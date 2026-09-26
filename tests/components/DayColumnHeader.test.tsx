@@ -1,7 +1,12 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, renderHook, waitFor } from '@testing-library/react';
+import 'fake-indexeddb/auto';
 import { DayColumnHeader } from '../../src/components/planner/DayColumnHeader';
-import type { DayPlannerData } from '../../src/hooks/useWeeklyPlanner';
+import { useWeeklyPlanner, type DayPlannerData } from '../../src/hooks/useWeeklyPlanner';
+import { TaskPlannerDatabase } from '../../src/db/index';
+import { updateCapacityRule, setCapacityOverride } from '../../src/db/repositories/capacityRepo';
+import { createTask } from '../../src/db/repositories/taskRepo';
+import { upsertAllocation } from '../../src/db/repositories/allocationRepo';
 
 function createMockDay(overrides?: Partial<DayPlannerData>): DayPlannerData {
   return {
@@ -163,5 +168,62 @@ describe('DayColumnHeader (PLAN-03, PLAN-04, UX-02, UX-04, D-07, D-13, D-14, D-1
 
     const header = screen.getByTestId('day-column-header-2026-09-28');
     expect(header).toHaveAttribute('data-is-today', 'true');
+  });
+});
+
+describe('useWeeklyPlanner hook (PLAN-03, D-01, D-16)', () => {
+  let testDb: TaskPlannerDatabase;
+
+  beforeEach(async () => {
+    testDb = new TaskPlannerDatabase('TestWeeklyPlanner_' + Math.random().toString(36).slice(2));
+    await testDb.open();
+  });
+
+  afterEach(async () => {
+    await testDb.delete();
+  });
+
+  it('computes 7 days Monday to Sunday for any target date', async () => {
+    // Wednesday 2026-09-30 -> week should be Monday 2026-09-28 to Sunday 2026-10-04
+    const { result } = renderHook(() => useWeeklyPlanner('2026-09-30', testDb));
+
+    expect(result.current.weekStartDate).toBe('2026-09-28');
+    expect(result.current.weekEndDate).toBe('2026-10-04');
+    expect(result.current.days).toHaveLength(7);
+    expect(result.current.days[0]?.date).toBe('2026-09-28');
+    expect(result.current.days[0]?.dayName).toBe('Monday');
+    expect(result.current.days[6]?.date).toBe('2026-10-04');
+    expect(result.current.days[6]?.dayName).toBe('Sunday');
+  });
+
+  it('joins capacity rules, date overrides, task allocations, and task entities reactively', async () => {
+    // 1. Monday rule = 480m (8h)
+    await updateCapacityRule(1, 480, testDb);
+    // 2. Tuesday override = 240m (4h)
+    await setCapacityOverride('2026-09-29', 240, 'Doctor appointment', testDb);
+
+    // 3. Create active task and allocate 120m to Monday
+    const task1 = await createTask({ name: 'Active Spec', estimateMinutes: 120, status: 'In Progress' }, testDb);
+    await upsertAllocation(task1.id, '2026-09-28', 120, testDb);
+
+    // 4. Create done task and allocate 60m to Monday (excluded from active metrics)
+    const task2 = await createTask({ name: 'Done Task', estimateMinutes: 60, status: 'Done' }, testDb);
+    await upsertAllocation(task2.id, '2026-09-28', 60, testDb);
+
+    const { result } = renderHook(() => useWeeklyPlanner('2026-09-28', testDb));
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+      const monday = result.current.days[0]!;
+      expect(monday.metrics.effectiveCapacityMinutes).toBe(480);
+      expect(monday.metrics.activeAllocatedMinutes).toBe(120);
+      expect(monday.metrics.inactiveAllocatedMinutes).toBe(60);
+      expect(monday.metrics.netBalanceMinutes).toBe(360);
+      expect(monday.allocations).toHaveLength(2);
+
+      const tuesday = result.current.days[1]!;
+      expect(tuesday.metrics.effectiveCapacityMinutes).toBe(240);
+      expect(tuesday.override?.note).toBe('Doctor appointment');
+    });
   });
 });
