@@ -36,11 +36,11 @@ export const DayColumn: React.FC<DayColumnProps> = ({
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        minWidth: 140,
+        minWidth: 180,
         backgroundColor: '#fafafa',
         borderRadius: 8,
         border: '1px solid #f0f0f0',
-        padding: 8,
+        padding: 6,
       }}
     >
       {/* Accessible Day Column Header */}

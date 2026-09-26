@@ -81,7 +81,7 @@ export const DayColumnHeader: React.FC<DayColumnHeaderProps> = ({
       data-is-today={isToday ? 'true' : 'false'}
       aria-label={ariaDescription}
       style={{
-        padding: '12px',
+        padding: '8px 10px',
         borderRadius: '6px',
         backgroundColor: isToday ? 'rgba(22, 119, 255, 0.05)' : undefined,
         border: isToday ? '1px solid #1677ff' : '1px solid #f0f0f0',
@@ -92,13 +92,15 @@ export const DayColumnHeader: React.FC<DayColumnHeaderProps> = ({
       <div
         style={{
           display: 'flex',
+          flexWrap: 'wrap',
+          gap: '4px 6px',
           justifyContent: 'space-between',
           alignItems: 'center',
           marginBottom: '6px',
         }}
       >
-        <Space size={6}>
-          <Text strong style={{ fontSize: '15px' }}>
+        <Space size={6} wrap>
+          <Text strong style={{ fontSize: '14px' }}>
             {formattedDate}
           </Text>
           {isToday && (
@@ -139,6 +141,8 @@ export const DayColumnHeader: React.FC<DayColumnHeaderProps> = ({
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '4px',
           fontSize: '12px',
           marginBottom: '6px',
         }}

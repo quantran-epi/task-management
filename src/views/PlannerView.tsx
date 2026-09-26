@@ -131,7 +131,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
         data-testid="planner-grid"
         style={{
           display: 'grid',
-          gridTemplateColumns: isMobile ? '1fr' : 'repeat(7, minmax(135px, 1fr))',
+          gridTemplateColumns: isMobile ? '1fr' : 'repeat(7, minmax(180px, 1fr))',
           gap: 12,
           overflowX: isMobile ? 'visible' : 'auto',
           minHeight: 520,
