@@ -124,8 +124,20 @@ Plans:
   4. Feasible tasks generate a deterministic suggested allocation distribution prioritizing lowest-load days (ties broken by earlier date).
   5. Candidate allocations require explicit user review and confirmation before writing to IndexedDB.
 
-**Plans**: TBD
+**Plans**: 3 plans
 **UI hint**: yes
+Plans:
+**Wave 1**
+
+- [ ] 04-01-PLAN.md — Build pure feasibility calculation engine, deficit metrics, forward date projection, and distribution algorithms (CALC-01, CALC-02, CALC-03, CALC-04, CALC-05)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 04-02-PLAN.md — Build interactive FeasibilityModal, candidate review table, date inspection breakdown, and atomic commit workflow (CALC-03, CALC-04, CALC-05, CALC-06)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 04-03-PLAN.md — Integrate entry points in TaskDrawerPlanning, PlannerView, and TasksView with end-to-end integration tests (CALC-01, CALC-06)
 
 ### Phase 5: Actionable Dashboard & Workload Forecasting
 
@@ -153,7 +165,7 @@ Plans:
   1. User can download a complete JSON backup containing application metadata, versioning, and all domain records.
   2. User can select an import file and inspect application version, creation timestamp, and record counts prior to execution.
   3. Application performs strict structural and referential validation, preventing corrupted imports from modifying existing records.
-  4. System takes a local snapshot before replacement and requires explicit user confirmation before overwriting existing data.
+  4. System takes a local snapshot before replacement and requires explicit confirmation before overwriting existing data.
   5. Backup and restore outcomes are announced with visible screen status messages and assistive-technology alerts.
 
 **Plans**: TBD
@@ -203,7 +215,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 1. Foundation & Deployment Shell | 4/4 | Complete | 2026-09-26 |
 | 2. Work Hierarchy & Fast Task Management | 2/3 | In Progress|  |
 | 3. Capacity Model & Daily Planning Ledger | 4/4 | Complete   | 2026-09-26 |
-| 4. Feasibility Engine & Workload Distribution | 0/TBD | Not started | - |
+| 4. Feasibility Engine & Workload Distribution | 0/3 | Not started | - |
 | 5. Actionable Dashboard & Workload Forecasting | 0/TBD | Not started | - |
 | 6. Safe Local Backup & Restore | 0/TBD | Not started | - |
 | 7. PWA Offline Capability & Lifecycle Hardening | 0/TBD | Not started | - |
