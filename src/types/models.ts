@@ -1,0 +1,78 @@
+export type ProjectStatus = 'Open' | 'In Progress' | 'Done' | 'Cancelled';
+export type MilestoneStatus = 'Open' | 'In Progress' | 'Done' | 'Cancelled';
+export type TaskStatus = 'Open' | 'In Progress' | 'Resolved' | 'In Review' | 'Done' | 'Cancelled';
+export type TaskPriority = 'Low' | 'Medium' | 'High' | 'Urgent';
+
+export interface Project {
+  id: string; // RFC 4122 v4 UUID
+  name: string;
+  description?: string;
+  deadline?: string; // YYYY-MM-DD
+  notes?: string;
+  status: ProjectStatus;
+  createdAt: string; // ISO string metadata
+  updatedAt: string; // ISO string metadata
+}
+
+export interface Milestone {
+  id: string; // RFC 4122 v4 UUID
+  projectId: string; // Reference to Project.id
+  name: string;
+  description?: string;
+  deadline?: string; // YYYY-MM-DD
+  notes?: string;
+  status: MilestoneStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Task {
+  id: string; // RFC 4122 v4 UUID
+  projectId?: string; // Optional reference to Project.id
+  milestoneId?: string; // Optional reference to Milestone.id
+  name: string;
+  description?: string;
+  deadline?: string; // YYYY-MM-DD
+  notes?: string;
+  actualStartDate?: string; // YYYY-MM-DD
+  actualEndDate?: string; // YYYY-MM-DD
+  status: TaskStatus;
+  progress: number; // Integer percentage 0 - 100
+  priority: TaskPriority;
+  estimateMinutes: number; // Non-negative integer minutes
+  documentLinks?: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CapacityRule {
+  id: string; // RFC 4122 v4 UUID
+  dayOfWeek: number; // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  workMinutes: number; // Non-negative integer minutes (e.g. 480 for 8h)
+}
+
+export interface CapacityOverride {
+  id: string; // RFC 4122 v4 UUID
+  date: string; // YYYY-MM-DD
+  workMinutes: number; // Non-negative integer minutes (0 for leave/holiday)
+  note?: string;
+}
+
+export interface PlannedAllocation {
+  id: string; // RFC 4122 v4 UUID
+  taskId: string; // Reference to Task.id
+  date: string; // YYYY-MM-DD
+  allocatedMinutes: number; // Non-negative integer minutes
+}
+
+export interface Setting {
+  key: string;
+  value: unknown;
+}
+
+export interface BackupMetadata {
+  id: string; // RFC 4122 v4 UUID
+  timestamp: string; // ISO string
+  appVersion: string;
+  recordCount: number;
+}
