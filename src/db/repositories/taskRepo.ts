@@ -120,6 +120,43 @@ export async function updateTaskProgress(
   return updateTask(id, { progress }, db);
 }
 
+export async function reparentTask(
+  taskId: string,
+  targetProjectId?: string,
+  targetMilestoneId?: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<Task> {
+  const existing = await db.tasks.get(taskId);
+  if (!existing) {
+    throw new Error(`Task not found: ${taskId}`);
+  }
+
+  const now = new Date().toISOString();
+  const updated: Task = {
+    ...existing,
+    updatedAt: now,
+  };
+
+  // Stable UUID assertion (WORK-04, D-09)
+  updated.id = existing.id;
+
+  if (targetProjectId !== undefined) {
+    updated.projectId = targetProjectId;
+  } else {
+    delete updated.projectId;
+  }
+
+  // If project changed and no target milestone provided, or if moved to standalone, reset milestone (D-10)
+  if (targetProjectId !== undefined && targetMilestoneId !== undefined) {
+    updated.milestoneId = targetMilestoneId;
+  } else {
+    delete updated.milestoneId;
+  }
+
+  await db.tasks.put(updated);
+  return updated;
+}
+
 export async function deleteTaskDirect(
   id: string,
   db: TaskPlannerDatabase = defaultDb
