@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import React from 'react';
 import { UpgradeModal } from '../src/components/shell/UpgradeModal';
 import { ResetDbModal } from '../src/components/common/ResetDbModal';
 import * as seeds from '../src/db/seeds';
