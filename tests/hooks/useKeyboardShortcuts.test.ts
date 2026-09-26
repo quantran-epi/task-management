@@ -49,7 +49,8 @@ describe('useKeyboardShortcuts', () => {
     document.body.appendChild(textarea);
 
     const editable = document.createElement('div');
-    editable.contentEditable = 'true';
+    editable.setAttribute('contenteditable', 'true');
+    Object.defineProperty(editable, 'isContentEditable', { value: true, configurable: true });
     document.body.appendChild(editable);
 
     // Type 'c' inside input

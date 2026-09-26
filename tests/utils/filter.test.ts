@@ -4,7 +4,6 @@ import {
   filterTasks,
   sortTasks,
   matchesHorizon,
-  type TaskFilterState,
   DEFAULT_TASK_FILTER_STATE,
 } from '../../src/utils/filter';
 
