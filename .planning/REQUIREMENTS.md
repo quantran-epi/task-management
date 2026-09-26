@@ -40,8 +40,8 @@
 
 - [x] **PLAN-01**: User can assign planned hours and minutes from a task to individual calendar dates.
 - [x] **PLAN-02**: User can edit or remove a daily task allocation and see the task's total allocated time.
-- [ ] **PLAN-03**: User can see each date's capacity, allocated time, and remaining or excess time.
-- [ ] **PLAN-04**: User can distinguish available, busy, overloaded, and no-capacity days using text or icons in addition to color.
+- [x] **PLAN-03**: User can see each date's capacity, allocated time, and remaining or excess time.
+- [x] **PLAN-04**: User can distinguish available, busy, overloaded, and no-capacity days using text or icons in addition to color.
 - [x] **PLAN-05**: Done and Cancelled task allocations remain stored for history but are excluded from active workload totals.
 - [x] **PLAN-06**: User can manually adjust suggested or existing allocations before saving them.
 
@@ -95,7 +95,7 @@
 - [x] **UX-01**: Application uses Ant Design and responsive layouts for desktop and mobile-width screens.
 - [x] **UX-02**: Core create, edit, status, progress, allocation, and navigation actions remain keyboard accessible with visible focus.
 - [x] **UX-03**: Forms provide labels, inline validation, safe defaults, and focus restoration after modal or drawer actions.
-- [ ] **UX-04**: Save, import, encryption, synchronization, and update results are announced in visible text and appropriate assistive-technology status regions.
+- [x] **UX-04**: Save, import, encryption, synchronization, and update results are announced in visible text and appropriate assistive-technology status regions.
 - [x] **UX-05**: Common task updates and workload adjustments require minimal navigation and avoid mandatory multi-step wizards.
 
 ## v2 Requirements
@@ -150,8 +150,8 @@
 | CAP-04 | Phase 3 | Complete |
 | PLAN-01 | Phase 3 | Complete |
 | PLAN-02 | Phase 3 | Complete |
-| PLAN-03 | Phase 3 | Pending |
-| PLAN-04 | Phase 3 | Pending |
+| PLAN-03 | Phase 3 | Complete |
+| PLAN-04 | Phase 3 | Complete |
 | PLAN-05 | Phase 3 | Complete |
 | PLAN-06 | Phase 3 | Complete |
 | CALC-01 | Phase 4 | Pending |
@@ -187,7 +187,7 @@
 | UX-01 | Phase 1 | Complete |
 | UX-02 | Phase 2 | Complete |
 | UX-03 | Phase 2 | Complete |
-| UX-04 | Phase 6 | Pending |
+| UX-04 | Phase 6 | Complete |
 | UX-05 | Phase 2 | Complete |
 
 **Coverage:**
