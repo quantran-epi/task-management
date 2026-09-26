@@ -68,7 +68,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 02-01-PLAN.md — Implement typed Dexie repositories, Zod validation schemas, time estimate utilities, task reparenting, and atomic cascade deletions (WORK-01, WORK-02, WORK-03, WORK-04, WORK-05, TASK-02, TASK-04)
+- [x] 02-01-PLAN.md — Implement typed Dexie repositories, Zod validation schemas, time estimate utilities, task reparenting, and atomic cascade deletions (WORK-01, WORK-02, WORK-03, WORK-04, WORK-05, TASK-02, TASK-04)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -185,7 +185,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | Phase | Plans Complete | Status | Completed |
 |---|---|---|---|
 | 1. Foundation & Deployment Shell | 4/4 | Complete | 2026-09-26 |
-| 2. Work Hierarchy & Fast Task Management | 0/3 | In progress | - |
+| 2. Work Hierarchy & Fast Task Management | 1/3 | In Progress|  |
 | 3. Capacity Model & Daily Planning Ledger | 0/TBD | Not started | - |
 | 4. Feasibility Engine & Workload Distribution | 0/TBD | Not started | - |
 | 5. Actionable Dashboard & Workload Forecasting | 0/TBD | Not started | - |

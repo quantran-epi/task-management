@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 2 UI-SPEC approved
-last_updated: "2026-09-26T10:46:33.014Z"
-last_activity: 2026-09-26 -- Phase 01 Plan 04 completed
+last_updated: "2026-09-26T11:01:02.422Z"
+last_activity: 2026-09-26 -- Phase 02 execution started
 progress:
   total_phases: 8
   completed_phases: 1
-  total_plans: 4
-  completed_plans: 4
+  total_plans: 7
+  completed_plans: 5
   percent: 13
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-26)
 
 **Core value:** Make planned work realistically fit available time by exposing overload early and suggesting feasible daily workload distributions.
-**Current focus:** Phase 01 — foundation-deployment-shell
+**Current focus:** Phase 02 — work-hierarchy-fast-task-management
 
 ## Current Position
 
-Phase: 01 (foundation-deployment-shell) — COMPLETED
-Plan: 4 of 4
+Phase: 02 (work-hierarchy-fast-task-management) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
-Last activity: 2026-09-26 -- Phase 01 Plan 04 completed
+Last activity: 2026-09-26 -- Phase 02 execution started
 
 Progress: [██████████] 100% (Phase 01)
 
@@ -62,6 +62,7 @@ Progress: [██████████] 100% (Phase 01)
 | Phase 01 P02 | 12m | 3 tasks | 16 files |
 | Phase 01 P03 | 6m | 2 tasks | 3 files |
 | Phase 01 P04 | 6m | 2 tasks | 7 files |
+| Phase 2 P1 | 10m | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -84,6 +85,9 @@ Decisions logged in PROJECT.md Key Decisions table:
 - [Phase 01]: initializeDatabaseDefaults wrapped in atomic readwrite transaction with ConstraintError handling for multi-tab concurrency (CR-02)
 - [Phase 01]: App.tsx queries capacity rules ordered by dayOfWeek (WR-01)
 - [Phase 01]: ResetDbModal catches reset errors with logging (WR-02)
+- [Phase 2]: Preserved exactOptionalPropertyTypes strict typing in repositories by using conditional assignment rather than spreading undefined values into models.
+- [Phase 2]: Quick-add parser uses lastIndexOf('~') and regex matching on the trailing token to handle unspaced and multi-token task names robustly.
+- [Phase 2]: Atomic transactions wrap all multi-table deletion routines in cascadeRepo, cleaning up plannedAllocations to eliminate orphaned allocations.
 
 ### Pending Todos
 
@@ -101,6 +105,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-09-26T10:36:19.460Z
+Last session: 2026-09-26T11:00:41.891Z
 Stopped at: Phase 2 UI-SPEC approved
 Resume file: .planning/phases/02-work-hierarchy-fast-task-management/02-UI-SPEC.md

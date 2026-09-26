@@ -14,18 +14,18 @@
 
 ### Work Hierarchy
 
-- [ ] **WORK-01**: User can create, view, edit, and delete a project with name, description, deadline, notes, and status.
-- [ ] **WORK-02**: User can create, view, edit, and delete multiple milestones under a project with name, description, deadline, notes, and status.
-- [ ] **WORK-03**: User can create, view, edit, and delete a standalone task, a task directly under a project, or a task under a project milestone.
-- [ ] **WORK-04**: User can move a task between standalone, project-level, and milestone-level placement without changing its stable ID.
-- [ ] **WORK-05**: User receives an explicit confirmation before deletion cascades to child records; cancellation leaves records available.
+- [x] **WORK-01**: User can create, view, edit, and delete a project with name, description, deadline, notes, and status.
+- [x] **WORK-02**: User can create, view, edit, and delete multiple milestones under a project with name, description, deadline, notes, and status.
+- [x] **WORK-03**: User can create, view, edit, and delete a standalone task, a task directly under a project, or a task under a project milestone.
+- [x] **WORK-04**: User can move a task between standalone, project-level, and milestone-level placement without changing its stable ID.
+- [x] **WORK-05**: User receives an explicit confirmation before deletion cascades to child records; cancellation leaves records available.
 
 ### Task Details
 
 - [ ] **TASK-01**: User can record task name, description, deadline, notes, actual start date, actual end date, status, progress percentage, priority, estimate, and document links.
-- [ ] **TASK-02**: User can enter estimates using hours and minutes while the application stores an exact integer-minute value.
+- [x] **TASK-02**: User can enter estimates using hours and minutes while the application stores an exact integer-minute value.
 - [ ] **TASK-03**: User can use task statuses Open, In Progress, Resolved, In Review, Done, and Cancelled.
-- [ ] **TASK-04**: User can use project and milestone statuses Open, In Progress, Done, and Cancelled.
+- [x] **TASK-04**: User can use project and milestone statuses Open, In Progress, Done, and Cancelled.
 - [ ] **TASK-05**: User can search work items by text and filter or sort tasks by status, project, priority, and date horizon.
 - [ ] **TASK-06**: User can update task status and progress through fast controls without opening a complex editor.
 
@@ -133,15 +133,15 @@
 | DATA-02 | Phase 1 | Complete |
 | DATA-03 | Phase 1 | Complete |
 | DATA-04 | Phase 1 | Complete |
-| WORK-01 | Phase 2 | Pending |
-| WORK-02 | Phase 2 | Pending |
-| WORK-03 | Phase 2 | Pending |
-| WORK-04 | Phase 2 | Pending |
-| WORK-05 | Phase 2 | Pending |
+| WORK-01 | Phase 2 | Complete |
+| WORK-02 | Phase 2 | Complete |
+| WORK-03 | Phase 2 | Complete |
+| WORK-04 | Phase 2 | Complete |
+| WORK-05 | Phase 2 | Complete |
 | TASK-01 | Phase 2 | Pending |
-| TASK-02 | Phase 2 | Pending |
+| TASK-02 | Phase 2 | Complete |
 | TASK-03 | Phase 2 | Pending |
-| TASK-04 | Phase 2 | Pending |
+| TASK-04 | Phase 2 | Complete |
 | TASK-05 | Phase 2 | Pending |
 | TASK-06 | Phase 2 | Pending |
 | CAP-01 | Phase 3 | Pending |
