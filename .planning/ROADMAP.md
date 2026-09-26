@@ -27,8 +27,13 @@ Deliver a production-ready, client-side, offline-first task and capacity plannin
   2. User data created in session persists across browser restarts and page reloads via IndexedDB.
   3. Planning records persist canonical string dates (`YYYY-MM-DD`) and integer minutes without timezone drift.
   4. Database migration framework executes cleanly and provides clear notification when another tab blocks upgrade.
-**Plans**: TBD
+**Plans**: 3 plans
 **UI hint**: yes
+
+Plans:
+- [ ] 01-01-PLAN.md — Scaffold runtime, core models, UUID generator, date utilities, and Dexie persistence substrate with capacity seeds (DATA-01, DATA-02, DATA-03)
+- [ ] 01-02-PLAN.md — Implement responsive Ant Design shell, hash routing, multi-tab upgrade alert modal, and guarded reset (DATA-04, UX-01)
+- [ ] 01-03-PLAN.md — Configure static production build for subpath hosting and implement GitHub Actions CI/CD deployment workflow (PWA-04, PWA-05)
 
 ### Phase 2: Work Hierarchy & Fast Task Management
 **Goal**: Enable CRUD and hierarchy movement for projects, milestones, and tasks with validation, cascade protection, search, filtering, and inline controls
@@ -132,7 +137,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 
 | Phase | Plans Complete | Status | Completed |
 |---|---|---|---|
-| 1. Foundation & Deployment Shell | 0/TBD | Not started | - |
+| 1. Foundation & Deployment Shell | 0/3 | Not started | - |
 | 2. Work Hierarchy & Fast Task Management | 0/TBD | Not started | - |
 | 3. Capacity Model & Daily Planning Ledger | 0/TBD | Not started | - |
 | 4. Feasibility Engine & Workload Distribution | 0/TBD | Not started | - |
