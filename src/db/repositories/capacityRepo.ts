@@ -93,7 +93,7 @@ export async function setCapacityOverride(
       const updated: CapacityOverride = {
         ...existing,
         workMinutes: validated.workMinutes,
-        note: validated.note,
+        ...(validated.note !== undefined ? { note: validated.note } : {}),
       };
       await targetDb.capacityOverrides.put(updated);
       return updated;
@@ -102,7 +102,7 @@ export async function setCapacityOverride(
         id: generateId(),
         date: validated.date,
         workMinutes: validated.workMinutes,
-        note: validated.note,
+        ...(validated.note !== undefined ? { note: validated.note } : {}),
       };
       await targetDb.capacityOverrides.add(created);
       return created;

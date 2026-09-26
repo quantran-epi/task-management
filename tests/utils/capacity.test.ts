@@ -7,8 +7,6 @@ import {
 import {
   getEffectiveDailyCapacity,
   calculateDayMetrics,
-  type DailyLoadState,
-  type DayCapacityMetrics,
 } from '../../src/utils/capacity';
 import type { CapacityRule, CapacityOverride } from '../../src/types/models';
 
