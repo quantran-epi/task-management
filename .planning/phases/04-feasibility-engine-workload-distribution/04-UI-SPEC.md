@@ -43,6 +43,14 @@ Exceptions: Touch target minimum for mobile controls is 44px (`minHeight: 44`, `
 
 ---
 
+## Visual Hierarchy & Focal Points
+
+1. **Primary Visual Anchor**: Feasibility Result Banner (`Alert` card at top of modal results). Immediately communicates feasibility status (green Feasible vs warning/red Infeasible), key surplus/deficit metric, and actionable resolution buttons (`Extend to {date}`, `Allocate Available`).
+2. **Secondary Interactive Anchor**: Candidate Allocations Table. Draws user focus to proposed daily distribution with editable minute inputs, live allocation summary footer (`Total Proposed` vs `Remaining Estimate`), and day status indicators.
+3. **Tertiary Supporting Elements**: Scope & Parameters control bar (date range and distribution strategy segmented control) and collapsible Date Inspection Breakdown panel.
+
+---
+
 ## Typography
 
 | Role | Size | Weight | Line Height |
@@ -82,6 +90,7 @@ Accent reserved for:
 | Secondary Action 1 | Extend to Earliest Feasible Date |
 | Secondary Action 2 | Allocate Available Capacity |
 | Secondary Action 3 | Check Feasibility & Auto-Distribute |
+| Modal Dismiss / Cancel | Discard Allocations |
 | Empty state heading | No Eligible Dates Found |
 | Empty state body | All dates in selected range are non-working, fully booked, or in the past. Adjust date range or add capacity overrides. |
 | Error state | Feasibility calculation failed: Unable to parse task capacity metrics. Please refresh and retry. |
@@ -116,7 +125,7 @@ Accent reserved for:
   - Summary metric tags: `{N} Available`, `{N} Full`, `{N} Overloaded`, `{N} Excluded (Weekend/Holiday)`.
   - Compact table listing each date, day capacity, active load, net balance, and eligibility badge.
 - **Footer**:
-  - `Cancel` button (restores focus to trigger).
+  - `Discard Allocations` button (dismisses modal preview without persisting changes, restores focus to trigger).
   - `Apply Allocations` primary button (commits allocations to Dexie within an atomic transaction, shows Ant Design success notification, and closes modal).
 
 ---
