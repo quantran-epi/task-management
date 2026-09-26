@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ConfigProvider, theme } from 'antd';
 import { AppShell } from '../src/components/shell/AppShell';
 import App from '../src/App';
@@ -68,26 +68,26 @@ describe('App Integration & Hash Route & Live Query (UX-01, DATA-02)', () => {
     await initializeDatabaseDefaults();
   });
 
-  it('renders capacity rules reactively queried from IndexedDB on tasks route', async () => {
+  it('renders TasksView with search and quick add on tasks route', async () => {
     render(<App />);
 
-    expect(await screen.findByText(/Tasks - Capacity Rules/i)).toBeInTheDocument();
-    // Monday-Friday have 480 mins (8h), total 5 items
-    const matches = await screen.findAllByText(/480 mins \(8h\)/i);
-    expect(matches).toHaveLength(5);
+    expect(await screen.findByPlaceholderText(/Search tasks/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Add a task/i)).toBeInTheDocument();
   });
 
   it('updates view when hash route changes to projects', async () => {
     render(<App />);
 
-    expect(await screen.findByText(/Tasks - Capacity Rules/i)).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText(/Search tasks/i)).toBeInTheDocument();
 
     // Trigger hashchange to projects
     window.location.hash = '#/projects';
     window.dispatchEvent(new HashChangeEvent('hashchange'));
 
-    expect(await screen.findByText('Projects')).toBeInTheDocument();
-    expect(screen.getByText(/No projects created yet/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('Work Hierarchy')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /New Project/i })).toBeInTheDocument();
+    });
   });
 
   it('updates view when hash route changes to planner', async () => {
@@ -96,6 +96,7 @@ describe('App Integration & Hash Route & Live Query (UX-01, DATA-02)', () => {
     window.location.hash = '#/planner';
     window.dispatchEvent(new HashChangeEvent('hashchange'));
 
-    expect(await screen.findByText(/Workload Planner - Capacity Rules/i)).toBeInTheDocument();
+    expect(await screen.findByText('Workload Planner')).toBeInTheDocument();
+    expect(screen.getByText(/Daily capacity allocation/i)).toBeInTheDocument();
   });
 });
