@@ -91,8 +91,20 @@ Plans:
   3. User can inspect daily capacity, total allocations, and net balance with load states (available, busy, overloaded, no-capacity) displayed via text, icons, and color.
   4. Allocations on Done or Cancelled tasks remain stored in historical records but are omitted from active daily capacity calculations.
 
-**Plans**: TBD
+**Plans**: 3 plans
 **UI hint**: yes
+Plans:
+**Wave 1**
+
+- [ ] 03-01-PLAN.md — Implement weekly capacity rules, date overrides repository, pure capacity engine, and settings configuration UI (CAP-01, CAP-02, CAP-03, CAP-04)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 03-02-PLAN.md — Build daily task allocation ledger repository, allocation modal with estimate tracking, and TaskDrawer integration (PLAN-01, PLAN-02, PLAN-05, PLAN-06)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 03-03-PLAN.md — Assemble 7-day weekly planner board, accessible load indicators, responsive grid, and route integration (PLAN-03, PLAN-04, UX-02, UX-03, UX-04, UX-05)
 
 ### Phase 4: Feasibility Engine & Workload Distribution
 
@@ -186,7 +198,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 |---|---|---|---|
 | 1. Foundation & Deployment Shell | 4/4 | Complete | 2026-09-26 |
 | 2. Work Hierarchy & Fast Task Management | 2/3 | In Progress|  |
-| 3. Capacity Model & Daily Planning Ledger | 0/TBD | Not started | - |
+| 3. Capacity Model & Daily Planning Ledger | 0/3 | Not started | - |
 | 4. Feasibility Engine & Workload Distribution | 0/TBD | Not started | - |
 | 5. Actionable Dashboard & Workload Forecasting | 0/TBD | Not started | - |
 | 6. Safe Local Backup & Restore | 0/TBD | Not started | - |
