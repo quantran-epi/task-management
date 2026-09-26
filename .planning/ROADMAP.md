@@ -8,7 +8,7 @@ Deliver a production-ready, client-side, offline-first task and capacity plannin
 
 - [ ] **Phase 1: Foundation & Deployment Shell** - Scaffolding, GitHub Actions Pages deployment, Dexie IndexedDB persistence, UUIDs, migrations, and responsive shell. (gap closure in progress)
 - [ ] **Phase 2: Work Hierarchy & Fast Task Management** - Projects, milestones, and task CRUD with reparenting, cascading confirmations, search, filters, and fast controls.
-- [x] **Phase 3: Capacity Model & Daily Planning Ledger** - Weekly capacity templates, per-date overrides, daily minute allocations, and accessible load status indicators. (completed 2026-09-26)
+- [ ] **Phase 3: Capacity Model & Daily Planning Ledger** - Weekly capacity templates, per-date overrides, daily minute allocations, and accessible load status indicators. (gap closure in progress)
 - [ ] **Phase 4: Feasibility Engine & Workload Distribution** - Deadline and range feasibility checks with deterministic lowest-load candidate distributions.
 - [ ] **Phase 5: Actionable Dashboard & Workload Forecasting** - Today, urgent, 7-day, 14-day, and next-month workload forecasting with direct navigation links.
 - [ ] **Phase 6: Safe Local Backup & Restore** - Complete JSON backup export, Zod structural validation, pre-import snapshots, and non-destructive restore failures.
@@ -91,7 +91,7 @@ Plans:
   3. User can inspect daily capacity, total allocations, and net balance with load states (available, busy, overloaded, no-capacity) displayed via text, icons, and color.
   4. Allocations on Done or Cancelled tasks remain stored in historical records but are omitted from active daily capacity calculations.
 
-**Plans**: 3 plans
+**Plans**: 4 plans
 **UI hint**: yes
 Plans:
 **Wave 1**
@@ -105,6 +105,10 @@ Plans:
 **Wave 3** *(blocked on Wave 2 completion)*
 
 - [x] 03-03-PLAN.md — Assemble 7-day weekly planner board, accessible load indicators, responsive grid, and route integration (PLAN-03, PLAN-04, UX-02, UX-03, UX-04, UX-05)
+
+**Wave 4** *(gap closure)*
+
+- [ ] 03-04-PLAN.md — Fix desktop grid column squashing, day header overclipping, and task card label truncation (PLAN-03, PLAN-04, UX-02, UX-04)
 
 ### Phase 4: Feasibility Engine & Workload Distribution
 
@@ -198,7 +202,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 |---|---|---|---|
 | 1. Foundation & Deployment Shell | 4/4 | Complete | 2026-09-26 |
 | 2. Work Hierarchy & Fast Task Management | 2/3 | In Progress|  |
-| 3. Capacity Model & Daily Planning Ledger | 3/3 | Complete   | 2026-09-26 |
+| 3. Capacity Model & Daily Planning Ledger | 3/4 | In Progress|  |
 | 4. Feasibility Engine & Workload Distribution | 0/TBD | Not started | - |
 | 5. Actionable Dashboard & Workload Forecasting | 0/TBD | Not started | - |
 | 6. Safe Local Backup & Restore | 0/TBD | Not started | - |
