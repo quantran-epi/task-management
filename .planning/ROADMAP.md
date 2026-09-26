@@ -76,7 +76,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 02-03-PLAN.md — Assemble unified TasksView, TaskFilterBar, TaskTable with batch actions, expandable ProjectTable, CascadeDeleteModal, and route integration (WORK-01, WORK-02, WORK-03, WORK-04, WORK-05, TASK-03, TASK-04, TASK-05, TASK-06, UX-02, UX-05)
+- [x] 02-03-PLAN.md — Assemble unified TasksView, TaskFilterBar, TaskTable with batch actions, expandable ProjectTable, CascadeDeleteModal, and route integration (WORK-01, WORK-02, WORK-03, WORK-04, WORK-05, TASK-03, TASK-04, TASK-05, TASK-06, UX-02, UX-05)
 
 ### Phase 3: Capacity Model & Daily Planning Ledger
 
