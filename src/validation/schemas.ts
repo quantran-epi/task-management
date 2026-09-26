@@ -122,9 +122,30 @@ export const TaskUpdateSchema = z.object({
   documentLinks: z.array(httpUrlSchema).optional(),
 });
 
+export const CapacityRuleInputSchema = z.object({
+  dayOfWeek: z.number().int().min(0).max(6),
+  workMinutes: z.number().int().min(0).max(1440),
+});
+
+export const CapacityOverrideInputSchema = z.object({
+  date: calendarDateSchema,
+  workMinutes: z.number().int().min(0).max(1440),
+  note: z.string().max(200, 'Note must be 200 characters or less').optional(),
+});
+
+export const PlannedAllocationInputSchema = z.object({
+  taskId: uuidSchema,
+  date: calendarDateSchema,
+  allocatedMinutes: z.number().int().min(1).max(1440),
+});
+
 export type ProjectInput = z.input<typeof ProjectInputSchema>;
 export type ProjectUpdate = z.input<typeof ProjectUpdateSchema>;
 export type MilestoneInput = z.input<typeof MilestoneInputSchema>;
 export type MilestoneUpdate = z.input<typeof MilestoneUpdateSchema>;
 export type TaskInput = z.input<typeof TaskInputSchema>;
 export type TaskUpdate = z.input<typeof TaskUpdateSchema>;
+export type CapacityRuleInput = z.input<typeof CapacityRuleInputSchema>;
+export type CapacityOverrideInput = z.input<typeof CapacityOverrideInputSchema>;
+export type PlannedAllocationInput = z.input<typeof PlannedAllocationInputSchema>;
+
