@@ -169,6 +169,24 @@ describe('DayColumnHeader (PLAN-03, PLAN-04, UX-02, UX-04, D-07, D-13, D-14, D-1
     const header = screen.getByTestId('day-column-header-2026-09-28');
     expect(header).toHaveAttribute('data-is-today', 'true');
   });
+
+  it('renders date, today badge, and capacity without layout failure in constrained width container (03-04)', () => {
+    const day = createMockDay({ isToday: true, date: '2026-09-28' });
+    const { container } = render(
+      <div style={{ width: 180 }}>
+        <DayColumnHeader day={day} />
+      </div>
+    );
+
+    const header = screen.getByTestId('day-column-header-2026-09-28');
+    expect(header).toBeInTheDocument();
+    expect(screen.getByText('Mon, Sep 28')).toBeInTheDocument();
+    expect(screen.getByText('Today')).toBeInTheDocument();
+    expect(screen.getByText(/Cap:\s*8h/i)).toBeInTheDocument();
+    expect(screen.getByText(/Alloc:\s*4h/i)).toBeInTheDocument();
+    expect(screen.getByText(/Bal:\s*\+4h/i)).toBeInTheDocument();
+    expect(container.querySelector('[role="button"]')).toBeInTheDocument();
+  });
 });
 
 describe('useWeeklyPlanner hook (PLAN-03, D-01, D-16)', () => {

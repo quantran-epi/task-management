@@ -173,4 +173,15 @@ describe('PlannerView & App Route Integration (PLAN-03, PLAN-04, UX-02, UX-03, U
     expect(await screen.findByText('Settings & Capacity Configuration')).toBeInTheDocument();
     expect(screen.getByText('Weekly Base Capacity Template')).toBeInTheDocument();
   });
+
+  it('configures desktop grid with minmax of at least 180px and auto horizontal overflow (03-04)', async () => {
+    render(<PlannerView db={testDb} initialDate="2026-09-30" />);
+
+    const grid = await screen.findByTestId('planner-grid');
+    expect(grid).toBeInTheDocument();
+
+    const style = grid.getAttribute('style') || '';
+    expect(style).toMatch(/minmax\(180px,\s*1fr\)/);
+    expect(style).toMatch(/overflow-x:\s*auto/);
+  });
 });

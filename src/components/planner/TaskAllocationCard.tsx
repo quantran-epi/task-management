@@ -170,42 +170,57 @@ export const TaskAllocationCard: React.FC<TaskAllocationCardProps> = ({
         borderLeft: isActive ? '3px solid #1677ff' : '3px solid #d9d9d9',
         backgroundColor: isActive ? '#ffffff' : '#fafafa',
       }}
-      bodyStyle={{ padding: '8px 12px' }}
+      bodyStyle={{ padding: '8px 10px' }}
       data-testid={`allocation-card-${allocation.id}`}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
-          <Text
-            strong
-            delete={!isActive}
-            style={{
-              cursor: onEditTask ? 'pointer' : 'default',
-              display: 'block',
-            }}
-            onClick={() => onEditTask?.(task.id)}
-            title="Click to view task details in drawer"
-            ellipsis
-          >
-            {task.name}
-          </Text>
+      {/* Top row: Task name rendered full width with up to 2 lines of text (T-03-07) */}
+      <Text
+        strong
+        delete={!isActive}
+        style={{
+          cursor: onEditTask ? 'pointer' : 'default',
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden',
+          lineHeight: '1.3',
+          wordBreak: 'break-word',
+        }}
+        onClick={() => onEditTask?.(task.id)}
+        title="Click to view task details in drawer"
+      >
+        {task.name}
+      </Text>
 
-          <Space size={4} wrap style={{ marginTop: 4 }}>
-            <Tag color={PRIORITY_COLORS[task.priority]} style={{ margin: 0, fontSize: 11 }}>
-              {task.priority}
+      {/* Bottom row: Meta tags and action controls */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 4,
+          marginTop: 6,
+        }}
+      >
+        {/* Left side: Priority tag and inactive/status tags with wrap */}
+        <Space size={4} wrap>
+          <Tag color={PRIORITY_COLORS[task.priority]} style={{ margin: 0, fontSize: 11 }}>
+            {task.priority}
+          </Tag>
+
+          {!isActive && (
+            <Tag
+              icon={task.status === 'Done' ? <CheckCircleOutlined /> : <StopOutlined />}
+              color="default"
+              style={{ margin: 0, fontSize: 11 }}
+            >
+              {task.status === 'Done' ? 'Done - excluded' : 'Cancelled - excluded'}
             </Tag>
+          )}
+        </Space>
 
-            {!isActive && (
-              <Tag
-                icon={task.status === 'Done' ? <CheckCircleOutlined /> : <StopOutlined />}
-                color="default"
-                style={{ margin: 0, fontSize: 11 }}
-              >
-                {task.status === 'Done' ? 'Done - excluded' : 'Cancelled - excluded'}
-              </Tag>
-            )}
-          </Space>
-        </div>
-
+        {/* Right side: Duration popover tag and Delete Popconfirm button side-by-side */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <Popover
             content={editPopoverContent}
