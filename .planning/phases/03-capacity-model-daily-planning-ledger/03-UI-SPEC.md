@@ -1,7 +1,8 @@
 ---
 phase: 03
 slug: capacity-model-daily-planning-ledger
-status: draft
+status: approved
+reviewed_at: 2026-09-26T00:00:00Z
 shadcn_initialized: false
 preset: none
 created: 2026-09-26
@@ -153,8 +154,8 @@ Accent reserved for:
   - **Estimate vs Allocation Preview**:
     - Displays `Total Allocated: {currentAlloc + newAlloc} / Estimate: {taskEstimate}`.
     - Shows alert if exceeding estimate: `Allocated time exceeds estimate by {surplus}` (warning style, non-blocking).
-- Primary button: "Save Allocation"
-- Cancel button: "Cancel"
+- Primary button: "Record Allocation"
+- Cancel button: "Discard Allocation"
 
 ### 3. Capacity Settings View (`/#/settings`) & Modal
 - **Section 1: Weekly Base Capacity Template**:
@@ -177,7 +178,7 @@ Accent reserved for:
   - Summary row: `Estimate: {estHours}h {estMinutes}m` | `Total Allocated: {allocHours}h {allocMinutes}m` | `Remaining: {remHours}h {remMinutes}m`.
   - Mini allocation table listing existing allocations:
     - Columns: Date, Planned Time (`Xh Ym`), Day Load Status, Action (`DeleteOutlined`).
-  - Inline row to quickly add allocation: DatePicker + Hours + Minutes + `+ Add` button.
+  - Inline row to quickly add allocation: DatePicker + Hours + Minutes + `+ Add Allocation` button.
 
 ---
 
@@ -194,11 +195,11 @@ Accent reserved for:
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
+- [x] Dimension 1 Copywriting: PASS
+- [x] Dimension 2 Visuals: PASS
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: PASS
+- [x] Dimension 6 Registry Safety: PASS
 
-**Approval:** pending
+**Approval:** approved 2026-09-26
