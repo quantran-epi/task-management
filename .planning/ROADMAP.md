@@ -6,7 +6,7 @@ Deliver a production-ready, client-side, offline-first task and capacity plannin
 
 ## Phases
 
-- [x] **Phase 1: Foundation & Deployment Shell** - Scaffolding, GitHub Actions Pages deployment, Dexie IndexedDB persistence, UUIDs, migrations, and responsive shell. (completed 2026-09-26)
+- [ ] **Phase 1: Foundation & Deployment Shell** - Scaffolding, GitHub Actions Pages deployment, Dexie IndexedDB persistence, UUIDs, migrations, and responsive shell. (gap closure in progress)
 - [ ] **Phase 2: Work Hierarchy & Fast Task Management** - Projects, milestones, and task CRUD with reparenting, cascading confirmations, search, filters, and fast controls.
 - [ ] **Phase 3: Capacity Model & Daily Planning Ledger** - Weekly capacity templates, per-date overrides, daily minute allocations, and accessible load status indicators.
 - [ ] **Phase 4: Feasibility Engine & Workload Distribution** - Deadline and range feasibility checks with deterministic lowest-load candidate distributions.
@@ -30,7 +30,7 @@ Deliver a production-ready, client-side, offline-first task and capacity plannin
   3. Planning records persist canonical string dates (`YYYY-MM-DD`) and integer minutes without timezone drift.
   4. Database migration framework executes cleanly and provides clear notification when another tab blocks upgrade.
 
-**Plans**: 3 plans
+**Plans**: 4 plans
 **UI hint**: yes
 Plans:
 **Wave 1**
@@ -44,6 +44,10 @@ Plans:
 **Wave 3** *(blocked on Wave 2 completion)*
 
 - [x] 01-03-PLAN.md — Configure static production build for subpath hosting and implement GitHub Actions CI/CD deployment workflow (PWA-04, PWA-05)
+
+**Wave 4** *(gap closure)*
+
+- [ ] 01-04-PLAN.md — Resolve dark mode header/sider contrast, add unique dayOfWeek index, and make capacity seeding atomic (UX-01, DATA-02)
 
 ### Phase 2: Work Hierarchy & Fast Task Management
 
@@ -112,7 +116,7 @@ Plans:
 
 ### Phase 6: Safe Local Backup & Restore
 
-**Goal**: Export versioned JSON backups and safely restore data with schema validation, pre-import snapshot, and failure protection
+**Goal**: Export versioned JSON backups and safely restore data with schema validation, pre-import snapshots, and failure protection
 **Mode:** mvp
 **Depends on**: Phase 5
 **Requirements**: BACK-01, BACK-02, BACK-03, BACK-04, BACK-05, UX-04
@@ -168,7 +172,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 
 | Phase | Plans Complete | Status | Completed |
 |---|---|---|---|
-| 1. Foundation & Deployment Shell | 3/3 | Complete   | 2026-09-26 |
+| 1. Foundation & Deployment Shell | 3/4 | In progress | - |
 | 2. Work Hierarchy & Fast Task Management | 0/TBD | Not started | - |
 | 3. Capacity Model & Daily Planning Ledger | 0/TBD | Not started | - |
 | 4. Feasibility Engine & Workload Distribution | 0/TBD | Not started | - |
