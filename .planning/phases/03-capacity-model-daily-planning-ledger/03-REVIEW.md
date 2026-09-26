@@ -1,8 +1,8 @@
 ---
 phase: 03-capacity-model-daily-planning-ledger
-reviewed: 2026-09-26T12:00:00Z
+reviewed: 2026-09-27T00:15:00Z
 depth: standard
-files_reviewed: 26
+files_reviewed: 27
 files_reviewed_list:
   - src/App.tsx
   - src/components/planner/AllocationModal.tsx
@@ -32,172 +32,120 @@ files_reviewed_list:
   - tests/utils/capacity.test.ts
   - tests/views/PlannerView.test.tsx
 findings:
-  critical: 2
-  warning: 5
+  critical: 0
+  warning: 3
   info: 3
-  total: 10
+  total: 6
 status: issues_found
 ---
 
 # Phase 03: Code Review Report
 
-**Reviewed:** 2026-09-26T12:00:00Z
-**Depth:** standard
-**Files Reviewed:** 26
+**Reviewed:** 2026-09-27T00:15:00Z  
+**Depth:** standard  
+**Files Reviewed:** 27  
 **Status:** issues_found
 
 ## Summary
 
-Phase 3 implementation delivers the capacity model, weekly workload planner grid, daily allocations ledger, and settings views. Core Dexie transactions, reactive queries via `useLiveQuery`, and load metrics calculation (`utils/capacity.ts`) function properly with passing test suites.
+Reviewed all Phase 03 source files, repositories, schemas, hooks, views, and test suites, with emphasis on recent gap closure (Plan 03-04) changes in `src/views/PlannerView.tsx`, `src/components/planner/DayColumn.tsx`, `src/components/planner/DayColumnHeader.tsx`, and `src/components/planner/TaskAllocationCard.tsx`.
 
-However, adversarial review revealed two **Critical** defects:
-1. Keyboard listeners in `PlannerView.tsx` intercept browser-native shortcuts (`Ctrl+P`, `Cmd+P`, `Ctrl+N`, `Cmd+N`) because modifier keys are not excluded on bare letter key checks (`e.key === 'p'` and `e.key === 'n'`).
-2. Allocation date collision in `updateAllocation` (`allocationRepo.ts`) silently overwrites and destroys pre-existing planned minutes on the target date.
+The responsive layout fixes in `DayColumnHeader` (flex-wrapping date/tag elements, `gap: '4px 6px'`), `DayColumn` (column padding adjusted to 6px, minimum width 180px), and `TaskAllocationCard` (full-width task name with 2-line WebkitLineClamp, wrap-enabled bottom meta/actions row) resolve UI clipping in narrow desktop column views. All unit and integration test suites pass.
 
-Additionally, 5 **Warnings** and 3 **Info** items were identified regarding note persistence, unhandled DatePicker clears, non-integer input handling, ignored date context in capacity edit triggers, and Ant Design 6 deprecation warnings.
-
----
-
-## Critical Issues
-
-### CR-01: Keyboard Shortcuts Hijack Native Browser Commands (Ctrl+P, Ctrl+N, Cmd+P, Cmd+N)
-
-**File:** `src/views/PlannerView.tsx:62-67`
-**Issue:** The keyboard shortcut handler checks `(e.altKey && e.key === 'ArrowLeft') || e.key === 'p' || e.key === 'P'`. When a user presses `Ctrl+P` (standard print command) or `Ctrl+N` (new window) or Mac equivalents (`Cmd+P`, `Cmd+N`), `e.key === 'p'` / `e.key === 'n'` evaluates to `true`. The code calls `e.preventDefault()`, cancelling browser commands and unexpectedly navigating the planner week backward or forward. (Notice line 68 correctly checks `!e.ctrlKey && !e.metaKey && !e.altKey` for `t`, but `p` and `n` omit this check).
-
-**Fix:**
-```typescript
-      const isBareP = (e.key === 'p' || e.key === 'P') && !e.ctrlKey && !e.metaKey && !e.altKey;
-      const isBareN = (e.key === 'n' || e.key === 'N') && !e.ctrlKey && !e.metaKey && !e.altKey;
-
-      if ((e.altKey && e.key === 'ArrowLeft') || isBareP) {
-        e.preventDefault();
-        setCurrentDate(curr.subtract(1, 'week').startOf('isoWeek').format('YYYY-MM-DD'));
-      } else if ((e.altKey && e.key === 'ArrowRight') || isBareN) {
-        e.preventDefault();
-        setCurrentDate(curr.add(1, 'week').startOf('isoWeek').format('YYYY-MM-DD'));
-      }
-```
-
----
-
-### CR-02: Silent Data Loss on Allocation Date Rescheduling Collision
-
-**File:** `src/db/repositories/allocationRepo.ts:105-113`
-**Issue:** In `updateAllocation`, when moving an allocation to another date where an allocation already exists for the same task, it deletes the source allocation and overwrites the destination record with `validated.allocatedMinutes` (`allocatedMinutes: validated.allocatedMinutes`). Any previously planned time already on that destination date is silently erased without user notification or confirmation.
-
-**Fix:**
-Either sum the minutes up to the daily max (1440m) or reject/warn on collision rather than silently discarding existing minutes:
-```typescript
-      if (collision) {
-        await db.plannedAllocations.delete(id);
-        const combinedMinutes = Math.min(1440, collision.allocatedMinutes + validated.allocatedMinutes);
-        const merged: PlannedAllocation = {
-          ...collision,
-          allocatedMinutes: combinedMinutes,
-        };
-        await db.plannedAllocations.put(merged);
-        return merged;
-      }
-```
-
----
+Zero critical blockers were detected. Three warnings regarding edge cases in keyboard shortcut filtering, stale estimate comparison in modals, and unauthenticated error boundary handling in live queries were identified.
 
 ## Warnings
 
-### WR-01: Date Override Notes Cannot Be Cleared Once Set
+### WR-01: Incomplete Form Element Exclusion in Keyboard Shortcut Listener
 
-**File:** `src/db/repositories/capacityRepo.ts:97`
-**Issue:** `setCapacityOverride` uses `...(validated.note !== undefined ? { note: validated.note } : {})` when updating an existing record. If an override already has a note (e.g. "Doctor visit") and the user later edits the override and clears the note field, `validated.note` is `undefined`, so `existing.note` is preserved. It is impossible to remove a note without deleting the entire override.
+**File:** `src/views/PlannerView.tsx:46-56`  
+**Issue:** The shortcut listener checks for `<input>`, `<textarea>`, `isContentEditable`, and `role="textbox"`. However, native HTML `<select>` elements and Ant Design dropdowns (which may render without `role="textbox"` while interacting) are not excluded. Pressing `P`, `N`, or `T` while focusing a `<select>` or custom widget outside text inputs can inadvertently navigate weeks while typing.  
+**Fix:** Add `target.tagName === 'SELECT'` and check for common ARIA roles (`combobox`, `listbox`, `menuitem`):
 
-**Fix:**
-Explicitly update or delete the `note` property based on user input:
+```tsx
+const isInput =
+  target &&
+  (target.tagName === 'INPUT' ||
+    target.tagName === 'TEXTAREA' ||
+    target.tagName === 'SELECT' ||
+    Boolean(target.isContentEditable) ||
+    target.getAttribute?.('contenteditable') === 'true' ||
+    target.getAttribute?.('contenteditable') === '' ||
+    Boolean(target.closest?.('[contenteditable="true"], [contenteditable=""]')) ||
+    target.getAttribute?.('role') === 'textbox' ||
+    target.getAttribute?.('role') === 'combobox');
+```
+
+### WR-02: Race Condition in `AllocationModal` Task Allocation Loading
+
+**File:** `src/components/planner/AllocationModal.tsx:94-122`  
+**Issue:** In `useEffect`, `loadTaskAllocations()` fetches previous allocations asynchronously when `selectedTaskId` or `selectedDate` changes. If the user rapidly switches tasks in the `Select` dropdown, requests can resolve out of order. While `isMounted` guards unmounting, it does not guard against an older request finishing after a newer one, causing `existingTotalMinutes` and `existingDateMinutes` to display stale values for the currently selected task.  
+**Fix:** Track current active query or check against the active `selectedTaskId`:
+
+```tsx
+let activeTaskId = selectedTaskId;
+let isMounted = true;
+async function loadTaskAllocations() {
+  try {
+    const allocations = await getAllocationsForTask(selectedTaskId, db);
+    if (!isMounted || activeTaskId !== selectedTaskId) return;
+
+    const total = allocations.reduce((sum, a) => sum + a.allocatedMinutes, 0);
+    setExistingTotalMinutes(total);
+
+    const dateStr = selectedDate ? selectedDate.format('YYYY-MM-DD') : '';
+    const onDate = allocations.find((a) => a.date === dateStr);
+    setExistingDateMinutes(onDate ? onDate.allocatedMinutes : 0);
+  } catch {
+    // Silently handle if db unready
+  }
+}
+```
+
+### WR-03: Missing Fallback Cleanup on Allocation Deletion in Repository
+
+**File:** `src/db/repositories/allocationRepo.ts:129-134`  
+**Issue:** `deleteAllocation` executes `await db.plannedAllocations.delete(id)` without validating if `id` exists or wrapping in transaction if cascaded operations are ever required. While Dexie's `delete` is idempotent, silently returning on non-existent IDs can mask UI synchronization drift when optimistic updates occur.  
+**Fix:** Verify existence or return boolean indicating whether deletion removed an existing record.
+
 ```typescript
-      const updated: CapacityOverride = {
-        ...existing,
-        workMinutes: validated.workMinutes,
-      };
-      if (validated.note !== undefined && validated.note.trim() !== '') {
-        updated.note = validated.note.trim();
-      } else {
-        delete updated.note;
-      }
-      await targetDb.capacityOverrides.put(updated);
+export async function deleteAllocation(
+  id: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<boolean> {
+  const existing = await db.plannedAllocations.get(id);
+  if (!existing) return false;
+  await db.plannedAllocations.delete(id);
+  return true;
+}
+```
+
+## Info
+
+### IN-01: Hardcoded Context Switch Threshold Magic Number
+
+**File:** `src/utils/capacity.ts:66`  
+**Issue:** `calculateDayMetrics` defines a default `contextSwitchThreshold = 4`. It would be cleaner to extract this constant as `DEFAULT_CONTEXT_SWITCH_THRESHOLD` so it can be re-used across documentation and settings.  
+**Fix:** Declare `export const DEFAULT_CONTEXT_SWITCH_THRESHOLD = 4;` in `capacity.ts`.
+
+### IN-02: Card Padding Override Deprecated Property in Ant Design 6
+
+**File:** `src/components/planner/TaskAllocationCard.tsx:173`  
+**Issue:** `<Card bodyStyle={{ padding: '8px 10px' }} ...>` uses `bodyStyle`, which is deprecated in modern Ant Design versions in favor of `styles={{ body: { padding: '8px 10px' } }}`.  
+**Fix:** Replace `bodyStyle={{ padding: '8px 10px' }}` with `styles={{ body: { padding: '8px 10px' } }}`.
+
+### IN-03: Redundant Nullish Coalescing in `WeekNavigator`
+
+**File:** `src/components/planner/WeekNavigator.tsx:26-28`  
+**Issue:** `dayjs(currentDate, 'YYYY-MM-DD').isValid()` returns boolean. Parsing twice in succession can be simplified:
+
+```typescript
+const parsed = dayjs(currentDate, 'YYYY-MM-DD');
+const current = parsed.isValid() ? parsed : dayjs();
 ```
 
 ---
 
-### WR-02: Clickable Day Capacity Tag Ignores Date Context
-
-**File:** `src/views/PlannerView.tsx:147`
-**Issue:** `DayColumnHeader` renders a clickable capacity badge with `aria-label="Edit capacity for ${date}"` and passes `date` to `onEditCapacity(date)`. However, `PlannerView.tsx` defines `onEditCapacity={() => setCapacityModalOpen(true)}`, discarding the `date` argument. The generic settings modal opens showing all 7 weekdays and the overrides table, requiring the user to manually click "+ Add Override" and re-select the date they just clicked.
-
-**Fix:**
-Pass the clicked `date` to `CapacitySettingsModal` or open the date override creation directly pre-filled with the selected date.
-
----
-
-### WR-03: DatePickers Missing `allowClear={false}` Cause Stale State on Clear
-
-**File:** `src/components/planner/TaskAllocationCard.tsx:114` and `src/components/tasks/TaskDrawerPlanning.tsx:177,336`
-**Issue:** In `TaskAllocationCard` and `TaskDrawerPlanning`, DatePickers use `onChange={(d) => d && setTargetDate(d)}`. When a user clicks the DatePicker's clear icon, `d` is `null`. The `setTargetDate` handler is skipped, leaving the input visually blank while internal state silently retains the previous date. When saved, it saves with the old date.
-
-**Fix:**
-Add `allowClear={false}` to all required DatePickers in `TaskAllocationCard.tsx` and `TaskDrawerPlanning.tsx` (as done in `WeekNavigator.tsx:96`).
-
----
-
-### WR-04: Unbounded Float Input Causes Zod Schema Rejection
-
-**File:** `src/components/planner/AllocationModal.tsx:150` and `src/components/tasks/TaskDrawerPlanning.tsx:82,115`
-**Issue:** `InputNumber` components for hours and minutes do not specify `precision={0}`. If a user types a fractional number (e.g. 1.2h or 15.5m), `totalMins` becomes non-integer. Because `PlannedAllocationInputSchema` validates with `z.number().int()`, Zod parsing rejects the payload and displays a generic "Failed to save allocation" error without highlighting the field.
-
-**Fix:**
-Add `precision={0}` to all hours/minutes `InputNumber` fields, and use `Math.round((values.hours ?? 0) * 60 + (values.minutes ?? 0))` before schema validation.
-
----
-
-### WR-05: Ant Design 6 Deprecated Props Trigger Console Warnings
-
-**File:** Multiple components (`TaskAllocationCard.tsx:173`, `AllocationModal.tsx:191,322`, `CapacitySettingsModal.tsx:45`, `OverridesTable.tsx:213`, `TaskDrawerPlanning.tsx:302`)
-**Issue:** In Ant Design 6.6.5, several props used throughout Phase 3 are deprecated and log runtime warnings in test and development runs:
-- `Card bodyStyle` -> replace with `styles={{ body: ... }}`
-- `Modal destroyOnClose` -> replace with `destroyOnHidden`
-- `Alert message` -> replace with `title`
-- `Space direction` -> replace with `orientation`
-- `Drawer width` -> replace with `size`
-
-**Fix:**
-Update props to Ant Design 6 canonical equivalents to eliminate deprecation warnings.
-
----
-
-## Info
-
-### IN-01: Unused Repository Export `getWeeklyAllocationsWithTasks`
-
-**File:** `src/db/repositories/allocationRepo.ts:200-270`
-**Issue:** `getWeeklyAllocationsWithTasks` is exported and tested, but never called in application code. `useWeeklyPlanner` queries Dexie tables directly inside `useLiveQuery` to preserve reactive update tracking.
-**Fix:** Keep if reserved for export/reporting utilities, or document as internal helper.
-
----
-
-### IN-02: Hardcoded Context Switching Threshold
-
-**File:** `src/utils/capacity.ts:66` and `src/views/SettingsView.tsx`
-**Issue:** Context switching warning threshold defaults to 4 tasks. Decision D-13 specified this threshold should be configurable in Settings, but `SettingsView` does not expose an input or store setting for this value.
-**Fix:** Add threshold setting to `settings` Dexie store and expose input in `SettingsView`.
-
----
-
-### IN-03: `TaskDrawerPlanning` Preset Sets Absolute Rather Than Incremental Time
-
-**File:** `src/components/tasks/TaskDrawerPlanning.tsx:386-395`
-**Issue:** The button labeled `+30m` in `TaskDrawerPlanning` executes `setHours(0); setMinutes(30);` (replacing the input with 30m) rather than adding 30m to the current input value, unlike `TaskDrawer` which uses `addPresetMinutes(30)`.
-**Fix:** Change onClick to add 30 minutes to existing form values.
-
----
-
-_Reviewed: 2026-09-26T12:00:00Z_
-_Reviewer: Claude (gsd-code-reviewer)_
+_Reviewed: 2026-09-27T00:15:00Z_  
+_Reviewer: Claude (gsd-code-reviewer)_  
 _Depth: standard_
