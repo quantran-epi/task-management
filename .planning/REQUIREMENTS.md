@@ -31,10 +31,10 @@
 
 ### Capacity
 
-- [ ] **CAP-01**: User can configure available work minutes for each weekday using a weekly template.
-- [ ] **CAP-02**: New local data starts with 8 hours for Monday through Friday and 0 hours for Saturday and Sunday, and every value remains editable.
-- [ ] **CAP-03**: User can override capacity for a specific date, including zero-capacity leave and increased-capacity overtime.
-- [ ] **CAP-04**: Effective daily capacity uses a date override when one exists and otherwise uses the matching weekly-template value.
+- [x] **CAP-01**: User can configure available work minutes for each weekday using a weekly template.
+- [x] **CAP-02**: New local data starts with 8 hours for Monday through Friday and 0 hours for Saturday and Sunday, and every value remains editable.
+- [x] **CAP-03**: User can override capacity for a specific date, including zero-capacity leave and increased-capacity overtime.
+- [x] **CAP-04**: Effective daily capacity uses a date override when one exists and otherwise uses the matching weekly-template value.
 
 ### Workload Planning
 
@@ -144,10 +144,10 @@
 | TASK-04 | Phase 2 | Complete |
 | TASK-05 | Phase 2 | Complete |
 | TASK-06 | Phase 2 | Complete |
-| CAP-01 | Phase 3 | Pending |
-| CAP-02 | Phase 3 | Pending |
-| CAP-03 | Phase 3 | Pending |
-| CAP-04 | Phase 3 | Pending |
+| CAP-01 | Phase 3 | Complete |
+| CAP-02 | Phase 3 | Complete |
+| CAP-03 | Phase 3 | Complete |
+| CAP-04 | Phase 3 | Complete |
 | PLAN-01 | Phase 3 | Pending |
 | PLAN-02 | Phase 3 | Pending |
 | PLAN-03 | Phase 3 | Pending |

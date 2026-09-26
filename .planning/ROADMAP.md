@@ -96,7 +96,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 03-01-PLAN.md — Implement weekly capacity rules, date overrides repository, pure capacity engine, and settings configuration UI (CAP-01, CAP-02, CAP-03, CAP-04)
+- [x] 03-01-PLAN.md — Implement weekly capacity rules, date overrides repository, pure capacity engine, and settings configuration UI (CAP-01, CAP-02, CAP-03, CAP-04)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -198,7 +198,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 |---|---|---|---|
 | 1. Foundation & Deployment Shell | 4/4 | Complete | 2026-09-26 |
 | 2. Work Hierarchy & Fast Task Management | 2/3 | In Progress|  |
-| 3. Capacity Model & Daily Planning Ledger | 0/3 | Not started | - |
+| 3. Capacity Model & Daily Planning Ledger | 1/3 | In Progress|  |
 | 4. Feasibility Engine & Workload Distribution | 0/TBD | Not started | - |
 | 5. Actionable Dashboard & Workload Forecasting | 0/TBD | Not started | - |
 | 6. Safe Local Backup & Restore | 0/TBD | Not started | - |
