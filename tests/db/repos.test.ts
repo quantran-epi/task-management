@@ -155,7 +155,7 @@ describe('Project, Milestone & Task Repositories & Schemas (WORK-01, WORK-02, WO
 
       const byProj = await getMilestonesByProject(project.id, testDb);
       expect(byProj).toHaveLength(1);
-      expect(byProj[0].id).toBe(milestone.id);
+      expect(byProj[0]?.id).toBe(milestone.id);
     });
 
     it('updates milestone status and details', async () => {
@@ -227,7 +227,7 @@ describe('Project, Milestone & Task Repositories & Schemas (WORK-01, WORK-02, WO
 
       const byProj = await getTasksByProject(project.id, testDb);
       expect(byProj).toHaveLength(1);
-      expect(byProj[0].id).toBe(task.id);
+      expect(byProj[0]?.id).toBe(task.id);
     });
 
     it('creates milestone-level task (projectId + milestoneId) per WORK-03', async () => {
@@ -247,7 +247,7 @@ describe('Project, Milestone & Task Repositories & Schemas (WORK-01, WORK-02, WO
 
       const byMs = await getTasksByMilestone(milestone.id, testDb);
       expect(byMs).toHaveLength(1);
-      expect(byMs[0].id).toBe(task.id);
+      expect(byMs[0]?.id).toBe(task.id);
     });
 
     it('updates task status across all 6 valid statuses per TASK-03', async () => {
