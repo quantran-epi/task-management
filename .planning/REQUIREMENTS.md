@@ -10,7 +10,7 @@
 - [x] **DATA-01**: User-created projects, milestones, tasks, capacity overrides, and task allocations each retain a stable UUID across edits, moves, exports, imports, and synchronization.
 - [x] **DATA-02**: User data persists locally in IndexedDB across reloads and browser restarts.
 - [x] **DATA-03**: Planning dates persist as calendar-date values independent of timezone, while estimates, capacity, and allocations persist as integer minutes.
-- [ ] **DATA-04**: Application upgrades migrate supported existing data without silent loss and explain when another open tab blocks an upgrade.
+- [x] **DATA-04**: Application upgrades migrate supported existing data without silent loss and explain when another open tab blocks an upgrade.
 
 ### Work Hierarchy
 
@@ -92,7 +92,7 @@
 
 ### User Experience and Accessibility
 
-- [ ] **UX-01**: Application uses Ant Design and responsive layouts for desktop and mobile-width screens.
+- [x] **UX-01**: Application uses Ant Design and responsive layouts for desktop and mobile-width screens.
 - [ ] **UX-02**: Core create, edit, status, progress, allocation, and navigation actions remain keyboard accessible with visible focus.
 - [ ] **UX-03**: Forms provide labels, inline validation, safe defaults, and focus restoration after modal or drawer actions.
 - [ ] **UX-04**: Save, import, encryption, synchronization, and update results are announced in visible text and appropriate assistive-technology status regions.
@@ -132,7 +132,7 @@
 | DATA-01 | Phase 1 | Complete |
 | DATA-02 | Phase 1 | Complete |
 | DATA-03 | Phase 1 | Complete |
-| DATA-04 | Phase 1 | Pending |
+| DATA-04 | Phase 1 | Complete |
 | WORK-01 | Phase 2 | Pending |
 | WORK-02 | Phase 2 | Pending |
 | WORK-03 | Phase 2 | Pending |
@@ -184,7 +184,7 @@
 | SYNC-05 | Phase 8 | Pending |
 | SYNC-06 | Phase 8 | Pending |
 | SYNC-07 | Phase 8 | Pending |
-| UX-01 | Phase 1 | Pending |
+| UX-01 | Phase 1 | Complete |
 | UX-02 | Phase 2 | Pending |
 | UX-03 | Phase 2 | Pending |
 | UX-04 | Phase 6 | Pending |

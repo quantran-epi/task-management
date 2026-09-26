@@ -39,7 +39,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 01-02-PLAN.md — Implement responsive Ant Design shell, hash routing, multi-tab upgrade alert modal, and guarded reset (DATA-04, UX-01)
+- [x] 01-02-PLAN.md — Implement responsive Ant Design shell, hash routing, multi-tab upgrade alert modal, and guarded reset (DATA-04, UX-01)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -168,7 +168,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 
 | Phase | Plans Complete | Status | Completed |
 |---|---|---|---|
-| 1. Foundation & Deployment Shell | 1/3 | In Progress|  |
+| 1. Foundation & Deployment Shell | 2/3 | In Progress|  |
 | 2. Work Hierarchy & Fast Task Management | 0/TBD | Not started | - |
 | 3. Capacity Model & Daily Planning Ledger | 0/TBD | Not started | - |
 | 4. Feasibility Engine & Workload Distribution | 0/TBD | Not started | - |
