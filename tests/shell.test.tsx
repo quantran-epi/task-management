@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { ConfigProvider, theme } from 'antd';
 import { AppShell } from '../src/components/shell/AppShell';
 import App from '../src/App';
 import { db } from '../src/db';
@@ -12,17 +13,25 @@ describe('AppShell Component (UX-01)', () => {
     vi.clearAllMocks();
   });
 
-  it('renders application header title and status badge', () => {
-    render(
-      <AppShell currentRoute="tasks" onNavigate={onNavigate}>
-        <div>Shell Content</div>
-      </AppShell>
+  it('renders application header title and status badge with dynamic token styling', () => {
+    const { container } = render(
+      <ConfigProvider theme={{ algorithm: theme.darkAlgorithm }}>
+        <AppShell currentRoute="tasks" onNavigate={onNavigate} isDark={true}>
+          <div>Shell Content</div>
+        </AppShell>
+      </ConfigProvider>
     );
 
     expect(screen.getByText('Task Planner')).toBeInTheDocument();
     expect(screen.getByText('Online')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Reset DB/i })).toBeInTheDocument();
     expect(screen.getByText('Shell Content')).toBeInTheDocument();
+
+    const header = container.querySelector('header');
+    expect(header).toBeInTheDocument();
+    // In dark mode, colorBgContainer is not white (#fff / rgb(255, 255, 255))
+    expect(header?.getAttribute('style')).not.toContain('background: rgb(255, 255, 255)');
+    expect(header?.getAttribute('style')).not.toContain('background: #fff');
   });
 
   it('renders navigation items and triggers navigation callback', () => {

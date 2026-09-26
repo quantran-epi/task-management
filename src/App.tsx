@@ -62,7 +62,7 @@ export const App: React.FC = () => {
         },
       }}
     >
-      <AppShell currentRoute={route} onNavigate={navigate}>
+      <AppShell currentRoute={route} onNavigate={navigate} isDark={isDark}>
         {renderContent()}
       </AppShell>
     </ConfigProvider>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Layout, Drawer, Grid, Button, Typography, Space } from 'antd';
+import { Layout, Drawer, Grid, Button, Typography, Space, theme } from 'antd';
 import { MenuOutlined } from '@ant-design/icons';
 import { Navigation } from './Navigation';
 import { StatusBadge } from './StatusBadge';
@@ -15,12 +15,17 @@ export interface AppShellProps {
   currentRoute: AppRoute;
   onNavigate: (route: AppRoute) => void;
   children: React.ReactNode;
+  isDark?: boolean;
 }
 
-export const AppShell: React.FC<AppShellProps> = ({ currentRoute, onNavigate, children }) => {
+export const AppShell: React.FC<AppShellProps> = ({ currentRoute, onNavigate, children, isDark: explicitDark }) => {
   const screens = useBreakpoint();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [resetModalOpen, setResetModalOpen] = useState(false);
+  const { token } = theme.useToken();
+
+  // Prefer explicit prop if provided, else check token brightness/property
+  const isDark = explicitDark ?? false;
 
   // md breakpoint is 768px. Mobile when screens.md is false. Default to desktop when screens.md is true or uninitialized in test/SSR.
   const isMobile = screens.md === false;
@@ -28,7 +33,7 @@ export const AppShell: React.FC<AppShellProps> = ({ currentRoute, onNavigate, ch
   return (
     <Layout style={{ minHeight: '100vh' }}>
       {!isMobile ? (
-        <Sider collapsible breakpoint="lg" theme="light">
+        <Sider collapsible breakpoint="lg" theme={isDark ? 'dark' : 'light'}>
           <div style={{ padding: '16px', fontWeight: 600, fontSize: 16 }}>Menu</div>
           <Navigation currentRoute={currentRoute} onNavigate={onNavigate} />
         </Sider>
@@ -57,7 +62,8 @@ export const AppShell: React.FC<AppShellProps> = ({ currentRoute, onNavigate, ch
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '0 16px',
-            background: '#fff',
+            background: token.colorBgContainer,
+            borderBottom: `1px solid ${token.colorBorderSecondary}`,
           }}
         >
           <Space>
