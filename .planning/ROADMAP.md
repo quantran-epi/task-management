@@ -63,8 +63,20 @@ Plans:
   4. User can search items by text and filter/sort by status, project, priority, and date horizon.
   5. User can adjust task status and progress percentages via quick controls without navigating into full modal editors.
 
-**Plans**: TBD
+**Plans**: 3 plans
 **UI hint**: yes
+Plans:
+**Wave 1**
+
+- [ ] 02-01-PLAN.md — Implement typed Dexie repositories, Zod validation schemas, time estimate utilities, task reparenting, and atomic cascade deletions (WORK-01, WORK-02, WORK-03, WORK-04, WORK-05, TASK-02, TASK-04)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 02-02-PLAN.md — Build in-memory task filtering/sorting, keyboard shortcuts, fast inline controls, QuickAddBar, and TaskDrawer with cascading reparenting (WORK-03, WORK-04, TASK-01, TASK-02, TASK-03, TASK-05, TASK-06, UX-02, UX-03, UX-05)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 02-03-PLAN.md — Assemble unified TasksView, TaskFilterBar, TaskTable with batch actions, expandable ProjectTable, CascadeDeleteModal, and route integration (WORK-01, WORK-02, WORK-03, WORK-04, WORK-05, TASK-03, TASK-04, TASK-05, TASK-06, UX-02, UX-05)
 
 ### Phase 3: Capacity Model & Daily Planning Ledger
 
@@ -173,7 +185,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | Phase | Plans Complete | Status | Completed |
 |---|---|---|---|
 | 1. Foundation & Deployment Shell | 4/4 | Complete | 2026-09-26 |
-| 2. Work Hierarchy & Fast Task Management | 0/TBD | Not started | - |
+| 2. Work Hierarchy & Fast Task Management | 0/3 | In progress | - |
 | 3. Capacity Model & Daily Planning Ledger | 0/TBD | Not started | - |
 | 4. Feasibility Engine & Workload Distribution | 0/TBD | Not started | - |
 | 5. Actionable Dashboard & Workload Forecasting | 0/TBD | Not started | - |
