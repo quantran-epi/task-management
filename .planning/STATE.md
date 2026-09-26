@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-09-26T15:35:48.468Z"
+stopped_at: Completed 03-04-PLAN.md
+last_updated: "2026-09-26T17:00:30.177Z"
 last_activity: 2026-09-26 -- Phase 03 execution started
 progress:
   total_phases: 8
   completed_phases: 3
-  total_plans: 10
-  completed_plans: 10
+  total_plans: 11
+  completed_plans: 11
   percent: 38
 ---
 
@@ -69,6 +69,7 @@ Progress: [██████████] 100% (Phase 02)
 | Phase 03 P01 | 15m | 3 tasks | 11 files |
 | Phase 03 P02 | 18m | 3 tasks | 8 files |
 | Phase 03 P03 | 22m | 3 tasks | 11 files |
+| Phase 03 P04 | 4m | - tasks | - files |
 
 ## Accumulated Context
 
@@ -111,6 +112,9 @@ Decisions logged in PROJECT.md Key Decisions table:
 - [Phase ?]: Implemented WeekNavigator with prev/next week controls, Today shortcut, and DatePicker week selector with Alt+Left/Right and Alt+T keyboard shortcuts per D-02
 - [Phase ?]: Provided Show Completed toggle allowing muted display of Done/Cancelled tasks while strictly excluding them from active daily load sums per D-16, PLAN-05
 - [Phase ?]: Mounted PlannerView and SettingsView on /#/planner and /#/settings routes without placeholder empty states
+- [Phase ?]: Expanded desktop weekly grid column min-width from 135px to 180px with overflow-x auto to prevent squashing columns
+- [Phase ?]: DayColumnHeader top row and metrics row wrap dynamically to avoid truncation in constrained widths
+- [Phase ?]: TaskAllocationCard converted to 2-tier stacked structure with full-width 2-line clamped task titles
 
 ### Pending Todos
 
@@ -128,6 +132,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-09-26T15:35:04.577Z
-Stopped at: Completed 03-01-PLAN.md
+Last session: 2026-09-26T17:00:30.152Z
+Stopped at: Completed 03-04-PLAN.md
 Resume file: .planning/phases/03-capacity-model-daily-planning-ledger/03-02-PLAN.md
