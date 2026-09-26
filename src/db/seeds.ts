@@ -7,19 +7,29 @@ import type { CapacityRule } from '../types/models';
  * Sets Mon-Fri (days 1-5) to 480 minutes (8h) and Sat-Sun (days 6, 0) to 0 minutes (D-05).
  */
 export async function initializeDatabaseDefaults(targetDb: TaskPlannerDatabase = db): Promise<void> {
-  const existingRules = await targetDb.capacityRules.count();
-  if (existingRules === 0) {
-    const defaultRules: CapacityRule[] = [
-      { id: generateId(), dayOfWeek: 1, workMinutes: 480 },
-      { id: generateId(), dayOfWeek: 2, workMinutes: 480 },
-      { id: generateId(), dayOfWeek: 3, workMinutes: 480 },
-      { id: generateId(), dayOfWeek: 4, workMinutes: 480 },
-      { id: generateId(), dayOfWeek: 5, workMinutes: 480 },
-      { id: generateId(), dayOfWeek: 6, workMinutes: 0 },
-      { id: generateId(), dayOfWeek: 0, workMinutes: 0 },
-    ];
-    await targetDb.capacityRules.bulkAdd(defaultRules);
-  }
+  await targetDb.transaction('rw', targetDb.capacityRules, async () => {
+    const existingRules = await targetDb.capacityRules.count();
+    if (existingRules === 0) {
+      const defaultRules: CapacityRule[] = [
+        { id: generateId(), dayOfWeek: 1, workMinutes: 480 },
+        { id: generateId(), dayOfWeek: 2, workMinutes: 480 },
+        { id: generateId(), dayOfWeek: 3, workMinutes: 480 },
+        { id: generateId(), dayOfWeek: 4, workMinutes: 480 },
+        { id: generateId(), dayOfWeek: 5, workMinutes: 480 },
+        { id: generateId(), dayOfWeek: 6, workMinutes: 0 },
+        { id: generateId(), dayOfWeek: 0, workMinutes: 0 },
+      ];
+      try {
+        await targetDb.capacityRules.bulkAdd(defaultRules);
+      } catch (err: unknown) {
+        // Handle race where another transaction completed bulkAdd concurrently
+        if (err && typeof err === 'object' && 'name' in err && err.name === 'ConstraintError') {
+          return;
+        }
+        throw err;
+      }
+    }
+  });
 }
 
 /**

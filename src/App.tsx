@@ -23,7 +23,7 @@ export const App: React.FC = () => {
     });
   }, []);
 
-  const capacityRules = useLiveQuery(() => db.capacityRules.toArray(), []) ?? [];
+  const capacityRules = useLiveQuery(() => db.capacityRules.orderBy('dayOfWeek').toArray(), []) ?? [];
 
   const renderContent = () => {
     switch (route) {

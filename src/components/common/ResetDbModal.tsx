@@ -20,6 +20,8 @@ export const ResetDbModal: React.FC<ResetDbModalProps> = ({ open, onClose }) => 
       await resetDatabaseToDefaults();
       setConfirmText('');
       onClose();
+    } catch (err) {
+      console.error('Failed to reset database:', err);
     } finally {
       setLoading(false);
     }

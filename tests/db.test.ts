@@ -56,6 +56,17 @@ describe('Dexie Database Persistence & Seed Layer (DATA-02, D-05, D-07)', () => 
     expect(count).toBe(7);
   });
 
+  it('handles concurrent initializeDatabaseDefaults calls atomically without duplicates (CR-02)', async () => {
+    await Promise.all([
+      initializeDatabaseDefaults(testDb),
+      initializeDatabaseDefaults(testDb),
+      initializeDatabaseDefaults(testDb),
+    ]);
+
+    const count = await testDb.capacityRules.count();
+    expect(count).toBe(7);
+  });
+
   it('persists records across database close and reopen (DATA-02)', async () => {
     const projectId = generateId();
     const taskId = generateId();
