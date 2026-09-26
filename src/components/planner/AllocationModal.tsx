@@ -28,11 +28,11 @@ const { Text } = Typography;
 
 export interface AllocationModalProps {
   open: boolean;
-  initialDate?: string;
-  initialTaskId?: string;
+  initialDate?: string | undefined;
+  initialTaskId?: string | undefined;
   onCancel: () => void;
-  onSuccess?: () => void;
-  db?: TaskPlannerDatabase;
+  onSuccess?: (() => void) | undefined;
+  db?: TaskPlannerDatabase | undefined;
 }
 
 const PRIORITY_COLORS: Record<TaskPriority, string> = {

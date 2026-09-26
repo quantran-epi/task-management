@@ -1,6 +1,6 @@
 import React from 'react';
-import { Button, Typography, Empty } from 'antd';
-import { PlusOutlined, CalendarOutlined } from '@ant-design/icons';
+import { Button, Typography } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
 import type { DayPlannerData } from '../../hooks/useWeeklyPlanner';
 import { DayColumnHeader } from './DayColumnHeader';
 import { TaskAllocationCard } from './TaskAllocationCard';
@@ -13,8 +13,8 @@ export interface DayColumnProps {
   showCompleted: boolean;
   onAllocate: (date: string) => void;
   onEditCapacity: (date: string) => void;
-  onTaskClick?: (taskId: string) => void;
-  db?: TaskPlannerDatabase;
+  onTaskClick?: ((taskId: string) => void) | undefined;
+  db?: TaskPlannerDatabase | undefined;
 }
 
 export const DayColumn: React.FC<DayColumnProps> = ({

@@ -3,7 +3,6 @@ import { Button, DatePicker, Space, Typography } from 'antd';
 import {
   LeftOutlined,
   RightOutlined,
-  CalendarOutlined,
   SettingOutlined,
 } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';

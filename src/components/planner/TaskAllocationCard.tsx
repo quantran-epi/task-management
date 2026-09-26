@@ -33,8 +33,8 @@ export interface TaskAllocationCardProps {
   allocation: PlannedAllocation;
   task: Task;
   isActive: boolean;
-  onEditTask?: (taskId: string) => void;
-  db?: TaskPlannerDatabase;
+  onEditTask?: ((taskId: string) => void) | undefined;
+  db?: TaskPlannerDatabase | undefined;
 }
 
 const PRIORITY_COLORS: Record<TaskPriority, string> = {

@@ -96,7 +96,7 @@ describe('App Integration & Hash Route & Live Query (UX-01, DATA-02)', () => {
     window.location.hash = '#/planner';
     window.dispatchEvent(new HashChangeEvent('hashchange'));
 
-    expect(await screen.findByText('Workload Planner')).toBeInTheDocument();
-    expect(screen.getByText(/Daily capacity allocation/i)).toBeInTheDocument();
+    expect(await screen.findByTestId('planner-view')).toBeInTheDocument();
+    expect(screen.getByTestId('week-navigator')).toBeInTheDocument();
   });
 });

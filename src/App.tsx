@@ -7,6 +7,7 @@ import { useHashRoute } from './hooks/useHashRoute';
 import { useThemeMode } from './hooks/useThemeMode';
 import { TasksView } from './views/TasksView';
 import { ProjectsView } from './views/ProjectsView';
+import { PlannerView } from './views/PlannerView';
 import { SettingsView } from './views/SettingsView';
 
 const { defaultAlgorithm, darkAlgorithm } = theme;
@@ -28,7 +29,7 @@ export const App: React.FC = () => {
       case 'projects':
         return <ProjectsView />;
       case 'planner':
-        return <EmptyState heading="Workload Planner" body="Daily capacity allocation and workload horizon forecasting." />;
+        return <PlannerView />;
       case 'settings':
         return <SettingsView onNavigate={navigate} />;
       default:
