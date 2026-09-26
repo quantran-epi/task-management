@@ -35,7 +35,7 @@ Deliver a production-ready, client-side, offline-first task and capacity plannin
 Plans:
 **Wave 1**
 
-- [ ] 01-01-PLAN.md — Scaffold runtime, core models, UUID generator, date utilities, and Dexie persistence substrate with capacity seeds (DATA-01, DATA-02, DATA-03)
+- [x] 01-01-PLAN.md — Scaffold runtime, core models, UUID generator, date utilities, and Dexie persistence substrate with capacity seeds (DATA-01, DATA-02, DATA-03)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -168,7 +168,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 
 | Phase | Plans Complete | Status | Completed |
 |---|---|---|---|
-| 1. Foundation & Deployment Shell | 0/3 | Not started | - |
+| 1. Foundation & Deployment Shell | 1/3 | In Progress|  |
 | 2. Work Hierarchy & Fast Task Management | 0/TBD | Not started | - |
 | 3. Capacity Model & Daily Planning Ledger | 0/TBD | Not started | - |
 | 4. Feasibility Engine & Workload Distribution | 0/TBD | Not started | - |

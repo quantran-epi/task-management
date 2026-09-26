@@ -7,9 +7,9 @@
 
 ### Data Foundation
 
-- [ ] **DATA-01**: User-created projects, milestones, tasks, capacity overrides, and task allocations each retain a stable UUID across edits, moves, exports, imports, and synchronization.
-- [ ] **DATA-02**: User data persists locally in IndexedDB across reloads and browser restarts.
-- [ ] **DATA-03**: Planning dates persist as calendar-date values independent of timezone, while estimates, capacity, and allocations persist as integer minutes.
+- [x] **DATA-01**: User-created projects, milestones, tasks, capacity overrides, and task allocations each retain a stable UUID across edits, moves, exports, imports, and synchronization.
+- [x] **DATA-02**: User data persists locally in IndexedDB across reloads and browser restarts.
+- [x] **DATA-03**: Planning dates persist as calendar-date values independent of timezone, while estimates, capacity, and allocations persist as integer minutes.
 - [ ] **DATA-04**: Application upgrades migrate supported existing data without silent loss and explain when another open tab blocks an upgrade.
 
 ### Work Hierarchy
@@ -129,9 +129,9 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DATA-01 | Phase 1 | Pending |
-| DATA-02 | Phase 1 | Pending |
-| DATA-03 | Phase 1 | Pending |
+| DATA-01 | Phase 1 | Complete |
+| DATA-02 | Phase 1 | Complete |
+| DATA-03 | Phase 1 | Complete |
 | DATA-04 | Phase 1 | Pending |
 | WORK-01 | Phase 2 | Pending |
 | WORK-02 | Phase 2 | Pending |
@@ -191,6 +191,7 @@
 | UX-05 | Phase 2 | Pending |
 
 **Coverage:**
+
 - v1 requirements: 59 total
 - Mapped to phases: 59
 - Unmapped: 0
