@@ -1,11 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import 'fake-indexeddb/auto';
 import { App } from '../../src/App';
 import { db } from '../../src/db';
 import { createProject } from '../../src/db/repositories/projectRepo';
-import { createTask } from '../../src/db/repositories/taskRepo';
 
 describe('App & Route Integration', () => {
   beforeEach(async () => {
@@ -45,8 +43,8 @@ describe('App & Route Integration', () => {
 
     render(<App />);
 
-    // Switch hash to projects
-    fireEvent.click(screen.getByRole('link', { name: /Projects/i }));
+    // Switch hash to projects by clicking menu item
+    fireEvent.click(screen.getByRole('menuitem', { name: /Projects/i }));
 
     await waitFor(() => {
       expect(screen.getByText('Integration Project')).toBeInTheDocument();

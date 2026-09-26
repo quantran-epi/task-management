@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import 'fake-indexeddb/auto';
 import { TaskPlannerDatabase } from '../../src/db';
@@ -7,7 +6,6 @@ import { ProjectTable } from '../../src/components/projects/ProjectTable';
 import { ProjectModal } from '../../src/components/projects/ProjectModal';
 import { MilestoneModal } from '../../src/components/projects/MilestoneModal';
 import { CascadeDeleteModal } from '../../src/components/projects/CascadeDeleteModal';
-import { ProjectsView } from '../../src/views/ProjectsView';
 import type { Project, Milestone, Task } from '../../src/types/models';
 
 describe('ProjectsView & Hierarchy Components', () => {
