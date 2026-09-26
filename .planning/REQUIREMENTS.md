@@ -38,12 +38,12 @@
 
 ### Workload Planning
 
-- [ ] **PLAN-01**: User can assign planned hours and minutes from a task to individual calendar dates.
-- [ ] **PLAN-02**: User can edit or remove a daily task allocation and see the task's total allocated time.
+- [x] **PLAN-01**: User can assign planned hours and minutes from a task to individual calendar dates.
+- [x] **PLAN-02**: User can edit or remove a daily task allocation and see the task's total allocated time.
 - [ ] **PLAN-03**: User can see each date's capacity, allocated time, and remaining or excess time.
 - [ ] **PLAN-04**: User can distinguish available, busy, overloaded, and no-capacity days using text or icons in addition to color.
-- [ ] **PLAN-05**: Done and Cancelled task allocations remain stored for history but are excluded from active workload totals.
-- [ ] **PLAN-06**: User can manually adjust suggested or existing allocations before saving them.
+- [x] **PLAN-05**: Done and Cancelled task allocations remain stored for history but are excluded from active workload totals.
+- [x] **PLAN-06**: User can manually adjust suggested or existing allocations before saving them.
 
 ### Feasibility Calculator
 
@@ -148,12 +148,12 @@
 | CAP-02 | Phase 3 | Complete |
 | CAP-03 | Phase 3 | Complete |
 | CAP-04 | Phase 3 | Complete |
-| PLAN-01 | Phase 3 | Pending |
-| PLAN-02 | Phase 3 | Pending |
+| PLAN-01 | Phase 3 | Complete |
+| PLAN-02 | Phase 3 | Complete |
 | PLAN-03 | Phase 3 | Pending |
 | PLAN-04 | Phase 3 | Pending |
-| PLAN-05 | Phase 3 | Pending |
-| PLAN-06 | Phase 3 | Pending |
+| PLAN-05 | Phase 3 | Complete |
+| PLAN-06 | Phase 3 | Complete |
 | CALC-01 | Phase 4 | Pending |
 | CALC-02 | Phase 4 | Pending |
 | CALC-03 | Phase 4 | Pending |

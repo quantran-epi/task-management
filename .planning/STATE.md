@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-09-26T14:37:30.876Z"
+last_updated: "2026-09-26T15:04:17.534Z"
 last_activity: 2026-09-26 -- Phase 03 execution started
 progress:
   total_phases: 8
   completed_phases: 2
   total_plans: 10
-  completed_plans: 8
+  completed_plans: 9
   percent: 25
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-09-26)
 ## Current Position
 
 Phase: 03 (capacity-model-daily-planning-ledger) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-09-26 -- Phase 03 execution started
 
@@ -67,6 +67,7 @@ Progress: [██████████] 100% (Phase 02)
 | Phase 2 P2 | 18m | 3 tasks | 16 files |
 | Phase 2 P3 | 25m | 2 tasks | 12 files |
 | Phase 03 P01 | 15m | 3 tasks | 11 files |
+| Phase 03 P02 | 18m | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -98,6 +99,11 @@ Decisions logged in PROJECT.md Key Decisions table:
 - [Phase 2]: Defaulted CascadeDeleteModal action to task-preserving orphan mode to prevent accidental data loss (T-02-08, D-13, D-14)
 - [Phase 2]: Wrapped batch mutations in Dexie atomic transactions to guarantee data consistency during multi-record updates (T-02-09, D-11)
 - [Phase 03]: Specific date overrides take precedence over weekly template rules in getEffectiveDailyCapacity
+- [Phase 03]: Enforced unique constraint per (taskId, date) by transactional check-and-update in upsertAllocation per D-12
+- [Phase 03]: Implemented date collision resolution in updateAllocation: moving an allocation to an already allocated date merges records per PLAN-02
+- [Phase 03]: Filtered task status in getAllocationsForDate and getWeeklyAllocationsWithTasks to strictly exclude Done and Cancelled tasks from active load sums per PLAN-05 and D-16
+- [Phase 03]: Displayed soft orange warning Alert when cumulative planned time exceeds task estimate without blocking saving per D-10 and PLAN-06
+- [Phase 03]: Rendered inactive Done and Cancelled task allocation cards with 50% opacity, strikethrough, and exclusion badges per D-16
 
 ### Pending Todos
 
@@ -115,6 +121,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-09-26T14:37:30.852Z
+Last session: 2026-09-26T15:03:33.845Z
 Stopped at: Completed 03-01-PLAN.md
 Resume file: .planning/phases/03-capacity-model-daily-planning-ledger/03-02-PLAN.md

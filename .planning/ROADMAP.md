@@ -100,7 +100,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 03-02-PLAN.md — Build daily task allocation ledger repository, allocation modal with estimate tracking, and TaskDrawer integration (PLAN-01, PLAN-02, PLAN-05, PLAN-06)
+- [x] 03-02-PLAN.md — Build daily task allocation ledger repository, allocation modal with estimate tracking, and TaskDrawer integration (PLAN-01, PLAN-02, PLAN-05, PLAN-06)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -198,7 +198,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 |---|---|---|---|
 | 1. Foundation & Deployment Shell | 4/4 | Complete | 2026-09-26 |
 | 2. Work Hierarchy & Fast Task Management | 2/3 | In Progress|  |
-| 3. Capacity Model & Daily Planning Ledger | 1/3 | In Progress|  |
+| 3. Capacity Model & Daily Planning Ledger | 2/3 | In Progress|  |
 | 4. Feasibility Engine & Workload Distribution | 0/TBD | Not started | - |
 | 5. Actionable Dashboard & Workload Forecasting | 0/TBD | Not started | - |
 | 6. Safe Local Backup & Restore | 0/TBD | Not started | - |
