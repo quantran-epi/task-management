@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 2 UI-SPEC approved
-last_updated: "2026-09-26T11:01:02.422Z"
+last_updated: "2026-09-26T11:26:24.925Z"
 last_activity: 2026-09-26 -- Phase 02 execution started
 progress:
   total_phases: 8
   completed_phases: 1
   total_plans: 7
-  completed_plans: 5
+  completed_plans: 6
   percent: 13
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-09-26)
 ## Current Position
 
 Phase: 02 (work-hierarchy-fast-task-management) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-09-26 -- Phase 02 execution started
 
@@ -63,6 +63,7 @@ Progress: [██████████] 100% (Phase 01)
 | Phase 01 P03 | 6m | 2 tasks | 3 files |
 | Phase 01 P04 | 6m | 2 tasks | 7 files |
 | Phase 2 P1 | 10m | 3 tasks | 10 files |
+| Phase 2 P2 | 18m | 3 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -88,6 +89,9 @@ Decisions logged in PROJECT.md Key Decisions table:
 - [Phase 2]: Preserved exactOptionalPropertyTypes strict typing in repositories by using conditional assignment rather than spreading undefined values into models.
 - [Phase 2]: Quick-add parser uses lastIndexOf('~') and regex matching on the trailing token to handle unspaced and multi-token task names robustly.
 - [Phase 2]: Atomic transactions wrap all multi-table deletion routines in cascadeRepo, cleaning up plannedAllocations to eliminate orphaned allocations.
+- [Phase 2]: Configured JSDOM global.ResizeObserver mock in tests/setup.ts to support Ant Design 6 dropdown, popover, and select animations
+- [Phase 2]: Configured fileParallelism: false in vite.config.ts test runner to prevent Windows worker thread timeouts across concurrent test files
+- [Phase 2]: Used strict YYYY-MM-DD calendar string comparisons in matchesHorizon to eliminate timezone drift across UTC midnight (T-02-06)
 
 ### Pending Todos
 
@@ -105,6 +109,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-09-26T11:00:41.891Z
+Last session: 2026-09-26T11:26:11.791Z
 Stopped at: Phase 2 UI-SPEC approved
 Resume file: .planning/phases/02-work-hierarchy-fast-task-management/02-UI-SPEC.md

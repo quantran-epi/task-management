@@ -72,7 +72,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 02-02-PLAN.md — Build in-memory task filtering/sorting, keyboard shortcuts, fast inline controls, QuickAddBar, and TaskDrawer with cascading reparenting (WORK-03, WORK-04, TASK-01, TASK-02, TASK-03, TASK-05, TASK-06, UX-02, UX-03, UX-05)
+- [x] 02-02-PLAN.md — Build in-memory task filtering/sorting, keyboard shortcuts, fast inline controls, QuickAddBar, and TaskDrawer with cascading reparenting (WORK-03, WORK-04, TASK-01, TASK-02, TASK-03, TASK-05, TASK-06, UX-02, UX-03, UX-05)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -185,7 +185,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | Phase | Plans Complete | Status | Completed |
 |---|---|---|---|
 | 1. Foundation & Deployment Shell | 4/4 | Complete | 2026-09-26 |
-| 2. Work Hierarchy & Fast Task Management | 1/3 | In Progress|  |
+| 2. Work Hierarchy & Fast Task Management | 2/3 | In Progress|  |
 | 3. Capacity Model & Daily Planning Ledger | 0/TBD | Not started | - |
 | 4. Feasibility Engine & Workload Distribution | 0/TBD | Not started | - |
 | 5. Actionable Dashboard & Workload Forecasting | 0/TBD | Not started | - |

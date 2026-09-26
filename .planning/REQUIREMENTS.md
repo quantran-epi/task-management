@@ -22,12 +22,12 @@
 
 ### Task Details
 
-- [ ] **TASK-01**: User can record task name, description, deadline, notes, actual start date, actual end date, status, progress percentage, priority, estimate, and document links.
+- [x] **TASK-01**: User can record task name, description, deadline, notes, actual start date, actual end date, status, progress percentage, priority, estimate, and document links.
 - [x] **TASK-02**: User can enter estimates using hours and minutes while the application stores an exact integer-minute value.
-- [ ] **TASK-03**: User can use task statuses Open, In Progress, Resolved, In Review, Done, and Cancelled.
+- [x] **TASK-03**: User can use task statuses Open, In Progress, Resolved, In Review, Done, and Cancelled.
 - [x] **TASK-04**: User can use project and milestone statuses Open, In Progress, Done, and Cancelled.
-- [ ] **TASK-05**: User can search work items by text and filter or sort tasks by status, project, priority, and date horizon.
-- [ ] **TASK-06**: User can update task status and progress through fast controls without opening a complex editor.
+- [x] **TASK-05**: User can search work items by text and filter or sort tasks by status, project, priority, and date horizon.
+- [x] **TASK-06**: User can update task status and progress through fast controls without opening a complex editor.
 
 ### Capacity
 
@@ -93,10 +93,10 @@
 ### User Experience and Accessibility
 
 - [x] **UX-01**: Application uses Ant Design and responsive layouts for desktop and mobile-width screens.
-- [ ] **UX-02**: Core create, edit, status, progress, allocation, and navigation actions remain keyboard accessible with visible focus.
-- [ ] **UX-03**: Forms provide labels, inline validation, safe defaults, and focus restoration after modal or drawer actions.
+- [x] **UX-02**: Core create, edit, status, progress, allocation, and navigation actions remain keyboard accessible with visible focus.
+- [x] **UX-03**: Forms provide labels, inline validation, safe defaults, and focus restoration after modal or drawer actions.
 - [ ] **UX-04**: Save, import, encryption, synchronization, and update results are announced in visible text and appropriate assistive-technology status regions.
-- [ ] **UX-05**: Common task updates and workload adjustments require minimal navigation and avoid mandatory multi-step wizards.
+- [x] **UX-05**: Common task updates and workload adjustments require minimal navigation and avoid mandatory multi-step wizards.
 
 ## v2 Requirements
 
@@ -138,12 +138,12 @@
 | WORK-03 | Phase 2 | Complete |
 | WORK-04 | Phase 2 | Complete |
 | WORK-05 | Phase 2 | Complete |
-| TASK-01 | Phase 2 | Pending |
+| TASK-01 | Phase 2 | Complete |
 | TASK-02 | Phase 2 | Complete |
-| TASK-03 | Phase 2 | Pending |
+| TASK-03 | Phase 2 | Complete |
 | TASK-04 | Phase 2 | Complete |
-| TASK-05 | Phase 2 | Pending |
-| TASK-06 | Phase 2 | Pending |
+| TASK-05 | Phase 2 | Complete |
+| TASK-06 | Phase 2 | Complete |
 | CAP-01 | Phase 3 | Pending |
 | CAP-02 | Phase 3 | Pending |
 | CAP-03 | Phase 3 | Pending |
@@ -185,10 +185,10 @@
 | SYNC-06 | Phase 8 | Pending |
 | SYNC-07 | Phase 8 | Pending |
 | UX-01 | Phase 1 | Complete |
-| UX-02 | Phase 2 | Pending |
-| UX-03 | Phase 2 | Pending |
+| UX-02 | Phase 2 | Complete |
+| UX-03 | Phase 2 | Complete |
 | UX-04 | Phase 6 | Pending |
-| UX-05 | Phase 2 | Pending |
+| UX-05 | Phase 2 | Complete |
 
 **Coverage:**
 
