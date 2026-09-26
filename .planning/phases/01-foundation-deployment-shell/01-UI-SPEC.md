@@ -1,7 +1,7 @@
 ---
 phase: 1
 slug: foundation-deployment-shell
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-09-26
@@ -22,6 +22,17 @@ created: 2026-09-26
 | Component library | antd (Ant Design 6.6.5) |
 | Icon library | @ant-design/icons (6.3.4) |
 | Font | system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif |
+
+---
+
+## Visual Hierarchy & Focal Point
+
+| Layout Context | Focal Anchor | Visual Weight |
+|----------------|--------------|---------------|
+| Desktop Shell | Header title + Active Route Segment | Medium weight, high contrast |
+| Sider Navigation | Active Menu Item (Accent #1677ff background tint) | Primary interaction anchor |
+| Notification Bar | Service worker update alert ("Reload Page") | Top-level high-visibility focal banner |
+| Mobile Shell | Collapsed header bar + Hamburger trigger | Compact 44px min touch anchor |
 
 ---
 
@@ -99,11 +110,11 @@ Status colors:
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
+- [x] Dimension 1 Copywriting: PASS
+- [x] Dimension 2 Visuals: PASS
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: PASS
+- [x] Dimension 6 Registry Safety: PASS
 
-**Approval:** pending
+**Approval:** approved
