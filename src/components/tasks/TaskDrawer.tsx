@@ -19,6 +19,7 @@ import { getTask, updateTask, reparentTask } from '../../db/repositories/taskRep
 import { getAllProjects } from '../../db/repositories/projectRepo';
 import { getAllMilestones } from '../../db/repositories/milestoneRepo';
 import { createFocusRestorer } from '../../utils/focus';
+import { TaskDrawerPlanning } from './TaskDrawerPlanning';
 import type { TaskPlannerDatabase } from '../../db';
 
 export interface TaskDrawerProps {
@@ -68,9 +69,13 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
   const [form] = Form.useForm<TaskDrawerFormValues>();
   const [projects, setProjects] = useState<Project[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
+  const [currentTask, setCurrentTask] = useState<Task | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const selectedProjectId = Form.useWatch('projectId', form);
+  const watchHours = Form.useWatch('hours', form) ?? 0;
+  const watchMinutes = Form.useWatch('minutes', form) ?? 0;
+  const liveEstimateMinutes = watchHours * 60 + watchMinutes;
   const restorerRef = useRef<(() => void) | null>(null);
 
   // Focus management
@@ -110,6 +115,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
         if (!mounted) return;
         setProjects(projList);
         setMilestones(msList);
+        setCurrentTask(taskData ?? null);
 
         if (taskData) {
           form.setFieldsValue({
@@ -397,6 +403,18 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
         </Form.Item>
 
         <Divider style={{ margin: '16px 0' }} />
+
+        {/* Planning & Daily Allocations (D-09) */}
+        {currentTask && (
+          <div style={{ marginBottom: 16 }}>
+            <TaskDrawerPlanning
+              task={currentTask}
+              liveEstimateMinutes={liveEstimateMinutes}
+              db={db}
+            />
+            <Divider style={{ margin: '16px 0' }} />
+          </div>
+        )}
 
         {/* Document Links */}
         <Form.Item label="Document Links">
