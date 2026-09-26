@@ -7,9 +7,9 @@ import type { TaskPlannerDatabase } from '../../db';
 export interface InlineStatusTagProps {
   taskId: string;
   status: TaskStatus;
-  estimateMinutes?: number;
-  onStatusChange?: (newStatus: TaskStatus) => void;
-  db?: TaskPlannerDatabase;
+  estimateMinutes?: number | undefined;
+  onStatusChange?: ((newStatus: TaskStatus) => void) | undefined;
+  db?: TaskPlannerDatabase | undefined;
 }
 
 const STATUS_CONFIG: Record<

@@ -6,8 +6,8 @@ import type { TaskPlannerDatabase } from '../../db';
 export interface InlineProgressProps {
   taskId: string;
   progress: number;
-  onProgressChange?: (newProgress: number) => void;
-  db?: TaskPlannerDatabase;
+  onProgressChange?: ((newProgress: number) => void) | undefined;
+  db?: TaskPlannerDatabase | undefined;
 }
 
 export const InlineProgress: React.FC<InlineProgressProps> = ({

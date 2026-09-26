@@ -1,12 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import 'fake-indexeddb/auto';
 import { TaskPlannerDatabase } from '../../src/db';
 import { TaskTable } from '../../src/components/tasks/TaskTable';
 import { TaskFilterBar } from '../../src/components/tasks/TaskFilterBar';
 import { BatchActionBar } from '../../src/components/tasks/BatchActionBar';
-import { TasksView } from '../../src/views/TasksView';
 import type { Task, Project } from '../../src/types/models';
 import { DEFAULT_TASK_FILTER_STATE } from '../../src/utils/filter';
 
@@ -17,7 +15,6 @@ describe('TaskTable Component', () => {
     {
       id: 'proj-1',
       name: 'Project Alpha',
-      color: '#1677ff',
       status: 'In Progress',
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
@@ -73,7 +70,7 @@ describe('TaskTable Component', () => {
     );
 
     expect(screen.getByPlaceholderText(/Search tasks/i)).toBeInTheDocument();
-    expect(screen.getByText('All')).toBeInTheDocument();
+    expect(screen.getAllByText('All').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText('Projects')).toBeInTheDocument();
     expect(screen.getByText('Standalone')).toBeInTheDocument();
     expect(screen.getByText(/Include Done & Cancelled/i)).toBeInTheDocument();

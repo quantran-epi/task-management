@@ -2,10 +2,10 @@ import React from 'react';
 import { Tag } from 'antd';
 
 export interface HierarchyBreadcrumbProps {
-  projectId?: string;
-  projectName?: string;
-  milestoneName?: string;
-  onSelectProject?: (projectId: string) => void;
+  projectId?: string | undefined;
+  projectName?: string | undefined;
+  milestoneName?: string | undefined;
+  onSelectProject?: ((projectId: string) => void) | undefined;
 }
 
 export const HierarchyBreadcrumb: React.FC<HierarchyBreadcrumbProps> = ({
