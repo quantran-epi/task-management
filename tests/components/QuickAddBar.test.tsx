@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { TaskPlannerDatabase } from '../../src/db';
 import { QuickAddBar } from '../../src/components/tasks/QuickAddBar';
@@ -32,7 +31,7 @@ describe('QuickAddBar', () => {
       expect(onCreated).toHaveBeenCalledTimes(1);
     });
 
-    const createdTask = onCreated.mock.calls[0][0];
+    const createdTask = onCreated.mock.calls[0]![0];
     expect(createdTask.name).toBe('Refactor auth service');
     expect(createdTask.estimateMinutes).toBe(150);
     expect(createdTask.status).toBe('Open');
@@ -44,15 +43,17 @@ describe('QuickAddBar', () => {
 
   it('creates task assigned to selected project', async () => {
     const onCreated = vi.fn();
+    const p1Id = '11111111-1111-4111-8111-111111111111';
+    const p2Id = '22222222-2222-4222-8222-222222222222';
     const projects = [
-      { id: 'p1', name: 'Project Alpha' },
-      { id: 'p2', name: 'Project Beta' },
+      { id: p1Id, name: 'Project Alpha' },
+      { id: p2Id, name: 'Project Beta' },
     ];
 
     render(
       <QuickAddBar
         projects={projects}
-        defaultProjectId="p1"
+        defaultProjectId={p1Id}
         onTaskCreated={onCreated}
         db={testDb}
       />
@@ -66,10 +67,10 @@ describe('QuickAddBar', () => {
       expect(onCreated).toHaveBeenCalledTimes(1);
     });
 
-    const createdTask = onCreated.mock.calls[0][0];
+    const createdTask = onCreated.mock.calls[0]![0];
     expect(createdTask.name).toBe('Write unit tests');
     expect(createdTask.estimateMinutes).toBe(45);
-    expect(createdTask.projectId).toBe('p1');
+    expect(createdTask.projectId).toBe(p1Id);
   });
 
   it('ignores empty submission', async () => {

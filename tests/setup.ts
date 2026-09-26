@@ -19,3 +19,11 @@ Object.defineProperty(window, 'matchMedia', {
     };
   },
 });
+
+// ResizeObserver shim for Ant Design dropdowns / popovers
+global.ResizeObserver = class ResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
+
