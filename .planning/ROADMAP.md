@@ -6,7 +6,7 @@ Deliver a production-ready, client-side, offline-first task and capacity plannin
 
 ## Phases
 
-- [ ] **Phase 1: Foundation & Deployment Shell** - Scaffolding, GitHub Actions Pages deployment, Dexie IndexedDB persistence, UUIDs, migrations, and responsive shell.
+- [x] **Phase 1: Foundation & Deployment Shell** - Scaffolding, GitHub Actions Pages deployment, Dexie IndexedDB persistence, UUIDs, migrations, and responsive shell. (completed 2026-09-26)
 - [ ] **Phase 2: Work Hierarchy & Fast Task Management** - Projects, milestones, and task CRUD with reparenting, cascading confirmations, search, filters, and fast controls.
 - [ ] **Phase 3: Capacity Model & Daily Planning Ledger** - Weekly capacity templates, per-date overrides, daily minute allocations, and accessible load status indicators.
 - [ ] **Phase 4: Feasibility Engine & Workload Distribution** - Deadline and range feasibility checks with deterministic lowest-load candidate distributions.
@@ -43,7 +43,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 01-03-PLAN.md — Configure static production build for subpath hosting and implement GitHub Actions CI/CD deployment workflow (PWA-04, PWA-05)
+- [x] 01-03-PLAN.md — Configure static production build for subpath hosting and implement GitHub Actions CI/CD deployment workflow (PWA-04, PWA-05)
 
 ### Phase 2: Work Hierarchy & Fast Task Management
 
@@ -168,7 +168,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 
 | Phase | Plans Complete | Status | Completed |
 |---|---|---|---|
-| 1. Foundation & Deployment Shell | 2/3 | In Progress|  |
+| 1. Foundation & Deployment Shell | 3/3 | Complete   | 2026-09-26 |
 | 2. Work Hierarchy & Fast Task Management | 0/TBD | Not started | - |
 | 3. Capacity Model & Daily Planning Ledger | 0/TBD | Not started | - |
 | 4. Feasibility Engine & Workload Distribution | 0/TBD | Not started | - |
