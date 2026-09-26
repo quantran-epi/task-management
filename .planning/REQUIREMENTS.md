@@ -127,16 +127,73 @@
 
 ## Traceability
 
-Roadmap phase mappings will be added after roadmap approval.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DATA-01 through UX-05 | Unassigned | Pending |
+| DATA-01 | Phase 1 | Pending |
+| DATA-02 | Phase 1 | Pending |
+| DATA-03 | Phase 1 | Pending |
+| DATA-04 | Phase 1 | Pending |
+| WORK-01 | Phase 2 | Pending |
+| WORK-02 | Phase 2 | Pending |
+| WORK-03 | Phase 2 | Pending |
+| WORK-04 | Phase 2 | Pending |
+| WORK-05 | Phase 2 | Pending |
+| TASK-01 | Phase 2 | Pending |
+| TASK-02 | Phase 2 | Pending |
+| TASK-03 | Phase 2 | Pending |
+| TASK-04 | Phase 2 | Pending |
+| TASK-05 | Phase 2 | Pending |
+| TASK-06 | Phase 2 | Pending |
+| CAP-01 | Phase 3 | Pending |
+| CAP-02 | Phase 3 | Pending |
+| CAP-03 | Phase 3 | Pending |
+| CAP-04 | Phase 3 | Pending |
+| PLAN-01 | Phase 3 | Pending |
+| PLAN-02 | Phase 3 | Pending |
+| PLAN-03 | Phase 3 | Pending |
+| PLAN-04 | Phase 3 | Pending |
+| PLAN-05 | Phase 3 | Pending |
+| PLAN-06 | Phase 3 | Pending |
+| CALC-01 | Phase 4 | Pending |
+| CALC-02 | Phase 4 | Pending |
+| CALC-03 | Phase 4 | Pending |
+| CALC-04 | Phase 4 | Pending |
+| CALC-05 | Phase 4 | Pending |
+| CALC-06 | Phase 4 | Pending |
+| DASH-01 | Phase 5 | Pending |
+| DASH-02 | Phase 5 | Pending |
+| DASH-03 | Phase 5 | Pending |
+| DASH-04 | Phase 5 | Pending |
+| DASH-05 | Phase 5 | Pending |
+| DASH-06 | Phase 5 | Pending |
+| BACK-01 | Phase 6 | Pending |
+| BACK-02 | Phase 6 | Pending |
+| BACK-03 | Phase 6 | Pending |
+| BACK-04 | Phase 6 | Pending |
+| BACK-05 | Phase 6 | Pending |
+| PWA-01 | Phase 7 | Pending |
+| PWA-02 | Phase 7 | Pending |
+| PWA-03 | Phase 7 | Pending |
+| PWA-04 | Phase 1 | Pending |
+| PWA-05 | Phase 1 | Pending |
+| PWA-06 | Phase 7 | Pending |
+| SYNC-01 | Phase 8 | Pending |
+| SYNC-02 | Phase 8 | Pending |
+| SYNC-03 | Phase 8 | Pending |
+| SYNC-04 | Phase 8 | Pending |
+| SYNC-05 | Phase 8 | Pending |
+| SYNC-06 | Phase 8 | Pending |
+| SYNC-07 | Phase 8 | Pending |
+| UX-01 | Phase 1 | Pending |
+| UX-02 | Phase 2 | Pending |
+| UX-03 | Phase 2 | Pending |
+| UX-04 | Phase 6 | Pending |
+| UX-05 | Phase 2 | Pending |
 
 **Coverage:**
 - v1 requirements: 59 total
-- Mapped to phases: 0
-- Unmapped: 59
+- Mapped to phases: 59
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-09-26*
