@@ -47,7 +47,7 @@ Plans:
 
 **Wave 4** *(gap closure)*
 
-- [ ] 01-04-PLAN.md — Resolve dark mode header/sider contrast, add unique dayOfWeek index, and make capacity seeding atomic (UX-01, DATA-02)
+- [x] 01-04-PLAN.md — Resolve dark mode header/sider contrast, add unique dayOfWeek index, and make capacity seeding atomic (UX-01, DATA-02)
 
 ### Phase 2: Work Hierarchy & Fast Task Management
 
@@ -172,7 +172,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 
 | Phase | Plans Complete | Status | Completed |
 |---|---|---|---|
-| 1. Foundation & Deployment Shell | 3/4 | In progress | - |
+| 1. Foundation & Deployment Shell | 4/4 | Complete | 2026-09-26 |
 | 2. Work Hierarchy & Fast Task Management | 0/TBD | Not started | - |
 | 3. Capacity Model & Daily Planning Ledger | 0/TBD | Not started | - |
 | 4. Feasibility Engine & Workload Distribution | 0/TBD | Not started | - |
