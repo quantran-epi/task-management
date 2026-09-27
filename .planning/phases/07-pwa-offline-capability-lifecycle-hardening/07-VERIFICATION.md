@@ -1,33 +1,18 @@
 ---
 phase: 07-pwa-offline-capability-lifecycle-hardening
-verified: 2026-09-27T19:00:00Z
-status: gaps_found
-score: 11/14 must-haves verified
+verified: 2026-09-27T19:50:00Z
+status: passed
+score: 14/14 must-haves verified
 overrides_applied: 0
-gaps:
-  - truth: "Clicking update guards against active open editing drawers or modals, preventing reload data loss per D-02 and PWA-03"
-    status: failed
-    reason: "FormGuardContext provides registerActiveForm and hasActiveForm, and UpdateBanner checks hasActiveForm before reloading. However, no editing forms, drawers, or modals in src/ (TaskDrawer, ProjectModal, MilestoneModal, AllocationModal, WeeklyCapacityForm) call registerActiveForm. As a result, hasActiveForm is permanently false at runtime in the app, and UpdateBanner immediately forces a page reload during active edits without warning, destroying uncommitted user data."
-    artifacts:
-      - path: "src/context/FormGuardContext.tsx"
-        issue: "Exposes registerActiveForm, but zero production components call it"
-      - path: "src/components/pwa/UpdateBanner.tsx"
-        issue: "Guard check always evaluates to false because activeFormIds is never populated"
-      - path: "src/components/tasks/TaskDrawer.tsx"
-        issue: "Does not register or unregister active editing session with FormGuardContext"
-    missing:
-      - "Wire registerActiveForm into TaskDrawer, ProjectModal, MilestoneModal, AllocationModal, and settings forms when open"
-      - "Ensure hasActiveForm accurately reflects active editing state so UpdateBanner triggers ActiveFormGuardModal"
-  - truth: "User can install application directly to desktop or mobile home screen via browser PWA prompts per PWA-01"
-    status: partial
-    reason: "usePWAInstall retains consumed BeforeInstallPromptEvent in state when user dismisses the native prompt without installing. Because installPrompt remains non-null, the Install button remains visible, and a subsequent click invokes .prompt() on an already-consumed event, causing an unhandled DOMException: InvalidStateError crash."
-    artifacts:
-      - path: "src/hooks/usePWAInstall.ts"
-        issue: "Only clears installPrompt when choice.outcome === 'accepted'; retains consumed event on 'dismissed' and lacks try/catch around .prompt()"
-    missing:
-      - "Always clear installPrompt to null once .prompt() has been invoked regardless of user choice outcome"
-      - "Wrap promptInstall() in try/catch to safely handle browser rejections"
-  - truth: "Settings displays PWA service worker status and provides manual update check button per D-12 and PWA-02"
+re_verification:
+  previous_status: gaps_found
+  previous_score: 11/14
+  gaps_closed:
+    - "Clicking update guards against active open editing drawers or modals, preventing reload data loss per D-02 and PWA-03 (closed in 07-04)"
+    - "User can install application directly to desktop or mobile home screen via browser PWA prompts per PWA-01 without InvalidStateError on dismissal (closed in 07-04)"
+    - "Settings displays PWA service worker status and provides manual update check button without duplicate lifecycle listeners or false positive toasts (closed in 07-04)"
+  gaps_remaining: []
+  regressions: []
     status: partial
     reason: "useServiceWorkerUpdate is invoked independently in both AppShell and PwaStatusCard, instantiating duplicate useRegisterSW listeners and leaking an un-cleared interval. Furthermore, PwaStatusCard's handleCheckUpdate unconditionally shows a success message claiming the app is up-to-date even when an update was detected and UpdateBanner is displayed."
     artifacts:
