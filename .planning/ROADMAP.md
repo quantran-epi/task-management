@@ -11,7 +11,7 @@ Deliver a production-ready, client-side, offline-first task and capacity plannin
 - [x] **Phase 3: Capacity Model & Daily Planning Ledger** - Weekly capacity templates, per-date overrides, daily minute allocations, and accessible load status indicators. (gap closure in progress) (completed 2026-09-26)
 - [x] **Phase 4: Feasibility Engine & Workload Distribution** - Deadline and range feasibility checks with deterministic lowest-load candidate distributions. (completed 2026-09-27)
 - [x] **Phase 5: Actionable Dashboard & Workload Forecasting** - Today, urgent, 7-day, 14-day, and next-month workload forecasting with direct navigation links. (completed 2026-09-27)
-- [ ] **Phase 6: Safe Local Backup & Restore** - Complete JSON backup export, Zod structural validation, pre-import snapshots, and non-destructive restore failures. (gap closure in progress)
+- [x] **Phase 6: Safe Local Backup & Restore** - Complete JSON backup export, Zod structural validation, pre-import snapshots, and non-destructive restore failures. (gap closure in progress) (completed 2026-09-27)
 - [ ] **Phase 7: PWA Offline Capability & Lifecycle Hardening** - Installable manifest, Workbox offline caching, non-destructive update prompts, and cross-browser audit.
 - [ ] **Phase 8: Optional Encrypted GitHub Backup** - Browser-side PBKDF2/AES-GCM encryption, runtime-only credentials, GitHub Contents API backup push/pull, and conflict protection.
 
@@ -194,7 +194,7 @@ Plans:
 
 **Wave 3** *(gap closure)*
 
-- [ ] 06-03-PLAN.md — Wrap downloaded snapshot in BackupEnvelope, fix Space prop, and verify validation compatibility (BACK-04, UX-04)
+- [x] 06-03-PLAN.md — Wrap downloaded snapshot in BackupEnvelope, fix Space prop, and verify validation compatibility (BACK-04, UX-04)
 
 ### Phase 7: PWA Offline Capability & Lifecycle Hardening
 
@@ -242,6 +242,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 3. Capacity Model & Daily Planning Ledger | 4/4 | Complete   | 2026-09-26 |
 | 4. Feasibility Engine & Workload Distribution | 3/3 | Complete   | 2026-09-27 |
 | 5. Actionable Dashboard & Workload Forecasting | 4/4 | Complete   | 2026-09-27 |
-| 6. Safe Local Backup & Restore | 2/3 | In Progress |  |
+| 6. Safe Local Backup & Restore | 3/3 | Complete   | 2026-09-27 |
 | 7. PWA Offline Capability & Lifecycle Hardening | 0/TBD | Not started | - |
 | 8. Optional Encrypted GitHub Backup | 0/TBD | Not started | - |
