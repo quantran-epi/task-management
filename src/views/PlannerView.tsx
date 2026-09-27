@@ -22,14 +22,16 @@ const { Text } = Typography;
 export interface PlannerViewProps {
   db?: TaskPlannerDatabase;
   initialDate?: string;
+  targetDate?: string;
 }
 
 export const PlannerView: React.FC<PlannerViewProps> = ({
   db = defaultDb,
   initialDate,
+  targetDate,
 }) => {
   const [currentDate, setCurrentDate] = useState<string>(
-    () => initialDate ?? getTodayDateString()
+    () => targetDate ?? initialDate ?? getTodayDateString()
   );
   const [showCompleted, setShowCompleted] = useState<boolean>(false);
   const [allocationModalOpen, setAllocationModalOpen] = useState<boolean>(false);
@@ -56,6 +58,13 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
     [db],
     []
   );
+
+  // Synchronize calendar date when targetDate changes via deep-link (D-13, D-16, T-05-07)
+  useEffect(() => {
+    if (targetDate && dayjs(targetDate, 'YYYY-MM-DD').isValid()) {
+      setCurrentDate(targetDate);
+    }
+  }, [targetDate]);
 
   const handleOpenFeasibility = async (task?: Task) => {
     if (task) {
@@ -151,26 +160,26 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
               checked={showCompleted}
               onChange={setShowCompleted}
               id="show-completed-toggle"
-              aria-label="Show Completed Tasks"
+              aria-label="Hiện tác vụ hoàn thành"
             />
-            <Text style={{ fontSize: 13, userSelect: 'none' }}>Show Completed</Text>
+            <Text style={{ fontSize: 13, userSelect: 'none' }}>Hiện tác vụ hoàn thành</Text>
           </Space>
 
           <Button
             type="primary"
             icon={<PlusOutlined />}
             onClick={() => handleOpenAllocate()}
-            aria-label="Allocate Task"
+            aria-label="Phân bổ tác vụ"
           >
-            + Allocate Task
+            Phân bổ tác vụ
           </Button>
 
           <Button
             icon={<ThunderboltOutlined />}
             onClick={() => handleOpenFeasibility()}
-            aria-label="Auto-Distribute Tasks"
+            aria-label="Tự động phân bổ"
           >
-            Auto-Distribute
+            Tự động phân bổ
           </Button>
         </Space>
       </div>
@@ -180,7 +189,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
         data-testid="planner-grid"
         style={{
           display: 'grid',
-          gridTemplateColumns: isMobile ? '1fr' : 'repeat(7, minmax(180px, 1fr))',
+          gridTemplateColumns: isMobile ? '1fr' : 'repeat(7, minmax(230px, 1fr))',
           gap: 12,
           overflowX: isMobile ? 'visible' : 'auto',
           minHeight: 520,
@@ -204,8 +213,14 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
       <AllocationModal
         open={allocationModalOpen}
         initialDate={allocationModalDate}
-        onCancel={() => setAllocationModalOpen(false)}
-        onSuccess={() => setAllocationModalOpen(false)}
+        onCancel={() => {
+          setAllocationModalOpen(false);
+          setAllocationModalDate(undefined);
+        }}
+        onSuccess={() => {
+          setAllocationModalOpen(false);
+          setAllocationModalDate(undefined);
+        }}
         db={db}
       />
 
@@ -218,7 +233,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
 
       {/* Task Selector Modal for Feasibility */}
       <Modal
-        title="Select Task for Auto-Distribution"
+        title="Chọn tác vụ để tự động phân bổ"
         open={taskSelectModalOpen}
         onCancel={() => setTaskSelectModalOpen(false)}
         onOk={() => {
@@ -229,12 +244,13 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
             setFeasibilityModalOpen(true);
           }
         }}
-        okText="Continue"
+        okText="Tiếp tục"
+        cancelText="Hủy"
         destroyOnClose
       >
         <div style={{ marginTop: 12, marginBottom: 8 }}>
           <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
-            Choose a task to evaluate capacity and preview workload distribution:
+            Chọn tác vụ để đánh giá công suất và xem trước phân bổ khối lượng công việc:
           </Text>
           <Select
             style={{ width: '100%' }}
@@ -242,9 +258,9 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
             onChange={setSelectedTaskIdForFeasibility}
             options={(activeTasks ?? []).map((t) => ({
               value: t.id,
-              label: `${t.name} (${t.estimateMinutes > 0 ? `${t.estimateMinutes}m` : 'no estimate'})`,
+              label: `${t.name} (${t.estimateMinutes > 0 ? `${t.estimateMinutes}m` : 'chưa ước tính'})`,
             }))}
-            placeholder="Select a task"
+            placeholder="Chọn một tác vụ"
           />
         </div>
       </Modal>

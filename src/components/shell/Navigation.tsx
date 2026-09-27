@@ -1,6 +1,7 @@
 import React from 'react';
 import { Menu, type MenuProps } from 'antd';
 import {
+  DashboardOutlined,
   CheckSquareOutlined,
   ProjectOutlined,
   CalendarOutlined,
@@ -17,24 +18,29 @@ type MenuItem = Required<MenuProps>['items'][number];
 
 const items: MenuItem[] = [
   {
+    key: 'dashboard',
+    icon: <DashboardOutlined />,
+    label: 'Tổng quan',
+  },
+  {
     key: 'tasks',
     icon: <CheckSquareOutlined />,
-    label: 'Tasks',
+    label: 'Tác vụ',
   },
   {
     key: 'projects',
     icon: <ProjectOutlined />,
-    label: 'Projects',
+    label: 'Dự án',
   },
   {
     key: 'planner',
     icon: <CalendarOutlined />,
-    label: 'Planner',
+    label: 'Lập kế hoạch',
   },
   {
     key: 'settings',
     icon: <SettingOutlined />,
-    label: 'Settings',
+    label: 'Cài đặt',
   },
 ];
 
