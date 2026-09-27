@@ -566,14 +566,14 @@ export async function restoreBackupPayload(
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **What happens if a backup contains empty table arrays?**
    - What we know: A fresh export or a reset database may have 0 projects or 0 tasks.
-   - Recommendation: Valid. As long as `capacityRules` or other tables are structurally compliant, an empty array is valid.
+   - RESOLVED: Valid. As long as `capacityRules` or other tables are structurally compliant, an empty array is valid.
 2. **Should rollback also be protected by a confirmation dialog?**
    - What we know: Rollback replaces existing data with snapshot data.
-   - Recommendation: Yes, per UI-SPEC component 5, `Modal.confirm` with danger button warns user before applying rollback.
+   - RESOLVED: Yes, per UI-SPEC component 5, `Modal.confirm` with danger button warns user before applying rollback.
 
 ---
 
