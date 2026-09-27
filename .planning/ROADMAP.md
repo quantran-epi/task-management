@@ -243,8 +243,20 @@ Plans:
   5. Application tracks remote file SHA and halts upload with explicit conflict notification if remote file changed since last read.
   6. Application remains 100% operational offline and for local JSON backups without GitHub token or internet access.
 
-**Plans**: TBD
+**Plans**: 3 plans
 **UI hint**: yes
+Plans:
+**Wave 1**
+
+- [ ] 08-01-PLAN.md — Build Web Crypto PBKDF2/AES-GCM engine, runtime memory auth context, and repository settings card (SYNC-01, SYNC-02, SYNC-03)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 08-02-PLAN.md — Implement GitHub Contents API client, encrypted backup push, and conflict modal with OVERWRITE keyword (SYNC-04, SYNC-06)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 08-03-PLAN.md — Build remote backup pull, Web Crypto decryption, ImportPreviewModal integration, and offline verification (SYNC-05, SYNC-07)
 
 ## Progress
 
@@ -260,4 +272,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 5. Actionable Dashboard & Workload Forecasting | 4/4 | Complete   | 2026-09-27 |
 | 6. Safe Local Backup & Restore | 3/3 | Complete   | 2026-09-27 |
 | 7. PWA Offline Capability & Lifecycle Hardening | 4/4 | Complete    | 2026-09-27 |
-| 8. Optional Encrypted GitHub Backup | 0/TBD | Not started | - |
+| 8. Optional Encrypted GitHub Backup | 0/3 | Not started | - |
