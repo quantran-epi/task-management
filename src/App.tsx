@@ -1,5 +1,7 @@
 import React, { useEffect } from 'react';
 import { ConfigProvider, theme } from 'antd';
+import viVN from 'antd/locale/vi_VN';
+import './utils/date';
 import { initializeDatabaseDefaults } from './db/seeds';
 import { AppShell } from './components/shell/AppShell';
 import { EmptyState } from './components/common/EmptyState';
@@ -9,11 +11,12 @@ import { TasksView } from './views/TasksView';
 import { ProjectsView } from './views/ProjectsView';
 import { PlannerView } from './views/PlannerView';
 import { SettingsView } from './views/SettingsView';
+import { DashboardView } from './views/DashboardView';
 
 const { defaultAlgorithm, darkAlgorithm } = theme;
 
 export const App: React.FC = () => {
-  const { route, navigate } = useHashRoute('tasks');
+  const { route, params, navigate } = useHashRoute('dashboard');
   const isDark = useThemeMode();
 
   useEffect(() => {
@@ -24,12 +27,14 @@ export const App: React.FC = () => {
 
   const renderContent = () => {
     switch (route) {
+      case 'dashboard':
+        return <DashboardView onNavigate={navigate} />;
       case 'tasks':
         return <TasksView />;
       case 'projects':
         return <ProjectsView />;
       case 'planner':
-        return <PlannerView />;
+        return <PlannerView targetDate={params.date} />;
       case 'settings':
         return <SettingsView onNavigate={navigate} />;
       default:
@@ -39,6 +44,7 @@ export const App: React.FC = () => {
 
   return (
     <ConfigProvider
+      locale={viVN}
       theme={{
         algorithm: isDark ? darkAlgorithm : defaultAlgorithm,
         token: {
