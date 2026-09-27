@@ -129,7 +129,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 04-01-PLAN.md — Build pure feasibility calculation engine, deficit metrics, forward date projection, and distribution algorithms (CALC-01, CALC-02, CALC-03, CALC-04, CALC-05)
+- [x] 04-01-PLAN.md — Build pure feasibility calculation engine, deficit metrics, forward date projection, and distribution algorithms (CALC-01, CALC-02, CALC-03, CALC-04, CALC-05)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
