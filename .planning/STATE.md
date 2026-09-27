@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 08 UI-SPEC approved
-last_updated: "2026-09-27T13:20:34.768Z"
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-09-27T13:32:02.437Z"
 last_activity: 2026-09-27 -- Phase 08 planning complete
 progress:
   total_phases: 8
   completed_phases: 7
-  total_plans: 25
-  completed_plans: 25
+  total_plans: 28
+  completed_plans: 26
   percent: 88
 ---
 
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-09-27)
 
 ## Current Position
 
-Phase: 8
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-09-27 -- Phase 08 planning complete
+Phase: 08 (optional-encrypted-github-backup) — EXECUTING
+Plan: 2 of 3
+Status: Executing Phase 08
+Last activity: 2026-09-27 -- Completed 08-01-PLAN.md
 
 Progress: [██████████] 100% (Phase 01)
 Progress: [██████████] 100% (Phase 02)
@@ -84,6 +84,7 @@ Progress: [██████████] 100% (Phase 02)
 | Phase 07 P02 | 12m | 2 tasks | 8 files |
 | Phase 07 P03 | 8m | 2 tasks | 6 files |
 | Phase 07 P04 | 8m | 3 tasks | 15 files |
+| Phase 08 P01 | 10m | 3 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -162,6 +163,10 @@ Decisions logged in PROJECT.md Key Decisions table:
 - [Phase 07]: Wrapped BeforeInstallPromptEvent prompt() in try/catch/finally to unconditionally nullify prompt reference and prevent InvalidStateError on dismissal
 - [Phase 07]: Created ServiceWorkerContext provider as singleton at AppShell root to eliminate duplicate SW registrations and timer leaks
 - [Phase 07]: Added useRegisterActiveForm hook and wired all 6 editing drawers and modals to prevent data loss on update reload
+- [Phase 08]: OWASP-compliant PBKDF2 with 600,000 iterations and HMAC-SHA256 for browser-side AES-GCM-256 key derivation
+- [Phase 08]: Strict transient in-memory secret holder with zero writes to IndexedDB, localStorage, sessionStorage, or logs
+- [Phase 08]: Repository coordinates (owner, repo, branch) persisted in IndexedDB settings while PAT and passphrase remain in memory
+- [Phase 08]: GitHubConfigCard mounted in SettingsView Data tab coexisting cleanly with local backup
 
 ### Pending Todos
 
@@ -179,6 +184,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-09-27T13:02:30.017Z
-Stopped at: Phase 08 UI-SPEC approved
-Resume file: .planning/phases/08-optional-encrypted-github-backup/08-UI-SPEC.md
+Last session: 2026-09-27T13:32:02.433Z
+Stopped at: Completed 08-01-PLAN.md
+Resume file: .planning/phases/08-optional-encrypted-github-backup/08-02-PLAN.md
