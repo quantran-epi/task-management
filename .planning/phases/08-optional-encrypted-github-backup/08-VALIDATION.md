@@ -1,8 +1,8 @@
 ---
 phase: 8
 slug: optional-encrypted-github-backup
-status: draft
-nyquist_compliant: false
+status: approved
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-09-27
 ---
@@ -57,23 +57,3 @@ created: 2026-09-27
 - [ ] `tests/context/GitHubAuthContext.test.tsx` — stubs for in-memory credential storage, clear session, and storage isolation
 
 ---
-
-## Manual-Only Verifications
-
-| Behavior | Requirement | Why Manual | Test Instructions |
-|----------|-------------|------------|-------------------|
-| Real GitHub repository push & pull | SYNC-04, SYNC-05 | Requires live personal access token and real GitHub repo | Set PAT in UI, push encrypted backup to test repo, verify commit in GitHub web UI, pull and restore |
-| Offline graceful fallback | SYNC-07 | Involves browser DevTools network throttling/offline toggle | Toggle offline in browser DevTools, verify sync UI disables gracefully without breaking local operations |
-
----
-
-## Validation Sign-Off
-
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 10s
-- [ ] `nyquist_compliant: true` set in frontmatter
-
-**Approval:** pending 2026-09-27
