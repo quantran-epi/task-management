@@ -47,7 +47,7 @@ export interface FeasibilityResult {
   totalAvailableNetMinutes: number;
   surplusMinutes: number;
   deficitMinutes: number;
-  earliestFeasibleDate?: string;
+  earliestFeasibleDate?: string | undefined;
   candidateAllocations: CandidateAllocation[];
   dateBreakdown: DateInspectionItem[];
 }

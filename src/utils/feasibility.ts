@@ -316,14 +316,19 @@ export function evaluateTaskFeasibility(input: FeasibilityEvaluationInput): Feas
     };
   });
 
-  return {
+  const result: FeasibilityResult = {
     isFeasible,
     remainingTaskEstimateMinutes,
     totalAvailableNetMinutes,
     surplusMinutes,
     deficitMinutes,
-    earliestFeasibleDate,
     candidateAllocations,
     dateBreakdown,
   };
+
+  if (earliestFeasibleDate !== undefined) {
+    result.earliestFeasibleDate = earliestFeasibleDate;
+  }
+
+  return result;
 }
