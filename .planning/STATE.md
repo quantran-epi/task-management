@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 06 UI-SPEC approved
-last_updated: "2026-09-27T08:23:12.667Z"
-last_activity: 2026-09-27 -- Completed 05-03-PLAN.md
+stopped_at: Completed 06-01-PLAN.md
+last_updated: "2026-09-27T08:36:17.964Z"
+last_activity: 2026-09-27 -- Phase 06 execution started
 progress:
   total_phases: 8
   completed_phases: 5
-  total_plans: 18
-  completed_plans: 18
+  total_plans: 20
+  completed_plans: 19
   percent: 63
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-26)
 
 **Core value:** Make planned work realistically fit available time by exposing overload early and suggesting feasible daily workload distributions.
-**Current focus:** Phase 05 — actionable-dashboard-workload-forecasting
+**Current focus:** Phase 06 — safe-local-backup-restore
 
 ## Current Position
 
-Phase: 05 (actionable-dashboard-workload-forecasting) — EXECUTING
-Plan: 4 of 4
+Phase: 06 (safe-local-backup-restore) — EXECUTING
+Plan: 2 of 2
 Status: Ready to execute
-Last activity: 2026-09-27 -- Completed 05-03-PLAN.md
+Last activity: 2026-09-27 -- Phase 06 execution started
 
 Progress: [██████████] 100% (Phase 01)
 Progress: [██████████] 100% (Phase 02)
@@ -76,6 +76,7 @@ Progress: [██████████] 100% (Phase 02)
 | Phase 05 P01 | 10m | 2 tasks | 6 files |
 | Phase 05 P02 | 12m | 2 tasks | 4 files |
 | Phase 05 P03 | 12m | 2 tasks | 5 files |
+| Phase 06 P01 | 10m | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -135,6 +136,11 @@ Decisions logged in PROJECT.md Key Decisions table:
 - [Phase 05]: Whitelisted hash route against AppRoute union defaulting to 'dashboard' (T-05-02)
 - [Phase 05]: Capped max forecast horizon at 30 days per threat model T-05-05
 - [Phase 05]: Clamped MiniDayCard progress percent between 0 and 100 per threat model T-05-06
+- [Phase 06]: Excluded settings and backupMetadata tables from exported backup payload to preserve client preferences and prevent token leaks (D-02, T-06-01)
+- [Phase 06]: Formatted backup file name as task-planner-backup-YYYY-MM-DD-HHmmss.json for deterministic sorting and uniqueness (D-03)
+- [Phase 06]: Logged export event into backupMetadata table upon each successful export for UI history (D-04)
+- [Phase 06]: Implemented centralized AriaLiveRegion event dispatcher for accessible screen reader status feedback (D-15, UX-04)
+- [Phase 06]: Restructured SettingsView into two tabs: 'capacity' (Công suất làm việc) and 'data' (Sao lưu & Dữ liệu) (D-16)
 
 ### Pending Todos
 
@@ -152,6 +158,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-09-27T08:05:24.061Z
-Stopped at: Phase 06 UI-SPEC approved
-Resume file: .planning/phases/06-safe-local-backup-restore/06-UI-SPEC.md
+Last session: 2026-09-27T08:36:17.960Z
+Stopped at: Completed 06-01-PLAN.md
+Resume file: .planning/phases/06-safe-local-backup-restore/06-02-PLAN.md

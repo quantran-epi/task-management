@@ -65,7 +65,7 @@
 
 ### Backup and Restore
 
-- [ ] **BACK-01**: User can export a complete versioned JSON backup of all local application data.
+- [x] **BACK-01**: User can export a complete versioned JSON backup of all local application data.
 - [ ] **BACK-02**: User can select a backup for import and review its application marker, version, timestamp, and record counts before any local data changes.
 - [ ] **BACK-03**: Application validates backup structure, IDs, dates, enums, minute values, and hierarchy references before restore.
 - [ ] **BACK-04**: Application creates a recoverable pre-import snapshot and requires explicit confirmation before replacing local data.
@@ -166,7 +166,7 @@
 | DASH-04 | Phase 5 | Complete |
 | DASH-05 | Phase 5 | Complete |
 | DASH-06 | Phase 5 | Complete |
-| BACK-01 | Phase 6 | Pending |
+| BACK-01 | Phase 6 | Complete |
 | BACK-02 | Phase 6 | Pending |
 | BACK-03 | Phase 6 | Pending |
 | BACK-04 | Phase 6 | Pending |
