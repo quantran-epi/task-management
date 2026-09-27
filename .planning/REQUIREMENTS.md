@@ -66,10 +66,10 @@
 ### Backup and Restore
 
 - [x] **BACK-01**: User can export a complete versioned JSON backup of all local application data.
-- [ ] **BACK-02**: User can select a backup for import and review its application marker, version, timestamp, and record counts before any local data changes.
-- [ ] **BACK-03**: Application validates backup structure, IDs, dates, enums, minute values, and hierarchy references before restore.
-- [ ] **BACK-04**: Application creates a recoverable pre-import snapshot and requires explicit confirmation before replacing local data.
-- [ ] **BACK-05**: Failed validation, migration, or restore leaves existing local data unchanged and reports the failure.
+- [x] **BACK-02**: User can select a backup for import and review its application marker, version, timestamp, and record counts before any local data changes.
+- [x] **BACK-03**: Application validates backup structure, IDs, dates, enums, minute values, and hierarchy references before restore.
+- [x] **BACK-04**: Application creates a recoverable pre-import snapshot and requires explicit confirmation before replacing local data.
+- [x] **BACK-05**: Failed validation, migration, or restore leaves existing local data unchanged and reports the failure.
 
 ### GitHub Backup
 
@@ -167,10 +167,10 @@
 | DASH-05 | Phase 5 | Complete |
 | DASH-06 | Phase 5 | Complete |
 | BACK-01 | Phase 6 | Complete |
-| BACK-02 | Phase 6 | Pending |
-| BACK-03 | Phase 6 | Pending |
-| BACK-04 | Phase 6 | Pending |
-| BACK-05 | Phase 6 | Pending |
+| BACK-02 | Phase 6 | Complete |
+| BACK-03 | Phase 6 | Complete |
+| BACK-04 | Phase 6 | Complete |
+| BACK-05 | Phase 6 | Complete |
 | PWA-01 | Phase 7 | Pending |
 | PWA-02 | Phase 7 | Pending |
 | PWA-03 | Phase 7 | Pending |

@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
+status: verifying
 stopped_at: Completed 06-01-PLAN.md
-last_updated: "2026-09-27T08:36:17.964Z"
+last_updated: "2026-09-27T08:48:13.453Z"
 last_activity: 2026-09-27 -- Phase 06 execution started
 progress:
   total_phases: 8
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 20
-  completed_plans: 19
-  percent: 63
+  completed_plans: 20
+  percent: 75
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-09-26)
 
 Phase: 06 (safe-local-backup-restore) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-09-27 -- Phase 06 execution started
 
 Progress: [██████████] 100% (Phase 01)
@@ -77,6 +77,7 @@ Progress: [██████████] 100% (Phase 02)
 | Phase 05 P02 | 12m | 2 tasks | 4 files |
 | Phase 05 P03 | 12m | 2 tasks | 5 files |
 | Phase 06 P01 | 10m | 2 tasks | 9 files |
+| Phase 06 P02 | 12m | 3 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -141,6 +142,9 @@ Decisions logged in PROJECT.md Key Decisions table:
 - [Phase 06]: Logged export event into backupMetadata table upon each successful export for UI history (D-04)
 - [Phase 06]: Implemented centralized AriaLiveRegion event dispatcher for accessible screen reader status feedback (D-15, UX-04)
 - [Phase 06]: Restructured SettingsView into two tabs: 'capacity' (Công suất làm việc) and 'data' (Sao lưu & Dữ liệu) (D-16)
+- [Phase ?]: Enforced two-stage validation separating structural envelope checks from in-memory referential integrity checks
+- [Phase ?]: Automatically captured pre-import snapshot of 6 domain tables into settings.last_pre_import_snapshot before any destructive write
+- [Phase ?]: Bound danger confirm button in ImportPreviewModal to exact keyword RESTORE to prevent accidental triggers
 
 ### Pending Todos
 
@@ -158,6 +162,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-09-27T08:36:17.960Z
+Last session: 2026-09-27T08:48:05.214Z
 Stopped at: Completed 06-01-PLAN.md
 Resume file: .planning/phases/06-safe-local-backup-restore/06-02-PLAN.md
