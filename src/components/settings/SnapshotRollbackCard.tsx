@@ -105,7 +105,7 @@ export const SnapshotRollbackCard: React.FC<SnapshotRollbackCardProps> = ({
           description="Chưa có bản snapshot an toàn nào được lưu."
         />
       ) : (
-        <Space direction="vertical" orientation="horizontal" style={{ width: '100%' }} size="middle">
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
           <div>
             <Text strong>Bản an toàn tự động trước khi nhập:</Text>{' '}
             <Text type="secondary">

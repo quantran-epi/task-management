@@ -1,7 +1,7 @@
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { BackupEnvelope, SnapshotData } from '../../types/backup';
 import { generateId } from '../../utils/uuid';
-import { triggerDownload } from './exportBackup';
+import { triggerDownload, APP_MARKER, CURRENT_SCHEMA_VERSION } from './exportBackup';
 
 /**
  * Atomically replaces data in 6 domain tables with incoming backup payload.
@@ -186,9 +186,17 @@ export async function rollbackToSnapshot(
 
 /**
  * Downloads the snapshot as a standard JSON backup file for disaster recovery.
+ * Wraps snapshot tables and counts in BackupEnvelope for full re-import compatibility.
  */
 export function downloadSnapshotFile(snapshot: SnapshotData): void {
   const fileName = `task-planner-snapshot-${snapshot.timestamp.replace(/[:.]/g, '-')}.json`;
-  const content = JSON.stringify(snapshot, null, 2);
+  const envelope: BackupEnvelope = {
+    app: APP_MARKER,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    exportedAt: snapshot.timestamp,
+    tables: snapshot.tables,
+    counts: snapshot.counts,
+  };
+  const content = JSON.stringify(envelope, null, 2);
   triggerDownload(content, fileName);
 }
