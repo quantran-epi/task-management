@@ -243,7 +243,7 @@ Plans:
   5. Application tracks remote file SHA and halts upload with explicit conflict notification if remote file changed since last read.
   6. Application remains 100% operational offline and for local JSON backups without GitHub token or internet access.
 
-**Plans**: 2/3 plans executed
+**Plans**: 3/3 plans executed
 **UI hint**: yes
 Plans:
 **Wave 1**
@@ -252,11 +252,11 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [x] 08-02-PLAN.md — Implement GitHub Contents API client, encrypted backup push, and conflict modal with OVERWRITE keyword (SYNC-04, SYNC-06)
+- [x] 08-02-PLAN.md — Implement GitHub Contents API client, encrypted backup push, and conflict modal with OVERWRITE keyword (SYNC-04, SYNC-06) (completed 2026-09-27)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [x] 08-03-PLAN.md — Build remote backup pull, Web Crypto decryption, ImportPreviewModal integration, and offline verification (SYNC-05, SYNC-07)
+- [x] 08-03-PLAN.md — Build remote backup pull, Web Crypto decryption, ImportPreviewModal integration, and offline verification (SYNC-05, SYNC-07) (completed 2026-09-27)
 
 ## Progress
 
