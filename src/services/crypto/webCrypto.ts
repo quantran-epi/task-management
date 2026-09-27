@@ -18,7 +18,7 @@ function getRandomValues(array: Uint8Array): Uint8Array {
   if (!c?.getRandomValues) {
     throw new Error('Web Crypto API (crypto.getRandomValues) không khả dụng');
   }
-  return c.getRandomValues(array);
+  return c.getRandomValues(array as unknown as ArrayBufferView<ArrayBuffer>) as unknown as Uint8Array;
 }
 
 /**
@@ -39,7 +39,7 @@ export async function deriveKey(passphrase: string, salt: Uint8Array): Promise<C
   return subtle.deriveKey(
     {
       name: 'PBKDF2',
-      salt,
+      salt: salt as unknown as BufferSource,
       iterations: PBKDF2_ITERATIONS,
       hash: 'SHA-256',
     },
@@ -65,7 +65,7 @@ export async function encryptPayload(
   const subtle = getSubtle();
   const enc = new TextEncoder();
   const ciphertextBuffer = await subtle.encrypt(
-    { name: 'AES-GCM', iv },
+    { name: 'AES-GCM', iv: iv as unknown as BufferSource },
     key,
     enc.encode(payloadJson)
   );
@@ -112,9 +112,9 @@ export async function decryptPayload(
 
   try {
     const decryptedBuffer = await subtle.decrypt(
-      { name: 'AES-GCM', iv },
+      { name: 'AES-GCM', iv: iv as unknown as BufferSource },
       key,
-      ciphertext
+      ciphertext as unknown as BufferSource
     );
 
     return new TextDecoder().decode(decryptedBuffer);
