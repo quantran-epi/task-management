@@ -12,6 +12,8 @@ import { OverridesTable } from '../components/settings/OverridesTable';
 import { BackupExportCard } from '../components/settings/BackupExportCard';
 import { BackupImportCard } from '../components/settings/BackupImportCard';
 import { SnapshotRollbackCard } from '../components/settings/SnapshotRollbackCard';
+import { PwaStatusCard } from '../components/settings/PwaStatusCard';
+import { StoragePersistenceCard } from '../components/settings/StoragePersistenceCard';
 import { PostRestoreBanner } from '../components/settings/PostRestoreBanner';
 import { ResetDbModal } from '../components/common/ResetDbModal';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
@@ -127,6 +129,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <BackupExportCard db={db} />
           <BackupImportCard db={db} onRestoreSuccess={handleRestoreSuccess} />
           <SnapshotRollbackCard db={db} />
+          <PwaStatusCard />
+          <StoragePersistenceCard />
 
           <Card
             title={
