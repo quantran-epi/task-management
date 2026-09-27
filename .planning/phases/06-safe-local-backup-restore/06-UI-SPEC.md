@@ -1,7 +1,7 @@
 ---
 phase: 06
 slug: 06-safe-local-backup-restore
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-09-27
