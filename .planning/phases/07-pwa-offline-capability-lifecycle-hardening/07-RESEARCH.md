@@ -364,12 +364,12 @@ export async function checkAndRequestStoragePersistence(): Promise<{
 |---|-------|---------|---------------|
 | A1 | Standard PNG assets (192x192, 512x512, maskable) in `public/` satisfy Lighthouse and mobile installability checks without external build plugins | Architecture Patterns | Low — SVGs and sharp/canvas scripts can generate PNGs during build if needed |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **How to test Service Worker behavior in Vitest / jsdom environment?**
    - What we know: `jsdom` does not implement `navigator.serviceWorker` or `navigator.storage`.
    - What's unclear: How to unit test `usePWAInstall` and `useServiceWorkerUpdate` cleanly.
-   - Recommendation: Provide test mocks for `virtual:pwa-register/react`, `navigator.serviceWorker`, and `navigator.storage` in `tests/setup.ts` to verify UI transitions, modals, and callbacks reliably.
+   - Recommendation: RESOLVED: Provide test mocks for `virtual:pwa-register/react`, `navigator.serviceWorker`, and `navigator.storage` in `tests/setup.ts` to verify UI transitions, modals, and callbacks reliably.
 
 ## Environment Availability
 
