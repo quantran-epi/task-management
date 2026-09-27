@@ -48,47 +48,47 @@ describe('PlannerView & App Route Integration (PLAN-03, PLAN-04, UX-02, UX-03, U
     // Wait for live query to populate default capacity
     await waitFor(() => {
       // Monday to Friday default capacity is 8h (480m)
-      expect(screen.getByTestId('day-column-header-2026-09-28')).toHaveTextContent(/Cap:\s*8h/);
-      expect(screen.getByTestId('day-column-header-2026-10-02')).toHaveTextContent(/Cap:\s*8h/);
+      expect(screen.getByTestId('day-column-header-2026-09-28')).toHaveTextContent(/Sức chứa:\s*8h/);
+      expect(screen.getByTestId('day-column-header-2026-10-02')).toHaveTextContent(/Sức chứa:\s*8h/);
 
       // Saturday and Sunday default capacity is 0h
-      expect(screen.getByTestId('day-column-header-2026-10-03')).toHaveTextContent(/Cap:\s*0m/);
-      expect(screen.getByTestId('day-column-header-2026-10-04')).toHaveTextContent(/Cap:\s*0m/);
+      expect(screen.getByTestId('day-column-header-2026-10-03')).toHaveTextContent(/Sức chứa:\s*0m/);
+      expect(screen.getByTestId('day-column-header-2026-10-04')).toHaveTextContent(/Sức chứa:\s*0m/);
     });
   });
 
   it('navigates to Next Week and Previous Week updating displayed date range and columns', async () => {
     render(<PlannerView db={testDb} initialDate="2026-09-30" />);
 
-    expect(await screen.findByText('Sep 28 – Oct 4, 2026')).toBeInTheDocument();
+    expect(await screen.findByText('28/09 – 04/10/2026')).toBeInTheDocument();
 
     // Click Next Week
-    const nextBtn = screen.getByRole('button', { name: 'Next Week' });
+    const nextBtn = screen.getByRole('button', { name: 'Tuần sau' });
     fireEvent.click(nextBtn);
 
-    expect(await screen.findByText('Oct 5 – Oct 11, 2026')).toBeInTheDocument();
+    expect(await screen.findByText('05/10 – 11/10/2026')).toBeInTheDocument();
     expect(screen.getByTestId('day-column-2026-10-05')).toBeInTheDocument();
 
     // Click Previous Week
-    const prevBtn = screen.getByRole('button', { name: 'Previous Week' });
+    const prevBtn = screen.getByRole('button', { name: 'Tuần trước' });
     fireEvent.click(prevBtn);
 
-    expect(await screen.findByText('Sep 28 – Oct 4, 2026')).toBeInTheDocument();
+    expect(await screen.findByText('28/09 – 04/10/2026')).toBeInTheDocument();
     expect(screen.getByTestId('day-column-2026-09-28')).toBeInTheDocument();
   });
 
   it('navigates weeks using keyboard shortcuts (Alt+ArrowRight / Alt+ArrowLeft)', async () => {
     render(<PlannerView db={testDb} initialDate="2026-09-30" />);
 
-    expect(await screen.findByText('Sep 28 – Oct 4, 2026')).toBeInTheDocument();
+    expect(await screen.findByText('28/09 – 04/10/2026')).toBeInTheDocument();
 
     // Alt+ArrowRight
     fireEvent.keyDown(window, { key: 'ArrowRight', altKey: true });
-    expect(await screen.findByText('Oct 5 – Oct 11, 2026')).toBeInTheDocument();
+    expect(await screen.findByText('05/10 – 11/10/2026')).toBeInTheDocument();
 
     // Alt+ArrowLeft
     fireEvent.keyDown(window, { key: 'ArrowLeft', altKey: true });
-    expect(await screen.findByText('Sep 28 – Oct 4, 2026')).toBeInTheDocument();
+    expect(await screen.findByText('28/09 – 04/10/2026')).toBeInTheDocument();
   });
 
   it('allocates task to day column via + Allocate button and updates load and balance reactively', async () => {
@@ -101,20 +101,20 @@ describe('PlannerView & App Route Integration (PLAN-03, PLAN-04, UX-02, UX-03, U
 
     // Wait for liveQuery to populate Monday header
     await waitFor(() => {
-      expect(screen.getByTestId('day-column-header-2026-09-28')).toHaveTextContent(/Bal:\s*\+8h/);
+      expect(screen.getByTestId('day-column-header-2026-09-28')).toHaveTextContent(/Còn lại:\s*\+8h/);
     });
 
     // Click + Allocate button for Monday
-    const allocateBtn = screen.getByRole('button', { name: 'Allocate task for 2026-09-28' });
+    const allocateBtn = screen.getByRole('button', { name: 'Phân bổ tác vụ cho 2026-09-28' });
     fireEvent.click(allocateBtn);
 
     // Allocation modal opens with target date prefilled to 2026-09-28
-    expect(await screen.findByText('Allocate Task Time')).toBeInTheDocument();
+    expect(await screen.findByText('Phân bổ thời gian tác vụ')).toBeInTheDocument();
 
     // Select the task
-    const select = screen.getByRole('combobox', { name: 'Select Task' });
+    const select = screen.getByRole('combobox', { name: 'Chọn tác vụ' });
     fireEvent.mouseDown(select);
-    const option = await screen.findByText('Wireframe Dashboard');
+    const option = await screen.findByText(/Wireframe Dashboard/);
     fireEvent.click(option);
 
     // Click preset 2h
@@ -122,14 +122,14 @@ describe('PlannerView & App Route Integration (PLAN-03, PLAN-04, UX-02, UX-03, U
     fireEvent.click(preset2h);
 
     // Save allocation
-    const saveBtn = screen.getByRole('button', { name: 'Save Allocation' });
+    const saveBtn = screen.getByRole('button', { name: 'Lưu phân bổ' });
     fireEvent.click(saveBtn);
 
     // Wait for reactive update in Monday column
     await waitFor(() => {
       const header = screen.getByTestId('day-column-header-2026-09-28');
-      expect(header).toHaveTextContent(/Alloc:\s*2h/);
-      expect(header).toHaveTextContent(/Bal:\s*\+6h/);
+      expect(header).toHaveTextContent(/Phân bổ:\s*2h/);
+      expect(header).toHaveTextContent(/Còn lại:\s*\+6h/);
       expect(screen.getByText('Wireframe Dashboard')).toBeInTheDocument();
     });
   });
@@ -138,25 +138,25 @@ describe('PlannerView & App Route Integration (PLAN-03, PLAN-04, UX-02, UX-03, U
     render(<PlannerView db={testDb} initialDate="2026-09-30" />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('day-column-header-2026-09-28')).toHaveTextContent(/Cap:\s*8h/);
+      expect(screen.getByTestId('day-column-header-2026-09-28')).toHaveTextContent(/Sức chứa:\s*8h/);
     });
 
     // Click Capacity Settings button
-    const settingsBtn = screen.getByRole('button', { name: 'Capacity Settings' });
+    const settingsBtn = screen.getByRole('button', { name: 'Cài đặt công suất' });
     fireEvent.click(settingsBtn);
 
-    expect(await screen.findByText('Work Capacity & Overrides')).toBeInTheDocument();
-    expect(screen.getByText('Weekly Base Capacity Template')).toBeInTheDocument();
+    expect(await screen.findByText('Công suất làm việc & Ngoại lệ')).toBeInTheDocument();
+    expect(screen.getByText('Mẫu công suất cơ bản hàng tuần')).toBeInTheDocument();
 
     // Close modal via Done button
-    const doneBtn = screen.getByRole('button', { name: 'Done' });
+    const doneBtn = screen.getByRole('button', { name: 'Xong' });
     fireEvent.click(doneBtn);
 
     // Modify Monday capacity directly in DB to 6h (360m)
     await updateCapacityRule(1, 360, testDb);
 
     await waitFor(() => {
-      expect(screen.getByTestId('day-column-header-2026-09-28')).toHaveTextContent(/Cap:\s*6h/);
+      expect(screen.getByTestId('day-column-header-2026-09-28')).toHaveTextContent(/Sức chứa:\s*6h/);
     });
   });
 
@@ -164,14 +164,14 @@ describe('PlannerView & App Route Integration (PLAN-03, PLAN-04, UX-02, UX-03, U
     render(<App />);
 
     // Click Planner in Menu
-    fireEvent.click(screen.getByRole('menuitem', { name: /Planner/i }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /Lập kế hoạch/i }));
     expect(await screen.findByTestId('planner-view')).toBeInTheDocument();
     expect(screen.queryByText('Workload Planner')).toBeNull();
 
     // Click Settings in Menu
-    fireEvent.click(screen.getByRole('menuitem', { name: /Settings/i }));
-    expect(await screen.findByText('Settings & Capacity Configuration')).toBeInTheDocument();
-    expect(screen.getByText('Weekly Base Capacity Template')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('menuitem', { name: /Cài đặt/i }));
+    expect(await screen.findByText('Cài đặt & Cấu hình công suất')).toBeInTheDocument();
+    expect(screen.getByText('Mẫu công suất cơ bản hàng tuần')).toBeInTheDocument();
   });
 
   it('configures desktop grid with minmax of at least 180px and auto horizontal overflow (03-04)', async () => {
@@ -181,7 +181,7 @@ describe('PlannerView & App Route Integration (PLAN-03, PLAN-04, UX-02, UX-03, U
     expect(grid).toBeInTheDocument();
 
     const style = grid.getAttribute('style') || '';
-    expect(style).toMatch(/minmax\(180px,\s*1fr\)/);
+    expect(style).toMatch(/minmax\(230px,\s*1fr\)/);
     expect(style).toMatch(/overflow-x:\s*auto/);
   });
 });

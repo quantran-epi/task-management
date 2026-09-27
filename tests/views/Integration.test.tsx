@@ -22,10 +22,10 @@ describe('App & Route Integration', () => {
     render(<App />);
 
     // Verify Tasks view elements are rendered
-    expect(screen.getByPlaceholderText(/Add a task/i)).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/Search tasks/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Thêm tác vụ nhanh/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Tìm kiếm tác vụ/i)).toBeInTheDocument();
 
-    const input = screen.getByPlaceholderText(/Add a task/i);
+    const input = screen.getByPlaceholderText(/Thêm tác vụ nhanh/i);
     fireEvent.change(input, { target: { value: 'Integration Test Task ~45m' } });
     fireEvent.keyDown(input, { key: 'Enter' });
 
@@ -44,11 +44,11 @@ describe('App & Route Integration', () => {
     render(<App />);
 
     // Switch hash to projects by clicking menu item
-    fireEvent.click(screen.getByRole('menuitem', { name: /Projects/i }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /Dự án/i }));
 
     await waitFor(() => {
       expect(screen.getByText('Integration Project')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /New Project/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Dự án mới/i })).toBeInTheDocument();
     });
   });
 });

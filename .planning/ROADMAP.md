@@ -10,7 +10,7 @@ Deliver a production-ready, client-side, offline-first task and capacity plannin
 - [ ] **Phase 2: Work Hierarchy & Fast Task Management** - Projects, milestones, and task CRUD with reparenting, cascading confirmations, search, filters, and fast controls.
 - [x] **Phase 3: Capacity Model & Daily Planning Ledger** - Weekly capacity templates, per-date overrides, daily minute allocations, and accessible load status indicators. (gap closure in progress) (completed 2026-09-26)
 - [x] **Phase 4: Feasibility Engine & Workload Distribution** - Deadline and range feasibility checks with deterministic lowest-load candidate distributions. (completed 2026-09-27)
-- [ ] **Phase 5: Actionable Dashboard & Workload Forecasting** - Today, urgent, 7-day, 14-day, and next-month workload forecasting with direct navigation links.
+- [x] **Phase 5: Actionable Dashboard & Workload Forecasting** - Today, urgent, 7-day, 14-day, and next-month workload forecasting with direct navigation links. (completed 2026-09-27)
 - [ ] **Phase 6: Safe Local Backup & Restore** - Complete JSON backup export, Zod structural validation, pre-import snapshots, and non-destructive restore failures.
 - [ ] **Phase 7: PWA Offline Capability & Lifecycle Hardening** - Installable manifest, Workbox offline caching, non-destructive update prompts, and cross-browser audit.
 - [ ] **Phase 8: Optional Encrypted GitHub Backup** - Browser-side PBKDF2/AES-GCM encryption, runtime-only credentials, GitHub Contents API backup push/pull, and conflict protection.
@@ -165,7 +165,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 05-04-PLAN.md — Assemble DashboardView, update Navigation and App default routing, and synchronize PlannerView (DASH-01, DASH-02, DASH-03, DASH-04, DASH-05, DASH-06)
+- [x] 05-04-PLAN.md — Assemble DashboardView, update Navigation and App default routing, and synchronize PlannerView (DASH-01, DASH-02, DASH-03, DASH-04, DASH-05, DASH-06)
 
 ### Phase 6: Safe Local Backup & Restore
 
@@ -229,7 +229,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 2. Work Hierarchy & Fast Task Management | 2/3 | In Progress|  |
 | 3. Capacity Model & Daily Planning Ledger | 4/4 | Complete   | 2026-09-26 |
 | 4. Feasibility Engine & Workload Distribution | 3/3 | Complete   | 2026-09-27 |
-| 5. Actionable Dashboard & Workload Forecasting | 3/4 | In Progress|  |
+| 5. Actionable Dashboard & Workload Forecasting | 4/4 | Complete   | 2026-09-27 |
 | 6. Safe Local Backup & Restore | 0/TBD | Not started | - |
 | 7. PWA Offline Capability & Lifecycle Hardening | 0/TBD | Not started | - |
 | 8. Optional Encrypted GitHub Backup | 0/TBD | Not started | - |

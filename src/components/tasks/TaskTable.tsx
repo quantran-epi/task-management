@@ -48,6 +48,13 @@ const PRIORITY_COLORS: Record<TaskPriority, string> = {
   Low: '#8c8c8c',
 };
 
+const PRIORITY_LABELS: Record<TaskPriority, string> = {
+  Urgent: 'Khẩn cấp',
+  High: 'Cao',
+  Medium: 'Trung bình',
+  Low: 'Thấp',
+};
+
 export const TaskTable: React.FC<TaskTableProps> = ({
   tasks,
   projects,
@@ -118,7 +125,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
 
   const columns: TableColumnsType<Task> = [
     {
-      title: 'Status',
+      title: 'Trạng thái',
       dataIndex: 'status',
       key: 'status',
       width: 130,
@@ -132,10 +139,10 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       ),
     },
     {
-      title: 'Priority',
+      title: 'Độ ưu tiên',
       dataIndex: 'priority',
       key: 'priority',
-      width: 100,
+      width: 105,
       render: (priority: TaskPriority) => (
         <Tag
           bordered={false}
@@ -147,12 +154,12 @@ export const TaskTable: React.FC<TaskTableProps> = ({
             fontSize: 12,
           }}
         >
-          {priority}
+          {PRIORITY_LABELS[priority] || priority}
         </Tag>
       ),
     },
     {
-      title: 'Task & Hierarchy',
+      title: 'Tác vụ & Phân cấp',
       dataIndex: 'name',
       key: 'name',
       render: (_, record) => {
@@ -184,7 +191,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
               </span>
               {linkCount > 0 && (
                 <Popover
-                  title="Document Links"
+                  title="Tài liệu liên kết"
                   content={
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       {record.documentLinks?.map((link, idx) => (
@@ -235,7 +242,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       },
     },
     {
-      title: 'Estimate',
+      title: 'Ước tính',
       dataIndex: 'estimateMinutes',
       key: 'estimateMinutes',
       width: 100,
@@ -246,7 +253,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       ),
     },
     {
-      title: 'Progress',
+      title: 'Tiến độ',
       dataIndex: 'progress',
       key: 'progress',
       width: 110,
@@ -255,7 +262,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       ),
     },
     {
-      title: 'Deadline',
+      title: 'Hạn chót',
       dataIndex: 'deadline',
       key: 'deadline',
       width: 120,
@@ -278,7 +285,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       },
     },
     {
-      title: 'Actions',
+      title: 'Thao tác',
       key: 'actions',
       width: 80,
       render: (_, record) => {
@@ -286,7 +293,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
           {
             key: 'edit',
             icon: <EditOutlined />,
-            label: 'Edit Task',
+            label: 'Sửa tác vụ',
             onClick: () => onOpenDrawer(record.id),
           },
           {
@@ -295,14 +302,14 @@ export const TaskTable: React.FC<TaskTableProps> = ({
             danger: true,
             label: (
               <Popconfirm
-                title="Delete Task"
-                description={`Are you sure you want to delete "${record.name}"?`}
+                title="Xóa tác vụ"
+                description={`Bạn có chắc muốn xóa "${record.name}"?`}
                 onConfirm={() => db && deleteTaskWithAllocations(record.id, db)}
-                okText="Delete"
-                cancelText="Cancel"
+                okText="Xóa"
+                cancelText="Hủy"
                 okButtonProps={{ danger: true }}
               >
-                <span>Delete</span>
+                <span>Xóa</span>
               </Popconfirm>
             ),
           },
@@ -310,13 +317,13 @@ export const TaskTable: React.FC<TaskTableProps> = ({
 
         return (
           <Space orientation="horizontal" size={4}>
-            <Tooltip title="Edit task">
+            <Tooltip title="Sửa tác vụ">
               <Button
                 type="text"
                 size="small"
                 icon={<EditOutlined />}
                 onClick={() => onOpenDrawer(record.id)}
-                aria-label="Quick edit task"
+                aria-label="Sửa nhanh tác vụ"
               />
             </Tooltip>
             <Dropdown menu={{ items: menuItems }} trigger={['click']}>
@@ -324,7 +331,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                 type="text"
                 size="small"
                 icon={<MoreOutlined />}
-                aria-label="More task actions"
+                aria-label="Thao tác khác"
               />
             </Dropdown>
           </Space>
@@ -357,13 +364,13 @@ export const TaskTable: React.FC<TaskTableProps> = ({
         locale={{
           emptyText: isFiltered ? (
             <EmptyState
-              heading="No matching tasks"
-              body="No tasks match the selected search and filter criteria. Reset filters to see all tasks."
+              heading="Không có tác vụ phù hợp"
+              body="Không có tác vụ nào khớp với tiêu chí tìm kiếm và bộ lọc. Hãy đặt lại bộ lọc để xem tất cả."
             />
           ) : (
             <EmptyState
-              heading="No tasks found"
-              body="Create your first task using the input bar above or clear your active filters."
+              heading="Chưa có tác vụ nào"
+              body="Tạo tác vụ đầu tiên bằng thanh nhập phía trên hoặc xóa bộ lọc đang hoạt động."
             />
           ),
         }}

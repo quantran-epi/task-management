@@ -69,14 +69,14 @@ describe('TaskTable Component', () => {
       />
     );
 
-    expect(screen.getByPlaceholderText(/Search tasks/i)).toBeInTheDocument();
-    expect(screen.getAllByText('All').length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText('Projects')).toBeInTheDocument();
-    expect(screen.getByText('Standalone')).toBeInTheDocument();
-    expect(screen.getByText(/Include Done & Cancelled/i)).toBeInTheDocument();
-    expect(screen.getByText('Overdue')).toBeInTheDocument();
-    expect(screen.getByText('Today')).toBeInTheDocument();
-    expect(screen.getByText('This Week')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Tìm kiếm tác vụ/i)).toBeInTheDocument();
+    expect(screen.getAllByText('Tất cả').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('Dự án')).toBeInTheDocument();
+    expect(screen.getByText('Độc lập')).toBeInTheDocument();
+    expect(screen.getByText(/Gồm Hoàn thành & Đã hủy/i)).toBeInTheDocument();
+    expect(screen.getByText('Quá hạn')).toBeInTheDocument();
+    expect(screen.getByText('Hôm nay')).toBeInTheDocument();
+    expect(screen.getByText('Tuần này')).toBeInTheDocument();
   });
 
   it('TaskTable renders columns with tags, breadcrumbs, estimate format, link badges, and overdue styling', () => {
@@ -101,7 +101,7 @@ describe('TaskTable Component', () => {
 
     // Task 2 checks
     expect(screen.getByText('Beta Standalone Task')).toBeInTheDocument();
-    expect(screen.getByText('Standalone')).toBeInTheDocument();
+    expect(screen.getByText('Độc lập')).toBeInTheDocument();
   });
 
   it('Table keyboard navigation handles Arrow navigation and Enter opening drawer', async () => {
@@ -147,12 +147,12 @@ describe('TaskTable Component', () => {
       />
     );
 
-    expect(screen.getByText('2 tasks selected')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Clear/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Status/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Delete/i })).toBeInTheDocument();
+    expect(screen.getByText('Đã chọn 2 tác vụ')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Bỏ chọn/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Trạng thái/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Xóa/i })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Clear/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Bỏ chọn/i }));
     expect(onClear).toHaveBeenCalled();
   });
 
@@ -170,6 +170,6 @@ describe('TaskTable Component', () => {
       />
     );
 
-    expect(screen.getByText(/No matching tasks/i)).toBeInTheDocument();
+    expect(screen.getByText(/Không có tác vụ phù hợp/i)).toBeInTheDocument();
   });
 });

@@ -33,6 +33,15 @@ export interface BatchActionBarProps {
   db?: TaskPlannerDatabase;
 }
 
+const STATUS_LABELS: Record<TaskStatus, string> = {
+  Open: 'Mở',
+  'In Progress': 'Đang làm',
+  Resolved: 'Đã giải quyết',
+  'In Review': 'Đang duyệt',
+  Done: 'Hoàn thành',
+  Cancelled: 'Đã hủy',
+};
+
 const ALL_STATUSES: TaskStatus[] = [
   'Open',
   'In Progress',
@@ -74,9 +83,9 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
           }
         });
       }
-      message.success({ content: `Updated ${selectedCount} tasks to ${nextStatus}`, duration: 2 });
+      message.success({ content: `Đã cập nhật ${selectedCount} tác vụ sang ${STATUS_LABELS[nextStatus] || nextStatus}`, duration: 2 });
     } catch {
-      message.error({ content: 'Failed to update selected tasks', duration: 2 });
+      message.error({ content: 'Không thể cập nhật các tác vụ đã chọn', duration: 2 });
     } finally {
       setLoading(false);
     }
@@ -84,7 +93,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
 
   const statusMenuItems: MenuProps['items'] = ALL_STATUSES.map((s) => ({
     key: s,
-    label: s,
+    label: STATUS_LABELS[s] || s,
   }));
 
   const handleDelete = async () => {
@@ -99,10 +108,10 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
           }
         });
       }
-      message.success({ content: `Deleted ${selectedCount} tasks`, duration: 2 });
+      message.success({ content: `Đã xóa ${selectedCount} tác vụ`, duration: 2 });
       onClearSelection();
     } catch {
-      message.error({ content: 'Failed to delete selected tasks', duration: 2 });
+      message.error({ content: 'Không thể xóa các tác vụ đã chọn', duration: 2 });
     } finally {
       setLoading(false);
     }
@@ -120,11 +129,11 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
           }
         });
       }
-      message.success({ content: `Reparented ${selectedCount} tasks`, duration: 2 });
+      message.success({ content: `Đã di chuyển ${selectedCount} tác vụ`, duration: 2 });
       setMoveModalOpen(false);
       onClearSelection();
     } catch {
-      message.error({ content: 'Failed to reparent selected tasks', duration: 2 });
+      message.error({ content: 'Không thể di chuyển các tác vụ đã chọn', duration: 2 });
     } finally {
       setLoading(false);
     }
@@ -155,7 +164,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
         }}
       >
         <span style={{ fontWeight: 600, fontSize: 14, color: token.colorText }}>
-          {selectedCount} tasks selected
+          Đã chọn {selectedCount} tác vụ
         </span>
 
         <Space orientation="horizontal" size="small">
@@ -164,7 +173,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
             trigger={['click']}
             disabled={loading}
           >
-            <Button icon={<CheckCircleOutlined />}>Status ▾</Button>
+            <Button icon={<CheckCircleOutlined />}>Trạng thái ▾</Button>
           </Dropdown>
 
           <Button
@@ -172,19 +181,19 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
             onClick={() => setMoveModalOpen(true)}
             disabled={loading}
           >
-            Move
+            Di chuyển
           </Button>
 
           <Popconfirm
-            title={`Delete ${selectedCount} Tasks`}
-            description={`Are you sure you want to permanently delete ${selectedCount} selected tasks?`}
+            title={`Xóa ${selectedCount} tác vụ`}
+            description={`Bạn có chắc muốn xóa vĩnh viễn ${selectedCount} tác vụ đã chọn?`}
             onConfirm={handleDelete}
-            okText="Delete"
-            cancelText="Cancel"
+            okText="Xóa"
+            cancelText="Hủy"
             okButtonProps={{ danger: true, loading }}
           >
             <Button danger icon={<DeleteOutlined />} loading={loading}>
-              Delete
+              Xóa
             </Button>
           </Popconfirm>
 
@@ -193,52 +202,53 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
             icon={<CloseOutlined />}
             onClick={onClearSelection}
             disabled={loading}
-            aria-label="Clear selection"
+            aria-label="Bỏ chọn"
           >
-            Clear
+            Bỏ chọn
           </Button>
         </Space>
       </div>
 
       <Modal
-        title={`Move ${selectedCount} Tasks`}
+        title={`Di chuyển ${selectedCount} tác vụ`}
         open={moveModalOpen}
         onOk={handleReparentSubmit}
         onCancel={() => setMoveModalOpen(false)}
         confirmLoading={loading}
-        okText="Apply Move"
+        okText="Áp dụng"
+        cancelText="Hủy"
         destroyOnClose
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 16 }}>
           <div>
-            <div style={{ marginBottom: 4, fontWeight: 600, fontSize: 12 }}>Target Project:</div>
+            <div style={{ marginBottom: 4, fontWeight: 600, fontSize: 12 }}>Dự án đích:</div>
             <Select
               allowClear
               style={{ width: '100%' }}
-              placeholder="Standalone (No Project)"
+              placeholder="Độc lập (Không thuộc dự án)"
               value={targetProjectId}
               onChange={(val) => {
                 setTargetProjectId(val || undefined);
                 setTargetMilestoneId(undefined);
               }}
               options={[
-                { label: 'Standalone (No Project)', value: '' },
+                { label: 'Độc lập (Không thuộc dự án)', value: '' },
                 ...projects.map((p) => ({ label: p.name, value: p.id })),
               ]}
             />
           </div>
 
           <div>
-            <div style={{ marginBottom: 4, fontWeight: 600, fontSize: 12 }}>Target Milestone:</div>
+            <div style={{ marginBottom: 4, fontWeight: 600, fontSize: 12 }}>Cột mốc đích:</div>
             <Select
               allowClear
               style={{ width: '100%' }}
-              placeholder="Project Root (No Milestone)"
+              placeholder="Gốc dự án (Không thuộc cột mốc)"
               value={targetMilestoneId}
               onChange={(val) => setTargetMilestoneId(val || undefined)}
               disabled={!targetProjectId || availableMilestones.length === 0}
               options={[
-                { label: 'Project Root (No Milestone)', value: '' },
+                { label: 'Gốc dự án (Không thuộc cột mốc)', value: '' },
                 ...availableMilestones.map((m) => ({ label: m.name, value: m.id })),
               ]}
             />

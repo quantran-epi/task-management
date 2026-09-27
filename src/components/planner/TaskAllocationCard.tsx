@@ -44,6 +44,13 @@ const PRIORITY_COLORS: Record<TaskPriority, string> = {
   Urgent: 'red',
 };
 
+const PRIORITY_LABELS: Record<TaskPriority, string> = {
+  Low: 'Thấp',
+  Medium: 'Trung bình',
+  High: 'Cao',
+  Urgent: 'Khẩn cấp',
+};
+
 export const TaskAllocationCard: React.FC<TaskAllocationCardProps> = ({
   allocation,
   task,
@@ -69,11 +76,11 @@ export const TaskAllocationCard: React.FC<TaskAllocationCardProps> = ({
   const handleSaveEdit = async () => {
     const totalMinutes = hours * 60 + minutes;
     if (totalMinutes <= 0) {
-      message.error('Duration must be at least 1 minute');
+      message.error('Thời lượng phải từ ít nhất 1 phút');
       return;
     }
     if (totalMinutes > 1440) {
-      message.error('Duration cannot exceed 24 hours');
+      message.error('Thời lượng không được vượt quá 24 giờ');
       return;
     }
 
@@ -81,10 +88,10 @@ export const TaskAllocationCard: React.FC<TaskAllocationCardProps> = ({
       setSaving(true);
       const dateStr = targetDate.format('YYYY-MM-DD');
       await updateAllocation(allocation.id, totalMinutes, dateStr, db);
-      message.success('Allocation updated');
+      message.success('Đã cập nhật phân bổ');
       setPopoverOpen(false);
     } catch {
-      message.error('Failed to update allocation');
+      message.error('Không thể cập nhật phân bổ');
     } finally {
       setSaving(false);
     }
@@ -93,21 +100,21 @@ export const TaskAllocationCard: React.FC<TaskAllocationCardProps> = ({
   const handleDelete = async () => {
     try {
       await deleteAllocation(allocation.id, db);
-      message.success(`Removed allocation of ${formatMinutes(allocation.allocatedMinutes)}`);
+      message.success(`Đã xóa phân bổ ${formatMinutes(allocation.allocatedMinutes)}`);
     } catch {
-      message.error('Failed to remove allocation');
+      message.error('Không thể xóa phân bổ');
     }
   };
 
   const editPopoverContent = (
     <div style={{ width: 220, padding: 4 }}>
       <Text strong style={{ display: 'block', marginBottom: 8 }}>
-        Edit Allocation
+        Sửa phân bổ
       </Text>
 
       <div style={{ marginBottom: 8 }}>
         <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
-          Target Date:
+          Ngày thực hiện:
         </Text>
         <DatePicker
           value={targetDate}
@@ -120,7 +127,7 @@ export const TaskAllocationCard: React.FC<TaskAllocationCardProps> = ({
 
       <div style={{ marginBottom: 12 }}>
         <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
-          Planned Time:
+          Thời gian dự kiến:
         </Text>
         <Space size={4}>
           <InputNumber
@@ -147,7 +154,7 @@ export const TaskAllocationCard: React.FC<TaskAllocationCardProps> = ({
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
         <Button size="small" onClick={() => setPopoverOpen(false)}>
-          Cancel
+          Hủy
         </Button>
         <Button
           type="primary"
@@ -155,7 +162,7 @@ export const TaskAllocationCard: React.FC<TaskAllocationCardProps> = ({
           loading={saving}
           onClick={() => void handleSaveEdit()}
         >
-          Save
+          Lưu
         </Button>
       </div>
     </div>
@@ -206,7 +213,7 @@ export const TaskAllocationCard: React.FC<TaskAllocationCardProps> = ({
         {/* Left side: Priority tag and inactive/status tags with wrap */}
         <Space size={4} wrap>
           <Tag color={PRIORITY_COLORS[task.priority]} style={{ margin: 0, fontSize: 11 }}>
-            {task.priority}
+            {PRIORITY_LABELS[task.priority] || task.priority}
           </Tag>
 
           {!isActive && (
@@ -215,7 +222,7 @@ export const TaskAllocationCard: React.FC<TaskAllocationCardProps> = ({
               color="default"
               style={{ margin: 0, fontSize: 11 }}
             >
-              {task.status === 'Done' ? 'Done - excluded' : 'Cancelled - excluded'}
+              {task.status === 'Done' ? 'Hoàn thành - không tính' : 'Đã hủy - không tính'}
             </Tag>
           )}
         </Space>
@@ -238,7 +245,7 @@ export const TaskAllocationCard: React.FC<TaskAllocationCardProps> = ({
                 alignItems: 'center',
                 gap: 4,
               }}
-              title="Click to edit planned time or date"
+              title="Nhấn để sửa thời gian hoặc ngày"
               aria-label={`Allocated ${formatMinutes(allocation.allocatedMinutes)}`}
             >
               {formatMinutes(allocation.allocatedMinutes)}
@@ -247,10 +254,10 @@ export const TaskAllocationCard: React.FC<TaskAllocationCardProps> = ({
           </Popover>
 
           <Popconfirm
-            title="Remove Allocation"
-            description={`Remove allocation of ${formatMinutes(allocation.allocatedMinutes)}?`}
-            okText="Remove"
-            cancelText="Cancel"
+            title="Xóa phân bổ"
+            description={`Xóa phân bổ ${formatMinutes(allocation.allocatedMinutes)}?`}
+            okText="Xóa"
+            cancelText="Hủy"
             okButtonProps={{ danger: true }}
             onConfirm={() => void handleDelete()}
           >

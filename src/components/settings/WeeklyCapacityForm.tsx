@@ -14,13 +14,13 @@ interface WeekdayConfig {
 }
 
 const WEEKDAYS: WeekdayConfig[] = [
-  { dayOfWeek: 1, label: 'Monday' },
-  { dayOfWeek: 2, label: 'Tuesday' },
-  { dayOfWeek: 3, label: 'Wednesday' },
-  { dayOfWeek: 4, label: 'Thursday' },
-  { dayOfWeek: 5, label: 'Friday' },
-  { dayOfWeek: 6, label: 'Saturday' },
-  { dayOfWeek: 0, label: 'Sunday' },
+  { dayOfWeek: 1, label: 'Thứ Hai' },
+  { dayOfWeek: 2, label: 'Thứ Ba' },
+  { dayOfWeek: 3, label: 'Thứ Tư' },
+  { dayOfWeek: 4, label: 'Thứ Năm' },
+  { dayOfWeek: 5, label: 'Thứ Sáu' },
+  { dayOfWeek: 6, label: 'Thứ Bảy' },
+  { dayOfWeek: 0, label: 'Chủ Nhật' },
 ];
 
 export interface WeeklyCapacityFormProps {
@@ -56,10 +56,10 @@ export const WeeklyCapacityForm: React.FC<WeeklyCapacityFormProps> = ({ db = def
 
   return (
     <Card
-      title={<Title level={5} style={{ margin: 0 }}>Weekly Base Capacity Template</Title>}
+      title={<Title level={5} style={{ margin: 0 }}>Mẫu công suất cơ bản hàng tuần</Title>}
       extra={
         <Text strong type="secondary" data-testid="weekly-total">
-          Weekly Total: {formatMinutes(totalWeeklyMinutes)}
+          Tổng hàng tuần: {formatMinutes(totalWeeklyMinutes)}
         </Text>
       }
       size="small"

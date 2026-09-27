@@ -36,7 +36,7 @@ export const DayColumn: React.FC<DayColumnProps> = ({
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        minWidth: 180,
+        minWidth: 230,
         backgroundColor: '#fafafa',
         borderRadius: 8,
         border: '1px solid #f0f0f0',
@@ -67,10 +67,10 @@ export const DayColumn: React.FC<DayColumnProps> = ({
             }}
           >
             <Text strong style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>
-              No tasks allocated
+              Chưa có tác vụ phân bổ
             </Text>
             <Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
-              Click &quot;+ Allocate&quot; below to plan tasks for this day.
+              Nhấn &quot;Phân bổ&quot; bên dưới để lập kế hoạch cho ngày này.
             </Text>
           </div>
         ) : (
@@ -87,16 +87,16 @@ export const DayColumn: React.FC<DayColumnProps> = ({
         )}
       </div>
 
-      {/* Footer: + Allocate quick button (D-03) */}
+      {/* Footer: Phân bổ quick button (D-03) */}
       <Button
         type="dashed"
         icon={<PlusOutlined />}
         block
         onClick={() => onAllocate(day.date)}
-        aria-label={`Allocate task for ${day.date}`}
+        aria-label={`Phân bổ tác vụ cho ${day.date}`}
         style={{ fontSize: 13 }}
       >
-        + Allocate
+        Phân bổ
       </Button>
     </div>
   );

@@ -20,6 +20,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import dayjs, { type Dayjs } from 'dayjs';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { upsertAllocation } from '../../db/repositories/allocationRepo';
+import { updateTask } from '../../db/repositories/taskRepo';
 import { formatMinutes } from '../../utils/time';
 import { createFocusRestorer } from '../../utils/focus';
 import { evaluateTaskFeasibility } from '../../utils/feasibility';
@@ -68,6 +69,7 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs]>(getInitialRange);
   const [strategy, setStrategy] = useState<DistributionStrategy>('balanced-spread');
   const [maxMinutesPerDay, setMaxMinutesPerDay] = useState<number | undefined>(undefined);
+  const [extendedDeadline, setExtendedDeadline] = useState<string | null>(null);
 
   // In-memory candidate edits (CALC-06, T-04-03)
   const [candidateOverrides, setCandidateOverrides] = useState<
@@ -89,6 +91,7 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
       setStrategy('balanced-spread');
       setMaxMinutesPerDay(undefined);
       setCandidateOverrides({});
+      setExtendedDeadline(null);
     }
   }, [open, task?.id, taskDeadline]);
 
@@ -208,6 +211,7 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
       setDateRange([dateRange[0], earliest]);
       setRangeMode('custom');
       setCandidateOverrides({});
+      setExtendedDeadline(feasibilityResult.earliestFeasibleDate);
     }
   };
 
@@ -226,7 +230,7 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
     );
 
     if (includedCandidates.length === 0) {
-      message.warning('No candidate allocations selected to apply');
+      message.warning('Chưa chọn phân bổ nào để áp dụng');
       return;
     }
 
@@ -237,19 +241,23 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
           const newTotal = c.existingAllocatedMinutes + c.proposedAllocatedMinutes;
           await upsertAllocation(task.id, c.date, newTotal, db);
         }
+        if (extendedDeadline) {
+          await updateTask(task.id, { deadline: extendedDeadline }, db);
+        }
       });
 
       const totalAppliedMinutes = includedCandidates.reduce(
         (sum, c) => sum + c.proposedAllocatedMinutes,
         0
       );
+      const deadlineMsg = extendedDeadline ? ` (đã cập nhật hạn chót đến ${extendedDeadline})` : '';
       message.success(
-        `Successfully allocated ${formatMinutes(totalAppliedMinutes)} across ${includedCandidates.length} days`
+        `Đã phân bổ thành công ${formatMinutes(totalAppliedMinutes)} qua ${includedCandidates.length} ngày${deadlineMsg}`
       );
       onSuccess?.();
       handleClose();
     } catch {
-      message.error('Failed to apply allocations');
+      message.error('Không thể áp dụng phân bổ');
     } finally {
       setSubmitting(false);
     }
@@ -260,7 +268,7 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
       title={
         <Space>
           <ThunderboltOutlined style={{ color: '#1677ff' }} />
-          <span>Task Feasibility & Workload Distribution</span>
+          <span>Đánh giá tính khả thi & Phân bổ khối lượng công việc</span>
         </Space>
       }
       open={open}
@@ -269,13 +277,13 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
       width={720}
       footer={
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <Button onClick={handleClose}>Discard Allocations</Button>
+          <Button onClick={handleClose}>Hủy bỏ</Button>
           <Button
             type="primary"
             onClick={() => void handleApply()}
             loading={submitting}
           >
-            Apply Allocations
+            Áp dụng phân bổ
           </Button>
         </div>
       }
@@ -294,7 +302,7 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
               <div>
                 <Text type="secondary" style={{ display: 'block', fontSize: 12, marginBottom: 4 }}>
-                  Evaluation Window
+                  Khoảng thời gian đánh giá
                 </Text>
                 <Space>
                   <Radio.Group
@@ -313,9 +321,9 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
                     }}
                   >
                     <Radio.Button value="deadline" disabled={!taskDeadline}>
-                      By Deadline
+                      Theo hạn chót
                     </Radio.Button>
-                    <Radio.Button value="custom">Custom Range</Radio.Button>
+                    <Radio.Button value="custom">Tùy chọn khoảng ngày</Radio.Button>
                   </Radio.Group>
                   <RangePicker
                     value={dateRange}
@@ -334,7 +342,7 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
 
               <div>
                 <Text type="secondary" style={{ display: 'block', fontSize: 12, marginBottom: 4 }}>
-                  Distribution Strategy
+                  Chiến lược phân bổ
                 </Text>
                 <Segmented
                   value={strategy}
@@ -343,22 +351,22 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
                     setCandidateOverrides({});
                   }}
                   options={[
-                    { label: 'Balanced Spread', value: 'balanced-spread' },
-                    { label: 'Front-load', value: 'front-load' },
-                    { label: 'Greedy Fill', value: 'greedy-fill' },
+                    { label: 'Phân bổ đều', value: 'balanced-spread' },
+                    { label: 'Dồn về đầu', value: 'front-load' },
+                    { label: 'Lấp đầy tối đa', value: 'greedy-fill' },
                   ]}
                 />
               </div>
 
               <div>
                 <Text type="secondary" style={{ display: 'block', fontSize: 12, marginBottom: 4 }}>
-                  Max Hours/Day (Optional)
+                  Số giờ tối đa/ngày (Tùy chọn)
                 </Text>
                 <InputNumber
                   min={1}
                   max={24}
                   step={1}
-                  placeholder="Uncapped"
+                  placeholder="Không giới hạn"
                   value={maxMinutesPerDay !== undefined ? maxMinutesPerDay / 60 : null}
                   onChange={(v) => {
                     const num = typeof v === 'number' ? v : Number(v);
@@ -366,7 +374,7 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
                     setCandidateOverrides({});
                   }}
                   suffix="h"
-                  style={{ width: 110 }}
+                  style={{ width: 130 }}
                 />
               </div>
             </div>
@@ -383,13 +391,13 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
                 icon={<CheckCircleOutlined />}
                 message={
                   <span style={{ fontWeight: 600 }}>
-                    Feasible: Work fits within range. Surplus capacity: +
+                    Khả thi: Công việc vừa với khoảng thời gian. Dư công suất: +
                     {formatMinutes(feasibilityResult.surplusMinutes)}.
                   </span>
                 }
                 description={
                   <span>
-                    The task remaining estimate ({formatMinutes(feasibilityResult.remainingTaskEstimateMinutes)}) can be fully allocated across the selected date window.
+                    Ước tính còn lại của tác vụ ({formatMinutes(feasibilityResult.remainingTaskEstimateMinutes)}) có thể phân bổ đầy đủ trong khoảng ngày đã chọn.
                   </span>
                 }
               />
@@ -400,29 +408,29 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
                 icon={<ExclamationCircleOutlined />}
                 message={
                   <span style={{ fontWeight: 600 }}>
-                    Infeasible: Deficit of -{formatMinutes(feasibilityResult.deficitMinutes)}. Earliest feasible completion date is {feasibilityResult.earliestFeasibleDate ?? 'unknown'}.
+                    Không khả thi: Thiếu hụt -{formatMinutes(feasibilityResult.deficitMinutes)}. Ngày hoàn thành khả thi sớm nhất là {feasibilityResult.earliestFeasibleDate ?? 'chưa xác định'}.
                   </span>
                 }
                 description={
                   <div style={{ marginTop: 8 }}>
                     <div style={{ marginBottom: 8 }}>
-                      Selected range has only {formatMinutes(feasibilityResult.totalAvailableNetMinutes)} available capacity for remaining estimate {formatMinutes(feasibilityResult.remainingTaskEstimateMinutes)}.
+                      Khoảng ngày đã chọn chỉ có {formatMinutes(feasibilityResult.totalAvailableNetMinutes)} công suất khả dụng cho ước tính còn lại {formatMinutes(feasibilityResult.remainingTaskEstimateMinutes)}.
                     </div>
-                    <Space orientation="horizontal" size="small" wrap>
+                    <Space size="small" wrap>
                       {feasibilityResult.earliestFeasibleDate && (
                         <Button
                           size="small"
                           type="primary"
                           onClick={handleExtendToEarliest}
                         >
-                          Extend to {feasibilityResult.earliestFeasibleDate}
+                          Gia hạn đến {feasibilityResult.earliestFeasibleDate}
                         </Button>
                       )}
                       <Button
                         size="small"
                         onClick={handleAllocateAvailable}
                       >
-                        Allocate Available ({formatMinutes(feasibilityResult.totalAvailableNetMinutes)})
+                        Phân bổ theo khả năng ({formatMinutes(feasibilityResult.totalAvailableNetMinutes)})
                       </Button>
                     </Space>
                   </div>

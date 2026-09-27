@@ -6,10 +6,10 @@ export const StatusBadge: React.FC = () => {
   const isOnline = useNetworkStatus();
 
   return (
-    <Tooltip title={isOnline ? 'Online (IndexedDB connected)' : 'Offline (Local storage active)'}>
+    <Tooltip title={isOnline ? 'Trực tuyến (kết nối IndexedDB)' : 'Ngoại tuyến (dữ liệu lưu cục bộ)'}>
       <Badge
         status={isOnline ? 'success' : 'warning'}
-        text={isOnline ? 'Online' : 'Offline'}
+        text={isOnline ? 'Trực tuyến' : 'Ngoại tuyến'}
         style={{ cursor: 'pointer' }}
       />
     </Tooltip>

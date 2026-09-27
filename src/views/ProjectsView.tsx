@@ -65,14 +65,14 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ db = defaultDb }) =>
     try {
       if (editingProject) {
         await updateProject(editingProject.id, values, db);
-        message.success({ content: 'Project updated', duration: 1.5 });
+        message.success({ content: 'Đã cập nhật dự án', duration: 1.5 });
       } else {
         await createProject(values, db);
-        message.success({ content: 'Project created', duration: 1.5 });
+        message.success({ content: 'Đã tạo dự án', duration: 1.5 });
       }
       setProjectModalOpen(false);
     } catch {
-      message.error({ content: 'Failed to save project', duration: 2 });
+      message.error({ content: 'Không thể lưu dự án', duration: 2 });
     }
   };
 
@@ -113,14 +113,14 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ db = defaultDb }) =>
     try {
       if (editingMilestone) {
         await updateMilestone(editingMilestone.id, values, db);
-        message.success({ content: 'Milestone updated', duration: 1.5 });
+        message.success({ content: 'Đã cập nhật cột mốc', duration: 1.5 });
       } else {
         await createMilestone(values, db);
-        message.success({ content: 'Milestone created', duration: 1.5 });
+        message.success({ content: 'Đã tạo cột mốc', duration: 1.5 });
       }
       setMilestoneModalOpen(false);
     } catch {
-      message.error({ content: 'Failed to save milestone', duration: 2 });
+      message.error({ content: 'Không thể lưu cột mốc', duration: 2 });
     }
   };
 
@@ -144,14 +144,14 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ db = defaultDb }) =>
     try {
       if (cascadeTarget.type === 'project') {
         await deleteProjectWithCascade(cascadeTarget.id, mode, db);
-        message.success({ content: `Project deleted (${mode} mode)`, duration: 2 });
+        message.success({ content: 'Đã xóa dự án', duration: 2 });
       } else {
         await deleteMilestoneWithCascade(cascadeTarget.id, mode, db);
-        message.success({ content: `Milestone deleted (${mode} mode)`, duration: 2 });
+        message.success({ content: 'Đã xóa cột mốc', duration: 2 });
       }
       setCascadeModalOpen(false);
     } catch {
-      message.error({ content: 'Failed to delete record', duration: 2 });
+      message.error({ content: 'Không thể xóa bản ghi', duration: 2 });
     }
   };
 
@@ -160,7 +160,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ db = defaultDb }) =>
     try {
       const created = await createTask(
         {
-          name: 'New Task',
+          name: 'Tác vụ mới',
           status: 'Open',
           priority: 'Medium',
           estimateMinutes: 0,
@@ -172,7 +172,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ db = defaultDb }) =>
       setDrawerTaskId(created.id);
       setDrawerOpen(true);
     } catch {
-      message.error({ content: 'Failed to create task', duration: 2 });
+      message.error({ content: 'Không thể tạo tác vụ', duration: 2 });
     }
   };
 
@@ -193,9 +193,9 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ db = defaultDb }) =>
         }}
       >
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>Work Hierarchy</h2>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>Phân cấp công việc</h2>
           <span style={{ fontSize: 14, color: '#8c8c8c' }}>
-            Manage projects, milestones, and direct project deliverables
+            Quản lý dự án, cột mốc và các sản phẩm bàn giao
           </span>
         </div>
         <Button
@@ -203,7 +203,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ db = defaultDb }) =>
           icon={<PlusOutlined />}
           onClick={handleOpenCreateProject}
         >
-          New Project
+          Dự án mới
         </Button>
       </div>
 

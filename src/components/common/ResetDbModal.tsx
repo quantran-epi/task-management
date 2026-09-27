@@ -29,24 +29,25 @@ export const ResetDbModal: React.FC<ResetDbModalProps> = ({ open, onClose }) => 
 
   return (
     <Modal
-      title="Reset Database"
+      title="Đặt lại cơ sở dữ liệu"
       open={open}
       onCancel={() => {
         setConfirmText('');
         onClose();
       }}
       onOk={handleReset}
-      okText="Confirm Reset"
+      okText="Xác nhận đặt lại"
+      cancelText="Hủy"
       okButtonProps={{ danger: true, disabled: confirmText !== 'RESET', loading }}
     >
       <Alert
         type="error"
-        message="Destructive Action"
-        description="Type RESET to confirm complete database purge. This action cannot be undone."
+        message="Hành động nguy hiểm"
+        description="Nhập RESET để xác nhận xóa toàn bộ cơ sở dữ liệu. Hành động này không thể hoàn tác."
         showIcon
         style={{ marginBottom: 16 }}
       />
-      <Text strong>Type &quot;RESET&quot; below:</Text>
+      <Text strong>Nhập &quot;RESET&quot; bên dưới:</Text>
       <Input
         value={confirmText}
         onChange={(e) => setConfirmText(e.target.value)}

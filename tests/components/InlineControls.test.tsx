@@ -43,14 +43,14 @@ describe('InlineControls', () => {
         />
       );
 
-      const tag = screen.getByText(/Open/i);
+      const tag = screen.getByText(/Mở/i);
       expect(tag).toBeInTheDocument();
 
       // Click tag to open dropdown
       fireEvent.click(tag);
 
       // Ant Design renders dropdown menu items
-      const inProgressItem = await screen.findByText('In Progress');
+      const inProgressItem = await screen.findByText('Đang làm');
       fireEvent.click(inProgressItem);
 
       await waitFor(() => {
@@ -60,7 +60,7 @@ describe('InlineControls', () => {
       const updated = await testDb.tasks.get(task.id);
       expect(updated?.status).toBe('In Progress');
       expect(message.success).toHaveBeenCalledWith(
-        expect.objectContaining({ content: 'Status updated' })
+        expect.objectContaining({ content: 'Đã cập nhật trạng thái' })
       );
     });
 
@@ -79,13 +79,13 @@ describe('InlineControls', () => {
         />
       );
 
-      fireEvent.click(screen.getByText(/Open/i));
-      const inProgressItem = await screen.findByText('In Progress');
+      fireEvent.click(screen.getByText(/Mở/i));
+      const inProgressItem = await screen.findByText('Đang làm');
       fireEvent.click(inProgressItem);
 
       await waitFor(() => {
         expect(message.info).toHaveBeenCalledWith(
-          expect.objectContaining({ content: expect.stringContaining('estimate') })
+          expect.objectContaining({ content: expect.stringContaining('ước tính') })
         );
       });
     });
@@ -99,7 +99,7 @@ describe('InlineControls', () => {
         />
       );
 
-      const tag = screen.getByText(/Cancelled/i);
+      const tag = screen.getByText(/Đã hủy/i);
       expect(tag).toHaveStyle({ textDecoration: 'line-through' });
     });
   });
@@ -122,7 +122,7 @@ describe('InlineControls', () => {
       );
 
       // Progress bar rendered with 20%
-      const trigger = screen.getByRole('button', { name: /progress 20%/i });
+      const trigger = screen.getByRole('button', { name: /tiến độ 20%/i });
       fireEvent.click(trigger);
 
       // Popover shows input with 20
@@ -143,7 +143,7 @@ describe('InlineControls', () => {
       const updated = await testDb.tasks.get(task.id);
       expect(updated?.progress).toBe(75);
       expect(message.success).toHaveBeenCalledWith(
-        expect.objectContaining({ content: 'Progress updated' })
+        expect.objectContaining({ content: 'Đã cập nhật tiến độ' })
       );
     });
   });
@@ -151,7 +151,7 @@ describe('InlineControls', () => {
   describe('HierarchyBreadcrumb', () => {
     it('renders Standalone when no projectId is provided per D-02', () => {
       render(<HierarchyBreadcrumb />);
-      expect(screen.getByText('Standalone')).toBeInTheDocument();
+      expect(screen.getByText('Độc lập')).toBeInTheDocument();
     });
 
     it('renders ProjectName when only project is given', () => {

@@ -21,19 +21,19 @@ export interface TaskFilterBarProps {
 }
 
 const ALL_STATUSES: { label: string; value: TaskStatus }[] = [
-  { label: 'Open', value: 'Open' },
-  { label: 'In Progress', value: 'In Progress' },
-  { label: 'Resolved', value: 'Resolved' },
-  { label: 'In Review', value: 'In Review' },
-  { label: 'Done', value: 'Done' },
-  { label: 'Cancelled', value: 'Cancelled' },
+  { label: 'Mở', value: 'Open' },
+  { label: 'Đang làm', value: 'In Progress' },
+  { label: 'Đã giải quyết', value: 'Resolved' },
+  { label: 'Đang duyệt', value: 'In Review' },
+  { label: 'Hoàn thành', value: 'Done' },
+  { label: 'Đã hủy', value: 'Cancelled' },
 ];
 
 const ALL_PRIORITIES: { label: string; value: TaskPriority }[] = [
-  { label: 'Urgent', value: 'Urgent' },
-  { label: 'High', value: 'High' },
-  { label: 'Medium', value: 'Medium' },
-  { label: 'Low', value: 'Low' },
+  { label: 'Khẩn cấp', value: 'Urgent' },
+  { label: 'Cao', value: 'High' },
+  { label: 'Trung bình', value: 'Medium' },
+  { label: 'Thấp', value: 'Low' },
 ];
 
 export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
@@ -72,33 +72,33 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
             id="task-search-input"
             data-shortcut-id="task-search-input"
             prefix={<SearchOutlined style={{ color: token.colorTextSecondary }} />}
-            placeholder="Search tasks (Press '/' to focus)..."
+            placeholder="Tìm kiếm tác vụ (Nhấn '/' để tìm)..."
             value={filters.search}
             onChange={(e) => onFilterChange({ search: e.target.value })}
             style={{ minWidth: 260, maxWidth: 380, flex: 1 }}
             allowClear
-            aria-label="Search tasks"
+            aria-label="Tìm kiếm tác vụ"
           />
 
           <Segmented
             options={[
-              { label: 'All', value: 'all' },
-              { label: 'Projects', value: 'projects' },
-              { label: 'Standalone', value: 'standalone' },
+              { label: 'Tất cả', value: 'all' },
+              { label: 'Dự án', value: 'projects' },
+              { label: 'Độc lập', value: 'standalone' },
             ]}
             value={filters.hierarchyScope}
             onChange={(val) => onFilterChange({ hierarchyScope: val as TaskFilterState['hierarchyScope'] })}
-            aria-label="Filter scope"
+            aria-label="Phạm vi lọc"
           />
 
           <Select
             allowClear
-            placeholder="Filter by Project"
+            placeholder="Lọc theo Dự án"
             style={{ minWidth: 160 }}
             value={filters.projectId || undefined}
             onChange={(val) => onFilterChange({ projectId: val || null })}
             options={projects.map((p) => ({ label: p.name, value: p.id }))}
-            aria-label="Filter by project"
+            aria-label="Lọc theo dự án"
           />
         </div>
 
@@ -109,12 +109,12 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
           optionType="button"
           buttonStyle="solid"
           size="middle"
-          aria-label="Filter horizon"
+          aria-label="Khoảng thời gian"
         >
-          <Radio.Button value="all">All</Radio.Button>
-          <Radio.Button value="overdue">Overdue</Radio.Button>
-          <Radio.Button value="today">Today</Radio.Button>
-          <Radio.Button value="this_week">This Week</Radio.Button>
+          <Radio.Button value="all">Tất cả</Radio.Button>
+          <Radio.Button value="overdue">Quá hạn</Radio.Button>
+          <Radio.Button value="today">Hôm nay</Radio.Button>
+          <Radio.Button value="this_week">Tuần này</Radio.Button>
         </Radio.Group>
       </div>
 
@@ -129,41 +129,41 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
       >
         <Space orientation="horizontal" size="small" style={{ alignItems: 'center' }}>
           <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
-            Status:
+            Trạng thái:
           </span>
           <Select
             mode="multiple"
             allowClear
             style={{ minWidth: 220 }}
-            placeholder="Active statuses"
+            placeholder="Trạng thái đang hoạt động"
             value={filters.statuses}
             onChange={(vals) => onFilterChange({ statuses: vals as TaskStatus[] })}
             options={ALL_STATUSES}
             maxTagCount="responsive"
-            aria-label="Filter by status"
+            aria-label="Lọc theo trạng thái"
           />
           <Checkbox
             checked={filters.includeClosed}
             onChange={(e) => onFilterChange({ includeClosed: e.target.checked })}
           >
-            Include Done & Cancelled
+            Bao gồm Hoàn thành & Đã hủy
           </Checkbox>
         </Space>
 
         <Space orientation="horizontal" size="small" style={{ alignItems: 'center' }}>
           <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
-            Priority:
+            Độ ưu tiên:
           </span>
           <Select
             mode="multiple"
             allowClear
             style={{ minWidth: 160 }}
-            placeholder="All Priorities"
+            placeholder="Tất cả độ ưu tiên"
             value={filters.priorities}
             onChange={(vals) => onFilterChange({ priorities: vals as TaskPriority[] })}
             options={ALL_PRIORITIES}
             maxTagCount="responsive"
-            aria-label="Filter by priority"
+            aria-label="Lọc theo độ ưu tiên"
           />
         </Space>
       </div>

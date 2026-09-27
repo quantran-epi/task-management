@@ -19,7 +19,7 @@ export const UpgradeModal: React.FC = () => {
 
   return (
     <Modal
-      title="Database Upgrade Blocked"
+      title="Nâng cấp cơ sở dữ liệu bị chặn"
       open={blocked}
       closable={false}
       footer={[
@@ -28,14 +28,14 @@ export const UpgradeModal: React.FC = () => {
           type="primary"
           onClick={() => window.location.reload()}
         >
-          Reload Page
+          Tải lại trang
         </Button>,
       ]}
     >
       <Alert
         type="warning"
-        message="Conflicting Browser Tab"
-        description="Database upgrade blocked by another tab. Close competing tabs and reload to continue."
+        message="Xung đột tab trình duyệt"
+        description="Nâng cấp cơ sở dữ liệu bị chặn bởi một tab khác. Vui lòng đóng các tab khác và tải lại trang."
         showIcon
       />
     </Modal>

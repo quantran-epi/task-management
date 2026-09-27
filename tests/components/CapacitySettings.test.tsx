@@ -25,23 +25,23 @@ describe('Capacity Settings UI Components (CAP-01, CAP-02, CAP-03, CAP-04, D-05,
     it('renders all 7 days Monday to Sunday with seeded 40h weekly total', async () => {
       render(<WeeklyCapacityForm db={testDb} />);
 
-      expect(await screen.findByText('Monday')).toBeInTheDocument();
-      expect(screen.getByText('Tuesday')).toBeInTheDocument();
-      expect(screen.getByText('Wednesday')).toBeInTheDocument();
-      expect(screen.getByText('Thursday')).toBeInTheDocument();
-      expect(screen.getByText('Friday')).toBeInTheDocument();
-      expect(screen.getByText('Saturday')).toBeInTheDocument();
-      expect(screen.getByText('Sunday')).toBeInTheDocument();
+      expect(await screen.findByText('Thứ Hai')).toBeInTheDocument();
+      expect(screen.getByText('Thứ Ba')).toBeInTheDocument();
+      expect(screen.getByText('Thứ Tư')).toBeInTheDocument();
+      expect(screen.getByText('Thứ Năm')).toBeInTheDocument();
+      expect(screen.getByText('Thứ Sáu')).toBeInTheDocument();
+      expect(screen.getByText('Thứ Bảy')).toBeInTheDocument();
+      expect(screen.getByText('Chủ Nhật')).toBeInTheDocument();
 
       // Check weekly total
-      expect(await screen.findByTestId('weekly-total')).toHaveTextContent('Weekly Total: 40h');
+      expect(await screen.findByTestId('weekly-total')).toHaveTextContent('Tổng hàng tuần: 40h');
     });
 
     it('updates Monday capacity to 0h on preset click', async () => {
       render(<WeeklyCapacityForm db={testDb} />);
 
-      await screen.findByText('Monday');
-      const setMon0h = screen.getByRole('button', { name: 'Set Monday to 0h' });
+      await screen.findByText('Thứ Hai');
+      const setMon0h = screen.getByRole('button', { name: 'Set Thứ Hai to 0h' });
       fireEvent.click(setMon0h);
 
       await waitFor(async () => {
@@ -53,8 +53,8 @@ describe('Capacity Settings UI Components (CAP-01, CAP-02, CAP-03, CAP-04, D-05,
     it('updates Saturday capacity to 4h on preset click', async () => {
       render(<WeeklyCapacityForm db={testDb} />);
 
-      await screen.findByText('Saturday');
-      const setSat4h = screen.getByRole('button', { name: 'Set Saturday to 4h' });
+      await screen.findByText('Thứ Bảy');
+      const setSat4h = screen.getByRole('button', { name: 'Set Thứ Bảy to 4h' });
       fireEvent.click(setSat4h);
 
       await waitFor(async () => {
@@ -68,9 +68,9 @@ describe('Capacity Settings UI Components (CAP-01, CAP-02, CAP-03, CAP-04, D-05,
     it('shows empty state when no overrides exist', async () => {
       render(<OverridesTable db={testDb} />);
 
-      expect(await screen.findByText('No specific date overrides')).toBeInTheDocument();
+      expect(await screen.findByText('Chưa có ngày ngoại lệ nào')).toBeInTheDocument();
       expect(
-        screen.getByText(/All dates use default weekly template hours/i)
+        screen.getByText(/Tất cả các ngày đều sử dụng số giờ mặc định theo mẫu hàng tuần/i)
       ).toBeInTheDocument();
     });
 
@@ -81,14 +81,14 @@ describe('Capacity Settings UI Components (CAP-01, CAP-02, CAP-03, CAP-04, D-05,
 
       expect(await screen.findByText('2026-10-12')).toBeInTheDocument();
       expect(screen.getByText('Indigenous Peoples Day')).toBeInTheDocument();
-      expect(screen.getByText('Leave / Off')).toBeInTheDocument();
+      expect(screen.getByText('Nghỉ')).toBeInTheDocument();
 
       // Click reset button
-      const resetBtn = screen.getByRole('button', { name: 'Reset override for 2026-10-12' });
+      const resetBtn = screen.getByRole('button', { name: 'Khôi phục ngoại lệ cho 2026-10-12' });
       fireEvent.click(resetBtn);
 
       // Confirm in popconfirm
-      const confirmBtn = await screen.findByRole('button', { name: 'Reset' });
+      const confirmBtn = await screen.findByRole('button', { name: 'Khôi phục' });
       fireEvent.click(confirmBtn);
 
       await waitFor(async () => {
@@ -103,8 +103,8 @@ describe('Capacity Settings UI Components (CAP-01, CAP-02, CAP-03, CAP-04, D-05,
       const onCancel = vi.fn();
       render(<CapacitySettingsModal open={true} onCancel={onCancel} db={testDb} />);
 
-      expect(await screen.findByText('Work Capacity & Overrides')).toBeInTheDocument();
-      const doneBtn = screen.getByRole('button', { name: 'Done' });
+      expect(await screen.findByText('Công suất làm việc & Ngoại lệ')).toBeInTheDocument();
+      const doneBtn = screen.getByRole('button', { name: 'Xong' });
       fireEvent.click(doneBtn);
       expect(onCancel).toHaveBeenCalledTimes(1);
     });
@@ -115,11 +115,11 @@ describe('Capacity Settings UI Components (CAP-01, CAP-02, CAP-03, CAP-04, D-05,
       const onNavigate = vi.fn();
       render(<SettingsView db={testDb} onNavigate={onNavigate} />);
 
-      expect(await screen.findByText('Settings & Capacity Configuration')).toBeInTheDocument();
-      expect(screen.getByText('Weekly Base Capacity Template')).toBeInTheDocument();
-      expect(screen.getByText('Specific Date Overrides')).toBeInTheDocument();
+      expect(await screen.findByText('Cài đặt & Cấu hình công suất')).toBeInTheDocument();
+      expect(screen.getByText('Mẫu công suất cơ bản hàng tuần')).toBeInTheDocument();
+      expect(screen.getByText('Ngoại lệ theo ngày cụ thể')).toBeInTheDocument();
 
-      const backBtn = screen.getByRole('button', { name: 'Back to Tasks' });
+      const backBtn = screen.getByRole('button', { name: 'Quay lại Tác vụ' });
       fireEvent.click(backBtn);
       expect(onNavigate).toHaveBeenCalledWith('tasks');
     });

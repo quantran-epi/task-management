@@ -7,8 +7,8 @@ export interface EmptyStateProps {
 }
 
 export const EmptyState: React.FC<EmptyStateProps> = ({
-  heading = 'No items yet',
-  body = 'Select a navigation tab from the sidebar to view details.',
+  heading = 'Chưa có mục nào',
+  body = 'Chọn một mục từ thanh điều hướng bên cạnh để xem chi tiết.',
 }) => {
   return (
     <div

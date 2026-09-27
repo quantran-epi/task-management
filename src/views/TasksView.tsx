@@ -129,10 +129,9 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb }) => {
         <Button
           icon={<ThunderboltOutlined />}
           onClick={() => handleOpenFeasibility()}
-          aria-label="Auto-Distribute Tasks"
-          style={{ height: 40 }}
+          aria-label="Tự động phân bổ"
         >
-          Auto-Distribute
+          Tự động phân bổ
         </Button>
       </div>
 
@@ -177,7 +176,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb }) => {
 
       {/* Task Selector Modal for Feasibility */}
       <Modal
-        title="Select Task for Auto-Distribution"
+        title="Chọn tác vụ để tự động phân bổ"
         open={taskSelectModalOpen}
         onCancel={() => setTaskSelectModalOpen(false)}
         onOk={() => {
@@ -188,12 +187,13 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb }) => {
             setFeasibilityOpen(true);
           }
         }}
-        okText="Continue"
+        okText="Tiếp tục"
+        cancelText="Hủy"
         destroyOnClose
       >
         <div style={{ marginTop: 12, marginBottom: 8 }}>
           <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
-            Choose a task to evaluate capacity and preview workload distribution:
+            Chọn tác vụ để đánh giá công suất và xem trước phân bổ khối lượng công việc:
           </Text>
           <Select
             style={{ width: '100%' }}
@@ -201,9 +201,9 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb }) => {
             onChange={setSelectedTaskIdForFeasibility}
             options={tasks.map((t) => ({
               value: t.id,
-              label: `${t.name} (${t.estimateMinutes > 0 ? `${t.estimateMinutes}m` : 'no estimate'})`,
+              label: `${t.name} (${t.estimateMinutes > 0 ? `${t.estimateMinutes}m` : 'chưa ước tính'})`,
             }))}
-            placeholder="Select a task"
+            placeholder="Chọn một tác vụ"
           />
         </div>
       </Modal>

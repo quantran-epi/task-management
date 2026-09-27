@@ -32,8 +32,8 @@ export const WeekNavigator: React.FC<WeekNavigatorProps> = ({
 
   const formattedRange =
     weekStart.year() === weekEnd.year()
-      ? `${weekStart.format('MMM D')} – ${weekEnd.format('MMM D, YYYY')}`
-      : `${weekStart.format('MMM D, YYYY')} – ${weekEnd.format('MMM D, YYYY')}`;
+      ? `${weekStart.format('DD/MM')} – ${weekEnd.format('DD/MM/YYYY')}`
+      : `${weekStart.format('DD/MM/YYYY')} – ${weekEnd.format('DD/MM/YYYY')}`;
 
   const handlePrevWeek = () => {
     const prev = current.subtract(1, 'week').startOf('isoWeek').format('YYYY-MM-DD');
@@ -73,17 +73,17 @@ export const WeekNavigator: React.FC<WeekNavigatorProps> = ({
           <Button
             icon={<LeftOutlined />}
             onClick={handlePrevWeek}
-            aria-label="Previous Week"
-            title="Previous Week (Alt+Left)"
+            aria-label="Tuần trước"
+            title="Tuần trước (Alt+Left)"
           />
-          <Button onClick={handleToday} aria-label="Today" title="Jump to Today (Alt+T)">
-            Today
+          <Button onClick={handleToday} aria-label="Hôm nay" title="Về hôm nay (Alt+T)">
+            Hôm nay
           </Button>
           <Button
             icon={<RightOutlined />}
             onClick={handleNextWeek}
-            aria-label="Next Week"
-            title="Next Week (Alt+Right)"
+            aria-label="Tuần sau"
+            title="Tuần sau (Alt+Right)"
           />
         </Space.Compact>
 
@@ -92,10 +92,10 @@ export const WeekNavigator: React.FC<WeekNavigatorProps> = ({
           picker="week"
           value={weekStart}
           onChange={handlePickerChange}
-          format="YYYY-[W]ww"
+          format={(d) => `Tuần ${d.isoWeek()} (${d.year()})`}
           allowClear={false}
-          aria-label="Select calendar week"
-          style={{ width: 140 }}
+          aria-label="Chọn tuần làm việc"
+          style={{ width: 160 }}
         />
 
         {/* Display Formatted Range */}
@@ -108,9 +108,9 @@ export const WeekNavigator: React.FC<WeekNavigatorProps> = ({
       <Button
         icon={<SettingOutlined />}
         onClick={onOpenCapacitySettings}
-        aria-label="Capacity Settings"
+        aria-label="Cài đặt công suất"
       >
-        Capacity Settings
+        Cài đặt công suất
       </Button>
     </div>
   );

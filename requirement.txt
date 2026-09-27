@@ -1,0 +1,15 @@
+- for personal use, no collaborator
+- manage project, milestone, task
+- project has name, desc, deadline, note
+- milestone similar, below project, multiple milestones per project
+- task similar, under milestone, under project or not. can create task without under any project or milestone
+- task has name, desc, deadline, note, actual start date, actual end date, status (Open, In progress, Resolved, In review, Done, Cancel), links to docs, progress percent, priority.
+- all item need an stable ID
+- project and milestone has status too (Open, in progress, Done, Cancel)
+- functionality to add planned hours spend for each task for each day, can view in timeline UI to see each day has how many planned hours, is this day busy or overload planned to adjust workload.
+- need analytic dashboard to show what need to do today, what urgent, workload today and the next 7 days, next 14 days, next months
+- need functionality like: when i have a task, that estimate to take for ex n hours, need to input that in calculator, with date range or deadline, and app show that this task is abled to do or not, if possible, show candidate distribution workload across day
+- need simple UI but hand-on and elegant, productive. make user interaction simple, prevent complex UI and make action fast.
+- data persist in indexdb, can export backup data, and can sync to github file to persistent.
+- UI use ant design.
+- app work 100% local.

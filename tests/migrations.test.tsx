@@ -7,28 +7,28 @@ import * as seeds from '../src/db/seeds';
 describe('UpgradeModal concurrency listeners (DATA-04, D-09, D-10)', () => {
   it('does not display modal initially', () => {
     render(<UpgradeModal />);
-    expect(screen.queryByText('Database Upgrade Blocked')).not.toBeInTheDocument();
+    expect(screen.queryByText('Nâng cấp cơ sở dữ liệu bị chặn')).not.toBeInTheDocument();
   });
 
   it('displays modal when db-upgrade-blocked event is dispatched', async () => {
     render(<UpgradeModal />);
     window.dispatchEvent(new CustomEvent('db-upgrade-blocked'));
-    expect(await screen.findByText('Database Upgrade Blocked')).toBeInTheDocument();
-    expect(screen.getByText(/Database upgrade blocked by another tab/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Reload Page/i })).toBeInTheDocument();
+    expect(await screen.findByText('Nâng cấp cơ sở dữ liệu bị chặn')).toBeInTheDocument();
+    expect(screen.getByText(/Nâng cấp cơ sở dữ liệu bị chặn bởi một tab khác/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Tải lại trang/i })).toBeInTheDocument();
   });
 
   it('displays modal when db-version-changed event is dispatched', async () => {
     render(<UpgradeModal />);
     window.dispatchEvent(new CustomEvent('db-version-changed'));
-    expect(await screen.findByText('Database Upgrade Blocked')).toBeInTheDocument();
+    expect(await screen.findByText('Nâng cấp cơ sở dữ liệu bị chặn')).toBeInTheDocument();
   });
 
   it('removes event listeners on unmount', () => {
     const { unmount } = render(<UpgradeModal />);
     unmount();
     window.dispatchEvent(new CustomEvent('db-upgrade-blocked'));
-    expect(screen.queryByText('Database Upgrade Blocked')).not.toBeInTheDocument();
+    expect(screen.queryByText('Nâng cấp cơ sở dữ liệu bị chặn')).not.toBeInTheDocument();
   });
 });
 
@@ -41,15 +41,15 @@ describe('ResetDbModal guarded purge (DATA-04, D-07, D-08, T-01-03)', () => {
 
   it('renders modal with disabled confirm button when open', () => {
     render(<ResetDbModal open={true} onClose={onClose} />);
-    expect(screen.getByText('Reset Database')).toBeInTheDocument();
-    const okBtn = screen.getByRole('button', { name: /Confirm Reset/i });
+    expect(screen.getByText('Đặt lại cơ sở dữ liệu')).toBeInTheDocument();
+    const okBtn = screen.getByRole('button', { name: /Xác nhận đặt lại/i });
     expect(okBtn).toBeDisabled();
   });
 
   it('keeps button disabled when input does not strictly match RESET', () => {
     render(<ResetDbModal open={true} onClose={onClose} />);
     const input = screen.getByPlaceholderText('RESET');
-    const okBtn = screen.getByRole('button', { name: /Confirm Reset/i });
+    const okBtn = screen.getByRole('button', { name: /Xác nhận đặt lại/i });
 
     fireEvent.change(input, { target: { value: 'reset' } });
     expect(okBtn).toBeDisabled();
@@ -63,7 +63,7 @@ describe('ResetDbModal guarded purge (DATA-04, D-07, D-08, T-01-03)', () => {
 
     render(<ResetDbModal open={true} onClose={onClose} />);
     const input = screen.getByPlaceholderText('RESET');
-    const okBtn = screen.getByRole('button', { name: /Confirm Reset/i });
+    const okBtn = screen.getByRole('button', { name: /Xác nhận đặt lại/i });
 
     fireEvent.change(input, { target: { value: 'RESET' } });
     expect(okBtn).not.toBeDisabled();

@@ -47,6 +47,22 @@ interface TaskDrawerFormValues {
   notes?: string;
 }
 
+const STATUS_LABELS: Record<TaskStatus, string> = {
+  Open: 'Mở',
+  'In Progress': 'Đang làm',
+  Resolved: 'Đã giải quyết',
+  'In Review': 'Đang duyệt',
+  Done: 'Hoàn thành',
+  Cancelled: 'Đã hủy',
+};
+
+const PRIORITY_LABELS: Record<TaskPriority, string> = {
+  Low: 'Thấp',
+  Medium: 'Trung bình',
+  High: 'Cao',
+  Urgent: 'Khẩn cấp',
+};
+
 const ALL_STATUSES: TaskStatus[] = [
   'Open',
   'In Progress',
@@ -242,7 +258,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
         db
       );
 
-      message.success({ content: 'Task saved', duration: 1.5 });
+      message.success({ content: 'Đã lưu tác vụ', duration: 1.5 });
       onSave?.(updated);
       handleClose();
     } catch {
@@ -258,7 +274,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
 
   return (
     <Drawer
-      title="Edit Task"
+      title="Chỉnh sửa tác vụ"
       width={520}
       open={open}
       onClose={handleClose}
@@ -266,9 +282,9 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
       loading={loading}
       footer={
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <Button onClick={handleClose}>Cancel</Button>
+          <Button onClick={handleClose}>Hủy</Button>
           <Button type="primary" onClick={() => void handleSave()} loading={saving}>
-            Save Task
+            Lưu tác vụ
           </Button>
         </div>
       }
@@ -277,34 +293,34 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
         {/* Name */}
         <Form.Item
           name="name"
-          label="Task Name"
+          label="Tên tác vụ"
           rules={[
-            { required: true, message: 'Please enter a valid task name (1-120 characters).' },
-            { max: 120, message: 'Please enter a valid task name (1-120 characters).' },
+            { required: true, message: 'Vui lòng nhập tên tác vụ hợp lệ (1-120 ký tự).' },
+            { max: 120, message: 'Vui lòng nhập tên tác vụ hợp lệ (1-120 ký tự).' },
           ]}
         >
-          <Input placeholder="Task name..." maxLength={120} />
+          <Input placeholder="Tên tác vụ..." maxLength={120} />
         </Form.Item>
 
         {/* Parent Assignment: Project and Milestone */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Form.Item name="projectId" label="Project">
+          <Form.Item name="projectId" label="Dự án">
             <Select
-              aria-label="Project"
+              aria-label="Dự án"
               onChange={handleProjectChange}
               options={[
-                { value: '', label: 'None / Standalone' },
+                { value: '', label: 'Không / Độc lập' },
                 ...projects.map((p) => ({ value: p.id, label: p.name })),
               ]}
             />
           </Form.Item>
 
-          <Form.Item name="milestoneId" label="Milestone">
+          <Form.Item name="milestoneId" label="Cột mốc">
             <Select
-              aria-label="Milestone"
+              aria-label="Cột mốc"
               disabled={!selectedProjectId}
               options={[
-                { value: '', label: 'None' },
+                { value: '', label: 'Không' },
                 ...filteredMilestones.map((m) => ({ value: m.id, label: m.name })),
               ]}
             />
@@ -313,40 +329,40 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
 
         {/* Status and Priority */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Form.Item name="status" label="Status" rules={[{ required: true }]}>
+          <Form.Item name="status" label="Trạng thái" rules={[{ required: true }]}>
             <Select
-              aria-label="Status"
-              options={ALL_STATUSES.map((s) => ({ value: s, label: s }))}
+              aria-label="Trạng thái"
+              options={ALL_STATUSES.map((s) => ({ value: s, label: STATUS_LABELS[s] || s }))}
             />
           </Form.Item>
 
-          <Form.Item name="priority" label="Priority" rules={[{ required: true }]}>
+          <Form.Item name="priority" label="Độ ưu tiên" rules={[{ required: true }]}>
             <Select
-              aria-label="Priority"
-              options={ALL_PRIORITIES.map((p) => ({ value: p, label: p }))}
+              aria-label="Độ ưu tiên"
+              options={ALL_PRIORITIES.map((p) => ({ value: p, label: PRIORITY_LABELS[p] || p }))}
             />
           </Form.Item>
         </div>
 
         {/* Estimate with hours, minutes, and preset buttons */}
-        <Form.Item label="Estimate">
+        <Form.Item label="Thời gian ước tính">
           <Space direction="vertical" style={{ width: '100%' }}>
             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
               <Form.Item
                 name="hours"
-                label="Hours"
+                label="Giờ"
                 style={{ marginBottom: 0 }}
                 rules={[{ type: 'number', min: 0, max: 100 }]}
               >
-                <InputNumber min={0 as number} max={100 as number} style={{ width: 100 }} aria-label="Hours" />
+                <InputNumber min={0 as number} max={100 as number} style={{ width: 100 }} aria-label="Giờ" />
               </Form.Item>
               <Form.Item
                 name="minutes"
-                label="Minutes"
+                label="Phút"
                 style={{ marginBottom: 0 }}
                 rules={[{ type: 'number', min: 0, max: 59 }]}
               >
-                <InputNumber min={0 as number} max={59 as number} style={{ width: 100 }} aria-label="Minutes" />
+                <InputNumber min={0 as number} max={59 as number} style={{ width: 100 }} aria-label="Phút" />
               </Form.Item>
             </div>
             <Space wrap size="small">
@@ -371,21 +387,21 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
 
         {/* Dates */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Form.Item name="deadline" label="Deadline">
-            <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" placeholder="Deadline" />
+          <Form.Item name="deadline" label="Hạn chót">
+            <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" placeholder="Hạn chót" />
           </Form.Item>
 
-          <Form.Item name="actualStartDate" label="Actual Start">
-            <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" placeholder="Actual start" />
+          <Form.Item name="actualStartDate" label="Bắt đầu thực tế">
+            <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" placeholder="Bắt đầu thực tế" />
           </Form.Item>
         </div>
 
-        <Form.Item name="actualEndDate" label="Actual End">
-          <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" placeholder="Actual end" />
+        <Form.Item name="actualEndDate" label="Kết thúc thực tế">
+          <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" placeholder="Kết thúc thực tế" />
         </Form.Item>
 
         {/* Progress Slider + Input */}
-        <Form.Item label="Progress" style={{ marginBottom: 12 }}>
+        <Form.Item label="Tiến độ" style={{ marginBottom: 12 }}>
           <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
             <Form.Item name="progress" noStyle>
               <Slider min={0} max={100} style={{ flex: 1 }} />
@@ -417,7 +433,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
         )}
 
         {/* Document Links */}
-        <Form.Item label="Document Links">
+        <Form.Item label="Tài liệu liên kết">
           <Form.List name="documentLinks">
             {(fields, { add, remove }) => (
               <Space direction="vertical" style={{ width: '100%' }}>
@@ -429,7 +445,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                       rules={[
                         {
                           pattern: /^https?:\/\//i,
-                          message: 'Document link must be a valid HTTP or HTTPS URL.',
+                          message: 'Liên kết tài liệu phải là URL HTTP hoặc HTTPS hợp lệ.',
                         },
                       ]}
                     >
@@ -443,7 +459,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                       danger
                       icon={<DeleteOutlined />}
                       onClick={() => remove(field.name)}
-                      aria-label="Remove link"
+                      aria-label="Xóa liên kết"
                     />
                   </div>
                 ))}
@@ -453,7 +469,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                   icon={<PlusOutlined />}
                   style={{ width: '100%' }}
                 >
-                  Add Link
+                  Thêm liên kết
                 </Button>
               </Space>
             )}
@@ -461,10 +477,10 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
         </Form.Item>
 
         {/* Notes */}
-        <Form.Item name="notes" label="Notes">
+        <Form.Item name="notes" label="Ghi chú">
           <Input.TextArea
             autoSize={{ minRows: 4, maxRows: 10 }}
-            placeholder="Detailed task notes (markdown / plain text)..."
+            placeholder="Ghi chú chi tiết tác vụ (văn bản thuần / markdown)..."
             style={{ whiteSpace: 'pre-wrap' }}
           />
         </Form.Item>

@@ -11,11 +11,11 @@ export interface DateInspectionBreakdownProps {
 }
 
 const STATUS_TAG_CONFIG: Record<DateInspectionStatus, { color: string; label: string }> = {
-  available: { color: 'success', label: 'Available' },
-  full: { color: 'default', label: 'Full' },
-  overloaded: { color: 'error', label: 'Overloaded' },
-  'excluded-past': { color: 'default', label: 'Past' },
-  'excluded-non-working': { color: 'warning', label: 'Non-working' },
+  available: { color: 'success', label: 'Khả dụng' },
+  full: { color: 'default', label: 'Đã đầy' },
+  overloaded: { color: 'error', label: 'Quá tải' },
+  'excluded-past': { color: 'default', label: 'Đã qua' },
+  'excluded-non-working': { color: 'warning', label: 'Ngày nghỉ' },
 };
 
 export const DateInspectionBreakdown: React.FC<DateInspectionBreakdownProps> = ({
@@ -34,7 +34,7 @@ export const DateInspectionBreakdown: React.FC<DateInspectionBreakdownProps> = (
 
   const columns = [
     {
-      title: 'Date',
+      title: 'Ngày',
       dataIndex: 'date',
       key: 'date',
       render: (d: string) => (
@@ -44,25 +44,25 @@ export const DateInspectionBreakdown: React.FC<DateInspectionBreakdownProps> = (
       ),
     },
     {
-      title: 'Capacity',
+      title: 'Công suất',
       dataIndex: 'capacityMinutes',
       key: 'capacityMinutes',
       render: (m: number) => <Text style={{ fontSize: 12 }}>{formatMinutes(m)}</Text>,
     },
     {
-      title: 'Active Load',
+      title: 'Đang dùng',
       dataIndex: 'activeLoadMinutes',
       key: 'activeLoadMinutes',
       render: (m: number) => <Text style={{ fontSize: 12 }}>{formatMinutes(m)}</Text>,
     },
     {
-      title: 'Net Balance',
+      title: 'Còn lại',
       dataIndex: 'netBalanceMinutes',
       key: 'netBalanceMinutes',
       render: (m: number) => <Text style={{ fontSize: 12 }}>{formatMinutes(m)}</Text>,
     },
     {
-      title: 'Status',
+      title: 'Trạng thái',
       dataIndex: 'status',
       key: 'status',
       render: (s: DateInspectionStatus) => {
@@ -81,17 +81,17 @@ export const DateInspectionBreakdown: React.FC<DateInspectionBreakdownProps> = (
           key: 'breakdown',
           label: (
             <span style={{ fontWeight: 600 }}>
-              Inspect Date Details ({dateBreakdown.length} days evaluated)
+              Chi tiết kiểm tra theo ngày ({dateBreakdown.length} ngày được đánh giá)
             </span>
           ),
           children: (
             <div>
               <div style={{ marginBottom: 12 }}>
                 <Space orientation="horizontal" size="small" wrap>
-                  <Tag color="success">{counts.available} Available</Tag>
-                  <Tag color="default">{counts.full} Full</Tag>
-                  <Tag color="error">{counts.overloaded} Overloaded</Tag>
-                  <Tag color="warning">{counts.excluded} Excluded</Tag>
+                  <Tag color="success">{counts.available} Khả dụng</Tag>
+                  <Tag color="default">{counts.full} Đã đầy</Tag>
+                  <Tag color="error">{counts.overloaded} Quá tải</Tag>
+                  <Tag color="warning">{counts.excluded} Loại trừ</Tag>
                 </Space>
               </div>
               <Table

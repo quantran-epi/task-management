@@ -28,6 +28,13 @@ interface MilestoneFormValues {
 
 const MILESTONE_STATUSES: MilestoneStatus[] = ['Open', 'In Progress', 'Done', 'Cancelled'];
 
+const STATUS_LABELS: Record<MilestoneStatus, string> = {
+  Open: 'Mở',
+  'In Progress': 'Đang làm',
+  Done: 'Hoàn thành',
+  Cancelled: 'Đã hủy',
+};
+
 export const MilestoneModal: React.FC<MilestoneModalProps> = ({
   open,
   projectId,
@@ -81,12 +88,13 @@ export const MilestoneModal: React.FC<MilestoneModalProps> = ({
 
   return (
     <Modal
-      title={milestone ? 'Edit Milestone' : 'New Milestone'}
+      title={milestone ? 'Sửa cột mốc' : 'Cột mốc mới'}
       open={open}
       onOk={handleOk}
       onCancel={handleClose}
       confirmLoading={loading}
-      okText={milestone ? 'Save Milestone' : 'Save Milestone'}
+      okText={milestone ? 'Lưu thay đổi' : 'Tạo cột mốc'}
+      cancelText="Hủy"
       destroyOnClose
     >
       <Form
@@ -97,25 +105,25 @@ export const MilestoneModal: React.FC<MilestoneModalProps> = ({
       >
         <Form.Item
           name="name"
-          label="Milestone Name"
+          label="Tên cột mốc"
           rules={[
-            { required: true, message: 'Please enter a valid milestone name (1-120 characters).' },
-            { max: 120, message: 'Name cannot exceed 120 characters.' },
+            { required: true, message: 'Vui lòng nhập tên cột mốc hợp lệ (1-120 ký tự).' },
+            { max: 120, message: 'Tên không được vượt quá 120 ký tự.' },
           ]}
         >
-          <Input placeholder="e.g. Phase 1 MVP" autoFocus />
+          <Input placeholder="vd: Giai đoạn 1 MVP" autoFocus />
         </Form.Item>
 
-        <Form.Item name="description" label="Description">
-          <Input placeholder="Scope delivered in this milestone" />
+        <Form.Item name="description" label="Mô tả">
+          <Input placeholder="Phạm vi đạt được trong cột mốc này" />
         </Form.Item>
 
         <div style={{ display: 'flex', gap: 16 }}>
-          <Form.Item name="status" label="Status" style={{ flex: 1 }}>
-            <Select options={MILESTONE_STATUSES.map((s) => ({ label: s, value: s }))} />
+          <Form.Item name="status" label="Trạng thái" style={{ flex: 1 }}>
+            <Select options={MILESTONE_STATUSES.map((s) => ({ label: STATUS_LABELS[s] || s, value: s }))} />
           </Form.Item>
 
-          <Form.Item name="deadline" label="Target Deadline" style={{ flex: 1 }}>
+          <Form.Item name="deadline" label="Hạn chót mục tiêu" style={{ flex: 1 }}>
             <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
           </Form.Item>
         </div>

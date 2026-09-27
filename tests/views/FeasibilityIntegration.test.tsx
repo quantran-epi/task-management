@@ -35,16 +35,16 @@ describe('Feasibility Integration (CALC-01, CALC-06, D-13, D-16)', () => {
     render(<TaskDrawerPlanning task={task} db={testDb} />);
 
     // 1. Verify "✨ Auto-Distribute" button exists
-    const triggerBtn = screen.getByRole('button', { name: /Check Feasibility & Auto-Distribute/i });
+    const triggerBtn = screen.getByRole('button', { name: /Đánh giá khả thi & Tự động phân bổ/i });
     expect(triggerBtn).toBeInTheDocument();
     expect(triggerBtn).not.toBeDisabled();
 
     // 2. Click button to open FeasibilityModal
     fireEvent.click(triggerBtn);
 
-    expect(await screen.findByText('Task Feasibility & Workload Distribution')).toBeInTheDocument();
+    expect(await screen.findByText('Đánh giá tính khả thi & Phân bổ khối lượng công việc')).toBeInTheDocument();
     await screen.findByTestId('feasibility-alert');
-    const applyBtn = await screen.findByRole('button', { name: 'Apply Allocations' });
+    const applyBtn = await screen.findByRole('button', { name: 'Áp dụng phân bổ' });
 
     // 3. Click Apply Allocations
     fireEvent.click(applyBtn);
@@ -59,8 +59,8 @@ describe('Feasibility Integration (CALC-01, CALC-06, D-13, D-16)', () => {
 
     // 5. Verify reactive progress update in TaskDrawerPlanning
     await waitFor(() => {
-      expect(screen.getByTestId('planning-metrics-total')).toHaveTextContent('Allocated: 4h of Est: 4h');
-      expect(screen.getByTestId('planning-metrics-balance')).toHaveTextContent('Remaining to plan: 0m');
+      expect(screen.getByTestId('planning-metrics-total')).toHaveTextContent('Đã phân bổ: 4h / Ước tính: 4h');
+      expect(screen.getByTestId('planning-metrics-balance')).toHaveTextContent('Còn lại cần phân bổ: 0m');
     });
   });
 
@@ -79,16 +79,16 @@ describe('Feasibility Integration (CALC-01, CALC-06, D-13, D-16)', () => {
     render(<PlannerView db={testDb} initialDate="2026-09-30" />);
 
     // 1. Verify toolbar action exists
-    const autoDistributeBtn = await screen.findByRole('button', { name: /Auto-Distribute/i });
+    const autoDistributeBtn = await screen.findByRole('button', { name: /Tự động phân bổ/i });
     expect(autoDistributeBtn).toBeInTheDocument();
 
     // 2. Click Auto-Distribute
     fireEvent.click(autoDistributeBtn);
 
     // 3. Feasibility modal opens
-    expect(await screen.findByText('Task Feasibility & Workload Distribution')).toBeInTheDocument();
+    expect(await screen.findByText('Đánh giá tính khả thi & Phân bổ khối lượng công việc')).toBeInTheDocument();
     await screen.findByTestId('feasibility-alert');
-    const applyBtn = await screen.findByRole('button', { name: 'Apply Allocations' });
+    const applyBtn = await screen.findByRole('button', { name: 'Áp dụng phân bổ' });
 
     // 4. Apply allocations
     fireEvent.click(applyBtn);
@@ -113,7 +113,7 @@ describe('Feasibility Integration (CALC-01, CALC-06, D-13, D-16)', () => {
     render(<TasksView db={testDb} />);
 
     // Verify Auto-Distribute button exists in TasksView
-    const autoDistributeBtn = await screen.findByRole('button', { name: /Auto-Distribute/i });
+    const autoDistributeBtn = await screen.findByRole('button', { name: /Tự động phân bổ/i });
     expect(autoDistributeBtn).toBeInTheDocument();
   });
 });

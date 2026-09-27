@@ -78,13 +78,13 @@ export const OverridesTable: React.FC<OverridesTableProps> = ({ db = defaultDb }
       const note = values.note?.trim() || undefined;
 
       await setCapacityOverride(dateStr, totalMinutes, note, db);
-      message.success('Capacity override saved');
+      message.success('Đã lưu ngày ngoại lệ công suất');
       handleCloseModal();
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'errorFields' in err) {
         return; // Validation failed
       }
-      message.error('Failed to save capacity override');
+      message.error('Không thể lưu ngày ngoại lệ công suất');
     } finally {
       setSubmitting(false);
     }
@@ -93,60 +93,60 @@ export const OverridesTable: React.FC<OverridesTableProps> = ({ db = defaultDb }
   const handleDelete = async (date: string) => {
     try {
       await removeCapacityOverride(date, db);
-      message.success(`Override for ${date} removed; restored weekly default.`);
+      message.success(`Đã xóa ngoại lệ cho ngày ${date}; đã khôi phục mặc định hàng tuần.`);
     } catch {
-      message.error('Failed to remove override');
+      message.error('Không thể xóa ngoại lệ');
     }
   };
 
   const columns = [
     {
-      title: 'Date',
+      title: 'Ngày',
       dataIndex: 'date',
       key: 'date',
       render: (date: string) => <Text strong>{date}</Text>,
     },
     {
-      title: 'Day',
+      title: 'Thứ',
       key: 'day',
       render: (_: unknown, record: CapacityOverride) => {
         return <Text type="secondary">{dayjs(record.date).format('dddd')}</Text>;
       },
     },
     {
-      title: 'Type',
+      title: 'Loại',
       key: 'type',
       render: (_: unknown, record: CapacityOverride) => {
         if (record.workMinutes === 0) {
-          return <Tag color="default">Leave / Off</Tag>;
+          return <Tag color="default">Nghỉ</Tag>;
         }
         if (record.workMinutes > 480) {
-          return <Tag color="orange">Overtime</Tag>;
+          return <Tag color="orange">Làm thêm giờ</Tag>;
         }
-        return <Tag color="blue">Custom</Tag>;
+        return <Tag color="blue">Tùy chỉnh</Tag>;
       },
     },
     {
-      title: 'Capacity',
+      title: 'Công suất',
       dataIndex: 'workMinutes',
       key: 'workMinutes',
       render: (mins: number) => <Text>{formatMinutes(mins)}</Text>,
     },
     {
-      title: 'Note',
+      title: 'Ghi chú',
       dataIndex: 'note',
       key: 'note',
       render: (note?: string) => note || <Text type="secondary">—</Text>,
     },
     {
-      title: 'Action',
+      title: 'Thao tác',
       key: 'action',
       render: (_: unknown, record: CapacityOverride) => (
         <Popconfirm
-          title="Reset to Default"
-          description={`Remove override for ${record.date} and restore weekly default?`}
-          okText="Reset"
-          cancelText="Cancel"
+          title="Khôi phục mặc định"
+          description={`Xóa ngoại lệ cho ngày ${record.date} và khôi phục mặc định hàng tuần?`}
+          okText="Khôi phục"
+          cancelText="Hủy"
           okButtonProps={{ danger: true }}
           onConfirm={() => handleDelete(record.date)}
         >
@@ -155,9 +155,9 @@ export const OverridesTable: React.FC<OverridesTableProps> = ({ db = defaultDb }
             danger
             size="small"
             icon={<DeleteOutlined />}
-            aria-label={`Reset override for ${record.date}`}
+            aria-label={`Khôi phục ngoại lệ cho ${record.date}`}
           >
-            Reset to Default
+            Khôi phục mặc định
           </Button>
         </Popconfirm>
       ),
@@ -166,7 +166,7 @@ export const OverridesTable: React.FC<OverridesTableProps> = ({ db = defaultDb }
 
   return (
     <Card
-      title={<Title level={5} style={{ margin: 0 }}>Specific Date Overrides</Title>}
+      title={<Title level={5} style={{ margin: 0 }}>Ngoại lệ theo ngày cụ thể</Title>}
       extra={
         <Button
           type="primary"
@@ -174,7 +174,7 @@ export const OverridesTable: React.FC<OverridesTableProps> = ({ db = defaultDb }
           onClick={handleOpenAdd}
           data-testid="add-override-btn"
         >
-          + Add Override
+          Thêm ngày ngoại lệ
         </Button>
       }
       size="small"
@@ -190,10 +190,10 @@ export const OverridesTable: React.FC<OverridesTableProps> = ({ db = defaultDb }
               image={Empty.PRESENTED_IMAGE_SIMPLE}
               description={
                 <div>
-                  <Text strong>No specific date overrides</Text>
+                  <Text strong>Chưa có ngày ngoại lệ nào</Text>
                   <br />
                   <Text type="secondary">
-                    All dates use default weekly template hours. Click &apos;+ Add Override&apos; to schedule holidays or overtime.
+                    Tất cả các ngày đều sử dụng số giờ mặc định theo mẫu hàng tuần. Nhấn &apos;Thêm ngày ngoại lệ&apos; để lên lịch ngày nghỉ hoặc làm thêm giờ.
                   </Text>
                 </div>
               }
@@ -203,20 +203,20 @@ export const OverridesTable: React.FC<OverridesTableProps> = ({ db = defaultDb }
       />
 
       <Modal
-        title="Add Date Capacity Override"
+        title="Thêm ngoại lệ công suất theo ngày"
         open={modalOpen}
         onOk={handleSave}
         onCancel={handleCloseModal}
         confirmLoading={submitting}
-        okText="Save Override"
-        cancelText="Cancel"
+        okText="Lưu ngoại lệ"
+        cancelText="Hủy"
         destroyOnClose
       >
         <Form form={form} layout="vertical" preserve={false}>
           <Form.Item
             name="date"
-            label="Calendar Date"
-            rules={[{ required: true, message: 'Please select a date' }]}
+            label="Ngày"
+            rules={[{ required: true, message: 'Vui lòng chọn ngày' }]}
           >
             <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
           </Form.Item>
@@ -224,16 +224,16 @@ export const OverridesTable: React.FC<OverridesTableProps> = ({ db = defaultDb }
           <Space align="start" size="middle">
             <Form.Item
               name="hours"
-              label="Work Hours"
-              rules={[{ required: true, message: 'Hours required' }]}
+              label="Số giờ làm việc"
+              rules={[{ required: true, message: 'Vui lòng nhập số giờ' }]}
             >
               <InputNumber min={0} max={24} suffix="h" style={{ width: 120 }} />
             </Form.Item>
 
             <Form.Item
               name="minutes"
-              label="Work Minutes"
-              rules={[{ required: true, message: 'Minutes required' }]}
+              label="Số phút làm việc"
+              rules={[{ required: true, message: 'Vui lòng nhập số phút' }]}
             >
               <InputNumber min={0} max={59} step={15} suffix="m" style={{ width: 120 }} />
             </Form.Item>
@@ -241,10 +241,10 @@ export const OverridesTable: React.FC<OverridesTableProps> = ({ db = defaultDb }
 
           <Form.Item
             name="note"
-            label="Note / Reason"
-            rules={[{ max: 200, message: 'Note must be 200 characters or less' }]}
+            label="Ghi chú / Lý do"
+            rules={[{ max: 200, message: 'Ghi chú tối đa 200 ký tự' }]}
           >
-            <Input placeholder="e.g. National Holiday, Vacation, Overtime sprint" maxLength={200} />
+            <Input placeholder="vd: Nghỉ lễ Quốc khánh, Nghỉ phép, Tăng ca chạy dự án" maxLength={200} />
           </Form.Item>
         </Form>
       </Modal>

@@ -43,6 +43,15 @@ const STATUS_TAG_COLORS: Record<string, string> = {
   Cancelled: 'default',
 };
 
+const STATUS_LABELS: Record<string, string> = {
+  Open: 'Mở',
+  'In Progress': 'Đang làm',
+  Resolved: 'Đã giải quyết',
+  'In Review': 'Đang duyệt',
+  Done: 'Hoàn thành',
+  Cancelled: 'Đã hủy',
+};
+
 export const ProjectTable: React.FC<ProjectTableProps> = ({
   projects,
   milestones,
@@ -96,7 +105,7 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
 
     const milestoneColumns: TableColumnsType<Milestone> = [
       {
-        title: 'Milestone',
+        title: 'Cột mốc',
         dataIndex: 'name',
         key: 'name',
         render: (name) => (
@@ -107,23 +116,23 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
         ),
       },
       {
-        title: 'Status',
+        title: 'Trạng thái',
         dataIndex: 'status',
         key: 'status',
         width: 120,
         render: (status: string) => (
-          <Tag color={STATUS_TAG_COLORS[status] || 'default'}>{status}</Tag>
+          <Tag color={STATUS_TAG_COLORS[status] || 'default'}>{STATUS_LABELS[status] || status}</Tag>
         ),
       },
       {
-        title: 'Deadline',
+        title: 'Hạn chót',
         dataIndex: 'deadline',
         key: 'deadline',
         width: 120,
         render: (deadline?: string) => deadline || '—',
       },
       {
-        title: 'Tasks',
+        title: 'Tác vụ',
         key: 'tasksCount',
         width: 80,
         render: (_, record) => {
@@ -132,7 +141,7 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
         },
       },
       {
-        title: 'Actions',
+        title: 'Thao tác',
         key: 'actions',
         width: 200,
         render: (_, record) => (
@@ -142,7 +151,7 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
               icon={<PlusOutlined />}
               onClick={() => onAddTask(project.id, record.id)}
             >
-              + Task
+              Tác vụ
             </Button>
             <Button
               size="small"
@@ -165,7 +174,7 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
       if (msTasks.length === 0) {
         return (
           <div style={{ padding: '8px 16px', color: token.colorTextTertiary, fontSize: 13 }}>
-            No tasks in this milestone.
+            Chưa có tác vụ nào trong cột mốc này.
           </div>
         );
       }
@@ -178,7 +187,7 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
           size="small"
           columns={[
             {
-              title: 'Task Name',
+              title: 'Tên tác vụ',
               dataIndex: 'name',
               key: 'name',
               render: (name: string, record: Task) => (
@@ -191,23 +200,23 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
               ),
             },
             {
-              title: 'Status',
+              title: 'Trạng thái',
               dataIndex: 'status',
               key: 'status',
               width: 120,
               render: (status: string) => (
-                <Tag color={STATUS_TAG_COLORS[status] || 'default'}>{status}</Tag>
+                <Tag color={STATUS_TAG_COLORS[status] || 'default'}>{STATUS_LABELS[status] || status}</Tag>
               ),
             },
             {
-              title: 'Estimate',
+              title: 'Ước tính',
               dataIndex: 'estimateMinutes',
               key: 'estimate',
               width: 100,
               render: (mins: number) => formatMinutes(mins),
             },
             {
-              title: 'Deadline',
+              title: 'Hạn chót',
               dataIndex: 'deadline',
               key: 'deadline',
               width: 120,
@@ -230,14 +239,14 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
             }}
           >
             <span style={{ fontWeight: 600, fontSize: 14, color: token.colorTextSecondary }}>
-              Milestones ({projMilestones.length})
+              Cột mốc ({projMilestones.length})
             </span>
             <Button
               size="small"
               icon={<PlusOutlined />}
               onClick={() => onAddMilestone(project.id)}
             >
-              + Milestone
+              Cột mốc
             </Button>
           </div>
           <Table
@@ -247,14 +256,14 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
             expandable={{ expandedRowRender: milestoneExpandedRender }}
             pagination={false}
             size="small"
-            locale={{ emptyText: 'No milestones yet' }}
+            locale={{ emptyText: 'Chưa có cột mốc nào' }}
           />
         </div>
 
         {directTasks.length > 0 && (
           <div>
             <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 14, color: token.colorTextSecondary }}>
-              Direct Project Tasks ({directTasks.length})
+              Tác vụ trực thuộc dự án ({directTasks.length})
             </div>
             <Table
               rowKey="id"
@@ -263,7 +272,7 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
               size="small"
               columns={[
                 {
-                  title: 'Task Name',
+                  title: 'Tên tác vụ',
                   dataIndex: 'name',
                   key: 'name',
                   render: (name: string, record: Task) => (
@@ -276,23 +285,23 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
                   ),
                 },
                 {
-                  title: 'Status',
+                  title: 'Trạng thái',
                   dataIndex: 'status',
                   key: 'status',
                   width: 120,
                   render: (status: string) => (
-                    <Tag color={STATUS_TAG_COLORS[status] || 'default'}>{status}</Tag>
+                    <Tag color={STATUS_TAG_COLORS[status] || 'default'}>{STATUS_LABELS[status] || status}</Tag>
                   ),
                 },
                 {
-                  title: 'Estimate',
+                  title: 'Ước tính',
                   dataIndex: 'estimateMinutes',
                   key: 'estimate',
                   width: 100,
                   render: (mins: number) => formatMinutes(mins),
                 },
                 {
-                  title: 'Deadline',
+                  title: 'Hạn chót',
                   dataIndex: 'deadline',
                   key: 'deadline',
                   width: 120,
@@ -308,7 +317,7 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
 
   const projectColumns: TableColumnsType<Project> = [
     {
-      title: 'Project',
+      title: 'Dự án',
       dataIndex: 'name',
       key: 'name',
       render: (name: string, record) => (
@@ -324,16 +333,16 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
       ),
     },
     {
-      title: 'Status',
+      title: 'Trạng thái',
       dataIndex: 'status',
       key: 'status',
       width: 130,
       render: (status: string) => (
-        <Tag color={STATUS_TAG_COLORS[status] || 'default'}>{status}</Tag>
+        <Tag color={STATUS_TAG_COLORS[status] || 'default'}>{STATUS_LABELS[status] || status}</Tag>
       ),
     },
     {
-      title: 'Deadline',
+      title: 'Hạn chót',
       dataIndex: 'deadline',
       key: 'deadline',
       width: 130,
@@ -348,7 +357,7 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
       },
     },
     {
-      title: 'Milestones',
+      title: 'Cột mốc',
       key: 'milestones',
       width: 110,
       render: (_, record) => {
@@ -357,7 +366,7 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
       },
     },
     {
-      title: 'Tasks',
+      title: 'Tác vụ',
       key: 'tasks',
       width: 100,
       render: (_, record) => {
@@ -366,7 +375,7 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
       },
     },
     {
-      title: 'Actions',
+      title: 'Thao tác',
       key: 'actions',
       width: 220,
       render: (_, record) => (
@@ -376,23 +385,23 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
             icon={<PlusOutlined />}
             onClick={() => onAddTask(record.id, undefined)}
           >
-            + Task
+            Tác vụ
           </Button>
           <Button
             size="small"
             icon={<PlusOutlined />}
             onClick={() => onAddMilestone(record.id)}
           >
-            + Milestone
+            Cột mốc
           </Button>
-          <Tooltip title="Edit project">
+          <Tooltip title="Sửa dự án">
             <Button
               size="small"
               icon={<EditOutlined />}
               onClick={() => onEditProject(record)}
             />
           </Tooltip>
-          <Tooltip title="Delete project">
+          <Tooltip title="Xóa dự án">
             <Button
               size="small"
               danger
@@ -416,8 +425,8 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
       locale={{
         emptyText: (
           <EmptyState
-            heading="No projects yet"
-            body="Click 'New Project' to organize tasks into projects and milestones."
+            heading="Chưa có dự án nào"
+            body="Nhấn 'Dự án mới' để sắp xếp tác vụ theo dự án và cột mốc."
           />
         ),
       }}

@@ -32,10 +32,10 @@ export const InlineProgress: React.FC<InlineProgressProps> = ({
 
     try {
       await updateTaskProgress(taskId, clamped, db);
-      message.success({ content: 'Progress updated', duration: 1.5 });
+      message.success({ content: 'Đã cập nhật tiến độ', duration: 1.5 });
       onProgressChange?.(clamped);
     } catch {
-      message.error({ content: 'Failed to update progress', duration: 2 });
+      message.error({ content: 'Không thể cập nhật tiến độ', duration: 2 });
     }
   };
 
@@ -58,7 +58,7 @@ export const InlineProgress: React.FC<InlineProgressProps> = ({
     <div style={{ width: 200, padding: 4 }}>
       <Space direction="vertical" style={{ width: '100%' }} size="small">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 12, fontWeight: 600 }}>Progress:</span>
+          <span style={{ fontSize: 12, fontWeight: 600 }}>Tiến độ:</span>
           <InputNumber
             min={0}
             max={100}
@@ -69,7 +69,7 @@ export const InlineProgress: React.FC<InlineProgressProps> = ({
             parser={(v) => Number((v || '').replace('%', '')) || 0}
             size="small"
             style={{ width: 75 }}
-            aria-label="Progress percentage input"
+            aria-label="Nhập phần trăm tiến độ"
           />
         </div>
         <Slider
@@ -94,7 +94,7 @@ export const InlineProgress: React.FC<InlineProgressProps> = ({
       <div
         role="button"
         tabIndex={0}
-        aria-label={`Progress ${progress}%`}
+        aria-label={`Tiến độ ${progress}%`}
         style={{
           cursor: 'pointer',
           display: 'inline-flex',

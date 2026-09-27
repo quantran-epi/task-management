@@ -71,7 +71,7 @@ export const AppShell: React.FC<AppShellProps> = ({ currentRoute, onNavigate, ch
               <Button
                 icon={<MenuOutlined />}
                 onClick={() => setDrawerOpen(true)}
-                aria-label="Open menu"
+                aria-label="Mở menu"
                 style={{ minHeight: 44, minWidth: 44 }}
               />
             )}
@@ -82,7 +82,7 @@ export const AppShell: React.FC<AppShellProps> = ({ currentRoute, onNavigate, ch
           <Space size="middle">
             <StatusBadge />
             <Button onClick={() => setResetModalOpen(true)} danger size="small">
-              Reset DB
+              Đặt lại CSDL
             </Button>
           </Space>
         </Header>

@@ -33,12 +33,12 @@ export const CapacitySettingsModal: React.FC<CapacitySettingsModalProps> = ({
 
   return (
     <Modal
-      title="Work Capacity & Overrides"
+      title="Công suất làm việc & Ngoại lệ"
       open={open}
       onCancel={handleClose}
       footer={[
         <Button key="close" type="primary" onClick={handleClose}>
-          Done
+          Xong
         </Button>,
       ]}
       width={720}

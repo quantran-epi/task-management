@@ -42,8 +42,8 @@ describe('TaskDrawer', () => {
     expect(screen.getByDisplayValue('Handle PKCE verification code')).toBeInTheDocument();
 
     // Estimate is split into hours (1) and minutes (30)
-    expect(screen.getByLabelText('Hours')).toHaveValue('1');
-    expect(screen.getByLabelText('Minutes')).toHaveValue('30');
+    expect(screen.getByLabelText('Giờ')).toHaveValue('1');
+    expect(screen.getByLabelText('Phút')).toHaveValue('30');
   });
 
   it('cascading reparenting clears milestone when changing project per D-10, WORK-04', async () => {
@@ -75,13 +75,13 @@ describe('TaskDrawer', () => {
     await screen.findByDisplayValue('Alpha Task');
 
     // Switch Project to Project Beta
-    const projectSelect = screen.getByLabelText('Project');
+    const projectSelect = screen.getByLabelText('Dự án');
     fireEvent.mouseDown(projectSelect);
     const betaOption = await screen.findByText('Project Beta');
     fireEvent.click(betaOption);
 
     // Click Save Task
-    const saveBtn = screen.getByRole('button', { name: /save task/i });
+    const saveBtn = screen.getByRole('button', { name: /lưu tác vụ/i });
     fireEvent.click(saveBtn);
 
     await waitFor(() => {
@@ -121,13 +121,13 @@ describe('TaskDrawer', () => {
     await screen.findByDisplayValue('Task with project');
 
     // Switch Project to None / Standalone
-    const projectSelect = screen.getByLabelText('Project');
+    const projectSelect = screen.getByLabelText('Dự án');
     fireEvent.mouseDown(projectSelect);
-    const standaloneOption = await screen.findByText('None / Standalone');
+    const standaloneOption = await screen.findByText('Không / Độc lập');
     fireEvent.click(standaloneOption);
 
     // Save
-    fireEvent.click(screen.getByRole('button', { name: /save task/i }));
+    fireEvent.click(screen.getByRole('button', { name: /lưu tác vụ/i }));
 
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledTimes(1);
@@ -159,15 +159,15 @@ describe('TaskDrawer', () => {
     const preset2h = screen.getByRole('button', { name: '2h' });
     fireEvent.click(preset2h);
 
-    expect(screen.getByLabelText('Hours')).toHaveValue('2');
-    expect(screen.getByLabelText('Minutes')).toHaveValue('0');
+    expect(screen.getByLabelText('Giờ')).toHaveValue('2');
+    expect(screen.getByLabelText('Phút')).toHaveValue('0');
 
     // Click +30m preset -> should become 2h 30m
     const presetAdd30 = screen.getByRole('button', { name: '+30m' });
     fireEvent.click(presetAdd30);
 
-    expect(screen.getByLabelText('Hours')).toHaveValue('2');
-    expect(screen.getByLabelText('Minutes')).toHaveValue('30');
+    expect(screen.getByLabelText('Giờ')).toHaveValue('2');
+    expect(screen.getByLabelText('Phút')).toHaveValue('30');
   });
 
   it('validates document links with http/https regex per D-25, T-02-05', async () => {
@@ -185,18 +185,18 @@ describe('TaskDrawer', () => {
     await screen.findByDisplayValue('Link task');
 
     // Click Add Link
-    const addLinkBtn = screen.getByRole('button', { name: /add link/i });
+    const addLinkBtn = screen.getByRole('button', { name: /thêm liên kết/i });
     fireEvent.click(addLinkBtn);
 
     const linkInput = screen.getByPlaceholderText('https://example.com/spec');
 
     // Enter invalid javascript: link
     fireEvent.change(linkInput, { target: { value: 'javascript:alert(1)' } });
-    fireEvent.click(screen.getByRole('button', { name: /save task/i }));
+    fireEvent.click(screen.getByRole('button', { name: /lưu tác vụ/i }));
 
     // Should display validation error
     expect(
-      await screen.findByText('Document link must be a valid HTTP or HTTPS URL.')
+      await screen.findByText('Liên kết tài liệu phải là URL HTTP hoặc HTTPS hợp lệ.')
     ).toBeInTheDocument();
   });
 

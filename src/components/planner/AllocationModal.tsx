@@ -149,11 +149,11 @@ export const AllocationModal: React.FC<AllocationModalProps> = ({
       const values = await form.validateFields();
       const totalMins = (values.hours ?? 0) * 60 + (values.minutes ?? 0);
       if (totalMins <= 0) {
-        message.error('Planned duration must be at least 1 minute');
+        message.error('Thời gian dự kiến phải từ 1 phút trở lên');
         return;
       }
       if (totalMins > 1440) {
-        message.error('Planned duration cannot exceed 24 hours (1440 minutes)');
+        message.error('Thời gian dự kiến không được vượt quá 24 giờ (1440 phút)');
         return;
       }
 
@@ -161,51 +161,65 @@ export const AllocationModal: React.FC<AllocationModalProps> = ({
       const dateStr = (values.date as Dayjs).format('YYYY-MM-DD');
 
       await upsertAllocation(values.taskId, dateStr, totalMins, db);
-      message.success(`Allocated ${formatMinutes(totalMins)} to ${dateStr}`);
+      message.success(`Đã phân bổ ${formatMinutes(totalMins)} cho ngày ${dateStr}`);
       onSuccess?.();
       handleClose();
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'errorFields' in err) {
         return; // AntD Form validation error
       }
-      message.error('Failed to save allocation');
+      message.error('Không thể lưu phân bổ');
     } finally {
       setSubmitting(false);
     }
   };
+
+  const modalInitialDate = initialDate ? dayjs(initialDate, 'YYYY-MM-DD') : dayjs();
 
   return (
     <Modal
       title={
         <Space>
           <ClockCircleOutlined />
-          <span>Allocate Task Time</span>
+          <span>Phân bổ thời gian tác vụ</span>
         </Space>
       }
       open={open}
       onOk={() => void handleSubmit()}
       onCancel={handleClose}
       confirmLoading={submitting}
-      okText="Save Allocation"
-      cancelText="Cancel"
+      okText="Lưu phân bổ"
+      cancelText="Hủy"
       destroyOnClose
       width={520}
     >
-      <Form form={form} layout="vertical" preserve={false} style={{ marginTop: 16 }}>
+      <Form
+        key={open ? `${initialDate ?? 'new'}_${initialTaskId ?? ''}` : 'closed'}
+        form={form}
+        layout="vertical"
+        preserve={false}
+        initialValues={{
+          taskId: initialTaskId ?? undefined,
+          date: modalInitialDate,
+          hours: 1,
+          minutes: 0,
+        }}
+        style={{ marginTop: 16 }}
+      >
         {/* Task Selection */}
         <Form.Item
           name="taskId"
-          label="Select Task"
-          rules={[{ required: true, message: 'Please select a task to allocate' }]}
+          label="Chọn tác vụ"
+          rules={[{ required: true, message: 'Vui lòng chọn tác vụ cần phân bổ' }]}
         >
           <Select
-            placeholder="Search active tasks..."
+            placeholder="Tìm kiếm tác vụ đang làm..."
             showSearch
             optionFilterProp="label"
-            aria-label="Select Task"
+            aria-label="Chọn tác vụ"
             options={activeTasks.map((t) => ({
               value: t.id,
-              label: `${t.name} (${t.priority}, est: ${formatMinutes(t.estimateMinutes)})`,
+              label: `${t.name} (${t.priority}, ước tính: ${formatMinutes(t.estimateMinutes)})`,
               task: t,
             }))}
             optionRender={(option) => {
@@ -228,18 +242,18 @@ export const AllocationModal: React.FC<AllocationModalProps> = ({
         {/* Date Picker */}
         <Form.Item
           name="date"
-          label="Target Date"
-          rules={[{ required: true, message: 'Please select target calendar date' }]}
+          label="Ngày thực hiện"
+          rules={[{ required: true, message: 'Vui lòng chọn ngày thực hiện' }]}
         >
-          <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" aria-label="Target Date" />
+          <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" aria-label="Ngày thực hiện" />
         </Form.Item>
 
         {/* Duration Input & Presets */}
-        <Form.Item label="Planned Duration" required style={{ marginBottom: 8 }}>
+        <Form.Item label="Thời gian dự kiến" required style={{ marginBottom: 8 }}>
           <Space align="start" size="middle">
             <Form.Item
               name="hours"
-              rules={[{ required: true, message: 'Hours required' }]}
+              rules={[{ required: true, message: 'Vui lòng nhập giờ' }]}
               style={{ marginBottom: 0 }}
             >
               <InputNumber
@@ -247,13 +261,13 @@ export const AllocationModal: React.FC<AllocationModalProps> = ({
                 max={24}
                 suffix="h"
                 style={{ width: 100 }}
-                aria-label="Planned Hours"
+                aria-label="Giờ dự kiến"
               />
             </Form.Item>
 
             <Form.Item
               name="minutes"
-              rules={[{ required: true, message: 'Minutes required' }]}
+              rules={[{ required: true, message: 'Vui lòng nhập phút' }]}
               style={{ marginBottom: 0 }}
             >
               <InputNumber
@@ -262,7 +276,7 @@ export const AllocationModal: React.FC<AllocationModalProps> = ({
                 step={15}
                 suffix="m"
                 style={{ width: 100 }}
-                aria-label="Planned Minutes"
+                aria-label="Phút dự kiến"
               />
             </Form.Item>
           </Space>
@@ -272,7 +286,7 @@ export const AllocationModal: React.FC<AllocationModalProps> = ({
         <div style={{ marginBottom: 16 }}>
           <Space size="small">
             <Text type="secondary" style={{ fontSize: 12 }}>
-              Presets:
+              Mẫu nhanh:
             </Text>
             <Button size="small" onClick={() => handleQuickPreset(1)}>
               1h
@@ -298,18 +312,18 @@ export const AllocationModal: React.FC<AllocationModalProps> = ({
             data-testid="estimate-comparison"
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <Text type="secondary">Task Estimate:</Text>
+              <Text type="secondary">Ước tính tác vụ:</Text>
               <Text strong>{formatMinutes(taskEstimate)}</Text>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <Text type="secondary">Total Planned (Cumulative):</Text>
+              <Text type="secondary">Tổng đã phân bổ (Tích lũy):</Text>
               <Text strong style={{ color: isOverEstimate ? '#fa8c16' : undefined }}>
                 {formatMinutes(newTotalAllocated)}
               </Text>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <Text type="secondary">
-                {isOverEstimate ? 'Over-allocated:' : 'Remaining to plan:'}
+                {isOverEstimate ? 'Phân bổ vượt mức:' : 'Còn lại cần phân bổ:'}
               </Text>
               <Text type={isOverEstimate ? 'warning' : 'secondary'} strong>
                 {isOverEstimate ? `+${formatMinutes(overageMinutes)}` : formatMinutes(remainingMinutes)}
@@ -318,7 +332,7 @@ export const AllocationModal: React.FC<AllocationModalProps> = ({
 
             {isOverEstimate && (
               <Alert
-                message={`Total allocated time exceeds task estimate by ${formatMinutes(overageMinutes)}`}
+                message={`Tổng thời gian phân bổ vượt quá ước tính tác vụ ${formatMinutes(overageMinutes)}`}
                 type="warning"
                 showIcon
                 icon={<WarningOutlined />}

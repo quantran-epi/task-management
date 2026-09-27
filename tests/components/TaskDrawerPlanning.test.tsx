@@ -26,10 +26,10 @@ describe('TaskDrawerPlanning Component (PLAN-01, PLAN-02, PLAN-06, D-09, D-10)',
 
     render(<TaskDrawerPlanning task={task} db={testDb} />);
 
-    expect(await screen.findByText('Planning & Daily Allocations')).toBeInTheDocument();
-    expect(screen.getByTestId('planning-metrics-total')).toHaveTextContent('Allocated: 0m of Est: 4h');
-    expect(screen.getByTestId('planning-metrics-balance')).toHaveTextContent('Remaining to plan: 4h');
-    expect(screen.getByText('No planned allocations yet on any calendar date')).toBeInTheDocument();
+    expect(await screen.findByText('Lập kế hoạch & Phân bổ hàng ngày')).toBeInTheDocument();
+    expect(screen.getByTestId('planning-metrics-total')).toHaveTextContent('Đã phân bổ: 0m / Ước tính: 4h');
+    expect(screen.getByTestId('planning-metrics-balance')).toHaveTextContent('Còn lại cần phân bổ: 4h');
+    expect(screen.getByText('Chưa có phân bổ nào trên các ngày lịch')).toBeInTheDocument();
   });
 
   it('adding a 120m allocation updates the progress bar to 50% (PLAN-01, D-09)', async () => {
@@ -40,7 +40,7 @@ describe('TaskDrawerPlanning Component (PLAN-01, PLAN-02, PLAN-06, D-09, D-10)',
 
     render(<TaskDrawerPlanning task={task} db={testDb} />);
 
-    await screen.findByText('Planning & Daily Allocations');
+    await screen.findByText('Lập kế hoạch & Phân bổ hàng ngày');
 
     // Click 2h preset (120m)
     const preset2h = screen.getByRole('button', { name: 'Plan 2h' });
@@ -51,8 +51,8 @@ describe('TaskDrawerPlanning Component (PLAN-01, PLAN-02, PLAN-06, D-09, D-10)',
     fireEvent.click(addBtn);
 
     await waitFor(async () => {
-      expect(screen.getByTestId('planning-metrics-total')).toHaveTextContent('Allocated: 2h of Est: 4h');
-      expect(screen.getByTestId('planning-metrics-balance')).toHaveTextContent('Remaining to plan: 2h');
+      expect(screen.getByTestId('planning-metrics-total')).toHaveTextContent('Đã phân bổ: 2h / Ước tính: 4h');
+      expect(screen.getByTestId('planning-metrics-balance')).toHaveTextContent('Còn lại cần phân bổ: 2h');
       const progressBar = screen.getByTestId('planning-progress-bar');
       expect(progressBar).toBeInTheDocument();
     });
@@ -68,20 +68,20 @@ describe('TaskDrawerPlanning Component (PLAN-01, PLAN-02, PLAN-06, D-09, D-10)',
     render(<TaskDrawerPlanning task={task} db={testDb} />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('planning-metrics-total')).toHaveTextContent('Allocated: 1h of Est: 3h');
+      expect(screen.getByTestId('planning-metrics-total')).toHaveTextContent('Đã phân bổ: 1h / Ước tính: 3h');
     });
 
     // Click delete allocation button
-    const deleteBtn = screen.getByRole('button', { name: /Delete allocation on 2026-10-25/i });
+    const deleteBtn = screen.getByRole('button', { name: /Xóa phân bổ ngày 2026-10-25/i });
     fireEvent.click(deleteBtn);
 
     // Confirm popconfirm
-    const confirmBtn = await screen.findByRole('button', { name: 'Remove' });
+    const confirmBtn = await screen.findByRole('button', { name: 'Xóa' });
     fireEvent.click(confirmBtn);
 
     await waitFor(() => {
-      expect(screen.getByTestId('planning-metrics-total')).toHaveTextContent('Allocated: 0m of Est: 3h');
-      expect(screen.getByTestId('planning-metrics-balance')).toHaveTextContent('Remaining to plan: 3h');
+      expect(screen.getByTestId('planning-metrics-total')).toHaveTextContent('Đã phân bổ: 0m / Ước tính: 3h');
+      expect(screen.getByTestId('planning-metrics-balance')).toHaveTextContent('Còn lại cần phân bổ: 3h');
     });
   });
 
@@ -96,8 +96,8 @@ describe('TaskDrawerPlanning Component (PLAN-01, PLAN-02, PLAN-06, D-09, D-10)',
     render(<TaskDrawerPlanning task={task} db={testDb} />);
 
     const warning = await screen.findByTestId('planning-overflow-warning');
-    expect(warning).toHaveTextContent(/Allocated time exceeds task estimate by 1h/i);
-    expect(screen.getByTestId('planning-metrics-balance')).toHaveTextContent('Over-allocated: +1h');
+    expect(warning).toHaveTextContent(/Thời gian phân bổ vượt quá ước tính tác vụ 1h/i);
+    expect(screen.getByTestId('planning-metrics-balance')).toHaveTextContent('Phân bổ vượt mức: +1h');
   });
 
   it('integrates seamlessly inside TaskDrawer when task is loaded (D-09)', async () => {
@@ -109,7 +109,7 @@ describe('TaskDrawerPlanning Component (PLAN-01, PLAN-02, PLAN-06, D-09, D-10)',
 
     render(<TaskDrawer taskId={task.id} open={true} onClose={() => {}} db={testDb} />);
 
-    expect(await screen.findByText('Planning & Daily Allocations')).toBeInTheDocument();
-    expect(await screen.findByTestId('planning-metrics-total')).toHaveTextContent('Allocated: 1h of Est: 2h');
+    expect(await screen.findByText('Lập kế hoạch & Phân bổ hàng ngày')).toBeInTheDocument();
+    expect(await screen.findByTestId('planning-metrics-total')).toHaveTextContent('Đã phân bổ: 1h / Ước tính: 2h');
   });
 });

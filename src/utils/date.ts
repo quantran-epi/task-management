@@ -1,7 +1,22 @@
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
+import updateLocale from 'dayjs/plugin/updateLocale';
+import advancedFormat from 'dayjs/plugin/advancedFormat';
+import isoWeek from 'dayjs/plugin/isoWeek';
+import 'dayjs/locale/vi';
 
 dayjs.extend(customParseFormat);
+dayjs.extend(updateLocale);
+dayjs.extend(advancedFormat);
+dayjs.extend(isoWeek);
+
+dayjs.locale('vi');
+dayjs.updateLocale('vi', {
+  weekStart: 1,
+});
+dayjs.updateLocale('en', {
+  weekStart: 1,
+});
 
 export const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 

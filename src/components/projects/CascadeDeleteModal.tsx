@@ -51,8 +51,8 @@ export const CascadeDeleteModal: React.FC<CascadeDeleteModalProps> = ({
           <ExclamationCircleFilled style={{ color: token.colorWarning, fontSize: 22 }} />
           <span>
             {isProject
-              ? `Delete Project '${targetName}'`
-              : `Delete Milestone '${targetName}'`}
+              ? `Xóa dự án '${targetName}'`
+              : `Xóa cột mốc '${targetName}'`}
           </span>
         </Space>
       }
@@ -64,8 +64,8 @@ export const CascadeDeleteModal: React.FC<CascadeDeleteModalProps> = ({
       <div style={{ marginTop: 16 }}>
         <Paragraph>
           {isProject
-            ? `This project contains ${childMilestoneCount} milestone(s) and ${childTaskCount} task(s). Choose how you want to handle child records:`
-            : `This milestone contains ${childTaskCount} task(s). Choose how you want to handle child tasks:`}
+            ? `Dự án này chứa ${childMilestoneCount} cột mốc và ${childTaskCount} tác vụ. Hãy chọn cách xử lý các mục con:`
+            : `Cột mốc này chứa ${childTaskCount} tác vụ. Hãy chọn cách xử lý các tác vụ con:`}
         </Paragraph>
 
         <div
@@ -87,8 +87,8 @@ export const CascadeDeleteModal: React.FC<CascadeDeleteModalProps> = ({
             style={{ width: '100%', height: 40 }}
           >
             {isProject
-              ? 'Keep Tasks (Move to Standalone)'
-              : 'Keep Tasks (Move to Project Level)'}
+              ? 'Giữ lại tác vụ (Chuyển thành Độc lập)'
+              : 'Giữ lại tác vụ (Chuyển lên Cấp dự án)'}
           </Button>
 
           <Button
@@ -100,7 +100,7 @@ export const CascadeDeleteModal: React.FC<CascadeDeleteModalProps> = ({
             loading={loading}
             style={{ width: '100%', height: 40 }}
           >
-            {isProject ? 'Delete All' : 'Delete All Child Tasks'}
+            {isProject ? 'Xóa tất cả' : 'Xóa tất cả tác vụ con'}
           </Button>
 
           <Button
@@ -109,7 +109,7 @@ export const CascadeDeleteModal: React.FC<CascadeDeleteModalProps> = ({
             disabled={loading}
             style={{ width: '100%', color: token.colorTextSecondary }}
           >
-            Cancel
+            Hủy
           </Button>
         </div>
       </div>

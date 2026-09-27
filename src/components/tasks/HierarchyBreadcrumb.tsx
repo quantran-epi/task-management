@@ -25,7 +25,7 @@ export const HierarchyBreadcrumb: React.FC<HierarchyBreadcrumbProps> = ({
           background: 'rgba(0, 0, 0, 0.04)',
         }}
       >
-        Standalone
+        Độc lập
       </Tag>
     );
   }

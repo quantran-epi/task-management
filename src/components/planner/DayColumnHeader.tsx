@@ -30,25 +30,25 @@ const LOAD_STATUS_CONFIG: Record<
   }
 > = {
   available: {
-    label: 'Available',
+    label: 'Khả dụng',
     color: 'success',
     icon: <CheckCircleOutlined />,
     progressStatus: 'success',
   },
   busy: {
-    label: 'Busy',
+    label: 'Bận',
     color: 'warning',
     icon: <ClockCircleOutlined />,
     progressStatus: 'normal',
   },
   overloaded: {
-    label: 'Overloaded',
+    label: 'Quá tải',
     color: 'error',
     icon: <ExclamationCircleOutlined />,
     progressStatus: 'exception',
   },
   'no-capacity': {
-    label: 'No Capacity',
+    label: 'Nghỉ',
     color: 'default',
     icon: <MinusCircleOutlined />,
     progressStatus: 'normal',
@@ -60,7 +60,7 @@ export const DayColumnHeader: React.FC<DayColumnHeaderProps> = ({
   onEditCapacity,
 }) => {
   const { date, isToday, metrics } = day;
-  const formattedDate = dayjs(date, 'YYYY-MM-DD').format('ddd, MMM D');
+  const formattedDate = dayjs(date, 'YYYY-MM-DD').format('ddd, DD/MM');
   const statusCfg = LOAD_STATUS_CONFIG[metrics.loadState];
 
   const netBalanceSign = metrics.netBalanceMinutes >= 0 ? '+' : '-';
@@ -69,11 +69,11 @@ export const DayColumnHeader: React.FC<DayColumnHeaderProps> = ({
   )}`;
   const netBalanceColor = metrics.netBalanceMinutes >= 0 ? '#52c41a' : '#ff4d4f';
 
-  const ariaDescription = `${day.dayName}, ${formattedDate}: Capacity ${formatMinutes(
+  const ariaDescription = `${day.dayName}, ${formattedDate}: Sức chứa ${formatMinutes(
     metrics.effectiveCapacityMinutes
-  )}, Allocated ${formatMinutes(
+  )}, Đã phân bổ ${formatMinutes(
     metrics.activeAllocatedMinutes
-  )}, Net Balance ${formattedNetBalance}, Load status ${statusCfg.label}`;
+  )}, Còn lại ${formattedNetBalance}, Trạng thái ${statusCfg.label}`;
 
   return (
     <div
@@ -105,17 +105,17 @@ export const DayColumnHeader: React.FC<DayColumnHeaderProps> = ({
           </Text>
           {isToday && (
             <Tag color="processing" style={{ margin: 0, fontSize: '11px', lineHeight: '18px' }}>
-              Today
+              Hôm nay
             </Tag>
           )}
         </Space>
 
         {/* Clickable Capacity Tag (D-07) */}
-        <Tooltip title="Click to edit date capacity">
+        <Tooltip title="Nhấn để sửa công suất ngày">
           <Tag
             role="button"
             tabIndex={0}
-            aria-label={`Edit capacity for ${date}`}
+            aria-label={`Sửa công suất cho ${date}`}
             icon={<CalendarOutlined />}
             onClick={() => onEditCapacity?.(date)}
             onKeyDown={(e) => {
@@ -130,7 +130,7 @@ export const DayColumnHeader: React.FC<DayColumnHeaderProps> = ({
               fontWeight: 600,
             }}
           >
-            Cap: {formatMinutes(metrics.effectiveCapacityMinutes)}
+            Sức chứa: {formatMinutes(metrics.effectiveCapacityMinutes)}
           </Tag>
         </Tooltip>
       </div>
@@ -148,10 +148,10 @@ export const DayColumnHeader: React.FC<DayColumnHeaderProps> = ({
         }}
       >
         <Text type="secondary">
-          Alloc: {formatMinutes(metrics.activeAllocatedMinutes)}
+          Phân bổ: {formatMinutes(metrics.activeAllocatedMinutes)}
         </Text>
         <Text strong style={{ color: netBalanceColor }}>
-          Bal: {formattedNetBalance}
+          Còn lại: {formattedNetBalance}
         </Text>
       </div>
 
@@ -187,7 +187,7 @@ export const DayColumnHeader: React.FC<DayColumnHeaderProps> = ({
             icon={<WarningOutlined />}
             style={{ margin: 0, fontSize: '11px', display: 'inline-flex', alignItems: 'center' }}
           >
-            High context switching ({metrics.activeTaskCount} tasks)
+            Chuyển ngữ cảnh cao ({metrics.activeTaskCount} tác vụ)
           </Tag>
         )}
       </div>

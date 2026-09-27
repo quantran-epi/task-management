@@ -42,11 +42,11 @@ describe('FeasibilityModal Component (CALC-03, CALC-04, CALC-05, CALC-06, D-08, 
       />
     );
 
-    expect(await screen.findByText(/Task Feasibility & Workload Distribution/i)).toBeInTheDocument();
-    expect(screen.getByText('Evaluation Window')).toBeInTheDocument();
-    expect(screen.getByText('Distribution Strategy')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Apply Allocations/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Discard Allocations/i })).toBeInTheDocument();
+    expect(await screen.findByText(/Đánh giá tính khả thi & Phân bổ khối lượng công việc/i)).toBeInTheDocument();
+    expect(screen.getByText('Khoảng thời gian đánh giá')).toBeInTheDocument();
+    expect(screen.getByText('Chiến lược phân bổ')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Áp dụng phân bổ/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Hủy bỏ/i })).toBeInTheDocument();
   });
 
   it('CALC-03: renders green Alert when task fits within range with surplus capacity', async () => {
@@ -68,9 +68,9 @@ describe('FeasibilityModal Component (CALC-03, CALC-04, CALC-05, CALC-06, D-08, 
     // Green alert with surplus text
     const banner = await screen.findByTestId('feasibility-alert');
     await waitFor(() => {
-      expect(banner).toHaveTextContent(/Feasible: Work fits within range/i);
+      expect(banner).toHaveTextContent(/Khả thi: Công việc vừa với khoảng thời gian/i);
     });
-    expect(banner).toHaveTextContent(/Surplus capacity/i);
+    expect(banner).toHaveTextContent(/Dư công suất/i);
   });
 
   it('CALC-03 / D-12: renders warning Alert when task is infeasible and allows extending to earliest feasible date', async () => {
@@ -92,12 +92,12 @@ describe('FeasibilityModal Component (CALC-03, CALC-04, CALC-05, CALC-06, D-08, 
 
     const banner = await screen.findByTestId('feasibility-alert');
     await waitFor(() => {
-      expect(banner).toHaveTextContent(/Infeasible: Deficit of/i);
+      expect(banner).toHaveTextContent(/Không khả thi: Thiếu hụt/i);
     });
-    expect(banner).toHaveTextContent(/Earliest feasible completion date/i);
+    expect(banner).toHaveTextContent(/Ngày hoàn thành khả thi sớm nhất là/i);
 
     // Extend button exists
-    const extendBtn = screen.getByRole('button', { name: /Extend to/i });
+    const extendBtn = screen.getByRole('button', { name: /Gia hạn đến/i });
     expect(extendBtn).toBeInTheDocument();
 
     // Clicking extend updates range end date
@@ -106,7 +106,7 @@ describe('FeasibilityModal Component (CALC-03, CALC-04, CALC-05, CALC-06, D-08, 
     // After extending, banner becomes feasible
     await waitFor(() => {
       const updatedBanner = screen.getByTestId('feasibility-alert');
-      expect(updatedBanner).toHaveTextContent(/Feasible: Work fits within range/i);
+      expect(updatedBanner).toHaveTextContent(/Khả thi: Công việc vừa với khoảng thời gian/i);
     });
   });
 
@@ -144,7 +144,7 @@ describe('FeasibilityModal Component (CALC-03, CALC-04, CALC-05, CALC-06, D-08, 
     expect(inDbBefore.length).toBe(0);
 
     // Click Discard Allocations
-    const discardBtn = screen.getByRole('button', { name: /Discard Allocations/i });
+    const discardBtn = screen.getByRole('button', { name: /Hủy bỏ/i });
     fireEvent.click(discardBtn);
 
     expect(onCancel).toHaveBeenCalledTimes(1);
@@ -180,7 +180,7 @@ describe('FeasibilityModal Component (CALC-03, CALC-04, CALC-05, CALC-06, D-08, 
 
     await screen.findByTestId('feasibility-alert');
 
-    const applyBtn = screen.getByRole('button', { name: /Apply Allocations/i });
+    const applyBtn = screen.getByRole('button', { name: /Áp dụng phân bổ/i });
     fireEvent.click(applyBtn);
 
     await waitFor(async () => {
@@ -190,6 +190,42 @@ describe('FeasibilityModal Component (CALC-03, CALC-04, CALC-05, CALC-06, D-08, 
       // Remainder was 90m (120m estimate - 30m existing). Total should be 120m!
       expect(totalMinutes).toBe(120);
       expect(onSuccess).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('automatically updates task deadline to new extended date when saving allocations', async () => {
+    const today = dayjs().format('YYYY-MM-DD');
+    const task = await createTask(
+      { name: 'Big Task', estimateMinutes: 1200, status: 'Open', deadline: today },
+      testDb
+    );
+
+    render(
+      <FeasibilityModal
+        open={true}
+        task={task}
+        onCancel={vi.fn()}
+        db={testDb}
+      />
+    );
+
+    // Infeasible banner
+    await waitFor(() => {
+      expect(screen.getByTestId('feasibility-alert')).toHaveTextContent(/Không khả thi/i);
+    });
+
+    // Click Extend to earliest feasible date
+    const extendBtn = screen.getByRole('button', { name: /Gia hạn đến/i });
+    fireEvent.click(extendBtn);
+
+    // Apply allocations
+    const applyBtn = screen.getByRole('button', { name: /Áp dụng phân bổ/i });
+    fireEvent.click(applyBtn);
+
+    await waitFor(async () => {
+      const updated = await testDb.tasks.get(task.id);
+      expect(updated?.deadline).not.toBe(today);
+      expect(dayjs(updated?.deadline).isAfter(today)).toBe(true);
     });
   });
 });

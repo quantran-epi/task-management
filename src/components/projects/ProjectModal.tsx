@@ -28,6 +28,13 @@ interface ProjectFormValues {
 
 const PROJECT_STATUSES: ProjectStatus[] = ['Open', 'In Progress', 'Done', 'Cancelled'];
 
+const STATUS_LABELS: Record<ProjectStatus, string> = {
+  Open: 'Mở',
+  'In Progress': 'Đang làm',
+  Done: 'Hoàn thành',
+  Cancelled: 'Đã hủy',
+};
+
 export const ProjectModal: React.FC<ProjectModalProps> = ({
   open,
   project,
@@ -81,12 +88,13 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
 
   return (
     <Modal
-      title={project ? 'Edit Project' : 'New Project'}
+      title={project ? 'Sửa dự án' : 'Dự án mới'}
       open={open}
       onOk={handleOk}
       onCancel={handleClose}
       confirmLoading={loading}
-      okText={project ? 'Save Project' : 'Save Project'}
+      okText={project ? 'Lưu thay đổi' : 'Tạo dự án'}
+      cancelText="Hủy"
       destroyOnClose
     >
       <Form
@@ -97,31 +105,31 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
       >
         <Form.Item
           name="name"
-          label="Project Name"
+          label="Tên dự án"
           rules={[
-            { required: true, message: 'Please enter a valid project name (1-120 characters).' },
-            { max: 120, message: 'Name cannot exceed 120 characters.' },
+            { required: true, message: 'Vui lòng nhập tên dự án hợp lệ (1-120 ký tự).' },
+            { max: 120, message: 'Tên không được vượt quá 120 ký tự.' },
           ]}
         >
-          <Input placeholder="e.g. Website Redesign" autoFocus />
+          <Input placeholder="vd: Thiết kế lại Website" autoFocus />
         </Form.Item>
 
-        <Form.Item name="description" label="Description">
-          <Input placeholder="Short summary of project scope" />
+        <Form.Item name="description" label="Mô tả">
+          <Input placeholder="Tóm tắt phạm vi dự án" />
         </Form.Item>
 
         <div style={{ display: 'flex', gap: 16 }}>
-          <Form.Item name="status" label="Status" style={{ flex: 1 }}>
-            <Select options={PROJECT_STATUSES.map((s) => ({ label: s, value: s }))} />
+          <Form.Item name="status" label="Trạng thái" style={{ flex: 1 }}>
+            <Select options={PROJECT_STATUSES.map((s) => ({ label: STATUS_LABELS[s] || s, value: s }))} />
           </Form.Item>
 
-          <Form.Item name="deadline" label="Target Deadline" style={{ flex: 1 }}>
+          <Form.Item name="deadline" label="Hạn chót mục tiêu" style={{ flex: 1 }}>
             <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
           </Form.Item>
         </div>
 
-        <Form.Item name="notes" label="Notes">
-          <Input.TextArea rows={3} placeholder="Project context, background, or goals..." />
+        <Form.Item name="notes" label="Ghi chú">
+          <Input.TextArea rows={3} placeholder="Bối cảnh dự án, mục tiêu..." />
         </Form.Item>
       </Form>
     </Modal>

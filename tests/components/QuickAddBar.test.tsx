@@ -13,7 +13,7 @@ describe('QuickAddBar', () => {
 
   it('renders input with placeholder and data-shortcut-id per D-05, D-29', () => {
     render(<QuickAddBar db={testDb} />);
-    const input = screen.getByPlaceholderText(/Add a task.*Press Enter to save/i);
+    const input = screen.getByPlaceholderText(/Thêm tác vụ nhanh/i);
     expect(input).toBeInTheDocument();
     expect(input).toHaveAttribute('data-shortcut-id', 'quick-add-input');
   });
@@ -22,7 +22,7 @@ describe('QuickAddBar', () => {
     const onCreated = vi.fn();
     render(<QuickAddBar onTaskCreated={onCreated} db={testDb} />);
 
-    const input = screen.getByPlaceholderText(/Add a task.*Press Enter to save/i);
+    const input = screen.getByPlaceholderText(/Thêm tác vụ nhanh/i);
 
     fireEvent.change(input, { target: { value: 'Refactor auth service ~2h 30m' } });
     fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
@@ -59,7 +59,7 @@ describe('QuickAddBar', () => {
       />
     );
 
-    const input = screen.getByPlaceholderText(/Add a task.*Press Enter to save/i);
+    const input = screen.getByPlaceholderText(/Thêm tác vụ nhanh/i);
     fireEvent.change(input, { target: { value: 'Write unit tests ~45m' } });
     fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
 
@@ -77,7 +77,7 @@ describe('QuickAddBar', () => {
     const onCreated = vi.fn();
     render(<QuickAddBar onTaskCreated={onCreated} db={testDb} />);
 
-    const input = screen.getByPlaceholderText(/Add a task.*Press Enter to save/i);
+    const input = screen.getByPlaceholderText(/Thêm tác vụ nhanh/i);
     fireEvent.change(input, { target: { value: '   ' } });
     fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
 

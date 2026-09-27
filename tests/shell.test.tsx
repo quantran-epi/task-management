@@ -23,8 +23,8 @@ describe('AppShell Component (UX-01)', () => {
     );
 
     expect(screen.getByText('Task Planner')).toBeInTheDocument();
-    expect(screen.getByText('Online')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Reset DB/i })).toBeInTheDocument();
+    expect(screen.getByText('Trực tuyến')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Đặt lại CSDL/i })).toBeInTheDocument();
     expect(screen.getByText('Shell Content')).toBeInTheDocument();
 
     const header = container.querySelector('header');
@@ -41,7 +41,7 @@ describe('AppShell Component (UX-01)', () => {
       </AppShell>
     );
 
-    const projectsLink = screen.getByText('Projects');
+    const projectsLink = screen.getByText('Dự án');
     expect(projectsLink).toBeInTheDocument();
     fireEvent.click(projectsLink);
     expect(onNavigate).toHaveBeenCalledWith('projects');
@@ -54,9 +54,9 @@ describe('AppShell Component (UX-01)', () => {
       </AppShell>
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Reset DB/i }));
-    expect(screen.getByText('Reset Database')).toBeInTheDocument();
-    expect(screen.getByText(/Destructive Action/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Đặt lại CSDL/i }));
+    expect(screen.getByText('Đặt lại cơ sở dữ liệu')).toBeInTheDocument();
+    expect(screen.getByText(/Hành động nguy hiểm/i)).toBeInTheDocument();
   });
 });
 
@@ -71,22 +71,22 @@ describe('App Integration & Hash Route & Live Query (UX-01, DATA-02)', () => {
   it('renders TasksView with search and quick add on tasks route', async () => {
     render(<App />);
 
-    expect(await screen.findByPlaceholderText(/Search tasks/i)).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/Add a task/i)).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText(/Tìm kiếm tác vụ/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Thêm tác vụ nhanh/i)).toBeInTheDocument();
   });
 
   it('updates view when hash route changes to projects', async () => {
     render(<App />);
 
-    expect(await screen.findByPlaceholderText(/Search tasks/i)).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText(/Tìm kiếm tác vụ/i)).toBeInTheDocument();
 
     // Trigger hashchange to projects
     window.location.hash = '#/projects';
     window.dispatchEvent(new HashChangeEvent('hashchange'));
 
     await waitFor(() => {
-      expect(screen.getByText('Work Hierarchy')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /New Project/i })).toBeInTheDocument();
+      expect(screen.getByText('Phân cấp công việc')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Dự án mới/i })).toBeInTheDocument();
     });
   });
 

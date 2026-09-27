@@ -85,11 +85,11 @@ export const TaskDrawerPlanning: React.FC<TaskDrawerPlanningProps> = ({
   const handleAddAllocation = async () => {
     const totalMins = hours * 60 + minutes;
     if (totalMins <= 0) {
-      message.error('Duration must be at least 1 minute');
+      message.error('Thời lượng phải từ ít nhất 1 phút');
       return;
     }
     if (totalMins > 1440) {
-      message.error('Duration cannot exceed 24 hours (1440 minutes)');
+      message.error('Thời lượng không được vượt quá 24 giờ (1440 phút)');
       return;
     }
 
@@ -97,11 +97,11 @@ export const TaskDrawerPlanning: React.FC<TaskDrawerPlanningProps> = ({
       setAdding(true);
       const dateStr = selectedDate.format('YYYY-MM-DD');
       await upsertAllocation(task.id, dateStr, totalMins, db);
-      message.success(`Allocated ${formatMinutes(totalMins)} on ${dateStr}`);
+      message.success(`Đã phân bổ ${formatMinutes(totalMins)} vào ${dateStr}`);
       setHours(1);
       setMinutes(0);
     } catch {
-      message.error('Failed to add allocation');
+      message.error('Không thể thêm phân bổ');
     } finally {
       setAdding(false);
     }
@@ -118,11 +118,11 @@ export const TaskDrawerPlanning: React.FC<TaskDrawerPlanningProps> = ({
     if (!editingId) return;
     const totalMins = editHours * 60 + editMinutes;
     if (totalMins <= 0) {
-      message.error('Duration must be at least 1 minute');
+      message.error('Thời lượng phải từ ít nhất 1 phút');
       return;
     }
     if (totalMins > 1440) {
-      message.error('Duration cannot exceed 24 hours');
+      message.error('Thời lượng không được vượt quá 24 giờ');
       return;
     }
 
@@ -130,10 +130,10 @@ export const TaskDrawerPlanning: React.FC<TaskDrawerPlanningProps> = ({
       setSavingEdit(true);
       const dateStr = editDate.format('YYYY-MM-DD');
       await updateAllocation(editingId, totalMins, dateStr, db);
-      message.success('Allocation updated');
+      message.success('Đã cập nhật phân bổ');
       setEditingId(null);
     } catch {
-      message.error('Failed to update allocation');
+      message.error('Không thể cập nhật phân bổ');
     } finally {
       setSavingEdit(false);
     }
@@ -142,15 +142,15 @@ export const TaskDrawerPlanning: React.FC<TaskDrawerPlanningProps> = ({
   const handleDelete = async (id: string, mins: number) => {
     try {
       await deleteAllocation(id, db);
-      message.success(`Removed allocation of ${formatMinutes(mins)}`);
+      message.success(`Đã xóa phân bổ ${formatMinutes(mins)}`);
     } catch {
-      message.error('Failed to remove allocation');
+      message.error('Không thể xóa phân bổ');
     }
   };
 
   const columns = [
     {
-      title: 'Date',
+      title: 'Ngày',
       dataIndex: 'date',
       key: 'date',
       render: (d: string) => (
@@ -160,13 +160,13 @@ export const TaskDrawerPlanning: React.FC<TaskDrawerPlanningProps> = ({
       ),
     },
     {
-      title: 'Allocated Time',
+      title: 'Thời lượng phân bổ',
       dataIndex: 'allocatedMinutes',
       key: 'allocatedMinutes',
       render: (mins: number) => <Text>{formatMinutes(mins)}</Text>,
     },
     {
-      title: 'Actions',
+      title: 'Thao tác',
       key: 'actions',
       width: 90,
       render: (_: unknown, record: PlannedAllocation) => {
@@ -174,7 +174,7 @@ export const TaskDrawerPlanning: React.FC<TaskDrawerPlanningProps> = ({
         const editContent = (
           <div style={{ width: 220, padding: 4 }}>
             <Text strong style={{ display: 'block', marginBottom: 8 }}>
-              Edit Allocation
+              Sửa phân bổ
             </Text>
             <div style={{ marginBottom: 8 }}>
               <DatePicker
@@ -210,7 +210,7 @@ export const TaskDrawerPlanning: React.FC<TaskDrawerPlanningProps> = ({
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
               <Button size="small" onClick={() => setEditingId(null)}>
-                Cancel
+                Hủy
               </Button>
               <Button
                 type="primary"
@@ -218,7 +218,7 @@ export const TaskDrawerPlanning: React.FC<TaskDrawerPlanningProps> = ({
                 loading={savingEdit}
                 onClick={() => void handleSaveEdit()}
               >
-                Save
+                Lưu
               </Button>
             </div>
           </div>
@@ -239,15 +239,15 @@ export const TaskDrawerPlanning: React.FC<TaskDrawerPlanningProps> = ({
                 type="text"
                 size="small"
                 icon={<EditOutlined />}
-                aria-label={`Edit allocation on ${record.date}`}
+                aria-label={`Sửa phân bổ ngày ${record.date}`}
               />
             </Popover>
 
             <Popconfirm
-              title="Remove Allocation"
-              description={`Remove allocation of ${formatMinutes(record.allocatedMinutes)} on ${record.date}?`}
-              okText="Remove"
-              cancelText="Cancel"
+              title="Xóa phân bổ"
+              description={`Xóa phân bổ ${formatMinutes(record.allocatedMinutes)} vào ngày ${record.date}?`}
+              okText="Xóa"
+              cancelText="Hủy"
               okButtonProps={{ danger: true }}
               onConfirm={() => void handleDelete(record.id, record.allocatedMinutes)}
             >
@@ -256,7 +256,7 @@ export const TaskDrawerPlanning: React.FC<TaskDrawerPlanningProps> = ({
                 danger
                 size="small"
                 icon={<DeleteOutlined />}
-                aria-label={`Delete allocation on ${record.date}`}
+                aria-label={`Xóa phân bổ ngày ${record.date}`}
               />
             </Popconfirm>
           </Space>
@@ -277,12 +277,12 @@ export const TaskDrawerPlanning: React.FC<TaskDrawerPlanningProps> = ({
       >
         <Title level={5} style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
           <ClockCircleOutlined />
-          <span>Planning & Daily Allocations</span>
+          <span>Lập kế hoạch & Phân bổ hàng ngày</span>
         </Title>
         <Tooltip
           title={
             estimateMinutes === 0
-              ? 'Set an estimate to auto-distribute work'
+              ? 'Đặt thời gian ước tính để tự động phân bổ'
               : undefined
           }
         >
@@ -292,9 +292,9 @@ export const TaskDrawerPlanning: React.FC<TaskDrawerPlanningProps> = ({
               icon={<ThunderboltOutlined />}
               onClick={() => setFeasibilityOpen(true)}
               disabled={estimateMinutes === 0}
-              aria-label="Check Feasibility & Auto-Distribute"
+              aria-label="Đánh giá khả thi & Tự động phân bổ"
             >
-              ✨ Auto-Distribute
+              ✨ Tự động phân bổ
             </Button>
           </span>
         </Tooltip>
@@ -307,14 +307,14 @@ export const TaskDrawerPlanning: React.FC<TaskDrawerPlanningProps> = ({
             percent={Math.min(100, percent)}
             status={isOverEstimate ? 'exception' : percent === 100 ? 'success' : 'normal'}
             {...(isOverEstimate ? { strokeColor: '#fa8c16' } : {})}
-            aria-label="Allocation progress"
+            aria-label="Tiến độ phân bổ"
             data-testid="planning-progress-bar"
           />
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
           <Text strong data-testid="planning-metrics-total">
-            Allocated: {formatMinutes(totalAllocatedMinutes)} of Est: {formatMinutes(estimateMinutes)}
+            Đã phân bổ: {formatMinutes(totalAllocatedMinutes)} / Ước tính: {formatMinutes(estimateMinutes)}
           </Text>
           <Text
             strong
@@ -322,8 +322,8 @@ export const TaskDrawerPlanning: React.FC<TaskDrawerPlanningProps> = ({
             data-testid="planning-metrics-balance"
           >
             {isOverEstimate
-              ? `Over-allocated: +${formatMinutes(overageMinutes)}`
-              : `Remaining to plan: ${formatMinutes(remainingMinutes)}`}
+              ? `Phân bổ vượt mức: +${formatMinutes(overageMinutes)}`
+              : `Còn lại cần phân bổ: ${formatMinutes(remainingMinutes)}`}
           </Text>
         </div>
 
@@ -331,7 +331,7 @@ export const TaskDrawerPlanning: React.FC<TaskDrawerPlanningProps> = ({
           <Alert
             type="warning"
             showIcon
-            message={`Allocated time exceeds task estimate by ${formatMinutes(overageMinutes)}`}
+            message={`Thời gian phân bổ vượt quá ước tính tác vụ ${formatMinutes(overageMinutes)}`}
             style={{ marginTop: 10 }}
             data-testid="planning-overflow-warning"
           />
@@ -350,7 +350,7 @@ export const TaskDrawerPlanning: React.FC<TaskDrawerPlanningProps> = ({
             emptyText: (
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description="No planned allocations yet on any calendar date"
+                description="Chưa có phân bổ nào trên các ngày lịch"
               />
             ),
           }}
@@ -358,24 +358,24 @@ export const TaskDrawerPlanning: React.FC<TaskDrawerPlanningProps> = ({
       </div>
 
       {/* Add Allocation Form */}
-      <Card size="small" title={<Text strong>+ Plan on Date</Text>}>
+      <Card size="small" title={<Text strong>Lập kế hoạch theo ngày</Text>}>
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
           <div>
             <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
-              Target Calendar Date:
+              Ngày thực hiện:
             </Text>
             <DatePicker
               value={selectedDate}
               onChange={(d) => d && setSelectedDate(d)}
               format="YYYY-MM-DD"
               style={{ width: '100%' }}
-              aria-label="Planning Date"
+              aria-label="Ngày thực hiện"
             />
           </div>
 
           <div>
             <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
-              Planned Duration:
+              Thời lượng dự kiến:
             </Text>
             <Space align="center" size="middle">
               <InputNumber
@@ -402,18 +402,18 @@ export const TaskDrawerPlanning: React.FC<TaskDrawerPlanningProps> = ({
                 type="primary"
                 icon={<PlusOutlined />}
                 loading={adding}
-                aria-label="Add Allocation"
+                aria-label="Thêm phân bổ"
                 data-testid="add-allocation-btn"
                 onClick={() => void handleAddAllocation()}
               >
-                Add Allocation
+                Thêm phân bổ
               </Button>
             </Space>
           </div>
 
           <Space size="small">
             <Text type="secondary" style={{ fontSize: 12 }}>
-              Presets:
+              Mẫu nhanh:
             </Text>
             <Button
               size="small"

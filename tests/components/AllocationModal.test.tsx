@@ -25,10 +25,10 @@ describe('Task Allocation UI Components (PLAN-01, PLAN-02, PLAN-06, D-09, D-10, 
       const onCancel = vi.fn();
       render(<AllocationModal open={true} onCancel={onCancel} db={testDb} />);
 
-      expect(await screen.findByText('Allocate Task Time')).toBeInTheDocument();
-      expect(screen.getByText('Select Task')).toBeInTheDocument();
-      expect(screen.getByText('Target Date')).toBeInTheDocument();
-      expect(screen.getByText('Planned Duration')).toBeInTheDocument();
+      expect(await screen.findByText('Phân bổ thời gian tác vụ')).toBeInTheDocument();
+      expect(screen.getByText('Chọn tác vụ')).toBeInTheDocument();
+      expect(screen.getByText('Ngày thực hiện')).toBeInTheDocument();
+      expect(screen.getByText('Thời gian dự kiến')).toBeInTheDocument();
 
       // Quick presets
       expect(screen.getByRole('button', { name: '1h' })).toBeInTheDocument();
@@ -62,7 +62,7 @@ describe('Task Allocation UI Components (PLAN-01, PLAN-02, PLAN-06, D-09, D-10, 
 
       // Soft warning appears with overage calculation
       const warning = await screen.findByTestId('soft-overflow-warning');
-      expect(warning).toHaveTextContent(/Total allocated time exceeds task estimate by 1h/i);
+      expect(warning).toHaveTextContent(/Tổng thời gian phân bổ vượt quá ước tính tác vụ 1h/i);
     });
 
     it('submits allocation successfully via upsertAllocation and triggers onSuccess', async () => {
@@ -92,7 +92,7 @@ describe('Task Allocation UI Components (PLAN-01, PLAN-02, PLAN-06, D-09, D-10, 
       fireEvent.click(preset4h);
 
       // Click Save Allocation button
-      const saveBtn = screen.getByRole('button', { name: 'Save Allocation' });
+      const saveBtn = screen.getByRole('button', { name: 'Lưu phân bổ' });
       fireEvent.click(saveBtn);
 
       await waitFor(async () => {
@@ -123,7 +123,7 @@ describe('Task Allocation UI Components (PLAN-01, PLAN-02, PLAN-06, D-09, D-10, 
       );
 
       expect(screen.getByText('Fix auth bug')).toBeInTheDocument();
-      expect(screen.getByText('High')).toBeInTheDocument();
+      expect(screen.getByText('Cao')).toBeInTheDocument();
       expect(screen.getByText('1h 30m')).toBeInTheDocument();
     });
 
@@ -144,7 +144,7 @@ describe('Task Allocation UI Components (PLAN-01, PLAN-02, PLAN-06, D-09, D-10, 
       );
 
       expect(screen.getByText('Finished feature')).toBeInTheDocument();
-      expect(screen.getByText('Done - excluded')).toBeInTheDocument();
+      expect(screen.getByText('Hoàn thành - không tính')).toBeInTheDocument();
 
       const card = screen.getByTestId(`allocation-card-${alloc.id}`);
       expect(card.style.opacity).toBe('0.5');
@@ -166,7 +166,7 @@ describe('Task Allocation UI Components (PLAN-01, PLAN-02, PLAN-06, D-09, D-10, 
       const deleteBtn = screen.getByRole('button', { name: `Remove allocation of ${task.name}` });
       fireEvent.click(deleteBtn);
 
-      const confirmBtn = await screen.findByRole('button', { name: 'Remove' });
+      const confirmBtn = await screen.findByRole('button', { name: 'Xóa' });
       fireEvent.click(confirmBtn);
 
       await waitFor(async () => {

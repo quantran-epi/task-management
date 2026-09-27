@@ -19,10 +19,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ db = defaultDb, onNa
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div>
           <Title level={3} style={{ margin: 0 }}>
-            Settings & Capacity Configuration
+            Cài đặt & Cấu hình công suất
           </Title>
           <Paragraph type="secondary" style={{ margin: 0 }}>
-            Configure your standard weekly work capacity and schedule specific calendar date overrides (CAP-01, CAP-03).
+            Cấu hình công suất làm việc hàng tuần tiêu chuẩn và lên lịch ngoại lệ cho các ngày cụ thể.
           </Paragraph>
         </div>
 
@@ -30,9 +30,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ db = defaultDb, onNa
           <Button
             icon={<ArrowLeftOutlined />}
             onClick={() => onNavigate('tasks')}
-            aria-label="Back to Tasks"
+            aria-label="Quay lại Tác vụ"
           >
-            Back to Tasks
+            Quay lại Tác vụ
           </Button>
         )}
       </div>

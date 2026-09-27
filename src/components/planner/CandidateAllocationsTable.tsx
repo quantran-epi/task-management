@@ -28,20 +28,20 @@ export const CandidateAllocationsTable: React.FC<CandidateAllocationsTableProps>
 
   const columns = [
     {
-      title: 'Include',
+      title: 'Chọn',
       key: 'included',
       width: 70,
       render: (_: unknown, record: CandidateAllocation) => (
         <Checkbox
           checked={record.included}
           onChange={(e) => onToggleCandidate(record.date, e.target.checked)}
-          aria-label={`Include ${record.date}`}
+          aria-label={`Chọn ${record.date}`}
           style={{ minHeight: isMobile ? 44 : undefined, display: 'inline-flex', alignItems: 'center' }}
         />
       ),
     },
     {
-      title: 'Date',
+      title: 'Ngày',
       dataIndex: 'date',
       key: 'date',
       render: (d: string) => (
@@ -51,7 +51,7 @@ export const CandidateAllocationsTable: React.FC<CandidateAllocationsTableProps>
       ),
     },
     {
-      title: 'Existing',
+      title: 'Hiện có',
       dataIndex: 'existingAllocatedMinutes',
       key: 'existing',
       render: (m: number) => (
@@ -59,7 +59,7 @@ export const CandidateAllocationsTable: React.FC<CandidateAllocationsTableProps>
       ),
     },
     {
-      title: 'Proposed',
+      title: 'Đề xuất',
       key: 'proposed',
       render: (_: unknown, record: CandidateAllocation) => (
         <InputNumber
@@ -71,12 +71,12 @@ export const CandidateAllocationsTable: React.FC<CandidateAllocationsTableProps>
           onChange={(v) => onChangeMinutes(record.date, Math.max(0, Math.round(v ?? 0)))}
           suffix="m"
           style={{ width: 90 }}
-          aria-label={`Proposed minutes for ${record.date}`}
+          aria-label={`Số phút đề xuất cho ${record.date}`}
         />
       ),
     },
     {
-      title: 'Resulting Total',
+      title: 'Tổng kết quả',
       key: 'total',
       render: (_: unknown, record: CandidateAllocation) => {
         const resulting =
@@ -94,10 +94,10 @@ export const CandidateAllocationsTable: React.FC<CandidateAllocationsTableProps>
         description={
           <div>
             <Text strong style={{ display: 'block', fontSize: 16, marginBottom: 4 }}>
-              No Eligible Dates Found
+              Không tìm thấy ngày phù hợp
             </Text>
             <Text type="secondary" style={{ fontSize: 14 }}>
-              All dates in selected range are non-working, fully booked, or in the past. Adjust date range or add capacity overrides.
+              Tất cả các ngày trong khoảng đã chọn là ngày nghỉ, đã kín lịch hoặc đã qua. Hãy điều chỉnh khoảng ngày hoặc thêm ngày ngoại lệ.
             </Text>
           </div>
         }
@@ -125,9 +125,9 @@ export const CandidateAllocationsTable: React.FC<CandidateAllocationsTableProps>
               fontSize: 13,
             }}
           >
-            <span>Total Proposed: {formatMinutes(totalProposed)}</span>
+            <span>Tổng đề xuất: {formatMinutes(totalProposed)}</span>
             <Text type={totalProposed < taskRemainingMinutes ? 'warning' : 'secondary'}>
-              Task Remaining Estimate: {formatMinutes(taskRemainingMinutes)}
+              Ước tính còn lại của tác vụ: {formatMinutes(taskRemainingMinutes)}
             </Text>
           </div>
         )}

@@ -48,7 +48,7 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
       message.success({ content: 'Task created', duration: 1.5 });
       onTaskCreated?.(created);
     } catch {
-      message.error({ content: 'Failed to create task', duration: 2 });
+      message.error({ content: 'Không thể tạo tác vụ', duration: 2 });
     } finally {
       setSubmitting(false);
     }
@@ -62,7 +62,7 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
   };
 
   const projectOptions = [
-    { value: '', label: 'Standalone' },
+    { value: '', label: 'Độc lập' },
     ...projects.map((p) => ({ value: p.id, label: p.name })),
   ];
 
@@ -74,20 +74,20 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
           onChange={(val) => setSelectedProjectId(val || undefined)}
           options={projectOptions}
           style={{ width: 140 }}
-          aria-label="Assign to project"
+          aria-label="Gán vào dự án"
         />
       )}
       <Input
         ref={inputRef}
         id="quick-add-input"
         data-shortcut-id="quick-add-input"
-        placeholder="Add a task (e.g. 'Review pull request ~1h 30m'). Press Enter to save..."
+        placeholder="Thêm tác vụ nhanh (vd: 'Xem xét PR ~1h 30m'). Nhấn Enter để lưu..."
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={handleKeyDown}
         disabled={submitting}
         maxLength={120}
-        aria-label="Quick add task name and estimate"
+        aria-label="Thêm nhanh tên tác vụ và ước tính"
       />
       <Button
         type="primary"
@@ -95,7 +95,7 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
         loading={submitting}
         disabled={!text.trim()}
       >
-        Add Task
+        Thêm
       </Button>
     </Space.Compact>
   );

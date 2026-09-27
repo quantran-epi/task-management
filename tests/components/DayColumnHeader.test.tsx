@@ -52,9 +52,9 @@ describe('DayColumnHeader (PLAN-03, PLAN-04, UX-02, UX-04, D-07, D-13, D-14, D-1
 
     render(<DayColumnHeader day={day} />);
 
-    expect(screen.getByText(/Cap:\s*8h/i)).toBeInTheDocument();
-    expect(screen.getByText(/Alloc:\s*3h/i)).toBeInTheDocument();
-    expect(screen.getByText(/Bal:\s*\+5h/i)).toBeInTheDocument();
+    expect(screen.getByText(/Sức chứa:\s*8h/i)).toBeInTheDocument();
+    expect(screen.getByText(/Phân bổ:\s*3h/i)).toBeInTheDocument();
+    expect(screen.getByText(/Còn lại:\s*\+5h/i)).toBeInTheDocument();
   });
 
   it('renders negative net balance with minus sign and overload styling when overloaded', () => {
@@ -76,8 +76,8 @@ describe('DayColumnHeader (PLAN-03, PLAN-04, UX-02, UX-04, D-07, D-13, D-14, D-1
 
     render(<DayColumnHeader day={day} />);
 
-    expect(screen.getByText(/Alloc:\s*10h/i)).toBeInTheDocument();
-    expect(screen.getByText(/Bal:\s*-2h/i)).toBeInTheDocument();
+    expect(screen.getByText(/Phân bổ:\s*10h/i)).toBeInTheDocument();
+    expect(screen.getByText(/Còn lại:\s*-2h/i)).toBeInTheDocument();
   });
 
   it('renders distinct load tags with icon and text for all 4 load states (D-14, D-15, PLAN-04)', () => {
@@ -85,7 +85,7 @@ describe('DayColumnHeader (PLAN-03, PLAN-04, UX-02, UX-04, D-07, D-13, D-14, D-1
     const { rerender } = render(
       <DayColumnHeader day={createMockDay({ metrics: { ...createMockDay().metrics, loadState: 'available' } })} />
     );
-    expect(screen.getByText('Available')).toBeInTheDocument();
+    expect(screen.getByText('Khả dụng')).toBeInTheDocument();
 
     // 2. Busy
     rerender(
@@ -100,7 +100,7 @@ describe('DayColumnHeader (PLAN-03, PLAN-04, UX-02, UX-04, D-07, D-13, D-14, D-1
         })}
       />
     );
-    expect(screen.getByText('Busy')).toBeInTheDocument();
+    expect(screen.getByText('Bận')).toBeInTheDocument();
 
     // 3. Overloaded
     rerender(
@@ -115,7 +115,7 @@ describe('DayColumnHeader (PLAN-03, PLAN-04, UX-02, UX-04, D-07, D-13, D-14, D-1
         })}
       />
     );
-    expect(screen.getByText('Overloaded')).toBeInTheDocument();
+    expect(screen.getByText('Quá tải')).toBeInTheDocument();
 
     // 4. No Capacity
     rerender(
@@ -132,7 +132,7 @@ describe('DayColumnHeader (PLAN-03, PLAN-04, UX-02, UX-04, D-07, D-13, D-14, D-1
         })}
       />
     );
-    expect(screen.getByText('No Capacity')).toBeInTheDocument();
+    expect(screen.getByText('Nghỉ')).toBeInTheDocument();
   });
 
   it('displays high context switching warning tag when active tasks exceed 4 per D-13', () => {
@@ -146,7 +146,7 @@ describe('DayColumnHeader (PLAN-03, PLAN-04, UX-02, UX-04, D-07, D-13, D-14, D-1
 
     render(<DayColumnHeader day={day} />);
 
-    expect(screen.getByText(/High context switching \(5 tasks\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/Chuyển ngữ cảnh cao \(5 tác vụ\)/i)).toBeInTheDocument();
   });
 
   it('clicking capacity tag invokes onEditCapacity for quick date override editing per D-07', () => {
@@ -155,7 +155,7 @@ describe('DayColumnHeader (PLAN-03, PLAN-04, UX-02, UX-04, D-07, D-13, D-14, D-1
 
     render(<DayColumnHeader day={day} onEditCapacity={onEditCapacity} />);
 
-    const capTag = screen.getByRole('button', { name: /Edit capacity for 2026-09-30/i });
+    const capTag = screen.getByRole('button', { name: /Sửa công suất cho 2026-09-30/i });
     fireEvent.click(capTag);
 
     expect(onEditCapacity).toHaveBeenCalledTimes(1);
@@ -180,11 +180,11 @@ describe('DayColumnHeader (PLAN-03, PLAN-04, UX-02, UX-04, D-07, D-13, D-14, D-1
 
     const header = screen.getByTestId('day-column-header-2026-09-28');
     expect(header).toBeInTheDocument();
-    expect(screen.getByText('Mon, Sep 28')).toBeInTheDocument();
-    expect(screen.getByText('Today')).toBeInTheDocument();
-    expect(screen.getByText(/Cap:\s*8h/i)).toBeInTheDocument();
-    expect(screen.getByText(/Alloc:\s*4h/i)).toBeInTheDocument();
-    expect(screen.getByText(/Bal:\s*\+4h/i)).toBeInTheDocument();
+    expect(screen.getByText('T2, 28/09')).toBeInTheDocument();
+    expect(screen.getByText('Hôm nay')).toBeInTheDocument();
+    expect(screen.getByText(/Sức chứa:\s*8h/i)).toBeInTheDocument();
+    expect(screen.getByText(/Phân bổ:\s*4h/i)).toBeInTheDocument();
+    expect(screen.getByText(/Còn lại:\s*\+4h/i)).toBeInTheDocument();
     expect(container.querySelector('[role="button"]')).toBeInTheDocument();
   });
 });

@@ -76,10 +76,10 @@ describe('ProjectsView & Hierarchy Components', () => {
     );
 
     expect(screen.getByText('Website Redesign')).toBeInTheDocument();
-    expect(screen.getByText('In Progress')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /\+ Task/i })).toBeInTheDocument();
+    expect(screen.getByText('Đang làm')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Tác vụ/i })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /\+ Task/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Tác vụ/i }));
     expect(onAddTask).toHaveBeenCalledWith('proj-1', undefined);
   });
 
@@ -93,9 +93,9 @@ describe('ProjectsView & Hierarchy Components', () => {
       />
     );
 
-    expect(screen.getByText('New Project')).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText(/Project Name/i), { target: { value: 'Brand New System' } });
-    fireEvent.click(screen.getByRole('button', { name: /Save Project/i }));
+    expect(screen.getByText('Dự án mới')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/Tên dự án/i), { target: { value: 'Brand New System' } });
+    fireEvent.click(screen.getByRole('button', { name: /Tạo dự án/i }));
 
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledWith(
@@ -118,9 +118,9 @@ describe('ProjectsView & Hierarchy Components', () => {
       />
     );
 
-    expect(screen.getByText('New Milestone')).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText(/Milestone Name/i), { target: { value: 'Sprint Alpha' } });
-    fireEvent.click(screen.getByRole('button', { name: /Save Milestone/i }));
+    expect(screen.getByText('Cột mốc mới')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/Tên cột mốc/i), { target: { value: 'Sprint Alpha' } });
+    fireEvent.click(screen.getByRole('button', { name: /Tạo cột mốc/i }));
 
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledWith(
@@ -147,13 +147,13 @@ describe('ProjectsView & Hierarchy Components', () => {
       />
     );
 
-    expect(screen.getByText(/Delete Project 'Website Redesign'/i)).toBeInTheDocument();
-    expect(screen.getByText(/contains 1 milestone\(s\) and 2 task\(s\)/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Delete All/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Keep Tasks \(Move to Standalone\)/i })).toBeInTheDocument();
+    expect(screen.getByText(/Xóa dự án 'Website Redesign'/i)).toBeInTheDocument();
+    expect(screen.getByText(/chứa 1 cột mốc và 2 tác vụ/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Xóa tất cả/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Giữ lại tác vụ \(Chuyển thành Độc lập\)/i })).toBeInTheDocument();
 
     // Default button preserves tasks
-    fireEvent.click(screen.getByRole('button', { name: /Keep Tasks \(Move to Standalone\)/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Giữ lại tác vụ \(Chuyển thành Độc lập\)/i }));
     expect(onConfirm).toHaveBeenCalledWith('orphan');
   });
 
@@ -170,11 +170,11 @@ describe('ProjectsView & Hierarchy Components', () => {
       />
     );
 
-    expect(screen.getByText(/Delete Milestone 'Phase 1 MVP'/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Delete All Child Tasks/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Keep Tasks \(Move to Project Level\)/i })).toBeInTheDocument();
+    expect(screen.getByText(/Xóa cột mốc 'Phase 1 MVP'/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Xóa tất cả tác vụ con/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Giữ lại tác vụ \(Chuyển lên Cấp dự án\)/i })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Delete All Child Tasks/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Xóa tất cả tác vụ con/i }));
     expect(onConfirm).toHaveBeenCalledWith('cascade');
   });
 });

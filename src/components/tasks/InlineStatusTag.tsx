@@ -16,13 +16,13 @@ const STATUS_CONFIG: Record<
   TaskStatus,
   { label: string; color: string; style?: React.CSSProperties }
 > = {
-  Open: { label: 'Open', color: 'default' },
-  'In Progress': { label: 'In Progress', color: 'processing' },
-  Resolved: { label: 'Resolved', color: 'warning' },
-  'In Review': { label: 'In Review', color: 'cyan' },
-  Done: { label: 'Done', color: 'success' },
+  Open: { label: 'Mở', color: 'default' },
+  'In Progress': { label: 'Đang làm', color: 'processing' },
+  Resolved: { label: 'Đã giải quyết', color: 'warning' },
+  'In Review': { label: 'Đang duyệt', color: 'cyan' },
+  Done: { label: 'Hoàn thành', color: 'success' },
   Cancelled: {
-    label: 'Cancelled',
+    label: 'Đã hủy',
     color: 'default',
     style: { textDecoration: 'line-through', opacity: 0.65 },
   },
@@ -52,18 +52,18 @@ export const InlineStatusTag: React.FC<InlineStatusTagProps> = ({
 
     try {
       await updateTaskStatus(taskId, nextStatus, db);
-      message.success({ content: 'Status updated', duration: 1.5 });
+      message.success({ content: 'Đã cập nhật trạng thái', duration: 1.5 });
 
       if (nextStatus === 'In Progress' && (!estimateMinutes || estimateMinutes === 0)) {
         message.info({
-          content: 'Reminder: This task has no time estimate',
+          content: 'Nhắc nhở: Tác vụ này chưa có ước tính thời gian',
           duration: 2.5,
         });
       }
 
       onStatusChange?.(nextStatus);
     } catch {
-      message.error({ content: 'Failed to update status', duration: 2 });
+      message.error({ content: 'Không thể cập nhật trạng thái', duration: 2 });
     }
   };
 
@@ -71,7 +71,7 @@ export const InlineStatusTag: React.FC<InlineStatusTagProps> = ({
     key: st,
     label: (
       <span style={st === 'Cancelled' ? { textDecoration: 'line-through' } : undefined}>
-        {st}
+        {STATUS_CONFIG[st]?.label || st}
       </span>
     ),
   }));
@@ -90,7 +90,7 @@ export const InlineStatusTag: React.FC<InlineStatusTagProps> = ({
           ...current.style,
         }}
         role="button"
-        aria-label={`Current status: ${status}. Click to change.`}
+        aria-label={`Trạng thái hiện tại: ${current.label}. Nhấn để thay đổi.`}
       >
         <span style={current.style}>{current.label}</span>
         <span style={{ fontSize: 10 }}>▾</span>
