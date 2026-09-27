@@ -1,5 +1,4 @@
 import { describe, it, expect, vi } from 'vitest';
-import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { GitHubPassphraseModal } from '../../../src/components/settings/GitHubPassphraseModal';
 import * as githubSyncService from '../../../src/services/github/githubSyncService';

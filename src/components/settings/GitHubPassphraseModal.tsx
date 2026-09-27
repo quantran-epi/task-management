@@ -100,7 +100,7 @@ export const GitHubPassphraseModal: React.FC<GitHubPassphraseModalProps> = ({
       maskClosable={!loading}
     >
       <Space direction="vertical" style={{ width: '100%' }} size="middle">
-        <Paragraph type="secondary" orientation="left" style={{ margin: 0 }}>
+        <Paragraph type="secondary" style={{ margin: 0 }}>
           Tệp sao lưu trên GitHub được mã hóa bằng thuật toán AES-GCM-256. Vui lòng nhập mật khẩu
           bảo vệ cá nhân của bạn để giải mã và xem trước nội dung.
         </Paragraph>

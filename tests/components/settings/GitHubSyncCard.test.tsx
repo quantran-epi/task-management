@@ -20,6 +20,8 @@ vi.mock('../../../src/services/github/githubSyncService', async (importOriginal)
   return {
     ...actual,
     executeGitHubBackupPush: vi.fn(),
+    executeGitHubBackupPull: vi.fn(),
+    downloadRawEncryptedBackup: vi.fn(),
   };
 });
 
@@ -171,6 +173,95 @@ describe('GitHubSyncCard', () => {
     await waitFor(() => {
       expect(screen.getByText('Xung đột bản sao lưu từ xa')).toBeInTheDocument();
       expect(screen.getByText(/remote_/)).toBeInTheDocument();
+    });
+  });
+
+  it('calls executeGitHubBackupPull and onPullSuccess when clicking Tải từ GitHub with passphrase', async () => {
+    await db.settings.put({ key: 'github_owner', value: 'alice' });
+    await db.settings.put({ key: 'github_repo', value: 'tasks' });
+
+    const mockPullResult = {
+      payload: {
+        app: 'personal-task-planner' as const,
+        schemaVersion: 1,
+        exportedAt: '2026-09-27T10:00:00.000Z',
+        tables: {
+          projects: [],
+          milestones: [],
+          tasks: [],
+          capacityRules: [],
+          capacityOverrides: [],
+          plannedAllocations: [],
+        },
+        counts: {
+          projects: 0,
+          milestones: 0,
+          tasks: 0,
+          capacityRules: 0,
+          capacityOverrides: 0,
+          plannedAllocations: 0,
+        },
+      },
+      remoteSha: 'remote_blob_1234567',
+      exportedAt: '2026-09-27T10:00:00.000Z',
+      rawEncryptedJson: '{"mock":"envelope"}',
+    };
+
+    vi.mocked(githubSyncService.executeGitHubBackupPull).mockResolvedValueOnce(mockPullResult);
+
+    const onPullSuccess = vi.fn();
+
+    render(
+      <GitHubAuthProvider>
+        <AuthSetter token="ghp_mock_token" passphrase="secure_passphrase" />
+        <GitHubSyncCard db={db} onPullSuccess={onPullSuccess} />
+      </GitHubAuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Tải từ GitHub/i })).toBeEnabled();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Tải từ GitHub/i }));
+
+    await waitFor(() => {
+      expect(githubSyncService.executeGitHubBackupPull).toHaveBeenCalledWith(
+        { owner: 'alice', repo: 'tasks', branch: 'main' },
+        'ghp_mock_token',
+        'secure_passphrase'
+      );
+      expect(onPullSuccess).toHaveBeenCalledWith(mockPullResult);
+    });
+  });
+
+  it('opens GitHubPassphraseModal when executeGitHubBackupPull throws PASSPHRASE_REQUIRED', async () => {
+    await db.settings.put({ key: 'github_owner', value: 'alice' });
+    await db.settings.put({ key: 'github_repo', value: 'tasks' });
+
+    vi.mocked(githubSyncService.executeGitHubBackupPull).mockRejectedValueOnce(
+      new githubSyncService.GitHubPullError(
+        'PASSPHRASE_REQUIRED',
+        'Cần mật khẩu để giải mã bản sao lưu',
+        { rawEncryptedJson: '{"raw":"data"}', remoteSha: 'sha_123' }
+      )
+    );
+
+    render(
+      <GitHubAuthProvider>
+        <AuthSetter token="ghp_mock_token" />
+        <GitHubSyncCard db={db} />
+      </GitHubAuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Tải từ GitHub/i })).toBeEnabled();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Tải từ GitHub/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Nhập mật khẩu giải mã GitHub')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Tải tệp thô về máy/i })).toBeInTheDocument();
     });
   });
 });

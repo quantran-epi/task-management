@@ -11,6 +11,7 @@ import { WeeklyCapacityForm } from '../components/settings/WeeklyCapacityForm';
 import { OverridesTable } from '../components/settings/OverridesTable';
 import { BackupExportCard } from '../components/settings/BackupExportCard';
 import { BackupImportCard } from '../components/settings/BackupImportCard';
+import { ImportPreviewModal } from '../components/settings/ImportPreviewModal';
 import { SnapshotRollbackCard } from '../components/settings/SnapshotRollbackCard';
 import { GitHubConfigCard } from '../components/settings/GitHubConfigCard';
 import { GitHubSyncCard } from '../components/settings/GitHubSyncCard';
@@ -22,7 +23,8 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import type { AppRoute } from '../types/navigation';
 import { rollbackToSnapshot, downloadSnapshotFile } from '../services/backup/restoreBackup';
 import { announceToScreenReader } from '../components/common/AriaLiveRegion';
-import type { SnapshotData } from '../types/backup';
+import type { SnapshotData, BackupEnvelope } from '../types/backup';
+import type { PullBackupResult } from '../services/github/types';
 
 const { Title, Paragraph } = Typography;
 
@@ -37,11 +39,23 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onNavigate,
   defaultActiveTab = 'capacity',
 }) => {
+  const [activeTab, setActiveTab] = useState<'capacity' | 'data'>(defaultActiveTab);
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [showPostRestoreBanner, setShowPostRestoreBanner] = useState(false);
+  const [remotePayload, setRemotePayload] = useState<BackupEnvelope | null>(null);
+  const [remoteSha, setRemoteSha] = useState<string | null>(null);
+  const [remoteExportedAt, setRemoteExportedAt] = useState<string | null>(null);
+  const [remotePreviewOpen, setRemotePreviewOpen] = useState(false);
 
   const handleRestoreSuccess = () => {
     setShowPostRestoreBanner(true);
+  };
+
+  const handleRemotePullSuccess = (result: PullBackupResult) => {
+    setRemotePayload(result.payload);
+    setRemoteSha(result.remoteSha);
+    setRemoteExportedAt(result.exportedAt);
+    setRemotePreviewOpen(true);
   };
 
   const handleBannerRollback = () => {
@@ -132,7 +146,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <BackupImportCard db={db} onRestoreSuccess={handleRestoreSuccess} />
           <SnapshotRollbackCard db={db} />
           <GitHubConfigCard db={db} />
-          <GitHubSyncCard db={db} />
+          <GitHubSyncCard db={db} onPullSuccess={handleRemotePullSuccess} />
           <PwaStatusCard />
           <StoragePersistenceCard />
 
@@ -180,12 +194,43 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         )}
       </div>
 
-      <Tabs defaultActiveKey={defaultActiveTab} items={items} />
+      <Tabs
+        activeKey={activeTab}
+        onChange={(k) => setActiveTab(k as 'capacity' | 'data')}
+        items={items}
+      />
 
       <ResetDbModal
         open={resetModalOpen}
         onClose={() => setResetModalOpen(false)}
       />
+
+      {remotePayload && (
+        <ImportPreviewModal
+          open={remotePreviewOpen}
+          payload={remotePayload}
+          rawFileName="github:backup.enc.json"
+          db={db}
+          onClose={() => {
+            setRemotePreviewOpen(false);
+            setRemotePayload(null);
+            setRemoteSha(null);
+            setRemoteExportedAt(null);
+          }}
+          onRestoreSuccess={async () => {
+            setShowPostRestoreBanner(true);
+            if (remoteSha) {
+              await db.settings.put({ key: 'last_synced_sha', value: remoteSha });
+            }
+            if (remoteExportedAt) {
+              await db.settings.put({ key: 'last_synced_at', value: remoteExportedAt });
+            }
+            announceToScreenReader(
+              'Khôi phục dữ liệu từ GitHub thành công. Bản snapshot an toàn đã được lưu.'
+            );
+          }}
+        />
+      )}
     </div>
   );
 };

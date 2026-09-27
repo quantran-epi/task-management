@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Card, Button, Space, Tag, Typography, notification, Descriptions } from 'antd';
 import {
   CloudUploadOutlined,
+  CloudDownloadOutlined,
   CloudSyncOutlined,
   ApiOutlined,
   SyncOutlined,
@@ -15,27 +16,40 @@ import { useGitHubAuth } from '../../context/GitHubAuthContext';
 import { testGitHubConnection } from '../../services/github/githubApi';
 import {
   executeGitHubBackupPush,
+  executeGitHubBackupPull,
+  downloadRawEncryptedBackup,
   GitHubSyncConflictError,
+  GitHubPullError,
 } from '../../services/github/githubSyncService';
 import { GitHubConflictModal } from './GitHubConflictModal';
+import { GitHubPassphraseModal } from './GitHubPassphraseModal';
 import { announceToScreenReader } from '../common/AriaLiveRegion';
-import type { GitHubConfig } from '../../services/github/types';
+import type { GitHubConfig, PullBackupResult } from '../../services/github/types';
 
 const { Paragraph, Text } = Typography;
 
 export interface GitHubSyncCardProps {
   db?: TaskPlannerDatabase;
+  onPullSuccess?: (result: PullBackupResult) => void;
 }
 
-export const GitHubSyncCard: React.FC<GitHubSyncCardProps> = ({ db = defaultDb }) => {
+export const GitHubSyncCard: React.FC<GitHubSyncCardProps> = ({
+  db = defaultDb,
+  onPullSuccess,
+}) => {
   const [isPushing, setIsPushing] = useState(false);
+  const [isPulling, setIsPulling] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'connected' | 'error'>('idle');
   const [conflictModalOpen, setConflictModalOpen] = useState(false);
   const [conflictRemoteSha, setConflictRemoteSha] = useState<string | undefined>(undefined);
   const [conflictLocalSha, setConflictLocalSha] = useState<string | undefined>(undefined);
 
-  const { token, passphrase, hasToken, hasPassphrase } = useGitHubAuth();
+  const [passphraseModalOpen, setPassphraseModalOpen] = useState(false);
+  const [passphraseError, setPassphraseError] = useState<string | undefined>(undefined);
+  const [rawEncryptedJson, setRawEncryptedJson] = useState<string | undefined>(undefined);
+
+  const { token, passphrase, setPassphrase, hasToken, hasPassphrase } = useGitHubAuth();
 
   // Load repository settings and sync metadata from IndexedDB
   const syncData = useLiveQuery(async () => {
@@ -154,6 +168,98 @@ export const GitHubSyncCard: React.FC<GitHubSyncCardProps> = ({ db = defaultDb }
     }
   };
 
+  const handlePull = async (overridePassphrase?: string) => {
+    if (!token) {
+      notification.warning({
+        message: 'Chưa có Token',
+        description: 'Vui lòng nhập GitHub Personal Access Token trong cấu hình.',
+      });
+      return;
+    }
+    if (!isConfigured) {
+      notification.warning({
+        message: 'Chưa cấu hình kho lưu trữ',
+        description: 'Vui lòng điền thông tin chủ sở hữu và tên kho lưu trữ GitHub.',
+      });
+      return;
+    }
+
+    const effectivePassphrase = overridePassphrase ?? passphrase ?? undefined;
+
+    setIsPulling(true);
+    announceToScreenReader('Đang tải bản sao lưu từ GitHub...');
+
+    try {
+      const config: GitHubConfig = { owner, repo, branch };
+      const result = await executeGitHubBackupPull(config, token, effectivePassphrase);
+
+      if (effectivePassphrase) {
+        setPassphrase(effectivePassphrase);
+      }
+
+      setPassphraseModalOpen(false);
+      setPassphraseError(undefined);
+      setRawEncryptedJson(undefined);
+
+      const shortSha = result.remoteSha.slice(0, 7);
+      notification.success({
+        message: 'Tải từ GitHub thành công',
+        description: `Bản sao lưu đã được giải mã và sẵn sàng để xem trước (SHA: ${shortSha}).`,
+      });
+      announceToScreenReader(`Tải từ GitHub thành công. SHA: ${shortSha}.`);
+      setTestStatus('connected');
+
+      if (onPullSuccess) {
+        onPullSuccess(result);
+      }
+    } catch (err: unknown) {
+      if (err instanceof GitHubPullError) {
+        if (err.code === 'PASSPHRASE_REQUIRED') {
+          setRawEncryptedJson(err.rawEncryptedJson);
+          setPassphraseError(undefined);
+          setPassphraseModalOpen(true);
+          announceToScreenReader('Cần nhập mật khẩu để giải mã bản sao lưu từ GitHub.');
+          return;
+        }
+        if (err.code === 'DECRYPT_FAILED') {
+          setRawEncryptedJson(err.rawEncryptedJson);
+          setPassphraseError('Mật khẩu giải mã không chính xác hoặc tệp sao lưu đã bị thay đổi.');
+          setPassphraseModalOpen(true);
+          announceToScreenReader('Mật khẩu giải mã không chính xác hoặc tệp sao lưu đã bị thay đổi.');
+          return;
+        }
+        if (err.code === 'NOT_FOUND') {
+          notification.info({
+            message: 'Chưa có bản sao lưu trên GitHub',
+            description: 'Tệp sao lưu .task-management/backup.enc.json chưa tồn tại trên kho lưu trữ.',
+          });
+          announceToScreenReader('Chưa có bản sao lưu trên GitHub.');
+          return;
+        }
+        if (err.code === 'INVALID_ENVELOPE' || err.code === 'VALIDATION_FAILED') {
+          setRawEncryptedJson(err.rawEncryptedJson);
+          setPassphraseError(err.message);
+          setPassphraseModalOpen(true);
+          notification.error({
+            message: 'Bản sao lưu không hợp lệ',
+            description: err.message,
+          });
+          announceToScreenReader(`Bản sao lưu từ GitHub không hợp lệ: ${err.message}`);
+          return;
+        }
+      }
+
+      const errorMsg = err instanceof Error ? err.message : 'Đã xảy ra lỗi không xác định';
+      notification.error({
+        message: 'Tải từ GitHub thất bại',
+        description: errorMsg,
+      });
+      announceToScreenReader(`Tải từ GitHub thất bại: ${errorMsg}`);
+    } finally {
+      setIsPulling(false);
+    }
+  };
+
   const renderConnectionTag = () => {
     if (testStatus === 'connected') {
       return (
@@ -230,16 +336,25 @@ export const GitHubSyncCard: React.FC<GitHubSyncCardProps> = ({ db = defaultDb }
             type="primary"
             icon={<CloudUploadOutlined />}
             loading={isPushing}
-            disabled={!hasToken || !hasPassphrase || !isConfigured || isTesting}
+            disabled={!hasToken || !hasPassphrase || !isConfigured || isTesting || isPulling}
             onClick={() => handlePush(false)}
           >
             Đẩy lên GitHub
           </Button>
 
           <Button
+            icon={<CloudDownloadOutlined />}
+            loading={isPulling}
+            disabled={!hasToken || !isConfigured || isPushing || isTesting}
+            onClick={() => handlePull()}
+          >
+            Tải từ GitHub
+          </Button>
+
+          <Button
             icon={<ApiOutlined />}
             loading={isTesting}
-            disabled={!hasToken || !isConfigured || isPushing}
+            disabled={!hasToken || !isConfigured || isPushing || isPulling}
             onClick={handleTestConnection}
           >
             Kiểm tra kết nối
@@ -258,10 +373,24 @@ export const GitHubSyncCard: React.FC<GitHubSyncCardProps> = ({ db = defaultDb }
         }}
         onPullAndPreview={() => {
           setConflictModalOpen(false);
-          notification.info({
-            message: 'Tải và xem trước bản remote',
-            description: 'Tính năng xem trước và khôi phục từ xa sẽ sẵn sàng trong bước tiếp theo.',
-          });
+          handlePull();
+        }}
+      />
+
+      <GitHubPassphraseModal
+        open={passphraseModalOpen}
+        error={passphraseError}
+        rawEncryptedJson={rawEncryptedJson}
+        loading={isPulling}
+        onSubmit={(p) => handlePull(p)}
+        onCancel={() => {
+          setPassphraseModalOpen(false);
+          setPassphraseError(undefined);
+        }}
+        onDownloadRaw={() => {
+          if (rawEncryptedJson) {
+            downloadRawEncryptedBackup(rawEncryptedJson);
+          }
         }}
       />
     </>

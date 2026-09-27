@@ -74,7 +74,7 @@ describe('PlannerView & App Route Integration (PLAN-03, PLAN-04, UX-02, UX-03, U
     fireEvent.click(prevBtn);
 
     expect(await screen.findByText('28/09 – 04/10/2026')).toBeInTheDocument();
-    expect(screen.getByTestId('day-column-2026-09-28')).toBeInTheDocument();
+    expect(await screen.findByTestId('day-column-2026-09-28')).toBeInTheDocument();
   });
 
   it('navigates weeks using keyboard shortcuts (Alt+ArrowRight / Alt+ArrowLeft)', async () => {
