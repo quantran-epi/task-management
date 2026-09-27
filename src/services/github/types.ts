@@ -1,3 +1,5 @@
+import type { BackupEnvelope } from '../../types/backup';
+
 export interface GitHubConfig {
   owner: string;
   repo: string;
@@ -16,6 +18,13 @@ export interface UploadBackupResult {
   sha: string;
   commitSha: string;
   exportedAt: string;
+}
+
+export interface PullBackupResult {
+  payload: BackupEnvelope;
+  remoteSha: string;
+  exportedAt: string;
+  rawEncryptedJson: string;
 }
 
 export type SyncStatus = 'idle' | 'testing' | 'pushing' | 'pulling' | 'conflict' | 'error';

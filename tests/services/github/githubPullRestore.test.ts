@@ -37,10 +37,9 @@ describe('githubPullRestore service', () => {
     tables: {
       projects: [
         {
-          id: 'proj-1',
+          id: '11111111-1111-4111-8111-111111111111',
           name: 'Project One',
-          color: '#1677ff',
-          targetDate: '2026-12-31',
+          status: 'Open',
           createdAt: '2026-09-27T10:00:00.000Z',
           updatedAt: '2026-09-27T10:00:00.000Z',
         },
@@ -182,10 +181,10 @@ describe('githubPullRestore service', () => {
         ...validPayload.tables,
         milestones: [
           {
-            id: 'm-orphan',
-            projectId: 'non-existent-project-id',
+            id: '22222222-2222-4222-8222-222222222222',
+            projectId: '33333333-3333-4333-8333-333333333333',
             name: 'Orphan milestone',
-            targetDate: '2026-12-31',
+            status: 'Open',
             createdAt: '2026-09-27T10:00:00.000Z',
             updatedAt: '2026-09-27T10:00:00.000Z',
           },
@@ -216,15 +215,24 @@ describe('githubPullRestore service', () => {
   });
 
   it('Test 6: downloadRawEncryptedBackup creates browser download with file name backup-corrupted.enc.json', () => {
-    const appendSpy = vi.spyOn(document.body, 'appendChild');
-    const removeSpy = vi.spyOn(document.body, 'removeChild');
+    const createObjectURLMock = vi.fn().mockReturnValue('blob:http://localhost/mock-uuid');
+    const revokeObjectURLMock = vi.fn();
+    globalThis.URL.createObjectURL = createObjectURLMock;
+    globalThis.URL.revokeObjectURL = revokeObjectURLMock;
 
     const clickMock = vi.fn();
-    const createElementSpy = vi.spyOn(document, 'createElement').mockReturnValue({
-      set href(val: string) {},
-      set download(val: string) {},
-      click: clickMock,
-    } as unknown as HTMLAnchorElement);
+    const originalCreateElement = document.createElement.bind(document);
+    const createElementSpy = vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
+      if (tagName === 'a') {
+        const anchor = originalCreateElement('a');
+        anchor.click = clickMock;
+        return anchor;
+      }
+      return originalCreateElement(tagName);
+    });
+
+    const appendSpy = vi.spyOn(document.body, 'appendChild');
+    const removeSpy = vi.spyOn(document.body, 'removeChild');
 
     const rawJson = '{"app":"personal-task-planner","format":"encrypted-v1"}';
     downloadRawEncryptedBackup(rawJson);
@@ -233,6 +241,7 @@ describe('githubPullRestore service', () => {
     expect(appendSpy).toHaveBeenCalled();
     expect(clickMock).toHaveBeenCalled();
     expect(removeSpy).toHaveBeenCalled();
+    expect(revokeObjectURLMock).toHaveBeenCalledWith('blob:http://localhost/mock-uuid');
 
     createElementSpy.mockRestore();
     appendSpy.mockRestore();
