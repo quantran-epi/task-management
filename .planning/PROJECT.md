@@ -12,6 +12,16 @@ Make planned work realistically fit available time by exposing overload early an
 
 Shipped **v1.0 MVP** on 2026-09-27 with all 8 foundational phases complete (28 plans, 69 tasks, 59/59 requirements satisfied, 0 audit gaps). Codebase comprises 14,384 LOC TypeScript/React across 324 files with 386 passing automated tests. Deployed as an installable PWA on GitHub Pages with offline IndexedDB storage and encrypted GitHub backup sync.
 
+## Current Milestone: v1.1 Banking IT Enhancements & Jira Integration
+
+**Goal:** Enhance application for banking IT development environment (SHB) with operational ownership fields, Jira Cloud connectivity, date-range task search, and advanced workload analytics.
+
+**Target features:**
+- SHB Domain Fields: Ops Owner and Business Analyst (BA) fields at Project, Milestone, and Task levels (supporting multiple people names).
+- Jira Cloud Integration: Direct API token auth with optional CORS proxy config, connection testing, issue creation from tasks, and status transition syncing.
+- Date-Range Task Search: Search and filter tasks by execution/planned date range and multi-criteria filters (dates, status, project, Ops Owner, BA).
+- Enhanced Analytics Dashboard: Time & completion trends, milestone burndown & status distribution, and Ops Owner / BA workload allocation.
+
 ## Requirements
 
 ### Validated

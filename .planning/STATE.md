@@ -1,19 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: Awaiting next milestone
-stopped_at: Completed 08-03-PLAN.md
-last_updated: "2026-09-27T15:03:16.484Z"
-last_activity: 2026-09-27 — Milestone v1.0 completed and archived
+milestone: v1.1
+milestone_name: Banking IT Enhancements & Jira Integration
+status: planning
+last_updated: "2026-09-27T16:01:11.161Z"
+last_activity: 2026-09-27
 progress:
-  total_phases: 8
-  completed_phases: 8
-  total_plans: 28
-  completed_plans: 28
-  percent: 100
-current_phase: 08
-current_phase_name: optional-encrypted-github-backup
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -27,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-09-27)
 
 ## Current Position
 
-Phase: Milestone v1.0 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-09-27 — Milestone v1.0 completed and archived
+Status: Defining requirements
+Last activity: 2026-09-27 — Milestone v1.1 started
 
 ## Performance Metrics
 
