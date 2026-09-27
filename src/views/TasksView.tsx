@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { type InputRef } from 'antd';
+import { Button, Modal, Select, Typography, type InputRef } from 'antd';
+import { ThunderboltOutlined } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb } from '../db';
 import { getAllProjects } from '../db/repositories/projectRepo';
@@ -9,9 +10,13 @@ import { TaskFilterBar } from '../components/tasks/TaskFilterBar';
 import { TaskTable } from '../components/tasks/TaskTable';
 import { BatchActionBar } from '../components/tasks/BatchActionBar';
 import { TaskDrawer } from '../components/tasks/TaskDrawer';
+import { FeasibilityModal } from '../components/planner/FeasibilityModal';
 import { useTaskFilters } from '../hooks/useTaskFilters';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import type { TaskPlannerDatabase } from '../db';
+import type { Task } from '../types/models';
+
+const { Text } = Typography;
 
 export interface TasksViewProps {
   db?: TaskPlannerDatabase;
@@ -21,6 +26,10 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb }) => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [feasibilityTask, setFeasibilityTask] = useState<Task | null>(null);
+  const [feasibilityOpen, setFeasibilityOpen] = useState(false);
+  const [taskSelectModalOpen, setTaskSelectModalOpen] = useState(false);
+  const [selectedTaskIdForFeasibility, setSelectedTaskIdForFeasibility] = useState<string | undefined>(undefined);
   const searchInputRef = useRef<InputRef>(null);
   const quickAddInputRef = useRef<InputRef>(null);
 
@@ -28,6 +37,37 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb }) => {
   const tasks = useLiveQuery(() => db.tasks.toArray(), [db]) ?? [];
   const projects = useLiveQuery(() => getAllProjects(db), [db]) ?? [];
   const milestones = useLiveQuery(() => getAllMilestones(db), [db]) ?? [];
+
+  const handleOpenFeasibility = async (task?: Task) => {
+    if (task) {
+      setFeasibilityTask(task);
+      setFeasibilityOpen(true);
+      return;
+    }
+    if (selectedRowKeys.length === 1) {
+      const selectedTask = tasks.find((t) => t.id === selectedRowKeys[0]);
+      if (selectedTask) {
+        setFeasibilityTask(selectedTask);
+        setFeasibilityOpen(true);
+        return;
+      }
+    }
+    const all = await db.tasks.toArray();
+    const active = all
+      .filter((t) => t.status !== 'Done' && t.status !== 'Cancelled')
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const tasksWithEst = active.filter((t) => t.estimateMinutes > 0);
+    if (tasksWithEst.length === 1) {
+      setFeasibilityTask(tasksWithEst[0]!);
+      setFeasibilityOpen(true);
+    } else if (tasksWithEst.length > 1) {
+      setSelectedTaskIdForFeasibility(tasksWithEst[0]?.id);
+      setTaskSelectModalOpen(true);
+    } else if (tasks.length > 0) {
+      setSelectedTaskIdForFeasibility(tasks[0]?.id);
+      setTaskSelectModalOpen(true);
+    }
+  };
 
   // Filtering & sorting pipeline
   const {
@@ -77,12 +117,24 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb }) => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* 1. Fast Task Creation Bar */}
-      <QuickAddBar
-        projects={projects}
-        db={db}
-        inputRef={quickAddInputRef}
-      />
+      {/* 1. Fast Task Creation Bar + Toolbar Action */}
+      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+        <div style={{ flex: 1 }}>
+          <QuickAddBar
+            projects={projects}
+            db={db}
+            inputRef={quickAddInputRef}
+          />
+        </div>
+        <Button
+          icon={<ThunderboltOutlined />}
+          onClick={() => handleOpenFeasibility()}
+          aria-label="Auto-Distribute Tasks"
+          style={{ height: 40 }}
+        >
+          Auto-Distribute
+        </Button>
+      </div>
 
       {/* 2. Filter & Horizon Toolbar */}
       <TaskFilterBar
@@ -120,6 +172,48 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb }) => {
         taskId={drawerTaskId}
         open={drawerOpen}
         onClose={handleCloseDrawer}
+        db={db}
+      />
+
+      {/* Task Selector Modal for Feasibility */}
+      <Modal
+        title="Select Task for Auto-Distribution"
+        open={taskSelectModalOpen}
+        onCancel={() => setTaskSelectModalOpen(false)}
+        onOk={() => {
+          const chosen = tasks.find((t) => t.id === selectedTaskIdForFeasibility);
+          if (chosen) {
+            setFeasibilityTask(chosen);
+            setTaskSelectModalOpen(false);
+            setFeasibilityOpen(true);
+          }
+        }}
+        okText="Continue"
+        destroyOnClose
+      >
+        <div style={{ marginTop: 12, marginBottom: 8 }}>
+          <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+            Choose a task to evaluate capacity and preview workload distribution:
+          </Text>
+          <Select
+            style={{ width: '100%' }}
+            value={selectedTaskIdForFeasibility}
+            onChange={setSelectedTaskIdForFeasibility}
+            options={tasks.map((t) => ({
+              value: t.id,
+              label: `${t.name} (${t.estimateMinutes > 0 ? `${t.estimateMinutes}m` : 'no estimate'})`,
+            }))}
+            placeholder="Select a task"
+          />
+        </div>
+      </Modal>
+
+      {/* Feasibility & Workload Distribution Modal */}
+      <FeasibilityModal
+        open={feasibilityOpen}
+        task={feasibilityTask ?? undefined}
+        onCancel={() => setFeasibilityOpen(false)}
+        onSuccess={() => setFeasibilityOpen(false)}
         db={db}
       />
     </div>

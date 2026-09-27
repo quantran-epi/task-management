@@ -43,10 +43,10 @@ describe('Feasibility Integration (CALC-01, CALC-06, D-13, D-16)', () => {
     fireEvent.click(triggerBtn);
 
     expect(await screen.findByText('Task Feasibility & Workload Distribution')).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: 'Apply Allocations' })).toBeInTheDocument();
+    await screen.findByTestId('feasibility-alert');
+    const applyBtn = await screen.findByRole('button', { name: 'Apply Allocations' });
 
     // 3. Click Apply Allocations
-    const applyBtn = screen.getByRole('button', { name: 'Apply Allocations' });
     fireEvent.click(applyBtn);
 
     // 4. Verify modal closes and allocations committed to database
@@ -65,7 +65,7 @@ describe('Feasibility Integration (CALC-01, CALC-06, D-13, D-16)', () => {
   });
 
   it('D-13 & D-16: launches FeasibilityModal from PlannerView toolbar and updates weekly grid board reactively', async () => {
-    const task = await createTask(
+    await createTask(
       {
         name: 'Planner Grid Feasibility Task',
         estimateMinutes: 120, // 2 hours
@@ -87,6 +87,7 @@ describe('Feasibility Integration (CALC-01, CALC-06, D-13, D-16)', () => {
 
     // 3. Feasibility modal opens
     expect(await screen.findByText('Task Feasibility & Workload Distribution')).toBeInTheDocument();
+    await screen.findByTestId('feasibility-alert');
     const applyBtn = await screen.findByRole('button', { name: 'Apply Allocations' });
 
     // 4. Apply allocations
@@ -94,7 +95,8 @@ describe('Feasibility Integration (CALC-01, CALC-06, D-13, D-16)', () => {
 
     // 5. Verify card appears on planner board
     await waitFor(() => {
-      expect(screen.getByText('Planner Grid Feasibility Task')).toBeInTheDocument();
+      const cards = screen.getAllByText('Planner Grid Feasibility Task');
+      expect(cards.length).toBeGreaterThan(0);
     });
   });
 

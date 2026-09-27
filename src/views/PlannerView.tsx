@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Button, Switch, Space, Typography, Grid } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { Button, Switch, Space, Typography, Grid, Modal, Select } from 'antd';
+import { PlusOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import { useWeeklyPlanner } from '../hooks/useWeeklyPlanner';
 import { WeekNavigator } from '../components/planner/WeekNavigator';
 import { DayColumn } from '../components/planner/DayColumn';
 import { AllocationModal } from '../components/planner/AllocationModal';
 import { CapacitySettingsModal } from '../components/planner/CapacitySettingsModal';
+import { FeasibilityModal } from '../components/planner/FeasibilityModal';
 import { TaskDrawer } from '../components/tasks/TaskDrawer';
 import { getTodayDateString } from '../utils/date';
+import type { Task } from '../types/models';
 
 dayjs.extend(isoWeek);
 
@@ -33,11 +36,49 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
   const [allocationModalDate, setAllocationModalDate] = useState<string | undefined>(undefined);
   const [capacityModalOpen, setCapacityModalOpen] = useState<boolean>(false);
   const [taskDrawerTaskId, setTaskDrawerTaskId] = useState<string | undefined>(undefined);
+  const [feasibilityTask, setFeasibilityTask] = useState<Task | null>(null);
+  const [feasibilityModalOpen, setFeasibilityModalOpen] = useState<boolean>(false);
+  const [taskSelectModalOpen, setTaskSelectModalOpen] = useState<boolean>(false);
+  const [selectedTaskIdForFeasibility, setSelectedTaskIdForFeasibility] = useState<string | undefined>(undefined);
 
   const screens = Grid.useBreakpoint();
   const isMobile = screens.md === false;
 
   const weeklyState = useWeeklyPlanner(currentDate, db);
+
+  const activeTasks = useLiveQuery(
+    async () => {
+      const all = await db.tasks.toArray();
+      return all
+        .filter((t) => t.status !== 'Done' && t.status !== 'Cancelled')
+        .sort((a, b) => a.name.localeCompare(b.name));
+    },
+    [db],
+    []
+  );
+
+  const handleOpenFeasibility = async (task?: Task) => {
+    if (task) {
+      setFeasibilityTask(task);
+      setFeasibilityModalOpen(true);
+      return;
+    }
+    const all = await db.tasks.toArray();
+    const active = all
+      .filter((t) => t.status !== 'Done' && t.status !== 'Cancelled')
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const tasksWithEst = active.filter((t) => t.estimateMinutes > 0);
+    if (tasksWithEst.length === 1) {
+      setFeasibilityTask(tasksWithEst[0]!);
+      setFeasibilityModalOpen(true);
+    } else if (tasksWithEst.length > 1) {
+      setSelectedTaskIdForFeasibility(tasksWithEst[0]?.id);
+      setTaskSelectModalOpen(true);
+    } else if (active.length > 0) {
+      setSelectedTaskIdForFeasibility(active[0]?.id);
+      setTaskSelectModalOpen(true);
+    }
+  };
 
   // Keyboard navigation shortcuts: Alt+ArrowLeft, Alt+ArrowRight, Alt+T, KeyP, KeyN (D-02)
   useEffect(() => {
@@ -123,6 +164,14 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
           >
             + Allocate Task
           </Button>
+
+          <Button
+            icon={<ThunderboltOutlined />}
+            onClick={() => handleOpenFeasibility()}
+            aria-label="Auto-Distribute Tasks"
+          >
+            Auto-Distribute
+          </Button>
         </Space>
       </div>
 
@@ -164,6 +213,48 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
       <CapacitySettingsModal
         open={capacityModalOpen}
         onCancel={() => setCapacityModalOpen(false)}
+        db={db}
+      />
+
+      {/* Task Selector Modal for Feasibility */}
+      <Modal
+        title="Select Task for Auto-Distribution"
+        open={taskSelectModalOpen}
+        onCancel={() => setTaskSelectModalOpen(false)}
+        onOk={() => {
+          const chosen = (activeTasks ?? []).find((t) => t.id === selectedTaskIdForFeasibility);
+          if (chosen) {
+            setFeasibilityTask(chosen);
+            setTaskSelectModalOpen(false);
+            setFeasibilityModalOpen(true);
+          }
+        }}
+        okText="Continue"
+        destroyOnClose
+      >
+        <div style={{ marginTop: 12, marginBottom: 8 }}>
+          <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+            Choose a task to evaluate capacity and preview workload distribution:
+          </Text>
+          <Select
+            style={{ width: '100%' }}
+            value={selectedTaskIdForFeasibility}
+            onChange={setSelectedTaskIdForFeasibility}
+            options={(activeTasks ?? []).map((t) => ({
+              value: t.id,
+              label: `${t.name} (${t.estimateMinutes > 0 ? `${t.estimateMinutes}m` : 'no estimate'})`,
+            }))}
+            placeholder="Select a task"
+          />
+        </div>
+      </Modal>
+
+      {/* Feasibility & Workload Distribution Modal (D-13, D-16) */}
+      <FeasibilityModal
+        open={feasibilityModalOpen}
+        task={feasibilityTask ?? undefined}
+        onCancel={() => setFeasibilityModalOpen(false)}
+        onSuccess={() => setFeasibilityModalOpen(false)}
         db={db}
       />
 
