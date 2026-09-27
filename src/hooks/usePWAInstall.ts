@@ -85,13 +85,19 @@ export function usePWAInstall(): UsePWAInstallReturn {
 
   const promptInstall = useCallback(async (): Promise<'accepted' | 'dismissed' | null> => {
     if (!installPrompt) return null;
-    await installPrompt.prompt();
-    const choice = await installPrompt.userChoice;
-    if (choice.outcome === 'accepted') {
-      setIsInstalled(true);
+    try {
+      await installPrompt.prompt();
+      const choice = await installPrompt.userChoice;
+      if (choice.outcome === 'accepted') {
+        setIsInstalled(true);
+      }
+      return choice.outcome;
+    } catch (err) {
+      console.warn('Failed to prompt PWA install:', err);
+      return null;
+    } finally {
       setInstallPrompt(null);
     }
-    return choice.outcome;
   }, [installPrompt]);
 
   const isInstallable = !isStandalone && !isInstalled && (installPrompt !== null || isIos);
