@@ -226,7 +226,7 @@ Plans:
 
 **Wave 4** *(gap closure)*
 
-- [ ] 07-04-PLAN.md — Wire active form reload guard, safe install prompt rejection handling, and singleton service worker update state (PWA-01, PWA-02, PWA-03, PWA-06)
+- [x] 07-04-PLAN.md — Wire active form reload guard, safe install prompt rejection handling, and singleton service worker update state (PWA-01, PWA-02, PWA-03, PWA-06)
 
 ### Phase 8: Optional Encrypted GitHub Backup
 
@@ -259,5 +259,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 4. Feasibility Engine & Workload Distribution | 3/3 | Complete   | 2026-09-27 |
 | 5. Actionable Dashboard & Workload Forecasting | 4/4 | Complete   | 2026-09-27 |
 | 6. Safe Local Backup & Restore | 3/3 | Complete   | 2026-09-27 |
-| 7. PWA Offline Capability & Lifecycle Hardening | 3/4 | In Progress | - |
+| 7. PWA Offline Capability & Lifecycle Hardening | 4/4 | Complete | 2026-09-27 |
 | 8. Optional Encrypted GitHub Backup | 0/TBD | Not started | - |
