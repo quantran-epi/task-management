@@ -27,3 +27,12 @@ global.ResizeObserver = class ResizeObserver {
   disconnect() {}
 };
 
+// JSDOM Web Crypto subtle shim using Node 24 native Web Crypto
+if (typeof window !== 'undefined' && window.crypto && !window.crypto.subtle && globalThis.crypto?.subtle) {
+  Object.defineProperty(window.crypto, 'subtle', {
+    value: globalThis.crypto.subtle,
+    writable: true,
+    configurable: true,
+  });
+}
+
