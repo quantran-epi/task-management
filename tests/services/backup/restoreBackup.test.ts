@@ -1,8 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TaskPlannerDatabase } from '../../../src/db/index';
-import { restoreBackupPayload, rollbackToSnapshot } from '../../../src/services/backup/restoreBackup';
-import type { BackupEnvelope } from '../../../src/types/backup';
+import { restoreBackupPayload, rollbackToSnapshot, downloadSnapshotFile } from '../../../src/services/backup/restoreBackup';
+import type { BackupEnvelope, SnapshotData } from '../../../src/types/backup';
+import * as exportBackupModule from '../../../src/services/backup/exportBackup';
 import { APP_MARKER, CURRENT_SCHEMA_VERSION } from '../../../src/services/backup/exportBackup';
+import { validateBackupPayload } from '../../../src/services/backup/validateBackup';
 
 describe('restoreBackupPayload & rollbackToSnapshot', () => {
   let testDb: TaskPlannerDatabase;
@@ -105,5 +107,89 @@ describe('restoreBackupPayload & rollbackToSnapshot', () => {
     const projects = await testDb.projects.toArray();
     expect(projects).toHaveLength(1);
     expect(projects[0]?.name).toBe('Pre-Restore Project');
+  });
+});
+
+describe('downloadSnapshotFile', () => {
+  it('wraps snapshot in valid BackupEnvelope and triggers download with matching filename and payload', () => {
+    const triggerDownloadSpy = vi.spyOn(exportBackupModule, 'triggerDownload').mockImplementation(() => {});
+
+    const mockSnapshot: SnapshotData = {
+      timestamp: '2026-09-27T14:30:00.000Z',
+      tables: {
+        projects: [
+          {
+            id: '22222222-2222-4222-8222-222222222222',
+            name: 'Snapshot Project',
+            status: 'Open',
+            createdAt: '2026-09-27T10:00:00.000Z',
+            updatedAt: '2026-09-27T10:00:00.000Z',
+          },
+        ],
+        milestones: [
+          {
+            id: '33333333-3333-4333-8333-333333333333',
+            projectId: '22222222-2222-4222-8222-222222222222',
+            name: 'Snapshot Milestone',
+            status: 'Open',
+            deadline: '2026-10-01',
+            createdAt: '2026-09-27T10:00:00.000Z',
+            updatedAt: '2026-09-27T10:00:00.000Z',
+          },
+        ],
+        tasks: [
+          {
+            id: '44444444-4444-4444-8444-444444444444',
+            projectId: '22222222-2222-4222-8222-222222222222',
+            milestoneId: '33333333-3333-4333-8333-333333333333',
+            name: 'Snapshot Task',
+            status: 'Open',
+            priority: 'Medium',
+            progress: 0,
+            estimateMinutes: 60,
+            createdAt: '2026-09-27T10:00:00.000Z',
+            updatedAt: '2026-09-27T10:00:00.000Z',
+          },
+        ],
+        capacityRules: [
+          {
+            id: '55555555-5555-4555-8555-555555555555',
+            dayOfWeek: 1,
+            workMinutes: 480,
+          },
+        ],
+        capacityOverrides: [],
+        plannedAllocations: [],
+      },
+      counts: {
+        projects: 1,
+        milestones: 1,
+        tasks: 1,
+        capacityRules: 1,
+        capacityOverrides: 0,
+        plannedAllocations: 0,
+      },
+    };
+
+    downloadSnapshotFile(mockSnapshot);
+
+    expect(triggerDownloadSpy).toHaveBeenCalledTimes(1);
+    const [content, fileName] = triggerDownloadSpy.mock.calls[0] as [string, string];
+
+    expect(fileName).toMatch(/^task-planner-snapshot-.*\.json$/);
+    expect(fileName).toContain('2026-09-27T14-30-00-000Z');
+
+    const parsed = JSON.parse(content);
+    expect(parsed.app).toBe(APP_MARKER);
+    expect(parsed.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+    expect(parsed.exportedAt).toBe(mockSnapshot.timestamp);
+    expect(parsed.tables).toEqual(mockSnapshot.tables);
+    expect(parsed.counts).toEqual(mockSnapshot.counts);
+
+    const validationResult = validateBackupPayload(parsed);
+    expect(validationResult.valid).toBe(true);
+    expect(validationResult.errors).toHaveLength(0);
+
+    triggerDownloadSpy.mockRestore();
   });
 });
