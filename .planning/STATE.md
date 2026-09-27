@@ -4,12 +4,12 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 5 UI-SPEC approved
-last_updated: "2026-09-27T05:13:51.477Z"
-last_activity: 2026-09-27 -- Phase 04 Plan 02 completed
+last_updated: "2026-09-27T05:27:24.240Z"
+last_activity: 2026-09-27 -- Phase 05 execution started
 progress:
   total_phases: 8
   completed_phases: 4
-  total_plans: 14
+  total_plans: 18
   completed_plans: 14
   percent: 50
 ---
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-26)
 
 **Core value:** Make planned work realistically fit available time by exposing overload early and suggesting feasible daily workload distributions.
-**Current focus:** Phase 04 — feasibility-engine-workload-distribution
+**Current focus:** Phase 05 — actionable-dashboard-workload-forecasting
 
 ## Current Position
 
-Phase: 04 (feasibility-engine-workload-distribution) — EXECUTING
-Plan: 3 of 3
-Status: Ready to execute
-Last activity: 2026-09-27 -- Phase 04 Plan 02 completed
+Phase: 05 (actionable-dashboard-workload-forecasting) — EXECUTING
+Plan: 2 of 4
+Status: Executing Phase 05
+Last activity: 2026-09-27 -- Completed 05-01-PLAN.md
 
 Progress: [██████████] 100% (Phase 01)
 Progress: [██████████] 100% (Phase 02)
@@ -73,6 +73,7 @@ Progress: [██████████] 100% (Phase 02)
 | Phase 04 P01 | 12m | 3 tasks | 3 files |
 | Phase 04 P02 | 18m | 2 tasks | 5 files |
 | Phase 04 P03 | 15m | 2 tasks | 5 files |
+| Phase 05 P01 | 10m | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -127,6 +128,9 @@ Decisions logged in PROJECT.md Key Decisions table:
 - [Phase 04]: Implemented atomic multi-record commit inside Dexie transaction calling upsertAllocation for each selected candidate with merged existing minutes (D-08, D-16)
 - [Phase ?]: Guarded FeasibilityModal live queries to only execute when open=true, avoiding background query overhead when closed
 - [Phase 04]: Implemented on-demand direct db.tasks queries in PlannerView and TasksView toolbar triggers to guarantee immediate task resolution
+- [Phase 05]: Extended AppRoute union with 'dashboard' as primary route
+- [Phase 05]: Sanitized hash route date parameter via strict isValidCalendarDate check to prevent tampering (T-05-01)
+- [Phase 05]: Whitelisted hash route against AppRoute union defaulting to 'dashboard' (T-05-02)
 
 ### Pending Todos
 

@@ -156,7 +156,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 05-01-PLAN.md — Define dashboard types, pure domain utilities, and hash route query parameter parsing (DASH-01, DASH-04, DASH-05, DASH-06)
+- [x] 05-01-PLAN.md — Define dashboard types, pure domain utilities, and hash route query parameter parsing (DASH-01, DASH-04, DASH-05, DASH-06) (completed 2026-09-27)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -229,7 +229,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 2. Work Hierarchy & Fast Task Management | 2/3 | In Progress|  |
 | 3. Capacity Model & Daily Planning Ledger | 4/4 | Complete   | 2026-09-26 |
 | 4. Feasibility Engine & Workload Distribution | 3/3 | Complete   | 2026-09-27 |
-| 5. Actionable Dashboard & Workload Forecasting | 0/4 | Not started | - |
+| 5. Actionable Dashboard & Workload Forecasting | 1/4 | In Progress | - |
 | 6. Safe Local Backup & Restore | 0/TBD | Not started | - |
 | 7. PWA Offline Capability & Lifecycle Hardening | 0/TBD | Not started | - |
 | 8. Optional Encrypted GitHub Backup | 0/TBD | Not started | - |
