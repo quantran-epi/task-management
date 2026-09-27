@@ -13,16 +13,19 @@ import {
   Popover,
   Empty,
   message,
+  Tooltip,
 } from 'antd';
 import {
   ClockCircleOutlined,
   DeleteOutlined,
   EditOutlined,
   PlusOutlined,
+  ThunderboltOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import dayjs, { type Dayjs } from 'dayjs';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
+import { FeasibilityModal } from '../planner/FeasibilityModal';
 import {
   upsertAllocation,
   updateAllocation,
@@ -55,6 +58,7 @@ export const TaskDrawerPlanning: React.FC<TaskDrawerPlanningProps> = ({
   const [editMinutes, setEditMinutes] = useState(0);
   const [editDate, setEditDate] = useState<Dayjs>(dayjs());
   const [savingEdit, setSavingEdit] = useState(false);
+  const [feasibilityOpen, setFeasibilityOpen] = useState(false);
 
   // Reactive query of task allocations
   const allocations = useLiveQuery(
@@ -263,10 +267,38 @@ export const TaskDrawerPlanning: React.FC<TaskDrawerPlanningProps> = ({
 
   return (
     <div style={{ marginTop: 16 }} data-testid="task-drawer-planning">
-      <Title level={5} style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-        <ClockCircleOutlined />
-        <span>Planning & Daily Allocations</span>
-      </Title>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: 12,
+        }}
+      >
+        <Title level={5} style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <ClockCircleOutlined />
+          <span>Planning & Daily Allocations</span>
+        </Title>
+        <Tooltip
+          title={
+            estimateMinutes === 0
+              ? 'Set an estimate to auto-distribute work'
+              : undefined
+          }
+        >
+          <span>
+            <Button
+              size="small"
+              icon={<ThunderboltOutlined />}
+              onClick={() => setFeasibilityOpen(true)}
+              disabled={estimateMinutes === 0}
+              aria-label="Check Feasibility & Auto-Distribute"
+            >
+              ✨ Auto-Distribute
+            </Button>
+          </span>
+        </Tooltip>
+      </div>
 
       {/* Progress & Live Estimate Comparison */}
       <Card size="small" style={{ marginBottom: 16, backgroundColor: '#fafafa' }}>
@@ -426,6 +458,14 @@ export const TaskDrawerPlanning: React.FC<TaskDrawerPlanningProps> = ({
           </Space>
         </Space>
       </Card>
+
+      <FeasibilityModal
+        open={feasibilityOpen}
+        task={liveEstimateMinutes !== undefined ? { ...task, estimateMinutes: liveEstimateMinutes } : task}
+        onCancel={() => setFeasibilityOpen(false)}
+        onSuccess={() => setFeasibilityOpen(false)}
+        db={db}
+      />
     </div>
   );
 };

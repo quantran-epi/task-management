@@ -93,9 +93,18 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
   }, [open, task?.id, taskDeadline]);
 
   // Reactive DB queries
-  const capacityRules = useLiveQuery(() => db.capacityRules.toArray(), [db]);
-  const capacityOverrides = useLiveQuery(() => db.capacityOverrides.toArray(), [db]);
-  const allAllocations = useLiveQuery(() => db.plannedAllocations.toArray(), [db]);
+  const capacityRules = useLiveQuery(
+    async () => (open ? db.capacityRules.toArray() : []),
+    [db, open]
+  );
+  const capacityOverrides = useLiveQuery(
+    async () => (open ? db.capacityOverrides.toArray() : []),
+    [db, open]
+  );
+  const allAllocations = useLiveQuery(
+    async () => (open ? db.plannedAllocations.toArray() : []),
+    [db, open]
+  );
 
   // Compute other tasks active load and existing task allocations
   const { existingTaskAllocations, otherTasksLoadByDate } = useMemo(() => {
