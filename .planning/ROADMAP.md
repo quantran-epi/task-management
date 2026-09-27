@@ -209,8 +209,20 @@ Plans:
   3. Service worker update triggers a non-disruptive update banner that prevents reload activation during pending local database writes.
   4. Core task, planning, dashboard, and backup workflows operate without error across Chrome, Edge, Firefox, and Safari.
 
-**Plans**: TBD
+**Plans**: 3 plans
 **UI hint**: yes
+Plans:
+**Wave 1**
+
+- [ ] 07-01-PLAN.md — Configure VitePWA manifest, icon bundle, ambient types, and install prompt with iOS Safari guidance (PWA-01, PWA-06)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 07-02-PLAN.md — Build FormGuardContext, useServiceWorkerUpdate hook, UpdateBanner, and ActiveFormGuardModal for reload safety (PWA-02, PWA-03)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 07-03-PLAN.md — Implement storage persistence service, boot request, PwaStatusCard, and StoragePersistenceCard in Settings (PWA-02, PWA-06)
 
 ### Phase 8: Optional Encrypted GitHub Backup
 
@@ -243,5 +255,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 4. Feasibility Engine & Workload Distribution | 3/3 | Complete   | 2026-09-27 |
 | 5. Actionable Dashboard & Workload Forecasting | 4/4 | Complete   | 2026-09-27 |
 | 6. Safe Local Backup & Restore | 3/3 | Complete   | 2026-09-27 |
-| 7. PWA Offline Capability & Lifecycle Hardening | 0/TBD | Not started | - |
+| 7. PWA Offline Capability & Lifecycle Hardening | 0/3 | Not started | - |
 | 8. Optional Encrypted GitHub Backup | 0/TBD | Not started | - |

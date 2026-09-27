@@ -1,8 +1,8 @@
 ---
 phase: 07
 slug: pwa-offline-capability-lifecycle-hardening
-status: draft
-nyquist_compliant: false
+status: ready
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-09-27
 ---
@@ -38,12 +38,12 @@ created: 2026-09-27
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 07-01-01 | 01 | 1 | PWA-01 | — | N/A | unit | `npx vitest run tests/components/pwa/InstallButton.test.tsx` | ❌ W0 | ⬜ pending |
-| 07-01-02 | 01 | 1 | PWA-01 | — | N/A | unit | `npx vitest run tests/components/pwa/IosInstallModal.test.tsx` | ❌ W0 | ⬜ pending |
-| 07-02-01 | 02 | 2 | PWA-02 | T-07-01 | Cleanup outdated caches; scoped navigate fallback | unit | `npx vitest run tests/hooks/useNetworkStatus.test.tsx` | ❌ W0 | ⬜ pending |
+| 07-01-01 | 01 | 1 | PWA-01 | T-07-SC | Package audit approved; ambient types and test mock created | unit | `npx vitest run tests/setup.ts` | ✅ | ⬜ pending |
+| 07-01-02 | 01 | 1 | PWA-01 | T-07-02 | Scoped manifest and iOS guidance modal | unit | `npx vitest run tests/components/pwa/InstallButton.test.tsx tests/components/pwa/IosInstallModal.test.tsx` | ❌ W0 | ⬜ pending |
+| 07-02-01 | 02 | 2 | PWA-02 | T-07-01 | Periodic focus check and accessible status transition | unit | `npx vitest run tests/hooks/useNetworkStatus.test.tsx` | ❌ W0 | ⬜ pending |
 | 07-02-02 | 02 | 2 | PWA-03 | T-07-03 | Form guard prevents reload during active dirty forms | unit | `npx vitest run tests/components/pwa/UpdateBanner.test.tsx` | ❌ W0 | ⬜ pending |
-| 07-03-01 | 03 | 3 | PWA-06 | — | N/A | unit | `npx vitest run tests/components/settings/StoragePersistenceCard.test.tsx` | ❌ W0 | ⬜ pending |
-| 07-03-02 | 03 | 3 | PWA-06 | — | N/A | unit | `npx vitest run tests/components/settings/PwaStatusCard.test.tsx` | ❌ W0 | ⬜ pending |
+| 07-03-01 | 03 | 3 | PWA-06 | T-07-04 | Defensive StorageManager feature detection and startup request | unit | `npx vitest run tests/setup.ts` | ✅ | ⬜ pending |
+| 07-03-02 | 03 | 3 | PWA-06 | T-07-04 | Quota progress display and non-intrusive advisory banner | unit | `npx vitest run tests/components/settings/PwaStatusCard.test.tsx tests/components/settings/StoragePersistenceCard.test.tsx` | ❌ W0 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -51,13 +51,13 @@ created: 2026-09-27
 
 ## Wave 0 Requirements
 
-- [ ] `tests/mocks/pwaRegister.ts` — mock for `virtual:pwa-register/react`
-- [ ] `tests/components/pwa/InstallButton.test.tsx` — stubs for PWA-01, PWA-06
-- [ ] `tests/components/pwa/IosInstallModal.test.tsx` — stubs for PWA-01, D-06
-- [ ] `tests/hooks/useNetworkStatus.test.tsx` — stubs for PWA-02, D-09
-- [ ] `tests/components/pwa/UpdateBanner.test.tsx` — stubs for PWA-03, D-07, D-08
-- [ ] `tests/components/settings/StoragePersistenceCard.test.tsx` — stubs for PWA-06, D-14, D-15
-- [ ] `tests/components/settings/PwaStatusCard.test.tsx` — stubs for PWA-02, PWA-06, D-12
+- [ ] `tests/mocks/pwaRegister.ts` — mock for `virtual:pwa-register/react` (created in 07-01 Task 1)
+- [ ] `tests/components/pwa/InstallButton.test.tsx` — stubs for PWA-01, PWA-06 (created in 07-01 Task 2)
+- [ ] `tests/components/pwa/IosInstallModal.test.tsx` — stubs for PWA-01, D-06 (created in 07-01 Task 2)
+- [ ] `tests/hooks/useNetworkStatus.test.tsx` — stubs for PWA-02, D-09 (created in 07-02 Task 1)
+- [ ] `tests/components/pwa/UpdateBanner.test.tsx` — stubs for PWA-03, D-01, D-02 (created in 07-02 Task 2)
+- [ ] `tests/components/settings/StoragePersistenceCard.test.tsx` — stubs for PWA-06, D-14, D-15 (created in 07-03 Task 2)
+- [ ] `tests/components/settings/PwaStatusCard.test.tsx` — stubs for PWA-02, PWA-06, D-12 (created in 07-03 Task 2)
 
 ---
 
@@ -73,11 +73,11 @@ created: 2026-09-27
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 15s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 15s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved 2026-09-27
