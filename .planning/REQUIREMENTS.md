@@ -58,9 +58,9 @@
 
 - [x] **DASH-01**: User can see tasks requiring attention today, including overdue and urgent work.
 - [x] **DASH-02**: User can see today's active planned load, available capacity, and overload status.
-- [ ] **DASH-03**: User can review active workload and overloaded dates over the next 7 days.
-- [ ] **DASH-04**: User can review active workload and overloaded dates over the next 14 days.
-- [ ] **DASH-05**: User can review active workload and overloaded dates for the next calendar month.
+- [x] **DASH-03**: User can review active workload and overloaded dates over the next 7 days.
+- [x] **DASH-04**: User can review active workload and overloaded dates over the next 14 days.
+- [x] **DASH-05**: User can review active workload and overloaded dates for the next calendar month.
 - [x] **DASH-06**: Dashboard presents actionable task and date links rather than only aggregate metrics.
 
 ### Backup and Restore
@@ -162,9 +162,9 @@
 | CALC-06 | Phase 4 | Complete |
 | DASH-01 | Phase 5 | Complete |
 | DASH-02 | Phase 5 | Complete |
-| DASH-03 | Phase 5 | Pending |
-| DASH-04 | Phase 5 | Pending |
-| DASH-05 | Phase 5 | Pending |
+| DASH-03 | Phase 5 | Complete |
+| DASH-04 | Phase 5 | Complete |
+| DASH-05 | Phase 5 | Complete |
 | DASH-06 | Phase 5 | Complete |
 | BACK-01 | Phase 6 | Pending |
 | BACK-02 | Phase 6 | Pending |

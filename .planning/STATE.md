@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-09-26)
 ## Current Position
 
 Phase: 05 (actionable-dashboard-workload-forecasting) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
-Last activity: 2026-09-27 -- Completed 05-01-PLAN.md
+Last activity: 2026-09-27 -- Completed 05-03-PLAN.md
 
 Progress: [██████████] 100% (Phase 01)
 Progress: [██████████] 100% (Phase 02)
@@ -75,6 +75,7 @@ Progress: [██████████] 100% (Phase 02)
 | Phase 04 P03 | 15m | 2 tasks | 5 files |
 | Phase 05 P01 | 10m | 2 tasks | 6 files |
 | Phase 05 P02 | 12m | 2 tasks | 4 files |
+| Phase 05 P03 | 12m | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -132,6 +133,8 @@ Decisions logged in PROJECT.md Key Decisions table:
 - [Phase 05]: Extended AppRoute union with 'dashboard' as primary route
 - [Phase 05]: Sanitized hash route date parameter via strict isValidCalendarDate check to prevent tampering (T-05-01)
 - [Phase 05]: Whitelisted hash route against AppRoute union defaulting to 'dashboard' (T-05-02)
+- [Phase 05]: Capped max forecast horizon at 30 days per threat model T-05-05
+- [Phase 05]: Clamped MiniDayCard progress percent between 0 and 100 per threat model T-05-06
 
 ### Pending Todos
 
