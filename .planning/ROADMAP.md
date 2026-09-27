@@ -214,7 +214,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 07-01-PLAN.md — Configure VitePWA manifest, icon bundle, ambient types, and install prompt with iOS Safari guidance (PWA-01, PWA-06)
+- [x] 07-01-PLAN.md — Configure VitePWA manifest, icon bundle, ambient types, and install prompt with iOS Safari guidance (PWA-01, PWA-06)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -255,5 +255,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 4. Feasibility Engine & Workload Distribution | 3/3 | Complete   | 2026-09-27 |
 | 5. Actionable Dashboard & Workload Forecasting | 4/4 | Complete   | 2026-09-27 |
 | 6. Safe Local Backup & Restore | 3/3 | Complete   | 2026-09-27 |
-| 7. PWA Offline Capability & Lifecycle Hardening | 0/3 | Not started | - |
+| 7. PWA Offline Capability & Lifecycle Hardening | 1/3 | In Progress|  |
 | 8. Optional Encrypted GitHub Backup | 0/TBD | Not started | - |

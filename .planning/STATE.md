@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 07 UI-SPEC approved
-last_updated: "2026-09-27T10:00:20.649Z"
-last_activity: 2026-09-27 -- Phase 06 execution started
+last_updated: "2026-09-27T11:27:27.402Z"
+last_activity: 2026-09-27 -- Phase 07 execution started
 progress:
   total_phases: 8
   completed_phases: 6
-  total_plans: 21
-  completed_plans: 21
+  total_plans: 24
+  completed_plans: 22
   percent: 75
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-26)
 
 **Core value:** Make planned work realistically fit available time by exposing overload early and suggesting feasible daily workload distributions.
-**Current focus:** Phase 06 — safe-local-backup-restore
+**Current focus:** Phase 07 — pwa-offline-capability-lifecycle-hardening
 
 ## Current Position
 
-Phase: 06 (safe-local-backup-restore) — EXECUTING
-Plan: 3 of 3
+Phase: 07 (pwa-offline-capability-lifecycle-hardening) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
-Last activity: 2026-09-27 -- Phase 06 execution started
+Last activity: 2026-09-27 -- Phase 07 execution started
 
 Progress: [██████████] 100% (Phase 01)
 Progress: [██████████] 100% (Phase 02)
@@ -79,6 +79,7 @@ Progress: [██████████] 100% (Phase 02)
 | Phase 06 P01 | 10m | 2 tasks | 9 files |
 | Phase 06 P02 | 12m | 3 tasks | 14 files |
 | Phase 06 P03 | 6m | 2 tasks | 3 files |
+| Phase 07 P01 | 10m | 2 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -147,6 +148,8 @@ Decisions logged in PROJECT.md Key Decisions table:
 - [Phase ?]: Automatically captured pre-import snapshot of 6 domain tables into settings.last_pre_import_snapshot before any destructive write
 - [Phase ?]: Bound danger confirm button in ImportPreviewModal to exact keyword RESTORE to prevent accidental triggers
 - [Phase ?]: Wrap downloadSnapshotFile payload in BackupEnvelope with APP_MARKER, CURRENT_SCHEMA_VERSION, and snapshot timestamp for re-import compatibility
+- [Phase ?]: Configured VitePWA with registerType: 'prompt' to prevent unprompted auto-skipWaiting during active writes
+- [Phase ?]: Set navigateFallback to /task-management/index.html to prevent 404s on deep hash navigation in GitHub Pages
 
 ### Pending Todos
 
@@ -164,6 +167,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-09-27T09:44:09.134Z
+Last session: 2026-09-27T11:27:10.640Z
 Stopped at: Phase 07 UI-SPEC approved
 Resume file: .planning/phases/07-pwa-offline-capability-lifecycle-hardening/07-UI-SPEC.md

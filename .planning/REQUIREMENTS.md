@@ -83,12 +83,12 @@
 
 ### PWA and Delivery
 
-- [ ] **PWA-01**: User can install the application as a PWA on a supported browser.
+- [x] **PWA-01**: User can install the application as a PWA on a supported browser.
 - [ ] **PWA-02**: User can open and use previously loaded core features without a network connection.
 - [ ] **PWA-03**: Application prompts before activating an update that requires reload and avoids interrupting pending data writes.
 - [x] **PWA-04**: Production assets, manifest, navigation, and service-worker scope work under the GitHub Pages `/task-management/` repository path.
 - [x] **PWA-05**: Application is deployed from the requested GitHub repository using GitHub Actions and GitHub Pages.
-- [ ] **PWA-06**: Current Chrome, Edge, Firefox, and Safari can use core task, planning, dashboard, and backup features; install behavior may follow browser capabilities.
+- [x] **PWA-06**: Current Chrome, Edge, Firefox, and Safari can use core task, planning, dashboard, and backup features; install behavior may follow browser capabilities.
 
 ### User Experience and Accessibility
 
@@ -171,12 +171,12 @@
 | BACK-03 | Phase 6 | Complete |
 | BACK-04 | Phase 6 | Complete |
 | BACK-05 | Phase 6 | Complete |
-| PWA-01 | Phase 7 | Pending |
+| PWA-01 | Phase 7 | Complete |
 | PWA-02 | Phase 7 | Pending |
 | PWA-03 | Phase 7 | Pending |
 | PWA-04 | Phase 1 | Complete |
 | PWA-05 | Phase 1 | Complete |
-| PWA-06 | Phase 7 | Pending |
+| PWA-06 | Phase 7 | Complete |
 | SYNC-01 | Phase 8 | Pending |
 | SYNC-02 | Phase 8 | Pending |
 | SYNC-03 | Phase 8 | Pending |
