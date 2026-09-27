@@ -189,12 +189,12 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     schemaVersion: candidate.schemaVersion as number,
     exportedAt: candidate.exportedAt as string,
     tables: {
-      projects,
-      milestones,
-      tasks,
-      capacityRules,
-      capacityOverrides,
-      plannedAllocations,
+      projects: projects as BackupEnvelope['tables']['projects'],
+      milestones: milestones as BackupEnvelope['tables']['milestones'],
+      tasks: tasks as BackupEnvelope['tables']['tasks'],
+      capacityRules: capacityRules as BackupEnvelope['tables']['capacityRules'],
+      capacityOverrides: capacityOverrides as BackupEnvelope['tables']['capacityOverrides'],
+      plannedAllocations: plannedAllocations as BackupEnvelope['tables']['plannedAllocations'],
     },
     counts: {
       projects: projects.length,

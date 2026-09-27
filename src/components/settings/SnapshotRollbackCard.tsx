@@ -7,7 +7,7 @@ import type { SnapshotData } from '../../types/backup';
 import { rollbackToSnapshot, downloadSnapshotFile } from '../../services/backup/restoreBackup';
 import { announceToScreenReader } from '../common/AriaLiveRegion';
 
-const { Title, Text, Paragraph } = Typography;
+const { Text, Paragraph } = Typography;
 
 export interface SnapshotRollbackCardProps {
   db?: TaskPlannerDatabase;

@@ -20,7 +20,7 @@ import { rollbackToSnapshot, downloadSnapshotFile } from '../services/backup/res
 import { announceToScreenReader } from '../components/common/AriaLiveRegion';
 import type { SnapshotData } from '../types/backup';
 
-const { Title, Paragraph, Text } = Typography;
+const { Title, Paragraph } = Typography;
 
 export interface SettingsViewProps {
   db?: TaskPlannerDatabase;
@@ -154,10 +154,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div>
           <Title level={3} style={{ margin: 0 }}>
-            Cài đặt & Dữ liệu
+            Cài đặt & Cấu hình công suất
           </Title>
           <Paragraph type="secondary" style={{ margin: 0 }}>
-            Cấu hình công suất làm việc hàng tuần, xuất bản sao lưu và quản lý dữ liệu an toàn.
+            Cấu hình công suất làm việc hàng tuần tiêu chuẩn và lên lịch ngoại lệ cho các ngày cụ thể.
           </Paragraph>
         </div>
 

@@ -5,7 +5,7 @@ import type { UploadProps } from 'antd';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { ImportPreviewModal } from './ImportPreviewModal';
 
-const { Title, Paragraph, Text } = Typography;
+const { Paragraph } = Typography;
 const { Dragger } = Upload;
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB

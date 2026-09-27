@@ -19,7 +19,7 @@ export const PostRestoreBanner: React.FC<PostRestoreBannerProps> = ({
       showIcon
       icon={<CheckCircleOutlined />}
       closable
-      onClose={onClose}
+      {...(onClose ? { onClose } : {})}
       style={{ marginBottom: 16 }}
       message="Khôi phục dữ liệu thành công"
       description={

@@ -12,7 +12,6 @@ import {
 } from 'antd';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
-import type { BackupEnvelope, ValidationErrorDetail } from '../../types/backup';
 import { validateBackupPayload } from '../../services/backup/validateBackup';
 import { restoreBackupPayload } from '../../services/backup/restoreBackup';
 import { announceToScreenReader } from '../common/AriaLiveRegion';
