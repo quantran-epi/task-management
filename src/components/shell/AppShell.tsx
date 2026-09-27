@@ -6,6 +6,7 @@ import { StatusBadge } from './StatusBadge';
 import { UpgradeModal } from './UpgradeModal';
 import { ResetDbModal } from '../common/ResetDbModal';
 import { AriaLiveRegion } from '../common/AriaLiveRegion';
+import { InstallButton } from '../pwa/InstallButton';
 import type { AppRoute } from '../../types/navigation';
 
 const { Header, Sider, Content } = Layout;
@@ -82,6 +83,7 @@ export const AppShell: React.FC<AppShellProps> = ({ currentRoute, onNavigate, ch
           </Space>
           <Space size="middle">
             <StatusBadge />
+            <InstallButton />
             <Button onClick={() => setResetModalOpen(true)} danger size="small">
               Đặt lại CSDL
             </Button>
