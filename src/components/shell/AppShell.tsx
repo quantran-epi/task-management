@@ -10,6 +10,7 @@ import { InstallButton } from '../pwa/InstallButton';
 import { UpdateBanner } from '../pwa/UpdateBanner';
 import { FormGuardProvider } from '../../context/FormGuardContext';
 import { ServiceWorkerProvider } from '../../context/ServiceWorkerContext';
+import { GitHubAuthProvider } from '../../context/GitHubAuthContext';
 import { useServiceWorkerUpdate } from '../../hooks/useServiceWorkerUpdate';
 import type { AppRoute } from '../../types/navigation';
 
@@ -140,7 +141,9 @@ export const AppShell: React.FC<AppShellProps> = (props) => {
   return (
     <ServiceWorkerProvider>
       <FormGuardProvider>
-        <AppShellInner {...props} />
+        <GitHubAuthProvider>
+          <AppShellInner {...props} />
+        </GitHubAuthProvider>
       </FormGuardProvider>
     </ServiceWorkerProvider>
   );
