@@ -48,4 +48,28 @@
 - Complex chart libraries (`@ant-design/plots`, `recharts`, `chart.js`) — keep zero new dependencies; lightweight native React SVG suffices.
 
 ## Traceability
-*To be populated by roadmapper during phase creation.*
+
+| Requirement | Phase | Status |
+|---|---|---|
+| SHB-01 | Phase 9 | Pending |
+| SHB-02 | Phase 9 | Pending |
+| SHB-03 | Phase 9 | Pending |
+| SHB-04 | Phase 9 | Pending |
+| SHB-05 | Phase 9 | Pending |
+| SRCH-01 | Phase 10 | Pending |
+| SRCH-02 | Phase 10 | Pending |
+| SRCH-03 | Phase 10 | Pending |
+| SRCH-04 | Phase 10 | Pending |
+| JIRA-01 | Phase 11 | Pending |
+| JIRA-02 | Phase 11 | Pending |
+| JIRA-03 | Phase 11 | Pending |
+| JIRA-04 | Phase 11 | Pending |
+| JIRA-05 | Phase 11 | Pending |
+| NOTIF-01 | Phase 12 | Pending |
+| NOTIF-02 | Phase 12 | Pending |
+| NOTIF-03 | Phase 12 | Pending |
+| NOTIF-04 | Phase 12 | Pending |
+| NOTIF-05 | Phase 12 | Pending |
+| ANLT-01 | Phase 13 | Pending |
+| ANLT-02 | Phase 13 | Pending |
+| ANLT-03 | Phase 13 | Pending |
