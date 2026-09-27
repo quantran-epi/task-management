@@ -151,8 +151,21 @@ Plans:
   2. User can inspect visual workload distributions and overload warnings across 7-day, 14-day, and next-month projection horizons.
   3. Dashboard metrics provide direct clickable links that navigate immediately to targeted tasks or planning dates.
 
-**Plans**: TBD
+**Plans**: 4 plans
 **UI hint**: yes
+Plans:
+**Wave 1**
+
+- [ ] 05-01-PLAN.md — Define dashboard types, pure domain utilities, and hash route query parameter parsing (DASH-01, DASH-04, DASH-05, DASH-06)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 05-02-PLAN.md — Build Today Summary KPI card and Attention Today task list with inline controls (DASH-01, DASH-02, DASH-06)
+- [ ] 05-03-PLAN.md — Build multi-horizon forecasting hook, MiniDayCard grid, and Overload Alert banner (DASH-03, DASH-04, DASH-05, DASH-06)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 05-04-PLAN.md — Assemble DashboardView, update Navigation and App default routing, and synchronize PlannerView (DASH-01, DASH-02, DASH-03, DASH-04, DASH-05, DASH-06)
 
 ### Phase 6: Safe Local Backup & Restore
 
@@ -216,7 +229,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 2. Work Hierarchy & Fast Task Management | 2/3 | In Progress|  |
 | 3. Capacity Model & Daily Planning Ledger | 4/4 | Complete   | 2026-09-26 |
 | 4. Feasibility Engine & Workload Distribution | 3/3 | Complete   | 2026-09-27 |
-| 5. Actionable Dashboard & Workload Forecasting | 0/TBD | Not started | - |
+| 5. Actionable Dashboard & Workload Forecasting | 0/4 | Not started | - |
 | 6. Safe Local Backup & Restore | 0/TBD | Not started | - |
 | 7. PWA Offline Capability & Lifecycle Hardening | 0/TBD | Not started | - |
 | 8. Optional Encrypted GitHub Backup | 0/TBD | Not started | - |
