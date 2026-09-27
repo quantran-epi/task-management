@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { message } from 'antd';
+import * as AriaLive from '../../../src/components/common/AriaLiveRegion';
 import { PwaStatusCard } from '../../../src/components/settings/PwaStatusCard';
 
-const mockCheckUpdate = vi.fn().mockResolvedValue(undefined);
+const mockCheckUpdate = vi.fn().mockResolvedValue(false);
 const mockPromptInstall = vi.fn().mockResolvedValue('accepted');
 
 let mockPwaState = {
@@ -14,15 +16,17 @@ let mockPwaState = {
   promptInstall: mockPromptInstall,
 };
 
+let mockSwState = {
+  needRefresh: false,
+  setNeedRefresh: vi.fn(),
+  offlineReady: true,
+  isChecking: false,
+  checkUpdate: mockCheckUpdate,
+  reloadApp: vi.fn(),
+};
+
 vi.mock('../../../src/hooks/useServiceWorkerUpdate', () => ({
-  useServiceWorkerUpdate: () => ({
-    needRefresh: false,
-    setNeedRefresh: vi.fn(),
-    offlineReady: true,
-    isChecking: false,
-    checkUpdate: mockCheckUpdate,
-    reloadApp: vi.fn(),
-  }),
+  useServiceWorkerUpdate: () => mockSwState,
 }));
 
 vi.mock('../../../src/hooks/usePWAInstall', () => ({
@@ -30,8 +34,12 @@ vi.mock('../../../src/hooks/usePWAInstall', () => ({
 }));
 
 describe('PwaStatusCard component', () => {
+  let messageSuccessSpy: ReturnType<typeof vi.spyOn>;
+  let announceSpy: ReturnType<typeof vi.spyOn>;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCheckUpdate.mockResolvedValue(false);
     mockPwaState = {
       isStandalone: false,
       isInstalled: false,
@@ -40,6 +48,16 @@ describe('PwaStatusCard component', () => {
       installPrompt: null,
       promptInstall: mockPromptInstall,
     };
+    mockSwState = {
+      needRefresh: false,
+      setNeedRefresh: vi.fn(),
+      offlineReady: true,
+      isChecking: false,
+      checkUpdate: mockCheckUpdate,
+      reloadApp: vi.fn(),
+    };
+    messageSuccessSpy = vi.spyOn(message, 'success').mockImplementation(() => vi.fn() as any);
+    announceSpy = vi.spyOn(AriaLive, 'announceToScreenReader').mockImplementation(() => {});
   });
 
   it('renders card title, description, and status tags', () => {
@@ -77,6 +95,56 @@ describe('PwaStatusCard component', () => {
     await waitFor(() => {
       expect(mockCheckUpdate).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it('shows up-to-date message when no update is found and needRefresh is false', async () => {
+    mockCheckUpdate.mockResolvedValue(false);
+    mockSwState.needRefresh = false;
+
+    render(<PwaStatusCard />);
+
+    const checkButton = screen.getByRole('button', { name: /Kiểm tra bản cập nhật/i });
+    fireEvent.click(checkButton);
+
+    await waitFor(() => {
+      expect(mockCheckUpdate).toHaveBeenCalledTimes(1);
+      expect(messageSuccessSpy).toHaveBeenCalledWith('Ứng dụng đang ở phiên bản mới nhất.');
+      expect(announceSpy).toHaveBeenCalledWith('Ứng dụng đang ở phiên bản mới nhất.');
+    });
+  });
+
+  it('does NOT display up-to-date message when checkUpdate returns true (update detected)', async () => {
+    mockCheckUpdate.mockResolvedValue(true);
+    mockSwState.needRefresh = false;
+
+    render(<PwaStatusCard />);
+
+    const checkButton = screen.getByRole('button', { name: /Kiểm tra bản cập nhật/i });
+    fireEvent.click(checkButton);
+
+    await waitFor(() => {
+      expect(mockCheckUpdate).toHaveBeenCalledTimes(1);
+    });
+
+    expect(messageSuccessSpy).not.toHaveBeenCalled();
+    expect(announceSpy).not.toHaveBeenCalled();
+  });
+
+  it('does NOT display up-to-date message when needRefresh is true', async () => {
+    mockCheckUpdate.mockResolvedValue(false);
+    mockSwState.needRefresh = true;
+
+    render(<PwaStatusCard />);
+
+    const checkButton = screen.getByRole('button', { name: /Kiểm tra bản cập nhật/i });
+    fireEvent.click(checkButton);
+
+    await waitFor(() => {
+      expect(mockCheckUpdate).toHaveBeenCalledTimes(1);
+    });
+
+    expect(messageSuccessSpy).not.toHaveBeenCalled();
+    expect(announceSpy).not.toHaveBeenCalled();
   });
 
   it('handles offline state when checking for updates', async () => {

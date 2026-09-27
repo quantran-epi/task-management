@@ -9,6 +9,7 @@ import { AriaLiveRegion } from '../common/AriaLiveRegion';
 import { InstallButton } from '../pwa/InstallButton';
 import { UpdateBanner } from '../pwa/UpdateBanner';
 import { FormGuardProvider } from '../../context/FormGuardContext';
+import { ServiceWorkerProvider } from '../../context/ServiceWorkerContext';
 import { useServiceWorkerUpdate } from '../../hooks/useServiceWorkerUpdate';
 import type { AppRoute } from '../../types/navigation';
 
@@ -137,8 +138,10 @@ const AppShellInner: React.FC<AppShellProps> = ({
 
 export const AppShell: React.FC<AppShellProps> = (props) => {
   return (
-    <FormGuardProvider>
-      <AppShellInner {...props} />
-    </FormGuardProvider>
+    <ServiceWorkerProvider>
+      <FormGuardProvider>
+        <AppShellInner {...props} />
+      </FormGuardProvider>
+    </ServiceWorkerProvider>
   );
 };

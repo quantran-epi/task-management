@@ -10,7 +10,7 @@ const { Paragraph } = Typography;
 
 export const PwaStatusCard: React.FC = () => {
   const [checking, setChecking] = useState(false);
-  const { checkUpdate } = useServiceWorkerUpdate();
+  const { checkUpdate, needRefresh } = useServiceWorkerUpdate();
   const { isStandalone, isInstalled } = usePWAInstall();
 
   const hasServiceWorker = typeof navigator !== 'undefined' && 'serviceWorker' in navigator;
@@ -26,9 +26,11 @@ export const PwaStatusCard: React.FC = () => {
 
     setChecking(true);
     try {
-      await checkUpdate();
-      message.success('Ứng dụng đang ở phiên bản mới nhất.');
-      announceToScreenReader('Ứng dụng đang ở phiên bản mới nhất.');
+      const hasUpdate = await checkUpdate();
+      if (!hasUpdate && !needRefresh) {
+        message.success('Ứng dụng đang ở phiên bản mới nhất.');
+        announceToScreenReader('Ứng dụng đang ở phiên bản mới nhất.');
+      }
     } catch (err) {
       console.warn('Update check failed:', err);
       message.error(
