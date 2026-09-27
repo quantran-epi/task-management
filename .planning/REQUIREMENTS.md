@@ -49,10 +49,10 @@
 
 - [ ] **CALC-01**: User can evaluate a task estimate against an inclusive date range or a deadline.
 - [ ] **CALC-02**: Feasibility calculation accounts for weekly capacity, date overrides, zero-capacity days, and existing active allocations.
-- [ ] **CALC-03**: User receives a clear feasible or infeasible result with remaining capacity or shortage in hours and minutes.
-- [ ] **CALC-04**: User can inspect which dates were available, full, overloaded, or excluded from the calculation.
-- [ ] **CALC-05**: When capacity permits, user receives a deterministic candidate distribution that favors eligible dates with the lowest current load and uses earlier dates to break ties.
-- [ ] **CALC-06**: Suggested allocations do not modify saved data until the user reviews and accepts them.
+- [x] **CALC-03**: User receives a clear feasible or infeasible result with remaining capacity or shortage in hours and minutes.
+- [x] **CALC-04**: User can inspect which dates were available, full, overloaded, or excluded from the calculation.
+- [x] **CALC-05**: When capacity permits, user receives a deterministic candidate distribution that favors eligible dates with the lowest current load and uses earlier dates to break ties.
+- [x] **CALC-06**: Suggested allocations do not modify saved data until the user reviews and accepts them.
 
 ### Dashboard
 
@@ -156,10 +156,10 @@
 | PLAN-06 | Phase 3 | Complete |
 | CALC-01 | Phase 4 | Pending |
 | CALC-02 | Phase 4 | Pending |
-| CALC-03 | Phase 4 | Pending |
-| CALC-04 | Phase 4 | Pending |
-| CALC-05 | Phase 4 | Pending |
-| CALC-06 | Phase 4 | Pending |
+| CALC-03 | Phase 4 | Complete |
+| CALC-04 | Phase 4 | Complete |
+| CALC-05 | Phase 4 | Complete |
+| CALC-06 | Phase 4 | Complete |
 | DASH-01 | Phase 5 | Pending |
 | DASH-02 | Phase 5 | Pending |
 | DASH-03 | Phase 5 | Pending |

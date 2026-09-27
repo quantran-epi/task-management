@@ -133,7 +133,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 04-02-PLAN.md — Build interactive FeasibilityModal, candidate review table, date inspection breakdown, and atomic commit workflow (CALC-03, CALC-04, CALC-05, CALC-06)
+- [x] 04-02-PLAN.md — Build interactive FeasibilityModal, candidate review table, date inspection breakdown, and atomic commit workflow (CALC-03, CALC-04, CALC-05, CALC-06)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
