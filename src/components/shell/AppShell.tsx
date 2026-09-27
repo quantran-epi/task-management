@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
-import { Layout, Drawer, Grid, Button, Typography, Space, theme } from 'antd';
-import { MenuOutlined } from '@ant-design/icons';
+import { Layout, Drawer, Grid, Button, Typography, Space, Badge, Tooltip, theme } from 'antd';
+import { MenuOutlined, CloudDownloadOutlined } from '@ant-design/icons';
 import { Navigation } from './Navigation';
 import { StatusBadge } from './StatusBadge';
 import { UpgradeModal } from './UpgradeModal';
 import { ResetDbModal } from '../common/ResetDbModal';
 import { AriaLiveRegion } from '../common/AriaLiveRegion';
 import { InstallButton } from '../pwa/InstallButton';
+import { UpdateBanner } from '../pwa/UpdateBanner';
+import { FormGuardProvider } from '../../context/FormGuardContext';
+import { useServiceWorkerUpdate } from '../../hooks/useServiceWorkerUpdate';
 import type { AppRoute } from '../../types/navigation';
 
 const { Header, Sider, Content } = Layout;
@@ -20,17 +23,30 @@ export interface AppShellProps {
   isDark?: boolean;
 }
 
-export const AppShell: React.FC<AppShellProps> = ({ currentRoute, onNavigate, children, isDark: explicitDark }) => {
+const AppShellInner: React.FC<AppShellProps> = ({
+  currentRoute,
+  onNavigate,
+  children,
+  isDark: explicitDark,
+}) => {
   const screens = useBreakpoint();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [resetModalOpen, setResetModalOpen] = useState(false);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
   const { token } = theme.useToken();
+
+  const { needRefresh, reloadApp } = useServiceWorkerUpdate();
 
   // Prefer explicit prop if provided, else check token brightness/property
   const isDark = explicitDark ?? false;
 
   // md breakpoint is 768px. Mobile when screens.md is false. Default to desktop when screens.md is true or uninitialized in test/SSR.
   const isMobile = screens.md === false;
+
+  // Show banner if needRefresh is true and not dismissed by user
+  const showBanner = needRefresh && !bannerDismissed;
+  // Show header collapsed badge if needRefresh is true and user dismissed the banner (D-04)
+  const showCollapsedBadge = needRefresh && bannerDismissed;
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -84,6 +100,19 @@ export const AppShell: React.FC<AppShellProps> = ({ currentRoute, onNavigate, ch
           <Space size="middle">
             <StatusBadge />
             <InstallButton />
+            {showCollapsedBadge && (
+              <Tooltip title="Đã có bản cập nhật mới. Nhấn để cập nhật.">
+                <Badge dot color="#1677ff">
+                  <Button
+                    type="text"
+                    icon={<CloudDownloadOutlined style={{ fontSize: 18, color: '#1677ff' }} />}
+                    onClick={() => setBannerDismissed(false)}
+                    aria-label="Cập nhật ứng dụng"
+                    style={{ minHeight: 32, minWidth: 32 }}
+                  />
+                </Badge>
+              </Tooltip>
+            )}
             <Button onClick={() => setResetModalOpen(true)} danger size="small">
               Đặt lại CSDL
             </Button>
@@ -96,6 +125,20 @@ export const AppShell: React.FC<AppShellProps> = ({ currentRoute, onNavigate, ch
       <UpgradeModal />
       <ResetDbModal open={resetModalOpen} onClose={() => setResetModalOpen(false)} />
       <AriaLiveRegion />
+
+      <UpdateBanner
+        needRefresh={showBanner}
+        onUpdate={() => reloadApp(true)}
+        onDismiss={() => setBannerDismissed(true)}
+      />
     </Layout>
+  );
+};
+
+export const AppShell: React.FC<AppShellProps> = (props) => {
+  return (
+    <FormGuardProvider>
+      <AppShellInner {...props} />
+    </FormGuardProvider>
   );
 };
