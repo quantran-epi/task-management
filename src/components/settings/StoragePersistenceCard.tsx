@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, Space, Tag, Button, Typography, Progress, Alert, Empty } from 'antd';
+import { Card, Space, Tag, Button, Typography, Progress, Alert, Empty, message } from 'antd';
 import { HddOutlined, DatabaseOutlined } from '@ant-design/icons';
 import { useStoragePersistence } from '../../hooks/useStoragePersistence';
 
@@ -15,6 +15,21 @@ export const StoragePersistenceCard: React.FC = () => {
     loading,
     requestPersistence,
   } = useStoragePersistence();
+
+  const handleRequestPersistence = async () => {
+    try {
+      const persisted = await requestPersistence();
+      if (persisted) {
+        message.success('Đã kích hoạt lưu trữ bền vững thành công.');
+      } else {
+        message.warning(
+          'Trình duyệt chưa cấp quyền lưu trữ bền vững. Để tăng khả năng được cấp quyền, hãy cài đặt ứng dụng (PWA) hoặc thêm trang vào dấu trang (bookmark).'
+        );
+      }
+    } catch {
+      message.error('Không thể yêu cầu lưu trữ bền vững.');
+    }
+  };
 
   return (
     <Card
@@ -80,7 +95,7 @@ export const StoragePersistenceCard: React.FC = () => {
               <Button
                 type="primary"
                 icon={<DatabaseOutlined />}
-                onClick={requestPersistence}
+                onClick={handleRequestPersistence}
                 loading={loading}
               >
                 Yêu cầu lưu trữ bền vững

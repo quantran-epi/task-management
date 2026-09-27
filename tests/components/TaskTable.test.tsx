@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { Modal } from 'antd';
 import 'fake-indexeddb/auto';
 import { TaskPlannerDatabase } from '../../src/db';
 import { TaskTable } from '../../src/components/tasks/TaskTable';
@@ -171,5 +172,34 @@ describe('TaskTable Component', () => {
     );
 
     expect(screen.getByText(/Không có tác vụ phù hợp/i)).toBeInTheDocument();
+  });
+
+  it('clicking delete option in task dropdown triggers confirmation modal', async () => {
+    const confirmSpy = vi.spyOn(Modal, 'confirm');
+    render(
+      <TaskTable
+        tasks={sampleTasks}
+        projects={sampleProjects}
+        milestones={[]}
+        selectedRowKeys={[]}
+        onSelectRows={vi.fn()}
+        onOpenDrawer={vi.fn()}
+        db={db}
+      />
+    );
+
+    const moreButtons = screen.getAllByRole('button', { name: /Thao tác khác/i });
+    fireEvent.click(moreButtons[0]!);
+
+    const deleteOption = await screen.findByText('Xóa');
+    fireEvent.click(deleteOption);
+
+    expect(confirmSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Xóa tác vụ',
+        content: expect.stringContaining('Alpha Task One'),
+      })
+    );
+    confirmSpy.mockRestore();
   });
 });

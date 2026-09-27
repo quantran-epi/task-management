@@ -1,6 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { StoragePersistenceCard } from '../../../src/components/settings/StoragePersistenceCard';
+import { message } from 'antd';
+
+vi.mock('antd', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('antd')>();
+  return {
+    ...actual,
+    message: {
+      success: vi.fn(),
+      warning: vi.fn(),
+      error: vi.fn(),
+      info: vi.fn(),
+    },
+  };
+});
 
 const mockRequestPersistence = vi.fn().mockResolvedValue(true);
 
@@ -67,7 +81,8 @@ describe('StoragePersistenceCard component', () => {
     ).toBeInTheDocument();
   });
 
-  it('calls requestPersistence when clicking "Yêu cầu lưu trữ bền vững"', async () => {
+  it('calls requestPersistence and shows message.success when granted', async () => {
+    mockRequestPersistence.mockResolvedValueOnce(true);
     render(<StoragePersistenceCard />);
 
     const requestBtn = screen.getByRole('button', { name: /Yêu cầu lưu trữ bền vững/i });
@@ -75,6 +90,22 @@ describe('StoragePersistenceCard component', () => {
 
     await waitFor(() => {
       expect(mockRequestPersistence).toHaveBeenCalledTimes(1);
+      expect(message.success).toHaveBeenCalledWith('Đã kích hoạt lưu trữ bền vững thành công.');
+    });
+  });
+
+  it('shows message.warning when persistence is not granted by browser heuristics', async () => {
+    mockRequestPersistence.mockResolvedValueOnce(false);
+    render(<StoragePersistenceCard />);
+
+    const requestBtn = screen.getByRole('button', { name: /Yêu cầu lưu trữ bền vững/i });
+    fireEvent.click(requestBtn);
+
+    await waitFor(() => {
+      expect(mockRequestPersistence).toHaveBeenCalledTimes(1);
+      expect(message.warning).toHaveBeenCalledWith(
+        expect.stringContaining('Trình duyệt chưa cấp quyền lưu trữ bền vững')
+      );
     });
   });
 

@@ -6,7 +6,8 @@ import {
   Button,
   Popover,
   Tooltip,
-  Popconfirm,
+  Modal,
+  message,
   Dropdown,
   theme,
   type TableColumnsType,
@@ -300,18 +301,25 @@ export const TaskTable: React.FC<TaskTableProps> = ({
             key: 'delete',
             icon: <DeleteOutlined style={{ color: token.colorError }} />,
             danger: true,
-            label: (
-              <Popconfirm
-                title="Xóa tác vụ"
-                description={`Bạn có chắc muốn xóa "${record.name}"?`}
-                onConfirm={() => db && deleteTaskWithAllocations(record.id, db)}
-                okText="Xóa"
-                cancelText="Hủy"
-                okButtonProps={{ danger: true }}
-              >
-                <span>Xóa</span>
-              </Popconfirm>
-            ),
+            label: 'Xóa',
+            onClick: () => {
+              Modal.confirm({
+                title: 'Xóa tác vụ',
+                content: `Bạn có chắc muốn xóa "${record.name}"?`,
+                okText: 'Xóa',
+                cancelText: 'Hủy',
+                okButtonProps: { danger: true },
+                onOk: async () => {
+                  if (!db) return;
+                  try {
+                    await deleteTaskWithAllocations(record.id, db);
+                    message.success({ content: 'Đã xóa tác vụ', duration: 1.5 });
+                  } catch {
+                    message.error({ content: 'Không thể xóa tác vụ', duration: 2 });
+                  }
+                },
+              });
+            },
           },
         ];
 
