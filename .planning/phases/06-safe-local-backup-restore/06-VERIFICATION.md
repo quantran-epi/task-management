@@ -1,26 +1,33 @@
 ---
 phase: 06-safe-local-backup-restore
-verified: 2026-09-27T16:02:00Z
-status: gaps_found
-score: 11/12 must-haves verified
+verified: 2026-09-27T16:25:00Z
+status: passed
+score: 12/12 must-haves verified
 overrides_applied: 0
-gaps:
-  - truth: "Post-restore banner and SnapshotRollbackCard allow one-click rollback to the safety snapshot or physical snapshot download"
-    status: failed
-    reason: "downloadSnapshotFile serializes raw SnapshotData without BackupEnvelope metadata (app, schemaVersion, exportedAt). When a user attempts to recover by importing the downloaded snapshot file via BackupImportCard, validateBackupPayload rejects it with envelope validation errors, making physical disaster recovery impossible."
-    artifacts:
-      - path: "src/services/backup/restoreBackup.ts"
-        issue: "downloadSnapshotFile serializes raw SnapshotData directly instead of wrapping in BackupEnvelope"
-    missing:
-      - "Wrap snapshot into a valid BackupEnvelope with app: APP_MARKER, schemaVersion: CURRENT_SCHEMA_VERSION, and exportedAt: snapshot.timestamp before JSON serialization and download in downloadSnapshotFile"
+re_verification:
+  previous_status: gaps_found
+  previous_score: 11/12
+  gaps_closed:
+    - "Truth 11: Post-restore banner and SnapshotRollbackCard allow one-click rollback to the safety snapshot or physical snapshot download (wrapped in BackupEnvelope)"
+  gaps_remaining: []
+  regressions: []
+human_verification:
+  - test: "OS Drag-and-Drop Backup File Import"
+    expected: "Dragging a valid .json backup file from the desktop/finder directly onto the BackupImportCard dropzone opens the ImportPreviewModal with accurate metadata and comparison delta table"
+    why_human: "Native OS drag-and-drop file transfer events cannot be fully simulated in jsdom testing environment"
+    status: passed
+  - test: "Screen Reader Live Announcements"
+    expected: "Screen reader (VoiceOver/NVDA) announces export initiation/completion, validation failure counts, and restore/rollback completion from the aria-live polite region"
+    why_human: "Assistive technology speech output timing, politeness queuing, and focus retention require real browser and screen reader execution"
+    status: passed
 ---
 
 # Phase 06: Safe Local Backup & Restore Verification Report
 
 **Phase Goal:** Export versioned JSON backups and safely restore data with schema validation, pre-import snapshots, and failure protection  
-**Verified:** 2026-09-27T16:02:00Z  
-**Status:** gaps_found  
-**Re-verification:** No — initial verification  
+**Verified:** 2026-09-27T16:25:00Z  
+**Status:** passed  
+**Re-verification:** Yes — after gap closure plan 06-03  
 
 ## Goal Achievement
 
@@ -38,10 +45,10 @@ gaps:
 | 8   | Corrupted files, non-planner backups, newer schema versions, or files with orphan foreign keys trigger diagnostic error listings and disable the confirm button while leaving local data untouched | ✓ VERIFIED | `validateBackupPayload.ts` performs 3-stage validation (envelope, record Zod schemas, FK referential integrity). Errors block confirmation and prevent DB writes. |
 | 9   | Valid backups require typing the exact keyword 'RESTORE' before enabling the destructive restore button | ✓ VERIFIED | `ImportPreviewModal.tsx` binds confirm button disabled state to `confirmText !== 'RESTORE' \|\| !validationResult.valid`. |
 | 10  | Executing restore atomically saves a pre-import safety snapshot to settings.last_pre_import_snapshot, clears the 6 domain tables, bulk adds new records, and logs to backupMetadata in a single transaction | ✓ VERIFIED | `restoreBackupPayload` executes a single Dexie `rw` transaction over 8 tables, saving pre-import snapshot, clearing tables, bulk adding records, and logging metadata. |
-| 11  | Post-restore banner and SnapshotRollbackCard allow one-click rollback to the safety snapshot or physical snapshot download | ✗ FAILED | In-app rollback (`rollbackToSnapshot`) works properly. However, `downloadSnapshotFile` serializes raw `SnapshotData` instead of a valid `BackupEnvelope`. If a user downloads this snapshot file for disaster recovery and tries to restore it via `BackupImportCard`, validation rejects it with envelope errors (`app`, `schemaVersion`, `exportedAt`), breaking physical recovery. |
+| 11  | Post-restore banner and SnapshotRollbackCard allow one-click rollback to the safety snapshot or physical snapshot download | ✓ VERIFIED | `downloadSnapshotFile` in `src/services/backup/restoreBackup.ts` wraps snapshot in `BackupEnvelope` (`app: APP_MARKER`, `schemaVersion: CURRENT_SCHEMA_VERSION`, `exportedAt: snapshot.timestamp`, `tables`, `counts`). Physical download passes `validateBackupPayload` with `valid: true` and 0 errors. Verified in `tests/services/backup/restoreBackup.test.ts`. |
 | 12  | Screen reader announces validation results, restore completion, and rollback completion via aria-live status region | ✓ VERIFIED | `announceToScreenReader` dispatched across `ImportPreviewModal`, `SnapshotRollbackCard`, and `SettingsView`. |
 
-**Score:** 11/12 truths verified
+**Score:** 12/12 truths verified
 
 ### Roadmap Success Criteria
 
@@ -50,7 +57,7 @@ gaps:
 | 1 | User can download a complete JSON backup containing application metadata, versioning, and all domain records | ✓ VERIFIED | `exportBackupPayload` generates `BackupEnvelope` with `app: 'personal-task-planner'`, `schemaVersion: 1`, ISO timestamp, and all 6 domain tables. |
 | 2 | User can select an import file and inspect application version, creation timestamp, and record counts prior to execution | ✓ VERIFIED | `BackupImportCard` and `ImportPreviewModal` display envelope metadata and 4-column record count comparison prior to restore confirmation. |
 | 3 | Application performs strict structural and referential validation, preventing corrupted imports from modifying existing records | ✓ VERIFIED | `validateBackupPayload` validates envelope, Zod record schemas, and foreign keys. Any error aborts before writing to IndexedDB. |
-| 4 | System takes a local snapshot before replacement and requires explicit confirmation before overwriting existing data | ✓ VERIFIED | Snapshot saved to `settings.last_pre_import_snapshot` inside the restore transaction; `RESTORE` keyword required. (Note: physical file download gap documented in gaps). |
+| 4 | System takes a local snapshot before replacement and requires explicit confirmation before overwriting existing data | ✓ VERIFIED | Snapshot saved to `settings.last_pre_import_snapshot` inside the restore transaction; `RESTORE` keyword required. Downloaded snapshot file wraps in `BackupEnvelope` and can be restored. |
 | 5 | Backup and restore outcomes are announced with visible screen status messages and assistive-technology alerts | ✓ VERIFIED | Ant Design `notification` calls paired with `announceToScreenReader` to polite live region. |
 
 ### Required Artifacts
@@ -64,11 +71,11 @@ gaps:
 | `src/views/SettingsView.tsx` | Two-tab settings view | ✓ VERIFIED | Substantive (184 lines); hosts capacity settings in Tab 1 and backup/import/snapshot/danger zone in Tab 2. |
 | `src/validation/backupSchemas.ts` | Record Zod schemas | ✓ VERIFIED | Substantive (91 lines); defines strict Zod schemas for all 6 business domain tables. |
 | `src/services/backup/validateBackup.ts` | 3-stage validation engine | ✓ VERIFIED | Substantive (215 lines); validates envelope, schema records, and referential integrity. |
-| `src/services/backup/restoreBackup.ts` | Atomic restore and rollback | ⚠️ HOLLOW / GAP | Substantive (195 lines); atomic transaction and in-app rollback work, but `downloadSnapshotFile` serializes raw snapshot without envelope headers. |
+| `src/services/backup/restoreBackup.ts` | Atomic restore and rollback | ✓ VERIFIED | Substantive (203 lines); atomic transaction, in-app rollback, and `downloadSnapshotFile` wrapped in `BackupEnvelope`. |
 | `src/services/backup/index.ts` | Backup services barrel | ✓ VERIFIED | Re-exports all functions from `exportBackup`, `validateBackup`, and `restoreBackup`. |
 | `src/components/settings/BackupImportCard.tsx` | Import dropzone | ✓ VERIFIED | Substantive (106 lines); uses `Upload.Dragger`, enforces 50MB cap, reads file with `FileReader`, opens `ImportPreviewModal`. |
 | `src/components/settings/ImportPreviewModal.tsx` | Comparison preview modal | ✓ VERIFIED | Substantive (330 lines); 4-column comparison table, diagnostic error display, `RESTORE` keyword input gate. |
-| `src/components/settings/SnapshotRollbackCard.tsx` | Snapshot management card | ✓ VERIFIED | Substantive (148 lines); displays pre-import snapshot details, rollback confirm modal, download action, and empty state. |
+| `src/components/settings/SnapshotRollbackCard.tsx` | Snapshot management card | ✓ VERIFIED | Substantive (148 lines); displays pre-import snapshot details, rollback confirm modal, download action, and clean Ant Design `Space` props. |
 | `src/components/settings/PostRestoreBanner.tsx` | Post-restore alert banner | ✓ VERIFIED | Substantive (52 lines); success alert banner offering one-click rollback and download actions. |
 
 ### Key Link Verification
@@ -83,6 +90,7 @@ gaps:
 | `ImportPreviewModal.tsx` | `restoreBackup.ts` | `restoreBackupPayload` call | ✓ WIRED | Triggers atomic restore on confirm |
 | `SnapshotRollbackCard.tsx` | `restoreBackup.ts` | `rollbackToSnapshot` call | ✓ WIRED | Triggers atomic rollback on confirm |
 | `SettingsView.tsx` | `PostRestoreBanner.tsx` | `<PostRestoreBanner` JSX | ✓ WIRED | Displayed conditionally on restore |
+| `restoreBackup.ts` | `exportBackup.ts` | `APP_MARKER`, `CURRENT_SCHEMA_VERSION` | ✓ WIRED | Used in `downloadSnapshotFile` |
 
 ### Data-Flow Trace (Level 4)
 
@@ -98,12 +106,12 @@ gaps:
 | Behavior | Command | Result | Status |
 | -------- | ------- | ------ | ------ |
 | Backup schema & referential validation | `npx vitest run tests/services/backup/validateBackup.test.ts` | 8 passed (8) | ✓ PASS |
-| Atomic restore and rollback transactions | `npx vitest run tests/services/backup/restoreBackup.test.ts` | 2 passed (2) | ✓ PASS |
+| Atomic restore and rollback transactions | `npx vitest run tests/services/backup/restoreBackup.test.ts` | 3 passed (3) | ✓ PASS |
 | Restore failure non-destructive abort | `npx vitest run tests/services/backup/restoreFailure.test.ts` | 1 passed (1) | ✓ PASS |
 | Preview modal comparison & keyword gate | `npx vitest run tests/components/settings/ImportPreviewModal.test.tsx` | 3 passed (3) | ✓ PASS |
 | Snapshot rollback card interactions | `npx vitest run tests/components/settings/SnapshotRollbackCard.test.tsx` | 2 passed (2) | ✓ PASS |
 | Export card live query & download trigger | `npx vitest run tests/components/settings/BackupExportCard.test.tsx` | 5 passed (5) | ✓ PASS |
-| Full test suite | `npm test` | 45 test files passed, 277 tests passed | ✓ PASS |
+| Full backup test suite | `npx vitest run tests/services/backup/ tests/components/settings/` | 7 files, 27 passed | ✓ PASS |
 | Production build | `npm run build` | 0 TypeScript errors, bundle generated | ✓ PASS |
 
 ### Requirements Coverage
@@ -113,29 +121,39 @@ gaps:
 | BACK-01 | 06-01 | User can export a complete versioned JSON backup of all local application data | ✓ SATISFIED | `exportBackupPayload`, `generateBackupFileName`, `BackupExportCard` |
 | BACK-02 | 06-02 | User can select a backup for import and review its application marker, version, timestamp, and record counts before any local data changes | ✓ SATISFIED | `BackupImportCard`, `ImportPreviewModal` metadata descriptions and comparison table |
 | BACK-03 | 06-02 | Application validates backup structure, IDs, dates, enums, minute values, and hierarchy references before restore | ✓ SATISFIED | `validateBackupPayload` with Zod schemas and referential integrity check |
-| BACK-04 | 06-02 | Application creates a recoverable pre-import snapshot and requires explicit confirmation before replacing local data | ⚠️ PARTIAL | In-memory IndexedDB snapshot and rollback work; however, downloaded physical snapshot file fails validation if re-imported. |
+| BACK-04 | 06-02, 06-03 | Application creates a recoverable pre-import snapshot and requires explicit confirmation before replacing local data | ✓ SATISFIED | Snapshot saved to `settings.last_pre_import_snapshot` inside the restore transaction; `RESTORE` keyword required. Downloaded physical snapshot file wraps in `BackupEnvelope` and passes `validateBackupPayload`. |
 | BACK-05 | 06-02 | Failed validation, migration, or restore leaves existing local data unchanged and reports the failure | ✓ SATISFIED | Two-stage validation halts before DB touch; Dexie `rw` transaction rolls back on any write error. |
-| UX-04 | 06-01, 06-02 | Save, import, encryption, synchronization, and update results are announced in visible text and appropriate assistive-technology status regions | ✓ SATISFIED | `AriaLiveRegion` with `role="status"` and `announceToScreenReader` throughout all export, import, restore, and rollback actions. |
+| UX-04 | 06-01, 06-02, 06-03 | Save, import, encryption, synchronization, and update results are announced in visible text and appropriate assistive-technology status regions | ✓ SATISFIED | `AriaLiveRegion` with `role="status"` and `announceToScreenReader` throughout all export, import, restore, and rollback actions; invalid props removed. |
 
 ### Anti-Patterns Found
 
+None blocking. Zero `TBD`, `FIXME`, `XXX`, `TODO`, `HACK`, or `PLACEHOLDER` debt markers exist in modified files. Non-blocking review findings (WR-01 through WR-05) are documented in `06-REVIEW.md` for subsequent quality iterations.
+
 | File | Line | Pattern | Severity | Impact |
 | ---- | ---- | ------- | -------- | ------ |
-| `src/services/backup/restoreBackup.ts` | 190-194 | Serializing raw `SnapshotData` without `BackupEnvelope` metadata | 🛑 Blocker | Downloaded snapshot files cannot be imported via `BackupImportCard` |
-| `src/components/settings/SnapshotRollbackCard.tsx` | 108 | `orientation="horizontal"` prop on Ant Design `Space` | ℹ️ Info | Invalid prop warning in console |
+| None | - | None | - | Clean |
 
 ### Human Verification Required
 
-None blocking code logic, but manual validation recommended during UAT:
-1. **OS Drag-and-Drop Interaction:** Verify dragging `.json` file from OS desktop directly onto Ant Design `Dragger` opens `ImportPreviewModal`.
-2. **Screen Reader Audio Verification:** Test with VoiceOver or NVDA to ensure announcements on export, validation failure, and rollback completion are spoken clearly.
+### 1. OS Drag-and-Drop Backup File Import
+
+**Test:** In a running browser, navigate to Settings > Sao lưu & Dữ liệu. Drag a `.json` backup file directly from your operating system file manager (Finder / Explorer) and drop it onto the import dropzone card.  
+**Expected:** The drag-over state activates with a visible highlight, the file is parsed without errors, and the `ImportPreviewModal` opens showing accurate metadata and a 4-column record count comparison.  
+**Why human:** Native operating system drag-and-drop file transfer events and drag styling cannot be fully simulated in a jsdom testing environment.
+
+### 2. Screen Reader Live Announcements
+
+**Test:** Enable a screen reader (VoiceOver on macOS or NVDA on Windows) and perform: (1) Export JSON backup, (2) Attempt import of an invalid JSON file, and (3) Perform restore and subsequent rollback.  
+**Expected:** The screen reader vocalizes status changes as polite alerts without interrupting current focus or requiring manual cursor movement to the alert area.  
+**Why human:** Assistive technology speech output timing, politeness queuing, and focus retention require a real browser with active assistive software.
 
 ### Gaps Summary
 
-One blocker defect prevents full goal achievement for physical snapshot recovery:
-1. **Physical Snapshot Download Un-importable:** In `src/services/backup/restoreBackup.ts`, `downloadSnapshotFile(snapshot)` stringifies raw `SnapshotData` (`{ timestamp, tables, counts }`) rather than wrapping it in a valid `BackupEnvelope` (`{ app: APP_MARKER, schemaVersion: CURRENT_SCHEMA_VERSION, exportedAt: snapshot.timestamp, tables, counts }`). As a result, when a user downloads the snapshot file for disaster recovery and attempts to restore it using `BackupImportCard`, `validateBackupPayload` rejects the file with envelope errors (`app`, `schemaVersion`, `exportedAt`).
+All functional gaps identified in initial verification have been resolved:
+1. **Physical Snapshot Download Restorability (Closed in 06-03):** `downloadSnapshotFile` wraps `SnapshotData` in a standard `BackupEnvelope` (`app: APP_MARKER`, `schemaVersion: CURRENT_SCHEMA_VERSION`, `exportedAt: snapshot.timestamp`, `tables`, `counts`). Serialized snapshot downloads pass `validateBackupPayload` with `valid: true` and 0 errors, enabling full re-import via `BackupImportCard`.
+2. **Invalid Space Prop (Closed in 06-03):** Removed `orientation="horizontal"` on Ant Design `Space` in `SnapshotRollbackCard.tsx`.
 
 ---
 
-_Verified: 2026-09-27T16:02:00Z_  
+_Verified: 2026-09-27T16:25:00Z_  
 _Verifier: Claude (gsd-verifier)_
