@@ -136,7 +136,7 @@ export async function uploadEncryptedBackup(
 export async function testGitHubConnection(
   config: GitHubConfig,
   token: string
-): Promise<{ ok: boolean; message: string; remoteSha?: string; fileExists: boolean }> {
+): Promise<{ ok: boolean; message: string; remoteSha?: string | undefined; fileExists: boolean }> {
   try {
     const meta = await fetchRemoteBackupMetadata(config, token);
     if (!meta.exists) {

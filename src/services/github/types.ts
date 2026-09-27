@@ -6,10 +6,10 @@ export interface GitHubConfig {
 
 export interface RemoteFileMetadata {
   exists: boolean;
-  sha?: string;
-  size?: number;
-  contentBase64?: string;
-  lastModified?: string;
+  sha?: string | undefined;
+  size?: number | undefined;
+  contentBase64?: string | undefined;
+  lastModified?: string | undefined;
 }
 
 export interface UploadBackupResult {

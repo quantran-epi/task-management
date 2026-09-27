@@ -7,8 +7,8 @@ const { Text, Paragraph } = Typography;
 
 export interface GitHubConflictModalProps {
   open: boolean;
-  remoteSha?: string;
-  localSha?: string;
+  remoteSha?: string | undefined;
+  localSha?: string | undefined;
   onPullAndPreview: () => void;
   onForceOverwrite: () => void;
   onCancel: () => void;
