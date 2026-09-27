@@ -20,9 +20,9 @@ dayjs.extend(isoWeek);
 const { Text } = Typography;
 
 export interface PlannerViewProps {
-  db?: TaskPlannerDatabase;
-  initialDate?: string;
-  targetDate?: string;
+  db?: TaskPlannerDatabase | undefined;
+  initialDate?: string | undefined;
+  targetDate?: string | undefined;
 }
 
 export const PlannerView: React.FC<PlannerViewProps> = ({

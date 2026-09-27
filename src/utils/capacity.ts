@@ -24,12 +24,13 @@ export interface DayCapacityMetrics {
 export function getEffectiveDailyCapacity(
   date: string,
   rules: Map<number, number> | CapacityRule[],
-  overrides: Map<string, number> | CapacityOverride[]
+  overrides: Map<string, number | CapacityOverride> | CapacityOverride[]
 ): number {
   // 1. Check override
   if (overrides instanceof Map) {
     if (overrides.has(date)) {
-      return overrides.get(date)!;
+      const val = overrides.get(date)!;
+      return typeof val === 'number' ? val : val.workMinutes;
     }
   } else {
     const override = overrides.find((o) => o.date === date);

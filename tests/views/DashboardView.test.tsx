@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import 'fake-indexeddb/auto';
 import { DashboardView } from '../../src/views/DashboardView';
 import { TaskPlannerDatabase } from '../../src/db/index';
@@ -69,7 +69,7 @@ describe('DashboardView Integration (DASH-01..DASH-06)', () => {
 
   it('clicking attention task title opens TaskDrawer in-place without page transition', async () => {
     const today = getTodayDateString();
-    const task = await createTask(
+    await createTask(
       {
         name: 'Inspectable Task Item',
         status: 'Open',

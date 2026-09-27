@@ -25,7 +25,7 @@ const LOAD_STATUS_CONFIG: Record<
     color: 'success' | 'warning' | 'error' | 'default';
     icon: React.ReactNode;
     progressStatus: 'success' | 'normal' | 'exception' | 'active';
-    progressColor?: string;
+    progressColor: string;
   }
 > = {
   available: {

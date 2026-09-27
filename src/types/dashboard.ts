@@ -1,4 +1,4 @@
-import type { Task, PlannedAllocation } from './models';
+import type { Task } from './models';
 import type { DayCapacityMetrics } from '../utils/capacity';
 
 export type ForecastHorizon = 7 | 14 | 30;
