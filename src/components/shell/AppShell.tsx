@@ -5,6 +5,7 @@ import { Navigation } from './Navigation';
 import { StatusBadge } from './StatusBadge';
 import { UpgradeModal } from './UpgradeModal';
 import { ResetDbModal } from '../common/ResetDbModal';
+import { AriaLiveRegion } from '../common/AriaLiveRegion';
 import type { AppRoute } from '../../types/navigation';
 
 const { Header, Sider, Content } = Layout;
@@ -92,6 +93,7 @@ export const AppShell: React.FC<AppShellProps> = ({ currentRoute, onNavigate, ch
 
       <UpgradeModal />
       <ResetDbModal open={resetModalOpen} onClose={() => setResetModalOpen(false)} />
+      <AriaLiveRegion />
     </Layout>
   );
 };
