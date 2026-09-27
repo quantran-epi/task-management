@@ -1,7 +1,7 @@
 ---
 phase: 8
 slug: optional-encrypted-github-backup
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-09-27
