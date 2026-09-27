@@ -22,6 +22,7 @@ import {
 } from '../../db/repositories/allocationRepo';
 import { formatMinutes } from '../../utils/time';
 import { createFocusRestorer } from '../../utils/focus';
+import { useRegisterActiveForm } from '../../context/FormGuardContext';
 import type { Task, TaskPriority } from '../../types/models';
 
 const { Text } = Typography;
@@ -50,6 +51,8 @@ export const AllocationModal: React.FC<AllocationModalProps> = ({
   onSuccess,
   db = defaultDb,
 }) => {
+  useRegisterActiveForm('allocation-modal', open);
+
   const [form] = Form.useForm();
   const [submitting, setSubmitting] = useState(false);
   const [existingTotalMinutes, setExistingTotalMinutes] = useState(0);

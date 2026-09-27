@@ -3,6 +3,7 @@ import { Modal, Space, Button } from 'antd';
 import { WeeklyCapacityForm } from '../settings/WeeklyCapacityForm';
 import { OverridesTable } from '../settings/OverridesTable';
 import { createFocusRestorer } from '../../utils/focus';
+import { useRegisterActiveForm } from '../../context/FormGuardContext';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 
 export interface CapacitySettingsModalProps {
@@ -16,6 +17,8 @@ export const CapacitySettingsModal: React.FC<CapacitySettingsModalProps> = ({
   onCancel,
   db = defaultDb,
 }) => {
+  useRegisterActiveForm('capacity-settings-modal', open);
+
   const restorerRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {

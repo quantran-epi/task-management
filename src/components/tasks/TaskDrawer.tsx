@@ -19,6 +19,7 @@ import { getTask, updateTask, reparentTask } from '../../db/repositories/taskRep
 import { getAllProjects } from '../../db/repositories/projectRepo';
 import { getAllMilestones } from '../../db/repositories/milestoneRepo';
 import { createFocusRestorer } from '../../utils/focus';
+import { useRegisterActiveForm } from '../../context/FormGuardContext';
 import { TaskDrawerPlanning } from './TaskDrawerPlanning';
 import type { TaskPlannerDatabase } from '../../db';
 
@@ -82,6 +83,8 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
   triggerRef,
   db,
 }) => {
+  useRegisterActiveForm('task-drawer', open);
+
   const [form] = Form.useForm<TaskDrawerFormValues>();
   const [projects, setProjects] = useState<Project[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);

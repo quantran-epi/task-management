@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 
 export interface FormGuardContextType {
   registerActiveForm: (id: string) => () => void;
@@ -58,4 +58,18 @@ export function useFormGuard(): FormGuardContextType {
     };
   }
   return context;
+}
+
+/**
+ * Convenience hook that registers an active form when active is true,
+ * and automatically unregisters on cleanup or unmount.
+ */
+export function useRegisterActiveForm(id: string, active: boolean = true): void {
+  const { registerActiveForm } = useFormGuard();
+
+  useEffect(() => {
+    if (!active) return;
+    const unregister = registerActiveForm(id);
+    return unregister;
+  }, [registerActiveForm, id, active]);
 }

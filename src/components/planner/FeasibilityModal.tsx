@@ -23,6 +23,7 @@ import { upsertAllocation } from '../../db/repositories/allocationRepo';
 import { updateTask } from '../../db/repositories/taskRepo';
 import { formatMinutes } from '../../utils/time';
 import { createFocusRestorer } from '../../utils/focus';
+import { useRegisterActiveForm } from '../../context/FormGuardContext';
 import { evaluateTaskFeasibility } from '../../utils/feasibility';
 import { getTodayDateString } from '../../utils/date';
 import type { Task, PlannedAllocation } from '../../types/models';
@@ -48,6 +49,8 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
   onSuccess,
   db = defaultDb,
 }) => {
+  useRegisterActiveForm('feasibility-modal', open);
+
   const restorerRef = useRef<(() => void) | null>(null);
   const [submitting, setSubmitting] = useState(false);
 

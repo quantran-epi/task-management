@@ -2,9 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 import { UpdateBanner } from '../../../src/components/pwa/UpdateBanner';
-import { FormGuardProvider, useFormGuard } from '../../../src/context/FormGuardContext';
+import { FormGuardProvider, useFormGuard, useRegisterActiveForm } from '../../../src/context/FormGuardContext';
 
-// Helper component to register an active form in test tree
+// Helper component to register an active form in test tree using manual registerActiveForm
 const FormRegistrar: React.FC<{ formId: string }> = ({ formId }) => {
   const { registerActiveForm } = useFormGuard();
 
@@ -14,6 +14,15 @@ const FormRegistrar: React.FC<{ formId: string }> = ({ formId }) => {
   }, [registerActiveForm, formId]);
 
   return <div data-testid="active-form">{formId}</div>;
+};
+
+// Helper component to register an active form using useRegisterActiveForm hook
+const HookFormRegistrar: React.FC<{ formId: string; active?: boolean }> = ({
+  formId,
+  active = true,
+}) => {
+  useRegisterActiveForm(formId, active);
+  return <div data-testid="hook-active-form">{formId}</div>;
 };
 
 describe('UpdateBanner component', () => {
@@ -140,5 +149,66 @@ describe('UpdateBanner component', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cập nhật ngay' }));
     fireEvent.click(screen.getByRole('button', { name: 'Bỏ qua và Tải lại' }));
     expect(mockOnUpdate).toHaveBeenCalledWith(true);
+  });
+
+  it('useRegisterActiveForm dynamically activates and deactivates reload guard', () => {
+    const { rerender } = render(
+      <FormGuardProvider>
+        <HookFormRegistrar formId="task-drawer" active={true} />
+        <UpdateBanner
+          needRefresh={true}
+          onUpdate={mockOnUpdate}
+          onDismiss={mockOnDismiss}
+        />
+      </FormGuardProvider>
+    );
+
+    // Active=true: intercepted
+    fireEvent.click(screen.getByRole('button', { name: 'Cập nhật ngay' }));
+    expect(mockOnUpdate).not.toHaveBeenCalled();
+    expect(screen.getByText('Cảnh báo: Dữ liệu chưa lưu')).toBeInTheDocument();
+
+    // Dismiss modal
+    fireEvent.click(screen.getByRole('button', { name: 'Quay lại lưu dữ liệu' }));
+
+    // Re-render with active=false
+    rerender(
+      <FormGuardProvider>
+        <HookFormRegistrar formId="task-drawer" active={false} />
+        <UpdateBanner
+          needRefresh={true}
+          onUpdate={mockOnUpdate}
+          onDismiss={mockOnDismiss}
+        />
+      </FormGuardProvider>
+    );
+
+    // Active=false: calls onUpdate(true) directly without guard modal
+    fireEvent.click(screen.getByRole('button', { name: 'Cập nhật ngay' }));
+    expect(mockOnUpdate).toHaveBeenCalledWith(true);
+  });
+
+  it.each([
+    'task-drawer',
+    'project-modal',
+    'milestone-modal',
+    'allocation-modal',
+    'capacity-settings-modal',
+    'feasibility-modal',
+  ])('guards reload when %s is actively registered', (formId) => {
+    render(
+      <FormGuardProvider>
+        <HookFormRegistrar formId={formId} active={true} />
+        <UpdateBanner
+          needRefresh={true}
+          onUpdate={mockOnUpdate}
+          onDismiss={mockOnDismiss}
+        />
+      </FormGuardProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cập nhật ngay' }));
+    expect(mockOnUpdate).not.toHaveBeenCalled();
+    expect(screen.getByText('Cảnh báo: Dữ liệu chưa lưu')).toBeInTheDocument();
   });
 });

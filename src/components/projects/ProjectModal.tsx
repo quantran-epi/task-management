@@ -3,6 +3,7 @@ import { Modal, Form, Input, DatePicker, Select } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
 import type { Project, ProjectStatus } from '../../types/models';
 import { createFocusRestorer } from '../../utils/focus';
+import { useRegisterActiveForm } from '../../context/FormGuardContext';
 
 export interface ProjectModalProps {
   open: boolean;
@@ -42,6 +43,8 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
   onSave,
   loading = false,
 }) => {
+  useRegisterActiveForm('project-modal', open);
+
   const [form] = Form.useForm<ProjectFormValues>();
   const restorerRef = useRef<(() => void) | null>(null);
 

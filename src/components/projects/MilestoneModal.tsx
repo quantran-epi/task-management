@@ -3,6 +3,7 @@ import { Modal, Form, Input, DatePicker, Select } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
 import type { Milestone, MilestoneStatus } from '../../types/models';
 import { createFocusRestorer } from '../../utils/focus';
+import { useRegisterActiveForm } from '../../context/FormGuardContext';
 
 export interface MilestoneModalProps {
   open: boolean;
@@ -43,6 +44,8 @@ export const MilestoneModal: React.FC<MilestoneModalProps> = ({
   onSave,
   loading = false,
 }) => {
+  useRegisterActiveForm('milestone-modal', open);
+
   const [form] = Form.useForm<MilestoneFormValues>();
   const restorerRef = useRef<(() => void) | null>(null);
 
