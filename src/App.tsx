@@ -3,6 +3,7 @@ import { ConfigProvider, theme } from 'antd';
 import viVN from 'antd/locale/vi_VN';
 import './utils/date';
 import { initializeDatabaseDefaults } from './db/seeds';
+import { checkAndRequestStoragePersistence } from './services/storage/storagePersistence';
 import { AppShell } from './components/shell/AppShell';
 import { EmptyState } from './components/common/EmptyState';
 import { useHashRoute } from './hooks/useHashRoute';
@@ -22,6 +23,9 @@ export const App: React.FC = () => {
   useEffect(() => {
     initializeDatabaseDefaults().catch((err) => {
       console.error('Failed to initialize database defaults:', err);
+    });
+    checkAndRequestStoragePersistence().catch((err) => {
+      console.warn('Storage persistence auto-request failed on boot:', err);
     });
   }, []);
 
