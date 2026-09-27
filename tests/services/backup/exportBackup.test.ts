@@ -117,8 +117,8 @@ describe('exportBackup service', () => {
       expect(envelope.tables.plannedAllocations).toHaveLength(1);
 
       // Excluded tables
-      expect((envelope.tables as Record<string, unknown>).settings).toBeUndefined();
-      expect((envelope.tables as Record<string, unknown>).backupMetadata).toBeUndefined();
+      expect((envelope.tables as unknown as Record<string, unknown>).settings).toBeUndefined();
+      expect((envelope.tables as unknown as Record<string, unknown>).backupMetadata).toBeUndefined();
 
       // Counts object
       expect(envelope.counts).toEqual({
