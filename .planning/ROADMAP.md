@@ -12,7 +12,7 @@ Deliver a production-ready, client-side, offline-first task and capacity plannin
 - [x] **Phase 4: Feasibility Engine & Workload Distribution** - Deadline and range feasibility checks with deterministic lowest-load candidate distributions. (completed 2026-09-27)
 - [x] **Phase 5: Actionable Dashboard & Workload Forecasting** - Today, urgent, 7-day, 14-day, and next-month workload forecasting with direct navigation links. (completed 2026-09-27)
 - [x] **Phase 6: Safe Local Backup & Restore** - Complete JSON backup export, Zod structural validation, pre-import snapshots, and non-destructive restore failures. (completed 2026-09-27)
-- [ ] **Phase 7: PWA Offline Capability & Lifecycle Hardening** - Installable manifest, Workbox offline caching, non-destructive update prompts, and cross-browser audit. (gap closure in progress)
+- [x] **Phase 7: PWA Offline Capability & Lifecycle Hardening** - Installable manifest, Workbox offline caching, non-destructive update prompts, and cross-browser audit. (completed 2026-09-27)
 - [ ] **Phase 8: Optional Encrypted GitHub Backup** - Browser-side PBKDF2/AES-GCM encryption, runtime-only credentials, GitHub Contents API backup push/pull, and conflict protection.
 
 ## Phase Details
@@ -259,5 +259,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 4. Feasibility Engine & Workload Distribution | 3/3 | Complete   | 2026-09-27 |
 | 5. Actionable Dashboard & Workload Forecasting | 4/4 | Complete   | 2026-09-27 |
 | 6. Safe Local Backup & Restore | 3/3 | Complete   | 2026-09-27 |
-| 7. PWA Offline Capability & Lifecycle Hardening | 4/4 | Complete | 2026-09-27 |
+| 7. PWA Offline Capability & Lifecycle Hardening | 4/4 | Complete    | 2026-09-27 |
 | 8. Optional Encrypted GitHub Backup | 0/TBD | Not started | - |

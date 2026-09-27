@@ -64,7 +64,7 @@ GitHub synchronization is backup synchronization, not collaborative live sync. B
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Build a React, TypeScript, and Vite static PWA | Fits Ant Design, GitHub Pages, and rich local interactions without a backend | — Pending |
+| Build a React, TypeScript, and Vite static PWA | Fits Ant Design, GitHub Pages, and rich local interactions without a backend | ✓ Validated — Phase 7 |
 | Use IndexedDB as source of truth | Supports structured local persistence and offline use | — Pending |
 | Model weekly capacity plus per-date overrides | Low maintenance while supporting holidays and exceptional workload | — Pending |
 | Suggest work on lowest-load eligible days first | Balances workload and directly supports overload prevention | — Pending |
@@ -90,4 +90,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-26 after initialization*
+*Last updated: 2026-09-27 after Phase 7*
