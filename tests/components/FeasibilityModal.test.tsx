@@ -4,7 +4,7 @@ import dayjs from 'dayjs';
 import { TaskPlannerDatabase } from '../../src/db/index';
 import { createTask } from '../../src/db/repositories/taskRepo';
 import { upsertAllocation } from '../../src/db/repositories/allocationRepo';
-import { setCapacityRule } from '../../src/db/repositories/capacityRepo';
+import { updateCapacityRule } from '../../src/db/repositories/capacityRepo';
 import { FeasibilityModal } from '../../src/components/planner/FeasibilityModal';
 
 describe('FeasibilityModal Component (CALC-03, CALC-04, CALC-05, CALC-06, D-08, D-10, D-12, D-14, D-15, D-16, T-04-03)', () => {
@@ -16,10 +16,10 @@ describe('FeasibilityModal Component (CALC-03, CALC-04, CALC-05, CALC-06, D-08, 
 
     // Default working week Mon-Fri 8h (480m)
     for (let day = 1; day <= 5; day++) {
-      await setCapacityRule(day, 480, testDb);
+      await updateCapacityRule(day, 480, testDb);
     }
-    await setCapacityRule(6, 0, testDb);
-    await setCapacityRule(0, 0, testDb);
+    await updateCapacityRule(6, 0, testDb);
+    await updateCapacityRule(0, 0, testDb);
   });
 
   afterEach(async () => {
@@ -27,10 +27,9 @@ describe('FeasibilityModal Component (CALC-03, CALC-04, CALC-05, CALC-06, D-08, 
   });
 
   it('renders modal when open with parameters, result alert, and candidate table', async () => {
-    const today = dayjs().format('YYYY-MM-DD');
-    const dueDate = dayjs().add(3, 'day').format('YYYY-MM-DD');
+    const deadline = dayjs().add(3, 'day').format('YYYY-MM-DD');
     const task = await createTask(
-      { name: 'Analyze Architecture', estimateMinutes: 240, status: 'In Progress', dueDate },
+      { name: 'Analyze Architecture', estimateMinutes: 240, status: 'In Progress', deadline },
       testDb
     );
 
@@ -51,9 +50,9 @@ describe('FeasibilityModal Component (CALC-03, CALC-04, CALC-05, CALC-06, D-08, 
   });
 
   it('CALC-03: renders green Alert when task fits within range with surplus capacity', async () => {
-    const dueDate = dayjs().add(5, 'day').format('YYYY-MM-DD');
+    const deadline = dayjs().add(5, 'day').format('YYYY-MM-DD');
     const task = await createTask(
-      { name: 'Feasible Task', estimateMinutes: 120, status: 'Open', dueDate },
+      { name: 'Feasible Task', estimateMinutes: 120, status: 'Open', deadline },
       testDb
     );
 
@@ -68,16 +67,17 @@ describe('FeasibilityModal Component (CALC-03, CALC-04, CALC-05, CALC-06, D-08, 
 
     // Green alert with surplus text
     const banner = await screen.findByTestId('feasibility-alert');
-    expect(banner).toBeInTheDocument();
-    expect(banner).toHaveTextContent(/Feasible: Work fits within range/i);
+    await waitFor(() => {
+      expect(banner).toHaveTextContent(/Feasible: Work fits within range/i);
+    });
     expect(banner).toHaveTextContent(/Surplus capacity/i);
   });
 
   it('CALC-03 / D-12: renders warning Alert when task is infeasible and allows extending to earliest feasible date', async () => {
     // 1-day range with 480m capacity, but task estimate is 1200m -> infeasible deficit
-    const dueDate = dayjs().format('YYYY-MM-DD');
+    const deadline = dayjs().format('YYYY-MM-DD');
     const task = await createTask(
-      { name: 'Overloaded Task', estimateMinutes: 1200, status: 'Open', dueDate },
+      { name: 'Overloaded Task', estimateMinutes: 1200, status: 'Open', deadline },
       testDb
     );
 
@@ -91,7 +91,9 @@ describe('FeasibilityModal Component (CALC-03, CALC-04, CALC-05, CALC-06, D-08, 
     );
 
     const banner = await screen.findByTestId('feasibility-alert');
-    expect(banner).toHaveTextContent(/Infeasible: Deficit of/i);
+    await waitFor(() => {
+      expect(banner).toHaveTextContent(/Infeasible: Deficit of/i);
+    });
     expect(banner).toHaveTextContent(/Earliest feasible completion date/i);
 
     // Extend button exists
@@ -109,9 +111,9 @@ describe('FeasibilityModal Component (CALC-03, CALC-04, CALC-05, CALC-06, D-08, 
   });
 
   it('CALC-06 / T-04-03: candidate minutes edits and toggling checkboxes do NOT mutate IndexedDB until Apply is clicked', async () => {
-    const dueDate = dayjs().add(3, 'day').format('YYYY-MM-DD');
+    const deadline = dayjs().add(3, 'day').format('YYYY-MM-DD');
     const task = await createTask(
-      { name: 'Draft Proposal', estimateMinutes: 180, status: 'Open', dueDate },
+      { name: 'Draft Proposal', estimateMinutes: 180, status: 'Open', deadline },
       testDb
     );
 
@@ -154,9 +156,9 @@ describe('FeasibilityModal Component (CALC-03, CALC-04, CALC-05, CALC-06, D-08, 
 
   it('CALC-06 / D-08 / D-16: clicking Apply Allocations atomically writes merged allocations to IndexedDB', async () => {
     const today = dayjs().format('YYYY-MM-DD');
-    const dueDate = dayjs().add(2, 'day').format('YYYY-MM-DD');
+    const deadline = dayjs().add(2, 'day').format('YYYY-MM-DD');
     const task = await createTask(
-      { name: 'Deploy Pipeline', estimateMinutes: 120, status: 'In Progress', dueDate },
+      { name: 'Deploy Pipeline', estimateMinutes: 120, status: 'In Progress', deadline },
       testDb
     );
 

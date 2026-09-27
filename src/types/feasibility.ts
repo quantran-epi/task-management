@@ -36,9 +36,9 @@ export interface FeasibilityEvaluationInput {
   rules: Map<number, number> | CapacityRule[];
   overrides: Map<string, number> | CapacityOverride[];
   activeAllocationsByDate: Record<string, number>; // other tasks active load
-  strategy?: DistributionStrategy;
-  maxMinutesPerDay?: number;
-  today?: string; // YYYY-MM-DD (defaults to getTodayDateString())
+  strategy?: DistributionStrategy | undefined;
+  maxMinutesPerDay?: number | undefined;
+  today?: string | undefined; // YYYY-MM-DD (defaults to getTodayDateString())
 }
 
 export interface FeasibilityResult {
