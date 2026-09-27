@@ -181,8 +181,16 @@ Plans:
   4. System takes a local snapshot before replacement and requires explicit confirmation before overwriting existing data.
   5. Backup and restore outcomes are announced with visible screen status messages and assistive-technology alerts.
 
-**Plans**: TBD
+**Plans**: 2 plans
 **UI hint**: yes
+Plans:
+**Wave 1**
+
+- [ ] 06-01-PLAN.md — Build export payload engine, timestamped download, aria-live announcement region, and settings two-tab layout (BACK-01, UX-04)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 06-02-PLAN.md — Build strict validation engine, atomic restore and snapshot rollback services, comparison modal with RESTORE gate, and snapshot management card (BACK-02, BACK-03, BACK-04, BACK-05, UX-04)
 
 ### Phase 7: PWA Offline Capability & Lifecycle Hardening
 
@@ -230,6 +238,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 3. Capacity Model & Daily Planning Ledger | 4/4 | Complete   | 2026-09-26 |
 | 4. Feasibility Engine & Workload Distribution | 3/3 | Complete   | 2026-09-27 |
 | 5. Actionable Dashboard & Workload Forecasting | 4/4 | Complete   | 2026-09-27 |
-| 6. Safe Local Backup & Restore | 0/TBD | Not started | - |
+| 6. Safe Local Backup & Restore | 0/2 | Not started | - |
 | 7. PWA Offline Capability & Lifecycle Hardening | 0/TBD | Not started | - |
 | 8. Optional Encrypted GitHub Backup | 0/TBD | Not started | - |
