@@ -76,9 +76,9 @@
 - [x] **SYNC-01**: User can enter a fine-grained GitHub token and encryption passphrase at runtime without either value entering source control, exports, logs, or the deployed bundle.
 - [x] **SYNC-02**: Token and passphrase remain in session memory only and are cleared when the tab closes or reloads.
 - [x] **SYNC-03**: User can encrypt a current backup in the browser using a passphrase-derived key and authenticated encryption before upload.
-- [ ] **SYNC-04**: User can manually upload the encrypted backup to `.task-management/backup.enc.json` through the GitHub Contents API.
+- [x] **SYNC-04**: User can manually upload the encrypted backup to `.task-management/backup.enc.json` through the GitHub Contents API.
 - [ ] **SYNC-05**: User can manually download, decrypt, validate, preview, and explicitly restore the encrypted GitHub backup.
-- [ ] **SYNC-06**: Application detects remote-content conflicts using the current file SHA and never silently overwrites or automatically merges a conflicting backup.
+- [x] **SYNC-06**: Application detects remote-content conflicts using the current file SHA and never silently overwrites or automatically merges a conflicting backup.
 - [ ] **SYNC-07**: Local operation and file export/import remain fully functional without GitHub credentials or network access.
 
 ### PWA and Delivery
@@ -180,9 +180,9 @@
 | SYNC-01 | Phase 8 | Complete |
 | SYNC-02 | Phase 8 | Complete |
 | SYNC-03 | Phase 8 | Complete |
-| SYNC-04 | Phase 8 | Pending |
+| SYNC-04 | Phase 8 | Complete |
 | SYNC-05 | Phase 8 | Pending |
-| SYNC-06 | Phase 8 | Pending |
+| SYNC-06 | Phase 8 | Complete |
 | SYNC-07 | Phase 8 | Pending |
 | UX-01 | Phase 1 | Complete |
 | UX-02 | Phase 2 | Complete |
