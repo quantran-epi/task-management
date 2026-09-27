@@ -47,7 +47,7 @@
 
 ### Feasibility Calculator
 
-- [ ] **CALC-01**: User can evaluate a task estimate against an inclusive date range or a deadline.
+- [x] **CALC-01**: User can evaluate a task estimate against an inclusive date range or a deadline.
 - [ ] **CALC-02**: Feasibility calculation accounts for weekly capacity, date overrides, zero-capacity days, and existing active allocations.
 - [x] **CALC-03**: User receives a clear feasible or infeasible result with remaining capacity or shortage in hours and minutes.
 - [x] **CALC-04**: User can inspect which dates were available, full, overloaded, or excluded from the calculation.
@@ -154,7 +154,7 @@
 | PLAN-04 | Phase 3 | Complete |
 | PLAN-05 | Phase 3 | Complete |
 | PLAN-06 | Phase 3 | Complete |
-| CALC-01 | Phase 4 | Pending |
+| CALC-01 | Phase 4 | Complete |
 | CALC-02 | Phase 4 | Pending |
 | CALC-03 | Phase 4 | Complete |
 | CALC-04 | Phase 4 | Complete |
