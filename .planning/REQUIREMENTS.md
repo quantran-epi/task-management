@@ -30,11 +30,11 @@
 
 ### Notifications & Custom Reminders
 
-- [ ] **NOTIF-01**: User can set custom reminder date (`reminderDate: YYYY-MM-DD`) and optional note on Project, Milestone, and Task.
+- [x] **NOTIF-01**: User can set custom reminder date (`reminderDate: YYYY-MM-DD`) and optional note on Project, Milestone, and Task.
 - [ ] **NOTIF-02**: User sees proactive in-app alert badge and notification drawer in application header showing active alerts.
 - [ ] **NOTIF-03**: System alerts user to overdue tasks and tasks approaching deadline (today/tomorrow).
 - [ ] **NOTIF-04**: System alerts user to days where planned work exceeds available capacity (>100% overload).
-- [ ] **NOTIF-05**: System alerts user to stale tasks in 'In Progress' or 'In Review' status with no activity for more than 5 days.
+- [x] **NOTIF-05**: System alerts user to stale tasks in 'In Progress' or 'In Review' status with no activity for more than 5 days.
 
 ### Enhanced Analytics Dashboard
 
@@ -72,11 +72,11 @@
 | JIRA-03 | Phase 11 | Complete |
 | JIRA-04 | Phase 11 | Complete |
 | JIRA-05 | Phase 11 | Complete |
-| NOTIF-01 | Phase 12 | Pending |
+| NOTIF-01 | Phase 12 | Complete |
 | NOTIF-02 | Phase 12 | Pending |
 | NOTIF-03 | Phase 12 | Pending |
 | NOTIF-04 | Phase 12 | Pending |
-| NOTIF-05 | Phase 12 | Pending |
+| NOTIF-05 | Phase 12 | Complete |
 | ANLT-01 | Phase 13 | Pending |
 | ANLT-02 | Phase 13 | Pending |
 | ANLT-03 | Phase 13 | Pending |
