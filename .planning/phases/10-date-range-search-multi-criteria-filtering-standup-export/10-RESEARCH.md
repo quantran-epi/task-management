@@ -594,11 +594,11 @@ export async function copyTextToClipboard(text: string): Promise<boolean> {
 
 *Note: All claims in this research are verified from CONTEXT.md, UI-SPEC.md, or the existing codebase — no unverified assumptions exist.*
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should the milestone filter dropdown show all milestones or only milestones belonging to the selected project?**
    - *What we know:* D-03 specifies: `milestoneId`: Select dropdown filtered by selected project (or all milestones).
-   - *Recommendation:* When `filters.projectId` is selected, filter the milestone options to only those with `milestone.projectId === filters.projectId`. When `filters.projectId` is null, display all milestones with their parent project name in parentheses (e.g. `Milestone A (Project X)`). If project changes and the selected milestone does not belong to the newly selected project, clear `milestoneId`.
+   - *RESOLVED:* When `filters.projectId` is selected, filter the milestone options to only those with `milestone.projectId === filters.projectId`. When `filters.projectId` is null, display all milestones with their parent project name in parentheses (e.g. `Milestone A (Project X)`). If project changes and the selected milestone does not belong to the newly selected project, clear `milestoneId`.
 
 ## Environment Availability
 

@@ -66,7 +66,10 @@
   4. User can click a button to copy filtered task results to clipboard as formatted Markdown standup summary.
 
 **Plans**: 2 plans in 2 waves
+**Wave 1**
 - [ ] 10-01-PLAN.md — Allocation date range query, multi-criteria filter pipeline, tag inheritance, and standup Markdown format utility (Wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 10-02-PLAN.md — Reactive filter hook, collapsible advanced filter bar UI, active filter badge, and clipboard standup export (Wave 2)
 
 **UI hint**: yes
