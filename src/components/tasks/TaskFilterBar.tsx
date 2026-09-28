@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Input,
   Select,
@@ -6,17 +6,28 @@ import {
   Checkbox,
   Radio,
   Space,
+  Button,
+  Badge,
+  DatePicker,
   theme,
   type InputRef,
 } from 'antd';
-import { SearchOutlined } from '@ant-design/icons';
+import { SearchOutlined, FilterOutlined, ClearOutlined } from '@ant-design/icons';
+import dayjs, { type Dayjs } from 'dayjs';
 import type { TaskFilterState } from '../../utils/filter';
-import type { Project, TaskStatus, TaskPriority } from '../../types/models';
+import { countActiveAdvancedFilters } from '../../utils/filter';
+import type { Project, Milestone, TaskStatus, TaskPriority, WorkType } from '../../types/models';
+import { WORK_TYPES } from '../../types/models';
+import { WORK_TYPE_CONFIG } from './WorkTypeBadge';
 
 export interface TaskFilterBarProps {
   filters: TaskFilterState;
   onFilterChange: (patch: Partial<TaskFilterState>) => void;
+  onResetFilters?: () => void;
   projects?: Project[];
+  milestones?: Milestone[];
+  availableOpsOwners?: string[];
+  availableBAs?: string[];
   searchInputRef?: React.Ref<InputRef>;
 }
 
@@ -39,10 +50,31 @@ const ALL_PRIORITIES: { label: string; value: TaskPriority }[] = [
 export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
   filters,
   onFilterChange,
+  onResetFilters,
   projects = [],
+  milestones = [],
+  availableOpsOwners = [],
+  availableBAs = [],
   searchInputRef,
 }) => {
   const { token } = theme.useToken();
+  const [advancedOpen, setAdvancedOpen] = useState<boolean>(false);
+
+  const activeAdvancedCount = countActiveAdvancedFilters(filters);
+  const hasActiveFilters =
+    Boolean(filters.search) ||
+    filters.hierarchyScope !== 'all' ||
+    Boolean(filters.projectId) ||
+    filters.horizon !== 'all' ||
+    filters.statuses.length !== 4 ||
+    filters.priorities.length > 0 ||
+    filters.includeClosed ||
+    activeAdvancedCount > 0;
+
+  // Filter milestone choices based on selected project
+  const eligibleMilestones = filters.projectId
+    ? milestones.filter((m) => m.projectId === filters.projectId)
+    : milestones;
 
   return (
     <div
@@ -56,7 +88,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
         border: `1px solid ${token.colorBorderSecondary}`,
       }}
     >
-      {/* Top row: Search, Scope, Project */}
+      {/* Top row: Search, Scope, Project, Advanced Toggle, Reset */}
       <div
         style={{
           display: 'flex',
@@ -75,7 +107,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
             placeholder="Tìm kiếm tác vụ (Nhấn '/' để tìm)..."
             value={filters.search}
             onChange={(e) => onFilterChange({ search: e.target.value })}
-            style={{ minWidth: 260, maxWidth: 380, flex: 1 }}
+            style={{ minWidth: 240, maxWidth: 360, flex: 1 }}
             allowClear
             aria-label="Tìm kiếm tác vụ"
           />
@@ -96,10 +128,43 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
             placeholder="Lọc theo Dự án"
             style={{ minWidth: 160 }}
             value={filters.projectId || undefined}
-            onChange={(val) => onFilterChange({ projectId: val || null })}
+            onChange={(val) => {
+              onFilterChange({
+                projectId: val || null,
+                // Clear milestone if it doesn't belong to the newly selected project
+                milestoneId:
+                  val && filters.milestoneId
+                    ? milestones.find((m) => m.id === filters.milestoneId && m.projectId === val)
+                      ? filters.milestoneId
+                      : null
+                    : filters.milestoneId,
+              });
+            }}
             options={projects.map((p) => ({ label: p.name, value: p.id }))}
             aria-label="Lọc theo dự án"
           />
+
+          <Badge count={activeAdvancedCount} size="small" offset={[-2, 2]}>
+            <Button
+              icon={<FilterOutlined />}
+              type={advancedOpen ? 'primary' : 'default'}
+              onClick={() => setAdvancedOpen(!advancedOpen)}
+              aria-expanded={advancedOpen}
+              aria-label="Bộ lọc nâng cao"
+            >
+              Bộ lọc nâng cao
+            </Button>
+          </Badge>
+
+          {onResetFilters && hasActiveFilters && (
+            <Button
+              icon={<ClearOutlined />}
+              onClick={onResetFilters}
+              aria-label="Xóa bộ lọc"
+            >
+              Xóa bộ lọc
+            </Button>
+          )}
         </div>
 
         {/* Date Horizons */}
@@ -118,7 +183,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
         </Radio.Group>
       </div>
 
-      {/* Bottom row: Status multiselect, include closed toggle, Priority filter */}
+      {/* Row 2: Status multiselect, include closed toggle, Priority filter */}
       <div
         style={{
           display: 'flex',
@@ -167,6 +232,174 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
           />
         </Space>
       </div>
+
+      {/* Row 3 (Collapsible): Advanced Filter Panel */}
+      {advancedOpen && (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 12,
+            padding: '12px 16px',
+            backgroundColor: token.colorBgContainer,
+            borderRadius: 6,
+            border: `1px dashed ${token.colorBorder}`,
+          }}
+        >
+          {/* Advanced Row 1: Execution Date Range & Deadline Date Range */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
+            <Space orientation="horizontal" size="small" style={{ alignItems: 'center' }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
+                Thời gian kế hoạch:
+              </span>
+              <DatePicker.RangePicker
+                placeholder={['Từ ngày', 'Đến ngày']}
+                format="YYYY-MM-DD"
+                value={
+                  filters.executionDateRange && filters.executionDateRange[0] && filters.executionDateRange[1]
+                    ? [dayjs(filters.executionDateRange[0]), dayjs(filters.executionDateRange[1])]
+                    : null
+                }
+                onChange={(dates: [Dayjs | null, Dayjs | null] | null) => {
+                  if (dates && dates[0] && dates[1]) {
+                    onFilterChange({
+                      executionDateRange: [
+                        dates[0].format('YYYY-MM-DD'),
+                        dates[1].format('YYYY-MM-DD'),
+                      ],
+                    });
+                  } else {
+                    onFilterChange({ executionDateRange: null });
+                  }
+                }}
+                allowClear
+                aria-label="Khoảng thời gian kế hoạch thực hiện"
+              />
+            </Space>
+
+            <Space orientation="horizontal" size="small" style={{ alignItems: 'center' }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
+                Hạn chót:
+              </span>
+              <DatePicker.RangePicker
+                placeholder={['Hạn từ', 'Hạn đến']}
+                format="YYYY-MM-DD"
+                value={
+                  filters.deadlineRange && filters.deadlineRange[0] && filters.deadlineRange[1]
+                    ? [dayjs(filters.deadlineRange[0]), dayjs(filters.deadlineRange[1])]
+                    : null
+                }
+                onChange={(dates: [Dayjs | null, Dayjs | null] | null) => {
+                  if (dates && dates[0] && dates[1]) {
+                    onFilterChange({
+                      deadlineRange: [
+                        dates[0].format('YYYY-MM-DD'),
+                        dates[1].format('YYYY-MM-DD'),
+                      ],
+                    });
+                  } else {
+                    onFilterChange({ deadlineRange: null });
+                  }
+                }}
+                allowClear
+                aria-label="Khoảng hạn chót hoàn thành"
+              />
+            </Space>
+          </div>
+
+          {/* Advanced Row 2: Milestone & Work Types */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
+            <Space orientation="horizontal" size="small" style={{ alignItems: 'center', flex: 1, minWidth: 260 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
+                Mốc (Milestone):
+              </span>
+              <Select
+                allowClear
+                placeholder="Lọc theo mốc (Milestone)"
+                style={{ minWidth: 200, flex: 1 }}
+                value={filters.milestoneId || undefined}
+                onChange={(val) => onFilterChange({ milestoneId: val || null })}
+                options={eligibleMilestones.map((m) => ({ label: m.name, value: m.id }))}
+                aria-label="Lọc theo mốc"
+              />
+            </Space>
+
+            <Space orientation="horizontal" size="small" style={{ alignItems: 'center', flex: 2, minWidth: 320 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
+                Loại việc:
+              </span>
+              <Select
+                mode="multiple"
+                allowClear
+                style={{ minWidth: 260, flex: 1 }}
+                placeholder="Tất cả loại việc"
+                value={filters.workTypes}
+                onChange={(vals) => onFilterChange({ workTypes: vals as WorkType[] })}
+                options={WORK_TYPES.map((wt) => {
+                  const cfg = WORK_TYPE_CONFIG[wt];
+                  return {
+                    label: (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            backgroundColor: cfg.color,
+                          }}
+                        />
+                        {cfg.label}
+                      </span>
+                    ),
+                    value: wt,
+                  };
+                })}
+                maxTagCount="responsive"
+                aria-label="Lọc theo loại công việc"
+              />
+            </Space>
+          </div>
+
+          {/* Advanced Row 3: Ops Owner & Business Analyst Multi-select */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
+            <Space orientation="horizontal" size="small" style={{ alignItems: 'center', flex: 1, minWidth: 280 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
+                Ops Owner:
+              </span>
+              <Select
+                mode="tags"
+                allowClear
+                style={{ minWidth: 220, flex: 1 }}
+                placeholder="Lọc theo Ops Owner (Nhập hoặc chọn)"
+                value={filters.opsOwners}
+                onChange={(vals) => onFilterChange({ opsOwners: vals })}
+                options={availableOpsOwners.map((owner) => ({ label: owner, value: owner }))}
+                maxTagCount="responsive"
+                aria-label="Lọc theo Ops Owner"
+              />
+            </Space>
+
+            <Space orientation="horizontal" size="small" style={{ alignItems: 'center', flex: 1, minWidth: 280 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
+                BA:
+              </span>
+              <Select
+                mode="tags"
+                allowClear
+                style={{ minWidth: 220, flex: 1 }}
+                placeholder="Lọc theo BA (Nhập hoặc chọn)"
+                value={filters.businessAnalysts}
+                onChange={(vals) => onFilterChange({ businessAnalysts: vals })}
+                options={availableBAs.map((ba) => ({ label: ba, value: ba }))}
+                maxTagCount="responsive"
+                aria-label="Lọc theo BA"
+              />
+            </Space>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+

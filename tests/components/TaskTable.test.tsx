@@ -79,10 +79,11 @@ describe('TaskTable Component', () => {
     expect(screen.getAllByText('Tất cả').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText('Dự án')).toBeInTheDocument();
     expect(screen.getByText('Độc lập')).toBeInTheDocument();
-    expect(screen.getByText(/Gồm Hoàn thành & Đã hủy/i)).toBeInTheDocument();
+    expect(screen.getByText(/Hoàn thành & Đã hủy/i)).toBeInTheDocument();
     expect(screen.getByText('Quá hạn')).toBeInTheDocument();
     expect(screen.getByText('Hôm nay')).toBeInTheDocument();
     expect(screen.getByText('Tuần này')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Bộ lọc nâng cao/i })).toBeInTheDocument();
   });
 
   it('TaskTable renders columns with tags, breadcrumbs, estimate format, link badges, and overdue styling', () => {
@@ -115,6 +116,9 @@ describe('TaskTable Component', () => {
     expect(screen.getByText('Beta Standalone Task')).toBeInTheDocument();
     expect(screen.getByText('Độc lập')).toBeInTheDocument();
     expect(screen.getByText('Lập trình')).toBeInTheDocument();
+
+    // Standup Export button check
+    expect(screen.getByRole('button', { name: /Sao chép Standup/i })).toBeInTheDocument();
   });
 
   it('Table keyboard navigation handles Arrow navigation and Enter opening drawer', async () => {

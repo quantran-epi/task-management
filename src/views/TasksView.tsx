@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { Button, Modal, Select, Typography, type InputRef } from 'antd';
 import { ThunderboltOutlined } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -38,6 +38,23 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb }) => {
   const projects = useLiveQuery(() => getAllProjects(db), [db]) ?? [];
   const milestones = useLiveQuery(() => getAllMilestones(db), [db]) ?? [];
 
+  // Extract distinct Ops Owners and BAs across projects, milestones, tasks for autocomplete
+  const availableOpsOwners = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of projects) p.opsOwners?.forEach((o) => set.add(o));
+    for (const m of milestones) m.opsOwners?.forEach((o) => set.add(o));
+    for (const t of tasks) t.opsOwners?.forEach((o) => set.add(o));
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [projects, milestones, tasks]);
+
+  const availableBAs = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of projects) p.businessAnalysts?.forEach((b) => set.add(b));
+    for (const m of milestones) m.businessAnalysts?.forEach((b) => set.add(b));
+    for (const t of tasks) t.businessAnalysts?.forEach((b) => set.add(b));
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [projects, milestones, tasks]);
+
   const handleOpenFeasibility = async (task?: Task) => {
     if (task) {
       setFeasibilityTask(task);
@@ -74,9 +91,11 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb }) => {
     filters,
     setFilter,
     setFilters,
+    resetFilters,
     filteredTasks,
     debouncedSearch,
-  } = useTaskFilters(tasks);
+    activeFilterCount,
+  } = useTaskFilters({ tasks, projects, milestones, db });
 
   // Global keyboard shortcuts per D-29
   useKeyboardShortcuts({
@@ -111,9 +130,10 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb }) => {
     filters.hierarchyScope !== 'all' ||
     Boolean(filters.projectId) ||
     filters.horizon !== 'all' ||
-    filters.statuses.length > 0 ||
+    filters.statuses.length !== 4 ||
     filters.priorities.length > 0 ||
-    filters.includeClosed;
+    filters.includeClosed ||
+    activeFilterCount > 0;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -139,7 +159,11 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb }) => {
       <TaskFilterBar
         filters={filters}
         onFilterChange={setFilters}
+        onResetFilters={resetFilters}
         projects={projects}
+        milestones={milestones}
+        availableOpsOwners={availableOpsOwners}
+        availableBAs={availableBAs}
         searchInputRef={searchInputRef}
       />
 

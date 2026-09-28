@@ -7,6 +7,7 @@ import {
   Popover,
   Tooltip,
   Modal,
+  Input,
   message,
   Dropdown,
   theme,
@@ -18,6 +19,7 @@ import {
   MoreOutlined,
   DeleteOutlined,
   LinkOutlined,
+  CopyOutlined,
 } from '@ant-design/icons';
 import type { Task, Project, Milestone, TaskPriority, WorkType } from '../../types/models';
 import { InlineStatusTag } from './InlineStatusTag';
@@ -31,6 +33,7 @@ import { WorkTypeBadge, WORK_TYPE_CONFIG } from './WorkTypeBadge';
 import { TagListDisplay } from '../common/TagListDisplay';
 import { resolveInheritedTags } from '../../domain/inheritance';
 import { WORK_TYPES } from '../../types/models';
+import { formatStandupSummary } from '../../utils/standup';
 import type { TaskPlannerDatabase } from '../../db';
 
 export interface TaskTableProps {
@@ -75,7 +78,10 @@ export const TaskTable: React.FC<TaskTableProps> = ({
   const { token } = theme.useToken();
   const today = getTodayDateString();
   const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
+  const [standupFallbackModalOpen, setStandupFallbackModalOpen] = useState<boolean>(false);
+  const [standupFallbackText, setStandupFallbackText] = useState<string>('');
   const tableRef = useRef<HTMLDivElement>(null);
+  const fallbackTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Fast project and milestone lookup maps
   const projectMap = React.useMemo(() => {
@@ -85,6 +91,29 @@ export const TaskTable: React.FC<TaskTableProps> = ({
   const milestoneMap = React.useMemo(() => {
     return new Map(milestones.map((m) => [m.id, m]));
   }, [milestones]);
+
+  const handleCopyStandup = async () => {
+    const summary = formatStandupSummary(tasks, {
+      projectMap,
+      milestoneMap,
+      todayStr: today,
+    });
+
+    try {
+      if (!navigator.clipboard || !navigator.clipboard.writeText) {
+        throw new Error('Clipboard API not available');
+      }
+      await navigator.clipboard.writeText(summary);
+      message.success('Đã sao chép báo cáo Standup vào clipboard');
+    } catch {
+      // Graceful fallback for non-secure context or permission denied
+      setStandupFallbackText(summary);
+      setStandupFallbackModalOpen(true);
+      setTimeout(() => {
+        fallbackTextareaRef.current?.select();
+      }, 100);
+    }
+  };
 
   // Keep highlightedIndex in bounds when tasks change
   useEffect(() => {
@@ -398,8 +427,34 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       data-testid="task-table-container"
       tabIndex={0}
       onKeyDown={handleKeyDown}
-      style={{ outline: 'none' }}
+      style={{ outline: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}
     >
+      {/* Table Toolbar Header */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '4px 0',
+        }}
+      >
+        <div style={{ fontSize: 13, color: token.colorTextSecondary }}>
+          {selectedRowKeys.length > 0 ? (
+            <span>Đã chọn <strong>{selectedRowKeys.length}</strong> / {tasks.length} tác vụ</span>
+          ) : (
+            <span>Hiển thị <strong>{tasks.length}</strong> tác vụ</span>
+          )}
+        </div>
+        <Button
+          type="primary"
+          icon={<CopyOutlined />}
+          onClick={handleCopyStandup}
+          aria-label="Sao chép Standup"
+        >
+          Sao chép Standup
+        </Button>
+      </div>
+
       <Table
         rowKey="id"
         columns={columns}
@@ -428,6 +483,30 @@ export const TaskTable: React.FC<TaskTableProps> = ({
         }}
         size="middle"
       />
+
+      {/* Fallback modal for clipboard copy in non-secure or restricted contexts */}
+      <Modal
+        title="Sao chép báo cáo Standup"
+        open={standupFallbackModalOpen}
+        onCancel={() => setStandupFallbackModalOpen(false)}
+        footer={[
+          <Button key="close" type="primary" onClick={() => setStandupFallbackModalOpen(false)}>
+            Đóng
+          </Button>,
+        ]}
+      >
+        <p style={{ fontSize: 13, color: token.colorTextSecondary, marginBottom: 8 }}>
+          Trình duyệt không hỗ trợ sao chép tự động hoặc chưa được cấp quyền. Vui lòng nhấn <strong>Ctrl+C</strong> (hoặc <strong>Cmd+C</strong>) để sao chép nội dung bên dưới:
+        </p>
+        <Input.TextArea
+          ref={fallbackTextareaRef as unknown as React.Ref<any>}
+          value={standupFallbackText}
+          readOnly
+          rows={10}
+          style={{ fontFamily: 'monospace', fontSize: 12 }}
+          onFocus={(e) => e.target.select()}
+        />
+      </Modal>
     </div>
   );
 };
