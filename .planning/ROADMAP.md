@@ -41,12 +41,11 @@
   3. Milestone and task views visually display inherited Ops Owner and BA tags from parent items when not explicitly overridden.
   4. User can assign one of five Work Types ('code', 'document', 'meeting', 'support_testing', 'investigate') to a task with a distinct visual badge.
   5. Existing v1.0 local database records and backup files seamlessly upgrade to schema v2 without data loss or error.
-**Plans**: 3 plans
+**Plans**: 3 plans in 3 waves
 
-Plans:
-- [ ] 09-01-PLAN.md — Schema v2 migration, model extensions, Zod normalization, and backup v2 compatibility
-- [ ] 09-02-PLAN.md — Transactional repositories, distinct tag autocomplete queries, and nearest-ancestor inheritance engine
-- [ ] 09-03-PLAN.md — WorkTypeBadge, TagSelect, TagListDisplay, drawer/modal tag inputs, and TaskTable integration
+- [ ] **Wave 1**: 09-01-PLAN.md — Schema v2 migration, model extensions, Zod normalization, and backup v2 compatibility
+- [ ] **Wave 2**: 09-02-PLAN.md *(blocked on Wave 1)* — Transactional repositories, distinct tag autocomplete queries, and nearest-ancestor inheritance engine
+- [ ] **Wave 3**: 09-03-PLAN.md *(blocked on Wave 2)* — WorkTypeBadge, TagSelect, TagListDisplay, drawer/modal tag inputs, and TaskTable integration
 **UI hint**: yes
 
 ### Phase 10: Date-Range Search, Multi-Criteria Filtering & Standup Export
