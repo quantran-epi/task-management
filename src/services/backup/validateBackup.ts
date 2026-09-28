@@ -55,7 +55,7 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     errors.push({
       table: 'envelope',
       field: 'schemaVersion',
-      message: `Phiên bản sơ đồ (${String(candidate.schemaVersion)}) không tương thích (hỗ trợ tối đa ${CURRENT_SCHEMA_VERSION})`,
+      message: `Phiên bản sơ đồ (${String(candidate.schemaVersion)}) không tương thích (chỉ hỗ trợ phiên bản 1 đến ${CURRENT_SCHEMA_VERSION})`,
     });
   }
 
@@ -182,6 +182,23 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
 
   if (errors.length > 0) {
     return { valid: false, errors };
+  }
+
+  // Normalization for schemaVersion 1 (backfill Banking IT domain fields per D-16)
+  if (candidate.schemaVersion === 1) {
+    projects.forEach((p) => {
+      if (!p.opsOwners) p.opsOwners = [];
+      if (!p.businessAnalysts) p.businessAnalysts = [];
+    });
+    milestones.forEach((m) => {
+      if (!m.opsOwners) m.opsOwners = [];
+      if (!m.businessAnalysts) m.businessAnalysts = [];
+    });
+    tasks.forEach((t) => {
+      if (!t.opsOwners) t.opsOwners = [];
+      if (!t.businessAnalysts) t.businessAnalysts = [];
+      if (!t.workType) t.workType = 'code';
+    });
   }
 
   const validEnvelope: BackupEnvelope = {

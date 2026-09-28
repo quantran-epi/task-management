@@ -3,7 +3,7 @@ import type { BackupEnvelope } from '../../types/backup';
 import { generateId } from '../../utils/uuid';
 
 export const APP_MARKER = 'personal-task-planner' as const;
-export const CURRENT_SCHEMA_VERSION = 1 as const;
+export const CURRENT_SCHEMA_VERSION = 2 as const;
 
 /**
  * Generates formatted backup filename: task-planner-backup-YYYY-MM-DD-HHmmss.json

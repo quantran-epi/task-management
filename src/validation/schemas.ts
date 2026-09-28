@@ -6,7 +6,6 @@ import type {
   MilestoneStatus,
   TaskStatus,
   TaskPriority,
-  WorkType,
 } from '../types/models';
 
 export const WORK_TYPES = [
