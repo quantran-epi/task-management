@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { WorkTypeBadge, WORK_TYPE_CONFIG } from '../../src/components/tasks/WorkTypeBadge';
-import { WORK_TYPES, type WorkType } from '../../src/types/models';
+import { WORK_TYPES } from '../../src/types/models';
 
 describe('WorkTypeBadge', () => {
   it('renders all 7 work types with correct labels and colors', () => {

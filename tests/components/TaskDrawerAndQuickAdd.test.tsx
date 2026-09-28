@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import React from 'react';
 import 'fake-indexeddb/auto';
 import { TaskPlannerDatabase } from '../../src/db';
 import { QuickAddBar } from '../../src/components/tasks/QuickAddBar';
