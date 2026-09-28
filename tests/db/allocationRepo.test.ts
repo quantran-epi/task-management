@@ -245,4 +245,52 @@ describe('Planned Allocation Repository (PLAN-01, PLAN-02, PLAN-05, D-12, D-16)'
       expect((await getTaskIdsWithAllocationsInRange('2026-10-15', '', testDb)).size).toBe(0);
     });
   });
+
+  describe('Stale Task updatedAt Touch (D-13, NOTIF-05)', () => {
+    it('calling upsertAllocation updates parent task updatedAt timestamp', async () => {
+      const task = await createTask({ name: 'Task to allocate', estimateMinutes: 60 }, testDb);
+      const initialUpdatedAt = '2026-09-01T00:00:00.000Z';
+      await testDb.tasks.update(task.id, { updatedAt: initialUpdatedAt });
+
+      await upsertAllocation(task.id, '2026-10-15', 60, testDb);
+
+      const refreshed = await testDb.tasks.get(task.id);
+      expect(refreshed?.updatedAt).not.toBe(initialUpdatedAt);
+      expect(new Date(refreshed?.updatedAt || '').getTime()).toBeGreaterThan(
+        new Date(initialUpdatedAt).getTime()
+      );
+    });
+
+    it('calling updateAllocation updates parent task updatedAt timestamp', async () => {
+      const task = await createTask({ name: 'Task to update alloc', estimateMinutes: 120 }, testDb);
+      const alloc = await upsertAllocation(task.id, '2026-10-15', 30, testDb);
+
+      const initialUpdatedAt = '2026-09-01T00:00:00.000Z';
+      await testDb.tasks.update(task.id, { updatedAt: initialUpdatedAt });
+
+      await updateAllocation(alloc.id, 60, '2026-10-16', testDb);
+
+      const refreshed = await testDb.tasks.get(task.id);
+      expect(refreshed?.updatedAt).not.toBe(initialUpdatedAt);
+      expect(new Date(refreshed?.updatedAt || '').getTime()).toBeGreaterThan(
+        new Date(initialUpdatedAt).getTime()
+      );
+    });
+
+    it('calling deleteAllocation updates parent task updatedAt timestamp', async () => {
+      const task = await createTask({ name: 'Task to delete alloc', estimateMinutes: 60 }, testDb);
+      const alloc = await upsertAllocation(task.id, '2026-10-15', 30, testDb);
+
+      const initialUpdatedAt = '2026-09-01T00:00:00.000Z';
+      await testDb.tasks.update(task.id, { updatedAt: initialUpdatedAt });
+
+      await deleteAllocation(alloc.id, testDb);
+
+      const refreshed = await testDb.tasks.get(task.id);
+      expect(refreshed?.updatedAt).not.toBe(initialUpdatedAt);
+      expect(new Date(refreshed?.updatedAt || '').getTime()).toBeGreaterThan(
+        new Date(initialUpdatedAt).getTime()
+      );
+    });
+  });
 });

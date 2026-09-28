@@ -46,6 +46,9 @@ export async function upsertAllocation(
       throw new Error(`Task not found: ${validated.taskId}`);
     }
 
+    task.updatedAt = new Date().toISOString();
+    await db.tasks.put(task);
+
     const existing = await db.plannedAllocations
       .where('taskId')
       .equals(validated.taskId)
@@ -82,10 +85,16 @@ export async function updateAllocation(
   date?: string,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<PlannedAllocation> {
-  return await db.transaction('rw', db.plannedAllocations, async () => {
+  return await db.transaction('rw', [db.plannedAllocations, db.tasks], async () => {
     const existing = await db.plannedAllocations.get(id);
     if (!existing) {
       throw new Error(`Allocation not found: ${id}`);
+    }
+
+    const task = await db.tasks.get(existing.taskId);
+    if (task) {
+      task.updatedAt = new Date().toISOString();
+      await db.tasks.put(task);
     }
 
     const targetDate = date ?? existing.date;
@@ -130,7 +139,17 @@ export async function deleteAllocation(
   id: string,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<void> {
-  await db.plannedAllocations.delete(id);
+  await db.transaction('rw', [db.plannedAllocations, db.tasks], async () => {
+    const existing = await db.plannedAllocations.get(id);
+    if (existing) {
+      const task = await db.tasks.get(existing.taskId);
+      if (task) {
+        task.updatedAt = new Date().toISOString();
+        await db.tasks.put(task);
+      }
+      await db.plannedAllocations.delete(id);
+    }
+  });
 }
 
 /**
