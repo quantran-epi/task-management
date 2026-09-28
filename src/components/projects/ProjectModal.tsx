@@ -4,10 +4,11 @@ import dayjs, { type Dayjs } from 'dayjs';
 import type { Project, ProjectStatus } from '../../types/models';
 import { createFocusRestorer } from '../../utils/focus';
 import { useRegisterActiveForm } from '../../context/FormGuardContext';
+import { TagSelect } from '../common/TagSelect';
 
 export interface ProjectModalProps {
   open: boolean;
-  project?: Project | null;
+  project?: Project | null | undefined;
   onClose: () => void;
   onSave: (values: {
     name: string;
@@ -15,8 +16,10 @@ export interface ProjectModalProps {
     deadline?: string | undefined;
     notes?: string | undefined;
     status: ProjectStatus;
+    opsOwners?: string[] | undefined;
+    businessAnalysts?: string[] | undefined;
   }) => Promise<void> | void;
-  loading?: boolean;
+  loading?: boolean | undefined;
 }
 
 interface ProjectFormValues {
@@ -25,6 +28,8 @@ interface ProjectFormValues {
   deadline?: Dayjs | null;
   notes?: string;
   status: ProjectStatus;
+  opsOwners?: string[];
+  businessAnalysts?: string[];
 }
 
 const PROJECT_STATUSES: ProjectStatus[] = ['Open', 'In Progress', 'Done', 'Cancelled'];
@@ -58,10 +63,12 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
           deadline: project.deadline ? dayjs(project.deadline, 'YYYY-MM-DD') : null,
           notes: project.notes || '',
           status: project.status,
+          opsOwners: project.opsOwners ?? [],
+          businessAnalysts: project.businessAnalysts ?? [],
         });
       } else {
         form.resetFields();
-        form.setFieldsValue({ status: 'Open' });
+        form.setFieldsValue({ status: 'Open', opsOwners: [], businessAnalysts: [] });
       }
     }
   }, [open, project, form]);
@@ -82,6 +89,9 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
         deadline: values.deadline ? values.deadline.format('YYYY-MM-DD') : undefined,
         notes: values.notes?.trim() || undefined,
         status: values.status,
+        opsOwners: (values.opsOwners ?? []).length > 0 ? values.opsOwners : undefined,
+        businessAnalysts:
+          (values.businessAnalysts ?? []).length > 0 ? values.businessAnalysts : undefined,
       });
       handleClose();
     } catch {
@@ -128,6 +138,16 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
 
           <Form.Item name="deadline" label="Hạn chót mục tiêu" style={{ flex: 1 }}>
             <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+          </Form.Item>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <Form.Item name="opsOwners" label="Ops Owner">
+            <TagSelect field="opsOwners" />
+          </Form.Item>
+
+          <Form.Item name="businessAnalysts" label="Business Analyst">
+            <TagSelect field="businessAnalysts" />
           </Form.Item>
         </div>
 

@@ -19,7 +19,7 @@ import {
   DeleteOutlined,
   LinkOutlined,
 } from '@ant-design/icons';
-import type { Task, Project, Milestone, TaskPriority } from '../../types/models';
+import type { Task, Project, Milestone, TaskPriority, WorkType } from '../../types/models';
 import { InlineStatusTag } from './InlineStatusTag';
 import { InlineProgress } from './InlineProgress';
 import { HierarchyBreadcrumb } from './HierarchyBreadcrumb';
@@ -27,6 +27,10 @@ import { EmptyState } from '../common/EmptyState';
 import { formatMinutes } from '../../utils/time';
 import { getTodayDateString } from '../../utils/date';
 import { deleteTaskWithAllocations } from '../../db/repositories/cascadeRepo';
+import { WorkTypeBadge, WORK_TYPE_CONFIG } from './WorkTypeBadge';
+import { TagListDisplay } from '../common/TagListDisplay';
+import { resolveInheritedTags } from '../../domain/inheritance';
+import { WORK_TYPES } from '../../types/models';
 import type { TaskPlannerDatabase } from '../../db';
 
 export interface TaskTableProps {
@@ -160,6 +164,18 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       ),
     },
     {
+      title: 'Loại việc',
+      dataIndex: 'workType',
+      key: 'workType',
+      width: 140,
+      filters: WORK_TYPES.map((wt) => ({
+        text: WORK_TYPE_CONFIG[wt].label,
+        value: wt,
+      })),
+      onFilter: (value, record) => (record.workType || 'code') === value,
+      render: (workType?: WorkType) => <WorkTypeBadge workType={workType || 'code'} />,
+    },
+    {
       title: 'Tác vụ & Phân cấp',
       dataIndex: 'name',
       key: 'name',
@@ -240,6 +256,34 @@ export const TaskTable: React.FC<TaskTableProps> = ({
             )}
           </div>
         );
+      },
+    },
+    {
+      title: 'Ops Owner',
+      key: 'opsOwners',
+      width: 140,
+      render: (_, record) => {
+        const project = record.projectId ? projectMap.get(record.projectId) : undefined;
+        const milestone = record.milestoneId ? milestoneMap.get(record.milestoneId) : undefined;
+        const res = resolveInheritedTags('opsOwners', record, {
+          project: project ? { name: project.name, opsOwners: project.opsOwners } : undefined,
+          milestone: milestone ? { name: milestone.name, opsOwners: milestone.opsOwners } : undefined,
+        });
+        return <TagListDisplay tags={res.tags} source={res.source} originName={res.originName} />;
+      },
+    },
+    {
+      title: 'BA',
+      key: 'businessAnalysts',
+      width: 140,
+      render: (_, record) => {
+        const project = record.projectId ? projectMap.get(record.projectId) : undefined;
+        const milestone = record.milestoneId ? milestoneMap.get(record.milestoneId) : undefined;
+        const res = resolveInheritedTags('businessAnalysts', record, {
+          project: project ? { name: project.name, businessAnalysts: project.businessAnalysts } : undefined,
+          milestone: milestone ? { name: milestone.name, businessAnalysts: milestone.businessAnalysts } : undefined,
+        });
+        return <TagListDisplay tags={res.tags} source={res.source} originName={res.originName} />;
       },
     },
     {

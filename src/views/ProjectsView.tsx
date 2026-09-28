@@ -230,6 +230,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ db = defaultDb }) =>
       <MilestoneModal
         open={milestoneModalOpen}
         projectId={activeProjectIdForMilestone}
+        project={projects.find((p) => p.id === activeProjectIdForMilestone)}
         milestone={editingMilestone}
         onClose={() => setMilestoneModalOpen(false)}
         onSave={handleSaveMilestone}

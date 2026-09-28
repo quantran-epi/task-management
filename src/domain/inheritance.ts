@@ -7,8 +7,8 @@ export interface TagInheritanceResult {
 }
 
 export interface EntityTagAncestors {
-  project?: { name: string; opsOwners?: string[]; businessAnalysts?: string[] };
-  milestone?: { name: string; projectId?: string; opsOwners?: string[]; businessAnalysts?: string[] };
+  project?: { name: string; opsOwners?: string[] | undefined; businessAnalysts?: string[] | undefined } | undefined;
+  milestone?: { name: string; projectId?: string | undefined; opsOwners?: string[] | undefined; businessAnalysts?: string[] | undefined } | undefined;
 }
 
 export function resolveInheritedTags(

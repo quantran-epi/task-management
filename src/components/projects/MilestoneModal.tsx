@@ -1,14 +1,17 @@
 import React, { useEffect, useRef } from 'react';
 import { Modal, Form, Input, DatePicker, Select } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
-import type { Milestone, MilestoneStatus } from '../../types/models';
+import type { Milestone, MilestoneStatus, Project } from '../../types/models';
 import { createFocusRestorer } from '../../utils/focus';
 import { useRegisterActiveForm } from '../../context/FormGuardContext';
+import { TagSelect } from '../common/TagSelect';
+import { resolveInheritedTags } from '../../domain/inheritance';
 
 export interface MilestoneModalProps {
   open: boolean;
   projectId: string;
-  milestone?: Milestone | null;
+  project?: Project | null | undefined;
+  milestone?: Milestone | null | undefined;
   onClose: () => void;
   onSave: (values: {
     projectId: string;
@@ -16,8 +19,10 @@ export interface MilestoneModalProps {
     description?: string | undefined;
     deadline?: string | undefined;
     status: MilestoneStatus;
+    opsOwners?: string[] | undefined;
+    businessAnalysts?: string[] | undefined;
   }) => Promise<void> | void;
-  loading?: boolean;
+  loading?: boolean | undefined;
 }
 
 interface MilestoneFormValues {
@@ -25,6 +30,8 @@ interface MilestoneFormValues {
   description?: string;
   deadline?: Dayjs | null;
   status: MilestoneStatus;
+  opsOwners?: string[];
+  businessAnalysts?: string[];
 }
 
 const MILESTONE_STATUSES: MilestoneStatus[] = ['Open', 'In Progress', 'Done', 'Cancelled'];
@@ -39,6 +46,7 @@ const STATUS_LABELS: Record<MilestoneStatus, string> = {
 export const MilestoneModal: React.FC<MilestoneModalProps> = ({
   open,
   projectId,
+  project,
   milestone,
   onClose,
   onSave,
@@ -58,13 +66,33 @@ export const MilestoneModal: React.FC<MilestoneModalProps> = ({
           description: milestone.description || '',
           deadline: milestone.deadline ? dayjs(milestone.deadline, 'YYYY-MM-DD') : null,
           status: milestone.status,
+          opsOwners: milestone.opsOwners ?? [],
+          businessAnalysts: milestone.businessAnalysts ?? [],
         });
       } else {
         form.resetFields();
-        form.setFieldsValue({ status: 'Open' });
+        form.setFieldsValue({ status: 'Open', opsOwners: [], businessAnalysts: [] });
       }
     }
   }, [open, milestone, form]);
+
+  const inheritedOps = resolveInheritedTags('opsOwners', {}, {
+    project: project ? { name: project.name, opsOwners: project.opsOwners } : undefined,
+  });
+
+  const inheritedBA = resolveInheritedTags('businessAnalysts', {}, {
+    project: project ? { name: project.name, businessAnalysts: project.businessAnalysts } : undefined,
+  });
+
+  const opsInheritedText =
+    inheritedOps.source !== 'none' && inheritedOps.tags.length > 0
+      ? `Kế thừa: [${inheritedOps.tags.join(', ')}] (từ Dự án)`
+      : undefined;
+
+  const baInheritedText =
+    inheritedBA.source !== 'none' && inheritedBA.tags.length > 0
+      ? `Kế thừa: [${inheritedBA.tags.join(', ')}] (từ Dự án)`
+      : undefined;
 
   const handleClose = () => {
     onClose();
@@ -82,6 +110,9 @@ export const MilestoneModal: React.FC<MilestoneModalProps> = ({
         description: values.description?.trim() || undefined,
         deadline: values.deadline ? values.deadline.format('YYYY-MM-DD') : undefined,
         status: values.status,
+        opsOwners: (values.opsOwners ?? []).length > 0 ? values.opsOwners : undefined,
+        businessAnalysts:
+          (values.businessAnalysts ?? []).length > 0 ? values.businessAnalysts : undefined,
       });
       handleClose();
     } catch {
@@ -128,6 +159,22 @@ export const MilestoneModal: React.FC<MilestoneModalProps> = ({
 
           <Form.Item name="deadline" label="Hạn chót mục tiêu" style={{ flex: 1 }}>
             <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+          </Form.Item>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <Form.Item name="opsOwners" label="Ops Owner">
+            <TagSelect
+              field="opsOwners"
+              inheritedText={opsInheritedText}
+            />
+          </Form.Item>
+
+          <Form.Item name="businessAnalysts" label="Business Analyst">
+            <TagSelect
+              field="businessAnalysts"
+              inheritedText={baInheritedText}
+            />
           </Form.Item>
         </div>
       </Form>

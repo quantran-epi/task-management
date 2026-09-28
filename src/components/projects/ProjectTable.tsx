@@ -19,6 +19,7 @@ import type { Project, Milestone, Task } from '../../types/models';
 import { EmptyState } from '../common/EmptyState';
 import { formatMinutes } from '../../utils/time';
 import { getTodayDateString } from '../../utils/date';
+import { TagListDisplay } from '../common/TagListDisplay';
 
 export interface ProjectTableProps {
   projects: Project[];
@@ -130,6 +131,48 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
         key: 'deadline',
         width: 120,
         render: (deadline?: string) => deadline || '—',
+      },
+      {
+        title: 'Ops Owner',
+        key: 'opsOwners',
+        width: 130,
+        render: (_, record) => {
+          const direct = record.opsOwners;
+          if (direct && direct.length > 0) {
+            return <TagListDisplay tags={direct} source="direct" />;
+          }
+          if (project.opsOwners && project.opsOwners.length > 0) {
+            return (
+              <TagListDisplay
+                tags={project.opsOwners}
+                source="project"
+                originName={project.name}
+              />
+            );
+          }
+          return <TagListDisplay tags={[]} />;
+        },
+      },
+      {
+        title: 'BA',
+        key: 'businessAnalysts',
+        width: 130,
+        render: (_, record) => {
+          const direct = record.businessAnalysts;
+          if (direct && direct.length > 0) {
+            return <TagListDisplay tags={direct} source="direct" />;
+          }
+          if (project.businessAnalysts && project.businessAnalysts.length > 0) {
+            return (
+              <TagListDisplay
+                tags={project.businessAnalysts}
+                source="project"
+                originName={project.name}
+              />
+            );
+          }
+          return <TagListDisplay tags={[]} />;
+        },
       },
       {
         title: 'Tác vụ',
@@ -355,6 +398,18 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
           </span>
         );
       },
+    },
+    {
+      title: 'Ops Owner',
+      key: 'opsOwners',
+      width: 140,
+      render: (_, record) => <TagListDisplay tags={record.opsOwners} source="direct" />,
+    },
+    {
+      title: 'BA',
+      key: 'businessAnalysts',
+      width: 140,
+      render: (_, record) => <TagListDisplay tags={record.businessAnalysts} source="direct" />,
     },
     {
       title: 'Cột mốc',

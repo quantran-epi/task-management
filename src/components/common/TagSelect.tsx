@@ -98,17 +98,19 @@ export const TagSelect: React.FC<TagSelectProps> = ({
     onChange?.(processed);
   };
 
-  return (
-    <Select
-      mode="tags"
-      value={value}
-      onChange={handleChange}
-      placeholder={computedPlaceholder}
-      options={options}
-      disabled={disabled}
-      style={{ width: '100%' }}
-      tokenSeparators={[',']}
-      allowClear
-    />
-  );
+  const selectProps: React.ComponentProps<typeof Select<string[]>> = {
+    mode: 'tags',
+    value,
+    onChange: handleChange,
+    placeholder: computedPlaceholder,
+    options,
+    style: { width: '100%' },
+    tokenSeparators: [','],
+    allowClear: true,
+  };
+  if (disabled !== undefined) {
+    selectProps.disabled = disabled;
+  }
+
+  return <Select {...selectProps} />;
 };

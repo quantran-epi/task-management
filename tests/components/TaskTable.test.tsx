@@ -17,6 +17,8 @@ describe('TaskTable Component', () => {
       id: 'proj-1',
       name: 'Project Alpha',
       status: 'In Progress',
+      opsOwners: ['NamNV'],
+      businessAnalysts: ['HuongTT'],
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
     },
@@ -29,6 +31,8 @@ describe('TaskTable Component', () => {
       projectId: 'proj-1',
       status: 'Open',
       priority: 'Urgent',
+      workType: 'investigate',
+      opsOwners: ['DucVA'],
       estimateMinutes: 90,
       progress: 25,
       deadline: '2025-01-01', // Overdue
@@ -42,6 +46,7 @@ describe('TaskTable Component', () => {
       name: 'Beta Standalone Task',
       status: 'In Progress',
       priority: 'Low',
+      workType: 'code',
       estimateMinutes: 0,
       progress: 0,
       createdAt: '2026-01-01T00:00:00.000Z',
@@ -99,10 +104,17 @@ describe('TaskTable Component', () => {
     expect(screen.getByText('1h 30m')).toBeInTheDocument(); // 90 mins -> 1h 30m
     expect(screen.getByText(/Project Alpha/i)).toBeInTheDocument();
     expect(screen.getByText(/🔗 1/i)).toBeInTheDocument(); // Document link badge
+    // WorkTypeBadge check for investigate
+    expect(screen.getByText('Điều tra lỗi / R&D')).toBeInTheDocument();
+    // Explicit tag for Task 1
+    expect(screen.getByText('DucVA')).toBeInTheDocument();
+    // Inherited BA tag from project for Task 1
+    expect(screen.getByText('HuongTT')).toBeInTheDocument();
 
     // Task 2 checks
     expect(screen.getByText('Beta Standalone Task')).toBeInTheDocument();
     expect(screen.getByText('Độc lập')).toBeInTheDocument();
+    expect(screen.getByText('Lập trình')).toBeInTheDocument();
   });
 
   it('Table keyboard navigation handles Arrow navigation and Enter opening drawer', async () => {
