@@ -51,6 +51,7 @@ export async function callJiraApi<T>(
   const headers: Record<string, string> = {
     Accept: 'application/json',
     'Content-Type': 'application/json',
+    'X-Atlassian-Token': 'no-check',
     Authorization: authHeader,
     ...((options.headers as Record<string, string>) || {}),
   };
