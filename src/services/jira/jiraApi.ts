@@ -29,6 +29,16 @@ export function sanitizeErrorMessage(errorMsg: string, token?: string): string {
   return errorMsg.replaceAll(token, '[REDACTED]');
 }
 
+export function getJiraBrowseUrl(jiraKey: string, domain?: string): string {
+  const rawDomain = (domain || '').replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+  const domainHost = rawDomain.includes('.')
+    ? rawDomain
+    : rawDomain
+      ? `${rawDomain}.atlassian.net`
+      : 'atlassian.net';
+  return `https://${domainHost}/browse/${encodeURIComponent(jiraKey)}`;
+}
+
 export async function callJiraApi<T>(
   config: JiraConfig,
   path: string,

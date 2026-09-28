@@ -17,8 +17,10 @@ import {
   EditOutlined,
   CheckCircleOutlined,
   StopOutlined,
+  LinkOutlined,
 } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import {
   updateAllocation,
@@ -26,6 +28,7 @@ import {
 } from '../../db/repositories/allocationRepo';
 import { formatMinutes } from '../../utils/time';
 import type { PlannedAllocation, Task, TaskPriority, Project } from '../../types/models';
+import { getJiraBrowseUrl } from '../../services/jira/jiraApi';
 
 const { Text } = Typography;
 
@@ -37,6 +40,7 @@ export interface TaskAllocationCardProps {
   isActive: boolean;
   onEditTask?: ((taskId: string) => void) | undefined;
   db?: TaskPlannerDatabase | undefined;
+  jiraDomain?: string | undefined;
 }
 
 const PRIORITY_COLORS: Record<TaskPriority, string> = {
@@ -61,12 +65,21 @@ export const TaskAllocationCard: React.FC<TaskAllocationCardProps> = ({
   isActive,
   onEditTask,
   db = defaultDb,
+  jiraDomain,
 }) => {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [hours, setHours] = useState(Math.floor(allocation.allocatedMinutes / 60));
   const [minutes, setMinutes] = useState(allocation.allocatedMinutes % 60);
   const [targetDate, setTargetDate] = useState<Dayjs>(dayjs(allocation.date, 'YYYY-MM-DD'));
   const [saving, setSaving] = useState(false);
+
+  const settingsDomain = useLiveQuery(async () => {
+    if (!db) return undefined;
+    const rec = await db.settings.get('jira_domain');
+    return (rec?.value as string) || undefined;
+  }, [db]);
+
+  const effectiveJiraDomain = jiraDomain || settingsDomain;
 
   const handleOpenChange = (open: boolean) => {
     setPopoverOpen(open);
@@ -236,6 +249,29 @@ export const TaskAllocationCard: React.FC<TaskAllocationCardProps> = ({
           <Tag color={PRIORITY_COLORS[task.priority]} style={{ margin: 0, fontSize: 11 }}>
             {PRIORITY_LABELS[task.priority] || task.priority}
           </Tag>
+
+          {task.jiraKey && (
+            <Tag
+              icon={<LinkOutlined style={{ marginRight: 2 }} />}
+              color="processing"
+              style={{
+                fontSize: 10,
+                padding: '0 4px',
+                margin: 0,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+              }}
+              title="Mở trên Jira Web"
+              onClick={(e) => {
+                e.stopPropagation();
+                const url = getJiraBrowseUrl(task.jiraKey!, effectiveJiraDomain);
+                window.open(url, '_blank', 'noopener,noreferrer');
+              }}
+            >
+              {task.jiraKey}
+            </Tag>
+          )}
 
           {!isActive && (
             <Tag

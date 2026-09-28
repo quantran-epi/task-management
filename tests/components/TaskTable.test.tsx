@@ -218,4 +218,48 @@ describe('TaskTable Component', () => {
     );
     confirmSpy.mockRestore();
   });
+
+  it('renders Jira Key tag and clicking it opens Jira issue with stopPropagation without opening drawer (JIRA-04, D-12)', async () => {
+    const onOpenDrawer = vi.fn();
+    const taskWithJira: Task = {
+      id: 'task-jira-1',
+      name: 'Jira Connected Task',
+      jiraKey: 'SHB-567',
+      status: 'In Progress',
+      priority: 'High',
+      progress: 0,
+      estimateMinutes: 60,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+
+    const windowOpenSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+    render(
+      <TaskTable
+        tasks={[taskWithJira]}
+        projects={[]}
+        milestones={[]}
+        selectedRowKeys={[]}
+        onSelectRows={vi.fn()}
+        onOpenDrawer={onOpenDrawer}
+        jiraDomain="test-company.atlassian.net"
+        db={db}
+      />
+    );
+
+    const jiraTag = screen.getByText('SHB-567');
+    expect(jiraTag).toBeInTheDocument();
+
+    fireEvent.click(jiraTag);
+
+    expect(windowOpenSpy).toHaveBeenCalledWith(
+      'https://test-company.atlassian.net/browse/SHB-567',
+      '_blank',
+      'noopener,noreferrer'
+    );
+    expect(onOpenDrawer).not.toHaveBeenCalled();
+
+    windowOpenSpy.mockRestore();
+  });
 });

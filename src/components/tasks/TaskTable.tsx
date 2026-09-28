@@ -35,6 +35,8 @@ import { resolveInheritedTags } from '../../domain/inheritance';
 import { WORK_TYPES } from '../../types/models';
 import { formatStandupSummary } from '../../utils/standup';
 import type { TaskPlannerDatabase } from '../../db';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { getJiraBrowseUrl } from '../../services/jira/jiraApi';
 
 export interface TaskTableProps {
   tasks: Task[];
@@ -47,6 +49,7 @@ export interface TaskTableProps {
   isFiltered?: boolean;
   db?: TaskPlannerDatabase;
   loading?: boolean;
+  jiraDomain?: string;
 }
 
 const PRIORITY_COLORS: Record<TaskPriority, string> = {
@@ -74,6 +77,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
   isFiltered = false,
   db,
   loading = false,
+  jiraDomain,
 }) => {
   const { token } = theme.useToken();
   const today = getTodayDateString();
@@ -82,6 +86,14 @@ export const TaskTable: React.FC<TaskTableProps> = ({
   const [standupFallbackText, setStandupFallbackText] = useState<string>('');
   const tableRef = useRef<HTMLDivElement>(null);
   const fallbackTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const settingsDomain = useLiveQuery(async () => {
+    if (!db) return undefined;
+    const rec = await db.settings.get('jira_domain');
+    return (rec?.value as string) || undefined;
+  }, [db]);
+
+  const effectiveJiraDomain = jiraDomain || settingsDomain;
 
   // Fast project and milestone lookup maps
   const projectMap = React.useMemo(() => {
@@ -235,6 +247,21 @@ export const TaskTable: React.FC<TaskTableProps> = ({
               >
                 {record.name}
               </span>
+              {record.jiraKey && (
+                <Tag
+                  color="processing"
+                  icon={<LinkOutlined style={{ marginRight: 4 }} />}
+                  style={{ cursor: 'pointer', margin: 0, fontSize: 12 }}
+                  title="Mở trên Jira Web"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const url = getJiraBrowseUrl(record.jiraKey!, effectiveJiraDomain);
+                    window.open(url, '_blank', 'noopener,noreferrer');
+                  }}
+                >
+                  {record.jiraKey}
+                </Tag>
+              )}
               {linkCount > 0 && (
                 <Popover
                   title="Tài liệu liên kết"
