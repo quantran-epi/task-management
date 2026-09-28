@@ -126,6 +126,36 @@ describe('Project, Milestone & Task Repositories & Schemas (WORK-01, WORK-02, WO
       await deleteProjectDirect(p.id, testDb);
       expect(await getProject(p.id, testDb)).toBeUndefined();
     });
+
+    it('creates and updates project with opsOwners and businessAnalysts', async () => {
+      const project = await createProject(
+        {
+          name: 'Banking Project',
+          opsOwners: ['ops-infra', 'ops-db'],
+          businessAnalysts: ['ba-alice'],
+        },
+        testDb
+      );
+
+      expect(project.opsOwners).toEqual(['ops-infra', 'ops-db']);
+      expect(project.businessAnalysts).toEqual(['ba-alice']);
+
+      const fetched = await getProject(project.id, testDb);
+      expect(fetched?.opsOwners).toEqual(['ops-infra', 'ops-db']);
+      expect(fetched?.businessAnalysts).toEqual(['ba-alice']);
+
+      const updated = await updateProject(
+        project.id,
+        {
+          opsOwners: ['ops-security'],
+          businessAnalysts: ['ba-bob', 'ba-carol'],
+        },
+        testDb
+      );
+
+      expect(updated.opsOwners).toEqual(['ops-security']);
+      expect(updated.businessAnalysts).toEqual(['ba-bob', 'ba-carol']);
+    });
   });
 
   describe('Milestone Schema & Repo', () => {
@@ -174,6 +204,34 @@ describe('Project, Milestone & Task Repositories & Schemas (WORK-01, WORK-02, WO
 
       expect(updated.status).toBe('Done');
       expect(updated.name).toBe('M Finished');
+    });
+
+    it('creates and updates milestone with opsOwners and businessAnalysts', async () => {
+      const project = await createProject({ name: 'P' }, testDb);
+      const m = await createMilestone(
+        {
+          projectId: project.id,
+          name: 'Milestone Banking',
+          opsOwners: ['ops-lead'],
+          businessAnalysts: ['ba-dan'],
+        },
+        testDb
+      );
+
+      expect(m.opsOwners).toEqual(['ops-lead']);
+      expect(m.businessAnalysts).toEqual(['ba-dan']);
+
+      const updated = await updateMilestone(
+        m.id,
+        {
+          opsOwners: ['ops-platform'],
+          businessAnalysts: ['ba-erin'],
+        },
+        testDb
+      );
+
+      expect(updated.opsOwners).toEqual(['ops-platform']);
+      expect(updated.businessAnalysts).toEqual(['ba-erin']);
     });
   });
 
@@ -300,6 +358,39 @@ describe('Project, Milestone & Task Repositories & Schemas (WORK-01, WORK-02, WO
 
       const all = await getAllTasks(testDb);
       expect(all.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('creates task with default workType "code" and updates workType, opsOwners, businessAnalysts', async () => {
+      const task = await createTask({ name: 'Banking Task' }, testDb);
+      expect(task.workType).toBe('code');
+      expect(task.opsOwners).toBeUndefined();
+      expect(task.businessAnalysts).toBeUndefined();
+
+      const taskWithFields = await createTask(
+        {
+          name: 'Explicit Fields Task',
+          workType: 'investigate',
+          opsOwners: ['ops-infra'],
+          businessAnalysts: ['ba-frank'],
+        },
+        testDb
+      );
+      expect(taskWithFields.workType).toBe('investigate');
+      expect(taskWithFields.opsOwners).toEqual(['ops-infra']);
+      expect(taskWithFields.businessAnalysts).toEqual(['ba-frank']);
+
+      const updated = await updateTask(
+        taskWithFields.id,
+        {
+          workType: 'review_code',
+          opsOwners: ['ops-core'],
+          businessAnalysts: ['ba-grace'],
+        },
+        testDb
+      );
+      expect(updated.workType).toBe('review_code');
+      expect(updated.opsOwners).toEqual(['ops-core']);
+      expect(updated.businessAnalysts).toEqual(['ba-grace']);
     });
   });
 });

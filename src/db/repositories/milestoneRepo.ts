@@ -27,6 +27,8 @@ export async function createMilestone(
   if (validated.description !== undefined) milestone.description = validated.description;
   if (validated.deadline !== undefined) milestone.deadline = validated.deadline;
   if (validated.notes !== undefined) milestone.notes = validated.notes;
+  if (validated.opsOwners !== undefined) milestone.opsOwners = validated.opsOwners;
+  if (validated.businessAnalysts !== undefined) milestone.businessAnalysts = validated.businessAnalysts;
 
   await db.milestones.add(milestone);
   return milestone;
@@ -54,6 +56,8 @@ export async function updateMilestone(
   if (validated.deadline !== undefined) updated.deadline = validated.deadline;
   if (validated.notes !== undefined) updated.notes = validated.notes;
   if (validated.status !== undefined) updated.status = validated.status;
+  if (validated.opsOwners !== undefined) updated.opsOwners = validated.opsOwners;
+  if (validated.businessAnalysts !== undefined) updated.businessAnalysts = validated.businessAnalysts;
 
   await db.milestones.put(updated);
   return updated;

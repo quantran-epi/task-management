@@ -22,6 +22,7 @@ export async function createTask(
     progress: validated.progress,
     priority: validated.priority,
     estimateMinutes: validated.estimateMinutes,
+    workType: validated.workType ?? 'code',
     createdAt: now,
     updatedAt: now,
   };
@@ -33,6 +34,8 @@ export async function createTask(
   if (validated.notes !== undefined) task.notes = validated.notes;
   if (validated.actualStartDate !== undefined) task.actualStartDate = validated.actualStartDate;
   if (validated.actualEndDate !== undefined) task.actualEndDate = validated.actualEndDate;
+  if (validated.opsOwners !== undefined) task.opsOwners = validated.opsOwners;
+  if (validated.businessAnalysts !== undefined) task.businessAnalysts = validated.businessAnalysts;
   if (validated.documentLinks !== undefined) task.documentLinks = validated.documentLinks;
 
   await db.tasks.add(task);
@@ -61,6 +64,7 @@ export async function updateTask(
   if (validated.progress !== undefined) updated.progress = validated.progress;
   if (validated.priority !== undefined) updated.priority = validated.priority;
   if (validated.estimateMinutes !== undefined) updated.estimateMinutes = validated.estimateMinutes;
+  if (validated.workType !== undefined) updated.workType = validated.workType;
   if (validated.projectId !== undefined) updated.projectId = validated.projectId;
   if (validated.milestoneId !== undefined) updated.milestoneId = validated.milestoneId;
   if (validated.description !== undefined) updated.description = validated.description;
@@ -68,6 +72,8 @@ export async function updateTask(
   if (validated.notes !== undefined) updated.notes = validated.notes;
   if (validated.actualStartDate !== undefined) updated.actualStartDate = validated.actualStartDate;
   if (validated.actualEndDate !== undefined) updated.actualEndDate = validated.actualEndDate;
+  if (validated.opsOwners !== undefined) updated.opsOwners = validated.opsOwners;
+  if (validated.businessAnalysts !== undefined) updated.businessAnalysts = validated.businessAnalysts;
   if (validated.documentLinks !== undefined) updated.documentLinks = validated.documentLinks;
 
   await db.tasks.put(updated);
