@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Banking IT Enhancements & Jira Integration
 status: executing
-stopped_at: Phase 12 UI-SPEC approved
-last_updated: "2026-09-28T16:27:07.960Z"
+stopped_at: Completed 12-02-PLAN.md
+last_updated: "2026-09-28T16:34:25.120Z"
 last_activity: 2026-09-28 -- Phase 12 execution started
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 11
-  completed_plans: 9
+  completed_plans: 10
   percent: 60
 current_phase: 11
 current_phase_name: jira-cloud-integration-task-lifecycle
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-27)
 ## Current Position
 
 Phase: 12 (in-app-notifications-proactive-alerts-custom-reminders) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-09-28 -- Phase 12 execution started
 
@@ -66,6 +66,7 @@ Last activity: 2026-09-28 -- Phase 12 execution started
 | Phase 11 P03 | 10m | 2 tasks | 9 files |
 | 11 | 3 | - | - |
 | Phase 12 P01 | 15m | 3 tasks | 15 files |
+| Phase 12 P02 | 10m | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -176,6 +177,9 @@ Decisions logged across v1.0 and v1.1:
 - [Phase ?]: Enforced exact regex ^[A-Z][A-Z0-9]+-[0-9]+$ on manual Jira key inputs to prevent malformed keys or URL injection
 - [Phase 12]: Extended Dexie with non-destructive SCHEMA_V4 indexing reminderDate across projects, milestones, and tasks
 - [Phase 12]: Touched parent task updatedAt timestamp inside atomic Dexie transactions during allocation mutations to maintain accurate stale task detection
+- [Phase 12]: Evaluated proactive alerts in local memory across 5 strict priority tiers: overdue (1), 14-day capacity overload (2), due soon (3), stale tasks (4), and custom reminders (5)
+- [Phase 12]: Enforced immutable alert obligations by rejecting dismissals for overdue tasks and capacity overload alerts
+- [Phase 12]: Auto-pruned expired dismissal keys on write within settings table to prevent unbounded dictionary growth
 
 ### Pending Todos
 
@@ -193,8 +197,8 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-09-28T16:26:42.618Z
-Stopped at: Phase 12 UI-SPEC approved
+Last session: 2026-09-28T16:34:25.116Z
+Stopped at: Completed 12-02-PLAN.md
 Resume file: .planning/phases/12-in-app-notifications-proactive-alerts-custom-reminders/12-UI-SPEC.md
 
 ## Operator Next Steps
