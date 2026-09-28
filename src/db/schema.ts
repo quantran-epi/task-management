@@ -30,3 +30,15 @@ export const SCHEMA_V3 = {
   settings: 'key',
   backupMetadata: 'id, timestamp',
 } as const;
+
+export const SCHEMA_V4 = {
+  projects: 'id, status, deadline, reminderDate, *opsOwners, *businessAnalysts',
+  milestones: 'id, projectId, status, deadline, reminderDate, *opsOwners, *businessAnalysts',
+  tasks: 'id, projectId, milestoneId, status, priority, deadline, workType, jiraKey, reminderDate, *opsOwners, *businessAnalysts',
+  capacityRules: 'id, &dayOfWeek',
+  capacityOverrides: 'id, date',
+  plannedAllocations: 'id, taskId, date',
+  settings: 'key',
+  backupMetadata: 'id, timestamp',
+} as const;
+

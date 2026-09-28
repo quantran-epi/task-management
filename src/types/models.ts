@@ -32,6 +32,8 @@ export interface Project {
   opsOwners?: string[];
   businessAnalysts?: string[];
   documentLinks?: string[];
+  reminderDate?: string; // YYYY-MM-DD
+  reminderNote?: string;
   createdAt: string; // ISO string metadata
   updatedAt: string; // ISO string metadata
 }
@@ -46,6 +48,8 @@ export interface Milestone {
   status: MilestoneStatus;
   opsOwners?: string[];
   businessAnalysts?: string[];
+  reminderDate?: string; // YYYY-MM-DD
+  reminderNote?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -69,6 +73,8 @@ export interface Task {
   opsOwners?: string[];
   businessAnalysts?: string[];
   documentLinks?: string[];
+  reminderDate?: string; // YYYY-MM-DD
+  reminderNote?: string;
   createdAt: string;
   updatedAt: string;
 }

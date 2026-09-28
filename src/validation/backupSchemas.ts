@@ -9,6 +9,8 @@ import {
   tagListSchema,
   workTypeSchema,
   jiraKeySchema,
+  reminderDateSchema,
+  reminderNoteSchema,
 } from './schemas';
 
 const calendarDateSchema = z
@@ -40,6 +42,8 @@ export const BackupProjectRecordSchema = z.object({
   opsOwners: tagListSchema.optional(),
   businessAnalysts: tagListSchema.optional(),
   documentLinks: z.array(httpUrlSchema).optional(),
+  reminderDate: reminderDateSchema.optional(),
+  reminderNote: reminderNoteSchema,
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -54,6 +58,8 @@ export const BackupMilestoneRecordSchema = z.object({
   status: z.enum(MILESTONE_STATUSES),
   opsOwners: tagListSchema.optional(),
   businessAnalysts: tagListSchema.optional(),
+  reminderDate: reminderDateSchema.optional(),
+  reminderNote: reminderNoteSchema,
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -77,6 +83,8 @@ export const BackupTaskRecordSchema = z.object({
   businessAnalysts: tagListSchema.optional(),
   documentLinks: z.array(httpUrlSchema).optional(),
   jiraKey: jiraKeySchema.optional(),
+  reminderDate: reminderDateSchema.optional(),
+  reminderNote: reminderNoteSchema,
   createdAt: z.string(),
   updatedAt: z.string(),
 });

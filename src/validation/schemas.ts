@@ -83,6 +83,13 @@ const calendarDateSchema = z
     message: 'Must be a valid calendar date in YYYY-MM-DD format',
   });
 
+export const reminderDateSchema = calendarDateSchema;
+export const reminderNoteSchema = z
+  .string()
+  .trim()
+  .max(500, 'Ghi chú nhắc nhở tối đa 500 ký tự')
+  .optional();
+
 const uuidSchema = z
   .string()
   .refine(isValidUuid, {
@@ -105,6 +112,8 @@ export const ProjectInputSchema = z.object({
   opsOwners: tagListSchema.optional(),
   businessAnalysts: tagListSchema.optional(),
   documentLinks: z.array(httpUrlSchema).optional(),
+  reminderDate: reminderDateSchema.optional(),
+  reminderNote: reminderNoteSchema,
 });
 
 export const ProjectUpdateSchema = z.object({
@@ -116,6 +125,8 @@ export const ProjectUpdateSchema = z.object({
   opsOwners: tagListSchema.optional(),
   businessAnalysts: tagListSchema.optional(),
   documentLinks: z.array(httpUrlSchema).optional(),
+  reminderDate: reminderDateSchema.optional(),
+  reminderNote: reminderNoteSchema,
 });
 
 export const MilestoneInputSchema = z.object({
@@ -127,6 +138,8 @@ export const MilestoneInputSchema = z.object({
   status: z.enum(MILESTONE_STATUSES).default('Open'),
   opsOwners: tagListSchema.optional(),
   businessAnalysts: tagListSchema.optional(),
+  reminderDate: reminderDateSchema.optional(),
+  reminderNote: reminderNoteSchema,
 });
 
 export const MilestoneUpdateSchema = z.object({
@@ -137,6 +150,8 @@ export const MilestoneUpdateSchema = z.object({
   status: z.enum(MILESTONE_STATUSES).optional(),
   opsOwners: tagListSchema.optional(),
   businessAnalysts: tagListSchema.optional(),
+  reminderDate: reminderDateSchema.optional(),
+  reminderNote: reminderNoteSchema,
 });
 
 export const TaskInputSchema = z.object({
@@ -157,6 +172,8 @@ export const TaskInputSchema = z.object({
   opsOwners: tagListSchema.optional(),
   businessAnalysts: tagListSchema.optional(),
   documentLinks: z.array(httpUrlSchema).optional(),
+  reminderDate: reminderDateSchema.optional(),
+  reminderNote: reminderNoteSchema,
 });
 
 export const TaskUpdateSchema = z.object({
@@ -177,6 +194,8 @@ export const TaskUpdateSchema = z.object({
   opsOwners: tagListSchema.optional(),
   businessAnalysts: tagListSchema.optional(),
   documentLinks: z.array(httpUrlSchema).optional(),
+  reminderDate: reminderDateSchema.optional(),
+  reminderNote: reminderNoteSchema,
 });
 
 export const CapacityRuleInputSchema = z.object({

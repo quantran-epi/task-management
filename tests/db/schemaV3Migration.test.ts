@@ -38,7 +38,7 @@ describe('Dexie Schema v3 Migration (JIRA-01, JIRA-04)', () => {
     const v3Db = new TaskPlannerDatabase(dbName);
     await v3Db.open();
 
-    expect(v3Db.verno).toBe(3);
+    expect(v3Db.verno).toBeGreaterThanOrEqual(3);
 
     const task = await v3Db.tasks.get(sampleTaskId);
     expect(task).toBeDefined();
