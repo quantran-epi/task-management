@@ -25,6 +25,10 @@ import {
   updateTaskProgress,
 } from '../../src/db/repositories/taskRepo';
 import {
+  getDistinctOpsOwners,
+  getDistinctBusinessAnalysts,
+} from '../../src/db/repositories/tagRepo';
+import {
   ProjectInputSchema,
   MilestoneInputSchema,
   TaskInputSchema,
@@ -391,6 +395,78 @@ describe('Project, Milestone & Task Repositories & Schemas (WORK-01, WORK-02, WO
       expect(updated.workType).toBe('review_code');
       expect(updated.opsOwners).toEqual(['ops-core']);
       expect(updated.businessAnalysts).toEqual(['ba-grace']);
+    });
+  });
+
+  describe('Tag Repository (getDistinctOpsOwners, getDistinctBusinessAnalysts)', () => {
+    it('returns empty array when no tags are present', async () => {
+      const ops = await getDistinctOpsOwners(testDb);
+      const bas = await getDistinctBusinessAnalysts(testDb);
+
+      expect(ops).toEqual([]);
+      expect(bas).toEqual([]);
+    });
+
+    it('queries distinct Ops Owners across projects, milestones, and tasks using multi-entry index and sorts alphabetically', async () => {
+      const project = await createProject(
+        {
+          name: 'Project P',
+          opsOwners: ['Ops-Beta', 'Ops-Alpha'],
+        },
+        testDb
+      );
+
+      const milestone = await createMilestone(
+        {
+          projectId: project.id,
+          name: 'Milestone M',
+          opsOwners: ['Ops-Gamma', 'Ops-Beta'],
+        },
+        testDb
+      );
+
+      await createTask(
+        {
+          name: 'Task T',
+          projectId: project.id,
+          milestoneId: milestone.id,
+          opsOwners: ['Ops-Delta', 'Ops-Alpha'],
+        },
+        testDb
+      );
+
+      const distinct = await getDistinctOpsOwners(testDb);
+      expect(distinct).toEqual(['Ops-Alpha', 'Ops-Beta', 'Ops-Delta', 'Ops-Gamma']);
+    });
+
+    it('queries distinct Business Analysts across projects, milestones, and tasks using multi-entry index and sorts alphabetically', async () => {
+      const project = await createProject(
+        {
+          name: 'Project P2',
+          businessAnalysts: ['BA-Zoe', 'BA-Alex'],
+        },
+        testDb
+      );
+
+      await createMilestone(
+        {
+          projectId: project.id,
+          name: 'Milestone M2',
+          businessAnalysts: ['BA-Bob', 'BA-Alex'],
+        },
+        testDb
+      );
+
+      await createTask(
+        {
+          name: 'Task T2',
+          businessAnalysts: ['BA-Charlie'],
+        },
+        testDb
+      );
+
+      const distinct = await getDistinctBusinessAnalysts(testDb);
+      expect(distinct).toEqual(['BA-Alex', 'BA-Bob', 'BA-Charlie', 'BA-Zoe']);
     });
   });
 });
