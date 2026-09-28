@@ -38,6 +38,8 @@ Shipped **v1.0 MVP** on 2026-09-27 with all 8 foundational phases complete (28 p
 - ✓ Synchronize a client-side encrypted backup file through the GitHub Contents API in the same repository. — v1.0
 - ✓ Provide a responsive, accessible, productive interface using Ant Design. — v1.0
 - ✓ Deploy the static PWA through GitHub Pages. — v1.0
+- ✓ Track Banking IT domain fields (Ops Owner, BA, Work Type) across projects, milestones, tasks. — Phase 9 (SHB-01..SHB-05)
+- ✓ Connect to Jira Cloud REST API v3, create issues, link keys, execute transitions, filter tasks by Jira key/status, and format standup exports. — Phase 11 (JIRA-01..JIRA-05)
 
 ### Active (Next Milestone Candidates)
 
