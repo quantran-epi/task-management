@@ -1,12 +1,23 @@
 import { useState, useEffect, useMemo } from 'react';
-import type { Task } from '../types/models';
+import { useLiveQuery } from 'dexie-react-hooks';
+import type { Task, Project, Milestone } from '../types/models';
 import {
   filterTasks,
   sortTasks,
   DEFAULT_TASK_FILTER_STATE,
+  countActiveAdvancedFilters,
   type TaskFilterState,
 } from '../utils/filter';
 import { getTodayDateString } from '../utils/date';
+import { getTaskIdsWithAllocationsInRange } from '../db/repositories/allocationRepo';
+import { db as defaultDb, type TaskPlannerDatabase } from '../db';
+
+export interface UseTaskFiltersOptions {
+  tasks?: Task[];
+  projects?: Project[];
+  milestones?: Milestone[];
+  db?: TaskPlannerDatabase;
+}
 
 export interface UseTaskFiltersReturn {
   filters: TaskFilterState;
@@ -18,9 +29,15 @@ export interface UseTaskFiltersReturn {
   sortField?: string | undefined;
   sortOrder?: 'ascend' | 'descend' | undefined;
   setSort: (field?: string, order?: 'ascend' | 'descend') => void;
+  activeFilterCount: number;
 }
 
-export function useTaskFilters(tasks: Task[] = []): UseTaskFiltersReturn {
+export function useTaskFilters(
+  input: UseTaskFiltersOptions | Task[] = []
+): UseTaskFiltersReturn {
+  const options: UseTaskFiltersOptions = Array.isArray(input) ? { tasks: input } : input;
+  const { tasks = [], projects = [], milestones = [], db = defaultDb } = options;
+
   const [filters, setFiltersState] = useState<TaskFilterState>(DEFAULT_TASK_FILTER_STATE);
   const [debouncedSearch, setDebouncedSearch] = useState<string>(filters.search);
   const [sortField, setSortField] = useState<string | undefined>(undefined);
@@ -56,14 +73,48 @@ export function useTaskFilters(tasks: Task[] = []): UseTaskFiltersReturn {
 
   const todayStr = useMemo(() => getTodayDateString(), []);
 
+  const projectMap = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
+  const milestoneMap = useMemo(() => new Map(milestones.map((m) => [m.id, m])), [milestones]);
+
+  const executionRangeStart = filters.executionDateRange?.[0];
+  const executionRangeEnd = filters.executionDateRange?.[1];
+
+  // Reactive Dexie query for execution date range (SRCH-01, D-05)
+  const executionTaskIds = useLiveQuery(
+    async () => {
+      if (executionRangeStart && executionRangeEnd) {
+        return await getTaskIdsWithAllocationsInRange(executionRangeStart, executionRangeEnd, db);
+      }
+      return null;
+    },
+    [executionRangeStart, executionRangeEnd, db]
+  );
+
+  const activeFilterCount = useMemo(() => countActiveAdvancedFilters(filters), [filters]);
+
   const filteredTasks = useMemo(() => {
     const effectiveFilterState: TaskFilterState = {
       ...filters,
       search: debouncedSearch,
     };
-    const matched = filterTasks(tasks, effectiveFilterState, todayStr);
+    const matched = filterTasks(tasks, effectiveFilterState, {
+      todayStr,
+      projectMap,
+      milestoneMap,
+      executionTaskIds: executionTaskIds ?? null,
+    });
     return sortTasks(matched, sortField, sortOrder);
-  }, [tasks, filters, debouncedSearch, sortField, sortOrder, todayStr]);
+  }, [
+    tasks,
+    filters,
+    debouncedSearch,
+    sortField,
+    sortOrder,
+    todayStr,
+    projectMap,
+    milestoneMap,
+    executionTaskIds,
+  ]);
 
   return {
     filters,
@@ -75,5 +126,6 @@ export function useTaskFilters(tasks: Task[] = []): UseTaskFiltersReturn {
     sortField,
     sortOrder,
     setSort,
+    activeFilterCount,
   };
 }
