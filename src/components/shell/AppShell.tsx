@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Layout, Drawer, Grid, Button, Typography, Space, Badge, Tooltip, theme } from 'antd';
+import { Layout, Drawer, Grid, Button, Typography, Space, Badge, Tooltip, theme, message } from 'antd';
 import { MenuOutlined, CloudDownloadOutlined } from '@ant-design/icons';
 import { Navigation } from './Navigation';
 import { StatusBadge } from './StatusBadge';
@@ -12,7 +12,19 @@ import { FormGuardProvider } from '../../context/FormGuardContext';
 import { ServiceWorkerProvider } from '../../context/ServiceWorkerContext';
 import { GitHubAuthProvider } from '../../context/GitHubAuthContext';
 import { useServiceWorkerUpdate } from '../../hooks/useServiceWorkerUpdate';
-import type { AppRoute } from '../../types/navigation';
+import { useNotifications } from '../../hooks/useNotifications';
+import { NotificationBell } from '../notifications/NotificationBell';
+import { NotificationDrawer } from '../notifications/NotificationDrawer';
+import { TaskDrawer } from '../tasks/TaskDrawer';
+import { ProjectModal } from '../projects/ProjectModal';
+import { MilestoneModal } from '../projects/MilestoneModal';
+import { dismissAlertToday } from '../../db/repositories/notificationRepo';
+import { getProject, updateProject } from '../../db/repositories/projectRepo';
+import { getMilestone, updateMilestone } from '../../db/repositories/milestoneRepo';
+import { getTodayDateString, isValidCalendarDate } from '../../utils/date';
+import type { AppRoute, NavigateFunction } from '../../types/navigation';
+import type { AlertNotificationItem } from '../../types/notifications';
+import type { Project, Milestone } from '../../types/models';
 
 const { Header, Sider, Content } = Layout;
 const { useBreakpoint } = Grid;
@@ -20,7 +32,7 @@ const { Title } = Typography;
 
 export interface AppShellProps {
   currentRoute: AppRoute;
-  onNavigate: (route: AppRoute) => void;
+  onNavigate: NavigateFunction;
   children: React.ReactNode;
   isDark?: boolean;
 }
@@ -38,6 +50,13 @@ const AppShellInner: React.FC<AppShellProps> = ({
   const { token } = theme.useToken();
 
   const { needRefresh, reloadApp } = useServiceWorkerUpdate();
+  const notifications = useNotifications();
+
+  // Notification UI & Inspection State (D-02, D-03, D-12)
+  const [notificationDrawerOpen, setNotificationDrawerOpen] = useState(false);
+  const [inspectingTaskId, setInspectingTaskId] = useState<string | undefined>(undefined);
+  const [inspectingProject, setInspectingProject] = useState<Project | null>(null);
+  const [inspectingMilestone, setInspectingMilestone] = useState<Milestone | null>(null);
 
   // Prefer explicit prop if provided, else check token brightness/property
   const isDark = explicitDark ?? false;
@@ -49,6 +68,34 @@ const AppShellInner: React.FC<AppShellProps> = ({
   const showBanner = needRefresh && !bannerDismissed;
   // Show header collapsed badge if needRefresh is true and user dismissed the banner (D-04)
   const showCollapsedBadge = needRefresh && bannerDismissed;
+
+  const handleNotificationClick = async (item: AlertNotificationItem) => {
+    setNotificationDrawerOpen(false);
+
+    if (item.entityType === 'task' && item.entityId) {
+      setInspectingTaskId(item.entityId);
+    } else if (item.entityType === 'project' && item.entityId) {
+      const p = await getProject(item.entityId);
+      if (p) setInspectingProject(p);
+    } else if (item.entityType === 'milestone' && item.entityId) {
+      const m = await getMilestone(item.entityId);
+      if (m) setInspectingMilestone(m);
+    } else if (item.entityType === 'capacity' && item.date) {
+      // T-12-09: Sanitize date parameter before routing
+      if (isValidCalendarDate(item.date)) {
+        onNavigate('planner', { date: item.date });
+      }
+    }
+  };
+
+  const handleDismissNotification = async (item: AlertNotificationItem) => {
+    try {
+      await dismissAlertToday(item.id, getTodayDateString());
+      message.success('Đã ẩn cảnh báo cho đến hết ngày hôm nay.');
+    } catch (err: any) {
+      message.error(err?.message || 'Không thể bỏ qua cảnh báo.');
+    }
+  };
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -101,6 +148,10 @@ const AppShellInner: React.FC<AppShellProps> = ({
           </Space>
           <Space size="middle">
             <StatusBadge />
+            <NotificationBell
+              count={notifications.activeCount}
+              onClick={() => setNotificationDrawerOpen(true)}
+            />
             <InstallButton />
             {showCollapsedBadge && (
               <Tooltip title="Đã có bản cập nhật mới. Nhấn để cập nhật.">
@@ -123,6 +174,47 @@ const AppShellInner: React.FC<AppShellProps> = ({
 
         <Content style={{ margin: 16 }}>{children}</Content>
       </Layout>
+
+      <NotificationDrawer
+        open={notificationDrawerOpen}
+        onClose={() => setNotificationDrawerOpen(false)}
+        items={notifications.items}
+        onItemClick={handleNotificationClick}
+        onDismiss={handleDismissNotification}
+      />
+
+      <TaskDrawer
+        taskId={inspectingTaskId ?? null}
+        open={Boolean(inspectingTaskId)}
+        onClose={() => setInspectingTaskId(undefined)}
+      />
+
+      {inspectingProject && (
+        <ProjectModal
+          open={Boolean(inspectingProject)}
+          project={inspectingProject}
+          onClose={() => setInspectingProject(null)}
+          onSave={async (values) => {
+            await updateProject(inspectingProject.id, values);
+            setInspectingProject(null);
+            message.success('Đã cập nhật dự án');
+          }}
+        />
+      )}
+
+      {inspectingMilestone && (
+        <MilestoneModal
+          open={Boolean(inspectingMilestone)}
+          projectId={inspectingMilestone.projectId}
+          milestone={inspectingMilestone}
+          onClose={() => setInspectingMilestone(null)}
+          onSave={async (values) => {
+            await updateMilestone(inspectingMilestone.id, values);
+            setInspectingMilestone(null);
+            message.success('Đã cập nhật mốc');
+          }}
+        />
+      )}
 
       <UpgradeModal />
       <ResetDbModal open={resetModalOpen} onClose={() => setResetModalOpen(false)} />
