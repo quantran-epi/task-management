@@ -99,7 +99,7 @@ describe('Jira API Client (jiraApi.ts)', () => {
 
       expect(result).toEqual({ accountId: '123', displayName: 'Dev SHB' });
       expect(mockFetch).toHaveBeenCalledTimes(1);
-      const [, init] = mockFetch.mock.calls[0];
+      const [, init] = mockFetch.mock.calls[0]!;
       const expectedCredentials = btoa(
         unescape(encodeURIComponent(`${baseConfig.email}:${baseConfig.apiToken}`))
       );
