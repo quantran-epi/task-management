@@ -65,7 +65,10 @@
   3. User can filter tasks simultaneously by status, priority, workType, project, milestone, Ops Owner, and BA.
   4. User can click a button to copy filtered task results to clipboard as formatted Markdown standup summary.
 
-**Plans**: TBD
+**Plans**: 2 plans in 2 waves
+- [ ] 10-01-PLAN.md — Allocation date range query, multi-criteria filter pipeline, tag inheritance, and standup Markdown format utility (Wave 1)
+- [ ] 10-02-PLAN.md — Reactive filter hook, collapsible advanced filter bar UI, active filter badge, and clipboard standup export (Wave 2)
+
 **UI hint**: yes
 
 ### Phase 11: Jira Cloud Integration & Task Lifecycle
