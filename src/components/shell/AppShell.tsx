@@ -13,6 +13,7 @@ import { ServiceWorkerProvider } from '../../context/ServiceWorkerContext';
 import { GitHubAuthProvider } from '../../context/GitHubAuthContext';
 import { useServiceWorkerUpdate } from '../../hooks/useServiceWorkerUpdate';
 import { useNotifications } from '../../hooks/useNotifications';
+import { useDesktopNotification } from '../../hooks/useDesktopNotification';
 import { NotificationBell } from '../notifications/NotificationBell';
 import { NotificationDrawer } from '../notifications/NotificationDrawer';
 import { TaskDrawer } from '../tasks/TaskDrawer';
@@ -51,6 +52,9 @@ const AppShellInner: React.FC<AppShellProps> = ({
 
   const { needRefresh, reloadApp } = useServiceWorkerUpdate();
   const notifications = useNotifications();
+
+  // Desktop Notification Startup Hook (D-18, D-19)
+  useDesktopNotification({ notifications });
 
   // Notification UI & Inspection State (D-02, D-03, D-12)
   const [notificationDrawerOpen, setNotificationDrawerOpen] = useState(false);

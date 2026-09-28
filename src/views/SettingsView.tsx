@@ -19,6 +19,7 @@ import { GitHubSyncCard } from '../components/settings/GitHubSyncCard';
 import { JiraConfigCard } from '../components/settings/JiraConfigCard';
 import { PwaStatusCard } from '../components/settings/PwaStatusCard';
 import { StoragePersistenceCard } from '../components/settings/StoragePersistenceCard';
+import { NotificationSettingsCard } from '../components/settings/NotificationSettingsCard';
 import { PostRestoreBanner } from '../components/settings/PostRestoreBanner';
 import { ResetDbModal } from '../components/common/ResetDbModal';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
@@ -151,6 +152,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <GitHubSyncCard db={db} onPullSuccess={handleRemotePullSuccess} />
           <PwaStatusCard />
           <StoragePersistenceCard />
+          <NotificationSettingsCard db={db} />
 
           <Card
             title={
