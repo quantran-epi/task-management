@@ -4,6 +4,7 @@ import {
   ArrowLeftOutlined,
   ScheduleOutlined,
   DatabaseOutlined,
+  CloudSyncOutlined,
   WarningOutlined,
   ExclamationCircleOutlined,
 } from '@ant-design/icons';
@@ -15,6 +16,7 @@ import { ImportPreviewModal } from '../components/settings/ImportPreviewModal';
 import { SnapshotRollbackCard } from '../components/settings/SnapshotRollbackCard';
 import { GitHubConfigCard } from '../components/settings/GitHubConfigCard';
 import { GitHubSyncCard } from '../components/settings/GitHubSyncCard';
+import { JiraConfigCard } from '../components/settings/JiraConfigCard';
 import { PwaStatusCard } from '../components/settings/PwaStatusCard';
 import { StoragePersistenceCard } from '../components/settings/StoragePersistenceCard';
 import { PostRestoreBanner } from '../components/settings/PostRestoreBanner';
@@ -31,7 +33,7 @@ const { Title, Paragraph } = Typography;
 export interface SettingsViewProps {
   db?: TaskPlannerDatabase;
   onNavigate?: (route: AppRoute) => void;
-  defaultActiveTab?: 'capacity' | 'data';
+  defaultActiveTab?: 'capacity' | 'data' | 'jira';
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -39,7 +41,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onNavigate,
   defaultActiveTab = 'capacity',
 }) => {
-  const [activeTab, setActiveTab] = useState<'capacity' | 'data'>(defaultActiveTab);
+  const [activeTab, setActiveTab] = useState<'capacity' | 'data' | 'jira'>(defaultActiveTab);
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [showPostRestoreBanner, setShowPostRestoreBanner] = useState(false);
   const [remotePayload, setRemotePayload] = useState<BackupEnvelope | null>(null);
@@ -169,6 +171,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </Space>
       ),
     },
+    {
+      key: 'jira',
+      label: (
+        <span>
+          <CloudSyncOutlined style={{ marginRight: 8 }} />
+          Tích hợp Jira
+        </span>
+      ),
+      children: (
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <JiraConfigCard db={db} />
+        </Space>
+      ),
+    },
   ];
 
   return (
@@ -196,7 +212,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       <Tabs
         activeKey={activeTab}
-        onChange={(k) => setActiveTab(k as 'capacity' | 'data')}
+        onChange={(k) => setActiveTab(k as 'capacity' | 'data' | 'jira')}
         items={items}
       />
 

@@ -63,6 +63,18 @@ describe('SettingsView Integration & Offline Independence (SYNC-07, SYNC-05)', (
     expect(screen.getByText('Khu vực nguy hiểm (Danger Zone)')).toBeInTheDocument();
   });
 
+  it('renders Jira tab and mounts JiraConfigCard when selected (D-02)', async () => {
+    render(
+      <GitHubAuthProvider>
+        <SettingsView db={db} defaultActiveTab="jira" />
+      </GitHubAuthProvider>
+    );
+
+    expect(screen.getByText('Cấu hình tích hợp Jira Cloud')).toBeInTheDocument();
+    expect(screen.getByLabelText('Tên miền Jira')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Lưu cấu hình Jira/i })).toBeInTheDocument();
+  });
+
   it('operates 100% offline without GitHub token or internet (SYNC-07)', async () => {
     // Zero token, zero repo settings, completely unauthenticated
     render(
