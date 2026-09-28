@@ -8,15 +8,15 @@ export interface AlertNotificationItem {
   id: string; // e.g. "overdue:task:123", "overload:date:2026-09-29", "stale:task:456", "reminder:task:789"
   category: AlertCategory;
   title: string;
-  subtitle?: string;
-  date?: string;
+  subtitle?: string | undefined;
+  date?: string | undefined;
   tagColor: 'error' | 'warning' | 'processing' | 'blue' | 'purple' | 'gold';
   tagLabel: string;
   entityType: NotificationEntityType;
-  entityId?: string;
+  entityId?: string | undefined;
   canDismiss: boolean;
   priorityOrder: number; // 1: overdue, 2: overload, 3: due-soon, 4: stale, 5: reminder
-  task?: Task;
+  task?: Task | undefined;
 }
 
 export interface NotificationState {
