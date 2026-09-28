@@ -500,9 +500,10 @@ export async function createJiraIssue(
 | A1 | Jira Cloud basic authentication accepts `email:apiToken` Base64 header on REST v3. | Standard Stack | High: Atlassian docs cite this as official auth for personal automation. Verified. |
 | A2 | Browser fetch will be CORS-blocked without user CORS proxy. | Architecture Patterns | Low: Standard browser security behavior for Jira Cloud; handled gracefully by prompt. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **What if the user's Jira instance has customized Issue Types (e.g. "Story" instead of "Task")?**
+   - RESOLVED: Default to "Task", allow modal editable select with options `['Task', 'Bug', 'Story', 'Sub-task']`.
    - What we know: Users can configure Default Issue Type in Settings, and edit it inside the `CreateJiraIssueModal`.
    - Recommendation: Default to "Task", but let the modal render an editable input or predefined select with options `['Task', 'Bug', 'Story', 'Sub-task']`.
 

@@ -37,6 +37,7 @@
 **Depends on**: Phase 8 (v1.0 baseline)
 **Requirements**: SHB-01, SHB-02, SHB-03, SHB-04, SHB-05
 **Success Criteria** (what must be TRUE):
+
   1. User can assign and edit multiple Ops Owner names on projects, milestones, and tasks.
   2. User can assign and edit multiple Business Analyst (BA) names on projects, milestones, and tasks.
   3. Milestone and task views visually display inherited Ops Owner and BA tags from parent items when not explicitly overridden.
@@ -44,6 +45,7 @@
   5. Existing v1.0 local database records and backup files seamlessly upgrade to schema v2 without data loss or error.
 
 **Plans**: 3/3 plans complete in 3 waves
+
 - [x] 09-01-PLAN.md
 - [x] 09-02-PLAN.md
 - [x] 09-03-PLAN.md
@@ -60,6 +62,7 @@
 **Depends on**: Phase 9
 **Requirements**: SRCH-01, SRCH-02, SRCH-03, SRCH-04
 **Success Criteria** (what must be TRUE):
+
   1. User can filter tasks by planned execution date window querying the daily allocation ledger.
   2. User can filter tasks by deadline date range.
   3. User can filter tasks simultaneously by status, priority, workType, project, milestone, Ops Owner, and BA.
@@ -67,9 +70,11 @@
 
 **Plans**: 2/2 plans complete in 2 waves
 **Wave 1**
+
 - [x] 10-01-PLAN.md — Allocation date range query, multi-criteria filter pipeline, tag inheritance, and standup Markdown format utility (Wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
+
 - [x] 10-02-PLAN.md — Reactive filter hook, collapsible advanced filter bar UI, active filter badge, and clipboard standup export (Wave 2)
 
 **UI hint**: yes
@@ -80,6 +85,7 @@
 **Depends on**: Phase 9
 **Requirements**: JIRA-01, JIRA-02, JIRA-03, JIRA-04, JIRA-05
 **Success Criteria** (what must be TRUE):
+
   1. User can configure Jira Cloud domain, email, API token, and optional CORS Proxy URL in Settings.
   2. User can test Jira Cloud connection and receive immediate diagnostic feedback (authentication, CORS proxy check, success/failure).
   3. User can create a new Jira issue directly from a task with summary and ADF description, automatically linking the generated Jira issue key.
@@ -87,8 +93,16 @@
   5. User can view available Jira workflow transitions and execute a status transition directly from the task modal.
 
 **Plans**: 3 plans in 3 waves
+**Wave 1**
+
 - [ ] 11-01-PLAN.md — Schema v3 migration, models, Jira REST API v3 client, minimal ADF serializer, status mapping, and Settings Tab 3 with connection diagnostics (Wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 11-02-PLAN.md — Task detail Jira integration: issue creation modal, manual key linking/unlinking, transition execution with smart status mapping, and TaskDrawer integration (Wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 11-03-PLAN.md — TaskTable and weekly planner Jira Key badges with direct navigation, filter bar Jira search/status filter, and standup summary [JiraKey] formatting (Wave 3)
 
 **UI hint**: yes
@@ -99,6 +113,7 @@
 **Depends on**: Phase 9, Phase 10
 **Requirements**: NOTIF-01, NOTIF-02, NOTIF-03, NOTIF-04, NOTIF-05
 **Success Criteria** (what must be TRUE):
+
   1. User can set a custom reminder date and optional note on projects, milestones, and tasks.
   2. User sees an alert badge with counter in the app header and can open a notification drawer listing active notifications.
   3. Notification drawer lists all overdue tasks and tasks due today or tomorrow.
@@ -114,6 +129,7 @@
 **Depends on**: Phase 9, Phase 10
 **Requirements**: ANLT-01, ANLT-02, ANLT-03
 **Success Criteria** (what must be TRUE):
+
   1. User can view a lightweight SVG vector burndown chart for any selected milestone showing remaining work versus ideal pace.
   2. User can inspect task status distribution bars and completion velocity across projects.
   3. User can view workload allocation broken down by Ops Owner, Business Analyst, and Work Type in both planned hours and active task counts.
