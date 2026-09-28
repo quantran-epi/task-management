@@ -130,7 +130,7 @@
 | 7. PWA Offline Capability & Lifecycle Hardening | v1.0 | 4/4 | Complete | 2026-09-27 |
 | 8. Optional Encrypted GitHub Backup | v1.0 | 3/3 | Complete | 2026-09-27 |
 | 9. Banking IT Domain Fields & Work Types | v1.1 | 3/3 | Complete    | 2026-09-28 |
-| 10. Date-Range Search, Multi-Criteria Filtering & Standup Export | v1.1 | 0/0 | Not started | - |
+| 10. Date-Range Search, Multi-Criteria Filtering & Standup Export | v1.1 | 1/2 | In progress | - |
 | 11. Jira Cloud Integration & Task Lifecycle | v1.1 | 0/0 | Not started | - |
 | 12. In-App Notifications, Proactive Alerts & Custom Reminders | v1.1 | 0/0 | Not started | - |
 | 13. Enhanced Workload Analytics & Milestone Burndown | v1.1 | 0/0 | Not started | - |

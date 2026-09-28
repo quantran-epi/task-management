@@ -23,10 +23,10 @@
 
 ### Date-Range Search & Multi-Criteria Filtering
 
-- [ ] **SRCH-01**: User can search and filter tasks by planned execution date window (via daily allocation ledger).
-- [ ] **SRCH-02**: User can search and filter tasks by deadline date range.
-- [ ] **SRCH-03**: User can filter tasks simultaneously by status, priority, workType, project, milestone, Ops Owner, and BA.
-- [ ] **SRCH-04**: User can copy filtered task results as formatted Markdown standup summary to clipboard.
+- [x] **SRCH-01**: User can search and filter tasks by planned execution date window (via daily allocation ledger).
+- [x] **SRCH-02**: User can search and filter tasks by deadline date range.
+- [x] **SRCH-03**: User can filter tasks simultaneously by status, priority, workType, project, milestone, Ops Owner, and BA.
+- [x] **SRCH-04**: User can copy filtered task results as formatted Markdown standup summary to clipboard.
 
 ### Notifications & Custom Reminders
 
@@ -63,10 +63,10 @@
 | SHB-03 | Phase 9 | Complete |
 | SHB-04 | Phase 9 | Complete |
 | SHB-05 | Phase 9 | Complete |
-| SRCH-01 | Phase 10 | Pending |
-| SRCH-02 | Phase 10 | Pending |
-| SRCH-03 | Phase 10 | Pending |
-| SRCH-04 | Phase 10 | Pending |
+| SRCH-01 | Phase 10 | Complete |
+| SRCH-02 | Phase 10 | Complete |
+| SRCH-03 | Phase 10 | Complete |
+| SRCH-04 | Phase 10 | Complete |
 | JIRA-01 | Phase 11 | Pending |
 | JIRA-02 | Phase 11 | Pending |
 | JIRA-03 | Phase 11 | Pending |
