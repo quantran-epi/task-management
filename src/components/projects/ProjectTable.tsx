@@ -5,6 +5,7 @@ import {
   Button,
   Space,
   Tooltip,
+  Popover,
   theme,
   type TableColumnsType,
 } from 'antd';
@@ -14,6 +15,7 @@ import {
   DeleteOutlined,
   FolderOutlined,
   FlagOutlined,
+  LinkOutlined,
 } from '@ant-design/icons';
 import type { Project, Milestone, Task } from '../../types/models';
 import { EmptyState } from '../common/EmptyState';
@@ -363,17 +365,52 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
       title: 'Dự án',
       dataIndex: 'name',
       key: 'name',
-      render: (name: string, record) => (
-        <Space orientation="horizontal" size="small">
-          <FolderOutlined style={{ color: token.colorPrimary, fontSize: 16 }} />
-          <div>
-            <div style={{ fontWeight: 600, fontSize: 14, color: token.colorText }}>{name}</div>
-            {record.description && (
-              <div style={{ fontSize: 12, color: token.colorTextTertiary }}>{record.description}</div>
-            )}
-          </div>
-        </Space>
-      ),
+      render: (name: string, record) => {
+        const linkCount = record.documentLinks?.length ?? 0;
+        return (
+          <Space orientation="horizontal" size="small">
+            <FolderOutlined style={{ color: token.colorPrimary, fontSize: 16 }} />
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontWeight: 600, fontSize: 14, color: token.colorText }}>{name}</span>
+                {linkCount > 0 && (
+                  <Popover
+                    title="Tài liệu liên kết"
+                    content={
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {record.documentLinks?.map((link, idx) => (
+                          <a
+                            key={idx}
+                            href={link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ fontSize: 12 }}
+                          >
+                            <LinkOutlined style={{ marginRight: 4 }} />
+                            {link}
+                          </a>
+                        ))}
+                      </div>
+                    }
+                    trigger="hover"
+                  >
+                    <Tag
+                      icon={<LinkOutlined />}
+                      style={{ cursor: 'pointer', margin: 0, fontSize: 11 }}
+                      color="default"
+                    >
+                      {linkCount} link{linkCount > 1 ? 's' : ''}
+                    </Tag>
+                  </Popover>
+                )}
+              </div>
+              {record.description && (
+                <div style={{ fontSize: 12, color: token.colorTextTertiary }}>{record.description}</div>
+              )}
+            </div>
+          </Space>
+        );
+      },
     },
     {
       title: 'Trạng thái',

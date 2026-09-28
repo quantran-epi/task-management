@@ -9,6 +9,7 @@ import {
   Space,
   Alert,
   Typography,
+  Tag,
   message,
 } from 'antd';
 import {
@@ -26,7 +27,7 @@ import { createFocusRestorer } from '../../utils/focus';
 import { useRegisterActiveForm } from '../../context/FormGuardContext';
 import { evaluateTaskFeasibility } from '../../utils/feasibility';
 import { getTodayDateString } from '../../utils/date';
-import type { Task, PlannedAllocation } from '../../types/models';
+import type { Task, PlannedAllocation, TaskPriority } from '../../types/models';
 import type { DistributionStrategy, CandidateAllocation } from '../../types/feasibility';
 import { CandidateAllocationsTable } from './CandidateAllocationsTable';
 import { DateInspectionBreakdown } from './DateInspectionBreakdown';
@@ -42,6 +43,13 @@ export interface FeasibilityModalProps {
   db?: TaskPlannerDatabase | undefined;
 }
 
+const PRIORITY_COLORS: Record<TaskPriority, string> = {
+  Low: 'default',
+  Medium: 'blue',
+  High: 'orange',
+  Urgent: 'red',
+};
+
 export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
   open,
   task,
@@ -53,6 +61,14 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
 
   const restorerRef = useRef<(() => void) | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const project = useLiveQuery(
+    async () => {
+      if (!task?.projectId) return undefined;
+      return db.projects.get(task.projectId);
+    },
+    [task?.projectId, db]
+  );
 
   // Compute initial date range
   const taskDeadline = task?.deadline;
@@ -292,6 +308,40 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
       }
     >
       <div style={{ marginTop: 16 }}>
+        {/* Task & Project Context Banner */}
+        {task && (
+          <div
+            data-testid="feasibility-task-context"
+            style={{
+              padding: '10px 14px',
+              backgroundColor: '#fafafa',
+              borderRadius: 6,
+              marginBottom: 16,
+              border: '1px solid #f0f0f0',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 8,
+            }}
+          >
+            <Space align="center" size={8} wrap>
+              <Text strong style={{ fontSize: 14 }}>
+                {task.name}
+              </Text>
+              {project?.name && (
+                <Tag color="blue" style={{ margin: 0 }}>
+                  {project.name}
+                </Tag>
+              )}
+            </Space>
+            <Space size={6}>
+              <Tag color={PRIORITY_COLORS[task.priority]}>{task.priority}</Tag>
+              <Tag>{formatMinutes(task.estimateMinutes)}</Tag>
+            </Space>
+          </div>
+        )}
+
         {/* Section 1: Scope & Parameters */}
         <div
           style={{

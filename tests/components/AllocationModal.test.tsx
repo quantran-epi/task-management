@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { TaskPlannerDatabase } from '../../src/db/index';
 import { createTask } from '../../src/db/repositories/taskRepo';
+import { createProject } from '../../src/db/repositories/projectRepo';
 import { upsertAllocation } from '../../src/db/repositories/allocationRepo';
 import { AllocationModal } from '../../src/components/planner/AllocationModal';
 import { TaskAllocationCard } from '../../src/components/planner/TaskAllocationCard';
@@ -102,6 +103,25 @@ describe('Task Allocation UI Components (PLAN-01, PLAN-02, PLAN-06, D-09, D-10, 
         expect(stored?.allocatedMinutes).toBe(240);
         expect(onSuccess).toHaveBeenCalledTimes(1);
       });
+    });
+
+    it('renders project combobox filter and displays project context', async () => {
+      const proj = await createProject({ name: 'Project Omega', status: 'Open' }, testDb);
+      await createTask(
+        { name: 'Omega Task', estimateMinutes: 60, status: 'Open', projectId: proj.id },
+        testDb
+      );
+      await createTask(
+        { name: 'Independent Task', estimateMinutes: 90, status: 'Open' },
+        testDb
+      );
+
+      render(<AllocationModal open={true} onCancel={vi.fn()} db={testDb} />);
+
+      expect(await screen.findByText('Phân bổ thời gian tác vụ')).toBeInTheDocument();
+      expect(screen.getByText('Lọc theo dự án:')).toBeInTheDocument();
+      expect(screen.getByRole('combobox', { name: 'Lọc theo dự án' })).toBeInTheDocument();
+      expect(screen.getByRole('combobox', { name: 'Chọn tác vụ' })).toBeInTheDocument();
     });
   });
 

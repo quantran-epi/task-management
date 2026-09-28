@@ -86,6 +86,10 @@ export const DayColumnHeader: React.FC<DayColumnHeaderProps> = ({
         backgroundColor: isToday ? 'rgba(22, 119, 255, 0.05)' : undefined,
         border: isToday ? '1px solid #1677ff' : '1px solid #f0f0f0',
         marginBottom: '8px',
+        minHeight: 142,
+        boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: 'column',
       }}
     >
       {/* Date & Today Highlight */}
@@ -97,6 +101,7 @@ export const DayColumnHeader: React.FC<DayColumnHeaderProps> = ({
           justifyContent: 'space-between',
           alignItems: 'center',
           marginBottom: '6px',
+          minHeight: 26,
         }}
       >
         <Space size={6} wrap>
@@ -170,7 +175,9 @@ export const DayColumnHeader: React.FC<DayColumnHeaderProps> = ({
           display: 'flex',
           flexWrap: 'wrap',
           gap: '4px',
-          alignItems: 'center',
+          alignItems: 'flex-start',
+          flex: 1,
+          minHeight: 46,
         }}
       >
         <Tag

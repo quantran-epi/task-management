@@ -28,6 +28,7 @@ export async function createProject(
   if (validated.notes !== undefined) project.notes = validated.notes;
   if (validated.opsOwners !== undefined) project.opsOwners = validated.opsOwners;
   if (validated.businessAnalysts !== undefined) project.businessAnalysts = validated.businessAnalysts;
+  if (validated.documentLinks !== undefined) project.documentLinks = validated.documentLinks;
 
   await db.projects.add(project);
   return project;
@@ -57,6 +58,7 @@ export async function updateProject(
   if (validated.status !== undefined) updated.status = validated.status;
   if (validated.opsOwners !== undefined) updated.opsOwners = validated.opsOwners;
   if (validated.businessAnalysts !== undefined) updated.businessAnalysts = validated.businessAnalysts;
+  if (validated.documentLinks !== undefined) updated.documentLinks = validated.documentLinks;
 
   await db.projects.put(updated);
   return updated;

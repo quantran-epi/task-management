@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import dayjs from 'dayjs';
 import { TaskPlannerDatabase } from '../../src/db/index';
 import { createTask } from '../../src/db/repositories/taskRepo';
+import { createProject } from '../../src/db/repositories/projectRepo';
 import { upsertAllocation } from '../../src/db/repositories/allocationRepo';
 import { updateCapacityRule } from '../../src/db/repositories/capacityRepo';
 import { FeasibilityModal } from '../../src/components/planner/FeasibilityModal';
@@ -227,5 +228,27 @@ describe('FeasibilityModal Component (CALC-03, CALC-04, CALC-05, CALC-06, D-08, 
       expect(updated?.deadline).not.toBe(today);
       expect(dayjs(updated?.deadline).isAfter(today)).toBe(true);
     });
+  });
+
+  it('renders task name and project badge in task context header', async () => {
+    const proj = await createProject({ name: 'Alpha Core', status: 'Open' }, testDb);
+    const task = await createTask(
+      { name: 'Core Engine Task', estimateMinutes: 120, status: 'Open', projectId: proj.id },
+      testDb
+    );
+
+    render(
+      <FeasibilityModal
+        open={true}
+        task={task}
+        onCancel={vi.fn()}
+        db={testDb}
+      />
+    );
+
+    const contextHeader = await screen.findByTestId('feasibility-task-context');
+    expect(contextHeader).toBeInTheDocument();
+    expect(contextHeader).toHaveTextContent('Core Engine Task');
+    expect(await screen.findByText('Alpha Core')).toBeInTheDocument();
   });
 });

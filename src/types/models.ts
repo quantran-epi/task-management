@@ -31,6 +31,7 @@ export interface Project {
   status: ProjectStatus;
   opsOwners?: string[];
   businessAnalysts?: string[];
+  documentLinks?: string[];
   createdAt: string; // ISO string metadata
   updatedAt: string; // ISO string metadata
 }

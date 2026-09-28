@@ -61,6 +61,9 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ db = defaultDb }) =>
     deadline?: string | undefined;
     notes?: string | undefined;
     status: ProjectStatus;
+    opsOwners?: string[] | undefined;
+    businessAnalysts?: string[] | undefined;
+    documentLinks?: string[] | undefined;
   }) => {
     try {
       if (editingProject) {

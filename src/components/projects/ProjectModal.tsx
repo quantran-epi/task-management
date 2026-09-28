@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { Modal, Form, Input, DatePicker, Select } from 'antd';
+import { Modal, Form, Input, DatePicker, Select, Button, Space } from 'antd';
+import { DeleteOutlined, LinkOutlined, PlusOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
 import type { Project, ProjectStatus } from '../../types/models';
 import { createFocusRestorer } from '../../utils/focus';
@@ -18,6 +19,7 @@ export interface ProjectModalProps {
     status: ProjectStatus;
     opsOwners?: string[] | undefined;
     businessAnalysts?: string[] | undefined;
+    documentLinks?: string[] | undefined;
   }) => Promise<void> | void;
   loading?: boolean | undefined;
 }
@@ -30,6 +32,7 @@ interface ProjectFormValues {
   status: ProjectStatus;
   opsOwners?: string[];
   businessAnalysts?: string[];
+  documentLinks?: string[];
 }
 
 const PROJECT_STATUSES: ProjectStatus[] = ['Open', 'In Progress', 'Done', 'Cancelled'];
@@ -65,10 +68,11 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
           status: project.status,
           opsOwners: project.opsOwners ?? [],
           businessAnalysts: project.businessAnalysts ?? [],
+          documentLinks: project.documentLinks ?? [],
         });
       } else {
         form.resetFields();
-        form.setFieldsValue({ status: 'Open', opsOwners: [], businessAnalysts: [] });
+        form.setFieldsValue({ status: 'Open', opsOwners: [], businessAnalysts: [], documentLinks: [] });
       }
     }
   }, [open, project, form]);
@@ -83,6 +87,9 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
   const handleOk = async () => {
     try {
       const values = await form.validateFields();
+      const cleanedLinks = (values.documentLinks ?? [])
+        .map((l) => (typeof l === 'string' ? l.trim() : ''))
+        .filter((l) => l.length > 0);
       await onSave({
         name: values.name.trim(),
         description: values.description?.trim() || undefined,
@@ -92,6 +99,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
         opsOwners: (values.opsOwners ?? []).length > 0 ? values.opsOwners : undefined,
         businessAnalysts:
           (values.businessAnalysts ?? []).length > 0 ? values.businessAnalysts : undefined,
+        documentLinks: cleanedLinks.length > 0 ? cleanedLinks : undefined,
       });
       handleClose();
     } catch {
@@ -150,6 +158,50 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
             <TagSelect field="businessAnalysts" />
           </Form.Item>
         </div>
+
+        {/* Document Links */}
+        <Form.Item label="Tài liệu liên kết">
+          <Form.List name="documentLinks">
+            {(fields, { add, remove }) => (
+              <Space direction="vertical" style={{ width: '100%' }}>
+                {fields.map((field) => (
+                  <div key={field.key} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <Form.Item
+                      {...field}
+                      noStyle
+                      rules={[
+                        {
+                          pattern: /^https?:\/\//i,
+                          message: 'Liên kết tài liệu phải là URL HTTP hoặc HTTPS hợp lệ.',
+                        },
+                      ]}
+                    >
+                      <Input
+                        placeholder="https://example.com/spec"
+                        prefix={<LinkOutlined style={{ color: '#8c8c8c' }} />}
+                      />
+                    </Form.Item>
+                    <Button
+                      type="text"
+                      danger
+                      icon={<DeleteOutlined />}
+                      onClick={() => remove(field.name)}
+                      aria-label="Xóa liên kết"
+                    />
+                  </div>
+                ))}
+                <Button
+                  type="dashed"
+                  onClick={() => add('')}
+                  icon={<PlusOutlined />}
+                  style={{ width: '100%' }}
+                >
+                  Thêm liên kết
+                </Button>
+              </Space>
+            )}
+          </Form.List>
+        </Form.Item>
 
         <Form.Item name="notes" label="Ghi chú">
           <Input.TextArea rows={3} placeholder="Bối cảnh dự án, mục tiêu..." />

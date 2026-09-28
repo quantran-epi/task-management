@@ -39,6 +39,7 @@ export const BackupProjectRecordSchema = z.object({
   status: z.enum(PROJECT_STATUSES),
   opsOwners: tagListSchema.optional(),
   businessAnalysts: tagListSchema.optional(),
+  documentLinks: z.array(httpUrlSchema).optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

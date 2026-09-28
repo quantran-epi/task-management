@@ -83,4 +83,42 @@ describe('Project and Milestone Modals and ProjectTable Banking IT Fields', () =
     expect(screen.getByText('TuanLA')).toBeInTheDocument();
     expect(screen.getByText('HuongTT')).toBeInTheDocument();
   });
+
+  it('ProjectModal renders documentLinks section and ProjectTable renders link badge', () => {
+    const projWithLinks: Project = {
+      ...sampleProject,
+      documentLinks: ['https://example.com/spec', 'https://example.com/arch'],
+    };
+
+    render(
+      <ProjectModal
+        open={true}
+        project={projWithLinks}
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Tài liệu liên kết')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('https://example.com/spec')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('https://example.com/arch')).toBeInTheDocument();
+
+    const { unmount } = render(
+      <ProjectTable
+        projects={[projWithLinks]}
+        milestones={[]}
+        tasks={[]}
+        onAddTask={vi.fn()}
+        onEditProject={vi.fn()}
+        onDeleteProject={vi.fn()}
+        onAddMilestone={vi.fn()}
+        onEditMilestone={vi.fn()}
+        onDeleteMilestone={vi.fn()}
+        onEditTask={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('2 links')).toBeInTheDocument();
+    unmount();
+  });
 });

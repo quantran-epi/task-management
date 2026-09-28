@@ -9,6 +9,8 @@ import {
   Button,
   Badge,
   DatePicker,
+  Row,
+  Col,
   theme,
   type InputRef,
 } from 'antd';
@@ -237,186 +239,196 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
       {advancedOpen && (
         <div
           style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 12,
-            padding: '12px 16px',
+            padding: '14px 16px',
             backgroundColor: token.colorBgContainer,
             borderRadius: 6,
             border: `1px dashed ${token.colorBorder}`,
           }}
         >
-          {/* Advanced Row 1: Execution Date Range & Deadline Date Range */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
-            <Space orientation="horizontal" size="small" style={{ alignItems: 'center' }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
-                Thời gian kế hoạch:
-              </span>
-              <DatePicker.RangePicker
-                placeholder={['Từ ngày', 'Đến ngày']}
-                format="YYYY-MM-DD"
-                value={
-                  filters.executionDateRange && filters.executionDateRange[0] && filters.executionDateRange[1]
-                    ? [dayjs(filters.executionDateRange[0]), dayjs(filters.executionDateRange[1])]
-                    : null
-                }
-                onChange={(dates: [Dayjs | null, Dayjs | null] | null) => {
-                  if (dates && dates[0] && dates[1]) {
-                    onFilterChange({
-                      executionDateRange: [
-                        dates[0].format('YYYY-MM-DD'),
-                        dates[1].format('YYYY-MM-DD'),
-                      ],
-                    });
-                  } else {
-                    onFilterChange({ executionDateRange: null });
+          <Row gutter={[16, 12]}>
+            {/* Field 1: Execution Date Range */}
+            <Col xs={24} sm={12} lg={6}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
+                  Thời gian kế hoạch:
+                </span>
+                <DatePicker.RangePicker
+                  style={{ width: '100%' }}
+                  placeholder={['Từ ngày', 'Đến ngày']}
+                  format="YYYY-MM-DD"
+                  value={
+                    filters.executionDateRange && filters.executionDateRange[0] && filters.executionDateRange[1]
+                      ? [dayjs(filters.executionDateRange[0]), dayjs(filters.executionDateRange[1])]
+                      : null
                   }
-                }}
-                allowClear
-                aria-label="Khoảng thời gian kế hoạch thực hiện"
-              />
-            </Space>
+                  onChange={(dates: [Dayjs | null, Dayjs | null] | null) => {
+                    if (dates && dates[0] && dates[1]) {
+                      onFilterChange({
+                        executionDateRange: [
+                          dates[0].format('YYYY-MM-DD'),
+                          dates[1].format('YYYY-MM-DD'),
+                        ],
+                      });
+                    } else {
+                      onFilterChange({ executionDateRange: null });
+                    }
+                  }}
+                  allowClear
+                  aria-label="Khoảng thời gian kế hoạch thực hiện"
+                />
+              </div>
+            </Col>
 
-            <Space orientation="horizontal" size="small" style={{ alignItems: 'center' }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
-                Hạn chót:
-              </span>
-              <DatePicker.RangePicker
-                placeholder={['Hạn từ', 'Hạn đến']}
-                format="YYYY-MM-DD"
-                value={
-                  filters.deadlineRange && filters.deadlineRange[0] && filters.deadlineRange[1]
-                    ? [dayjs(filters.deadlineRange[0]), dayjs(filters.deadlineRange[1])]
-                    : null
-                }
-                onChange={(dates: [Dayjs | null, Dayjs | null] | null) => {
-                  if (dates && dates[0] && dates[1]) {
-                    onFilterChange({
-                      deadlineRange: [
-                        dates[0].format('YYYY-MM-DD'),
-                        dates[1].format('YYYY-MM-DD'),
-                      ],
-                    });
-                  } else {
-                    onFilterChange({ deadlineRange: null });
+            {/* Field 2: Deadline Range */}
+            <Col xs={24} sm={12} lg={6}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
+                  Hạn chót:
+                </span>
+                <DatePicker.RangePicker
+                  style={{ width: '100%' }}
+                  placeholder={['Hạn từ', 'Hạn đến']}
+                  format="YYYY-MM-DD"
+                  value={
+                    filters.deadlineRange && filters.deadlineRange[0] && filters.deadlineRange[1]
+                      ? [dayjs(filters.deadlineRange[0]), dayjs(filters.deadlineRange[1])]
+                      : null
                   }
-                }}
-                allowClear
-                aria-label="Khoảng hạn chót hoàn thành"
-              />
-            </Space>
-          </div>
+                  onChange={(dates: [Dayjs | null, Dayjs | null] | null) => {
+                    if (dates && dates[0] && dates[1]) {
+                      onFilterChange({
+                        deadlineRange: [
+                          dates[0].format('YYYY-MM-DD'),
+                          dates[1].format('YYYY-MM-DD'),
+                        ],
+                      });
+                    } else {
+                      onFilterChange({ deadlineRange: null });
+                    }
+                  }}
+                  allowClear
+                  aria-label="Khoảng hạn chót hoàn thành"
+                />
+              </div>
+            </Col>
 
-          {/* Advanced Row 2: Milestone & Work Types */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
-            <Space orientation="horizontal" size="small" style={{ alignItems: 'center', flex: 1, minWidth: 260 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
-                Mốc (Milestone):
-              </span>
-              <Select
-                allowClear
-                placeholder="Lọc theo mốc (Milestone)"
-                style={{ minWidth: 200, flex: 1 }}
-                value={filters.milestoneId || undefined}
-                onChange={(val) => onFilterChange({ milestoneId: val || null })}
-                options={eligibleMilestones.map((m) => ({ label: m.name, value: m.id }))}
-                aria-label="Lọc theo mốc"
-              />
-            </Space>
+            {/* Field 3: Milestone */}
+            <Col xs={24} sm={12} lg={6}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
+                  Mốc (Milestone):
+                </span>
+                <Select
+                  style={{ width: '100%' }}
+                  allowClear
+                  placeholder="Lọc theo mốc (Milestone)"
+                  value={filters.milestoneId || undefined}
+                  onChange={(val) => onFilterChange({ milestoneId: val || null })}
+                  options={eligibleMilestones.map((m) => ({ label: m.name, value: m.id }))}
+                  aria-label="Lọc theo mốc"
+                />
+              </div>
+            </Col>
 
-            <Space orientation="horizontal" size="small" style={{ alignItems: 'center', flex: 2, minWidth: 320 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
-                Loại việc:
-              </span>
-              <Select
-                mode="multiple"
-                allowClear
-                style={{ minWidth: 260, flex: 1 }}
-                placeholder="Tất cả loại việc"
-                value={filters.workTypes}
-                onChange={(vals) => onFilterChange({ workTypes: vals as WorkType[] })}
-                options={WORK_TYPES.map((wt) => {
-                  const cfg = WORK_TYPE_CONFIG[wt];
-                  return {
-                    label: (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        <span
-                          style={{
-                            display: 'inline-block',
-                            width: 8,
-                            height: 8,
-                            borderRadius: '50%',
-                            backgroundColor: cfg.color,
-                          }}
-                        />
-                        {cfg.label}
-                      </span>
-                    ),
-                    value: wt,
-                  };
-                })}
-                maxTagCount="responsive"
-                aria-label="Lọc theo loại công việc"
-              />
-            </Space>
-          </div>
+            {/* Field 4: Work Types */}
+            <Col xs={24} sm={12} lg={6}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
+                  Loại việc:
+                </span>
+                <Select
+                  style={{ width: '100%' }}
+                  mode="multiple"
+                  allowClear
+                  placeholder="Tất cả loại việc"
+                  value={filters.workTypes}
+                  onChange={(vals) => onFilterChange({ workTypes: vals as WorkType[] })}
+                  options={WORK_TYPES.map((wt) => {
+                    const cfg = WORK_TYPE_CONFIG[wt];
+                    return {
+                      label: (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              width: 8,
+                              height: 8,
+                              borderRadius: '50%',
+                              backgroundColor: cfg.color,
+                            }}
+                          />
+                          {cfg.label}
+                        </span>
+                      ),
+                      value: wt,
+                    };
+                  })}
+                  maxTagCount="responsive"
+                  aria-label="Lọc theo loại công việc"
+                />
+              </div>
+            </Col>
 
-          {/* Advanced Row 3: Ops Owner & Business Analyst Multi-select */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
-            <Space orientation="horizontal" size="small" style={{ alignItems: 'center', flex: 1, minWidth: 280 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
-                Ops Owner:
-              </span>
-              <Select
-                mode="tags"
-                allowClear
-                style={{ minWidth: 220, flex: 1 }}
-                placeholder="Lọc theo Ops Owner (Nhập hoặc chọn)"
-                value={filters.opsOwners}
-                onChange={(vals) => onFilterChange({ opsOwners: vals })}
-                options={availableOpsOwners.map((owner) => ({ label: owner, value: owner }))}
-                maxTagCount="responsive"
-                aria-label="Lọc theo Ops Owner"
-              />
-            </Space>
+            {/* Field 5: Ops Owner */}
+            <Col xs={24} sm={12} lg={6}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
+                  Ops Owner:
+                </span>
+                <Select
+                  style={{ width: '100%' }}
+                  mode="tags"
+                  allowClear
+                  placeholder="Lọc theo Ops Owner (Nhập hoặc chọn)"
+                  value={filters.opsOwners}
+                  onChange={(vals) => onFilterChange({ opsOwners: vals })}
+                  options={availableOpsOwners.map((owner) => ({ label: owner, value: owner }))}
+                  maxTagCount="responsive"
+                  aria-label="Lọc theo Ops Owner"
+                />
+              </div>
+            </Col>
 
-            <Space orientation="horizontal" size="small" style={{ alignItems: 'center', flex: 1, minWidth: 280 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
-                BA:
-              </span>
-              <Select
-                mode="tags"
-                allowClear
-                style={{ minWidth: 220, flex: 1 }}
-                placeholder="Lọc theo BA (Nhập hoặc chọn)"
-                value={filters.businessAnalysts}
-                onChange={(vals) => onFilterChange({ businessAnalysts: vals })}
-                options={availableBAs.map((ba) => ({ label: ba, value: ba }))}
-                maxTagCount="responsive"
-                aria-label="Lọc theo BA"
-              />
-            </Space>
-          </div>
+            {/* Field 6: Business Analyst */}
+            <Col xs={24} sm={12} lg={6}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
+                  BA:
+                </span>
+                <Select
+                  style={{ width: '100%' }}
+                  mode="tags"
+                  allowClear
+                  placeholder="Lọc theo BA (Nhập hoặc chọn)"
+                  value={filters.businessAnalysts}
+                  onChange={(vals) => onFilterChange({ businessAnalysts: vals })}
+                  options={availableBAs.map((ba) => ({ label: ba, value: ba }))}
+                  maxTagCount="responsive"
+                  aria-label="Lọc theo BA"
+                />
+              </div>
+            </Col>
 
-          {/* Advanced Row 4: Jira Status Filter (JIRA-04, D-13) */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
-            <Space orientation="horizontal" size="small" style={{ alignItems: 'center', minWidth: 280 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
-                Trạng thái Jira:
-              </span>
-              <Select
-                style={{ minWidth: 200 }}
-                value={filters.jiraFilter || 'all'}
-                onChange={(val) => onFilterChange({ jiraFilter: val as TaskFilterState['jiraFilter'] })}
-                options={[
-                  { label: 'Tất cả trạng thái Jira', value: 'all' },
-                  { label: 'Đã gắn Jira', value: 'linked' },
-                  { label: 'Chưa gắn Jira', value: 'unlinked' },
-                ]}
-                aria-label="Lọc theo trạng thái Jira"
-              />
-            </Space>
-          </div>
+            {/* Field 7: Jira Status */}
+            <Col xs={24} sm={12} lg={6}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
+                  Trạng thái Jira:
+                </span>
+                <Select
+                  style={{ width: '100%' }}
+                  value={filters.jiraFilter || 'all'}
+                  onChange={(val) => onFilterChange({ jiraFilter: val as TaskFilterState['jiraFilter'] })}
+                  options={[
+                    { label: 'Tất cả trạng thái Jira', value: 'all' },
+                    { label: 'Đã gắn Jira', value: 'linked' },
+                    { label: 'Chưa gắn Jira', value: 'unlinked' },
+                  ]}
+                  aria-label="Lọc theo trạng thái Jira"
+                />
+              </div>
+            </Col>
+          </Row>
         </div>
       )}
     </div>

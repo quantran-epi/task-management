@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Card, Badge, Button, Empty, List, Checkbox, Tag, Typography, Space, message } from 'antd';
+import { useLiveQuery } from 'dexie-react-hooks';
 import type { AttentionTaskItem } from '../../types/dashboard';
 import type { Task, TaskPriority, TaskStatus } from '../../types/models';
 import type { TaskPlannerDatabase } from '../../db';
@@ -12,6 +13,7 @@ export interface AttentionTodayListProps {
   onTaskClick: (taskId: string) => void;
   onViewAllTasks: () => void;
   db?: TaskPlannerDatabase;
+  projectMap?: Map<string, string>;
 }
 
 const PRIORITY_COLORS: Record<TaskPriority, string> = {
@@ -33,7 +35,22 @@ export const AttentionTodayList: React.FC<AttentionTodayListProps> = ({
   onTaskClick,
   onViewAllTasks,
   db,
+  projectMap,
 }) => {
+  const projects = useLiveQuery(
+    async () => {
+      if (!db) return [];
+      return db.projects.toArray();
+    },
+    [db],
+    []
+  );
+
+  const internalProjectMap = useMemo(() => {
+    if (projectMap) return projectMap;
+    return new Map<string, string>((projects ?? []).map((p) => [p.id, p.name]));
+  }, [projects, projectMap]);
+
   const handleToggleDone = async (task: Task) => {
     const nextStatus: TaskStatus = task.status === 'Done' ? 'Open' : 'Done';
     try {
@@ -94,7 +111,7 @@ export const AttentionTodayList: React.FC<AttentionTodayListProps> = ({
                     onChange={() => handleToggleDone(item.task)}
                     aria-label={`Đánh dấu hoàn thành cho ${item.task.name}`}
                   />
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 0 }}>
                     <Typography.Text
                       ellipsis
                       delete={item.task.status === 'Done' || item.task.status === 'Cancelled'}
@@ -116,7 +133,16 @@ export const AttentionTodayList: React.FC<AttentionTodayListProps> = ({
                     >
                       {item.task.name}
                     </Typography.Text>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+                    {item.task.projectId && internalProjectMap.get(item.task.projectId) && (
+                      <Typography.Text
+                        type="secondary"
+                        ellipsis={{ tooltip: internalProjectMap.get(item.task.projectId) }}
+                        style={{ fontSize: 11, lineHeight: 1.2 }}
+                      >
+                        {internalProjectMap.get(item.task.projectId)}
+                      </Typography.Text>
+                    )}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center', marginTop: 2 }}>
                       {item.category === 'overdue' && (
                         <Tag color="error" style={{ margin: 0 }}>
                           Quá hạn {item.daysOverdue ?? 0} ngày

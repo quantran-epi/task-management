@@ -104,6 +104,7 @@ export const ProjectInputSchema = z.object({
   status: z.enum(PROJECT_STATUSES).default('Open'),
   opsOwners: tagListSchema.optional(),
   businessAnalysts: tagListSchema.optional(),
+  documentLinks: z.array(httpUrlSchema).optional(),
 });
 
 export const ProjectUpdateSchema = z.object({
@@ -114,6 +115,7 @@ export const ProjectUpdateSchema = z.object({
   status: z.enum(PROJECT_STATUSES).optional(),
   opsOwners: tagListSchema.optional(),
   businessAnalysts: tagListSchema.optional(),
+  documentLinks: z.array(httpUrlSchema).optional(),
 });
 
 export const MilestoneInputSchema = z.object({

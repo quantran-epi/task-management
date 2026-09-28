@@ -187,6 +187,13 @@ describe('DayColumnHeader (PLAN-03, PLAN-04, UX-02, UX-04, D-07, D-13, D-14, D-1
     expect(screen.getByText(/Còn lại:\s*\+4h/i)).toBeInTheDocument();
     expect(container.querySelector('[role="button"]')).toBeInTheDocument();
   });
+
+  it('renders with uniform minHeight for stable column header height across columns', () => {
+    const day = createMockDay({ date: '2026-09-28' });
+    render(<DayColumnHeader day={day} />);
+    const header = screen.getByTestId('day-column-header-2026-09-28');
+    expect(header).toHaveStyle({ minHeight: '142px' });
+  });
 });
 
 describe('useWeeklyPlanner hook (PLAN-03, D-01, D-16)', () => {

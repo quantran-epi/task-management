@@ -14,7 +14,7 @@ import { FeasibilityModal } from '../components/planner/FeasibilityModal';
 import { useTaskFilters } from '../hooks/useTaskFilters';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import type { TaskPlannerDatabase } from '../db';
-import type { Task } from '../types/models';
+import type { Task, Project } from '../types/models';
 
 const { Text } = Typography;
 
@@ -30,6 +30,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb }) => {
   const [feasibilityOpen, setFeasibilityOpen] = useState(false);
   const [taskSelectModalOpen, setTaskSelectModalOpen] = useState(false);
   const [selectedTaskIdForFeasibility, setSelectedTaskIdForFeasibility] = useState<string | undefined>(undefined);
+  const [selectedProjectIdForFeasibility, setSelectedProjectIdForFeasibility] = useState<string | undefined>(undefined);
   const searchInputRef = useRef<InputRef>(null);
   const quickAddInputRef = useRef<InputRef>(null);
 
@@ -37,6 +38,21 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb }) => {
   const tasks = useLiveQuery(() => db.tasks.toArray(), [db]) ?? [];
   const projects = useLiveQuery(() => getAllProjects(db), [db]) ?? [];
   const milestones = useLiveQuery(() => getAllMilestones(db), [db]) ?? [];
+
+  const projectMap = useMemo(() => {
+    return new Map<string, Project>(projects.map((p) => [p.id, p]));
+  }, [projects]);
+
+  const activeTasksForFeasibility = useMemo(() => {
+    return tasks
+      .filter((t) => t.status !== 'Done' && t.status !== 'Cancelled')
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [tasks]);
+
+  const filteredTasksForFeasibility = useMemo(() => {
+    if (!selectedProjectIdForFeasibility) return activeTasksForFeasibility;
+    return activeTasksForFeasibility.filter((t) => t.projectId === selectedProjectIdForFeasibility);
+  }, [activeTasksForFeasibility, selectedProjectIdForFeasibility]);
 
   // Extract distinct Ops Owners and BAs across projects, milestones, tasks for autocomplete
   const availableOpsOwners = useMemo(() => {
@@ -56,6 +72,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb }) => {
   }, [projects, milestones, tasks]);
 
   const handleOpenFeasibility = async (task?: Task) => {
+    setSelectedProjectIdForFeasibility(undefined);
     if (task) {
       setFeasibilityTask(task);
       setFeasibilityOpen(true);
@@ -215,20 +232,84 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb }) => {
         cancelText="Hủy"
         destroyOnClose
       >
-        <div style={{ marginTop: 12, marginBottom: 8 }}>
-          <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+        <div style={{ marginTop: 12, marginBottom: 8, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Text type="secondary">
             Chọn tác vụ để đánh giá công suất và xem trước phân bổ khối lượng công việc:
           </Text>
-          <Select
-            style={{ width: '100%' }}
-            value={selectedTaskIdForFeasibility}
-            onChange={setSelectedTaskIdForFeasibility}
-            options={tasks.map((t) => ({
-              value: t.id,
-              label: `${t.name} (${t.estimateMinutes > 0 ? `${t.estimateMinutes}m` : 'chưa ước tính'})`,
-            }))}
-            placeholder="Chọn một tác vụ"
-          />
+
+          {/* Project combobox filter */}
+          <div>
+            <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+              Dự án:
+            </Text>
+            <Select
+              allowClear
+              showSearch
+              placeholder="Lọc theo dự án (Tất cả)"
+              style={{ width: '100%' }}
+              value={selectedProjectIdForFeasibility}
+              onChange={(newProjId) => {
+                setSelectedProjectIdForFeasibility(newProjId);
+                const matchingTasks = !newProjId
+                  ? activeTasksForFeasibility
+                  : activeTasksForFeasibility.filter((t) => t.projectId === newProjId);
+                if (!matchingTasks.some((t) => t.id === selectedTaskIdForFeasibility)) {
+                  setSelectedTaskIdForFeasibility(matchingTasks[0]?.id);
+                }
+              }}
+              filterOption={(input, option) =>
+                ((option?.label as string) ?? '').toLowerCase().includes(input.toLowerCase())
+              }
+              options={projects.map((p) => ({
+                value: p.id,
+                label: p.name,
+              }))}
+            />
+          </div>
+
+          {/* Task Select */}
+          <div>
+            <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+              Tác vụ:
+            </Text>
+            <Select
+              style={{ width: '100%' }}
+              showSearch
+              value={selectedTaskIdForFeasibility}
+              onChange={setSelectedTaskIdForFeasibility}
+              placeholder="Chọn một tác vụ"
+              filterOption={(input, option) => {
+                const search = input.toLowerCase();
+                const task = tasks.find((t) => t.id === option?.value);
+                if (!task) return false;
+                const taskMatch = task.name.toLowerCase().includes(search);
+                const proj = task.projectId ? projectMap.get(task.projectId) : undefined;
+                const projMatch = proj ? proj.name.toLowerCase().includes(search) : false;
+                return taskMatch || projMatch;
+              }}
+              options={filteredTasksForFeasibility.map((t) => {
+                const proj = t.projectId ? projectMap.get(t.projectId) : undefined;
+                return {
+                  value: t.id,
+                  label: `${t.name} (${t.estimateMinutes > 0 ? `${t.estimateMinutes}m` : 'chưa ước tính'})`,
+                  projectName: proj?.name,
+                };
+              })}
+              optionRender={(option) => {
+                const projName = (option.data as { projectName?: string } | undefined)?.projectName;
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '2px 0' }}>
+                    <Text style={{ lineHeight: 1.3 }}>{option.label}</Text>
+                    {projName && (
+                      <Text type="secondary" style={{ fontSize: 11, lineHeight: 1.2 }}>
+                        {projName}
+                      </Text>
+                    )}
+                  </div>
+                );
+              }}
+            />
+          </div>
         </div>
       </Modal>
 

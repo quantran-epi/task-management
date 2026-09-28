@@ -204,4 +204,28 @@ describe('AttentionTodayList (DASH-01, DASH-06, D-09, D-10, D-11, D-12, D-14)', 
 
     expect(onViewAllTasks).toHaveBeenCalledTimes(1);
   });
+
+  it('renders project name subtitle when task belongs to a project', () => {
+    const items: AttentionTaskItem[] = [
+      {
+        task: createMockTask({ id: 'task-proj', name: 'Project Alpha Task', projectId: 'p1' }),
+        category: 'due-today',
+        scheduledMinutes: 0,
+      },
+    ];
+
+    const projectMap = new Map<string, string>([['p1', 'Alpha Project']]);
+
+    render(
+      <AttentionTodayList
+        items={items}
+        onTaskClick={vi.fn()}
+        onViewAllTasks={vi.fn()}
+        projectMap={projectMap}
+      />
+    );
+
+    expect(screen.getByText('Project Alpha Task')).toBeInTheDocument();
+    expect(screen.getByText('Alpha Project')).toBeInTheDocument();
+  });
 });

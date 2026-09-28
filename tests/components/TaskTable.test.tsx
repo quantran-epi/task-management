@@ -84,6 +84,16 @@ describe('TaskTable Component', () => {
     expect(screen.getByText('Hôm nay')).toBeInTheDocument();
     expect(screen.getByText('Tuần này')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Bộ lọc nâng cao/i })).toBeInTheDocument();
+
+    // Toggle advanced filter panel open
+    fireEvent.click(screen.getByRole('button', { name: /Bộ lọc nâng cao/i }));
+    expect(screen.getByText('Thời gian kế hoạch:')).toBeInTheDocument();
+    expect(screen.getByText('Hạn chót:')).toBeInTheDocument();
+    expect(screen.getByText('Mốc (Milestone):')).toBeInTheDocument();
+    expect(screen.getByText('Loại việc:')).toBeInTheDocument();
+    expect(screen.getByText('Ops Owner:')).toBeInTheDocument();
+    expect(screen.getByText('BA:')).toBeInTheDocument();
+    expect(screen.getByText('Trạng thái Jira:')).toBeInTheDocument();
   });
 
   it('TaskTable renders columns with tags, breadcrumbs, estimate format, link badges, and overdue styling', () => {
