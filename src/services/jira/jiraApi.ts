@@ -1,4 +1,10 @@
-import type { JiraConfig, JiraMyselfResponse } from './types';
+import type {
+  JiraConfig,
+  JiraMyselfResponse,
+  JiraCreateIssuePayload,
+  JiraIssueResponse,
+  JiraTransitionsResponse,
+} from './types';
 
 export function buildJiraUrl(config: JiraConfig, path: string): string {
   const cleanDomain = config.domain.replace(/^https?:\/\//i, '').replace(/\/+$/, '');
@@ -87,4 +93,39 @@ export async function callJiraApi<T>(
 
 export async function testJiraConnection(config: JiraConfig): Promise<JiraMyselfResponse> {
   return callJiraApi<JiraMyselfResponse>(config, '/rest/api/3/myself');
+}
+
+export async function createJiraIssue(
+  config: JiraConfig,
+  payload: JiraCreateIssuePayload
+): Promise<JiraIssueResponse> {
+  return callJiraApi<JiraIssueResponse>(config, '/rest/api/3/issue', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getJiraTransitions(
+  config: JiraConfig,
+  issueKey: string
+): Promise<JiraTransitionsResponse> {
+  return callJiraApi<JiraTransitionsResponse>(
+    config,
+    `/rest/api/3/issue/${encodeURIComponent(issueKey)}/transitions`
+  );
+}
+
+export async function executeJiraTransition(
+  config: JiraConfig,
+  issueKey: string,
+  transitionId: string
+): Promise<void> {
+  await callJiraApi<Record<string, unknown>>(
+    config,
+    `/rest/api/3/issue/${encodeURIComponent(issueKey)}/transitions`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ transition: { id: transitionId } }),
+    }
+  );
 }
