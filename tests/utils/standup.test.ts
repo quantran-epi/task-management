@@ -148,6 +148,37 @@ describe('formatStandupSummary (SRCH-04, D-08, D-09, D-10)', () => {
     );
   });
 
+  it('formats task items with [JiraKey] immediately following [WorkType] when jiraKey is present (JIRA-05, D-14)', () => {
+    const tasks: Task[] = [
+      {
+        id: 't-jira',
+        name: 'Tích hợp API thanh toán thẻ',
+        status: 'In Progress',
+        priority: 'High',
+        progress: 50,
+        estimateMinutes: 120,
+        projectId: 'p1',
+        workType: 'code',
+        jiraKey: 'SHB-1234',
+        deadline: '2026-09-30',
+        createdAt: '2026-09-01T00:00:00Z',
+        updatedAt: '2026-09-01T00:00:00Z',
+      },
+    ];
+
+    const context: StandupTaskContext = {
+      projectMap,
+      milestoneMap,
+      todayStr: '2026-09-28',
+    };
+
+    const output = formatStandupSummary(tasks, context);
+
+    expect(output).toContain(
+      '- [Lập trình][SHB-1234] Tích hợp API thanh toán thẻ (Dự án: Core Banking | Hạn: 2026-09-30 | Phụ trách: Ops: Ops-Lead | BA: BA-Lead)'
+    );
+  });
+
   it('falls back to inherited tags from project when task has no direct tags', () => {
     const tasks: Task[] = [
       {

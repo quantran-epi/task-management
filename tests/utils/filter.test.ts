@@ -101,7 +101,7 @@ const sampleTasks: Task[] = [
 const today = '2026-09-26'; // Saturday
 
 describe('filterTasks', () => {
-  it('filters case-insensitively across name, description, and notes per D-18', () => {
+  it('filters case-insensitively across name, description, notes, and jiraKey per D-18, JIRA-04', () => {
     // Matches in name
     const matchName = filterTasks(sampleTasks, { ...DEFAULT_TASK_FILTER_STATE, search: 'Quarterly' }, today);
     expect(matchName.map((t) => t.id)).toEqual(['t1']);
@@ -113,6 +113,19 @@ describe('filterTasks', () => {
     // Matches in notes
     const matchNotes = filterTasks(sampleTasks, { ...DEFAULT_TASK_FILTER_STATE, search: 'markdown tables' }, today);
     expect(matchNotes.map((t) => t.id)).toEqual(['t3']);
+
+    // Matches in jiraKey (case-insensitive)
+    const taskWithJira: Task = {
+      ...sampleTasks[0]!,
+      id: 't-jira',
+      jiraKey: 'SHB-1234',
+    };
+    const matchJira = filterTasks(
+      [...sampleTasks, taskWithJira],
+      { ...DEFAULT_TASK_FILTER_STATE, search: 'shb-1234' },
+      today
+    );
+    expect(matchJira.map((t) => t.id)).toEqual(['t-jira']);
   });
 
   it('filters by hierarchy scope (All, Projects, Standalone) and selected projectId per D-04', () => {
@@ -283,14 +296,36 @@ describe('Phase 10: countActiveAdvancedFilters (SRCH-03, D-04)', () => {
     expect(
       countActiveAdvancedFilters({
         ...DEFAULT_TASK_FILTER_STATE,
+        jiraFilter: 'linked',
+      })
+    ).toBe(1);
+
+    expect(
+      countActiveAdvancedFilters({
+        ...DEFAULT_TASK_FILTER_STATE,
+        jiraFilter: 'unlinked',
+      })
+    ).toBe(1);
+
+    expect(
+      countActiveAdvancedFilters({
+        ...DEFAULT_TASK_FILTER_STATE,
+        jiraFilter: 'all',
+      })
+    ).toBe(0);
+
+    expect(
+      countActiveAdvancedFilters({
+        ...DEFAULT_TASK_FILTER_STATE,
         milestoneId: 'm1',
         workTypes: ['code'],
         opsOwners: ['John'],
         businessAnalysts: ['Alice'],
         executionDateRange: ['2026-09-01', '2026-09-30'],
         deadlineRange: ['2026-09-01', '2026-09-30'],
+        jiraFilter: 'linked',
       })
-    ).toBe(6);
+    ).toBe(7);
   });
 
   it('does not count empty arrays or empty date strings in ranges', () => {
@@ -552,6 +587,50 @@ describe('Phase 10: Multi-Criteria filterTasks & FilterContext (SRCH-01, SRCH-02
     );
 
     expect(res.map((t) => t.id)).toEqual(['task-code']);
+  });
+
+  it('filters by jiraFilter: all, linked, and unlinked (JIRA-04, D-13)', () => {
+    const tasksWithJira: Task[] = [
+      {
+        ...sampleTasks[0]!,
+        id: 't-with-jira-1',
+        jiraKey: 'SHB-101',
+      },
+      {
+        ...sampleTasks[1]!,
+        id: 't-with-jira-2',
+        jiraKey: 'SHB-102',
+      },
+      {
+        ...sampleTasks[2]!,
+        id: 't-without-jira',
+        jiraKey: undefined,
+      },
+    ];
+
+    // 'all' returns all eligible tasks
+    const resAll = filterTasks(
+      tasksWithJira,
+      { ...DEFAULT_TASK_FILTER_STATE, jiraFilter: 'all' },
+      today
+    );
+    expect(resAll.map((t) => t.id)).toEqual(['t-with-jira-1', 't-with-jira-2', 't-without-jira']);
+
+    // 'linked' returns only tasks with jiraKey
+    const resLinked = filterTasks(
+      tasksWithJira,
+      { ...DEFAULT_TASK_FILTER_STATE, jiraFilter: 'linked' },
+      today
+    );
+    expect(resLinked.map((t) => t.id)).toEqual(['t-with-jira-1', 't-with-jira-2']);
+
+    // 'unlinked' returns only tasks without jiraKey
+    const resUnlinked = filterTasks(
+      tasksWithJira,
+      { ...DEFAULT_TASK_FILTER_STATE, jiraFilter: 'unlinked' },
+      today
+    );
+    expect(resUnlinked.map((t) => t.id)).toEqual(['t-without-jira']);
   });
 });
 
