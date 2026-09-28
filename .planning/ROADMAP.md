@@ -126,7 +126,7 @@ Plans:
 
 - [x] 12-01-PLAN.md — Schema v4, models, validation schemas, reminder form inputs, and task updatedAt touch (Wave 1)
 - [x] 12-02-PLAN.md — Alert evaluation engine, day-scoped dismiss repository, and reactive useNotifications hook (Wave 2)
-- [ ] 12-03-PLAN.md — NotificationBell badge, 5-tab NotificationDrawer, item navigation, and desktop notifications (Wave 3)
+- [x] 12-03-PLAN.md — NotificationBell badge, 5-tab NotificationDrawer, item navigation, and desktop notifications (Wave 3)
 
 **Wave 1**
 
@@ -134,9 +134,11 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 12-02-PLAN.md — Alert evaluation engine, day-scoped dismiss repository, and reactive useNotifications hook
+- [x] 12-02-PLAN.md — Alert evaluation engine, day-scoped dismiss repository, and reactive useNotifications hook
 
 **Wave 3** *(blocked on Wave 2)*
+
+- [x] 12-03-PLAN.md — NotificationBell badge, 5-tab NotificationDrawer, item navigation, and desktop notifications
 
 - [ ] 12-03-PLAN.md — NotificationBell badge, 5-tab NotificationDrawer, item navigation, and desktop notifications
 
