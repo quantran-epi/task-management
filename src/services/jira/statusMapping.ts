@@ -8,7 +8,13 @@ export function mapJiraStatusToLocalTaskStatus(
   const normCat = (categoryKey || '').toLowerCase();
 
   // 1. Cancelled
-  if (normName.includes('cancel') || normName.includes('reject') || normName.includes("won't do")) {
+  if (
+    normName.includes('cancel') ||
+    normName.includes('reject') ||
+    normName.includes("won't do") ||
+    normName.includes("won't fix") ||
+    normName.includes("wont fix")
+  ) {
     return 'Cancelled';
   }
 

@@ -102,13 +102,14 @@ export const CreateJiraIssueModal: React.FC<CreateJiraIssueModalProps> = ({
       setSubmitting(true);
       setError(null);
 
-      const adfDoc = textToAdf(values.description);
+      const descTrimmed = values.description?.trim();
+      const adfDoc = descTrimmed ? textToAdf(descTrimmed) : undefined;
       const payload: JiraCreateIssuePayload = {
         fields: {
           project: { key: values.projectKey.trim().toUpperCase() },
           issuetype: { name: values.issueType },
           summary: values.summary.trim(),
-          description: adfDoc,
+          ...(adfDoc ? { description: adfDoc } : {}),
         },
       };
 

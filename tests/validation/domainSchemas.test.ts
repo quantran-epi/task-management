@@ -189,11 +189,13 @@ describe('Banking IT Domain Fields Validation & Normalization (D-01, D-02, D-03,
         workType: 'investigate',
         opsOwners: ['Alice'],
         businessAnalysts: ['Bob'],
+        jiraKey: 'SHB-1234',
         createdAt: '2026-09-01T00:00:00.000Z',
         updatedAt: '2026-09-01T00:00:00.000Z',
       });
       expect(task.workType).toBe('investigate');
       expect(task.opsOwners).toEqual(['Alice']);
+      expect(task.jiraKey).toBe('SHB-1234');
     });
   });
 });

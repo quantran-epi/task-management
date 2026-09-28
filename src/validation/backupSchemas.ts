@@ -8,6 +8,7 @@ import {
   TASK_PRIORITIES,
   tagListSchema,
   workTypeSchema,
+  jiraKeySchema,
 } from './schemas';
 
 const calendarDateSchema = z
@@ -74,6 +75,7 @@ export const BackupTaskRecordSchema = z.object({
   opsOwners: tagListSchema.optional(),
   businessAnalysts: tagListSchema.optional(),
   documentLinks: z.array(httpUrlSchema).optional(),
+  jiraKey: jiraKeySchema.optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

@@ -7,6 +7,7 @@ describe('Smart Status Mapping (statusMapping.ts - D-10)', () => {
       expect(mapJiraStatusToLocalTaskStatus('Cancelled')).toBe('Cancelled');
       expect(mapJiraStatusToLocalTaskStatus('Rejected by PO')).toBe('Cancelled');
       expect(mapJiraStatusToLocalTaskStatus("Won't Do")).toBe('Cancelled');
+      expect(mapJiraStatusToLocalTaskStatus("Won't Fix")).toBe('Cancelled');
       expect(mapJiraStatusToLocalTaskStatus('Cancel Task', 'done')).toBe('Cancelled');
     });
   });

@@ -105,9 +105,12 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
       } else {
         setSelectedTransitionId(null);
       }
-    } catch {
+    } catch (err: unknown) {
       setTransitions([]);
       setSelectedTransitionId(null);
+      const msg =
+        err instanceof Error ? err.message : 'Không thể tải workflow transitions từ Jira.';
+      setTransitionError({ message: msg, isScreenError: false });
     } finally {
       setLoadingTransitions(false);
     }
