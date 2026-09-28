@@ -268,3 +268,33 @@ export async function getWeeklyAllocationsWithTasks(
     activeTaskCountsByDate,
   };
 }
+
+/**
+ * Queries Dexie plannedAllocations on indexed date and returns unique Set of matching taskIds (SRCH-01, D-05).
+ * Filters out allocations where allocatedMinutes <= 0.
+ * Returns empty Set if dates are empty or startDate > endDate.
+ */
+export async function getTaskIdsWithAllocationsInRange(
+  startDate: string,
+  endDate: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<Set<string>> {
+  if (!startDate || !endDate || startDate > endDate) {
+    return new Set<string>();
+  }
+
+  const allocations = await db.plannedAllocations
+    .where('date')
+    .between(startDate, endDate, true, true)
+    .toArray();
+
+  const taskIds = new Set<string>();
+  for (const alloc of allocations) {
+    if (alloc.allocatedMinutes > 0) {
+      taskIds.add(alloc.taskId);
+    }
+  }
+
+  return taskIds;
+}
+

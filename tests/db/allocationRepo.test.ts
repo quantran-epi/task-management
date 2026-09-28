@@ -9,6 +9,7 @@ import {
   getTotalAllocatedMinutesForTask,
   getAllocationsForDate,
   getWeeklyAllocationsWithTasks,
+  getTaskIdsWithAllocationsInRange,
 } from '../../src/db/repositories/allocationRepo';
 
 describe('Planned Allocation Repository (PLAN-01, PLAN-02, PLAN-05, D-12, D-16)', () => {
@@ -162,5 +163,86 @@ describe('Planned Allocation Repository (PLAN-01, PLAN-02, PLAN-05, D-12, D-16)'
     expect(result.inactiveTotalsByDate['2026-10-20']).toBe(0);
     expect(result.activeTaskCountsByDate['2026-10-20']).toBe(1);
     expect(result.allocationsByDate['2026-10-20']).toHaveLength(1);
+  });
+
+  describe('getTaskIdsWithAllocationsInRange (SRCH-01, D-05)', () => {
+    it('returns empty set when no allocations exist in range', async () => {
+      const task = await createTask({ name: 'Task outside range' }, testDb);
+      await upsertAllocation(task.id, '2026-10-10', 60, testDb);
+
+      const taskIds = await getTaskIdsWithAllocationsInRange('2026-10-15', '2026-10-20', testDb);
+      expect(taskIds.size).toBe(0);
+    });
+
+    it('returns matching taskIds when allocations fall within [startDate, endDate] inclusive', async () => {
+      const task1 = await createTask({ name: 'Task 1' }, testDb);
+      const task2 = await createTask({ name: 'Task 2' }, testDb);
+      const task3 = await createTask({ name: 'Task 3' }, testDb);
+
+      await upsertAllocation(task1.id, '2026-10-15', 60, testDb); // on boundary start
+      await upsertAllocation(task2.id, '2026-10-18', 45, testDb); // in middle
+      await upsertAllocation(task3.id, '2026-10-20', 30, testDb); // on boundary end
+
+      const taskIds = await getTaskIdsWithAllocationsInRange('2026-10-15', '2026-10-20', testDb);
+      expect(taskIds.size).toBe(3);
+      expect(taskIds.has(task1.id)).toBe(true);
+      expect(taskIds.has(task2.id)).toBe(true);
+      expect(taskIds.has(task3.id)).toBe(true);
+    });
+
+    it('excludes tasks with allocations strictly outside date range', async () => {
+      const insideTask = await createTask({ name: 'Inside' }, testDb);
+      const beforeTask = await createTask({ name: 'Before' }, testDb);
+      const afterTask = await createTask({ name: 'After' }, testDb);
+
+      await upsertAllocation(insideTask.id, '2026-10-16', 60, testDb);
+      await upsertAllocation(beforeTask.id, '2026-10-14', 60, testDb);
+      await upsertAllocation(afterTask.id, '2026-10-21', 60, testDb);
+
+      const taskIds = await getTaskIdsWithAllocationsInRange('2026-10-15', '2026-10-20', testDb);
+      expect(taskIds.size).toBe(1);
+      expect(taskIds.has(insideTask.id)).toBe(true);
+      expect(taskIds.has(beforeTask.id)).toBe(false);
+      expect(taskIds.has(afterTask.id)).toBe(false);
+    });
+
+    it('deduplicates when a task has multiple allocations within the range', async () => {
+      const task = await createTask({ name: 'Multiple days' }, testDb);
+      await upsertAllocation(task.id, '2026-10-16', 30, testDb);
+      await upsertAllocation(task.id, '2026-10-17', 45, testDb);
+      await upsertAllocation(task.id, '2026-10-18', 60, testDb);
+
+      const taskIds = await getTaskIdsWithAllocationsInRange('2026-10-15', '2026-10-20', testDb);
+      expect(taskIds.size).toBe(1);
+      expect(taskIds.has(task.id)).toBe(true);
+    });
+
+    it('excludes allocations with allocatedMinutes <= 0', async () => {
+      const activeTask = await createTask({ name: 'Active task' }, testDb);
+      const zeroTask = await createTask({ name: 'Zero task' }, testDb);
+
+      await upsertAllocation(activeTask.id, '2026-10-16', 60, testDb);
+      // Directly put an allocation with 0 minutes to simulate zero allocation
+      await testDb.plannedAllocations.add({
+        id: 'zero-alloc-id',
+        taskId: zeroTask.id,
+        date: '2026-10-16',
+        allocatedMinutes: 0,
+      });
+
+      const taskIds = await getTaskIdsWithAllocationsInRange('2026-10-15', '2026-10-20', testDb);
+      expect(taskIds.size).toBe(1);
+      expect(taskIds.has(activeTask.id)).toBe(true);
+      expect(taskIds.has(zeroTask.id)).toBe(false);
+    });
+
+    it('returns empty set if startDate > endDate or dates are empty', async () => {
+      const task = await createTask({ name: 'Task' }, testDb);
+      await upsertAllocation(task.id, '2026-10-16', 60, testDb);
+
+      expect((await getTaskIdsWithAllocationsInRange('2026-10-20', '2026-10-15', testDb)).size).toBe(0);
+      expect((await getTaskIdsWithAllocationsInRange('', '2026-10-20', testDb)).size).toBe(0);
+      expect((await getTaskIdsWithAllocationsInRange('2026-10-15', '', testDb)).size).toBe(0);
+    });
   });
 });
