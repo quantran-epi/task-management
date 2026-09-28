@@ -53,11 +53,11 @@ describe('Dexie Schema v2 Migration (SHB-05, D-04, D-14, D-15)', () => {
 
     v1Db.close();
 
-    // Step 2: Open using TaskPlannerDatabase which defines version(2) upgrade
+    // Step 2: Open using TaskPlannerDatabase which defines version(2) and version(3) upgrade
     const v2Db = new TaskPlannerDatabase(dbName);
     await v2Db.open();
 
-    expect(v2Db.verno).toBe(2);
+    expect(v2Db.verno).toBeGreaterThanOrEqual(2);
 
     // Verify Project backfill
     const project = await v2Db.projects.get(sampleProjectId);

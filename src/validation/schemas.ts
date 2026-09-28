@@ -20,6 +20,11 @@ export const WORK_TYPES = [
 
 export const workTypeSchema = z.enum(WORK_TYPES);
 
+export const JIRA_KEY_REGEX = /^[A-Z][A-Z0-9]+-[0-9]+$/;
+export const jiraKeySchema = z
+  .string()
+  .regex(JIRA_KEY_REGEX, 'Jira Key không hợp lệ (ví dụ: SHB-123)');
+
 export function normalizeTags(tags: string[]): string[] {
   const seen = new Set<string>();
   const result: string[] = [];
@@ -146,6 +151,7 @@ export const TaskInputSchema = z.object({
   priority: z.enum(TASK_PRIORITIES).default('Medium'),
   estimateMinutes: z.number().int().min(0).max(6000).default(0),
   workType: workTypeSchema.default('code'),
+  jiraKey: jiraKeySchema.optional(),
   opsOwners: tagListSchema.optional(),
   businessAnalysts: tagListSchema.optional(),
   documentLinks: z.array(httpUrlSchema).optional(),
@@ -165,6 +171,7 @@ export const TaskUpdateSchema = z.object({
   priority: z.enum(TASK_PRIORITIES).optional(),
   estimateMinutes: z.number().int().min(0).max(6000).optional(),
   workType: workTypeSchema.optional(),
+  jiraKey: jiraKeySchema.optional(),
   opsOwners: tagListSchema.optional(),
   businessAnalysts: tagListSchema.optional(),
   documentLinks: z.array(httpUrlSchema).optional(),

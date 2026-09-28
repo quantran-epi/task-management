@@ -130,6 +130,28 @@ describe('Banking IT Domain Fields Validation & Normalization (D-01, D-02, D-03,
       expect(update.workType).toBe('review_code');
       expect(update.opsOwners).toEqual(['LeadOps']);
     });
+
+    it('validates jiraKey format matching JIRA_KEY_REGEX', () => {
+      const validTask = TaskInputSchema.parse({
+        name: 'Connect to Core API',
+        jiraKey: 'SHB-1234',
+      });
+      expect(validTask.jiraKey).toBe('SHB-1234');
+
+      expect(() =>
+        TaskInputSchema.parse({
+          name: 'Invalid Jira Key',
+          jiraKey: 'invalid_key',
+        })
+      ).toThrow();
+
+      expect(() =>
+        TaskInputSchema.parse({
+          name: 'Invalid Jira Key format',
+          jiraKey: '123-ABC',
+        })
+      ).toThrow();
+    });
   });
 
   describe('Backup schemas with domain fields', () => {

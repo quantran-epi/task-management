@@ -41,8 +41,7 @@ describe('Jira API Client (jiraApi.ts)', () => {
         corsProxy: 'https://cors-proxy.workers.dev/?url=',
       };
       expect(buildJiraUrl(config, '/rest/api/3/myself')).toBe(
-        'https://cors-proxy.workers.dev/?url=https%3A%2F%2Fshb-bank.atlassian.net%2Frest%2Fapi%3F3%2Fmyself'
-          .replace('3%3Fmyself', '3%2Fmyself') // URL-encoded path check
+        `https://cors-proxy.workers.dev/?url=${encodeURIComponent('https://shb-bank.atlassian.net/rest/api/3/myself')}`
       );
     });
 

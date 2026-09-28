@@ -64,6 +64,7 @@ export interface Task {
   priority: TaskPriority;
   estimateMinutes: number; // Non-negative integer minutes
   workType?: WorkType;
+  jiraKey?: string;
   opsOwners?: string[];
   businessAnalysts?: string[];
   documentLinks?: string[];
