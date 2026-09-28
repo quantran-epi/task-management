@@ -17,9 +17,9 @@
 
 - [x] **JIRA-01**: User can configure Jira Cloud domain (`xxx.atlassian.net`), email, API token, and optional CORS Proxy URL in Settings.
 - [x] **JIRA-02**: User can test Jira Cloud connection with immediate diagnostic feedback (authenticating, CORS detection, success/failure).
-- [ ] **JIRA-03**: User can create a new Jira issue directly from a local task with summary and minimal ADF description, auto-linking the Jira key.
-- [ ] **JIRA-04**: User can manually link an existing Jira issue key to a local task and open the Jira web URL in one click.
-- [ ] **JIRA-05**: User can inspect and execute Jira status transitions directly from the task detail modal.
+- [x] **JIRA-03**: User can create a new Jira issue directly from a local task with summary and minimal ADF description, auto-linking the Jira key.
+- [x] **JIRA-04**: User can manually link an existing Jira issue key to a local task and open the Jira web URL in one click.
+- [x] **JIRA-05**: User can inspect and execute Jira status transitions directly from the task detail modal.
 
 ### Date-Range Search & Multi-Criteria Filtering
 
@@ -69,9 +69,9 @@
 | SRCH-04 | Phase 10 | Complete |
 | JIRA-01 | Phase 11 | Complete |
 | JIRA-02 | Phase 11 | Complete |
-| JIRA-03 | Phase 11 | Pending |
-| JIRA-04 | Phase 11 | Pending |
-| JIRA-05 | Phase 11 | Pending |
+| JIRA-03 | Phase 11 | Complete |
+| JIRA-04 | Phase 11 | Complete |
+| JIRA-05 | Phase 11 | Complete |
 | NOTIF-01 | Phase 12 | Pending |
 | NOTIF-02 | Phase 12 | Pending |
 | NOTIF-03 | Phase 12 | Pending |

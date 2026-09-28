@@ -92,14 +92,14 @@
   4. User can manually link an existing Jira issue key to a local task and click to open the issue in Jira web UI.
   5. User can view available Jira workflow transitions and execute a status transition directly from the task modal.
 
-**Plans**: 3 plans in 3 waves
+**Plans**: 2/3 plans executed
 **Wave 1**
 
 - [x] 11-01-PLAN.md — Schema v3 migration, models, Jira REST API v3 client, minimal ADF serializer, status mapping, and Settings Tab 3 with connection diagnostics (Wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 11-02-PLAN.md — Task detail Jira integration: issue creation modal, manual key linking/unlinking, transition execution with smart status mapping, and TaskDrawer integration (Wave 2)
+- [x] 11-02-PLAN.md — Task detail Jira integration: issue creation modal, manual key linking/unlinking, transition execution with smart status mapping, and TaskDrawer integration (Wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -151,6 +151,6 @@
 | 8. Optional Encrypted GitHub Backup | v1.0 | 3/3 | Complete | 2026-09-27 |
 | 9. Banking IT Domain Fields & Work Types | v1.1 | 3/3 | Complete    | 2026-09-28 |
 | 10. Date-Range Search, Multi-Criteria Filtering & Standup Export | v1.1 | 2/2 | Complete    | 2026-09-28 |
-| 11. Jira Cloud Integration & Task Lifecycle | v1.1 | 1/3 | In Progress|  |
+| 11. Jira Cloud Integration & Task Lifecycle | v1.1 | 2/3 | In Progress|  |
 | 12. In-App Notifications, Proactive Alerts & Custom Reminders | v1.1 | 0/0 | Not started | - |
 | 13. Enhanced Workload Analytics & Milestone Burndown | v1.1 | 0/0 | Not started | - |
