@@ -1,7 +1,8 @@
 ---
 phase: "11"
 slug: "11-jira-cloud-integration-task-lifecycle"
-status: draft
+status: approved
+reviewed_at: "2026-09-28T09:20:00Z"
 shadcn_initialized: false
 preset: none
 created: "2026-09-28"
@@ -153,7 +154,7 @@ Accent reserved for: Primary action buttons in Jira forms/modals ("Lưu cấu h�
 
 ### 4. Hiển thị trên TaskTable & PlannerView
 - **TaskTable:** Render Jira Key dưới dạng `Tag` màu `#1677ff` ngay cạnh tên tác vụ. Bấm vào tag gọi `e.stopPropagation()` và mở URL Jira trong tab mới.
-- **PlannerView (TaskAllocationCard):** Render micro-badge Jira Key nhỏ (font size 11px) để tra cứu nhanh khi xem lịch làm việc.
+- **PlannerView (TaskAllocationCard):** Render micro-badge Jira Key nhỏ (font size 12px theo token Label) để tra cứu nhanh khi xem lịch làm việc.
 - **TaskFilterBar:** Bổ sung option lọc "Trạng thái Jira": Tất cả (`all`) / Đã liên kết Jira (`linked`) / Chưa liên kết Jira (`unlinked`).
 
 ---
@@ -169,11 +170,11 @@ Accent reserved for: Primary action buttons in Jira forms/modals ("Lưu cấu h�
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
+- [x] Dimension 1 Copywriting: PASS
+- [x] Dimension 2 Visuals: PASS
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: PASS
+- [x] Dimension 6 Registry Safety: PASS
 
-**Approval:** pending
+**Approval:** approved
