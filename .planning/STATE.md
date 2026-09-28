@@ -4,13 +4,13 @@ milestone: v1.1
 milestone_name: Banking IT Enhancements & Jira Integration
 status: executing
 stopped_at: Phase 11 UI-SPEC approved
-last_updated: "2026-09-28T13:23:03.472Z"
+last_updated: "2026-09-28T13:33:04.000Z"
 last_activity: 2026-09-28 -- Phase 11 execution started
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 8
-  completed_plans: 5
+  completed_plans: 6
   percent: 40
 current_phase: 11
 current_phase_name: Jira Cloud Integration & Task Lifecycle
@@ -28,8 +28,8 @@ See: .planning/PROJECT.md (updated 2026-09-27)
 ## Current Position
 
 Phase: 11 (jira-cloud-integration-task-lifecycle) — EXECUTING
-Plan: 1 of 3
-Status: Executing Phase 11
+Plan: 2 of 3
+Status: Ready to execute
 Last activity: 2026-09-28 -- Phase 11 execution started
 
 ## Performance Metrics
@@ -54,6 +54,7 @@ Last activity: 2026-09-28 -- Phase 11 execution started
 | 8. Optional Encrypted GitHub Backup | 3 | 43m | 14.3m |
 | 09 | 3 | - | - |
 | 10 | 2 | - | - |
+| Phase 11 P01 | 9m | 2 tasks | 18 files |
 
 ## Accumulated Context
 
@@ -153,6 +154,10 @@ Decisions logged across v1.0 and v1.1:
 - [Phase 08]: Restoring remote backup executes atomically with pre-import safety snapshot in settings.last_pre_import_snapshot, requiring explicit RESTORE confirmation
 - [Phase 08]: Corrupt remote payloads halt restore with zero local database mutation and provide immediate raw un-decrypted file download for offline diagnostics
 - [Phase 08]: Local operations, weekly capacity configuration, and local JSON export/import operate 100% autonomously without network access or GitHub credentials
+- [Phase ?]: Extended Dexie with SCHEMA_V3 indexing jiraKey for fast search queries while preserving v1/v2 records
+- [Phase ?]: Zero npm dependencies for Jira REST v3: native fetch, btoa, and custom minimal ADF serializer
+- [Phase ?]: Smart status mapping with word-boundary regex for PR and Review to avoid false matches on progress
+- [Phase ?]: Diagnostic feedback in Settings distinguishing success, CORS blockage, and 401/403 credentials failure
 
 ### Pending Todos
 
@@ -170,7 +175,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-09-28T12:58:22.171Z
+Last session: 2026-09-28T13:32:46.877Z
 Stopped at: Phase 11 UI-SPEC approved
 Resume file: .planning/phases/11-jira-cloud-integration-task-lifecycle/11-UI-SPEC.md
 

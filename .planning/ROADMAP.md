@@ -95,7 +95,7 @@
 **Plans**: 3 plans in 3 waves
 **Wave 1**
 
-- [ ] 11-01-PLAN.md — Schema v3 migration, models, Jira REST API v3 client, minimal ADF serializer, status mapping, and Settings Tab 3 with connection diagnostics (Wave 1)
+- [x] 11-01-PLAN.md — Schema v3 migration, models, Jira REST API v3 client, minimal ADF serializer, status mapping, and Settings Tab 3 with connection diagnostics (Wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -151,6 +151,6 @@
 | 8. Optional Encrypted GitHub Backup | v1.0 | 3/3 | Complete | 2026-09-27 |
 | 9. Banking IT Domain Fields & Work Types | v1.1 | 3/3 | Complete    | 2026-09-28 |
 | 10. Date-Range Search, Multi-Criteria Filtering & Standup Export | v1.1 | 2/2 | Complete    | 2026-09-28 |
-| 11. Jira Cloud Integration & Task Lifecycle | v1.1 | 0/3 | In progress | - |
+| 11. Jira Cloud Integration & Task Lifecycle | v1.1 | 1/3 | In Progress|  |
 | 12. In-App Notifications, Proactive Alerts & Custom Reminders | v1.1 | 0/0 | Not started | - |
 | 13. Enhanced Workload Analytics & Milestone Burndown | v1.1 | 0/0 | Not started | - |
