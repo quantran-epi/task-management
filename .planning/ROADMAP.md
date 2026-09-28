@@ -120,7 +120,22 @@
   4. Notification drawer flags calendar days where planned workload exceeds 100% capacity.
   5. Notification drawer flags stale tasks that have remained in 'In Progress' or 'In Review' with no updates for over 5 days.
 
-**Plans**: TBD
+**Plans**: 3 plans in 3 waves
+
+Plans:
+- [ ] 12-01-PLAN.md — Schema v4, models, validation schemas, reminder form inputs, and task updatedAt touch (Wave 1)
+- [ ] 12-02-PLAN.md — Alert evaluation engine, day-scoped dismiss repository, and reactive useNotifications hook (Wave 2)
+- [ ] 12-03-PLAN.md — NotificationBell badge, 5-tab NotificationDrawer, item navigation, and desktop notifications (Wave 3)
+
+**Wave 1**
+- [ ] 12-01-PLAN.md — Schema v4 migration, models, validation schemas, reminder form inputs, and task updatedAt touch
+
+**Wave 2** *(blocked on Wave 1)*
+- [ ] 12-02-PLAN.md — Alert evaluation engine, day-scoped dismiss repository, and reactive useNotifications hook
+
+**Wave 3** *(blocked on Wave 2)*
+- [ ] 12-03-PLAN.md — NotificationBell badge, 5-tab NotificationDrawer, item navigation, and desktop notifications
+
 **UI hint**: yes
 
 ### Phase 13: Enhanced Workload Analytics & Milestone Burndown
@@ -152,5 +167,5 @@
 | 9. Banking IT Domain Fields & Work Types | v1.1 | 3/3 | Complete    | 2026-09-28 |
 | 10. Date-Range Search, Multi-Criteria Filtering & Standup Export | v1.1 | 2/2 | Complete    | 2026-09-28 |
 | 11. Jira Cloud Integration & Task Lifecycle | v1.1 | 3/3 | Complete    | 2026-09-28 |
-| 12. In-App Notifications, Proactive Alerts & Custom Reminders | v1.1 | 0/0 | Not started | - |
+| 12. In-App Notifications, Proactive Alerts & Custom Reminders | v1.1 | 0/3 | Planned     | - |
 | 13. Enhanced Workload Analytics & Milestone Burndown | v1.1 | 0/0 | Not started | - |
