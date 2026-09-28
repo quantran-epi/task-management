@@ -48,6 +48,7 @@ export function formatStandupSummary(
 
   function formatTaskLine(task: Task): string {
     const workTypeLabel = task.workType ? VIETNAMESE_WORK_TYPE_LABELS[task.workType] : 'Khác';
+    const jiraPart = task.jiraKey ? `[${task.jiraKey}]` : '';
     const projectName = (task.projectId ? projectMap?.get(task.projectId)?.name : undefined) ?? 'Cá nhân';
     const deadline = task.deadline || 'Không có';
 
@@ -66,7 +67,7 @@ export function formatStandupSummary(
     const baPart = baTags.length > 0 ? `BA: ${baTags.join(', ')}` : '';
     const assigneeStr = [opsPart, baPart].filter(Boolean).join(' | ') || 'Chưa gán';
 
-    let line = `- [${workTypeLabel}] ${task.name} (Dự án: ${projectName} | Hạn: ${deadline} | Phụ trách: ${assigneeStr})`;
+    let line = `- [${workTypeLabel}]${jiraPart} ${task.name} (Dự án: ${projectName} | Hạn: ${deadline} | Phụ trách: ${assigneeStr})`;
 
     if (task.priority === 'Urgent') {
       line += '\n  - ⚠️ Ưu tiên khẩn cấp';

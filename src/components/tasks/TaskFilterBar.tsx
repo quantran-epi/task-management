@@ -397,6 +397,26 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
               />
             </Space>
           </div>
+
+          {/* Advanced Row 4: Jira Status Filter (JIRA-04, D-13) */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
+            <Space orientation="horizontal" size="small" style={{ alignItems: 'center', minWidth: 280 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
+                Trạng thái Jira:
+              </span>
+              <Select
+                style={{ minWidth: 200 }}
+                value={filters.jiraFilter || 'all'}
+                onChange={(val) => onFilterChange({ jiraFilter: val as TaskFilterState['jiraFilter'] })}
+                options={[
+                  { label: 'Tất cả trạng thái Jira', value: 'all' },
+                  { label: 'Đã gắn Jira', value: 'linked' },
+                  { label: 'Chưa gắn Jira', value: 'unlinked' },
+                ]}
+                aria-label="Lọc theo trạng thái Jira"
+              />
+            </Space>
+          </div>
         </div>
       )}
     </div>

@@ -16,6 +16,7 @@ export interface TaskFilterState {
   businessAnalysts: string[];
   executionDateRange: [string, string] | null;
   deadlineRange: [string, string] | null;
+  jiraFilter: 'all' | 'linked' | 'unlinked';
 }
 
 export const DEFAULT_TASK_FILTER_STATE: TaskFilterState = {
@@ -32,6 +33,7 @@ export const DEFAULT_TASK_FILTER_STATE: TaskFilterState = {
   businessAnalysts: [],
   executionDateRange: null,
   deadlineRange: null,
+  jiraFilter: 'all',
 };
 
 export interface FilterContext {
@@ -53,6 +55,7 @@ export function countActiveAdvancedFilters(filters: TaskFilterState): number {
   if (filters.businessAnalysts && filters.businessAnalysts.length > 0) count++;
   if (filters.executionDateRange && filters.executionDateRange[0] && filters.executionDateRange[1]) count++;
   if (filters.deadlineRange && filters.deadlineRange[0] && filters.deadlineRange[1]) count++;
+  if (filters.jiraFilter && filters.jiraFilter !== 'all') count++;
   return count;
 }
 
@@ -116,12 +119,13 @@ export function filterTasks(
   const searchTerm = filterState.search.trim().toLowerCase();
 
   return tasks.filter((task) => {
-    // 1. Text search across name, description, and notes (D-18)
+    // 1. Text search across name, description, notes, and jiraKey (D-18, JIRA-04)
     if (searchTerm) {
       const matchName = task.name.toLowerCase().includes(searchTerm);
       const matchDesc = (task.description ?? '').toLowerCase().includes(searchTerm);
       const matchNotes = (task.notes ?? '').toLowerCase().includes(searchTerm);
-      if (!matchName && !matchDesc && !matchNotes) {
+      const matchJira = (task.jiraKey ?? '').toLowerCase().includes(searchTerm);
+      if (!matchName && !matchDesc && !matchNotes && !matchJira) {
         return false;
       }
     }
@@ -245,6 +249,14 @@ export function filterTasks(
       if (!hasMatch) {
         return false;
       }
+    }
+
+    // 12. Jira link status filter (JIRA-04, D-13)
+    if (filterState.jiraFilter === 'linked' && !task.jiraKey) {
+      return false;
+    }
+    if (filterState.jiraFilter === 'unlinked' && Boolean(task.jiraKey)) {
+      return false;
     }
 
     return true;
