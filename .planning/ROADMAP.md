@@ -23,7 +23,7 @@
 
 ### Milestone v1.1: Banking IT Enhancements & Jira Integration
 
-- [ ] **Phase 9: Banking IT Domain Fields & Work Types** - Schema v2 migration with multi-entry indexes, Ops Owner / BA tag management with inheritance, and task work type classification.
+- [x] **Phase 9: Banking IT Domain Fields & Work Types** - Schema v2 migration with multi-entry indexes, Ops Owner / BA tag management with inheritance, and task work type classification. (completed 2026-09-28)
 - [ ] **Phase 10: Date-Range Search, Multi-Criteria Filtering & Standup Export** - Planned execution and deadline date range search, multi-criteria filter bar, and formatted standup Markdown summary clipboard export.
 - [ ] **Phase 11: Jira Cloud Integration & Task Lifecycle** - Jira Cloud REST API v3 connection settings with CORS proxy support, connection diagnostics, issue creation, key linking, and status transitions.
 - [ ] **Phase 12: In-App Notifications, Proactive Alerts & Custom Reminders** - In-app header alert badge and drawer, custom item reminders, and automated alerts for overdue tasks, imminent deadlines, capacity overload, and stale work.
@@ -43,7 +43,7 @@
   4. User can assign one of five Work Types ('code', 'document', 'meeting', 'support_testing', 'investigate') to a task with a distinct visual badge.
   5. Existing v1.0 local database records and backup files seamlessly upgrade to schema v2 without data loss or error.
 
-**Plans**: 3/3 plans executed in 3 waves
+**Plans**: 3/3 plans complete in 3 waves
 - [x] 09-01-PLAN.md
 - [x] 09-02-PLAN.md
 - [x] 09-03-PLAN.md
@@ -123,7 +123,7 @@
 | 6. Safe Local Backup & Restore | v1.0 | 3/3 | Complete | 2026-09-27 |
 | 7. PWA Offline Capability & Lifecycle Hardening | v1.0 | 4/4 | Complete | 2026-09-27 |
 | 8. Optional Encrypted GitHub Backup | v1.0 | 3/3 | Complete | 2026-09-27 |
-| 9. Banking IT Domain Fields & Work Types | v1.1 | 3/3 | In Progress|  |
+| 9. Banking IT Domain Fields & Work Types | v1.1 | 3/3 | Complete    | 2026-09-28 |
 | 10. Date-Range Search, Multi-Criteria Filtering & Standup Export | v1.1 | 0/0 | Not started | - |
 | 11. Jira Cloud Integration & Task Lifecycle | v1.1 | 0/0 | Not started | - |
 | 12. In-App Notifications, Proactive Alerts & Custom Reminders | v1.1 | 0/0 | Not started | - |
