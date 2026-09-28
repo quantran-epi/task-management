@@ -234,4 +234,24 @@ describe('TaskDrawer', () => {
 
     document.body.removeChild(triggerBtn);
   });
+
+  it('renders embedded TaskJiraSection with Jira linking capability per D-05, JIRA-03, JIRA-04', async () => {
+    const task = await createTask({ name: 'Task with Jira Section', status: 'Open' }, testDb);
+
+    render(
+      <TaskDrawer
+        taskId={task.id}
+        open={true}
+        onClose={vi.fn()}
+        db={testDb}
+      />
+    );
+
+    await screen.findByDisplayValue('Task with Jira Section');
+
+    // TaskJiraSection should be rendered inside drawer
+    expect(screen.getByTestId('task-jira-section')).toBeInTheDocument();
+    expect(screen.getByText('Tích hợp Jira Cloud')).toBeInTheDocument();
+    expect(screen.getByText('Tác vụ chưa được liên kết với Jira Issue nào.')).toBeInTheDocument();
+  });
 });

@@ -130,7 +130,7 @@ export const CreateJiraIssueModal: React.FC<CreateJiraIssueModalProps> = ({
       title="Tạo Jira Issue mới"
       open={open}
       onCancel={onClose}
-      destroyOnClose
+      destroyOnHidden
       footer={[
         <Button key="cancel" onClick={onClose} disabled={submitting}>
           Hủy

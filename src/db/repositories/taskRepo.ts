@@ -37,6 +37,7 @@ export async function createTask(
   if (validated.opsOwners !== undefined) task.opsOwners = validated.opsOwners;
   if (validated.businessAnalysts !== undefined) task.businessAnalysts = validated.businessAnalysts;
   if (validated.documentLinks !== undefined) task.documentLinks = validated.documentLinks;
+  if (validated.jiraKey !== undefined) task.jiraKey = validated.jiraKey;
 
   await db.tasks.add(task);
   return task;
@@ -75,6 +76,13 @@ export async function updateTask(
   if (validated.opsOwners !== undefined) updated.opsOwners = validated.opsOwners;
   if (validated.businessAnalysts !== undefined) updated.businessAnalysts = validated.businessAnalysts;
   if (validated.documentLinks !== undefined) updated.documentLinks = validated.documentLinks;
+  if ('jiraKey' in patch) {
+    if (validated.jiraKey !== undefined) {
+      updated.jiraKey = validated.jiraKey;
+    } else {
+      delete updated.jiraKey;
+    }
+  }
 
   await db.tasks.put(updated);
   return updated;

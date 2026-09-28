@@ -22,6 +22,7 @@ import { getAllMilestones } from '../../db/repositories/milestoneRepo';
 import { createFocusRestorer } from '../../utils/focus';
 import { useRegisterActiveForm } from '../../context/FormGuardContext';
 import { TaskDrawerPlanning } from './TaskDrawerPlanning';
+import { TaskJiraSection } from './TaskJiraSection';
 import { TagSelect } from '../common/TagSelect';
 import { WORK_TYPE_CONFIG } from './WorkTypeBadge';
 import { resolveInheritedTags } from '../../domain/inheritance';
@@ -285,6 +286,16 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
     }
   };
 
+  const handleUpdateTaskJira = async (patch: Partial<Task>) => {
+    if (!taskId) return;
+    const updated = await updateTask(taskId, patch, db);
+    setCurrentTask(updated);
+    if (patch.status) {
+      form.setFieldValue('status', patch.status);
+    }
+    onSave?.(updated);
+  };
+
   const filteredMilestones = milestones.filter(
     (m) => Boolean(selectedProjectId) && m.projectId === selectedProjectId
   );
@@ -504,6 +515,18 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
             <TaskDrawerPlanning
               task={currentTask}
               liveEstimateMinutes={liveEstimateMinutes}
+              db={db}
+            />
+            <Divider style={{ margin: '16px 0' }} />
+          </div>
+        )}
+
+        {/* Jira Integration Section (D-05) */}
+        {currentTask && (
+          <div style={{ marginBottom: 16 }}>
+            <TaskJiraSection
+              task={currentTask}
+              onUpdateTask={handleUpdateTaskJira}
               db={db}
             />
             <Divider style={{ margin: '16px 0' }} />
