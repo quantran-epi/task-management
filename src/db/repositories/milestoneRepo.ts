@@ -29,6 +29,8 @@ export async function createMilestone(
   if (validated.notes !== undefined) milestone.notes = validated.notes;
   if (validated.opsOwners !== undefined) milestone.opsOwners = validated.opsOwners;
   if (validated.businessAnalysts !== undefined) milestone.businessAnalysts = validated.businessAnalysts;
+  if (validated.reminderDate !== undefined) milestone.reminderDate = validated.reminderDate;
+  if (validated.reminderNote !== undefined) milestone.reminderNote = validated.reminderNote;
 
   await db.milestones.add(milestone);
   return milestone;
@@ -58,6 +60,20 @@ export async function updateMilestone(
   if (validated.status !== undefined) updated.status = validated.status;
   if (validated.opsOwners !== undefined) updated.opsOwners = validated.opsOwners;
   if (validated.businessAnalysts !== undefined) updated.businessAnalysts = validated.businessAnalysts;
+  if ('reminderDate' in patch) {
+    if (validated.reminderDate !== undefined) {
+      updated.reminderDate = validated.reminderDate;
+    } else {
+      delete updated.reminderDate;
+    }
+  }
+  if ('reminderNote' in patch) {
+    if (validated.reminderNote !== undefined) {
+      updated.reminderNote = validated.reminderNote;
+    } else {
+      delete updated.reminderNote;
+    }
+  }
 
   await db.milestones.put(updated);
   return updated;

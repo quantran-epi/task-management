@@ -20,6 +20,8 @@ export interface ProjectModalProps {
     opsOwners?: string[] | undefined;
     businessAnalysts?: string[] | undefined;
     documentLinks?: string[] | undefined;
+    reminderDate?: string | undefined;
+    reminderNote?: string | undefined;
   }) => Promise<void> | void;
   loading?: boolean | undefined;
 }
@@ -33,6 +35,8 @@ interface ProjectFormValues {
   opsOwners?: string[];
   businessAnalysts?: string[];
   documentLinks?: string[];
+  reminderDate?: Dayjs | null;
+  reminderNote?: string;
 }
 
 const PROJECT_STATUSES: ProjectStatus[] = ['Open', 'In Progress', 'Done', 'Cancelled'];
@@ -69,10 +73,19 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
           opsOwners: project.opsOwners ?? [],
           businessAnalysts: project.businessAnalysts ?? [],
           documentLinks: project.documentLinks ?? [],
+          reminderDate: project.reminderDate ? dayjs(project.reminderDate, 'YYYY-MM-DD') : null,
+          reminderNote: project.reminderNote || '',
         });
       } else {
         form.resetFields();
-        form.setFieldsValue({ status: 'Open', opsOwners: [], businessAnalysts: [], documentLinks: [] });
+        form.setFieldsValue({
+          status: 'Open',
+          opsOwners: [],
+          businessAnalysts: [],
+          documentLinks: [],
+          reminderDate: null,
+          reminderNote: '',
+        });
       }
     }
   }, [open, project, form]);
@@ -100,6 +113,8 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
         businessAnalysts:
           (values.businessAnalysts ?? []).length > 0 ? values.businessAnalysts : undefined,
         documentLinks: cleanedLinks.length > 0 ? cleanedLinks : undefined,
+        reminderDate: values.reminderDate ? values.reminderDate.format('YYYY-MM-DD') : undefined,
+        reminderNote: values.reminderNote?.trim() || undefined,
       });
       handleClose();
     } catch {
@@ -156,6 +171,17 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
 
           <Form.Item name="businessAnalysts" label="Business Analyst">
             <TagSelect field="businessAnalysts" />
+          </Form.Item>
+        </div>
+
+        {/* Reminder (D-08) */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <Form.Item name="reminderDate" label="Ngày nhắc nhở">
+            <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" placeholder="Chọn ngày nhắc nhở" allowClear />
+          </Form.Item>
+
+          <Form.Item name="reminderNote" label="Ghi chú nhắc nhở">
+            <Input placeholder="Nhập nội dung cần lưu ý khi đến hạn..." maxLength={500} allowClear />
           </Form.Item>
         </div>
 

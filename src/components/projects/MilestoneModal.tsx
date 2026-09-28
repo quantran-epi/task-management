@@ -21,6 +21,8 @@ export interface MilestoneModalProps {
     status: MilestoneStatus;
     opsOwners?: string[] | undefined;
     businessAnalysts?: string[] | undefined;
+    reminderDate?: string | undefined;
+    reminderNote?: string | undefined;
   }) => Promise<void> | void;
   loading?: boolean | undefined;
 }
@@ -32,6 +34,8 @@ interface MilestoneFormValues {
   status: MilestoneStatus;
   opsOwners?: string[];
   businessAnalysts?: string[];
+  reminderDate?: Dayjs | null;
+  reminderNote?: string;
 }
 
 const MILESTONE_STATUSES: MilestoneStatus[] = ['Open', 'In Progress', 'Done', 'Cancelled'];
@@ -68,10 +72,18 @@ export const MilestoneModal: React.FC<MilestoneModalProps> = ({
           status: milestone.status,
           opsOwners: milestone.opsOwners ?? [],
           businessAnalysts: milestone.businessAnalysts ?? [],
+          reminderDate: milestone.reminderDate ? dayjs(milestone.reminderDate, 'YYYY-MM-DD') : null,
+          reminderNote: milestone.reminderNote || '',
         });
       } else {
         form.resetFields();
-        form.setFieldsValue({ status: 'Open', opsOwners: [], businessAnalysts: [] });
+        form.setFieldsValue({
+          status: 'Open',
+          opsOwners: [],
+          businessAnalysts: [],
+          reminderDate: null,
+          reminderNote: '',
+        });
       }
     }
   }, [open, milestone, form]);
@@ -113,6 +125,8 @@ export const MilestoneModal: React.FC<MilestoneModalProps> = ({
         opsOwners: (values.opsOwners ?? []).length > 0 ? values.opsOwners : undefined,
         businessAnalysts:
           (values.businessAnalysts ?? []).length > 0 ? values.businessAnalysts : undefined,
+        reminderDate: values.reminderDate ? values.reminderDate.format('YYYY-MM-DD') : undefined,
+        reminderNote: values.reminderNote?.trim() || undefined,
       });
       handleClose();
     } catch {
@@ -175,6 +189,17 @@ export const MilestoneModal: React.FC<MilestoneModalProps> = ({
               field="businessAnalysts"
               inheritedText={baInheritedText}
             />
+          </Form.Item>
+        </div>
+
+        {/* Reminder (D-08) */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <Form.Item name="reminderDate" label="Ngày nhắc nhở">
+            <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" placeholder="Chọn ngày nhắc nhở" allowClear />
+          </Form.Item>
+
+          <Form.Item name="reminderNote" label="Ghi chú nhắc nhở">
+            <Input placeholder="Nhập nội dung cần lưu ý khi đến hạn..." maxLength={500} allowClear />
           </Form.Item>
         </div>
       </Form>

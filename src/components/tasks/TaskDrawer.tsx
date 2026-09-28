@@ -53,6 +53,8 @@ interface TaskDrawerFormValues {
   actualEndDate?: Dayjs | null;
   progress: number;
   documentLinks?: string[];
+  reminderDate?: Dayjs | null;
+  reminderNote?: string;
   notes?: string;
 }
 
@@ -165,6 +167,8 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
               : null,
             progress: taskData.progress,
             documentLinks: taskData.documentLinks ?? [],
+            reminderDate: taskData.reminderDate ? dayjs(taskData.reminderDate, 'YYYY-MM-DD') : null,
+            reminderNote: taskData.reminderNote ?? '',
             notes: taskData.notes ?? '',
           });
         }
@@ -269,6 +273,8 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
             ? values.actualEndDate.format('YYYY-MM-DD')
             : undefined,
           documentLinks: cleanedLinks.length > 0 ? cleanedLinks : undefined,
+          reminderDate: values.reminderDate ? values.reminderDate.format('YYYY-MM-DD') : undefined,
+          reminderNote: values.reminderNote?.trim() ? values.reminderNote.trim() : undefined,
           notes: values.notes?.trim() ? values.notes : undefined,
           projectId: targetProjectId,
           milestoneId: targetMilestoneId,
@@ -488,6 +494,26 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
         <Form.Item name="actualEndDate" label="Kết thúc thực tế">
           <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" placeholder="Kết thúc thực tế" />
         </Form.Item>
+
+        {/* Reminder (D-08) */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <Form.Item name="reminderDate" label="Ngày nhắc nhở">
+            <DatePicker
+              style={{ width: '100%' }}
+              format="YYYY-MM-DD"
+              placeholder="Chọn ngày nhắc nhở"
+              allowClear
+            />
+          </Form.Item>
+
+          <Form.Item name="reminderNote" label="Ghi chú nhắc nhở">
+            <Input
+              placeholder="Nhập nội dung cần lưu ý khi đến hạn..."
+              maxLength={500}
+              allowClear
+            />
+          </Form.Item>
+        </div>
 
         {/* Progress Slider + Input */}
         <Form.Item label="Tiến độ" style={{ marginBottom: 12 }}>

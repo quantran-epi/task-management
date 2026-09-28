@@ -64,6 +64,8 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ db = defaultDb }) =>
     opsOwners?: string[] | undefined;
     businessAnalysts?: string[] | undefined;
     documentLinks?: string[] | undefined;
+    reminderDate?: string | undefined;
+    reminderNote?: string | undefined;
   }) => {
     try {
       if (editingProject) {
@@ -112,6 +114,10 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ db = defaultDb }) =>
     description?: string | undefined;
     deadline?: string | undefined;
     status: MilestoneStatus;
+    opsOwners?: string[] | undefined;
+    businessAnalysts?: string[] | undefined;
+    reminderDate?: string | undefined;
+    reminderNote?: string | undefined;
   }) => {
     try {
       if (editingMilestone) {

@@ -38,6 +38,8 @@ export async function createTask(
   if (validated.businessAnalysts !== undefined) task.businessAnalysts = validated.businessAnalysts;
   if (validated.documentLinks !== undefined) task.documentLinks = validated.documentLinks;
   if (validated.jiraKey !== undefined) task.jiraKey = validated.jiraKey;
+  if (validated.reminderDate !== undefined) task.reminderDate = validated.reminderDate;
+  if (validated.reminderNote !== undefined) task.reminderNote = validated.reminderNote;
 
   await db.tasks.add(task);
   return task;
@@ -81,6 +83,20 @@ export async function updateTask(
       updated.jiraKey = validated.jiraKey;
     } else {
       delete updated.jiraKey;
+    }
+  }
+  if ('reminderDate' in patch) {
+    if (validated.reminderDate !== undefined) {
+      updated.reminderDate = validated.reminderDate;
+    } else {
+      delete updated.reminderDate;
+    }
+  }
+  if ('reminderNote' in patch) {
+    if (validated.reminderNote !== undefined) {
+      updated.reminderNote = validated.reminderNote;
+    } else {
+      delete updated.reminderNote;
     }
   }
 

@@ -29,6 +29,8 @@ export async function createProject(
   if (validated.opsOwners !== undefined) project.opsOwners = validated.opsOwners;
   if (validated.businessAnalysts !== undefined) project.businessAnalysts = validated.businessAnalysts;
   if (validated.documentLinks !== undefined) project.documentLinks = validated.documentLinks;
+  if (validated.reminderDate !== undefined) project.reminderDate = validated.reminderDate;
+  if (validated.reminderNote !== undefined) project.reminderNote = validated.reminderNote;
 
   await db.projects.add(project);
   return project;
@@ -59,6 +61,20 @@ export async function updateProject(
   if (validated.opsOwners !== undefined) updated.opsOwners = validated.opsOwners;
   if (validated.businessAnalysts !== undefined) updated.businessAnalysts = validated.businessAnalysts;
   if (validated.documentLinks !== undefined) updated.documentLinks = validated.documentLinks;
+  if ('reminderDate' in patch) {
+    if (validated.reminderDate !== undefined) {
+      updated.reminderDate = validated.reminderDate;
+    } else {
+      delete updated.reminderDate;
+    }
+  }
+  if ('reminderNote' in patch) {
+    if (validated.reminderNote !== undefined) {
+      updated.reminderNote = validated.reminderNote;
+    } else {
+      delete updated.reminderNote;
+    }
+  }
 
   await db.projects.put(updated);
   return updated;
