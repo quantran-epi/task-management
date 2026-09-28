@@ -14,13 +14,17 @@ import {
 } from 'antd';
 import { PlusOutlined, DeleteOutlined, LinkOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
-import type { Task, Project, Milestone, TaskStatus, TaskPriority } from '../../types/models';
+import type { Task, Project, Milestone, TaskStatus, TaskPriority, WorkType } from '../../types/models';
+import { WORK_TYPES } from '../../types/models';
 import { getTask, updateTask, reparentTask } from '../../db/repositories/taskRepo';
 import { getAllProjects } from '../../db/repositories/projectRepo';
 import { getAllMilestones } from '../../db/repositories/milestoneRepo';
 import { createFocusRestorer } from '../../utils/focus';
 import { useRegisterActiveForm } from '../../context/FormGuardContext';
 import { TaskDrawerPlanning } from './TaskDrawerPlanning';
+import { TagSelect } from '../common/TagSelect';
+import { WORK_TYPE_CONFIG } from './WorkTypeBadge';
+import { resolveInheritedTags } from '../../domain/inheritance';
 import type { TaskPlannerDatabase } from '../../db';
 
 export interface TaskDrawerProps {
@@ -38,6 +42,9 @@ interface TaskDrawerFormValues {
   milestoneId?: string;
   status: TaskStatus;
   priority: TaskPriority;
+  workType?: WorkType;
+  opsOwners?: string[];
+  businessAnalysts?: string[];
   hours: number;
   minutes: number;
   deadline?: Dayjs | null;
@@ -143,6 +150,9 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
             milestoneId: taskData.milestoneId || '',
             status: taskData.status,
             priority: taskData.priority,
+            workType: taskData.workType || 'code',
+            opsOwners: taskData.opsOwners ?? [],
+            businessAnalysts: taskData.businessAnalysts ?? [],
             hours: Math.floor(taskData.estimateMinutes / 60),
             minutes: taskData.estimateMinutes % 60,
             deadline: taskData.deadline ? dayjs(taskData.deadline, 'YYYY-MM-DD') : null,
@@ -244,6 +254,10 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
           name: values.name.trim(),
           status: values.status,
           priority: values.priority,
+          workType: values.workType || 'code',
+          opsOwners: (values.opsOwners ?? []).length > 0 ? values.opsOwners : undefined,
+          businessAnalysts:
+            (values.businessAnalysts ?? []).length > 0 ? values.businessAnalysts : undefined,
           estimateMinutes,
           progress: values.progress ?? 0,
           deadline: values.deadline ? values.deadline.format('YYYY-MM-DD') : undefined,
@@ -274,6 +288,43 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
   const filteredMilestones = milestones.filter(
     (m) => Boolean(selectedProjectId) && m.projectId === selectedProjectId
   );
+
+  const selectedMilestoneId = Form.useWatch('milestoneId', form);
+  const selectedProj = projects.find((p) => p.id === selectedProjectId);
+  const selectedMs = milestones.find((m) => m.id === selectedMilestoneId);
+
+  const inheritedOps = resolveInheritedTags('opsOwners', {}, {
+    project: selectedProj ? { name: selectedProj.name, opsOwners: selectedProj.opsOwners } : undefined,
+    milestone: selectedMs ? { name: selectedMs.name, opsOwners: selectedMs.opsOwners } : undefined,
+  });
+
+  const inheritedBA = resolveInheritedTags('businessAnalysts', {}, {
+    project: selectedProj ? { name: selectedProj.name, businessAnalysts: selectedProj.businessAnalysts } : undefined,
+    milestone: selectedMs ? { name: selectedMs.name, businessAnalysts: selectedMs.businessAnalysts } : undefined,
+  });
+
+  const opsInheritedText =
+    inheritedOps.source !== 'none' && inheritedOps.tags.length > 0
+      ? `Kế thừa: [${inheritedOps.tags.join(', ')}] (từ ${inheritedOps.source === 'milestone' ? 'Milestone' : 'Dự án'})`
+      : undefined;
+
+  const baInheritedText =
+    inheritedBA.source !== 'none' && inheritedBA.tags.length > 0
+      ? `Kế thừa: [${inheritedBA.tags.join(', ')}] (từ ${inheritedBA.source === 'milestone' ? 'Milestone' : 'Dự án'})`
+      : undefined;
+
+  const workTypeOptions = WORK_TYPES.map((wt) => {
+    const cfg = WORK_TYPE_CONFIG[wt];
+    return {
+      value: wt,
+      label: (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          {cfg.icon}
+          <span>{cfg.label}</span>
+        </span>
+      ),
+    };
+  });
 
   return (
     <Drawer
@@ -330,8 +381,8 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
           </Form.Item>
         </div>
 
-        {/* Status and Priority */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        {/* Status, Priority, and Work Type */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
           <Form.Item name="status" label="Trạng thái" rules={[{ required: true }]}>
             <Select
               aria-label="Trạng thái"
@@ -343,6 +394,30 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
             <Select
               aria-label="Độ ưu tiên"
               options={ALL_PRIORITIES.map((p) => ({ value: p, label: PRIORITY_LABELS[p] || p }))}
+            />
+          </Form.Item>
+
+          <Form.Item name="workType" label="Loại công việc" rules={[{ required: true }]}>
+            <Select
+              aria-label="Loại công việc"
+              options={workTypeOptions}
+            />
+          </Form.Item>
+        </div>
+
+        {/* Banking IT Tags: Ops Owners & Business Analysts */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <Form.Item name="opsOwners" label="Ops Owner">
+            <TagSelect
+              field="opsOwners"
+              inheritedText={opsInheritedText}
+            />
+          </Form.Item>
+
+          <Form.Item name="businessAnalysts" label="Business Analyst">
+            <TagSelect
+              field="businessAnalysts"
+              inheritedText={baInheritedText}
             />
           </Form.Item>
         </div>

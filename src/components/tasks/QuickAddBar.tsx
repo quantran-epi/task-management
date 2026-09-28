@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { Input, Button, Select, Space, message, type InputRef } from 'antd';
 import { parseQuickAddInput } from '../../utils/time';
 import { createTask } from '../../db/repositories/taskRepo';
-import type { Task } from '../../types/models';
+import type { Task, WorkType } from '../../types/models';
 import type { TaskPlannerDatabase } from '../../db';
+import { WORK_TYPE_CONFIG } from './WorkTypeBadge';
+import { WORK_TYPES } from '../../types/models';
 
 export interface QuickAddBarProps {
   projects?: { id: string; name: string }[];
@@ -21,6 +23,7 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
   inputRef,
 }) => {
   const [text, setText] = useState('');
+  const [workType, setWorkType] = useState<WorkType>('code');
   const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>(defaultProjectId);
   const [submitting, setSubmitting] = useState(false);
 
@@ -39,12 +42,14 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
           status: 'Open',
           priority: 'Medium',
           estimateMinutes,
+          workType,
           projectId: selectedProjectId || undefined,
         },
         db
       );
 
       setText('');
+      setWorkType('code');
       message.success({ content: 'Task created', duration: 1.5 });
       onTaskCreated?.(created);
     } catch {
@@ -66,6 +71,19 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
     ...projects.map((p) => ({ value: p.id, label: p.name })),
   ];
 
+  const workTypeOptions = WORK_TYPES.map((wt) => {
+    const cfg = WORK_TYPE_CONFIG[wt];
+    return {
+      value: wt,
+      label: (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          {cfg.icon}
+          <span>{cfg.label}</span>
+        </span>
+      ),
+    };
+  });
+
   return (
     <Space.Compact style={{ width: '100%' }}>
       {projects.length > 0 && (
@@ -77,6 +95,13 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
           aria-label="Gán vào dự án"
         />
       )}
+      <Select
+        value={workType}
+        onChange={(val) => setWorkType(val)}
+        options={workTypeOptions}
+        style={{ width: 155 }}
+        aria-label="Loại công việc"
+      />
       <Input
         ref={inputRef}
         id="quick-add-input"
