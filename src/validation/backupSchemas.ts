@@ -6,6 +6,8 @@ import {
   MILESTONE_STATUSES,
   TASK_STATUSES,
   TASK_PRIORITIES,
+  tagListSchema,
+  workTypeSchema,
 } from './schemas';
 
 const calendarDateSchema = z
@@ -34,6 +36,8 @@ export const BackupProjectRecordSchema = z.object({
   deadline: calendarDateSchema.optional(),
   notes: z.string().optional(),
   status: z.enum(PROJECT_STATUSES),
+  opsOwners: tagListSchema.optional(),
+  businessAnalysts: tagListSchema.optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -46,6 +50,8 @@ export const BackupMilestoneRecordSchema = z.object({
   deadline: calendarDateSchema.optional(),
   notes: z.string().optional(),
   status: z.enum(MILESTONE_STATUSES),
+  opsOwners: tagListSchema.optional(),
+  businessAnalysts: tagListSchema.optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -64,6 +70,9 @@ export const BackupTaskRecordSchema = z.object({
   progress: z.number().int().min(0).max(100),
   priority: z.enum(TASK_PRIORITIES),
   estimateMinutes: z.number().int().min(0).max(6000),
+  workType: workTypeSchema.optional(),
+  opsOwners: tagListSchema.optional(),
+  businessAnalysts: tagListSchema.optional(),
   documentLinks: z.array(httpUrlSchema).optional(),
   createdAt: z.string(),
   updatedAt: z.string(),

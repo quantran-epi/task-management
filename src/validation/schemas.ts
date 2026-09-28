@@ -6,7 +6,42 @@ import type {
   MilestoneStatus,
   TaskStatus,
   TaskPriority,
+  WorkType,
 } from '../types/models';
+
+export const WORK_TYPES = [
+  'code',
+  'document',
+  'meeting',
+  'support_testing',
+  'investigate',
+  'configuration',
+  'review_code',
+] as const;
+
+export const workTypeSchema = z.enum(WORK_TYPES);
+
+export function normalizeTags(tags: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const tag of tags) {
+    const trimmed = tag.trim();
+    if (!trimmed) continue;
+    const lower = trimmed.toLowerCase();
+    if (!seen.has(lower)) {
+      seen.add(lower);
+      result.push(trimmed);
+    }
+  }
+
+  return result;
+}
+
+export const tagListSchema = z
+  .array(z.string().trim().max(50, 'Tên thẻ tối đa 50 ký tự'))
+  .max(10, 'Tối đa 10 thẻ cho mỗi trường')
+  .transform(normalizeTags);
 
 export const PROJECT_STATUSES: [ProjectStatus, ...ProjectStatus[]] = [
   'Open',
@@ -63,6 +98,8 @@ export const ProjectInputSchema = z.object({
   deadline: calendarDateSchema.optional(),
   notes: z.string().optional(),
   status: z.enum(PROJECT_STATUSES).default('Open'),
+  opsOwners: tagListSchema.optional(),
+  businessAnalysts: tagListSchema.optional(),
 });
 
 export const ProjectUpdateSchema = z.object({
@@ -71,6 +108,8 @@ export const ProjectUpdateSchema = z.object({
   deadline: calendarDateSchema.optional(),
   notes: z.string().optional(),
   status: z.enum(PROJECT_STATUSES).optional(),
+  opsOwners: tagListSchema.optional(),
+  businessAnalysts: tagListSchema.optional(),
 });
 
 export const MilestoneInputSchema = z.object({
@@ -80,6 +119,8 @@ export const MilestoneInputSchema = z.object({
   deadline: calendarDateSchema.optional(),
   notes: z.string().optional(),
   status: z.enum(MILESTONE_STATUSES).default('Open'),
+  opsOwners: tagListSchema.optional(),
+  businessAnalysts: tagListSchema.optional(),
 });
 
 export const MilestoneUpdateSchema = z.object({
@@ -88,6 +129,8 @@ export const MilestoneUpdateSchema = z.object({
   deadline: calendarDateSchema.optional(),
   notes: z.string().optional(),
   status: z.enum(MILESTONE_STATUSES).optional(),
+  opsOwners: tagListSchema.optional(),
+  businessAnalysts: tagListSchema.optional(),
 });
 
 export const TaskInputSchema = z.object({
@@ -103,6 +146,9 @@ export const TaskInputSchema = z.object({
   progress: z.number().int().min(0).max(100).default(0),
   priority: z.enum(TASK_PRIORITIES).default('Medium'),
   estimateMinutes: z.number().int().min(0).max(6000).default(0),
+  workType: workTypeSchema.default('code'),
+  opsOwners: tagListSchema.optional(),
+  businessAnalysts: tagListSchema.optional(),
   documentLinks: z.array(httpUrlSchema).optional(),
 });
 
@@ -119,6 +165,9 @@ export const TaskUpdateSchema = z.object({
   progress: z.number().int().min(0).max(100).optional(),
   priority: z.enum(TASK_PRIORITIES).optional(),
   estimateMinutes: z.number().int().min(0).max(6000).optional(),
+  workType: workTypeSchema.optional(),
+  opsOwners: tagListSchema.optional(),
+  businessAnalysts: tagListSchema.optional(),
   documentLinks: z.array(httpUrlSchema).optional(),
 });
 
