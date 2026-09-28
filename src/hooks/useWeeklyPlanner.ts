@@ -7,6 +7,7 @@ import type {
   PlannedAllocation,
   Task,
   CapacityOverride,
+  Project,
 } from '../types/models';
 import {
   getEffectiveDailyCapacity,
@@ -25,7 +26,14 @@ export interface DayPlannerData {
   isToday: boolean;
   override?: CapacityOverride;
   metrics: DayCapacityMetrics;
-  allocations: Array<PlannedAllocation & { task: Task; isActive: boolean }>;
+  allocations: Array<
+    PlannedAllocation & {
+      task: Task;
+      project?: Project | undefined;
+      projectName?: string | undefined;
+      isActive: boolean;
+    }
+  >;
 }
 
 export interface WeeklyPlannerState {
@@ -95,6 +103,10 @@ export function useWeeklyPlanner(
       const tasks = taskIds.length > 0 ? await targetDb.tasks.where('id').anyOf(taskIds).toArray() : [];
       const taskMap = new Map<string, Task>(tasks.map((t) => [t.id, t]));
 
+      // 5. Fetch projects for tasks
+      const projects = await targetDb.projects.toArray();
+      const projectMap = new Map<string, Project>(projects.map((p) => [p.id, p]));
+
       const todayStr = getTodayDateString();
 
       const days: DayPlannerData[] = weekDates.map((date) => {
@@ -120,9 +132,12 @@ export function useWeeklyPlanner(
             updatedAt: '',
           };
           const resolvedTask = task ?? fallbackTask;
+          const project = resolvedTask.projectId ? projectMap.get(resolvedTask.projectId) : undefined;
           return {
             ...alloc,
             task: resolvedTask,
+            project,
+            projectName: project?.name,
             isActive: isTaskActive(resolvedTask.status),
           };
         });

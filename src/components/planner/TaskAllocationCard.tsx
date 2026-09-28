@@ -25,13 +25,15 @@ import {
   deleteAllocation,
 } from '../../db/repositories/allocationRepo';
 import { formatMinutes } from '../../utils/time';
-import type { PlannedAllocation, Task, TaskPriority } from '../../types/models';
+import type { PlannedAllocation, Task, TaskPriority, Project } from '../../types/models';
 
 const { Text } = Typography;
 
 export interface TaskAllocationCardProps {
   allocation: PlannedAllocation;
   task: Task;
+  project?: Project | undefined;
+  projectName?: string | undefined;
   isActive: boolean;
   onEditTask?: ((taskId: string) => void) | undefined;
   db?: TaskPlannerDatabase | undefined;
@@ -54,6 +56,8 @@ const PRIORITY_LABELS: Record<TaskPriority, string> = {
 export const TaskAllocationCard: React.FC<TaskAllocationCardProps> = ({
   allocation,
   task,
+  project,
+  projectName,
   isActive,
   onEditTask,
   db = defaultDb,
@@ -198,6 +202,23 @@ export const TaskAllocationCard: React.FC<TaskAllocationCardProps> = ({
       >
         {task.name}
       </Text>
+
+      {/* Subtitle: Project name if associated */}
+      {(projectName || project?.name) && (
+        <Text
+          type="secondary"
+          ellipsis={{ tooltip: projectName || project?.name }}
+          style={{
+            fontSize: 11,
+            display: 'block',
+            marginTop: 2,
+            marginBottom: 2,
+            lineHeight: 1.3,
+          }}
+        >
+          {projectName || project?.name}
+        </Text>
+      )}
 
       {/* Bottom row: Meta tags and action controls */}
       <div
