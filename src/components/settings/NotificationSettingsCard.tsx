@@ -4,10 +4,10 @@ import { NotificationOutlined } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 
-const { Text, Paragraph } = Typography;
+const { Paragraph } = Typography;
 
 export interface NotificationSettingsCardProps {
-  db?: TaskPlannerDatabase;
+  db?: TaskPlannerDatabase | undefined;
 }
 
 export const NotificationSettingsCard: React.FC<NotificationSettingsCardProps> = ({

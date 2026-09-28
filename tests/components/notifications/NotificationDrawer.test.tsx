@@ -1,4 +1,3 @@
-import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { NotificationDrawer } from '../../../src/components/notifications/NotificationDrawer';
@@ -10,8 +9,9 @@ const mockTask: Task = {
   name: 'Nhiệm vụ kiểm thử',
   status: 'Open',
   priority: 'High',
+  progress: 0,
   estimateMinutes: 60,
-  workType: 'DeepWork',
+  workType: 'code',
   createdAt: '2026-09-20T00:00:00Z',
   updatedAt: '2026-09-20T00:00:00Z',
 };

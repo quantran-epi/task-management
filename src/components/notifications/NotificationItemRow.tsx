@@ -1,5 +1,5 @@
 import React from 'react';
-import { Checkbox, Tag, Typography, Button, Space, message } from 'antd';
+import { Checkbox, Tag, Typography, Button, message } from 'antd';
 import {
   CalendarOutlined,
   FolderOutlined,
@@ -15,7 +15,7 @@ export interface NotificationItemRowProps {
   item: AlertNotificationItem;
   onItemClick: (item: AlertNotificationItem) => void;
   onDismiss: (item: AlertNotificationItem) => void;
-  db?: TaskPlannerDatabase;
+  db?: TaskPlannerDatabase | undefined;
 }
 
 export const NotificationItemRow: React.FC<NotificationItemRowProps> = ({
