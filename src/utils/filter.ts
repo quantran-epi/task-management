@@ -1,5 +1,6 @@
 import dayjs from 'dayjs';
-import type { Task, TaskPriority, TaskStatus } from '../types/models';
+import type { Milestone, Project, Task, TaskPriority, TaskStatus, WorkType } from '../types/models';
+import { resolveInheritedTags } from '../domain/inheritance';
 
 export interface TaskFilterState {
   search: string;
@@ -9,6 +10,12 @@ export interface TaskFilterState {
   priorities: TaskPriority[];
   horizon: 'all' | 'overdue' | 'today' | 'this_week';
   includeClosed: boolean;
+  milestoneId: string | null;
+  workTypes: WorkType[];
+  opsOwners: string[];
+  businessAnalysts: string[];
+  executionDateRange: [string, string] | null;
+  deadlineRange: [string, string] | null;
 }
 
 export const DEFAULT_TASK_FILTER_STATE: TaskFilterState = {
@@ -19,7 +26,35 @@ export const DEFAULT_TASK_FILTER_STATE: TaskFilterState = {
   priorities: [],
   horizon: 'all',
   includeClosed: false,
+  milestoneId: null,
+  workTypes: [],
+  opsOwners: [],
+  businessAnalysts: [],
+  executionDateRange: null,
+  deadlineRange: null,
 };
+
+export interface FilterContext {
+  todayStr: string;
+  projectMap?: Map<string, Project>;
+  milestoneMap?: Map<string, Milestone>;
+  executionTaskIds?: Set<string> | null;
+}
+
+/**
+ * Counts active advanced filter criteria (SRCH-03, D-04).
+ * Returns count of active non-default advanced filters.
+ */
+export function countActiveAdvancedFilters(filters: TaskFilterState): number {
+  let count = 0;
+  if (filters.milestoneId) count++;
+  if (filters.workTypes && filters.workTypes.length > 0) count++;
+  if (filters.opsOwners && filters.opsOwners.length > 0) count++;
+  if (filters.businessAnalysts && filters.businessAnalysts.length > 0) count++;
+  if (filters.executionDateRange && filters.executionDateRange[0] && filters.executionDateRange[1]) count++;
+  if (filters.deadlineRange && filters.deadlineRange[0] && filters.deadlineRange[1]) count++;
+  return count;
+}
 
 const PRIORITY_WEIGHTS: Record<TaskPriority, number> = {
   Urgent: 4,
@@ -66,13 +101,18 @@ export function matchesHorizon(
 }
 
 /**
- * Filters task array in-memory across search text, hierarchy scope, status, priority, and date horizon.
+ * Filters task array in-memory across search text, hierarchy scope, status, priority, date horizon,
+ * and advanced multi-criteria (milestone, workTypes, opsOwners, businessAnalysts, deadlineRange, executionDateRange).
  */
 export function filterTasks(
   tasks: Task[],
   filterState: TaskFilterState,
-  todayStr: string
+  context: string | FilterContext
 ): Task[] {
+  const normalizedContext: FilterContext =
+    typeof context === 'string' ? { todayStr: context } : context;
+  const { todayStr, projectMap, milestoneMap, executionTaskIds } = normalizedContext;
+
   const searchTerm = filterState.search.trim().toLowerCase();
 
   return tasks.filter((task) => {
@@ -131,6 +171,78 @@ export function filterTasks(
     // 5. Date horizon filter (D-17)
     if (filterState.horizon && filterState.horizon !== 'all') {
       if (!matchesHorizon(task.deadline, filterState.horizon, todayStr)) {
+        return false;
+      }
+    }
+
+    // 6. Milestone filter (SRCH-03)
+    if (filterState.milestoneId) {
+      if (task.milestoneId !== filterState.milestoneId) {
+        return false;
+      }
+    }
+
+    // 7. Work types filter (SRCH-03)
+    if (filterState.workTypes && filterState.workTypes.length > 0) {
+      if (!task.workType || !filterState.workTypes.includes(task.workType)) {
+        return false;
+      }
+    }
+
+    // 8. Deadline range filter [start, end] inclusive (SRCH-02, D-02)
+    if (
+      filterState.deadlineRange &&
+      filterState.deadlineRange[0] &&
+      filterState.deadlineRange[1]
+    ) {
+      const [start, end] = filterState.deadlineRange;
+      if (!task.deadline || task.deadline < start || task.deadline > end) {
+        return false;
+      }
+    }
+
+    // 9. Execution date range filter via executionTaskIds Set (SRCH-01, D-06)
+    if (
+      filterState.executionDateRange &&
+      filterState.executionDateRange[0] &&
+      filterState.executionDateRange[1] &&
+      executionTaskIds !== null &&
+      executionTaskIds !== undefined
+    ) {
+      if (!executionTaskIds.has(task.id)) {
+        return false;
+      }
+    }
+
+    // Resolve ancestors for tag inheritance if needed
+    const ancestors =
+      projectMap || milestoneMap
+        ? {
+            project: task.projectId ? projectMap?.get(task.projectId) : undefined,
+            milestone: task.milestoneId ? milestoneMap?.get(task.milestoneId) : undefined,
+          }
+        : {};
+
+    // 10. Ops Owners filter with inheritance (SRCH-03, D-03)
+    if (filterState.opsOwners && filterState.opsOwners.length > 0) {
+      const effectiveOps = resolveInheritedTags('opsOwners', task, ancestors).tags;
+      const lowerEffective = effectiveOps.map((t) => t.trim().toLowerCase());
+      const hasMatch = filterState.opsOwners.some((target) =>
+        lowerEffective.includes(target.trim().toLowerCase())
+      );
+      if (!hasMatch) {
+        return false;
+      }
+    }
+
+    // 11. Business Analysts filter with inheritance (SRCH-03, D-03)
+    if (filterState.businessAnalysts && filterState.businessAnalysts.length > 0) {
+      const effectiveBa = resolveInheritedTags('businessAnalysts', task, ancestors).tags;
+      const lowerEffective = effectiveBa.map((t) => t.trim().toLowerCase());
+      const hasMatch = filterState.businessAnalysts.some((target) =>
+        lowerEffective.includes(target.trim().toLowerCase())
+      );
+      if (!hasMatch) {
         return false;
       }
     }
