@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import { SCHEMA_V1 } from './schema';
+import { SCHEMA_V1, SCHEMA_V2 } from './schema';
 import type {
   Project,
   Milestone,
@@ -25,6 +25,35 @@ export class TaskPlannerDatabase extends Dexie {
     super(databaseName);
 
     this.version(1).stores(SCHEMA_V1);
+
+    this.version(2)
+      .stores(SCHEMA_V2)
+      .upgrade(async (tx) => {
+        await tx
+          .table('projects')
+          .toCollection()
+          .modify((proj: Record<string, unknown>) => {
+            if (!proj.opsOwners) proj.opsOwners = [];
+            if (!proj.businessAnalysts) proj.businessAnalysts = [];
+          });
+
+        await tx
+          .table('milestones')
+          .toCollection()
+          .modify((ms: Record<string, unknown>) => {
+            if (!ms.opsOwners) ms.opsOwners = [];
+            if (!ms.businessAnalysts) ms.businessAnalysts = [];
+          });
+
+        await tx
+          .table('tasks')
+          .toCollection()
+          .modify((task: Record<string, unknown>) => {
+            if (!task.opsOwners) task.opsOwners = [];
+            if (!task.businessAnalysts) task.businessAnalysts = [];
+            if (!task.workType) task.workType = 'code';
+          });
+      });
 
     // Multi-tab concurrency handlers (DATA-04, D-09, D-10)
     this.on('blocked', () => {

@@ -3,6 +3,25 @@ export type MilestoneStatus = 'Open' | 'In Progress' | 'Done' | 'Cancelled';
 export type TaskStatus = 'Open' | 'In Progress' | 'Resolved' | 'In Review' | 'Done' | 'Cancelled';
 export type TaskPriority = 'Low' | 'Medium' | 'High' | 'Urgent';
 
+export type WorkType =
+  | 'code'
+  | 'document'
+  | 'meeting'
+  | 'support_testing'
+  | 'investigate'
+  | 'configuration'
+  | 'review_code';
+
+export const WORK_TYPES: readonly WorkType[] = [
+  'code',
+  'document',
+  'meeting',
+  'support_testing',
+  'investigate',
+  'configuration',
+  'review_code',
+] as const;
+
 export interface Project {
   id: string; // RFC 4122 v4 UUID
   name: string;
@@ -10,6 +29,8 @@ export interface Project {
   deadline?: string; // YYYY-MM-DD
   notes?: string;
   status: ProjectStatus;
+  opsOwners?: string[];
+  businessAnalysts?: string[];
   createdAt: string; // ISO string metadata
   updatedAt: string; // ISO string metadata
 }
@@ -22,6 +43,8 @@ export interface Milestone {
   deadline?: string; // YYYY-MM-DD
   notes?: string;
   status: MilestoneStatus;
+  opsOwners?: string[];
+  businessAnalysts?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -40,6 +63,9 @@ export interface Task {
   progress: number; // Integer percentage 0 - 100
   priority: TaskPriority;
   estimateMinutes: number; // Non-negative integer minutes
+  workType?: WorkType;
+  opsOwners?: string[];
+  businessAnalysts?: string[];
   documentLinks?: string[];
   createdAt: string;
   updatedAt: string;
