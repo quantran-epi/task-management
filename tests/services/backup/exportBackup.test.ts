@@ -104,7 +104,7 @@ describe('exportBackup service', () => {
       expect(envelope.app).toBe(APP_MARKER);
       expect(envelope.app).toBe('personal-task-planner');
       expect(envelope.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
-      expect(envelope.schemaVersion).toBe(1);
+      expect(envelope.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
       expect(envelope.exportedAt).toBeDefined();
       expect(new Date(envelope.exportedAt).toString()).not.toBe('Invalid Date');
 
