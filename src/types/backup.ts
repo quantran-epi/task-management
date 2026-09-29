@@ -5,6 +5,7 @@ import type {
   CapacityRule,
   CapacityOverride,
   PlannedAllocation,
+  WorkSession,
 } from './models';
 
 export interface BackupTableData {
@@ -14,6 +15,7 @@ export interface BackupTableData {
   capacityRules: CapacityRule[];
   capacityOverrides: CapacityOverride[];
   plannedAllocations: PlannedAllocation[];
+  workSessions?: WorkSession[];
 }
 
 export interface BackupTableCounts {
@@ -23,7 +25,9 @@ export interface BackupTableCounts {
   capacityRules: number;
   capacityOverrides: number;
   plannedAllocations: number;
+  workSessions?: number;
 }
+
 
 export interface BackupEnvelope {
   app: 'personal-task-planner';

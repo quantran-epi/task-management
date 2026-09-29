@@ -60,3 +60,22 @@ export function validateMinutes(minutes: unknown): boolean {
     minutes <= 6000
   );
 }
+
+/**
+ * Formats elapsed seconds into standard tabular ticker string HH:mm:ss.
+ * (e.g. 3665 -> "01:01:05", 25 -> "00:00:25", 0 -> "00:00:00")
+ */
+export function formatElapsedTicker(totalSeconds: number): string {
+  if (!totalSeconds || totalSeconds <= 0 || !Number.isFinite(totalSeconds)) {
+    return '00:00:00';
+  }
+
+  const total = Math.floor(totalSeconds);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+}
+

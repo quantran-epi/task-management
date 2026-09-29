@@ -55,13 +55,14 @@ describe('Dexie Schema v4 Migration (D-06, D-07, NOTIF-01)', () => {
 
     v3Db.close();
 
-    // Step 2: Open with TaskPlannerDatabase which applies version 4
+    // Step 2: Open with TaskPlannerDatabase which applies version 4+
     const v4Db = new TaskPlannerDatabase(dbName);
     await v4Db.open();
 
-    expect(v4Db.verno).toBe(4);
+    expect(v4Db.verno).toBeGreaterThanOrEqual(4);
 
     // Verify existing data preserved
+
     const project = await v4Db.projects.get(sampleProjectId);
     expect(project).toBeDefined();
     expect(project?.name).toBe('Existing V3 Project');

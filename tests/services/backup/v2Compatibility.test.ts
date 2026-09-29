@@ -11,18 +11,19 @@ import type { BackupEnvelope } from '../../../src/types/backup';
 
 describe('Backup Schema v2 Export & v1 Backward Compatibility (SHB-05, D-16, D-17)', () => {
   describe('exportBackupPayload', () => {
-    it('emits backup envelope with CURRENT_SCHEMA_VERSION equal to 2', async () => {
+    it('emits backup envelope with CURRENT_SCHEMA_VERSION equal to 3', async () => {
       const testDb = new TaskPlannerDatabase('TestExportV2DB_' + Math.random().toString(36).slice(2));
       await testDb.open();
 
       const envelope = await exportBackupPayload(testDb);
-      expect(CURRENT_SCHEMA_VERSION).toBe(2);
-      expect(envelope.schemaVersion).toBe(2);
+      expect(CURRENT_SCHEMA_VERSION).toBe(3);
+      expect(envelope.schemaVersion).toBe(3);
       expect(envelope.app).toBe(APP_MARKER);
 
       await testDb.delete();
     });
   });
+
 
   describe('validateBackupPayload v1 compatibility & normalization', () => {
     const sampleProjectId = '11111111-1111-4111-8111-111111111111';
@@ -172,9 +173,9 @@ describe('Backup Schema v2 Export & v1 Backward Compatibility (SHB-05, D-16, D-1
     });
 
     it('rejects unsupported schemaVersion with descriptive Vietnamese message', () => {
-      const v3Payload = {
+      const v4Payload = {
         app: APP_MARKER,
-        schemaVersion: 3,
+        schemaVersion: 4,
         exportedAt: '2026-09-28T00:00:00.000Z',
         tables: {
           projects: [],
@@ -194,19 +195,20 @@ describe('Backup Schema v2 Export & v1 Backward Compatibility (SHB-05, D-16, D-1
         },
       };
 
-      const result = validateBackupPayload(v3Payload);
+      const result = validateBackupPayload(v4Payload);
       expect(result.valid).toBe(false);
       expect(result.errors[0]?.field).toBe('schemaVersion');
-      expect(result.errors[0]?.message).toContain('chỉ hỗ trợ phiên bản 1 đến 2');
+      expect(result.errors[0]?.message).toContain('chỉ hỗ trợ phiên bản 1 đến 3');
 
       const v0Payload = {
-        ...v3Payload,
+        ...v4Payload,
         schemaVersion: 0,
       };
       const result0 = validateBackupPayload(v0Payload);
       expect(result0.valid).toBe(false);
       expect(result0.errors[0]?.field).toBe('schemaVersion');
-      expect(result0.errors[0]?.message).toContain('chỉ hỗ trợ phiên bản 1 đến 2');
+      expect(result0.errors[0]?.message).toContain('chỉ hỗ trợ phiên bản 1 đến 3');
     });
+
   });
 });

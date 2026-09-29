@@ -12,14 +12,17 @@ import {
   BackupCapacityRuleRecordSchema,
   BackupCapacityOverrideRecordSchema,
   BackupPlannedAllocationRecordSchema,
+  BackupWorkSessionRecordSchema,
 } from '../../validation/backupSchemas';
+
 
 /**
  * Two-stage validation engine for backup payloads:
  * Stage 1: Envelope validation (app marker, schemaVersion, structure)
- * Stage 2: Schema validation of records across all 6 domain tables
+ * Stage 2: Schema validation of records across domain tables (projects, milestones, tasks, capacityRules, capacityOverrides, plannedAllocations, and optionally workSessions)
  * Stage 3: Referential integrity checks (foreign keys: project, milestone, task)
  */
+
 export function validateBackupPayload(raw: unknown): BackupValidationResult {
   const errors: ValidationErrorDetail[] = [];
 
@@ -125,6 +128,9 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
   const capacityRules = validateTable('capacityRules', BackupCapacityRuleRecordSchema, rawTables.capacityRules ?? []);
   const capacityOverrides = validateTable('capacityOverrides', BackupCapacityOverrideRecordSchema, rawTables.capacityOverrides ?? []);
   const plannedAllocations = validateTable('plannedAllocations', BackupPlannedAllocationRecordSchema, rawTables.plannedAllocations ?? []);
+  const workSessions = rawTables.workSessions !== undefined
+    ? validateTable('workSessions', BackupWorkSessionRecordSchema, rawTables.workSessions)
+    : undefined;
 
   // If schema validation errors occurred, stop before referential checks
   if (errors.length > 0) {
@@ -180,6 +186,20 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     }
   });
 
+  // Check workSessions refer to existing task
+  if (workSessions) {
+    workSessions.forEach((ws) => {
+      if (!taskIds.has(ws.taskId)) {
+        errors.push({
+          table: 'workSessions',
+          recordId: ws.id,
+          field: 'taskId',
+          message: `WorkSession references taskId "${ws.taskId}" not found in tasks`,
+        });
+      }
+    });
+  }
+
   if (errors.length > 0) {
     return { valid: false, errors };
   }
@@ -212,6 +232,7 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       capacityRules: capacityRules as BackupEnvelope['tables']['capacityRules'],
       capacityOverrides: capacityOverrides as BackupEnvelope['tables']['capacityOverrides'],
       plannedAllocations: plannedAllocations as BackupEnvelope['tables']['plannedAllocations'],
+      ...(workSessions !== undefined ? { workSessions } : {}),
     },
     counts: {
       projects: projects.length,
@@ -220,8 +241,10 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       capacityRules: capacityRules.length,
       capacityOverrides: capacityOverrides.length,
       plannedAllocations: plannedAllocations.length,
+      ...(workSessions !== undefined ? { workSessions: workSessions.length } : {}),
     },
   };
+
 
   return {
     valid: true,

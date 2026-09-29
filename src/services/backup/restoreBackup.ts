@@ -4,9 +4,9 @@ import { generateId } from '../../utils/uuid';
 import { triggerDownload, APP_MARKER, CURRENT_SCHEMA_VERSION } from './exportBackup';
 
 /**
- * Atomically replaces data in 6 domain tables with incoming backup payload.
+ * Atomically replaces data in domain tables with incoming backup payload.
  * Before clearing tables, captures full snapshot into `settings.last_pre_import_snapshot`.
- * Runs in a single Dexie readwrite transaction across 6 domain tables + settings + backupMetadata.
+ * Runs in a single Dexie readwrite transaction across domain tables + settings + backupMetadata.
  */
 export async function restoreBackupPayload(
   backup: BackupEnvelope,
@@ -23,20 +23,30 @@ export async function restoreBackupPayload(
       targetDb.capacityRules,
       targetDb.capacityOverrides,
       targetDb.plannedAllocations,
+      targetDb.workSessions,
+      targetDb.activeTimers,
       targetDb.settings,
       targetDb.backupMetadata,
     ],
     async () => {
       // 1. Capture snapshot of current domain tables
-      const [projects, milestones, tasks, capacityRules, capacityOverrides, plannedAllocations] =
-        await Promise.all([
-          targetDb.projects.toArray(),
-          targetDb.milestones.toArray(),
-          targetDb.tasks.toArray(),
-          targetDb.capacityRules.toArray(),
-          targetDb.capacityOverrides.toArray(),
-          targetDb.plannedAllocations.toArray(),
-        ]);
+      const [
+        projects,
+        milestones,
+        tasks,
+        capacityRules,
+        capacityOverrides,
+        plannedAllocations,
+        workSessions,
+      ] = await Promise.all([
+        targetDb.projects.toArray(),
+        targetDb.milestones.toArray(),
+        targetDb.tasks.toArray(),
+        targetDb.capacityRules.toArray(),
+        targetDb.capacityOverrides.toArray(),
+        targetDb.plannedAllocations.toArray(),
+        targetDb.workSessions.toArray(),
+      ]);
 
       const snapshot: SnapshotData = {
         timestamp: snapshotTime,
@@ -47,6 +57,7 @@ export async function restoreBackupPayload(
           capacityRules,
           capacityOverrides,
           plannedAllocations,
+          workSessions,
         },
         counts: {
           projects: projects.length,
@@ -55,6 +66,7 @@ export async function restoreBackupPayload(
           capacityRules: capacityRules.length,
           capacityOverrides: capacityOverrides.length,
           plannedAllocations: plannedAllocations.length,
+          workSessions: workSessions.length,
         },
       };
 
@@ -64,7 +76,7 @@ export async function restoreBackupPayload(
         value: snapshot,
       });
 
-      // 2. Clear current domain tables
+      // 2. Clear current domain tables and active timers
       await Promise.all([
         targetDb.projects.clear(),
         targetDb.milestones.clear(),
@@ -72,6 +84,8 @@ export async function restoreBackupPayload(
         targetDb.capacityRules.clear(),
         targetDb.capacityOverrides.clear(),
         targetDb.plannedAllocations.clear(),
+        targetDb.workSessions.clear(),
+        targetDb.activeTimers.clear(),
       ]);
 
       // 3. Bulk add incoming records
@@ -93,6 +107,9 @@ export async function restoreBackupPayload(
       if (backup.tables.plannedAllocations.length) {
         await targetDb.plannedAllocations.bulkAdd(backup.tables.plannedAllocations);
       }
+      if (backup.tables.workSessions && backup.tables.workSessions.length) {
+        await targetDb.workSessions.bulkAdd(backup.tables.workSessions);
+      }
 
       // 4. Log restore in backupMetadata
       const totalCount = Object.values(backup.counts).reduce((sum, n) => sum + n, 0);
@@ -108,6 +125,7 @@ export async function restoreBackupPayload(
   const totalRestored = Object.values(backup.counts).reduce((sum, n) => sum + n, 0);
   return { totalRestored, snapshotTime };
 }
+
 
 /**
  * Rolls back the database to the saved pre-import snapshot in settings.
@@ -132,6 +150,8 @@ export async function rollbackToSnapshot(
       targetDb.capacityRules,
       targetDb.capacityOverrides,
       targetDb.plannedAllocations,
+      targetDb.workSessions,
+      targetDb.activeTimers,
       targetDb.settings,
       targetDb.backupMetadata,
     ],
@@ -144,6 +164,8 @@ export async function rollbackToSnapshot(
         targetDb.capacityRules.clear(),
         targetDb.capacityOverrides.clear(),
         targetDb.plannedAllocations.clear(),
+        targetDb.workSessions.clear(),
+        targetDb.activeTimers.clear(),
       ]);
 
       // 2. Restore records from snapshot
@@ -165,9 +187,13 @@ export async function rollbackToSnapshot(
       if (snapshot.tables.plannedAllocations.length) {
         await targetDb.plannedAllocations.bulkAdd(snapshot.tables.plannedAllocations);
       }
+      if (snapshot.tables.workSessions && snapshot.tables.workSessions.length) {
+        await targetDb.workSessions.bulkAdd(snapshot.tables.workSessions);
+      }
 
       // 3. Clear the snapshot from settings after rollback
       await targetDb.settings.delete('last_pre_import_snapshot');
+
 
       // 4. Log rollback in backupMetadata
       const totalCount = Object.values(snapshot.counts).reduce((sum, n) => sum + n, 0);

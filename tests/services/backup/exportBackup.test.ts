@@ -128,7 +128,9 @@ describe('exportBackup service', () => {
         capacityRules: 1,
         capacityOverrides: 1,
         plannedAllocations: 1,
+        workSessions: 0,
       });
+
 
       // Export history logged in backupMetadata
       const metadataEntries = await testDb.backupMetadata.toArray();
@@ -153,9 +155,11 @@ describe('exportBackup service', () => {
         capacityRules: 0,
         capacityOverrides: 0,
         plannedAllocations: 0,
+        workSessions: 0,
       });
 
       const metadataEntries = await testDb.backupMetadata.toArray();
+
       expect(metadataEntries).toHaveLength(1);
       expect(metadataEntries[0]?.recordCount).toBe(0);
     });

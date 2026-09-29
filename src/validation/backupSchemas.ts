@@ -108,3 +108,29 @@ export const BackupPlannedAllocationRecordSchema = z.object({
   date: calendarDateSchema,
   allocatedMinutes: z.number().int().min(1).max(1440),
 });
+
+export const BackupWorkSessionRecordSchema = z
+  .object({
+    id: uuidSchema,
+    taskId: uuidSchema,
+    startTime: z.string().datetime({ message: 'startTime must be a valid ISO 8601 string' }),
+    endTime: z.string().datetime({ message: 'endTime must be a valid ISO 8601 string' }).optional(),
+    date: calendarDateSchema,
+    durationMinutes: z.number().int().min(1).max(1440),
+    note: z.string().trim().max(500, 'Note must be 500 characters or less').optional(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  })
+  .refine(
+    (data) => {
+      if (data.endTime) {
+        return new Date(data.endTime).getTime() >= new Date(data.startTime).getTime();
+      }
+      return true;
+    },
+    {
+      message: 'endTime must be greater than or equal to startTime',
+      path: ['endTime'],
+    }
+  );
+

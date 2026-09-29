@@ -117,13 +117,14 @@ export interface WorkSession {
   id: string; // RFC 4122 v4 UUID
   taskId: string; // Reference to Task.id
   startTime: string; // ISO 8601 string
-  endTime?: string; // ISO 8601 string
+  endTime?: string | undefined; // ISO 8601 string
   date: string; // YYYY-MM-DD
   durationMinutes: number; // Positive integer minutes (>= 1)
-  note?: string;
+  note?: string | undefined;
   createdAt: string; // ISO string metadata
   updatedAt: string; // ISO string metadata
 }
+
 
 export interface ActiveTimer {
   taskId: string; // Primary key - Reference to Task.id

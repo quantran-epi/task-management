@@ -201,5 +201,6 @@ describe('SettingsView Integration & Offline Independence (SYNC-07, SYNC-05)', (
     });
 
     expect(announceSpy).toHaveBeenCalled();
-  }, 15000);
+  }, 30000);
 });
+

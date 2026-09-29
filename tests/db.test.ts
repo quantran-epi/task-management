@@ -17,8 +17,9 @@ describe('Dexie Database Persistence & Seed Layer (DATA-02, D-05, D-07)', () => 
     await testDb.delete();
   });
 
-  it('registers all 8 core tables with version 1 schema', () => {
+  it('registers all core tables in schema', () => {
     expect(testDb.tables.map((t) => t.name).sort()).toEqual([
+      'activeTimers',
       'backupMetadata',
       'capacityOverrides',
       'capacityRules',
@@ -27,8 +28,10 @@ describe('Dexie Database Persistence & Seed Layer (DATA-02, D-05, D-07)', () => 
       'projects',
       'settings',
       'tasks',
+      'workSessions',
     ].sort());
   });
+
 
   it('seeds baseline weekly capacity rules (Mon-Fri 480 mins, Sat-Sun 0 mins)', async () => {
     await initializeDatabaseDefaults(testDb);

@@ -3,7 +3,7 @@ import type { BackupEnvelope } from '../../types/backup';
 import { generateId } from '../../utils/uuid';
 
 export const APP_MARKER = 'personal-task-planner' as const;
-export const CURRENT_SCHEMA_VERSION = 2 as const;
+export const CURRENT_SCHEMA_VERSION = 3 as const;
 
 /**
  * Generates formatted backup filename: task-planner-backup-YYYY-MM-DD-HHmmss.json
@@ -20,7 +20,7 @@ export function generateBackupFileName(date: Date = new Date()): string {
 }
 
 /**
- * Headless export function querying 6 core business tables from targetDb,
+ * Headless export function querying 6 core business tables + workSessions from targetDb,
  * assembling the standard envelope, logging export history to backupMetadata,
  * and returning the BackupEnvelope.
  */
@@ -34,6 +34,7 @@ export async function exportBackupPayload(
     capacityRules,
     capacityOverrides,
     plannedAllocations,
+    workSessions,
   ] = await Promise.all([
     targetDb.projects.toArray(),
     targetDb.milestones.toArray(),
@@ -41,6 +42,7 @@ export async function exportBackupPayload(
     targetDb.capacityRules.toArray(),
     targetDb.capacityOverrides.toArray(),
     targetDb.plannedAllocations.toArray(),
+    targetDb.workSessions.toArray(),
   ]);
 
   const exportedAt = new Date().toISOString();
@@ -52,6 +54,7 @@ export async function exportBackupPayload(
     capacityRules,
     capacityOverrides,
     plannedAllocations,
+    workSessions,
   };
 
   const counts = {
@@ -61,6 +64,7 @@ export async function exportBackupPayload(
     capacityRules: capacityRules.length,
     capacityOverrides: capacityOverrides.length,
     plannedAllocations: plannedAllocations.length,
+    workSessions: workSessions.length,
   };
 
   const envelope: BackupEnvelope = {
@@ -70,6 +74,7 @@ export async function exportBackupPayload(
     tables,
     counts,
   };
+
 
   const totalRecordCount = Object.values(counts).reduce((sum, n) => sum + n, 0);
 
