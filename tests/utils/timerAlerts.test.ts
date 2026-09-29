@@ -3,6 +3,7 @@ import type { Task } from '../../src/types/models';
 import {
   evaluateTaskSpentAlert,
   evaluateLiveTaskAlert,
+  evaluateLiveTaskDailyAllocationAlert,
   evaluateDailyCapacitySpentAlert,
   evaluateDailyFeasibilityAlert,
 } from '../../src/utils/timerAlerts';
@@ -76,6 +77,28 @@ describe('timerAlerts 3-tier allocation & feasibility engine', () => {
       // 0 estimate returns shouldAlert: false
       const res0Est = evaluateLiveTaskAlert({ ...baseTask, estimateMinutes: 0 }, 10, 600);
       expect(res0Est.shouldAlert).toBe(false);
+    });
+
+    it('evaluates live running timer vs daily allocation (evaluateLiveTaskDailyAllocationAlert)', () => {
+      const task: Task = { ...baseTask, estimateMinutes: 60 };
+      // 5m allocation today: 0m recorded today + 300s (5m) = 5m >= 5m
+      const res5m = evaluateLiveTaskDailyAllocationAlert(task, 5, 0, 300);
+      expect(res5m.shouldAlert).toBe(true);
+      expect(res5m.severity).toBe('warning');
+      expect(res5m.message).toContain('vượt quá thời gian phân bổ (5m)');
+
+      // 4m spent (240s) < 5m allocation
+      const res4m = evaluateLiveTaskDailyAllocationAlert(task, 5, 0, 240);
+      expect(res4m.shouldAlert).toBe(false);
+
+      // 3m recorded today + 120s (2m) = 5m >= 5m allocation
+      const resCombo = evaluateLiveTaskDailyAllocationAlert(task, 5, 3, 120);
+      expect(resCombo.shouldAlert).toBe(true);
+
+      // When daily allocation is undefined or 0, falls back to estimateMinutes (60m)
+      const resFallback = evaluateLiveTaskDailyAllocationAlert(task, 0, 0, 3600, 0);
+      expect(resFallback.shouldAlert).toBe(true);
+      expect(resFallback.message).toContain('thời gian ước lượng (60m)');
     });
   });
 

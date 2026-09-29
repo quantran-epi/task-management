@@ -66,6 +66,47 @@ export function evaluateLiveTaskAlert(
 }
 
 /**
+ * Live Running Timer vs Daily Planned Allocation Alert
+ * Triggers when total daily duration (recorded sessions today + active running session)
+ * meets or exceeds daily planned allocation. If no daily allocation exists, falls back
+ * to task estimate.
+ */
+export function evaluateLiveTaskDailyAllocationAlert(
+  task: Task,
+  todayAllocatedMinutes: number | undefined,
+  todaySpentMinutes: number,
+  currentRunSeconds: number,
+  totalHistoricalSpentMinutes?: number
+): TaskSpentAlertResult {
+  const safeTodaySpent = Math.max(0, Math.floor(todaySpentMinutes || 0));
+  const safeRunMinutes = Math.floor(Math.max(0, currentRunSeconds || 0) / 60);
+  const currentTotalToday = safeTodaySpent + safeRunMinutes;
+  const safeAllocated = Math.max(0, Math.floor(todayAllocatedMinutes || 0));
+
+  if (safeAllocated > 0) {
+    if (currentTotalToday >= safeAllocated) {
+      return {
+        shouldAlert: true,
+        message: `Tác vụ "${task.name}" đã chạy ${currentTotalToday}m hôm nay, vượt quá thời gian phân bổ (${safeAllocated}m).`,
+        severity: 'warning',
+      };
+    }
+    return {
+      shouldAlert: false,
+      message: '',
+      severity: 'info',
+    };
+  }
+
+  // Fallback to task total estimate if no daily allocation set
+  return evaluateLiveTaskAlert(
+    task,
+    totalHistoricalSpentMinutes ?? safeTodaySpent,
+    currentRunSeconds
+  );
+}
+
+/**
  * Tier 2: Daily Capacity Overload from Recorded Work Sessions (Notification Drawer)
  * Triggers when recorded spent minutes on a date exceeds effective daily capacity.
  * Informational and non-blocking (D-07, D-08, TIMER-06).

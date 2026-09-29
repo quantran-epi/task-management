@@ -12,6 +12,7 @@ export interface TimerContextValue {
   pauseTimer: (taskId: string) => Promise<void>;
   finishTimer: (taskId: string, note?: string) => Promise<WorkSession | null>;
   cancelTimer: (taskId: string) => Promise<void>;
+  tick?: number;
 }
 
 export const TimerContext = createContext<TimerContextValue | undefined>(undefined);
@@ -192,6 +193,7 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({
       pauseTimer,
       finishTimer,
       cancelTimer,
+      tick,
     }),
     [
       activeTimers,

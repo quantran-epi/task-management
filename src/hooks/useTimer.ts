@@ -9,6 +9,7 @@ const fallbackTimerContext: TimerContextValue = {
   pauseTimer: async () => {},
   finishTimer: async () => null,
   cancelTimer: async () => {},
+  tick: 0,
 };
 
 /**
