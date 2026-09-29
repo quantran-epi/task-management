@@ -127,6 +127,10 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
 
           <Select
             allowClear
+            showSearch
+            filterOption={(input, option) =>
+              (option?.label as string ?? '').toLowerCase().includes(input.toLowerCase())
+            }
             placeholder="Lọc theo Dự án"
             style={{ minWidth: 160 }}
             value={filters.projectId || undefined}

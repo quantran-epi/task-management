@@ -25,12 +25,18 @@ const uuidSchema = z
     message: 'Must be a valid RFC 4122 v4 UUID',
   });
 
-const httpUrlSchema = z
+const linkSchema = z
   .string()
-  .url()
-  .refine((url) => url.startsWith('http://') || url.startsWith('https://'), {
-    message: 'URL must use http or https protocol',
-  });
+  .min(1, 'Link must not be empty')
+  .refine(
+    (val) =>
+      /^https?:\/\//i.test(val) ||
+      /^file:\/\//i.test(val) ||
+      /^[A-Za-z]:\\/.test(val) ||
+      /^\//.test(val) ||
+      /^\\\\/.test(val),
+    { message: 'Link must be a URL, folder path, or file URI.' }
+  );
 
 export const BackupProjectRecordSchema = z.object({
   id: uuidSchema,
@@ -41,7 +47,7 @@ export const BackupProjectRecordSchema = z.object({
   status: z.enum(PROJECT_STATUSES),
   opsOwners: tagListSchema.optional(),
   businessAnalysts: tagListSchema.optional(),
-  documentLinks: z.array(httpUrlSchema).optional(),
+  documentLinks: z.array(linkSchema).optional(),
   reminderDate: reminderDateSchema.optional(),
   reminderNote: reminderNoteSchema,
   createdAt: z.string(),
@@ -81,7 +87,7 @@ export const BackupTaskRecordSchema = z.object({
   workType: workTypeSchema.optional(),
   opsOwners: tagListSchema.optional(),
   businessAnalysts: tagListSchema.optional(),
-  documentLinks: z.array(httpUrlSchema).optional(),
+  documentLinks: z.array(linkSchema).optional(),
   jiraKey: jiraKeySchema.optional(),
   reminderDate: reminderDateSchema.optional(),
   reminderNote: reminderNoteSchema,

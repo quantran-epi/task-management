@@ -557,13 +557,17 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                       noStyle
                       rules={[
                         {
-                          pattern: /^https?:\/\//i,
-                          message: 'Liên kết tài liệu phải là URL HTTP hoặc HTTPS hợp lệ.',
+                          validator: (_: unknown, value: string) => {
+                            if (!value || /^https?:\/\//i.test(value) || /^file:\/\//i.test(value) || /^[A-Za-z]:\\/.test(value) || /^\//.test(value) || /^\\\\/.test(value)) {
+                              return Promise.resolve();
+                            }
+                            return Promise.reject('Liên kết phải là URL (http/https), đường dẫn thư mục, hoặc file URI.');
+                          },
                         },
                       ]}
                     >
                       <Input
-                        placeholder="https://example.com/spec"
+                        placeholder="https://... hoặc C:\folder hoặc /path/to/folder"
                         prefix={<LinkOutlined style={{ color: '#8c8c8c' }} />}
                       />
                     </Form.Item>

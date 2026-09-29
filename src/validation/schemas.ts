@@ -96,12 +96,18 @@ const uuidSchema = z
     message: 'Must be a valid RFC 4122 v4 UUID',
   });
 
-const httpUrlSchema = z
+const linkSchema = z
   .string()
-  .url()
-  .refine((url) => url.startsWith('http://') || url.startsWith('https://'), {
-    message: 'URL must use http or https protocol',
-  });
+  .min(1, 'Link must not be empty')
+  .refine(
+    (val) =>
+      /^https?:\/\//i.test(val) || // HTTP/HTTPS URL
+      /^file:\/\//i.test(val) || // file:// URI
+      /^[A-Za-z]:\\/.test(val) || // Windows path: C:\...
+      /^\//.test(val) || // Unix absolute path: /Users/...
+      /^\\\\/.test(val), // UNC path: \\server\share
+    { message: 'Liên kết phải là URL (http/https), đường dẫn thư mục, hoặc file URI.' }
+  );
 
 export const ProjectInputSchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(120, 'Name must be 120 characters or less'),
@@ -111,7 +117,7 @@ export const ProjectInputSchema = z.object({
   status: z.enum(PROJECT_STATUSES).default('Open'),
   opsOwners: tagListSchema.optional(),
   businessAnalysts: tagListSchema.optional(),
-  documentLinks: z.array(httpUrlSchema).optional(),
+  documentLinks: z.array(linkSchema).optional(),
   reminderDate: reminderDateSchema.optional(),
   reminderNote: reminderNoteSchema,
 });
@@ -124,7 +130,7 @@ export const ProjectUpdateSchema = z.object({
   status: z.enum(PROJECT_STATUSES).optional(),
   opsOwners: tagListSchema.optional(),
   businessAnalysts: tagListSchema.optional(),
-  documentLinks: z.array(httpUrlSchema).optional(),
+  documentLinks: z.array(linkSchema).optional(),
   reminderDate: reminderDateSchema.optional(),
   reminderNote: reminderNoteSchema,
 });
@@ -171,7 +177,7 @@ export const TaskInputSchema = z.object({
   jiraKey: jiraKeySchema.optional(),
   opsOwners: tagListSchema.optional(),
   businessAnalysts: tagListSchema.optional(),
-  documentLinks: z.array(httpUrlSchema).optional(),
+  documentLinks: z.array(linkSchema).optional(),
   reminderDate: reminderDateSchema.optional(),
   reminderNote: reminderNoteSchema,
 });
@@ -193,7 +199,7 @@ export const TaskUpdateSchema = z.object({
   jiraKey: jiraKeySchema.optional(),
   opsOwners: tagListSchema.optional(),
   businessAnalysts: tagListSchema.optional(),
-  documentLinks: z.array(httpUrlSchema).optional(),
+  documentLinks: z.array(linkSchema).optional(),
   reminderDate: reminderDateSchema.optional(),
   reminderNote: reminderNoteSchema,
 });

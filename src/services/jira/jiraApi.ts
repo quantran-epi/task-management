@@ -60,6 +60,9 @@ export async function callJiraApi<T>(
     const response = await fetch(url, {
       ...options,
       headers,
+      // ponytail: credentials omit prevents browser from sending Atlassian session cookies
+      // which cause XSRF check failures (403) on direct cross-origin requests
+      credentials: 'omit',
       signal: options.signal ?? AbortSignal.timeout(10000),
     });
 

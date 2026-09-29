@@ -188,7 +188,7 @@ describe('TaskDrawer', () => {
     const addLinkBtn = screen.getByRole('button', { name: /thêm liên kết/i });
     fireEvent.click(addLinkBtn);
 
-    const linkInput = screen.getByPlaceholderText('https://example.com/spec');
+    const linkInput = screen.getByPlaceholderText('https://... hoặc C:\\folder hoặc /path/to/folder');
 
     // Enter invalid javascript: link
     fireEvent.change(linkInput, { target: { value: 'javascript:alert(1)' } });
@@ -196,7 +196,7 @@ describe('TaskDrawer', () => {
 
     // Should display validation error
     expect(
-      await screen.findByText('Liên kết tài liệu phải là URL HTTP hoặc HTTPS hợp lệ.')
+      await screen.findByText('Liên kết phải là URL (http/https), đường dẫn thư mục, hoặc file URI.')
     ).toBeInTheDocument();
   });
 
