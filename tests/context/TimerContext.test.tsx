@@ -52,10 +52,11 @@ describe('TimerContext & useTimer', () => {
     <TimerProvider database={testDb}>{children}</TimerProvider>
   );
 
-  it('throws error when useTimer is used outside TimerProvider', () => {
-    expect(() => renderHook(() => useTimer())).toThrow(
-      'useTimer must be used within a TimerProvider'
-    );
+  it('provides safe fallback when useTimer is used outside TimerProvider', () => {
+    const { result } = renderHook(() => useTimer());
+    expect(result.current.activeTimers).toEqual([]);
+    expect(result.current.getElapsedSeconds('non-existent')).toBe(0);
+    expect(result.current.getTimerForTask('non-existent')).toBeUndefined();
   });
 
   it('starts a timer and computes elapsed seconds from wall clock', async () => {
