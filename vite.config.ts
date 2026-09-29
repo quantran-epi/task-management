@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
@@ -56,5 +56,6 @@ export default defineConfig({
     setupFiles: ['./tests/setup.ts'],
     globals: true,
     fileParallelism: false,
+    exclude: [...configDefaults.exclude, 'proxy/**'],
   },
 });
