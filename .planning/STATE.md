@@ -3,19 +3,19 @@ gsd_state_version: "1.0"
 milestone: v1.1
 milestone_name: Banking IT Enhancements & Jira Integration
 current_phase: "12.1"
-current_phase_name: task-timer-start-pause-finish-per-task-work-session-logs-rel
+current_phase_name: Task timer — start/pause/finish per task, work session logs, reload persistence, multiple concurrent timers, time allocation notifications, spent time aggregations (INSERTED)
 status: executing
-stopped_at: Phase 12.1 UI-SPEC approved
-last_updated: "2026-09-29T02:27:28.748Z"
+stopped_at: Completed 12.1-01-PLAN.md
+last_updated: "2026-09-29T02:57:53.481Z"
 last_activity: 2026-09-29
-last_activity_desc: Phase 12 complete, transitioned to Phase 13
-state_head: 02cea1177fe61156cc2647547767d4cff37819f7
+last_activity_desc: Phase 12.1 execution started
+state_head: e7550489b41b31b5226322f58ac925707f953e1e
 progress:
   total_phases: 6
   completed_phases: 12
   total_plans: 14
-  completed_plans: 11
-  percent: 79
+  completed_plans: 12
+  percent: 86
 ---
 
 # Project State
@@ -25,14 +25,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-27)
 
 **Core value:** Make planned work realistically fit available time by exposing overload early and suggesting feasible daily workload distributions.
-**Current focus:** Phase 12.1 — Task timer, work session logs & spent time tracking
+**Current focus:** Phase 12.1 — Task timer — start/pause/finish per task, work session logs, reload persistence, multiple concurrent timers, time allocation notifications, spent time aggregations (INSERTED)
 
 ## Current Position
 
-Phase: 12.1 (task-timer-start-pause-finish-per-task-work-session-logs-rel) — READY TO EXECUTE
-Plan: Not started
+Phase: 12.1 (Task timer — start/pause/finish per task, work session logs, reload persistence, multiple concurrent timers, time allocation notifications, spent time aggregations (INSERTED)) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
-Last activity: 2026-09-29 — Inserted Phase 12.1 (task timer & spent time tracking) before Phase 13
+Last activity: 2026-09-29 — Phase 12.1 execution started
 
 ### Quick Tasks Completed
 
@@ -71,6 +71,11 @@ Last activity: 2026-09-29 — Inserted Phase 12.1 (task timer & spent time track
 | Phase 12 P02 | 10m | 3 tasks | 7 files |
 | Phase 12 P03 | 12m | 3 tasks | 11 files |
 | 12 | 3 | - | - |
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 12.1 P01 | 15m | 3 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -190,6 +195,9 @@ Decisions logged across v1.0 and v1.1:
 - [Phase 12]: Evaluated proactive alerts in local memory across 5 strict priority tiers: overdue (1), 14-day capacity overload (2), due soon (3), stale tasks (4), and custom reminders (5)
 - [Phase 12]: Enforced immutable alert obligations by rejecting dismissals for overdue tasks and capacity overload alerts
 - [Phase 12]: Auto-pruned expired dismissal keys on write within settings table to prevent unbounded dictionary growth
+- [Phase 12.1]: Dexie schema v5 adds workSessions and activeTimers tables
+- [Phase 12.1]: Backup payload schemaVersion upgraded to 3 with backward compatibility for v1/v2
+- [Phase 12.1]: Cascade deletions atomically purge work sessions and active timers for tasks, milestones, and projects
 
 ### Pending Todos
 
@@ -211,9 +219,9 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-09-29T01:57:30.321Z
-Stopped at: Phase 12.1 UI-SPEC approved
-Resume file: /Users/admin/working/personal/task-management/.planning/phases/12.1-task-timer-start-pause-finish-per-task-work-session-logs-rel/12.1-UI-SPEC.md
+Last session: 2026-09-29T02:57:53.314Z
+Stopped at: Completed 12.1-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 

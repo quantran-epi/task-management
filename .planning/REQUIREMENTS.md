@@ -38,11 +38,11 @@
 
 ### Task Timer & Work Session Logs (Phase 12.1 INSERTED)
 
-- [ ] **TIMER-01**: Dexie SCHEMA_V5 adds `workSessions` and `activeTimers` stores without data loss.
-- [ ] **TIMER-02**: User can create, view, edit, and delete work session logs per task with duration, date, and optional note.
-- [ ] **TIMER-03**: User can start, pause, resume, and finish task timers with real wall-clock delta calculation and reload survival.
-- [ ] **TIMER-04**: System cascades task, milestone, and project deletion to clean up associated work sessions and active timers.
-- [ ] **TIMER-05**: Backup export and restore schemas bump to v3 and serialize `workSessions` with cryptographic validation.
+- [x] **TIMER-01**: Dexie SCHEMA_V5 adds `workSessions` and `activeTimers` stores without data loss.
+- [x] **TIMER-02**: User can create, view, edit, and delete work session logs per task with duration, date, and optional note.
+- [x] **TIMER-03**: User can start, pause, resume, and finish task timers with real wall-clock delta calculation and reload survival.
+- [x] **TIMER-04**: System cascades task, milestone, and project deletion to clean up associated work sessions and active timers.
+- [x] **TIMER-05**: Backup export and restore schemas bump to v3 and serialize `workSessions` with cryptographic validation.
 - [ ] **TIMER-06**: User can run multiple concurrent timers simultaneously with reactive UI ticker loop.
 - [ ] **TIMER-07**: System alerts user with 3-tier allocation warnings (task spent >= estimate toast, daily overload drawer alert, daily feasibility risk).
 - [ ] **TIMER-08**: User can view and control active timers via AppHeader capsule widget and multi-timer dropdown badge.
@@ -89,11 +89,11 @@
 | NOTIF-03 | Phase 12 | Complete |
 | NOTIF-04 | Phase 12 | Complete |
 | NOTIF-05 | Phase 12 | Complete |
-| TIMER-01 | Phase 12.1 | Pending |
-| TIMER-02 | Phase 12.1 | Pending |
-| TIMER-03 | Phase 12.1 | Pending |
-| TIMER-04 | Phase 12.1 | Pending |
-| TIMER-05 | Phase 12.1 | Pending |
+| TIMER-01 | Phase 12.1 | Complete |
+| TIMER-02 | Phase 12.1 | Complete |
+| TIMER-03 | Phase 12.1 | Complete |
+| TIMER-04 | Phase 12.1 | Complete |
+| TIMER-05 | Phase 12.1 | Complete |
 | TIMER-06 | Phase 12.1 | Pending |
 | TIMER-07 | Phase 12.1 | Pending |
 | TIMER-08 | Phase 12.1 | Pending |
