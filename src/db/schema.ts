@@ -42,3 +42,10 @@ export const SCHEMA_V4 = {
   backupMetadata: 'id, timestamp',
 } as const;
 
+export const SCHEMA_V5 = {
+  ...SCHEMA_V4,
+  workSessions: 'id, taskId, startTime, endTime, date',
+  activeTimers: 'taskId, status',
+} as const;
+
+

@@ -215,6 +215,31 @@ export const PlannedAllocationInputSchema = z.object({
   allocatedMinutes: z.number().int().min(1).max(1440),
 });
 
+export const WorkSessionInputSchema = z
+  .object({
+    taskId: uuidSchema,
+    startTime: z.string().datetime({ message: 'startTime must be a valid ISO 8601 string' }),
+    endTime: z.string().datetime({ message: 'endTime must be a valid ISO 8601 string' }).optional(),
+    durationMinutes: z
+      .number()
+      .int()
+      .min(1, 'Thời lượng tối thiểu 1 phút')
+      .max(1440, 'Thời lượng tối đa 1440 phút (24h)'),
+    note: z.string().trim().max(500, 'Ghi chú tối đa 500 ký tự').optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.endTime) {
+        return new Date(data.endTime).getTime() >= new Date(data.startTime).getTime();
+      }
+      return true;
+    },
+    {
+      message: 'endTime must be greater than or equal to startTime',
+      path: ['endTime'],
+    }
+  );
+
 export type ProjectInput = z.input<typeof ProjectInputSchema>;
 export type ProjectUpdate = z.input<typeof ProjectUpdateSchema>;
 export type MilestoneInput = z.input<typeof MilestoneInputSchema>;
@@ -224,4 +249,6 @@ export type TaskUpdate = z.input<typeof TaskUpdateSchema>;
 export type CapacityRuleInput = z.input<typeof CapacityRuleInputSchema>;
 export type CapacityOverrideInput = z.input<typeof CapacityOverrideInputSchema>;
 export type PlannedAllocationInput = z.input<typeof PlannedAllocationInputSchema>;
+export type WorkSessionInput = z.input<typeof WorkSessionInputSchema>;
+
 

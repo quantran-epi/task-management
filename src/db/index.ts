@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import { SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4 } from './schema';
+import { SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5 } from './schema';
 import type {
   Project,
   Milestone,
@@ -9,6 +9,8 @@ import type {
   PlannedAllocation,
   Setting,
   BackupMetadata,
+  WorkSession,
+  ActiveTimer,
 } from '../types/models';
 
 export class TaskPlannerDatabase extends Dexie {
@@ -20,6 +22,8 @@ export class TaskPlannerDatabase extends Dexie {
   plannedAllocations!: Table<PlannedAllocation, string>;
   settings!: Table<Setting, string>;
   backupMetadata!: Table<BackupMetadata, string>;
+  workSessions!: Table<WorkSession, string>;
+  activeTimers!: Table<ActiveTimer, string>;
 
   constructor(databaseName = 'PersonalTaskPlannerDB') {
     super(databaseName);
@@ -58,6 +62,8 @@ export class TaskPlannerDatabase extends Dexie {
     this.version(3).stores(SCHEMA_V3);
 
     this.version(4).stores(SCHEMA_V4);
+
+    this.version(5).stores(SCHEMA_V5);
 
     // Multi-tab concurrency handlers (DATA-04, D-09, D-10)
     this.on('blocked', () => {
