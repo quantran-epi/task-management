@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Banking IT Enhancements & Jira Integration
-status: executing
-stopped_at: Completed 12.2-03-PLAN.md
-last_updated: "2026-09-29T14:15:00.000Z"
+status: verifying
+stopped_at: Completed 12.2-04-PLAN.md
+last_updated: "2026-09-29T15:52:44.493Z"
 last_activity: 2026-09-29 -- Phase 12.2 execution completed
 progress:
   total_phases: 7
   completed_phases: 6
-  total_plans: 18
-  completed_plans: 18
-  percent: 75
+  total_plans: 19
+  completed_plans: 19
+  percent: 86
 current_phase: 12.2
 current_phase_name: Multiple Reminders with Time, Notification Settings, Table Customization & Sidebar Persistence
 ---
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-27)
 
 Phase: 12.2 (multiple-reminders-with-time-notification-settings-table-cus) — COMPLETED
 Plan: 3 of 3
-Status: Phase complete
+Status: Phase complete — ready for verification
 Last activity: 2026-09-29 -- Phase 12.2 execution completed
 
 ### Quick Tasks Completed
@@ -80,6 +80,7 @@ Last activity: 2026-09-29 -- Phase 12.2 execution completed
 | Phase 12.2 P01 | 15m | 3 tasks | 14 files |
 | Phase 12.2 P02 | 14m | 3 tasks | 9 files |
 | Phase 12.2 P03 | 24m | 3 tasks | 4 files |
+| Phase 12.2 P04 | 18m | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -217,6 +218,10 @@ Decisions logged across v1.0 and v1.1:
 - [Phase 12.2]: Initialize visibleColumns state synchronously in TaskTable using planner:task_table_columns with permanent enforcement of name column
 - [Phase 12.2]: Support 3-state cycling (ascend -> descend -> reset) on TaskTable column sorters for name, status, priority, estimateMinutes, and deadline
 - [Phase 12.2]: Persist desktop Sider collapsed state under planner:sidebar_collapsed while ignoring responsive auto-collapse triggers
+- [Phase 12.2]: Standardize desktop notification dispatch via sendDesktopNotification supporting Service Worker showNotification and window.Notification fallback with exactOptionalPropertyTypes compliance
+- [Phase 12.2]: Add 10-second interval clock state ticker in useNotifications feeding currentTime and todayDate into evaluateNotifications for reactive reminder triggering without page reloads
+- [Phase 12.2]: Deduplicate real-time multi-category alerts (reminders, overdue, overload, timer) via notifiedAlertIdsRef and seed non-reminders on initial startup summary to prevent notification storms
+- [Phase 12.2]: Add test notification button and immediate toggle confirmation in NotificationSettingsCard to give users instant visual proof of desktop banner operation
 
 ### Pending Todos
 
@@ -238,8 +243,8 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-09-29T14:15:00.000Z
-Stopped at: Completed 12.2-03-PLAN.md
+Last session: 2026-09-29T15:52:44.489Z
+Stopped at: Completed 12.2-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

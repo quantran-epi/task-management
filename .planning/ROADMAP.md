@@ -28,7 +28,7 @@
 - [x] **Phase 11: Jira Cloud Integration & Task Lifecycle** - Jira Cloud REST API v3 connection settings with CORS proxy support, connection diagnostics, issue creation, key linking, and status transitions. (completed 2026-09-28)
 - [x] **Phase 12: In-App Notifications, Proactive Alerts & Custom Reminders** - In-app header alert badge and drawer, custom item reminders, and automated alerts for overdue tasks, imminent deadlines, capacity overload, and stale work. (completed 2026-09-29)
 - [x] **Phase 12.1: Task Timer, Work Session Logs & Spent Time Tracking** (INSERTED) - Start/pause/finish task timer, work session persistence across reload, concurrent timers, allocation limit notifications, remaining day feasibility alerts, and spent time aggregation per task, milestone, and project. (completed 2026-09-29)
-- [ ] **Phase 12.2: Multiple Reminders with Time, Notification Settings, Table Customization & Sidebar Persistence** (INSERTED) - Multiple reminders with optional time per item, persistent browser notifications (no auto-dismiss), configurable notification settings, table column visibility picker and sortable headers, and persisted sidebar collapse state.
+- [x] **Phase 12.2: Multiple Reminders with Time, Notification Settings, Table Customization & Sidebar Persistence** (INSERTED) - Multiple reminders with optional time per item, persistent browser notifications (no auto-dismiss), configurable notification settings, table column visibility picker and sortable headers, and persisted sidebar collapse state. (completed 2026-09-29)
 - [ ] **Phase 13: Enhanced Workload Analytics & Milestone Burndown** - Dedicated analytics view with lightweight SVG vector burndown, completion velocity metrics, and stakeholder workload allocation breakdowns.
 
 ## Phase Details
@@ -180,12 +180,12 @@ Plans:
   4. TaskTable includes a column visibility control (show/hide columns) and clickable header column sorting, persisted in client storage.
   5. AppShell Sider remembers collapsed/expanded state across browser reloads.
 
-**Plans:** 4/4 plans (1 gap closure plan)
+**Plans:** 4/4 plans complete
 Plans:
 **Wave 1**
 
 - [x] 12.2-01-PLAN.md — Schema V6, models, validation schemas, multi-reminder evaluation engine, and form list controls (Wave 1)
-- [ ] 12.2-04-PLAN.md — Real-time clock ticker in useNotifications, unified sendDesktopNotification with ServiceWorker support, and multi-category desktop alert dispatch (Gap Closure)
+- [x] 12.2-04-PLAN.md — Real-time clock ticker in useNotifications, unified sendDesktopNotification with ServiceWorker support, and multi-category desktop alert dispatch (Gap Closure)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -223,5 +223,5 @@ Plans:
 | 11. Jira Cloud Integration & Task Lifecycle | v1.1 | 3/3 | Complete    | 2026-09-28 |
 | 12. In-App Notifications, Proactive Alerts & Custom Reminders | v1.1 | 3/3 | Complete    | 2026-09-29 |
 | 12.1. Task Timer, Work Session Logs & Spent Time Tracking | v1.1 | 4/4 | Complete    | 2026-09-29 |
-| 12.2. Multiple Reminders with Time, Notification Settings, Table Customization & Sidebar Persistence | v1.1 | 3/4 | In Progress | - |
+| 12.2. Multiple Reminders with Time, Notification Settings, Table Customization & Sidebar Persistence | v1.1 | 4/4 | Complete   | 2026-09-29 |
 | 13. Enhanced Workload Analytics & Milestone Burndown | v1.1 | 0/0 | Not started | - |
