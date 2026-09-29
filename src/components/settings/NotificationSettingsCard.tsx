@@ -10,6 +10,7 @@ import {
   Checkbox,
   Row,
   Col,
+  Button,
   message,
 } from 'antd';
 import {
@@ -19,6 +20,7 @@ import {
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
+import { sendDesktopNotification } from '../../utils/desktopNotification';
 import {
   NOTIFICATION_SETTINGS_KEY,
   DEFAULT_NOTIFICATION_SETTINGS,
@@ -101,6 +103,11 @@ export const NotificationSettingsCard: React.FC<NotificationSettingsCardProps> =
       if (Notification.permission === 'granted') {
         await saveSettings({ browserNotificationsEnabled: true });
         message.success('Đã bật thông báo trình duyệt.');
+        await sendDesktopNotification({
+          title: 'Task Planner - Thông báo trình duyệt',
+          body: 'Thông báo màn hình đã được kích hoạt thành công.',
+          requireInteraction: settings.requireInteractionEnabled,
+        });
         return;
       }
 
@@ -109,6 +116,11 @@ export const NotificationSettingsCard: React.FC<NotificationSettingsCardProps> =
         if (perm === 'granted') {
           await saveSettings({ browserNotificationsEnabled: true });
           message.success('Đã bật thông báo trình duyệt.');
+          await sendDesktopNotification({
+            title: 'Task Planner - Thông báo trình duyệt',
+            body: 'Thông báo màn hình đã được kích hoạt thành công.',
+            requireInteraction: settings.requireInteractionEnabled,
+          });
         } else {
           setPermissionBlocked(true);
           await saveSettings({ browserNotificationsEnabled: false });
@@ -188,6 +200,34 @@ export const NotificationSettingsCard: React.FC<NotificationSettingsCardProps> =
             data-testid="require-interaction-switch"
             aria-label="Giữ thông báo trên màn hình cho đến khi đóng thủ công"
           />
+        </div>
+
+        <div style={{ marginTop: 16 }}>
+          <Button
+            data-testid="test-notification-button"
+            onClick={async () => {
+              if (typeof window === 'undefined' || !('Notification' in window)) {
+                message.warning('Trình duyệt của bạn không hỗ trợ thông báo màn hình.');
+                return;
+              }
+              if (Notification.permission !== 'granted') {
+                message.warning('Vui lòng cấp quyền thông báo trình duyệt trước.');
+                return;
+              }
+              const sent = await sendDesktopNotification({
+                title: 'Task Planner - Thông báo thử nghiệm',
+                body: 'Thông báo màn hình đang hoạt động với cài đặt của bạn.',
+                requireInteraction: settings.requireInteractionEnabled,
+              });
+              if (sent) {
+                message.success('Đã gửi thông báo thử nghiệm.');
+              } else {
+                message.error('Không thể gửi thông báo thử nghiệm.');
+              }
+            }}
+          >
+            Gửi thông báo thử nghiệm
+          </Button>
         </div>
 
         {isDenied && (

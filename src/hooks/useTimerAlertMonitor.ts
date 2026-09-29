@@ -5,6 +5,12 @@ import { db, type TaskPlannerDatabase } from '../db';
 import { useTimer } from '../hooks/useTimer';
 import { getTodayDateString } from '../utils/date';
 import { evaluateLiveTaskDailyAllocationAlert } from '../utils/timerAlerts';
+import { sendDesktopNotification } from '../utils/desktopNotification';
+import {
+  NOTIFICATION_SETTINGS_KEY,
+  DEFAULT_NOTIFICATION_SETTINGS,
+  type NotificationSettings,
+} from '../types/notifications';
 
 export interface UseTimerAlertMonitorOptions {
   database?: TaskPlannerDatabase;
@@ -32,6 +38,7 @@ export function useTimerAlertMonitor(options: UseTimerAlertMonitorOptions = {}):
         todaySpentMap: new Map<string, number>(),
         totalSpentMap: new Map<string, number>(),
         desktopNotifEnabled: false,
+        requireInteractionEnabled: DEFAULT_NOTIFICATION_SETTINGS.requireInteractionEnabled,
       };
     }
 
@@ -46,17 +53,37 @@ export function useTimerAlertMonitor(options: UseTimerAlertMonitorOptions = {}):
         todaySpentMap: new Map<string, number>(),
         totalSpentMap: new Map<string, number>(),
         desktopNotifEnabled: false,
+        requireInteractionEnabled: DEFAULT_NOTIFICATION_SETTINGS.requireInteractionEnabled,
       };
     }
 
-    const [tasks, allocations, todaySessions, allSessions, notifSetting] =
+    const [tasks, allocations, todaySessions, allSessions, legacySetting, notifSettingRecord] =
       await Promise.all([
         targetDb.tasks.bulkGet(runningTaskIds),
         targetDb.plannedAllocations.where('date').equals(todayStr).toArray(),
         targetDb.workSessions.where('date').equals(todayStr).toArray(),
         targetDb.workSessions.where('taskId').anyOf(runningTaskIds).toArray(),
         targetDb.settings.get('browserNotificationsEnabled'),
+        targetDb.settings.get(NOTIFICATION_SETTINGS_KEY),
       ]);
+
+    const rawSettings =
+      notifSettingRecord?.value && typeof notifSettingRecord.value === 'object'
+        ? (notifSettingRecord.value as Partial<NotificationSettings>)
+        : undefined;
+
+    const resolvedSettings: NotificationSettings = {
+      ...DEFAULT_NOTIFICATION_SETTINGS,
+      ...rawSettings,
+      enabledCategories: {
+        ...DEFAULT_NOTIFICATION_SETTINGS.enabledCategories,
+        ...(rawSettings?.enabledCategories ?? {}),
+      },
+    };
+
+    const isEnabled =
+      rawSettings?.browserNotificationsEnabled ?? legacySetting?.value === true;
+    const timerCategoryEnabled = resolvedSettings.enabledCategories.timer !== false;
 
     const tasksMap = new Map();
     for (const t of tasks) {
@@ -87,7 +114,8 @@ export function useTimerAlertMonitor(options: UseTimerAlertMonitorOptions = {}):
       allocationsMap,
       todaySpentMap,
       totalSpentMap,
-      desktopNotifEnabled: notifSetting?.value !== false,
+      desktopNotifEnabled: isEnabled && timerCategoryEnabled,
+      requireInteractionEnabled: resolvedSettings.requireInteractionEnabled,
     };
   }, [targetDb, activeTimers, todayStr]);
 
@@ -101,8 +129,14 @@ export function useTimerAlertMonitor(options: UseTimerAlertMonitorOptions = {}):
     }
 
     if (!liveMonitoringData) return;
-    const { tasksMap, allocationsMap, todaySpentMap, totalSpentMap, desktopNotifEnabled } =
-      liveMonitoringData;
+    const {
+      tasksMap,
+      allocationsMap,
+      todaySpentMap,
+      totalSpentMap,
+      desktopNotifEnabled,
+      requireInteractionEnabled,
+    } = liveMonitoringData;
 
     for (const timer of activeTimers) {
       if (timer.status !== 'running') continue;
@@ -129,25 +163,15 @@ export function useTimerAlertMonitor(options: UseTimerAlertMonitorOptions = {}):
         // 1. Ant Design in-app message
         message.warning(alert.message);
 
-        // 2. Desktop notification if granted
-        if (
-          desktopNotifEnabled &&
-          typeof window !== 'undefined' &&
-          'Notification' in window &&
-          window.Notification.permission === 'granted'
-        ) {
-          try {
-            const notif = new window.Notification('Vượt thời gian phân bổ', {
-              body: alert.message,
-              icon: '/task-management/favicon.ico',
-            });
-            notif.onclick = () => {
-              window.focus();
-              notif.close();
-            };
-          } catch (err) {
+        // 2. Desktop notification if granted and enabled
+        if (desktopNotifEnabled) {
+          sendDesktopNotification({
+            title: 'Vượt thời gian phân bổ',
+            body: alert.message,
+            requireInteraction: requireInteractionEnabled,
+          }).catch((err) => {
             console.warn('Live timer desktop notification failed:', err);
-          }
+          });
         }
       }
     }

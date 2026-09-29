@@ -27,6 +27,10 @@ describe('NotificationSettingsCard (D-10, D-11, NOTIF-08)', () => {
     expect(screen.getByTestId('stale-task-days-select')).toBeDefined();
     expect(screen.getByTestId('capacity-overload-select')).toBeDefined();
 
+    // Test notification button
+    expect(screen.getByTestId('test-notification-button')).toBeDefined();
+    expect(screen.getByText(/Gửi thông báo thử nghiệm/i)).toBeDefined();
+
     // Category checkboxes
     expect(screen.getByTestId('category-checkbox-overdue')).toBeDefined();
     expect(screen.getByTestId('category-checkbox-dueSoon')).toBeDefined();
@@ -156,6 +160,33 @@ describe('NotificationSettingsCard (D-10, D-11, NOTIF-08)', () => {
       // Existing custom thresholds must NOT be overwritten by DEFAULT_NOTIFICATION_SETTINGS
       expect(val?.dueSoonDays).toBe(5);
       expect(val?.staleTaskDays).toBe(14);
+    });
+  });
+
+  it('sends test desktop notification when test notification button is clicked with granted permission', async () => {
+    const mockNotification = vi.fn();
+    vi.stubGlobal(
+      'Notification',
+      Object.assign(mockNotification, {
+        permission: 'granted',
+        requestPermission: vi.fn().mockResolvedValue('granted'),
+      })
+    );
+
+    render(<NotificationSettingsCard db={db} />);
+    const testButton = screen.getByTestId('test-notification-button');
+
+    fireEvent.click(testButton);
+
+    await waitFor(() => {
+      expect(mockNotification).toHaveBeenCalledTimes(1);
+      expect(mockNotification).toHaveBeenCalledWith(
+        'Task Planner - Thông báo thử nghiệm',
+        expect.objectContaining({
+          body: expect.stringContaining('Thông báo màn hình đang hoạt động'),
+          requireInteraction: true,
+        })
+      );
     });
   });
 });

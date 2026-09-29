@@ -7,6 +7,10 @@ import { TimerContext, type TimerContextValue } from '../../src/context/TimerCon
 import { TaskPlannerDatabase } from '../../src/db';
 import 'fake-indexeddb/auto';
 import { getTodayDateString } from '../../src/utils/date';
+import {
+  NOTIFICATION_SETTINGS_KEY,
+  DEFAULT_NOTIFICATION_SETTINGS,
+} from '../../src/types/notifications';
 
 describe('useTimerAlertMonitor', () => {
   let testDb: TaskPlannerDatabase;
@@ -103,10 +107,11 @@ describe('useTimerAlertMonitor', () => {
       expect.stringContaining('vượt quá thời gian phân bổ (5m)')
     );
 
-    // Verify desktop notification dispatched
+    // Verify desktop notification dispatched with requireInteraction: true
     expect(notificationInstances.length).toBe(1);
     expect(notificationInstances[0].title).toBe('Vượt thời gian phân bổ');
     expect(notificationInstances[0].options.body).toContain('Task 5 minutes planned');
+    expect(notificationInstances[0].options.requireInteraction).toBe(true);
 
     // On next tick (e.g. 301 seconds), alert should NOT repeat
     timerValue.getElapsedSeconds = (id) => (id === 'task-alloc-5' ? 301 : 0);
@@ -180,5 +185,87 @@ describe('useTimerAlertMonitor', () => {
     });
 
     expect(warningSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('suppresses desktop notification when timer category is disabled in notification settings', async () => {
+    const warningSpy = vi.spyOn(message, 'warning').mockImplementation((() => {}) as any);
+
+    const notificationInstances: any[] = [];
+    class MockNotification {
+      static permission = 'granted';
+      title: string;
+      options: any;
+      constructor(title: string, options: any) {
+        this.title = title;
+        this.options = options;
+        notificationInstances.push(this);
+      }
+      close() {}
+    }
+    vi.stubGlobal('Notification', MockNotification);
+
+    await testDb.settings.put({
+      key: NOTIFICATION_SETTINGS_KEY,
+      value: {
+        ...DEFAULT_NOTIFICATION_SETTINGS,
+        browserNotificationsEnabled: true,
+        enabledCategories: {
+          ...DEFAULT_NOTIFICATION_SETTINGS.enabledCategories,
+          timer: false, // Timer disabled
+        },
+      },
+    });
+
+    await testDb.tasks.put({
+      id: 'task-no-timer-notif',
+      name: 'Task with timer notif disabled',
+      status: 'Open',
+      progress: 0,
+      priority: 'High',
+      estimateMinutes: 10,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    await testDb.plannedAllocations.put({
+      id: 'alloc-no-notif',
+      taskId: 'task-no-timer-notif',
+      date: today,
+      allocatedMinutes: 2,
+    });
+
+    const runningTimer = {
+      taskId: 'task-no-timer-notif',
+      status: 'running' as const,
+      startedAt: Date.now() - 150000,
+      accumulatedMs: 0,
+      sessionStartTime: new Date().toISOString(),
+    };
+
+    const timerValue: TimerContextValue = {
+      activeTimers: [runningTimer],
+      getTimerForTask: (id) => (id === 'task-no-timer-notif' ? runningTimer : undefined),
+      getElapsedSeconds: (id) => (id === 'task-no-timer-notif' ? 150 : 0),
+      startTimer: vi.fn(),
+      pauseTimer: vi.fn(),
+      finishTimer: vi.fn(),
+      cancelTimer: vi.fn(),
+      tick: 0,
+    };
+
+    const wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+      <TimerContext.Provider value={timerValue}>{children}</TimerContext.Provider>
+    );
+
+    renderHook(() => useTimerAlertMonitor({ database: testDb }), { wrapper });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    });
+
+    // In-app warning still appears
+    expect(warningSpy).toHaveBeenCalledTimes(1);
+    // Desktop notification must be suppressed
+    expect(notificationInstances.length).toBe(0);
   });
 });

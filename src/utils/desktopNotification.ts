@@ -24,7 +24,21 @@ export async function sendDesktopNotification(
     return false;
   }
 
-  const iconUrl = payload.icon ?? '/task-management/favicon.ico';
+  const options: NotificationOptions = {
+    icon: payload.icon ?? '/task-management/favicon.ico',
+  };
+  if (payload.body !== undefined) {
+    options.body = payload.body;
+  }
+  if (payload.tag !== undefined) {
+    options.tag = payload.tag;
+  }
+  if (payload.requireInteraction !== undefined) {
+    options.requireInteraction = payload.requireInteraction;
+  }
+  if (payload.data !== undefined) {
+    options.data = payload.data;
+  }
 
   try {
     // 1. PWA Service Worker branch
@@ -37,13 +51,7 @@ export async function sendDesktopNotification(
         const registration = await Promise.race([swPromise, timeoutPromise]);
 
         if (registration && typeof registration.showNotification === 'function') {
-          await registration.showNotification(payload.title, {
-            body: payload.body,
-            icon: iconUrl,
-            tag: payload.tag,
-            requireInteraction: payload.requireInteraction,
-            data: payload.data,
-          });
+          await registration.showNotification(payload.title, options);
           return true;
         }
       } catch (swErr) {
@@ -53,13 +61,7 @@ export async function sendDesktopNotification(
 
     // 2. Window Notification fallback
     if (typeof window.Notification === 'function') {
-      const notif = new window.Notification(payload.title, {
-        body: payload.body,
-        icon: iconUrl,
-        tag: payload.tag,
-        requireInteraction: payload.requireInteraction,
-        data: payload.data,
-      });
+      const notif = new window.Notification(payload.title, options);
 
       notif.onclick = () => {
         try {

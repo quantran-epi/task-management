@@ -1,12 +1,13 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import dayjs from 'dayjs';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
+import { sendDesktopNotification } from '../utils/desktopNotification';
 import {
   NOTIFICATION_SETTINGS_KEY,
   DEFAULT_NOTIFICATION_SETTINGS,
   type NotificationState,
   type NotificationSettings,
+  type AlertCategory,
 } from '../types/notifications';
 
 export const SESSION_NOTIFICATION_SHOWN_KEY = 'desktop_notification_shown';
@@ -16,17 +17,35 @@ export interface UseDesktopNotificationOptions {
   db?: TaskPlannerDatabase;
 }
 
+function isCategoryEnabled(category: AlertCategory, settings: NotificationSettings): boolean {
+  switch (category) {
+    case 'reminder':
+      return settings.enabledCategories.reminders;
+    case 'overdue':
+      return settings.enabledCategories.overdue;
+    case 'overload':
+      return settings.enabledCategories.overload;
+    case 'due-soon':
+      return settings.enabledCategories.dueSoon;
+    case 'stale':
+      return settings.enabledCategories.stale;
+    default:
+      return true;
+  }
+}
+
 /**
  * Triggers browser desktop notifications (D-09, D-12, D-18, D-19, NOTIF-07, NOTIF-08).
  * 1. Startup summary: aggregated counts on initial load, throttled once per session via sessionStorage (T-12-07, T-12-08).
- * 2. Live reminder ticker: checks every 30s for minute-exact reminders and dispatches discrete alerts.
- * Respects user preferences in db.settings, checks Notification.permission, and sets requireInteraction.
+ * 2. Real-time alert dispatch: dispatches discrete alerts for reminders and newly active alerts across all categories.
+ * Deduplicates dispatched alerts using notifiedAlertIdsRef to avoid notification storms.
  */
 export function useDesktopNotification({
   notifications,
   db = defaultDb,
 }: UseDesktopNotificationOptions): void {
-  const notifiedRemindersRef = useRef<Set<string>>(new Set());
+  const notifiedAlertIdsRef = useRef<Set<string>>(new Set());
+  const initialLoadHandledRef = useRef(false);
 
   const settingsData = useLiveQuery(
     async () => {
@@ -64,8 +83,7 @@ export function useDesktopNotification({
     }
   );
 
-  // 1. Startup aggregated summary notification
-  useEffect(() => {
+  const checkAndDispatchAlerts = useCallback(() => {
     if (typeof window === 'undefined' || !('Notification' in window)) {
       return;
     }
@@ -73,116 +91,91 @@ export function useDesktopNotification({
     if (
       !settingsData.isEnabled ||
       Notification.permission !== 'granted' ||
-      notifications.isLoading ||
-      notifications.activeCount === 0
+      notifications.isLoading
     ) {
       return;
     }
 
-    // T-12-08: Throttle to once per browser session
-    try {
-      const alreadyShown = sessionStorage.getItem(SESSION_NOTIFICATION_SHOWN_KEY);
-      if (alreadyShown === 'true') {
-        return;
-      }
-    } catch {
-      // sessionStorage might be restricted in some iframe or private contexts
-      return;
-    }
+    // 1. Startup summary: check once on initial active load
+    if (!initialLoadHandledRef.current) {
+      initialLoadHandledRef.current = true;
 
-    const overdue = notifications.categoryCounts.overdue;
-    const overload = notifications.categoryCounts.overload;
-    const stale = notifications.categoryCounts.stale;
-    const reminders =
-      notifications.categoryCounts.reminder + notifications.categoryCounts['due-soon'];
-    const totalPending = reminders + stale;
-
-    // T-12-07: Use summary counts rather than sensitive task/project descriptions
-    const summaryText = `Bạn có ${overdue} việc quá hạn, ${overload} ngày quá tải, và ${totalPending} việc cần xử lý.`;
-
-    try {
-      const desktopNotif = new window.Notification('Task Planner', {
-        body: summaryText,
-        icon: '/task-management/favicon.ico',
-        requireInteraction: settingsData.settings.requireInteractionEnabled,
-      });
-
-      desktopNotif.onclick = () => {
-        window.focus();
-        desktopNotif.close();
-      };
-
-      sessionStorage.setItem(SESSION_NOTIFICATION_SHOWN_KEY, 'true');
-    } catch (err) {
-      console.warn('Desktop notification dispatch failed:', err);
-    }
-  }, [
-    settingsData.isEnabled,
-    settingsData.settings.requireInteractionEnabled,
-    notifications.isLoading,
-    notifications.activeCount,
-    notifications.categoryCounts,
-  ]);
-
-  // 2. Live reminder interval ticker (checks every 30s for minute-exact alerts)
-  useEffect(() => {
-    if (typeof window === 'undefined' || !('Notification' in window)) {
-      return;
-    }
-
-    const checkLiveReminders = () => {
-      if (
-        !settingsData.isEnabled ||
-        Notification.permission !== 'granted' ||
-        notifications.isLoading ||
-        !settingsData.settings.enabledCategories.reminders
-      ) {
-        return;
+      let alreadyShown = false;
+      try {
+        alreadyShown = sessionStorage.getItem(SESSION_NOTIFICATION_SHOWN_KEY) === 'true';
+      } catch {
+        // sessionStorage may be restricted in private/sandboxed contexts
       }
 
-      const now = dayjs();
-      const currentDate = now.format('YYYY-MM-DD');
-      const currentClock = now.format('HH:mm');
+      if (!alreadyShown && notifications.activeCount > 0) {
+        const overdue = notifications.categoryCounts.overdue;
+        const overload = notifications.categoryCounts.overload;
+        const stale = notifications.categoryCounts.stale;
+        const reminders =
+          notifications.categoryCounts.reminder + notifications.categoryCounts['due-soon'];
+        const totalPending = reminders + stale;
 
-      for (const item of notifications.items) {
-        if (item.category !== 'reminder' || !item.date) continue;
-        const parts = item.date.split(' ');
-        if (parts.length === 2 && parts[0] && parts[1]) {
-          const timePart = parts[0];
-          const datePart = parts[1];
-          if (datePart === currentDate && timePart <= currentClock) {
-            const reminderKey = `${item.id}:${datePart}:${timePart}`;
-            if (notifiedRemindersRef.current.has(reminderKey)) continue;
+        const summaryText = `Bạn có ${overdue} việc quá hạn, ${overload} ngày quá tải, và ${totalPending} việc cần xử lý.`;
 
-            try {
-              const notif = new window.Notification(item.title, {
-                body: item.subtitle || 'Đã đến giờ nhắc nhở!',
-                icon: '/task-management/favicon.ico',
-                requireInteraction: settingsData.settings.requireInteractionEnabled,
-              });
+        sendDesktopNotification({
+          title: 'Task Planner',
+          body: summaryText,
+          requireInteraction: settingsData.settings.requireInteractionEnabled,
+        });
 
-              notif.onclick = () => {
-                window.focus();
-                notif.close();
-              };
+        try {
+          sessionStorage.setItem(SESSION_NOTIFICATION_SHOWN_KEY, 'true');
+        } catch {
+          // ignore
+        }
 
-              notifiedRemindersRef.current.add(reminderKey);
-            } catch (err) {
-              console.warn('Live reminder notification failed:', err);
-            }
+        // Seed notifiedAlertIdsRef with existing non-reminder items to prevent spamming
+        // OS notifications for all backlog tasks on startup summary
+        for (const item of notifications.items) {
+          if (item.category !== 'reminder') {
+            notifiedAlertIdsRef.current.add(item.id);
           }
         }
       }
-    };
+    }
 
-    checkLiveReminders();
-    const intervalId = window.setInterval(checkLiveReminders, 30000);
-    return () => window.clearInterval(intervalId);
+    // 2. Real-time alert dispatch across all enabled categories
+    for (const item of notifications.items) {
+      if (!isCategoryEnabled(item.category, settingsData.settings)) {
+        continue;
+      }
+
+      if (notifiedAlertIdsRef.current.has(item.id)) {
+        continue;
+      }
+
+      const title =
+        item.category === 'reminder'
+          ? item.title
+          : `[${item.tagLabel || 'Cảnh báo'}] ${item.title}`;
+      const body = item.subtitle || item.tagLabel || 'Thông báo từ Task Planner';
+
+      sendDesktopNotification({
+        title,
+        body,
+        tag: item.id,
+        requireInteraction: settingsData.settings.requireInteractionEnabled,
+      });
+
+      notifiedAlertIdsRef.current.add(item.id);
+    }
   }, [
     settingsData.isEnabled,
-    settingsData.settings.requireInteractionEnabled,
-    settingsData.settings.enabledCategories.reminders,
+    settingsData.settings,
     notifications.isLoading,
+    notifications.activeCount,
+    notifications.categoryCounts,
     notifications.items,
   ]);
+
+  useEffect(() => {
+    checkAndDispatchAlerts();
+    const intervalId = window.setInterval(checkAndDispatchAlerts, 10000);
+    return () => window.clearInterval(intervalId);
+  }, [checkAndDispatchAlerts]);
 }
