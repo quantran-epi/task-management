@@ -6,10 +6,12 @@ import type {
   CapacityRule,
   CapacityOverride,
   PlannedAllocation,
+  WorkSession,
 } from '../types/models';
 import type { AlertNotificationItem } from '../types/notifications';
 import { getEffectiveDailyCapacity, calculateDayMetrics } from './capacity';
 import { isTaskActive } from '../db/repositories/allocationRepo';
+import { evaluateDailyCapacitySpentAlert } from './timerAlerts';
 
 export interface EvaluateNotificationsParams {
   tasks: Task[];
@@ -18,6 +20,7 @@ export interface EvaluateNotificationsParams {
   rules: CapacityRule[];
   overrides: CapacityOverride[];
   allocations: PlannedAllocation[];
+  workSessions?: WorkSession[] | undefined;
   dismissedMap: Record<string, string>;
   todayDate: string;
 }
@@ -76,6 +79,15 @@ export function evaluateNotifications(params: EvaluateNotificationsParams): Aler
     }
   }
 
+  // Work session spent minutes by date
+  const spentByDate = new Map<string, number>();
+  if (params.workSessions && params.workSessions.length > 0) {
+    for (const session of params.workSessions) {
+      const current = spentByDate.get(session.date) ?? 0;
+      spentByDate.set(session.date, current + session.durationMinutes);
+    }
+  }
+
   for (let i = 0; i <= 14; i++) {
     const checkDate = dayjs(todayDate, 'YYYY-MM-DD').add(i, 'day').format('YYYY-MM-DD');
     const capMinutes = getEffectiveDailyCapacity(checkDate, rules, overrides);
@@ -109,6 +121,15 @@ export function evaluateNotifications(params: EvaluateNotificationsParams): Aler
         canDismiss: false,
         priorityOrder: 2,
       });
+    }
+
+    // Check if recorded work session spent time exceeded daily capacity (TIMER-06, D-07)
+    const daySpent = spentByDate.get(checkDate) ?? 0;
+    if (daySpent > 0) {
+      const spentAlert = evaluateDailyCapacitySpentAlert(checkDate, daySpent, capMinutes);
+      if (spentAlert) {
+        results.push(spentAlert);
+      }
     }
   }
 

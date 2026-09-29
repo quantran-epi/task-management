@@ -39,6 +39,7 @@ export function useNotifications(
         rules,
         overrides,
         allocations,
+        workSessions,
         dismissedSetting,
       ] = await Promise.all([
         targetDb.tasks.toArray(),
@@ -50,6 +51,10 @@ export function useNotifications(
           .between(todayDate, maxOverloadDate, true, true)
           .toArray(),
         targetDb.plannedAllocations
+          .where('date')
+          .between(todayDate, maxOverloadDate, true, true)
+          .toArray(),
+        targetDb.workSessions
           .where('date')
           .between(todayDate, maxOverloadDate, true, true)
           .toArray(),
@@ -70,6 +75,7 @@ export function useNotifications(
         rules,
         overrides,
         allocations,
+        workSessions,
         dismissedMap,
         todayDate,
       });
