@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Banking IT Enhancements & Jira Integration
 status: executing
-stopped_at: Completed 12.2-02-PLAN.md
-last_updated: "2026-09-29T13:48:41.807Z"
-last_activity: 2026-09-29 -- Phase 12.2 execution started
+stopped_at: Completed 12.2-03-PLAN.md
+last_updated: "2026-09-29T14:15:00.000Z"
+last_activity: 2026-09-29 -- Phase 12.2 execution completed
 progress:
   total_phases: 7
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 18
-  completed_plans: 17
-  percent: 71
+  completed_plans: 18
+  percent: 75
 current_phase: 12.2
 current_phase_name: Multiple Reminders with Time, Notification Settings, Table Customization & Sidebar Persistence
 ---
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-09-27)
 
 ## Current Position
 
-Phase: 12.2 (multiple-reminders-with-time-notification-settings-table-cus) — EXECUTING
+Phase: 12.2 (multiple-reminders-with-time-notification-settings-table-cus) — COMPLETED
 Plan: 3 of 3
-Status: Ready to execute
-Last activity: 2026-09-29 -- Phase 12.2 execution started
+Status: Phase complete
+Last activity: 2026-09-29 -- Phase 12.2 execution completed
 
 ### Quick Tasks Completed
 
@@ -79,6 +79,7 @@ Last activity: 2026-09-29 -- Phase 12.2 execution started
 | Phase 12.1 P04 | 12m | 3 tasks | 10 files |
 | Phase 12.2 P01 | 15m | 3 tasks | 14 files |
 | Phase 12.2 P02 | 14m | 3 tasks | 9 files |
+| Phase 12.2 P03 | 24m | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -213,6 +214,9 @@ Decisions logged across v1.0 and v1.1:
 - [Phase 12.2]: Provide dedicated Tab 4 'notifications' (Thông báo) in SettingsView separating alerts configuration from data backup
 - [Phase 12.2]: Sync browserNotificationsEnabled boolean alongside full NotificationSettings payload for backwards compatibility
 - [Phase 12.2]: Run a 30-second interval ticker in useDesktopNotification matching minute-exact reminders for immediate dispatch
+- [Phase 12.2]: Initialize visibleColumns state synchronously in TaskTable using planner:task_table_columns with permanent enforcement of name column
+- [Phase 12.2]: Support 3-state cycling (ascend -> descend -> reset) on TaskTable column sorters for name, status, priority, estimateMinutes, and deadline
+- [Phase 12.2]: Persist desktop Sider collapsed state under planner:sidebar_collapsed while ignoring responsive auto-collapse triggers
 
 ### Pending Todos
 
@@ -234,8 +238,8 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-09-29T13:48:41.802Z
-Stopped at: Completed 12.2-02-PLAN.md
+Last session: 2026-09-29T14:15:00.000Z
+Stopped at: Completed 12.2-03-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
