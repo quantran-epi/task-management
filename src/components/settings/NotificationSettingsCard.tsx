@@ -56,11 +56,18 @@ export const NotificationSettingsCard: React.FC<NotificationSettingsCardProps> =
   };
 
   const saveSettings = async (partial: Partial<NotificationSettings>) => {
+    const record = await db.settings.get(NOTIFICATION_SETTINGS_KEY);
+    const existing =
+      record?.value && typeof record.value === 'object'
+        ? (record.value as Partial<NotificationSettings>)
+        : {};
     const updated: NotificationSettings = {
-      ...settings,
+      ...DEFAULT_NOTIFICATION_SETTINGS,
+      ...existing,
       ...partial,
       enabledCategories: {
-        ...settings.enabledCategories,
+        ...DEFAULT_NOTIFICATION_SETTINGS.enabledCategories,
+        ...(existing.enabledCategories ?? {}),
         ...(partial.enabledCategories ?? {}),
       },
     };

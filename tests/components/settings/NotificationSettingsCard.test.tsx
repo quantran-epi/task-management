@@ -130,4 +130,32 @@ describe('NotificationSettingsCard (D-10, D-11, NOTIF-08)', () => {
       expect(val?.capacityOverloadThreshold).toBe(110);
     });
   });
+
+  it('preserves existing database settings even when toggled immediately on mount', async () => {
+    // Seed initial custom settings
+    await db.settings.put({
+      key: NOTIFICATION_SETTINGS_KEY,
+      value: {
+        ...DEFAULT_NOTIFICATION_SETTINGS,
+        dueSoonDays: 5,
+        staleTaskDays: 14,
+        requireInteractionEnabled: true,
+      },
+    });
+
+    render(<NotificationSettingsCard db={db} />);
+
+    // Immediately toggle requireInteraction before useLiveQuery finishes
+    const requireToggle = screen.getByTestId('require-interaction-switch');
+    fireEvent.click(requireToggle);
+
+    await waitFor(async () => {
+      const saved = await db.settings.get(NOTIFICATION_SETTINGS_KEY);
+      const val = saved?.value as NotificationSettings;
+      expect(val?.requireInteractionEnabled).toBe(false);
+      // Existing custom thresholds must NOT be overwritten by DEFAULT_NOTIFICATION_SETTINGS
+      expect(val?.dueSoonDays).toBe(5);
+      expect(val?.staleTaskDays).toBe(14);
+    });
+  });
 });
