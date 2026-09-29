@@ -112,7 +112,7 @@ describe('TaskTable Component', () => {
 
     // Task 1 checks
     expect(screen.getByText('Alpha Task One')).toBeInTheDocument();
-    expect(screen.getByText('1h 30m')).toBeInTheDocument(); // 90 mins -> 1h 30m
+    expect(screen.getByText('/ 1h 30m')).toBeInTheDocument(); // 90 mins -> / 1h 30m
     expect(screen.getByText(/Project Alpha/i)).toBeInTheDocument();
     expect(screen.getByText(/🔗 1/i)).toBeInTheDocument(); // Document link badge
     // WorkTypeBadge check for investigate

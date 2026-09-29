@@ -22,6 +22,8 @@ import { EmptyState } from '../common/EmptyState';
 import { formatMinutes } from '../../utils/time';
 import { getTodayDateString } from '../../utils/date';
 import { TagListDisplay } from '../common/TagListDisplay';
+import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
+import { useLiveQuery } from 'dexie-react-hooks';
 
 export interface ProjectTableProps {
   projects: Project[];
@@ -35,6 +37,7 @@ export interface ProjectTableProps {
   onDeleteMilestone: (milestone: Milestone) => void;
   onEditTask: (taskId: string) => void;
   loading?: boolean;
+  db?: TaskPlannerDatabase;
 }
 
 const STATUS_TAG_COLORS: Record<string, string> = {
@@ -67,9 +70,22 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
   onDeleteMilestone,
   onEditTask,
   loading = false,
+  db = defaultDb,
 }) => {
   const { token } = theme.useToken();
   const today = getTodayDateString();
+
+  // Query spent minutes map for all tasks
+  const taskSpentMap = useLiveQuery(async () => {
+    if (!db || tasks.length === 0) return new Map<string, number>();
+    const taskIds = tasks.map((t) => t.id);
+    const sessions = await db.workSessions.where('taskId').anyOf(taskIds).toArray();
+    const map = new Map<string, number>();
+    for (const s of sessions) {
+      map.set(s.taskId, (map.get(s.taskId) || 0) + s.durationMinutes);
+    }
+    return map;
+  }, [db, tasks]) ?? new Map<string, number>();
 
   // Maps for fast aggregation
   const milestoneMap = useMemo(() => {
@@ -174,6 +190,23 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
             );
           }
           return <TagListDisplay tags={[]} />;
+        },
+      },
+      {
+        title: 'Thời gian',
+        key: 'spentTime',
+        width: 140,
+        render: (_, record) => {
+          const msTasks = taskMap.byMilestone.get(record.id) || [];
+          const totalEstimate = msTasks.reduce((acc, t) => acc + (t.estimateMinutes || 0), 0);
+          const totalSpent = msTasks.reduce((acc, t) => acc + (taskSpentMap.get(t.id) || 0), 0);
+
+          return (
+            <span style={{ fontSize: 13 }}>
+              <strong>{formatMinutes(totalSpent)}</strong>
+              <span style={{ color: token.colorTextSecondary }}> / {formatMinutes(totalEstimate)}</span>
+            </span>
+          );
         },
       },
       {
@@ -447,6 +480,23 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
       key: 'businessAnalysts',
       width: 140,
       render: (_, record) => <TagListDisplay tags={record.businessAnalysts} source="direct" />,
+    },
+    {
+      title: 'Thời gian',
+      key: 'spentTime',
+      width: 150,
+      render: (_, record) => {
+        const projTasks = taskMap.byProject.get(record.id) || [];
+        const totalEstimate = projTasks.reduce((acc, t) => acc + (t.estimateMinutes || 0), 0);
+        const totalSpent = projTasks.reduce((acc, t) => acc + (taskSpentMap.get(t.id) || 0), 0);
+
+        return (
+          <span style={{ fontSize: 13 }}>
+            <strong>{formatMinutes(totalSpent)}</strong>
+            <span style={{ color: token.colorTextSecondary }}> / {formatMinutes(totalEstimate)}</span>
+          </span>
+        );
+      },
     },
     {
       title: 'Cột mốc',

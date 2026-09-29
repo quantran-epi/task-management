@@ -1,4 +1,3 @@
-import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TaskTable } from '../../src/components/tasks/TaskTable';
@@ -26,7 +25,7 @@ describe('TaskTableTimer', () => {
     {
       id: 'task-2',
       name: 'Nhiệm vụ kiểm thử 2',
-      status: 'Todo',
+      status: 'Open',
       progress: 0,
       priority: 'Medium',
       estimateMinutes: 120,

@@ -11,6 +11,7 @@ import {
   Slider,
   message,
   Divider,
+  Tabs,
 } from 'antd';
 import { PlusOutlined, DeleteOutlined, LinkOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
@@ -23,6 +24,7 @@ import { createFocusRestorer } from '../../utils/focus';
 import { useRegisterActiveForm } from '../../context/FormGuardContext';
 import { TaskDrawerPlanning } from './TaskDrawerPlanning';
 import { TaskJiraSection } from './TaskJiraSection';
+import { WorkSessionsTab } from './WorkSessionsTab';
 import { TagSelect } from '../common/TagSelect';
 import { WORK_TYPE_CONFIG } from './WorkTypeBadge';
 import { resolveInheritedTags } from '../../domain/inheritance';
@@ -343,25 +345,9 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
     };
   });
 
-  return (
-    <Drawer
-      title="Chỉnh sửa tác vụ"
-      width={520}
-      open={open}
-      onClose={handleClose}
-      destroyOnClose
-      loading={loading}
-      footer={
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <Button onClick={handleClose}>Hủy</Button>
-          <Button type="primary" onClick={() => void handleSave()} loading={saving}>
-            Lưu tác vụ
-          </Button>
-        </div>
-      }
-    >
-      <Form form={form} layout="vertical" initialValues={{ progress: 0, hours: 0, minutes: 0 }}>
-        {/* Name */}
+  const renderDetailsTab = () => (
+    <Form form={form} layout="vertical" initialValues={{ progress: 0, hours: 0, minutes: 0 }}>
+      {/* Name */}
         <Form.Item
           name="name"
           label="Tên tác vụ"
@@ -612,6 +598,39 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
           />
         </Form.Item>
       </Form>
+  );
+
+  const tabItems = [
+    {
+      key: 'details',
+      label: 'Chi tiết tác vụ',
+      children: renderDetailsTab(),
+    },
+    {
+      key: 'sessions',
+      label: 'Lịch sử làm việc',
+      children: currentTask ? <WorkSessionsTab task={currentTask} db={db} /> : null,
+    },
+  ];
+
+  return (
+    <Drawer
+      title="Chỉnh sửa tác vụ"
+      width={560}
+      open={open}
+      onClose={handleClose}
+      destroyOnClose
+      loading={loading}
+      footer={
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <Button onClick={handleClose}>Hủy</Button>
+          <Button type="primary" onClick={() => void handleSave()} loading={saving}>
+            Lưu tác vụ
+          </Button>
+        </div>
+      }
+    >
+      <Tabs defaultActiveKey="details" items={tabItems} />
     </Drawer>
   );
 };
