@@ -4,21 +4,14 @@ Zero-dependency Node.js helper for local personal Jira Cloud calls from the GitH
 
 ## Start
 
-```bash
-npm run jira:proxy
-```
-
-Default URL:
-
-```text
-http://localhost:3001
-```
-
-Custom port:
+Build once, then start app preview and proxy together:
 
 ```bash
-PORT=8888 npm run jira:proxy
+npm run build
+npm run preview
 ```
+
+The app uses Vite's preview URL. The proxy runs at `http://localhost:3001` and stops when preview stops.
 
 ## App setting
 
