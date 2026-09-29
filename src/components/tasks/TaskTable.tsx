@@ -74,6 +74,22 @@ const PRIORITY_LABELS: Record<TaskPriority, string> = {
   Low: 'Thấp',
 };
 
+const PRIORITY_WEIGHTS: Record<TaskPriority, number> = {
+  Urgent: 4,
+  High: 3,
+  Medium: 2,
+  Low: 1,
+};
+
+const STATUS_WEIGHTS: Record<Task['status'], number> = {
+  Open: 1,
+  'In Progress': 2,
+  Resolved: 3,
+  'In Review': 4,
+  Done: 5,
+  Cancelled: 6,
+};
+
 export const STORAGE_COLUMNS_KEY = 'planner:task_table_columns';
 
 export interface ColumnConfig {
@@ -274,6 +290,8 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       dataIndex: 'status',
       key: 'status',
       width: 130,
+      sorter: (a, b) => (STATUS_WEIGHTS[a.status] || 0) - (STATUS_WEIGHTS[b.status] || 0),
+      sortDirections: ['ascend', 'descend'],
       render: (status, record) => (
         <InlineStatusTag
           taskId={record.id}
@@ -288,6 +306,8 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       dataIndex: 'priority',
       key: 'priority',
       width: 105,
+      sorter: (a, b) => (PRIORITY_WEIGHTS[a.priority] || 0) - (PRIORITY_WEIGHTS[b.priority] || 0),
+      sortDirections: ['ascend', 'descend'],
       render: (priority: TaskPriority) => (
         <Tag
           bordered={false}
@@ -319,6 +339,8 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       title: 'Tác vụ & Phân cấp',
       dataIndex: 'name',
       key: 'name',
+      sorter: (a, b) => a.name.localeCompare(b.name, 'vi', { sensitivity: 'base' }),
+      sortDirections: ['ascend', 'descend'],
       render: (_, record) => {
         const project = record.projectId ? projectMap.get(record.projectId) : undefined;
         const milestone = record.milestoneId ? milestoneMap.get(record.milestoneId) : undefined;
@@ -446,6 +468,8 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       dataIndex: 'estimateMinutes',
       key: 'estimateMinutes',
       width: 140,
+      sorter: (a, b) => (a.estimateMinutes || 0) - (b.estimateMinutes || 0),
+      sortDirections: ['ascend', 'descend'],
       render: (mins: number, record) => {
         const spentMinutes = taskSpentMap.get(record.id) || 0;
         const estimate = mins || 0;
@@ -599,6 +623,8 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       dataIndex: 'deadline',
       key: 'deadline',
       width: 120,
+      sorter: (a, b) => (a.deadline || '9999-99-99').localeCompare(b.deadline || '9999-99-99'),
+      sortDirections: ['ascend', 'descend'],
       render: (deadline?: string) => {
         if (!deadline) {
           return <span style={{ fontSize: 12, color: token.colorTextQuaternary }}>—</span>;
