@@ -1,0 +1,83 @@
+{
+  "contract": "1.0.0",
+  "flavor": "core",
+  "milestone": "v1.1 — Banking IT Enhancements & Jira Integration",
+  "phases": [
+    {
+      "number": "1",
+      "name": "Foundation & Deployment Shell",
+      "status": "complete"
+    },
+    {
+      "number": "2",
+      "name": "Work Hierarchy & Fast Task Management",
+      "status": "complete"
+    },
+    {
+      "number": "3",
+      "name": "Capacity Model & Daily Planning Ledger",
+      "status": "complete"
+    },
+    {
+      "number": "4",
+      "name": "Feasibility Engine & Workload Distribution",
+      "status": "complete"
+    },
+    {
+      "number": "5",
+      "name": "Actionable Dashboard & Workload Forecasting",
+      "status": "complete"
+    },
+    {
+      "number": "6",
+      "name": "Safe Local Backup & Restore",
+      "status": "complete"
+    },
+    {
+      "number": "7",
+      "name": "PWA Offline Capability & Lifecycle Hardening",
+      "status": "complete"
+    },
+    {
+      "number": "8",
+      "name": "Optional Encrypted GitHub Backup",
+      "status": "complete"
+    },
+    {
+      "number": "9",
+      "name": "Banking IT Domain Fields & Work Types",
+      "status": "complete"
+    },
+    {
+      "number": "10",
+      "name": "Date-Range Search, Multi-Criteria Filtering & Standup Export",
+      "status": "complete"
+    },
+    {
+      "number": "11",
+      "name": "Jira Cloud Integration & Task Lifecycle",
+      "status": "complete"
+    },
+    {
+      "number": "12",
+      "name": "In-App Notifications, Proactive Alerts & Custom Reminders",
+      "status": "complete"
+    },
+    {
+      "number": "12.1",
+      "name": "Task Timer, Work Session Logs & Spent Time Tracking",
+      "status": "complete"
+    },
+    {
+      "number": "13",
+      "name": "Enhanced Workload Analytics & Milestone Burndown",
+      "status": "pending"
+    }
+  ],
+  "next": {
+    "command": "/gsd:progress --next",
+    "label": "Advance to the next step (plan phase 13)",
+    "reason": "Phase 13 of 6 — needs a plan"
+  },
+  "updated_at": "2026-09-29T05:25:08.903Z"
+}

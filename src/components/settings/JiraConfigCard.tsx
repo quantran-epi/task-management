@@ -143,6 +143,16 @@ export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }
           return;
         }
 
+        // XSRF check failed — show specific message with proxy guidance
+        if (err.message.toLowerCase().includes('xsrf') || err.message.toLowerCase().includes('csrf')) {
+          setDiagnosticResult({
+            status: 'cors_blocked',
+            message: err.message,
+          });
+          announceToScreenReader(err.message);
+          return;
+        }
+
         if (
           err.message.includes('401') ||
           err.message.includes('403') ||

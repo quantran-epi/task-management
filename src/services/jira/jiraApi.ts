@@ -74,7 +74,27 @@ export async function callJiraApi<T>(
       const errorData = (await response.json().catch(() => ({}))) as {
         errorMessages?: string[];
         errors?: Record<string, string>;
+        message?: string;
       };
+
+      // Detect XSRF check failure — Jira Cloud rejects direct cross-origin browser requests
+      if (response.status === 403) {
+        const allText = [
+          ...(errorData.errorMessages ?? []),
+          ...Object.values(errorData.errors ?? {}),
+          errorData.message ?? '',
+        ].join(' ').toLowerCase();
+        if (allText.includes('xsrf') || allText.includes('csrf')) {
+          if (!config.corsProxy) {
+            throw new Error(
+              'Jira Cloud từ chối request trực tiếp từ trình duyệt (XSRF check failed). ' +
+              'Jira Cloud không hỗ trợ gọi API trực tiếp từ ứng dụng web khác origin. ' +
+              'Vui lòng cấu hình CORS Proxy URL trong Cài đặt > Tích hợp Jira để chuyển tiếp request.'
+            );
+          }
+        }
+      }
+
       const messages: string[] = [];
       if (errorData.errorMessages && errorData.errorMessages.length > 0) {
         messages.push(...errorData.errorMessages);
