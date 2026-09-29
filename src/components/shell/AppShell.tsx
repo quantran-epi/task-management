@@ -11,9 +11,11 @@ import { UpdateBanner } from '../pwa/UpdateBanner';
 import { FormGuardProvider } from '../../context/FormGuardContext';
 import { ServiceWorkerProvider } from '../../context/ServiceWorkerContext';
 import { GitHubAuthProvider } from '../../context/GitHubAuthContext';
+import { TimerProvider } from '../../context/TimerContext';
 import { useServiceWorkerUpdate } from '../../hooks/useServiceWorkerUpdate';
 import { useNotifications } from '../../hooks/useNotifications';
 import { useDesktopNotification } from '../../hooks/useDesktopNotification';
+import { ActiveTimerWidget } from '../timer/ActiveTimerWidget';
 import { NotificationBell } from '../notifications/NotificationBell';
 import { NotificationDrawer } from '../notifications/NotificationDrawer';
 import { TaskDrawer } from '../tasks/TaskDrawer';
@@ -151,6 +153,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
             </Title>
           </Space>
           <Space size="middle">
+            <ActiveTimerWidget />
             <StatusBadge />
             <NotificationBell
               count={notifications.activeCount}
@@ -238,7 +241,9 @@ export const AppShell: React.FC<AppShellProps> = (props) => {
     <ServiceWorkerProvider>
       <FormGuardProvider>
         <GitHubAuthProvider>
-          <AppShellInner {...props} />
+          <TimerProvider>
+            <AppShellInner {...props} />
+          </TimerProvider>
         </GitHubAuthProvider>
       </FormGuardProvider>
     </ServiceWorkerProvider>
