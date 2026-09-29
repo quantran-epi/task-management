@@ -266,4 +266,53 @@ describe('TaskTable', () => {
     expect(rows[1]).toHaveTextContent('Gamma Task'); // High
     expect(rows[2]).toHaveTextContent('Alpha Task'); // Low
   });
+
+  it('keeps tasks without deadline at the bottom for both ascending and descending sorts', async () => {
+    const tasksWithUndated: Task[] = [
+      ...mockTasks,
+      {
+        id: 'task-4',
+        name: 'Delta Task',
+        status: 'Open',
+        priority: 'Medium',
+        progress: 0,
+        estimateMinutes: 45,
+        projectId: 'proj-1',
+        milestoneId: 'mile-1',
+        createdAt: '2026-09-01T00:00:00Z',
+        updatedAt: '2026-09-01T00:00:00Z',
+      },
+    ];
+
+    render(
+      <TaskTable
+        tasks={tasksWithUndated}
+        projects={mockProjects}
+        milestones={mockMilestones}
+        selectedRowKeys={[]}
+        onSelectRows={vi.fn()}
+        onOpenDrawer={vi.fn()}
+        db={testDb}
+      />
+    );
+
+    const deadlineHeader = screen.getByRole('columnheader', { name: /Hạn chót/i });
+    expect(deadlineHeader).toHaveClass('ant-table-column-has-sorters');
+
+    // Click 1: Ascending (earliest date first, undefined at bottom)
+    fireEvent.click(deadlineHeader);
+    let rows = screen.getAllByText(/(Alpha|Beta|Gamma|Delta) Task/);
+    expect(rows[0]).toHaveTextContent('Gamma Task'); // 2026-09-25
+    expect(rows[1]).toHaveTextContent('Beta Task');  // 2026-09-30
+    expect(rows[2]).toHaveTextContent('Alpha Task'); // 2026-10-01
+    expect(rows[3]).toHaveTextContent('Delta Task'); // undefined deadline at bottom
+
+    // Click 2: Descending (latest date first, undefined STILL at bottom)
+    fireEvent.click(deadlineHeader);
+    rows = screen.getAllByText(/(Alpha|Beta|Gamma|Delta) Task/);
+    expect(rows[0]).toHaveTextContent('Alpha Task'); // 2026-10-01
+    expect(rows[1]).toHaveTextContent('Beta Task');  // 2026-09-30
+    expect(rows[2]).toHaveTextContent('Gamma Task'); // 2026-09-25
+    expect(rows[3]).toHaveTextContent('Delta Task'); // undefined deadline at bottom
+  });
 });

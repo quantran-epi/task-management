@@ -623,7 +623,12 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       dataIndex: 'deadline',
       key: 'deadline',
       width: 120,
-      sorter: (a, b) => (a.deadline || '9999-99-99').localeCompare(b.deadline || '9999-99-99'),
+      sorter: (a, b, sortOrder) => {
+        if (!a.deadline && !b.deadline) return 0;
+        if (!a.deadline) return sortOrder === 'descend' ? -1 : 1;
+        if (!b.deadline) return sortOrder === 'descend' ? 1 : -1;
+        return a.deadline.localeCompare(b.deadline);
+      },
       sortDirections: ['ascend', 'descend'],
       render: (deadline?: string) => {
         if (!deadline) {
