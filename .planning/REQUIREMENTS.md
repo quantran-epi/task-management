@@ -36,6 +36,18 @@
 - [x] **NOTIF-04**: System alerts user to days where planned work exceeds available capacity (>100% overload).
 - [x] **NOTIF-05**: System alerts user to stale tasks in 'In Progress' or 'In Review' status with no activity for more than 5 days.
 
+### Task Timer & Work Session Logs (Phase 12.1 INSERTED)
+
+- [ ] **TIMER-01**: Dexie SCHEMA_V5 adds `workSessions` and `activeTimers` stores without data loss.
+- [ ] **TIMER-02**: User can create, view, edit, and delete work session logs per task with duration, date, and optional note.
+- [ ] **TIMER-03**: User can start, pause, resume, and finish task timers with real wall-clock delta calculation and reload survival.
+- [ ] **TIMER-04**: System cascades task, milestone, and project deletion to clean up associated work sessions and active timers.
+- [ ] **TIMER-05**: Backup export and restore schemas bump to v3 and serialize `workSessions` with cryptographic validation.
+- [ ] **TIMER-06**: User can run multiple concurrent timers simultaneously with reactive UI ticker loop.
+- [ ] **TIMER-07**: System alerts user with 3-tier allocation warnings (task spent >= estimate toast, daily overload drawer alert, daily feasibility risk).
+- [ ] **TIMER-08**: User can view and control active timers via AppHeader capsule widget and multi-timer dropdown badge.
+- [ ] **TIMER-09**: User can inspect and manage task work history in TaskDrawer dedicated Work Sessions tab and record manual sessions via modal.
+
 ### Enhanced Analytics Dashboard
 
 - [ ] **ANLT-01**: User can view milestone burndown chart (lightweight SVG vector) tracking remaining vs completed work over time.
@@ -77,6 +89,15 @@
 | NOTIF-03 | Phase 12 | Complete |
 | NOTIF-04 | Phase 12 | Complete |
 | NOTIF-05 | Phase 12 | Complete |
+| TIMER-01 | Phase 12.1 | Pending |
+| TIMER-02 | Phase 12.1 | Pending |
+| TIMER-03 | Phase 12.1 | Pending |
+| TIMER-04 | Phase 12.1 | Pending |
+| TIMER-05 | Phase 12.1 | Pending |
+| TIMER-06 | Phase 12.1 | Pending |
+| TIMER-07 | Phase 12.1 | Pending |
+| TIMER-08 | Phase 12.1 | Pending |
+| TIMER-09 | Phase 12.1 | Pending |
 | ANLT-01 | Phase 13 | Pending |
 | ANLT-02 | Phase 13 | Pending |
 | ANLT-03 | Phase 13 | Pending |
