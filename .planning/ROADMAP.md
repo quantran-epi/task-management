@@ -153,8 +153,13 @@ Plans:
 **Plans:** 3 plans
 
 Plans:
+**Wave 1**
 - [ ] 12.1-01-PLAN.md — Dexie SCHEMA_V5 (workSessions, activeTimers), models, repository CRUD, spent rollups, cascade cleanup, and backup v3 envelope
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 12.1-02-PLAN.md — TimerContext & useTimer hook with multi-timer concurrency, reload survival, and 3-tier allocation/feasibility alert evaluation engine
+
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 12.1-03-PLAN.md — AppShell ActiveTimerWidget header capsule/dropdown, TaskTable inline triggers/spent progress, and TaskDrawer WorkSessionsTab history & manual modal
 
 ### Phase 13: Enhanced Workload Analytics & Milestone Burndown
