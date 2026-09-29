@@ -10,6 +10,7 @@ import {
   Input,
   message,
   Dropdown,
+  Progress,
   theme,
   type TableColumnsType,
   type MenuProps,
@@ -20,13 +21,16 @@ import {
   DeleteOutlined,
   LinkOutlined,
   CopyOutlined,
+  PlayCircleOutlined,
+  PauseCircleOutlined,
+  CheckCircleOutlined,
 } from '@ant-design/icons';
 import type { Task, Project, Milestone, TaskPriority, WorkType } from '../../types/models';
 import { InlineStatusTag } from './InlineStatusTag';
 import { InlineProgress } from './InlineProgress';
 import { HierarchyBreadcrumb } from './HierarchyBreadcrumb';
 import { EmptyState } from '../common/EmptyState';
-import { formatMinutes } from '../../utils/time';
+import { formatMinutes, formatElapsedTicker } from '../../utils/time';
 import { getTodayDateString } from '../../utils/date';
 import { deleteTaskWithAllocations } from '../../db/repositories/cascadeRepo';
 import { WorkTypeBadge, WORK_TYPE_CONFIG } from './WorkTypeBadge';
@@ -34,9 +38,11 @@ import { TagListDisplay } from '../common/TagListDisplay';
 import { resolveInheritedTags } from '../../domain/inheritance';
 import { WORK_TYPES } from '../../types/models';
 import { formatStandupSummary } from '../../utils/standup';
-import type { TaskPlannerDatabase } from '../../db';
+import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { getJiraBrowseUrl } from '../../services/jira/jiraApi';
+import { useTimer } from '../../hooks/useTimer';
+import { evaluateTaskSpentAlert } from '../../utils/timerAlerts';
 
 export interface TaskTableProps {
   tasks: Task[];
@@ -87,11 +93,26 @@ export const TaskTable: React.FC<TaskTableProps> = ({
   const tableRef = useRef<HTMLDivElement>(null);
   const fallbackTextareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const effectiveDb = db || defaultDb;
+  const { getTimerForTask, getElapsedSeconds, startTimer, pauseTimer, finishTimer } = useTimer();
+
+  // Query spent minutes for all tasks in table
+  const taskSpentMap = useLiveQuery(async () => {
+    if (!effectiveDb || tasks.length === 0) return new Map<string, number>();
+    const taskIds = tasks.map((t) => t.id);
+    const sessions = await effectiveDb.workSessions.where('taskId').anyOf(taskIds).toArray();
+    const map = new Map<string, number>();
+    for (const s of sessions) {
+      map.set(s.taskId, (map.get(s.taskId) || 0) + s.durationMinutes);
+    }
+    return map;
+  }, [effectiveDb, tasks]) ?? new Map<string, number>();
+
   const settingsDomain = useLiveQuery(async () => {
-    if (!db) return undefined;
-    const rec = await db.settings.get('jira_domain');
+    if (!effectiveDb) return undefined;
+    const rec = await effectiveDb.settings.get('jira_domain');
     return (rec?.value as string) || undefined;
-  }, [db]);
+  }, [effectiveDb]);
 
   const effectiveJiraDomain = jiraDomain || settingsDomain;
 
@@ -343,15 +364,148 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       },
     },
     {
-      title: 'Ước tính',
+      title: 'Ước tính / Đã dùng',
       dataIndex: 'estimateMinutes',
       key: 'estimateMinutes',
-      width: 100,
-      render: (mins: number) => (
-        <span style={{ fontSize: 14, color: mins ? token.colorText : token.colorTextQuaternary }}>
-          {formatMinutes(mins)}
-        </span>
-      ),
+      width: 140,
+      render: (mins: number, record) => {
+        const spentMinutes = taskSpentMap.get(record.id) || 0;
+        const estimate = mins || 0;
+        const percent = estimate > 0 ? Math.round((spentMinutes / estimate) * 100) : 0;
+
+        let strokeColor = token.colorSuccess;
+        if (percent >= 100) {
+          strokeColor = token.colorError;
+        } else if (percent >= 80) {
+          strokeColor = token.colorWarning;
+        }
+
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 100 }}>
+            <span style={{ fontSize: 13, color: token.colorText }}>
+              <strong>{formatMinutes(spentMinutes)}</strong>
+              <span style={{ color: token.colorTextQuaternary }}> / {formatMinutes(estimate)}</span>
+            </span>
+            {estimate > 0 && (
+              <Progress
+                percent={Math.min(100, percent)}
+                size="small"
+                strokeColor={strokeColor}
+                showInfo={false}
+                style={{ margin: 0 }}
+              />
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      title: 'Đồng hồ',
+      key: 'timer',
+      width: 130,
+      render: (_, record) => {
+        const timer = getTimerForTask(record.id);
+        const isRunning = timer?.status === 'running';
+
+        const handleStart = async (e: React.MouseEvent) => {
+          e.stopPropagation();
+          try {
+            await startTimer(record.id);
+          } catch (err: any) {
+            message.error(err?.message || 'Không thể bắt đầu tính giờ');
+          }
+        };
+
+        const handlePause = async (e: React.MouseEvent) => {
+          e.stopPropagation();
+          try {
+            await pauseTimer(record.id);
+          } catch (err: any) {
+            message.error(err?.message || 'Không thể tạm dừng tính giờ');
+          }
+        };
+
+        const handleFinish = async (e: React.MouseEvent) => {
+          e.stopPropagation();
+          try {
+            await finishTimer(record.id);
+            // Check Tier 1 toast alert
+            const updatedSpent = (taskSpentMap.get(record.id) || 0) + Math.max(1, Math.round(getElapsedSeconds(record.id) / 60));
+            const alert = evaluateTaskSpentAlert(record, updatedSpent);
+            if (alert.shouldAlert) {
+              message.warning(alert.message);
+            }
+          } catch (err: any) {
+            message.error(err?.message || 'Không thể kết thúc phiên');
+          }
+        };
+
+        if (!timer) {
+          return (
+            <Tooltip title="Bắt đầu tính giờ">
+              <Button
+                type="text"
+                size="small"
+                icon={<PlayCircleOutlined style={{ fontSize: 16, color: token.colorPrimary }} />}
+                onClick={handleStart}
+                aria-label="Bắt đầu tính giờ"
+                style={{ minWidth: 28, minHeight: 28 }}
+              />
+            </Tooltip>
+          );
+        }
+
+        const elapsedSec = getElapsedSeconds(record.id);
+
+        return (
+          <Space orientation="horizontal" size={2} onClick={(e) => e.stopPropagation()}>
+            <span
+              style={{
+                fontVariantNumeric: 'tabular-nums',
+                fontSize: 12,
+                fontWeight: 600,
+                color: isRunning ? token.colorSuccess : token.colorWarning,
+                marginRight: 4,
+              }}
+            >
+              {formatElapsedTicker(elapsedSec)}
+            </span>
+            {isRunning ? (
+              <Tooltip title="Tạm dừng">
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<PauseCircleOutlined style={{ fontSize: 16, color: token.colorWarning }} />}
+                  onClick={handlePause}
+                  aria-label="Tạm dừng"
+                  style={{ minWidth: 24, minHeight: 24, padding: 0 }}
+                />
+              </Tooltip>
+            ) : (
+              <Tooltip title="Tiếp tục">
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<PlayCircleOutlined style={{ fontSize: 16, color: token.colorSuccess }} />}
+                  onClick={handleStart}
+                  aria-label="Tiếp tục"
+                  style={{ minWidth: 24, minHeight: 24, padding: 0 }}
+                />
+              </Tooltip>
+            )}
+            <Tooltip title="Kết thúc phiên">
+              <Button
+                type="text"
+                size="small"
+                icon={<CheckCircleOutlined style={{ fontSize: 16, color: token.colorPrimary }} />}
+                onClick={handleFinish}
+                aria-label="Kết thúc phiên"
+                style={{ minWidth: 24, minHeight: 24, padding: 0 }}
+              />
+            </Tooltip>
+          </Space>
+        );
+      },
     },
     {
       title: 'Tiến độ',
