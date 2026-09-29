@@ -293,4 +293,67 @@ describe('useDesktopNotification hook (D-09, D-12, NOTIF-07)', () => {
       );
     });
   });
+
+  it('dispatches live notification even if interval ticks after reminder minute (browser throttling)', async () => {
+    const twoMinutesAgoClock = dayjs().subtract(2, 'minute').format('HH:mm');
+    const currentDate = dayjs().format('YYYY-MM-DD');
+    const delayedTarget = `${twoMinutesAgoClock} ${currentDate}`;
+
+    await db.settings.put({
+      key: NOTIFICATION_SETTINGS_KEY,
+      value: {
+        ...DEFAULT_NOTIFICATION_SETTINGS,
+        browserNotificationsEnabled: true,
+        requireInteractionEnabled: true,
+      },
+    });
+
+    sessionStorage.setItem(SESSION_NOTIFICATION_SHOWN_KEY, 'true');
+
+    const mockNotification = vi.fn();
+    vi.stubGlobal(
+      'Notification',
+      Object.assign(mockNotification, {
+        permission: 'granted',
+      })
+    );
+
+    const reminderState: NotificationState = {
+      items: [
+        {
+          id: 'reminder:task:t-2:rem-2',
+          category: 'reminder',
+          title: 'Nhắc nhở trễ',
+          subtitle: 'Kiểm tra',
+          date: delayedTarget,
+          tagColor: 'gold',
+          tagLabel: `Nhắc nhở (${twoMinutesAgoClock})`,
+          entityType: 'task',
+          canDismiss: true,
+          priorityOrder: 5,
+        },
+      ],
+      activeCount: 1,
+      categoryCounts: {
+        overdue: 0,
+        overload: 0,
+        'due-soon': 0,
+        stale: 0,
+        reminder: 1,
+      },
+      isLoading: false,
+    };
+
+    renderHook(() => useDesktopNotification({ notifications: reminderState, db }));
+
+    await waitFor(() => {
+      expect(mockNotification).toHaveBeenCalledWith(
+        'Nhắc nhở trễ',
+        expect.objectContaining({
+          body: 'Kiểm tra',
+          requireInteraction: true,
+        })
+      );
+    });
+  });
 });

@@ -140,31 +140,36 @@ export function useDesktopNotification({
         return;
       }
 
-      const currentClock = dayjs().format('HH:mm');
-      const currentDate = dayjs().format('YYYY-MM-DD');
-      const currentMinuteTarget = `${currentClock} ${currentDate}`;
+      const now = dayjs();
+      const currentDate = now.format('YYYY-MM-DD');
+      const currentClock = now.format('HH:mm');
 
       for (const item of notifications.items) {
-        if (item.category !== 'reminder') continue;
-        if (item.date === currentMinuteTarget) {
-          const reminderKey = `${item.id}:${currentMinuteTarget}`;
-          if (notifiedRemindersRef.current.has(reminderKey)) continue;
+        if (item.category !== 'reminder' || !item.date) continue;
+        const parts = item.date.split(' ');
+        if (parts.length === 2 && parts[0] && parts[1]) {
+          const timePart = parts[0];
+          const datePart = parts[1];
+          if (datePart === currentDate && timePart <= currentClock) {
+            const reminderKey = `${item.id}:${datePart}:${timePart}`;
+            if (notifiedRemindersRef.current.has(reminderKey)) continue;
 
-          try {
-            const notif = new window.Notification(item.title, {
-              body: item.subtitle || 'Đã đến giờ nhắc nhở!',
-              icon: '/task-management/favicon.ico',
-              requireInteraction: settingsData.settings.requireInteractionEnabled,
-            });
+            try {
+              const notif = new window.Notification(item.title, {
+                body: item.subtitle || 'Đã đến giờ nhắc nhở!',
+                icon: '/task-management/favicon.ico',
+                requireInteraction: settingsData.settings.requireInteractionEnabled,
+              });
 
-            notif.onclick = () => {
-              window.focus();
-              notif.close();
-            };
+              notif.onclick = () => {
+                window.focus();
+                notif.close();
+              };
 
-            notifiedRemindersRef.current.add(reminderKey);
-          } catch (err) {
-            console.warn('Live reminder notification failed:', err);
+              notifiedRemindersRef.current.add(reminderKey);
+            } catch (err) {
+              console.warn('Live reminder notification failed:', err);
+            }
           }
         }
       }
