@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import dayjs from 'dayjs';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
@@ -25,12 +25,34 @@ const DEFAULT_CATEGORY_COUNTS: Record<AlertCategory, number> = {
  * Reactive Dexie live query hook aggregating multi-domain alerts (NOTIF-02, D-01, D-05).
  * Automatically recalculates active alerts and category counts whenever tasks,
  * projects, milestones, capacity rules, overrides, allocations, or dismissed
- * settings change in IndexedDB.
+ * settings change in IndexedDB, or as the wall clock advances to trigger scheduled reminders.
  */
 export function useNotifications(
   targetDb: TaskPlannerDatabase = defaultDb
 ): NotificationState {
-  const todayDate = useMemo(() => getTodayDateString(), []);
+  // Clock state ticks every 10s so scheduled reminders reactively evaluate when clock reaches target time
+  const [clock, setClock] = useState(() => ({
+    todayDate: getTodayDateString(),
+    currentTime: dayjs().format('HH:mm'),
+  }));
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const nextDate = getTodayDateString();
+      const nextTime = dayjs().format('HH:mm');
+      setClock((prev) => {
+        if (prev.todayDate === nextDate && prev.currentTime === nextTime) {
+          return prev;
+        }
+        return { todayDate: nextDate, currentTime: nextTime };
+      });
+    }, 10000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  const { todayDate, currentTime } = clock;
+
   const maxOverloadDate = useMemo(
     () => dayjs(todayDate, 'YYYY-MM-DD').add(14, 'day').format('YYYY-MM-DD'),
     [todayDate]
@@ -102,6 +124,7 @@ export function useNotifications(
         workSessions,
         dismissedMap,
         todayDate,
+        currentTime,
         settings: resolvedSettings,
       });
 
@@ -123,7 +146,7 @@ export function useNotifications(
         isLoading: false,
       };
     },
-    [targetDb, todayDate, maxOverloadDate]
+    [targetDb, todayDate, currentTime, maxOverloadDate]
   );
 
   return (
