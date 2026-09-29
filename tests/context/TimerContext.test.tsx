@@ -250,4 +250,56 @@ describe('TimerContext & useTimer', () => {
     const elapsed = result.current.getElapsedSeconds('task-1');
     expect(elapsed).toBeGreaterThanOrEqual(45);
   });
+
+  it('re-renders subscribers every 1000ms when at least one active timer is running', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+
+    const { result } = renderHook(() => useTimer(), { wrapper });
+
+    await act(async () => {
+      await result.current.startTimer('task-1');
+    });
+
+    await vi.waitFor(() => {
+      expect(result.current.activeTimers).toHaveLength(1);
+    });
+
+    const initialContextValue = result.current;
+
+    // Advance 1000ms
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+
+    // Subscriber value reference should have updated because tick is in useMemo dependencies
+    expect(result.current).not.toBe(initialContextValue);
+
+    vi.useRealTimers();
+  });
+
+  it('clears timer interval when no timers are running', async () => {
+    const clearIntervalSpy = vi.spyOn(window, 'clearInterval');
+    const setIntervalSpy = vi.spyOn(window, 'setInterval');
+
+    const { result, unmount } = renderHook(() => useTimer(), { wrapper });
+
+    await act(async () => {
+      await result.current.startTimer('task-1');
+    });
+
+    await waitFor(() => {
+      expect(setIntervalSpy).toHaveBeenCalled();
+    });
+
+    // Pause timer so no running timers remain
+    await act(async () => {
+      await result.current.pauseTimer('task-1');
+    });
+
+    await waitFor(() => {
+      expect(clearIntervalSpy).toHaveBeenCalled();
+    });
+
+    unmount();
+  });
 });

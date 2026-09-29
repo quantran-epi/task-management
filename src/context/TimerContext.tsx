@@ -32,7 +32,7 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({
 
   // Local ticker state for re-rendering UI subscribers every second
   // Does NOT write to IndexedDB per second (D-06)
-  const [, setTick] = useState<number>(0);
+  const [tick, setTick] = useState<number>(0);
 
   const hasRunningTimer = useMemo(
     () => activeTimers.some((t) => t.status === 'running'),
@@ -201,6 +201,7 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({
       pauseTimer,
       finishTimer,
       cancelTimer,
+      tick,
     ]
   );
 
