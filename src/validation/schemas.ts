@@ -96,6 +96,20 @@ const uuidSchema = z
     message: 'Must be a valid RFC 4122 v4 UUID',
   });
 
+export const reminderTimeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+export const reminderItemSchema = z.object({
+  id: uuidSchema,
+  date: calendarDateSchema,
+  time: z.string().regex(reminderTimeRegex, 'Giờ phải có định dạng HH:mm').optional(),
+  note: z.string().trim().max(500, 'Ghi chú tối đa 500 ký tự').optional(),
+});
+
+export const remindersArraySchema = z
+  .array(reminderItemSchema)
+  .max(5, 'Tối đa 5 nhắc nhở cho mỗi mục')
+  .optional();
+
 const linkSchema = z
   .string()
   .min(1, 'Link must not be empty')
@@ -120,6 +134,7 @@ export const ProjectInputSchema = z.object({
   documentLinks: z.array(linkSchema).optional(),
   reminderDate: reminderDateSchema.optional(),
   reminderNote: reminderNoteSchema,
+  reminders: remindersArraySchema,
 });
 
 export const ProjectUpdateSchema = z.object({
@@ -133,6 +148,7 @@ export const ProjectUpdateSchema = z.object({
   documentLinks: z.array(linkSchema).optional(),
   reminderDate: reminderDateSchema.optional(),
   reminderNote: reminderNoteSchema,
+  reminders: remindersArraySchema,
 });
 
 export const MilestoneInputSchema = z.object({
@@ -146,6 +162,7 @@ export const MilestoneInputSchema = z.object({
   businessAnalysts: tagListSchema.optional(),
   reminderDate: reminderDateSchema.optional(),
   reminderNote: reminderNoteSchema,
+  reminders: remindersArraySchema,
 });
 
 export const MilestoneUpdateSchema = z.object({
@@ -158,6 +175,7 @@ export const MilestoneUpdateSchema = z.object({
   businessAnalysts: tagListSchema.optional(),
   reminderDate: reminderDateSchema.optional(),
   reminderNote: reminderNoteSchema,
+  reminders: remindersArraySchema,
 });
 
 export const TaskInputSchema = z.object({
@@ -180,6 +198,7 @@ export const TaskInputSchema = z.object({
   documentLinks: z.array(linkSchema).optional(),
   reminderDate: reminderDateSchema.optional(),
   reminderNote: reminderNoteSchema,
+  reminders: remindersArraySchema,
 });
 
 export const TaskUpdateSchema = z.object({
@@ -202,6 +221,7 @@ export const TaskUpdateSchema = z.object({
   documentLinks: z.array(linkSchema).optional(),
   reminderDate: reminderDateSchema.optional(),
   reminderNote: reminderNoteSchema,
+  reminders: remindersArraySchema,
 });
 
 export const CapacityRuleInputSchema = z.object({

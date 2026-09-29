@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import { SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5 } from './schema';
+import { SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6 } from './schema';
 import type {
   Project,
   Milestone,
@@ -64,6 +64,35 @@ export class TaskPlannerDatabase extends Dexie {
     this.version(4).stores(SCHEMA_V4);
 
     this.version(5).stores(SCHEMA_V5);
+
+    this.version(6)
+      .stores(SCHEMA_V6)
+      .upgrade(async (tx) => {
+        const generateUuid = () =>
+          typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : '00000000-0000-4000-8000-' + Math.random().toString(16).slice(2, 14).padEnd(12, '0');
+
+        const migrateReminders = (record: Record<string, unknown>) => {
+          if (!Array.isArray(record.reminders)) {
+            if (record.reminderDate && typeof record.reminderDate === 'string') {
+              record.reminders = [
+                {
+                  id: generateUuid(),
+                  date: record.reminderDate,
+                  note: record.reminderNote ? String(record.reminderNote) : undefined,
+                },
+              ];
+            } else {
+              record.reminders = [];
+            }
+          }
+        };
+
+        await tx.table('projects').toCollection().modify(migrateReminders);
+        await tx.table('milestones').toCollection().modify(migrateReminders);
+        await tx.table('tasks').toCollection().modify(migrateReminders);
+      });
 
     // Multi-tab concurrency handlers (DATA-04, D-09, D-10)
     this.on('blocked', () => {

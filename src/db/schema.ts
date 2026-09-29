@@ -48,4 +48,8 @@ export const SCHEMA_V5 = {
   activeTimers: 'taskId, status',
 } as const;
 
+export const SCHEMA_V6 = {
+  ...SCHEMA_V5,
+} as const;
+
 

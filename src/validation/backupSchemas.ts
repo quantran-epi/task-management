@@ -11,6 +11,7 @@ import {
   jiraKeySchema,
   reminderDateSchema,
   reminderNoteSchema,
+  remindersArraySchema,
 } from './schemas';
 
 const calendarDateSchema = z
@@ -50,6 +51,7 @@ export const BackupProjectRecordSchema = z.object({
   documentLinks: z.array(linkSchema).optional(),
   reminderDate: reminderDateSchema.optional(),
   reminderNote: reminderNoteSchema,
+  reminders: remindersArraySchema,
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -66,6 +68,7 @@ export const BackupMilestoneRecordSchema = z.object({
   businessAnalysts: tagListSchema.optional(),
   reminderDate: reminderDateSchema.optional(),
   reminderNote: reminderNoteSchema,
+  reminders: remindersArraySchema,
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -91,6 +94,7 @@ export const BackupTaskRecordSchema = z.object({
   jiraKey: jiraKeySchema.optional(),
   reminderDate: reminderDateSchema.optional(),
   reminderNote: reminderNoteSchema,
+  reminders: remindersArraySchema,
   createdAt: z.string(),
   updatedAt: z.string(),
 });

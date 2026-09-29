@@ -22,6 +22,13 @@ export const WORK_TYPES: readonly WorkType[] = [
   'review_code',
 ] as const;
 
+export interface ReminderItem {
+  id: string; // crypto.randomUUID()
+  date: string; // YYYY-MM-DD
+  time?: string; // HH:mm
+  note?: string;
+}
+
 export interface Project {
   id: string; // RFC 4122 v4 UUID
   name: string;
@@ -34,6 +41,7 @@ export interface Project {
   documentLinks?: string[];
   reminderDate?: string; // YYYY-MM-DD
   reminderNote?: string;
+  reminders?: ReminderItem[];
   createdAt: string; // ISO string metadata
   updatedAt: string; // ISO string metadata
 }
@@ -50,6 +58,7 @@ export interface Milestone {
   businessAnalysts?: string[];
   reminderDate?: string; // YYYY-MM-DD
   reminderNote?: string;
+  reminders?: ReminderItem[];
   createdAt: string;
   updatedAt: string;
 }
@@ -75,6 +84,7 @@ export interface Task {
   documentLinks?: string[];
   reminderDate?: string; // YYYY-MM-DD
   reminderNote?: string;
+  reminders?: ReminderItem[];
   createdAt: string;
   updatedAt: string;
 }

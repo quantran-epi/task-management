@@ -62,7 +62,7 @@ describe('Dexie Schema v5 Migration (D-09, TIMER-01, TIMER-02)', () => {
     const v5Db = new TaskPlannerDatabase(dbName);
     await v5Db.open();
 
-    expect(v5Db.verno).toBe(5);
+    expect(v5Db.verno).toBeGreaterThanOrEqual(5);
 
     // Verify existing data preserved
     const project = await v5Db.projects.get(sampleProjectId);
