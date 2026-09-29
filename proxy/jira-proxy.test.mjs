@@ -83,6 +83,7 @@ describe('jira proxy HTTP behavior', () => {
     assert.match(response.headers.get('access-control-allow-methods'), /GET/);
     assert.match(response.headers.get('access-control-allow-methods'), /POST/);
     assert.match(response.headers.get('access-control-allow-headers'), /Authorization/);
+    assert.equal(response.headers.get('access-control-allow-private-network'), 'true');
   });
 
   test('missing target URL returns 400 JSON', async () => {
