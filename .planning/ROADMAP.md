@@ -150,11 +150,12 @@ Plans:
 **Goal:** Provide a local-first task timer engine (start/pause/finish) with reload persistence, multiple concurrent timers, work session history logs in Dexie SCHEMA_V5, 3-tier allocation & feasibility alerts, and spent time rollups across tasks, milestones, and projects.
 **Requirements**: TIMER-01, TIMER-02, TIMER-03, TIMER-04, TIMER-05, TIMER-06, TIMER-07, TIMER-08, TIMER-09
 **Depends on:** Phase 12
-**Plans:** 3/3 plans complete
+**Plans:** 4 plans (1 gap closure plan)
 
 Plans:
 **Wave 1**
 - [x] 12.1-01-PLAN.md — Dexie SCHEMA_V5 (workSessions, activeTimers), models, repository CRUD, spent rollups, cascade cleanup, and backup v3 envelope
+- [ ] 12.1-04-PLAN.md — Fix timer UI freeze, header widget task title query, TaskTable column header, and live allocation warning alert (Gap Closure)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [x] 12.1-02-PLAN.md — TimerContext & useTimer hook with multi-timer concurrency, reload survival, and 3-tier allocation/feasibility alert evaluation engine
