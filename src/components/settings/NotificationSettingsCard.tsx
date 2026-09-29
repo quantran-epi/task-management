@@ -1,10 +1,31 @@
 import React, { useState } from 'react';
-import { Card, Switch, Typography, Space, Alert, message } from 'antd';
-import { NotificationOutlined } from '@ant-design/icons';
+import {
+  Card,
+  Switch,
+  Typography,
+  Space,
+  Alert,
+  Divider,
+  Select,
+  Checkbox,
+  Row,
+  Col,
+  message,
+} from 'antd';
+import {
+  NotificationOutlined,
+  ControlOutlined,
+  AppstoreOutlined,
+} from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
+import {
+  NOTIFICATION_SETTINGS_KEY,
+  DEFAULT_NOTIFICATION_SETTINGS,
+  type NotificationSettings,
+} from '../../types/notifications';
 
-const { Paragraph } = Typography;
+const { Text, Paragraph } = Typography;
 
 export interface NotificationSettingsCardProps {
   db?: TaskPlannerDatabase | undefined;
@@ -15,16 +36,47 @@ export const NotificationSettingsCard: React.FC<NotificationSettingsCardProps> =
 }) => {
   const [permissionBlocked, setPermissionBlocked] = useState(false);
 
-  const enabled = useLiveQuery(
+  const rawSettings = useLiveQuery(
     async () => {
-      const setting = await db.settings.get('browserNotificationsEnabled');
-      return setting?.value === true;
+      const record = await db.settings.get(NOTIFICATION_SETTINGS_KEY);
+      return record?.value && typeof record.value === 'object'
+        ? (record.value as Partial<NotificationSettings>)
+        : undefined;
     },
-    [db],
-    false
+    [db]
   );
 
-  const handleToggle = async (checked: boolean) => {
+  const settings: NotificationSettings = {
+    ...DEFAULT_NOTIFICATION_SETTINGS,
+    ...rawSettings,
+    enabledCategories: {
+      ...DEFAULT_NOTIFICATION_SETTINGS.enabledCategories,
+      ...(rawSettings?.enabledCategories ?? {}),
+    },
+  };
+
+  const saveSettings = async (partial: Partial<NotificationSettings>) => {
+    const updated: NotificationSettings = {
+      ...settings,
+      ...partial,
+      enabledCategories: {
+        ...settings.enabledCategories,
+        ...(partial.enabledCategories ?? {}),
+      },
+    };
+    await db.settings.put({
+      key: NOTIFICATION_SETTINGS_KEY,
+      value: updated,
+    });
+    if (partial.browserNotificationsEnabled !== undefined) {
+      await db.settings.put({
+        key: 'browserNotificationsEnabled',
+        value: partial.browserNotificationsEnabled,
+      });
+    }
+  };
+
+  const handleBrowserToggle = async (checked: boolean) => {
     setPermissionBlocked(false);
 
     if (checked) {
@@ -35,72 +87,295 @@ export const NotificationSettingsCard: React.FC<NotificationSettingsCardProps> =
 
       if (Notification.permission === 'denied') {
         setPermissionBlocked(true);
-        await db.settings.put({
-          key: 'browserNotificationsEnabled',
-          value: false,
-        });
+        await saveSettings({ browserNotificationsEnabled: false });
+        return;
+      }
+
+      if (Notification.permission === 'granted') {
+        await saveSettings({ browserNotificationsEnabled: true });
+        message.success('Đã bật thông báo trình duyệt.');
         return;
       }
 
       try {
         const perm = await Notification.requestPermission();
         if (perm === 'granted') {
-          await db.settings.put({
-            key: 'browserNotificationsEnabled',
-            value: true,
-          });
+          await saveSettings({ browserNotificationsEnabled: true });
           message.success('Đã bật thông báo trình duyệt.');
         } else {
           setPermissionBlocked(true);
-          await db.settings.put({
-            key: 'browserNotificationsEnabled',
-            value: false,
-          });
+          await saveSettings({ browserNotificationsEnabled: false });
         }
       } catch (err) {
         console.error('Failed to request notification permission:', err);
       }
     } else {
-      await db.settings.put({
-        key: 'browserNotificationsEnabled',
-        value: false,
-      });
+      await saveSettings({ browserNotificationsEnabled: false });
       message.info('Đã tắt thông báo trình duyệt.');
     }
   };
+
+  const isDenied =
+    permissionBlocked ||
+    (typeof window !== 'undefined' &&
+      'Notification' in window &&
+      Notification.permission === 'denied');
 
   return (
     <Card
       title={
         <Space>
           <NotificationOutlined />
-          <span>Thông báo màn hình (Desktop Notifications)</span>
+          <span>Cài đặt thông báo & cảnh báo</span>
         </Space>
       }
       data-testid="notification-settings-card"
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
-        <div style={{ flex: 1 }}>
-          <Paragraph type="secondary" style={{ margin: 0 }}>
-            Nhận thông báo tóm tắt trên màn hình khi mở ứng dụng nếu có tác vụ quá hạn, ngày quá tải hoặc nhắc nhở đến hạn hôm nay.
-          </Paragraph>
+      {/* Section 1: Thông báo trình duyệt (Desktop Notifications) */}
+      <div>
+        <Space style={{ marginBottom: 12 }}>
+          <NotificationOutlined />
+          <Text strong>Thông báo trình duyệt (Desktop Notifications)</Text>
+        </Space>
+
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+            gap: 16,
+            marginBottom: 16,
+          }}
+        >
+          <div style={{ flex: 1 }}>
+            <Text strong>Bật thông báo màn hình</Text>
+            <Paragraph type="secondary" style={{ margin: 0 }}>
+              Hiển thị biểu ngữ thông báo của hệ điều hành khi có việc quá hạn, quá tải hoặc đến giờ nhắc nhở.
+            </Paragraph>
+          </div>
+          <Switch
+            checked={settings.browserNotificationsEnabled}
+            onChange={handleBrowserToggle}
+            data-testid="browser-notifications-switch"
+            aria-label="Bật hoặc tắt thông báo trình duyệt"
+          />
         </div>
-        <Switch
-          checked={enabled}
-          onChange={handleToggle}
-          aria-label="Bật hoặc tắt thông báo trình duyệt"
-        />
+
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+            gap: 16,
+          }}
+        >
+          <div style={{ flex: 1 }}>
+            <Text strong>Giữ thông báo trên màn hình</Text>
+            <Paragraph type="secondary" style={{ margin: 0 }}>
+              Giữ biểu ngữ thông báo hiển thị cho đến khi người dùng nhấp hoặc đóng thủ công (requireInteraction: true).
+            </Paragraph>
+          </div>
+          <Switch
+            checked={settings.requireInteractionEnabled}
+            onChange={(checked) => saveSettings({ requireInteractionEnabled: checked })}
+            data-testid="require-interaction-switch"
+            aria-label="Giữ thông báo trên màn hình cho đến khi đóng thủ công"
+          />
+        </div>
+
+        {isDenied && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginTop: 16 }}
+            title="Quyền thông báo bị từ chối"
+            description="Vui lòng cấp quyền thông báo trong cài đặt trình duyệt để nhận cảnh báo."
+            data-testid="permission-denied-alert"
+          />
+        )}
       </div>
 
-      {permissionBlocked && (
-        <Alert
-          type="warning"
-          showIcon
-          style={{ marginTop: 16 }}
-          message="Quyền thông báo bị từ chối"
-          description="Trình duyệt đã chặn quyền thông báo. Vui lòng cấp quyền trong cài đặt trang web của trình duyệt (biểu tượng khóa hoặc cài đặt trên thanh địa chỉ) để sử dụng tính năng này."
-        />
-      )}
+      <Divider />
+
+      {/* Section 2: Ngưỡng cảnh báo (Thresholds) */}
+      <div>
+        <Space style={{ marginBottom: 16 }}>
+          <ControlOutlined />
+          <Text strong>Ngưỡng cảnh báo (Thresholds)</Text>
+        </Space>
+
+        <Row gutter={[16, 16]}>
+          <Col xs={24} sm={8}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <Text>Sắp đến hạn (Due Soon)</Text>
+              <Select
+                value={settings.dueSoonDays}
+                onChange={(val) => saveSettings({ dueSoonDays: val })}
+                data-testid="due-soon-days-select"
+                aria-label="Ngưỡng ngày sắp đến hạn"
+                options={[
+                  { value: 1, label: '1 ngày (hôm nay & ngày mai)' },
+                  { value: 2, label: '2 ngày' },
+                  { value: 3, label: '3 ngày' },
+                  { value: 5, label: '5 ngày' },
+                ]}
+              />
+            </div>
+          </Col>
+
+          <Col xs={24} sm={8}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <Text>Việc ứ đọng (Stale Tasks)</Text>
+              <Select
+                value={settings.staleTaskDays}
+                onChange={(val) => saveSettings({ staleTaskDays: val })}
+                data-testid="stale-task-days-select"
+                aria-label="Ngưỡng ngày tác vụ ứ đọng"
+                options={[
+                  { value: 3, label: '3 ngày' },
+                  { value: 5, label: '5 ngày (mặc định)' },
+                  { value: 7, label: '7 ngày' },
+                  { value: 14, label: '14 ngày' },
+                ]}
+              />
+            </div>
+          </Col>
+
+          <Col xs={24} sm={8}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <Text>Ngưỡng quá tải công suất</Text>
+              <Select
+                value={settings.capacityOverloadThreshold}
+                onChange={(val) => saveSettings({ capacityOverloadThreshold: val })}
+                data-testid="capacity-overload-select"
+                aria-label="Ngưỡng tỷ lệ quá tải công suất"
+                options={[
+                  { value: 100, label: '100% công suất (mặc định)' },
+                  { value: 110, label: '110% công suất' },
+                  { value: 120, label: '120% công suất' },
+                ]}
+              />
+            </div>
+          </Col>
+        </Row>
+      </div>
+
+      <Divider />
+
+      {/* Section 3: Nhóm cảnh báo hiển thị (Categories) */}
+      <div>
+        <Space orientation="horizontal" style={{ marginBottom: 12 }}>
+          <AppstoreOutlined />
+          <Text strong>Nhóm cảnh báo hiển thị (Categories)</Text>
+        </Space>
+        <Paragraph type="secondary" style={{ marginBottom: 16 }}>
+          Chọn các loại cảnh báo bạn muốn nhận và theo dõi trong ứng dụng.
+        </Paragraph>
+
+        <Row gutter={[16, 12]}>
+          <Col xs={24} sm={12} md={8}>
+            <Checkbox
+              checked={settings.enabledCategories.overdue}
+              onChange={(e) =>
+                saveSettings({
+                  enabledCategories: {
+                    ...settings.enabledCategories,
+                    overdue: e.target.checked,
+                  },
+                })
+              }
+              data-testid="category-checkbox-overdue"
+            >
+              Quá hạn (Overdue)
+            </Checkbox>
+          </Col>
+
+          <Col xs={24} sm={12} md={8}>
+            <Checkbox
+              checked={settings.enabledCategories.dueSoon}
+              onChange={(e) =>
+                saveSettings({
+                  enabledCategories: {
+                    ...settings.enabledCategories,
+                    dueSoon: e.target.checked,
+                  },
+                })
+              }
+              data-testid="category-checkbox-dueSoon"
+            >
+              Sắp đến hạn (Due Soon)
+            </Checkbox>
+          </Col>
+
+          <Col xs={24} sm={12} md={8}>
+            <Checkbox
+              checked={settings.enabledCategories.overload}
+              onChange={(e) =>
+                saveSettings({
+                  enabledCategories: {
+                    ...settings.enabledCategories,
+                    overload: e.target.checked,
+                  },
+                })
+              }
+              data-testid="category-checkbox-overload"
+            >
+              Quá tải công suất (Overload)
+            </Checkbox>
+          </Col>
+
+          <Col xs={24} sm={12} md={8}>
+            <Checkbox
+              checked={settings.enabledCategories.stale}
+              onChange={(e) =>
+                saveSettings({
+                  enabledCategories: {
+                    ...settings.enabledCategories,
+                    stale: e.target.checked,
+                  },
+                })
+              }
+              data-testid="category-checkbox-stale"
+            >
+              Việc ứ đọng (Stale)
+            </Checkbox>
+          </Col>
+
+          <Col xs={24} sm={12} md={8}>
+            <Checkbox
+              checked={settings.enabledCategories.reminders}
+              onChange={(e) =>
+                saveSettings({
+                  enabledCategories: {
+                    ...settings.enabledCategories,
+                    reminders: e.target.checked,
+                  },
+                })
+              }
+              data-testid="category-checkbox-reminders"
+            >
+              Nhắc nhở tùy chỉnh (Reminders)
+            </Checkbox>
+          </Col>
+
+          <Col xs={24} sm={12} md={8}>
+            <Checkbox
+              checked={settings.enabledCategories.timer}
+              onChange={(e) =>
+                saveSettings({
+                  enabledCategories: {
+                    ...settings.enabledCategories,
+                    timer: e.target.checked,
+                  },
+                })
+              }
+              data-testid="category-checkbox-timer"
+            >
+              Cảnh báo đồng hồ (Timer)
+            </Checkbox>
+          </Col>
+        </Row>
+      </div>
     </Card>
   );
 };

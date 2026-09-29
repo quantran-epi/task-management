@@ -7,6 +7,7 @@ import {
   CloudSyncOutlined,
   WarningOutlined,
   ExclamationCircleOutlined,
+  BellOutlined,
 } from '@ant-design/icons';
 import { WeeklyCapacityForm } from '../components/settings/WeeklyCapacityForm';
 import { OverridesTable } from '../components/settings/OverridesTable';
@@ -34,7 +35,7 @@ const { Title, Paragraph } = Typography;
 export interface SettingsViewProps {
   db?: TaskPlannerDatabase;
   onNavigate?: (route: AppRoute) => void;
-  defaultActiveTab?: 'capacity' | 'data' | 'jira';
+  defaultActiveTab?: 'capacity' | 'data' | 'jira' | 'notifications';
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -42,7 +43,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onNavigate,
   defaultActiveTab = 'capacity',
 }) => {
-  const [activeTab, setActiveTab] = useState<'capacity' | 'data' | 'jira'>(defaultActiveTab);
+  const [activeTab, setActiveTab] = useState<'capacity' | 'data' | 'jira' | 'notifications'>(defaultActiveTab);
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [showPostRestoreBanner, setShowPostRestoreBanner] = useState(false);
   const [remotePayload, setRemotePayload] = useState<BackupEnvelope | null>(null);
@@ -152,7 +153,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <GitHubSyncCard db={db} onPullSuccess={handleRemotePullSuccess} />
           <PwaStatusCard />
           <StoragePersistenceCard />
-          <NotificationSettingsCard db={db} />
 
           <Card
             title={
@@ -187,6 +187,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </Space>
       ),
     },
+    {
+      key: 'notifications',
+      label: (
+        <span>
+          <BellOutlined style={{ marginRight: 8 }} />
+          Thông báo
+        </span>
+      ),
+      children: (
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <NotificationSettingsCard db={db} />
+        </Space>
+      ),
+    },
   ];
 
   return (
@@ -214,7 +228,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       <Tabs
         activeKey={activeTab}
-        onChange={(k) => setActiveTab(k as 'capacity' | 'data' | 'jira')}
+        onChange={(k) => setActiveTab(k as 'capacity' | 'data' | 'jira' | 'notifications')}
         items={items}
       />
 

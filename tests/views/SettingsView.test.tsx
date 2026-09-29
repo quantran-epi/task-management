@@ -202,5 +202,17 @@ describe('SettingsView Integration & Offline Independence (SYNC-07, SYNC-05)', (
 
     expect(announceSpy).toHaveBeenCalled();
   }, 30000);
+
+  it('renders notifications tab and mounts NotificationSettingsCard when selected (D-10)', async () => {
+    render(
+      <GitHubAuthProvider>
+        <SettingsView db={db} defaultActiveTab="notifications" />
+      </GitHubAuthProvider>
+    );
+
+    expect(screen.getByRole('tab', { name: /Thông báo/i })).toBeInTheDocument();
+    expect(screen.getByTestId('notification-settings-card')).toBeInTheDocument();
+    expect(screen.getByText('Cài đặt thông báo & cảnh báo')).toBeInTheDocument();
+  });
 });
 

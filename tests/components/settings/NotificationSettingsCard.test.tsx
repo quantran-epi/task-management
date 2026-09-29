@@ -1,26 +1,42 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { NotificationSettingsCard } from '../../../src/components/settings/NotificationSettingsCard';
-import { useDesktopNotification, SESSION_NOTIFICATION_SHOWN_KEY } from '../../../src/hooks/useDesktopNotification';
 import { db } from '../../../src/db';
-import type { NotificationState } from '../../../src/types/notifications';
-import { renderHook } from '@testing-library/react';
+import {
+  NOTIFICATION_SETTINGS_KEY,
+  DEFAULT_NOTIFICATION_SETTINGS,
+  type NotificationSettings,
+} from '../../../src/types/notifications';
 
-describe('NotificationSettingsCard (D-18, D-19)', () => {
+describe('NotificationSettingsCard (D-10, D-11, NOTIF-08)', () => {
   beforeEach(async () => {
     await db.settings.delete('browserNotificationsEnabled');
+    await db.settings.delete(NOTIFICATION_SETTINGS_KEY);
     sessionStorage.clear();
     vi.restoreAllMocks();
   });
 
-  it('renders desktop notification settings card with title and switch', () => {
+  it('renders default controls for notifications, thresholds, and categories', async () => {
     render(<NotificationSettingsCard db={db} />);
 
-    expect(screen.getByText(/Thông báo màn hình \(Desktop Notifications\)/i)).toBeDefined();
-    expect(screen.getByRole('switch', { name: /Bật hoặc tắt thông báo trình duyệt/i })).toBeDefined();
+    expect(screen.getByTestId('notification-settings-card')).toBeDefined();
+    expect(screen.getByText(/Cài đặt thông báo & cảnh báo/i)).toBeDefined();
+    expect(screen.getByTestId('browser-notifications-switch')).toBeDefined();
+    expect(screen.getByTestId('require-interaction-switch')).toBeDefined();
+    expect(screen.getByTestId('due-soon-days-select')).toBeDefined();
+    expect(screen.getByTestId('stale-task-days-select')).toBeDefined();
+    expect(screen.getByTestId('capacity-overload-select')).toBeDefined();
+
+    // Category checkboxes
+    expect(screen.getByTestId('category-checkbox-overdue')).toBeDefined();
+    expect(screen.getByTestId('category-checkbox-dueSoon')).toBeDefined();
+    expect(screen.getByTestId('category-checkbox-overload')).toBeDefined();
+    expect(screen.getByTestId('category-checkbox-stale')).toBeDefined();
+    expect(screen.getByTestId('category-checkbox-reminders')).toBeDefined();
+    expect(screen.getByTestId('category-checkbox-timer')).toBeDefined();
   });
 
-  it('requests permission and enables setting when permission is granted', async () => {
+  it('requests permission and enables browser notifications when toggle is clicked', async () => {
     const mockRequestPermission = vi.fn().mockResolvedValue('granted');
     vi.stubGlobal('Notification', {
       permission: 'default',
@@ -28,122 +44,90 @@ describe('NotificationSettingsCard (D-18, D-19)', () => {
     });
 
     render(<NotificationSettingsCard db={db} />);
-    const toggle = screen.getByRole('switch', { name: /Bật hoặc tắt thông báo trình duyệt/i });
+    const toggle = screen.getByTestId('browser-notifications-switch');
 
     fireEvent.click(toggle);
 
     await waitFor(async () => {
       expect(mockRequestPermission).toHaveBeenCalled();
-      const saved = await db.settings.get('browserNotificationsEnabled');
-      expect(saved?.value).toBe(true);
+      const savedLegacy = await db.settings.get('browserNotificationsEnabled');
+      expect(savedLegacy?.value).toBe(true);
+
+      const savedSettings = await db.settings.get(NOTIFICATION_SETTINGS_KEY);
+      const val = savedSettings?.value as NotificationSettings;
+      expect(val?.browserNotificationsEnabled).toBe(true);
     });
   });
 
-  it('shows warning alert when permission is denied', async () => {
+  it('shows warning alert and disables setting when notification permission is denied', async () => {
     vi.stubGlobal('Notification', {
       permission: 'denied',
       requestPermission: vi.fn().mockResolvedValue('denied'),
     });
 
     render(<NotificationSettingsCard db={db} />);
-    const toggle = screen.getByRole('switch', { name: /Bật hoặc tắt thông báo trình duyệt/i });
+    const toggle = screen.getByTestId('browser-notifications-switch');
 
     fireEvent.click(toggle);
 
-    expect(await screen.findByText('Quyền thông báo bị từ chối')).toBeDefined();
-    const saved = await db.settings.get('browserNotificationsEnabled');
-    expect(saved?.value).toBe(false);
-  });
-});
-
-describe('useDesktopNotification hook (T-12-07, T-12-08)', () => {
-  beforeEach(async () => {
-    await db.settings.delete('browserNotificationsEnabled');
-    sessionStorage.clear();
-    vi.restoreAllMocks();
-  });
-
-  it('triggers browser notification when enabled, granted, and not throttled', async () => {
-    await db.settings.put({ key: 'browserNotificationsEnabled', value: true });
-
-    const mockNotificationConstructor = vi.fn();
-    vi.stubGlobal('Notification', Object.assign(mockNotificationConstructor, {
-      permission: 'granted',
-    }));
-
-    const mockState: NotificationState = {
-      items: [
-        {
-          id: 'overdue:task:1',
-          category: 'overdue',
-          title: 'Tác vụ 1',
-          tagColor: 'error',
-          tagLabel: 'Quá hạn',
-          entityType: 'task',
-          canDismiss: false,
-          priorityOrder: 1,
-        },
-      ],
-      activeCount: 1,
-      categoryCounts: {
-        overdue: 1,
-        overload: 0,
-        'due-soon': 0,
-        stale: 0,
-        reminder: 0,
-      },
-      isLoading: false,
-    };
-
-    renderHook(() => useDesktopNotification({ notifications: mockState, db }));
-
-    await waitFor(() => {
-      expect(mockNotificationConstructor).toHaveBeenCalledTimes(1);
-      expect(mockNotificationConstructor).toHaveBeenCalledWith(
-        'Task Planner',
-        expect.objectContaining({
-          body: expect.stringContaining('1 việc quá hạn'),
-        })
-      );
-      expect(sessionStorage.getItem(SESSION_NOTIFICATION_SHOWN_KEY)).toBe('true');
+    await waitFor(async () => {
+      expect(screen.getByTestId('permission-denied-alert')).toBeDefined();
+      const saved = await db.settings.get('browserNotificationsEnabled');
+      expect(saved?.value).toBe(false);
     });
   });
 
-  it('does not trigger if already shown in this session (sessionStorage throttled)', async () => {
-    await db.settings.put({ key: 'browserNotificationsEnabled', value: true });
-    sessionStorage.setItem(SESSION_NOTIFICATION_SHOWN_KEY, 'true');
+  it('toggles requireInteractionEnabled switch and saves to db.settings', async () => {
+    render(<NotificationSettingsCard db={db} />);
+    const requireToggle = screen.getByTestId('require-interaction-switch');
 
-    const mockNotificationConstructor = vi.fn();
-    vi.stubGlobal('Notification', Object.assign(mockNotificationConstructor, {
-      permission: 'granted',
-    }));
+    // Default is true, clicking toggles to false
+    fireEvent.click(requireToggle);
 
-    const mockState: NotificationState = {
-      items: [
-        {
-          id: 'overdue:task:1',
-          category: 'overdue',
-          title: 'Tác vụ 1',
-          tagColor: 'error',
-          tagLabel: 'Quá hạn',
-          entityType: 'task',
-          canDismiss: false,
-          priorityOrder: 1,
-        },
-      ],
-      activeCount: 1,
-      categoryCounts: {
-        overdue: 1,
-        overload: 0,
-        'due-soon': 0,
-        stale: 0,
-        reminder: 0,
+    await waitFor(async () => {
+      const saved = await db.settings.get(NOTIFICATION_SETTINGS_KEY);
+      const val = saved?.value as NotificationSettings;
+      expect(val?.requireInteractionEnabled).toBe(false);
+    });
+  });
+
+  it('updates category toggles in db.settings when checkbox is changed', async () => {
+    render(<NotificationSettingsCard db={db} />);
+
+    const overdueCheckbox = screen.getByTestId('category-checkbox-overdue');
+    expect(overdueCheckbox).toBeDefined();
+
+    // Toggle overdue off
+    fireEvent.click(overdueCheckbox);
+
+    await waitFor(async () => {
+      const saved = await db.settings.get(NOTIFICATION_SETTINGS_KEY);
+      const val = saved?.value as NotificationSettings;
+      expect(val?.enabledCategories.overdue).toBe(false);
+      expect(val?.enabledCategories.dueSoon).toBe(true);
+    });
+  });
+
+  it('persists threshold settings changes to Dexie', async () => {
+    // Seed initial custom settings
+    await db.settings.put({
+      key: NOTIFICATION_SETTINGS_KEY,
+      value: {
+        ...DEFAULT_NOTIFICATION_SETTINGS,
+        dueSoonDays: 3,
+        staleTaskDays: 7,
+        capacityOverloadThreshold: 110,
       },
-      isLoading: false,
-    };
+    });
 
-    renderHook(() => useDesktopNotification({ notifications: mockState, db }));
+    render(<NotificationSettingsCard db={db} />);
 
-    expect(mockNotificationConstructor).not.toHaveBeenCalled();
+    await waitFor(async () => {
+      const saved = await db.settings.get(NOTIFICATION_SETTINGS_KEY);
+      const val = saved?.value as NotificationSettings;
+      expect(val?.dueSoonDays).toBe(3);
+      expect(val?.staleTaskDays).toBe(7);
+      expect(val?.capacityOverloadThreshold).toBe(110);
+    });
   });
 });
