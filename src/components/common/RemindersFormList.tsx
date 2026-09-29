@@ -160,7 +160,7 @@ export const RemindersFormList: React.FC<RemindersFormListProps> = ({
                 icon={<PlusOutlined />}
                 style={{ width: '100%' }}
               >
-                + Thêm nhắc nhở ({fields.length}/5)
+                Thêm nhắc nhở ({fields.length}/5)
               </Button>
             ) : (
               <Text type="secondary" style={{ fontSize: 12 }}>
