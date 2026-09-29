@@ -50,7 +50,7 @@
 
 ### Multi-Reminder, Notification Settings & UI Controls (Phase 12.2 INSERTED)
 
-- [ ] **NOTIF-06**: User can configure multiple custom reminders with date (`YYYY-MM-DD`), optional time (`HH:mm`), and note on Projects, Milestones, and Tasks.
+- [x] **NOTIF-06**: User can configure multiple custom reminders with date (`YYYY-MM-DD`), optional time (`HH:mm`), and note on Projects, Milestones, and Tasks.
 - [ ] **NOTIF-07**: Browser notifications support persistent display (`requireInteraction: true`) so notifications stay on screen until user interaction.
 - [ ] **NOTIF-08**: User can configure notification settings in Settings (master toggle, persistent alert toggle, deadline warning threshold days, stale task threshold days, capacity overload threshold percentage, category toggles).
 - [ ] **NOTIF-09**: User can pick which columns to display or hide on task tables and click column headers to sort table data, with column preferences saved across sessions.
@@ -106,7 +106,7 @@
 | TIMER-07 | Phase 12.1 | Complete |
 | TIMER-08 | Phase 12.1 | Complete |
 | TIMER-09 | Phase 12.1 | Complete |
-| NOTIF-06 | Phase 12.2 | Pending |
+| NOTIF-06 | Phase 12.2 | Complete |
 | NOTIF-07 | Phase 12.2 | Pending |
 | NOTIF-08 | Phase 12.2 | Pending |
 | NOTIF-09 | Phase 12.2 | Pending |

@@ -180,11 +180,11 @@ Plans:
   4. TaskTable includes a column visibility control (show/hide columns) and clickable header column sorting, persisted in client storage.
   5. AppShell Sider remembers collapsed/expanded state across browser reloads.
 
-**Plans:** 3 plans in 2 waves
+**Plans:** 1/3 plans executed
 Plans:
 **Wave 1**
 
-- [ ] 12.2-01-PLAN.md — Schema V6, models, validation schemas, multi-reminder evaluation engine, and form list controls (Wave 1)
+- [x] 12.2-01-PLAN.md — Schema V6, models, validation schemas, multi-reminder evaluation engine, and form list controls (Wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -222,5 +222,5 @@ Plans:
 | 11. Jira Cloud Integration & Task Lifecycle | v1.1 | 3/3 | Complete    | 2026-09-28 |
 | 12. In-App Notifications, Proactive Alerts & Custom Reminders | v1.1 | 3/3 | Complete    | 2026-09-29 |
 | 12.1. Task Timer, Work Session Logs & Spent Time Tracking | v1.1 | 4/4 | Complete    | 2026-09-29 |
-| 12.2. Multiple Reminders with Time, Notification Settings, Table Customization & Sidebar Persistence | v1.1 | 0/3 | Planning complete | - |
+| 12.2. Multiple Reminders with Time, Notification Settings, Table Customization & Sidebar Persistence | v1.1 | 1/3 | In Progress|  |
 | 13. Enhanced Workload Analytics & Milestone Burndown | v1.1 | 0/0 | Not started | - |

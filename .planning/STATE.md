@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Banking IT Enhancements & Jira Integration
 status: executing
-stopped_at: Phase 12.2 context gathered
-last_updated: "2026-09-29T13:14:28.915Z"
-last_activity: 2026-09-29 — Phase 12.1 complete, transitioned to Phase 13
+stopped_at: Completed 12.2-01-PLAN.md
+last_updated: "2026-09-29T13:32:59.308Z"
+last_activity: 2026-09-29 -- Phase 12.2 execution started
 progress:
   total_phases: 7
   completed_phases: 5
-  total_plans: 15
-  completed_plans: 15
+  total_plans: 18
+  completed_plans: 16
   percent: 71
 current_phase: 12.2
 current_phase_name: Multiple Reminders with Time, Notification Settings, Table Customization & Sidebar Persistence
@@ -23,14 +23,14 @@ current_phase_name: Multiple Reminders with Time, Notification Settings, Table C
 See: .planning/PROJECT.md (updated 2026-09-27)
 
 **Core value:** Make planned work realistically fit available time by exposing overload early and suggesting feasible daily workload distributions.
-**Current focus:** Phase 12.2 — Multiple Reminders with Time, Notification Settings, Table Customization & Sidebar Persistence (INSERTED)
+**Current focus:** Phase 12.2 — multiple-reminders-with-time-notification-settings-table-cus
 
 ## Current Position
 
-Phase: 12.2 — Multiple Reminders with Time, Notification Settings, Table Customization & Sidebar Persistence
-Plan: Not started
+Phase: 12.2 (multiple-reminders-with-time-notification-settings-table-cus) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
-Last activity: 2026-09-29 — Phase 12.1 complete, transitioned to Phase 13
+Last activity: 2026-09-29 -- Phase 12.2 execution started
 
 ### Quick Tasks Completed
 
@@ -77,6 +77,7 @@ Last activity: 2026-09-29 — Phase 12.1 complete, transitioned to Phase 13
 | Phase 12.1 P01 | 15m | 3 tasks | 16 files |
 | Phase 12.1 P03 | 25m | 3 tasks | 8 files |
 | Phase 12.1 P04 | 12m | 3 tasks | 10 files |
+| Phase 12.2 P01 | 15m | 3 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -205,6 +206,8 @@ Decisions logged across v1.0 and v1.1:
 - [Phase 12.1]: Include tick in TimerContext useMemo dependency array so tick increments trigger context consumer re-renders every second without writing tick counts to IndexedDB
 - [Phase 12.1]: Use db.tasks.bulkGet(ids) in ActiveTimerWidget to reliably fetch task records by primary key id, filtering out undefined entries
 - [Phase 12.1]: Invert TaskTable column header to 'Đã dùng / Ước tính' to match cell format, and evaluate live running timer duration against task estimate with Set ref deduplication to prevent toast alert spam
+- [Phase 12.2]: Migrate Dexie schema to Version 6 by cloning v5 table structures and migrating legacy reminderDate/reminderNote into reminders array elements
+- [Phase 12.2]: Cap reminders at max 5 items per entity in both Zod validation and dynamic form list
 
 ### Pending Todos
 
@@ -226,9 +229,9 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-09-29T12:49:17.608Z
-Stopped at: Phase 12.2 context gathered
-Resume file: .planning/phases/12.2-multiple-reminders-with-time-notification-settings-table-cus/12.2-CONTEXT.md
+Last session: 2026-09-29T13:32:59.303Z
+Stopped at: Completed 12.2-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
