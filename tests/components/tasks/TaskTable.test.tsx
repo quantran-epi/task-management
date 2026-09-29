@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { TaskPlannerDatabase } from '../../../src/db';
 import type { Task, Project, Milestone } from '../../../src/types/models';
-import { TaskTable, STORAGE_COLUMNS_KEY, ALL_CUSTOMIZABLE_COLUMNS } from '../../../src/components/tasks/TaskTable';
+import { TaskTable, STORAGE_COLUMNS_KEY } from '../../../src/components/tasks/TaskTable';
 
 // Mock TimerContext
 vi.mock('../../../src/hooks/useTimer', () => ({

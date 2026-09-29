@@ -7,6 +7,7 @@ if (typeof window !== 'undefined') {
     writable: true,
     value: (query: string) => {
       // Return matches: true for min-width queries up to 1024px to simulate desktop by default
+      // Return matches: false for max-width queries (e.g. max-width: 991.98px) to avoid triggering responsive collapse on desktop
       const isDesktopQuery = query.includes('min-width: 768px') || query.includes('min-width: 992px');
       return {
         matches: isDesktopQuery,

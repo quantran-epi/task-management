@@ -34,6 +34,8 @@ const { Header, Sider, Content } = Layout;
 const { useBreakpoint } = Grid;
 const { Title } = Typography;
 
+export const SIDEBAR_COLLAPSED_KEY = 'planner:sidebar_collapsed';
+
 export interface AppShellProps {
   currentRoute: AppRoute;
   onNavigate: NavigateFunction;
@@ -52,6 +54,28 @@ const AppShellInner: React.FC<AppShellProps> = ({
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const { token } = theme.useToken();
+
+  // Desktop sidebar collapse persistence per D-17, D-18, D-20, T-12.2-08
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleCollapse = (value: boolean, type?: 'clickTrigger' | 'responsive') => {
+    // Only handle user-directed collapse/expand triggers per D-17, D-18, D-19
+    // Responsive auto-collapse/expand from breakpoint="lg" should not override user's persistent preference
+    if (type === 'responsive') return;
+    setCollapsed(value);
+    try {
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(value));
+    } catch (err) {
+      console.warn('Failed to save sidebar collapse state:', err);
+    }
+  };
 
   const { needRefresh, reloadApp } = useServiceWorkerUpdate();
   const notifications = useNotifications();
@@ -110,7 +134,13 @@ const AppShellInner: React.FC<AppShellProps> = ({
   return (
     <Layout style={{ minHeight: '100vh' }}>
       {!isMobile ? (
-        <Sider collapsible breakpoint="lg" theme={isDark ? 'dark' : 'light'}>
+        <Sider
+          collapsible
+          collapsed={collapsed}
+          onCollapse={handleCollapse}
+          breakpoint="lg"
+          theme={isDark ? 'dark' : 'light'}
+        >
           <div style={{ padding: '16px', fontWeight: 600, fontSize: 16 }}>Menu</div>
           <Navigation currentRoute={currentRoute} onNavigate={onNavigate} />
         </Sider>
