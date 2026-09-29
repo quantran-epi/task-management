@@ -11,6 +11,7 @@ import {
   message,
   Dropdown,
   Progress,
+  Checkbox,
   theme,
   type TableColumnsType,
   type MenuProps,
@@ -24,6 +25,7 @@ import {
   PlayCircleOutlined,
   PauseCircleOutlined,
   CheckCircleOutlined,
+  SettingOutlined,
 } from '@ant-design/icons';
 import type { Task, Project, Milestone, TaskPriority, WorkType } from '../../types/models';
 import { InlineStatusTag } from './InlineStatusTag';
@@ -72,6 +74,33 @@ const PRIORITY_LABELS: Record<TaskPriority, string> = {
   Low: 'Thấp',
 };
 
+export const STORAGE_COLUMNS_KEY = 'planner:task_table_columns';
+
+export interface ColumnConfig {
+  key: string;
+  label: string;
+  fixed?: boolean;
+  default: boolean;
+}
+
+export const ALL_CUSTOMIZABLE_COLUMNS: ColumnConfig[] = [
+  { key: 'name', label: 'Tác vụ & Phân cấp', fixed: true, default: true },
+  { key: 'status', label: 'Trạng thái', default: true },
+  { key: 'priority', label: 'Độ ưu tiên', default: true },
+  { key: 'workType', label: 'Loại việc', default: true },
+  { key: 'opsOwners', label: 'Ops Owner', default: true },
+  { key: 'businessAnalysts', label: 'Business Analyst (BA)', default: true },
+  { key: 'estimateMinutes', label: 'Thời gian làm / Ước tính', default: true },
+  { key: 'timer', label: 'Đồng hồ tính giờ', default: true },
+  { key: 'progress', label: 'Tiến độ', default: true },
+  { key: 'deadline', label: 'Hạn chót', default: true },
+  { key: 'actions', label: 'Thao tác', default: true },
+];
+
+export const DEFAULT_VISIBLE_COLUMNS: string[] = ALL_CUSTOMIZABLE_COLUMNS.filter(
+  (c) => c.default
+).map((c) => c.key);
+
 export const TaskTable: React.FC<TaskTableProps> = ({
   tasks,
   projects,
@@ -92,6 +121,49 @@ export const TaskTable: React.FC<TaskTableProps> = ({
   const [standupFallbackText, setStandupFallbackText] = useState<string>('');
   const tableRef = useRef<HTMLDivElement>(null);
   const fallbackTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Synchronous localStorage initialization to prevent FOUC per D-16, T-12.2-07
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(() => {
+    try {
+      if (typeof window === 'undefined') return DEFAULT_VISIBLE_COLUMNS;
+      const raw = localStorage.getItem(STORAGE_COLUMNS_KEY);
+      if (!raw) return DEFAULT_VISIBLE_COLUMNS;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        // Enforce 'name' is always included
+        return Array.from(new Set(['name', ...parsed.filter((k) => typeof k === 'string')]));
+      }
+      return DEFAULT_VISIBLE_COLUMNS;
+    } catch {
+      return DEFAULT_VISIBLE_COLUMNS;
+    }
+  });
+
+  const handleColumnToggle = (columnKey: string, checked: boolean) => {
+    if (columnKey === 'name') return; // Fixed mandatory column
+    let next: string[];
+    if (checked) {
+      next = Array.from(new Set([...visibleColumns, columnKey]));
+    } else {
+      next = visibleColumns.filter((k) => k !== columnKey);
+      if (!next.includes('name')) next.unshift('name');
+    }
+    setVisibleColumns(next);
+    try {
+      localStorage.setItem(STORAGE_COLUMNS_KEY, JSON.stringify(next));
+    } catch (err) {
+      console.warn('Failed to save task table column preferences:', err);
+    }
+  };
+
+  const handleResetColumns = () => {
+    setVisibleColumns(DEFAULT_VISIBLE_COLUMNS);
+    try {
+      localStorage.setItem(STORAGE_COLUMNS_KEY, JSON.stringify(DEFAULT_VISIBLE_COLUMNS));
+    } catch (err) {
+      console.warn('Failed to reset task table column preferences:', err);
+    }
+  };
 
   const effectiveDb = db || defaultDb;
   const {
@@ -608,6 +680,43 @@ export const TaskTable: React.FC<TaskTableProps> = ({
     },
   ];
 
+  // Dynamic column filtering based on visibleColumns preferences per D-13, D-14
+  const activeColumns = columns.filter(
+    (col) => col.key === 'name' || visibleColumns.includes(col.key as string)
+  );
+
+  const columnCustomizationContent = (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 200, padding: 4 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${token.colorBorderSecondary}`, paddingBottom: 6 }}>
+        <strong style={{ fontSize: 13 }}>Cột hiển thị</strong>
+        <Button type="link" size="small" onClick={handleResetColumns} style={{ padding: 0 }}>
+          Mặc định
+        </Button>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 280, overflowY: 'auto' }}>
+        {ALL_CUSTOMIZABLE_COLUMNS.map((col) => {
+          const isFixed = Boolean(col.fixed);
+          const isChecked = isFixed || visibleColumns.includes(col.key);
+          return (
+            <Checkbox
+              key={col.key}
+              checked={isChecked}
+              disabled={isFixed}
+              onChange={(e) => handleColumnToggle(col.key, e.target.checked)}
+            >
+              <span style={{ fontSize: 13 }}>{col.label}</span>
+              {isFixed && (
+                <span style={{ fontSize: 11, color: token.colorTextQuaternary, marginLeft: 4 }}>
+                  (Cố định)
+                </span>
+              )}
+            </Checkbox>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   return (
     <div
       ref={tableRef}
@@ -632,19 +741,36 @@ export const TaskTable: React.FC<TaskTableProps> = ({
             <span>Hiển thị <strong>{tasks.length}</strong> tác vụ</span>
           )}
         </div>
-        <Button
-          type="primary"
-          icon={<CopyOutlined />}
-          onClick={handleCopyStandup}
-          aria-label="Sao chép Standup"
-        >
-          Sao chép Standup
-        </Button>
+        <Space size="middle">
+          <Popover
+            content={columnCustomizationContent}
+            title={null}
+            trigger="click"
+            placement="bottomRight"
+          >
+            <Tooltip title="Cột hiển thị">
+              <Button
+                icon={<SettingOutlined />}
+                aria-label="Cột hiển thị"
+              >
+                Tùy biến cột
+              </Button>
+            </Tooltip>
+          </Popover>
+          <Button
+            type="primary"
+            icon={<CopyOutlined />}
+            onClick={handleCopyStandup}
+            aria-label="Sao chép Standup"
+          >
+            Sao chép Standup
+          </Button>
+        </Space>
       </div>
 
       <Table
         rowKey="id"
-        columns={columns}
+        columns={activeColumns}
         dataSource={tasks}
         loading={loading}
         pagination={{ pageSize: 25, hideOnSinglePage: true }}
