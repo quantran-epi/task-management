@@ -546,4 +546,222 @@ describe('evaluateNotifications', () => {
       expect(reminders).toHaveLength(0);
     });
   });
+
+  describe('NotificationSettings threshold and category filtering (NOTIF-08, D-11)', () => {
+    it('mutes disabled categories when toggled off in settings.enabledCategories', () => {
+      const tasks: Task[] = [
+        {
+          ...baseTask,
+          id: 't-overdue',
+          deadline: '2026-09-25',
+          status: 'Open',
+        },
+        {
+          ...baseTask,
+          id: 't-due-soon',
+          deadline: tomorrowDate,
+          status: 'Open',
+        },
+        {
+          ...baseTask,
+          id: 't-stale',
+          status: 'In Progress',
+          updatedAt: '2026-09-15T00:00:00.000Z',
+        },
+        {
+          ...baseTask,
+          id: 't-rem',
+          status: 'In Progress',
+          reminders: [{ id: 'r1', date: todayDate }],
+        },
+      ];
+
+      const allocations: PlannedAllocation[] = [
+        { id: 'al-overload', taskId: 't-overdue', date: todayDate, allocatedMinutes: 600 },
+      ];
+
+      // Mute all categories
+      const resultMuted = evaluateNotifications({
+        tasks,
+        projects: [],
+        milestones: [],
+        rules: defaultRules,
+        overrides: [],
+        allocations,
+        dismissedMap: {},
+        todayDate,
+        settings: {
+          browserNotificationsEnabled: false,
+          requireInteractionEnabled: true,
+          dueSoonDays: 1,
+          staleTaskDays: 5,
+          capacityOverloadThreshold: 100,
+          enabledCategories: {
+            overdue: false,
+            dueSoon: false,
+            overload: false,
+            stale: false,
+            reminders: false,
+            timer: false,
+          },
+        },
+      });
+
+      expect(resultMuted).toHaveLength(0);
+    });
+
+    it('respects custom dueSoonDays threshold (e.g. 3 days)', () => {
+      const in2Days = '2026-09-30';
+      const in4Days = '2026-10-02';
+
+      const tasks: Task[] = [
+        { ...baseTask, id: 't-due-2d', deadline: in2Days, status: 'Open' },
+        { ...baseTask, id: 't-due-4d', deadline: in4Days, status: 'Open' },
+      ];
+
+      // Default dueSoonDays = 1 -> neither 2 days nor 4 days is included
+      const resultDefault = evaluateNotifications({
+        tasks,
+        projects: [],
+        milestones: [],
+        rules: defaultRules,
+        overrides: [],
+        allocations: [],
+        dismissedMap: {},
+        todayDate,
+      });
+      expect(resultDefault.filter((i) => i.category === 'due-soon')).toHaveLength(0);
+
+      // Custom dueSoonDays = 3 -> in2Days included, in4Days excluded
+      const resultCustom = evaluateNotifications({
+        tasks,
+        projects: [],
+        milestones: [],
+        rules: defaultRules,
+        overrides: [],
+        allocations: [],
+        dismissedMap: {},
+        todayDate,
+        settings: {
+          browserNotificationsEnabled: false,
+          requireInteractionEnabled: true,
+          dueSoonDays: 3,
+          staleTaskDays: 5,
+          capacityOverloadThreshold: 100,
+          enabledCategories: {
+            overdue: true,
+            dueSoon: true,
+            overload: true,
+            stale: true,
+            reminders: true,
+            timer: true,
+          },
+        },
+      });
+
+      const dueSoonCustom = resultCustom.filter((i) => i.category === 'due-soon');
+      expect(dueSoonCustom).toHaveLength(1);
+      expect(dueSoonCustom[0]?.entityId).toBe('t-due-2d');
+      expect(dueSoonCustom[0]?.tagLabel).toBe('Đến hạn sau 2 ngày');
+    });
+
+    it('respects custom staleTaskDays threshold (e.g. 7 days)', () => {
+      // 6 days untouched (2026-09-22)
+      // 8 days untouched (2026-09-20)
+      const tasks: Task[] = [
+        {
+          ...baseTask,
+          id: 't-stale-6d',
+          status: 'In Progress',
+          updatedAt: '2026-09-22T00:00:00.000Z',
+        },
+        {
+          ...baseTask,
+          id: 't-stale-8d',
+          status: 'In Progress',
+          updatedAt: '2026-09-20T00:00:00.000Z',
+        },
+      ];
+
+      const result = evaluateNotifications({
+        tasks,
+        projects: [],
+        milestones: [],
+        rules: defaultRules,
+        overrides: [],
+        allocations: [],
+        dismissedMap: {},
+        todayDate,
+        settings: {
+          browserNotificationsEnabled: false,
+          requireInteractionEnabled: true,
+          dueSoonDays: 1,
+          staleTaskDays: 7,
+          capacityOverloadThreshold: 100,
+          enabledCategories: {
+            overdue: true,
+            dueSoon: true,
+            overload: true,
+            stale: true,
+            reminders: true,
+            timer: true,
+          },
+        },
+      });
+
+      const stale = result.filter((i) => i.category === 'stale');
+      expect(stale).toHaveLength(1);
+      expect(stale[0]?.entityId).toBe('t-stale-8d');
+    });
+
+    it('respects custom capacityOverloadThreshold (e.g. 110%)', () => {
+      // 480m cap on Monday (2026-09-28)
+      // 105% = 504m -> not overload at 110% (528m), but is overload at 100% (480m)
+      const tasks: Task[] = [{ ...baseTask, id: 't-1', status: 'In Progress' }];
+      const allocations: PlannedAllocation[] = [
+        { id: 'al-1', taskId: 't-1', date: todayDate, allocatedMinutes: 504 },
+      ];
+
+      // At default 100%: 504m > 480m -> overloaded
+      const result100 = evaluateNotifications({
+        tasks,
+        projects: [],
+        milestones: [],
+        rules: defaultRules,
+        overrides: [],
+        allocations,
+        dismissedMap: {},
+        todayDate,
+      });
+      expect(result100.filter((i) => i.category === 'overload')).toHaveLength(1);
+
+      // At 110%: 504m <= 480 * 1.1 (528m) -> not overloaded
+      const result110 = evaluateNotifications({
+        tasks,
+        projects: [],
+        milestones: [],
+        rules: defaultRules,
+        overrides: [],
+        allocations,
+        dismissedMap: {},
+        todayDate,
+        settings: {
+          browserNotificationsEnabled: false,
+          requireInteractionEnabled: true,
+          dueSoonDays: 1,
+          staleTaskDays: 5,
+          capacityOverloadThreshold: 110,
+          enabledCategories: {
+            overdue: true,
+            dueSoon: true,
+            overload: true,
+            stale: true,
+            reminders: true,
+            timer: true,
+          },
+        },
+      });
+      expect(result110.filter((i) => i.category === 'overload')).toHaveLength(0);
+    });
+  });
 });

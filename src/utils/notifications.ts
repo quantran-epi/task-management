@@ -9,7 +9,8 @@ import type {
   WorkSession,
   ReminderItem,
 } from '../types/models';
-import type { AlertNotificationItem } from '../types/notifications';
+import type { AlertNotificationItem, NotificationSettings } from '../types/notifications';
+import { DEFAULT_NOTIFICATION_SETTINGS } from '../types/notifications';
 import { getEffectiveDailyCapacity, calculateDayMetrics } from './capacity';
 import { isTaskActive } from '../db/repositories/allocationRepo';
 import { evaluateDailyCapacitySpentAlert } from './timerAlerts';
@@ -25,6 +26,7 @@ export interface EvaluateNotificationsParams {
   dismissedMap: Record<string, string>;
   todayDate: string;
   currentTime?: string | undefined;
+  settings?: NotificationSettings | undefined;
 }
 
 /**
@@ -57,34 +59,36 @@ export function evaluateNotifications(params: EvaluateNotificationsParams): Aler
   const { tasks, projects, milestones, rules, overrides, allocations, dismissedMap, todayDate } =
     params;
   const currentTime = params.currentTime ?? dayjs().format('HH:mm');
+  const effectiveSettings = params.settings ?? DEFAULT_NOTIFICATION_SETTINGS;
 
-  const tomorrowDate = dayjs(todayDate, 'YYYY-MM-DD').add(1, 'day').format('YYYY-MM-DD');
   const projectMap = new Map<string, string>(projects.map((p) => [p.id, p.name]));
   const taskMap = new Map<string, Task>(tasks.map((t) => [t.id, t]));
   const results: AlertNotificationItem[] = [];
 
   // 1. Overdue tasks (deadline < todayDate and status not Done/Cancelled)
-  for (const task of tasks) {
-    if (task.status === 'Done' || task.status === 'Cancelled') continue;
-    if (task.deadline && task.deadline < todayDate) {
-      const daysOverdue = dayjs(todayDate, 'YYYY-MM-DD').diff(
-        dayjs(task.deadline, 'YYYY-MM-DD'),
-        'day'
-      );
-      results.push({
-        id: `overdue:task:${task.id}`,
-        category: 'overdue',
-        title: task.name,
-        subtitle: task.projectId ? projectMap.get(task.projectId) : undefined,
-        date: task.deadline,
-        tagColor: 'error',
-        tagLabel: `Quá hạn ${daysOverdue} ngày`,
-        entityType: 'task',
-        entityId: task.id,
-        canDismiss: false,
-        priorityOrder: 1,
-        task,
-      });
+  if (effectiveSettings.enabledCategories.overdue) {
+    for (const task of tasks) {
+      if (task.status === 'Done' || task.status === 'Cancelled') continue;
+      if (task.deadline && task.deadline < todayDate) {
+        const daysOverdue = dayjs(todayDate, 'YYYY-MM-DD').diff(
+          dayjs(task.deadline, 'YYYY-MM-DD'),
+          'day'
+        );
+        results.push({
+          id: `overdue:task:${task.id}`,
+          category: 'overdue',
+          title: task.name,
+          subtitle: task.projectId ? projectMap.get(task.projectId) : undefined,
+          date: task.deadline,
+          tagColor: 'error',
+          tagLabel: `Quá hạn ${daysOverdue} ngày`,
+          entityType: 'task',
+          entityId: task.id,
+          canDismiss: false,
+          priorityOrder: 1,
+          task,
+        });
+      }
     }
   }
 
@@ -126,100 +130,151 @@ export function evaluateNotifications(params: EvaluateNotificationsParams): Aler
 
     const metrics = calculateDayMetrics(checkDate, capMinutes, activeMinutes, 0, activeTaskCount);
 
-    if (metrics.isOverloaded) {
-      const allocHours = Math.round((activeMinutes / 60) * 10) / 10;
-      const capHours = Math.round((capMinutes / 60) * 10) / 10;
-      results.push({
-        id: `overload:date:${checkDate}`,
-        category: 'overload',
-        title: `Quá tải ngày ${checkDate}`,
-        subtitle: `${activeTaskCount} tác vụ được phân bổ`,
-        date: checkDate,
-        tagColor: 'warning',
-        tagLabel: `Quá tải ${metrics.percent}% (${allocHours}h / ${capHours}h)`,
-        entityType: 'capacity',
-        canDismiss: false,
-        priorityOrder: 2,
-      });
+    if (effectiveSettings.enabledCategories.overload) {
+      const overloadThresholdRatio = effectiveSettings.capacityOverloadThreshold / 100;
+      const isCapacityOverloaded =
+        capMinutes === 0
+          ? activeMinutes > 0
+          : activeMinutes > capMinutes * overloadThresholdRatio;
+
+      if (isCapacityOverloaded) {
+        const allocHours = Math.round((activeMinutes / 60) * 10) / 10;
+        const capHours = Math.round((capMinutes / 60) * 10) / 10;
+        results.push({
+          id: `overload:date:${checkDate}`,
+          category: 'overload',
+          title: `Quá tải ngày ${checkDate}`,
+          subtitle: `${activeTaskCount} tác vụ được phân bổ`,
+          date: checkDate,
+          tagColor: 'warning',
+          tagLabel: `Quá tải ${metrics.percent}% (${allocHours}h / ${capHours}h)`,
+          entityType: 'capacity',
+          canDismiss: false,
+          priorityOrder: 2,
+        });
+      }
     }
 
     // Check if recorded work session spent time exceeded daily capacity (TIMER-06, D-07)
-    const daySpent = spentByDate.get(checkDate) ?? 0;
-    if (daySpent > 0) {
-      const spentAlert = evaluateDailyCapacitySpentAlert(checkDate, daySpent, capMinutes);
-      if (spentAlert) {
-        results.push(spentAlert);
+    if (effectiveSettings.enabledCategories.timer) {
+      const daySpent = spentByDate.get(checkDate) ?? 0;
+      if (daySpent > 0) {
+        const spentAlert = evaluateDailyCapacitySpentAlert(checkDate, daySpent, capMinutes);
+        if (spentAlert) {
+          results.push(spentAlert);
+        }
       }
     }
   }
 
-  // 3. Due Soon tasks (deadline === todayDate or deadline === tomorrowDate)
-  for (const task of tasks) {
-    if (task.status === 'Done' || task.status === 'Cancelled') continue;
-    if (task.deadline === todayDate || task.deadline === tomorrowDate) {
-      const isToday = task.deadline === todayDate;
-      results.push({
-        id: `due-soon:task:${task.id}`,
-        category: 'due-soon',
-        title: task.name,
-        subtitle: task.projectId ? projectMap.get(task.projectId) : undefined,
-        date: task.deadline,
-        tagColor: isToday ? 'processing' : 'blue',
-        tagLabel: isToday ? 'Đến hạn hôm nay' : 'Đến hạn ngày mai',
-        entityType: 'task',
-        entityId: task.id,
-        canDismiss: false,
-        priorityOrder: 3,
-        task,
-      });
+  // 3. Due Soon tasks (deadline within dueSoonDays from todayDate)
+  if (effectiveSettings.enabledCategories.dueSoon) {
+    for (const task of tasks) {
+      if (task.status === 'Done' || task.status === 'Cancelled') continue;
+      if (task.deadline && task.deadline >= todayDate) {
+        const diffDays = dayjs(task.deadline, 'YYYY-MM-DD').diff(
+          dayjs(todayDate, 'YYYY-MM-DD'),
+          'day'
+        );
+        if (diffDays <= effectiveSettings.dueSoonDays) {
+          const isToday = diffDays === 0;
+          const isTomorrow = diffDays === 1;
+          const tagLabel = isToday
+            ? 'Đến hạn hôm nay'
+            : isTomorrow
+            ? 'Đến hạn ngày mai'
+            : `Đến hạn sau ${diffDays} ngày`;
+          results.push({
+            id: `due-soon:task:${task.id}`,
+            category: 'due-soon',
+            title: task.name,
+            subtitle: task.projectId ? projectMap.get(task.projectId) : undefined,
+            date: task.deadline,
+            tagColor: isToday ? 'processing' : 'blue',
+            tagLabel,
+            entityType: 'task',
+            entityId: task.id,
+            canDismiss: false,
+            priorityOrder: 3,
+            task,
+          });
+        }
+      }
     }
   }
 
-  // 4. Stale tasks (In Progress or In Review, untouched > 5 days)
-  for (const task of tasks) {
-    if (task.status !== 'In Progress' && task.status !== 'In Review') continue;
-    const lastUpdatedDate = task.updatedAt ? task.updatedAt.slice(0, 10) : todayDate;
-    const diffDays = dayjs(todayDate, 'YYYY-MM-DD').diff(
-      dayjs(lastUpdatedDate, 'YYYY-MM-DD'),
-      'day'
-    );
-    if (diffDays > 5) {
-      const alertKey = `stale:task:${task.id}`;
-      if (dismissedMap[alertKey] !== todayDate) {
-        results.push({
-          id: alertKey,
-          category: 'stale',
-          title: task.name,
-          subtitle: task.projectId ? projectMap.get(task.projectId) : undefined,
-          date: lastUpdatedDate,
-          tagColor: 'purple',
-          tagLabel: `Chưa cập nhật ${diffDays} ngày`,
-          entityType: 'task',
-          entityId: task.id,
-          canDismiss: true,
-          priorityOrder: 4,
-          task,
-        });
+  // 4. Stale tasks (In Progress or In Review, untouched > staleTaskDays)
+  if (effectiveSettings.enabledCategories.stale) {
+    for (const task of tasks) {
+      if (task.status !== 'In Progress' && task.status !== 'In Review') continue;
+      const lastUpdatedDate = task.updatedAt ? task.updatedAt.slice(0, 10) : todayDate;
+      const diffDays = dayjs(todayDate, 'YYYY-MM-DD').diff(
+        dayjs(lastUpdatedDate, 'YYYY-MM-DD'),
+        'day'
+      );
+      if (diffDays > effectiveSettings.staleTaskDays) {
+        const alertKey = `stale:task:${task.id}`;
+        if (dismissedMap[alertKey] !== todayDate) {
+          results.push({
+            id: alertKey,
+            category: 'stale',
+            title: task.name,
+            subtitle: task.projectId ? projectMap.get(task.projectId) : undefined,
+            date: lastUpdatedDate,
+            tagColor: 'purple',
+            tagLabel: `Chưa cập nhật ${diffDays} ngày`,
+            entityType: 'task',
+            entityId: task.id,
+            canDismiss: true,
+            priorityOrder: 4,
+            task,
+          });
+        }
       }
     }
   }
 
   // 5. Custom reminders (Project, Milestone, Task) per D-06, D-07, D-08, NOTIF-06
-  for (const project of projects) {
-    if (project.status === 'Done' || project.status === 'Cancelled') continue;
-    if (project.reminders && project.reminders.length > 0) {
-      for (const reminder of project.reminders) {
-        if (isReminderTriggered(reminder, todayDate, currentTime)) {
-          const alertKey = `reminder:project:${project.id}:${reminder.id}`;
+  if (effectiveSettings.enabledCategories.reminders) {
+    for (const project of projects) {
+      if (project.status === 'Done' || project.status === 'Cancelled') continue;
+      if (project.reminders && project.reminders.length > 0) {
+        for (const reminder of project.reminders) {
+          if (isReminderTriggered(reminder, todayDate, currentTime)) {
+            const alertKey = `reminder:project:${project.id}:${reminder.id}`;
+            if (dismissedMap[alertKey] === todayDate) continue;
+            results.push({
+              id: alertKey,
+              category: 'reminder',
+              title: project.name,
+              subtitle: reminder.note || project.reminderNote,
+              date: reminder.time ? `${reminder.time} ${reminder.date}` : reminder.date,
+              tagColor: 'gold',
+              tagLabel: reminder.time ? `Nhắc nhở (${reminder.time})` : 'Nhắc nhở',
+              entityType: 'project',
+              entityId: project.id,
+              canDismiss: true,
+              priorityOrder: 5,
+            });
+          }
+        }
+      } else if (project.reminderDate) {
+        const legacyReminder: ReminderItem = {
+          id: '',
+          date: project.reminderDate,
+        };
+        if (project.reminderNote) legacyReminder.note = project.reminderNote;
+        if (isReminderTriggered(legacyReminder, todayDate, currentTime)) {
+          const alertKey = `reminder:project:${project.id}`;
           if (dismissedMap[alertKey] === todayDate) continue;
           results.push({
             id: alertKey,
             category: 'reminder',
             title: project.name,
-            subtitle: reminder.note || project.reminderNote,
-            date: reminder.time ? `${reminder.time} ${reminder.date}` : reminder.date,
+            subtitle: project.reminderNote,
+            date: project.reminderDate,
             tagColor: 'gold',
-            tagLabel: reminder.time ? `Nhắc nhở (${reminder.time})` : 'Nhắc nhở',
+            tagLabel: 'Nhắc nhở',
             entityType: 'project',
             entityId: project.id,
             canDismiss: true,
@@ -227,31 +282,7 @@ export function evaluateNotifications(params: EvaluateNotificationsParams): Aler
           });
         }
       }
-    } else if (project.reminderDate) {
-      const legacyReminder: ReminderItem = {
-        id: '',
-        date: project.reminderDate,
-      };
-      if (project.reminderNote) legacyReminder.note = project.reminderNote;
-      if (isReminderTriggered(legacyReminder, todayDate, currentTime)) {
-        const alertKey = `reminder:project:${project.id}`;
-        if (dismissedMap[alertKey] === todayDate) continue;
-        results.push({
-          id: alertKey,
-          category: 'reminder',
-          title: project.name,
-          subtitle: project.reminderNote,
-          date: project.reminderDate,
-          tagColor: 'gold',
-          tagLabel: 'Nhắc nhở',
-          entityType: 'project',
-          entityId: project.id,
-          canDismiss: true,
-          priorityOrder: 5,
-        });
-      }
     }
-  }
 
   for (const milestone of milestones) {
     if (milestone.status === 'Done' || milestone.status === 'Cancelled') continue;
@@ -358,6 +389,7 @@ export function evaluateNotifications(params: EvaluateNotificationsParams): Aler
         });
       }
     }
+  }
   }
 
   // Final sort: priorityOrder ascending, then date ascending, then id

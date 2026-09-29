@@ -1,5 +1,41 @@
 import type { Task } from './models';
 
+export const NOTIFICATION_SETTINGS_KEY = 'notification_settings';
+
+export interface NotificationCategoryConfig {
+  overdue: boolean;
+  dueSoon: boolean;
+  overload: boolean;
+  stale: boolean;
+  reminders: boolean;
+  timer: boolean;
+}
+
+export interface NotificationSettings {
+  browserNotificationsEnabled: boolean;
+  requireInteractionEnabled: boolean;
+  dueSoonDays: number; // 1, 2, 3, 5 (default: 1)
+  staleTaskDays: number; // 3, 5, 7, 14 (default: 5)
+  capacityOverloadThreshold: number; // 100, 110, 120 (default: 100)
+  enabledCategories: NotificationCategoryConfig;
+}
+
+export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
+  browserNotificationsEnabled: false,
+  requireInteractionEnabled: true,
+  dueSoonDays: 1,
+  staleTaskDays: 5,
+  capacityOverloadThreshold: 100,
+  enabledCategories: {
+    overdue: true,
+    dueSoon: true,
+    overload: true,
+    stale: true,
+    reminders: true,
+    timer: true,
+  },
+};
+
 export type AlertCategory = 'overdue' | 'overload' | 'due-soon' | 'stale' | 'reminder';
 export type NotificationTabKey = 'all' | 'deadline' | 'overload' | 'stale' | 'reminders';
 export type NotificationEntityType = 'task' | 'project' | 'milestone' | 'capacity';

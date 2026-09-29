@@ -5,7 +5,13 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import { getTodayDateString } from '../utils/date';
 import { evaluateNotifications } from '../utils/notifications';
 import { DISMISSED_ALERTS_KEY } from '../db/repositories/notificationRepo';
-import type { NotificationState, AlertCategory } from '../types/notifications';
+import {
+  NOTIFICATION_SETTINGS_KEY,
+  DEFAULT_NOTIFICATION_SETTINGS,
+  type NotificationState,
+  type AlertCategory,
+  type NotificationSettings,
+} from '../types/notifications';
 
 const DEFAULT_CATEGORY_COUNTS: Record<AlertCategory, number> = {
   overdue: 0,
@@ -41,6 +47,7 @@ export function useNotifications(
         allocations,
         workSessions,
         dismissedSetting,
+        notificationSettingsRecord,
       ] = await Promise.all([
         targetDb.tasks.toArray(),
         targetDb.projects.toArray(),
@@ -59,6 +66,7 @@ export function useNotifications(
           .between(todayDate, maxOverloadDate, true, true)
           .toArray(),
         targetDb.settings.get(DISMISSED_ALERTS_KEY),
+        targetDb.settings.get(NOTIFICATION_SETTINGS_KEY),
       ]);
 
       const dismissedMap =
@@ -67,6 +75,22 @@ export function useNotifications(
         dismissedSetting.value !== null
           ? (dismissedSetting.value as Record<string, string>)
           : {};
+
+      const rawSettings =
+        notificationSettingsRecord &&
+        typeof notificationSettingsRecord.value === 'object' &&
+        notificationSettingsRecord.value !== null
+          ? (notificationSettingsRecord.value as Partial<NotificationSettings>)
+          : undefined;
+
+      const resolvedSettings: NotificationSettings = {
+        ...DEFAULT_NOTIFICATION_SETTINGS,
+        ...rawSettings,
+        enabledCategories: {
+          ...DEFAULT_NOTIFICATION_SETTINGS.enabledCategories,
+          ...(rawSettings?.enabledCategories ?? {}),
+        },
+      };
 
       const items = evaluateNotifications({
         tasks,
@@ -78,6 +102,7 @@ export function useNotifications(
         workSessions,
         dismissedMap,
         todayDate,
+        settings: resolvedSettings,
       });
 
       const categoryCounts: Record<AlertCategory, number> = {
