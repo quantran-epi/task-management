@@ -7,7 +7,7 @@ import type {
   CapacityOverride,
   PlannedAllocation,
 } from '../../src/types/models';
-import { evaluateNotifications } from '../../src/utils/notifications';
+import { evaluateNotifications, isReminderTriggered } from '../../src/utils/notifications';
 
 describe('evaluateNotifications', () => {
   const todayDate = '2026-09-28';
@@ -422,5 +422,128 @@ describe('evaluateNotifications', () => {
     const reminderIndex = result.findIndex((r) => r.category === 'reminder');
     expect(reminderIndex).toBeGreaterThan(staleIndex);
     expect(result[reminderIndex]?.priorityOrder).toBe(5);
+  });
+
+  describe('isReminderTriggered helper (D-06, D-08, NOTIF-06)', () => {
+    it('returns false when reminder has no date', () => {
+      expect(isReminderTriggered({ id: '1', date: '' }, '2026-09-28', '10:00')).toBe(false);
+    });
+
+    it('returns true when reminder date is in the past (overdue reminder per D-08)', () => {
+      expect(isReminderTriggered({ id: '1', date: '2026-09-27' }, '2026-09-28', '10:00')).toBe(true);
+    });
+
+    it('returns false when reminder date is in the future', () => {
+      expect(isReminderTriggered({ id: '1', date: '2026-09-29' }, '2026-09-28', '10:00')).toBe(false);
+    });
+
+    it('returns true when reminder date is today without time (triggers from 00:00)', () => {
+      expect(isReminderTriggered({ id: '1', date: '2026-09-28' }, '2026-09-28', '08:00')).toBe(true);
+    });
+
+    it('returns false when reminder date is today but clock has not reached time', () => {
+      expect(
+        isReminderTriggered({ id: '1', date: '2026-09-28', time: '14:30' }, '2026-09-28', '10:00')
+      ).toBe(false);
+    });
+
+    it('returns true when reminder date is today and clock has reached or passed time', () => {
+      expect(
+        isReminderTriggered({ id: '1', date: '2026-09-28', time: '10:00' }, '2026-09-28', '10:00')
+      ).toBe(true);
+      expect(
+        isReminderTriggered({ id: '1', date: '2026-09-28', time: '09:30' }, '2026-09-28', '10:00')
+      ).toBe(true);
+    });
+  });
+
+  describe('Multi-reminder evaluation in evaluateNotifications (D-06, D-07, NOTIF-06)', () => {
+    it('evaluates multiple reminders with time and handles independent dismissals', () => {
+      const taskWithReminders: Task = {
+        ...baseTask,
+        id: 'task-multi-rem',
+        name: 'Task with Multiple Reminders',
+        status: 'In Progress',
+        reminders: [
+          { id: 'rem-past', date: '2026-09-25', note: 'Overdue reminder' },
+          { id: 'rem-today-elapsed', date: '2026-09-28', time: '09:00', note: 'Morning sync' },
+          { id: 'rem-today-future', date: '2026-09-28', time: '15:00', note: 'Afternoon wrap' },
+          { id: 'rem-future-day', date: '2026-10-01', time: '10:00', note: 'Next month' },
+          { id: 'rem-dismissed', date: '2026-09-28', time: '08:30', note: 'Already dismissed' },
+        ],
+      };
+
+      const dismissedMap: Record<string, string> = {
+        'reminder:task:task-multi-rem:rem-dismissed': todayDate,
+      };
+
+      const result = evaluateNotifications({
+        tasks: [taskWithReminders],
+        projects: [],
+        milestones: [],
+        rules: defaultRules,
+        overrides: [],
+        allocations: [],
+        dismissedMap,
+        todayDate,
+        currentTime: '10:00',
+      });
+
+      const reminders = result.filter((item) => item.category === 'reminder');
+      // Should trigger rem-past and rem-today-elapsed
+      // rem-today-future (15:00 > 10:00) does not trigger
+      // rem-future-day (2026-10-01 > 2026-09-28) does not trigger
+      // rem-dismissed is dismissed for today
+      expect(reminders).toHaveLength(2);
+
+      const pastRem = reminders.find((r) => r.id === 'reminder:task:task-multi-rem:rem-past');
+      expect(pastRem).toBeDefined();
+      expect(pastRem?.id).toMatch(/^reminder:task:[^:]+:[^:]+$/);
+      expect(pastRem?.date).toBe('2026-09-25');
+      expect(pastRem?.tagLabel).toBe('Nhắc nhở');
+      expect(pastRem?.subtitle).toBe('Overdue reminder');
+
+      const elapsedRem = reminders.find(
+        (r) => r.id === 'reminder:task:task-multi-rem:rem-today-elapsed'
+      );
+      expect(elapsedRem).toBeDefined();
+      expect(elapsedRem?.id).toMatch(/^reminder:task:[^:]+:[^:]+$/);
+      expect(elapsedRem?.date).toBe('09:00 2026-09-28');
+      expect(elapsedRem?.tagLabel).toBe('Nhắc nhở (09:00)');
+      expect(elapsedRem?.subtitle).toBe('Morning sync');
+    });
+
+    it('does not trigger reminders for Done or Cancelled entities', () => {
+      const doneTask: Task = {
+        ...baseTask,
+        id: 'task-done-rem',
+        name: 'Done Task',
+        status: 'Done',
+        reminders: [{ id: 'rem-1', date: '2026-09-28', time: '09:00' }],
+      };
+      const cancelledProject: Project = {
+        id: 'proj-cancelled',
+        name: 'Cancelled Project',
+        status: 'Cancelled',
+        reminders: [{ id: 'rem-2', date: '2026-09-28' }],
+        createdAt: '2026-09-01T00:00:00.000Z',
+        updatedAt: '2026-09-01T00:00:00.000Z',
+      };
+
+      const result = evaluateNotifications({
+        tasks: [doneTask],
+        projects: [cancelledProject],
+        milestones: [],
+        rules: defaultRules,
+        overrides: [],
+        allocations: [],
+        dismissedMap: {},
+        todayDate,
+        currentTime: '12:00',
+      });
+
+      const reminders = result.filter((item) => item.category === 'reminder');
+      expect(reminders).toHaveLength(0);
+    });
   });
 });

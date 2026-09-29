@@ -7,6 +7,7 @@ import type {
   CapacityOverride,
   PlannedAllocation,
   WorkSession,
+  ReminderItem,
 } from '../types/models';
 import type { AlertNotificationItem } from '../types/notifications';
 import { getEffectiveDailyCapacity, calculateDayMetrics } from './capacity';
@@ -23,6 +24,24 @@ export interface EvaluateNotificationsParams {
   workSessions?: WorkSession[] | undefined;
   dismissedMap: Record<string, string>;
   todayDate: string;
+  currentTime?: string | undefined;
+}
+
+/**
+ * Checks whether a reminder should trigger based on date, optional time, and wall clock (D-06, D-08, NOTIF-06).
+ */
+export function isReminderTriggered(
+  reminder: ReminderItem,
+  todayDate: string,
+  currentTime: string
+): boolean {
+  if (!reminder.date) return false;
+  if (reminder.date < todayDate) return true; // Past trigger remains active per D-08
+  if (reminder.date === todayDate) {
+    if (!reminder.time) return true; // Triggers from 00:00 per D-06
+    return currentTime >= reminder.time; // Triggers once clock reaches target HH:mm
+  }
+  return false;
 }
 
 /**
@@ -37,6 +56,7 @@ export interface EvaluateNotificationsParams {
 export function evaluateNotifications(params: EvaluateNotificationsParams): AlertNotificationItem[] {
   const { tasks, projects, milestones, rules, overrides, allocations, dismissedMap, todayDate } =
     params;
+  const currentTime = params.currentTime ?? dayjs().format('HH:mm');
 
   const tomorrowDate = dayjs(todayDate, 'YYYY-MM-DD').add(1, 'day').format('YYYY-MM-DD');
   const projectMap = new Map<string, string>(projects.map((p) => [p.id, p.name]));
@@ -184,12 +204,38 @@ export function evaluateNotifications(params: EvaluateNotificationsParams): Aler
     }
   }
 
-  // 5. Custom reminders (Project, Milestone, Task where reminderDate <= todayDate)
+  // 5. Custom reminders (Project, Milestone, Task) per D-06, D-07, D-08, NOTIF-06
   for (const project of projects) {
     if (project.status === 'Done' || project.status === 'Cancelled') continue;
-    if (project.reminderDate && project.reminderDate <= todayDate) {
-      const alertKey = `reminder:project:${project.id}`;
-      if (dismissedMap[alertKey] !== todayDate) {
+    if (project.reminders && project.reminders.length > 0) {
+      for (const reminder of project.reminders) {
+        if (isReminderTriggered(reminder, todayDate, currentTime)) {
+          const alertKey = `reminder:project:${project.id}:${reminder.id}`;
+          if (dismissedMap[alertKey] === todayDate) continue;
+          results.push({
+            id: alertKey,
+            category: 'reminder',
+            title: project.name,
+            subtitle: reminder.note || project.reminderNote,
+            date: reminder.time ? `${reminder.time} ${reminder.date}` : reminder.date,
+            tagColor: 'gold',
+            tagLabel: reminder.time ? `Nhắc nhở (${reminder.time})` : 'Nhắc nhở',
+            entityType: 'project',
+            entityId: project.id,
+            canDismiss: true,
+            priorityOrder: 5,
+          });
+        }
+      }
+    } else if (project.reminderDate) {
+      const legacyReminder: ReminderItem = {
+        id: '',
+        date: project.reminderDate,
+        note: project.reminderNote,
+      };
+      if (isReminderTriggered(legacyReminder, todayDate, currentTime)) {
+        const alertKey = `reminder:project:${project.id}`;
+        if (dismissedMap[alertKey] === todayDate) continue;
         results.push({
           id: alertKey,
           category: 'reminder',
@@ -209,9 +255,38 @@ export function evaluateNotifications(params: EvaluateNotificationsParams): Aler
 
   for (const milestone of milestones) {
     if (milestone.status === 'Done' || milestone.status === 'Cancelled') continue;
-    if (milestone.reminderDate && milestone.reminderDate <= todayDate) {
-      const alertKey = `reminder:milestone:${milestone.id}`;
-      if (dismissedMap[alertKey] !== todayDate) {
+    if (milestone.reminders && milestone.reminders.length > 0) {
+      for (const reminder of milestone.reminders) {
+        if (isReminderTriggered(reminder, todayDate, currentTime)) {
+          const alertKey = `reminder:milestone:${milestone.id}:${reminder.id}`;
+          if (dismissedMap[alertKey] === todayDate) continue;
+          results.push({
+            id: alertKey,
+            category: 'reminder',
+            title: milestone.name,
+            subtitle:
+              reminder.note ||
+              milestone.reminderNote ||
+              (milestone.projectId ? projectMap.get(milestone.projectId) : undefined),
+            date: reminder.time ? `${reminder.time} ${reminder.date}` : reminder.date,
+            tagColor: 'gold',
+            tagLabel: reminder.time ? `Nhắc nhở (${reminder.time})` : 'Nhắc nhở',
+            entityType: 'milestone',
+            entityId: milestone.id,
+            canDismiss: true,
+            priorityOrder: 5,
+          });
+        }
+      }
+    } else if (milestone.reminderDate) {
+      const legacyReminder: ReminderItem = {
+        id: '',
+        date: milestone.reminderDate,
+        note: milestone.reminderNote,
+      };
+      if (isReminderTriggered(legacyReminder, todayDate, currentTime)) {
+        const alertKey = `reminder:milestone:${milestone.id}`;
+        if (dismissedMap[alertKey] === todayDate) continue;
         results.push({
           id: alertKey,
           category: 'reminder',
@@ -233,9 +308,39 @@ export function evaluateNotifications(params: EvaluateNotificationsParams): Aler
 
   for (const task of tasks) {
     if (task.status === 'Done' || task.status === 'Cancelled') continue;
-    if (task.reminderDate && task.reminderDate <= todayDate) {
-      const alertKey = `reminder:task:${task.id}`;
-      if (dismissedMap[alertKey] !== todayDate) {
+    if (task.reminders && task.reminders.length > 0) {
+      for (const reminder of task.reminders) {
+        if (isReminderTriggered(reminder, todayDate, currentTime)) {
+          const alertKey = `reminder:task:${task.id}:${reminder.id}`;
+          if (dismissedMap[alertKey] === todayDate) continue;
+          results.push({
+            id: alertKey,
+            category: 'reminder',
+            title: task.name,
+            subtitle:
+              reminder.note ||
+              task.reminderNote ||
+              (task.projectId ? projectMap.get(task.projectId) : undefined),
+            date: reminder.time ? `${reminder.time} ${reminder.date}` : reminder.date,
+            tagColor: 'gold',
+            tagLabel: reminder.time ? `Nhắc nhở (${reminder.time})` : 'Nhắc nhở',
+            entityType: 'task',
+            entityId: task.id,
+            canDismiss: true,
+            priorityOrder: 5,
+            task,
+          });
+        }
+      }
+    } else if (task.reminderDate) {
+      const legacyReminder: ReminderItem = {
+        id: '',
+        date: task.reminderDate,
+        note: task.reminderNote,
+      };
+      if (isReminderTriggered(legacyReminder, todayDate, currentTime)) {
+        const alertKey = `reminder:task:${task.id}`;
+        if (dismissedMap[alertKey] === todayDate) continue;
         results.push({
           id: alertKey,
           category: 'reminder',
