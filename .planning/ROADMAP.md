@@ -28,6 +28,7 @@
 - [x] **Phase 11: Jira Cloud Integration & Task Lifecycle** - Jira Cloud REST API v3 connection settings with CORS proxy support, connection diagnostics, issue creation, key linking, and status transitions. (completed 2026-09-28)
 - [x] **Phase 12: In-App Notifications, Proactive Alerts & Custom Reminders** - In-app header alert badge and drawer, custom item reminders, and automated alerts for overdue tasks, imminent deadlines, capacity overload, and stale work. (completed 2026-09-29)
 - [x] **Phase 12.1: Task Timer, Work Session Logs & Spent Time Tracking** (INSERTED) - Start/pause/finish task timer, work session persistence across reload, concurrent timers, allocation limit notifications, remaining day feasibility alerts, and spent time aggregation per task, milestone, and project. (completed 2026-09-29)
+- [ ] **Phase 12.2: Multiple Reminders with Time, Notification Settings, Table Customization & Sidebar Persistence** (INSERTED) - Multiple reminders with optional time per item, persistent browser notifications (no auto-dismiss), configurable notification settings, table column visibility picker and sortable headers, and persisted sidebar collapse state.
 - [ ] **Phase 13: Enhanced Workload Analytics & Milestone Burndown** - Dedicated analytics view with lightweight SVG vector burndown, completion velocity metrics, and stakeholder workload allocation breakdowns.
 
 ## Phase Details
@@ -154,14 +155,36 @@ Plans:
 
 Plans:
 **Wave 1**
+
 - [x] 12.1-01-PLAN.md — Dexie SCHEMA_V5 (workSessions, activeTimers), models, repository CRUD, spent rollups, cascade cleanup, and backup v3 envelope
 - [x] 12.1-04-PLAN.md — Fix timer UI freeze, header widget task title query, TaskTable column header, and live allocation warning alert (Gap Closure)
 
 **Wave 2** *(blocked on Wave 1 completion)*
+
 - [x] 12.1-02-PLAN.md — TimerContext & useTimer hook with multi-timer concurrency, reload survival, and 3-tier allocation/feasibility alert evaluation engine
 
 **Wave 3** *(blocked on Wave 2 completion)*
+
 - [x] 12.1-03-PLAN.md — AppShell ActiveTimerWidget header capsule/dropdown, TaskTable inline triggers/spent progress, and TaskDrawer WorkSessionsTab history & manual modal
+
+### Phase 12.2: Multiple Reminders with Time, Notification Settings, Table Customization & Sidebar Persistence (INSERTED)
+
+**Goal:** Provide multi-reminder management with optional time for all hierarchy items (projects, milestones, tasks), persistent non-auto-dismissing browser notifications (`requireInteraction: true`), user-configurable notification settings, customizable table columns with header sorting, and remembered sidebar collapse state.
+**Requirements**: NOTIF-06, NOTIF-07, NOTIF-08, NOTIF-09, NOTIF-10
+**Depends on:** Phase 12, Phase 12.1
+**Success Criteria** (what must be TRUE):
+
+  1. User can add, view, and delete multiple custom reminders on projects, milestones, and tasks with date and optional time (`HH:mm`).
+  2. Browser notifications do not auto-dismiss (`requireInteraction: true`), remaining on desktop screen until user clicks or closes them.
+  3. Settings includes a dedicated Notification Settings tab allowing configuration of master toggle, persistent interaction toggle, threshold days/percentages, and category mutes.
+  4. TaskTable includes a column visibility control (show/hide columns) and clickable header column sorting, persisted in client storage.
+  5. AppShell Sider remembers collapsed/expanded state across browser reloads.
+
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 12.2 to break down)
 
 ### Phase 13: Enhanced Workload Analytics & Milestone Burndown
 
@@ -193,5 +216,6 @@ Plans:
 | 10. Date-Range Search, Multi-Criteria Filtering & Standup Export | v1.1 | 2/2 | Complete    | 2026-09-28 |
 | 11. Jira Cloud Integration & Task Lifecycle | v1.1 | 3/3 | Complete    | 2026-09-28 |
 | 12. In-App Notifications, Proactive Alerts & Custom Reminders | v1.1 | 3/3 | Complete    | 2026-09-29 |
-| 12.1. Task Timer, Work Session Logs & Spent Time Tracking | v1.1 | 4/4 | In Progress|  |
+| 12.1. Task Timer, Work Session Logs & Spent Time Tracking | v1.1 | 4/4 | Complete    | 2026-09-29 |
+| 12.2. Multiple Reminders with Time, Notification Settings, Table Customization & Sidebar Persistence | v1.1 | 0/0 | Not started | - |
 | 13. Enhanced Workload Analytics & Milestone Burndown | v1.1 | 0/0 | Not started | - |
