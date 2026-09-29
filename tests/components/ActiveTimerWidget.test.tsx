@@ -1,18 +1,27 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import 'fake-indexeddb/auto';
 import { ActiveTimerWidget } from '../../src/components/timer/ActiveTimerWidget';
 import { TimerContext, type TimerContextValue } from '../../src/context/TimerContext';
-import type { ActiveTimer } from '../../src/types/models';
+import { TaskPlannerDatabase } from '../../src/db';
+import type { ActiveTimer, Task } from '../../src/types/models';
 
 describe('ActiveTimerWidget', () => {
   const mockPause = vi.fn();
   const mockStart = vi.fn();
   const mockFinish = vi.fn();
   const mockCancel = vi.fn();
+  let testDb: TaskPlannerDatabase;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+    testDb = new TaskPlannerDatabase(`TestWidgetDB_${Date.now()}_${Math.random()}`);
+    await testDb.open();
+  });
+
+  afterEach(async () => {
+    await testDb.delete();
   });
 
   const renderWithTimerContext = (
@@ -139,5 +148,75 @@ describe('ActiveTimerWidget', () => {
     expect(screen.getByText('Nhiệm vụ 2')).toBeInTheDocument();
     expect(screen.getByText('00:01:00')).toBeInTheDocument();
     expect(screen.getByText('00:03:00')).toBeInTheDocument();
+  });
+
+  it('resolves and displays task name from database via bulkGet when tasksMap is omitted', async () => {
+    const task: Task = {
+      id: 'task-100',
+      name: 'Nâng cấp bảo mật OAuth2',
+      status: 'In Progress',
+      progress: 40,
+      priority: 'High',
+      estimateMinutes: 120,
+      workType: 'code',
+      opsOwners: [],
+      businessAnalysts: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    await testDb.tasks.add(task);
+
+    const timer: ActiveTimer = {
+      taskId: 'task-100',
+      status: 'running',
+      startedAt: Date.now() - 60000,
+      accumulatedMs: 0,
+      sessionStartTime: new Date().toISOString(),
+    };
+
+    renderWithTimerContext(<ActiveTimerWidget database={testDb} />, {
+      activeTimers: [timer],
+      getElapsedSeconds: vi.fn().mockReturnValue(60),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Nâng cấp bảo mật OAuth2')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Tác vụ')).not.toBeInTheDocument();
+  });
+
+  it('prefers tasksMap over database lookup if both are present', async () => {
+    const task: Task = {
+      id: 'task-101',
+      name: 'Tên trong CSDL',
+      status: 'Open',
+      progress: 0,
+      priority: 'Low',
+      estimateMinutes: 30,
+      workType: 'configuration',
+      opsOwners: [],
+      businessAnalysts: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    await testDb.tasks.add(task);
+
+    const timer: ActiveTimer = {
+      taskId: 'task-101',
+      status: 'running',
+      startedAt: Date.now() - 30000,
+      accumulatedMs: 0,
+      sessionStartTime: new Date().toISOString(),
+    };
+
+    const tasksMap = new Map([['task-101', 'Tên override từ Map']]);
+
+    renderWithTimerContext(<ActiveTimerWidget tasksMap={tasksMap} database={testDb} />, {
+      activeTimers: [timer],
+      getElapsedSeconds: vi.fn().mockReturnValue(30),
+    });
+
+    expect(screen.getByText('Tên override từ Map')).toBeInTheDocument();
+    expect(screen.queryByText('Tên trong CSDL')).not.toBeInTheDocument();
   });
 });

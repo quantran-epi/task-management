@@ -7,15 +7,19 @@ import {
   ClockCircleOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../../db';
+import { db, type TaskPlannerDatabase } from '../../db';
 import { useTimer } from '../../hooks/useTimer';
 import { formatElapsedTicker } from '../../utils/time';
 
 export interface ActiveTimerWidgetProps {
   tasksMap?: Map<string, string>;
+  database?: TaskPlannerDatabase;
 }
 
-export const ActiveTimerWidget: React.FC<ActiveTimerWidgetProps> = ({ tasksMap }) => {
+export const ActiveTimerWidget: React.FC<ActiveTimerWidgetProps> = ({
+  tasksMap,
+  database = db,
+}) => {
   const { token } = theme.useToken();
   const {
     activeTimers,
@@ -30,9 +34,10 @@ export const ActiveTimerWidget: React.FC<ActiveTimerWidgetProps> = ({ tasksMap }
     async () => {
       if (activeTimers.length === 0) return [];
       const ids = activeTimers.map((t) => t.taskId);
-      return await db.tasks.where('id').anyOf(ids).toArray();
+      const results = await database.tasks.bulkGet(ids);
+      return results.filter((t): t is NonNullable<typeof t> => Boolean(t));
     },
-    [activeTimers]
+    [activeTimers, database]
   );
 
   const getTaskTitle = (taskId: string): string => {
