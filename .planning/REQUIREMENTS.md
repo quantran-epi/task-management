@@ -43,8 +43,8 @@
 - [x] **TIMER-03**: User can start, pause, resume, and finish task timers with real wall-clock delta calculation and reload survival.
 - [x] **TIMER-04**: System cascades task, milestone, and project deletion to clean up associated work sessions and active timers.
 - [x] **TIMER-05**: Backup export and restore schemas bump to v3 and serialize `workSessions` with cryptographic validation.
-- [ ] **TIMER-06**: User can run multiple concurrent timers simultaneously with reactive UI ticker loop.
-- [ ] **TIMER-07**: System alerts user with 3-tier allocation warnings (task spent >= estimate toast, daily overload drawer alert, daily feasibility risk).
+- [x] **TIMER-06**: User can run multiple concurrent timers simultaneously with reactive UI ticker loop.
+- [x] **TIMER-07**: System alerts user with 3-tier allocation warnings (task spent >= estimate toast, daily overload drawer alert, daily feasibility risk).
 - [x] **TIMER-08**: User can view and control active timers via AppHeader capsule widget and multi-timer dropdown badge.
 - [x] **TIMER-09**: User can inspect and manage task work history in TaskDrawer dedicated Work Sessions tab and record manual sessions via modal.
 
@@ -94,8 +94,8 @@
 | TIMER-03 | Phase 12.1 | Complete |
 | TIMER-04 | Phase 12.1 | Complete |
 | TIMER-05 | Phase 12.1 | Complete |
-| TIMER-06 | Phase 12.1 | Pending |
-| TIMER-07 | Phase 12.1 | Pending |
+| TIMER-06 | Phase 12.1 | Complete |
+| TIMER-07 | Phase 12.1 | Complete |
 | TIMER-08 | Phase 12.1 | Complete |
 | TIMER-09 | Phase 12.1 | Complete |
 | ANLT-01 | Phase 13 | Pending |

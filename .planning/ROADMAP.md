@@ -27,7 +27,7 @@
 - [x] **Phase 10: Date-Range Search, Multi-Criteria Filtering & Standup Export** - Planned execution and deadline date range search, multi-criteria filter bar, and formatted standup Markdown summary clipboard export. (completed 2026-09-28)
 - [x] **Phase 11: Jira Cloud Integration & Task Lifecycle** - Jira Cloud REST API v3 connection settings with CORS proxy support, connection diagnostics, issue creation, key linking, and status transitions. (completed 2026-09-28)
 - [x] **Phase 12: In-App Notifications, Proactive Alerts & Custom Reminders** - In-app header alert badge and drawer, custom item reminders, and automated alerts for overdue tasks, imminent deadlines, capacity overload, and stale work. (completed 2026-09-29)
-- [ ] **Phase 12.1: Task Timer, Work Session Logs & Spent Time Tracking** (INSERTED) - Start/pause/finish task timer, work session persistence across reload, concurrent timers, allocation limit notifications, remaining day feasibility alerts, and spent time aggregation per task, milestone, and project.
+- [x] **Phase 12.1: Task Timer, Work Session Logs & Spent Time Tracking** (INSERTED) - Start/pause/finish task timer, work session persistence across reload, concurrent timers, allocation limit notifications, remaining day feasibility alerts, and spent time aggregation per task, milestone, and project. (completed 2026-09-29)
 - [ ] **Phase 13: Enhanced Workload Analytics & Milestone Burndown** - Dedicated analytics view with lightweight SVG vector burndown, completion velocity metrics, and stakeholder workload allocation breakdowns.
 
 ## Phase Details
@@ -150,7 +150,7 @@ Plans:
 **Goal:** Provide a local-first task timer engine (start/pause/finish) with reload persistence, multiple concurrent timers, work session history logs in Dexie SCHEMA_V5, 3-tier allocation & feasibility alerts, and spent time rollups across tasks, milestones, and projects.
 **Requirements**: TIMER-01, TIMER-02, TIMER-03, TIMER-04, TIMER-05, TIMER-06, TIMER-07, TIMER-08, TIMER-09
 **Depends on:** Phase 12
-**Plans:** 3/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 **Wave 1**
@@ -192,5 +192,5 @@ Plans:
 | 10. Date-Range Search, Multi-Criteria Filtering & Standup Export | v1.1 | 2/2 | Complete    | 2026-09-28 |
 | 11. Jira Cloud Integration & Task Lifecycle | v1.1 | 3/3 | Complete    | 2026-09-28 |
 | 12. In-App Notifications, Proactive Alerts & Custom Reminders | v1.1 | 3/3 | Complete    | 2026-09-29 |
-| 12.1. Task Timer, Work Session Logs & Spent Time Tracking | v1.1 | 3/3 | In Progress|  |
+| 12.1. Task Timer, Work Session Logs & Spent Time Tracking | v1.1 | 3/3 | Complete    | 2026-09-29 |
 | 13. Enhanced Workload Analytics & Milestone Burndown | v1.1 | 0/0 | Not started | - |
