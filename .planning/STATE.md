@@ -2,20 +2,20 @@
 gsd_state_version: "1.0"
 milestone: v1.1
 milestone_name: Banking IT Enhancements & Jira Integration
-current_phase: 13
-current_phase_name: Enhanced Workload Analytics & Milestone Burndown
+current_phase: "12.1"
+current_phase_name: Task timer and work session logging
 status: planning
-stopped_at: Phase 12 complete, ready to plan Phase 13
-last_updated: "2026-09-29T01:28:56.618Z"
+stopped_at: Phase 12.1 context gathered
+last_updated: "2026-09-29T01:45:33.606Z"
 last_activity: 2026-09-29
 last_activity_desc: Phase 12 complete, transitioned to Phase 13
-state_head: eb329bf6596f6479d06e18e63b0fea596b42d3b6
+state_head: d55305f6eb534316029510476805d2ad1dc4e01d
 progress:
-  total_phases: 5
+  total_phases: 6
   completed_phases: 12
   total_plans: 11
   completed_plans: 11
-  percent: 92
+  percent: 100
 ---
 
 # Project State
@@ -25,14 +25,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-27)
 
 **Core value:** Make planned work realistically fit available time by exposing overload early and suggesting feasible daily workload distributions.
-**Current focus:** Phase 12 — in-app-notifications-proactive-alerts-custom-reminders (Complete)
+**Current focus:** Phase 12.1 — Task timer, work session logs & spent time tracking
 
 ## Current Position
 
-Phase: 13 — Enhanced Workload Analytics & Milestone Burndown
+Phase: 12.1 — Task timer, work session logs & spent time tracking
 Plan: Not started
-Status: Ready to plan
-Last activity: 2026-09-29 — Phase 12 complete, transitioned to Phase 13
+Status: ready to plan
+Last activity: 2026-09-29 — Inserted Phase 12.1 (task timer & spent time tracking) before Phase 13
 
 ### Quick Tasks Completed
 
@@ -199,6 +199,10 @@ None yet.
 
 None.
 
+### Roadmap Evolution
+
+- Phase 12.1 inserted after Phase 12: Task timer, work session logs, reload persistence, concurrent timers, allocation reminders, spent time views (URGENT)
+
 ## Deferred Items
 
 | Category | Item | Status | Deferred At |
@@ -207,9 +211,9 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-09-28T16:34:25.116Z
-Stopped at: Phase 12 complete, ready to plan Phase 13
-Resume file: .planning/phases/12-in-app-notifications-proactive-alerts-custom-reminders/12-UI-SPEC.md
+Last session: 2026-09-29T01:45:33.333Z
+Stopped at: Phase 12.1 context gathered
+Resume file: .planning/phases/12.1-task-timer-start-pause-finish-per-task-work-session-logs-rel/12.1-CONTEXT.md
 
 ## Operator Next Steps
 
