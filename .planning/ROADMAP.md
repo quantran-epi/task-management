@@ -181,10 +181,13 @@ Plans:
   5. AppShell Sider remembers collapsed/expanded state across browser reloads.
 
 **Plans:** 3 plans in 2 waves
-
 Plans:
+**Wave 1**
 
 - [ ] 12.2-01-PLAN.md — Schema V6, models, validation schemas, multi-reminder evaluation engine, and form list controls (Wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 12.2-02-PLAN.md — Notification settings tab, category toggles, configurable thresholds, and persistent desktop notifications (Wave 2)
 - [ ] 12.2-03-PLAN.md — TaskTable column visibility popover, 3-state header sorting, and AppShell sidebar collapse persistence (Wave 2)
 
