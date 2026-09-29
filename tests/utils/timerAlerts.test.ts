@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { Task } from '../../src/types/models';
 import {
   evaluateTaskSpentAlert,
+  evaluateLiveTaskAlert,
   evaluateDailyCapacitySpentAlert,
   evaluateDailyFeasibilityAlert,
 } from '../../src/utils/timerAlerts';
@@ -54,6 +55,27 @@ describe('timerAlerts 3-tier allocation & feasibility engine', () => {
     it('handles negative or invalid spentMinutes gracefully', () => {
       const result = evaluateTaskSpentAlert(baseTask, -10);
       expect(result.shouldAlert).toBe(false);
+    });
+
+    it('evaluates live running timer alerts (evaluateLiveTaskAlert)', () => {
+      // 0 historical spent + 60s elapsed = 1m >= 1m estimate
+      const task1m: Task = { ...baseTask, estimateMinutes: 1 };
+      const res60s = evaluateLiveTaskAlert(task1m, 0, 60);
+      expect(res60s.shouldAlert).toBe(true);
+      expect(res60s.severity).toBe('warning');
+      expect(res60s.message).toContain('Implement OAuth Login');
+
+      // 0 historical spent + 50s elapsed < 1m estimate
+      const res50s = evaluateLiveTaskAlert(task1m, 0, 50);
+      expect(res50s.shouldAlert).toBe(false);
+
+      // 30m historical spent + 1800s (30m) = 60m >= 60m estimate
+      const res60m = evaluateLiveTaskAlert(baseTask, 30, 1800);
+      expect(res60m.shouldAlert).toBe(true);
+
+      // 0 estimate returns shouldAlert: false
+      const res0Est = evaluateLiveTaskAlert({ ...baseTask, estimateMinutes: 0 }, 10, 600);
+      expect(res0Est.shouldAlert).toBe(false);
     });
   });
 

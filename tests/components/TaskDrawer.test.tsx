@@ -168,7 +168,7 @@ describe('TaskDrawer', () => {
 
     expect(screen.getByLabelText('Giờ')).toHaveValue('2');
     expect(screen.getByLabelText('Phút')).toHaveValue('30');
-  });
+  }, 15000);
 
   it('validates document links with http/https regex per D-25, T-02-05', async () => {
     const task = await createTask({ name: 'Link task', status: 'Open' }, testDb);

@@ -49,6 +49,23 @@ export function evaluateTaskSpentAlert(
 }
 
 /**
+ * Live Running Timer vs Estimate Alert (Toast notification)
+ * Triggers when total duration (historical spent + active running session) meets or exceeds estimate.
+ * Informational and non-blocking (D-07, D-08, TIMER-03, G-12.1-6).
+ */
+export function evaluateLiveTaskAlert(
+  task: Task,
+  spentMinutes: number,
+  currentRunSeconds: number
+): TaskSpentAlertResult {
+  const safeSpent = Math.max(0, Math.floor(spentMinutes || 0));
+  const safeRunMinutes = Math.floor(Math.max(0, currentRunSeconds || 0) / 60);
+  const totalSpentMinutes = safeSpent + safeRunMinutes;
+
+  return evaluateTaskSpentAlert(task, totalSpentMinutes);
+}
+
+/**
  * Tier 2: Daily Capacity Overload from Recorded Work Sessions (Notification Drawer)
  * Triggers when recorded spent minutes on a date exceeds effective daily capacity.
  * Informational and non-blocking (D-07, D-08, TIMER-06).

@@ -1,5 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { message } from 'antd';
 import { TaskTable } from '../../src/components/tasks/TaskTable';
 import { TimerContext, type TimerContextValue } from '../../src/context/TimerContext';
 import type { Task, Project, Milestone, ActiveTimer } from '../../src/types/models';
@@ -140,5 +141,85 @@ describe('TaskTableTimer', () => {
     // Estimate formatting displays / 1h and / 2h
     expect(screen.getByText('/ 1h')).toBeInTheDocument();
     expect(screen.getByText('/ 2h')).toBeInTheDocument();
+  });
+
+  it('displays column header as "Đã dùng / Ước tính" matching cell display order', () => {
+    renderWithTimerContext();
+
+    expect(screen.getByText('Đã dùng / Ước tính')).toBeInTheDocument();
+    expect(screen.queryByText('Ước tính / Đã dùng')).not.toBeInTheDocument();
+  });
+
+  it('triggers warning message when live running timer passes estimate threshold', () => {
+    const warningSpy = vi.spyOn(message, 'warning').mockImplementation(() => ({} as any));
+
+    const task1m: Task = {
+      id: 'task-short',
+      name: 'Viết unit test',
+      status: 'In Progress',
+      progress: 0,
+      priority: 'Medium',
+      estimateMinutes: 1, // 1 minute = 60s
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const runningTimer: ActiveTimer = {
+      taskId: 'task-short',
+      status: 'running',
+      startedAt: Date.now() - 60000,
+      accumulatedMs: 0,
+      sessionStartTime: new Date().toISOString(),
+    };
+
+    const defaultValue: TimerContextValue = {
+      activeTimers: [runningTimer],
+      getTimerForTask: (id) => (id === 'task-short' ? runningTimer : undefined),
+      getElapsedSeconds: (id) => (id === 'task-short' ? 60 : 0),
+      startTimer: mockStart,
+      pauseTimer: mockPause,
+      finishTimer: mockFinish,
+      cancelTimer: vi.fn(),
+    };
+
+    const { rerender } = render(
+      <TimerContext.Provider value={defaultValue}>
+        <TaskTable
+          tasks={[task1m]}
+          projects={mockProjects}
+          milestones={mockMilestones}
+          selectedRowKeys={[]}
+          onSelectRows={mockSelectRows}
+          onOpenDrawer={mockOpenDrawer}
+        />
+      </TimerContext.Provider>
+    );
+
+    expect(warningSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Viết unit test')
+    );
+    expect(warningSpy).toHaveBeenCalledTimes(1);
+
+    // On subsequent tick with elapsed 61s, it should not spam again
+    const nextTickValue: TimerContextValue = {
+      ...defaultValue,
+      getElapsedSeconds: (id) => (id === 'task-short' ? 61 : 0),
+    };
+
+    rerender(
+      <TimerContext.Provider value={nextTickValue}>
+        <TaskTable
+          tasks={[task1m]}
+          projects={mockProjects}
+          milestones={mockMilestones}
+          selectedRowKeys={[]}
+          onSelectRows={mockSelectRows}
+          onOpenDrawer={mockOpenDrawer}
+        />
+      </TimerContext.Provider>
+    );
+
+    expect(warningSpy).toHaveBeenCalledTimes(1);
+    warningSpy.mockRestore();
   });
 });

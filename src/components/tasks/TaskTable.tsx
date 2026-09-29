@@ -42,7 +42,7 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { getJiraBrowseUrl } from '../../services/jira/jiraApi';
 import { useTimer } from '../../hooks/useTimer';
-import { evaluateTaskSpentAlert } from '../../utils/timerAlerts';
+import { evaluateTaskSpentAlert, evaluateLiveTaskAlert } from '../../utils/timerAlerts';
 
 export interface TaskTableProps {
   tasks: Task[];
@@ -94,7 +94,16 @@ export const TaskTable: React.FC<TaskTableProps> = ({
   const fallbackTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   const effectiveDb = db || defaultDb;
-  const { getTimerForTask, getElapsedSeconds, startTimer, pauseTimer, finishTimer } = useTimer();
+  const {
+    activeTimers,
+    getTimerForTask,
+    getElapsedSeconds,
+    startTimer,
+    pauseTimer,
+    finishTimer,
+  } = useTimer();
+
+  const alertedTasksRef = useRef<Set<string>>(new Set());
 
   // Query spent minutes for all tasks in table
   const taskSpentMap = useLiveQuery(async () => {
@@ -107,6 +116,34 @@ export const TaskTable: React.FC<TaskTableProps> = ({
     }
     return map;
   }, [effectiveDb, tasks]) ?? new Map<string, number>();
+
+  // G-12.1-6 / T-12.1-12: Live running timer threshold alert
+  useEffect(() => {
+    // Clean up tasks no longer active
+    const activeIds = new Set(activeTimers.map((t) => t.taskId));
+    for (const taskId of alertedTasksRef.current) {
+      if (!activeIds.has(taskId)) {
+        alertedTasksRef.current.delete(taskId);
+      }
+    }
+
+    for (const timer of activeTimers) {
+      if (timer.status !== 'running') continue;
+      if (alertedTasksRef.current.has(timer.taskId)) continue;
+
+      const task = tasks.find((t) => t.id === timer.taskId);
+      if (!task || !task.estimateMinutes || task.estimateMinutes <= 0) continue;
+
+      const spentMinutes = taskSpentMap.get(task.id) || 0;
+      const elapsedSeconds = getElapsedSeconds(task.id);
+      const alert = evaluateLiveTaskAlert(task, spentMinutes, elapsedSeconds);
+
+      if (alert.shouldAlert) {
+        alertedTasksRef.current.add(timer.taskId);
+        message.warning(alert.message);
+      }
+    }
+  }, [activeTimers, tasks, taskSpentMap, getElapsedSeconds]);
 
   const settingsDomain = useLiveQuery(async () => {
     if (!effectiveDb) return undefined;
@@ -364,7 +401,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       },
     },
     {
-      title: 'Ước tính / Đã dùng',
+      title: 'Đã dùng / Ước tính',
       dataIndex: 'estimateMinutes',
       key: 'estimateMinutes',
       width: 140,
@@ -432,9 +469,10 @@ export const TaskTable: React.FC<TaskTableProps> = ({
             // Check Tier 1 toast alert
             const updatedSpent = (taskSpentMap.get(record.id) || 0) + Math.max(1, Math.round(getElapsedSeconds(record.id) / 60));
             const alert = evaluateTaskSpentAlert(record, updatedSpent);
-            if (alert.shouldAlert) {
+            if (alert.shouldAlert && !alertedTasksRef.current.has(record.id)) {
               message.warning(alert.message);
             }
+            alertedTasksRef.current.delete(record.id);
           } catch (err: any) {
             message.error(err?.message || 'Không thể kết thúc phiên');
           }

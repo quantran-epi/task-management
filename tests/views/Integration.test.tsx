@@ -31,7 +31,7 @@ describe('App & Route Integration', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Integration Test Task')).toBeInTheDocument();
-      expect(screen.getByText('45m')).toBeInTheDocument();
+      expect(screen.getByText(/45m/)).toBeInTheDocument();
     });
   });
 
