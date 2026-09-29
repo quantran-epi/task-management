@@ -150,7 +150,7 @@ Plans:
 **Goal:** Provide a local-first task timer engine (start/pause/finish) with reload persistence, multiple concurrent timers, work session history logs in Dexie SCHEMA_V5, 3-tier allocation & feasibility alerts, and spent time rollups across tasks, milestones, and projects.
 **Requirements**: TIMER-01, TIMER-02, TIMER-03, TIMER-04, TIMER-05, TIMER-06, TIMER-07, TIMER-08, TIMER-09
 **Depends on:** Phase 12
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans executed
 
 Plans:
 **Wave 1**
@@ -160,7 +160,7 @@ Plans:
 - [x] 12.1-02-PLAN.md — TimerContext & useTimer hook with multi-timer concurrency, reload survival, and 3-tier allocation/feasibility alert evaluation engine
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 12.1-03-PLAN.md — AppShell ActiveTimerWidget header capsule/dropdown, TaskTable inline triggers/spent progress, and TaskDrawer WorkSessionsTab history & manual modal
+- [x] 12.1-03-PLAN.md — AppShell ActiveTimerWidget header capsule/dropdown, TaskTable inline triggers/spent progress, and TaskDrawer WorkSessionsTab history & manual modal
 
 ### Phase 13: Enhanced Workload Analytics & Milestone Burndown
 
@@ -192,5 +192,5 @@ Plans:
 | 10. Date-Range Search, Multi-Criteria Filtering & Standup Export | v1.1 | 2/2 | Complete    | 2026-09-28 |
 | 11. Jira Cloud Integration & Task Lifecycle | v1.1 | 3/3 | Complete    | 2026-09-28 |
 | 12. In-App Notifications, Proactive Alerts & Custom Reminders | v1.1 | 3/3 | Complete    | 2026-09-29 |
-| 12.1. Task Timer, Work Session Logs & Spent Time Tracking | v1.1 | 2/3 | In Progress|  |
+| 12.1. Task Timer, Work Session Logs & Spent Time Tracking | v1.1 | 3/3 | In Progress|  |
 | 13. Enhanced Workload Analytics & Milestone Burndown | v1.1 | 0/0 | Not started | - |

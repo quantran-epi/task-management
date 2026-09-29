@@ -5,17 +5,17 @@ milestone_name: Banking IT Enhancements & Jira Integration
 current_phase: "12.1"
 current_phase_name: Task timer — start/pause/finish per task, work session logs, reload persistence, multiple concurrent timers, time allocation notifications, spent time aggregations (INSERTED)
 status: executing
-stopped_at: Completed 12.1-01-PLAN.md
-last_updated: "2026-09-29T02:57:53.481Z"
+stopped_at: Completed 12.1-03-PLAN.md
+last_updated: "2026-09-29T04:28:07.350Z"
 last_activity: 2026-09-29
 last_activity_desc: Phase 12.1 execution started
-state_head: e7550489b41b31b5226322f58ac925707f953e1e
+state_head: 5e27c70bfcf6da59cb85b6b0849f4985df566d3b
 progress:
   total_phases: 6
   completed_phases: 12
   total_plans: 14
-  completed_plans: 12
-  percent: 86
+  completed_plans: 14
+  percent: 100
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-09-27)
 ## Current Position
 
 Phase: 12.1 (Task timer — start/pause/finish per task, work session logs, reload persistence, multiple concurrent timers, time allocation notifications, spent time aggregations (INSERTED)) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-09-29 — Phase 12.1 execution started
 
@@ -76,6 +76,7 @@ Last activity: 2026-09-29 — Phase 12.1 execution started
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 12.1 P01 | 15m | 3 tasks | 16 files |
+| Phase 12.1 P03 | 25m | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -198,6 +199,9 @@ Decisions logged across v1.0 and v1.1:
 - [Phase 12.1]: Dexie schema v5 adds workSessions and activeTimers tables
 - [Phase 12.1]: Backup payload schemaVersion upgraded to 3 with backward compatibility for v1/v2
 - [Phase 12.1]: Cascade deletions atomically purge work sessions and active timers for tasks, milestones, and projects
+- [Phase 12.1]: AppShell embeds ActiveTimerWidget next to NotificationBell with zero-timer auto-hide
+- [Phase 12.1]: TaskTable rows feature inline Start, Pause, Resume, and Finish timer buttons
+- [Phase 12.1]: TaskDrawer includes dedicated Work Sessions tab with historical table and manual modal
 
 ### Pending Todos
 
@@ -219,8 +223,8 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-09-29T02:57:53.314Z
-Stopped at: Completed 12.1-01-PLAN.md
+Last session: 2026-09-29T04:28:07.192Z
+Stopped at: Completed 12.1-03-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

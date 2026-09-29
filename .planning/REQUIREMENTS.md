@@ -45,8 +45,8 @@
 - [x] **TIMER-05**: Backup export and restore schemas bump to v3 and serialize `workSessions` with cryptographic validation.
 - [ ] **TIMER-06**: User can run multiple concurrent timers simultaneously with reactive UI ticker loop.
 - [ ] **TIMER-07**: System alerts user with 3-tier allocation warnings (task spent >= estimate toast, daily overload drawer alert, daily feasibility risk).
-- [ ] **TIMER-08**: User can view and control active timers via AppHeader capsule widget and multi-timer dropdown badge.
-- [ ] **TIMER-09**: User can inspect and manage task work history in TaskDrawer dedicated Work Sessions tab and record manual sessions via modal.
+- [x] **TIMER-08**: User can view and control active timers via AppHeader capsule widget and multi-timer dropdown badge.
+- [x] **TIMER-09**: User can inspect and manage task work history in TaskDrawer dedicated Work Sessions tab and record manual sessions via modal.
 
 ### Enhanced Analytics Dashboard
 
@@ -96,8 +96,8 @@
 | TIMER-05 | Phase 12.1 | Complete |
 | TIMER-06 | Phase 12.1 | Pending |
 | TIMER-07 | Phase 12.1 | Pending |
-| TIMER-08 | Phase 12.1 | Pending |
-| TIMER-09 | Phase 12.1 | Pending |
+| TIMER-08 | Phase 12.1 | Complete |
+| TIMER-09 | Phase 12.1 | Complete |
 | ANLT-01 | Phase 13 | Pending |
 | ANLT-02 | Phase 13 | Pending |
 | ANLT-03 | Phase 13 | Pending |
