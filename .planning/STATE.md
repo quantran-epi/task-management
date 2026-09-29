@@ -5,17 +5,17 @@ milestone_name: Banking IT Enhancements & Jira Integration
 current_phase: 13
 current_phase_name: Enhanced Workload Analytics & Milestone Burndown
 status: planning
-stopped_at: Phase 12.1 complete, ready to plan Phase 13
-last_updated: "2026-09-29T05:25:08.873Z"
+stopped_at: Completed 12.1-04-PLAN.md
+last_updated: "2026-09-29T07:24:46.359Z"
 last_activity: 2026-09-29
 last_activity_desc: Phase 12.1 complete, transitioned to Phase 13
-state_head: 7e5a92056a0ba0ede297ff3cc2766e6b47d24ecf
+state_head: 27c40c46acdf6898c615db866518455180694332
 progress:
   total_phases: 6
   completed_phases: 13
-  total_plans: 14
-  completed_plans: 14
-  percent: 93
+  total_plans: 15
+  completed_plans: 15
+  percent: 100
 ---
 
 # Project State
@@ -78,6 +78,7 @@ Last activity: 2026-09-29 — Phase 12.1 complete, transitioned to Phase 13
 |------|----------|-------|-------|
 | Phase 12.1 P01 | 15m | 3 tasks | 16 files |
 | Phase 12.1 P03 | 25m | 3 tasks | 8 files |
+| Phase 12.1 P04 | 12m | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -203,6 +204,9 @@ Decisions logged across v1.0 and v1.1:
 - [Phase 12.1]: AppShell embeds ActiveTimerWidget next to NotificationBell with zero-timer auto-hide
 - [Phase 12.1]: TaskTable rows feature inline Start, Pause, Resume, and Finish timer buttons
 - [Phase 12.1]: TaskDrawer includes dedicated Work Sessions tab with historical table and manual modal
+- [Phase 12.1]: Include tick in TimerContext useMemo dependency array so tick increments trigger context consumer re-renders every second without writing tick counts to IndexedDB
+- [Phase 12.1]: Use db.tasks.bulkGet(ids) in ActiveTimerWidget to reliably fetch task records by primary key id, filtering out undefined entries
+- [Phase 12.1]: Invert TaskTable column header to 'Đã dùng / Ước tính' to match cell format, and evaluate live running timer duration against task estimate with Set ref deduplication to prevent toast alert spam
 
 ### Pending Todos
 
@@ -224,8 +228,8 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-09-29T04:28:07.192Z
-Stopped at: Phase 12.1 complete, ready to plan Phase 13
+Last session: 2026-09-29T07:24:46.131Z
+Stopped at: Completed 12.1-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
