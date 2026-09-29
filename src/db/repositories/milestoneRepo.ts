@@ -31,6 +31,7 @@ export async function createMilestone(
   if (validated.businessAnalysts !== undefined) milestone.businessAnalysts = validated.businessAnalysts;
   if (validated.reminderDate !== undefined) milestone.reminderDate = validated.reminderDate;
   if (validated.reminderNote !== undefined) milestone.reminderNote = validated.reminderNote;
+  if (validated.reminders !== undefined) milestone.reminders = validated.reminders;
 
   await db.milestones.add(milestone);
   return milestone;
@@ -72,6 +73,13 @@ export async function updateMilestone(
       updated.reminderNote = validated.reminderNote;
     } else {
       delete updated.reminderNote;
+    }
+  }
+  if ('reminders' in patch) {
+    if (validated.reminders !== undefined) {
+      updated.reminders = validated.reminders;
+    } else {
+      delete updated.reminders;
     }
   }
 

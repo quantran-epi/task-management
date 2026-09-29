@@ -231,8 +231,8 @@ export function evaluateNotifications(params: EvaluateNotificationsParams): Aler
       const legacyReminder: ReminderItem = {
         id: '',
         date: project.reminderDate,
-        note: project.reminderNote,
       };
+      if (project.reminderNote) legacyReminder.note = project.reminderNote;
       if (isReminderTriggered(legacyReminder, todayDate, currentTime)) {
         const alertKey = `reminder:project:${project.id}`;
         if (dismissedMap[alertKey] === todayDate) continue;
@@ -282,8 +282,8 @@ export function evaluateNotifications(params: EvaluateNotificationsParams): Aler
       const legacyReminder: ReminderItem = {
         id: '',
         date: milestone.reminderDate,
-        note: milestone.reminderNote,
       };
+      if (milestone.reminderNote) legacyReminder.note = milestone.reminderNote;
       if (isReminderTriggered(legacyReminder, todayDate, currentTime)) {
         const alertKey = `reminder:milestone:${milestone.id}`;
         if (dismissedMap[alertKey] === todayDate) continue;
@@ -336,8 +336,8 @@ export function evaluateNotifications(params: EvaluateNotificationsParams): Aler
       const legacyReminder: ReminderItem = {
         id: '',
         date: task.reminderDate,
-        note: task.reminderNote,
       };
+      if (task.reminderNote) legacyReminder.note = task.reminderNote;
       if (isReminderTriggered(legacyReminder, todayDate, currentTime)) {
         const alertKey = `reminder:task:${task.id}`;
         if (dismissedMap[alertKey] === todayDate) continue;

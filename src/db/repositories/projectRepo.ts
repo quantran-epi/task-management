@@ -31,6 +31,7 @@ export async function createProject(
   if (validated.documentLinks !== undefined) project.documentLinks = validated.documentLinks;
   if (validated.reminderDate !== undefined) project.reminderDate = validated.reminderDate;
   if (validated.reminderNote !== undefined) project.reminderNote = validated.reminderNote;
+  if (validated.reminders !== undefined) project.reminders = validated.reminders;
 
   await db.projects.add(project);
   return project;
@@ -73,6 +74,13 @@ export async function updateProject(
       updated.reminderNote = validated.reminderNote;
     } else {
       delete updated.reminderNote;
+    }
+  }
+  if ('reminders' in patch) {
+    if (validated.reminders !== undefined) {
+      updated.reminders = validated.reminders;
+    } else {
+      delete updated.reminders;
     }
   }
 

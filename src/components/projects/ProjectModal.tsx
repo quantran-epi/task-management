@@ -2,10 +2,11 @@ import React, { useEffect, useRef } from 'react';
 import { Modal, Form, Input, DatePicker, Select, Button, Space } from 'antd';
 import { DeleteOutlined, LinkOutlined, PlusOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
-import type { Project, ProjectStatus } from '../../types/models';
+import type { Project, ProjectStatus, ReminderItem } from '../../types/models';
 import { createFocusRestorer } from '../../utils/focus';
 import { useRegisterActiveForm } from '../../context/FormGuardContext';
 import { TagSelect } from '../common/TagSelect';
+import { RemindersFormList, formatRemindersForForm, formatRemindersForSave } from '../common/RemindersFormList';
 
 export interface ProjectModalProps {
   open: boolean;
@@ -22,6 +23,7 @@ export interface ProjectModalProps {
     documentLinks?: string[] | undefined;
     reminderDate?: string | undefined;
     reminderNote?: string | undefined;
+    reminders?: ReminderItem[] | undefined;
   }) => Promise<void> | void;
   loading?: boolean | undefined;
 }
@@ -37,6 +39,7 @@ interface ProjectFormValues {
   documentLinks?: string[];
   reminderDate?: Dayjs | null;
   reminderNote?: string;
+  reminders?: unknown[];
 }
 
 const PROJECT_STATUSES: ProjectStatus[] = ['Open', 'In Progress', 'Done', 'Cancelled'];
@@ -73,8 +76,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
           opsOwners: project.opsOwners ?? [],
           businessAnalysts: project.businessAnalysts ?? [],
           documentLinks: project.documentLinks ?? [],
-          reminderDate: project.reminderDate ? dayjs(project.reminderDate, 'YYYY-MM-DD') : null,
-          reminderNote: project.reminderNote || '',
+          reminders: formatRemindersForForm(project),
         });
       } else {
         form.resetFields();
@@ -83,8 +85,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
           opsOwners: [],
           businessAnalysts: [],
           documentLinks: [],
-          reminderDate: null,
-          reminderNote: '',
+          reminders: [],
         });
       }
     }
@@ -103,6 +104,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
       const cleanedLinks = (values.documentLinks ?? [])
         .map((l) => (typeof l === 'string' ? l.trim() : ''))
         .filter((l) => l.length > 0);
+      const savedReminders = formatRemindersForSave(values.reminders);
       await onSave({
         name: values.name.trim(),
         description: values.description?.trim() || undefined,
@@ -113,8 +115,9 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
         businessAnalysts:
           (values.businessAnalysts ?? []).length > 0 ? values.businessAnalysts : undefined,
         documentLinks: cleanedLinks.length > 0 ? cleanedLinks : undefined,
-        reminderDate: values.reminderDate ? values.reminderDate.format('YYYY-MM-DD') : undefined,
-        reminderNote: values.reminderNote?.trim() || undefined,
+        reminders: savedReminders ?? [],
+        reminderDate: savedReminders?.[0]?.date,
+        reminderNote: savedReminders?.[0]?.note,
       });
       handleClose();
     } catch {
@@ -174,16 +177,8 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
           </Form.Item>
         </div>
 
-        {/* Reminder (D-08) */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-          <Form.Item name="reminderDate" label="Ngày nhắc nhở">
-            <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" placeholder="Chọn ngày nhắc nhở" allowClear />
-          </Form.Item>
-
-          <Form.Item name="reminderNote" label="Ghi chú nhắc nhở">
-            <Input placeholder="Nhập nội dung cần lưu ý khi đến hạn..." maxLength={500} allowClear />
-          </Form.Item>
-        </div>
+        {/* Reminders (D-03, D-05, NOTIF-06) */}
+        <RemindersFormList />
 
         {/* Document Links */}
         <Form.Item label="Tài liệu liên kết">

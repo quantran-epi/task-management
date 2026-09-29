@@ -1,11 +1,12 @@
 import React, { useEffect, useRef } from 'react';
 import { Modal, Form, Input, DatePicker, Select } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
-import type { Milestone, MilestoneStatus, Project } from '../../types/models';
+import type { Milestone, MilestoneStatus, Project, ReminderItem } from '../../types/models';
 import { createFocusRestorer } from '../../utils/focus';
 import { useRegisterActiveForm } from '../../context/FormGuardContext';
 import { TagSelect } from '../common/TagSelect';
 import { resolveInheritedTags } from '../../domain/inheritance';
+import { RemindersFormList, formatRemindersForForm, formatRemindersForSave } from '../common/RemindersFormList';
 
 export interface MilestoneModalProps {
   open: boolean;
@@ -23,6 +24,7 @@ export interface MilestoneModalProps {
     businessAnalysts?: string[] | undefined;
     reminderDate?: string | undefined;
     reminderNote?: string | undefined;
+    reminders?: ReminderItem[] | undefined;
   }) => Promise<void> | void;
   loading?: boolean | undefined;
 }
@@ -36,6 +38,7 @@ interface MilestoneFormValues {
   businessAnalysts?: string[];
   reminderDate?: Dayjs | null;
   reminderNote?: string;
+  reminders?: unknown[];
 }
 
 const MILESTONE_STATUSES: MilestoneStatus[] = ['Open', 'In Progress', 'Done', 'Cancelled'];
@@ -72,8 +75,7 @@ export const MilestoneModal: React.FC<MilestoneModalProps> = ({
           status: milestone.status,
           opsOwners: milestone.opsOwners ?? [],
           businessAnalysts: milestone.businessAnalysts ?? [],
-          reminderDate: milestone.reminderDate ? dayjs(milestone.reminderDate, 'YYYY-MM-DD') : null,
-          reminderNote: milestone.reminderNote || '',
+          reminders: formatRemindersForForm(milestone),
         });
       } else {
         form.resetFields();
@@ -81,8 +83,7 @@ export const MilestoneModal: React.FC<MilestoneModalProps> = ({
           status: 'Open',
           opsOwners: [],
           businessAnalysts: [],
-          reminderDate: null,
-          reminderNote: '',
+          reminders: [],
         });
       }
     }
@@ -116,6 +117,7 @@ export const MilestoneModal: React.FC<MilestoneModalProps> = ({
   const handleOk = async () => {
     try {
       const values = await form.validateFields();
+      const savedReminders = formatRemindersForSave(values.reminders);
       await onSave({
         projectId,
         name: values.name.trim(),
@@ -125,8 +127,9 @@ export const MilestoneModal: React.FC<MilestoneModalProps> = ({
         opsOwners: (values.opsOwners ?? []).length > 0 ? values.opsOwners : undefined,
         businessAnalysts:
           (values.businessAnalysts ?? []).length > 0 ? values.businessAnalysts : undefined,
-        reminderDate: values.reminderDate ? values.reminderDate.format('YYYY-MM-DD') : undefined,
-        reminderNote: values.reminderNote?.trim() || undefined,
+        reminders: savedReminders ?? [],
+        reminderDate: savedReminders?.[0]?.date,
+        reminderNote: savedReminders?.[0]?.note,
       });
       handleClose();
     } catch {
@@ -192,16 +195,8 @@ export const MilestoneModal: React.FC<MilestoneModalProps> = ({
           </Form.Item>
         </div>
 
-        {/* Reminder (D-08) */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-          <Form.Item name="reminderDate" label="Ngày nhắc nhở">
-            <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" placeholder="Chọn ngày nhắc nhở" allowClear />
-          </Form.Item>
-
-          <Form.Item name="reminderNote" label="Ghi chú nhắc nhở">
-            <Input placeholder="Nhập nội dung cần lưu ý khi đến hạn..." maxLength={500} allowClear />
-          </Form.Item>
-        </div>
+        {/* Reminders (D-03, D-05, NOTIF-06) */}
+        <RemindersFormList />
       </Form>
     </Modal>
   );

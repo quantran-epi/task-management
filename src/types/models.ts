@@ -25,8 +25,8 @@ export const WORK_TYPES: readonly WorkType[] = [
 export interface ReminderItem {
   id: string; // crypto.randomUUID()
   date: string; // YYYY-MM-DD
-  time?: string; // HH:mm
-  note?: string;
+  time?: string | undefined; // HH:mm
+  note?: string | undefined;
 }
 
 export interface Project {

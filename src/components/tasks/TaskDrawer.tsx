@@ -26,6 +26,7 @@ import { TaskDrawerPlanning } from './TaskDrawerPlanning';
 import { TaskJiraSection } from './TaskJiraSection';
 import { WorkSessionsTab } from './WorkSessionsTab';
 import { TagSelect } from '../common/TagSelect';
+import { RemindersFormList, formatRemindersForForm, formatRemindersForSave } from '../common/RemindersFormList';
 import { WORK_TYPE_CONFIG } from './WorkTypeBadge';
 import { resolveInheritedTags } from '../../domain/inheritance';
 import type { TaskPlannerDatabase } from '../../db';
@@ -57,6 +58,7 @@ interface TaskDrawerFormValues {
   documentLinks?: string[];
   reminderDate?: Dayjs | null;
   reminderNote?: string;
+  reminders?: unknown[];
   notes?: string;
 }
 
@@ -169,8 +171,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
               : null,
             progress: taskData.progress,
             documentLinks: taskData.documentLinks ?? [],
-            reminderDate: taskData.reminderDate ? dayjs(taskData.reminderDate, 'YYYY-MM-DD') : null,
-            reminderNote: taskData.reminderNote ?? '',
+            reminders: formatRemindersForForm(taskData),
             notes: taskData.notes ?? '',
           });
         }
@@ -255,6 +256,8 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
         .map((link) => link?.trim())
         .filter((link): link is string => Boolean(link && link.length > 0));
 
+      const savedReminders = formatRemindersForSave(values.reminders);
+
       const updated = await updateTask(
         taskId,
         {
@@ -275,8 +278,9 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
             ? values.actualEndDate.format('YYYY-MM-DD')
             : undefined,
           documentLinks: cleanedLinks.length > 0 ? cleanedLinks : undefined,
-          reminderDate: values.reminderDate ? values.reminderDate.format('YYYY-MM-DD') : undefined,
-          reminderNote: values.reminderNote?.trim() ? values.reminderNote.trim() : undefined,
+          reminders: savedReminders ?? [],
+          reminderDate: savedReminders?.[0]?.date,
+          reminderNote: savedReminders?.[0]?.note,
           notes: values.notes?.trim() ? values.notes : undefined,
           projectId: targetProjectId,
           milestoneId: targetMilestoneId,
@@ -481,25 +485,8 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
           <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" placeholder="Kết thúc thực tế" />
         </Form.Item>
 
-        {/* Reminder (D-08) */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Form.Item name="reminderDate" label="Ngày nhắc nhở">
-            <DatePicker
-              style={{ width: '100%' }}
-              format="YYYY-MM-DD"
-              placeholder="Chọn ngày nhắc nhở"
-              allowClear
-            />
-          </Form.Item>
-
-          <Form.Item name="reminderNote" label="Ghi chú nhắc nhở">
-            <Input
-              placeholder="Nhập nội dung cần lưu ý khi đến hạn..."
-              maxLength={500}
-              allowClear
-            />
-          </Form.Item>
-        </div>
+        {/* Reminders (D-03, D-05, NOTIF-06) */}
+        <RemindersFormList />
 
         {/* Progress Slider + Input */}
         <Form.Item label="Tiến độ" style={{ marginBottom: 12 }}>

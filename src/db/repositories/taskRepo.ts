@@ -40,6 +40,7 @@ export async function createTask(
   if (validated.jiraKey !== undefined) task.jiraKey = validated.jiraKey;
   if (validated.reminderDate !== undefined) task.reminderDate = validated.reminderDate;
   if (validated.reminderNote !== undefined) task.reminderNote = validated.reminderNote;
+  if (validated.reminders !== undefined) task.reminders = validated.reminders;
 
   await db.tasks.add(task);
   return task;
@@ -97,6 +98,13 @@ export async function updateTask(
       updated.reminderNote = validated.reminderNote;
     } else {
       delete updated.reminderNote;
+    }
+  }
+  if ('reminders' in patch) {
+    if (validated.reminders !== undefined) {
+      updated.reminders = validated.reminders;
+    } else {
+      delete updated.reminders;
     }
   }
 
