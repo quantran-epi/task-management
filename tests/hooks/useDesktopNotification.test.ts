@@ -77,6 +77,61 @@ describe('useDesktopNotification hook (D-09, D-12, NOTIF-07)', () => {
     });
   });
 
+  it('includes stale tasks in startup summary text when only stale tasks exist', async () => {
+    await db.settings.put({
+      key: NOTIFICATION_SETTINGS_KEY,
+      value: {
+        ...DEFAULT_NOTIFICATION_SETTINGS,
+        browserNotificationsEnabled: true,
+        requireInteractionEnabled: true,
+      },
+    });
+
+    const mockNotification = vi.fn();
+    vi.stubGlobal(
+      'Notification',
+      Object.assign(mockNotification, {
+        permission: 'granted',
+      })
+    );
+
+    const staleNotificationState: NotificationState = {
+      items: [
+        {
+          id: 'stale:task:1',
+          category: 'stale',
+          title: 'Tác vụ trì trệ',
+          tagColor: 'warning',
+          tagLabel: 'Cần cập nhật',
+          entityType: 'task',
+          canDismiss: true,
+          priorityOrder: 3,
+        },
+      ],
+      activeCount: 1,
+      categoryCounts: {
+        overdue: 0,
+        overload: 0,
+        'due-soon': 0,
+        stale: 1,
+        reminder: 0,
+      },
+      isLoading: false,
+    };
+
+    renderHook(() => useDesktopNotification({ notifications: staleNotificationState, db }));
+
+    await waitFor(() => {
+      expect(mockNotification).toHaveBeenCalledTimes(1);
+      expect(mockNotification).toHaveBeenCalledWith(
+        'Task Planner',
+        expect.objectContaining({
+          body: 'Bạn có 0 việc quá hạn, 0 ngày quá tải, và 1 việc cần xử lý.',
+        })
+      );
+    });
+  });
+
   it('respects requireInteraction: false when disabled in settings', async () => {
     await db.settings.put({
       key: NOTIFICATION_SETTINGS_KEY,

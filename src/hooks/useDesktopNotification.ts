@@ -92,11 +92,13 @@ export function useDesktopNotification({
 
     const overdue = notifications.categoryCounts.overdue;
     const overload = notifications.categoryCounts.overload;
+    const stale = notifications.categoryCounts.stale;
     const reminders =
       notifications.categoryCounts.reminder + notifications.categoryCounts['due-soon'];
+    const totalPending = reminders + stale;
 
     // T-12-07: Use summary counts rather than sensitive task/project descriptions
-    const summaryText = `Bạn có ${overdue} việc quá hạn, ${overload} ngày quá tải, và ${reminders} việc cần xử lý.`;
+    const summaryText = `Bạn có ${overdue} việc quá hạn, ${overload} ngày quá tải, và ${totalPending} việc cần xử lý.`;
 
     try {
       const desktopNotif = new window.Notification('Task Planner', {
