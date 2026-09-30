@@ -112,6 +112,8 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb }) => {
     filteredTasks,
     debouncedSearch,
     activeFilterCount,
+    globalSort,
+    setGlobalSort,
   } = useTaskFilters({ tasks, projects, milestones, db });
 
   // Global keyboard shortcuts per D-29
@@ -195,6 +197,8 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb }) => {
         onSelectProject={handleSelectProject}
         isFiltered={isFiltered}
         db={db}
+        globalSort={globalSort}
+        onGlobalSortChange={setGlobalSort}
       />
 
       {/* 4. Floating Batch Action Bar */}

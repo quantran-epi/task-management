@@ -8,6 +8,7 @@ import {
   Tooltip,
   Modal,
   Input,
+  Select,
   message,
   Dropdown,
   Progress,
@@ -45,6 +46,11 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { getJiraBrowseUrl } from '../../services/jira/jiraApi';
 import { useTimer } from '../../hooks/useTimer';
 import { evaluateTaskSpentAlert } from '../../utils/timerAlerts';
+import {
+  TASK_SORT_OPTIONS,
+  DEFAULT_TASK_SORT,
+  type TaskSortKey,
+} from '../../utils/filter';
 
 export interface TaskTableProps {
   tasks: Task[];
@@ -58,6 +64,8 @@ export interface TaskTableProps {
   db?: TaskPlannerDatabase;
   loading?: boolean;
   jiraDomain?: string;
+  globalSort?: TaskSortKey;
+  onGlobalSortChange?: (key: TaskSortKey) => void;
 }
 
 const PRIORITY_COLORS: Record<TaskPriority, string> = {
@@ -129,6 +137,8 @@ export const TaskTable: React.FC<TaskTableProps> = ({
   db,
   loading = false,
   jiraDomain,
+  globalSort,
+  onGlobalSortChange,
 }) => {
   const { token } = theme.useToken();
   const today = getTodayDateString();
@@ -773,6 +783,18 @@ export const TaskTable: React.FC<TaskTableProps> = ({
           )}
         </div>
         <Space size="middle">
+          {/* Global sort applies to the pre-sorted dataSource; per-column sorter clicks override for that render. */}
+          <span style={{ color: token.colorTextSecondary, fontSize: 13 }}>
+            Sắp xếp theo
+          </span>
+          <Select
+            size="middle"
+            style={{ width: 200 }}
+            value={globalSort ?? DEFAULT_TASK_SORT}
+            onChange={(v) => onGlobalSortChange?.(v)}
+            options={[...TASK_SORT_OPTIONS]}
+            aria-label="Sắp xếp danh sách tác vụ"
+          />
           <Popover
             content={columnCustomizationContent}
             title={null}

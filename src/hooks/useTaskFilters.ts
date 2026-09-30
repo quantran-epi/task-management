@@ -5,12 +5,29 @@ import {
   filterTasks,
   sortTasks,
   DEFAULT_TASK_FILTER_STATE,
+  DEFAULT_TASK_SORT,
+  TASK_SORT_OPTIONS,
   countActiveAdvancedFilters,
   type TaskFilterState,
+  type TaskSortKey,
 } from '../utils/filter';
 import { getTodayDateString } from '../utils/date';
 import { getTaskIdsWithAllocationsInRange } from '../db/repositories/allocationRepo';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
+
+export const STORAGE_SORT_KEY = 'planner:task_table_sort';
+
+function loadInitialGlobalSort(): TaskSortKey {
+  try {
+    if (typeof window === 'undefined') return DEFAULT_TASK_SORT;
+    const raw = localStorage.getItem(STORAGE_SORT_KEY);
+    if (!raw) return DEFAULT_TASK_SORT;
+    const valid = TASK_SORT_OPTIONS.some((opt) => opt.value === raw);
+    return valid ? (raw as TaskSortKey) : DEFAULT_TASK_SORT;
+  } catch {
+    return DEFAULT_TASK_SORT;
+  }
+}
 
 export interface UseTaskFiltersOptions {
   tasks?: Task[];
@@ -29,6 +46,8 @@ export interface UseTaskFiltersReturn {
   sortField?: string | undefined;
   sortOrder?: 'ascend' | 'descend' | undefined;
   setSort: (field?: string, order?: 'ascend' | 'descend') => void;
+  globalSort: TaskSortKey;
+  setGlobalSort: (key: TaskSortKey) => void;
   activeFilterCount: number;
 }
 
@@ -42,6 +61,8 @@ export function useTaskFilters(
   const [debouncedSearch, setDebouncedSearch] = useState<string>(filters.search);
   const [sortField, setSortField] = useState<string | undefined>(undefined);
   const [sortOrder, setSortOrder] = useState<'ascend' | 'descend' | undefined>(undefined);
+  // Synchronous localStorage read prevents FOUC — matches STORAGE_COLUMNS_KEY pattern in TaskTable
+  const [globalSort, setGlobalSortState] = useState<TaskSortKey>(() => loadInitialGlobalSort());
 
   // 200ms debounce on search string per D-18
   useEffect(() => {
@@ -64,11 +85,22 @@ export function useTaskFilters(
     setFiltersState(DEFAULT_TASK_FILTER_STATE);
     setSortField(undefined);
     setSortOrder(undefined);
+    // NOTE: globalSort is intentionally preserved across filter resets — it represents
+    // a user preference, not a filter criterion.
   };
 
   const setSort = (field?: string, order?: 'ascend' | 'descend') => {
     setSortField(field);
     setSortOrder(order);
+  };
+
+  const setGlobalSort = (key: TaskSortKey) => {
+    setGlobalSortState(key);
+    try {
+      localStorage.setItem(STORAGE_SORT_KEY, key);
+    } catch (err) {
+      console.warn('Failed to save task table sort preference:', err);
+    }
   };
 
   const todayStr = useMemo(() => getTodayDateString(), []);
@@ -103,13 +135,14 @@ export function useTaskFilters(
       milestoneMap,
       executionTaskIds: executionTaskIds ?? null,
     });
-    return sortTasks(matched, sortField, sortOrder);
+    return sortTasks(matched, sortField, sortOrder, globalSort);
   }, [
     tasks,
     filters,
     debouncedSearch,
     sortField,
     sortOrder,
+    globalSort,
     todayStr,
     projectMap,
     milestoneMap,
@@ -126,6 +159,8 @@ export function useTaskFilters(
     sortField,
     sortOrder,
     setSort,
+    globalSort,
+    setGlobalSort,
     activeFilterCount,
   };
 }

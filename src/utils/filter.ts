@@ -263,13 +263,78 @@ export function filterTasks(
   });
 }
 
+export type TaskSortKey =
+  | 'createdAt_desc'
+  | 'createdAt_asc'
+  | 'updatedAt_desc'
+  | 'updatedAt_asc'
+  | 'deadline_asc'
+  | 'deadline_desc'
+  | 'priority_desc'
+  | 'priority_asc'
+  | 'name_asc'
+  | 'name_desc';
+
+export const TASK_SORT_OPTIONS: ReadonlyArray<{ value: TaskSortKey; label: string }> = [
+  { value: 'createdAt_desc', label: 'Mới tạo' },
+  { value: 'createdAt_asc', label: 'Tạo cũ nhất' },
+  { value: 'updatedAt_desc', label: 'Vừa cập nhật' },
+  { value: 'updatedAt_asc', label: 'Ít cập nhật gần đây' },
+  { value: 'deadline_asc', label: 'Hạn gần nhất' },
+  { value: 'deadline_desc', label: 'Hạn xa nhất' },
+  { value: 'priority_desc', label: 'Ưu tiên cao → thấp' },
+  { value: 'priority_asc', label: 'Ưu tiên thấp → cao' },
+  { value: 'name_asc', label: 'Tên A → Z' },
+  { value: 'name_desc', label: 'Tên Z → A' },
+];
+
+export const DEFAULT_TASK_SORT: TaskSortKey = 'deadline_asc';
+
+function compareByGlobalSort(a: Task, b: Task, key: TaskSortKey): number {
+  switch (key) {
+    case 'createdAt_desc':
+      return (b.createdAt ?? '').localeCompare(a.createdAt ?? '');
+    case 'createdAt_asc':
+      return (a.createdAt ?? '').localeCompare(b.createdAt ?? '');
+    case 'updatedAt_desc':
+      return (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '');
+    case 'updatedAt_asc':
+      return (a.updatedAt ?? '').localeCompare(b.updatedAt ?? '');
+    case 'deadline_asc': {
+      if (!a.deadline && !b.deadline) return 0;
+      if (!a.deadline) return 1;
+      if (!b.deadline) return -1;
+      return a.deadline.localeCompare(b.deadline);
+    }
+    case 'deadline_desc': {
+      if (!a.deadline && !b.deadline) return 0;
+      if (!a.deadline) return 1; // nulls last both directions
+      if (!b.deadline) return -1;
+      return b.deadline.localeCompare(a.deadline);
+    }
+    case 'priority_desc':
+      return (PRIORITY_WEIGHTS[b.priority] ?? 0) - (PRIORITY_WEIGHTS[a.priority] ?? 0);
+    case 'priority_asc':
+      return (PRIORITY_WEIGHTS[a.priority] ?? 0) - (PRIORITY_WEIGHTS[b.priority] ?? 0);
+    case 'name_asc':
+      return a.name.localeCompare(b.name, 'vi', { sensitivity: 'base' });
+    case 'name_desc':
+      return b.name.localeCompare(a.name, 'vi', { sensitivity: 'base' });
+    default:
+      return 0;
+  }
+}
+
 /**
- * Orders tasks defaulting to Deadline ascending (nulls last) then Priority descending (D-19).
+ * Orders tasks. If `sortField` is provided, per-column branch runs (backwards compatible).
+ * Otherwise applies `globalSort` (default: DEFAULT_TASK_SORT).
+ * Tiebreaker: task name ascending.
  */
 export function sortTasks(
   tasks: Task[],
   sortField?: string,
-  sortOrder?: 'ascend' | 'descend'
+  sortOrder?: 'ascend' | 'descend',
+  globalSort?: TaskSortKey
 ): Task[] {
   return [...tasks].sort((a, b) => {
     if (sortField) {
@@ -292,20 +357,9 @@ export function sortTasks(
       }
     }
 
-    // Default sort: Deadline ascending (nulls last) then Priority descending
-    if (a.deadline && !b.deadline) return -1;
-    if (!a.deadline && b.deadline) return 1;
-    if (a.deadline && b.deadline && a.deadline !== b.deadline) {
-      return a.deadline.localeCompare(b.deadline);
-    }
-
-    // Priority descending
-    const pA = PRIORITY_WEIGHTS[a.priority] ?? 0;
-    const pB = PRIORITY_WEIGHTS[b.priority] ?? 0;
-    if (pA !== pB) {
-      return pB - pA;
-    }
-
+    const key = globalSort ?? DEFAULT_TASK_SORT;
+    const primary = compareByGlobalSort(a, b, key);
+    if (primary !== 0) return primary;
     return a.name.localeCompare(b.name);
   });
 }
