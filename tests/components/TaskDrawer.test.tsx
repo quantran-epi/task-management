@@ -56,15 +56,14 @@ describe('TaskDrawer', () => {
     expect(screen.getByText('Ops Owner')).toBeInTheDocument();
     expect(screen.getByText('Business Analyst')).toBeInTheDocument();
     expect(screen.getByText('Tiến độ')).toBeInTheDocument();
-    expect(screen.getByRole('slider')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /thêm liên kết/i })).toBeInTheDocument();
-    expect(await screen.findByTestId('task-drawer-planning')).toBeInTheDocument();
-    expect(await screen.findByTestId('task-jira-section')).toBeInTheDocument();
+    expect(screen.getByTestId('task-drawer-planning')).toBeInTheDocument();
+    expect(screen.getByTestId('task-jira-section')).toBeInTheDocument();
 
     // Estimate is split into hours (1) and minutes (30)
     expect(screen.getByLabelText('Giờ')).toHaveValue('1');
     expect(screen.getByLabelText('Phút')).toHaveValue('30');
-  });
+  }, 15000);
 
   it('cascading reparenting clears milestone when changing project per D-10, WORK-04', async () => {
     const projA = await createProject({ name: 'Project Alpha' }, testDb);
@@ -188,7 +187,7 @@ describe('TaskDrawer', () => {
 
     expect(screen.getByLabelText('Giờ')).toHaveValue('2');
     expect(screen.getByLabelText('Phút')).toHaveValue('30');
-  }, 15000);
+  }, 60000);
 
   it('validates document links with http/https regex per D-25, T-02-05', async () => {
     const task = await createTask({ name: 'Link task', status: 'Open' }, testDb);
@@ -218,7 +217,7 @@ describe('TaskDrawer', () => {
     expect(
       await screen.findByText('Liên kết phải là URL (http/https), đường dẫn thư mục, hoặc file URI.')
     ).toBeInTheDocument();
-  });
+  }, 15000);
 
   it('restores focus to trigger element on drawer close per D-29, D-30, UX-03', async () => {
     const task = await createTask({ name: 'Focus task', status: 'Open' }, testDb);

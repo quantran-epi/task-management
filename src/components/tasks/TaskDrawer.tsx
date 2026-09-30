@@ -10,8 +10,8 @@ import {
   DatePicker,
   Slider,
   message,
-  Divider,
   Tabs,
+  Typography,
 } from 'antd';
 import { PlusOutlined, DeleteOutlined, LinkOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
@@ -88,6 +88,8 @@ const ALL_STATUSES: TaskStatus[] = [
 ];
 
 const ALL_PRIORITIES: TaskPriority[] = ['Low', 'Medium', 'High', 'Urgent'];
+
+const { Title } = Typography;
 
 export const TaskDrawer: React.FC<TaskDrawerProps> = ({
   taskId,
@@ -349,246 +351,242 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
     };
   });
 
+  const renderSection = (title: string, children: React.ReactNode) => (
+    <section style={{ border: '1px solid #f0f0f0', borderRadius: 8, padding: 16, marginBottom: 16 }}>
+      <Title level={5} style={{ marginTop: 0, marginBottom: 16 }}>
+        {title}
+      </Title>
+      {children}
+    </section>
+  );
+
   const renderDetailsTab = () => (
     <Form form={form} layout="vertical" initialValues={{ progress: 0, hours: 0, minutes: 0 }}>
-      {/* Name */}
-        <Form.Item
-          name="name"
-          label="Tên tác vụ"
-          rules={[
-            { required: true, message: 'Vui lòng nhập tên tác vụ hợp lệ (1-120 ký tự).' },
-            { max: 120, message: 'Vui lòng nhập tên tác vụ hợp lệ (1-120 ký tự).' },
-          ]}
-        >
-          <Input placeholder="Tên tác vụ..." maxLength={120} />
-        </Form.Item>
-
-        {/* Parent Assignment: Project and Milestone */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Form.Item name="projectId" label="Dự án">
-            <Select
-              aria-label="Dự án"
-              onChange={handleProjectChange}
-              options={[
-                { value: '', label: 'Không / Độc lập' },
-                ...projects.map((p) => ({ value: p.id, label: p.name })),
-              ]}
-            />
+      {renderSection(
+        'Thông tin chính',
+        <>
+          <Form.Item
+            name="name"
+            label="Tên tác vụ"
+            rules={[
+              { required: true, message: 'Vui lòng nhập tên tác vụ hợp lệ (1-120 ký tự).' },
+              { max: 120, message: 'Vui lòng nhập tên tác vụ hợp lệ (1-120 ký tự).' },
+            ]}
+          >
+            <Input placeholder="Tên tác vụ..." maxLength={120} />
           </Form.Item>
 
-          <Form.Item name="milestoneId" label="Cột mốc">
-            <Select
-              aria-label="Cột mốc"
-              disabled={!selectedProjectId}
-              options={[
-                { value: '', label: 'Không' },
-                ...filteredMilestones.map((m) => ({ value: m.id, label: m.name })),
-              ]}
-            />
-          </Form.Item>
-        </div>
-
-        {/* Status, Priority, and Work Type */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-          <Form.Item name="status" label="Trạng thái" rules={[{ required: true }]}>
-            <Select
-              aria-label="Trạng thái"
-              options={ALL_STATUSES.map((s) => ({ value: s, label: STATUS_LABELS[s] || s }))}
-            />
-          </Form.Item>
-
-          <Form.Item name="priority" label="Độ ưu tiên" rules={[{ required: true }]}>
-            <Select
-              aria-label="Độ ưu tiên"
-              options={ALL_PRIORITIES.map((p) => ({ value: p, label: PRIORITY_LABELS[p] || p }))}
-            />
-          </Form.Item>
-
-          <Form.Item name="workType" label="Loại công việc" rules={[{ required: true }]}>
-            <Select
-              aria-label="Loại công việc"
-              options={workTypeOptions}
-            />
-          </Form.Item>
-        </div>
-
-        {/* Banking IT Tags: Ops Owners & Business Analysts */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Form.Item name="opsOwners" label="Ops Owner">
-            <TagSelect
-              field="opsOwners"
-              inheritedText={opsInheritedText}
-            />
-          </Form.Item>
-
-          <Form.Item name="businessAnalysts" label="Business Analyst">
-            <TagSelect
-              field="businessAnalysts"
-              inheritedText={baInheritedText}
-            />
-          </Form.Item>
-        </div>
-
-        {/* Estimate with hours, minutes, and preset buttons */}
-        <Form.Item label="Thời gian ước tính">
-          <Space direction="vertical" style={{ width: '100%' }}>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-              <Form.Item
-                name="hours"
-                label="Giờ"
-                style={{ marginBottom: 0 }}
-                rules={[{ type: 'number', min: 0, max: 100 }]}
-              >
-                <InputNumber min={0 as number} max={100 as number} style={{ width: 100 }} aria-label="Giờ" />
-              </Form.Item>
-              <Form.Item
-                name="minutes"
-                label="Phút"
-                style={{ marginBottom: 0 }}
-                rules={[{ type: 'number', min: 0, max: 59 }]}
-              >
-                <InputNumber min={0 as number} max={59 as number} style={{ width: 100 }} aria-label="Phút" />
-              </Form.Item>
-            </div>
-            <Space wrap size="small">
-              <Button size="small" onClick={() => addPresetMinutes(30)}>
-                +30m
-              </Button>
-              <Button size="small" onClick={() => setPresetHours(1)}>
-                1h
-              </Button>
-              <Button size="small" onClick={() => setPresetHours(2)}>
-                2h
-              </Button>
-              <Button size="small" onClick={() => setPresetHours(4)}>
-                4h
-              </Button>
-              <Button size="small" onClick={() => setPresetHours(8)}>
-                8h
-              </Button>
-            </Space>
-          </Space>
-        </Form.Item>
-
-        {/* Dates */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Form.Item name="deadline" label="Hạn chót">
-            <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" placeholder="Hạn chót" />
-          </Form.Item>
-
-          <Form.Item name="actualStartDate" label="Bắt đầu thực tế">
-            <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" placeholder="Bắt đầu thực tế" />
-          </Form.Item>
-        </div>
-
-        <Form.Item name="actualEndDate" label="Kết thúc thực tế">
-          <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" placeholder="Kết thúc thực tế" />
-        </Form.Item>
-
-        {/* Reminders (D-03, D-05, NOTIF-06) */}
-        <RemindersFormList />
-
-        {/* Progress Slider + Input */}
-        <Form.Item label="Tiến độ" style={{ marginBottom: 12 }}>
-          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-            <Form.Item name="progress" noStyle>
-              <Slider min={0} max={100} style={{ flex: 1 }} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Form.Item name="projectId" label="Dự án">
+              <Select
+                aria-label="Dự án"
+                onChange={handleProjectChange}
+                options={[
+                  { value: '', label: 'Không / Độc lập' },
+                  ...projects.map((p) => ({ value: p.id, label: p.name })),
+                ]}
+              />
             </Form.Item>
-            <Form.Item name="progress" noStyle>
-              <InputNumber
-                min={0 as number}
-                max={100 as number}
-                formatter={(v) => `${v}%`}
-                parser={(v) => (Number((v || '').replace('%', '')) || 0) as number}
-                style={{ width: 80 }}
+
+            <Form.Item name="milestoneId" label="Cột mốc">
+              <Select
+                aria-label="Cột mốc"
+                disabled={!selectedProjectId}
+                options={[
+                  { value: '', label: 'Không' },
+                  ...filteredMilestones.map((m) => ({ value: m.id, label: m.name })),
+                ]}
               />
             </Form.Item>
           </div>
-        </Form.Item>
+        </>
+      )}
 
-        <Divider style={{ margin: '16px 0' }} />
+      {renderSection(
+        'Trạng thái & phân loại',
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+            <Form.Item name="status" label="Trạng thái" rules={[{ required: true }]}>
+              <Select
+                aria-label="Trạng thái"
+                options={ALL_STATUSES.map((s) => ({ value: s, label: STATUS_LABELS[s] || s }))}
+              />
+            </Form.Item>
 
-        {/* Planning & Daily Allocations (D-09) */}
-        {currentTask && (
-          <div style={{ marginBottom: 16 }}>
-            <TaskDrawerPlanning
-              task={currentTask}
-              liveEstimateMinutes={liveEstimateMinutes}
-              db={db}
-            />
-            <Divider style={{ margin: '16px 0' }} />
+            <Form.Item name="priority" label="Độ ưu tiên" rules={[{ required: true }]}>
+              <Select
+                aria-label="Độ ưu tiên"
+                options={ALL_PRIORITIES.map((p) => ({ value: p, label: PRIORITY_LABELS[p] || p }))}
+              />
+            </Form.Item>
+
+            <Form.Item name="workType" label="Loại công việc" rules={[{ required: true }]}>
+              <Select aria-label="Loại công việc" options={workTypeOptions} />
+            </Form.Item>
           </div>
-        )}
 
-        {/* Jira Integration Section (D-05) */}
-        {currentTask && (
-          <div style={{ marginBottom: 16 }}>
-            <TaskJiraSection
-              task={currentTask}
-              onUpdateTask={handleUpdateTaskJira}
-              db={db}
-            />
-            <Divider style={{ margin: '16px 0' }} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Form.Item name="opsOwners" label="Ops Owner">
+              <TagSelect field="opsOwners" inheritedText={opsInheritedText} />
+            </Form.Item>
+
+            <Form.Item name="businessAnalysts" label="Business Analyst">
+              <TagSelect field="businessAnalysts" inheritedText={baInheritedText} />
+            </Form.Item>
           </div>
-        )}
+        </>
+      )}
 
-        {/* Document Links */}
-        <Form.Item label="Tài liệu liên kết">
-          <Form.List name="documentLinks">
-            {(fields, { add, remove }) => (
-              <Space direction="vertical" style={{ width: '100%' }}>
-                {fields.map((field) => (
-                  <div key={field.key} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <Form.Item
-                      {...field}
-                      noStyle
-                      rules={[
-                        {
-                          validator: (_: unknown, value: string) => {
-                            if (!value || /^https?:\/\//i.test(value) || /^file:\/\//i.test(value) || /^[A-Za-z]:\\/.test(value) || /^\//.test(value) || /^\\\\/.test(value)) {
-                              return Promise.resolve();
-                            }
-                            return Promise.reject('Liên kết phải là URL (http/https), đường dẫn thư mục, hoặc file URI.');
-                          },
-                        },
-                      ]}
-                    >
-                      <Input
-                        placeholder="https://... hoặc C:\folder hoặc /path/to/folder"
-                        prefix={<LinkOutlined style={{ color: '#8c8c8c' }} />}
-                      />
-                    </Form.Item>
-                    <Button
-                      type="text"
-                      danger
-                      icon={<DeleteOutlined />}
-                      onClick={() => remove(field.name)}
-                      aria-label="Xóa liên kết"
-                    />
-                  </div>
-                ))}
-                <Button
-                  type="dashed"
-                  onClick={() => add('')}
-                  icon={<PlusOutlined />}
-                  style={{ width: '100%' }}
+      {renderSection(
+        'Thời gian & tiến độ',
+        <>
+          <Form.Item label="Thời gian ước tính">
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                <Form.Item
+                  name="hours"
+                  label="Giờ"
+                  style={{ marginBottom: 0 }}
+                  rules={[{ type: 'number', min: 0, max: 100 }]}
                 >
-                  Thêm liên kết
+                  <InputNumber min={0 as number} max={100 as number} style={{ width: 100 }} aria-label="Giờ" />
+                </Form.Item>
+                <Form.Item
+                  name="minutes"
+                  label="Phút"
+                  style={{ marginBottom: 0 }}
+                  rules={[{ type: 'number', min: 0, max: 59 }]}
+                >
+                  <InputNumber min={0 as number} max={59 as number} style={{ width: 100 }} aria-label="Phút" />
+                </Form.Item>
+              </div>
+              <Space wrap size="small">
+                <Button size="small" onClick={() => addPresetMinutes(30)}>
+                  +30m
+                </Button>
+                <Button size="small" onClick={() => setPresetHours(1)}>
+                  1h
+                </Button>
+                <Button size="small" onClick={() => setPresetHours(2)}>
+                  2h
+                </Button>
+                <Button size="small" onClick={() => setPresetHours(4)}>
+                  4h
+                </Button>
+                <Button size="small" onClick={() => setPresetHours(8)}>
+                  8h
                 </Button>
               </Space>
-            )}
-          </Form.List>
-        </Form.Item>
+            </Space>
+          </Form.Item>
 
-        {/* Notes */}
-        <Form.Item name="notes" label="Ghi chú">
-          <Input.TextArea
-            autoSize={{ minRows: 4, maxRows: 10 }}
-            placeholder="Ghi chú chi tiết tác vụ (văn bản thuần / markdown)..."
-            style={{ whiteSpace: 'pre-wrap' }}
-          />
-        </Form.Item>
-      </Form>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Form.Item name="deadline" label="Hạn chót">
+              <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" placeholder="Hạn chót" />
+            </Form.Item>
+
+            <Form.Item name="actualStartDate" label="Bắt đầu thực tế">
+              <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" placeholder="Bắt đầu thực tế" />
+            </Form.Item>
+          </div>
+
+          <Form.Item name="actualEndDate" label="Kết thúc thực tế">
+            <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" placeholder="Kết thúc thực tế" />
+          </Form.Item>
+
+          <RemindersFormList />
+
+          <Form.Item label="Tiến độ" style={{ marginBottom: 12 }}>
+            <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+              <Form.Item name="progress" noStyle>
+                <Slider min={0} max={100} style={{ flex: 1 }} />
+              </Form.Item>
+              <Form.Item name="progress" noStyle>
+                <InputNumber
+                  min={0 as number}
+                  max={100 as number}
+                  formatter={(v) => `${v}%`}
+                  parser={(v) => (Number((v || '').replace('%', '')) || 0) as number}
+                  style={{ width: 80 }}
+                />
+              </Form.Item>
+            </div>
+          </Form.Item>
+        </>
+      )}
+
+      {renderSection(
+        'Kế hoạch phân bổ',
+        currentTask ? (
+          <TaskDrawerPlanning task={currentTask} liveEstimateMinutes={liveEstimateMinutes} db={db} />
+        ) : null
+      )}
+
+      {renderSection(
+        'Jira',
+        currentTask ? <TaskJiraSection task={currentTask} onUpdateTask={handleUpdateTaskJira} db={db} /> : null
+      )}
+
+      {renderSection(
+        'Tài liệu & ghi chú',
+        <>
+          <Form.Item label="Tài liệu liên kết">
+            <Form.List name="documentLinks">
+              {(fields, { add, remove }) => (
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  {fields.map((field) => (
+                    <div key={field.key} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <Form.Item
+                        {...field}
+                        noStyle
+                        rules={[
+                          {
+                            validator: (_: unknown, value: string) => {
+                              if (!value || /^https?:\/\//i.test(value) || /^file:\/\//i.test(value) || /^[A-Za-z]:\\/.test(value) || /^\//.test(value) || /^\\\\/.test(value)) {
+                                return Promise.resolve();
+                              }
+                              return Promise.reject('Liên kết phải là URL (http/https), đường dẫn thư mục, hoặc file URI.');
+                            },
+                          },
+                        ]}
+                      >
+                        <Input
+                          placeholder="https://... hoặc C:\folder hoặc /path/to/folder"
+                          prefix={<LinkOutlined style={{ color: '#8c8c8c' }} />}
+                        />
+                      </Form.Item>
+                      <Button
+                        type="text"
+                        danger
+                        icon={<DeleteOutlined />}
+                        onClick={() => remove(field.name)}
+                        aria-label="Xóa liên kết"
+                      />
+                    </div>
+                  ))}
+                  <Button
+                    type="dashed"
+                    onClick={() => add('')}
+                    icon={<PlusOutlined />}
+                    style={{ width: '100%' }}
+                  >
+                    Thêm liên kết
+                  </Button>
+                </Space>
+              )}
+            </Form.List>
+          </Form.Item>
+
+          <Form.Item name="notes" label="Ghi chú">
+            <Input.TextArea
+              autoSize={{ minRows: 4, maxRows: 10 }}
+              placeholder="Ghi chú chi tiết tác vụ (văn bản thuần / markdown)..."
+              style={{ whiteSpace: 'pre-wrap' }}
+            />
+          </Form.Item>
+        </>
+      )}
+    </Form>
   );
 
   const tabItems = [
