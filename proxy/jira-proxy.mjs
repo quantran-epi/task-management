@@ -125,7 +125,9 @@ export function createJiraProxyServer({ fetchImpl = fetch, port = DEFAULT_PORT }
 
       res.writeHead(upstream.status, responseHeaders);
       res.end(Buffer.from(await upstream.arrayBuffer()));
+      console.log(`[proxy] ${req.method} ${targetUrl} -> ${upstream.status}`);
     } catch (error) {
+      console.error(`[proxy] fetch error for ${targetUrl}:`, error instanceof Error ? error.message : error);
       sendJson(res, 502, {
         error: error instanceof Error ? error.message : 'Proxy fetch failed',
       });
