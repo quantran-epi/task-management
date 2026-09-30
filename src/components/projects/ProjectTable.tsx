@@ -38,7 +38,7 @@ export interface ProjectTableProps {
   onEditMilestone: (milestone: Milestone) => void;
   onDeleteMilestone: (milestone: Milestone) => void;
   onEditTask: (taskId: string) => void;
-  onNavigate?: NavigateFunction;
+  onNavigate?: NavigateFunction | undefined;
   loading?: boolean;
   db?: TaskPlannerDatabase;
 }

@@ -78,9 +78,9 @@ describe('calculateMilestoneBurndown', () => {
       todayStr: '2026-09-06',
     });
 
-    const firstPoint = result.points[0];
-    const midPoint = result.points[5];
-    const lastPoint = result.points[10];
+    const firstPoint = result.points[0]!;
+    const midPoint = result.points[5]!;
+    const lastPoint = result.points[10]!;
 
     expect(firstPoint.idealRemaining).toBe(10);
     expect(midPoint.idealRemaining).toBe(5);
@@ -94,20 +94,20 @@ describe('calculateMilestoneBurndown', () => {
     });
 
     // On 2026-09-01 (day 0): 0 tasks completed -> 10h remaining
-    expect(result.points[0].date).toBe('2026-09-01');
-    expect(result.points[0].actualRemaining).toBe(10);
+    expect(result.points[0]?.date).toBe('2026-09-01');
+    expect(result.points[0]?.actualRemaining).toBe(10);
 
     // On 2026-09-03 (day 2): t-1 completed (2h) -> 8h remaining
-    expect(result.points[2].date).toBe('2026-09-03');
-    expect(result.points[2].actualRemaining).toBe(8);
+    expect(result.points[2]?.date).toBe('2026-09-03');
+    expect(result.points[2]?.actualRemaining).toBe(8);
 
     // On 2026-09-04 (day 3, today): t-1 completed -> 8h remaining (t-2 completes on 09-05)
-    expect(result.points[3].date).toBe('2026-09-04');
-    expect(result.points[3].actualRemaining).toBe(8);
+    expect(result.points[3]?.date).toBe('2026-09-04');
+    expect(result.points[3]?.actualRemaining).toBe(8);
 
     // On 2026-09-05 (day 4, future relative to todayStr 09-04): null
-    expect(result.points[4].date).toBe('2026-09-05');
-    expect(result.points[4].actualRemaining).toBeNull();
+    expect(result.points[4]?.date).toBe('2026-09-05');
+    expect(result.points[4]?.actualRemaining).toBeNull();
   });
 
   it('supports task count unit accurately', () => {
@@ -118,18 +118,16 @@ describe('calculateMilestoneBurndown', () => {
 
     expect(result.totalScope).toBe(3); // 3 tasks
     // Day 0: 3 tasks
-    expect(result.points[0].actualRemaining).toBe(3);
+    expect(result.points[0]?.actualRemaining).toBe(3);
     // After 09-03 (t-1 completed): 2 tasks
-    expect(result.points[2].actualRemaining).toBe(2);
+    expect(result.points[2]?.actualRemaining).toBe(2);
     // After 09-05 (t-2 completed): 1 task
-    expect(result.points[4].actualRemaining).toBe(1);
+    expect(result.points[4]?.actualRemaining).toBe(1);
   });
 
   it('applies 14-day fallback when milestone has no deadline', () => {
-    const noDeadlineMs: Milestone = {
-      ...baseMilestone,
-      deadline: undefined,
-    };
+    const { deadline: _, ...msWithoutDeadline } = baseMilestone;
+    const noDeadlineMs: Milestone = msWithoutDeadline;
 
     const result = calculateMilestoneBurndown(noDeadlineMs, sampleTasks, {
       unit: 'hours',
@@ -149,8 +147,8 @@ describe('calculateMilestoneBurndown', () => {
 
     expect(emptyResult.totalScope).toBe(0);
     expect(emptyResult.points.length).toBeGreaterThan(0);
-    expect(emptyResult.points[0].idealRemaining).toBe(0);
-    expect(emptyResult.points[0].actualRemaining).toBe(0);
+    expect(emptyResult.points[0]?.idealRemaining).toBe(0);
+    expect(emptyResult.points[0]?.actualRemaining).toBe(0);
   });
 });
 
