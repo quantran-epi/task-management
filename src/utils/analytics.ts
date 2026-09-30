@@ -26,10 +26,11 @@ export function calculateMilestoneBurndown(
   }
 ): MilestoneBurndownSeries {
   const { unit, todayStr } = options;
+  const activeTasks = tasks.filter((t) => t.status !== 'Cancelled');
 
   // Determine milestone start date: earliest of milestone.createdAt (YYYY-MM-DD) or task actualStartDate
   const msCreated = milestone.createdAt ? milestone.createdAt.slice(0, 10) : todayStr;
-  const earliestTaskStart = tasks.reduce<string | null>((earliest, t) => {
+  const earliestTaskStart = activeTasks.reduce<string | null>((earliest, t) => {
     const d = t.actualStartDate || (t.createdAt ? t.createdAt.slice(0, 10) : null);
     if (!d) return earliest;
     return !earliest || d < earliest ? d : earliest;
@@ -40,7 +41,7 @@ export function calculateMilestoneBurndown(
   // Determine milestone deadline with fallback per D-02
   let endDate = milestone.deadline;
   if (!endDate) {
-    const latestTaskDeadline = tasks.reduce<string | null>((latest, t) => {
+    const latestTaskDeadline = activeTasks.reduce<string | null>((latest, t) => {
       if (!t.deadline) return latest;
       return !latest || t.deadline > latest ? t.deadline : latest;
     }, null);
@@ -61,7 +62,7 @@ export function calculateMilestoneBurndown(
   const clampedEndDate = startDay.add(totalDays, 'day').format('YYYY-MM-DD');
 
   // Compute total initial scope
-  const totalScope = tasks.reduce((sum, t) => {
+  const totalScope = activeTasks.reduce((sum, t) => {
     if (unit === 'hours') {
       return sum + (t.estimateMinutes ? t.estimateMinutes / 60 : 0);
     }
@@ -76,7 +77,7 @@ export function calculateMilestoneBurndown(
 
     let actualRemaining: number | null = null;
     if (currentDate <= todayStr) {
-      const completedScope = tasks.reduce((sum, t) => {
+      const completedScope = activeTasks.reduce((sum, t) => {
         const isDoneOrResolved = t.status === 'Done' || t.status === 'Resolved';
         if (!isDoneOrResolved) return sum;
 
