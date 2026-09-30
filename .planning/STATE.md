@@ -5,9 +5,9 @@ milestone_name: Banking IT Enhancements & Jira Integration
 current_phase: 13
 status: completed
 stopped_at: Phase 13 complete — all phases complete
-last_updated: "2026-09-30T07:22:21.235Z"
+last_updated: "2026-09-30T08:12:09.554Z"
 last_activity: 2026-09-30
-last_activity_desc: "Completed quick task 260930-j2e: section TaskDrawer details"
+last_activity_desc: "Completed quick task 260930-km1: task list global sort"
 state_head: 20084129c1f417a480949f319c165df036769784
 progress:
   total_phases: 7
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-09-27)
 Phase: 13
 Plan: Not started
 Status: All phases complete
-Last activity: 2026-09-30 — Completed quick task 260930-j2e: section TaskDrawer details
+Last activity: 2026-09-30 — Completed quick task 260930-km1: task list global sort
 
 ### Quick Tasks Completed
 
@@ -40,6 +40,7 @@ Last activity: 2026-09-30 — Completed quick task 260930-j2e: section TaskDrawe
 | 1 | `260928-kn3` · Planner task item subtitle and auto-distribute project filter | 2026-09-28 | — | — | — |
 | 2 | `260928-kn4` · UI enhancements & project links | 2026-09-28 | — | — | — |
 | 260930-j2e | in task drawer detail, there are many fields now, divide them in sections for more focus and easy to use | 2026-09-30 | 2008412 | — | [260930-j2e-in-task-drawer-detail-there-are-many-fie](./quick/260930-j2e-in-task-drawer-detail-there-are-many-fie/) |
+| 260930-km1 | task list page need global sort, criteria may be by creation date, updated date, etc. | 2026-09-30 | 2111c95 | — | [260930-km1-task-list-page-need-global-sort-criteria](./quick/260930-km1-task-list-page-need-global-sort-criteria/) |
 
 ## Performance Metrics
 
