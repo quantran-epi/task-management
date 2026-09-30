@@ -23,6 +23,19 @@ export interface TimerProviderProps {
 }
 
 const MAX_CONCURRENT_TIMERS = 20;
+export const TIMER_SYNC_CHANNEL = 'task_timer_sync';
+
+function broadcastTimerSync(type: string, taskId: string) {
+  if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+    try {
+      const channel = new BroadcastChannel(TIMER_SYNC_CHANNEL);
+      channel.postMessage({ type, taskId, timestamp: Date.now() });
+      channel.close();
+    } catch {
+      // Ignore broadcast errors
+    }
+  }
+}
 
 export const TimerProvider: React.FC<TimerProviderProps> = ({
   children,
@@ -34,6 +47,22 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({
   // Local ticker state for re-rendering UI subscribers every second
   // Does NOT write to IndexedDB per second (D-06)
   const [tick, setTick] = useState<number>(0);
+
+  // Cross-window synchronization via BroadcastChannel (Tauri multi-window & browser popout)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('BroadcastChannel' in window)) return;
+    try {
+      const channel = new BroadcastChannel(TIMER_SYNC_CHANNEL);
+      channel.onmessage = () => {
+        setTick((prev) => prev + 1);
+      };
+      return () => {
+        channel.close();
+      };
+    } catch {
+      return undefined;
+    }
+  }, []);
 
   const hasRunningTimer = useMemo(
     () => activeTimers.some((t) => t.status === 'running'),
@@ -92,6 +121,7 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({
           sessionStartTime: new Date(now).toISOString(),
         };
         await database.activeTimers.put(newTimer);
+        broadcastTimerSync('START', taskId);
         return;
       }
 
@@ -103,6 +133,7 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({
           startedAt: Date.now(),
         };
         await database.activeTimers.put(updated);
+        broadcastTimerSync('START', taskId);
       }
     },
     [database]
@@ -121,6 +152,7 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({
         startedAt: Date.now(),
       };
       await database.activeTimers.put(updated);
+      broadcastTimerSync('PAUSE', taskId);
     },
     [database]
   );
@@ -170,6 +202,7 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({
 
           await database.workSessions.add(session);
           await database.activeTimers.delete(taskId);
+          broadcastTimerSync('FINISH', taskId);
           return session;
         }
       );
@@ -180,6 +213,7 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({
   const cancelTimer = useCallback(
     async (taskId: string): Promise<void> => {
       await database.activeTimers.delete(taskId);
+      broadcastTimerSync('CANCEL', taskId);
     },
     [database]
   );

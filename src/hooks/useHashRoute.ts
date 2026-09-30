@@ -15,6 +15,7 @@ const VALID_ROUTES: readonly AppRoute[] = [
   'planner',
   'analytics',
   'settings',
+  'timer-popout',
 ] as const;
 
 /**
