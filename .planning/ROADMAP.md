@@ -206,9 +206,15 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
+**Wave 1**
 - [ ] 13-01-PLAN.md — Navigation routing tracer, analytics data contracts, burndown math, and velocity/workload calculation engines
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 13-02-PLAN.md — Reusable pure SVG burndown vector chart, stacked status bars, and workload proportion bars
+
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 13-03-PLAN.md — Comprehensive AnalyticsView dashboard assembly, empty states, and AppShell integration
+
 **UI hint**: yes
 
 ## Progress
