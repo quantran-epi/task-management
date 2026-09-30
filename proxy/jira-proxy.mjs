@@ -33,9 +33,12 @@ const strippedRequestHeaders = new Set([
   'connection',
   'transfer-encoding',
   'content-length',
+  'accept-encoding',
 ]);
 
 const strippedResponseHeaders = new Set([
+  'content-encoding',
+  'content-length',
   'transfer-encoding',
   'connection',
   'access-control-allow-origin',

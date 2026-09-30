@@ -110,6 +110,7 @@ describe('jira proxy HTTP behavior', () => {
         'content-type': 'application/json',
         origin: 'http://localhost:5173',
         referer: 'http://localhost:5173/settings',
+        'accept-encoding': 'gzip, deflate, br',
       },
       body: JSON.stringify({ fields: { summary: 'Test' } }),
     });
@@ -128,7 +129,35 @@ describe('jira proxy HTTP behavior', () => {
     assert.equal(call.init.headers.origin, undefined);
     assert.equal(call.init.headers.referer, undefined);
     assert.equal(call.init.headers.host, undefined);
+    assert.equal(call.init.headers['accept-encoding'], undefined);
     assert.equal(call.init.body.toString(), JSON.stringify({ fields: { summary: 'Test' } }));
+  });
+
+  test('strips content-encoding and content-length from upstream response', async () => {
+    const encServer = createJiraProxyServer({
+      fetchImpl: async () => {
+        return new Response(JSON.stringify({ decompressed: true }), {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+            'content-encoding': 'gzip',
+            'content-length': '42',
+          },
+        });
+      },
+      port: 3001,
+    });
+    const encPort = await listen(encServer);
+
+    try {
+      const response = await fetch(`http://127.0.0.1:${encPort}/proxy?url=${encodeURIComponent('https://example.atlassian.net/rest/api/3/myself')}`);
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get('content-encoding'), null);
+      assert.notEqual(response.headers.get('content-length'), '42');
+      assert.deepEqual(await readJson(response), { decompressed: true });
+    } finally {
+      await close(encServer);
+    }
   });
 });
 
