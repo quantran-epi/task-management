@@ -99,4 +99,14 @@ describe('App Integration & Hash Route & Live Query (UX-01, DATA-02)', () => {
     expect(await screen.findByTestId('planner-view')).toBeInTheDocument();
     expect(screen.getByTestId('week-navigator')).toBeInTheDocument();
   });
+
+  it('updates view when hash route changes to analytics', async () => {
+    render(<App />);
+
+    window.location.hash = '#/analytics';
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+
+    expect(await screen.findByTestId('analytics-view')).toBeInTheDocument();
+    expect(screen.getByTestId('section-milestone-burndown')).toBeInTheDocument();
+  });
 });

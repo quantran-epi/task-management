@@ -56,6 +56,6 @@ export default defineConfig({
     setupFiles: ['./tests/setup.ts'],
     globals: true,
     fileParallelism: false,
-    exclude: [...configDefaults.exclude, 'proxy/**'],
+    exclude: [...configDefaults.exclude, 'proxy/**', '.claude/**'],
   },
 });

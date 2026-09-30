@@ -13,6 +13,7 @@ import { ProjectsView } from './views/ProjectsView';
 import { PlannerView } from './views/PlannerView';
 import { SettingsView } from './views/SettingsView';
 import { DashboardView } from './views/DashboardView';
+import { AnalyticsView } from './views/AnalyticsView';
 
 const { defaultAlgorithm, darkAlgorithm } = theme;
 
@@ -40,7 +41,7 @@ export const App: React.FC = () => {
       case 'planner':
         return <PlannerView targetDate={params.date} />;
       case 'analytics':
-        return <div data-testid="analytics-view-root">Phân tích</div>;
+        return <AnalyticsView initialMilestoneId={params.milestoneId} onNavigate={navigate} />;
       case 'settings':
         return <SettingsView onNavigate={navigate} />;
       default:
