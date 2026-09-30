@@ -41,6 +41,26 @@ describe('TaskDrawer', () => {
     expect(await screen.findByDisplayValue('Implement OAuth callback')).toBeInTheDocument();
     expect(screen.getByDisplayValue('Handle PKCE verification code')).toBeInTheDocument();
 
+    expect(screen.getByText('Thông tin chính')).toBeInTheDocument();
+    expect(screen.getByText('Trạng thái & phân loại')).toBeInTheDocument();
+    expect(screen.getByText('Thời gian & tiến độ')).toBeInTheDocument();
+    expect(screen.getByText('Kế hoạch phân bổ')).toBeInTheDocument();
+    expect(screen.getByText('Jira')).toBeInTheDocument();
+    expect(screen.getByText('Tài liệu & ghi chú')).toBeInTheDocument();
+
+    expect(screen.getByLabelText('Dự án')).toBeInTheDocument();
+    expect(screen.getByLabelText('Cột mốc')).toBeInTheDocument();
+    expect(screen.getByLabelText('Trạng thái')).toBeInTheDocument();
+    expect(screen.getByLabelText('Độ ưu tiên')).toBeInTheDocument();
+    expect(screen.getByLabelText('Loại công việc')).toBeInTheDocument();
+    expect(screen.getByText('Ops Owner')).toBeInTheDocument();
+    expect(screen.getByText('Business Analyst')).toBeInTheDocument();
+    expect(screen.getByText('Tiến độ')).toBeInTheDocument();
+    expect(screen.getByRole('slider')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /thêm liên kết/i })).toBeInTheDocument();
+    expect(await screen.findByTestId('task-drawer-planning')).toBeInTheDocument();
+    expect(await screen.findByTestId('task-jira-section')).toBeInTheDocument();
+
     // Estimate is split into hours (1) and minutes (30)
     expect(screen.getByLabelText('Giờ')).toHaveValue('1');
     expect(screen.getByLabelText('Phút')).toHaveValue('30');
