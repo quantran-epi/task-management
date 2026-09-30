@@ -58,9 +58,9 @@
 
 ### Enhanced Analytics Dashboard
 
-- [ ] **ANLT-01**: User can view milestone burndown chart (lightweight SVG vector) tracking remaining vs completed work over time.
-- [ ] **ANLT-02**: User can view task status distribution and completion velocity across projects.
-- [ ] **ANLT-03**: User can view workload allocation broken down by Ops Owner, Business Analyst, and Work Type (hours and active task counts).
+- [x] **ANLT-01**: User can view milestone burndown chart (lightweight SVG vector) tracking remaining vs completed work over time.
+- [x] **ANLT-02**: User can view task status distribution and completion velocity across projects.
+- [x] **ANLT-03**: User can view workload allocation broken down by Ops Owner, Business Analyst, and Work Type (hours and active task counts).
 
 ## Future Requirements (Deferred)
 
@@ -111,6 +111,6 @@
 | NOTIF-08 | Phase 12.2 | Complete |
 | NOTIF-09 | Phase 12.2 | Complete |
 | NOTIF-10 | Phase 12.2 | Complete |
-| ANLT-01 | Phase 13 | Pending |
-| ANLT-02 | Phase 13 | Pending |
-| ANLT-03 | Phase 13 | Pending |
+| ANLT-01 | Phase 13 | Complete |
+| ANLT-02 | Phase 13 | Complete |
+| ANLT-03 | Phase 13 | Complete |
