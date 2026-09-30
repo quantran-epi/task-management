@@ -1,7 +1,8 @@
 ---
 phase: "13"
 slug: "enhanced-workload-analytics-milestone-burndown"
-status: draft
+status: approved
+reviewed_at: "2026-09-30"
 shadcn_initialized: false
 preset: none
 created: "2026-09-30"
@@ -101,6 +102,14 @@ Accent reserved for:
 
 ---
 
+## Visual Hierarchy & Focal Point
+
+1. **Tier 1 (Primary Visual Anchor):** Milestone Burndown SVG Chart. Positioned top-level in the Analytics view, using high-contrast vector lines (Ideal grey dashed vs Actual blue bold line #1677ff) and Today circle marker to immediately draw attention to milestone completion health.
+2. **Tier 2 (Secondary Metrics):** Velocity & Delivery Metrics Table. Positioned directly below Burndown, displaying weekly completion rates and rolling averages in structured Antd Card and Table.
+3. **Tier 3 (Supporting Distribution):** Workload Distribution & Stakeholder Breakdown. Bottom container featuring 3-dimension tabs (Ops Owner, BA, Work Type) with stacked progress ratio bars and expandable detail tables.
+
+---
+
 ## Copywriting Contract
 
 | Element | Copy |
@@ -119,18 +128,32 @@ Accent reserved for:
 
 ## UI Considerations
 
-Applicable state considerations resolved: 8 covered, 0 backstop, 0 unresolved
+Applicable state considerations resolved: 22 covered (22 explicit, 0 backstop, 0 unresolved)
 
-| Category | Element(s) | Status | Resolution / Reason |
-|----------|------------|--------|---------------------|
-| empty | Milestone Burndown section, Velocity table, Workload breakdown | ✅ covered | Each of the 3 dashboard sections renders independent empty state with specific heading and CTA per Copywriting Contract |
-| loading | Live queries from IndexedDB | ✅ covered | useLiveQuery renders Spin skeleton fallback while local Dexie collections calculate |
-| error | SVG chart bounds / Invalid date ranges | ✅ covered | Clamps zero/negative milestone durations to 14-day fallback per D-02; prevents NaN coordinates in SVG |
-| populated | Burndown SVG, Status stacked bars, Velocity table, Workload distribution | ✅ covered | Full 3-tier vertical dashboard with responsive SVG viewBox (700x320) and expandable Antd tables |
-| partial | Milestone without child tasks / Tasks without estimate | ✅ covered | Displays notice tag indicating tasks without estimate contribution when toggled to Hours mode |
-| overflow | Long stakeholder names / Many projects in comparison table | ✅ covered | Antd Table pagination and horizontal scroll; text truncation with Tooltip for names > 20 characters |
-| zero-one-many | Weekly velocity aggregation / Project lists | ✅ covered | Formats single vs multiple weeks cleanly (e.g., '1 tuần' vs '4 tuần'); handles 0 completed tasks with '0h / 0 tasks' |
-| long-text | Milestone descriptions and project titles | ✅ covered | CSS text-overflow ellipsis with full-text Antd Tooltip on hover in header and table cells |
+| Element ID | Category | Status | Verification | Resolution / Truth Statement |
+|------------|----------|--------|--------------|------------------------------|
+| E1 (Burndown SVG) | loading | resolved | explicit | Antd Spin skeleton fallback renders while Dexie useLiveQuery calculates burndown coordinates. |
+| E1 (Burndown SVG) | error | resolved | explicit | Clamps zero/negative milestone durations to 14-day fallback per D-02 to prevent NaN SVG coordinates. |
+| E1 (Burndown SVG) | long-text | resolved | explicit | Milestone selector dropdown truncates long milestone titles with CSS ellipsis and shows full title via Tooltip. |
+| E2 (Velocity Table) | empty | resolved | explicit | Renders Empty state heading 'Chưa có dữ liệu vận tốc' and body per Copywriting Contract when no completed tasks exist. |
+| E2 (Velocity Table) | loading | resolved | explicit | Antd Table `loading={isLoading}` spinner renders while calculating rolling window metrics. |
+| E2 (Velocity Table) | error | resolved | explicit | Shows error alert banner per Copywriting Contract if calculation fails. |
+| E2 (Velocity Table) | populated | resolved | explicit | Vertical card with Antd Table, weekly columns, rolling average velocity per selectable window (2, 4, 8, 12 weeks). |
+| E2 (Velocity Table) | partial | resolved | explicit | Displays notice tag when past weeks have partial data or tasks without estimates. |
+| E2 (Velocity Table) | overflow | resolved | explicit | Antd Table `scroll={{ x: 'max-content' }}` with pagination at 10 items per page. |
+| E2 (Velocity Table) | zero-one-many | resolved | explicit | Formats '1 tuần' vs 'N tuần'; displays '0h / 0 tasks' when 0 completed tasks in window. |
+| E3 (Workload Breakdown) | empty | resolved | explicit | Renders Empty state heading 'Chưa có tác vụ nào được phân công' per Copywriting Contract. |
+| E3 (Workload Breakdown) | loading | resolved | explicit | Tab-level Spin indicator during multi-dimensional Dexie aggregation. |
+| E3 (Workload Breakdown) | error | resolved | explicit | Inline alert banner if stakeholder aggregation throws error. |
+| E3 (Workload Breakdown) | populated | resolved | explicit | 3 tabs (Ops Owner, BA, Work Type) with Antd Progress stacked bars and detailed stakeholder tables. |
+| E3 (Workload Breakdown) | partial | resolved | explicit | Stakeholders with 0 hours in specific statuses display neutral 0% tags. |
+| E3 (Workload Breakdown) | overflow | resolved | explicit | Table pagination with max 10 rows per page; scrollable tab bar on narrow screens. |
+| E3 (Workload Breakdown) | zero-one-many | resolved | explicit | Renders single stakeholder cleanly and multiple stakeholder rows with dividers. |
+| E3 (Workload Breakdown) | long-text | resolved | explicit | Stakeholder names and work type labels truncate at 20 chars with hover Tooltip. |
+| E4 (Actions & Nav) | loading | resolved | explicit | Primary CTA button disables with loading state during action dispatch. |
+| E4 (Actions & Nav) | error | resolved | explicit | Action error notifications displayed via Antd message or notification. |
+| E4 (Actions & Nav) | overflow | resolved | explicit | Button groups collapse into responsive space or wrap on mobile screens. |
+| E4 (Actions & Nav) | long-text | resolved | explicit | Button labels keep concise text ('Tạo Milestone'), avoiding multi-line wrapping. |
 
 ---
 
@@ -144,12 +167,12 @@ Applicable state considerations resolved: 8 covered, 0 backstop, 0 unresolved
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
-- [ ] Dimension 7 Inventory Provenance: PASS
+- [x] Dimension 1 Copywriting: PASS
+- [x] Dimension 2 Visuals: PASS
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: PASS
+- [x] Dimension 6 Registry Safety: PASS
+- [x] Dimension 7 Inventory Provenance: PASS
 
-**Approval:** pending 2026-09-30
+**Approval:** approved 2026-09-30
