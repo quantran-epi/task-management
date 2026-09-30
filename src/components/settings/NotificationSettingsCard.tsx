@@ -20,7 +20,12 @@ import {
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
-import { sendDesktopNotification } from '../../utils/desktopNotification';
+import {
+  sendDesktopNotification,
+  isTauriEnvironment,
+  isNotificationPermissionGranted,
+  requestNotificationPermission,
+} from '../../utils/desktopNotification';
 import {
   NOTIFICATION_SETTINGS_KEY,
   DEFAULT_NOTIFICATION_SETTINGS,
@@ -89,35 +94,41 @@ export const NotificationSettingsCard: React.FC<NotificationSettingsCardProps> =
     setPermissionBlocked(false);
 
     if (checked) {
-      if (typeof window === 'undefined' || !('Notification' in window)) {
+      if (!isTauriEnvironment() && (typeof window === 'undefined' || !('Notification' in window))) {
         message.warning('Trình duyệt của bạn không hỗ trợ thông báo màn hình.');
         return;
       }
 
-      if (Notification.permission === 'denied') {
-        setPermissionBlocked(true);
-        await saveSettings({ browserNotificationsEnabled: false });
-        return;
-      }
-
-      if (Notification.permission === 'granted') {
+      const alreadyGranted = await isNotificationPermissionGranted();
+      if (alreadyGranted) {
         await saveSettings({ browserNotificationsEnabled: true });
-        message.success('Đã bật thông báo trình duyệt.');
+        message.success('Đã bật thông báo màn hình.');
         await sendDesktopNotification({
-          title: 'Task Planner - Thông báo trình duyệt',
+          title: 'Task Planner - Thông báo màn hình',
           body: 'Thông báo màn hình đã được kích hoạt thành công.',
           requireInteraction: settings.requireInteractionEnabled,
         });
         return;
       }
 
+      if (
+        !isTauriEnvironment() &&
+        typeof window !== 'undefined' &&
+        'Notification' in window &&
+        Notification.permission === 'denied'
+      ) {
+        setPermissionBlocked(true);
+        await saveSettings({ browserNotificationsEnabled: false });
+        return;
+      }
+
       try {
-        const perm = await Notification.requestPermission();
-        if (perm === 'granted') {
+        const granted = await requestNotificationPermission();
+        if (granted) {
           await saveSettings({ browserNotificationsEnabled: true });
-          message.success('Đã bật thông báo trình duyệt.');
+          message.success('Đã bật thông báo màn hình.');
           await sendDesktopNotification({
-            title: 'Task Planner - Thông báo trình duyệt',
+            title: 'Task Planner - Thông báo màn hình',
             body: 'Thông báo màn hình đã được kích hoạt thành công.',
             requireInteraction: settings.requireInteractionEnabled,
           });
@@ -130,7 +141,7 @@ export const NotificationSettingsCard: React.FC<NotificationSettingsCardProps> =
       }
     } else {
       await saveSettings({ browserNotificationsEnabled: false });
-      message.info('Đã tắt thông báo trình duyệt.');
+      message.info('Đã tắt thông báo màn hình.');
     }
   };
 
@@ -206,12 +217,13 @@ export const NotificationSettingsCard: React.FC<NotificationSettingsCardProps> =
           <Button
             data-testid="test-notification-button"
             onClick={async () => {
-              if (typeof window === 'undefined' || !('Notification' in window)) {
+              if (!isTauriEnvironment() && (typeof window === 'undefined' || !('Notification' in window))) {
                 message.warning('Trình duyệt của bạn không hỗ trợ thông báo màn hình.');
                 return;
               }
-              if (Notification.permission !== 'granted') {
-                message.warning('Vui lòng cấp quyền thông báo trình duyệt trước.');
+              const granted = await isNotificationPermissionGranted();
+              if (!granted) {
+                message.warning('Vui lòng cấp quyền thông báo trước.');
                 return;
               }
               const sent = await sendDesktopNotification({

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { NotificationSettingsCard } from '../../../src/components/settings/NotificationSettingsCard';
 import { db } from '../../../src/db';
@@ -7,13 +7,24 @@ import {
   DEFAULT_NOTIFICATION_SETTINGS,
   type NotificationSettings,
 } from '../../../src/types/notifications';
+import * as tauriPluginNotification from '@tauri-apps/plugin-notification';
 
-describe('NotificationSettingsCard (D-10, D-11, NOTIF-08)', () => {
+vi.mock('@tauri-apps/plugin-notification', () => ({
+  isPermissionGranted: vi.fn(),
+  requestPermission: vi.fn(),
+  sendNotification: vi.fn(),
+}));
+
+describe('NotificationSettingsCard (D-10, D-11, NOTIF-08, TAURI-NOTIF-DESKTOP-DISPATCH)', () => {
   beforeEach(async () => {
     await db.settings.delete('browserNotificationsEnabled');
     await db.settings.delete(NOTIFICATION_SETTINGS_KEY);
     sessionStorage.clear();
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('renders default controls for notifications, thresholds, and categories', async () => {
@@ -185,6 +196,38 @@ describe('NotificationSettingsCard (D-10, D-11, NOTIF-08)', () => {
         expect.objectContaining({
           body: expect.stringContaining('Thông báo màn hình đang hoạt động'),
           requireInteraction: true,
+        })
+      );
+    });
+  });
+
+  it('supports Tauri native permission toggle and test notification dispatch', async () => {
+    vi.stubGlobal('__TAURI_INTERNALS__', {});
+    vi.mocked(tauriPluginNotification.isPermissionGranted).mockResolvedValue(false);
+    vi.mocked(tauriPluginNotification.requestPermission).mockResolvedValue('granted');
+
+    render(<NotificationSettingsCard db={db} />);
+    const toggle = screen.getByTestId('browser-notifications-switch');
+
+    fireEvent.click(toggle);
+
+    await waitFor(async () => {
+      expect(tauriPluginNotification.requestPermission).toHaveBeenCalled();
+      const saved = await db.settings.get(NOTIFICATION_SETTINGS_KEY);
+      const val = saved?.value as NotificationSettings;
+      expect(val?.browserNotificationsEnabled).toBe(true);
+    });
+
+    // Test notification dispatch in Tauri
+    vi.mocked(tauriPluginNotification.isPermissionGranted).mockResolvedValue(true);
+    const testButton = screen.getByTestId('test-notification-button');
+    fireEvent.click(testButton);
+
+    await waitFor(() => {
+      expect(tauriPluginNotification.sendNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Task Planner - Thông báo thử nghiệm',
+          body: 'Thông báo màn hình đang hoạt động với cài đặt của bạn.',
         })
       );
     });

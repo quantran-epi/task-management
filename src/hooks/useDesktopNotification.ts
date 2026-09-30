@@ -1,7 +1,11 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
-import { sendDesktopNotification } from '../utils/desktopNotification';
+import {
+  sendDesktopNotification,
+  isTauriEnvironment,
+  isNotificationPermissionGranted,
+} from '../utils/desktopNotification';
 import {
   NOTIFICATION_SETTINGS_KEY,
   DEFAULT_NOTIFICATION_SETTINGS,
@@ -83,16 +87,21 @@ export function useDesktopNotification({
     }
   );
 
-  const checkAndDispatchAlerts = useCallback(() => {
-    if (typeof window === 'undefined' || !('Notification' in window)) {
+  const checkAndDispatchAlerts = useCallback(async () => {
+    if (typeof window === 'undefined') {
       return;
     }
 
-    if (
-      !settingsData.isEnabled ||
-      Notification.permission !== 'granted' ||
-      notifications.isLoading
-    ) {
+    if (!isTauriEnvironment() && !('Notification' in window)) {
+      return;
+    }
+
+    if (!settingsData.isEnabled || notifications.isLoading) {
+      return;
+    }
+
+    const permissionGranted = await isNotificationPermissionGranted();
+    if (!permissionGranted) {
       return;
     }
 

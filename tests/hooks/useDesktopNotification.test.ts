@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import dayjs from 'dayjs';
 import {
@@ -11,13 +11,24 @@ import {
   DEFAULT_NOTIFICATION_SETTINGS,
   type NotificationState,
 } from '../../src/types/notifications';
+import * as tauriPluginNotification from '@tauri-apps/plugin-notification';
 
-describe('useDesktopNotification hook (D-09, D-12, NOTIF-07)', () => {
+vi.mock('@tauri-apps/plugin-notification', () => ({
+  isPermissionGranted: vi.fn(),
+  requestPermission: vi.fn(),
+  sendNotification: vi.fn(),
+}));
+
+describe('useDesktopNotification hook (D-09, D-12, NOTIF-07, TAURI-NOTIF-DESKTOP-DISPATCH)', () => {
   beforeEach(async () => {
     await db.settings.delete('browserNotificationsEnabled');
     await db.settings.delete(NOTIFICATION_SETTINGS_KEY);
     sessionStorage.clear();
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   const baseNotificationState: NotificationState = {
@@ -509,5 +520,57 @@ describe('useDesktopNotification hook (D-09, D-12, NOTIF-07)', () => {
 
     await new Promise((r) => setTimeout(r, 100));
     expect(mockNotification).not.toHaveBeenCalled();
+  });
+
+  it('dispatches notifications in Tauri environment via @tauri-apps/plugin-notification without window.Notification', async () => {
+    vi.stubGlobal('__TAURI_INTERNALS__', {});
+    vi.stubGlobal('Notification', undefined);
+
+    await db.settings.put({
+      key: NOTIFICATION_SETTINGS_KEY,
+      value: {
+        ...DEFAULT_NOTIFICATION_SETTINGS,
+        browserNotificationsEnabled: true,
+        requireInteractionEnabled: true,
+      },
+    });
+
+    sessionStorage.setItem(SESSION_NOTIFICATION_SHOWN_KEY, 'true');
+    vi.mocked(tauriPluginNotification.isPermissionGranted).mockResolvedValue(true);
+
+    const reminderState: NotificationState = {
+      items: [
+        {
+          id: 'reminder:tauri:1',
+          category: 'reminder',
+          title: 'Tauri Native Reminder',
+          subtitle: 'Kiểm tra tauri native alert',
+          tagColor: 'gold',
+          tagLabel: 'Nhắc nhở',
+          entityType: 'task',
+          canDismiss: true,
+          priorityOrder: 5,
+        },
+      ],
+      activeCount: 1,
+      categoryCounts: {
+        overdue: 0,
+        overload: 0,
+        'due-soon': 0,
+        stale: 0,
+        reminder: 1,
+      },
+      isLoading: false,
+    };
+
+    renderHook(() => useDesktopNotification({ notifications: reminderState, db }));
+
+    await waitFor(() => {
+      expect(tauriPluginNotification.sendNotification).toHaveBeenCalledWith({
+        title: 'Tauri Native Reminder',
+        body: 'Kiểm tra tauri native alert',
+        extra: undefined,
+      });
+    });
   });
 });
