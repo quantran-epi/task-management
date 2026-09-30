@@ -124,6 +124,50 @@ describe('CreateJiraIssueModal', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it('auto assigns issue to user accountId when available', async () => {
+    await testDb.settings.put({ key: 'jira_domain', value: 'my-org.atlassian.net' });
+    await testDb.settings.put({ key: 'jira_email', value: 'user@example.com' });
+    await testDb.settings.put({ key: 'jira_api_token', value: 'token123' });
+    await testDb.settings.put({ key: 'jira_account_id', value: 'acc-7890' });
+
+    const createSpy = vi.spyOn(jiraApi, 'createJiraIssue').mockResolvedValue({
+      id: '10002',
+      key: 'SHB-5678',
+      self: 'https://my-org.atlassian.net/rest/api/3/issue/10002',
+    });
+
+    render(
+      <CreateJiraIssueModal
+        open={true}
+        task={mockTask}
+        onClose={vi.fn()}
+        onSuccess={vi.fn()}
+        db={testDb}
+      />
+    );
+
+    await screen.findByDisplayValue('Implement OAuth Token Refresh');
+
+    const projectKeyInput = screen.getByPlaceholderText('SHB');
+    fireEvent.change(projectKeyInput, { target: { value: 'SHB' } });
+
+    const submitBtn = screen.getByRole('button', { name: 'Tạo Jira Issue' });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(createSpy).toHaveBeenCalledTimes(1);
+    });
+
+    expect(createSpy).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        fields: expect.objectContaining({
+          assignee: { id: 'acc-7890' },
+        }),
+      })
+    );
+  });
+
   it('displays alert if Jira credentials are not configured', async () => {
     render(
       <CreateJiraIssueModal

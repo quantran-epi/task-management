@@ -124,6 +124,8 @@ export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }
         corsProxy: corsProxy.trim(),
       });
 
+      await db.settings.put({ key: 'jira_account_id', value: user.accountId });
+
       const successMsg = `Kết nối thành công! Đã xác thực với tài khoản ${user.displayName} (${user.emailAddress}).`;
       setDiagnosticResult({
         status: 'success',
