@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Card, Segmented, Select, Table, Tabs, Empty, Button, Space, Row, Col } from 'antd';
 import dayjs from 'dayjs';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -70,12 +70,16 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   const [velocityWindowWeeks, setVelocityWindowWeeks] = useState<VelocityWindowWeeks>(4);
   const [workloadDimension, setWorkloadDimension] = useState<WorkloadDimension>('opsOwners');
   const [includeDoneWorkload, setIncludeDoneWorkload] = useState<boolean>(false);
+  const prevInitialMilestoneIdRef = useRef(initialMilestoneId);
 
   // Sync / auto-select milestone per D-15
   useEffect(() => {
-    if (initialMilestoneId && milestones.some((m) => m.id === initialMilestoneId)) {
-      setSelectedMilestoneId(initialMilestoneId);
-      return;
+    if (initialMilestoneId !== prevInitialMilestoneIdRef.current) {
+      prevInitialMilestoneIdRef.current = initialMilestoneId;
+      if (initialMilestoneId && milestones.some((m) => m.id === initialMilestoneId)) {
+        setSelectedMilestoneId(initialMilestoneId);
+        return;
+      }
     }
     if (selectedMilestoneId && milestones.some((m) => m.id === selectedMilestoneId)) {
       return;
@@ -122,6 +126,12 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       includeDone: includeDoneWorkload,
     });
   }, [tasks, milestones, projects, workloadDimension, includeDoneWorkload]);
+
+  const handleMilestoneChange = (value: string | undefined) => {
+    if (!value) return;
+    setSelectedMilestoneId(value);
+    onNavigate?.('analytics', { milestoneId: value });
+  };
 
   const projectTableColumns = useMemo(
     () => [
@@ -225,7 +235,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                 style={{ minWidth: 200 }}
                 placeholder="Chọn Milestone"
                 value={selectedMilestoneId}
-                onChange={(val) => setSelectedMilestoneId(val)}
+                onChange={handleMilestoneChange}
                 options={milestones.map((m) => ({
                   value: m.id,
                   label: m.name,
