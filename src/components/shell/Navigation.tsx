@@ -5,6 +5,7 @@ import {
   CheckSquareOutlined,
   ProjectOutlined,
   CalendarOutlined,
+  BarChartOutlined,
   SettingOutlined,
 } from '@ant-design/icons';
 import type { AppRoute } from '../../types/navigation';
@@ -36,6 +37,11 @@ const items: MenuItem[] = [
     key: 'planner',
     icon: <CalendarOutlined />,
     label: 'Lập kế hoạch',
+  },
+  {
+    key: 'analytics',
+    icon: <BarChartOutlined />,
+    label: 'Phân tích',
   },
   {
     key: 'settings',

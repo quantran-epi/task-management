@@ -36,9 +36,11 @@ export const App: React.FC = () => {
       case 'tasks':
         return <TasksView />;
       case 'projects':
-        return <ProjectsView />;
+        return <ProjectsView onNavigate={navigate} />;
       case 'planner':
         return <PlannerView targetDate={params.date} />;
+      case 'analytics':
+        return <div data-testid="analytics-view-root">Phân tích</div>;
       case 'settings':
         return <SettingsView onNavigate={navigate} />;
       default:

@@ -14,12 +14,14 @@ import { createTask } from '../db/repositories/taskRepo';
 import { deleteProjectWithCascade, deleteMilestoneWithCascade } from '../db/repositories/cascadeRepo';
 import type { Project, Milestone, ProjectStatus, MilestoneStatus } from '../types/models';
 import type { TaskPlannerDatabase } from '../db';
+import type { NavigateFunction } from '../types/navigation';
 
 export interface ProjectsViewProps {
   db?: TaskPlannerDatabase;
+  onNavigate?: NavigateFunction;
 }
 
-export const ProjectsView: React.FC<ProjectsViewProps> = ({ db = defaultDb }) => {
+export const ProjectsView: React.FC<ProjectsViewProps> = ({ db = defaultDb, onNavigate }) => {
   const [projectModalOpen, setProjectModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
 
@@ -227,6 +229,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ db = defaultDb }) =>
         onEditMilestone={handleOpenEditMilestone}
         onDeleteMilestone={handleDeleteMilestonePrompt}
         onEditTask={handleEditTask}
+        onNavigate={onNavigate}
       />
 
       <ProjectModal

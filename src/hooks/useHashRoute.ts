@@ -8,11 +8,19 @@ export interface HashRouteState {
   navigate: (nextRoute: AppRoute, nextParams?: Record<string, string>) => void;
 }
 
-const VALID_ROUTES: readonly AppRoute[] = ['dashboard', 'tasks', 'projects', 'planner', 'settings'] as const;
+const VALID_ROUTES: readonly AppRoute[] = [
+  'dashboard',
+  'tasks',
+  'projects',
+  'planner',
+  'analytics',
+  'settings',
+] as const;
 
 /**
  * Parses window.location.hash into route and query parameters (D-16).
  * Whitelists routes against AppRoute members and sanitizes 'date' parameter (T-05-01, T-05-02).
+ * Sanitizes 'milestoneId' parameter against strict alphanumeric/uuid pattern (T-13-01).
  */
 export function parseHash(
   hashStr: string,
@@ -35,6 +43,12 @@ export function parseHash(
       if (key === 'date') {
         if (isValidCalendarDate(val)) {
           params[key] = val;
+        }
+      } else if (key === 'milestoneId') {
+        // T-13-01: Sanitize milestoneId parameter
+        const sanitized = val.trim();
+        if (sanitized.length > 0 && /^[a-zA-Z0-9_-]+$/.test(sanitized)) {
+          params[key] = sanitized;
         }
       } else {
         params[key] = val;

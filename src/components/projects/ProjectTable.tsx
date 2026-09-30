@@ -16,8 +16,10 @@ import {
   FolderOutlined,
   FlagOutlined,
   LinkOutlined,
+  BarChartOutlined,
 } from '@ant-design/icons';
 import type { Project, Milestone, Task } from '../../types/models';
+import type { NavigateFunction } from '../../types/navigation';
 import { EmptyState } from '../common/EmptyState';
 import { formatMinutes } from '../../utils/time';
 import { getTodayDateString } from '../../utils/date';
@@ -36,6 +38,7 @@ export interface ProjectTableProps {
   onEditMilestone: (milestone: Milestone) => void;
   onDeleteMilestone: (milestone: Milestone) => void;
   onEditTask: (taskId: string) => void;
+  onNavigate?: NavigateFunction;
   loading?: boolean;
   db?: TaskPlannerDatabase;
 }
@@ -69,6 +72,7 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
   onEditMilestone,
   onDeleteMilestone,
   onEditTask,
+  onNavigate,
   loading = false,
   db = defaultDb,
 }) => {
@@ -221,9 +225,16 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
       {
         title: 'Thao tác',
         key: 'actions',
-        width: 200,
+        width: 250,
         render: (_, record) => (
           <Space orientation="horizontal" size="small">
+            <Button
+              size="small"
+              icon={<BarChartOutlined />}
+              onClick={() => onNavigate?.('analytics', { milestoneId: record.id })}
+            >
+              Burndown
+            </Button>
             <Button
               size="small"
               icon={<PlusOutlined />}
