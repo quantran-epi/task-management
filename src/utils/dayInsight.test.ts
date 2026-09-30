@@ -199,4 +199,46 @@ describe('buildDayInsight', () => {
     expect(result.totalActualMinutes).toBe(0);
     expect(result.capacityMinutes).toBe(0);
   });
+
+  it('runningMinutesByTask overlays active timer minutes and sets isRunning', () => {
+    const t = task('running-task');
+    const result = buildDayInsight({
+      date: '2026-09-30',
+      capacityMinutes: 480,
+      allocations: [alloc('running-task', 60)],
+      sessions: [session('running-task', 30)],
+      taskMap: new Map([[t.id, t]]),
+      projectNameById: new Map(),
+      runningMinutesByTask: new Map([['running-task', 15]]),
+    });
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]).toMatchObject({
+      plannedMinutes: 60,
+      actualMinutes: 45, // 30 persisted + 15 live
+      deltaMinutes: -15, // 45 - 60
+      isRunning: true,
+    });
+    expect(result.totalActualMinutes).toBe(45);
+  });
+
+  it('running timer for task with no prior session creates new row with isRunning', () => {
+    const t = task('fresh-running');
+    const result = buildDayInsight({
+      date: '2026-09-30',
+      capacityMinutes: 480,
+      allocations: [],
+      sessions: [],
+      taskMap: new Map([[t.id, t]]),
+      projectNameById: new Map(),
+      runningMinutesByTask: new Map([['fresh-running', 10]]),
+    });
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]).toMatchObject({
+      taskId: 'fresh-running',
+      actualMinutes: 10,
+      plannedMinutes: 0,
+      deltaMinutes: 10,
+      isRunning: true,
+    });
+  });
 });

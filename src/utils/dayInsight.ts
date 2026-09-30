@@ -10,6 +10,7 @@ export interface DayInsightRow {
   plannedMinutes: number;
   actualMinutes: number;
   deltaMinutes: number; // actual - planned
+  isRunning?: boolean; // true when a running-status timer is contributing live minutes
 }
 
 export interface DayInsightData {
@@ -28,6 +29,12 @@ export interface BuildDayInsightInput {
   sessions: WorkSession[];
   taskMap: Map<string, Task>; // resolves task info for session-only rows
   projectNameById: Map<string, string>;
+  /**
+   * Live minutes contributed by currently-active timers whose sessionStartTime
+   * falls on the target date. Not yet persisted as WorkSession — added on top
+   * of `sessions` sums so the panel reflects realtime progress.
+   */
+  runningMinutesByTask?: Map<string, number>;
 }
 
 const FALLBACK_TASK_NAME = 'Deleted / Unknown Task';
@@ -77,6 +84,35 @@ export function buildDayInsight(input: BuildDayInsightInput): DayInsightData {
       : undefined;
     if (projectName !== undefined) row.projectName = projectName;
     rowsByTask.set(session.taskId, row);
+  }
+
+  // Overlay running-timer minutes on top of persisted sessions.
+  if (input.runningMinutesByTask) {
+    for (const [taskId, runningMinutes] of input.runningMinutesByTask) {
+      if (runningMinutes <= 0) continue;
+      const existing = rowsByTask.get(taskId);
+      if (existing) {
+        existing.actualMinutes += runningMinutes;
+        existing.deltaMinutes = existing.actualMinutes - existing.plannedMinutes;
+        existing.isRunning = true;
+        continue;
+      }
+      const task = input.taskMap.get(taskId);
+      const row: DayInsightRow = {
+        taskId,
+        taskName: task?.name ?? FALLBACK_TASK_NAME,
+        isActive: task ? isTaskActive(task.status) : false,
+        plannedMinutes: 0,
+        actualMinutes: runningMinutes,
+        deltaMinutes: runningMinutes,
+        isRunning: true,
+      };
+      const projectName = task?.projectId
+        ? input.projectNameById.get(task.projectId)
+        : undefined;
+      if (projectName !== undefined) row.projectName = projectName;
+      rowsByTask.set(taskId, row);
+    }
   }
 
   const rows = Array.from(rowsByTask.values()).sort((a, b) => {

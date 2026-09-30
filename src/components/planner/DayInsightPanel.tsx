@@ -49,14 +49,21 @@ export const DayInsightPanel: React.FC<DayInsightPanelProps> = ({ data }) => {
       key: 'taskName',
       render: (_: string, row: DayInsightRow) => (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <Text style={{ opacity: row.isActive ? 1 : 0.55 }}>{row.taskName}</Text>
+          <Space orientation="horizontal" size={6} wrap>
+            <Text style={{ opacity: row.isActive ? 1 : 0.55 }}>{row.taskName}</Text>
+            {row.isRunning && (
+              <Tag color="processing" style={{ margin: 0, fontSize: 10 }}>
+                Đang chạy
+              </Tag>
+            )}
+          </Space>
           {row.projectName && (
             <Text type="secondary" style={{ fontSize: 11 }}>
               {row.projectName}
             </Text>
           )}
           {!row.isActive && (
-            <Tag color="default" style={{ marginTop: 2, fontSize: 10 }}>
+            <Tag color="default" style={{ marginTop: 2, fontSize: 10, width: 'fit-content' }}>
               Không hoạt động
             </Tag>
           )}

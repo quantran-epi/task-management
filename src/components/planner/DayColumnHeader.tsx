@@ -1,5 +1,5 @@
 import React from 'react';
-import { Tag, Progress, Space, Typography, Tooltip, Button } from 'antd';
+import { Tag, Progress, Space, Typography, Tooltip } from 'antd';
 import {
   CheckCircleOutlined,
   ClockCircleOutlined,
@@ -7,7 +7,6 @@ import {
   MinusCircleOutlined,
   WarningOutlined,
   CalendarOutlined,
-  BarChartOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import type { DayPlannerData } from '../../hooks/useWeeklyPlanner';
@@ -19,7 +18,6 @@ const { Text } = Typography;
 export interface DayColumnHeaderProps {
   day: DayPlannerData;
   onEditCapacity?: ((date: string) => void) | undefined;
-  onOpenInsight?: ((date: string) => void) | undefined;
 }
 
 const LOAD_STATUS_CONFIG: Record<
@@ -60,7 +58,6 @@ const LOAD_STATUS_CONFIG: Record<
 export const DayColumnHeader: React.FC<DayColumnHeaderProps> = ({
   day,
   onEditCapacity,
-  onOpenInsight,
 }) => {
   const { date, isToday, metrics } = day;
   const formattedDate = dayjs(date, 'YYYY-MM-DD').format('ddd, DD/MM');
@@ -118,44 +115,29 @@ export const DayColumnHeader: React.FC<DayColumnHeaderProps> = ({
           )}
         </Space>
 
-        <Space size={4} align="center">
-          {/* Clickable Capacity Tag (D-07) */}
-          <Tooltip title="Nhấn để sửa công suất ngày">
-            <Tag
-              role="button"
-              tabIndex={0}
-              aria-label={`Sửa công suất cho ${date}`}
-              icon={<CalendarOutlined />}
-              onClick={() => onEditCapacity?.(date)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  onEditCapacity?.(date);
-                }
-              }}
-              style={{
-                cursor: onEditCapacity ? 'pointer' : 'default',
-                margin: 0,
-                fontWeight: 600,
-              }}
-            >
-              Sức chứa: {formatMinutes(metrics.effectiveCapacityMinutes)}
-            </Tag>
-          </Tooltip>
-
-          {/* Day Insight (planned vs actual) trigger */}
-          {onOpenInsight && (
-            <Tooltip title="Chi tiết ngày (kế hoạch vs thực tế)">
-              <Button
-                size="small"
-                type="text"
-                icon={<BarChartOutlined />}
-                aria-label={`Chi tiết ngày ${date}`}
-                onClick={() => onOpenInsight(date)}
-              />
-            </Tooltip>
-          )}
-        </Space>
+        {/* Clickable Capacity Tag (D-07) */}
+        <Tooltip title="Nhấn để sửa công suất ngày">
+          <Tag
+            role="button"
+            tabIndex={0}
+            aria-label={`Sửa công suất cho ${date}`}
+            icon={<CalendarOutlined />}
+            onClick={() => onEditCapacity?.(date)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onEditCapacity?.(date);
+              }
+            }}
+            style={{
+              cursor: onEditCapacity ? 'pointer' : 'default',
+              margin: 0,
+              fontWeight: 600,
+            }}
+          >
+            Sức chứa: {formatMinutes(metrics.effectiveCapacityMinutes)}
+          </Tag>
+        </Tooltip>
       </div>
 
       {/* Metrics Row: Cap, Alloc, Bal (D-17) */}

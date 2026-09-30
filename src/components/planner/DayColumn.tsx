@@ -1,6 +1,6 @@
 import React from 'react';
-import { Button, Typography } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { Button, Typography, Space, Tooltip } from 'antd';
+import { PlusOutlined, BarChartOutlined } from '@ant-design/icons';
 import type { DayPlannerData } from '../../hooks/useWeeklyPlanner';
 import { DayColumnHeader } from './DayColumnHeader';
 import { TaskAllocationCard } from './TaskAllocationCard';
@@ -46,7 +46,7 @@ export const DayColumn: React.FC<DayColumnProps> = ({
       }}
     >
       {/* Accessible Day Column Header */}
-      <DayColumnHeader day={day} onEditCapacity={onEditCapacity} onOpenInsight={onOpenInsight} />
+      <DayColumnHeader day={day} onEditCapacity={onEditCapacity} />
 
       {/* Body: List of Task Allocation Cards */}
       <div
@@ -91,17 +91,28 @@ export const DayColumn: React.FC<DayColumnProps> = ({
         )}
       </div>
 
-      {/* Footer: Phân bổ quick button (D-03) */}
-      <Button
-        type="dashed"
-        icon={<PlusOutlined />}
-        block
-        onClick={() => onAllocate(day.date)}
-        aria-label={`Phân bổ tác vụ cho ${day.date}`}
-        style={{ fontSize: 13 }}
-      >
-        Phân bổ
-      </Button>
+      {/* Footer: Phân bổ + Chi tiết ngày (D-03) */}
+      <Space.Compact style={{ width: '100%' }}>
+        <Button
+          type="dashed"
+          icon={<PlusOutlined />}
+          style={{ flex: 1, fontSize: 13 }}
+          onClick={() => onAllocate(day.date)}
+          aria-label={`Phân bổ tác vụ cho ${day.date}`}
+        >
+          Phân bổ
+        </Button>
+        {onOpenInsight && (
+          <Tooltip title="Chi tiết ngày (kế hoạch vs thực tế)">
+            <Button
+              type="dashed"
+              icon={<BarChartOutlined />}
+              onClick={() => onOpenInsight(day.date)}
+              aria-label={`Chi tiết ngày ${day.date}`}
+            />
+          </Tooltip>
+        )}
+      </Space.Compact>
     </div>
   );
 };
