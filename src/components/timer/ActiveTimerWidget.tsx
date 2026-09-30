@@ -5,11 +5,13 @@ import {
   PlayCircleOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
+  ExportOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type TaskPlannerDatabase } from '../../db';
 import { useTimer } from '../../hooks/useTimer';
 import { formatElapsedTicker } from '../../utils/time';
+import { openTimerPopout } from '../../utils/timerPopout';
 
 export interface ActiveTimerWidgetProps {
   tasksMap?: Map<string, string>;
@@ -135,13 +137,23 @@ export const ActiveTimerWidget: React.FC<ActiveTimerWidgetProps> = ({
             aria-label="Kết thúc phiên"
             style={{ minWidth: 24, minHeight: 24, padding: 0 }}
           />
+          <Tooltip title="Mở cửa sổ nổi (Pop out)">
+            <Button
+              type="text"
+              size="small"
+              icon={<ExportOutlined style={{ fontSize: 13, color: token.colorTextSecondary }} />}
+              onClick={() => openTimerPopout()}
+              aria-label="Mở cửa sổ nổi"
+              style={{ minWidth: 24, minHeight: 24, padding: 0 }}
+            />
+          </Tooltip>
         </Space>
       </div>
     );
   }
 
   // D-02, D-05: Multi-timer dropdown
-  const menuItems: MenuProps['items'] = activeTimers.map((timer) => {
+  const timerItems: MenuProps['items'] = activeTimers.map((timer) => {
     const taskTitle = getTaskTitle(timer.taskId);
     const elapsedSec = getElapsedSeconds(timer.taskId);
     const isRunning = timer.status === 'running';
@@ -230,6 +242,43 @@ export const ActiveTimerWidget: React.FC<ActiveTimerWidgetProps> = ({
       ),
     };
   });
+
+  const menuItems: MenuProps['items'] = [
+    {
+      key: '__popout_action__',
+      label: (
+        <div
+          data-testid="timer-popout-action"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '2px 0',
+            borderBottom: `1px solid ${token.colorBorderSecondary}`,
+            marginBottom: 4,
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            openTimerPopout();
+          }}
+        >
+          <Typography.Text strong style={{ fontSize: 12 }}>
+            {activeTimers.length} bộ đếm đang chạy
+          </Typography.Text>
+          <Button
+            type="link"
+            size="small"
+            icon={<ExportOutlined style={{ fontSize: 12 }} />}
+            style={{ padding: 0, fontSize: 12 }}
+            aria-label="Mở cửa sổ nổi"
+          >
+            Mở cửa sổ nổi
+          </Button>
+        </div>
+      ),
+    },
+    ...timerItems,
+  ];
 
   return (
     <Dropdown menu={{ items: menuItems }} trigger={['click']} placement="bottomRight">

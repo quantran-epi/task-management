@@ -14,6 +14,8 @@ import { PlannerView } from './views/PlannerView';
 import { SettingsView } from './views/SettingsView';
 import { DashboardView } from './views/DashboardView';
 import { AnalyticsView } from './views/AnalyticsView';
+import { TimerPopoutView } from './views/TimerPopoutView';
+import { TimerProvider } from './context/TimerContext';
 
 const { defaultAlgorithm, darkAlgorithm } = theme;
 
@@ -48,6 +50,25 @@ export const App: React.FC = () => {
         return <EmptyState />;
     }
   };
+
+  if (route === 'timer-popout') {
+    return (
+      <ConfigProvider
+        locale={viVN}
+        theme={{
+          algorithm: isDark ? darkAlgorithm : defaultAlgorithm,
+          token: {
+            colorPrimary: '#1677ff',
+            fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+          },
+        }}
+      >
+        <TimerProvider>
+          <TimerPopoutView />
+        </TimerProvider>
+      </ConfigProvider>
+    );
+  }
 
   return (
     <ConfigProvider

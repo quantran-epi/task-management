@@ -79,6 +79,13 @@ export async function setWindowAlwaysOnTop(alwaysOnTop: boolean): Promise<boolea
   }
 }
 
+export async function toggleAlwaysOnTop(): Promise<boolean> {
+  const current = await isWindowAlwaysOnTop();
+  const next = !current;
+  await setWindowAlwaysOnTop(next);
+  return next;
+}
+
 export async function closeCurrentPopoutWindow(): Promise<void> {
   if (isTauriApp()) {
     try {

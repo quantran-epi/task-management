@@ -4,6 +4,7 @@ import {
   openTimerPopout,
   isWindowAlwaysOnTop,
   setWindowAlwaysOnTop,
+  toggleAlwaysOnTop,
   closeCurrentPopoutWindow,
   TIMER_POPOUT_LABEL,
 } from '../../src/utils/timerPopout';
@@ -51,6 +52,11 @@ describe('timerPopout utility', () => {
     it('setWindowAlwaysOnTop returns false in non-Tauri browser', async () => {
       const res = await setWindowAlwaysOnTop(true);
       expect(res).toBe(false);
+    });
+
+    it('toggleAlwaysOnTop returns true (negated current false) and calls setWindowAlwaysOnTop', async () => {
+      const res = await toggleAlwaysOnTop();
+      expect(res).toBe(true);
     });
   });
 
