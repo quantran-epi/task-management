@@ -45,6 +45,7 @@ Last activity: 2026-09-30 — Completed quick task 260930-dii: day insight per-t
 | 260930-ugc | Setup Tauri desktop app for macOS and Windows | 2026-09-30 | faf3662 | complete | [260930-ugc-setup-tauri-desktop-app-for-macos-and-wi](./quick/260930-ugc-setup-tauri-desktop-app-for-macos-and-wi/) |
 | 260930-uwl | Add Tauri notification plugin for native desktop notifications | 2026-09-30 | e2d8996 | complete | [260930-uwl-add-tauri-notification-plugin-for-native](./quick/260930-uwl-add-tauri-notification-plugin-for-native/) |
 | 260930-vdl | pop out and pin timer as separate small window with multi-timer support and live sync | 2026-09-30 | 74e9bd2 | complete | [260930-vdl-pop-out-and-pin-timer-as-separate-small-](./quick/260930-vdl-pop-out-and-pin-timer-as-separate-small-/) |
+| 260930-wva | fix vitest virtual:pwa-register alias for windows runners | 2026-09-30 | 9bbc0f5 | complete | [260930-wva-fix-vitest-virtual-pwa-alias-windows](./quick/260930-wva-fix-vitest-virtual-pwa-alias-windows/) |
 
 ## Performance Metrics
 

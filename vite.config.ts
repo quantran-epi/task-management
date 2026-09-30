@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { configDefaults, defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
@@ -60,6 +61,11 @@ export default defineConfig({
     }),
   ],
   test: {
+    alias: {
+      'virtual:pwa-register/react': fileURLToPath(
+        new URL('./tests/mocks/pwaRegister.ts', import.meta.url)
+      ),
+    },
     environment: 'jsdom',
     setupFiles: ['./tests/setup.ts'],
     globals: true,
