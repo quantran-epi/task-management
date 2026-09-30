@@ -301,16 +301,28 @@ function compareByGlobalSort(a: Task, b: Task, key: TaskSortKey): number {
     case 'updatedAt_asc':
       return (a.updatedAt ?? '').localeCompare(b.updatedAt ?? '');
     case 'deadline_asc': {
-      if (!a.deadline && !b.deadline) return 0;
+      if (!a.deadline && !b.deadline) {
+        const pDiff = (PRIORITY_WEIGHTS[b.priority] ?? 0) - (PRIORITY_WEIGHTS[a.priority] ?? 0);
+        if (pDiff !== 0) return pDiff;
+        return 0;
+      }
       if (!a.deadline) return 1;
       if (!b.deadline) return -1;
-      return a.deadline.localeCompare(b.deadline);
+      const dDiff = a.deadline.localeCompare(b.deadline);
+      if (dDiff !== 0) return dDiff;
+      return (PRIORITY_WEIGHTS[b.priority] ?? 0) - (PRIORITY_WEIGHTS[a.priority] ?? 0);
     }
     case 'deadline_desc': {
-      if (!a.deadline && !b.deadline) return 0;
+      if (!a.deadline && !b.deadline) {
+        const pDiff = (PRIORITY_WEIGHTS[b.priority] ?? 0) - (PRIORITY_WEIGHTS[a.priority] ?? 0);
+        if (pDiff !== 0) return pDiff;
+        return 0;
+      }
       if (!a.deadline) return 1; // nulls last both directions
       if (!b.deadline) return -1;
-      return b.deadline.localeCompare(a.deadline);
+      const dDiff = b.deadline.localeCompare(a.deadline);
+      if (dDiff !== 0) return dDiff;
+      return (PRIORITY_WEIGHTS[b.priority] ?? 0) - (PRIORITY_WEIGHTS[a.priority] ?? 0);
     }
     case 'priority_desc':
       return (PRIORITY_WEIGHTS[b.priority] ?? 0) - (PRIORITY_WEIGHTS[a.priority] ?? 0);
