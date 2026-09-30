@@ -9,10 +9,14 @@
     "test": "vitest run",
     "test:jira-proxy": "node --test proxy/jira-proxy.test.mjs",
     "jira:proxy": "node proxy/jira-proxy.mjs",
-    "preview": "node proxy/jira-proxy.mjs & proxy_pid=$!; trap 'kill $proxy_pid' EXIT INT TERM; vite preview"
+    "preview": "node proxy/jira-proxy.mjs & proxy_pid=$!; trap 'kill $proxy_pid' EXIT INT TERM; vite preview",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
   },
   "dependencies": {
     "@ant-design/icons": "^6.3.4",
+    "@tauri-apps/api": "^2.2.0",
     "antd": "^6.6.5",
     "dayjs": "^1.11.23",
     "dexie": "^4.4.6",
@@ -22,6 +26,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.2.0",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",

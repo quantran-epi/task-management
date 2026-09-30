@@ -2,9 +2,17 @@ import { configDefaults, defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
+const isTauri = Boolean(process.env.TAURI_ENV_PLATFORM || process.env.TAURI_PLATFORM);
+
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/task-management/',
+  base: isTauri ? '/' : '/task-management/',
+  clearScreen: false,
+  server: {
+    port: 5173,
+    strictPort: true,
+    host: process.env.TAURI_DEV_HOST || false,
+  },
   plugins: [
     react(),
     VitePWA({
