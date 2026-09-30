@@ -203,7 +203,12 @@ Plans:
   2. User can inspect task status distribution bars and completion velocity across projects.
   3. User can view workload allocation broken down by Ops Owner, Business Analyst, and Work Type in both planned hours and active task counts.
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 13-01-PLAN.md — Navigation routing tracer, analytics data contracts, burndown math, and velocity/workload calculation engines
+- [ ] 13-02-PLAN.md — Reusable pure SVG burndown vector chart, stacked status bars, and workload proportion bars
+- [ ] 13-03-PLAN.md — Comprehensive AnalyticsView dashboard assembly, empty states, and AppShell integration
 **UI hint**: yes
 
 ## Progress
