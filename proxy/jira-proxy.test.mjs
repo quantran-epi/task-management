@@ -111,6 +111,8 @@ describe('jira proxy HTTP behavior', () => {
         origin: 'http://localhost:5173',
         referer: 'http://localhost:5173/settings',
         'accept-encoding': 'gzip, deflate, br',
+        cookie: 'atlassian.xsrf.token=foo',
+        'sec-fetch-mode': 'cors',
       },
       body: JSON.stringify({ fields: { summary: 'Test' } }),
     });
@@ -130,6 +132,10 @@ describe('jira proxy HTTP behavior', () => {
     assert.equal(call.init.headers.referer, undefined);
     assert.equal(call.init.headers.host, undefined);
     assert.equal(call.init.headers['accept-encoding'], undefined);
+    assert.equal(call.init.headers.cookie, undefined);
+    assert.equal(call.init.headers['sec-fetch-mode'], undefined);
+    assert.equal(call.init.headers['x-atlassian-token'], 'no-check');
+    assert.equal(call.init.headers['user-agent'], 'TaskPlannerProxy/1.0');
     assert.equal(call.init.body.toString(), JSON.stringify({ fields: { summary: 'Test' } }));
   });
 

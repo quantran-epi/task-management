@@ -34,6 +34,9 @@ const strippedRequestHeaders = new Set([
   'transfer-encoding',
   'content-length',
   'accept-encoding',
+  'cookie',
+  'priority',
+  'user-agent',
 ]);
 
 const strippedResponseHeaders = new Set([
@@ -107,8 +110,13 @@ export function createJiraProxyServer({ fetchImpl = fetch, port = DEFAULT_PORT }
 
     const forwardHeaders = {};
     for (const [key, value] of Object.entries(req.headers)) {
-      if (!strippedRequestHeaders.has(key.toLowerCase())) forwardHeaders[key] = value;
+      const lower = key.toLowerCase();
+      if (!strippedRequestHeaders.has(lower) && !lower.startsWith('sec-')) {
+        forwardHeaders[key] = value;
+      }
     }
+    forwardHeaders['x-atlassian-token'] = 'no-check';
+    forwardHeaders['user-agent'] = 'TaskPlannerProxy/1.0';
 
     try {
       const upstream = await fetchImpl(targetUrl, {
