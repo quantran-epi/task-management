@@ -42,6 +42,7 @@ Last activity: 2026-09-30 — Completed quick task 260930-dii: day insight per-t
 | 260930-j2e | in task drawer detail, there are many fields now, divide them in sections for more focus and easy to use | 2026-09-30 | 2008412 | — | [260930-j2e-in-task-drawer-detail-there-are-many-fie](./quick/260930-j2e-in-task-drawer-detail-there-are-many-fie/) |
 | 260930-km1 | task list page need global sort, criteria may be by creation date, updated date, etc. | 2026-09-30 | 2111c95 | — | [260930-km1-task-list-page-need-global-sort-criteria](./quick/260930-km1-task-list-page-need-global-sort-criteria/) |
 | 260930-dii | Day Insight — per-task planned vs actual for a single date (read-only) | 2026-09-30 | 801eeb5 | complete | [260930-dii-day-insight-per-task-plan-vs-actual](./quick/260930-dii-day-insight-per-task-plan-vs-actual/) |
+| 260930-ugc | Setup Tauri desktop app for macOS and Windows | 2026-09-30 | faf3662 | complete | [260930-ugc-setup-tauri-desktop-app-for-macos-and-wi](./quick/260930-ugc-setup-tauri-desktop-app-for-macos-and-wi/) |
 
 ## Performance Metrics
 
