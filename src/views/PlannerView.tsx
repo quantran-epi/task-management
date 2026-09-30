@@ -11,6 +11,8 @@ import { DayColumn } from '../components/planner/DayColumn';
 import { AllocationModal } from '../components/planner/AllocationModal';
 import { CapacitySettingsModal } from '../components/planner/CapacitySettingsModal';
 import { FeasibilityModal } from '../components/planner/FeasibilityModal';
+import { DayInsightPanel } from '../components/planner/DayInsightPanel';
+import { useDayInsight } from '../hooks/useDayInsight';
 import { TaskDrawer } from '../components/tasks/TaskDrawer';
 import { getTodayDateString } from '../utils/date';
 import type { Task, Project } from '../types/models';
@@ -43,6 +45,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
   const [taskSelectModalOpen, setTaskSelectModalOpen] = useState<boolean>(false);
   const [selectedTaskIdForFeasibility, setSelectedTaskIdForFeasibility] = useState<string | undefined>(undefined);
   const [selectedProjectIdForFilter, setSelectedProjectIdForFilter] = useState<string | undefined>(undefined);
+  const [insightDate, setInsightDate] = useState<string | undefined>(undefined);
 
   const screens = Grid.useBreakpoint();
   const isMobile = screens.md === false;
@@ -225,6 +228,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
             onAllocate={(date) => handleOpenAllocate(date)}
             onEditCapacity={() => setCapacityModalOpen(true)}
             onTaskClick={(taskId) => setTaskDrawerTaskId(taskId)}
+            onOpenInsight={(date) => setInsightDate(date)}
             db={db}
           />
         ))}
@@ -367,6 +371,38 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
         onClose={() => setTaskDrawerTaskId(undefined)}
         db={db}
       />
+
+      {/* Day Insight Modal — planned vs actual for a single date */}
+      <DayInsightModal
+        date={insightDate}
+        open={insightDate !== undefined}
+        onClose={() => setInsightDate(undefined)}
+        db={db}
+      />
     </div>
+  );
+};
+
+interface DayInsightModalProps {
+  date: string | undefined;
+  open: boolean;
+  onClose: () => void;
+  db: TaskPlannerDatabase;
+}
+
+const DayInsightModal: React.FC<DayInsightModalProps> = ({ date, open, onClose, db }) => {
+  // Hook must be called unconditionally; feed a sentinel date when closed.
+  const data = useDayInsight(date ?? '1970-01-01', db);
+  return (
+    <Modal
+      title="Chi tiết ngày"
+      open={open}
+      onCancel={onClose}
+      footer={null}
+      width={720}
+      destroyOnClose
+    >
+      {date && <DayInsightPanel data={data} />}
+    </Modal>
   );
 };

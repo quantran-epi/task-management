@@ -14,6 +14,7 @@ export interface DayColumnProps {
   onAllocate: (date: string) => void;
   onEditCapacity: (date: string) => void;
   onTaskClick?: ((taskId: string) => void) | undefined;
+  onOpenInsight?: ((date: string) => void) | undefined;
   db?: TaskPlannerDatabase | undefined;
 }
 
@@ -23,6 +24,7 @@ export const DayColumn: React.FC<DayColumnProps> = ({
   onAllocate,
   onEditCapacity,
   onTaskClick,
+  onOpenInsight,
   db,
 }) => {
   const visibleAllocations = day.allocations.filter((item) =>
@@ -44,7 +46,7 @@ export const DayColumn: React.FC<DayColumnProps> = ({
       }}
     >
       {/* Accessible Day Column Header */}
-      <DayColumnHeader day={day} onEditCapacity={onEditCapacity} />
+      <DayColumnHeader day={day} onEditCapacity={onEditCapacity} onOpenInsight={onOpenInsight} />
 
       {/* Body: List of Task Allocation Cards */}
       <div
