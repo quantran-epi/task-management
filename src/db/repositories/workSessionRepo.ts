@@ -1,7 +1,11 @@
 import { db as defaultDb, type TaskPlannerDatabase } from '../index';
-import type { WorkSession, ActiveTimer } from '../../types/models';
+import type { WorkSession, ActiveTimer, Task } from '../../types/models';
 import { WorkSessionInputSchema, type WorkSessionInput } from '../../validation/schemas';
 import { generateId } from '../../utils/uuid';
+
+export interface WorkSessionWithTask extends WorkSession {
+  task: Task;
+}
 
 /**
  * Helper to format a date/ISO string into YYYY-MM-DD calendar date string.
@@ -190,6 +194,52 @@ export async function getProjectSpentMinutes(
 
   const sessions = await db.workSessions.where('taskId').anyOf(allTaskIds).toArray();
   return sessions.reduce((sum, s) => sum + s.durationMinutes, 0);
+}
+
+/**
+ * Retrieves all work sessions on a specific calendar date, joined with Task.
+ * Missing tasks get a fallback record matching getAllocationsForDate semantics.
+ */
+export async function getWorkSessionsForDate(
+  date: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<WorkSessionWithTask[]> {
+  const sessions = await db.workSessions.where('date').equals(date).toArray();
+  if (sessions.length === 0) return [];
+
+  const taskIds = Array.from(new Set(sessions.map((s) => s.taskId)));
+  const tasks = await db.tasks.where('id').anyOf(taskIds).toArray();
+  const taskMap = new Map(tasks.map((t) => [t.id, t]));
+
+  return sessions.map((session) => {
+    const task = taskMap.get(session.taskId);
+    const fallbackTask: Task = {
+      id: session.taskId,
+      name: 'Deleted / Unknown Task',
+      status: 'Cancelled',
+      progress: 0,
+      priority: 'Medium',
+      estimateMinutes: 0,
+      createdAt: '',
+      updatedAt: '',
+    };
+    return { ...session, task: task ?? fallbackTask };
+  });
+}
+
+/**
+ * Aggregates total logged minutes per taskId for a specific calendar date.
+ */
+export async function getActualMinutesByTaskForDate(
+  date: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<Map<string, number>> {
+  const sessions = await db.workSessions.where('date').equals(date).toArray();
+  const result = new Map<string, number>();
+  for (const s of sessions) {
+    result.set(s.taskId, (result.get(s.taskId) ?? 0) + s.durationMinutes);
+  }
+  return result;
 }
 
 /**
