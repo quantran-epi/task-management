@@ -192,7 +192,7 @@ export function calculateProjectStatusMetrics(
 
     for (const task of projectTasks) {
       counts[task.status] = (counts[task.status] ?? 0) + 1;
-      if (task.status !== 'Done' && task.status !== 'Cancelled') {
+      if (task.status !== 'Done' && task.status !== 'Resolved' && task.status !== 'Cancelled') {
         remainingMinutes += task.estimateMinutes ?? 0;
       }
     }
@@ -207,7 +207,7 @@ export function calculateProjectStatusMetrics(
       projectName: project.name,
       counts,
       totalTasks: projectTasks.length,
-      openTasksCount: (counts.Open ?? 0) + (counts['In Progress'] ?? 0) + (counts['In Review'] ?? 0) + (counts.Resolved ?? 0),
+      openTasksCount: (counts.Open ?? 0) + (counts['In Progress'] ?? 0) + (counts['In Review'] ?? 0),
       remainingHours: Number((remainingMinutes / 60).toFixed(1)),
       velocityTasksPerWeek: velocity.averageTasksPerWeek,
       velocityHoursPerWeek: velocity.averageHoursPerWeek,
