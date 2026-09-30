@@ -397,9 +397,9 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             {/* Top: Workload Proportion Bar per D-12 */}
             <div style={{ padding: '0 4px' }}>
               <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 8 }}>
-                Tỷ trọng phân bổ tải ({burndownUnit === 'hours' ? 'theo giờ ước lượng' : 'theo số lượng tác vụ'})
+                Tỷ trọng phân bổ tải (theo giờ ước lượng)
               </div>
-              <WorkloadProportionBar items={workloadItems} metric={burndownUnit} height={18} />
+              <WorkloadProportionBar items={workloadItems} metric="hours" height={18} />
             </div>
 
             {/* Bottom: Detailed Stakeholder Table per D-12 */}
