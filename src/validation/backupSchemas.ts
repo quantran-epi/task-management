@@ -46,6 +46,7 @@ export const BackupProjectRecordSchema = z.object({
   deadline: calendarDateSchema.optional(),
   notes: z.string().optional(),
   status: z.enum(PROJECT_STATUSES),
+  jiraEpicKey: jiraKeySchema.optional(),
   opsOwners: tagListSchema.optional(),
   businessAnalysts: tagListSchema.optional(),
   documentLinks: z.array(linkSchema).optional(),
