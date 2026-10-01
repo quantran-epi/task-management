@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, Form, Input, Select, Button, Alert, message } from 'antd';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
+import { getJiraApiToken } from '../../services/jiraTokenService';
 import type { Task } from '../../types/models';
 import type { JiraConfig, JiraCreateIssuePayload } from '../../services/jira/types';
 import { textToAdf } from '../../services/jira/adf';
@@ -50,7 +51,7 @@ export const CreateJiraIssueModal: React.FC<CreateJiraIssueModalProps> = ({
         const [domainRec, emailRec, tokenRec, proxyRec, projRec, issueTypeRec, accountIdRec] = await Promise.all([
           db.settings.get('jira_domain'),
           db.settings.get('jira_email'),
-          db.settings.get('jira_api_token'),
+          getJiraApiToken(db),
           db.settings.get('jira_cors_proxy'),
           db.settings.get('jira_default_project'),
           db.settings.get('jira_default_issue_type'),
@@ -76,7 +77,7 @@ export const CreateJiraIssueModal: React.FC<CreateJiraIssueModalProps> = ({
         setConfig({
           domain: (domainRec?.value as string) || '',
           email: (emailRec?.value as string) || '',
-          apiToken: (tokenRec?.value as string) || '',
+          apiToken: tokenRec || '',
           corsProxy: (proxyRec?.value as string) || '',
           defaultProjectKey: defaultProj,
           defaultIssueType: defaultType,

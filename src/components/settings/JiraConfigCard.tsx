@@ -11,19 +11,33 @@ import {
   notification,
   Row,
   Col,
+  Tag,
+  Modal,
+  Popconfirm,
 } from 'antd';
 import {
   CloudSyncOutlined,
   SaveOutlined,
   CheckCircleOutlined,
   SafetyCertificateOutlined,
+  LockOutlined,
+  EditOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { testJiraConnection } from '../../services/jira/jiraApi';
+import {
+  getJiraApiToken,
+  setJiraApiToken,
+  forgetJiraApiToken,
+  isJiraApiTokenStored,
+  migrateLegacyJiraTokenIfNeeded,
+} from '../../services/jiraTokenService';
+import { isTauriApp } from '../../utils/timerPopout';
 import { announceToScreenReader } from '../common/AriaLiveRegion';
 
-const { Paragraph } = Typography;
+const { Paragraph, Text } = Typography;
 
 export interface JiraConfigCardProps {
   db?: TaskPlannerDatabase;
@@ -39,7 +53,6 @@ export type DiagnosticState =
 export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }) => {
   const [domain, setDomain] = useState('');
   const [email, setEmail] = useState('');
-  const [apiToken, setApiToken] = useState('');
   const [corsProxy, setCorsProxy] = useState('');
   const [defaultProjectKey, setDefaultProjectKey] = useState('');
   const [defaultIssueType, setDefaultIssueType] = useState('Task');
@@ -47,12 +60,29 @@ export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }
   const [testing, setTesting] = useState(false);
   const [diagnosticResult, setDiagnosticResult] = useState<DiagnosticState>(null);
 
-  // Load Jira settings from IndexedDB (D-01)
+  // Secret token management (D-33, D-34, D-37)
+  const [tokenStored, setTokenStored] = useState(false);
+  const [replaceModalOpen, setReplaceModalOpen] = useState(false);
+  const [newTokenValue, setNewTokenValue] = useState('');
+
+  // Check stored state on mount / update
+  const checkTokenStatus = async () => {
+    if (isTauriApp()) {
+      await migrateLegacyJiraTokenIfNeeded(db);
+    }
+    const stored = await isJiraApiTokenStored(db);
+    setTokenStored(stored);
+  };
+
+  useEffect(() => {
+    void checkTokenStatus();
+  }, [db]);
+
+  // Load non-secret Jira settings from IndexedDB (D-01)
   const savedSettings = useLiveQuery(async () => {
-    const [domainRec, emailRec, tokenRec, proxyRec, projRec, issueTypeRec] = await Promise.all([
+    const [domainRec, emailRec, proxyRec, projRec, issueTypeRec] = await Promise.all([
       db.settings.get('jira_domain'),
       db.settings.get('jira_email'),
-      db.settings.get('jira_api_token'),
       db.settings.get('jira_cors_proxy'),
       db.settings.get('jira_default_project'),
       db.settings.get('jira_default_issue_type'),
@@ -60,7 +90,6 @@ export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }
     return {
       domain: (domainRec?.value as string) || '',
       email: (emailRec?.value as string) || '',
-      apiToken: (tokenRec?.value as string) || '',
       corsProxy: (proxyRec?.value as string) || '',
       defaultProjectKey: (projRec?.value as string) || '',
       defaultIssueType: (issueTypeRec?.value as string) || 'Task',
@@ -71,7 +100,6 @@ export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }
     if (savedSettings) {
       setDomain(savedSettings.domain);
       setEmail(savedSettings.email);
-      setApiToken(savedSettings.apiToken);
       setCorsProxy(savedSettings.corsProxy);
       setDefaultProjectKey(savedSettings.defaultProjectKey);
       setDefaultIssueType(savedSettings.defaultIssueType);
@@ -84,7 +112,6 @@ export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }
       await db.transaction('rw', db.settings, async () => {
         await db.settings.put({ key: 'jira_domain', value: domain.trim() });
         await db.settings.put({ key: 'jira_email', value: email.trim() });
-        await db.settings.put({ key: 'jira_api_token', value: apiToken.trim() });
         await db.settings.put({ key: 'jira_cors_proxy', value: corsProxy.trim() });
         await db.settings.put({
           key: 'jira_default_project',
@@ -98,7 +125,7 @@ export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }
 
       notification.success({
         message: 'Đã lưu cấu hình Jira',
-        description: 'Thông tin kết nối Jira Cloud đã được lưu vào cơ sở dữ liệu IndexedDB.',
+        description: 'Thông tin kết nối Jira Cloud đã được cập nhật thành công.',
       });
       announceToScreenReader('Đã lưu cấu hình Jira');
     } catch (err: unknown) {
@@ -112,15 +139,55 @@ export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }
     }
   };
 
+  const handleSaveNewToken = async () => {
+    if (!newTokenValue.trim()) return;
+    try {
+      await setJiraApiToken(newTokenValue.trim(), db);
+      setNewTokenValue('');
+      setReplaceModalOpen(false);
+      setTokenStored(true);
+      notification.success({
+        message: 'Đã cập nhật Jira API Token',
+        description: isTauriApp()
+          ? 'Token đã được lưu an toàn trong OS Keychain.'
+          : 'Token đã được lưu trong phiên làm việc.',
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Không thể lưu token.';
+      notification.error({
+        message: 'Lưu token thất bại',
+        description: msg,
+      });
+    }
+  };
+
+  const handleForgetToken = async () => {
+    try {
+      await forgetJiraApiToken(db);
+      setTokenStored(false);
+      notification.info({
+        message: 'Đã xóa Jira API Token',
+        description: 'Token đã được loại bỏ hoàn toàn khỏi bộ nhớ và Keychain.',
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Không thể xóa token.';
+      notification.error({
+        message: 'Xóa token thất bại',
+        description: msg,
+      });
+    }
+  };
+
   const handleTestConnection = async () => {
     setTesting(true);
     setDiagnosticResult(null);
 
     try {
+      const token = await getJiraApiToken(db);
       const user = await testJiraConnection({
         domain: domain.trim(),
         email: email.trim(),
-        apiToken: apiToken.trim(),
+        apiToken: token,
         corsProxy: corsProxy.trim(),
       });
 
@@ -145,7 +212,6 @@ export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }
           return;
         }
 
-        // XSRF check failed — show specific message with proxy guidance
         if (err.message.toLowerCase().includes('xsrf') || err.message.toLowerCase().includes('csrf')) {
           setDiagnosticResult({
             status: 'cors_blocked',
@@ -190,7 +256,7 @@ export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }
     }
   };
 
-  const canTestConnection = Boolean(domain.trim() && email.trim() && apiToken.trim());
+  const canTestConnection = Boolean(domain.trim() && email.trim() && tokenStored);
 
   return (
     <Card
@@ -210,8 +276,12 @@ export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }
         type="info"
         showIcon
         icon={<SafetyCertificateOutlined />}
-        message="Bảo mật API Token cục bộ"
-        description="Toàn bộ thông tin Jira API Token được lưu trữ trực tiếp trong cơ sở dữ liệu IndexedDB của trình duyệt, không bao giờ truyền qua máy chủ ứng dụng trung gian."
+        message="Bảo mật API Token (Zero-Secret Disk Boundary)"
+        description={
+          isTauriApp()
+            ? 'Trên bản Desktop (Tauri), API Token được lưu trữ an toàn trong OS Keychain / Credential Manager của hệ điều hành.'
+            : 'Trên trình duyệt Web/PWA, token không bao giờ bị lưu lộ liễu và hỗ trợ trình quản lý mật khẩu của trình duyệt.'
+        }
         style={{ marginBottom: 16 }}
       />
 
@@ -265,12 +335,54 @@ export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }
           required
           extra="Tạo API token tại: id.atlassian.com/manage-profile/security/api-tokens"
         >
-          <Input.Password
-            value={apiToken}
-            onChange={(e) => setApiToken(e.target.value)}
-            placeholder="••••••••••••••••"
-            aria-label="Jira API Token"
-          />
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '8px 12px',
+              background: 'rgba(0, 0, 0, 0.02)',
+              borderRadius: 6,
+              border: '1px solid rgba(0, 0, 0, 0.08)',
+            }}
+          >
+            <Space>
+              <LockOutlined />
+              <Text strong>Trạng thái lưu trữ:</Text>
+              {tokenStored ? (
+                <Tag color="success">Stored (Đã lưu)</Tag>
+              ) : (
+                <Tag color="default">Not stored (Chưa lưu)</Tag>
+              )}
+            </Space>
+
+            <Space>
+              <Button
+                size="small"
+                icon={<EditOutlined />}
+                onClick={() => {
+                  setNewTokenValue('');
+                  setReplaceModalOpen(true);
+                }}
+              >
+                {tokenStored ? 'Thay đổi' : 'Nhập mã token'}
+              </Button>
+              {tokenStored && (
+                <Popconfirm
+                  title="Xác nhận xóa token Jira?"
+                  description="Mã token sẽ bị xóa khỏi Keychain và bộ nhớ. Bạn sẽ cần nhập lại để tương tác với Jira."
+                  okText="Xóa"
+                  cancelText="Hủy"
+                  okButtonProps={{ danger: true }}
+                  onConfirm={handleForgetToken}
+                >
+                  <Button size="small" danger icon={<DeleteOutlined />}>
+                    Xóa
+                  </Button>
+                </Popconfirm>
+              )}
+            </Space>
+          </div>
         </Form.Item>
 
         <Form.Item
@@ -338,6 +450,32 @@ export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }
           </Space>
         </Form.Item>
       </Form>
+
+      {/* Modal for replacing Jira API token without revealing secret */}
+      <Modal
+        title="Nhập / Thay đổi Jira API Token"
+        open={replaceModalOpen}
+        onCancel={() => {
+          setReplaceModalOpen(false);
+          setNewTokenValue('');
+        }}
+        onOk={handleSaveNewToken}
+        okText="Lưu Token"
+        cancelText="Hủy"
+        okButtonProps={{ disabled: !newTokenValue.trim() }}
+      >
+        <Paragraph type="secondary">
+          Mã token sẽ được bảo vệ bởi OS Keychain (trên Desktop) hoặc phiên bảo mật và không bao giờ
+          hiển thị lại dưới dạng văn bản thuần.
+        </Paragraph>
+        <Input.Password
+          autoFocus
+          placeholder="Nhập mã Jira API token mới"
+          value={newTokenValue}
+          onChange={(e) => setNewTokenValue(e.target.value)}
+          autoComplete="new-password"
+        />
+      </Modal>
     </Card>
   );
 };

@@ -23,6 +23,7 @@ import {
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
+import { getJiraApiToken } from '../../services/jiraTokenService';
 import type { Task, TaskStatus } from '../../types/models';
 import type {
   JiraConfig,
@@ -84,7 +85,7 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
     const [domainRec, emailRec, tokenRec, proxyRec, projRec, issueTypeRec, mappingRec] = await Promise.all([
       db.settings.get('jira_domain'),
       db.settings.get('jira_email'),
-      db.settings.get('jira_api_token'),
+      getJiraApiToken(db),
       db.settings.get('jira_cors_proxy'),
       db.settings.get('jira_default_project'),
       db.settings.get('jira_default_issue_type'),
@@ -94,7 +95,7 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
     const config: JiraConfig = {
       domain: (domainRec?.value as string) || '',
       email: (emailRec?.value as string) || '',
-      apiToken: (tokenRec?.value as string) || '',
+      apiToken: tokenRec || '',
       corsProxy: (proxyRec?.value as string) || '',
       defaultProjectKey: (projRec?.value as string) || '',
       defaultIssueType: (issueTypeRec?.value as string) || 'Task',

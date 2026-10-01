@@ -11,6 +11,7 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { JiraConfig, JiraCreateIssuePayload } from '../../services/jira/types';
 import { createJiraIssue } from '../../services/jira/jiraApi';
 import { textToAdf } from '../../services/jira/adf';
+import { getJiraApiToken } from '../../services/jiraTokenService';
 
 export interface ProjectModalProps {
   open: boolean;
@@ -121,7 +122,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
       const [domainRec, emailRec, tokenRec, proxyRec, projRec] = await Promise.all([
         db.settings.get('jira_domain'),
         db.settings.get('jira_email'),
-        db.settings.get('jira_api_token'),
+        getJiraApiToken(db),
         db.settings.get('jira_cors_proxy'),
         db.settings.get('jira_default_project'),
       ]);
@@ -129,7 +130,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
       const config: JiraConfig = {
         domain: (domainRec?.value as string) || '',
         email: (emailRec?.value as string) || '',
-        apiToken: (tokenRec?.value as string) || '',
+        apiToken: tokenRec || '',
         corsProxy: (proxyRec?.value as string) || '',
         defaultProjectKey: (projRec?.value as string) || '',
       };
