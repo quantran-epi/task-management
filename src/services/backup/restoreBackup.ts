@@ -1,7 +1,27 @@
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { BackupEnvelope, SnapshotData } from '../../types/backup';
+import type { NoteAttachment } from '../../types/models';
 import { generateId } from '../../utils/uuid';
 import { triggerDownload, APP_MARKER, CURRENT_SCHEMA_VERSION } from './exportBackup';
+
+export function base64ToBlob(dataUrl: string, fallbackMime: string): Blob {
+  const parts = dataUrl.split(',');
+  const mimeMatch = parts[0]?.match(/:(.*?);/);
+  const mime = mimeMatch ? mimeMatch[1] : fallbackMime;
+  const b64 = parts.length > 1 ? parts[1]! : parts[0]!;
+  const binary = atob(b64);
+  const len = binary.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  const BlobConstructor = typeof globalThis !== 'undefined' && (globalThis as any).Blob
+    ? (globalThis as any).Blob
+    : typeof window !== 'undefined' && window.Blob
+      ? window.Blob
+      : Blob;
+  return new BlobConstructor([bytes], { type: mime });
+}
 
 /**
  * Atomically replaces data in domain tables with incoming backup payload.
@@ -25,6 +45,8 @@ export async function restoreBackupPayload(
       targetDb.plannedAllocations,
       targetDb.workSessions,
       targetDb.activeTimers,
+      targetDb.notes,
+      targetDb.noteAttachments,
       targetDb.settings,
       targetDb.backupMetadata,
     ],
@@ -38,6 +60,8 @@ export async function restoreBackupPayload(
         capacityOverrides,
         plannedAllocations,
         workSessions,
+        notes,
+        rawAttachments,
       ] = await Promise.all([
         targetDb.projects.toArray(),
         targetDb.milestones.toArray(),
@@ -46,6 +70,8 @@ export async function restoreBackupPayload(
         targetDb.capacityOverrides.toArray(),
         targetDb.plannedAllocations.toArray(),
         targetDb.workSessions.toArray(),
+        targetDb.notes.toArray(),
+        targetDb.noteAttachments.toArray(),
       ]);
 
       const snapshot: SnapshotData = {
@@ -58,6 +84,7 @@ export async function restoreBackupPayload(
           capacityOverrides,
           plannedAllocations,
           workSessions,
+          notes,
         },
         counts: {
           projects: projects.length,
@@ -67,6 +94,8 @@ export async function restoreBackupPayload(
           capacityOverrides: capacityOverrides.length,
           plannedAllocations: plannedAllocations.length,
           workSessions: workSessions.length,
+          notes: notes.length,
+          noteAttachments: rawAttachments.length,
         },
       };
 
@@ -76,7 +105,7 @@ export async function restoreBackupPayload(
         value: snapshot,
       });
 
-      // 2. Clear current domain tables and active timers
+      // 2. Clear current domain tables, notes, attachments, and active timers
       await Promise.all([
         targetDb.projects.clear(),
         targetDb.milestones.clear(),
@@ -86,6 +115,8 @@ export async function restoreBackupPayload(
         targetDb.plannedAllocations.clear(),
         targetDb.workSessions.clear(),
         targetDb.activeTimers.clear(),
+        targetDb.notes.clear(),
+        targetDb.noteAttachments.clear(),
       ]);
 
       // 3. Bulk add incoming records
@@ -109,6 +140,22 @@ export async function restoreBackupPayload(
       }
       if (backup.tables.workSessions && backup.tables.workSessions.length) {
         await targetDb.workSessions.bulkAdd(backup.tables.workSessions);
+      }
+      if (backup.tables.notes && backup.tables.notes.length) {
+        await targetDb.notes.bulkAdd(backup.tables.notes);
+      }
+      if (backup.tables.noteAttachments && backup.tables.noteAttachments.length) {
+        const restoredAttachments: NoteAttachment[] = backup.tables.noteAttachments.map((att) => ({
+          id: att.id,
+          noteId: att.noteId,
+          fileName: att.fileName,
+          mimeType: att.mimeType,
+          sizeBytes: att.sizeBytes,
+          data: base64ToBlob(att.data, att.mimeType),
+          ...(att.caption ? { caption: att.caption } : {}),
+          createdAt: att.createdAt,
+        }));
+        await targetDb.noteAttachments.bulkAdd(restoredAttachments);
       }
 
       // 4. Log restore in backupMetadata

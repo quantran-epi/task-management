@@ -13,6 +13,8 @@ import {
   BackupCapacityOverrideRecordSchema,
   BackupPlannedAllocationRecordSchema,
   BackupWorkSessionRecordSchema,
+  BackupNoteRecordSchema,
+  BackupNoteAttachmentRecordSchema,
 } from '../../validation/backupSchemas';
 
 
@@ -131,6 +133,12 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
   const workSessions = rawTables.workSessions !== undefined
     ? validateTable('workSessions', BackupWorkSessionRecordSchema, rawTables.workSessions)
     : undefined;
+  const notes = rawTables.notes !== undefined
+    ? validateTable('notes', BackupNoteRecordSchema, rawTables.notes)
+    : undefined;
+  const noteAttachments = rawTables.noteAttachments !== undefined
+    ? validateTable('noteAttachments', BackupNoteAttachmentRecordSchema, rawTables.noteAttachments)
+    : undefined;
 
   // If schema validation errors occurred, stop before referential checks
   if (errors.length > 0) {
@@ -200,6 +208,51 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     });
   }
 
+  // Check notes refer to existing entity if specified
+  const noteIds = new Set((notes || []).map((n) => n.id));
+  if (notes) {
+    notes.forEach((n) => {
+      if (n.entityType && n.entityId) {
+        if (n.entityType === 'task' && !taskIds.has(n.entityId)) {
+          errors.push({
+            table: 'notes',
+            recordId: n.id,
+            field: 'entityId',
+            message: `Note references taskId "${n.entityId}" not found in tasks`,
+          });
+        } else if (n.entityType === 'milestone' && !milestoneIds.has(n.entityId)) {
+          errors.push({
+            table: 'notes',
+            recordId: n.id,
+            field: 'entityId',
+            message: `Note references milestoneId "${n.entityId}" not found in milestones`,
+          });
+        } else if (n.entityType === 'project' && !projectIds.has(n.entityId)) {
+          errors.push({
+            table: 'notes',
+            recordId: n.id,
+            field: 'entityId',
+            message: `Note references projectId "${n.entityId}" not found in projects`,
+          });
+        }
+      }
+    });
+  }
+
+  // Check noteAttachments refer to existing note
+  if (noteAttachments) {
+    noteAttachments.forEach((na) => {
+      if (!noteIds.has(na.noteId)) {
+        errors.push({
+          table: 'noteAttachments',
+          recordId: na.id,
+          field: 'noteId',
+          message: `NoteAttachment references noteId "${na.noteId}" not found in notes`,
+        });
+      }
+    });
+  }
+
   if (errors.length > 0) {
     return { valid: false, errors };
   }
@@ -233,6 +286,8 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       capacityOverrides: capacityOverrides as BackupEnvelope['tables']['capacityOverrides'],
       plannedAllocations: plannedAllocations as BackupEnvelope['tables']['plannedAllocations'],
       ...(workSessions !== undefined ? { workSessions } : {}),
+      ...(notes !== undefined ? { notes } : {}),
+      ...(noteAttachments !== undefined ? { noteAttachments } : {}),
     },
     counts: {
       projects: projects.length,
@@ -242,6 +297,8 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       capacityOverrides: capacityOverrides.length,
       plannedAllocations: plannedAllocations.length,
       ...(workSessions !== undefined ? { workSessions: workSessions.length } : {}),
+      ...(notes !== undefined ? { notes: notes.length } : {}),
+      ...(noteAttachments !== undefined ? { noteAttachments: noteAttachments.length } : {}),
     },
   };
 

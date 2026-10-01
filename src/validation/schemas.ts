@@ -345,5 +345,7 @@ export type CapacityRuleInput = z.input<typeof CapacityRuleInputSchema>;
 export type CapacityOverrideInput = z.input<typeof CapacityOverrideInputSchema>;
 export type PlannedAllocationInput = z.input<typeof PlannedAllocationInputSchema>;
 export type WorkSessionInput = z.input<typeof WorkSessionInputSchema>;
+export type NoteInput = z.input<typeof NoteInputSchema>;
+export type NoteUpdate = z.input<typeof NoteUpdateSchema>;
 
 
