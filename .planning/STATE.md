@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Banking IT Enhancements & Jira Integration
 status: executing
-stopped_at: Completed 13.1-03-PLAN.md
-last_updated: "2026-10-01T14:15:00.000Z"
-last_activity: 2026-10-01 -- Completed 13.1-03-PLAN.md (Sticky Notes, attachments, markdown, pop-out window)
+stopped_at: Completed 13.1-04-PLAN.md
+last_updated: "2026-10-01T14:30:00.000Z"
+last_activity: 2026-10-01 -- Completed 13.1-04-PLAN.md (Weekly Actual Worklog Planner)
 progress:
   total_phases: 8
   completed_phases: 7
   total_plans: 27
-  completed_plans: 25
-  percent: 92
+  completed_plans: 26
+  percent: 96
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-09-27)
 ## Current Position
 
 Phase: 13.1 (timer-pause-timestamps-jira-project-mapping-and-live-status-) — EXECUTING
-Plan: 3 of 5
+Plan: 4 of 5
 Status: Executing Phase 13.1
-Last activity: 2026-10-01 -- Completed 13.1-03-PLAN.md (Sticky Notes, attachments, markdown, pop-out window)
+Last activity: 2026-10-01 -- Completed 13.1-04-PLAN.md (Weekly Actual Worklog Planner)
 
 ### Quick Tasks Completed
 
@@ -93,6 +93,7 @@ Last activity: 2026-10-01 -- Completed 13.1-03-PLAN.md (Sticky Notes, attachment
 | Phase 13 P03 | 15m | 2 tasks | 5 files |
 | Phase 13.1 P01 | 15m | 3 tasks | 12 files |
 | Phase 13.1 P03 | 20m | 3 tasks | 17 files |
+| Phase 13.1 P04 | 10m | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -100,6 +101,12 @@ Last activity: 2026-10-01 -- Completed 13.1-03-PLAN.md (Sticky Notes, attachment
 
 Decisions logged across v1.0 and v1.1:
 
+- [Phase 13.1]: WorkSession records remain the single source of truth for Actual time without secondary aggregate fields (D-28)
+- [Phase 13.1]: Running segments crossing local midnight are deterministically split across calendar dates while paused duration is excluded (D-30)
+- [Phase 13.1]: Weekly Actual Worklog grid displays planned vs actual hours per task and date with color-coded variance (negative neutral, positive warning) (D-26, D-31)
+- [Phase 13.1]: Planner shows tasks with planned allocations or work sessions during the week with a searchable Add Task dropdown for ad-hoc entries (D-27)
+- [Phase 13.1]: Users can quickly enter minutes directly in table cells or open a detail modal to inspect and edit start/end times and segments (D-29)
+- [Phase 13.1]: Actual Worklog operations remain strictly local without external Jira worklog sync (D-32)
 - [Phase 13.1]: Single reusable Notes pop-out window with Always on Top, screen-boundary clamping, and web popup fallback
 - [Phase 13.1]: Cascade deletion detaches parent-linked notes into standalone notes without losing content or attachments
 - [Phase 13.1]: ActiveTimer.segments made optional on TypeScript model level for test mock compatibility while populated with fallback in schema upgrade and runtime methods

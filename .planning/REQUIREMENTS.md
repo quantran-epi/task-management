@@ -68,6 +68,10 @@
 - [x] **NOTE-02**: User can attach up to 5 screenshot images (PNG/JPEG/GIF/WebP, max 5MB each) per note stored as Blobs and serialized in backups.
 - [x] **NOTE-03**: User can search and filter notes in a dedicated full view and pop out a pinned, floating, resizable notes window with Always on Top on Tauri and browser popup fallback.
 
+### Actual Worklog Planner (Phase 13.1 INSERTED)
+
+- [x] **WORKLOG-01**: User can view weekly planned vs actual work comparison matrix with midnight segment splitting, color-coded variance, quick inline minute entry, and full work session detail editing.
+
 ## Future Requirements (Deferred)
 
 - **FUTR-01**: Full bidirectional Jira issue webhook sync (deferred - requires server/push).
@@ -123,3 +127,4 @@
 | NOTE-01 | Phase 13.1 | Complete |
 | NOTE-02 | Phase 13.1 | Complete |
 | NOTE-03 | Phase 13.1 | Complete |
+| WORKLOG-01 | Phase 13.1 | Complete |
