@@ -11,6 +11,9 @@ export interface WorkSessionWithTask extends WorkSession {
  * Helper to format a date/ISO string into YYYY-MM-DD calendar date string.
  */
 function toCalendarDateString(dateInput: string | Date): string {
+  if (typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
+    return dateInput;
+  }
   const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
