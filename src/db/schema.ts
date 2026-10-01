@@ -52,4 +52,11 @@ export const SCHEMA_V6 = {
   ...SCHEMA_V5,
 } as const;
 
+export const SCHEMA_V7 = {
+  ...SCHEMA_V6,
+  projects: 'id, status, deadline, reminderDate, jiraEpicKey, *opsOwners, *businessAnalysts',
+  notes: 'id, entityType, entityId, isPinned, createdAt, updatedAt',
+  noteAttachments: 'id, noteId, fileName, mimeType, sizeBytes, createdAt',
+} as const;
+
 
