@@ -72,6 +72,10 @@
 
 - [x] **WORKLOG-01**: User can view weekly planned vs actual work comparison matrix with midnight segment splitting, color-coded variance, quick inline minute entry, and full work session detail editing.
 
+### Native Credential Storage & Auto-Sync Hardening (Phase 13.1 INSERTED)
+
+- [x] **SYNC-01**: Native desktop OS Keychain credential persistence via Rust keyring crate with Web password-manager compatibility, safe legacy Jira token migration, zero-secret SQLite/IndexedDB boundaries, and resilient GitHub auto-sync with exponential backoff and SHA conflict pausing.
+
 ## Future Requirements (Deferred)
 
 - **FUTR-01**: Full bidirectional Jira issue webhook sync (deferred - requires server/push).
@@ -128,3 +132,4 @@
 | NOTE-02 | Phase 13.1 | Complete |
 | NOTE-03 | Phase 13.1 | Complete |
 | WORKLOG-01 | Phase 13.1 | Complete |
+| SYNC-01 | Phase 13.1 | Complete |

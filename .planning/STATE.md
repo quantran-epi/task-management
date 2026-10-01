@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Banking IT Enhancements & Jira Integration
 status: executing
-stopped_at: Completed 13.1-04-PLAN.md
-last_updated: "2026-10-01T14:30:00.000Z"
-last_activity: 2026-10-01 -- Completed 13.1-04-PLAN.md (Weekly Actual Worklog Planner)
+stopped_at: Completed 13.1-05-PLAN.md
+last_updated: "2026-10-01T15:00:00.000Z"
+last_activity: 2026-10-01 -- Completed 13.1-05-PLAN.md (Native OS Keychain credential persistence and auto-sync hardening)
 progress:
   total_phases: 8
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 27
-  completed_plans: 26
-  percent: 96
+  completed_plans: 27
+  percent: 100
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-09-27)
 
 ## Current Position
 
-Phase: 13.1 (timer-pause-timestamps-jira-project-mapping-and-live-status-) — EXECUTING
-Plan: 4 of 5
-Status: Executing Phase 13.1
-Last activity: 2026-10-01 -- Completed 13.1-04-PLAN.md (Weekly Actual Worklog Planner)
+Phase: 13.1 (timer-pause-timestamps-jira-project-mapping-and-live-status-) — COMPLETE
+Plan: 5 of 5
+Status: Completed Phase 13.1
+Last activity: 2026-10-01 -- Completed 13.1-05-PLAN.md (Native OS Keychain credential persistence and auto-sync hardening)
 
 ### Quick Tasks Completed
 
@@ -94,6 +94,7 @@ Last activity: 2026-10-01 -- Completed 13.1-04-PLAN.md (Weekly Actual Worklog Pl
 | Phase 13.1 P01 | 15m | 3 tasks | 12 files |
 | Phase 13.1 P03 | 20m | 3 tasks | 17 files |
 | Phase 13.1 P04 | 10m | 3 tasks | 6 files |
+| Phase 13.1 P05 | 18m | 3 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -101,6 +102,9 @@ Last activity: 2026-10-01 -- Completed 13.1-04-PLAN.md (Weekly Actual Worklog Pl
 
 Decisions logged across v1.0 and v1.1:
 
+- [Phase 13.1]: Use keyring v4.2 with Entry::delete_credential to support cross-platform secret storage and deletion
+- [Phase 13.1]: Keep secrets in module-level in-memory cache and OS Keychain, completely excluding them from SQLite mirror and Dexie IndexedDB
+- [Phase 13.1]: Pause auto-sync scheduler without infinite retries upon 401/403 or remote SHA conflict until user intervenes
 - [Phase 13.1]: WorkSession records remain the single source of truth for Actual time without secondary aggregate fields (D-28)
 - [Phase 13.1]: Running segments crossing local midnight are deterministically split across calendar dates while paused duration is excluded (D-30)
 - [Phase 13.1]: Weekly Actual Worklog grid displays planned vs actual hours per task and date with color-coded variance (negative neutral, positive warning) (D-26, D-31)

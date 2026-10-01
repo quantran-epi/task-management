@@ -245,11 +245,11 @@ Plans:
 
 - [x] 13.1-02-PLAN.md — Local Project to Jira Epic mapping, local-authoritative status reconciliation, and Tauri native proxy
 - [x] 13.1-03-PLAN.md — Offline-first Sticky Notes, safe Markdown preview, screenshot attachments, and reusable pop-out window
-- [ ] 13.1-04-PLAN.md — Weekly Actual Worklog Planner matrix with variance indicators, quick entry, and midnight segment splitting
+- [x] 13.1-04-PLAN.md — Weekly Actual Worklog Planner matrix with variance indicators, quick entry, and midnight segment splitting
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 13.1-05-PLAN.md — Native OS Keychain credential persistence, legacy token migration, and resilient auto-sync recovery
+- [x] 13.1-05-PLAN.md — Native OS Keychain credential persistence, legacy token migration, and resilient auto-sync recovery
 
 **UI hint**: yes
 
@@ -272,4 +272,4 @@ Plans:
 | 12.1. Task Timer, Work Session Logs & Spent Time Tracking | v1.1 | 4/4 | Complete    | 2026-09-29 |
 | 12.2. Multiple Reminders with Time, Notification Settings, Table Customization & Sidebar Persistence | v1.1 | 4/4 | Complete   | 2026-09-29 |
 | 13. Enhanced Workload Analytics & Milestone Burndown | v1.1 | 3/3 | Complete    | 2026-09-30 |
-| 13.1. Timer, Jira, Sticky Notes, Actual Worklog & Sync Improvements | v1.1 | 4/5 | In Progress|  |
+| 13.1. Timer, Jira, Sticky Notes, Actual Worklog & Sync Improvements | v1.1 | 5/5 | Complete    | 2026-10-01 |
