@@ -235,7 +235,7 @@ Plans:
 
 Plans:
 **Wave 1**
-- [ ] 13.1-01-PLAN.md — Dexie SCHEMA_V7 migration, high-fidelity timer pause/resume segments, safe status automation, and hierarchy subtitles
+- [x] 13.1-01-PLAN.md — Dexie SCHEMA_V7 migration, high-fidelity timer pause/resume segments, safe status automation, and hierarchy subtitles
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 13.1-02-PLAN.md — Local Project to Jira Epic mapping, local-authoritative status reconciliation, and Tauri native proxy
@@ -266,4 +266,4 @@ Plans:
 | 12.1. Task Timer, Work Session Logs & Spent Time Tracking | v1.1 | 4/4 | Complete    | 2026-09-29 |
 | 12.2. Multiple Reminders with Time, Notification Settings, Table Customization & Sidebar Persistence | v1.1 | 4/4 | Complete   | 2026-09-29 |
 | 13. Enhanced Workload Analytics & Milestone Burndown | v1.1 | 3/3 | Complete    | 2026-09-30 |
-| 13.1. Timer, Jira, Sticky Notes, Actual Worklog & Sync Improvements | v1.1 | 0/5 | In Progress | - |
+| 13.1. Timer, Jira, Sticky Notes, Actual Worklog & Sync Improvements | v1.1 | 1/5 | In Progress | - |

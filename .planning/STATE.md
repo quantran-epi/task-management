@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Banking IT Enhancements & Jira Integration
 status: executing
-stopped_at: Phase 13.1 UI-SPEC approved
-last_updated: "2026-10-01T12:16:39.009Z"
-last_activity: "2026-09-30 — Completed quick task 260930-dii: day insight per-task planned vs actual"
+stopped_at: Completed 13.1-01-PLAN.md
+last_updated: "2026-10-01T12:40:00.000Z"
+last_activity: 2026-10-01 -- Completed 13.1-01-PLAN.md
 progress:
   total_phases: 8
   completed_phases: 7
-  total_plans: 22
-  completed_plans: 22
-  percent: 88
+  total_plans: 27
+  completed_plans: 23
+  percent: 85
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-27)
 
 **Core value:** Make planned work realistically fit available time by exposing overload early and suggesting feasible daily workload distributions.
-**Current focus:** Phase 13.1 — Timer, Jira, sticky notes, worklog, and sync improvements
+**Current focus:** Phase 13.1 — timer-pause-timestamps-jira-project-mapping-and-live-status-
 
 ## Current Position
 
-Phase: 13.1
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-09-30 — Completed quick task 260930-dii: day insight per-task planned vs actual
+Phase: 13.1 (timer-pause-timestamps-jira-project-mapping-and-live-status-) — EXECUTING
+Plan: 2 of 5
+Status: Executing Phase 13.1
+Last activity: 2026-10-01 -- Completed 13.1-01-PLAN.md (Timer segments, safe status automation, hierarchy subtitles)
 
 ### Quick Tasks Completed
 
@@ -91,6 +91,7 @@ Last activity: 2026-09-30 — Completed quick task 260930-dii: day insight per-t
 | Phase 13 P01 | 6m | 3 tasks | 7 files |
 | Phase 13 P02 | 10m | 3 tasks | 7 files |
 | Phase 13 P03 | 15m | 2 tasks | 5 files |
+| Phase 13.1 P01 | 15m | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -98,6 +99,9 @@ Last activity: 2026-09-30 — Completed quick task 260930-dii: day insight per-t
 
 Decisions logged across v1.0 and v1.1:
 
+- [Phase 13.1]: ActiveTimer.segments made optional on TypeScript model level for test mock compatibility while populated with fallback in schema upgrade and runtime methods
+- [Phase 13.1]: Finishing a paused timer resolves WorkSession.endTime to the last segment's endTime, excluding trailing idle pause time from logged work sessions
+- [Phase 13.1]: Safe status automation strictly scoped to Open -> In Progress inside Dexie transaction, leaving review and terminal statuses intact
 - [Phase 13]: BurndownSvgChart renders pure SVG with dynamic tooltip overlay without D3/Recharts dependencies
 - [Phase 13]: StackedStatusBar handles zero-task projects safely with dashed empty placeholder to prevent division by zero
 - [Phase 13]: WorkloadProportionBar maps stakeholder palette cycle and reserves neutral gray for unassigned tasks
