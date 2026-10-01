@@ -4,7 +4,7 @@ import Dexie from 'dexie';
 import { SCHEMA_V6 } from '../src/db/schema';
 import { TaskPlannerDatabase } from '../src/db/index';
 import { TimerSegmentSchema, NoteSchema, NoteAttachmentSchema } from '../src/validation/schemas';
-import type { ActiveTimer, WorkSession, TimerSegment, Note, NoteAttachment } from '../src/types/models';
+import type { TimerSegment, Note, NoteAttachment } from '../src/types/models';
 
 describe('Timer Segments and Schema V7 Migration (Task 1)', () => {
   const dbName = 'TestMigrationV7DB_' + Math.random().toString(36).slice(2);
@@ -110,7 +110,7 @@ describe('Timer Segments and Schema V7 Migration (Task 1)', () => {
     expect(timer).toBeDefined();
     expect(timer?.segments).toBeDefined();
     expect(timer?.segments).toHaveLength(1);
-    expect(timer?.segments[0]?.startTime).toBe(new Date(1790845200000).toISOString());
+    expect(timer?.segments?.[0]?.startTime).toBe(new Date(1790845200000).toISOString());
 
     // Verify workSession migrated with fallback single segment
     const ws = await v7Db.workSessions.get(sampleSessionId);

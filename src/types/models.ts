@@ -148,7 +148,7 @@ export interface ActiveTimer {
   startedAt: number; // Unix epoch ms
   accumulatedMs: number;
   sessionStartTime: string; // ISO 8601 string
-  segments: TimerSegment[]; // Phase 13.1 D-01: discrete running segments
+  segments?: TimerSegment[] | undefined; // Phase 13.1 D-01: discrete running segments
 }
 
 export type NoteEntityType = 'task' | 'project' | 'milestone';

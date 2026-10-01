@@ -5,7 +5,7 @@ import { TimerProvider } from '../src/context/TimerContext';
 import { useTimer } from '../src/hooks/useTimer';
 import type { Task, TaskStatus } from '../src/types/models';
 import React from 'react';
-import { renderHook, act, waitFor } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
 
 describe('Timer Status Automation & Segment Timestamps (Task 2)', () => {
   let testDb: TaskPlannerDatabase;
@@ -21,7 +21,7 @@ describe('Timer Status Automation & Segment Timestamps (Task 2)', () => {
   });
 
   const wrapper = ({ children }: { children: React.ReactNode }) => (
-    React.createElement(TimerProvider, { database: testDb }, children)
+    <TimerProvider database={testDb}>{children}</TimerProvider>
   );
 
   const createTaskWithStatus = async (id: string, status: TaskStatus) => {
@@ -90,8 +90,8 @@ describe('Timer Status Automation & Segment Timestamps (Task 2)', () => {
 
     let timer = await testDb.activeTimers.get('task-seg');
     expect(timer?.segments).toHaveLength(1);
-    expect(timer?.segments[0]?.startTime).toBe(new Date(t0).toISOString());
-    expect(timer?.segments[0]?.endTime).toBeUndefined();
+    expect(timer?.segments?.[0]?.startTime).toBe(new Date(t0).toISOString());
+    expect(timer?.segments?.[0]?.endTime).toBeUndefined();
 
     // Fast-forward 10 minutes (600,000 ms) and pause
     const t1 = t0 + 600000; // 09:10:00.000Z
@@ -104,7 +104,7 @@ describe('Timer Status Automation & Segment Timestamps (Task 2)', () => {
     timer = await testDb.activeTimers.get('task-seg');
     expect(timer?.status).toBe('paused');
     expect(timer?.segments).toHaveLength(1);
-    expect(timer?.segments[0]?.endTime).toBe(new Date(t1).toISOString());
+    expect(timer?.segments?.[0]?.endTime).toBe(new Date(t1).toISOString());
 
     // Fast-forward 5 minutes idle time, then resume
     const t2 = t1 + 300000; // 09:15:00.000Z
@@ -117,8 +117,8 @@ describe('Timer Status Automation & Segment Timestamps (Task 2)', () => {
     timer = await testDb.activeTimers.get('task-seg');
     expect(timer?.status).toBe('running');
     expect(timer?.segments).toHaveLength(2);
-    expect(timer?.segments[1]?.startTime).toBe(new Date(t2).toISOString());
-    expect(timer?.segments[1]?.endTime).toBeUndefined();
+    expect(timer?.segments?.[1]?.startTime).toBe(new Date(t2).toISOString());
+    expect(timer?.segments?.[1]?.endTime).toBeUndefined();
   });
 
   it('uses last pause timestamp as WorkSession.endTime when finishing a paused timer (D-03)', async () => {

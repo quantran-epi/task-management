@@ -219,4 +219,55 @@ describe('ActiveTimerWidget', () => {
     expect(screen.getByText('Tên override từ Map')).toBeInTheDocument();
     expect(screen.queryByText('Tên trong CSDL')).not.toBeInTheDocument();
   });
+
+  it('renders Project › Milestone hierarchy subtitle under task name (D-04)', async () => {
+    await testDb.projects.add({
+      id: 'proj-1',
+      name: 'Dự án Alpha',
+      status: 'In Progress',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    await testDb.milestones.add({
+      id: 'ms-1',
+      projectId: 'proj-1',
+      name: 'Giai đoạn 1',
+      status: 'In Progress',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    await testDb.tasks.add({
+      id: 'task-sub',
+      projectId: 'proj-1',
+      milestoneId: 'ms-1',
+      name: 'Xây dựng API',
+      status: 'In Progress',
+      progress: 0,
+      priority: 'High',
+      estimateMinutes: 60,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    const timer: ActiveTimer = {
+      taskId: 'task-sub',
+      status: 'running',
+      startedAt: Date.now() - 30000,
+      accumulatedMs: 0,
+      sessionStartTime: new Date().toISOString(),
+      segments: [{ startTime: new Date().toISOString() }],
+    };
+
+    renderWithTimerContext(<ActiveTimerWidget database={testDb} />, {
+      activeTimers: [timer],
+      getElapsedSeconds: vi.fn().mockReturnValue(30),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Xây dựng API')).toBeInTheDocument();
+      expect(screen.getByTestId('capsule-hierarchy-subtitle')).toHaveTextContent('Dự án Alpha › Giai đoạn 1');
+    });
+  });
 });
