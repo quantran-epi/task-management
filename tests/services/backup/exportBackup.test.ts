@@ -129,6 +129,8 @@ describe('exportBackup service', () => {
         capacityOverrides: 1,
         plannedAllocations: 1,
         workSessions: 0,
+        notes: 0,
+        noteAttachments: 0,
       });
 
 
@@ -156,6 +158,8 @@ describe('exportBackup service', () => {
         capacityOverrides: 0,
         plannedAllocations: 0,
         workSessions: 0,
+        notes: 0,
+        noteAttachments: 0,
       });
 
       const metadataEntries = await testDb.backupMetadata.toArray();

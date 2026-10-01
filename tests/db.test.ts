@@ -24,6 +24,8 @@ describe('Dexie Database Persistence & Seed Layer (DATA-02, D-05, D-07)', () => 
       'capacityOverrides',
       'capacityRules',
       'milestones',
+      'noteAttachments',
+      'notes',
       'plannedAllocations',
       'projects',
       'settings',

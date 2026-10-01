@@ -56,7 +56,7 @@ describe('SettingsView Integration & Offline Independence (SYNC-07, SYNC-05)', (
     ).toBeInTheDocument();
 
     // Verify GitHub sync cards exist
-    expect(screen.getByText('Cấu hình đồng bộ GitHub (Tùy chọn)')).toBeInTheDocument();
+    expect(screen.getByText('Cấu hình kho lưu trữ GitHub')).toBeInTheDocument();
     expect(screen.getByText('Đồng bộ sao lưu GitHub')).toBeInTheDocument();
 
     // Danger zone

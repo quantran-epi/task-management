@@ -60,10 +60,10 @@ describe('Backup Schemas & Restore with Timer Work Sessions (TIMER-01, TIMER-02)
     await Dexie.delete(dbName);
   });
 
-  it('exports backup payload with schemaVersion 3 and includes workSessions', async () => {
+  it('exports backup payload with schemaVersion 4 and includes workSessions', async () => {
     const payload = await exportBackupPayload(db);
 
-    expect(payload.schemaVersion).toBe(3);
+    expect(payload.schemaVersion).toBe(4);
     expect(payload.tables.workSessions).toBeDefined();
     expect(payload.tables.workSessions).toHaveLength(1);
     expect(payload.counts.workSessions).toBe(1);
