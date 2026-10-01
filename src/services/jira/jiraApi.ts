@@ -5,6 +5,30 @@ import type {
   JiraIssueResponse,
   JiraTransitionsResponse,
 } from './types';
+import { isTauriApp } from '../../utils/timerPopout';
+
+interface TauriProxyResponse {
+  status: number;
+  headers: Record<string, string>;
+  body: string;
+}
+
+async function tauriInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+  const api = await import('@tauri-apps/api/core');
+  return args === undefined ? api.invoke<T>(command) : api.invoke<T>(command, args);
+}
+
+export async function openJiraExternalUrl(url: string): Promise<void> {
+  if (isTauriApp()) {
+    try {
+      await tauriInvoke('open_external_url', { url });
+      return;
+    } catch (err) {
+      console.warn('Failed to open URL via Tauri native opener, falling back to window.open:', err);
+    }
+  }
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
 
 export function buildJiraUrl(config: JiraConfig, path: string): string {
   const cleanDomain = config.domain.replace(/^https?:\/\//i, '').replace(/\/+$/, '');
@@ -44,7 +68,8 @@ export async function callJiraApi<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const url = buildJiraUrl(config, path);
+  const cleanDomain = config.domain.replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+  const directTargetUrl = `https://${cleanDomain}${path.startsWith('/') ? path : `/${path}`}`;
   const credentials = `${config.email}:${config.apiToken}`;
   const authHeader = `Basic ${btoa(unescape(encodeURIComponent(credentials)))}`;
 
@@ -55,6 +80,59 @@ export async function callJiraApi<T>(
     Authorization: authHeader,
     ...((options.headers as Record<string, string>) || {}),
   };
+
+  // D-13: On Tauri desktop, route Jira API requests directly through native Rust proxy to avoid browser CORS/XSRF checks
+  if (isTauriApp()) {
+    try {
+      const method = (options.method || 'GET').toUpperCase();
+      const body = typeof options.body === 'string' ? options.body : undefined;
+
+      const proxyRes = await tauriInvoke<TauriProxyResponse>('jira_proxy_request', {
+        method,
+        url: directTargetUrl,
+        headers,
+        body,
+      });
+
+      if (proxyRes.status === 204) {
+        return {} as T;
+      }
+
+      let parsedBody: Record<string, unknown> = {};
+      try {
+        parsedBody = proxyRes.body ? (JSON.parse(proxyRes.body) as Record<string, unknown>) : {};
+      } catch {
+        parsedBody = {};
+      }
+
+      if (proxyRes.status < 200 || proxyRes.status >= 300) {
+        const errorData = parsedBody as {
+          errorMessages?: string[];
+          errors?: Record<string, string>;
+          message?: string;
+        };
+        const messages: string[] = [];
+        if (errorData.errorMessages && errorData.errorMessages.length > 0) {
+          messages.push(...errorData.errorMessages);
+        }
+        if (errorData.errors && Object.keys(errorData.errors).length > 0) {
+          messages.push(...Object.values(errorData.errors));
+        }
+        const rawErrorMsg = messages.length > 0 ? messages.join(', ') : `Lỗi Jira API: HTTP ${proxyRes.status}`;
+        throw new Error(sanitizeErrorMessage(rawErrorMsg, config.apiToken));
+      }
+
+      return parsedBody as T;
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        err.message = sanitizeErrorMessage(err.message, config.apiToken);
+        throw err;
+      }
+      throw new Error(sanitizeErrorMessage(String(err), config.apiToken));
+    }
+  }
+
+  const url = buildJiraUrl(config, path);
 
   try {
     const response = await fetch(url, {

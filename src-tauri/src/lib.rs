@@ -1,3 +1,4 @@
+mod jira_proxy;
 mod sqlite_persistence;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -10,6 +11,8 @@ pub fn run() {
             sqlite_persistence::sqlite_init,
             sqlite_persistence::sqlite_apply_changes,
             sqlite_persistence::sqlite_read_rows,
+            jira_proxy::jira_proxy_request,
+            jira_proxy::open_external_url,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
