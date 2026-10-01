@@ -468,5 +468,35 @@ describe('Project, Milestone & Task Repositories & Schemas (WORK-01, WORK-02, WO
       const distinct = await getDistinctBusinessAnalysts(testDb);
       expect(distinct).toEqual(['BA-Alex', 'BA-Bob', 'BA-Charlie', 'BA-Zoe']);
     });
+
+    it('falls back to in-memory tag extraction when uniqueKeys cursor throws (WebKit bug #319640)', async () => {
+      await createProject(
+        {
+          name: 'Project Fallback',
+          opsOwners: ['Ops-FB'],
+          businessAnalysts: ['BA-FB'],
+        },
+        testDb
+      );
+
+      // Mock uniqueKeys on tasks to simulate WebKit UnknownError
+      const spyOps = vi.spyOn(testDb.projects.orderBy('opsOwners'), 'uniqueKeys').mockRejectedValue(
+        new Error('UnknownError: Unable to open cursor')
+      );
+
+      const ops = await getDistinctOpsOwners(testDb);
+      expect(ops).toContain('Ops-FB');
+
+      spyOps.mockRestore();
+
+      const spyBA = vi.spyOn(testDb.projects.orderBy('businessAnalysts'), 'uniqueKeys').mockRejectedValue(
+        new Error('UnknownError: Unable to open cursor')
+      );
+
+      const bas = await getDistinctBusinessAnalysts(testDb);
+      expect(bas).toContain('BA-FB');
+
+      spyBA.mockRestore();
+    });
   });
 });
