@@ -122,6 +122,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
     async () => {
       if (!taskId) return 0;
       const targetDb = db || (await import('../../db')).db;
+      if (!targetDb?.notes) return 0;
       return await targetDb.notes
         .where('entityId')
         .equals(taskId)
