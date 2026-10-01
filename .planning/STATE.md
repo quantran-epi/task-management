@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Banking IT Enhancements & Jira Integration
 status: executing
-stopped_at: Phase 13.1 UI-SPEC approved
-last_updated: "2026-10-01T13:30:53.748Z"
-last_activity: 2026-10-01 -- Completed 13.1-01-PLAN.md (Timer segments, safe status automation, hierarchy subtitles)
+stopped_at: Completed 13.1-03-PLAN.md
+last_updated: "2026-10-01T14:15:00.000Z"
+last_activity: 2026-10-01 -- Completed 13.1-03-PLAN.md (Sticky Notes, attachments, markdown, pop-out window)
 progress:
   total_phases: 8
   completed_phases: 7
   total_plans: 27
-  completed_plans: 24
-  percent: 88
+  completed_plans: 25
+  percent: 92
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-09-27)
 ## Current Position
 
 Phase: 13.1 (timer-pause-timestamps-jira-project-mapping-and-live-status-) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Executing Phase 13.1
-Last activity: 2026-10-01 -- Completed 13.1-01-PLAN.md (Timer segments, safe status automation, hierarchy subtitles)
+Last activity: 2026-10-01 -- Completed 13.1-03-PLAN.md (Sticky Notes, attachments, markdown, pop-out window)
 
 ### Quick Tasks Completed
 
@@ -92,6 +92,7 @@ Last activity: 2026-10-01 -- Completed 13.1-01-PLAN.md (Timer segments, safe sta
 | Phase 13 P02 | 10m | 3 tasks | 7 files |
 | Phase 13 P03 | 15m | 2 tasks | 5 files |
 | Phase 13.1 P01 | 15m | 3 tasks | 12 files |
+| Phase 13.1 P03 | 20m | 3 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -99,6 +100,8 @@ Last activity: 2026-10-01 -- Completed 13.1-01-PLAN.md (Timer segments, safe sta
 
 Decisions logged across v1.0 and v1.1:
 
+- [Phase 13.1]: Single reusable Notes pop-out window with Always on Top, screen-boundary clamping, and web popup fallback
+- [Phase 13.1]: Cascade deletion detaches parent-linked notes into standalone notes without losing content or attachments
 - [Phase 13.1]: ActiveTimer.segments made optional on TypeScript model level for test mock compatibility while populated with fallback in schema upgrade and runtime methods
 - [Phase 13.1]: Finishing a paused timer resolves WorkSession.endTime to the last segment's endTime, excluding trailing idle pause time from logged work sessions
 - [Phase 13.1]: Safe status automation strictly scoped to Open -> In Progress inside Dexie transaction, leaving review and terminal statuses intact
