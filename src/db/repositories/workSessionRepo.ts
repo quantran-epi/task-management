@@ -246,6 +246,23 @@ export async function getActualMinutesByTaskForDate(
 }
 
 /**
+ * Retrieves all work sessions intersecting a 7-day period.
+ * Dates are inclusive between weekStartIso and weekEndIso.
+ */
+export async function getWorkSessionsForWeek(
+  weekStartIso: string,
+  weekEndIso: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<WorkSession[]> {
+  const startDateStr = toCalendarDateString(weekStartIso);
+  const endDateStr = toCalendarDateString(weekEndIso);
+  return await db.workSessions
+    .where('date')
+    .between(startDateStr, endDateStr, true, true)
+    .toArray();
+}
+
+/**
  * Active timer repository functions (survive reload per D-04, TIMER-02).
  */
 export async function getActiveTimers(
