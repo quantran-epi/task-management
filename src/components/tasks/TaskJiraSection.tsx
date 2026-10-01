@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Space,
   Button,
@@ -9,6 +9,8 @@ import {
   Alert,
   Typography,
   Spin,
+  Modal,
+  Radio,
   message,
 } from 'antd';
 import {
@@ -17,17 +19,33 @@ import {
   ReloadOutlined,
   DisconnectOutlined,
   BranchesOutlined,
+  WarningOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
-import type { Task } from '../../types/models';
-import type { JiraConfig, JiraTransitionItem } from '../../services/jira/types';
-import { getJiraTransitions, executeJiraTransition } from '../../services/jira/jiraApi';
-import { mapJiraStatusToLocalTaskStatus } from '../../services/jira/statusMapping';
+import type { Task, TaskStatus } from '../../types/models';
+import type {
+  JiraConfig,
+  JiraTransitionItem,
+  JiraCachedStatus,
+  JiraStatusMapping,
+} from '../../services/jira/types';
+import {
+  getJiraTransitions,
+  executeJiraTransition,
+  getJiraIssue,
+  openJiraExternalUrl,
+  getJiraBrowseUrl,
+} from '../../services/jira/jiraApi';
+import {
+  findReachableTransitions,
+  isStatusMismatch,
+  resolveLocalStatusFromMapping,
+} from '../../services/jira/statusMapping';
 import { CreateJiraIssueModal } from './CreateJiraIssueModal';
 import { announceToScreenReader } from '../common/AriaLiveRegion';
 
-const { Text, Title } = Typography;
+const { Text, Title, Paragraph } = Typography;
 
 export interface TaskJiraSectionProps {
   task: Task;
@@ -36,6 +54,15 @@ export interface TaskJiraSectionProps {
 }
 
 const JIRA_KEY_REGEX = /^[A-Z][A-Z0-9]+-[0-9]+$/;
+
+const DEFAULT_STATUS_MAPPINGS: JiraStatusMapping = {
+  Open: ['10000', '1', 'to do', 'open', 'backlog'],
+  'In Progress': ['3', 'in progress'],
+  'In Review': ['review', 'code review', 'peer review', 'pr'],
+  Resolved: ['resolved', 'testing', 'qa', 'uat', 'verify'],
+  Done: ['10001', '10002', 'done', 'closed', 'complete'],
+  Cancelled: ['cancelled', "won't do", 'rejected'],
+};
 
 export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
   task,
@@ -48,17 +75,23 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
   const [linking, setLinking] = useState(false);
   const [unlinking, setUnlinking] = useState(false);
 
-  // Load Jira settings from IndexedDB
-  const config: JiraConfig | undefined = useLiveQuery(async () => {
-    const [domainRec, emailRec, tokenRec, proxyRec, projRec, issueTypeRec] = await Promise.all([
+  // Cached Jira Status state (D-07)
+  const [cachedStatus, setCachedStatus] = useState<JiraCachedStatus | null>(null);
+  const [loadingJiraStatus, setLoadingJiraStatus] = useState(false);
+
+  // Load Jira settings and custom status mappings from IndexedDB
+  const jiraSettings = useLiveQuery(async () => {
+    const [domainRec, emailRec, tokenRec, proxyRec, projRec, issueTypeRec, mappingRec] = await Promise.all([
       db.settings.get('jira_domain'),
       db.settings.get('jira_email'),
       db.settings.get('jira_api_token'),
       db.settings.get('jira_cors_proxy'),
       db.settings.get('jira_default_project'),
       db.settings.get('jira_default_issue_type'),
+      db.settings.get('jira_status_mappings'),
     ]);
-    return {
+
+    const config: JiraConfig = {
       domain: (domainRec?.value as string) || '',
       email: (emailRec?.value as string) || '',
       apiToken: (tokenRec?.value as string) || '',
@@ -66,7 +99,14 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
       defaultProjectKey: (projRec?.value as string) || '',
       defaultIssueType: (issueTypeRec?.value as string) || 'Task',
     };
+
+    const mappings = (mappingRec?.value as JiraStatusMapping) || DEFAULT_STATUS_MAPPINGS;
+
+    return { config, mappings };
   }, [db]);
+
+  const config = jiraSettings?.config;
+  const mappings = jiraSettings?.mappings || DEFAULT_STATUS_MAPPINGS;
 
   const [transitions, setTransitions] = useState<JiraTransitionItem[]>([]);
   const [selectedTransitionId, setSelectedTransitionId] = useState<string | null>(null);
@@ -77,22 +117,60 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
     isScreenError: boolean;
   } | null>(null);
 
-  const getBrowseUrl = useCallback(
-    (key: string): string => {
-      const rawDomain = (config?.domain || '').replace(/^https?:\/\//i, '').replace(/\/+$/, '');
-      const domainHost = rawDomain.includes('.')
-        ? rawDomain
-        : rawDomain
-          ? `${rawDomain}.atlassian.net`
-          : 'atlassian.net';
-      return `https://${domainHost}/browse/${key}`;
-    },
-    [config?.domain]
-  );
+  // Transition confirmation modal state (D-09)
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const [matchedTransitions, setMatchedTransitions] = useState<JiraTransitionItem[]>([]);
+  const [modalSelectedTransitionId, setModalSelectedTransitionId] = useState<string | null>(null);
+  const prevStatusRef = useRef<TaskStatus>(task.status);
+
+  // Refresh Jira Issue & Cached Status on Demand or initial task load (D-12: Zero periodic background polling)
+  const fetchJiraIssueStatus = useCallback(async () => {
+    if (!task.jiraKey || !config?.domain || !config?.email || !config?.apiToken) {
+      return;
+    }
+    setLoadingJiraStatus(true);
+    try {
+      const issue = await getJiraIssue(config, task.jiraKey);
+      if (issue?.fields?.status) {
+        const s = issue.fields.status;
+        const nowIso = new Date().toISOString();
+        const newCached: JiraCachedStatus = {
+          statusId: s.id,
+          statusName: s.name,
+          statusCategory: s.statusCategory?.name || '',
+          syncedAt: nowIso,
+        };
+        setCachedStatus(newCached);
+        await db.settings.put({
+          key: `jira_cached_status_${task.id}`,
+          value: newCached,
+        });
+      }
+    } catch {
+      // Retain existing cached status on refresh failure per UI-SPEC
+    } finally {
+      setLoadingJiraStatus(false);
+    }
+  }, [task.jiraKey, task.id, config, db]);
+
+  // Load initial cached status from DB
+  useEffect(() => {
+    let active = true;
+    async function loadCached() {
+      const rec = await db.settings.get(`jira_cached_status_${task.id}`);
+      if (active && rec?.value) {
+        setCachedStatus(rec.value as JiraCachedStatus);
+      }
+    }
+    void loadCached();
+    return () => {
+      active = false;
+    };
+  }, [task.id, db]);
 
   const fetchTransitions = useCallback(async () => {
     if (!task.jiraKey || !config?.domain || !config?.email || !config?.apiToken) {
-      return;
+      return [];
     }
     setLoadingTransitions(true);
     setTransitionError(null);
@@ -105,26 +183,55 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
       } else {
         setSelectedTransitionId(null);
       }
+      return list;
     } catch (err: unknown) {
       setTransitions([]);
       setSelectedTransitionId(null);
       const msg =
         err instanceof Error ? err.message : 'Không thể tải workflow transitions từ Jira.';
       setTransitionError({ message: msg, isScreenError: false });
+      return [];
     } finally {
       setLoadingTransitions(false);
     }
   }, [task.jiraKey, config]);
 
+  // Refresh data on task mount (D-12)
   useEffect(() => {
     if (task.jiraKey && config?.domain && config?.apiToken) {
+      void fetchJiraIssueStatus();
       void fetchTransitions();
     } else {
       setTransitions([]);
       setSelectedTransitionId(null);
       setTransitionError(null);
     }
-  }, [task.jiraKey, config, fetchTransitions]);
+  }, [task.jiraKey, config, fetchJiraIssueStatus, fetchTransitions]);
+
+  // Status transition detection when local status changes (D-08, D-09, D-10)
+  useEffect(() => {
+    if (prevStatusRef.current !== task.status) {
+      prevStatusRef.current = task.status;
+
+      // Only prompt if Jira is linked
+      if (task.jiraKey && config?.domain && config?.apiToken) {
+        void (async () => {
+          const avail = await fetchTransitions();
+          const reachable = findReachableTransitions(avail, task.status, mappings);
+          if (reachable.length > 0) {
+            setMatchedTransitions(reachable);
+            setModalSelectedTransitionId(reachable[0]!.id);
+            setConfirmModalOpen(true);
+          } else {
+            // D-10: No mapped transition reachable -> preserve local status, surface mismatch
+            message.info(
+              `Trạng thái cục bộ đã đổi sang "${task.status}". Không có luồng chuyển Jira tương ứng hoặc không khả dụng.`
+            );
+          }
+        })();
+      }
+    }
+  }, [task.status, task.jiraKey, config, mappings, fetchTransitions]);
 
   const handleLinkKey = async () => {
     const trimmed = manualKey.trim().toUpperCase();
@@ -151,6 +258,8 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
     setUnlinking(true);
     try {
       await onUpdateTask({ jiraKey: undefined });
+      setCachedStatus(null);
+      await db.settings.delete(`jira_cached_status_${task.id}`);
       message.success('Đã hủy liên kết Jira');
       announceToScreenReader('Đã hủy liên kết Jira');
     } catch {
@@ -177,24 +286,36 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
     );
   };
 
-  const handleExecuteTransition = async () => {
-    if (!selectedTransitionId || !task.jiraKey || !config) return;
+  const executeTransitionId = async (transId: string) => {
+    if (!transId || !task.jiraKey || !config) return;
 
     setExecutingTransition(true);
     setTransitionError(null);
 
-    const chosen = transitions.find((t) => t.id === selectedTransitionId);
+    const chosen = transitions.find((t) => t.id === transId);
 
     try {
-      await executeJiraTransition(config, task.jiraKey, selectedTransitionId);
+      await executeJiraTransition(config, task.jiraKey, transId);
 
+      // If transition succeeds, update cached Jira status
       if (chosen) {
-        const newStatus = mapJiraStatusToLocalTaskStatus(
-          chosen.to.name,
-          chosen.to.statusCategory?.key
-        );
-        if (newStatus) {
-          await onUpdateTask({ status: newStatus });
+        const nowIso = new Date().toISOString();
+        const updatedCache: JiraCachedStatus = {
+          statusId: chosen.to.id,
+          statusName: chosen.to.name,
+          statusCategory: chosen.to.statusCategory?.name || '',
+          syncedAt: nowIso,
+        };
+        setCachedStatus(updatedCache);
+        await db.settings.put({
+          key: `jira_cached_status_${task.id}`,
+          value: updatedCache,
+        });
+
+        // Optionally align local status if not already aligned
+        const resolvedLocal = resolveLocalStatusFromMapping(chosen.to.id, mappings);
+        if (resolvedLocal && resolvedLocal !== task.status) {
+          await onUpdateTask({ status: resolvedLocal });
         }
       }
 
@@ -205,10 +326,11 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
       const msg = err instanceof Error ? err.message : 'Lỗi khi chuyển trạng thái Jira.';
       const hasScreen = isScreenError(msg) || Boolean(chosen?.hasScreen);
 
+      // D-10: Retain local status change on transition error, report mismatch
       if (hasScreen) {
         setTransitionError({
           message:
-            'Không thể chuyển trạng thái trực tiếp do workflow Jira yêu cầu nhập màn hình (Screen/Resolution). Vui lòng thực hiện trên Jira Web.',
+            'Jira yêu cầu nhập thêm trường (Screen/Resolution). Vui lòng thực hiện trên Jira Web.',
           isScreenError: true,
         });
       } else {
@@ -221,6 +343,23 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
       setExecutingTransition(false);
     }
   };
+
+  const handleExecuteTransition = async () => {
+    if (selectedTransitionId) {
+      await executeTransitionId(selectedTransitionId);
+    }
+  };
+
+  const handleConfirmModalOk = async () => {
+    if (modalSelectedTransitionId) {
+      setConfirmModalOpen(false);
+      await executeTransitionId(modalSelectedTransitionId);
+    }
+  };
+
+  // Status mismatch evaluation (D-07, D-10)
+  const hasMismatch = isStatusMismatch(task.status, cachedStatus?.statusId, mappings);
+  const browseUrl = task.jiraKey ? getJiraBrowseUrl(task.jiraKey, config?.domain) : '';
 
   return (
     <div data-testid="task-jira-section" style={{ marginTop: 8 }}>
@@ -314,13 +453,13 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
                   margin: 0,
                 }}
                 onClick={() => {
-                  window.open(getBrowseUrl(task.jiraKey!), '_blank', 'noopener,noreferrer');
+                  void openJiraExternalUrl(browseUrl);
                 }}
                 role="link"
                 tabIndex={0}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
-                    window.open(getBrowseUrl(task.jiraKey!), '_blank', 'noopener,noreferrer');
+                    void openJiraExternalUrl(browseUrl);
                   }
                 }}
               >
@@ -347,6 +486,78 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
                 Hủy liên kết
               </Button>
             </Popconfirm>
+          </div>
+
+          {/* Cached Jira Status & Reconciliation Display (D-07, D-10, D-12) */}
+          <div
+            style={{
+              backgroundColor: '#fafafa',
+              padding: '10px 12px',
+              borderRadius: 6,
+              border: '1px solid #f0f0f0',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Space size={6}>
+                <Text strong style={{ fontSize: 13 }}>
+                  Trạng thái Jira:
+                </Text>
+                {cachedStatus ? (
+                  <Tag color="geekblue" style={{ margin: 0 }}>
+                    {cachedStatus.statusName}
+                  </Tag>
+                ) : (
+                  <Tag color="default" style={{ margin: 0 }}>
+                    Chưa refresh
+                  </Tag>
+                )}
+
+                {hasMismatch && cachedStatus && (
+                  <Tag color="warning" icon={<WarningOutlined />} style={{ margin: 0 }}>
+                    Lệch trạng thái
+                  </Tag>
+                )}
+              </Space>
+
+              <Button
+                type="text"
+                size="small"
+                icon={<ReloadOutlined />}
+                loading={loadingJiraStatus}
+                onClick={() => void fetchJiraIssueStatus()}
+                aria-label="Làm mới Jira"
+              >
+                Làm mới Jira
+              </Button>
+            </div>
+
+            {hasMismatch && cachedStatus && (
+              <Alert
+                type="warning"
+                showIcon
+                message={
+                  <span>
+                    Trạng thái tác vụ trong app (<strong>{task.status}</strong>) khác với Jira (
+                    <strong>{cachedStatus.statusName}</strong>).
+                  </span>
+                }
+                action={
+                  <Button
+                    size="small"
+                    type="primary"
+                    onClick={() => {
+                      void openJiraExternalUrl(browseUrl);
+                    }}
+                  >
+                    Mở trên Jira
+                  </Button>
+                }
+                style={{ marginTop: 4 }}
+              />
+            )}
           </div>
 
           {/* Workflow transitions */}
@@ -385,17 +596,15 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
                 showIcon
                 message={transitionError.message}
                 action={
-                  transitionError.isScreenError ? (
-                    <Button
-                      size="small"
-                      type="primary"
-                      onClick={() => {
-                        window.open(getBrowseUrl(task.jiraKey!), '_blank', 'noopener,noreferrer');
-                      }}
-                    >
-                      Mở trên Jira Web
-                    </Button>
-                  ) : undefined
+                  <Button
+                    size="small"
+                    type="primary"
+                    onClick={() => {
+                      void openJiraExternalUrl(browseUrl);
+                    }}
+                  >
+                    Mở trên Jira Web
+                  </Button>
                 }
                 closable
                 onClose={() => setTransitionError(null)}
@@ -434,6 +643,47 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
           </div>
         </div>
       )}
+
+      {/* Confirmation Modal when local status changes (D-09) */}
+      <Modal
+        title="Xác nhận đồng bộ trạng thái sang Jira"
+        open={confirmModalOpen}
+        onOk={() => void handleConfirmModalOk()}
+        onCancel={() => setConfirmModalOpen(false)}
+        okText="Đồng bộ sang Jira"
+        cancelText="Để sau"
+      >
+        <Paragraph>
+          Tác vụ cục bộ đã chuyển sang trạng thái <strong>{task.status}</strong>. Có{' '}
+          {matchedTransitions.length} luồng chuyển Jira tương ứng. Bạn có muốn chuyển trạng thái
+          trên Jira Board luôn không?
+        </Paragraph>
+
+        {matchedTransitions.length === 1 ? (
+          <Alert
+            type="info"
+            message={
+              <span>
+                Luồng chuyển Jira sẽ thực hiện:{' '}
+                <strong>{matchedTransitions[0]?.name}</strong>
+              </span>
+            }
+            showIcon
+          />
+        ) : (
+          <Radio.Group
+            value={modalSelectedTransitionId}
+            onChange={(e) => setModalSelectedTransitionId(e.target.value)}
+            style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}
+          >
+            {matchedTransitions.map((t) => (
+              <Radio key={t.id} value={t.id}>
+                {t.name} (Đích: {t.to.name})
+              </Radio>
+            ))}
+          </Radio.Group>
+        )}
+      </Modal>
 
       <CreateJiraIssueModal
         open={modalOpen}

@@ -66,6 +66,17 @@ export interface JiraCreateIssuePayload {
     issuetype: { name: string };
     summary: string;
     description?: unknown;
+    parent?: { key: string };
     [key: string]: unknown;
   };
 }
+
+export interface JiraCachedStatus {
+  statusId: string;
+  statusName: string;
+  statusCategory: string;
+  syncedAt: string;
+}
+
+export type JiraStatusMapping = Record<string, string[]>;
+

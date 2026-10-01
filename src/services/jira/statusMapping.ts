@@ -1,5 +1,63 @@
 import type { TaskStatus } from '../../types/models';
+import type { JiraTransitionItem, JiraStatusMapping } from './types';
 
+/**
+ * Filter Jira transitions to those whose destination status ID matches
+ * the configured one-to-many mappings for a given local TaskStatus (D-08, D-09).
+ */
+export function findReachableTransitions(
+  availableTransitions: JiraTransitionItem[],
+  localStatus: TaskStatus,
+  mappings: JiraStatusMapping
+): JiraTransitionItem[] {
+  const mappedStatusIds = mappings[localStatus] || [];
+  if (mappedStatusIds.length === 0) {
+    return [];
+  }
+
+  const mappedSet = new Set(mappedStatusIds);
+  return availableTransitions.filter((transition) =>
+    mappedSet.has(transition.to.id)
+  );
+}
+
+/**
+ * Resolves local TaskStatus corresponding to a Jira status ID from mappings (D-08).
+ * In accordance with D-11: No keyword guessing! If unmapped, returns null.
+ */
+export function resolveLocalStatusFromMapping(
+  jiraStatusId: string,
+  mappings: JiraStatusMapping
+): TaskStatus | null {
+  for (const [status, ids] of Object.entries(mappings)) {
+    if (ids.includes(jiraStatusId)) {
+      return status as TaskStatus;
+    }
+  }
+  return null;
+}
+
+/**
+ * Evaluates whether local status matches cached Jira status.
+ * D-07, D-10: Task.status is authoritative.
+ */
+export function isStatusMismatch(
+  localStatus: TaskStatus,
+  jiraStatusId: string | undefined,
+  mappings: JiraStatusMapping
+): boolean {
+  if (!jiraStatusId) return false;
+  const mappedIds = mappings[localStatus] || [];
+  if (mappedIds.length === 0) {
+    // If no mapping is configured for this local status, consider it unmapped
+    return true;
+  }
+  return !mappedIds.includes(jiraStatusId);
+}
+
+/**
+ * Legacy status mapper for initial default proposal (D-11: statusCategory only used for initial suggestions).
+ */
 export function mapJiraStatusToLocalTaskStatus(
   statusName: string,
   categoryKey?: string
@@ -68,6 +126,6 @@ export function mapJiraStatusToLocalTaskStatus(
     return 'Open';
   }
 
-  // Fallback: null means leave local status unchanged
   return null;
 }
+

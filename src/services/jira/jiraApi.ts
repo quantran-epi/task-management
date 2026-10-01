@@ -227,6 +227,16 @@ export async function getJiraTransitions(
   );
 }
 
+export async function getJiraIssue(
+  config: JiraConfig,
+  issueKey: string
+): Promise<JiraIssueResponse> {
+  return callJiraApi<JiraIssueResponse>(
+    config,
+    `/rest/api/3/issue/${encodeURIComponent(issueKey)}`
+  );
+}
+
 export async function executeJiraTransition(
   config: JiraConfig,
   issueKey: string,
