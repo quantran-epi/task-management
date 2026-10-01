@@ -42,6 +42,7 @@ import {
   findReachableTransitions,
   isStatusMismatch,
   resolveLocalStatusFromMapping,
+  mapJiraStatusToLocalTaskStatus,
 } from '../../services/jira/statusMapping';
 import { CreateJiraIssueModal } from './CreateJiraIssueModal';
 import { announceToScreenReader } from '../common/AriaLiveRegion';
@@ -61,7 +62,7 @@ const DEFAULT_STATUS_MAPPINGS: JiraStatusMapping = {
   'In Progress': ['3', 'in progress'],
   'In Review': ['review', 'code review', 'peer review', 'pr'],
   Resolved: ['resolved', 'testing', 'qa', 'uat', 'verify'],
-  Done: ['10001', '10002', 'done', 'closed', 'complete'],
+  Done: ['10001', '10002', '6', 'done', 'closed', 'complete'],
   Cancelled: ['cancelled', "won't do", 'rejected'],
 };
 
@@ -314,7 +315,9 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
         });
 
         // Optionally align local status if not already aligned
-        const resolvedLocal = resolveLocalStatusFromMapping(chosen.to.id, mappings);
+        const resolvedLocal =
+          resolveLocalStatusFromMapping(chosen.to.id, mappings) ||
+          mapJiraStatusToLocalTaskStatus(chosen.to.name, chosen.to.statusCategory?.key);
         if (resolvedLocal && resolvedLocal !== task.status) {
           await onUpdateTask({ status: resolvedLocal });
         }
