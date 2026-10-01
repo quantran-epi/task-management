@@ -2,7 +2,7 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { BackupEnvelope, SnapshotData } from '../../types/backup';
 import type { NoteAttachment } from '../../types/models';
 import { generateId } from '../../utils/uuid';
-import { triggerDownload, APP_MARKER, CURRENT_SCHEMA_VERSION } from './exportBackup';
+import { triggerDownload, APP_MARKER, CURRENT_SCHEMA_VERSION, blobToBase64 } from './exportBackup';
 
 export function base64ToBlob(dataUrl: string, fallbackMime: string): Blob {
   const parts = dataUrl.split(',');
@@ -74,6 +74,19 @@ export async function restoreBackupPayload(
         targetDb.noteAttachments.toArray(),
       ]);
 
+      const serializedAttachments = await Promise.all(
+        rawAttachments.map(async (att) => ({
+          id: att.id,
+          noteId: att.noteId,
+          fileName: att.fileName,
+          mimeType: att.mimeType,
+          sizeBytes: att.sizeBytes,
+          data: await blobToBase64(att.data, att.mimeType),
+          ...(att.caption ? { caption: att.caption } : {}),
+          createdAt: att.createdAt,
+        }))
+      );
+
       const snapshot: SnapshotData = {
         timestamp: snapshotTime,
         tables: {
@@ -85,6 +98,7 @@ export async function restoreBackupPayload(
           plannedAllocations,
           workSessions,
           notes,
+          noteAttachments: serializedAttachments,
         },
         counts: {
           projects: projects.length,
@@ -199,6 +213,8 @@ export async function rollbackToSnapshot(
       targetDb.plannedAllocations,
       targetDb.workSessions,
       targetDb.activeTimers,
+      targetDb.notes,
+      targetDb.noteAttachments,
       targetDb.settings,
       targetDb.backupMetadata,
     ],
@@ -213,6 +229,8 @@ export async function rollbackToSnapshot(
         targetDb.plannedAllocations.clear(),
         targetDb.workSessions.clear(),
         targetDb.activeTimers.clear(),
+        targetDb.notes.clear(),
+        targetDb.noteAttachments.clear(),
       ]);
 
       // 2. Restore records from snapshot
@@ -236,6 +254,22 @@ export async function rollbackToSnapshot(
       }
       if (snapshot.tables.workSessions && snapshot.tables.workSessions.length) {
         await targetDb.workSessions.bulkAdd(snapshot.tables.workSessions);
+      }
+      if (snapshot.tables.notes && snapshot.tables.notes.length) {
+        await targetDb.notes.bulkAdd(snapshot.tables.notes);
+      }
+      if (snapshot.tables.noteAttachments && snapshot.tables.noteAttachments.length) {
+        const restoredAttachments: NoteAttachment[] = snapshot.tables.noteAttachments.map((att) => ({
+          id: att.id,
+          noteId: att.noteId,
+          fileName: att.fileName,
+          mimeType: att.mimeType,
+          sizeBytes: att.sizeBytes,
+          data: base64ToBlob(att.data, att.mimeType),
+          ...(att.caption ? { caption: att.caption } : {}),
+          createdAt: att.createdAt,
+        }));
+        await targetDb.noteAttachments.bulkAdd(restoredAttachments);
       }
 
       // 3. Clear the snapshot from settings after rollback
