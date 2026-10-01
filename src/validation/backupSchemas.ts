@@ -12,6 +12,7 @@ import {
   reminderDateSchema,
   reminderNoteSchema,
   remindersArraySchema,
+  timerSegmentSchema,
 } from './schemas';
 
 const calendarDateSchema = z
@@ -128,6 +129,7 @@ export const BackupWorkSessionRecordSchema = z
     endTime: z.string().datetime({ message: 'endTime must be a valid ISO 8601 string' }).optional(),
     date: calendarDateSchema,
     durationMinutes: z.number().int().min(1).max(1440),
+    segments: z.array(timerSegmentSchema).optional(),
     note: z.string().trim().max(500, 'Note must be 500 characters or less').optional(),
     createdAt: z.string(),
     updatedAt: z.string(),
