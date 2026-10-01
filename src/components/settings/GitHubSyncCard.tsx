@@ -1,5 +1,19 @@
 import React, { useState } from 'react';
-import { Card, Button, Space, Tag, Typography, notification, Descriptions } from 'antd';
+import {
+  Card,
+  Button,
+  Space,
+  Tag,
+  Typography,
+  notification,
+  Descriptions,
+  Divider,
+  Form,
+  Switch,
+  Radio,
+  InputNumber,
+  TimePicker,
+} from 'antd';
 import {
   CloudUploadOutlined,
   CloudDownloadOutlined,
@@ -53,12 +67,34 @@ export const GitHubSyncCard: React.FC<GitHubSyncCardProps> = ({
 
   // Load repository settings and sync metadata from IndexedDB
   const syncData = useLiveQuery(async () => {
-    const [ownerRec, repoRec, branchRec, lastShaRec, lastAtRec] = await Promise.all([
+    const [
+      ownerRec,
+      repoRec,
+      branchRec,
+      lastShaRec,
+      lastAtRec,
+      autoEnabledRec,
+      autoModeRec,
+      autoIntervalRec,
+      autoDailyTimeRec,
+      autoLastRunRec,
+      autoDirtySinceRec,
+      autoMissedDueRec,
+      autoLastErrorRec,
+    ] = await Promise.all([
       db.settings.get('github_owner'),
       db.settings.get('github_repo'),
       db.settings.get('github_branch'),
       db.settings.get('last_synced_sha'),
       db.settings.get('last_synced_at'),
+      db.settings.get('github_auto_sync_enabled'),
+      db.settings.get('github_auto_sync_mode'),
+      db.settings.get('github_auto_sync_interval_minutes'),
+      db.settings.get('github_auto_sync_daily_time'),
+      db.settings.get('github_auto_sync_last_run_at'),
+      db.settings.get('github_auto_sync_dirty_since'),
+      db.settings.get('github_auto_sync_missed_due_at'),
+      db.settings.get('github_auto_sync_last_error'),
     ]);
 
     return {
@@ -67,6 +103,14 @@ export const GitHubSyncCard: React.FC<GitHubSyncCardProps> = ({
       branch: (branchRec?.value as string) || 'main',
       lastSyncedSha: (lastShaRec?.value as string) || undefined,
       lastSyncedAt: (lastAtRec?.value as string) || undefined,
+      autoEnabled: autoEnabledRec?.value === true,
+      autoMode: (autoModeRec?.value as 'interval' | 'daily') || 'interval',
+      autoIntervalMinutes: typeof autoIntervalRec?.value === 'number' ? autoIntervalRec.value : 30,
+      autoDailyTime: (autoDailyTimeRec?.value as string) || '18:00',
+      autoLastRunAt: (autoLastRunRec?.value as string) || undefined,
+      autoDirtySince: (autoDirtySinceRec?.value as string) || undefined,
+      autoMissedDueAt: (autoMissedDueRec?.value as string) || undefined,
+      autoLastError: (autoLastErrorRec?.value as string) || undefined,
     };
   }, [db]);
 
@@ -295,6 +339,10 @@ export const GitHubSyncCard: React.FC<GitHubSyncCardProps> = ({
     return <Tag color="default">Chưa có token</Tag>;
   };
 
+  const updateAutoSyncSetting = async (key: string, value: unknown) => {
+    await db.settings.put({ key, value });
+  };
+
   return (
     <>
       <Card
@@ -360,6 +408,85 @@ export const GitHubSyncCard: React.FC<GitHubSyncCardProps> = ({
             Kiểm tra kết nối
           </Button>
         </Space>
+
+        <Divider style={{ margin: '16px 0' }} />
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <div>
+            <Text strong>Tự động đồng bộ định kỳ</Text>
+            <div>
+              <Text type="secondary">
+                Chỉ đẩy khi có thay đổi dữ liệu xuất và thông tin xác thực đã nạp vào phiên.
+              </Text>
+            </div>
+          </div>
+          <Switch
+            checked={syncData?.autoEnabled ?? false}
+            onChange={(checked) => updateAutoSyncSetting('github_auto_sync_enabled', checked)}
+          />
+        </div>
+
+        {syncData?.autoEnabled && (
+          <Space orientation="vertical" style={{ width: '100%' }} size="middle">
+            <Form layout="inline">
+              <Form.Item label="Chế độ">
+                <Radio.Group
+                  value={syncData?.autoMode ?? 'interval'}
+                  onChange={(e) => updateAutoSyncSetting('github_auto_sync_mode', e.target.value)}
+                >
+                  <Radio.Button value="interval">Khoảng thời gian</Radio.Button>
+                  <Radio.Button value="daily">Hàng ngày (cố định)</Radio.Button>
+                </Radio.Group>
+              </Form.Item>
+
+              {syncData?.autoMode === 'daily' ? (
+                <Form.Item label="Giờ chạy">
+                  <TimePicker
+                    format="HH:mm"
+                    value={dayjs(syncData?.autoDailyTime ?? '18:00', 'HH:mm')}
+                    onChange={(val) => {
+                      if (val) updateAutoSyncSetting('github_auto_sync_daily_time', val.format('HH:mm'));
+                    }}
+                  />
+                </Form.Item>
+              ) : (
+                <Form.Item label="Mỗi (phút)">
+                  <InputNumber
+                    min={1}
+                    max={1440}
+                    value={syncData?.autoIntervalMinutes ?? 30}
+                    onChange={(val) => {
+                      if (typeof val === 'number') updateAutoSyncSetting('github_auto_sync_interval_minutes', val);
+                    }}
+                  />
+                </Form.Item>
+              )}
+            </Form>
+
+            <Descriptions column={1} size="small" bordered>
+              <Descriptions.Item label="Dữ liệu chưa đồng bộ">
+                {syncData?.autoDirtySince ? (
+                  <Tag color="warning">Có thay đổi từ {dayjs(syncData.autoDirtySince).format('DD/MM HH:mm')}</Tag>
+                ) : (
+                  <Tag color="success">Đã khớp</Tag>
+                )}
+              </Descriptions.Item>
+              <Descriptions.Item label="Tự động chạy gần nhất">
+                {syncData?.autoLastRunAt ? dayjs(syncData.autoLastRunAt).format('DD/MM/YYYY HH:mm:ss') : 'Chưa chạy'}
+              </Descriptions.Item>
+              {syncData?.autoMissedDueAt && (
+                <Descriptions.Item label="Lần lỡ hẹn gần nhất">
+                  <Text type="warning">{dayjs(syncData.autoMissedDueAt).format('DD/MM/YYYY HH:mm:ss')}</Text>
+                </Descriptions.Item>
+              )}
+              {syncData?.autoLastError && (
+                <Descriptions.Item label="Lỗi tự động gần nhất">
+                  <Text type="danger">{syncData.autoLastError}</Text>
+                </Descriptions.Item>
+              )}
+            </Descriptions>
+          </Space>
+        )}
       </Card>
 
       <GitHubConflictModal

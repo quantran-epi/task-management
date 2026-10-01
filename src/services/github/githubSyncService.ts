@@ -131,6 +131,10 @@ export async function executeGitHubBackupPush(
   await db.transaction('rw', db.settings, async () => {
     await db.settings.put({ key: 'last_synced_sha', value: uploadResult.sha });
     await db.settings.put({ key: 'last_synced_at', value: encryptedEnvelope.exportedAt });
+    await db.settings.put({ key: 'github_auto_sync_last_run_at', value: encryptedEnvelope.exportedAt });
+    await db.settings.delete('github_auto_sync_dirty_since');
+    await db.settings.delete('github_auto_sync_missed_due_at');
+    await db.settings.delete('github_auto_sync_last_error');
   });
 
   return {
