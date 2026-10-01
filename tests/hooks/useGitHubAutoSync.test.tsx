@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { useEffect } from 'react';
 import { renderHook, waitFor } from '@testing-library/react';
 import { TaskPlannerDatabase } from '../../src/db';
 import { GitHubAuthProvider, useGitHubAuth } from '../../src/context/GitHubAuthContext';
@@ -123,6 +124,8 @@ function AuthBridge({
   passphrase: string;
 }) {
   const { setCredentials } = useGitHubAuth();
-  setCredentials(token, passphrase);
+  useEffect(() => {
+    setCredentials(token, passphrase);
+  }, [setCredentials, token, passphrase]);
   return <>{children}</>;
 }
