@@ -330,7 +330,7 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
       if (hasScreen) {
         setTransitionError({
           message:
-            'Jira yêu cầu nhập thêm trường (Screen/Resolution). Vui lòng thực hiện trên Jira Web.',
+            'Không thể chuyển trạng thái trực tiếp do workflow Jira yêu cầu nhập màn hình (Screen/Resolution). Vui lòng thực hiện trên Jira Web.',
           isScreenError: true,
         });
       } else {
