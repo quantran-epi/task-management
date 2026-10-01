@@ -13,6 +13,7 @@ import {
   Radio,
   InputNumber,
   TimePicker,
+  Alert,
 } from 'antd';
 import {
   CloudUploadOutlined,
@@ -22,6 +23,7 @@ import {
   SyncOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
+  WarningOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import dayjs from 'dayjs';
@@ -35,6 +37,7 @@ import {
   GitHubSyncConflictError,
   GitHubPullError,
 } from '../../services/github/githubSyncService';
+import { type AutoSyncRetryState } from '../../hooks/useGitHubAutoSync';
 import { GitHubConflictModal } from './GitHubConflictModal';
 import { GitHubPassphraseModal } from './GitHubPassphraseModal';
 import { announceToScreenReader } from '../common/AriaLiveRegion';
@@ -81,6 +84,7 @@ export const GitHubSyncCard: React.FC<GitHubSyncCardProps> = ({
       autoDirtySinceRec,
       autoMissedDueRec,
       autoLastErrorRec,
+      autoSyncStateRec,
     ] = await Promise.all([
       db.settings.get('github_owner'),
       db.settings.get('github_repo'),
@@ -95,6 +99,7 @@ export const GitHubSyncCard: React.FC<GitHubSyncCardProps> = ({
       db.settings.get('github_auto_sync_dirty_since'),
       db.settings.get('github_auto_sync_missed_due_at'),
       db.settings.get('github_auto_sync_last_error'),
+      db.settings.get('github_auto_sync_state'),
     ]);
 
     return {
@@ -111,6 +116,7 @@ export const GitHubSyncCard: React.FC<GitHubSyncCardProps> = ({
       autoDirtySince: (autoDirtySinceRec?.value as string) || undefined,
       autoMissedDueAt: (autoMissedDueRec?.value as string) || undefined,
       autoLastError: (autoLastErrorRec?.value as string) || undefined,
+      autoSyncState: (autoSyncStateRec?.value as AutoSyncRetryState) || undefined,
     };
   }, [db]);
 
@@ -119,6 +125,7 @@ export const GitHubSyncCard: React.FC<GitHubSyncCardProps> = ({
   const branch = syncData?.branch || 'main';
   const lastSyncedSha = syncData?.lastSyncedSha;
   const lastSyncedAt = syncData?.lastSyncedAt;
+  const autoSyncState = syncData?.autoSyncState;
 
   const isConfigured = Boolean(owner && repo);
 
@@ -186,6 +193,18 @@ export const GitHubSyncCard: React.FC<GitHubSyncCardProps> = ({
         forceOverwrite
       );
 
+      // On manual push success: clear conflict/pause state so auto-sync resumes (D-39, D-42)
+      await db.settings.put({
+        key: 'github_auto_sync_state',
+        value: {
+          consecutiveFailures: 0,
+          isPaused: false,
+          lastAttemptAt: new Date().toISOString(),
+        } satisfies AutoSyncRetryState,
+      });
+      await db.settings.delete('github_auto_sync_last_error');
+      await db.settings.delete('github_auto_sync_dirty_since');
+
       const shortSha = result.sha.slice(0, 7);
       notification.success({
         message: 'Đẩy lên GitHub thành công',
@@ -240,6 +259,17 @@ export const GitHubSyncCard: React.FC<GitHubSyncCardProps> = ({
       if (effectivePassphrase) {
         setPassphrase(effectivePassphrase);
       }
+
+      // Resume auto-sync after pull (D-42)
+      await db.settings.put({
+        key: 'github_auto_sync_state',
+        value: {
+          consecutiveFailures: 0,
+          isPaused: false,
+          lastAttemptAt: new Date().toISOString(),
+        } satisfies AutoSyncRetryState,
+      });
+      await db.settings.delete('github_auto_sync_last_error');
 
       setPassphraseModalOpen(false);
       setPassphraseError(undefined);
@@ -339,6 +369,45 @@ export const GitHubSyncCard: React.FC<GitHubSyncCardProps> = ({
     return <Tag color="default">Chưa có token</Tag>;
   };
 
+  const renderAutoSyncStatus = () => {
+    if (!syncData?.autoEnabled) {
+      return <Tag color="default">Đã tắt</Tag>;
+    }
+    if (autoSyncState?.isPaused) {
+      if (autoSyncState.pauseReason === 'conflict') {
+        return <Tag color="error">Tạm dừng do xung đột</Tag>;
+      }
+      if (autoSyncState.pauseReason === 'auth_error') {
+        return <Tag color="error">Lỗi xác thực (401/403)</Tag>;
+      }
+      return <Tag color="warning">Tạm dừng</Tag>;
+    }
+    if (autoSyncState?.nextRetryAt) {
+      return (
+        <Tag color="orange">
+          Chờ thử lại lúc {dayjs(autoSyncState.nextRetryAt).format('HH:mm:ss')} (lỗi #{autoSyncState.consecutiveFailures})
+        </Tag>
+      );
+    }
+    return <Tag color="success">Đang hoạt động</Tag>;
+  };
+
+  const calculateNextRun = () => {
+    if (!syncData?.autoEnabled || autoSyncState?.isPaused) return 'Đang tạm dừng';
+    if (autoSyncState?.nextRetryAt) {
+      return dayjs(autoSyncState.nextRetryAt).format('DD/MM/YYYY HH:mm:ss');
+    }
+    if (syncData.autoMode === 'daily') {
+      return `Hàng ngày lúc ${syncData.autoDailyTime}`;
+    }
+    if (syncData.autoLastRunAt) {
+      return dayjs(syncData.autoLastRunAt)
+        .add(syncData.autoIntervalMinutes, 'minute')
+        .format('DD/MM/YYYY HH:mm:ss');
+    }
+    return `Mỗi ${syncData.autoIntervalMinutes} phút`;
+  };
+
   const updateAutoSyncSetting = async (key: string, value: unknown) => {
     await db.settings.put({ key, value });
   };
@@ -359,6 +428,46 @@ export const GitHubSyncCard: React.FC<GitHubSyncCardProps> = ({
           và đẩy tệp sao lưu lên GitHub.
         </Paragraph>
 
+        {autoSyncState?.isPaused && autoSyncState.pauseReason === 'conflict' && (
+          <Alert
+            type="error"
+            showIcon
+            icon={<WarningOutlined />}
+            message="Tự động đồng bộ bị tạm dừng do phát hiện xung đột dữ liệu trên GitHub"
+            description={
+              <div>
+                <p>
+                  Bản sao lưu trên GitHub đã được thay đổi từ một thiết bị khác (Remote SHA mismatch).
+                  Hệ thống tạm dừng đồng bộ để bảo vệ toàn vẹn dữ liệu. Vui lòng chọn hành động xử lý:
+                </p>
+                <Space style={{ marginTop: 8 }}>
+                  <Button
+                    type="primary"
+                    size="small"
+                    icon={<CloudDownloadOutlined />}
+                    onClick={() => handlePull()}
+                  >
+                    Tải về từ GitHub (Pull)
+                  </Button>
+                  <Button
+                    danger
+                    size="small"
+                    icon={<CloudUploadOutlined />}
+                    onClick={() => {
+                      setConflictRemoteSha(autoSyncState.conflictRemoteSha);
+                      setConflictLocalSha(lastSyncedSha);
+                      setConflictModalOpen(true);
+                    }}
+                  >
+                    Ghi đè lên GitHub (Force Push)
+                  </Button>
+                </Space>
+              </div>
+            }
+            style={{ marginBottom: 16 }}
+          />
+        )}
+
         <Descriptions column={{ xs: 1, sm: 2 }} size="small" bordered style={{ marginBottom: 16 }}>
           <Descriptions.Item label="Trạng thái xác thực">{renderCredentialsTag()}</Descriptions.Item>
           <Descriptions.Item label="Bản sao lưu gần nhất">
@@ -370,7 +479,7 @@ export const GitHubSyncCard: React.FC<GitHubSyncCardProps> = ({
               <Text type="secondary">Chưa đồng bộ</Text>
             )}
           </Descriptions.Item>
-          <Descriptions.Item label="Thời gian đồng bộ" span={2}>
+          <Descriptions.Item label="Lần đồng bộ thành công gần nhất" span={2}>
             {lastSyncedAt ? (
               dayjs(lastSyncedAt).format('DD/MM/YYYY HH:mm:ss')
             ) : (
@@ -416,7 +525,7 @@ export const GitHubSyncCard: React.FC<GitHubSyncCardProps> = ({
             <Text strong>Tự động đồng bộ định kỳ</Text>
             <div>
               <Text type="secondary">
-                Chỉ đẩy khi có thay đổi dữ liệu xuất và thông tin xác thực đã nạp vào phiên.
+                Tự động đẩy dữ liệu khi có thay đổi với thuật toán backoff chống nghẽn mạng.
               </Text>
             </div>
           </div>
@@ -427,7 +536,7 @@ export const GitHubSyncCard: React.FC<GitHubSyncCardProps> = ({
         </div>
 
         {syncData?.autoEnabled && (
-          <Space orientation="vertical" style={{ width: '100%' }} size="middle">
+          <Space direction="vertical" style={{ width: '100%' }} size="middle">
             <Form layout="inline">
               <Form.Item label="Chế độ">
                 <Radio.Group
@@ -464,11 +573,17 @@ export const GitHubSyncCard: React.FC<GitHubSyncCardProps> = ({
             </Form>
 
             <Descriptions column={1} size="small" bordered>
-              <Descriptions.Item label="Dữ liệu chưa đồng bộ">
+              <Descriptions.Item label="Trạng thái đồng bộ">
+                {renderAutoSyncStatus()}
+              </Descriptions.Item>
+              <Descriptions.Item label="Lần chạy tiếp theo">
+                <Text strong>{calculateNextRun()}</Text>
+              </Descriptions.Item>
+              <Descriptions.Item label="Dữ liệu chưa đồng bộ từ">
                 {syncData?.autoDirtySince ? (
-                  <Tag color="warning">Có thay đổi từ {dayjs(syncData.autoDirtySince).format('DD/MM HH:mm')}</Tag>
+                  <Tag color="warning">Thay đổi lúc {dayjs(syncData.autoDirtySince).format('DD/MM HH:mm:ss')}</Tag>
                 ) : (
-                  <Tag color="success">Đã khớp</Tag>
+                  <Text type="secondary">Không có (Đã khớp)</Text>
                 )}
               </Descriptions.Item>
               <Descriptions.Item label="Tự động chạy gần nhất">
@@ -480,7 +595,7 @@ export const GitHubSyncCard: React.FC<GitHubSyncCardProps> = ({
                 </Descriptions.Item>
               )}
               {syncData?.autoLastError && (
-                <Descriptions.Item label="Lỗi tự động gần nhất">
+                <Descriptions.Item label="Lỗi gần nhất">
                   <Text type="danger">{syncData.autoLastError}</Text>
                 </Descriptions.Item>
               )}

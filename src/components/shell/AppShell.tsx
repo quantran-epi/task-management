@@ -18,6 +18,7 @@ import { useDesktopNotification } from '../../hooks/useDesktopNotification';
 import { useTimerAlertMonitor } from '../../hooks/useTimerAlertMonitor';
 import { useLocalSqlitePersistence } from '../../hooks/useLocalSqlitePersistence';
 import { useGitHubAutoSync } from '../../hooks/useGitHubAutoSync';
+import { GitHubSyncStatusDot } from './GitHubSyncStatusDot';
 import { ActiveTimerWidget } from '../timer/ActiveTimerWidget';
 import { NotificationBell } from '../notifications/NotificationBell';
 import { NotificationDrawer } from '../notifications/NotificationDrawer';
@@ -196,6 +197,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
           </Space>
           <Space size="middle">
             <ActiveTimerWidget />
+            <GitHubSyncStatusDot />
             <StatusBadge />
             <NotificationBell
               count={notifications.activeCount}
