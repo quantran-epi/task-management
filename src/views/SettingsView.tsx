@@ -20,6 +20,7 @@ import { GitHubSyncCard } from '../components/settings/GitHubSyncCard';
 import { JiraConfigCard } from '../components/settings/JiraConfigCard';
 import { PwaStatusCard } from '../components/settings/PwaStatusCard';
 import { StoragePersistenceCard } from '../components/settings/StoragePersistenceCard';
+import { LocalSqlitePersistenceCard } from '../components/settings/LocalSqlitePersistenceCard';
 import { NotificationSettingsCard } from '../components/settings/NotificationSettingsCard';
 import { PostRestoreBanner } from '../components/settings/PostRestoreBanner';
 import { ResetDbModal } from '../components/common/ResetDbModal';
@@ -151,6 +152,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <SnapshotRollbackCard db={db} />
           <GitHubConfigCard db={db} />
           <GitHubSyncCard db={db} onPullSuccess={handleRemotePullSuccess} />
+          <LocalSqlitePersistenceCard db={db} />
           <PwaStatusCard />
           <StoragePersistenceCard />
 

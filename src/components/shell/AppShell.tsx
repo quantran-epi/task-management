@@ -16,6 +16,7 @@ import { useServiceWorkerUpdate } from '../../hooks/useServiceWorkerUpdate';
 import { useNotifications } from '../../hooks/useNotifications';
 import { useDesktopNotification } from '../../hooks/useDesktopNotification';
 import { useTimerAlertMonitor } from '../../hooks/useTimerAlertMonitor';
+import { useLocalSqlitePersistence } from '../../hooks/useLocalSqlitePersistence';
 import { ActiveTimerWidget } from '../timer/ActiveTimerWidget';
 import { NotificationBell } from '../notifications/NotificationBell';
 import { NotificationDrawer } from '../notifications/NotificationDrawer';
@@ -85,6 +86,9 @@ const AppShellInner: React.FC<AppShellProps> = ({
 
   // Global Running Timer Threshold & Allocation Alert Monitor
   useTimerAlertMonitor();
+
+  // Desktop SQLite mirror persistence
+  useLocalSqlitePersistence();
 
   // Notification UI & Inspection State (D-02, D-03, D-12)
   const [notificationDrawerOpen, setNotificationDrawerOpen] = useState(false);
