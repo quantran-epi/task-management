@@ -19,15 +19,20 @@ async function tauriInvoke<T>(command: string, args?: Record<string, unknown>): 
 }
 
 export async function openJiraExternalUrl(url: string): Promise<void> {
+  const trimmed = url.trim();
+  if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+    console.warn('Blocked: only http:// and https:// URLs are allowed');
+    return;
+  }
   if (isTauriApp()) {
     try {
-      await tauriInvoke('open_external_url', { url });
+      await tauriInvoke('open_external_url', { url: trimmed });
       return;
     } catch (err) {
       console.warn('Failed to open URL via Tauri native opener, falling back to window.open:', err);
     }
   }
-  window.open(url, '_blank', 'noopener,noreferrer');
+  window.open(trimmed, '_blank', 'noopener,noreferrer');
 }
 
 export function buildJiraUrl(config: JiraConfig, path: string): string {
