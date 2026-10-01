@@ -108,9 +108,10 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const selectedProjectId = Form.useWatch('projectId', form);
-  const watchHours = Form.useWatch('hours', form) ?? 0;
-  const watchMinutes = Form.useWatch('minutes', form) ?? 0;
-  const liveEstimateMinutes = watchHours * 60 + watchMinutes;
+  const watchHours = Form.useWatch('hours', form);
+  const watchMinutes = Form.useWatch('minutes', form);
+  const liveEstimateMinutes =
+    watchHours !== undefined && watchMinutes !== undefined ? watchHours * 60 + watchMinutes : undefined;
   const restorerRef = useRef<(() => void) | null>(null);
 
   // Focus management

@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { Form } from 'antd';
 import { TaskPlannerDatabase } from '../../src/db/index';
 import { createTask } from '../../src/db/repositories/taskRepo';
 import { upsertAllocation } from '../../src/db/repositories/allocationRepo';
@@ -111,5 +112,23 @@ describe('TaskDrawerPlanning Component (PLAN-01, PLAN-02, PLAN-06, D-09, D-10)',
 
     expect(await screen.findByText('Lập kế hoạch & Phân bổ hàng ngày')).toBeInTheDocument();
     expect(await screen.findByTestId('planning-metrics-total')).toHaveTextContent('Đã phân bổ: 1h / Ước tính: 2h');
+  });
+
+  it('uses loaded task estimate while drawer form watchers are not hydrated', async () => {
+    const useWatchSpy = vi.spyOn(Form, 'useWatch').mockReturnValue(undefined);
+    const task = await createTask(
+      { name: 'Drawer Task', estimateMinutes: 120, status: 'Open' },
+      testDb
+    );
+    await upsertAllocation(task.id, '2026-10-26', 60, testDb);
+
+    try {
+      render(<TaskDrawer taskId={task.id} open={true} onClose={() => {}} db={testDb} />);
+
+      expect(await screen.findByText('Lập kế hoạch & Phân bổ hàng ngày')).toBeInTheDocument();
+      expect(await screen.findByTestId('planning-metrics-total')).toHaveTextContent('Đã phân bổ: 1h / Ước tính: 2h');
+    } finally {
+      useWatchSpy.mockRestore();
+    }
   });
 });
