@@ -14,6 +14,7 @@ import { PlannerView } from './views/PlannerView';
 import { SettingsView } from './views/SettingsView';
 import { DashboardView } from './views/DashboardView';
 import { AnalyticsView } from './views/AnalyticsView';
+import { NotesView } from './views/NotesView';
 import { TimerPopoutView } from './views/TimerPopoutView';
 import { TimerProvider } from './context/TimerContext';
 
@@ -44,6 +45,8 @@ export const App: React.FC = () => {
         return <PlannerView targetDate={params.date} />;
       case 'analytics':
         return <AnalyticsView initialMilestoneId={params.milestoneId} onNavigate={navigate} />;
+      case 'notes':
+        return <NotesView />;
       case 'settings':
         return <SettingsView onNavigate={navigate} />;
       default:
