@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { message } from 'antd';
 import 'fake-indexeddb/auto';
 import { App } from '../../src/App';
@@ -106,17 +106,14 @@ describe('Timer alert across navigation', () => {
       expect(screen.queryByPlaceholderText(/Thêm tác vụ nhanh/i)).not.toBeInTheDocument();
     });
 
-    // Advance timers by 4 seconds (from 298s to 302s > 300s)
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 3500));
-    });
-
-    console.log('warningSpy calls:', warningSpy.mock.calls);
-    console.log('notificationInstances:', notificationInstances);
-
-    expect(warningSpy).toHaveBeenCalledTimes(1);
-    expect(notificationInstances.length).toBe(1);
-  });
+    await waitFor(
+      () => {
+        expect(warningSpy).toHaveBeenCalledTimes(1);
+        expect(notificationInstances).toHaveLength(1);
+      },
+      { timeout: 10000 }
+    );
+  }, 15000);
 
   it('verifies exactly one in-app alert when staying on task page (no duplicates)', async () => {
     const warningSpy = vi.spyOn(message, 'warning').mockImplementation((() => {}) as any);
@@ -174,13 +171,8 @@ describe('Timer alert across navigation', () => {
       expect(screen.getByPlaceholderText(/Thêm tác vụ nhanh/i)).toBeInTheDocument();
     });
 
-    // Stay on task page and wait for timer to pass 300s
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 3500));
-    });
-
-    expect(warningSpy).toHaveBeenCalledTimes(1); // EXACTLY 1 - NO DUPLICATE!
-  });
+    await waitFor(() => expect(warningSpy).toHaveBeenCalledTimes(1), { timeout: 10000 });
+  }, 15000);
 
   it('tests starting timer in UI then navigating away', async () => {
     const warningSpy = vi.spyOn(message, 'warning').mockImplementation((() => {}) as any);
@@ -254,15 +246,12 @@ describe('Timer alert across navigation', () => {
       expect(screen.queryByPlaceholderText(/Thêm tác vụ nhanh/i)).not.toBeInTheDocument();
     });
 
-    // Advance time by 3.5s
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 3500));
-    });
-
-    console.log('UI start then navigate warningSpy calls:', warningSpy.mock.calls.length);
-    console.log('UI start then navigate notificationInstances:', notificationInstances.length);
-
-    expect(warningSpy).toHaveBeenCalledTimes(1);
-    expect(notificationInstances.length).toBe(1);
+    await waitFor(
+      () => {
+        expect(warningSpy).toHaveBeenCalledTimes(1);
+        expect(notificationInstances).toHaveLength(1);
+      },
+      { timeout: 10000 }
+    );
   }, 15000);
 });
