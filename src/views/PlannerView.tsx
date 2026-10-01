@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Button, Switch, Space, Typography, Grid, Modal, Select } from 'antd';
+import { Button, Switch, Space, Typography, Grid, Modal, Select, Segmented } from 'antd';
 import { PlusOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
@@ -12,6 +12,7 @@ import { AllocationModal } from '../components/planner/AllocationModal';
 import { CapacitySettingsModal } from '../components/planner/CapacitySettingsModal';
 import { FeasibilityModal } from '../components/planner/FeasibilityModal';
 import { DayInsightPanel } from '../components/planner/DayInsightPanel';
+import { ActualWorklogPlanner } from '../components/planner/ActualWorklogPlanner';
 import { useDayInsight } from '../hooks/useDayInsight';
 import { TaskDrawer } from '../components/tasks/TaskDrawer';
 import { getTodayDateString } from '../utils/date';
@@ -35,6 +36,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
   const [currentDate, setCurrentDate] = useState<string>(
     () => targetDate ?? initialDate ?? getTodayDateString()
   );
+  const [plannerMode, setPlannerMode] = useState<'planned' | 'actual'>('planned');
   const [showCompleted, setShowCompleted] = useState<boolean>(false);
   const [allocationModalOpen, setAllocationModalOpen] = useState<boolean>(false);
   const [allocationModalDate, setAllocationModalDate] = useState<string | undefined>(undefined);
@@ -156,9 +158,21 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
     setAllocationModalOpen(true);
   };
 
+  const currentWeekStart = useMemo(() => {
+    return dayjs(currentDate, 'YYYY-MM-DD').isValid()
+      ? dayjs(currentDate, 'YYYY-MM-DD').startOf('isoWeek')
+      : dayjs().startOf('isoWeek');
+  }, [currentDate]);
+
+  const currentWeekDates = useMemo(() => {
+    return Array.from({ length: 7 }, (_, i) =>
+      currentWeekStart.add(i, 'day').format('YYYY-MM-DD')
+    );
+  }, [currentWeekStart]);
+
   return (
     <div data-testid="planner-view" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* Top Toolbar: Week Navigator + Controls (D-02, D-05, D-16) */}
+      {/* Top Toolbar: Week Navigator + Segmented Subview + Controls (D-02, D-05, D-16, D-26) */}
       <div
         style={{
           display: 'flex',
@@ -172,67 +186,89 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
           border: '1px solid #f0f0f0',
         }}
       >
-        <WeekNavigator
-          currentDate={currentDate}
-          onDateChange={setCurrentDate}
-          onOpenCapacitySettings={() => setCapacityModalOpen(true)}
-        />
-
         <Space wrap size="middle">
-          <Space size={6} align="center">
-            <Switch
-              checked={showCompleted}
-              onChange={setShowCompleted}
-              id="show-completed-toggle"
-              aria-label="Hiện tác vụ hoàn thành"
-            />
-            <Text style={{ fontSize: 13, userSelect: 'none' }}>Hiện tác vụ hoàn thành</Text>
-          </Space>
-
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => handleOpenAllocate()}
-            aria-label="Phân bổ tác vụ"
-          >
-            Phân bổ tác vụ
-          </Button>
-
-          <Button
-            icon={<ThunderboltOutlined />}
-            onClick={() => handleOpenFeasibility()}
-            aria-label="Tự động phân bổ"
-          >
-            Tự động phân bổ
-          </Button>
-        </Space>
-      </div>
-
-      {/* Weekly Grid (D-01, D-04) */}
-      <div
-        data-testid="planner-grid"
-        style={{
-          display: 'grid',
-          gridTemplateColumns: isMobile ? '1fr' : 'repeat(7, minmax(230px, 1fr))',
-          gap: 12,
-          overflowX: isMobile ? 'visible' : 'auto',
-          minHeight: 520,
-          alignItems: 'stretch',
-        }}
-      >
-        {weeklyState.days.map((day) => (
-          <DayColumn
-            key={day.date}
-            day={day}
-            showCompleted={showCompleted}
-            onAllocate={(date) => handleOpenAllocate(date)}
-            onEditCapacity={() => setCapacityModalOpen(true)}
-            onTaskClick={(taskId) => setTaskDrawerTaskId(taskId)}
-            onOpenInsight={(date) => setInsightDate(date)}
-            db={db}
+          <WeekNavigator
+            currentDate={currentDate}
+            onDateChange={setCurrentDate}
+            onOpenCapacitySettings={() => setCapacityModalOpen(true)}
           />
-        ))}
+
+          <Segmented<'planned' | 'actual'>
+            value={plannerMode}
+            onChange={(val) => setPlannerMode(val)}
+            options={[
+              { label: 'Kế hoạch', value: 'planned' },
+              { label: 'Thực tế', value: 'actual' },
+            ]}
+          />
+        </Space>
+
+        {plannerMode === 'planned' && (
+          <Space wrap size="middle">
+            <Space size={6} align="center">
+              <Switch
+                checked={showCompleted}
+                onChange={setShowCompleted}
+                id="show-completed-toggle"
+                aria-label="Hiện tác vụ hoàn thành"
+              />
+              <Text style={{ fontSize: 13, userSelect: 'none' }}>Hiện tác vụ hoàn thành</Text>
+            </Space>
+
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => handleOpenAllocate()}
+              aria-label="Phân bổ tác vụ"
+            >
+              Phân bổ tác vụ
+            </Button>
+
+            <Button
+              icon={<ThunderboltOutlined />}
+              onClick={() => handleOpenFeasibility()}
+              aria-label="Tự động phân bổ"
+            >
+              Tự động phân bổ
+            </Button>
+          </Space>
+        )}
       </div>
+
+      {/* Main Subview Content */}
+      {plannerMode === 'actual' ? (
+        <ActualWorklogPlanner
+          weekStart={currentWeekStart}
+          weekDates={currentWeekDates}
+          db={db}
+        />
+      ) : (
+        /* Weekly Grid (D-01, D-04) */
+        <div
+          data-testid="planner-grid"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(7, minmax(230px, 1fr))',
+            gap: 12,
+            overflowX: isMobile ? 'visible' : 'auto',
+            minHeight: 520,
+            alignItems: 'stretch',
+          }}
+        >
+          {weeklyState.days.map((day) => (
+            <DayColumn
+              key={day.date}
+              day={day}
+              showCompleted={showCompleted}
+              onAllocate={(date) => handleOpenAllocate(date)}
+              onEditCapacity={() => setCapacityModalOpen(true)}
+              onTaskClick={(taskId) => setTaskDrawerTaskId(taskId)}
+              onOpenInsight={(date) => setInsightDate(date)}
+              db={db}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Allocation Modal (D-09, D-10) */}
       <AllocationModal

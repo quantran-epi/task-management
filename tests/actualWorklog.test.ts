@@ -3,7 +3,6 @@ import {
   splitSegmentByMidnight,
   aggregateTaskActualMinutesByDate,
   computeVariance,
-  formatVariance,
 } from '../src/utils/worklog';
 import type { WorkSession } from '../src/types/models';
 

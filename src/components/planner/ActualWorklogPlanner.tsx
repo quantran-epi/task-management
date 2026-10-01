@@ -12,12 +12,12 @@ import {
   Card,
   message,
 } from 'antd';
-import { PlusOutlined, FieldTimeOutlined, EditOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined } from '@ant-design/icons';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
-import type { Task, PlannedAllocation, WorkSession, Project, Milestone } from '../../types/models';
+import type { Task, Project, Milestone } from '../../types/models';
 import {
   aggregateTaskActualMinutesByDate,
   computeVariance,

@@ -25,7 +25,7 @@ import {
   getWorkSessionsForTask,
 } from '../../db/repositories/workSessionRepo';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
-import type { WorkSession, TimerSegment } from '../../types/models';
+import type { WorkSession } from '../../types/models';
 import { formatMinutes } from '../../utils/worklog';
 
 const { Text } = Typography;
@@ -272,7 +272,7 @@ export const WorkSessionDetailModal: React.FC<WorkSessionDetailModalProps> = ({
                   <List.Item.Meta
                     title={
                       <Space>
-                        <Text orientation="left" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                        <Text style={{ fontVariantNumeric: 'tabular-nums' }}>
                           {startFmt} - {endFmt}
                         </Text>
                         <Tag color="blue">{formatMinutes(s.durationMinutes)}</Tag>
