@@ -149,6 +149,7 @@ export const WorkSessionDetailModal: React.FC<WorkSessionDetailModalProps> = ({
             startTime: startTimeIso,
             endTime: endTimeIso,
             durationMinutes,
+            segments: [{ startTime: startTimeIso, endTime: endTimeIso }],
             note,
           },
           db
