@@ -208,12 +208,15 @@ Plans:
 
 Plans:
 **Wave 1**
+
 - [x] 13-01-PLAN.md — Navigation routing tracer, analytics data contracts, burndown math, and velocity/workload calculation engines
 
 **Wave 2** *(blocked on Wave 1 completion)*
+
 - [x] 13-02-PLAN.md — Reusable pure SVG burndown vector chart, stacked status bars, and workload proportion bars
 
 **Wave 3** *(blocked on Wave 2 completion)*
+
 - [x] 13-03-PLAN.md — Comprehensive AnalyticsView dashboard assembly, empty states, and AppShell integration
 
 **UI hint**: yes
@@ -231,18 +234,21 @@ Plans:
   4. Weekly Actual Worklog Planner displays planned vs actual hours per day and task with variance indicators, quick minute entry, and inline WorkSession management.
   5. Tauri securely stores GitHub PAT, passphrase, and Jira token in OS Credential Manager/Keychain, while Web/PWA supports password managers; GitHub auto-sync displays real-time status with retry/backoff on network errors.
 
-**Plans:** 5 plans
+**Plans:** 2/5 plans executed
 
 Plans:
 **Wave 1**
+
 - [x] 13.1-01-PLAN.md — Dexie SCHEMA_V7 migration, high-fidelity timer pause/resume segments, safe status automation, and hierarchy subtitles
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 13.1-02-PLAN.md — Local Project to Jira Epic mapping, local-authoritative status reconciliation, and Tauri native proxy
+
+- [x] 13.1-02-PLAN.md — Local Project to Jira Epic mapping, local-authoritative status reconciliation, and Tauri native proxy
 - [ ] 13.1-03-PLAN.md — Offline-first Sticky Notes, safe Markdown preview, screenshot attachments, and reusable pop-out window
 - [ ] 13.1-04-PLAN.md — Weekly Actual Worklog Planner matrix with variance indicators, quick entry, and midnight segment splitting
 
 **Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 13.1-05-PLAN.md — Native OS Keychain credential persistence, legacy token migration, and resilient auto-sync recovery
 
 **UI hint**: yes
@@ -266,4 +272,4 @@ Plans:
 | 12.1. Task Timer, Work Session Logs & Spent Time Tracking | v1.1 | 4/4 | Complete    | 2026-09-29 |
 | 12.2. Multiple Reminders with Time, Notification Settings, Table Customization & Sidebar Persistence | v1.1 | 4/4 | Complete   | 2026-09-29 |
 | 13. Enhanced Workload Analytics & Milestone Burndown | v1.1 | 3/3 | Complete    | 2026-09-30 |
-| 13.1. Timer, Jira, Sticky Notes, Actual Worklog & Sync Improvements | v1.1 | 1/5 | In Progress | - |
+| 13.1. Timer, Jira, Sticky Notes, Actual Worklog & Sync Improvements | v1.1 | 2/5 | In Progress|  |
