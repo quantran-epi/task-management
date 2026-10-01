@@ -41,6 +41,16 @@ describe('localSqlitePersistence', () => {
     await expect(db.settings.get('github_passphrase')).resolves.toBeUndefined();
   });
 
+  it('persists hook changes outside transactions that omit settings', async () => {
+    await db.transaction('rw', db.tasks, async () => {
+      enqueueLocalSqliteChange(db, 'tasks', 'task-1', { id: 'task-1' }, false);
+    });
+
+    await expect.poll(async () => (await db.settings.get(SQLITE_SETTING_KEYS.queue))?.value).toEqual([
+      expect.objectContaining({ tableName: 'tasks', rowId: 'task-1' }),
+    ]);
+  });
+
   it('flushes coalesced row-level changes and clears queue after success', async () => {
     await db.settings.bulkPut([
       { key: SQLITE_SETTING_KEYS.path, value: 'tasks.sqlite' },

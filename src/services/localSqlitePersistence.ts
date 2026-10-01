@@ -1,4 +1,4 @@
-import type { Table } from 'dexie';
+import Dexie, { type Table } from 'dexie';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import type { Setting } from '../types/models';
 
@@ -153,7 +153,7 @@ export function enqueueLocalSqliteChange(
   memoryQueues.set(db, coalesceQueue(memoryQueues.get(db) ?? [], change));
   triggerDebouncedFlush(db);
 
-  void (async () => {
+  void Dexie.ignoreTransaction(async () => {
     const next = coalesceQueue(await getQueue(db), change);
     const writes: Setting[] = [{ key: SQLITE_SETTING_KEYS.queue, value: next }];
     if ((SQLITE_DOMAIN_TABLES as readonly string[]).includes(tableName)) {
@@ -165,7 +165,7 @@ export function enqueueLocalSqliteChange(
     } finally {
       suppressedDbs.delete(db);
     }
-  })();
+  });
 }
 
 export async function flushLocalSqliteNow(
