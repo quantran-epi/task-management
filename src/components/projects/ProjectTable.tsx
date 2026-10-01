@@ -26,6 +26,7 @@ import { getTodayDateString } from '../../utils/date';
 import { TagListDisplay } from '../common/TagListDisplay';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { getJiraBrowseUrl, openJiraExternalUrl } from '../../services/jira/jiraApi';
 
 export interface ProjectTableProps {
   projects: Project[];
@@ -417,6 +418,20 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <span style={{ fontWeight: 600, fontSize: 14, color: token.colorText }}>{name}</span>
+                {record.jiraEpicKey && (
+                  <Tag
+                    color="purple"
+                    icon={<LinkOutlined />}
+                    style={{ cursor: 'pointer', margin: 0, fontSize: 11 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void openJiraExternalUrl(getJiraBrowseUrl(record.jiraEpicKey!));
+                    }}
+                    title={`Mở Jira Epic ${record.jiraEpicKey}`}
+                  >
+                    Epic: {record.jiraEpicKey}
+                  </Tag>
+                )}
                 {linkCount > 0 && (
                   <Popover
                     title="Tài liệu liên kết"

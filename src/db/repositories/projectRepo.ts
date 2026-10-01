@@ -26,6 +26,7 @@ export async function createProject(
   if (validated.description !== undefined) project.description = validated.description;
   if (validated.deadline !== undefined) project.deadline = validated.deadline;
   if (validated.notes !== undefined) project.notes = validated.notes;
+  if (validated.jiraEpicKey !== undefined) project.jiraEpicKey = validated.jiraEpicKey;
   if (validated.opsOwners !== undefined) project.opsOwners = validated.opsOwners;
   if (validated.businessAnalysts !== undefined) project.businessAnalysts = validated.businessAnalysts;
   if (validated.documentLinks !== undefined) project.documentLinks = validated.documentLinks;
@@ -59,6 +60,13 @@ export async function updateProject(
   if (validated.deadline !== undefined) updated.deadline = validated.deadline;
   if (validated.notes !== undefined) updated.notes = validated.notes;
   if (validated.status !== undefined) updated.status = validated.status;
+  if ('jiraEpicKey' in patch) {
+    if (validated.jiraEpicKey !== undefined) {
+      updated.jiraEpicKey = validated.jiraEpicKey;
+    } else {
+      delete updated.jiraEpicKey;
+    }
+  }
   if (validated.opsOwners !== undefined) updated.opsOwners = validated.opsOwners;
   if (validated.businessAnalysts !== undefined) updated.businessAnalysts = validated.businessAnalysts;
   if (validated.documentLinks !== undefined) updated.documentLinks = validated.documentLinks;

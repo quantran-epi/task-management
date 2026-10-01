@@ -63,6 +63,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ db = defaultDb, onNa
     deadline?: string | undefined;
     notes?: string | undefined;
     status: ProjectStatus;
+    jiraEpicKey?: string | undefined;
     opsOwners?: string[] | undefined;
     businessAnalysts?: string[] | undefined;
     documentLinks?: string[] | undefined;
