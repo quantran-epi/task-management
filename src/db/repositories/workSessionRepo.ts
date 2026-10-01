@@ -52,6 +52,9 @@ export async function createWorkSession(
     if (validated.endTime !== undefined) {
       session.endTime = validated.endTime;
     }
+    if (validated.segments !== undefined) {
+      session.segments = validated.segments;
+    }
     if (validated.note !== undefined && validated.note.trim() !== '') {
       session.note = validated.note.trim();
     }
