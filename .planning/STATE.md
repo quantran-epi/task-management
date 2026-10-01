@@ -5,9 +5,9 @@ milestone_name: Banking IT Enhancements & Jira Integration
 current_phase: 13
 status: completed
 stopped_at: Phase 13 complete — all phases complete
-last_updated: "2026-09-30T09:30:00.000Z"
-last_activity: 2026-09-30
-last_activity_desc: "Completed quick task 260930-dii: day insight per-task planned vs actual"
+last_updated: "2026-10-01T06:25:00.000Z"
+last_activity: 2026-10-01
+last_activity_desc: "Completed quick task 261001-hex: Tauri SQLite persistence and scheduled GitHub auto-sync"
 state_head: 801eeb5
 progress:
   total_phases: 7
@@ -46,6 +46,7 @@ Last activity: 2026-09-30 — Completed quick task 260930-dii: day insight per-t
 | 260930-uwl | Add Tauri notification plugin for native desktop notifications | 2026-09-30 | e2d8996 | complete | [260930-uwl-add-tauri-notification-plugin-for-native](./quick/260930-uwl-add-tauri-notification-plugin-for-native/) |
 | 260930-vdl | pop out and pin timer as separate small window with multi-timer support and live sync | 2026-09-30 | 74e9bd2 | complete | [260930-vdl-pop-out-and-pin-timer-as-separate-small-](./quick/260930-vdl-pop-out-and-pin-timer-as-separate-small-/) |
 | 260930-wva | fix vitest virtual:pwa-register alias for windows runners | 2026-09-30 | 9bbc0f5 | complete | [260930-wva-fix-vitest-virtual-pwa-alias-windows](./quick/260930-wva-fix-vitest-virtual-pwa-alias-windows/) |
+| 261001-hex | Add Tauri local SQLite file persistence with user-selected path, row-level transactional autosave, close flush, missing-path recovery, and GitHub auto-sync by interval or fixed daily local time with dirty-only sync and missed-run catch-up | 2026-10-01 | 7d84dd6 | complete | [261001-hex-add-tauri-local-sqlite-file-persistence-](./quick/261001-hex-add-tauri-local-sqlite-file-persistence-/) |
 
 ## Performance Metrics
 
