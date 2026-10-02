@@ -38,4 +38,28 @@ describe('captureFocusedWindowScreenshot', () => {
     expect(file.type).toBe('image/png');
     expect(stops.every((stop) => stop.mock.calls.length === 1)).toBe(true);
   });
+
+  it('falls back to clipboard image when getDisplayMedia is not available', async () => {
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: undefined,
+    });
+
+    const mockBlob = new Blob(['clipboard-img'], { type: 'image/png' });
+    const mockClipboardItem = {
+      types: ['image/png'],
+      getType: vi.fn().mockResolvedValue(mockBlob),
+    };
+
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        read: vi.fn().mockResolvedValue([mockClipboardItem]),
+      },
+    });
+
+    const file = await captureFocusedWindowScreenshot();
+    expect(file).toBeDefined();
+    expect(file.type).toBe('image/png');
+  });
 });
