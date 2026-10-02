@@ -27,6 +27,7 @@ import { deleteNote, updateNote } from '../../db/repositories/noteRepo';
 import { renderSafeMarkdown } from '../../utils/markdown';
 import { NoteEditor } from './NoteEditor';
 import { NoteDetailModal } from './NoteDetailModal';
+import { QuickNoteEntry } from './QuickNoteEntry';
 import { openNotesPopout } from '../../utils/notesPopout';
 
 export interface EntityNotesSectionProps {
@@ -134,6 +135,10 @@ export const EntityNotesSection: React.FC<EntityNotesSectionProps> = ({
             Thêm ghi chú
           </Button>
         </Space>
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <QuickNoteEntry defaultEntityType={entityType} defaultEntityId={entityId} db={db} />
       </div>
 
       {(!notes || notes.length === 0) ? (

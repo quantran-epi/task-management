@@ -29,6 +29,7 @@ import { deleteNote, updateNote } from '../db/repositories/noteRepo';
 import { renderSafeMarkdown } from '../utils/markdown';
 import { NoteEditor } from '../components/notes/NoteEditor';
 import { NoteDetailModal } from '../components/notes/NoteDetailModal';
+import { QuickNoteEntry } from '../components/notes/QuickNoteEntry';
 import { openNotesPopout } from '../utils/notesPopout';
 
 export interface NotesViewProps {
@@ -204,6 +205,10 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
             Tạo ghi chú
           </Button>
         </Space>
+      </div>
+
+      <div style={{ marginBottom: 20 }}>
+        <QuickNoteEntry db={db} />
       </div>
 
       {/* Notes Grid */}

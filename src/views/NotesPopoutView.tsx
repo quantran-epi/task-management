@@ -29,6 +29,7 @@ import { deleteNote, updateNote } from '../db/repositories/noteRepo';
 import { renderSafeMarkdown } from '../utils/markdown';
 import { NoteEditor } from '../components/notes/NoteEditor';
 import { NoteDetailModal } from '../components/notes/NoteDetailModal';
+import { QuickNoteEntry } from '../components/notes/QuickNoteEntry';
 import {
   isTauriApp,
   isNotesWindowAlwaysOnTop,
@@ -362,6 +363,14 @@ export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb
             </Button>
           </div>
         )}
+      </div>
+
+      <div style={{ padding: '10px 12px 0' }}>
+        <QuickNoteEntry
+          defaultEntityType={activeFilter?.entityType as NoteEntityType | undefined}
+          defaultEntityId={activeFilter?.entityId}
+          db={db}
+        />
       </div>
 
       {/* Scrollable Notes List */}
