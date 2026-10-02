@@ -1,7 +1,9 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import 'fake-indexeddb/auto';
 import { TimerPopoutView } from '../../src/views/TimerPopoutView';
 import { TimerContext, type TimerContextValue } from '../../src/context/TimerContext';
+import { TaskPlannerDatabase } from '../../src/db';
 import * as timerPopoutUtils from '../../src/utils/timerPopout';
 
 const mockPause = vi.fn();
@@ -10,7 +12,8 @@ const mockFinish = vi.fn();
 const mockCancel = vi.fn();
 
 function renderWithContext(
-  contextOverrides: Partial<TimerContextValue> = {}
+  contextOverrides: Partial<TimerContextValue> = {},
+  database?: TaskPlannerDatabase
 ) {
   const defaultContext: TimerContextValue = {
     activeTimers: [],
@@ -25,14 +28,22 @@ function renderWithContext(
 
   return render(
     <TimerContext.Provider value={defaultContext}>
-      <TimerPopoutView />
+      <TimerPopoutView database={database} />
     </TimerContext.Provider>
   );
 }
 
 describe('TimerPopoutView', () => {
-  beforeEach(() => {
+  let testDb: TaskPlannerDatabase;
+
+  beforeEach(async () => {
     vi.clearAllMocks();
+    testDb = new TaskPlannerDatabase(`TestPopoutDB_${Date.now()}_${Math.random()}`);
+    await testDb.open();
+  });
+
+  afterEach(async () => {
+    await testDb.delete();
   });
 
   it('renders empty state when no timers are active', () => {
@@ -146,6 +157,60 @@ describe('TimerPopoutView', () => {
 
     await waitFor(() => {
       expect(setOnTopSpy).toHaveBeenCalledWith(false);
+    });
+  });
+
+  it('renders Project › Milestone hierarchy subtitle under task name (D-04)', async () => {
+    await testDb.projects.add({
+      id: 'proj-popout-1',
+      name: 'Project Delta',
+      status: 'In Progress',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    await testDb.milestones.add({
+      id: 'ms-popout-1',
+      projectId: 'proj-popout-1',
+      name: 'Milestone Beta',
+      status: 'In Progress',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    await testDb.tasks.add({
+      id: 'task-popout-sub',
+      projectId: 'proj-popout-1',
+      milestoneId: 'ms-popout-1',
+      name: 'Viết tài liệu tích hợp',
+      status: 'In Progress',
+      progress: 0,
+      priority: 'Medium',
+      estimateMinutes: 45,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    renderWithContext(
+      {
+        activeTimers: [
+          {
+            taskId: 'task-popout-sub',
+            status: 'running',
+            startedAt: Date.now() - 45000,
+            accumulatedMs: 0,
+            sessionStartTime: new Date().toISOString(),
+            segments: [{ startTime: new Date().toISOString() }],
+          },
+        ],
+        getElapsedSeconds: () => 45,
+      },
+      testDb
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Viết tài liệu tích hợp')).toBeInTheDocument();
+      expect(screen.getByTestId('popout-hierarchy-subtitle')).toHaveTextContent('Project Delta › Milestone Beta');
     });
   });
 });

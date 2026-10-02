@@ -36,6 +36,7 @@ export interface Project {
   deadline?: string; // YYYY-MM-DD
   notes?: string;
   status: ProjectStatus;
+  jiraEpicKey?: string; // Phase 13.1 D-05: Jira Epic key mapping
   opsOwners?: string[];
   businessAnalysts?: string[];
   documentLinks?: string[];
@@ -123,6 +124,11 @@ export interface BackupMetadata {
 
 export type TimerStatus = 'running' | 'paused';
 
+export interface TimerSegment {
+  startTime: string; // ISO 8601 string
+  endTime?: string | undefined; // ISO 8601 string (undefined if currently running)
+}
+
 export interface WorkSession {
   id: string; // RFC 4122 v4 UUID
   taskId: string; // Reference to Task.id
@@ -130,11 +136,11 @@ export interface WorkSession {
   endTime?: string | undefined; // ISO 8601 string
   date: string; // YYYY-MM-DD
   durationMinutes: number; // Positive integer minutes (>= 1)
+  segments?: TimerSegment[] | undefined; // Phase 13.1 D-01: discrete running segments
   note?: string | undefined;
   createdAt: string; // ISO string metadata
   updatedAt: string; // ISO string metadata
 }
-
 
 export interface ActiveTimer {
   taskId: string; // Primary key - Reference to Task.id
@@ -142,5 +148,30 @@ export interface ActiveTimer {
   startedAt: number; // Unix epoch ms
   accumulatedMs: number;
   sessionStartTime: string; // ISO 8601 string
+  segments?: TimerSegment[] | undefined; // Phase 13.1 D-01: discrete running segments
+}
+
+export type NoteEntityType = 'task' | 'project' | 'milestone';
+
+export interface Note {
+  id: string; // RFC 4122 v4 UUID
+  entityType?: NoteEntityType | undefined; // Optional reference type
+  entityId?: string | undefined; // Optional reference to Task/Project/Milestone id
+  title?: string | undefined;
+  body: string; // Markdown text content
+  isPinned: boolean;
+  createdAt: string; // ISO string metadata
+  updatedAt: string; // ISO string metadata
+}
+
+export interface NoteAttachment {
+  id: string; // RFC 4122 v4 UUID
+  noteId: string; // Reference to Note.id
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  caption?: string | undefined;
+  createdAt: string; // ISO string metadata
+  data: Blob; // Binary image payload
 }
 

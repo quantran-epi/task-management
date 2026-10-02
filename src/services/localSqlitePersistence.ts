@@ -58,7 +58,16 @@ const INTERNAL_SETTING_KEYS = new Set<string>([
   SQLITE_SETTING_KEYS.lastFlushAt,
   SQLITE_SETTING_KEYS.missingPath,
 ]);
-const SECRET_SETTING_KEYS = new Set(['github_token', 'github_passphrase']);
+export const EXCLUDED_SETTING_KEYS = new Set<string>([
+  'jira_api_token',
+  'github_pat',
+  'github_token',
+  'github_passphrase',
+  'backup_passphrase',
+  'tauri_keyring_migrated',
+]);
+
+const SECRET_SETTING_KEYS = EXCLUDED_SETTING_KEYS;
 
 function coalesceQueue(queue: QueuedSqliteChange[], change: QueuedSqliteChange): QueuedSqliteChange[] {
   return [...queue.filter((item) => item.tableName !== change.tableName || item.rowId !== change.rowId), change];

@@ -1,6 +1,14 @@
 import 'fake-indexeddb/auto';
 import '@testing-library/jest-dom/vitest';
 
+import { Blob as NodeBlob } from 'node:buffer';
+
+// JSDOM Blob shim using Node 24 native Blob so structuredClone / fake-indexeddb preserves Blob instances
+globalThis.Blob = NodeBlob as any;
+if (typeof window !== 'undefined') {
+  window.Blob = NodeBlob as any;
+}
+
 // JSDOM matchMedia shim for Ant Design responsive Observer and useThemeMode
 if (typeof window !== 'undefined') {
   Object.defineProperty(window, 'matchMedia', {
@@ -40,4 +48,26 @@ if (typeof window !== 'undefined' && window.crypto && !window.crypto.subtle && g
     configurable: true,
   });
 }
+
+// Ensure global and window structuredClone and Blob work with native Node 24 Blob in JSDOM
+if (typeof window !== 'undefined') {
+  if (typeof globalThis.Blob !== 'undefined') {
+    Object.defineProperty(window, 'Blob', {
+      value: globalThis.Blob,
+      writable: true,
+      configurable: true,
+    });
+    (global as any).Blob = globalThis.Blob;
+  }
+  if (typeof globalThis.structuredClone !== 'undefined') {
+    Object.defineProperty(window, 'structuredClone', {
+      value: globalThis.structuredClone,
+      writable: true,
+      configurable: true,
+    });
+    (global as any).structuredClone = globalThis.structuredClone;
+  }
+}
+
+
 

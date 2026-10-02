@@ -11,6 +11,9 @@ export interface WorkSessionWithTask extends WorkSession {
  * Helper to format a date/ISO string into YYYY-MM-DD calendar date string.
  */
 function toCalendarDateString(dateInput: string | Date): string {
+  if (typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
+    return dateInput;
+  }
   const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -51,6 +54,9 @@ export async function createWorkSession(
 
     if (validated.endTime !== undefined) {
       session.endTime = validated.endTime;
+    }
+    if (validated.segments !== undefined) {
+      session.segments = validated.segments;
     }
     if (validated.note !== undefined && validated.note.trim() !== '') {
       session.note = validated.note.trim();
@@ -240,6 +246,23 @@ export async function getActualMinutesByTaskForDate(
     result.set(s.taskId, (result.get(s.taskId) ?? 0) + s.durationMinutes);
   }
   return result;
+}
+
+/**
+ * Retrieves all work sessions intersecting a 7-day period.
+ * Dates are inclusive between weekStartIso and weekEndIso.
+ */
+export async function getWorkSessionsForWeek(
+  weekStartIso: string,
+  weekEndIso: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<WorkSession[]> {
+  const startDateStr = toCalendarDateString(weekStartIso);
+  const endDateStr = toCalendarDateString(weekEndIso);
+  return await db.workSessions
+    .where('date')
+    .between(startDateStr, endDateStr, true, true)
+    .toArray();
 }
 
 /**

@@ -12,9 +12,11 @@ import {
   message,
   Tabs,
   Typography,
+  Badge,
 } from 'antd';
 import { PlusOutlined, DeleteOutlined, LinkOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
+import { useLiveQuery } from 'dexie-react-hooks';
 import type { Task, Project, Milestone, TaskStatus, TaskPriority, WorkType } from '../../types/models';
 import { WORK_TYPES } from '../../types/models';
 import { getTask, updateTask, reparentTask } from '../../db/repositories/taskRepo';
@@ -25,6 +27,7 @@ import { useRegisterActiveForm } from '../../context/FormGuardContext';
 import { TaskDrawerPlanning } from './TaskDrawerPlanning';
 import { TaskJiraSection } from './TaskJiraSection';
 import { WorkSessionsTab } from './WorkSessionsTab';
+import { EntityNotesSection } from '../notes/EntityNotesSection';
 import { TagSelect } from '../common/TagSelect';
 import { RemindersFormList, formatRemindersForForm, formatRemindersForSave } from '../common/RemindersFormList';
 import { WORK_TYPE_CONFIG } from './WorkTypeBadge';
@@ -113,6 +116,21 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
   const liveEstimateMinutes =
     watchHours !== undefined && watchMinutes !== undefined ? watchHours * 60 + watchMinutes : undefined;
   const restorerRef = useRef<(() => void) | null>(null);
+
+  // Live count of notes attached to this task (D-15, UI-SPEC)
+  const taskNotesCount = useLiveQuery(
+    async () => {
+      if (!taskId) return 0;
+      const targetDb = db || (await import('../../db')).db;
+      if (!targetDb?.notes) return 0;
+      return await targetDb.notes
+        .where('entityId')
+        .equals(taskId)
+        .filter((n) => n.entityType === 'task')
+        .count();
+    },
+    [taskId, db]
+  );
 
   // Focus management
   useEffect(() => {
@@ -600,6 +618,23 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
       key: 'sessions',
       label: 'Lịch sử làm việc',
       children: currentTask ? <WorkSessionsTab task={currentTask} db={db} /> : null,
+    },
+    {
+      key: 'notes',
+      label: (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <span>Ghi chú</span>
+          <Badge
+            count={taskNotesCount || 0}
+            overflowCount={99}
+            size="small"
+            style={{ backgroundColor: taskNotesCount ? '#1677ff' : '#d9d9d9' }}
+          />
+        </span>
+      ),
+      children: currentTask ? (
+        <EntityNotesSection entityType="task" entityId={currentTask.id} db={db} />
+      ) : null,
     },
   ];
 

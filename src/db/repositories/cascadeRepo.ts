@@ -15,7 +15,7 @@ export async function deleteProjectWithCascade(
 ): Promise<void> {
   await db.transaction(
     'rw',
-    [db.projects, db.milestones, db.tasks, db.plannedAllocations, db.workSessions, db.activeTimers],
+    [db.projects, db.milestones, db.tasks, db.plannedAllocations, db.workSessions, db.activeTimers, db.notes],
     async () => {
       const milestones = await db.milestones.where('projectId').equals(projectId).toArray();
       const milestoneIds = milestones.map((m) => m.id);
@@ -31,6 +31,20 @@ export async function deleteProjectWithCascade(
       }
       const allChildTasks = Array.from(taskMap.values());
       const childTaskIds = allChildTasks.map((t) => t.id);
+
+      // Detach notes associated with the project, milestones, and deleted tasks (D-25)
+      const now = new Date().toISOString();
+      const entityIdsToDetach = [projectId, ...milestoneIds, ...(mode === 'cascade' ? childTaskIds : [])];
+      if (entityIdsToDetach.length > 0) {
+        await db.notes
+          .where('entityId')
+          .anyOf(entityIdsToDetach)
+          .modify((note: any) => {
+            delete note.entityType;
+            delete note.entityId;
+            note.updatedAt = now;
+          });
+      }
 
       if (mode === 'cascade') {
         if (childTaskIds.length > 0) {
@@ -92,10 +106,24 @@ export async function deleteMilestoneWithCascade(
 ): Promise<void> {
   await db.transaction(
     'rw',
-    [db.milestones, db.tasks, db.plannedAllocations, db.workSessions, db.activeTimers],
+    [db.milestones, db.tasks, db.plannedAllocations, db.workSessions, db.activeTimers, db.notes],
     async () => {
       const childTasks = await db.tasks.where('milestoneId').equals(milestoneId).toArray();
       const childTaskIds = childTasks.map((t) => t.id);
+
+      // Detach notes associated with the milestone and deleted tasks (D-25)
+      const now = new Date().toISOString();
+      const entityIdsToDetach = [milestoneId, ...(mode === 'cascade' ? childTaskIds : [])];
+      if (entityIdsToDetach.length > 0) {
+        await db.notes
+          .where('entityId')
+          .anyOf(entityIdsToDetach)
+          .modify((note: any) => {
+            delete note.entityType;
+            delete note.entityId;
+            note.updatedAt = now;
+          });
+      }
 
       if (mode === 'cascade') {
         if (childTaskIds.length > 0) {
@@ -143,8 +171,19 @@ export async function deleteTaskWithAllocations(
 ): Promise<void> {
   await db.transaction(
     'rw',
-    [db.tasks, db.plannedAllocations, db.workSessions, db.activeTimers],
+    [db.tasks, db.plannedAllocations, db.workSessions, db.activeTimers, db.notes],
     async () => {
+      // Detach notes associated with the task (D-25: notes become standalone)
+      const now = new Date().toISOString();
+      await db.notes
+        .where('entityId')
+        .equals(taskId)
+        .modify((note: any) => {
+          delete note.entityType;
+          delete note.entityId;
+          note.updatedAt = now;
+        });
+
       const allocations = await db.plannedAllocations.where('taskId').equals(taskId).toArray();
       if (allocations.length > 0) {
         await db.plannedAllocations.bulkDelete(allocations.map((a) => a.id));

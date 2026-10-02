@@ -1,89 +1,63 @@
 import type { TaskStatus } from '../../types/models';
-import type { JiraTransitionItem } from './types';
+import type { JiraTransitionItem, JiraStatusMapping } from './types';
 
-export const LOCAL_TASK_STATUSES: readonly TaskStatus[] = [
-  'Open',
-  'In Progress',
-  'In Review',
-  'Resolved',
-  'Done',
-  'Cancelled',
-];
-
-export type JiraStatusMappings = Record<TaskStatus, string[]>;
-
-export const DEFAULT_JIRA_STATUS_MAPPINGS: JiraStatusMappings = {
-  Open: ['Open', 'To Do', 'Backlog'],
-  'In Progress': ['In Progress', 'Developing', 'Doing'],
-  'In Review': ['In Review', 'Review', 'PR Review'],
-  Resolved: ['Resolved', 'Testing', 'QA', 'UAT'],
-  Done: ['Done', 'Closed', 'Completed'],
-  Cancelled: ['Cancelled', 'Rejected', "Won't Do", "Won't Fix"],
-};
-
-export function normalizeJiraStatusMappings(value: unknown): JiraStatusMappings {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return structuredClone(DEFAULT_JIRA_STATUS_MAPPINGS);
+/**
+ * Filter Jira transitions to those whose destination status ID matches
+ * the configured one-to-many mappings for a given local TaskStatus (D-08, D-09).
+ */
+export function findReachableTransitions(
+  availableTransitions: JiraTransitionItem[],
+  localStatus: TaskStatus,
+  mappings: JiraStatusMapping
+): JiraTransitionItem[] {
+  const mappedStatusIds = mappings[localStatus] || [];
+  if (mappedStatusIds.length === 0) {
+    return [];
   }
 
-  const stored = value as Record<string, unknown>;
-  if (Object.entries(stored).some(([key, tokens]) =>
-    LOCAL_TASK_STATUSES.includes(key as TaskStatus) && !Array.isArray(tokens)
-  )) {
-    return structuredClone(DEFAULT_JIRA_STATUS_MAPPINGS);
-  }
-
-  return Object.fromEntries(
-    LOCAL_TASK_STATUSES.map((status) => {
-      const tokens = stored[status];
-      if (!Array.isArray(tokens)) return [status, [...DEFAULT_JIRA_STATUS_MAPPINGS[status]]];
-      const normalized = tokens
-        .filter((token): token is string => typeof token === 'string')
-        .map((token) => token.trim())
-        .filter(Boolean);
-      return [status, normalized];
-    })
-  ) as JiraStatusMappings;
+  const mappedSet = new Set(mappedStatusIds);
+  return availableTransitions.filter((transition) =>
+    mappedSet.has(transition.to.id)
+  );
 }
 
+/**
+ * Resolves local TaskStatus corresponding to a Jira status ID from mappings (D-08).
+ * In accordance with D-11: No keyword guessing! If unmapped, returns null.
+ */
 export function resolveLocalStatusFromMapping(
   jiraStatusId: string,
-  jiraStatusName: string,
-  mappings: JiraStatusMappings
+  mappings: JiraStatusMapping
 ): TaskStatus | null {
-  const id = jiraStatusId.trim().toLowerCase();
-  const name = jiraStatusName.trim().toLowerCase();
-  return (
-    LOCAL_TASK_STATUSES.find((status) =>
-      mappings[status].some((token) => {
-        const normalized = token.toLowerCase();
-        return normalized === id || normalized === name;
-      })
-    ) ?? null
-  );
+  for (const [status, ids] of Object.entries(mappings)) {
+    if (ids.includes(jiraStatusId)) {
+      return status as TaskStatus;
+    }
+  }
+  return null;
 }
 
-export function findReachableTransitions(
-  transitions: JiraTransitionItem[],
-  localStatus: TaskStatus,
-  mappings: JiraStatusMappings
-): JiraTransitionItem[] {
-  return transitions.filter(
-    (transition) =>
-      resolveLocalStatusFromMapping(transition.to.id, transition.to.name, mappings) === localStatus
-  );
-}
-
+/**
+ * Evaluates whether local status matches cached Jira status.
+ * D-07, D-10: Task.status is authoritative.
+ */
 export function isStatusMismatch(
   localStatus: TaskStatus,
-  jiraStatusId: string,
-  jiraStatusName: string,
-  mappings: JiraStatusMappings
+  jiraStatusId: string | undefined,
+  mappings: JiraStatusMapping
 ): boolean {
-  const mapped = resolveLocalStatusFromMapping(jiraStatusId, jiraStatusName, mappings);
-  return mapped !== null && mapped !== localStatus;
+  if (!jiraStatusId) return false;
+  const mappedIds = mappings[localStatus] || [];
+  if (mappedIds.length === 0) {
+    // If no mapping is configured for this local status, consider it unmapped
+    return true;
+  }
+  return !mappedIds.includes(jiraStatusId);
 }
 
+/**
+ * Legacy status mapper for initial default proposal (D-11: statusCategory only used for initial suggestions).
+ */
 export function mapJiraStatusToLocalTaskStatus(
   statusName: string,
   categoryKey?: string
@@ -152,6 +126,6 @@ export function mapJiraStatusToLocalTaskStatus(
     return 'Open';
   }
 
-  // Fallback: null means leave local status unchanged
   return null;
 }
+

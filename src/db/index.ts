@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import { SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6 } from './schema';
+import { SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7 } from './schema';
 import type {
   Project,
   Milestone,
@@ -11,6 +11,8 @@ import type {
   BackupMetadata,
   WorkSession,
   ActiveTimer,
+  Note,
+  NoteAttachment,
 } from '../types/models';
 
 export class TaskPlannerDatabase extends Dexie {
@@ -24,6 +26,8 @@ export class TaskPlannerDatabase extends Dexie {
   backupMetadata!: Table<BackupMetadata, string>;
   workSessions!: Table<WorkSession, string>;
   activeTimers!: Table<ActiveTimer, string>;
+  notes!: Table<Note, string>;
+  noteAttachments!: Table<NoteAttachment, string>;
 
   constructor(databaseName = 'PersonalTaskPlannerDB') {
     super(databaseName);
@@ -92,6 +96,36 @@ export class TaskPlannerDatabase extends Dexie {
         await tx.table('projects').toCollection().modify(migrateReminders);
         await tx.table('milestones').toCollection().modify(migrateReminders);
         await tx.table('tasks').toCollection().modify(migrateReminders);
+      });
+
+    this.version(7)
+      .stores(SCHEMA_V7)
+      .upgrade(async (tx) => {
+        // Migration: populate segments for existing activeTimers and workSessions (D-01)
+        await tx
+          .table('activeTimers')
+          .toCollection()
+          .modify((timer: Record<string, unknown>) => {
+            if (!Array.isArray(timer.segments)) {
+              timer.segments = timer.startedAt
+                ? [{ startTime: new Date(Number(timer.startedAt)).toISOString() }]
+                : [];
+            }
+          });
+
+        await tx
+          .table('workSessions')
+          .toCollection()
+          .modify((ws: Record<string, unknown>) => {
+            if (!Array.isArray(ws.segments)) {
+              ws.segments = [
+                {
+                  startTime: String(ws.startTime),
+                  endTime: ws.endTime ? String(ws.endTime) : undefined,
+                },
+              ];
+            }
+          });
       });
 
     // Multi-tab concurrency handlers (DATA-04, D-09, D-10)

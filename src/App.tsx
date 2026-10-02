@@ -14,6 +14,8 @@ import { PlannerView } from './views/PlannerView';
 import { SettingsView } from './views/SettingsView';
 import { DashboardView } from './views/DashboardView';
 import { AnalyticsView } from './views/AnalyticsView';
+import { NotesView } from './views/NotesView';
+import { NotesPopoutView } from './views/NotesPopoutView';
 import { TimerPopoutView } from './views/TimerPopoutView';
 import { TimerProvider } from './context/TimerContext';
 
@@ -44,6 +46,8 @@ export const App: React.FC = () => {
         return <PlannerView targetDate={params.date} />;
       case 'analytics':
         return <AnalyticsView initialMilestoneId={params.milestoneId} onNavigate={navigate} />;
+      case 'notes':
+        return <NotesView />;
       case 'settings':
         return <SettingsView onNavigate={navigate} />;
       default:
@@ -66,6 +70,23 @@ export const App: React.FC = () => {
         <TimerProvider>
           <TimerPopoutView />
         </TimerProvider>
+      </ConfigProvider>
+    );
+  }
+
+  if (route === 'notes-popout') {
+    return (
+      <ConfigProvider
+        locale={viVN}
+        theme={{
+          algorithm: isDark ? darkAlgorithm : defaultAlgorithm,
+          token: {
+            colorPrimary: '#1677ff',
+            fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+          },
+        }}
+      >
+        <NotesPopoutView />
       </ConfigProvider>
     );
   }

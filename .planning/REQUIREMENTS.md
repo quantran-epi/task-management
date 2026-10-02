@@ -62,6 +62,20 @@
 - [x] **ANLT-02**: User can view task status distribution and completion velocity across projects.
 - [x] **ANLT-03**: User can view workload allocation broken down by Ops Owner, Business Analyst, and Work Type (hours and active task counts).
 
+### Sticky Notes with Attachments & Pop-Out (Phase 13.1 INSERTED)
+
+- [x] **NOTE-01**: User can create, edit, pin, and delete standalone or entity-attached (Task, Project, Milestone) sticky notes with safe Common Markdown formatting.
+- [x] **NOTE-02**: User can attach up to 5 screenshot images (PNG/JPEG/GIF/WebP, max 5MB each) per note stored as Blobs and serialized in backups.
+- [x] **NOTE-03**: User can search and filter notes in a dedicated full view and pop out a pinned, floating, resizable notes window with Always on Top on Tauri and browser popup fallback.
+
+### Actual Worklog Planner (Phase 13.1 INSERTED)
+
+- [x] **WORKLOG-01**: User can view weekly planned vs actual work comparison matrix with midnight segment splitting, color-coded variance, quick inline minute entry, and full work session detail editing.
+
+### Native Credential Storage & Auto-Sync Hardening (Phase 13.1 INSERTED)
+
+- [x] **SYNC-01**: Native desktop OS Keychain credential persistence via Rust keyring crate with Web password-manager compatibility, safe legacy Jira token migration, zero-secret SQLite/IndexedDB boundaries, and resilient GitHub auto-sync with exponential backoff and SHA conflict pausing.
+
 ## Future Requirements (Deferred)
 
 - **FUTR-01**: Full bidirectional Jira issue webhook sync (deferred - requires server/push).
@@ -114,3 +128,8 @@
 | ANLT-01 | Phase 13 | Complete |
 | ANLT-02 | Phase 13 | Complete |
 | ANLT-03 | Phase 13 | Complete |
+| NOTE-01 | Phase 13.1 | Complete |
+| NOTE-02 | Phase 13.1 | Complete |
+| NOTE-03 | Phase 13.1 | Complete |
+| WORKLOG-01 | Phase 13.1 | Complete |
+| SYNC-01 | Phase 13.1 | Complete |

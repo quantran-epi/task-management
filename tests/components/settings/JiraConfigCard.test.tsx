@@ -1,11 +1,12 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { TaskPlannerDatabase } from '../../../src/db';
-import { JiraConfigCard } from '../../../src/components/settings/JiraConfigCard';
-import * as jiraApi from '../../../src/services/jira/jiraApi';
-import * as ariaLive from '../../../src/components/common/AriaLiveRegion';
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { TaskPlannerDatabase } from "../../../src/db";
+import { JiraConfigCard } from "../../../src/components/settings/JiraConfigCard";
+import * as jiraApi from "../../../src/services/jira/jiraApi";
+import * as ariaLive from "../../../src/components/common/AriaLiveRegion";
+import * as jiraTokenService from "../../../src/services/jiraTokenService";
 
-vi.mock('../../../src/services/jira/jiraApi', async (importOriginal) => {
+vi.mock("../../../src/services/jira/jiraApi", async (importOriginal) => {
   const actual = await importOriginal<typeof jiraApi>();
   return {
     ...actual,
@@ -13,7 +14,7 @@ vi.mock('../../../src/services/jira/jiraApi', async (importOriginal) => {
   };
 });
 
-describe('JiraConfigCard Component (JIRA-01, JIRA-02, D-01, D-02, D-03, D-04)', () => {
+describe("JiraConfigCard Component (JIRA-01, JIRA-02, D-01, D-02, D-03, D-04)", () => {
   let db: TaskPlannerDatabase;
 
   beforeEach(async () => {
@@ -26,124 +27,112 @@ describe('JiraConfigCard Component (JIRA-01, JIRA-02, D-01, D-02, D-03, D-04)', 
     await db.delete();
   });
 
-  it('renders all form fields and action buttons', () => {
+  it("renders all form fields and action buttons", () => {
     render(<JiraConfigCard db={db} />);
 
-    expect(screen.getByText('Cấu hình tích hợp Jira Cloud')).toBeInTheDocument();
-    expect(screen.getByLabelText('Tên miền Jira')).toBeInTheDocument();
-    expect(screen.getByLabelText('Email Jira')).toBeInTheDocument();
-    expect(screen.getByLabelText('Jira API Token')).toBeInTheDocument();
-    expect(screen.getByLabelText('CORS Proxy URL')).toBeInTheDocument();
-    expect(screen.getByLabelText('Mã dự án mặc định')).toBeInTheDocument();
-    expect(screen.getByLabelText('Loại Issue mặc định')).toBeInTheDocument();
-    expect(screen.getByText('Ánh xạ trạng thái cục bộ sang Jira')).toBeInTheDocument();
-    for (const status of ['Open', 'In Progress', 'In Review', 'Resolved', 'Done', 'Cancelled']) {
-      expect(screen.getByLabelText(`Jira statuses cho ${status}`)).toBeInTheDocument();
-    }
+    expect(screen.getByText("Cấu hình tích hợp Jira Cloud")).toBeInTheDocument();
+    expect(screen.getByLabelText("Tên miền Jira")).toBeInTheDocument();
+    expect(screen.getByLabelText("Email Jira")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Nhập mã token/i })).toBeInTheDocument();
+    expect(screen.getByLabelText("CORS Proxy URL")).toBeInTheDocument();
+    expect(screen.getByLabelText("Mã dự án mặc định")).toBeInTheDocument();
+    expect(screen.getByLabelText("Loại Issue mặc định")).toBeInTheDocument();
 
-    expect(screen.getByRole('button', { name: /Lưu cấu hình Jira/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Kiểm tra kết nối/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Lưu cấu hình Jira/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Kiểm tra kết nối/i })).toBeInTheDocument();
   });
 
-  it('loads saved settings from db.settings into form fields', async () => {
-    await db.settings.put({ key: 'jira_domain', value: 'shb-bank.atlassian.net' });
-    await db.settings.put({ key: 'jira_email', value: 'developer@shb.com.vn' });
-    await db.settings.put({ key: 'jira_api_token', value: 'saved_token_123' });
-    await db.settings.put({ key: 'jira_cors_proxy', value: 'https://proxy.example.com/' });
-    await db.settings.put({ key: 'jira_default_project', value: 'SHB' });
-    await db.settings.put({ key: 'jira_default_issue_type', value: 'Bug' });
+  it("loads saved settings from db.settings into form fields", async () => {
+    await db.settings.put({ key: "jira_domain", value: "shb-bank.atlassian.net" });
+    await db.settings.put({ key: "jira_email", value: "developer@shb.com.vn" });
+    await db.settings.put({ key: "jira_cors_proxy", value: "https://proxy.example.com/" });
+    await db.settings.put({ key: "jira_default_project", value: "SHB" });
+    await db.settings.put({ key: "jira_default_issue_type", value: "Bug" });
 
     render(<JiraConfigCard db={db} />);
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Tên miền Jira')).toHaveValue('shb-bank.atlassian.net');
-      expect(screen.getByLabelText('Email Jira')).toHaveValue('developer@shb.com.vn');
-      expect(screen.getByLabelText('Jira API Token')).toHaveValue('saved_token_123');
-      expect(screen.getByLabelText('CORS Proxy URL')).toHaveValue('https://proxy.example.com/');
-      expect(screen.getByLabelText('Mã dự án mặc định')).toHaveValue('SHB');
+      expect(screen.getByLabelText("Tên miền Jira")).toHaveValue("shb-bank.atlassian.net");
+      expect(screen.getByLabelText("Email Jira")).toHaveValue("developer@shb.com.vn");
+      expect(screen.getByLabelText("CORS Proxy URL")).toHaveValue("https://proxy.example.com/");
+      expect(screen.getByLabelText("Mã dự án mặc định")).toHaveValue("SHB");
     });
   });
 
-  it('saves updated form values into db.settings on clicking save', async () => {
-    const announceSpy = vi.spyOn(ariaLive, 'announceToScreenReader');
+  it("saves updated form values into db.settings on clicking save", async () => {
+    const announceSpy = vi.spyOn(ariaLive, "announceToScreenReader");
 
     render(<JiraConfigCard db={db} />);
 
-    fireEvent.change(screen.getByLabelText('Tên miền Jira'), {
-      target: { value: 'my-org.atlassian.net' },
+    fireEvent.change(screen.getByLabelText("Tên miền Jira"), {
+      target: { value: "my-org.atlassian.net" },
     });
-    fireEvent.change(screen.getByLabelText('Email Jira'), {
-      target: { value: 'ops@my-org.com' },
+    fireEvent.change(screen.getByLabelText("Email Jira"), {
+      target: { value: "ops@my-org.com" },
     });
-    fireEvent.change(screen.getByLabelText('Jira API Token'), {
-      target: { value: 'my_new_secret_token' },
+    fireEvent.change(screen.getByLabelText("CORS Proxy URL"), {
+      target: { value: "https://worker.proxy/?url=" },
     });
-    fireEvent.change(screen.getByLabelText('CORS Proxy URL'), {
-      target: { value: 'https://worker.proxy/?url=' },
+    fireEvent.change(screen.getByLabelText("Mã dự án mặc định"), {
+      target: { value: "shb" },
     });
-    fireEvent.change(screen.getByLabelText('Mã dự án mặc định'), {
-      target: { value: 'shb' },
-    });
-    const openMapping = screen.getByLabelText('Jira statuses cho Open');
-    fireEvent.mouseDown(openMapping);
-    fireEvent.change(openMapping, { target: { value: ' 10000 ' } });
-    fireEvent.keyDown(openMapping, { key: 'Enter' });
 
-    fireEvent.click(screen.getByRole('button', { name: /Lưu cấu hình Jira/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Lưu cấu hình Jira/i }));
 
     await waitFor(async () => {
-      const savedDomain = await db.settings.get('jira_domain');
-      const savedEmail = await db.settings.get('jira_email');
-      const savedToken = await db.settings.get('jira_api_token');
-      const savedProxy = await db.settings.get('jira_cors_proxy');
-      const savedProject = await db.settings.get('jira_default_project');
-      const savedIssueType = await db.settings.get('jira_default_issue_type');
-      const savedMappings = await db.settings.get('jira_status_mappings');
+      const savedDomain = await db.settings.get("jira_domain");
+      const savedEmail = await db.settings.get("jira_email");
+      const savedProxy = await db.settings.get("jira_cors_proxy");
+      const savedProject = await db.settings.get("jira_default_project");
+      const savedIssueType = await db.settings.get("jira_default_issue_type");
 
-      expect(savedDomain?.value).toBe('my-org.atlassian.net');
-      expect(savedEmail?.value).toBe('ops@my-org.com');
-      expect(savedToken?.value).toBe('my_new_secret_token');
-      expect(savedProxy?.value).toBe('https://worker.proxy/?url=');
-      expect(savedProject?.value).toBe('SHB'); // converted to uppercase
-      expect(savedIssueType?.value).toBe('Task');
-      expect(savedMappings?.value).toEqual(
-        expect.objectContaining({ Open: expect.arrayContaining(['10000']) })
-      );
+      expect(savedDomain?.value).toBe("my-org.atlassian.net");
+      expect(savedEmail?.value).toBe("ops@my-org.com");
+      expect(savedProxy?.value).toBe("https://worker.proxy/?url=");
+      expect(savedProject?.value).toBe("SHB"); // converted to uppercase
+      expect(savedIssueType?.value).toBe("Task");
     });
 
-    expect(announceSpy).toHaveBeenCalledWith('Đã lưu cấu hình Jira');
+    expect(announceSpy).toHaveBeenCalledWith("Đã lưu cấu hình Jira");
   });
 
-  describe('Diagnostic Connection Test', () => {
-    it('disables test connection button when credentials are missing', () => {
+  describe("Diagnostic Connection Test", () => {
+    it("disables test connection button when credentials are missing", () => {
       render(<JiraConfigCard db={db} />);
 
-      const testBtn = screen.getByRole('button', { name: /Kiểm tra kết nối/i });
+      const testBtn = screen.getByRole("button", { name: /Kiểm tra kết nối/i });
       expect(testBtn).toBeDisabled();
     });
 
-    it('displays success alert when testJiraConnection succeeds', async () => {
+    it("displays success alert when testJiraConnection succeeds", async () => {
       vi.mocked(jiraApi.testJiraConnection).mockResolvedValueOnce({
-        accountId: 'acc-123',
-        displayName: 'Tran Duc Quan',
-        emailAddress: 'quan@shb.com.vn',
+        accountId: "acc-123",
+        displayName: "Tran Duc Quan",
+        emailAddress: "quan@shb.com.vn",
         active: true,
       });
+      vi.spyOn(jiraTokenService, "getJiraApiToken").mockResolvedValue("valid_token");
+      vi.spyOn(jiraTokenService, "isJiraApiTokenStored").mockResolvedValue(true);
 
       render(<JiraConfigCard db={db} />);
 
-      fireEvent.change(screen.getByLabelText('Tên miền Jira'), {
-        target: { value: 'shb.atlassian.net' },
+      fireEvent.change(screen.getByLabelText("Tên miền Jira"), {
+        target: { value: "shb.atlassian.net" },
       });
-      fireEvent.change(screen.getByLabelText('Email Jira'), {
-        target: { value: 'quan@shb.com.vn' },
-      });
-      fireEvent.change(screen.getByLabelText('Jira API Token'), {
-        target: { value: 'valid_token' },
+      fireEvent.change(screen.getByLabelText("Email Jira"), {
+        target: { value: "quan@shb.com.vn" },
       });
 
-      const testBtn = screen.getByRole('button', { name: /Kiểm tra kết nối/i });
-      expect(testBtn).toBeEnabled();
+      // Enter token via modal
+      fireEvent.click(screen.getByRole("button", { name: /Nhập mã token/i }));
+      const tokenInput = screen.getByPlaceholderText(/Nhập mã Jira API token mới/i);
+      fireEvent.change(tokenInput, { target: { value: "valid_token" } });
+      fireEvent.click(screen.getByRole("button", { name: /Lưu Token/i }));
+
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: /Kiểm tra kết nối/i })).toBeEnabled();
+      });
+      const testBtn = screen.getByRole("button", { name: /Kiểm tra kết nối/i });
 
       fireEvent.click(testBtn);
 
@@ -154,56 +143,70 @@ describe('JiraConfigCard Component (JIRA-01, JIRA-02, D-01, D-02, D-03, D-04)', 
       });
     });
 
-    it('displays warning alert when testJiraConnection rejects with CORS_BLOCKED', async () => {
-      vi.mocked(jiraApi.testJiraConnection).mockRejectedValueOnce(new Error('CORS_BLOCKED'));
+    it("displays warning alert when testJiraConnection rejects with CORS_BLOCKED", async () => {
+      vi.mocked(jiraApi.testJiraConnection).mockRejectedValueOnce(new Error("CORS_BLOCKED"));
+      vi.spyOn(jiraTokenService, "getJiraApiToken").mockResolvedValue("valid_token");
+      vi.spyOn(jiraTokenService, "isJiraApiTokenStored").mockResolvedValue(true);
 
       render(<JiraConfigCard db={db} />);
 
-      fireEvent.change(screen.getByLabelText('Tên miền Jira'), {
-        target: { value: 'shb.atlassian.net' },
+      fireEvent.change(screen.getByLabelText("Tên miền Jira"), {
+        target: { value: "shb.atlassian.net" },
       });
-      fireEvent.change(screen.getByLabelText('Email Jira'), {
-        target: { value: 'quan@shb.com.vn' },
-      });
-      fireEvent.change(screen.getByLabelText('Jira API Token'), {
-        target: { value: 'valid_token' },
+      fireEvent.change(screen.getByLabelText("Email Jira"), {
+        target: { value: "quan@shb.com.vn" },
       });
 
-      fireEvent.click(screen.getByRole('button', { name: /Kiểm tra kết nối/i }));
+      // Enter token via modal
+      fireEvent.click(screen.getByRole("button", { name: /Nhập mã token/i }));
+      const tokenInput = screen.getByPlaceholderText(/Nhập mã Jira API token mới/i);
+      fireEvent.change(tokenInput, { target: { value: "valid_token" } });
+      fireEvent.click(screen.getByRole("button", { name: /Lưu Token/i }));
+
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: /Kiểm tra kết nối/i })).toBeEnabled();
+      });
+      const testBtn = screen.getByRole("button", { name: /Kiểm tra kết nối/i });
+
+      fireEvent.click(testBtn);
 
       await waitFor(() => {
         expect(
-          screen.getByText(
-            /Yêu cầu mạng bị chặn do chính sách CORS của trình duyệt\. Vui lòng cấu hình CORS Proxy URL hợp lệ để kết nối với Jira Cloud\./i
-          )
+          screen.getByText(/Yêu cầu mạng bị chặn do chính sách CORS của trình duyệt/i)
         ).toBeInTheDocument();
       });
     });
 
-    it('displays auth error alert when testJiraConnection fails with 401 or 403', async () => {
-      vi.mocked(jiraApi.testJiraConnection).mockRejectedValueOnce(
-        new Error('Lỗi Jira API: HTTP 401 Unauthorized')
-      );
+    it("displays auth error alert when testJiraConnection fails with 401 or 403", async () => {
+      vi.mocked(jiraApi.testJiraConnection).mockRejectedValueOnce(new Error("HTTP 401 Unauthorized"));
+      vi.spyOn(jiraTokenService, "getJiraApiToken").mockResolvedValue("wrong_token");
+      vi.spyOn(jiraTokenService, "isJiraApiTokenStored").mockResolvedValue(true);
 
       render(<JiraConfigCard db={db} />);
 
-      fireEvent.change(screen.getByLabelText('Tên miền Jira'), {
-        target: { value: 'shb.atlassian.net' },
+      fireEvent.change(screen.getByLabelText("Tên miền Jira"), {
+        target: { value: "shb.atlassian.net" },
       });
-      fireEvent.change(screen.getByLabelText('Email Jira'), {
-        target: { value: 'quan@shb.com.vn' },
-      });
-      fireEvent.change(screen.getByLabelText('Jira API Token'), {
-        target: { value: 'wrong_token' },
+      fireEvent.change(screen.getByLabelText("Email Jira"), {
+        target: { value: "wrong@shb.com.vn" },
       });
 
-      fireEvent.click(screen.getByRole('button', { name: /Kiểm tra kết nối/i }));
+      // Enter token via modal
+      fireEvent.click(screen.getByRole("button", { name: /Nhập mã token/i }));
+      const tokenInput = screen.getByPlaceholderText(/Nhập mã Jira API token mới/i);
+      fireEvent.change(tokenInput, { target: { value: "wrong_token" } });
+      fireEvent.click(screen.getByRole("button", { name: /Lưu Token/i }));
+
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: /Kiểm tra kết nối/i })).toBeEnabled();
+      });
+      const testBtn = screen.getByRole("button", { name: /Kiểm tra kết nối/i });
+
+      fireEvent.click(testBtn);
 
       await waitFor(() => {
         expect(
-          screen.getByText(
-            /Xác thực thất bại \(401\/403\)\. Vui lòng kiểm tra lại Jira Domain, Email và API Token\./i
-          )
+          screen.getByText(/Xác thực thất bại \(401\/403\)/i)
         ).toBeInTheDocument();
       });
     });

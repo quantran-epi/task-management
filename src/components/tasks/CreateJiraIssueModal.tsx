@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, Form, Input, Select, Button, Alert, message } from 'antd';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
+import { getJiraApiToken } from '../../services/jiraTokenService';
 import type { Task } from '../../types/models';
 import type { JiraConfig, JiraCreateIssuePayload } from '../../services/jira/types';
 import { textToAdf } from '../../services/jira/adf';
@@ -19,6 +20,7 @@ export interface CreateJiraIssueModalProps {
 interface FormValues {
   projectKey: string;
   issueType: string;
+  epicKey?: string;
   summary: string;
   description?: string;
 }
@@ -49,7 +51,7 @@ export const CreateJiraIssueModal: React.FC<CreateJiraIssueModalProps> = ({
         const [domainRec, emailRec, tokenRec, proxyRec, projRec, issueTypeRec, accountIdRec] = await Promise.all([
           db.settings.get('jira_domain'),
           db.settings.get('jira_email'),
-          db.settings.get('jira_api_token'),
+          getJiraApiToken(db),
           db.settings.get('jira_cors_proxy'),
           db.settings.get('jira_default_project'),
           db.settings.get('jira_default_issue_type'),
@@ -63,10 +65,19 @@ export const CreateJiraIssueModal: React.FC<CreateJiraIssueModalProps> = ({
         const defaultProj = (projRec?.value as string) || '';
         const defaultType = (issueTypeRec?.value as string) || 'Task';
 
+        // D-06: Resolve task parent Project to pre-fill default Epic Key
+        let parentEpicKey = '';
+        if (task.projectId) {
+          const parentProject = await db.projects.get(task.projectId);
+          if (parentProject?.jiraEpicKey) {
+            parentEpicKey = parentProject.jiraEpicKey;
+          }
+        }
+
         setConfig({
           domain: (domainRec?.value as string) || '',
           email: (emailRec?.value as string) || '',
-          apiToken: (tokenRec?.value as string) || '',
+          apiToken: tokenRec || '',
           corsProxy: (proxyRec?.value as string) || '',
           defaultProjectKey: defaultProj,
           defaultIssueType: defaultType,
@@ -75,6 +86,7 @@ export const CreateJiraIssueModal: React.FC<CreateJiraIssueModalProps> = ({
         form.setFieldsValue({
           projectKey: defaultProj,
           issueType: defaultType,
+          epicKey: parentEpicKey,
           summary: task.name,
           description: task.description || task.notes || '',
         });
@@ -122,6 +134,8 @@ export const CreateJiraIssueModal: React.FC<CreateJiraIssueModalProps> = ({
 
       const descTrimmed = values.description?.trim();
       const adfDoc = descTrimmed ? textToAdf(descTrimmed) : undefined;
+      const epicKeyVal = values.epicKey?.trim().toUpperCase();
+
       const payload: JiraCreateIssuePayload = {
         fields: {
           project: { key: values.projectKey.trim().toUpperCase() },
@@ -129,6 +143,7 @@ export const CreateJiraIssueModal: React.FC<CreateJiraIssueModalProps> = ({
           summary: values.summary.trim(),
           ...(adfDoc ? { description: adfDoc } : {}),
           ...(targetAccountId ? { assignee: { id: targetAccountId } } : {}),
+          ...(epicKeyVal ? { parent: { key: epicKeyVal } } : {}),
         },
       };
 
@@ -199,6 +214,20 @@ export const CreateJiraIssueModal: React.FC<CreateJiraIssueModalProps> = ({
               { value: 'Sub-task', label: 'Sub-task' },
             ]}
           />
+        </Form.Item>
+
+        <Form.Item
+          name="epicKey"
+          label="Mã Jira Epic (Parent Epic Key)"
+          rules={[
+            {
+              pattern: /^[A-Z][A-Z0-9]+-[0-9]+$/,
+              message: 'Mã Epic không hợp lệ (ví dụ: SHB-100)',
+            },
+          ]}
+          extra="Tự động điền từ Dự án cha (nếu có). Bạn có thể chỉnh sửa hoặc bỏ trống."
+        >
+          <Input placeholder="vd: SHB-100" style={{ textTransform: 'uppercase' }} allowClear />
         </Form.Item>
 
         <Form.Item

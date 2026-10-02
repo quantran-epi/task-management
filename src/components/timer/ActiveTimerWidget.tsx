@@ -18,6 +18,14 @@ export interface ActiveTimerWidgetProps {
   database?: TaskPlannerDatabase;
 }
 
+export function formatHierarchySubtitle(
+  project?: { name: string } | null,
+  milestone?: { name: string } | null
+): string | null {
+  const parts = [project?.name, milestone?.name].filter(Boolean);
+  return parts.length > 0 ? parts.join(' › ') : null;
+}
+
 export const ActiveTimerWidget: React.FC<ActiveTimerWidgetProps> = ({
   tasksMap,
   database = db,
@@ -42,12 +50,45 @@ export const ActiveTimerWidget: React.FC<ActiveTimerWidgetProps> = ({
     [activeTimers, database]
   );
 
+  // Load project & milestone hierarchy for active timer tasks (D-04)
+  const hierarchyMap = useLiveQuery(
+    async () => {
+      if (!dbTasks || dbTasks.length === 0) return new Map<string, string>();
+      const projectIds = Array.from(new Set(dbTasks.map((t) => t.projectId).filter(Boolean))) as string[];
+      const milestoneIds = Array.from(new Set(dbTasks.map((t) => t.milestoneId).filter(Boolean))) as string[];
+
+      const [projects, milestones] = await Promise.all([
+        projectIds.length > 0 ? database.projects.bulkGet(projectIds) : [],
+        milestoneIds.length > 0 ? database.milestones.bulkGet(milestoneIds) : [],
+      ]);
+
+      const pMap = new Map(projects.filter(Boolean).map((p) => [p!.id, p!]));
+      const mMap = new Map(milestones.filter(Boolean).map((m) => [m!.id, m!]));
+
+      const result = new Map<string, string>();
+      for (const t of dbTasks) {
+        const p = t.projectId ? pMap.get(t.projectId) : undefined;
+        const m = t.milestoneId ? mMap.get(t.milestoneId) : undefined;
+        const subtitle = formatHierarchySubtitle(p, m);
+        if (subtitle) {
+          result.set(t.id, subtitle);
+        }
+      }
+      return result;
+    },
+    [dbTasks, database]
+  );
+
   const getTaskTitle = (taskId: string): string => {
     if (tasksMap && tasksMap.has(taskId)) {
       return tasksMap.get(taskId)!;
     }
     const found = dbTasks?.find((t) => t.id === taskId);
     return found?.name || 'Tác vụ';
+  };
+
+  const getHierarchySubtitle = (taskId: string): string | null => {
+    return hierarchyMap?.get(taskId) ?? null;
   };
 
   // UI-SPEC: When 0 timers active, return null to eliminate visual clutter
@@ -59,6 +100,7 @@ export const ActiveTimerWidget: React.FC<ActiveTimerWidgetProps> = ({
   if (activeTimers.length === 1) {
     const timer = activeTimers[0]!;
     const taskTitle = getTaskTitle(timer.taskId);
+    const subtitle = getHierarchySubtitle(timer.taskId);
     const elapsedSec = getElapsedSeconds(timer.taskId);
     const isRunning = timer.status === 'running';
 
@@ -73,7 +115,7 @@ export const ActiveTimerWidget: React.FC<ActiveTimerWidgetProps> = ({
           background: token.colorFillAlter,
           borderRadius: 16,
           border: `1px solid ${token.colorBorderSecondary}`,
-          height: 32,
+          height: subtitle ? 36 : 32,
         }}
       >
         <span
@@ -86,18 +128,33 @@ export const ActiveTimerWidget: React.FC<ActiveTimerWidgetProps> = ({
             display: 'inline-block',
           }}
         />
-        <Tooltip title={taskTitle}>
-          <Typography.Text
-            ellipsis
-            style={{
-              maxWidth: 120,
-              fontSize: 13,
-              fontWeight: 500,
-            }}
-          >
-            {taskTitle}
-          </Typography.Text>
-        </Tooltip>
+        <div style={{ display: 'inline-flex', flexDirection: 'column', maxWidth: 120 }}>
+          <Tooltip title={taskTitle}>
+            <Typography.Text
+              ellipsis
+              style={{
+                fontSize: 13,
+                fontWeight: 500,
+                lineHeight: 1.2,
+              }}
+            >
+              {taskTitle}
+            </Typography.Text>
+          </Tooltip>
+          {subtitle && (
+            <Typography.Text
+              ellipsis
+              type="secondary"
+              data-testid="capsule-hierarchy-subtitle"
+              style={{
+                fontSize: 11,
+                lineHeight: 1.1,
+              }}
+            >
+              {subtitle}
+            </Typography.Text>
+          )}
+        </div>
         <Typography.Text
           data-testid="elapsed-ticker"
           style={{
@@ -155,6 +212,7 @@ export const ActiveTimerWidget: React.FC<ActiveTimerWidgetProps> = ({
   // D-02, D-05: Multi-timer dropdown
   const timerItems: MenuProps['items'] = activeTimers.map((timer) => {
     const taskTitle = getTaskTitle(timer.taskId);
+    const subtitle = getHierarchySubtitle(timer.taskId);
     const elapsedSec = getElapsedSeconds(timer.taskId);
     const isRunning = timer.status === 'running';
 
@@ -168,7 +226,7 @@ export const ActiveTimerWidget: React.FC<ActiveTimerWidgetProps> = ({
             alignItems: 'center',
             justifyContent: 'space-between',
             gap: 12,
-            minWidth: 240,
+            minWidth: 260,
             padding: '4px 0',
           }}
           onClick={(e) => e.stopPropagation()}
@@ -184,11 +242,23 @@ export const ActiveTimerWidget: React.FC<ActiveTimerWidgetProps> = ({
                 flexShrink: 0,
               }}
             />
-            <Tooltip title={taskTitle}>
-              <Typography.Text ellipsis style={{ maxWidth: 110, fontSize: 13 }}>
-                {taskTitle}
-              </Typography.Text>
-            </Tooltip>
+            <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, maxWidth: 130 }}>
+              <Tooltip title={taskTitle}>
+                <Typography.Text ellipsis style={{ fontSize: 13, lineHeight: 1.2 }}>
+                  {taskTitle}
+                </Typography.Text>
+              </Tooltip>
+              {subtitle && (
+                <Typography.Text
+                  ellipsis
+                  type="secondary"
+                  data-testid={`dropdown-hierarchy-subtitle-${timer.taskId}`}
+                  style={{ fontSize: 11, lineHeight: 1.1 }}
+                >
+                  {subtitle}
+                </Typography.Text>
+              )}
+            </div>
           </div>
           <Typography.Text
             style={{

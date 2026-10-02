@@ -30,6 +30,7 @@
 - [x] **Phase 12.1: Task Timer, Work Session Logs & Spent Time Tracking** (INSERTED) - Start/pause/finish task timer, work session persistence across reload, concurrent timers, allocation limit notifications, remaining day feasibility alerts, and spent time aggregation per task, milestone, and project. (completed 2026-09-29)
 - [x] **Phase 12.2: Multiple Reminders with Time, Notification Settings, Table Customization & Sidebar Persistence** (INSERTED) - Multiple reminders with optional time per item, persistent browser notifications (no auto-dismiss), configurable notification settings, table column visibility picker and sortable headers, and persisted sidebar collapse state. (completed 2026-09-29)
 - [x] **Phase 13: Enhanced Workload Analytics & Milestone Burndown** - Dedicated analytics view with lightweight SVG vector burndown, completion velocity metrics, and stakeholder workload allocation breakdowns. (completed 2026-09-30)
+- [ ] **Phase 13.1: Timer, Jira, Sticky Notes, Actual Worklog & Sync Improvements** (INSERTED) - Pause/resume timer segments, Project-Epic Jira mapping with reachable status transitions, offline Sticky Notes with screenshot attachments & pop-out window, weekly Actual Worklog Planner, and secure OS credential storage with auto-sync recovery.
 
 ## Phase Details
 
@@ -207,13 +208,48 @@ Plans:
 
 Plans:
 **Wave 1**
+
 - [x] 13-01-PLAN.md — Navigation routing tracer, analytics data contracts, burndown math, and velocity/workload calculation engines
 
 **Wave 2** *(blocked on Wave 1 completion)*
+
 - [x] 13-02-PLAN.md — Reusable pure SVG burndown vector chart, stacked status bars, and workload proportion bars
 
 **Wave 3** *(blocked on Wave 2 completion)*
+
 - [x] 13-03-PLAN.md — Comprehensive AnalyticsView dashboard assembly, empty states, and AppShell integration
+
+**UI hint**: yes
+
+### Phase 13.1: Timer, Jira, Sticky Notes, Actual Worklog & Sync Improvements (INSERTED)
+
+**Goal:** Deliver accurate pause/resume timer segments with safe auto-status and hierarchy subtitle; local Project to Jira Epic mapping with one-to-many reachable status transitions and native Tauri proxy/browser links; offline-first Sticky Notes with Markdown, screenshot attachments, and reusable pop-out window; weekly Actual Worklog Planner with variance and inline work sessions; and secure credential storage in OS keychain with robust auto-sync recovery.
+**Depends on:** Phase 11, Phase 12.1, Phase 12.2, Phase 13
+**Requirements**: TIMER-01, TIMER-02, JIRA-01, JIRA-04, JIRA-05, NOTE-01, NOTE-02, NOTE-03, WORKLOG-01, SYNC-01
+**Success Criteria** (what must be TRUE):
+
+  1. Timer tracks exact pause/resume timestamps via running segments, safely moves task to In Progress on start/resume without overwriting terminal statuses, and displays Project › Milestone subtitle.
+  2. Projects can link or create Jira Epics, task status change evaluates one-to-many mapped reachable Jira transitions with user confirmation, and Tauri runs Jira calls via built-in proxy with system browser links.
+  3. User can create standalone or entity-attached (Task/Project/Milestone) Sticky Notes with Markdown preview, attach up to 5 screenshots (5MB each), search/filter all notes in a dedicated view, and pop out a pinned multi-note window.
+  4. Weekly Actual Worklog Planner displays planned vs actual hours per day and task with variance indicators, quick minute entry, and inline WorkSession management.
+  5. Tauri securely stores GitHub PAT, passphrase, and Jira token in OS Credential Manager/Keychain, while Web/PWA supports password managers; GitHub auto-sync displays real-time status with retry/backoff on network errors.
+
+**Plans:** 3/5 plans executed
+
+Plans:
+**Wave 1**
+
+- [x] 13.1-01-PLAN.md — Dexie SCHEMA_V7 migration, high-fidelity timer pause/resume segments, safe status automation, and hierarchy subtitles
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [x] 13.1-02-PLAN.md — Local Project to Jira Epic mapping, local-authoritative status reconciliation, and Tauri native proxy
+- [x] 13.1-03-PLAN.md — Offline-first Sticky Notes, safe Markdown preview, screenshot attachments, and reusable pop-out window
+- [x] 13.1-04-PLAN.md — Weekly Actual Worklog Planner matrix with variance indicators, quick entry, and midnight segment splitting
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [x] 13.1-05-PLAN.md — Native OS Keychain credential persistence, legacy token migration, and resilient auto-sync recovery
 
 **UI hint**: yes
 
@@ -236,3 +272,4 @@ Plans:
 | 12.1. Task Timer, Work Session Logs & Spent Time Tracking | v1.1 | 4/4 | Complete    | 2026-09-29 |
 | 12.2. Multiple Reminders with Time, Notification Settings, Table Customization & Sidebar Persistence | v1.1 | 4/4 | Complete   | 2026-09-29 |
 | 13. Enhanced Workload Analytics & Milestone Burndown | v1.1 | 3/3 | Complete    | 2026-09-30 |
+| 13.1. Timer, Jira, Sticky Notes, Actual Worklog & Sync Improvements | v1.1 | 5/5 | Complete    | 2026-10-01 |

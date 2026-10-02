@@ -80,7 +80,7 @@ describe('Dexie Schema v6 Migration (D-01, D-02, NOTIF-06)', () => {
     const v6Db = new TaskPlannerDatabase(dbName);
     await v6Db.open();
 
-    expect(v6Db.verno).toBe(6);
+    expect(v6Db.verno).toBeGreaterThanOrEqual(6);
 
     // Verify existing project data preserved & migrated
     const project = await v6Db.projects.get(sampleProjectId);

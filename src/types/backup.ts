@@ -6,7 +6,19 @@ import type {
   CapacityOverride,
   PlannedAllocation,
   WorkSession,
+  Note,
 } from './models';
+
+export interface BackupAttachmentRecord {
+  id: string;
+  noteId: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  data: string; // Base64 Data URL (e.g. data:image/png;base64,...)
+  caption?: string | undefined;
+  createdAt: string;
+}
 
 export interface BackupTableData {
   projects: Project[];
@@ -16,6 +28,8 @@ export interface BackupTableData {
   capacityOverrides: CapacityOverride[];
   plannedAllocations: PlannedAllocation[];
   workSessions?: WorkSession[];
+  notes?: Note[];
+  noteAttachments?: BackupAttachmentRecord[];
 }
 
 export interface BackupTableCounts {
@@ -26,6 +40,8 @@ export interface BackupTableCounts {
   capacityOverrides: number;
   plannedAllocations: number;
   workSessions?: number;
+  notes?: number;
+  noteAttachments?: number;
 }
 
 

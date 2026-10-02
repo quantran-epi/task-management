@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Banking IT Enhancements & Jira Integration
-status: planning
-stopped_at: Phase 13.1 UI-SPEC approved
-last_updated: "2026-10-01T10:54:15.068Z"
-last_activity: "2026-09-30 — Completed quick task 260930-dii: day insight per-task planned vs actual"
+status: executing
+stopped_at: Completed 13.1-05-PLAN.md
+last_updated: "2026-10-01T15:00:00.000Z"
+last_activity: 2026-10-01 -- Completed 13.1-05-PLAN.md (Native OS Keychain credential persistence and auto-sync hardening)
 progress:
   total_phases: 8
-  completed_phases: 7
-  total_plans: 22
-  completed_plans: 22
-  percent: 88
+  completed_phases: 8
+  total_plans: 27
+  completed_plans: 27
+  percent: 100
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-27)
 
 **Core value:** Make planned work realistically fit available time by exposing overload early and suggesting feasible daily workload distributions.
-**Current focus:** Phase 13.1 — Timer, Jira, sticky notes, worklog, and sync improvements
+**Current focus:** Phase 13.1 — timer-pause-timestamps-jira-project-mapping-and-live-status-
 
 ## Current Position
 
-Phase: 13.1
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-09-30 — Completed quick task 260930-dii: day insight per-task planned vs actual
+Phase: 13.1 (timer-pause-timestamps-jira-project-mapping-and-live-status-) — COMPLETE
+Plan: 5 of 5
+Status: Completed Phase 13.1
+Last activity: 2026-10-01 -- Completed 13.1-05-PLAN.md (Native OS Keychain credential persistence and auto-sync hardening)
 
 ### Quick Tasks Completed
 
@@ -91,6 +91,10 @@ Last activity: 2026-09-30 — Completed quick task 260930-dii: day insight per-t
 | Phase 13 P01 | 6m | 3 tasks | 7 files |
 | Phase 13 P02 | 10m | 3 tasks | 7 files |
 | Phase 13 P03 | 15m | 2 tasks | 5 files |
+| Phase 13.1 P01 | 15m | 3 tasks | 12 files |
+| Phase 13.1 P03 | 20m | 3 tasks | 17 files |
+| Phase 13.1 P04 | 10m | 3 tasks | 6 files |
+| Phase 13.1 P05 | 18m | 3 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -98,6 +102,20 @@ Last activity: 2026-09-30 — Completed quick task 260930-dii: day insight per-t
 
 Decisions logged across v1.0 and v1.1:
 
+- [Phase 13.1]: Use keyring v4.2 with Entry::delete_credential to support cross-platform secret storage and deletion
+- [Phase 13.1]: Keep secrets in module-level in-memory cache and OS Keychain, completely excluding them from SQLite mirror and Dexie IndexedDB
+- [Phase 13.1]: Pause auto-sync scheduler without infinite retries upon 401/403 or remote SHA conflict until user intervenes
+- [Phase 13.1]: WorkSession records remain the single source of truth for Actual time without secondary aggregate fields (D-28)
+- [Phase 13.1]: Running segments crossing local midnight are deterministically split across calendar dates while paused duration is excluded (D-30)
+- [Phase 13.1]: Weekly Actual Worklog grid displays planned vs actual hours per task and date with color-coded variance (negative neutral, positive warning) (D-26, D-31)
+- [Phase 13.1]: Planner shows tasks with planned allocations or work sessions during the week with a searchable Add Task dropdown for ad-hoc entries (D-27)
+- [Phase 13.1]: Users can quickly enter minutes directly in table cells or open a detail modal to inspect and edit start/end times and segments (D-29)
+- [Phase 13.1]: Actual Worklog operations remain strictly local without external Jira worklog sync (D-32)
+- [Phase 13.1]: Single reusable Notes pop-out window with Always on Top, screen-boundary clamping, and web popup fallback
+- [Phase 13.1]: Cascade deletion detaches parent-linked notes into standalone notes without losing content or attachments
+- [Phase 13.1]: ActiveTimer.segments made optional on TypeScript model level for test mock compatibility while populated with fallback in schema upgrade and runtime methods
+- [Phase 13.1]: Finishing a paused timer resolves WorkSession.endTime to the last segment's endTime, excluding trailing idle pause time from logged work sessions
+- [Phase 13.1]: Safe status automation strictly scoped to Open -> In Progress inside Dexie transaction, leaving review and terminal statuses intact
 - [Phase 13]: BurndownSvgChart renders pure SVG with dynamic tooltip overlay without D3/Recharts dependencies
 - [Phase 13]: StackedStatusBar handles zero-task projects safely with dashed empty placeholder to prevent division by zero
 - [Phase 13]: WorkloadProportionBar maps stakeholder palette cycle and reserves neutral gray for unassigned tasks

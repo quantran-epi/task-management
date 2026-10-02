@@ -3,7 +3,53 @@ import type { BackupEnvelope } from '../../types/backup';
 import { generateId } from '../../utils/uuid';
 
 export const APP_MARKER = 'personal-task-planner' as const;
-export const CURRENT_SCHEMA_VERSION = 3 as const;
+export const CURRENT_SCHEMA_VERSION = 4 as const;
+
+export async function blobToBase64(blob: Blob, fallbackMime?: string): Promise<string> {
+  const mime = blob.type || fallbackMime || 'application/octet-stream';
+
+  if (typeof (blob as any).arrayBuffer === 'function') {
+    const buffer = await (blob as any).arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(bytes[i]!);
+    }
+    const base64 = btoa(binary);
+    return `data:${mime};base64,${base64}`;
+  }
+
+  // Handle fake-indexeddb / node-blob / buffer
+  if (typeof (blob as any).text === 'function') {
+    const text = await (blob as any).text();
+    const base64 = btoa(text);
+    return `data:${mime};base64,${base64}`;
+  }
+
+  if (typeof FileReader !== 'undefined') {
+    try {
+      return await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          resolve(reader.result as string);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      // Fallback below
+    }
+  }
+
+  // Node Buffer check
+  if (typeof Buffer !== 'undefined') {
+    const buf = Buffer.from(await (blob as any).text?.() || '');
+    return `data:${mime};base64,${buf.toString('base64')}`;
+  }
+
+  throw new Error('Không thể chuyển đổi Blob sang Base64');
+}
 
 /**
  * Generates formatted backup filename: task-planner-backup-YYYY-MM-DD-HHmmss.json
@@ -35,6 +81,8 @@ export async function exportBackupPayload(
     capacityOverrides,
     plannedAllocations,
     workSessions,
+    notes,
+    rawAttachments,
   ] = await Promise.all([
     targetDb.projects.toArray(),
     targetDb.milestones.toArray(),
@@ -43,7 +91,22 @@ export async function exportBackupPayload(
     targetDb.capacityOverrides.toArray(),
     targetDb.plannedAllocations.toArray(),
     targetDb.workSessions.toArray(),
+    targetDb.notes.toArray(),
+    targetDb.noteAttachments.toArray(),
   ]);
+
+  const noteAttachments = await Promise.all(
+    rawAttachments.map(async (att) => ({
+      id: att.id,
+      noteId: att.noteId,
+      fileName: att.fileName,
+      mimeType: att.mimeType,
+      sizeBytes: att.sizeBytes,
+      data: await blobToBase64(att.data, att.mimeType),
+      ...(att.caption ? { caption: att.caption } : {}),
+      createdAt: att.createdAt,
+    }))
+  );
 
   const exportedAt = new Date().toISOString();
 
@@ -55,6 +118,8 @@ export async function exportBackupPayload(
     capacityOverrides,
     plannedAllocations,
     workSessions,
+    notes,
+    noteAttachments,
   };
 
   const counts = {
@@ -65,6 +130,8 @@ export async function exportBackupPayload(
     capacityOverrides: capacityOverrides.length,
     plannedAllocations: plannedAllocations.length,
     workSessions: workSessions.length,
+    notes: notes.length,
+    noteAttachments: noteAttachments.length,
   };
 
   const envelope: BackupEnvelope = {

@@ -103,38 +103,50 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({
 
   const startTimer = useCallback(
     async (taskId: string): Promise<void> => {
-      const existing = await database.activeTimers.get(taskId);
+      const nowMs = Date.now();
+      const nowIso = new Date(nowMs).toISOString();
 
-      if (!existing) {
-        // T-12.1-05: Enforce cap of 20 concurrent active timers
-        const totalActive = await database.activeTimers.count();
-        if (totalActive >= MAX_CONCURRENT_TIMERS) {
-          throw new Error(`Đã đạt giới hạn tối đa ${MAX_CONCURRENT_TIMERS} bộ đếm hoạt động đồng thời.`);
+      await database.transaction('rw', [database.activeTimers, database.tasks], async () => {
+        // Safe status automation: Open -> In Progress only (D-02)
+        const task = await database.tasks.get(taskId);
+        if (task && task.status === 'Open') {
+          task.status = 'In Progress';
+          task.updatedAt = nowIso;
+          await database.tasks.put(task);
         }
 
-        const now = Date.now();
-        const newTimer: ActiveTimer = {
-          taskId,
-          status: 'running',
-          startedAt: now,
-          accumulatedMs: 0,
-          sessionStartTime: new Date(now).toISOString(),
-        };
-        await database.activeTimers.put(newTimer);
-        broadcastTimerSync('START', taskId);
-        return;
-      }
+        const existing = await database.activeTimers.get(taskId);
 
-      if (existing.status === 'paused') {
-        // Resume paused timer
-        const updated: ActiveTimer = {
-          ...existing,
-          status: 'running',
-          startedAt: Date.now(),
-        };
-        await database.activeTimers.put(updated);
-        broadcastTimerSync('START', taskId);
-      }
+        if (!existing) {
+          // T-12.1-05: Enforce cap of 20 concurrent active timers
+          const totalActive = await database.activeTimers.count();
+          if (totalActive >= MAX_CONCURRENT_TIMERS) {
+            throw new Error(`Đã đạt giới hạn tối đa ${MAX_CONCURRENT_TIMERS} bộ đếm hoạt động đồng thời.`);
+          }
+
+          const newTimer: ActiveTimer = {
+            taskId,
+            status: 'running',
+            startedAt: nowMs,
+            accumulatedMs: 0,
+            sessionStartTime: nowIso,
+            segments: [{ startTime: nowIso }],
+          };
+          await database.activeTimers.put(newTimer);
+        } else if (existing.status === 'paused') {
+          // Resume paused timer: append new segment with current timestamp (D-01)
+          const updatedSegments = [...(existing.segments || []), { startTime: nowIso }];
+          const updated: ActiveTimer = {
+            ...existing,
+            status: 'running',
+            startedAt: nowMs,
+            segments: updatedSegments,
+          };
+          await database.activeTimers.put(updated);
+        }
+      });
+
+      broadcastTimerSync('START', taskId);
     },
     [database]
   );
@@ -144,12 +156,25 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({
       const existing = await database.activeTimers.get(taskId);
       if (!existing || existing.status !== 'running') return;
 
-      const delta = Math.max(0, Date.now() - existing.startedAt);
+      const nowMs = Date.now();
+      const nowIso = new Date(nowMs).toISOString();
+      const delta = Math.max(0, nowMs - existing.startedAt);
+
+      // Close the latest open segment with endTime (D-01)
+      const updatedSegments = [...(existing.segments || [])];
+      if (updatedSegments.length > 0 && !updatedSegments[updatedSegments.length - 1]!.endTime) {
+        updatedSegments[updatedSegments.length - 1] = {
+          ...updatedSegments[updatedSegments.length - 1]!,
+          endTime: nowIso,
+        };
+      }
+
       const updated: ActiveTimer = {
         ...existing,
         status: 'paused',
         accumulatedMs: existing.accumulatedMs + delta,
-        startedAt: Date.now(),
+        startedAt: nowMs,
+        segments: updatedSegments,
       };
       await database.activeTimers.put(updated);
       broadcastTimerSync('PAUSE', taskId);
@@ -166,13 +191,28 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({
           const existing = await database.activeTimers.get(taskId);
           if (!existing) return null;
 
-          const currentRun =
-            existing.status === 'running' ? Math.max(0, Date.now() - existing.startedAt) : 0;
+          const nowMs = Date.now();
+          const nowIso = new Date(nowMs).toISOString();
+
+          // D-03: If paused, use the last segment's endTime instead of current click time
+          const lastSegment = existing.segments?.[existing.segments.length - 1];
+          const isPaused = existing.status === 'paused';
+          const endTime = isPaused && lastSegment?.endTime ? lastSegment.endTime : nowIso;
+
+          // If running when finished, close the open segment
+          const updatedSegments = [...(existing.segments || [])];
+          if (!isPaused && updatedSegments.length > 0 && !updatedSegments[updatedSegments.length - 1]!.endTime) {
+            updatedSegments[updatedSegments.length - 1] = {
+              ...updatedSegments[updatedSegments.length - 1]!,
+              endTime: nowIso,
+            };
+          }
+
+          const currentRun = !isPaused ? Math.max(0, nowMs - existing.startedAt) : 0;
           const totalMs = existing.accumulatedMs + currentRun;
           const durationMinutes = Math.max(1, Math.round(totalMs / 60000));
 
           const task = await database.tasks.get(taskId);
-          const nowIso = new Date().toISOString();
           if (task) {
             task.updatedAt = nowIso;
             await database.tasks.put(task);
@@ -189,9 +229,10 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({
             id: generateId(),
             taskId,
             startTime: existing.sessionStartTime,
-            endTime: nowIso,
+            endTime,
             date,
             durationMinutes,
+            segments: updatedSegments.length > 0 ? updatedSegments : undefined,
             createdAt: nowIso,
             updatedAt: nowIso,
           };
