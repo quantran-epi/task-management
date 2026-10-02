@@ -305,7 +305,7 @@ export const GitHubSyncCard: React.FC<GitHubSyncCardProps> = ({
         if (err.code === 'NOT_FOUND') {
           notification.info({
             message: 'Chưa có bản sao lưu trên GitHub',
-            description: 'Tệp sao lưu .task-management/backup.enc.json chưa tồn tại trên kho lưu trữ.',
+            description: `Tệp sao lưu .task-management/backup.enc.json chưa tồn tại trên nhánh "${branch}". Nếu đây là lần đầu hoặc bạn vừa đổi cấu hình, hãy nhấn "Đẩy lên GitHub" để tạo bản sao lưu. Đồng thời kiểm tra tên nhánh trong Cấu hình GitHub (ví dụ: "master" hay "main").`,
           });
           announceToScreenReader('Chưa có bản sao lưu trên GitHub.');
           return;

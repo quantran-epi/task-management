@@ -20,6 +20,9 @@ export const WORK_TYPES = [
 
 export const workTypeSchema = z.enum(WORK_TYPES);
 
+export const RECURRENCE_FREQUENCIES = ['daily', 'weekly', 'monthly'] as const;
+export const recurrenceFrequencySchema = z.enum(RECURRENCE_FREQUENCIES);
+
 export const JIRA_KEY_REGEX = /^[A-Z][A-Z0-9]+-[0-9]+$/;
 export const jiraKeySchema = z
   .string()
@@ -204,6 +207,12 @@ export const TaskInputSchema = z.object({
   reminderDate: reminderDateSchema.optional(),
   reminderNote: reminderNoteSchema,
   reminders: remindersArraySchema,
+  isRecurring: z.boolean().optional(),
+  recurrenceFrequency: recurrenceFrequencySchema.optional(),
+  recurrenceInterval: z.number().int().min(1).max(365).optional(),
+  recurrenceDaysOfWeek: z.array(z.number().int().min(1).max(7)).optional(),
+  recurrenceEndDate: calendarDateSchema.optional(),
+  parentRecurringTaskId: uuidSchema.optional(),
 });
 
 export const TaskUpdateSchema = z.object({
@@ -227,6 +236,12 @@ export const TaskUpdateSchema = z.object({
   reminderDate: reminderDateSchema.optional(),
   reminderNote: reminderNoteSchema,
   reminders: remindersArraySchema,
+  isRecurring: z.boolean().optional(),
+  recurrenceFrequency: recurrenceFrequencySchema.optional(),
+  recurrenceInterval: z.number().int().min(1).max(365).optional(),
+  recurrenceDaysOfWeek: z.array(z.number().int().min(1).max(7)).optional(),
+  recurrenceEndDate: calendarDateSchema.optional(),
+  parentRecurringTaskId: uuidSchema.optional(),
 });
 
 export const CapacityRuleInputSchema = z.object({

@@ -3,6 +3,8 @@ export type MilestoneStatus = 'Open' | 'Pending' | 'In Progress' | 'Done' | 'Can
 export type TaskStatus = 'Open' | 'Pending' | 'In Progress' | 'Resolved' | 'In Review' | 'Done' | 'Cancelled';
 export type TaskPriority = 'Low' | 'Medium' | 'High' | 'Urgent';
 
+export type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly';
+
 export type WorkType =
   | 'code'
   | 'document'
@@ -86,6 +88,12 @@ export interface Task {
   reminderDate?: string; // YYYY-MM-DD
   reminderNote?: string;
   reminders?: ReminderItem[];
+  isRecurring?: boolean;
+  recurrenceFrequency?: RecurrenceFrequency;
+  recurrenceInterval?: number; // e.g. 1 (every 1 day/week/month)
+  recurrenceDaysOfWeek?: number[]; // [1..7] where 1 = Monday ... 7 = Sunday
+  recurrenceEndDate?: string; // YYYY-MM-DD
+  parentRecurringTaskId?: string; // Links spawned task to initial recurring task
   createdAt: string;
   updatedAt: string;
 }

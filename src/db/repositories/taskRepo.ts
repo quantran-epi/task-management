@@ -7,6 +7,7 @@ import {
   type TaskInput,
   type TaskUpdate,
 } from '../../validation/schemas';
+import { spawnNextRecurringTask } from '../../utils/recurrence';
 
 export async function createTask(
   input: TaskInput,
@@ -41,6 +42,12 @@ export async function createTask(
   if (validated.reminderDate !== undefined) task.reminderDate = validated.reminderDate;
   if (validated.reminderNote !== undefined) task.reminderNote = validated.reminderNote;
   if (validated.reminders !== undefined) task.reminders = validated.reminders;
+  if (validated.isRecurring !== undefined) task.isRecurring = validated.isRecurring;
+  if (validated.recurrenceFrequency !== undefined) task.recurrenceFrequency = validated.recurrenceFrequency;
+  if (validated.recurrenceInterval !== undefined) task.recurrenceInterval = validated.recurrenceInterval;
+  if (validated.recurrenceDaysOfWeek !== undefined) task.recurrenceDaysOfWeek = validated.recurrenceDaysOfWeek;
+  if (validated.recurrenceEndDate !== undefined) task.recurrenceEndDate = validated.recurrenceEndDate;
+  if (validated.parentRecurringTaskId !== undefined) task.parentRecurringTaskId = validated.parentRecurringTaskId;
 
   await db.tasks.add(task);
   return task;
@@ -128,8 +135,60 @@ export async function updateTask(
       delete updated.reminders;
     }
   }
+  if ('isRecurring' in patch) {
+    if (validated.isRecurring !== undefined) {
+      updated.isRecurring = validated.isRecurring;
+    } else {
+      delete updated.isRecurring;
+    }
+  }
+  if ('recurrenceFrequency' in patch) {
+    if (validated.recurrenceFrequency !== undefined) {
+      updated.recurrenceFrequency = validated.recurrenceFrequency;
+    } else {
+      delete updated.recurrenceFrequency;
+    }
+  }
+  if ('recurrenceInterval' in patch) {
+    if (validated.recurrenceInterval !== undefined) {
+      updated.recurrenceInterval = validated.recurrenceInterval;
+    } else {
+      delete updated.recurrenceInterval;
+    }
+  }
+  if ('recurrenceDaysOfWeek' in patch) {
+    if (validated.recurrenceDaysOfWeek !== undefined) {
+      updated.recurrenceDaysOfWeek = validated.recurrenceDaysOfWeek;
+    } else {
+      delete updated.recurrenceDaysOfWeek;
+    }
+  }
+  if ('recurrenceEndDate' in patch) {
+    if (validated.recurrenceEndDate !== undefined) {
+      updated.recurrenceEndDate = validated.recurrenceEndDate;
+    } else {
+      delete updated.recurrenceEndDate;
+    }
+  }
+  if ('parentRecurringTaskId' in patch) {
+    if (validated.parentRecurringTaskId !== undefined) {
+      updated.parentRecurringTaskId = validated.parentRecurringTaskId;
+    } else {
+      delete updated.parentRecurringTaskId;
+    }
+  }
 
   await db.tasks.put(updated);
+
+  // Auto-spawn next recurring task if marked Done
+  if (validated.status === 'Done' && existing.status !== 'Done' && updated.isRecurring) {
+    try {
+      await spawnNextRecurringTask(updated, db);
+    } catch (err) {
+      console.error('Failed to spawn next recurring task:', err);
+    }
+  }
+
   return updated;
 }
 

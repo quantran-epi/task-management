@@ -28,6 +28,7 @@ import {
   CheckCircleOutlined,
   SettingOutlined,
   FileTextOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 import type { Task, Project, Milestone, TaskPriority, WorkType } from '../../types/models';
 import { InlineStatusTag } from './InlineStatusTag';
@@ -406,6 +407,27 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                     onClick={(e) => {
                       e.stopPropagation();
                       onOpenDrawer(record.id);
+                    }}
+                  />
+                </Tooltip>
+              )}
+              {record.isRecurring && (
+                <Tooltip
+                  title={`Lặp lại ${
+                    record.recurrenceFrequency === 'daily'
+                      ? 'hàng ngày'
+                      : record.recurrenceFrequency === 'weekly'
+                        ? 'hàng tuần'
+                        : 'hàng tháng'
+                  }`}
+                  placement="top"
+                >
+                  <SyncOutlined
+                    data-testid={`task-recurring-indicator-${record.id}`}
+                    aria-label="Tác vụ lặp lại"
+                    style={{
+                      color: '#1677ff',
+                      fontSize: 12,
                     }}
                   />
                 </Tooltip>

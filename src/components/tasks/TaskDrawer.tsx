@@ -13,11 +13,20 @@ import {
   Tabs,
   Typography,
   Badge,
+  Switch,
 } from 'antd';
-import { PlusOutlined, DeleteOutlined, LinkOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, LinkOutlined, SyncOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useLiveQuery } from 'dexie-react-hooks';
-import type { Task, Project, Milestone, TaskStatus, TaskPriority, WorkType } from '../../types/models';
+import type {
+  Task,
+  Project,
+  Milestone,
+  TaskStatus,
+  TaskPriority,
+  WorkType,
+  RecurrenceFrequency,
+} from '../../types/models';
 import { WORK_TYPES } from '../../types/models';
 import { getTask, updateTask, reparentTask } from '../../db/repositories/taskRepo';
 import { getAllProjects } from '../../db/repositories/projectRepo';
@@ -63,6 +72,11 @@ interface TaskDrawerFormValues {
   reminderNote?: string;
   reminders?: unknown[];
   notes?: string;
+  isRecurring?: boolean;
+  recurrenceFrequency?: RecurrenceFrequency;
+  recurrenceInterval?: number;
+  recurrenceDaysOfWeek?: number[];
+  recurrenceEndDate?: Dayjs | null;
 }
 
 const STATUS_LABELS: Record<TaskStatus, string> = {
@@ -196,6 +210,13 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
             documentLinks: taskData.documentLinks ?? [],
             reminders: formatRemindersForForm(taskData),
             notes: taskData.notes ?? '',
+            isRecurring: taskData.isRecurring ?? false,
+            recurrenceFrequency: taskData.recurrenceFrequency ?? 'daily',
+            recurrenceInterval: taskData.recurrenceInterval ?? 1,
+            recurrenceDaysOfWeek: taskData.recurrenceDaysOfWeek ?? [],
+            recurrenceEndDate: taskData.recurrenceEndDate
+              ? dayjs(taskData.recurrenceEndDate, 'YYYY-MM-DD')
+              : null,
           });
         }
       } catch {
@@ -307,6 +328,15 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
           notes: values.notes?.trim() ? values.notes : undefined,
           projectId: targetProjectId,
           milestoneId: targetMilestoneId,
+          isRecurring: values.isRecurring ?? false,
+          recurrenceFrequency: values.isRecurring ? values.recurrenceFrequency || 'daily' : undefined,
+          recurrenceInterval: values.isRecurring ? values.recurrenceInterval || 1 : undefined,
+          recurrenceDaysOfWeek: values.isRecurring && values.recurrenceFrequency === 'weekly'
+            ? values.recurrenceDaysOfWeek
+            : undefined,
+          recurrenceEndDate: values.isRecurring && values.recurrenceEndDate
+            ? values.recurrenceEndDate.format('YYYY-MM-DD')
+            : undefined,
         },
         db
       );
@@ -514,6 +544,128 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
           <Form.Item name="actualEndDate" label="Kết thúc thực tế">
             <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" placeholder="Kết thúc thực tế" />
           </Form.Item>
+
+          <div
+            style={{
+              padding: '12px',
+              backgroundColor: '#fafafa',
+              borderRadius: '8px',
+              marginBottom: '16px',
+              border: '1px solid #f0f0f0',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <Space>
+                <SyncOutlined style={{ color: '#1677ff' }} />
+                <span style={{ fontWeight: 500 }}>Lặp lại định kỳ</span>
+              </Space>
+              <Form.Item name="isRecurring" valuePropName="checked" noStyle>
+                <Switch aria-label="Bật lặp lại định kỳ" />
+              </Form.Item>
+            </div>
+
+            <Form.Item
+              noStyle
+              shouldUpdate={(prev, cur) =>
+                prev.isRecurring !== cur.isRecurring ||
+                prev.recurrenceFrequency !== cur.recurrenceFrequency
+              }
+            >
+              {({ getFieldValue }) => {
+                const isRecurring = getFieldValue('isRecurring');
+                if (!isRecurring) return null;
+                const freq = getFieldValue('recurrenceFrequency') || 'daily';
+
+                return (
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 12,
+                      marginTop: 12,
+                    }}
+                  >
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                      <Form.Item
+                        name="recurrenceFrequency"
+                        label="Tần suất"
+                        initialValue="daily"
+                        style={{ marginBottom: 0 }}
+                      >
+                        <Select
+                          options={[
+                            { value: 'daily', label: 'Hàng ngày' },
+                            { value: 'weekly', label: 'Hàng tuần' },
+                            { value: 'monthly', label: 'Hàng tháng' },
+                          ]}
+                        />
+                      </Form.Item>
+
+                      <Form.Item
+                        name="recurrenceInterval"
+                        label="Chu kỳ"
+                        initialValue={1}
+                        style={{ marginBottom: 0 }}
+                      >
+                        <InputNumber
+                          min={1}
+                          max={365}
+                          style={{ width: '100%' }}
+                          addonAfter={
+                            freq === 'daily'
+                              ? 'ngày'
+                              : freq === 'weekly'
+                                ? 'tuần'
+                                : 'tháng'
+                          }
+                        />
+                      </Form.Item>
+                    </div>
+
+                    {freq === 'weekly' && (
+                      <Form.Item
+                        name="recurrenceDaysOfWeek"
+                        label="Các ngày trong tuần"
+                        style={{ marginBottom: 0 }}
+                      >
+                        <Select
+                          mode="multiple"
+                          placeholder="Chọn ngày lặp lại"
+                          options={[
+                            { value: 1, label: 'Thứ 2' },
+                            { value: 2, label: 'Thứ 3' },
+                            { value: 3, label: 'Thứ 4' },
+                            { value: 4, label: 'Thứ 5' },
+                            { value: 5, label: 'Thứ 6' },
+                            { value: 6, label: 'Thứ 7' },
+                            { value: 7, label: 'Chủ nhật' },
+                          ]}
+                        />
+                      </Form.Item>
+                    )}
+
+                    <Form.Item
+                      name="recurrenceEndDate"
+                      label="Ngày kết thúc (tùy chọn)"
+                      style={{ marginBottom: 0 }}
+                    >
+                      <DatePicker
+                        style={{ width: '100%' }}
+                        format="YYYY-MM-DD"
+                        placeholder="Không giới hạn"
+                      />
+                    </Form.Item>
+                  </div>
+                );
+              }}
+            </Form.Item>
+          </div>
 
           <RemindersFormList />
 

@@ -97,6 +97,12 @@ export const BackupTaskRecordSchema = z.object({
   reminderDate: reminderDateSchema.optional(),
   reminderNote: reminderNoteSchema,
   reminders: remindersArraySchema,
+  isRecurring: z.boolean().optional(),
+  recurrenceFrequency: z.enum(['daily', 'weekly', 'monthly']).optional(),
+  recurrenceInterval: z.number().int().min(1).max(365).optional(),
+  recurrenceDaysOfWeek: z.array(z.number().int().min(1).max(7)).optional(),
+  recurrenceEndDate: calendarDateSchema.optional(),
+  parentRecurringTaskId: uuidSchema.optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
