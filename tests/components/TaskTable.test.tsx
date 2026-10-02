@@ -117,7 +117,7 @@ describe('TaskTable Component', () => {
     expect(screen.getByText('/ 1h 30m')).toBeInTheDocument(); // 90 mins -> / 1h 30m
     expect(screen.getByText(/Project Alpha/i)).toBeInTheDocument();
     expect(screen.getByText(/🔗 1/i)).toBeInTheDocument(); // Document link badge
-    expect(screen.getByText('Có ghi chú')).toBeInTheDocument();
+    expect(screen.queryByText('Có ghi chú')).not.toBeInTheDocument();
     expect(screen.queryByText('Notes line 1')).not.toBeInTheDocument();
     // WorkTypeBadge check for investigate
     expect(screen.getByText('Điều tra lỗi / R&D')).toBeInTheDocument();

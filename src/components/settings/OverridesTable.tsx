@@ -13,9 +13,10 @@ import {
   Typography,
   Popconfirm,
   Empty,
+  Segmented,
   message,
 } from 'antd';
-import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import dayjs, { type Dayjs } from 'dayjs';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
@@ -35,6 +36,8 @@ export interface OverridesTableProps {
 
 export const OverridesTable: React.FC<OverridesTableProps> = ({ db = defaultDb }) => {
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingOverride, setEditingOverride] = useState<CapacityOverride | null>(null);
+  const [rangeMode, setRangeMode] = useState<'single' | 'range'>('single');
   const [submitting, setSubmitting] = useState(false);
   const [form] = Form.useForm();
   const restorerRef = useRef<(() => void) | null>(null);
@@ -50,9 +53,12 @@ export const OverridesTable: React.FC<OverridesTableProps> = ({ db = defaultDb }
 
   const handleOpenAdd = () => {
     restorerRef.current = createFocusRestorer();
+    setEditingOverride(null);
+    setRangeMode('single');
     form.resetFields();
     form.setFieldsValue({
       date: dayjs(),
+      dateRange: [dayjs(), dayjs()],
       hours: 0,
       minutes: 0,
       note: '',
@@ -60,8 +66,24 @@ export const OverridesTable: React.FC<OverridesTableProps> = ({ db = defaultDb }
     setModalOpen(true);
   };
 
+  const handleOpenEdit = (record: CapacityOverride) => {
+    restorerRef.current = createFocusRestorer();
+    setEditingOverride(record);
+    setRangeMode('single');
+    form.resetFields();
+    form.setFieldsValue({
+      date: dayjs(record.date, 'YYYY-MM-DD'),
+      hours: Math.floor(record.workMinutes / 60),
+      minutes: record.workMinutes % 60,
+      note: record.note || '',
+    });
+    setModalOpen(true);
+  };
+
   const handleCloseModal = () => {
     setModalOpen(false);
+    setEditingOverride(null);
+    setRangeMode('single');
     if (restorerRef.current) {
       restorerRef.current();
     }
@@ -71,14 +93,28 @@ export const OverridesTable: React.FC<OverridesTableProps> = ({ db = defaultDb }
     try {
       const values = await form.validateFields();
       setSubmitting(true);
-      const dateStr = (values.date as Dayjs).format('YYYY-MM-DD');
       const hours = values.hours ?? 0;
       const minutes = values.minutes ?? 0;
       const totalMinutes = Math.min(1440, Math.max(0, hours * 60 + minutes));
       const note = values.note?.trim() || undefined;
 
-      await setCapacityOverride(dateStr, totalMinutes, note, db);
-      message.success('Đã lưu ngày ngoại lệ công suất');
+      if (editingOverride || rangeMode === 'single') {
+        const dateStr = (values.date as Dayjs).format('YYYY-MM-DD');
+        await setCapacityOverride(dateStr, totalMinutes, note, db);
+        message.success(editingOverride ? 'Đã cập nhật ngày ngoại lệ công suất' : 'Đã lưu ngày ngoại lệ công suất');
+      } else {
+        const [start, end] = values.dateRange as [Dayjs, Dayjs];
+        let curr = start.startOf('day');
+        const endDay = end.startOf('day');
+        let count = 0;
+        while (curr.isBefore(endDay) || curr.isSame(endDay, 'day')) {
+          await setCapacityOverride(curr.format('YYYY-MM-DD'), totalMinutes, note, db);
+          curr = curr.add(1, 'day');
+          count++;
+        }
+        message.success(`Đã lưu ${count} ngày ngoại lệ công suất`);
+      }
+
       handleCloseModal();
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'errorFields' in err) {
@@ -141,25 +177,37 @@ export const OverridesTable: React.FC<OverridesTableProps> = ({ db = defaultDb }
     {
       title: 'Thao tác',
       key: 'action',
+      width: 170,
       render: (_: unknown, record: CapacityOverride) => (
-        <Popconfirm
-          title="Khôi phục mặc định"
-          description={`Xóa ngoại lệ cho ngày ${record.date} và khôi phục mặc định hàng tuần?`}
-          okText="Khôi phục"
-          cancelText="Hủy"
-          okButtonProps={{ danger: true }}
-          onConfirm={() => handleDelete(record.date)}
-        >
+        <Space size="small">
           <Button
             type="link"
-            danger
             size="small"
-            icon={<DeleteOutlined />}
-            aria-label={`Khôi phục ngoại lệ cho ${record.date}`}
+            icon={<EditOutlined />}
+            onClick={() => handleOpenEdit(record)}
+            aria-label={`Chỉnh sửa ngoại lệ cho ${record.date}`}
           >
-            Khôi phục mặc định
+            Sửa
           </Button>
-        </Popconfirm>
+          <Popconfirm
+            title="Khôi phục mặc định"
+            description={`Xóa ngoại lệ cho ngày ${record.date} và khôi phục mặc định hàng tuần?`}
+            okText="Khôi phục"
+            cancelText="Hủy"
+            okButtonProps={{ danger: true }}
+            onConfirm={() => handleDelete(record.date)}
+          >
+            <Button
+              type="link"
+              danger
+              size="small"
+              icon={<DeleteOutlined />}
+              aria-label={`Khôi phục ngoại lệ cho ${record.date}`}
+            >
+              Khôi phục
+            </Button>
+          </Popconfirm>
+        </Space>
       ),
     },
   ];
@@ -203,23 +251,50 @@ export const OverridesTable: React.FC<OverridesTableProps> = ({ db = defaultDb }
       />
 
       <Modal
-        title="Thêm ngoại lệ công suất theo ngày"
+        title={editingOverride ? 'Chỉnh sửa ngoại lệ công suất' : 'Thêm ngoại lệ công suất theo ngày'}
         open={modalOpen}
         onOk={handleSave}
         onCancel={handleCloseModal}
         confirmLoading={submitting}
-        okText="Lưu ngoại lệ"
+        okText={editingOverride ? 'Cập nhật' : 'Lưu ngoại lệ'}
         cancelText="Hủy"
         destroyOnClose
       >
         <Form form={form} layout="vertical" preserve={false}>
-          <Form.Item
-            name="date"
-            label="Ngày"
-            rules={[{ required: true, message: 'Vui lòng chọn ngày' }]}
-          >
-            <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
-          </Form.Item>
+          {!editingOverride && (
+            <Form.Item label="Phương thức chọn ngày">
+              <Segmented<'single' | 'range'>
+                value={rangeMode}
+                onChange={(val) => setRangeMode(val)}
+                options={[
+                  { label: 'Một ngày', value: 'single' },
+                  { label: 'Khoảng ngày', value: 'range' },
+                ]}
+              />
+            </Form.Item>
+          )}
+
+          {editingOverride || rangeMode === 'single' ? (
+            <Form.Item
+              name="date"
+              label="Ngày"
+              rules={[{ required: true, message: 'Vui lòng chọn ngày' }]}
+            >
+              <DatePicker
+                style={{ width: '100%' }}
+                format="YYYY-MM-DD"
+                disabled={Boolean(editingOverride)}
+              />
+            </Form.Item>
+          ) : (
+            <Form.Item
+              name="dateRange"
+              label="Khoảng ngày"
+              rules={[{ required: true, message: 'Vui lòng chọn khoảng ngày' }]}
+            >
+              <DatePicker.RangePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+            </Form.Item>
+          )}
 
           <Space align="start" size="middle">
             <Form.Item

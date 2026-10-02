@@ -147,7 +147,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
   const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
   const [standupFallbackModalOpen, setStandupFallbackModalOpen] = useState<boolean>(false);
   const [standupFallbackText, setStandupFallbackText] = useState<string>('');
-  const [pagination, setPagination] = useState({ current: 1, pageSize: 25 });
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
   const tableRef = useRef<HTMLDivElement>(null);
   const fallbackTextareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -214,6 +214,18 @@ export const TaskTable: React.FC<TaskTableProps> = ({
     }
     return map;
   }, [effectiveDb, tasks]) ?? new Map<string, number>();
+
+  // Query tasks with notes in the note feature
+  const taskNotesSet = useLiveQuery(async () => {
+    if (!effectiveDb || tasks.length === 0) return new Set<string>();
+    const taskIds = tasks.map((t) => t.id);
+    const notes = await effectiveDb.notes
+      .where('entityId')
+      .anyOf(taskIds)
+      .filter((n) => n.entityType === 'task')
+      .toArray();
+    return new Set(notes.map((n) => n.entityId));
+  }, [effectiveDb, tasks]) ?? new Set<string>();
 
   const settingsDomain = useLiveQuery(async () => {
     if (!effectiveDb) return undefined;
@@ -358,7 +370,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
         const project = record.projectId ? projectMap.get(record.projectId) : undefined;
         const milestone = record.milestoneId ? milestoneMap.get(record.milestoneId) : undefined;
         const linkCount = record.documentLinks?.length ?? 0;
-        const hasNotes = Boolean(record.notes?.trim());
+        const hasNotes = taskNotesSet.has(record.id);
 
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -381,6 +393,23 @@ export const TaskTable: React.FC<TaskTableProps> = ({
               >
                 {record.name}
               </span>
+              {hasNotes && (
+                <Tooltip title="Có ghi chú" placement="top">
+                  <FileTextOutlined
+                    data-testid={`task-note-indicator-${record.id}`}
+                    aria-label="Có ghi chú"
+                    style={{
+                      color: token.colorPrimary,
+                      fontSize: 13,
+                      cursor: 'pointer',
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenDrawer(record.id);
+                    }}
+                  />
+                </Tooltip>
+              )}
               {record.jiraKey && (
                 <Tag
                   color="processing"
@@ -426,14 +455,6 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                 </Popover>
               )}
             </div>
-
-            {hasNotes && (
-              <Tooltip title="Có ghi chú trong chi tiết tác vụ" placement="topLeft">
-                <Tag icon={<FileTextOutlined />} color="blue" style={{ width: 'fit-content', margin: 0 }}>
-                  Có ghi chú
-                </Tag>
-              </Tooltip>
-            )}
           </div>
         );
       },

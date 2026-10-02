@@ -121,7 +121,8 @@ describe('TaskTable', () => {
     expect(screen.getByText('Beta Task')).toBeInTheDocument();
     expect(screen.getByText('Gamma Task')).toBeInTheDocument();
     expect(screen.getByText('Chờ xử lý')).toBeInTheDocument();
-    expect(screen.getByText('Có ghi chú')).toBeInTheDocument();
+    // Does not show bulky text tag "Có ghi chú" for single field task.notes
+    expect(screen.queryByText('Có ghi chú')).not.toBeInTheDocument();
     expect(screen.queryByText('Private note body')).not.toBeInTheDocument();
 
     // Verify column headers rendered
@@ -129,6 +130,34 @@ describe('TaskTable', () => {
     expect(screen.getByText('Trạng thái')).toBeInTheDocument();
     expect(screen.getByText('Độ ưu tiên')).toBeInTheDocument();
     expect(screen.getByText('1-4 / 4 tác vụ')).toBeInTheDocument();
+  });
+
+  it('renders compact note indicator when note exists in note feature', async () => {
+    await testDb.notes.add({
+      id: 'note-1',
+      entityType: 'task',
+      entityId: 'task-1',
+      body: 'Note body in note feature',
+      isPinned: false,
+      createdAt: '2026-10-01T00:00:00Z',
+      updatedAt: '2026-10-01T00:00:00Z',
+    });
+
+    render(
+      <TaskTable
+        tasks={mockTasks}
+        projects={mockProjects}
+        milestones={mockMilestones}
+        selectedRowKeys={[]}
+        onSelectRows={vi.fn()}
+        onOpenDrawer={vi.fn()}
+        db={testDb}
+      />
+    );
+
+    // Indicator exists for task-1 but not for task-2
+    expect(await screen.findByTestId('task-note-indicator-task-1')).toBeInTheDocument();
+    expect(screen.queryByTestId('task-note-indicator-task-2')).not.toBeInTheDocument();
   });
 
   it('opens column customization popover and shows all customizable columns', async () => {

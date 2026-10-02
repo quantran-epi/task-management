@@ -16,6 +16,7 @@ import {
   FolderOutlined,
   FlagOutlined,
   LinkOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons';
 import type { Project, Milestone, Task } from '../../types/models';
 import { EmptyState } from '../common/EmptyState';
@@ -90,6 +91,18 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
     }
     return map;
   }, [db, tasks]) ?? new Map<string, number>();
+
+  // Query tasks with notes in the note feature
+  const taskNotesSet = useLiveQuery(async () => {
+    if (!db || tasks.length === 0) return new Set<string>();
+    const taskIds = tasks.map((t) => t.id);
+    const notes = await db.notes
+      .where('entityId')
+      .anyOf(taskIds)
+      .filter((n) => n.entityType === 'task')
+      .toArray();
+    return new Set(notes.map((n) => n.entityId));
+  }, [db, tasks]) ?? new Set<string>();
 
   // Maps for fast aggregation
   const milestoneMap = useMemo(() => {
@@ -255,62 +268,98 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
       const msTasks = taskMap.byMilestone.get(ms.id) || [];
       if (msTasks.length === 0) {
         return (
-          <div style={{ padding: '8px 16px', color: token.colorTextTertiary, fontSize: 13 }}>
+          <div
+            style={{
+              padding: '8px 16px',
+              marginLeft: 8,
+              borderLeft: `2px dashed ${token.colorBorderSecondary}`,
+              color: token.colorTextTertiary,
+              fontSize: 13,
+            }}
+          >
             Chưa có tác vụ nào trong cột mốc này.
           </div>
         );
       }
 
       return (
-        <Table
-          rowKey="id"
-          dataSource={msTasks}
-          pagination={false}
-          size="small"
-          columns={[
-            {
-              title: 'Tên tác vụ',
-              dataIndex: 'name',
-              key: 'name',
-              render: (name: string, record: Task) => (
-                <span
-                  style={{ cursor: 'pointer', color: token.colorPrimary }}
-                  onClick={() => onEditTask(record.id)}
-                >
-                  {name}
-                </span>
-              ),
-            },
-            {
-              title: 'Trạng thái',
-              dataIndex: 'status',
-              key: 'status',
-              width: 120,
-              render: (status: string) => (
-                <Tag color={STATUS_TAG_COLORS[status] || 'default'}>{STATUS_LABELS[status] || status}</Tag>
-              ),
-            },
-            {
-              title: 'Ước tính',
-              dataIndex: 'estimateMinutes',
-              key: 'estimate',
-              width: 100,
-              render: (mins: number) => formatMinutes(mins),
-            },
-            {
-              title: 'Hạn chót',
-              dataIndex: 'deadline',
-              key: 'deadline',
-              width: 120,
-              render: (deadline?: string) => deadline || '—',
-            },
-          ]}
-        />
+        <div
+          style={{
+            padding: '8px 12px 8px 24px',
+            marginLeft: 8,
+            borderLeft: `2px dashed ${token.colorBorderSecondary}`,
+            background: token.colorFillQuaternary,
+            borderRadius: `0 ${token.borderRadiusSM}px ${token.borderRadiusSM}px 0`,
+          }}
+        >
+          <Table
+            rowKey="id"
+            dataSource={msTasks}
+            pagination={false}
+            size="small"
+            columns={[
+              {
+                title: 'Tên tác vụ',
+                dataIndex: 'name',
+                key: 'name',
+                render: (name: string, record: Task) => (
+                  <Space size={6}>
+                    <span
+                      style={{ cursor: 'pointer', color: token.colorPrimary }}
+                      onClick={() => onEditTask(record.id)}
+                    >
+                      {name}
+                    </span>
+                    {taskNotesSet.has(record.id) && (
+                      <Tooltip title="Có ghi chú">
+                        <FileTextOutlined style={{ color: token.colorPrimary, fontSize: 12 }} />
+                      </Tooltip>
+                    )}
+                  </Space>
+                ),
+              },
+              {
+                title: 'Trạng thái',
+                dataIndex: 'status',
+                key: 'status',
+                width: 120,
+                render: (status: string) => (
+                  <Tag color={STATUS_TAG_COLORS[status] || 'default'}>{STATUS_LABELS[status] || status}</Tag>
+                ),
+              },
+              {
+                title: 'Ước tính',
+                dataIndex: 'estimateMinutes',
+                key: 'estimate',
+                width: 100,
+                render: (mins: number) => formatMinutes(mins),
+              },
+              {
+                title: 'Hạn chót',
+                dataIndex: 'deadline',
+                key: 'deadline',
+                width: 120,
+                render: (deadline?: string) => deadline || '—',
+              },
+            ]}
+          />
+        </div>
       );
     };
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '12px 0' }}>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 16,
+          padding: '14px 16px 14px 28px',
+          marginLeft: 12,
+          borderLeft: `3px solid ${token.colorPrimaryBorder}`,
+          background: token.colorFillAlter,
+          borderRadius: `0 ${token.borderRadiusSM}px ${token.borderRadiusSM}px 0`,
+        }}
+      >
         <div>
           <div
             style={{
@@ -358,12 +407,19 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
                   dataIndex: 'name',
                   key: 'name',
                   render: (name: string, record: Task) => (
-                    <span
-                      style={{ cursor: 'pointer', color: token.colorPrimary }}
-                      onClick={() => onEditTask(record.id)}
-                    >
-                      {name}
-                    </span>
+                    <Space size={6}>
+                      <span
+                        style={{ cursor: 'pointer', color: token.colorPrimary }}
+                        onClick={() => onEditTask(record.id)}
+                      >
+                        {name}
+                      </span>
+                      {taskNotesSet.has(record.id) && (
+                        <Tooltip title="Có ghi chú">
+                          <FileTextOutlined style={{ color: token.colorPrimary, fontSize: 12 }} />
+                        </Tooltip>
+                      )}
+                    </Space>
                   ),
                 },
                 {
