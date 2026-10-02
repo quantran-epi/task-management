@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Modal, Input, List, Tag, Typography, Space, Empty, Button, Tooltip, Table } from 'antd';
+import { Modal, Input, List, Tag, Typography, Space, Empty, Button, Tooltip } from 'antd';
 import {
   SearchOutlined,
-  AppstoreOutlined,
   CheckSquareOutlined,
   ProjectOutlined,
   FileTextOutlined,
@@ -12,11 +11,10 @@ import {
   SettingOutlined,
   DashboardOutlined,
   QuestionCircleOutlined,
-  CloseCircleOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
-import type { AppRoute, NavigateFunction } from '../../types/navigation';
+import type { NavigateFunction } from '../../types/navigation';
 import type { Task, Project, Note } from '../../types/models';
 
 const { Text } = Typography;

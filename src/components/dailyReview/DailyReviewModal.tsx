@@ -15,7 +15,7 @@ import { getAllocationsForDate, deleteAllocation, upsertAllocation, type Planned
 import { getTodayDateString } from '../../utils/date';
 import { formatMinutes } from '../../utils/time';
 
-const { Title, Text, Paragraph } = Typography;
+const { Text, Paragraph } = Typography;
 
 export interface DailyReviewModalProps {
   open: boolean;
@@ -166,7 +166,7 @@ export const DailyReviewModal: React.FC<DailyReviewModalProps> = ({
           <Progress
             percent={percentCapacity}
             status={isOverCapacity ? 'exception' : percentCapacity >= 100 ? 'success' : 'active'}
-            strokeColor={isOverCapacity ? '#fa541c' : undefined}
+            {...(isOverCapacity ? { strokeColor: '#fa541c' } : {})}
           />
         </div>
 
@@ -208,9 +208,10 @@ export const DailyReviewModal: React.FC<DailyReviewModalProps> = ({
               </Paragraph>
             </Card>
           ) : (
-            <Table
+            <Table<PlannedAllocationWithTask>
               size="small"
               rowKey="id"
+              loading={loading}
               dataSource={incompleteAllocations}
               pagination={false}
               columns={[
@@ -218,7 +219,7 @@ export const DailyReviewModal: React.FC<DailyReviewModalProps> = ({
                   title: 'Công việc',
                   dataIndex: ['task', 'name'],
                   key: 'name',
-                  render: (name: string, record) => (
+                  render: (name: string, record: PlannedAllocationWithTask) => (
                     <Space orientation="vertical" size={2}>
                       <Text strong>{name}</Text>
                       <Space size="small">
@@ -235,7 +236,7 @@ export const DailyReviewModal: React.FC<DailyReviewModalProps> = ({
                   key: 'action',
                   width: 140,
                   align: 'right',
-                  render: (_, record) => (
+                  render: (_: unknown, record: PlannedAllocationWithTask) => (
                     <Button
                       size="small"
                       icon={<ArrowRightOutlined />}

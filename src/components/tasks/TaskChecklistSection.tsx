@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Button, Checkbox, Input, List, Space, Typography, Tooltip } from 'antd';
+import { Button, Checkbox, Input, List, Typography, Tooltip } from 'antd';
 import { PlusOutlined, DeleteOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import type { TaskChecklistItem } from '../../types/models';
 

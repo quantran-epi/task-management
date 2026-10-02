@@ -31,12 +31,6 @@ export interface ReminderItem {
   note?: string | undefined;
 }
 
-export interface TaskChecklistItem {
-  id: string; // crypto.randomUUID()
-  text: string;
-  completed: boolean;
-}
-
 export interface Project {
   id: string; // RFC 4122 v4 UUID
   name: string;
