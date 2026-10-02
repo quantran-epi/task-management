@@ -4,6 +4,7 @@ import React from 'react';
 import { CommandPaletteModal } from '../../../src/components/palette/CommandPaletteModal';
 import { TaskPlannerDatabase } from '../../../src/db';
 import 'fake-indexeddb/auto';
+import type { Task, Project } from '../../../src/types/models';
 
 describe('CommandPaletteModal', () => {
   let db: TaskPlannerDatabase;
@@ -97,5 +98,62 @@ describe('CommandPaletteModal', () => {
 
     expect(onNavigate).toHaveBeenCalledWith('tasks');
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('shows cheatsheet guide when ? is typed or guide button clicked', () => {
+    const onNavigate = vi.fn();
+    const onClose = vi.fn();
+
+    render(
+      <CommandPaletteModal
+        open={true}
+        onClose={onClose}
+        onNavigate={onNavigate}
+        db={db}
+      />
+    );
+
+    const guideBtn = screen.getByLabelText('Hướng dẫn cú pháp');
+    fireEvent.click(guideBtn);
+
+    expect(screen.getByText(/Hướng dẫn cú pháp Command Palette/)).toBeInTheDocument();
+    expect(screen.getByText('Màn hình')).toBeInTheDocument();
+    expect(screen.getByText('Tác vụ')).toBeInTheDocument();
+    expect(screen.getByText('Dự án')).toBeInTheDocument();
+    expect(screen.getByText('Tạo việc')).toBeInTheDocument();
+  });
+
+  it('filters by prefix when tag is clicked or prefix typed', async () => {
+    const onNavigate = vi.fn();
+    const onClose = vi.fn();
+
+    const task: Task = {
+      id: 'a0000000-0000-4000-8000-000000000001',
+      name: 'Kiểm tra bảo mật API',
+      status: 'Open',
+      priority: 'High',
+      progress: 0,
+      estimateMinutes: 60,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    await db.tasks.add(task);
+
+    render(
+      <CommandPaletteModal
+        open={true}
+        onClose={onClose}
+        onNavigate={onNavigate}
+        db={db}
+      />
+    );
+
+    // Click @ Tác vụ filter tag
+    const taskTag = screen.getByText('@ Tác vụ');
+    fireEvent.click(taskTag);
+
+    await waitFor(() => {
+      expect(screen.getByText('Kiểm tra bảo mật API')).toBeInTheDocument();
+    });
   });
 });

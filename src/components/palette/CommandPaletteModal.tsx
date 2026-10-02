@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Modal, Input, List, Tag, Typography, Space, Empty, Button } from 'antd';
+import { Modal, Input, List, Tag, Typography, Space, Empty, Button, Tooltip, Table } from 'antd';
 import {
   SearchOutlined,
   AppstoreOutlined,
@@ -11,6 +11,8 @@ import {
   BarChartOutlined,
   SettingOutlined,
   DashboardOutlined,
+  QuestionCircleOutlined,
+  CloseCircleOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
@@ -29,7 +31,7 @@ export interface CommandPaletteModalProps {
   db?: TaskPlannerDatabase;
 }
 
-interface PaletteItem {
+export interface PaletteItem {
   id: string;
   category: 'view' | 'action' | 'task' | 'project' | 'note';
   title: string;
@@ -37,6 +39,15 @@ interface PaletteItem {
   icon: React.ReactNode;
   action: () => void;
 }
+
+export const CHEATSHEET_ENTRIES = [
+  { prefix: '>', name: 'Màn hình', desc: 'Chỉ tìm các trang / màn hình chức năng', example: '> tasks, > planner' },
+  { prefix: '@', name: 'Tác vụ', desc: 'Chỉ tìm kiếm danh sách công việc', example: '@ họp sprint, @ refactor' },
+  { prefix: '#', name: 'Dự án', desc: 'Chỉ tìm kiếm danh sách dự án & cột mốc', example: '# website, # mobile app' },
+  { prefix: '!', name: 'Ghi chú', desc: 'Chỉ tìm kiếm ghi chú và nội dung đính kèm', example: '! auth, ! api' },
+  { prefix: '+', name: 'Tạo việc', desc: 'Tạo ngay một tác vụ mới với tên đã nhập', example: '+ Soạn hợp đồng quý 4' },
+  { prefix: '?', name: 'Hướng dẫn', desc: 'Mở trang tra cứu phím tắt và cú pháp lệnh', example: '?' },
+];
 
 export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
   open,
@@ -49,12 +60,14 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
 }) => {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [showCheatsheet, setShowCheatsheet] = useState(false);
   const inputRef = useRef<any>(null);
 
   useEffect(() => {
     if (open) {
       setQuery('');
       setSelectedIndex(0);
+      setShowCheatsheet(false);
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [open]);
@@ -158,9 +171,42 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
     ];
   }, [onNavigate, onClose, onCreateTask]);
 
-  // Dynamic search items
+  // Dynamic search items with prefix filtering
   const filteredItems = useMemo<PaletteItem[]>(() => {
-    const q = query.trim().toLowerCase();
+    const raw = query.trim();
+    const q = raw.toLowerCase();
+
+    // Check prefixes
+    const isViewOnly = q.startsWith('>') || q.startsWith('/');
+    const isTaskOnly = q.startsWith('@');
+    const isProjectOnly = q.startsWith('#');
+    const isNoteOnly = q.startsWith('!');
+    const isCreateOnly = q.startsWith('+');
+
+    let cleanQuery = q;
+    if (isViewOnly || isTaskOnly || isProjectOnly || isNoteOnly || isCreateOnly) {
+      cleanQuery = q.slice(1).trim();
+    }
+
+    // Quick create shortcut
+    if (isCreateOnly) {
+      const taskName = raw.slice(1).trim();
+      return [
+        {
+          id: 'action-quick-create-prefix',
+          category: 'action',
+          title: taskName ? `Tạo công việc: "${taskName}"` : 'Tạo công việc mới (gõ tiếp tên)',
+          subtitle: 'Nhấn Enter để tạo nhanh',
+          icon: <PlusOutlined style={{ color: '#52c41a' }} />,
+          action: () => {
+            if (taskName) {
+              onClose();
+              onCreateTask?.(taskName);
+            }
+          },
+        },
+      ];
+    }
 
     const taskItems: PaletteItem[] = tasks.map((t) => ({
       id: `task-${t.id}`,
@@ -198,31 +244,50 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
       },
     }));
 
+    // Filter by specific prefix
+    if (isViewOnly) {
+      if (!cleanQuery) return staticItems;
+      return staticItems.filter((i) => i.title.toLowerCase().includes(cleanQuery) || i.subtitle?.toLowerCase().includes(cleanQuery));
+    }
+
+    if (isTaskOnly) {
+      if (!cleanQuery) return taskItems.slice(0, 10);
+      return taskItems.filter((i) => i.title.toLowerCase().includes(cleanQuery) || i.subtitle?.toLowerCase().includes(cleanQuery));
+    }
+
+    if (isProjectOnly) {
+      if (!cleanQuery) return projectItems.slice(0, 10);
+      return projectItems.filter((i) => i.title.toLowerCase().includes(cleanQuery) || i.subtitle?.toLowerCase().includes(cleanQuery));
+    }
+
+    if (isNoteOnly) {
+      if (!cleanQuery) return noteItems.slice(0, 10);
+      return noteItems.filter((i) => i.title.toLowerCase().includes(cleanQuery) || i.subtitle?.toLowerCase().includes(cleanQuery));
+    }
+
+    // Default global search
     const all = [...staticItems, ...taskItems, ...projectItems, ...noteItems];
 
-    if (!q) {
-      // Default: show static views/actions and top tasks/projects
+    if (!cleanQuery) {
       return [...staticItems, ...taskItems.slice(0, 5), ...projectItems.slice(0, 3)];
     }
 
-    // Filter items
     const matched = all.filter(
       (item) =>
-        item.title.toLowerCase().includes(q) ||
-        (item.subtitle && item.subtitle.toLowerCase().includes(q))
+        item.title.toLowerCase().includes(cleanQuery) ||
+        (item.subtitle && item.subtitle.toLowerCase().includes(cleanQuery))
     );
 
-    // If query has text, also offer quick create task action with this name
-    if (q.length > 0) {
+    if (cleanQuery.length > 0) {
       const quickCreate: PaletteItem = {
         id: 'action-quick-create',
         category: 'action',
-        title: `Tạo công việc: "${query.trim()}"`,
+        title: `Tạo công việc: "${raw}"`,
         subtitle: 'Nhấn Enter để tạo nhanh',
         icon: <PlusOutlined style={{ color: '#52c41a' }} />,
         action: () => {
           onClose();
-          onCreateTask?.(query.trim());
+          onCreateTask?.(raw);
         },
       };
       return [quickCreate, ...matched];
@@ -239,6 +304,13 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
   }, [filteredItems.length, selectedIndex]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (showCheatsheet) {
+      if (e.key === 'Escape') {
+        setShowCheatsheet(false);
+      }
+      return;
+    }
+
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       setSelectedIndex((prev) => (prev + 1) % Math.max(1, filteredItems.length));
@@ -271,6 +343,8 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
     }
   };
 
+  const isAskingCheatsheet = query.trim() === '?' || showCheatsheet;
+
   return (
     <Modal
       open={open}
@@ -278,77 +352,203 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
       footer={null}
       closable={false}
       destroyOnClose
-      width={600}
+      width={660}
       style={{ top: 80 }}
       styles={{
         body: { padding: '12px' },
       }}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <Input
-          ref={inputRef}
-          size="large"
-          prefix={<SearchOutlined style={{ color: '#8c8c8c', fontSize: 18 }} />}
-          placeholder="Tìm công việc, dự án, màn hình, lệnh... (gõ để tìm hoặc tạo)"
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setSelectedIndex(0);
-          }}
-          onKeyDown={handleKeyDown}
-          aria-label="Tìm kiếm lệnh toàn cục"
-          allowClear
-        />
-
-        <div style={{ maxHeight: 380, overflowY: 'auto' }}>
-          {filteredItems.length === 0 ? (
-            <Empty description="Không tìm thấy kết quả phù hợp" style={{ margin: '24px 0' }} />
-          ) : (
-            <List
-              size="small"
-              dataSource={filteredItems}
-              renderItem={(item, idx) => {
-                const isSelected = idx === selectedIndex;
-                return (
-                  <List.Item
-                    key={item.id}
-                    onClick={() => item.action()}
-                    onMouseEnter={() => setSelectedIndex(idx)}
-                    style={{
-                      cursor: 'pointer',
-                      padding: '8px 12px',
-                      borderRadius: 6,
-                      backgroundColor: isSelected ? '#e6f4ff' : 'transparent',
-                      transition: 'background-color 0.15s ease',
-                      borderBottom: '1px solid #f0f0f0',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                    }}
-                  >
-                    <Space style={{ overflow: 'hidden' }}>
-                      <span style={{ fontSize: 18, display: 'flex', alignItems: 'center' }}>
-                        {item.icon}
-                      </span>
-                      <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                        <Text strong style={{ fontSize: 14 }}>
-                          {item.title}
-                        </Text>
-                        {item.subtitle && (
-                          <Text type="secondary" style={{ fontSize: 12 }}>
-                            {item.subtitle}
-                          </Text>
-                        )}
-                      </div>
-                    </Space>
-                    <div>{getCategoryTag(item.category)}</div>
-                  </List.Item>
-                );
-              }}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {/* Search input bar */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Input
+            ref={inputRef}
+            size="large"
+            prefix={<SearchOutlined style={{ color: '#8c8c8c', fontSize: 18 }} />}
+            placeholder="Tìm công việc, dự án, màn hình, lệnh... (gõ '?' để xem cú pháp)"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setSelectedIndex(0);
+            }}
+            onKeyDown={handleKeyDown}
+            aria-label="Tìm kiếm lệnh toàn cục"
+            allowClear
+            style={{ flex: 1 }}
+          />
+          <Tooltip title={isAskingCheatsheet ? 'Đóng hướng dẫn' : 'Bảng tra cứu cú pháp (?)'}>
+            <Button
+              type={isAskingCheatsheet ? 'primary' : 'default'}
+              icon={<QuestionCircleOutlined />}
+              onClick={() => setShowCheatsheet((prev) => !prev)}
+              aria-label="Hướng dẫn cú pháp"
             />
-          )}
+          </Tooltip>
         </div>
 
+        {/* Quick prefix filter buttons */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <Text type="secondary" style={{ fontSize: 12, marginRight: 2 }}>
+            Bộ lọc nhanh:
+          </Text>
+          <Tag
+            color={query.startsWith('>') ? 'blue' : 'default'}
+            style={{ cursor: 'pointer', margin: 0 }}
+            onClick={() => setQuery('> ')}
+          >
+            &gt; Màn hình
+          </Tag>
+          <Tag
+            color={query.startsWith('@') ? 'cyan' : 'default'}
+            style={{ cursor: 'pointer', margin: 0 }}
+            onClick={() => setQuery('@ ')}
+          >
+            @ Tác vụ
+          </Tag>
+          <Tag
+            color={query.startsWith('#') ? 'orange' : 'default'}
+            style={{ cursor: 'pointer', margin: 0 }}
+            onClick={() => setQuery('# ')}
+          >
+            # Dự án
+          </Tag>
+          <Tag
+            color={query.startsWith('!') ? 'magenta' : 'default'}
+            style={{ cursor: 'pointer', margin: 0 }}
+            onClick={() => setQuery('! ')}
+          >
+            ! Ghi chú
+          </Tag>
+          <Tag
+            color={query.startsWith('+') ? 'green' : 'default'}
+            style={{ cursor: 'pointer', margin: 0 }}
+            onClick={() => setQuery('+ ')}
+          >
+            + Tạo việc
+          </Tag>
+        </div>
+
+        {/* Main Content: Cheatsheet or Filtered List */}
+        {isAskingCheatsheet ? (
+          <div
+            style={{
+              maxHeight: 380,
+              overflowY: 'auto',
+              padding: '8px 4px',
+              backgroundColor: '#fafafa',
+              borderRadius: 6,
+              border: '1px solid #f0f0f0',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, padding: '0 8px' }}>
+              <Text strong style={{ fontSize: 14 }}>
+                📖 Hướng dẫn cú pháp Command Palette
+              </Text>
+              <Button size="small" type="text" onClick={() => { setShowCheatsheet(false); if (query === '?') setQuery(''); }}>
+                Đóng hướng dẫn
+              </Button>
+            </div>
+
+            <List
+              size="small"
+              dataSource={CHEATSHEET_ENTRIES}
+              renderItem={(item) => (
+                <List.Item
+                  style={{
+                    cursor: 'pointer',
+                    padding: '8px 12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                  onClick={() => {
+                    setQuery(`${item.prefix} `);
+                    setShowCheatsheet(false);
+                    inputRef.current?.focus();
+                  }}
+                >
+                  <Space size="middle">
+                    <kbd
+                      style={{
+                        padding: '2px 8px',
+                        border: '1px solid #d9d9d9',
+                        borderRadius: 4,
+                        background: '#fff',
+                        fontWeight: 600,
+                        fontSize: 13,
+                        color: '#1677ff',
+                      }}
+                    >
+                      {item.prefix}
+                    </kbd>
+                    <div>
+                      <Text strong>{item.name}</Text>
+                      <div>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          {item.desc}
+                        </Text>
+                      </div>
+                    </div>
+                  </Space>
+                  <Text code style={{ fontSize: 12 }}>
+                    {item.example}
+                  </Text>
+                </List.Item>
+              )}
+            />
+          </div>
+        ) : (
+          <div style={{ maxHeight: 380, overflowY: 'auto' }}>
+            {filteredItems.length === 0 ? (
+              <Empty description="Không tìm thấy kết quả phù hợp" style={{ margin: '24px 0' }} />
+            ) : (
+              <List
+                size="small"
+                dataSource={filteredItems}
+                renderItem={(item, idx) => {
+                  const isSelected = idx === selectedIndex;
+                  return (
+                    <List.Item
+                      key={item.id}
+                      onClick={() => item.action()}
+                      onMouseEnter={() => setSelectedIndex(idx)}
+                      style={{
+                        cursor: 'pointer',
+                        padding: '8px 12px',
+                        borderRadius: 6,
+                        backgroundColor: isSelected ? '#e6f4ff' : 'transparent',
+                        transition: 'background-color 0.15s ease',
+                        borderBottom: '1px solid #f0f0f0',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <Space style={{ overflow: 'hidden' }}>
+                        <span style={{ fontSize: 18, display: 'flex', alignItems: 'center' }}>
+                          {item.icon}
+                        </span>
+                        <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                          <Text strong style={{ fontSize: 14 }}>
+                            {item.title}
+                          </Text>
+                          {item.subtitle && (
+                            <Text type="secondary" style={{ fontSize: 12 }}>
+                              {item.subtitle}
+                            </Text>
+                          )}
+                        </div>
+                      </Space>
+                      <div>{getCategoryTag(item.category)}</div>
+                    </List.Item>
+                  );
+                }}
+              />
+            )}
+          </div>
+        )}
+
+        {/* Footer info bar */}
         <div
           style={{
             display: 'flex',
@@ -383,7 +583,14 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
               để đóng
             </span>
           </Space>
-          <span>Cmd+K / Ctrl+K</span>
+          <Button
+            type="link"
+            size="small"
+            style={{ padding: 0, fontSize: 12 }}
+            onClick={() => setShowCheatsheet((prev) => !prev)}
+          >
+            {isAskingCheatsheet ? 'Đóng hướng dẫn' : 'Xem phím tắt (?)'}
+          </Button>
         </div>
       </div>
     </Modal>
