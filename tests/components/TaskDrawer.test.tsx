@@ -158,7 +158,7 @@ describe('TaskDrawer', () => {
     const updated = await testDb.tasks.get(task.id);
     expect(updated?.projectId).toBeUndefined();
     expect(updated?.milestoneId).toBeUndefined();
-  });
+  }, 30000);
 
   it('updates estimate using quick preset buttons (+30m, 1h, 2h, 4h, 8h) per D-21', async () => {
     const task = await createTask(

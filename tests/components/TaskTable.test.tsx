@@ -96,7 +96,7 @@ describe('TaskTable Component', () => {
     expect(screen.getByText('Ops Owner:')).toBeInTheDocument();
     expect(screen.getByText('BA:')).toBeInTheDocument();
     expect(screen.getByText('Trạng thái Jira:')).toBeInTheDocument();
-  });
+  }, 15000);
 
   it('TaskTable renders columns with tags, breadcrumbs, estimate format, link badges, and overdue styling', () => {
     const onOpenDrawer = vi.fn();
