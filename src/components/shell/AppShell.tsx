@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Layout, Drawer, Grid, Button, Typography, Space, Badge, Tooltip, theme, message } from 'antd';
-import { MenuOutlined, CloudDownloadOutlined } from '@ant-design/icons';
+import { MenuOutlined, CloudDownloadOutlined, SearchOutlined } from '@ant-design/icons';
 import { Navigation } from './Navigation';
 import { StatusBadge } from './StatusBadge';
 import { UpgradeModal } from './UpgradeModal';
@@ -25,7 +25,9 @@ import { NotificationDrawer } from '../notifications/NotificationDrawer';
 import { TaskDrawer } from '../tasks/TaskDrawer';
 import { ProjectModal } from '../projects/ProjectModal';
 import { MilestoneModal } from '../projects/MilestoneModal';
+import { CommandPaletteModal } from '../palette/CommandPaletteModal';
 import { dismissAlertToday } from '../../db/repositories/notificationRepo';
+import { createTask } from '../../db/repositories/taskRepo';
 import { getProject, updateProject } from '../../db/repositories/projectRepo';
 import { getMilestone, updateMilestone } from '../../db/repositories/milestoneRepo';
 import { getTodayDateString, isValidCalendarDate } from '../../utils/date';
@@ -97,9 +99,22 @@ const AppShellInner: React.FC<AppShellProps> = ({
 
   // Notification UI & Inspection State (D-02, D-03, D-12)
   const [notificationDrawerOpen, setNotificationDrawerOpen] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [inspectingTaskId, setInspectingTaskId] = useState<string | undefined>(undefined);
   const [inspectingProject, setInspectingProject] = useState<Project | null>(null);
   const [inspectingMilestone, setInspectingMilestone] = useState<Milestone | null>(null);
+
+  // Global Cmd+K / Ctrl+K keyboard shortcut
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setCommandPaletteOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Prefer explicit prop if provided, else check token brightness/property
   const isDark = explicitDark ?? false;
@@ -196,6 +211,16 @@ const AppShellInner: React.FC<AppShellProps> = ({
             </Title>
           </Space>
           <Space size="middle">
+            <Tooltip title="Tìm kiếm & Lệnh nhanh (Cmd+K / Ctrl+K)">
+              <Button
+                type="text"
+                icon={<SearchOutlined style={{ fontSize: 16 }} />}
+                onClick={() => setCommandPaletteOpen(true)}
+                aria-label="Mở tìm kiếm nhanh"
+              >
+                {!isMobile && <span style={{ fontSize: 12, color: '#8c8c8c' }}>Tìm kiếm (Cmd+K)</span>}
+              </Button>
+            </Tooltip>
             <ActiveTimerWidget />
             <GitHubSyncStatusDot />
             <StatusBadge />
@@ -266,6 +291,28 @@ const AppShellInner: React.FC<AppShellProps> = ({
           }}
         />
       )}
+
+      <CommandPaletteModal
+        open={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        onNavigate={onNavigate}
+        onOpenTask={(taskId) => setInspectingTaskId(taskId)}
+        onOpenProject={(p) => setInspectingProject(p)}
+        onCreateTask={async (name) => {
+          try {
+            const task = await createTask({
+              name: name || 'Tác vụ mới',
+              status: 'Open',
+              priority: 'Medium',
+              estimateMinutes: 0,
+            });
+            message.success('Đã tạo tác vụ');
+            setInspectingTaskId(task.id);
+          } catch {
+            message.error('Không thể tạo tác vụ');
+          }
+        }}
+      />
 
       <UpgradeModal />
       <ResetDbModal open={resetModalOpen} onClose={() => setResetModalOpen(false)} />
