@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Layout, Drawer, Grid, Button, Typography, Space, Badge, Tooltip, theme, message } from 'antd';
-import { MenuOutlined, CloudDownloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { MenuOutlined, CloudDownloadOutlined, SearchOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { Navigation } from './Navigation';
 import { StatusBadge } from './StatusBadge';
 import { UpgradeModal } from './UpgradeModal';
@@ -26,6 +26,7 @@ import { TaskDrawer } from '../tasks/TaskDrawer';
 import { ProjectModal } from '../projects/ProjectModal';
 import { MilestoneModal } from '../projects/MilestoneModal';
 import { CommandPaletteModal } from '../palette/CommandPaletteModal';
+import { DailyReviewModal } from '../dailyReview/DailyReviewModal';
 import { dismissAlertToday } from '../../db/repositories/notificationRepo';
 import { createTask } from '../../db/repositories/taskRepo';
 import { getProject, updateProject } from '../../db/repositories/projectRepo';
@@ -100,6 +101,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
   // Notification UI & Inspection State (D-02, D-03, D-12)
   const [notificationDrawerOpen, setNotificationDrawerOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [dailyReviewOpen, setDailyReviewOpen] = useState(false);
   const [inspectingTaskId, setInspectingTaskId] = useState<string | undefined>(undefined);
   const [inspectingProject, setInspectingProject] = useState<Project | null>(null);
   const [inspectingMilestone, setInspectingMilestone] = useState<Milestone | null>(null);
@@ -221,6 +223,16 @@ const AppShellInner: React.FC<AppShellProps> = ({
                 {!isMobile && <span style={{ fontSize: 12, color: '#8c8c8c' }}>Tìm kiếm (Cmd+K)</span>}
               </Button>
             </Tooltip>
+            <Tooltip title="Tổng kết ngày & Standup">
+              <Button
+                type="text"
+                icon={<CheckCircleOutlined style={{ fontSize: 16, color: '#1677ff' }} />}
+                onClick={() => setDailyReviewOpen(true)}
+                aria-label="Mở tổng kết ngày"
+              >
+                {!isMobile && <span style={{ fontSize: 12, color: '#8c8c8c' }}>Tổng kết</span>}
+              </Button>
+            </Tooltip>
             <ActiveTimerWidget />
             <GitHubSyncStatusDot />
             <StatusBadge />
@@ -312,6 +324,11 @@ const AppShellInner: React.FC<AppShellProps> = ({
             message.error('Không thể tạo tác vụ');
           }
         }}
+      />
+
+      <DailyReviewModal
+        open={dailyReviewOpen}
+        onClose={() => setDailyReviewOpen(false)}
       />
 
       <UpgradeModal />
