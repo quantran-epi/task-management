@@ -14,6 +14,7 @@ interface StatusStyleConfig {
 }
 
 const STATUS_MAP: Record<TaskStatus, StatusStyleConfig> = {
+  Pending: { label: 'Chờ xử lý', color: '#faad14' },
   Open: { label: 'Mở', color: '#d9d9d9' },
   'In Progress': { label: 'Đang làm', color: '#1677ff' },
   'In Review': { label: 'Đang duyệt', color: '#722ed1' },
@@ -27,6 +28,7 @@ const ORDERED_STATUSES: TaskStatus[] = [
   'Resolved',
   'In Progress',
   'In Review',
+  'Pending',
   'Open',
   'Cancelled',
 ];

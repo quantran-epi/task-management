@@ -83,6 +83,8 @@ describe('TaskTable Component', () => {
     expect(screen.getByText('Quá hạn')).toBeInTheDocument();
     expect(screen.getByText('Hôm nay')).toBeInTheDocument();
     expect(screen.getByText('Tuần này')).toBeInTheDocument();
+    fireEvent.mouseDown(screen.getByLabelText('Lọc theo trạng thái'));
+    expect(screen.getByText('Chờ xử lý')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Bộ lọc nâng cao/i })).toBeInTheDocument();
 
     // Toggle advanced filter panel open
@@ -177,6 +179,8 @@ describe('TaskTable Component', () => {
     expect(screen.getByText('Đã chọn 2 tác vụ')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Bỏ chọn/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Trạng thái/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Trạng thái/i }));
+    expect(await screen.findByText('Chờ xử lý')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Xóa/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Bỏ chọn/i }));

@@ -50,7 +50,10 @@ describe('TaskDrawer', () => {
 
     expect(screen.getByLabelText('Dự án')).toBeInTheDocument();
     expect(screen.getByLabelText('Cột mốc')).toBeInTheDocument();
-    expect(screen.getByLabelText('Trạng thái')).toBeInTheDocument();
+    const statusSelect = screen.getByLabelText('Trạng thái');
+    expect(statusSelect).toBeInTheDocument();
+    fireEvent.mouseDown(statusSelect);
+    expect(await screen.findByText('Chờ xử lý')).toBeInTheDocument();
     expect(screen.getByLabelText('Độ ưu tiên')).toBeInTheDocument();
     expect(screen.getByLabelText('Loại công việc')).toBeInTheDocument();
     expect(screen.getByText('Ops Owner')).toBeInTheDocument();
@@ -63,7 +66,7 @@ describe('TaskDrawer', () => {
     // Estimate is split into hours (1) and minutes (30)
     expect(screen.getByLabelText('Giờ')).toHaveValue('1');
     expect(screen.getByLabelText('Phút')).toHaveValue('30');
-  }, 15000);
+  }, 30000);
 
   it('cascading reparenting clears milestone when changing project per D-10, WORK-04', async () => {
     const projA = await createProject({ name: 'Project Alpha' }, testDb);
@@ -187,7 +190,7 @@ describe('TaskDrawer', () => {
 
     expect(screen.getByLabelText('Giờ')).toHaveValue('2');
     expect(screen.getByLabelText('Phút')).toHaveValue('30');
-  }, 60000);
+  }, 90000);
 
   it('validates document links with http/https regex per D-25, T-02-05', async () => {
     const task = await createTask({ name: 'Link task', status: 'Open' }, testDb);

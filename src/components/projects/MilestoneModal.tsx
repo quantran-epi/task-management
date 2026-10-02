@@ -41,10 +41,11 @@ interface MilestoneFormValues {
   reminders?: unknown[];
 }
 
-const MILESTONE_STATUSES: MilestoneStatus[] = ['Open', 'In Progress', 'Done', 'Cancelled'];
+const MILESTONE_STATUSES: MilestoneStatus[] = ['Open', 'Pending', 'In Progress', 'Done', 'Cancelled'];
 
 const STATUS_LABELS: Record<MilestoneStatus, string> = {
   Open: 'Mở',
+  Pending: 'Chờ xử lý',
   'In Progress': 'Đang làm',
   Done: 'Hoàn thành',
   Cancelled: 'Đã hủy',

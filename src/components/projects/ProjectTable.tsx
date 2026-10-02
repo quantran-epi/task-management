@@ -46,6 +46,7 @@ export interface ProjectTableProps {
 
 const STATUS_TAG_COLORS: Record<string, string> = {
   Open: 'default',
+  Pending: 'gold',
   'In Progress': 'processing',
   Resolved: 'warning',
   'In Review': 'cyan',
@@ -55,6 +56,7 @@ const STATUS_TAG_COLORS: Record<string, string> = {
 
 const STATUS_LABELS: Record<string, string> = {
   Open: 'Mở',
+  Pending: 'Chờ xử lý',
   'In Progress': 'Đang làm',
   Resolved: 'Đã giải quyết',
   'In Review': 'Đang duyệt',

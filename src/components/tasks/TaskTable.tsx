@@ -91,11 +91,12 @@ const PRIORITY_WEIGHTS: Record<TaskPriority, number> = {
 
 const STATUS_WEIGHTS: Record<Task['status'], number> = {
   Open: 1,
-  'In Progress': 2,
-  Resolved: 3,
-  'In Review': 4,
-  Done: 5,
-  Cancelled: 6,
+  Pending: 2,
+  'In Progress': 3,
+  Resolved: 4,
+  'In Review': 5,
+  Done: 6,
+  Cancelled: 7,
 };
 
 export const STORAGE_COLUMNS_KEY = 'planner:task_table_columns';
