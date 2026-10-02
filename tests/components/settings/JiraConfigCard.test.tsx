@@ -37,6 +37,10 @@ describe("JiraConfigCard Component (JIRA-01, JIRA-02, D-01, D-02, D-03, D-04)", 
     expect(screen.getByLabelText("CORS Proxy URL")).toBeInTheDocument();
     expect(screen.getByLabelText("Mã dự án mặc định")).toBeInTheDocument();
     expect(screen.getByLabelText("Loại Issue mặc định")).toBeInTheDocument();
+    expect(screen.getByText("Ánh xạ trạng thái cục bộ sang Jira")).toBeInTheDocument();
+    for (const status of ["Open", "In Progress", "In Review", "Resolved", "Done", "Cancelled"]) {
+      expect(screen.getByLabelText(`Jira statuses cho ${status}`)).toBeInTheDocument();
+    }
 
     expect(screen.getByRole("button", { name: /Lưu cấu hình Jira/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Kiểm tra kết nối/i })).toBeInTheDocument();
@@ -85,12 +89,16 @@ describe("JiraConfigCard Component (JIRA-01, JIRA-02, D-01, D-02, D-03, D-04)", 
       const savedProxy = await db.settings.get("jira_cors_proxy");
       const savedProject = await db.settings.get("jira_default_project");
       const savedIssueType = await db.settings.get("jira_default_issue_type");
+      const savedMappings = await db.settings.get("jira_status_mappings");
 
       expect(savedDomain?.value).toBe("my-org.atlassian.net");
       expect(savedEmail?.value).toBe("ops@my-org.com");
       expect(savedProxy?.value).toBe("https://worker.proxy/?url=");
       expect(savedProject?.value).toBe("SHB"); // converted to uppercase
       expect(savedIssueType?.value).toBe("Task");
+      expect(savedMappings?.value).toEqual(
+        expect.objectContaining({ Open: expect.arrayContaining(["10000"]) })
+      );
     });
 
     expect(announceSpy).toHaveBeenCalledWith("Đã lưu cấu hình Jira");

@@ -1,6 +1,55 @@
 import type { TaskStatus } from '../../types/models';
 import type { JiraTransitionItem, JiraStatusMapping } from './types';
 
+export const LOCAL_TASK_STATUSES: readonly TaskStatus[] = [
+  'Open',
+  'In Progress',
+  'In Review',
+  'Resolved',
+  'Done',
+  'Cancelled',
+];
+
+export const DEFAULT_JIRA_STATUS_MAPPINGS: Record<TaskStatus, string[]> = {
+  Open: ['10000', '1', 'to do', 'open', 'backlog'],
+  'In Progress': ['3', 'in progress'],
+  'In Review': ['review', 'code review', 'peer review', 'pr'],
+  Resolved: ['resolved', 'testing', 'qa', 'uat', 'verify'],
+  Done: ['10001', '10002', '6', 'done', 'closed', 'complete'],
+  Cancelled: ['cancelled', "won't do", 'rejected'],
+};
+
+export function normalizeJiraStatusMappings(
+  value: unknown
+): Record<TaskStatus, string[]> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return structuredClone(DEFAULT_JIRA_STATUS_MAPPINGS);
+  }
+
+  const stored = value as Record<string, unknown>;
+  if (
+    Object.entries(stored).some(
+      ([key, tokens]) => LOCAL_TASK_STATUSES.includes(key as TaskStatus) && !Array.isArray(tokens)
+    )
+  ) {
+    return structuredClone(DEFAULT_JIRA_STATUS_MAPPINGS);
+  }
+
+  return Object.fromEntries(
+    LOCAL_TASK_STATUSES.map((status) => {
+      const tokens = stored[status];
+      if (!Array.isArray(tokens)) return [status, [...DEFAULT_JIRA_STATUS_MAPPINGS[status]]];
+      return [
+        status,
+        tokens
+          .filter((token): token is string => typeof token === 'string')
+          .map((token) => token.trim())
+          .filter(Boolean),
+      ];
+    })
+  ) as Record<TaskStatus, string[]>;
+}
+
 /**
  * Filter Jira transitions to those whose destination status ID matches
  * the configured one-to-many mappings for a given local TaskStatus (D-08, D-09).
