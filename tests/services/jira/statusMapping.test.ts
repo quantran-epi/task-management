@@ -10,6 +10,7 @@ describe('Smart Status Mapping (statusMapping.ts - D-10)', () => {
   it('provides ordered defaults for every local task status', () => {
     expect(LOCAL_TASK_STATUSES).toEqual([
       'Open',
+      'Pending',
       'In Progress',
       'In Review',
       'Resolved',
