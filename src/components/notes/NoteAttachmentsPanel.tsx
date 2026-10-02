@@ -16,15 +16,19 @@ import {
   DeleteOutlined,
   EditOutlined,
   CheckOutlined,
+  CameraOutlined,
 } from '@ant-design/icons';
 import type { UploadFile } from 'antd';
 import type { NoteAttachment } from '../../types/models';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { addNoteAttachment, deleteNoteAttachment } from '../../db/repositories/noteRepo';
+import { captureFocusedWindowScreenshot } from '../../utils/screenshotCapture';
 
 const MAX_ATTACHMENTS = 5;
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
 const ALLOWED_MIME_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] as const;
+const EMPTY_ATTACHMENTS: NoteAttachment[] = [];
+const EMPTY_STAGED_FILES: Array<{ file: File; caption?: string | undefined }> = [];
 
 export interface NoteAttachmentsPanelProps {
   noteId?: string | undefined;
@@ -39,9 +43,9 @@ export interface NoteAttachmentsPanelProps {
 
 export const NoteAttachmentsPanel: React.FC<NoteAttachmentsPanelProps> = ({
   noteId,
-  attachments = [],
+  attachments = EMPTY_ATTACHMENTS,
   onChange,
-  stagedFiles = [],
+  stagedFiles = EMPTY_STAGED_FILES,
   onStagedFilesChange,
   db = defaultDb,
   readOnly = false,
@@ -124,6 +128,20 @@ export const NoteAttachmentsPanel: React.FC<NoteAttachmentsPanelProps> = ({
     }
   };
 
+  const handleCapture = async () => {
+    setUploading(true);
+    try {
+      const file = await captureFocusedWindowScreenshot();
+      if (beforeUpload(file) !== true) return;
+      await handleCustomRequest({ file });
+      message.success('Đã chụp cửa sổ');
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : 'Không thể chụp cửa sổ');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleDeleteAttachment = async (id: string) => {
     if (noteId) {
       try {
@@ -170,16 +188,26 @@ export const NoteAttachmentsPanel: React.FC<NoteAttachmentsPanelProps> = ({
           Ảnh chụp màn hình ({totalCount}/{MAX_ATTACHMENTS})
         </Typography.Text>
         {!readOnly && totalCount < MAX_ATTACHMENTS && (
-          <Upload
-            accept="image/png,image/jpeg,image/gif,image/webp"
-            showUploadList={false}
-            beforeUpload={beforeUpload}
-            customRequest={({ file }) => void handleCustomRequest({ file })}
-          >
-            <Button size="small" icon={<PlusOutlined />} loading={uploading}>
-              Thêm ảnh
+          <Space size={4}>
+            <Upload
+              accept="image/png,image/jpeg,image/gif,image/webp"
+              showUploadList={false}
+              beforeUpload={beforeUpload}
+              customRequest={({ file }) => void handleCustomRequest({ file })}
+            >
+              <Button size="small" icon={<PlusOutlined />} loading={uploading}>
+                Thêm ảnh
+              </Button>
+            </Upload>
+            <Button
+              size="small"
+              icon={<CameraOutlined />}
+              loading={uploading}
+              onClick={() => void handleCapture()}
+            >
+              Chụp cửa sổ
             </Button>
-          </Upload>
+          </Space>
         )}
       </div>
 

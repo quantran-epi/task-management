@@ -4,8 +4,8 @@ milestone: v1.1
 milestone_name: Banking IT Enhancements & Jira Integration
 status: executing
 stopped_at: Completed 13.1-05-PLAN.md
-last_updated: "2026-10-01T15:00:00.000Z"
-last_activity: 2026-10-01 -- Completed 13.1-05-PLAN.md (Native OS Keychain credential persistence and auto-sync hardening)
+last_updated: "2026-10-02T03:20:00.000Z"
+last_activity: 2026-10-02 -- Completed quick task 261002-cie: Jira status and notes UI
 progress:
   total_phases: 8
   completed_phases: 8
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-27)
 Phase: 13.1 (timer-pause-timestamps-jira-project-mapping-and-live-status-) — COMPLETE
 Plan: 5 of 5
 Status: Completed Phase 13.1
-Last activity: 2026-10-01 -- Completed 13.1-05-PLAN.md (Native OS Keychain credential persistence and auto-sync hardening)
+Last activity: 2026-10-02 -- Completed quick task 261002-cie: Jira status and notes UI
 
 ### Quick Tasks Completed
 
@@ -44,6 +44,7 @@ Last activity: 2026-10-01 -- Completed 13.1-05-PLAN.md (Native OS Keychain crede
 | 260930-vdl | pop out and pin timer as separate small window with multi-timer support and live sync | 2026-09-30 | 74e9bd2 | complete | [260930-vdl-pop-out-and-pin-timer-as-separate-small-](./quick/260930-vdl-pop-out-and-pin-timer-as-separate-small-/) |
 | 260930-wva | fix vitest virtual:pwa-register alias for windows runners | 2026-09-30 | 9bbc0f5 | complete | [260930-wva-fix-vitest-virtual-pwa-alias-windows](./quick/260930-wva-fix-vitest-virtual-pwa-alias-windows/) |
 | 261001-hex | Add Tauri local SQLite file persistence with user-selected path, row-level transactional autosave, close flush, missing-path recovery, and GitHub auto-sync by interval or fixed daily local time with dirty-only sync and missed-run catch-up | 2026-10-01 | 7d84dd6 | complete | [261001-hex-add-tauri-local-sqlite-file-persistence-](./quick/261001-hex-add-tauri-local-sqlite-file-persistence-/) |
+| 261002-cie | Jira status mapping, local-only status edits, note details, screenshot attachments, and quick notes | 2026-10-02 | df12789 | complete | [261002-cie-need-ui-for-local-status-to-jira-status-](./quick/261002-cie-need-ui-for-local-status-to-jira-status-/) |
 
 ## Performance Metrics
 

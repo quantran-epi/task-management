@@ -26,6 +26,8 @@ import type { Note, NoteEntityType } from '../../types/models';
 import { deleteNote, updateNote } from '../../db/repositories/noteRepo';
 import { renderSafeMarkdown } from '../../utils/markdown';
 import { NoteEditor } from './NoteEditor';
+import { NoteDetailModal } from './NoteDetailModal';
+import { QuickNoteEntry } from './QuickNoteEntry';
 import { openNotesPopout } from '../../utils/notesPopout';
 
 export interface EntityNotesSectionProps {
@@ -41,6 +43,7 @@ export const EntityNotesSection: React.FC<EntityNotesSectionProps> = ({
 }) => {
   const [editorOpen, setEditorOpen] = useState<boolean>(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
+  const [selectedNote, setSelectedNote] = useState<Note | null>(null);
 
   // Live query for entity notes sorted pinned first, then updatedAt desc
   const notes = useLiveQuery(
@@ -134,6 +137,10 @@ export const EntityNotesSection: React.FC<EntityNotesSectionProps> = ({
         </Space>
       </div>
 
+      <div style={{ marginBottom: 12 }}>
+        <QuickNoteEntry defaultEntityType={entityType} defaultEntityId={entityId} db={db} />
+      </div>
+
       {(!notes || notes.length === 0) ? (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
@@ -153,6 +160,15 @@ export const EntityNotesSection: React.FC<EntityNotesSectionProps> = ({
                   background: note.isPinned ? '#f0f7ff' : '#fff',
                 }}
                 styles={{ body: { padding: '10px 12px' } }}
+                role="button"
+                tabIndex={0}
+                onClick={() => setSelectedNote(note)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    setSelectedNote(note);
+                  }
+                }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
                   <Space size={6} wrap>
@@ -181,7 +197,10 @@ export const EntityNotesSection: React.FC<EntityNotesSectionProps> = ({
                         type="text"
                         size="small"
                         icon={note.isPinned ? <PushpinFilled style={{ color: '#1677ff' }} /> : <PushpinOutlined />}
-                        onClick={() => void handleTogglePin(note)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void handleTogglePin(note);
+                        }}
                       />
                     </Tooltip>
                     <Tooltip title="Chỉnh sửa">
@@ -189,7 +208,8 @@ export const EntityNotesSection: React.FC<EntityNotesSectionProps> = ({
                         type="text"
                         size="small"
                         icon={<EditOutlined />}
-                        onClick={() => {
+                        onClick={(event) => {
+                          event.stopPropagation();
                           setEditingNote(note);
                           setEditorOpen(true);
                         }}
@@ -207,6 +227,7 @@ export const EntityNotesSection: React.FC<EntityNotesSectionProps> = ({
                         danger
                         size="small"
                         icon={<DeleteOutlined />}
+                        onClick={(event) => event.stopPropagation()}
                       />
                     </Popconfirm>
                   </Space>
@@ -233,6 +254,18 @@ export const EntityNotesSection: React.FC<EntityNotesSectionProps> = ({
           })}
         </div>
       )}
+
+      <NoteDetailModal
+        open={Boolean(selectedNote)}
+        note={selectedNote}
+        onClose={() => setSelectedNote(null)}
+        onEdit={(note) => {
+          setSelectedNote(null);
+          setEditingNote(note);
+          setEditorOpen(true);
+        }}
+        db={db}
+      />
 
       {editorOpen && (
         <NoteEditor

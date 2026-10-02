@@ -28,6 +28,8 @@ import type { Note, NoteEntityType } from '../types/models';
 import { deleteNote, updateNote } from '../db/repositories/noteRepo';
 import { renderSafeMarkdown } from '../utils/markdown';
 import { NoteEditor } from '../components/notes/NoteEditor';
+import { NoteDetailModal } from '../components/notes/NoteDetailModal';
+import { QuickNoteEntry } from '../components/notes/QuickNoteEntry';
 import {
   isTauriApp,
   isNotesWindowAlwaysOnTop,
@@ -50,6 +52,7 @@ export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb
   const [activeFilter, setActiveFilter] = useState<NotesFilterParams | null>(null);
   const [editorOpen, setEditorOpen] = useState<boolean>(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
+  const [selectedNote, setSelectedNote] = useState<Note | null>(null);
 
   // 1. Parse initial query parameters from window.location.hash
   useEffect(() => {
@@ -362,6 +365,18 @@ export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb
         )}
       </div>
 
+      <div style={{ padding: '10px 12px 0' }}>
+        <QuickNoteEntry
+          {...(activeFilter
+            ? {
+                defaultEntityType: activeFilter.entityType as NoteEntityType,
+                defaultEntityId: activeFilter.entityId,
+              }
+            : {})}
+          db={db}
+        />
+      </div>
+
       {/* Scrollable Notes List */}
       <div
         style={{
@@ -396,6 +411,15 @@ export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb
                   background: note.isPinned ? '#fafcff' : '#fff',
                 }}
                 styles={{ body: { padding: '10px 12px' } }}
+                role="button"
+                tabIndex={0}
+                onClick={() => setSelectedNote(note)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    setSelectedNote(note);
+                  }
+                }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
                   <Space size={4} wrap>
@@ -437,7 +461,10 @@ export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb
                             <PushpinOutlined style={{ fontSize: 12 }} />
                           )
                         }
-                        onClick={() => void handleToggleNotePin(note)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void handleToggleNotePin(note);
+                        }}
                       />
                     </Tooltip>
                     <Tooltip title="Chỉnh sửa">
@@ -445,7 +472,8 @@ export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb
                         type="text"
                         size="small"
                         icon={<EditOutlined style={{ fontSize: 12 }} />}
-                        onClick={() => {
+                        onClick={(event) => {
+                          event.stopPropagation();
                           setEditingNote(note);
                           setEditorOpen(true);
                         }}
@@ -462,6 +490,7 @@ export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb
                         danger
                         size="small"
                         icon={<DeleteOutlined style={{ fontSize: 12 }} />}
+                        onClick={(event) => event.stopPropagation()}
                       />
                     </Popconfirm>
                   </Space>
@@ -483,6 +512,18 @@ export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb
           })
         )}
       </div>
+
+      <NoteDetailModal
+        open={Boolean(selectedNote)}
+        note={selectedNote}
+        onClose={() => setSelectedNote(null)}
+        onEdit={(note) => {
+          setSelectedNote(null);
+          setEditingNote(note);
+          setEditorOpen(true);
+        }}
+        db={db}
+      />
 
       {editorOpen && (
         <NoteEditor

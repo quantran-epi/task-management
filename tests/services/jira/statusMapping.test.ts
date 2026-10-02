@@ -1,7 +1,42 @@
 import { describe, it, expect } from 'vitest';
-import { mapJiraStatusToLocalTaskStatus } from '../../../src/services/jira/statusMapping';
+import {
+  DEFAULT_JIRA_STATUS_MAPPINGS,
+  LOCAL_TASK_STATUSES,
+  mapJiraStatusToLocalTaskStatus,
+  normalizeJiraStatusMappings,
+} from '../../../src/services/jira/statusMapping';
 
 describe('Smart Status Mapping (statusMapping.ts - D-10)', () => {
+  it('provides ordered defaults for every local task status', () => {
+    expect(LOCAL_TASK_STATUSES).toEqual([
+      'Open',
+      'In Progress',
+      'In Review',
+      'Resolved',
+      'Done',
+      'Cancelled',
+    ]);
+    expect(Object.keys(DEFAULT_JIRA_STATUS_MAPPINGS)).toEqual(LOCAL_TASK_STATUSES);
+  });
+
+  it('normalizes trimmed mapping tokens and falls back for malformed values', () => {
+    expect(
+      normalizeJiraStatusMappings({
+        Open: [' 10000 ', '', 'To Do'],
+        'In Progress': ['3'],
+        Unknown: ['bad'],
+      })
+    ).toEqual({
+      ...DEFAULT_JIRA_STATUS_MAPPINGS,
+      Open: ['10000', 'To Do'],
+      'In Progress': ['3'],
+    });
+    expect(normalizeJiraStatusMappings(null)).toEqual(DEFAULT_JIRA_STATUS_MAPPINGS);
+    expect(normalizeJiraStatusMappings({ Open: '10000' })).toEqual(
+      DEFAULT_JIRA_STATUS_MAPPINGS
+    );
+  });
+
   describe('Rule 1: Cancelled', () => {
     it('maps statuses containing cancel, reject, or won\'t do to Cancelled', () => {
       expect(mapJiraStatusToLocalTaskStatus('Cancelled')).toBe('Cancelled');

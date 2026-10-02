@@ -28,6 +28,12 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { testJiraConnection } from '../../services/jira/jiraApi';
 import {
+  DEFAULT_JIRA_STATUS_MAPPINGS,
+  LOCAL_TASK_STATUSES,
+  normalizeJiraStatusMappings,
+} from '../../services/jira/statusMapping';
+import type { TaskStatus } from '../../types/models';
+import {
   getJiraApiToken,
   setJiraApiToken,
   forgetJiraApiToken,
@@ -56,6 +62,9 @@ export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }
   const [corsProxy, setCorsProxy] = useState('');
   const [defaultProjectKey, setDefaultProjectKey] = useState('');
   const [defaultIssueType, setDefaultIssueType] = useState('Task');
+  const [statusMappings, setStatusMappings] = useState<Record<TaskStatus, string[]>>(() =>
+    normalizeJiraStatusMappings(DEFAULT_JIRA_STATUS_MAPPINGS)
+  );
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [diagnosticResult, setDiagnosticResult] = useState<DiagnosticState>(null);
@@ -80,19 +89,22 @@ export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }
 
   // Load non-secret Jira settings from IndexedDB (D-01)
   const savedSettings = useLiveQuery(async () => {
-    const [domainRec, emailRec, proxyRec, projRec, issueTypeRec] = await Promise.all([
-      db.settings.get('jira_domain'),
-      db.settings.get('jira_email'),
-      db.settings.get('jira_cors_proxy'),
-      db.settings.get('jira_default_project'),
-      db.settings.get('jira_default_issue_type'),
-    ]);
+    const [domainRec, emailRec, proxyRec, projRec, issueTypeRec, mappingRec] =
+      await Promise.all([
+        db.settings.get('jira_domain'),
+        db.settings.get('jira_email'),
+        db.settings.get('jira_cors_proxy'),
+        db.settings.get('jira_default_project'),
+        db.settings.get('jira_default_issue_type'),
+        db.settings.get('jira_status_mappings'),
+      ]);
     return {
       domain: (domainRec?.value as string) || '',
       email: (emailRec?.value as string) || '',
       corsProxy: (proxyRec?.value as string) || '',
       defaultProjectKey: (projRec?.value as string) || '',
       defaultIssueType: (issueTypeRec?.value as string) || 'Task',
+      statusMappings: normalizeJiraStatusMappings(mappingRec?.value),
     };
   }, [db]);
 
@@ -103,6 +115,7 @@ export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }
       setCorsProxy(savedSettings.corsProxy);
       setDefaultProjectKey(savedSettings.defaultProjectKey);
       setDefaultIssueType(savedSettings.defaultIssueType);
+      setStatusMappings(savedSettings.statusMappings);
     }
   }, [savedSettings]);
 
@@ -120,6 +133,10 @@ export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }
         await db.settings.put({
           key: 'jira_default_issue_type',
           value: defaultIssueType.trim() || 'Task',
+        });
+        await db.settings.put({
+          key: 'jira_status_mappings',
+          value: normalizeJiraStatusMappings(statusMappings),
         });
       });
 
@@ -426,6 +443,29 @@ export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }
               />
             </Form.Item>
           </Col>
+        </Row>
+
+        <Typography.Title level={5}>Ánh xạ trạng thái cục bộ sang Jira</Typography.Title>
+        <Paragraph type="secondary">
+          Nhập Jira status ID từ cấu hình workflow/status. Tên hoặc token Jira hiện có cũng được
+          hỗ trợ.
+        </Paragraph>
+        <Row gutter={16}>
+          {LOCAL_TASK_STATUSES.map((status) => (
+            <Col xs={24} sm={12} key={status}>
+              <Form.Item label={status}>
+                <Select
+                  mode="tags"
+                  value={statusMappings[status]}
+                  onChange={(values) =>
+                    setStatusMappings((current) => ({ ...current, [status]: values }))
+                  }
+                  tokenSeparators={[',']}
+                  aria-label={`Jira statuses cho ${status}`}
+                />
+              </Form.Item>
+            </Col>
+          ))}
         </Row>
 
         <Form.Item style={{ marginBottom: 0 }}>
