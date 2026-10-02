@@ -67,6 +67,7 @@ interface TaskDrawerFormValues {
 
 const STATUS_LABELS: Record<TaskStatus, string> = {
   Open: 'Mở',
+  Pending: 'Chờ xử lý',
   'In Progress': 'Đang làm',
   Resolved: 'Đã giải quyết',
   'In Review': 'Đang duyệt',
@@ -83,6 +84,7 @@ const PRIORITY_LABELS: Record<TaskPriority, string> = {
 
 const ALL_STATUSES: TaskStatus[] = [
   'Open',
+  'Pending',
   'In Progress',
   'Resolved',
   'In Review',

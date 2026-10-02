@@ -36,7 +36,7 @@ export function formatStandupSummary(
   const inProgressTasks = eligibleTasks.filter(
     (t) => t.status === 'In Progress' || t.status === 'In Review' || t.status === 'Resolved'
   );
-  const pendingTasks = eligibleTasks.filter((t) => t.status === 'Open');
+  const pendingTasks = eligibleTasks.filter((t) => t.status === 'Open' || t.status === 'Pending');
 
   const header = `# BÁO CÁO STANDUP NGÀY ${todayStr}`;
 

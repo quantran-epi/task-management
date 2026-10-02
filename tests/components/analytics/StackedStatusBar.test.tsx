@@ -9,6 +9,7 @@ describe('StackedStatusBar & VelocityTrendChart Components', () => {
     it('computes proportional segment widths for task statuses per D-07', () => {
       const counts = {
         Open: 2,
+        Pending: 1,
         'In Progress': 4,
         'In Review': 1,
         Resolved: 1,
@@ -17,16 +18,18 @@ describe('StackedStatusBar & VelocityTrendChart Components', () => {
       };
 
       render(
-        <StackedStatusBar counts={counts} totalTasks={10} />
+        <StackedStatusBar counts={counts} totalTasks={11} />
       );
 
       const inProgressSegment = screen.getByTestId('status-segment-In Progress');
       expect(inProgressSegment).toBeInTheDocument();
-      // 4 out of 10 = 40%
-      expect(inProgressSegment).toHaveStyle({ width: '40%' });
+      expect(inProgressSegment).toHaveStyle({ width: '36.36363636363637%' });
 
       const openSegment = screen.getByTestId('status-segment-Open');
-      expect(openSegment).toHaveStyle({ width: '20%' });
+      expect(openSegment).toHaveStyle({ width: '18.181818181818183%' });
+
+      const pendingSegment = screen.getByTestId('status-segment-Pending');
+      expect(pendingSegment).toHaveStyle({ width: '9.090909090909092%' });
 
       // Cancelled has 0 count so it should not render
       expect(screen.queryByTestId('status-segment-Cancelled')).not.toBeInTheDocument();
@@ -35,6 +38,7 @@ describe('StackedStatusBar & VelocityTrendChart Components', () => {
     it('renders color-coded segments matching application status theme with Tooltip info', async () => {
       const counts = {
         Open: 1,
+        Pending: 1,
         'In Progress': 1,
         'In Review': 1,
         Resolved: 1,
@@ -42,10 +46,13 @@ describe('StackedStatusBar & VelocityTrendChart Components', () => {
         Cancelled: 1,
       };
 
-      render(<StackedStatusBar counts={counts} totalTasks={6} />);
+      render(<StackedStatusBar counts={counts} totalTasks={7} />);
 
       const inProgressSegment = screen.getByTestId('status-segment-In Progress');
       expect(inProgressSegment).toHaveStyle({ backgroundColor: '#1677ff' });
+
+      const pendingSegment = screen.getByTestId('status-segment-Pending');
+      expect(pendingSegment).toHaveStyle({ backgroundColor: '#faad14' });
 
       const doneSegment = screen.getByTestId('status-segment-Done');
       expect(doneSegment).toHaveStyle({ backgroundColor: '#52c41a' });
@@ -57,6 +64,7 @@ describe('StackedStatusBar & VelocityTrendChart Components', () => {
     it('handles empty or zero-task projects cleanly without division by zero errors', () => {
       const counts = {
         Open: 0,
+        Pending: 0,
         'In Progress': 0,
         Resolved: 0,
         'In Review': 0,

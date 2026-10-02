@@ -6,7 +6,9 @@ import {
   workTypeSchema,
   WORK_TYPES,
   ProjectInputSchema,
+  ProjectUpdateSchema,
   MilestoneInputSchema,
+  MilestoneUpdateSchema,
   TaskInputSchema,
   TaskUpdateSchema,
 } from '../../src/validation/schemas';
@@ -96,6 +98,19 @@ describe('Banking IT Domain Fields Validation & Normalization (D-01, D-02, D-03,
       expect(milestone.opsOwners).toEqual(['OpsTeam']);
       expect(milestone.businessAnalysts).toBeUndefined();
     });
+
+    it('accepts Pending status for project and milestone input/update schemas', () => {
+      expect(ProjectInputSchema.parse({ name: 'Queued project', status: 'Pending' }).status).toBe('Pending');
+      expect(ProjectUpdateSchema.parse({ status: 'Pending' }).status).toBe('Pending');
+      expect(
+        MilestoneInputSchema.parse({
+          projectId: '11111111-1111-4111-8111-111111111111',
+          name: 'Queued milestone',
+          status: 'Pending',
+        }).status
+      ).toBe('Pending');
+      expect(MilestoneUpdateSchema.parse({ status: 'Pending' }).status).toBe('Pending');
+    });
   });
 
   describe('TaskInputSchema & TaskUpdateSchema', () => {
@@ -112,6 +127,11 @@ describe('Banking IT Domain Fields Validation & Normalization (D-01, D-02, D-03,
         workType: 'document',
       });
       expect(task.workType).toBe('document');
+    });
+
+    it('accepts Pending status for task input/update schemas', () => {
+      expect(TaskInputSchema.parse({ name: 'Queued task', status: 'Pending' }).status).toBe('Pending');
+      expect(TaskUpdateSchema.parse({ status: 'Pending' }).status).toBe('Pending');
     });
 
     it('accepts optional opsOwners and businessAnalysts on TaskInput and TaskUpdate', () => {
@@ -182,7 +202,7 @@ describe('Banking IT Domain Fields Validation & Normalization (D-01, D-02, D-03,
       const task = BackupTaskRecordSchema.parse({
         id: '33333333-3333-4333-8333-333333333333',
         name: 'Task 1',
-        status: 'Open',
+        status: 'Pending',
         progress: 0,
         priority: 'Medium',
         estimateMinutes: 60,
@@ -193,6 +213,7 @@ describe('Banking IT Domain Fields Validation & Normalization (D-01, D-02, D-03,
         createdAt: '2026-09-01T00:00:00.000Z',
         updatedAt: '2026-09-01T00:00:00.000Z',
       });
+      expect(task.status).toBe('Pending');
       expect(task.workType).toBe('investigate');
       expect(task.opsOwners).toEqual(['Alice']);
       expect(task.jiraKey).toBe('SHB-1234');

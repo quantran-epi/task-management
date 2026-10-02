@@ -17,7 +17,7 @@ import {
 import { SearchOutlined, FilterOutlined, ClearOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
 import type { TaskFilterState } from '../../utils/filter';
-import { countActiveAdvancedFilters } from '../../utils/filter';
+import { DEFAULT_TASK_FILTER_STATE, countActiveAdvancedFilters } from '../../utils/filter';
 import type { Project, Milestone, TaskStatus, TaskPriority, WorkType } from '../../types/models';
 import { WORK_TYPES } from '../../types/models';
 import { WORK_TYPE_CONFIG } from './WorkTypeBadge';
@@ -35,6 +35,7 @@ export interface TaskFilterBarProps {
 
 const ALL_STATUSES: { label: string; value: TaskStatus }[] = [
   { label: 'Mở', value: 'Open' },
+  { label: 'Chờ xử lý', value: 'Pending' },
   { label: 'Đang làm', value: 'In Progress' },
   { label: 'Đã giải quyết', value: 'Resolved' },
   { label: 'Đang duyệt', value: 'In Review' },
@@ -68,7 +69,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
     filters.hierarchyScope !== 'all' ||
     Boolean(filters.projectId) ||
     filters.horizon !== 'all' ||
-    filters.statuses.length !== 4 ||
+    filters.statuses.length !== DEFAULT_TASK_FILTER_STATE.statuses.length ||
     filters.priorities.length > 0 ||
     filters.includeClosed ||
     activeAdvancedCount > 0;

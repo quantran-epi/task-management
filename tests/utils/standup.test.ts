@@ -97,6 +97,17 @@ describe('formatStandupSummary (SRCH-04, D-08, D-09, D-10)', () => {
         updatedAt: '2026-09-01T00:00:00Z',
       },
       {
+        id: 't-pending',
+        name: 'Explicit pending task',
+        status: 'Pending',
+        priority: 'Medium',
+        progress: 0,
+        estimateMinutes: 45,
+        workType: 'support_testing',
+        createdAt: '2026-09-01T00:00:00Z',
+        updatedAt: '2026-09-01T00:00:00Z',
+      },
+      {
         id: 't6',
         name: 'Cancelled should be omitted',
         status: 'Cancelled',
@@ -113,6 +124,7 @@ describe('formatStandupSummary (SRCH-04, D-08, D-09, D-10)', () => {
     expect(output).toContain('### ✅ Đã hoàn thành');
     expect(output).toContain('### 🔄 Đang thực hiện');
     expect(output).toContain('### 📋 Kế hoạch / Đang chờ');
+    expect(output).toContain('Explicit pending task');
     expect(output).not.toContain('Cancelled should be omitted');
   });
 

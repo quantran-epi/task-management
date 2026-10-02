@@ -50,10 +50,11 @@ interface ProjectFormValues {
   reminders?: unknown[];
 }
 
-const PROJECT_STATUSES: ProjectStatus[] = ['Open', 'In Progress', 'Done', 'Cancelled'];
+const PROJECT_STATUSES: ProjectStatus[] = ['Open', 'Pending', 'In Progress', 'Done', 'Cancelled'];
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
   Open: 'Mở',
+  Pending: 'Chờ xử lý',
   'In Progress': 'Đang làm',
   Done: 'Hoàn thành',
   Cancelled: 'Đã hủy',
