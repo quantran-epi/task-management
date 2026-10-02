@@ -827,7 +827,13 @@ export const TaskTable: React.FC<TaskTableProps> = ({
         columns={activeColumns}
         dataSource={tasks}
         loading={loading}
-        pagination={{ pageSize: 25, hideOnSinglePage: true }}
+        pagination={{
+          pageSize: 25,
+          showSizeChanger: true,
+          pageSizeOptions: ['10', '25', '50', '100'],
+          showTotal: (total, range) => `${range[0]}-${range[1]} / ${total} tác vụ`,
+          hideOnSinglePage: false,
+        }}
         rowSelection={{
           selectedRowKeys,
           onChange: (keys) => onSelectRows(keys as string[]),

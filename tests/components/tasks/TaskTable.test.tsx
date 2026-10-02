@@ -125,6 +125,7 @@ describe('TaskTable', () => {
     expect(screen.getByText('Tác vụ & Phân cấp')).toBeInTheDocument();
     expect(screen.getByText('Trạng thái')).toBeInTheDocument();
     expect(screen.getByText('Độ ưu tiên')).toBeInTheDocument();
+    expect(screen.getByText('1-4 / 4 tác vụ')).toBeInTheDocument();
   });
 
   it('opens column customization popover and shows all customizable columns', async () => {

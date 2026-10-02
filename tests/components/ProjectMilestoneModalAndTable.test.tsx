@@ -87,6 +87,7 @@ describe('Project and Milestone Modals and ProjectTable Banking IT Fields', () =
     expect(screen.getByText('TuanLA')).toBeInTheDocument();
     expect(screen.getByText('HuongTT')).toBeInTheDocument();
     expect(screen.getByText('Chờ xử lý')).toBeInTheDocument();
+    expect(screen.getByText('1-1 / 1 dự án')).toBeInTheDocument();
   });
 
   it('ProjectModal renders documentLinks section and ProjectTable renders link badge', () => {

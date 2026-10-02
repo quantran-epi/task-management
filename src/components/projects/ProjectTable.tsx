@@ -591,7 +591,13 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
       columns={projectColumns}
       expandable={{ expandedRowRender }}
       loading={loading}
-      pagination={{ pageSize: 20, hideOnSinglePage: true }}
+      pagination={{
+        pageSize: 20,
+        showSizeChanger: true,
+        pageSizeOptions: ['10', '20', '50', '100'],
+        showTotal: (total, range) => `${range[0]}-${range[1]} / ${total} dự án`,
+        hideOnSinglePage: false,
+      }}
       locale={{
         emptyText: (
           <EmptyState
