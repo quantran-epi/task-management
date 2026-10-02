@@ -65,6 +65,9 @@ describe('AnalyticsView', () => {
     expect(screen.getByText('Ước tính vs Thực tế (giờ)')).toBeInTheDocument();
     expect(screen.getByText('Phân bố theo Loại công việc')).toBeInTheDocument();
     expect(
+      screen.getByText('Độ chính xác ước tính theo Loại công việc')
+    ).toBeInTheDocument();
+    expect(
       screen.getByText('Bản đồ nhiệt năng suất (Thứ trong tuần × Khung giờ)')
     ).toBeInTheDocument();
 
@@ -74,10 +77,14 @@ describe('AnalyticsView', () => {
     expect(screen.getByText('30 ngày qua')).toBeInTheDocument();
     expect(screen.getByText('Tất cả')).toBeInTheDocument();
 
-    // Verify mock charts rendered
-    expect(screen.getByTestId('mock-column-chart')).toBeInTheDocument();
+    // Verify mock charts rendered (two Column charts: task estimate vs actual + work type accuracy)
+    const columnCharts = screen.getAllByTestId('mock-column-chart');
+    expect(columnCharts.length).toBe(2);
     expect(screen.getByTestId('mock-pie-chart')).toBeInTheDocument();
     expect(screen.getByTestId('mock-heatmap-chart')).toBeInTheDocument();
+
+    // Verify accuracy table rendered work type label
+    expect(screen.getByText('Lập trình')).toBeInTheDocument();
 
     // Switch period to "Tất cả"
     fireEvent.click(screen.getByText('Tất cả'));
