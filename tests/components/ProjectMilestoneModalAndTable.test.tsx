@@ -156,4 +156,44 @@ describe('Project and Milestone Modals and ProjectTable Banking IT Fields', () =
     expect(screen.getByText('1-10 / 12 dự án')).toBeInTheDocument();
     expect(screen.queryByText('Project Page 11')).not.toBeInTheDocument();
   });
+
+  it('ProjectTable renders local folder link with File Explorer title and dispatches openDocumentLink', async () => {
+    const documentLinksModule = await import('../../src/utils/documentLinks');
+    const openDocSpy = vi.spyOn(documentLinksModule, 'openDocumentLink').mockImplementation(async () => {});
+
+    const projWithLocalLink: Project = {
+      ...sampleProject,
+      id: 'proj-local-link',
+      documentLinks: ['/Users/test/workspace/banking-app'],
+    };
+
+    render(
+      <ProjectTable
+        projects={[projWithLocalLink]}
+        milestones={[]}
+        tasks={[]}
+        onAddTask={vi.fn()}
+        onEditProject={vi.fn()}
+        onDeleteProject={vi.fn()}
+        onAddMilestone={vi.fn()}
+        onEditMilestone={vi.fn()}
+        onDeleteMilestone={vi.fn()}
+        onEditTask={vi.fn()}
+      />
+    );
+
+    const linkTag = screen.getByText('1 link');
+    expect(linkTag).toBeInTheDocument();
+
+    fireEvent.mouseEnter(linkTag);
+
+    const docLinkAnchor = await screen.findByRole('link', { name: /\/Users\/test\/workspace\/banking-app/ });
+    expect(docLinkAnchor).toBeInTheDocument();
+    expect(docLinkAnchor).toHaveAttribute('title', 'Mở trong File Explorer');
+
+    fireEvent.click(docLinkAnchor);
+    expect(openDocSpy).toHaveBeenCalledWith('/Users/test/workspace/banking-app');
+
+    openDocSpy.mockRestore();
+  });
 });

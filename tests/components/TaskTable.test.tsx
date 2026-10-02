@@ -278,4 +278,49 @@ describe('TaskTable Component', () => {
 
     windowOpenSpy.mockRestore();
   });
+
+  it('renders document links tag and clicking a local folder link invokes openDocumentLink', async () => {
+    const documentLinksModule = await import('../../src/utils/documentLinks');
+    const openDocSpy = vi.spyOn(documentLinksModule, 'openDocumentLink').mockImplementation(async () => {});
+
+    render(
+      <TaskTable
+        tasks={[
+          {
+            id: 'task-doc-1',
+            name: 'Task with doc link',
+            status: 'Open',
+            priority: 'Medium',
+            workType: 'other',
+            estimateMinutes: 30,
+            progress: 0,
+            documentLinks: ['/Users/test/workspace/project'],
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        ]}
+        projects={[]}
+        milestones={[]}
+        selectedRowKeys={[]}
+        onSelectRows={vi.fn()}
+        onOpenDrawer={vi.fn()}
+        db={db}
+      />
+    );
+
+    const linkTag = screen.getByText('🔗 1');
+    expect(linkTag).toBeInTheDocument();
+
+    // Trigger popover display
+    fireEvent.mouseEnter(linkTag);
+
+    const docLinkAnchor = await screen.findByRole('link', { name: /\/Users\/test\/workspace\/project/ });
+    expect(docLinkAnchor).toBeInTheDocument();
+    expect(docLinkAnchor).toHaveAttribute('title', 'Mở trong File Explorer');
+
+    fireEvent.click(docLinkAnchor);
+    expect(openDocSpy).toHaveBeenCalledWith('/Users/test/workspace/project');
+
+    openDocSpy.mockRestore();
+  });
 });

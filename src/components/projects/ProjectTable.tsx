@@ -17,6 +17,7 @@ import {
   FlagOutlined,
   LinkOutlined,
   FileTextOutlined,
+  FolderOpenOutlined,
 } from '@ant-design/icons';
 import type { Project, Milestone, Task } from '../../types/models';
 import { EmptyState } from '../common/EmptyState';
@@ -26,6 +27,7 @@ import { TagListDisplay } from '../common/TagListDisplay';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { getJiraBrowseUrl, openJiraExternalUrl } from '../../services/jira/jiraApi';
+import { openDocumentLink, isLocalPath } from '../../utils/documentLinks';
 
 export interface ProjectTableProps {
   projects: Project[];
@@ -491,19 +493,30 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
                   <Popover
                     title="Tài liệu liên kết"
                     content={
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        {record.documentLinks?.map((link, idx) => (
-                          <a
-                            key={idx}
-                            href={link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ fontSize: 12 }}
-                          >
-                            <LinkOutlined style={{ marginRight: 4 }} />
-                            {link}
-                          </a>
-                        ))}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {record.documentLinks?.map((link, idx) => {
+                          const local = isLocalPath(link);
+                          return (
+                            <a
+                              key={idx}
+                              href={link}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                void openDocumentLink(link);
+                              }}
+                              title={local ? 'Mở trong File Explorer' : 'Mở liên kết web'}
+                              style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                            >
+                              {local ? (
+                                <FolderOpenOutlined style={{ color: '#fa8c16' }} />
+                              ) : (
+                                <LinkOutlined style={{ color: '#1677ff' }} />
+                              )}
+                              <span>{link}</span>
+                            </a>
+                          );
+                        })}
                       </div>
                     }
                     trigger="hover"
