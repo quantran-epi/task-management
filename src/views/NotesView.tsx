@@ -28,6 +28,7 @@ import type { Note, NoteEntityType } from '../types/models';
 import { deleteNote, updateNote } from '../db/repositories/noteRepo';
 import { renderSafeMarkdown } from '../utils/markdown';
 import { NoteEditor } from '../components/notes/NoteEditor';
+import { NoteDetailModal } from '../components/notes/NoteDetailModal';
 import { openNotesPopout } from '../utils/notesPopout';
 
 export interface NotesViewProps {
@@ -39,6 +40,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
   const [entityFilter, setEntityFilter] = useState<'all' | 'standalone' | NoteEntityType>('all');
   const [editorOpen, setEditorOpen] = useState<boolean>(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
+  const [selectedNote, setSelectedNote] = useState<Note | null>(null);
 
   // Fetch all notes
   const allNotes = useLiveQuery(
@@ -245,6 +247,15 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
                     padding: 16,
                   },
                 }}
+                role="button"
+                tabIndex={0}
+                onClick={() => setSelectedNote(note)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    setSelectedNote(note);
+                  }
+                }}
               >
                 {/* Header: Title / Tags / Actions */}
                 <div
@@ -295,7 +306,10 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
                             <PushpinOutlined />
                           )
                         }
-                        onClick={() => void handleTogglePin(note)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void handleTogglePin(note);
+                        }}
                       />
                     </Tooltip>
                     <Tooltip title="Chỉnh sửa">
@@ -303,7 +317,8 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
                         type="text"
                         size="small"
                         icon={<EditOutlined />}
-                        onClick={() => {
+                        onClick={(event) => {
+                          event.stopPropagation();
                           setEditingNote(note);
                           setEditorOpen(true);
                         }}
@@ -321,6 +336,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
                         danger
                         size="small"
                         icon={<DeleteOutlined />}
+                        onClick={(event) => event.stopPropagation()}
                       />
                     </Popconfirm>
                   </Space>
@@ -360,6 +376,18 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
           })}
         </div>
       )}
+
+      <NoteDetailModal
+        open={Boolean(selectedNote)}
+        note={selectedNote}
+        onClose={() => setSelectedNote(null)}
+        onEdit={(note) => {
+          setSelectedNote(null);
+          setEditingNote(note);
+          setEditorOpen(true);
+        }}
+        db={db}
+      />
 
       {editorOpen && (
         <NoteEditor
