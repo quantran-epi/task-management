@@ -21,7 +21,15 @@ describe('Smart Status Mapping (statusMapping.ts - D-10)', () => {
     });
   });
 
-  describe('Rule 3: Resolved', () => {
+  describe('Rule 3: Pending', () => {
+    it('maps status names containing pending, waiting, or on hold to Pending', () => {
+      expect(mapJiraStatusToLocalTaskStatus('Pending')).toBe('Pending');
+      expect(mapJiraStatusToLocalTaskStatus('Waiting for Customer')).toBe('Pending');
+      expect(mapJiraStatusToLocalTaskStatus('On Hold')).toBe('Pending');
+    });
+  });
+
+  describe('Rule 4: Resolved', () => {
     it('maps status names containing test, qa, uat, resolved, verify to Resolved', () => {
       expect(mapJiraStatusToLocalTaskStatus('Resolved')).toBe('Resolved');
       expect(mapJiraStatusToLocalTaskStatus('Testing in UAT', 'indeterminate')).toBe('Resolved');
@@ -30,7 +38,7 @@ describe('Smart Status Mapping (statusMapping.ts - D-10)', () => {
     });
   });
 
-  describe('Rule 4: In Review', () => {
+  describe('Rule 5: In Review', () => {
     it('maps status names containing review, pr, peer review to In Review', () => {
       expect(mapJiraStatusToLocalTaskStatus('PR Review', 'indeterminate')).toBe('In Review');
       expect(mapJiraStatusToLocalTaskStatus('Code Review')).toBe('In Review');
@@ -38,7 +46,7 @@ describe('Smart Status Mapping (statusMapping.ts - D-10)', () => {
     });
   });
 
-  describe('Rule 5: In Progress', () => {
+  describe('Rule 6: In Progress', () => {
     it('maps indeterminate category or names containing in progress, developing, doing to In Progress', () => {
       expect(mapJiraStatusToLocalTaskStatus('In Progress')).toBe('In Progress');
       expect(mapJiraStatusToLocalTaskStatus('Developing', 'indeterminate')).toBe('In Progress');
@@ -47,7 +55,7 @@ describe('Smart Status Mapping (statusMapping.ts - D-10)', () => {
     });
   });
 
-  describe('Rule 6: Open / To Do', () => {
+  describe('Rule 7: Open / To Do', () => {
     it('maps new category or names containing to do, open, backlog to Open', () => {
       expect(mapJiraStatusToLocalTaskStatus('Backlog', 'new')).toBe('Open');
       expect(mapJiraStatusToLocalTaskStatus('To Do')).toBe('Open');

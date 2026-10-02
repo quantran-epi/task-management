@@ -24,6 +24,16 @@ const sampleTasks: Task[] = [
     updatedAt: '2026-09-20T10:00:00Z',
   },
   {
+    id: 't-pending',
+    name: 'Await business input',
+    status: 'Pending',
+    progress: 0,
+    priority: 'Medium',
+    estimateMinutes: 45,
+    createdAt: '2026-09-20T12:00:00Z',
+    updatedAt: '2026-09-20T12:00:00Z',
+  },
+  {
     id: 't2',
     projectId: 'p1',
     milestoneId: 'm1',
@@ -161,7 +171,8 @@ describe('filterTasks', () => {
   it('filters by active status set and excludes Done/Cancelled unless includeClosed toggled per D-20', () => {
     // Default excludes Done (t5) and Cancelled (t6)
     const activeOnly = filterTasks(sampleTasks, DEFAULT_TASK_FILTER_STATE, today);
-    expect(activeOnly.map((t) => t.id)).toEqual(['t1', 't2', 't3', 't4', 't7']);
+    expect(DEFAULT_TASK_FILTER_STATE.statuses).toEqual(['Open', 'Pending', 'In Progress', 'Resolved', 'In Review']);
+    expect(activeOnly.map((t) => t.id)).toEqual(['t1', 't-pending', 't2', 't3', 't4', 't7']);
     expect(activeOnly.some((t) => t.status === 'Done' || t.status === 'Cancelled')).toBe(false);
 
     // With includeClosed = true
