@@ -4,6 +4,7 @@ import {
   SearchOutlined,
   CheckSquareOutlined,
   ProjectOutlined,
+  FlagOutlined,
   FileTextOutlined,
   PlusOutlined,
   CalendarOutlined,
@@ -15,7 +16,7 @@ import {
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { NavigateFunction } from '../../types/navigation';
-import type { Task, Project, Note } from '../../types/models';
+import type { Task, Project, Milestone, Note } from '../../types/models';
 
 const { Text } = Typography;
 
@@ -25,13 +26,15 @@ export interface CommandPaletteModalProps {
   onNavigate: NavigateFunction;
   onOpenTask?: (taskId: string) => void;
   onOpenProject?: (project: Project) => void;
+  onOpenMilestone?: (milestone: Milestone) => void;
+  onOpenNote?: (note: Note) => void;
   onCreateTask?: (taskName?: string) => void;
   db?: TaskPlannerDatabase;
 }
 
 export interface PaletteItem {
   id: string;
-  category: 'view' | 'action' | 'task' | 'project' | 'note';
+  category: 'view' | 'action' | 'task' | 'project' | 'milestone' | 'note';
   title: string;
   subtitle?: string;
   icon: React.ReactNode;
@@ -53,6 +56,8 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
   onNavigate,
   onOpenTask,
   onOpenProject,
+  onOpenMilestone,
+  onOpenNote,
   onCreateTask,
   db = defaultDb,
 }) => {
@@ -70,9 +75,10 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
     }
   }, [open]);
 
-  // Live queries for tasks, projects, notes
+  // Live queries for tasks, projects, notes, milestones
   const tasks = useLiveQuery<Task[]>(() => db.tasks.toArray(), [db]) ?? [];
   const projects = useLiveQuery<Project[]>(() => db.projects.toArray(), [db]) ?? [];
+  const milestones = useLiveQuery<Milestone[]>(() => db.milestones.toArray(), [db]) ?? [];
   const notes = useLiveQuery<Note[]>(() => db.notes.toArray(), [db]) ?? [];
 
   // Static Views and Actions
@@ -230,6 +236,27 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
       },
     }));
 
+    const milestoneItems: PaletteItem[] = milestones.map((m) => {
+      const parentProj = projects.find((p) => p.id === m.projectId);
+      return {
+        id: `milestone-${m.id}`,
+        category: 'milestone',
+        title: m.name,
+        subtitle: `Cột mốc • ${m.status}${parentProj ? ` • [${parentProj.name}]` : ''}`,
+        icon: <FlagOutlined style={{ color: '#faad14' }} />,
+        action: () => {
+          onClose();
+          if (onOpenMilestone) {
+            onOpenMilestone(m);
+          } else if (parentProj && onOpenProject) {
+            onOpenProject(parentProj);
+          } else {
+            onNavigate('projects');
+          }
+        },
+      };
+    });
+
     const noteItems: PaletteItem[] = notes.map((n) => ({
       id: `note-${n.id}`,
       category: 'note',
@@ -238,7 +265,11 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
       icon: <FileTextOutlined style={{ color: '#eb2f96' }} />,
       action: () => {
         onClose();
-        onNavigate('notes');
+        if (onOpenNote) {
+          onOpenNote(n);
+        } else {
+          onNavigate('notes');
+        }
       },
     }));
 
@@ -254,8 +285,9 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
     }
 
     if (isProjectOnly) {
-      if (!cleanQuery) return projectItems.slice(0, 10);
-      return projectItems.filter((i) => i.title.toLowerCase().includes(cleanQuery) || i.subtitle?.toLowerCase().includes(cleanQuery));
+      const combined = [...projectItems, ...milestoneItems];
+      if (!cleanQuery) return combined.slice(0, 10);
+      return combined.filter((i) => i.title.toLowerCase().includes(cleanQuery) || i.subtitle?.toLowerCase().includes(cleanQuery));
     }
 
     if (isNoteOnly) {
@@ -264,7 +296,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
     }
 
     // Default global search
-    const all = [...staticItems, ...taskItems, ...projectItems, ...noteItems];
+    const all = [...staticItems, ...taskItems, ...projectItems, ...milestoneItems, ...noteItems];
 
     if (!cleanQuery) {
       return [...staticItems, ...taskItems.slice(0, 5), ...projectItems.slice(0, 3)];
@@ -292,7 +324,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
     }
 
     return matched;
-  }, [query, staticItems, tasks, projects, notes, onClose, onOpenTask, onOpenProject, onNavigate, onCreateTask]);
+  }, [query, staticItems, tasks, projects, milestones, notes, onClose, onOpenTask, onOpenProject, onOpenMilestone, onOpenNote, onNavigate, onCreateTask]);
 
   // Keep selected index within bounds
   useEffect(() => {
@@ -334,6 +366,8 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
         return <Tag color="cyan">Tác vụ</Tag>;
       case 'project':
         return <Tag color="orange">Dự án</Tag>;
+      case 'milestone':
+        return <Tag color="gold">Cột mốc</Tag>;
       case 'note':
         return <Tag color="magenta">Ghi chú</Tag>;
       default:

@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { CommandPaletteModal } from '../../../src/components/palette/CommandPaletteModal';
 import { TaskPlannerDatabase } from '../../../src/db';
 import 'fake-indexeddb/auto';
-import type { Task } from '../../../src/types/models';
+import type { Task, Project, Milestone, Note } from '../../../src/types/models';
 
 describe('CommandPaletteModal', () => {
   let db: TaskPlannerDatabase;
@@ -154,5 +154,115 @@ describe('CommandPaletteModal', () => {
     await waitFor(() => {
       expect(screen.getByText('Kiểm tra bảo mật API')).toBeInTheDocument();
     });
+  });
+
+  it('calls onOpenNote when selecting a note', async () => {
+    const onNavigate = vi.fn();
+    const onClose = vi.fn();
+    const onOpenNote = vi.fn();
+
+    const note: Note = {
+      id: 'note-1',
+      title: 'Chiến lược phát hành Q4',
+      body: 'Nội dung chi tiết ghi chú...',
+      isPinned: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    await db.notes.add(note);
+
+    render(
+      <CommandPaletteModal
+        open={true}
+        onClose={onClose}
+        onNavigate={onNavigate}
+        onOpenNote={onOpenNote}
+        db={db}
+      />
+    );
+
+    const input = screen.getByPlaceholderText(/Tìm công việc, dự án, màn hình, lệnh/);
+    fireEvent.change(input, { target: { value: '! Chiến lược' } });
+
+    await waitFor(() => {
+      expect(screen.getByText('Chiến lược phát hành Q4')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Chiến lược phát hành Q4'));
+    expect(onOpenNote).toHaveBeenCalledWith(expect.objectContaining({ id: 'note-1' }));
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('calls onOpenProject when selecting a project', async () => {
+    const onNavigate = vi.fn();
+    const onClose = vi.fn();
+    const onOpenProject = vi.fn();
+
+    const project: Project = {
+      id: 'proj-99',
+      name: 'Nền tảng thanh toán mới',
+      status: 'In Progress',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    await db.projects.add(project);
+
+    render(
+      <CommandPaletteModal
+        open={true}
+        onClose={onClose}
+        onNavigate={onNavigate}
+        onOpenProject={onOpenProject}
+        db={db}
+      />
+    );
+
+    const input = screen.getByPlaceholderText(/Tìm công việc, dự án, màn hình, lệnh/);
+    fireEvent.change(input, { target: { value: '# thanh toán' } });
+
+    await waitFor(() => {
+      expect(screen.getByText('Nền tảng thanh toán mới')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Nền tảng thanh toán mới'));
+    expect(onOpenProject).toHaveBeenCalledWith(expect.objectContaining({ id: 'proj-99' }));
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('filters milestones under # prefix and opens milestone or parent project', async () => {
+    const onNavigate = vi.fn();
+    const onClose = vi.fn();
+    const onOpenMilestone = vi.fn();
+
+    const milestone: Milestone = {
+      id: 'ms-99',
+      projectId: 'proj-99',
+      name: 'Mốc Beta Release',
+      status: 'Open',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    await db.milestones.add(milestone);
+
+    render(
+      <CommandPaletteModal
+        open={true}
+        onClose={onClose}
+        onNavigate={onNavigate}
+        onOpenMilestone={onOpenMilestone}
+        db={db}
+      />
+    );
+
+    const input = screen.getByPlaceholderText(/Tìm công việc, dự án, màn hình, lệnh/);
+    fireEvent.change(input, { target: { value: '# Beta' } });
+
+    await waitFor(() => {
+      expect(screen.getByText('Mốc Beta Release')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Mốc Beta Release'));
+    expect(onOpenMilestone).toHaveBeenCalledWith(expect.objectContaining({ id: 'ms-99' }));
+    expect(onClose).toHaveBeenCalled();
   });
 });

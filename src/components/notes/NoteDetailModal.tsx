@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Button, Modal, Tag, Typography } from 'antd';
+import { ExportOutlined } from '@ant-design/icons';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { Note, NoteAttachment } from '../../types/models';
 import { renderSafeMarkdown } from '../../utils/markdown';
@@ -10,6 +11,7 @@ export interface NoteDetailModalProps {
   note: Note | null;
   onClose: () => void;
   onEdit: (note: Note) => void;
+  onNavigateToNotes?: () => void;
   db?: TaskPlannerDatabase;
 }
 
@@ -18,6 +20,7 @@ export const NoteDetailModal: React.FC<NoteDetailModalProps> = ({
   note,
   onClose,
   onEdit,
+  onNavigateToNotes,
   db = defaultDb,
 }) => {
   const [attachments, setAttachments] = useState<NoteAttachment[]>([]);
@@ -50,11 +53,16 @@ export const NoteDetailModal: React.FC<NoteDetailModalProps> = ({
       onCancel={onClose}
       width={680}
       footer={[
+        onNavigateToNotes && (
+          <Button key="navigate" icon={<ExportOutlined />} onClick={onNavigateToNotes}>
+            Mở trong trang Ghi chú
+          </Button>
+        ),
         <Button key="close" onClick={onClose}>Đóng</Button>,
         <Button key="edit" type="primary" onClick={() => note && onEdit(note)}>
           Chỉnh sửa đầy đủ
         </Button>,
-      ]}
+      ].filter(Boolean)}
     >
       {note && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

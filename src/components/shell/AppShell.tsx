@@ -23,10 +23,13 @@ import { ActiveTimerWidget } from '../timer/ActiveTimerWidget';
 import { NotificationBell } from '../notifications/NotificationBell';
 import { NotificationDrawer } from '../notifications/NotificationDrawer';
 import { TaskDrawer } from '../tasks/TaskDrawer';
+import { ProjectDetailModal } from '../projects/ProjectDetailModal';
 import { ProjectModal } from '../projects/ProjectModal';
 import { MilestoneModal } from '../projects/MilestoneModal';
+import { NoteDetailModal } from '../notes/NoteDetailModal';
 import { CommandPaletteModal } from '../palette/CommandPaletteModal';
 import { DailyReviewModal } from '../dailyReview/DailyReviewModal';
+import { db } from '../../db';
 import { dismissAlertToday } from '../../db/repositories/notificationRepo';
 import { createTask } from '../../db/repositories/taskRepo';
 import { getProject, updateProject } from '../../db/repositories/projectRepo';
@@ -34,7 +37,7 @@ import { getMilestone, updateMilestone } from '../../db/repositories/milestoneRe
 import { getTodayDateString, isValidCalendarDate } from '../../utils/date';
 import type { AppRoute, NavigateFunction } from '../../types/navigation';
 import type { AlertNotificationItem } from '../../types/notifications';
-import type { Project, Milestone } from '../../types/models';
+import type { Project, Milestone, Note } from '../../types/models';
 
 const { Header, Sider, Content } = Layout;
 const { useBreakpoint } = Grid;
@@ -104,7 +107,9 @@ const AppShellInner: React.FC<AppShellProps> = ({
   const [dailyReviewOpen, setDailyReviewOpen] = useState(false);
   const [inspectingTaskId, setInspectingTaskId] = useState<string | undefined>(undefined);
   const [inspectingProject, setInspectingProject] = useState<Project | null>(null);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [inspectingMilestone, setInspectingMilestone] = useState<Milestone | null>(null);
+  const [inspectingNote, setInspectingNote] = useState<Note | null>(null);
 
   // Global Cmd+K / Ctrl+K keyboard shortcut
   useEffect(() => {
@@ -278,15 +283,56 @@ const AppShellInner: React.FC<AppShellProps> = ({
       />
 
       {inspectingProject && (
-        <ProjectModal
+        <ProjectDetailModal
           open={Boolean(inspectingProject)}
           project={inspectingProject}
           onClose={() => setInspectingProject(null)}
-          onSave={async (values) => {
-            await updateProject(inspectingProject.id, values);
+          onEdit={(proj) => {
             setInspectingProject(null);
+            setEditingProject(proj);
+          }}
+          onNavigateToProjects={() => {
+            setInspectingProject(null);
+            onNavigate('projects');
+          }}
+          onOpenTask={(taskId) => {
+            setInspectingProject(null);
+            setInspectingTaskId(taskId);
+          }}
+          onAddTask={async (projId) => {
+            setInspectingProject(null);
+            try {
+              const task = await createTask(
+                {
+                  name: 'Tác vụ mới',
+                  projectId: projId,
+                  status: 'Open',
+                  priority: 'Medium',
+                  estimateMinutes: 0,
+                },
+                db
+              );
+              message.success('Đã tạo tác vụ cho dự án');
+              setInspectingTaskId(task.id);
+            } catch {
+              message.error('Không thể tạo tác vụ');
+            }
+          }}
+          db={db}
+        />
+      )}
+
+      {editingProject && (
+        <ProjectModal
+          open={Boolean(editingProject)}
+          project={editingProject}
+          onClose={() => setEditingProject(null)}
+          onSave={async (values) => {
+            await updateProject(editingProject.id, values, db);
+            setEditingProject(null);
             message.success('Đã cập nhật dự án');
           }}
+          db={db}
         />
       )}
 
@@ -297,10 +343,27 @@ const AppShellInner: React.FC<AppShellProps> = ({
           milestone={inspectingMilestone}
           onClose={() => setInspectingMilestone(null)}
           onSave={async (values) => {
-            await updateMilestone(inspectingMilestone.id, values);
+            await updateMilestone(inspectingMilestone.id, values, db);
             setInspectingMilestone(null);
             message.success('Đã cập nhật mốc');
           }}
+        />
+      )}
+
+      {inspectingNote && (
+        <NoteDetailModal
+          open={Boolean(inspectingNote)}
+          note={inspectingNote}
+          onClose={() => setInspectingNote(null)}
+          onEdit={() => {
+            setInspectingNote(null);
+            onNavigate('notes');
+          }}
+          onNavigateToNotes={() => {
+            setInspectingNote(null);
+            onNavigate('notes');
+          }}
+          db={db}
         />
       )}
 
@@ -310,20 +373,26 @@ const AppShellInner: React.FC<AppShellProps> = ({
         onNavigate={onNavigate}
         onOpenTask={(taskId) => setInspectingTaskId(taskId)}
         onOpenProject={(p) => setInspectingProject(p)}
+        onOpenMilestone={(m) => setInspectingMilestone(m)}
+        onOpenNote={(note) => setInspectingNote(note)}
         onCreateTask={async (name) => {
           try {
-            const task = await createTask({
-              name: name || 'Tác vụ mới',
-              status: 'Open',
-              priority: 'Medium',
-              estimateMinutes: 0,
-            });
+            const task = await createTask(
+              {
+                name: name || 'Tác vụ mới',
+                status: 'Open',
+                priority: 'Medium',
+                estimateMinutes: 0,
+              },
+              db
+            );
             message.success('Đã tạo tác vụ');
             setInspectingTaskId(task.id);
           } catch {
             message.error('Không thể tạo tác vụ');
           }
         }}
+        db={db}
       />
 
       <DailyReviewModal

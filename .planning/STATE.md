@@ -56,6 +56,7 @@ Last activity: 2026-10-02 -- Completed quick task 261002-x47: Fix 31 TypeScript 
 | 261002-wik | Command Palette (Cmd+K), Task Checklist / Subtasks, and Daily Review Modal | 2026-10-02 | 779c019 | complete | [261002-wik-implement-command-palette-task-checklist](./quick/261002-wik-implement-command-palette-task-checklist/) |
 | 261002-x11 | Add Command Palette cheatsheet guide and prefix filters | 2026-10-02 | be616ad | complete | [261002-x11-add-command-palette-cheatsheet-guide-and](./quick/261002-x11-add-command-palette-cheatsheet-guide-and/) |
 | 261002-x47 | Fix 31 TypeScript build errors across 7 files | 2026-10-02 | a146d26 | complete | [261002-x47-fix-31-typescript-build-errors-across-7-](./quick/261002-x47-fix-31-typescript-build-errors-across-7-/) |
+| 261003-pdm | Normalize command palette item navigation with detail modals, tools, and navigators | 2026-10-03 | 99569a7 | complete | [261003-pdm-command-palette-item-detail-modals](./quick/261003-pdm-command-palette-item-detail-modals/) |
 
 ## Performance Metrics
 
