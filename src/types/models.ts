@@ -1,6 +1,6 @@
-export type ProjectStatus = 'Open' | 'In Progress' | 'Done' | 'Cancelled';
-export type MilestoneStatus = 'Open' | 'In Progress' | 'Done' | 'Cancelled';
-export type TaskStatus = 'Open' | 'In Progress' | 'Resolved' | 'In Review' | 'Done' | 'Cancelled';
+export type ProjectStatus = 'Open' | 'Pending' | 'In Progress' | 'Done' | 'Cancelled';
+export type MilestoneStatus = 'Open' | 'Pending' | 'In Progress' | 'Done' | 'Cancelled';
+export type TaskStatus = 'Open' | 'Pending' | 'In Progress' | 'Resolved' | 'In Review' | 'Done' | 'Cancelled';
 export type TaskPriority = 'Low' | 'Medium' | 'High' | 'Urgent';
 
 export type WorkType =

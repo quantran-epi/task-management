@@ -59,6 +59,7 @@ const JIRA_KEY_REGEX = /^[A-Z][A-Z0-9]+-[0-9]+$/;
 
 const DEFAULT_STATUS_MAPPINGS: JiraStatusMapping = {
   Open: ['10000', '1', 'to do', 'open', 'backlog'],
+  Pending: ['pending', 'waiting', 'on hold'],
   'In Progress': ['3', 'in progress'],
   'In Review': ['review', 'code review', 'peer review', 'pr'],
   Resolved: ['resolved', 'testing', 'qa', 'uat', 'verify'],

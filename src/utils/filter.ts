@@ -23,7 +23,7 @@ export const DEFAULT_TASK_FILTER_STATE: TaskFilterState = {
   search: '',
   hierarchyScope: 'all',
   projectId: null,
-  statuses: ['Open', 'In Progress', 'Resolved', 'In Review'],
+  statuses: ['Open', 'Pending', 'In Progress', 'Resolved', 'In Review'],
   priorities: [],
   horizon: 'all',
   includeClosed: false,

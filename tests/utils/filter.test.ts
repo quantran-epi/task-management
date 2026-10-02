@@ -240,7 +240,7 @@ describe('sortTasks', () => {
     // t3 (2026-09-27)
     // t4 (2026-10-15)
     // No deadline: t7 (Urgent, prio 4) comes before t6 (Low, prio 1)
-    expect(sorted.map((t) => t.id)).toEqual(['t5', 't2', 't1', 't3', 't4', 't7', 't6']);
+    expect(sorted.map((t) => t.id)).toEqual(['t5', 't2', 't1', 't3', 't4', 't7', 't-pending', 't6']);
   });
 
   it('orders same deadline by Priority descending (Urgent -> High -> Medium -> Low)', () => {
