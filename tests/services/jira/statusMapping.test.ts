@@ -4,6 +4,8 @@ import {
   LOCAL_TASK_STATUSES,
   mapJiraStatusToLocalTaskStatus,
   normalizeJiraStatusMappings,
+  isStatusMismatch,
+  resolveLocalStatusFromMapping,
 } from '../../../src/services/jira/statusMapping';
 
 describe('Smart Status Mapping (statusMapping.ts - D-10)', () => {
@@ -36,6 +38,17 @@ describe('Smart Status Mapping (statusMapping.ts - D-10)', () => {
     expect(normalizeJiraStatusMappings({ Open: '10000' })).toEqual(
       DEFAULT_JIRA_STATUS_MAPPINGS
     );
+  });
+
+  it('matches configured Jira status name tokens when status ID is unknown', () => {
+    const mappings = normalizeJiraStatusMappings({
+      'In Progress': ['doing'],
+      Done: ['done'],
+    });
+
+    expect(isStatusMismatch('In Progress', '99999', mappings, 'Doing')).toBe(false);
+    expect(isStatusMismatch('Done', '99999', mappings, 'Doing')).toBe(true);
+    expect(resolveLocalStatusFromMapping('99999', mappings, 'Doing')).toBe('In Progress');
   });
 
   describe('Rule 1: Cancelled', () => {

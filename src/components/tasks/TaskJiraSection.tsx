@@ -270,7 +270,7 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
 
         // Optionally align local status if not already aligned
         const resolvedLocal =
-          resolveLocalStatusFromMapping(chosen.to.id, mappings) ||
+          resolveLocalStatusFromMapping(chosen.to.id, mappings, chosen.to.name) ||
           mapJiraStatusToLocalTaskStatus(chosen.to.name, chosen.to.statusCategory?.key);
         if (resolvedLocal && resolvedLocal !== task.status) {
           await onUpdateTask({ status: resolvedLocal });
@@ -309,7 +309,12 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
   };
 
   // Status mismatch evaluation (D-07, D-10)
-  const hasMismatch = isStatusMismatch(task.status, cachedStatus?.statusId, mappings);
+  const hasMismatch = isStatusMismatch(
+    task.status,
+    cachedStatus?.statusId,
+    mappings,
+    cachedStatus?.statusName
+  );
   const browseUrl = task.jiraKey ? getJiraBrowseUrl(task.jiraKey, config?.domain) : '';
 
   return (

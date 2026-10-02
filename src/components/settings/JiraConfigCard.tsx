@@ -26,13 +26,14 @@ import {
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
-import { testJiraConnection } from '../../services/jira/jiraApi';
+import { getJiraStatuses, testJiraConnection } from '../../services/jira/jiraApi';
 import {
   DEFAULT_JIRA_STATUS_MAPPINGS,
   LOCAL_TASK_STATUSES,
   normalizeJiraStatusMappings,
 } from '../../services/jira/statusMapping';
 import type { TaskStatus } from '../../types/models';
+import type { JiraStatusCatalogItem } from '../../services/jira/types';
 import {
   getJiraApiToken,
   setJiraApiToken,
@@ -68,6 +69,7 @@ export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [diagnosticResult, setDiagnosticResult] = useState<DiagnosticState>(null);
+  const [jiraStatuses, setJiraStatuses] = useState<JiraStatusCatalogItem[]>([]);
 
   // Secret token management (D-33, D-34, D-37)
   const [tokenStored, setTokenStored] = useState(false);
@@ -273,6 +275,39 @@ export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }
     }
   };
 
+  useEffect(() => {
+    let active = true;
+    async function loadStatuses() {
+      if (!domain.trim() || !email.trim() || !tokenStored) {
+        setJiraStatuses([]);
+        return;
+      }
+      try {
+        const apiToken = await getJiraApiToken(db);
+        if (!apiToken) return;
+        const statuses = await getJiraStatuses({
+          domain: domain.trim(),
+          email: email.trim(),
+          apiToken,
+          corsProxy: corsProxy.trim(),
+        });
+        if (active) setJiraStatuses(Array.isArray(statuses) ? statuses : []);
+      } catch {
+        if (active) setJiraStatuses([]);
+      }
+    }
+    void loadStatuses();
+    return () => {
+      active = false;
+    };
+  }, [domain, email, corsProxy, tokenStored, db]);
+
+  const statusOptions = jiraStatuses.map((status) => ({
+    value: status.id,
+    label: status.name,
+  }));
+  const statusLabelById = new Map(statusOptions.map((option) => [option.value, option.label]));
+
   const canTestConnection = Boolean(domain.trim() && email.trim() && tokenStored);
 
   return (
@@ -461,6 +496,17 @@ export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }
                     setStatusMappings((current) => ({ ...current, [status]: values }))
                   }
                   tokenSeparators={[',']}
+                  tagRender={({ value, closable, onClose }) => (
+                    <Tag closable={closable} onClose={onClose} style={{ marginInlineEnd: 4 }}>
+                      {statusLabelById.get(String(value)) || String(value)}
+                    </Tag>
+                  )}
+                  options={[
+                    ...statusOptions,
+                    ...statusMappings[status]
+                      .filter((value) => !statusOptions.some((option) => option.value === value))
+                      .map((value) => ({ value, label: value })),
+                  ]}
                   aria-label={`Jira statuses cho ${status}`}
                 />
               </Form.Item>

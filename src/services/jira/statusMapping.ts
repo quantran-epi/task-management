@@ -14,7 +14,7 @@ export const LOCAL_TASK_STATUSES: readonly TaskStatus[] = [
 export const DEFAULT_JIRA_STATUS_MAPPINGS: Record<TaskStatus, string[]> = {
   Open: ['10000', '1', 'to do', 'open', 'backlog'],
   Pending: ['pending', 'waiting', 'on hold'],
-  'In Progress': ['3', 'in progress'],
+  'In Progress': ['3', 'in progress', 'doing'],
   'In Review': ['review', 'code review', 'peer review', 'pr'],
   Resolved: ['resolved', 'testing', 'qa', 'uat', 'verify'],
   Done: ['10001', '10002', '6', 'done', 'closed', 'complete'],
@@ -76,12 +76,26 @@ export function findReachableTransitions(
  * Resolves local TaskStatus corresponding to a Jira status ID from mappings (D-08).
  * In accordance with D-11: No keyword guessing! If unmapped, returns null.
  */
+export function normalizeJiraStatusToken(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
 export function resolveLocalStatusFromMapping(
   jiraStatusId: string,
-  mappings: JiraStatusMapping
+  mappings: JiraStatusMapping,
+  jiraStatusName?: string
 ): TaskStatus | null {
   for (const [status, ids] of Object.entries(mappings)) {
     if (ids.includes(jiraStatusId)) {
+      return status as TaskStatus;
+    }
+  }
+
+  const normalizedName = jiraStatusName ? normalizeJiraStatusToken(jiraStatusName) : '';
+  if (!normalizedName) return null;
+
+  for (const [status, ids] of Object.entries(mappings)) {
+    if (ids.some((id) => normalizeJiraStatusToken(id) === normalizedName)) {
       return status as TaskStatus;
     }
   }
@@ -95,7 +109,8 @@ export function resolveLocalStatusFromMapping(
 export function isStatusMismatch(
   localStatus: TaskStatus,
   jiraStatusId: string | undefined,
-  mappings: JiraStatusMapping
+  mappings: JiraStatusMapping,
+  jiraStatusName?: string
 ): boolean {
   if (!jiraStatusId) return false;
   const mappedIds = mappings[localStatus] || [];
@@ -103,7 +118,11 @@ export function isStatusMismatch(
     // If no mapping is configured for this local status, consider it unmapped
     return true;
   }
-  return !mappedIds.includes(jiraStatusId);
+  if (mappedIds.includes(jiraStatusId)) return false;
+
+  const normalizedName = jiraStatusName ? normalizeJiraStatusToken(jiraStatusName) : '';
+  if (!normalizedName) return true;
+  return !mappedIds.some((id) => normalizeJiraStatusToken(id) === normalizedName);
 }
 
 /**

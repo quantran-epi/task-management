@@ -21,6 +21,7 @@ import {
   DeleteOutlined,
   PaperClipOutlined,
   CloseCircleOutlined,
+  CloseOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
@@ -35,6 +36,7 @@ import {
   isNotesWindowAlwaysOnTop,
   setNotesWindowAlwaysOnTop,
   NOTES_FILTER_EVENT,
+  closeCurrentNotesPopoutWindow,
   type NotesFilterParams,
 } from '../utils/notesPopout';
 
@@ -335,6 +337,15 @@ export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb
             >
               Thêm
             </Button>
+            <Tooltip title="Đóng cửa sổ">
+              <Button
+                type="text"
+                size="small"
+                icon={<CloseOutlined />}
+                onClick={() => void closeCurrentNotesPopoutWindow()}
+                aria-label="Đóng cửa sổ"
+              />
+            </Tooltip>
           </Space>
         </div>
 

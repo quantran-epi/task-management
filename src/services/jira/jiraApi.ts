@@ -4,6 +4,7 @@ import type {
   JiraCreateIssuePayload,
   JiraIssueResponse,
   JiraTransitionsResponse,
+  JiraStatusCatalogItem,
 } from './types';
 import { isTauriApp } from '../../utils/timerPopout';
 
@@ -210,6 +211,10 @@ export async function callJiraApi<T>(
 
 export async function testJiraConnection(config: JiraConfig): Promise<JiraMyselfResponse> {
   return callJiraApi<JiraMyselfResponse>(config, '/rest/api/3/myself');
+}
+
+export async function getJiraStatuses(config: JiraConfig): Promise<JiraStatusCatalogItem[]> {
+  return callJiraApi<JiraStatusCatalogItem[]>(config, '/rest/api/3/status');
 }
 
 export async function createJiraIssue(

@@ -2,12 +2,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   isTauriApp,
   openTimerPopout,
+  buildTimerPopoutUrl,
   isWindowAlwaysOnTop,
   setWindowAlwaysOnTop,
   toggleAlwaysOnTop,
   closeCurrentPopoutWindow,
   TIMER_POPOUT_LABEL,
 } from '../../src/utils/timerPopout';
+import { buildNotesPopoutUrl, openNotesPopout } from '../../src/utils/notesPopout';
 
 describe('timerPopout utility', () => {
   beforeEach(() => {
@@ -30,15 +32,45 @@ describe('timerPopout utility', () => {
   });
 
   describe('openTimerPopout in browser mode', () => {
-    it('calls window.open with correct hash route and options', async () => {
+    it('calls window.open with fresh pre-hash cache busting route and options', async () => {
       const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
 
       await openTimerPopout();
 
       expect(openSpy).toHaveBeenCalledWith(
-        expect.stringContaining('#timer-popout'),
+        expect.stringMatching(/\?popoutVersion=\d+#timer-popout$/),
         'task-planner-timer-popout',
         expect.stringContaining('width=340')
+      );
+    });
+  });
+
+  describe('buildTimerPopoutUrl', () => {
+    it('inserts popoutVersion before hash route', () => {
+      expect(buildTimerPopoutUrl('/task-management/')).toMatch(
+        /^\/task-management\/\?popoutVersion=\d+#timer-popout$/
+      );
+    });
+  });
+
+  describe('openNotesPopout in browser mode', () => {
+    it('calls window.open with fresh pre-hash cache busting notes route and entity filters', async () => {
+      const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+      await openNotesPopout({ entityType: 'task', entityId: 'task-1' });
+
+      expect(openSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/\?popoutVersion=\d+#notes-popout\?entityType=task&entityId=task-1$/),
+        'task-planner-notes-popout',
+        expect.stringContaining('width=420')
+      );
+    });
+  });
+
+  describe('buildNotesPopoutUrl', () => {
+    it('inserts popoutVersion before notes hash route and encodes filters', () => {
+      expect(buildNotesPopoutUrl('/task-management/', { entityType: 'task', entityId: 'task 1' })).toMatch(
+        /^\/task-management\/\?popoutVersion=\d+#notes-popout\?entityType=task&entityId=task%201$/
       );
     });
   });

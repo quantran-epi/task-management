@@ -5,7 +5,7 @@ milestone_name: Banking IT Enhancements & Jira Integration
 status: executing
 stopped_at: Completed 13.1-05-PLAN.md
 last_updated: "2026-10-02T04:45:00.000Z"
-last_activity: 2026-10-02 -- Completed quick task 261002-f2d: Add Pending status and list pagination
+last_activity: 2026-10-02 -- Completed quick task 261002-jm1: close-window, popout cache, Jira mapping, notes indicator, and pagination
 progress:
   total_phases: 8
   completed_phases: 8
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-27)
 Phase: 13.1 (timer-pause-timestamps-jira-project-mapping-and-live-status-) — COMPLETE
 Plan: 5 of 5
 Status: Completed Phase 13.1
-Last activity: 2026-10-02 -- Completed quick task 261002-f2d: Add Pending status and list pagination
+Last activity: 2026-10-02 -- Completed quick task 261002-jm1: close-window, popout cache, Jira mapping, notes indicator, and pagination
 
 ### Quick Tasks Completed
 
@@ -46,6 +46,8 @@ Last activity: 2026-10-02 -- Completed quick task 261002-f2d: Add Pending status
 | 261001-hex | Add Tauri local SQLite file persistence with user-selected path, row-level transactional autosave, close flush, missing-path recovery, and GitHub auto-sync by interval or fixed daily local time with dirty-only sync and missed-run catch-up | 2026-10-01 | 7d84dd6 | complete | [261001-hex-add-tauri-local-sqlite-file-persistence-](./quick/261001-hex-add-tauri-local-sqlite-file-persistence-/) |
 | 261002-cie | Jira status mapping, local-only status edits, note details, screenshot attachments, and quick notes | 2026-10-02 | df12789 | complete | [261002-cie-need-ui-for-local-status-to-jira-status-](./quick/261002-cie-need-ui-for-local-status-to-jira-status-/) |
 | 261002-f2d | task, project, and milestone need one more status call pending. task list and project list need pagination | 2026-10-02 | afdb2a7 | complete | [261002-f2d-task-project-and-milestone-need-one-more](./quick/261002-f2d-task-project-and-milestone-need-one-more/) |
+| 261002-remove-analytics | Remove analytics page, components, calculations, tests, and navigation items | 2026-10-02 | — | complete | [261002-remove-analytics](./quick/261002-remove-analytics/) |
+| 261002-jm1 | Fix close-window action, stale popout cache, Jira mapping labels, note indicator, and pagination | 2026-10-02 | — | complete | [261002-jm1-fix-close-window-action-stale-popout-cac](./quick/261002-jm1-fix-close-window-action-stale-popout-cac/) |
 
 ## Performance Metrics
 

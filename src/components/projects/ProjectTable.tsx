@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Table,
   Tag,
@@ -16,10 +16,8 @@ import {
   FolderOutlined,
   FlagOutlined,
   LinkOutlined,
-  BarChartOutlined,
 } from '@ant-design/icons';
 import type { Project, Milestone, Task } from '../../types/models';
-import type { NavigateFunction } from '../../types/navigation';
 import { EmptyState } from '../common/EmptyState';
 import { formatMinutes } from '../../utils/time';
 import { getTodayDateString } from '../../utils/date';
@@ -39,7 +37,6 @@ export interface ProjectTableProps {
   onEditMilestone: (milestone: Milestone) => void;
   onDeleteMilestone: (milestone: Milestone) => void;
   onEditTask: (taskId: string) => void;
-  onNavigate?: NavigateFunction | undefined;
   loading?: boolean;
   db?: TaskPlannerDatabase;
 }
@@ -75,12 +72,12 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
   onEditMilestone,
   onDeleteMilestone,
   onEditTask,
-  onNavigate,
   loading = false,
   db = defaultDb,
 }) => {
   const { token } = theme.useToken();
   const today = getTodayDateString();
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 20 });
 
   // Query spent minutes map for all tasks
   const taskSpentMap = useLiveQuery(async () => {
@@ -228,16 +225,9 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
       {
         title: 'Thao tác',
         key: 'actions',
-        width: 250,
+        width: 180,
         render: (_, record) => (
           <Space orientation="horizontal" size="small">
-            <Button
-              size="small"
-              icon={<BarChartOutlined />}
-              onClick={() => onNavigate?.('analytics', { milestoneId: record.id })}
-            >
-              Burndown
-            </Button>
             <Button
               size="small"
               icon={<PlusOutlined />}
@@ -406,6 +396,13 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
       </div>
     );
   };
+
+  useEffect(() => {
+    const maxPage = Math.max(1, Math.ceil(projects.length / pagination.pageSize));
+    if (pagination.current > maxPage) {
+      setPagination((current) => ({ ...current, current: maxPage }));
+    }
+  }, [projects.length, pagination.current, pagination.pageSize]);
 
   const projectColumns: TableColumnsType<Project> = [
     {
@@ -592,11 +589,18 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
       expandable={{ expandedRowRender }}
       loading={loading}
       pagination={{
-        pageSize: 20,
+        current: pagination.current,
+        pageSize: pagination.pageSize,
         showSizeChanger: true,
         pageSizeOptions: ['10', '20', '50', '100'],
         showTotal: (total, range) => `${range[0]}-${range[1]} / ${total} dự án`,
         hideOnSinglePage: false,
+        onChange: (current, pageSize) => {
+          setPagination((prev) => ({
+            current: pageSize !== prev.pageSize ? 1 : current,
+            pageSize,
+          }));
+        },
       }}
       locale={{
         emptyText: (

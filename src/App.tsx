@@ -13,7 +13,6 @@ import { ProjectsView } from './views/ProjectsView';
 import { PlannerView } from './views/PlannerView';
 import { SettingsView } from './views/SettingsView';
 import { DashboardView } from './views/DashboardView';
-import { AnalyticsView } from './views/AnalyticsView';
 import { NotesView } from './views/NotesView';
 import { NotesPopoutView } from './views/NotesPopoutView';
 import { TimerPopoutView } from './views/TimerPopoutView';
@@ -41,11 +40,9 @@ export const App: React.FC = () => {
       case 'tasks':
         return <TasksView />;
       case 'projects':
-        return <ProjectsView onNavigate={navigate} />;
+        return <ProjectsView />;
       case 'planner':
         return <PlannerView targetDate={params.date} />;
-      case 'analytics':
-        return <AnalyticsView initialMilestoneId={params.milestoneId} onNavigate={navigate} />;
       case 'notes':
         return <NotesView />;
       case 'settings':

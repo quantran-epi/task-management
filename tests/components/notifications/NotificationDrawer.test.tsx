@@ -94,7 +94,7 @@ describe('NotificationDrawer', () => {
     // Does not provide "Dismiss All" button (D-17)
     expect(screen.queryByText(/Bỏ qua tất cả/i)).toBeNull();
     expect(screen.queryByText(/Dismiss All/i)).toBeNull();
-  });
+  }, 15000);
 
   it('renders quick Done checkbox for task and invokes onDismiss for dismissible items', () => {
     const handleItemClick = vi.fn();

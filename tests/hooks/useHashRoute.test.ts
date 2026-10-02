@@ -14,7 +14,6 @@ describe('useHashRoute utilities', () => {
       expect(parseHash('#/tasks')).toEqual({ route: 'tasks', params: {} });
       expect(parseHash('#/projects')).toEqual({ route: 'projects', params: {} });
       expect(parseHash('#/planner')).toEqual({ route: 'planner', params: {} });
-      expect(parseHash('#/analytics')).toEqual({ route: 'analytics', params: {} });
       expect(parseHash('#/settings')).toEqual({ route: 'settings', params: {} });
       expect(parseHash('#/dashboard')).toEqual({ route: 'dashboard', params: {} });
     });
@@ -23,10 +22,6 @@ describe('useHashRoute utilities', () => {
       expect(parseHash('#/planner?date=2026-10-05')).toEqual({
         route: 'planner',
         params: { date: '2026-10-05' },
-      });
-      expect(parseHash('#/analytics?milestoneId=ms-123')).toEqual({
-        route: 'analytics',
-        params: { milestoneId: 'ms-123' },
       });
       expect(parseHash('#/tasks?view=all&filter=open')).toEqual({
         route: 'tasks',

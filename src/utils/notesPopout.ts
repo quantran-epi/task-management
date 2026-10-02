@@ -17,10 +17,14 @@ export interface NotesFilterParams {
 
 export const NOTES_FILTER_EVENT = 'notes-set-filter';
 
-export async function openNotesPopout(entityFilter?: NotesFilterParams): Promise<void> {
+export function buildNotesPopoutUrl(base = '', entityFilter?: NotesFilterParams): string {
   const queryPart = entityFilter?.entityType && entityFilter?.entityId
     ? `?entityType=${encodeURIComponent(entityFilter.entityType)}&entityId=${encodeURIComponent(entityFilter.entityId)}`
     : '';
+  return `${base}?popoutVersion=${Date.now()}#notes-popout${queryPart}`;
+}
+
+export async function openNotesPopout(entityFilter?: NotesFilterParams): Promise<void> {
 
   if (isTauriApp()) {
     try {
@@ -39,7 +43,7 @@ export async function openNotesPopout(entityFilter?: NotesFilterParams): Promise
       }
 
       const webview = new WebviewWindow(NOTES_POPOUT_LABEL, {
-        url: `#notes-popout${queryPart}`,
+        url: buildNotesPopoutUrl('', entityFilter),
         title: 'Ghi chú nhanh',
         width: 420,
         height: 640,
@@ -61,8 +65,8 @@ export async function openNotesPopout(entityFilter?: NotesFilterParams): Promise
   }
 
   // Web browser fallback
-  const base = `${window.location.origin}${window.location.pathname}#notes-popout${queryPart}`;
-  window.open(base, 'task-planner-notes-popout', 'width=420,height=640,resizable=yes,status=no');
+  const base = `${window.location.origin}${window.location.pathname}`;
+  window.open(buildNotesPopoutUrl(base, entityFilter), 'task-planner-notes-popout', 'width=420,height=640,resizable=yes,status=no');
 }
 
 export async function isNotesWindowAlwaysOnTop(): Promise<boolean> {
@@ -92,4 +96,17 @@ export async function setNotesWindowAlwaysOnTop(alwaysOnTop: boolean): Promise<b
     console.warn('Failed to set notes always-on-top state:', err);
     return false;
   }
+}
+
+export async function closeCurrentNotesPopoutWindow(): Promise<void> {
+  if (isTauriApp()) {
+    try {
+      const { getCurrentWebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+      await getCurrentWebviewWindow().close();
+      return;
+    } catch {
+      // Fall through to window.close
+    }
+  }
+  window.close();
 }

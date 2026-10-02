@@ -4,6 +4,7 @@ import {
   sanitizeErrorMessage,
   callJiraApi,
   testJiraConnection,
+  getJiraStatuses,
 } from '../../../src/services/jira/jiraApi';
 import type { JiraConfig } from '../../../src/services/jira/types';
 
@@ -153,6 +154,33 @@ describe('Jira API Client (jiraApi.ts)', () => {
 
       await expect(callJiraApi(baseConfig, '/rest/api/3/issue/SHB-999')).rejects.toThrow(
         'Issue does not exist, Resolution is required'
+      );
+    });
+  });
+
+  describe('getJiraStatuses', () => {
+    it('calls GET /rest/api/3/status and returns Jira status catalog', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ([
+          { id: '3', name: 'Doing', statusCategory: { id: 2, key: 'indeterminate', name: 'In Progress' } },
+        ]),
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      const statuses = await getJiraStatuses(baseConfig);
+
+      expect(statuses).toEqual([
+        { id: '3', name: 'Doing', statusCategory: { id: 2, key: 'indeterminate', name: 'In Progress' } },
+      ]);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://shb-bank.atlassian.net/rest/api/3/status',
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: expect.stringMatching(/^Basic /),
+          }),
+        })
       );
     });
   });

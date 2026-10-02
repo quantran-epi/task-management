@@ -27,6 +27,7 @@ import {
   PauseCircleOutlined,
   CheckCircleOutlined,
   SettingOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons';
 import type { Task, Project, Milestone, TaskPriority, WorkType } from '../../types/models';
 import { InlineStatusTag } from './InlineStatusTag';
@@ -146,6 +147,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
   const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
   const [standupFallbackModalOpen, setStandupFallbackModalOpen] = useState<boolean>(false);
   const [standupFallbackText, setStandupFallbackText] = useState<string>('');
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 25 });
   const tableRef = useRef<HTMLDivElement>(null);
   const fallbackTextareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -356,7 +358,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
         const project = record.projectId ? projectMap.get(record.projectId) : undefined;
         const milestone = record.milestoneId ? milestoneMap.get(record.milestoneId) : undefined;
         const linkCount = record.documentLinks?.length ?? 0;
-        const notesPreview = record.notes ? record.notes.split('\n')[0] : '';
+        const hasNotes = Boolean(record.notes?.trim());
 
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -425,21 +427,11 @@ export const TaskTable: React.FC<TaskTableProps> = ({
               )}
             </div>
 
-            {notesPreview && (
-              <Tooltip title={record.notes} placement="topLeft">
-                <span
-                  style={{
-                    fontSize: 12,
-                    color: token.colorTextTertiary,
-                    maxWidth: 400,
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    display: 'block',
-                  }}
-                >
-                  {notesPreview}
-                </span>
+            {hasNotes && (
+              <Tooltip title="Có ghi chú trong chi tiết tác vụ" placement="topLeft">
+                <Tag icon={<FileTextOutlined />} color="blue" style={{ width: 'fit-content', margin: 0 }}>
+                  Có ghi chú
+                </Tag>
               </Tooltip>
             )}
           </div>
@@ -727,6 +719,13 @@ export const TaskTable: React.FC<TaskTableProps> = ({
     (col) => col.key === 'name' || visibleColumns.includes(col.key as string)
   );
 
+  useEffect(() => {
+    const maxPage = Math.max(1, Math.ceil(tasks.length / pagination.pageSize));
+    if (pagination.current > maxPage) {
+      setPagination((current) => ({ ...current, current: maxPage }));
+    }
+  }, [tasks.length, pagination.current, pagination.pageSize]);
+
   const columnCustomizationContent = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 200, padding: 4 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${token.colorBorderSecondary}`, paddingBottom: 6 }}>
@@ -828,11 +827,18 @@ export const TaskTable: React.FC<TaskTableProps> = ({
         dataSource={tasks}
         loading={loading}
         pagination={{
-          pageSize: 25,
+          current: pagination.current,
+          pageSize: pagination.pageSize,
           showSizeChanger: true,
           pageSizeOptions: ['10', '25', '50', '100'],
           showTotal: (total, range) => `${range[0]}-${range[1]} / ${total} tác vụ`,
           hideOnSinglePage: false,
+          onChange: (current, pageSize) => {
+            setPagination((prev) => ({
+              current: pageSize !== prev.pageSize ? 1 : current,
+              pageSize,
+            }));
+          },
         }}
         rowSelection={{
           selectedRowKeys,

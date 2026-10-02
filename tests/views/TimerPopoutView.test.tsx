@@ -143,6 +143,18 @@ describe('TimerPopoutView', () => {
     expect(mockStart).toHaveBeenCalledWith('task-2');
   });
 
+  it('closes current popout from header close button', async () => {
+    const closeSpy = vi.spyOn(timerPopoutUtils, 'closeCurrentPopoutWindow').mockResolvedValue(undefined);
+
+    renderWithContext({ activeTimers: [] });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Đóng cửa sổ' }));
+
+    await waitFor(() => {
+      expect(closeSpy).toHaveBeenCalled();
+    });
+  });
+
   it('toggles pin alwaysOnTop state', async () => {
     vi.spyOn(timerPopoutUtils, 'isTauriApp').mockReturnValue(true);
     const setOnTopSpy = vi.spyOn(timerPopoutUtils, 'setWindowAlwaysOnTop').mockResolvedValue(true);

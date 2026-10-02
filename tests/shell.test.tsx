@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ConfigProvider, theme } from 'antd';
 import { AppShell } from '../src/components/shell/AppShell';
 import App from '../src/App';
@@ -62,6 +62,7 @@ describe('AppShell Component (UX-01)', () => {
 
 describe('App Integration & Hash Route & Live Query (UX-01, DATA-02)', () => {
   beforeEach(async () => {
+    cleanup();
     window.location.hash = '#/tasks';
     await db.delete();
     await db.open();
@@ -98,15 +99,5 @@ describe('App Integration & Hash Route & Live Query (UX-01, DATA-02)', () => {
 
     expect(await screen.findByTestId('planner-view')).toBeInTheDocument();
     expect(screen.getByTestId('week-navigator')).toBeInTheDocument();
-  });
-
-  it('updates view when hash route changes to analytics', async () => {
-    render(<App />);
-
-    window.location.hash = '#/analytics';
-    window.dispatchEvent(new HashChangeEvent('hashchange'));
-
-    expect(await screen.findByTestId('analytics-view')).toBeInTheDocument();
-    expect(screen.getByTestId('section-milestone-burndown')).toBeInTheDocument();
   });
 });

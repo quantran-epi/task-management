@@ -127,4 +127,33 @@ describe('Project and Milestone Modals and ProjectTable Banking IT Fields', () =
     expect(screen.getByText('2 links')).toBeInTheDocument();
     unmount();
   });
+
+  it('changes project page size immediately when selecting 10', async () => {
+    const projects = Array.from({ length: 12 }, (_, index) => ({
+      ...sampleProject,
+      id: `proj-page-${index}`,
+      name: `Project Page ${index + 1}`,
+    }));
+
+    render(
+      <ProjectTable
+        projects={projects}
+        milestones={[]}
+        tasks={[]}
+        onAddTask={vi.fn()}
+        onEditProject={vi.fn()}
+        onDeleteProject={vi.fn()}
+        onAddMilestone={vi.fn()}
+        onEditMilestone={vi.fn()}
+        onDeleteMilestone={vi.fn()}
+        onEditTask={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('1-12 / 12 dự án')).toBeInTheDocument();
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /page size/i }));
+    fireEvent.click(await screen.findByText('10 / page'));
+    expect(screen.getByText('1-10 / 12 dự án')).toBeInTheDocument();
+    expect(screen.queryByText('Project Page 11')).not.toBeInTheDocument();
+  });
 });

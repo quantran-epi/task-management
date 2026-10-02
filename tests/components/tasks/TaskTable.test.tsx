@@ -52,6 +52,7 @@ describe('TaskTable', () => {
       milestoneId: 'mile-1',
       createdAt: '2026-09-01T00:00:00Z',
       updatedAt: '2026-09-01T00:00:00Z',
+      notes: 'Private note body',
     },
     {
       id: 'task-pending',
@@ -120,6 +121,8 @@ describe('TaskTable', () => {
     expect(screen.getByText('Beta Task')).toBeInTheDocument();
     expect(screen.getByText('Gamma Task')).toBeInTheDocument();
     expect(screen.getByText('Chờ xử lý')).toBeInTheDocument();
+    expect(screen.getByText('Có ghi chú')).toBeInTheDocument();
+    expect(screen.queryByText('Private note body')).not.toBeInTheDocument();
 
     // Verify column headers rendered
     expect(screen.getByText('Tác vụ & Phân cấp')).toBeInTheDocument();

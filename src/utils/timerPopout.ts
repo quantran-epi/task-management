@@ -10,6 +10,10 @@ export function isTauriApp(): boolean {
 
 export const TIMER_POPOUT_LABEL = 'timer-popout';
 
+export function buildTimerPopoutUrl(base = ''): string {
+  return `${base}?popoutVersion=${Date.now()}#timer-popout`;
+}
+
 export async function openTimerPopout(): Promise<void> {
   if (isTauriApp()) {
     try {
@@ -24,7 +28,7 @@ export async function openTimerPopout(): Promise<void> {
       }
 
       const webview = new WebviewWindow(TIMER_POPOUT_LABEL, {
-        url: '#timer-popout',
+        url: buildTimerPopoutUrl(),
         title: 'Bộ đếm thời gian',
         width: 340,
         height: 200,
@@ -46,8 +50,8 @@ export async function openTimerPopout(): Promise<void> {
   }
 
   // Web browser fallback
-  const base = `${window.location.origin}${window.location.pathname}#timer-popout`;
-  window.open(base, 'task-planner-timer-popout', 'width=340,height=200,resizable=yes,status=no');
+  const base = `${window.location.origin}${window.location.pathname}`;
+  window.open(buildTimerPopoutUrl(base), 'task-planner-timer-popout', 'width=340,height=200,resizable=yes,status=no');
 }
 
 export async function isWindowAlwaysOnTop(): Promise<boolean> {

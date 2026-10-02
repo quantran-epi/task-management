@@ -7,6 +7,7 @@ import {
   PushpinOutlined,
   PushpinFilled,
   ClockCircleOutlined,
+  CloseOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type TaskPlannerDatabase } from '../db';
@@ -16,6 +17,7 @@ import {
   isTauriApp,
   isWindowAlwaysOnTop,
   setWindowAlwaysOnTop,
+  closeCurrentPopoutWindow,
 } from '../utils/timerPopout';
 import { formatHierarchySubtitle } from '../components/timer/ActiveTimerWidget';
 
@@ -155,6 +157,23 @@ export const TimerPopoutView: React.FC<TimerPopoutViewProps> = ({
               icon={pinned ? <PushpinFilled /> : <PushpinOutlined />}
               onClick={handleTogglePin}
               aria-label={pinned ? 'Bỏ ghim' : 'Ghim trên cùng'}
+              style={{
+                width: 26,
+                height: 26,
+                padding: 0,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            />
+          </Tooltip>
+          <Tooltip title="Đóng cửa sổ">
+            <Button
+              type="text"
+              size="small"
+              icon={<CloseOutlined />}
+              onClick={() => void closeCurrentPopoutWindow()}
+              aria-label="Đóng cửa sổ"
               style={{
                 width: 26,
                 height: 26,

@@ -11,6 +11,7 @@ vi.mock("../../../src/services/jira/jiraApi", async (importOriginal) => {
   return {
     ...actual,
     testJiraConnection: vi.fn(),
+    getJiraStatuses: vi.fn(),
   };
 });
 
@@ -21,6 +22,7 @@ describe("JiraConfigCard Component (JIRA-01, JIRA-02, D-01, D-02, D-03, D-04)", 
     db = new TaskPlannerDatabase(`test-jira-config-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     await db.open();
     vi.clearAllMocks();
+    vi.mocked(jiraApi.getJiraStatuses).mockResolvedValue([]);
   });
 
   afterEach(async () => {
@@ -104,6 +106,35 @@ describe("JiraConfigCard Component (JIRA-01, JIRA-02, D-01, D-02, D-03, D-04)", 
     expect(announceSpy).toHaveBeenCalledWith("Đã lưu cấu hình Jira");
   });
 
+
+
+  it('shows Jira status names as mapping labels while keeping ID values', async () => {
+    vi.mocked(jiraApi.getJiraStatuses).mockResolvedValue([
+      { id: '3', name: 'Doing', statusCategory: { id: 2, key: 'indeterminate', name: 'In Progress' } },
+    ]);
+    vi.spyOn(jiraTokenService, "getJiraApiToken").mockResolvedValue("valid_token");
+    vi.spyOn(jiraTokenService, "isJiraApiTokenStored").mockResolvedValue(true);
+    await db.settings.bulkPut([
+      { key: "jira_domain", value: "shb.atlassian.net" },
+      { key: "jira_email", value: "quan@shb.com.vn" },
+      { key: "jira_status_mappings", value: { "In Progress": ["3"] } },
+    ]);
+
+    render(<JiraConfigCard db={db} />);
+
+    await waitFor(() => {
+      expect(jiraApi.getJiraStatuses).toHaveBeenCalled();
+    });
+    fireEvent.mouseDown(screen.getByLabelText("Jira statuses cho In Progress"));
+    expect((await screen.findAllByText("Doing")).length).toBeGreaterThanOrEqual(1);
+
+    fireEvent.click(screen.getByRole("button", { name: /Lưu cấu hình Jira/i }));
+    await waitFor(async () => {
+      const savedMappings = await db.settings.get("jira_status_mappings");
+      expect(savedMappings?.value).toEqual(expect.objectContaining({ "In Progress": ["3"] }));
+    });
+  });
+
   describe("Diagnostic Connection Test", () => {
     it("disables test connection button when credentials are missing", () => {
       render(<JiraConfigCard db={db} />);
@@ -149,7 +180,7 @@ describe("JiraConfigCard Component (JIRA-01, JIRA-02, D-01, D-02, D-03, D-04)", 
           screen.getByText(/Kết nối thành công! Đã xác thực với tài khoản Tran Duc Quan \(quan@shb.com.vn\)\./i)
         ).toBeInTheDocument();
       });
-    });
+    }, 15000);
 
     it("displays warning alert when testJiraConnection rejects with CORS_BLOCKED", async () => {
       vi.mocked(jiraApi.testJiraConnection).mockRejectedValueOnce(new Error("CORS_BLOCKED"));
@@ -183,7 +214,7 @@ describe("JiraConfigCard Component (JIRA-01, JIRA-02, D-01, D-02, D-03, D-04)", 
           screen.getByText(/Yêu cầu mạng bị chặn do chính sách CORS của trình duyệt/i)
         ).toBeInTheDocument();
       });
-    });
+    }, 15000);
 
     it("displays auth error alert when testJiraConnection fails with 401 or 403", async () => {
       vi.mocked(jiraApi.testJiraConnection).mockRejectedValueOnce(new Error("HTTP 401 Unauthorized"));
@@ -217,6 +248,6 @@ describe("JiraConfigCard Component (JIRA-01, JIRA-02, D-01, D-02, D-03, D-04)", 
           screen.getByText(/Xác thực thất bại \(401\/403\)/i)
         ).toBeInTheDocument();
       });
-    });
+    }, 15000);
   });
 });

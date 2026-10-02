@@ -13,7 +13,6 @@ const VALID_ROUTES: readonly AppRoute[] = [
   'tasks',
   'projects',
   'planner',
-  'analytics',
   'notes',
   'settings',
   'timer-popout',

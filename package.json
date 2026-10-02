@@ -9,7 +9,7 @@
     "test": "vitest run",
     "test:jira-proxy": "node --test proxy/jira-proxy.test.mjs",
     "jira:proxy": "node proxy/jira-proxy.mjs",
-    "preview": "node proxy/jira-proxy.mjs & proxy_pid=$!; trap 'kill $proxy_pid' EXIT INT TERM; vite preview",
+    "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build"

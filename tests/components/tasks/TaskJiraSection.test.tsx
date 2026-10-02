@@ -171,6 +171,35 @@ describe('TaskJiraSection', () => {
     });
   });
 
+
+
+    it('does not show mismatch when local In Progress maps to cached Jira Doing by name token', async () => {
+      const semanticTask: Task = { ...baseTask, jiraKey: 'SHB-DOING' };
+      await testDb.settings.bulkPut([
+        { key: 'jira_status_mappings', value: { 'In Progress': ['doing'] } },
+        {
+          key: `jira_cached_status_${semanticTask.id}`,
+          value: {
+            statusId: '99999',
+            statusName: 'Doing',
+            statusCategory: 'In Progress',
+            syncedAt: new Date().toISOString(),
+          },
+        },
+      ]);
+
+      render(
+        <TaskJiraSection
+          task={semanticTask}
+          onUpdateTask={vi.fn()}
+          db={testDb}
+        />
+      );
+
+      expect(await screen.findByText('Doing')).toBeInTheDocument();
+      expect(screen.queryByText('Lệch trạng thái')).not.toBeInTheDocument();
+    });
+
   describe('Workflow Transitions', () => {
     const linkedTask: Task = {
       ...baseTask,

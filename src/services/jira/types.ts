@@ -41,6 +41,16 @@ export interface JiraTransitionsResponse {
   transitions: JiraTransitionItem[];
 }
 
+export interface JiraStatusCatalogItem {
+  id: string;
+  name: string;
+  statusCategory?: {
+    id?: number;
+    key?: string;
+    name?: string;
+  };
+}
+
 export interface JiraIssueResponse {
   id: string;
   key: string;
