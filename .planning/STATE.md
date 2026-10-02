@@ -5,7 +5,7 @@ milestone_name: Banking IT Enhancements & Jira Integration
 status: executing
 stopped_at: Completed 13.1-05-PLAN.md
 last_updated: "2026-10-02T04:45:00.000Z"
-last_activity: 2026-10-02 -- Completed quick task 261002-jm1: close-window, popout cache, Jira mapping, notes indicator, and pagination
+last_activity: 2026-10-02 -- Completed quick task 261002-vqg: Open local folder link in system file explorer and browse local folders
 progress:
   total_phases: 8
   completed_phases: 8
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-27)
 Phase: 13.1 (timer-pause-timestamps-jira-project-mapping-and-live-status-) — COMPLETE
 Plan: 5 of 5
 Status: Completed Phase 13.1
-Last activity: 2026-10-02 -- Completed quick task 261002-jm1: close-window, popout cache, Jira mapping, notes indicator, and pagination
+Last activity: 2026-10-02 -- Completed quick task 261002-vqg: Open local folder link in system file explorer and browse local folders
 
 ### Quick Tasks Completed
 
@@ -52,6 +52,7 @@ Last activity: 2026-10-02 -- Completed quick task 261002-jm1: close-window, popo
 | 261002-t9m | Filter analytics charts to only show items with data (> 0 hours / minutes) | 2026-10-02 | — | complete | [261002-t9m-filter-charts-to-only-show-items-with-da](./quick/261002-t9m-filter-charts-to-only-show-items-with-da/) |
 | 261002-eac | Estimate vs actual accuracy analytics per task type | 2026-10-02 | 6e5dcdc | complete | [261002-eac-estimate-accuracy-per-task-type](./quick/261002-eac-estimate-accuracy-per-task-type/) |
 | 261002-rec | Recurring tasks and GitHub sync diagnostics | 2026-10-02 | — | complete | [261002-rec-recurring-tasks](./quick/261002-rec-recurring-tasks/) |
+| 261002-vqg | Open local folder link in system file explorer and browse local folders | 2026-10-02 | 39bac40 | complete | [261002-vqg-open-local-folder-link-in-file-explorer-](./quick/261002-vqg-open-local-folder-link-in-file-explorer-/) |
 
 ## Performance Metrics
 
