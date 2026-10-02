@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import React from 'react';
 import { TaskChecklistSection } from '../../../src/components/tasks/TaskChecklistSection';
 import type { TaskChecklistItem } from '../../../src/types/models';
 
@@ -32,7 +31,7 @@ describe('TaskChecklistSection', () => {
     fireEvent.click(addButton);
 
     expect(onChange).toHaveBeenCalledTimes(1);
-    const addedItems = onChange.mock.calls[0][0];
+    const addedItems = onChange.mock.calls[0]![0];
     expect(addedItems).toHaveLength(1);
     expect(addedItems[0].text).toBe('New item to do');
     expect(addedItems[0].done).toBe(false);
@@ -49,7 +48,7 @@ describe('TaskChecklistSection', () => {
     fireEvent.click(checkbox);
 
     expect(onChange).toHaveBeenCalledTimes(1);
-    expect(onChange.mock.calls[0][0][0].done).toBe(true);
+    expect(onChange.mock.calls[0]![0][0].done).toBe(true);
   });
 
   it('edits item text and calls onChange', () => {
@@ -63,7 +62,7 @@ describe('TaskChecklistSection', () => {
     fireEvent.change(textInput, { target: { value: 'Subtask 1 edited' } });
 
     expect(onChange).toHaveBeenCalledTimes(1);
-    expect(onChange.mock.calls[0][0][0].text).toBe('Subtask 1 edited');
+    expect(onChange.mock.calls[0]![0][0].text).toBe('Subtask 1 edited');
   });
 
   it('deletes an item and calls onChange', () => {
@@ -77,7 +76,7 @@ describe('TaskChecklistSection', () => {
     fireEvent.click(deleteBtn);
 
     expect(onChange).toHaveBeenCalledTimes(1);
-    expect(onChange.mock.calls[0][0]).toHaveLength(0);
+    expect(onChange.mock.calls[0]![0]).toHaveLength(0);
   });
 
   it('triggers onSyncProgress with correct percentage when button clicked', () => {

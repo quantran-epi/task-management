@@ -1,10 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import React from 'react';
 import { CommandPaletteModal } from '../../../src/components/palette/CommandPaletteModal';
 import { TaskPlannerDatabase } from '../../../src/db';
 import 'fake-indexeddb/auto';
-import type { Task, Project } from '../../../src/types/models';
+import type { Task } from '../../../src/types/models';
 
 describe('CommandPaletteModal', () => {
   let db: TaskPlannerDatabase;
