@@ -11,6 +11,7 @@ import { useThemeMode } from './hooks/useThemeMode';
 import { TasksView } from './views/TasksView';
 import { ProjectsView } from './views/ProjectsView';
 import { PlannerView } from './views/PlannerView';
+import { AnalyticsView } from './views/AnalyticsView';
 import { SettingsView } from './views/SettingsView';
 import { DashboardView } from './views/DashboardView';
 import { NotesView } from './views/NotesView';
@@ -43,6 +44,8 @@ export const App: React.FC = () => {
         return <ProjectsView />;
       case 'planner':
         return <PlannerView targetDate={params.date} />;
+      case 'analytics':
+        return <AnalyticsView />;
       case 'notes':
         return <NotesView />;
       case 'settings':

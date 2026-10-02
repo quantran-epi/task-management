@@ -14,6 +14,7 @@ describe('useHashRoute utilities', () => {
       expect(parseHash('#/tasks')).toEqual({ route: 'tasks', params: {} });
       expect(parseHash('#/projects')).toEqual({ route: 'projects', params: {} });
       expect(parseHash('#/planner')).toEqual({ route: 'planner', params: {} });
+      expect(parseHash('#/analytics')).toEqual({ route: 'analytics', params: {} });
       expect(parseHash('#/settings')).toEqual({ route: 'settings', params: {} });
       expect(parseHash('#/dashboard')).toEqual({ route: 'dashboard', params: {} });
     });
