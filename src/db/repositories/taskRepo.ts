@@ -71,14 +71,35 @@ export async function updateTask(
   if (validated.workType !== undefined) updated.workType = validated.workType;
   if (validated.projectId !== undefined) updated.projectId = validated.projectId;
   if (validated.milestoneId !== undefined) updated.milestoneId = validated.milestoneId;
-  if (validated.description !== undefined) updated.description = validated.description;
-  if (validated.deadline !== undefined) updated.deadline = validated.deadline;
-  if (validated.notes !== undefined) updated.notes = validated.notes;
-  if (validated.actualStartDate !== undefined) updated.actualStartDate = validated.actualStartDate;
-  if (validated.actualEndDate !== undefined) updated.actualEndDate = validated.actualEndDate;
-  if (validated.opsOwners !== undefined) updated.opsOwners = validated.opsOwners;
-  if (validated.businessAnalysts !== undefined) updated.businessAnalysts = validated.businessAnalysts;
-  if (validated.documentLinks !== undefined) updated.documentLinks = validated.documentLinks;
+
+  const assignOptional = (key: keyof Pick<
+    Task,
+    | 'description'
+    | 'deadline'
+    | 'notes'
+    | 'actualStartDate'
+    | 'actualEndDate'
+    | 'opsOwners'
+    | 'businessAnalysts'
+    | 'documentLinks'
+  >) => {
+    if (!(key in patch)) return;
+    const value = validated[key];
+    if (value !== undefined) {
+      Object.assign(updated, { [key]: value });
+    } else {
+      delete updated[key];
+    }
+  };
+
+  assignOptional('description');
+  assignOptional('deadline');
+  assignOptional('notes');
+  assignOptional('actualStartDate');
+  assignOptional('actualEndDate');
+  assignOptional('opsOwners');
+  assignOptional('businessAnalysts');
+  assignOptional('documentLinks');
   if ('jiraKey' in patch) {
     if (validated.jiraKey !== undefined) {
       updated.jiraKey = validated.jiraKey;

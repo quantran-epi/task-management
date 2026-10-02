@@ -49,26 +49,47 @@ export async function captureFocusedWindowScreenshot(): Promise<File> {
 
     await new Promise<void>((resolve, reject) => {
       let resolved = false;
+      let pollTimer: ReturnType<typeof setTimeout> | undefined;
       const timer = setTimeout(() => {
         if (!resolved) {
           resolved = true;
           cleanup();
           reject(new Error('Hết thời gian chờ khung hình (timeout).'));
         }
-      }, 8000);
+      }, 12000);
+
+      const hasFrame = () => video.videoWidth > 0 && video.videoHeight > 0;
 
       const cleanup = () => {
         clearTimeout(timer);
+        if (pollTimer !== undefined) clearTimeout(pollTimer);
         video.removeEventListener('loadedmetadata', onLoaded);
         video.removeEventListener('loadeddata', onLoaded);
+        video.removeEventListener('canplay', onLoaded);
+        video.removeEventListener('playing', onLoaded);
         video.removeEventListener('error', onError);
+      };
+
+      const pollForFrame = () => {
+        if (resolved) return;
+        if (hasFrame()) {
+          resolved = true;
+          cleanup();
+          resolve();
+          return;
+        }
+        pollTimer = setTimeout(pollForFrame, 50);
       };
 
       const onLoaded = () => {
         if (resolved) return;
-        resolved = true;
-        cleanup();
-        resolve();
+        if (hasFrame()) {
+          resolved = true;
+          cleanup();
+          resolve();
+          return;
+        }
+        pollForFrame();
       };
 
       const onError = () => {
@@ -78,17 +99,20 @@ export async function captureFocusedWindowScreenshot(): Promise<File> {
         reject(new Error('Không thể đọc khung hình đã chọn.'));
       };
 
-      video.addEventListener('loadedmetadata', onLoaded, { once: true });
-      video.addEventListener('loadeddata', onLoaded, { once: true });
+      video.addEventListener('loadedmetadata', onLoaded);
+      video.addEventListener('loadeddata', onLoaded);
+      video.addEventListener('canplay', onLoaded);
+      video.addEventListener('playing', onLoaded);
       video.addEventListener('error', onError, { once: true });
       video.srcObject = stream ?? null;
 
-      if (video.readyState >= 1) {
+      if (hasFrame()) {
         onLoaded();
       } else {
         void video.play().catch(() => {
           // Play might reject if not in DOM, but metadata may still load
         });
+        pollForFrame();
       }
     });
 

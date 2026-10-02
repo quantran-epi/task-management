@@ -364,6 +364,45 @@ describe('Project, Milestone & Task Repositories & Schemas (WORK-01, WORK-02, WO
       expect(all.length).toBeGreaterThanOrEqual(1);
     });
 
+    it('clears optional task detail fields when explicitly patched as undefined', async () => {
+      const task = await createTask(
+        {
+          name: 'Clear me',
+          deadline: '2026-10-02',
+          notes: 'remove this',
+          actualStartDate: '2026-10-01',
+          actualEndDate: '2026-10-02',
+          documentLinks: ['https://example.com/spec'],
+          opsOwners: ['ops-one'],
+          businessAnalysts: ['ba-one'],
+        },
+        testDb
+      );
+
+      const updated = await updateTask(
+        task.id,
+        {
+          deadline: undefined,
+          notes: undefined,
+          actualStartDate: undefined,
+          actualEndDate: undefined,
+          documentLinks: undefined,
+          opsOwners: undefined,
+          businessAnalysts: undefined,
+        },
+        testDb
+      );
+
+      expect(updated.deadline).toBeUndefined();
+      expect(updated.notes).toBeUndefined();
+      expect(updated.actualStartDate).toBeUndefined();
+      expect(updated.actualEndDate).toBeUndefined();
+      expect(updated.documentLinks).toBeUndefined();
+      expect(updated.opsOwners).toBeUndefined();
+      expect(updated.businessAnalysts).toBeUndefined();
+      expect(await getTask(task.id, testDb)).toMatchObject(updated);
+    });
+
     it('creates task with default workType "code" and updates workType, opsOwners, businessAnalysts', async () => {
       const task = await createTask({ name: 'Banking Task' }, testDb);
       expect(task.workType).toBe('code');
