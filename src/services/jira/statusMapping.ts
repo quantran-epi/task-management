@@ -1,4 +1,88 @@
 import type { TaskStatus } from '../../types/models';
+import type { JiraTransitionItem } from './types';
+
+export const LOCAL_TASK_STATUSES: readonly TaskStatus[] = [
+  'Open',
+  'In Progress',
+  'In Review',
+  'Resolved',
+  'Done',
+  'Cancelled',
+];
+
+export type JiraStatusMappings = Record<TaskStatus, string[]>;
+
+export const DEFAULT_JIRA_STATUS_MAPPINGS: JiraStatusMappings = {
+  Open: ['Open', 'To Do', 'Backlog'],
+  'In Progress': ['In Progress', 'Developing', 'Doing'],
+  'In Review': ['In Review', 'Review', 'PR Review'],
+  Resolved: ['Resolved', 'Testing', 'QA', 'UAT'],
+  Done: ['Done', 'Closed', 'Completed'],
+  Cancelled: ['Cancelled', 'Rejected', "Won't Do", "Won't Fix"],
+};
+
+export function normalizeJiraStatusMappings(value: unknown): JiraStatusMappings {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return structuredClone(DEFAULT_JIRA_STATUS_MAPPINGS);
+  }
+
+  const stored = value as Record<string, unknown>;
+  if (Object.entries(stored).some(([key, tokens]) =>
+    LOCAL_TASK_STATUSES.includes(key as TaskStatus) && !Array.isArray(tokens)
+  )) {
+    return structuredClone(DEFAULT_JIRA_STATUS_MAPPINGS);
+  }
+
+  return Object.fromEntries(
+    LOCAL_TASK_STATUSES.map((status) => {
+      const tokens = stored[status];
+      if (!Array.isArray(tokens)) return [status, [...DEFAULT_JIRA_STATUS_MAPPINGS[status]]];
+      const normalized = tokens
+        .filter((token): token is string => typeof token === 'string')
+        .map((token) => token.trim())
+        .filter(Boolean);
+      return [status, normalized];
+    })
+  ) as JiraStatusMappings;
+}
+
+export function resolveLocalStatusFromMapping(
+  jiraStatusId: string,
+  jiraStatusName: string,
+  mappings: JiraStatusMappings
+): TaskStatus | null {
+  const id = jiraStatusId.trim().toLowerCase();
+  const name = jiraStatusName.trim().toLowerCase();
+  return (
+    LOCAL_TASK_STATUSES.find((status) =>
+      mappings[status].some((token) => {
+        const normalized = token.toLowerCase();
+        return normalized === id || normalized === name;
+      })
+    ) ?? null
+  );
+}
+
+export function findReachableTransitions(
+  transitions: JiraTransitionItem[],
+  localStatus: TaskStatus,
+  mappings: JiraStatusMappings
+): JiraTransitionItem[] {
+  return transitions.filter(
+    (transition) =>
+      resolveLocalStatusFromMapping(transition.to.id, transition.to.name, mappings) === localStatus
+  );
+}
+
+export function isStatusMismatch(
+  localStatus: TaskStatus,
+  jiraStatusId: string,
+  jiraStatusName: string,
+  mappings: JiraStatusMappings
+): boolean {
+  const mapped = resolveLocalStatusFromMapping(jiraStatusId, jiraStatusName, mappings);
+  return mapped !== null && mapped !== localStatus;
+}
 
 export function mapJiraStatusToLocalTaskStatus(
   statusName: string,

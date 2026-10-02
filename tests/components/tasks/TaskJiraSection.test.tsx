@@ -239,6 +239,33 @@ describe('TaskJiraSection', () => {
       });
     });
 
+    it('does not transition Jira when local task status changes', async () => {
+      await testDb.settings.bulkPut([
+        { key: 'jira_domain', value: 'shb-bank.atlassian.net' },
+        { key: 'jira_email', value: 'user@shb.com.vn' },
+        { key: 'jira_api_token', value: 'token123' },
+        { key: 'jira_status_mappings', value: { Done: ['6'] } },
+      ]);
+      vi.spyOn(jiraApi, 'getJiraTransitions').mockResolvedValue({ transitions: [] });
+      const executeSpy = vi.spyOn(jiraApi, 'executeJiraTransition').mockResolvedValue(undefined);
+
+      const { rerender } = render(
+        <TaskJiraSection task={linkedTask} onUpdateTask={vi.fn()} db={testDb} />
+      );
+      await screen.findByText('SHB-789');
+
+      rerender(
+        <TaskJiraSection
+          task={{ ...linkedTask, status: 'Done' }}
+          onUpdateTask={vi.fn()}
+          db={testDb}
+        />
+      );
+
+      await waitFor(() => expect(executeSpy).not.toHaveBeenCalled());
+      expect(screen.queryByText('Xác nhận đồng bộ trạng thái sang Jira')).not.toBeInTheDocument();
+    });
+
     it('shows alert with direct Jira Web link when transition requires workflow screen', async () => {
       await testDb.settings.put({ key: 'jira_domain', value: 'shb-bank.atlassian.net' });
       await testDb.settings.put({ key: 'jira_email', value: 'user@shb.com.vn' });

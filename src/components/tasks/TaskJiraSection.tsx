@@ -23,7 +23,10 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { Task } from '../../types/models';
 import type { JiraConfig, JiraTransitionItem } from '../../services/jira/types';
 import { getJiraTransitions, executeJiraTransition } from '../../services/jira/jiraApi';
-import { mapJiraStatusToLocalTaskStatus } from '../../services/jira/statusMapping';
+import {
+  mapJiraStatusToLocalTaskStatus,
+  normalizeJiraStatusMappings,
+} from '../../services/jira/statusMapping';
 import { CreateJiraIssueModal } from './CreateJiraIssueModal';
 import { announceToScreenReader } from '../common/AriaLiveRegion';
 
@@ -50,14 +53,17 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
 
   // Load Jira settings from IndexedDB
   const config: JiraConfig | undefined = useLiveQuery(async () => {
-    const [domainRec, emailRec, tokenRec, proxyRec, projRec, issueTypeRec] = await Promise.all([
-      db.settings.get('jira_domain'),
-      db.settings.get('jira_email'),
-      db.settings.get('jira_api_token'),
-      db.settings.get('jira_cors_proxy'),
-      db.settings.get('jira_default_project'),
-      db.settings.get('jira_default_issue_type'),
-    ]);
+    const [domainRec, emailRec, tokenRec, proxyRec, projRec, issueTypeRec, mappingRec] =
+      await Promise.all([
+        db.settings.get('jira_domain'),
+        db.settings.get('jira_email'),
+        db.settings.get('jira_api_token'),
+        db.settings.get('jira_cors_proxy'),
+        db.settings.get('jira_default_project'),
+        db.settings.get('jira_default_issue_type'),
+        db.settings.get('jira_status_mappings'),
+      ]);
+    normalizeJiraStatusMappings(mappingRec?.value);
     return {
       domain: (domainRec?.value as string) || '',
       email: (emailRec?.value as string) || '',
