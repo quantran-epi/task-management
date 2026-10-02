@@ -1,10 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import 'fake-indexeddb/auto';
-import dayjs from 'dayjs';
 import { TaskPlannerDatabase } from '../../../src/db';
 import { OverridesTable } from '../../../src/components/settings/OverridesTable';
-import { setCapacityOverride, getCapacityOverrides } from '../../../src/db/repositories/capacityRepo';
+import { setCapacityOverride } from '../../../src/db/repositories/capacityRepo';
 
 describe('OverridesTable Component', () => {
   let db: TaskPlannerDatabase;
