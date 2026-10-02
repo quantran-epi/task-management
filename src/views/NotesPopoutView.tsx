@@ -367,8 +367,12 @@ export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb
 
       <div style={{ padding: '10px 12px 0' }}>
         <QuickNoteEntry
-          defaultEntityType={activeFilter?.entityType as NoteEntityType | undefined}
-          defaultEntityId={activeFilter?.entityId}
+          {...(activeFilter
+            ? {
+                defaultEntityType: activeFilter.entityType as NoteEntityType,
+                defaultEntityId: activeFilter.entityId,
+              }
+            : {})}
           db={db}
         />
       </div>

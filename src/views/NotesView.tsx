@@ -292,8 +292,13 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
                     </div>
                     <Typography.Title
                       level={5}
-                      ellipsis={{ rows: 1 }}
-                      style={{ marginTop: 6, marginBottom: 0 }}
+                      style={{
+                        marginTop: 6,
+                        marginBottom: 0,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
                     >
                       {note.title || '(Không tiêu đề)'}
                     </Typography.Title>

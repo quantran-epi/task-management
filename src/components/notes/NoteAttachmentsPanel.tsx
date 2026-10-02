@@ -27,6 +27,8 @@ import { captureFocusedWindowScreenshot } from '../../utils/screenshotCapture';
 const MAX_ATTACHMENTS = 5;
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
 const ALLOWED_MIME_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] as const;
+const EMPTY_ATTACHMENTS: NoteAttachment[] = [];
+const EMPTY_STAGED_FILES: Array<{ file: File; caption?: string | undefined }> = [];
 
 export interface NoteAttachmentsPanelProps {
   noteId?: string | undefined;
@@ -41,9 +43,9 @@ export interface NoteAttachmentsPanelProps {
 
 export const NoteAttachmentsPanel: React.FC<NoteAttachmentsPanelProps> = ({
   noteId,
-  attachments = [],
+  attachments = EMPTY_ATTACHMENTS,
   onChange,
-  stagedFiles = [],
+  stagedFiles = EMPTY_STAGED_FILES,
   onStagedFilesChange,
   db = defaultDb,
   readOnly = false,
