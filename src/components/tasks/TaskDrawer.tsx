@@ -15,9 +15,10 @@ import {
   Badge,
   Switch,
 } from 'antd';
-import { PlusOutlined, DeleteOutlined, LinkOutlined, SyncOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, LinkOutlined, SyncOutlined, FolderOpenOutlined, ExportOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { openDocumentLink, browseLocalFolder } from '../../utils/documentLinks';
 import type {
   Task,
   Project,
@@ -708,7 +709,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
               {(fields, { add, remove }) => (
                 <Space direction="vertical" style={{ width: '100%' }}>
                   {fields.map((field) => (
-                    <div key={field.key} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <div key={field.key} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                       <Form.Item
                         {...field}
                         noStyle
@@ -730,6 +731,30 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                       </Form.Item>
                       <Button
                         type="text"
+                        icon={<FolderOpenOutlined />}
+                        title="Duyệt thư mục trên máy"
+                        aria-label="Duyệt thư mục"
+                        onClick={async () => {
+                          const picked = await browseLocalFolder();
+                          if (picked) {
+                            form.setFieldValue(['documentLinks', field.name], picked);
+                          }
+                        }}
+                      />
+                      <Button
+                        type="text"
+                        icon={<ExportOutlined />}
+                        title="Mở liên kết"
+                        aria-label="Mở liên kết"
+                        onClick={() => {
+                          const val = form.getFieldValue(['documentLinks', field.name]);
+                          if (val) {
+                            void openDocumentLink(val);
+                          }
+                        }}
+                      />
+                      <Button
+                        type="text"
                         danger
                         icon={<DeleteOutlined />}
                         onClick={() => remove(field.name)}
@@ -737,14 +762,28 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                       />
                     </div>
                   ))}
-                  <Button
-                    type="dashed"
-                    onClick={() => add('')}
-                    icon={<PlusOutlined />}
-                    style={{ width: '100%' }}
-                  >
-                    Thêm liên kết
-                  </Button>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <Button
+                      type="dashed"
+                      onClick={() => add('')}
+                      icon={<PlusOutlined />}
+                      style={{ flex: 1 }}
+                    >
+                      Thêm liên kết
+                    </Button>
+                    <Button
+                      type="default"
+                      icon={<FolderOpenOutlined />}
+                      onClick={async () => {
+                        const picked = await browseLocalFolder();
+                        if (picked) {
+                          add(picked);
+                        }
+                      }}
+                    >
+                      Chọn thư mục từ máy
+                    </Button>
+                  </div>
                 </Space>
               )}
             </Form.List>

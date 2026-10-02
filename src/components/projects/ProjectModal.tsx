@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Modal, Form, Input, DatePicker, Select, Button, Space, message } from 'antd';
-import { DeleteOutlined, LinkOutlined, PlusOutlined, ApiOutlined } from '@ant-design/icons';
+import { DeleteOutlined, LinkOutlined, PlusOutlined, ApiOutlined, FolderOpenOutlined, ExportOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
 import type { Project, ProjectStatus, ReminderItem } from '../../types/models';
+import { openDocumentLink, browseLocalFolder } from '../../utils/documentLinks';
 import { createFocusRestorer } from '../../utils/focus';
 import { useRegisterActiveForm } from '../../context/FormGuardContext';
 import { TagSelect } from '../common/TagSelect';
@@ -257,7 +258,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
             {(fields, { add, remove }) => (
               <Space direction="vertical" style={{ width: '100%' }}>
                 {fields.map((field) => (
-                  <div key={field.key} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <div key={field.key} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                     <Form.Item
                       {...field}
                       noStyle
@@ -279,6 +280,30 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
                     </Form.Item>
                     <Button
                       type="text"
+                      icon={<FolderOpenOutlined />}
+                      title="Duyệt thư mục trên máy"
+                      aria-label="Duyệt thư mục"
+                      onClick={async () => {
+                        const picked = await browseLocalFolder();
+                        if (picked) {
+                          form.setFieldValue(['documentLinks', field.name], picked);
+                        }
+                      }}
+                    />
+                    <Button
+                      type="text"
+                      icon={<ExportOutlined />}
+                      title="Mở liên kết"
+                      aria-label="Mở liên kết"
+                      onClick={() => {
+                        const val = form.getFieldValue(['documentLinks', field.name]);
+                        if (val) {
+                          void openDocumentLink(val);
+                        }
+                      }}
+                    />
+                    <Button
+                      type="text"
                       danger
                       icon={<DeleteOutlined />}
                       onClick={() => remove(field.name)}
@@ -286,14 +311,28 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
                     />
                   </div>
                 ))}
-                <Button
-                  type="dashed"
-                  onClick={() => add('')}
-                  icon={<PlusOutlined />}
-                  style={{ width: '100%' }}
-                >
-                  Thêm liên kết
-                </Button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <Button
+                    type="dashed"
+                    onClick={() => add('')}
+                    icon={<PlusOutlined />}
+                    style={{ flex: 1 }}
+                  >
+                    Thêm liên kết
+                  </Button>
+                  <Button
+                    type="default"
+                    icon={<FolderOpenOutlined />}
+                    onClick={async () => {
+                      const picked = await browseLocalFolder();
+                      if (picked) {
+                        add(picked);
+                      }
+                    }}
+                  >
+                    Chọn thư mục từ máy
+                  </Button>
+                </div>
               </Space>
             )}
           </Form.List>
