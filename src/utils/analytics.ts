@@ -188,12 +188,12 @@ export function aggregateProductivityHeatmap(
   }
 
   const items: ProductivityHeatmapItem[] = [];
-  for (let d = 0; d < 7; d++) {
-    const dayLabel = DAY_LABELS[d] ?? `Thứ ${d + 2}`;
-    for (let h = 0; h < 24; h++) {
+  for (let h = 0; h < 24; h++) {
+    const hourLabel = `${String(h).padStart(2, '0')}:00`;
+    for (let d = 0; d < 7; d++) {
       const mins = grid[d]?.[h] ?? 0;
       if (mins <= 0) continue;
-      const hourLabel = `${String(h).padStart(2, '0')}:00`;
+      const dayLabel = DAY_LABELS[d] ?? `Thứ ${d + 2}`;
       items.push({
         day: dayLabel,
         hour: hourLabel,

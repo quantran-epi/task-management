@@ -321,6 +321,13 @@ describe('Phase 10: countActiveAdvancedFilters (SRCH-03, D-04)', () => {
     expect(
       countActiveAdvancedFilters({
         ...DEFAULT_TASK_FILTER_STATE,
+        worklogDateRange: ['2026-09-01', '2026-09-30'],
+      })
+    ).toBe(1);
+
+    expect(
+      countActiveAdvancedFilters({
+        ...DEFAULT_TASK_FILTER_STATE,
         jiraFilter: 'all',
       })
     ).toBe(0);
@@ -335,8 +342,9 @@ describe('Phase 10: countActiveAdvancedFilters (SRCH-03, D-04)', () => {
         executionDateRange: ['2026-09-01', '2026-09-30'],
         deadlineRange: ['2026-09-01', '2026-09-30'],
         jiraFilter: 'linked',
+        worklogDateRange: ['2026-09-01', '2026-09-30'],
       })
-    ).toBe(7);
+    ).toBe(8);
   });
 
   it('does not count empty arrays or empty date strings in ranges', () => {
@@ -468,6 +476,42 @@ describe('Phase 10: Multi-Criteria filterTasks & FilterContext (SRCH-01, SRCH-02
     );
 
     expect(res.map((t) => t.id)).toEqual(['task-code', 'task-standalone']);
+  });
+
+  it('filters by worklogDateRange using worklogTaskIds Set', () => {
+    const context: FilterContext = {
+      todayStr: '2026-09-26',
+      worklogTaskIds: new Set(['task-doc']),
+    };
+
+    const res = filterTasks(
+      tasksWithDomain,
+      {
+        ...DEFAULT_TASK_FILTER_STATE,
+        worklogDateRange: ['2026-09-20', '2026-09-25'],
+      },
+      context
+    );
+
+    expect(res.map((t) => t.id)).toEqual(['task-doc']);
+  });
+
+  it('does not filter out tasks if worklogDateRange is set but worklogTaskIds is null/undefined (loading state)', () => {
+    const context: FilterContext = {
+      todayStr: '2026-09-26',
+      worklogTaskIds: null,
+    };
+
+    const res = filterTasks(
+      tasksWithDomain,
+      {
+        ...DEFAULT_TASK_FILTER_STATE,
+        worklogDateRange: ['2026-09-20', '2026-09-25'],
+      },
+      context
+    );
+
+    expect(res.length).toBe(tasksWithDomain.length);
   });
 
   it('does not filter out tasks if executionDateRange is set but executionTaskIds is null/undefined (loading state)', () => {

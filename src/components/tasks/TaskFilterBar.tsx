@@ -284,6 +284,39 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
               </div>
             </Col>
 
+            {/* Field: Worklog Date Range */}
+            <Col xs={24} sm={12} lg={6}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
+                  Ngày có worklog:
+                </span>
+                <DatePicker.RangePicker
+                  style={{ width: '100%' }}
+                  placeholder={['Từ ngày', 'Đến ngày']}
+                  format="YYYY-MM-DD"
+                  value={
+                    filters.worklogDateRange && filters.worklogDateRange[0] && filters.worklogDateRange[1]
+                      ? [dayjs(filters.worklogDateRange[0]), dayjs(filters.worklogDateRange[1])]
+                      : null
+                  }
+                  onChange={(dates: [Dayjs | null, Dayjs | null] | null) => {
+                    if (dates && dates[0] && dates[1]) {
+                      onFilterChange({
+                        worklogDateRange: [
+                          dates[0].format('YYYY-MM-DD'),
+                          dates[1].format('YYYY-MM-DD'),
+                        ],
+                      });
+                    } else {
+                      onFilterChange({ worklogDateRange: null });
+                    }
+                  }}
+                  allowClear
+                  aria-label="Khoảng ngày có worklog"
+                />
+              </div>
+            </Col>
+
             {/* Field 2: Deadline Range */}
             <Col xs={24} sm={12} lg={6}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>

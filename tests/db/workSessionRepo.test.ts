@@ -10,6 +10,7 @@ import {
   getTaskSpentMinutes,
   getMilestoneSpentMinutes,
   getProjectSpentMinutes,
+  getTaskIdsWithWorkSessionsInRange,
 } from '../../src/db/repositories/workSessionRepo';
 import type { Task, Project, Milestone } from '../../src/types/models';
 
@@ -221,5 +222,42 @@ describe('workSessionRepo (D-06, D-09, D-10, D-11, TIMER-01, TIMER-05)', () => {
     // Rollup 3: Project spent = Milestone (100m) + Direct Task (50m) = 150m
     const projectSpent = await getProjectSpentMinutes(sampleProjectId, db);
     expect(projectSpent).toBe(150);
+  });
+
+  it('getTaskIdsWithWorkSessionsInRange returns unique task IDs for sessions in date range', async () => {
+    await createWorkSession(
+      {
+        taskId: sampleTaskId1,
+        startTime: '2026-10-01T10:00:00.000Z',
+        durationMinutes: 30,
+      },
+      db
+    );
+    await createWorkSession(
+      {
+        taskId: sampleTaskId2,
+        startTime: '2026-10-02T10:00:00.000Z',
+        durationMinutes: 45,
+      },
+      db
+    );
+
+    // Both inside Oct 1 - Oct 2
+    const taskIdsAll = await getTaskIdsWithWorkSessionsInRange('2026-10-01', '2026-10-02', db);
+    expect(taskIdsAll.has(sampleTaskId1)).toBe(true);
+    expect(taskIdsAll.has(sampleTaskId2)).toBe(true);
+    expect(taskIdsAll.size).toBe(2);
+
+    // Only Oct 1
+    const taskIdsOct1 = await getTaskIdsWithWorkSessionsInRange('2026-10-01', '2026-10-01', db);
+    expect(taskIdsOct1.has(sampleTaskId1)).toBe(true);
+    expect(taskIdsOct1.has(sampleTaskId2)).toBe(false);
+
+    // Invalid range or out of range
+    const emptySet = await getTaskIdsWithWorkSessionsInRange('2026-10-05', '2026-10-06', db);
+    expect(emptySet.size).toBe(0);
+
+    const invertedRange = await getTaskIdsWithWorkSessionsInRange('2026-10-05', '2026-10-01', db);
+    expect(invertedRange.size).toBe(0);
   });
 });

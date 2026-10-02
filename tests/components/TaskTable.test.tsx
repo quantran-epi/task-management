@@ -291,7 +291,7 @@ describe('TaskTable Component', () => {
             name: 'Task with doc link',
             status: 'Open',
             priority: 'Medium',
-            workType: 'other',
+            workType: 'document',
             estimateMinutes: 30,
             progress: 0,
             documentLinks: ['/Users/test/workspace/project'],

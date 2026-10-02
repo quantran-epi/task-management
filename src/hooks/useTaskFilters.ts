@@ -13,6 +13,7 @@ import {
 } from '../utils/filter';
 import { getTodayDateString } from '../utils/date';
 import { getTaskIdsWithAllocationsInRange } from '../db/repositories/allocationRepo';
+import { getTaskIdsWithWorkSessionsInRange } from '../db/repositories/workSessionRepo';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 
 export const STORAGE_SORT_KEY = 'planner:task_table_sort';
@@ -122,6 +123,20 @@ export function useTaskFilters(
     [executionRangeStart, executionRangeEnd, db]
   );
 
+  const worklogRangeStart = filters.worklogDateRange?.[0];
+  const worklogRangeEnd = filters.worklogDateRange?.[1];
+
+  // Reactive Dexie query for worklog date range
+  const worklogTaskIds = useLiveQuery(
+    async () => {
+      if (worklogRangeStart && worklogRangeEnd) {
+        return await getTaskIdsWithWorkSessionsInRange(worklogRangeStart, worklogRangeEnd, db);
+      }
+      return null;
+    },
+    [worklogRangeStart, worklogRangeEnd, db]
+  );
+
   const activeFilterCount = useMemo(() => countActiveAdvancedFilters(filters), [filters]);
 
   const filteredTasks = useMemo(() => {
@@ -134,6 +149,7 @@ export function useTaskFilters(
       projectMap,
       milestoneMap,
       executionTaskIds: executionTaskIds ?? null,
+      worklogTaskIds: worklogTaskIds ?? null,
     });
     return sortTasks(matched, sortField, sortOrder, globalSort);
   }, [
@@ -147,6 +163,7 @@ export function useTaskFilters(
     projectMap,
     milestoneMap,
     executionTaskIds,
+    worklogTaskIds,
   ]);
 
   return {

@@ -24,6 +24,14 @@ export const ProductivityHeatmapChart: React.FC<ProductivityHeatmapChartProps> =
     mark: 'cell' as const,
     height,
     autoFit: true,
+    scale: {
+      x: {
+        domain: Array.from(new Set(data.map((d) => d.hour))).sort(),
+      },
+      y: {
+        domain: ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'],
+      },
+    },
     legend: {
       color: {
         title: 'Thời gian (giờ)',

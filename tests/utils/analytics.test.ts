@@ -105,11 +105,47 @@ describe('analytics utilities', () => {
     expect(breakdown[1]?.hours).toBe(2.5);
   });
 
-  it('aggregates productivity heatmap with only active cells', () => {
-    const heatmap = aggregateProductivityHeatmap(mockSessions);
+  it('aggregates productivity heatmap with only active cells in chronological hour order', () => {
+    // Session on Friday (d=4) at 10h, session on Monday (d=0) at 14h, session on Tuesday (d=1) at 09h
+    const testSessions: WorkSession[] = [
+      {
+        id: 'ts-1',
+        taskId: 'task-1',
+        date: '2026-10-02',
+        startTime: '2026-10-02T10:00:00.000Z',
+        durationMinutes: 60,
+        createdAt: '2026-10-02T10:00:00.000Z',
+        updatedAt: '2026-10-02T10:00:00.000Z',
+      },
+      {
+        id: 'ts-2',
+        taskId: 'task-1',
+        date: '2026-09-28',
+        startTime: '2026-09-28T14:00:00.000Z',
+        durationMinutes: 60,
+        createdAt: '2026-09-28T14:00:00.000Z',
+        updatedAt: '2026-09-28T14:00:00.000Z',
+      },
+      {
+        id: 'ts-3',
+        taskId: 'task-1',
+        date: '2026-09-29',
+        startTime: '2026-09-29T09:00:00.000Z',
+        durationMinutes: 60,
+        createdAt: '2026-09-29T09:00:00.000Z',
+        updatedAt: '2026-09-29T09:00:00.000Z',
+      },
+    ];
+
+    const heatmap = aggregateProductivityHeatmap(testSessions);
     // Only non-zero cells returned
-    expect(heatmap.length).toBeGreaterThan(0);
+    expect(heatmap.length).toBe(3);
     expect(heatmap.every((h) => h.minutes > 0)).toBe(true);
+
+    // Hours must be strictly chronological
+    const hours = heatmap.map((h) => h.hour);
+    expect(hours).toEqual([...hours].sort());
+    expect(hours.length).toBe(3);
   });
 
   it('excludes items with 0 hours in estimate vs actual', () => {

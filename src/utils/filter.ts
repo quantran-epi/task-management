@@ -17,6 +17,7 @@ export interface TaskFilterState {
   executionDateRange: [string, string] | null;
   deadlineRange: [string, string] | null;
   jiraFilter: 'all' | 'linked' | 'unlinked';
+  worklogDateRange: [string, string] | null;
 }
 
 export const DEFAULT_TASK_FILTER_STATE: TaskFilterState = {
@@ -34,6 +35,7 @@ export const DEFAULT_TASK_FILTER_STATE: TaskFilterState = {
   executionDateRange: null,
   deadlineRange: null,
   jiraFilter: 'all',
+  worklogDateRange: null,
 };
 
 export interface FilterContext {
@@ -41,6 +43,7 @@ export interface FilterContext {
   projectMap?: Map<string, Project>;
   milestoneMap?: Map<string, Milestone>;
   executionTaskIds?: Set<string> | null;
+  worklogTaskIds?: Set<string> | null;
 }
 
 /**
@@ -56,6 +59,7 @@ export function countActiveAdvancedFilters(filters: TaskFilterState): number {
   if (filters.executionDateRange && filters.executionDateRange[0] && filters.executionDateRange[1]) count++;
   if (filters.deadlineRange && filters.deadlineRange[0] && filters.deadlineRange[1]) count++;
   if (filters.jiraFilter && filters.jiraFilter !== 'all') count++;
+  if (filters.worklogDateRange && filters.worklogDateRange[0] && filters.worklogDateRange[1]) count++;
   return count;
 }
 
@@ -114,7 +118,7 @@ export function filterTasks(
 ): Task[] {
   const normalizedContext: FilterContext =
     typeof context === 'string' ? { todayStr: context } : context;
-  const { todayStr, projectMap, milestoneMap, executionTaskIds } = normalizedContext;
+  const { todayStr, projectMap, milestoneMap, executionTaskIds, worklogTaskIds } = normalizedContext;
 
   const searchTerm = filterState.search.trim().toLowerCase();
 
@@ -214,6 +218,19 @@ export function filterTasks(
       executionTaskIds !== undefined
     ) {
       if (!executionTaskIds.has(task.id)) {
+        return false;
+      }
+    }
+
+    // 9b. Worklog date range filter via worklogTaskIds Set
+    if (
+      filterState.worklogDateRange &&
+      filterState.worklogDateRange[0] &&
+      filterState.worklogDateRange[1] &&
+      worklogTaskIds !== null &&
+      worklogTaskIds !== undefined
+    ) {
+      if (!worklogTaskIds.has(task.id)) {
         return false;
       }
     }

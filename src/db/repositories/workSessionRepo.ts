@@ -266,6 +266,35 @@ export async function getWorkSessionsForWeek(
 }
 
 /**
+ * Queries Dexie workSessions on indexed date and returns unique Set of matching taskIds.
+ * Filters out sessions where durationMinutes <= 0.
+ * Returns empty Set if dates are empty or startDate > endDate.
+ */
+export async function getTaskIdsWithWorkSessionsInRange(
+  startDate: string,
+  endDate: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<Set<string>> {
+  if (!startDate || !endDate || startDate > endDate) {
+    return new Set<string>();
+  }
+
+  const sessions = await db.workSessions
+    .where('date')
+    .between(startDate, endDate, true, true)
+    .toArray();
+
+  const taskIds = new Set<string>();
+  for (const session of sessions) {
+    if (session.taskId && session.durationMinutes > 0) {
+      taskIds.add(session.taskId);
+    }
+  }
+
+  return taskIds;
+}
+
+/**
  * Active timer repository functions (survive reload per D-04, TIMER-02).
  */
 export async function getActiveTimers(
