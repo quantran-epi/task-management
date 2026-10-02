@@ -104,11 +104,29 @@ describe('analytics utilities', () => {
     expect(breakdown[1]?.hours).toBe(2.5);
   });
 
-  it('aggregates productivity heatmap with 7x24 grid', () => {
+  it('aggregates productivity heatmap with only active cells', () => {
     const heatmap = aggregateProductivityHeatmap(mockSessions);
-    expect(heatmap.length).toBe(7 * 24); // 168 cells
-    const nonZero = heatmap.filter((h) => h.minutes > 0);
-    expect(nonZero.length).toBeGreaterThan(0);
+    // Only non-zero cells returned
+    expect(heatmap.length).toBeGreaterThan(0);
+    expect(heatmap.every((h) => h.minutes > 0)).toBe(true);
+  });
+
+  it('excludes items with 0 hours in estimate vs actual', () => {
+    const taskOnlyEstimate: Task = {
+      id: 'task-no-work',
+      name: 'Task chưa làm',
+      status: 'Open',
+      priority: 'Low',
+      progress: 0,
+      estimateMinutes: 60,
+      createdAt: '2026-10-01T00:00:00.000Z',
+      updatedAt: '2026-10-01T00:00:00.000Z',
+    };
+    const data = aggregateEstimateVsActual([taskOnlyEstimate], []);
+    // Only estimate item, no 0-hour actual item
+    expect(data.length).toBe(1);
+    expect(data[0]?.type).toBe('Ước tính (giờ)');
+    expect(data[0]?.hours).toBe(1);
   });
 
   it('filters sessions by period correctly', () => {

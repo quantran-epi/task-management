@@ -12,8 +12,7 @@ export const ProductivityHeatmapChart: React.FC<ProductivityHeatmapChartProps> =
   data,
   height = 360,
 }) => {
-  const hasData = data.some((d) => d.minutes > 0);
-  if (!hasData) {
+  if (data.length === 0) {
     return <Empty description="Chưa có dữ liệu phiên làm việc trong khoảng thời gian này" />;
   }
 

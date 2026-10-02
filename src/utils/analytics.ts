@@ -73,16 +73,20 @@ export function aggregateEstimateVsActual(
 
   const result: EstimateVsActualItem[] = [];
   for (const item of taskData) {
-    result.push({
-      task: item.taskName,
-      type: 'Ước tính (giờ)',
-      hours: item.estimateHours,
-    });
-    result.push({
-      task: item.taskName,
-      type: 'Thực tế (giờ)',
-      hours: item.actualHours,
-    });
+    if (item.estimateHours > 0) {
+      result.push({
+        task: item.taskName,
+        type: 'Ước tính (giờ)',
+        hours: item.estimateHours,
+      });
+    }
+    if (item.actualHours > 0) {
+      result.push({
+        task: item.taskName,
+        type: 'Thực tế (giờ)',
+        hours: item.actualHours,
+      });
+    }
   }
 
   return result;
@@ -116,6 +120,7 @@ export function aggregateWorkTypeBreakdown(
       minutes: mins,
       hours: Math.round((mins / 60) * 10) / 10,
     }))
+    .filter((item) => item.minutes > 0 && item.hours > 0)
     .sort((a, b) => b.minutes - a.minutes);
 }
 
@@ -182,8 +187,9 @@ export function aggregateProductivityHeatmap(
   for (let d = 0; d < 7; d++) {
     const dayLabel = DAY_LABELS[d] ?? `Thứ ${d + 2}`;
     for (let h = 0; h < 24; h++) {
-      const hourLabel = `${String(h).padStart(2, '0')}:00`;
       const mins = grid[d]?.[h] ?? 0;
+      if (mins <= 0) continue;
+      const hourLabel = `${String(h).padStart(2, '0')}:00`;
       items.push({
         day: dayLabel,
         hour: hourLabel,
