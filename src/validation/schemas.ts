@@ -350,6 +350,7 @@ export const NoteAttachmentSchema = z.object({
   mimeType: z.enum(NOTE_ATTACHMENT_MIME_TYPES),
   sizeBytes: z.number().int().min(1).max(5 * 1024 * 1024, 'Kích thước tệp tối đa 5MB'),
   caption: z.string().max(250, 'Chú thích tối đa 250 ký tự').optional(),
+  filePath: z.string().optional(),
   createdAt: z.string().datetime({ message: 'createdAt must be a valid ISO 8601 string' }),
 });
 

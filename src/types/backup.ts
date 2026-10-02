@@ -15,7 +15,8 @@ export interface BackupAttachmentRecord {
   fileName: string;
   mimeType: string;
   sizeBytes: number;
-  data: string; // Base64 Data URL (e.g. data:image/png;base64,...)
+  data?: string | undefined; // Base64 Data URL (optional: omitted for lightweight remote sync)
+  filePath?: string | undefined; // Local disk file path
   caption?: string | undefined;
   createdAt: string;
 }

@@ -70,8 +70,13 @@ export function generateBackupFileName(date: Date = new Date()): string {
  * assembling the standard envelope, logging export history to backupMetadata,
  * and returning the BackupEnvelope.
  */
+export interface ExportBackupOptions {
+  excludeAttachmentData?: boolean;
+}
+
 export async function exportBackupPayload(
-  targetDb: TaskPlannerDatabase = defaultDb
+  targetDb: TaskPlannerDatabase = defaultDb,
+  options?: ExportBackupOptions
 ): Promise<BackupEnvelope> {
   const [
     projects,
@@ -95,6 +100,8 @@ export async function exportBackupPayload(
     targetDb.noteAttachments.toArray(),
   ]);
 
+  const excludeData = options?.excludeAttachmentData ?? false;
+
   const noteAttachments = await Promise.all(
     rawAttachments.map(async (att) => ({
       id: att.id,
@@ -102,7 +109,8 @@ export async function exportBackupPayload(
       fileName: att.fileName,
       mimeType: att.mimeType,
       sizeBytes: att.sizeBytes,
-      data: await blobToBase64(att.data, att.mimeType),
+      filePath: att.filePath || `attachments/${att.id}_${att.fileName}`,
+      ...(excludeData ? {} : { data: await blobToBase64(att.data, att.mimeType) }),
       ...(att.caption ? { caption: att.caption } : {}),
       createdAt: att.createdAt,
     }))

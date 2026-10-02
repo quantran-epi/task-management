@@ -181,5 +181,6 @@ export interface NoteAttachment {
   caption?: string | undefined;
   createdAt: string; // ISO string metadata
   data: Blob; // Binary image payload
+  filePath?: string | undefined; // Local disk file path
 }
 

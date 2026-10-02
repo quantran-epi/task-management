@@ -166,5 +166,43 @@ describe('Note Attachments & Backup Serialization', () => {
       const restoredText = await restoredAttachments[0]!.data.text();
       expect(restoredText).toBe(blobData);
     });
+
+    it('exports backup without image binary data when excludeAttachmentData is true', async () => {
+      const note = await createNote({
+        title: 'Note with local path',
+        body: 'Testing path backup',
+        entityType: 'project',
+      });
+
+      await addNoteAttachment({
+        noteId: note.id,
+        fileName: 'screenshot-local.png',
+        mimeType: 'image/png',
+        sizeBytes: 2048,
+        data: new Blob(['dummy-binary'], { type: 'image/png' }),
+        filePath: '/Users/me/Documents/screenshot-local.png',
+      });
+
+      const backup = await exportBackupPayload(db, { excludeAttachmentData: true });
+      expect((backup.tables as any).noteAttachments).toHaveLength(1);
+
+      const exportedAtt = (backup.tables as any).noteAttachments[0];
+      expect(exportedAtt.filePath).toBe('/Users/me/Documents/screenshot-local.png');
+      expect(exportedAtt.data).toBeUndefined();
+
+      // Validation passes without data
+      const validation = validateBackupPayload(backup);
+      expect(validation.valid).toBe(true);
+
+      // Restore handles attachment without data
+      await db.notes.clear();
+      await db.noteAttachments.clear();
+
+      await restoreBackupPayload(backup);
+      const restored = await db.noteAttachments.toArray();
+      expect(restored).toHaveLength(1);
+      expect(restored[0]?.filePath).toBe('/Users/me/Documents/screenshot-local.png');
+      expect(restored[0]?.fileName).toBe('screenshot-local.png');
+    });
   });
 });

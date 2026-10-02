@@ -97,8 +97,8 @@ export async function executeGitHubBackupPush(
     }
   }
 
-  // 3. Export local domain data (D-13)
-  const envelope = await exportBackupPayload(db);
+  // 3. Export local domain data without heavy image binaries (path only)
+  const envelope = await exportBackupPayload(db, { excludeAttachmentData: true });
 
   // 4. Encrypt payload (D-10, D-11)
   const encryptedEnvelope = await encryptPayload(JSON.stringify(envelope), passphrase);

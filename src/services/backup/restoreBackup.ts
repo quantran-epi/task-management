@@ -165,7 +165,8 @@ export async function restoreBackupPayload(
           fileName: att.fileName,
           mimeType: att.mimeType,
           sizeBytes: att.sizeBytes,
-          data: base64ToBlob(att.data, att.mimeType),
+          data: att.data ? base64ToBlob(att.data, att.mimeType) : new Blob([], { type: att.mimeType }),
+          ...(att.filePath ? { filePath: att.filePath } : {}),
           ...(att.caption ? { caption: att.caption } : {}),
           createdAt: att.createdAt,
         }));
@@ -265,7 +266,8 @@ export async function rollbackToSnapshot(
           fileName: att.fileName,
           mimeType: att.mimeType,
           sizeBytes: att.sizeBytes,
-          data: base64ToBlob(att.data, att.mimeType),
+          data: att.data ? base64ToBlob(att.data, att.mimeType) : new Blob([], { type: att.mimeType }),
+          ...(att.filePath ? { filePath: att.filePath } : {}),
           ...(att.caption ? { caption: att.caption } : {}),
           createdAt: att.createdAt,
         }));

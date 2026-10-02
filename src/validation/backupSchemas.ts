@@ -169,10 +169,14 @@ export const BackupNoteAttachmentRecordSchema = z.object({
   noteId: uuidSchema,
   fileName: z.string().min(1).max(255),
   mimeType: z.enum(['image/png', 'image/jpeg', 'image/gif', 'image/webp']),
-  sizeBytes: z.number().int().min(1).max(5 * 1024 * 1024),
-  data: z.string().refine((val) => /^data:image\/(png|jpeg|gif|webp);base64,/i.test(val), {
-    message: 'data must be a valid base64 image data URL',
-  }),
+  sizeBytes: z.number().int().min(0).max(50 * 1024 * 1024),
+  data: z
+    .string()
+    .refine((val) => /^data:image\/(png|jpeg|gif|webp);base64,/i.test(val), {
+      message: 'data must be a valid base64 image data URL',
+    })
+    .optional(),
+  filePath: z.string().optional(),
   caption: z.string().max(250).optional(),
   createdAt: z.string(),
 });

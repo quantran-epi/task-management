@@ -129,6 +129,7 @@ export async function addNoteAttachment(
     sizeBytes: number;
     data: Blob;
     caption?: string | undefined;
+    filePath?: string | undefined;
   },
   db: TaskPlannerDatabase = defaultDb
 ): Promise<NoteAttachment> {
@@ -143,6 +144,7 @@ export async function addNoteAttachment(
     mimeType: input.mimeType,
     sizeBytes: input.sizeBytes,
     caption: input.caption,
+    filePath: input.filePath,
     createdAt: now,
   });
 
@@ -168,6 +170,7 @@ export async function addNoteAttachment(
       mimeType: input.mimeType,
       sizeBytes: input.sizeBytes,
       data: input.data,
+      ...(input.filePath ? { filePath: input.filePath } : {}),
       ...(input.caption?.trim() ? { caption: input.caption.trim() } : {}),
       createdAt: now,
     };
