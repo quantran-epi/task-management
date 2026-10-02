@@ -31,6 +31,12 @@ export interface ReminderItem {
   note?: string | undefined;
 }
 
+export interface TaskChecklistItem {
+  id: string; // crypto.randomUUID()
+  text: string;
+  completed: boolean;
+}
+
 export interface Project {
   id: string; // RFC 4122 v4 UUID
   name: string;
@@ -66,6 +72,12 @@ export interface Milestone {
   updatedAt: string;
 }
 
+export interface TaskChecklistItem {
+  id: string;
+  text: string;
+  done: boolean;
+}
+
 export interface Task {
   id: string; // RFC 4122 v4 UUID
   projectId?: string; // Optional reference to Project.id
@@ -88,6 +100,7 @@ export interface Task {
   reminderDate?: string; // YYYY-MM-DD
   reminderNote?: string;
   reminders?: ReminderItem[];
+  checklist?: TaskChecklistItem[];
   isRecurring?: boolean;
   recurrenceFrequency?: RecurrenceFrequency;
   recurrenceInterval?: number; // e.g. 1 (every 1 day/week/month)

@@ -42,6 +42,7 @@ export async function createTask(
   if (validated.reminderDate !== undefined) task.reminderDate = validated.reminderDate;
   if (validated.reminderNote !== undefined) task.reminderNote = validated.reminderNote;
   if (validated.reminders !== undefined) task.reminders = validated.reminders;
+  if (validated.checklist !== undefined) task.checklist = validated.checklist;
   if (validated.isRecurring !== undefined) task.isRecurring = validated.isRecurring;
   if (validated.recurrenceFrequency !== undefined) task.recurrenceFrequency = validated.recurrenceFrequency;
   if (validated.recurrenceInterval !== undefined) task.recurrenceInterval = validated.recurrenceInterval;
@@ -133,6 +134,13 @@ export async function updateTask(
       updated.reminders = validated.reminders;
     } else {
       delete updated.reminders;
+    }
+  }
+  if ('checklist' in patch) {
+    if (validated.checklist !== undefined) {
+      updated.checklist = validated.checklist;
+    } else {
+      delete updated.checklist;
     }
   }
   if ('isRecurring' in patch) {

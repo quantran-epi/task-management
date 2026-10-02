@@ -27,6 +27,7 @@ import type {
   TaskPriority,
   WorkType,
   RecurrenceFrequency,
+  TaskChecklistItem,
 } from '../../types/models';
 import { WORK_TYPES } from '../../types/models';
 import { getTask, updateTask, reparentTask } from '../../db/repositories/taskRepo';
@@ -40,6 +41,7 @@ import { WorkSessionsTab } from './WorkSessionsTab';
 import { EntityNotesSection } from '../notes/EntityNotesSection';
 import { TagSelect } from '../common/TagSelect';
 import { RemindersFormList, formatRemindersForForm, formatRemindersForSave } from '../common/RemindersFormList';
+import { TaskChecklistSection } from './TaskChecklistSection';
 import { WORK_TYPE_CONFIG } from './WorkTypeBadge';
 import { resolveInheritedTags } from '../../domain/inheritance';
 import type { TaskPlannerDatabase } from '../../db';
@@ -72,6 +74,7 @@ interface TaskDrawerFormValues {
   reminderDate?: Dayjs | null;
   reminderNote?: string;
   reminders?: unknown[];
+  checklist?: TaskChecklistItem[];
   notes?: string;
   isRecurring?: boolean;
   recurrenceFrequency?: RecurrenceFrequency;
@@ -208,6 +211,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
               ? dayjs(taskData.actualEndDate, 'YYYY-MM-DD')
               : null,
             progress: taskData.progress,
+            checklist: taskData.checklist ?? [],
             documentLinks: taskData.documentLinks ?? [],
             reminders: formatRemindersForForm(taskData),
             notes: taskData.notes ?? '',
@@ -326,6 +330,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
           reminders: savedReminders ?? [],
           reminderDate: savedReminders?.[0]?.date,
           reminderNote: savedReminders?.[0]?.note,
+          checklist: values.checklist ?? [],
           notes: values.notes?.trim() ? values.notes : undefined,
           projectId: targetProjectId,
           milestoneId: targetMilestoneId,
@@ -685,6 +690,16 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                 />
               </Form.Item>
             </div>
+          </Form.Item>
+
+          <Form.Item label="Danh sách việc cần làm (Checklist)">
+            <Form.Item name="checklist" noStyle>
+              <TaskChecklistSection
+                onSyncProgress={(pct) => {
+                  form.setFieldValue('progress', pct);
+                }}
+              />
+            </Form.Item>
           </Form.Item>
         </>
       )}

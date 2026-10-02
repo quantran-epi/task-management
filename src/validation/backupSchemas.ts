@@ -75,6 +75,12 @@ export const BackupMilestoneRecordSchema = z.object({
   updatedAt: z.string(),
 });
 
+export const BackupTaskChecklistItemSchema = z.object({
+  id: z.string(),
+  text: z.string(),
+  done: z.boolean(),
+});
+
 export const BackupTaskRecordSchema = z.object({
   id: uuidSchema,
   projectId: uuidSchema.optional(),
@@ -97,6 +103,7 @@ export const BackupTaskRecordSchema = z.object({
   reminderDate: reminderDateSchema.optional(),
   reminderNote: reminderNoteSchema,
   reminders: remindersArraySchema,
+  checklist: z.array(BackupTaskChecklistItemSchema).optional(),
   isRecurring: z.boolean().optional(),
   recurrenceFrequency: z.enum(['daily', 'weekly', 'monthly']).optional(),
   recurrenceInterval: z.number().int().min(1).max(365).optional(),

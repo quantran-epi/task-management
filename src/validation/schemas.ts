@@ -116,6 +116,17 @@ export const remindersArraySchema = z
   .max(5, 'Tối đa 5 nhắc nhở cho mỗi mục')
   .optional();
 
+export const checklistItemSchema = z.object({
+  id: z.string().min(1),
+  text: z.string().trim().min(1, 'Nội dung công việc con không được trống').max(300, 'Nội dung công việc con tối đa 300 ký tự'),
+  done: z.boolean(),
+});
+
+export const checklistArraySchema = z
+  .array(checklistItemSchema)
+  .max(50, 'Tối đa 50 mục checklist')
+  .optional();
+
 const linkSchema = z
   .string()
   .min(1, 'Link must not be empty')
@@ -207,6 +218,7 @@ export const TaskInputSchema = z.object({
   reminderDate: reminderDateSchema.optional(),
   reminderNote: reminderNoteSchema,
   reminders: remindersArraySchema,
+  checklist: checklistArraySchema,
   isRecurring: z.boolean().optional(),
   recurrenceFrequency: recurrenceFrequencySchema.optional(),
   recurrenceInterval: z.number().int().min(1).max(365).optional(),
@@ -236,6 +248,7 @@ export const TaskUpdateSchema = z.object({
   reminderDate: reminderDateSchema.optional(),
   reminderNote: reminderNoteSchema,
   reminders: remindersArraySchema,
+  checklist: checklistArraySchema,
   isRecurring: z.boolean().optional(),
   recurrenceFrequency: recurrenceFrequencySchema.optional(),
   recurrenceInterval: z.number().int().min(1).max(365).optional(),
