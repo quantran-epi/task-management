@@ -75,3 +75,46 @@ pub fn open_external_url(url: String) -> Result<(), String> {
 
     open::that(trimmed).map_err(|e| format!("Failed to open URL in system browser: {}", e))
 }
+
+#[tauri::command]
+pub fn open_local_path(path: String) -> Result<(), String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err("Path cannot be empty".to_string());
+    }
+
+    // Clean file:// URI prefix if present
+    let mut clean_path = trimmed;
+    if clean_path.to_lowercase().starts_with("file://") {
+        clean_path = &clean_path[7..];
+        // On Windows, file:///C:/path might leave /C:/path
+        #[cfg(target_os = "windows")]
+        if clean_path.starts_with('/') && clean_path.len() > 3 && clean_path.chars().nth(2) == Some(':') {
+            clean_path = &clean_path[1..];
+        }
+    }
+
+    let p = std::path::Path::new(clean_path);
+    if !p.exists() {
+        return Err(format!("Đường dẫn không tồn tại: {}", clean_path));
+    }
+
+    open::that(clean_path).map_err(|e| format!("Không thể mở đường dẫn hệ thống: {}", e))
+}
+
+#[tauri::command]
+pub fn select_local_folder() -> Result<Option<String>, String> {
+    Ok(rfd::FileDialog::new()
+        .set_title("Chọn thư mục liên kết")
+        .pick_folder()
+        .map(|path| path.to_string_lossy().to_string()))
+}
+
+#[tauri::command]
+pub fn select_local_file() -> Result<Option<String>, String> {
+    Ok(rfd::FileDialog::new()
+        .set_title("Chọn tập tin liên kết")
+        .pick_file()
+        .map(|path| path.to_string_lossy().to_string()))
+}
+
