@@ -29,6 +29,40 @@ export async function fetchRemoteBackupMetadata(
     });
 
     if (response.status === 404) {
+      // Diagnostic check: verify if the repository itself or branch is accessible
+      try {
+        const repoUrl = `https://api.github.com/repos/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}`;
+        const repoRes = await fetch(repoUrl, {
+          headers: {
+            Accept: 'application/vnd.github.v3+json',
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        if (repoRes && repoRes.status === 404) {
+          throw new Error(
+            `Không tìm thấy kho lưu trữ "${config.owner}/${config.repo}" hoặc Token không có quyền truy cập kho này. Vui lòng kiểm tra lại quyền PAT.`
+          );
+        }
+        if (repoRes && repoRes.ok) {
+          const branchUrl = `https://api.github.com/repos/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}/branches/${encodeURIComponent(config.branch)}`;
+          const branchRes = await fetch(branchUrl, {
+            headers: {
+              Accept: 'application/vnd.github.v3+json',
+              Authorization: `Bearer ${token}`,
+            },
+          });
+          if (branchRes && branchRes.status === 404) {
+            throw new Error(
+              `Kho lưu trữ "${config.owner}/${config.repo}" không tồn tại nhánh "${config.branch}". Vui lòng kiểm tra lại cấu hình nhánh.`
+            );
+          }
+        }
+      } catch (err: unknown) {
+        if (err instanceof Error && (err.message.includes('kho lưu trữ') || err.message.includes('nhánh'))) {
+          throw err;
+        }
+      }
+
       return { exists: false };
     }
 
@@ -44,13 +78,36 @@ export async function fetchRemoteBackupMetadata(
       content?: string;
     };
 
+    let contentBase64 = data.content ? data.content.replace(/\s+/g, '') : undefined;
+
+    // GitHub Contents API omits `content` if file is > 1MB. Fall back to Git Blobs API (supports up to 100MB).
+    if (!contentBase64 && data.sha) {
+      try {
+        const blobUrl = `https://api.github.com/repos/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}/git/blobs/${data.sha}`;
+        const blobRes = await fetch(blobUrl, {
+          headers: {
+            Accept: 'application/vnd.github.v3+json',
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        if (blobRes && blobRes.ok) {
+          const blobData = (await blobRes.json()) as { content?: string };
+          if (blobData.content) {
+            contentBase64 = blobData.content.replace(/\s+/g, '');
+          }
+        }
+      } catch {
+        // Fall back to undefined if blob retrieval fails
+      }
+    }
+
     const lastModifiedHeader = response.headers.get('last-modified');
 
     return {
       exists: true,
       sha: data.sha,
       size: data.size,
-      contentBase64: data.content ? data.content.replace(/\s+/g, '') : undefined,
+      contentBase64,
       lastModified: lastModifiedHeader ?? undefined,
     };
   } catch (err: unknown) {

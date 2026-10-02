@@ -163,8 +163,15 @@ export async function executeGitHubBackupPull(
 
   // 1. Fetch remote backup file metadata
   const meta = await fetchRemoteBackupMetadata(config, token);
-  if (!meta.exists || !meta.contentBase64) {
+  if (!meta.exists) {
     throw new GitHubPullError('NOT_FOUND', 'Chưa có bản sao lưu trên GitHub');
+  }
+  if (!meta.contentBase64) {
+    throw new GitHubPullError(
+      'INVALID_ENVELOPE',
+      'Không thể đọc nội dung tệp sao lưu từ GitHub (tệp có thể quá lớn hoặc lỗi tải blob)',
+      { remoteSha: meta.sha }
+    );
   }
 
   // 2. Decode Base64 to raw UTF-8 JSON
