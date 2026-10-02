@@ -3,6 +3,7 @@ import type { JiraTransitionItem, JiraStatusMapping } from './types';
 
 export const LOCAL_TASK_STATUSES: readonly TaskStatus[] = [
   'Open',
+  'Pending',
   'In Progress',
   'In Review',
   'Resolved',
@@ -12,6 +13,7 @@ export const LOCAL_TASK_STATUSES: readonly TaskStatus[] = [
 
 export const DEFAULT_JIRA_STATUS_MAPPINGS: Record<TaskStatus, string[]> = {
   Open: ['10000', '1', 'to do', 'open', 'backlog'],
+  Pending: ['pending', 'waiting', 'on hold'],
   'In Progress': ['3', 'in progress'],
   'In Review': ['review', 'code review', 'peer review', 'pr'],
   Resolved: ['resolved', 'testing', 'qa', 'uat', 'verify'],
@@ -135,7 +137,16 @@ export function mapJiraStatusToLocalTaskStatus(
     return 'Done';
   }
 
-  // 3. Resolved / Testing
+  // 3. Pending
+  if (
+    /\bpending\b/.test(normName) ||
+    /\bwaiting\b/.test(normName) ||
+    /\bon hold\b/.test(normName)
+  ) {
+    return 'Pending';
+  }
+
+  // 4. Resolved / Testing
   if (
     normName.includes('test') ||
     normName.includes('qa') ||
@@ -146,7 +157,7 @@ export function mapJiraStatusToLocalTaskStatus(
     return 'Resolved';
   }
 
-  // 4. In Review
+  // 5. In Review
   if (
     normName.includes('review') ||
     /\bpr\b/.test(normName) ||
@@ -155,7 +166,7 @@ export function mapJiraStatusToLocalTaskStatus(
     return 'In Review';
   }
 
-  // 5. In Progress
+  // 6. In Progress
   if (
     normCat === 'indeterminate' ||
     normName.includes('in progress') ||
@@ -165,7 +176,7 @@ export function mapJiraStatusToLocalTaskStatus(
     return 'In Progress';
   }
 
-  // 6. Open / To Do
+  // 7. Open / To Do
   if (
     normCat === 'new' ||
     normName.includes('to do') ||

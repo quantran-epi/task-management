@@ -17,6 +17,7 @@ const STATUS_CONFIG: Record<
   { label: string; color: string; style?: React.CSSProperties }
 > = {
   Open: { label: 'Mở', color: 'default' },
+  Pending: { label: 'Chờ xử lý', color: 'gold' },
   'In Progress': { label: 'Đang làm', color: 'processing' },
   Resolved: { label: 'Đã giải quyết', color: 'warning' },
   'In Review': { label: 'Đang duyệt', color: 'cyan' },
@@ -30,6 +31,7 @@ const STATUS_CONFIG: Record<
 
 const ALL_STATUSES: TaskStatus[] = [
   'Open',
+  'Pending',
   'In Progress',
   'Resolved',
   'In Review',

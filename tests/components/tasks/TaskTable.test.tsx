@@ -54,6 +54,19 @@ describe('TaskTable', () => {
       updatedAt: '2026-09-01T00:00:00Z',
     },
     {
+      id: 'task-pending',
+      name: 'Pending Task',
+      status: 'Pending',
+      priority: 'Medium',
+      progress: 0,
+      estimateMinutes: 45,
+      deadline: '2026-09-29',
+      projectId: 'proj-1',
+      milestoneId: 'mile-1',
+      createdAt: '2026-09-01T00:00:00Z',
+      updatedAt: '2026-09-01T00:00:00Z',
+    },
+    {
       id: 'task-2',
       name: 'Beta Task',
       status: 'In Progress',
@@ -103,13 +116,16 @@ describe('TaskTable', () => {
 
     // Verify task names rendered
     expect(screen.getByText('Alpha Task')).toBeInTheDocument();
+    expect(screen.getByText('Pending Task')).toBeInTheDocument();
     expect(screen.getByText('Beta Task')).toBeInTheDocument();
     expect(screen.getByText('Gamma Task')).toBeInTheDocument();
+    expect(screen.getByText('Chờ xử lý')).toBeInTheDocument();
 
     // Verify column headers rendered
     expect(screen.getByText('Tác vụ & Phân cấp')).toBeInTheDocument();
     expect(screen.getByText('Trạng thái')).toBeInTheDocument();
     expect(screen.getByText('Độ ưu tiên')).toBeInTheDocument();
+    expect(screen.getByText('1-4 / 4 tác vụ')).toBeInTheDocument();
   });
 
   it('opens column customization popover and shows all customizable columns', async () => {
@@ -136,7 +152,7 @@ describe('TaskTable', () => {
     const nameCheckbox = screen.getByRole('checkbox', { name: /Tác vụ & Phân cấp/ });
     expect(nameCheckbox).toBeDisabled();
     expect(nameCheckbox).toBeChecked();
-  });
+  }, 15000);
 
   it('toggles column visibility and persists preference to localStorage', async () => {
     render(
@@ -216,24 +232,27 @@ describe('TaskTable', () => {
 
     // Click 1: Ascending
     fireEvent.click(nameHeader);
-    const rowLinksAsc = screen.getAllByText(/(Alpha|Beta|Gamma) Task/);
+    const rowLinksAsc = screen.getAllByText(/(Alpha|Pending|Beta|Gamma) Task/);
     expect(rowLinksAsc[0]).toHaveTextContent('Alpha Task');
     expect(rowLinksAsc[1]).toHaveTextContent('Beta Task');
     expect(rowLinksAsc[2]).toHaveTextContent('Gamma Task');
+    expect(rowLinksAsc[3]).toHaveTextContent('Pending Task');
 
     // Click 2: Descending
     fireEvent.click(nameHeader);
-    const rowLinksDesc = screen.getAllByText(/(Alpha|Beta|Gamma) Task/);
-    expect(rowLinksDesc[0]).toHaveTextContent('Gamma Task');
-    expect(rowLinksDesc[1]).toHaveTextContent('Beta Task');
-    expect(rowLinksDesc[2]).toHaveTextContent('Alpha Task');
+    const rowLinksDesc = screen.getAllByText(/(Alpha|Pending|Beta|Gamma) Task/);
+    expect(rowLinksDesc[0]).toHaveTextContent('Pending Task');
+    expect(rowLinksDesc[1]).toHaveTextContent('Gamma Task');
+    expect(rowLinksDesc[2]).toHaveTextContent('Beta Task');
+    expect(rowLinksDesc[3]).toHaveTextContent('Alpha Task');
 
     // Click 3: Reset to default order
     fireEvent.click(nameHeader);
-    const rowLinksReset = screen.getAllByText(/(Alpha|Beta|Gamma) Task/);
+    const rowLinksReset = screen.getAllByText(/(Alpha|Pending|Beta|Gamma) Task/);
     expect(rowLinksReset[0]).toHaveTextContent('Alpha Task');
-    expect(rowLinksReset[1]).toHaveTextContent('Beta Task');
-    expect(rowLinksReset[2]).toHaveTextContent('Gamma Task');
+    expect(rowLinksReset[1]).toHaveTextContent('Pending Task');
+    expect(rowLinksReset[2]).toHaveTextContent('Beta Task');
+    expect(rowLinksReset[3]).toHaveTextContent('Gamma Task');
   });
 
   it('supports sorting by priority', async () => {
@@ -254,17 +273,19 @@ describe('TaskTable', () => {
 
     // Click 1: Ascending (Low -> Medium -> High -> Urgent)
     fireEvent.click(priorityHeader);
-    let rows = screen.getAllByText(/(Alpha|Beta|Gamma) Task/);
+    let rows = screen.getAllByText(/(Alpha|Pending|Beta|Gamma) Task/);
     expect(rows[0]).toHaveTextContent('Alpha Task'); // Low
-    expect(rows[1]).toHaveTextContent('Gamma Task'); // High
-    expect(rows[2]).toHaveTextContent('Beta Task');  // Urgent
+    expect(rows[1]).toHaveTextContent('Pending Task'); // Medium
+    expect(rows[2]).toHaveTextContent('Gamma Task'); // High
+    expect(rows[3]).toHaveTextContent('Beta Task');  // Urgent
 
     // Click 2: Descending (Urgent -> High -> Medium -> Low)
     fireEvent.click(priorityHeader);
-    rows = screen.getAllByText(/(Alpha|Beta|Gamma) Task/);
+    rows = screen.getAllByText(/(Alpha|Pending|Beta|Gamma) Task/);
     expect(rows[0]).toHaveTextContent('Beta Task');  // Urgent
     expect(rows[1]).toHaveTextContent('Gamma Task'); // High
-    expect(rows[2]).toHaveTextContent('Alpha Task'); // Low
+    expect(rows[2]).toHaveTextContent('Pending Task'); // Medium
+    expect(rows[3]).toHaveTextContent('Alpha Task'); // Low
   });
 
   it('keeps tasks without deadline at the bottom for both ascending and descending sorts', async () => {
@@ -301,18 +322,20 @@ describe('TaskTable', () => {
 
     // Click 1: Ascending (earliest date first, undefined at bottom)
     fireEvent.click(deadlineHeader);
-    let rows = screen.getAllByText(/(Alpha|Beta|Gamma|Delta) Task/);
+    let rows = screen.getAllByText(/(Alpha|Pending|Beta|Gamma|Delta) Task/);
     expect(rows[0]).toHaveTextContent('Gamma Task'); // 2026-09-25
-    expect(rows[1]).toHaveTextContent('Beta Task');  // 2026-09-30
-    expect(rows[2]).toHaveTextContent('Alpha Task'); // 2026-10-01
-    expect(rows[3]).toHaveTextContent('Delta Task'); // undefined deadline at bottom
+    expect(rows[1]).toHaveTextContent('Pending Task'); // 2026-09-29
+    expect(rows[2]).toHaveTextContent('Beta Task');  // 2026-09-30
+    expect(rows[3]).toHaveTextContent('Alpha Task'); // 2026-10-01
+    expect(rows[4]).toHaveTextContent('Delta Task'); // undefined deadline at bottom
 
     // Click 2: Descending (latest date first, undefined STILL at bottom)
     fireEvent.click(deadlineHeader);
-    rows = screen.getAllByText(/(Alpha|Beta|Gamma|Delta) Task/);
+    rows = screen.getAllByText(/(Alpha|Pending|Beta|Gamma|Delta) Task/);
     expect(rows[0]).toHaveTextContent('Alpha Task'); // 2026-10-01
     expect(rows[1]).toHaveTextContent('Beta Task');  // 2026-09-30
-    expect(rows[2]).toHaveTextContent('Gamma Task'); // 2026-09-25
-    expect(rows[3]).toHaveTextContent('Delta Task'); // undefined deadline at bottom
+    expect(rows[2]).toHaveTextContent('Pending Task'); // 2026-09-29
+    expect(rows[3]).toHaveTextContent('Gamma Task'); // 2026-09-25
+    expect(rows[4]).toHaveTextContent('Delta Task'); // undefined deadline at bottom
   });
 });

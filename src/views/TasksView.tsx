@@ -12,6 +12,7 @@ import { BatchActionBar } from '../components/tasks/BatchActionBar';
 import { TaskDrawer } from '../components/tasks/TaskDrawer';
 import { FeasibilityModal } from '../components/planner/FeasibilityModal';
 import { useTaskFilters } from '../hooks/useTaskFilters';
+import { DEFAULT_TASK_FILTER_STATE } from '../utils/filter';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import type { TaskPlannerDatabase } from '../db';
 import type { Task, Project } from '../types/models';
@@ -149,7 +150,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb }) => {
     filters.hierarchyScope !== 'all' ||
     Boolean(filters.projectId) ||
     filters.horizon !== 'all' ||
-    filters.statuses.length !== 4 ||
+    filters.statuses.length !== DEFAULT_TASK_FILTER_STATE.statuses.length ||
     filters.priorities.length > 0 ||
     filters.includeClosed ||
     activeFilterCount > 0;

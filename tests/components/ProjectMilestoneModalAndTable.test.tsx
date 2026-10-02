@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import 'fake-indexeddb/auto';
 import { ProjectModal } from '../../src/components/projects/ProjectModal';
 import { MilestoneModal } from '../../src/components/projects/MilestoneModal';
@@ -29,7 +29,7 @@ describe('Project and Milestone Modals and ProjectTable Banking IT Fields', () =
     },
   ];
 
-  it('ProjectModal renders Ops Owner and BA tag select inputs', () => {
+  it('ProjectModal renders Ops Owner, BA, and Pending status option', () => {
     render(
       <ProjectModal
         open={true}
@@ -43,9 +43,11 @@ describe('Project and Milestone Modals and ProjectTable Banking IT Fields', () =
     expect(screen.getByText('Business Analyst')).toBeInTheDocument();
     expect(screen.getByText('NamNV')).toBeInTheDocument();
     expect(screen.getByText('HuongTT')).toBeInTheDocument();
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /Trạng thái/i }));
+    expect(screen.getByText('Chờ xử lý')).toBeInTheDocument();
   });
 
-  it('MilestoneModal renders Ops Owner and BA inputs with inheritance placeholder from project', () => {
+  it('MilestoneModal renders Ops Owner, BA, inheritance placeholder, and Pending status option', () => {
     render(
       <MilestoneModal
         open={true}
@@ -61,12 +63,14 @@ describe('Project and Milestone Modals and ProjectTable Banking IT Fields', () =
     expect(screen.getByText('Business Analyst')).toBeInTheDocument();
     expect(screen.getByText(/Kế thừa: \[NamNV, TuanLA\] \(từ Dự án\)/i)).toBeInTheDocument();
     expect(screen.getByText(/Kế thừa: \[HuongTT\] \(từ Dự án\)/i)).toBeInTheDocument();
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /Trạng thái/i }));
+    expect(screen.getByText('Chờ xử lý')).toBeInTheDocument();
   });
 
-  it('ProjectTable renders Ops Owner and BA tags in project row', () => {
+  it('ProjectTable renders Ops Owner, BA tags, and Pending status label in project row', () => {
     render(
       <ProjectTable
-        projects={[sampleProject]}
+        projects={[{ ...sampleProject, status: 'Pending' }]}
         milestones={sampleMilestones}
         tasks={[]}
         onAddTask={vi.fn()}
@@ -82,6 +86,8 @@ describe('Project and Milestone Modals and ProjectTable Banking IT Fields', () =
     expect(screen.getByText('NamNV')).toBeInTheDocument();
     expect(screen.getByText('TuanLA')).toBeInTheDocument();
     expect(screen.getByText('HuongTT')).toBeInTheDocument();
+    expect(screen.getByText('Chờ xử lý')).toBeInTheDocument();
+    expect(screen.getByText('1-1 / 1 dự án')).toBeInTheDocument();
   });
 
   it('ProjectModal renders documentLinks section and ProjectTable renders link badge', () => {

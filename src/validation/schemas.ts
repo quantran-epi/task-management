@@ -49,6 +49,7 @@ export const tagListSchema = z
 
 export const PROJECT_STATUSES: [ProjectStatus, ...ProjectStatus[]] = [
   'Open',
+  'Pending',
   'In Progress',
   'Done',
   'Cancelled',
@@ -56,6 +57,7 @@ export const PROJECT_STATUSES: [ProjectStatus, ...ProjectStatus[]] = [
 
 export const MILESTONE_STATUSES: [MilestoneStatus, ...MilestoneStatus[]] = [
   'Open',
+  'Pending',
   'In Progress',
   'Done',
   'Cancelled',
@@ -63,6 +65,7 @@ export const MILESTONE_STATUSES: [MilestoneStatus, ...MilestoneStatus[]] = [
 
 export const TASK_STATUSES: [TaskStatus, ...TaskStatus[]] = [
   'Open',
+  'Pending',
   'In Progress',
   'Resolved',
   'In Review',
