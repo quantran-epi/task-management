@@ -48,6 +48,7 @@ Last activity: 2026-10-02 -- Completed quick task 261002-jm1: close-window, popo
 | 261002-f2d | task, project, and milestone need one more status call pending. task list and project list need pagination | 2026-10-02 | afdb2a7 | complete | [261002-f2d-task-project-and-milestone-need-one-more](./quick/261002-f2d-task-project-and-milestone-need-one-more/) |
 | 261002-remove-analytics | Remove analytics page, components, calculations, tests, and navigation items | 2026-10-02 | — | complete | [261002-remove-analytics](./quick/261002-remove-analytics/) |
 | 261002-jm1 | Fix close-window action, stale popout cache, Jira mapping labels, note indicator, and pagination | 2026-10-02 | — | complete | [261002-jm1-fix-close-window-action-stale-popout-cac](./quick/261002-jm1-fix-close-window-action-stale-popout-cac/) |
+| 261002-su2 | Install @ant-design/plots and build charts 1 (Estimate vs Actual), 2 (Work Type Breakdown), and 6 (Productivity Heatmap) | 2026-10-02 | 777a838 | complete | [261002-su2-install-ant-design-plots-build-chart-1-e](./quick/261002-su2-install-ant-design-plots-build-chart-1-e/) |
 
 ## Performance Metrics
 
