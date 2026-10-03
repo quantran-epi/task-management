@@ -462,7 +462,7 @@ export function analyzeMilestoneInsight(
       actionText: 'Cập nhật mốc',
       actionKey: 'edit-milestone',
     });
-  } else if (daysRemaining !== null && daysRemaining <= 3 && remainingTasks.length > 0) {
+  } else if (daysRemaining !== null && daysRemaining >= 0 && daysRemaining <= 3 && remainingTasks.length > 0) {
     recommendations.push({
       id: 'ms-deadline-close',
       severity: 'warning',

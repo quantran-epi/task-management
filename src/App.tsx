@@ -51,14 +51,19 @@ export const App: React.FC = () => {
         return <NotesView />;
       case 'settings':
         return <SettingsView onNavigate={navigate} />;
-      case 'insight':
+      case 'insight': {
+        const validTypes = ['task', 'project', 'milestone'] as const;
+        const itemType = validTypes.includes(params.type as any)
+          ? (params.type as 'task' | 'project' | 'milestone')
+          : 'task';
         return (
           <ItemInsightView
-            itemType={(params.type as 'task' | 'project' | 'milestone') || 'task'}
+            itemType={itemType}
             itemId={params.id || ''}
             onNavigate={navigate}
           />
         );
+      }
       default:
         return <EmptyState />;
     }

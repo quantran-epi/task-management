@@ -276,11 +276,12 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
   };
 
   // If item not found
-  if (
-    (itemType === 'task' && !currentTask) ||
-    (itemType === 'project' && !currentProject) ||
-    (itemType === 'milestone' && !currentMilestone)
-  ) {
+  const hasItem =
+    (itemType === 'task' && currentTask) ||
+    (itemType === 'project' && currentProject) ||
+    (itemType === 'milestone' && currentMilestone);
+
+  if (!hasItem) {
     return (
       <Card style={{ margin: 16 }}>
         <Empty
