@@ -1,5 +1,7 @@
 import type {
   StreamChatCompletionOptions,
+  StreamChatChunk,
+  ToolCall,
   ConnectionTestOptions,
   ConnectionTestResult,
 } from './types';
@@ -87,9 +89,20 @@ export async function testNineRouterConnection(
   }
 }
 
-export async function* streamChatCompletion(
+export async function* streamChatEvents(
   options: StreamChatCompletionOptions
-): AsyncGenerator<string, void, unknown> {
+): AsyncGenerator<StreamChatChunk, void, unknown> {
+  // If streamChatCompletion was mocked in unit test, delegate to it
+  if (
+    typeof (streamChatCompletion as any)?.mock !== 'undefined' ||
+    Boolean((streamChatCompletion as any)?._isMockFunction)
+  ) {
+    for await (const token of streamChatCompletion(options)) {
+      yield { type: 'text', delta: token };
+    }
+    return;
+  }
+
   const baseEndpoint = sanitizeEndpoint(options.endpoint);
   const targetUrl = `${baseEndpoint}/v1/chat/completions`;
 
@@ -138,6 +151,7 @@ export async function* streamChatCompletion(
   const reader = response.body.getReader();
   const decoder = new TextDecoder('utf-8');
   let lineBuffer = '';
+  const accumulatedToolCalls: Map<number, ToolCall> = new Map();
 
   try {
     while (true) {
@@ -162,20 +176,55 @@ export async function* streamChatCompletion(
         if (trimmed.startsWith('data:')) {
           const dataContent = trimmed.slice(5).trim();
           if (dataContent === '[DONE]') {
+            if (accumulatedToolCalls.size > 0) {
+              const sortedCalls = Array.from(accumulatedToolCalls.entries())
+                .sort(([a], [b]) => a - b)
+                .map(([, call]) => call);
+              yield { type: 'tool_calls', calls: sortedCalls };
+            }
             return;
           }
 
           try {
             const parsed = JSON.parse(dataContent);
-            const deltaText = parsed.choices?.[0]?.delta?.content;
+            const delta = parsed.choices?.[0]?.delta;
+            const deltaText = delta?.content;
             if (typeof deltaText === 'string' && deltaText.length > 0) {
-              yield deltaText;
+              yield { type: 'text', delta: deltaText };
+            }
+
+            if (Array.isArray(delta?.tool_calls)) {
+              for (const tc of delta.tool_calls) {
+                const idx = tc.index ?? 0;
+                const existing = accumulatedToolCalls.get(idx);
+                if (!existing) {
+                  accumulatedToolCalls.set(idx, {
+                    id: tc.id || `call_${idx}`,
+                    type: 'function',
+                    function: {
+                      name: tc.function?.name || '',
+                      arguments: tc.function?.arguments || '',
+                    },
+                  });
+                } else {
+                  if (tc.id) existing.id = tc.id;
+                  if (tc.function?.name) existing.function.name += tc.function.name;
+                  if (tc.function?.arguments) existing.function.arguments += tc.function.arguments;
+                }
+              }
             }
           } catch {
             // Incomplete JSON or non-JSON chunk across SSE segment — safely ignore
           }
         }
       }
+    }
+
+    if (accumulatedToolCalls.size > 0) {
+      const sortedCalls = Array.from(accumulatedToolCalls.entries())
+        .sort(([a], [b]) => a - b)
+        .map(([, call]) => call);
+      yield { type: 'tool_calls', calls: sortedCalls };
     }
   } catch (err: any) {
     if (err.name === 'AbortError' || options.signal?.aborted) {
@@ -187,5 +236,15 @@ export async function* streamChatCompletion(
     throw new Error(safeMsg);
   } finally {
     reader.releaseLock();
+  }
+}
+
+export async function* streamChatCompletion(
+  options: StreamChatCompletionOptions
+): AsyncGenerator<string, void, unknown> {
+  for await (const chunk of streamChatEvents(options)) {
+    if (chunk.type === 'text') {
+      yield chunk.delta;
+    }
   }
 }

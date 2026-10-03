@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { Typography, Button, Tooltip, theme, message } from 'antd';
+import { Typography, Button, Tooltip, theme, message, Spin, Tag } from 'antd';
 import {
   CopyOutlined,
   CheckOutlined,
   CheckSquareOutlined,
   FileAddOutlined,
   CodeOutlined,
+  LoadingOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 import type { ChatMessage } from '../../types/models';
 import { renderSafeMarkdown } from '../../utils/markdown';
@@ -15,6 +17,7 @@ const { Text } = Typography;
 export interface ChatMessageBubbleProps {
   message: ChatMessage;
   isStreaming?: boolean | undefined;
+  streamingStatus?: string | null | undefined;
   canAddToChecklist?: boolean | undefined;
   canSaveStickyNote?: boolean | undefined;
   canRunClaudeCode?: boolean | undefined;
@@ -49,6 +52,7 @@ export function parseChecklistFromText(text: string): string[] {
 export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   message: msg,
   isStreaming = false,
+  streamingStatus,
   canAddToChecklist = false,
   canSaveStickyNote = false,
   canRunClaudeCode = false,
@@ -127,6 +131,20 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
       >
         {isUser ? (
           <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
+        ) : isStreaming && !msg.content ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0' }}>
+            <Spin
+              indicator={<LoadingOutlined style={{ fontSize: 16, color: token.colorPrimary }} spin />}
+            />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Text strong style={{ fontSize: 13, color: token.colorText }}>
+                {streamingStatus || 'Đang suy nghĩ câu trả lời...'}
+              </Text>
+              <Text type="secondary" style={{ fontSize: 11 }}>
+                {streamingStatus ? 'Task Planner AI Harness' : 'Đang xử lý qua 9router...'}
+              </Text>
+            </div>
+          </div>
         ) : (
           <div>
             <div
@@ -145,6 +163,17 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               >
                 ▋
               </span>
+            )}
+            {isStreaming && streamingStatus && (
+              <div style={{ marginTop: 8 }}>
+                <Tag
+                  icon={<SyncOutlined spin />}
+                  color="processing"
+                  style={{ borderRadius: 10, padding: '2px 8px', fontSize: 11 }}
+                >
+                  {streamingStatus}
+                </Tag>
+              </div>
             )}
           </div>
         )}

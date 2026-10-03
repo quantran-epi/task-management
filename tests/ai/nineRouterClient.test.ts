@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   streamChatCompletion,
+  streamChatEvents,
   testNineRouterConnection,
   redactApiKey,
 } from '../../src/services/ai/nineRouterClient';
@@ -130,5 +131,48 @@ describe('nineRouterClient', () => {
     }
 
     expect(tokens).toEqual(['Part 1']);
+  });
+
+  it('streamChatEvents parses tool_calls delta chunks and yields aggregated tool calls', async () => {
+    const ssePayloadChunks = [
+      'data: {"choices":[{"delta":{"role":"assistant","content":null,"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"query_tasks","arguments":""}}]}}]}\n\n',
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\\"project"}}]}}]}\n\n',
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"Id\\":\\"p1\\"}"}}]}}]}\n\n',
+      'data: [DONE]\n\n',
+    ];
+
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        for (const chunk of ssePayloadChunks) {
+          controller.enqueue(encoder.encode(chunk));
+        }
+        controller.close();
+      },
+    });
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: stream,
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const chunks: any[] = [];
+    for await (const chunk of streamChatEvents({
+      endpoint: 'http://localhost:20128',
+      apiKey: 'test-key',
+      payload: {
+        model: 'gpt-4o',
+        messages: [{ role: 'user', content: 'Có bao nhiêu task?' }],
+      },
+    })) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks.length).toBe(1);
+    expect(chunks[0].type).toBe('tool_calls');
+    expect(chunks[0].calls[0].function.name).toBe('query_tasks');
+    expect(chunks[0].calls[0].function.arguments).toBe('{"projectId":"p1"}');
   });
 });

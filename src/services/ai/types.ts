@@ -4,9 +4,21 @@ export interface NineRouterConfig {
   charLimit?: number;
 }
 
+export interface ToolCall {
+  id: string;
+  type: 'function';
+  function: {
+    name: string;
+    arguments: string;
+  };
+}
+
 export interface ChatCompletionMessage {
-  role: 'user' | 'assistant' | 'system';
-  content: string;
+  role: 'user' | 'assistant' | 'system' | 'tool';
+  content?: string | null;
+  tool_calls?: ToolCall[];
+  tool_call_id?: string;
+  name?: string;
 }
 
 export interface StreamChatCompletionOptions {
@@ -15,11 +27,16 @@ export interface StreamChatCompletionOptions {
   payload: {
     model: string;
     messages: ChatCompletionMessage[];
+    tools?: any[];
     temperature?: number;
     max_tokens?: number;
   };
   signal?: AbortSignal;
 }
+
+export type StreamChatChunk =
+  | { type: 'text'; delta: string }
+  | { type: 'tool_calls'; calls: ToolCall[] };
 
 export interface ConnectionTestOptions {
   endpoint: string;

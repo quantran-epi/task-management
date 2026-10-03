@@ -9,6 +9,7 @@ export interface ChatMessageListProps {
   messages: ChatMessage[];
   streamingText?: string | undefined;
   isStreaming?: boolean | undefined;
+  streamingStatus?: string | null | undefined;
   error?: string | null | undefined;
   onRetry?: (() => void) | undefined;
   onOpenSettings?: (() => void) | undefined;
@@ -24,6 +25,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   messages,
   streamingText,
   isStreaming = false,
+  streamingStatus,
   error,
   onRetry,
   onOpenSettings,
@@ -110,16 +112,17 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
       })}
 
       {/* Active SSE Streaming Assistant Bubble */}
-      {isStreaming && streamingText !== undefined && (
+      {isStreaming && (
         <ChatMessageBubble
           message={{
             id: 'temp-streaming-msg',
             threadId: 'active',
             role: 'assistant',
-            content: streamingText,
+            content: streamingText || '',
             createdAt: new Date().toISOString(),
           }}
           isStreaming={true}
+          streamingStatus={streamingStatus}
         />
       )}
 

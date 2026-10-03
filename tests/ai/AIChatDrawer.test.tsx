@@ -207,4 +207,70 @@ describe('AIChatDrawer', () => {
       expect(nineRouterTokenService.fetchAvailableModels).toHaveBeenCalled();
     });
   });
+
+  it('executes tool calling loop when stream yields tool_calls', async () => {
+    vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-api-key');
+    vi.spyOn(nineRouterTokenService, 'getNineRouterConfig').mockResolvedValue({
+      endpoint: 'http://localhost:20128',
+      defaultModel: 'gpt-4o',
+      charLimit: 12000,
+    });
+
+    await db.tasks.add({
+      id: 'tool-test-task',
+      name: 'Task Tool Test',
+      status: 'In Progress',
+      priority: 'High',
+      projectId: 'p-tool',
+      estimateMinutes: 30,
+      progress: 50,
+      createdAt: '2026-10-01',
+      updatedAt: '2026-10-01',
+    });
+
+    let callCount = 0;
+    async function* mockEvents() {
+      callCount++;
+      if (callCount === 1) {
+        yield {
+          type: 'tool_calls',
+          calls: [
+            {
+              id: 'call_abc',
+              type: 'function',
+              function: {
+                name: 'query_tasks',
+                arguments: JSON.stringify({ projectId: 'p-tool' }),
+              },
+            },
+          ],
+        };
+      } else {
+        yield {
+          type: 'text',
+          delta: 'Dự án có 1 tác vụ đang thực hiện.',
+        };
+      }
+    }
+
+    vi.spyOn(nineRouterClient, 'streamChatEvents').mockImplementation(mockEvents as any);
+
+    render(
+      <AIChatDrawer
+        open={true}
+        onClose={vi.fn()}
+        db={db}
+        activeScope={{ type: 'global' }}
+      />
+    );
+
+    const textarea = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
+    fireEvent.change(textarea, { target: { value: 'Có bao nhiêu task trong p-tool?' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Dự án có 1 tác vụ đang thực hiện/i)).toBeInTheDocument();
+    });
+    expect(callCount).toBe(2);
+  });
 });

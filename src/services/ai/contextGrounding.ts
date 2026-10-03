@@ -183,6 +183,69 @@ export async function buildItemContextPrompt(options: BuildItemContextPromptOpti
 
   const sections: string[] = [innerContent];
 
+  // Hierarchy relationships (child milestones & tasks for projects, parent for tasks/milestones)
+  try {
+    if (entityType === 'project' && db.milestones && db.tasks) {
+      const milestones = await db.milestones.where('projectId').equals(item.id).toArray();
+      if (milestones.length > 0) {
+        sections.push(`### Milestones (${milestones.length})`);
+        for (const ms of milestones) {
+          sections.push(`- [${ms.status}] **${ms.name}**${ms.deadline ? ` (Deadline: ${ms.deadline})` : ''}`);
+        }
+      } else {
+        sections.push('### Milestones: 0');
+      }
+
+      const tasks = await db.tasks.where('projectId').equals(item.id).toArray();
+      const openTasks = tasks.filter((t) => t.status !== 'Done' && t.status !== 'Cancelled');
+      sections.push(`### Tasks (${tasks.length} total, ${openTasks.length} open)`);
+      for (const t of tasks) {
+        const msName = milestones.find((m) => m.id === t.milestoneId)?.name;
+        sections.push(
+          `- [${t.status}] [${t.priority}] **${t.name}** (${t.progress}%)${
+            msName ? ` [Milestone: ${msName}]` : ''
+          }${t.deadline ? ` (Deadline: ${t.deadline})` : ''}${t.jiraKey ? ` [Jira: ${t.jiraKey}]` : ''}`
+        );
+      }
+    } else if (entityType === 'milestone') {
+      const milestone = item as Milestone;
+      if (milestone.projectId && db.projects) {
+        const proj = await db.projects.get(milestone.projectId);
+        if (proj) {
+          sections.push(`- **Parent Project:** ${proj.name} (Status: ${proj.status})`);
+        }
+      }
+      if (db.tasks) {
+        const tasks = await db.tasks.where('milestoneId').equals(milestone.id).toArray();
+        const openTasks = tasks.filter((t) => t.status !== 'Done' && t.status !== 'Cancelled');
+        sections.push(`### Tasks in this Milestone (${tasks.length} total, ${openTasks.length} open)`);
+        for (const t of tasks) {
+          sections.push(
+            `- [${t.status}] [${t.priority}] **${t.name}** (${t.progress}%)${
+              t.deadline ? ` (Deadline: ${t.deadline})` : ''
+            }`
+          );
+        }
+      }
+    } else if (entityType === 'task') {
+      const task = item as Task;
+      if (task.projectId && db.projects) {
+        const proj = await db.projects.get(task.projectId);
+        if (proj) {
+          sections.push(`- **Project:** ${proj.name}`);
+        }
+      }
+      if (task.milestoneId && db.milestones) {
+        const ms = await db.milestones.get(task.milestoneId);
+        if (ms) {
+          sections.push(`- **Milestone:** ${ms.name}`);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[contextGrounding] Failed to fetch hierarchy items:', err);
+  }
+
   // 1. Attached Sticky Notes & Screenshot Captions
   try {
     const notes: Note[] = await db.notes
@@ -272,4 +335,41 @@ export async function buildItemContextPrompt(options: BuildItemContextPromptOpti
   const clampedBody = combinedBody.slice(0, Math.max(0, allowedLength));
 
   return `${fullPrefix}${clampedBody}${truncationNotice}${fullSuffix}`;
+}
+
+/**
+ * Builds high-level global context overview when AI chat is in global scope.
+ */
+export async function buildGlobalContextPrompt(db: TaskPlannerDatabase = defaultDb): Promise<string> {
+  const sections: string[] = [
+    '<global_context>',
+    '## Workspace Overview',
+  ];
+
+  try {
+    const projects = db.projects ? await db.projects.toArray() : [];
+    const openProjects = projects.filter((p) => p.status !== 'Done' && p.status !== 'Cancelled');
+    const tasks = db.tasks ? await db.tasks.toArray() : [];
+    const openTasks = tasks.filter((t) => t.status !== 'Done' && t.status !== 'Cancelled');
+
+    sections.push(`- **Projects:** ${projects.length} total (${openProjects.length} active)`);
+    sections.push(`- **Tasks:** ${tasks.length} total (${openTasks.length} open)`);
+
+    if (projects.length > 0) {
+      sections.push('\n### Active Projects');
+      for (const p of openProjects.slice(0, 10)) {
+        const pTasks = tasks.filter((t) => t.projectId === p.id);
+        sections.push(
+          `- **${p.name}** [${p.status}] (${pTasks.length} tasks)${
+            p.deadline ? ` - Deadline: ${p.deadline}` : ''
+          }`
+        );
+      }
+    }
+  } catch (err) {
+    console.warn('[contextGrounding] Failed to fetch global context:', err);
+  }
+
+  sections.push('</global_context>');
+  return sections.join('\n');
 }

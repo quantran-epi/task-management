@@ -283,5 +283,55 @@ describe('contextGrounding', () => {
       expect(prompt).toContain('... [Truncated at 12,000 character limit]');
       expect(prompt.endsWith('</item_context>')).toBe(true);
     });
+
+    it('serializes child milestones and child tasks when grounding a project', async () => {
+      const mockDb: any = {
+        notes: { where: () => ({ equals: () => ({ filter: () => ({ toArray: async () => [] }) }) }) },
+        noteAttachments: { where: () => ({ equals: () => ({ toArray: async () => [] }) }) },
+        milestones: {
+          where: () => ({
+            equals: () => ({
+              toArray: async () => [mockMilestone],
+            }),
+          }),
+        },
+        tasks: {
+          where: () => ({
+            equals: () => ({
+              toArray: async () => [mockTask],
+            }),
+          }),
+        },
+      };
+
+      const prompt = await buildItemContextPrompt({
+        entityType: 'project',
+        item: mockProject,
+        db: mockDb,
+      });
+
+      expect(prompt).toContain('### Milestones (1)');
+      expect(prompt).toContain('Milestone 1: Backend Security');
+      expect(prompt).toContain('### Tasks (1 total, 1 open)');
+      expect(prompt).toContain('Implement OAuth Token Refresh');
+      expect(prompt).toContain('[Jira: CORE-104]');
+    });
+  });
+
+  describe('buildGlobalContextPrompt', () => {
+    it('summarizes active projects and tasks across workspace', async () => {
+      const { buildGlobalContextPrompt } = await import('../../src/services/ai/contextGrounding');
+      const mockDb: any = {
+        projects: { toArray: async () => [mockProject] },
+        tasks: { toArray: async () => [mockTask] },
+      };
+
+      const prompt = await buildGlobalContextPrompt(mockDb);
+      expect(prompt).toContain('<global_context>');
+      expect(prompt).toContain('Projects:** 1 total (1 active)');
+      expect(prompt).toContain('Tasks:** 1 total (1 open)');
+      expect(prompt).toContain('Core Banking Auth Revamp');
+      expect(prompt).toContain('</global_context>');
+    });
   });
 });

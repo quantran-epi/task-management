@@ -17,8 +17,10 @@ import {
   setNineRouterConfig,
   fetchAvailableModels,
 } from '../../services/ai/nineRouterTokenService';
-import { streamChatCompletion } from '../../services/ai/nineRouterClient';
-import { buildItemContextPrompt } from '../../services/ai/contextGrounding';
+import { streamChatEvents, streamChatCompletion } from '../../services/ai/nineRouterClient';
+import { buildItemContextPrompt, buildGlobalContextPrompt } from '../../services/ai/contextGrounding';
+import { AI_DATABASE_TOOLS, executeAiTool } from '../../services/ai/aiTools';
+import type { ChatCompletionMessage, ToolCall } from '../../services/ai/types';
 import { launchClaudeTerminal } from '../../services/ai/claudeCliService';
 import { updateTask, getTask } from '../../db/repositories/taskRepo';
 import { createNote } from '../../db/repositories/noteRepo';
@@ -292,6 +294,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   // Streaming & error state
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingText, setStreamingText] = useState('');
+  const [streamingStatus, setStreamingStatus] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
   const [lastSubmittedText, setLastSubmittedText] = useState('');
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -384,6 +387,12 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       } catch (err) {
         console.warn('[AIChatDrawer] Context grounding resolution error:', err);
       }
+    } else if (effectiveScope.type === 'global') {
+      try {
+        systemInstruction = await buildGlobalContextPrompt(db);
+      } catch (err) {
+        console.warn('[AIChatDrawer] Global context prompt resolution error:', err);
+      }
     }
 
     const allMsgs = await getMessagesByThreadId(activeThread.id, db);
@@ -395,12 +404,12 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       }
     }
     const msgsToSend = boundaryIdx >= 0 ? allMsgs.slice(boundaryIdx + 1) : allMsgs;
-    const recentMsgs: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [];
+    const recentMsgs: ChatCompletionMessage[] = [];
 
     if (systemInstruction.trim()) {
       recentMsgs.push({
         role: 'system',
-        content: `You are an expert AI assistant embedded inside Personal Task & Workload Planner.\nBelow is the ground-truth context of the currently active item:\n${systemInstruction}\nUse this context to answer the user accurately. When breaking down goals, output clear actionable bullet points that can be converted into checklist items.`,
+        content: `You are an expert AI assistant embedded inside Personal Task & Workload Planner.\nBelow is the ground-truth context of the currently active item or workspace:\n${systemInstruction}\nUse this context to answer accurately. You have access to database query tools (query_tasks, query_projects, query_milestones, get_item_details). Use them whenever needed to inspect related tasks, search milestones, or check details. When breaking down goals, output clear actionable bullet points that can be converted into checklist items.`,
       });
     }
 
@@ -411,13 +420,17 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       });
     }
 
-    // 5. Start SSE Streaming
+    // 5. Start SSE Streaming with Tool Execution Harness
     const controller = new AbortController();
     abortControllerRef.current = controller;
     setIsStreaming(true);
     setStreamingText('');
+    setStreamingStatus('Đang kết nối 9router...');
 
     let fullResponse = '';
+    const currentMessages: ChatCompletionMessage[] = [...recentMsgs];
+    let loopCount = 0;
+    const MAX_TOOL_LOOPS = 5;
 
     try {
       const targetModel =
@@ -425,19 +438,97 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           ? selectedModel
           : availableModels[0] || config.defaultModel;
 
-      const stream = streamChatCompletion({
-        endpoint: config.endpoint,
-        apiKey,
-        payload: {
-          model: targetModel,
-          messages: recentMsgs,
-        },
-        signal: controller.signal,
-      });
+      while (loopCount < MAX_TOOL_LOOPS) {
+        loopCount++;
+        let hasToolCalls = false;
+        let toolCallsToRun: ToolCall[] = [];
 
-      for await (const delta of stream) {
-        fullResponse += delta;
-        setStreamingText(fullResponse);
+        try {
+          const stream = streamChatEvents({
+            endpoint: config.endpoint,
+            apiKey,
+            payload: {
+              model: targetModel,
+              messages: currentMessages,
+              tools: AI_DATABASE_TOOLS,
+            },
+            signal: controller.signal,
+          });
+
+          for await (const chunk of stream) {
+            if (chunk.type === 'text') {
+              fullResponse += chunk.delta;
+              setStreamingText(fullResponse);
+              setStreamingStatus(null);
+            } else if (chunk.type === 'tool_calls') {
+              hasToolCalls = true;
+              toolCallsToRun = chunk.calls;
+            }
+          }
+        } catch (streamErr: any) {
+          if (streamErr.name === 'AbortError') throw streamErr;
+          // If model rejected tools payload, fallback to standard stream without tools
+          if (loopCount === 1 && !fullResponse) {
+            console.warn('[AIChatDrawer] Tools stream error, retrying without tools:', streamErr);
+            const fallbackStream = streamChatCompletion({
+              endpoint: config.endpoint,
+              apiKey,
+              payload: {
+                model: targetModel,
+                messages: currentMessages,
+              },
+              signal: controller.signal,
+            });
+            for await (const delta of fallbackStream) {
+              fullResponse += delta;
+              setStreamingText(fullResponse);
+              setStreamingStatus(null);
+            }
+            break;
+          }
+          throw streamErr;
+        }
+
+        if (!hasToolCalls || toolCallsToRun.length === 0) {
+          break;
+        }
+
+        // Show friendly recognizable status for tool execution
+        const toolLabels = toolCallsToRun
+          .map((tc) => {
+            if (tc.function.name === 'query_tasks') return 'Tra cứu tác vụ';
+            if (tc.function.name === 'query_projects') return 'Tra cứu dự án';
+            if (tc.function.name === 'query_milestones') return 'Tra cứu cột mốc';
+            if (tc.function.name === 'get_item_details') return 'Chi tiết mục';
+            return tc.function.name;
+          })
+          .join(', ');
+
+        setStreamingStatus(`Đang truy vấn cơ sở dữ liệu: ${toolLabels}...`);
+
+        currentMessages.push({
+          role: 'assistant',
+          content: fullResponse || null,
+          tool_calls: toolCallsToRun,
+        });
+
+        for (const tc of toolCallsToRun) {
+          let args: Record<string, any> = {};
+          try {
+            args = JSON.parse(tc.function.arguments || '{}');
+          } catch {}
+
+          const toolResult = await executeAiTool(tc.function.name, args, db);
+
+          currentMessages.push({
+            role: 'tool',
+            tool_call_id: tc.id,
+            name: tc.function.name,
+            content: toolResult,
+          });
+        }
+
+        setStreamingStatus('Đang tổng hợp thông tin...');
       }
 
       // 6. Commit assistant response to DB
@@ -469,6 +560,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       }
     } finally {
       setIsStreaming(false);
+      setStreamingStatus(null);
       setStreamingText('');
       abortControllerRef.current = null;
     }
@@ -695,6 +787,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         messages={messages}
         streamingText={streamingText}
         isStreaming={isStreaming}
+        streamingStatus={streamingStatus}
         error={apiError}
         onRetry={handleRetry}
         onOpenSettings={onOpenSettings}
