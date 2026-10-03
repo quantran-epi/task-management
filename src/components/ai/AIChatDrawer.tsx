@@ -424,7 +424,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         right: 0,
         bottom: 0,
         width: isMobile ? '100vw' : width,
-        zIndex: isPinned && !isMobile ? 100 : 1000,
+        zIndex: isPinned && !isMobile ? 100 : 1200,
         backgroundColor: token.colorBgContainer,
         borderLeft: `1px solid ${token.colorBorderSecondary}`,
         boxShadow: isPinned && !isMobile ? 'none' : '-2px 0 8px rgba(0,0,0,0.15)',

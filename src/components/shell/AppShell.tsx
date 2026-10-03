@@ -18,6 +18,7 @@ import { FormGuardProvider } from '../../context/FormGuardContext';
 import { ServiceWorkerProvider } from '../../context/ServiceWorkerContext';
 import { GitHubAuthProvider } from '../../context/GitHubAuthContext';
 import { TimerProvider } from '../../context/TimerContext';
+import { AIChatProvider, useAIChat } from '../../context/AIChatContext';
 import { useServiceWorkerUpdate } from '../../hooks/useServiceWorkerUpdate';
 import { useNotifications } from '../../hooks/useNotifications';
 import { useDesktopNotification } from '../../hooks/useDesktopNotification';
@@ -123,15 +124,14 @@ const AppShellInner: React.FC<AppShellProps> = ({
   const [inspectingNote, setInspectingNote] = useState<Note | null>(null);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
 
-  // AI Chat Drawer State & Persistence (D-01, D-02, D-04, D-08)
-  const [aiChatOpen, setAiChatOpen] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    try {
-      return localStorage.getItem(AI_CHAT_OPEN_KEY) === 'true';
-    } catch {
-      return false;
-    }
-  });
+  // AI Chat via context
+  const {
+    isOpen: aiChatOpen,
+    toggleChat: toggleAiChatOpen,
+    closeChat: closeAiChat,
+    activeScope: contextActiveScope,
+    registerActiveItem,
+  } = useAIChat();
 
   const [aiChatPinned, setAiChatPinned] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
@@ -153,16 +153,6 @@ const AppShellInner: React.FC<AppShellProps> = ({
     } catch {}
     return DEFAULT_AI_CHAT_WIDTH;
   });
-
-  const toggleAiChatOpen = () => {
-    setAiChatOpen((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem(AI_CHAT_OPEN_KEY, String(next));
-      } catch {}
-      return next;
-    });
-  };
 
   const handleToggleAiChatPinned = () => {
     setAiChatPinned((prev) => {
@@ -193,13 +183,31 @@ const AppShellInner: React.FC<AppShellProps> = ({
     };
   }, [inspectingTaskId]);
 
-  const activeScope: ActiveScope = inspectingTaskId
-    ? { type: 'task', id: inspectingTaskId, title: activeTaskTitle || 'Tác vụ đang xem' }
-    : inspectingProject
-    ? { type: 'project', id: inspectingProject.id, title: inspectingProject.name }
-    : inspectingMilestone
-    ? { type: 'milestone', id: inspectingMilestone.id, title: inspectingMilestone.name }
-    : { type: 'global' };
+  // Register open inspection item with AIChatContext so Cmd+J grounds automatically
+  useEffect(() => {
+    if (inspectingTaskId) {
+      return registerActiveItem({
+        type: 'task',
+        id: inspectingTaskId,
+        title: activeTaskTitle || 'Tác vụ đang xem',
+      });
+    } else if (inspectingProject) {
+      return registerActiveItem({
+        type: 'project',
+        id: inspectingProject.id,
+        title: inspectingProject.name,
+      });
+    } else if (inspectingMilestone) {
+      return registerActiveItem({
+        type: 'milestone',
+        id: inspectingMilestone.id,
+        title: inspectingMilestone.name,
+      });
+    }
+    return undefined;
+  }, [inspectingTaskId, activeTaskTitle, inspectingProject, inspectingMilestone, registerActiveItem]);
+
+  const activeScope: ActiveScope = contextActiveScope;
 
   // Global Cmd+K / Ctrl+K and Cmd+J / Ctrl+J keyboard shortcuts (D-04)
   useEffect(() => {
@@ -212,9 +220,9 @@ const AppShellInner: React.FC<AppShellProps> = ({
         toggleAiChatOpen();
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [toggleAiChatOpen]);
 
   // Prefer explicit prop if provided, else check token brightness/property
   const isDark = explicitDark ?? false;
@@ -522,14 +530,14 @@ const AppShellInner: React.FC<AppShellProps> = ({
 
       <AIChatDrawer
         open={aiChatOpen}
-        onClose={() => setAiChatOpen(false)}
+        onClose={closeAiChat}
         isPinned={aiChatPinned}
         onTogglePin={handleToggleAiChatPinned}
         activeScope={activeScope}
         width={aiChatWidth}
         onWidthChange={(w) => setAiChatWidth(w)}
         onOpenSettings={() => {
-          setAiChatOpen(false);
+          closeAiChat();
           onNavigate('settings');
         }}
         isMobile={isMobile}
@@ -555,7 +563,9 @@ export const AppShell: React.FC<AppShellProps> = (props) => {
       <FormGuardProvider>
         <GitHubAuthProvider>
           <TimerProvider>
-            <AppShellInner {...props} />
+            <AIChatProvider>
+              <AppShellInner {...props} />
+            </AIChatProvider>
           </TimerProvider>
         </GitHubAuthProvider>
       </FormGuardProvider>
