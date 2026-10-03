@@ -267,11 +267,11 @@ Plans:
   4. Context item fields (title, status, priority, estimates, tags, notes, dates, subtasks) are automatically structured into LLM system and conversation context.
   5. Chat can ingest and ground answers on local file notes, attachments, and referenced URLs associated with the context item, answering reference-based questions directly.
 
-**Plans:** 0/3 plans executed
+**Plans:** 1/3 plans executed
 
 Plans:
 
-- [ ] 13.2-01-PLAN.md — Dexie SCHEMA_V8 migration for chat threads/messages, 9router API client, connection test, and Settings configuration
+- [x] 13.2-01-PLAN.md — Dexie SCHEMA_V8 migration for chat threads/messages, 9router API client, connection test, and Settings configuration
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -303,5 +303,4 @@ Plans:
 | 12.2. Multiple Reminders with Time, Notification Settings, Table Customization & Sidebar Persistence | v1.1 | 4/4 | Complete   | 2026-09-29 |
 | 13. Enhanced Workload Analytics & Milestone Burndown | v1.1 | 3/3 | Complete    | 2026-09-30 |
 | 13.1. Timer, Jira, Sticky Notes, Actual Worklog & Sync Improvements | v1.1 | 5/5 | Complete    | 2026-10-01 |
-| 13.2. AI Chat Drawer, Item Context Grounding & 9router Ask-Answer Integration | v1.1 | 0/3 | Ready to execute | — |
-| 13.2. AI Chat Drawer, Item Context Grounding & 9router Ask-Answer Integration | v1.1 | 0/3 | Planning | — |
+| 13.2. AI Chat Drawer, Item Context Grounding & 9router Ask-Answer Integration | v1.1 | 1/3 | In Progress | — |
