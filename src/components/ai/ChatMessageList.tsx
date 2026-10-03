@@ -11,6 +11,7 @@ export interface ChatMessageListProps {
   isStreaming?: boolean | undefined;
   streamingStatus?: string | null | undefined;
   error?: string | null | undefined;
+  scrollTrigger?: number | undefined;
   onRetry?: (() => void) | undefined;
   onOpenSettings?: (() => void) | undefined;
   canAddToChecklist?: boolean | undefined;
@@ -27,6 +28,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   isStreaming = false,
   streamingStatus,
   error,
+  scrollTrigger,
   onRetry,
   onOpenSettings,
   canAddToChecklist,
@@ -40,12 +42,33 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom on message change or streaming text chunk
-  useEffect(() => {
-    if (typeof bottomRef.current?.scrollIntoView === 'function') {
-      bottomRef.current.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottom = (instant = false) => {
+    if (containerRef.current) {
+      containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
-  }, [messages, streamingText, error]);
+    if (bottomRef.current?.scrollIntoView) {
+      bottomRef.current.scrollIntoView({ behavior: instant ? 'auto' : 'smooth' });
+    }
+  };
+
+  // Immediate scroll to bottom when user hits Send
+  useEffect(() => {
+    if (scrollTrigger) {
+      scrollToBottom(true);
+    }
+  }, [scrollTrigger]);
+
+  // Auto-scroll on new message added
+  useEffect(() => {
+    scrollToBottom(false);
+  }, [messages.length]);
+
+  // Keep pinned to bottom during streaming or errors
+  useEffect(() => {
+    if (isStreaming || streamingText || error) {
+      scrollToBottom(true);
+    }
+  }, [streamingText, isStreaming, error]);
 
   return (
     <div

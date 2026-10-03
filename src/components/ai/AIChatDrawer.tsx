@@ -302,6 +302,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const [streamingStatus, setStreamingStatus] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
   const [lastSubmittedText, setLastSubmittedText] = useState('');
+  const [scrollTrigger, setScrollTrigger] = useState(0);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // Abort stream on unmount or drawer close
@@ -321,6 +322,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     const trimmed = text.trim();
     if (!trimmed || isStreaming) return;
 
+    setScrollTrigger((prev) => prev + 1);
     setApiError(null);
     setLastSubmittedText(trimmed);
 
@@ -852,6 +854,7 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
         isStreaming={isStreaming}
         streamingStatus={streamingStatus}
         error={apiError}
+        scrollTrigger={scrollTrigger}
         onRetry={handleRetry}
         onOpenSettings={onOpenSettings}
         canAddToChecklist={currentScope.type === 'task'}

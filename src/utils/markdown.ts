@@ -1,6 +1,6 @@
 /**
  * Safe Markdown renderer escaping raw HTML and rendering headings, bold, italics,
- * checklists, code, and links with rel="noopener noreferrer" (D-16, T-13.1-07).
+ * checklists, fenced code blocks, lists, blockquotes, and links with rel="noopener noreferrer".
  */
 
 function escapeHtml(text: string): string {
@@ -12,60 +12,184 @@ function escapeHtml(text: string): string {
     .replace(/'/g, '&#39;');
 }
 
+function renderInlineFormatting(rawText: string): string {
+  // First escape raw HTML
+  let text = escapeHtml(rawText);
+
+  // 1. Inline code (`code`)
+  text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+  // 2. Bold (**text** or __text__)
+  text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  text = text.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+
+  // 3. Strikethrough (~~text~~)
+  text = text.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+
+  // 4. Italic (*text* or _text_)
+  text = text.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  text = text.replace(/_([^_]+)_/g, '<em>$1</em>');
+
+  // 5. Links [text](url) - strictly disallow dangerous schemes
+  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, linkText, url) => {
+    const trimmedUrl = url.trim();
+    if (/^(javascript|vbscript|data):/i.test(trimmedUrl)) {
+      return linkText; // Strip dangerous protocol link
+    }
+    return `<a href="${trimmedUrl}" target="_blank" rel="noopener noreferrer">${linkText}</a>`;
+  });
+
+  return text;
+}
+
 export function renderSafeMarkdown(source: string): string {
   if (!source) return '';
 
   const lines = source.split(/\r?\n/);
-  const renderedLines: string[] = [];
+  const output: string[] = [];
 
-  for (const rawLine of lines) {
-    // 1. First escape all raw HTML characters to neutralize scripts and dangerous tags
-    let line = escapeHtml(rawLine);
+  let inCodeBlock = false;
+  let codeBlockLang = '';
+  let codeBlockLines: string[] = [];
 
-    // 2. Headings (#, ##, ###, ####, #####, ######)
+  let currentListType: 'ul' | 'ol' | null = null;
+  let listItems: string[] = [];
+
+  let blockquoteLines: string[] = [];
+
+  const flushList = () => {
+    if (currentListType && listItems.length > 0) {
+      const tag = currentListType;
+      output.push(`<${tag}>${listItems.join('')}</${tag}>`);
+      currentListType = null;
+      listItems = [];
+    }
+  };
+
+  const flushBlockquote = () => {
+    if (blockquoteLines.length > 0) {
+      output.push(`<blockquote>${blockquoteLines.map((l) => `<p>${renderInlineFormatting(l)}</p>`).join('')}</blockquote>`);
+      blockquoteLines = [];
+    }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? '';
+
+    // Handle code fence (``` or ```lang)
+    const codeFenceMatch = line.match(/^```([a-zA-Z0-9_-]*)/);
+    if (codeFenceMatch) {
+      if (inCodeBlock) {
+        // Closing code block
+        const escapedCode = codeBlockLines.map((l) => escapeHtml(l)).join('\n');
+        const langAttr = codeBlockLang ? ` class="language-${codeBlockLang}"` : '';
+        output.push(`<pre class="code-block"><code${langAttr}>${escapedCode}</code></pre>`);
+        inCodeBlock = false;
+        codeBlockLang = '';
+        codeBlockLines = [];
+      } else {
+        // Opening code block
+        flushList();
+        flushBlockquote();
+        inCodeBlock = true;
+        codeBlockLang = codeFenceMatch[1] || '';
+        codeBlockLines = [];
+      }
+      continue;
+    }
+
+    if (inCodeBlock) {
+      codeBlockLines.push(line);
+      continue;
+    }
+
+    // Horizontal rule
+    if (/^(?:---|\*\*\*|___)\s*$/.test(line)) {
+      flushList();
+      flushBlockquote();
+      output.push('<hr />');
+      continue;
+    }
+
+    // Headings (# through ######)
     const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
     if (headingMatch && headingMatch[1] && headingMatch[2]) {
+      flushList();
+      flushBlockquote();
       const level = headingMatch[1].length;
-      renderedLines.push(`<h${level}>${headingMatch[2]}</h${level}>`);
+      output.push(`<h${level}>${renderInlineFormatting(headingMatch[2])}</h${level}>`);
       continue;
     }
 
-    // 3. Task checklists (- [ ] or - [x])
-    if (/^-\s+\[\s*\]\s+(.*)$/.test(line)) {
-      line = line.replace(
-        /^-\s+\[\s*\]\s+(.*)$/,
-        '<label><input type="checkbox" disabled /> $1</label>'
-      );
-      renderedLines.push(line);
+    // Blockquote (> text)
+    const blockquoteMatch = line.match(/^>\s?(.*)$/);
+    if (blockquoteMatch && blockquoteMatch[1] !== undefined) {
+      flushList();
+      blockquoteLines.push(blockquoteMatch[1]);
       continue;
-    }
-    if (/^-\s+\[[xX]\]\s+(.*)$/.test(line)) {
-      line = line.replace(
-        /^-\s+\[[xX]\]\s+(.*)$/,
-        '<label><input type="checkbox" checked disabled /> $1</label>'
-      );
-      renderedLines.push(line);
-      continue;
+    } else {
+      flushBlockquote();
     }
 
-    // 4. Inline code (`code`)
-    line = line.replace(/`([^`]+)`/g, '<code>$1</code>');
-
-    // 5. Bold (**text**) & Italic (*text*)
-    line = line.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    line = line.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-
-    // 6. Markdown links [text](url) - strictly disallow javascript: or vbscript:
-    line = line.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, text, url) => {
-      const trimmedUrl = url.trim();
-      if (/^(javascript|vbscript|data):/i.test(trimmedUrl)) {
-        return text; // Strip dangerous protocol link
+    // Task list items (- [ ] or - [x])
+    const taskMatch = line.match(/^-\s+\[([ xX])\]\s+(.*)$/);
+    if (taskMatch && taskMatch[1] !== undefined && taskMatch[2] !== undefined) {
+      if (currentListType !== 'ul') {
+        flushList();
+        currentListType = 'ul';
       }
-      return `<a href="${trimmedUrl}" target="_blank" rel="noopener noreferrer">${text}</a>`;
-    });
+      const isChecked = taskMatch[1].toLowerCase() === 'x';
+      const labelText = renderInlineFormatting(taskMatch[2]);
+      listItems.push(
+        `<li class="task-item"><label><input type="checkbox"${isChecked ? ' checked' : ''} disabled /> ${labelText}</label></li>`
+      );
+      continue;
+    }
 
-    renderedLines.push(line);
+    // Unordered lists (- item or * item)
+    const ulMatch = line.match(/^[-*]\s+(.*)$/);
+    if (ulMatch && ulMatch[1] !== undefined) {
+      if (currentListType !== 'ul') {
+        flushList();
+        currentListType = 'ul';
+      }
+      listItems.push(`<li>${renderInlineFormatting(ulMatch[1])}</li>`);
+      continue;
+    }
+
+    // Ordered lists (1. item)
+    const olMatch = line.match(/^\d+\.\s+(.*)$/);
+    if (olMatch && olMatch[1] !== undefined) {
+      if (currentListType !== 'ol') {
+        flushList();
+        currentListType = 'ol';
+      }
+      listItems.push(`<li>${renderInlineFormatting(olMatch[1])}</li>`);
+      continue;
+    }
+
+    // Blank line
+    if (!line.trim()) {
+      flushList();
+      flushBlockquote();
+      continue;
+    }
+
+    // Regular paragraph text
+    flushList();
+    flushBlockquote();
+    output.push(`<p>${renderInlineFormatting(line)}</p>`);
   }
 
-  return renderedLines.join('\n');
+  // Handle unclosed code block if stream cut off
+  if (inCodeBlock && codeBlockLines.length > 0) {
+    const escapedCode = codeBlockLines.map((l) => escapeHtml(l)).join('\n');
+    const langAttr = codeBlockLang ? ` class="language-${codeBlockLang}"` : '';
+    output.push(`<pre class="code-block"><code${langAttr}>${escapedCode}</code></pre>`);
+  }
+
+  flushList();
+  flushBlockquote();
+
+  return output.join('\n');
 }

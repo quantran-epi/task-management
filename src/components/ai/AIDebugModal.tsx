@@ -102,6 +102,19 @@ export const AIDebugModal: React.FC<AIDebugModalProps> = ({ open, onClose }) => 
       onCancel={onClose}
       footer={null}
       width={900}
+      mask={false}
+      focusable={{ trap: false, focusTriggerAfterClose: false }}
+      wrapProps={{ style: { pointerEvents: 'none' } }}
+      style={{ top: 32, pointerEvents: 'auto' }}
+      styles={{
+        wrapper: { pointerEvents: 'none', zIndex: 1001 },
+        body: { maxHeight: '72vh', overflowY: 'auto', paddingRight: 8 },
+      }}
+      modalRender={(modalNode) => (
+        <div style={{ pointerEvents: 'auto' }}>
+          {modalNode}
+        </div>
+      )}
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <BugOutlined style={{ color: token.colorPrimary, fontSize: 18 }} />
@@ -109,7 +122,6 @@ export const AIDebugModal: React.FC<AIDebugModalProps> = ({ open, onClose }) => 
           {activeTurn && renderStatusTag(activeTurn.status)}
         </div>
       }
-      styles={{ body: { maxHeight: '72vh', overflowY: 'auto', paddingRight: 8 } }}
     >
       <div
         style={{

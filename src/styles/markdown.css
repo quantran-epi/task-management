@@ -1,0 +1,119 @@
+/* Scoped styles for rich Markdown responses inside AI Chat bubbles */
+.chat-markdown-body {
+  font-size: 13.5px;
+  line-height: 1.6;
+  word-break: break-word;
+  color: inherit;
+}
+
+.chat-markdown-body p {
+  margin: 0 0 8px 0;
+}
+
+.chat-markdown-body p:last-child {
+  margin-bottom: 0;
+}
+
+.chat-markdown-body h1,
+.chat-markdown-body h2,
+.chat-markdown-body h3,
+.chat-markdown-body h4,
+.chat-markdown-body h5,
+.chat-markdown-body h6 {
+  margin: 12px 0 6px 0;
+  font-weight: 600;
+  line-height: 1.35;
+  color: inherit;
+}
+
+.chat-markdown-body h1:first-child,
+.chat-markdown-body h2:first-child,
+.chat-markdown-body h3:first-child {
+  margin-top: 0;
+}
+
+.chat-markdown-body h1 { font-size: 1.25em; }
+.chat-markdown-body h2 { font-size: 1.15em; }
+.chat-markdown-body h3 { font-size: 1.05em; }
+.chat-markdown-body h4,
+.chat-markdown-body h5,
+.chat-markdown-body h6 { font-size: 1em; }
+
+.chat-markdown-body ul,
+.chat-markdown-body ol {
+  margin: 4px 0 8px 0;
+  padding-left: 20px;
+}
+
+.chat-markdown-body li {
+  margin: 2px 0;
+}
+
+.chat-markdown-body li.task-item {
+  list-style-type: none;
+  margin-left: -18px;
+}
+
+.chat-markdown-body li.task-item label {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  cursor: default;
+}
+
+.chat-markdown-body blockquote {
+  margin: 8px 0;
+  padding: 4px 12px;
+  border-left: 3px solid rgba(128, 128, 128, 0.4);
+  opacity: 0.88;
+  font-style: italic;
+}
+
+.chat-markdown-body blockquote p {
+  margin: 2px 0;
+}
+
+.chat-markdown-body pre.code-block {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+:root[data-theme='dark'] .chat-markdown-body pre.code-block,
+[data-theme='dark'] .chat-markdown-body pre.code-block {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.chat-markdown-body code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.9em;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: rgba(128, 128, 128, 0.15);
+}
+
+.chat-markdown-body pre.code-block code {
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  font-size: 1em;
+}
+
+.chat-markdown-body a {
+  color: #1677ff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.chat-markdown-body hr {
+  border: none;
+  border-top: 1px solid rgba(128, 128, 128, 0.25);
+  margin: 12px 0;
+}
