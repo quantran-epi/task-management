@@ -19,7 +19,13 @@ import {
 } from '../../services/ai/nineRouterTokenService';
 import { streamChatEvents, streamChatCompletion } from '../../services/ai/nineRouterClient';
 import { buildItemContextPrompt, buildGlobalContextPrompt } from '../../services/ai/contextGrounding';
-import { AI_DATABASE_TOOLS, executeAiTool } from '../../services/ai/aiTools';
+import {
+  AI_DATABASE_TOOLS,
+  executeAiTool,
+  isMutationTool,
+  describeToolMutation,
+  normalizeToolName,
+} from '../../services/ai/aiTools';
 import type { ChatCompletionMessage, ToolCall } from '../../services/ai/types';
 import { launchClaudeTerminal } from '../../services/ai/claudeCliService';
 import { updateTask, getTask } from '../../db/repositories/taskRepo';
@@ -160,84 +166,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
   const scopeKey = buildScopeKey(currentScope.type, currentScope.id);
 
-  // Live queries for in-drawer scope picker (tasks, projects, milestones)
-  const availableTasks = useLiveQuery(() => {
-    return db.tasks.toArray();
-  }, [db]) ?? [];
-
-  const availableProjects = useLiveQuery(() => {
-    return db.projects.toArray();
-  }, [db]) ?? [];
-
-  const availableMilestones = useLiveQuery(() => {
-    return db.milestones.toArray();
-  }, [db]) ?? [];
-
-  const selectedScopeValue =
-    currentScope.type === 'global'
-      ? 'global'
-      : `${currentScope.type}:${currentScope.id}`;
-
-  const scopeOptions = [
-    {
-      label: 'Toàn cục',
-      options: [{ value: 'global', label: 'Toàn cục (Không gắn)' }],
-    },
-    {
-      label: 'Tác vụ',
-      options: availableTasks
-        .filter((t) => t.status !== 'Done' && t.status !== 'Cancelled')
-        .slice(0, 30)
-        .map((t) => ({
-          value: `task:${t.id}`,
-          label: `[${t.status}] ${t.name}`,
-        })),
-    },
-    {
-      label: 'Dự án',
-      options: availableProjects
-        .filter((p) => p.status !== 'Done' && p.status !== 'Cancelled')
-        .slice(0, 20)
-        .map((p) => ({
-          value: `project:${p.id}`,
-          label: p.name,
-        })),
-    },
-    {
-      label: 'Mốc',
-      options: availableMilestones
-        .filter((m) => m.status !== 'Done' && m.status !== 'Cancelled')
-        .slice(0, 20)
-        .map((m) => ({
-          value: `milestone:${m.id}`,
-          label: m.name,
-        })),
-    },
-  ];
-
-  const handleScopeChange = (val: string) => {
-    if (val === 'global') {
-      setIsDetached(true);
-      setInternalScope({ type: 'global' });
-      return;
-    }
-    const [typeStr, id] = val.split(':');
-    if (!typeStr || !id) return;
-    const type = typeStr as ChatScopeType;
-
-    let title: string | undefined = undefined;
-    if (type === 'task') {
-      title = availableTasks.find((t) => t.id === id)?.name;
-    } else if (type === 'project') {
-      title = availableProjects.find((p) => p.id === id)?.name;
-    } else if (type === 'milestone') {
-      title = availableMilestones.find((m) => m.id === id)?.name;
-    }
-
-    setIsDetached(false);
-    setInternalScope({ type, id, title });
-  };
-
   // Model & Token settings
   const [selectedModel, setSelectedModel] = useState<string>('gpt-4o');
   const [availableModels, setAvailableModels] = useState<string[]>([]);
@@ -310,14 +238,44 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const [scrollTrigger, setScrollTrigger] = useState(0);
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  // Mutation action confirmation state & ref
+  const [pendingConfirmation, setPendingConfirmation] = useState<{
+    toolName: string;
+    summary: string;
+    args?: Record<string, any>;
+  } | null>(null);
+  const pendingConfirmationRef = useRef<{
+    resolve: (confirmed: boolean) => void;
+  } | null>(null);
+
+  const handleConfirmAction = useCallback((confirmed: boolean) => {
+    if (pendingConfirmationRef.current) {
+      pendingConfirmationRef.current.resolve(confirmed);
+      pendingConfirmationRef.current = null;
+    }
+    setPendingConfirmation(null);
+  }, []);
+
   // Abort stream on unmount or drawer close
   useEffect(() => {
-    if (!open && abortControllerRef.current) {
-      abortControllerRef.current.abort();
+    if (!open) {
+      if (pendingConfirmationRef.current) {
+        pendingConfirmationRef.current.resolve(false);
+        pendingConfirmationRef.current = null;
+        setPendingConfirmation(null);
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
     }
   }, [open]);
 
   const handleStopGeneration = () => {
+    if (pendingConfirmationRef.current) {
+      pendingConfirmationRef.current.resolve(false);
+      pendingConfirmationRef.current = null;
+      setPendingConfirmation(null);
+    }
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -325,7 +283,22 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
   const handleSendMessage = async (text: string, overrideScope?: ActiveScope) => {
     const trimmed = text.trim();
-    if (!trimmed || isStreaming) return;
+    if (!trimmed) return;
+
+    // Check if user is responding to an active confirmation prompt via chat input
+    if (pendingConfirmationRef.current) {
+      const lower = trimmed.toLowerCase();
+      if (/^(yes|y|có|co|ok|được|duoc|đồng ý|dong y|xác nhận|xac nhan)$/i.test(lower)) {
+        handleConfirmAction(true);
+        return;
+      }
+      if (/^(no|n|không|khong|cancel|hủy|huy|từ chối|tu choi)$/i.test(lower)) {
+        handleConfirmAction(false);
+        return;
+      }
+    }
+
+    if (isStreaming) return;
 
     setScrollTrigger((prev) => prev + 1);
     setApiError(null);
@@ -432,6 +405,7 @@ CRITICAL ANTI-HALLUCINATION RULES:
 3. If the user asks about anything not present in the initial context (such as time spent, worklog history, daily schedule, running timer, notes, capacity, overdue items), YOU MUST CALL THE RELEVANT DATABASE TOOLS before answering.
 4. If a requested item or detail is missing, null, empty, or not recorded in the database, EXPLICITLY STATE THAT IT IS NOT RECORDED. Never extrapolate, approximate, or pretend data exists.
 5. When breaking down goals or proposing steps, output clear actionable bullet points that can be converted into checklist items.
+6. YOU HAVE FULL DATABASE MUTATION CAPABILITIES: You can create, update, reparent, or delete tasks, projects, milestones, planned allocations, work sessions, active timers, capacity rules/overrides, and notes using mutation tools (create_task, update_task, update_task_checklist, reparent_task, delete_task, create_project, update_project, delete_project, create_milestone, update_milestone, delete_milestone, plan_allocation, delete_allocation, log_work_session, update_work_session, delete_work_session, start_timer, pause_timer, stop_and_log_timer, discard_timer, update_capacity_rule, set_capacity_override, remove_capacity_override, create_note, update_note, delete_note). When the user asks you to perform an action or change anything in the app, call the appropriate action tool. The system will prompt the user to confirm the mutation before applying it.
 ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the currently active item or workspace:\n${systemInstruction}\n` : ''}`;
 
     console.log('[AI Harness] 📝 Injected Context Grounding:\n', systemPromptContent);
@@ -533,7 +507,8 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
         // Show friendly recognizable status for tool execution
         const toolLabels = toolCallsToRun
           .map((tc) => {
-            switch (tc.function.name) {
+            const normalized = normalizeToolName(tc.function.name);
+            switch (normalized) {
               case 'query_tasks': return 'Tra cứu tác vụ';
               case 'query_projects': return 'Tra cứu dự án';
               case 'query_milestones': return 'Tra cứu cột mốc';
@@ -548,7 +523,12 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
               case 'query_attention_items': return 'Mục cần chú ý';
               case 'query_recurring_tasks': return 'Tác vụ định kỳ';
               case 'get_system_status': return 'Trạng thái hệ thống';
-              default: return tc.function.name;
+              case 'create_task': return 'Tạo tác vụ';
+              case 'update_task': return 'Cập nhật tác vụ';
+              case 'delete_task': return 'Xóa tác vụ';
+              case 'plan_allocation': return 'Lên lịch phân bổ';
+              case 'log_work_session': return 'Ghi nhận thời gian';
+              default: return normalized || tc.function.name;
             }
           })
           .join(', ');
@@ -574,6 +554,39 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
             args,
           });
 
+          // Check if this tool performs a data mutation requiring user confirmation
+          if (isMutationTool(tc.function.name)) {
+            const summary = describeToolMutation(tc.function.name, args);
+            setStreamingStatus('Chờ xác nhận hành động...');
+            const confirmed = await new Promise<boolean>((resolve) => {
+              pendingConfirmationRef.current = { resolve };
+              setPendingConfirmation({
+                toolName: tc.function.name,
+                summary,
+                args,
+              });
+            });
+            setPendingConfirmation(null);
+            pendingConfirmationRef.current = null;
+
+            if (!confirmed) {
+              const cancelMsg = JSON.stringify({
+                cancelled: true,
+                message: 'Người dùng đã từ chối thao tác này (User declined confirmation). Không có dữ liệu nào bị thay đổi.',
+              });
+              console.log(`[AI Harness] 🚫 User declined mutation "${tc.function.name}"`);
+              aiDebugService.recordToolResult(turnId, tc.id, cancelMsg, 0);
+              currentMessages.push({
+                role: 'tool',
+                tool_call_id: tc.id,
+                name: tc.function.name,
+                content: cancelMsg,
+              });
+              continue;
+            }
+          }
+
+          setStreamingStatus('Đang thực thi...');
           const toolStartTime = Date.now();
           const toolResult = await executeAiTool(tc.function.name, args, db);
           const toolDuration = Date.now() - toolStartTime;
@@ -602,6 +615,8 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
           },
           db
         );
+      } else {
+        setApiError('Mô hình AI không trả về nội dung (phản hồi rỗng). Vui lòng thử lại hoặc chọn mô hình khác.');
       }
       aiDebugService.finishTurn(turnId, { finalResponse: fullResponse });
     } catch (err: any) {
@@ -626,11 +641,18 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
       setIsStreaming(false);
       setStreamingStatus(null);
       setStreamingText('');
+      setPendingConfirmation(null);
+      pendingConfirmationRef.current = null;
       abortControllerRef.current = null;
     }
   };
 
   const handleClearContext = async () => {
+    if (pendingConfirmationRef.current) {
+      pendingConfirmationRef.current.resolve(false);
+      pendingConfirmationRef.current = null;
+      setPendingConfirmation(null);
+    }
     let activeThread = thread;
     if (!activeThread) {
       activeThread = await createOrGetThread(
@@ -716,11 +738,6 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
 
   if (!open) return null;
 
-  const scopeLabel =
-    currentScope.type === 'global'
-      ? 'Toàn cục (Không gắn)'
-      : `${currentScope.type === 'task' ? 'Tác vụ' : currentScope.type === 'project' ? 'Dự án' : 'Mốc'}: ${currentScope.title || currentScope.id}`;
-
   const handlePopoutAction = () => {
     if (onPopout) {
       onPopout();
@@ -771,11 +788,6 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
 
       {/* Chat Header */}
       <ChatHeader
-        scopeLabel={scopeLabel}
-        selectedScopeValue={selectedScopeValue}
-        scopeOptions={scopeOptions}
-        onScopeChange={handleScopeChange}
-        onOpenScopePicker={() => setScopeModalOpen(true)}
         selectedModel={selectedModel}
         availableModels={availableModels}
         onModelChange={handleModelChange}
@@ -884,6 +896,8 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
         onAddToChecklist={handleAddToChecklist}
         onSaveStickyNote={handleSaveStickyNote}
         onRunClaudeCode={handleRunClaudeCode}
+        pendingConfirmation={pendingConfirmation}
+        onConfirmAction={handleConfirmAction}
       />
 
       {/* Chat Input Bar */}
@@ -891,7 +905,12 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
         onSubmit={handleSendMessage}
         onClear={handleClearContext}
         onStop={handleStopGeneration}
-        isStreaming={isStreaming}
+        isStreaming={isStreaming && !pendingConfirmation}
+        placeholder={
+          pendingConfirmation
+            ? 'Gõ "yes" để xác nhận hoặc "no" để từ chối...'
+            : undefined
+        }
       />
     </div>
   );

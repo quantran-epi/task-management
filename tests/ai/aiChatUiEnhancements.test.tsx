@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { AIDebugModal } from '../../src/components/ai/AIDebugModal';
 import { ChatMessageList } from '../../src/components/ai/ChatMessageList';
+import { ChatInputBar } from '../../src/components/ai/ChatInputBar';
 import type { ChatMessage } from '../../src/types/models';
 
 describe('AI Chat UI Bugfix & Enhancements', () => {
@@ -56,6 +57,47 @@ describe('AI Chat UI Bugfix & Enhancements', () => {
       expect(screen.getByText('I am ready')).toBeInTheDocument();
       expect(container.querySelector('pre.code-block')).not.toBeNull();
       expect(container.querySelector('code.language-js')).not.toBeNull();
+    });
+
+    it('renders mutation action confirmation card when pendingConfirmation is passed', () => {
+      const handleConfirm = vi.fn();
+      render(
+        <ChatMessageList
+          messages={[]}
+          pendingConfirmation={{
+            toolName: 'create_task',
+            summary: 'Tạo tác vụ mới: "Fix login" [Ưu tiên: High] [Ước tính: 60p]',
+          }}
+          onConfirmAction={handleConfirm}
+        />
+      );
+
+      expect(screen.getByTestId('ai-mutation-confirmation')).toBeInTheDocument();
+      expect(screen.getByText('Xác nhận thực hiện hành động')).toBeInTheDocument();
+      expect(screen.getByText(/Tạo tác vụ mới: "Fix login"/i)).toBeInTheDocument();
+      expect(screen.getByLabelText('Xác nhận thao tác')).toBeInTheDocument();
+      expect(screen.getByLabelText('Từ chối thao tác')).toBeInTheDocument();
+    });
+  });
+
+  describe('ChatInputBar inline layout', () => {
+    it('renders textarea and send button inline within a flex-row container', () => {
+      const handleSubmit = vi.fn();
+      const { container } = render(
+        <ChatInputBar onSubmit={handleSubmit} />
+      );
+
+      const wrapper = container.firstChild as HTMLElement;
+      expect(wrapper).toHaveStyle({ display: 'flex', 'flex-direction': 'row' });
+
+      const textarea = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
+      const sendBtn = screen.getByLabelText('Gửi tin nhắn');
+      expect(textarea).toBeInTheDocument();
+      expect(sendBtn).toBeInTheDocument();
+
+      fireEvent.change(textarea, { target: { value: 'Test inline send' } });
+      fireEvent.click(sendBtn);
+      expect(handleSubmit).toHaveBeenCalledWith('Test inline send');
     });
   });
 });

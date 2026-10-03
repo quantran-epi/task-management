@@ -1,5 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { executeAiTool, AI_DATABASE_TOOLS } from '../../src/services/ai/aiTools';
+import { describe, it, expect, vi } from 'vitest';
+import {
+  executeAiTool,
+  AI_DATABASE_TOOLS,
+  isMutationTool,
+  describeToolMutation,
+  normalizeToolName,
+} from '../../src/services/ai/aiTools';
 
 describe('aiTools', () => {
   const mockTasks = [
@@ -233,25 +239,92 @@ describe('aiTools', () => {
     },
   };
 
-  it('declares all 14 comprehensive AI_DATABASE_TOOLS', () => {
-    expect(AI_DATABASE_TOOLS.length).toBe(14);
+  it('declares comprehensive query and mutation AI_DATABASE_TOOLS', () => {
+    expect(AI_DATABASE_TOOLS.length).toBe(40);
     const names = AI_DATABASE_TOOLS.map((t) => t.function.name);
-    expect(names).toEqual([
-      'query_tasks',
-      'query_projects',
-      'query_milestones',
-      'get_item_details',
-      'query_worklogs',
-      'get_active_timer',
-      'get_daily_schedule',
-      'check_capacity_feasibility',
-      'get_day_insight',
-      'get_analytics_summary',
-      'query_notes',
-      'query_attention_items',
-      'query_recurring_tasks',
-      'get_system_status',
-    ]);
+    // Includes standard read tools
+    expect(names).toContain('query_tasks');
+    expect(names).toContain('query_projects');
+    expect(names).toContain('query_milestones');
+    expect(names).toContain('get_item_details');
+    expect(names).toContain('query_worklogs');
+    expect(names).toContain('get_active_timer');
+    expect(names).toContain('get_daily_schedule');
+    expect(names).toContain('check_capacity_feasibility');
+    expect(names).toContain('get_day_insight');
+    expect(names).toContain('get_analytics_summary');
+    expect(names).toContain('query_notes');
+    expect(names).toContain('query_attention_items');
+    expect(names).toContain('query_recurring_tasks');
+    expect(names).toContain('get_system_status');
+
+    // Includes full mutation action tools
+    expect(names).toContain('create_task');
+    expect(names).toContain('update_task');
+    expect(names).toContain('update_task_checklist');
+    expect(names).toContain('reparent_task');
+    expect(names).toContain('delete_task');
+    expect(names).toContain('create_project');
+    expect(names).toContain('update_project');
+    expect(names).toContain('delete_project');
+    expect(names).toContain('create_milestone');
+    expect(names).toContain('update_milestone');
+    expect(names).toContain('delete_milestone');
+    expect(names).toContain('plan_allocation');
+    expect(names).toContain('delete_allocation');
+    expect(names).toContain('log_work_session');
+    expect(names).toContain('update_work_session');
+    expect(names).toContain('delete_work_session');
+    expect(names).toContain('start_timer');
+    expect(names).toContain('pause_timer');
+    expect(names).toContain('stop_and_log_timer');
+    expect(names).toContain('discard_timer');
+    expect(names).toContain('update_capacity_rule');
+    expect(names).toContain('set_capacity_override');
+    expect(names).toContain('remove_capacity_override');
+    expect(names).toContain('create_note');
+    expect(names).toContain('update_note');
+    expect(names).toContain('delete_note');
+  });
+
+  describe('isMutationTool, normalizeToolName, and describeToolMutation', () => {
+    it('normalizes tool names with proxy / cloaking suffixes and prefixes', () => {
+      expect(normalizeToolName('create_task_ide')).toBe('create_task');
+      expect(normalizeToolName('query_tasks_ide')).toBe('query_tasks');
+      expect(normalizeToolName('proxy_delete_project')).toBe('delete_project');
+      expect(normalizeToolName('create_task_cc')).toBe('create_task');
+    });
+
+    it('correctly identifies mutation tools versus read-only query tools even when cloaked', () => {
+      expect(isMutationTool('create_task')).toBe(true);
+      expect(isMutationTool('create_task_ide')).toBe(true);
+      expect(isMutationTool('delete_project_ide')).toBe(true);
+      expect(isMutationTool('start_timer_ide')).toBe(true);
+      expect(isMutationTool('plan_allocation')).toBe(true);
+      expect(isMutationTool('query_tasks')).toBe(false);
+      expect(isMutationTool('query_tasks_ide')).toBe(false);
+      expect(isMutationTool('get_daily_schedule')).toBe(false);
+      expect(isMutationTool('get_system_status')).toBe(false);
+    });
+
+    it('generates readable Vietnamese description of mutations with cloaked names', () => {
+      const taskDesc = describeToolMutation('create_task_ide', {
+        name: 'Fix Auth bug',
+        priority: 'High',
+        estimateMinutes: 60,
+      });
+      expect(taskDesc).toContain('Fix Auth bug');
+      expect(taskDesc).toContain('High');
+      expect(taskDesc).toContain('60p');
+
+      const allocDesc = describeToolMutation('plan_allocation', {
+        taskId: 't-1',
+        date: '2026-10-04',
+        allocatedMinutes: 90,
+      });
+      expect(allocDesc).toContain('90 phút');
+      expect(allocDesc).toContain('2026-10-04');
+    });
   });
 
   describe('query_tasks (enriched)', () => {
@@ -458,6 +531,45 @@ describe('aiTools', () => {
       expect(res.githubSync.targetRepo).toBe('user/task-planner');
       // Redaction verification: tokens must never be present
       expect(resJson).not.toContain('secret-token-must-not-leak');
+    });
+  });
+
+  describe('update_task_checklist tool definition and execution', () => {
+    it('defines checklistItems rather than reserved items property to prevent Google/Gemini schema collision', () => {
+      const tool = AI_DATABASE_TOOLS.find((t) => t.function.name === 'update_task_checklist');
+      expect(tool).toBeDefined();
+      const props = tool!.function.parameters.properties;
+      expect(props.checklistItems).toBeDefined();
+      expect(props.items).toBeUndefined(); // Must NOT define "items" directly on object schema
+    });
+
+    it('handles adding checklist items via checklistItems or items', async () => {
+      const mockTask = {
+        id: 't-chk',
+        name: 'Task with checklist',
+        status: 'Open',
+        priority: 'Medium',
+        progress: 0,
+        workType: 'code',
+        checklist: [],
+        createdAt: '2026-10-01T00:00:00Z',
+        updatedAt: '2026-10-01T00:00:00Z',
+      };
+      const testDb: any = {
+        tasks: {
+          get: vi.fn().mockResolvedValue(mockTask),
+          put: vi.fn().mockResolvedValue('t-chk'),
+        },
+      };
+
+      const res = await executeAiTool(
+        'update_task_checklist',
+        { taskId: 't-chk', action: 'add', checklistItems: ['Item 1', 'Item 2'] },
+        testDb
+      );
+      const parsed = JSON.parse(res);
+      expect(parsed.success).toBe(true);
+      expect(parsed.totalChecklistItems).toBe(2);
     });
   });
 });

@@ -6,7 +6,6 @@ import {
   PushpinOutlined,
   PushpinFilled,
   CloseOutlined,
-  ApartmentOutlined,
   BugOutlined,
   ExportOutlined,
 } from '@ant-design/icons';
@@ -24,7 +23,7 @@ export interface ScopeOptionGroup {
 }
 
 export interface ChatHeaderProps {
-  scopeLabel: string;
+  scopeLabel?: string;
   selectedScopeValue?: string;
   scopeOptions?: ScopeOptionGroup[];
   onScopeChange?: (value: string) => void;
@@ -41,11 +40,6 @@ export interface ChatHeaderProps {
 }
 
 export const ChatHeader: React.FC<ChatHeaderProps> = ({
-  scopeLabel,
-  selectedScopeValue,
-  scopeOptions,
-  onScopeChange,
-  onOpenScopePicker,
   selectedModel,
   availableModels,
   onModelChange,
@@ -75,61 +69,6 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         <Text strong style={{ fontSize: 15, whiteSpace: 'nowrap' }}>
           Trợ lý AI
         </Text>
-        {onOpenScopePicker ? (
-          <Tooltip title="Chọn phạm vi ngữ cảnh">
-            <Button
-              size="small"
-              icon={<ApartmentOutlined />}
-              onClick={onOpenScopePicker}
-              onMouseDown={onOpenScopePicker}
-              aria-label="Chọn phạm vi ngữ cảnh"
-              style={{
-                fontSize: 12,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-              }}
-            >
-              Ngữ cảnh
-            </Button>
-          </Tooltip>
-        ) : scopeOptions && onScopeChange ? (
-          <Select
-            size="small"
-            value={selectedScopeValue || 'global'}
-            onChange={onScopeChange}
-            showSearch
-            aria-label="Chọn phạm vi ngữ cảnh"
-            placeholder="Chọn ngữ cảnh"
-            style={{ minWidth: 110, maxWidth: 160 }}
-            popupMatchSelectWidth={false}
-            getPopupContainer={(node) => node.parentElement || document.body}
-            popupStyle={{ zIndex: 1300 }}
-            filterOption={(input, option) =>
-              (option?.label as string ?? '').toLowerCase().includes(input.toLowerCase())
-            }
-            options={scopeOptions}
-          />
-        ) : (
-          <Tooltip title={scopeLabel}>
-            <span
-              style={{
-                maxWidth: 140,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                fontSize: 12,
-                color: token.colorPrimary,
-                backgroundColor: token.colorFillAlter,
-                padding: '2px 6px',
-                borderRadius: 4,
-                border: `1px solid ${token.colorBorderSecondary}`,
-              }}
-            >
-              {scopeLabel}
-            </span>
-          </Tooltip>
-        )}
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>

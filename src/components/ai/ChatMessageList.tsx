@@ -1,9 +1,15 @@
 import React, { useRef, useEffect } from 'react';
-import { Divider, theme } from 'antd';
-import { SyncOutlined } from '@ant-design/icons';
+import { Divider, Button, theme } from 'antd';
+import { SyncOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import type { ChatMessage } from '../../types/models';
 import { ChatMessageBubble } from './ChatMessageBubble';
 import { InlineApiErrorCard } from './InlineApiErrorCard';
+
+export interface PendingConfirmationInfo {
+  toolName: string;
+  summary: string;
+  args?: Record<string, any>;
+}
 
 export interface ChatMessageListProps {
   messages: ChatMessage[];
@@ -20,6 +26,8 @@ export interface ChatMessageListProps {
   onAddToChecklist?: ((items: string[]) => Promise<void> | void) | undefined;
   onSaveStickyNote?: ((content: string) => Promise<void> | void) | undefined;
   onRunClaudeCode?: (() => Promise<void> | void) | undefined;
+  pendingConfirmation?: PendingConfirmationInfo | null;
+  onConfirmAction?: (confirmed: boolean) => void;
 }
 
 export const ChatMessageList: React.FC<ChatMessageListProps> = ({
@@ -37,6 +45,8 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   onAddToChecklist,
   onSaveStickyNote,
   onRunClaudeCode,
+  pendingConfirmation,
+  onConfirmAction,
 }) => {
   const { token } = theme.useToken();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -58,17 +68,17 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
     }
   }, [scrollTrigger]);
 
-  // Auto-scroll on new message added
+  // Auto-scroll on new message added or confirmation prompt displayed
   useEffect(() => {
     scrollToBottom(false);
-  }, [messages.length]);
+  }, [messages.length, pendingConfirmation]);
 
   // Keep pinned to bottom during streaming or errors
   useEffect(() => {
-    if (isStreaming || streamingText || error) {
+    if (isStreaming || streamingText || error || pendingConfirmation) {
       scrollToBottom(true);
     }
-  }, [streamingText, isStreaming, error]);
+  }, [streamingText, isStreaming, error, pendingConfirmation]);
 
   return (
     <div
@@ -135,7 +145,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
       })}
 
       {/* Active SSE Streaming Assistant Bubble */}
-      {isStreaming && (
+      {isStreaming && (streamingText || !pendingConfirmation) && (
         <ChatMessageBubble
           message={{
             id: 'temp-streaming-msg',
@@ -149,8 +159,78 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
         />
       )}
 
+      {/* Mutation Action Confirmation Card */}
+      {pendingConfirmation && onConfirmAction && (
+        <div
+          data-testid="ai-mutation-confirmation"
+          style={{
+            margin: '10px 0',
+            padding: '12px 14px',
+            borderRadius: 8,
+            border: `1px solid ${token.colorWarningBorder}`,
+            backgroundColor: token.colorWarningBg,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              fontWeight: 600,
+              color: token.colorWarningText,
+              fontSize: 13,
+            }}
+          >
+            <ExclamationCircleOutlined />
+            <span>Xác nhận thực hiện hành động</span>
+          </div>
+          <div
+            style={{
+              fontSize: 13,
+              color: token.colorText,
+              lineHeight: 1.5,
+              wordBreak: 'break-word',
+            }}
+          >
+            {pendingConfirmation.summary}
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginTop: 4,
+              fontSize: 12,
+              color: token.colorTextSecondary,
+            }}
+          >
+            <span>Bấm nút bên dưới hoặc gõ &quot;yes&quot; / &quot;no&quot; để tiếp tục:</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Button
+                size="small"
+                onClick={() => onConfirmAction(false)}
+                aria-label="Từ chối thao tác"
+              >
+                Không (No)
+              </Button>
+              <Button
+                size="small"
+                type="primary"
+                onClick={() => onConfirmAction(true)}
+                aria-label="Xác nhận thao tác"
+              >
+                Có (Yes)
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Inline API Error Card */}
-      {error && onRetry && onOpenSettings && (
+      {error && onRetry && (
         <InlineApiErrorCard
           errorMessage={error}
           onRetry={onRetry}

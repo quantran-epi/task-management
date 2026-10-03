@@ -185,36 +185,47 @@ export async function* streamChatEvents(
             return;
           }
 
+          let parsed: any;
           try {
-            const parsed = JSON.parse(dataContent);
-            const delta = parsed.choices?.[0]?.delta;
-            const deltaText = delta?.content;
-            if (typeof deltaText === 'string' && deltaText.length > 0) {
-              yield { type: 'text', delta: deltaText };
-            }
-
-            if (Array.isArray(delta?.tool_calls)) {
-              for (const tc of delta.tool_calls) {
-                const idx = tc.index ?? 0;
-                const existing = accumulatedToolCalls.get(idx);
-                if (!existing) {
-                  accumulatedToolCalls.set(idx, {
-                    id: tc.id || `call_${idx}`,
-                    type: 'function',
-                    function: {
-                      name: tc.function?.name || '',
-                      arguments: tc.function?.arguments || '',
-                    },
-                  });
-                } else {
-                  if (tc.id) existing.id = tc.id;
-                  if (tc.function?.name) existing.function.name += tc.function.name;
-                  if (tc.function?.arguments) existing.function.arguments += tc.function.arguments;
-                }
-              }
-            }
+            parsed = JSON.parse(dataContent);
           } catch {
             // Incomplete JSON or non-JSON chunk across SSE segment — safely ignore
+            continue;
+          }
+
+          if (parsed?.error) {
+            const errMsg =
+              typeof parsed.error === 'string'
+                ? parsed.error
+                : parsed.error.message || JSON.stringify(parsed.error);
+            throw new Error(redactApiKey(errMsg, options.apiKey));
+          }
+
+          const delta = parsed.choices?.[0]?.delta;
+          const deltaText = delta?.content ?? delta?.reasoning_content;
+          if (typeof deltaText === 'string' && deltaText.length > 0) {
+            yield { type: 'text', delta: deltaText };
+          }
+
+          if (Array.isArray(delta?.tool_calls)) {
+            for (const tc of delta.tool_calls) {
+              const idx = tc.index ?? 0;
+              const existing = accumulatedToolCalls.get(idx);
+              if (!existing) {
+                accumulatedToolCalls.set(idx, {
+                  id: tc.id || `call_${idx}`,
+                  type: 'function',
+                  function: {
+                    name: tc.function?.name || '',
+                    arguments: tc.function?.arguments || '',
+                  },
+                });
+              } else {
+                if (tc.id) existing.id = tc.id;
+                if (tc.function?.name) existing.function.name += tc.function.name;
+                if (tc.function?.arguments) existing.function.arguments += tc.function.arguments;
+              }
+            }
           }
         }
       }

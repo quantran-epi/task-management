@@ -6,11 +6,11 @@ const { TextArea } = Input;
 
 export interface ChatInputBarProps {
   onSubmit: (text: string) => void;
-  onClear?: () => void;
-  onStop?: () => void;
-  isStreaming?: boolean;
-  disabled?: boolean;
-  placeholder?: string;
+  onClear?: (() => void) | undefined;
+  onStop?: (() => void) | undefined;
+  isStreaming?: boolean | undefined;
+  disabled?: boolean | undefined;
+  placeholder?: string | undefined;
 }
 
 export const ChatInputBar: React.FC<ChatInputBarProps> = ({
@@ -93,50 +93,53 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   return (
     <div
       style={{
-        padding: '12px 16px',
+        padding: '10px 14px',
         backgroundColor: token.colorBgContainer,
         borderTop: `1px solid ${token.colorBorderSecondary}`,
         display: 'flex',
-        flexDirection: 'column',
+        flexDirection: 'row',
+        alignItems: 'flex-end',
         gap: 8,
       }}
     >
-      <TextArea
-        ref={textAreaRef}
-        value={value}
-        onChange={(e) => {
-          if (isSubmittingRef.current) {
-            e.target.value = '';
-            setValue('');
-            return;
-          }
-          setValue(e.target.value);
-        }}
-        onInput={(e) => {
-          if (isSubmittingRef.current) {
-            const target = e.target as HTMLTextAreaElement;
-            if (target) target.value = '';
-            setValue('');
-          }
-        }}
-        onCompositionEnd={(e) => {
-          if (isSubmittingRef.current) {
-            const target = e.target as HTMLTextAreaElement;
-            if (target) target.value = '';
-            clearInput();
-          }
-        }}
-        onKeyDown={handleKeyDown}
-        placeholder={placeholder}
-        aria-label="Nội dung tin nhắn trò chuyện AI"
-        autoSize={{ minRows: 2, maxRows: 6 }}
-        disabled={disabled || isStreaming}
-        style={{
-          borderRadius: 8,
-          fontSize: 14,
-        }}
-      />
-      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <TextArea
+          ref={textAreaRef}
+          value={value}
+          onChange={(e) => {
+            if (isSubmittingRef.current) {
+              e.target.value = '';
+              setValue('');
+              return;
+            }
+            setValue(e.target.value);
+          }}
+          onInput={(e) => {
+            if (isSubmittingRef.current) {
+              const target = e.target as HTMLTextAreaElement;
+              if (target) target.value = '';
+              setValue('');
+            }
+          }}
+          onCompositionEnd={(e) => {
+            if (isSubmittingRef.current) {
+              const target = e.target as HTMLTextAreaElement;
+              if (target) target.value = '';
+              clearInput();
+            }
+          }}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          aria-label="Nội dung tin nhắn trò chuyện AI"
+          autoSize={{ minRows: 1, maxRows: 5 }}
+          disabled={disabled || isStreaming}
+          style={{
+            borderRadius: 8,
+            fontSize: 14,
+          }}
+        />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
         {isStreaming ? (
           <Tooltip title="Dừng sinh phản hồi">
             <Button
@@ -145,6 +148,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
               icon={<StopOutlined />}
               onClick={onStop}
               aria-label="Dừng sinh phản hồi"
+              style={{ height: 32 }}
             >
               Dừng
             </Button>
@@ -157,6 +161,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
               onClick={() => handleSend()}
               disabled={disabled || !value.trim()}
               aria-label="Gửi tin nhắn"
+              style={{ height: 32 }}
             >
               Gửi
             </Button>

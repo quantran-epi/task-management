@@ -1,9 +1,29 @@
 import type { TaskPlannerDatabase } from '../../db';
-import type { Task, Project, Milestone, Note } from '../../types/models';
+import type { Task, Project, Milestone, Note, ActiveTimer } from '../../types/models';
 import { getTodayDateString } from '../../utils/date';
 import { getEffectiveDailyCapacity } from '../../utils/capacity';
 import { inspectDateCapacity } from '../../utils/feasibility';
 import { filterSessionsByPeriod, aggregateWorkTypeBreakdown } from '../../utils/analytics';
+import { createTask, updateTask, reparentTask } from '../../db/repositories/taskRepo';
+import {
+  deleteTaskWithAllocations,
+  deleteProjectWithCascade,
+  deleteMilestoneWithCascade,
+} from '../../db/repositories/cascadeRepo';
+import { createProject, updateProject } from '../../db/repositories/projectRepo';
+import { createMilestone, updateMilestone } from '../../db/repositories/milestoneRepo';
+import { upsertAllocation, deleteAllocation } from '../../db/repositories/allocationRepo';
+import {
+  createWorkSession,
+  updateWorkSession,
+  deleteWorkSession,
+} from '../../db/repositories/workSessionRepo';
+import {
+  updateCapacityRule,
+  setCapacityOverride,
+  removeCapacityOverride,
+} from '../../db/repositories/capacityRepo';
+import { createNote, updateNote, deleteNote } from '../../db/repositories/noteRepo';
 import dayjs from 'dayjs';
 
 export interface AiToolDefinition {
@@ -342,6 +362,490 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
       },
     },
   },
+  // --- MUTATION TOOLS (Action execution requires user confirmation) ---
+  {
+    type: 'function',
+    function: {
+      name: 'create_task',
+      description:
+        'Create a new task in Task Planner. Can optionally specify project, milestone, priority, estimate, deadline, work type, tags, and checklist.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Task title or name (required).' },
+          description: { type: 'string', description: 'Optional detailed description.' },
+          projectId: { type: 'string', description: 'Optional project UUID.' },
+          milestoneId: { type: 'string', description: 'Optional milestone UUID.' },
+          status: {
+            type: 'string',
+            enum: ['Open', 'Pending', 'In Progress', 'Resolved', 'In Review', 'Done', 'Cancelled'],
+            description: 'Task status (defaults to Open).',
+          },
+          priority: {
+            type: 'string',
+            enum: ['Low', 'Medium', 'High', 'Urgent'],
+            description: 'Task priority (defaults to Medium).',
+          },
+          estimateMinutes: { type: 'number', description: 'Estimated duration in minutes (e.g. 60).' },
+          deadline: { type: 'string', description: 'Deadline in YYYY-MM-DD format.' },
+          workType: {
+            type: 'string',
+            enum: ['code', 'document', 'meeting', 'support_testing', 'investigate', 'configuration', 'review_code'],
+            description: 'Type of work (defaults to code).',
+          },
+          tags: { type: 'array', items: { type: 'string' }, description: 'Optional tags list.' },
+          jiraKey: { type: 'string', description: 'Optional Jira issue key (e.g. PROJ-123).' },
+          checklist: { type: 'array', items: { type: 'string' }, description: 'Optional checklist item titles.' },
+        },
+        required: ['name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_task',
+      description:
+        'Update fields of an existing task (status, priority, estimate, progress, dates, notes, description).',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'UUID of the task to update (required).' },
+          name: { type: 'string', description: 'New task name.' },
+          description: { type: 'string', description: 'New description.' },
+          status: {
+            type: 'string',
+            enum: ['Open', 'Pending', 'In Progress', 'Resolved', 'In Review', 'Done', 'Cancelled'],
+            description: 'Updated status.',
+          },
+          priority: {
+            type: 'string',
+            enum: ['Low', 'Medium', 'High', 'Urgent'],
+            description: 'Updated priority.',
+          },
+          progress: { type: 'number', description: 'Progress percentage (0 - 100).' },
+          estimateMinutes: { type: 'number', description: 'Estimated minutes.' },
+          deadline: { type: 'string', description: 'Deadline in YYYY-MM-DD format.' },
+          notes: { type: 'string', description: 'Task notes.' },
+          workType: {
+            type: 'string',
+            enum: ['code', 'document', 'meeting', 'support_testing', 'investigate', 'configuration', 'review_code'],
+          },
+          jiraKey: { type: 'string', description: 'Jira issue key.' },
+        },
+        required: ['id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_task_checklist',
+      description:
+        'Modify task checklist items: add new items, toggle done/undone status, remove an item, or replace entire checklist.',
+      parameters: {
+        type: 'object',
+        properties: {
+          taskId: { type: 'string', description: 'UUID of the task.' },
+          action: {
+            type: 'string',
+            enum: ['add', 'toggle', 'remove', 'replace_all'],
+            description: 'Action to perform on the checklist.',
+          },
+          checklistItems: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Item titles for "add" or "replace_all" actions.',
+          },
+          itemId: {
+            type: 'string',
+            description: 'Specific checklist item UUID for "toggle" or "remove" actions.',
+          },
+        },
+        required: ['taskId', 'action'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'reparent_task',
+      description: 'Move a task to a different project or milestone.',
+      parameters: {
+        type: 'object',
+        properties: {
+          taskId: { type: 'string', description: 'UUID of the task to reparent.' },
+          projectId: { type: 'string', description: 'Target project UUID (or null to unassign).' },
+          milestoneId: { type: 'string', description: 'Target milestone UUID (or null to unassign).' },
+        },
+        required: ['taskId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_task',
+      description: 'Delete a task and its planned allocations permanently.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'UUID of the task to delete.' },
+        },
+        required: ['id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_project',
+      description: 'Create a new project in Task Planner.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Project name (required).' },
+          description: { type: 'string', description: 'Project description.' },
+          status: {
+            type: 'string',
+            enum: ['Open', 'Pending', 'In Progress', 'Done', 'Cancelled'],
+            description: 'Status (defaults to Open).',
+          },
+          deadline: { type: 'string', description: 'Target date / deadline in YYYY-MM-DD format.' },
+          notes: { type: 'string', description: 'Project notes.' },
+        },
+        required: ['name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_project',
+      description: 'Update project details, status, deadline, or description.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'UUID of the project to update.' },
+          name: { type: 'string', description: 'Updated project name.' },
+          description: { type: 'string', description: 'Updated description.' },
+          status: {
+            type: 'string',
+            enum: ['Open', 'Pending', 'In Progress', 'Done', 'Cancelled'],
+          },
+          deadline: { type: 'string', description: 'Deadline in YYYY-MM-DD format.' },
+          notes: { type: 'string', description: 'Updated notes.' },
+        },
+        required: ['id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_project',
+      description: 'Delete a project and cascade delete all child milestones, tasks, and allocations.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'UUID of the project to delete.' },
+        },
+        required: ['id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_milestone',
+      description: 'Create a new milestone under an existing project.',
+      parameters: {
+        type: 'object',
+        properties: {
+          projectId: { type: 'string', description: 'Parent project UUID (required).' },
+          name: { type: 'string', description: 'Milestone name (required).' },
+          description: { type: 'string', description: 'Milestone description.' },
+          status: {
+            type: 'string',
+            enum: ['Open', 'Pending', 'In Progress', 'Done', 'Cancelled'],
+            description: 'Status (defaults to Open).',
+          },
+          deadline: { type: 'string', description: 'Target date in YYYY-MM-DD format.' },
+        },
+        required: ['projectId', 'name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_milestone',
+      description: 'Update milestone name, description, status, or deadline.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'UUID of the milestone to update.' },
+          name: { type: 'string', description: 'New milestone name.' },
+          description: { type: 'string', description: 'New description.' },
+          status: {
+            type: 'string',
+            enum: ['Open', 'Pending', 'In Progress', 'Done', 'Cancelled'],
+          },
+          deadline: { type: 'string', description: 'Deadline in YYYY-MM-DD format.' },
+        },
+        required: ['id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_milestone',
+      description: 'Delete a milestone and cascade delete its child tasks and allocations.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'UUID of the milestone to delete.' },
+        },
+        required: ['id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'plan_allocation',
+      description: 'Schedule a workload allocation for a task on a specific calendar date.',
+      parameters: {
+        type: 'object',
+        properties: {
+          taskId: { type: 'string', description: 'UUID of the task.' },
+          date: { type: 'string', description: 'Target date in YYYY-MM-DD format.' },
+          allocatedMinutes: { type: 'number', description: 'Allocated time in minutes (1 - 1440).' },
+        },
+        required: ['taskId', 'date', 'allocatedMinutes'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_allocation',
+      description: 'Remove scheduled workload allocation for a task on a date.',
+      parameters: {
+        type: 'object',
+        properties: {
+          taskId: { type: 'string', description: 'UUID of the task.' },
+          date: { type: 'string', description: 'Target date in YYYY-MM-DD format.' },
+        },
+        required: ['taskId', 'date'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'log_work_session',
+      description: 'Log actual time spent working on a task into work session history.',
+      parameters: {
+        type: 'object',
+        properties: {
+          taskId: { type: 'string', description: 'UUID of the task.' },
+          durationMinutes: { type: 'number', description: 'Actual work duration in minutes (>= 1).' },
+          date: { type: 'string', description: 'Date of session (YYYY-MM-DD, defaults to today).' },
+          notes: { type: 'string', description: 'Optional work summary or notes.' },
+        },
+        required: ['taskId', 'durationMinutes'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_work_session',
+      description: 'Update duration, date, or notes of an existing work session.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'UUID of the work session.' },
+          durationMinutes: { type: 'number', description: 'New duration in minutes.' },
+          date: { type: 'string', description: 'New date in YYYY-MM-DD format.' },
+          notes: { type: 'string', description: 'Updated notes.' },
+        },
+        required: ['id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_work_session',
+      description: 'Delete a logged work session permanently.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'UUID of the work session to delete.' },
+        },
+        required: ['id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'start_timer',
+      description: 'Start live timer tracking for a task.',
+      parameters: {
+        type: 'object',
+        properties: {
+          taskId: { type: 'string', description: 'UUID of the task to time.' },
+        },
+        required: ['taskId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'pause_timer',
+      description: 'Pause a currently running timer for a task.',
+      parameters: {
+        type: 'object',
+        properties: {
+          taskId: { type: 'string', description: 'UUID of the task whose timer should be paused.' },
+        },
+        required: ['taskId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'stop_and_log_timer',
+      description: 'Stop the active timer for a task, compute elapsed duration, and record a work session log.',
+      parameters: {
+        type: 'object',
+        properties: {
+          taskId: { type: 'string', description: 'UUID of the task.' },
+          notes: { type: 'string', description: 'Optional notes for the logged session.' },
+        },
+        required: ['taskId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'discard_timer',
+      description: 'Cancel and discard an active timer without saving any work session.',
+      parameters: {
+        type: 'object',
+        properties: {
+          taskId: { type: 'string', description: 'UUID of the task whose timer to discard.' },
+        },
+        required: ['taskId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_capacity_rule',
+      description: 'Update standard daily working capacity rule for a day of week (0=Sunday, 1=Monday, ..., 6=Saturday).',
+      parameters: {
+        type: 'object',
+        properties: {
+          dayOfWeek: { type: 'number', description: 'Day of week: 0 to 6.' },
+          capacityMinutes: { type: 'number', description: 'Daily capacity in minutes.' },
+          isWorkDay: { type: 'boolean', description: 'Whether this day is a designated work day.' },
+        },
+        required: ['dayOfWeek', 'capacityMinutes'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'set_capacity_override',
+      description: 'Set a specific capacity override for a date (e.g. for leave or overtime).',
+      parameters: {
+        type: 'object',
+        properties: {
+          date: { type: 'string', description: 'Date in YYYY-MM-DD format.' },
+          capacityMinutes: { type: 'number', description: 'Capacity in minutes for that date.' },
+          reason: { type: 'string', description: 'Reason for override (e.g. Vacation, Holiday).' },
+        },
+        required: ['date', 'capacityMinutes'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'remove_capacity_override',
+      description: 'Remove custom capacity override for a date, reverting back to the standard weekly rule.',
+      parameters: {
+        type: 'object',
+        properties: {
+          date: { type: 'string', description: 'Date in YYYY-MM-DD format.' },
+        },
+        required: ['date'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_note',
+      description: 'Create a new note or scratchpad, optionally linked to a task, project, or milestone.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Note title.' },
+          body: { type: 'string', description: 'Note markdown content (required).' },
+          entityType: {
+            type: 'string',
+            enum: ['task', 'project', 'milestone'],
+            description: 'Optional entity type to link note to.',
+          },
+          entityId: { type: 'string', description: 'UUID of entity to link note to.' },
+          isPinned: { type: 'boolean', description: 'Whether note should be pinned.' },
+        },
+        required: ['body'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_note',
+      description: 'Update content, title, or pinned state of an existing note.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'UUID of the note to update.' },
+          title: { type: 'string', description: 'Updated title.' },
+          body: { type: 'string', description: 'Updated markdown body.' },
+          isPinned: { type: 'boolean', description: 'Updated pinned state.' },
+        },
+        required: ['id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_note',
+      description: 'Delete a note permanently.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'UUID of the note to delete.' },
+        },
+        required: ['id'],
+      },
+    },
+  },
 ];
 
 export async function executeAiTool(
@@ -349,8 +853,9 @@ export async function executeAiTool(
   args: Record<string, any>,
   db: TaskPlannerDatabase
 ): Promise<string> {
+  const normalized = normalizeToolName(toolName);
   try {
-    switch (toolName) {
+    switch (normalized) {
       case 'query_tasks': {
         if (!db.tasks) return JSON.stringify({ error: 'Tasks table unavailable' });
         let tasks = await db.tasks.toArray();
@@ -1249,10 +1754,581 @@ export async function executeAiTool(
         });
       }
 
+      // --- MUTATION IMPLEMENTATIONS ---
+      case 'create_task': {
+        const checklistItems = Array.isArray(args.checklist)
+          ? args.checklist.map((itemText: string) => ({
+              id: crypto.randomUUID(),
+              text: String(itemText),
+              done: false,
+            }))
+          : undefined;
+
+        const task = await createTask(
+          {
+            name: args.name,
+            description: args.description,
+            projectId: args.projectId,
+            milestoneId: args.milestoneId,
+            status: args.status || 'Open',
+            priority: args.priority || 'Medium',
+            estimateMinutes: typeof args.estimateMinutes === 'number' ? args.estimateMinutes : 0,
+            deadline: args.deadline,
+            workType: args.workType || 'code',
+            opsOwners: args.opsOwners || args.tags,
+            jiraKey: args.jiraKey,
+            checklist: checklistItems,
+          },
+          db
+        );
+        return JSON.stringify({
+          success: true,
+          message: `Đã tạo tác vụ "${task.name}" thành công.`,
+          task: { id: task.id, name: task.name, status: task.status, priority: task.priority },
+        });
+      }
+
+      case 'update_task': {
+        if (!args.id) return JSON.stringify({ error: 'Task ID is required' });
+        const patch: any = {};
+        if (args.name !== undefined) patch.name = args.name;
+        if (args.description !== undefined) patch.description = args.description;
+        if (args.status !== undefined) patch.status = args.status;
+        if (args.priority !== undefined) patch.priority = args.priority;
+        if (args.progress !== undefined) patch.progress = Number(args.progress);
+        if (args.estimateMinutes !== undefined) patch.estimateMinutes = Number(args.estimateMinutes);
+        if (args.deadline !== undefined) patch.deadline = args.deadline;
+        if (args.notes !== undefined) patch.notes = args.notes;
+        if (args.workType !== undefined) patch.workType = args.workType;
+        if (args.jiraKey !== undefined) patch.jiraKey = args.jiraKey;
+
+        await updateTask(args.id, patch, db);
+        return JSON.stringify({
+          success: true,
+          message: `Đã cập nhật tác vụ (${args.id}) thành công.`,
+          updatedFields: Object.keys(patch),
+        });
+      }
+
+      case 'update_task_checklist': {
+        if (!args.taskId) return JSON.stringify({ error: 'taskId is required' });
+        const task = await db.tasks.get(args.taskId);
+        if (!task) return JSON.stringify({ error: `Không tìm thấy tác vụ: ${args.taskId}` });
+        const checklist = [...(task.checklist || [])];
+
+        if (args.action === 'add') {
+          const rawItems = args.checklistItems ?? args.items;
+          const itemsToAdd = Array.isArray(rawItems) ? rawItems : [args.item || 'Mục mới'];
+          for (const it of itemsToAdd) {
+            checklist.push({ id: crypto.randomUUID(), text: String(it), done: false });
+          }
+        } else if (args.action === 'toggle') {
+          const item = checklist.find((c) => c.id === args.itemId || c.text === args.itemId);
+          if (item) item.done = !item.done;
+        } else if (args.action === 'remove') {
+          const idx = checklist.findIndex((c) => c.id === args.itemId || c.text === args.itemId);
+          if (idx !== -1) checklist.splice(idx, 1);
+        } else if (args.action === 'replace_all') {
+          checklist.length = 0;
+          const rawItems = args.checklistItems ?? args.items;
+          if (Array.isArray(rawItems)) {
+            for (const it of rawItems) {
+              checklist.push({ id: crypto.randomUUID(), text: String(it), done: false });
+            }
+          }
+        }
+
+        await updateTask(task.id, { checklist }, db);
+        return JSON.stringify({
+          success: true,
+          message: `Đã cập nhật checklist của tác vụ "${task.name}".`,
+          totalChecklistItems: checklist.length,
+        });
+      }
+
+      case 'reparent_task': {
+        if (!args.taskId) return JSON.stringify({ error: 'taskId is required' });
+        await reparentTask(args.taskId, args.projectId ?? null, args.milestoneId ?? null, db);
+        return JSON.stringify({
+          success: true,
+          message: `Đã di chuyển tác vụ (${args.taskId}) sang dự án/mốc mới.`,
+        });
+      }
+
+      case 'delete_task': {
+        if (!args.id) return JSON.stringify({ error: 'Task ID is required' });
+        await deleteTaskWithAllocations(args.id, db);
+        return JSON.stringify({
+          success: true,
+          message: `Đã xóa tác vụ (${args.id}) và các phân bổ kế hoạch liên quan.`,
+        });
+      }
+
+      case 'create_project': {
+        const project = await createProject(
+          {
+            name: args.name,
+            description: args.description,
+            status: args.status || 'Open',
+            deadline: args.deadline,
+            notes: args.notes,
+          },
+          db
+        );
+        return JSON.stringify({
+          success: true,
+          message: `Đã tạo dự án "${project.name}" thành công.`,
+          project: { id: project.id, name: project.name, status: project.status },
+        });
+      }
+
+      case 'update_project': {
+        if (!args.id) return JSON.stringify({ error: 'Project ID is required' });
+        const patch: any = {};
+        if (args.name !== undefined) patch.name = args.name;
+        if (args.description !== undefined) patch.description = args.description;
+        if (args.status !== undefined) patch.status = args.status;
+        if (args.deadline !== undefined) patch.deadline = args.deadline;
+        if (args.notes !== undefined) patch.notes = args.notes;
+
+        await updateProject(args.id, patch, db);
+        return JSON.stringify({
+          success: true,
+          message: `Đã cập nhật dự án (${args.id}) thành công.`,
+          updatedFields: Object.keys(patch),
+        });
+      }
+
+      case 'delete_project': {
+        if (!args.id) return JSON.stringify({ error: 'Project ID is required' });
+        await deleteProjectWithCascade(args.id, 'cascade', db);
+        return JSON.stringify({
+          success: true,
+          message: `Đã xóa dự án (${args.id}) và tất cả mốc, tác vụ con liên quan.`,
+        });
+      }
+
+      case 'create_milestone': {
+        const milestone = await createMilestone(
+          {
+            projectId: args.projectId,
+            name: args.name,
+            description: args.description,
+            status: args.status || 'Open',
+            deadline: args.deadline,
+          },
+          db
+        );
+        return JSON.stringify({
+          success: true,
+          message: `Đã tạo mốc "${milestone.name}" thành công.`,
+          milestone: { id: milestone.id, name: milestone.name, status: milestone.status },
+        });
+      }
+
+      case 'update_milestone': {
+        if (!args.id) return JSON.stringify({ error: 'Milestone ID is required' });
+        const patch: any = {};
+        if (args.name !== undefined) patch.name = args.name;
+        if (args.description !== undefined) patch.description = args.description;
+        if (args.status !== undefined) patch.status = args.status;
+        if (args.deadline !== undefined) patch.deadline = args.deadline;
+
+        await updateMilestone(args.id, patch, db);
+        return JSON.stringify({
+          success: true,
+          message: `Đã cập nhật mốc (${args.id}) thành công.`,
+          updatedFields: Object.keys(patch),
+        });
+      }
+
+      case 'delete_milestone': {
+        if (!args.id) return JSON.stringify({ error: 'Milestone ID is required' });
+        await deleteMilestoneWithCascade(args.id, 'cascade', db);
+        return JSON.stringify({
+          success: true,
+          message: `Đã xóa mốc (${args.id}) và tất cả tác vụ con liên quan.`,
+        });
+      }
+
+      case 'plan_allocation': {
+        if (!args.taskId || !args.date || typeof args.allocatedMinutes !== 'number') {
+          return JSON.stringify({ error: 'taskId, date, and allocatedMinutes are required' });
+        }
+        const allocation = await upsertAllocation(args.taskId, args.date, Number(args.allocatedMinutes), db);
+        return JSON.stringify({
+          success: true,
+          message: `Đã lên lịch phân bổ ${args.allocatedMinutes} phút ngày ${args.date}.`,
+          allocation,
+        });
+      }
+
+      case 'delete_allocation': {
+        if (args.id) {
+          await deleteAllocation(args.id, db);
+          return JSON.stringify({
+            success: true,
+            message: `Đã xóa phân bổ kế hoạch (${args.id}).`,
+          });
+        }
+        if (!args.taskId || !args.date) {
+          return JSON.stringify({ error: 'taskId and date are required' });
+        }
+        const existing = await db.plannedAllocations
+          .where('taskId')
+          .equals(args.taskId)
+          .filter((a) => a.date === args.date)
+          .first();
+        if (existing) {
+          await deleteAllocation(existing.id, db);
+        }
+        return JSON.stringify({
+          success: true,
+          message: `Đã xóa phân bổ kế hoạch ngày ${args.date}.`,
+        });
+      }
+
+      case 'log_work_session': {
+        if (!args.taskId || typeof args.durationMinutes !== 'number') {
+          return JSON.stringify({ error: 'taskId and durationMinutes are required' });
+        }
+        const targetDate = args.date || getTodayDateString();
+        const startTime = dayjs(targetDate).hour(9).minute(0).toISOString();
+        const endTime = dayjs(startTime).add(Number(args.durationMinutes), 'minute').toISOString();
+        const session = await createWorkSession(
+          {
+            taskId: args.taskId,
+            startTime,
+            endTime,
+            durationMinutes: Math.max(1, Number(args.durationMinutes)),
+            note: args.notes || args.note,
+          },
+          db
+        );
+        return JSON.stringify({
+          success: true,
+          message: `Đã ghi nhận ${args.durationMinutes} phút vào nhật ký công việc.`,
+          sessionId: session.id,
+        });
+      }
+
+      case 'update_work_session': {
+        if (!args.id) return JSON.stringify({ error: 'Session ID is required' });
+        const patch: any = {};
+        if (args.durationMinutes !== undefined) patch.durationMinutes = Number(args.durationMinutes);
+        if (args.notes !== undefined) patch.note = args.notes;
+        if (args.date !== undefined) {
+          patch.date = args.date;
+          patch.startTime = dayjs(args.date).hour(9).minute(0).toISOString();
+        }
+        await updateWorkSession(args.id, patch, db);
+        return JSON.stringify({
+          success: true,
+          message: `Đã cập nhật phiên làm việc (${args.id}).`,
+        });
+      }
+
+      case 'delete_work_session': {
+        if (!args.id) return JSON.stringify({ error: 'Session ID is required' });
+        await deleteWorkSession(args.id, db);
+        return JSON.stringify({
+          success: true,
+          message: `Đã xóa phiên làm việc (${args.id}).`,
+        });
+      }
+
+      case 'start_timer': {
+        if (!args.taskId) return JSON.stringify({ error: 'taskId is required' });
+        const task = await db.tasks.get(args.taskId);
+        if (!task) return JSON.stringify({ error: `Không tìm thấy tác vụ: ${args.taskId}` });
+
+        const nowMs = Date.now();
+        const nowIso = new Date(nowMs).toISOString();
+        const existing = await db.activeTimers.get(args.taskId);
+
+        if (existing) {
+          if (existing.status === 'running') {
+            return JSON.stringify({
+              success: true,
+              message: `Bộ đếm giờ cho "${task.name}" đang chạy rồi.`,
+            });
+          }
+          const updatedSegments = [...(existing.segments || []), { startTime: nowIso }];
+          const updated: ActiveTimer = {
+            ...existing,
+            status: 'running',
+            startedAt: nowMs,
+            segments: updatedSegments,
+          };
+          await db.activeTimers.put(updated);
+          return JSON.stringify({
+            success: true,
+            message: `Đã tiếp tục bộ đếm giờ cho "${task.name}".`,
+          });
+        }
+
+        const newTimer: ActiveTimer = {
+          taskId: args.taskId,
+          status: 'running',
+          startedAt: nowMs,
+          accumulatedMs: 0,
+          sessionStartTime: nowIso,
+          segments: [{ startTime: nowIso }],
+        };
+        await db.activeTimers.put(newTimer);
+        return JSON.stringify({
+          success: true,
+          message: `Đã bắt đầu bộ đếm giờ cho "${task.name}".`,
+        });
+      }
+
+      case 'pause_timer': {
+        if (!args.taskId) return JSON.stringify({ error: 'taskId is required' });
+        const existing = await db.activeTimers.get(args.taskId);
+        if (!existing || existing.status !== 'running') {
+          return JSON.stringify({ error: `Không có bộ đếm đang chạy cho tác vụ: ${args.taskId}` });
+        }
+        const nowMs = Date.now();
+        const nowIso = new Date(nowMs).toISOString();
+        const delta = Math.max(0, nowMs - existing.startedAt);
+        const updatedSegments = [...(existing.segments || [])];
+        if (updatedSegments.length > 0 && !updatedSegments[updatedSegments.length - 1]?.endTime) {
+          updatedSegments[updatedSegments.length - 1] = {
+            ...updatedSegments[updatedSegments.length - 1]!,
+            endTime: nowIso,
+          };
+        }
+        const updated: ActiveTimer = {
+          ...existing,
+          status: 'paused',
+          accumulatedMs: (existing.accumulatedMs || 0) + delta,
+          startedAt: nowMs,
+          segments: updatedSegments,
+        };
+        await db.activeTimers.put(updated);
+        return JSON.stringify({
+          success: true,
+          message: `Đã tạm dừng bộ đếm giờ cho tác vụ (${args.taskId}).`,
+        });
+      }
+
+      case 'stop_and_log_timer': {
+        if (!args.taskId) return JSON.stringify({ error: 'taskId is required' });
+        const existing = await db.activeTimers.get(args.taskId);
+        if (!existing) {
+          return JSON.stringify({ error: `Không tìm thấy bộ đếm hoạt động cho tác vụ: ${args.taskId}` });
+        }
+        const nowMs = Date.now();
+        const nowIso = new Date(nowMs).toISOString();
+        let totalMs = existing.accumulatedMs || 0;
+        if (existing.status === 'running') {
+          totalMs += Math.max(0, nowMs - existing.startedAt);
+        }
+        const durationMinutes = Math.max(1, Math.round(totalMs / 60000));
+        const session = await createWorkSession(
+          {
+            taskId: existing.taskId,
+            startTime: existing.sessionStartTime || nowIso,
+            endTime: nowIso,
+            durationMinutes,
+            segments: existing.segments,
+            note: args.notes || args.note || 'AI Auto-logged Work Session',
+          },
+          db
+        );
+        await db.activeTimers.delete(existing.taskId);
+        return JSON.stringify({
+          success: true,
+          message: `Đã dừng bộ đếm giờ và ghi nhận ${durationMinutes} phút vào nhật ký.`,
+          durationMinutes,
+          sessionId: session.id,
+        });
+      }
+
+      case 'discard_timer': {
+        if (!args.taskId) return JSON.stringify({ error: 'taskId is required' });
+        await db.activeTimers.delete(args.taskId);
+        return JSON.stringify({
+          success: true,
+          message: `Đã hủy bỏ bộ đếm giờ của tác vụ (${args.taskId}).`,
+        });
+      }
+
+      case 'update_capacity_rule': {
+        await updateCapacityRule(Number(args.dayOfWeek), Number(args.capacityMinutes), db);
+        return JSON.stringify({
+          success: true,
+          message: `Đã cập nhật quy tắc năng lực thứ ${args.dayOfWeek}: ${args.capacityMinutes} phút.`,
+        });
+      }
+
+      case 'set_capacity_override': {
+        await setCapacityOverride(args.date, Number(args.capacityMinutes), args.reason, db);
+        return JSON.stringify({
+          success: true,
+          message: `Đã đặt năng lực ngày ${args.date}: ${args.capacityMinutes} phút.`,
+        });
+      }
+
+      case 'remove_capacity_override': {
+        await removeCapacityOverride(args.date, db);
+        return JSON.stringify({
+          success: true,
+          message: `Đã xóa tùy chỉnh năng lực ngày ${args.date}.`,
+        });
+      }
+
+      case 'create_note': {
+        const note = await createNote(
+          {
+            title: args.title,
+            body: args.body,
+            entityType: args.entityType,
+            entityId: args.entityId,
+            isPinned: Boolean(args.isPinned),
+          },
+          db
+        );
+        return JSON.stringify({
+          success: true,
+          message: `Đã tạo ghi chú thành công.`,
+          noteId: note.id,
+        });
+      }
+
+      case 'update_note': {
+        if (!args.id) return JSON.stringify({ error: 'Note ID is required' });
+        const patch: any = {};
+        if (args.title !== undefined) patch.title = args.title;
+        if (args.body !== undefined) patch.body = args.body;
+        if (args.isPinned !== undefined) patch.isPinned = Boolean(args.isPinned);
+
+        await updateNote(args.id, patch, db);
+        return JSON.stringify({
+          success: true,
+          message: `Đã cập nhật ghi chú (${args.id}).`,
+        });
+      }
+
+      case 'delete_note': {
+        if (!args.id) return JSON.stringify({ error: 'Note ID is required' });
+        await deleteNote(args.id, db);
+        return JSON.stringify({
+          success: true,
+          message: `Đã xóa ghi chú (${args.id}).`,
+        });
+      }
+
       default:
         return JSON.stringify({ error: `Unknown tool: ${toolName}` });
     }
   } catch (err: any) {
     return JSON.stringify({ error: `Tool execution failed: ${err?.message || String(err)}` });
+  }
+}
+
+const MUTATION_TOOLS = new Set([
+  'create_task',
+  'update_task',
+  'update_task_checklist',
+  'reparent_task',
+  'delete_task',
+  'create_project',
+  'update_project',
+  'delete_project',
+  'create_milestone',
+  'update_milestone',
+  'delete_milestone',
+  'plan_allocation',
+  'delete_allocation',
+  'log_work_session',
+  'update_work_session',
+  'delete_work_session',
+  'start_timer',
+  'pause_timer',
+  'stop_and_log_timer',
+  'discard_timer',
+  'update_capacity_rule',
+  'set_capacity_override',
+  'remove_capacity_override',
+  'create_note',
+  'update_note',
+  'delete_note',
+]);
+
+/**
+ * Normalizes tool names by stripping provider or proxy cloaking wrappers
+ * (such as 9router Antigravity / Claude suffix `_ide`, `_cc`, `_tool` or `proxy_` prefix).
+ */
+export function normalizeToolName(toolName: string): string {
+  if (!toolName) return '';
+  let name = toolName.trim();
+  name = name.replace(/(_ide|_cc|_tool)$/, '');
+  name = name.replace(/^(proxy_|tool_)/, '');
+  return name;
+}
+
+export function isMutationTool(toolName: string): boolean {
+  const normalized = normalizeToolName(toolName);
+  return MUTATION_TOOLS.has(normalized);
+}
+
+export function describeToolMutation(toolName: string, args: Record<string, any>): string {
+  const normalized = normalizeToolName(toolName);
+  switch (normalized) {
+    case 'create_task':
+      return `Tạo tác vụ mới: "${args.name || 'Chưa đặt tên'}"${args.priority ? ` [Ưu tiên: ${args.priority}]` : ''}${args.estimateMinutes ? ` [Ước tính: ${args.estimateMinutes}p]` : ''}${args.deadline ? ` [Hạn: ${args.deadline}]` : ''}`;
+    case 'update_task':
+      return `Cập nhật tác vụ (${args.id}): ${Object.keys(args).filter((k) => k !== 'id').join(', ')}`;
+    case 'update_task_checklist':
+      return `Cập nhật checklist tác vụ (${args.taskId}): hành động ${args.action}`;
+    case 'reparent_task':
+      return `Chuyển tác vụ (${args.taskId}) sang dự án/mốc mới`;
+    case 'delete_task':
+      return `Xóa vĩnh viễn tác vụ (${args.id}) cùng các kế hoạch liên quan`;
+    case 'create_project':
+      return `Tạo dự án mới: "${args.name || 'Chưa đặt tên'}"${args.deadline ? ` [Hạn: ${args.deadline}]` : ''}`;
+    case 'update_project':
+      return `Cập nhật dự án (${args.id}): ${Object.keys(args).filter((k) => k !== 'id').join(', ')}`;
+    case 'delete_project':
+      return `Xóa dự án (${args.id}) và tất cả mốc, tác vụ con liên quan`;
+    case 'create_milestone':
+      return `Tạo mốc mới: "${args.name || 'Chưa đặt tên'}"${args.deadline ? ` [Hạn: ${args.deadline}]` : ''}`;
+    case 'update_milestone':
+      return `Cập nhật mốc (${args.id}): ${Object.keys(args).filter((k) => k !== 'id').join(', ')}`;
+    case 'delete_milestone':
+      return `Xóa mốc (${args.id}) và tất cả tác vụ con liên quan`;
+    case 'plan_allocation':
+      return `Lên lịch làm việc: ${args.allocatedMinutes} phút vào ngày ${args.date} cho tác vụ (${args.taskId})`;
+    case 'delete_allocation':
+      return `Xóa lịch làm việc ngày ${args.date} của tác vụ (${args.taskId})`;
+    case 'log_work_session':
+      return `Ghi nhận thời gian làm việc: ${args.durationMinutes} phút vào ngày ${args.date || 'hôm nay'} cho tác vụ (${args.taskId})`;
+    case 'update_work_session':
+      return `Cập nhật nhật ký công việc (${args.id})`;
+    case 'delete_work_session':
+      return `Xóa phiên làm việc (${args.id})`;
+    case 'start_timer':
+      return `Bắt đầu bộ đếm giờ cho tác vụ (${args.taskId})`;
+    case 'pause_timer':
+      return `Tạm dừng bộ đếm giờ của tác vụ (${args.taskId})`;
+    case 'stop_and_log_timer':
+      return `Dừng bộ đếm giờ và lưu vào nhật ký công việc cho tác vụ (${args.taskId})`;
+    case 'discard_timer':
+      return `Hủy bỏ bộ đếm giờ của tác vụ (${args.taskId}) không lưu lại`;
+    case 'update_capacity_rule':
+      return `Cập nhật năng lực làm việc thứ ${args.dayOfWeek}: ${args.capacityMinutes} phút`;
+    case 'set_capacity_override':
+      return `Đặt ngoại lệ năng lực ngày ${args.date}: ${args.capacityMinutes} phút`;
+    case 'remove_capacity_override':
+      return `Xóa ngoại lệ năng lực ngày ${args.date}`;
+    case 'create_note':
+      return `Tạo ghi chú mới: "${args.title || 'Ghi chú'}"`;
+    case 'update_note':
+      return `Cập nhật ghi chú (${args.id})`;
+    case 'delete_note':
+      return `Xóa vĩnh viễn ghi chú (${args.id})`;
+    default:
+      return `Thực hiện thao tác: ${toolName}`;
   }
 }

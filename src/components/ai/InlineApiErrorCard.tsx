@@ -7,7 +7,7 @@ const { Text } = Typography;
 export interface InlineApiErrorCardProps {
   errorMessage: string;
   onRetry: () => void;
-  onOpenSettings: () => void;
+  onOpenSettings?: (() => void) | undefined;
 }
 
 export const InlineApiErrorCard: React.FC<InlineApiErrorCardProps> = ({
@@ -47,13 +47,15 @@ export const InlineApiErrorCard: React.FC<InlineApiErrorCardProps> = ({
           >
             Thử lại tin nhắn
           </Button>
-          <Button
-            size="small"
-            icon={<SettingOutlined />}
-            onClick={onOpenSettings}
-          >
-            Cài đặt AI
-          </Button>
+          {onOpenSettings && (
+            <Button
+              size="small"
+              icon={<SettingOutlined />}
+              onClick={onOpenSettings}
+            >
+              Cài đặt AI
+            </Button>
+          )}
         </Space>
       </div>
     </Card>
