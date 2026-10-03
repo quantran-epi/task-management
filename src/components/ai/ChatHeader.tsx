@@ -7,6 +7,7 @@ import {
   PushpinFilled,
   CloseOutlined,
   ApartmentOutlined,
+  BugOutlined,
 } from '@ant-design/icons';
 
 const { Text } = Typography;
@@ -33,6 +34,7 @@ export interface ChatHeaderProps {
   isPinned: boolean;
   onTogglePin: () => void;
   onClearContext: () => void;
+  onOpenDebug?: () => void;
   onClose: () => void;
 }
 
@@ -48,6 +50,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   isPinned,
   onTogglePin,
   onClearContext,
+  onOpenDebug,
   onClose,
 }) => {
   const { token } = theme.useToken();
@@ -159,6 +162,19 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             style={{ minWidth: 28, minHeight: 28 }}
           />
         </Tooltip>
+
+        {onOpenDebug && (
+          <Tooltip title="Nhật ký gỡ lỗi AI (Xem tin nhắn & công cụ)">
+            <Button
+              type="text"
+              size="small"
+              icon={<BugOutlined />}
+              onClick={onOpenDebug}
+              aria-label="Nhật ký gỡ lỗi AI"
+              style={{ minWidth: 28, minHeight: 28 }}
+            />
+          </Tooltip>
+        )}
 
         <Tooltip
           title={
