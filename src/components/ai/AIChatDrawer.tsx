@@ -26,6 +26,8 @@ import { updateTask, getTask } from '../../db/repositories/taskRepo';
 import { createNote } from '../../db/repositories/noteRepo';
 import { getProject } from '../../db/repositories/projectRepo';
 import { getMilestone } from '../../db/repositories/milestoneRepo';
+import { getTodayDateString } from '../../utils/date';
+import dayjs from 'dayjs';
 import { ChatHeader } from './ChatHeader';
 import { ChatMessageList } from './ChatMessageList';
 import { ChatInputBar } from './ChatInputBar';
@@ -409,13 +411,27 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     const msgsToSend = boundaryIdx >= 0 ? allMsgs.slice(boundaryIdx + 1) : allMsgs;
     const recentMsgs: ChatCompletionMessage[] = [];
 
-    if (systemInstruction.trim()) {
-      console.log('[AI Harness] 📝 Injected Context Grounding:\n', systemInstruction);
-      recentMsgs.push({
-        role: 'system',
-        content: `You are an expert AI assistant embedded inside Personal Task & Workload Planner.\nBelow is the ground-truth context of the currently active item or workspace:\n${systemInstruction}\nUse this context to answer accurately. You have access to database query tools (query_tasks, query_projects, query_milestones, get_item_details). Use them whenever needed to inspect related tasks, search milestones, or check details. When breaking down goals, output clear actionable bullet points that can be converted into checklist items.`,
-      });
-    }
+    const todayStr = getTodayDateString();
+    const now = dayjs();
+    const dayName = now.format('dddd');
+    const timeStr = now.format('HH:mm');
+
+    const systemPromptContent = `You are an expert AI assistant embedded inside Personal Task & Workload Planner.
+Current Date: ${todayStr} (${dayName}). Time: ${timeStr}.
+
+CRITICAL ANTI-HALLUCINATION RULES:
+1. NEVER GUESS, ASSUME, OR INVENT DATA.
+2. Every statement regarding tasks, projects, milestones, statuses, deadlines, logged work sessions, actual hours, planned allocations, capacity limits, notes, reminders, recurring schedules, or system sync state MUST be strictly grounded in concrete evidence returned by your tools or provided in context.
+3. If the user asks about anything not present in the initial context (such as time spent, worklog history, daily schedule, running timer, notes, capacity, overdue items), YOU MUST CALL THE RELEVANT DATABASE TOOLS before answering.
+4. If a requested item or detail is missing, null, empty, or not recorded in the database, EXPLICITLY STATE THAT IT IS NOT RECORDED. Never extrapolate, approximate, or pretend data exists.
+5. When breaking down goals or proposing steps, output clear actionable bullet points that can be converted into checklist items.
+${systemInstruction.trim() ? `\nBelow is the ground-truth context of the currently active item or workspace:\n${systemInstruction}\n` : ''}`;
+
+    console.log('[AI Harness] 📝 Injected Context Grounding:\n', systemPromptContent);
+    recentMsgs.push({
+      role: 'system',
+      content: systemPromptContent,
+    });
 
     for (const m of msgsToSend.slice(-20)) {
       recentMsgs.push({
@@ -510,11 +526,23 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         // Show friendly recognizable status for tool execution
         const toolLabels = toolCallsToRun
           .map((tc) => {
-            if (tc.function.name === 'query_tasks') return 'Tra cứu tác vụ';
-            if (tc.function.name === 'query_projects') return 'Tra cứu dự án';
-            if (tc.function.name === 'query_milestones') return 'Tra cứu cột mốc';
-            if (tc.function.name === 'get_item_details') return 'Chi tiết mục';
-            return tc.function.name;
+            switch (tc.function.name) {
+              case 'query_tasks': return 'Tra cứu tác vụ';
+              case 'query_projects': return 'Tra cứu dự án';
+              case 'query_milestones': return 'Tra cứu cột mốc';
+              case 'get_item_details': return 'Chi tiết mục';
+              case 'query_worklogs': return 'Nhật ký công việc';
+              case 'get_active_timer': return 'Trạng thái bấm giờ';
+              case 'get_daily_schedule': return 'Lịch làm việc';
+              case 'check_capacity_feasibility': return 'Khả thi năng suất';
+              case 'get_day_insight': return 'Đánh giá ngày';
+              case 'get_analytics_summary': return 'Phân tích thống kê';
+              case 'query_notes': return 'Ghi chú';
+              case 'query_attention_items': return 'Mục cần chú ý';
+              case 'query_recurring_tasks': return 'Tác vụ định kỳ';
+              case 'get_system_status': return 'Trạng thái hệ thống';
+              default: return tc.function.name;
+            }
           })
           .join(', ');
 
