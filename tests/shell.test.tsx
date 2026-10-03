@@ -13,7 +13,7 @@ describe('AppShell Component (UX-01)', () => {
     vi.clearAllMocks();
   });
 
-  it('renders application header title and status badge with dynamic token styling', () => {
+  it('renders application header title, search pill, and status badge with dynamic token styling', () => {
     const { container } = render(
       <ConfigProvider theme={{ algorithm: theme.darkAlgorithm }}>
         <AppShell currentRoute="tasks" onNavigate={onNavigate} isDark={true}>
@@ -22,9 +22,9 @@ describe('AppShell Component (UX-01)', () => {
       </ConfigProvider>
     );
 
-    expect(screen.getByText('Task Planner')).toBeInTheDocument();
+    expect(screen.getAllByText('Task Planner').length).toBeGreaterThan(0);
     expect(screen.getByText('Trực tuyến')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Đặt lại CSDL/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Mở tìm kiếm nhanh/i })).toBeInTheDocument();
     expect(screen.getByText('Shell Content')).toBeInTheDocument();
 
     const header = container.querySelector('header');
@@ -47,16 +47,14 @@ describe('AppShell Component (UX-01)', () => {
     expect(onNavigate).toHaveBeenCalledWith('projects');
   });
 
-  it('opens reset database modal when clicking Reset DB button', () => {
+  it('does not render dangerous reset database button in header', () => {
     render(
       <AppShell currentRoute="tasks" onNavigate={onNavigate}>
         <div>Content</div>
       </AppShell>
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Đặt lại CSDL/i }));
-    expect(screen.getByText('Đặt lại cơ sở dữ liệu')).toBeInTheDocument();
-    expect(screen.getByText(/Hành động nguy hiểm/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Đặt lại CSDL/i })).not.toBeInTheDocument();
   });
 });
 

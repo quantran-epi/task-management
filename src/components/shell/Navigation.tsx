@@ -1,5 +1,5 @@
 import React from 'react';
-import { Menu, type MenuProps, theme } from 'antd';
+import { Menu, type MenuProps } from 'antd';
 import {
   DashboardOutlined,
   CheckSquareOutlined,
@@ -57,8 +57,6 @@ const items: MenuItem[] = [
 ];
 
 export const Navigation: React.FC<NavigationProps> = ({ currentRoute, onNavigate }) => {
-  const { token } = theme.useToken();
-
   return (
     <Menu
       mode="inline"

@@ -12,20 +12,59 @@ export interface InlineStatusTagProps {
   db?: TaskPlannerDatabase | undefined;
 }
 
-const STATUS_CONFIG: Record<
-  TaskStatus,
-  { label: string; color: string; style?: React.CSSProperties }
-> = {
-  Open: { label: 'Mở', color: 'default' },
-  Pending: { label: 'Chờ xử lý', color: 'gold' },
-  'In Progress': { label: 'Đang làm', color: 'processing' },
-  Resolved: { label: 'Đã giải quyết', color: 'warning' },
-  'In Review': { label: 'Đang duyệt', color: 'cyan' },
-  Done: { label: 'Hoàn thành', color: 'success' },
+interface StatusTheme {
+  label: string;
+  bg: string;
+  color: string;
+  borderColor: string;
+  textDecoration?: string;
+  opacity?: number;
+}
+
+const STATUS_CONFIG: Record<TaskStatus, StatusTheme> = {
+  Open: {
+    label: 'Mở',
+    bg: '#f1f5f9',
+    color: '#475569',
+    borderColor: '#e2e8f0',
+  },
+  Pending: {
+    label: 'Chờ xử lý',
+    bg: '#fffbeb',
+    color: '#b45309',
+    borderColor: '#fde68a',
+  },
+  'In Progress': {
+    label: 'Đang làm',
+    bg: '#eef2ff',
+    color: '#4338ca',
+    borderColor: '#c7d2fe',
+  },
+  Resolved: {
+    label: 'Đã giải quyết',
+    bg: '#faf5ff',
+    color: '#7e22ce',
+    borderColor: '#e9d5ff',
+  },
+  'In Review': {
+    label: 'Đang duyệt',
+    bg: '#f0f9ff',
+    color: '#0284c7',
+    borderColor: '#bae6fd',
+  },
+  Done: {
+    label: 'Hoàn thành',
+    bg: '#ecfdf5',
+    color: '#047857',
+    borderColor: '#a7f3d0',
+  },
   Cancelled: {
     label: 'Đã hủy',
-    color: 'default',
-    style: { textDecoration: 'line-through', opacity: 0.65 },
+    bg: '#f8fafc',
+    color: '#94a3b8',
+    borderColor: '#e2e8f0',
+    textDecoration: 'line-through',
+    opacity: 0.75,
   },
 };
 
@@ -46,7 +85,12 @@ export const InlineStatusTag: React.FC<InlineStatusTagProps> = ({
   onStatusChange,
   db,
 }) => {
-  const current = STATUS_CONFIG[status] ?? { label: status, color: 'default' };
+  const current = STATUS_CONFIG[status] ?? {
+    label: status,
+    bg: '#f1f5f9',
+    color: '#475569',
+    borderColor: '#e2e8f0',
+  };
 
   const handleMenuClick: MenuProps['onClick'] = async ({ key }) => {
     const nextStatus = key as TaskStatus;
@@ -69,19 +113,38 @@ export const InlineStatusTag: React.FC<InlineStatusTagProps> = ({
     }
   };
 
-  const menuItems: MenuProps['items'] = ALL_STATUSES.map((st) => ({
-    key: st,
-    label: (
-      <span style={st === 'Cancelled' ? { textDecoration: 'line-through' } : undefined}>
-        {STATUS_CONFIG[st]?.label || st}
-      </span>
-    ),
-  }));
+  const menuItems: MenuProps['items'] = ALL_STATUSES.map((st) => {
+    const cfg = STATUS_CONFIG[st];
+    return {
+      key: st,
+      label: (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            textDecoration: cfg?.textDecoration,
+          }}
+        >
+          <span
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              backgroundColor: cfg?.color || '#94a3b8',
+              display: 'inline-block',
+            }}
+          />
+          {cfg?.label || st}
+        </span>
+      ),
+    };
+  });
 
   return (
     <Dropdown menu={{ items: menuItems, onClick: handleMenuClick }} trigger={['click']}>
       <Tag
-        color={current.color}
+        bordered={false}
         style={{
           cursor: 'pointer',
           userSelect: 'none',
@@ -89,13 +152,22 @@ export const InlineStatusTag: React.FC<InlineStatusTagProps> = ({
           alignItems: 'center',
           gap: 4,
           margin: 0,
-          ...current.style,
+          borderRadius: 12,
+          padding: '1px 10px',
+          fontSize: 12,
+          fontWeight: 500,
+          backgroundColor: current.bg,
+          color: current.color,
+          border: `1px solid ${current.borderColor}`,
+          textDecoration: current.textDecoration,
+          opacity: current.opacity,
+          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
         }}
         role="button"
         aria-label={`Trạng thái hiện tại: ${current.label}. Nhấn để thay đổi.`}
       >
-        <span style={current.style}>{current.label}</span>
-        <span style={{ fontSize: 10 }}>▾</span>
+        <span>{current.label}</span>
+        <span style={{ fontSize: 9, opacity: 0.7, marginLeft: 1 }}>▾</span>
       </Tag>
     </Dropdown>
   );
