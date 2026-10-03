@@ -272,7 +272,13 @@ Plans:
 Plans:
 
 - [ ] 13.2-01-PLAN.md — Dexie SCHEMA_V8 migration for chat threads/messages, 9router API client, connection test, and Settings configuration
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 13.2-02-PLAN.md — Pinnable right-side ChatDrawer UI with docked/overlay layouts, conversation message stream, and scope switcher
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 13.2-03-PLAN.md — Context prompt builder with item field serialization and local note/link content extraction for grounded Q&A
 
 **UI hint**: yes
@@ -297,4 +303,5 @@ Plans:
 | 12.2. Multiple Reminders with Time, Notification Settings, Table Customization & Sidebar Persistence | v1.1 | 4/4 | Complete   | 2026-09-29 |
 | 13. Enhanced Workload Analytics & Milestone Burndown | v1.1 | 3/3 | Complete    | 2026-09-30 |
 | 13.1. Timer, Jira, Sticky Notes, Actual Worklog & Sync Improvements | v1.1 | 5/5 | Complete    | 2026-10-01 |
+| 13.2. AI Chat Drawer, Item Context Grounding & 9router Ask-Answer Integration | v1.1 | 0/3 | Ready to execute | — |
 | 13.2. AI Chat Drawer, Item Context Grounding & 9router Ask-Answer Integration | v1.1 | 0/3 | Planning | — |
