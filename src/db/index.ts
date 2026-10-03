@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import { SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7 } from './schema';
+import { SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7, SCHEMA_V8 } from './schema';
 import type {
   Project,
   Milestone,
@@ -13,6 +13,8 @@ import type {
   ActiveTimer,
   Note,
   NoteAttachment,
+  ChatThread,
+  ChatMessage,
 } from '../types/models';
 
 export class TaskPlannerDatabase extends Dexie {
@@ -28,6 +30,8 @@ export class TaskPlannerDatabase extends Dexie {
   activeTimers!: Table<ActiveTimer, string>;
   notes!: Table<Note, string>;
   noteAttachments!: Table<NoteAttachment, string>;
+  chatThreads!: Table<ChatThread, string>;
+  chatMessages!: Table<ChatMessage, string>;
 
   constructor(databaseName = 'PersonalTaskPlannerDB') {
     super(databaseName);
@@ -127,6 +131,8 @@ export class TaskPlannerDatabase extends Dexie {
             }
           });
       });
+
+    this.version(8).stores(SCHEMA_V8);
 
     // Multi-tab concurrency handlers (DATA-04, D-09, D-10)
     this.on('blocked', () => {

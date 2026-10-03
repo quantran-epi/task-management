@@ -15,7 +15,17 @@ export async function deleteProjectWithCascade(
 ): Promise<void> {
   await db.transaction(
     'rw',
-    [db.projects, db.milestones, db.tasks, db.plannedAllocations, db.workSessions, db.activeTimers, db.notes],
+    [
+      db.projects,
+      db.milestones,
+      db.tasks,
+      db.plannedAllocations,
+      db.workSessions,
+      db.activeTimers,
+      db.notes,
+      db.chatThreads,
+      db.chatMessages,
+    ],
     async () => {
       const milestones = await db.milestones.where('projectId').equals(projectId).toArray();
       const milestoneIds = milestones.map((m) => m.id);
@@ -44,6 +54,23 @@ export async function deleteProjectWithCascade(
             delete note.entityId;
             note.updatedAt = now;
           });
+      }
+
+      // Purge chat threads and messages for project, milestones, and cascaded tasks (D-07)
+      const chatScopeKeysToPurge: string[] = [`project:${projectId}`];
+      for (const mId of milestoneIds) {
+        chatScopeKeysToPurge.push(`milestone:${mId}`);
+      }
+      if (mode === 'cascade') {
+        for (const tId of childTaskIds) {
+          chatScopeKeysToPurge.push(`task:${tId}`);
+        }
+      }
+      const threadsToPurge = await db.chatThreads.where('scopeKey').anyOf(chatScopeKeysToPurge).toArray();
+      if (threadsToPurge.length > 0) {
+        const threadIds = threadsToPurge.map((t) => t.id);
+        await db.chatMessages.where('threadId').anyOf(threadIds).delete();
+        await db.chatThreads.bulkDelete(threadIds);
       }
 
       if (mode === 'cascade') {
@@ -106,7 +133,16 @@ export async function deleteMilestoneWithCascade(
 ): Promise<void> {
   await db.transaction(
     'rw',
-    [db.milestones, db.tasks, db.plannedAllocations, db.workSessions, db.activeTimers, db.notes],
+    [
+      db.milestones,
+      db.tasks,
+      db.plannedAllocations,
+      db.workSessions,
+      db.activeTimers,
+      db.notes,
+      db.chatThreads,
+      db.chatMessages,
+    ],
     async () => {
       const childTasks = await db.tasks.where('milestoneId').equals(milestoneId).toArray();
       const childTaskIds = childTasks.map((t) => t.id);
@@ -123,6 +159,20 @@ export async function deleteMilestoneWithCascade(
             delete note.entityId;
             note.updatedAt = now;
           });
+      }
+
+      // Purge chat threads and messages for milestone and cascaded tasks (D-07)
+      const chatScopeKeysToPurge: string[] = [`milestone:${milestoneId}`];
+      if (mode === 'cascade') {
+        for (const tId of childTaskIds) {
+          chatScopeKeysToPurge.push(`task:${tId}`);
+        }
+      }
+      const threadsToPurge = await db.chatThreads.where('scopeKey').anyOf(chatScopeKeysToPurge).toArray();
+      if (threadsToPurge.length > 0) {
+        const threadIds = threadsToPurge.map((t) => t.id);
+        await db.chatMessages.where('threadId').anyOf(threadIds).delete();
+        await db.chatThreads.bulkDelete(threadIds);
       }
 
       if (mode === 'cascade') {
@@ -171,7 +221,15 @@ export async function deleteTaskWithAllocations(
 ): Promise<void> {
   await db.transaction(
     'rw',
-    [db.tasks, db.plannedAllocations, db.workSessions, db.activeTimers, db.notes],
+    [
+      db.tasks,
+      db.plannedAllocations,
+      db.workSessions,
+      db.activeTimers,
+      db.notes,
+      db.chatThreads,
+      db.chatMessages,
+    ],
     async () => {
       // Detach notes associated with the task (D-25: notes become standalone)
       const now = new Date().toISOString();
@@ -183,6 +241,14 @@ export async function deleteTaskWithAllocations(
           delete note.entityId;
           note.updatedAt = now;
         });
+
+      // Purge chat threads and messages for task (D-07)
+      const threadsToPurge = await db.chatThreads.where('scopeKey').equals(`task:${taskId}`).toArray();
+      if (threadsToPurge.length > 0) {
+        const threadIds = threadsToPurge.map((t) => t.id);
+        await db.chatMessages.where('threadId').anyOf(threadIds).delete();
+        await db.chatThreads.bulkDelete(threadIds);
+      }
 
       const allocations = await db.plannedAllocations.where('taskId').equals(taskId).toArray();
       if (allocations.length > 0) {

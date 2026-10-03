@@ -191,3 +191,26 @@ export interface NoteAttachment {
   filePath?: string | undefined; // Local disk file path
 }
 
+export type ChatScopeType = 'global' | 'task' | 'project' | 'milestone';
+
+export interface ChatThread {
+  id: string; // RFC 4122 v4 UUID
+  scopeKey: string; // Unique index: 'global' | 'task:<taskId>' | 'project:<projectId>' | 'milestone:<milestoneId>'
+  scopeType: ChatScopeType;
+  entityId?: string | undefined; // Target task/project/milestone id (undefined if global)
+  title?: string | undefined;
+  createdAt: string; // ISO string metadata
+  updatedAt: string; // ISO string metadata
+}
+
+export type ChatRole = 'user' | 'assistant' | 'system';
+
+export interface ChatMessage {
+  id: string; // RFC 4122 v4 UUID
+  threadId: string; // Reference to ChatThread.id
+  role: ChatRole;
+  content: string; // Markdown text
+  createdAt: string; // ISO string metadata
+  isContextBoundary?: boolean | undefined; // Phase 13.2 D-06: /clear context reset marker
+}
+

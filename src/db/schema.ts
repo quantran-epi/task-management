@@ -59,4 +59,11 @@ export const SCHEMA_V7 = {
   noteAttachments: 'id, noteId, fileName, mimeType, sizeBytes, createdAt',
 } as const;
 
+export const SCHEMA_V8 = {
+  ...SCHEMA_V7,
+  chatThreads: 'id, &scopeKey, scopeType, entityId, updatedAt',
+  chatMessages: 'id, threadId, role, createdAt',
+} as const;
+
+
 
