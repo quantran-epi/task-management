@@ -17,6 +17,7 @@ import { DashboardView } from './views/DashboardView';
 import { NotesView } from './views/NotesView';
 import { NotesPopoutView } from './views/NotesPopoutView';
 import { TimerPopoutView } from './views/TimerPopoutView';
+import { ItemInsightView } from './views/ItemInsightView';
 import { TimerProvider } from './context/TimerContext';
 
 const { defaultAlgorithm, darkAlgorithm } = theme;
@@ -50,6 +51,14 @@ export const App: React.FC = () => {
         return <NotesView />;
       case 'settings':
         return <SettingsView onNavigate={navigate} />;
+      case 'insight':
+        return (
+          <ItemInsightView
+            itemType={(params.type as 'task' | 'project' | 'milestone') || 'task'}
+            itemId={params.id || ''}
+            onNavigate={navigate}
+          />
+        );
       default:
         return <EmptyState />;
     }
