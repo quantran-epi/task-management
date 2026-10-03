@@ -65,6 +65,7 @@ Last activity: 2026-10-03 - Completed quick task 261003-laj: add debug feature t
 | 261003-bz6 | Command palette insight pages for task, project, and milestone with pre-implementation analysis, and note edit modal fix | 2026-10-03 | 59b2905 | complete | [261003-bz6-for-command-palette-now-i-want-each-item](./quick/261003-bz6-for-command-palette-now-i-want-each-item/) |
 | 261003-tbl | Fix AI input Cmd+Enter clearing and add table items context menu with Ask AI for task, project, milestone | 2026-10-03 | cff43e2 | complete | [261003-tbl-fix-ai-input-and-add-table-context-menu](./quick/261003-tbl-fix-ai-input-and-add-table-context-menu/) |
 | 261003-pop | Fix AI input Cmd+Enter clearing, resizable and pinable AI popout window, and Claude shortcut for local paths | 2026-10-03 | — | complete | [261003-pop-fix-ai-input-popout-and-claude-shortcut](./quick/261003-pop-fix-ai-input-popout-and-claude-shortcut/) |
+| 261003-set | Fix SettingsView test timeout in CI with testTimeout configuration and clean Dexie teardown | 2026-10-03 | — | complete | [261003-set-fix-settingsview-test-timeout-in-ci](./quick/261003-set-fix-settingsview-test-timeout-in-ci/) |
 
 ## Performance Metrics
 

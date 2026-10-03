@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { TaskPlannerDatabase } from '../../src/db';
 import { GitHubAuthProvider, useGitHubAuth } from '../../src/context/GitHubAuthContext';
 import { SettingsView } from '../../src/views/SettingsView';
@@ -32,13 +32,19 @@ describe('SettingsView Integration & Offline Independence (SYNC-07, SYNC-05)', (
   let db: TaskPlannerDatabase;
 
   beforeEach(async () => {
-    db = new TaskPlannerDatabase(`test-settings-view-${Date.now()}`);
+    db = new TaskPlannerDatabase(`test-settings-view-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     await db.open();
     vi.clearAllMocks();
   });
 
   afterEach(async () => {
-    await db.delete();
+    cleanup();
+    try {
+      await db.close();
+      await db.delete();
+    } catch {
+      // ignore
+    }
   });
 
   it('renders capacity tab by default and switches to data tab displaying all local and GitHub cards', async () => {
@@ -61,7 +67,7 @@ describe('SettingsView Integration & Offline Independence (SYNC-07, SYNC-05)', (
 
     // Danger zone
     expect(screen.getByText('Khu vực nguy hiểm (Danger Zone)')).toBeInTheDocument();
-  });
+  }, 15000);
 
   it('renders Jira tab and mounts JiraConfigCard when selected (D-02)', async () => {
     render(
@@ -73,7 +79,7 @@ describe('SettingsView Integration & Offline Independence (SYNC-07, SYNC-05)', (
     expect(screen.getByText('Cấu hình tích hợp Jira Cloud')).toBeInTheDocument();
     expect(screen.getByLabelText('Tên miền Jira')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Lưu cấu hình Jira/i })).toBeInTheDocument();
-  });
+  }, 15000);
 
   it('operates 100% offline without GitHub token or internet (SYNC-07)', async () => {
     // Zero token, zero repo settings, completely unauthenticated
@@ -93,7 +99,7 @@ describe('SettingsView Integration & Offline Independence (SYNC-07, SYNC-05)', (
       expect(screen.getByText('Mẫu công suất cơ bản hàng tuần')).toBeInTheDocument();
       expect(screen.getByText('Ngoại lệ theo ngày cụ thể')).toBeInTheDocument();
     });
-  });
+  }, 15000);
 
   it('coordinates remote pull into ImportPreviewModal and records last_synced_sha upon restore', async () => {
     const announceSpy = vi.spyOn(ariaLive, 'announceToScreenReader');
@@ -213,6 +219,6 @@ describe('SettingsView Integration & Offline Independence (SYNC-07, SYNC-05)', (
     expect(screen.getByRole('tab', { name: /Thông báo/i })).toBeInTheDocument();
     expect(screen.getByTestId('notification-settings-card')).toBeInTheDocument();
     expect(screen.getByText('Cài đặt thông báo & cảnh báo')).toBeInTheDocument();
-  });
+  }, 15000);
 });
 

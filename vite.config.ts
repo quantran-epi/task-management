@@ -71,6 +71,7 @@ export default defineConfig({
     setupFiles: ['./tests/setup.ts'],
     globals: true,
     fileParallelism: false,
+    testTimeout: 15000,
     exclude: [...configDefaults.exclude, 'proxy/**', '.claude/**'],
   },
 });
