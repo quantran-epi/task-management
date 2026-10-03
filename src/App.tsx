@@ -23,6 +23,15 @@ import { TimerProvider } from './context/TimerContext';
 
 const { defaultAlgorithm, darkAlgorithm } = theme;
 
+const themeTokens = {
+  colorPrimary: '#4f46e5',
+  colorPrimaryHover: '#4338ca',
+  colorPrimaryActive: '#3730a3',
+  borderRadius: 8,
+  controlHeight: 36,
+  fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+};
+
 export const App: React.FC = () => {
   const { route, params, navigate } = useHashRoute('dashboard');
   const isDark = useThemeMode();
@@ -77,8 +86,13 @@ export const App: React.FC = () => {
         theme={{
           algorithm: isDark ? darkAlgorithm : defaultAlgorithm,
           token: {
-            colorPrimary: '#1677ff',
-            fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+            ...themeTokens,
+            ...(isDark ? {} : {
+              colorBgLayout: '#f8fafc',
+              boxShadowSecondary: '0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05)',
+              boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+              wireframe: false,
+            }),
           },
         }}
       >
@@ -96,8 +110,13 @@ export const App: React.FC = () => {
         theme={{
           algorithm: isDark ? darkAlgorithm : defaultAlgorithm,
           token: {
-            colorPrimary: '#1677ff',
-            fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+            ...themeTokens,
+            ...(isDark ? {} : {
+              colorBgLayout: '#f8fafc',
+              boxShadowSecondary: '0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05)',
+              boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+              wireframe: false,
+            }),
           },
         }}
       >
@@ -113,8 +132,13 @@ export const App: React.FC = () => {
         theme={{
           algorithm: isDark ? darkAlgorithm : defaultAlgorithm,
           token: {
-            colorPrimary: '#1677ff',
-            fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+            ...themeTokens,
+            ...(isDark ? {} : {
+              colorBgLayout: '#f8fafc',
+              boxShadowSecondary: '0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05)',
+              boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+              wireframe: false,
+            }),
           },
         }}
       >
@@ -129,8 +153,13 @@ export const App: React.FC = () => {
       theme={{
         algorithm: isDark ? darkAlgorithm : defaultAlgorithm,
         token: {
-          colorPrimary: '#1677ff',
-          fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+          ...themeTokens,
+          ...(isDark ? {} : {
+            colorBgLayout: '#f8fafc',
+            boxShadowSecondary: '0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05)',
+            boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+            wireframe: false,
+          }),
         },
       }}
     >
