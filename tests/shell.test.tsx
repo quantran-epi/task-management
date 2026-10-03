@@ -1,10 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ConfigProvider, theme } from 'antd';
 import { AppShell } from '../src/components/shell/AppShell';
 import App from '../src/App';
 import { db } from '../src/db';
-import { initializeDatabaseDefaults } from '../src/db/seeds';
+import { resetDatabaseToDefaults } from '../src/db/seeds';
 
 describe('AppShell Component (UX-01)', () => {
   const onNavigate = vi.fn();
@@ -64,9 +64,11 @@ describe('App Integration & Hash Route & Live Query (UX-01, DATA-02)', () => {
   beforeEach(async () => {
     cleanup();
     window.location.hash = '#/tasks';
-    await db.delete();
-    await db.open();
-    await initializeDatabaseDefaults();
+    await resetDatabaseToDefaults(db);
+  });
+
+  afterEach(async () => {
+    cleanup();
   });
 
   it('renders TasksView with search and quick add on tasks route', async () => {
