@@ -3,8 +3,8 @@ import type { ChatScopeType } from '../types/models';
 
 export interface ActiveScope {
   type: ChatScopeType;
-  id?: string;
-  title?: string;
+  id?: string | undefined;
+  title?: string | undefined;
 }
 
 export interface AIChatContextValue {

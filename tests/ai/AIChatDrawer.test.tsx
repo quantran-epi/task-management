@@ -124,4 +124,70 @@ describe('AIChatDrawer', () => {
       expect(clearSpy).toHaveBeenCalled();
     });
   });
+
+  it('renders with zIndex 1200 in overlay mode', () => {
+    const { container } = render(
+      <AIChatDrawer
+        open={true}
+        onClose={vi.fn()}
+        db={db}
+        isPinned={false}
+        isMobile={false}
+      />
+    );
+
+    const drawerEl = container.firstElementChild as HTMLElement;
+    expect(drawerEl.style.zIndex).toBe('1200');
+  });
+
+  it('allows in-drawer item picker to switch scope between global, task, project, and milestone', async () => {
+    // Populate dummy task, project, and milestone
+    await db.projects.add({
+      id: 'p-1',
+      name: 'Dự án Alpha',
+      status: 'In Progress',
+      createdAt: '2026-10-01',
+      updatedAt: '2026-10-01',
+    });
+
+    await db.tasks.add({
+      id: 't-1',
+      name: 'Tác vụ Khởi tạo',
+      status: 'Open',
+      priority: 'High',
+      projectId: 'p-1',
+      estimateMinutes: 60,
+      progress: 0,
+      createdAt: '2026-10-01',
+      updatedAt: '2026-10-01',
+    });
+
+    render(
+      <AIChatDrawer
+        open={true}
+        onClose={vi.fn()}
+        db={db}
+        activeScope={{ type: 'global' }}
+      />
+    );
+
+    // The scope picker select element
+    const scopePicker = screen.getByLabelText('Chọn phạm vi ngữ cảnh');
+    expect(scopePicker).toBeInTheDocument();
+
+    // Verify initial scope
+    expect(screen.getByText('Toàn cục (Không gắn)')).toBeInTheDocument();
+
+    // Change scope to task:t-1
+    fireEvent.mouseDown(scopePicker);
+    await waitFor(() => {
+      expect(screen.getByText(/Tác vụ Khởi tạo/i)).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText(/Tác vụ Khởi tạo/i));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Đang gắn ngữ cảnh: Tác vụ Khởi tạo/i)).toBeInTheDocument();
+    });
+  });
 });

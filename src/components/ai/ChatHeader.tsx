@@ -1,5 +1,5 @@
 import React from 'react';
-import { Typography, Tag, Select, Button, Tooltip, theme } from 'antd';
+import { Typography, Select, Button, Tooltip, theme } from 'antd';
 import {
   RobotOutlined,
   ClearOutlined,
@@ -10,8 +10,21 @@ import {
 
 const { Text } = Typography;
 
+export interface ScopeOptionItem {
+  value: string; // "global" | "task:<id>" | "project:<id>" | "milestone:<id>"
+  label: string;
+}
+
+export interface ScopeOptionGroup {
+  label: string;
+  options: ScopeOptionItem[];
+}
+
 export interface ChatHeaderProps {
   scopeLabel: string;
+  selectedScopeValue?: string;
+  scopeOptions?: ScopeOptionGroup[];
+  onScopeChange?: (value: string) => void;
   selectedModel: string;
   availableModels: string[];
   onModelChange: (model: string) => void;
@@ -23,6 +36,9 @@ export interface ChatHeaderProps {
 
 export const ChatHeader: React.FC<ChatHeaderProps> = ({
   scopeLabel,
+  selectedScopeValue,
+  scopeOptions,
+  onScopeChange,
   selectedModel,
   availableModels,
   onModelChange,
@@ -50,22 +66,40 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         <Text strong style={{ fontSize: 15, whiteSpace: 'nowrap' }}>
           Trợ lý AI
         </Text>
-        <Tooltip title={scopeLabel}>
-          <Tag
-            color="processing"
-            style={{
-              maxWidth: 140,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              margin: 0,
-              fontSize: 11,
-              borderRadius: 4,
-            }}
-          >
-            {scopeLabel}
-          </Tag>
-        </Tooltip>
+        {scopeOptions && onScopeChange ? (
+          <Select
+            size="small"
+            value={selectedScopeValue || 'global'}
+            onChange={onScopeChange}
+            showSearch
+            aria-label="Chọn phạm vi ngữ cảnh"
+            placeholder="Chọn ngữ cảnh"
+            style={{ minWidth: 110, maxWidth: 160 }}
+            filterOption={(input, option) =>
+              (option?.label as string ?? '').toLowerCase().includes(input.toLowerCase())
+            }
+            options={scopeOptions}
+          />
+        ) : (
+          <Tooltip title={scopeLabel}>
+            <span
+              style={{
+                maxWidth: 140,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                fontSize: 12,
+                color: token.colorPrimary,
+                backgroundColor: token.colorFillAlter,
+                padding: '2px 6px',
+                borderRadius: 4,
+                border: `1px solid ${token.colorBorderSecondary}`,
+              }}
+            >
+              {scopeLabel}
+            </span>
+          </Tooltip>
+        )}
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
@@ -73,7 +107,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           size="small"
           value={selectedModel}
           onChange={onModelChange}
-          style={{ width: 110 }}
+          style={{ width: 105 }}
           options={
             availableModels.length > 0
               ? availableModels.map((m) => ({ label: m, value: m }))

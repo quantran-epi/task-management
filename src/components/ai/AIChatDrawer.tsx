@@ -34,8 +34,8 @@ export const MAX_AI_CHAT_WIDTH = 650;
 
 export interface ActiveScope {
   type: ChatScopeType;
-  id?: string;
-  title?: string;
+  id?: string | undefined;
+  title?: string | undefined;
 }
 
 export interface AIChatDrawerProps {
@@ -125,13 +125,101 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     window.addEventListener('mouseup', handleMouseUp);
   };
 
-  // Scope detachment (standalone vs auto-follow)
+  // Scope management: internal state, detachment, or picker selection
+  const [internalScope, setInternalScope] = useState<ActiveScope | null>(null);
   const [isDetached, setIsDetached] = useState(false);
-  const currentScope: ActiveScope = isDetached || !propScope
+
+  // Sync propScope when it changes (unless user explicitly picked or detached)
+  useEffect(() => {
+    if (propScope) {
+      setInternalScope(propScope);
+      setIsDetached(false);
+    }
+  }, [propScope?.type, propScope?.id, propScope?.title]);
+
+  const currentScope: ActiveScope = isDetached || !internalScope
     ? { type: 'global' }
-    : propScope;
+    : internalScope;
 
   const scopeKey = buildScopeKey(currentScope.type, currentScope.id);
+
+  // Live queries for in-drawer scope picker (tasks, projects, milestones)
+  const availableTasks = useLiveQuery(() => {
+    return db.tasks.toArray();
+  }, [db]) ?? [];
+
+  const availableProjects = useLiveQuery(() => {
+    return db.projects.toArray();
+  }, [db]) ?? [];
+
+  const availableMilestones = useLiveQuery(() => {
+    return db.milestones.toArray();
+  }, [db]) ?? [];
+
+  const selectedScopeValue =
+    currentScope.type === 'global'
+      ? 'global'
+      : `${currentScope.type}:${currentScope.id}`;
+
+  const scopeOptions = [
+    {
+      label: 'Toàn cục',
+      options: [{ value: 'global', label: 'Toàn cục (Không gắn)' }],
+    },
+    {
+      label: 'Tác vụ',
+      options: availableTasks
+        .filter((t) => t.status !== 'Done' && t.status !== 'Cancelled')
+        .slice(0, 30)
+        .map((t) => ({
+          value: `task:${t.id}`,
+          label: `[${t.status}] ${t.name}`,
+        })),
+    },
+    {
+      label: 'Dự án',
+      options: availableProjects
+        .filter((p) => p.status !== 'Done' && p.status !== 'Cancelled')
+        .slice(0, 20)
+        .map((p) => ({
+          value: `project:${p.id}`,
+          label: p.name,
+        })),
+    },
+    {
+      label: 'Mốc',
+      options: availableMilestones
+        .filter((m) => m.status !== 'Done' && m.status !== 'Cancelled')
+        .slice(0, 20)
+        .map((m) => ({
+          value: `milestone:${m.id}`,
+          label: m.name,
+        })),
+    },
+  ];
+
+  const handleScopeChange = (val: string) => {
+    if (val === 'global') {
+      setIsDetached(true);
+      setInternalScope({ type: 'global' });
+      return;
+    }
+    const [typeStr, id] = val.split(':');
+    if (!typeStr || !id) return;
+    const type = typeStr as ChatScopeType;
+
+    let title: string | undefined = undefined;
+    if (type === 'task') {
+      title = availableTasks.find((t) => t.id === id)?.name;
+    } else if (type === 'project') {
+      title = availableProjects.find((p) => p.id === id)?.name;
+    } else if (type === 'milestone') {
+      title = availableMilestones.find((m) => m.id === id)?.name;
+    }
+
+    setIsDetached(false);
+    setInternalScope({ type, id, title });
+  };
 
   // Model & Token settings
   const [selectedModel, setSelectedModel] = useState<string>('gpt-4o');
@@ -452,6 +540,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       {/* Chat Header */}
       <ChatHeader
         scopeLabel={scopeLabel}
+        selectedScopeValue={selectedScopeValue}
+        scopeOptions={scopeOptions}
+        onScopeChange={handleScopeChange}
         selectedModel={selectedModel}
         availableModels={availableModels}
         onModelChange={handleModelChange}
