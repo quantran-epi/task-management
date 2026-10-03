@@ -6,6 +6,7 @@ export const KEYRING_KEYS = {
   GITHUB_PAT: 'github_pat',
   BACKUP_PASSPHRASE: 'backup_passphrase',
   JIRA_API_TOKEN: 'jira_api_token',
+  NINEROUTER_API_KEY: 'ninerouter_api_key',
 } as const;
 
 export async function storeKeyringCredential(key: string, secret: string): Promise<void> {
