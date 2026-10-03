@@ -407,6 +407,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     const recentMsgs: ChatCompletionMessage[] = [];
 
     if (systemInstruction.trim()) {
+      console.log('[AI Harness] 📝 Injected Context Grounding:\n', systemInstruction);
       recentMsgs.push({
         role: 'system',
         content: `You are an expert AI assistant embedded inside Personal Task & Workload Planner.\nBelow is the ground-truth context of the currently active item or workspace:\n${systemInstruction}\nUse this context to answer accurately. You have access to database query tools (query_tasks, query_projects, query_milestones, get_item_details). Use them whenever needed to inspect related tasks, search milestones, or check details. When breaking down goals, output clear actionable bullet points that can be converted into checklist items.`,
@@ -518,7 +519,11 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
             args = JSON.parse(tc.function.arguments || '{}');
           } catch {}
 
+          console.log(`[AI Harness] 🛠️ Model invoked tool "${tc.function.name}":`, args);
+
           const toolResult = await executeAiTool(tc.function.name, args, db);
+
+          console.log(`[AI Harness] 📦 Tool result for "${tc.function.name}":`, toolResult);
 
           currentMessages.push({
             role: 'tool',
