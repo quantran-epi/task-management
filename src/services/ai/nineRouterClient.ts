@@ -27,7 +27,7 @@ export async function testNineRouterConnection(
         Authorization: `Bearer ${options.apiKey.trim()}`,
         Accept: 'application/json',
       },
-      signal: options.signal,
+      ...(options.signal ? { signal: options.signal } : {}),
     });
 
     if (response.ok) {
@@ -90,7 +90,7 @@ export async function* streamChatCompletion(
         ...options.payload,
         stream: true,
       }),
-      signal: options.signal,
+      ...(options.signal ? { signal: options.signal } : {}),
     });
   } catch (err: any) {
     if (err.name === 'AbortError') {

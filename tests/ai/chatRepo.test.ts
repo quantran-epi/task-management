@@ -9,7 +9,6 @@ import {
 } from '../../src/db/repositories/chatRepo';
 import {
   deleteProjectWithCascade,
-  deleteMilestoneWithCascade,
   deleteTaskWithAllocations,
 } from '../../src/db/repositories/cascadeRepo';
 import type { Task, Project, Milestone } from '../../src/types/models';
@@ -63,7 +62,7 @@ describe('chatRepo and SCHEMA_V8 integration', () => {
     expect(msg1.role).toBe('user');
     expect(msg1.content).toBe('Xin chào AI');
 
-    const msg2 = await saveMessage(
+    await saveMessage(
       {
         threadId: thread.id,
         role: 'assistant',
@@ -90,7 +89,8 @@ describe('chatRepo and SCHEMA_V8 integration', () => {
 
     const allMessages = await getMessagesByThreadId(thread.id, db);
     expect(allMessages).toHaveLength(4);
-    expect(allMessages[2]?.isContextBoundary).toBe(true);
+    const boundaryMsg = allMessages.find((m) => m.id === dividerMsg.id);
+    expect(boundaryMsg?.isContextBoundary).toBe(true);
   });
 
   it('deleteThreadByScope purges thread and all its messages', async () => {
@@ -131,6 +131,8 @@ describe('chatRepo and SCHEMA_V8 integration', () => {
       name: 'Task 1',
       status: 'Open',
       priority: 'Medium',
+      progress: 0,
+      estimateMinutes: 60,
       workType: 'code',
       createdAt: now,
       updatedAt: now,
@@ -142,6 +144,8 @@ describe('chatRepo and SCHEMA_V8 integration', () => {
       name: 'Task 2',
       status: 'Open',
       priority: 'Low',
+      progress: 0,
+      estimateMinutes: 30,
       workType: 'code',
       createdAt: now,
       updatedAt: now,

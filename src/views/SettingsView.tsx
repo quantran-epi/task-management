@@ -8,6 +8,7 @@ import {
   WarningOutlined,
   ExclamationCircleOutlined,
   BellOutlined,
+  RobotOutlined,
 } from '@ant-design/icons';
 import { WeeklyCapacityForm } from '../components/settings/WeeklyCapacityForm';
 import { OverridesTable } from '../components/settings/OverridesTable';
@@ -18,6 +19,7 @@ import { SnapshotRollbackCard } from '../components/settings/SnapshotRollbackCar
 import { GitHubConfigCard } from '../components/settings/GitHubConfigCard';
 import { GitHubSyncCard } from '../components/settings/GitHubSyncCard';
 import { JiraConfigCard } from '../components/settings/JiraConfigCard';
+import { NineRouterConfigCard } from '../components/settings/NineRouterConfigCard';
 import { PwaStatusCard } from '../components/settings/PwaStatusCard';
 import { StoragePersistenceCard } from '../components/settings/StoragePersistenceCard';
 import { LocalSqlitePersistenceCard } from '../components/settings/LocalSqlitePersistenceCard';
@@ -36,7 +38,7 @@ const { Title, Paragraph } = Typography;
 export interface SettingsViewProps {
   db?: TaskPlannerDatabase;
   onNavigate?: (route: AppRoute) => void;
-  defaultActiveTab?: 'capacity' | 'data' | 'jira' | 'notifications';
+  defaultActiveTab?: 'capacity' | 'data' | 'jira' | 'notifications' | 'ai';
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -44,7 +46,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onNavigate,
   defaultActiveTab = 'capacity',
 }) => {
-  const [activeTab, setActiveTab] = useState<'capacity' | 'data' | 'jira' | 'notifications'>(defaultActiveTab);
+  const [activeTab, setActiveTab] = useState<'capacity' | 'data' | 'jira' | 'notifications' | 'ai'>(defaultActiveTab);
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [showPostRestoreBanner, setShowPostRestoreBanner] = useState(false);
   const [remotePayload, setRemotePayload] = useState<BackupEnvelope | null>(null);
@@ -203,6 +205,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </Space>
       ),
     },
+    {
+      key: 'ai',
+      label: (
+        <span>
+          <RobotOutlined style={{ marginRight: 8 }} />
+          Trợ lý AI
+        </span>
+      ),
+      children: (
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <NineRouterConfigCard db={db} />
+        </Space>
+      ),
+    },
   ];
 
   return (
@@ -230,7 +246,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       <Tabs
         activeKey={activeTab}
-        onChange={(k) => setActiveTab(k as 'capacity' | 'data' | 'jira' | 'notifications')}
+        onChange={(k) => setActiveTab(k as 'capacity' | 'data' | 'jira' | 'notifications' | 'ai')}
         items={items}
       />
 
