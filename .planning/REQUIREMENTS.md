@@ -76,6 +76,14 @@
 
 - [x] **SYNC-01**: Native desktop OS Keychain credential persistence via Rust keyring crate with Web password-manager compatibility, safe legacy Jira token migration, zero-secret SQLite/IndexedDB boundaries, and resilient GitHub auto-sync with exponential backoff and SHA conflict pausing.
 
+### AI Chat Drawer & 9router Integration (Phase 13.2 INSERTED)
+
+- [ ] **AI-01**: User can configure 9router API endpoint, API key, and model name in Settings with connection test verification.
+- [ ] **AI-02**: Right-side collapsible and pinnable chat drawer (docked side-by-side or overlay) accessible globally and from task/project/milestone views.
+- [ ] **AI-03**: Chat sessions can be standalone or scoped to a specific Task, Project, or Milestone, retaining conversation history per scope in local IndexedDB.
+- [ ] **AI-04**: Prompt context engine serializes scoped item fields (title, status, priority, estimates, tags, notes, dates) into system/user instructions for grounded responses.
+- [ ] **AI-05**: Item link and document grounding extracts text from item links/notes (local attachments, URLs, note content) to answer reference-based questions directly.
+
 ## Future Requirements (Deferred)
 
 - **FUTR-01**: Full bidirectional Jira issue webhook sync (deferred - requires server/push).
@@ -133,3 +141,8 @@
 | NOTE-03 | Phase 13.1 | Complete |
 | WORKLOG-01 | Phase 13.1 | Complete |
 | SYNC-01 | Phase 13.1 | Complete |
+| AI-01 | Phase 13.2 | Pending |
+| AI-02 | Phase 13.2 | Pending |
+| AI-03 | Phase 13.2 | Pending |
+| AI-04 | Phase 13.2 | Pending |
+| AI-05 | Phase 13.2 | Pending |

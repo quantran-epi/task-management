@@ -30,7 +30,8 @@
 - [x] **Phase 12.1: Task Timer, Work Session Logs & Spent Time Tracking** (INSERTED) - Start/pause/finish task timer, work session persistence across reload, concurrent timers, allocation limit notifications, remaining day feasibility alerts, and spent time aggregation per task, milestone, and project. (completed 2026-09-29)
 - [x] **Phase 12.2: Multiple Reminders with Time, Notification Settings, Table Customization & Sidebar Persistence** (INSERTED) - Multiple reminders with optional time per item, persistent browser notifications (no auto-dismiss), configurable notification settings, table column visibility picker and sortable headers, and persisted sidebar collapse state. (completed 2026-09-29)
 - [x] **Phase 13: Enhanced Workload Analytics & Milestone Burndown** - Dedicated analytics view with lightweight SVG vector burndown, completion velocity metrics, and stakeholder workload allocation breakdowns. (completed 2026-09-30)
-- [ ] **Phase 13.1: Timer, Jira, Sticky Notes, Actual Worklog & Sync Improvements** (INSERTED) - Pause/resume timer segments, Project-Epic Jira mapping with reachable status transitions, offline Sticky Notes with screenshot attachments & pop-out window, weekly Actual Worklog Planner, and secure OS credential storage with auto-sync recovery.
+- [x] **Phase 13.1: Timer, Jira, Sticky Notes, Actual Worklog & Sync Improvements** (INSERTED) - Pause/resume timer segments, Project-Epic Jira mapping with reachable status transitions, offline Sticky Notes with screenshot attachments & pop-out window, weekly Actual Worklog Planner, and secure OS credential storage with auto-sync recovery. (completed 2026-10-01)
+- [ ] **Phase 13.2: AI Chat Drawer, Item Context Grounding & 9router Ask-Answer Integration** (INSERTED) - Right-side pinnable chat drawer, standalone and entity-scoped (Task/Project/Milestone) conversations, prompt grounding on item fields and referenced links/notes, and 9router API integration with local IndexedDB thread persistence.
 
 ## Phase Details
 
@@ -253,6 +254,29 @@ Plans:
 
 **UI hint**: yes
 
+### Phase 13.2: AI Chat Drawer, Item Context Grounding & 9router Ask-Answer Integration (INSERTED)
+
+**Goal:** Deliver a pinnable right-side AI Chat Drawer with 9router API integration, capable of operating standalone or grounded in the context of a selected Task, Project, or Milestone with item field serialization and local note/link content ingestion for accurate ask-and-answer assistance.
+**Depends on:** Phase 9, Phase 13.1
+**Requirements**: AI-01, AI-02, AI-03, AI-04, AI-05
+**Success Criteria** (what must be TRUE):
+
+  1. User can configure 9router API endpoint, API key, and model name in Settings with immediate connection test verification.
+  2. Right-side AI Chat drawer can be opened, collapsed, and pinned (docked side-by-side with main content without covering UI) globally across all views.
+  3. Chat can operate standalone or attach to an active context item (Task, Project, or Milestone), maintaining persistent conversation history per scope in local IndexedDB.
+  4. Context item fields (title, status, priority, estimates, tags, notes, dates, subtasks) are automatically structured into LLM system and conversation context.
+  5. Chat can ingest and ground answers on local file notes, attachments, and referenced URLs associated with the context item, answering reference-based questions directly.
+
+**Plans:** 0/3 plans executed
+
+Plans:
+
+- [ ] 13.2-01-PLAN.md — Dexie SCHEMA_V8 migration for chat threads/messages, 9router API client, connection test, and Settings configuration
+- [ ] 13.2-02-PLAN.md — Pinnable right-side ChatDrawer UI with docked/overlay layouts, conversation message stream, and scope switcher
+- [ ] 13.2-03-PLAN.md — Context prompt builder with item field serialization and local note/link content extraction for grounded Q&A
+
+**UI hint**: yes
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -273,3 +297,4 @@ Plans:
 | 12.2. Multiple Reminders with Time, Notification Settings, Table Customization & Sidebar Persistence | v1.1 | 4/4 | Complete   | 2026-09-29 |
 | 13. Enhanced Workload Analytics & Milestone Burndown | v1.1 | 3/3 | Complete    | 2026-09-30 |
 | 13.1. Timer, Jira, Sticky Notes, Actual Worklog & Sync Improvements | v1.1 | 5/5 | Complete    | 2026-10-01 |
+| 13.2. AI Chat Drawer, Item Context Grounding & 9router Ask-Answer Integration | v1.1 | 0/3 | Planning | — |
