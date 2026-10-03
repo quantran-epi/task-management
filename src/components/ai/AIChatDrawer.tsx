@@ -35,6 +35,7 @@ import { ScopePickerModal } from './ScopePickerModal';
 import { AIDebugModal } from './AIDebugModal';
 import { aiDebugService } from '../../services/ai/aiDebugService';
 import { useAIChat } from '../../context/AIChatContext';
+import { openAiPopout } from '../../utils/aiPopout';
 
 export const AI_CHAT_WIDTH_KEY = 'planner:ai_chat_width';
 export const DEFAULT_AI_CHAT_WIDTH = 380;
@@ -58,6 +59,8 @@ export interface AIChatDrawerProps {
   onWidthChange?: (width: number) => void;
   onOpenSettings?: () => void;
   isMobile?: boolean;
+  onPopout?: () => void;
+  isPopoutWindow?: boolean;
 }
 
 export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
@@ -71,6 +74,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   onWidthChange,
   onOpenSettings,
   isMobile = false,
+  onPopout,
+  isPopoutWindow = false,
 }) => {
   const { token } = theme.useToken();
   const { pendingPrompt, clearPendingPrompt, setCustomScope } = useAIChat();
@@ -716,24 +721,39 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
       ? 'Toàn cục (Không gắn)'
       : `${currentScope.type === 'task' ? 'Tác vụ' : currentScope.type === 'project' ? 'Dự án' : 'Mốc'}: ${currentScope.title || currentScope.id}`;
 
+  const handlePopoutAction = () => {
+    if (onPopout) {
+      onPopout();
+    } else {
+      void openAiPopout({
+        type: currentScope.type,
+        id: currentScope.id,
+        title: currentScope.title,
+      });
+      onClose();
+    }
+  };
+
   return (
     <div
       style={{
-        position: 'fixed',
+        position: isPopoutWindow ? 'relative' : 'fixed',
         top: 0,
         right: 0,
         bottom: 0,
-        width: isMobile ? '100vw' : width,
-        zIndex: isPinned && !isMobile ? 100 : 1200,
+        left: isPopoutWindow ? 0 : undefined,
+        width: isPopoutWindow ? '100%' : isMobile ? '100vw' : width,
+        height: isPopoutWindow ? '100%' : undefined,
+        zIndex: isPopoutWindow ? 1 : isPinned && !isMobile ? 100 : 1200,
         backgroundColor: token.colorBgContainer,
-        borderLeft: `1px solid ${token.colorBorderSecondary}`,
-        boxShadow: isPinned && !isMobile ? 'none' : '-2px 0 8px rgba(0,0,0,0.15)',
+        borderLeft: isPopoutWindow ? 'none' : `1px solid ${token.colorBorderSecondary}`,
+        boxShadow: isPopoutWindow || (isPinned && !isMobile) ? 'none' : '-2px 0 8px rgba(0,0,0,0.15)',
         display: 'flex',
         flexDirection: 'column',
       }}
     >
-      {/* Left border drag handle (desktop only) */}
-      {!isMobile && (
+      {/* Left border drag handle (desktop drawer only) */}
+      {!isMobile && !isPopoutWindow && (
         <div
           data-testid="ai-chat-resizer"
           onMouseDown={handleMouseDown}
@@ -763,6 +783,7 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
         onTogglePin={() => onTogglePin?.()}
         onClearContext={handleClearContext}
         onOpenDebug={() => setIsDebugModalOpen(true)}
+        onPopout={!isPopoutWindow ? handlePopoutAction : undefined}
         onClose={onClose}
       />
 

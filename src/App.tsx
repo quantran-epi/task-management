@@ -17,6 +17,7 @@ import { DashboardView } from './views/DashboardView';
 import { NotesView } from './views/NotesView';
 import { NotesPopoutView } from './views/NotesPopoutView';
 import { TimerPopoutView } from './views/TimerPopoutView';
+import { AIPopoutView } from './views/AIPopoutView';
 import { ItemInsightView } from './views/ItemInsightView';
 import { TimerProvider } from './context/TimerContext';
 
@@ -101,6 +102,23 @@ export const App: React.FC = () => {
         }}
       >
         <NotesPopoutView />
+      </ConfigProvider>
+    );
+  }
+
+  if (route === 'ai-popout') {
+    return (
+      <ConfigProvider
+        locale={viVN}
+        theme={{
+          algorithm: isDark ? darkAlgorithm : defaultAlgorithm,
+          token: {
+            colorPrimary: '#1677ff',
+            fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+          },
+        }}
+      >
+        <AIPopoutView />
       </ConfigProvider>
     );
   }

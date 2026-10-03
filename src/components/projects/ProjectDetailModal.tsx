@@ -330,8 +330,8 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({
                     key={idx}
                     size="small"
                     icon={isLocalPath(link) ? <FolderOpenOutlined /> : <LinkOutlined />}
-                    onClick={() => openDocumentLink(link)}
-                    title={link}
+                    onClick={(e) => void openDocumentLink(link, { quickClaude: e.altKey })}
+                    title={isLocalPath(link) ? `${link} (Alt+Click để mở Claude Code)` : link}
                   >
                     {link.length > 40 ? link.slice(0, 37) + '...' : link}
                   </Button>

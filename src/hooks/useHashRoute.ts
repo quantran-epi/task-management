@@ -18,6 +18,7 @@ const VALID_ROUTES: readonly AppRoute[] = [
   'settings',
   'timer-popout',
   'notes-popout',
+  'ai-popout',
   'insight',
 ] as const;
 

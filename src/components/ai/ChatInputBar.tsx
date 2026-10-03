@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Input, Button, Tooltip, theme } from 'antd';
 import { SendOutlined, StopOutlined } from '@ant-design/icons';
 
@@ -25,6 +25,15 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   const [value, setValue] = useState('');
   const textAreaRef = useRef<any>(null);
   const isSubmittingRef = useRef(false);
+  const submitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (submitTimerRef.current) {
+        clearTimeout(submitTimerRef.current);
+      }
+    };
+  }, []);
 
   const clearInput = (el?: HTMLTextAreaElement | null) => {
     setValue('');
@@ -38,7 +47,8 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   };
 
   const handleSend = (targetEl?: HTMLTextAreaElement) => {
-    const trimmed = value.trim();
+    const rawVal = value || targetEl?.value || '';
+    const trimmed = rawVal.trim();
     if (!trimmed) return;
 
     clearInput(targetEl);
@@ -56,15 +66,27 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
       e.preventDefault();
       e.stopPropagation();
       const el = e.currentTarget;
-      if (el) {
-        el.value = '';
-      }
+      const rawText = value.trim() || el?.value?.trim() || '';
+      if (!rawText) return;
+
       isSubmittingRef.current = true;
-      handleSend(el);
-      queueMicrotask(() => {
-        clearInput(el);
+      clearInput(el);
+
+      if (submitTimerRef.current) {
+        clearTimeout(submitTimerRef.current);
+      }
+
+      // Hold lock across microtasks and subsequent IME/browser input macrotask cycles
+      submitTimerRef.current = setTimeout(() => {
+        clearInput();
         isSubmittingRef.current = false;
-      });
+      }, 250);
+
+      if (rawText === '/clear') {
+        onClear?.();
+      } else {
+        onSubmit(rawText);
+      }
     }
   };
 
@@ -85,12 +107,22 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
         onChange={(e) => {
           if (isSubmittingRef.current) {
             e.target.value = '';
+            setValue('');
             return;
           }
           setValue(e.target.value);
         }}
-        onCompositionEnd={() => {
+        onInput={(e) => {
           if (isSubmittingRef.current) {
+            const target = e.target as HTMLTextAreaElement;
+            if (target) target.value = '';
+            setValue('');
+          }
+        }}
+        onCompositionEnd={(e) => {
+          if (isSubmittingRef.current) {
+            const target = e.target as HTMLTextAreaElement;
+            if (target) target.value = '';
             clearInput();
           }
         }}

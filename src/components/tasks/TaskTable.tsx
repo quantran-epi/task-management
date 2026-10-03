@@ -516,7 +516,11 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
-                              void openDocumentLink(link);
+                              if (e.altKey) {
+                                void openDocumentLink(link, { quickClaude: true });
+                              } else {
+                                void openDocumentLink(link);
+                              }
                             }}
                             title={local ? 'Mở trong File Explorer' : 'Mở liên kết web'}
                             style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}

@@ -8,6 +8,7 @@ import {
   CloseOutlined,
   ApartmentOutlined,
   BugOutlined,
+  ExportOutlined,
 } from '@ant-design/icons';
 
 const { Text } = Typography;
@@ -34,7 +35,8 @@ export interface ChatHeaderProps {
   isPinned: boolean;
   onTogglePin: () => void;
   onClearContext: () => void;
-  onOpenDebug?: () => void;
+  onOpenDebug?: (() => void) | undefined;
+  onPopout?: (() => void) | undefined;
   onClose: () => void;
 }
 
@@ -51,6 +53,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   onTogglePin,
   onClearContext,
   onOpenDebug,
+  onPopout,
   onClose,
 }) => {
   const { token } = theme.useToken();
@@ -202,6 +205,19 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             style={{ minWidth: 28, minHeight: 28 }}
           />
         </Tooltip>
+
+        {onPopout && (
+          <Tooltip title="Mở cửa sổ riêng (Popout)">
+            <Button
+              type="text"
+              size="small"
+              icon={<ExportOutlined />}
+              onClick={onPopout}
+              aria-label="Mở cửa sổ riêng (Popout)"
+              style={{ minWidth: 28, minHeight: 28 }}
+            />
+          </Tooltip>
+        )}
 
         <Tooltip title="Đóng ngăn trò chuyện">
           <Button

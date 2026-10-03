@@ -646,7 +646,8 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
                   key={idx}
                   size="small"
                   icon={isLocalPath(link) ? <FolderOpenOutlined /> : <LinkOutlined />}
-                  onClick={() => void openDocumentLink(link)}
+                  onClick={(e) => void openDocumentLink(link, { quickClaude: e.altKey })}
+                  title={isLocalPath(link) ? `${link} (Alt+Click để mở Claude Code)` : link}
                 >
                   {link}
                 </Button>

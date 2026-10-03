@@ -154,6 +154,12 @@ describe('ChatInputBar', () => {
     // Simulate trailing IME input event that commonly arrives on macOS right after Cmd+Enter
     fireEvent.change(textarea, { target: { value: 'án' } });
     expect(textarea.value).toBe('');
+
+    // Simulate trailing native input and composition events
+    fireEvent.input(textarea, { target: { value: 'n' } });
+    expect(textarea.value).toBe('');
+    fireEvent.compositionEnd(textarea, { target: { value: 'n' } });
+    expect(textarea.value).toBe('');
   });
 
   it('renders Stop Generation button when isStreaming is true', () => {

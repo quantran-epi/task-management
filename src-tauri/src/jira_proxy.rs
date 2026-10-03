@@ -171,8 +171,11 @@ pub fn launch_claude_terminal(command_str: String) -> Result<(), String> {
         return Err("Command cannot be empty".to_string());
     }
 
-    // Security check T-13.2-07: command must start with "claude"
-    if !trimmed.starts_with("claude ") && trimmed != "claude" {
+    // Security check: command must start with "claude" or be a cd command launching claude
+    let is_valid = trimmed.starts_with("claude ")
+        || trimmed == "claude"
+        || (trimmed.starts_with("cd ") && (trimmed.ends_with("&& claude") || trimmed.contains("&& claude")));
+    if !is_valid {
         return Err("Only claude commands can be launched".to_string());
     }
 
