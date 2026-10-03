@@ -21,11 +21,13 @@ import {
   LinkOutlined,
   FolderOpenOutlined,
   ClockCircleOutlined,
+  RobotOutlined,
 } from '@ant-design/icons';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { Project, Milestone, Task } from '../../types/models';
 import { formatMinutes } from '../../utils/time';
 import { openDocumentLink, isLocalPath } from '../../utils/documentLinks';
+import { useAIChat } from '../../context/AIChatContext';
 
 const { Text, Title, Paragraph } = Typography;
 
@@ -73,6 +75,32 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [spentMinutes, setSpentMinutes] = useState<number>(0);
+
+  const { registerActiveItem, openChat } = useAIChat();
+
+  // Register active project while open for auto-follow grounding
+  useEffect(() => {
+    if (open && project) {
+      return registerActiveItem({
+        type: 'project',
+        id: project.id,
+        title: project.name,
+      });
+    }
+    return undefined;
+  }, [open, project, registerActiveItem]);
+
+  const handleAskAI = () => {
+    if (project) {
+      openChat({
+        type: 'project',
+        id: project.id,
+        title: project.name,
+      });
+    } else {
+      openChat();
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -176,6 +204,14 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({
             Thêm công việc
           </Button>
         ),
+        <Button
+          key="askAI"
+          icon={<RobotOutlined style={{ color: '#1677ff' }} />}
+          onClick={handleAskAI}
+          aria-label="Hỏi AI về dự án này"
+        >
+          Hỏi AI
+        </Button>,
         <Button key="close" onClick={onClose}>
           Đóng
         </Button>,

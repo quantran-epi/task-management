@@ -15,7 +15,7 @@ import {
   Badge,
   Switch,
 } from 'antd';
-import { PlusOutlined, DeleteOutlined, LinkOutlined, SyncOutlined, FolderOpenOutlined, ExportOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, LinkOutlined, SyncOutlined, FolderOpenOutlined, ExportOutlined, RobotOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { openDocumentLink, browseLocalFolder } from '../../utils/documentLinks';
@@ -35,6 +35,7 @@ import { getAllProjects } from '../../db/repositories/projectRepo';
 import { getAllMilestones } from '../../db/repositories/milestoneRepo';
 import { createFocusRestorer } from '../../utils/focus';
 import { useRegisterActiveForm } from '../../context/FormGuardContext';
+import { useAIChat } from '../../context/AIChatContext';
 import { TaskDrawerPlanning } from './TaskDrawerPlanning';
 import { TaskJiraSection } from './TaskJiraSection';
 import { WorkSessionsTab } from './WorkSessionsTab';
@@ -237,6 +238,32 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
       mounted = false;
     };
   }, [open, taskId, form, db]);
+
+  const { registerActiveItem, openChat } = useAIChat();
+
+  // Register active task while open for auto-follow grounding
+  useEffect(() => {
+    if (open && currentTask) {
+      return registerActiveItem({
+        type: 'task',
+        id: currentTask.id,
+        title: currentTask.name,
+      });
+    }
+    return undefined;
+  }, [open, currentTask, registerActiveItem]);
+
+  const handleAskAI = () => {
+    if (currentTask) {
+      openChat({
+        type: 'task',
+        id: currentTask.id,
+        title: currentTask.name,
+      });
+    } else {
+      openChat();
+    }
+  };
 
   const handleClose = () => {
     onClose();
@@ -855,6 +882,16 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
       onClose={handleClose}
       destroyOnClose
       loading={loading}
+      extra={
+        <Button
+          type="text"
+          icon={<RobotOutlined style={{ color: '#1677ff' }} />}
+          onClick={handleAskAI}
+          aria-label="Hỏi AI về tác vụ này"
+        >
+          Hỏi AI
+        </Button>
+      }
       footer={
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <Button onClick={handleClose}>Hủy</Button>

@@ -33,6 +33,7 @@ import {
   PlusOutlined,
   LineChartOutlined,
   FileTextOutlined,
+  RobotOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
@@ -48,6 +49,7 @@ import { formatMinutes } from '../utils/time';
 import { openDocumentLink, isLocalPath } from '../utils/documentLinks';
 import { getJiraBrowseUrl, openJiraExternalUrl } from '../services/jira/jiraApi';
 import { useTimer } from '../hooks/useTimer';
+import { useAIChat } from '../context/AIChatContext';
 import { TaskDrawer } from '../components/tasks/TaskDrawer';
 import { ProjectModal } from '../components/projects/ProjectModal';
 import { MilestoneModal } from '../components/projects/MilestoneModal';
@@ -133,6 +135,31 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
     () => (itemType === 'milestone' ? allMilestones.find((m) => m.id === itemId) : undefined),
     [itemType, allMilestones, itemId]
   );
+
+  const currentItemTitle =
+    (itemType === 'task' ? currentTask?.name : itemType === 'project' ? currentProject?.name : currentMilestone?.name) || itemId;
+
+  const { registerActiveItem, openChat } = useAIChat();
+
+  // Register active item with AIChatContext
+  React.useEffect(() => {
+    if (itemId) {
+      return registerActiveItem({
+        type: itemType,
+        id: itemId,
+        title: currentItemTitle,
+      });
+    }
+    return undefined;
+  }, [itemType, itemId, currentItemTitle, registerActiveItem]);
+
+  const handleAskAI = () => {
+    openChat({
+      type: itemType,
+      id: itemId,
+      title: currentItemTitle,
+    });
+  };
 
   // Parent relationships
   const parentProject = useMemo(() => {
@@ -566,6 +593,15 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
                 </Button>
               </>
             )}
+
+            <Button
+              type="default"
+              icon={<RobotOutlined style={{ color: '#1677ff' }} />}
+              onClick={handleAskAI}
+              aria-label="Hỏi AI về mục này"
+            >
+              Hỏi AI
+            </Button>
           </Space>
         </div>
 

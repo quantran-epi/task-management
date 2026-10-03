@@ -108,10 +108,17 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
   return <AIChatContext.Provider value={value}>{children}</AIChatContext.Provider>;
 };
 
+const defaultContextValue: AIChatContextValue = {
+  isOpen: false,
+  openChat: () => {},
+  closeChat: () => {},
+  toggleChat: () => {},
+  activeScope: { type: 'global' },
+  setCustomScope: () => {},
+  registerActiveItem: () => () => {},
+};
+
 export const useAIChat = (): AIChatContextValue => {
   const context = useContext(AIChatContext);
-  if (!context) {
-    throw new Error('useAIChat must be used within an AIChatProvider');
-  }
-  return context;
+  return context ?? defaultContextValue;
 };

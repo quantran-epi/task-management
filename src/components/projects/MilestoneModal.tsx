@@ -1,9 +1,11 @@
 import React, { useEffect, useRef } from 'react';
-import { Modal, Form, Input, DatePicker, Select } from 'antd';
+import { Modal, Form, Input, DatePicker, Select, Button } from 'antd';
+import { RobotOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
 import type { Milestone, MilestoneStatus, Project, ReminderItem } from '../../types/models';
 import { createFocusRestorer } from '../../utils/focus';
 import { useRegisterActiveForm } from '../../context/FormGuardContext';
+import { useAIChat } from '../../context/AIChatContext';
 import { TagSelect } from '../common/TagSelect';
 import { resolveInheritedTags } from '../../domain/inheritance';
 import { RemindersFormList, formatRemindersForForm, formatRemindersForSave } from '../common/RemindersFormList';
@@ -64,6 +66,32 @@ export const MilestoneModal: React.FC<MilestoneModalProps> = ({
 
   const [form] = Form.useForm<MilestoneFormValues>();
   const restorerRef = useRef<(() => void) | null>(null);
+
+  const { registerActiveItem, openChat } = useAIChat();
+
+  // Register active milestone while open for auto-follow grounding
+  useEffect(() => {
+    if (open && milestone) {
+      return registerActiveItem({
+        type: 'milestone',
+        id: milestone.id,
+        title: milestone.name,
+      });
+    }
+    return undefined;
+  }, [open, milestone, registerActiveItem]);
+
+  const handleAskAI = () => {
+    if (milestone) {
+      openChat({
+        type: 'milestone',
+        id: milestone.id,
+        title: milestone.name,
+      });
+    } else {
+      openChat();
+    }
+  };
 
   useEffect(() => {
     if (open) {
@@ -148,6 +176,26 @@ export const MilestoneModal: React.FC<MilestoneModalProps> = ({
       okText={milestone ? 'Lưu thay đổi' : 'Tạo cột mốc'}
       cancelText="Hủy"
       destroyOnClose
+      footer={(_, { OkBtn, CancelBtn }) => (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            {milestone && (
+              <Button
+                type="text"
+                icon={<RobotOutlined style={{ color: '#1677ff' }} />}
+                onClick={handleAskAI}
+                aria-label="Hỏi AI về cột mốc này"
+              >
+                Hỏi AI
+              </Button>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <CancelBtn />
+            <OkBtn />
+          </div>
+        </div>
+      )}
     >
       <Form
         form={form}
