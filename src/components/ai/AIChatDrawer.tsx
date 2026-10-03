@@ -18,7 +18,11 @@ import {
   fetchAvailableModels,
 } from '../../services/ai/nineRouterTokenService';
 import { streamChatEvents, streamChatCompletion } from '../../services/ai/nineRouterClient';
-import { buildItemContextPrompt, buildGlobalContextPrompt } from '../../services/ai/contextGrounding';
+import {
+  buildItemContextPrompt,
+  buildGlobalContextPrompt,
+  extractMentionedEntityIds,
+} from '../../services/ai/contextGrounding';
 import {
   AI_DATABASE_TOOLS,
   executeAiTool,
@@ -44,6 +48,7 @@ import { useAIChat } from '../../context/AIChatContext';
 import { openAiPopout } from '../../utils/aiPopout';
 
 export const AI_CHAT_WIDTH_KEY = 'planner:ai_chat_width';
+export const AI_AUTO_APPROVE_MUTATIONS_KEY = 'planner:ai_auto_approve_mutations';
 export const DEFAULT_AI_CHAT_WIDTH = 380;
 export const MIN_AI_CHAT_WIDTH = 320;
 export const MAX_AI_CHAT_WIDTH = 650;
@@ -248,6 +253,36 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     resolve: (confirmed: boolean) => void;
   } | null>(null);
 
+  // Auto-approve mutation toggle (bypasses confirmation modal if explicitly enabled by user)
+  const [autoApproveMutations, setAutoApproveMutations] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(AI_AUTO_APPROVE_MUTATIONS_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleToggleAutoApproveMutations = useCallback(() => {
+    setAutoApproveMutations((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(AI_AUTO_APPROVE_MUTATIONS_KEY, String(next));
+      } catch {
+        // ignore storage error
+      }
+      if (next) {
+        message.warning(
+          'Đã bật tự động duyệt thay đổi dữ liệu (Auto-approve mutations). AI sẽ tự động thực thi và báo cáo chi tiết.'
+        );
+      } else {
+        message.info(
+          'Đã tắt tự động duyệt. AI sẽ hỏi xác nhận trước khi thực hiện thay đổi dữ liệu.'
+        );
+      }
+      return next;
+    });
+  }, []);
+
   const handleConfirmAction = useCallback((confirmed: boolean) => {
     if (pendingConfirmationRef.current) {
       pendingConfirmationRef.current.resolve(confirmed);
@@ -298,11 +333,32 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       }
     }
 
+    if (trimmed === '/clear') {
+      handleClearContext();
+      return;
+    }
+
     if (isStreaming) return;
 
     setScrollTrigger((prev) => prev + 1);
     setApiError(null);
     setLastSubmittedText(trimmed);
+
+    // Lightweight prompt handling for slash commands allowing user to describe freely
+    let effectivePrompt = trimmed;
+    if (trimmed.startsWith('/plan')) {
+      const extra = trimmed.replace(/^\/plan\s*/, '').trim();
+      effectivePrompt = extra ? `Lập kế hoạch: ${extra}` : 'Lập kế hoạch công việc hôm nay';
+    } else if (trimmed.startsWith('/status')) {
+      const extra = trimmed.replace(/^\/status\s*/, '').trim();
+      effectivePrompt = extra ? `Báo cáo tiến độ: ${extra}` : 'Báo cáo tiến độ hiện tại';
+    } else if (trimmed.startsWith('/overdue')) {
+      const extra = trimmed.replace(/^\/overdue\s*/, '').trim();
+      effectivePrompt = extra ? `Kiểm tra tác vụ quá hạn: ${extra}` : 'Kiểm tra các tác vụ quá hạn';
+    } else if (trimmed.startsWith('/help')) {
+      const extra = trimmed.replace(/^\/help\s*/, '').trim();
+      effectivePrompt = extra ? `Hướng dẫn: ${extra}` : 'Hướng dẫn sử dụng trợ lý AI và các lệnh';
+    }
 
     const effectiveScope = overrideScope ?? currentScope;
 
@@ -330,7 +386,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     }
 
     // 2. Save user message
-    await saveMessage(
+    const savedUserMsg = await saveMessage(
       {
         threadId: activeThread.id,
         role: 'user',
@@ -380,6 +436,41 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       }
     }
 
+    // 4b. Extract mentioned tasks and projects from prompt and inject grounding
+    const { taskIds, projectIds } = extractMentionedEntityIds(trimmed);
+    const mentionedContexts: string[] = [];
+
+    for (const tid of taskIds) {
+      if (effectiveScope.type === 'task' && effectiveScope.id === tid) continue;
+      try {
+        const t = await getTask(tid, db);
+        if (t) {
+          const serialized = await buildItemContextPrompt({ entityType: 'task', item: t, db });
+          mentionedContexts.push(serialized);
+        }
+      } catch (err) {
+        console.warn(`[AIChatDrawer] Grounding error for task ${tid}:`, err);
+      }
+    }
+
+    for (const pid of projectIds) {
+      if (effectiveScope.type === 'project' && effectiveScope.id === pid) continue;
+      try {
+        const p = await getProject(pid, db);
+        if (p) {
+          const serialized = await buildItemContextPrompt({ entityType: 'project', item: p, db });
+          mentionedContexts.push(serialized);
+        }
+      } catch (err) {
+        console.warn(`[AIChatDrawer] Grounding error for project ${pid}:`, err);
+      }
+    }
+
+    if (mentionedContexts.length > 0) {
+      const mentionsBlock = `<mentioned_entities>\n[User Referenced Items Grounding]:\nThe user explicitly referenced the following items using mentions in their request. Their detailed database state is provided below for exact grounding:\n${mentionedContexts.join('\n\n')}\n</mentioned_entities>`;
+      systemInstruction = systemInstruction ? `${systemInstruction}\n\n${mentionsBlock}` : mentionsBlock;
+    }
+
     const allMsgs = await getMessagesByThreadId(activeThread.id, db);
     let boundaryIdx = -1;
     for (let i = allMsgs.length - 1; i >= 0; i--) {
@@ -405,7 +496,18 @@ CRITICAL ANTI-HALLUCINATION RULES:
 3. If the user asks about anything not present in the initial context (such as time spent, worklog history, daily schedule, running timer, notes, capacity, overdue items), YOU MUST CALL THE RELEVANT DATABASE TOOLS before answering.
 4. If a requested item or detail is missing, null, empty, or not recorded in the database, EXPLICITLY STATE THAT IT IS NOT RECORDED. Never extrapolate, approximate, or pretend data exists.
 5. When breaking down goals or proposing steps, output clear actionable bullet points that can be converted into checklist items.
-6. YOU HAVE FULL DATABASE MUTATION CAPABILITIES: You can create, update, reparent, or delete tasks, projects, milestones, planned allocations, work sessions, active timers, capacity rules/overrides, and notes using mutation tools (create_task, update_task, update_task_checklist, reparent_task, delete_task, create_project, update_project, delete_project, create_milestone, update_milestone, delete_milestone, plan_allocation, delete_allocation, log_work_session, update_work_session, delete_work_session, start_timer, pause_timer, stop_and_log_timer, discard_timer, update_capacity_rule, set_capacity_override, remove_capacity_override, create_note, update_note, delete_note). When the user asks you to perform an action or change anything in the app, call the appropriate action tool. The system will prompt the user to confirm the mutation before applying it.
+6. YOU HAVE FULL DATABASE MUTATION CAPABILITIES: You can create, update, reparent, or delete tasks, projects, milestones, planned allocations, work sessions, active timers, capacity rules/overrides, and notes using mutation tools (create_task, update_task, update_task_checklist, reparent_task, delete_task, create_project, update_project, delete_project, create_milestone, update_milestone, delete_milestone, plan_allocation, delete_allocation, log_work_session, update_work_session, delete_work_session, start_timer, pause_timer, stop_and_log_timer, discard_timer, update_capacity_rule, set_capacity_override, remove_capacity_override, create_note, update_note, delete_note). When the user asks you to perform an action or change anything in the app, call the appropriate action tool.${
+      autoApproveMutations
+        ? `\n\n[AUTO-EXECUTION & REPORTING MODE ACTIVE]:
+The user has EXPLICITLY authorized automatic execution of mutations without confirmation prompts.
+MANDATORY REPORTING REQUIREMENT:
+Because mutations run automatically without manual confirmation, your final response MUST provide a clear, comprehensive, and itemized report of EVERY SINGLE MUTATION you performed:
+- Detail every created, updated, scheduled, or deleted item (name/title, ID, type).
+- Specify exact field changes (e.g. status, priority, estimate, progress, deadline, allocated minutes).
+- Highlight the outcome of each action clearly.
+Never perform mutations silently without providing this full change summary in your final reply.`
+        : ' The system will prompt the user to confirm the mutation before applying it.'
+    }
 ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the currently active item or workspace:\n${systemInstruction}\n` : ''}`;
 
     console.log('[AI Harness] 📝 Injected Context Grounding:\n', systemPromptContent);
@@ -417,7 +519,7 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
     for (const m of msgsToSend.slice(-20)) {
       recentMsgs.push({
         role: m.role,
-        content: m.content,
+        content: m.id === savedUserMsg.id && effectivePrompt !== trimmed ? effectivePrompt : m.content,
       });
     }
 
@@ -556,33 +658,37 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
 
           // Check if this tool performs a data mutation requiring user confirmation
           if (isMutationTool(tc.function.name)) {
-            const summary = describeToolMutation(tc.function.name, args);
-            setStreamingStatus('Chờ xác nhận hành động...');
-            const confirmed = await new Promise<boolean>((resolve) => {
-              pendingConfirmationRef.current = { resolve };
-              setPendingConfirmation({
-                toolName: tc.function.name,
-                summary,
-                args,
+            if (!autoApproveMutations) {
+              const summary = describeToolMutation(tc.function.name, args);
+              setStreamingStatus('Chờ xác nhận hành động...');
+              const confirmed = await new Promise<boolean>((resolve) => {
+                pendingConfirmationRef.current = { resolve };
+                setPendingConfirmation({
+                  toolName: tc.function.name,
+                  summary,
+                  args,
+                });
               });
-            });
-            setPendingConfirmation(null);
-            pendingConfirmationRef.current = null;
+              setPendingConfirmation(null);
+              pendingConfirmationRef.current = null;
 
-            if (!confirmed) {
-              const cancelMsg = JSON.stringify({
-                cancelled: true,
-                message: 'Người dùng đã từ chối thao tác này (User declined confirmation). Không có dữ liệu nào bị thay đổi.',
-              });
-              console.log(`[AI Harness] 🚫 User declined mutation "${tc.function.name}"`);
-              aiDebugService.recordToolResult(turnId, tc.id, cancelMsg, 0);
-              currentMessages.push({
-                role: 'tool',
-                tool_call_id: tc.id,
-                name: tc.function.name,
-                content: cancelMsg,
-              });
-              continue;
+              if (!confirmed) {
+                const cancelMsg = JSON.stringify({
+                  cancelled: true,
+                  message: 'Người dùng đã từ chối thao tác này (User declined confirmation). Không có dữ liệu nào bị thay đổi.',
+                });
+                console.log(`[AI Harness] 🚫 User declined mutation "${tc.function.name}"`);
+                aiDebugService.recordToolResult(turnId, tc.id, cancelMsg, 0);
+                currentMessages.push({
+                  role: 'tool',
+                  tool_call_id: tc.id,
+                  name: tc.function.name,
+                  content: cancelMsg,
+                });
+                continue;
+              }
+            } else {
+              console.log(`[AI Harness] ⚡ Auto-approving mutation tool "${tc.function.name}" (bypass active)`);
             }
           }
 
@@ -791,6 +897,8 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
         selectedModel={selectedModel}
         availableModels={availableModels}
         onModelChange={handleModelChange}
+        autoApproveMutations={autoApproveMutations}
+        onToggleAutoApproveMutations={handleToggleAutoApproveMutations}
         isPinned={isPinned}
         onTogglePin={() => onTogglePin?.()}
         onClearContext={handleClearContext}
@@ -911,6 +1019,7 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
             ? 'Gõ "yes" để xác nhận hoặc "no" để từ chối...'
             : undefined
         }
+        db={db}
       />
     </div>
   );

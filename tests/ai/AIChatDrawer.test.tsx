@@ -41,6 +41,46 @@ describe('ChatHeader', () => {
     fireEvent.click(screen.getByLabelText('Đóng ngăn trò chuyện'));
     expect(handleClose).toHaveBeenCalled();
   });
+
+  it('renders and toggles auto-approve mutations button', () => {
+    const handleToggleAutoApprove = vi.fn();
+
+    const { rerender } = render(
+      <ChatHeader
+        selectedModel="gpt-4o"
+        availableModels={['gpt-4o']}
+        onModelChange={vi.fn()}
+        autoApproveMutations={false}
+        onToggleAutoApproveMutations={handleToggleAutoApprove}
+        isPinned={false}
+        onTogglePin={vi.fn()}
+        onClearContext={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    const toggleBtn = screen.getByLabelText('Bật tự động duyệt thay đổi dữ liệu');
+    expect(toggleBtn).toBeInTheDocument();
+    fireEvent.click(toggleBtn);
+    expect(handleToggleAutoApprove).toHaveBeenCalledTimes(1);
+
+    // Rerender with autoApproveMutations=true
+    rerender(
+      <ChatHeader
+        selectedModel="gpt-4o"
+        availableModels={['gpt-4o']}
+        onModelChange={vi.fn()}
+        autoApproveMutations={true}
+        onToggleAutoApproveMutations={handleToggleAutoApprove}
+        isPinned={false}
+        onTogglePin={vi.fn()}
+        onClearContext={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    expect(screen.getByLabelText('Tắt tự động duyệt thay đổi dữ liệu')).toBeInTheDocument();
+  });
 });
 
 describe('AIChatDrawer', () => {
@@ -106,6 +146,56 @@ describe('AIChatDrawer', () => {
     await waitFor(() => {
       expect(screen.getByText(/Xin chào!/i)).toBeInTheDocument();
     });
+  });
+
+  it('extracts mentioned task ID and injects into system grounding prompt', async () => {
+    vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-api-key');
+    vi.spyOn(nineRouterTokenService, 'getNineRouterConfig').mockResolvedValue({
+      endpoint: 'https://api.9router.com',
+      defaultModel: 'gpt-4o',
+      charLimit: 12000,
+    });
+
+    await db.tasks.add({
+      id: 'task-test-mention',
+      name: 'Tối ưu hóa Database Index',
+      status: 'In Progress',
+      priority: 'Urgent',
+      progress: 50,
+      estimateMinutes: 120,
+      createdAt: '2026-10-01',
+      updatedAt: '2026-10-01',
+    });
+
+    const startTurnSpy = vi.spyOn(aiDebugService, 'startTurn');
+    async function* mockEvents() {
+      yield { type: 'text', delta: 'Đã nhận task!' };
+    }
+    vi.spyOn(nineRouterClient, 'streamChatEvents').mockImplementation(mockEvents as any);
+
+    render(
+      <AIChatDrawer
+        open={true}
+        onClose={vi.fn()}
+        db={db}
+        activeScope={{ type: 'global' }}
+      />
+    );
+
+    const textarea = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
+    fireEvent.change(textarea, {
+      target: { value: 'Hãy phân tích @[Tối ưu hóa Database Index](task:task-test-mention)' },
+    });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+    await waitFor(() => {
+      expect(startTurnSpy).toHaveBeenCalled();
+    });
+
+    const callArgs = startTurnSpy.mock.calls[0]?.[0];
+    expect(callArgs?.systemPrompt).toContain('<mentioned_entities>');
+    expect(callArgs?.systemPrompt).toContain('Tối ưu hóa Database Index');
+    expect(callArgs?.systemPrompt).toContain('id="task-test-mention"');
   });
 
   it('clicking clear context calls clearThreadContext and shows divider', async () => {
@@ -622,5 +712,71 @@ describe('AIChatDrawer', () => {
         screen.getByText(/Mô hình AI không trả về nội dung/i)
       ).toBeInTheDocument();
     });
+  });
+
+  it('bypasses confirmation prompt and automatically executes mutation when auto-approve is enabled', async () => {
+    localStorage.setItem('planner:ai_auto_approve_mutations', 'true');
+
+    vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-api-key');
+    vi.spyOn(nineRouterTokenService, 'getNineRouterConfig').mockResolvedValue({
+      endpoint: 'http://localhost:20128',
+      defaultModel: 'gpt-4o',
+      charLimit: 12000,
+    });
+
+    let callCount = 0;
+    async function* mockEvents() {
+      callCount++;
+      if (callCount === 1) {
+        yield {
+          type: 'tool_calls',
+          calls: [
+            {
+              id: 'call_auto_create_task',
+              type: 'function',
+              function: {
+                name: 'create_task',
+                arguments: JSON.stringify({
+                  name: 'Tác vụ tự động duyệt',
+                  priority: 'High',
+                }),
+              },
+            },
+          ],
+        };
+      } else {
+        yield {
+          type: 'text',
+          delta: 'Báo cáo thay đổi: Đã tự động tạo tác vụ "Tác vụ tự động duyệt" [Ưu tiên: High].',
+        };
+      }
+    }
+    vi.spyOn(nineRouterClient, 'streamChatEvents').mockImplementation(mockEvents as any);
+
+    render(
+      <AIChatDrawer
+        open={true}
+        onClose={vi.fn()}
+        db={db}
+        activeScope={{ type: 'global' }}
+      />
+    );
+
+    // Verify toggle button in header shows enabled state
+    expect(screen.getByLabelText('Tắt tự động duyệt thay đổi dữ liệu')).toBeInTheDocument();
+
+    const textarea = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
+    fireEvent.change(textarea, { target: { value: 'Tạo task tự động' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+    // Should NOT show confirmation prompt
+    await waitFor(() => {
+      expect(screen.queryByTestId('ai-mutation-confirmation')).not.toBeInTheDocument();
+      expect(screen.getByText(/Báo cáo thay đổi: Đã tự động tạo tác vụ/i)).toBeInTheDocument();
+    });
+
+    // Verify mutation was committed to database directly
+    const tasksInDb = await db.tasks.toArray();
+    expect(tasksInDb.some((t) => t.name === 'Tác vụ tự động duyệt' && t.priority === 'High')).toBe(true);
   });
 });

@@ -8,6 +8,8 @@ import {
   CloseOutlined,
   BugOutlined,
   ExportOutlined,
+  ThunderboltOutlined,
+  ThunderboltFilled,
 } from '@ant-design/icons';
 
 const { Text } = Typography;
@@ -31,6 +33,8 @@ export interface ChatHeaderProps {
   selectedModel: string;
   availableModels: string[];
   onModelChange: (model: string) => void;
+  autoApproveMutations?: boolean;
+  onToggleAutoApproveMutations?: (() => void) | undefined;
   isPinned: boolean;
   onTogglePin: () => void;
   onClearContext: () => void;
@@ -43,6 +47,8 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   selectedModel,
   availableModels,
   onModelChange,
+  autoApproveMutations = false,
+  onToggleAutoApproveMutations,
   isPinned,
   onTogglePin,
   onClearContext,
@@ -113,6 +119,36 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               icon={<BugOutlined />}
               onClick={onOpenDebug}
               aria-label="Nhật ký gỡ lỗi AI"
+              style={{ minWidth: 28, minHeight: 28 }}
+            />
+          </Tooltip>
+        )}
+
+        {onToggleAutoApproveMutations && (
+          <Tooltip
+            title={
+              autoApproveMutations
+                ? 'Tự động duyệt thay đổi dữ liệu (Đang BẬT: AI thực thi không hỏi, báo cáo sau)'
+                : 'Tự động duyệt thay đổi dữ liệu (Đang TẮT: AI sẽ hỏi xác nhận trước khi sửa)'
+            }
+          >
+            <Button
+              type="text"
+              size="small"
+              data-testid="toggle-auto-approve-mutations"
+              icon={
+                autoApproveMutations ? (
+                  <ThunderboltFilled style={{ color: token.colorWarning }} />
+                ) : (
+                  <ThunderboltOutlined />
+                )
+              }
+              onClick={onToggleAutoApproveMutations}
+              aria-label={
+                autoApproveMutations
+                  ? 'Tắt tự động duyệt thay đổi dữ liệu'
+                  : 'Bật tự động duyệt thay đổi dữ liệu'
+              }
               style={{ minWidth: 28, minHeight: 28 }}
             />
           </Tooltip>

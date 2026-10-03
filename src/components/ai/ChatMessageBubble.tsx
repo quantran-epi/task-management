@@ -4,6 +4,7 @@ import {
   CopyOutlined,
   CheckOutlined,
   CheckSquareOutlined,
+  ProjectOutlined,
   FileAddOutlined,
   CodeOutlined,
   LoadingOutlined,
@@ -47,6 +48,82 @@ export function parseChecklistFromText(text: string): string[] {
   }
 
   return items;
+}
+
+/**
+ * Parses markdown mentions (@[Task](task:id) and #[Project](project:id))
+ * and renders them as sleek visual pill tags inside user messages.
+ */
+export function renderUserMessageWithMentions(content: string): React.ReactNode {
+  const mentionRegex = /(@\[([^\]]+)\]\(task:([a-zA-Z0-9_-]+)\))|(#\[([^\]]+)\]\(project:([a-zA-Z0-9_-]+)\))/g;
+  if (!mentionRegex.test(content)) {
+    return content;
+  }
+  mentionRegex.lastIndex = 0;
+
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = mentionRegex.exec(content)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(content.substring(lastIndex, match.index));
+    }
+    if (match[1]) {
+      // Task mention
+      const taskName = match[2];
+      const taskId = match[3];
+      parts.push(
+        <Tag
+          key={`task-pill-${taskId}-${match.index}`}
+          icon={<CheckSquareOutlined style={{ color: '#ffffff', marginRight: 4 }} />}
+          style={{
+            margin: '0 3px',
+            verticalAlign: 'middle',
+            borderRadius: 4,
+            fontWeight: 500,
+            backgroundColor: 'rgba(255, 255, 255, 0.22)',
+            color: '#ffffff',
+            border: '1px solid rgba(255, 255, 255, 0.45)',
+            fontSize: 12,
+            padding: '1px 6px',
+          }}
+        >
+          {taskName}
+        </Tag>
+      );
+    } else if (match[4]) {
+      // Project mention
+      const projName = match[5];
+      const projId = match[6];
+      parts.push(
+        <Tag
+          key={`proj-pill-${projId}-${match.index}`}
+          icon={<ProjectOutlined style={{ color: '#ffffff', marginRight: 4 }} />}
+          style={{
+            margin: '0 3px',
+            verticalAlign: 'middle',
+            borderRadius: 4,
+            fontWeight: 500,
+            backgroundColor: 'rgba(255, 255, 255, 0.22)',
+            color: '#ffffff',
+            border: '1px solid rgba(255, 255, 255, 0.45)',
+            fontSize: 12,
+            padding: '1px 6px',
+          }}
+        >
+          #{projName}
+        </Tag>
+      );
+    }
+    lastIndex = mentionRegex.lastIndex;
+  }
+
+  if (lastIndex < content.length) {
+    parts.push(content.substring(lastIndex));
+  }
+
+  return parts;
 }
 
 export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
@@ -130,7 +207,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
         }}
       >
         {isUser ? (
-          <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
+          <div style={{ whiteSpace: 'pre-wrap' }}>{renderUserMessageWithMentions(msg.content)}</div>
         ) : isStreaming && !msg.content ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0' }}>
             <Spin

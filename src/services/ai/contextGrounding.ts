@@ -373,3 +373,36 @@ export async function buildGlobalContextPrompt(db: TaskPlannerDatabase = default
   sections.push('</global_context>');
   return sections.join('\n');
 }
+
+export interface ExtractedMentions {
+  taskIds: string[];
+  projectIds: string[];
+}
+
+/**
+ * Extracts task and project entity IDs from text containing mentions.
+ * Supports @[Task Name](task:<id>), #[Project Name](project:<id>),
+ * @task:<id>, and #project:<id>.
+ */
+export function extractMentionedEntityIds(text: string): ExtractedMentions {
+  const taskIds = new Set<string>();
+  const projectIds = new Set<string>();
+
+  const taskRegex = /@\[(?:[^\]]*)\]\(task:([a-zA-Z0-9_-]+)\)|@task:([a-zA-Z0-9_-]+)/g;
+  let match: RegExpExecArray | null;
+  while ((match = taskRegex.exec(text)) !== null) {
+    const id = match[1] || match[2];
+    if (id) taskIds.add(id);
+  }
+
+  const projRegex = /#\[(?:[^\]]*)\]\(project:([a-zA-Z0-9_-]+)\)|#project:([a-zA-Z0-9_-]+)/g;
+  while ((match = projRegex.exec(text)) !== null) {
+    const id = match[1] || match[2];
+    if (id) projectIds.add(id);
+  }
+
+  return {
+    taskIds: Array.from(taskIds),
+    projectIds: Array.from(projectIds),
+  };
+}
