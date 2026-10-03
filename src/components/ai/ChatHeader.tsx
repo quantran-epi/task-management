@@ -6,6 +6,7 @@ import {
   PushpinOutlined,
   PushpinFilled,
   CloseOutlined,
+  ApartmentOutlined,
 } from '@ant-design/icons';
 
 const { Text } = Typography;
@@ -25,6 +26,7 @@ export interface ChatHeaderProps {
   selectedScopeValue?: string;
   scopeOptions?: ScopeOptionGroup[];
   onScopeChange?: (value: string) => void;
+  onOpenScopePicker?: () => void;
   selectedModel: string;
   availableModels: string[];
   onModelChange: (model: string) => void;
@@ -39,6 +41,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   selectedScopeValue,
   scopeOptions,
   onScopeChange,
+  onOpenScopePicker,
   selectedModel,
   availableModels,
   onModelChange,
@@ -66,7 +69,25 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         <Text strong style={{ fontSize: 15, whiteSpace: 'nowrap' }}>
           Trợ lý AI
         </Text>
-        {scopeOptions && onScopeChange ? (
+        {onOpenScopePicker ? (
+          <Tooltip title="Chọn phạm vi ngữ cảnh">
+            <Button
+              size="small"
+              icon={<ApartmentOutlined />}
+              onClick={onOpenScopePicker}
+              onMouseDown={onOpenScopePicker}
+              aria-label="Chọn phạm vi ngữ cảnh"
+              style={{
+                fontSize: 12,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+              }}
+            >
+              Ngữ cảnh
+            </Button>
+          </Tooltip>
+        ) : scopeOptions && onScopeChange ? (
           <Select
             size="small"
             value={selectedScopeValue || 'global'}
@@ -75,6 +96,9 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             aria-label="Chọn phạm vi ngữ cảnh"
             placeholder="Chọn ngữ cảnh"
             style={{ minWidth: 110, maxWidth: 160 }}
+            popupMatchSelectWidth={false}
+            getPopupContainer={(node) => node.parentElement || document.body}
+            popupStyle={{ zIndex: 1300 }}
             filterOption={(input, option) =>
               (option?.label as string ?? '').toLowerCase().includes(input.toLowerCase())
             }
@@ -107,7 +131,11 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           size="small"
           value={selectedModel}
           onChange={onModelChange}
-          style={{ width: 105 }}
+          style={{ width: 115 }}
+          popupMatchSelectWidth={false}
+          getPopupContainer={(node) => node.parentElement || document.body}
+          popupStyle={{ zIndex: 1300 }}
+          aria-label="Chọn mô hình AI"
           options={
             availableModels.length > 0
               ? availableModels.map((m) => ({ label: m, value: m }))

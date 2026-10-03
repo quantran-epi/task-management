@@ -219,12 +219,12 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
       <Form layout="vertical">
         <Form.Item
           label="API Endpoint"
-          extra="Mặc định: https://api.9router.com (hoặc đường dẫn tương thích OpenAI /v1)"
+          extra="Mặc định: http://localhost:20128 (chạy daemon qua lệnh `npx 9router`, hoặc đường dẫn tương thích OpenAI /v1)"
         >
           <Input
             value={endpoint}
             onChange={(e) => setEndpoint(e.target.value)}
-            placeholder="https://api.9router.com"
+            placeholder="http://localhost:20128"
           />
         </Form.Item>
 
@@ -313,7 +313,14 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
                 type="error"
                 showIcon
                 message="Kiểm tra kết nối thất bại"
-                description={connectionResult.message}
+                description={
+                  <div>
+                    <div style={{ marginBottom: 6 }}>{connectionResult.message}</div>
+                    <div style={{ fontSize: 12, opacity: 0.9 }}>
+                      <strong>Gợi ý:</strong> 9Router server chạy cục bộ tại <code>http://localhost:20128</code> (chạy lệnh <code>npx 9router</code>). Nếu dùng Web qua HTTPS, trình duyệt sẽ chặn kết nối HTTP cục bộ (Mixed Content) - hãy sử dụng ứng dụng Tauri Desktop.
+                    </div>
+                  </div>
+                }
               />
             )}
           </div>

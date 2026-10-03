@@ -8,7 +8,7 @@ import {
 } from '../keyringService';
 import type { NineRouterConfig } from './types';
 
-export const DEFAULT_NINEROUTER_ENDPOINT = 'https://api.9router.com';
+export const DEFAULT_NINEROUTER_ENDPOINT = 'http://localhost:20128';
 export const DEFAULT_NINEROUTER_MODEL = 'gpt-4o';
 export const DEFAULT_NINEROUTER_CHAR_LIMIT = 12000;
 

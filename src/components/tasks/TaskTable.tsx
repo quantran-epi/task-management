@@ -30,7 +30,9 @@ import {
   FileTextOutlined,
   SyncOutlined,
   FolderOpenOutlined,
+  RobotOutlined,
 } from '@ant-design/icons';
+import { useAIChat } from '../../context/AIChatContext';
 import type { Task, Project, Milestone, TaskPriority, WorkType } from '../../types/models';
 import { InlineStatusTag } from './InlineStatusTag';
 import { InlineProgress } from './InlineProgress';
@@ -198,6 +200,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
   };
 
   const effectiveDb = db || defaultDb;
+  const { openChat } = useAIChat();
   const {
     getTimerForTask,
     getElapsedSeconds,
@@ -713,6 +716,14 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       width: 80,
       render: (_, record) => {
         const menuItems: MenuProps['items'] = [
+          {
+            key: 'ai-chat',
+            icon: <RobotOutlined style={{ color: token.colorPrimary }} />,
+            label: 'Hỏi Trợ lý AI',
+            onClick: () => {
+              openChat({ type: 'task', id: record.id, title: record.name });
+            },
+          },
           {
             key: 'edit',
             icon: <EditOutlined />,

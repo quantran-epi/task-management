@@ -9,12 +9,14 @@ export interface ActiveScope {
 
 export interface AIChatContextValue {
   isOpen: boolean;
-  openChat: (scope?: ActiveScope) => void;
+  openChat: (scope?: ActiveScope, initialPrompt?: string) => void;
   closeChat: () => void;
   toggleChat: () => void;
   activeScope: ActiveScope;
   setCustomScope: (scope: ActiveScope) => void;
   registerActiveItem: (scope: ActiveScope | null) => () => void;
+  pendingPrompt: string | null;
+  clearPendingPrompt: () => void;
 }
 
 const AIChatContext = createContext<AIChatContextValue | null>(null);
@@ -41,6 +43,7 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
 
   // User manually selected scope (overrides registered items if set)
   const [customScope, setCustomScopeState] = useState<ActiveScope | null>(null);
+  const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
 
   const saveOpenState = (open: boolean) => {
     setIsOpen(open);
@@ -49,11 +52,18 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
     } catch {}
   };
 
-  const openChat = useCallback((scope?: ActiveScope) => {
+  const openChat = useCallback((scope?: ActiveScope, initialPrompt?: string) => {
     if (scope) {
       setCustomScopeState(scope);
     }
+    if (initialPrompt && initialPrompt.trim()) {
+      setPendingPrompt(initialPrompt.trim());
+    }
     saveOpenState(true);
+  }, []);
+
+  const clearPendingPrompt = useCallback(() => {
+    setPendingPrompt(null);
   }, []);
 
   const closeChat = useCallback(() => {
@@ -103,6 +113,8 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
     activeScope,
     setCustomScope,
     registerActiveItem,
+    pendingPrompt,
+    clearPendingPrompt,
   };
 
   return <AIChatContext.Provider value={value}>{children}</AIChatContext.Provider>;
@@ -116,6 +128,8 @@ const defaultContextValue: AIChatContextValue = {
   activeScope: { type: 'global' },
   setCustomScope: () => {},
   registerActiveItem: () => () => {},
+  pendingPrompt: null,
+  clearPendingPrompt: () => {},
 };
 
 export const useAIChat = (): AIChatContextValue => {

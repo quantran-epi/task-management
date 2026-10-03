@@ -272,4 +272,28 @@ describe('CommandPaletteModal', () => {
     expect(onNavigate).toHaveBeenCalledWith('insight', { type: 'milestone', id: 'ms-99' });
     expect(onClose).toHaveBeenCalled();
   });
+
+  it('triggers AI with ? prefix and opens AI drawer with global context and prompt', async () => {
+    const onNavigate = vi.fn();
+    const onClose = vi.fn();
+
+    render(
+      <CommandPaletteModal
+        open={true}
+        onClose={onClose}
+        onNavigate={onNavigate}
+        db={db}
+      />
+    );
+
+    const input = screen.getByPlaceholderText(/Tìm công việc, dự án, màn hình, lệnh/);
+    fireEvent.change(input, { target: { value: '? phân tích tiến độ' } });
+
+    await waitFor(() => {
+      expect(screen.getByText('Hỏi Trợ lý AI: "phân tích tiến độ"')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Hỏi Trợ lý AI: "phân tích tiến độ"'));
+    expect(onClose).toHaveBeenCalled();
+  });
 });

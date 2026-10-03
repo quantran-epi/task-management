@@ -50,7 +50,7 @@ describe('nineRouterTokenService (Web mode)', () => {
 
   it('reads and writes endpoint and model config from db.settings', async () => {
     const defaultConfig = await getNineRouterConfig(db);
-    expect(defaultConfig.endpoint).toBe('https://api.9router.com');
+    expect(defaultConfig.endpoint).toBe('http://localhost:20128');
     expect(defaultConfig.defaultModel).toBe('gpt-4o');
 
     await setNineRouterConfig(

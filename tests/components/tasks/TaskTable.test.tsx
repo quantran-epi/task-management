@@ -370,4 +370,24 @@ describe('TaskTable', () => {
     expect(rows[3]).toHaveTextContent('Gamma Task'); // 2026-09-25
     expect(rows[4]).toHaveTextContent('Delta Task'); // undefined deadline at bottom
   });
+
+  it('renders action dropdown with Hỏi Trợ lý AI option', () => {
+    render(
+      <TaskTable
+        tasks={mockTasks}
+        projects={mockProjects}
+        milestones={mockMilestones}
+        selectedRowKeys={[]}
+        onSelectRows={vi.fn()}
+        onOpenDrawer={vi.fn()}
+        db={testDb}
+      />
+    );
+
+    const actionDropdownBtns = screen.getAllByLabelText('Thao tác khác');
+    expect(actionDropdownBtns.length).toBeGreaterThan(0);
+    fireEvent.click(actionDropdownBtns[0]!);
+
+    expect(screen.getByText('Hỏi Trợ lý AI')).toBeInTheDocument();
+  });
 });

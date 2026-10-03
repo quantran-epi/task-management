@@ -10,8 +10,11 @@ export function redactApiKey(text: string, apiKey?: string): string {
 }
 
 export function sanitizeEndpoint(endpoint: string): string {
-  const trimmed = endpoint.trim().replace(/\/+$/, '');
-  return trimmed || 'https://api.9router.com';
+  let trimmed = endpoint.trim().replace(/\/+$/, '');
+  if (trimmed.endsWith('/v1')) {
+    trimmed = trimmed.slice(0, -3).replace(/\/+$/, '');
+  }
+  return trimmed || 'http://localhost:20128';
 }
 
 export async function testNineRouterConnection(
@@ -48,21 +51,29 @@ export async function testNineRouterConnection(
     }
 
     const rawError = await response.text().catch(() => '');
-    const safeError = redactApiKey(
+    let safeError = redactApiKey(
       rawError || response.statusText || 'API Connection Failed',
       options.apiKey
     );
+    if (baseEndpoint.includes('api.9router.com') && response.status === 404) {
+      safeError = 'api.9router.com không phải máy chủ API. Vui lòng sử dụng http://localhost:20128 (chạy qua lệnh `npx 9router`).';
+    }
     return {
       ok: false,
       status: response.status,
       models: [],
-      error: safeError,
+      error: `HTTP ${response.status}: ${safeError}`,
     };
   } catch (err: any) {
-    const errorMsg = redactApiKey(
+    let errorMsg = redactApiKey(
       err?.message || 'Không thể kết nối đến máy chủ 9router',
       options.apiKey
     );
+    if (baseEndpoint.includes('api.9router.com')) {
+      errorMsg = 'api.9router.com không phải API server. 9Router chạy cục bộ tại http://localhost:20128 (chạy lệnh `npx 9router`).';
+    } else {
+      errorMsg = `Lỗi kết nối tới ${targetUrl} (${err?.message || 'Network/CORS error'}). Hãy kiểm tra xem 9Router daemon đã chạy chưa (npx 9router).`;
+    }
     return {
       ok: false,
       status: 0,

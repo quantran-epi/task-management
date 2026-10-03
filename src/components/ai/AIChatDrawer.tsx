@@ -26,6 +26,8 @@ import { getMilestone } from '../../db/repositories/milestoneRepo';
 import { ChatHeader } from './ChatHeader';
 import { ChatMessageList } from './ChatMessageList';
 import { ChatInputBar } from './ChatInputBar';
+import { ScopePickerModal } from './ScopePickerModal';
+import { useAIChat } from '../../context/AIChatContext';
 
 export const AI_CHAT_WIDTH_KEY = 'planner:ai_chat_width';
 export const DEFAULT_AI_CHAT_WIDTH = 380;
@@ -64,6 +66,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   isMobile = false,
 }) => {
   const { token } = theme.useToken();
+  const { pendingPrompt, clearPendingPrompt, setCustomScope } = useAIChat();
 
   // Width management with drag-resize clamping
   const [internalWidth, setInternalWidth] = useState<number>(() => {
@@ -128,6 +131,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   // Scope management: internal state, detachment, or picker selection
   const [internalScope, setInternalScope] = useState<ActiveScope | null>(null);
   const [isDetached, setIsDetached] = useState(false);
+  const [scopeModalOpen, setScopeModalOpen] = useState(false);
 
   // Sync propScope when it changes (unless user explicitly picked or detached)
   useEffect(() => {
@@ -277,21 +281,33 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     }
   };
 
-  const handleSendMessage = async (text: string) => {
+  const handleSendMessage = async (text: string, overrideScope?: ActiveScope) => {
     const trimmed = text.trim();
     if (!trimmed || isStreaming) return;
 
     setApiError(null);
     setLastSubmittedText(trimmed);
 
-    // 1. Ensure thread exists
-    let activeThread = thread;
+    const effectiveScope = overrideScope ?? currentScope;
+
+    // 1. Ensure thread exists for effective scope
+    let activeThread = overrideScope
+      ? await createOrGetThread(
+          {
+            scopeType: effectiveScope.type,
+            entityId: effectiveScope.id,
+            title: effectiveScope.title,
+          },
+          db
+        )
+      : thread;
+
     if (!activeThread) {
       activeThread = await createOrGetThread(
         {
-          scopeType: currentScope.type,
-          entityId: currentScope.id,
-          title: currentScope.title,
+          scopeType: effectiveScope.type,
+          entityId: effectiveScope.id,
+          title: effectiveScope.title,
         },
         db
       );
@@ -319,20 +335,20 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     // 4. Assemble context payload (messages after last context boundary, capped at 20)
     // If scoped item exists, inject system context prompt with grounding
     let systemInstruction = '';
-    if (currentScope.type !== 'global' && currentScope.id) {
+    if (effectiveScope.type !== 'global' && effectiveScope.id) {
       try {
-        if (currentScope.type === 'task') {
-          const t = await getTask(currentScope.id, db);
+        if (effectiveScope.type === 'task') {
+          const t = await getTask(effectiveScope.id, db);
           if (t) {
             systemInstruction = await buildItemContextPrompt({ entityType: 'task', item: t, db });
           }
-        } else if (currentScope.type === 'project') {
-          const p = await getProject(currentScope.id, db);
+        } else if (effectiveScope.type === 'project') {
+          const p = await getProject(effectiveScope.id, db);
           if (p) {
             systemInstruction = await buildItemContextPrompt({ entityType: 'project', item: p, db });
           }
-        } else if (currentScope.type === 'milestone') {
-          const m = await getMilestone(currentScope.id, db);
+        } else if (effectiveScope.type === 'milestone') {
+          const m = await getMilestone(effectiveScope.id, db);
           if (m) {
             systemInstruction = await buildItemContextPrompt({ entityType: 'milestone', item: m, db });
           }
@@ -447,6 +463,18 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     }
   };
 
+  // Auto-send prompt when opened from Command Palette with pendingPrompt
+  useEffect(() => {
+    if (open && pendingPrompt) {
+      const promptToSend = pendingPrompt;
+      clearPendingPrompt();
+      setInternalScope({ type: 'global' });
+      setCustomScope({ type: 'global' });
+      setIsDetached(false);
+      handleSendMessage(promptToSend, { type: 'global' });
+    }
+  }, [open, pendingPrompt]);
+
   // Action chips event handlers per D-18
   const handleAddToChecklist = async (items: string[]) => {
     if (currentScope.type !== 'task' || !currentScope.id || items.length === 0) return;
@@ -501,7 +529,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
   const scopeLabel =
     currentScope.type === 'global'
-      ? 'Toàn cục'
+      ? 'Toàn cục (Không gắn)'
       : `${currentScope.type === 'task' ? 'Tác vụ' : currentScope.type === 'project' ? 'Dự án' : 'Mốc'}: ${currentScope.title || currentScope.id}`;
 
   return (
@@ -543,6 +571,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         selectedScopeValue={selectedScopeValue}
         scopeOptions={scopeOptions}
         onScopeChange={handleScopeChange}
+        onOpenScopePicker={() => setScopeModalOpen(true)}
         selectedModel={selectedModel}
         availableModels={availableModels}
         onModelChange={handleModelChange}
@@ -552,40 +581,81 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         onClose={onClose}
       />
 
-      {/* Scope banner with Detach button if focused on an item */}
-      {currentScope.type !== 'global' && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '4px 16px',
-            backgroundColor: token.colorFillAlter,
-            borderBottom: `1px solid ${token.colorBorderSecondary}`,
-            fontSize: 12,
-          }}
-        >
+      {/* Scope sub-bar showing current active context and change/detach controls */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '4px 14px',
+          backgroundColor: token.colorFillAlter,
+          borderBottom: `1px solid ${token.colorBorderSecondary}`,
+          fontSize: 12,
+          gap: 8,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
+          <span style={{ color: token.colorTextSecondary, fontSize: 11, flexShrink: 0 }}>Ngữ cảnh:</span>
           <span
             style={{
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
-              color: token.colorTextSecondary,
+              fontWeight: 500,
+              color: currentScope.type === 'global' ? token.colorTextSecondary : token.colorPrimary,
             }}
           >
-            Đang gắn ngữ cảnh: {currentScope.title || currentScope.id}
+            {currentScope.type === 'global'
+              ? 'Toàn cục (Không gắn)'
+              : `Đang gắn ngữ cảnh: ${currentScope.title || currentScope.id}`}
           </span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
           <Button
             type="link"
             size="small"
-            icon={<DisconnectOutlined />}
-            onClick={() => setIsDetached(true)}
-            style={{ padding: 0, height: 'auto', fontSize: 12 }}
+            onClick={() => setScopeModalOpen(true)}
+            aria-label="Đổi phạm vi ngữ cảnh"
+            style={{ padding: '0 4px', height: 22, fontSize: 12 }}
           >
-            Tách riêng
+            Đổi
           </Button>
+          {currentScope.type !== 'global' && (
+            <Button
+              type="text"
+              size="small"
+              icon={<DisconnectOutlined />}
+              onClick={() => {
+                setIsDetached(true);
+                setInternalScope({ type: 'global' });
+                setCustomScope({ type: 'global' });
+              }}
+              aria-label="Gỡ gắn ngữ cảnh"
+              style={{ padding: '0 4px', height: 22, fontSize: 12, color: token.colorTextSecondary }}
+            >
+              Gỡ
+            </Button>
+          )}
         </div>
-      )}
+      </div>
+
+      <ScopePickerModal
+        open={scopeModalOpen}
+        onClose={() => setScopeModalOpen(false)}
+        currentScope={currentScope}
+        onSelectScope={(newScope) => {
+          if (newScope.type === 'global') {
+            setIsDetached(true);
+            setInternalScope({ type: 'global' });
+            setCustomScope({ type: 'global' });
+          } else {
+            setIsDetached(false);
+            setInternalScope(newScope);
+            setCustomScope(newScope);
+          }
+        }}
+        db={db}
+      />
 
       {/* Message List */}
       <ChatMessageList

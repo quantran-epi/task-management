@@ -12,7 +12,9 @@ import {
   SettingOutlined,
   DashboardOutlined,
   QuestionCircleOutlined,
+  RobotOutlined,
 } from '@ant-design/icons';
+import { useAIChat } from '../../context/AIChatContext';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { NavigateFunction } from '../../types/navigation';
@@ -47,7 +49,7 @@ export const CHEATSHEET_ENTRIES = [
   { prefix: '#', name: 'Dự án', desc: 'Chỉ tìm kiếm danh sách dự án & cột mốc', example: '# website, # mobile app' },
   { prefix: '!', name: 'Ghi chú', desc: 'Chỉ tìm kiếm ghi chú và nội dung đính kèm', example: '! auth, ! api' },
   { prefix: '+', name: 'Tạo việc', desc: 'Tạo ngay một tác vụ mới với tên đã nhập', example: '+ Soạn hợp đồng quý 4' },
-  { prefix: '?', name: 'Hướng dẫn', desc: 'Mở trang tra cứu phím tắt và cú pháp lệnh', example: '?' },
+  { prefix: '?', name: 'Trợ lý AI', desc: 'Mở Trợ lý AI hoặc hỏi nhanh câu hỏi', example: '? làm sao tối ưu tuần này' },
 ];
 
 export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
@@ -65,6 +67,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showCheatsheet, setShowCheatsheet] = useState(false);
   const inputRef = useRef<any>(null);
+  const { openChat } = useAIChat();
 
   useEffect(() => {
     if (open) {
@@ -162,6 +165,17 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
         },
       },
       {
+        id: 'action-open-ai',
+        category: 'action',
+        title: 'Trợ lý AI (AI Chat)',
+        subtitle: 'Mở cửa sổ trợ lý AI phân tích và hỗ trợ (Cmd+J)',
+        icon: <RobotOutlined style={{ color: '#722ed1' }} />,
+        action: () => {
+          onClose();
+          openChat();
+        },
+      },
+      {
         id: 'action-create-task',
         category: 'action',
         title: 'Tạo công việc mới',
@@ -186,10 +200,31 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
     const isProjectOnly = q.startsWith('#');
     const isNoteOnly = q.startsWith('!');
     const isCreateOnly = q.startsWith('+');
+    const isAiOnly = (q.startsWith('?') && q.length > 1) || q.startsWith('ai ');
 
     let cleanQuery = q;
     if (isViewOnly || isTaskOnly || isProjectOnly || isNoteOnly || isCreateOnly) {
       cleanQuery = q.slice(1).trim();
+    } else if (isAiOnly) {
+      cleanQuery = q.startsWith('?') ? q.slice(1).trim() : q.slice(3).trim();
+    }
+
+    // AI shortcut
+    if (isAiOnly) {
+      const prompt = raw.startsWith('?') ? raw.slice(1).trim() : raw.slice(3).trim();
+      return [
+        {
+          id: 'action-ai-prompt',
+          category: 'action',
+          title: prompt ? `Hỏi Trợ lý AI: "${prompt}"` : 'Mở Trợ lý AI (Cmd+J)',
+          subtitle: prompt ? 'Gửi trực tiếp tới Trợ lý AI ở ngữ cảnh Toàn cục' : 'Nhấn Enter để mở cửa sổ trò chuyện AI',
+          icon: <RobotOutlined style={{ color: '#722ed1' }} />,
+          action: () => {
+            onClose();
+            openChat({ type: 'global' }, prompt || undefined);
+          },
+        },
+      ];
     }
 
     // Quick create shortcut
