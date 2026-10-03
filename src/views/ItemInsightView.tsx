@@ -448,6 +448,16 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
                 {currentTask?.description || currentProject?.description || currentMilestone?.description}
               </Paragraph>
             )}
+
+            {(currentTask?.notes || currentMilestone?.notes) && (
+              <Paragraph
+                type="secondary"
+                style={{ marginTop: 4, marginBottom: 0, maxWidth: 800, whiteSpace: 'pre-wrap', fontStyle: 'italic' }}
+              >
+                <Text strong>Ghi chú: </Text>
+                {currentTask?.notes || currentMilestone?.notes}
+              </Paragraph>
+            )}
           </div>
 
           {/* Action Toolbar */}
