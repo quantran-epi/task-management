@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Input, Button, Tooltip, theme } from 'antd';
 import { SendOutlined, StopOutlined } from '@ant-design/icons';
 
@@ -23,25 +23,48 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
 }) => {
   const { token } = theme.useToken();
   const [value, setValue] = useState('');
+  const textAreaRef = useRef<any>(null);
+  const isSubmittingRef = useRef(false);
 
-  const handleSend = () => {
+  const clearInput = (el?: HTMLTextAreaElement | null) => {
+    setValue('');
+    if (el && 'value' in el) {
+      el.value = '';
+    }
+    const nativeArea = textAreaRef.current?.resizableTextArea?.textArea || textAreaRef.current?.input;
+    if (nativeArea && 'value' in nativeArea) {
+      nativeArea.value = '';
+    }
+  };
+
+  const handleSend = (targetEl?: HTMLTextAreaElement) => {
     const trimmed = value.trim();
     if (!trimmed) return;
 
+    clearInput(targetEl);
+
     if (trimmed === '/clear') {
-      setValue('');
       onClear?.();
       return;
     }
 
-    setValue('');
     onSubmit(trimmed);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault();
-      handleSend();
+      e.stopPropagation();
+      const el = e.currentTarget;
+      if (el) {
+        el.value = '';
+      }
+      isSubmittingRef.current = true;
+      handleSend(el);
+      queueMicrotask(() => {
+        clearInput(el);
+        isSubmittingRef.current = false;
+      });
     }
   };
 
@@ -57,8 +80,20 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
       }}
     >
       <TextArea
+        ref={textAreaRef}
         value={value}
-        onChange={(e) => setValue(e.target.value)}
+        onChange={(e) => {
+          if (isSubmittingRef.current) {
+            e.target.value = '';
+            return;
+          }
+          setValue(e.target.value);
+        }}
+        onCompositionEnd={() => {
+          if (isSubmittingRef.current) {
+            clearInput();
+          }
+        }}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         aria-label="Nội dung tin nhắn trò chuyện AI"

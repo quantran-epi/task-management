@@ -6,8 +6,10 @@ import {
   Space,
   Tooltip,
   Popover,
+  Dropdown,
   theme,
   type TableColumnsType,
+  type MenuProps,
 } from 'antd';
 import {
   PlusOutlined,
@@ -18,6 +20,8 @@ import {
   LinkOutlined,
   FileTextOutlined,
   FolderOpenOutlined,
+  RobotOutlined,
+  MoreOutlined,
 } from '@ant-design/icons';
 import type { Project, Milestone, Task } from '../../types/models';
 import { EmptyState } from '../common/EmptyState';
@@ -28,6 +32,7 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { getJiraBrowseUrl, openJiraExternalUrl } from '../../services/jira/jiraApi';
 import { openDocumentLink, isLocalPath } from '../../utils/documentLinks';
+import { useAIChat } from '../../context/AIChatContext';
 
 export interface ProjectTableProps {
   projects: Project[];
@@ -81,6 +86,102 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
   const { token } = theme.useToken();
   const today = getTodayDateString();
   const [pagination, setPagination] = useState({ current: 1, pageSize: 20 });
+  const { openChat } = useAIChat();
+
+  const [contextMenu, setContextMenu] = useState<{
+    items: MenuProps['items'];
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const getProjectMenuItems = (record: Project): MenuProps['items'] => [
+    {
+      key: 'ai-chat',
+      icon: <RobotOutlined style={{ color: token.colorPrimary }} />,
+      label: 'Hỏi Trợ lý AI',
+      onClick: () => {
+        openChat({ type: 'project', id: record.id, title: record.name });
+      },
+    },
+    {
+      key: 'add-task',
+      icon: <PlusOutlined />,
+      label: 'Thêm tác vụ',
+      onClick: () => onAddTask(record.id, undefined),
+    },
+    {
+      key: 'add-milestone',
+      icon: <PlusOutlined />,
+      label: 'Thêm cột mốc',
+      onClick: () => onAddMilestone(record.id),
+    },
+    {
+      key: 'edit',
+      icon: <EditOutlined />,
+      label: 'Sửa dự án',
+      onClick: () => onEditProject(record),
+    },
+    {
+      type: 'divider',
+    },
+    {
+      key: 'delete',
+      icon: <DeleteOutlined style={{ color: token.colorError }} />,
+      danger: true,
+      label: 'Xóa dự án',
+      onClick: () => onDeleteProject(record),
+    },
+  ];
+
+  const getMilestoneMenuItems = (record: Milestone, projectId: string): MenuProps['items'] => [
+    {
+      key: 'ai-chat',
+      icon: <RobotOutlined style={{ color: token.colorPrimary }} />,
+      label: 'Hỏi Trợ lý AI',
+      onClick: () => {
+        openChat({ type: 'milestone', id: record.id, title: record.name });
+      },
+    },
+    {
+      key: 'add-task',
+      icon: <PlusOutlined />,
+      label: 'Thêm tác vụ',
+      onClick: () => onAddTask(projectId, record.id),
+    },
+    {
+      key: 'edit',
+      icon: <EditOutlined />,
+      label: 'Sửa cột mốc',
+      onClick: () => onEditMilestone(record),
+    },
+    {
+      type: 'divider',
+    },
+    {
+      key: 'delete',
+      icon: <DeleteOutlined style={{ color: token.colorError }} />,
+      danger: true,
+      label: 'Xóa cột mốc',
+      onClick: () => onDeleteMilestone(record),
+    },
+  ];
+
+  const getTaskMenuItems = (record: Task): MenuProps['items'] => [
+    {
+      key: 'ai-chat',
+      icon: <RobotOutlined style={{ color: token.colorPrimary }} />,
+      label: 'Hỏi Trợ lý AI',
+      onClick: () => {
+        openChat({ type: 'task', id: record.id, title: record.name });
+      },
+    },
+    {
+      key: 'edit',
+      icon: <EditOutlined />,
+      label: 'Sửa tác vụ',
+      onClick: () => onEditTask(record.id),
+    },
+  ];
 
   // Query spent minutes map for all tasks
   const taskSpentMap = useLiveQuery(async () => {
@@ -240,7 +341,7 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
       {
         title: 'Thao tác',
         key: 'actions',
-        width: 180,
+        width: 140,
         render: (_, record) => (
           <Space orientation="horizontal" size="small">
             <Button
@@ -250,17 +351,14 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
             >
               Tác vụ
             </Button>
-            <Button
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => onEditMilestone(record)}
-            />
-            <Button
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={() => onDeleteMilestone(record)}
-            />
+            <Dropdown menu={{ items: getMilestoneMenuItems(record, project.id) }} trigger={['click']}>
+              <Button
+                type="text"
+                size="small"
+                icon={<MoreOutlined />}
+                aria-label="Thao tác khác"
+              />
+            </Dropdown>
           </Space>
         ),
       },
@@ -299,6 +397,16 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
             dataSource={msTasks}
             pagination={false}
             size="small"
+            onRow={(record) => ({
+              onContextMenu: (e) => {
+                e.preventDefault();
+                setContextMenu({
+                  items: getTaskMenuItems(record),
+                  x: e.clientX,
+                  y: e.clientY,
+                });
+              },
+            })}
             columns={[
               {
                 title: 'Tên tác vụ',
@@ -342,6 +450,21 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
                 key: 'deadline',
                 width: 120,
                 render: (deadline?: string) => deadline || '—',
+              },
+              {
+                title: 'Thao tác',
+                key: 'actions',
+                width: 80,
+                render: (_, record: Task) => (
+                  <Dropdown menu={{ items: getTaskMenuItems(record) }} trigger={['click']}>
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<MoreOutlined />}
+                      aria-label="Thao tác khác"
+                    />
+                  </Dropdown>
+                ),
               },
             ]}
           />
@@ -390,6 +513,16 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
             pagination={false}
             size="small"
             locale={{ emptyText: 'Chưa có cột mốc nào' }}
+            onRow={(record) => ({
+              onContextMenu: (e) => {
+                e.preventDefault();
+                setContextMenu({
+                  items: getMilestoneMenuItems(record, project.id),
+                  x: e.clientX,
+                  y: e.clientY,
+                });
+              },
+            })}
           />
         </div>
 
@@ -403,6 +536,16 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
               dataSource={directTasks}
               pagination={false}
               size="small"
+              onRow={(record) => ({
+                onContextMenu: (e) => {
+                  e.preventDefault();
+                  setContextMenu({
+                    items: getTaskMenuItems(record),
+                    x: e.clientX,
+                    y: e.clientY,
+                  });
+                },
+              })}
               columns={[
                 {
                   title: 'Tên tác vụ',
@@ -446,6 +589,21 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
                   key: 'deadline',
                   width: 120,
                   render: (deadline?: string) => deadline || '—',
+                },
+                {
+                  title: 'Thao tác',
+                  key: 'actions',
+                  width: 80,
+                  render: (_, record: Task) => (
+                    <Dropdown menu={{ items: getTaskMenuItems(record) }} trigger={['click']}>
+                      <Button
+                        type="text"
+                        size="small"
+                        icon={<MoreOutlined />}
+                        aria-label="Thao tác khác"
+                      />
+                    </Dropdown>
+                  ),
                 },
               ]}
             />
@@ -613,7 +771,7 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
     {
       title: 'Thao tác',
       key: 'actions',
-      width: 220,
+      width: 140,
       render: (_, record) => (
         <Space orientation="horizontal" size="small">
           <Button
@@ -623,63 +781,85 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
           >
             Tác vụ
           </Button>
-          <Button
-            size="small"
-            icon={<PlusOutlined />}
-            onClick={() => onAddMilestone(record.id)}
-          >
-            Cột mốc
-          </Button>
-          <Tooltip title="Sửa dự án">
+          <Dropdown menu={{ items: getProjectMenuItems(record) }} trigger={['click']}>
             <Button
+              type="text"
               size="small"
-              icon={<EditOutlined />}
-              onClick={() => onEditProject(record)}
+              icon={<MoreOutlined />}
+              aria-label="Thao tác khác"
             />
-          </Tooltip>
-          <Tooltip title="Xóa dự án">
-            <Button
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={() => onDeleteProject(record)}
-            />
-          </Tooltip>
+          </Dropdown>
         </Space>
       ),
     },
   ];
 
   return (
-    <Table
-      rowKey="id"
-      dataSource={projects}
-      columns={projectColumns}
-      expandable={{ expandedRowRender }}
-      loading={loading}
-      pagination={{
-        current: pagination.current,
-        pageSize: pagination.pageSize,
-        showSizeChanger: true,
-        pageSizeOptions: ['10', '20', '50', '100'],
-        showTotal: (total, range) => `${range[0]}-${range[1]} / ${total} dự án`,
-        hideOnSinglePage: false,
-        onChange: (current, pageSize) => {
-          setPagination((prev) => ({
-            current: pageSize !== prev.pageSize ? 1 : current,
-            pageSize,
-          }));
-        },
-      }}
-      locale={{
-        emptyText: (
-          <EmptyState
-            heading="Chưa có dự án nào"
-            body="Nhấn 'Dự án mới' để sắp xếp tác vụ theo dự án và cột mốc."
+    <>
+      <Table
+        rowKey="id"
+        dataSource={projects}
+        columns={projectColumns}
+        expandable={{ expandedRowRender }}
+        loading={loading}
+        onRow={(record) => ({
+          onContextMenu: (e) => {
+            e.preventDefault();
+            setContextMenu({
+              items: getProjectMenuItems(record),
+              x: e.clientX,
+              y: e.clientY,
+            });
+          },
+        })}
+        pagination={{
+          current: pagination.current,
+          pageSize: pagination.pageSize,
+          showSizeChanger: true,
+          pageSizeOptions: ['10', '20', '50', '100'],
+          showTotal: (total, range) => `${range[0]}-${range[1]} / ${total} dự án`,
+          hideOnSinglePage: false,
+          onChange: (current, pageSize) => {
+            setPagination((prev) => ({
+              current: pageSize !== prev.pageSize ? 1 : current,
+              pageSize,
+            }));
+          },
+        }}
+        locale={{
+          emptyText: (
+            <EmptyState
+              heading="Chưa có dự án nào"
+              body="Nhấn 'Dự án mới' để sắp xếp tác vụ theo dự án và cột mốc."
+            />
+          ),
+        }}
+        size="middle"
+      />
+
+      {contextMenu && (
+        <Dropdown
+          menu={{
+            items: contextMenu.items,
+            onClick: () => setContextMenu(null),
+          }}
+          open={true}
+          onOpenChange={(open) => {
+            if (!open) setContextMenu(null);
+          }}
+        >
+          <span
+            style={{
+              position: 'fixed',
+              left: contextMenu.x,
+              top: contextMenu.y,
+              width: 1,
+              height: 1,
+              pointerEvents: 'none',
+            }}
           />
-        ),
-      }}
-      size="middle"
-    />
+        </Dropdown>
+      )}
+    </>
   );
 };

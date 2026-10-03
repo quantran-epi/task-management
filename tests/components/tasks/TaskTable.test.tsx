@@ -390,4 +390,24 @@ describe('TaskTable', () => {
 
     expect(screen.getByText('Hỏi Trợ lý AI')).toBeInTheDocument();
   });
+
+  it('opens context menu on right click (contextmenu) on a task row', () => {
+    render(
+      <TaskTable
+        tasks={mockTasks}
+        projects={mockProjects}
+        milestones={mockMilestones}
+        selectedRowKeys={[]}
+        onSelectRows={vi.fn()}
+        onOpenDrawer={vi.fn()}
+        db={testDb}
+      />
+    );
+
+    const taskRowText = screen.getByText('Alpha Task');
+    fireEvent.contextMenu(taskRowText, { clientX: 200, clientY: 300 });
+
+    expect(screen.getByText('Hỏi Trợ lý AI')).toBeInTheDocument();
+    expect(screen.getByText('Sửa tác vụ')).toBeInTheDocument();
+  });
 });

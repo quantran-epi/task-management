@@ -132,6 +132,30 @@ describe('ChatInputBar', () => {
     expect(handleClear).toHaveBeenCalled();
   });
 
+  it('clears input completely on Cmd+Enter and suppresses trailing IME input', () => {
+    const handleSubmit = vi.fn();
+
+    render(
+      <ChatInputBar
+        onSubmit={handleSubmit}
+        isStreaming={false}
+      />
+    );
+
+    const textarea = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI') as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: 'Kế hoạch phát triển dự án' } });
+    expect(textarea.value).toBe('Kế hoạch phát triển dự án');
+
+    // Press Cmd+Enter
+    fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true });
+    expect(handleSubmit).toHaveBeenCalledWith('Kế hoạch phát triển dự án');
+    expect(textarea.value).toBe('');
+
+    // Simulate trailing IME input event that commonly arrives on macOS right after Cmd+Enter
+    fireEvent.change(textarea, { target: { value: 'án' } });
+    expect(textarea.value).toBe('');
+  });
+
   it('renders Stop Generation button when isStreaming is true', () => {
     const handleStop = vi.fn();
 

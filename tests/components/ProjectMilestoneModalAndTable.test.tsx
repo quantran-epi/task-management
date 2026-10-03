@@ -196,4 +196,34 @@ describe('Project and Milestone Modals and ProjectTable Banking IT Fields', () =
 
     openDocSpy.mockRestore();
   });
+
+  it('renders action dropdown and supports contextmenu on project row with Ask AI', () => {
+    render(
+      <ProjectTable
+        projects={[sampleProject]}
+        milestones={sampleMilestones}
+        tasks={[]}
+        onAddTask={vi.fn()}
+        onEditProject={vi.fn()}
+        onDeleteProject={vi.fn()}
+        onAddMilestone={vi.fn()}
+        onEditMilestone={vi.fn()}
+        onDeleteMilestone={vi.fn()}
+        onEditTask={vi.fn()}
+      />
+    );
+
+    // Context menu via right-click on project row
+    const projectText = screen.getByText('OmniChannel Banking');
+    fireEvent.contextMenu(projectText, { clientX: 150, clientY: 250 });
+    expect(screen.getByText('Hỏi Trợ lý AI')).toBeInTheDocument();
+    expect(screen.getByText('Sửa dự án')).toBeInTheDocument();
+    expect(screen.getByText('Xóa dự án')).toBeInTheDocument();
+
+    // Action dropdown button
+    const actionBtns = screen.getAllByLabelText('Thao tác khác');
+    expect(actionBtns.length).toBeGreaterThan(0);
+    fireEvent.click(actionBtns[0]!);
+    expect(screen.getAllByText('Hỏi Trợ lý AI').length).toBeGreaterThan(0);
+  });
 });

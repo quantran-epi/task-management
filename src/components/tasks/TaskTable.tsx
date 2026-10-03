@@ -315,6 +315,56 @@ export const TaskTable: React.FC<TaskTableProps> = ({
     }
   };
 
+  const [contextMenu, setContextMenu] = useState<{
+    record: Task;
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const getTaskMenuItems = (record: Task): MenuProps['items'] => [
+    {
+      key: 'ai-chat',
+      icon: <RobotOutlined style={{ color: token.colorPrimary }} />,
+      label: 'Hỏi Trợ lý AI',
+      onClick: () => {
+        openChat({ type: 'task', id: record.id, title: record.name });
+      },
+    },
+    {
+      key: 'edit',
+      icon: <EditOutlined />,
+      label: 'Sửa tác vụ',
+      onClick: () => onOpenDrawer(record.id),
+    },
+    {
+      type: 'divider',
+    },
+    {
+      key: 'delete',
+      icon: <DeleteOutlined style={{ color: token.colorError }} />,
+      danger: true,
+      label: 'Xóa',
+      onClick: () => {
+        Modal.confirm({
+          title: 'Xóa tác vụ',
+          content: `Bạn có chắc muốn xóa "${record.name}"?`,
+          okText: 'Xóa',
+          cancelText: 'Hủy',
+          okButtonProps: { danger: true },
+          onOk: async () => {
+            if (!db) return;
+            try {
+              await deleteTaskWithAllocations(record.id, db);
+              message.success({ content: 'Đã xóa tác vụ', duration: 1.5 });
+            } catch {
+              message.error({ content: 'Không thể xóa tác vụ', duration: 2 });
+            }
+          },
+        });
+      },
+    },
+  ];
+
   const columns: TableColumnsType<Task> = [
     {
       title: 'Trạng thái',
@@ -714,70 +764,27 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       title: 'Thao tác',
       key: 'actions',
       width: 80,
-      render: (_, record) => {
-        const menuItems: MenuProps['items'] = [
-          {
-            key: 'ai-chat',
-            icon: <RobotOutlined style={{ color: token.colorPrimary }} />,
-            label: 'Hỏi Trợ lý AI',
-            onClick: () => {
-              openChat({ type: 'task', id: record.id, title: record.name });
-            },
-          },
-          {
-            key: 'edit',
-            icon: <EditOutlined />,
-            label: 'Sửa tác vụ',
-            onClick: () => onOpenDrawer(record.id),
-          },
-          {
-            key: 'delete',
-            icon: <DeleteOutlined style={{ color: token.colorError }} />,
-            danger: true,
-            label: 'Xóa',
-            onClick: () => {
-              Modal.confirm({
-                title: 'Xóa tác vụ',
-                content: `Bạn có chắc muốn xóa "${record.name}"?`,
-                okText: 'Xóa',
-                cancelText: 'Hủy',
-                okButtonProps: { danger: true },
-                onOk: async () => {
-                  if (!db) return;
-                  try {
-                    await deleteTaskWithAllocations(record.id, db);
-                    message.success({ content: 'Đã xóa tác vụ', duration: 1.5 });
-                  } catch {
-                    message.error({ content: 'Không thể xóa tác vụ', duration: 2 });
-                  }
-                },
-              });
-            },
-          },
-        ];
-
-        return (
-          <Space orientation="horizontal" size={4}>
-            <Tooltip title="Sửa tác vụ">
-              <Button
-                type="text"
-                size="small"
-                icon={<EditOutlined />}
-                onClick={() => onOpenDrawer(record.id)}
-                aria-label="Sửa nhanh tác vụ"
-              />
-            </Tooltip>
-            <Dropdown menu={{ items: menuItems }} trigger={['click']}>
-              <Button
-                type="text"
-                size="small"
-                icon={<MoreOutlined />}
-                aria-label="Thao tác khác"
-              />
-            </Dropdown>
-          </Space>
-        );
-      },
+      render: (_, record) => (
+        <Space orientation="horizontal" size={4}>
+          <Tooltip title="Sửa tác vụ">
+            <Button
+              type="text"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => onOpenDrawer(record.id)}
+              aria-label="Sửa nhanh tác vụ"
+            />
+          </Tooltip>
+          <Dropdown menu={{ items: getTaskMenuItems(record) }} trigger={['click']}>
+            <Button
+              type="text"
+              size="small"
+              icon={<MoreOutlined />}
+              aria-label="Thao tác khác"
+            />
+          </Dropdown>
+        </Space>
+      ),
     },
   ];
 
@@ -914,6 +921,16 @@ export const TaskTable: React.FC<TaskTableProps> = ({
         rowClassName={(_, index) =>
           index === highlightedIndex ? 'ant-table-row-selected keyboard-active-row' : ''
         }
+        onRow={(record) => ({
+          onContextMenu: (e) => {
+            e.preventDefault();
+            setContextMenu({
+              record,
+              x: e.clientX,
+              y: e.clientY,
+            });
+          },
+        })}
         locale={{
           emptyText: isFiltered ? (
             <EmptyState
@@ -929,6 +946,30 @@ export const TaskTable: React.FC<TaskTableProps> = ({
         }}
         size="middle"
       />
+
+      {contextMenu && (
+        <Dropdown
+          menu={{
+            items: getTaskMenuItems(contextMenu.record),
+            onClick: () => setContextMenu(null),
+          }}
+          open={true}
+          onOpenChange={(open) => {
+            if (!open) setContextMenu(null);
+          }}
+        >
+          <span
+            style={{
+              position: 'fixed',
+              left: contextMenu.x,
+              top: contextMenu.y,
+              width: 1,
+              height: 1,
+              pointerEvents: 'none',
+            }}
+          />
+        </Dropdown>
+      )}
 
       {/* Fallback modal for clipboard copy in non-secure or restricted contexts */}
       <Modal

@@ -62,6 +62,7 @@ Last activity: 2026-10-03 - Completed quick task 261003-laj: add debug feature t
 | 261002-x47 | Fix 31 TypeScript build errors across 7 files | 2026-10-02 | a146d26 | complete | [261002-x47-fix-31-typescript-build-errors-across-7-](./quick/261002-x47-fix-31-typescript-build-errors-across-7-/) |
 | 261003-pdm | Normalize command palette item navigation with detail modals, tools, and navigators | 2026-10-03 | 99569a7 | complete | [261003-pdm-command-palette-item-detail-modals](./quick/261003-pdm-command-palette-item-detail-modals/) |
 | 261003-bz6 | Command palette insight pages for task, project, and milestone with pre-implementation analysis, and note edit modal fix | 2026-10-03 | 59b2905 | complete | [261003-bz6-for-command-palette-now-i-want-each-item](./quick/261003-bz6-for-command-palette-now-i-want-each-item/) |
+| 261003-tbl | Fix AI input Cmd+Enter clearing and add table items context menu with Ask AI for task, project, milestone | 2026-10-03 | — | complete | [261003-tbl-fix-ai-input-and-add-table-context-menu](./quick/261003-tbl-fix-ai-input-and-add-table-context-menu/) |
 
 ## Performance Metrics
 
