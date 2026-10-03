@@ -27,6 +27,7 @@ import { ProjectDetailModal } from '../projects/ProjectDetailModal';
 import { ProjectModal } from '../projects/ProjectModal';
 import { MilestoneModal } from '../projects/MilestoneModal';
 import { NoteDetailModal } from '../notes/NoteDetailModal';
+import { NoteEditor } from '../notes/NoteEditor';
 import { CommandPaletteModal } from '../palette/CommandPaletteModal';
 import { DailyReviewModal } from '../dailyReview/DailyReviewModal';
 import { db } from '../../db';
@@ -110,6 +111,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [inspectingMilestone, setInspectingMilestone] = useState<Milestone | null>(null);
   const [inspectingNote, setInspectingNote] = useState<Note | null>(null);
+  const [editingNote, setEditingNote] = useState<Note | null>(null);
 
   // Global Cmd+K / Ctrl+K keyboard shortcut
   useEffect(() => {
@@ -355,14 +357,24 @@ const AppShellInner: React.FC<AppShellProps> = ({
           open={Boolean(inspectingNote)}
           note={inspectingNote}
           onClose={() => setInspectingNote(null)}
-          onEdit={() => {
+          onEdit={(note) => {
             setInspectingNote(null);
-            onNavigate('notes');
+            setEditingNote(note);
           }}
           onNavigateToNotes={() => {
             setInspectingNote(null);
             onNavigate('notes');
           }}
+          db={db}
+        />
+      )}
+
+      {editingNote && (
+        <NoteEditor
+          open={Boolean(editingNote)}
+          note={editingNote}
+          onClose={() => setEditingNote(null)}
+          onSaved={() => setEditingNote(null)}
           db={db}
         />
       )}

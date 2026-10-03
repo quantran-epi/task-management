@@ -28,6 +28,10 @@ describe('useHashRoute utilities', () => {
         route: 'tasks',
         params: { view: 'all', filter: 'open' },
       });
+      expect(parseHash('#/insight?type=task&id=task-1')).toEqual({
+        route: 'insight',
+        params: { type: 'task', id: 'task-1' },
+      });
     });
 
     it('falls back to defaultRoute when route is invalid or unknown (T-05-02 mitigation)', () => {
@@ -72,6 +76,9 @@ describe('useHashRoute utilities', () => {
       expect(buildHash('planner', { date: '2026-10-05' })).toBe('#/planner?date=2026-10-05');
       expect(buildHash('tasks', { status: 'open', sort: 'priority' })).toBe(
         '#/tasks?status=open&sort=priority'
+      );
+      expect(buildHash('insight', { type: 'task', id: 'task-1' })).toBe(
+        '#/insight?type=task&id=task-1'
       );
     });
   });
