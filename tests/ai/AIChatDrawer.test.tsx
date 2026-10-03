@@ -190,4 +190,21 @@ describe('AIChatDrawer', () => {
       expect(screen.getByText(/Đang gắn ngữ cảnh: Tác vụ Khởi tạo/i)).toBeInTheDocument();
     });
   });
+
+  it('auto-fetches available models and updates model picker when opened', async () => {
+    vi.spyOn(nineRouterTokenService, 'fetchAvailableModels').mockResolvedValue(['cc-high', 'ag/claude-sonnet-4-6']);
+
+    render(
+      <AIChatDrawer
+        open={true}
+        onClose={vi.fn()}
+        db={db}
+        activeScope={{ type: 'global' }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(nineRouterTokenService.fetchAvailableModels).toHaveBeenCalled();
+    });
+  });
 });

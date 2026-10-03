@@ -89,7 +89,11 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
       // Check if cached model list exists
       const modelsRec = await db.settings.get('ninerouter_cached_models');
       if (active && Array.isArray(modelsRec?.value) && modelsRec.value.length > 0) {
-        setAvailableModels(modelsRec.value as string[]);
+        const cached = modelsRec.value as string[];
+        setAvailableModels(cached);
+        if (!cached.includes(config.defaultModel) && cached[0]) {
+          setDefaultModel(cached[0]);
+        }
       }
     }
 
@@ -125,6 +129,9 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
             key: 'ninerouter_cached_models',
             value: res.models,
           });
+          if (!res.models.includes(defaultModel) && res.models[0]) {
+            setDefaultModel(res.models[0]);
+          }
         }
         setConnectionResult({
           ok: true,
@@ -281,7 +288,16 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
             value={defaultModel}
             onChange={(val) => setDefaultModel(val)}
             showSearch
-            options={availableModels.map((m) => ({ label: m, value: m }))}
+            filterOption={(input, option) =>
+              ((option?.label as string) ?? '').toLowerCase().includes(input.toLowerCase())
+            }
+            options={
+              availableModels.length > 0
+                ? availableModels.map((m) => ({ label: m, value: m }))
+                : defaultModel
+                  ? [{ label: defaultModel, value: defaultModel }]
+                  : []
+            }
           />
         </Form.Item>
 

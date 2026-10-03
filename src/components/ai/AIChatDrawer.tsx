@@ -15,6 +15,7 @@ import {
   getNineRouterApiKey,
   getNineRouterConfig,
   setNineRouterConfig,
+  fetchAvailableModels,
 } from '../../services/ai/nineRouterTokenService';
 import { streamChatCompletion } from '../../services/ai/nineRouterClient';
 import { buildItemContextPrompt } from '../../services/ai/contextGrounding';
@@ -231,20 +232,47 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
   useEffect(() => {
     let mounted = true;
-    getNineRouterConfig(db).then((cfg) => {
-      if (mounted && cfg.defaultModel) {
+
+    async function loadModels() {
+      const cfg = await getNineRouterConfig(db);
+      const rec = await db.settings.get('ninerouter_cached_models');
+      const cached = Array.isArray(rec?.value) ? (rec.value as string[]) : [];
+
+      if (!mounted) return;
+
+      if (cached.length > 0) {
+        setAvailableModels(cached);
+        if (cfg.defaultModel && cached.includes(cfg.defaultModel)) {
+          setSelectedModel(cfg.defaultModel);
+        } else if (cached[0]) {
+          setSelectedModel(cached[0]);
+        }
+      } else if (cfg.defaultModel) {
         setSelectedModel(cfg.defaultModel);
       }
-    });
-    db.settings.get('ninerouter_cached_models').then((rec) => {
-      if (mounted && Array.isArray(rec?.value)) {
-        setAvailableModels(rec.value);
+
+      if (open) {
+        try {
+          const liveModels = await fetchAvailableModels(db);
+          if (mounted && liveModels.length > 0) {
+            setAvailableModels(liveModels);
+            setSelectedModel((prev) => {
+              if (liveModels.includes(prev)) return prev;
+              if (cfg.defaultModel && liveModels.includes(cfg.defaultModel)) return cfg.defaultModel;
+              return liveModels[0] ?? prev;
+            });
+          }
+        } catch {
+          // ignore background fetch error
+        }
       }
-    });
+    }
+
+    loadModels();
     return () => {
       mounted = false;
     };
-  }, [db]);
+  }, [db, open]);
 
   const handleModelChange = async (model: string) => {
     setSelectedModel(model);
@@ -392,11 +420,16 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     let fullResponse = '';
 
     try {
+      const targetModel =
+        selectedModel && (availableModels.length === 0 || availableModels.includes(selectedModel))
+          ? selectedModel
+          : availableModels[0] || config.defaultModel;
+
       const stream = streamChatCompletion({
         endpoint: config.endpoint,
         apiKey,
         payload: {
-          model: selectedModel || config.defaultModel,
+          model: targetModel,
           messages: recentMsgs,
         },
         signal: controller.signal,

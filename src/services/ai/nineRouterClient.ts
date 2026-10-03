@@ -24,12 +24,16 @@ export async function testNineRouterConnection(
   const targetUrl = `${baseEndpoint}/v1/models`;
 
   try {
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+    };
+    if (options.apiKey && options.apiKey.trim()) {
+      headers.Authorization = `Bearer ${options.apiKey.trim()}`;
+    }
+
     const response = await fetch(targetUrl, {
       method: 'GET',
-      headers: {
-        Authorization: `Bearer ${options.apiKey.trim()}`,
-        Accept: 'application/json',
-      },
+      headers,
       ...(options.signal ? { signal: options.signal } : {}),
     });
 
@@ -91,12 +95,16 @@ export async function* streamChatCompletion(
 
   let response: Response;
   try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (options.apiKey && options.apiKey.trim()) {
+      headers.Authorization = `Bearer ${options.apiKey.trim()}`;
+    }
+
     response = await fetch(targetUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${options.apiKey.trim()}`,
-      },
+      headers,
       body: JSON.stringify({
         ...options.payload,
         stream: true,

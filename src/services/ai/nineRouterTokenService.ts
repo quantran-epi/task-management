@@ -7,6 +7,7 @@ import {
   deleteKeyringCredential,
 } from '../keyringService';
 import type { NineRouterConfig } from './types';
+import { testNineRouterConnection } from './nineRouterClient';
 
 export const DEFAULT_NINEROUTER_ENDPOINT = 'http://localhost:20128';
 export const DEFAULT_NINEROUTER_MODEL = 'gpt-4o';
@@ -136,4 +137,33 @@ export async function setNineRouterConfig(
       value: config.charLimit,
     });
   }
+}
+
+export async function fetchAvailableModels(
+  db: TaskPlannerDatabase = defaultDb
+): Promise<string[]> {
+  const config = await getNineRouterConfig(db);
+  const apiKey = await getNineRouterApiKey(db);
+
+  try {
+    const res = await testNineRouterConnection({
+      endpoint: config.endpoint,
+      apiKey: apiKey || '',
+    });
+    if (res.ok && Array.isArray(res.models) && res.models.length > 0) {
+      await db.settings.put({
+        key: 'ninerouter_cached_models',
+        value: res.models,
+      });
+      return res.models;
+    }
+  } catch (err) {
+    console.warn('[nineRouter] fetchAvailableModels failed:', err);
+  }
+
+  const rec = await db.settings.get('ninerouter_cached_models');
+  if (Array.isArray(rec?.value) && rec.value.length > 0) {
+    return rec.value as string[];
+  }
+  return [];
 }

@@ -127,6 +127,7 @@ Decisions logged across v1.0 and v1.1:
 - [Phase 13.2]: Cmd+J / Ctrl+J global shortcut and header RobotOutlined button toggle AI Chat Drawer (D-04)
 - [Phase 13.2]: SCHEMA_V8 with scoped chat threads and messages with cascade deletion on entity removal (D-07)
 - [Phase 13.2]: Dual-tier 9router credential management in OS Keychain (Tauri) and Dexie settings (Web) (D-20)
+- [Quick 261003-9rm]: Auto-fetch available models from 9Router on drawer open, remove hardcoded fake model fallback in ChatHeader, and prevent unroutable model payloads
 - [Phase 13.2]: Native fetch SSE streaming client with line buffering, AbortController cancellation, and API key redaction (D-14, D-15)
 - [Phase 13.1]: Use keyring v4.2 with Entry::delete_credential to support cross-platform secret storage and deletion
 - [Phase 13.1]: Keep secrets in module-level in-memory cache and OS Keychain, completely excluding them from SQLite mirror and Dexie IndexedDB

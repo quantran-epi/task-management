@@ -131,7 +131,11 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           size="small"
           value={selectedModel}
           onChange={onModelChange}
-          style={{ width: 115 }}
+          showSearch
+          filterOption={(input, option) =>
+            ((option?.label as string) ?? '').toLowerCase().includes(input.toLowerCase())
+          }
+          style={{ minWidth: 125, maxWidth: 175 }}
           popupMatchSelectWidth={false}
           getPopupContainer={(node) => node.parentElement || document.body}
           popupStyle={{ zIndex: 1300 }}
@@ -139,12 +143,9 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           options={
             availableModels.length > 0
               ? availableModels.map((m) => ({ label: m, value: m }))
-              : [
-                  { label: 'gpt-4o', value: 'gpt-4o' },
-                  { label: 'gpt-4o-mini', value: 'gpt-4o-mini' },
-                  { label: 'claude-3-5-sonnet', value: 'claude-3-5-sonnet' },
-                  { label: 'deepseek-chat', value: 'deepseek-chat' },
-                ]
+              : selectedModel
+                ? [{ label: selectedModel, value: selectedModel }]
+                : []
           }
         />
 
