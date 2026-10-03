@@ -99,7 +99,7 @@ describe('Timer Segments and Schema V7 Migration (Task 1)', () => {
     const v7Db = new TaskPlannerDatabase(dbName);
     await v7Db.open();
 
-    expect(v7Db.verno).toBe(7);
+    expect(v7Db.verno).toBe(8);
 
     // Verify stores exist
     expect(v7Db.table('notes')).toBeDefined();

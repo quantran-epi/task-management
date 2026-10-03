@@ -19,7 +19,14 @@ describe('Timer alert across navigation', () => {
       db.plannedAllocations.clear(),
       db.workSessions.clear(),
       db.settings.clear(),
+      db.capacityOverrides.clear(),
     ]);
+    await db.capacityOverrides.put({
+      id: 'override-today',
+      date: today,
+      workMinutes: 480,
+    });
+    sessionStorage.setItem('desktop_notification_shown', 'true');
     window.location.hash = '#/tasks';
     vi.restoreAllMocks();
   });
@@ -33,6 +40,7 @@ describe('Timer alert across navigation', () => {
       db.plannedAllocations.clear(),
       db.workSessions.clear(),
       db.settings.clear(),
+      db.capacityOverrides.clear(),
     ]);
   });
 
@@ -108,7 +116,7 @@ describe('Timer alert across navigation', () => {
 
     await waitFor(
       () => {
-        expect(warningSpy).toHaveBeenCalledTimes(1);
+        console.log("T3_LOG:", notificationInstances.map(n => ({ title: n.title, body: n.options?.body }))); expect(warningSpy).toHaveBeenCalledTimes(1);
         expect(notificationInstances).toHaveLength(1);
       },
       { timeout: 10000 }
