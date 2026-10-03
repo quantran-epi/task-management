@@ -129,7 +129,7 @@ export const AIDebugModal: React.FC<AIDebugModalProps> = ({ open, onClose }) => 
           <Text strong style={{ fontSize: 13, whiteSpace: 'nowrap' }}>Lượt chat:</Text>
           <Select
             value={activeTurn?.id}
-            onChange={(val) => setSelectedTurnId(val)}
+            onChange={(val) => setSelectedTurnId(val ?? null)}
             style={{ width: '100%', maxWidth: 450 }}
             placeholder="Chọn lượt chat để kiểm tra"
             options={turns.map((t, idx) => ({

@@ -6,6 +6,7 @@ import { TaskPlannerDatabase } from '../../src/db';
 import * as chatRepo from '../../src/db/repositories/chatRepo';
 import * as nineRouterClient from '../../src/services/ai/nineRouterClient';
 import * as nineRouterTokenService from '../../src/services/ai/nineRouterTokenService';
+import { aiDebugService } from '../../src/services/ai/aiDebugService';
 
 describe('ChatHeader', () => {
   it('displays title, scope tag, model selector, and action buttons', () => {
@@ -272,5 +273,53 @@ describe('AIChatDrawer', () => {
       expect(screen.getByText(/Dự án có 1 tác vụ đang thực hiện/i)).toBeInTheDocument();
     });
     expect(callCount).toBe(2);
+  });
+
+  it('renders debug button in header and opens AIDebugModal with tracked turn', async () => {
+    aiDebugService.clearLogs();
+
+    vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-api-key');
+    vi.spyOn(nineRouterTokenService, 'getNineRouterConfig').mockResolvedValue({
+      endpoint: 'http://localhost:20128',
+      defaultModel: 'gpt-4o',
+      charLimit: 12000,
+    });
+
+    async function* mockEvents() {
+      yield {
+        type: 'text',
+        delta: 'Câu trả lời mẫu',
+      };
+    }
+    vi.spyOn(nineRouterClient, 'streamChatEvents').mockImplementation(mockEvents as any);
+
+    render(
+      <AIChatDrawer
+        open={true}
+        onClose={vi.fn()}
+        db={db}
+        activeScope={{ type: 'global' }}
+      />
+    );
+
+    const debugBtn = screen.getByLabelText('Nhật ký gỡ lỗi AI');
+    expect(debugBtn).toBeInTheDocument();
+
+    const textarea = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
+    fireEvent.change(textarea, { target: { value: 'Tin nhắn gỡ lỗi test' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+    await waitFor(() => {
+      const turns = aiDebugService.getTurns();
+      expect(turns.length).toBeGreaterThan(0);
+      expect(turns[0]?.status).toBe('completed');
+      expect(turns[0]?.finalResponse).toContain('Câu trả lời mẫu');
+    });
+
+    fireEvent.click(debugBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText('Nhật ký gỡ lỗi AI & Payloads')).toBeInTheDocument();
+    });
   });
 });

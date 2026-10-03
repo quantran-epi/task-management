@@ -30,6 +30,8 @@ import { ChatHeader } from './ChatHeader';
 import { ChatMessageList } from './ChatMessageList';
 import { ChatInputBar } from './ChatInputBar';
 import { ScopePickerModal } from './ScopePickerModal';
+import { AIDebugModal } from './AIDebugModal';
+import { aiDebugService } from '../../services/ai/aiDebugService';
 import { useAIChat } from '../../context/AIChatContext';
 
 export const AI_CHAT_WIDTH_KEY = 'planner:ai_chat_width';
@@ -135,6 +137,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const [internalScope, setInternalScope] = useState<ActiveScope | null>(null);
   const [isDetached, setIsDetached] = useState(false);
   const [scopeModalOpen, setScopeModalOpen] = useState(false);
+  const [isDebugModalOpen, setIsDebugModalOpen] = useState(false);
 
   // Sync propScope when it changes (unless user explicitly picked or detached)
   useEffect(() => {
@@ -433,12 +436,20 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     let loopCount = 0;
     const MAX_TOOL_LOOPS = 5;
 
-    try {
-      const targetModel =
-        selectedModel && (availableModels.length === 0 || availableModels.includes(selectedModel))
-          ? selectedModel
-          : availableModels[0] || config.defaultModel;
+    const targetModel =
+      selectedModel && (availableModels.length === 0 || availableModels.includes(selectedModel))
+        ? selectedModel
+        : availableModels[0] || config.defaultModel;
 
+    const turnId = aiDebugService.startTurn({
+      scope: effectiveScope.title || `${effectiveScope.type}${effectiveScope.id ? `:${effectiveScope.id}` : ''}`,
+      model: targetModel,
+      systemPrompt: systemInstruction,
+      messagesSent: currentMessages,
+      toolsSent: AI_DATABASE_TOOLS,
+    });
+
+    try {
       while (loopCount < MAX_TOOL_LOOPS) {
         loopCount++;
         let hasToolCalls = false;
@@ -459,6 +470,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           for await (const chunk of stream) {
             if (chunk.type === 'text') {
               fullResponse += chunk.delta;
+              aiDebugService.appendStreamChunk(turnId, chunk.delta);
               setStreamingText(fullResponse);
               setStreamingStatus(null);
             } else if (chunk.type === 'tool_calls') {
@@ -482,6 +494,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
             });
             for await (const delta of fallbackStream) {
               fullResponse += delta;
+              aiDebugService.appendStreamChunk(turnId, delta);
               setStreamingText(fullResponse);
               setStreamingStatus(null);
             }
@@ -520,10 +533,18 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           } catch {}
 
           console.log(`[AI Harness] 🛠️ Model invoked tool "${tc.function.name}":`, args);
+          aiDebugService.recordToolCall(turnId, {
+            id: tc.id,
+            name: tc.function.name,
+            args,
+          });
 
+          const toolStartTime = Date.now();
           const toolResult = await executeAiTool(tc.function.name, args, db);
+          const toolDuration = Date.now() - toolStartTime;
 
           console.log(`[AI Harness] 📦 Tool result for "${tc.function.name}":`, toolResult);
+          aiDebugService.recordToolResult(turnId, tc.id, toolResult, toolDuration);
 
           currentMessages.push({
             role: 'tool',
@@ -547,6 +568,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           db
         );
       }
+      aiDebugService.finishTurn(turnId, { finalResponse: fullResponse });
     } catch (err: any) {
       if (err.name === 'AbortError') {
         // User aborted — commit partial response if exists
@@ -560,8 +582,10 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
             db
           );
         }
+        aiDebugService.finishTurn(turnId, { finalResponse: fullResponse, aborted: true });
       } else {
         setApiError(err?.message || 'Lỗi không xác định khi kết nối AI');
+        aiDebugService.finishTurn(turnId, { error: err?.message || String(err) });
       }
     } finally {
       setIsStreaming(false);
@@ -708,6 +732,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         isPinned={isPinned}
         onTogglePin={() => onTogglePin?.()}
         onClearContext={handleClearContext}
+        onOpenDebug={() => setIsDebugModalOpen(true)}
         onClose={onClose}
       />
 
@@ -785,6 +810,11 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           }
         }}
         db={db}
+      />
+
+      <AIDebugModal
+        open={isDebugModalOpen}
+        onClose={() => setIsDebugModalOpen(false)}
       />
 
       {/* Message List */}

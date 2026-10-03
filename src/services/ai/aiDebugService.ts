@@ -4,9 +4,9 @@ export interface AiDebugToolExecution {
   id: string;
   name: string;
   args: Record<string, any>;
-  result?: string;
-  durationMs?: number;
-  error?: string;
+  result?: string | undefined;
+  durationMs?: number | undefined;
+  error?: string | undefined;
 }
 
 export interface AiDebugEvent {
@@ -21,31 +21,31 @@ export interface AiDebugTurn {
   timestamp: number;
   scope: string;
   model: string;
-  systemPrompt?: string;
+  systemPrompt?: string | undefined;
   messagesSent: any[];
-  toolsSent?: any[];
+  toolsSent?: any[] | undefined;
   status: TurnStatus;
   responseStream: string;
   chunkCount: number;
   toolExecutions: AiDebugToolExecution[];
-  finalResponse?: string;
-  error?: string;
-  durationMs?: number;
+  finalResponse?: string | undefined;
+  error?: string | undefined;
+  durationMs?: number | undefined;
   events: AiDebugEvent[];
 }
 
 export interface StartTurnParams {
   scope: string;
   model: string;
-  systemPrompt?: string;
+  systemPrompt?: string | undefined;
   messagesSent: any[];
-  toolsSent?: any[];
+  toolsSent?: any[] | undefined;
 }
 
 export interface FinishTurnParams {
-  finalResponse?: string;
-  error?: string;
-  aborted?: boolean;
+  finalResponse?: string | undefined;
+  error?: string | undefined;
+  aborted?: boolean | undefined;
 }
 
 const MAX_TURNS = 50;
