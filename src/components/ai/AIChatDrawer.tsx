@@ -17,6 +17,12 @@ import {
   setNineRouterConfig,
 } from '../../services/ai/nineRouterTokenService';
 import { streamChatCompletion } from '../../services/ai/nineRouterClient';
+import { buildItemContextPrompt } from '../../services/ai/contextGrounding';
+import { launchClaudeTerminal } from '../../services/ai/claudeCliService';
+import { updateTask, getTask } from '../../db/repositories/taskRepo';
+import { createNote } from '../../db/repositories/noteRepo';
+import { getProject } from '../../db/repositories/projectRepo';
+import { getMilestone } from '../../db/repositories/milestoneRepo';
 import { ChatHeader } from './ChatHeader';
 import { ChatMessageList } from './ChatMessageList';
 import { ChatInputBar } from './ChatInputBar';
@@ -223,6 +229,31 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     const config = await getNineRouterConfig(db);
 
     // 4. Assemble context payload (messages after last context boundary, capped at 20)
+    // If scoped item exists, inject system context prompt with grounding
+    let systemInstruction = '';
+    if (currentScope.type !== 'global' && currentScope.id) {
+      try {
+        if (currentScope.type === 'task') {
+          const t = await getTask(currentScope.id, db);
+          if (t) {
+            systemInstruction = await buildItemContextPrompt({ entityType: 'task', item: t, db });
+          }
+        } else if (currentScope.type === 'project') {
+          const p = await getProject(currentScope.id, db);
+          if (p) {
+            systemInstruction = await buildItemContextPrompt({ entityType: 'project', item: p, db });
+          }
+        } else if (currentScope.type === 'milestone') {
+          const m = await getMilestone(currentScope.id, db);
+          if (m) {
+            systemInstruction = await buildItemContextPrompt({ entityType: 'milestone', item: m, db });
+          }
+        }
+      } catch (err) {
+        console.warn('[AIChatDrawer] Context grounding resolution error:', err);
+      }
+    }
+
     const allMsgs = await getMessagesByThreadId(activeThread.id, db);
     let boundaryIdx = -1;
     for (let i = allMsgs.length - 1; i >= 0; i--) {
@@ -232,10 +263,21 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       }
     }
     const msgsToSend = boundaryIdx >= 0 ? allMsgs.slice(boundaryIdx + 1) : allMsgs;
-    const recentMsgs = msgsToSend.slice(-20).map((m) => ({
-      role: m.role,
-      content: m.content,
-    }));
+    const recentMsgs: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [];
+
+    if (systemInstruction.trim()) {
+      recentMsgs.push({
+        role: 'system',
+        content: `You are an expert AI assistant embedded inside Personal Task & Workload Planner.\nBelow is the ground-truth context of the currently active item:\n${systemInstruction}\nUse this context to answer the user accurately. When breaking down goals, output clear actionable bullet points that can be converted into checklist items.`,
+      });
+    }
+
+    for (const m of msgsToSend.slice(-20)) {
+      recentMsgs.push({
+        role: m.role,
+        content: m.content,
+      });
+    }
 
     // 5. Start SSE Streaming
     const controller = new AbortController();
@@ -314,6 +356,56 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const handleRetry = () => {
     if (lastSubmittedText) {
       handleSendMessage(lastSubmittedText);
+    }
+  };
+
+  // Action chips event handlers per D-18
+  const handleAddToChecklist = async (items: string[]) => {
+    if (currentScope.type !== 'task' || !currentScope.id || items.length === 0) return;
+    try {
+      const task = await getTask(currentScope.id, db);
+      if (!task) return;
+      const existingChecklist = task.checklist || [];
+      const newChecklist = [
+        ...existingChecklist,
+        ...items.map((text) => ({
+          id: crypto.randomUUID(),
+          text,
+          done: false,
+        })),
+      ];
+      await updateTask(task.id, { checklist: newChecklist }, db);
+      message.success(`Đã thêm ${items.length} mục vào Checklist`);
+    } catch (err: any) {
+      message.error(`Không thể thêm vào Checklist: ${err?.message || err}`);
+    }
+  };
+
+  const handleSaveStickyNote = async (content: string) => {
+    try {
+      await createNote(
+        {
+          entityType: currentScope.type !== 'global' ? currentScope.type : undefined,
+          entityId: currentScope.type !== 'global' ? currentScope.id : undefined,
+          title: `Ghi chú AI - ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+          body: content,
+        },
+        db
+      );
+      message.success('Đã lưu phản hồi vào Sticky Notes');
+    } catch (err: any) {
+      message.error(`Không thể lưu ghi chú: ${err?.message || err}`);
+    }
+  };
+
+  const handleRunClaudeCode = async () => {
+    if (currentScope.type !== 'task' || !currentScope.id) return;
+    try {
+      const task = await getTask(currentScope.id, db);
+      if (!task) return;
+      await launchClaudeTerminal({ task });
+    } catch (err: any) {
+      message.error(`Lỗi khởi chạy Claude Code: ${err?.message || err}`);
     }
   };
 
@@ -412,6 +504,12 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         error={apiError}
         onRetry={handleRetry}
         onOpenSettings={onOpenSettings}
+        canAddToChecklist={currentScope.type === 'task'}
+        canSaveStickyNote={true}
+        canRunClaudeCode={currentScope.type === 'task'}
+        onAddToChecklist={handleAddToChecklist}
+        onSaveStickyNote={handleSaveStickyNote}
+        onRunClaudeCode={handleRunClaudeCode}
       />
 
       {/* Chat Input Bar */}

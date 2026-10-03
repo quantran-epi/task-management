@@ -220,7 +220,7 @@ export async function buildItemContextPrompt(options: BuildItemContextPromptOpti
   }
 
   // 2. Document Links & Local Files
-  const docLinks = item.documentLinks || [];
+  const docLinks = 'documentLinks' in item && Array.isArray(item.documentLinks) ? item.documentLinks : [];
   if (docLinks.length > 0) {
     sections.push('\n### Document & External Links');
     for (const link of docLinks) {

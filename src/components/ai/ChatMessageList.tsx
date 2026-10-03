@@ -12,6 +12,12 @@ export interface ChatMessageListProps {
   error?: string | null | undefined;
   onRetry?: (() => void) | undefined;
   onOpenSettings?: (() => void) | undefined;
+  canAddToChecklist?: boolean | undefined;
+  canSaveStickyNote?: boolean | undefined;
+  canRunClaudeCode?: boolean | undefined;
+  onAddToChecklist?: ((items: string[]) => Promise<void> | void) | undefined;
+  onSaveStickyNote?: ((content: string) => Promise<void> | void) | undefined;
+  onRunClaudeCode?: (() => Promise<void> | void) | undefined;
 }
 
 export const ChatMessageList: React.FC<ChatMessageListProps> = ({
@@ -21,6 +27,12 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   error,
   onRetry,
   onOpenSettings,
+  canAddToChecklist,
+  canSaveStickyNote,
+  canRunClaudeCode,
+  onAddToChecklist,
+  onSaveStickyNote,
+  onRunClaudeCode,
 }) => {
   const { token } = theme.useToken();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -83,7 +95,18 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
           );
         }
 
-        return <ChatMessageBubble key={msg.id} message={msg} />;
+        return (
+          <ChatMessageBubble
+            key={msg.id}
+            message={msg}
+            canAddToChecklist={canAddToChecklist}
+            canSaveStickyNote={canSaveStickyNote}
+            canRunClaudeCode={canRunClaudeCode}
+            onAddToChecklist={onAddToChecklist}
+            onSaveStickyNote={onSaveStickyNote}
+            onRunClaudeCode={onRunClaudeCode}
+          />
+        );
       })}
 
       {/* Active SSE Streaming Assistant Bubble */}

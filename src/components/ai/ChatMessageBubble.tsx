@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
 import { Typography, Button, Tooltip, theme, message } from 'antd';
-import { CopyOutlined, CheckOutlined } from '@ant-design/icons';
+import {
+  CopyOutlined,
+  CheckOutlined,
+  CheckSquareOutlined,
+  FileAddOutlined,
+  CodeOutlined,
+} from '@ant-design/icons';
 import type { ChatMessage } from '../../types/models';
 import { renderSafeMarkdown } from '../../utils/markdown';
 
@@ -8,15 +14,52 @@ const { Text } = Typography;
 
 export interface ChatMessageBubbleProps {
   message: ChatMessage;
-  isStreaming?: boolean;
+  isStreaming?: boolean | undefined;
+  canAddToChecklist?: boolean | undefined;
+  canSaveStickyNote?: boolean | undefined;
+  canRunClaudeCode?: boolean | undefined;
+  onAddToChecklist?: ((items: string[]) => Promise<void> | void) | undefined;
+  onSaveStickyNote?: ((content: string) => Promise<void> | void) | undefined;
+  onRunClaudeCode?: (() => Promise<void> | void) | undefined;
+}
+
+/**
+ * Extracts action bullet items from markdown text.
+ * Matches lines starting with `- `, `* `, or `1. `
+ */
+export function parseChecklistFromText(text: string): string[] {
+  const lines = text.split('\n');
+  const items: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    // Match bullet points like - item, * item, - [ ] item
+    const match = trimmed.match(/^[-*]\s+(?:\[[ xX]\]\s+)?(.+)$/) || trimmed.match(/^\d+\.\s+(.+)$/);
+    if (match && match[1]) {
+      const cleanItem = match[1].trim();
+      if (cleanItem.length > 0 && !cleanItem.startsWith('#')) {
+        items.push(cleanItem);
+      }
+    }
+  }
+
+  return items;
 }
 
 export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   message: msg,
   isStreaming = false,
+  canAddToChecklist = false,
+  canSaveStickyNote = false,
+  canRunClaudeCode = false,
+  onAddToChecklist,
+  onSaveStickyNote,
+  onRunClaudeCode,
 }) => {
   const { token } = theme.useToken();
   const [copied, setCopied] = useState(false);
+  const [checklistAdded, setChecklistAdded] = useState(false);
+  const [noteSaved, setNoteSaved] = useState(false);
 
   const isUser = msg.role === 'user';
 
@@ -29,6 +72,28 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
     } catch {
       message.error('Không thể sao chép');
     }
+  };
+
+  const handleAddToChecklist = async () => {
+    if (!onAddToChecklist) return;
+    const items = parseChecklistFromText(msg.content);
+    if (items.length === 0) {
+      // If no bullet points found, use first non-empty paragraph
+      const firstLine = msg.content.trim().split('\n')[0]?.trim();
+      if (firstLine) {
+        await onAddToChecklist([firstLine]);
+        setChecklistAdded(true);
+      }
+    } else {
+      await onAddToChecklist(items);
+      setChecklistAdded(true);
+    }
+  };
+
+  const handleSaveStickyNote = async () => {
+    if (!onSaveStickyNote) return;
+    await onSaveStickyNote(msg.content);
+    setNoteSaved(true);
   };
 
   const formattedTime = msg.createdAt
@@ -84,6 +149,54 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
           </div>
         )}
       </div>
+
+      {/* Action Chips for Assistant messages per D-18 */}
+      {!isUser && !isStreaming && (
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 6,
+            marginTop: 6,
+            paddingLeft: 4,
+          }}
+        >
+          {canAddToChecklist && onAddToChecklist && (
+            <Button
+              size="small"
+              icon={checklistAdded ? <CheckOutlined style={{ color: token.colorSuccess }} /> : <CheckSquareOutlined />}
+              onClick={handleAddToChecklist}
+              disabled={checklistAdded}
+              style={{ fontSize: 12, height: 24, padding: '0 8px' }}
+            >
+              {checklistAdded ? 'Đã thêm vào Checklist' : 'Thêm vào Checklist'}
+            </Button>
+          )}
+
+          {canSaveStickyNote && onSaveStickyNote && (
+            <Button
+              size="small"
+              icon={noteSaved ? <CheckOutlined style={{ color: token.colorSuccess }} /> : <FileAddOutlined />}
+              onClick={handleSaveStickyNote}
+              disabled={noteSaved}
+              style={{ fontSize: 12, height: 24, padding: '0 8px' }}
+            >
+              {noteSaved ? 'Đã lưu vào Ghi chú' : 'Lưu vào Sticky Notes'}
+            </Button>
+          )}
+
+          {canRunClaudeCode && onRunClaudeCode && (
+            <Button
+              size="small"
+              icon={<CodeOutlined />}
+              onClick={onRunClaudeCode}
+              style={{ fontSize: 12, height: 24, padding: '0 8px' }}
+            >
+              Chạy với Claude Code
+            </Button>
+          )}
+        </div>
+      )}
 
       <div
         style={{

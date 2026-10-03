@@ -164,4 +164,63 @@ pub fn read_local_file_text_head(file_path: String, max_lines: usize) -> Result<
     Ok(lines.join("\n"))
 }
 
+#[tauri::command]
+pub fn launch_claude_terminal(command_str: String) -> Result<(), String> {
+    let trimmed = command_str.trim();
+    if trimmed.is_empty() {
+        return Err("Command cannot be empty".to_string());
+    }
+
+    // Security check T-13.2-07: command must start with "claude"
+    if !trimmed.starts_with("claude ") && trimmed != "claude" {
+        return Err("Only claude commands can be launched".to_string());
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        // Use AppleScript to tell Terminal.app to activate and do script
+        // Escape quotes and backslashes for AppleScript string literal
+        let escaped = trimmed
+            .replace('\\', "\\\\")
+            .replace('"', "\\\"");
+
+        let script = format!(
+            "tell application \"Terminal\"\nactivate\ndo script \"{}\"\nend tell",
+            escaped
+        );
+
+        std::process::Command::new("osascript")
+            .arg("-e")
+            .arg(&script)
+            .spawn()
+            .map_err(|e| format!("Failed to spawn Terminal on macOS: {}", e))?;
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        // On Windows launch cmd /k in a new window
+        std::process::Command::new("cmd")
+            .arg("/c")
+            .arg("start")
+            .arg("cmd")
+            .arg("/k")
+            .arg(trimmed)
+            .spawn()
+            .map_err(|e| format!("Failed to spawn cmd.exe on Windows: {}", e))?;
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        // Linux fallback using x-terminal-emulator or sh
+        std::process::Command::new("x-terminal-emulator")
+            .arg("-e")
+            .arg(trimmed)
+            .spawn()
+            .map_err(|e| format!("Failed to spawn terminal on Linux: {}", e))?;
+    }
+
+    Ok(())
+}
+
+
 

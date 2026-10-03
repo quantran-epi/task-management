@@ -18,6 +18,7 @@ pub fn run() {
             jira_proxy::select_local_folder,
             jira_proxy::select_local_file,
             jira_proxy::read_local_file_text_head,
+            jira_proxy::launch_claude_terminal,
             keyring_store::store_credential,
             keyring_store::get_credential,
             keyring_store::delete_credential,
