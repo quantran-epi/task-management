@@ -321,7 +321,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
     y: number;
   } | null>(null);
 
-  const getTaskMenuItems = (record: Task): MenuProps['items'] => [
+  const getTaskMenuItems = (record: Task): NonNullable<MenuProps['items']> => [
     {
       key: 'ai-chat',
       icon: <RobotOutlined style={{ color: token.colorPrimary }} />,

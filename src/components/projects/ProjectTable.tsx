@@ -89,12 +89,12 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
   const { openChat } = useAIChat();
 
   const [contextMenu, setContextMenu] = useState<{
-    items: MenuProps['items'];
+    items: NonNullable<MenuProps['items']>;
     x: number;
     y: number;
   } | null>(null);
 
-  const getProjectMenuItems = (record: Project): MenuProps['items'] => [
+  const getProjectMenuItems = (record: Project): NonNullable<MenuProps['items']> => [
     {
       key: 'ai-chat',
       icon: <RobotOutlined style={{ color: token.colorPrimary }} />,
@@ -133,7 +133,7 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
     },
   ];
 
-  const getMilestoneMenuItems = (record: Milestone, projectId: string): MenuProps['items'] => [
+  const getMilestoneMenuItems = (record: Milestone, projectId: string): NonNullable<MenuProps['items']> => [
     {
       key: 'ai-chat',
       icon: <RobotOutlined style={{ color: token.colorPrimary }} />,
@@ -166,7 +166,7 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
     },
   ];
 
-  const getTaskMenuItems = (record: Task): MenuProps['items'] => [
+  const getTaskMenuItems = (record: Task): NonNullable<MenuProps['items']> => [
     {
       key: 'ai-chat',
       icon: <RobotOutlined style={{ color: token.colorPrimary }} />,

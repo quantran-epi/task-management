@@ -122,7 +122,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
             <Button
               type="primary"
               icon={<SendOutlined />}
-              onClick={handleSend}
+              onClick={() => handleSend()}
               disabled={disabled || !value.trim()}
               aria-label="Gửi tin nhắn"
             >
