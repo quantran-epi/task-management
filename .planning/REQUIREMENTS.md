@@ -81,8 +81,8 @@
 - [x] **AI-01**: User can configure 9router API endpoint, API key, and model name in Settings with connection test verification.
 - [x] **AI-02**: Right-side collapsible and pinnable chat drawer (docked side-by-side or overlay) accessible globally and from task/project/milestone views.
 - [x] **AI-03**: Chat sessions can be standalone or scoped to a specific Task, Project, or Milestone, retaining conversation history per scope in local IndexedDB.
-- [ ] **AI-04**: Prompt context engine serializes scoped item fields (title, status, priority, estimates, tags, notes, dates) into system/user instructions for grounded responses.
-- [ ] **AI-05**: Item link and document grounding extracts text from item links/notes (local attachments, URLs, note content) to answer reference-based questions directly.
+- [x] **AI-04**: Prompt context engine serializes scoped item fields (title, status, priority, estimates, tags, notes, dates) into system/user instructions for grounded responses.
+- [x] **AI-05**: Item link and document grounding extracts text from item links/notes (local attachments, URLs, note content) to answer reference-based questions directly.
 
 ## Future Requirements (Deferred)
 
@@ -144,5 +144,5 @@
 | AI-01 | Phase 13.2 | Complete |
 | AI-02 | Phase 13.2 | Complete |
 | AI-03 | Phase 13.2 | Complete |
-| AI-04 | Phase 13.2 | Pending |
-| AI-05 | Phase 13.2 | Pending |
+| AI-04 | Phase 13.2 | Complete |
+| AI-05 | Phase 13.2 | Complete |

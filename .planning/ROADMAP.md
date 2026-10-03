@@ -31,7 +31,7 @@
 - [x] **Phase 12.2: Multiple Reminders with Time, Notification Settings, Table Customization & Sidebar Persistence** (INSERTED) - Multiple reminders with optional time per item, persistent browser notifications (no auto-dismiss), configurable notification settings, table column visibility picker and sortable headers, and persisted sidebar collapse state. (completed 2026-09-29)
 - [x] **Phase 13: Enhanced Workload Analytics & Milestone Burndown** - Dedicated analytics view with lightweight SVG vector burndown, completion velocity metrics, and stakeholder workload allocation breakdowns. (completed 2026-09-30)
 - [x] **Phase 13.1: Timer, Jira, Sticky Notes, Actual Worklog & Sync Improvements** (INSERTED) - Pause/resume timer segments, Project-Epic Jira mapping with reachable status transitions, offline Sticky Notes with screenshot attachments & pop-out window, weekly Actual Worklog Planner, and secure OS credential storage with auto-sync recovery. (completed 2026-10-01)
-- [ ] **Phase 13.2: AI Chat Drawer, Item Context Grounding & 9router Ask-Answer Integration** (INSERTED) - Right-side pinnable chat drawer, standalone and entity-scoped (Task/Project/Milestone) conversations, prompt grounding on item fields and referenced links/notes, and 9router API integration with local IndexedDB thread persistence.
+- [x] **Phase 13.2: AI Chat Drawer, Item Context Grounding & 9router Ask-Answer Integration** (INSERTED) - Right-side pinnable chat drawer, standalone and entity-scoped (Task/Project/Milestone) conversations, prompt grounding on item fields and referenced links/notes, and 9router API integration with local IndexedDB thread persistence. (completed 2026-10-03)
 
 ## Phase Details
 
@@ -267,7 +267,7 @@ Plans:
   4. Context item fields (title, status, priority, estimates, tags, notes, dates, subtasks) are automatically structured into LLM system and conversation context.
   5. Chat can ingest and ground answers on local file notes, attachments, and referenced URLs associated with the context item, answering reference-based questions directly.
 
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 
@@ -279,7 +279,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 13.2-03-PLAN.md — Context prompt builder with item field serialization and local note/link content extraction for grounded Q&A
+- [x] 13.2-03-PLAN.md — Context prompt builder with item field serialization and local note/link content extraction for grounded Q&A
 
 **UI hint**: yes
 
@@ -303,4 +303,4 @@ Plans:
 | 12.2. Multiple Reminders with Time, Notification Settings, Table Customization & Sidebar Persistence | v1.1 | 4/4 | Complete   | 2026-09-29 |
 | 13. Enhanced Workload Analytics & Milestone Burndown | v1.1 | 3/3 | Complete    | 2026-09-30 |
 | 13.1. Timer, Jira, Sticky Notes, Actual Worklog & Sync Improvements | v1.1 | 5/5 | Complete    | 2026-10-01 |
-| 13.2. AI Chat Drawer, Item Context Grounding & 9router Ask-Answer Integration | v1.1 | 2/3 | In Progress | — |
+| 13.2. AI Chat Drawer, Item Context Grounding & 9router Ask-Answer Integration | v1.1 | 3/3 | Complete   | 2026-10-03 |
