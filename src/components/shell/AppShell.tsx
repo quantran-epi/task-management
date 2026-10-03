@@ -10,7 +10,7 @@ import {
 import { Navigation } from './Navigation';
 import { StatusBadge } from './StatusBadge';
 import { UpgradeModal } from './UpgradeModal';
-import { ResetDbModal } from '../common/ResetDbModal';
+import { BrandLogo } from '../common/BrandLogo';
 import { AriaLiveRegion } from '../common/AriaLiveRegion';
 import { InstallButton } from '../pwa/InstallButton';
 import { UpdateBanner } from '../pwa/UpdateBanner';
@@ -72,7 +72,6 @@ const AppShellInner: React.FC<AppShellProps> = ({
 }) => {
   const screens = useBreakpoint();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [resetModalOpen, setResetModalOpen] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const { token } = theme.useToken();
 
@@ -272,8 +271,37 @@ const AppShellInner: React.FC<AppShellProps> = ({
           onCollapse={handleCollapse}
           breakpoint="lg"
           theme={isDark ? 'dark' : 'light'}
+          style={{
+            borderRight: `1px solid ${token.colorBorderSecondary}`,
+          }}
         >
-          <div style={{ padding: '16px', fontWeight: 600, fontSize: 16 }}>Menu</div>
+          <div
+            style={{
+              padding: collapsed ? '16px 8px' : '16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              justifyContent: collapsed ? 'center' : 'flex-start',
+              transition: 'all 0.2s',
+              borderBottom: `1px solid ${token.colorBorderSecondary}`,
+              marginBottom: 8,
+            }}
+          >
+            <BrandLogo size={collapsed ? 32 : 28} />
+            {!collapsed && (
+              <span
+                style={{
+                  fontWeight: 700,
+                  fontSize: 16,
+                  letterSpacing: '-0.02em',
+                  color: token.colorText,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Task Planner
+              </span>
+            )}
+          </div>
           <Navigation currentRoute={currentRoute} onNavigate={onNavigate} />
         </Sider>
       ) : (
@@ -282,7 +310,14 @@ const AppShellInner: React.FC<AppShellProps> = ({
           open={drawerOpen}
           onClose={() => setDrawerOpen(false)}
           styles={{ body: { padding: 0 } }}
-          title="Menu"
+          title={
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <BrandLogo size={26} />
+              <span style={{ fontWeight: 700, fontSize: 16, letterSpacing: '-0.02em' }}>
+                Task Planner
+              </span>
+            </div>
+          }
         >
           <Navigation
             currentRoute={currentRoute}
@@ -300,78 +335,120 @@ const AppShellInner: React.FC<AppShellProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: '0 16px',
+            padding: '0 20px',
             background: token.colorBgContainer,
             borderBottom: `1px solid ${token.colorBorderSecondary}`,
+            height: 56,
+            lineHeight: '56px',
           }}
         >
-          <Space>
+          {/* Left: Brand logo & title + mobile menu hamburger */}
+          <Space size="middle" align="center">
             {isMobile && (
               <Button
                 icon={<MenuOutlined />}
                 onClick={() => setDrawerOpen(true)}
                 aria-label="Mở menu"
-                style={{ minHeight: 44, minWidth: 44 }}
+                style={{ minHeight: 36, minWidth: 36 }}
               />
             )}
-            <Title level={4} style={{ margin: 0 }}>
-              Task Planner
-            </Title>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {isMobile && <BrandLogo size={26} />}
+              <Title level={4} style={{ margin: 0, fontWeight: 700, letterSpacing: '-0.02em' }}>
+                Task Planner
+              </Title>
+            </div>
           </Space>
-          <Space size="middle">
+
+          {/* Center: GitHub sync status dot & ActiveTimerWidget */}
+          <Space size="middle" align="center">
+            <GitHubSyncStatusDot />
+            <ActiveTimerWidget />
+          </Space>
+
+          {/* Right: Search pill, Daily Review, AI Assistant, NotificationBell, InstallButton, UpdateBadge */}
+          <Space size="small" align="center">
             <Tooltip title="Tìm kiếm & Lệnh nhanh (Cmd+K / Ctrl+K)">
               <Button
-                type="text"
-                icon={<SearchOutlined style={{ fontSize: 16 }} />}
+                type="default"
                 onClick={() => setCommandPaletteOpen(true)}
                 aria-label="Mở tìm kiếm nhanh"
+                style={{
+                  borderRadius: 20,
+                  height: 34,
+                  padding: '0 12px 0 10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  background: token.colorFillAlter,
+                  borderColor: token.colorBorderSecondary,
+                }}
               >
-                {!isMobile && <span style={{ fontSize: 12, color: '#8c8c8c' }}>Tìm kiếm (Cmd+K)</span>}
+                <SearchOutlined style={{ fontSize: 14, color: token.colorTextTertiary }} />
+                {!isMobile && (
+                  <span style={{ fontSize: 13, color: token.colorTextSecondary }}>
+                    Tìm kiếm & Lệnh...
+                  </span>
+                )}
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    padding: '1px 6px',
+                    borderRadius: 6,
+                    background: token.colorFillSecondary,
+                    color: token.colorTextTertiary,
+                    lineHeight: '16px',
+                  }}
+                >
+                  {navigator.platform.toUpperCase().indexOf('MAC') >= 0 ? '⌘K' : 'Ctrl K'}
+                </span>
               </Button>
             </Tooltip>
+
             <Tooltip title="Tổng kết ngày & Standup">
               <Button
                 type="text"
-                icon={<CheckCircleOutlined style={{ fontSize: 16, color: '#1677ff' }} />}
+                icon={<CheckCircleOutlined style={{ fontSize: 16, color: '#4f46e5' }} />}
                 onClick={() => setDailyReviewOpen(true)}
                 aria-label="Mở tổng kết ngày"
               >
-                {!isMobile && <span style={{ fontSize: 12, color: '#8c8c8c' }}>Tổng kết</span>}
+                {!isMobile && <span style={{ fontSize: 13, color: token.colorTextSecondary }}>Tổng kết</span>}
               </Button>
             </Tooltip>
-            <ActiveTimerWidget />
-            <GitHubSyncStatusDot />
+
             <Tooltip title="Trợ lý AI (Cmd+J / Ctrl+J)">
               <Button
                 type={aiChatOpen ? 'primary' : 'text'}
                 icon={<RobotOutlined style={{ fontSize: 16 }} />}
                 onClick={toggleAiChatOpen}
                 aria-label="Trợ lý AI (Cmd+J / Ctrl+J)"
-                style={{ minHeight: 32, minWidth: 32 }}
+                style={{ minHeight: 34, minWidth: 34 }}
               />
             </Tooltip>
+
             <StatusBadge />
+
             <NotificationBell
               count={notifications.activeCount}
               onClick={() => setNotificationDrawerOpen(true)}
             />
+
             <InstallButton />
+
             {showCollapsedBadge && (
               <Tooltip title="Đã có bản cập nhật mới. Nhấn để cập nhật.">
-                <Badge dot color="#1677ff">
+                <Badge dot color="#4f46e5">
                   <Button
                     type="text"
-                    icon={<CloudDownloadOutlined style={{ fontSize: 18, color: '#1677ff' }} />}
+                    icon={<CloudDownloadOutlined style={{ fontSize: 18, color: '#4f46e5' }} />}
                     onClick={() => setBannerDismissed(false)}
                     aria-label="Cập nhật ứng dụng"
-                    style={{ minHeight: 32, minWidth: 32 }}
+                    style={{ minHeight: 34, minWidth: 34 }}
                   />
                 </Badge>
               </Tooltip>
             )}
-            <Button onClick={() => setResetModalOpen(true)} danger size="small">
-              Đặt lại CSDL
-            </Button>
           </Space>
         </Header>
 
@@ -545,7 +622,6 @@ const AppShellInner: React.FC<AppShellProps> = ({
       />
 
       <UpgradeModal />
-      <ResetDbModal open={resetModalOpen} onClose={() => setResetModalOpen(false)} />
       <AriaLiveRegion />
 
       <UpdateBanner
