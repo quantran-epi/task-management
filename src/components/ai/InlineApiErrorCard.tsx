@@ -31,9 +31,9 @@ export const InlineApiErrorCard: React.FC<InlineApiErrorCardProps> = ({
       }}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <Space orientation="horizontal" align="start">
+        <Space align="start">
           <ExclamationCircleOutlined style={{ color: token.colorError, fontSize: 16, marginTop: 2 }} />
-          <Text orientation="left" style={{ color: token.colorErrorText, fontSize: 13 }}>
+          <Text style={{ color: token.colorErrorText, fontSize: 13 }}>
             Lỗi kết nối 9router: {errorMessage}. Vui lòng kiểm tra lại khóa API hoặc đường truyền mạng.
           </Text>
         </Space>

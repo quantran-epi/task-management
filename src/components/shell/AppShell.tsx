@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Layout, Drawer, Grid, Button, Typography, Space, Badge, Tooltip, theme, message } from 'antd';
-import { MenuOutlined, CloudDownloadOutlined, SearchOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import {
+  MenuOutlined,
+  CloudDownloadOutlined,
+  SearchOutlined,
+  CheckCircleOutlined,
+  RobotOutlined,
+} from '@ant-design/icons';
 import { Navigation } from './Navigation';
 import { StatusBadge } from './StatusBadge';
 import { UpgradeModal } from './UpgradeModal';
@@ -30,9 +36,10 @@ import { NoteDetailModal } from '../notes/NoteDetailModal';
 import { NoteEditor } from '../notes/NoteEditor';
 import { CommandPaletteModal } from '../palette/CommandPaletteModal';
 import { DailyReviewModal } from '../dailyReview/DailyReviewModal';
+import { AIChatDrawer, DEFAULT_AI_CHAT_WIDTH, type ActiveScope } from '../ai/AIChatDrawer';
 import { db } from '../../db';
 import { dismissAlertToday } from '../../db/repositories/notificationRepo';
-import { createTask } from '../../db/repositories/taskRepo';
+import { createTask, getTask } from '../../db/repositories/taskRepo';
 import { getProject, updateProject } from '../../db/repositories/projectRepo';
 import { getMilestone, updateMilestone } from '../../db/repositories/milestoneRepo';
 import { getTodayDateString, isValidCalendarDate } from '../../utils/date';
@@ -45,6 +52,9 @@ const { useBreakpoint } = Grid;
 const { Title } = Typography;
 
 export const SIDEBAR_COLLAPSED_KEY = 'planner:sidebar_collapsed';
+export const AI_CHAT_OPEN_KEY = 'planner:ai_chat_open';
+export const AI_CHAT_PINNED_KEY = 'planner:ai_chat_pinned';
+export const AI_CHAT_WIDTH_KEY = 'planner:ai_chat_width';
 
 export interface AppShellProps {
   currentRoute: AppRoute;
@@ -113,12 +123,93 @@ const AppShellInner: React.FC<AppShellProps> = ({
   const [inspectingNote, setInspectingNote] = useState<Note | null>(null);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
 
-  // Global Cmd+K / Ctrl+K keyboard shortcut
+  // AI Chat Drawer State & Persistence (D-01, D-02, D-04, D-08)
+  const [aiChatOpen, setAiChatOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return localStorage.getItem(AI_CHAT_OPEN_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const [aiChatPinned, setAiChatPinned] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return localStorage.getItem(AI_CHAT_PINNED_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const [aiChatWidth, setAiChatWidth] = useState<number>(() => {
+    if (typeof window === 'undefined') return DEFAULT_AI_CHAT_WIDTH;
+    try {
+      const stored = localStorage.getItem(AI_CHAT_WIDTH_KEY);
+      if (stored) {
+        const val = parseInt(stored, 10);
+        if (!isNaN(val)) return val;
+      }
+    } catch {}
+    return DEFAULT_AI_CHAT_WIDTH;
+  });
+
+  const toggleAiChatOpen = () => {
+    setAiChatOpen((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(AI_CHAT_OPEN_KEY, String(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  const handleToggleAiChatPinned = () => {
+    setAiChatPinned((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(AI_CHAT_PINNED_KEY, String(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  // Active item tracking for AI item grounding auto-follow (D-05)
+  const [activeTaskTitle, setActiveTaskTitle] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (!inspectingTaskId) {
+      setActiveTaskTitle(undefined);
+      return;
+    }
+    let mounted = true;
+    getTask(inspectingTaskId, db).then((t) => {
+      if (mounted && t) {
+        setActiveTaskTitle(t.name);
+      }
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [inspectingTaskId]);
+
+  const activeScope: ActiveScope = inspectingTaskId
+    ? { type: 'task', id: inspectingTaskId, title: activeTaskTitle || 'Tác vụ đang xem' }
+    : inspectingProject
+    ? { type: 'project', id: inspectingProject.id, title: inspectingProject.name }
+    : inspectingMilestone
+    ? { type: 'milestone', id: inspectingMilestone.id, title: inspectingMilestone.name }
+    : { type: 'global' };
+
+  // Global Cmd+K / Ctrl+K and Cmd+J / Ctrl+J keyboard shortcuts (D-04)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setCommandPaletteOpen((prev) => !prev);
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j') {
+        e.preventDefault();
+        toggleAiChatOpen();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -242,6 +333,15 @@ const AppShellInner: React.FC<AppShellProps> = ({
             </Tooltip>
             <ActiveTimerWidget />
             <GitHubSyncStatusDot />
+            <Tooltip title="Trợ lý AI (Cmd+J / Ctrl+J)">
+              <Button
+                type={aiChatOpen ? 'primary' : 'text'}
+                icon={<RobotOutlined style={{ fontSize: 16 }} />}
+                onClick={toggleAiChatOpen}
+                aria-label="Trợ lý AI (Cmd+J / Ctrl+J)"
+                style={{ minHeight: 32, minWidth: 32 }}
+              />
+            </Tooltip>
             <StatusBadge />
             <NotificationBell
               count={notifications.activeCount}
@@ -267,7 +367,15 @@ const AppShellInner: React.FC<AppShellProps> = ({
           </Space>
         </Header>
 
-        <Content style={{ margin: 16 }}>{children}</Content>
+        <Content
+          style={{
+            margin: 16,
+            marginRight: aiChatOpen && aiChatPinned && !isMobile ? aiChatWidth + 16 : 16,
+            transition: 'margin-right 0.2s ease',
+          }}
+        >
+          {children}
+        </Content>
       </Layout>
 
       <NotificationDrawer
@@ -410,6 +518,22 @@ const AppShellInner: React.FC<AppShellProps> = ({
       <DailyReviewModal
         open={dailyReviewOpen}
         onClose={() => setDailyReviewOpen(false)}
+      />
+
+      <AIChatDrawer
+        open={aiChatOpen}
+        onClose={() => setAiChatOpen(false)}
+        isPinned={aiChatPinned}
+        onTogglePin={handleToggleAiChatPinned}
+        activeScope={activeScope}
+        width={aiChatWidth}
+        onWidthChange={(w) => setAiChatWidth(w)}
+        onOpenSettings={() => {
+          setAiChatOpen(false);
+          onNavigate('settings');
+        }}
+        isMobile={isMobile}
+        db={db}
       />
 
       <UpgradeModal />

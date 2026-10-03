@@ -1,19 +1,17 @@
 import React, { useRef, useEffect } from 'react';
-import { Typography, Divider, theme } from 'antd';
+import { Divider, theme } from 'antd';
 import { SyncOutlined } from '@ant-design/icons';
 import type { ChatMessage } from '../../types/models';
 import { ChatMessageBubble } from './ChatMessageBubble';
 import { InlineApiErrorCard } from './InlineApiErrorCard';
 
-const { Text } = Typography;
-
 export interface ChatMessageListProps {
   messages: ChatMessage[];
-  streamingText?: string;
-  isStreaming?: boolean;
-  error?: string | null;
-  onRetry?: () => void;
-  onOpenSettings?: () => void;
+  streamingText?: string | undefined;
+  isStreaming?: boolean | undefined;
+  error?: string | null | undefined;
+  onRetry?: (() => void) | undefined;
+  onOpenSettings?: (() => void) | undefined;
 }
 
 export const ChatMessageList: React.FC<ChatMessageListProps> = ({

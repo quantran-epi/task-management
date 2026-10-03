@@ -92,6 +92,7 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
 
   return (
     <Drawer
+      zIndex={1050}
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span>Thông báo & Nhắc nhở</span>

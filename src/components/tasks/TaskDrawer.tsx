@@ -848,6 +848,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
 
   return (
     <Drawer
+      zIndex={1050}
       title="Chỉnh sửa tác vụ"
       width={560}
       open={open}
