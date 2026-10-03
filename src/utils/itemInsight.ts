@@ -299,6 +299,18 @@ export function analyzeProjectInsight(
 
   const recommendations: InsightRecommendation[] = [];
 
+  if (project.deadline && isValidCalendarDate(project.deadline)) {
+    const diffDays = dayjs(project.deadline).diff(dayjs(today), 'day');
+    if (diffDays < 0 && project.status !== 'Done' && project.status !== 'Cancelled') {
+      recommendations.push({
+        id: 'proj-overdue',
+        severity: 'danger',
+        title: 'Dự án đã quá hạn chót',
+        description: `Hạn chót dự án là ${project.deadline} (${Math.abs(diffDays)} ngày trước). Cần đánh giá lại tiến độ tổng thể.`,
+      });
+    }
+  }
+
   if (totalTasks === 0) {
     recommendations.push({
       id: 'proj-no-tasks',

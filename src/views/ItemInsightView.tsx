@@ -9,7 +9,6 @@ import {
   Space,
   Typography,
   Divider,
-  Progress,
   List,
   Checkbox,
   Alert,
@@ -27,8 +26,6 @@ import {
   CalendarOutlined,
   ClockCircleOutlined,
   ExclamationCircleOutlined,
-  WarningOutlined,
-  InfoCircleOutlined,
   LinkOutlined,
   FolderOpenOutlined,
   ProjectOutlined,
@@ -39,8 +36,8 @@ import {
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
-import type { Task, Project, Milestone, WorkSession, PlannedAllocation, Note, CapacityRule } from '../types/models';
-import type { AppRoute, NavigateFunction } from '../types/navigation';
+import type { Note } from '../types/models';
+import type { NavigateFunction } from '../types/navigation';
 import {
   analyzeTaskInsight,
   analyzeProjectInsight,
@@ -393,16 +390,16 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
                 color={
                   STATUS_TAG_COLORS[
                     currentTask?.status || currentProject?.status || currentMilestone?.status || 'Open'
-                  ]
+                  ] ?? 'default'
                 }
               >
                 {STATUS_LABELS[
                   currentTask?.status || currentProject?.status || currentMilestone?.status || 'Open'
-                ]}
+                ] ?? 'Mở'}
               </Tag>
 
               {currentTask && (
-                <Tag color={PRIORITY_TAG_COLORS[currentTask.priority]}>
+                <Tag color={PRIORITY_TAG_COLORS[currentTask.priority] ?? 'default'}>
                   Ưu tiên {currentTask.priority}
                 </Tag>
               )}
@@ -802,8 +799,12 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
                   <List.Item.Meta
                     title={
                       <Space>
-                        <Tag color={STATUS_TAG_COLORS[t.status]}>{STATUS_LABELS[t.status]}</Tag>
-                        <Tag color={PRIORITY_TAG_COLORS[t.priority]}>{t.priority}</Tag>
+                        <Tag color={STATUS_TAG_COLORS[t.status] ?? 'default'}>
+                          {STATUS_LABELS[t.status] ?? 'Mở'}
+                        </Tag>
+                        <Tag color={PRIORITY_TAG_COLORS[t.priority] ?? 'default'}>
+                          {t.priority}
+                        </Tag>
                         <a onClick={() => onNavigate('insight', { type: 'task', id: t.id })}>
                           {t.name}
                         </a>

@@ -154,6 +154,13 @@ describe('CommandPaletteModal', () => {
     await waitFor(() => {
       expect(screen.getByText('Kiểm tra bảo mật API')).toBeInTheDocument();
     });
+
+    fireEvent.click(screen.getByText('Kiểm tra bảo mật API'));
+    expect(onNavigate).toHaveBeenCalledWith('insight', {
+      type: 'task',
+      id: 'a0000000-0000-4000-8000-000000000001',
+    });
+    expect(onClose).toHaveBeenCalled();
   });
 
   it('calls onOpenNote when selecting a note', async () => {
@@ -225,7 +232,7 @@ describe('CommandPaletteModal', () => {
     });
 
     fireEvent.click(screen.getByText('Nền tảng thanh toán mới'));
-    expect(onOpenProject).toHaveBeenCalledWith(expect.objectContaining({ id: 'proj-99' }));
+    expect(onNavigate).toHaveBeenCalledWith('insight', { type: 'project', id: 'proj-99' });
     expect(onClose).toHaveBeenCalled();
   });
 
@@ -262,7 +269,7 @@ describe('CommandPaletteModal', () => {
     });
 
     fireEvent.click(screen.getByText('Mốc Beta Release'));
-    expect(onOpenMilestone).toHaveBeenCalledWith(expect.objectContaining({ id: 'ms-99' }));
+    expect(onNavigate).toHaveBeenCalledWith('insight', { type: 'milestone', id: 'ms-99' });
     expect(onClose).toHaveBeenCalled();
   });
 });

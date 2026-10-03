@@ -1,14 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import 'fake-indexeddb/auto';
 import { ItemInsightView } from '../../src/views/ItemInsightView';
 import { TaskPlannerDatabase } from '../../src/db/index';
 import { createTask } from '../../src/db/repositories/taskRepo';
 import { createProject } from '../../src/db/repositories/projectRepo';
 import { createMilestone } from '../../src/db/repositories/milestoneRepo';
-import { createWorkSession } from '../../src/db/repositories/workSessionRepo';
-import { upsertAllocation } from '../../src/db/repositories/allocationRepo';
-import { createNote } from '../../src/db/repositories/noteRepo';
 
 describe('ItemInsightView', () => {
   let testDb: TaskPlannerDatabase;

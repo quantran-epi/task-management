@@ -220,7 +220,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
       icon: <CheckSquareOutlined style={{ color: t.status === 'Done' ? '#52c41a' : '#1677ff' }} />,
       action: () => {
         onClose();
-        onOpenTask?.(t.id);
+        onNavigate('insight', { type: 'task', id: t.id });
       },
     }));
 
@@ -232,7 +232,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
       icon: <ProjectOutlined style={{ color: '#fa8c16' }} />,
       action: () => {
         onClose();
-        onOpenProject?.(p);
+        onNavigate('insight', { type: 'project', id: p.id });
       },
     }));
 
@@ -246,13 +246,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
         icon: <FlagOutlined style={{ color: '#faad14' }} />,
         action: () => {
           onClose();
-          if (onOpenMilestone) {
-            onOpenMilestone(m);
-          } else if (parentProj && onOpenProject) {
-            onOpenProject(parentProj);
-          } else {
-            onNavigate('projects');
-          }
+          onNavigate('insight', { type: 'milestone', id: m.id });
         },
       };
     });
