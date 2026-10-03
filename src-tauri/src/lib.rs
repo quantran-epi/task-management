@@ -2,11 +2,17 @@ mod jira_proxy;
 mod keyring_store;
 mod sqlite_persistence;
 
+#[tauri::command]
+fn open_devtools(window: tauri::WebviewWindow) {
+    window.open_devtools();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
+            open_devtools,
             sqlite_persistence::select_sqlite_path,
             sqlite_persistence::sqlite_file_status,
             sqlite_persistence::sqlite_init,
