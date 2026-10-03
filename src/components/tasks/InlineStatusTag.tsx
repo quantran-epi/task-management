@@ -166,7 +166,7 @@ export const InlineStatusTag: React.FC<InlineStatusTagProps> = ({
         role="button"
         aria-label={`Trạng thái hiện tại: ${current.label}. Nhấn để thay đổi.`}
       >
-        <span>{current.label}</span>
+        <span style={{ textDecoration: current.textDecoration }}>{current.label}</span>
         <span style={{ fontSize: 9, opacity: 0.7, marginLeft: 1 }}>▾</span>
       </Tag>
     </Dropdown>
