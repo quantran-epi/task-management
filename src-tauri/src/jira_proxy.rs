@@ -118,3 +118,50 @@ pub fn select_local_file() -> Result<Option<String>, String> {
         .map(|path| path.to_string_lossy().to_string()))
 }
 
+#[tauri::command]
+pub fn read_local_file_text_head(file_path: String, max_lines: usize) -> Result<String, String> {
+    let trimmed = file_path.trim();
+    if trimmed.is_empty() {
+        return Err("Path cannot be empty".to_string());
+    }
+
+    let mut clean_path = trimmed;
+    if clean_path.to_lowercase().starts_with("file://") {
+        clean_path = &clean_path[7..];
+        #[cfg(target_os = "windows")]
+        if clean_path.starts_with('/') && clean_path.len() > 3 && clean_path.chars().nth(2) == Some(':') {
+            clean_path = &clean_path[1..];
+        }
+    }
+
+    let path = std::path::Path::new(clean_path);
+    if !path.exists() {
+        return Err(format!("File does not exist: {}", clean_path));
+    }
+    if !path.is_file() {
+        return Err(format!("Path is not a regular file: {}", clean_path));
+    }
+
+    // Security mitigation T-13.2-05: Block sensitive paths
+    let path_str = clean_path.replace('\\', "/");
+    let lower_path = path_str.to_lowercase();
+    if lower_path.contains("/.ssh/") || lower_path.contains("/.gnupg/") || lower_path.contains("/.env") {
+        return Err("Access to sensitive system or credential files is blocked".to_string());
+    }
+
+    use std::io::{BufRead, BufReader};
+    let file = std::fs::File::open(path).map_err(|e| format!("Failed to open file: {}", e))?;
+    let reader = BufReader::new(file);
+
+    let limit = if max_lines == 0 { 2000 } else { max_lines.min(2000) };
+    let mut lines = Vec::new();
+
+    for line_result in reader.lines().take(limit) {
+        let line = line_result.map_err(|e| format!("Failed to read file as text: {}", e))?;
+        lines.push(line);
+    }
+
+    Ok(lines.join("\n"))
+}
+
+
