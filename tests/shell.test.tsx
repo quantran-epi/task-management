@@ -86,7 +86,7 @@ describe('App Integration & Hash Route & Live Query (UX-01, DATA-02)', () => {
     window.dispatchEvent(new HashChangeEvent('hashchange'));
 
     await waitFor(() => {
-      expect(screen.getByText('Phân cấp công việc')).toBeInTheDocument();
+      expect(screen.getByText('Dự án & Cột mốc')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Dự án mới/i })).toBeInTheDocument();
     });
   });
