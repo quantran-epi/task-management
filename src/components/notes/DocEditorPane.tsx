@@ -10,6 +10,7 @@ import {
   message,
   Popconfirm,
 } from 'antd';
+import type { TextAreaRef } from 'antd/es/input/TextArea';
 import {
   EditOutlined,
   EyeOutlined,
@@ -19,6 +20,9 @@ import {
   RobotOutlined,
   DeleteOutlined,
   CloudSyncOutlined,
+  FileTextOutlined,
+  CheckSquareOutlined,
+  FolderOutlined,
 } from '@ant-design/icons';
 import type { Note } from '../../types/models';
 import { renderSafeMarkdown } from '../../utils/markdown';
@@ -57,6 +61,23 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
   const [backlinks, setBacklinks] = useState<BacklinksResult>({ tasks: [], projects: [], referencingNotes: [] });
   const [showToC, setShowToC] = useState(true);
 
+  // Wiki-link autocomplete popup state
+  interface CandidateItem {
+    id: string;
+    title: string;
+    type: 'doc' | 'task' | 'project';
+  }
+  const [isAutoCompleteOpen, setIsAutoCompleteOpen] = useState(false);
+  const [autoCompleteQuery, setAutoCompleteQuery] = useState('');
+  const [triggerStartIndex, setTriggerStartIndex] = useState<number>(-1);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [candidates, setCandidates] = useState<CandidateItem[]>([]);
+
+  // Ref tracking latest title, body, and tags to eliminate stale closure bugs during async operations
+  const latestValuesRef = useRef({ title, body, tags });
+  latestValuesRef.current = { title, body, tags };
+
+  const textareaRef = useRef<TextAreaRef | null>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const aiChat = useAIChat();
@@ -111,14 +132,143 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
     [doc?.id, onUpdateDoc]
   );
 
-  const handleTitleChange = (val: string) => {
-    setTitle(val);
-    triggerAutoSave(val, body, tags);
+  // Query candidates from IndexedDB matching query text
+  const fetchWikiCandidates = useCallback(
+    async (query: string) => {
+      const q = query.trim().toLowerCase();
+      try {
+        const [rawNotes, rawTasks, rawProjects] = await Promise.all([
+          db.notes.toArray(),
+          db.tasks.toArray(),
+          db.projects.toArray(),
+        ]);
+
+        const noteCandidates: CandidateItem[] = rawNotes
+          .filter((n) => !n.deletedAt && n.id !== doc?.id && (n.title || 'Không có tiêu đề').toLowerCase().includes(q))
+          .map((n) => ({
+            id: n.id,
+            title: n.title || 'Không có tiêu đề',
+            type: 'doc' as const,
+          }));
+
+        const taskCandidates: CandidateItem[] = rawTasks
+          .filter((t) => (t.name || '').toLowerCase().includes(q))
+          .map((t) => ({
+            id: t.id,
+            title: t.name || 'Không có tiêu đề',
+            type: 'task' as const,
+          }));
+
+        const projectCandidates: CandidateItem[] = rawProjects
+          .filter((p) => (p.name || '').toLowerCase().includes(q))
+          .map((p) => ({
+            id: p.id,
+            title: p.name || 'Không có tiêu đề',
+            type: 'project' as const,
+          }));
+
+        const combined = [...noteCandidates, ...taskCandidates, ...projectCandidates].slice(0, 8);
+        setCandidates(combined);
+        setSelectedIndex(0);
+        setIsAutoCompleteOpen(combined.length > 0);
+      } catch (err) {
+        console.warn('Failed to query wiki candidates:', err);
+        setCandidates([]);
+        setIsAutoCompleteOpen(false);
+      }
+    },
+    [db, doc?.id]
+  );
+
+  // Detect [[ trigger pattern from text up to cursor position
+  const checkForWikiTrigger = (text: string, cursorPos: number) => {
+    const textBeforeCursor = text.slice(0, cursorPos);
+    // Matches [[ followed by zero or more non-bracket characters up to cursor, on the same line
+    const match = /(?:^|[^\\])\[\[([^\]\r\n]*)$/.exec(textBeforeCursor);
+    if (match && match[1] !== undefined) {
+      const query = match[1];
+      const matchIndex = textBeforeCursor.lastIndexOf('[[');
+      setTriggerStartIndex(matchIndex);
+      setAutoCompleteQuery(query);
+      fetchWikiCandidates(query);
+    } else {
+      setIsAutoCompleteOpen(false);
+      setTriggerStartIndex(-1);
+      setAutoCompleteQuery('');
+    }
   };
 
-  const handleBodyChange = (val: string) => {
+  const handleTitleChange = (val: string) => {
+    setTitle(val);
+    latestValuesRef.current.title = val;
+    triggerAutoSave(val, latestValuesRef.current.body, latestValuesRef.current.tags);
+  };
+
+  const handleBodyChange = (val: string, cursorPos?: number) => {
     setBody(val);
-    triggerAutoSave(title, val, tags);
+    latestValuesRef.current.body = val;
+    triggerAutoSave(latestValuesRef.current.title, val, latestValuesRef.current.tags);
+
+    const pos = cursorPos !== undefined ? cursorPos : textareaRef.current?.resizableTextArea?.textArea?.selectionStart ?? val.length;
+    checkForWikiTrigger(val, pos);
+  };
+
+  // Handle item selection in wiki-link autocomplete
+  const handleSelectCandidate = (item: CandidateItem) => {
+    const currentBody = latestValuesRef.current.body;
+    const startIndex = triggerStartIndex >= 0 ? triggerStartIndex : currentBody.lastIndexOf('[[');
+    if (startIndex < 0) return;
+
+    // Pattern: replace [[query with [[type:id|Title]]
+    const beforeTrigger = currentBody.slice(0, startIndex);
+    const triggerAndAfter = currentBody.slice(startIndex);
+    const endMatch = /^\[\[[^\]\r\n]*/.exec(triggerAndAfter);
+    const matchLen = endMatch ? endMatch[0].length : 2 + autoCompleteQuery.length;
+    const afterTrigger = currentBody.slice(startIndex + matchLen);
+
+    const chip = `[[${item.type}:${item.id}|${item.title}]]`;
+    const newBody = `${beforeTrigger}${chip}${afterTrigger}`;
+    const newCursorPos = startIndex + chip.length;
+
+    setBody(newBody);
+    latestValuesRef.current.body = newBody;
+    setIsAutoCompleteOpen(false);
+    setCandidates([]);
+    setTriggerStartIndex(-1);
+    setAutoCompleteQuery('');
+
+    triggerAutoSave(latestValuesRef.current.title, newBody, latestValuesRef.current.tags);
+
+    // Restore textarea focus and cursor position
+    setTimeout(() => {
+      const nativeEl = textareaRef.current?.resizableTextArea?.textArea;
+      if (nativeEl) {
+        nativeEl.focus();
+        nativeEl.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    }, 0);
+  };
+
+  // Keyboard navigation for autocomplete popup
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!isAutoCompleteOpen || candidates.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIndex((prev) => (prev + 1) % candidates.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedIndex((prev) => (prev - 1 + candidates.length) % candidates.length);
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      const selected = candidates[selectedIndex];
+      if (selected) {
+        handleSelectCandidate(selected);
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setIsAutoCompleteOpen(false);
+    }
   };
 
   // Handle paste for smart ingestion
@@ -130,16 +280,23 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
     const metadata = extractMarkdownMetadata(pastedText);
     let nextTitle = title;
     let nextTags = [...tags];
+    let metadataChanged = false;
 
     if (!nextTitle.trim() && metadata.title) {
       nextTitle = metadata.title;
       setTitle(nextTitle);
+      latestValuesRef.current.title = nextTitle;
+      metadataChanged = true;
     }
 
     if (metadata.tags.length > 0) {
       const merged = Array.from(new Set([...nextTags, ...metadata.tags]));
-      nextTags = merged;
-      setTags(nextTags);
+      if (merged.length !== nextTags.length) {
+        nextTags = merged;
+        setTags(nextTags);
+        latestValuesRef.current.tags = nextTags;
+        metadataChanged = true;
+      }
     }
 
     // 2. Entity detection from database
@@ -157,7 +314,11 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
       console.warn('Entity detection failed:', err);
     }
 
-    triggerAutoSave(nextTitle, body, nextTags);
+    // Only trigger autosave if title or tags changed from extraction;
+    // otherwise let handleBodyChange handle debounced save of the pasted body cleanly
+    if (metadataChanged) {
+      triggerAutoSave(nextTitle, latestValuesRef.current.body, nextTags);
+    }
   };
 
   // 1-Click apply all entities
@@ -372,11 +533,22 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
               display: 'flex',
               flexDirection: 'column',
               paddingRight: viewMode === 'split' ? 8 : 0,
+              position: 'relative',
             }}
           >
             <Input.TextArea
+              ref={textareaRef}
               value={body}
-              onChange={(e) => handleBodyChange(e.target.value)}
+              onChange={(e) => handleBodyChange(e.target.value, e.target.selectionStart)}
+              onKeyDown={handleKeyDown}
+              onKeyUp={(e) => {
+                const target = e.target as HTMLTextAreaElement;
+                checkForWikiTrigger(target.value, target.selectionStart);
+              }}
+              onClick={(e) => {
+                const target = e.target as HTMLTextAreaElement;
+                checkForWikiTrigger(target.value, target.selectionStart);
+              }}
               onPaste={handlePaste}
               placeholder="Nhập nội dung Markdown hoặc dán văn bản vào đây... Sử dụng [[ để liên kết tác vụ/dự án."
               style={{
@@ -391,6 +563,100 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
                 height: '100%',
               }}
             />
+
+            {/* Wiki-link Autocomplete Floating Popup */}
+            {isAutoCompleteOpen && candidates.length > 0 && (
+              <div
+                className="wiki-autocomplete-popup"
+                role="listbox"
+                aria-label="Gợi ý liên kết [[..."
+                style={{
+                  position: 'absolute',
+                  bottom: 16,
+                  left: 16,
+                  width: 320,
+                  maxHeight: 280,
+                  backgroundColor: '#ffffff',
+                  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.15)',
+                  borderRadius: 8,
+                  border: '1px solid #e5e7eb',
+                  zIndex: 1050,
+                  overflowY: 'auto',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  padding: '4px 0',
+                }}
+              >
+                <div
+                  style={{
+                    padding: '6px 12px',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: '#6b7280',
+                    borderBottom: '1px solid #f3f4f6',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <span>LIÊN KẾT NHANH {autoCompleteQuery ? `"${autoCompleteQuery}"` : ''}</span>
+                  <span style={{ fontWeight: 400 }}>↑↓ di chuyển, ↵ chọn</span>
+                </div>
+                {candidates.map((cand, idx) => {
+                  const isSelected = idx === selectedIndex;
+                  let icon = <FileTextOutlined style={{ color: '#7c3aed' }} />;
+                  let typeLabel = 'Tài liệu';
+                  let tagColor = 'purple';
+                  if (cand.type === 'task') {
+                    icon = <CheckSquareOutlined style={{ color: '#2563eb' }} />;
+                    typeLabel = 'Tác vụ';
+                    tagColor = 'blue';
+                  } else if (cand.type === 'project') {
+                    icon = <FolderOutlined style={{ color: '#d97706' }} />;
+                    typeLabel = 'Dự án';
+                    tagColor = 'orange';
+                  }
+
+                  return (
+                    <div
+                      key={`${cand.type}-${cand.id}`}
+                      role="option"
+                      aria-selected={isSelected}
+                      onClick={() => handleSelectCandidate(cand)}
+                      onMouseEnter={() => setSelectedIndex(idx)}
+                      style={{
+                        padding: '8px 12px',
+                        cursor: 'pointer',
+                        backgroundColor: isSelected ? '#f5f3ff' : 'transparent',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 8,
+                        borderLeft: isSelected ? '3px solid #7c3aed' : '3px solid transparent',
+                        transition: 'background-color 0.15s',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
+                        {icon}
+                        <span
+                          style={{
+                            fontSize: 13,
+                            color: '#1f2937',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {cand.title}
+                        </span>
+                      </div>
+                      <Tag color={tagColor} style={{ fontSize: 10, margin: 0, padding: '0 4px', lineHeight: '18px' }}>
+                        {typeLabel}
+                      </Tag>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
