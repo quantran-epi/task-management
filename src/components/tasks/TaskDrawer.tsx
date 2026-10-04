@@ -263,6 +263,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
     } else {
       openChat();
     }
+    handleClose();
   };
 
   const handleClose = () => {

@@ -14,6 +14,7 @@ describe('ChatHeader', () => {
     const handleTogglePin = vi.fn();
     const handleClose = vi.fn();
     const handleModelChange = vi.fn();
+    const handlePopout = vi.fn();
 
     render(
       <ChatHeader
@@ -23,16 +24,22 @@ describe('ChatHeader', () => {
         isPinned={false}
         onTogglePin={handleTogglePin}
         onClearContext={handleClear}
+        onPopout={handlePopout}
         onClose={handleClose}
       />
     );
 
     expect(screen.getByText('Trợ lý AI')).toBeInTheDocument();
+    expect(screen.getByLabelText('Mở cửa sổ riêng (Popout)')).toBeInTheDocument();
     expect(screen.getByLabelText('Đặt lại ngữ cảnh (/clear)')).toBeInTheDocument();
-    expect(screen.getByLabelText('Ghim ngăn trò chuyện bên phải')).toBeInTheDocument();
+    expect(screen.getByLabelText('Tùy chọn khác')).toBeInTheDocument();
     expect(screen.getByLabelText('Đóng ngăn trò chuyện')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText('Ghim ngăn trò chuyện bên phải'));
+    // Click more options dropdown to toggle pin
+    fireEvent.click(screen.getByLabelText('Tùy chọn khác'));
+    const pinOption = screen.getByText('Ghim ngăn trò chuyện bên phải');
+    expect(pinOption).toBeInTheDocument();
+    fireEvent.click(pinOption);
     expect(handleTogglePin).toHaveBeenCalled();
 
     fireEvent.click(screen.getByLabelText('Đặt lại ngữ cảnh (/clear)'));
@@ -42,7 +49,7 @@ describe('ChatHeader', () => {
     expect(handleClose).toHaveBeenCalled();
   });
 
-  it('renders and toggles auto-approve mutations button', () => {
+  it('renders and toggles auto-approve mutations button in dropdown', () => {
     const handleToggleAutoApprove = vi.fn();
 
     const { rerender } = render(
@@ -59,7 +66,8 @@ describe('ChatHeader', () => {
       />
     );
 
-    const toggleBtn = screen.getByLabelText('Bật tự động duyệt thay đổi dữ liệu');
+    fireEvent.click(screen.getByLabelText('Tùy chọn khác'));
+    const toggleBtn = screen.getByText('Bật tự động duyệt thay đổi');
     expect(toggleBtn).toBeInTheDocument();
     fireEvent.click(toggleBtn);
     expect(handleToggleAutoApprove).toHaveBeenCalledTimes(1);
@@ -79,7 +87,8 @@ describe('ChatHeader', () => {
       />
     );
 
-    expect(screen.getByLabelText('Tắt tự động duyệt thay đổi dữ liệu')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Tùy chọn khác'));
+    expect(screen.getByText('Tắt tự động duyệt thay đổi')).toBeInTheDocument();
   });
 });
 
@@ -393,9 +402,6 @@ describe('AIChatDrawer', () => {
       />
     );
 
-    const debugBtn = screen.getByLabelText('Nhật ký gỡ lỗi AI');
-    expect(debugBtn).toBeInTheDocument();
-
     const textarea = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
     fireEvent.change(textarea, { target: { value: 'Tin nhắn gỡ lỗi test' } });
     fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
@@ -407,7 +413,9 @@ describe('AIChatDrawer', () => {
       expect(turns[0]?.finalResponse).toContain('Câu trả lời mẫu');
     });
 
-    fireEvent.click(debugBtn);
+    fireEvent.click(screen.getByLabelText('Tùy chọn khác'));
+    const debugOption = screen.getByText('Nhật ký gỡ lỗi AI');
+    fireEvent.click(debugOption);
 
     await waitFor(() => {
       expect(screen.getByText('Nhật ký gỡ lỗi AI & Payloads')).toBeInTheDocument();
@@ -762,8 +770,11 @@ describe('AIChatDrawer', () => {
       />
     );
 
-    // Verify toggle button in header shows enabled state
-    expect(screen.getByLabelText('Tắt tự động duyệt thay đổi dữ liệu')).toBeInTheDocument();
+    // Verify toggle option in header dropdown shows enabled state
+    fireEvent.click(screen.getByLabelText('Tùy chọn khác'));
+    expect(screen.getByText('Tắt tự động duyệt thay đổi')).toBeInTheDocument();
+    // Close dropdown
+    fireEvent.click(screen.getByLabelText('Tùy chọn khác'));
 
     const textarea = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
     fireEvent.change(textarea, { target: { value: 'Tạo task tự động' } });
@@ -778,5 +789,26 @@ describe('AIChatDrawer', () => {
     // Verify mutation was committed to database directly
     const tasksInDb = await db.tasks.toArray();
     expect(tasksInDb.some((t) => t.name === 'Tác vụ tự động duyệt' && t.priority === 'High')).toBe(true);
+  });
+
+  it('opens AI task planner instructions modal from dropdown menu', async () => {
+    render(
+      <AIChatDrawer
+        open={true}
+        onClose={vi.fn()}
+        db={db}
+        activeScope={{ type: 'global' }}
+      />
+    );
+
+    fireEvent.click(screen.getByLabelText('Tùy chọn khác'));
+    const instructionsOption = screen.getByText('Hướng dẫn lập kế hoạch AI');
+    expect(instructionsOption).toBeInTheDocument();
+    fireEvent.click(instructionsOption);
+
+    await waitFor(() => {
+      expect(screen.getByText('Hướng dẫn sử dụng AI Task Planner')).toBeInTheDocument();
+      expect(screen.getByText('Cú pháp nhanh (@, #, /)')).toBeInTheDocument();
+    });
   });
 });

@@ -24,7 +24,7 @@ describe('aiTools', () => {
       notes: 'Some task notes',
       isRecurring: true,
       recurrenceFrequency: 'weekly',
-      reminders: [{ id: 'r1', date: '2026-10-03', note: 'Check tests' }],
+      reminders: [{ id: 'r1', date: '2026-10-10', note: 'Check tests' }],
     },
     {
       id: 'task-2',

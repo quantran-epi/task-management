@@ -1,5 +1,6 @@
 import React from 'react';
-import { Typography, Select, Button, Tooltip, theme } from 'antd';
+import { Typography, Select, Button, Tooltip, Dropdown, theme } from 'antd';
+import type { MenuProps } from 'antd';
 import {
   RobotOutlined,
   ClearOutlined,
@@ -10,6 +11,8 @@ import {
   ExportOutlined,
   ThunderboltOutlined,
   ThunderboltFilled,
+  MoreOutlined,
+  BookOutlined,
 } from '@ant-design/icons';
 
 const { Text } = Typography;
@@ -40,6 +43,7 @@ export interface ChatHeaderProps {
   onClearContext: () => void;
   onOpenDebug?: (() => void) | undefined;
   onPopout?: (() => void) | undefined;
+  onOpenInstructions?: (() => void) | undefined;
   onClose: () => void;
 }
 
@@ -54,9 +58,59 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   onClearContext,
   onOpenDebug,
   onPopout,
+  onOpenInstructions,
   onClose,
 }) => {
   const { token } = theme.useToken();
+
+  const menuItems: MenuProps['items'] = [
+    ...(onOpenInstructions
+      ? [
+          {
+            key: 'instructions',
+            icon: <BookOutlined style={{ color: token.colorPrimary }} />,
+            label: 'Hướng dẫn lập kế hoạch AI',
+            onClick: onOpenInstructions,
+          },
+        ]
+      : []),
+    ...(onToggleAutoApproveMutations
+      ? [
+          {
+            key: 'auto-approve',
+            icon: autoApproveMutations ? (
+              <ThunderboltFilled style={{ color: token.colorWarning }} />
+            ) : (
+              <ThunderboltOutlined />
+            ),
+            label: autoApproveMutations
+              ? 'Tắt tự động duyệt thay đổi'
+              : 'Bật tự động duyệt thay đổi',
+            onClick: onToggleAutoApproveMutations,
+          },
+        ]
+      : []),
+    {
+      key: 'pin',
+      icon: isPinned ? (
+        <PushpinFilled style={{ color: token.colorPrimary }} />
+      ) : (
+        <PushpinOutlined />
+      ),
+      label: isPinned ? 'Bỏ ghim ngăn trò chuyện' : 'Ghim ngăn trò chuyện bên phải',
+      onClick: onTogglePin,
+    },
+    ...(onOpenDebug
+      ? [
+          {
+            key: 'debug',
+            icon: <BugOutlined />,
+            label: 'Nhật ký gỡ lỗi AI',
+            onClick: onOpenDebug,
+          },
+        ]
+      : []),
+  ];
 
   return (
     <div
@@ -86,7 +140,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           filterOption={(input, option) =>
             ((option?.label as string) ?? '').toLowerCase().includes(input.toLowerCase())
           }
-          style={{ minWidth: 125, maxWidth: 175 }}
+          style={{ minWidth: 120, maxWidth: 165 }}
           popupMatchSelectWidth={false}
           getPopupContainer={(node) => node.parentElement || document.body}
           popupStyle={{ zIndex: 1300 }}
@@ -100,87 +154,6 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           }
         />
 
-        <Tooltip title="Đặt lại ngữ cảnh (/clear)">
-          <Button
-            type="text"
-            size="small"
-            icon={<ClearOutlined />}
-            onClick={onClearContext}
-            aria-label="Đặt lại ngữ cảnh (/clear)"
-            style={{ minWidth: 28, minHeight: 28 }}
-          />
-        </Tooltip>
-
-        {onOpenDebug && (
-          <Tooltip title="Nhật ký gỡ lỗi AI (Xem tin nhắn & công cụ)">
-            <Button
-              type="text"
-              size="small"
-              icon={<BugOutlined />}
-              onClick={onOpenDebug}
-              aria-label="Nhật ký gỡ lỗi AI"
-              style={{ minWidth: 28, minHeight: 28 }}
-            />
-          </Tooltip>
-        )}
-
-        {onToggleAutoApproveMutations && (
-          <Tooltip
-            title={
-              autoApproveMutations
-                ? 'Tự động duyệt thay đổi dữ liệu (Đang BẬT: AI thực thi không hỏi, báo cáo sau)'
-                : 'Tự động duyệt thay đổi dữ liệu (Đang TẮT: AI sẽ hỏi xác nhận trước khi sửa)'
-            }
-          >
-            <Button
-              type="text"
-              size="small"
-              data-testid="toggle-auto-approve-mutations"
-              icon={
-                autoApproveMutations ? (
-                  <ThunderboltFilled style={{ color: token.colorWarning }} />
-                ) : (
-                  <ThunderboltOutlined />
-                )
-              }
-              onClick={onToggleAutoApproveMutations}
-              aria-label={
-                autoApproveMutations
-                  ? 'Tắt tự động duyệt thay đổi dữ liệu'
-                  : 'Bật tự động duyệt thay đổi dữ liệu'
-              }
-              style={{ minWidth: 28, minHeight: 28 }}
-            />
-          </Tooltip>
-        )}
-
-        <Tooltip
-          title={
-            isPinned
-              ? 'Bỏ ghim ngăn trò chuyện (Chuyển sang dạng lớp phủ)'
-              : 'Ghim ngăn trò chuyện bên phải (Co hẹp giao diện chính)'
-          }
-        >
-          <Button
-            type="text"
-            size="small"
-            icon={
-              isPinned ? (
-                <PushpinFilled style={{ color: token.colorPrimary }} />
-              ) : (
-                <PushpinOutlined />
-              )
-            }
-            onClick={onTogglePin}
-            aria-label={
-              isPinned
-                ? 'Bỏ ghim ngăn trò chuyện'
-                : 'Ghim ngăn trò chuyện bên phải'
-            }
-            style={{ minWidth: 28, minHeight: 28 }}
-          />
-        </Tooltip>
-
         {onPopout && (
           <Tooltip title="Mở cửa sổ riêng (Popout)">
             <Button
@@ -193,6 +166,35 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             />
           </Tooltip>
         )}
+
+        <Tooltip title="Đặt lại ngữ cảnh (/clear)">
+          <Button
+            type="text"
+            size="small"
+            icon={<ClearOutlined />}
+            onClick={onClearContext}
+            aria-label="Đặt lại ngữ cảnh (/clear)"
+            style={{ minWidth: 28, minHeight: 28 }}
+          />
+        </Tooltip>
+
+        <Dropdown
+          menu={{ items: menuItems }}
+          trigger={['click']}
+          placement="bottomRight"
+          getPopupContainer={(node) => node.parentElement || document.body}
+        >
+          <Tooltip title="Tùy chọn khác">
+            <Button
+              type="text"
+              size="small"
+              icon={<MoreOutlined />}
+              aria-label="Tùy chọn khác"
+              data-testid="chat-header-more-btn"
+              style={{ minWidth: 28, minHeight: 28 }}
+            />
+          </Tooltip>
+        </Dropdown>
 
         <Tooltip title="Đóng ngăn trò chuyện">
           <Button

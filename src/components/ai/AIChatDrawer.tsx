@@ -43,6 +43,7 @@ import { ChatMessageList } from './ChatMessageList';
 import { ChatInputBar } from './ChatInputBar';
 import { ScopePickerModal } from './ScopePickerModal';
 import { AIDebugModal } from './AIDebugModal';
+import { AITaskPlannerInstructionsModal } from './AITaskPlannerInstructionsModal';
 import { aiDebugService } from '../../services/ai/aiDebugService';
 import { useAIChat } from '../../context/AIChatContext';
 import { openAiPopout } from '../../utils/aiPopout';
@@ -156,6 +157,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const [isDetached, setIsDetached] = useState(false);
   const [scopeModalOpen, setScopeModalOpen] = useState(false);
   const [isDebugModalOpen, setIsDebugModalOpen] = useState(false);
+  const [isInstructionsOpen, setIsInstructionsOpen] = useState(false);
 
   // Sync propScope when it changes (unless user explicitly picked or detached)
   useEffect(() => {
@@ -487,7 +489,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     const dayName = now.format('dddd');
     const timeStr = now.format('HH:mm');
 
-    const systemPromptContent = `You are an expert AI assistant embedded inside Personal Task & Workload Planner.
+    const systemPromptContent = `You are an expert AI assistant embedded inside PlannerMate.
 Current Date: ${todayStr} (${dayName}). Time: ${timeStr}.
 
 CRITICAL ANTI-HALLUCINATION RULES:
@@ -904,6 +906,7 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
         onClearContext={handleClearContext}
         onOpenDebug={() => setIsDebugModalOpen(true)}
         onPopout={!isPopoutWindow ? handlePopoutAction : undefined}
+        onOpenInstructions={() => setIsInstructionsOpen(true)}
         onClose={onClose}
       />
 
@@ -988,6 +991,11 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
         onClose={() => setIsDebugModalOpen(false)}
       />
 
+      <AITaskPlannerInstructionsModal
+        open={isInstructionsOpen}
+        onClose={() => setIsInstructionsOpen(false)}
+      />
+
       {/* Message List */}
       <ChatMessageList
         messages={messages}
@@ -1010,6 +1018,7 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
 
       {/* Chat Input Bar */}
       <ChatInputBar
+        autoFocus={open}
         onSubmit={handleSendMessage}
         onClear={handleClearContext}
         onStop={handleStopGeneration}
