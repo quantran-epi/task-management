@@ -17,7 +17,7 @@ import {
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
-import type { Task, Project } from '../../types/models';
+import type { Task, Project, Note } from '../../types/models';
 import { isTauriApp } from '../../utils/timerPopout';
 
 export interface ChatInputBarProps {
@@ -78,6 +78,12 @@ const COMMANDS = [
     title: '/file',
     description: 'Tham chiếu hoặc đính kèm tập tin từ máy tính (@file)',
   },
+  {
+    name: 'doc',
+    icon: <FileTextOutlined style={{ color: '#1677ff' }} />,
+    title: '/doc',
+    description: 'Tham chiếu tài liệu tri thức (@doc:)',
+  },
 ];
 
 export function parseFileInputPath(text: string): string {
@@ -123,6 +129,15 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
 
   const tasks = useLiveQuery<Task[]>(() => db.tasks?.toArray() ?? [], [db]) ?? [];
   const projects = useLiveQuery<Project[]>(() => db.projects?.toArray() ?? [], [db]) ?? [];
+  const documents = useLiveQuery<Note[]>(
+    async () => {
+      if (!db.notes) return [];
+      return await db.notes
+        .filter((n: Note) => !n.deletedAt && (n.type === 'document' || !n.type))
+        .toArray();
+    },
+    [db]
+  ) ?? [];
 
   useEffect(() => {
     return () => {
@@ -303,6 +318,25 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
       return;
     }
 
+    if (option.key === 'cmd-doc' || option.key === 'mention-doc-entry') {
+      setValue((prev) => {
+        const clean = prev.replace(/\/doc\s*$/, '').trimEnd();
+        return clean ? `${clean} @doc:` : '@doc:';
+      });
+      setSearchInfo({ text: 'doc:', prefix: '@' });
+      setTimeout(() => {
+        const textarea =
+          mentionsRef.current?.textarea ||
+          (mentionsRef.current as any)?.nativeElement?.querySelector?.('textarea');
+        if (textarea) {
+          textarea.focus();
+          textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+          textarea.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: ':' }));
+        }
+      }, 50);
+      return;
+    }
+
     if (option.isDir || option.key === 'mention-file-entry') {
       const dirPath = option.key === 'mention-file-entry'
         ? '~/'
@@ -352,6 +386,78 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
     const q = text.trim().toLowerCase();
 
     if (prefix === '@') {
+      const isDocMode = text.startsWith('doc:') || text.startsWith('doc');
+
+      if (isDocMode) {
+        const docQuery = text.startsWith('doc:')
+          ? text.slice(4).trim().toLowerCase()
+          : text.slice(3).replace(/^[:\s]+/, '').trim().toLowerCase();
+
+        const docOptions = documents
+          .filter((d) => {
+            if (!docQuery) return true;
+            const titleMatch = d.title?.toLowerCase().includes(docQuery);
+            const tagMatch = d.tags?.some((t) => t.toLowerCase().includes(docQuery));
+            return Boolean(titleMatch || tagMatch);
+          })
+          .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
+          .slice(0, 15)
+          .map((d) => ({
+            key: `doc-${d.id}`,
+            value: `@[${d.title || 'Untitled Document'}](doc:${d.id})`,
+            label: (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                  padding: '2px 0',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                  <FileTextOutlined style={{ color: '#1677ff', flexShrink: 0 }} />
+                  <span
+                    style={{
+                      fontWeight: 500,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {d.title || 'Untitled Document'}
+                  </span>
+                  {d.tags && d.tags.length > 0 && (
+                    <Tag
+                      color="blue"
+                      style={{
+                        margin: 0,
+                        fontSize: 10,
+                        lineHeight: '16px',
+                        padding: '0 4px',
+                      }}
+                    >
+                      {d.tags[0]}
+                    </Tag>
+                  )}
+                </div>
+                <Tag
+                  style={{
+                    margin: 0,
+                    fontSize: 10,
+                    lineHeight: '16px',
+                    padding: '0 4px',
+                  }}
+                >
+                  Tài liệu
+                </Tag>
+              </div>
+            ),
+          }));
+
+        return docOptions;
+      }
+
       const isFileMode =
         text.startsWith('file') ||
         text.startsWith('/') ||
@@ -521,11 +627,9 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
           ),
         }));
 
-      const fileHintOption = {
-        key: 'mention-file-entry',
-        isDir: true,
-        filePath: '~/',
-        value: 'file:~/',
+      const docHintOption = {
+        key: 'mention-doc-entry',
+        value: 'doc:',
         label: (
           <div
             style={{
@@ -538,13 +642,35 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
               paddingTop: 4,
             }}
           >
+            <FileTextOutlined style={{ color: '#1677ff', flexShrink: 0 }} />
+            <span style={{ fontWeight: 500, color: '#1677ff' }}>Tham chiếu tài liệu tri thức... (@doc:)</span>
+          </div>
+        ),
+      };
+
+      const fileHintOption = {
+        key: 'mention-file-entry',
+        isDir: true,
+        filePath: '~/',
+        value: 'file:~/',
+        label: (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '2px 0',
+              marginTop: 2,
+              paddingTop: 2,
+            }}
+          >
             <PaperClipOutlined style={{ color: '#13c2c2', flexShrink: 0 }} />
             <span style={{ fontWeight: 500, color: '#13c2c2' }}>Tham chiếu tập tin máy tính... (@file)</span>
           </div>
         ),
       };
 
-      return [...taskOptions, fileHintOption];
+      return [...taskOptions, docHintOption, fileHintOption];
     }
 
     if (prefix === '#') {

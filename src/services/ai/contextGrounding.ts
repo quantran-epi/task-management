@@ -414,17 +414,20 @@ export interface ExtractedMentions {
   taskIds: string[];
   projectIds: string[];
   filePaths: string[];
+  docIds: string[];
 }
 
 /**
- * Extracts task, project, and file entity references from text containing mentions.
+ * Extracts task, project, file, and document entity references from text containing mentions.
  * Supports @[Task Name](task:<id>), #[Project Name](project:<id>),
- * [file.txt](file:<path>), @file:<path>, @task:<id>, and #project:<id>.
+ * [file.txt](file:<path>), @file:<path>, @task:<id>, #project:<id>,
+ * @doc:<id>, and @[Doc Title](doc:<id>).
  */
 export function extractMentionedEntityIds(text: string): ExtractedMentions {
   const taskIds = new Set<string>();
   const projectIds = new Set<string>();
   const filePaths = new Set<string>();
+  const docIds = new Set<string>();
 
   const taskRegex = /@?\[(?:[^\]]*)\]\(task:([a-zA-Z0-9_-]+)\)|@task:([a-zA-Z0-9_-]+)/g;
   let match: RegExpExecArray | null;
@@ -445,9 +448,16 @@ export function extractMentionedEntityIds(text: string): ExtractedMentions {
     if (path) filePaths.add(path.trim());
   }
 
+  const docRegex = /@?\[(?:[^\]]*)\]\(doc:([a-zA-Z0-9_-]+)\)|@doc:([a-zA-Z0-9_-]+)/g;
+  while ((match = docRegex.exec(text)) !== null) {
+    const id = match[1] || match[2];
+    if (id) docIds.add(id);
+  }
+
   return {
     taskIds: Array.from(taskIds),
     projectIds: Array.from(projectIds),
     filePaths: Array.from(filePaths),
+    docIds: Array.from(docIds),
   };
 }

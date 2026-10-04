@@ -90,6 +90,18 @@ describe('ChatInputBar - Mentions & Command Palette', () => {
 
     expect(handleSubmit).toHaveBeenCalledWith('Phân tích tiến độ @[Fix auth](task:task-1)');
   });
+
+  it('submits document mentions with @doc: syntax', () => {
+    const handleSubmit = vi.fn();
+
+    render(<ChatInputBar onSubmit={handleSubmit} db={db} />);
+
+    const textarea = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
+    fireEvent.change(textarea, { target: { value: 'Tóm tắt @[Core Banking](doc:doc-1)' } });
+    fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true });
+
+    expect(handleSubmit).toHaveBeenCalledWith('Tóm tắt @[Core Banking](doc:doc-1)');
+  });
 });
 
 describe('extractMentionedEntityIds', () => {
@@ -99,6 +111,13 @@ describe('extractMentionedEntityIds', () => {
 
     expect(result.taskIds).toEqual(['task-123', 'task-456']);
     expect(result.projectIds).toEqual(['proj-999']);
+  });
+
+  it('extracts document IDs from @doc:uuid (Title) and @[Title](doc:uuid)', () => {
+    const text = 'Tra cứu @doc:doc-123 (Architecture Doc) và @[Runbook](doc:doc-456)';
+    const result = extractMentionedEntityIds(text);
+
+    expect(result.docIds).toEqual(['doc-123', 'doc-456']);
   });
 
   it('returns empty arrays when no mentions exist', () => {
@@ -123,12 +142,13 @@ describe('renderUserMessageWithMentions', () => {
     expect(rendered).toBe('Xin chào');
   });
 
-  it('renders pills for task and project mentions', () => {
+  it('renders pills for task, project, and document mentions', () => {
     const { container } = render(
-      <div>{renderUserMessageWithMentions('Xem @[Fix auth](task:t-1) và #[Dự án](project:p-1)')}</div>
+      <div>{renderUserMessageWithMentions('Xem @[Fix auth](task:t-1), #[Dự án](project:p-1) và @[Sổ tay kiến trúc](doc:d-1)')}</div>
     );
 
     expect(container.textContent).toContain('Fix auth');
     expect(container.textContent).toContain('#Dự án');
+    expect(container.textContent).toContain('Sổ tay kiến trúc');
   });
 });

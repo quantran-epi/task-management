@@ -5,6 +5,7 @@ import {
   CheckOutlined,
   CheckSquareOutlined,
   ProjectOutlined,
+  FileTextOutlined,
   FileAddOutlined,
   CodeOutlined,
   LoadingOutlined,
@@ -55,7 +56,7 @@ export function parseChecklistFromText(text: string): string[] {
  * and renders them as sleek visual pill tags inside user messages.
  */
 export function renderUserMessageWithMentions(content: string): React.ReactNode {
-  const mentionRegex = /(@\[([^\]]+)\]\(task:([a-zA-Z0-9_-]+)\))|(#\[([^\]]+)\]\(project:([a-zA-Z0-9_-]+)\))/g;
+  const mentionRegex = /(@\[([^\]]+)\]\(task:([a-zA-Z0-9_-]+)\))|(#\[([^\]]+)\]\(project:([a-zA-Z0-9_-]+)\))|(@\[([^\]]+)\]\(doc:([a-zA-Z0-9_-]+)\))/g;
   if (!mentionRegex.test(content)) {
     return content;
   }
@@ -113,6 +114,29 @@ export function renderUserMessageWithMentions(content: string): React.ReactNode 
           }}
         >
           #{projName}
+        </Tag>
+      );
+    } else if (match[7]) {
+      // Doc mention
+      const docTitle = match[8];
+      const docId = match[9];
+      parts.push(
+        <Tag
+          key={`doc-pill-${docId}-${match.index}`}
+          icon={<FileTextOutlined style={{ color: '#ffffff', marginRight: 4 }} />}
+          style={{
+            margin: '0 3px',
+            verticalAlign: 'middle',
+            borderRadius: 4,
+            fontWeight: 500,
+            backgroundColor: 'rgba(255, 255, 255, 0.22)',
+            color: '#ffffff',
+            border: '1px solid rgba(255, 255, 255, 0.45)',
+            fontSize: 12,
+            padding: '1px 6px',
+          }}
+        >
+          {docTitle}
         </Tag>
       );
     }
