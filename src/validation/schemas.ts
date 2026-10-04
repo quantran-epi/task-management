@@ -348,7 +348,7 @@ export const NoteInputSchema = z.object({
   entityType: z.enum(NOTE_ENTITY_TYPES).optional(),
   entityId: uuidSchema.optional(),
   title: z.string().trim().max(120, 'Tiêu đề tối đa 120 ký tự').optional(),
-  body: z.string().min(1, 'Nội dung không được để trống').max(50000, 'Nội dung tối đa 50000 ký tự'),
+  body: z.string().max(50000, 'Nội dung tối đa 50000 ký tự').default(''),
   isPinned: z.boolean().optional(),
 });
 
@@ -360,7 +360,7 @@ export const NoteUpdateSchema = z.object({
   entityType: z.enum(NOTE_ENTITY_TYPES).optional(),
   entityId: uuidSchema.optional(),
   title: z.string().trim().max(120, 'Tiêu đề tối đa 120 ký tự').optional(),
-  body: z.string().min(1, 'Nội dung không được để trống').max(50000, 'Nội dung tối đa 50000 ký tự').optional(),
+  body: z.string().max(50000, 'Nội dung tối đa 50000 ký tự').optional(),
   isPinned: z.boolean().optional(),
   deletedAt: z.string().datetime({ message: 'deletedAt must be a valid ISO 8601 string' }).optional().nullable(),
 });

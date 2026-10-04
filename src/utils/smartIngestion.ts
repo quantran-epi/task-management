@@ -15,6 +15,24 @@ export interface DetectedEntity {
 }
 
 /**
+ * Checks whether a document title is considered an empty or default placeholder
+ * (e.g. "Tài liệu mới", "Untitled", "New Document").
+ */
+export function isPlaceholderTitle(title?: string | null): boolean {
+  if (!title || !title.trim()) return true;
+  const lower = title.trim().toLowerCase();
+  return [
+    'tài liệu mới',
+    'tài liệu không có tiêu đề',
+    'không có tiêu đề',
+    'untitled',
+    'untitled document',
+    'new document',
+    'new doc',
+  ].includes(lower);
+}
+
+/**
  * Extracts first `# Heading` line as document title and extracts inline `#tag` tokens.
  * Ignores markdown headings (`# `, `## `, etc.) when collecting tags.
  * Bounded input slicing avoids potential ReDoS on huge pastes (T-14-04).
@@ -33,11 +51,14 @@ export function extractMarkdownMetadata(markdown: string): ExtractedMarkdownMeta
     const rawLine = lines[i] ?? '';
     const trimmed = rawLine.trim();
 
-    // 1. Detect first H1 heading (# Title)
-    if (!title && /^#\s+([^#\r\n].*)$/.test(trimmed)) {
-      const match = trimmed.match(/^#\s+(.+)$/);
+    // 1. Detect first H1 heading (# Title or #Title with optional trailing #)
+    if (!title && /^#(?![#])\s*(.*)$/.test(trimmed)) {
+      const match = trimmed.match(/^#\s*(.*?)(?:\s*#+)?$/);
       if (match && match[1]) {
-        title = match[1].trim();
+        const cleanTitle = match[1].replace(/[*_`~]/g, '').trim();
+        if (cleanTitle) {
+          title = cleanTitle;
+        }
       }
       continue;
     }
@@ -65,12 +86,31 @@ export function extractMarkdownMetadata(markdown: string): ExtractedMarkdownMeta
   };
 }
 
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Checks whether a phrase occurs in text as a distinct word or boundary-delimited phrase,
+ * preventing false substring matches (e.g. project "MPA" matching inside "company" or "impact").
+ */
+export function matchesWholePhrase(text: string, phrase: string): boolean {
+  const trimmed = phrase.trim();
+  if (!trimmed || !text) return false;
+  const escaped = escapeRegex(trimmed);
+  try {
+    return new RegExp(`(?<![\\p{L}\\p{N}_])${escaped}(?![\\p{L}\\p{N}_])`, 'iu').test(text);
+  } catch {
+    return text.toLowerCase().includes(trimmed.toLowerCase());
+  }
+}
+
 /**
  * Detects referenced tasks, projects, and milestones from markdown content per D-06:
  * - Jira issue keys (`[A-Z][A-Z0-9]+-[0-9]+`) matching task.jiraKey or name
- * - Known Task titles
- * - Known Project titles
- * - Known Milestone titles
+ * - Known Task titles (whole-phrase matched)
+ * - Known Project titles (whole-phrase matched)
+ * - Known Milestone titles (whole-phrase matched)
  */
 export function detectReferencedEntities(
   markdown: string,
@@ -110,11 +150,10 @@ export function detectReferencedEntities(
     }
   }
 
-  // 2. Scan for Project names
-  const lowerMarkdown = markdown.toLowerCase();
+  // 2. Scan for Project names (whole phrase)
   for (const proj of projects) {
     const projName = proj.name.trim();
-    if (projName.length >= 3 && lowerMarkdown.includes(projName.toLowerCase())) {
+    if (projName.length >= 3 && matchesWholePhrase(markdown, projName)) {
       if (!seenEntityIds.has(proj.id)) {
         seenEntityIds.add(proj.id);
         detected.push({
@@ -128,10 +167,10 @@ export function detectReferencedEntities(
     }
   }
 
-  // 3. Scan for Milestone names
+  // 3. Scan for Milestone names (whole phrase)
   for (const ms of milestones) {
     const msName = ms.name.trim();
-    if (msName.length >= 3 && lowerMarkdown.includes(msName.toLowerCase())) {
+    if (msName.length >= 3 && matchesWholePhrase(markdown, msName)) {
       if (!seenEntityIds.has(ms.id)) {
         seenEntityIds.add(ms.id);
         detected.push({
@@ -145,10 +184,10 @@ export function detectReferencedEntities(
     }
   }
 
-  // 4. Scan for Task names
+  // 4. Scan for Task names (whole phrase)
   for (const task of tasks) {
     const taskName = task.name.trim();
-    if (taskName.length >= 4 && lowerMarkdown.includes(taskName.toLowerCase())) {
+    if (taskName.length >= 4 && matchesWholePhrase(markdown, taskName)) {
       if (!seenEntityIds.has(task.id)) {
         seenEntityIds.add(task.id);
         detected.push({

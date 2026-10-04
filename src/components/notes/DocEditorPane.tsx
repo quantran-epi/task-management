@@ -26,7 +26,7 @@ import {
 } from '@ant-design/icons';
 import type { Note } from '../../types/models';
 import { renderSafeMarkdown } from '../../utils/markdown';
-import { extractMarkdownMetadata, detectReferencedEntities, type DetectedEntity } from '../../utils/smartIngestion';
+import { extractMarkdownMetadata, detectReferencedEntities, isPlaceholderTitle, type DetectedEntity } from '../../utils/smartIngestion';
 import { SmartIngestionBanner } from './SmartIngestionBanner';
 import { DocOutlineToC } from './DocOutlineToC';
 import { BacklinksSection } from './BacklinksSection';
@@ -86,6 +86,9 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
   const latestValuesRef = useRef({ title, body, tags });
   latestValuesRef.current = { title, body, tags };
 
+  // Tracks if user explicitly edited title input; if false or placeholder, first `# Heading` auto-populates title
+  const isTitleManuallyEditedRef = useRef(false);
+
   const textareaRef = useRef<TextAreaRef | null>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -100,13 +103,16 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
       setDetectedEntities([]);
       setBacklinks({ tasks: [], projects: [], referencingNotes: [] });
       setSaveStatus('');
+      isTitleManuallyEditedRef.current = false;
       return;
     }
 
-    setTitle(doc.title || '');
+    const currentDocTitle = doc.title || '';
+    setTitle(currentDocTitle);
     setBody(doc.body || '');
     setTags(doc.tags || []);
     setDetectedEntities([]);
+    isTitleManuallyEditedRef.current = !isPlaceholderTitle(currentDocTitle);
     setSaveStatus(`Đã lưu lúc ${new Date(doc.updatedAt).toLocaleTimeString('vi-VN')}`);
 
     // Load backlinks
@@ -212,6 +218,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
   };
 
   const handleTitleChange = (val: string) => {
+    isTitleManuallyEditedRef.current = !isPlaceholderTitle(val);
     setTitle(val);
     latestValuesRef.current.title = val;
     triggerAutoSave(val, latestValuesRef.current.body, latestValuesRef.current.tags);
@@ -220,7 +227,19 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
   const handleBodyChange = (val: string, cursorPos?: number) => {
     setBody(val);
     latestValuesRef.current.body = val;
-    triggerAutoSave(latestValuesRef.current.title, val, latestValuesRef.current.tags);
+
+    let currentTitle = latestValuesRef.current.title;
+    // Auto-detect title from first H1 (# Heading) if title is placeholder/empty or not manually set
+    if (!isTitleManuallyEditedRef.current || isPlaceholderTitle(currentTitle)) {
+      const extracted = extractMarkdownMetadata(val);
+      if (extracted.title && extracted.title !== currentTitle) {
+        currentTitle = extracted.title;
+        setTitle(currentTitle);
+        latestValuesRef.current.title = currentTitle;
+      }
+    }
+
+    triggerAutoSave(currentTitle, val, latestValuesRef.current.tags);
 
     const pos = cursorPos !== undefined ? cursorPos : textareaRef.current?.resizableTextArea?.textArea?.selectionStart ?? val.length;
     checkForWikiTrigger(val, pos);
@@ -307,15 +326,15 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
   // Handle paste for smart ingestion
   const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const pastedText = e.clipboardData.getData('text');
-    if (!pastedText || pastedText.length < 15) return;
+    if (!pastedText) return;
 
-    // 1. Metadata extraction if doc is untitled
+    // 1. Metadata extraction if doc is untitled or has placeholder title
     const metadata = extractMarkdownMetadata(pastedText);
-    let nextTitle = title;
-    let nextTags = [...tags];
+    let nextTitle = latestValuesRef.current.title;
+    let nextTags = [...latestValuesRef.current.tags];
     let metadataChanged = false;
 
-    if (!nextTitle.trim() && metadata.title) {
+    if ((isPlaceholderTitle(nextTitle) || !isTitleManuallyEditedRef.current) && metadata.title) {
       nextTitle = metadata.title;
       setTitle(nextTitle);
       latestValuesRef.current.title = nextTitle;

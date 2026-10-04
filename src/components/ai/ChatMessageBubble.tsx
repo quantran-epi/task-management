@@ -205,6 +205,23 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
     ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : '';
 
+  const handleMarkdownClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    const copyBtn = target.closest('.code-copy-btn');
+    if (copyBtn) {
+      const wrapper = copyBtn.closest('.code-block-wrapper');
+      const codeEl = wrapper?.querySelector('code');
+      if (codeEl) {
+        navigator.clipboard.writeText(codeEl.innerText).then(() => {
+          copyBtn.textContent = 'Copied!';
+          setTimeout(() => {
+            copyBtn.textContent = 'Copy';
+          }, 2000);
+        });
+      }
+    }
+  };
+
   return (
     <div
       data-role={msg.role}
@@ -250,6 +267,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
           <div>
             <div
               className="chat-markdown-body"
+              onClick={handleMarkdownClick}
               dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(msg.content) }}
             />
             {isStreaming && (

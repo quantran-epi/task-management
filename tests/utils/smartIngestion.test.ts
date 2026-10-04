@@ -4,6 +4,7 @@ import { TaskPlannerDatabase } from '../../src/db';
 import {
   extractMarkdownMetadata,
   detectReferencedEntities,
+  isPlaceholderTitle,
 } from '../../src/utils/smartIngestion';
 import {
   linkEntitiesToDoc,
@@ -34,6 +35,25 @@ describe('smartIngestion utils', () => {
       const result = extractMarkdownMetadata(markdown);
       expect(result.title).toBeUndefined();
       expect(result.tags).toEqual(['notes']);
+    });
+
+    it('extracts H1 headings with formatting or no space after # and cleans title', () => {
+      const markdown1 = '#**Thiết kế Database**\n\nNội dung chi tiết';
+      expect(extractMarkdownMetadata(markdown1).title).toBe('Thiết kế Database');
+
+      const markdown2 = '# Tài liệu Hướng dẫn #\n\nNội dung';
+      expect(extractMarkdownMetadata(markdown2).title).toBe('Tài liệu Hướng dẫn');
+    });
+
+    it('correctly identifies placeholder titles', () => {
+      expect(isPlaceholderTitle('')).toBe(true);
+      expect(isPlaceholderTitle(null)).toBe(true);
+      expect(isPlaceholderTitle('   ')).toBe(true);
+      expect(isPlaceholderTitle('Tài liệu mới')).toBe(true);
+      expect(isPlaceholderTitle('tài liệu không có tiêu đề')).toBe(true);
+      expect(isPlaceholderTitle('Untitled')).toBe(true);
+      expect(isPlaceholderTitle('New Document')).toBe(true);
+      expect(isPlaceholderTitle('Kiến trúc Microservices')).toBe(false);
     });
   });
 
@@ -97,6 +117,29 @@ describe('smartIngestion utils', () => {
       const detected = detectReferencedEntities(markdown, mockTasks, mockProjects, mockMilestones);
       expect(detected.some((d) => d.id === 'proj-1' && d.type === 'project')).toBe(true);
       expect(detected.some((d) => d.id === 'task-2' && d.type === 'task')).toBe(true);
+    });
+
+    it('does not falsely match short project names (e.g. MPA) inside arbitrary words like company or impact', () => {
+      const projectsWithMPA: Project[] = [
+        ...mockProjects,
+        {
+          id: 'proj-mpa',
+          name: 'MPA',
+          status: 'Open',
+          createdAt: '2026-10-01T00:00:00Z',
+          updatedAt: '2026-10-01T00:00:00Z',
+        },
+      ];
+
+      // Contains "company", "campaign", "impact", "compact" — all contain "mpa" as substring
+      const unrelatedText = 'Our company launched an advertising campaign that had tremendous impact on compact devices.';
+      const detectedFalse = detectReferencedEntities(unrelatedText, mockTasks, projectsWithMPA, mockMilestones);
+      expect(detectedFalse.some((d) => d.id === 'proj-mpa')).toBe(false);
+
+      // Distinct word MPA should match
+      const relatedText = 'Họp kỹ thuật dự án MPA với team frontend.';
+      const detectedTrue = detectReferencedEntities(relatedText, mockTasks, projectsWithMPA, mockMilestones);
+      expect(detectedTrue.some((d) => d.id === 'proj-mpa')).toBe(true);
     });
   });
 });

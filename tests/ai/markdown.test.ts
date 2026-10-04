@@ -104,4 +104,64 @@ describe('renderSafeMarkdown rich markdown rendering', () => {
       expect(html).toContain('alt="&lt;script&gt;bad&lt;/script&gt;"');
     });
   });
+
+  describe('GFM tables and extended markdown syntax', () => {
+    it('renders GFM tables with header, alignment, and rows', () => {
+      const input = `| Tác vụ | Trạng thái | Thời gian |
+| :--- | :---: | ---: |
+| Viết test | Done | 2h |
+| Sửa lỗi | In Progress | 1h |`;
+
+      const html = renderSafeMarkdown(input);
+      expect(html).toContain('<table class="markdown-table">');
+      expect(html).toContain('<th style="text-align: left;">Tác vụ</th>');
+      expect(html).toContain('<th style="text-align: center;">Trạng thái</th>');
+      expect(html).toContain('<th style="text-align: right;">Thời gian</th>');
+      expect(html).toContain('<td style="text-align: left;">Viết test</td>');
+      expect(html).toContain('<td style="text-align: center;">Done</td>');
+      expect(html).toContain('<td style="text-align: right;">2h</td>');
+    });
+
+    it('renders nested lists with indentation', () => {
+      const input = `- Dự án lớn
+  - Module Auth
+  - Module Billing
+- Dự án nhỏ`;
+
+      const html = renderSafeMarkdown(input);
+      expect(html).toContain('<ul><li>Dự án lớn<ul><li>Module Auth</li><li>Module Billing</li></ul></li><li>Dự án nhỏ</li></ul>');
+    });
+
+    it('renders standard web images safely while disallowing javascript scheme', () => {
+      const valid = '![Biểu đồ](https://example.com/chart.png)';
+      const validHtml = renderSafeMarkdown(valid);
+      expect(validHtml).toContain('<img class="markdown-image" src="https://example.com/chart.png" alt="Biểu đồ" loading="lazy" />');
+
+      const evil = '![XSS](javascript:alert(1))';
+      const evilHtml = renderSafeMarkdown(evil);
+      expect(evilHtml).not.toContain('<img');
+      expect(evilHtml).toContain('XSS');
+    });
+
+    it('converts autolinks and bare URLs to safe hyperlinks', () => {
+      const input = 'Xem tài liệu tại <https://docs.github.com> hoặc https://example.com/api.';
+      const html = renderSafeMarkdown(input);
+      expect(html).toContain('<a href="https://docs.github.com" target="_blank" rel="noopener noreferrer">https://docs.github.com</a>');
+      expect(html).toContain('<a href="https://example.com/api" target="_blank" rel="noopener noreferrer">https://example.com/api</a>');
+    });
+
+    it('wraps code blocks with copy button and language tag', () => {
+      const input = '```python\nprint("Hello")\n```';
+      const html = renderSafeMarkdown(input);
+      expect(html).toContain('class="code-block-wrapper"');
+      expect(html).toContain('<span class="code-block-lang">python</span>');
+      expect(html).toContain('<button class="code-copy-btn" type="button">Copy</button>');
+    });
+
+    it('preserves multi-line soft breaks within paragraphs using br tag', () => {
+      const input = 'Dòng thứ nhất\nDòng thứ hai tiếp theo';
+      const html = renderSafeMarkdown(input);
+      expect(html).toContain('<p>Dòng thứ nhất<br />Dòng thứ hai tiếp theo</p>');
+    });
+  });
 });

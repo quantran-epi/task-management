@@ -88,6 +88,15 @@ describe('Dexie Schema v9 Migration & Note Repository (REQ-14.1, D-01, D-02, D-1
       body: 'Just a quick reminder',
     });
     expect(defaultParsed.type).toBe('quick_note');
+
+    // Folder allows empty body
+    const folderParsed = NoteInputSchema.parse({
+      type: 'folder',
+      title: 'Tài liệu kiến trúc',
+      body: '',
+    });
+    expect(folderParsed.type).toBe('folder');
+    expect(folderParsed.body).toBe('');
   });
 
   it('supports noteRepo CRUD with soft delete, restore, folder filter, and trash queries', async () => {

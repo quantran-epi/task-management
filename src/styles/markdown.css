@@ -117,3 +117,107 @@
   border-top: 1px solid rgba(128, 128, 128, 0.25);
   margin: 12px 0;
 }
+
+/* GFM Markdown Table */
+.chat-markdown-body .markdown-table-wrapper {
+  width: 100%;
+  margin: 10px 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.chat-markdown-body .markdown-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.5;
+  border: 1px solid rgba(128, 128, 128, 0.25);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.chat-markdown-body .markdown-table th,
+.chat-markdown-body .markdown-table td {
+  padding: 6px 12px;
+  border: 1px solid rgba(128, 128, 128, 0.2);
+}
+
+.chat-markdown-body .markdown-table th {
+  background: rgba(0, 0, 0, 0.04);
+  font-weight: 600;
+}
+
+:root[data-theme='dark'] .chat-markdown-body .markdown-table th,
+[data-theme='dark'] .chat-markdown-body .markdown-table th {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.chat-markdown-body .markdown-table tr:hover {
+  background: rgba(128, 128, 128, 0.06);
+}
+
+/* Markdown Image */
+.chat-markdown-body .markdown-image {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  margin: 8px 0;
+  display: block;
+}
+
+/* Code block wrapper with language tag and copy button */
+.chat-markdown-body .code-block-wrapper {
+  margin: 8px 0;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root[data-theme='dark'] .chat-markdown-body .code-block-wrapper,
+[data-theme='dark'] .chat-markdown-body .code-block-wrapper {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.chat-markdown-body .code-block-wrapper pre.code-block {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.chat-markdown-body .code-block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 10px;
+  font-size: 11px;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.15);
+  background: rgba(128, 128, 128, 0.08);
+}
+
+.chat-markdown-body .code-block-lang {
+  font-family: ui-monospace, monospace;
+  font-weight: 600;
+  text-transform: lowercase;
+  opacity: 0.75;
+}
+
+.chat-markdown-body .code-copy-btn {
+  background: transparent;
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 4px;
+  padding: 1px 7px;
+  font-size: 11px;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.8;
+  transition: all 0.15s ease;
+}
+
+.chat-markdown-body .code-copy-btn:hover {
+  opacity: 1;
+  border-color: #1677ff;
+  color: #1677ff;
+}
