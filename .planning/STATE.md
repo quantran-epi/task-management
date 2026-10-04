@@ -4,8 +4,8 @@ milestone: v1.1
 milestone_name: Banking IT Enhancements & Jira Integration
 status: verifying
 stopped_at: Completed 14-04-PLAN.md
-last_updated: "2026-10-04T08:59:28.940Z"
-last_activity: 2026-10-04 -- Completed quick task 261004-qox: AI assistant multi-format file generation & export
+last_updated: "2026-10-04T14:02:00.000Z"
+last_activity: 2026-10-04 -- Completed quick task 261004-t2a: Fix doc UI shift, togglable TOC, folder contents view, and zip nested folder bug
 progress:
   total_phases: 10
   completed_phases: 10
@@ -29,12 +29,13 @@ Phase: 14 (knowledge-base-integration-docs-linking-ai-retrieval) — EXECUTING
 Plan: 4 of 4
 Status: Phase complete — ready for verification
 Next recommended run: /gsd-execute-phase 13.2
-Last activity: 2026-10-04 -- Completed quick task 261004-qox: AI assistant multi-format file generation & export
+Last activity: 2026-10-04 -- Completed quick task 261004-t2a: Fix doc UI shift, togglable TOC, folder contents view, and zip nested folder bug
 
 ### Quick Tasks Completed
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261004-t2a | Fix doc UI shift, togglable TOC, folder contents view, and zip nested folder bug | 2026-10-04 | b258b86 | complete | [261004-t2a-fix-doc-ui-shift-togglable-toc-folder-co](./quick/261004-t2a-fix-doc-ui-shift-togglable-toc-folder-co/) |
 | 261004-fhz | Folder hierarchy, zip markdown upload with preview modal, and doc bug fixes | 2026-10-04 | — | complete | [261004-fhz-folder-hierarchy-zip-upload-doc-fixes](./quick/261004-fhz-folder-hierarchy-zip-upload-doc-fixes/) |
 | 261004-qox | AI assistant feature to create/export files with various formats (MD, TXT, DOCX, XLSX, CSV) | 2026-10-04 | 9093528 | complete | [261004-qox-ai-file-generation-export](./quick/261004-qox-ai-file-generation-export/) |
 | 261004-fui | Redesign folder UI, enable 1-click document creation in folders, folder rename, safe delete, and move-to-folder | 2026-10-04 | — | complete | [261004-fui-folder-ui-and-doc-creation](./quick/261004-fui-folder-ui-and-doc-creation/) |
