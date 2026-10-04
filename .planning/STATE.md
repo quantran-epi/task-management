@@ -4,13 +4,13 @@ milestone: v1.1
 milestone_name: Banking IT Enhancements & Jira Integration
 status: executing
 stopped_at: Phase 14 UI-SPEC approved
-last_updated: "2026-10-04T08:24:57.298Z"
+last_updated: "2026-10-04T08:30:47.481Z"
 last_activity: 2026-10-04 -- Phase 14 execution started
 progress:
   total_phases: 10
   completed_phases: 9
   total_plans: 34
-  completed_plans: 31
+  completed_plans: 32
   percent: 90
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-09-27)
 ## Current Position
 
 Phase: 14 (knowledge-base-integration-docs-linking-ai-retrieval) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Next recommended run: /gsd-execute-phase 13.2
 Last activity: 2026-10-04 -- Phase 14 execution started
@@ -130,6 +130,7 @@ Last activity: 2026-10-04 -- Phase 14 execution started
 | Phase 13.2 P02 | 14m | 3 tasks | 9 files |
 | Phase 13.2 P03 | 11m | 2 tasks | 7 files |
 | Phase 14 P01 | 4m | 2 tasks | 8 files |
+| Phase 14 P02 | 4m | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -310,6 +311,10 @@ Decisions logged across v1.0 and v1.1:
 - [Phase 13.2]: Action chips in assistant bubbles for one-click add to task checklist, save to sticky notes, or launch Claude Code (D-18)
 - [Phase ?]: [Phase 14]: SCHEMA_V9 indexes note type, parentId, deletedAt, and multi-entry *tags while preserving legacy notes as quick_note with empty tags (D-01, D-02)
 - [Phase ?]: [Phase 14]: BM25 scoring utility implements Okapi BM25 with Title x3, Tags x2, Body x1 weighting and NFD-based Vietnamese diacritic normalization (D-10, D-11)
+- [Phase ?]: Wiki-links [[doc:...]], [[task:...]], [[project:...]] parse safely after HTML escaping with entity icons and fallback labels (D-05)
+- [Phase ?]: Binary attachments ![caption](attachment:uuid) render into note-attachment-image DOM elements without Base64 payload bloat (D-16)
+- [Phase ?]: Smart ingestion extracts first H1 line as document title and hashtags as tags while ignoring Markdown headings (D-06, D-09)
+- [Phase ?]: linkEntitiesToDoc writes bidirectional wiki-link references between document and selected tasks/projects in a single Dexie transaction (D-08)
 
 ### Pending Todos
 
@@ -333,7 +338,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-10-04T08:24:54.258Z
+Last session: 2026-10-04T08:30:43.159Z
 Stopped at: Phase 14 UI-SPEC approved
 Resume file: .planning/phases/14-knowledge-base-integration-docs-linking-ai-retrieval/14-UI-SPEC.md
 

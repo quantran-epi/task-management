@@ -310,7 +310,7 @@ Plans:
 **Goal:** Deliver an offline-first Personal Knowledge Management (PKM) engine with 3-column Docs workspace, folder tree taxonomy, Markdown split preview with outline ToC, Wiki-link bidirectional linking, 1-Click Smart Ingestion flow, lexical BM25 search with Vietnamese diacritic tolerance, and grounded AI retrieval with clickable citations.
 **Requirements**: REQ-14.1, REQ-14.2, REQ-14.3, REQ-14.4, REQ-14.5, REQ-14.6
 **Depends on:** Phase 13
-**Plans:** 1/4 plans executed
+**Plans:** 2/4 plans executed
 Plans:
 **Wave 1**
 
@@ -318,7 +318,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 14-02-PLAN.md — Markdown Wiki-link parser, binary attachment tokens, smart ingestion metadata/entity extraction, two-way link repo, and SmartIngestionBanner (Wave 2)
+- [x] 14-02-PLAN.md — Markdown Wiki-link parser, binary attachment tokens, smart ingestion metadata/entity extraction, two-way link repo, and SmartIngestionBanner (Wave 2)
 - [ ] 14-03-PLAN.md — AI tools `search_knowledge_base` and `get_document_details`, character-budgeted snippet grounding, `@doc:` autocomplete, clickable citation chips, and QuickPreviewDrawer (Wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
