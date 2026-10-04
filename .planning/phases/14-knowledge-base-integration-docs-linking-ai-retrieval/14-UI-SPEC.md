@@ -1,7 +1,8 @@
 ---
 phase: 14
 slug: knowledge-base-integration-docs-linking-ai-retrieval
-status: draft
+status: approved
+reviewed_at: 2026-10-04
 shadcn_initialized: false
 preset: none
 created: 2026-10-04
