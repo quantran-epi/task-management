@@ -33,6 +33,7 @@ import { BacklinksSection } from './BacklinksSection';
 import { getBacklinksForDoc, linkEntitiesToDoc, type BacklinksResult } from '../../db/repositories/documentLinkRepo';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { useAIChat } from '../../context/AIChatContext';
+import { TaskDrawer } from '../tasks/TaskDrawer';
 
 const { Text, Title } = Typography;
 
@@ -42,6 +43,9 @@ export interface DocEditorPaneProps {
   doc: Note | null;
   onUpdateDoc: (id: string, updates: Partial<Note>) => Promise<void> | void;
   onDeleteDoc?: (doc: Note) => void;
+  onSelectDoc?: (docId: string) => void;
+  onOpenTask?: (taskId: string) => void;
+  onOpenProject?: (projectId: string) => void;
   db?: TaskPlannerDatabase;
 }
 
@@ -49,6 +53,9 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
   doc,
   onUpdateDoc,
   onDeleteDoc,
+  onSelectDoc,
+  onOpenTask,
+  onOpenProject,
   db = defaultDb,
 }) => {
   const [viewMode, setViewMode] = useState<EditorViewMode>('split');
@@ -72,6 +79,8 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
   const [triggerStartIndex, setTriggerStartIndex] = useState<number>(-1);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [candidates, setCandidates] = useState<CandidateItem[]>([]);
+  const [localDrawerTaskId, setLocalDrawerTaskId] = useState<string | undefined>(undefined);
+  const lastQueryRef = useRef<string | null>(null);
 
   // Ref tracking latest title, body, and tags to eliminate stale closure bugs during async operations
   const latestValuesRef = useRef({ title, body, tags });
@@ -190,11 +199,15 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
       const matchIndex = textBeforeCursor.lastIndexOf('[[');
       setTriggerStartIndex(matchIndex);
       setAutoCompleteQuery(query);
-      fetchWikiCandidates(query);
+      if (lastQueryRef.current !== query) {
+        lastQueryRef.current = query;
+        fetchWikiCandidates(query);
+      }
     } else {
       setIsAutoCompleteOpen(false);
       setTriggerStartIndex(-1);
       setAutoCompleteQuery('');
+      lastQueryRef.current = null;
     }
   };
 
@@ -214,7 +227,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
   };
 
   // Handle item selection in wiki-link autocomplete
-  const handleSelectCandidate = (item: CandidateItem) => {
+  const handleSelectCandidate = async (item: CandidateItem) => {
     const currentBody = latestValuesRef.current.body;
     const startIndex = triggerStartIndex >= 0 ? triggerStartIndex : currentBody.lastIndexOf('[[');
     if (startIndex < 0) return;
@@ -236,6 +249,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
     setCandidates([]);
     setTriggerStartIndex(-1);
     setAutoCompleteQuery('');
+    lastQueryRef.current = null;
 
     triggerAutoSave(latestValuesRef.current.title, newBody, latestValuesRef.current.tags);
 
@@ -247,6 +261,24 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
         nativeEl.setSelectionRange(newCursorPos, newCursorPos);
       }
     }, 0);
+
+    // Persist bidirectional link to the referenced entity (task, project, doc)
+    if (doc) {
+      try {
+        await linkEntitiesToDoc(
+          doc.id,
+          latestValuesRef.current.title || 'Tài liệu',
+          [{ id: item.id, type: item.type, title: item.title }],
+          db,
+          { skipDocBodyUpdate: true }
+        );
+        const res = await getBacklinksForDoc(doc.id, db);
+        setBacklinks(res);
+        message.success(`Đã liên kết với ${item.title}`);
+      } catch (err) {
+        console.warn('Failed to link entity:', err);
+      }
+    }
   };
 
   // Keyboard navigation for autocomplete popup
@@ -268,6 +300,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
     } else if (e.key === 'Escape') {
       e.preventDefault();
       setIsAutoCompleteOpen(false);
+      lastQueryRef.current = null;
     }
   };
 
@@ -542,6 +575,10 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
               onChange={(e) => handleBodyChange(e.target.value, e.target.selectionStart)}
               onKeyDown={handleKeyDown}
               onKeyUp={(e) => {
+                const navKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Tab', 'Escape'];
+                if (isAutoCompleteOpen && navKeys.includes(e.key)) {
+                  return;
+                }
                 const target = e.target as HTMLTextAreaElement;
                 checkForWikiTrigger(target.value, target.selectionStart);
               }}
@@ -619,9 +656,18 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
                   return (
                     <div
                       key={`${cand.type}-${cand.id}`}
+                      ref={(el) => {
+                        if (isSelected && el && typeof el.scrollIntoView === 'function') {
+                          el.scrollIntoView({ block: 'nearest' });
+                        }
+                      }}
                       role="option"
                       aria-selected={isSelected}
                       onClick={() => handleSelectCandidate(cand)}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        handleSelectCandidate(cand);
+                      }}
                       onMouseEnter={() => setSelectedIndex(idx)}
                       style={{
                         padding: '8px 12px',
@@ -673,6 +719,25 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
           >
             <div
               className="markdown-rendered-view"
+              onClick={(e) => {
+                const chip = (e.target as HTMLElement).closest('.wiki-link-chip') as HTMLElement | null;
+                if (!chip) return;
+                const entityType = chip.getAttribute('data-entity-type');
+                const entityId = chip.getAttribute('data-entity-id');
+                if (!entityType || !entityId) return;
+
+                if (entityType === 'task') {
+                  if (onOpenTask) {
+                    onOpenTask(entityId);
+                  } else {
+                    setLocalDrawerTaskId(entityId);
+                  }
+                } else if (entityType === 'doc' && onSelectDoc) {
+                  onSelectDoc(entityId);
+                } else if (entityType === 'project' && onOpenProject) {
+                  onOpenProject(entityId);
+                }
+              }}
               dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(body || '_Chưa có nội dung_') }}
             />
             {/* Backlinks Section */}
@@ -680,6 +745,9 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
               tasks={backlinks.tasks}
               projects={backlinks.projects}
               referencingNotes={backlinks.referencingNotes}
+              onOpenTask={onOpenTask || ((id) => setLocalDrawerTaskId(id))}
+              onOpenProject={onOpenProject}
+              onOpenNote={onSelectDoc}
             />
           </div>
         )}
@@ -700,6 +768,13 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
           </div>
         )}
       </div>
+
+      <TaskDrawer
+        open={Boolean(localDrawerTaskId)}
+        taskId={localDrawerTaskId ?? null}
+        onClose={() => setLocalDrawerTaskId(undefined)}
+        db={db}
+      />
 
       {/* Footer Info Bar */}
       <div

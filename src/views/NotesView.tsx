@@ -412,6 +412,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
             doc={activeDocument}
             onUpdateDoc={handleUpdateDocument}
             onDeleteDoc={handleDeleteDocument}
+            onSelectDoc={(id) => setSelectedDocId(id)}
             db={db}
           />
         </div>

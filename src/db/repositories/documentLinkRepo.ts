@@ -8,27 +8,36 @@ export interface BacklinksResult {
   referencingNotes: Note[];
 }
 
+export interface LinkableEntityItem {
+  id: string;
+  type: 'task' | 'project' | 'milestone' | 'doc' | string;
+  title: string;
+}
+
+export interface LinkEntitiesOptions {
+  skipDocBodyUpdate?: boolean;
+}
+
 /**
  * Persists bidirectional links between a document and selected entities in a single Dexie transaction (D-06, D-08).
- * 1. For each selected task/project:
- *    - Appends `[[doc:${docId}|${docTitle}]]` to `notes` field if not already present.
+ * 1. For each selected task/project/doc:
+ *    - Appends `[[doc:${docId}|${docTitle}]]` to `notes` or `body` field if not already present.
  *    - For tasks: ensures `docId` is in `task.documentLinks`.
  * 2. In the document:
- *    - Appends `[[${entity.type}:${entity.id}|${entity.title}]]` to doc's `body` if not already present.
+ *    - Appends `[[${entity.type}:${entity.id}|${entity.title}]]` to doc's `body` if not already present (unless skipDocBodyUpdate is true).
  */
 export async function linkEntitiesToDoc(
   docId: string,
   docTitle: string,
-  selectedEntities: DetectedEntity[],
-  db: TaskPlannerDatabase = defaultDb
+  selectedEntities: LinkableEntityItem[] | DetectedEntity[],
+  db: TaskPlannerDatabase = defaultDb,
+  options?: LinkEntitiesOptions
 ): Promise<void> {
   if (selectedEntities.length === 0) return;
 
   await db.transaction('rw', [db.notes, db.tasks, db.projects], async () => {
     const doc = await db.notes.get(docId);
-    if (!doc) return;
-
-    let docBody = doc.body;
+    let docBody = doc?.body || '';
     const now = new Date().toISOString();
     const docWikiLink = `[[doc:${docId}|${docTitle}]]`;
 
@@ -68,17 +77,32 @@ export async function linkEntitiesToDoc(
             updatedAt: now,
           });
         }
+      } else if (entity.type === 'doc') {
+        const targetDoc = await db.notes.get(entity.id);
+        if (targetDoc) {
+          const currentBody = targetDoc.body || '';
+          const needsDocLink = !currentBody.includes(`[[doc:${docId}`);
+          if (needsDocLink) {
+            const newBody = currentBody ? `${currentBody}\n${docWikiLink}` : docWikiLink;
+            await db.notes.update(targetDoc.id, {
+              body: newBody,
+              updatedAt: now,
+            });
+          }
+        }
       }
 
-      // 2. Link doc -> entity
-      const entityWikiLink = `[[${entity.type}:${entity.id}|${entity.title}]]`;
-      if (!docBody.includes(`[[${entity.type}:${entity.id}`)) {
-        docBody = docBody ? `${docBody}\n${entityWikiLink}` : entityWikiLink;
+      // 2. Link doc -> entity (skipped if doc body was already formatted by caller)
+      if (!options?.skipDocBodyUpdate) {
+        const entityWikiLink = `[[${entity.type}:${entity.id}|${entity.title}]]`;
+        if (!docBody.includes(`[[${entity.type}:${entity.id}`)) {
+          docBody = docBody ? `${docBody}\n${entityWikiLink}` : entityWikiLink;
+        }
       }
     }
 
     // Persist updated document body
-    if (docBody !== doc.body) {
+    if (!options?.skipDocBodyUpdate && doc && docBody !== doc.body) {
       await db.notes.update(docId, {
         body: docBody,
         updatedAt: now,

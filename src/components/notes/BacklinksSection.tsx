@@ -8,10 +8,10 @@ const { Text } = Typography;
 export interface BacklinksSectionProps {
   tasks: Task[];
   projects: Project[];
-  referencingNotes?: Note[];
-  onOpenTask?: (taskId: string) => void;
-  onOpenProject?: (projectId: string) => void;
-  onOpenNote?: (noteId: string) => void;
+  referencingNotes?: Note[] | undefined;
+  onOpenTask?: ((taskId: string) => void) | undefined;
+  onOpenProject?: ((projectId: string) => void) | undefined;
+  onOpenNote?: ((noteId: string) => void) | undefined;
 }
 
 export const BacklinksSection: React.FC<BacklinksSectionProps> = ({

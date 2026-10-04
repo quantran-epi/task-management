@@ -18,6 +18,7 @@ describe('DocEditorPane', () => {
   beforeEach(async () => {
     db = new TaskPlannerDatabase(`doc-editor-test-${crypto.randomUUID()}`);
     await db.open();
+    await db.notes.add(mockDoc);
   });
 
   afterEach(async () => {
@@ -198,8 +199,11 @@ describe('DocEditorPane', () => {
     fireEvent.change(textarea, { target: { value: 'Liên kết: [[Task' } });
     expect(await screen.findByRole('listbox')).toBeInTheDocument();
 
-    // Arrow down to Task Beta and press Enter
+    // Arrow down to Task Beta, trigger keyUp, and ensure selection doesn't bounce back to Task Alpha
     fireEvent.keyDown(textarea, { key: 'ArrowDown' });
+    fireEvent.keyUp(textarea, { key: 'ArrowDown' });
+
+    // Press Enter to select Task Beta
     fireEvent.keyDown(textarea, { key: 'Enter' });
 
     // Expect selected Task Beta to be inserted
@@ -209,6 +213,13 @@ describe('DocEditorPane', () => {
 
     expect(screen.getByDisplayValue('Liên kết: [[task:task-b|Task Beta]]')).toBeInTheDocument();
 
+    // Verify task-b was actually linked in IndexedDB
+    await waitFor(async () => {
+      const updatedTaskB = await db.tasks.get('task-b');
+      expect(updatedTaskB?.documentLinks).toContain(mockDoc.id);
+      expect(updatedTaskB?.notes).toContain(`[[doc:${mockDoc.id}`);
+    });
+
     // Type [[Task again and test Escape dismiss
     fireEvent.change(textarea, { target: { value: 'Liên kết: [[task:task-b|Task Beta]] và [[Task' } });
     expect(await screen.findByRole('listbox')).toBeInTheDocument();
@@ -217,5 +228,22 @@ describe('DocEditorPane', () => {
     await waitFor(() => {
       expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
     });
+  });
+
+  it('opens task drawer when clicking wiki-link chip in markdown preview', async () => {
+    const onOpenTask = vi.fn();
+    const docWithChip: Note = {
+      ...mockDoc,
+      body: 'Tham khảo [[task:task-1234|Viết API]] trong tài liệu',
+    };
+
+    render(<DocEditorPane doc={docWithChip} onUpdateDoc={vi.fn()} onOpenTask={onOpenTask} db={db} />);
+
+    // Find rendered chip
+    const chip = screen.getByRole('button', { name: /Viết API/i });
+    expect(chip).toBeInTheDocument();
+
+    fireEvent.click(chip);
+    expect(onOpenTask).toHaveBeenCalledWith('task-1234');
   });
 });
