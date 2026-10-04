@@ -3094,7 +3094,7 @@ export async function executeAiTool(
         if (args.saveToDocId && db.noteAttachments && db.notes) {
           const doc = await db.notes.get(args.saveToDocId);
           if (doc) {
-            attachedDocTitle = doc.title;
+            attachedDocTitle = doc.title ?? null;
             const attachmentId = crypto.randomUUID();
             let blobData: Blob;
             if (result.b64Json) {

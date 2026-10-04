@@ -2,7 +2,7 @@ import React from 'react';
 import { Typography, Select, Button, Tooltip, Dropdown, theme } from 'antd';
 import type { MenuProps } from 'antd';
 import {
-  RobotOutlined,
+  RobotFilled,
   ClearOutlined,
   PushpinOutlined,
   PushpinFilled,
@@ -14,6 +14,7 @@ import {
   MoreOutlined,
   BookOutlined,
   DeleteOutlined,
+  StarFilled,
 } from '@ant-design/icons';
 
 const { Text } = Typography;
@@ -147,17 +148,69 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '12px 16px',
-        borderBottom: `1px solid ${token.colorBorderSecondary}`,
-        backgroundColor: token.colorBgContainer,
+        padding: '10px 16px',
+        borderBottom: `1px solid rgba(79, 70, 229, 0.12)`,
+        background: `linear-gradient(to right, rgba(79, 70, 229, 0.07) 0%, rgba(124, 58, 237, 0.04) 50%, ${token.colorBgContainer} 100%)`,
         gap: 8,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
-        <RobotOutlined style={{ fontSize: 18, color: token.colorPrimary, flexShrink: 0 }} />
-        <Text strong style={{ fontSize: 15, whiteSpace: 'nowrap' }}>
-          Trợ lý AI
-        </Text>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+        <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+              boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#ffffff',
+              flexShrink: 0,
+            }}
+          >
+            <RobotFilled style={{ fontSize: 18 }} />
+          </div>
+          <span
+            style={{
+              position: 'absolute',
+              bottom: -1,
+              right: -1,
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              backgroundColor: '#10b981',
+              border: '1.5px solid #ffffff',
+              boxShadow: '0 0 4px rgba(16, 185, 129, 0.6)',
+            }}
+          />
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+          <Text strong style={{ fontSize: 14, whiteSpace: 'nowrap', color: token.colorText }}>
+            Trợ lý AI
+          </Text>
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 3,
+              fontSize: 10,
+              fontWeight: 600,
+              padding: '1px 6px',
+              borderRadius: 10,
+              backgroundColor: 'rgba(79, 70, 229, 0.1)',
+              color: '#4f46e5',
+              border: '1px solid rgba(79, 70, 229, 0.2)',
+              letterSpacing: '0.02em',
+              textTransform: 'uppercase',
+            }}
+          >
+            <StarFilled style={{ fontSize: 8 }} />
+            Assistant
+          </span>
+        </div>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>

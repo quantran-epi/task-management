@@ -12,7 +12,6 @@ import {
   Popconfirm,
   Dropdown,
 } from 'antd';
-import type { MenuProps } from 'antd';
 import type { TextAreaRef } from 'antd/es/input/TextArea';
 import {
   EditOutlined,

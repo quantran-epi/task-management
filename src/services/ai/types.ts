@@ -70,10 +70,10 @@ export interface ImageGenerationOptions {
 }
 
 export interface ImageGenerationResult {
-  url?: string;
-  b64Json?: string;
-  dataUrl?: string;
-  revisedPrompt?: string;
+  url?: string | undefined;
+  b64Json?: string | undefined;
+  dataUrl?: string | undefined;
+  revisedPrompt?: string | undefined;
   model: string;
 }
 
