@@ -35,6 +35,7 @@ Last activity: 2026-10-04 -- Phase 14 execution started
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261004-o1d | Fix docs editor paste autosave stale closure and add [[ wiki-link autocomplete | 2026-10-04 | 7a4a367 | complete | [261004-o1d-fix-docs-editor-paste-autosave-and-wiki-](./quick/261004-o1d-fix-docs-editor-paste-autosave-and-wiki-/) |
 | 1 | `260928-kn3` · Planner task item subtitle and auto-distribute project filter | 2026-09-28 | — | — | — |
 | 2 | `260928-kn4` · UI enhancements & project links | 2026-09-28 | — | — | — |
 | 260930-j2e | in task drawer detail, there are many fields now, divide them in sections for more focus and easy to use | 2026-09-30 | 2008412 | — | [260930-j2e-in-task-drawer-detail-there-are-many-fie](./quick/260930-j2e-in-task-drawer-detail-there-are-many-fie/) |
