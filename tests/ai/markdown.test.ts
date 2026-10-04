@@ -53,4 +53,55 @@ describe('renderSafeMarkdown rich markdown rendering', () => {
     expect(html).toContain('&lt;script&gt;');
     expect(html).not.toContain('href="javascript:');
   });
+
+  describe('wiki-links and attachment image rendering', () => {
+    it('converts [[doc:uuid-123|Kiến trúc hệ thống]] into an interactive chip with doc icon', () => {
+      const input = 'Check [[doc:uuid-123|Kiến trúc hệ thống]] for details';
+      const html = renderSafeMarkdown(input);
+      expect(html).toContain(
+        '<span class="wiki-link-chip" data-entity-type="doc" data-entity-id="uuid-123" role="button" tabindex="0">📄 Kiến trúc hệ thống</span>'
+      );
+    });
+
+    it('converts [[task:uuid-456|Viết unit test]] into an interactive chip with task icon', () => {
+      const input = 'Related to [[task:uuid-456|Viết unit test]]';
+      const html = renderSafeMarkdown(input);
+      expect(html).toContain(
+        '<span class="wiki-link-chip" data-entity-type="task" data-entity-id="uuid-456" role="button" tabindex="0">✅ Viết unit test</span>'
+      );
+    });
+
+    it('converts [[project:uuid-789|Core Banking]] into an interactive chip with project icon', () => {
+      const input = 'Belongs to [[project:uuid-789|Core Banking]]';
+      const html = renderSafeMarkdown(input);
+      expect(html).toContain(
+        '<span class="wiki-link-chip" data-entity-type="project" data-entity-id="uuid-789" role="button" tabindex="0">📁 Core Banking</span>'
+      );
+    });
+
+    it('falls back to entity ID if display title is omitted [[doc:uuid-123]]', () => {
+      const input = 'Reference: [[doc:uuid-123]]';
+      const html = renderSafeMarkdown(input);
+      expect(html).toContain(
+        '<span class="wiki-link-chip" data-entity-type="doc" data-entity-id="uuid-123" role="button" tabindex="0">📄 uuid-123</span>'
+      );
+    });
+
+    it('converts ![Sơ đồ](attachment:uuid-999) into note-attachment-image without base64 bloat', () => {
+      const input = '![Sơ đồ kiến trúc](attachment:uuid-999)';
+      const html = renderSafeMarkdown(input);
+      expect(html).toContain(
+        '<img class="note-attachment-image" data-attachment-id="uuid-999" alt="Sơ đồ kiến trúc" />'
+      );
+    });
+
+    it('sanitizes HTML characters inside wiki-link titles and image captions against XSS', () => {
+      const input = '[[doc:safe-id|<img src=x onerror=alert(1)>]] and ![<script>bad</script>](attachment:att-123)';
+      const html = renderSafeMarkdown(input);
+      expect(html).not.toContain('<img src=x');
+      expect(html).not.toContain('<script>');
+      expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
+      expect(html).toContain('alt="&lt;script&gt;bad&lt;/script&gt;"');
+    });
+  });
 });
