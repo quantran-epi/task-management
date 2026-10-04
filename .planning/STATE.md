@@ -29,7 +29,7 @@ Phase: 13.2
 Plan: Not started
 Status: Phase complete — ready for verification
 Next recommended run: /gsd-execute-phase 13.2
-Last activity: 2026-10-04 - Completed quick task 261004-chp: context history pruning and char limit wiring
+Last activity: 2026-10-04 - Completed quick task 261004-hbt: fix ProjectsView header assertion in shell.test.tsx
 
 ### Quick Tasks Completed
 
@@ -74,6 +74,7 @@ Last activity: 2026-10-04 - Completed quick task 261004-chp: context history pru
 | 261004-chp | wire charLimit config to context grounding and add lightweight history and tool output pruning | 2026-10-04 | 7897cc3 | complete | [261004-chp-context-history-pruning-and-char-limit](./quick/261004-chp-context-history-pruning-and-char-limit/) |
 | 261004-cct | make context char limit freely configurable with estimated token preview and presets | 2026-10-04 | — | complete | [261004-cct-context-char-limit-and-token-preview](./quick/261004-cct-context-char-limit-and-token-preview/) |
 | 261004-gn9 | comprehensive AI tools full field support and filtering | 2026-10-04 | — | complete | [261004-gn9-comprehensive-ai-tools-full-field-suppor](./quick/261004-gn9-comprehensive-ai-tools-full-field-suppor/) |
+| 261004-hbt | update project view header title assertion in shell.test.tsx | 2026-10-04 | 06306bc | complete | [261004-hbt-fix-shell-test-tsx-project-view-header-t](./quick/261004-hbt-fix-shell-test-tsx-project-view-header-t/) |
 
 ## Performance Metrics
 
