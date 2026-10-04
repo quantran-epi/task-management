@@ -46,7 +46,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'query_tasks',
       description:
-        'Query or search tasks in PlannerMate. Returns tasks enriched with project/milestone names, logged hours, recurring schedule, and checklists. Can filter by projectId, milestoneId, status, priority, or search keywords.',
+        'Query or search tasks in PlannerMate. Returns tasks enriched with creation/update dates, notes, project/milestone names, logged hours, recurring schedule, and checklists. Supports comprehensive filtering by dates (createdAt, createdAfter/Before, deadline, updatedAfter/Before), status, priority, workType, recurring state, project, milestone, or search keywords, with customizable sorting.',
       parameters: {
         type: 'object',
         properties: {
@@ -71,6 +71,61 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
             type: 'string',
             description: 'Optional search keyword to match task name, description, notes, or jiraKey.',
           },
+          createdAt: {
+            type: 'string',
+            description: 'Optional exact creation date (YYYY-MM-DD or ISO string prefix) to filter tasks created on that day.',
+          },
+          createdAfter: {
+            type: 'string',
+            description: 'Optional filter for tasks created on or after this date (YYYY-MM-DD).',
+          },
+          createdBefore: {
+            type: 'string',
+            description: 'Optional filter for tasks created on or before this date (YYYY-MM-DD).',
+          },
+          updatedAfter: {
+            type: 'string',
+            description: 'Optional filter for tasks updated on or after this date (YYYY-MM-DD).',
+          },
+          updatedBefore: {
+            type: 'string',
+            description: 'Optional filter for tasks updated on or before this date (YYYY-MM-DD).',
+          },
+          deadline: {
+            type: 'string',
+            description: 'Optional exact deadline date in YYYY-MM-DD format.',
+          },
+          deadlineBefore: {
+            type: 'string',
+            description: 'Optional filter for tasks with deadline on or before this date (YYYY-MM-DD).',
+          },
+          deadlineAfter: {
+            type: 'string',
+            description: 'Optional filter for tasks with deadline on or after this date (YYYY-MM-DD).',
+          },
+          hasDeadline: {
+            type: 'boolean',
+            description: 'Optional filter: true for tasks having a deadline, false for tasks without deadline.',
+          },
+          workType: {
+            type: 'string',
+            enum: ['code', 'document', 'meeting', 'support_testing', 'investigate', 'configuration', 'review_code'],
+            description: 'Optional workType filter.',
+          },
+          isRecurring: {
+            type: 'boolean',
+            description: 'Optional boolean filter for recurring tasks.',
+          },
+          sortBy: {
+            type: 'string',
+            enum: ['createdAt', 'updatedAt', 'deadline', 'priority', 'estimateMinutes', 'name'],
+            description: 'Sort field (default: createdAt).',
+          },
+          sortOrder: {
+            type: 'string',
+            enum: ['asc', 'desc'],
+            description: 'Sort direction (default: desc for createdAt/updatedAt/priority/estimateMinutes; asc for deadline/name).',
+          },
           limit: {
             type: 'number',
             description: 'Max number of tasks to return (default 25, max 50).',
@@ -84,7 +139,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'query_projects',
       description:
-        'List or search all projects in PlannerMate. Returns project metadata, statuses, milestone counts, total task counts, and total logged minutes.',
+        'List or search all projects in PlannerMate. Returns project metadata, statuses, milestone counts, total task counts, dates, notes, and total logged minutes.',
       parameters: {
         type: 'object',
         properties: {
@@ -94,7 +149,37 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           },
           search: {
             type: 'string',
-            description: 'Optional search keyword to match project name or description.',
+            description: 'Optional search keyword to match project name, description, or notes.',
+          },
+          createdAfter: {
+            type: 'string',
+            description: 'Optional filter for projects created on or after this date (YYYY-MM-DD).',
+          },
+          createdBefore: {
+            type: 'string',
+            description: 'Optional filter for projects created on or before this date (YYYY-MM-DD).',
+          },
+          deadlineBefore: {
+            type: 'string',
+            description: 'Optional filter for projects with deadline on or before this date (YYYY-MM-DD).',
+          },
+          deadlineAfter: {
+            type: 'string',
+            description: 'Optional filter for projects with deadline on or after this date (YYYY-MM-DD).',
+          },
+          jiraEpicKey: {
+            type: 'string',
+            description: 'Optional filter by Jira Epic key.',
+          },
+          sortBy: {
+            type: 'string',
+            enum: ['createdAt', 'updatedAt', 'deadline', 'name'],
+            description: 'Sort field (default: createdAt).',
+          },
+          sortOrder: {
+            type: 'string',
+            enum: ['asc', 'desc'],
+            description: 'Sort direction (default: desc for createdAt/updatedAt; asc for deadline/name).',
           },
           limit: {
             type: 'number',
@@ -109,7 +194,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'query_milestones',
       description:
-        'List or search milestones in PlannerMate. Returns milestone metadata, parent project name, task counts, and deadlines.',
+        'List or search milestones in PlannerMate. Returns milestone metadata, parent project name, task counts, dates, notes, and deadlines.',
       parameters: {
         type: 'object',
         properties: {
@@ -123,7 +208,33 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           },
           search: {
             type: 'string',
-            description: 'Optional search keyword to match milestone name or description.',
+            description: 'Optional search keyword to match milestone name, description, or notes.',
+          },
+          createdAfter: {
+            type: 'string',
+            description: 'Optional filter for milestones created on or after this date (YYYY-MM-DD).',
+          },
+          createdBefore: {
+            type: 'string',
+            description: 'Optional filter for milestones created on or before this date (YYYY-MM-DD).',
+          },
+          deadlineBefore: {
+            type: 'string',
+            description: 'Optional filter for milestones with deadline on or before this date (YYYY-MM-DD).',
+          },
+          deadlineAfter: {
+            type: 'string',
+            description: 'Optional filter for milestones with deadline on or after this date (YYYY-MM-DD).',
+          },
+          sortBy: {
+            type: 'string',
+            enum: ['createdAt', 'updatedAt', 'deadline', 'name'],
+            description: 'Sort field (default: createdAt).',
+          },
+          sortOrder: {
+            type: 'string',
+            enum: ['asc', 'desc'],
+            description: 'Sort direction (default: desc for createdAt/updatedAt; asc for deadline/name).',
           },
           limit: {
             type: 'number',
@@ -161,7 +272,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'query_worklogs',
       description:
-        'Query actual worklog sessions and time spent. Can filter by taskId, projectId, or date range (startDate to endDate YYYY-MM-DD). Returns session details and total minutes logged.',
+        'Query actual worklog sessions and time spent. Can filter by taskId, projectId, date range (startDate to endDate YYYY-MM-DD), search keywords in notes/taskName, or duration. Returns session details and total minutes logged.',
       parameters: {
         type: 'object',
         properties: {
@@ -180,6 +291,18 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           endDate: {
             type: 'string',
             description: 'Optional end date filter (YYYY-MM-DD inclusive).',
+          },
+          search: {
+            type: 'string',
+            description: 'Optional search keyword to match work session notes or task name.',
+          },
+          minDuration: {
+            type: 'number',
+            description: 'Optional minimum duration in minutes.',
+          },
+          maxDuration: {
+            type: 'number',
+            description: 'Optional maximum duration in minutes.',
           },
           limit: {
             type: 'number',
@@ -293,7 +416,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'query_notes',
       description:
-        'Search or list notes and scratchpads. Can search text in title or body, filter by isPinned, or filter by entityType (task, project, milestone, or standalone).',
+        'Search or list notes and scratchpads. Can search text in title or body, filter by isPinned, filter by entityType (task, project, milestone, or standalone), filter by created/updated dates, or sort results.',
       parameters: {
         type: 'object',
         properties: {
@@ -313,6 +436,32 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           isPinned: {
             type: 'boolean',
             description: 'Optional boolean filter for pinned notes.',
+          },
+          createdAfter: {
+            type: 'string',
+            description: 'Optional filter for notes created on or after this date (YYYY-MM-DD).',
+          },
+          createdBefore: {
+            type: 'string',
+            description: 'Optional filter for notes created on or before this date (YYYY-MM-DD).',
+          },
+          updatedAfter: {
+            type: 'string',
+            description: 'Optional filter for notes updated on or after this date (YYYY-MM-DD).',
+          },
+          updatedBefore: {
+            type: 'string',
+            description: 'Optional filter for notes updated on or before this date (YYYY-MM-DD).',
+          },
+          sortBy: {
+            type: 'string',
+            enum: ['createdAt', 'updatedAt', 'title'],
+            description: 'Sort field (default: updatedAt).',
+          },
+          sortOrder: {
+            type: 'string',
+            enum: ['asc', 'desc'],
+            description: 'Sort direction (default: desc for updatedAt/createdAt; asc for title).',
           },
           limit: {
             type: 'number',
@@ -344,10 +493,32 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'query_recurring_tasks',
       description:
-        'List all recurring task templates in PlannerMate, including frequency, repeat days of week, intervals, and recurrence end dates.',
+        'List or filter recurring task templates in PlannerMate, including frequency, repeat days of week, intervals, and recurrence end dates.',
       parameters: {
         type: 'object',
-        properties: {},
+        properties: {
+          status: {
+            type: 'string',
+            description: 'Optional task status filter: Open, Pending, In Progress, Resolved, In Review, Done, Cancelled.',
+          },
+          projectId: {
+            type: 'string',
+            description: 'Optional project UUID to filter recurring tasks for a specific project.',
+          },
+          recurrenceFrequency: {
+            type: 'string',
+            enum: ['daily', 'weekly', 'monthly'],
+            description: 'Optional recurrence frequency filter: daily, weekly, monthly.',
+          },
+          search: {
+            type: 'string',
+            description: 'Optional search keyword to match task name, description, notes, or jiraKey.',
+          },
+          limit: {
+            type: 'number',
+            description: 'Max number of recurring tasks to return (default 25, max 50).',
+          },
+        },
       },
     },
   },
@@ -369,7 +540,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'create_task',
       description:
-        'Create a new task in PlannerMate. Can optionally specify project, milestone, priority, estimate, deadline, work type, tags, and checklist.',
+        'Create a new task in PlannerMate. Can optionally specify project, milestone, priority, estimate, deadline, work type, notes, dates, owners, and checklist.',
       parameters: {
         type: 'object',
         properties: {
@@ -389,6 +560,11 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           },
           estimateMinutes: { type: 'number', description: 'Estimated duration in minutes (e.g. 60).' },
           deadline: { type: 'string', description: 'Deadline in YYYY-MM-DD format.' },
+          notes: { type: 'string', description: 'Optional task notes.' },
+          actualStartDate: { type: 'string', description: 'Actual start date in YYYY-MM-DD format.' },
+          actualEndDate: { type: 'string', description: 'Actual end date in YYYY-MM-DD format.' },
+          opsOwners: { type: 'array', items: { type: 'string' }, description: 'Optional Operations Owners.' },
+          businessAnalysts: { type: 'array', items: { type: 'string' }, description: 'Optional Business Analysts.' },
           workType: {
             type: 'string',
             enum: ['code', 'document', 'meeting', 'support_testing', 'investigate', 'configuration', 'review_code'],
@@ -407,7 +583,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'update_task',
       description:
-        'Update fields of an existing task (status, priority, estimate, progress, dates, notes, description).',
+        'Update fields of an existing task (status, priority, estimate, progress, dates, notes, owners, description, project, milestone).',
       parameters: {
         type: 'object',
         properties: {
@@ -428,6 +604,12 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           estimateMinutes: { type: 'number', description: 'Estimated minutes.' },
           deadline: { type: 'string', description: 'Deadline in YYYY-MM-DD format.' },
           notes: { type: 'string', description: 'Task notes.' },
+          actualStartDate: { type: 'string', description: 'Actual start date in YYYY-MM-DD format.' },
+          actualEndDate: { type: 'string', description: 'Actual end date in YYYY-MM-DD format.' },
+          opsOwners: { type: 'array', items: { type: 'string' }, description: 'Operations Owners.' },
+          businessAnalysts: { type: 'array', items: { type: 'string' }, description: 'Business Analysts.' },
+          projectId: { type: 'string', description: 'Parent project UUID (or null to unassign).' },
+          milestoneId: { type: 'string', description: 'Parent milestone UUID (or null to unassign).' },
           workType: {
             type: 'string',
             enum: ['code', 'document', 'meeting', 'support_testing', 'investigate', 'configuration', 'review_code'],
@@ -514,6 +696,9 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           },
           deadline: { type: 'string', description: 'Target date / deadline in YYYY-MM-DD format.' },
           notes: { type: 'string', description: 'Project notes.' },
+          jiraEpicKey: { type: 'string', description: 'Optional Jira Epic key (e.g. PROJ-EPIC-1).' },
+          opsOwners: { type: 'array', items: { type: 'string' }, description: 'Optional Operations Owners.' },
+          businessAnalysts: { type: 'array', items: { type: 'string' }, description: 'Optional Business Analysts.' },
         },
         required: ['name'],
       },
@@ -523,7 +708,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     type: 'function',
     function: {
       name: 'update_project',
-      description: 'Update project details, status, deadline, or description.',
+      description: 'Update project details, status, deadline, notes, owners, or description.',
       parameters: {
         type: 'object',
         properties: {
@@ -536,6 +721,9 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           },
           deadline: { type: 'string', description: 'Deadline in YYYY-MM-DD format.' },
           notes: { type: 'string', description: 'Updated notes.' },
+          jiraEpicKey: { type: 'string', description: 'Updated Jira Epic key.' },
+          opsOwners: { type: 'array', items: { type: 'string' }, description: 'Operations Owners.' },
+          businessAnalysts: { type: 'array', items: { type: 'string' }, description: 'Business Analysts.' },
         },
         required: ['id'],
       },
@@ -572,6 +760,9 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
             description: 'Status (defaults to Open).',
           },
           deadline: { type: 'string', description: 'Target date in YYYY-MM-DD format.' },
+          notes: { type: 'string', description: 'Optional milestone notes.' },
+          opsOwners: { type: 'array', items: { type: 'string' }, description: 'Optional Operations Owners.' },
+          businessAnalysts: { type: 'array', items: { type: 'string' }, description: 'Optional Business Analysts.' },
         },
         required: ['projectId', 'name'],
       },
@@ -581,7 +772,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     type: 'function',
     function: {
       name: 'update_milestone',
-      description: 'Update milestone name, description, status, or deadline.',
+      description: 'Update milestone name, description, status, deadline, notes, or owners.',
       parameters: {
         type: 'object',
         properties: {
@@ -593,6 +784,9 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
             enum: ['Open', 'Pending', 'In Progress', 'Done', 'Cancelled'],
           },
           deadline: { type: 'string', description: 'Deadline in YYYY-MM-DD format.' },
+          notes: { type: 'string', description: 'Updated notes.' },
+          opsOwners: { type: 'array', items: { type: 'string' }, description: 'Operations Owners.' },
+          businessAnalysts: { type: 'array', items: { type: 'string' }, description: 'Business Analysts.' },
         },
         required: ['id'],
       },
@@ -897,6 +1091,7 @@ export async function executeAiTool(
           loggedMap.set(ws.taskId, (loggedMap.get(ws.taskId) || 0) + (ws.durationMinutes || 0));
         }
 
+        // Entity / Status / Priority / WorkType / Recurrence filters
         if (args.projectId) {
           tasks = tasks.filter((t) => t.projectId === args.projectId);
         }
@@ -913,6 +1108,49 @@ export async function executeAiTool(
             (t) => t.priority.toLowerCase() === String(args.priority).toLowerCase()
           );
         }
+        if (args.workType) {
+          tasks = tasks.filter(
+            (t) => t.workType?.toLowerCase() === String(args.workType).toLowerCase()
+          );
+        }
+        if (typeof args.isRecurring === 'boolean') {
+          tasks = tasks.filter((t) => Boolean(t.isRecurring) === args.isRecurring);
+        }
+        if (typeof args.hasDeadline === 'boolean') {
+          tasks = tasks.filter((t) => (args.hasDeadline ? Boolean(t.deadline) : !t.deadline));
+        }
+
+        // Date filters
+        if (args.createdAt) {
+          const target = String(args.createdAt).slice(0, 10);
+          tasks = tasks.filter((t) => (t.createdAt || '').slice(0, 10) === target);
+        }
+        if (args.createdAfter) {
+          const boundary = String(args.createdAfter).slice(0, 10);
+          tasks = tasks.filter((t) => (t.createdAt || '').slice(0, 10) >= boundary);
+        }
+        if (args.createdBefore) {
+          const boundary = String(args.createdBefore).slice(0, 10);
+          tasks = tasks.filter((t) => (t.createdAt || '').slice(0, 10) <= boundary);
+        }
+        if (args.updatedAfter) {
+          const boundary = String(args.updatedAfter).slice(0, 10);
+          tasks = tasks.filter((t) => (t.updatedAt || '').slice(0, 10) >= boundary);
+        }
+        if (args.updatedBefore) {
+          const boundary = String(args.updatedBefore).slice(0, 10);
+          tasks = tasks.filter((t) => (t.updatedAt || '').slice(0, 10) <= boundary);
+        }
+        if (args.deadline) {
+          tasks = tasks.filter((t) => t.deadline === args.deadline);
+        }
+        if (args.deadlineBefore) {
+          tasks = tasks.filter((t) => t.deadline && t.deadline <= args.deadlineBefore);
+        }
+        if (args.deadlineAfter) {
+          tasks = tasks.filter((t) => t.deadline && t.deadline >= args.deadlineAfter);
+        }
+
         if (args.search) {
           const q = String(args.search).toLowerCase();
           tasks = tasks.filter(
@@ -924,6 +1162,35 @@ export async function executeAiTool(
           );
         }
 
+        // Sorting
+        const sortBy = args.sortBy || 'createdAt';
+        const sortOrder = args.sortOrder || (sortBy === 'deadline' || sortBy === 'name' ? 'asc' : 'desc');
+        const isAsc = sortOrder.toLowerCase() === 'asc';
+
+        tasks.sort((a, b) => {
+          let cmp = 0;
+          if (sortBy === 'createdAt') {
+            cmp = (a.createdAt || '').localeCompare(b.createdAt || '');
+          } else if (sortBy === 'updatedAt') {
+            cmp = (a.updatedAt || '').localeCompare(b.updatedAt || '');
+          } else if (sortBy === 'deadline') {
+            if (!a.deadline && !b.deadline) cmp = 0;
+            else if (!a.deadline) return 1;
+            else if (!b.deadline) return -1;
+            else cmp = a.deadline.localeCompare(b.deadline);
+          } else if (sortBy === 'priority') {
+            const weights: Record<string, number> = { urgent: 4, high: 3, medium: 2, low: 1 };
+            const wa = weights[a.priority.toLowerCase()] || 0;
+            const wb = weights[b.priority.toLowerCase()] || 0;
+            cmp = wa - wb;
+          } else if (sortBy === 'estimateMinutes') {
+            cmp = (a.estimateMinutes || 0) - (b.estimateMinutes || 0);
+          } else if (sortBy === 'name') {
+            cmp = a.name.localeCompare(b.name);
+          }
+          return isAsc ? cmp : -cmp;
+        });
+
         const totalCount = tasks.length;
         const limit = Math.min(Math.max(1, Number(args.limit) || 25), 50);
         const subset = tasks.slice(0, limit).map((t) => {
@@ -932,6 +1199,8 @@ export async function executeAiTool(
           return {
             id: t.id,
             name: t.name,
+            description: t.description ?? null,
+            notes: t.notes ?? null,
             status: t.status,
             priority: t.priority,
             progress: t.progress,
@@ -950,9 +1219,13 @@ export async function executeAiTool(
             checklistDoneCount: t.checklist?.filter((c) => c.done).length ?? 0,
             isRecurring: Boolean(t.isRecurring),
             recurrenceFrequency: t.recurrenceFrequency ?? null,
+            reminderDate: t.reminderDate ?? null,
+            reminderNote: t.reminderNote ?? null,
             remindersCount: t.reminders?.length ?? 0,
             opsOwners: t.opsOwners ?? [],
             businessAnalysts: t.businessAnalysts ?? [],
+            createdAt: t.createdAt,
+            updatedAt: t.updatedAt,
           };
         });
 
@@ -980,14 +1253,56 @@ export async function executeAiTool(
             (p) => p.status.toLowerCase() === String(args.status).toLowerCase()
           );
         }
+        if (args.createdAfter) {
+          const boundary = String(args.createdAfter).slice(0, 10);
+          projects = projects.filter((p) => (p.createdAt || '').slice(0, 10) >= boundary);
+        }
+        if (args.createdBefore) {
+          const boundary = String(args.createdBefore).slice(0, 10);
+          projects = projects.filter((p) => (p.createdAt || '').slice(0, 10) <= boundary);
+        }
+        if (args.deadlineBefore) {
+          projects = projects.filter((p) => p.deadline && p.deadline <= args.deadlineBefore);
+        }
+        if (args.deadlineAfter) {
+          projects = projects.filter((p) => p.deadline && p.deadline >= args.deadlineAfter);
+        }
+        if (args.jiraEpicKey) {
+          const q = String(args.jiraEpicKey).toLowerCase();
+          projects = projects.filter((p) => p.jiraEpicKey && p.jiraEpicKey.toLowerCase().includes(q));
+        }
         if (args.search) {
           const q = String(args.search).toLowerCase();
           projects = projects.filter(
             (p) =>
               p.name.toLowerCase().includes(q) ||
-              (p.description && p.description.toLowerCase().includes(q))
+              (p.description && p.description.toLowerCase().includes(q)) ||
+              (p.notes && p.notes.toLowerCase().includes(q)) ||
+              (p.jiraEpicKey && p.jiraEpicKey.toLowerCase().includes(q))
           );
         }
+
+        // Sorting
+        const sortBy = args.sortBy || 'createdAt';
+        const sortOrder = args.sortOrder || (sortBy === 'deadline' || sortBy === 'name' ? 'asc' : 'desc');
+        const isAsc = sortOrder.toLowerCase() === 'asc';
+
+        projects.sort((a, b) => {
+          let cmp = 0;
+          if (sortBy === 'createdAt') {
+            cmp = (a.createdAt || '').localeCompare(b.createdAt || '');
+          } else if (sortBy === 'updatedAt') {
+            cmp = (a.updatedAt || '').localeCompare(b.updatedAt || '');
+          } else if (sortBy === 'deadline') {
+            if (!a.deadline && !b.deadline) cmp = 0;
+            else if (!a.deadline) return 1;
+            else if (!b.deadline) return -1;
+            else cmp = a.deadline.localeCompare(b.deadline);
+          } else if (sortBy === 'name') {
+            cmp = a.name.localeCompare(b.name);
+          }
+          return isAsc ? cmp : -cmp;
+        });
 
         const limit = Math.min(Math.max(1, Number(args.limit) || 20), 50);
         const subset = projects.slice(0, limit).map((p) => {
@@ -1006,6 +1321,13 @@ export async function executeAiTool(
             deadline: p.deadline ?? null,
             jiraEpicKey: p.jiraEpicKey ?? null,
             description: p.description ?? null,
+            notes: p.notes ?? null,
+            opsOwners: p.opsOwners ?? [],
+            businessAnalysts: p.businessAnalysts ?? [],
+            reminderDate: p.reminderDate ?? null,
+            reminderNote: p.reminderNote ?? null,
+            createdAt: p.createdAt,
+            updatedAt: p.updatedAt,
             taskCount: pTasks.length,
             openTaskCount: pTasks.filter(
               (t) => t.status !== 'Done' && t.status !== 'Cancelled'
@@ -1044,14 +1366,51 @@ export async function executeAiTool(
             (m) => m.status.toLowerCase() === String(args.status).toLowerCase()
           );
         }
+        if (args.createdAfter) {
+          const boundary = String(args.createdAfter).slice(0, 10);
+          milestones = milestones.filter((m) => (m.createdAt || '').slice(0, 10) >= boundary);
+        }
+        if (args.createdBefore) {
+          const boundary = String(args.createdBefore).slice(0, 10);
+          milestones = milestones.filter((m) => (m.createdAt || '').slice(0, 10) <= boundary);
+        }
+        if (args.deadlineBefore) {
+          milestones = milestones.filter((m) => m.deadline && m.deadline <= args.deadlineBefore);
+        }
+        if (args.deadlineAfter) {
+          milestones = milestones.filter((m) => m.deadline && m.deadline >= args.deadlineAfter);
+        }
         if (args.search) {
           const q = String(args.search).toLowerCase();
           milestones = milestones.filter(
             (m) =>
               m.name.toLowerCase().includes(q) ||
-              (m.description && m.description.toLowerCase().includes(q))
+              (m.description && m.description.toLowerCase().includes(q)) ||
+              (m.notes && m.notes.toLowerCase().includes(q))
           );
         }
+
+        // Sorting
+        const sortBy = args.sortBy || 'createdAt';
+        const sortOrder = args.sortOrder || (sortBy === 'deadline' || sortBy === 'name' ? 'asc' : 'desc');
+        const isAsc = sortOrder.toLowerCase() === 'asc';
+
+        milestones.sort((a, b) => {
+          let cmp = 0;
+          if (sortBy === 'createdAt') {
+            cmp = (a.createdAt || '').localeCompare(b.createdAt || '');
+          } else if (sortBy === 'updatedAt') {
+            cmp = (a.updatedAt || '').localeCompare(b.updatedAt || '');
+          } else if (sortBy === 'deadline') {
+            if (!a.deadline && !b.deadline) cmp = 0;
+            else if (!a.deadline) return 1;
+            else if (!b.deadline) return -1;
+            else cmp = a.deadline.localeCompare(b.deadline);
+          } else if (sortBy === 'name') {
+            cmp = a.name.localeCompare(b.name);
+          }
+          return isAsc ? cmp : -cmp;
+        });
 
         const limit = Math.min(Math.max(1, Number(args.limit) || 20), 50);
         const subset = milestones.slice(0, limit).map((m) => {
@@ -1071,6 +1430,13 @@ export async function executeAiTool(
             status: m.status,
             deadline: m.deadline ?? null,
             description: m.description ?? null,
+            notes: m.notes ?? null,
+            opsOwners: m.opsOwners ?? [],
+            businessAnalysts: m.businessAnalysts ?? [],
+            reminderDate: m.reminderDate ?? null,
+            reminderNote: m.reminderNote ?? null,
+            createdAt: m.createdAt,
+            updatedAt: m.updatedAt,
             taskCount: mTasks.length,
             openTaskCount: mTasks.filter(
               (t) => t.status !== 'Done' && t.status !== 'Cancelled'
@@ -1256,6 +1622,20 @@ export async function executeAiTool(
         if (args.endDate) {
           sessions = sessions.filter((s) => s.date <= args.endDate);
         }
+        if (args.search) {
+          const q = String(args.search).toLowerCase();
+          sessions = sessions.filter((s) => {
+            const taskName = taskMap.get(s.taskId)?.name?.toLowerCase() || '';
+            const note = s.note?.toLowerCase() || '';
+            return taskName.includes(q) || note.includes(q);
+          });
+        }
+        if (typeof args.minDuration === 'number') {
+          sessions = sessions.filter((s) => (s.durationMinutes || 0) >= args.minDuration);
+        }
+        if (typeof args.maxDuration === 'number') {
+          sessions = sessions.filter((s) => (s.durationMinutes || 0) <= args.maxDuration);
+        }
 
         // Sort descending by date, then startTime
         sessions.sort((a, b) => {
@@ -1279,6 +1659,7 @@ export async function executeAiTool(
           startTime: s.startTime,
           endTime: s.endTime ?? null,
           note: s.note ?? null,
+          createdAt: s.createdAt,
         }));
 
         return JSON.stringify({
@@ -1603,6 +1984,22 @@ export async function executeAiTool(
         if (typeof args.isPinned === 'boolean') {
           notes = notes.filter((n) => Boolean(n.isPinned) === args.isPinned);
         }
+        if (args.createdAfter) {
+          const boundary = String(args.createdAfter).slice(0, 10);
+          notes = notes.filter((n) => (n.createdAt || '').slice(0, 10) >= boundary);
+        }
+        if (args.createdBefore) {
+          const boundary = String(args.createdBefore).slice(0, 10);
+          notes = notes.filter((n) => (n.createdAt || '').slice(0, 10) <= boundary);
+        }
+        if (args.updatedAfter) {
+          const boundary = String(args.updatedAfter).slice(0, 10);
+          notes = notes.filter((n) => (n.updatedAt || '').slice(0, 10) >= boundary);
+        }
+        if (args.updatedBefore) {
+          const boundary = String(args.updatedBefore).slice(0, 10);
+          notes = notes.filter((n) => (n.updatedAt || '').slice(0, 10) <= boundary);
+        }
         if (args.search) {
           const q = String(args.search).toLowerCase();
           notes = notes.filter(
@@ -1612,10 +2009,22 @@ export async function executeAiTool(
           );
         }
 
-        // Sort pinned first, then newest
+        // Sorting: pinned first, then by field
+        const sortBy = args.sortBy || 'updatedAt';
+        const sortOrder = args.sortOrder || (sortBy === 'title' ? 'asc' : 'desc');
+        const isAsc = sortOrder.toLowerCase() === 'asc';
+
         notes.sort((a, b) => {
           if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
-          return (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || '');
+          let cmp = 0;
+          if (sortBy === 'createdAt') {
+            cmp = (a.createdAt || '').localeCompare(b.createdAt || '');
+          } else if (sortBy === 'updatedAt') {
+            cmp = (a.updatedAt || '').localeCompare(b.updatedAt || '');
+          } else if (sortBy === 'title') {
+            cmp = (a.title || '').localeCompare(b.title || '');
+          }
+          return isAsc ? cmp : -cmp;
         });
 
         const totalCount = notes.length;
@@ -1729,21 +2138,55 @@ export async function executeAiTool(
 
       case 'query_recurring_tasks': {
         if (!db.tasks) return JSON.stringify({ error: 'Tasks table unavailable' });
-        const allTasks = await db.tasks.toArray();
-        const recurring = allTasks.filter((t) => t.isRecurring);
+        let recurring = (await db.tasks.toArray()).filter((t) => t.isRecurring);
+
+        if (args.status) {
+          recurring = recurring.filter(
+            (t) => t.status.toLowerCase() === String(args.status).toLowerCase()
+          );
+        }
+        if (args.projectId) {
+          recurring = recurring.filter((t) => t.projectId === args.projectId);
+        }
+        if (args.recurrenceFrequency) {
+          recurring = recurring.filter(
+            (t) => t.recurrenceFrequency?.toLowerCase() === String(args.recurrenceFrequency).toLowerCase()
+          );
+        }
+        if (args.search) {
+          const q = String(args.search).toLowerCase();
+          recurring = recurring.filter(
+            (t) =>
+              t.name.toLowerCase().includes(q) ||
+              (t.description && t.description.toLowerCase().includes(q)) ||
+              (t.notes && t.notes.toLowerCase().includes(q)) ||
+              (t.jiraKey && t.jiraKey.toLowerCase().includes(q))
+          );
+        }
+
+        const limit = Math.min(Math.max(1, Number(args.limit) || 25), 50);
+        const subset = recurring.slice(0, limit);
 
         return JSON.stringify({
           totalCount: recurring.length,
-          recurringTasks: recurring.map((t) => ({
+          returnedCount: subset.length,
+          recurringTasks: subset.map((t) => ({
             id: t.id,
             name: t.name,
+            description: t.description ?? null,
+            notes: t.notes ?? null,
             status: t.status,
             priority: t.priority,
-            recurrenceFrequency: t.recurrenceFrequency,
+            estimateMinutes: t.estimateMinutes,
+            deadline: t.deadline ?? null,
+            workType: t.workType ?? null,
+            recurrenceFrequency: t.recurrenceFrequency ?? null,
             recurrenceInterval: t.recurrenceInterval ?? 1,
             recurrenceDaysOfWeek: t.recurrenceDaysOfWeek ?? [],
             recurrenceEndDate: t.recurrenceEndDate ?? null,
             parentRecurringTaskId: t.parentRecurringTaskId ?? null,
+            createdAt: t.createdAt,
+            updatedAt: t.updatedAt,
           })),
         });
       }
@@ -1848,8 +2291,12 @@ export async function executeAiTool(
             priority: args.priority || 'Medium',
             estimateMinutes: typeof args.estimateMinutes === 'number' ? args.estimateMinutes : 0,
             deadline: args.deadline,
+            notes: args.notes,
+            actualStartDate: args.actualStartDate,
+            actualEndDate: args.actualEndDate,
             workType: args.workType || 'code',
             opsOwners: args.opsOwners || args.tags,
+            businessAnalysts: args.businessAnalysts,
             jiraKey: args.jiraKey,
             checklist: checklistItems,
           },
@@ -1873,6 +2320,12 @@ export async function executeAiTool(
         if (args.estimateMinutes !== undefined) patch.estimateMinutes = Number(args.estimateMinutes);
         if (args.deadline !== undefined) patch.deadline = args.deadline;
         if (args.notes !== undefined) patch.notes = args.notes;
+        if (args.actualStartDate !== undefined) patch.actualStartDate = args.actualStartDate;
+        if (args.actualEndDate !== undefined) patch.actualEndDate = args.actualEndDate;
+        if (args.opsOwners !== undefined) patch.opsOwners = args.opsOwners;
+        if (args.businessAnalysts !== undefined) patch.businessAnalysts = args.businessAnalysts;
+        if (args.projectId !== undefined) patch.projectId = args.projectId;
+        if (args.milestoneId !== undefined) patch.milestoneId = args.milestoneId;
         if (args.workType !== undefined) patch.workType = args.workType;
         if (args.jiraKey !== undefined) patch.jiraKey = args.jiraKey;
 
@@ -1946,6 +2399,9 @@ export async function executeAiTool(
             status: args.status || 'Open',
             deadline: args.deadline,
             notes: args.notes,
+            jiraEpicKey: args.jiraEpicKey,
+            opsOwners: args.opsOwners,
+            businessAnalysts: args.businessAnalysts,
           },
           db
         );
@@ -1964,6 +2420,9 @@ export async function executeAiTool(
         if (args.status !== undefined) patch.status = args.status;
         if (args.deadline !== undefined) patch.deadline = args.deadline;
         if (args.notes !== undefined) patch.notes = args.notes;
+        if (args.jiraEpicKey !== undefined) patch.jiraEpicKey = args.jiraEpicKey;
+        if (args.opsOwners !== undefined) patch.opsOwners = args.opsOwners;
+        if (args.businessAnalysts !== undefined) patch.businessAnalysts = args.businessAnalysts;
 
         await updateProject(args.id, patch, db);
         return JSON.stringify({
@@ -1990,6 +2449,9 @@ export async function executeAiTool(
             description: args.description,
             status: args.status || 'Open',
             deadline: args.deadline,
+            notes: args.notes,
+            opsOwners: args.opsOwners,
+            businessAnalysts: args.businessAnalysts,
           },
           db
         );
@@ -2007,6 +2469,9 @@ export async function executeAiTool(
         if (args.description !== undefined) patch.description = args.description;
         if (args.status !== undefined) patch.status = args.status;
         if (args.deadline !== undefined) patch.deadline = args.deadline;
+        if (args.notes !== undefined) patch.notes = args.notes;
+        if (args.opsOwners !== undefined) patch.opsOwners = args.opsOwners;
+        if (args.businessAnalysts !== undefined) patch.businessAnalysts = args.businessAnalysts;
 
         await updateMilestone(args.id, patch, db);
         return JSON.stringify({

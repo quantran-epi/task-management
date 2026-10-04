@@ -73,6 +73,7 @@ Last activity: 2026-10-04 - Completed quick task 261004-chp: context history pru
 | 261004-ash | app shortcuts with HUD autocomplete, cross-platform modifiers, multi-key combos, and view actions | 2026-10-04 | — | complete | [261004-ash-app-shortcuts-with-hud-autocomplete](./quick/261004-ash-app-shortcuts-with-hud-autocomplete/) |
 | 261004-chp | wire charLimit config to context grounding and add lightweight history and tool output pruning | 2026-10-04 | 7897cc3 | complete | [261004-chp-context-history-pruning-and-char-limit](./quick/261004-chp-context-history-pruning-and-char-limit/) |
 | 261004-cct | make context char limit freely configurable with estimated token preview and presets | 2026-10-04 | — | complete | [261004-cct-context-char-limit-and-token-preview](./quick/261004-cct-context-char-limit-and-token-preview/) |
+| 261004-gn9 | comprehensive AI tools full field support and filtering | 2026-10-04 | — | complete | [261004-gn9-comprehensive-ai-tools-full-field-suppor](./quick/261004-gn9-comprehensive-ai-tools-full-field-suppor/) |
 
 ## Performance Metrics
 

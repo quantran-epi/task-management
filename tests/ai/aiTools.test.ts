@@ -12,6 +12,7 @@ describe('aiTools', () => {
     {
       id: 'task-1',
       name: 'Write unit tests',
+      description: 'Core unit test coverage',
       status: 'In Progress',
       priority: 'High',
       progress: 50,
@@ -25,10 +26,13 @@ describe('aiTools', () => {
       isRecurring: true,
       recurrenceFrequency: 'weekly',
       reminders: [{ id: 'r1', date: '2026-10-10', note: 'Check tests' }],
+      createdAt: '2026-10-01T08:00:00.000Z',
+      updatedAt: '2026-10-02T08:00:00.000Z',
     },
     {
       id: 'task-2',
       name: 'Deploy to production',
+      description: 'Release v1.0',
       status: 'Open',
       priority: 'Urgent',
       progress: 0,
@@ -38,6 +42,8 @@ describe('aiTools', () => {
       workType: 'configuration',
       deadline: '2026-10-05',
       notes: 'Deployment checklist',
+      createdAt: '2026-10-03T09:00:00.000Z',
+      updatedAt: '2026-10-03T09:00:00.000Z',
     },
     {
       id: 'task-3',
@@ -48,6 +54,8 @@ describe('aiTools', () => {
       estimateMinutes: 30,
       projectId: 'proj-2',
       workType: 'document',
+      createdAt: '2026-09-25T10:00:00.000Z',
+      updatedAt: '2026-09-26T10:00:00.000Z',
     },
   ];
 
@@ -58,12 +66,20 @@ describe('aiTools', () => {
       status: 'In Progress',
       deadline: '2026-12-31',
       description: 'Main banking core',
+      notes: 'Banking notes',
+      jiraEpicKey: 'BANK-EPIC-1',
+      opsOwners: ['OpsTeam'],
+      businessAnalysts: ['BA1'],
+      createdAt: '2026-09-01T00:00:00.000Z',
+      updatedAt: '2026-09-02T00:00:00.000Z',
     },
     {
       id: 'proj-2',
       name: 'Mobile App',
       status: 'Open',
       description: 'iOS and Android client',
+      createdAt: '2026-09-10T00:00:00.000Z',
+      updatedAt: '2026-09-10T00:00:00.000Z',
     },
   ];
 
@@ -74,12 +90,16 @@ describe('aiTools', () => {
       name: 'Backend API',
       status: 'In Progress',
       deadline: '2026-10-10',
+      createdAt: '2026-09-05T00:00:00.000Z',
+      updatedAt: '2026-09-05T00:00:00.000Z',
     },
     {
       id: 'ms-2',
       projectId: 'proj-1',
       name: 'Cloud Deploy',
       status: 'Open',
+      createdAt: '2026-09-15T00:00:00.000Z',
+      updatedAt: '2026-09-15T00:00:00.000Z',
     },
   ];
 
@@ -92,6 +112,7 @@ describe('aiTools', () => {
       endTime: '10:30:00.000Z',
       durationMinutes: 90,
       note: 'Wrote core test suites',
+      createdAt: '2026-10-02T10:30:00.000Z',
     },
     {
       id: 'ws-2',
@@ -101,12 +122,14 @@ describe('aiTools', () => {
       endTime: '14:45:00.000Z',
       durationMinutes: 45,
       note: 'Fixed edge case in test runner',
+      createdAt: '2026-10-03T14:45:00.000Z',
     },
     {
       id: 'ws-3',
       taskId: 'task-3',
       date: '2026-10-01',
       durationMinutes: 30,
+      createdAt: '2026-10-01T10:00:00.000Z',
     },
   ];
 
@@ -571,6 +594,201 @@ describe('aiTools', () => {
       const parsed = JSON.parse(res);
       expect(parsed.success).toBe(true);
       expect(parsed.totalChecklistItems).toBe(2);
+    });
+  });
+
+  describe('comprehensive full-field query and sorting support', () => {
+    it('supports query_tasks filtering by exact createdAt, createdAfter, and createdBefore', async () => {
+      // Exact date YYYY-MM-DD
+      const exactRes = JSON.parse(
+        await executeAiTool('query_tasks', { createdAt: '2026-10-01' }, mockDb)
+      );
+      expect(exactRes.totalCount).toBe(1);
+      expect(exactRes.tasks[0].id).toBe('task-1');
+      expect(exactRes.tasks[0].createdAt).toBe('2026-10-01T08:00:00.000Z');
+      expect(exactRes.tasks[0].updatedAt).toBe('2026-10-02T08:00:00.000Z');
+      expect(exactRes.tasks[0].notes).toBe('Some task notes');
+      expect(exactRes.tasks[0].description).toBe('Core unit test coverage');
+
+      // createdAfter
+      const afterRes = JSON.parse(
+        await executeAiTool('query_tasks', { createdAfter: '2026-10-02' }, mockDb)
+      );
+      expect(afterRes.totalCount).toBe(1);
+      expect(afterRes.tasks[0].id).toBe('task-2');
+
+      // createdBefore
+      const beforeRes = JSON.parse(
+        await executeAiTool('query_tasks', { createdBefore: '2026-09-30' }, mockDb)
+      );
+      expect(beforeRes.totalCount).toBe(1);
+      expect(beforeRes.tasks[0].id).toBe('task-3');
+    });
+
+    it('supports query_tasks filtering by deadline, workType, isRecurring, and hasDeadline', async () => {
+      // deadlineBefore
+      const dlRes = JSON.parse(
+        await executeAiTool('query_tasks', { deadlineBefore: '2026-10-02' }, mockDb)
+      );
+      expect(dlRes.totalCount).toBe(1);
+      expect(dlRes.tasks[0].id).toBe('task-1');
+
+      // hasDeadline: false
+      const noDlRes = JSON.parse(
+        await executeAiTool('query_tasks', { hasDeadline: false }, mockDb)
+      );
+      expect(noDlRes.totalCount).toBe(1);
+      expect(noDlRes.tasks[0].id).toBe('task-3');
+
+      // workType
+      const wtRes = JSON.parse(
+        await executeAiTool('query_tasks', { workType: 'configuration' }, mockDb)
+      );
+      expect(wtRes.totalCount).toBe(1);
+      expect(wtRes.tasks[0].id).toBe('task-2');
+
+      // isRecurring
+      const recRes = JSON.parse(
+        await executeAiTool('query_tasks', { isRecurring: true }, mockDb)
+      );
+      expect(recRes.totalCount).toBe(1);
+      expect(recRes.tasks[0].id).toBe('task-1');
+    });
+
+    it('supports query_tasks sorting by createdAt and priority', async () => {
+      // Sort createdAt asc -> task-3 (Sept 25) first
+      const ascRes = JSON.parse(
+        await executeAiTool('query_tasks', { sortBy: 'createdAt', sortOrder: 'asc' }, mockDb)
+      );
+      expect(ascRes.tasks[0].id).toBe('task-3');
+      expect(ascRes.tasks[2].id).toBe('task-2');
+
+      // Sort priority desc -> task-2 (Urgent) first, then task-1 (High), then task-3 (Low)
+      const prioRes = JSON.parse(
+        await executeAiTool('query_tasks', { sortBy: 'priority', sortOrder: 'desc' }, mockDb)
+      );
+      expect(prioRes.tasks[0].id).toBe('task-2');
+      expect(prioRes.tasks[1].id).toBe('task-1');
+      expect(prioRes.tasks[2].id).toBe('task-3');
+    });
+
+    it('supports query_projects filtering and returning all metadata fields', async () => {
+      const res = JSON.parse(
+        await executeAiTool('query_projects', { createdAfter: '2026-09-05' }, mockDb)
+      );
+      expect(res.totalCount).toBe(1);
+      expect(res.projects[0].id).toBe('proj-2');
+
+      const allRes = JSON.parse(
+        await executeAiTool('query_projects', { jiraEpicKey: 'BANK' }, mockDb)
+      );
+      expect(allRes.totalCount).toBe(1);
+      const p1 = allRes.projects[0];
+      expect(p1.id).toBe('proj-1');
+      expect(p1.createdAt).toBe('2026-09-01T00:00:00.000Z');
+      expect(p1.updatedAt).toBe('2026-09-02T00:00:00.000Z');
+      expect(p1.notes).toBe('Banking notes');
+      expect(p1.opsOwners).toContain('OpsTeam');
+      expect(p1.businessAnalysts).toContain('BA1');
+    });
+
+    it('supports query_milestones filtering by deadline and returning dates & notes', async () => {
+      const res = JSON.parse(
+        await executeAiTool('query_milestones', { deadlineBefore: '2026-10-12' }, mockDb)
+      );
+      expect(res.totalCount).toBe(1);
+      const m1 = res.milestones[0];
+      expect(m1.id).toBe('ms-1');
+      expect(m1.createdAt).toBe('2026-09-05T00:00:00.000Z');
+    });
+
+    it('supports query_worklogs search and minDuration with createdAt in output', async () => {
+      const res = JSON.parse(
+        await executeAiTool('query_worklogs', { search: 'test runner' }, mockDb)
+      );
+      expect(res.totalCount).toBe(1);
+      expect(res.sessions[0].id).toBe('ws-2');
+      expect(res.sessions[0].createdAt).toBe('2026-10-03T14:45:00.000Z');
+
+      const durRes = JSON.parse(
+        await executeAiTool('query_worklogs', { minDuration: 50 }, mockDb)
+      );
+      expect(durRes.totalCount).toBe(1);
+      expect(durRes.sessions[0].id).toBe('ws-1');
+    });
+
+    it('supports query_notes date filtering and custom sorting', async () => {
+      const res = JSON.parse(
+        await executeAiTool('query_notes', { createdAfter: '2026-10-02' }, mockDb)
+      );
+      expect(res.totalCount).toBe(1);
+      expect(res.notes[0].id).toBe('n-2');
+
+      const sortRes = JSON.parse(
+        await executeAiTool('query_notes', { sortBy: 'title', sortOrder: 'asc' }, mockDb)
+      );
+      // Pinned note still prioritized, but check title sort
+      expect(sortRes.notes[0].title).toBe('API Spec Draft');
+    });
+
+    it('supports query_recurring_tasks filtering by status/frequency and returning all fields', async () => {
+      const res = JSON.parse(
+        await executeAiTool('query_recurring_tasks', { recurrenceFrequency: 'weekly' }, mockDb)
+      );
+      expect(res.totalCount).toBe(1);
+      const r1 = res.recurringTasks[0];
+      expect(r1.id).toBe('task-1');
+      expect(r1.workType).toBe('code');
+      expect(r1.estimateMinutes).toBe(60);
+      expect(r1.createdAt).toBe('2026-10-01T08:00:00.000Z');
+    });
+
+    it('passes new parameters to mutation tools', async () => {
+      const mockTaskDb: any = {
+        tasks: {
+          add: vi.fn().mockResolvedValue('new-t-id'),
+          get: vi.fn().mockResolvedValue({ id: 'existing-t', name: 'Task', status: 'Open', priority: 'Medium', progress: 0, estimateMinutes: 0 }),
+          put: vi.fn().mockResolvedValue('existing-t'),
+        },
+      };
+
+      // create_task with full fields
+      const createRes = JSON.parse(
+        await executeAiTool(
+          'create_task',
+          {
+            name: 'New Feature',
+            notes: 'Implementation notes',
+            actualStartDate: '2026-10-04',
+            actualEndDate: '2026-10-05',
+            opsOwners: ['Ops1'],
+            businessAnalysts: ['BA1'],
+          },
+          mockTaskDb
+        )
+      );
+      expect(createRes.success).toBe(true);
+
+      // update_task with full fields
+      const updateRes = JSON.parse(
+        await executeAiTool(
+          'update_task',
+          {
+            id: 'existing-t',
+            notes: 'Updated notes',
+            actualStartDate: '2026-10-04',
+            actualEndDate: '2026-10-05',
+            opsOwners: ['Ops2'],
+            businessAnalysts: ['BA2'],
+          },
+          mockTaskDb
+        )
+      );
+      expect(updateRes.success).toBe(true);
+      expect(updateRes.updatedFields).toContain('notes');
+      expect(updateRes.updatedFields).toContain('actualStartDate');
+      expect(updateRes.updatedFields).toContain('opsOwners');
+      expect(updateRes.updatedFields).toContain('businessAnalysts');
     });
   });
 });
