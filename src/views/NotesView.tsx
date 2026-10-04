@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Card,
   Input,
@@ -11,6 +11,8 @@ import {
   Popconfirm,
   Tooltip,
   message,
+  Segmented,
+  Modal,
   type SelectProps,
 } from 'antd';
 import {
@@ -22,11 +24,21 @@ import {
   DeleteOutlined,
   PaperClipOutlined,
   ExportOutlined,
+  AppstoreOutlined,
+  UnorderedListOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import type { Note, NoteEntityType } from '../types/models';
-import { deleteNote, updateNote } from '../db/repositories/noteRepo';
+import {
+  deleteNote,
+  updateNote,
+  createNote,
+  softDeleteNote,
+  permanentDeleteNote,
+  restoreNote,
+} from '../db/repositories/noteRepo';
+import { getBacklinksForDoc } from '../db/repositories/documentLinkRepo';
 import { renderSafeMarkdown } from '../utils/markdown';
 import { NoteEditor } from '../components/notes/NoteEditor';
 import { NoteDetailModal } from '../components/notes/NoteDetailModal';
@@ -34,11 +46,41 @@ import { QuickNoteEntry } from '../components/notes/QuickNoteEntry';
 import { PageHeader } from '../components/common/PageHeader';
 import { openNotesPopout } from '../utils/notesPopout';
 
+import { DocFolderTree, type QuickFilterKey } from '../components/notes/DocFolderTree';
+import { DocListPane } from '../components/notes/DocListPane';
+import { DocEditorPane } from '../components/notes/DocEditorPane';
+
 export interface NotesViewProps {
   db?: TaskPlannerDatabase | undefined;
 }
 
+export type NotesLayoutMode = '3column' | 'grid';
+
+const LAYOUT_PREF_KEY = 'planner:docs_layout_view';
+const FOLDER_PREF_KEY = 'planner:docs_active_folder';
+
 export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
+  // Layout mode: 3-column Docs app vs classic Grid View
+  const [layoutMode, setLayoutMode] = useState<NotesLayoutMode>(() => {
+    try {
+      return (localStorage.getItem(LAYOUT_PREF_KEY) as NotesLayoutMode) || '3column';
+    } catch {
+      return '3column';
+    }
+  });
+
+  const [activeFilter, setActiveFilter] = useState<QuickFilterKey | string>(() => {
+    try {
+      return localStorage.getItem(FOLDER_PREF_KEY) || 'inbox';
+    } catch {
+      return 'inbox';
+    }
+  });
+
+  const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
+
+  // Legacy grid view state
   const [searchText, setSearchText] = useState<string>('');
   const [entityFilter, setEntityFilter] = useState<'all' | 'standalone' | NoteEntityType>('all');
   const [selectedEntityId, setSelectedEntityId] = useState<string | undefined>(undefined);
@@ -46,11 +88,25 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
 
-  // Fetch all notes
+  // Save preferences
+  const handleLayoutModeChange = (mode: NotesLayoutMode) => {
+    setLayoutMode(mode);
+    try {
+      localStorage.setItem(LAYOUT_PREF_KEY, mode);
+    } catch {}
+  };
+
+  const handleFilterChange = (filter: QuickFilterKey | string) => {
+    setActiveFilter(filter);
+    try {
+      localStorage.setItem(FOLDER_PREF_KEY, filter);
+    } catch {}
+  };
+
+  // Fetch all notes from database
   const allNotes = useLiveQuery(
     async () => {
       const records = await db.notes.toArray();
-      // Sort pinned first, then updatedAt descending (D-24)
       return records.sort((a, b) => {
         if (a.isPinned !== b.isPinned) {
           return a.isPinned ? -1 : 1;
@@ -61,7 +117,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
     [db]
   );
 
-  // Fetch all note attachments for search across filenames and captions (D-17)
+  // Fetch note attachments for search
   const allAttachments = useLiveQuery(
     async () => {
       return await db.noteAttachments.toArray();
@@ -69,7 +125,6 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
     [db]
   );
 
-  // Attachment count & metadata mapping
   const noteAttachmentMeta = useMemo(() => {
     const counts = new Map<string, number>();
     const searchTexts = new Map<string, string[]>();
@@ -103,7 +158,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
     [db]
   );
 
-  // Entities list for item-level selection filter
+  // Entities list for filter options
   const entityItems = useLiveQuery(
     async () => {
       const [tasks, projects, milestones] = await Promise.all([
@@ -113,62 +168,167 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
       ]);
 
       return {
-        task: tasks
-          .map((t) => ({ value: t.id, label: t.name }))
-          .sort((a, b) => a.label.localeCompare(b.label)),
-        project: projects
-          .map((p) => ({ value: p.id, label: p.name }))
-          .sort((a, b) => a.label.localeCompare(b.label)),
-        milestone: milestones
-          .map((m) => ({ value: m.id, label: m.name }))
-          .sort((a, b) => a.label.localeCompare(b.label)),
+        task: tasks.map((t) => ({ value: t.id, label: t.name })).sort((a, b) => a.label.localeCompare(b.label)),
+        project: projects.map((p) => ({ value: p.id, label: p.name })).sort((a, b) => a.label.localeCompare(b.label)),
+        milestone: milestones.map((m) => ({ value: m.id, label: m.name })).sort((a, b) => a.label.localeCompare(b.label)),
       };
     },
     [db]
   );
 
-  const itemOptions: SelectProps['options'] = useMemo(() => {
-    if (!entityItems) return [];
-    if (entityFilter === 'task') return entityItems.task;
-    if (entityFilter === 'project') return entityItems.project;
-    if (entityFilter === 'milestone') return entityItems.milestone;
-    return [
-      { label: 'Tác vụ', options: entityItems.task },
-      { label: 'Dự án', options: entityItems.project },
-      { label: 'Cột mốc', options: entityItems.milestone },
-    ];
-  }, [entityItems, entityFilter]);
+  // Compute docs matching current navigation filter / tag in 3-column mode
+  const filteredDocList = useMemo(() => {
+    if (!allNotes) return [];
 
-  const itemPlaceholder = useMemo(() => {
-    if (entityFilter === 'task') return 'Lọc theo tác vụ cụ thể (Tất cả)';
-    if (entityFilter === 'project') return 'Lọc theo dự án cụ thể (Tất cả)';
-    if (entityFilter === 'milestone') return 'Lọc theo cột mốc cụ thể (Tất cả)';
-    return 'Lọc theo mục cụ thể (Tất cả)';
-  }, [entityFilter]);
+    return allNotes.filter((note) => {
+      // 1. Tag filter if selected
+      if (activeTag) {
+        if (!note.tags?.includes(activeTag)) return false;
+      }
 
-  const handleEntityFilterChange = (val: 'all' | 'standalone' | NoteEntityType) => {
-    setEntityFilter(val);
-    setSelectedEntityId(undefined);
+      // 2. Navigation quick filters
+      if (activeFilter === 'trash') {
+        return Boolean(note.deletedAt);
+      }
+
+      // Remaining filters require not deleted
+      if (note.deletedAt) return false;
+
+      if (activeFilter === 'inbox') {
+        return !note.parentId && (note.type === 'document' || !note.type);
+      }
+      if (activeFilter === 'pinned') {
+        return Boolean(note.isPinned);
+      }
+      if (activeFilter === 'all') {
+        return note.type === 'document' || !note.type;
+      }
+      if (activeFilter === 'quick_notes') {
+        return note.type === 'quick_note';
+      }
+
+      // Specific folder ID
+      return note.parentId === activeFilter;
+    });
+  }, [allNotes, activeFilter, activeTag]);
+
+  // Selected document instance for editor pane
+  const activeDocument = useMemo(() => {
+    if (!allNotes) return null;
+    if (selectedDocId) {
+      const found = allNotes.find((n) => n.id === selectedDocId);
+      if (found) return found;
+    }
+    // Default to first doc if available
+    return filteredDocList[0] || null;
+  }, [allNotes, selectedDocId, filteredDocList]);
+
+  // Create new document action
+  const handleCreateDocument = async () => {
+    try {
+      const newDoc = await createNote(
+        {
+          title: 'Tài liệu mới',
+          body: '# Tài liệu mới\n\nBắt đầu viết nội dung tại đây...',
+          type: 'document',
+          parentId: typeof activeFilter === 'string' && !['inbox', 'pinned', 'all', 'quick_notes', 'trash'].includes(activeFilter) ? activeFilter : undefined,
+          tags: activeTag ? [activeTag] : [],
+        },
+        db
+      );
+      setSelectedDocId(newDoc.id);
+      message.success('Đã tạo tài liệu mới');
+    } catch {
+      message.error('Không thể tạo tài liệu');
+    }
   };
 
-  // Filter notes by search text, entity category, and specific item
-  const filteredNotes = useMemo(() => {
+  // Create folder action
+  const handleCreateFolder = async (name: string) => {
+    try {
+      await createNote(
+        {
+          title: name,
+          body: '',
+          type: 'folder',
+        },
+        db
+      );
+      message.success(`Đã tạo thư mục "${name}"`);
+    } catch {
+      message.error('Không thể tạo thư mục');
+    }
+  };
+
+  // Update document action
+  const handleUpdateDocument = async (id: string, updates: Partial<Note>) => {
+    try {
+      await updateNote(id, updates, db);
+    } catch (err) {
+      console.warn('Failed to update doc:', err);
+    }
+  };
+
+  // Delete document action (soft delete vs permanent delete with backlinks warning)
+  const handleDeleteDocument = async (note: Note) => {
+    if (note.deletedAt) {
+      // In trash: Check backlinks before permanent delete (D-17)
+      try {
+        const backlinks = await getBacklinksForDoc(note.id, db);
+        const backlinkCount = backlinks.tasks.length + backlinks.projects.length + backlinks.referencingNotes.length;
+
+        if (backlinkCount > 0) {
+          Modal.confirm({
+            title: 'Cảnh báo xóa vĩnh viễn',
+            content: `Tài liệu "${note.title || 'Không tiêu đề'}" đang được ${backlinkCount} mục liên kết (Tasks/Projects). Vẫn tiếp tục xóa vĩnh viễn?`,
+            okText: 'Xóa vĩnh viễn',
+            okType: 'danger',
+            cancelText: 'Hủy',
+            onOk: async () => {
+              await permanentDeleteNote(note.id, db);
+              message.success('Đã xóa vĩnh viễn tài liệu');
+              if (selectedDocId === note.id) setSelectedDocId(null);
+            },
+          });
+          return;
+        }
+
+        await permanentDeleteNote(note.id, db);
+        message.success('Đã xóa vĩnh viễn tài liệu');
+        if (selectedDocId === note.id) setSelectedDocId(null);
+      } catch {
+        message.error('Không thể xóa vĩnh viễn');
+      }
+    } else {
+      // Move to trash (soft delete)
+      try {
+        await softDeleteNote(note.id, db);
+        message.success('Đã chuyển tài liệu vào thùng rác');
+        if (selectedDocId === note.id) setSelectedDocId(null);
+      } catch {
+        message.error('Không thể chuyển vào thùng rác');
+      }
+    }
+  };
+
+  // Filter notes for legacy grid view
+  const filteredGridNotes = useMemo(() => {
     if (!allNotes) return [];
 
     const lowerSearch = searchText.trim().toLowerCase();
 
     return allNotes.filter((note) => {
+      if (note.deletedAt) return false;
+
       // 1. Entity Filter
       if (entityFilter === 'standalone') {
         if (note.entityType) return false;
       } else if (entityFilter !== 'all') {
         if (note.entityType !== entityFilter) return false;
-        // Item-level filter
         if (selectedEntityId && note.entityId !== selectedEntityId) {
           return false;
         }
       } else if (selectedEntityId) {
-        // When category is 'all' but specific item is selected
         if (note.entityId !== selectedEntityId) {
           return false;
         }
@@ -180,11 +340,9 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
       const titleMatch = note.title?.toLowerCase().includes(lowerSearch);
       const bodyMatch = note.body.toLowerCase().includes(lowerSearch);
 
-      // Search in attachment filename and caption (D-17)
       const attTexts = noteAttachmentMeta.searchTexts.get(note.id) || [];
       const attachmentMatch = attTexts.some((t) => t.includes(lowerSearch));
 
-      // Search in parent entity name
       const parentName = note.entityType && note.entityId
         ? entityNames?.get(`${note.entityType}:${note.entityId}`)
         : undefined;
@@ -194,23 +352,6 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
     });
   }, [allNotes, searchText, entityFilter, selectedEntityId, noteAttachmentMeta, entityNames]);
 
-  const handleDelete = async (id: string) => {
-    try {
-      await deleteNote(id, db);
-      message.success('Đã xóa ghi chú');
-    } catch {
-      message.error('Không thể xóa ghi chú');
-    }
-  };
-
-  const handleTogglePin = async (note: Note) => {
-    try {
-      await updateNote(note.id, { isPinned: !note.isPinned }, db);
-    } catch {
-      message.error('Không thể thay đổi ghim');
-    }
-  };
-
   const handleOpenPopout = () => {
     openNotesPopout().catch((err) => {
       console.warn('Failed to open notes popout:', err);
@@ -218,259 +359,215 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* 1. Standard Page Header */}
+    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 84px)', overflow: 'hidden' }}>
+      {/* 1. Header with Mode Toggle */}
       <PageHeader
         title="Ghi chú & Tài liệu"
-        subtitle="Ghi chép nhanh, đính kèm hình ảnh và liên kết với tác vụ, dự án"
+        subtitle="Hệ thống quản lý tri thức, tài liệu Markdown và ghi chú nhanh cá nhân"
         extra={
           <Space>
+            <Segmented
+              value={layoutMode}
+              onChange={(val) => handleLayoutModeChange(val as NotesLayoutMode)}
+              options={[
+                { value: '3column', icon: <UnorderedListOutlined />, label: 'Docs (3 Cột)' },
+                { value: 'grid', icon: <AppstoreOutlined />, label: 'Ghi chú nhanh (Grid)' },
+              ]}
+            />
             <Tooltip title="Mở danh sách ghi chú trong cửa sổ nổi riêng biệt (Always on Top)">
               <Button icon={<ExportOutlined />} onClick={handleOpenPopout}>
                 Cửa sổ nổi
               </Button>
             </Tooltip>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => {
-                setEditingNote(null);
-                setEditorOpen(true);
-              }}
-            >
-              Tạo ghi chú
-            </Button>
+            {layoutMode === 'grid' && (
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  setEditingNote(null);
+                  setEditorOpen(true);
+                }}
+              >
+                Tạo ghi chú
+              </Button>
+            )}
           </Space>
         }
       />
 
-      {/* 2. Filter Controls */}
-      <div
-        style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 12,
-          alignItems: 'center',
-        }}
-      >
-        <Input
-          placeholder="Tìm theo nội dung, tiêu đề, mục cha, ảnh..."
-          prefix={<SearchOutlined />}
-          value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
-          allowClear
-          style={{ width: 280 }}
-        />
-
-        <Select
-          value={entityFilter}
-          onChange={handleEntityFilterChange}
-          style={{ width: 180 }}
-          options={[
-            { label: 'Tất cả ghi chú', value: 'all' },
-            { label: 'Ghi chú độc lập', value: 'standalone' },
-            { label: 'Gắn với Tác vụ', value: 'task' },
-            { label: 'Gắn với Dự án', value: 'project' },
-            { label: 'Gắn với Cột mốc', value: 'milestone' },
-          ]}
-        />
-
-        {entityFilter !== 'standalone' && (
-          <Select
-            allowClear
-            showSearch
-            placeholder={itemPlaceholder}
-            value={selectedEntityId}
-            onChange={(val) => setSelectedEntityId(val)}
-            style={{ minWidth: 260, flex: 1, maxWidth: 400 }}
-            options={itemOptions}
-            filterOption={(input, option) =>
-              ((option?.label as string) ?? '').toLowerCase().includes(input.toLowerCase())
-            }
-          />
-        )}
-      </div>
-
-      <div style={{ marginBottom: 20 }}>
-        <QuickNoteEntry db={db} />
-      </div>
-
-      {/* Notes Grid */}
-      {filteredNotes.length === 0 ? (
-        <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description="Không tìm thấy ghi chú nào phù hợp"
-          style={{ marginTop: 64 }}
-        />
-      ) : (
+      {/* 2. Main View Mode */}
+      {layoutMode === '3column' ? (
         <div
+          className="docs-3column-layout"
           style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-            gap: 16,
+            flex: 1,
+            minHeight: 0,
+            display: 'flex',
+            border: '1px solid #f0f0f0',
+            borderRadius: 8,
+            overflow: 'hidden',
+            backgroundColor: '#ffffff',
           }}
         >
-          {filteredNotes.map((note) => {
-            const attCount = noteAttachmentMeta.counts.get(note.id) || 0;
-            const entityLabel =
-              note.entityType && note.entityId
-                ? entityNames?.get(`${note.entityType}:${note.entityId}`) || `${note.entityType}`
-                : null;
+          {/* Column 1: Folder Tree (~220px) */}
+          <DocFolderTree
+            notes={allNotes || []}
+            activeFilter={activeFilter}
+            onSelectFilter={handleFilterChange}
+            onCreateDoc={handleCreateDocument}
+            onCreateFolder={handleCreateFolder}
+            activeTag={activeTag}
+            onSelectTag={setActiveTag}
+          />
 
-            return (
-              <Card
-                key={note.id}
-                size="small"
-                hoverable
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  borderTop: note.isPinned ? '3px solid #1677ff' : undefined,
-                  background: note.isPinned ? '#fafcff' : '#fff',
-                }}
-                styles={{
-                  body: {
-                    flex: 1,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    padding: 16,
-                  },
-                }}
-                role="button"
-                tabIndex={0}
-                onClick={() => setSelectedNote(note)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    setSelectedNote(note);
-                  }
-                }}
-              >
-                {/* Header: Title / Tags / Actions */}
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'flex-start',
-                    marginBottom: 8,
-                  }}
-                >
-                  <div style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                      {note.isPinned && (
-                        <Tag color="blue" icon={<PushpinFilled style={{ fontSize: 10 }} />}>
-                          Đã ghim
-                        </Tag>
-                      )}
-                      {note.entityType && (
-                        <Tag color="purple">
-                          {note.entityType}: {entityLabel || note.entityId}
-                        </Tag>
-                      )}
-                      {!note.entityType && <Tag>Độc lập</Tag>}
-                      {attCount > 0 && (
-                        <Tag icon={<PaperClipOutlined />}>
-                          {attCount} ảnh
-                        </Tag>
-                      )}
+          {/* Column 2: Document List (~300px) */}
+          <DocListPane
+            notes={filteredDocList}
+            selectedDocId={activeDocument?.id}
+            onSelectDoc={(doc) => setSelectedDocId(doc.id)}
+            onTogglePin={(doc) => handleUpdateDocument(doc.id, { isPinned: !doc.isPinned })}
+            onDeleteDoc={handleDeleteDocument}
+          />
+
+          {/* Column 3: Editor / Reader Split Pane */}
+          <DocEditorPane
+            doc={activeDocument}
+            onUpdateDoc={handleUpdateDocument}
+            onDeleteDoc={handleDeleteDocument}
+            db={db}
+          />
+        </div>
+      ) : (
+        /* Legacy Grid View */
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto', padding: '4px 0' }}>
+          {/* Filter Controls */}
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 12,
+              alignItems: 'center',
+            }}
+          >
+            <Input
+              placeholder="Tìm theo nội dung, tiêu đề, mục cha, ảnh..."
+              prefix={<SearchOutlined />}
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              allowClear
+              style={{ width: 280 }}
+            />
+
+            <Select
+              value={entityFilter}
+              onChange={(val) => {
+                setEntityFilter(val);
+                setSelectedEntityId(undefined);
+              }}
+              style={{ width: 180 }}
+              options={[
+                { label: 'Tất cả ghi chú', value: 'all' },
+                { label: 'Ghi chú độc lập', value: 'standalone' },
+                { label: 'Gắn với Tác vụ', value: 'task' },
+                { label: 'Gắn với Dự án', value: 'project' },
+                { label: 'Gắn với Cột mốc', value: 'milestone' },
+              ]}
+            />
+          </div>
+
+          <QuickNoteEntry db={db} />
+
+          {/* Grid Cards */}
+          {filteredGridNotes.length === 0 ? (
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description="Không tìm thấy ghi chú nào phù hợp"
+              style={{ marginTop: 64 }}
+            />
+          ) : (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+                gap: 16,
+              }}
+            >
+              {filteredGridNotes.map((note) => {
+                const attCount = noteAttachmentMeta.counts.get(note.id) || 0;
+                const entityLabel =
+                  note.entityType && note.entityId
+                    ? entityNames?.get(`${note.entityType}:${note.entityId}`) || `${note.entityType}`
+                    : null;
+
+                return (
+                  <Card
+                    key={note.id}
+                    size="small"
+                    hoverable
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      borderTop: note.isPinned ? '3px solid #1677ff' : undefined,
+                      background: note.isPinned ? '#fafcff' : '#fff',
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelectedNote(note)}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                      <div style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          {note.isPinned && <Tag color="blue">Đã ghim</Tag>}
+                          {note.entityType && <Tag color="purple">{note.entityType}: {entityLabel || note.entityId}</Tag>}
+                          {!note.entityType && <Tag>Độc lập</Tag>}
+                          {attCount > 0 && <Tag icon={<PaperClipOutlined />}>{attCount} ảnh</Tag>}
+                        </div>
+                        <Typography.Title level={5} style={{ marginTop: 6, marginBottom: 0 }}>
+                          {note.title || '(Không tiêu đề)'}
+                        </Typography.Title>
+                      </div>
+
+                      <Space size={2}>
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<EditOutlined />}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingNote(note);
+                            setEditorOpen(true);
+                          }}
+                        />
+                        <Popconfirm
+                          title="Xóa ghi chú này?"
+                          onConfirm={() => deleteNote(note.id, db)}
+                          okText="Xóa"
+                          cancelText="Hủy"
+                        >
+                          <Button
+                            type="text"
+                            danger
+                            size="small"
+                            icon={<DeleteOutlined />}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </Popconfirm>
+                      </Space>
                     </div>
-                    <Typography.Title
-                      level={5}
-                      style={{
-                        marginTop: 6,
-                        marginBottom: 0,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {note.title || '(Không tiêu đề)'}
-                    </Typography.Title>
-                  </div>
 
-                  <Space size={2}>
-                    <Tooltip title={note.isPinned ? 'Bỏ ghim' : 'Ghim lên đầu'}>
-                      <Button
-                        type="text"
-                        size="small"
-                        icon={
-                          note.isPinned ? (
-                            <PushpinFilled style={{ color: '#1677ff' }} />
-                          ) : (
-                            <PushpinOutlined />
-                          )
-                        }
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void handleTogglePin(note);
-                        }}
-                      />
-                    </Tooltip>
-                    <Tooltip title="Chỉnh sửa">
-                      <Button
-                        type="text"
-                        size="small"
-                        icon={<EditOutlined />}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setEditingNote(note);
-                          setEditorOpen(true);
-                        }}
-                      />
-                    </Tooltip>
-                    <Popconfirm
-                      title="Xóa ghi chú này?"
-                      description="Ghi chú và tất cả ảnh đính kèm sẽ bị xóa."
-                      onConfirm={() => void handleDelete(note.id)}
-                      okText="Xóa"
-                      cancelText="Hủy"
-                    >
-                      <Button
-                        type="text"
-                        danger
-                        size="small"
-                        icon={<DeleteOutlined />}
-                        onClick={(event) => event.stopPropagation()}
-                      />
-                    </Popconfirm>
-                  </Space>
-                </div>
-
-                {/* Markdown content preview */}
-                <div
-                  style={{
-                    flex: 1,
-                    maxHeight: 180,
-                    overflowY: 'auto',
-                    fontSize: 13,
-                    lineHeight: '1.6',
-                    color: '#434343',
-                    marginBottom: 12,
-                    whiteSpace: 'pre-wrap',
-                  }}
-                  dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(note.body) }}
-                />
-
-                {/* Footer metadata */}
-                <div
-                  style={{
-                    paddingTop: 8,
-                    borderTop: '1px solid #f0f0f0',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                  }}
-                >
-                  <Typography.Text type="secondary" style={{ fontSize: 11 }}>
-                    {new Date(note.updatedAt).toLocaleString('vi-VN')}
-                  </Typography.Text>
-                </div>
-              </Card>
-            );
-          })}
+                    <div
+                      style={{ maxHeight: 180, overflowY: 'auto', fontSize: 13, lineHeight: '1.6', color: '#434343' }}
+                      dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(note.body) }}
+                    />
+                  </Card>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
+      {/* Note Detail Modal */}
       <NoteDetailModal
         open={Boolean(selectedNote)}
         note={selectedNote}
@@ -483,6 +580,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
         db={db}
       />
 
+      {/* Note Editor Modal */}
       {editorOpen && (
         <NoteEditor
           open={editorOpen}
