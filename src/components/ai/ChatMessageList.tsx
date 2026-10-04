@@ -101,7 +101,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
           }}
         >
           <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: token.colorText }}>
-            Trợ lý AI Task Planner
+            Trợ lý AI PlannerMate
           </div>
           <div style={{ fontSize: 13, lineHeight: 1.6, maxWidth: 360, margin: '0 auto' }}>
             Đặt câu hỏi về tác vụ hiện tại, phân tích tiến độ, gợi ý checklist hoặc tra cứu tài liệu đính kèm. Nhập câu hỏi bên dưới để bắt đầu.

@@ -45,7 +45,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'query_tasks',
       description:
-        'Query or search tasks in Task Planner. Returns tasks enriched with project/milestone names, logged hours, recurring schedule, and checklists. Can filter by projectId, milestoneId, status, priority, or search keywords.',
+        'Query or search tasks in PlannerMate. Returns tasks enriched with project/milestone names, logged hours, recurring schedule, and checklists. Can filter by projectId, milestoneId, status, priority, or search keywords.',
       parameters: {
         type: 'object',
         properties: {
@@ -83,7 +83,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'query_projects',
       description:
-        'List or search all projects in Task Planner. Returns project metadata, statuses, milestone counts, total task counts, and total logged minutes.',
+        'List or search all projects in PlannerMate. Returns project metadata, statuses, milestone counts, total task counts, and total logged minutes.',
       parameters: {
         type: 'object',
         properties: {
@@ -108,7 +108,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'query_milestones',
       description:
-        'List or search milestones in Task Planner. Returns milestone metadata, parent project name, task counts, and deadlines.',
+        'List or search milestones in PlannerMate. Returns milestone metadata, parent project name, task counts, and deadlines.',
       parameters: {
         type: 'object',
         properties: {
@@ -343,7 +343,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'query_recurring_tasks',
       description:
-        'List all recurring task templates in Task Planner, including frequency, repeat days of week, intervals, and recurrence end dates.',
+        'List all recurring task templates in PlannerMate, including frequency, repeat days of week, intervals, and recurrence end dates.',
       parameters: {
         type: 'object',
         properties: {},
@@ -368,7 +368,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'create_task',
       description:
-        'Create a new task in Task Planner. Can optionally specify project, milestone, priority, estimate, deadline, work type, tags, and checklist.',
+        'Create a new task in PlannerMate. Can optionally specify project, milestone, priority, estimate, deadline, work type, tags, and checklist.',
       parameters: {
         type: 'object',
         properties: {
@@ -500,7 +500,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     type: 'function',
     function: {
       name: 'create_project',
-      description: 'Create a new project in Task Planner.',
+      description: 'Create a new project in PlannerMate.',
       parameters: {
         type: 'object',
         properties: {

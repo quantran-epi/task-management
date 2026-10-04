@@ -2,7 +2,7 @@
 
 ## Project
 
-**Personal Task & Workload Planner**
+**PlannerMate**
 
 A private, offline-first web application for one person to manage projects, milestones, and tasks while planning work against daily capacity. It combines fast task management with workload forecasting, feasibility checks, and suggested daily hour allocation, and runs as an installable PWA hosted on GitHub Pages.
 

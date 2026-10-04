@@ -104,7 +104,7 @@ export const NotificationSettingsCard: React.FC<NotificationSettingsCardProps> =
         await saveSettings({ browserNotificationsEnabled: true });
         message.success('Đã bật thông báo màn hình.');
         await sendDesktopNotification({
-          title: 'Task Planner - Thông báo màn hình',
+          title: 'PlannerMate - Thông báo màn hình',
           body: 'Thông báo màn hình đã được kích hoạt thành công.',
           requireInteraction: settings.requireInteractionEnabled,
         });
@@ -128,7 +128,7 @@ export const NotificationSettingsCard: React.FC<NotificationSettingsCardProps> =
           await saveSettings({ browserNotificationsEnabled: true });
           message.success('Đã bật thông báo màn hình.');
           await sendDesktopNotification({
-            title: 'Task Planner - Thông báo màn hình',
+            title: 'PlannerMate - Thông báo màn hình',
             body: 'Thông báo màn hình đã được kích hoạt thành công.',
             requireInteraction: settings.requireInteractionEnabled,
           });
@@ -227,7 +227,7 @@ export const NotificationSettingsCard: React.FC<NotificationSettingsCardProps> =
                 return;
               }
               const sent = await sendDesktopNotification({
-                title: 'Task Planner - Thông báo thử nghiệm',
+                title: 'PlannerMate - Thông báo thử nghiệm',
                 body: 'Thông báo màn hình đang hoạt động với cài đặt của bạn.',
                 requireInteraction: settings.requireInteractionEnabled,
               });

@@ -22,7 +22,7 @@ describe('AppShell Component (UX-01)', () => {
       </ConfigProvider>
     );
 
-    expect(screen.getAllByText('Task Planner').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('PlannerMate').length).toBeGreaterThan(0);
     expect(screen.getByText('Trực tuyến')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Mở tìm kiếm nhanh/i })).toBeInTheDocument();
     expect(screen.getByText('Shell Content')).toBeInTheDocument();

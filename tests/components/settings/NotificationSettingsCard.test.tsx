@@ -192,7 +192,7 @@ describe('NotificationSettingsCard (D-10, D-11, NOTIF-08, TAURI-NOTIF-DESKTOP-DI
     await waitFor(() => {
       expect(mockNotification).toHaveBeenCalledTimes(1);
       expect(mockNotification).toHaveBeenCalledWith(
-        'Task Planner - Thông báo thử nghiệm',
+        'PlannerMate - Thông báo thử nghiệm',
         expect.objectContaining({
           body: expect.stringContaining('Thông báo màn hình đang hoạt động'),
           requireInteraction: true,
@@ -226,7 +226,7 @@ describe('NotificationSettingsCard (D-10, D-11, NOTIF-08, TAURI-NOTIF-DESKTOP-DI
     await waitFor(() => {
       expect(tauriPluginNotification.sendNotification).toHaveBeenCalledWith(
         expect.objectContaining({
-          title: 'Task Planner - Thông báo thử nghiệm',
+          title: 'PlannerMate - Thông báo thử nghiệm',
           body: 'Thông báo màn hình đang hoạt động với cài đặt của bạn.',
         })
       );

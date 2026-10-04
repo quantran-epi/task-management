@@ -127,7 +127,7 @@ export function useDesktopNotification({
         const summaryText = `Bạn có ${overdue} việc quá hạn, ${overload} ngày quá tải, và ${totalPending} việc cần xử lý.`;
 
         sendDesktopNotification({
-          title: 'Task Planner',
+          title: 'PlannerMate',
           body: summaryText,
           requireInteraction: settingsData.settings.requireInteractionEnabled,
         });
@@ -162,7 +162,7 @@ export function useDesktopNotification({
         item.category === 'reminder'
           ? item.title
           : `[${item.tagLabel || 'Cảnh báo'}] ${item.title}`;
-      const body = item.subtitle || item.tagLabel || 'Thông báo từ Task Planner';
+      const body = item.subtitle || item.tagLabel || 'Thông báo từ PlannerMate';
 
       sendDesktopNotification({
         title,

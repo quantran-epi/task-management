@@ -298,7 +298,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
                   whiteSpace: 'nowrap',
                 }}
               >
-                Task Planner
+                PlannerMate
               </span>
             )}
           </div>
@@ -314,7 +314,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <BrandLogo size={26} />
               <span style={{ fontWeight: 700, fontSize: 16, letterSpacing: '-0.02em' }}>
-                Task Planner
+                PlannerMate
               </span>
             </div>
           }
@@ -355,7 +355,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               {isMobile && <BrandLogo size={26} />}
               <Title level={4} style={{ margin: 0, fontWeight: 700, letterSpacing: '-0.02em' }}>
-                Task Planner
+                PlannerMate
               </Title>
             </div>
           </Space>

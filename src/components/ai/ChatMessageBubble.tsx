@@ -218,7 +218,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
                 {streamingStatus || 'Đang suy nghĩ câu trả lời...'}
               </Text>
               <Text type="secondary" style={{ fontSize: 11 }}>
-                {streamingStatus ? 'Task Planner AI Harness' : 'Đang xử lý qua 9router...'}
+                {streamingStatus ? 'PlannerMate AI Harness' : 'Đang xử lý qua 9router...'}
               </Text>
             </div>
           </div>

@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Personal Task and Workload Planner",
+  "productName": "PlannerMate",
   "version": "0.1.0",
   "identifier": "com.personal.taskplanner",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Personal Task & Workload Planner",
+        "title": "PlannerMate",
         "width": 1280,
         "height": 800,
         "minWidth": 900,
