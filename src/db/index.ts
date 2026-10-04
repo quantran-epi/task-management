@@ -1,5 +1,15 @@
 import Dexie, { type Table } from 'dexie';
-import { SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7, SCHEMA_V8 } from './schema';
+import {
+  SCHEMA_V1,
+  SCHEMA_V2,
+  SCHEMA_V3,
+  SCHEMA_V4,
+  SCHEMA_V5,
+  SCHEMA_V6,
+  SCHEMA_V7,
+  SCHEMA_V8,
+  SCHEMA_V9,
+} from './schema';
 import type {
   Project,
   Milestone,
@@ -133,6 +143,23 @@ export class TaskPlannerDatabase extends Dexie {
       });
 
     this.version(8).stores(SCHEMA_V8);
+
+    this.version(9)
+      .stores(SCHEMA_V9)
+      .upgrade(async (tx) => {
+        // Migration: populate default type and tags for existing notes (D-01, D-02)
+        await tx
+          .table('notes')
+          .toCollection()
+          .modify((note: Record<string, unknown>) => {
+            if (!note.type) {
+              note.type = 'quick_note';
+            }
+            if (!Array.isArray(note.tags)) {
+              note.tags = [];
+            }
+          });
+      });
 
     // Multi-tab concurrency handlers (DATA-04, D-09, D-10)
     this.on('blocked', () => {

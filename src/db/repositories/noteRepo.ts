@@ -23,6 +23,10 @@ export async function createNote(
 
   const note: Note = {
     id: generateId(),
+    type: validated.type,
+    ...(validated.parentId ? { parentId: validated.parentId } : {}),
+    ...(validated.tags ? { tags: validated.tags } : { tags: [] }),
+    ...(validated.slug?.trim() ? { slug: validated.slug.trim() } : {}),
     ...(validated.entityType ? { entityType: validated.entityType } : {}),
     ...(validated.entityId ? { entityId: validated.entityId } : {}),
     ...(validated.title?.trim() ? { title: validated.title.trim() } : {}),
@@ -48,6 +52,17 @@ export async function updateNote(
   const now = new Date().toISOString();
   const updated: Note = {
     ...existing,
+    ...(validated.type !== undefined ? { type: validated.type } : {}),
+    ...(validated.tags !== undefined ? { tags: validated.tags } : {}),
+    ...(validated.slug !== undefined
+      ? validated.slug ? { slug: validated.slug.trim() } : {}
+      : existing.slug ? { slug: existing.slug } : {}),
+    ...(validated.parentId !== undefined
+      ? validated.parentId ? { parentId: validated.parentId } : {}
+      : existing.parentId ? { parentId: existing.parentId } : {}),
+    ...(validated.deletedAt !== undefined
+      ? validated.deletedAt ? { deletedAt: validated.deletedAt } : {}
+      : existing.deletedAt ? { deletedAt: existing.deletedAt } : {}),
     ...(validated.entityType !== undefined
       ? validated.entityType ? { entityType: validated.entityType } : {}
       : existing.entityType ? { entityType: existing.entityType } : {}),
@@ -72,6 +87,15 @@ export async function updateNote(
   if (validated.title === undefined && 'title' in updates && !updates.title) {
     delete updated.title;
   }
+  if (validated.parentId === null || ('parentId' in updates && !updates.parentId)) {
+    delete updated.parentId;
+  }
+  if (validated.slug === null || ('slug' in updates && !updates.slug)) {
+    delete updated.slug;
+  }
+  if (validated.deletedAt === null || ('deletedAt' in updates && !updates.deletedAt)) {
+    delete updated.deletedAt;
+  }
 
   await db.notes.put(updated);
   return updated;
@@ -87,6 +111,74 @@ export async function deleteNote(
       await db.noteAttachments.bulkDelete(attachments.map((a) => a.id));
     }
     await db.notes.delete(id);
+  });
+}
+
+export async function permanentDeleteNote(
+  id: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<void> {
+  await deleteNote(id, db);
+}
+
+export async function softDeleteNote(
+  id: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<void> {
+  const existing = await db.notes.get(id);
+  if (!existing) return;
+  const now = new Date().toISOString();
+  await db.notes.update(id, {
+    deletedAt: now,
+    updatedAt: now,
+  });
+}
+
+export async function restoreNote(
+  id: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<void> {
+  const existing = await db.notes.get(id);
+  if (!existing) return;
+  const now = new Date().toISOString();
+  await db.notes.update(id, {
+    deletedAt: undefined,
+    updatedAt: now,
+  });
+}
+
+export async function getNotesByFolder(
+  folderId?: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<Note[]> {
+  const collection = db.notes.toCollection();
+  const notes = await collection
+    .filter((n) => {
+      if (n.deletedAt) return false;
+      if (folderId === undefined) {
+        return !n.parentId;
+      }
+      return n.parentId === folderId;
+    })
+    .toArray();
+
+  return notes.sort((a, b) => {
+    if (a.isPinned !== b.isPinned) {
+      return a.isPinned ? -1 : 1;
+    }
+    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+  });
+}
+
+export async function getTrashNotes(
+  db: TaskPlannerDatabase = defaultDb
+): Promise<Note[]> {
+  const notes = await db.notes
+    .filter((n) => n.deletedAt != null && n.deletedAt !== undefined)
+    .toArray();
+
+  return notes.sort((a, b) => {
+    return new Date(b.deletedAt || b.updatedAt).getTime() - new Date(a.deletedAt || a.updatedAt).getTime();
   });
 }
 

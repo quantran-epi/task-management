@@ -321,19 +321,29 @@ export const WorkSessionInputSchema = z
   );
 
 export const NOTE_ENTITY_TYPES = ['task', 'project', 'milestone'] as const;
+export const NOTE_TYPES = ['quick_note', 'document'] as const;
 
 export const NoteSchema = z.object({
   id: uuidSchema,
+  type: z.enum(NOTE_TYPES).default('quick_note'),
+  parentId: uuidSchema.optional(),
+  tags: z.array(z.string().trim().min(1).max(50)).max(30).optional(),
+  slug: z.string().trim().max(120).optional(),
   entityType: z.enum(NOTE_ENTITY_TYPES).optional(),
   entityId: uuidSchema.optional(),
   title: z.string().trim().max(120, 'Tiêu đề tối đa 120 ký tự').optional(),
   body: z.string().max(50000, 'Nội dung ghi chú tối đa 50000 ký tự'),
   isPinned: z.boolean(),
+  deletedAt: z.string().datetime({ message: 'deletedAt must be a valid ISO 8601 string' }).optional(),
   createdAt: z.string().datetime({ message: 'createdAt must be a valid ISO 8601 string' }),
   updatedAt: z.string().datetime({ message: 'updatedAt must be a valid ISO 8601 string' }),
 });
 
 export const NoteInputSchema = z.object({
+  type: z.enum(NOTE_TYPES).default('quick_note'),
+  parentId: uuidSchema.optional(),
+  tags: z.array(z.string().trim().min(1).max(50)).max(30).optional(),
+  slug: z.string().trim().max(120).optional(),
   entityType: z.enum(NOTE_ENTITY_TYPES).optional(),
   entityId: uuidSchema.optional(),
   title: z.string().trim().max(120, 'Tiêu đề tối đa 120 ký tự').optional(),
@@ -342,11 +352,16 @@ export const NoteInputSchema = z.object({
 });
 
 export const NoteUpdateSchema = z.object({
+  type: z.enum(NOTE_TYPES).optional(),
+  parentId: uuidSchema.optional().nullable(),
+  tags: z.array(z.string().trim().min(1).max(50)).max(30).optional(),
+  slug: z.string().trim().max(120).optional().nullable(),
   entityType: z.enum(NOTE_ENTITY_TYPES).optional(),
   entityId: uuidSchema.optional(),
   title: z.string().trim().max(120, 'Tiêu đề tối đa 120 ký tự').optional(),
   body: z.string().min(1, 'Nội dung không được để trống').max(50000, 'Nội dung tối đa 50000 ký tự').optional(),
   isPinned: z.boolean().optional(),
+  deletedAt: z.string().datetime({ message: 'deletedAt must be a valid ISO 8601 string' }).optional().nullable(),
 });
 
 export const NOTE_ATTACHMENT_MIME_TYPES = [

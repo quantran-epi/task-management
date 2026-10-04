@@ -167,14 +167,20 @@ export interface ActiveTimer {
 }
 
 export type NoteEntityType = 'task' | 'project' | 'milestone';
+export type NoteType = 'quick_note' | 'document';
 
 export interface Note {
   id: string; // RFC 4122 v4 UUID
+  type?: NoteType | undefined; // D-01: 'quick_note' or 'document'
+  parentId?: string | undefined; // D-02: Folder hierarchy
+  tags?: string[] | undefined; // Taxonomy tags
+  slug?: string | undefined; // URL / human readable slug
   entityType?: NoteEntityType | undefined; // Optional reference type
   entityId?: string | undefined; // Optional reference to Task/Project/Milestone id
   title?: string | undefined;
   body: string; // Markdown text content
   isPinned: boolean;
+  deletedAt?: string | undefined; // D-17: Soft delete timestamp
   createdAt: string; // ISO string metadata
   updatedAt: string; // ISO string metadata
 }

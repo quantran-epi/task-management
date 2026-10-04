@@ -65,5 +65,11 @@ export const SCHEMA_V8 = {
   chatMessages: 'id, threadId, role, createdAt',
 } as const;
 
+export const SCHEMA_V9 = {
+  ...SCHEMA_V8,
+  notes: 'id, type, parentId, entityType, entityId, isPinned, deletedAt, *tags, createdAt, updatedAt',
+} as const;
+
+
 
 
