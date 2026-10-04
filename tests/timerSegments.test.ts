@@ -39,6 +39,7 @@ describe('Timer Segments and Schema V7 Migration (Task 1)', () => {
       title: 'Sprint Notes',
       body: 'Important discussion items',
       isPinned: true,
+      type: 'quick_note',
       createdAt: '2026-10-01T08:00:00.000Z',
       updatedAt: '2026-10-01T08:30:00.000Z',
     };
@@ -95,11 +96,11 @@ describe('Timer Segments and Schema V7 Migration (Task 1)', () => {
 
     v6Db.close();
 
-    // 2. Open with TaskPlannerDatabase (v7)
+    // 2. Open with TaskPlannerDatabase (v7/v8/v9)
     const v7Db = new TaskPlannerDatabase(dbName);
     await v7Db.open();
 
-    expect(v7Db.verno).toBe(8);
+    expect(v7Db.verno).toBe(9);
 
     // Verify stores exist
     expect(v7Db.table('notes')).toBeDefined();
