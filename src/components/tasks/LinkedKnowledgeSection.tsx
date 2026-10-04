@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Tag, Typography, Tooltip } from 'antd';
+import { Tag, Typography, Tooltip, Spin } from 'antd';
 import { FileTextOutlined } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
@@ -55,7 +55,7 @@ export const LinkedKnowledgeSection: React.FC<LinkedKnowledgeSectionProps> = ({
     [docIds, db]
   );
 
-  if (docIds.length === 0 && (!linkedDocs || linkedDocs.length === 0)) {
+  if (docIds.length === 0 || (linkedDocs !== undefined && linkedDocs.length === 0)) {
     return null;
   }
 
@@ -100,9 +100,12 @@ export const LinkedKnowledgeSection: React.FC<LinkedKnowledgeSectionProps> = ({
             </Tooltip>
           ))
         ) : (
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            Đang tải tài liệu...
-          </Text>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Spin size="small" />
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              Đang tải tài liệu...
+            </Text>
+          </div>
         )}
       </div>
     </div>
