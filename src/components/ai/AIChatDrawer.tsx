@@ -26,6 +26,10 @@ import {
   extractMentionedEntityIds,
 } from '../../services/ai/contextGrounding';
 import {
+  pruneToolOutputsInMessages,
+  selectMessagesWithinBudget,
+} from '../../services/ai/historyPruning';
+import {
   AI_DATABASE_TOOLS,
   executeAiTool,
   isMutationTool,
@@ -425,17 +429,32 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         if (effectiveScope.type === 'task') {
           const t = await getTask(effectiveScope.id, db);
           if (t) {
-            systemInstruction = await buildItemContextPrompt({ entityType: 'task', item: t, db });
+            systemInstruction = await buildItemContextPrompt({
+              entityType: 'task',
+              item: t,
+              db,
+              charLimit: config.charLimit,
+            });
           }
         } else if (effectiveScope.type === 'project') {
           const p = await getProject(effectiveScope.id, db);
           if (p) {
-            systemInstruction = await buildItemContextPrompt({ entityType: 'project', item: p, db });
+            systemInstruction = await buildItemContextPrompt({
+              entityType: 'project',
+              item: p,
+              db,
+              charLimit: config.charLimit,
+            });
           }
         } else if (effectiveScope.type === 'milestone') {
           const m = await getMilestone(effectiveScope.id, db);
           if (m) {
-            systemInstruction = await buildItemContextPrompt({ entityType: 'milestone', item: m, db });
+            systemInstruction = await buildItemContextPrompt({
+              entityType: 'milestone',
+              item: m,
+              db,
+              charLimit: config.charLimit,
+            });
           }
         }
       } catch (err) {
@@ -463,7 +482,12 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       try {
         const t = await getTask(tid, db);
         if (t) {
-          const serialized = await buildItemContextPrompt({ entityType: 'task', item: t, db });
+          const serialized = await buildItemContextPrompt({
+            entityType: 'task',
+            item: t,
+            db,
+            charLimit: config.charLimit,
+          });
           mentionedContexts.push(serialized);
         }
       } catch (err) {
@@ -476,7 +500,12 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       try {
         const p = await getProject(pid, db);
         if (p) {
-          const serialized = await buildItemContextPrompt({ entityType: 'project', item: p, db });
+          const serialized = await buildItemContextPrompt({
+            entityType: 'project',
+            item: p,
+            db,
+            charLimit: config.charLimit,
+          });
           mentionedContexts.push(serialized);
         }
       } catch (err) {
@@ -540,7 +569,13 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
       content: systemPromptContent,
     });
 
-    for (const m of msgsToSend.slice(-20)) {
+    const historyBudget = (config.charLimit || 12000) * 2.5;
+    const budgetedMsgs = selectMessagesWithinBudget(msgsToSend, {
+      maxMessages: 20,
+      maxTotalChars: historyBudget,
+    });
+
+    for (const m of budgetedMsgs) {
       recentMsgs.push({
         role: m.role,
         content: m.id === savedUserMsg.id && effectivePrompt !== trimmed ? effectivePrompt : m.content,
@@ -579,12 +614,13 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
         let toolCallsToRun: ToolCall[] = [];
 
         try {
+          const messagesToSend = pruneToolOutputsInMessages(currentMessages);
           const stream = streamChatEvents({
             endpoint: config.endpoint,
             apiKey,
             payload: {
               model: targetModel,
-              messages: currentMessages,
+              messages: messagesToSend,
               tools: AI_DATABASE_TOOLS,
             },
             signal: controller.signal,
@@ -611,7 +647,7 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
               apiKey,
               payload: {
                 model: targetModel,
-                messages: currentMessages,
+                messages: pruneToolOutputsInMessages(currentMessages),
               },
               signal: controller.signal,
             });

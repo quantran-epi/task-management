@@ -29,7 +29,7 @@ Phase: 13.2
 Plan: Not started
 Status: Phase complete — ready for verification
 Next recommended run: /gsd-execute-phase 13.2
-Last activity: 2026-10-04 - Completed quick task 261004-nls: fix note detail modal layout shift on open/close and display entity name in note detail modal
+Last activity: 2026-10-04 - Completed quick task 261004-chp: context history pruning and char limit wiring
 
 ### Quick Tasks Completed
 
@@ -71,6 +71,7 @@ Last activity: 2026-10-04 - Completed quick task 261004-nls: fix note detail mod
 | 261004-nps | normalize page structure UI across all views with unified PageHeader, update top header, enable notes search by parent name, and add item filter to NotesView | 2026-10-04 | — | complete | [261004-nps-normalize-page-structure-and-notes-filter](./quick/261004-nps-normalize-page-structure-and-notes-filter/) |
 | 261004-nls | fix note detail modal layout shift on open/close and display entity name in note detail modal | 2026-10-04 | — | complete | [261004-nls-fix-note-detail-modal-layout-shift-and-entity-name](./quick/261004-nls-fix-note-detail-modal-layout-shift-and-entity-name/) |
 | 261004-ash | app shortcuts with HUD autocomplete, cross-platform modifiers, multi-key combos, and view actions | 2026-10-04 | — | complete | [261004-ash-app-shortcuts-with-hud-autocomplete](./quick/261004-ash-app-shortcuts-with-hud-autocomplete/) |
+| 261004-chp | wire charLimit config to context grounding and add lightweight history and tool output pruning | 2026-10-04 | 7897cc3 | complete | [261004-chp-context-history-pruning-and-char-limit](./quick/261004-chp-context-history-pruning-and-char-limit/) |
 
 ## Performance Metrics
 

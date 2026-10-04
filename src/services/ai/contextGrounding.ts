@@ -156,16 +156,23 @@ export function serializeMilestoneContext(milestone: Milestone): string {
 export interface BuildItemContextPromptOptions {
   entityType: 'task' | 'project' | 'milestone';
   item: Task | Project | Milestone;
-  db?: TaskPlannerDatabase;
-  fileReader?: (filePath: string, maxLines?: number) => Promise<string | null>;
+  db?: TaskPlannerDatabase | undefined;
+  fileReader?: ((filePath: string, maxLines?: number) => Promise<string | null>) | undefined;
+  charLimit?: number | undefined;
 }
 
 /**
  * Builds comprehensive item context prompt with notes and document grounding
- * strictly clamped at 12,000 characters per D-10 and T-13.2-06.
+ * strictly clamped at charLimit (default 12,000 characters) per D-10 and T-13.2-06.
  */
 export async function buildItemContextPrompt(options: BuildItemContextPromptOptions): Promise<string> {
-  const { entityType, item, db = defaultDb, fileReader = defaultFileReader } = options;
+  const {
+    entityType,
+    item,
+    db = defaultDb,
+    fileReader = defaultFileReader,
+    charLimit = MAX_CONTEXT_CHAR_LIMIT,
+  } = options;
 
   let baseXml = '';
   if (entityType === 'task') {
@@ -323,14 +330,16 @@ export async function buildItemContextPrompt(options: BuildItemContextPromptOpti
   const combinedBody = sections.join('\n\n');
   const fullPrefix = `${openTag}\n`;
   const fullSuffix = '\n</item_context>';
-  const maxBodyLength = MAX_CONTEXT_CHAR_LIMIT - fullPrefix.length - fullSuffix.length;
+  const effectiveLimit = Math.max(500, charLimit);
+  const maxBodyLength = effectiveLimit - fullPrefix.length - fullSuffix.length;
 
   if (combinedBody.length <= maxBodyLength) {
     return `${fullPrefix}${combinedBody}${fullSuffix}`;
   }
 
   // Strict truncation clamping
-  const truncationNotice = '\n... [Truncated at 12,000 character limit]';
+  const formattedLimit = effectiveLimit.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const truncationNotice = `\n... [Truncated at ${formattedLimit} character limit]`;
   const allowedLength = maxBodyLength - truncationNotice.length;
   const clampedBody = combinedBody.slice(0, Math.max(0, allowedLength));
 

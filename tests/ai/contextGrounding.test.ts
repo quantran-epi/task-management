@@ -284,6 +284,52 @@ describe('contextGrounding', () => {
       expect(prompt.endsWith('</item_context>')).toBe(true);
     });
 
+    it('respects custom charLimit when provided in options', async () => {
+      const longNoteBody = 'B'.repeat(10000);
+      const mockNotes: Note[] = [
+        {
+          id: 'note-custom-limit',
+          entityType: 'task',
+          entityId: 'task-123',
+          body: longNoteBody,
+          isPinned: false,
+          createdAt: '2026-10-02T10:00:00Z',
+          updatedAt: '2026-10-02T10:00:00Z',
+        },
+      ];
+
+      const mockDb: any = {
+        notes: {
+          where: () => ({
+            equals: () => ({
+              filter: () => ({
+                toArray: async () => mockNotes,
+              }),
+            }),
+          }),
+        },
+        noteAttachments: {
+          where: () => ({
+            equals: () => ({
+              toArray: async () => [],
+            }),
+          }),
+        },
+      };
+
+      const customLimit = 5000;
+      const prompt = await buildItemContextPrompt({
+        entityType: 'task',
+        item: mockTask,
+        db: mockDb,
+        charLimit: customLimit,
+      });
+
+      expect(prompt.length).toBeLessThanOrEqual(customLimit);
+      expect(prompt).toContain('... [Truncated at 5,000 character limit]');
+      expect(prompt.endsWith('</item_context>')).toBe(true);
+    });
+
     it('serializes child milestones and child tasks when grounding a project', async () => {
       const mockDb: any = {
         notes: { where: () => ({ equals: () => ({ filter: () => ({ toArray: async () => [] }) }) }) },
