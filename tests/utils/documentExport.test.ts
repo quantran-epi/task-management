@@ -30,6 +30,7 @@ describe('documentExport utility', () => {
       title: 'Tài liệu kiến trúc',
       body: '# Nội dung\nChi tiết hệ thống',
       tags: ['architecture', 'backend'],
+      isPinned: false,
       createdAt: '2026-10-04T00:00:00.000Z',
       updatedAt: '2026-10-04T12:00:00.000Z',
       slug: 'tai-lieu-kien-truc',
@@ -48,6 +49,7 @@ describe('documentExport utility', () => {
       id: 'doc-123',
       title: 'Tài liệu test',
       body: '# Test\nNội dung',
+      isPinned: false,
       createdAt: '2026-10-04T00:00:00.000Z',
       updatedAt: '2026-10-04T12:00:00.000Z',
     };
@@ -75,6 +77,7 @@ describe('documentExport utility', () => {
         id: 'doc-1',
         title: 'Doc 1',
         body: 'Body 1',
+        isPinned: false,
         createdAt: '2026-10-04T00:00:00.000Z',
         updatedAt: '2026-10-04T12:00:00.000Z',
       },

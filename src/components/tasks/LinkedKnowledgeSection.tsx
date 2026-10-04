@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
-import { Tag, Typography, Button, Tooltip, Empty } from 'antd';
-import { FileTextOutlined, LinkOutlined } from '@ant-design/icons';
+import { Tag, Typography, Tooltip } from 'antd';
+import { FileTextOutlined } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { Note } from '../../types/models';
@@ -12,11 +12,11 @@ export interface LinkedKnowledgeSectionProps {
   notes?: string | undefined;
   documentLinks?: string[] | undefined;
   onOpenDocPreview: (docId: string) => void;
-  db?: TaskPlannerDatabase;
+  db?: TaskPlannerDatabase | undefined;
 }
 
 export const LinkedKnowledgeSection: React.FC<LinkedKnowledgeSectionProps> = ({
-  taskId,
+  taskId: _taskId,
   notes,
   documentLinks = [],
   onOpenDocPreview,

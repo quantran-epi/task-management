@@ -2,7 +2,6 @@ import React, { useState, useMemo } from 'react';
 import { Input, Select, Typography, Empty, Tag, Dropdown, type MenuProps } from 'antd';
 import {
   SearchOutlined,
-  SortAscendingOutlined,
   PushpinFilled,
   PushpinOutlined,
   FolderOutlined,
@@ -19,11 +18,11 @@ export type DocSortOption = 'updatedAt' | 'title' | 'createdAt';
 
 export interface DocListPaneProps {
   notes: Note[];
-  selectedDocId?: string | null;
+  selectedDocId?: string | null | undefined;
   onSelectDoc: (doc: Note) => void;
-  onTogglePin?: (doc: Note) => void;
-  onMoveToFolder?: (doc: Note) => void;
-  onDeleteDoc?: (doc: Note) => void;
+  onTogglePin?: ((doc: Note) => void) | undefined;
+  onMoveToFolder?: ((doc: Note) => void) | undefined;
+  onDeleteDoc?: ((doc: Note) => void) | undefined;
 }
 
 export const DocListPane: React.FC<DocListPaneProps> = ({
@@ -225,7 +224,7 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     {doc.isPinned && <PushpinFilled style={{ color: '#4f46e5', fontSize: 11 }} />}
-                    <Dropdown menu={{ items: getItemMenuItems(doc) }} trigger={['click']}>
+                    <Dropdown menu={{ items: getItemMenuItems(doc) ?? [] }} trigger={['click']}>
                       <span
                         role="button"
                         tabIndex={0}

@@ -322,7 +322,7 @@ export const WorkSessionInputSchema = z
   );
 
 export const NOTE_ENTITY_TYPES = ['task', 'project', 'milestone'] as const;
-export const NOTE_TYPES = ['quick_note', 'document'] as const;
+export const NOTE_TYPES = ['quick_note', 'document', 'folder'] as const;
 
 export const NoteSchema = z.object({
   id: uuidSchema,

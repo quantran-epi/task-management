@@ -1,5 +1,5 @@
 import React from 'react';
-import { Typography, List, Tag } from 'antd';
+import { Typography, Tag } from 'antd';
 import { LinkOutlined, CheckSquareOutlined, FolderOutlined, FileTextOutlined } from '@ant-design/icons';
 import type { Task, Project, Note } from '../../types/models';
 

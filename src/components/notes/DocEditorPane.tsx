@@ -9,7 +9,6 @@ import {
   Typography,
   message,
   Popconfirm,
-  Badge,
 } from 'antd';
 import {
   EditOutlined,
@@ -19,12 +18,9 @@ import {
   FullscreenExitOutlined,
   RobotOutlined,
   DeleteOutlined,
-  PushpinFilled,
-  PushpinOutlined,
-  CheckOutlined,
   CloudSyncOutlined,
 } from '@ant-design/icons';
-import type { Note, Task, Project, Milestone } from '../../types/models';
+import type { Note } from '../../types/models';
 import { renderSafeMarkdown } from '../../utils/markdown';
 import { extractMarkdownMetadata, detectReferencedEntities, type DetectedEntity } from '../../utils/smartIngestion';
 import { SmartIngestionBanner } from './SmartIngestionBanner';
@@ -188,7 +184,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
     if (!doc) return;
     if (aiChat?.openChat) {
       aiChat.openChat(
-        { type: 'item', id: doc.id, title: doc.title || 'Tài liệu' },
+        { type: 'document', id: doc.id, title: doc.title || 'Tài liệu' },
         `Hãy tóm tắt và phân tích tài liệu "${doc.title || 'này'}" giúp tôi.`
       );
     }

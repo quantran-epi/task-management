@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Card,
   Input,
@@ -13,13 +13,10 @@ import {
   message,
   Segmented,
   Modal,
-  type SelectProps,
 } from 'antd';
 import {
   SearchOutlined,
   PlusOutlined,
-  PushpinFilled,
-  PushpinOutlined,
   EditOutlined,
   DeleteOutlined,
   PaperClipOutlined,
@@ -36,7 +33,6 @@ import {
   createNote,
   softDeleteNote,
   permanentDeleteNote,
-  restoreNote,
 } from '../db/repositories/noteRepo';
 import { getBacklinksForDoc } from '../db/repositories/documentLinkRepo';
 import { renderSafeMarkdown } from '../utils/markdown';
@@ -154,24 +150,6 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
       projects.forEach((p) => map.set(`project:${p.id}`, p.name));
       milestones.forEach((m) => map.set(`milestone:${m.id}`, m.name));
       return map;
-    },
-    [db]
-  );
-
-  // Entities list for filter options
-  const entityItems = useLiveQuery(
-    async () => {
-      const [tasks, projects, milestones] = await Promise.all([
-        db.tasks.toArray(),
-        db.projects.toArray(),
-        db.milestones.toArray(),
-      ]);
-
-      return {
-        task: tasks.map((t) => ({ value: t.id, label: t.name })).sort((a, b) => a.label.localeCompare(b.label)),
-        project: projects.map((p) => ({ value: p.id, label: p.name })).sort((a, b) => a.label.localeCompare(b.label)),
-        milestone: milestones.map((m) => ({ value: m.id, label: m.name })).sort((a, b) => a.label.localeCompare(b.label)),
-      };
     },
     [db]
   );
@@ -423,7 +401,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
           {/* Column 2: Document List (~300px) */}
           <DocListPane
             notes={filteredDocList}
-            selectedDocId={activeDocument?.id}
+            selectedDocId={activeDocument?.id ?? null}
             onSelectDoc={(doc) => setSelectedDocId(doc.id)}
             onTogglePin={(doc) => handleUpdateDocument(doc.id, { isPinned: !doc.isPinned })}
             onDeleteDoc={handleDeleteDocument}

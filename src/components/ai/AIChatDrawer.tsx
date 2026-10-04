@@ -910,10 +910,12 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
 
   const handleSaveStickyNote = async (content: string) => {
     try {
+      const scopeType = currentScope.type;
+      const entityType = (scopeType === 'task' || scopeType === 'project' || scopeType === 'milestone') ? scopeType : undefined;
       await createNote(
         {
-          entityType: currentScope.type !== 'global' ? currentScope.type : undefined,
-          entityId: currentScope.type !== 'global' ? currentScope.id : undefined,
+          entityType,
+          entityId: entityType ? currentScope.id : undefined,
           title: `Ghi chú AI - ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
           body: content,
         },

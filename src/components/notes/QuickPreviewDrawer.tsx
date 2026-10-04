@@ -19,7 +19,7 @@ export interface QuickPreviewDrawerProps {
   docId: string | null;
   onClose: () => void;
   onNavigateToDocs?: ((docId: string) => void) | undefined;
-  db?: TaskPlannerDatabase;
+  db?: TaskPlannerDatabase | undefined;
 }
 
 /**

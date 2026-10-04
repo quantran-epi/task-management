@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Button, Input, Modal, Popconfirm, Tag, Tooltip, Tree, Typography } from 'antd';
+import { Button, Input, Modal, Tag, Tooltip, Tree, Typography } from 'antd';
 import type { TreeDataNode } from 'antd';
 import {
   FolderOutlined,
@@ -66,7 +66,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
 
   // 4. Folder structure: notes of type folder (or parentId groups)
   const folders = React.useMemo(() => {
-    return activeNotes.filter((n) => (n.type as string) === 'folder');
+    return activeNotes.filter((n) => n.type === 'folder');
   }, [activeNotes]);
 
   const treeData: TreeDataNode[] = React.useMemo(() => {

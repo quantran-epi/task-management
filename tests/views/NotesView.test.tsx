@@ -45,7 +45,7 @@ describe('NotesView 3-Column Document Workspace', () => {
   });
 
   it('filters documents in DocListPane and displays selection in DocEditorPane', async () => {
-    const doc1 = await createNote({ title: 'Design Specs', body: '# Design Specs\nUI Guidelines here', type: 'document' }, testDb);
+    await createNote({ title: 'Design Specs', body: '# Design Specs\nUI Guidelines here', type: 'document' }, testDb);
     await createNote({ title: 'Meeting Notes', body: 'Discuss sprint goals without title heading', type: 'document' }, testDb);
 
     render(<NotesView db={testDb} />);
@@ -59,7 +59,9 @@ describe('NotesView 3-Column Document Workspace', () => {
 
     // Click on Design Specs in doc list to select it
     const listItems = screen.getAllByText('Design Specs');
-    fireEvent.click(listItems[0]);
+    if (listItems[0]) {
+      fireEvent.click(listItems[0]);
+    }
 
     // Search filter
     const searchInput = screen.getByPlaceholderText('Tìm trong danh sách...');

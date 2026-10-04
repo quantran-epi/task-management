@@ -167,7 +167,7 @@ export interface ActiveTimer {
 }
 
 export type NoteEntityType = 'task' | 'project' | 'milestone';
-export type NoteType = 'quick_note' | 'document';
+export type NoteType = 'quick_note' | 'document' | 'folder';
 
 export interface Note {
   id: string; // RFC 4122 v4 UUID
@@ -197,7 +197,7 @@ export interface NoteAttachment {
   filePath?: string | undefined; // Local disk file path
 }
 
-export type ChatScopeType = 'global' | 'task' | 'project' | 'milestone';
+export type ChatScopeType = 'global' | 'task' | 'project' | 'milestone' | 'document';
 
 export interface ChatThread {
   id: string; // RFC 4122 v4 UUID

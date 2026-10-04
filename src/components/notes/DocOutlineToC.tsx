@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Typography, Empty } from 'antd';
+import { Typography } from 'antd';
 import { OrderedListOutlined } from '@ant-design/icons';
 
 const { Text } = Typography;
