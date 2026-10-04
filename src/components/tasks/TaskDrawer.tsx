@@ -45,6 +45,8 @@ import { RemindersFormList, formatRemindersForForm, formatRemindersForSave } fro
 import { TaskChecklistSection } from './TaskChecklistSection';
 import { WORK_TYPE_CONFIG } from './WorkTypeBadge';
 import { resolveInheritedTags } from '../../domain/inheritance';
+import { LinkedKnowledgeSection } from './LinkedKnowledgeSection';
+import { QuickPreviewDrawer } from '../notes/QuickPreviewDrawer';
 import type { TaskPlannerDatabase } from '../../db';
 
 export interface TaskDrawerProps {
@@ -131,6 +133,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
   const [currentTask, setCurrentTask] = useState<Task | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [previewDocId, setPreviewDocId] = useState<string | null>(null);
   const selectedProjectId = Form.useWatch('projectId', form);
   const watchHours = Form.useWatch('hours', form);
   const watchMinutes = Form.useWatch('minutes', form);
@@ -747,6 +750,14 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
       {renderSection(
         'Tài liệu & ghi chú',
         <>
+          <LinkedKnowledgeSection
+            taskId={currentTask?.id || ''}
+            notes={currentTask?.notes}
+            documentLinks={currentTask?.documentLinks}
+            onOpenDocPreview={(docId) => setPreviewDocId(docId)}
+            db={db}
+          />
+
           <Form.Item label="Tài liệu liên kết">
             <Form.List name="documentLinks">
               {(fields, { add, remove }) => (
@@ -903,6 +914,13 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
       }
     >
       <Tabs defaultActiveKey="details" items={tabItems} />
+
+      <QuickPreviewDrawer
+        docId={previewDocId}
+        open={Boolean(previewDocId)}
+        onClose={() => setPreviewDocId(null)}
+        db={db}
+      />
     </Drawer>
   );
 };

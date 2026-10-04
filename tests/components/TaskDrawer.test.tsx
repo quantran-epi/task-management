@@ -276,4 +276,47 @@ describe('TaskDrawer', () => {
     expect(screen.getByText('Tích hợp Jira Cloud')).toBeInTheDocument();
     expect(screen.getByText('Tác vụ chưa được liên kết với Jira Issue nào.')).toBeInTheDocument();
   });
+
+  it('renders LinkedKnowledgeSection and triggers QuickPreviewDrawer on click', async () => {
+    const { createNote } = await import('../../src/db/repositories/noteRepo');
+    const doc = await createNote(
+      {
+        title: 'Tài liệu kiến trúc hệ thống',
+        body: '# Kiến trúc\nChi tiết mô hình DB...',
+        type: 'document',
+      },
+      testDb
+    );
+
+    const task = await createTask(
+      {
+        name: 'Nhiệm vụ có doc liên kết',
+        notes: `Ghi chú task [[doc:${doc.id}|Tài liệu kiến trúc hệ thống]]`,
+        status: 'Open',
+        documentLinks: [doc.id],
+      },
+      testDb
+    );
+
+    render(
+      <TaskDrawer
+        taskId={task.id}
+        open={true}
+        onClose={vi.fn()}
+        db={testDb}
+      />
+    );
+
+    await screen.findByDisplayValue('Nhiệm vụ có doc liên kết');
+
+    // Should render LinkedKnowledgeSection with doc title
+    expect(await screen.findByText('Tài liệu kiến trúc hệ thống')).toBeInTheDocument();
+
+    // Click on the linked doc chip to trigger QuickPreviewDrawer
+    const docChip = screen.getByText('Tài liệu kiến trúc hệ thống');
+    fireEvent.click(docChip);
+
+    // QuickPreviewDrawer should slide out showing doc preview
+    expect(await screen.findByText('Mở trong Docs')).toBeInTheDocument();
+  });
 });

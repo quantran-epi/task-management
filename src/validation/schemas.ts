@@ -132,12 +132,13 @@ const linkSchema = z
   .min(1, 'Link must not be empty')
   .refine(
     (val) =>
+      isValidUuid(val) || // Document UUID link
       /^https?:\/\//i.test(val) || // HTTP/HTTPS URL
       /^file:\/\//i.test(val) || // file:// URI
       /^[A-Za-z]:\\/.test(val) || // Windows path: C:\...
       /^\//.test(val) || // Unix absolute path: /Users/...
       /^\\\\/.test(val), // UNC path: \\server\share
-    { message: 'Liên kết phải là URL (http/https), đường dẫn thư mục, hoặc file URI.' }
+    { message: 'Liên kết phải là URL (http/https), đường dẫn thư mục, file URI, hoặc ID tài liệu hợp lệ.' }
   );
 
 export const ProjectInputSchema = z.object({
