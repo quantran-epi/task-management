@@ -310,7 +310,7 @@ Plans:
 **Goal:** Deliver an offline-first Personal Knowledge Management (PKM) engine with 3-column Docs workspace, folder tree taxonomy, Markdown split preview with outline ToC, Wiki-link bidirectional linking, 1-Click Smart Ingestion flow, lexical BM25 search with Vietnamese diacritic tolerance, and grounded AI retrieval with clickable citations.
 **Requirements**: REQ-14.1, REQ-14.2, REQ-14.3, REQ-14.4, REQ-14.5, REQ-14.6
 **Depends on:** Phase 13
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans complete
 Plans:
 **Wave 1**
 
@@ -323,4 +323,4 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 14-04-PLAN.md — 3-column Docs workspace in NotesView, folder tree, document list, split editor, ToC rail, TaskDrawer Linked Knowledge, Backlinks, Trash bin, and Markdown/Zip export (Wave 3)
+- [x] 14-04-PLAN.md — 3-column Docs workspace in NotesView, folder tree, document list, split editor, ToC rail, TaskDrawer Linked Knowledge, Backlinks, Trash bin, and Markdown/Zip export (Wave 3)

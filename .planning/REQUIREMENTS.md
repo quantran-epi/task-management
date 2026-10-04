@@ -91,7 +91,7 @@
 - [x] **REQ-14.3**: Markdown renderer parses inline Wiki-links (`[[doc:id|Title]]`, `[[task:id|Title]]`, `[[project:id|Title]]`) into interactive chips and binary attachments (`attachment:uuid`) safely without XSS.
 - [x] **REQ-14.4**: Smart Ingestion flow extracts markdown headings/hashtags and regex-detects Jira keys and existing task/project titles with a 1-click "Áp dụng tất cả" banner.
 - [x] **REQ-14.5**: AI tools `search_knowledge_base` and `get_document_details` provide BM25-ranked snippets within character budget, supported by `@doc:` autocomplete and clickable citation chips opening a Quick Preview Drawer.
-- [ ] **REQ-14.6**: NotesView provides a unified 3-column document workspace (Folder Tree + Document List + Split Editor/Reader with ToC and Backlinks), TaskDrawer Linked Knowledge integration, and Markdown/Zip export.
+- [x] **REQ-14.6**: NotesView provides a unified 3-column document workspace (Folder Tree + Document List + Split Editor/Reader with ToC and Backlinks), TaskDrawer Linked Knowledge integration, and Markdown/Zip export.
 
 ## Future Requirements (Deferred)
 
@@ -160,4 +160,4 @@
 | REQ-14.3 | Phase 14 | Complete |
 | REQ-14.4 | Phase 14 | Complete |
 | REQ-14.5 | Phase 14 | Complete |
-| REQ-14.6 | Phase 14 | Pending |
+| REQ-14.6 | Phase 14 | Complete |
