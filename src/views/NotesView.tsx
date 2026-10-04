@@ -47,6 +47,7 @@ import { openNotesPopout } from '../utils/notesPopout';
 import { DocFolderTree, type QuickFilterKey } from '../components/notes/DocFolderTree';
 import { DocListPane } from '../components/notes/DocListPane';
 import { DocEditorPane } from '../components/notes/DocEditorPane';
+import { DocFolderContentsView } from '../components/notes/DocFolderContentsView';
 import { ZipImportPreviewModal } from '../components/notes/ZipImportPreviewModal';
 
 const { Text } = Typography;
@@ -99,6 +100,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
 
   const handleFilterChange = (filter: QuickFilterKey | string) => {
     setActiveFilter(filter);
+    setSelectedDocId(null);
     try {
       localStorage.setItem(FOLDER_PREF_KEY, filter);
     } catch {}
@@ -181,7 +183,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
         return !note.parentId && (note.type === 'document' || !note.type);
       }
       if (activeFilter === 'pinned') {
-        return Boolean(note.isPinned);
+        return Boolean(note.isPinned) && note.type !== 'folder';
       }
       if (activeFilter === 'all') {
         return note.type === 'document' || !note.type;
@@ -190,21 +192,43 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
         return note.type === 'quick_note';
       }
 
-      // Specific folder ID
-      return note.parentId === activeFilter;
+      // Specific folder ID: strictly exclude folder notes
+      return note.parentId === activeFilter && note.type !== 'folder';
     });
   }, [allNotes, activeFilter, activeTag]);
 
-  // Selected document instance for editor pane
+  // Selected document instance for editor pane (only when explicitly selected)
   const activeDocument = useMemo(() => {
-    if (!allNotes) return null;
-    if (selectedDocId) {
-      const found = allNotes.find((n) => n.id === selectedDocId);
-      if (found) return found;
-    }
-    // Default to first doc if available
-    return filteredDocList[0] || null;
-  }, [allNotes, selectedDocId, filteredDocList]);
+    if (!allNotes || !selectedDocId) return null;
+    const found = allNotes.find((n) => n.id === selectedDocId && n.type !== 'folder');
+    return found || null;
+  }, [allNotes, selectedDocId]);
+
+  // Subfolders in current scope (either inside current folder or root folders for inbox)
+  const currentSubfolders = useMemo(() => {
+    if (!allNotes) return [];
+    const activeNotes = allNotes.filter((n) => !n.deletedAt);
+    const targetParentId =
+      typeof activeFilter === 'string' && !['inbox', 'pinned', 'all', 'quick_notes', 'trash'].includes(activeFilter)
+        ? activeFilter
+        : null;
+
+    const matchedFolders = activeNotes.filter((n) => {
+      if (n.type !== 'folder') return false;
+      if (targetParentId) {
+        return n.parentId === targetParentId;
+      }
+      if (activeFilter === 'inbox') {
+        return !n.parentId;
+      }
+      return false;
+    });
+
+    return matchedFolders.map((folder) => {
+      const docCount = activeNotes.filter((n) => n.parentId === folder.id && n.type !== 'folder').length;
+      return { folder, docCount };
+    });
+  }, [allNotes, activeFilter]);
 
   // Current selected folder note if viewing a specific folder
   const currentFolder = useMemo(() => {
@@ -640,16 +664,55 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
             onCreateDoc={() => handleCreateDocument(currentFolder?.id)}
           />
 
-          {/* Column 3: Editor / Reader Split Pane */}
-          <DocEditorPane
-            key={activeDocument?.id ?? 'empty'}
-            doc={activeDocument}
-            onUpdateDoc={handleUpdateDocument}
-            onDeleteDoc={handleDeleteDocument}
-            onRestoreDoc={handleRestoreDocument}
-            onSelectDoc={(id) => setSelectedDocId(id)}
-            db={db}
-          />
+          {/* Column 3: Editor or Folder Contents View */}
+          {activeDocument ? (
+            <DocEditorPane
+              key={activeDocument.id}
+              doc={activeDocument}
+              onUpdateDoc={handleUpdateDocument}
+              onDeleteDoc={handleDeleteDocument}
+              onRestoreDoc={handleRestoreDocument}
+              onSelectDoc={(id) => setSelectedDocId(id)}
+              db={db}
+            />
+          ) : (
+            <DocFolderContentsView
+              currentFolder={currentFolder}
+              folderPath={folderPath}
+              subfolders={currentSubfolders}
+              documents={filteredDocList}
+              activeFilter={activeFilter}
+              onNavigateFolder={handleFilterChange}
+              onSelectDoc={(doc) => setSelectedDocId(doc.id)}
+              onCreateDoc={() => handleCreateDocument(currentFolder?.id)}
+              onCreateSubfolder={() => {
+                let tempName = '';
+                Modal.confirm({
+                  title: currentFolder
+                    ? `Tạo thư mục con trong "${currentFolder.title}"`
+                    : 'Tạo thư mục mới',
+                  content: (
+                    <Input
+                      placeholder="Tên thư mục..."
+                      autoFocus
+                      onChange={(e) => {
+                        tempName = e.target.value;
+                      }}
+                    />
+                  ),
+                  okText: 'Tạo',
+                  cancelText: 'Hủy',
+                  onOk: async () => {
+                    const trimmed = tempName.trim();
+                    if (trimmed) {
+                      await handleCreateFolder(trimmed, currentFolder?.id);
+                    }
+                  },
+                });
+              }}
+              onOpenZipImport={handleOpenZipImport}
+            />
+          )}
         </div>
       ) : (
         /* Legacy Grid View */
