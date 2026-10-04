@@ -23,6 +23,7 @@ export interface ChatInputBarProps {
   isStreaming?: boolean | undefined;
   disabled?: boolean | undefined;
   placeholder?: string | undefined;
+  autoFocus?: boolean | undefined;
   db?: TaskPlannerDatabase | undefined;
 }
 
@@ -65,7 +66,8 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   onStop,
   isStreaming = false,
   disabled = false,
-  placeholder = 'Hỏi AI, gõ @ cho task, # cho project, / cho lệnh... (Cmd+Enter để gửi)',
+  placeholder = 'Hỏi AI... (@, #, /)',
+  autoFocus = false,
   db = defaultDb,
 }) => {
   const { token } = theme.useToken();
@@ -89,6 +91,15 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (autoFocus && !disabled && !isStreaming) {
+      const timer = setTimeout(() => {
+        mentionsRef.current?.focus();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [autoFocus, disabled, isStreaming]);
 
   const clearInput = (el?: HTMLTextAreaElement | null) => {
     setValue('');
@@ -387,6 +398,9 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
             textarea: {
               fontSize: 14,
               borderRadius: 8,
+              lineHeight: '22px',
+              padding: '4px 11px',
+              resize: 'none',
             },
           }}
           style={{
