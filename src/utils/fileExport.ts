@@ -132,7 +132,22 @@ function createStoreZip(entries: ZipEntry[]): Blob {
   eocdView.setUint32(16, centralDirOffset, true); // Offset of start of central directory
   eocdView.setUint16(20, 0, true); // Comment length
 
-  return new Blob([...localHeaderChunks, ...centralDirChunks, eocd], {
+  // Combine all Uint8Array chunks into a single ArrayBuffer for standard Blob compatibility
+  const totalLength = offset + centralDirSize + eocd.length;
+  const outBuffer = new Uint8Array(totalLength);
+  let pos = 0;
+
+  for (const chunk of localHeaderChunks) {
+    outBuffer.set(chunk, pos);
+    pos += chunk.length;
+  }
+  for (const chunk of centralDirChunks) {
+    outBuffer.set(chunk, pos);
+    pos += chunk.length;
+  }
+  outBuffer.set(eocd, pos);
+
+  return new Blob([outBuffer.buffer as ArrayBuffer], {
     type: 'application/octet-stream',
   });
 }

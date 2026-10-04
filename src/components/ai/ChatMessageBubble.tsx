@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Typography, Button, Tooltip, theme, message, Spin, Tag } from 'antd';
+import React, { useState, useMemo } from 'react';
+import { Typography, Button, Tooltip, theme, message, Spin, Tag, Dropdown } from 'antd';
+import type { MenuProps } from 'antd';
 import {
   CopyOutlined,
   CheckOutlined,
@@ -10,9 +11,14 @@ import {
   CodeOutlined,
   LoadingOutlined,
   SyncOutlined,
+  DownloadOutlined,
+  FileWordOutlined,
+  FileExcelOutlined,
+  FileMarkdownOutlined,
 } from '@ant-design/icons';
 import type { ChatMessage } from '../../types/models';
 import { renderSafeMarkdown } from '../../utils/markdown';
+import { exportContentAsFile, type ExportFormat } from '../../utils/fileExport';
 
 const { Text } = Typography;
 
@@ -201,6 +207,83 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
     setNoteSaved(true);
   };
 
+  const hasMarkdownTable = useMemo(() => {
+    return /\|.+?\|.+?\|/.test(msg.content);
+  }, [msg.content]);
+
+  const handleExportFile = (format: ExportFormat) => {
+    try {
+      // Derive clean base filename: check first heading (# Title) or fallback to timestamp
+      const firstHeadingMatch = msg.content.match(/^#{1,3}\s+(.+)$/m);
+      let baseName = '';
+      if (firstHeadingMatch && firstHeadingMatch[1]) {
+        baseName = firstHeadingMatch[1]
+          .trim()
+          .replace(/[\\/:*?"<>|#]/g, '')
+          .replace(/\s+/g, '-')
+          .slice(0, 40);
+      }
+      if (!baseName) {
+        baseName = `plannermate-ai-${new Date().toISOString().slice(0, 10)}`;
+      }
+
+      const result = exportContentAsFile(msg.content, `${baseName}.${format}`, format);
+      message.success(`Đã tải xuống ${result.filename}`);
+    } catch (err: unknown) {
+      message.error(`Không thể xuất tệp: ${(err as Error)?.message || 'Lỗi không xác định'}`);
+    }
+  };
+
+  const exportMenuItems: MenuProps['items'] = useMemo(() => {
+    const tableHighlightStyle = hasMarkdownTable
+      ? { fontWeight: 600, color: token.colorPrimary }
+      : undefined;
+
+    return [
+      {
+        key: 'docx',
+        icon: <FileWordOutlined style={{ color: '#185abd' }} />,
+        label: 'Word Document (.docx)',
+        onClick: () => handleExportFile('docx'),
+      },
+      {
+        key: 'xlsx',
+        icon: <FileExcelOutlined style={{ color: '#107c41' }} />,
+        label: (
+          <span style={tableHighlightStyle}>
+            Excel Spreadsheet (.xlsx) {hasMarkdownTable ? '★' : ''}
+          </span>
+        ),
+        onClick: () => handleExportFile('xlsx'),
+      },
+      {
+        key: 'csv',
+        icon: <FileTextOutlined style={{ color: '#107c41' }} />,
+        label: (
+          <span style={tableHighlightStyle}>
+            CSV Data (.csv) {hasMarkdownTable ? '★' : ''}
+          </span>
+        ),
+        onClick: () => handleExportFile('csv'),
+      },
+      {
+        type: 'divider',
+      },
+      {
+        key: 'md',
+        icon: <FileMarkdownOutlined style={{ color: '#0969da' }} />,
+        label: 'Markdown (.md)',
+        onClick: () => handleExportFile('md'),
+      },
+      {
+        key: 'txt',
+        icon: <FileTextOutlined style={{ color: '#666666' }} />,
+        label: 'Văn bản thuần (.txt)',
+        onClick: () => handleExportFile('txt'),
+      },
+    ];
+  }, [hasMarkdownTable, token.colorPrimary]);
+
   const formattedTime = msg.createdAt
     ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : '';
@@ -343,6 +426,16 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               Chạy với Claude Code
             </Button>
           )}
+
+          <Dropdown menu={{ items: exportMenuItems }} trigger={['click']} placement="bottomLeft">
+            <Button
+              size="small"
+              icon={<DownloadOutlined />}
+              style={{ fontSize: 12, height: 24, padding: '0 8px' }}
+            >
+              Xuất tệp
+            </Button>
+          </Dropdown>
         </div>
       )}
 
