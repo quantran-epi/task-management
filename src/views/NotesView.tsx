@@ -642,6 +642,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
 
           {/* Column 3: Editor / Reader Split Pane */}
           <DocEditorPane
+            key={activeDocument?.id ?? 'empty'}
             doc={activeDocument}
             onUpdateDoc={handleUpdateDocument}
             onDeleteDoc={handleDeleteDocument}

@@ -25,6 +25,7 @@ import {
   CheckSquareOutlined,
   FolderOutlined,
   UndoOutlined,
+  OrderedListOutlined,
 } from '@ant-design/icons';
 import type { Note } from '../../types/models';
 import { renderSafeMarkdown } from '../../utils/markdown';
@@ -40,6 +41,8 @@ import { TaskDrawer } from '../tasks/TaskDrawer';
 const { Text, Title } = Typography;
 
 export type EditorViewMode = 'edit' | 'preview' | 'split';
+
+const TOC_PREF_KEY = 'planner:docs_toc_visible';
 
 export interface DocEditorPaneProps {
   doc: Note | null;
@@ -70,7 +73,29 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
   const [saveStatus, setSaveStatus] = useState<string>('');
   const [detectedEntities, setDetectedEntities] = useState<DetectedEntity[]>([]);
   const [backlinks, setBacklinks] = useState<BacklinksResult>({ tasks: [], projects: [], referencingNotes: [] });
-  const [showToC, setShowToC] = useState(true);
+  const [showToC, setShowToC] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('planner:docs_toc_visible');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const toggleToC = () => {
+    setShowToC((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('planner:docs_toc_visible', String(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  const hasHeadings = useMemo(() => {
+    if (!body) return false;
+    return /(^|\r?\n)#{1,3}\s+\S+/m.test(body);
+  }, [body]);
 
   // Wiki-link autocomplete popup state
   interface CandidateItem {
@@ -491,12 +516,13 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
 
         {/* Right Actions */}
         <Space size={8}>
-          <Tooltip title="Mục lục bài viết">
+          <Tooltip title={hasHeadings ? 'Mục lục bài viết' : 'Tài liệu chưa có tiêu đề để tạo mục lục'}>
             <Button
               size="small"
-              type={showToC ? 'primary' : 'default'}
-              ghost={showToC}
-              onClick={() => setShowToC(!showToC)}
+              type={showToC && hasHeadings ? 'primary' : 'default'}
+              ghost={showToC && hasHeadings}
+              disabled={!hasHeadings}
+              onClick={toggleToC}
             >
               Mục lục
             </Button>
@@ -517,6 +543,16 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
               size="small"
               icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
               onClick={toggleFullscreen}
+            />
+          </Tooltip>
+
+          <Tooltip title={showToC ? 'Ẩn mục lục' : 'Hiện mục lục'}>
+            <Button
+              size="small"
+              type={showToC ? 'default' : 'dashed'}
+              icon={<OrderedListOutlined />}
+              onClick={toggleToC}
+              style={{ color: showToC ? '#4f46e5' : undefined }}
             />
           </Tooltip>
 
@@ -834,7 +870,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
         )}
 
         {/* Outline ToC Rail */}
-        {showToC && (
+        {showToC && hasHeadings && (
           <div
             style={{
               width: 180,

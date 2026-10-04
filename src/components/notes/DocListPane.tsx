@@ -328,7 +328,7 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
                   cursor: 'pointer',
                   backgroundColor: isSelected ? '#f0f2ff' : '#ffffff',
                   border: isSelected ? '1px solid #c7d2fe' : '1px solid #f0f0f0',
-                  borderLeft: isSelected ? '3px solid #4f46e5' : '1px solid #f0f0f0',
+                  borderLeft: isSelected ? '3px solid #4f46e5' : '3px solid transparent',
                   boxShadow: isSelected ? '0 1px 3px rgba(79, 70, 229, 0.1)' : 'none',
                   transition: 'all 0.15s ease',
                   position: 'relative',
