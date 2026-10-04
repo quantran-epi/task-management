@@ -68,6 +68,22 @@ describe('nineRouterTokenService (Web mode)', () => {
     expect(updated.defaultModel).toBe('claude-3-5-sonnet');
   });
 
+  it('supports freely configurable charLimit (including large limits for frontier models)', async () => {
+    // Default limit
+    const initialConfig = await getNineRouterConfig(db);
+    expect(initialConfig.charLimit).toBe(12000);
+
+    // Set large frontier model budget (500k chars ~ 125k tokens)
+    await setNineRouterConfig({ charLimit: 500000 }, db);
+    const updated = await getNineRouterConfig(db);
+    expect(updated.charLimit).toBe(500000);
+
+    // Set 1M chars ~ 250k tokens
+    await setNineRouterConfig({ charLimit: 1000000 }, db);
+    const largeConfig = await getNineRouterConfig(db);
+    expect(largeConfig.charLimit).toBe(1000000);
+  });
+
   it('fetchAvailableModels calls testNineRouterConnection and caches results to db.settings', async () => {
     const testSpy = vi.spyOn(nineRouterClient, 'testNineRouterConnection').mockResolvedValue({
       ok: true,

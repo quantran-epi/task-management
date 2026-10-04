@@ -303,15 +303,67 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
 
         <Form.Item
           label="Giới hạn ký tự ngữ cảnh (Safe Character Budget)"
-          extra="Ngưỡng ký tự an toàn tối đa cho ngữ cảnh nhiệm vụ (mặc định 12.000 ký tự)"
+          extra={
+            <div style={{ marginTop: 6, fontSize: 12 }}>
+              <div style={{ marginBottom: 6 }}>
+                Tương đương ước tính:{' '}
+                <strong style={{ color: '#1677ff' }}>
+                  ~{Math.round(charLimit / 4).toLocaleString()} tokens
+                </strong>{' '}
+                <span style={{ color: '#8c8c8c' }}>(quy đổi xấp xỉ 1 token ≈ 4 ký tự)</span>
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 6 }}>
+                <span style={{ color: '#8c8c8c' }}>Gợi ý nhanh:</span>
+                <Tag.CheckableTag
+                  checked={charLimit === 12000}
+                  onChange={() => setCharLimit(12000)}
+                >
+                  12k (~3k tok) • Mặc định
+                </Tag.CheckableTag>
+                <Tag.CheckableTag
+                  checked={charLimit === 32000}
+                  onChange={() => setCharLimit(32000)}
+                >
+                  32k (~8k tok) • Local vừa
+                </Tag.CheckableTag>
+                <Tag.CheckableTag
+                  checked={charLimit === 128000}
+                  onChange={() => setCharLimit(128000)}
+                >
+                  128k (~32k tok) • Cân bằng
+                </Tag.CheckableTag>
+                <Tag.CheckableTag
+                  checked={charLimit === 500000}
+                  onChange={() => setCharLimit(500000)}
+                >
+                  500k (~125k tok) • GPT-4o / Claude
+                </Tag.CheckableTag>
+                <Tag.CheckableTag
+                  checked={charLimit === 1000000}
+                  onChange={() => setCharLimit(1000000)}
+                >
+                  1M (~250k tok) • Siêu lớn
+                </Tag.CheckableTag>
+              </div>
+              <div style={{ color: '#8c8c8c', lineHeight: 1.4 }}>
+                Tự do tùy chỉnh theo mô hình: mô hình nhỏ cục bộ (Ollama 8k–32k context) nên dùng 8k–32k ký tự để tránh lỗi vượt ngữ cảnh; mô hình hiện đại (Claude 3.5, GPT-4o, Gemini) có thể đặt 100k–1M+ ký tự để nạp file và tài liệu đầy đủ.
+              </div>
+            </div>
+          }
         >
           <InputNumber
-            min={2000}
-            max={32000}
+            min={1000}
+            max={5000000}
             step={1000}
+            formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+            parser={(value) => {
+              const parsed = value ? parseInt(value.replace(/,/g, ''), 10) : DEFAULT_NINEROUTER_CHAR_LIMIT;
+              return isNaN(parsed) ? DEFAULT_NINEROUTER_CHAR_LIMIT : parsed;
+            }}
             value={charLimit}
             onChange={(val) => setCharLimit(val || DEFAULT_NINEROUTER_CHAR_LIMIT)}
-            style={{ width: 200 }}
+            style={{ width: 240 }}
+            addonAfter="ký tự"
           />
         </Form.Item>
 

@@ -240,9 +240,10 @@ describe('aiTools', () => {
   };
 
   it('declares comprehensive query and mutation AI_DATABASE_TOOLS', () => {
-    expect(AI_DATABASE_TOOLS.length).toBe(40);
+    expect(AI_DATABASE_TOOLS.length).toBe(41);
     const names = AI_DATABASE_TOOLS.map((t) => t.function.name);
     // Includes standard read tools
+    expect(names).toContain('read_file');
     expect(names).toContain('query_tasks');
     expect(names).toContain('query_projects');
     expect(names).toContain('query_milestones');
