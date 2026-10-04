@@ -4,13 +4,13 @@ milestone: v1.1
 milestone_name: Banking IT Enhancements & Jira Integration
 status: executing
 stopped_at: Phase 14 UI-SPEC approved
-last_updated: "2026-10-04T08:18:52.123Z"
-last_activity: "2026-10-04 - Completed quick task 261004-hbt: fix ProjectsView header assertion in shell.test.tsx"
+last_updated: "2026-10-04T08:24:57.298Z"
+last_activity: 2026-10-04 -- Phase 14 execution started
 progress:
   total_phases: 10
   completed_phases: 9
-  total_plans: 30
-  completed_plans: 30
+  total_plans: 34
+  completed_plans: 31
   percent: 90
 ---
 
@@ -21,15 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-27)
 
 **Core value:** Make planned work realistically fit available time by exposing overload early and suggesting feasible daily workload distributions.
-**Current focus:** Phase 13.2 — ai-chat-drawer-item-context-grounding-9router-ask-answer-int
+**Current focus:** Phase 14 — knowledge-base-integration-docs-linking-ai-retrieval
 
 ## Current Position
 
-Phase: 13.2
-Plan: Not started
+Phase: 14 (knowledge-base-integration-docs-linking-ai-retrieval) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
 Next recommended run: /gsd-execute-phase 13.2
-Last activity: 2026-10-04 - Completed quick task 261004-hbt: fix ProjectsView header assertion in shell.test.tsx
+Last activity: 2026-10-04 -- Phase 14 execution started
 
 ### Quick Tasks Completed
 
@@ -129,6 +129,7 @@ Last activity: 2026-10-04 - Completed quick task 261004-hbt: fix ProjectsView he
 | Phase 13.2 P01 | 12m | 3 tasks | 11 files |
 | Phase 13.2 P02 | 14m | 3 tasks | 9 files |
 | Phase 13.2 P03 | 11m | 2 tasks | 7 files |
+| Phase 14 P01 | 4m | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -307,6 +308,8 @@ Decisions logged across v1.0 and v1.1:
 - [Phase 13.2]: Sticky notes content and screenshot captions grounded within 12,000 char budget (D-10, T-13.2-06)
 - [Phase 13.2]: Claude Code CLI launcher generates shell-escaped command claude '...' and spawns OS terminal via Tauri or clipboard on Web (D-13, T-13.2-07)
 - [Phase 13.2]: Action chips in assistant bubbles for one-click add to task checklist, save to sticky notes, or launch Claude Code (D-18)
+- [Phase ?]: [Phase 14]: SCHEMA_V9 indexes note type, parentId, deletedAt, and multi-entry *tags while preserving legacy notes as quick_note with empty tags (D-01, D-02)
+- [Phase ?]: [Phase 14]: BM25 scoring utility implements Okapi BM25 with Title x3, Tags x2, Body x1 weighting and NFD-based Vietnamese diacritic normalization (D-10, D-11)
 
 ### Pending Todos
 
@@ -330,7 +333,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-10-04T07:56:52.930Z
+Last session: 2026-10-04T08:24:54.258Z
 Stopped at: Phase 14 UI-SPEC approved
 Resume file: .planning/phases/14-knowledge-base-integration-docs-linking-ai-retrieval/14-UI-SPEC.md
 
