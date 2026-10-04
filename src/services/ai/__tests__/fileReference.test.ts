@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { extractMentionedEntityIds } from '../contextGrounding';
 import { AI_DATABASE_TOOLS, executeAiTool } from '../aiTools';
 import { clearThreadMessages, clearAllChatHistory } from '../../../db/repositories/chatRepo';
+import { parseFileInputPath } from '../../../components/ai/ChatInputBar';
 import type { TaskPlannerDatabase } from '../../../db';
 
 describe('AI File Reference & Grounding', () => {
@@ -93,6 +94,25 @@ describe('AI File Reference & Grounding', () => {
       await clearAllChatHistory(mockDb);
       expect(clearMsgsMock).toHaveBeenCalled();
       expect(clearThreadsMock).toHaveBeenCalled();
+    });
+  });
+
+  describe('parseFileInputPath helper', () => {
+    it('normalizes @file and @file: prefixes to home root', () => {
+      expect(parseFileInputPath('file')).toBe('~/');
+      expect(parseFileInputPath('file:')).toBe('~/');
+      expect(parseFileInputPath('file:~')).toBe('~/');
+      expect(parseFileInputPath('file:~/')).toBe('~/');
+      expect(parseFileInputPath('~')).toBe('~/');
+      expect(parseFileInputPath('')).toBe('~/');
+    });
+
+    it('preserves nested paths typed after file or prefix', () => {
+      expect(parseFileInputPath('file:~/Documents')).toBe('~/Documents');
+      expect(parseFileInputPath('file/Users/admin/dev')).toBe('/Users/admin/dev');
+      expect(parseFileInputPath('file:/var/log')).toBe('/var/log');
+      expect(parseFileInputPath('/usr/local')).toBe('/usr/local');
+      expect(parseFileInputPath('./src')).toBe('./src');
     });
   });
 });
