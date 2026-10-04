@@ -2,10 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Layout, Drawer, Grid, Button, Typography, Space, Badge, Tooltip, theme, message } from 'antd';
 import {
   MenuOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
   CloudDownloadOutlined,
   SearchOutlined,
   CheckCircleOutlined,
   RobotOutlined,
+  QuestionCircleOutlined,
 } from '@ant-design/icons';
 import { Navigation } from './Navigation';
 import { StatusBadge } from './StatusBadge';
@@ -38,6 +41,12 @@ import { NoteEditor } from '../notes/NoteEditor';
 import { CommandPaletteModal } from '../palette/CommandPaletteModal';
 import { DailyReviewModal } from '../dailyReview/DailyReviewModal';
 import { AIChatDrawer, DEFAULT_AI_CHAT_WIDTH, type ActiveScope } from '../ai/AIChatDrawer';
+import { useGitHubAuth } from '../../context/GitHubAuthContext';
+import { executeGitHubBackupPush } from '../../services/github/githubSyncService';
+import { useGlobalShortcuts } from '../../hooks/useGlobalShortcuts';
+import { ShortcutHUD } from '../common/ShortcutHUD';
+import { isMacPlatform } from '../../utils/keyboard';
+import type { ShortcutItem } from '../../types/shortcuts';
 import { db } from '../../db';
 import { dismissAlertToday } from '../../db/repositories/notificationRepo';
 import { createTask, getTask } from '../../db/repositories/taskRepo';
@@ -122,6 +131,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
   const [inspectingMilestone, setInspectingMilestone] = useState<Milestone | null>(null);
   const [inspectingNote, setInspectingNote] = useState<Note | null>(null);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
+  const [creatingNote, setCreatingNote] = useState(false);
 
   // AI Chat via context
   const {
@@ -208,20 +218,148 @@ const AppShellInner: React.FC<AppShellProps> = ({
 
   const activeScope: ActiveScope = contextActiveScope;
 
-  // Global Cmd+K / Ctrl+K and Cmd+J / Ctrl+J keyboard shortcuts (D-04)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        setCommandPaletteOpen((prev) => !prev);
-      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j') {
-        e.preventDefault();
-        toggleAiChatOpen();
+  const { token: authToken, passphrase } = useGitHubAuth();
+
+  const handleManualSync = React.useCallback(async () => {
+    if (!authToken || !passphrase) {
+      message.warning('Vui lòng cấu hình GitHub Token và Mật khẩu trong Cài đặt trước');
+      return;
+    }
+    try {
+      const [ownerRec, repoRec, branchRec, lastShaRec] = await Promise.all([
+        db.settings.get('github_owner'),
+        db.settings.get('github_repo'),
+        db.settings.get('github_branch'),
+        db.settings.get('last_synced_sha'),
+      ]);
+      const owner = (ownerRec?.value as string) || '';
+      const repo = (repoRec?.value as string) || '';
+      const branch = (branchRec?.value as string) || 'main';
+      const lastSyncedSha = (lastShaRec?.value as string) || undefined;
+
+      if (!owner || !repo) {
+        message.warning('Chưa điền thông tin Owner / Repo trong Cài đặt');
+        return;
       }
-    };
-    window.addEventListener('keydown', handleKeyDown, true);
-    return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [toggleAiChatOpen]);
+
+      message.loading({ content: 'Đang đẩy dữ liệu lên GitHub...', key: 'gh-sync' });
+      await executeGitHubBackupPush(
+        db,
+        { owner, repo, branch },
+        authToken,
+        passphrase,
+        lastSyncedSha,
+        false
+      );
+      message.success({ content: 'Đã sao lưu lên GitHub thành công!', key: 'gh-sync' });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Thất bại';
+      message.error({ content: `Lỗi đồng bộ: ${msg}`, key: 'gh-sync' });
+    }
+  }, [authToken, passphrase]);
+
+  const handleQuickCreateTask = React.useCallback(async () => {
+    try {
+      const task = await createTask(
+        {
+          name: 'Tác vụ mới',
+          status: 'Open',
+          priority: 'Medium',
+          estimateMinutes: 0,
+        },
+        db
+      );
+      message.success('Đã tạo tác vụ mới');
+      setInspectingTaskId(task.id);
+    } catch {
+      message.error('Không thể tạo tác vụ');
+    }
+  }, []);
+
+  const extraShortcuts: ShortcutItem[] = React.useMemo(() => [
+    {
+      id: 'task-nav-down',
+      category: 'tasks',
+      categoryLabel: 'Tác vụ',
+      title: 'Chọn tác vụ tiếp theo',
+      description: 'Di chuyển con trỏ chọn xuống tác vụ kế tiếp trong bảng',
+      keys: ['Alt', 'ArrowDown'],
+      scope: 'tasks',
+      action: () => {},
+    },
+    {
+      id: 'task-nav-up',
+      category: 'tasks',
+      categoryLabel: 'Tác vụ',
+      title: 'Chọn tác vụ trước đó',
+      description: 'Di chuyển con trỏ chọn lên tác vụ phía trước trong bảng',
+      keys: ['Alt', 'ArrowUp'],
+      scope: 'tasks',
+      action: () => {},
+    },
+    {
+      id: 'task-toggle-status',
+      category: 'tasks',
+      categoryLabel: 'Tác vụ',
+      title: 'Đổi trạng thái hoàn thành',
+      description: 'Chuyển đổi giữa Mở và Hoàn thành cho tác vụ đang chọn',
+      keys: ['Alt', 'Enter'],
+      scope: 'tasks',
+      action: () => {},
+    },
+    {
+      id: 'task-toggle-timer',
+      category: 'tasks',
+      categoryLabel: 'Tác vụ',
+      title: 'Bật / Tắt bộ đếm giờ',
+      description: 'Bắt đầu hoặc tạm dừng đếm thời gian cho tác vụ đang chọn',
+      keys: ['Alt', 'Space'],
+      scope: 'tasks',
+      action: () => {},
+    },
+    {
+      id: 'task-edit-drawer',
+      category: 'tasks',
+      categoryLabel: 'Tác vụ',
+      title: 'Chỉnh sửa chi tiết tác vụ',
+      description: 'Mở Drawer để chỉnh sửa đầy đủ thông tin tác vụ đang chọn',
+      keys: ['Mod', 'E'],
+      scope: 'tasks',
+      action: () => {},
+    },
+    {
+      id: 'task-delete',
+      category: 'tasks',
+      categoryLabel: 'Tác vụ',
+      title: 'Xóa tác vụ đang chọn',
+      description: 'Mở hộp thoại xác nhận xóa tác vụ',
+      keys: ['Mod', 'Backspace'],
+      scope: 'tasks',
+      action: () => {},
+    },
+    {
+      id: 'note-save-quick',
+      category: 'notes',
+      categoryLabel: 'Ghi chú',
+      title: 'Lưu ghi chú tức thì',
+      description: 'Lưu nội dung khi đang soạn thảo ghi chú',
+      keys: ['Mod', 'S'],
+      scope: 'notes',
+      action: () => {},
+    },
+  ], []);
+
+  const { hudOpen, setHudOpen, allShortcuts } = useGlobalShortcuts({
+    currentRoute,
+    onNavigate,
+    onTogglePalette: () => setCommandPaletteOpen((prev) => !prev),
+    onToggleAiChat: toggleAiChatOpen,
+    onCreateTask: handleQuickCreateTask,
+    onCreateNote: () => setCreatingNote(true),
+    onToggleSidebar: () => handleCollapse(!collapsed, 'clickTrigger'),
+    onManualSync: handleManualSync,
+    extraShortcuts,
+  });
 
   // Prefer explicit prop if provided, else check token brightness/property
   const isDark = explicitDark ?? false;
@@ -267,6 +405,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
       {!isMobile ? (
         <Sider
           collapsible
+          trigger={null}
           collapsed={collapsed}
           onCollapse={handleCollapse}
           breakpoint="lg"
@@ -342,22 +481,73 @@ const AppShellInner: React.FC<AppShellProps> = ({
             lineHeight: '56px',
           }}
         >
-          {/* Left: Brand logo & title + mobile menu hamburger */}
+          {/* Left: Mobile hamburger & Brand logo, or Desktop sidebar toggle + Search pill */}
           <Space size="middle" align="center">
-            {isMobile && (
-              <Button
-                icon={<MenuOutlined />}
-                onClick={() => setDrawerOpen(true)}
-                aria-label="Mở menu"
-                style={{ minHeight: 36, minWidth: 36 }}
-              />
+            {isMobile ? (
+              <>
+                <Button
+                  icon={<MenuOutlined />}
+                  onClick={() => setDrawerOpen(true)}
+                  aria-label="Mở menu"
+                  style={{ minHeight: 36, minWidth: 36 }}
+                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <BrandLogo size={26} />
+                  <Title level={4} style={{ margin: 0, fontWeight: 700, letterSpacing: '-0.02em' }}>
+                    PlannerMate
+                  </Title>
+                </div>
+              </>
+            ) : (
+              <>
+                <Tooltip title={collapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'}>
+                  <Button
+                    type="text"
+                    icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+                    onClick={() => handleCollapse(!collapsed)}
+                    aria-label={collapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'}
+                    data-testid="sidebar-toggle-btn"
+                    style={{ fontSize: 16, width: 36, height: 36 }}
+                  />
+                </Tooltip>
+
+                <Tooltip title="Tìm kiếm & Lệnh nhanh (Cmd+K / Ctrl+K)">
+                  <Button
+                    type="default"
+                    onClick={() => setCommandPaletteOpen(true)}
+                    aria-label="Mở tìm kiếm nhanh"
+                    style={{
+                      borderRadius: 20,
+                      height: 34,
+                      padding: '0 12px 0 10px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      background: token.colorFillAlter,
+                      borderColor: token.colorBorderSecondary,
+                    }}
+                  >
+                    <SearchOutlined style={{ fontSize: 14, color: token.colorTextTertiary }} />
+                    <span style={{ fontSize: 13, color: token.colorTextSecondary }}>
+                      Tìm kiếm & Lệnh...
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 600,
+                        padding: '1px 6px',
+                        borderRadius: 6,
+                        background: token.colorFillSecondary,
+                        color: token.colorTextTertiary,
+                        lineHeight: '16px',
+                      }}
+                    >
+                      {navigator.platform.toUpperCase().indexOf('MAC') >= 0 ? '⌘K' : 'Ctrl K'}
+                    </span>
+                  </Button>
+                </Tooltip>
+              </>
             )}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              {isMobile && <BrandLogo size={26} />}
-              <Title level={4} style={{ margin: 0, fontWeight: 700, letterSpacing: '-0.02em' }}>
-                PlannerMate
-              </Title>
-            </div>
           </Space>
 
           {/* Center: GitHub sync status dot & ActiveTimerWidget */}
@@ -366,45 +556,19 @@ const AppShellInner: React.FC<AppShellProps> = ({
             <ActiveTimerWidget />
           </Space>
 
-          {/* Right: Search pill, Daily Review, AI Assistant, NotificationBell, InstallButton, UpdateBadge */}
+          {/* Right: Mobile search, Daily Review, AI Assistant, NotificationBell, InstallButton, UpdateBadge */}
           <Space size="small" align="center">
-            <Tooltip title="Tìm kiếm & Lệnh nhanh (Cmd+K / Ctrl+K)">
-              <Button
-                type="default"
-                onClick={() => setCommandPaletteOpen(true)}
-                aria-label="Mở tìm kiếm nhanh"
-                style={{
-                  borderRadius: 20,
-                  height: 34,
-                  padding: '0 12px 0 10px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  background: token.colorFillAlter,
-                  borderColor: token.colorBorderSecondary,
-                }}
-              >
-                <SearchOutlined style={{ fontSize: 14, color: token.colorTextTertiary }} />
-                {!isMobile && (
-                  <span style={{ fontSize: 13, color: token.colorTextSecondary }}>
-                    Tìm kiếm & Lệnh...
-                  </span>
-                )}
-                <span
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 600,
-                    padding: '1px 6px',
-                    borderRadius: 6,
-                    background: token.colorFillSecondary,
-                    color: token.colorTextTertiary,
-                    lineHeight: '16px',
-                  }}
-                >
-                  {navigator.platform.toUpperCase().indexOf('MAC') >= 0 ? '⌘K' : 'Ctrl K'}
-                </span>
-              </Button>
-            </Tooltip>
+            {isMobile && (
+              <Tooltip title="Tìm kiếm & Lệnh nhanh">
+                <Button
+                  type="text"
+                  icon={<SearchOutlined style={{ fontSize: 16 }} />}
+                  onClick={() => setCommandPaletteOpen(true)}
+                  aria-label="Mở tìm kiếm nhanh"
+                  style={{ minHeight: 36, minWidth: 36 }}
+                />
+              </Tooltip>
+            )}
 
             <Tooltip title="Tổng kết ngày & Standup">
               <Button
@@ -423,6 +587,16 @@ const AppShellInner: React.FC<AppShellProps> = ({
                 icon={<RobotOutlined style={{ fontSize: 16 }} />}
                 onClick={toggleAiChatOpen}
                 aria-label="Trợ lý AI (Cmd+J / Ctrl+J)"
+                style={{ minHeight: 34, minWidth: 34 }}
+              />
+            </Tooltip>
+
+            <Tooltip title={`Phím tắt (Giữ Alt hoặc ${isMacPlatform() ? '⇧?' : 'Shift+?'})`}>
+              <Button
+                type="text"
+                icon={<QuestionCircleOutlined style={{ fontSize: 16 }} />}
+                onClick={() => setHudOpen((prev) => !prev)}
+                aria-label="Phím tắt ứng dụng"
                 style={{ minHeight: 34, minWidth: 34 }}
               />
             </Tooltip>
@@ -562,15 +736,28 @@ const AppShellInner: React.FC<AppShellProps> = ({
         />
       )}
 
-      {editingNote && (
+      {(editingNote || creatingNote) && (
         <NoteEditor
-          open={Boolean(editingNote)}
+          open={Boolean(editingNote || creatingNote)}
           note={editingNote}
-          onClose={() => setEditingNote(null)}
-          onSaved={() => setEditingNote(null)}
+          onClose={() => {
+            setEditingNote(null);
+            setCreatingNote(false);
+          }}
+          onSaved={() => {
+            setEditingNote(null);
+            setCreatingNote(false);
+          }}
           db={db}
         />
       )}
+
+      <ShortcutHUD
+        open={hudOpen}
+        onClose={() => setHudOpen(false)}
+        shortcuts={allShortcuts}
+        currentRoute={currentRoute}
+      />
 
       <CommandPaletteModal
         open={commandPaletteOpen}

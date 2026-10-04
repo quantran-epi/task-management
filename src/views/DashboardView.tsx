@@ -6,6 +6,7 @@ import { TodaySummaryCard } from '../components/dashboard/TodaySummaryCard';
 import { AttentionTodayList } from '../components/dashboard/AttentionTodayList';
 import { WorkloadForecast } from '../components/dashboard/WorkloadForecast';
 import { TaskDrawer } from '../components/tasks/TaskDrawer';
+import { PageHeader } from '../components/common/PageHeader';
 import type { AppRoute } from '../types/navigation';
 
 export interface DashboardViewProps {
@@ -33,6 +34,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       data-testid="dashboard-view"
       style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
     >
+      <PageHeader
+        title="Bảng tổng quan"
+        subtitle="Theo dõi tiến độ, khối lượng công việc và cảnh báo hôm nay"
+      />
+
       {/* Top Tier: Today Summary (left) & Attention List (right) per D-01 */}
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={8}>

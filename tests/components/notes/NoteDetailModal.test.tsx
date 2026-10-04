@@ -50,4 +50,39 @@ describe('NoteDetailModal', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Chỉnh sửa đầy đủ' }));
     await waitFor(() => expect(onEdit).toHaveBeenCalledWith(note));
   });
+
+  it('renders the name of the entity that the note belongs to', async () => {
+    await db.tasks.add({
+      id: '22222222-2222-4222-8222-222222222222',
+      name: 'Thiết kế giao diện',
+      projectId: 'proj-1',
+      status: 'In Progress',
+      priority: 'High',
+      progress: 0,
+      estimateMinutes: 60,
+      createdAt: '2026-10-02T00:00:00.000Z',
+      updatedAt: '2026-10-02T00:00:00.000Z',
+    });
+
+    render(
+      <NoteDetailModal open note={note} onClose={vi.fn()} onEdit={vi.fn()} db={db} />
+    );
+
+    expect(await screen.findByText('Tác vụ: Thiết kế giao diện')).toBeInTheDocument();
+  });
+
+  it('renders standalone tag for notes without entity', async () => {
+    const standaloneNote: Note = {
+      ...note,
+      id: 'standalone-note-id',
+      entityType: undefined,
+      entityId: undefined,
+    };
+
+    render(
+      <NoteDetailModal open note={standaloneNote} onClose={vi.fn()} onEdit={vi.fn()} db={db} />
+    );
+
+    expect(screen.getByText('Độc lập')).toBeInTheDocument();
+  });
 });

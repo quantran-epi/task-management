@@ -10,6 +10,7 @@ import { ProjectModal } from '../components/projects/ProjectModal';
 import { MilestoneModal } from '../components/projects/MilestoneModal';
 import { CascadeDeleteModal } from '../components/projects/CascadeDeleteModal';
 import { TaskDrawer } from '../components/tasks/TaskDrawer';
+import { PageHeader } from '../components/common/PageHeader';
 import { createTask } from '../db/repositories/taskRepo';
 import { deleteProjectWithCascade, deleteMilestoneWithCascade } from '../db/repositories/cascadeRepo';
 import type { Project, Milestone, ProjectStatus, MilestoneStatus } from '../types/models';
@@ -193,29 +194,19 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ db = defaultDb }) =>
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 12,
-        }}
-      >
-        <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>Phân cấp công việc</h2>
-          <span style={{ fontSize: 14, color: '#8c8c8c' }}>
-            Quản lý dự án, cột mốc và các sản phẩm bàn giao
-          </span>
-        </div>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={handleOpenCreateProject}
-        >
-          Dự án mới
-        </Button>
-      </div>
+      <PageHeader
+        title="Dự án & Cột mốc"
+        subtitle="Quản lý dự án, cột mốc và các sản phẩm bàn giao"
+        extra={
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={handleOpenCreateProject}
+          >
+            Dự án mới
+          </Button>
+        }
+      />
 
       <ProjectTable
         projects={projects}

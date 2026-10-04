@@ -14,6 +14,7 @@ import type { Note, NoteAttachment, NoteEntityType } from '../../types/models';
 import { createNote, updateNote, addNoteAttachment } from '../../db/repositories/noteRepo';
 import { renderSafeMarkdown } from '../../utils/markdown';
 import { NoteAttachmentsPanel } from './NoteAttachmentsPanel';
+import { isModPressed } from '../../utils/keyboard';
 
 export interface NoteEditorProps {
   open: boolean;
@@ -163,12 +164,25 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     }
   };
 
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (isModPressed(e) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        void handleSave();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [open, form, note, stagedFiles]);
+
   return (
     <Modal
       title={note ? 'Chỉnh sửa ghi chú' : 'Tạo ghi chú mới'}
       open={open}
       onCancel={onClose}
       width={680}
+      scrollLock={false}
       footer={[
         <Button key="cancel" onClick={onClose}>
           Hủy

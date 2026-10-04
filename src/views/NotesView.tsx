@@ -11,6 +11,7 @@ import {
   Popconfirm,
   Tooltip,
   message,
+  type SelectProps,
 } from 'antd';
 import {
   SearchOutlined,
@@ -30,6 +31,7 @@ import { renderSafeMarkdown } from '../utils/markdown';
 import { NoteEditor } from '../components/notes/NoteEditor';
 import { NoteDetailModal } from '../components/notes/NoteDetailModal';
 import { QuickNoteEntry } from '../components/notes/QuickNoteEntry';
+import { PageHeader } from '../components/common/PageHeader';
 import { openNotesPopout } from '../utils/notesPopout';
 
 export interface NotesViewProps {
@@ -39,6 +41,7 @@ export interface NotesViewProps {
 export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
   const [searchText, setSearchText] = useState<string>('');
   const [entityFilter, setEntityFilter] = useState<'all' | 'standalone' | NoteEntityType>('all');
+  const [selectedEntityId, setSelectedEntityId] = useState<string | undefined>(undefined);
   const [editorOpen, setEditorOpen] = useState<boolean>(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
@@ -100,7 +103,55 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
     [db]
   );
 
-  // Filter notes by search text and entity category
+  // Entities list for item-level selection filter
+  const entityItems = useLiveQuery(
+    async () => {
+      const [tasks, projects, milestones] = await Promise.all([
+        db.tasks.toArray(),
+        db.projects.toArray(),
+        db.milestones.toArray(),
+      ]);
+
+      return {
+        task: tasks
+          .map((t) => ({ value: t.id, label: t.name }))
+          .sort((a, b) => a.label.localeCompare(b.label)),
+        project: projects
+          .map((p) => ({ value: p.id, label: p.name }))
+          .sort((a, b) => a.label.localeCompare(b.label)),
+        milestone: milestones
+          .map((m) => ({ value: m.id, label: m.name }))
+          .sort((a, b) => a.label.localeCompare(b.label)),
+      };
+    },
+    [db]
+  );
+
+  const itemOptions: SelectProps['options'] = useMemo(() => {
+    if (!entityItems) return [];
+    if (entityFilter === 'task') return entityItems.task;
+    if (entityFilter === 'project') return entityItems.project;
+    if (entityFilter === 'milestone') return entityItems.milestone;
+    return [
+      { label: 'Tác vụ', options: entityItems.task },
+      { label: 'Dự án', options: entityItems.project },
+      { label: 'Cột mốc', options: entityItems.milestone },
+    ];
+  }, [entityItems, entityFilter]);
+
+  const itemPlaceholder = useMemo(() => {
+    if (entityFilter === 'task') return 'Lọc theo tác vụ cụ thể (Tất cả)';
+    if (entityFilter === 'project') return 'Lọc theo dự án cụ thể (Tất cả)';
+    if (entityFilter === 'milestone') return 'Lọc theo cột mốc cụ thể (Tất cả)';
+    return 'Lọc theo mục cụ thể (Tất cả)';
+  }, [entityFilter]);
+
+  const handleEntityFilterChange = (val: 'all' | 'standalone' | NoteEntityType) => {
+    setEntityFilter(val);
+    setSelectedEntityId(undefined);
+  };
+
+  // Filter notes by search text, entity category, and specific item
   const filteredNotes = useMemo(() => {
     if (!allNotes) return [];
 
@@ -112,6 +163,15 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
         if (note.entityType) return false;
       } else if (entityFilter !== 'all') {
         if (note.entityType !== entityFilter) return false;
+        // Item-level filter
+        if (selectedEntityId && note.entityId !== selectedEntityId) {
+          return false;
+        }
+      } else if (selectedEntityId) {
+        // When category is 'all' but specific item is selected
+        if (note.entityId !== selectedEntityId) {
+          return false;
+        }
       }
 
       // 2. Search Text
@@ -124,9 +184,15 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
       const attTexts = noteAttachmentMeta.searchTexts.get(note.id) || [];
       const attachmentMatch = attTexts.some((t) => t.includes(lowerSearch));
 
-      return Boolean(titleMatch || bodyMatch || attachmentMatch);
+      // Search in parent entity name
+      const parentName = note.entityType && note.entityId
+        ? entityNames?.get(`${note.entityType}:${note.entityId}`)
+        : undefined;
+      const parentMatch = parentName ? parentName.toLowerCase().includes(lowerSearch) : false;
+
+      return Boolean(titleMatch || bodyMatch || attachmentMatch || parentMatch);
     });
-  }, [allNotes, searchText, entityFilter, noteAttachmentMeta]);
+  }, [allNotes, searchText, entityFilter, selectedEntityId, noteAttachmentMeta, entityNames]);
 
   const handleDelete = async (id: string) => {
     try {
@@ -152,59 +218,77 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
   };
 
   return (
-    <div style={{ padding: 24, maxWidth: 1400, margin: '0 auto' }}>
-      {/* Header controls */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* 1. Standard Page Header */}
+      <PageHeader
+        title="Ghi chú & Tài liệu"
+        subtitle="Ghi chép nhanh, đính kèm hình ảnh và liên kết với tác vụ, dự án"
+        extra={
+          <Space>
+            <Tooltip title="Mở danh sách ghi chú trong cửa sổ nổi riêng biệt (Always on Top)">
+              <Button icon={<ExportOutlined />} onClick={handleOpenPopout}>
+                Cửa sổ nổi
+              </Button>
+            </Tooltip>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                setEditingNote(null);
+                setEditorOpen(true);
+              }}
+            >
+              Tạo ghi chú
+            </Button>
+          </Space>
+        }
+      />
+
+      {/* 2. Filter Controls */}
       <div
         style={{
           display: 'flex',
           flexWrap: 'wrap',
-          gap: 16,
-          justifyContent: 'space-between',
+          gap: 12,
           alignItems: 'center',
-          marginBottom: 20,
         }}
       >
-        <Space wrap size="middle">
-          <Input
-            placeholder="Tìm theo nội dung, tiêu đề, tên ảnh, chú thích..."
-            prefix={<SearchOutlined />}
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            allowClear
-            style={{ width: 320 }}
-          />
+        <Input
+          placeholder="Tìm theo nội dung, tiêu đề, mục cha, ảnh..."
+          prefix={<SearchOutlined />}
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+          allowClear
+          style={{ width: 280 }}
+        />
 
+        <Select
+          value={entityFilter}
+          onChange={handleEntityFilterChange}
+          style={{ width: 180 }}
+          options={[
+            { label: 'Tất cả ghi chú', value: 'all' },
+            { label: 'Ghi chú độc lập', value: 'standalone' },
+            { label: 'Gắn với Tác vụ', value: 'task' },
+            { label: 'Gắn với Dự án', value: 'project' },
+            { label: 'Gắn với Cột mốc', value: 'milestone' },
+          ]}
+        />
+
+        {entityFilter !== 'standalone' && (
           <Select
-            value={entityFilter}
-            onChange={(val) => setEntityFilter(val)}
-            style={{ width: 200 }}
-            options={[
-              { label: 'Tất cả ghi chú', value: 'all' },
-              { label: 'Ghi chú độc lập', value: 'standalone' },
-              { label: 'Gắn với Tác vụ', value: 'task' },
-              { label: 'Gắn với Dự án', value: 'project' },
-              { label: 'Gắn với Cột mốc', value: 'milestone' },
-            ]}
+            allowClear
+            showSearch
+            placeholder={itemPlaceholder}
+            value={selectedEntityId}
+            onChange={(val) => setSelectedEntityId(val)}
+            style={{ minWidth: 260, flex: 1, maxWidth: 400 }}
+            options={itemOptions}
+            filterOption={(input, option) =>
+              ((option?.label as string) ?? '').toLowerCase().includes(input.toLowerCase())
+            }
           />
-        </Space>
-
-        <Space>
-          <Tooltip title="Mở danh sách ghi chú trong cửa sổ nổi riêng biệt (Always on Top)">
-            <Button icon={<ExportOutlined />} onClick={handleOpenPopout}>
-              Cửa sổ nổi
-            </Button>
-          </Tooltip>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => {
-              setEditingNote(null);
-              setEditorOpen(true);
-            }}
-          >
-            Tạo ghi chú
-          </Button>
-        </Space>
+        )}
       </div>
 
       <div style={{ marginBottom: 20 }}>

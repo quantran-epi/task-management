@@ -1,14 +1,22 @@
 import { useEffect, useRef } from 'react';
+import { isInputFocused, isModPressed } from '../utils/keyboard';
 
 export interface KeyboardShortcutHandlers {
   onSearch?: () => void;
   onQuickAdd?: () => void;
   onEscape?: () => void;
+  onNextTask?: () => void;
+  onPrevTask?: () => void;
+  onToggleStatus?: () => void;
+  onToggleTimer?: () => void;
+  onEditTask?: () => void;
+  onDeleteTask?: () => void;
 }
 
 /**
- * Global keyboard shortcut listener for '/', 'c', and 'Escape' (D-29, T-02-04).
- * Ignores keystrokes when the event target is inside an input, textarea, or contentEditable element.
+ * Keyboard shortcut listener supporting global and view-scoped actions.
+ * Multi-key combinations work even when modifier keys are used.
+ * Ignores text entry shortcuts when user is actively typing inside an editable field.
  */
 export function useKeyboardShortcuts(handlers: KeyboardShortcutHandlers): void {
   const handlersRef = useRef(handlers);
@@ -16,35 +24,73 @@ export function useKeyboardShortcuts(handlers: KeyboardShortcutHandlers): void {
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      const target = e.target as HTMLElement | null;
-      const isInput =
-        target &&
-        (target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          Boolean(target.isContentEditable) ||
-          target.getAttribute?.('contenteditable') === 'true' ||
-          target.getAttribute?.('contenteditable') === '' ||
-          Boolean(target.closest?.('[contenteditable="true"], [contenteditable=""]')) ||
-          target.getAttribute?.('role') === 'textbox');
+      const isInput = isInputFocused(e.target);
 
+      // Escape always works
       if (e.key === 'Escape') {
-        if (handlersRef.current.onEscape) {
-          handlersRef.current.onEscape();
-        }
+        handlersRef.current.onEscape?.();
         return;
       }
 
-      // Ignore text entry keys if user is typing inside an editable field
+      // Ignore single character or text keys if user is typing inside an editable field
       if (isInput) {
         return;
       }
 
-      if (e.key === '/') {
+      // Mod + E: Edit selected task
+      if (isModPressed(e) && e.key.toLowerCase() === 'e') {
+        e.preventDefault();
+        handlersRef.current.onEditTask?.();
+        return;
+      }
+
+      // Mod + Backspace / Delete: Delete selected task
+      if (isModPressed(e) && (e.key === 'Backspace' || e.key === 'Delete')) {
+        e.preventDefault();
+        handlersRef.current.onDeleteTask?.();
+        return;
+      }
+
+      // Alt + ArrowDown: Focus next task
+      if (e.altKey && !e.ctrlKey && !e.metaKey && e.key === 'ArrowDown') {
+        e.preventDefault();
+        handlersRef.current.onNextTask?.();
+        return;
+      }
+
+      // Alt + ArrowUp: Focus previous task
+      if (e.altKey && !e.ctrlKey && !e.metaKey && e.key === 'ArrowUp') {
+        e.preventDefault();
+        handlersRef.current.onPrevTask?.();
+        return;
+      }
+
+      // Alt + Enter: Toggle task complete status
+      if (e.altKey && !e.ctrlKey && !e.metaKey && e.key === 'Enter') {
+        e.preventDefault();
+        handlersRef.current.onToggleStatus?.();
+        return;
+      }
+
+      // Alt + Space: Toggle timer
+      if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === ' ' || e.code === 'Space')) {
+        e.preventDefault();
+        handlersRef.current.onToggleTimer?.();
+        return;
+      }
+
+      // Search: '/' or Mod+F
+      if (e.key === '/' || (isModPressed(e) && e.key.toLowerCase() === 'f')) {
         e.preventDefault();
         handlersRef.current.onSearch?.();
-      } else if (e.key === 'c' || e.key === 'C') {
+        return;
+      }
+
+      // Quick add: 'c' / 'C'
+      if (e.key === 'c' || e.key === 'C') {
         e.preventDefault();
         handlersRef.current.onQuickAdd?.();
+        return;
       }
     }
 

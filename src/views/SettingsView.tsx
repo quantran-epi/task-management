@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Typography, Button, Tabs, Space, Card, Modal, notification } from 'antd';
+import { Button, Tabs, Space, Card, Modal, Typography, notification } from 'antd';
 import {
   ArrowLeftOutlined,
   ScheduleOutlined,
@@ -26,6 +26,7 @@ import { LocalSqlitePersistenceCard } from '../components/settings/LocalSqlitePe
 import { NotificationSettingsCard } from '../components/settings/NotificationSettingsCard';
 import { PostRestoreBanner } from '../components/settings/PostRestoreBanner';
 import { ResetDbModal } from '../components/common/ResetDbModal';
+import { PageHeader } from '../components/common/PageHeader';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import type { AppRoute } from '../types/navigation';
 import { rollbackToSnapshot, downloadSnapshotFile } from '../services/backup/restoreBackup';
@@ -33,7 +34,7 @@ import { announceToScreenReader } from '../components/common/AriaLiveRegion';
 import type { SnapshotData, BackupEnvelope } from '../types/backup';
 import type { PullBackupResult } from '../services/github/types';
 
-const { Title, Paragraph } = Typography;
+const { Paragraph } = Typography;
 
 export interface SettingsViewProps {
   db?: TaskPlannerDatabase;
@@ -223,26 +224,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   return (
     <div style={{ maxWidth: 1000, margin: '0 auto', padding: '16px 24px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <div>
-          <Title level={3} style={{ margin: 0 }}>
-            Cài đặt & Cấu hình công suất
-          </Title>
-          <Paragraph type="secondary" style={{ margin: 0 }}>
-            Cấu hình công suất làm việc hàng tuần tiêu chuẩn và lên lịch ngoại lệ cho các ngày cụ thể.
-          </Paragraph>
-        </div>
-
-        {onNavigate && (
-          <Button
-            icon={<ArrowLeftOutlined />}
-            onClick={() => onNavigate('tasks')}
-            aria-label="Quay lại Tác vụ"
-          >
-            Quay lại Tác vụ
-          </Button>
-        )}
-      </div>
+      <PageHeader
+        title="Cài đặt & Cấu hình công suất"
+        subtitle="Cấu hình công suất làm việc hàng tuần tiêu chuẩn và lên lịch ngoại lệ cho các ngày cụ thể."
+        extra={
+          onNavigate && (
+            <Button
+              icon={<ArrowLeftOutlined />}
+              onClick={() => onNavigate('tasks')}
+              aria-label="Quay lại Tác vụ"
+            >
+              Quay lại Tác vụ
+            </Button>
+          )
+        }
+      />
 
       <Tabs
         activeKey={activeTab}

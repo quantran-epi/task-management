@@ -65,12 +65,15 @@ describe('AppShell', () => {
       </AppShell>
     );
 
-    // Ant Design Sider collapsible trigger button
-    const trigger = document.querySelector('.ant-layout-sider-trigger');
-    expect(trigger).toBeInTheDocument();
+    // Bottom Sider trigger should not exist
+    expect(document.querySelector('.ant-layout-sider-trigger')).not.toBeInTheDocument();
+
+    // Header toggle button
+    const toggleBtn = screen.getByTestId('sidebar-toggle-btn');
+    expect(toggleBtn).toBeInTheDocument();
 
     // Click collapse trigger
-    fireEvent.click(trigger!);
+    fireEvent.click(toggleBtn);
 
     // Should now be collapsed and saved in localStorage
     expect(localStorage.getItem(SIDEBAR_COLLAPSED_KEY)).toBe('true');
@@ -78,7 +81,7 @@ describe('AppShell', () => {
     expect(sider).toHaveClass('ant-layout-sider-collapsed');
 
     // Click expand trigger
-    fireEvent.click(trigger!);
+    fireEvent.click(toggleBtn);
     expect(localStorage.getItem(SIDEBAR_COLLAPSED_KEY)).toBe('false');
     expect(sider).not.toHaveClass('ant-layout-sider-collapsed');
   });

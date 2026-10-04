@@ -24,11 +24,13 @@ export const NoteDetailModal: React.FC<NoteDetailModalProps> = ({
   db = defaultDb,
 }) => {
   const [attachments, setAttachments] = useState<NoteAttachment[]>([]);
+  const [entityName, setEntityName] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
     if (!open || !note) {
       setAttachments([]);
+      setEntityName(null);
       return () => {
         active = false;
       };
@@ -41,10 +43,49 @@ export const NoteDetailModal: React.FC<NoteDetailModalProps> = ({
       .then((items) => {
         if (active) setAttachments(items);
       });
+
+    if (note.entityType && note.entityId) {
+      const loadEntity = async () => {
+        try {
+          let name: string | null = null;
+          if (note.entityType === 'task') {
+            const task = await db.tasks.get(note.entityId!);
+            name = task?.name ?? null;
+          } else if (note.entityType === 'project') {
+            const project = await db.projects.get(note.entityId!);
+            name = project?.name ?? null;
+          } else if (note.entityType === 'milestone') {
+            const milestone = await db.milestones.get(note.entityId!);
+            name = milestone?.name ?? null;
+          }
+          if (active) setEntityName(name);
+        } catch {
+          if (active) setEntityName(null);
+        }
+      };
+      void loadEntity();
+    } else {
+      setEntityName(null);
+    }
+
     return () => {
       active = false;
     };
   }, [db, note, open]);
+
+  const getEntityDisplayText = () => {
+    if (!note?.entityType) return 'Độc lập';
+    const typeLabel =
+      note.entityType === 'task'
+        ? 'Tác vụ'
+        : note.entityType === 'project'
+          ? 'Dự án'
+          : note.entityType === 'milestone'
+            ? 'Cột mốc'
+            : note.entityType;
+    const target = entityName || note.entityId;
+    return target ? `${typeLabel}: ${target}` : typeLabel;
+  };
 
   return (
     <Modal
@@ -52,6 +93,7 @@ export const NoteDetailModal: React.FC<NoteDetailModalProps> = ({
       open={open && Boolean(note)}
       onCancel={onClose}
       width={680}
+      scrollLock={false}
       footer={[
         onNavigateToNotes && (
           <Button key="navigate" icon={<ExportOutlined />} onClick={onNavigateToNotes}>
@@ -66,7 +108,13 @@ export const NoteDetailModal: React.FC<NoteDetailModalProps> = ({
     >
       {note && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {note.entityType && <Tag color="purple">{note.entityType}</Tag>}
+          <div>
+            {note.entityType ? (
+              <Tag color="purple">{getEntityDisplayText()}</Tag>
+            ) : (
+              <Tag>{getEntityDisplayText()}</Tag>
+            )}
+          </div>
           <div dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(note.body) }} />
           <Typography.Text type="secondary">
             Cập nhật: {new Date(note.updatedAt).toLocaleString('vi-VN')}

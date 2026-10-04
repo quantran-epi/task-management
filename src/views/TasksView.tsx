@@ -1,16 +1,20 @@
 import React, { useState, useRef, useMemo } from 'react';
-import { Button, Modal, Select, Typography, type InputRef } from 'antd';
+import { Button, Modal, Select, Typography, message, type InputRef } from 'antd';
 import { ThunderboltOutlined } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb } from '../db';
 import { getAllProjects } from '../db/repositories/projectRepo';
 import { getAllMilestones } from '../db/repositories/milestoneRepo';
+import { updateTaskStatus } from '../db/repositories/taskRepo';
+import { deleteTaskWithAllocations } from '../db/repositories/cascadeRepo';
+import { useTimer } from '../hooks/useTimer';
 import { QuickAddBar } from '../components/tasks/QuickAddBar';
 import { TaskFilterBar } from '../components/tasks/TaskFilterBar';
 import { TaskTable } from '../components/tasks/TaskTable';
 import { BatchActionBar } from '../components/tasks/BatchActionBar';
 import { TaskDrawer } from '../components/tasks/TaskDrawer';
 import { FeasibilityModal } from '../components/planner/FeasibilityModal';
+import { PageHeader } from '../components/common/PageHeader';
 import { useTaskFilters } from '../hooks/useTaskFilters';
 import { DEFAULT_TASK_FILTER_STATE } from '../utils/filter';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
@@ -117,7 +121,92 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb }) => {
     setGlobalSort,
   } = useTaskFilters({ tasks, projects, milestones, db });
 
-  // Global keyboard shortcuts per D-29
+  const { getTimerForTask, startTimer, pauseTimer } = useTimer();
+
+  // Selected task resolution for keyboard shortcuts
+  const activeSelectedTask = useMemo(() => {
+    if (selectedRowKeys.length === 0) return null;
+    return filteredTasks.find((t) => t.id === selectedRowKeys[0]) ?? null;
+  }, [selectedRowKeys, filteredTasks]);
+
+  const handleNextTask = () => {
+    if (filteredTasks.length === 0) return;
+    const currentIndex = activeSelectedTask
+      ? filteredTasks.findIndex((t) => t.id === activeSelectedTask.id)
+      : -1;
+    const nextIndex = currentIndex < filteredTasks.length - 1 ? currentIndex + 1 : 0;
+    const nextTask = filteredTasks[nextIndex];
+    if (nextTask) {
+      setSelectedRowKeys([nextTask.id]);
+    }
+  };
+
+  const handlePrevTask = () => {
+    if (filteredTasks.length === 0) return;
+    const currentIndex = activeSelectedTask
+      ? filteredTasks.findIndex((t) => t.id === activeSelectedTask.id)
+      : -1;
+    const prevIndex = currentIndex > 0 ? currentIndex - 1 : filteredTasks.length - 1;
+    const prevTask = filteredTasks[prevIndex];
+    if (prevTask) {
+      setSelectedRowKeys([prevTask.id]);
+    }
+  };
+
+  const handleToggleStatus = async () => {
+    if (!activeSelectedTask) return;
+    const newStatus = activeSelectedTask.status === 'Done' ? 'Open' : 'Done';
+    try {
+      await updateTaskStatus(activeSelectedTask.id, newStatus, db);
+      message.success(`Đã chuyển trạng thái: ${newStatus === 'Done' ? 'Hoàn thành' : 'Mở'}`);
+    } catch {
+      message.error('Không thể cập nhật trạng thái');
+    }
+  };
+
+  const handleToggleTimer = async () => {
+    if (!activeSelectedTask) return;
+    const timer = getTimerForTask(activeSelectedTask.id);
+    const isRunning = timer?.status === 'running';
+    try {
+      if (isRunning) {
+        await pauseTimer(activeSelectedTask.id);
+        message.info('Đã tạm dừng đếm giờ');
+      } else {
+        await startTimer(activeSelectedTask.id);
+        message.success('Đã bắt đầu đếm giờ');
+      }
+    } catch {
+      message.error('Không thể điều khiển bộ đếm giờ');
+    }
+  };
+
+  const handleEditTask = () => {
+    if (!activeSelectedTask) return;
+    handleOpenDrawer(activeSelectedTask.id);
+  };
+
+  const handleDeleteTask = () => {
+    if (!activeSelectedTask) return;
+    Modal.confirm({
+      title: 'Xóa tác vụ',
+      content: `Bạn có chắc muốn xóa tác vụ "${activeSelectedTask.name}" không?`,
+      okText: 'Xóa',
+      okType: 'danger',
+      cancelText: 'Hủy',
+      onOk: async () => {
+        try {
+          await deleteTaskWithAllocations(activeSelectedTask.id, db);
+          setSelectedRowKeys((prev) => prev.filter((id) => id !== activeSelectedTask.id));
+          message.success('Đã xóa tác vụ');
+        } catch {
+          message.error('Không thể xóa tác vụ');
+        }
+      },
+    });
+  };
+
+  // Keyboard shortcuts per D-29 and multi-key enhancements
   useKeyboardShortcuts({
     onSearch: () => {
       searchInputRef.current?.focus();
@@ -128,6 +217,12 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb }) => {
     onEscape: () => {
       setDrawerOpen(false);
     },
+    onNextTask: handleNextTask,
+    onPrevTask: handlePrevTask,
+    onToggleStatus: handleToggleStatus,
+    onToggleTimer: handleToggleTimer,
+    onEditTask: handleEditTask,
+    onDeleteTask: handleDeleteTask,
   });
 
   const handleOpenDrawer = (taskId: string) => {
@@ -157,25 +252,29 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb }) => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* 1. Fast Task Creation Bar + Toolbar Action */}
-      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-        <div style={{ flex: 1 }}>
-          <QuickAddBar
-            projects={projects}
-            db={db}
-            inputRef={quickAddInputRef}
-          />
-        </div>
-        <Button
-          icon={<ThunderboltOutlined />}
-          onClick={() => handleOpenFeasibility()}
-          aria-label="Tự động phân bổ"
-        >
-          Tự động phân bổ
-        </Button>
-      </div>
+      {/* 1. Page Header */}
+      <PageHeader
+        title="Danh sách tác vụ"
+        subtitle="Quản lý công việc, phân bổ thời gian và theo dõi tiến độ"
+        extra={
+          <Button
+            icon={<ThunderboltOutlined />}
+            onClick={() => handleOpenFeasibility()}
+            aria-label="Tự động phân bổ"
+          >
+            Tự động phân bổ
+          </Button>
+        }
+      />
 
-      {/* 2. Filter & Horizon Toolbar */}
+      {/* 2. Fast Task Creation Bar */}
+      <QuickAddBar
+        projects={projects}
+        db={db}
+        inputRef={quickAddInputRef}
+      />
+
+      {/* 3. Filter & Horizon Toolbar */}
       <TaskFilterBar
         filters={filters}
         onFilterChange={setFilters}

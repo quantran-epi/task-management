@@ -29,7 +29,7 @@ Phase: 13.2
 Plan: Not started
 Status: Phase complete — ready for verification
 Next recommended run: /gsd-execute-phase 13.2
-Last activity: 2026-10-04 - Completed quick task 261004-blg: fix drawer interactions, ai header actions dropdown, chat input height, task planner instructions modal, and rename app to PlannerMate
+Last activity: 2026-10-04 - Completed quick task 261004-nls: fix note detail modal layout shift on open/close and display entity name in note detail modal
 
 ### Quick Tasks Completed
 
@@ -68,6 +68,9 @@ Last activity: 2026-10-04 - Completed quick task 261004-blg: fix drawer interact
 | 261003-set | Fix SettingsView test timeout in CI with testTimeout configuration and clean Dexie teardown | 2026-10-03 | — | complete | [261003-set-fix-settingsview-test-timeout-in-ci](./quick/261003-set-fix-settingsview-test-timeout-in-ci/) |
 | 261003-wib | enhance UI aesthetics and modern app icon | 2026-10-03 | 2e51acb | complete | [261003-wib-enhance-ui-aesthetics-and-modern-app-ico](./quick/261003-wib-enhance-ui-aesthetics-and-modern-app-ico/) |
 | 261004-blg | fix drawer interactions, ai header actions dropdown, chat input height, task planner instructions modal, and rename app to PlannerMate | 2026-10-04 | ade0453 | complete | [261004-blg-fix-drawer-interactions-ai-header-action](./quick/261004-blg-fix-drawer-interactions-ai-header-action/) |
+| 261004-nps | normalize page structure UI across all views with unified PageHeader, update top header, enable notes search by parent name, and add item filter to NotesView | 2026-10-04 | — | complete | [261004-nps-normalize-page-structure-and-notes-filter](./quick/261004-nps-normalize-page-structure-and-notes-filter/) |
+| 261004-nls | fix note detail modal layout shift on open/close and display entity name in note detail modal | 2026-10-04 | — | complete | [261004-nls-fix-note-detail-modal-layout-shift-and-entity-name](./quick/261004-nls-fix-note-detail-modal-layout-shift-and-entity-name/) |
+| 261004-ash | app shortcuts with HUD autocomplete, cross-platform modifiers, multi-key combos, and view actions | 2026-10-04 | — | complete | [261004-ash-app-shortcuts-with-hud-autocomplete](./quick/261004-ash-app-shortcuts-with-hud-autocomplete/) |
 
 ## Performance Metrics
 

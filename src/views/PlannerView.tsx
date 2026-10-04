@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Button, Switch, Space, Typography, Grid, Modal, Select, Segmented } from 'antd';
+import { Button, Switch, Space, Typography, Grid, Modal, Select, Segmented, theme } from 'antd';
 import { PlusOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
@@ -15,6 +15,7 @@ import { DayInsightPanel } from '../components/planner/DayInsightPanel';
 import { ActualWorklogPlanner } from '../components/planner/ActualWorklogPlanner';
 import { useDayInsight } from '../hooks/useDayInsight';
 import { TaskDrawer } from '../components/tasks/TaskDrawer';
+import { PageHeader } from '../components/common/PageHeader';
 import { getTodayDateString } from '../utils/date';
 import type { Task, Project } from '../types/models';
 
@@ -51,6 +52,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
 
   const screens = Grid.useBreakpoint();
   const isMobile = screens.md === false;
+  const { token } = theme.useToken();
 
   const weeklyState = useWeeklyPlanner(currentDate, db);
 
@@ -172,7 +174,45 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
 
   return (
     <div data-testid="planner-view" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* Top Toolbar: Week Navigator + Segmented Subview + Controls (D-02, D-05, D-16, D-26) */}
+      {/* 1. Standard Page Header */}
+      <PageHeader
+        title="Kế hoạch công suất"
+        subtitle="Lập kế hoạch phân bổ thời gian và theo dõi giờ làm việc thực tế"
+        extra={
+          plannerMode === 'planned' ? (
+            <Space wrap size="middle">
+              <Space size={6} align="center">
+                <Switch
+                  checked={showCompleted}
+                  onChange={setShowCompleted}
+                  id="show-completed-toggle"
+                  aria-label="Hiện tác vụ hoàn thành"
+                />
+                <Text style={{ fontSize: 13, userSelect: 'none' }}>Hiện tác vụ hoàn thành</Text>
+              </Space>
+
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => handleOpenAllocate()}
+                aria-label="Phân bổ tác vụ"
+              >
+                Phân bổ tác vụ
+              </Button>
+
+              <Button
+                icon={<ThunderboltOutlined />}
+                onClick={() => handleOpenFeasibility()}
+                aria-label="Tự động phân bổ"
+              >
+                Tự động phân bổ
+              </Button>
+            </Space>
+          ) : null
+        }
+      />
+
+      {/* 2. Top Toolbar: Week Navigator + Segmented Subview (D-02, D-05, D-16, D-26) */}
       <div
         style={{
           display: 'flex',
@@ -181,58 +221,25 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
           alignItems: 'center',
           gap: 12,
           padding: '12px 16px',
-          backgroundColor: '#ffffff',
-          borderRadius: 8,
-          border: '1px solid #f0f0f0',
+          backgroundColor: token.colorBgContainer,
+          borderRadius: token.borderRadius,
+          border: `1px solid ${token.colorBorderSecondary}`,
         }}
       >
-        <Space wrap size="middle">
-          <WeekNavigator
-            currentDate={currentDate}
-            onDateChange={setCurrentDate}
-            onOpenCapacitySettings={() => setCapacityModalOpen(true)}
-          />
+        <WeekNavigator
+          currentDate={currentDate}
+          onDateChange={setCurrentDate}
+          onOpenCapacitySettings={() => setCapacityModalOpen(true)}
+        />
 
-          <Segmented<'planned' | 'actual'>
-            value={plannerMode}
-            onChange={(val) => setPlannerMode(val)}
-            options={[
-              { label: 'Kế hoạch', value: 'planned' },
-              { label: 'Thực tế', value: 'actual' },
-            ]}
-          />
-        </Space>
-
-        {plannerMode === 'planned' && (
-          <Space wrap size="middle">
-            <Space size={6} align="center">
-              <Switch
-                checked={showCompleted}
-                onChange={setShowCompleted}
-                id="show-completed-toggle"
-                aria-label="Hiện tác vụ hoàn thành"
-              />
-              <Text style={{ fontSize: 13, userSelect: 'none' }}>Hiện tác vụ hoàn thành</Text>
-            </Space>
-
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => handleOpenAllocate()}
-              aria-label="Phân bổ tác vụ"
-            >
-              Phân bổ tác vụ
-            </Button>
-
-            <Button
-              icon={<ThunderboltOutlined />}
-              onClick={() => handleOpenFeasibility()}
-              aria-label="Tự động phân bổ"
-            >
-              Tự động phân bổ
-            </Button>
-          </Space>
-        )}
+        <Segmented<'planned' | 'actual'>
+          value={plannerMode}
+          onChange={(val) => setPlannerMode(val)}
+          options={[
+            { label: 'Kế hoạch', value: 'planned' },
+            { label: 'Thực tế', value: 'actual' },
+          ]}
+        />
       </div>
 
       {/* Main Subview Content */}
