@@ -153,6 +153,33 @@ export function serializeMilestoneContext(milestone: Milestone): string {
   return lines.join('\n');
 }
 
+/**
+ * Serializes a Document/Note model into XML with structured markdown and relevant snippet
+ */
+export function serializeDocumentContext(doc: Note, snippet?: string): string {
+  const lines: string[] = [];
+  lines.push(`<item_context type="document" id="${doc.id}">`);
+  lines.push(`## Document: ${doc.title || 'Untitled Document'}`);
+  if (doc.tags && doc.tags.length > 0) {
+    lines.push(`- **Tags:** ${doc.tags.join(', ')}`);
+  }
+  if (doc.slug) {
+    lines.push(`- **Slug:** ${doc.slug}`);
+  }
+  if (doc.updatedAt) {
+    lines.push(`- **Updated:** ${doc.updatedAt}`);
+  }
+
+  const content = snippet?.trim() || doc.body?.trim();
+  if (content) {
+    lines.push('\n### Relevant Content');
+    lines.push(content);
+  }
+
+  lines.push('</item_context>');
+  return lines.join('\n');
+}
+
 export interface BuildItemContextPromptOptions {
   entityType: 'task' | 'project' | 'milestone';
   item: Task | Project | Milestone;

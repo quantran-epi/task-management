@@ -24,6 +24,7 @@ import {
   removeCapacityOverride,
 } from '../../db/repositories/capacityRepo';
 import { createNote, updateNote, deleteNote } from '../../db/repositories/noteRepo';
+import { rankBM25, extractRelevantSnippet } from '../../utils/bm25';
 import { isTauriApp } from '../../utils/timerPopout';
 import dayjs from 'dayjs';
 
@@ -1064,6 +1065,51 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           },
         },
         required: ['filePath'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_knowledge_base',
+      description:
+        'Search offline knowledge base documents using lexical BM25 ranking. Supports query keywords, optional tag filtering, and returns relevant snippet extracts.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'Search keywords, topic, or question to find in documents.',
+          },
+          tags: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional array of tags to filter documents.',
+          },
+          limit: {
+            type: 'number',
+            description: 'Maximum number of documents to return (default 5, max 10).',
+          },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_document_details',
+      description:
+        'Retrieve full content, tags, metadata, and attachment IDs of a document from the knowledge base by document UUID.',
+      parameters: {
+        type: 'object',
+        properties: {
+          documentId: {
+            type: 'string',
+            description: 'UUID of the document/note to inspect.',
+          },
+        },
+        required: ['documentId'],
       },
     },
   },
@@ -2755,6 +2801,85 @@ export async function executeAiTool(
         return JSON.stringify({
           success: true,
           message: `Đã xóa ghi chú (${args.id}).`,
+        });
+      }
+
+      case 'search_knowledge_base': {
+        if (!db.notes) return JSON.stringify({ error: 'Notes table unavailable' });
+        if (!args.query || typeof args.query !== 'string') {
+          return JSON.stringify({ error: 'query string parameter is required' });
+        }
+
+        let docs = await db.notes
+          .filter((n: Note) => !n.deletedAt && (n.type === 'document' || !n.type))
+          .toArray();
+
+        // Optional tags filter
+        if (Array.isArray(args.tags) && args.tags.length > 0) {
+          const filterTags = new Set((args.tags as string[]).map((t) => t.toLowerCase().trim()));
+          docs = docs.filter((d: Note) =>
+            d.tags?.some((t) => filterTags.has(t.toLowerCase().trim()))
+          );
+        }
+
+        const limit = Math.min(Math.max(1, Number(args.limit) || 5), 10);
+        const bm25Docs = docs.map((d: Note) => ({
+          id: d.id,
+          title: d.title || '',
+          tags: d.tags || [],
+          body: d.body || '',
+          updatedAt: d.updatedAt,
+        }));
+
+        const scoredResults = rankBM25(args.query, bm25Docs, { limit });
+        const results = scoredResults.map((sr) => ({
+          id: sr.doc.id,
+          title: sr.doc.title,
+          tags: sr.doc.tags,
+          score: Math.round(sr.score * 100) / 100,
+          snippet: extractRelevantSnippet(sr.doc.body, args.query, 1500),
+          updatedAt: sr.doc.updatedAt,
+        }));
+
+        return JSON.stringify({
+          totalHits: scoredResults.length,
+          returned: results.length,
+          results,
+        });
+      }
+
+      case 'get_document_details': {
+        if (!db.notes) return JSON.stringify({ error: 'Notes table unavailable' });
+        if (!args.documentId) {
+          return JSON.stringify({ error: 'documentId parameter is required' });
+        }
+
+        const doc = await db.notes.get(args.documentId);
+        if (!doc || doc.deletedAt) {
+          return JSON.stringify({ error: `Document not found or has been deleted: ${args.documentId}` });
+        }
+
+        let attachments: Array<{ id: string; fileName: string; mimeType: string; sizeBytes: number }> = [];
+        if (db.noteAttachments) {
+          const rawAttachments = await db.noteAttachments.where('noteId').equals(doc.id).toArray();
+          attachments = rawAttachments.map((a: any) => ({
+            id: a.id,
+            fileName: a.fileName,
+            mimeType: a.mimeType,
+            sizeBytes: a.sizeBytes,
+          }));
+        }
+
+        return JSON.stringify({
+          id: doc.id,
+          title: doc.title || 'Untitled Document',
+          type: doc.type || 'document',
+          tags: doc.tags || [],
+          slug: doc.slug,
+          body: doc.body || '',
+          attachments,
+          createdAt: doc.createdAt,
+          updatedAt: doc.updatedAt,
         });
       }
 
