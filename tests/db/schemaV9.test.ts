@@ -1,11 +1,10 @@
 // @vitest-environment node
 import { describe, it, expect, afterEach } from 'vitest';
 import Dexie from 'dexie';
-import { SCHEMA_V8, SCHEMA_V9 } from '../../src/db/schema';
+import { SCHEMA_V8 } from '../../src/db/schema';
 import { TaskPlannerDatabase } from '../../src/db/index';
 import {
   createNote,
-  updateNote,
   softDeleteNote,
   restoreNote,
   getNotesByFolder,
