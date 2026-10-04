@@ -30,6 +30,21 @@ function renderInlineFormatting(rawText: string): string {
   text = text.replace(/\*([^*]+)\*/g, '<em>$1</em>');
   text = text.replace(/_([^_]+)_/g, '<em>$1</em>');
 
+  // 4.5 Binary attachment image (![caption](attachment:uuid))
+  text = text.replace(/!\[([^\]]*)\]\(attachment:([a-zA-Z0-9_-]+)\)/g, (_match, caption, uuid) => {
+    return `<img class="note-attachment-image" data-attachment-id="${uuid}" alt="${caption}" />`;
+  });
+
+  // 4.6 Wiki-link chips ([[doc:id|Title]], [[task:id|Title]], [[project:id|Title]])
+  // Note: text was already escapeHtml'd, so '|' is intact, entity ID matches alphanumeric/dash/underscore
+  text = text.replace(/\[\[(doc|task|project):([a-zA-Z0-9_-]+)(?:\|([^\]]+))?\]\]/g, (_match, type, id, label) => {
+    const displayLabel = label?.trim() || id;
+    let icon = '📄';
+    if (type === 'task') icon = '✅';
+    if (type === 'project') icon = '📁';
+    return `<span class="wiki-link-chip" data-entity-type="${type}" data-entity-id="${id}" role="button" tabindex="0">${icon} ${displayLabel}</span>`;
+  });
+
   // 5. Links [text](url) - strictly disallow dangerous schemes
   text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, linkText, url) => {
     const trimmedUrl = url.trim();
