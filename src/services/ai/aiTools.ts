@@ -26,6 +26,7 @@ import {
 import { createNote, updateNote, deleteNote } from '../../db/repositories/noteRepo';
 import { rankBM25, extractRelevantSnippet } from '../../utils/bm25';
 import { isTauriApp } from '../../utils/timerPopout';
+import { exportContentAsFile, inferFormatFromFilename, type ExportFormat } from '../../utils/fileExport';
 import dayjs from 'dayjs';
 
 export interface AiToolDefinition {
@@ -1110,6 +1111,37 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           },
         },
         required: ['documentId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'generate_file',
+      description:
+        'Generate and trigger immediate browser download of a file in specified format (Markdown .md, plain text .txt, Word .docx, Excel .xlsx, or .csv). Useful when the user asks to export or save a document, report, table, summary, or spreadsheet to a file.',
+      parameters: {
+        type: 'object',
+        properties: {
+          filename: {
+            type: 'string',
+            description: 'Name of the file to create (e.g. "report.docx", "tasks.xlsx", "notes.md", "data.csv").',
+          },
+          format: {
+            type: 'string',
+            enum: ['md', 'txt', 'docx', 'xlsx', 'csv'],
+            description: 'Optional format: md, txt, docx, xlsx, or csv. If omitted, inferred from filename extension.',
+          },
+          content: {
+            type: 'string',
+            description: 'The full document content, report, markdown text, or tabular data to include in the file.',
+          },
+          title: {
+            type: 'string',
+            description: 'Optional title or header for the document.',
+          },
+        },
+        required: ['filename', 'content'],
       },
     },
   },
@@ -2880,6 +2912,27 @@ export async function executeAiTool(
           attachments,
           createdAt: doc.createdAt,
           updatedAt: doc.updatedAt,
+        });
+      }
+
+      case 'generate_file': {
+        if (!args.filename || !args.content) {
+          return JSON.stringify({ error: 'filename and content are required' });
+        }
+
+        const format = (args.format as ExportFormat) || inferFormatFromFilename(String(args.filename));
+        const exportResult = exportContentAsFile(
+          String(args.content),
+          String(args.filename),
+          format
+        );
+
+        return JSON.stringify({
+          success: true,
+          message: `Đã tạo và tải xuống tệp "${exportResult.filename}" thành công.`,
+          filename: exportResult.filename,
+          format: exportResult.format,
+          sizeBytes: exportResult.sizeBytes,
         });
       }
 
