@@ -35,6 +35,7 @@ Last activity: 2026-10-04 -- Completed quick task 261004-qox: AI assistant multi
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261004-fhz | Folder hierarchy, zip markdown upload with preview modal, and doc bug fixes | 2026-10-04 | — | complete | [261004-fhz-folder-hierarchy-zip-upload-doc-fixes](./quick/261004-fhz-folder-hierarchy-zip-upload-doc-fixes/) |
 | 261004-qox | AI assistant feature to create/export files with various formats (MD, TXT, DOCX, XLSX, CSV) | 2026-10-04 | 9093528 | complete | [261004-qox-ai-file-generation-export](./quick/261004-qox-ai-file-generation-export/) |
 | 261004-fui | Redesign folder UI, enable 1-click document creation in folders, folder rename, safe delete, and move-to-folder | 2026-10-04 | — | complete | [261004-fui-folder-ui-and-doc-creation](./quick/261004-fui-folder-ui-and-doc-creation/) |
 | 261004-fdc | Fix docs entity detection word boundaries, title auto-detection, markdown viewer extensions (tables, nested lists, images, autolinks, copy), and folder creation | 2026-10-04 | 6d699d1 | complete | [261004-fdc-fix-docs-chat-issues](./quick/261004-fdc-fix-docs-chat-issues/) |
