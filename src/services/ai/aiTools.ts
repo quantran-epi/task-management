@@ -24,6 +24,7 @@ import {
   removeCapacityOverride,
 } from '../../db/repositories/capacityRepo';
 import { createNote, updateNote, deleteNote } from '../../db/repositories/noteRepo';
+import { isTauriApp } from '../../utils/timerPopout';
 import dayjs from 'dayjs';
 
 export interface AiToolDefinition {
@@ -843,6 +844,32 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           id: { type: 'string', description: 'UUID of the note to delete.' },
         },
         required: ['id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'read_file',
+      description:
+        'Read a slice of a local file referenced in the conversation or attached to a task/project. Returns line-numbered content (`cat -n` format), lines read, and whether the file was truncated. Use offset and limit to page through large files.',
+      parameters: {
+        type: 'object',
+        properties: {
+          filePath: {
+            type: 'string',
+            description: 'The local path of the file to read (supports absolute paths, relative paths, and ~).',
+          },
+          offset: {
+            type: 'number',
+            description: 'The line number to start reading from (1-based, default: 1).',
+          },
+          limit: {
+            type: 'number',
+            description: 'Maximum number of lines to read (default: 500, max: 2000).',
+          },
+        },
+        required: ['filePath'],
       },
     },
   },
@@ -1752,6 +1779,53 @@ export async function executeAiTool(
             lastFlushAt: settingsMap.get('tauri_sqlite_last_flush_at') ?? null,
           },
         });
+      }
+
+      case 'read_file': {
+        const rawPath = args.filePath || args.file_path || args.path;
+        if (!rawPath || typeof rawPath !== 'string') {
+          return JSON.stringify({ error: 'filePath parameter is required.' });
+        }
+        const offset = typeof args.offset === 'number' ? Math.max(1, Math.floor(args.offset)) : 1;
+        const limit =
+          typeof args.limit === 'number' ? Math.min(2000, Math.max(1, Math.floor(args.limit))) : 500;
+
+        try {
+          if (!isTauriApp()) {
+            return JSON.stringify({
+              error:
+                'Local file reading is only supported in Tauri desktop app due to browser security sandbox.',
+              filePath: rawPath,
+            });
+          }
+
+          const api = await import('@tauri-apps/api/core');
+          const result = await api.invoke<any>('read_local_file_slice', {
+            filePath: rawPath,
+            offset,
+            limit,
+          });
+
+          return JSON.stringify({
+            filePath: result.filePath,
+            offset: result.offset,
+            linesRead: result.linesRead,
+            totalLinesEstimated: result.totalLinesEst,
+            truncated: result.truncated,
+            isBinary: result.isBinary,
+            content: result.content,
+            note: result.isBinary
+              ? 'This is a binary file; text contents cannot be displayed.'
+              : result.truncated
+              ? `Showing lines ${result.offset} to ${result.offset + result.linesRead - 1}. Truncated. To read next chunk, call read_file with offset: ${result.offset + result.linesRead}.`
+              : `Showing lines ${result.offset} to ${result.offset + result.linesRead - 1}. End of file.`,
+          });
+        } catch (err: any) {
+          return JSON.stringify({
+            error: `Failed to read file '${rawPath}': ${err?.message || String(err)}`,
+            filePath: rawPath,
+          });
+        }
       }
 
       // --- MUTATION IMPLEMENTATIONS ---

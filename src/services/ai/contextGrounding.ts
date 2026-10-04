@@ -377,32 +377,41 @@ export async function buildGlobalContextPrompt(db: TaskPlannerDatabase = default
 export interface ExtractedMentions {
   taskIds: string[];
   projectIds: string[];
+  filePaths: string[];
 }
 
 /**
- * Extracts task and project entity IDs from text containing mentions.
+ * Extracts task, project, and file entity references from text containing mentions.
  * Supports @[Task Name](task:<id>), #[Project Name](project:<id>),
- * @task:<id>, and #project:<id>.
+ * [file.txt](file:<path>), @file:<path>, @task:<id>, and #project:<id>.
  */
 export function extractMentionedEntityIds(text: string): ExtractedMentions {
   const taskIds = new Set<string>();
   const projectIds = new Set<string>();
+  const filePaths = new Set<string>();
 
-  const taskRegex = /@\[(?:[^\]]*)\]\(task:([a-zA-Z0-9_-]+)\)|@task:([a-zA-Z0-9_-]+)/g;
+  const taskRegex = /@?\[(?:[^\]]*)\]\(task:([a-zA-Z0-9_-]+)\)|@task:([a-zA-Z0-9_-]+)/g;
   let match: RegExpExecArray | null;
   while ((match = taskRegex.exec(text)) !== null) {
     const id = match[1] || match[2];
     if (id) taskIds.add(id);
   }
 
-  const projRegex = /#\[(?:[^\]]*)\]\(project:([a-zA-Z0-9_-]+)\)|#project:([a-zA-Z0-9_-]+)/g;
+  const projRegex = /#?\[(?:[^\]]*)\]\(project:([a-zA-Z0-9_-]+)\)|#project:([a-zA-Z0-9_-]+)/g;
   while ((match = projRegex.exec(text)) !== null) {
     const id = match[1] || match[2];
     if (id) projectIds.add(id);
   }
 
+  const fileRegex = /(?:@?\[(?:[^\]]*)\]\(file:([^)]+)\)|@file:([^\s]+))/g;
+  while ((match = fileRegex.exec(text)) !== null) {
+    const path = match[1] || match[2];
+    if (path) filePaths.add(path.trim());
+  }
+
   return {
     taskIds: Array.from(taskIds),
     projectIds: Array.from(projectIds),
+    filePaths: Array.from(filePaths),
   };
 }

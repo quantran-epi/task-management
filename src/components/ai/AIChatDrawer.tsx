@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { theme, Button, message } from 'antd';
+import { theme, Button, message, Modal } from 'antd';
 import { DisconnectOutlined } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
@@ -10,6 +10,8 @@ import {
   saveMessage,
   getMessagesByThreadId,
   clearThreadContext,
+  clearThreadMessages,
+  clearAllChatHistory,
 } from '../../db/repositories/chatRepo';
 import {
   getNineRouterApiKey,
@@ -158,6 +160,15 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const [scopeModalOpen, setScopeModalOpen] = useState(false);
   const [isDebugModalOpen, setIsDebugModalOpen] = useState(false);
   const [isInstructionsOpen, setIsInstructionsOpen] = useState(false);
+  const [sessionAttachedFiles, setSessionAttachedFiles] = useState<string[]>([]);
+
+  const handleAttachFile = (filePath: string) => {
+    setSessionAttachedFiles((prev) => (prev.includes(filePath) ? prev : [...prev, filePath]));
+  };
+
+  const handleRemoveFile = (filePath: string) => {
+    setSessionAttachedFiles((prev) => prev.filter((p) => p !== filePath));
+  };
 
   // Sync propScope when it changes (unless user explicitly picked or detached)
   useEffect(() => {
@@ -438,9 +449,14 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       }
     }
 
-    // 4b. Extract mentioned tasks and projects from prompt and inject grounding
-    const { taskIds, projectIds } = extractMentionedEntityIds(trimmed);
+    // 4b. Extract mentioned tasks, projects, and local files from prompt and inject grounding
+    const { taskIds, projectIds, filePaths } = extractMentionedEntityIds(trimmed);
     const mentionedContexts: string[] = [];
+
+    if (filePaths && filePaths.length > 0) {
+      setSessionAttachedFiles((prev) => Array.from(new Set([...prev, ...filePaths])));
+    }
+    const allFiles = Array.from(new Set([...sessionAttachedFiles, ...(filePaths || [])]));
 
     for (const tid of taskIds) {
       if (effectiveScope.type === 'task' && effectiveScope.id === tid) continue;
@@ -471,6 +487,12 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     if (mentionedContexts.length > 0) {
       const mentionsBlock = `<mentioned_entities>\n[User Referenced Items Grounding]:\nThe user explicitly referenced the following items using mentions in their request. Their detailed database state is provided below for exact grounding:\n${mentionedContexts.join('\n\n')}\n</mentioned_entities>`;
       systemInstruction = systemInstruction ? `${systemInstruction}\n\n${mentionsBlock}` : mentionsBlock;
+    }
+
+    if (allFiles.length > 0) {
+      const filesList = allFiles.map((fp) => `- \`${fp}\``).join('\n');
+      const filesPrompt = `<referenced_files>\n[User Attached & Referenced Local Files]:\nThe following local files are attached to this chat session:\n${filesList}\nTo inspect their contents or specific lines, you have access to the \`read_file\` tool. Call \`read_file(filePath: "...", offset: 1, limit: 500)\` as needed to fulfill the request.\n</referenced_files>`;
+      systemInstruction = systemInstruction ? `${systemInstruction}\n\n${filesPrompt}` : filesPrompt;
     }
 
     const allMsgs = await getMessagesByThreadId(activeThread.id, db);
@@ -773,7 +795,41 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
       );
     }
     await clearThreadContext(activeThread.id, db);
+    setSessionAttachedFiles([]);
     message.success('Đã đặt lại ngữ cảnh hội thoại');
+  };
+
+  const handleDeleteCurrentThread = () => {
+    Modal.confirm({
+      title: 'Xóa tin nhắn cuộc trò chuyện này?',
+      content: 'Toàn bộ nội dung trao đổi trong phạm vi này sẽ bị xóa khỏi lịch sử.',
+      okText: 'Xóa tin nhắn',
+      okType: 'danger',
+      cancelText: 'Hủy',
+      onOk: async () => {
+        if (thread) {
+          await clearThreadMessages(thread.id, db);
+        }
+        setSessionAttachedFiles([]);
+        message.success('Đã xóa tin nhắn cuộc trò chuyện');
+      },
+    });
+  };
+
+  const handleClearAllHistory = () => {
+    Modal.confirm({
+      title: 'Xóa toàn bộ lịch sử AI?',
+      content:
+        'Hành động này sẽ xóa vĩnh viễn tất cả các cuộc trò chuyện và tin nhắn AI trên mọi phạm vi (toàn cục, tác vụ, dự án). Không thể hoàn tác.',
+      okText: 'Xóa sạch tất cả',
+      okType: 'danger',
+      cancelText: 'Hủy',
+      onOk: async () => {
+        await clearAllChatHistory(db);
+        setSessionAttachedFiles([]);
+        message.success('Đã xóa sạch toàn bộ lịch sử trò chuyện AI');
+      },
+    });
   };
 
   const handleRetry = () => {
@@ -904,6 +960,8 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
         isPinned={isPinned}
         onTogglePin={() => onTogglePin?.()}
         onClearContext={handleClearContext}
+        onClearAllHistory={handleClearAllHistory}
+        onDeleteCurrentThread={handleDeleteCurrentThread}
         onOpenDebug={() => setIsDebugModalOpen(true)}
         onPopout={!isPopoutWindow ? handlePopoutAction : undefined}
         onOpenInstructions={() => setIsInstructionsOpen(true)}
@@ -1021,6 +1079,7 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
         autoFocus={open}
         onSubmit={handleSendMessage}
         onClear={handleClearContext}
+        onClearAll={handleClearAllHistory}
         onStop={handleStopGeneration}
         isStreaming={isStreaming && !pendingConfirmation}
         placeholder={
@@ -1029,6 +1088,9 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
             : undefined
         }
         db={db}
+        attachedFiles={sessionAttachedFiles}
+        onAttachFile={handleAttachFile}
+        onRemoveFile={handleRemoveFile}
       />
     </div>
   );

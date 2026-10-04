@@ -110,3 +110,21 @@ export async function deleteThreadByScope(
     }
   });
 }
+
+export async function clearThreadMessages(
+  threadId: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<void> {
+  await db.transaction('rw', [db.chatMessages], async () => {
+    await db.chatMessages.where('threadId').equals(threadId).delete();
+  });
+}
+
+export async function clearAllChatHistory(
+  db: TaskPlannerDatabase = defaultDb
+): Promise<void> {
+  await db.transaction('rw', [db.chatThreads, db.chatMessages], async () => {
+    await db.chatMessages.clear();
+    await db.chatThreads.clear();
+  });
+}

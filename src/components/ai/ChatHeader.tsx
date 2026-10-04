@@ -13,6 +13,7 @@ import {
   ThunderboltFilled,
   MoreOutlined,
   BookOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons';
 
 const { Text } = Typography;
@@ -41,6 +42,8 @@ export interface ChatHeaderProps {
   isPinned: boolean;
   onTogglePin: () => void;
   onClearContext: () => void;
+  onClearAllHistory?: (() => void) | undefined;
+  onDeleteCurrentThread?: (() => void) | undefined;
   onOpenDebug?: (() => void) | undefined;
   onPopout?: (() => void) | undefined;
   onOpenInstructions?: (() => void) | undefined;
@@ -56,6 +59,8 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   isPinned,
   onTogglePin,
   onClearContext,
+  onClearAllHistory,
+  onDeleteCurrentThread,
   onOpenDebug,
   onPopout,
   onOpenInstructions,
@@ -107,6 +112,30 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             icon: <BugOutlined />,
             label: 'Nhật ký gỡ lỗi AI',
             onClick: onOpenDebug,
+          },
+        ]
+      : []),
+    ...(onDeleteCurrentThread
+      ? [
+          {
+            type: 'divider' as const,
+          },
+          {
+            key: 'delete-thread',
+            icon: <DeleteOutlined style={{ color: token.colorWarning }} />,
+            label: 'Xóa tin nhắn hội thoại này',
+            onClick: onDeleteCurrentThread,
+          },
+        ]
+      : []),
+    ...(onClearAllHistory
+      ? [
+          {
+            key: 'clear-all-history',
+            icon: <DeleteOutlined style={{ color: token.colorError }} />,
+            danger: true,
+            label: 'Xóa toàn bộ lịch sử AI',
+            onClick: onClearAllHistory,
           },
         ]
       : []),

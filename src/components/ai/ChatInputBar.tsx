@@ -11,20 +11,28 @@ import {
   DashboardOutlined,
   WarningOutlined,
   QuestionCircleOutlined,
+  PaperClipOutlined,
+  FileTextOutlined,
+  FolderOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { Task, Project } from '../../types/models';
+import { isTauriApp } from '../../utils/timerPopout';
 
 export interface ChatInputBarProps {
   onSubmit: (text: string) => void;
   onClear?: (() => void) | undefined;
+  onClearAll?: (() => void) | undefined;
   onStop?: (() => void) | undefined;
   isStreaming?: boolean | undefined;
   disabled?: boolean | undefined;
   placeholder?: string | undefined;
   autoFocus?: boolean | undefined;
   db?: TaskPlannerDatabase | undefined;
+  attachedFiles?: string[] | undefined;
+  onAttachFile?: ((filePath: string) => void) | undefined;
+  onRemoveFile?: ((filePath: string) => void) | undefined;
 }
 
 const COMMANDS = [
@@ -33,6 +41,12 @@ const COMMANDS = [
     icon: <ClearOutlined style={{ color: '#ff4d4f' }} />,
     title: '/clear',
     description: 'Xóa lịch sử và làm mới ngữ cảnh trò chuyện',
+  },
+  {
+    name: 'clear-all',
+    icon: <ClearOutlined style={{ color: '#ff4d4f' }} />,
+    title: '/clear-all',
+    description: 'Xóa toàn bộ lịch sử trò chuyện AI trên mọi phạm vi',
   },
   {
     name: 'plan',
@@ -63,12 +77,16 @@ const COMMANDS = [
 export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   onSubmit,
   onClear,
+  onClearAll,
   onStop,
   isStreaming = false,
   disabled = false,
-  placeholder = 'Hỏi AI... (@, #, /)',
+  placeholder = 'Hỏi AI... (@, @file:, #, /)',
   autoFocus = false,
   db = defaultDb,
+  attachedFiles = [],
+  onAttachFile,
+  onRemoveFile,
 }) => {
   const { token } = theme.useToken();
   const [value, setValue] = useState('');
@@ -76,6 +94,9 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
     text: '',
     prefix: '',
   });
+  const [fileSuggestions, setFileSuggestions] = useState<
+    Array<{ path: string; name: string; is_dir: boolean }>
+  >([]);
 
   const mentionsRef = useRef<MentionsRef>(null);
   const isSubmittingRef = useRef(false);
@@ -91,6 +112,46 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
       }
     };
   }, []);
+
+  useEffect(() => {
+    const { prefix, text } = searchInfo;
+    const isFileQuery =
+      prefix === '@' &&
+      (text.startsWith('file:') || text.startsWith('/') || text.startsWith('~') || text.startsWith('.'));
+
+    if (!isFileQuery) {
+      setFileSuggestions([]);
+      return;
+    }
+
+    let inputPath = text;
+    if (text.startsWith('file:')) {
+      inputPath = text.slice(5);
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        if (isTauriApp()) {
+          const api = await import('@tauri-apps/api/core');
+          const results = await api.invoke<Array<{ path: string; name: string; is_dir: boolean }>>(
+            'complete_local_path',
+            { input: inputPath || '~/' }
+          );
+          if (!cancelled) {
+            setFileSuggestions(results || []);
+          }
+        }
+      } catch (err) {
+        console.warn('[ChatInputBar] Local path autocomplete error:', err);
+      }
+    }, 80);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [searchInfo]);
 
   useEffect(() => {
     if (autoFocus && !disabled && !isStreaming) {
@@ -114,6 +175,44 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
     }
   };
 
+  const handlePickFile = async () => {
+    try {
+      if (isTauriApp()) {
+        const api = await import('@tauri-apps/api/core');
+        const selected = await api.invoke<string | null>('select_local_file');
+        if (selected) {
+          if (onAttachFile) {
+            onAttachFile(selected);
+          } else {
+            const fileName = selected.split(/[/\\]/).pop() || selected;
+            const ref = `[${fileName}](file:${selected}) `;
+            setValue((prev) => (prev ? `${prev.trimEnd()} ${ref}` : ref));
+          }
+          setTimeout(() => {
+            mentionsRef.current?.focus();
+          }, 50);
+        }
+      } else {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.onchange = (e: any) => {
+          const file = e.target?.files?.[0];
+          if (file) {
+            if (onAttachFile) {
+              onAttachFile(file.name);
+            } else {
+              const ref = `[${file.name}](file:${file.name}) `;
+              setValue((prev) => (prev ? `${prev.trimEnd()} ${ref}` : ref));
+            }
+          }
+        };
+        input.click();
+      }
+    } catch (err) {
+      console.warn('[ChatInputBar] File selection error:', err);
+    }
+  };
+
   const handleSend = (targetEl?: HTMLTextAreaElement) => {
     const rawVal = value || targetEl?.value || '';
     const trimmed = rawVal.trim();
@@ -123,6 +222,11 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
 
     if (trimmed === '/clear') {
       onClear?.();
+      return;
+    }
+
+    if (trimmed === '/clear-all') {
+      onClearAll?.();
       return;
     }
 
@@ -152,6 +256,8 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
 
       if (rawText === '/clear') {
         onClear?.();
+      } else if (rawText === '/clear-all') {
+        onClearAll?.();
       } else {
         onSubmit(rawText);
       }
@@ -167,7 +273,76 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
     const q = text.trim().toLowerCase();
 
     if (prefix === '@') {
-      return tasks
+      const isFileMode =
+        text.startsWith('file:') ||
+        text.startsWith('/') ||
+        text.startsWith('~') ||
+        text.startsWith('.');
+
+      if (isFileMode) {
+        if (fileSuggestions.length > 0) {
+          return fileSuggestions.map((s) => ({
+            key: `file-${s.path}`,
+            value: s.is_dir ? `[${s.name}/](folder:${s.path})` : `[${s.name}](file:${s.path})`,
+            label: (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                  padding: '2px 0',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                  {s.is_dir ? (
+                    <FolderOutlined style={{ color: '#fa8c16', flexShrink: 0 }} />
+                  ) : (
+                    <FileTextOutlined style={{ color: '#52c41a', flexShrink: 0 }} />
+                  )}
+                  <span
+                    style={{
+                      fontWeight: 500,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {s.name}
+                  </span>
+                </div>
+                <span
+                  style={{
+                    color: '#8c8c8c',
+                    fontSize: 11,
+                    flexShrink: 0,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    maxWidth: 160,
+                  }}
+                >
+                  {s.path}
+                </span>
+              </div>
+            ),
+          }));
+        }
+
+        return [
+          {
+            key: 'file-empty-hint',
+            value: text,
+            label: (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0', color: '#8c8c8c' }}>
+                <FileTextOutlined />
+                <span>Nhập đường dẫn hợp lệ (vd: @file:~/ hoặc @file:/Users/...)</span>
+              </div>
+            ),
+          },
+        ];
+      }
+
+      const taskOptions = tasks
         .filter((t) => {
           if (t.status === 'Cancelled') return false;
           if (!q) return true;
@@ -237,6 +412,29 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
             </div>
           ),
         }));
+
+      const fileHintOption = {
+        key: 'mention-file-entry',
+        value: 'file:~/',
+        label: (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '2px 0',
+              borderTop: `1px dashed ${token.colorBorderSecondary}`,
+              marginTop: 4,
+              paddingTop: 4,
+            }}
+          >
+            <PaperClipOutlined style={{ color: '#13c2c2', flexShrink: 0 }} />
+            <span style={{ fontWeight: 500, color: '#13c2c2' }}>Tham chiếu tập tin... (@file:path)</span>
+          </div>
+        ),
+      };
+
+      return [...taskOptions, fileHintOption];
     }
 
     if (prefix === '#') {
@@ -354,7 +552,52 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
         gap: 8,
       }}
     >
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+        {attachedFiles && attachedFiles.length > 0 && (
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 6,
+              marginBottom: 6,
+              maxHeight: 72,
+              overflowY: 'auto',
+            }}
+          >
+            {attachedFiles.map((filePath) => {
+              const fileName = filePath.split(/[/\\]/).pop() || filePath;
+              return (
+                <Tag
+                  key={filePath}
+                  closable
+                  onClose={() => onRemoveFile?.(filePath)}
+                  icon={<FileTextOutlined style={{ color: '#52c41a' }} />}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    padding: '2px 8px',
+                    borderRadius: 6,
+                    fontSize: 12,
+                    maxWidth: 240,
+                    margin: 0,
+                  }}
+                >
+                  <Tooltip title={filePath}>
+                    <span
+                      style={{
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {fileName}
+                    </span>
+                  </Tooltip>
+                </Tag>
+              );
+            })}
+          </div>
+        )}
         <Mentions
           ref={mentionsRef}
           value={value}
@@ -382,7 +625,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
           placement="top"
           options={options}
           filterOption={false}
-          validateSearch={(text) => !text.includes('\n') && text.length <= 40}
+          validateSearch={(text) => !text.includes('\n') && text.length <= 150}
           notFoundContent={null}
           autoSize={{ minRows: 1, maxRows: 5 }}
           placeholder={placeholder}
@@ -410,7 +653,17 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
           }}
         />
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+        <Tooltip title="Tham chiếu tập tin cục bộ">
+          <Button
+            type="text"
+            icon={<PaperClipOutlined />}
+            onClick={handlePickFile}
+            disabled={disabled || isStreaming}
+            aria-label="Tham chiếu tập tin"
+            style={{ height: 32, width: 32, padding: 0 }}
+          />
+        </Tooltip>
         {isStreaming ? (
           <Tooltip title="Dừng sinh phản hồi">
             <Button
