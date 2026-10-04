@@ -43,7 +43,7 @@
 **Success Criteria** (what must be TRUE):
 
   1. User can assign and edit multiple Ops Owner names on projects, milestones, and tasks.
-  2. User can assign and edit multiple Business Analyst (BA) names on projects, milestones, and tasks.
+  2. User can assign and edit multiple Business Analyst names on projects, milestones, and tasks.
   3. Milestone and task views visually display inherited Ops Owner and BA tags from parent items when not explicitly overridden.
   4. User can assign one of five Work Types ('code', 'document', 'meeting', 'support_testing', 'investigate') to a task with a distinct visual badge.
   5. Existing v1.0 local database records and backup files seamlessly upgrade to schema v2 without data loss or error.
@@ -304,3 +304,17 @@ Plans:
 | 13. Enhanced Workload Analytics & Milestone Burndown | v1.1 | 3/3 | Complete    | 2026-09-30 |
 | 13.1. Timer, Jira, Sticky Notes, Actual Worklog & Sync Improvements | v1.1 | 5/5 | Complete    | 2026-10-01 |
 | 13.2. AI Chat Drawer, Item Context Grounding & 9router Ask-Answer Integration | v1.1 | 3/3 | Complete    | 2026-10-03 |
+
+### Phase 14: Knowledge Base Integration (Docs, Linking & AI Retrieval)
+
+**Goal:** Deliver an offline-first Personal Knowledge Management (PKM) engine with 3-column Docs workspace, folder tree taxonomy, Markdown split preview with outline ToC, Wiki-link bidirectional linking, 1-Click Smart Ingestion flow, lexical BM25 search with Vietnamese diacritic tolerance, and grounded AI retrieval with clickable citations.
+**Requirements**: REQ-14.1, REQ-14.2, REQ-14.3, REQ-14.4, REQ-14.5, REQ-14.6
+**Depends on:** Phase 13
+**Plans:** 4 plans
+
+Plans:
+
+- [ ] 14-01-PLAN.md — Schema V9, note model extensions, folder/tag repository, soft-delete, and lexical BM25 search engine with Vietnamese diacritic normalization (Wave 1)
+- [ ] 14-02-PLAN.md — Markdown Wiki-link parser, binary attachment tokens, smart ingestion metadata/entity extraction, two-way link repo, and SmartIngestionBanner (Wave 2)
+- [ ] 14-03-PLAN.md — AI tools `search_knowledge_base` and `get_document_details`, character-budgeted snippet grounding, `@doc:` autocomplete, clickable citation chips, and QuickPreviewDrawer (Wave 2)
+- [ ] 14-04-PLAN.md — 3-column Docs workspace in NotesView, folder tree, document list, split editor, ToC rail, TaskDrawer Linked Knowledge, Backlinks, Trash bin, and Markdown/Zip export (Wave 3)

@@ -84,6 +84,15 @@
 - [x] **AI-04**: Prompt context engine serializes scoped item fields (title, status, priority, estimates, tags, notes, dates) into system/user instructions for grounded responses.
 - [x] **AI-05**: Item link and document grounding extracts text from item links/notes (local attachments, URLs, note content) to answer reference-based questions directly.
 
+### Knowledge Base Integration (Phase 14 INSERTED)
+
+- [ ] **REQ-14.1**: Database schema upgrades to Dexie SCHEMA_V9 supporting document type, folder hierarchy (parentId), tags, and soft delete (deletedAt) without data loss on existing sticky notes.
+- [ ] **REQ-14.2**: Offline lexical BM25 search engine with field weighting (Title x3, Tags x2, Body x1) and Vietnamese diacritic normalization.
+- [ ] **REQ-14.3**: Markdown renderer parses inline Wiki-links (`[[doc:id|Title]]`, `[[task:id|Title]]`, `[[project:id|Title]]`) into interactive chips and binary attachments (`attachment:uuid`) safely without XSS.
+- [ ] **REQ-14.4**: Smart Ingestion flow extracts markdown headings/hashtags and regex-detects Jira keys and existing task/project titles with a 1-click "Áp dụng tất cả" banner.
+- [ ] **REQ-14.5**: AI tools `search_knowledge_base` and `get_document_details` provide BM25-ranked snippets within character budget, supported by `@doc:` autocomplete and clickable citation chips opening a Quick Preview Drawer.
+- [ ] **REQ-14.6**: NotesView provides a unified 3-column document workspace (Folder Tree + Document List + Split Editor/Reader with ToC and Backlinks), TaskDrawer Linked Knowledge integration, and Markdown/Zip export.
+
 ## Future Requirements (Deferred)
 
 - **FUTR-01**: Full bidirectional Jira issue webhook sync (deferred - requires server/push).
@@ -146,3 +155,9 @@
 | AI-03 | Phase 13.2 | Complete |
 | AI-04 | Phase 13.2 | Complete |
 | AI-05 | Phase 13.2 | Complete |
+| REQ-14.1 | Phase 14 | Pending |
+| REQ-14.2 | Phase 14 | Pending |
+| REQ-14.3 | Phase 14 | Pending |
+| REQ-14.4 | Phase 14 | Pending |
+| REQ-14.5 | Phase 14 | Pending |
+| REQ-14.6 | Phase 14 | Pending |
