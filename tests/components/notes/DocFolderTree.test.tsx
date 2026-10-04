@@ -101,19 +101,19 @@ describe('DocFolderTree Component', () => {
       />
     );
 
-    // Click the top folder create button (button containing folder icon)
+    // Click the top folder create button (button containing folder-add icon)
     const folderButtons = screen.getAllByRole('button');
-    const folderIconBtn = folderButtons.find((btn) => btn.querySelector('.anticon-folder'));
+    const folderIconBtn = folderButtons.find((btn) => btn.querySelector('.anticon-folder-add'));
     expect(folderIconBtn).toBeDefined();
 
     if (folderIconBtn) {
       fireEvent.click(folderIconBtn);
       expect(screen.getByText('Tạo thư mục mới')).toBeInTheDocument();
-      const input = screen.getByPlaceholderText(/Tên thư mục/);
+      const input = screen.getByPlaceholderText(/tên thư mục/i);
       fireEvent.change(input, { target: { value: 'Thư mục thử nghiệm' } });
-      const submitBtn = screen.getByRole('button', { name: 'Tạo' });
+      const submitBtn = screen.getByRole('button', { name: 'Tạo thư mục' });
       fireEvent.click(submitBtn);
-      expect(handleCreateFolder).toHaveBeenCalledWith('Thư mục thử nghiệm');
+      expect(handleCreateFolder).toHaveBeenCalledWith('Thư mục thử nghiệm', undefined);
     }
   });
 });

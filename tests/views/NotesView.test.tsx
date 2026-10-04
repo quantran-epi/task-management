@@ -37,8 +37,8 @@ describe('NotesView 3-Column Document Workspace', () => {
 
     render(<NotesView db={testDb} />);
 
-    expect(await screen.findByText('Inbox Doc')).toBeInTheDocument();
-    expect(screen.getByText('Pinned Doc')).toBeInTheDocument();
+    expect((await screen.findAllByText('Inbox Doc')).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Pinned Doc').length).toBeGreaterThan(0);
     expect(screen.getByText('Tất cả tài liệu')).toBeInTheDocument();
     expect(screen.getByText('Ghi chú nhanh')).toBeInTheDocument();
     expect(screen.getByText('Thùng rác')).toBeInTheDocument();
@@ -54,7 +54,7 @@ describe('NotesView 3-Column Document Workspace', () => {
     await waitFor(() => {
       const designElements = screen.getAllByText('Design Specs');
       expect(designElements.length).toBeGreaterThan(0);
-      expect(screen.getByText('Meeting Notes')).toBeInTheDocument();
+      expect(screen.getAllByText('Meeting Notes').length).toBeGreaterThan(0);
     });
 
     // Click on Design Specs in doc list to select it

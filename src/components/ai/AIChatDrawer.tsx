@@ -717,7 +717,7 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
           });
 
           // Check if this tool performs a data mutation requiring user confirmation
-          if (isMutationTool(tc.function.name)) {
+          if (isMutationTool(tc.function.name, args)) {
             if (!autoApproveMutations) {
               const summary = describeToolMutation(tc.function.name, args);
               setStreamingStatus('Chờ xác nhận hành động...');

@@ -1,16 +1,23 @@
-/* Scoped styles for rich Markdown responses inside AI Chat bubbles */
-.chat-markdown-body {
+/* Scoped styles for rich Markdown responses inside AI Chat bubbles and Docs rendered view */
+.chat-markdown-body,
+.markdown-rendered-view {
   font-size: 13.5px;
   line-height: 1.6;
   word-break: break-word;
+  overflow-wrap: break-word;
   color: inherit;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
-.chat-markdown-body p {
+.chat-markdown-body p,
+.markdown-rendered-view p {
   margin: 0 0 8px 0;
 }
 
-.chat-markdown-body p:last-child {
+.chat-markdown-body p:last-child,
+.markdown-rendered-view p:last-child {
   margin-bottom: 0;
 }
 
@@ -19,49 +26,66 @@
 .chat-markdown-body h3,
 .chat-markdown-body h4,
 .chat-markdown-body h5,
-.chat-markdown-body h6 {
+.chat-markdown-body h6,
+.markdown-rendered-view h1,
+.markdown-rendered-view h2,
+.markdown-rendered-view h3,
+.markdown-rendered-view h4,
+.markdown-rendered-view h5,
+.markdown-rendered-view h6 {
   margin: 12px 0 6px 0;
   font-weight: 600;
   line-height: 1.35;
   color: inherit;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .chat-markdown-body h1:first-child,
 .chat-markdown-body h2:first-child,
-.chat-markdown-body h3:first-child {
+.chat-markdown-body h3:first-child,
+.markdown-rendered-view h1:first-child,
+.markdown-rendered-view h2:first-child,
+.markdown-rendered-view h3:first-child {
   margin-top: 0;
 }
 
-.chat-markdown-body h1 { font-size: 1.25em; }
-.chat-markdown-body h2 { font-size: 1.15em; }
-.chat-markdown-body h3 { font-size: 1.05em; }
-.chat-markdown-body h4,
-.chat-markdown-body h5,
-.chat-markdown-body h6 { font-size: 1em; }
+.chat-markdown-body h1, .markdown-rendered-view h1 { font-size: 1.35em; }
+.chat-markdown-body h2, .markdown-rendered-view h2 { font-size: 1.2em; }
+.chat-markdown-body h3, .markdown-rendered-view h3 { font-size: 1.1em; }
+.chat-markdown-body h4, .markdown-rendered-view h4,
+.chat-markdown-body h5, .markdown-rendered-view h5,
+.chat-markdown-body h6, .markdown-rendered-view h6 { font-size: 1em; }
 
 .chat-markdown-body ul,
-.chat-markdown-body ol {
+.chat-markdown-body ol,
+.markdown-rendered-view ul,
+.markdown-rendered-view ol {
   margin: 4px 0 8px 0;
   padding-left: 20px;
 }
 
-.chat-markdown-body li {
+.chat-markdown-body li,
+.markdown-rendered-view li {
   margin: 2px 0;
 }
 
-.chat-markdown-body li.task-item {
+.chat-markdown-body li.task-item,
+.markdown-rendered-view li.task-item {
   list-style-type: none;
   margin-left: -18px;
 }
 
-.chat-markdown-body li.task-item label {
+.chat-markdown-body li.task-item label,
+.markdown-rendered-view li.task-item label {
   display: inline-flex;
   align-items: baseline;
   gap: 6px;
   cursor: default;
 }
 
-.chat-markdown-body blockquote {
+.chat-markdown-body blockquote,
+.markdown-rendered-view blockquote {
   margin: 8px 0;
   padding: 4px 12px;
   border-left: 3px solid rgba(128, 128, 128, 0.4);
@@ -69,65 +93,82 @@
   font-style: italic;
 }
 
-.chat-markdown-body blockquote p {
+.chat-markdown-body blockquote p,
+.markdown-rendered-view blockquote p {
   margin: 2px 0;
 }
 
-.chat-markdown-body pre.code-block {
+.chat-markdown-body pre.code-block,
+.markdown-rendered-view pre.code-block {
   margin: 8px 0;
   padding: 10px 12px;
   border-radius: 6px;
   background: rgba(0, 0, 0, 0.05);
   border: 1px solid rgba(0, 0, 0, 0.08);
   overflow-x: auto;
+  max-width: 100%;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 12.5px;
   line-height: 1.45;
 }
 
 :root[data-theme='dark'] .chat-markdown-body pre.code-block,
-[data-theme='dark'] .chat-markdown-body pre.code-block {
+[data-theme='dark'] .chat-markdown-body pre.code-block,
+:root[data-theme='dark'] .markdown-rendered-view pre.code-block,
+[data-theme='dark'] .markdown-rendered-view pre.code-block {
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 255, 255, 0.12);
 }
 
-.chat-markdown-body code {
+.chat-markdown-body code,
+.markdown-rendered-view code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.9em;
   padding: 2px 5px;
   border-radius: 4px;
   background: rgba(128, 128, 128, 0.15);
+  word-break: break-word;
 }
 
-.chat-markdown-body pre.code-block code {
+.chat-markdown-body pre.code-block code,
+.markdown-rendered-view pre.code-block code {
   padding: 0;
   background: transparent;
   border-radius: 0;
   font-size: 1em;
+  word-break: normal;
+  white-space: pre;
 }
 
-.chat-markdown-body a {
+.chat-markdown-body a,
+.markdown-rendered-view a {
   color: #1677ff;
   text-decoration: underline;
   text-underline-offset: 2px;
+  word-break: break-word;
 }
 
-.chat-markdown-body hr {
+.chat-markdown-body hr,
+.markdown-rendered-view hr {
   border: none;
   border-top: 1px solid rgba(128, 128, 128, 0.25);
   margin: 12px 0;
 }
 
 /* GFM Markdown Table */
-.chat-markdown-body .markdown-table-wrapper {
+.chat-markdown-body .markdown-table-wrapper,
+.markdown-rendered-view .markdown-table-wrapper {
   width: 100%;
+  max-width: 100%;
   margin: 10px 0;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
 
-.chat-markdown-body .markdown-table {
+.chat-markdown-body .markdown-table,
+.markdown-rendered-view .markdown-table {
   width: 100%;
+  max-width: 100%;
   border-collapse: collapse;
   font-size: 13px;
   line-height: 1.5;
@@ -137,27 +178,35 @@
 }
 
 .chat-markdown-body .markdown-table th,
-.chat-markdown-body .markdown-table td {
+.chat-markdown-body .markdown-table td,
+.markdown-rendered-view .markdown-table th,
+.markdown-rendered-view .markdown-table td {
   padding: 6px 12px;
   border: 1px solid rgba(128, 128, 128, 0.2);
 }
 
-.chat-markdown-body .markdown-table th {
+.chat-markdown-body .markdown-table th,
+.markdown-rendered-view .markdown-table th {
   background: rgba(0, 0, 0, 0.04);
   font-weight: 600;
 }
 
 :root[data-theme='dark'] .chat-markdown-body .markdown-table th,
-[data-theme='dark'] .chat-markdown-body .markdown-table th {
+[data-theme='dark'] .chat-markdown-body .markdown-table th,
+:root[data-theme='dark'] .markdown-rendered-view .markdown-table th,
+[data-theme='dark'] .markdown-rendered-view .markdown-table th {
   background: rgba(255, 255, 255, 0.08);
 }
 
-.chat-markdown-body .markdown-table tr:hover {
+.chat-markdown-body .markdown-table tr:hover,
+.markdown-rendered-view .markdown-table tr:hover {
   background: rgba(128, 128, 128, 0.06);
 }
 
 /* Markdown Image */
-.chat-markdown-body .markdown-image {
+.chat-markdown-body .markdown-image,
+.markdown-rendered-view .markdown-image,
+.markdown-rendered-view img {
   max-width: 100%;
   height: auto;
   border-radius: 6px;
@@ -166,28 +215,35 @@
 }
 
 /* Code block wrapper with language tag and copy button */
-.chat-markdown-body .code-block-wrapper {
+.chat-markdown-body .code-block-wrapper,
+.markdown-rendered-view .code-block-wrapper {
   margin: 8px 0;
   border-radius: 6px;
   overflow: hidden;
+  max-width: 100%;
   border: 1px solid rgba(0, 0, 0, 0.08);
   background: rgba(0, 0, 0, 0.04);
 }
 
 :root[data-theme='dark'] .chat-markdown-body .code-block-wrapper,
-[data-theme='dark'] .chat-markdown-body .code-block-wrapper {
+[data-theme='dark'] .chat-markdown-body .code-block-wrapper,
+:root[data-theme='dark'] .markdown-rendered-view .code-block-wrapper,
+[data-theme='dark'] .markdown-rendered-view .code-block-wrapper {
   background: rgba(255, 255, 255, 0.05);
   border-color: rgba(255, 255, 255, 0.12);
 }
 
-.chat-markdown-body .code-block-wrapper pre.code-block {
+.chat-markdown-body .code-block-wrapper pre.code-block,
+.markdown-rendered-view .code-block-wrapper pre.code-block {
   margin: 0;
   border: none;
   border-radius: 0;
   background: transparent;
+  max-width: 100%;
 }
 
-.chat-markdown-body .code-block-header {
+.chat-markdown-body .code-block-header,
+.markdown-rendered-view .code-block-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -197,14 +253,16 @@
   background: rgba(128, 128, 128, 0.08);
 }
 
-.chat-markdown-body .code-block-lang {
+.chat-markdown-body .code-block-lang,
+.markdown-rendered-view .code-block-lang {
   font-family: ui-monospace, monospace;
   font-weight: 600;
   text-transform: lowercase;
   opacity: 0.75;
 }
 
-.chat-markdown-body .code-copy-btn {
+.chat-markdown-body .code-copy-btn,
+.markdown-rendered-view .code-copy-btn {
   background: transparent;
   border: 1px solid rgba(128, 128, 128, 0.3);
   border-radius: 4px;
@@ -216,8 +274,31 @@
   transition: all 0.15s ease;
 }
 
-.chat-markdown-body .code-copy-btn:hover {
+.chat-markdown-body .code-copy-btn:hover,
+.markdown-rendered-view .code-copy-btn:hover {
   opacity: 1;
   border-color: #1677ff;
   color: #1677ff;
+}
+
+/* Wiki Link Chips in Markdown View */
+.markdown-rendered-view .wiki-link-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 12px;
+  background-color: #f3e8ff;
+  color: #7e22ce;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  margin: 0 2px;
+  border: 1px solid #e9d5ff;
+  transition: all 0.15s ease;
+}
+
+.markdown-rendered-view .wiki-link-chip:hover {
+  background-color: #e9d5ff;
+  color: #6b21a8;
 }

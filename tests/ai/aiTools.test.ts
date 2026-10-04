@@ -263,10 +263,13 @@ describe('aiTools', () => {
   };
 
   it('declares comprehensive query and mutation AI_DATABASE_TOOLS', () => {
-    expect(AI_DATABASE_TOOLS.length).toBe(43);
+    expect(AI_DATABASE_TOOLS.length).toBe(51);
     const names = AI_DATABASE_TOOLS.map((t) => t.function.name);
     // Includes standard read tools
     expect(names).toContain('read_file');
+    expect(names).toContain('generate_file');
+    expect(names).toContain('generate_pptx');
+    expect(names).toContain('generate_image');
     expect(names).toContain('search_knowledge_base');
     expect(names).toContain('get_document_details');
     expect(names).toContain('query_tasks');
@@ -283,6 +286,7 @@ describe('aiTools', () => {
     expect(names).toContain('query_attention_items');
     expect(names).toContain('query_recurring_tasks');
     expect(names).toContain('get_system_status');
+    expect(names).toContain('query_notifications');
 
     // Includes full mutation action tools
     expect(names).toContain('create_task');
@@ -311,6 +315,10 @@ describe('aiTools', () => {
     expect(names).toContain('create_note');
     expect(names).toContain('update_note');
     expect(names).toContain('delete_note');
+    expect(names).toContain('manage_reminders');
+    expect(names).toContain('link_document');
+    expect(names).toContain('unlink_document');
+    expect(names).toContain('dismiss_notification');
   });
 
   describe('isMutationTool, normalizeToolName, and describeToolMutation', () => {
@@ -327,10 +335,17 @@ describe('aiTools', () => {
       expect(isMutationTool('delete_project_ide')).toBe(true);
       expect(isMutationTool('start_timer_ide')).toBe(true);
       expect(isMutationTool('plan_allocation')).toBe(true);
+      expect(isMutationTool('manage_reminders')).toBe(true);
+      expect(isMutationTool('manage_reminders', { action: 'list' })).toBe(false);
+      expect(isMutationTool('manage_reminders', { action: 'add' })).toBe(true);
+      expect(isMutationTool('link_document')).toBe(true);
+      expect(isMutationTool('unlink_document')).toBe(true);
+      expect(isMutationTool('dismiss_notification')).toBe(true);
       expect(isMutationTool('query_tasks')).toBe(false);
       expect(isMutationTool('query_tasks_ide')).toBe(false);
       expect(isMutationTool('get_daily_schedule')).toBe(false);
       expect(isMutationTool('get_system_status')).toBe(false);
+      expect(isMutationTool('query_notifications')).toBe(false);
     });
 
     it('generates readable Vietnamese description of mutations with cloaked names', () => {
@@ -771,7 +786,7 @@ describe('aiTools', () => {
       );
       expect(createRes.success).toBe(true);
 
-      // update_task with full fields
+      // update_task with full fields including tags and reminders
       const updateRes = JSON.parse(
         await executeAiTool(
           'update_task',
@@ -782,6 +797,10 @@ describe('aiTools', () => {
             actualEndDate: '2026-10-05',
             opsOwners: ['Ops2'],
             businessAnalysts: ['BA2'],
+            tags: ['tag1'],
+            reminders: [{ date: '2026-10-20', time: '10:00', note: 'Checkup' }],
+            isRecurring: true,
+            recurrenceFrequency: 'daily',
           },
           mockTaskDb
         )
@@ -791,6 +810,147 @@ describe('aiTools', () => {
       expect(updateRes.updatedFields).toContain('actualStartDate');
       expect(updateRes.updatedFields).toContain('opsOwners');
       expect(updateRes.updatedFields).toContain('businessAnalysts');
+      expect(updateRes.updatedFields).toContain('reminders');
+      expect(updateRes.updatedFields).toContain('isRecurring');
+    });
+  });
+
+  describe('manage_reminders tool', () => {
+    it('lists, adds, and removes reminders on a task', async () => {
+      const remId1 = '11111111-1111-4111-8111-111111111111';
+      const mockTaskWithReminders = {
+        id: '11111111-2222-4222-8222-222222222222',
+        name: 'Task with Reminders',
+        status: 'Open',
+        priority: 'Medium',
+        progress: 0,
+        estimateMinutes: 30,
+        reminders: [{ id: remId1, date: '2026-10-15', time: '09:00', note: 'First reminder' }],
+      };
+      const testDb: any = {
+        tasks: {
+          get: vi.fn().mockResolvedValue(mockTaskWithReminders),
+          put: vi.fn().mockResolvedValue(mockTaskWithReminders.id),
+        },
+      };
+
+      // 1. List reminders
+      const listRes = JSON.parse(
+        await executeAiTool(
+          'manage_reminders',
+          { action: 'list', entityType: 'task', entityId: mockTaskWithReminders.id },
+          testDb
+        )
+      );
+      expect(listRes.remindersCount).toBe(1);
+      expect(listRes.reminders[0].id).toBe(remId1);
+
+      // 2. Add reminder
+      const addRes = JSON.parse(
+        await executeAiTool(
+          'manage_reminders',
+          { action: 'add', entityType: 'task', entityId: mockTaskWithReminders.id, date: '2026-10-25', time: '14:30', note: 'Second reminder' },
+          testDb
+        )
+      );
+      if (addRes.error) console.error('ADD_REM_ERROR:', addRes.error);
+      expect(addRes.success).toBe(true);
+      expect(addRes.reminder.date).toBe('2026-10-25');
+      expect(addRes.reminder.time).toBe('14:30');
+
+      // 3. Remove reminder
+      const removeRes = JSON.parse(
+        await executeAiTool(
+          'manage_reminders',
+          { action: 'remove', entityType: 'task', entityId: mockTaskWithReminders.id, reminderId: remId1 },
+          testDb
+        )
+      );
+      expect(removeRes.success).toBe(true);
+      expect(removeRes.remainingRemindersCount).toBe(0);
+    });
+  });
+
+  describe('link_document and unlink_document', () => {
+    it('links and unlinks document with entity', async () => {
+      const mockDoc = { id: 'doc-l1', title: 'Architecture Doc', body: '# Architecture' };
+      const mockTask = { id: 'task-l1', name: 'Build Core', notes: 'Initial notes', documentLinks: [] };
+      const testDb: any = {
+        notes: {
+          get: vi.fn().mockResolvedValue(mockDoc),
+          update: vi.fn().mockResolvedValue(1),
+        },
+        tasks: {
+          get: vi.fn().mockResolvedValue(mockTask),
+          update: vi.fn().mockResolvedValue(1),
+        },
+        projects: {
+          get: vi.fn().mockResolvedValue(null),
+        },
+        transaction: vi.fn().mockImplementation(async (_mode, _tables, callback) => {
+          return await callback();
+        }),
+      };
+
+      // Link document
+      const linkRes = JSON.parse(
+        await executeAiTool(
+          'link_document',
+          { documentId: 'doc-l1', entityType: 'task', entityId: 'task-l1' },
+          testDb
+        )
+      );
+      expect(linkRes.success).toBe(true);
+      expect(linkRes.message).toContain('Architecture Doc');
+
+      // Unlink document
+      const unlinkRes = JSON.parse(
+        await executeAiTool(
+          'unlink_document',
+          { documentId: 'doc-l1', entityType: 'task', entityId: 'task-l1' },
+          testDb
+        )
+      );
+      expect(unlinkRes.success).toBe(true);
+    });
+  });
+
+  describe('query_notifications and dismiss_notification', () => {
+    it('queries active notifications and dismisses an alert', async () => {
+      const notifDb: any = {
+        tasks: { toArray: async () => mockTasks },
+        projects: { toArray: async () => mockProjects },
+        milestones: { toArray: async () => mockMilestones },
+        capacityRules: { toArray: async () => mockCapacityRules },
+        capacityOverrides: { toArray: async () => mockCapacityOverrides },
+        plannedAllocations: { toArray: async () => mockPlannedAllocations },
+        workSessions: { toArray: async () => mockWorkSessions },
+        settings: {
+          get: vi.fn().mockResolvedValue(null),
+          put: vi.fn().mockResolvedValue('ok'),
+        },
+        transaction: vi.fn().mockImplementation(async (_mode, _table, callback) => {
+          return await callback();
+        }),
+      };
+
+      const queryRes = JSON.parse(
+        await executeAiTool('query_notifications', {}, notifDb)
+      );
+      expect(queryRes.totalCount).toBeGreaterThanOrEqual(1);
+      expect(queryRes.notifications.length).toBeGreaterThanOrEqual(1);
+
+      // Dismiss alert for today
+      const dismissRes = JSON.parse(
+        await executeAiTool('dismiss_notification', { alertKey: 'stale:task:123' }, notifDb)
+      );
+      expect(dismissRes.success).toBe(true);
+
+      // Rejection of non-dismissible alert
+      const rejectRes = JSON.parse(
+        await executeAiTool('dismiss_notification', { alertKey: 'overdue:task:123' }, notifDb)
+      );
+      expect(rejectRes.error).toBeDefined();
     });
   });
 

@@ -1,5 +1,6 @@
 import type { TaskPlannerDatabase } from '../../db';
-import type { Task, Project, Milestone, Note, ActiveTimer } from '../../types/models';
+import type { Task, Project, Milestone, Note, ActiveTimer, ReminderItem } from '../../types/models';
+import { NOTIFICATION_SETTINGS_KEY, DEFAULT_NOTIFICATION_SETTINGS } from '../../types/notifications';
 import { getTodayDateString } from '../../utils/date';
 import { getEffectiveDailyCapacity } from '../../utils/capacity';
 import { inspectDateCapacity } from '../../utils/feasibility';
@@ -24,6 +25,9 @@ import {
   removeCapacityOverride,
 } from '../../db/repositories/capacityRepo';
 import { createNote, updateNote, deleteNote } from '../../db/repositories/noteRepo';
+import { linkEntitiesToDoc, unlinkEntityFromDoc } from '../../db/repositories/documentLinkRepo';
+import { dismissAlertToday, getDismissedAlerts } from '../../db/repositories/notificationRepo';
+import { evaluateNotifications } from '../../utils/notifications';
 import { rankBM25, extractRelevantSnippet } from '../../utils/bm25';
 import { isTauriApp } from '../../utils/timerPopout';
 import { exportContentAsFile, inferFormatFromFilename, type ExportFormat } from '../../utils/fileExport';
@@ -579,6 +583,32 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           tags: { type: 'array', items: { type: 'string' }, description: 'Optional tags list.' },
           jiraKey: { type: 'string', description: 'Optional Jira issue key (e.g. PROJ-123).' },
           checklist: { type: 'array', items: { type: 'string' }, description: 'Optional checklist item titles.' },
+          reminders: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                date: { type: 'string', description: 'Reminder date (YYYY-MM-DD).' },
+                time: { type: 'string', description: 'Optional reminder time (HH:mm).' },
+                note: { type: 'string', description: 'Optional reminder note.' },
+              },
+              required: ['date'],
+            },
+            description: 'Optional reminders list with dates and optional times.',
+          },
+          isRecurring: { type: 'boolean', description: 'Whether this task is a recurring template.' },
+          recurrenceFrequency: {
+            type: 'string',
+            enum: ['daily', 'weekly', 'monthly'],
+            description: 'Recurrence frequency: daily, weekly, monthly.',
+          },
+          recurrenceInterval: { type: 'number', description: 'Recurrence interval (e.g. 1 for every week, 2 for every 2 weeks).' },
+          recurrenceDaysOfWeek: {
+            type: 'array',
+            items: { type: 'number' },
+            description: 'Days of week to repeat (0=Sun, 1=Mon, ..., 6=Sat).',
+          },
+          recurrenceEndDate: { type: 'string', description: 'End date for recurrence (YYYY-MM-DD).' },
         },
         required: ['name'],
       },
@@ -589,7 +619,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'update_task',
       description:
-        'Update fields of an existing task (status, priority, estimate, progress, dates, notes, owners, description, project, milestone).',
+        'Update fields of an existing task (status, priority, estimate, progress, dates, notes, owners, description, project, milestone, reminders, recurrence, tags).',
       parameters: {
         type: 'object',
         properties: {
@@ -614,6 +644,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           actualEndDate: { type: 'string', description: 'Actual end date in YYYY-MM-DD format.' },
           opsOwners: { type: 'array', items: { type: 'string' }, description: 'Operations Owners.' },
           businessAnalysts: { type: 'array', items: { type: 'string' }, description: 'Business Analysts.' },
+          tags: { type: 'array', items: { type: 'string' }, description: 'Tags list.' },
           projectId: { type: 'string', description: 'Parent project UUID (or null to unassign).' },
           milestoneId: { type: 'string', description: 'Parent milestone UUID (or null to unassign).' },
           workType: {
@@ -621,6 +652,33 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
             enum: ['code', 'document', 'meeting', 'support_testing', 'investigate', 'configuration', 'review_code'],
           },
           jiraKey: { type: 'string', description: 'Jira issue key.' },
+          reminders: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', description: 'Optional existing reminder UUID.' },
+                date: { type: 'string', description: 'Reminder date (YYYY-MM-DD).' },
+                time: { type: 'string', description: 'Optional reminder time (HH:mm).' },
+                note: { type: 'string', description: 'Optional reminder note.' },
+              },
+              required: ['date'],
+            },
+            description: 'Updated reminders array.',
+          },
+          isRecurring: { type: 'boolean', description: 'Whether this task is a recurring template.' },
+          recurrenceFrequency: {
+            type: 'string',
+            enum: ['daily', 'weekly', 'monthly'],
+            description: 'Recurrence frequency: daily, weekly, monthly.',
+          },
+          recurrenceInterval: { type: 'number', description: 'Recurrence interval (e.g. 1 for every week, 2 for every 2 weeks).' },
+          recurrenceDaysOfWeek: {
+            type: 'array',
+            items: { type: 'number' },
+            description: 'Days of week to repeat (0=Sun, 1=Mon, ..., 6=Sat).',
+          },
+          recurrenceEndDate: { type: 'string', description: 'End date for recurrence (YYYY-MM-DD).' },
         },
         required: ['id'],
       },
@@ -705,6 +763,19 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           jiraEpicKey: { type: 'string', description: 'Optional Jira Epic key (e.g. PROJ-EPIC-1).' },
           opsOwners: { type: 'array', items: { type: 'string' }, description: 'Optional Operations Owners.' },
           businessAnalysts: { type: 'array', items: { type: 'string' }, description: 'Optional Business Analysts.' },
+          reminders: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                date: { type: 'string', description: 'Reminder date (YYYY-MM-DD).' },
+                time: { type: 'string', description: 'Optional reminder time (HH:mm).' },
+                note: { type: 'string', description: 'Optional reminder note.' },
+              },
+              required: ['date'],
+            },
+            description: 'Optional reminders list for project.',
+          },
         },
         required: ['name'],
       },
@@ -714,7 +785,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     type: 'function',
     function: {
       name: 'update_project',
-      description: 'Update project details, status, deadline, notes, owners, or description.',
+      description: 'Update project details, status, deadline, notes, owners, reminders, or description.',
       parameters: {
         type: 'object',
         properties: {
@@ -730,6 +801,20 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           jiraEpicKey: { type: 'string', description: 'Updated Jira Epic key.' },
           opsOwners: { type: 'array', items: { type: 'string' }, description: 'Operations Owners.' },
           businessAnalysts: { type: 'array', items: { type: 'string' }, description: 'Business Analysts.' },
+          reminders: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', description: 'Optional existing reminder UUID.' },
+                date: { type: 'string', description: 'Reminder date (YYYY-MM-DD).' },
+                time: { type: 'string', description: 'Optional reminder time (HH:mm).' },
+                note: { type: 'string', description: 'Optional reminder note.' },
+              },
+              required: ['date'],
+            },
+            description: 'Updated reminders array.',
+          },
         },
         required: ['id'],
       },
@@ -769,6 +854,19 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           notes: { type: 'string', description: 'Optional milestone notes.' },
           opsOwners: { type: 'array', items: { type: 'string' }, description: 'Optional Operations Owners.' },
           businessAnalysts: { type: 'array', items: { type: 'string' }, description: 'Optional Business Analysts.' },
+          reminders: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                date: { type: 'string', description: 'Reminder date (YYYY-MM-DD).' },
+                time: { type: 'string', description: 'Optional reminder time (HH:mm).' },
+                note: { type: 'string', description: 'Optional reminder note.' },
+              },
+              required: ['date'],
+            },
+            description: 'Optional reminders list for milestone.',
+          },
         },
         required: ['projectId', 'name'],
       },
@@ -778,7 +876,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     type: 'function',
     function: {
       name: 'update_milestone',
-      description: 'Update milestone name, description, status, deadline, notes, or owners.',
+      description: 'Update milestone name, description, status, deadline, notes, reminders, or owners.',
       parameters: {
         type: 'object',
         properties: {
@@ -793,6 +891,20 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           notes: { type: 'string', description: 'Updated notes.' },
           opsOwners: { type: 'array', items: { type: 'string' }, description: 'Operations Owners.' },
           businessAnalysts: { type: 'array', items: { type: 'string' }, description: 'Business Analysts.' },
+          reminders: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', description: 'Optional existing reminder UUID.' },
+                date: { type: 'string', description: 'Reminder date (YYYY-MM-DD).' },
+                time: { type: 'string', description: 'Optional reminder time (HH:mm).' },
+                note: { type: 'string', description: 'Optional reminder note.' },
+              },
+              required: ['date'],
+            },
+            description: 'Updated reminders array.',
+          },
         },
         required: ['id'],
       },
@@ -998,12 +1110,19 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     type: 'function',
     function: {
       name: 'create_note',
-      description: 'Create a new note or scratchpad, optionally linked to a task, project, or milestone.',
+      description: 'Create a new note, document, or folder in knowledge base, optionally linked to a task, project, or milestone.',
       parameters: {
         type: 'object',
         properties: {
-          title: { type: 'string', description: 'Note title.' },
+          title: { type: 'string', description: 'Note or document title.' },
           body: { type: 'string', description: 'Note markdown content (required).' },
+          type: {
+            type: 'string',
+            enum: ['quick_note', 'document', 'folder'],
+            description: 'Item type: quick_note, document, or folder (defaults to document).',
+          },
+          parentId: { type: 'string', description: 'Optional parent folder UUID.' },
+          tags: { type: 'array', items: { type: 'string' }, description: 'Optional tags array.' },
           entityType: {
             type: 'string',
             enum: ['task', 'project', 'milestone'],
@@ -1020,13 +1139,20 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     type: 'function',
     function: {
       name: 'update_note',
-      description: 'Update content, title, or pinned state of an existing note.',
+      description: 'Update content, title, folder location, tags, or pinned state of an existing note/document.',
       parameters: {
         type: 'object',
         properties: {
           id: { type: 'string', description: 'UUID of the note to update.' },
           title: { type: 'string', description: 'Updated title.' },
           body: { type: 'string', description: 'Updated markdown body.' },
+          type: {
+            type: 'string',
+            enum: ['quick_note', 'document', 'folder'],
+            description: 'Updated item type.',
+          },
+          parentId: { type: 'string', description: 'Parent folder UUID (or null to move to root).' },
+          tags: { type: 'array', items: { type: 'string' }, description: 'Updated tags array.' },
           isPinned: { type: 'boolean', description: 'Updated pinned state.' },
         },
         required: ['id'],
@@ -1044,6 +1170,107 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           id: { type: 'string', description: 'UUID of the note to delete.' },
         },
         required: ['id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'manage_reminders',
+      description:
+        'Manage reminders on tasks, projects, or milestones: add a new reminder with date/time/note, remove an existing reminder, or list current reminders. PlannerMate has full native reminder support with browser desktop notifications.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            enum: ['add', 'remove', 'list'],
+            description: 'Action to perform: add, remove, or list.',
+          },
+          entityType: {
+            type: 'string',
+            enum: ['task', 'project', 'milestone'],
+            description: 'Type of entity owning the reminder.',
+          },
+          entityId: { type: 'string', description: 'UUID of the task, project, or milestone.' },
+          date: { type: 'string', description: 'Reminder date (YYYY-MM-DD), required for add action.' },
+          time: { type: 'string', description: 'Optional reminder time (HH:mm).' },
+          note: { type: 'string', description: 'Optional reminder description or note.' },
+          reminderId: { type: 'string', description: 'UUID of the reminder to remove, required for remove action.' },
+        },
+        required: ['action', 'entityType', 'entityId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'link_document',
+      description: 'Create a bidirectional link between a knowledge base document and a task, project, or milestone.',
+      parameters: {
+        type: 'object',
+        properties: {
+          documentId: { type: 'string', description: 'UUID of the document/note to link.' },
+          entityType: {
+            type: 'string',
+            enum: ['task', 'project', 'milestone'],
+            description: 'Target entity type.',
+          },
+          entityId: { type: 'string', description: 'UUID of the target task, project, or milestone.' },
+        },
+        required: ['documentId', 'entityType', 'entityId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'unlink_document',
+      description: 'Remove bidirectional link between a knowledge base document and a task, project, or milestone.',
+      parameters: {
+        type: 'object',
+        properties: {
+          documentId: { type: 'string', description: 'UUID of the document/note.' },
+          entityType: {
+            type: 'string',
+            enum: ['task', 'project', 'milestone'],
+            description: 'Entity type.',
+          },
+          entityId: { type: 'string', description: 'UUID of the entity to unlink.' },
+        },
+        required: ['documentId', 'entityType', 'entityId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'query_notifications',
+      description:
+        'Query active notifications and alerts in PlannerMate (overdue tasks, capacity overloads, due-soon deadlines, stale tasks, custom reminders, and timer alerts).',
+      parameters: {
+        type: 'object',
+        properties: {
+          category: {
+            type: 'string',
+            enum: ['all', 'overdue', 'overload', 'due-soon', 'stale', 'reminder'],
+            description: 'Optional category filter.',
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'dismiss_notification',
+      description: 'Dismiss a dismissible notification alert (e.g. stale task or reminder alert) for today.',
+      parameters: {
+        type: 'object',
+        properties: {
+          alertKey: { type: 'string', description: 'The unique alert key/id (e.g. "reminder:task:123", "stale:task:456").' },
+        },
+        required: ['alertKey'],
       },
     },
   },
@@ -2442,6 +2669,15 @@ export async function executeAiTool(
             }))
           : undefined;
 
+        const reminderItems = Array.isArray(args.reminders)
+          ? args.reminders.map((r: any) => ({
+              id: crypto.randomUUID(),
+              date: String(r.date),
+              time: r.time ? String(r.time) : undefined,
+              note: r.note ? String(r.note) : undefined,
+            }))
+          : undefined;
+
         const task = await createTask(
           {
             name: args.name,
@@ -2460,6 +2696,12 @@ export async function executeAiTool(
             businessAnalysts: args.businessAnalysts,
             jiraKey: args.jiraKey,
             checklist: checklistItems,
+            reminders: reminderItems,
+            isRecurring: args.isRecurring !== undefined ? Boolean(args.isRecurring) : undefined,
+            recurrenceFrequency: args.recurrenceFrequency,
+            recurrenceInterval: args.recurrenceInterval !== undefined ? Number(args.recurrenceInterval) : undefined,
+            recurrenceDaysOfWeek: Array.isArray(args.recurrenceDaysOfWeek) ? args.recurrenceDaysOfWeek : undefined,
+            recurrenceEndDate: args.recurrenceEndDate,
           },
           db
         );
@@ -2484,11 +2726,27 @@ export async function executeAiTool(
         if (args.actualStartDate !== undefined) patch.actualStartDate = args.actualStartDate;
         if (args.actualEndDate !== undefined) patch.actualEndDate = args.actualEndDate;
         if (args.opsOwners !== undefined) patch.opsOwners = args.opsOwners;
+        if (args.tags !== undefined) patch.opsOwners = args.tags;
         if (args.businessAnalysts !== undefined) patch.businessAnalysts = args.businessAnalysts;
         if (args.projectId !== undefined) patch.projectId = args.projectId;
         if (args.milestoneId !== undefined) patch.milestoneId = args.milestoneId;
         if (args.workType !== undefined) patch.workType = args.workType;
         if (args.jiraKey !== undefined) patch.jiraKey = args.jiraKey;
+        if (args.reminders !== undefined) {
+          patch.reminders = Array.isArray(args.reminders)
+            ? args.reminders.map((r: any) => ({
+                id: r.id || crypto.randomUUID(),
+                date: String(r.date),
+                time: r.time ? String(r.time) : undefined,
+                note: r.note ? String(r.note) : undefined,
+              }))
+            : [];
+        }
+        if (args.isRecurring !== undefined) patch.isRecurring = Boolean(args.isRecurring);
+        if (args.recurrenceFrequency !== undefined) patch.recurrenceFrequency = args.recurrenceFrequency;
+        if (args.recurrenceInterval !== undefined) patch.recurrenceInterval = Number(args.recurrenceInterval);
+        if (args.recurrenceDaysOfWeek !== undefined) patch.recurrenceDaysOfWeek = args.recurrenceDaysOfWeek;
+        if (args.recurrenceEndDate !== undefined) patch.recurrenceEndDate = args.recurrenceEndDate;
 
         await updateTask(args.id, patch, db);
         return JSON.stringify({
@@ -2553,6 +2811,15 @@ export async function executeAiTool(
       }
 
       case 'create_project': {
+        const reminderItems = Array.isArray(args.reminders)
+          ? args.reminders.map((r: any) => ({
+              id: crypto.randomUUID(),
+              date: String(r.date),
+              time: r.time ? String(r.time) : undefined,
+              note: r.note ? String(r.note) : undefined,
+            }))
+          : undefined;
+
         const project = await createProject(
           {
             name: args.name,
@@ -2563,6 +2830,7 @@ export async function executeAiTool(
             jiraEpicKey: args.jiraEpicKey,
             opsOwners: args.opsOwners,
             businessAnalysts: args.businessAnalysts,
+            reminders: reminderItems,
           },
           db
         );
@@ -2584,6 +2852,16 @@ export async function executeAiTool(
         if (args.jiraEpicKey !== undefined) patch.jiraEpicKey = args.jiraEpicKey;
         if (args.opsOwners !== undefined) patch.opsOwners = args.opsOwners;
         if (args.businessAnalysts !== undefined) patch.businessAnalysts = args.businessAnalysts;
+        if (args.reminders !== undefined) {
+          patch.reminders = Array.isArray(args.reminders)
+            ? args.reminders.map((r: any) => ({
+                id: r.id || crypto.randomUUID(),
+                date: String(r.date),
+                time: r.time ? String(r.time) : undefined,
+                note: r.note ? String(r.note) : undefined,
+              }))
+            : [];
+        }
 
         await updateProject(args.id, patch, db);
         return JSON.stringify({
@@ -2603,6 +2881,15 @@ export async function executeAiTool(
       }
 
       case 'create_milestone': {
+        const reminderItems = Array.isArray(args.reminders)
+          ? args.reminders.map((r: any) => ({
+              id: crypto.randomUUID(),
+              date: String(r.date),
+              time: r.time ? String(r.time) : undefined,
+              note: r.note ? String(r.note) : undefined,
+            }))
+          : undefined;
+
         const milestone = await createMilestone(
           {
             projectId: args.projectId,
@@ -2613,6 +2900,7 @@ export async function executeAiTool(
             notes: args.notes,
             opsOwners: args.opsOwners,
             businessAnalysts: args.businessAnalysts,
+            reminders: reminderItems,
           },
           db
         );
@@ -2633,6 +2921,16 @@ export async function executeAiTool(
         if (args.notes !== undefined) patch.notes = args.notes;
         if (args.opsOwners !== undefined) patch.opsOwners = args.opsOwners;
         if (args.businessAnalysts !== undefined) patch.businessAnalysts = args.businessAnalysts;
+        if (args.reminders !== undefined) {
+          patch.reminders = Array.isArray(args.reminders)
+            ? args.reminders.map((r: any) => ({
+                id: r.id || crypto.randomUUID(),
+                date: String(r.date),
+                time: r.time ? String(r.time) : undefined,
+                note: r.note ? String(r.note) : undefined,
+              }))
+            : [];
+        }
 
         await updateMilestone(args.id, patch, db);
         return JSON.stringify({
@@ -2883,6 +3181,9 @@ export async function executeAiTool(
           {
             title: args.title,
             body: args.body,
+            type: args.type,
+            parentId: args.parentId,
+            tags: args.tags,
             entityType: args.entityType,
             entityId: args.entityId,
             isPinned: Boolean(args.isPinned),
@@ -2891,7 +3192,7 @@ export async function executeAiTool(
         );
         return JSON.stringify({
           success: true,
-          message: `Đã tạo ghi chú thành công.`,
+          message: `Đã tạo ${args.type === 'folder' ? 'thư mục' : 'ghi chú/tài liệu'} thành công.`,
           noteId: note.id,
         });
       }
@@ -2901,6 +3202,9 @@ export async function executeAiTool(
         const patch: any = {};
         if (args.title !== undefined) patch.title = args.title;
         if (args.body !== undefined) patch.body = args.body;
+        if (args.type !== undefined) patch.type = args.type;
+        if (args.parentId !== undefined) patch.parentId = args.parentId || undefined;
+        if (args.tags !== undefined) patch.tags = args.tags;
         if (args.isPinned !== undefined) patch.isPinned = Boolean(args.isPinned);
 
         await updateNote(args.id, patch, db);
@@ -2917,6 +3221,197 @@ export async function executeAiTool(
           success: true,
           message: `Đã xóa ghi chú (${args.id}).`,
         });
+      }
+
+      case 'manage_reminders': {
+        if (!args.action) return JSON.stringify({ error: 'action parameter (add, remove, or list) is required' });
+        if (!args.entityType || !['task', 'project', 'milestone'].includes(args.entityType)) {
+          return JSON.stringify({ error: 'entityType must be "task", "project", or "milestone"' });
+        }
+        if (!args.entityId) return JSON.stringify({ error: 'entityId is required' });
+
+        let entityName = '';
+        let currentReminders: ReminderItem[] = [];
+
+        if (args.entityType === 'task') {
+          const task = await db.tasks.get(args.entityId);
+          if (!task) return JSON.stringify({ error: `Không tìm thấy tác vụ: ${args.entityId}` });
+          entityName = task.name;
+          currentReminders = task.reminders || [];
+        } else if (args.entityType === 'project') {
+          const project = await db.projects.get(args.entityId);
+          if (!project) return JSON.stringify({ error: `Không tìm thấy dự án: ${args.entityId}` });
+          entityName = project.name;
+          currentReminders = project.reminders || [];
+        } else if (args.entityType === 'milestone') {
+          const milestone = await db.milestones.get(args.entityId);
+          if (!milestone) return JSON.stringify({ error: `Không tìm thấy mốc: ${args.entityId}` });
+          entityName = milestone.name;
+          currentReminders = milestone.reminders || [];
+        }
+
+        if (args.action === 'list') {
+          return JSON.stringify({
+            entityType: args.entityType,
+            entityId: args.entityId,
+            entityName,
+            remindersCount: currentReminders.length,
+            reminders: currentReminders,
+          });
+        }
+
+        if (args.action === 'add') {
+          if (!args.date) return JSON.stringify({ error: 'date (YYYY-MM-DD) is required for adding reminder' });
+          const newReminder: ReminderItem = {
+            id: crypto.randomUUID(),
+            date: String(args.date),
+            time: args.time ? String(args.time) : undefined,
+            note: args.note ? String(args.note) : undefined,
+          };
+          const updated = [...currentReminders, newReminder];
+
+          if (args.entityType === 'task') await updateTask(args.entityId, { reminders: updated }, db);
+          else if (args.entityType === 'project') await updateProject(args.entityId, { reminders: updated }, db);
+          else if (args.entityType === 'milestone') await updateMilestone(args.entityId, { reminders: updated }, db);
+
+          return JSON.stringify({
+            success: true,
+            message: `Đã thêm nhắc nhở cho "${entityName}" vào ngày ${newReminder.date}${newReminder.time ? ` lúc ${newReminder.time}` : ''}.`,
+            reminder: newReminder,
+          });
+        }
+
+        if (args.action === 'remove') {
+          if (!args.reminderId) return JSON.stringify({ error: 'reminderId is required to remove a reminder' });
+          const updated = currentReminders.filter((r) => r.id !== args.reminderId);
+          if (updated.length === currentReminders.length) {
+            return JSON.stringify({ error: `Không tìm thấy nhắc nhở với ID: ${args.reminderId}` });
+          }
+
+          if (args.entityType === 'task') await updateTask(args.entityId, { reminders: updated }, db);
+          else if (args.entityType === 'project') await updateProject(args.entityId, { reminders: updated }, db);
+          else if (args.entityType === 'milestone') await updateMilestone(args.entityId, { reminders: updated }, db);
+
+          return JSON.stringify({
+            success: true,
+            message: `Đã xóa nhắc nhở khỏi "${entityName}".`,
+            remainingRemindersCount: updated.length,
+          });
+        }
+
+        return JSON.stringify({ error: `Invalid action: ${args.action}` });
+      }
+
+      case 'link_document': {
+        if (!args.documentId) return JSON.stringify({ error: 'documentId is required' });
+        if (!args.entityId) return JSON.stringify({ error: 'entityId is required' });
+        if (!args.entityType || !['task', 'project', 'milestone'].includes(args.entityType)) {
+          return JSON.stringify({ error: 'entityType must be "task", "project", or "milestone"' });
+        }
+
+        const doc = await db.notes.get(args.documentId);
+        if (!doc) return JSON.stringify({ error: `Không tìm thấy tài liệu: ${args.documentId}` });
+
+        let entityTitle = 'Entity';
+        if (args.entityType === 'task') {
+          const t = await db.tasks.get(args.entityId);
+          if (!t) return JSON.stringify({ error: `Không tìm thấy tác vụ: ${args.entityId}` });
+          entityTitle = t.name;
+        } else if (args.entityType === 'project') {
+          const p = await db.projects.get(args.entityId);
+          if (!p) return JSON.stringify({ error: `Không tìm thấy dự án: ${args.entityId}` });
+          entityTitle = p.name;
+        } else if (args.entityType === 'milestone') {
+          const m = await db.milestones.get(args.entityId);
+          if (!m) return JSON.stringify({ error: `Không tìm thấy mốc: ${args.entityId}` });
+          entityTitle = m.name;
+        }
+
+        await linkEntitiesToDoc(
+          args.documentId,
+          doc.title || 'Untitled Document',
+          [{ id: args.entityId, type: args.entityType, title: entityTitle }],
+          db
+        );
+
+        return JSON.stringify({
+          success: true,
+          message: `Đã liên kết tài liệu "${doc.title || 'Untitled'}" với ${args.entityType} "${entityTitle}".`,
+        });
+      }
+
+      case 'unlink_document': {
+        if (!args.documentId) return JSON.stringify({ error: 'documentId is required' });
+        if (!args.entityId) return JSON.stringify({ error: 'entityId is required' });
+        if (!args.entityType || !['task', 'project', 'milestone'].includes(args.entityType)) {
+          return JSON.stringify({ error: 'entityType must be "task", "project", or "milestone"' });
+        }
+
+        await unlinkEntityFromDoc(args.documentId, args.entityType, args.entityId, db);
+        return JSON.stringify({
+          success: true,
+          message: `Đã hủy liên kết giữa tài liệu (${args.documentId}) và ${args.entityType} (${args.entityId}).`,
+        });
+      }
+
+      case 'query_notifications': {
+        const tasks = db.tasks ? await db.tasks.toArray() : [];
+        const projects = db.projects ? await db.projects.toArray() : [];
+        const milestones = db.milestones ? await db.milestones.toArray() : [];
+        const rules = db.capacityRules ? await db.capacityRules.toArray() : [];
+        const overrides = db.capacityOverrides ? await db.capacityOverrides.toArray() : [];
+        const allocations = db.plannedAllocations ? await db.plannedAllocations.toArray() : [];
+        const workSessions = db.workSessions ? await db.workSessions.toArray() : [];
+        const dismissedMap = await getDismissedAlerts(db);
+        const settingRecord = db.settings ? await db.settings.get(NOTIFICATION_SETTINGS_KEY) : null;
+        const settings = (settingRecord?.value as any) ?? DEFAULT_NOTIFICATION_SETTINGS;
+
+        const alerts = evaluateNotifications({
+          tasks,
+          projects,
+          milestones,
+          rules,
+          overrides,
+          allocations,
+          workSessions,
+          dismissedMap,
+          todayDate: getTodayDateString(),
+          settings,
+        });
+
+        const category = args.category;
+        const filtered = category && category !== 'all'
+          ? alerts.filter((a) => a.category === category)
+          : alerts;
+
+        return JSON.stringify({
+          totalCount: alerts.length,
+          returnedCount: filtered.length,
+          notifications: filtered.map((a) => ({
+            id: a.id,
+            category: a.category,
+            title: a.title,
+            subtitle: a.subtitle,
+            date: a.date,
+            tagLabel: a.tagLabel,
+            tagColor: a.tagColor,
+          })),
+        });
+      }
+
+      case 'dismiss_notification': {
+        if (!args.alertKey) return JSON.stringify({ error: 'alertKey is required' });
+        try {
+          await dismissAlertToday(args.alertKey, getTodayDateString(), db);
+          return JSON.stringify({
+            success: true,
+            message: `Đã tạm ẩn cảnh báo "${args.alertKey}" cho ngày hôm nay.`,
+          });
+        } catch (err: any) {
+          return JSON.stringify({
+            error: `Không thể bỏ qua cảnh báo: ${err?.message || String(err)}`,
+          });
+        }
       }
 
       case 'search_knowledge_base': {
@@ -3178,6 +3673,10 @@ const MUTATION_TOOLS = new Set([
   'create_note',
   'update_note',
   'delete_note',
+  'manage_reminders',
+  'link_document',
+  'unlink_document',
+  'dismiss_notification',
 ]);
 
 /**
@@ -3192,8 +3691,11 @@ export function normalizeToolName(toolName: string): string {
   return name;
 }
 
-export function isMutationTool(toolName: string): boolean {
+export function isMutationTool(toolName: string, args?: Record<string, any>): boolean {
   const normalized = normalizeToolName(toolName);
+  if (normalized === 'manage_reminders' && args?.action === 'list') {
+    return false;
+  }
   return MUTATION_TOOLS.has(normalized);
 }
 
@@ -3247,11 +3749,26 @@ export function describeToolMutation(toolName: string, args: Record<string, any>
     case 'remove_capacity_override':
       return `Xóa ngoại lệ năng lực ngày ${args.date}`;
     case 'create_note':
-      return `Tạo ghi chú mới: "${args.title || 'Ghi chú'}"`;
+      return `Tạo ${args.type === 'folder' ? 'thư mục' : 'ghi chú/tài liệu'}: "${args.title || 'Mục mới'}"`;
     case 'update_note':
-      return `Cập nhật ghi chú (${args.id})`;
+      return `Cập nhật ghi chú/tài liệu (${args.id})`;
     case 'delete_note':
       return `Xóa vĩnh viễn ghi chú (${args.id})`;
+    case 'manage_reminders': {
+      if (args.action === 'add') {
+        return `Thêm nhắc nhở ngày ${args.date || ''}${args.time ? ` lúc ${args.time}` : ''} cho ${args.entityType || 'mục'} (${args.entityId})`;
+      }
+      if (args.action === 'remove') {
+        return `Xóa nhắc nhở (${args.reminderId}) khỏi ${args.entityType || 'mục'} (${args.entityId})`;
+      }
+      return `Quản lý nhắc nhở cho ${args.entityType || 'mục'} (${args.entityId})`;
+    }
+    case 'link_document':
+      return `Liên kết tài liệu (${args.documentId}) với ${args.entityType} (${args.entityId})`;
+    case 'unlink_document':
+      return `Hủy liên kết tài liệu (${args.documentId}) khỏi ${args.entityType} (${args.entityId})`;
+    case 'dismiss_notification':
+      return `Tạm ẩn cảnh báo (${args.alertKey}) trong ngày hôm nay`;
     default:
       return `Thực hiện thao tác: ${toolName}`;
   }

@@ -73,6 +73,7 @@ export const DocFolderContentsView: React.FC<DocFolderContentsViewProps> = ({
     <div
       style={{
         flex: 1,
+        minWidth: 0,
         height: '100%',
         overflowY: 'auto',
         backgroundColor: '#ffffff',

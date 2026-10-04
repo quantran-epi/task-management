@@ -155,6 +155,7 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
         width: 300,
         minWidth: 260,
         maxWidth: 380,
+        flexShrink: 0,
         height: '100%',
         display: 'flex',
         flexDirection: 'column',

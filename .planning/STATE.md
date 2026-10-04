@@ -35,6 +35,8 @@ Last activity: 2026-10-04 -- Completed quick task 261004-t2a: Fix doc UI shift, 
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261004-ait | Add missing AI mutation tools (reminders, doc linking, notifications, recurring) and fix failing tests | 2026-10-04 | — | complete | [261004-ait-add-missing-ai-mutation-tools-and-fix-tests](./quick/261004-ait-add-missing-ai-mutation-tools-and-fix-tests/) |
+| 261004-ovf | Fix doc detail width overflow and vitest failures | 2026-10-04 | — | complete | [261004-ovf-fix-doc-overflow-and-tests](./quick/261004-ovf-fix-doc-overflow-and-tests/) |
 | 261004-t2a | Fix doc UI shift, togglable TOC, folder contents view, and zip nested folder bug | 2026-10-04 | b258b86 | complete | [261004-t2a-fix-doc-ui-shift-togglable-toc-folder-co](./quick/261004-t2a-fix-doc-ui-shift-togglable-toc-folder-co/) |
 | 261004-fhz | Folder hierarchy, zip markdown upload with preview modal, and doc bug fixes | 2026-10-04 | — | complete | [261004-fhz-folder-hierarchy-zip-upload-doc-fixes](./quick/261004-fhz-folder-hierarchy-zip-upload-doc-fixes/) |
 | 261004-qox | AI assistant feature to create/export files with various formats (MD, TXT, DOCX, XLSX, CSV) | 2026-10-04 | 9093528 | complete | [261004-qox-ai-file-generation-export](./quick/261004-qox-ai-file-generation-export/) |

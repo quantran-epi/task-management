@@ -459,6 +459,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
       style={{
         width: 240,
         minWidth: 240,
+        flexShrink: 0,
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
