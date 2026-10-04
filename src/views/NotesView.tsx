@@ -46,6 +46,8 @@ import { DocFolderTree, type QuickFilterKey } from '../components/notes/DocFolde
 import { DocListPane } from '../components/notes/DocListPane';
 import { DocEditorPane } from '../components/notes/DocEditorPane';
 
+const { Text } = Typography;
+
 export interface NotesViewProps {
   db?: TaskPlannerDatabase | undefined;
 }
@@ -201,19 +203,37 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
     return filteredDocList[0] || null;
   }, [allNotes, selectedDocId, filteredDocList]);
 
-  // Create new document action
-  const handleCreateDocument = async () => {
+  // Current selected folder note if viewing a specific folder
+  const currentFolder = useMemo(() => {
+    if (!allNotes || typeof activeFilter !== 'string') return null;
+    return allNotes.find((n) => n.id === activeFilter && n.type === 'folder') || null;
+  }, [allNotes, activeFilter]);
+
+  // Create new document action (supports explicit target folder)
+  const handleCreateDocument = async (targetFolderId?: string) => {
+    const effectiveFolderId =
+      targetFolderId ??
+      (typeof activeFilter === 'string' && !['inbox', 'pinned', 'all', 'quick_notes', 'trash'].includes(activeFilter)
+        ? activeFilter
+        : undefined);
+
     try {
       const newDoc = await createNote(
         {
           title: 'Tài liệu mới',
           body: '# Tài liệu mới\n\nBắt đầu viết nội dung tại đây...',
           type: 'document',
-          parentId: typeof activeFilter === 'string' && !['inbox', 'pinned', 'all', 'quick_notes', 'trash'].includes(activeFilter) ? activeFilter : undefined,
+          parentId: effectiveFolderId,
           tags: activeTag ? [activeTag] : [],
         },
         db
       );
+
+      // If document was created in a folder, switch view to that folder so doc is immediately visible
+      if (effectiveFolderId && activeFilter !== effectiveFolderId) {
+        handleFilterChange(effectiveFolderId);
+      }
+
       setSelectedDocId(newDoc.id);
       message.success('Đã tạo tài liệu mới');
     } catch {
@@ -224,7 +244,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
   // Create folder action
   const handleCreateFolder = async (name: string) => {
     try {
-      await createNote(
+      const newFolder = await createNote(
         {
           title: name,
           body: '',
@@ -232,11 +252,76 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
         },
         db
       );
+      handleFilterChange(newFolder.id);
       message.success(`Đã tạo thư mục "${name}"`);
     } catch {
       message.error('Không thể tạo thư mục');
     }
   };
+
+  // Rename folder action
+  const handleRenameFolder = async (folderId: string, newName: string) => {
+    try {
+      await updateNote(folderId, { title: newName }, db);
+      message.success(`Đã đổi tên thư mục thành "${newName}"`);
+    } catch {
+      message.error('Không thể đổi tên thư mục');
+    }
+  };
+
+  // Delete folder action (reassigns child documents to Inbox so work is never lost)
+  const handleDeleteFolder = async (folder: Note) => {
+    const childDocs = (allNotes || []).filter((n) => n.parentId === folder.id && !n.deletedAt);
+    Modal.confirm({
+      title: `Xóa thư mục "${folder.title || 'Không tên'}"?`,
+      content:
+        childDocs.length > 0
+          ? `Thư mục đang chứa ${childDocs.length} tài liệu. Các tài liệu này sẽ được chuyển về Inbox (không bị xóa).`
+          : 'Bạn có chắc chắn muốn xóa thư mục này?',
+      okText: 'Xóa thư mục',
+      okType: 'danger',
+      cancelText: 'Hủy',
+      onOk: async () => {
+        try {
+          for (const child of childDocs) {
+            await updateNote(child.id, { parentId: null }, db);
+          }
+          await permanentDeleteNote(folder.id, db);
+          if (activeFilter === folder.id) {
+            handleFilterChange('inbox');
+          }
+          message.success('Đã xóa thư mục');
+        } catch {
+          message.error('Không thể xóa thư mục');
+        }
+      },
+    });
+  };
+
+  // Move document to folder state & action
+  const [movingDoc, setMovingDoc] = useState<Note | null>(null);
+  const [targetFolderSelect, setTargetFolderSelect] = useState<string | null>(null);
+
+  const handleOpenMoveDocModal = (doc: Note) => {
+    setMovingDoc(doc);
+    setTargetFolderSelect(doc.parentId || null);
+  };
+
+  const handleConfirmMoveDoc = async () => {
+    if (!movingDoc) return;
+    try {
+      await updateNote(movingDoc.id, { parentId: targetFolderSelect }, db);
+      message.success('Đã chuyển thư mục thành công');
+      setMovingDoc(null);
+    } catch {
+      message.error('Không thể chuyển thư mục');
+    }
+  };
+
+  // Available folders for move action
+  const availableFolders = useMemo(() => {
+    return (allNotes || []).filter((n) => n.type === 'folder' && !n.deletedAt);
+  }, [allNotes]);
 
   // Update document action
   const handleUpdateDocument = async (id: string, updates: Partial<Note>) => {
@@ -387,13 +472,15 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
             backgroundColor: '#ffffff',
           }}
         >
-          {/* Column 1: Folder Tree (~220px) */}
+          {/* Column 1: Folder Tree (~230px) */}
           <DocFolderTree
             notes={allNotes || []}
             activeFilter={activeFilter}
             onSelectFilter={handleFilterChange}
             onCreateDoc={handleCreateDocument}
             onCreateFolder={handleCreateFolder}
+            onRenameFolder={handleRenameFolder}
+            onDeleteFolder={handleDeleteFolder}
             activeTag={activeTag}
             onSelectTag={setActiveTag}
           />
@@ -404,7 +491,10 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
             selectedDocId={activeDocument?.id ?? null}
             onSelectDoc={(doc) => setSelectedDocId(doc.id)}
             onTogglePin={(doc) => handleUpdateDocument(doc.id, { isPinned: !doc.isPinned })}
+            onMoveToFolder={handleOpenMoveDocModal}
             onDeleteDoc={handleDeleteDocument}
+            currentFolder={currentFolder}
+            onCreateDoc={() => handleCreateDocument(currentFolder?.id)}
           />
 
           {/* Column 3: Editor / Reader Split Pane */}
@@ -571,6 +661,34 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
           db={db}
         />
       )}
+
+      {/* Move Document to Folder Modal */}
+      <Modal
+        title={`Chuyển "${movingDoc?.title || 'Tài liệu'}" sang thư mục`}
+        open={Boolean(movingDoc)}
+        onOk={handleConfirmMoveDoc}
+        onCancel={() => setMovingDoc(null)}
+        okText="Chuyển"
+        cancelText="Hủy"
+      >
+        <div style={{ padding: '8px 0' }}>
+          <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+            Chọn thư mục đích:
+          </Text>
+          <Select
+            style={{ width: '100%' }}
+            value={targetFolderSelect ?? ''}
+            onChange={(val) => setTargetFolderSelect(val || null)}
+            options={[
+              { value: '', label: '📥 Inbox (Không nằm trong thư mục nào)' },
+              ...availableFolders.map((f) => ({
+                value: f.id,
+                label: `📁 ${f.title || 'Thư mục không tên'}`,
+              })),
+            ]}
+          />
+        </div>
+      </Modal>
     </div>
   );
 };

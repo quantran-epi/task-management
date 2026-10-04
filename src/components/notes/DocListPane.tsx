@@ -1,10 +1,12 @@
 import React, { useState, useMemo } from 'react';
-import { Input, Select, Typography, Empty, Tag, Dropdown, type MenuProps } from 'antd';
+import { Input, Select, Typography, Empty, Tag, Dropdown, Button, type MenuProps } from 'antd';
 import {
   SearchOutlined,
   PushpinFilled,
   PushpinOutlined,
   FolderOutlined,
+  FolderFilled,
+  PlusOutlined,
   DeleteOutlined,
   MoreOutlined,
   FileTextOutlined,
@@ -23,6 +25,8 @@ export interface DocListPaneProps {
   onTogglePin?: ((doc: Note) => void) | undefined;
   onMoveToFolder?: ((doc: Note) => void) | undefined;
   onDeleteDoc?: ((doc: Note) => void) | undefined;
+  currentFolder?: Note | null | undefined;
+  onCreateDoc?: (() => void) | undefined;
 }
 
 export const DocListPane: React.FC<DocListPaneProps> = ({
@@ -32,6 +36,8 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
   onTogglePin,
   onMoveToFolder,
   onDeleteDoc,
+  currentFolder,
+  onCreateDoc,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<DocSortOption>('updatedAt');
@@ -127,6 +133,57 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
     >
       {/* Header with Search and Sort */}
       <div style={{ padding: '12px 12px 8px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {/* Optional Current Folder Scope Indicator */}
+        {currentFolder && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '6px 10px',
+              backgroundColor: '#fef3c7',
+              borderRadius: 6,
+              border: '1px solid #fde68a',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
+              <FolderFilled style={{ color: '#d97706', fontSize: 15 }} />
+              <span
+                style={{
+                  fontWeight: 600,
+                  fontSize: 12.5,
+                  color: '#92400e',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+                title={currentFolder.title || 'Thư mục'}
+              >
+                {currentFolder.title || 'Thư mục'}
+              </span>
+            </div>
+            {onCreateDoc && (
+              <Button
+                size="small"
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={onCreateDoc}
+                style={{
+                  fontSize: 11,
+                  height: 24,
+                  padding: '0 8px',
+                  backgroundColor: '#d97706',
+                  borderColor: '#d97706',
+                  flexShrink: 0,
+                  marginLeft: 6,
+                }}
+              >
+                Tạo tài liệu
+              </Button>
+            )}
+          </div>
+        )}
+
         <Input
           placeholder="Tìm trong danh sách..."
           prefix={<SearchOutlined style={{ color: '#8c8c8c' }} />}
@@ -165,11 +222,26 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
         }}
       >
         {filteredAndSortedDocs.length === 0 ? (
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description="Chưa có tài liệu nào"
-            style={{ marginTop: 48 }}
-          />
+          <div style={{ marginTop: 48, textAlign: 'center', padding: '0 16px' }}>
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={
+                currentFolder
+                  ? `Thư mục "${currentFolder.title}" chưa có tài liệu`
+                  : 'Chưa có tài liệu nào'
+              }
+            />
+            {onCreateDoc && (
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={onCreateDoc}
+                style={{ marginTop: 12, backgroundColor: '#4f46e5' }}
+              >
+                {currentFolder ? `Tạo tài liệu trong "${currentFolder.title}"` : 'Tạo tài liệu mới'}
+              </Button>
+            )}
+          </div>
         ) : (
           filteredAndSortedDocs.map((doc) => {
             const isSelected = selectedDocId === doc.id;
