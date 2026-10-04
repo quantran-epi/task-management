@@ -37,6 +37,43 @@ export interface ExtractedZipDoc {
   selected: boolean;
 }
 
+/**
+ * Strips common root directory prefix from paths if all items are wrapped inside
+ * a single top-level folder (e.g. "my-project/README.md" -> "README.md").
+ */
+export function stripCommonRootPrefix(relativePaths: string[]): {
+  commonPrefix: string;
+  strippedPaths: string[];
+} {
+  if (relativePaths.length === 0) {
+    return { commonPrefix: '', strippedPaths: [] };
+  }
+
+  const splitPaths = relativePaths.map((p) => p.split('/').filter(Boolean));
+
+  // If any file is directly at the root, there is no single enclosing common directory
+  if (splitPaths.some((parts) => parts.length <= 1)) {
+    return { commonPrefix: '', strippedPaths: [...relativePaths] };
+  }
+
+  const firstDir = splitPaths[0]?.[0];
+  if (!firstDir) {
+    return { commonPrefix: '', strippedPaths: [...relativePaths] };
+  }
+
+  const allShareFirstDir = splitPaths.every((parts) => parts[0] === firstDir);
+  if (!allShareFirstDir) {
+    return { commonPrefix: '', strippedPaths: [...relativePaths] };
+  }
+
+  const prefixWithSlash = `${firstDir}/`;
+  const stripped = relativePaths.map((p) =>
+    p.startsWith(prefixWithSlash) ? p.slice(prefixWithSlash.length) : p
+  );
+
+  return { commonPrefix: firstDir, strippedPaths: stripped };
+}
+
 export interface ZipImportPreviewModalProps {
   open: boolean;
   onClose: () => void;
@@ -104,9 +141,19 @@ export const ZipImportPreviewModal: React.FC<ZipImportPreviewModalProps> = ({
           }
         });
 
+        // Strip common root folder prefix if all entries are wrapped in one top-level directory
+        const rawPaths = entries.map((e) => e.relativePath);
+        const { commonPrefix, strippedPaths } = stripCommonRootPrefix(rawPaths);
+
+        // If common prefix exists and default folder name was generic, offer common prefix
+        if (commonPrefix && (defaultFolderName.toLowerCase() === 'archive' || !defaultFolderName)) {
+          setNewFolderName(commonPrefix);
+        }
+
         // Read all markdown files in parallel
         await Promise.all(
-          entries.map(async ({ relativePath, entry }, idx) => {
+          entries.map(async ({ entry }, idx) => {
+            const relativePath = strippedPaths[idx] || entries[idx]!.relativePath;
             const body = await entry.async('string');
             const pathParts = relativePath.split('/');
             const fileName = pathParts[pathParts.length - 1] || 'document.md';

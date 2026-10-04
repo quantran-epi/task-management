@@ -1,7 +1,45 @@
 import { describe, it, expect } from 'vitest';
 import JSZip from 'jszip';
+import { stripCommonRootPrefix } from '../ZipImportPreviewModal';
 
 describe('Zip Markdown Import extraction', () => {
+  it('stripCommonRootPrefix detects and strips common enclosing directory', () => {
+    const paths = [
+      'my-docs/readme.md',
+      'my-docs/guide.md',
+      'my-docs/sub/nested.md',
+    ];
+    const { commonPrefix, strippedPaths } = stripCommonRootPrefix(paths);
+
+    expect(commonPrefix).toBe('my-docs');
+    expect(strippedPaths).toEqual([
+      'readme.md',
+      'guide.md',
+      'sub/nested.md',
+    ]);
+  });
+
+  it('stripCommonRootPrefix leaves paths unchanged if root contains loose files', () => {
+    const paths = [
+      'readme.md',
+      'docs/guide.md',
+    ];
+    const { commonPrefix, strippedPaths } = stripCommonRootPrefix(paths);
+
+    expect(commonPrefix).toBe('');
+    expect(strippedPaths).toEqual(paths);
+  });
+
+  it('stripCommonRootPrefix leaves paths unchanged if multiple different top-level folders exist', () => {
+    const paths = [
+      'folderA/readme.md',
+      'folderB/guide.md',
+    ];
+    const { commonPrefix, strippedPaths } = stripCommonRootPrefix(paths);
+
+    expect(commonPrefix).toBe('');
+    expect(strippedPaths).toEqual(paths);
+  });
   it('unzips and extracts markdown files, detecting titles from first H1 or filename', async () => {
     const zip = new JSZip();
 

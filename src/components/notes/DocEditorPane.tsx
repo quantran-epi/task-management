@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Alert,
   Button,
@@ -75,7 +75,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
   const [backlinks, setBacklinks] = useState<BacklinksResult>({ tasks: [], projects: [], referencingNotes: [] });
   const [showToC, setShowToC] = useState<boolean>(() => {
     try {
-      const saved = localStorage.getItem('planner:docs_toc_visible');
+      const saved = localStorage.getItem(TOC_PREF_KEY);
       return saved !== null ? saved === 'true' : true;
     } catch {
       return true;
@@ -86,7 +86,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
     setShowToC((prev) => {
       const next = !prev;
       try {
-        localStorage.setItem('planner:docs_toc_visible', String(next));
+        localStorage.setItem(TOC_PREF_KEY, String(next));
       } catch {}
       return next;
     });
