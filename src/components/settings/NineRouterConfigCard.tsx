@@ -5,6 +5,7 @@ import {
   Input,
   InputNumber,
   Select,
+  AutoComplete,
   Button,
   Space,
   Alert,
@@ -74,6 +75,14 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
     'deepseek-chat',
   ]);
 
+  const [availableImageModels, setAvailableImageModels] = useState<string[]>([
+    'dall-e-3',
+    'dall-e-2',
+    'flux-schnell',
+    'flux-dev',
+    'stable-diffusion-3',
+  ]);
+
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [connectionResult, setConnectionResult] = useState<ConnectionState | null>(null);
@@ -119,6 +128,16 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
         setAvailableModels(cached);
         if (!cached.includes(config.defaultModel) && cached[0]) {
           setDefaultModel(cached[0]);
+        }
+      }
+
+      // Check if cached image model list exists
+      const imgModelsRec = await db.settings.get('image_cached_models');
+      if (active && Array.isArray(imgModelsRec?.value) && imgModelsRec.value.length > 0) {
+        const cachedImg = imgModelsRec.value as string[];
+        setAvailableImageModels(cachedImg);
+        if (!cachedImg.includes(imgConfig.defaultModel) && cachedImg[0]) {
+          setImageModel(cachedImg[0]);
         }
       }
     }
@@ -244,6 +263,16 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
       });
 
       if (res.ok) {
+        if (res.models && res.models.length > 0) {
+          setAvailableImageModels(res.models);
+          await db.settings.put({
+            key: 'image_cached_models',
+            value: res.models,
+          });
+          if (!res.models.includes(imageModel) && res.models[0]) {
+            setImageModel(res.models[0]);
+          }
+        }
         setImageConnectionResult({
           ok: true,
           message: `Kết nối máy chủ tạo ảnh thành công (${res.models.length} models tìm thấy).`,
@@ -511,17 +540,26 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
             />
           </Form.Item>
 
-          <Form.Item label="Mô hình tạo ảnh (Image Model)">
-            <Select
+          <Form.Item
+            label="Mô hình tạo ảnh (Image Model)"
+            extra={
+              <div style={{ marginTop: 4, fontSize: 12, color: '#8c8c8c' }}>
+                {availableImageModels.length > 5
+                  ? `Đã nạp ${availableImageModels.length} mô hình từ máy chủ (bấm "Kiểm tra kết nối tạo ảnh" để cập nhật). Có thể chọn hoặc gõ tùy chỉnh.`
+                  : 'Gợi ý: dall-e-3, dall-e-2, flux-schnell, flux-dev, stable-diffusion-3. Bấm "Kiểm tra kết nối tạo ảnh" để nạp danh sách từ máy chủ, hoặc gõ tùy chỉnh.'}
+              </div>
+            }
+          >
+            <AutoComplete
               value={imageModel}
               onChange={(val) => setImageModel(val)}
-              options={[
-                { label: 'dall-e-3 (OpenAI Chất lượng cao)', value: 'dall-e-3' },
-                { label: 'dall-e-2 (OpenAI Nhanh/Nhẹ)', value: 'dall-e-2' },
-                { label: 'flux-schnell (Flux Siêu nhanh)', value: 'flux-schnell' },
-                { label: 'flux-dev (Flux Chất lượng cao)', value: 'flux-dev' },
-                { label: 'stable-diffusion-3 (Stability AI)', value: 'stable-diffusion-3' },
-              ]}
+              options={Array.from(new Set([imageModel, ...availableImageModels]))
+                .filter(Boolean)
+                .map((m) => ({ label: m, value: m }))}
+              placeholder="Chọn hoặc nhập tên mô hình tạo ảnh (VD: dall-e-3, flux-dev...)"
+              filterOption={(inputValue, option) =>
+                ((option?.value as string) ?? '').toLowerCase().includes(inputValue.toLowerCase())
+              }
             />
           </Form.Item>
 

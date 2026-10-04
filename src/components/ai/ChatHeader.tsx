@@ -14,7 +14,6 @@ import {
   MoreOutlined,
   BookOutlined,
   DeleteOutlined,
-  StarFilled,
 } from '@ant-design/icons';
 
 const { Text } = Typography;
@@ -187,29 +186,10 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           />
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
           <Text strong style={{ fontSize: 14, whiteSpace: 'nowrap', color: token.colorText }}>
             Trợ lý AI
           </Text>
-          <span
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 3,
-              fontSize: 10,
-              fontWeight: 600,
-              padding: '1px 6px',
-              borderRadius: 10,
-              backgroundColor: 'rgba(79, 70, 229, 0.1)',
-              color: '#4f46e5',
-              border: '1px solid rgba(79, 70, 229, 0.2)',
-              letterSpacing: '0.02em',
-              textTransform: 'uppercase',
-            }}
-          >
-            <StarFilled style={{ fontSize: 8 }} />
-            Assistant
-          </span>
         </div>
       </div>
 

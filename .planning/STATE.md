@@ -83,6 +83,7 @@ Last activity: 2026-10-04 -- Completed quick task 261004-t2a: Fix doc UI shift, 
 | 261004-hbt | update project view header title assertion in shell.test.tsx | 2026-10-04 | 06306bc | complete | [261004-hbt-fix-shell-test-tsx-project-view-header-t](./quick/261004-hbt-fix-shell-test-tsx-project-view-header-t/) |
 | 261004-ovf | fix doc detail width overflow and failing vitest tests | 2026-10-04 | — | complete | [261004-ovf-fix-doc-overflow-and-tests](./quick/261004-ovf-fix-doc-overflow-and-tests/) |
 | 261004-twn | PPTX generation, image generation support, and AI drawer header UI enhancement | 2026-10-04 | 4f087ac | complete | [261004-twn-add-pptx-generation-image-generation-sup](./quick/261004-twn-add-pptx-generation-image-generation-sup/) |
+| 261004-uc0 | dynamic fetch image models from endpoint and remove assistant text from AI drawer header | 2026-10-04 | — | complete | [261004-uc0-dynamic-fetch-image-models-from-endpoint](./quick/261004-uc0-dynamic-fetch-image-models-from-endpoint/) |
 
 ## Performance Metrics
 
