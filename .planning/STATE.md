@@ -29,7 +29,7 @@ Phase: 13.2
 Plan: Not started
 Status: Phase complete — ready for verification
 Next recommended run: /gsd-execute-phase 13.2
-Last activity: 2026-10-03 - Completed quick task 261003-wib: enhance UI aesthetics and modern app icon
+Last activity: 2026-10-04 - Completed quick task 261004-blg: fix drawer interactions, ai header actions dropdown, chat input height, task planner instructions modal, and rename app to PlannerMate
 
 ### Quick Tasks Completed
 
@@ -67,6 +67,7 @@ Last activity: 2026-10-03 - Completed quick task 261003-wib: enhance UI aestheti
 | 261003-pop | Fix AI input Cmd+Enter clearing, resizable and pinable AI popout window, and Claude shortcut for local paths | 2026-10-03 | — | complete | [261003-pop-fix-ai-input-popout-and-claude-shortcut](./quick/261003-pop-fix-ai-input-popout-and-claude-shortcut/) |
 | 261003-set | Fix SettingsView test timeout in CI with testTimeout configuration and clean Dexie teardown | 2026-10-03 | — | complete | [261003-set-fix-settingsview-test-timeout-in-ci](./quick/261003-set-fix-settingsview-test-timeout-in-ci/) |
 | 261003-wib | enhance UI aesthetics and modern app icon | 2026-10-03 | 2e51acb | complete | [261003-wib-enhance-ui-aesthetics-and-modern-app-ico](./quick/261003-wib-enhance-ui-aesthetics-and-modern-app-ico/) |
+| 261004-blg | fix drawer interactions, ai header actions dropdown, chat input height, task planner instructions modal, and rename app to PlannerMate | 2026-10-04 | ade0453 | complete | [261004-blg-fix-drawer-interactions-ai-header-action](./quick/261004-blg-fix-drawer-interactions-ai-header-action/) |
 
 ## Performance Metrics
 
