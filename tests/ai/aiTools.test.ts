@@ -791,4 +791,147 @@ describe('aiTools', () => {
       expect(updateRes.updatedFields).toContain('businessAnalysts');
     });
   });
+
+  describe('search_knowledge_base and get_document_details', () => {
+    const mockKnowledgeNotes = [
+      {
+        id: 'doc-1',
+        type: 'document',
+        title: 'Core Banking Architecture & Ledger',
+        tags: ['architecture', 'banking'],
+        body: '# Core Banking\nThis document describes the double-entry accounting ledger system.\n## Transaction Processing\nAll transactions require balanced credits and debits.',
+        isPinned: false,
+        createdAt: '2026-10-01T00:00:00Z',
+        updatedAt: '2026-10-01T00:00:00Z',
+      },
+      {
+        id: 'doc-2',
+        type: 'document',
+        title: 'Deployment & CI/CD Runbook',
+        tags: ['devops', 'deployment'],
+        body: '# Deployment Runbook\nSteps to deploy release artifacts to production Kubernetes cluster.\nRun `kubectl apply -f release.yaml`.',
+        isPinned: false,
+        createdAt: '2026-10-02T00:00:00Z',
+        updatedAt: '2026-10-02T00:00:00Z',
+      },
+      {
+        id: 'doc-deleted',
+        type: 'document',
+        title: 'Old Banking Notes (Deleted)',
+        tags: ['banking'],
+        body: 'Deleted secret ledger notes',
+        deletedAt: '2026-10-03T00:00:00Z',
+        isPinned: false,
+        createdAt: '2026-09-01T00:00:00Z',
+        updatedAt: '2026-10-03T00:00:00Z',
+      },
+    ];
+
+    const mockKnowledgeAttachments = [
+      {
+        id: 'att-1',
+        noteId: 'doc-1',
+        fileName: 'architecture-diagram.png',
+        mimeType: 'image/png',
+        sizeBytes: 10240,
+        createdAt: '2026-10-01T00:00:00Z',
+        data: new Blob(['test'], { type: 'image/png' }),
+      },
+    ];
+
+    const mockKnowledgeDb: any = {
+      notes: {
+        filter: (fn: any) => ({
+          toArray: async () => mockKnowledgeNotes.filter(fn),
+        }),
+        get: async (id: string) => mockKnowledgeNotes.find((n) => n.id === id) || null,
+      },
+      noteAttachments: {
+        where: (field: string) => ({
+          equals: (val: any) => ({
+            toArray: async () => mockKnowledgeAttachments.filter((a: any) => a[field] === val),
+          }),
+        }),
+      },
+    };
+
+    it('registers search_knowledge_base and get_document_details in AI_DATABASE_TOOLS', () => {
+      const searchTool = AI_DATABASE_TOOLS.find((t) => t.function.name === 'search_knowledge_base');
+      expect(searchTool).toBeDefined();
+      expect(searchTool?.function.parameters.properties.query).toBeDefined();
+      expect(searchTool?.function.parameters.properties.tags).toBeDefined();
+      expect(searchTool?.function.parameters.properties.limit).toBeDefined();
+
+      const detailsTool = AI_DATABASE_TOOLS.find((t) => t.function.name === 'get_document_details');
+      expect(detailsTool).toBeDefined();
+      expect(detailsTool?.function.parameters.properties.documentId).toBeDefined();
+    });
+
+    it('searches knowledge base with BM25, filters soft-deleted docs, and supports tag filtering', async () => {
+      // Search query matching doc-1
+      const resJson = await executeAiTool(
+        'search_knowledge_base',
+        { query: 'double-entry ledger', limit: 5 },
+        mockKnowledgeDb
+      );
+      const res = JSON.parse(resJson);
+      expect(res.totalHits).toBeGreaterThanOrEqual(1);
+      expect(res.results[0].id).toBe('doc-1');
+      expect(res.results[0].title).toBe('Core Banking Architecture & Ledger');
+      expect(res.results[0].snippet).toBeDefined();
+      expect(res.results[0].snippet.length).toBeLessThanOrEqual(1500);
+
+      // Verify soft-deleted doc is never returned
+      const deletedCheckJson = await executeAiTool(
+        'search_knowledge_base',
+        { query: 'Deleted secret ledger' },
+        mockKnowledgeDb
+      );
+      const deletedCheck = JSON.parse(deletedCheckJson);
+      const hasDeleted = deletedCheck.results.some((r: any) => r.id === 'doc-deleted');
+      expect(hasDeleted).toBe(false);
+
+      // Tag filter
+      const tagFilteredJson = await executeAiTool(
+        'search_knowledge_base',
+        { query: 'Runbook', tags: ['architecture'] },
+        mockKnowledgeDb
+      );
+      const tagFiltered = JSON.parse(tagFilteredJson);
+      // Runbook has devops tag, not architecture
+      expect(tagFiltered.results.length).toBe(0);
+    });
+
+    it('gets document details including attachment IDs and body', async () => {
+      const resJson = await executeAiTool(
+        'get_document_details',
+        { documentId: 'doc-1' },
+        mockKnowledgeDb
+      );
+      const res = JSON.parse(resJson);
+      expect(res.id).toBe('doc-1');
+      expect(res.title).toBe('Core Banking Architecture & Ledger');
+      expect(res.body).toContain('double-entry accounting');
+      expect(res.attachments).toEqual([
+        {
+          id: 'att-1',
+          fileName: 'architecture-diagram.png',
+          mimeType: 'image/png',
+          sizeBytes: 10240,
+        },
+      ]);
+    });
+
+    it('returns error for soft-deleted or non-existent document in get_document_details', async () => {
+      const deletedRes = JSON.parse(
+        await executeAiTool('get_document_details', { documentId: 'doc-deleted' }, mockKnowledgeDb)
+      );
+      expect(deletedRes.error).toBeDefined();
+
+      const notFoundRes = JSON.parse(
+        await executeAiTool('get_document_details', { documentId: 'doc-nonexistent' }, mockKnowledgeDb)
+      );
+      expect(notFoundRes.error).toBeDefined();
+    });
+  });
 });

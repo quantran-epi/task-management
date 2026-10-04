@@ -380,4 +380,28 @@ describe('contextGrounding', () => {
       expect(prompt).toContain('</global_context>');
     });
   });
+
+  describe('serializeDocumentContext', () => {
+    it('formats document metadata and snippet into structured XML <item_context type="document">', async () => {
+      const { serializeDocumentContext } = await import('../../src/services/ai/contextGrounding');
+      const mockDoc: Note = {
+        id: 'doc-456',
+        type: 'document',
+        title: 'API Authentication Standard',
+        tags: ['security', 'oauth'],
+        body: '# API Auth Standard\nAll internal microservices must validate JWT bearer tokens issued by Auth0.',
+        isPinned: false,
+        createdAt: '2026-10-01T00:00:00Z',
+        updatedAt: '2026-10-01T00:00:00Z',
+      };
+
+      const xml = serializeDocumentContext(mockDoc, 'All internal microservices must validate JWT bearer tokens');
+      expect(xml).toContain('<item_context type="document" id="doc-456">');
+      expect(xml).toContain('## Document: API Authentication Standard');
+      expect(xml).toContain('- **Tags:** security, oauth');
+      expect(xml).toContain('### Relevant Content');
+      expect(xml).toContain('All internal microservices must validate JWT bearer tokens');
+      expect(xml).toContain('</item_context>');
+    });
+  });
 });
