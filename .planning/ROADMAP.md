@@ -311,10 +311,16 @@ Plans:
 **Requirements**: REQ-14.1, REQ-14.2, REQ-14.3, REQ-14.4, REQ-14.5, REQ-14.6
 **Depends on:** Phase 13
 **Plans:** 4 plans
-
 Plans:
+**Wave 1**
 
 - [ ] 14-01-PLAN.md — Schema V9, note model extensions, folder/tag repository, soft-delete, and lexical BM25 search engine with Vietnamese diacritic normalization (Wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 14-02-PLAN.md — Markdown Wiki-link parser, binary attachment tokens, smart ingestion metadata/entity extraction, two-way link repo, and SmartIngestionBanner (Wave 2)
 - [ ] 14-03-PLAN.md — AI tools `search_knowledge_base` and `get_document_details`, character-budgeted snippet grounding, `@doc:` autocomplete, clickable citation chips, and QuickPreviewDrawer (Wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 14-04-PLAN.md — 3-column Docs workspace in NotesView, folder tree, document list, split editor, ToC rail, TaskDrawer Linked Knowledge, Backlinks, Trash bin, and Markdown/Zip export (Wave 3)
