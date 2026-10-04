@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   Card,
   Input,
@@ -33,6 +33,8 @@ import {
   createNote,
   softDeleteNote,
   permanentDeleteNote,
+  restoreNote,
+  batchCreateNotes,
 } from '../db/repositories/noteRepo';
 import { getBacklinksForDoc } from '../db/repositories/documentLinkRepo';
 import { renderSafeMarkdown } from '../utils/markdown';
@@ -45,6 +47,7 @@ import { openNotesPopout } from '../utils/notesPopout';
 import { DocFolderTree, type QuickFilterKey } from '../components/notes/DocFolderTree';
 import { DocListPane } from '../components/notes/DocListPane';
 import { DocEditorPane } from '../components/notes/DocEditorPane';
+import { ZipImportPreviewModal } from '../components/notes/ZipImportPreviewModal';
 
 const { Text } = Typography;
 
@@ -241,21 +244,24 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
     }
   };
 
-  // Create folder action
-  const handleCreateFolder = async (name: string) => {
+  // Create folder action (supports root & subfolder)
+  const handleCreateFolder = async (name: string, parentId?: string): Promise<Note> => {
     try {
       const newFolder = await createNote(
         {
           title: name,
           body: '',
           type: 'folder',
+          parentId: parentId || undefined,
         },
         db
       );
       handleFilterChange(newFolder.id);
       message.success(`Đã tạo thư mục "${name}"`);
-    } catch {
+      return newFolder;
+    } catch (err) {
       message.error('Không thể tạo thư mục');
+      throw err;
     }
   };
 
@@ -269,25 +275,37 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
     }
   };
 
-  // Delete folder action (reassigns child documents to Inbox so work is never lost)
+  // Delete folder action (reassigns child documents to Inbox and deletes folder and subfolders so work is never lost)
   const handleDeleteFolder = async (folder: Note) => {
-    const childDocs = (allNotes || []).filter((n) => n.parentId === folder.id && !n.deletedAt);
+    const getAllDescendantFolderIds = (parentId: string): string[] => {
+      const children = (allNotes || []).filter(
+        (n) => n.type === 'folder' && n.parentId === parentId && !n.deletedAt
+      );
+      return [parentId, ...children.flatMap((c) => getAllDescendantFolderIds(c.id))];
+    };
+    const folderIdsToDelete = getAllDescendantFolderIds(folder.id);
+    const affectedDocs = (allNotes || []).filter(
+      (n) => n.type !== 'folder' && folderIdsToDelete.includes(n.parentId || '') && !n.deletedAt
+    );
+
     Modal.confirm({
       title: `Xóa thư mục "${folder.title || 'Không tên'}"?`,
       content:
-        childDocs.length > 0
-          ? `Thư mục đang chứa ${childDocs.length} tài liệu. Các tài liệu này sẽ được chuyển về Inbox (không bị xóa).`
+        affectedDocs.length > 0
+          ? `Thư mục (và các thư mục con) đang chứa ${affectedDocs.length} tài liệu. Các tài liệu này sẽ được chuyển về Inbox (không bị xóa).`
           : 'Bạn có chắc chắn muốn xóa thư mục này?',
       okText: 'Xóa thư mục',
       okType: 'danger',
       cancelText: 'Hủy',
       onOk: async () => {
         try {
-          for (const child of childDocs) {
+          for (const child of affectedDocs) {
             await updateNote(child.id, { parentId: null }, db);
           }
-          await permanentDeleteNote(folder.id, db);
-          if (activeFilter === folder.id) {
+          for (const fId of folderIdsToDelete) {
+            await permanentDeleteNote(fId, db);
+          }
+          if (folderIdsToDelete.includes(typeof activeFilter === 'string' ? activeFilter : '')) {
             handleFilterChange('inbox');
           }
           message.success('Đã xóa thư mục');
@@ -297,6 +315,39 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
       },
     });
   };
+
+  // Hierarchical folder options with indentation and breadcrumb path
+  const hierarchicalFolderOptions = useMemo(() => {
+    const folders = (allNotes || []).filter((n) => n.type === 'folder' && !n.deletedAt);
+    const map = new Map<string, { note: Note; depth: number; path: string }>();
+    const roots = folders.filter((f) => !f.parentId || !folders.some((p) => p.id === f.parentId));
+
+    const traverse = (node: Note, depth: number, parentPath: string) => {
+      const currentPath = parentPath ? `${parentPath} / ${node.title}` : node.title || 'Không tên';
+      map.set(node.id, { note: node, depth, path: currentPath });
+      const children = folders.filter((f) => f.parentId === node.id);
+      children.forEach((c) => traverse(c, depth + 1, currentPath));
+    };
+    roots.forEach((r) => traverse(r, 0, ''));
+    return Array.from(map.values());
+  }, [allNotes]);
+
+  // Folder breadcrumb path for currently viewed folder
+  const folderPath = useMemo(() => {
+    if (!currentFolder || !allNotes) return [];
+    const path: Note[] = [currentFolder];
+    let curr = currentFolder.parentId;
+    while (curr) {
+      const parent = allNotes.find((n) => n.id === curr && n.type === 'folder' && !n.deletedAt);
+      if (parent) {
+        path.unshift(parent);
+        curr = parent.parentId;
+      } else {
+        break;
+      }
+    }
+    return path;
+  }, [currentFolder, allNotes]);
 
   // Move document to folder state & action
   const [movingDoc, setMovingDoc] = useState<Note | null>(null);
@@ -315,6 +366,81 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
       setMovingDoc(null);
     } catch {
       message.error('Không thể chuyển thư mục');
+    }
+  };
+
+  // Move folder to another folder state & action (with cycle prevention)
+  const [movingFolder, setMovingFolder] = useState<Note | null>(null);
+  const [targetParentFolderSelect, setTargetParentFolderSelect] = useState<string | null>(null);
+
+  const handleOpenMoveFolderModal = (folder: Note) => {
+    setMovingFolder(folder);
+    setTargetParentFolderSelect(folder.parentId || null);
+  };
+
+  // Prevent cycle: folder cannot be moved into itself or its descendants
+  const invalidTargetFolderIds = useMemo(() => {
+    if (!movingFolder || !allNotes) return new Set<string>();
+    const invalid = new Set<string>([movingFolder.id]);
+    const getDescendants = (parentId: string) => {
+      const children = allNotes.filter(
+        (n) => n.type === 'folder' && n.parentId === parentId && !n.deletedAt
+      );
+      for (const c of children) {
+        invalid.add(c.id);
+        getDescendants(c.id);
+      }
+    };
+    getDescendants(movingFolder.id);
+    return invalid;
+  }, [movingFolder, allNotes]);
+
+  const handleConfirmMoveFolder = async () => {
+    if (!movingFolder) return;
+    try {
+      await updateNote(movingFolder.id, { parentId: targetParentFolderSelect }, db);
+      message.success('Đã di chuyển thư mục thành công');
+      setMovingFolder(null);
+    } catch {
+      message.error('Không thể di chuyển thư mục');
+    }
+  };
+
+  // Zip Import state & triggers
+  const [zipImportModalOpen, setZipImportModalOpen] = useState(false);
+  const [selectedZipFile, setSelectedZipFile] = useState<File | null>(null);
+  const zipFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleOpenZipImport = () => {
+    if (zipFileInputRef.current) {
+      zipFileInputRef.current.value = '';
+      zipFileInputRef.current.click();
+    }
+  };
+
+  const handleZipFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedZipFile(file);
+      setZipImportModalOpen(true);
+    }
+  };
+
+  const handleBatchImportDocs = async (
+    docsToImport: Array<{ title: string; body: string; parentId?: string | undefined }>,
+    destinationFolderId?: string
+  ) => {
+    await batchCreateNotes(
+      docsToImport.map((d) => ({
+        title: d.title,
+        body: d.body,
+        type: 'document',
+        ...(d.parentId ? { parentId: d.parentId } : {}),
+      })),
+      db
+    );
+    if (destinationFolderId) {
+      handleFilterChange(destinationFolderId);
     }
   };
 
@@ -371,6 +497,16 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
       } catch {
         message.error('Không thể chuyển vào thùng rác');
       }
+    }
+  };
+
+  // Restore document action
+  const handleRestoreDocument = async (note: Note) => {
+    try {
+      await restoreNote(note.id, db);
+      message.success(`Đã khôi phục tài liệu "${note.title || 'Không tiêu đề'}"`);
+    } catch {
+      message.error('Không thể khôi phục tài liệu');
     }
   };
 
@@ -472,15 +608,19 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
             backgroundColor: '#ffffff',
           }}
         >
-          {/* Column 1: Folder Tree (~230px) */}
+          {/* Column 1: Folder Tree (~240px) */}
           <DocFolderTree
             notes={allNotes || []}
             activeFilter={activeFilter}
             onSelectFilter={handleFilterChange}
             onCreateDoc={handleCreateDocument}
-            onCreateFolder={handleCreateFolder}
+            onCreateFolder={async (name, parentId) => {
+              await handleCreateFolder(name, parentId);
+            }}
             onRenameFolder={handleRenameFolder}
+            onMoveFolder={handleOpenMoveFolderModal}
             onDeleteFolder={handleDeleteFolder}
+            onOpenZipImport={handleOpenZipImport}
             activeTag={activeTag}
             onSelectTag={setActiveTag}
           />
@@ -493,7 +633,10 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
             onTogglePin={(doc) => handleUpdateDocument(doc.id, { isPinned: !doc.isPinned })}
             onMoveToFolder={handleOpenMoveDocModal}
             onDeleteDoc={handleDeleteDocument}
+            onRestoreDoc={handleRestoreDocument}
             currentFolder={currentFolder}
+            folderPath={folderPath}
+            onNavigateFolder={(id) => handleFilterChange(id)}
             onCreateDoc={() => handleCreateDocument(currentFolder?.id)}
           />
 
@@ -502,6 +645,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
             doc={activeDocument}
             onUpdateDoc={handleUpdateDocument}
             onDeleteDoc={handleDeleteDocument}
+            onRestoreDoc={handleRestoreDocument}
             onSelectDoc={(id) => setSelectedDocId(id)}
             db={db}
           />
@@ -681,14 +825,67 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
             onChange={(val) => setTargetFolderSelect(val || null)}
             options={[
               { value: '', label: '📥 Inbox (Không nằm trong thư mục nào)' },
-              ...availableFolders.map((f) => ({
-                value: f.id,
-                label: `📁 ${f.title || 'Thư mục không tên'}`,
+              ...hierarchicalFolderOptions.map(({ note, depth, path }) => ({
+                value: note.id,
+                label: `${'— '.repeat(depth)}📁 ${path}`,
               })),
             ]}
           />
         </div>
       </Modal>
+
+      {/* Move Folder to Another Folder Modal (Cycle Prevention) */}
+      <Modal
+        title={`Di chuyển thư mục "${movingFolder?.title || 'Không tên'}"`}
+        open={Boolean(movingFolder)}
+        onOk={handleConfirmMoveFolder}
+        onCancel={() => setMovingFolder(null)}
+        okText="Di chuyển"
+        cancelText="Hủy"
+      >
+        <div style={{ padding: '8px 0' }}>
+          <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+            Chọn thư mục cha mới:
+          </Text>
+          <Select
+            style={{ width: '100%' }}
+            value={targetParentFolderSelect ?? ''}
+            onChange={(val) => setTargetParentFolderSelect(val || null)}
+            options={[
+              { value: '', label: '📁 Thư mục gốc (Root)' },
+              ...hierarchicalFolderOptions
+                .filter(({ note }) => !invalidTargetFolderIds.has(note.id))
+                .map(({ note, depth, path }) => ({
+                  value: note.id,
+                  label: `${'— '.repeat(depth)}📁 ${path}`,
+                })),
+            ]}
+          />
+        </div>
+      </Modal>
+
+      {/* Hidden file input for zip upload */}
+      <input
+        type="file"
+        ref={zipFileInputRef}
+        accept=".zip"
+        style={{ display: 'none' }}
+        onChange={handleZipFileSelected}
+      />
+
+      {/* Zip Import Preview Modal */}
+      <ZipImportPreviewModal
+        open={zipImportModalOpen}
+        onClose={() => {
+          setZipImportModalOpen(false);
+          setSelectedZipFile(null);
+        }}
+        zipFile={selectedZipFile}
+        folders={availableFolders}
+        currentFolderId={typeof activeFilter === 'string' && availableFolders.some((f) => f.id === activeFilter) ? activeFilter : null}
+        onImportDocs={handleBatchImportDocs}
+        onCreateFolder={handleCreateFolder}
+      />
     </div>
   );
 };

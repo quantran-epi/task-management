@@ -40,6 +40,34 @@ export async function createNote(
   return note;
 }
 
+export async function batchCreateNotes(
+  inputs: NoteInput[],
+  db: TaskPlannerDatabase = defaultDb
+): Promise<Note[]> {
+  if (inputs.length === 0) return [];
+  const now = new Date().toISOString();
+  const notes: Note[] = inputs.map((input) => {
+    const validated = NoteInputSchema.parse(input);
+    return {
+      id: generateId(),
+      type: validated.type,
+      ...(validated.parentId ? { parentId: validated.parentId } : {}),
+      ...(validated.tags ? { tags: validated.tags } : { tags: [] }),
+      ...(validated.slug?.trim() ? { slug: validated.slug.trim() } : {}),
+      ...(validated.entityType ? { entityType: validated.entityType } : {}),
+      ...(validated.entityId ? { entityId: validated.entityId } : {}),
+      ...(validated.title?.trim() ? { title: validated.title.trim() } : {}),
+      body: validated.body,
+      isPinned: validated.isPinned ?? false,
+      createdAt: now,
+      updatedAt: now,
+    };
+  });
+
+  await db.notes.bulkAdd(notes);
+  return notes;
+}
+
 export async function updateNote(
   id: string,
   updates: NoteUpdate,
@@ -141,10 +169,9 @@ export async function restoreNote(
   const existing = await db.notes.get(id);
   if (!existing) return;
   const now = new Date().toISOString();
-  await db.notes.update(id, {
-    deletedAt: undefined,
-    updatedAt: now,
-  });
+  delete existing.deletedAt;
+  existing.updatedAt = now;
+  await db.notes.put(existing);
 }
 
 export async function getNotesByFolder(

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
+  Alert,
   Button,
   Input,
   Radio,
@@ -23,6 +24,7 @@ import {
   FileTextOutlined,
   CheckSquareOutlined,
   FolderOutlined,
+  UndoOutlined,
 } from '@ant-design/icons';
 import type { Note } from '../../types/models';
 import { renderSafeMarkdown } from '../../utils/markdown';
@@ -43,6 +45,7 @@ export interface DocEditorPaneProps {
   doc: Note | null;
   onUpdateDoc: (id: string, updates: Partial<Note>) => Promise<void> | void;
   onDeleteDoc?: (doc: Note) => void;
+  onRestoreDoc?: (doc: Note) => void;
   onSelectDoc?: (docId: string) => void;
   onOpenTask?: (taskId: string) => void;
   onOpenProject?: (projectId: string) => void;
@@ -53,6 +56,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
   doc,
   onUpdateDoc,
   onDeleteDoc,
+  onRestoreDoc,
   onSelectDoc,
   onOpenTask,
   onOpenProject,
@@ -516,12 +520,28 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
             />
           </Tooltip>
 
+          {doc.deletedAt && onRestoreDoc && (
+            <Button
+              size="small"
+              type="primary"
+              style={{ backgroundColor: '#16a34a' }}
+              icon={<UndoOutlined />}
+              onClick={() => onRestoreDoc(doc)}
+            >
+              Khôi phục
+            </Button>
+          )}
+
           {onDeleteDoc && (
             <Popconfirm
-              title="Xóa tài liệu?"
-              description="Chuyển tài liệu này vào thùng rác?"
+              title={doc.deletedAt ? 'Xóa vĩnh viễn tài liệu?' : 'Xóa tài liệu?'}
+              description={
+                doc.deletedAt
+                  ? 'Tài liệu sẽ bị xóa hoàn toàn khỏi cơ sở dữ liệu. Không thể khôi phục.'
+                  : 'Chuyển tài liệu này vào thùng rác?'
+              }
               onConfirm={() => onDeleteDoc(doc)}
-              okText="Xóa"
+              okText={doc.deletedAt ? 'Xóa vĩnh viễn' : 'Xóa'}
               cancelText="Hủy"
             >
               <Button size="small" danger icon={<DeleteOutlined />} />
@@ -530,8 +550,48 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
         </Space>
       </div>
 
+      {/* Trash Warning Banner */}
+      {doc.deletedAt && (
+        <div style={{ padding: '8px 16px 0 16px' }}>
+          <Alert
+            type="warning"
+            showIcon
+            message="Tài liệu này đang nằm trong thùng rác"
+            description="Nội dung đang ở chế độ xem. Bạn có thể khôi phục tài liệu để tiếp tục chỉnh sửa hoặc xóa vĩnh viễn."
+            action={
+              <Space>
+                {onRestoreDoc && (
+                  <Button
+                    size="small"
+                    type="primary"
+                    icon={<UndoOutlined />}
+                    onClick={() => onRestoreDoc(doc)}
+                    style={{ backgroundColor: '#16a34a' }}
+                  >
+                    Khôi phục
+                  </Button>
+                )}
+                {onDeleteDoc && (
+                  <Popconfirm
+                    title="Xóa vĩnh viễn tài liệu?"
+                    description="Tài liệu sẽ bị xóa hoàn toàn khỏi cơ sở dữ liệu."
+                    onConfirm={() => onDeleteDoc(doc)}
+                    okText="Xóa vĩnh viễn"
+                    cancelText="Hủy"
+                  >
+                    <Button size="small" danger>
+                      Xóa vĩnh viễn
+                    </Button>
+                  </Popconfirm>
+                )}
+              </Space>
+            }
+          />
+        </div>
+      )}
+
       {/* Smart Ingestion Banner */}
-      {detectedEntities.length > 0 && (
+      {detectedEntities.length > 0 && !doc.deletedAt && (
         <div style={{ padding: '8px 16px 0 16px' }}>
           <SmartIngestionBanner
             detectedEntities={detectedEntities}
@@ -546,6 +606,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
         <Input
           placeholder="Tiêu đề tài liệu..."
           value={title}
+          disabled={Boolean(doc.deletedAt)}
           onChange={(e) => handleTitleChange(e.target.value)}
           variant="borderless"
           style={{
@@ -591,6 +652,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
             <Input.TextArea
               ref={textareaRef}
               value={body}
+              readOnly={Boolean(doc.deletedAt)}
               onChange={(e) => handleBodyChange(e.target.value, e.target.selectionStart)}
               onKeyDown={handleKeyDown}
               onKeyUp={(e) => {

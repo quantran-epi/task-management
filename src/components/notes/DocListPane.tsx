@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Input, Select, Typography, Empty, Tag, Dropdown, Button, type MenuProps } from 'antd';
+import { Input, Select, Typography, Empty, Tag, Dropdown, Button, Tooltip, type MenuProps } from 'antd';
 import {
   SearchOutlined,
   PushpinFilled,
@@ -11,6 +11,7 @@ import {
   MoreOutlined,
   FileTextOutlined,
   FormOutlined,
+  UndoOutlined,
 } from '@ant-design/icons';
 import type { Note } from '../../types/models';
 
@@ -25,7 +26,10 @@ export interface DocListPaneProps {
   onTogglePin?: ((doc: Note) => void) | undefined;
   onMoveToFolder?: ((doc: Note) => void) | undefined;
   onDeleteDoc?: ((doc: Note) => void) | undefined;
+  onRestoreDoc?: ((doc: Note) => void) | undefined;
   currentFolder?: Note | null | undefined;
+  folderPath?: Note[] | undefined;
+  onNavigateFolder?: ((folderId: string) => void) | undefined;
   onCreateDoc?: (() => void) | undefined;
 }
 
@@ -36,7 +40,10 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
   onTogglePin,
   onMoveToFolder,
   onDeleteDoc,
+  onRestoreDoc,
   currentFolder,
+  folderPath,
+  onNavigateFolder,
   onCreateDoc,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -76,34 +83,58 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
     return result;
   }, [notes, searchTerm, sortBy]);
 
-  const getItemMenuItems = (doc: Note): MenuProps['items'] => [
-    {
-      key: 'pin',
-      label: doc.isPinned ? 'Bỏ ghim' : 'Ghim lên đầu',
-      icon: doc.isPinned ? <PushpinOutlined /> : <PushpinFilled />,
-      onClick: () => onTogglePin?.(doc),
-    },
-    ...(onMoveToFolder
-      ? [
-          {
-            key: 'move',
-            label: 'Chuyển thư mục',
-            icon: <FolderOutlined />,
-            onClick: () => onMoveToFolder(doc),
-          },
-        ]
-      : []),
-    {
-      type: 'divider',
-    },
-    {
-      key: 'delete',
-      label: doc.deletedAt ? 'Xóa vĩnh viễn' : 'Chuyển vào thùng rác',
-      danger: true,
-      icon: <DeleteOutlined />,
-      onClick: () => onDeleteDoc?.(doc),
-    },
-  ];
+  const getItemMenuItems = (doc: Note): MenuProps['items'] => {
+    if (doc.deletedAt) {
+      return [
+        ...(onRestoreDoc
+          ? [
+              {
+                key: 'restore',
+                label: 'Khôi phục tài liệu',
+                icon: <UndoOutlined style={{ color: '#16a34a' }} />,
+                onClick: () => onRestoreDoc(doc),
+              },
+            ]
+          : []),
+        {
+          key: 'delete',
+          label: 'Xóa vĩnh viễn',
+          danger: true,
+          icon: <DeleteOutlined />,
+          onClick: () => onDeleteDoc?.(doc),
+        },
+      ];
+    }
+
+    return [
+      {
+        key: 'pin',
+        label: doc.isPinned ? 'Bỏ ghim' : 'Ghim lên đầu',
+        icon: doc.isPinned ? <PushpinOutlined /> : <PushpinFilled />,
+        onClick: () => onTogglePin?.(doc),
+      },
+      ...(onMoveToFolder
+        ? [
+            {
+              key: 'move',
+              label: 'Chuyển thư mục',
+              icon: <FolderOutlined />,
+              onClick: () => onMoveToFolder(doc),
+            },
+          ]
+        : []),
+      {
+        type: 'divider',
+      },
+      {
+        key: 'delete',
+        label: 'Chuyển vào thùng rác',
+        danger: true,
+        icon: <DeleteOutlined />,
+        onClick: () => onDeleteDoc?.(doc),
+      },
+    ];
+  };
 
   const getCleanSnippet = (body: string): string => {
     if (!body) return 'Không có nội dung';
@@ -133,7 +164,7 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
     >
       {/* Header with Search and Sort */}
       <div style={{ padding: '12px 12px 8px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {/* Optional Current Folder Scope Indicator */}
+        {/* Optional Current Folder Scope Indicator with Breadcrumbs */}
         {currentFolder && (
           <div
             style={{
@@ -147,20 +178,51 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
-              <FolderFilled style={{ color: '#d97706', fontSize: 15 }} />
-              <span
+              <FolderFilled style={{ color: '#d97706', fontSize: 15, flexShrink: 0 }} />
+              <div
                 style={{
                   fontWeight: 600,
-                  fontSize: 12.5,
+                  fontSize: 12,
                   color: '#92400e',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
                 }}
-                title={currentFolder.title || 'Thư mục'}
               >
-                {currentFolder.title || 'Thư mục'}
-              </span>
+                {folderPath && folderPath.length > 1 ? (
+                  folderPath.map((item, idx) => {
+                    const isLast = idx === folderPath.length - 1;
+                    return (
+                      <React.Fragment key={item.id}>
+                        {idx > 0 && <span style={{ color: '#d97706', opacity: 0.6 }}>/</span>}
+                        {isLast ? (
+                          <span style={{ fontWeight: 700 }} title={item.title}>
+                            {item.title}
+                          </span>
+                        ) : (
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => onNavigateFolder?.(item.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') onNavigateFolder?.(item.id);
+                            }}
+                            style={{ cursor: 'pointer', textDecoration: 'underline' }}
+                            title={`Đi tới thư mục ${item.title}`}
+                          >
+                            {item.title}
+                          </span>
+                        )}
+                      </React.Fragment>
+                    );
+                  })
+                ) : (
+                  <span title={currentFolder.title || 'Thư mục'}>{currentFolder.title || 'Thư mục'}</span>
+                )}
+              </div>
             </div>
             {onCreateDoc && (
               <Button
@@ -178,7 +240,7 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
                   marginLeft: 6,
                 }}
               >
-                Tạo tài liệu
+                Tạo
               </Button>
             )}
           </div>
@@ -296,6 +358,20 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     {doc.isPinned && <PushpinFilled style={{ color: '#4f46e5', fontSize: 11 }} />}
+                    {doc.deletedAt && onRestoreDoc && (
+                      <Tooltip title="Khôi phục tài liệu">
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<UndoOutlined style={{ color: '#16a34a', fontSize: 12 }} />}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onRestoreDoc(doc);
+                          }}
+                          style={{ width: 22, height: 22, padding: 0 }}
+                        />
+                      </Tooltip>
+                    )}
                     <Dropdown menu={{ items: getItemMenuItems(doc) ?? [] }} trigger={['click']}>
                       <span
                         role="button"
