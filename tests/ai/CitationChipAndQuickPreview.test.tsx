@@ -106,10 +106,12 @@ describe('QuickPreviewDrawer', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Mở trong Docs')).toBeInTheDocument();
+      const btn = screen.getByRole('button', { name: /Mở trong Docs/i });
+      expect(btn).not.toBeDisabled();
     });
 
-    fireEvent.click(screen.getByText('Mở trong Docs'));
+    const btn = screen.getByRole('button', { name: /Mở trong Docs/i });
+    fireEvent.click(btn);
     expect(handleNav).toHaveBeenCalledWith('doc-preview-1');
   });
 });
