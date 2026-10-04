@@ -24,7 +24,7 @@ describe('BM25 Lexical Ranking & Vietnamese Normalization (REQ-14.2, D-10, D-11)
   describe('tokenize', () => {
     it('extracts alpha-numeric word tokens with length > 1, stripping punctuation', () => {
       const tokens = tokenize('Báo cáo #1: Tiến độ dự án, SHB-2024!');
-      expect(tokens).toEqual(['bao', 'cao', 'tien', 'du', 'an', 'shb', '2024']);
+      expect(tokens).toEqual(['bao', 'cao', 'tien', 'do', 'du', 'an', 'shb', '2024']);
       expect(tokens.includes('1')).toBe(false); // length <= 1 filtered
     });
 
