@@ -6,18 +6,23 @@ import {
   storeKeyringCredential,
   deleteKeyringCredential,
 } from '../keyringService';
-import type { NineRouterConfig } from './types';
+import type { NineRouterConfig, ImageConfig } from './types';
 import { testNineRouterConnection } from './nineRouterClient';
 
 export const DEFAULT_NINEROUTER_ENDPOINT = 'http://localhost:20128';
 export const DEFAULT_NINEROUTER_MODEL = 'gpt-4o';
 export const DEFAULT_NINEROUTER_CHAR_LIMIT = 12000;
 
+export const DEFAULT_IMAGE_ENDPOINT = 'http://localhost:20128';
+export const DEFAULT_IMAGE_MODEL = 'dall-e-3';
+
 // Module-level in-memory cache for fast read during UI interactions
 let memoryNineRouterApiKey: string | null = null;
+let memoryImageApiKey: string | null = null;
 
 export function clearNineRouterMemoryCache(): void {
   memoryNineRouterApiKey = null;
+  memoryImageApiKey = null;
 }
 
 export async function getNineRouterApiKey(
@@ -166,4 +171,121 @@ export async function fetchAvailableModels(
     return rec.value as string[];
   }
   return [];
+}
+
+// -------------------------------------------------------------
+// Image Generation Config & Key Management
+// -------------------------------------------------------------
+
+export async function getImageApiKey(
+  db: TaskPlannerDatabase = defaultDb
+): Promise<string> {
+  if (memoryImageApiKey !== null) {
+    return memoryImageApiKey;
+  }
+
+  if (isTauriApp()) {
+    const key = await getKeyringCredential(KEYRING_KEYS.IMAGE_API_KEY);
+    if (key) {
+      memoryImageApiKey = key;
+      return key;
+    }
+  }
+
+  // Fallback to IndexedDB
+  const rec = await db.settings.get('image_api_key');
+  const key = typeof rec?.value === 'string' ? rec.value : '';
+  if (key) {
+    memoryImageApiKey = key;
+    return key;
+  }
+
+  // If no dedicated image key, fallback to nineRouter API key
+  const fallback = await getNineRouterApiKey(db);
+  return fallback;
+}
+
+export async function setImageApiKey(
+  key: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<void> {
+  const trimmed = key.trim();
+  memoryImageApiKey = trimmed;
+
+  if (isTauriApp()) {
+    if (trimmed) {
+      await storeKeyringCredential(KEYRING_KEYS.IMAGE_API_KEY, trimmed);
+    } else {
+      await deleteKeyringCredential(KEYRING_KEYS.IMAGE_API_KEY);
+    }
+    await db.settings.delete('image_api_key');
+  } else {
+    if (trimmed) {
+      await db.settings.put({ key: 'image_api_key', value: trimmed });
+    } else {
+      await db.settings.delete('image_api_key');
+    }
+  }
+}
+
+export async function forgetImageApiKey(
+  db: TaskPlannerDatabase = defaultDb
+): Promise<void> {
+  memoryImageApiKey = '';
+  if (isTauriApp()) {
+    await deleteKeyringCredential(KEYRING_KEYS.IMAGE_API_KEY);
+  }
+  await db.settings.delete('image_api_key');
+}
+
+export async function isImageApiKeyStored(
+  db: TaskPlannerDatabase = defaultDb
+): Promise<boolean> {
+  if (memoryImageApiKey && memoryImageApiKey.length > 0) return true;
+  if (isTauriApp()) {
+    const cred = await getKeyringCredential(KEYRING_KEYS.IMAGE_API_KEY);
+    if (cred) {
+      memoryImageApiKey = cred;
+      return true;
+    }
+  }
+  const rec = await db.settings.get('image_api_key');
+  return typeof rec?.value === 'string' && rec.value.trim().length > 0;
+}
+
+export async function getImageConfig(
+  db: TaskPlannerDatabase = defaultDb
+): Promise<ImageConfig> {
+  const [endpointRec, modelRec, nrConfig] = await Promise.all([
+    db.settings.get('image_endpoint'),
+    db.settings.get('image_model'),
+    getNineRouterConfig(db),
+  ]);
+
+  return {
+    endpoint:
+      typeof endpointRec?.value === 'string' && endpointRec.value.trim()
+        ? endpointRec.value.trim()
+        : nrConfig.endpoint || DEFAULT_IMAGE_ENDPOINT,
+    defaultModel:
+      typeof modelRec?.value === 'string' && modelRec.value.trim()
+        ? modelRec.value.trim()
+        : DEFAULT_IMAGE_MODEL,
+  };
+}
+
+export async function setImageConfig(
+  config: Partial<ImageConfig>,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<void> {
+  if (config.endpoint !== undefined) {
+    const cleaned = config.endpoint.trim().replace(/\/+$/, '');
+    await db.settings.put({ key: 'image_endpoint', value: cleaned });
+  }
+  if (config.defaultModel !== undefined) {
+    await db.settings.put({
+      key: 'image_model',
+      value: config.defaultModel.trim(),
+    });
+  }
 }

@@ -22,6 +22,7 @@ import {
   LockOutlined,
   EditOutlined,
   DeleteOutlined,
+  PictureOutlined,
 } from '@ant-design/icons';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import {
@@ -31,11 +32,20 @@ import {
   isNineRouterApiKeyStored,
   getNineRouterConfig,
   setNineRouterConfig,
+  getImageConfig,
+  setImageConfig,
+  getImageApiKey,
+  setImageApiKey,
+  forgetImageApiKey,
+  isImageApiKeyStored,
   DEFAULT_NINEROUTER_ENDPOINT,
   DEFAULT_NINEROUTER_MODEL,
   DEFAULT_NINEROUTER_CHAR_LIMIT,
+  DEFAULT_IMAGE_ENDPOINT,
+  DEFAULT_IMAGE_MODEL,
 } from '../../services/ai/nineRouterTokenService';
 import { testNineRouterConnection } from '../../services/ai/nineRouterClient';
+import { testImageGenerationConnection } from '../../services/ai/imageGenerationClient';
 import { isTauriApp } from '../../utils/timerPopout';
 import { announceToScreenReader } from '../common/AriaLiveRegion';
 
@@ -73,6 +83,15 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
   const [replaceModalOpen, setReplaceModalOpen] = useState(false);
   const [newKeyValue, setNewKeyValue] = useState('');
 
+  // Image Generation Settings State
+  const [imageEndpoint, setImageEndpoint] = useState(DEFAULT_IMAGE_ENDPOINT);
+  const [imageModel, setImageModel] = useState(DEFAULT_IMAGE_MODEL);
+  const [imageKeyStored, setImageKeyStored] = useState(false);
+  const [newImageKeyValue, setNewImageKeyValue] = useState('');
+  const [replaceImageModalOpen, setReplaceImageModalOpen] = useState(false);
+  const [testingImage, setTestingImage] = useState(false);
+  const [imageConnectionResult, setImageConnectionResult] = useState<ConnectionState | null>(null);
+
   // Check stored state and config on mount
   useEffect(() => {
     let active = true;
@@ -80,11 +99,18 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
     async function loadData() {
       const stored = await isNineRouterApiKeyStored(db);
       const config = await getNineRouterConfig(db);
+      const imgConfig = await getImageConfig(db);
+      const imgKeyStored = await isImageApiKeyStored(db);
+
       if (!active) return;
       setKeyStored(stored);
       setEndpoint(config.endpoint);
       setDefaultModel(config.defaultModel);
       if (config.charLimit) setCharLimit(config.charLimit);
+
+      setImageEndpoint(imgConfig.endpoint);
+      setImageModel(imgConfig.defaultModel);
+      setImageKeyStored(imgKeyStored);
 
       // Check if cached model list exists
       const modelsRec = await db.settings.get('ninerouter_cached_models');
@@ -175,11 +201,26 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
         db
       );
 
+      // Save image config as well
+      if (newImageKeyValue.trim()) {
+        await setImageApiKey(newImageKeyValue.trim(), db);
+        setImageKeyStored(true);
+        setNewImageKeyValue('');
+      }
+
+      await setImageConfig(
+        {
+          endpoint: imageEndpoint,
+          defaultModel: imageModel,
+        },
+        db
+      );
+
       notification.success({
         message: 'Lưu cấu hình thành công',
-        description: 'Thông số kết nối 9router đã được cập nhật.',
+        description: 'Thông số kết nối 9router và tạo ảnh đã được cập nhật.',
       });
-      announceToScreenReader('Đã lưu cấu hình 9router');
+      announceToScreenReader('Đã lưu cấu hình AI và tạo ảnh');
     } catch (err: any) {
       notification.error({
         message: 'Lỗi lưu cấu hình',
@@ -187,6 +228,60 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleTestImageConnection = async () => {
+    setTestingImage(true);
+    setImageConnectionResult(null);
+    try {
+      const activeKey =
+        newImageKeyValue.trim() || (await getImageApiKey(db));
+
+      const res = await testImageGenerationConnection({
+        endpoint: imageEndpoint,
+        apiKey: activeKey || '',
+      });
+
+      if (res.ok) {
+        setImageConnectionResult({
+          ok: true,
+          message: `Kết nối máy chủ tạo ảnh thành công (${res.models.length} models tìm thấy).`,
+          modelsCount: res.models.length,
+          models: res.models,
+        });
+        announceToScreenReader('Kết nối máy chủ ảnh thành công');
+      } else {
+        setImageConnectionResult({
+          ok: false,
+          message: res.error || `Lỗi kết nối HTTP ${res.status}`,
+        });
+        announceToScreenReader('Kiểm tra kết nối ảnh thất bại');
+      }
+    } catch (err: any) {
+      setImageConnectionResult({
+        ok: false,
+        message: err?.message || 'Lỗi kiểm tra kết nối tạo ảnh',
+      });
+    } finally {
+      setTestingImage(false);
+    }
+  };
+
+  const handleForgetImageApiKey = async () => {
+    try {
+      await forgetImageApiKey(db);
+      setImageKeyStored(false);
+      setNewImageKeyValue('');
+      notification.info({
+        message: 'Đã xóa API Key tạo ảnh',
+        description: 'Khóa API Key tạo ảnh đã được xóa.',
+      });
+    } catch (err: any) {
+      notification.error({
+        message: 'Lỗi khi xóa API Key tạo ảnh',
+        description: err?.message,
+      });
     }
   };
 
@@ -394,13 +489,124 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
           </div>
         )}
 
+        <div style={{ marginTop: 28, marginBottom: 16, borderTop: '1px solid #f0f0f0', paddingTop: 20 }}>
+          <Space align="center" style={{ marginBottom: 12 }}>
+            <PictureOutlined style={{ fontSize: 18, color: '#4f46e5' }} />
+            <Text strong style={{ fontSize: 15 }}>
+              Cấu hình Tạo hình ảnh AI (Image Generation - DALL-E / Flux / OpenAI)
+            </Text>
+          </Space>
+          <Paragraph type="secondary" style={{ fontSize: 13 }}>
+            Tùy chọn tạo ảnh minh họa trực tiếp thông qua công cụ `generate_image`. Sử dụng endpoint OpenAI `/v1/images/generations` hoặc qua 9router daemon.
+          </Paragraph>
+
+          <Form.Item
+            label="Image Endpoint"
+            extra="Đường dẫn API tạo ảnh tương thích OpenAI (mặc định trỏ theo 9router hoặc OpenAI)"
+          >
+            <Input
+              value={imageEndpoint}
+              onChange={(e) => setImageEndpoint(e.target.value)}
+              placeholder="http://localhost:20128"
+            />
+          </Form.Item>
+
+          <Form.Item label="Mô hình tạo ảnh (Image Model)">
+            <Select
+              value={imageModel}
+              onChange={(val) => setImageModel(val)}
+              options={[
+                { label: 'dall-e-3 (OpenAI Chất lượng cao)', value: 'dall-e-3' },
+                { label: 'dall-e-2 (OpenAI Nhanh/Nhẹ)', value: 'dall-e-2' },
+                { label: 'flux-schnell (Flux Siêu nhanh)', value: 'flux-schnell' },
+                { label: 'flux-dev (Flux Chất lượng cao)', value: 'flux-dev' },
+                { label: 'stable-diffusion-3 (Stability AI)', value: 'stable-diffusion-3' },
+              ]}
+            />
+          </Form.Item>
+
+          <Form.Item
+            label="API Key riêng cho tạo ảnh (Tùy chọn)"
+            extra="Nếu để trống, hệ thống sẽ tự động dùng chung API Key của 9router ở trên."
+          >
+            {imageKeyStored ? (
+              <Space orientation="horizontal" style={{ width: '100%', justifyContent: 'space-between' }}>
+                <Space>
+                  <Tag color="purple" icon={<SafetyCertificateOutlined />}>
+                    API Key tạo ảnh riêng đã lưu
+                  </Tag>
+                  <Text type="secondary">(••••••••••••••••)</Text>
+                </Space>
+                <Space>
+                  <Button
+                    size="small"
+                    icon={<EditOutlined />}
+                    onClick={() => setReplaceImageModalOpen(true)}
+                  >
+                    Thay đổi
+                  </Button>
+                  <Popconfirm
+                    title="Xác nhận xóa API Key tạo ảnh"
+                    description="Bạn có muốn xóa API Key tạo ảnh riêng? (Hệ thống sẽ dùng lại 9router API Key)."
+                    onConfirm={handleForgetImageApiKey}
+                    okText="Xóa"
+                    cancelText="Hủy"
+                    okButtonProps={{ danger: true }}
+                  >
+                    <Button size="small" danger icon={<DeleteOutlined />}>
+                      Xóa
+                    </Button>
+                  </Popconfirm>
+                </Space>
+              </Space>
+            ) : (
+              <Input.Password
+                value={newImageKeyValue}
+                onChange={(e) => setNewImageKeyValue(e.target.value)}
+                placeholder="Nhập API Key riêng cho tạo ảnh (nếu khác 9router)"
+                prefix={<LockOutlined />}
+              />
+            )}
+          </Form.Item>
+
+          {imageConnectionResult && (
+            <div style={{ marginBottom: 16 }}>
+              {imageConnectionResult.ok ? (
+                <Alert
+                  type="success"
+                  showIcon
+                  icon={<CheckCircleOutlined />}
+                  message={imageConnectionResult.message}
+                />
+              ) : (
+                <Alert
+                  type="error"
+                  showIcon
+                  message="Kiểm tra kết nối tạo ảnh thất bại"
+                  description={imageConnectionResult.message}
+                />
+              )}
+            </div>
+          )}
+
+          <Space style={{ marginBottom: 16 }}>
+            <Button
+              icon={<PictureOutlined />}
+              onClick={handleTestImageConnection}
+              loading={testingImage}
+            >
+              Kiểm tra kết nối tạo ảnh
+            </Button>
+          </Space>
+        </div>
+
         <Space>
           <Button
             icon={<ApiOutlined />}
             onClick={handleTestConnection}
             loading={testing}
           >
-            Kiểm tra kết nối
+            Kiểm tra kết nối 9router
           </Button>
 
           <Button
@@ -409,7 +615,7 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
             onClick={handleSaveConfig}
             loading={saving}
           >
-            Lưu cấu hình
+            Lưu tất cả cấu hình
           </Button>
         </Space>
       </Form>
@@ -438,6 +644,35 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
         <Input.Password
           value={newKeyValue}
           onChange={(e) => setNewKeyValue(e.target.value)}
+          placeholder="sk-..."
+          prefix={<LockOutlined />}
+        />
+      </Modal>
+
+      <Modal
+        title="Cập nhật Image API Key"
+        open={replaceImageModalOpen}
+        onCancel={() => {
+          setReplaceImageModalOpen(false);
+          setNewImageKeyValue('');
+        }}
+        onOk={async () => {
+          if (newImageKeyValue.trim()) {
+            await setImageApiKey(newImageKeyValue.trim(), db);
+            setImageKeyStored(true);
+            setReplaceImageModalOpen(false);
+            setNewImageKeyValue('');
+            notification.success({ message: 'Đã cập nhật Image API Key mới' });
+          }
+        }}
+        okText="Cập nhật"
+        cancelText="Hủy"
+        okButtonProps={{ disabled: !newImageKeyValue.trim() }}
+      >
+        <Paragraph>Nhập API Key mới cho dịch vụ tạo ảnh:</Paragraph>
+        <Input.Password
+          value={newImageKeyValue}
+          onChange={(e) => setNewImageKeyValue(e.target.value)}
           placeholder="sk-..."
           prefix={<LockOutlined />}
         />

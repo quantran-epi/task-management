@@ -50,3 +50,30 @@ export interface ConnectionTestResult {
   models: string[];
   error?: string;
 }
+
+export interface ImageConfig {
+  endpoint: string;
+  defaultModel: string;
+}
+
+export interface ImageGenerationOptions {
+  prompt: string;
+  endpoint?: string;
+  apiKey?: string;
+  model?: string;
+  size?: '1024x1024' | '512x512' | '256x256' | string;
+  n?: number;
+  quality?: 'standard' | 'hd';
+  style?: 'vivid' | 'natural';
+  responseFormat?: 'b64_json' | 'url';
+  signal?: AbortSignal;
+}
+
+export interface ImageGenerationResult {
+  url?: string;
+  b64Json?: string;
+  dataUrl?: string;
+  revisedPrompt?: string;
+  model: string;
+}
+

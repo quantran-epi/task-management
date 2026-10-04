@@ -28,6 +28,9 @@ import { rankBM25, extractRelevantSnippet } from '../../utils/bm25';
 import { isTauriApp } from '../../utils/timerPopout';
 import { exportContentAsFile, inferFormatFromFilename, type ExportFormat } from '../../utils/fileExport';
 import { exportPresentationAsFile, type SlideData } from '../../utils/pptxExport';
+import { generateImage } from './imageGenerationClient';
+import { getImageConfig, getImageApiKey } from './nineRouterTokenService';
+import { redactApiKey } from './nineRouterClient';
 import dayjs from 'dayjs';
 
 export interface AiToolDefinition {
@@ -1190,6 +1193,38 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
             description: 'Alternative raw markdown text with # titles, ## slides, and bullet lists to convert into slides.',
           },
         },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'generate_image',
+      description:
+        'Generate an image based on a descriptive text prompt using an OpenAI-compatible image model (e.g. DALL-E 3, Flux, Stable Diffusion). Returns the generated image data URL and markdown embed to display directly in the conversation.',
+      parameters: {
+        type: 'object',
+        properties: {
+          prompt: {
+            type: 'string',
+            description: 'Detailed description of the image to generate.',
+          },
+          size: {
+            type: 'string',
+            enum: ['1024x1024', '512x512', '256x256'],
+            description: 'Image dimensions (default: 1024x1024).',
+          },
+          style: {
+            type: 'string',
+            enum: ['vivid', 'natural'],
+            description: 'Style of image: vivid or natural (for DALL-E 3).',
+          },
+          saveToDocId: {
+            type: 'string',
+            description: 'Optional document UUID to attach this generated image to in the knowledge base.',
+          },
+        },
+        required: ['prompt'],
       },
     },
   },
@@ -3031,11 +3066,88 @@ export async function executeAiTool(
         });
       }
 
+      case 'generate_image': {
+        if (!args.prompt || typeof args.prompt !== 'string') {
+          return JSON.stringify({ error: 'prompt is required' });
+        }
+
+        const config = await getImageConfig(db);
+        const apiKey = await getImageApiKey(db);
+
+        const result = await generateImage({
+          prompt: args.prompt,
+          endpoint: config.endpoint,
+          apiKey: apiKey || '',
+          model: config.defaultModel,
+          size: args.size || '1024x1024',
+          style: args.style,
+          responseFormat: 'b64_json',
+        });
+
+        const imageSrc = result.dataUrl || result.url;
+        if (!imageSrc) {
+          return JSON.stringify({ error: 'Không nhận được dữ liệu hình ảnh' });
+        }
+
+        // If saveToDocId provided and noteAttachments table available, persist attachment
+        let attachedDocTitle: string | null = null;
+        if (args.saveToDocId && db.noteAttachments && db.notes) {
+          const doc = await db.notes.get(args.saveToDocId);
+          if (doc) {
+            attachedDocTitle = doc.title;
+            const attachmentId = crypto.randomUUID();
+            let blobData: Blob;
+            if (result.b64Json) {
+              const byteCharacters = atob(result.b64Json);
+              const byteNumbers = new Array(byteCharacters.length);
+              for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+              }
+              const byteArray = new Uint8Array(byteNumbers);
+              blobData = new Blob([byteArray], { type: 'image/png' });
+            } else {
+              blobData = new Blob([imageSrc], { type: 'image/png' });
+            }
+
+            await db.noteAttachments.put({
+              id: attachmentId,
+              noteId: doc.id,
+              fileName: `ai-gen-${Date.now()}.png`,
+              mimeType: 'image/png',
+              sizeBytes: blobData.size,
+              data: blobData,
+              createdAt: new Date().toISOString(),
+            });
+          }
+        }
+
+        const markdownEmbed = `![${result.revisedPrompt || args.prompt}](${imageSrc})`;
+
+        return JSON.stringify({
+          success: true,
+          message: `Đã tạo hình ảnh thành công bằng mô hình ${result.model}.${attachedDocTitle ? ` Đã đính kèm vào tài liệu "${attachedDocTitle}".` : ''}`,
+          prompt: args.prompt,
+          revisedPrompt: result.revisedPrompt,
+          model: result.model,
+          imageUrl: imageSrc,
+          markdown: markdownEmbed,
+        });
+      }
+
       default:
         return JSON.stringify({ error: `Unknown tool: ${toolName}` });
     }
   } catch (err: any) {
-    return JSON.stringify({ error: `Tool execution failed: ${err?.message || String(err)}` });
+    let msg = err?.message || String(err);
+    if (normalized === 'generate_image') {
+      try {
+        const key = await getImageApiKey(db);
+        msg = redactApiKey(msg, key);
+      } catch {
+        // ignore
+      }
+    }
+    return JSON.stringify({ error: `Tool execution failed: ${msg}` });
   }
 }
 
