@@ -1,10 +1,10 @@
 /**
  * Client-side multi-format file generation and browser download utility.
- * Supports Markdown (.md), Plain Text (.txt), Word (.docx), Excel (.xlsx), and CSV (.csv).
+ * Supports Markdown (.md), Plain Text (.txt), Word (.docx), Excel (.xlsx), CSV (.csv), and PowerPoint (.pptx).
  * DOCX and XLSX are created using zero-dependency, pure TypeScript store-mode (uncompressed) OpenXML ZIP archives.
  */
 
-export type ExportFormat = 'md' | 'txt' | 'docx' | 'xlsx' | 'csv';
+export type ExportFormat = 'md' | 'txt' | 'docx' | 'xlsx' | 'csv' | 'pptx';
 
 export interface FileExportResult {
   filename: string;
@@ -190,6 +190,8 @@ export function inferFormatFromFilename(filename: string): ExportFormat {
       return 'xlsx';
     case 'csv':
       return 'csv';
+    case 'pptx':
+      return 'pptx';
     case 'txt':
       return 'txt';
     case 'md':

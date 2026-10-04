@@ -10,7 +10,9 @@ import {
   Typography,
   message,
   Popconfirm,
+  Dropdown,
 } from 'antd';
+import type { MenuProps } from 'antd';
 import type { TextAreaRef } from 'antd/es/input/TextArea';
 import {
   EditOutlined,
@@ -26,6 +28,10 @@ import {
   FolderOutlined,
   UndoOutlined,
   OrderedListOutlined,
+  DownloadOutlined,
+  FilePptOutlined,
+  FileWordOutlined,
+  FileMarkdownOutlined,
 } from '@ant-design/icons';
 import type { Note } from '../../types/models';
 import { renderSafeMarkdown } from '../../utils/markdown';
@@ -37,6 +43,8 @@ import { getBacklinksForDoc, linkEntitiesToDoc, type BacklinksResult } from '../
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { useAIChat } from '../../context/AIChatContext';
 import { TaskDrawer } from '../tasks/TaskDrawer';
+import { exportPresentationAsFile } from '../../utils/pptxExport';
+import { exportContentAsFile } from '../../utils/fileExport';
 
 const { Text, Title } = Typography;
 
@@ -471,6 +479,9 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
       className={`doc-editor-pane ${isFullscreen ? 'fullscreen-mode' : ''}`}
       style={{
         flex: 1,
+        minWidth: 0,
+        width: '100%',
+        maxWidth: '100%',
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
@@ -481,6 +492,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
         right: isFullscreen ? 0 : 'auto',
         bottom: isFullscreen ? 0 : 'auto',
         zIndex: isFullscreen ? 1000 : 'auto',
+        overflow: 'hidden',
       }}
     >
       {/* Top Toolbar */}
@@ -493,6 +505,8 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
           borderBottom: '1px solid #f0f0f0',
           backgroundColor: '#fafafa',
           gap: 12,
+          flexShrink: 0,
+          minWidth: 0,
         }}
       >
         {/* Left: View Mode Toggle */}
@@ -502,6 +516,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
           onChange={(e) => setViewMode(e.target.value)}
           optionType="button"
           buttonStyle="solid"
+          style={{ flexShrink: 0 }}
         >
           <Radio.Button value="edit">
             <EditOutlined /> Sửa
@@ -515,7 +530,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
         </Radio.Group>
 
         {/* Right Actions */}
-        <Space size={8}>
+        <Space size={8} wrap={false} style={{ flexShrink: 0 }}>
           <Tooltip title={hasHeadings ? 'Mục lục bài viết' : 'Tài liệu chưa có tiêu đề để tạo mục lục'}>
             <Button
               size="small"
@@ -537,6 +552,71 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
               Hỏi AI
             </Button>
           </Tooltip>
+
+          <Dropdown
+            menu={{
+              items: [
+                {
+                  key: 'pptx',
+                  icon: <FilePptOutlined style={{ color: '#d24726' }} />,
+                  label: 'PowerPoint Slides (.pptx)',
+                  onClick: async () => {
+                    try {
+                      const res = await exportPresentationAsFile(
+                        body || `# ${title || 'Document'}\n\n(Không có nội dung)`,
+                        `${title || 'document'}.pptx`,
+                        { presentationTitle: title || 'Tài liệu' }
+                      );
+                      message.success(`Đã xuất ${res.filename} (${res.slideCount} slides)`);
+                    } catch (err: any) {
+                      message.error(`Lỗi xuất PPTX: ${err?.message || String(err)}`);
+                    }
+                  },
+                },
+                {
+                  key: 'docx',
+                  icon: <FileWordOutlined style={{ color: '#185abd' }} />,
+                  label: 'Word Document (.docx)',
+                  onClick: () => {
+                    try {
+                      const res = exportContentAsFile(
+                        `# ${title || 'Document'}\n\n${body}`,
+                        `${title || 'document'}.docx`,
+                        'docx'
+                      );
+                      message.success(`Đã xuất ${res.filename}`);
+                    } catch (err: any) {
+                      message.error(`Lỗi xuất DOCX: ${err?.message || String(err)}`);
+                    }
+                  },
+                },
+                {
+                  key: 'md',
+                  icon: <FileMarkdownOutlined style={{ color: '#0969da' }} />,
+                  label: 'Markdown (.md)',
+                  onClick: () => {
+                    try {
+                      const res = exportContentAsFile(
+                        `# ${title || 'Document'}\n\n${body}`,
+                        `${title || 'document'}.md`,
+                        'md'
+                      );
+                      message.success(`Đã xuất ${res.filename}`);
+                    } catch (err: any) {
+                      message.error(`Lỗi xuất MD: ${err?.message || String(err)}`);
+                    }
+                  },
+                },
+              ],
+            }}
+            placement="bottomRight"
+          >
+            <Tooltip title="Xuất tài liệu (PPTX, DOCX, MD)">
+              <Button size="small" icon={<DownloadOutlined />}>
+                Xuất
+              </Button>
+            </Tooltip>
+          </Dropdown>
 
           <Tooltip title={isFullscreen ? 'Thu nhỏ' : 'Toàn màn hình'}>
             <Button
@@ -638,7 +718,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
       )}
 
       {/* Document Title Input */}
-      <div style={{ padding: '12px 20px 4px 20px' }}>
+      <div style={{ padding: '12px 20px 4px 20px', flexShrink: 0, minWidth: 0 }}>
         <Input
           placeholder="Tiêu đề tài liệu..."
           value={title}
@@ -650,6 +730,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
             fontWeight: 600,
             padding: 0,
             color: '#1f1f1f',
+            width: '100%',
           }}
         />
         {tags.length > 0 && (
@@ -667,10 +748,12 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
       <div
         style={{
           flex: 1,
+          minWidth: 0,
           minHeight: 0,
           display: 'flex',
           overflow: 'hidden',
           padding: '0 16px',
+          width: '100%',
         }}
       >
         {/* Editor Area */}
@@ -678,11 +761,13 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
           <div
             style={{
               flex: viewMode === 'split' ? 1 : 1,
+              minWidth: 0,
               height: '100%',
               display: 'flex',
               flexDirection: 'column',
               paddingRight: viewMode === 'split' ? 8 : 0,
               position: 'relative',
+              overflow: 'hidden',
             }}
           >
             <Input.TextArea
@@ -828,14 +913,23 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
           <div
             style={{
               flex: viewMode === 'split' ? 1 : 1,
+              minWidth: 0,
+              maxWidth: '100%',
               height: '100%',
               overflowY: 'auto',
+              overflowX: 'hidden',
               padding: '8px 16px 24px 16px',
               borderLeft: viewMode === 'split' ? '1px solid #f0f0f0' : 'none',
             }}
           >
             <div
               className="markdown-rendered-view"
+              style={{
+                width: '100%',
+                maxWidth: '100%',
+                wordBreak: 'break-word',
+                overflowWrap: 'break-word',
+              }}
               onClick={(e) => {
                 const chip = (e.target as HTMLElement).closest('.wiki-link-chip') as HTMLElement | null;
                 if (!chip) return;
@@ -875,9 +969,12 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
             style={{
               width: 180,
               minWidth: 160,
+              maxWidth: 220,
+              flexShrink: 0,
               height: '100%',
               borderLeft: '1px solid #f0f0f0',
               overflowY: 'auto',
+              overflowX: 'hidden',
               padding: '4px 8px',
             }}
           >
@@ -904,6 +1001,8 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
           backgroundColor: '#fafafa',
           fontSize: 11,
           color: '#8c8c8c',
+          flexShrink: 0,
+          minWidth: 0,
         }}
       >
         <Space size={16}>

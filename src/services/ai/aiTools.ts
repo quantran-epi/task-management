@@ -27,6 +27,7 @@ import { createNote, updateNote, deleteNote } from '../../db/repositories/noteRe
 import { rankBM25, extractRelevantSnippet } from '../../utils/bm25';
 import { isTauriApp } from '../../utils/timerPopout';
 import { exportContentAsFile, inferFormatFromFilename, type ExportFormat } from '../../utils/fileExport';
+import { exportPresentationAsFile, type SlideData } from '../../utils/pptxExport';
 import dayjs from 'dayjs';
 
 export interface AiToolDefinition {
@@ -1119,18 +1120,18 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'generate_file',
       description:
-        'Generate and trigger immediate browser download of a file in specified format (Markdown .md, plain text .txt, Word .docx, Excel .xlsx, or .csv). Useful when the user asks to export or save a document, report, table, summary, or spreadsheet to a file.',
+        'Generate and trigger immediate browser download of a file in specified format (Markdown .md, plain text .txt, Word .docx, Excel .xlsx, CSV .csv, or PowerPoint .pptx). Useful when the user asks to export or save a document, report, table, summary, or spreadsheet to a file.',
       parameters: {
         type: 'object',
         properties: {
           filename: {
             type: 'string',
-            description: 'Name of the file to create (e.g. "report.docx", "tasks.xlsx", "notes.md", "data.csv").',
+            description: 'Name of the file to create (e.g. "report.docx", "tasks.xlsx", "presentation.pptx", "notes.md", "data.csv").',
           },
           format: {
             type: 'string',
-            enum: ['md', 'txt', 'docx', 'xlsx', 'csv'],
-            description: 'Optional format: md, txt, docx, xlsx, or csv. If omitted, inferred from filename extension.',
+            enum: ['md', 'txt', 'docx', 'xlsx', 'csv', 'pptx'],
+            description: 'Optional format: md, txt, docx, xlsx, csv, or pptx. If omitted, inferred from filename extension.',
           },
           content: {
             type: 'string',
@@ -1142,6 +1143,53 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           },
         },
         required: ['filename', 'content'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'generate_pptx',
+      description:
+        'Generate and trigger immediate browser download of a PowerPoint presentation (.pptx). Accepts markdown content or structured slides with titles, bullet points, and speaker notes.',
+      parameters: {
+        type: 'object',
+        properties: {
+          filename: {
+            type: 'string',
+            description: 'Name of the presentation file (e.g. "q3-roadmap.pptx").',
+          },
+          presentationTitle: {
+            type: 'string',
+            description: 'Title for the presentation cover slide.',
+          },
+          slides: {
+            type: 'array',
+            description: 'Array of structured slides.',
+            items: {
+              type: 'object',
+              properties: {
+                title: { type: 'string', description: 'Slide title' },
+                subtitle: { type: 'string', description: 'Slide subtitle or topic' },
+                bullets: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: 'Bullet points on the slide',
+                },
+                notes: { type: 'string', description: 'Speaker notes for the presenter' },
+                layout: {
+                  type: 'string',
+                  enum: ['title', 'content', 'section'],
+                  description: 'Slide layout style',
+                },
+              },
+            },
+          },
+          markdownContent: {
+            type: 'string',
+            description: 'Alternative raw markdown text with # titles, ## slides, and bullet lists to convert into slides.',
+          },
+        },
       },
     },
   },
@@ -2921,6 +2969,22 @@ export async function executeAiTool(
         }
 
         const format = (args.format as ExportFormat) || inferFormatFromFilename(String(args.filename));
+        if (format === 'pptx') {
+          const exportResult = await exportPresentationAsFile(
+            String(args.content),
+            String(args.filename),
+            args.title ? { presentationTitle: String(args.title) } : undefined
+          );
+          return JSON.stringify({
+            success: true,
+            message: `Đã tạo và tải xuống bản trình chiếu "${exportResult.filename}" (${exportResult.slideCount} slides) thành công.`,
+            filename: exportResult.filename,
+            format: exportResult.format,
+            slideCount: exportResult.slideCount,
+            sizeBytes: exportResult.sizeBytes,
+          });
+        }
+
         const exportResult = exportContentAsFile(
           String(args.content),
           String(args.filename),
@@ -2932,6 +2996,37 @@ export async function executeAiTool(
           message: `Đã tạo và tải xuống tệp "${exportResult.filename}" thành công.`,
           filename: exportResult.filename,
           format: exportResult.format,
+          sizeBytes: exportResult.sizeBytes,
+        });
+      }
+
+      case 'generate_pptx': {
+        const filename = args.filename ? String(args.filename) : 'presentation.pptx';
+        const presentationTitle = args.presentationTitle ? String(args.presentationTitle) : undefined;
+        let contentOrSlides: string | SlideData[] = '';
+
+        if (Array.isArray(args.slides) && args.slides.length > 0) {
+          contentOrSlides = args.slides as SlideData[];
+        } else if (args.markdownContent) {
+          contentOrSlides = String(args.markdownContent);
+        } else if (args.content) {
+          contentOrSlides = String(args.content);
+        } else {
+          return JSON.stringify({ error: 'Either slides array or markdownContent/content is required' });
+        }
+
+        const exportResult = await exportPresentationAsFile(
+          contentOrSlides,
+          filename,
+          presentationTitle ? { presentationTitle } : undefined
+        );
+
+        return JSON.stringify({
+          success: true,
+          message: `Đã tạo và tải xuống bản trình chiếu PowerPoint "${exportResult.filename}" (${exportResult.slideCount} slides) thành công.`,
+          filename: exportResult.filename,
+          format: exportResult.format,
+          slideCount: exportResult.slideCount,
           sizeBytes: exportResult.sizeBytes,
         });
       }

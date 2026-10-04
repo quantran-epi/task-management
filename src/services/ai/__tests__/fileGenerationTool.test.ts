@@ -16,7 +16,7 @@ describe('aiTools generate_file', () => {
     expect(props?.filename).toBeDefined();
     expect(props?.content).toBeDefined();
     expect(props?.format).toBeDefined();
-    expect(props?.format?.enum).toEqual(['md', 'txt', 'docx', 'xlsx', 'csv']);
+    expect(props?.format?.enum).toEqual(['md', 'txt', 'docx', 'xlsx', 'csv', 'pptx']);
     expect(tool?.function.parameters.required).toContain('filename');
     expect(tool?.function.parameters.required).toContain('content');
   });

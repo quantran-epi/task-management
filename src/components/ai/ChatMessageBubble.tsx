@@ -14,11 +14,13 @@ import {
   DownloadOutlined,
   FileWordOutlined,
   FileExcelOutlined,
+  FilePptOutlined,
   FileMarkdownOutlined,
 } from '@ant-design/icons';
 import type { ChatMessage } from '../../types/models';
 import { renderSafeMarkdown } from '../../utils/markdown';
 import { exportContentAsFile, type ExportFormat } from '../../utils/fileExport';
+import { exportPresentationAsFile } from '../../utils/pptxExport';
 
 const { Text } = Typography;
 
@@ -211,7 +213,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
     return /\|.+?\|.+?\|/.test(msg.content);
   }, [msg.content]);
 
-  const handleExportFile = (format: ExportFormat) => {
+  const handleExportFile = async (format: ExportFormat) => {
     try {
       // Derive clean base filename: check first heading (# Title) or fallback to timestamp
       const firstHeadingMatch = msg.content.match(/^#{1,3}\s+(.+)$/m);
@@ -227,6 +229,12 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
         baseName = `plannermate-ai-${new Date().toISOString().slice(0, 10)}`;
       }
 
+      if (format === 'pptx') {
+        const result = await exportPresentationAsFile(msg.content, `${baseName}.pptx`);
+        message.success(`Đã tải xuống ${result.filename} (${result.slideCount} slides)`);
+        return;
+      }
+
       const result = exportContentAsFile(msg.content, `${baseName}.${format}`, format);
       message.success(`Đã tải xuống ${result.filename}`);
     } catch (err: unknown) {
@@ -240,6 +248,12 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
       : undefined;
 
     return [
+      {
+        key: 'pptx',
+        icon: <FilePptOutlined style={{ color: '#d24726' }} />,
+        label: 'PowerPoint Slides (.pptx)',
+        onClick: () => handleExportFile('pptx'),
+      },
       {
         key: 'docx',
         icon: <FileWordOutlined style={{ color: '#185abd' }} />,
