@@ -98,6 +98,7 @@ Last activity: 2026-10-05 -- Completed quick task 261005-ep9: Notes-page AI prom
 | 261005-fxw | Fix desktop window close failure by adding core:window:allow-destroy permission and handling flush error | 2026-10-05 | a35d174 | — | [261005-fxw-fix-desktop-window-close-failure-by-addi](./quick/261005-fxw-fix-desktop-window-close-failure-by-addi/) |
 | 261005-hfx | make Graphiti MCP endpoint configurable and inject SmartVista dictionary instructions into AI assistant | 2026-10-05 | 127990a | complete | [261005-hfx-make-graphiti-mcp-endpoint-configurable-](./quick/261005-hfx-make-graphiti-mcp-endpoint-configurable-/) |
 | 261005-jfa | remove @file autocomplete in chat input bar, keep attach file button | 2026-10-05 | e864620 | complete | [261005-jfa-remove-file-autocomplete-in-chat-input-b](./quick/261005-jfa-remove-file-autocomplete-in-chat-input-b/) |
+| 261005-taw | Disable service worker in Tauri build and auto-unregister existing service worker in Tauri runtime | 2026-10-05 | 0dc5c1f | complete | [261005-taw-disable-sw-in-tauri-and-unregister-old-sw](./quick/261005-taw-disable-sw-in-tauri-and-unregister-old-sw/) |
 
 ## Performance Metrics
 
