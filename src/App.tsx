@@ -19,6 +19,7 @@ import { NotesPopoutView } from './views/NotesPopoutView';
 import { TimerPopoutView } from './views/TimerPopoutView';
 import { AIPopoutView } from './views/AIPopoutView';
 import { ItemInsightView } from './views/ItemInsightView';
+import { AgentControlView } from './views/AgentControlView';
 import { TimerProvider } from './context/TimerContext';
 
 const { defaultAlgorithm, darkAlgorithm } = theme;
@@ -61,6 +62,8 @@ export const App: React.FC = () => {
         return <NotesView />;
       case 'settings':
         return <SettingsView onNavigate={navigate} />;
+      case 'agents':
+        return <AgentControlView />;
       case 'insight': {
         const validTypes = ['task', 'project', 'milestone'] as const;
         const itemType = validTypes.includes(params.type as any)
