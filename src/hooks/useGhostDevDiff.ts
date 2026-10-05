@@ -19,7 +19,7 @@ export interface UseGhostDevDiffResult {
   setSelectedFilePath: (path: string | null) => void;
   selectedFile: DiffFile | null;
   loading: boolean;
-  refreshDiff: () => Promise<void>;
+  refreshDiff: (silent?: boolean) => Promise<void>;
   acceptAll: (commitMessage?: string) => Promise<string>;
   revertAll: () => Promise<void>;
   revertFile: (filePath: string) => Promise<void>;
@@ -32,47 +32,54 @@ export function useGhostDevDiff(worktreePath: string | null): UseGhostDevDiffRes
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
-  const refreshDiff = useCallback(async () => {
-    if (!isTauriApp() || !worktreePath) {
-      setRawDiff('');
-      setDiffFiles([]);
-      setSelectedFilePath(null);
-      return;
-    }
+  const refreshDiff = useCallback(
+    async (silent = false) => {
+      if (!isTauriApp() || !worktreePath) {
+        setRawDiff('');
+        setDiffFiles([]);
+        setSelectedFilePath(null);
+        return;
+      }
 
-    setLoading(true);
-    try {
-      const output = await tauriInvoke<string>('get_worktree_diff', { worktreePath });
-      setRawDiff(output || '');
-      const parsed = parseGitDiff(output || '');
-      setDiffFiles(parsed);
+      if (!silent) {
+        setLoading(true);
+      }
+      try {
+        const output = await tauriInvoke<string>('get_worktree_diff', { worktreePath });
+        setRawDiff(output || '');
+        const parsed = parseGitDiff(output || '');
+        setDiffFiles(parsed);
 
-      // Maintain valid file selection
-      setSelectedFilePath((prev) => {
-        if (prev && parsed.some((f) => f.newPath === prev || f.oldPath === prev)) {
-          return prev;
+        // Maintain valid file selection
+        setSelectedFilePath((prev) => {
+          if (prev && parsed.some((f) => f.newPath === prev || f.oldPath === prev)) {
+            return prev;
+          }
+          const first = parsed[0];
+          return first ? first.newPath : null;
+        });
+      } catch (err) {
+        console.error('[GhostDev] Failed to fetch git diff:', err);
+      } finally {
+        if (!silent) {
+          setLoading(false);
         }
-        const first = parsed[0];
-        return first ? first.newPath : null;
-      });
-    } catch (err) {
-      console.error('[GhostDev] Failed to fetch git diff:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [worktreePath]);
+      }
+    },
+    [worktreePath]
+  );
 
   // Initial load and periodic refresh / event-driven refresh
   useEffect(() => {
-    void refreshDiff();
+    void refreshDiff(false);
   }, [refreshDiff]);
 
-  // Periodic poll every 3 seconds to catch live git file modifications by agents
+  // Periodic poll every 3 seconds to catch live git file modifications by agents (silent refresh)
   useEffect(() => {
     if (!isTauriApp() || !worktreePath) return;
 
     const interval = setInterval(() => {
-      void refreshDiff();
+      void refreshDiff(true);
     }, 3000);
 
     return () => clearInterval(interval);
