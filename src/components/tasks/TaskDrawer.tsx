@@ -47,7 +47,9 @@ import { WORK_TYPE_CONFIG } from './WorkTypeBadge';
 import { resolveInheritedTags } from '../../domain/inheritance';
 import { LinkedKnowledgeSection } from './LinkedKnowledgeSection';
 import { QuickPreviewDrawer } from '../notes/QuickPreviewDrawer';
+import { RunGhostDevModal } from '../agents/RunGhostDevModal';
 import type { TaskPlannerDatabase } from '../../db';
+import type { AppRoute } from '../../types/navigation';
 
 export interface TaskDrawerProps {
   taskId: string | null;
@@ -56,6 +58,7 @@ export interface TaskDrawerProps {
   onSave?: (task: Task) => void;
   triggerRef?: HTMLElement | null;
   db?: TaskPlannerDatabase;
+  onNavigate?: ((route: AppRoute) => void) | undefined;
 }
 
 interface TaskDrawerFormValues {
@@ -124,6 +127,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
   onSave,
   triggerRef,
   db,
+  onNavigate,
 }) => {
   useRegisterActiveForm('task-drawer', open);
 
@@ -134,6 +138,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [previewDocId, setPreviewDocId] = useState<string | null>(null);
+  const [ghostDevModalOpen, setGhostDevModalOpen] = useState(false);
   const selectedProjectId = Form.useWatch('projectId', form);
   const watchHours = Form.useWatch('hours', form);
   const watchMinutes = Form.useWatch('minutes', form);
@@ -895,14 +900,24 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
       destroyOnClose
       loading={loading}
       extra={
-        <Button
-          type="text"
-          icon={<RobotOutlined style={{ color: '#1677ff' }} />}
-          onClick={handleAskAI}
-          aria-label="Hỏi AI về tác vụ này"
-        >
-          Hỏi AI
-        </Button>
+        <Space>
+          <Button
+            type="text"
+            icon={<RobotOutlined style={{ color: '#4f46e5' }} />}
+            onClick={() => setGhostDevModalOpen(true)}
+            aria-label="Khởi chạy Ghost Dev"
+          >
+            Ghost Dev
+          </Button>
+          <Button
+            type="text"
+            icon={<RobotOutlined style={{ color: '#1677ff' }} />}
+            onClick={handleAskAI}
+            aria-label="Hỏi AI về tác vụ này"
+          >
+            Hỏi AI
+          </Button>
+        </Space>
       }
       footer={
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
@@ -920,6 +935,13 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
         open={Boolean(previewDocId)}
         onClose={() => setPreviewDocId(null)}
         db={db}
+      />
+
+      <RunGhostDevModal
+        task={currentTask}
+        visible={ghostDevModalOpen}
+        onCancel={() => setGhostDevModalOpen(false)}
+        onNavigate={onNavigate}
       />
     </Drawer>
   );

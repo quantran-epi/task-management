@@ -57,6 +57,8 @@ import {
   DEFAULT_TASK_SORT,
   type TaskSortKey,
 } from '../../utils/filter';
+import type { AppRoute } from '../../types/navigation';
+import { RunGhostDevModal } from '../agents/RunGhostDevModal';
 
 export interface TaskTableProps {
   tasks: Task[];
@@ -72,6 +74,7 @@ export interface TaskTableProps {
   jiraDomain?: string;
   globalSort?: TaskSortKey;
   onGlobalSortChange?: (key: TaskSortKey) => void;
+  onNavigate?: ((route: AppRoute) => void) | undefined;
 }
 
 const PRIORITY_COLORS: Record<TaskPriority, string> = {
@@ -146,6 +149,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
   jiraDomain,
   globalSort,
   onGlobalSortChange,
+  onNavigate,
 }) => {
   const { token } = theme.useToken();
   const today = getTodayDateString();
@@ -153,6 +157,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
   const [standupFallbackModalOpen, setStandupFallbackModalOpen] = useState<boolean>(false);
   const [standupFallbackText, setStandupFallbackText] = useState<string>('');
   const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
+  const [ghostDevTask, setGhostDevTask] = useState<Task | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
   const fallbackTextareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -322,6 +327,14 @@ export const TaskTable: React.FC<TaskTableProps> = ({
   } | null>(null);
 
   const getTaskMenuItems = (record: Task): NonNullable<MenuProps['items']> => [
+    {
+      key: 'run-ghost-dev',
+      icon: <RobotOutlined style={{ color: '#4f46e5' }} />,
+      label: 'Chạy Ghost Dev',
+      onClick: () => {
+        setGhostDevTask(record);
+      },
+    },
     {
       key: 'ai-chat',
       icon: <RobotOutlined style={{ color: token.colorPrimary }} />,
@@ -998,6 +1011,13 @@ export const TaskTable: React.FC<TaskTableProps> = ({
           onFocus={(e) => e.target.select()}
         />
       </Modal>
+
+      <RunGhostDevModal
+        task={ghostDevTask}
+        visible={Boolean(ghostDevTask)}
+        onCancel={() => setGhostDevTask(null)}
+        onNavigate={onNavigate}
+      />
     </div>
   );
 };

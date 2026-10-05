@@ -20,14 +20,16 @@ import { DEFAULT_TASK_FILTER_STATE } from '../utils/filter';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import type { TaskPlannerDatabase } from '../db';
 import type { Task, Project } from '../types/models';
+import type { AppRoute } from '../types/navigation';
 
 const { Text } = Typography;
 
 export interface TasksViewProps {
   db?: TaskPlannerDatabase;
+  onNavigate?: (route: AppRoute) => void;
 }
 
-export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb }) => {
+export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, onNavigate }) => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -297,6 +299,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb }) => {
         onSelectProject={handleSelectProject}
         isFiltered={isFiltered}
         db={db}
+        onNavigate={onNavigate}
         globalSort={globalSort}
         onGlobalSortChange={setGlobalSort}
       />
@@ -317,6 +320,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb }) => {
         open={drawerOpen}
         onClose={handleCloseDrawer}
         db={db}
+        onNavigate={onNavigate}
       />
 
       {/* Task Selector Modal for Feasibility */}

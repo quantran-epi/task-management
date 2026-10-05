@@ -51,7 +51,7 @@ export const App: React.FC = () => {
       case 'dashboard':
         return <DashboardView onNavigate={navigate} />;
       case 'tasks':
-        return <TasksView />;
+        return <TasksView onNavigate={navigate} />;
       case 'projects':
         return <ProjectsView />;
       case 'planner':
