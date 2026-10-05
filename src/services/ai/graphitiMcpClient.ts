@@ -4,6 +4,7 @@ import type { AiToolDefinition } from './aiTools';
 
 export const DEFAULT_GRAPHITI_MCP_ENDPOINT = 'http://10.4.97.70:30456/mcp';
 const GRAPHITI_ENDPOINT_SETTINGS_KEY = 'graphiti_mcp_endpoint';
+export const GRAPHITI_ENABLED_SETTINGS_KEY = 'graphiti_mcp_enabled';
 
 const GRAPHITI_TOOL_NAMES = [
   'list_advertised_groups',
@@ -62,6 +63,29 @@ export async function setGraphitiMcpEndpoint(
     value: cleaned,
   });
   clearSession();
+}
+
+export async function isGraphitiMcpEnabled(
+  db: TaskPlannerDatabase = defaultDb
+): Promise<boolean> {
+  const rec = await db.settings.get(GRAPHITI_ENABLED_SETTINGS_KEY);
+  if (typeof rec?.value === 'boolean') {
+    return rec.value;
+  }
+  return true;
+}
+
+export async function setGraphitiMcpEnabled(
+  enabled: boolean,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<void> {
+  await db.settings.put({
+    key: GRAPHITI_ENABLED_SETTINGS_KEY,
+    value: enabled,
+  });
+  if (!enabled) {
+    clearSession();
+  }
 }
 
 function extractSessionId(headers: Record<string, string>): string | undefined {

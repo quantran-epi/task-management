@@ -5,8 +5,10 @@ import {
   executeGraphitiMcpTool,
   getGraphitiMcpEndpoint,
   getGraphitiMcpToolDefinitions,
+  isGraphitiMcpEnabled,
   isGraphitiMcpTool,
   resetGraphitiMcpClientForTests,
+  setGraphitiMcpEnabled,
   setGraphitiMcpEndpoint,
   testGraphitiMcpConnection,
 } from '../../src/services/ai/graphitiMcpClient';
@@ -186,6 +188,39 @@ describe('graphitiMcpClient', () => {
       const result = await testGraphitiMcpConnection('http://10.4.97.70:30456/mcp', db);
       expect(result.ok).toBe(false);
       expect(result.message).toContain('Connection refused');
+    });
+  });
+
+  describe('enabled/disabled toggle persistence', () => {
+    let db: TaskPlannerDatabase;
+
+    beforeEach(() => {
+      db = new TaskPlannerDatabase(`test-graphiti-enabled-${Date.now()}-${Math.random()}`);
+    });
+
+    it('isGraphitiMcpEnabled returns true by default when no setting exists', async () => {
+      const enabled = await isGraphitiMcpEnabled(db);
+      expect(enabled).toBe(true);
+    });
+
+    it('setGraphitiMcpEnabled(false, db) sets setting and isGraphitiMcpEnabled returns false', async () => {
+      await setGraphitiMcpEnabled(false, db);
+      const enabled = await isGraphitiMcpEnabled(db);
+      expect(enabled).toBe(false);
+
+      const rec = await db.settings.get('graphiti_mcp_enabled');
+      expect(rec?.value).toBe(false);
+    });
+
+    it('setGraphitiMcpEnabled(true, db) sets setting and isGraphitiMcpEnabled returns true', async () => {
+      await setGraphitiMcpEnabled(false, db);
+      expect(await isGraphitiMcpEnabled(db)).toBe(false);
+
+      await setGraphitiMcpEnabled(true, db);
+      expect(await isGraphitiMcpEnabled(db)).toBe(true);
+
+      const rec = await db.settings.get('graphiti_mcp_enabled');
+      expect(rec?.value).toBe(true);
     });
   });
 });
