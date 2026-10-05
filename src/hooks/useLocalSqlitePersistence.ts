@@ -34,7 +34,11 @@ export function useLocalSqlitePersistence(db: TaskPlannerDatabase = defaultDb): 
     let detachCloseListener: (() => void) | undefined;
     void import('@tauri-apps/api/window')
       .then((api) => api.getCurrentWindow().onCloseRequested(async () => {
-        await flushLocalSqliteNow(db);
+        try {
+          await flushLocalSqliteNow(db);
+        } catch (err) {
+          console.warn('Local SQLite close flush failed:', err);
+        }
       }))
       .then((detach) => {
         detachCloseListener = detach;
