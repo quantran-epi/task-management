@@ -13,7 +13,6 @@ import {
   QuestionCircleOutlined,
   PaperClipOutlined,
   FileTextOutlined,
-  FolderOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
@@ -76,7 +75,7 @@ const COMMANDS = [
     name: 'file',
     icon: <PaperClipOutlined style={{ color: '#13c2c2' }} />,
     title: '/file',
-    description: 'Tham chiếu hoặc đính kèm tập tin từ máy tính (@file)',
+    description: 'Đính kèm tập tin từ máy tính',
   },
   {
     name: 'doc',
@@ -106,7 +105,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   onStop,
   isStreaming = false,
   disabled = false,
-  placeholder = 'Hỏi AI... (@, @file, #, /)',
+  placeholder = 'Hỏi AI... (@, #, /)',
   autoFocus = false,
   db = defaultDb,
   attachedFiles = [],
@@ -119,9 +118,6 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
     text: '',
     prefix: '',
   });
-  const [fileSuggestions, setFileSuggestions] = useState<
-    Array<{ path: string; name: string; is_dir: boolean }>
-  >([]);
 
   const mentionsRef = useRef<MentionsRef>(null);
   const isSubmittingRef = useRef(false);
@@ -146,43 +142,6 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
       }
     };
   }, []);
-
-  useEffect(() => {
-    const { prefix, text } = searchInfo;
-    const isFileQuery =
-      prefix === '@' &&
-      (text.startsWith('file') || text.startsWith('/') || text.startsWith('~') || text.startsWith('.'));
-
-    if (!isFileQuery) {
-      setFileSuggestions([]);
-      return;
-    }
-
-    const inputPath = parseFileInputPath(text);
-
-    let cancelled = false;
-    const timer = setTimeout(async () => {
-      try {
-        if (isTauriApp()) {
-          const api = await import('@tauri-apps/api/core');
-          const results = await api.invoke<Array<{ path: string; name: string; is_dir: boolean }>>(
-            'complete_local_path',
-            { input: inputPath }
-          );
-          if (!cancelled) {
-            setFileSuggestions(results || []);
-          }
-        }
-      } catch (err) {
-        console.warn('[ChatInputBar] Local path autocomplete error:', err);
-      }
-    }, 80);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [searchInfo]);
 
   useEffect(() => {
     if (autoFocus && !disabled && !isStreaming) {
@@ -304,17 +263,8 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
 
   const handleSelect = (option: any) => {
     if (option.key === 'cmd-file') {
-      setValue((prev) => (prev ? `${prev.replace(/\/file\s*$/, '')}@file:~/` : '@file:~/'));
-      setSearchInfo({ text: 'file:~/', prefix: '@' });
-      setTimeout(() => {
-        const textarea =
-          mentionsRef.current?.textarea ||
-          (mentionsRef.current as any)?.nativeElement?.querySelector?.('textarea');
-        if (textarea) {
-          textarea.focus();
-          textarea.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: '/' }));
-        }
-      }, 50);
+      setValue((prev) => prev.replace(/\/file\s*$/, '').trimEnd());
+      handlePickFile();
       return;
     }
 
@@ -335,30 +285,6 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
         }
       }, 50);
       return;
-    }
-
-    if (option.isDir || option.key === 'mention-file-entry') {
-      const dirPath = option.key === 'mention-file-entry'
-        ? '~/'
-        : (option.filePath?.endsWith('/') ? option.filePath : `${option.filePath}/`);
-      const cleanMention = `@file:${dirPath}`;
-
-      setValue((prev) => {
-        const nextVal = prev.replace(/@file:[^\s]+\s*$/, cleanMention);
-        return nextVal.includes('@file:') ? nextVal : `${prev.trimEnd()} ${cleanMention}`.trimStart();
-      });
-      setSearchInfo({ text: `file:${dirPath}`, prefix: '@' });
-
-      setTimeout(() => {
-        const textarea =
-          mentionsRef.current?.textarea ||
-          (mentionsRef.current as any)?.nativeElement?.querySelector?.('textarea');
-        if (textarea) {
-          textarea.focus();
-          textarea.setSelectionRange(textarea.value.length, textarea.value.length);
-          textarea.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: '/' }));
-        }
-      }, 50);
     }
   };
 
@@ -458,104 +384,6 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
         return docOptions;
       }
 
-      const isFileMode =
-        text.startsWith('file') ||
-        text.startsWith('/') ||
-        text.startsWith('~') ||
-        text.startsWith('.');
-
-      if (isFileMode) {
-        if (!isTauriApp()) {
-          return [
-            {
-              key: 'file-web-sandbox',
-              value: text,
-              disabled: true,
-              label: (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: '4px 0',
-                    color: '#faad14',
-                  }}
-                >
-                  <WarningOutlined style={{ flexShrink: 0 }} />
-                  <span>Autocomplete tập tin máy tính cần chạy app desktop Tauri (dùng icon 📎 để đính kèm trên Web)</span>
-                </div>
-              ),
-            },
-          ];
-        }
-
-        if (fileSuggestions.length > 0) {
-          return fileSuggestions.map((s) => ({
-            key: `file-${s.path}`,
-            isDir: s.is_dir,
-            filePath: s.path,
-            value: s.is_dir
-              ? `file:${s.path.endsWith('/') ? s.path : `${s.path}/`}`
-              : `[${s.name}](file:${s.path})`,
-            label: (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 8,
-                  padding: '2px 0',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                  {s.is_dir ? (
-                    <FolderOutlined style={{ color: '#fa8c16', flexShrink: 0 }} />
-                  ) : (
-                    <FileTextOutlined style={{ color: '#52c41a', flexShrink: 0 }} />
-                  )}
-                  <span
-                    style={{
-                      fontWeight: 500,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {s.name}{s.is_dir && !s.name.endsWith('/') ? '/' : ''}
-                  </span>
-                </div>
-                <span
-                  style={{
-                    color: '#8c8c8c',
-                    fontSize: 11,
-                    flexShrink: 0,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    maxWidth: 160,
-                  }}
-                >
-                  {s.path}
-                </span>
-              </div>
-            ),
-          }));
-        }
-
-        return [
-          {
-            key: 'file-empty-hint',
-            value: text,
-            disabled: true,
-            label: (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0', color: '#8c8c8c' }}>
-                <FileTextOutlined />
-                <span>Không tìm thấy hoặc đang tải tập tin trong: {parseFileInputPath(text)}</span>
-              </div>
-            ),
-          },
-        ];
-      }
-
       const taskOptions = tasks
         .filter((t) => {
           if (t.status === 'Cancelled') return false;
@@ -648,29 +476,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
         ),
       };
 
-      const fileHintOption = {
-        key: 'mention-file-entry',
-        isDir: true,
-        filePath: '~/',
-        value: 'file:~/',
-        label: (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '2px 0',
-              marginTop: 2,
-              paddingTop: 2,
-            }}
-          >
-            <PaperClipOutlined style={{ color: '#13c2c2', flexShrink: 0 }} />
-            <span style={{ fontWeight: 500, color: '#13c2c2' }}>Tham chiếu tập tin máy tính... (@file)</span>
-          </div>
-        ),
-      };
-
-      return [...taskOptions, docHintOption, fileHintOption];
+      return [...taskOptions, docHintOption];
     }
 
     if (prefix === '#') {

@@ -1,9 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ChatInputBar } from '../../src/components/ai/ChatInputBar';
 import { TaskPlannerDatabase } from '../../src/db';
 import { extractMentionedEntityIds } from '../../src/services/ai/contextGrounding';
 import { renderUserMessageWithMentions } from '../../src/components/ai/ChatMessageBubble';
+import * as timerPopoutUtils from '../../src/utils/timerPopout';
+
+const mockInvoke = vi.fn();
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: (...args: any[]) => mockInvoke(...args),
+}));
 
 describe('ChatInputBar - Mentions & Command Palette', () => {
   let db: TaskPlannerDatabase;
@@ -101,6 +107,78 @@ describe('ChatInputBar - Mentions & Command Palette', () => {
     fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true });
 
     expect(handleSubmit).toHaveBeenCalledWith('Tóm tắt @[Core Banking](doc:doc-1)');
+  });
+
+  it('renders default placeholder without @file reference', () => {
+    render(<ChatInputBar onSubmit={vi.fn()} db={db} />);
+
+    const textarea = screen.getByPlaceholderText('Hỏi AI... (@, #, /)');
+    expect(textarea).toBeInTheDocument();
+    expect(textarea).not.toHaveAttribute('placeholder', expect.stringContaining('@file'));
+  });
+
+  it('does not display file hint option or trigger file autocomplete when typing @', async () => {
+    render(<ChatInputBar onSubmit={vi.fn()} db={db} />);
+
+    const textarea = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI') as HTMLTextAreaElement;
+    textarea.focus();
+    fireEvent.change(textarea, { target: { value: '@', selectionStart: 1, selectionEnd: 1 } });
+    fireEvent.keyUp(textarea, { key: '@', keyCode: 50 });
+
+    // Should not contain any file autocomplete hint
+    expect(screen.queryByText(/Tham chiếu tập tin máy tính/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/@file/i)).not.toBeInTheDocument();
+
+    // Documents hint and tasks should be available
+    await waitFor(() => {
+      expect(document.querySelector('.ant-mentions-dropdown')).toBeInTheDocument();
+      expect(screen.getByText(/Tham chiếu tài liệu tri thức... \(@doc:\)/i)).toBeInTheDocument();
+      expect(screen.getByText('Fix authentication token expiry')).toBeInTheDocument();
+    });
+  });
+
+  it('does not trigger file path completion or show file sandbox warning when typing @file', async () => {
+    render(<ChatInputBar onSubmit={vi.fn()} db={db} />);
+
+    const textarea = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
+    fireEvent.change(textarea, { target: { value: '@file' } });
+
+    // In web mode previously this rendered a warning about desktop Tauri
+    expect(screen.queryByText(/Autocomplete tập tin máy tính/i)).not.toBeInTheDocument();
+    expect(mockInvoke).not.toHaveBeenCalledWith('complete_local_path', expect.anything());
+  });
+
+  it('triggers file selection when paperclip button is clicked in Tauri app', async () => {
+    vi.spyOn(timerPopoutUtils, 'isTauriApp').mockReturnValue(true);
+    mockInvoke.mockResolvedValue('/Users/admin/docs/report.pdf');
+
+    const handleAttach = vi.fn();
+    render(<ChatInputBar onSubmit={vi.fn()} onAttachFile={handleAttach} db={db} />);
+
+    const paperclipBtn = screen.getByLabelText('Tham chiếu tập tin');
+    fireEvent.click(paperclipBtn);
+
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith('select_local_file');
+      expect(handleAttach).toHaveBeenCalledWith('/Users/admin/docs/report.pdf');
+    });
+  });
+
+  it('triggers file picker directly when submitting /file command', async () => {
+    vi.spyOn(timerPopoutUtils, 'isTauriApp').mockReturnValue(true);
+    mockInvoke.mockResolvedValue('/Users/admin/notes.txt');
+
+    const handleAttach = vi.fn();
+    render(<ChatInputBar onSubmit={vi.fn()} onAttachFile={handleAttach} db={db} />);
+
+    const textarea = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
+    fireEvent.change(textarea, { target: { value: '/file' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith('select_local_file');
+      expect(handleAttach).toHaveBeenCalledWith('/Users/admin/notes.txt');
+    });
   });
 });
 
