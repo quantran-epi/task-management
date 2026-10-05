@@ -577,6 +577,12 @@ pub async fn get_worktree_diff(worktree_path: String) -> Result<String, String> 
         return Err(format!("Worktree path does not exist: {}", worktree_path));
     }
 
+    // Mark untracked files with intent-to-add so they are included in git diff
+    let _ = std::process::Command::new("git")
+        .current_dir(&path)
+        .args(["add", "-N", "."])
+        .output();
+
     // Combine git diff HEAD and git diff for staged/unstaged changes
     let output = std::process::Command::new("git")
         .current_dir(&path)
