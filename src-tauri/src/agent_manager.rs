@@ -341,6 +341,8 @@ pub async fn start_ghost_dev_session(
         }
     });
 
+    let stdin_tx_for_reader = stdin_tx.clone();
+
     // Record into pool
     {
         let mut pool = AGENT_POOL.lock().await;
@@ -422,8 +424,14 @@ pub async fn start_ghost_dev_session(
                                         .and_then(|c| c.as_str())
                                         .unwrap_or("");
                                     if !cmd.is_empty() && !is_command_whitelisted(cmd) {
-                                        // Request permission from user
+                                        // Request permission from user via oneshot channel
                                         let req_id = format!("perm-{}-{}", tid, chrono_iso_now());
+                                        let (perm_tx, perm_rx) = oneshot::channel::<bool>();
+                                        {
+                                            let mut pool = AGENT_POOL.lock().await;
+                                            pool.pending_permissions.insert(req_id.clone(), perm_tx);
+                                        }
+
                                         let req = ShellPermissionRequest {
                                             task_id: tid.clone(),
                                             request_id: req_id.clone(),
@@ -431,6 +439,32 @@ pub async fn start_ghost_dev_session(
                                             working_dir: worktree_path_str.clone(),
                                         };
                                         let _ = app_clone.emit("ghost-dev:permission-request", req);
+
+                                        // Pause line processor awaiting user approval/rejection
+                                        let approved = perm_rx.await.unwrap_or(false);
+
+                                        // Feed response to Claude stdin
+                                        let response_payload = serde_json::json!({
+                                            "type": "permission_response",
+                                            "requestId": req_id,
+                                            "approved": approved,
+                                            "decision": if approved { "allow" } else { "deny" }
+                                        });
+                                        let _ = stdin_tx_for_reader.send(response_payload.to_string()).await;
+
+                                        let audit_chunk = StreamEventChunk {
+                                            task_id: tid.clone(),
+                                            worker_id: None,
+                                            source: "master".to_string(),
+                                            timestamp: chrono_iso_now(),
+                                            chunk_type: "log".to_string(),
+                                            content: format!(
+                                                "[Security] Shell command '{}' was {}",
+                                                cmd,
+                                                if approved { "approved by user" } else { "denied by user" }
+                                            ),
+                                        };
+                                        let _ = b_tx.send(audit_chunk).await;
                                     }
                                 }
                             }
