@@ -70,7 +70,7 @@
   1. User can filter tasks by planned execution date window querying the daily allocation ledger.
   2. User can filter tasks by deadline date range.
   3. User can filter tasks simultaneously by status, priority, workType, project, milestone, Ops Owner, and BA.
-  4. User can click a button to copy filtered task results to clipboard as formatted Markdown standup summary.
+  4. User can click a button to copy filtered task results as formatted Markdown standup summary to clipboard.
 
 **Plans**: 2/2 plans complete in 2 waves
 **Wave 1**
@@ -327,11 +327,21 @@ Plans:
 
 ### Phase 15: Ghost Dev: Local Claude Code Headless Orchestration with Agent Control Page and Live Git Diff Reviewer
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Orchestrate local Claude Code Headless CLI (`stream-json`) via native Rust multi-agent manager (Master-Worker) with Git worktree isolation, a dedicated 3-column Agent Control center, and an interactive Live Git Diff Reviewer with side-by-side/unified diff modes and click-to-comment inline feedback.
+**Requirements**: GHOST-01, GHOST-02, GHOST-03, GHOST-04
 **Depends on:** Phase 14
-**Plans:** 0 plans
+**Plans:** 4 plans in 3 waves
 
 Plans:
+**Wave 1**
 
-- [ ] TBD (run /gsd-plan-phase 15 to break down)
+- [ ] 15-01-PLAN.md — Core TypeScript contracts, zero-dependency Git unified diff parser, prompt builder utilities, shell command whitelist validator, and Wave 0 unit tests
+- [ ] 15-02-PLAN.md — Native Rust agent_manager module, Git worktree isolation, Tokio process supervisor, IPC stream batcher, and application exit protection
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 15-03-PLAN.md — Agent Control center hooks, 3-column Splitter layout, session tree, terminal stream viewer, and Live Git Diff Reviewer with inline code feedback
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 15-04-PLAN.md — AppShell navigation route with live running badge, TaskTable/TaskDrawer launch triggers, Settings model configuration, and component test suite

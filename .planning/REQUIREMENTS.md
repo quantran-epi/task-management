@@ -93,6 +93,13 @@
 - [x] **REQ-14.5**: AI tools `search_knowledge_base` and `get_document_details` provide BM25-ranked snippets within character budget, supported by `@doc:` autocomplete and clickable citation chips opening a Quick Preview Drawer.
 - [x] **REQ-14.6**: NotesView provides a unified 3-column document workspace (Folder Tree + Document List + Split Editor/Reader with ToC and Backlinks), TaskDrawer Linked Knowledge integration, and Markdown/Zip export.
 
+### Ghost Dev: Headless Claude Code Orchestration (Phase 15 INSERTED)
+
+- [ ] **GHOST-01**: Zero-dependency Git unified diff parser converts raw diff strings into structured files, line counts, hunks, and individual additions/deletions.
+- [ ] **GHOST-02**: Prompt builder utilities format task context for Master Agent orchestration and package inline diff code comments (`file_path:line_number`) for iterative code refinement.
+- [ ] **GHOST-03**: Rust backend enforces shell command whitelist for autonomous diagnostic runs and blocks unwhitelisted commands until explicit user approval via modal gate.
+- [ ] **GHOST-04**: Agent Control view delivers a 3-column layout (Session List, Terminal Stream Log, Live Git Diff Reviewer) accessible via Sidebar badge and integrated with task triggers.
+
 ## Future Requirements (Deferred)
 
 - **FUTR-01**: Full bidirectional Jira issue webhook sync (deferred - requires server/push).
@@ -161,3 +168,7 @@
 | REQ-14.4 | Phase 14 | Complete |
 | REQ-14.5 | Phase 14 | Complete |
 | REQ-14.6 | Phase 14 | Complete |
+| GHOST-01 | Phase 15 | Pending |
+| GHOST-02 | Phase 15 | Pending |
+| GHOST-03 | Phase 15 | Pending |
+| GHOST-04 | Phase 15 | Pending |
