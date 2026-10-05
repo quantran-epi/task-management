@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::net::Ipv4Addr;
 
 const GRAPHITI_MCP_URL: &str = "http://10.4.97.70:30456/mcp";
 const GRAPHITI_MAX_REQUEST_BYTES: usize = 256 * 1024;
@@ -20,6 +21,14 @@ pub struct AiProxyResponse {
     pub body: String,
 }
 
+fn is_allowed_http_host(host: &str) -> bool {
+    matches!(host, "localhost" | "::1")
+        || host
+            .parse::<Ipv4Addr>()
+            .map(|ip| ip.is_loopback() || ip.is_private())
+            .unwrap_or(false)
+}
+
 pub fn is_allowed_ai_target(url: &str) -> bool {
     let Ok(parsed) = reqwest::Url::parse(url) else {
         return false;
@@ -31,10 +40,7 @@ pub fn is_allowed_ai_target(url: &str) -> bool {
 
     match parsed.scheme() {
         "https" => true,
-        "http" => parsed
-            .host_str()
-            .map(|host| matches!(host, "localhost" | "127.0.0.1" | "::1"))
-            .unwrap_or(false),
+        "http" => parsed.host_str().map(is_allowed_http_host).unwrap_or(false),
         _ => false,
     }
 }
@@ -232,15 +238,18 @@ mod tests {
     }
 
     #[test]
-    fn allows_loopback_http_v1_targets() {
+    fn allows_loopback_and_private_ipv4_http_v1_targets() {
         assert!(is_allowed_ai_target("http://localhost:20128/v1/models"));
         assert!(is_allowed_ai_target("http://127.0.0.1:20128/v1/models"));
         assert!(is_allowed_ai_target("http://[::1]:20128/v1/models"));
+        assert!(is_allowed_ai_target("http://10.4.97.70:30129/v1/models"));
+        assert!(is_allowed_ai_target("http://172.16.0.5:20128/v1/models"));
+        assert!(is_allowed_ai_target("http://192.168.1.5:20128/v1/models"));
     }
 
     #[test]
     fn rejects_unsafe_targets() {
-        assert!(!is_allowed_ai_target("http://192.168.1.5:20128/v1/models"));
+        assert!(!is_allowed_ai_target("http://93.184.216.34:20128/v1/models"));
         assert!(!is_allowed_ai_target("file:///tmp/key"));
         assert!(!is_allowed_ai_target("not a url"));
         assert!(!is_allowed_ai_target("https://example.test/models"));
