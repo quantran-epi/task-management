@@ -438,6 +438,12 @@ describe('AIChatDrawer', () => {
       query: 'alpha',
     });
     expect(payloads).toHaveLength(2);
+    expect(payloads[0].messages).toContainEqual(
+      expect.objectContaining({
+        role: 'system',
+        content: expect.stringContaining('SMARTVISTA BANKING DOMAIN DICTIONARY'),
+      })
+    );
     expect(payloads[0].tools).toContainEqual(graphitiDefinition);
     expect(payloads[1].tools).toBe(payloads[0].tools);
     expect(payloads[1].messages).toContainEqual(
