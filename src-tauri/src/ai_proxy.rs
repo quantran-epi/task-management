@@ -183,7 +183,7 @@ pub async fn graphiti_mcp_request(
         request = request.header("Mcp-Session-Id", value);
     }
 
-    let response = request
+    let mut response = request
         .send()
         .await
         .map_err(|e| format!("Graphiti MCP request failed: {}", e))?;
@@ -201,14 +201,18 @@ pub async fn graphiti_mcp_request(
             headers.insert(key.as_str().to_string(), value.to_string());
         }
     }
-    let bytes = response
-        .bytes()
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response
+        .chunk()
         .await
-        .map_err(|e| format!("Failed to read Graphiti MCP response body: {}", e))?;
-    if bytes.len() > GRAPHITI_MAX_RESPONSE_BYTES {
-        return Err("Graphiti MCP response body is too large".to_string());
+        .map_err(|e| format!("Failed to read Graphiti MCP response body: {}", e))?
+    {
+        if bytes.len() + chunk.len() > GRAPHITI_MAX_RESPONSE_BYTES {
+            return Err("Graphiti MCP response body is too large".to_string());
+        }
+        bytes.extend_from_slice(&chunk);
     }
-    let body = String::from_utf8(bytes.to_vec())
+    let body = String::from_utf8(bytes)
         .map_err(|_| "Graphiti MCP response body is not valid UTF-8".to_string())?;
 
     Ok(AiProxyResponse {
