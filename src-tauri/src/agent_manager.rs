@@ -363,6 +363,9 @@ pub async fn start_ghost_dev_session(
     let task_id_clone = payload.task_id.clone();
     let app_clone = app.clone();
     let worktree_path_str = worktree_path.to_string_lossy().to_string();
+    let worktree_dir = worktree_path.clone();
+    let worker_model_default = payload.worker_model.clone();
+    let claude_binary_clone = claude_binary.clone();
 
     tokio::spawn(async move {
         let (batch_tx, mut batch_rx) = tokio::sync::mpsc::channel::<StreamEventChunk>(500);
@@ -416,9 +419,158 @@ pub async fn start_ghost_dev_session(
                         let msg_type = val.get("type").and_then(|v| v.as_str()).unwrap_or("");
                         if msg_type == "tool_use" || msg_type == "tool_call" {
                             chunk_type = "tool_call";
-                            // Intercept shell tool call if outside whitelist
+                            // Intercept tool calls: shell permission check & master-worker subtask dispatch
                             if let Some(tool_name) = val.get("name").and_then(|v| v.as_str()) {
-                                if tool_name == "bash" || tool_name == "sh" || tool_name == "execute_command" {
+                                if tool_name == "dispatch_subtask" {
+                                    let tool_use_id = val.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                                    let input = val.get("input").cloned().unwrap_or_default();
+                                    let role = input.get("role").and_then(|v| v.as_str()).unwrap_or("developer").to_string();
+                                    let subtask_prompt = input.get("task_prompt")
+                                        .or_else(|| input.get("prompt"))
+                                        .or_else(|| input.get("description"))
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("")
+                                        .to_string();
+                                    let subtask_model = input.get("model")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or(&worker_model_default)
+                                        .to_string();
+
+                                    let active_workers_count = {
+                                        let pool = AGENT_POOL.lock().await;
+                                        pool.sessions.get(&tid)
+                                            .map(|s| s.state.active_workers.iter().filter(|w| w.status == "running").count())
+                                            .unwrap_or(0)
+                                    };
+                                    let global_count = RUNNING_PROCESS_COUNT.load(Ordering::SeqCst);
+
+                                    if active_workers_count >= 2 || global_count >= MAX_GLOBAL_PROCESSES {
+                                        let limit_msg = if active_workers_count >= 2 {
+                                            "Worker concurrency limit reached (max 2 active workers per task). Please wait for active workers to complete."
+                                        } else {
+                                            "Global process limit reached. Cannot spawn new worker."
+                                        };
+                                        let resp = serde_json::json!({
+                                            "type": "tool_result",
+                                            "tool_use_id": tool_use_id,
+                                            "is_error": true,
+                                            "content": limit_msg
+                                        });
+                                        let _ = stdin_tx_for_reader.send(resp.to_string()).await;
+                                    } else {
+                                        let worker_id = format!("w-{}-{}", tid, chrono_iso_now());
+                                        let mut wcmd = tokio::process::Command::new(&claude_binary_clone);
+                                        wcmd.current_dir(&worktree_dir)
+                                            .args([
+                                                "-p",
+                                                "--output-format",
+                                                "stream-json",
+                                                "--model",
+                                                &subtask_model,
+                                                &subtask_prompt,
+                                            ])
+                                            .stdout(std::process::Stdio::piped())
+                                            .stderr(std::process::Stdio::piped());
+
+                                        #[cfg(unix)]
+                                        {
+                                            unsafe {
+                                                wcmd.pre_exec(|| {
+                                                    libc::setpgid(0, 0);
+                                                    Ok(())
+                                                });
+                                            }
+                                        }
+
+                                        match wcmd.spawn() {
+                                            Ok(mut wchild) => {
+                                                let wpid = wchild.id().unwrap_or(0);
+                                                RUNNING_PROCESS_COUNT.fetch_add(1, Ordering::SeqCst);
+
+                                                let winfo = WorkerSession {
+                                                    worker_id: worker_id.clone(),
+                                                    role: role.clone(),
+                                                    pid: wpid,
+                                                    model: subtask_model.clone(),
+                                                    status: "running".to_string(),
+                                                    subtask_prompt: subtask_prompt.clone(),
+                                                    started_at: chrono_iso_now(),
+                                                };
+
+                                                {
+                                                    let mut pool = AGENT_POOL.lock().await;
+                                                    if let Some(session) = pool.sessions.get_mut(&tid) {
+                                                        session.state.active_workers.push(winfo);
+                                                        session.worker_pids.push(wpid);
+                                                    }
+                                                }
+                                                let _ = app_clone.emit("ghost-dev:session-updated", ());
+
+                                                let w_tid = tid.clone();
+                                                let w_wid = worker_id.clone();
+                                                let w_app = app_clone.clone();
+                                                let w_btx = b_tx.clone();
+                                                let w_stdin_tx = stdin_tx_for_reader.clone();
+                                                let w_tuid = tool_use_id.clone();
+
+                                                tokio::spawn(async move {
+                                                    let w_stdout = wchild.stdout.take();
+                                                    if let Some(stream) = w_stdout {
+                                                        let mut w_reader = BufReader::new(stream).lines();
+                                                        while let Ok(Some(w_line)) = w_reader.next_line().await {
+                                                            if !w_line.trim().is_empty() {
+                                                                let _ = w_btx.send(StreamEventChunk {
+                                                                    task_id: w_tid.clone(),
+                                                                    worker_id: Some(w_wid.clone()),
+                                                                    source: "worker".to_string(),
+                                                                    timestamp: chrono_iso_now(),
+                                                                    chunk_type: "log".to_string(),
+                                                                    content: w_line,
+                                                                }).await;
+                                                            }
+                                                        }
+                                                    }
+
+                                                    let w_status = wchild.wait().await;
+                                                    let _ = RUNNING_PROCESS_COUNT.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |c| {
+                                                        Some(c.saturating_sub(1))
+                                                    });
+
+                                                    let w_success = w_status.map(|s| s.success()).unwrap_or(false);
+                                                    let w_final = if w_success { "done" } else { "error" };
+
+                                                    {
+                                                        let mut pool = AGENT_POOL.lock().await;
+                                                        if let Some(session) = pool.sessions.get_mut(&w_tid) {
+                                                            if let Some(w) = session.state.active_workers.iter_mut().find(|w| w.worker_id == w_wid) {
+                                                                w.status = w_final.to_string();
+                                                            }
+                                                        }
+                                                    }
+                                                    let _ = w_app.emit("ghost-dev:session-updated", ());
+
+                                                    let result_payload = serde_json::json!({
+                                                        "type": "tool_result",
+                                                        "tool_use_id": w_tuid,
+                                                        "status": w_final,
+                                                        "worker_id": w_wid,
+                                                        "content": format!("Worker {} completed with status: {}", w_wid, w_final)
+                                                    });
+                                                    let _ = w_stdin_tx.send(result_payload.to_string()).await;
+                                                });
+                                            }
+                                            Err(e) => {
+                                                let err_resp = serde_json::json!({
+                                                    "type": "tool_result",
+                                                    "tool_use_id": tool_use_id,
+                                                    "is_error": true,
+                                                    "content": format!("Failed to spawn worker process: {}", e)
+                                                });
+                                                let _ = stdin_tx_for_reader.send(err_resp.to_string()).await;
+                                            }
+                                        }
+                                    }
+                                } else if tool_name == "bash" || tool_name == "sh" || tool_name == "execute_command" {
                                     let cmd = val.get("input")
                                         .and_then(|i| i.get("command"))
                                         .and_then(|c| c.as_str())

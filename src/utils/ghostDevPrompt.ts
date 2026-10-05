@@ -16,6 +16,10 @@ export function generateGhostDevMasterPrompt(task: Task, repoPath: string): stri
     pendingChecklist.forEach((item) => parts.push(`- ${item.text}`));
   }
 
+  parts.push(
+    'Bạn có thể phân chia tác vụ nhỏ hơn cho worker song song (tối đa 2 worker đồng thời) bằng cách gọi tool: `dispatch_subtask(role, task_prompt, model)`.'
+  );
+
   return parts.join('\n\n');
 }
 
