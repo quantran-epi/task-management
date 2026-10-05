@@ -6,10 +6,10 @@ current_phase: 14
 current_phase_name: knowledge-base-integration-docs-linking-ai-retrieval
 status: verifying
 stopped_at: Completed 14-04-PLAN.md
-last_updated: "2026-10-05T03:35:00.000Z"
+last_updated: "2026-10-05T04:38:58.149Z"
 last_activity: 2026-10-05
 last_activity_desc: "Completed quick task 261005-ep9: Notes-page AI prompt modal for external document generation"
-state_head: a007093571cd6894e3fddcff97925b7b5b4a72d6
+state_head: a35d174248310b522dbd6071aeee1948bf689e55
 progress:
   total_phases: 10
   completed_phases: 10
@@ -93,6 +93,7 @@ Last activity: 2026-10-05 -- Completed quick task 261005-ep9: Notes-page AI prom
 | 261004-uc0 | dynamic fetch image models from endpoint and remove assistant text from AI drawer header | 2026-10-04 | — | complete | [261004-uc0-dynamic-fetch-image-models-from-endpoint](./quick/261004-uc0-dynamic-fetch-image-models-from-endpoint/) |
 | 261005-cn2 | Implement a Tauri-local proxy for AI 9Router configuration and connection checks, following the existing Jira proxy pattern. Route Tauri requests through the backend to avoid WebView CORS. Preserve browser behavior where appropriate. Run only targeted tests. | 2026-10-05 | a007093 | complete | [261005-cn2-implement-a-tauri-local-proxy-for-ai-9ro](./quick/261005-cn2-implement-a-tauri-local-proxy-for-ai-9ro/) |
 | 261005-dce | Add read-only Graphiti MCP integration for Tauri desktop app | 2026-10-05 | 606bf48 | complete | [261005-dce-add-read-only-graphiti-mcp-integration-f](./quick/261005-dce-add-read-only-graphiti-mcp-integration-f/) |
+| 261005-fxw | Fix desktop window close failure by adding core:window:allow-destroy permission and handling flush error | 2026-10-05 | a35d174 | — | [261005-fxw-fix-desktop-window-close-failure-by-addi](./quick/261005-fxw-fix-desktop-window-close-failure-by-addi/) |
 
 ## Performance Metrics
 

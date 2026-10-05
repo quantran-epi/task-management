@@ -69,15 +69,20 @@
       "status": "complete"
     },
     {
+      "number": "12.2",
+      "name": "Multiple Reminders with Time, Notification Settings, Table Customization & Sidebar Persistence",
+      "status": "complete"
+    },
+    {
       "number": "13",
       "name": "Enhanced Workload Analytics & Milestone Burndown",
-      "status": "pending"
+      "status": "complete"
     }
   ],
   "next": {
-    "command": "/gsd:progress --next",
-    "label": "Advance to the next step (plan phase 13)",
-    "reason": "Phase 13 of 6 — needs a plan"
+    "command": "/gsd:new-milestone",
+    "label": "Start a new milestone",
+    "reason": "All phases complete — start a new milestone"
   },
-  "updated_at": "2026-09-29T05:25:08.903Z"
+  "updated_at": "2026-09-30T04:34:33.853Z"
 }
