@@ -6,10 +6,10 @@ current_phase: 14
 current_phase_name: knowledge-base-integration-docs-linking-ai-retrieval
 status: verifying
 stopped_at: Completed 14-04-PLAN.md
-last_updated: "2026-10-05T07:06:21.912Z"
+last_updated: "2026-10-05T09:21:00.000Z"
 last_activity: 2026-10-05
-last_activity_desc: "Completed quick task 261005-jfa: remove @file autocomplete in chat input bar, keep attach file button"
-state_head: e864620465cee3a22ba6e08bbff00f1f8189792b
+last_activity_desc: "Completed quick task 261005-mbq: Fix local attachment Claude Code launcher"
+state_head: 6964979
 progress:
   total_phases: 10
   completed_phases: 10
@@ -99,6 +99,7 @@ Last activity: 2026-10-05 -- Completed quick task 261005-ep9: Notes-page AI prom
 | 261005-hfx | make Graphiti MCP endpoint configurable and inject SmartVista dictionary instructions into AI assistant | 2026-10-05 | 127990a | complete | [261005-hfx-make-graphiti-mcp-endpoint-configurable-](./quick/261005-hfx-make-graphiti-mcp-endpoint-configurable-/) |
 | 261005-jfa | remove @file autocomplete in chat input bar, keep attach file button | 2026-10-05 | e864620 | complete | [261005-jfa-remove-file-autocomplete-in-chat-input-b](./quick/261005-jfa-remove-file-autocomplete-in-chat-input-b/) |
 | 261005-taw | Disable service worker in Tauri build and auto-unregister existing service worker in Tauri runtime | 2026-10-05 | 0dc5c1f | complete | [261005-taw-disable-sw-in-tauri-and-unregister-old-sw](./quick/261005-taw-disable-sw-in-tauri-and-unregister-old-sw/) |
+| 261005-mbq | Fix local attachment link Claude Code option to launch from Windows cmd.exe at selected path | 2026-10-05 | 6964979 | complete | [261005-mbq-fix-local-attachment-link-claude-code-op](./quick/261005-mbq-fix-local-attachment-link-claude-code-op/) |
 
 ## Performance Metrics
 
@@ -334,6 +335,7 @@ Decisions logged across v1.0 and v1.1:
 - [Phase ?]: Phase 13.2: XML tags <item_context> and Markdown format for task/project/milestone prompt grounding (D-09)
 - [Phase 13.2]: Sticky notes content and screenshot captions grounded within 12,000 char budget (D-10, T-13.2-06)
 - [Phase 13.2]: Claude Code CLI launcher generates shell-escaped command claude '...' and spawns OS terminal via Tauri or clipboard on Web (D-13, T-13.2-07)
+- [Quick 261005-mbq]: Local attachment Claude Code launcher uses dedicated Tauri command and Windows `cmd.exe /d /k claude` with user path passed as `current_dir`, not shell interpolation
 - [Phase 13.2]: Action chips in assistant bubbles for one-click add to task checklist, save to sticky notes, or launch Claude Code (D-18)
 - [Phase ?]: [Phase 14]: SCHEMA_V9 indexes note type, parentId, deletedAt, and multi-entry *tags while preserving legacy notes as quick_note with empty tags (D-01, D-02)
 - [Phase ?]: [Phase 14]: BM25 scoring utility implements Okapi BM25 with Title x3, Tags x2, Body x1 weighting and NFD-based Vietnamese diacritic normalization (D-10, D-11)
@@ -368,8 +370,8 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-10-04T08:59:28.934Z
-Stopped at: Completed 14-04-PLAN.md
+Last session: 2026-10-05T09:21:00.000Z
+Stopped at: Completed quick task 261005-mbq
 Resume file: None
 
 ## Operator Next Steps
