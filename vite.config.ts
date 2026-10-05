@@ -17,6 +17,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      disable: isTauri,
       registerType: 'prompt',
       includeAssets: [
         'favicon.svg',

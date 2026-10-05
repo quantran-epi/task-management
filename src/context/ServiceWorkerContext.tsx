@@ -1,5 +1,6 @@
 import React, { createContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
+import { isTauriApp } from '../utils/timerPopout';
 
 export interface ServiceWorkerContextValue {
   needRefresh: boolean;
@@ -38,7 +39,35 @@ export const ServiceWorkerProvider: React.FC<ServiceWorkerProviderProps> = ({ ch
     },
   });
 
+  // Auto-unregister any stale service workers and purge caches in Tauri runtime
+  useEffect(() => {
+    if (!isTauriApp()) return;
+
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker
+        .getRegistrations()
+        .then((registrations) => {
+          for (const reg of registrations) {
+            reg.unregister().catch(() => {});
+          }
+        })
+        .catch(() => {});
+    }
+
+    if (typeof window !== 'undefined' && 'caches' in window) {
+      window.caches
+        .keys()
+        .then((keys) => {
+          for (const key of keys) {
+            window.caches.delete(key).catch(() => {});
+          }
+        })
+        .catch(() => {});
+    }
+  }, []);
+
   const checkUpdate = useCallback(async (): Promise<boolean> => {
+    if (isTauriApp()) return false;
     if (typeof navigator === 'undefined' || !navigator.onLine) return false;
     setIsChecking(true);
     try {
@@ -66,6 +95,8 @@ export const ServiceWorkerProvider: React.FC<ServiceWorkerProviderProps> = ({ ch
 
   // Hourly periodic update check per D-03 with proper unmount cleanup
   useEffect(() => {
+    if (isTauriApp()) return;
+
     intervalRef.current = setInterval(() => {
       if (typeof navigator !== 'undefined' && navigator.onLine && registrationRef.current) {
         registrationRef.current.update().catch(() => {});
@@ -82,6 +113,8 @@ export const ServiceWorkerProvider: React.FC<ServiceWorkerProviderProps> = ({ ch
 
   // Check update on window focus and tab visibility change per D-03
   useEffect(() => {
+    if (isTauriApp()) return;
+
     const handleFocus = () => {
       if (typeof navigator !== 'undefined' && navigator.onLine) {
         checkUpdate().catch(() => {});
@@ -110,6 +143,10 @@ export const ServiceWorkerProvider: React.FC<ServiceWorkerProviderProps> = ({ ch
 
   const reloadApp = useCallback(
     async (force = false) => {
+      if (isTauriApp()) {
+        window.location.reload();
+        return;
+      }
       try {
         await updateServiceWorker(force || true);
       } catch (err) {
