@@ -14,6 +14,7 @@ import {
   MoreOutlined,
   BookOutlined,
   DeleteOutlined,
+  ApiOutlined,
 } from '@ant-design/icons';
 
 const { Text } = Typography;
@@ -45,6 +46,7 @@ export interface ChatHeaderProps {
   onClearAllHistory?: (() => void) | undefined;
   onDeleteCurrentThread?: (() => void) | undefined;
   onOpenDebug?: (() => void) | undefined;
+  onOpenMcpSettings?: (() => void) | undefined;
   onPopout?: (() => void) | undefined;
   onOpenInstructions?: (() => void) | undefined;
   onClose: () => void;
@@ -62,6 +64,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   onClearAllHistory,
   onDeleteCurrentThread,
   onOpenDebug,
+  onOpenMcpSettings,
   onPopout,
   onOpenInstructions,
   onClose,
@@ -105,6 +108,16 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       label: isPinned ? 'Bỏ ghim ngăn trò chuyện' : 'Ghim ngăn trò chuyện bên phải',
       onClick: onTogglePin,
     },
+    ...(onOpenMcpSettings
+      ? [
+          {
+            key: 'mcp-settings',
+            icon: <ApiOutlined />,
+            label: 'Quản lý máy chủ MCP',
+            onClick: onOpenMcpSettings,
+          },
+        ]
+      : []),
     ...(onOpenDebug
       ? [
           {
