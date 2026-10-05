@@ -17,19 +17,27 @@ function renderInlineFormatting(rawText: string): string {
   // First escape raw HTML
   let text = escapeHtml(rawText);
 
-  // 1. Inline code (`code`)
-  text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // 1. Protect inline code (`code` or ``code``) before any inline formatting
+  const codeTokens: string[] = [];
+  text = text.replace(/(`+)([\s\S]+?)\1/g, (_match, _fence, codeContent) => {
+    let cleanCode = codeContent;
+    if (cleanCode.startsWith(' ') && cleanCode.endsWith(' ') && cleanCode.trim().length > 0) {
+      cleanCode = cleanCode.slice(1, -1);
+    }
+    codeTokens.push(`<code>${cleanCode}</code>`);
+    return `\x00INLINE_CODE_${codeTokens.length - 1}\x00`;
+  });
 
   // 2. Bold (**text** or __text__)
-  text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  text = text.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+  text = text.replace(/\*\*(?!\s)([^\n]+?)(?<!\s)\*\*/g, '<strong>$1</strong>');
+  text = text.replace(/(?<=^|[^\w])__(?!\s)([^\n_]+?)(?<!\s)__(?=[^\w]|$)/g, '<strong>$1</strong>');
 
   // 3. Strikethrough (~~text~~)
-  text = text.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+  text = text.replace(/~~(?!\s)([^\n~]+?)(?<!\s)~~/g, '<del>$1</del>');
 
   // 4. Italic (*text* or _text_)
-  text = text.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-  text = text.replace(/_([^_]+)_/g, '<em>$1</em>');
+  text = text.replace(/\*(?!\s)([^\n*]+?)(?<!\s)\*/g, '<em>$1</em>');
+  text = text.replace(/(?<=^|[^\w])_(?!\s)([^\n_]+?)(?<!\s)_(?=[^\w]|$)/g, '<em>$1</em>');
 
   // 4.5 Binary attachment image (![caption](attachment:uuid))
   text = text.replace(/!\[([^\]]*)\]\(attachment:([a-zA-Z0-9_-]+)\)/g, (_match, caption, uuid) => {
@@ -67,20 +75,23 @@ function renderInlineFormatting(rawText: string): string {
   // 6. Explicit Autolinks: <https://...>
   text = text.replace(/&lt;(https?:\/\/[^&>]+)&gt;/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
 
-  // 7. Bare URLs: Protect existing HTML tags (a, img, code) so URLs inside attributes/content aren't re-linked
+  // 7. Bare URLs: Protect existing HTML tags (a, img) so URLs inside attributes aren't re-linked
   const htmlTagTokens: string[] = [];
-  text = text.replace(/<(?:a\b[^>]*>.*?<\/a>|img\b[^>]*\/?>|code\b[^>]*>.*?<\/code>)/gs, (match) => {
+  text = text.replace(/<(?:a\b[^>]*>.*?<\/a>|img\b[^>]*\/?>)/gs, (match) => {
     htmlTagTokens.push(match);
     return `__HTML_TAG_TOKEN_${htmlTagTokens.length - 1}__`;
   });
 
-  text = text.replace(/\b(https?:\/\/[^\s<>"']+)/g, (_match, url) => {
+  text = text.replace(/\b(https?:\/\/[^\s<>"'\x00]+)/g, (_match, url) => {
     const cleanUrl = url.replace(/[.,;!?)]+$/, '');
     const trailing = url.slice(cleanUrl.length);
     return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer">${cleanUrl}</a>${trailing}`;
   });
 
   text = text.replace(/__HTML_TAG_TOKEN_(\d+)__/g, (_m, idx) => htmlTagTokens[Number(idx)] ?? '');
+
+  // 8. Restore inline code tokens
+  text = text.replace(/\x00INLINE_CODE_(\d+)\x00/g, (_m, idx) => codeTokens[Number(idx)] ?? '');
 
   return text;
 }
