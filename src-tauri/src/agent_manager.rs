@@ -654,6 +654,22 @@ pub async fn revert_file_diff(worktree_path: String, file_path: String) -> Resul
         return Err(format!("Worktree path does not exist: {}", worktree_path));
     }
 
+    let canonical_worktree = path.canonicalize().map_err(|e| e.to_string())?;
+
+    // Block path traversal attempts
+    let relative = Path::new(&file_path);
+    if file_path.contains("..") || relative.is_absolute() {
+        return Err("Path traversal attempt detected".to_string());
+    }
+
+    let target_file = path.join(&file_path);
+    if target_file.exists() {
+        let canonical_target = target_file.canonicalize().map_err(|e| e.to_string())?;
+        if !canonical_target.starts_with(&canonical_worktree) {
+            return Err("Path traversal attempt detected".to_string());
+        }
+    }
+
     // git checkout HEAD -- <file>
     let checkout_out = std::process::Command::new("git")
         .current_dir(&path)
@@ -662,10 +678,15 @@ pub async fn revert_file_diff(worktree_path: String, file_path: String) -> Resul
         .map_err(|e| format!("Failed to checkout file: {}", e))?;
 
     if !checkout_out.status.success() {
-        // If file was newly added, remove it from disk
+        // If file was newly added, remove it from disk safely within worktree
         let full_file = path.join(&file_path);
         if full_file.exists() {
-            let _ = std::fs::remove_file(&full_file);
+            if let Ok(canonical_target) = full_file.canonicalize() {
+                if !canonical_target.starts_with(&canonical_worktree) {
+                    return Err("Path traversal attempt detected".to_string());
+                }
+                let _ = std::fs::remove_file(&canonical_target);
+            }
         }
     }
 
