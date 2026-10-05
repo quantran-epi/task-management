@@ -330,13 +330,13 @@ Plans:
 **Goal:** Orchestrate local Claude Code Headless CLI (`stream-json`) via native Rust multi-agent manager (Master-Worker) with Git worktree isolation, a dedicated 3-column Agent Control center, and an interactive Live Git Diff Reviewer with side-by-side/unified diff modes and click-to-comment inline feedback.
 **Requirements**: GHOST-01, GHOST-02, GHOST-03, GHOST-04
 **Depends on:** Phase 14
-**Plans:** 4 plans in 3 waves
+**Plans:** 2/4 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 15-01-PLAN.md — Core TypeScript contracts, zero-dependency Git unified diff parser, prompt builder utilities, shell command whitelist validator, and Wave 0 unit tests
-- [ ] 15-02-PLAN.md — Native Rust agent_manager module, Git worktree isolation, Tokio process supervisor, IPC stream batcher, and application exit protection
+- [x] 15-01-PLAN.md — Core TypeScript contracts, zero-dependency Git unified diff parser, prompt builder utilities, shell command whitelist validator, and Wave 0 unit tests
+- [x] 15-02-PLAN.md — Native Rust agent_manager module, Git worktree isolation, Tokio process supervisor, IPC stream batcher, and application exit protection
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
