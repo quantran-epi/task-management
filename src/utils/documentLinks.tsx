@@ -77,11 +77,11 @@ export async function launchClaudeAtLocalPath(cleanPath: string): Promise<void> 
   const terminalCmd = `cd '${cleanPath.replace(/'/g, "'\\''")}' && claude`;
   if (isTauriApp()) {
     try {
-      await tauriInvoke('launch_claude_terminal', { commandStr: terminalCmd });
-      message.success('Đang mở Terminal chạy Claude Code...');
+      await tauriInvoke('launch_claude_at_local_path', { path: cleanPath });
+      message.success('Đang mở Command Prompt chạy Claude Code...');
       return;
     } catch (err: any) {
-      console.warn('Tauri launch_claude_terminal failed, copying command:', err);
+      console.warn('Tauri launch_claude_at_local_path failed, copying command:', err);
     }
   }
 

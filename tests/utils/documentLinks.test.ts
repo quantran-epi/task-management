@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Modal } from 'antd';
+
+const invokeMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: invokeMock,
+}));
 import {
   isLocalPath,
   normalizeLocalPath,
@@ -13,6 +19,7 @@ import {
 describe('documentLinks utility', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    invokeMock.mockReset();
     delete (window as any).__TAURI_INTERNALS__;
   });
 
@@ -110,6 +117,32 @@ describe('documentLinks utility', () => {
       expect(writeTextMock).toHaveBeenCalledWith("cd '/Users/john/project' && claude");
     });
 
+    it('launchClaudeAtLocalPath invokes dedicated Tauri local-path launcher in desktop mode', async () => {
+      (window as any).__TAURI_INTERNALS__ = {};
+      invokeMock.mockResolvedValue(undefined);
+
+      await launchClaudeAtLocalPath('C:\\Users\\john\\project');
+
+      expect(invokeMock).toHaveBeenCalledWith('launch_claude_at_local_path', {
+        path: 'C:\\Users\\john\\project',
+      });
+      expect(invokeMock).not.toHaveBeenCalledWith(
+        'launch_claude_terminal',
+        expect.objectContaining({ commandStr: expect.stringContaining('cd ') })
+      );
+    });
+
+    it('openDocumentLink with quickClaude uses dedicated Tauri local-path launcher in desktop mode', async () => {
+      (window as any).__TAURI_INTERNALS__ = {};
+      invokeMock.mockResolvedValue(undefined);
+
+      await openDocumentLink('C:\\Users\\john\\project', { quickClaude: true });
+
+      expect(invokeMock).toHaveBeenCalledWith('launch_claude_at_local_path', {
+        path: 'C:\\Users\\john\\project',
+      });
+    });
+
     it('openDocumentLink prompts modal confirm for local path by default', async () => {
       const confirmSpy = vi.spyOn(Modal, 'confirm').mockImplementation((config: any) => {
         config?.onCancel?.();
@@ -123,6 +156,7 @@ describe('documentLinks utility', () => {
       expect(confirmSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           title: 'Thao tác với đường dẫn cục bộ',
+          footer: expect.any(Function),
         })
       );
     });
