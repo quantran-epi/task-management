@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Banking IT Enhancements & Jira Integration
-status: executing
-stopped_at: Phase 15 Wave 2 complete
-last_updated: "2026-10-05T15:06:00.000Z"
-last_activity: "2026-10-05 -- Completed Phase 15 Plan 03 (Wave 2)"
+status: complete
+stopped_at: Phase 15 executed and verified
+last_updated: "2026-10-05T15:45:00.000Z"
+last_activity: "2026-10-05 -- Completed Phase 15 Ghost Dev headless orchestration with agent control page and live git diff reviewer"
 progress:
   total_phases: 12
-  completed_phases: 10
+  completed_phases: 11
   total_plans: 38
-  completed_plans: 37
-  percent: 97
+  completed_plans: 38
+  percent: 100
 current_phase: 15
 current_phase_name: ghost-dev-local-claude-code-headless-orchestration-with-agen
 ---
@@ -23,15 +23,15 @@ current_phase_name: ghost-dev-local-claude-code-headless-orchestration-with-agen
 See: .planning/PROJECT.md (updated 2026-09-27)
 
 **Core value:** Make planned work realistically fit available time by exposing overload early and suggesting feasible daily workload distributions.
-**Current focus:** Phase 15 — ghost-dev-local-claude-code-headless-orchestration-with-agen
+**Current focus:** Phase 15 — ghost-dev-local-claude-code-headless-orchestration-with-agen (COMPLETE)
 
 ## Current Position
 
-Phase: 15 (ghost-dev-local-claude-code-headless-orchestration-with-agen) — EXECUTING
-Plan: 3 of 4 (Wave 2 complete, starting Wave 3)
-Status: In Progress
-Next recommended run: /gsd-execute-phase 15
-Last activity: 2026-10-05 -- Completed Phase 15 Plan 03 (Wave 2)
+Phase: 15 (ghost-dev-local-claude-code-headless-orchestration-with-agen) — COMPLETE
+Plan: 4 of 4 complete
+Status: Verified (human_needed for desktop smoke check)
+Next recommended run: /gsd-verify-work 15
+Last activity: 2026-10-05 -- Completed Phase 15 Ghost Dev headless orchestration with agent control page and live git diff reviewer
 
 ### Quick Tasks Completed
 
@@ -164,6 +164,14 @@ Last activity: 2026-10-05 -- Completed Phase 15 Plan 03 (Wave 2)
 ### Decisions
 
 Decisions logged across v1.0 and v1.1:
+
+- [Phase 15]: Pure native Rust Claude Code Headless CLI orchestration via stream-json with zero Node.js daemon dependencies (D-01, D-02)
+- [Phase 15]: Deterministic Git worktree isolation under .plannermate/worktrees/task-<id> on branch pm-agent/task-<id> (D-03, D-04)
+- [Phase 15]: Native 2-level Master-Worker hierarchy with max 2 concurrent subtask workers and 2-way stdin piping (D-05, D-06)
+- [Phase 15]: 3-column resizable layout with Ant Design 6 Splitter (Session List 20%, Terminal 45%, Diff Reviewer 35%) (D-08, D-09)
+- [Phase 15]: Live Git Diff Reviewer with side-by-side/unified toggle and click-to-comment inline feedback prompt delivery (D-10, D-11, D-12)
+- [Phase 15]: Shell command whitelist with interactive user approval modal and background OS desktop notifications (D-13, D-14)
+- [Phase 15]: Safe process lifecycle with OS process group SIGKILL on app exit while preserving worktrees on disk (D-15, D-16)
 
 - [Phase 13.2]: Docked Side-by-Side: AppShell Content transitions marginRight by drawer width when pinned (D-01)
 - [Phase 13.2]: Drag-resizable AI Chat Drawer width clamped 320px-650px persisted in localStorage (D-02)

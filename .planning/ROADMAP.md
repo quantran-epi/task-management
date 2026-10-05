@@ -330,7 +330,7 @@ Plans:
 **Goal:** Orchestrate local Claude Code Headless CLI (`stream-json`) via native Rust multi-agent manager (Master-Worker) with Git worktree isolation, a dedicated 3-column Agent Control center, and an interactive Live Git Diff Reviewer with side-by-side/unified diff modes and click-to-comment inline feedback.
 **Requirements**: GHOST-01, GHOST-02, GHOST-03, GHOST-04
 **Depends on:** Phase 14
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans complete
 
 Plans:
 **Wave 1**
@@ -344,4 +344,4 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 15-04-PLAN.md — AppShell navigation route with live running badge, TaskTable/TaskDrawer launch triggers, Settings model configuration, and component test suite
+- [x] 15-04-PLAN.md — AppShell navigation route with live running badge, TaskTable/TaskDrawer launch triggers, Settings model configuration, and component test suite
