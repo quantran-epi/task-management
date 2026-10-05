@@ -324,3 +324,14 @@ Plans:
 **Wave 3** *(blocked on Wave 2 completion)*
 
 - [x] 14-04-PLAN.md — 3-column Docs workspace in NotesView, folder tree, document list, split editor, ToC rail, TaskDrawer Linked Knowledge, Backlinks, Trash bin, and Markdown/Zip export (Wave 3)
+
+### Phase 15: Ghost Dev: Local Claude Code Headless Orchestration with Agent Control Page and Live Git Diff Reviewer
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 14
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 15 to break down)

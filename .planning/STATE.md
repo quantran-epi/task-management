@@ -363,6 +363,7 @@ None.
 - Phase 12.1 inserted after Phase 12: Task timer, work session logs, reload persistence, concurrent timers, allocation reminders, spent time views (URGENT)
 - Phase 13.1 inserted after Phase 13: Timer pause timestamps; Jira project mapping and live status sync; timer status automation and project subtitles; Tauri external links and built-in Jira proxy; sticky notes attached to tasks, projects, or milestones with searchable screenshot attachments, pop-out mode, pinning, and resizable windows; actual worklog planner; secure GitHub credentials and recurring auto-sync fixes (URGENT)
 - Phase 14 added: Knowledge Base Integration (Docs, Linking & AI Retrieval)
+- Phase 15 added: Ghost Dev: Local Claude Code Headless Orchestration with Agent Control Page and Live Git Diff Reviewer
 
 ## Deferred Items
 
