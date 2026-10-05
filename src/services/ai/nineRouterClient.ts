@@ -215,6 +215,7 @@ export async function* streamChatEvents(
   let fullRawBody = '';
   let yieldedAny = false;
   const accumulatedToolCalls: Map<number, ToolCall> = new Map();
+  const watchdogMs = options.watchdogTimeoutMs ?? 60_000;
 
   try {
     while (true) {
@@ -224,7 +225,25 @@ export async function* streamChatEvents(
         throw abortErr;
       }
 
-      const { done, value } = await reader.read();
+      let readTimer: ReturnType<typeof setTimeout> | undefined;
+      const readTimeout = new Promise<never>((_, reject) => {
+        readTimer = setTimeout(() => {
+          reject(
+            new Error(
+              `Thời gian chờ phản hồi từ máy chủ AI vượt quá ${Math.round(watchdogMs / 1000)}s`
+            )
+          );
+        }, watchdogMs);
+      });
+
+      let readResult: ReadableStreamReadResult<Uint8Array>;
+      try {
+        readResult = await Promise.race([reader.read(), readTimeout]);
+      } finally {
+        if (readTimer) clearTimeout(readTimer);
+      }
+
+      const { done, value } = readResult;
       if (done) break;
 
       lineBuffer += decoder.decode(value, { stream: true });
@@ -266,7 +285,14 @@ export async function* streamChatEvents(
             throw new Error(redactApiKey(errMsg, options.apiKey));
           }
 
-          const delta = parsed.choices?.[0]?.delta;
+          const choice = parsed.choices?.[0];
+          if (choice?.finish_reason === 'content_filter') {
+            throw new Error(
+              'Nội dung bị chặn bởi bộ lọc an toàn của nhà cung cấp AI (content_filter)'
+            );
+          }
+
+          const delta = choice?.delta;
           const deltaText = delta?.content ?? delta?.reasoning_content;
           if (typeof deltaText === 'string' && deltaText.length > 0) {
             yield { type: 'text', delta: deltaText };
@@ -320,16 +346,22 @@ export async function* streamChatEvents(
         const deltaText = message?.content ?? message?.reasoning_content;
         if (typeof deltaText === 'string' && deltaText.length > 0) {
           yield { type: 'text', delta: deltaText };
+          yieldedAny = true;
         }
 
         if (Array.isArray(message?.tool_calls) && message.tool_calls.length > 0) {
           yield { type: 'tool_calls', calls: message.tool_calls };
+          yieldedAny = true;
         }
       } catch (err: any) {
         if (err?.message && !err.message.includes('JSON')) {
           throw err;
         }
       }
+    }
+
+    if (!yieldedAny && accumulatedToolCalls.size === 0 && !options.signal?.aborted) {
+      throw new Error('Máy chủ AI đóng kết nối mà không trả về nội dung hoặc công cụ hợp lệ');
     }
   } catch (err: any) {
     if (err.name === 'AbortError' || options.signal?.aborted) {

@@ -624,7 +624,8 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
     let fullResponse = '';
     const currentMessages: ChatCompletionMessage[] = [...recentMsgs];
     let loopCount = 0;
-    const MAX_TOOL_LOOPS = 5;
+    const MAX_TOOL_LOOPS = 30;
+    let lastHadToolCalls = false;
 
     const targetModel =
       selectedModel && (availableModels.length === 0 || availableModels.includes(selectedModel))
@@ -694,6 +695,7 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
           throw streamErr;
         }
 
+        lastHadToolCalls = hasToolCalls && toolCallsToRun.length > 0;
         if (!hasToolCalls || toolCallsToRun.length === 0) {
           break;
         }
@@ -793,9 +795,17 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
 
           setStreamingStatus('Đang thực thi...');
           const toolStartTime = Date.now();
-          const toolResult = isGraphitiTool
-            ? await executeGraphitiMcpTool(normalizedToolName, args)
-            : await executeAiTool(tc.function.name, args, db);
+          let toolResult: string;
+          try {
+            toolResult = isGraphitiTool
+              ? await executeGraphitiMcpTool(normalizedToolName, args)
+              : await executeAiTool(tc.function.name, args, db);
+          } catch (toolErr: any) {
+            console.error(`[AI Harness] ❌ Tool execution failed for "${tc.function.name}":`, toolErr);
+            toolResult = JSON.stringify({
+              error: `Lỗi thực thi công cụ '${tc.function.name}': ${toolErr?.message || String(toolErr)}`,
+            });
+          }
           const toolDuration = Date.now() - toolStartTime;
 
           console.log(`[AI Harness] 📦 Tool result for "${tc.function.name}":`, toolResult);
@@ -810,6 +820,37 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
         }
 
         setStreamingStatus('Đang tổng hợp thông tin...');
+      }
+
+      // If loop completed while tools were called, or response is empty after tools ran,
+      // perform a final synthesis pass to guarantee an answer is generated
+      if (lastHadToolCalls || (!fullResponse.trim() && loopCount > 1)) {
+        setStreamingStatus('Đang tổng hợp câu trả lời hoàn chỉnh...');
+        const synthesisMessages: ChatCompletionMessage[] = [
+          ...pruneToolOutputsInMessages(currentMessages),
+          {
+            role: 'user',
+            content:
+              'Dựa trên tất cả các kết quả công cụ và thông tin đã thu thập ở trên, hãy tổng hợp câu trả lời đầy đủ, chi tiết và rõ ràng cho yêu cầu ban đầu. Không gọi thêm công cụ nào nữa.',
+          },
+        ];
+
+        const synthesisStream = streamChatCompletion({
+          endpoint: config.endpoint,
+          apiKey,
+          payload: {
+            model: targetModel,
+            messages: synthesisMessages,
+          },
+          signal: controller.signal,
+        });
+
+        for await (const delta of synthesisStream) {
+          fullResponse += delta;
+          aiDebugService.appendStreamChunk(turnId, delta);
+          setStreamingText(fullResponse);
+          setStreamingStatus(null);
+        }
       }
 
       // 6. Commit assistant response to DB

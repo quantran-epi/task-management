@@ -32,6 +32,7 @@ export interface StreamChatCompletionOptions {
     max_tokens?: number;
   };
   signal?: AbortSignal;
+  watchdogTimeoutMs?: number;
 }
 
 export type StreamChatChunk =

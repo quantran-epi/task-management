@@ -356,4 +356,63 @@ describe('nineRouterClient', () => {
       }
     }).rejects.toThrowError(/API Error \(403\): Forbidden with key \*\*\*/);
   });
+
+  it('streamChatEvents throws watchdog timeout when chunk stalls beyond limit', async () => {
+    // Stream that never produces chunks
+    const stream = new ReadableStream({
+      start(_controller) {
+        // don't enqueue anything, leave open
+      },
+    });
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: stream,
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    await expect(async () => {
+      for await (const _ of streamChatEvents({
+        endpoint: 'https://api.9router.com',
+        apiKey: 'test-key',
+        payload: {
+          model: 'gpt-4o',
+          messages: [{ role: 'user', content: 'test' }],
+        },
+        watchdogTimeoutMs: 50,
+      })) {
+        // drain
+      }
+    }).rejects.toThrowError(/Thời gian chờ phản hồi từ máy chủ AI vượt quá/);
+  });
+
+  it('streamChatEvents throws when stream terminates prematurely without data or [DONE]', async () => {
+    // Stream that immediately closes with 0 chunks
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.close();
+      },
+    });
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: stream,
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    await expect(async () => {
+      for await (const _ of streamChatEvents({
+        endpoint: 'https://api.9router.com',
+        apiKey: 'test-key',
+        payload: {
+          model: 'gpt-4o',
+          messages: [{ role: 'user', content: 'test' }],
+        },
+      })) {
+        // drain
+      }
+    }).rejects.toThrowError(/Máy chủ AI đóng kết nối mà không trả về nội dung hoặc công cụ hợp lệ/);
+  });
 });

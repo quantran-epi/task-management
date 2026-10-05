@@ -919,4 +919,106 @@ describe('AIChatDrawer', () => {
       expect(screen.getByText('Cú pháp nhanh (@, #, /)')).toBeInTheDocument();
     });
   });
+
+  it('triggers final synthesis pass to summarize results when tools run without trailing text', async () => {
+    vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-api-key');
+    vi.spyOn(nineRouterTokenService, 'getNineRouterConfig').mockResolvedValue({
+      endpoint: 'http://localhost:20128',
+      defaultModel: 'gpt-4o',
+      charLimit: 12000,
+    });
+
+    // Mock streamChatEvents yielding tool_calls and then completing (hasToolCalls=true)
+    async function* mockEvents() {
+      yield {
+        type: 'tool_calls',
+        calls: [
+          {
+            id: 'call_query_1',
+            type: 'function',
+            function: {
+              name: 'query_tasks',
+              arguments: JSON.stringify({}),
+            },
+          },
+        ],
+      };
+    }
+    vi.spyOn(nineRouterClient, 'streamChatEvents').mockImplementation(mockEvents as any);
+
+    // Mock streamChatCompletion which is called by the synthesis step
+    async function* mockSynthesisCompletion() {
+      yield 'Tổng hợp: Hệ thống hiện có 0 tác vụ.';
+    }
+    vi.spyOn(nineRouterClient, 'streamChatCompletion').mockImplementation(mockSynthesisCompletion as any);
+
+    render(
+      <AIChatDrawer
+        open={true}
+        onClose={vi.fn()}
+        db={db}
+        activeScope={{ type: 'global' }}
+      />
+    );
+
+    const textarea = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
+    fireEvent.change(textarea, { target: { value: 'Kiểm tra task' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Tổng hợp: Hệ thống hiện có 0 tác vụ/i)).toBeInTheDocument();
+    });
+  });
+
+  it('catches tool execution errors and feeds error to AI instead of crashing harness', async () => {
+    vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-api-key');
+    vi.spyOn(nineRouterTokenService, 'getNineRouterConfig').mockResolvedValue({
+      endpoint: 'http://localhost:20128',
+      defaultModel: 'gpt-4o',
+      charLimit: 12000,
+    });
+
+    let callCount = 0;
+    async function* mockEvents() {
+      callCount++;
+      if (callCount === 1) {
+        yield {
+          type: 'tool_calls',
+          calls: [
+            {
+              id: 'call_failing_tool',
+              type: 'function',
+              function: {
+                name: 'non_existent_tool_name',
+                arguments: '{}',
+              },
+            },
+          ],
+        };
+      } else {
+        yield {
+          type: 'text',
+          delta: 'Công cụ bị lỗi nhưng tôi đã xử lý an toàn.',
+        };
+      }
+    }
+    vi.spyOn(nineRouterClient, 'streamChatEvents').mockImplementation(mockEvents as any);
+
+    render(
+      <AIChatDrawer
+        open={true}
+        onClose={vi.fn()}
+        db={db}
+        activeScope={{ type: 'global' }}
+      />
+    );
+
+    const textarea = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
+    fireEvent.change(textarea, { target: { value: 'Chạy công cụ lỗi' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Công cụ bị lỗi nhưng tôi đã xử lý an toàn/i)).toBeInTheDocument();
+    });
+  });
 });

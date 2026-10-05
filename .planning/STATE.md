@@ -39,6 +39,7 @@ Last activity: 2026-10-05 -- Completed quick task 261005-ep9: Notes-page AI prom
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261005-kq5 | Fix AI chat silent stops with watchdog timeout, 30-turn tool loop, final synthesis pass, and safe tool error handling | 2026-10-05 | 6a051a8 | complete | [261005-kq5-fix-ai-chat-silent-stop-and-error-report](./quick/261005-kq5-fix-ai-chat-silent-stop-and-error-report/) |
 | 261005-k7m | Fix inline code tokenization and intra-word underscore italic corruption in markdown renderer | 2026-10-05 | 8744dab | complete | [261005-k7m-fix-markdown-inline-code-and-underscores](./quick/261005-k7m-fix-markdown-inline-code-and-underscores/) |
 | 261005-ep9 | Add Notes-page feature that displays reusable AI instruction prompt for external document generation | 2026-10-05 | 90a1235 | complete | [261005-ep9-add-a-notes-page-feature-that-displays-a](./quick/261005-ep9-add-a-notes-page-feature-that-displays-a/) |
 | 261004-ait | Add missing AI mutation tools (reminders, doc linking, notifications, recurring) and fix failing tests | 2026-10-04 | — | complete | [261004-ait-add-missing-ai-mutation-tools-and-fix-tests](./quick/261004-ait-add-missing-ai-mutation-tools-and-fix-tests/) |
