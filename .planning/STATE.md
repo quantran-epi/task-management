@@ -6,10 +6,10 @@ current_phase: 14
 current_phase_name: knowledge-base-integration-docs-linking-ai-retrieval
 status: verifying
 stopped_at: Completed 14-04-PLAN.md
-last_updated: "2026-10-05T06:33:19.573Z"
+last_updated: "2026-10-05T07:06:21.912Z"
 last_activity: 2026-10-05
-last_activity_desc: "Completed quick task 261005-hfx: make Graphiti MCP endpoint configurable and inject SmartVista dictionary instructions into AI assistant"
-state_head: 127990a1fd9625204f975a6fa3f4dc7c6447ea4a
+last_activity_desc: "Completed quick task 261005-jfa: remove @file autocomplete in chat input bar, keep attach file button"
+state_head: e864620465cee3a22ba6e08bbff00f1f8189792b
 progress:
   total_phases: 10
   completed_phases: 10
@@ -95,6 +95,7 @@ Last activity: 2026-10-05 -- Completed quick task 261005-ep9: Notes-page AI prom
 | 261005-dce | Add read-only Graphiti MCP integration for Tauri desktop app | 2026-10-05 | 606bf48 | complete | [261005-dce-add-read-only-graphiti-mcp-integration-f](./quick/261005-dce-add-read-only-graphiti-mcp-integration-f/) |
 | 261005-fxw | Fix desktop window close failure by adding core:window:allow-destroy permission and handling flush error | 2026-10-05 | a35d174 | — | [261005-fxw-fix-desktop-window-close-failure-by-addi](./quick/261005-fxw-fix-desktop-window-close-failure-by-addi/) |
 | 261005-hfx | make Graphiti MCP endpoint configurable and inject SmartVista dictionary instructions into AI assistant | 2026-10-05 | 127990a | complete | [261005-hfx-make-graphiti-mcp-endpoint-configurable-](./quick/261005-hfx-make-graphiti-mcp-endpoint-configurable-/) |
+| 261005-jfa | remove @file autocomplete in chat input bar, keep attach file button | 2026-10-05 | e864620 | complete | [261005-jfa-remove-file-autocomplete-in-chat-input-b](./quick/261005-jfa-remove-file-autocomplete-in-chat-input-b/) |
 
 ## Performance Metrics
 
