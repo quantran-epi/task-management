@@ -155,19 +155,22 @@ export const DiffHunkView: React.FC<DiffHunkViewProps> = ({
     if (cur.type === 'context') {
       rows.push({ left: cur, right: cur });
       i++;
-    } else if (cur.type === 'delete') {
-      // Check if immediately followed by an addition
-      const next = lines[i + 1];
-      if (next && next.type === 'add') {
-        rows.push({ left: cur, right: next });
-        i += 2;
-      } else {
-        rows.push({ left: cur, right: undefined });
+    } else if (cur.type === 'delete' || cur.type === 'add') {
+      const delLines: DiffLine[] = [];
+      const addLines: DiffLine[] = [];
+      while (i < lines.length && (lines[i]?.type === 'delete' || lines[i]?.type === 'add')) {
+        const line = lines[i]!;
+        if (line.type === 'delete') {
+          delLines.push(line);
+        } else {
+          addLines.push(line);
+        }
         i++;
       }
-    } else if (cur.type === 'add') {
-      rows.push({ left: undefined, right: cur });
-      i++;
+      const maxLen = Math.max(delLines.length, addLines.length);
+      for (let j = 0; j < maxLen; j++) {
+        rows.push({ left: delLines[j], right: addLines[j] });
+      }
     }
   }
 
