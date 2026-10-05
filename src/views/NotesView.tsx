@@ -23,6 +23,8 @@ import {
   ExportOutlined,
   AppstoreOutlined,
   UnorderedListOutlined,
+  RobotOutlined,
+  CopyOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
@@ -51,6 +53,83 @@ import { DocFolderContentsView } from '../components/notes/DocFolderContentsView
 import { ZipImportPreviewModal } from '../components/notes/ZipImportPreviewModal';
 
 const { Text } = Typography;
+
+export const AI_KNOWLEDGE_DOC_PROMPT = `Bạn là chuyên gia soạn thảo tài liệu tri thức (knowledge document) cho PlannerMate.
+Hãy tạo tài liệu Markdown tối ưu cho hệ thống tìm kiếm BM25 và ngữ cảnh của AI Assistant theo đúng các nguyên tắc sau:
+
+1. TIÊU ĐỀ BẮT BUỘC:
+- Dòng đầu tiên của tài liệu BẮT BUỘC là tiêu đề H1 duy nhất:
+  # Tiêu đề tài liệu
+- Tiêu đề phải rõ nghĩa, chứa danh từ/thuật ngữ nghiệp vụ chính xác, tối đa 120 ký tự.
+
+2. PHẠM VI & ĐỘ DÀI:
+- Nguyên tắc: 1 tài liệu = 1 chủ đề/quy trình/thành phần độc lập.
+- Giữ toàn bộ tài liệu dưới 50.000 ký tự (khuyến nghị 1.000 - 8.000 ký tự). Nếu chủ đề quá rộng, hãy tách thành các tài liệu con.
+
+3. HASHTAGS PHÂN LOẠI:
+- Ngay sau tiêu đề H1, thêm một dòng chứa inline hashtags dạng:
+  #tag-one #tag-two #he-thong
+- Dùng hashtag ngắn gọn để hỗ trợ phân loại và lọc tài liệu.
+
+4. CẤU TRÚC TIÊU ĐỀ H2/H3:
+- Sử dụng các tiêu đề mục rõ ràng, có ngữ nghĩa (ví dụ: ## Tóm tắt, ## Phạm vi, ## Thuật ngữ, ## Quy tắc, ## Luồng xử lý, ## Bảng trạng thái/Mã lỗi, ## Ví dụ, ## Ngoại lệ, ## Nguồn).
+- TUYỆT ĐỐI KHÔNG dùng tiêu đề mơ hồ như: ## Ghi chú, ## Notes, ## Khác, ## Misc.
+
+5. NỘI DUNG TỰ CHỨA ĐỦ (SELF-CONTAINED):
+- Mỗi đoạn/section phải tự chứa đủ ngữ cảnh để khi AI chỉ trích xuất một đoạn khoảng 1.500 ký tự vẫn hiểu được đầy đủ.
+- Lặp lại tên chủ thể hoặc thuật ngữ chính xác trong từng section thay vì dùng đại từ mơ hồ ("nó", "hệ thống này", "chức năng trên").
+- Đưa từ khóa tìm kiếm mà người dùng thực tế sẽ tra cứu vào trực tiếp trong tiêu đề và nội dung.
+
+6. ĐỊNH DẠNG NGÀY & NGUỒN (SOURCES):
+- Dùng ngày tuyệt đối dạng ISO YYYY-MM-DD (ví dụ: 2026-10-05). Tuyệt đối không dùng ngày tương đối ("hôm qua", "tuần tới", "sắp tới").
+- Luôn có mục ## Nguồn (Sources) ở cuối ghi rõ mã ticket/ServiceDesk, procedure/API, tài liệu tham chiếu và ngày cập nhật.
+
+7. KHÔNG PHỤ THUỘC YAML FRONTMATTER:
+- Mọi thông tin cốt lõi (tiêu đề, thẻ, ngày, mô tả) phải hiển thị rõ ràng trong nội dung Markdown chuẩn. Không phụ thuộc vào YAML frontmatter để nạp dữ liệu.
+
+8. BẢO MẬT & DỮ LIỆU NHẠY CẢM:
+- TUYỆT ĐỐI KHÔNG đưa mật khẩu, API key, access token, PAT, secret hoặc thông tin xác thực riêng tư vào tài liệu.
+
+---
+MẪU KHUNG CHUẨN ĐỂ ÁP DỤNG:
+
+# Tiêu đề nghiệp vụ hoặc thành phần
+
+#domain-tag #system-tag
+
+## Tóm tắt
+Mô tả ngắn gọn mục đích và câu hỏi nghiệp vụ mà tài liệu này giải quyết.
+
+## Phạm vi
+Phạm vi áp dụng của quy tắc hoặc thành phần này.
+
+## Thuật ngữ
+- **Thuật ngữ A**: Định nghĩa ngắn gọn, chính xác.
+- **Thuật ngữ B**: Định nghĩa ngắn gọn, chính xác.
+
+## Quy tắc
+1. Quy tắc thứ nhất (ghi rõ điều kiện và kết quả).
+2. Quy tắc thứ hai.
+
+## Luồng xử lý
+1. Bước 1: Hành động cụ thể.
+2. Bước 2: Hành động tiếp theo.
+
+## Trạng thái và mã lỗi
+| Mã | Ý nghĩa | Hành động xử lý |
+|---|---|---|
+| 00 | Thành công | Tiếp tục quy trình |
+| 05 | Từ chối | Kiểm tra điều kiện |
+
+## Ví dụ
+Mô tả ví dụ đầu vào cụ thể và kết quả mong đợi.
+
+## Ngoại lệ
+Các trường hợp đặc biệt không áp dụng luồng tiêu chuẩn.
+
+## Nguồn
+- Tài liệu/Ticket tham chiếu: SD-XXXXX / PROC_NAME
+- Ngày xác minh: YYYY-MM-DD`;
 
 export interface NotesViewProps {
   db?: TaskPlannerDatabase | undefined;
@@ -89,6 +168,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
   const [editorOpen, setEditorOpen] = useState<boolean>(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
+  const [aiPromptModalOpen, setAiPromptModalOpen] = useState<boolean>(false);
 
   // Save preferences
   const handleLayoutModeChange = (mode: NotesLayoutMode) => {
@@ -581,6 +661,18 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
     });
   };
 
+  const handleCopyAiPrompt = async () => {
+    try {
+      if (!navigator.clipboard?.writeText) {
+        throw new Error('Clipboard API unavailable');
+      }
+      await navigator.clipboard.writeText(AI_KNOWLEDGE_DOC_PROMPT);
+      message.success('Đã sao chép prompt hướng dẫn AI vào clipboard');
+    } catch {
+      message.error('Không thể sao chép prompt vào clipboard');
+    }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 84px)', overflow: 'hidden' }}>
       {/* 1. Header with Mode Toggle */}
@@ -597,6 +689,11 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
                 { value: 'grid', icon: <AppstoreOutlined />, label: 'Ghi chú nhanh (Grid)' },
               ]}
             />
+            <Tooltip title="Xem prompt chuẩn để dán vào AI ngoài tạo tài liệu Markdown phù hợp tìm kiếm">
+              <Button icon={<RobotOutlined />} onClick={() => setAiPromptModalOpen(true)}>
+                Prompt AI cho tài liệu
+              </Button>
+            </Tooltip>
             <Tooltip title="Mở danh sách ghi chú trong cửa sổ nổi riêng biệt (Always on Top)">
               <Button icon={<ExportOutlined />} onClick={handleOpenPopout}>
                 Cửa sổ nổi
@@ -950,6 +1047,44 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
         onImportDocs={handleBatchImportDocs}
         onCreateFolder={handleCreateFolder}
       />
+
+      {/* AI Document Generation Prompt Modal */}
+      <Modal
+        title="Hướng dẫn AI tạo tài liệu tối ưu cho PlannerMate"
+        open={aiPromptModalOpen}
+        onCancel={() => setAiPromptModalOpen(false)}
+        width={760}
+        footer={[
+          <Button key="close" onClick={() => setAiPromptModalOpen(false)}>
+            Đóng
+          </Button>,
+          <Button
+            key="copy"
+            type="primary"
+            icon={<CopyOutlined />}
+            onClick={handleCopyAiPrompt}
+            aria-label="Sao chép prompt"
+          >
+            Sao chép prompt
+          </Button>,
+        ]}
+      >
+        <Space direction="vertical" size="small" style={{ width: '100%' }}>
+          <Text type="secondary">
+            Dán prompt này vào bất kỳ AI Assistant bên ngoài (Claude, ChatGPT, Open-WebUI, ...) khi bạn muốn tạo tài liệu Markdown để nạp vào PlannerMate.
+          </Text>
+          <Input.TextArea
+            readOnly
+            value={AI_KNOWLEDGE_DOC_PROMPT}
+            rows={18}
+            style={{
+              fontFamily: 'monospace',
+              fontSize: 12,
+              backgroundColor: '#fafafa',
+            }}
+          />
+        </Space>
+      </Modal>
     </div>
   );
 };

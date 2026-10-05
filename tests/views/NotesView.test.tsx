@@ -94,4 +94,55 @@ describe('NotesView 3-Column Document Workspace', () => {
     // Grid view renders legacy "Tạo ghi chú" CTA
     expect(await screen.findByText('Tạo ghi chú')).toBeInTheDocument();
   });
+
+  it('renders visible AI document instructions button, opens modal, and copies prompt to clipboard', async () => {
+    const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, {
+      clipboard: {
+        writeText: writeTextMock,
+      },
+    });
+
+    render(<NotesView db={testDb} />);
+
+    const openPromptBtn = await screen.findByRole('button', { name: /prompt ai/i });
+    expect(openPromptBtn).toBeInTheDocument();
+
+    fireEvent.click(openPromptBtn);
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toBeInTheDocument();
+    expect(screen.getByText(/hướng dẫn ai tạo tài liệu/i)).toBeInTheDocument();
+
+    const textarea = dialog.querySelector('textarea') as HTMLTextAreaElement | null;
+    expect(textarea).not.toBeNull();
+    const promptValue = textarea?.value || '';
+
+    const expectedSnippets = [
+      '# Tiêu đề tài liệu',
+      '#tag-one',
+      'H2/H3',
+      'Sources',
+      'YYYY-MM-DD',
+      'YAML frontmatter',
+      'secret',
+    ];
+
+    for (const snippet of expectedSnippets) {
+      expect(promptValue.toLowerCase()).toContain(snippet.toLowerCase());
+    }
+
+    const copyBtn = screen.getByRole('button', { name: /sao chép prompt/i });
+    fireEvent.click(copyBtn);
+
+    await waitFor(() => {
+      expect(writeTextMock).toHaveBeenCalledTimes(1);
+    });
+
+    const copiedPayload = writeTextMock.mock.calls[0]?.[0] as string;
+    expect(copiedPayload).toContain('# Tiêu đề tài liệu');
+    expect(copiedPayload).toContain('YAML frontmatter');
+    expect(copiedPayload).toContain('secret');
+    expect(await screen.findByText(/đã sao chép prompt/i)).toBeInTheDocument();
+  });
 });
