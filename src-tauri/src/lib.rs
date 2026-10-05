@@ -1,3 +1,4 @@
+mod ai_proxy;
 mod jira_proxy;
 mod keyring_store;
 mod sqlite_persistence;
@@ -19,6 +20,7 @@ pub fn run() {
             sqlite_persistence::sqlite_apply_changes,
             sqlite_persistence::sqlite_read_rows,
             jira_proxy::jira_proxy_request,
+            ai_proxy::ai_proxy_request,
             jira_proxy::open_external_url,
             jira_proxy::open_local_path,
             jira_proxy::select_local_folder,
