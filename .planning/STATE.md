@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Banking IT Enhancements & Jira Integration
 status: verifying
-stopped_at: Phase 15 context gathered
-last_updated: "2026-10-05T14:16:07.270Z"
+stopped_at: Phase 15 UI-SPEC approved
+last_updated: "2026-10-05T14:18:46.854Z"
 last_activity: "2026-10-05 -- Completed quick task 261005-ep9: Notes-page AI prompt modal for external document generation"
 progress:
   total_phases: 11
@@ -371,9 +371,9 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-10-05T14:16:07.264Z
-Stopped at: Phase 15 context gathered
-Resume file: .planning/phases/15-ghost-dev-local-claude-code-headless-orchestration-with-agen/15-CONTEXT.md
+Last session: 2026-10-05T14:18:46.848Z
+Stopped at: Phase 15 UI-SPEC approved
+Resume file: .planning/phases/15-ghost-dev-local-claude-code-headless-orchestration-with-agen/15-UI-SPEC.md
 
 ## Operator Next Steps
 
