@@ -14,6 +14,8 @@ describe('ghostDevPrompt', () => {
     priority: 'High',
     progress: 30,
     estimateMinutes: 120,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     checklist: [
       { id: 'c1', text: 'Define chunk types', done: true },
       { id: 'c2', text: 'Listen to tauri event', done: false },
