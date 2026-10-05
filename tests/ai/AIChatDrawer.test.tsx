@@ -95,6 +95,27 @@ describe('ChatHeader', () => {
     fireEvent.click(screen.getByLabelText('Tùy chọn khác'));
     expect(screen.getByText('Tắt tự động duyệt thay đổi')).toBeInTheDocument();
   });
+
+  it('calls onOpenMcpSettings when clicked in dropdown', () => {
+    const handleOpenMcp = vi.fn();
+    render(
+      <ChatHeader
+        selectedModel="gpt-4o"
+        availableModels={['gpt-4o']}
+        onModelChange={vi.fn()}
+        onOpenMcpSettings={handleOpenMcp}
+        isPinned={false}
+        onTogglePin={vi.fn()}
+        onClearContext={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+    fireEvent.click(screen.getByLabelText('Tùy chọn khác'));
+    const mcpOption = screen.getByText('Quản lý máy chủ MCP');
+    expect(mcpOption).toBeInTheDocument();
+    fireEvent.click(mcpOption);
+    expect(handleOpenMcp).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('AIChatDrawer', () => {
@@ -1020,5 +1041,120 @@ describe('AIChatDrawer', () => {
     await waitFor(() => {
       expect(screen.getByText(/Công cụ bị lỗi nhưng tôi đã xử lý an toàn/i)).toBeInTheDocument();
     });
+  });
+
+  it('opens McpSettingsModal from dropdown menu and renders server list', async () => {
+    render(
+      <AIChatDrawer
+        open={true}
+        onClose={vi.fn()}
+        db={db}
+        activeScope={{ type: 'global' }}
+      />
+    );
+
+    fireEvent.click(screen.getByLabelText('Tùy chọn khác'));
+    const mcpOption = screen.getByText('Quản lý máy chủ MCP');
+    expect(mcpOption).toBeInTheDocument();
+    fireEvent.click(mcpOption);
+
+    await waitFor(() => {
+      expect(screen.getByText('Graphiti Banking MCP')).toBeInTheDocument();
+      expect(screen.getByLabelText('Bật/tắt Graphiti Banking MCP')).toBeInTheDocument();
+    });
+  });
+
+  it('excludes Graphiti tools and SmartVista instructions when Graphiti MCP is disabled', async () => {
+    await graphitiMcpClient.setGraphitiMcpEnabled(false, db);
+
+    vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-api-key');
+    vi.spyOn(nineRouterTokenService, 'getNineRouterConfig').mockResolvedValue({
+      endpoint: 'http://localhost:20128',
+      defaultModel: 'gpt-4o',
+      charLimit: 12000,
+    });
+
+    const payloads: any[] = [];
+    vi.spyOn(nineRouterClient, 'streamChatEvents').mockImplementation((options: any) => {
+      payloads.push(options.payload);
+      return (async function* () {
+        yield { type: 'text', delta: 'Trả lời không có MCP.' };
+      })() as any;
+    });
+
+    render(
+      <AIChatDrawer open={true} onClose={vi.fn()} db={db} activeScope={{ type: 'global' }} />
+    );
+
+    fireEvent.change(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI'), {
+      target: { value: 'Hỏi bài' },
+    });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+    await waitFor(() => expect(screen.getByText(/Trả lời không có MCP/i)).toBeInTheDocument());
+    expect(graphitiMcpClient.getGraphitiMcpToolDefinitions).not.toHaveBeenCalled();
+    expect(payloads[0].messages).not.toContainEqual(
+      expect.objectContaining({
+        content: expect.stringContaining('SMARTVISTA BANKING DOMAIN DICTIONARY'),
+      })
+    );
+    expect(
+      payloads[0].tools.some((t: any) => t.function?.name === 'search_nodes')
+    ).toBe(false);
+  });
+
+  it('blocks execution and returns disabled error message if model invokes Graphiti tool while disabled', async () => {
+    await graphitiMcpClient.setGraphitiMcpEnabled(false, db);
+
+    vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-api-key');
+    vi.spyOn(nineRouterTokenService, 'getNineRouterConfig').mockResolvedValue({
+      endpoint: 'http://localhost:20128',
+      defaultModel: 'gpt-4o',
+      charLimit: 12000,
+    });
+
+    let callCount = 0;
+    const payloads: any[] = [];
+    vi.spyOn(nineRouterClient, 'streamChatEvents').mockImplementation((options: any) => {
+      payloads.push(options.payload);
+      return (async function* () {
+        callCount++;
+        if (callCount === 1) {
+          yield {
+            type: 'tool_calls',
+            calls: [
+              {
+                id: 'call_blocked_mcp',
+                type: 'function',
+                function: { name: 'search_nodes', arguments: '{"query":"alpha"}' },
+              },
+            ],
+          };
+        } else {
+          yield { type: 'text', delta: 'Đã nhận thông báo tắt MCP.' };
+        }
+      })() as any;
+    });
+
+    const executeSpy = vi.spyOn(graphitiMcpClient, 'executeGraphitiMcpTool');
+
+    render(
+      <AIChatDrawer open={true} onClose={vi.fn()} db={db} activeScope={{ type: 'global' }} />
+    );
+
+    fireEvent.change(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI'), {
+      target: { value: 'Thử gọi MCP khi tắt' },
+    });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+    await waitFor(() => expect(screen.getByText(/Đã nhận thông báo tắt MCP/i)).toBeInTheDocument());
+    expect(executeSpy).not.toHaveBeenCalled();
+    expect(payloads[1].messages).toContainEqual(
+      expect.objectContaining({
+        role: 'tool',
+        name: 'search_nodes',
+        content: expect.stringContaining('Máy chủ Graphiti MCP hiện đang bị tắt bởi người dùng'),
+      })
+    );
   });
 });

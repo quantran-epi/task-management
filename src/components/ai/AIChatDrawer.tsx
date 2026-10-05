@@ -40,6 +40,7 @@ import {
 import {
   executeGraphitiMcpTool,
   getGraphitiMcpToolDefinitions,
+  isGraphitiMcpEnabled,
   isGraphitiMcpTool,
 } from '../../services/ai/graphitiMcpClient';
 import type { ChatCompletionMessage, ToolCall } from '../../services/ai/types';
@@ -56,6 +57,7 @@ import { ChatInputBar } from './ChatInputBar';
 import { ScopePickerModal } from './ScopePickerModal';
 import { AIDebugModal } from './AIDebugModal';
 import { AITaskPlannerInstructionsModal } from './AITaskPlannerInstructionsModal';
+import { McpSettingsModal } from './McpSettingsModal';
 import { aiDebugService } from '../../services/ai/aiDebugService';
 import { useAIChat } from '../../context/AIChatContext';
 import { openAiPopout } from '../../utils/aiPopout';
@@ -170,6 +172,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const [scopeModalOpen, setScopeModalOpen] = useState(false);
   const [isDebugModalOpen, setIsDebugModalOpen] = useState(false);
   const [isInstructionsOpen, setIsInstructionsOpen] = useState(false);
+  const [isMcpModalOpen, setIsMcpModalOpen] = useState(false);
   const [sessionAttachedFiles, setSessionAttachedFiles] = useState<string[]>([]);
 
   const handleAttachFile = (filePath: string) => {
@@ -547,10 +550,13 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     const timeStr = now.format('HH:mm');
 
     let graphitiTools: AiToolDefinition[] = [];
-    try {
-      graphitiTools = await getGraphitiMcpToolDefinitions(db);
-    } catch (err) {
-      console.warn('[AIChatDrawer] Graphiti MCP discovery unavailable:', err);
+    const mcpEnabled = await isGraphitiMcpEnabled(db);
+    if (mcpEnabled) {
+      try {
+        graphitiTools = await getGraphitiMcpToolDefinitions(db);
+      } catch (err) {
+        console.warn('[AIChatDrawer] Graphiti MCP discovery unavailable:', err);
+      }
     }
     const toolsForTurn = [...AI_DATABASE_TOOLS, ...graphitiTools];
     const graphitiInstruction = graphitiTools.length
@@ -797,9 +803,19 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
           const toolStartTime = Date.now();
           let toolResult: string;
           try {
-            toolResult = isGraphitiTool
-              ? await executeGraphitiMcpTool(normalizedToolName, args)
-              : await executeAiTool(tc.function.name, args, db);
+            if (isGraphitiTool) {
+              const mcpEnabled = await isGraphitiMcpEnabled(db);
+              if (!mcpEnabled) {
+                toolResult = JSON.stringify({
+                  error:
+                    'Máy chủ Graphiti MCP hiện đang bị tắt bởi người dùng (Disabled in MCP settings).',
+                });
+              } else {
+                toolResult = await executeGraphitiMcpTool(normalizedToolName, args);
+              }
+            } else {
+              toolResult = await executeAiTool(tc.function.name, args, db);
+            }
           } catch (toolErr: any) {
             console.error(`[AI Harness] ❌ Tool execution failed for "${tc.function.name}":`, toolErr);
             toolResult = JSON.stringify({
@@ -1083,6 +1099,7 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
         onClearAllHistory={handleClearAllHistory}
         onDeleteCurrentThread={handleDeleteCurrentThread}
         onOpenDebug={() => setIsDebugModalOpen(true)}
+        onOpenMcpSettings={() => setIsMcpModalOpen(true)}
         onPopout={!isPopoutWindow ? handlePopoutAction : undefined}
         onOpenInstructions={() => setIsInstructionsOpen(true)}
         onClose={onClose}
@@ -1172,6 +1189,12 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
       <AITaskPlannerInstructionsModal
         open={isInstructionsOpen}
         onClose={() => setIsInstructionsOpen(false)}
+      />
+
+      <McpSettingsModal
+        open={isMcpModalOpen}
+        onClose={() => setIsMcpModalOpen(false)}
+        db={db}
       />
 
       {/* Message List */}
