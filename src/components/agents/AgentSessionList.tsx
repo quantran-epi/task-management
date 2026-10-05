@@ -142,7 +142,7 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
                 justifyContent: 'space-between',
               }}
             >
-              <Space orientation="horizontal" size={6}>
+              <Space direction="horizontal" size={6}>
                 <RobotOutlined style={{ color: '#722ed1', fontSize: 13 }} />
                 <Text style={{ fontSize: 12 }}>Master Lead</Text>
               </Space>
@@ -174,7 +174,7 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
                       fontSize: 11,
                     }}
                   >
-                    <Space orientation="horizontal" size={4}>
+                    <Space direction="horizontal" size={4}>
                       <ThunderboltOutlined style={{ color: '#1677ff', fontSize: 11 }} />
                       <Text style={{ fontSize: 11 }} ellipsis>
                         {worker.role || 'Worker'}

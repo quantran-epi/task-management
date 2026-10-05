@@ -123,7 +123,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
           gap: 8,
         }}
       >
-        <Space orientation="horizontal" size={8}>
+        <Space direction="horizontal" size={8}>
           <Segmented
             value={viewMode}
             onChange={(val) => onViewModeChange(val as DiffViewMode)}
@@ -152,7 +152,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
           )}
         </Space>
 
-        <Space orientation="horizontal" size={8}>
+        <Space direction="horizontal" size={8}>
           <Popconfirm
             title="Hủy bỏ tất cả thay đổi"
             description="Hoàn tác toàn bộ thay đổi mã nguồn trong worktree này? Tiến trình chưa commit sẽ bị xóa."
@@ -245,7 +245,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
                     }
                   }}
                 >
-                  <Space orientation="horizontal" size={6} style={{ overflow: 'hidden', flex: 1 }}>
+                  <Space direction="horizontal" size={6} style={{ overflow: 'hidden', flex: 1 }}>
                     <FileTextOutlined style={{ fontSize: 13 }} />
                     <Text
                       style={{ fontSize: 12, width: 120 }}
@@ -254,7 +254,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
                       {file.newPath.split('/').pop() || file.newPath}
                     </Text>
                   </Space>
-                  <Space orientation="horizontal" size={4}>
+                  <Space direction="horizontal" size={4}>
                     {file.additions > 0 && (
                       <span style={{ color: '#52c41a', fontSize: 10 }}>+{file.additions}</span>
                     )}
@@ -290,7 +290,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
                     justifyContent: 'space-between',
                   }}
                 >
-                  <Space orientation="horizontal" size={8}>
+                  <Space direction="horizontal" size={8}>
                     <Text strong style={{ fontSize: 13 }}>
                       {selectedFile.newPath}
                     </Text>

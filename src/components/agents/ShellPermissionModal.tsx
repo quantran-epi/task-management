@@ -97,7 +97,7 @@ export const ShellPermissionModal: React.FC<ShellPermissionModalProps> = ({
         </Button>,
       ]}
     >
-      <Space orientation="vertical" style={{ width: '100%' }} size={16}>
+      <Space direction="vertical" style={{ width: '100%' }} size={16}>
         <Alert
           message="Cảnh báo an toàn hệ thống"
           description={`Agent yêu cầu thực thi lệnh "${currentRequest.command}" trong thư mục worktree. Bạn có muốn cho phép không?`}

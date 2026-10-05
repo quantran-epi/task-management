@@ -90,7 +90,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
           backgroundColor: '#252526',
         }}
       >
-        <Space orientation="horizontal" size={8}>
+        <Space direction="horizontal" size={8}>
           <RobotOutlined style={{ color: '#4f46e5' }} />
           <Text style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>
             {taskTitle ? `Terminal: ${taskTitle}` : 'Terminal Stream'}
@@ -98,7 +98,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
           <Text style={{ color: '#888', fontSize: 11 }}>({logs.length} dòng)</Text>
         </Space>
 
-        <Space orientation="horizontal" size={6}>
+        <Space direction="horizontal" size={6}>
           {!autoScroll && (
             <Button
               size="small"
