@@ -6,7 +6,12 @@ import { TaskPlannerDatabase } from '../../src/db';
 import * as chatRepo from '../../src/db/repositories/chatRepo';
 import * as nineRouterClient from '../../src/services/ai/nineRouterClient';
 import * as nineRouterTokenService from '../../src/services/ai/nineRouterTokenService';
+import * as graphitiMcpClient from '../../src/services/ai/graphitiMcpClient';
 import { aiDebugService } from '../../src/services/ai/aiDebugService';
+
+vi.mock('../../src/utils/pptxExport', () => ({
+  exportPresentationAsFile: vi.fn(),
+}));
 
 describe('ChatHeader', () => {
   it('displays title, model selector, and action buttons', () => {
@@ -98,6 +103,7 @@ describe('AIChatDrawer', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    vi.spyOn(graphitiMcpClient, 'getGraphitiMcpToolDefinitions').mockResolvedValue([]);
     db = new TaskPlannerDatabase(`test-aichat-drawer-${Date.now()}-${Math.random()}`);
   });
 
@@ -373,6 +379,102 @@ describe('AIChatDrawer', () => {
       expect(screen.getByText(/Dự án có 1 tác vụ đang thực hiện/i)).toBeInTheDocument();
     });
     expect(callCount).toBe(2);
+  });
+
+  it('uses discovered Graphiti tools across model loops and appends MCP result as tool content', async () => {
+    vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-api-key');
+    vi.spyOn(nineRouterTokenService, 'getNineRouterConfig').mockResolvedValue({
+      endpoint: 'http://localhost:20128',
+      defaultModel: 'gpt-4o',
+      charLimit: 12000,
+    });
+    const graphitiDefinition = {
+      type: 'function' as const,
+      function: {
+        name: 'search_nodes',
+        description: 'Search graph nodes',
+        parameters: { type: 'object' as const, properties: { query: { type: 'string' } } },
+      },
+    };
+    vi.mocked(graphitiMcpClient.getGraphitiMcpToolDefinitions).mockResolvedValue([
+      graphitiDefinition,
+    ]);
+    vi.spyOn(graphitiMcpClient, 'executeGraphitiMcpTool').mockResolvedValue('graphiti result');
+
+    let callCount = 0;
+    const payloads: any[] = [];
+    vi.spyOn(nineRouterClient, 'streamChatEvents').mockImplementation((options: any) => {
+      payloads.push(options.payload);
+      return (async function* () {
+        callCount++;
+        if (callCount === 1) {
+          yield {
+            type: 'tool_calls',
+            calls: [
+              {
+                id: 'call_graphiti',
+                type: 'function',
+                function: { name: 'search_nodes_ide', arguments: '{"query":"alpha"}' },
+              },
+            ],
+          };
+        } else {
+          yield { type: 'text', delta: 'Đã tổng hợp Graphiti.' };
+        }
+      })() as any;
+    });
+
+    render(
+      <AIChatDrawer open={true} onClose={vi.fn()} db={db} activeScope={{ type: 'global' }} />
+    );
+    fireEvent.change(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI'), {
+      target: { value: 'Tra Graphiti' },
+    });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+    await waitFor(() => expect(screen.getByText(/Đã tổng hợp Graphiti/i)).toBeInTheDocument());
+    expect(graphitiMcpClient.getGraphitiMcpToolDefinitions).toHaveBeenCalledTimes(1);
+    expect(graphitiMcpClient.executeGraphitiMcpTool).toHaveBeenCalledWith('search_nodes', {
+      query: 'alpha',
+    });
+    expect(payloads).toHaveLength(2);
+    expect(payloads[0].tools).toContainEqual(graphitiDefinition);
+    expect(payloads[1].tools).toBe(payloads[0].tools);
+    expect(payloads[1].messages).toContainEqual(
+      expect.objectContaining({ role: 'tool', name: 'search_nodes_ide', content: 'graphiti result' })
+    );
+    expect(aiDebugService.getTurns()[0]?.toolsSent).toContainEqual(graphitiDefinition);
+  });
+
+  it('falls back to local tools when Graphiti discovery fails', async () => {
+    vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-api-key');
+    vi.spyOn(nineRouterTokenService, 'getNineRouterConfig').mockResolvedValue({
+      endpoint: 'http://localhost:20128',
+      defaultModel: 'gpt-4o',
+      charLimit: 12000,
+    });
+    vi.mocked(graphitiMcpClient.getGraphitiMcpToolDefinitions).mockRejectedValue(
+      new Error('Graphiti offline')
+    );
+    const streamSpy = vi.spyOn(nineRouterClient, 'streamChatEvents').mockImplementation(
+      (async function* () {
+        yield { type: 'text', delta: 'Local tools still work.' };
+      }) as any
+    );
+    const fallbackSpy = vi.spyOn(nineRouterClient, 'streamChatCompletion');
+
+    render(
+      <AIChatDrawer open={true} onClose={vi.fn()} db={db} activeScope={{ type: 'global' }} />
+    );
+    fireEvent.change(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI'), {
+      target: { value: 'Use local tools' },
+    });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+    await waitFor(() => expect(screen.getByText(/Local tools still work/i)).toBeInTheDocument());
+    expect(streamSpy).toHaveBeenCalled();
+    expect((streamSpy.mock.calls[0]?.[0] as any).payload.tools.length).toBeGreaterThan(0);
+    expect(fallbackSpy).not.toHaveBeenCalled();
   });
 
   it('renders debug button in header and opens AIDebugModal with tracked turn', async () => {
