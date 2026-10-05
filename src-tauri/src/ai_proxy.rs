@@ -29,6 +29,18 @@ fn is_allowed_http_host(host: &str) -> bool {
             .unwrap_or(false)
 }
 
+pub fn is_allowed_graphiti_target(url: &str) -> bool {
+    let Ok(parsed) = reqwest::Url::parse(url) else {
+        return false;
+    };
+
+    match parsed.scheme() {
+        "https" => true,
+        "http" => parsed.host_str().map(is_allowed_http_host).unwrap_or(false),
+        _ => false,
+    }
+}
+
 pub fn is_allowed_ai_target(url: &str) -> bool {
     let Ok(parsed) = reqwest::Url::parse(url) else {
         return false;
@@ -167,6 +179,7 @@ fn graphiti_session_id_is_valid(session_id: &str) -> bool {
 pub async fn graphiti_mcp_request(
     body: String,
     session_id: Option<String>,
+    endpoint: Option<String>,
 ) -> Result<AiProxyResponse, String> {
     validate_graphiti_request(&body)?;
     if session_id
@@ -176,12 +189,22 @@ pub async fn graphiti_mcp_request(
         return Err("Invalid Graphiti MCP session ID".to_string());
     }
 
+    let target_url = match endpoint.as_deref().map(str::trim) {
+        Some(custom) if !custom.is_empty() => {
+            if !is_allowed_graphiti_target(custom) {
+                return Err("Blocked Graphiti MCP endpoint target".to_string());
+            }
+            custom
+        }
+        _ => GRAPHITI_MCP_URL,
+    };
+
     let client = reqwest::Client::builder()
         .user_agent("PlannerMateGraphitiMCP/1.0")
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
     let mut request = client
-        .post(GRAPHITI_MCP_URL)
+        .post(target_url)
         .header(reqwest::header::CONTENT_TYPE, "application/json")
         .header(reqwest::header::ACCEPT, "application/json, text/event-stream")
         .body(body);
@@ -230,11 +253,32 @@ pub async fn graphiti_mcp_request(
 
 #[cfg(test)]
 mod tests {
-    use super::{is_allowed_ai_target, validate_graphiti_request, GRAPHITI_MAX_REQUEST_BYTES};
+    use super::{
+        is_allowed_ai_target, is_allowed_graphiti_target, validate_graphiti_request,
+        GRAPHITI_MAX_REQUEST_BYTES,
+    };
 
     #[test]
     fn allows_https_v1_targets() {
         assert!(is_allowed_ai_target("https://example.test/v1/models"));
+    }
+
+    #[test]
+    fn graphiti_allows_https_and_private_http_targets() {
+        assert!(is_allowed_graphiti_target("https://mcp.internal.test/mcp"));
+        assert!(is_allowed_graphiti_target("http://localhost:30456/mcp"));
+        assert!(is_allowed_graphiti_target("http://127.0.0.1:30456/mcp"));
+        assert!(is_allowed_graphiti_target("http://[::1]:30456/mcp"));
+        assert!(is_allowed_graphiti_target("http://10.4.97.70:30456/mcp"));
+        assert!(is_allowed_graphiti_target("http://172.16.1.20:8080/mcp"));
+        assert!(is_allowed_graphiti_target("http://192.168.1.50:3000/mcp"));
+    }
+
+    #[test]
+    fn graphiti_rejects_unsafe_targets() {
+        assert!(!is_allowed_graphiti_target("http://93.184.216.34:30456/mcp"));
+        assert!(!is_allowed_graphiti_target("file:///tmp/mcp"));
+        assert!(!is_allowed_graphiti_target("not a url"));
     }
 
     #[test]

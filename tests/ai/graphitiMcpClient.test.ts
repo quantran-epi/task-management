@@ -1,9 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { TaskPlannerDatabase } from '../../src/db';
 import {
+  DEFAULT_GRAPHITI_MCP_ENDPOINT,
   executeGraphitiMcpTool,
+  getGraphitiMcpEndpoint,
   getGraphitiMcpToolDefinitions,
   isGraphitiMcpTool,
   resetGraphitiMcpClientForTests,
+  setGraphitiMcpEndpoint,
+  testGraphitiMcpConnection,
 } from '../../src/services/ai/graphitiMcpClient';
 
 const invokeMock = vi.hoisted(() => vi.fn());
@@ -128,5 +133,59 @@ describe('graphitiMcpClient', () => {
     expect(isGraphitiMcpTool('delete_episode')).toBe(false);
     await expect(executeGraphitiMcpTool('delete_episode', {})).rejects.toThrow('not allowed');
     expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  describe('configurable endpoint', () => {
+    let db: TaskPlannerDatabase;
+
+    beforeEach(() => {
+      db = new TaskPlannerDatabase(`test-graphiti-endpoint-${Date.now()}-${Math.random()}`);
+    });
+
+    it('defaults to DEFAULT_GRAPHITI_MCP_ENDPOINT when not set in settings', async () => {
+      expect(DEFAULT_GRAPHITI_MCP_ENDPOINT).toBe('http://10.4.97.70:30456/mcp');
+      const endpoint = await getGraphitiMcpEndpoint(db);
+      expect(endpoint).toBe('http://10.4.97.70:30456/mcp');
+    });
+
+    it('persists and retrieves custom endpoint in Dexie settings', async () => {
+      await setGraphitiMcpEndpoint('http://192.168.1.100:30456/mcp', db);
+      const endpoint = await getGraphitiMcpEndpoint(db);
+      expect(endpoint).toBe('http://192.168.1.100:30456/mcp');
+    });
+
+    it('passes configured endpoint to graphiti_mcp_request invoke calls', async () => {
+      (window as any).__TAURI_INTERNALS__ = {};
+      await setGraphitiMcpEndpoint('http://127.0.0.1:30456/mcp', db);
+      queueDiscovery([allowedTool]);
+
+      await getGraphitiMcpToolDefinitions(db);
+
+      expect(invokeMock).toHaveBeenCalledTimes(3);
+      const firstCall = invokeMock.mock.calls[0];
+      expect(firstCall?.[0]).toBe('graphiti_mcp_request');
+      expect(firstCall?.[1]).toMatchObject({
+        endpoint: 'http://127.0.0.1:30456/mcp',
+      });
+    });
+
+    it('tests connection and reports discovered tools count', async () => {
+      (window as any).__TAURI_INTERNALS__ = {};
+      queueDiscovery([allowedTool]);
+
+      const result = await testGraphitiMcpConnection('http://10.4.97.70:30456/mcp', db);
+      expect(result.ok).toBe(true);
+      expect(result.toolsCount).toBe(1);
+      expect(result.message).toContain('1 công cụ');
+    });
+
+    it('testGraphitiMcpConnection returns failure when invoke rejects', async () => {
+      (window as any).__TAURI_INTERNALS__ = {};
+      invokeMock.mockRejectedValueOnce(new Error('Connection refused'));
+
+      const result = await testGraphitiMcpConnection('http://10.4.97.70:30456/mcp', db);
+      expect(result.ok).toBe(false);
+      expect(result.message).toContain('Connection refused');
+    });
   });
 });

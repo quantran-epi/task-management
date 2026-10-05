@@ -1,5 +1,9 @@
+import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { isTauriApp } from '../../utils/timerPopout';
 import type { AiToolDefinition } from './aiTools';
+
+export const DEFAULT_GRAPHITI_MCP_ENDPOINT = 'http://10.4.97.70:30456/mcp';
+const GRAPHITI_ENDPOINT_SETTINGS_KEY = 'graphiti_mcp_endpoint';
 
 const GRAPHITI_TOOL_NAMES = [
   'list_advertised_groups',
@@ -38,6 +42,28 @@ function clearSession(): void {
   groupResultCache.clear();
 }
 
+export async function getGraphitiMcpEndpoint(
+  db: TaskPlannerDatabase = defaultDb
+): Promise<string> {
+  const rec = await db.settings.get(GRAPHITI_ENDPOINT_SETTINGS_KEY);
+  if (typeof rec?.value === 'string' && rec.value.trim().length > 0) {
+    return rec.value.trim();
+  }
+  return DEFAULT_GRAPHITI_MCP_ENDPOINT;
+}
+
+export async function setGraphitiMcpEndpoint(
+  endpoint: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<void> {
+  const cleaned = endpoint.trim().replace(/\/+$/, '');
+  await db.settings.put({
+    key: GRAPHITI_ENDPOINT_SETTINGS_KEY,
+    value: cleaned,
+  });
+  clearSession();
+}
+
 function extractSessionId(headers: Record<string, string>): string | undefined {
   const entry = Object.entries(headers).find(([name]) => name.toLowerCase() === 'mcp-session-id');
   return entry?.[1];
@@ -67,18 +93,23 @@ function parseResponseBody(body: string): JsonRpcResponse | undefined {
 async function invokeGraphiti(
   method: string,
   params?: Record<string, unknown>,
-  notification = false
+  notification = false,
+  customEndpoint?: string,
+  db: TaskPlannerDatabase = defaultDb
 ): Promise<any> {
   const api = await import('@tauri-apps/api/core');
   const payload: Record<string, unknown> = { jsonrpc: '2.0', method };
   if (!notification) payload.id = ++requestId;
   if (params !== undefined) payload.params = params;
 
+  const endpoint = customEndpoint || (await getGraphitiMcpEndpoint(db));
+
   let response: TauriProxyResponse;
   try {
     response = await api.invoke<TauriProxyResponse>('graphiti_mcp_request', {
       body: JSON.stringify(payload),
       sessionId,
+      endpoint,
     });
   } catch (error) {
     clearSession();
@@ -98,14 +129,23 @@ async function invokeGraphiti(
   return message?.result;
 }
 
-async function initializeSession(): Promise<void> {
+async function initializeSession(
+  customEndpoint?: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<void> {
   if (sessionId) return;
-  await invokeGraphiti('initialize', {
-    protocolVersion: '2025-03-26',
-    capabilities: {},
-    clientInfo: { name: 'PlannerMate', version: '1.0' },
-  });
-  await invokeGraphiti('notifications/initialized', undefined, true);
+  await invokeGraphiti(
+    'initialize',
+    {
+      protocolVersion: '2025-03-26',
+      capabilities: {},
+      clientInfo: { name: 'PlannerMate', version: '1.0' },
+    },
+    false,
+    customEndpoint,
+    db
+  );
+  await invokeGraphiti('notifications/initialized', undefined, true, customEndpoint, db);
 }
 
 function isInputSchema(value: unknown): value is AiToolDefinition['function']['parameters'] {
@@ -114,9 +154,12 @@ function isInputSchema(value: unknown): value is AiToolDefinition['function']['p
   return schema.type === 'object' && typeof schema.properties === 'object' && schema.properties !== null;
 }
 
-async function discoverTools(): Promise<AiToolDefinition[]> {
-  await initializeSession();
-  const result = await invokeGraphiti('tools/list');
+async function discoverTools(
+  customEndpoint?: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<AiToolDefinition[]> {
+  await initializeSession(customEndpoint, db);
+  const result = await invokeGraphiti('tools/list', undefined, false, customEndpoint, db);
   if (!Array.isArray(result?.tools)) return [];
 
   return result.tools.flatMap((tool: any) => {
@@ -142,15 +185,40 @@ async function discoverTools(): Promise<AiToolDefinition[]> {
   });
 }
 
-export function getGraphitiMcpToolDefinitions(): Promise<AiToolDefinition[]> {
+export function getGraphitiMcpToolDefinitions(
+  db: TaskPlannerDatabase = defaultDb
+): Promise<AiToolDefinition[]> {
   if (!isTauriApp()) return Promise.resolve([]);
   if (!discoveryPromise) {
-    discoveryPromise = discoverTools().catch((error) => {
+    discoveryPromise = discoverTools(undefined, db).catch((error) => {
       clearSession();
       throw error;
     });
   }
   return discoveryPromise;
+}
+
+export async function testGraphitiMcpConnection(
+  customEndpoint?: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<{ ok: boolean; message: string; toolsCount?: number }> {
+  try {
+    clearSession();
+    const endpoint = customEndpoint || (await getGraphitiMcpEndpoint(db));
+    const tools = await discoverTools(endpoint, db);
+    clearSession();
+    return {
+      ok: true,
+      message: `Kết nối Graphiti MCP thành công. Tìm thấy ${tools.length} công cụ được hỗ trợ.`,
+      toolsCount: tools.length,
+    };
+  } catch (error: any) {
+    clearSession();
+    return {
+      ok: false,
+      message: error?.message || 'Không thể kết nối tới máy chủ Graphiti MCP',
+    };
+  }
 }
 
 function stableSerialize(value: unknown): string {
