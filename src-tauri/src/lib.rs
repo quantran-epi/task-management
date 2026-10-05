@@ -1,3 +1,4 @@
+mod agent_manager;
 mod ai_proxy;
 mod jira_proxy;
 mod keyring_store;
@@ -34,7 +35,22 @@ pub fn run() {
             keyring_store::store_credential,
             keyring_store::get_credential,
             keyring_store::delete_credential,
+            agent_manager::start_ghost_dev_session,
+            agent_manager::stop_ghost_dev_session,
+            agent_manager::list_agent_sessions,
+            agent_manager::get_worktree_diff,
+            agent_manager::accept_all_diff,
+            agent_manager::revert_all_diff,
+            agent_manager::revert_file_diff,
+            agent_manager::send_agent_feedback,
+            agent_manager::respond_shell_permission,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app_handle, event| {
+            if let tauri::RunEvent::ExitRequested { .. } = event {
+                // D-18: Kill active process groups immediately, preserve .plannermate/worktrees on disk
+                agent_manager::cleanup_on_exit();
+            }
+        });
 }
