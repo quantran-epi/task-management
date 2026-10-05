@@ -676,12 +676,17 @@ pub async fn start_ghost_dev_session(
             _ => "error",
         };
 
-        // Update state in pool
+        // Update state in pool (preserve "interrupted" if manually stopped)
+        let mut reported_status = final_status.to_string();
         {
             let mut pool = AGENT_POOL.lock().await;
             if let Some(session) = pool.sessions.get_mut(&task_id_clone) {
-                session.state.status = final_status.to_string();
-                session.state.finished_at = Some(chrono_iso_now());
+                if session.state.status == "interrupted" {
+                    reported_status = "interrupted".to_string();
+                } else {
+                    session.state.status = final_status.to_string();
+                    session.state.finished_at = Some(chrono_iso_now());
+                }
             }
         }
 
@@ -693,7 +698,7 @@ pub async fn start_ghost_dev_session(
                 source: "master".to_string(),
                 timestamp: chrono_iso_now(),
                 chunk_type: "status_change".to_string(),
-                content: format!("Session finished with status: {}", final_status),
+                content: format!("Session finished with status: {}", reported_status),
             },
         );
     });
