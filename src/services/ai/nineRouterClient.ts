@@ -7,13 +7,13 @@ import type {
 } from './types';
 import { isTauriApp } from '../../utils/timerPopout';
 
-interface TauriProxyResponse {
+export interface TauriProxyResponse {
   status: number;
   headers: Record<string, string>;
   body: string;
 }
 
-async function tauriInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+export async function tauriInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   const api = await import('@tauri-apps/api/core');
   return args === undefined ? api.invoke<T>(command) : api.invoke<T>(command, args);
 }
@@ -159,15 +159,32 @@ export async function* streamChatEvents(
       headers.Authorization = `Bearer ${options.apiKey.trim()}`;
     }
 
-    response = await fetch(targetUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        ...options.payload,
-        stream: true,
-      }),
-      ...(options.signal ? { signal: options.signal } : {}),
-    });
+    if (isTauriApp()) {
+      const proxyResponse = await tauriInvoke<TauriProxyResponse>('ai_proxy_request', {
+        method: 'POST',
+        url: targetUrl,
+        headers,
+        body: JSON.stringify({
+          ...options.payload,
+          stream: true,
+        }),
+      });
+
+      response = new Response(proxyResponse.body, {
+        status: proxyResponse.status,
+        headers: proxyResponse.headers,
+      });
+    } else {
+      response = await fetch(targetUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          ...options.payload,
+          stream: true,
+        }),
+        ...(options.signal ? { signal: options.signal } : {}),
+      });
+    }
   } catch (err: any) {
     if (err.name === 'AbortError') {
       throw err;
@@ -195,6 +212,8 @@ export async function* streamChatEvents(
   const reader = response.body.getReader();
   const decoder = new TextDecoder('utf-8');
   let lineBuffer = '';
+  let fullRawBody = '';
+  let yieldedAny = false;
   const accumulatedToolCalls: Map<number, ToolCall> = new Map();
 
   try {
@@ -209,6 +228,7 @@ export async function* streamChatEvents(
       if (done) break;
 
       lineBuffer += decoder.decode(value, { stream: true });
+      fullRawBody += lineBuffer;
       const lines = lineBuffer.split(/\r?\n/);
       // Keep trailing incomplete fragment in the buffer
       lineBuffer = lines.pop() ?? '';
@@ -225,6 +245,7 @@ export async function* streamChatEvents(
                 .sort(([a], [b]) => a - b)
                 .map(([, call]) => call);
               yield { type: 'tool_calls', calls: sortedCalls };
+              yieldedAny = true;
             }
             return;
           }
@@ -249,6 +270,7 @@ export async function* streamChatEvents(
           const deltaText = delta?.content ?? delta?.reasoning_content;
           if (typeof deltaText === 'string' && deltaText.length > 0) {
             yield { type: 'text', delta: deltaText };
+            yieldedAny = true;
           }
 
           if (Array.isArray(delta?.tool_calls)) {
@@ -280,6 +302,34 @@ export async function* streamChatEvents(
         .sort(([a], [b]) => a - b)
         .map(([, call]) => call);
       yield { type: 'tool_calls', calls: sortedCalls };
+      yieldedAny = true;
+    }
+
+    if (!yieldedAny && accumulatedToolCalls.size === 0 && fullRawBody.trim()) {
+      try {
+        const parsed = JSON.parse(fullRawBody);
+        if (parsed?.error) {
+          const errMsg =
+            typeof parsed.error === 'string'
+              ? parsed.error
+              : parsed.error.message || JSON.stringify(parsed.error);
+          throw new Error(redactApiKey(errMsg, options.apiKey));
+        }
+
+        const message = parsed.choices?.[0]?.message;
+        const deltaText = message?.content ?? message?.reasoning_content;
+        if (typeof deltaText === 'string' && deltaText.length > 0) {
+          yield { type: 'text', delta: deltaText };
+        }
+
+        if (Array.isArray(message?.tool_calls) && message.tool_calls.length > 0) {
+          yield { type: 'tool_calls', calls: message.tool_calls };
+        }
+      } catch (err: any) {
+        if (err?.message && !err.message.includes('JSON')) {
+          throw err;
+        }
+      }
     }
   } catch (err: any) {
     if (err.name === 'AbortError' || options.signal?.aborted) {

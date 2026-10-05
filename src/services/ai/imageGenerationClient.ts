@@ -3,7 +3,13 @@ import type {
   ImageGenerationResult,
   ConnectionTestResult,
 } from './types';
-import { redactApiKey, sanitizeEndpoint } from './nineRouterClient';
+import {
+  redactApiKey,
+  sanitizeEndpoint,
+  tauriInvoke,
+  type TauriProxyResponse,
+} from './nineRouterClient';
+import { isTauriApp } from '../../utils/timerPopout';
 
 export interface ImageConnectionTestOptions {
   endpoint: string;
@@ -52,12 +58,27 @@ export async function generateImage(
       headers.Authorization = `Bearer ${options.apiKey.trim()}`;
     }
 
-    const response = await fetch(targetUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(payload),
-      signal,
-    });
+    let response: Response;
+    if (isTauriApp()) {
+      const proxyResponse = await tauriInvoke<TauriProxyResponse>('ai_proxy_request', {
+        method: 'POST',
+        url: targetUrl,
+        headers,
+        body: JSON.stringify(payload),
+      });
+
+      response = new Response(proxyResponse.body, {
+        status: proxyResponse.status,
+        headers: proxyResponse.headers,
+      });
+    } else {
+      response = await fetch(targetUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+        signal,
+      });
+    }
 
     clearTimeout(timeoutId);
 
@@ -131,11 +152,26 @@ export async function testImageGenerationConnection(
       headers.Authorization = `Bearer ${options.apiKey.trim()}`;
     }
 
-    const response = await fetch(targetUrl, {
-      method: 'GET',
-      headers,
-      ...(options.signal ? { signal: options.signal } : {}),
-    });
+    let response: Response;
+    if (isTauriApp()) {
+      const proxyResponse = await tauriInvoke<TauriProxyResponse>('ai_proxy_request', {
+        method: 'GET',
+        url: targetUrl,
+        headers,
+        body: undefined,
+      });
+
+      response = new Response(proxyResponse.body, {
+        status: proxyResponse.status,
+        headers: proxyResponse.headers,
+      });
+    } else {
+      response = await fetch(targetUrl, {
+        method: 'GET',
+        headers,
+        ...(options.signal ? { signal: options.signal } : {}),
+      });
+    }
 
     if (response.ok) {
       const data = await response.json().catch(() => ({}));

@@ -251,4 +251,109 @@ describe('nineRouterClient', () => {
     expect(chunks[0].calls[0].function.name).toBe('query_tasks');
     expect(chunks[0].calls[0].function.arguments).toBe('{"projectId":"p1"}');
   });
+
+  it('streamChatEvents uses Tauri AI proxy and streams chunks in desktop', async () => {
+    (window as any).__TAURI_INTERNALS__ = {};
+    const sseBody = [
+      'data: {"choices":[{"delta":{"content":"Tauri"}}]}\n\n',
+      'data: {"choices":[{"delta":{"content":" streaming"}}]}\n\n',
+      'data: [DONE]\n\n',
+    ].join('');
+
+    invokeMock.mockResolvedValue({
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' },
+      body: sseBody,
+    });
+    const mockFetch = vi.fn();
+    vi.stubGlobal('fetch', mockFetch);
+
+    const chunks: any[] = [];
+    for await (const chunk of streamChatEvents({
+      endpoint: 'http://10.4.97.70:30129',
+      apiKey: 'sk-secret-1234',
+      payload: {
+        model: 'gpt-4o',
+        messages: [{ role: 'user', content: 'test tauri' }],
+      },
+    })) {
+      chunks.push(chunk);
+    }
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(invokeMock).toHaveBeenCalledWith('ai_proxy_request', {
+      method: 'POST',
+      url: 'http://10.4.97.70:30129/v1/chat/completions',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer sk-secret-1234',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: [{ role: 'user', content: 'test tauri' }],
+        stream: true,
+      }),
+    });
+    expect(chunks).toEqual([
+      { type: 'text', delta: 'Tauri' },
+      { type: 'text', delta: ' streaming' },
+    ]);
+  });
+
+  it('streamChatEvents supports non-SSE JSON response from Tauri AI proxy', async () => {
+    (window as any).__TAURI_INTERNALS__ = {};
+    const jsonBody = JSON.stringify({
+      choices: [
+        {
+          message: {
+            content: 'Direct JSON response',
+          },
+        },
+      ],
+    });
+
+    invokeMock.mockResolvedValue({
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+      body: jsonBody,
+    });
+
+    const chunks: any[] = [];
+    for await (const chunk of streamChatEvents({
+      endpoint: 'http://10.4.97.70:30129',
+      apiKey: 'sk-secret-1234',
+      payload: {
+        model: 'gpt-4o',
+        messages: [{ role: 'user', content: 'test' }],
+      },
+    })) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks).toEqual([
+      { type: 'text', delta: 'Direct JSON response' },
+    ]);
+  });
+
+  it('streamChatEvents redacts sensitive API key on error in desktop', async () => {
+    (window as any).__TAURI_INTERNALS__ = {};
+    invokeMock.mockResolvedValue({
+      status: 403,
+      headers: {},
+      body: 'Forbidden with key sk-secret-1234',
+    });
+
+    await expect(async () => {
+      for await (const _ of streamChatEvents({
+        endpoint: 'http://10.4.97.70:30129',
+        apiKey: 'sk-secret-1234',
+        payload: {
+          model: 'gpt-4o',
+          messages: [{ role: 'user', content: 'test' }],
+        },
+      })) {
+        // drain
+      }
+    }).rejects.toThrowError(/API Error \(403\): Forbidden with key \*\*\*/);
+  });
 });
