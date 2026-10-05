@@ -1,5 +1,16 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::HashMap;
+
+const GRAPHITI_MCP_URL: &str = "http://10.4.97.70:30456/mcp";
+const GRAPHITI_MAX_REQUEST_BYTES: usize = 256 * 1024;
+const GRAPHITI_MAX_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
+const GRAPHITI_ALLOWED_TOOLS: [&str; 4] = [
+    "list_advertised_groups",
+    "search_nodes",
+    "search_memory_facts",
+    "get_catalog_object_context",
+];
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -104,9 +115,112 @@ pub async fn ai_proxy_request(
     })
 }
 
+fn validate_graphiti_request(body: &str) -> Result<(), String> {
+    if body.len() > GRAPHITI_MAX_REQUEST_BYTES {
+        return Err("Graphiti MCP request body is too large".to_string());
+    }
+
+    let payload: Value =
+        serde_json::from_str(body).map_err(|_| "Invalid Graphiti MCP JSON-RPC payload".to_string())?;
+    let object = payload
+        .as_object()
+        .ok_or_else(|| "Graphiti MCP payload must be one JSON-RPC object".to_string())?;
+
+    if object.get("jsonrpc").and_then(Value::as_str) != Some("2.0") {
+        return Err("Graphiti MCP payload must use JSON-RPC 2.0".to_string());
+    }
+
+    match object.get("method").and_then(Value::as_str) {
+        Some("initialize" | "notifications/initialized" | "tools/list") => Ok(()),
+        Some("tools/call") => {
+            let name = object
+                .get("params")
+                .and_then(Value::as_object)
+                .and_then(|params| params.get("name"))
+                .and_then(Value::as_str)
+                .ok_or_else(|| "Graphiti tools/call requires params.name".to_string())?;
+
+            if GRAPHITI_ALLOWED_TOOLS.contains(&name) {
+                Ok(())
+            } else {
+                Err(format!("Blocked Graphiti MCP tool: {}", name))
+            }
+        }
+        Some(method) => Err(format!("Blocked Graphiti MCP method: {}", method)),
+        None => Err("Graphiti MCP payload requires method".to_string()),
+    }
+}
+
+fn graphiti_session_id_is_valid(session_id: &str) -> bool {
+    !session_id.is_empty()
+        && session_id.len() <= 256
+        && session_id.bytes().all(|byte| byte.is_ascii_graphic())
+}
+
+#[tauri::command]
+pub async fn graphiti_mcp_request(
+    body: String,
+    session_id: Option<String>,
+) -> Result<AiProxyResponse, String> {
+    validate_graphiti_request(&body)?;
+    if session_id
+        .as_deref()
+        .is_some_and(|value| !graphiti_session_id_is_valid(value))
+    {
+        return Err("Invalid Graphiti MCP session ID".to_string());
+    }
+
+    let client = reqwest::Client::builder()
+        .user_agent("PlannerMateGraphitiMCP/1.0")
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    let mut request = client
+        .post(GRAPHITI_MCP_URL)
+        .header(reqwest::header::CONTENT_TYPE, "application/json")
+        .header(reqwest::header::ACCEPT, "application/json, text/event-stream")
+        .body(body);
+    if let Some(value) = session_id {
+        request = request.header("Mcp-Session-Id", value);
+    }
+
+    let response = request
+        .send()
+        .await
+        .map_err(|e| format!("Graphiti MCP request failed: {}", e))?;
+    if response
+        .content_length()
+        .is_some_and(|length| length > GRAPHITI_MAX_RESPONSE_BYTES as u64)
+    {
+        return Err("Graphiti MCP response body is too large".to_string());
+    }
+
+    let status = response.status().as_u16();
+    let mut headers = HashMap::new();
+    for (key, value) in response.headers() {
+        if let Ok(value) = value.to_str() {
+            headers.insert(key.as_str().to_string(), value.to_string());
+        }
+    }
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| format!("Failed to read Graphiti MCP response body: {}", e))?;
+    if bytes.len() > GRAPHITI_MAX_RESPONSE_BYTES {
+        return Err("Graphiti MCP response body is too large".to_string());
+    }
+    let body = String::from_utf8(bytes.to_vec())
+        .map_err(|_| "Graphiti MCP response body is not valid UTF-8".to_string())?;
+
+    Ok(AiProxyResponse {
+        status,
+        headers,
+        body,
+    })
+}
+
 #[cfg(test)]
 mod tests {
-    use super::is_allowed_ai_target;
+    use super::{is_allowed_ai_target, validate_graphiti_request, GRAPHITI_MAX_REQUEST_BYTES};
 
     #[test]
     fn allows_https_v1_targets() {
@@ -127,5 +241,60 @@ mod tests {
         assert!(!is_allowed_ai_target("not a url"));
         assert!(!is_allowed_ai_target("https://example.test/models"));
         assert!(!is_allowed_ai_target("https://example.test/v2/models"));
+    }
+
+    #[test]
+    fn graphiti_allows_handshake_and_discovery_methods() {
+        for method in ["initialize", "notifications/initialized", "tools/list"] {
+            let body = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"{}"}}"#, method);
+            assert!(validate_graphiti_request(&body).is_ok(), "{}", method);
+        }
+    }
+
+    #[test]
+    fn graphiti_allows_only_read_tools() {
+        for name in [
+            "list_advertised_groups",
+            "search_nodes",
+            "search_memory_facts",
+            "get_catalog_object_context",
+        ] {
+            let body = format!(
+                r#"{{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{{"name":"{}","arguments":{{}}}}}}"#,
+                name
+            );
+            assert!(validate_graphiti_request(&body).is_ok(), "{}", name);
+        }
+    }
+
+    #[test]
+    fn graphiti_rejects_mutations_and_unknown_tools() {
+        for name in [
+            "create_episode",
+            "update_node",
+            "delete_memory",
+            "search_everything",
+        ] {
+            let body = format!(
+                r#"{{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{{"name":"{}"}}}}"#,
+                name
+            );
+            assert!(validate_graphiti_request(&body).is_err(), "{}", name);
+        }
+    }
+
+    #[test]
+    fn graphiti_rejects_unknown_malformed_batch_and_oversized_payloads() {
+        assert!(validate_graphiti_request(
+            r#"{"jsonrpc":"2.0","id":1,"method":"resources/list"}"#
+        )
+        .is_err());
+        assert!(validate_graphiti_request("not json").is_err());
+        assert!(validate_graphiti_request(
+            r#"[{"jsonrpc":"2.0","id":1,"method":"tools/list"}]"#
+        )
+        .is_err());
+        let oversized = " ".repeat(GRAPHITI_MAX_REQUEST_BYTES + 1);
+        assert!(validate_graphiti_request(&oversized).is_err());
     }
 }

@@ -21,6 +21,7 @@ pub fn run() {
             sqlite_persistence::sqlite_read_rows,
             jira_proxy::jira_proxy_request,
             ai_proxy::ai_proxy_request,
+            ai_proxy::graphiti_mcp_request,
             jira_proxy::open_external_url,
             jira_proxy::open_local_path,
             jira_proxy::select_local_folder,
