@@ -478,7 +478,9 @@ pub async fn start_ghost_dev_session(
 
         // Wait for child process exit
         let status = child.wait().await;
-        RUNNING_PROCESS_COUNT.fetch_sub(1, Ordering::SeqCst);
+        let _ = RUNNING_PROCESS_COUNT.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |c| {
+            Some(c.saturating_sub(1))
+        });
 
         let final_status = match status {
             Ok(s) if s.success() => "done",
@@ -521,7 +523,6 @@ pub async fn stop_ghost_dev_session(task_id: String) -> Result<(), String> {
         session.state.status = "interrupted".to_string();
         session.state.finished_at = Some(chrono_iso_now());
         session.stdin_tx = None;
-        RUNNING_PROCESS_COUNT.fetch_sub(1, Ordering::SeqCst);
         Ok(())
     } else {
         Err(format!("Session {} not found", task_id))
