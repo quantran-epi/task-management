@@ -24,8 +24,16 @@ import {
   EditOutlined,
   DeleteOutlined,
   PictureOutlined,
+  ClusterOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
+import {
+  DEFAULT_GRAPHITI_MCP_ENDPOINT,
+  getGraphitiMcpEndpoint,
+  setGraphitiMcpEndpoint,
+  testGraphitiMcpConnection,
+} from '../../services/ai/graphitiMcpClient';
 import {
   getNineRouterApiKey,
   setNineRouterApiKey,
@@ -101,6 +109,15 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
   const [testingImage, setTestingImage] = useState(false);
   const [imageConnectionResult, setImageConnectionResult] = useState<ConnectionState | null>(null);
 
+  // Graphiti MCP Settings State
+  const [graphitiEndpoint, setGraphitiEndpoint] = useState(DEFAULT_GRAPHITI_MCP_ENDPOINT);
+  const [testingGraphiti, setTestingGraphiti] = useState(false);
+  const [graphitiConnectionResult, setGraphitiConnectionResult] = useState<{
+    ok: boolean;
+    message: string;
+    toolsCount?: number;
+  } | null>(null);
+
   // Check stored state and config on mount
   useEffect(() => {
     let active = true;
@@ -110,6 +127,7 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
       const config = await getNineRouterConfig(db);
       const imgConfig = await getImageConfig(db);
       const imgKeyStored = await isImageApiKeyStored(db);
+      const savedGraphitiEndpoint = await getGraphitiMcpEndpoint(db);
 
       if (!active) return;
       setKeyStored(stored);
@@ -120,6 +138,7 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
       setImageEndpoint(imgConfig.endpoint);
       setImageModel(imgConfig.defaultModel);
       setImageKeyStored(imgKeyStored);
+      setGraphitiEndpoint(savedGraphitiEndpoint);
 
       // Check if cached model list exists
       const modelsRec = await db.settings.get('ninerouter_cached_models');
@@ -235,11 +254,14 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
         db
       );
 
+      // Save Graphiti MCP endpoint
+      await setGraphitiMcpEndpoint(graphitiEndpoint, db);
+
       notification.success({
         message: 'Lưu cấu hình thành công',
-        description: 'Thông số kết nối 9router và tạo ảnh đã được cập nhật.',
+        description: 'Thông số kết nối 9router, tạo ảnh và Graphiti MCP đã được cập nhật.',
       });
-      announceToScreenReader('Đã lưu cấu hình AI và tạo ảnh');
+      announceToScreenReader('Đã lưu cấu hình AI, tạo ảnh và Graphiti MCP');
     } catch (err: any) {
       notification.error({
         message: 'Lỗi lưu cấu hình',
@@ -247,6 +269,27 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleTestGraphitiConnection = async () => {
+    setTestingGraphiti(true);
+    setGraphitiConnectionResult(null);
+    try {
+      const res = await testGraphitiMcpConnection(graphitiEndpoint, db);
+      setGraphitiConnectionResult(res);
+      if (res.ok) {
+        announceToScreenReader('Kết nối Graphiti MCP thành công');
+      } else {
+        announceToScreenReader('Kết nối Graphiti MCP thất bại');
+      }
+    } catch (err: any) {
+      setGraphitiConnectionResult({
+        ok: false,
+        message: err?.message || 'Lỗi kiểm tra kết nối Graphiti MCP',
+      });
+    } finally {
+      setTestingGraphiti(false);
     }
   };
 
@@ -634,6 +677,75 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
               loading={testingImage}
             >
               Kiểm tra kết nối tạo ảnh
+            </Button>
+          </Space>
+        </div>
+
+        <div style={{ marginTop: 28, marginBottom: 16, borderTop: '1px solid #f0f0f0', paddingTop: 20 }}>
+          <Space align="center" style={{ marginBottom: 12 }}>
+            <ClusterOutlined style={{ fontSize: 18, color: '#0284c7' }} />
+            <Text strong style={{ fontSize: 15 }}>
+              Graphiti MCP (Knowledge Graph & Domain Memory)
+            </Text>
+          </Space>
+          <Paragraph type="secondary" style={{ fontSize: 13 }}>
+            Cấu hình cổng kết nối Graphiti MCP cho trợ lý AI để tra cứu các nút, dữ kiện tri thức và thông tin bảng/trường ngân hàng dưới dạng chỉ đọc.
+          </Paragraph>
+
+          <Form.Item
+            label="Graphiti MCP Endpoint"
+            extra="Mặc định: http://10.4.97.70:30456/mcp (kết nối proxy cục bộ hoặc mạng nội bộ được cho phép)"
+          >
+            <Space.Compact style={{ width: '100%' }}>
+              <Input
+                value={graphitiEndpoint}
+                onChange={(e) => setGraphitiEndpoint(e.target.value)}
+                placeholder={DEFAULT_GRAPHITI_MCP_ENDPOINT}
+              />
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={() => setGraphitiEndpoint(DEFAULT_GRAPHITI_MCP_ENDPOINT)}
+                title="Khôi phục mặc định"
+              >
+                Mặc định
+              </Button>
+            </Space.Compact>
+          </Form.Item>
+
+          {graphitiConnectionResult && (
+            <div style={{ marginBottom: 16 }}>
+              {graphitiConnectionResult.ok ? (
+                <Alert
+                  type="success"
+                  showIcon
+                  icon={<CheckCircleOutlined />}
+                  message={graphitiConnectionResult.message}
+                />
+              ) : (
+                <Alert
+                  type="error"
+                  showIcon
+                  message="Kiểm tra kết nối Graphiti MCP thất bại"
+                  description={
+                    <div>
+                      <div style={{ marginBottom: 6 }}>{graphitiConnectionResult.message}</div>
+                      <div style={{ fontSize: 12, opacity: 0.9 }}>
+                        <strong>Lưu ý:</strong> Graphiti MCP yêu cầu chạy qua môi trường ứng dụng Tauri Desktop và địa chỉ máy chủ hợp lệ trong mạng LAN hoặc máy cục bộ.
+                      </div>
+                    </div>
+                  }
+                />
+              )}
+            </div>
+          )}
+
+          <Space style={{ marginBottom: 16 }}>
+            <Button
+              icon={<ClusterOutlined />}
+              onClick={handleTestGraphitiConnection}
+              loading={testingGraphiti}
+            >
+              Kiểm tra kết nối Graphiti MCP
             </Button>
           </Space>
         </div>
