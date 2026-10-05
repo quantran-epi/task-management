@@ -61,6 +61,11 @@ import { McpSettingsModal } from './McpSettingsModal';
 import { aiDebugService } from '../../services/ai/aiDebugService';
 import { useAIChat } from '../../context/AIChatContext';
 import { openAiPopout } from '../../utils/aiPopout';
+import {
+  sendDesktopNotification,
+  isNotificationPermissionGranted,
+  requestNotificationPermission,
+} from '../../utils/desktopNotification';
 
 export const AI_CHAT_WIDTH_KEY = 'planner:ai_chat_width';
 export const AI_AUTO_APPROVE_MUTATIONS_KEY = 'planner:ai_auto_approve_mutations';
@@ -190,6 +195,22 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       setIsDetached(false);
     }
   }, [propScope?.type, propScope?.id, propScope?.title]);
+
+  // Request notification permission if not yet granted so completion alerts can be dispatched
+  useEffect(() => {
+    if (open) {
+      void (async () => {
+        try {
+          const granted = await isNotificationPermissionGranted();
+          if (!granted) {
+            await requestNotificationPermission();
+          }
+        } catch {
+          // ignore notification permission error
+        }
+      })();
+    }
+  }, [open]);
 
   const currentScope: ActiveScope = isDetached || !internalScope
     ? { type: 'global' }
@@ -369,6 +390,18 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     setScrollTrigger((prev) => prev + 1);
     setApiError(null);
     setLastSubmittedText(trimmed);
+
+    // Gracefully request notification permission upon user interaction if not yet granted
+    void (async () => {
+      try {
+        const granted = await isNotificationPermissionGranted();
+        if (!granted) {
+          await requestNotificationPermission();
+        }
+      } catch {
+        // ignore notification permission error
+      }
+    })();
 
     // Lightweight prompt handling for slash commands allowing user to describe freely
     let effectivePrompt = trimmed;
@@ -879,6 +912,18 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
           },
           db
         );
+
+        // Check if document is blurred or hidden to notify user
+        const isBlurred = typeof document !== 'undefined' && (document.hidden || !document.hasFocus?.());
+        if (isBlurred) {
+          const trimmed = fullResponse.trim();
+          const snippet = trimmed.slice(0, 120);
+          void sendDesktopNotification({
+            title: 'PlannerMate AI',
+            body: snippet + (trimmed.length > 120 ? '...' : ''),
+            tag: 'ai-turn-finished',
+          });
+        }
       } else {
         setApiError('Mô hình AI không trả về nội dung (phản hồi rỗng). Vui lòng thử lại hoặc chọn mô hình khác.');
       }
