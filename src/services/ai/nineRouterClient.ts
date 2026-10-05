@@ -5,6 +5,18 @@ import type {
   ConnectionTestOptions,
   ConnectionTestResult,
 } from './types';
+import { isTauriApp } from '../../utils/timerPopout';
+
+interface TauriProxyResponse {
+  status: number;
+  headers: Record<string, string>;
+  body: string;
+}
+
+async function tauriInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+  const api = await import('@tauri-apps/api/core');
+  return args === undefined ? api.invoke<T>(command) : api.invoke<T>(command, args);
+}
 
 export function redactApiKey(text: string, apiKey?: string): string {
   if (!apiKey || apiKey.length < 4) return text;
@@ -19,18 +31,58 @@ export function sanitizeEndpoint(endpoint: string): string {
   return trimmed || 'http://localhost:20128';
 }
 
+function parseModelIds(data: any): string[] {
+  const models: string[] = [];
+  if (Array.isArray(data?.data)) {
+    for (const item of data.data) {
+      if (item?.id && typeof item.id === 'string') {
+        models.push(item.id);
+      }
+    }
+  }
+  return models;
+}
+
 export async function testNineRouterConnection(
   options: ConnectionTestOptions
 ): Promise<ConnectionTestResult> {
   const baseEndpoint = sanitizeEndpoint(options.endpoint);
   const targetUrl = `${baseEndpoint}/v1/models`;
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+  };
+  if (options.apiKey && options.apiKey.trim()) {
+    headers.Authorization = `Bearer ${options.apiKey.trim()}`;
+  }
 
   try {
-    const headers: Record<string, string> = {
-      Accept: 'application/json',
-    };
-    if (options.apiKey && options.apiKey.trim()) {
-      headers.Authorization = `Bearer ${options.apiKey.trim()}`;
+    if (isTauriApp()) {
+      const proxyResponse = await tauriInvoke<TauriProxyResponse>('ai_proxy_request', {
+        method: 'GET',
+        url: targetUrl,
+        headers,
+        body: undefined,
+      });
+
+      if (proxyResponse.status >= 200 && proxyResponse.status < 300) {
+        const data = proxyResponse.body ? JSON.parse(proxyResponse.body) : {};
+        return {
+          ok: true,
+          status: proxyResponse.status,
+          models: parseModelIds(data),
+        };
+      }
+
+      let safeError = redactApiKey(proxyResponse.body || 'API Connection Failed', options.apiKey);
+      if (baseEndpoint.includes('api.9router.com') && proxyResponse.status === 404) {
+        safeError = 'api.9router.com không phải máy chủ API. Vui lòng sử dụng http://localhost:20128 (chạy qua lệnh `npx 9router`).';
+      }
+      return {
+        ok: false,
+        status: proxyResponse.status,
+        models: [],
+        error: `HTTP ${proxyResponse.status}: ${safeError}`,
+      };
     }
 
     const response = await fetch(targetUrl, {
@@ -41,18 +93,10 @@ export async function testNineRouterConnection(
 
     if (response.ok) {
       const data = await response.json().catch(() => ({}));
-      const models: string[] = [];
-      if (Array.isArray(data?.data)) {
-        for (const item of data.data) {
-          if (item?.id && typeof item.id === 'string') {
-            models.push(item.id);
-          }
-        }
-      }
       return {
         ok: true,
         status: response.status,
-        models,
+        models: parseModelIds(data),
       };
     }
 
@@ -78,7 +122,7 @@ export async function testNineRouterConnection(
     if (baseEndpoint.includes('api.9router.com')) {
       errorMsg = 'api.9router.com không phải API server. 9Router chạy cục bộ tại http://localhost:20128 (chạy lệnh `npx 9router`).';
     } else {
-      errorMsg = `Lỗi kết nối tới ${targetUrl} (${err?.message || 'Network/CORS error'}). Hãy kiểm tra xem 9Router daemon đã chạy chưa (npx 9router).`;
+      errorMsg = `Lỗi kết nối tới ${targetUrl} (${errorMsg || 'Network/CORS error'}). Hãy kiểm tra xem 9Router daemon đã chạy chưa (npx 9router).`;
     }
     return {
       ok: false,

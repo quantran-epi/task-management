@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   streamChatCompletion,
   streamChatEvents,
@@ -6,9 +6,21 @@ import {
   redactApiKey,
 } from '../../src/services/ai/nineRouterClient';
 
+const invokeMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: invokeMock,
+}));
+
 describe('nineRouterClient', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    invokeMock.mockReset();
+    delete (window as any).__TAURI_INTERNALS__;
+  });
+
+  afterEach(() => {
+    delete (window as any).__TAURI_INTERNALS__;
   });
 
   it('redacts sensitive API key from strings and error messages', () => {
@@ -52,6 +64,70 @@ describe('nineRouterClient', () => {
 
     expect(result.ok).toBe(false);
     expect(result.status).toBe(401);
+    expect(result.error).not.toContain('test-key');
+    expect(result.error).toContain('***');
+  });
+
+  it('testNineRouterConnection uses Tauri AI proxy and parses models in desktop', async () => {
+    (window as any).__TAURI_INTERNALS__ = {};
+    invokeMock.mockResolvedValue({
+      status: 200,
+      headers: {},
+      body: JSON.stringify({ data: [{ id: 'gpt-4o' }, { id: 'claude-3-5-sonnet' }] }),
+    });
+    const mockFetch = vi.fn();
+    vi.stubGlobal('fetch', mockFetch);
+
+    const result = await testNineRouterConnection({
+      endpoint: 'http://localhost:20128',
+      apiKey: 'test-key',
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.models).toEqual(['gpt-4o', 'claude-3-5-sonnet']);
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(invokeMock).toHaveBeenCalledWith('ai_proxy_request', {
+      method: 'GET',
+      url: 'http://localhost:20128/v1/models',
+      headers: {
+        Accept: 'application/json',
+        Authorization: 'Bearer test-key',
+      },
+      body: undefined,
+    });
+  });
+
+  it('testNineRouterConnection redacts Tauri proxy non-2xx errors', async () => {
+    (window as any).__TAURI_INTERNALS__ = {};
+    invokeMock.mockResolvedValue({
+      status: 401,
+      headers: {},
+      body: 'Invalid API key test-key',
+    });
+
+    const result = await testNineRouterConnection({
+      endpoint: 'http://localhost:20128',
+      apiKey: 'test-key',
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.status).toBe(401);
+    expect(result.models).toEqual([]);
+    expect(result.error).not.toContain('test-key');
+    expect(result.error).toContain('***');
+  });
+
+  it('testNineRouterConnection redacts Tauri invoke errors', async () => {
+    (window as any).__TAURI_INTERNALS__ = {};
+    invokeMock.mockRejectedValue(new Error('native failure with test-key'));
+
+    const result = await testNineRouterConnection({
+      endpoint: 'http://localhost:20128',
+      apiKey: 'test-key',
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.status).toBe(0);
     expect(result.error).not.toContain('test-key');
     expect(result.error).toContain('***');
   });
