@@ -330,7 +330,7 @@ Plans:
 **Goal:** Orchestrate local Claude Code Headless CLI (`stream-json`) via native Rust multi-agent manager (Master-Worker) with Git worktree isolation, a dedicated 3-column Agent Control center, and an interactive Live Git Diff Reviewer with side-by-side/unified diff modes and click-to-comment inline feedback.
 **Requirements**: GHOST-01, GHOST-02, GHOST-03, GHOST-04
 **Depends on:** Phase 14
-**Plans:** 2/4 plans executed
+**Plans:** 3/4 plans executed
 
 Plans:
 **Wave 1**
@@ -340,7 +340,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 15-03-PLAN.md — Agent Control center hooks, 3-column Splitter layout, session tree, terminal stream viewer, and Live Git Diff Reviewer with inline code feedback
+- [x] 15-03-PLAN.md — Agent Control center hooks, 3-column Splitter layout, session tree, terminal stream viewer, and Live Git Diff Reviewer with inline code feedback
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
