@@ -114,6 +114,7 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
       const masterModel = sanitizeModelId(values.masterModel, DEFAULT_GHOST_DEV_CONFIG.masterModel);
       const workerModel = sanitizeModelId(values.workerModel, DEFAULT_GHOST_DEV_CONFIG.workerModel);
       const initialPrompt = generateGhostDevMasterPrompt(task, repoPath);
+      const config = getGhostDevConfig();
 
       setSubmitting(true);
 
@@ -126,6 +127,7 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
             masterModel,
             workerModel,
             initialPrompt,
+            concurrencyCap: config.concurrencyCap,
           },
         });
       } else {

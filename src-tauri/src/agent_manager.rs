@@ -34,6 +34,7 @@ pub struct StartSessionPayload {
     pub master_model: String,
     pub worker_model: String,
     pub initial_prompt: String,
+    pub concurrency_cap: Option<usize>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -252,12 +253,13 @@ pub async fn start_ghost_dev_session(
     app: AppHandle,
     payload: StartSessionPayload,
 ) -> Result<AgentSessionState, String> {
-    // Check concurrency cap
+    // Check concurrency cap (respect user setting, clamp 1..=12)
+    let max_processes = payload.concurrency_cap.unwrap_or(MAX_GLOBAL_PROCESSES).clamp(1, 12);
     let current_running = RUNNING_PROCESS_COUNT.load(Ordering::SeqCst);
-    if current_running >= MAX_GLOBAL_PROCESSES {
+    if current_running >= max_processes {
         return Err(format!(
             "Global process limit reached ({}/{}). Please stop an existing session first.",
-            current_running, MAX_GLOBAL_PROCESSES
+            current_running, max_processes
         ));
     }
 
@@ -366,6 +368,7 @@ pub async fn start_ghost_dev_session(
     let worktree_dir = worktree_path.clone();
     let worker_model_default = payload.worker_model.clone();
     let claude_binary_clone = claude_binary.clone();
+    let max_processes_cap = max_processes;
 
     tokio::spawn(async move {
         let (batch_tx, mut batch_rx) = tokio::sync::mpsc::channel::<StreamEventChunk>(500);
@@ -444,7 +447,7 @@ pub async fn start_ghost_dev_session(
                                     };
                                     let global_count = RUNNING_PROCESS_COUNT.load(Ordering::SeqCst);
 
-                                    if active_workers_count >= 2 || global_count >= MAX_GLOBAL_PROCESSES {
+                                    if active_workers_count >= 2 || global_count >= max_processes_cap {
                                         let limit_msg = if active_workers_count >= 2 {
                                             "Worker concurrency limit reached (max 2 active workers per task). Please wait for active workers to complete."
                                         } else {
