@@ -76,25 +76,30 @@ pub fn open_external_url(url: String) -> Result<(), String> {
     open::that(trimmed).map_err(|e| format!("Failed to open URL in system browser: {}", e))
 }
 
-#[tauri::command]
-pub fn open_local_path(path: String) -> Result<(), String> {
+fn clean_file_uri_path(path: &str) -> Result<String, String> {
     let trimmed = path.trim();
     if trimmed.is_empty() {
         return Err("Path cannot be empty".to_string());
     }
 
-    // Clean file:// URI prefix if present
-    let mut clean_path = trimmed;
+    let mut clean_path = trimmed.to_string();
     if clean_path.to_lowercase().starts_with("file://") {
-        clean_path = &clean_path[7..];
+        clean_path = clean_path[7..].to_string();
         // On Windows, file:///C:/path might leave /C:/path
         #[cfg(target_os = "windows")]
         if clean_path.starts_with('/') && clean_path.len() > 3 && clean_path.chars().nth(2) == Some(':') {
-            clean_path = &clean_path[1..];
+            clean_path = clean_path[1..].to_string();
         }
     }
 
-    let p = std::path::Path::new(clean_path);
+    Ok(clean_path)
+}
+
+#[tauri::command]
+pub fn open_local_path(path: String) -> Result<(), String> {
+    let clean_path = clean_file_uri_path(&path)?;
+
+    let p = std::path::Path::new(&clean_path);
     if !p.exists() {
         return Err(format!("Đường dẫn không tồn tại: {}", clean_path));
     }
@@ -162,6 +167,70 @@ pub fn read_local_file_text_head(file_path: String, max_lines: usize) -> Result<
     }
 
     Ok(lines.join("\n"))
+}
+
+fn resolve_claude_working_dir(path: &str) -> Result<std::path::PathBuf, String> {
+    let clean_path = clean_file_uri_path(path)?;
+    let p = std::path::Path::new(&clean_path);
+    if !p.exists() {
+        return Err(format!("Path does not exist: {}", clean_path));
+    }
+    if p.is_dir() {
+        return Ok(p.to_path_buf());
+    }
+    p.parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .map(std::path::Path::to_path_buf)
+        .ok_or_else(|| format!("File path has no parent directory: {}", clean_path))
+}
+
+#[cfg(target_os = "windows")]
+fn build_claude_local_path_command() -> (&'static str, [&'static str; 3]) {
+    ("cmd.exe", ["/d", "/k", "claude"])
+}
+
+#[tauri::command]
+pub fn launch_claude_at_local_path(path: String) -> Result<(), String> {
+    let working_dir = resolve_claude_working_dir(&path)?;
+
+    #[cfg(target_os = "windows")]
+    {
+        let (program, args) = build_claude_local_path_command();
+        std::process::Command::new(program)
+            .args(args)
+            .current_dir(working_dir)
+            .spawn()
+            .map_err(|e| format!("Failed to spawn cmd.exe for Claude Code: {}", e))?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let script = format!(
+            "tell application \"Terminal\"\nactivate\ndo script \"cd {} && claude\"\nend tell",
+            shell_quote_for_applescript(&working_dir.to_string_lossy())
+        );
+        std::process::Command::new("osascript")
+            .arg("-e")
+            .arg(&script)
+            .spawn()
+            .map_err(|e| format!("Failed to spawn Terminal on macOS: {}", e))?;
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        std::process::Command::new("x-terminal-emulator")
+            .arg("-e")
+            .arg(format!("cd '{}' && claude", working_dir.to_string_lossy().replace('\'', "'\\''")))
+            .spawn()
+            .map_err(|e| format!("Failed to spawn terminal on Linux: {}", e))?;
+    }
+
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn shell_quote_for_applescript(path: &str) -> String {
+    format!("'{}'", path.replace('\'', "'\\''").replace('\\', "\\\\").replace('"', "\\\""))
 }
 
 #[tauri::command]
@@ -424,6 +493,50 @@ pub fn read_local_file_slice(
         is_binary: false,
     })
 }
+#[cfg(test)]
+mod launch_claude_local_path_tests {
+    use super::*;
 
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn launch_claude_local_path_uses_direct_cmd_exe_spec() {
+        let (program, args) = build_claude_local_path_command();
+        assert_eq!(program, "cmd.exe");
+        assert_eq!(args, ["/d", "/k", "claude"]);
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn launch_claude_local_path_spec_avoids_other_terminal_hosts() {
+        let (program, args) = build_claude_local_path_command();
+        let spec = format!("{} {}", program, args.join(" ")).to_lowercase();
+        for forbidden in ["wt", "windowsterminal", "powershell", "pwsh", "open::that", "start"] {
+            assert!(!spec.contains(forbidden), "spec contained {forbidden}: {spec}");
+        }
+    }
+
+    #[test]
+    fn launch_claude_local_path_resolves_existing_dir_and_file_parent() {
+        let temp = std::env::temp_dir().join(format!(
+            "planner-mate-claude-path-test-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&temp).unwrap();
+        let file = temp.join("note.md");
+        std::fs::write(&file, "test").unwrap();
+
+        assert_eq!(resolve_claude_working_dir(temp.to_str().unwrap()).unwrap(), temp);
+        assert_eq!(resolve_claude_working_dir(file.to_str().unwrap()).unwrap(), temp);
+
+        let _ = std::fs::remove_file(file);
+        let _ = std::fs::remove_dir_all(temp);
+    }
+
+    #[test]
+    fn launch_claude_local_path_rejects_empty_and_missing_paths() {
+        assert!(resolve_claude_working_dir("   ").is_err());
+        assert!(resolve_claude_working_dir("/definitely/missing/planner-mate-path").is_err());
+    }
+}
 
 
