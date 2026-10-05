@@ -31,6 +31,7 @@ import {
 } from '../../services/ai/historyPruning';
 import {
   AI_DATABASE_TOOLS,
+  type AiToolDefinition,
   executeAiTool,
   isMutationTool,
   describeToolMutation,
@@ -545,7 +546,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     const dayName = now.format('dddd');
     const timeStr = now.format('HH:mm');
 
-    let graphitiTools = [];
+    let graphitiTools: AiToolDefinition[] = [];
     try {
       graphitiTools = await getGraphitiMcpToolDefinitions();
     } catch (err) {

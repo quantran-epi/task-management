@@ -65,11 +65,20 @@ describe('graphitiMcpClient', () => {
     ]);
     expect(second).toBe(first);
     expect(invokeMock).toHaveBeenCalledTimes(3);
-    expect(JSON.parse(invokeMock.mock.calls[0][1].body).method).toBe('initialize');
-    expect(JSON.parse(invokeMock.mock.calls[1][1].body).method).toBe('notifications/initialized');
-    expect(invokeMock.mock.calls[1][1].sessionId).toBe('session-1');
-    expect(JSON.parse(invokeMock.mock.calls[2][1].body).method).toBe('tools/list');
-    expect(invokeMock.mock.calls[2][1].sessionId).toBe('session-1');
+    const firstCall = invokeMock.mock.calls[0];
+    const secondCall = invokeMock.mock.calls[1];
+    const thirdCall = invokeMock.mock.calls[2];
+    expect(firstCall).toBeDefined();
+    expect(secondCall).toBeDefined();
+    expect(thirdCall).toBeDefined();
+    if (!firstCall || !secondCall || !thirdCall) {
+      throw new Error('Expected three mock calls');
+    }
+    expect(JSON.parse(firstCall[1].body).method).toBe('initialize');
+    expect(JSON.parse(secondCall[1].body).method).toBe('notifications/initialized');
+    expect(secondCall[1].sessionId).toBe('session-1');
+    expect(JSON.parse(thirdCall[1].body).method).toBe('tools/list');
+    expect(thirdCall[1].sessionId).toBe('session-1');
   });
 
   it('parses SSE JSON-RPC responses', async () => {
