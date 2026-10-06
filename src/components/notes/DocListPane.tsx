@@ -14,6 +14,7 @@ import {
   UndoOutlined,
 } from '@ant-design/icons';
 import type { Note } from '../../types/models';
+import { matchesDocSearch } from '../../utils/docSearch';
 
 const { Text } = Typography;
 
@@ -57,13 +58,7 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
 
     // Filter by search term
     if (searchTerm.trim()) {
-      const q = searchTerm.trim().toLowerCase();
-      result = result.filter((n) => {
-        const titleMatch = (n.title || '').toLowerCase().includes(q);
-        const bodyMatch = (n.body || '').toLowerCase().includes(q);
-        const tagMatch = n.tags?.some((t) => t.toLowerCase().includes(q));
-        return Boolean(titleMatch || bodyMatch || tagMatch);
-      });
+      result = result.filter((n) => matchesDocSearch(searchTerm, n));
     }
 
     // Sort

@@ -51,6 +51,7 @@ import { DocListPane } from '../components/notes/DocListPane';
 import { DocEditorPane } from '../components/notes/DocEditorPane';
 import { DocFolderContentsView } from '../components/notes/DocFolderContentsView';
 import { ZipImportPreviewModal } from '../components/notes/ZipImportPreviewModal';
+import { matchesDocSearch } from '../utils/docSearch';
 
 const { Text } = Typography;
 
@@ -665,8 +666,6 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
   const filteredGridNotes = useMemo(() => {
     if (!allNotes) return [];
 
-    const lowerSearch = searchText.trim().toLowerCase();
-
     return allNotes.filter((note) => {
       if (note.deletedAt) return false;
 
@@ -685,20 +684,15 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
       }
 
       // 2. Search Text
-      if (!lowerSearch) return true;
-
-      const titleMatch = note.title?.toLowerCase().includes(lowerSearch);
-      const bodyMatch = note.body.toLowerCase().includes(lowerSearch);
+      if (!searchText.trim()) return true;
 
       const attTexts = noteAttachmentMeta.searchTexts.get(note.id) || [];
-      const attachmentMatch = attTexts.some((t) => t.includes(lowerSearch));
-
       const parentName = note.entityType && note.entityId
         ? entityNames?.get(`${note.entityType}:${note.entityId}`)
         : undefined;
-      const parentMatch = parentName ? parentName.toLowerCase().includes(lowerSearch) : false;
+      const extraTexts = parentName ? [...attTexts, parentName] : attTexts;
 
-      return Boolean(titleMatch || bodyMatch || attachmentMatch || parentMatch);
+      return matchesDocSearch(searchText, note, extraTexts);
     });
   }, [allNotes, searchText, entityFilter, selectedEntityId, noteAttachmentMeta, entityNames]);
 

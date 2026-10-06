@@ -39,6 +39,7 @@ import {
   closeCurrentNotesPopoutWindow,
   type NotesFilterParams,
 } from '../utils/notesPopout';
+import { matchesDocSearch } from '../utils/docSearch';
 
 const GEOMETRY_STORAGE_KEY = 'planner:notes_popout_geometry';
 
@@ -243,8 +244,6 @@ export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb
   const filteredNotes = useMemo(() => {
     if (!allNotes) return [];
 
-    const lowerSearch = searchText.trim().toLowerCase();
-
     return allNotes.filter((note) => {
       // Entity filter
       if (activeFilter?.entityType && activeFilter?.entityId) {
@@ -257,14 +256,10 @@ export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb
       }
 
       // Search text
-      if (!lowerSearch) return true;
+      if (!searchText.trim()) return true;
 
-      const titleMatch = note.title?.toLowerCase().includes(lowerSearch);
-      const bodyMatch = note.body.toLowerCase().includes(lowerSearch);
       const attTexts = noteAttachmentMeta.searchTexts.get(note.id) || [];
-      const attachmentMatch = attTexts.some((t) => t.includes(lowerSearch));
-
-      return Boolean(titleMatch || bodyMatch || attachmentMatch);
+      return matchesDocSearch(searchText, note, attTexts);
     });
   }, [allNotes, searchText, activeFilter, noteAttachmentMeta]);
 

@@ -187,4 +187,105 @@ describe('NotesView 3-Column Document Workspace', () => {
       expect(createdDoc?.body).toContain('## Nguồn');
     });
   });
+
+  it('supports broken-words and diacritic-insensitive search in Docs list pane', async () => {
+    await createNote({
+      title: 'Kế hoạch phát triển 2026',
+      body: 'Tài liệu kiến trúc hệ thống và hướng dẫn API chi tiết',
+      tags: ['kien-truc'],
+      type: 'document',
+    }, testDb);
+
+    await createNote({
+      title: 'Báo cáo tài chính quý 1',
+      body: 'Ngân sách và kế hoạch chi tiêu hàng tháng',
+      tags: ['tai-chinh'],
+      type: 'document',
+    }, testDb);
+
+    render(<NotesView db={testDb} />);
+
+    // Wait until both docs appear
+    await waitFor(() => {
+      expect(screen.getAllByText('Kế hoạch phát triển 2026').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('Báo cáo tài chính quý 1').length).toBeGreaterThan(0);
+    });
+
+    // Click on Kế hoạch phát triển 2026 to select it and activate DocEditorPane
+    const listItems = screen.getAllByText('Kế hoạch phát triển 2026');
+    if (listItems[0]) {
+      fireEvent.click(listItems[0]);
+    }
+
+    const searchInput = screen.getByPlaceholderText('Tìm trong danh sách...');
+
+    // 1. Broken-words multi-term query (words split across title and body) without accents
+    // "ke hoach" in title, "kien truc" in body/tag, "api" in body
+    fireEvent.change(searchInput, { target: { value: 'ke hoach kien truc api' } });
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Kế hoạch phát triển 2026').length).toBeGreaterThan(0);
+      expect(screen.queryByText('Báo cáo tài chính quý 1')).not.toBeInTheDocument();
+    });
+
+    // 2. Out-of-order terms
+    fireEvent.change(searchInput, { target: { value: 'api 2026' } });
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Kế hoạch phát triển 2026').length).toBeGreaterThan(0);
+      expect(screen.queryByText('Báo cáo tài chính quý 1')).not.toBeInTheDocument();
+    });
+
+    // 3. Negative search where one word doesn't match
+    fireEvent.change(searchInput, { target: { value: 'ke hoach khongtontai' } });
+
+    await waitFor(() => {
+      expect(screen.queryByText('Kế hoạch phát triển 2026')).not.toBeInTheDocument();
+      expect(screen.queryByText('Báo cáo tài chính quý 1')).not.toBeInTheDocument();
+    });
+  });
+
+  it('supports broken-words and diacritic-insensitive search in Grid View mode', async () => {
+    await createNote({
+      title: 'Kế hoạch triển khai Sprint 10',
+      body: 'Mục tiêu hoàn thành tính năng tìm kiếm tokenized',
+      type: 'quick_note',
+    }, testDb);
+
+    await createNote({
+      title: 'Ghi chú họp tuần',
+      body: 'Đánh giá tiến độ dự án',
+      type: 'quick_note',
+    }, testDb);
+
+    render(<NotesView db={testDb} />);
+
+    // Switch to Grid view
+    const gridBtn = await screen.findByText('Ghi chú nhanh (Grid)');
+    fireEvent.click(gridBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText('Kế hoạch triển khai Sprint 10')).toBeInTheDocument();
+      expect(screen.getByText('Ghi chú họp tuần')).toBeInTheDocument();
+    });
+
+    const searchInput = screen.getByPlaceholderText('Tìm theo nội dung, tiêu đề, mục cha, ảnh...');
+
+    // Broken multi-word search with unaccented query terms across title and body
+    // "ke hoach" in title, "tim kiem" in body
+    fireEvent.change(searchInput, { target: { value: 'ke hoach tim kiem' } });
+
+    await waitFor(() => {
+      expect(screen.getByText('Kế hoạch triển khai Sprint 10')).toBeInTheDocument();
+      expect(screen.queryByText('Ghi chú họp tuần')).not.toBeInTheDocument();
+    });
+
+    // Reversed order
+    fireEvent.change(searchInput, { target: { value: 'tokenized sprint' } });
+
+    await waitFor(() => {
+      expect(screen.getByText('Kế hoạch triển khai Sprint 10')).toBeInTheDocument();
+      expect(screen.queryByText('Ghi chú họp tuần')).not.toBeInTheDocument();
+    });
+  });
 });
