@@ -246,4 +246,16 @@ describe('DocEditorPane', () => {
     fireEvent.click(chip);
     expect(onOpenTask).toHaveBeenCalledWith('task-1234');
   });
+
+  it('renders AI Chuẩn hóa button and opens NormalizeDocModal on click', async () => {
+    render(<DocEditorPane doc={mockDoc} onUpdateDoc={vi.fn()} db={db} />);
+
+    const normalizeBtn = screen.getByRole('button', { name: /ai chuẩn hóa/i });
+    expect(normalizeBtn).toBeInTheDocument();
+
+    fireEvent.click(normalizeBtn);
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByText(/AI Chuẩn hóa tài liệu/)).toBeInTheDocument();
+  });
 });

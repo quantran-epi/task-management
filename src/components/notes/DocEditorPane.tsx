@@ -44,6 +44,7 @@ import { useAIChat } from '../../context/AIChatContext';
 import { TaskDrawer } from '../tasks/TaskDrawer';
 import { exportPresentationAsFile } from '../../utils/pptxExport';
 import { exportContentAsFile } from '../../utils/fileExport';
+import { NormalizeDocModal } from './NormalizeDocModal';
 
 const { Text, Title } = Typography;
 
@@ -80,6 +81,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
   const [saveStatus, setSaveStatus] = useState<string>('');
   const [detectedEntities, setDetectedEntities] = useState<DetectedEntity[]>([]);
   const [backlinks, setBacklinks] = useState<BacklinksResult>({ tasks: [], projects: [], referencingNotes: [] });
+  const [isNormalizeModalOpen, setIsNormalizeModalOpen] = useState(false);
   const [showToC, setShowToC] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem(TOC_PREF_KEY);
@@ -542,6 +544,16 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
             </Button>
           </Tooltip>
 
+          <Tooltip title="Chuẩn hóa nội dung tài liệu theo cấu trúc chuẩn AI Knowledge Document">
+            <Button
+              size="small"
+              icon={<RobotOutlined style={{ color: '#0284c7' }} />}
+              onClick={() => setIsNormalizeModalOpen(true)}
+            >
+              AI Chuẩn hóa
+            </Button>
+          </Tooltip>
+
           <Tooltip title="Hỏi AI về tài liệu này (Cmd+J)">
             <Button
               size="small"
@@ -986,6 +998,18 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
         open={Boolean(localDrawerTaskId)}
         taskId={localDrawerTaskId ?? null}
         onClose={() => setLocalDrawerTaskId(undefined)}
+        db={db}
+      />
+
+      <NormalizeDocModal
+        open={isNormalizeModalOpen}
+        originalContent={body}
+        docTitle={title}
+        onClose={() => setIsNormalizeModalOpen(false)}
+        onApply={(normalizedMarkdown) => {
+          handleBodyChange(normalizedMarkdown);
+          message.success('Đã chuẩn hóa tài liệu thành công');
+        }}
         db={db}
       />
 
