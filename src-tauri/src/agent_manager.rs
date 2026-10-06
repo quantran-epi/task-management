@@ -334,8 +334,9 @@ pub async fn start_ghost_dev_session(
             "stream-json",
             "--input-format",
             "stream-json",
-            "--permission-mode",
-            "acceptEdits",
+            "--dangerously-skip-permissions",
+            "--add-dir",
+            &payload.repo_path,
             "--model",
             &payload.master_model,
         ])
@@ -424,6 +425,7 @@ pub async fn start_ghost_dev_session(
     let app_clone = app.clone();
     let worktree_path_str = worktree_path.to_string_lossy().to_string();
     let worktree_dir = worktree_path.clone();
+    let repo_path_str = payload.repo_path.clone();
     let worker_model_default = payload.worker_model.clone();
     let claude_binary_clone = claude_binary.clone();
     let max_processes_cap = max_processes;
@@ -526,6 +528,9 @@ pub async fn start_ghost_dev_session(
                                                 "--verbose",
                                                 "--output-format",
                                                 "stream-json",
+                                                "--dangerously-skip-permissions",
+                                                "--add-dir",
+                                                &repo_path_str,
                                                 "--model",
                                                 &subtask_model,
                                                 &subtask_prompt,

@@ -28,6 +28,7 @@ describe('ghostDevPrompt', () => {
     expect(prompt).toContain('Master/Lead Agent');
     expect(prompt).toContain('Implement Ghost Dev Stream');
     expect(prompt).toContain('/Users/dev/repo');
+    expect(prompt).toContain('Git worktree riêng biệt');
     expect(prompt).toContain('Connect Tauri IPC stream-json chunks to React view');
     expect(prompt).not.toContain('Define chunk types');
     expect(prompt).toContain('Listen to tauri event');

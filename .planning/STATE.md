@@ -108,6 +108,7 @@ Last activity: 2026-10-06 -- Completed quick task 261006-9py: Fix #/agents route
 | 261006-dns | break words search in docs page | 2026-10-06 | 5350a60 | complete | [261006-dns-break-words-search-in-docs-page](./quick/261006-dns-break-words-search-in-docs-page/) |
 | 261006-ktc | Fix AI normalize thinking text, enrich mutation context, and ground doc context | 2026-10-06 | 5ff5a36 | complete | [261006-ktc-fix-ai-normalize-thinking-text-enrich-ai](./quick/261006-ktc-fix-ai-normalize-thinking-text-enrich-ai/) |
 | 261006-ghd | Ghost dev: human-friendly logs, subagent detection, AI response in feedback history, multi-session history | 2026-10-06 | — | complete | [261006-ghd-ghost-dev-human-logs-subagents-feedback-sessions](./quick/261006-ghd-ghost-dev-human-logs-subagents-feedback-sessions/) |
+| 261006-mjh | Fix ghost dev file permission and worktree path alignment | 2026-10-06 | 156164b | complete | [261006-mjh-fix-ghost-dev-file-permission](./quick/261006-mjh-fix-ghost-dev-file-permission/) |
 
 ## Performance Metrics
 
