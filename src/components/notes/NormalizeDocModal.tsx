@@ -41,6 +41,20 @@ export interface NormalizeDocModalProps {
 
 export type NormalizeViewMode = 'split' | 'preview' | 'edit';
 
+/**
+ * Strips reasoning process blocks (<think>...</think>, <thought>...</thought>)
+ * and unclosed in-progress thinking blocks during streaming.
+ */
+export function stripThinkingText(text: string): string {
+  if (!text) return '';
+  let cleaned = text;
+  // Remove closed blocks
+  cleaned = cleaned.replace(/<(think|thought)>[\s\S]*?<\/\1>/gi, '');
+  // Remove unclosed thinking block at the end (active streaming)
+  cleaned = cleaned.replace(/<(think|thought)>[\s\S]*$/i, '');
+  return cleaned.trimStart();
+}
+
 export const NormalizeDocModal: React.FC<NormalizeDocModalProps> = ({
   open,
   originalContent,
@@ -85,7 +99,7 @@ export const NormalizeDocModal: React.FC<NormalizeDocModalProps> = ({
       }
 
       const config = await getNineRouterConfig(db);
-      const userPrompt = `Hãy chuẩn hóa nội dung ghi chú/tài liệu sau đây vào đúng cấu trúc khung chuẩn Markdown đã hướng dẫn. Giữ lại toàn bộ thông tin quan trọng, từ khóa và dữ liệu thực tế, bổ sung các mục còn thiếu (hoặc để placeholder hợp lý) theo đúng định dạng. Chỉ trả về nội dung Markdown kết quả, không viết thêm lời dẫn chào hay giải thích ngoài lề.\n\nNội dung hiện tại:\n"""\n${originalContent}\n"""`;
+      const userPrompt = `Hãy chuẩn hóa nội dung ghi chú/tài liệu sau đây vào đúng cấu trúc khung chuẩn Markdown đã hướng dẫn. Giữ lại toàn bộ thông tin quan trọng, từ khóa và dữ liệu thực tế, bổ sung các mục còn thiếu (hoặc để placeholder hợp lý) theo đúng định dạng. Chỉ trả về nội dung Markdown kết quả, không viết thêm lời dẫn chào hay giải thích ngoài lề. Tuyệt đối không xuất thẻ <think> hoặc quá trình suy nghĩ, chỉ trả về nội dung Markdown kết quả.\n\nNội dung hiện tại:\n"""\n${originalContent}\n"""`;
 
       const stream = streamChatCompletion({
         endpoint: config.endpoint,
@@ -103,7 +117,7 @@ export const NormalizeDocModal: React.FC<NormalizeDocModalProps> = ({
       let accumulated = '';
       for await (const chunk of stream) {
         accumulated += chunk;
-        setProposedContent(accumulated);
+        setProposedContent(stripThinkingText(accumulated));
       }
     } catch (err: any) {
       if (err?.name === 'AbortError' || controller.signal.aborted) {

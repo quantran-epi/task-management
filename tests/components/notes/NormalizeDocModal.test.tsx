@@ -88,6 +88,54 @@ describe('NormalizeDocModal', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it('strips <think>...</think> blocks and unclosed <think> streaming chunks', async () => {
+    vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-api-key');
+    vi.spyOn(nineRouterTokenService, 'getNineRouterConfig').mockResolvedValue({
+      endpoint: 'http://localhost:20128',
+      defaultModel: 'deepseek-r1',
+      charLimit: 12000,
+    });
+
+    async function* mockStream() {
+      yield '<think>Đang suy nghĩ cấu trúc chuẩn hóa...</think>';
+      yield '# Tiêu đề chuẩn hóa\n\n';
+      yield '<think>Suy nghĩ thêm về nội dung'; // mid-stream unclosed think
+      yield ' - nội dung suy nghĩ tiếp</think>';
+      yield 'Nội dung thực tế sau chuẩn hóa.';
+    }
+
+    vi.spyOn(nineRouterClient, 'streamChatCompletion').mockImplementation(() => mockStream() as any);
+
+    const onApply = vi.fn();
+    const onClose = vi.fn();
+
+    render(
+      <NormalizeDocModal
+        open={true}
+        originalContent="Nội dung kiểm tra lọc think"
+        docTitle="Doc Think Strip"
+        onClose={onClose}
+        onApply={onApply}
+        db={db}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Nội dung thực tế sau chuẩn hóa\./)).toBeInTheDocument();
+    });
+
+    // Ensure thinking content is NOT rendered
+    expect(screen.queryByText(/Đang suy nghĩ cấu trúc/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/nội dung suy nghĩ tiếp/)).not.toBeInTheDocument();
+
+    const acceptBtn = screen.getByRole('button', { name: /chấp nhận/i });
+    fireEvent.click(acceptBtn);
+
+    expect(onApply).toHaveBeenCalledWith(
+      '# Tiêu đề chuẩn hóa\n\nNội dung thực tế sau chuẩn hóa.'
+    );
+  });
+
   it('aborts and calls onClose when clicking Hủy', async () => {
     vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-api-key');
 
