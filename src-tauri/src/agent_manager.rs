@@ -481,211 +481,355 @@ pub async fn start_ghost_dev_session(
 
                 // Check if this line is a stream-json event
                 let mut chunk_type = "log";
+                let mut chunk_worker_id: Option<String> = None;
+                let mut chunk_source = "master".to_string();
+
                 if trimmed.starts_with('{') {
                     if let Ok(val) = serde_json::from_str::<serde_json::Value>(trimmed) {
-                        let msg_type = val.get("type").and_then(|v| v.as_str()).unwrap_or("");
-                        if msg_type == "tool_use" || msg_type == "tool_call" {
-                            chunk_type = "tool_call";
-                            // Intercept tool calls: shell permission check & master-worker subtask dispatch
-                            if let Some(tool_name) = val.get("name").and_then(|v| v.as_str()) {
-                                if tool_name == "dispatch_subtask" || tool_name == "Agent" {
-                                    let tool_use_id = val.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                                    let input = val.get("input").cloned().unwrap_or_default();
-                                    let role = input.get("role")
-                                        .or_else(|| input.get("subagent_type"))
-                                        .and_then(|v| v.as_str())
-                                        .unwrap_or("subagent")
-                                        .to_string();
-                                    let subtask_prompt = input.get("prompt")
-                                        .or_else(|| input.get("task_prompt"))
-                                        .or_else(|| input.get("description"))
-                                        .and_then(|v| v.as_str())
-                                        .unwrap_or("")
-                                        .to_string();
-                                    let subtask_model = input.get("model")
-                                        .and_then(|v| v.as_str())
-                                        .unwrap_or(&worker_model_default)
-                                        .to_string();
+                        // Inspect for parent_tool_use_id on stream-json events (native subagent output)
+                        let parent_tool_use_id = val.get("parent_tool_use_id")
+                            .or_else(|| val.get("message").and_then(|m| m.get("parent_tool_use_id")))
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string());
 
-                                    let active_workers_count = {
-                                        let pool = AGENT_POOL.lock().await;
-                                        pool.sessions.get(&tid)
-                                            .map(|s| s.state.active_workers.iter().filter(|w| w.status == "running").count())
-                                            .unwrap_or(0)
-                                    };
-                                    let global_count = RUNNING_PROCESS_COUNT.load(Ordering::SeqCst);
+                        if let Some(ref pid) = parent_tool_use_id {
+                            chunk_worker_id = Some(pid.clone());
+                            chunk_source = "worker".to_string();
 
-                                    if active_workers_count >= 2 || global_count >= max_processes_cap {
-                                        let limit_msg = if active_workers_count >= 2 {
-                                            "Worker concurrency limit reached (max 2 active workers per task). Please wait for active workers to complete."
-                                        } else {
-                                            "Global process limit reached. Cannot spawn new worker."
-                                        };
-                                        let resp = format_tool_result_envelope(&tool_use_id, limit_msg, true);
-                                        let _ = stdin_tx_for_reader.send(resp.to_string()).await;
-                                    } else {
-                                        let worker_id = format!("w-{}-{}", tid, chrono_iso_now());
-                                        let mut wcmd = hidden_tokio_command(&claude_binary_clone);
-                                        wcmd.current_dir(&worktree_dir)
-                                            .args([
-                                                "-p",
-                                                "--verbose",
-                                                "--output-format",
-                                                "stream-json",
-                                                "--permission-mode",
-                                                "bypassPermissions",
-                                                "--dangerously-skip-permissions",
-                                                "--add-dir",
-                                                worktree_dir.to_str().unwrap_or(""),
-                                                "--add-dir",
-                                                &repo_path_str,
-                                                "--model",
-                                                &subtask_model,
-                                                &subtask_prompt,
-                                            ])
-                                            .stdout(std::process::Stdio::piped())
-                                            .stderr(std::process::Stdio::piped());
-
-                                        #[cfg(unix)]
-                                        {
-                                            unsafe {
-                                                wcmd.pre_exec(|| {
-                                                    libc::setpgid(0, 0);
-                                                    Ok(())
-                                                });
-                                            }
-                                        }
-
-                                        match wcmd.spawn() {
-                                            Ok(mut wchild) => {
-                                                let wpid = wchild.id().unwrap_or(0);
-                                                RUNNING_PROCESS_COUNT.fetch_add(1, Ordering::SeqCst);
-
-                                                let winfo = WorkerSession {
-                                                    worker_id: worker_id.clone(),
-                                                    role: role.clone(),
-                                                    pid: wpid,
-                                                    model: subtask_model.clone(),
-                                                    status: "running".to_string(),
-                                                    subtask_prompt: subtask_prompt.clone(),
-                                                    started_at: chrono_iso_now(),
-                                                };
-
-                                                {
-                                                    let mut pool = AGENT_POOL.lock().await;
-                                                    if let Some(session) = pool.sessions.get_mut(&tid) {
-                                                        session.state.active_workers.push(winfo);
-                                                        session.worker_pids.push(wpid);
-                                                    }
-                                                }
-                                                let _ = app_clone.emit("ghost-dev:session-updated", ());
-
-                                                let w_tid = tid.clone();
-                                                let w_wid = worker_id.clone();
-                                                let w_app = app_clone.clone();
-                                                let w_btx = b_tx.clone();
-                                                let w_stdin_tx = stdin_tx_for_reader.clone();
-                                                let w_tuid = tool_use_id.clone();
-
-                                                tokio::spawn(async move {
-                                                    let w_stdout = wchild.stdout.take();
-                                                    if let Some(stream) = w_stdout {
-                                                        let mut w_reader = BufReader::new(stream).lines();
-                                                        while let Ok(Some(w_line)) = w_reader.next_line().await {
-                                                            if !w_line.trim().is_empty() {
-                                                                let _ = w_btx.send(StreamEventChunk {
-                                                                    task_id: w_tid.clone(),
-                                                                    worker_id: Some(w_wid.clone()),
-                                                                    source: "worker".to_string(),
-                                                                    timestamp: chrono_iso_now(),
-                                                                    chunk_type: "log".to_string(),
-                                                                    content: w_line,
-                                                                }).await;
-                                                            }
-                                                        }
-                                                    }
-
-                                                    let w_status = wchild.wait().await;
-                                                    let _ = RUNNING_PROCESS_COUNT.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |c| {
-                                                        Some(c.saturating_sub(1))
-                                                    });
-
-                                                    let w_success = w_status.map(|s| s.success()).unwrap_or(false);
-                                                    let w_final = if w_success { "done" } else { "error" };
-
-                                                    {
-                                                        let mut pool = AGENT_POOL.lock().await;
-                                                        if let Some(session) = pool.sessions.get_mut(&w_tid) {
-                                                            if let Some(w) = session.state.active_workers.iter_mut().find(|w| w.worker_id == w_wid) {
-                                                                w.status = w_final.to_string();
-                                                            }
-                                                        }
-                                                    }
-                                                    let _ = w_app.emit("ghost-dev:session-updated", ());
-
-                                                    let completion_content = format!("Worker {} completed with status: {}", w_wid, w_final);
-                                                    let result_payload = format_tool_result_envelope(&w_tuid, &completion_content, !w_success);
-                                                    let _ = w_stdin_tx.send(result_payload.to_string()).await;
-                                                });
-                                            }
-                                            Err(e) => {
-                                                let err_msg = format!("Failed to spawn worker process: {}", e);
-                                                let err_resp = format_tool_result_envelope(&tool_use_id, &err_msg, true);
-                                                let _ = stdin_tx_for_reader.send(err_resp.to_string()).await;
-                                            }
-                                        }
-                                    }
-                                } else if tool_name == "bash" || tool_name == "sh" || tool_name == "execute_command" {
-                                    let cmd = val.get("input")
-                                        .and_then(|i| i.get("command"))
-                                        .and_then(|c| c.as_str())
-                                        .unwrap_or("");
-                                    if !cmd.is_empty() && !is_command_whitelisted(cmd) {
-                                        // Request permission from user via oneshot channel
-                                        let req_id = format!("perm-{}-{}", tid, chrono_iso_now());
-                                        let (perm_tx, perm_rx) = oneshot::channel::<bool>();
-                                        {
-                                            let mut pool = AGENT_POOL.lock().await;
-                                            pool.pending_permissions.insert(req_id.clone(), perm_tx);
-                                        }
-
-                                        let req = ShellPermissionRequest {
-                                            task_id: tid.clone(),
-                                            request_id: req_id.clone(),
-                                            command: cmd.to_string(),
-                                            working_dir: worktree_path_str.clone(),
-                                        };
-                                        let _ = app_clone.emit("ghost-dev:permission-request", req);
-
-                                        // Pause line processor awaiting user approval/rejection
-                                        let approved = perm_rx.await.unwrap_or(false);
-
-                                        // Feed response to Claude stdin
-                                        let response_payload = serde_json::json!({
-                                            "type": "permission_response",
-                                            "requestId": req_id,
-                                            "approved": approved,
-                                            "decision": if approved { "allow" } else { "deny" }
+                            // Ensure parent subagent is tracked in active_workers
+                            let mut updated = false;
+                            {
+                                let mut pool = AGENT_POOL.lock().await;
+                                if let Some(session) = pool.sessions.get_mut(&tid) {
+                                    if !session.state.active_workers.iter().any(|w| w.worker_id == *pid) {
+                                        session.state.active_workers.push(WorkerSession {
+                                            worker_id: pid.clone(),
+                                            role: "subagent".to_string(),
+                                            pid: master_pid,
+                                            model: worker_model_default.clone(),
+                                            status: "running".to_string(),
+                                            subtask_prompt: String::new(),
+                                            started_at: chrono_iso_now(),
                                         });
-                                        let _ = stdin_tx_for_reader.send(response_payload.to_string()).await;
-
-                                        let audit_chunk = StreamEventChunk {
-                                            task_id: tid.clone(),
-                                            worker_id: None,
-                                            source: "master".to_string(),
-                                            timestamp: chrono_iso_now(),
-                                            chunk_type: "log".to_string(),
-                                            content: format!(
-                                                "[Security] Shell command '{}' was {}",
-                                                cmd,
-                                                if approved { "approved by user" } else { "denied by user" }
-                                            ),
-                                        };
-                                        let _ = b_tx.send(audit_chunk).await;
+                                        updated = true;
                                     }
                                 }
                             }
+                            if updated {
+                                let _ = app_clone.emit("ghost-dev:session-updated", ());
+                            }
+                        }
+
+                        // Collect tool calls & tool results from top-level or embedded message/content
+                        let mut extracted_tool_calls: Vec<(String, String, serde_json::Value)> = Vec::new();
+                        let mut extracted_tool_results: Vec<(String, bool)> = Vec::new();
+
+                        let msg_type = val.get("type").and_then(|v| v.as_str()).unwrap_or("");
+
+                        if msg_type == "tool_use" || msg_type == "tool_call" {
+                            let id = val.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                            let name = val.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                            let input = val.get("input").cloned().unwrap_or_default();
+                            extracted_tool_calls.push((id, name, input));
                         } else if msg_type == "tool_result" {
+                            let tu_id = val.get("tool_use_id").or_else(|| val.get("id")).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                            let is_err = val.get("is_error").and_then(|v| v.as_bool()).unwrap_or(false);
+                            extracted_tool_results.push((tu_id, is_err));
+                        } else if msg_type == "content_block_start" {
+                            if let Some(cb) = val.get("content_block") {
+                                if cb.get("type").and_then(|v| v.as_str()) == Some("tool_use") {
+                                    let id = cb.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                                    let name = cb.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                                    let input = cb.get("input").cloned().unwrap_or_default();
+                                    extracted_tool_calls.push((id, name, input));
+                                }
+                            }
+                        }
+
+                        // Check content arrays in val.message.content or val.content
+                        let content_arr = val.get("message")
+                            .and_then(|m| m.get("content"))
+                            .or_else(|| val.get("content"))
+                            .and_then(|c| c.as_array());
+
+                        if let Some(arr) = content_arr {
+                            for item in arr {
+                                let itype = item.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                                if itype == "tool_use" || itype == "tool_call" {
+                                    let id = item.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                                    let name = item.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                                    let input = item.get("input").cloned().unwrap_or_default();
+                                    extracted_tool_calls.push((id, name, input));
+                                } else if itype == "tool_result" {
+                                    let tu_id = item.get("tool_use_id").or_else(|| item.get("id")).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                                    let is_err = item.get("is_error").and_then(|v| v.as_bool()).unwrap_or(false);
+                                    extracted_tool_results.push((tu_id, is_err));
+                                }
+                            }
+                        }
+
+                        // Track native Task/Agent subagents
+                        for (tc_id, tc_name, tc_input) in &extracted_tool_calls {
+                            if tc_name == "Task" || tc_name == "Agent" {
+                                let role = tc_input.get("subagent_type")
+                                    .or_else(|| tc_input.get("description"))
+                                    .or_else(|| tc_input.get("role"))
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("subagent")
+                                    .to_string();
+                                let prompt = tc_input.get("prompt")
+                                    .or_else(|| tc_input.get("description"))
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("")
+                                    .to_string();
+                                let subtask_model = tc_input.get("model")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or(&worker_model_default)
+                                    .to_string();
+
+                                let mut updated = false;
+                                {
+                                    let mut pool = AGENT_POOL.lock().await;
+                                    if let Some(session) = pool.sessions.get_mut(&tid) {
+                                        if let Some(w) = session.state.active_workers.iter_mut().find(|w| w.worker_id == *tc_id) {
+                                            w.role = role;
+                                            w.subtask_prompt = prompt;
+                                        } else {
+                                            session.state.active_workers.push(WorkerSession {
+                                                worker_id: tc_id.clone(),
+                                                role,
+                                                pid: master_pid,
+                                                model: subtask_model,
+                                                status: "running".to_string(),
+                                                subtask_prompt: prompt,
+                                                started_at: chrono_iso_now(),
+                                            });
+                                            updated = true;
+                                        }
+                                    }
+                                }
+                                if updated {
+                                    let _ = app_clone.emit("ghost-dev:session-updated", ());
+                                }
+                            }
+                        }
+
+                        // Update worker status upon tool_result arrival
+                        for (tr_id, tr_is_err) in &extracted_tool_results {
+                            if !tr_id.is_empty() {
+                                let mut updated = false;
+                                {
+                                    let mut pool = AGENT_POOL.lock().await;
+                                    if let Some(session) = pool.sessions.get_mut(&tid) {
+                                        if let Some(w) = session.state.active_workers.iter_mut().find(|w| w.worker_id == *tr_id) {
+                                            w.status = if *tr_is_err { "error".to_string() } else { "done".to_string() };
+                                            updated = true;
+                                        }
+                                    }
+                                }
+                                if updated {
+                                    let _ = app_clone.emit("ghost-dev:session-updated", ());
+                                }
+                            }
+                        }
+
+                        // Handle dispatch_subtask worker process spawning & shell permission checks
+                        for (tc_id, tc_name, tc_input) in &extracted_tool_calls {
+                            if tc_name == "dispatch_subtask" {
+                                let role = tc_input.get("role")
+                                    .or_else(|| tc_input.get("subagent_type"))
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("subagent")
+                                    .to_string();
+                                let subtask_prompt = tc_input.get("prompt")
+                                    .or_else(|| tc_input.get("task_prompt"))
+                                    .or_else(|| tc_input.get("description"))
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("")
+                                    .to_string();
+                                let subtask_model = tc_input.get("model")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or(&worker_model_default)
+                                    .to_string();
+
+                                let active_workers_count = {
+                                    let pool = AGENT_POOL.lock().await;
+                                    pool.sessions.get(&tid)
+                                        .map(|s| s.state.active_workers.iter().filter(|w| w.status == "running").count())
+                                        .unwrap_or(0)
+                                };
+                                let global_count = RUNNING_PROCESS_COUNT.load(Ordering::SeqCst);
+
+                                if active_workers_count >= 2 || global_count >= max_processes_cap {
+                                    let limit_msg = if active_workers_count >= 2 {
+                                        "Worker concurrency limit reached (max 2 active workers per task). Please wait for active workers to complete."
+                                    } else {
+                                        "Global process limit reached. Cannot spawn new worker."
+                                    };
+                                    let resp = format_tool_result_envelope(tc_id, limit_msg, true);
+                                    let _ = stdin_tx_for_reader.send(resp.to_string()).await;
+                                } else {
+                                    let worker_id = format!("w-{}-{}", tid, chrono_iso_now());
+                                    let mut wcmd = hidden_tokio_command(&claude_binary_clone);
+                                    wcmd.current_dir(&worktree_dir)
+                                        .args([
+                                            "-p",
+                                            "--verbose",
+                                            "--output-format",
+                                            "stream-json",
+                                            "--permission-mode",
+                                            "bypassPermissions",
+                                            "--dangerously-skip-permissions",
+                                            "--add-dir",
+                                            worktree_dir.to_str().unwrap_or(""),
+                                            "--add-dir",
+                                            &repo_path_str,
+                                            "--model",
+                                            &subtask_model,
+                                            &subtask_prompt,
+                                        ])
+                                        .stdout(std::process::Stdio::piped())
+                                        .stderr(std::process::Stdio::piped());
+
+                                    #[cfg(unix)]
+                                    {
+                                        unsafe {
+                                            wcmd.pre_exec(|| {
+                                                libc::setpgid(0, 0);
+                                                Ok(())
+                                            });
+                                        }
+                                    }
+
+                                    match wcmd.spawn() {
+                                        Ok(mut wchild) => {
+                                            let wpid = wchild.id().unwrap_or(0);
+                                            RUNNING_PROCESS_COUNT.fetch_add(1, Ordering::SeqCst);
+
+                                            let winfo = WorkerSession {
+                                                worker_id: worker_id.clone(),
+                                                role: role.clone(),
+                                                pid: wpid,
+                                                model: subtask_model.clone(),
+                                                status: "running".to_string(),
+                                                subtask_prompt: subtask_prompt.clone(),
+                                                started_at: chrono_iso_now(),
+                                            };
+
+                                            {
+                                                let mut pool = AGENT_POOL.lock().await;
+                                                if let Some(session) = pool.sessions.get_mut(&tid) {
+                                                    session.state.active_workers.push(winfo);
+                                                    session.worker_pids.push(wpid);
+                                                }
+                                            }
+                                            let _ = app_clone.emit("ghost-dev:session-updated", ());
+
+                                            let w_tid = tid.clone();
+                                            let w_wid = worker_id.clone();
+                                            let w_app = app_clone.clone();
+                                            let w_btx = b_tx.clone();
+                                            let w_stdin_tx = stdin_tx_for_reader.clone();
+                                            let w_tuid = tc_id.clone();
+
+                                            tokio::spawn(async move {
+                                                let w_stdout = wchild.stdout.take();
+                                                if let Some(stream) = w_stdout {
+                                                    let mut w_reader = BufReader::new(stream).lines();
+                                                    while let Ok(Some(w_line)) = w_reader.next_line().await {
+                                                        if !w_line.trim().is_empty() {
+                                                            let _ = w_btx.send(StreamEventChunk {
+                                                                task_id: w_tid.clone(),
+                                                                worker_id: Some(w_wid.clone()),
+                                                                source: "worker".to_string(),
+                                                                timestamp: chrono_iso_now(),
+                                                                chunk_type: "log".to_string(),
+                                                                content: w_line,
+                                                            }).await;
+                                                        }
+                                                    }
+                                                }
+
+                                                let w_status = wchild.wait().await;
+                                                let _ = RUNNING_PROCESS_COUNT.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |c| {
+                                                    Some(c.saturating_sub(1))
+                                                });
+
+                                                let w_success = w_status.map(|s| s.success()).unwrap_or(false);
+                                                let w_final = if w_success { "done" } else { "error" };
+
+                                                {
+                                                    let mut pool = AGENT_POOL.lock().await;
+                                                    if let Some(session) = pool.sessions.get_mut(&w_tid) {
+                                                        if let Some(w) = session.state.active_workers.iter_mut().find(|w| w.worker_id == w_wid) {
+                                                            w.status = w_final.to_string();
+                                                        }
+                                                    }
+                                                }
+                                                let _ = w_app.emit("ghost-dev:session-updated", ());
+
+                                                let completion_content = format!("Worker {} completed with status: {}", w_wid, w_final);
+                                                let result_payload = format_tool_result_envelope(&w_tuid, &completion_content, !w_success);
+                                                let _ = w_stdin_tx.send(result_payload.to_string()).await;
+                                            });
+                                        }
+                                        Err(e) => {
+                                            let err_msg = format!("Failed to spawn worker process: {}", e);
+                                            let err_resp = format_tool_result_envelope(tc_id, &err_msg, true);
+                                            let _ = stdin_tx_for_reader.send(err_resp.to_string()).await;
+                                        }
+                                    }
+                                }
+                            } else if tc_name == "bash" || tc_name == "sh" || tc_name == "execute_command" {
+                                let cmd = tc_input.get("command")
+                                    .and_then(|c| c.as_str())
+                                    .unwrap_or("");
+                                if !cmd.is_empty() && !is_command_whitelisted(cmd) {
+                                    let req_id = format!("perm-{}-{}", tid, chrono_iso_now());
+                                    let (perm_tx, perm_rx) = oneshot::channel::<bool>();
+                                    {
+                                        let mut pool = AGENT_POOL.lock().await;
+                                        pool.pending_permissions.insert(req_id.clone(), perm_tx);
+                                    }
+
+                                    let req = ShellPermissionRequest {
+                                        task_id: tid.clone(),
+                                        request_id: req_id.clone(),
+                                        command: cmd.to_string(),
+                                        working_dir: worktree_path_str.clone(),
+                                    };
+                                    let _ = app_clone.emit("ghost-dev:permission-request", req);
+
+                                    let approved = perm_rx.await.unwrap_or(false);
+
+                                    let response_payload = serde_json::json!({
+                                        "type": "permission_response",
+                                        "requestId": req_id,
+                                        "approved": approved,
+                                        "decision": if approved { "allow" } else { "deny" }
+                                    });
+                                    let _ = stdin_tx_for_reader.send(response_payload.to_string()).await;
+
+                                    let audit_chunk = StreamEventChunk {
+                                        task_id: tid.clone(),
+                                        worker_id: None,
+                                        source: "master".to_string(),
+                                        timestamp: chrono_iso_now(),
+                                        chunk_type: "log".to_string(),
+                                        content: format!(
+                                            "[Security] Shell command '{}' was {}",
+                                            cmd,
+                                            if approved { "approved by user" } else { "denied by user" }
+                                        ),
+                                    };
+                                    let _ = b_tx.send(audit_chunk).await;
+                                }
+                            }
+                        }
+
+                        if !extracted_tool_calls.is_empty() {
+                            chunk_type = "tool_call";
+                        } else if !extracted_tool_results.is_empty() {
                             chunk_type = "tool_result";
                         }
                     }
@@ -693,8 +837,8 @@ pub async fn start_ghost_dev_session(
 
                 let chunk = StreamEventChunk {
                     task_id: tid.clone(),
-                    worker_id: None,
-                    source: "master".to_string(),
+                    worker_id: chunk_worker_id,
+                    source: chunk_source,
                     timestamp: chrono_iso_now(),
                     chunk_type: chunk_type.to_string(),
                     content: line,

@@ -303,4 +303,35 @@ index 0000000..1111111 100644
       expect(screen.queryByText('Phiên cần xóa')).not.toBeInTheDocument();
     });
   });
+
+  it('displays active running indicator in terminal when session status is running', async () => {
+    const mockSessions: AgentSession[] = [
+      {
+        taskId: 'task-running-1',
+        taskTitle: 'Tác vụ đang xử lý',
+        repoPath: '/repo',
+        worktreePath: '/worktree',
+        branchName: 'pm-agent/task-running-1',
+        masterPid: 1005,
+        masterModel: 'claude-3-5-sonnet-20241022',
+        workerModel: 'claude-3-5-haiku-20241022',
+        status: 'running',
+        startedAt: '2026-10-06T10:00:00Z',
+        activeWorkers: [],
+      },
+    ];
+
+    mockInvoke.mockImplementation((command: string) => {
+      if (command === 'list_agent_sessions') {
+        return Promise.resolve(mockSessions);
+      }
+      return Promise.resolve(null);
+    });
+
+    render(<AgentControlView />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Claude AI đang xử lý / suy nghĩ...')).toBeInTheDocument();
+    });
+  });
 });

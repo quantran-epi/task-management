@@ -152,6 +152,7 @@ export const AgentControlView: React.FC = () => {
             <AgentTerminalLog
               logs={logs}
               sending={sending}
+              isRunning={activeSession?.status === 'running'}
               onSendFeedback={sendChatMessage}
               onClearLogs={clearLogs}
               taskTitle={activeSession.taskTitle}

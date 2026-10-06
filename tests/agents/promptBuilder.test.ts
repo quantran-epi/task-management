@@ -33,6 +33,7 @@ describe('ghostDevPrompt', () => {
     expect(prompt).not.toContain('Define chunk types');
     expect(prompt).toContain('Listen to tauri event');
     expect(prompt).toContain('Render auto-scroll terminal');
+    expect(prompt).toContain('Task(description, prompt, subagent_type)');
   });
 
   it('formatInlineFeedbackPrompt produces markdown with file path, line number, code block, and user comment per D-13', () => {

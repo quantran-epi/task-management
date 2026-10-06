@@ -4,7 +4,7 @@ export function generateGhostDevMasterPrompt(task: Task, repoPath: string): stri
   const parts: string[] = [
     `Bạn là Master/Lead Agent chịu trách nhiệm lập kế hoạch, phân rã công việc và điều phối giải quyết tác vụ: "${task.name}".`,
     `Thư mục gốc dự án: ${repoPath}`,
-    'Bạn đang thực thi trong Git worktree riêng biệt được tạo tự động cho tác vụ này. Hãy đọc và ghi các tệp mã nguồn trực tiếp theo đường dẫn tương đối trong thư mục làm việc hiện tại.',
+    'Bạn đang làm việc trực tiếp trong thư mục Git worktree riêng biệt (thư mục làm việc hiện tại). Mọi thao tác chỉnh sửa, tạo file hoặc đọc mã nguồn phải được thực hiện trong thư mục worktree này theo đường dẫn tương đối.',
   ];
 
   if (task.description?.trim()) {
@@ -18,7 +18,7 @@ export function generateGhostDevMasterPrompt(task: Task, repoPath: string): stri
   }
 
   parts.push(
-    'Khi cần phân chia tác vụ nhỏ hơn cho worker song song (tối đa 2 worker đồng thời), bạn có thể gọi tool: `Agent(prompt, description, model)` hoặc `dispatch_subtask(role, task_prompt, model)`.'
+    'Khi cần phân chia tác vụ nhỏ hơn cho worker song song (tối đa 2 worker đồng thời), bạn có thể gọi native tool `Task(description, prompt, subagent_type)` hoặc `dispatch_subtask(role, task_prompt, model)`.'
   );
 
   return parts.join('\n\n');

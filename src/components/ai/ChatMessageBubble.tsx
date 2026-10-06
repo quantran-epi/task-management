@@ -380,14 +380,14 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
                 ▋
               </span>
             )}
-            {isStreaming && streamingStatus && (
+            {isStreaming && (
               <div style={{ marginTop: 8 }}>
                 <Tag
                   icon={<SyncOutlined spin />}
                   color="processing"
                   style={{ borderRadius: 10, padding: '2px 8px', fontSize: 11 }}
                 >
-                  {streamingStatus}
+                  {streamingStatus || 'Đang tạo câu trả lời...'}
                 </Tag>
               </div>
             )}
