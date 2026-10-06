@@ -8,7 +8,6 @@ import {
   Space,
   Typography,
   Input,
-  message,
 } from 'antd';
 import {
   RobotOutlined,

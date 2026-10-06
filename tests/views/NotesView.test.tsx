@@ -157,7 +157,7 @@ describe('NotesView 3-Column Document Workspace', () => {
     const createBtns = await screen.findAllByRole('button', { name: /tạo ghi chú nhanh/i });
     expect(createBtns.length).toBeGreaterThan(0);
 
-    fireEvent.click(createBtns[0]);
+    fireEvent.click(createBtns[0]!);
 
     await waitFor(async () => {
       const allNotes = await testDb.notes.toArray();
@@ -174,7 +174,7 @@ describe('NotesView 3-Column Document Workspace', () => {
     // Click "Tạo tài liệu"
     const createBtns = await screen.findAllByRole('button', { name: /tạo tài liệu/i });
     expect(createBtns.length).toBeGreaterThan(0);
-    fireEvent.click(createBtns[0]);
+    fireEvent.click(createBtns[0]!);
 
     await waitFor(async () => {
       const allNotes = await testDb.notes.toArray();
