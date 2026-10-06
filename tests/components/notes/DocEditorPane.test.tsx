@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { TaskPlannerDatabase } from '../../../src/db';
 import { DocEditorPane } from '../../../src/components/notes/DocEditorPane';
+import { AIChatProvider } from '../../../src/context/AIChatContext';
+import * as aiChatContextModule from '../../../src/context/AIChatContext';
 import type { Note, Task, Project } from '../../../src/types/models';
 
 describe('DocEditorPane', () => {
@@ -257,5 +259,56 @@ describe('DocEditorPane', () => {
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
     expect(screen.getByText(/AI Chuẩn hóa tài liệu/)).toBeInTheDocument();
+  });
+
+  it('renders only one Table of Contents button with text "Mục lục"', () => {
+    const docWithHeadings: Note = {
+      ...mockDoc,
+      body: '# Heading 1\nContent 1\n## Heading 2\nContent 2',
+    };
+    render(<DocEditorPane doc={docWithHeadings} onUpdateDoc={vi.fn()} db={db} />);
+
+    const tocButtons = screen.getAllByRole('button', { name: /mục lục/i });
+    expect(tocButtons).toHaveLength(1);
+    expect(tocButtons[0]).toHaveTextContent('Mục lục');
+  });
+
+  it('opens AI chat with enriched prompt containing doc title, word count, tags and actionable intent on Hỏi AI click', () => {
+    const openChatMock = vi.fn();
+    vi.spyOn(aiChatContextModule, 'useAIChat').mockReturnValue({
+      isOpen: false,
+      openChat: openChatMock,
+      closeChat: vi.fn(),
+      toggleChat: vi.fn(),
+      activeScope: { type: 'global' },
+      setCustomScope: vi.fn(),
+      registerActiveItem: () => () => {},
+      pendingPrompt: null,
+      clearPendingPrompt: vi.fn(),
+    });
+
+    const docWithMetadata: Note = {
+      ...mockDoc,
+      title: 'Tài liệu kiến trúc',
+      body: 'Từ thứ nhất từ thứ hai từ thứ ba',
+      tags: ['kien-truc', 'backend'],
+    };
+
+    render(<DocEditorPane doc={docWithMetadata} onUpdateDoc={vi.fn()} db={db} />);
+
+    const askAiBtn = screen.getByRole('button', { name: /hỏi ai/i });
+    fireEvent.click(askAiBtn);
+
+    expect(openChatMock).toHaveBeenCalledTimes(1);
+    const [scopeArg, promptArg] = openChatMock.mock.calls[0];
+    expect(scopeArg).toEqual({
+      type: 'document',
+      id: docWithMetadata.id,
+      title: 'Tài liệu kiến trúc',
+    });
+    expect(promptArg).toContain('Tài liệu kiến trúc');
+    expect(promptArg).toContain('9 từ');
+    expect(promptArg).toContain('[Tags: kien-truc, backend]');
+    expect(promptArg).toContain('Hãy phân tích nội dung, tóm tắt các điểm then chốt và gợi ý các hành động tiếp theo');
   });
 });

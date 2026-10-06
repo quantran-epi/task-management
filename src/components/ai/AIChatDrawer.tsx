@@ -23,6 +23,7 @@ import { streamChatEvents, streamChatCompletion } from '../../services/ai/nineRo
 import {
   buildItemContextPrompt,
   buildGlobalContextPrompt,
+  serializeDocumentContext,
   extractMentionedEntityIds,
 } from '../../services/ai/contextGrounding';
 import {
@@ -35,6 +36,7 @@ import {
   executeAiTool,
   isMutationTool,
   describeToolMutation,
+  describeToolMutationWithContext,
   normalizeToolName,
 } from '../../services/ai/aiTools';
 import {
@@ -498,6 +500,11 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
               charLimit: config.charLimit,
             });
           }
+        } else if (effectiveScope.type === 'document') {
+          const note = db.notes ? await db.notes.get(effectiveScope.id) : null;
+          if (note) {
+            systemInstruction = serializeDocumentContext(note);
+          }
         }
       } catch (err) {
         console.warn('[AIChatDrawer] Context grounding resolution error:', err);
@@ -799,7 +806,7 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
           // Check if this local tool performs a data mutation requiring user confirmation
           if (!isGraphitiTool && isMutationTool(tc.function.name, args)) {
             if (!autoApproveMutations) {
-              const summary = describeToolMutation(tc.function.name, args);
+              const summary = await describeToolMutationWithContext(tc.function.name, args, db);
               setStreamingStatus('Chờ xác nhận hành động...');
               const confirmed = await new Promise<boolean>((resolve) => {
                 pendingConfirmationRef.current = { resolve };

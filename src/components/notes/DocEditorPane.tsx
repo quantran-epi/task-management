@@ -434,9 +434,12 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
   const handleAskAI = () => {
     if (!doc) return;
     if (aiChat?.openChat) {
+      const wordCount = doc.body ? doc.body.trim().split(/\s+/).filter(Boolean).length : 0;
+      const tagInfo = doc.tags && doc.tags.length > 0 ? ` [Tags: ${doc.tags.join(', ')}]` : '';
+      const expandedPrompt = `Tôi đang xem xét tài liệu "${doc.title || 'Chưa đặt tên'}" (${wordCount} từ${tagInfo}). Hãy phân tích nội dung, tóm tắt các điểm then chốt và gợi ý các hành động tiếp theo hoặc liên kết với các tác vụ/dự án phù hợp.`;
       aiChat.openChat(
         { type: 'document', id: doc.id, title: doc.title || 'Tài liệu' },
-        `Hãy tóm tắt và phân tích tài liệu "${doc.title || 'này'}" giúp tôi.`
+        expandedPrompt
       );
     }
   };
@@ -634,16 +637,6 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
               size="small"
               icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
               onClick={toggleFullscreen}
-            />
-          </Tooltip>
-
-          <Tooltip title={showToC ? 'Ẩn mục lục' : 'Hiện mục lục'}>
-            <Button
-              size="small"
-              type={showToC ? 'default' : 'dashed'}
-              icon={<OrderedListOutlined />}
-              onClick={toggleToC}
-              style={{ color: showToC ? '#4f46e5' : undefined }}
             />
           </Tooltip>
 

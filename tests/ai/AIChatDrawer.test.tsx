@@ -1157,4 +1157,127 @@ describe('AIChatDrawer', () => {
       })
     );
   });
+
+  it('grounds document scope context when activeScope is document type with valid id', async () => {
+    vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-api-key');
+    vi.spyOn(nineRouterTokenService, 'getNineRouterConfig').mockResolvedValue({
+      endpoint: 'https://api.9router.com',
+      defaultModel: 'gpt-4o',
+      charLimit: 12000,
+    });
+
+    await db.notes.add({
+      id: 'doc-scope-test-1',
+      title: 'Tài liệu kiến trúc hệ thống Core Banking',
+      body: '# Core Banking Specs\nNội dung chi tiết về luồng xử lý giao dịch tài chính.',
+      tags: ['banking', 'architecture'],
+      isPinned: false,
+      createdAt: '2026-10-01',
+      updatedAt: '2026-10-01',
+    });
+
+    const startTurnSpy = vi.spyOn(aiDebugService, 'startTurn');
+    async function* mockEvents() {
+      yield { type: 'text', delta: 'Đã nhận tài liệu kiến trúc!' };
+    }
+    vi.spyOn(nineRouterClient, 'streamChatEvents').mockImplementation(mockEvents as any);
+
+    render(
+      <AIChatDrawer
+        open={true}
+        onClose={vi.fn()}
+        db={db}
+        activeScope={{
+          type: 'document',
+          id: 'doc-scope-test-1',
+          title: 'Tài liệu kiến trúc hệ thống Core Banking',
+        }}
+      />
+    );
+
+    const textarea = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
+    fireEvent.change(textarea, { target: { value: 'Hãy phân tích tài liệu này' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+    await waitFor(() => {
+      expect(startTurnSpy).toHaveBeenCalled();
+    });
+
+    const callArgs = startTurnSpy.mock.calls[0]?.[0];
+    expect(callArgs?.systemPrompt).toContain('<item_context type="document" id="doc-scope-test-1">');
+    expect(callArgs?.systemPrompt).toContain('Tài liệu kiến trúc hệ thống Core Banking');
+    expect(callArgs?.systemPrompt).toContain('Nội dung chi tiết về luồng xử lý giao dịch tài chính');
+  });
+
+  it('displays enriched mutation summary with entity name in confirmation modal', async () => {
+    vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-api-key');
+    vi.spyOn(nineRouterTokenService, 'getNineRouterConfig').mockResolvedValue({
+      endpoint: 'http://localhost:20128',
+      defaultModel: 'gpt-4o',
+      charLimit: 12000,
+    });
+
+    await db.tasks.add({
+      id: 'task-enrich-confirm',
+      name: 'Nâng cấp bảo mật JWT',
+      status: 'Open',
+      priority: 'Medium',
+      progress: 0,
+      estimateMinutes: 60,
+      createdAt: '2026-10-01',
+      updatedAt: '2026-10-01',
+    });
+
+    let callCount = 0;
+    async function* mockEvents() {
+      callCount++;
+      if (callCount === 1) {
+        yield {
+          type: 'tool_calls',
+          calls: [
+            {
+              id: 'call_update_task_enrich',
+              type: 'function',
+              function: {
+                name: 'update_task',
+                arguments: JSON.stringify({
+                  id: 'task-enrich-confirm',
+                  status: 'Done',
+                  priority: 'Urgent',
+                }),
+              },
+            },
+          ],
+        };
+      } else {
+        yield {
+          type: 'text',
+          delta: 'Đã hoàn tất cập nhật.',
+        };
+      }
+    }
+    vi.spyOn(nineRouterClient, 'streamChatEvents').mockImplementation(mockEvents as any);
+
+    render(
+      <AIChatDrawer
+        open={true}
+        onClose={vi.fn()}
+        db={db}
+        activeScope={{ type: 'global' }}
+      />
+    );
+
+    const textarea = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
+    fireEvent.change(textarea, { target: { value: 'Cập nhật task Nâng cấp bảo mật JWT' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+    await waitFor(() => {
+      const confirmCard = screen.getByTestId('ai-mutation-confirmation');
+      expect(confirmCard).toBeInTheDocument();
+      // Should show resolved task name and formatted field changes instead of raw id
+      expect(confirmCard).toHaveTextContent(/Nâng cấp bảo mật JWT/);
+      expect(confirmCard).toHaveTextContent(/Trạng thái: "Done"/);
+      expect(confirmCard).toHaveTextContent(/Ưu tiên: "Urgent"/);
+    });
+  });
 });
