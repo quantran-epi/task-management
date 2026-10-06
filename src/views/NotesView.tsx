@@ -131,6 +131,44 @@ Các trường hợp đặc biệt không áp dụng luồng tiêu chuẩn.
 - Tài liệu/Ticket tham chiếu: SD-XXXXX / PROC_NAME
 - Ngày xác minh: YYYY-MM-DD`;
 
+export const RECOMMENDED_DOC_TEMPLATE = `# Tiêu đề nghiệp vụ hoặc thành phần
+
+#domain-tag #system-tag
+
+## Tóm tắt
+Mô tả ngắn gọn mục đích và câu hỏi nghiệp vụ mà tài liệu này giải quyết.
+
+## Phạm vi
+Phạm vi áp dụng của quy tắc hoặc thành phần này.
+
+## Thuật ngữ
+- **Thuật ngữ A**: Định nghĩa ngắn gọn, chính xác.
+- **Thuật ngữ B**: Định nghĩa ngắn gọn, chính xác.
+
+## Quy tắc
+1. Quy tắc thứ nhất (ghi rõ điều kiện và kết quả).
+2. Quy tắc thứ hai.
+
+## Luồng xử lý
+1. Bước 1: Hành động cụ thể.
+2. Bước 2: Hành động tiếp theo.
+
+## Trạng thái và mã lỗi
+| Mã | Ý nghĩa | Hành động xử lý |
+|---|---|---|
+| 00 | Thành công | Tiếp tục quy trình |
+| 05 | Từ chối | Kiểm tra điều kiện |
+
+## Ví dụ
+Mô tả ví dụ đầu vào cụ thể và kết quả mong đợi.
+
+## Ngoại lệ
+Các trường hợp đặc biệt không áp dụng luồng tiêu chuẩn.
+
+## Nguồn
+- Tài liệu/Ticket tham chiếu: SD-XXXXX / PROC_NAME
+- Ngày xác minh: YYYY-MM-DD`;
+
 export interface NotesViewProps {
   db?: TaskPlannerDatabase | undefined;
 }
@@ -318,6 +356,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
 
   // Create new document action (supports explicit target folder)
   const handleCreateDocument = async (targetFolderId?: string) => {
+    const isQuickNoteMode = activeFilter === 'quick_notes' && !targetFolderId;
     const effectiveFolderId =
       targetFolderId ??
       (typeof activeFilter === 'string' && !['inbox', 'pinned', 'all', 'quick_notes', 'trash'].includes(activeFilter)
@@ -326,13 +365,21 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
 
     try {
       const newDoc = await createNote(
-        {
-          title: 'Tài liệu mới',
-          body: '# Tài liệu mới\n\nBắt đầu viết nội dung tại đây...',
-          type: 'document',
-          parentId: effectiveFolderId,
-          tags: activeTag ? [activeTag] : [],
-        },
+        isQuickNoteMode
+          ? {
+              title: 'Ghi chú nhanh mới',
+              body: '',
+              type: 'quick_note',
+              parentId: undefined,
+              tags: activeTag ? [activeTag] : [],
+            }
+          : {
+              title: 'Tài liệu mới',
+              body: RECOMMENDED_DOC_TEMPLATE,
+              type: 'document',
+              parentId: effectiveFolderId,
+              tags: activeTag ? [activeTag] : [],
+            },
         db
       );
 
@@ -342,9 +389,9 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
       }
 
       setSelectedDocId(newDoc.id);
-      message.success('Đã tạo tài liệu mới');
+      message.success(isQuickNoteMode ? 'Đã tạo ghi chú nhanh mới' : 'Đã tạo tài liệu mới');
     } catch {
-      message.error('Không thể tạo tài liệu');
+      message.error(isQuickNoteMode ? 'Không thể tạo ghi chú nhanh' : 'Không thể tạo tài liệu');
     }
   };
 
@@ -750,6 +797,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
           <DocListPane
             notes={filteredDocList}
             selectedDocId={activeDocument?.id ?? null}
+            activeFilter={activeFilter}
             onSelectDoc={(doc) => setSelectedDocId(doc.id)}
             onTogglePin={(doc) => handleUpdateDocument(doc.id, { isPinned: !doc.isPinned })}
             onMoveToFolder={handleOpenMoveDocModal}

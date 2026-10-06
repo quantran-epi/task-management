@@ -22,6 +22,7 @@ export type DocSortOption = 'updatedAt' | 'title' | 'createdAt';
 export interface DocListPaneProps {
   notes: Note[];
   selectedDocId?: string | null | undefined;
+  activeFilter?: string | undefined;
   onSelectDoc: (doc: Note) => void;
   onTogglePin?: ((doc: Note) => void) | undefined;
   onMoveToFolder?: ((doc: Note) => void) | undefined;
@@ -36,6 +37,7 @@ export interface DocListPaneProps {
 export const DocListPane: React.FC<DocListPaneProps> = ({
   notes,
   selectedDocId,
+  activeFilter,
   onSelectDoc,
   onTogglePin,
   onMoveToFolder,
@@ -291,7 +293,9 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
               description={
                 currentFolder
                   ? `Thư mục "${currentFolder.title}" chưa có tài liệu`
-                  : 'Chưa có tài liệu nào'
+                  : activeFilter === 'quick_notes'
+                    ? 'Chưa có ghi chú nhanh nào'
+                    : 'Chưa có tài liệu nào'
               }
             />
             {onCreateDoc && (
@@ -301,7 +305,11 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
                 onClick={onCreateDoc}
                 style={{ marginTop: 12, backgroundColor: '#4f46e5' }}
               >
-                {currentFolder ? `Tạo tài liệu trong "${currentFolder.title}"` : 'Tạo tài liệu mới'}
+                {currentFolder
+                  ? `Tạo tài liệu trong "${currentFolder.title}"`
+                  : activeFilter === 'quick_notes'
+                    ? 'Tạo ghi chú nhanh mới'
+                    : 'Tạo tài liệu mới'}
               </Button>
             )}
           </div>

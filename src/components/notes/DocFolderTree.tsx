@@ -484,7 +484,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
             onCreateDoc(targetFolder);
           }}
         >
-          Tạo tài liệu
+          {activeFilter === 'quick_notes' ? 'Tạo ghi chú nhanh' : 'Tạo tài liệu'}
         </Button>
         <Tooltip title="Tạo thư mục mới ở cấp gốc">
           <Button icon={<FolderAddOutlined />} onClick={handleOpenCreateRootFolder} />

@@ -145,4 +145,46 @@ describe('NotesView 3-Column Document Workspace', () => {
     expect(copiedPayload).toContain('secret');
     expect(await screen.findByText(/đã sao chép prompt/i)).toBeInTheDocument();
   });
+
+  it('creates quick_note when in quick_notes view filter', async () => {
+    render(<NotesView db={testDb} />);
+
+    // Switch to quick notes filter
+    const quickNotesFilterBtn = await screen.findByText('Ghi chú nhanh');
+    fireEvent.click(quickNotesFilterBtn);
+
+    // Primary create button in tree label becomes "Tạo ghi chú nhanh"
+    const createBtns = await screen.findAllByRole('button', { name: /tạo ghi chú nhanh/i });
+    expect(createBtns.length).toBeGreaterThan(0);
+
+    fireEvent.click(createBtns[0]);
+
+    await waitFor(async () => {
+      const allNotes = await testDb.notes.toArray();
+      const createdQuickNote = allNotes.find((n) => n.type === 'quick_note');
+      expect(createdQuickNote).toBeDefined();
+      expect(createdQuickNote?.title).toBe('Ghi chú nhanh mới');
+      expect(createdQuickNote?.body).toBe('');
+    });
+  });
+
+  it('creates document with RECOMMENDED_DOC_TEMPLATE when in document view', async () => {
+    render(<NotesView db={testDb} />);
+
+    // Click "Tạo tài liệu"
+    const createBtns = await screen.findAllByRole('button', { name: /tạo tài liệu/i });
+    expect(createBtns.length).toBeGreaterThan(0);
+    fireEvent.click(createBtns[0]);
+
+    await waitFor(async () => {
+      const allNotes = await testDb.notes.toArray();
+      const createdDoc = allNotes.find((n) => n.type === 'document');
+      expect(createdDoc).toBeDefined();
+      expect(createdDoc?.title).toBe('Tài liệu mới');
+      expect(createdDoc?.body).toContain('## Tóm tắt');
+      expect(createdDoc?.body).toContain('## Phạm vi');
+      expect(createdDoc?.body).toContain('## Quy tắc');
+      expect(createdDoc?.body).toContain('## Nguồn');
+    });
+  });
 });
