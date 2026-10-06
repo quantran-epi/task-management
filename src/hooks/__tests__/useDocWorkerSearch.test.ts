@@ -40,4 +40,15 @@ describe('useDocWorkerSearch', () => {
     const { result } = renderHook(() => useDocWorkerSearch(mockNotes, 'React hook'));
     expect(result.current.matchIds).toEqual(['doc-1']);
   });
+
+  it('updates matchIds when query changes to non-matching query', () => {
+    const { result, rerender } = renderHook(
+      ({ q }) => useDocWorkerSearch(mockNotes, q),
+      { initialProps: { q: 'React' } }
+    );
+    expect(result.current.matchIds).toEqual(['doc-1']);
+
+    rerender({ q: 'nonexistent-query' });
+    expect(result.current.matchIds).toEqual([]);
+  });
 });

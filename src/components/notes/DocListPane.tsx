@@ -86,7 +86,7 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
     });
 
     return result;
-  }, [notes, searchTerm, sortBy]);
+  }, [notes, searchTerm, sortBy, matchIds]);
 
   const getItemMenuItems = (doc: Note): MenuProps['items'] => {
     if (doc.deletedAt) {
