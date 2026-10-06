@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { TaskPlannerDatabase } from '../../../src/db';
 import { DocEditorPane } from '../../../src/components/notes/DocEditorPane';
-import { AIChatProvider } from '../../../src/context/AIChatContext';
 import * as aiChatContextModule from '../../../src/context/AIChatContext';
 import type { Note, Task, Project } from '../../../src/types/models';
 
@@ -300,7 +299,8 @@ describe('DocEditorPane', () => {
     fireEvent.click(askAiBtn);
 
     expect(openChatMock).toHaveBeenCalledTimes(1);
-    const [scopeArg, promptArg] = openChatMock.mock.calls[0];
+    const call = openChatMock.mock.calls[0]!;
+    const [scopeArg, promptArg] = call;
     expect(scopeArg).toEqual({
       type: 'document',
       id: docWithMetadata.id,

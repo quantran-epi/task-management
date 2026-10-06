@@ -35,7 +35,6 @@ import {
   type AiToolDefinition,
   executeAiTool,
   isMutationTool,
-  describeToolMutation,
   describeToolMutationWithContext,
   normalizeToolName,
 } from '../../services/ai/aiTools';
