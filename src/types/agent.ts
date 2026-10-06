@@ -24,6 +24,7 @@ export interface WorkerSession {
 export interface UserFeedbackEntry {
   timestamp: string;
   feedback: string;
+  aiResponse?: string | undefined;
 }
 
 export interface GhostDevSessionAuditRecord {

@@ -147,6 +147,64 @@ describe('agentSessionHistoryRepo', () => {
     expect(list).toHaveLength(0);
   });
 
+  it('preserves multiple sessions for the same taskId without overwriting', () => {
+    const s1 = agentSessionHistoryRepo.recordSessionStart({
+      taskId: 'task-same-id',
+      taskTitle: 'Same Task Run 1',
+      startedAt: '2026-10-06T10:00:00.000Z',
+      repoPath: '/workspace/project',
+      branchName: 'pm-agent/task-same-id',
+      masterModel: 'claude-3-7-sonnet-20250219',
+      workerModel: 'claude-3-5-haiku-20241022',
+      status: 'done',
+      initialPrompt: 'Run 1',
+    });
+
+    const s2 = agentSessionHistoryRepo.recordSessionStart({
+      taskId: 'task-same-id',
+      taskTitle: 'Same Task Run 2',
+      startedAt: '2026-10-06T10:30:00.000Z',
+      repoPath: '/workspace/project',
+      branchName: 'pm-agent/task-same-id',
+      masterModel: 'claude-3-7-sonnet-20250219',
+      workerModel: 'claude-3-5-haiku-20241022',
+      status: 'running',
+      initialPrompt: 'Run 2',
+    });
+
+    const list = agentSessionHistoryRepo.listSessionHistory();
+    expect(list).toHaveLength(2);
+    expect(list.map((s) => s.sessionId)).toContain(s1.sessionId);
+    expect(list.map((s) => s.sessionId)).toContain(s2.sessionId);
+
+    // Deleting s1 by sessionId only removes s1
+    agentSessionHistoryRepo.deleteSession(s1.sessionId);
+    const afterDelete = agentSessionHistoryRepo.listSessionHistory();
+    expect(afterDelete).toHaveLength(1);
+    expect(afterDelete[0]?.sessionId).toBe(s2.sessionId);
+  });
+
+  it('attaches AI response to latest user feedback', () => {
+    agentSessionHistoryRepo.recordSessionStart({
+      taskId: 'task-ai-resp',
+      taskTitle: 'Test AI Response Pairing',
+      startedAt: '2026-10-06T10:00:00.000Z',
+      repoPath: '/workspace/project',
+      branchName: 'pm-agent/task-ai-resp',
+      masterModel: 'claude-3-7-sonnet-20250219',
+      workerModel: 'claude-3-5-haiku-20241022',
+      status: 'running',
+      initialPrompt: 'Prompt',
+    });
+
+    agentSessionHistoryRepo.recordUserFeedback('task-ai-resp', 'Please fix the typo in button label');
+    agentSessionHistoryRepo.attachAiResponseToLatestFeedback('task-ai-resp', 'I have updated the label to Save');
+
+    const session = agentSessionHistoryRepo.getSessionById('task-ai-resp');
+    expect(session?.userFeedbackHistory[0]?.feedback).toBe('Please fix the typo in button label');
+    expect(session?.userFeedbackHistory[0]?.aiResponse).toBe('I have updated the label to Save');
+  });
+
   it('safely recovers from malformed localStorage data', () => {
     localStorage.setItem('planner:ghost_dev_session_history', 'corrupted{json');
     const list = agentSessionHistoryRepo.listSessionHistory();

@@ -107,6 +107,7 @@ Last activity: 2026-10-06 -- Completed quick task 261006-9py: Fix #/agents route
 | 261006-czh | autofill doc template on create and ai normalize note action | 2026-10-06 | a87511a | — | [261006-czh-autofill-doc-template-on-create-and-ai-n](./quick/261006-czh-autofill-doc-template-on-create-and-ai-n/) |
 | 261006-dns | break words search in docs page | 2026-10-06 | 5350a60 | complete | [261006-dns-break-words-search-in-docs-page](./quick/261006-dns-break-words-search-in-docs-page/) |
 | 261006-ktc | Fix AI normalize thinking text, enrich mutation context, and ground doc context | 2026-10-06 | 5ff5a36 | complete | [261006-ktc-fix-ai-normalize-thinking-text-enrich-ai](./quick/261006-ktc-fix-ai-normalize-thinking-text-enrich-ai/) |
+| 261006-ghd | Ghost dev: human-friendly logs, subagent detection, AI response in feedback history, multi-session history | 2026-10-06 | — | complete | [261006-ghd-ghost-dev-human-logs-subagents-feedback-sessions](./quick/261006-ghd-ghost-dev-human-logs-subagents-feedback-sessions/) |
 
 ## Performance Metrics
 

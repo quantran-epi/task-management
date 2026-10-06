@@ -482,12 +482,16 @@ pub async fn start_ghost_dev_session(
                             chunk_type = "tool_call";
                             // Intercept tool calls: shell permission check & master-worker subtask dispatch
                             if let Some(tool_name) = val.get("name").and_then(|v| v.as_str()) {
-                                if tool_name == "dispatch_subtask" {
+                                if tool_name == "dispatch_subtask" || tool_name == "Agent" {
                                     let tool_use_id = val.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
                                     let input = val.get("input").cloned().unwrap_or_default();
-                                    let role = input.get("role").and_then(|v| v.as_str()).unwrap_or("developer").to_string();
-                                    let subtask_prompt = input.get("task_prompt")
-                                        .or_else(|| input.get("prompt"))
+                                    let role = input.get("role")
+                                        .or_else(|| input.get("subagent_type"))
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("subagent")
+                                        .to_string();
+                                    let subtask_prompt = input.get("prompt")
+                                        .or_else(|| input.get("task_prompt"))
                                         .or_else(|| input.get("description"))
                                         .and_then(|v| v.as_str())
                                         .unwrap_or("")

@@ -12,7 +12,7 @@ import {
   Card,
   message,
 } from 'antd';
-import { HistoryOutlined, CopyOutlined } from '@ant-design/icons';
+import { HistoryOutlined, CopyOutlined, UserOutlined, RobotOutlined } from '@ant-design/icons';
 import { AgentSessionList, getStatusBadge } from '../components/agents/AgentSessionList';
 import { AgentTerminalLog } from '../components/agents/AgentTerminalLog';
 import { AgentDiffReviewer } from '../components/agents/AgentDiffReviewer';
@@ -52,10 +52,13 @@ export const AgentControlView: React.FC = () => {
     setAuditDrawerOpen(true);
   };
 
-  const handleDeleteAuditSession = (taskId: string) => {
-    agentSessionHistoryRepo.deleteSession(taskId);
+  const handleDeleteAuditSession = (sessionIdOrTaskId: string) => {
+    agentSessionHistoryRepo.deleteSession(sessionIdOrTaskId);
     refreshAuditHistory();
-    if (selectedAuditRecord?.taskId === taskId) {
+    if (
+      selectedAuditRecord?.sessionId === sessionIdOrTaskId ||
+      selectedAuditRecord?.taskId === sessionIdOrTaskId
+    ) {
       setSelectedAuditRecord(null);
       setAuditDrawerOpen(false);
     }
@@ -152,6 +155,7 @@ export const AgentControlView: React.FC = () => {
               onSendFeedback={sendChatMessage}
               onClearLogs={clearLogs}
               taskTitle={activeSession.taskTitle}
+              activeWorkers={activeSession.activeWorkers}
             />
           ) : (
             <div
@@ -298,33 +302,87 @@ export const AgentControlView: React.FC = () => {
               </Typography.Title>
               {selectedAuditRecord.userFeedbackHistory &&
               selectedAuditRecord.userFeedbackHistory.length > 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {selectedAuditRecord.userFeedbackHistory.map((fb, idx) => (
-                    <Card
+                    <div
                       key={idx}
-                      size="small"
-                      style={{ backgroundColor: '#f0f9ff', borderColor: '#bae6fd' }}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 6,
+                        padding: 10,
+                        backgroundColor: '#fafafa',
+                        border: '1px solid #f0f0f0',
+                        borderRadius: 8,
+                      }}
                     >
-                      <div
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          marginBottom: 4,
-                        }}
+                      {/* User Feedback Bubble */}
+                      <Card
+                        size="small"
+                        style={{ backgroundColor: '#f0f9ff', borderColor: '#bae6fd' }}
+                        styles={{ body: { padding: '8px 12px' } }}
                       >
-                        <Typography.Text strong style={{ fontSize: 12, color: '#0369a1' }}>
-                          Phản hồi #{idx + 1}
-                        </Typography.Text>
-                        <Typography.Text type="secondary" style={{ fontSize: 11 }}>
-                          {new Date(fb.timestamp).toLocaleTimeString()}
-                        </Typography.Text>
-                      </div>
-                      <Typography.Paragraph
-                        style={{ margin: 0, fontSize: 13, whiteSpace: 'pre-wrap' }}
-                      >
-                        {fb.feedback}
-                      </Typography.Paragraph>
-                    </Card>
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            marginBottom: 4,
+                          }}
+                        >
+                          <Space size={4}>
+                            <UserOutlined style={{ color: '#0369a1', fontSize: 12 }} />
+                            <Typography.Text strong style={{ fontSize: 12, color: '#0369a1' }}>
+                              Chỉ đạo #{idx + 1}
+                            </Typography.Text>
+                          </Space>
+                          <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+                            {new Date(fb.timestamp).toLocaleTimeString()}
+                          </Typography.Text>
+                        </div>
+                        <Typography.Paragraph
+                          style={{ margin: 0, fontSize: 13, whiteSpace: 'pre-wrap' }}
+                        >
+                          {fb.feedback}
+                        </Typography.Paragraph>
+                      </Card>
+
+                      {/* AI Response Bubble */}
+                      {fb.aiResponse ? (
+                        <Card
+                          size="small"
+                          style={{
+                            backgroundColor: '#faf5ff',
+                            borderColor: '#e9d5ff',
+                            marginLeft: 16,
+                          }}
+                          styles={{ body: { padding: '8px 12px' } }}
+                        >
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              marginBottom: 4,
+                            }}
+                          >
+                            <Space size={4}>
+                              <RobotOutlined style={{ color: '#7e22ce', fontSize: 12 }} />
+                              <Typography.Text strong style={{ fontSize: 12, color: '#7e22ce' }}>
+                                Phản hồi từ AI
+                              </Typography.Text>
+                            </Space>
+                          </div>
+                          <Typography.Paragraph
+                            style={{ margin: 0, fontSize: 13, whiteSpace: 'pre-wrap', color: '#374151' }}
+                          >
+                            {fb.aiResponse}
+                          </Typography.Paragraph>
+                        </Card>
+                      ) : (
+                        <div style={{ marginLeft: 20, fontSize: 11, color: '#9ca3af', fontStyle: 'italic' }}>
+                          (AI đã nhận chỉ đạo và thực hiện trực tiếp vào mã nguồn)
+                        </div>
+                      )}
+                    </div>
                   ))}
                 </div>
               ) : (

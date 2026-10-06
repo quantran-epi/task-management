@@ -17,7 +17,7 @@ export function generateGhostDevMasterPrompt(task: Task, repoPath: string): stri
   }
 
   parts.push(
-    'Bạn có thể phân chia tác vụ nhỏ hơn cho worker song song (tối đa 2 worker đồng thời) bằng cách gọi tool: `dispatch_subtask(role, task_prompt, model)`.'
+    'Khi cần phân chia tác vụ nhỏ hơn cho worker song song (tối đa 2 worker đồng thời), bạn có thể gọi tool: `Agent(prompt, description, model)` hoặc `dispatch_subtask(role, task_prompt, model)`.'
   );
 
   return parts.join('\n\n');

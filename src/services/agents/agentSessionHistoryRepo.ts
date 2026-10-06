@@ -63,14 +63,14 @@ export const agentSessionHistoryRepo = {
       error: record.error,
     };
 
-    // Filter out if duplicate taskId already exists, or keep newest at top
-    const nextList = [newRecord, ...existing.filter((s) => s.taskId !== record.taskId)];
+    // Keep all historical runs, placing newest session at top
+    const nextList = [newRecord, ...existing.filter((s) => s.sessionId !== newRecord.sessionId)];
     saveHistory(nextList);
     return newRecord;
   },
 
   updateSessionStatus(
-    taskId: string,
+    taskIdOrSessionId: string,
     status: AgentStatus,
     finishedAt?: string,
     error?: string
@@ -79,7 +79,7 @@ export const agentSessionHistoryRepo = {
     let updated = false;
 
     const nextList = existing.map((item) => {
-      if (item.taskId === taskId || item.sessionId === taskId) {
+      if (item.sessionId === taskIdOrSessionId || item.taskId === taskIdOrSessionId) {
         updated = true;
         return {
           ...item,
@@ -96,16 +96,17 @@ export const agentSessionHistoryRepo = {
     }
   },
 
-  recordUserFeedback(taskId: string, feedback: string): void {
+  recordUserFeedback(taskIdOrSessionId: string, feedback: string, aiResponse?: string): void {
     const existing = loadHistory();
     let updated = false;
 
     const nextList = existing.map((item) => {
-      if (item.taskId === taskId || item.sessionId === taskId) {
+      if (item.sessionId === taskIdOrSessionId || item.taskId === taskIdOrSessionId) {
         updated = true;
         const entry: UserFeedbackEntry = {
           timestamp: new Date().toISOString(),
           feedback,
+          aiResponse,
         };
         return {
           ...item,
@@ -120,18 +121,54 @@ export const agentSessionHistoryRepo = {
     }
   },
 
+  attachAiResponseToLatestFeedback(taskIdOrSessionId: string, aiResponse: string): void {
+    const existing = loadHistory();
+    let updated = false;
+
+    const nextList = existing.map((item) => {
+      if (item.sessionId === taskIdOrSessionId || item.taskId === taskIdOrSessionId) {
+        const history = [...(item.userFeedbackHistory || [])];
+        if (history.length > 0) {
+          const lastIdx = history.length - 1;
+          const lastEntry = history[lastIdx];
+          if (lastEntry) {
+            history[lastIdx] = {
+              ...lastEntry,
+              aiResponse: lastEntry.aiResponse
+                ? `${lastEntry.aiResponse}\n\n${aiResponse}`
+                : aiResponse,
+            };
+            updated = true;
+            return {
+              ...item,
+              userFeedbackHistory: history,
+            };
+          }
+        }
+      }
+      return item;
+    });
+
+    if (updated) {
+      saveHistory(nextList);
+    }
+  },
+
   listSessionHistory(): GhostDevSessionAuditRecord[] {
     return loadHistory();
   },
 
-  getSessionById(taskId: string): GhostDevSessionAuditRecord | null {
+  getSessionById(id: string): GhostDevSessionAuditRecord | null {
     const existing = loadHistory();
-    return existing.find((item) => item.taskId === taskId || item.sessionId === taskId) || null;
+    return existing.find((item) => item.sessionId === id || item.taskId === id) || null;
   },
 
-  deleteSession(taskId: string): void {
+  deleteSession(sessionIdOrTaskId: string): void {
     const existing = loadHistory();
-    const nextList = existing.filter((item) => item.taskId !== taskId && item.sessionId !== taskId);
+    const hasSessionMatch = existing.some((item) => item.sessionId === sessionIdOrTaskId);
+    const nextList = hasSessionMatch
+      ? existing.filter((item) => item.sessionId !== sessionIdOrTaskId)
+      : existing.filter((item) => item.taskId !== sessionIdOrTaskId);
     saveHistory(nextList);
   },
 

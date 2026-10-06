@@ -20,7 +20,7 @@ export interface AgentSessionListProps {
   onStopSession?: (taskId: string) => Promise<void>;
   auditHistory?: GhostDevSessionAuditRecord[];
   onSelectAuditSession?: (record: GhostDevSessionAuditRecord) => void;
-  onDeleteAuditSession?: (taskId: string) => void;
+  onDeleteAuditSession?: (sessionId: string) => void;
   onClearAllAuditHistory?: () => void;
 }
 
@@ -428,7 +428,7 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
                     {onDeleteAuditSession && (
                       <Popconfirm
                         title="Xóa phiên này?"
-                        onConfirm={() => onDeleteAuditSession(record.taskId)}
+                        onConfirm={() => onDeleteAuditSession(record.sessionId || record.taskId)}
                         okText="Xóa"
                         cancelText="Hủy"
                         okButtonProps={{ danger: true }}
