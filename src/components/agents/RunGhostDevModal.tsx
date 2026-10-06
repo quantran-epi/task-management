@@ -26,11 +26,12 @@ import type { Task } from '../../types/models';
 import type { AppRoute } from '../../types/navigation';
 import { isTauriApp } from '../../utils/timerPopout';
 import { isLocalPath, normalizeLocalPath, browseLocalFolder } from '../../utils/documentLinks';
-import { generateGhostDevMasterPrompt } from '../../utils/ghostDevPrompt';
+import { generateGhostDevMasterPrompt, type GhostDevPromptLanguage } from '../../utils/ghostDevPrompt';
 import {
   getGhostDevConfig,
   sanitizeModelId,
   DEFAULT_GHOST_DEV_CONFIG,
+  MODEL_ID_REGEX,
 } from '../../services/agents/ghostDevConfig';
 import { agentSessionHistoryRepo } from '../../services/agents/agentSessionHistoryRepo';
 
@@ -61,6 +62,7 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
   const [detectedPaths, setDetectedPaths] = useState<string[]>([]);
   const [selectedPathMode, setSelectedPathMode] = useState<'detected' | 'custom'>('detected');
 
+  const [promptLanguage, setPromptLanguage] = useState<GhostDevPromptLanguage>('vi');
   const [promptMode, setPromptMode] = useState<'default' | 'custom'>('default');
   const [customPromptText, setCustomPromptText] = useState<string>('');
   const [isCustomEdited, setIsCustomEdited] = useState<boolean>(false);
@@ -69,7 +71,9 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
 
   const watchedRepoPath = Form.useWatch('repoPath', form);
   const currentRepo = normalizeLocalPath(watchedRepoPath || (detectedPaths[0] ?? '')) || '/workspace';
-  const generatedDefaultPrompt = task ? generateGhostDevMasterPrompt(task, currentRepo) : '';
+  const generatedDefaultPrompt = task
+    ? generateGhostDevMasterPrompt(task, currentRepo, promptLanguage)
+    : '';
 
   useEffect(() => {
     if (!isCustomEdited && generatedDefaultPrompt) {
@@ -79,6 +83,7 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
 
   useEffect(() => {
     if (visible) {
+      setPromptLanguage('vi');
       setPromptMode('default');
       setExtraInstructionsText('');
       setIsCustomEdited(false);
@@ -86,11 +91,26 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
     }
   }, [visible]);
 
+  const handleLanguageChange = (lang: GhostDevPromptLanguage) => {
+    setPromptLanguage(lang);
+    if (task) {
+      const newPrompt = generateGhostDevMasterPrompt(task, currentRepo, lang);
+      if (!isCustomEdited) {
+        setCustomPromptText(newPrompt);
+      }
+    }
+  };
+
+  const extraHeader =
+    promptLanguage === 'en'
+      ? '## Additional Instructions from User'
+      : '## Chỉ dẫn bổ sung từ người dùng';
+
   const resolvedFinalPrompt =
     promptMode === 'custom'
       ? customPromptText.trim() || generatedDefaultPrompt
       : extraInstructionsText.trim()
-        ? `${generatedDefaultPrompt}\n\n## Chỉ dẫn bổ sung từ người dùng\n${extraInstructionsText.trim()}`
+        ? `${generatedDefaultPrompt}\n\n${extraHeader}\n${extraInstructionsText.trim()}`
         : generatedDefaultPrompt;
 
   useEffect(() => {
@@ -331,39 +351,28 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
             name="masterModel"
             label="Master Agent Model"
             rules={[
-              { required: true, message: 'Vui lòng chọn model Master' },
+              { required: true, message: 'Vui lòng nhập model Master' },
               {
-                pattern: /^[a-zA-Z0-9.-]+$/,
-                message: 'Model ID chỉ chứa ký tự chữ, số, dấu chấm và gạch ngang',
+                pattern: MODEL_ID_REGEX,
+                message: 'Model ID chỉ chứa ký tự chữ, số, dấu chấm, gạch ngang, gạch dưới, v.v.',
               },
             ]}
           >
-            <Select
-              options={[
-                { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet' },
-                { value: 'claude-3-7-sonnet-20250219', label: 'Claude 3.7 Sonnet' },
-                { value: 'claude-3-opus-20240229', label: 'Claude 3 Opus' },
-              ]}
-            />
+            <Input placeholder="claude-3-5-sonnet-20241022" />
           </Form.Item>
 
           <Form.Item
             name="workerModel"
             label="Worker Agent Model"
             rules={[
-              { required: true, message: 'Vui lòng chọn model Worker' },
+              { required: true, message: 'Vui lòng nhập model Worker' },
               {
-                pattern: /^[a-zA-Z0-9.-]+$/,
-                message: 'Model ID chỉ chứa ký tự chữ, số, dấu chấm và gạch ngang',
+                pattern: MODEL_ID_REGEX,
+                message: 'Model ID chỉ chứa ký tự chữ, số, dấu chấm, gạch ngang, gạch dưới, v.v.',
               },
             ]}
           >
-            <Select
-              options={[
-                { value: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku' },
-                { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet' },
-              ]}
-            />
+            <Input placeholder="claude-3-5-haiku-20241022" />
           </Form.Item>
         </div>
 
@@ -374,20 +383,32 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
               justifyContent: 'space-between',
               alignItems: 'center',
               marginBottom: 12,
+              flexWrap: 'wrap',
+              gap: 8,
             }}
           >
             <Space>
               <FileTextOutlined style={{ color: '#4f46e5' }} />
               <span style={{ fontWeight: 600 }}>Cấu hình Prompt cho Agent</span>
             </Space>
-            <Segmented
-              value={promptMode}
-              onChange={(val) => setPromptMode(val as 'default' | 'custom')}
-              options={[
-                { label: 'Prompt mặc định', value: 'default' },
-                { label: 'Tùy chỉnh toàn bộ prompt', value: 'custom' },
-              ]}
-            />
+            <Space wrap>
+              <Segmented
+                value={promptLanguage}
+                onChange={(val) => handleLanguageChange(val as GhostDevPromptLanguage)}
+                options={[
+                  { label: 'Tiếng Việt', value: 'vi' },
+                  { label: 'English', value: 'en' },
+                ]}
+              />
+              <Segmented
+                value={promptMode}
+                onChange={(val) => setPromptMode(val as 'default' | 'custom')}
+                options={[
+                  { label: 'Prompt mặc định', value: 'default' },
+                  { label: 'Tùy chỉnh toàn bộ prompt', value: 'custom' },
+                ]}
+              />
+            </Space>
           </div>
 
           {promptMode === 'default' ? (
@@ -423,7 +444,10 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
                   type="link"
                   icon={<ReloadOutlined />}
                   onClick={() => {
-                    setCustomPromptText(generatedDefaultPrompt);
+                    if (task) {
+                      const def = generateGhostDevMasterPrompt(task, currentRepo, promptLanguage);
+                      setCustomPromptText(def);
+                    }
                     setIsCustomEdited(false);
                   }}
                 >

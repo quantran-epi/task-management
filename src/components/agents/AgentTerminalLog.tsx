@@ -60,6 +60,43 @@ interface ParsedChunk {
   isError?: boolean;
 }
 
+function formatToolResultContent(content: unknown): string {
+  if (typeof content === 'string') {
+    const trimmed = content.trim();
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          return formatToolResultContent(parsed);
+        }
+      } catch {
+        // Return original string if not valid JSON
+      }
+    }
+    return content;
+  }
+  if (Array.isArray(content)) {
+    const textParts = content
+      .map((item) => {
+        if (typeof item === 'string') return item;
+        if (item && typeof item === 'object') {
+          const obj = item as Record<string, unknown>;
+          if (typeof obj.text === 'string') return obj.text;
+          if (typeof obj.content === 'string') return obj.content;
+        }
+        return JSON.stringify(item);
+      })
+      .filter(Boolean);
+    if (textParts.length > 0) {
+      return textParts.join('\n');
+    }
+  }
+  if (content && typeof content === 'object') {
+    return JSON.stringify(content, null, 2);
+  }
+  return String(content ?? '');
+}
+
 function parseStreamChunk(chunk: GhostDevStreamChunk): ParsedChunk {
   const content = chunk.content;
 
@@ -150,10 +187,7 @@ function parseStreamChunk(chunk: GhostDevStreamChunk): ParsedChunk {
         );
         if (resultBlock) {
           const isError = Boolean(resultBlock.is_error);
-          const resContent =
-            typeof resultBlock.content === 'string'
-              ? resultBlock.content
-              : JSON.stringify(resultBlock.content || resultBlock);
+          const resContent = formatToolResultContent(resultBlock.content ?? resultBlock);
           return {
             raw: chunk,
             kind: 'tool_result',
@@ -246,13 +280,36 @@ function parseStreamChunk(chunk: GhostDevStreamChunk): ParsedChunk {
       // Tool Result
       if (msgType === 'tool_result' || chunk.type === 'tool_result') {
         const isError = Boolean(val.is_error);
-        const resContent = typeof val.content === 'string' ? val.content : JSON.stringify(val.content || val);
+        const resContent = formatToolResultContent(val.content ?? val);
         return {
           raw: chunk,
           kind: 'tool_result',
           title: isError ? 'Kết quả Tool (Lỗi)' : 'Kết quả Tool',
           body: resContent,
           isError,
+        };
+      }
+
+      // Result event from Claude stream-json
+      if (msgType === 'result') {
+        const resultText = typeof val.result === 'string' ? val.result : '';
+        const durationSec =
+          typeof val.duration_ms === 'number' ? Math.round(val.duration_ms / 1000) : 0;
+        const durationStr =
+          durationSec > 60
+            ? `${Math.floor(durationSec / 60)}m ${durationSec % 60}s`
+            : `${durationSec}s`;
+        const costStr =
+          typeof val.total_cost_usd === 'number'
+            ? ` • $${val.total_cost_usd.toFixed(4)}`
+            : '';
+        const title = `Hoàn thành (${durationStr}${costStr})`;
+        return {
+          raw: chunk,
+          kind: 'ai_text',
+          title,
+          body: resultText || 'Phiên làm việc đã hoàn thành nhiệm vụ.',
+          details: val,
         };
       }
 
@@ -309,6 +366,54 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
   const [viewMode, setViewMode] = useState<'human' | 'raw'>('human');
   const [selectedAgent, setSelectedAgent] = useState<string>('all');
   const logContainerRef = useRef<HTMLDivElement>(null);
+
+  // Track active thinking vs turn completion state
+  const { isThinking, latestResultInfo } = useMemo(() => {
+    let resultInfo: { durationStr: string; cost?: string | undefined } | null = null;
+    let feedbackSentAfterResult = false;
+
+    for (let i = logs.length - 1; i >= 0; i--) {
+      const chunk = logs[i];
+      if (!chunk) continue;
+      if (chunk.content.startsWith('[User Feedback]')) {
+        feedbackSentAfterResult = true;
+        break;
+      }
+      const trimmed = chunk.content.trim();
+      if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+        try {
+          const val = JSON.parse(trimmed) as Record<string, unknown>;
+          if (val.type === 'result') {
+            const durationSec =
+              typeof val.duration_ms === 'number' ? Math.round(val.duration_ms / 1000) : 0;
+            const durationStr =
+              durationSec > 60
+                ? `${Math.floor(durationSec / 60)}m ${durationSec % 60}s`
+                : `${durationSec}s`;
+            resultInfo = {
+              durationStr,
+              cost:
+                typeof val.total_cost_usd === 'number'
+                  ? `$${val.total_cost_usd.toFixed(4)}`
+                  : undefined,
+            };
+            break;
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
+
+    const thinking = Boolean(
+      sending || (isRunning && (!resultInfo || feedbackSentAfterResult))
+    );
+
+    return {
+      isThinking: thinking,
+      latestResultInfo: resultInfo,
+    };
+  }, [logs, sending, isRunning]);
 
   // Discover all unique workers from props, logs, and parsed tool calls
   const allWorkers = useMemo(() => {
@@ -898,8 +1003,8 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
             </div>
           )}
 
-          {/* Active AI Running Loading Indicator */}
-          {(isRunning || sending) && (
+          {/* Active AI Running vs Completed Status Indicator */}
+          {isThinking ? (
             <div
               style={{
                 display: 'flex',
@@ -918,7 +1023,27 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
               />
               <span style={{ fontSize: 12 }}>Claude AI đang xử lý / suy nghĩ...</span>
             </div>
-          )}
+          ) : latestResultInfo ? (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '6px 12px',
+                backgroundColor: '#14291f',
+                border: '1px solid #1e4620',
+                borderRadius: 4,
+                marginTop: 8,
+                color: '#4ade80',
+              }}
+            >
+              <CheckCircleOutlined style={{ fontSize: 14, color: '#4ade80' }} />
+              <span style={{ fontSize: 12, fontWeight: 500 }}>
+                Đã hoàn thành {latestResultInfo.durationStr ? `trong ${latestResultInfo.durationStr}` : ''}
+                {latestResultInfo.cost ? ` (${latestResultInfo.cost})` : ''} — Sẵn sàng nhận chỉ đạo mới.
+              </span>
+            </div>
+          ) : null}
         </div>
 
         {/* 2-Way Chat Prompt Input */}

@@ -12,11 +12,12 @@ export const DEFAULT_GHOST_DEV_CONFIG: GhostDevConfig = {
   concurrencyCap: 6,
 };
 
-export const MODEL_ID_REGEX = /^[a-zA-Z0-9.-]+$/;
+// Allow arbitrary model identifiers (including providers with slashes, colons, brackets, e.g. cc-high[1m], anthropic/claude-3.7-sonnet:thinking)
+export const MODEL_ID_REGEX = /^[a-zA-Z0-9._:\-\/\[\]@]+$/;
 
 export function sanitizeModelId(model: string, fallback: string): string {
   const trimmed = model.trim();
-  if (MODEL_ID_REGEX.test(trimmed)) {
+  if (trimmed && MODEL_ID_REGEX.test(trimmed)) {
     return trimmed;
   }
   return fallback;

@@ -6,9 +6,9 @@ current_phase: 15
 current_phase_name: ghost-dev-local-claude-code-headless-orchestration-with-agen
 status: complete
 stopped_at: Phase 15 executed and verified
-last_updated: "2026-10-06T12:40:00.000Z"
+last_updated: "2026-10-06T14:25:00.000Z"
 last_activity: 2026-10-06
-last_activity_desc: "Completed quick task 261006-nog: Fix Ghost Dev subagent tracking, log filtering, UI contrast, and loading indicators"
+last_activity_desc: "Completed quick task 261006-fxm: Fix Ghost Dev modal input, prompt lang toggle, terminal result json parsing, and file lock defense"
 state_head: 5350a603319f131528b8706ffb00291b60b25073
 progress:
   total_phases: 12
@@ -33,12 +33,13 @@ Phase: 15 (ghost-dev-local-claude-code-headless-orchestration-with-agen) — COM
 Plan: 4 of 4 complete
 Status: Verified (human_needed for desktop smoke check)
 Next recommended run: /gsd-verify-work 15
-Last activity: 2026-10-06 -- Completed quick task 261006-nog: Fix Ghost Dev subagent tracking, log filtering, UI contrast, and loading indicators
+Last activity: 2026-10-06 -- Completed quick task 261006-fxm: Fix Ghost Dev modal input, prompt lang toggle, terminal result json parsing, and file lock defense
 
 ### Quick Tasks Completed
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261006-fxm | Fix Ghost Dev modal input, prompt lang toggle, terminal result json parsing, and file lock defense | 2026-10-06 | — | complete | [261006-fxm-fix-ghost-dev-modal-terminal-lock](./quick/261006-fxm-fix-ghost-dev-modal-terminal-lock/) |
 | 261006-nog | Fix Ghost Dev subagent tracking, terminal log filtering, UI contrast, worktree write permissions, and AI loading indicators | 2026-10-06 | — | complete | [261006-nog-fix-ghost-dev-subagent-tracking-log-filt](./quick/261006-nog-fix-ghost-dev-subagent-tracking-log-filt/) |
 | 261006-nvw | Write test content to file hello.txt in repository root | 2026-10-06 | 70923fb | complete | [261006-nvw-write-test-content-to-file-hello-txt](./quick/261006-nvw-write-test-content-to-file-hello-txt/) |
 | 261006-9py | Fix #/agents route reload issue and add custom command + session audit history for Ghost Dev | 2026-10-06 | 776cfb0 | complete | [261006-9py-fix-agents-route-reload-issue-and-add-cu](./quick/261006-9py-fix-agents-route-reload-issue-and-add-cu/) |

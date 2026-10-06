@@ -88,6 +88,7 @@ export function useGhostDevDiff(worktreePath: string | null): UseGhostDevDiffRes
     let unlistenUpdated: (() => void) | undefined;
     let unlistenFinished: (() => void) | undefined;
     let unlistenStream: (() => void) | undefined;
+    let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
     void (async () => {
       try {
@@ -102,8 +103,14 @@ export function useGhostDevDiff(worktreePath: string | null): UseGhostDevDiffRes
         });
 
         unlistenStream = await listen<{ type?: string }>('ghost-dev:stream-chunk', (event) => {
-          if (event.payload?.type === 'tool_result' || event.payload?.type === 'status_change') {
+          if (event.payload?.type === 'status_change') {
             void refreshDiff(true);
+          } else if (event.payload?.type === 'tool_result') {
+            // Debounce git diff to prevent concurrent Windows file handle conflicts during tool execution
+            if (debounceTimer) clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+              void refreshDiff(true);
+            }, 600);
           }
         });
       } catch (err) {
@@ -112,6 +119,7 @@ export function useGhostDevDiff(worktreePath: string | null): UseGhostDevDiffRes
     })();
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       if (unlistenUpdated) unlistenUpdated();
       if (unlistenFinished) unlistenFinished();
       if (unlistenStream) unlistenStream();

@@ -182,6 +182,25 @@ pub fn is_command_whitelisted(command: &str) -> bool {
     })
 }
 
+/// Strip read-only flag from all files recursively (prevent EPERM on Windows NTFS)
+fn strip_readonly_recursive(dir: &Path) {
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if let Ok(metadata) = std::fs::symlink_metadata(&path) {
+                let mut perms = metadata.permissions();
+                if perms.readonly() {
+                    perms.set_readonly(false);
+                    let _ = std::fs::set_permissions(&path, perms);
+                }
+            }
+            if path.is_dir() {
+                strip_readonly_recursive(&path);
+            }
+        }
+    }
+}
+
 /// Ensure Git worktree exists under .plannermate/worktrees/task-<id>
 /// Branch: pm-agent/task-<id>
 /// Exclude entry appended to .git/info/exclude so it never dirties git status.
@@ -232,6 +251,7 @@ pub fn ensure_git_worktree(repo_root: &Path, task_id: &str) -> Result<PathBuf, S
 
     // If worktree already exists, reuse it per D-18 resume capability
     if worktree_path.exists() && worktree_path.is_dir() {
+        strip_readonly_recursive(&worktree_path);
         return Ok(worktree_path);
     }
 
@@ -257,6 +277,8 @@ pub fn ensure_git_worktree(repo_root: &Path, task_id: &str) -> Result<PathBuf, S
         let err_msg = String::from_utf8_lossy(&output.stderr);
         return Err(format!("git worktree add failed: {}", err_msg.trim()));
     }
+
+    strip_readonly_recursive(&worktree_path);
 
     Ok(worktree_path)
 }
