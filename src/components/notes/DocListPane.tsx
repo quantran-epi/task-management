@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Input, Select, Typography, Empty, Tag, Dropdown, Button, Tooltip, type MenuProps } from 'antd';
+import { useDocWorkerSearch } from '../../hooks/useDocWorkerSearch';
 import {
   SearchOutlined,
   PushpinFilled,
@@ -52,13 +53,20 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<DocSortOption>('updatedAt');
 
+  const { matchIds } = useDocWorkerSearch(notes, searchTerm);
+
   // Filter and sort documents
   const filteredAndSortedDocs = useMemo(() => {
     let result = [...notes];
 
     // Filter by search term
     if (searchTerm.trim()) {
-      result = result.filter((n) => matchesDocSearch(searchTerm, n));
+      if (matchIds !== null) {
+        const idSet = new Set(matchIds);
+        result = result.filter((n) => idSet.has(n.id));
+      } else {
+        result = result.filter((n) => matchesDocSearch(searchTerm, n));
+      }
     }
 
     // Sort
