@@ -17,6 +17,7 @@ describe('useHashRoute utilities', () => {
       expect(parseHash('#/analytics')).toEqual({ route: 'analytics', params: {} });
       expect(parseHash('#/settings')).toEqual({ route: 'settings', params: {} });
       expect(parseHash('#/dashboard')).toEqual({ route: 'dashboard', params: {} });
+      expect(parseHash('#/agents')).toEqual({ route: 'agents', params: {} });
     });
 
     it('parses routes with query parameters', () => {
@@ -69,6 +70,7 @@ describe('useHashRoute utilities', () => {
     it('serializes routes without params', () => {
       expect(buildHash('dashboard')).toBe('#/dashboard');
       expect(buildHash('planner')).toBe('#/planner');
+      expect(buildHash('agents')).toBe('#/agents');
       expect(buildHash('tasks', {})).toBe('#/tasks');
     });
 

@@ -20,6 +20,7 @@ const VALID_ROUTES: readonly AppRoute[] = [
   'notes-popout',
   'ai-popout',
   'insight',
+  'agents',
 ] as const;
 
 /**

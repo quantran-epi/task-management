@@ -10,12 +10,17 @@ import {
   Typography,
   message,
   notification,
+  Segmented,
 } from 'antd';
 import {
   RobotOutlined,
   FolderOpenOutlined,
   FolderOutlined,
   RocketOutlined,
+  EyeOutlined,
+  EyeInvisibleOutlined,
+  ReloadOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons';
 import type { Task } from '../../types/models';
 import type { AppRoute } from '../../types/navigation';
@@ -54,6 +59,38 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [detectedPaths, setDetectedPaths] = useState<string[]>([]);
   const [selectedPathMode, setSelectedPathMode] = useState<'detected' | 'custom'>('detected');
+
+  const [promptMode, setPromptMode] = useState<'default' | 'custom'>('default');
+  const [customPromptText, setCustomPromptText] = useState<string>('');
+  const [isCustomEdited, setIsCustomEdited] = useState<boolean>(false);
+  const [extraInstructionsText, setExtraInstructionsText] = useState<string>('');
+  const [showPromptPreview, setShowPromptPreview] = useState<boolean>(false);
+
+  const watchedRepoPath = Form.useWatch('repoPath', form);
+  const currentRepo = normalizeLocalPath(watchedRepoPath || (detectedPaths[0] ?? '')) || '/workspace';
+  const generatedDefaultPrompt = task ? generateGhostDevMasterPrompt(task, currentRepo) : '';
+
+  useEffect(() => {
+    if (!isCustomEdited && generatedDefaultPrompt) {
+      setCustomPromptText(generatedDefaultPrompt);
+    }
+  }, [generatedDefaultPrompt, isCustomEdited]);
+
+  useEffect(() => {
+    if (visible) {
+      setPromptMode('default');
+      setExtraInstructionsText('');
+      setIsCustomEdited(false);
+      setShowPromptPreview(false);
+    }
+  }, [visible]);
+
+  const resolvedFinalPrompt =
+    promptMode === 'custom'
+      ? customPromptText.trim() || generatedDefaultPrompt
+      : extraInstructionsText.trim()
+        ? `${generatedDefaultPrompt}\n\n## Chỉ dẫn bổ sung từ người dùng\n${extraInstructionsText.trim()}`
+        : generatedDefaultPrompt;
 
   useEffect(() => {
     if (!visible || !task) return;
@@ -113,7 +150,7 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
       const repoPath = normalizeLocalPath(rawRepoPath);
       const masterModel = sanitizeModelId(values.masterModel, DEFAULT_GHOST_DEV_CONFIG.masterModel);
       const workerModel = sanitizeModelId(values.workerModel, DEFAULT_GHOST_DEV_CONFIG.workerModel);
-      const initialPrompt = generateGhostDevMasterPrompt(task, repoPath);
+      const initialPrompt = resolvedFinalPrompt;
       const config = getGhostDevConfig();
 
       setSubmitting(true);
@@ -198,7 +235,7 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
           Khởi chạy Agent
         </Button>,
       ]}
-      width={560}
+      width={620}
       destroyOnClose
     >
       <Paragraph type="secondary" style={{ marginTop: 8, fontSize: 13 }}>
@@ -312,6 +349,113 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
               ]}
             />
           </Form.Item>
+        </div>
+
+        <div style={{ marginTop: 16, borderTop: '1px solid #f0f0f0', paddingTop: 16 }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: 12,
+            }}
+          >
+            <Space>
+              <FileTextOutlined style={{ color: '#4f46e5' }} />
+              <span style={{ fontWeight: 600 }}>Cấu hình Prompt cho Agent</span>
+            </Space>
+            <Segmented
+              value={promptMode}
+              onChange={(val) => setPromptMode(val as 'default' | 'custom')}
+              options={[
+                { label: 'Prompt mặc định', value: 'default' },
+                { label: 'Tùy chỉnh toàn bộ prompt', value: 'custom' },
+              ]}
+            />
+          </div>
+
+          {promptMode === 'default' ? (
+            <div>
+              <Form.Item
+                label="Chỉ dẫn bổ sung (tùy chọn)"
+                tooltip="Chỉ dẫn này sẽ được thêm vào cuối Master Prompt mặc định"
+                style={{ marginBottom: 8 }}
+              >
+                <Input.TextArea
+                  rows={3}
+                  value={extraInstructionsText}
+                  onChange={(e) => setExtraInstructionsText(e.target.value)}
+                  placeholder="Nhập yêu cầu đặc biệt, lưu ý hoặc ràng buộc (ví dụ: Không sửa file XYZ, viết test bằng Vitest...)"
+                />
+              </Form.Item>
+            </div>
+          ) : (
+            <div>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: 6,
+                }}
+              >
+                <span style={{ fontSize: 12, color: '#666' }}>
+                  Bạn có thể chỉnh sửa toàn bộ nội dung prompt gửi cho Master Agent:
+                </span>
+                <Button
+                  size="small"
+                  type="link"
+                  icon={<ReloadOutlined />}
+                  onClick={() => {
+                    setCustomPromptText(generatedDefaultPrompt);
+                    setIsCustomEdited(false);
+                  }}
+                >
+                  Khôi phục mặc định
+                </Button>
+              </div>
+              <Input.TextArea
+                rows={8}
+                value={customPromptText}
+                onChange={(e) => {
+                  setCustomPromptText(e.target.value);
+                  setIsCustomEdited(true);
+                }}
+                style={{ fontFamily: 'monospace', fontSize: 12 }}
+              />
+            </div>
+          )}
+
+          <div style={{ marginTop: 8 }}>
+            <Button
+              type="link"
+              size="small"
+              style={{ paddingLeft: 0 }}
+              icon={showPromptPreview ? <EyeInvisibleOutlined /> : <EyeOutlined />}
+              onClick={() => setShowPromptPreview((prev) => !prev)}
+            >
+              {showPromptPreview ? 'Ẩn xem trước Prompt đầy đủ' : 'Xem trước toàn bộ Prompt gửi cho Agent'}
+            </Button>
+            {showPromptPreview && (
+              <div
+                style={{
+                  marginTop: 6,
+                  padding: 8,
+                  background: '#f9fafb',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: 4,
+                  maxHeight: 180,
+                  overflowY: 'auto',
+                  fontSize: 11,
+                  fontFamily: 'monospace',
+                  whiteSpace: 'pre-wrap',
+                  color: '#374151',
+                }}
+              >
+                {resolvedFinalPrompt}
+              </div>
+            )}
+          </div>
         </div>
       </Form>
     </Modal>
