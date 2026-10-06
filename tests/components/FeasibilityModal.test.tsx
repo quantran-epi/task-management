@@ -251,4 +251,25 @@ describe('FeasibilityModal Component (CALC-03, CALC-04, CALC-05, CALC-06, D-08, 
     expect(contextHeader).toHaveTextContent('Core Engine Task');
     expect(await screen.findByText('Alpha Core')).toBeInTheDocument();
   });
+
+  it('handles task with past deadline gracefully by defaulting to custom range from today', async () => {
+    const pastDeadline = dayjs().subtract(2, 'day').format('YYYY-MM-DD');
+    const task = await createTask(
+      { name: 'Overdue Task', estimateMinutes: 120, status: 'Open', deadline: pastDeadline },
+      testDb
+    );
+
+    render(
+      <FeasibilityModal
+        open={true}
+        task={task}
+        onCancel={vi.fn()}
+        db={testDb}
+      />
+    );
+
+    expect(await screen.findByText(/Đánh giá tính khả thi & Phân bổ khối lượng công việc/i)).toBeInTheDocument();
+    const alert = await screen.findByTestId('feasibility-alert');
+    expect(alert).toBeInTheDocument();
+  });
 });

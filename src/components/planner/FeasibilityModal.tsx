@@ -76,15 +76,24 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
   const getInitialRange = (): [Dayjs, Dayjs] => {
     const today = dayjs();
     if (taskDeadline) {
-      return [today, dayjs(taskDeadline, 'YYYY-MM-DD')];
+      const deadlineDay = dayjs(taskDeadline, 'YYYY-MM-DD');
+      if (!deadlineDay.isBefore(today, 'day')) {
+        return [today, deadlineDay];
+      }
     }
     return [today, today.add(7, 'day')];
   };
 
   // Parameter states
-  const [rangeMode, setRangeMode] = useState<'deadline' | 'custom'>(() =>
-    taskDeadline ? 'deadline' : 'custom'
-  );
+  const [rangeMode, setRangeMode] = useState<'deadline' | 'custom'>(() => {
+    if (taskDeadline) {
+      const deadlineDay = dayjs(taskDeadline, 'YYYY-MM-DD');
+      if (!deadlineDay.isBefore(dayjs(), 'day')) {
+        return 'deadline';
+      }
+    }
+    return 'custom';
+  });
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs]>(getInitialRange);
   const [strategy, setStrategy] = useState<DistributionStrategy>('balanced-spread');
   const [maxMinutesPerDay, setMaxMinutesPerDay] = useState<number | undefined>(undefined);
@@ -101,8 +110,14 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
       restorerRef.current = createFocusRestorer();
       const today = dayjs();
       if (taskDeadline) {
-        setRangeMode('deadline');
-        setDateRange([today, dayjs(taskDeadline, 'YYYY-MM-DD')]);
+        const deadlineDay = dayjs(taskDeadline, 'YYYY-MM-DD');
+        if (!deadlineDay.isBefore(today, 'day')) {
+          setRangeMode('deadline');
+          setDateRange([today, deadlineDay]);
+        } else {
+          setRangeMode('custom');
+          setDateRange([today, today.add(7, 'day')]);
+        }
       } else {
         setRangeMode('custom');
         setDateRange([today, today.add(7, 'day')]);

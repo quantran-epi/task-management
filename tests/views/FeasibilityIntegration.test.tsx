@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import dayjs from 'dayjs';
 import 'fake-indexeddb/auto';
 import { TaskPlannerDatabase } from '../../src/db/index';
 import { initializeDatabaseDefaults } from '../../src/db/seeds';
@@ -22,12 +23,13 @@ describe('Feasibility Integration (CALC-01, CALC-06, D-13, D-16)', () => {
   });
 
   it('D-13 & D-16: launches FeasibilityModal from TaskDrawerPlanning, applies allocations, and updates database reactively', async () => {
+    const deadline = dayjs().add(5, 'day').format('YYYY-MM-DD');
     const task = await createTask(
       {
         name: 'Feasibility Integration Task',
         estimateMinutes: 240, // 4 hours
         status: 'Open',
-        deadline: '2026-10-05',
+        deadline,
       },
       testDb
     );
