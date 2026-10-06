@@ -47,6 +47,38 @@ pub static SAFE_COMMAND_PREFIXES: &[&str] = &[
     "go test",
 ];
 
+pub fn format_user_text_envelope(text: &str) -> serde_json::Value {
+    serde_json::json!({
+        "type": "user",
+        "message": {
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": text
+                }
+            ]
+        }
+    })
+}
+
+pub fn format_tool_result_envelope(tool_use_id: &str, content: &str, is_error: bool) -> serde_json::Value {
+    serde_json::json!({
+        "type": "user",
+        "message": {
+            "role": "user",
+            "content": [
+                {
+                    "type": "tool_result",
+                    "tool_use_id": tool_use_id,
+                    "content": content,
+                    "is_error": is_error
+                }
+            ]
+        }
+    })
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct StartSessionPayload {
@@ -306,7 +338,6 @@ pub async fn start_ghost_dev_session(
             "acceptEdits",
             "--model",
             &payload.master_model,
-            &payload.initial_prompt,
         ])
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
@@ -366,6 +397,9 @@ pub async fn start_ghost_dev_session(
             }
         }
     });
+
+    // Send initial prompt via stream-json envelope
+    let _ = stdin_tx.send(format_user_text_envelope(&payload.initial_prompt).to_string()).await;
 
     let stdin_tx_for_reader = stdin_tx.clone();
 
@@ -477,12 +511,7 @@ pub async fn start_ghost_dev_session(
                                         } else {
                                             "Global process limit reached. Cannot spawn new worker."
                                         };
-                                        let resp = serde_json::json!({
-                                            "type": "tool_result",
-                                            "tool_use_id": tool_use_id,
-                                            "is_error": true,
-                                            "content": limit_msg
-                                        });
+                                        let resp = format_tool_result_envelope(&tool_use_id, limit_msg, true);
                                         let _ = stdin_tx_for_reader.send(resp.to_string()).await;
                                     } else {
                                         let worker_id = format!("w-{}-{}", tid, chrono_iso_now());
@@ -577,23 +606,14 @@ pub async fn start_ghost_dev_session(
                                                     }
                                                     let _ = w_app.emit("ghost-dev:session-updated", ());
 
-                                                    let result_payload = serde_json::json!({
-                                                        "type": "tool_result",
-                                                        "tool_use_id": w_tuid,
-                                                        "status": w_final,
-                                                        "worker_id": w_wid,
-                                                        "content": format!("Worker {} completed with status: {}", w_wid, w_final)
-                                                    });
+                                                    let completion_content = format!("Worker {} completed with status: {}", w_wid, w_final);
+                                                    let result_payload = format_tool_result_envelope(&w_tuid, &completion_content, !w_success);
                                                     let _ = w_stdin_tx.send(result_payload.to_string()).await;
                                                 });
                                             }
                                             Err(e) => {
-                                                let err_resp = serde_json::json!({
-                                                    "type": "tool_result",
-                                                    "tool_use_id": tool_use_id,
-                                                    "is_error": true,
-                                                    "content": format!("Failed to spawn worker process: {}", e)
-                                                });
+                                                let err_msg = format!("Failed to spawn worker process: {}", e);
+                                                let err_resp = format_tool_result_envelope(&tool_use_id, &err_msg, true);
                                                 let _ = stdin_tx_for_reader.send(err_resp.to_string()).await;
                                             }
                                         }
@@ -920,7 +940,8 @@ pub async fn send_agent_feedback(task_id: String, feedback: String) -> Result<()
     let pool = AGENT_POOL.lock().await;
     if let Some(session) = pool.sessions.get(&task_id) {
         if let Some(tx) = &session.stdin_tx {
-            tx.send(feedback).await.map_err(|e| format!("Failed to send feedback to agent stdin: {}", e))?;
+            let wrapped_feedback = format_user_text_envelope(&feedback).to_string();
+            tx.send(wrapped_feedback).await.map_err(|e| format!("Failed to send feedback to agent stdin: {}", e))?;
             Ok(())
         } else {
             Err("Agent stdin channel is not active".to_string())
