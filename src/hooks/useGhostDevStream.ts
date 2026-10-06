@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { GhostDevStreamChunk } from '../types/agent';
 import { isTauriApp } from '../utils/timerPopout';
+import { agentSessionHistoryRepo } from '../services/agents/agentSessionHistoryRepo';
 
 export const MAX_STREAM_LINES = 2000;
 
@@ -72,6 +73,9 @@ export function useGhostDevStream(taskId: string | null): UseGhostDevStreamResul
           taskId: taskIdRef.current,
           feedback: prompt.trim(),
         });
+
+        // Record in audit log
+        agentSessionHistoryRepo.recordUserFeedback(taskIdRef.current, prompt.trim());
 
         // Optimistically append user message chunk in log stream
         const userChunk: GhostDevStreamChunk = {

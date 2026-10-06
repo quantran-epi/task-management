@@ -32,6 +32,7 @@ import {
   sanitizeModelId,
   DEFAULT_GHOST_DEV_CONFIG,
 } from '../../services/agents/ghostDevConfig';
+import { agentSessionHistoryRepo } from '../../services/agents/agentSessionHistoryRepo';
 
 const { Paragraph } = Typography;
 
@@ -175,8 +176,23 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
           repoPath,
           masterModel,
           workerModel,
+          initialPrompt,
         });
       }
+
+      // Record in persistent audit log
+      const branchName = `pm-agent/task-${task.id.slice(0, 8)}`;
+      agentSessionHistoryRepo.recordSessionStart({
+        taskId: task.id,
+        taskTitle: task.name,
+        startedAt: new Date().toISOString(),
+        repoPath,
+        branchName,
+        masterModel,
+        workerModel,
+        status: 'running',
+        initialPrompt,
+      });
 
       // Feedback per D-03: notification/toast with "Xem trong Agent Control" button
       notification.success({

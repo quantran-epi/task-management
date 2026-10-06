@@ -21,6 +21,27 @@ export interface WorkerSession {
   startedAt: string;
 }
 
+export interface UserFeedbackEntry {
+  timestamp: string;
+  feedback: string;
+}
+
+export interface GhostDevSessionAuditRecord {
+  sessionId: string;
+  taskId: string;
+  taskTitle: string;
+  startedAt: string;
+  repoPath: string;
+  branchName: string;
+  masterModel: string;
+  workerModel: string;
+  status: AgentStatus;
+  initialPrompt: string;
+  userFeedbackHistory: UserFeedbackEntry[];
+  finishedAt?: string | undefined;
+  error?: string | undefined;
+}
+
 export interface AgentSession {
   taskId: string;
   taskTitle: string;
@@ -32,8 +53,10 @@ export interface AgentSession {
   workerModel: string;
   status: AgentStatus;
   startedAt: string;
-  finishedAt?: string;
+  finishedAt?: string | undefined;
   activeWorkers: WorkerSession[];
+  initialPrompt?: string | undefined;
+  userFeedbackHistory?: UserFeedbackEntry[] | undefined;
 }
 
 export interface GhostDevStreamChunk {

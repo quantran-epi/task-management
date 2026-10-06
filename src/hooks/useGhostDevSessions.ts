@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { AgentSession } from '../types/agent';
 import { isTauriApp } from '../utils/timerPopout';
+import { agentSessionHistoryRepo } from '../services/agents/agentSessionHistoryRepo';
 
 async function tauriInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   const api = await import('@tauri-apps/api/core');
@@ -30,6 +31,11 @@ export function useGhostDevSessions(): UseGhostDevSessionsResult {
     try {
       const result = await tauriInvoke<AgentSession[]>('list_agent_sessions');
       setSessions(result || []);
+      if (result && Array.isArray(result)) {
+        result.forEach((s) => {
+          agentSessionHistoryRepo.updateSessionStatus(s.taskId, s.status, s.finishedAt);
+        });
+      }
     } catch (err) {
       console.error('[GhostDev] Failed to list agent sessions:', err);
     } finally {
@@ -42,6 +48,11 @@ export function useGhostDevSessions(): UseGhostDevSessionsResult {
       if (!isTauriApp()) return;
       try {
         await tauriInvoke('stop_ghost_dev_session', { taskId });
+        agentSessionHistoryRepo.updateSessionStatus(
+          taskId,
+          'interrupted',
+          new Date().toISOString()
+        );
         await refreshSessions();
       } catch (err) {
         console.error(`[GhostDev] Failed to stop session ${taskId}:`, err);
