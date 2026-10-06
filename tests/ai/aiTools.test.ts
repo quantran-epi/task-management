@@ -4,6 +4,8 @@ import {
   AI_DATABASE_TOOLS,
   isMutationTool,
   describeToolMutation,
+  describeToolMutationWithContext,
+  formatFieldChanges,
   normalizeToolName,
 } from '../../src/services/ai/aiTools';
 
@@ -245,6 +247,7 @@ describe('aiTools', () => {
     },
     notes: {
       toArray: async () => mockNotes,
+      get: async (id: string) => mockNotes.find((n) => n.id === id),
       where: (field: string) => ({
         equals: (val: string) => ({
           filter: (fn: (n: any) => boolean) => ({
@@ -1094,6 +1097,124 @@ describe('aiTools', () => {
         await executeAiTool('get_document_details', { documentId: 'doc-nonexistent' }, mockKnowledgeDb)
       );
       expect(notFoundRes.error).toBeDefined();
+    });
+  });
+
+  describe('describeToolMutationWithContext and formatFieldChanges', () => {
+    it('formats field changes with friendly Vietnamese labels and values', () => {
+      const formatted = formatFieldChanges({
+        id: 't-123',
+        name: 'Tên mới',
+        status: 'Done',
+        priority: 'High',
+        deadline: '2026-10-15',
+        estimateMinutes: 90,
+      });
+
+      expect(formatted).toContain('Tên: "Tên mới"');
+      expect(formatted).toContain('Trạng thái: "Done"');
+      expect(formatted).toContain('Ưu tiên: "High"');
+      expect(formatted).toContain('Hạn chót: 2026-10-15');
+      expect(formatted).toContain('Ước tính: 90p');
+      // ID should be excluded by default
+      expect(formatted).not.toContain('id:');
+    });
+
+    it('resolves task name and formats field changes for update_task', async () => {
+      const desc = await describeToolMutationWithContext(
+        'update_task',
+        { id: 'task-1', status: 'Done', priority: 'Urgent' },
+        mockDb as any
+      );
+      expect(desc).toContain('"Write unit tests"');
+      expect(desc).toContain('Trạng thái: "Done"');
+      expect(desc).toContain('Ưu tiên: "Urgent"');
+    });
+
+    it('resolves task name for delete_task and reparent_task', async () => {
+      const deleteDesc = await describeToolMutationWithContext(
+        'delete_task',
+        { id: 'task-1' },
+        mockDb as any
+      );
+      expect(deleteDesc).toContain('"Write unit tests"');
+
+      const reparentDesc = await describeToolMutationWithContext(
+        'reparent_task',
+        { taskId: 'task-1', projectId: 'proj-1', milestoneId: 'ms-1' },
+        mockDb as any
+      );
+      expect(reparentDesc).toContain('"Write unit tests"');
+      expect(reparentDesc).toContain('Banking Platform');
+      expect(reparentDesc).toContain('Backend API');
+    });
+
+    it('resolves project and milestone names', async () => {
+      const projDesc = await describeToolMutationWithContext(
+        'update_project',
+        { id: 'proj-1', status: 'Done' },
+        mockDb as any
+      );
+      expect(projDesc).toContain('"Banking Platform"');
+      expect(projDesc).toContain('Trạng thái: "Done"');
+
+      const msDesc = await describeToolMutationWithContext(
+        'delete_milestone',
+        { id: 'ms-1' },
+        mockDb as any
+      );
+      expect(msDesc).toContain('"Backend API"');
+    });
+
+    it('resolves note title for update_note and delete_note', async () => {
+      const noteUpdateDesc = await describeToolMutationWithContext(
+        'update_note',
+        { id: 'n-1', title: 'Tên ghi chú mới' },
+        mockDb as any
+      );
+      expect(noteUpdateDesc).toContain('"API Spec Draft"');
+      expect(noteUpdateDesc).toContain('Tiêu đề: "Tên ghi chú mới"');
+
+      const noteDeleteDesc = await describeToolMutationWithContext(
+        'delete_note',
+        { id: 'n-1' },
+        mockDb as any
+      );
+      expect(noteDeleteDesc).toContain('"API Spec Draft"');
+    });
+
+    it('resolves task name for plan_allocation and log_work_session', async () => {
+      const allocDesc = await describeToolMutationWithContext(
+        'plan_allocation',
+        { taskId: 'task-1', date: '2026-10-10', allocatedMinutes: 60 },
+        mockDb as any
+      );
+      expect(allocDesc).toContain('"Write unit tests"');
+      expect(allocDesc).toContain('60 phút');
+      expect(allocDesc).toContain('2026-10-10');
+
+      const sessionDesc = await describeToolMutationWithContext(
+        'log_work_session',
+        { taskId: 'task-1', durationMinutes: 45 },
+        mockDb as any
+      );
+      expect(sessionDesc).toContain('"Write unit tests"');
+      expect(sessionDesc).toContain('45 phút');
+    });
+
+    it('falls back to describeToolMutation when db is undefined or entity not found', async () => {
+      const noDbDesc = await describeToolMutationWithContext(
+        'update_task',
+        { id: 'task-unknown', status: 'Done' }
+      );
+      expect(noDbDesc).toContain('task-unknown');
+
+      const notFoundDesc = await describeToolMutationWithContext(
+        'update_task',
+        { id: 'task-nonexistent', status: 'Done' },
+        mockDb as any
+      );
+      expect(notFoundDesc).toContain('task-nonexistent');
     });
   });
 });

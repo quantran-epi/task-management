@@ -3699,29 +3699,84 @@ export function isMutationTool(toolName: string, args?: Record<string, any>): bo
   return MUTATION_TOOLS.has(normalized);
 }
 
+export function formatFieldChanges(args: Record<string, any>, ignoredKeys: string[] = ['id', 'taskId']): string {
+  const fieldLabels: Record<string, string> = {
+    name: 'Tên',
+    title: 'Tiêu đề',
+    status: 'Trạng thái',
+    priority: 'Ưu tiên',
+    deadline: 'Hạn chót',
+    estimateMinutes: 'Ước tính',
+    body: 'Nội dung',
+    description: 'Mô tả',
+    notes: 'Ghi chú',
+    workType: 'Loại công việc',
+    allocatedMinutes: 'Phút phân bổ',
+    durationMinutes: 'Thời lượng',
+    date: 'Ngày',
+    time: 'Giờ',
+    isPinned: 'Ghim',
+    tags: 'Nhãn',
+    action: 'Hành động',
+    itemTitle: 'Mục',
+    isRecurring: 'Định kỳ',
+    recurrenceFrequency: 'Tần suất lặp',
+    actualStartDate: 'Ngày bắt đầu thực tế',
+    actualEndDate: 'Ngày kết thúc thực tế',
+    opsOwners: 'Ops Owners',
+    businessAnalysts: 'Business Analysts',
+  };
+
+  const ignored = new Set(ignoredKeys);
+  const parts: string[] = [];
+
+  for (const [key, val] of Object.entries(args)) {
+    if (ignored.has(key) || val === undefined) continue;
+    const label = fieldLabels[key] || key;
+    let formattedVal = '';
+    if (typeof val === 'string') {
+      formattedVal = key === 'deadline' || key === 'date' ? val : `"${val}"`;
+    } else if (typeof val === 'number') {
+      formattedVal = key === 'estimateMinutes' ? `${val}p` : key === 'allocatedMinutes' || key === 'durationMinutes' ? `${val} phút` : String(val);
+    } else if (typeof val === 'boolean') {
+      formattedVal = val ? 'Có' : 'Không';
+    } else if (Array.isArray(val)) {
+      formattedVal = val.length > 0 ? val.map((v) => (typeof v === 'object' && v?.text ? v.text : typeof v === 'object' && v?.name ? v.name : String(v))).join(', ') : 'Trống';
+    } else if (val === null) {
+      formattedVal = 'Xóa/Rỗng';
+    } else {
+      formattedVal = JSON.stringify(val);
+    }
+    parts.push(`${label}: ${formattedVal}`);
+  }
+
+  return parts.join(', ');
+}
+
 export function describeToolMutation(toolName: string, args: Record<string, any>): string {
   const normalized = normalizeToolName(toolName);
+  const changes = formatFieldChanges(args);
   switch (normalized) {
     case 'create_task':
       return `Tạo tác vụ mới: "${args.name || 'Chưa đặt tên'}"${args.priority ? ` [Ưu tiên: ${args.priority}]` : ''}${args.estimateMinutes ? ` [Ước tính: ${args.estimateMinutes}p]` : ''}${args.deadline ? ` [Hạn: ${args.deadline}]` : ''}`;
     case 'update_task':
-      return `Cập nhật tác vụ (${args.id}): ${Object.keys(args).filter((k) => k !== 'id').join(', ')}`;
+      return `Cập nhật tác vụ (${args.id}): ${changes || 'không có thay đổi'}`;
     case 'update_task_checklist':
-      return `Cập nhật checklist tác vụ (${args.taskId}): hành động ${args.action}`;
+      return `Cập nhật checklist tác vụ (${args.taskId}): ${changes || `hành động ${args.action}`}`;
     case 'reparent_task':
-      return `Chuyển tác vụ (${args.taskId}) sang dự án/mốc mới`;
+      return `Chuyển tác vụ (${args.taskId}) sang dự án/mốc mới: ${changes}`;
     case 'delete_task':
       return `Xóa vĩnh viễn tác vụ (${args.id}) cùng các kế hoạch liên quan`;
     case 'create_project':
       return `Tạo dự án mới: "${args.name || 'Chưa đặt tên'}"${args.deadline ? ` [Hạn: ${args.deadline}]` : ''}`;
     case 'update_project':
-      return `Cập nhật dự án (${args.id}): ${Object.keys(args).filter((k) => k !== 'id').join(', ')}`;
+      return `Cập nhật dự án (${args.id}): ${changes || 'không có thay đổi'}`;
     case 'delete_project':
       return `Xóa dự án (${args.id}) và tất cả mốc, tác vụ con liên quan`;
     case 'create_milestone':
       return `Tạo mốc mới: "${args.name || 'Chưa đặt tên'}"${args.deadline ? ` [Hạn: ${args.deadline}]` : ''}`;
     case 'update_milestone':
-      return `Cập nhật mốc (${args.id}): ${Object.keys(args).filter((k) => k !== 'id').join(', ')}`;
+      return `Cập nhật mốc (${args.id}): ${changes || 'không có thay đổi'}`;
     case 'delete_milestone':
       return `Xóa mốc (${args.id}) và tất cả tác vụ con liên quan`;
     case 'plan_allocation':
@@ -3731,7 +3786,7 @@ export function describeToolMutation(toolName: string, args: Record<string, any>
     case 'log_work_session':
       return `Ghi nhận thời gian làm việc: ${args.durationMinutes} phút vào ngày ${args.date || 'hôm nay'} cho tác vụ (${args.taskId})`;
     case 'update_work_session':
-      return `Cập nhật nhật ký công việc (${args.id})`;
+      return `Cập nhật nhật ký công việc (${args.id}): ${changes || ''}`;
     case 'delete_work_session':
       return `Xóa phiên làm việc (${args.id})`;
     case 'start_timer':
@@ -3751,7 +3806,7 @@ export function describeToolMutation(toolName: string, args: Record<string, any>
     case 'create_note':
       return `Tạo ${args.type === 'folder' ? 'thư mục' : 'ghi chú/tài liệu'}: "${args.title || 'Mục mới'}"`;
     case 'update_note':
-      return `Cập nhật ghi chú/tài liệu (${args.id})`;
+      return `Cập nhật ghi chú/tài liệu (${args.id}): ${changes || ''}`;
     case 'delete_note':
       return `Xóa vĩnh viễn ghi chú (${args.id})`;
     case 'manage_reminders': {
@@ -3771,5 +3826,200 @@ export function describeToolMutation(toolName: string, args: Record<string, any>
       return `Tạm ẩn cảnh báo (${args.alertKey}) trong ngày hôm nay`;
     default:
       return `Thực hiện thao tác: ${toolName}`;
+  }
+}
+
+/**
+ * Enriches mutation description with resolved human-readable entity names from db
+ * (tasks, projects, milestones, notes) and formatted field value diffs.
+ */
+export async function describeToolMutationWithContext(
+  toolName: string,
+  args: Record<string, any>,
+  db?: TaskPlannerDatabase
+): Promise<string> {
+  const normalized = normalizeToolName(toolName);
+  const fallback = describeToolMutation(toolName, args);
+  if (!db) return fallback;
+
+  try {
+    switch (normalized) {
+      case 'update_task': {
+        const taskId = args.id || args.taskId;
+        const task = db.tasks ? await db.tasks.get(taskId) : null;
+        if (!task) return fallback;
+        const changes = formatFieldChanges(args);
+        return `Cập nhật tác vụ "${task.name}": ${changes || 'không có thay đổi'}`;
+      }
+
+      case 'delete_task': {
+        const taskId = args.id || args.taskId;
+        const task = db.tasks ? await db.tasks.get(taskId) : null;
+        if (!task) return fallback;
+        return `Xóa vĩnh viễn tác vụ "${task.name}" cùng các kế hoạch liên quan`;
+      }
+
+      case 'reparent_task': {
+        const taskId = args.taskId || args.id;
+        const task = db.tasks ? await db.tasks.get(taskId) : null;
+        if (!task) return fallback;
+        let dest = '';
+        if (args.projectId && db.projects) {
+          const proj = await db.projects.get(args.projectId);
+          if (proj) dest += ` dự án "${proj.name}"`;
+        }
+        if (args.milestoneId && db.milestones) {
+          const ms = await db.milestones.get(args.milestoneId);
+          if (ms) dest += ` mốc "${ms.name}"`;
+        }
+        return `Chuyển tác vụ "${task.name}" sang${dest || ' vị trí mới'}`;
+      }
+
+      case 'update_task_checklist': {
+        const taskId = args.taskId || args.id;
+        const task = db.tasks ? await db.tasks.get(taskId) : null;
+        if (!task) return fallback;
+        const changes = formatFieldChanges(args);
+        return `Cập nhật checklist cho tác vụ "${task.name}": ${changes || `hành động ${args.action}`}`;
+      }
+
+      case 'update_project': {
+        const project = db.projects ? await db.projects.get(args.id) : null;
+        if (!project) return fallback;
+        const changes = formatFieldChanges(args);
+        return `Cập nhật dự án "${project.name}": ${changes || 'không có thay đổi'}`;
+      }
+
+      case 'delete_project': {
+        const project = db.projects ? await db.projects.get(args.id) : null;
+        if (!project) return fallback;
+        return `Xóa dự án "${project.name}" và tất cả mốc, tác vụ con liên quan`;
+      }
+
+      case 'update_milestone': {
+        const milestone = db.milestones ? await db.milestones.get(args.id) : null;
+        if (!milestone) return fallback;
+        const changes = formatFieldChanges(args);
+        return `Cập nhật mốc "${milestone.name}": ${changes || 'không có thay đổi'}`;
+      }
+
+      case 'delete_milestone': {
+        const milestone = db.milestones ? await db.milestones.get(args.id) : null;
+        if (!milestone) return fallback;
+        return `Xóa mốc "${milestone.name}" và tất cả tác vụ con liên quan`;
+      }
+
+      case 'plan_allocation': {
+        const task = db.tasks ? await db.tasks.get(args.taskId) : null;
+        if (!task) return fallback;
+        return `Lên lịch làm việc: ${args.allocatedMinutes} phút vào ngày ${args.date} cho tác vụ "${task.name}"`;
+      }
+
+      case 'delete_allocation': {
+        const task = args.taskId && db.tasks ? await db.tasks.get(args.taskId) : null;
+        if (!task) return fallback;
+        return `Xóa lịch làm việc ngày ${args.date} của tác vụ "${task.name}"`;
+      }
+
+      case 'log_work_session': {
+        const task = db.tasks ? await db.tasks.get(args.taskId) : null;
+        if (!task) return fallback;
+        return `Ghi nhận thời gian làm việc: ${args.durationMinutes} phút vào ngày ${args.date || 'hôm nay'} cho tác vụ "${task.name}"`;
+      }
+
+      case 'start_timer':
+      case 'pause_timer':
+      case 'stop_and_log_timer':
+      case 'discard_timer': {
+        const task = db.tasks ? await db.tasks.get(args.taskId) : null;
+        if (!task) return fallback;
+        const actionMap: Record<string, string> = {
+          start_timer: 'Bắt đầu bộ đếm giờ cho tác vụ',
+          pause_timer: 'Tạm dừng bộ đếm giờ của tác vụ',
+          stop_and_log_timer: 'Dừng bộ đếm giờ và lưu vào nhật ký công việc cho tác vụ',
+          discard_timer: 'Hủy bỏ bộ đếm giờ của tác vụ',
+        };
+        return `${actionMap[normalized]} "${task.name}"`;
+      }
+
+      case 'update_note': {
+        const note = db.notes ? await db.notes.get(args.id) : null;
+        if (!note) return fallback;
+        const changes = formatFieldChanges(args);
+        return `Cập nhật ghi chú/tài liệu "${note.title || 'Chưa đặt tên'}": ${changes || 'không có thay đổi'}`;
+      }
+
+      case 'delete_note': {
+        const note = db.notes ? await db.notes.get(args.id) : null;
+        if (!note) return fallback;
+        return `Xóa vĩnh viễn ghi chú/tài liệu "${note.title || 'Chưa đặt tên'}"`;
+      }
+
+      case 'manage_reminders': {
+        let entityName = '';
+        if (args.entityType === 'task' && db.tasks) {
+          const t = await db.tasks.get(args.entityId);
+          if (t) entityName = `tác vụ "${t.name}"`;
+        } else if (args.entityType === 'project' && db.projects) {
+          const p = await db.projects.get(args.entityId);
+          if (p) entityName = `dự án "${p.name}"`;
+        } else if (args.entityType === 'milestone' && db.milestones) {
+          const m = await db.milestones.get(args.entityId);
+          if (m) entityName = `mốc "${m.name}"`;
+        }
+        if (!entityName) return fallback;
+
+        if (args.action === 'add') {
+          return `Thêm nhắc nhở ngày ${args.date || ''}${args.time ? ` lúc ${args.time}` : ''} cho ${entityName}`;
+        }
+        if (args.action === 'remove') {
+          return `Xóa nhắc nhở khỏi ${entityName}`;
+        }
+        return `Quản lý nhắc nhở cho ${entityName}`;
+      }
+
+      case 'link_document': {
+        const doc = db.notes ? await db.notes.get(args.documentId) : null;
+        let entityName = '';
+        if (args.entityType === 'task' && db.tasks) {
+          const t = await db.tasks.get(args.entityId);
+          if (t) entityName = `tác vụ "${t.name}"`;
+        } else if (args.entityType === 'project' && db.projects) {
+          const p = await db.projects.get(args.entityId);
+          if (p) entityName = `dự án "${p.name}"`;
+        } else if (args.entityType === 'milestone' && db.milestones) {
+          const m = await db.milestones.get(args.entityId);
+          if (m) entityName = `mốc "${m.name}"`;
+        }
+        if (doc && entityName) {
+          return `Liên kết tài liệu "${doc.title || 'Chưa đặt tên'}" với ${entityName}`;
+        }
+        return fallback;
+      }
+
+      case 'unlink_document': {
+        const doc = db.notes ? await db.notes.get(args.documentId) : null;
+        let entityName = '';
+        if (args.entityType === 'task' && db.tasks) {
+          const t = await db.tasks.get(args.entityId);
+          if (t) entityName = `tác vụ "${t.name}"`;
+        } else if (args.entityType === 'project' && db.projects) {
+          const p = await db.projects.get(args.entityId);
+          if (p) entityName = `dự án "${p.name}"`;
+        } else if (args.entityType === 'milestone' && db.milestones) {
+          const m = await db.milestones.get(args.entityId);
+          if (m) entityName = `mốc "${m.name}"`;
+        }
+        if (doc && entityName) {
+          return `Hủy liên kết tài liệu "${doc.title || 'Chưa đặt tên'}" khỏi ${entityName}`;
+        }
+        return fallback;
+      }
+
+      default:
+        return fallback;
+    }
+  } catch {
+    return fallback;
   }
 }
