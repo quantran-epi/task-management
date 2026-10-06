@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { AgentControlView } from '../../src/views/AgentControlView';
+import { agentSessionHistoryRepo } from '../../src/services/agents/agentSessionHistoryRepo';
 import type { AgentSession } from '../../src/types/agent';
 
 // Mock Tauri environment
@@ -18,6 +19,7 @@ vi.mock('@tauri-apps/api/event', () => ({
 describe('AgentControlView Component Tests (GHOST-04)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     (window as any).__TAURI_INTERNALS__ = {};
     mockListen.mockResolvedValue(() => {});
   });
@@ -212,6 +214,93 @@ index 0000000..1111111 100644
     await waitFor(() => {
       expect(screen.getByText('old line')).toBeInTheDocument();
       expect(screen.getByText('new line')).toBeInTheDocument();
+    });
+  });
+
+  it('renders audit history tab and inspects past session prompt and feedback details', async () => {
+    mockInvoke.mockImplementation((command: string) => {
+      if (command === 'list_agent_sessions') {
+        return Promise.resolve([]);
+      }
+      return Promise.resolve(null);
+    });
+
+    agentSessionHistoryRepo.recordSessionStart({
+      taskId: 'hist-task-1',
+      taskTitle: 'Lịch sử thiết kế cơ sở dữ liệu',
+      startedAt: '2026-10-06T08:00:00.000Z',
+      repoPath: '/workspace/project',
+      branchName: 'pm-agent/task-hist-1',
+      masterModel: 'claude-3-7-sonnet-20250219',
+      workerModel: 'claude-3-5-haiku-20241022',
+      status: 'done',
+      initialPrompt: 'Master prompt: Tạo schema cho bảng user và orders',
+    });
+    agentSessionHistoryRepo.recordUserFeedback('hist-task-1', 'Thêm trường phone number');
+
+    render(<AgentControlView />);
+
+    // Switch to Lịch sử tab
+    const historyTab = screen.getByText(/Lịch sử \(1\)/i);
+    fireEvent.click(historyTab);
+
+    // Assert session is listed
+    await waitFor(() => {
+      expect(screen.getByText('Lịch sử thiết kế cơ sở dữ liệu')).toBeInTheDocument();
+    });
+    expect(screen.getByText('1 phản hồi')).toBeInTheDocument();
+
+    // Click "Chi tiết" button
+    const detailBtn = screen.getByRole('button', { name: /Chi tiết/i });
+    fireEvent.click(detailBtn);
+
+    // Assert Drawer opens with details
+    await waitFor(() => {
+      expect(screen.getByText('Master Prompt ban đầu')).toBeInTheDocument();
+    });
+    expect(screen.getByText(/Tạo schema cho bảng user và orders/i)).toBeInTheDocument();
+    expect(screen.getByText('Thêm trường phone number')).toBeInTheDocument();
+  });
+
+  it('supports deleting an audit session from history', async () => {
+    mockInvoke.mockImplementation((command: string) => {
+      if (command === 'list_agent_sessions') {
+        return Promise.resolve([]);
+      }
+      return Promise.resolve(null);
+    });
+
+    agentSessionHistoryRepo.recordSessionStart({
+      taskId: 'del-task-1',
+      taskTitle: 'Phiên cần xóa',
+      startedAt: '2026-10-06T08:00:00.000Z',
+      repoPath: '/workspace/project',
+      branchName: 'pm-agent/task-del-1',
+      masterModel: 'claude-3-7-sonnet-20250219',
+      workerModel: 'claude-3-5-haiku-20241022',
+      status: 'interrupted',
+      initialPrompt: 'Prompt',
+    });
+
+    render(<AgentControlView />);
+
+    const historyTab = screen.getByText(/Lịch sử \(1\)/i);
+    fireEvent.click(historyTab);
+
+    await waitFor(() => {
+      expect(screen.getByText('Phiên cần xóa')).toBeInTheDocument();
+    });
+
+    const deleteBtn = screen.getByRole('button', { name: /Xóa lịch sử phiên Phiên cần xóa/i });
+    fireEvent.click(deleteBtn);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Xóa' })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Xóa' }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Phiên cần xóa')).not.toBeInTheDocument();
     });
   });
 });

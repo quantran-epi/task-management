@@ -1,6 +1,19 @@
-import React, { useEffect, useRef } from 'react';
-import { Splitter, Empty, theme } from 'antd';
-import { AgentSessionList } from '../components/agents/AgentSessionList';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import {
+  Splitter,
+  Empty,
+  theme,
+  Drawer,
+  Descriptions,
+  Tag,
+  Typography,
+  Button,
+  Space,
+  Card,
+  message,
+} from 'antd';
+import { HistoryOutlined, CopyOutlined } from '@ant-design/icons';
+import { AgentSessionList, getStatusBadge } from '../components/agents/AgentSessionList';
 import { AgentTerminalLog } from '../components/agents/AgentTerminalLog';
 import { AgentDiffReviewer } from '../components/agents/AgentDiffReviewer';
 import { ShellPermissionModal } from '../components/agents/ShellPermissionModal';
@@ -8,7 +21,8 @@ import { useGhostDevSessions } from '../hooks/useGhostDevSessions';
 import { useGhostDevStream } from '../hooks/useGhostDevStream';
 import { useGhostDevDiff } from '../hooks/useGhostDevDiff';
 import { announceToScreenReader } from '../components/common/AriaLiveRegion';
-import type { AgentSession } from '../types/agent';
+import { agentSessionHistoryRepo } from '../services/agents/agentSessionHistoryRepo';
+import type { AgentSession, GhostDevSessionAuditRecord } from '../types/agent';
 
 export const AgentControlView: React.FC = () => {
   const { token } = theme.useToken();
@@ -19,6 +33,40 @@ export const AgentControlView: React.FC = () => {
     activeSession,
     stopSession,
   } = useGhostDevSessions();
+
+  // Audit history state
+  const [auditHistory, setAuditHistory] = useState<GhostDevSessionAuditRecord[]>([]);
+  const [selectedAuditRecord, setSelectedAuditRecord] = useState<GhostDevSessionAuditRecord | null>(null);
+  const [auditDrawerOpen, setAuditDrawerOpen] = useState<boolean>(false);
+
+  const refreshAuditHistory = useCallback(() => {
+    setAuditHistory(agentSessionHistoryRepo.listSessionHistory());
+  }, []);
+
+  useEffect(() => {
+    refreshAuditHistory();
+  }, [refreshAuditHistory, sessions]);
+
+  const handleSelectAuditSession = (record: GhostDevSessionAuditRecord) => {
+    setSelectedAuditRecord(record);
+    setAuditDrawerOpen(true);
+  };
+
+  const handleDeleteAuditSession = (taskId: string) => {
+    agentSessionHistoryRepo.deleteSession(taskId);
+    refreshAuditHistory();
+    if (selectedAuditRecord?.taskId === taskId) {
+      setSelectedAuditRecord(null);
+      setAuditDrawerOpen(false);
+    }
+  };
+
+  const handleClearAllAudit = () => {
+    agentSessionHistoryRepo.clearAllHistory();
+    refreshAuditHistory();
+    setSelectedAuditRecord(null);
+    setAuditDrawerOpen(false);
+  };
 
   // Terminal stream for active session
   const {
@@ -88,6 +136,10 @@ export const AgentControlView: React.FC = () => {
             activeSessionId={activeSessionId}
             onSelectSession={setActiveSessionId}
             onStopSession={stopSession}
+            auditHistory={auditHistory}
+            onSelectAuditSession={handleSelectAuditSession}
+            onDeleteAuditSession={handleDeleteAuditSession}
+            onClearAllAuditHistory={handleClearAllAudit}
           />
         </Splitter.Panel>
 
@@ -147,6 +199,143 @@ export const AgentControlView: React.FC = () => {
 
       {/* Global Shell Permission Modal interceptor */}
       <ShellPermissionModal />
+
+      {/* Audit Record Details Drawer */}
+      <Drawer
+        title={
+          <Space>
+            <HistoryOutlined style={{ color: '#4f46e5' }} />
+            <span>Chi tiết Audit: {selectedAuditRecord?.taskTitle}</span>
+          </Space>
+        }
+        width={600}
+        open={auditDrawerOpen}
+        onClose={() => setAuditDrawerOpen(false)}
+      >
+        {selectedAuditRecord && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Session Summary Metadata */}
+            <Descriptions size="small" bordered column={1}>
+              <Descriptions.Item label="Trạng thái">
+                {getStatusBadge(selectedAuditRecord.status)}
+              </Descriptions.Item>
+              <Descriptions.Item label="Tác vụ">
+                {selectedAuditRecord.taskTitle} (ID: {selectedAuditRecord.taskId})
+              </Descriptions.Item>
+              <Descriptions.Item label="Nhánh Git">
+                <code>{selectedAuditRecord.branchName}</code>
+              </Descriptions.Item>
+              <Descriptions.Item label="Thư mục Repo">
+                <code>{selectedAuditRecord.repoPath}</code>
+              </Descriptions.Item>
+              <Descriptions.Item label="Models">
+                <Space>
+                  <Tag color="#722ed1">Master: {selectedAuditRecord.masterModel}</Tag>
+                  <Tag color="#1677ff">Worker: {selectedAuditRecord.workerModel}</Tag>
+                </Space>
+              </Descriptions.Item>
+              <Descriptions.Item label="Thời gian bắt đầu">
+                {new Date(selectedAuditRecord.startedAt).toLocaleString()}
+              </Descriptions.Item>
+              <Descriptions.Item label="Thời gian kết thúc">
+                {selectedAuditRecord.finishedAt
+                  ? new Date(selectedAuditRecord.finishedAt).toLocaleString()
+                  : 'Đang chạy / Chưa kết thúc'}
+              </Descriptions.Item>
+              {selectedAuditRecord.error && (
+                <Descriptions.Item label="Lỗi ghi nhận">
+                  <Typography.Text type="danger">{selectedAuditRecord.error}</Typography.Text>
+                </Descriptions.Item>
+              )}
+            </Descriptions>
+
+            {/* Master Initial Prompt */}
+            <div>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: 8,
+                }}
+              >
+                <Typography.Title level={5} style={{ margin: 0 }}>
+                  Master Prompt ban đầu
+                </Typography.Title>
+                <Button
+                  size="small"
+                  icon={<CopyOutlined />}
+                  onClick={() => {
+                    void navigator.clipboard?.writeText(selectedAuditRecord.initialPrompt);
+                    message.success('Đã sao chép prompt!');
+                  }}
+                >
+                  Sao chép
+                </Button>
+              </div>
+              <pre
+                style={{
+                  backgroundColor: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: 6,
+                  padding: 12,
+                  fontSize: 12,
+                  whiteSpace: 'pre-wrap',
+                  maxHeight: 250,
+                  overflowY: 'auto',
+                  fontFamily: 'monospace',
+                }}
+              >
+                {selectedAuditRecord.initialPrompt || '(Không có prompt lưu trữ)'}
+              </pre>
+            </div>
+
+            {/* User Feedback History */}
+            <div>
+              <Typography.Title level={5} style={{ marginBottom: 8 }}>
+                Lịch sử phản hồi từ người dùng (
+                {selectedAuditRecord.userFeedbackHistory?.length || 0})
+              </Typography.Title>
+              {selectedAuditRecord.userFeedbackHistory &&
+              selectedAuditRecord.userFeedbackHistory.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {selectedAuditRecord.userFeedbackHistory.map((fb, idx) => (
+                    <Card
+                      key={idx}
+                      size="small"
+                      style={{ backgroundColor: '#f0f9ff', borderColor: '#bae6fd' }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          marginBottom: 4,
+                        }}
+                      >
+                        <Typography.Text strong style={{ fontSize: 12, color: '#0369a1' }}>
+                          Phản hồi #{idx + 1}
+                        </Typography.Text>
+                        <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+                          {new Date(fb.timestamp).toLocaleTimeString()}
+                        </Typography.Text>
+                      </div>
+                      <Typography.Paragraph
+                        style={{ margin: 0, fontSize: 13, whiteSpace: 'pre-wrap' }}
+                      >
+                        {fb.feedback}
+                      </Typography.Paragraph>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+                  Không có phản hồi nào được gửi trong phiên này.
+                </Typography.Text>
+              )}
+            </div>
+          </div>
+        )}
+      </Drawer>
     </div>
   );
 };
