@@ -12,6 +12,28 @@ use tokio::sync::{oneshot, Mutex};
 pub const MAX_GLOBAL_PROCESSES: usize = 6;
 static RUNNING_PROCESS_COUNT: AtomicUsize = AtomicUsize::new(0);
 
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+pub fn hidden_std_command<P: AsRef<std::ffi::OsStr>>(program: P) -> std::process::Command {
+    let mut cmd = std::process::Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd
+}
+
+pub fn hidden_tokio_command<P: AsRef<std::ffi::OsStr>>(program: P) -> tokio::process::Command {
+    let mut cmd = tokio::process::Command::new(program);
+    #[cfg(windows)]
+    {
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd
+}
+
 // Shell command safe prefixes per D-16 and ASVS V14.2
 pub static SAFE_COMMAND_PREFIXES: &[&str] = &[
     "git status",
@@ -186,7 +208,7 @@ pub fn ensure_git_worktree(repo_root: &Path, task_id: &str) -> Result<PathBuf, S
     }
 
     // git worktree add -B <branch_name> <worktree_path> HEAD
-    let output = std::process::Command::new("git")
+    let output = hidden_std_command("git")
         .current_dir(repo_root)
         .args([
             "worktree",
@@ -227,7 +249,8 @@ pub fn kill_process_tree(pid: u32) {
 
     #[cfg(windows)]
     {
-        let _ = std::process::Command::new("taskkill")
+        let mut cmd = hidden_std_command("taskkill");
+        let _ = cmd
             .args(["/F", "/T", "/PID", &pid.to_string()])
             .output();
     }
@@ -270,10 +293,11 @@ pub async fn start_ghost_dev_session(
     // Resolve claude executable
     let claude_binary = std::env::var("CLAUDE_PATH").unwrap_or_else(|_| "claude".to_string());
 
-    let mut cmd = tokio::process::Command::new(&claude_binary);
+    let mut cmd = hidden_tokio_command(&claude_binary);
     cmd.current_dir(&worktree_path)
         .args([
             "-p",
+            "--verbose",
             "--output-format",
             "stream-json",
             "--input-format",
@@ -462,10 +486,11 @@ pub async fn start_ghost_dev_session(
                                         let _ = stdin_tx_for_reader.send(resp.to_string()).await;
                                     } else {
                                         let worker_id = format!("w-{}-{}", tid, chrono_iso_now());
-                                        let mut wcmd = tokio::process::Command::new(&claude_binary_clone);
+                                        let mut wcmd = hidden_tokio_command(&claude_binary_clone);
                                         wcmd.current_dir(&worktree_dir)
                                             .args([
                                                 "-p",
+                                                "--verbose",
                                                 "--output-format",
                                                 "stream-json",
                                                 "--model",
@@ -690,6 +715,9 @@ pub async fn start_ghost_dev_session(
             }
         }
 
+        let _ = app_clone.emit("ghost-dev:session-updated", ());
+        let _ = app_clone.emit("ghost-dev:session-finished", ());
+
         let _ = app_clone.emit(
             "ghost-dev:stream-chunk",
             StreamEventChunk {
@@ -707,7 +735,7 @@ pub async fn start_ghost_dev_session(
 }
 
 #[tauri::command]
-pub async fn stop_ghost_dev_session(task_id: String) -> Result<(), String> {
+pub async fn stop_ghost_dev_session(app: AppHandle, task_id: String) -> Result<(), String> {
     let mut pool = AGENT_POOL.lock().await;
     if let Some(session) = pool.sessions.get_mut(&task_id) {
         kill_process_tree(session.master_pid);
@@ -717,10 +745,10 @@ pub async fn stop_ghost_dev_session(task_id: String) -> Result<(), String> {
         session.state.status = "interrupted".to_string();
         session.state.finished_at = Some(chrono_iso_now());
         session.stdin_tx = None;
-        Ok(())
-    } else {
-        Err(format!("Session {} not found", task_id))
     }
+    let _ = app.emit("ghost-dev:session-updated", ());
+    let _ = app.emit("ghost-dev:session-finished", ());
+    Ok(())
 }
 
 #[tauri::command]
@@ -737,14 +765,8 @@ pub async fn get_worktree_diff(worktree_path: String) -> Result<String, String> 
         return Err(format!("Worktree path does not exist: {}", worktree_path));
     }
 
-    // Mark untracked files with intent-to-add so they are included in git diff
-    let _ = std::process::Command::new("git")
-        .current_dir(&path)
-        .args(["add", "-N", "."])
-        .output();
-
     // Combine git diff HEAD and git diff for staged/unstaged changes
-    let output = std::process::Command::new("git")
+    let output = hidden_std_command("git")
         .current_dir(&path)
         .args(["diff", "HEAD"])
         .output()
@@ -754,7 +776,7 @@ pub async fn get_worktree_diff(worktree_path: String) -> Result<String, String> 
 
     // If HEAD diff is empty, check unstaged git diff (e.g. freshly created branch)
     if full_diff.trim().is_empty() {
-        let unstaged = std::process::Command::new("git")
+        let unstaged = hidden_std_command("git")
             .current_dir(&path)
             .args(["diff"])
             .output()
@@ -773,7 +795,7 @@ pub async fn accept_all_diff(worktree_path: String, commit_message: String) -> R
     }
 
     // git add -A
-    let add_out = std::process::Command::new("git")
+    let add_out = hidden_std_command("git")
         .current_dir(&path)
         .args(["add", "-A"])
         .output()
@@ -790,7 +812,7 @@ pub async fn accept_all_diff(worktree_path: String, commit_message: String) -> R
         commit_message
     };
 
-    let commit_out = std::process::Command::new("git")
+    let commit_out = hidden_std_command("git")
         .current_dir(&path)
         .args(["commit", "-m", &msg])
         .output()
@@ -806,7 +828,7 @@ pub async fn accept_all_diff(worktree_path: String, commit_message: String) -> R
     }
 
     // Return current commit sha
-    let rev_out = std::process::Command::new("git")
+    let rev_out = hidden_std_command("git")
         .current_dir(&path)
         .args(["rev-parse", "--short", "HEAD"])
         .output()
@@ -823,7 +845,7 @@ pub async fn revert_all_diff(worktree_path: String) -> Result<(), String> {
     }
 
     // git reset --hard HEAD
-    let reset_out = std::process::Command::new("git")
+    let reset_out = hidden_std_command("git")
         .current_dir(&path)
         .args(["reset", "--hard", "HEAD"])
         .output()
@@ -834,7 +856,7 @@ pub async fn revert_all_diff(worktree_path: String) -> Result<(), String> {
     }
 
     // git clean -fd
-    let clean_out = std::process::Command::new("git")
+    let clean_out = hidden_std_command("git")
         .current_dir(&path)
         .args(["clean", "-fd"])
         .output()
@@ -871,7 +893,7 @@ pub async fn revert_file_diff(worktree_path: String, file_path: String) -> Resul
     }
 
     // git checkout HEAD -- <file>
-    let checkout_out = std::process::Command::new("git")
+    let checkout_out = hidden_std_command("git")
         .current_dir(&path)
         .args(["checkout", "HEAD", "--", &file_path])
         .output()

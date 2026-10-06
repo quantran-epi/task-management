@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { DiffFile, DiffViewMode } from '../types/agent';
 import { parseGitDiff } from '../utils/gitDiffParser';
 import { isTauriApp } from '../utils/timerPopout';
@@ -31,6 +31,7 @@ export function useGhostDevDiff(worktreePath: string | null): UseGhostDevDiffRes
   const [viewMode, setViewMode] = useState<DiffViewMode>('unified');
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  const inFlightRef = useRef(false);
 
   const refreshDiff = useCallback(
     async (silent = false) => {
@@ -40,6 +41,11 @@ export function useGhostDevDiff(worktreePath: string | null): UseGhostDevDiffRes
         setSelectedFilePath(null);
         return;
       }
+
+      if (inFlightRef.current) {
+        return;
+      }
+      inFlightRef.current = true;
 
       if (!silent) {
         setLoading(true);
@@ -61,6 +67,7 @@ export function useGhostDevDiff(worktreePath: string | null): UseGhostDevDiffRes
       } catch (err) {
         console.error('[GhostDev] Failed to fetch git diff:', err);
       } finally {
+        inFlightRef.current = false;
         if (!silent) {
           setLoading(false);
         }
@@ -69,20 +76,46 @@ export function useGhostDevDiff(worktreePath: string | null): UseGhostDevDiffRes
     [worktreePath]
   );
 
-  // Initial load and periodic refresh / event-driven refresh
+  // Initial load on worktree change
   useEffect(() => {
     void refreshDiff(false);
   }, [refreshDiff]);
 
-  // Periodic poll every 3 seconds to catch live git file modifications by agents (silent refresh)
+  // Event-driven refresh: update diff only on actual agent activity or status changes
   useEffect(() => {
     if (!isTauriApp() || !worktreePath) return;
 
-    const interval = setInterval(() => {
-      void refreshDiff(true);
-    }, 3000);
+    let unlistenUpdated: (() => void) | undefined;
+    let unlistenFinished: (() => void) | undefined;
+    let unlistenStream: (() => void) | undefined;
 
-    return () => clearInterval(interval);
+    void (async () => {
+      try {
+        const { listen } = await import('@tauri-apps/api/event');
+
+        unlistenUpdated = await listen('ghost-dev:session-updated', () => {
+          void refreshDiff(true);
+        });
+
+        unlistenFinished = await listen('ghost-dev:session-finished', () => {
+          void refreshDiff(true);
+        });
+
+        unlistenStream = await listen<{ type?: string }>('ghost-dev:stream-chunk', (event) => {
+          if (event.payload?.type === 'tool_result' || event.payload?.type === 'status_change') {
+            void refreshDiff(true);
+          }
+        });
+      } catch (err) {
+        console.error('[GhostDev] Error setting up diff event listeners:', err);
+      }
+    })();
+
+    return () => {
+      if (unlistenUpdated) unlistenUpdated();
+      if (unlistenFinished) unlistenFinished();
+      if (unlistenStream) unlistenStream();
+    };
   }, [worktreePath, refreshDiff]);
 
   const acceptAll = useCallback(

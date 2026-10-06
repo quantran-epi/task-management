@@ -48,15 +48,15 @@ export function useGhostDevSessions(): UseGhostDevSessionsResult {
       if (!isTauriApp()) return;
       try {
         await tauriInvoke('stop_ghost_dev_session', { taskId });
+      } catch (err) {
+        console.warn(`[GhostDev] Notice when stopping session ${taskId}:`, err);
+      } finally {
         agentSessionHistoryRepo.updateSessionStatus(
           taskId,
           'interrupted',
           new Date().toISOString()
         );
         await refreshSessions();
-      } catch (err) {
-        console.error(`[GhostDev] Failed to stop session ${taskId}:`, err);
-        throw err;
       }
     },
     [refreshSessions]
