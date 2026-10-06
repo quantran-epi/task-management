@@ -1,19 +1,21 @@
 ---
-gsd_state_version: 1.0
+gsd_state_version: "1.0"
 milestone: v1.1
 milestone_name: Banking IT Enhancements & Jira Integration
+current_phase: 15
+current_phase_name: ghost-dev-local-claude-code-headless-orchestration-with-agen
 status: complete
 stopped_at: Phase 15 executed and verified
-last_updated: "2026-10-05T15:45:00.000Z"
-last_activity: "2026-10-05 -- Completed Phase 15 Ghost Dev headless orchestration with agent control page and live git diff reviewer"
+last_updated: "2026-10-06T02:42:52.849Z"
+last_activity: 2026-10-06
+last_activity_desc: "Completed quick task 261006-9py: Fix #/agents route reload issue and add custom command + session audit history for Ghost Dev"
+state_head: a87511a9e784895f2a9a2cb8858ee2185c4fc9bf
 progress:
   total_phases: 12
   completed_phases: 11
   total_plans: 38
   completed_plans: 38
   percent: 100
-current_phase: 15
-current_phase_name: ghost-dev-local-claude-code-headless-orchestration-with-agen
 ---
 
 # Project State
@@ -101,6 +103,8 @@ Last activity: 2026-10-06 -- Completed quick task 261006-9py: Fix #/agents route
 | 261005-mbq | Fix local attachment link Claude Code option to launch from Windows cmd.exe at selected path | 2026-10-05 | 6964979 | complete | [261005-mbq-fix-local-attachment-link-claude-code-op](./quick/261005-mbq-fix-local-attachment-link-claude-code-op/) |
 | 261005-mre | enable disable mcp modal from ai drawer dropdown menu | 2026-10-05 | 63d725b | — | [261005-mre-enable-disable-mcp-modal-from-ai-drawer-](./quick/261005-mre-enable-disable-mcp-modal-from-ai-drawer-/) |
 | 261005-njn | notify OS when AI finishes response while PlannerMate blurred | 2026-10-05 | fe08249 | — | [261005-njn-notify-os-when-ai-finishes-response-whil](./quick/261005-njn-notify-os-when-ai-finishes-response-whil/) |
+| 261006-c3u | Fix past deadline causing FeasibilityIntegration test failure | 2026-10-06 | — | complete | [261006-c3u-fix-past-deadline-causing-feasibilityint](./quick/261006-c3u-fix-past-deadline-causing-feasibilityint/) |
+| 261006-czh | autofill doc template on create and ai normalize note action | 2026-10-06 | a87511a | — | [261006-czh-autofill-doc-template-on-create-and-ai-n](./quick/261006-czh-autofill-doc-template-on-create-and-ai-n/) |
 
 ## Performance Metrics
 
