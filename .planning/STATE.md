@@ -31,12 +31,13 @@ Phase: 15 (ghost-dev-local-claude-code-headless-orchestration-with-agen) — COM
 Plan: 4 of 4 complete
 Status: Verified (human_needed for desktop smoke check)
 Next recommended run: /gsd-verify-work 15
-Last activity: 2026-10-05 -- Completed Phase 15 Ghost Dev headless orchestration with agent control page and live git diff reviewer
+Last activity: 2026-10-06 -- Completed quick task 261006-9py: Fix #/agents route reload issue and add custom command + session audit history for Ghost Dev
 
 ### Quick Tasks Completed
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261006-9py | Fix #/agents route reload issue and add custom command + session audit history for Ghost Dev | 2026-10-06 | 776cfb0 | complete | [261006-9py-fix-agents-route-reload-issue-and-add-cu](./quick/261006-9py-fix-agents-route-reload-issue-and-add-cu/) |
 | 261005-kq5 | Fix AI chat silent stops with watchdog timeout, 30-turn tool loop, final synthesis pass, and safe tool error handling | 2026-10-05 | 6a051a8 | complete | [261005-kq5-fix-ai-chat-silent-stop-and-error-report](./quick/261005-kq5-fix-ai-chat-silent-stop-and-error-report/) |
 | 261005-k7m | Fix inline code tokenization and intra-word underscore italic corruption in markdown renderer | 2026-10-05 | 8744dab | complete | [261005-k7m-fix-markdown-inline-code-and-underscores](./quick/261005-k7m-fix-markdown-inline-code-and-underscores/) |
 | 261005-ep9 | Add Notes-page feature that displays reusable AI instruction prompt for external document generation | 2026-10-05 | 90a1235 | complete | [261005-ep9-add-a-notes-page-feature-that-displays-a](./quick/261005-ep9-add-a-notes-page-feature-that-displays-a/) |
