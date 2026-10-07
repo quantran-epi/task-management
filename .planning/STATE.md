@@ -1,21 +1,16 @@
 ---
-gsd_state_version: "1.0"
-milestone: v1.1
-milestone_name: Banking IT Enhancements & Jira Integration
-current_phase: 15
-current_phase_name: ghost-dev-local-claude-code-headless-orchestration-with-agen
-status: complete
-stopped_at: Phase 15 executed and verified
-last_updated: "2026-10-07T06:45:00.000Z"
+gsd_state_version: 1.0
+milestone: v1.2
+milestone_name: Hybrid GraphRAG Knowledge Assistant MVP
+status: planning
+last_updated: "2026-10-07T14:11:40.102Z"
 last_activity: 2026-10-07
-last_activity_desc: "Completed quick task 261007-gce: allow choosing claude code executable in ghost dev config"
-state_head: 5350a603319f131528b8706ffb00291b60b25073
 progress:
-  total_phases: 12
-  completed_phases: 11
-  total_plans: 38
-  completed_plans: 38
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -29,11 +24,10 @@ See: .planning/PROJECT.md (updated 2026-09-27)
 
 ## Current Position
 
-Phase: 15 (ghost-dev-local-claude-code-headless-orchestration-with-agen) — COMPLETE
-Plan: 4 of 4 complete
-Status: Verified (human_needed for desktop smoke check)
-Next recommended run: /gsd-verify-work 15
-Last activity: 2026-10-07 -- Completed quick task 261007-gce: allow choosing claude code executable in ghost dev config
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-10-07 — Milestone v1.2 started
 
 ### Quick Tasks Completed
 

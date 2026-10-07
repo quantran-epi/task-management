@@ -12,15 +12,16 @@ Make planned work realistically fit available time by exposing overload early an
 
 Shipped **v1.0 MVP** on 2026-09-27 with all 8 foundational phases complete (28 plans, 69 tasks, 59/59 requirements satisfied, 0 audit gaps). Codebase comprises 14,384 LOC TypeScript/React across 324 files with 386 passing automated tests. Deployed as an installable PWA on GitHub Pages with offline IndexedDB storage and encrypted GitHub backup sync.
 
-## Current Milestone: v1.1 Banking IT Enhancements & Jira Integration
+## Current Milestone: v1.2 Hybrid GraphRAG Knowledge Assistant MVP
 
-**Goal:** Enhance application for banking IT development environment (SHB) with operational ownership fields, Jira Cloud connectivity, date-range task search, and advanced workload analytics.
+**Goal:** Query normalized local Markdown for scheduled process `60000006`, returning evidence-grounded answers, citations, and multi-hop dependency paths.
 
 **Target features:**
-- SHB Domain Fields: Ops Owner and Business Analyst (BA) fields at Project, Milestone, and Task levels (supporting multiple people names).
-- Jira Cloud Integration: Direct API token auth with optional CORS proxy config, connection testing, issue creation from tasks, and status transition syncing.
-- Date-Range Task Search: Search and filter tasks by execution/planned date range and multi-criteria filters (dates, status, project, Ops Owner, BA).
-- Enhanced Analytics Dashboard: Time & completion trends, milestone burndown & status distribution, and Ops Owner / BA workload allocation.
+- Publish and incrementally index PlannerMate Markdown through an optional knowledge server.
+- Combine keyword, vector, and Neo4j graph retrieval over the scheduled-process pilot corpus.
+- Extract evidence-backed process steps, call chains, database objects, cycles, statuses, and diagnostic relationships.
+- Answer through the existing AI assistant with citations, graph paths, conflicts, and missing-evidence handling.
+- Verify quality with a benchmark corpus covering retrieval, flow, and impact queries of at least three hops.
 
 ## Requirements
 
@@ -42,13 +43,15 @@ Shipped **v1.0 MVP** on 2026-09-27 with all 8 foundational phases complete (28 p
 - ✓ Connect to Jira Cloud REST API v3, create issues, link keys, execute transitions, filter tasks by Jira key/status, and format standup exports. — Phase 11 (JIRA-01..JIRA-05)
 - ✓ AI Chat Drawer with 9router API integration, scoped item context grounding, local file head extraction, and Claude Code CLI terminal bridge. — Phase 13.2 (AI-01..AI-05)
 
-### Active (Next Milestone Candidates)
+### Active
 
-- [ ] Save and reuse preferred filter combinations (PROD-01).
-- [ ] Duplicate a task or create one from a personal template (PROD-02).
-- [ ] Inspect a simple history of allocation changes (PROD-03).
-- [ ] Merge selected records from a valid backup rather than replacing all local data (PROD-04).
-- [ ] Richer timeline or heatmap workload visualizations (PROD-05).
+- [ ] Publish normalized Markdown to an optional knowledge server without breaking local/offline document use.
+- [ ] Incrementally index changed Markdown sections for keyword and semantic retrieval.
+- [ ] Build an evidence-backed Neo4j graph for scheduled process `60000006` using collision-safe composite identities.
+- [ ] Query process flow, call chain, dependencies, data objects, cycles, statuses, and diagnostics through bounded graph traversal.
+- [ ] Return AI answers with source citations, graph paths, conflicts, and explicit missing-evidence handling.
+- [ ] Keep technical reconstruction facts classified as observed or inferred unless business approval is documented.
+- [ ] Verify retrieval and multi-hop answer quality against a benchmark corpus.
 
 ### Out of Scope
 
@@ -80,6 +83,11 @@ GitHub synchronization is backup synchronization, not collaborative live sync. B
 - **PWA**: Installable and offline-capable — service worker updates do not cause data loss.
 - **Data safety**: Backup import validates format and avoids replacing good local data without explicit confirmation.
 - **Identifiers**: Stable client-generated UUIDs — hierarchy changes do not alter IDs.
+- **Knowledge source**: Markdown remains canonical; Neo4j and retrieval indexes must be fully rebuildable from published documents.
+- **Offline behavior**: Existing local document editing and search remain available when the optional knowledge server is unavailable.
+- **Evidence integrity**: Every extracted relationship must retain document, section, and source-range provenance plus evidence classification.
+- **Pilot scope**: MVP targets only `docs/sample-markdown-flow/60000006-SHB-Credit-calculations/`; broader card-system ingestion is deferred.
+- **Sensitive data**: MVP corpus must exclude real PAN, CVV, PIN/PIN block, HSM keys, production credentials, and customer PII.
 
 ## Key Decisions
 
@@ -95,6 +103,9 @@ GitHub synchronization is backup synchronization, not collaborative live sync. B
 | Session-only in-memory storage for PAT and passphrase | Eliminates credential leak surface in localStorage, IndexedDB, or logs | ✓ Validated — Phase 8 |
 | Pre-import snapshots with one-click rollback | Prevents accidental data replacement during restore | ✓ Validated — Phase 6 & 8 |
 | ActiveFormGuard reload interception | Prevents service worker updates from destroying dirty form state | ✓ Validated — Phase 7 |
+| Keep Markdown as canonical knowledge source | Human-readable documents remain reviewable and portable; graph/indexes can be rebuilt | — Pending |
+| Use collision-safe composite graph identities | Prevents namespace collisions such as `PRC_PROCESS:60000006` and `PRC_CONTAINER:60000006` | — Pending |
+| Start with scheduled process `60000006` as pilot corpus | Small enough to validate, rich enough for scheduler, call-chain, data, and diagnostic multi-hop queries | — Pending |
 
 ## Evolution
 
@@ -114,4 +125,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-27 after v1.0 milestone*
+*Last updated: 2026-10-07 after starting v1.2 Hybrid GraphRAG Knowledge Assistant MVP*
