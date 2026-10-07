@@ -62,6 +62,7 @@ jobs:
         with:
           owner: ${{ (startsWith(github.ref, 'refs/tags/v') || inputs.publish_to_taskmate) && 'quantran-epi' || github.repository_owner }}
           repo: ${{ (startsWith(github.ref, 'refs/tags/v') || inputs.publish_to_taskmate) && 'taskmate' || github.event.repository.name }}
+          releaseCommitish: ${{ (startsWith(github.ref, 'refs/tags/v') || inputs.publish_to_taskmate) && 'main' || github.sha }}
           tagName: v__VERSION__
           releaseName: 'TaskMate v__VERSION__'
           releaseBody: 'TaskMate Desktop release for macOS and Windows.'
