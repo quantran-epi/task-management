@@ -8,7 +8,7 @@ status: complete
 stopped_at: Phase 15 executed and verified
 last_updated: "2026-10-07T04:40:00.000Z"
 last_activity: 2026-10-07
-last_activity_desc: "Completed quick task 261007-f4h: implement six UI and data fixes for agent control, docs, ghost dev, projects, and header"
+last_activity_desc: "Completed quick task 261007-iwb: fix noteAttachments test failure after binary exclusion"
 state_head: 5350a603319f131528b8706ffb00291b60b25073
 progress:
   total_phases: 12
@@ -39,6 +39,7 @@ Last activity: 2026-10-07 -- Completed quick task 261007-f4h: implement six UI a
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261007-iwb | fix noteAttachments test failure after binary exclusion | 2026-10-07 | 7bbd991 | complete | [261007-iwb-fix-noteattachments-test-failure-after-b](./quick/261007-iwb-fix-noteattachments-test-failure-after-b/) |
 | 261007-hip | backup all user data and safe settings without binary data and fix dirty tracking | 2026-10-07 | 5c4b7c5 | complete | [261007-hip-backup-all-user-data-and-safe-settings-w](./quick/261007-hip-backup-all-user-data-and-safe-settings-w/) |
 | 261007-f4h | implement six UI and data fixes for agent control, docs, ghost dev, projects, and header | 2026-10-07 | 1ef6364 | complete | [261007-f4h-implement-six-ui-data-fixes-agent-contro](./quick/261007-f4h-implement-six-ui-data-fixes-agent-contro/) |
 | 261007-dtm | Fix scrollIntoView unhandled error in tests | 2026-10-07 | — | complete | [261007-dtm-fix-scrollintoview-unhandled-error-in-te](./quick/261007-dtm-fix-scrollintoview-unhandled-error-in-te/) |
