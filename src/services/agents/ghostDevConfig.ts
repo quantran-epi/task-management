@@ -2,7 +2,7 @@ export interface GhostDevConfig {
   masterModel: string;
   workerModel: string;
   concurrencyCap: number;
-  claudePath?: string;
+  claudePath?: string | undefined;
 }
 
 export const GHOST_DEV_CONFIG_KEY = 'planner:ghost_dev_config';

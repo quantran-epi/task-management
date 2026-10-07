@@ -39,6 +39,7 @@ Last activity: 2026-10-07 -- Completed quick task 261007-gce: allow choosing cla
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261007-epc | fix ghostDevConfig claudePath exactOptionalPropertyTypes build error | 2026-10-07 | — | complete | [261007-epc-fix-ghost-dev-claude-path-exact-optional-property](./quick/261007-epc-fix-ghost-dev-claude-path-exact-optional-property/) |
 | 261007-gce | allow choosing claude code executable in ghost dev config | 2026-10-07 | 35bbc32 | complete | [261007-gce-allow-choose-claude-executable-ghost-dev](./quick/261007-gce-allow-choose-claude-executable-ghost-dev/) |
 | 261007-iwb | fix noteAttachments test failure after binary exclusion | 2026-10-07 | 7bbd991 | complete | [261007-iwb-fix-noteattachments-test-failure-after-b](./quick/261007-iwb-fix-noteattachments-test-failure-after-b/) |
 | 261007-hip | backup all user data and safe settings without binary data and fix dirty tracking | 2026-10-07 | 5c4b7c5 | complete | [261007-hip-backup-all-user-data-and-safe-settings-w](./quick/261007-hip-backup-all-user-data-and-safe-settings-w/) |
