@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Form, Input, InputNumber, Button, Space, Typography, message, Alert } from 'antd';
-import { RobotOutlined, SaveOutlined, ReloadOutlined } from '@ant-design/icons';
+import { RobotOutlined, SaveOutlined, ReloadOutlined, FolderOpenOutlined } from '@ant-design/icons';
 import {
   getGhostDevConfig,
   setGhostDevConfig,
@@ -8,6 +8,8 @@ import {
   MODEL_ID_REGEX,
   type GhostDevConfig,
 } from '../../services/agents/ghostDevConfig';
+import { isTauriApp } from '../../utils/timerPopout';
+import { browseLocalFile } from '../../utils/documentLinks';
 
 const { Paragraph } = Typography;
 
@@ -36,6 +38,13 @@ export const GhostDevConfigCard: React.FC = () => {
     form.setFieldsValue(DEFAULT_GHOST_DEV_CONFIG);
     setGhostDevConfig(DEFAULT_GHOST_DEV_CONFIG);
     message.info('Đã đặt lại cấu hình Ghost Dev về mặc định');
+  };
+
+  const handleBrowseExecutable = async () => {
+    const filePath = await browseLocalFile();
+    if (filePath) {
+      form.setFieldValue('claudePath', filePath);
+    }
   };
 
   return (
@@ -109,6 +118,21 @@ export const GhostDevConfigCard: React.FC = () => {
             <Input placeholder="claude-3-5-haiku-20241022" />
           </Form.Item>
         </div>
+
+        <Form.Item
+          name="claudePath"
+          label="Claude Code Executable / CLI Path"
+          tooltip="Đường dẫn file thực thi hoặc tên lệnh Claude Code (để trống sẽ dùng 'claude' từ PATH hoặc biến môi trường CLAUDE_PATH)"
+        >
+          <Space.Compact style={{ width: '100%' }}>
+            <Input placeholder="Mặc định: claude (ví dụ: claude, C:\...\claude.cmd, /usr/local/bin/claude)" />
+            {isTauriApp() && (
+              <Button icon={<FolderOpenOutlined />} onClick={handleBrowseExecutable}>
+                Duyệt tập tin...
+              </Button>
+            )}
+          </Space.Compact>
+        </Form.Item>
 
         <Form.Item
           name="concurrencyCap"

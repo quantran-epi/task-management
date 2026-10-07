@@ -169,6 +169,7 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
             workerModel,
             initialPrompt,
             concurrencyCap: config.concurrencyCap,
+            claudePath: config.claudePath?.trim() || undefined,
           },
         });
       } else {

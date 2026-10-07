@@ -89,6 +89,7 @@ pub struct StartSessionPayload {
     pub worker_model: String,
     pub initial_prompt: String,
     pub concurrency_cap: Option<usize>,
+    pub claude_path: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -345,7 +346,14 @@ pub async fn start_ghost_dev_session(
     let branch_name = format!("pm-agent/task-{}", payload.task_id);
 
     // Resolve claude executable
-    let claude_binary = std::env::var("CLAUDE_PATH").unwrap_or_else(|_| "claude".to_string());
+    let claude_binary = payload
+        .claude_path
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+        .or_else(|| std::env::var("CLAUDE_PATH").ok())
+        .unwrap_or_else(|| "claude".to_string());
 
     let mut cmd = hidden_tokio_command(&claude_binary);
     cmd.current_dir(&worktree_path)

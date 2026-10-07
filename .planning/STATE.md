@@ -6,9 +6,9 @@ current_phase: 15
 current_phase_name: ghost-dev-local-claude-code-headless-orchestration-with-agen
 status: complete
 stopped_at: Phase 15 executed and verified
-last_updated: "2026-10-07T04:40:00.000Z"
+last_updated: "2026-10-07T06:45:00.000Z"
 last_activity: 2026-10-07
-last_activity_desc: "Completed quick task 261007-iwb: fix noteAttachments test failure after binary exclusion"
+last_activity_desc: "Completed quick task 261007-gce: allow choosing claude code executable in ghost dev config"
 state_head: 5350a603319f131528b8706ffb00291b60b25073
 progress:
   total_phases: 12
@@ -33,12 +33,13 @@ Phase: 15 (ghost-dev-local-claude-code-headless-orchestration-with-agen) — COM
 Plan: 4 of 4 complete
 Status: Verified (human_needed for desktop smoke check)
 Next recommended run: /gsd-verify-work 15
-Last activity: 2026-10-07 -- Completed quick task 261007-f4h: implement six UI and data fixes for agent control, docs, ghost dev, projects, and header
+Last activity: 2026-10-07 -- Completed quick task 261007-gce: allow choosing claude code executable in ghost dev config
 
 ### Quick Tasks Completed
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261007-gce | allow choosing claude code executable in ghost dev config | 2026-10-07 | 35bbc32 | complete | [261007-gce-allow-choose-claude-executable-ghost-dev](./quick/261007-gce-allow-choose-claude-executable-ghost-dev/) |
 | 261007-iwb | fix noteAttachments test failure after binary exclusion | 2026-10-07 | 7bbd991 | complete | [261007-iwb-fix-noteattachments-test-failure-after-b](./quick/261007-iwb-fix-noteattachments-test-failure-after-b/) |
 | 261007-hip | backup all user data and safe settings without binary data and fix dirty tracking | 2026-10-07 | 5c4b7c5 | complete | [261007-hip-backup-all-user-data-and-safe-settings-w](./quick/261007-hip-backup-all-user-data-and-safe-settings-w/) |
 | 261007-f4h | implement six UI and data fixes for agent control, docs, ghost dev, projects, and header | 2026-10-07 | 1ef6364 | complete | [261007-f4h-implement-six-ui-data-fixes-agent-contro](./quick/261007-f4h-implement-six-ui-data-fixes-agent-contro/) |
