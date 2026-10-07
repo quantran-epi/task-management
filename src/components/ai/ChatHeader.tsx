@@ -1,5 +1,5 @@
 import React from 'react';
-import { Typography, Select, Button, Tooltip, Dropdown, theme } from 'antd';
+import { Typography, Select, Button, Tooltip, Dropdown, Popover, Badge, Switch, Space, theme } from 'antd';
 import type { MenuProps } from 'antd';
 import {
   RobotFilled,
@@ -15,7 +15,9 @@ import {
   BookOutlined,
   DeleteOutlined,
   ApiOutlined,
+  SettingOutlined,
 } from '@ant-design/icons';
+import type { McpServerConfig } from '../../services/ai/mcpClient';
 
 const { Text } = Typography;
 
@@ -50,6 +52,8 @@ export interface ChatHeaderProps {
   onPopout?: (() => void) | undefined;
   onOpenInstructions?: (() => void) | undefined;
   onClose: () => void;
+  mcpServers?: McpServerConfig[];
+  onToggleMcpServer?: (id: string, enabled: boolean) => void;
 }
 
 export const ChatHeader: React.FC<ChatHeaderProps> = ({
@@ -68,8 +72,12 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   onPopout,
   onOpenInstructions,
   onClose,
+  mcpServers = [],
+  onToggleMcpServer,
 }) => {
   const { token } = theme.useToken();
+
+  const enabledMcpCount = mcpServers.filter((s) => s.enabled).length;
 
   const menuItems: MenuProps['items'] = [
     ...(onOpenInstructions
@@ -154,6 +162,89 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       : []),
   ];
 
+  const mcpPopoverContent = (
+    <div style={{ width: 260 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: 8,
+          paddingBottom: 6,
+          borderBottom: `1px solid ${token.colorBorderSecondary}`,
+        }}
+      >
+        <Text strong style={{ fontSize: 13 }}>
+          Máy chủ MCP ({enabledMcpCount}/{mcpServers.length})
+        </Text>
+        {onOpenMcpSettings && (
+          <Button
+            type="link"
+            size="small"
+            icon={<SettingOutlined />}
+            onClick={onOpenMcpSettings}
+            style={{ padding: 0, fontSize: 12 }}
+          >
+            Cài đặt
+          </Button>
+        )}
+      </div>
+
+      {mcpServers.length === 0 ? (
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          Chưa có máy chủ MCP nào được cấu hình.
+        </Text>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {mcpServers.map((server) => (
+            <div
+              key={server.id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 8,
+              }}
+            >
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <Text
+                  style={{
+                    fontSize: 12,
+                    display: 'block',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                  title={server.name}
+                >
+                  {server.name}
+                </Text>
+                <Text
+                  type="secondary"
+                  style={{
+                    fontSize: 10,
+                    display: 'block',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {server.url}
+                </Text>
+              </div>
+              <Switch
+                size="small"
+                checked={server.enabled}
+                onChange={(checked) => onToggleMcpServer?.(server.id, checked)}
+                aria-label={`Bật/tắt ${server.name}`}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div
       style={{
@@ -228,6 +319,32 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                 : []
           }
         />
+
+        {/* Quick MCP Toggle Popover */}
+        <Popover
+          content={mcpPopoverContent}
+          title={null}
+          trigger="click"
+          placement="bottomRight"
+          getPopupContainer={(node) => node.parentElement || document.body}
+        >
+          <Tooltip title={`Máy chủ MCP (${enabledMcpCount} đang bật)`}>
+            <Badge
+              count={enabledMcpCount}
+              size="small"
+              offset={[-2, 4]}
+              style={{ backgroundColor: enabledMcpCount > 0 ? '#10b981' : token.colorTextQuaternary }}
+            >
+              <Button
+                type="text"
+                size="small"
+                icon={<ApiOutlined style={{ color: enabledMcpCount > 0 ? token.colorPrimary : undefined }} />}
+                aria-label="Bật/tắt nhanh máy chủ MCP"
+                style={{ minWidth: 28, minHeight: 28 }}
+              />
+            </Badge>
+          </Tooltip>
+        </Popover>
 
         {onPopout && (
           <Tooltip title="Mở cửa sổ riêng (Popout)">
