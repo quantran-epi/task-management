@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TaskMate</title>
+<meta name="description" content="Private, offline-first desktop app to manage projects, milestones, and tasks while planning work against daily capacity.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&family=Space+Grotesk:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: centered single-column, max 1080px, stacked sections */
+:root {
+  --bg: #fafbfc;
+  --bg-elevated: #ffffff;
+  --fg: #1a1d23;
+  --fg-muted: #5c6370;
+  --fg-dim: #8b919d;
+  --accent: #4f46e5;
+  --accent-hover: #4338ca;
+  --accent-soft: rgba(79, 70, 229, 0.08);
+  --surface-border: rgba(0, 0, 0, 0.06);
+  --surface-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03);
+  --surface-shadow-lg: 0 4px 24px rgba(0,0,0,0.06), 0 12px 48px rgba(0,0,0,0.04);
+  --green: #16a34a;
+  --amber: #d97706;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-body: 'DM Sans', system-ui, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1117;
+    --bg-elevated: #1a1d27;
+    --fg: #e8eaed;
+    --fg-muted: #9ca3af;
+    --fg-dim: #6b7280;
+    --accent: #818cf8;
+    --accent-hover: #a5b4fc;
+    --accent-soft: rgba(129, 140, 248, 0.1);
+    --surface-border: rgba(255, 255, 255, 0.08);
+    --surface-shadow: 0 1px 3px rgba(0,0,0,0.2), 0 4px 12px rgba(0,0,0,0.15);
+    --surface-shadow-lg: 0 4px 24px rgba(0,0,0,0.3), 0 12px 48px rgba(0,0,0,0.2);
+    --green: #4ade80;
+    --amber: #fbbf24;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1117;
+  --bg-elevated: #1a1d27;
+  --fg: #e8eaed;
+  --fg-muted: #9ca3af;
+  --fg-dim: #6b7280;
+  --accent: #818cf8;
+  --accent-hover: #a5b4fc;
+  --accent-soft: rgba(129, 140, 248, 0.1);
+  --surface-border: rgba(255, 255, 255, 0.08);
+  --surface-shadow: 0 1px 3px rgba(0,0,0,0.2), 0 4px 12px rgba(0,0,0,0.15);
+  --surface-shadow-lg: 0 4px 24px rgba(0,0,0,0.3), 0 12px 48px rgba(0,0,0,0.2);
+  --green: #4ade80;
+  --amber: #fbbf24;
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 0 20px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrapper {
+  max-width: 1080px;
+  margin: 0 auto;
+}
+
+/* ─── Nav ─── */
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 0;
+  gap: 16px;
+}
+.nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--fg);
+}
+.nav-logo svg { flex-shrink: 0; }
+.nav-logo span {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+}
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.nav-link {
+  color: var(--fg-muted);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  transition: color 0.15s, background 0.15s;
+}
+.nav-link:hover { color: var(--fg); background: var(--accent-soft); }
+.nav-cta {
+  background: var(--accent);
+  color: #fff !important;
+  padding: 8px 18px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+}
+.nav-cta:hover { background: var(--accent-hover); color: #fff !important; }
+
+/* ─── Hero ─── */
+.hero {
+  text-align: center;
+  padding: 80px 0 60px;
+}
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 16px;
+  border-radius: 20px;
+  margin-bottom: 28px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.hero-badge svg { width: 14px; height: 14px; }
+.hero h1 {
+  font-family: var(--font-display);
+  font-size: clamp(36px, 6vw, 64px);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+  margin-bottom: 20px;
+}
+.hero h1 em {
+  font-style: normal;
+  color: var(--accent);
+}
+.hero p {
+  font-size: clamp(17px, 2.5vw, 20px);
+  color: var(--fg-muted);
+  max-width: 580px;
+  margin: 0 auto 40px;
+  text-wrap: balance;
+}
+
+.hero-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 28px;
+  border-radius: var(--radius);
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s;
+  border: none;
+  cursor: pointer;
+}
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
+}
+.btn-primary:hover {
+  background: var(--accent-hover);
+  box-shadow: 0 4px 16px rgba(79, 70, 229, 0.35);
+  transform: translateY(-1px);
+}
+.btn-secondary {
+  background: var(--bg-elevated);
+  color: var(--fg);
+  border: 1px solid var(--surface-border);
+  box-shadow: var(--surface-shadow);
+}
+.btn-secondary:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  transform: translateY(-1px);
+}
+.btn svg { width: 20px; height: 20px; flex-shrink: 0; }
+.btn-small { font-size: 14px; padding: 6px 14px; }
+
+.hero-meta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  margin-top: 24px;
+  font-size: 13px;
+  color: var(--fg-dim);
+}
+.hero-meta span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.hero-meta svg { width: 14px; height: 14px; }
+
+/* ─── App Preview ─── */
+.preview {
+  margin: 0 auto 100px;
+  max-width: 960px;
+}
+.preview-window {
+  background: var(--bg-elevated);
+  border: 1px solid var(--surface-border);
+  border-radius: 16px;
+  box-shadow: var(--surface-shadow-lg);
+  overflow: hidden;
+}
+.preview-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--surface-border);
+}
+.preview-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+.preview-dot:nth-child(1) { background: #ff5f57; }
+.preview-dot:nth-child(2) { background: #ffbd2e; }
+.preview-dot:nth-child(3) { background: #28c840; }
+.preview-titlebar-text {
+  flex: 1;
+  text-align: center;
+  font-size: 12px;
+  color: var(--fg-dim);
+  font-weight: 500;
+}
+
+.preview-content {
+  padding: 32px;
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 24px;
+  min-height: 380px;
+}
+@media (max-width: 640px) {
+  .preview-content {
+    grid-template-columns: 1fr;
+    padding: 20px;
+    min-height: auto;
+  }
+  .preview-sidebar { display: none; }
+}
+
+.preview-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.preview-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--fg-muted);
+  font-weight: 500;
+}
+.preview-nav-item.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+.preview-nav-item svg { width: 16px; height: 16px; opacity: 0.7; }
+.preview-nav-item.active svg { opacity: 1; }
+
+.preview-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.preview-header h3 {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+}
+.preview-stats {
+  display: flex;
+  gap: 12px;
+}
+.preview-stat {
+  background: var(--accent-soft);
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.preview-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.preview-task {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  border: 1px solid var(--surface-border);
+}
+.preview-task-check {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 2px solid var(--fg-dim);
+  flex-shrink: 0;
+}
+.preview-task-check.done {
+  background: var(--green);
+  border-color: var(--green);
+}
+.preview-task-name { flex: 1; min-width: 0; }
+.preview-task.done .preview-task-name {
+  text-decoration: line-through;
+  color: var(--fg-dim);
+}
+.preview-task-tag {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.preview-task-tag.high { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+.preview-task-tag.med { background: rgba(217, 119, 6, 0.1); color: var(--amber); }
+.preview-task-tag.low { background: rgba(22, 163, 74, 0.1); color: var(--green); }
+.preview-task-hours {
+  font-size: 12px;
+  color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.preview-bar-track {
+  height: 6px;
+  background: var(--surface-border);
+  border-radius: 3px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+.preview-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+  width: 68%;
+}
+
+/* ─── Features ─── */
+.features {
+  padding-block: 80px;
+}
+.features-header {
+  text-align: center;
+  margin-bottom: 56px;
+}
+.features-header h2 {
+  font-family: var(--font-display);
+  font-size: clamp(28px, 4vw, 40px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 12px;
+  text-wrap: balance;
+}
+.features-header p {
+  color: var(--fg-muted);
+  font-size: 17px;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+@media (max-width: 768px) {
+  .features-grid { grid-template-columns: 1fr; }
+}
+
+.feature-card {
+  padding: 28px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius);
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+.feature-card:hover {
+  box-shadow: var(--surface-shadow);
+  transform: translateY(-2px);
+}
+.feature-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  color: var(--accent);
+}
+.feature-icon svg { width: 20px; height: 20px; }
+.feature-card h3 {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.feature-card p {
+  font-size: 14px;
+  color: var(--fg-muted);
+  line-height: 1.6;
+}
+
+/* ─── Privacy section ─── */
+.privacy {
+  padding-block: 60px 80px;
+}
+.privacy-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--surface-border);
+  border-radius: 16px;
+  padding: 48px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 48px;
+  align-items: center;
+}
+@media (max-width: 640px) {
+  .privacy-card {
+    grid-template-columns: 1fr;
+    padding: 28px;
+    gap: 28px;
+  }
+}
+.privacy-text h2 {
+  font-family: var(--font-display);
+  font-size: clamp(24px, 3.5vw, 32px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 12px;
+  text-wrap: balance;
+}
+.privacy-text p {
+  font-size: 15px;
+  color: var(--fg-muted);
+  margin-bottom: 20px;
+  line-height: 1.7;
+}
+.privacy-list {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.privacy-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.privacy-list svg { width: 18px; height: 18px; color: var(--green); flex-shrink: 0; }
+
+.privacy-visual {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.privacy-badge {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  background: var(--bg);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius);
+}
+.privacy-badge-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.privacy-badge-icon.shield { background: rgba(22, 163, 74, 0.1); color: var(--green); }
+.privacy-badge-icon.offline { background: rgba(79, 70, 229, 0.08); color: var(--accent); }
+.privacy-badge-icon.lock { background: rgba(217, 119, 6, 0.08); color: var(--amber); }
+.privacy-badge-icon svg { width: 18px; height: 18px; }
+.privacy-badge-text strong { display: block; font-size: 14px; font-weight: 600; }
+.privacy-badge-text span { font-size: 12px; color: var(--fg-muted); }
+
+/* ─── Download CTA ─── */
+.download {
+  padding-block: 60px 100px;
+  text-align: center;
+}
+.download h2 {
+  font-family: var(--font-display);
+  font-size: clamp(28px, 4vw, 40px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 12px;
+}
+.download p {
+  color: var(--fg-muted);
+  font-size: 17px;
+  margin-bottom: 32px;
+}
+.download-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.download-note {
+  font-size: 13px;
+  color: var(--fg-dim);
+}
+.download-note a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.download-note a:hover { text-decoration: underline; }
+
+/* ─── Footer ─── */
+.footer {
+  padding: 28px 0;
+  border-top: 1px solid var(--surface-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--fg-dim);
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.footer a {
+  color: var(--fg-muted);
+  text-decoration: none;
+}
+.footer a:hover { color: var(--accent); }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; transform: none !important; }
+}
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <!-- Nav -->
+  <nav class="nav">
+    <a href="#" class="nav-logo">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none"><rect width="28" height="28" rx="7" fill="var(--accent)"/><path d="M8 10h12M8 14h8M8 18h10" stroke="#fff" stroke-width="2" stroke-linecap="round"/><circle cx="20" cy="18" r="3" fill="#fff" opacity="0.5"/></svg>
+      <span>TaskMate</span>
+    </a>
+    <div class="nav-links">
+      <a href="#features" class="nav-link">Features</a>
+      <a href="#privacy" class="nav-link">Privacy</a>
+      <a href="#download" class="nav-link nav-cta">Download</a>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-badge">
+      <svg viewBox="0 0 16 16" fill="none"><path d="M8 1l2.5 5 5.5.8-4 3.9.9 5.3L8 13.3 3.1 16l.9-5.3-4-3.9 5.5-.8L8 1z" fill="currentColor"/></svg>
+      Free &amp; Open Source
+    </div>
+    <h1>Plan your work.<br><em>Ship on time.</em></h1>
+    <p>A private, offline-first desktop app that turns your task list into a realistic daily plan — with capacity forecasting, workload distribution, and zero cloud dependency.</p>
+
+    <div class="hero-actions">
+      <a id="btn-mac" href="https://github.com/quantran-epi/taskmate/releases/latest" class="btn btn-primary" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+        Download for macOS
+      </a>
+      <a id="btn-win" href="https://github.com/quantran-epi/taskmate/releases/latest" class="btn btn-secondary" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 12V6.75l6-1.32v6.48L3 12zm0 .75l6 .09v6.81l-6-1.32V12.75zM10 5.19l11-2.43v9.15l-11 .09V5.19zm0 7.71l11 .09v9.24l-11-2.43V12.9z"/></svg>
+        Download for Windows
+      </a>
+    </div>
+
+    <div class="hero-meta">
+      <span>
+        <svg viewBox="0 0 16 16" fill="none"><path d="M8 14A6 6 0 108 2a6 6 0 000 12z" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 6.5l-3.25 3.25L5.5 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        macOS &amp; Windows
+      </span>
+      <span>
+        <svg viewBox="0 0 16 16" fill="none"><path d="M2 4.5h12M2 8h12M2 11.5h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        v0.1.0
+      </span>
+      <span>
+        <svg viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="10" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M5 1v4M11 1v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Free forever
+      </span>
+    </div>
+  </section>
+
+  <!-- App Preview -->
+  <div class="preview">
+    <div class="preview-window">
+      <div class="preview-titlebar">
+        <div class="preview-dot"></div>
+        <div class="preview-dot"></div>
+        <div class="preview-dot"></div>
+        <span class="preview-titlebar-text">TaskMate</span>
+      </div>
+      <div class="preview-content">
+        <div class="preview-sidebar">
+          <div class="preview-nav-item active">
+            <svg viewBox="0 0 16 16" fill="none"><path d="M2 3h12M2 8h12M2 13h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            Dashboard
+          </div>
+          <div class="preview-nav-item">
+            <svg viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 8l2 2 3-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Tasks
+          </div>
+          <div class="preview-nav-item">
+            <svg viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="10" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M5 1v4M11 1v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            Planner
+          </div>
+          <div class="preview-nav-item">
+            <svg viewBox="0 0 16 16" fill="none"><path d="M3 13V5l4-3 4 3v8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M13 13V8l-2-1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Projects
+          </div>
+          <div class="preview-nav-item">
+            <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/><path d="M10 6l-4 4M6 6l4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            Analytics
+          </div>
+        </div>
+        <div class="preview-main">
+          <div class="preview-header">
+            <h3>Today's Plan</h3>
+            <div class="preview-stats">
+              <span class="preview-stat">5.5h planned</span>
+              <span class="preview-stat">8h capacity</span>
+            </div>
+          </div>
+          <div class="preview-tasks">
+            <div class="preview-task done">
+              <div class="preview-task-check done"></div>
+              <span class="preview-task-name">Review API spec for auth module</span>
+              <span class="preview-task-tag low">Low</span>
+              <span class="preview-task-hours">1.0h</span>
+            </div>
+            <div class="preview-task">
+              <div class="preview-task-check"></div>
+              <span class="preview-task-name">Build user settings page</span>
+              <span class="preview-task-tag high">High</span>
+              <span class="preview-task-hours">2.5h</span>
+            </div>
+            <div class="preview-task">
+              <div class="preview-task-check"></div>
+              <span class="preview-task-name">Fix date picker timezone drift</span>
+              <span class="preview-task-tag med">Med</span>
+              <span class="preview-task-hours">1.0h</span>
+            </div>
+            <div class="preview-task">
+              <div class="preview-task-check"></div>
+              <span class="preview-task-name">Write milestone retrospective</span>
+              <span class="preview-task-tag low">Low</span>
+              <span class="preview-task-hours">1.0h</span>
+            </div>
+          </div>
+          <div class="preview-bar-track">
+            <div class="preview-bar-fill"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Features -->
+  <section class="features" id="features">
+    <div class="features-header">
+      <h2>Everything you need to ship</h2>
+      <p>Built for developers and solo builders who want realistic plans, not optimistic guesses.</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 3v18h18"/><path d="M7 16l4-8 4 4 6-10"/></svg>
+        </div>
+        <h3>Workload Forecasting</h3>
+        <p>See whether your planned work actually fits your available hours. Overload surfaces before deadlines, not after.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 3v18"/></svg>
+        </div>
+        <h3>Daily Capacity Planner</h3>
+        <p>Allocate hours per task per day. TaskMate suggests feasible distributions based on your rules and deadlines.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+        </div>
+        <h3>Projects &amp; Milestones</h3>
+        <p>Organize work into projects with milestones and deadlines. Track progress with real completion data, not guesses.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg>
+        </div>
+        <h3>Task Management</h3>
+        <p>Create, prioritize, estimate, and track tasks with custom fields, recurring schedules, and time logging built in.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <h3>100% Private &amp; Offline</h3>
+        <p>Your data lives on your machine. No accounts, no cloud, no tracking. Works fully offline with encrypted backup option.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+        </div>
+        <h3>AI-Powered Insights</h3>
+        <p>Built-in AI assistant for task analysis, estimation suggestions, and intelligent project insights — all processed locally.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Privacy Section -->
+  <section class="privacy" id="privacy">
+    <div class="privacy-card">
+      <div class="privacy-text">
+        <h2>Your data stays yours</h2>
+        <p>TaskMate runs entirely on your desktop. No server, no signup, no telemetry. Optional encrypted backups go to your own GitHub repo — encrypted with your passphrase before they leave the app.</p>
+        <ul class="privacy-list">
+          <li>
+            <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+            Zero network requests in normal operation
+          </li>
+          <li>
+            <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+            AES-256 encrypted backups
+          </li>
+          <li>
+            <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+            Passphrase never stored
+          </li>
+          <li>
+            <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+            Open source — audit the code yourself
+          </li>
+        </ul>
+      </div>
+      <div class="privacy-visual">
+        <div class="privacy-badge">
+          <div class="privacy-badge-icon shield">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <div class="privacy-badge-text">
+            <strong>Local-first architecture</strong>
+            <span>IndexedDB on your machine</span>
+          </div>
+        </div>
+        <div class="privacy-badge">
+          <div class="privacy-badge-icon offline">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12l5 5L22 2"/></svg>
+          </div>
+          <div class="privacy-badge-text">
+            <strong>Works offline</strong>
+            <span>No internet needed after install</span>
+          </div>
+        </div>
+        <div class="privacy-badge">
+          <div class="privacy-badge-icon lock">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+          </div>
+          <div class="privacy-badge-text">
+            <strong>End-to-end encrypted sync</strong>
+            <span>AES-GCM + PBKDF2 via Web Crypto</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Download CTA -->
+  <section class="download" id="download">
+    <h2>Get TaskMate</h2>
+    <p>Free, private, and built to help you ship.</p>
+    <div class="download-actions">
+      <a id="btn-mac-2" href="https://github.com/quantran-epi/taskmate/releases/latest" class="btn btn-primary" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+        Download for macOS
+      </a>
+      <a id="btn-win-2" href="https://github.com/quantran-epi/taskmate/releases/latest" class="btn btn-secondary" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 12V6.75l6-1.32v6.48L3 12zm0 .75l6 .09v6.81l-6-1.32V12.75zM10 5.19l11-2.43v9.15l-11 .09V5.19zm0 7.71l11 .09v9.24l-11-2.43V12.9z"/></svg>
+        Download for Windows
+      </a>
+    </div>
+    <p class="download-note">
+      Or browse all releases on <a href="https://github.com/quantran-epi/taskmate/releases" target="_blank" rel="noopener">GitHub</a>
+    </p>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <span>TaskMate — Free &amp; open source</span>
+    <a href="https://github.com/quantran-epi/taskmate" target="_blank" rel="noopener">GitHub</a>
+  </footer>
+
+</div>
+
+<script>
+// Detect OS and swap primary/secondary button styling
+(function() {
+  var isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent);
+  if (!isMac) {
+    // Windows user: make Windows button primary
+    ['btn-mac','btn-mac-2'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) { el.className = el.className.replace('btn-primary','btn-secondary'); }
+    });
+    ['btn-win','btn-win-2'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) { el.className = el.className.replace('btn-secondary','btn-primary'); }
+    });
+  }
+})();
+
+// Smooth scroll for anchor links
+document.querySelectorAll('a[href^="#"]').forEach(function(a) {
+  a.addEventListener('click', function(e) {
+    var target = document.querySelector(this.getAttribute('href'));
+    if (target) { e.preventDefault(); target.scrollIntoView({ behavior: 'smooth' }); }
+  });
+});
+</script>
+</body>
+</html>

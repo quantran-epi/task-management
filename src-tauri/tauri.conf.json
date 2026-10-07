@@ -1,18 +1,18 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "PlannerMate",
+  "productName": "TaskMate",
   "version": "0.1.0",
   "identifier": "com.personal.taskplanner",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "devUrl": "http://localhost:5173",
     "beforeBuildCommand": "npm run build",
+    "devUrl": "http://localhost:5173",
     "frontendDist": "../dist"
   },
   "app": {
     "windows": [
       {
-        "title": "PlannerMate",
+        "title": "TaskMate",
         "width": 1280,
         "height": 800,
         "minWidth": 900,

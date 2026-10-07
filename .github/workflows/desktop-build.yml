@@ -61,12 +61,14 @@ jobs:
       - name: Build Tauri Desktop Application
         uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN || secrets.GITHUB_TOKEN }}
         with:
+          owner: quantran-epi
+          repo: taskmate
           tagName: v__VERSION__
-          releaseName: 'Personal Task & Workload Planner v__VERSION__'
-          releaseBody: 'Desktop release for macOS and Windows.'
-          releaseDraft: true
+          releaseName: 'TaskMate v__VERSION__'
+          releaseBody: 'TaskMate Desktop release for macOS and Windows.'
+          releaseDraft: false
           prerelease: false
           args: --target ${{ matrix.target }}
 
