@@ -40,6 +40,14 @@ if (typeof window !== 'undefined') {
   };
 }
 
+// scrollIntoView shim for Ant Design mentions / dropdowns in JSDOM
+if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {};
+}
+if (typeof window !== 'undefined' && window.Element && !window.Element.prototype.scrollIntoView) {
+  window.Element.prototype.scrollIntoView = () => {};
+}
+
 // JSDOM Web Crypto subtle shim using Node 24 native Web Crypto
 if (typeof window !== 'undefined' && window.crypto && !window.crypto.subtle && globalThis.crypto?.subtle) {
   Object.defineProperty(window.crypto, 'subtle', {
