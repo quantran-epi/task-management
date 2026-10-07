@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { GhostDevStreamChunk } from '../types/agent';
 import { isTauriApp } from '../utils/timerPopout';
 import { agentSessionHistoryRepo } from '../services/agents/agentSessionHistoryRepo';
+import { agentLogStore, MAX_STREAM_LINES } from '../services/agents/agentLogStore';
 
-export const MAX_STREAM_LINES = 2000;
+export { MAX_STREAM_LINES };
 
 function extractAiTextFromChunk(content: string): string | null {
   const trimmed = content.trim();
@@ -48,58 +49,51 @@ export interface UseGhostDevStreamResult {
 }
 
 export function useGhostDevStream(taskId: string | null): UseGhostDevStreamResult {
-  const [logs, setLogs] = useState<GhostDevStreamChunk[]>([]);
+  const [logs, setLogs] = useState<GhostDevStreamChunk[]>(() =>
+    taskId ? agentLogStore.getLogs(taskId) : []
+  );
   const [sending, setSending] = useState<boolean>(false);
   const taskIdRef = useRef<string | null>(taskId);
   taskIdRef.current = taskId;
   const awaitingAiResponseRef = useRef<boolean>(false);
 
   const clearLogs = useCallback(() => {
-    setLogs([]);
+    if (taskIdRef.current) {
+      agentLogStore.clearLogs(taskIdRef.current);
+    }
   }, []);
 
-  // Clear logs when active taskId changes
+  // Subscribe to agentLogStore for active taskId
   useEffect(() => {
-    setLogs([]);
+    if (!taskId) {
+      setLogs([]);
+      awaitingAiResponseRef.current = false;
+      return;
+    }
+
+    // Immediately load stored logs for this task
+    setLogs(agentLogStore.getLogs(taskId));
     awaitingAiResponseRef.current = false;
-  }, [taskId]);
 
-  useEffect(() => {
-    if (!isTauriApp() || !taskId) return;
+    // Listen to continuous stream updates from store
+    const unsubscribe = agentLogStore.subscribe(taskId, (newLogs) => {
+      setLogs(newLogs);
 
-    let unlisten: (() => void) | undefined;
-
-    void (async () => {
-      try {
-        const { listen } = await import('@tauri-apps/api/event');
-        unlisten = await listen<GhostDevStreamChunk>('ghost-dev:stream-chunk', (event) => {
-          const chunk = event.payload;
-          if (!chunk || chunk.taskId !== taskIdRef.current) return;
-
-          // If awaiting AI response to user feedback, capture it
-          if (awaitingAiResponseRef.current && chunk.source === 'master') {
-            const aiText = extractAiTextFromChunk(chunk.content);
-            if (aiText) {
-              agentSessionHistoryRepo.attachAiResponseToLatestFeedback(chunk.taskId, aiText);
-              awaitingAiResponseRef.current = false;
-            }
+      // If awaiting AI response to user feedback, capture it
+      if (awaitingAiResponseRef.current && newLogs.length > 0) {
+        const last = newLogs[newLogs.length - 1];
+        if (last && last.source === 'master') {
+          const aiText = extractAiTextFromChunk(last.content);
+          if (aiText) {
+            agentSessionHistoryRepo.attachAiResponseToLatestFeedback(taskId, aiText);
+            awaitingAiResponseRef.current = false;
           }
-
-          setLogs((prev) => {
-            const next = [...prev, chunk];
-            if (next.length > MAX_STREAM_LINES) {
-              return next.slice(next.length - MAX_STREAM_LINES);
-            }
-            return next;
-          });
-        });
-      } catch (err) {
-        console.error('[GhostDev] Failed to subscribe to stream-chunk:', err);
+        }
       }
-    })();
+    });
 
     return () => {
-      if (unlisten) unlisten();
+      unsubscribe();
     };
   }, [taskId]);
 
@@ -108,32 +102,27 @@ export function useGhostDevStream(taskId: string | null): UseGhostDevStreamResul
       if (!isTauriApp() || !taskIdRef.current) return;
       if (!prompt.trim()) return;
 
+      const currentTaskId = taskIdRef.current;
       setSending(true);
       try {
         await tauriInvoke('send_agent_feedback', {
-          taskId: taskIdRef.current,
+          taskId: currentTaskId,
           feedback: prompt.trim(),
         });
 
         // Record in audit log and arm AI response listener
-        agentSessionHistoryRepo.recordUserFeedback(taskIdRef.current, prompt.trim());
+        agentSessionHistoryRepo.recordUserFeedback(currentTaskId, prompt.trim());
         awaitingAiResponseRef.current = true;
 
-        // Optimistically append user message chunk in log stream
+        // Optimistically record user message chunk in log store
         const userChunk: GhostDevStreamChunk = {
-          taskId: taskIdRef.current,
+          taskId: currentTaskId,
           source: 'master',
           timestamp: new Date().toISOString(),
           type: 'log',
           content: `[User Feedback]: ${prompt.trim()}`,
         };
-        setLogs((prev) => {
-          const next = [...prev, userChunk];
-          if (next.length > MAX_STREAM_LINES) {
-            return next.slice(next.length - MAX_STREAM_LINES);
-          }
-          return next;
-        });
+        agentLogStore.addChunk(userChunk);
       } catch (err) {
         console.error('[GhostDev] Failed to send agent feedback:', err);
         throw err;

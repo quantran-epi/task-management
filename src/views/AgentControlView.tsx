@@ -22,6 +22,7 @@ import { useGhostDevStream } from '../hooks/useGhostDevStream';
 import { useGhostDevDiff } from '../hooks/useGhostDevDiff';
 import { announceToScreenReader } from '../components/common/AriaLiveRegion';
 import { agentSessionHistoryRepo } from '../services/agents/agentSessionHistoryRepo';
+import { agentLogStore } from '../services/agents/agentLogStore';
 import type { AgentSession, GhostDevSessionAuditRecord } from '../types/agent';
 
 export const AgentControlView: React.FC = () => {
@@ -54,6 +55,7 @@ export const AgentControlView: React.FC = () => {
 
   const handleDeleteAuditSession = (sessionIdOrTaskId: string) => {
     agentSessionHistoryRepo.deleteSession(sessionIdOrTaskId);
+    agentLogStore.deleteLogs(sessionIdOrTaskId);
     refreshAuditHistory();
     if (
       selectedAuditRecord?.sessionId === sessionIdOrTaskId ||
@@ -95,6 +97,17 @@ export const AgentControlView: React.FC = () => {
     revertAll,
     revertFile,
   } = useGhostDevDiff(activeSession ? activeSession.worktreePath : null);
+
+  const handleStopSession = useCallback(
+    async (taskId: string) => {
+      await stopSession(taskId);
+      if (activeSessionId === taskId) {
+        clearLogs();
+        setActiveSessionId(null);
+      }
+    },
+    [stopSession, activeSessionId, clearLogs, setActiveSessionId]
+  );
 
   // Screen reader announcements on session status changes
   const prevStatusesRef = useRef<Record<string, string>>({});
@@ -138,7 +151,7 @@ export const AgentControlView: React.FC = () => {
             sessions={sessions}
             activeSessionId={activeSessionId}
             onSelectSession={setActiveSessionId}
-            onStopSession={stopSession}
+            onStopSession={handleStopSession}
             auditHistory={auditHistory}
             onSelectAuditSession={handleSelectAuditSession}
             onDeleteAuditSession={handleDeleteAuditSession}

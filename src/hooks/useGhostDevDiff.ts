@@ -102,10 +102,16 @@ export function useGhostDevDiff(worktreePath: string | null): UseGhostDevDiffRes
           void refreshDiff(true);
         });
 
-        unlistenStream = await listen<{ type?: string }>('ghost-dev:stream-chunk', (event) => {
+        unlistenStream = await listen<{ type?: string; content?: string }>('ghost-dev:stream-chunk', (event) => {
           if (event.payload?.type === 'status_change') {
             void refreshDiff(true);
-          } else if (event.payload?.type === 'tool_result') {
+          } else if (
+            event.payload?.type === 'tool_result' ||
+            event.payload?.type === 'tool_call' ||
+            (event.payload?.type === 'log' &&
+              (event.payload?.content?.includes('"tool_result"') ||
+                event.payload?.content?.includes('"tool_use"')))
+          ) {
             // Debounce git diff to prevent concurrent Windows file handle conflicts during tool execution
             if (debounceTimer) clearTimeout(debounceTimer);
             debounceTimer = setTimeout(() => {
@@ -118,7 +124,14 @@ export function useGhostDevDiff(worktreePath: string | null): UseGhostDevDiffRes
       }
     })();
 
+    // Auto-refresh diff when user returns focus to app window
+    const handleWindowFocus = () => {
+      void refreshDiff(true);
+    };
+    window.addEventListener('focus', handleWindowFocus);
+
     return () => {
+      window.removeEventListener('focus', handleWindowFocus);
       if (debounceTimer) clearTimeout(debounceTimer);
       if (unlistenUpdated) unlistenUpdated();
       if (unlistenFinished) unlistenFinished();

@@ -56,10 +56,13 @@ export function useGhostDevSessions(): UseGhostDevSessionsResult {
           'interrupted',
           new Date().toISOString()
         );
+        if (activeSessionId === taskId) {
+          setActiveSessionId(null);
+        }
         await refreshSessions();
       }
     },
-    [refreshSessions]
+    [refreshSessions, activeSessionId]
   );
 
   // Initial fetch and Tauri event listeners

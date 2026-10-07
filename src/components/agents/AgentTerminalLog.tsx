@@ -24,12 +24,14 @@ import {
   AppstoreOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
+  CloseOutlined,
   ToolOutlined,
   SafetyCertificateOutlined,
   CommentOutlined,
   LoadingOutlined,
+  BulbOutlined,
 } from '@ant-design/icons';
-import type { GhostDevStreamChunk, WorkerSession } from '../../types/agent';
+import type { GhostDevStreamChunk, WorkerSession, AgentStatus } from '../../types/agent';
 
 const { Text } = Typography;
 
@@ -41,12 +43,14 @@ export interface AgentTerminalLogProps {
   onClearLogs?: () => void;
   taskTitle?: string;
   activeWorkers?: WorkerSession[];
+  onRemoveWorker?: (workerId: string) => void;
 }
 
 interface ParsedChunk {
   raw: GhostDevStreamChunk;
   kind:
     | 'ai_text'
+    | 'thinking'
     | 'tool_call'
     | 'tool_result'
     | 'user_feedback'
@@ -95,6 +99,22 @@ function formatToolResultContent(content: unknown): string {
     return JSON.stringify(content, null, 2);
   }
   return String(content ?? '');
+}
+
+function extractTokenCount(val: Record<string, unknown>): number | null {
+  if (typeof val.total_tokens === 'number') return val.total_tokens;
+  if (typeof val.tokens === 'number') return val.tokens;
+  if (val.usage && typeof val.usage === 'object') {
+    const u = val.usage as Record<string, unknown>;
+    if (typeof u.total_tokens === 'number') return u.total_tokens;
+    const input = typeof u.input_tokens === 'number' ? u.input_tokens : 0;
+    const output = typeof u.output_tokens === 'number' ? u.output_tokens : 0;
+    const cacheRead = typeof u.cache_read_input_tokens === 'number' ? u.cache_read_input_tokens : 0;
+    const cacheCreate = typeof u.cache_creation_input_tokens === 'number' ? u.cache_creation_input_tokens : 0;
+    const sum = input + output + cacheRead + cacheCreate;
+    if (sum > 0) return sum;
+  }
+  return null;
 }
 
 function parseStreamChunk(chunk: GhostDevStreamChunk): ParsedChunk {
@@ -198,44 +218,100 @@ function parseStreamChunk(chunk: GhostDevStreamChunk): ParsedChunk {
         }
       }
 
-      // AI Text Message
+      // CLI envelope user message echo (internal, not direct user feedback)
+      if (msgType === 'user' && !content.startsWith('[User Feedback]')) {
+        return {
+          raw: chunk,
+          kind: 'system_hook',
+          title: 'User Envelope',
+          body: content,
+        };
+      }
+
+      // AI Text & Thinking Message
       if (msgType === 'assistant' || val.role === 'assistant') {
         let text = '';
+        let thinking = '';
+
         if (typeof val.content === 'string') {
           text = val.content;
         } else if (Array.isArray(val.content)) {
           text = (val.content as Array<{ type?: string; text?: string }>)
-            .filter((c) => c.type === 'text')
+            .filter((c) => c && c.type === 'text')
             .map((c) => c.text || '')
+            .filter(Boolean)
+            .join('\n');
+          thinking = (val.content as Array<{ type?: string; thinking?: string }>)
+            .filter((c) => c && (c.type === 'thinking' || typeof c.thinking === 'string'))
+            .map((c) => c.thinking || '')
+            .filter(Boolean)
             .join('\n');
         } else if (val.message && typeof val.message === 'object') {
-          const msgObj = val.message as { content?: Array<{ type?: string; text?: string }> };
+          const msgObj = val.message as {
+            content?: Array<{ type?: string; text?: string; thinking?: string }>;
+          };
           if (Array.isArray(msgObj.content)) {
             text = msgObj.content
-              .filter((c) => c.type === 'text')
+              .filter((c) => c && c.type === 'text')
               .map((c) => c.text || '')
+              .filter(Boolean)
+              .join('\n');
+            thinking = msgObj.content
+              .filter((c) => c && (c.type === 'thinking' || typeof c.thinking === 'string'))
+              .map((c) => c.thinking || '')
+              .filter(Boolean)
               .join('\n');
           }
         }
+
         if (text) {
           return {
             raw: chunk,
             kind: 'ai_text',
             title: 'Phản hồi từ AI',
             body: text,
+            details: thinking ? { thinking } : undefined,
           };
         }
+
+        if (thinking) {
+          const durationMs =
+            typeof val.thinking_duration_ms === 'number' ? val.thinking_duration_ms : undefined;
+          const durationStr = durationMs ? ` (${Math.round(durationMs / 1000)}s)` : '';
+          return {
+            raw: chunk,
+            kind: 'thinking',
+            title: `Suy nghĩ AI (Thinking)${durationStr}`,
+            body: thinking,
+          };
+        }
+
+        // Assistant message with neither text nor thinking and no tool call (e.g. empty envelope)
+        return {
+          raw: chunk,
+          kind: 'system_hook',
+          title: 'Assistant Hook',
+          body: content,
+        };
       }
 
       // Delta streaming text
       if (msgType === 'content_block_delta') {
-        const delta = val.delta as { type?: string; text?: string } | undefined;
+        const delta = val.delta as { type?: string; text?: string; thinking?: string } | undefined;
         if (delta?.text) {
           return {
             raw: chunk,
             kind: 'ai_text',
             title: 'AI Streaming',
             body: delta.text,
+          };
+        }
+        if (delta?.thinking || delta?.type === 'thinking_delta') {
+          return {
+            raw: chunk,
+            kind: 'system_hook',
+            title: 'Thinking Delta',
+            body: content,
           };
         }
       }
@@ -299,11 +375,9 @@ function parseStreamChunk(chunk: GhostDevStreamChunk): ParsedChunk {
           durationSec > 60
             ? `${Math.floor(durationSec / 60)}m ${durationSec % 60}s`
             : `${durationSec}s`;
-        const costStr =
-          typeof val.total_cost_usd === 'number'
-            ? ` • $${val.total_cost_usd.toFixed(4)}`
-            : '';
-        const title = `Hoàn thành (${durationStr}${costStr})`;
+        const tokenCount = extractTokenCount(val);
+        const tokenStr = tokenCount !== null ? ` • ${tokenCount.toLocaleString()} tokens` : '';
+        const title = `Hoàn thành (${durationStr}${tokenStr})`;
         return {
           raw: chunk,
           kind: 'ai_text',
@@ -360,16 +434,31 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
   onClearLogs,
   taskTitle,
   activeWorkers = [],
+  onRemoveWorker,
 }) => {
   const [inputText, setInputText] = useState('');
   const [autoScroll, setAutoScroll] = useState(true);
   const [viewMode, setViewMode] = useState<'human' | 'raw'>('human');
   const [selectedAgent, setSelectedAgent] = useState<string>('all');
+  const [dismissedWorkerIds, setDismissedWorkerIds] = useState<string[]>([]);
   const logContainerRef = useRef<HTMLDivElement>(null);
+
+  // Reset dismissed subagent state when active task changes
+  useEffect(() => {
+    setDismissedWorkerIds([]);
+  }, [taskTitle]);
+
+  const handleRemoveWorker = (workerId: string) => {
+    setDismissedWorkerIds((prev) => (prev.includes(workerId) ? prev : [...prev, workerId]));
+    onRemoveWorker?.(workerId);
+    if (selectedAgent === workerId) {
+      setSelectedAgent('all');
+    }
+  };
 
   // Track active thinking vs turn completion state
   const { isThinking, latestResultInfo } = useMemo(() => {
-    let resultInfo: { durationStr: string; cost?: string | undefined } | null = null;
+    let resultInfo: { durationStr: string; tokens?: string | undefined } | null = null;
     let feedbackSentAfterResult = false;
 
     for (let i = logs.length - 1; i >= 0; i--) {
@@ -390,12 +479,12 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
               durationSec > 60
                 ? `${Math.floor(durationSec / 60)}m ${durationSec % 60}s`
                 : `${durationSec}s`;
+            const tokenCount = extractTokenCount(val);
+            const tokenStr =
+              tokenCount !== null ? `${tokenCount.toLocaleString()} tokens` : undefined;
             resultInfo = {
               durationStr,
-              cost:
-                typeof val.total_cost_usd === 'number'
-                  ? `$${val.total_cost_usd.toFixed(4)}`
-                  : undefined,
+              tokens: tokenStr,
             };
             break;
           }
@@ -415,17 +504,27 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
     };
   }, [logs, sending, isRunning]);
 
-  // Discover all unique workers from props, logs, and parsed tool calls
+  // Discover all unique workers from props, logs, and parsed tool calls with exit tracking
   const allWorkers = useMemo(() => {
-    const map = new Map<string, { workerId: string; role: string }>();
+    const map = new Map<string, { workerId: string; role: string; status: AgentStatus }>();
     activeWorkers.forEach((w) => {
-      map.set(w.workerId, { workerId: w.workerId, role: w.role });
+      map.set(w.workerId, { workerId: w.workerId, role: w.role, status: w.status });
     });
 
     logs.forEach((chunk) => {
       if (chunk.source === 'worker' && chunk.workerId) {
         if (!map.has(chunk.workerId)) {
-          map.set(chunk.workerId, { workerId: chunk.workerId, role: 'Worker' });
+          map.set(chunk.workerId, { workerId: chunk.workerId, role: 'Worker', status: 'running' });
+        }
+      }
+
+      if (chunk.workerId && chunk.type === 'status_change') {
+        const existing = map.get(chunk.workerId);
+        if (existing) {
+          const s = chunk.content.trim();
+          if (s === 'done' || s === 'error' || s === 'interrupted') {
+            map.set(chunk.workerId, { ...existing, status: s as AgentStatus });
+          }
         }
       }
 
@@ -437,6 +536,8 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
           const msgType = String(val.type || '');
           const blocks: Array<Record<string, unknown>> = [];
           if (msgType === 'tool_use' || msgType === 'tool_call') {
+            blocks.push(val);
+          } else if (msgType === 'tool_result') {
             blocks.push(val);
           } else if (msgType === 'content_block_start' && val.content_block) {
             blocks.push(val.content_block as Record<string, unknown>);
@@ -461,11 +562,40 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
               const role = String(
                 input.subagent_type || input.description || input.role || 'Subagent'
               ).slice(0, 24);
-              if (id && !map.has(id)) {
-                map.set(id, { workerId: id, role });
+              if (id) {
+                const existing = map.get(id);
+                map.set(id, {
+                  workerId: id,
+                  role,
+                  status: existing ? existing.status : 'running',
+                });
+              }
+            }
+
+            // Check if tool_result marks tool_use/subagent completed
+            const bType = String(b.type || '');
+            if (bType === 'tool_result' || msgType === 'tool_result') {
+              const toolUseId = String(b.tool_use_id || b.id || val.tool_use_id || val.id || '');
+              if (toolUseId && map.has(toolUseId)) {
+                const existing = map.get(toolUseId)!;
+                const isError = Boolean(b.is_error || val.is_error);
+                map.set(toolUseId, {
+                  ...existing,
+                  status: isError ? 'error' : 'done',
+                });
               }
             }
           });
+
+          // Check if worker emitted turn result event
+          if (chunk.workerId && val.type === 'result' && map.has(chunk.workerId)) {
+            const existing = map.get(chunk.workerId)!;
+            const isError = val.subtype === 'error';
+            map.set(chunk.workerId, {
+              ...existing,
+              status: isError ? 'error' : 'done',
+            });
+          }
         } catch {
           // Ignore parse errors
         }
@@ -475,18 +605,54 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
     return Array.from(map.values());
   }, [activeWorkers, logs]);
 
-  // Filter logs by selected agent
-  const filteredLogs = useMemo(() => {
-    if (selectedAgent === 'all') return logs;
-    if (selectedAgent === 'master') return logs.filter((l) => l.source !== 'worker');
-    return logs.filter((l) => l.workerId === selectedAgent || l.content.includes(selectedAgent));
-  }, [logs, selectedAgent]);
+  // Exclude dismissed subagents from UI
+  const visibleWorkers = useMemo(() => {
+    return allWorkers.filter((w) => !dismissedWorkerIds.includes(w.workerId));
+  }, [allWorkers, dismissedWorkerIds]);
 
-  // Parse logs for human view, filtering out internal system hooks
+  // Filter logs by selected agent and exclude dismissed workers
+  const filteredLogs = useMemo(() => {
+    let base = logs;
+    if (dismissedWorkerIds.length > 0) {
+      base = base.filter(
+        (l) => !l.workerId || !dismissedWorkerIds.includes(l.workerId)
+      );
+    }
+    if (selectedAgent === 'all') return base;
+    if (selectedAgent === 'master') return base.filter((l) => l.source !== 'worker');
+    return base.filter((l) => l.workerId === selectedAgent || l.content.includes(selectedAgent));
+  }, [logs, selectedAgent, dismissedWorkerIds]);
+
+  // Parse logs for human view, filtering out internal system hooks and deduplicating return display
   const parsedLogs = useMemo(() => {
-    return filteredLogs
+    const rawItems = filteredLogs
       .map((chunk) => parseStreamChunk(chunk))
       .filter((item) => item.kind !== 'system_hook');
+
+    const deduplicated: ParsedChunk[] = [];
+    for (let i = 0; i < rawItems.length; i++) {
+      const item = rawItems[i];
+      if (!item) continue;
+
+      if (item.title?.startsWith('Hoàn thành')) {
+        const matchingPrevIdx = deduplicated.findLastIndex(
+          (prev) => prev.kind === 'ai_text' && prev.body.trim() === item.body.trim()
+        );
+        if (matchingPrevIdx !== -1) {
+          // Response text already shown in preceding AI message!
+          // Upgrade that message's title with completion metrics and skip duplicate card.
+          deduplicated[matchingPrevIdx] = {
+            ...deduplicated[matchingPrevIdx]!,
+            title: item.title,
+          };
+          continue;
+        }
+      }
+
+      deduplicated.push(item);
+    }
+
+    return deduplicated;
   }, [filteredLogs]);
 
   // Auto-scroll to bottom on new logs if user has not scrolled up
@@ -518,7 +684,20 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
   };
 
   return (
-    <ConfigProvider theme={{ algorithm: theme.darkAlgorithm }}>
+    <ConfigProvider
+      theme={{
+        algorithm: theme.darkAlgorithm,
+        components: {
+          Segmented: {
+            trackBg: '#09090b',
+            itemSelectedBg: '#27272a',
+            itemSelectedColor: '#ffffff',
+            itemColor: '#cbd5e1',
+            itemHoverColor: '#ffffff',
+          },
+        },
+      }}
+    >
       <div
         style={{
           height: '100%',
@@ -562,10 +741,22 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                 value={viewMode}
                 onChange={(val) => setViewMode(val as 'human' | 'raw')}
                 options={[
-                  { label: 'Trực quan', value: 'human', icon: <AppstoreOutlined /> },
-                  { label: 'Raw Log', value: 'raw', icon: <CodeOutlined /> },
+                  {
+                    label: <span style={{ fontWeight: 600 }}>Trực quan</span>,
+                    value: 'human',
+                    icon: <AppstoreOutlined />,
+                  },
+                  {
+                    label: <span style={{ fontWeight: 600 }}>Raw Log</span>,
+                    value: 'raw',
+                    icon: <CodeOutlined />,
+                  },
                 ]}
-                style={{ backgroundColor: '#1e1e1e' }}
+                style={{
+                  backgroundColor: '#09090b',
+                  border: '1px solid #52525b',
+                  padding: 2,
+                }}
               />
 
               <Tooltip title="Sao chép toàn bộ log của Agent đang chọn">
@@ -611,23 +802,107 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
 
           {/* Subagent & Master Switcher Tabs */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflowX: 'auto', paddingTop: 2 }}>
-            <Text style={{ color: '#888', fontSize: 11, flexShrink: 0 }}>Tiến trình:</Text>
+            <Text style={{ color: '#d4d4d8', fontSize: 11, fontWeight: 600, flexShrink: 0 }}>
+              Tiến trình:
+            </Text>
             <Segmented
               size="small"
               value={selectedAgent}
               onChange={(val) => setSelectedAgent(val as string)}
               options={[
-                { label: 'Tất cả', value: 'all' },
                 {
-                  label: '👑 Master Lead',
+                  label: <span style={{ fontWeight: 600 }}>Tất cả</span>,
+                  value: 'all',
+                },
+                {
+                  label: (
+                    <span
+                      style={{
+                        color: selectedAgent === 'master' ? '#f3e8ff' : '#c084fc',
+                        fontWeight: 700,
+                      }}
+                    >
+                      👑 Master Lead
+                    </span>
+                  ),
                   value: 'master',
                 },
-                ...allWorkers.map((w) => ({
-                  label: `⚡ ${w.role || 'Worker'} (${w.workerId.slice(0, 6)})`,
-                  value: w.workerId,
-                })),
+                ...visibleWorkers.map((w) => {
+                  const isExited =
+                    w.status === 'done' ||
+                    w.status === 'error' ||
+                    w.status === 'interrupted';
+                  const isError = w.status === 'error';
+
+                  return {
+                    label: (
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          color:
+                            selectedAgent === w.workerId
+                              ? (isExited ? '#e4e4e7' : '#e0f2fe')
+                              : (isExited ? '#a1a1aa' : '#60a5fa'),
+                          fontWeight: 700,
+                        }}
+                      >
+                        {isExited ? (
+                          <>
+                            {isError ? (
+                              <CloseCircleOutlined style={{ color: '#ef4444', fontSize: 11 }} />
+                            ) : (
+                              <CheckCircleOutlined style={{ color: '#10b981', fontSize: 11 }} />
+                            )}
+                            <span>{w.role || 'Worker'} ({w.workerId.slice(0, 6)})</span>
+                            <Tag
+                              bordered={false}
+                              style={{
+                                fontSize: 9,
+                                lineHeight: '14px',
+                                padding: '0 4px',
+                                margin: 0,
+                                background: isError ? '#450a0a' : '#14532d',
+                                color: isError ? '#fca5a5' : '#86efac',
+                              }}
+                            >
+                              {isError ? 'Lỗi' : 'Đã thoát'}
+                            </Tag>
+                            <Tooltip title="Xóa subagent khỏi terminal">
+                              <CloseOutlined
+                                style={{
+                                  fontSize: 10,
+                                  color: '#71717a',
+                                  cursor: 'pointer',
+                                  padding: '2px',
+                                  marginLeft: 2,
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  handleRemoveWorker(w.workerId);
+                                }}
+                                role="button"
+                                aria-label={`Xóa subagent ${w.workerId}`}
+                              />
+                            </Tooltip>
+                          </>
+                        ) : (
+                          <span>⚡ {w.role || 'Worker'} ({w.workerId.slice(0, 6)})</span>
+                        )}
+                      </span>
+                    ),
+                    value: w.workerId,
+                  };
+                }),
               ]}
-              style={{ backgroundColor: '#18181b', fontSize: 11 }}
+              style={{
+                backgroundColor: '#09090b',
+                border: '1px solid #52525b',
+                padding: 2,
+                fontSize: 11,
+              }}
             />
           </div>
         </div>
@@ -710,9 +985,11 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                       key={idx}
                       size="small"
                       style={{
-                        backgroundColor: '#1f1f23',
-                        borderColor: '#3f3f46',
+                        backgroundColor: isSubagent ? '#0b1329' : '#1e1435',
+                        borderColor: isSubagent ? '#2563eb' : '#7c3aed',
+                        borderLeft: `4px solid ${isSubagent ? '#3b82f6' : '#a855f7'}`,
                         borderRadius: 6,
+                        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.4)',
                       }}
                       styles={{ body: { padding: '8px 12px' } }}
                     >
@@ -726,25 +1003,41 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                       >
                         <Space size={6}>
                           {isSubagent ? (
-                            <Tag color="#1677ff" style={{ margin: 0, fontSize: 10 }}>
+                            <Tag
+                              color="#1677ff"
+                              style={{
+                                margin: 0,
+                                fontSize: 10,
+                                fontWeight: 600,
+                                border: '1px solid #3b82f6',
+                              }}
+                            >
                               Subagent Worker
                             </Tag>
                           ) : (
-                            <Tag color="#722ed1" style={{ margin: 0, fontSize: 10 }}>
+                            <Tag
+                              color="#722ed1"
+                              style={{
+                                margin: 0,
+                                fontSize: 10,
+                                fontWeight: 600,
+                                border: '1px solid #9333ea',
+                              }}
+                            >
                               Master Lead
                             </Tag>
                           )}
-                          <Text strong style={{ color: '#f4f4f5', fontSize: 12 }}>
+                          <Text strong style={{ color: '#ffffff', fontSize: 12 }}>
                             {item.title}
                           </Text>
                         </Space>
-                        <Text type="secondary" style={{ fontSize: 10, color: '#71717a' }}>
+                        <Text style={{ fontSize: 10, color: '#a1a1aa' }}>
                           {new Date(item.raw.timestamp).toLocaleTimeString()}
                         </Text>
                       </div>
                       <div
                         style={{
-                          color: '#e4e4e7',
+                          color: '#f8fafc',
                           fontSize: 13,
                           whiteSpace: 'pre-wrap',
                           lineHeight: 1.6,
@@ -752,7 +1045,119 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                       >
                         {item.body}
                       </div>
+
+                      {Boolean(
+                        item.details &&
+                          typeof item.details === 'object' &&
+                          (item.details as Record<string, unknown>).thinking
+                      ) && (
+                        <div style={{ marginTop: 6 }}>
+                          <Collapse
+                            ghost
+                            size="small"
+                            items={[
+                              {
+                                key: 'thinking',
+                                label: (
+                                  <span style={{ color: '#a78bfa', fontSize: 11, fontStyle: 'italic' }}>
+                                    💭 Xem suy nghĩ nội bộ (Thinking)
+                                  </span>
+                                ),
+                                children: (
+                                  <div
+                                    style={{
+                                      fontSize: 11,
+                                      color: '#a1a1aa',
+                                      whiteSpace: 'pre-wrap',
+                                      lineHeight: 1.5,
+                                      maxHeight: 160,
+                                      overflowY: 'auto',
+                                      backgroundColor: '#09090b',
+                                      padding: 6,
+                                      borderRadius: 4,
+                                    }}
+                                  >
+                                    {String((item.details as Record<string, unknown>).thinking)}
+                                  </div>
+                                ),
+                              },
+                            ]}
+                          />
+                        </div>
+                      )}
                     </Card>
+                  );
+                }
+
+                if (item.kind === 'thinking') {
+                  return (
+                    <div
+                      key={idx}
+                      style={{
+                        backgroundColor: '#13111c',
+                        border: '1px solid #2e1065',
+                        borderLeft: '3px solid #8b5cf6',
+                        borderRadius: 4,
+                        padding: '6px 10px',
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        }}
+                      >
+                        <Space size={6}>
+                          <BulbOutlined style={{ color: '#a78bfa' }} />
+                          <Text strong style={{ color: '#a78bfa', fontSize: 12 }}>
+                            {item.title}
+                          </Text>
+                          {isSubagent && (
+                            <Tag color="blue" style={{ fontSize: 9, margin: 0 }}>
+                              Subagent
+                            </Tag>
+                          )}
+                        </Space>
+                        <Text style={{ fontSize: 10, color: '#71717a' }}>
+                          {new Date(item.raw.timestamp).toLocaleTimeString()}
+                        </Text>
+                      </div>
+
+                      <div style={{ marginTop: 4 }}>
+                        <Collapse
+                          ghost
+                          size="small"
+                          items={[
+                            {
+                              key: 'thought_body',
+                              label: (
+                                <span style={{ color: '#71717a', fontSize: 11, fontStyle: 'italic' }}>
+                                  Xem chuỗi suy nghĩ ({item.body.length} ký tự)
+                                </span>
+                              ),
+                              children: (
+                                <div
+                                  style={{
+                                    fontSize: 11,
+                                    color: '#cbd5e1',
+                                    whiteSpace: 'pre-wrap',
+                                    lineHeight: 1.5,
+                                    maxHeight: 200,
+                                    overflowY: 'auto',
+                                    backgroundColor: '#09090b',
+                                    padding: 8,
+                                    borderRadius: 4,
+                                  }}
+                                >
+                                  {item.body}
+                                </div>
+                              ),
+                            },
+                          ]}
+                        />
+                      </div>
+                    </div>
                   );
                 }
 
@@ -1040,7 +1445,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
               <CheckCircleOutlined style={{ fontSize: 14, color: '#4ade80' }} />
               <span style={{ fontSize: 12, fontWeight: 500 }}>
                 Đã hoàn thành {latestResultInfo.durationStr ? `trong ${latestResultInfo.durationStr}` : ''}
-                {latestResultInfo.cost ? ` (${latestResultInfo.cost})` : ''} — Sẵn sàng nhận chỉ đạo mới.
+                {latestResultInfo.tokens ? ` (${latestResultInfo.tokens})` : ''} — Sẵn sàng nhận chỉ đạo mới.
               </span>
             </div>
           ) : null}

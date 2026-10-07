@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { AgentTerminalLog } from '../../src/components/agents/AgentTerminalLog';
 import type { GhostDevStreamChunk } from '../../src/types/agent';
 
@@ -121,5 +121,159 @@ describe('AgentTerminalLog Component Tests', () => {
     expect(screen.queryByText('Claude AI đang xử lý / suy nghĩ...')).not.toBeInTheDocument();
     // Should show completion badge with formatted duration and cost
     expect(screen.getByText(/Đã hoàn thành trong 2m 36s/)).toBeInTheDocument();
+  });
+
+  it('deduplicates return display when assistant text and result event match, and displays tokens not dollar cost', () => {
+    const returnText = 'hello from agent 1 to master hello from agent 2 to master';
+    const mockLogs: GhostDevStreamChunk[] = [
+      {
+        taskId: 'task-1',
+        source: 'master',
+        timestamp: '2026-10-06T21:55:50Z',
+        type: 'log',
+        content: JSON.stringify({
+          type: 'assistant',
+          message: {
+            content: [{ type: 'text', text: returnText }],
+          },
+        }),
+      },
+      {
+        taskId: 'task-1',
+        source: 'master',
+        timestamp: '2026-10-06T21:55:50Z',
+        type: 'log',
+        content: JSON.stringify({
+          type: 'result',
+          subtype: 'success',
+          duration_ms: 168000,
+          total_cost_usd: 0.6584,
+          usage: {
+            input_tokens: 10000,
+            output_tokens: 2450,
+          },
+          result: returnText,
+        }),
+      },
+    ];
+
+    render(
+      <AgentTerminalLog
+        logs={mockLogs}
+        sending={false}
+        isRunning={false}
+        onSendFeedback={vi.fn()}
+      />
+    );
+
+    // Return text must be rendered exactly once (no duplicate card)
+    const matchingElements = screen.getAllByText(returnText);
+    expect(matchingElements).toHaveLength(1);
+
+    // Displays token count, not dollar cost
+    expect(screen.getAllByText(/12,450 tokens/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText(/\$0\.6584/)).not.toBeInTheDocument();
+  });
+
+  it('parses assistant thinking block without text cleanly without dumping raw JSON in human view', () => {
+    const rawThinkingChunk = JSON.stringify({
+      type: 'assistant',
+      message: {
+        id: 'naTFaq_sBdiN1e8Po-74iAk',
+        type: 'message',
+        role: 'assistant',
+        model: 'gemini-3.8-flash-n',
+        content: [
+          {
+            type: 'thinking',
+            thinking: 'The user intent is a test run to confirm successful subagent spawning.',
+            signature: '',
+          },
+        ],
+      },
+      thinking_duration_ms: 1649,
+    });
+
+    const mockLogs: GhostDevStreamChunk[] = [
+      {
+        taskId: 'task-1',
+        source: 'master',
+        timestamp: '2026-10-07T01:47:20.905Z',
+        type: 'log',
+        content: rawThinkingChunk,
+      },
+    ];
+
+    render(
+      <AgentTerminalLog
+        logs={mockLogs}
+        sending={false}
+        isRunning={false}
+        onSendFeedback={vi.fn()}
+      />
+    );
+
+    // Should NOT show raw unparsed JSON string
+    expect(screen.queryByText(/naTFaq_sBdiN1e8Po-74iAk/)).not.toBeInTheDocument();
+    // Should render thinking badge/title cleanly
+    expect(screen.getByText(/Suy nghĩ AI \(Thinking\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Xem chuỗi suy nghĩ/)).toBeInTheDocument();
+  });
+
+  it('shows exited status for subagent when completed and allows removing it from terminal UI', () => {
+    const mockLogs: GhostDevStreamChunk[] = [
+      {
+        taskId: 'task-1',
+        source: 'master',
+        timestamp: '2026-10-06T10:00:00Z',
+        type: 'tool_call',
+        content: JSON.stringify({
+          type: 'tool_use',
+          id: 'subagent_worker_1',
+          name: 'Task',
+          input: { subagent_type: 'tester', prompt: 'Run test suite' },
+        }),
+      },
+      {
+        taskId: 'task-1',
+        source: 'master',
+        timestamp: '2026-10-06T10:01:00Z',
+        type: 'tool_result',
+        content: JSON.stringify({
+          type: 'tool_result',
+          tool_use_id: 'subagent_worker_1',
+          content: 'Tests passed',
+        }),
+      },
+    ];
+
+    const onRemoveMock = vi.fn();
+
+    render(
+      <AgentTerminalLog
+        logs={mockLogs}
+        sending={false}
+        isRunning={true}
+        onSendFeedback={vi.fn()}
+        onRemoveWorker={onRemoveMock}
+      />
+    );
+
+    // Subagent should show "Đã thoát" tag indicating exit
+    expect(screen.getByText('Đã thoát')).toBeInTheDocument();
+    expect(screen.getByText(/tester \(subage\)/)).toBeInTheDocument();
+
+    // Remove button should be present
+    const removeBtn = screen.getByRole('button', { name: 'Xóa subagent subagent_worker_1' });
+    expect(removeBtn).toBeInTheDocument();
+
+    // Click remove
+    fireEvent.click(removeBtn);
+
+    // Callback should be fired
+    expect(onRemoveMock).toHaveBeenCalledWith('subagent_worker_1');
+
+    // Subagent should no longer be in the tab list
+    expect(screen.queryByText(/tester \(subage\)/)).not.toBeInTheDocument();
   });
 });

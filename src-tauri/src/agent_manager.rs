@@ -940,7 +940,7 @@ pub async fn start_ghost_dev_session(
 #[tauri::command]
 pub async fn stop_ghost_dev_session(app: AppHandle, task_id: String) -> Result<(), String> {
     let mut pool = AGENT_POOL.lock().await;
-    if let Some(session) = pool.sessions.get_mut(&task_id) {
+    if let Some(mut session) = pool.sessions.remove(&task_id) {
         kill_process_tree(session.master_pid);
         for worker_pid in session.worker_pids.drain(..) {
             kill_process_tree(worker_pid);
@@ -967,6 +967,12 @@ pub async fn get_worktree_diff(worktree_path: String) -> Result<String, String> 
     if !path.exists() {
         return Err(format!("Worktree path does not exist: {}", worktree_path));
     }
+
+    // Include untracked files in diff via intent-to-add (-N)
+    let _ = hidden_std_command("git")
+        .current_dir(&path)
+        .args(["add", "-N", "."])
+        .output();
 
     // Combine git diff HEAD and git diff for staged/unstaged changes
     let output = hidden_std_command("git")
@@ -1103,6 +1109,12 @@ pub async fn revert_file_diff(worktree_path: String, file_path: String) -> Resul
         .map_err(|e| format!("Failed to checkout file: {}", e))?;
 
     if !checkout_out.status.success() {
+        // Reset from index in case it was intent-to-add
+        let _ = hidden_std_command("git")
+            .current_dir(&path)
+            .args(["reset", "HEAD", "--", &file_path])
+            .output();
+
         // If file was newly added, remove it from disk safely within worktree
         let full_file = path.join(&file_path);
         if full_file.exists() {

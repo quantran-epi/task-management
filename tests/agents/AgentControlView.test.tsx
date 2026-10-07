@@ -334,4 +334,77 @@ index 0000000..1111111 100644
       expect(screen.getByText('Claude AI đang xử lý / suy nghĩ...')).toBeInTheDocument();
     });
   });
+
+  it('resets terminal UI and excludes stopped session from running tab when session stops', async () => {
+    const runningSession: AgentSession = {
+      taskId: 'task-stop-test',
+      taskTitle: 'Tác vụ chuẩn bị dừng',
+      repoPath: '/repo',
+      worktreePath: '/worktree',
+      branchName: 'pm-agent/task-stop-test',
+      masterPid: 1009,
+      masterModel: 'claude-3-5-sonnet-20241022',
+      workerModel: 'claude-3-5-haiku-20241022',
+      status: 'running',
+      startedAt: '2026-10-06T10:00:00Z',
+      activeWorkers: [],
+    };
+
+    agentSessionHistoryRepo.recordSessionStart({
+      taskId: 'task-stop-test',
+      taskTitle: 'Tác vụ chuẩn bị dừng',
+      startedAt: '2026-10-06T10:00:00.000Z',
+      repoPath: '/repo',
+      branchName: 'pm-agent/task-stop-test',
+      masterModel: 'claude-3-5-sonnet-20241022',
+      workerModel: 'claude-3-5-haiku-20241022',
+      status: 'running',
+      initialPrompt: 'Prompt',
+    });
+
+    let sessionList = [runningSession];
+
+    mockInvoke.mockImplementation((command: string) => {
+      if (command === 'list_agent_sessions') {
+        return Promise.resolve(sessionList);
+      }
+      if (command === 'stop_ghost_dev_session') {
+        sessionList = [];
+        return Promise.resolve(null);
+      }
+      return Promise.resolve(null);
+    });
+
+    render(<AgentControlView />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Tác vụ chuẩn bị dừng')).toBeInTheDocument();
+    });
+
+    // Click Stop button
+    const stopBtn = screen.getByRole('button', { name: /Dừng Ghost Dev cho tác vụ Tác vụ chuẩn bị dừng/i });
+    fireEvent.click(stopBtn);
+
+    // Confirm stop in popconfirm
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Dừng' })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Dừng' }));
+
+    // Terminal UI should be reset to empty state
+    await waitFor(() => {
+      expect(screen.getByText('Chưa có phiên Ghost Dev nào được chọn')).toBeInTheDocument();
+    });
+
+    // Session must NOT show in running tab
+    expect(screen.getByText('Chưa có phiên Ghost Dev nào')).toBeInTheDocument();
+
+    // Session must only show in history tab
+    const historyTab = screen.getByText(/Lịch sử \(1\)/i);
+    fireEvent.click(historyTab);
+
+    await waitFor(() => {
+      expect(screen.getByText('Tác vụ chuẩn bị dừng')).toBeInTheDocument();
+    });
+  });
 });

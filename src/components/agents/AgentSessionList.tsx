@@ -55,6 +55,7 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
 }) => {
   const { token } = theme.useToken();
   const [currentTab, setCurrentTab] = useState<'active' | 'history'>('active');
+  const runningSessions = sessions.filter((s) => s.status !== 'interrupted');
 
   return (
     <div
@@ -72,12 +73,20 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
           onChange={(val) => setCurrentTab(val as 'active' | 'history')}
           options={[
             {
-              label: `Đang chạy (${sessions.length})`,
+              label: (
+                <span style={{ fontWeight: 600 }}>
+                  Đang chạy ({runningSessions.length})
+                </span>
+              ),
               value: 'active',
               icon: <RobotOutlined />,
             },
             {
-              label: `Lịch sử (${auditHistory.length})`,
+              label: (
+                <span style={{ fontWeight: 600 }}>
+                  Lịch sử ({auditHistory.length})
+                </span>
+              ),
               value: 'history',
               icon: <HistoryOutlined />,
             },
@@ -99,7 +108,7 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
           role="list"
           aria-label="Danh sách phiên Ghost Dev"
         >
-          {sessions.length === 0 ? (
+          {runningSessions.length === 0 ? (
             <div style={{ padding: 16, textAlign: 'center' }}>
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
@@ -108,7 +117,7 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
               />
             </div>
           ) : (
-            sessions.map((session) => {
+            runningSessions.map((session) => {
               const isSelected = session.taskId === activeSessionId;
               const isRunning =
                 session.status === 'running' || session.status === 'awaiting_approval';
