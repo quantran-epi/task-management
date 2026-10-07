@@ -111,7 +111,7 @@ describe('Note Attachments & Backup Serialization', () => {
   });
 
   describe('Backup export and restore round-trip (D-19)', () => {
-    it('exports attachments as Base64 in backup payload version 4 and restores them faithfully', async () => {
+    it('exports attachments without binary data in backup payload version 4 and restores metadata faithfully', async () => {
       const note = await createNote({
         title: 'Note for backup',
         body: 'Markdown content',
@@ -121,7 +121,7 @@ describe('Note Attachments & Backup Serialization', () => {
       const blobData = 'hello-png-image-bytes';
       const fakeBlob = new Blob([blobData], { type: 'image/png' });
 
-      await addNoteAttachment({
+      const att = await addNoteAttachment({
         noteId: note.id,
         fileName: 'backup-image.png',
         mimeType: 'image/png',
@@ -137,7 +137,8 @@ describe('Note Attachments & Backup Serialization', () => {
       expect((backup.tables as any).noteAttachments).toHaveLength(1);
 
       const exportedAttachment = (backup.tables as any).noteAttachments[0];
-      expect(exportedAttachment.data).toMatch(/^data:image\/png;base64,/);
+      expect(exportedAttachment.data).toBeUndefined();
+      expect(exportedAttachment.filePath).toBe(`attachments/${att.id}_${att.fileName}`);
 
       // Validate
       const validation = validateBackupPayload(backup);
@@ -160,11 +161,49 @@ describe('Note Attachments & Backup Serialization', () => {
       expect(restoredAttachments).toHaveLength(1);
       expect(restoredAttachments[0]?.fileName).toBe('backup-image.png');
       expect(restoredAttachments[0]?.caption).toBe('Ảnh đính kèm sao lưu');
+      expect(restoredAttachments[0]?.filePath).toBe(`attachments/${att.id}_${att.fileName}`);
       expect(restoredAttachments[0]?.data).toBeDefined();
       expect(typeof restoredAttachments[0]?.data.text).toBe('function');
 
       const restoredText = await restoredAttachments[0]!.data.text();
-      expect(restoredText).toBe(blobData);
+      expect(restoredText).toBe('');
+    });
+
+    it('restores legacy backup with base64 attachment data faithfully', async () => {
+      const note = await createNote({
+        title: 'Legacy note',
+        body: 'Legacy note body',
+      });
+
+      const base64Data = 'data:image/png;base64,' + Buffer.from('legacy-image-content').toString('base64');
+      const backup = await exportBackupPayload();
+
+      // Simulate legacy backup payload containing base64 data
+      (backup.tables as any).noteAttachments = [
+        {
+          id: 'legacy-att-1',
+          noteId: note.id,
+          fileName: 'legacy.png',
+          mimeType: 'image/png',
+          sizeBytes: 20,
+          data: base64Data,
+          createdAt: new Date().toISOString(),
+        },
+      ];
+
+      await db.notes.clear();
+      await db.noteAttachments.clear();
+
+      await restoreBackupPayload(backup);
+
+      const restored = await db.noteAttachments.toArray();
+      expect(restored).toHaveLength(1);
+      expect(restored[0]?.fileName).toBe('legacy.png');
+      expect(restored[0]?.data).toBeDefined();
+      expect(typeof restored[0]?.data.text).toBe('function');
+
+      const restoredText = await restored[0]!.data.text();
+      expect(restoredText).toBe('legacy-image-content');
     });
 
     it('exports backup without image binary data when excludeAttachmentData is true', async () => {
