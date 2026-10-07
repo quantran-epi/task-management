@@ -180,7 +180,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({
         name: values.name.trim(),
         description: values.description?.trim() || undefined,
         deadline: values.deadline ? values.deadline.format('YYYY-MM-DD') : undefined,
-        notes: values.notes?.trim() || undefined,
+        notes: values.notes !== undefined ? values.notes.trim() : undefined,
         status: values.status,
         jiraEpicKey: epicKeyTrimmed || undefined,
         opsOwners: (values.opsOwners ?? []).length > 0 ? values.opsOwners : undefined,

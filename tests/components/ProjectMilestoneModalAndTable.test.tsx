@@ -47,6 +47,25 @@ describe('Project and Milestone Modals and ProjectTable Banking IT Fields', () =
     expect(screen.getByText('Chờ xử lý')).toBeInTheDocument();
   });
 
+  it('ProjectModal saves empty notes when existing note is cleared', async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <ProjectModal
+        open={true}
+        project={{ ...sampleProject, notes: 'old note' }}
+        onClose={vi.fn()}
+        onSave={onSave}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText('Ghi chú'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
+
+    await screen.findByText('Ghi chú');
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ notes: '' }));
+  });
+
   it('MilestoneModal renders Ops Owner, BA, inheritance placeholder, and Pending status option', () => {
     render(
       <MilestoneModal

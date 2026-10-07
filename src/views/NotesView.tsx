@@ -579,7 +579,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
   };
 
   const handleBatchImportDocs = async (
-    docsToImport: Array<{ title: string; body: string; parentId?: string | undefined }>,
+    docsToImport: Array<{ title: string; body: string; parentId?: string | undefined; tags?: string[] | undefined }>,
     destinationFolderId?: string
   ) => {
     await batchCreateNotes(
@@ -587,6 +587,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
         title: d.title,
         body: d.body,
         type: 'document',
+        tags: d.tags ?? [],
         ...(d.parentId ? { parentId: d.parentId } : {}),
       })),
       db

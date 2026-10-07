@@ -23,6 +23,7 @@ import {
 import JSZip from 'jszip';
 import type { Note } from '../../types/models';
 import { renderSafeMarkdown } from '../../utils/markdown';
+import { extractMarkdownMetadata } from '../../utils/smartIngestion';
 
 const { Text } = Typography;
 
@@ -31,6 +32,7 @@ export interface ExtractedZipDoc {
   relativePath: string;
   fileName: string;
   detectedTitle: string;
+  tags: string[];
   body: string;
   wordCount: number;
   sizeBytes: number;
@@ -81,7 +83,7 @@ export interface ZipImportPreviewModalProps {
   folders: Note[];
   currentFolderId?: string | null;
   onImportDocs: (
-    docsToImport: Array<{ title: string; body: string; parentId?: string | undefined }>,
+    docsToImport: Array<{ title: string; body: string; parentId?: string | undefined; tags?: string[] | undefined }>,
     folderIdToNavigate?: string
   ) => Promise<void>;
   onCreateFolder?: (name: string, parentId?: string) => Promise<Note>;
@@ -158,11 +160,9 @@ export const ZipImportPreviewModal: React.FC<ZipImportPreviewModalProps> = ({
             const pathParts = relativePath.split('/');
             const fileName = pathParts[pathParts.length - 1] || 'document.md';
 
-            // Detect title from first heading # H1 or fallback to file name
-            const h1Match = body.match(/^#\s+(.+)$/m);
-            const detectedTitle = h1Match && h1Match[1]
-              ? h1Match[1].trim()
-              : fileName.replace(/\.(md|markdown)$/i, '').trim();
+            // Detect title and tags using smart ingestion metadata
+            const metadata = extractMarkdownMetadata(body);
+            const detectedTitle = metadata.title || fileName.replace(/\.(md|markdown)$/i, '').trim();
 
             const words = body.trim() ? body.trim().split(/\s+/).length : 0;
             const sizeBytes = new Blob([body]).size;
@@ -172,6 +172,7 @@ export const ZipImportPreviewModal: React.FC<ZipImportPreviewModalProps> = ({
               relativePath,
               fileName,
               detectedTitle: detectedTitle || fileName,
+              tags: metadata.tags,
               body,
               wordCount: words,
               sizeBytes,
@@ -336,6 +337,7 @@ export const ZipImportPreviewModal: React.FC<ZipImportPreviewModalProps> = ({
         return {
           title: doc.detectedTitle.trim() || doc.fileName,
           body: doc.body,
+          tags: doc.tags,
           ...(parentId ? { parentId } : {}),
         };
       });

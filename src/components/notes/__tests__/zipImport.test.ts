@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import JSZip from 'jszip';
 import { stripCommonRootPrefix } from '../ZipImportPreviewModal';
+import { extractMarkdownMetadata } from '../../../utils/smartIngestion';
 
 describe('Zip Markdown Import extraction', () => {
   it('stripCommonRootPrefix detects and strips common enclosing directory', () => {
@@ -90,5 +91,13 @@ describe('Zip Markdown Import extraction', () => {
 
     const untitled = extracted.find((e) => e.relativePath === 'notes/untitled.md');
     expect(untitled?.title).toBe('untitled');
+  });
+
+  it('extracts title and tags using smart ingestion metadata from markdown body', () => {
+    const markdown = '# API Guide\n\n#backend #auth\n\nEndpoint details here.';
+    const metadata = extractMarkdownMetadata(markdown);
+
+    expect(metadata.title).toBe('API Guide');
+    expect(metadata.tags).toEqual(['backend', 'auth']);
   });
 });
