@@ -2,18 +2,15 @@ name: Build Desktop Apps
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_to_taskmate:
+        description: 'Publish release to public taskmate repo'
+        required: false
+        type: boolean
+        default: false
   push:
     tags:
       - 'v*'
-    paths:
-      - 'src-tauri/**'
-      - 'src/**'
-      - 'public/**'
-      - 'package.json'
-      - 'vite.config.ts'
-    branches:
-      - main
-      - master
 
 permissions:
   contents: write
@@ -61,14 +58,14 @@ jobs:
       - name: Build Tauri Desktop Application
         uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ (startsWith(github.ref, 'refs/tags/v') || inputs.publish_to_taskmate) && (secrets.PUBLIC_REPO_TOKEN || secrets.GITHUB_TOKEN) || secrets.GITHUB_TOKEN }}
         with:
-          owner: quantran-epi
-          repo: taskmate
+          owner: ${{ (startsWith(github.ref, 'refs/tags/v') || inputs.publish_to_taskmate) && 'quantran-epi' || github.repository_owner }}
+          repo: ${{ (startsWith(github.ref, 'refs/tags/v') || inputs.publish_to_taskmate) && 'taskmate' || github.event.repository.name }}
           tagName: v__VERSION__
           releaseName: 'TaskMate v__VERSION__'
           releaseBody: 'TaskMate Desktop release for macOS and Windows.'
-          releaseDraft: false
+          releaseDraft: ${{ !(startsWith(github.ref, 'refs/tags/v') || inputs.publish_to_taskmate) }}
           prerelease: false
           args: --target ${{ matrix.target }}
 
