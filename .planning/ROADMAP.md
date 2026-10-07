@@ -3,7 +3,8 @@
 ## Milestones
 
 - ✅ **v1.0 MVP** — Phases 1-8 (shipped 2026-09-27)
-- 🟡 **v1.1 Banking IT Enhancements & Jira Integration** — Phases 9-13 (in progress)
+- 🟡 **v1.1 Banking IT Enhancements & Jira Integration** — Phases 9-15 (completed baseline)
+- 📋 **v1.2 Hybrid GraphRAG Knowledge Assistant MVP** — Phases 16-20 (planning)
 
 ## Phases
 
@@ -32,6 +33,16 @@
 - [x] **Phase 13: Enhanced Workload Analytics & Milestone Burndown** - Dedicated analytics view with lightweight SVG vector burndown, completion velocity metrics, and stakeholder workload allocation breakdowns. (completed 2026-09-30)
 - [x] **Phase 13.1: Timer, Jira, Sticky Notes, Actual Worklog & Sync Improvements** (INSERTED) - Pause/resume timer segments, Project-Epic Jira mapping with reachable status transitions, offline Sticky Notes with screenshot attachments & pop-out window, weekly Actual Worklog Planner, and secure OS credential storage with auto-sync recovery. (completed 2026-10-01)
 - [x] **Phase 13.2: AI Chat Drawer, Item Context Grounding & 9router Ask-Answer Integration** (INSERTED) - Right-side pinnable chat drawer, standalone and entity-scoped (Task/Project/Milestone) conversations, prompt grounding on item fields and referenced links/notes, and 9router API integration with local IndexedDB thread persistence. (completed 2026-10-03)
+- [x] **Phase 14: Knowledge Base Integration (Docs, Linking & AI Retrieval)** - Offline-first PKM engine with 3-column Docs workspace, folder tree taxonomy, Markdown split editor/reader, Wiki-links, BM25 search, and grounded AI retrieval. (completed 2026-10-04)
+- [x] **Phase 15: Ghost Dev: Local Claude Code Headless Orchestration with Agent Control Page and Live Git Diff Reviewer** - Local Claude Code CLI orchestration via native Rust agent manager with Git worktree isolation, 3-column Agent Control center, and Live Git Diff Reviewer. (completed 2026-10-06)
+
+### Milestone v1.2: Hybrid GraphRAG Knowledge Assistant MVP
+
+- [ ] **Phase 16: Knowledge Server Foundation, DLP Checks & AST Ingestion** - Optional Fastify service, pre-ingestion sensitive data rejection, AST evidence chunking, and SHA-256 incremental indexing.
+- [ ] **Phase 17: Pilot Ontology, Deterministic Extraction & Neo4j Knowledge Graph** - Controlled process 60000006 ontology, composite URNs, deterministic table extraction, evidence classification, and rebuildable Neo4j graph.
+- [ ] **Phase 18: Multi-Modal Hybrid Retrieval Engine** - Full-text identifier search, semantic vector search, bounded 1-3 hop Cypher traversal, and Reciprocal Rank Fusion.
+- [ ] **Phase 19: Grounded Assistant, Provenance Citations & Offline Fallback** - AI Chat Drawer synthesis with source citations, step-by-step path cards, conflict warnings, abstention handling, and local BM25 fallback.
+- [ ] **Phase 20: Benchmark Evaluation Suite, Integrity Hardening & Credential Isolation** - 30-50 question evaluation benchmark, path/claim verification, index rebuild tests, and server-side secret isolation.
 
 ## Phase Details
 
@@ -54,10 +65,6 @@
 - [x] 09-02-PLAN.md
 - [x] 09-03-PLAN.md
 
-- [ ] **Wave 1**: 09-01-PLAN.md — Schema v2 migration, model extensions, Zod normalization, and backup v2 compatibility
-- [ ] **Wave 2**: 09-02-PLAN.md *(blocked on Wave 1)* — Transactional repositories, distinct tag autocomplete queries, and nearest-ancestor inheritance engine
-- [ ] **Wave 3**: 09-03-PLAN.md *(blocked on Wave 2)* — WorkTypeBadge, TagSelect, TagListDisplay, drawer/modal tag inputs, and TaskTable integration
-
 **UI hint**: yes
 
 ### Phase 10: Date-Range Search, Multi-Criteria Filtering & Standup Export
@@ -73,13 +80,6 @@
   4. User can click a button to copy filtered task results as formatted Markdown standup summary to clipboard.
 
 **Plans**: 2/2 plans complete in 2 waves
-**Wave 1**
-
-- [x] 10-01-PLAN.md — Allocation date range query, multi-criteria filter pipeline, tag inheritance, and standup Markdown format utility (Wave 1)
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [x] 10-02-PLAN.md — Reactive filter hook, collapsible advanced filter bar UI, active filter badge, and clipboard standup export (Wave 2)
 
 **UI hint**: yes
 
@@ -96,18 +96,7 @@
   4. User can manually link an existing Jira issue key to a local task and click to open the issue in Jira web UI.
   5. User can view available Jira workflow transitions and execute a status transition directly from the task modal.
 
-**Plans**: 2/3 plans executed
-**Wave 1**
-
-- [x] 11-01-PLAN.md — Schema v3 migration, models, Jira REST API v3 client, minimal ADF serializer, status mapping, and Settings Tab 3 with connection diagnostics (Wave 1)
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [x] 11-02-PLAN.md — Task detail Jira integration: issue creation modal, manual key linking/unlinking, transition execution with smart status mapping, and TaskDrawer integration (Wave 2)
-
-**Wave 3** *(blocked on Wave 2 completion)*
-
-- [x] 11-03-PLAN.md — TaskTable and weekly planner Jira Key badges with direct navigation, filter bar Jira search/status filter, and standup summary [JiraKey] formatting (Wave 3)
+**Plans**: 3/3 plans complete in 3 waves
 
 **UI hint**: yes
 
@@ -126,26 +115,6 @@
 
 **Plans**: 3/3 plans complete in 3 waves
 
-Plans:
-
-- [x] 12-01-PLAN.md — Schema v4, models, validation schemas, reminder form inputs, and task updatedAt touch (Wave 1)
-- [x] 12-02-PLAN.md — Alert evaluation engine, day-scoped dismiss repository, and reactive useNotifications hook (Wave 2)
-- [x] 12-03-PLAN.md — NotificationBell badge, 5-tab NotificationDrawer, item navigation, and desktop notifications (Wave 3)
-
-**Wave 1**
-
-- [x] 12-01-PLAN.md — Schema v4 migration, models, validation schemas, reminder form inputs, and task updatedAt touch
-
-**Wave 2** *(blocked on Wave 1)*
-
-- [x] 12-02-PLAN.md — Alert evaluation engine, day-scoped dismiss repository, and reactive useNotifications hook
-
-**Wave 3** *(blocked on Wave 2)*
-
-- [x] 12-03-PLAN.md — NotificationBell badge, 5-tab NotificationDrawer, item navigation, and desktop notifications
-
-- [x] 12-03-PLAN.md — NotificationBell badge, 5-tab NotificationDrawer, item navigation, and desktop notifications
-
 **UI hint**: yes
 
 ### Phase 12.1: Task timer — start/pause/finish per task, work session logs, reload persistence, multiple concurrent timers, time allocation notifications, spent time aggregations (INSERTED)
@@ -154,20 +123,6 @@ Plans:
 **Requirements**: TIMER-01, TIMER-02, TIMER-03, TIMER-04, TIMER-05, TIMER-06, TIMER-07, TIMER-08, TIMER-09
 **Depends on:** Phase 12
 **Plans:** 4/4 plans executed (1 gap closure plan)
-
-Plans:
-**Wave 1**
-
-- [x] 12.1-01-PLAN.md — Dexie SCHEMA_V5 (workSessions, activeTimers), models, repository CRUD, spent rollups, cascade cleanup, and backup v3 envelope
-- [x] 12.1-04-PLAN.md — Fix timer UI freeze, header widget task title query, TaskTable column header, and live allocation warning alert (Gap Closure)
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [x] 12.1-02-PLAN.md — TimerContext & useTimer hook with multi-timer concurrency, reload survival, and 3-tier allocation/feasibility alert evaluation engine
-
-**Wave 3** *(blocked on Wave 2 completion)*
-
-- [x] 12.1-03-PLAN.md — AppShell ActiveTimerWidget header capsule/dropdown, TaskTable inline triggers/spent progress, and TaskDrawer WorkSessionsTab history & manual modal
 
 ### Phase 12.2: Multiple Reminders with Time, Notification Settings, Table Customization & Sidebar Persistence (INSERTED)
 
@@ -183,16 +138,6 @@ Plans:
   5. AppShell Sider remembers collapsed/expanded state across browser reloads.
 
 **Plans:** 4/4 plans complete
-Plans:
-**Wave 1**
-
-- [x] 12.2-01-PLAN.md — Schema V6, models, validation schemas, multi-reminder evaluation engine, and form list controls (Wave 1)
-- [x] 12.2-04-PLAN.md — Real-time clock ticker in useNotifications, unified sendDesktopNotification with ServiceWorker support, and multi-category desktop alert dispatch (Gap Closure)
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [x] 12.2-02-PLAN.md — Notification settings tab, category toggles, configurable thresholds, and persistent desktop notifications (Wave 2)
-- [x] 12.2-03-PLAN.md — TaskTable column visibility popover, 3-state header sorting, and AppShell sidebar collapse persistence (Wave 2)
 
 ### Phase 13: Enhanced Workload Analytics & Milestone Burndown
 
@@ -206,19 +151,6 @@ Plans:
   3. User can view workload allocation broken down by Ops Owner, Business Analyst, and Work Type in both planned hours and active task counts.
 
 **Plans**: 3/3 plans complete
-
-Plans:
-**Wave 1**
-
-- [x] 13-01-PLAN.md — Navigation routing tracer, analytics data contracts, burndown math, and velocity/workload calculation engines
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [x] 13-02-PLAN.md — Reusable pure SVG burndown vector chart, stacked status bars, and workload proportion bars
-
-**Wave 3** *(blocked on Wave 2 completion)*
-
-- [x] 13-03-PLAN.md — Comprehensive AnalyticsView dashboard assembly, empty states, and AppShell integration
 
 **UI hint**: yes
 
@@ -235,22 +167,7 @@ Plans:
   4. Weekly Actual Worklog Planner displays planned vs actual hours per day and task with variance indicators, quick minute entry, and inline WorkSession management.
   5. Tauri securely stores GitHub PAT, passphrase, and Jira token in OS Credential Manager/Keychain, while Web/PWA supports password managers; GitHub auto-sync displays real-time status with retry/backoff on network errors.
 
-**Plans:** 3/5 plans executed
-
-Plans:
-**Wave 1**
-
-- [x] 13.1-01-PLAN.md — Dexie SCHEMA_V7 migration, high-fidelity timer pause/resume segments, safe status automation, and hierarchy subtitles
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [x] 13.1-02-PLAN.md — Local Project to Jira Epic mapping, local-authoritative status reconciliation, and Tauri native proxy
-- [x] 13.1-03-PLAN.md — Offline-first Sticky Notes, safe Markdown preview, screenshot attachments, and reusable pop-out window
-- [x] 13.1-04-PLAN.md — Weekly Actual Worklog Planner matrix with variance indicators, quick entry, and midnight segment splitting
-
-**Wave 3** *(blocked on Wave 2 completion)*
-
-- [x] 13.1-05-PLAN.md — Native OS Keychain credential persistence, legacy token migration, and resilient auto-sync recovery
+**Plans:** 5/5 plans executed
 
 **UI hint**: yes
 
@@ -269,19 +186,90 @@ Plans:
 
 **Plans:** 3/3 plans complete
 
-Plans:
-
-- [x] 13.2-01-PLAN.md — Dexie SCHEMA_V8 migration for chat threads/messages, 9router API client, connection test, and Settings configuration
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [x] 13.2-02-PLAN.md — Pinnable right-side ChatDrawer UI with docked/overlay layouts, conversation message stream, and scope switcher
-
-**Wave 3** *(blocked on Wave 2 completion)*
-
-- [x] 13.2-03-PLAN.md — Context prompt builder with item field serialization and local note/link content extraction for grounded Q&A
-
 **UI hint**: yes
+
+### Phase 14: Knowledge Base Integration (Docs, Linking & AI Retrieval)
+
+**Goal:** Deliver an offline-first Personal Knowledge Management (PKM) engine with 3-column Docs workspace, folder tree taxonomy, Markdown split preview with outline ToC, Wiki-link bidirectional linking, 1-Click Smart Ingestion flow, lexical BM25 search with Vietnamese diacritic tolerance, and grounded AI retrieval with clickable citations.
+**Requirements**: REQ-14.1, REQ-14.2, REQ-14.3, REQ-14.4, REQ-14.5, REQ-14.6
+**Depends on:** Phase 13
+**Plans:** 4/4 plans complete
+
+### Phase 15: Ghost Dev: Local Claude Code Headless Orchestration with Agent Control Page and Live Git Diff Reviewer
+
+**Goal:** Orchestrate local Claude Code Headless CLI (`stream-json`) via native Rust multi-agent manager (Master-Worker) with Git worktree isolation, a dedicated 3-column Agent Control center, and an interactive Live Git Diff Reviewer with side-by-side/unified diff modes and click-to-comment inline feedback.
+**Requirements**: GHOST-01, GHOST-02, GHOST-03, GHOST-04
+**Depends on:** Phase 14
+**Plans:** 4/4 plans complete
+
+### Phase 16: Knowledge Server Foundation, DLP Checks & AST Ingestion
+
+**Goal**: Establish optional knowledge server publishing pipeline with pre-ingestion sensitive data rejection, AST-based evidence chunking, and SHA-256 incremental reindexing.
+**Depends on**: Phase 15
+**Requirements**: INGEST-01, INGEST-02, INGEST-03, INGEST-04, INGEST-05
+**Success Criteria** (what must be TRUE):
+  1. User can publish selected Markdown documents to the optional knowledge server without altering local Markdown copies.
+  2. Ingestion halts and returns actionable rejection details when documents contain PAN, CVV, PIN, HSM keys, credentials, or customer PII.
+  3. Published documents preserve headings, tables, code blocks, SQL, ASCII diagrams, and exact source ranges as retrievable evidence chunks.
+  4. Republishing unchanged or partially modified documents re-indexes only altered sections via SHA-256 hash comparison.
+  5. User can inspect publish and indexing status for each document set in PlannerMate.
+**Plans**: TBD
+
+### Phase 17: Pilot Ontology, Deterministic Extraction & Neo4j Knowledge Graph
+
+**Goal**: Build a rebuildable Neo4j knowledge graph for process 60000006 using collision-safe composite identities, deterministic table extraction, and explicit evidence classification.
+**Depends on**: Phase 16
+**Requirements**: GRAPH-01, GRAPH-02, GRAPH-03, GRAPH-04, GRAPH-05, GRAPH-06
+**Success Criteria** (what must be TRUE):
+  1. User can build a controlled graph projection for process 60000006 covering scheduled processes, container steps, software components, database objects, cycle types, statuses, and source documents.
+  2. Graph keeps identically numbered domain objects distinct through namespaced composite identities (such as `PRC_PROCESS:60000006` vs `PRC_CONTAINER:60000006`).
+  3. Structured Markdown tables and explicit identifiers are extracted deterministically before LLM extraction is used for prose-only relationships.
+  4. Every graph relation retains source document, section, source range, extraction method, and evidence classification (`OBSERVED`, `INFERRED`, or `BUSINESS_APPROVED`).
+  5. User can distinguish `OBSERVED`, `INFERRED`, and `BUSINESS_APPROVED` knowledge in graph-backed results.
+  6. User can rebuild graph and indexes from published Markdown without treating Neo4j as canonical storage.
+**Plans**: TBD
+
+### Phase 18: Multi-Modal Hybrid Retrieval Engine
+
+**Goal**: Execute fused keyword, semantic vector, and bounded Cypher graph retrieval over scheduled process 60000006.
+**Depends on**: Phase 17
+**Requirements**: RETR-01, RETR-02, RETR-03, RETR-04, RETR-05
+**Success Criteria** (what must be TRUE):
+  1. User can find exact technical identifiers (process IDs, package names, table names, cycle codes, status codes) through full-text search.
+  2. User can find relevant English technical documentation using semantically equivalent Vietnamese or English questions.
+  3. User can query process flow and runtime call chains through bounded graph traversal.
+  4. User can run dependency and impact queries across one to three graph hops with bounded result counts.
+  5. Hybrid results combine full-text, semantic, and graph evidence into one ranked, deduplicated evidence set.
+**Plans**: TBD
+
+### Phase 19: Grounded Assistant, Provenance Citations & Offline Fallback
+
+**Goal**: Deliver evidence-grounded AI assistant responses in Chat Drawer with interactive citations, step-by-step graph paths, conflict detection, and local BM25 fallback.
+**Depends on**: Phase 18
+**Requirements**: ANSWER-01, ANSWER-02, ANSWER-03, ANSWER-04, ANSWER-05, ANSWER-06, ANSWER-07
+**Success Criteria** (what must be TRUE):
+  1. User receives AI answers whose material claims cite exact source documents, sections, and ranges.
+  2. User can inspect a step-by-step graph path for flow, dependency, and impact answers.
+  3. User sees evidence classification on facts and clear labeling when a conclusion is inferred.
+  4. User is warned when indexed sources conflict by version, environment, or behavior.
+  5. Assistant explicitly reports missing evidence instead of inventing an answer.
+  6. When knowledge server is unavailable, user can continue searching local Markdown through existing BM25 retrieval.
+  7. Citations and graph paths open the corresponding PlannerMate document context.
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 20: Benchmark Evaluation Suite, Integrity Hardening & Credential Isolation
+
+**Goal**: Validate answer quality, multi-hop path fidelity, credential isolation, and recovery behavior using a 30-50 question benchmark harness.
+**Depends on**: Phase 19
+**Requirements**: QUAL-01, QUAL-02, QUAL-03, QUAL-04, QUAL-05
+**Success Criteria** (what must be TRUE):
+  1. Maintainer can run a 30–50 question benchmark covering exact lookup, semantic retrieval, process flow, call chain, three-hop impact, conflict, and abstention cases.
+  2. Benchmark verifies expected sources, required graph paths, required facts, and forbidden unsupported claims.
+  3. Milestone meets an agreed accuracy threshold for three-hop pilot queries and reports failures rather than masking them.
+  4. Automated checks prove indexes are rebuildable, sensitive-data checks run before external calls, and local search remains available offline.
+  5. Claude and Neo4j credentials remain server-side and never enter PlannerMate source, IndexedDB, logs, or published bundles.
+**Plans**: TBD
 
 ## Progress
 
@@ -295,53 +283,19 @@ Plans:
 | 6. Safe Local Backup & Restore | v1.0 | 3/3 | Complete | 2026-09-27 |
 | 7. PWA Offline Capability & Lifecycle Hardening | v1.0 | 4/4 | Complete | 2026-09-27 |
 | 8. Optional Encrypted GitHub Backup | v1.0 | 3/3 | Complete | 2026-09-27 |
-| 9. Banking IT Domain Fields & Work Types | v1.1 | 3/3 | Complete    | 2026-09-28 |
-| 10. Date-Range Search, Multi-Criteria Filtering & Standup Export | v1.1 | 2/2 | Complete    | 2026-09-28 |
-| 11. Jira Cloud Integration & Task Lifecycle | v1.1 | 3/3 | Complete    | 2026-09-28 |
-| 12. In-App Notifications, Proactive Alerts & Custom Reminders | v1.1 | 3/3 | Complete    | 2026-09-29 |
-| 12.1. Task Timer, Work Session Logs & Spent Time Tracking | v1.1 | 4/4 | Complete    | 2026-09-29 |
-| 12.2. Multiple Reminders with Time, Notification Settings, Table Customization & Sidebar Persistence | v1.1 | 4/4 | Complete   | 2026-09-29 |
-| 13. Enhanced Workload Analytics & Milestone Burndown | v1.1 | 3/3 | Complete    | 2026-09-30 |
-| 13.1. Timer, Jira, Sticky Notes, Actual Worklog & Sync Improvements | v1.1 | 5/5 | Complete    | 2026-10-01 |
-| 13.2. AI Chat Drawer, Item Context Grounding & 9router Ask-Answer Integration | v1.1 | 3/3 | Complete    | 2026-10-03 |
-
-### Phase 14: Knowledge Base Integration (Docs, Linking & AI Retrieval)
-
-**Goal:** Deliver an offline-first Personal Knowledge Management (PKM) engine with 3-column Docs workspace, folder tree taxonomy, Markdown split preview with outline ToC, Wiki-link bidirectional linking, 1-Click Smart Ingestion flow, lexical BM25 search with Vietnamese diacritic tolerance, and grounded AI retrieval with clickable citations.
-**Requirements**: REQ-14.1, REQ-14.2, REQ-14.3, REQ-14.4, REQ-14.5, REQ-14.6
-**Depends on:** Phase 13
-**Plans:** 4/4 plans complete
-Plans:
-**Wave 1**
-
-- [x] 14-01-PLAN.md — Schema V9, note model extensions, folder/tag repository, soft-delete, and lexical BM25 search engine with Vietnamese diacritic normalization (Wave 1)
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [x] 14-02-PLAN.md — Markdown Wiki-link parser, binary attachment tokens, smart ingestion metadata/entity extraction, two-way link repo, and SmartIngestionBanner (Wave 2)
-- [x] 14-03-PLAN.md — AI tools `search_knowledge_base` and `get_document_details`, character-budgeted snippet grounding, `@doc:` autocomplete, clickable citation chips, and QuickPreviewDrawer (Wave 2)
-
-**Wave 3** *(blocked on Wave 2 completion)*
-
-- [x] 14-04-PLAN.md — 3-column Docs workspace in NotesView, folder tree, document list, split editor, ToC rail, TaskDrawer Linked Knowledge, Backlinks, Trash bin, and Markdown/Zip export (Wave 3)
-
-### Phase 15: Ghost Dev: Local Claude Code Headless Orchestration with Agent Control Page and Live Git Diff Reviewer
-
-**Goal:** Orchestrate local Claude Code Headless CLI (`stream-json`) via native Rust multi-agent manager (Master-Worker) with Git worktree isolation, a dedicated 3-column Agent Control center, and an interactive Live Git Diff Reviewer with side-by-side/unified diff modes and click-to-comment inline feedback.
-**Requirements**: GHOST-01, GHOST-02, GHOST-03, GHOST-04
-**Depends on:** Phase 14
-**Plans:** 4/4 plans complete
-
-Plans:
-**Wave 1**
-
-- [x] 15-01-PLAN.md — Core TypeScript contracts, zero-dependency Git unified diff parser, prompt builder utilities, shell command whitelist validator, and Wave 0 unit tests
-- [x] 15-02-PLAN.md — Native Rust agent_manager module, Git worktree isolation, Tokio process supervisor, IPC stream batcher, and application exit protection
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [x] 15-03-PLAN.md — Agent Control center hooks, 3-column Splitter layout, session tree, terminal stream viewer, and Live Git Diff Reviewer with inline code feedback
-
-**Wave 3** *(blocked on Wave 2 completion)*
-
-- [x] 15-04-PLAN.md — AppShell navigation route with live running badge, TaskTable/TaskDrawer launch triggers, Settings model configuration, and component test suite
+| 9. Banking IT Domain Fields & Work Types | v1.1 | 3/3 | Complete | 2026-09-28 |
+| 10. Date-Range Search, Multi-Criteria Filtering & Standup Export | v1.1 | 2/2 | Complete | 2026-09-28 |
+| 11. Jira Cloud Integration & Task Lifecycle | v1.1 | 3/3 | Complete | 2026-09-28 |
+| 12. In-App Notifications, Proactive Alerts & Custom Reminders | v1.1 | 3/3 | Complete | 2026-09-29 |
+| 12.1. Task Timer, Work Session Logs & Spent Time Tracking | v1.1 | 4/4 | Complete | 2026-09-29 |
+| 12.2. Multiple Reminders with Time, Notification Settings, Table Customization & Sidebar Persistence | v1.1 | 4/4 | Complete | 2026-09-29 |
+| 13. Enhanced Workload Analytics & Milestone Burndown | v1.1 | 3/3 | Complete | 2026-09-30 |
+| 13.1. Timer, Jira, Sticky Notes, Actual Worklog & Sync Improvements | v1.1 | 5/5 | Complete | 2026-10-01 |
+| 13.2. AI Chat Drawer, Item Context Grounding & 9router Ask-Answer Integration | v1.1 | 3/3 | Complete | 2026-10-03 |
+| 14. Knowledge Base Integration (Docs, Linking & AI Retrieval) | v1.1 | 4/4 | Complete | 2026-10-04 |
+| 15. Ghost Dev: Local Claude Code Headless Orchestration with Agent Control Page and Live Git Diff Reviewer | v1.1 | 4/4 | Complete | 2026-10-06 |
+| 16. Knowledge Server Foundation, DLP Checks & AST Ingestion | v1.2 | 0/TBD | Not started | - |
+| 17. Pilot Ontology, Deterministic Extraction & Neo4j Knowledge Graph | v1.2 | 0/TBD | Not started | - |
+| 18. Multi-Modal Hybrid Retrieval Engine | v1.2 | 0/TBD | Not started | - |
+| 19. Grounded Assistant, Provenance Citations & Offline Fallback | v1.2 | 0/TBD | Not started | - |
+| 20. Benchmark Evaluation Suite, Integrity Hardening & Credential Isolation | v1.2 | 0/TBD | Not started | - |

@@ -78,44 +78,42 @@
 
 ## Traceability
 
-Roadmap creation populates phase assignments.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INGEST-01 | TBD | Pending |
-| INGEST-02 | TBD | Pending |
-| INGEST-03 | TBD | Pending |
-| INGEST-04 | TBD | Pending |
-| INGEST-05 | TBD | Pending |
-| GRAPH-01 | TBD | Pending |
-| GRAPH-02 | TBD | Pending |
-| GRAPH-03 | TBD | Pending |
-| GRAPH-04 | TBD | Pending |
-| GRAPH-05 | TBD | Pending |
-| GRAPH-06 | TBD | Pending |
-| RETR-01 | TBD | Pending |
-| RETR-02 | TBD | Pending |
-| RETR-03 | TBD | Pending |
-| RETR-04 | TBD | Pending |
-| RETR-05 | TBD | Pending |
-| ANSWER-01 | TBD | Pending |
-| ANSWER-02 | TBD | Pending |
-| ANSWER-03 | TBD | Pending |
-| ANSWER-04 | TBD | Pending |
-| ANSWER-05 | TBD | Pending |
-| ANSWER-06 | TBD | Pending |
-| ANSWER-07 | TBD | Pending |
-| QUAL-01 | TBD | Pending |
-| QUAL-02 | TBD | Pending |
-| QUAL-03 | TBD | Pending |
-| QUAL-04 | TBD | Pending |
-| QUAL-05 | TBD | Pending |
+| INGEST-01 | Phase 16 | Pending |
+| INGEST-02 | Phase 16 | Pending |
+| INGEST-03 | Phase 16 | Pending |
+| INGEST-04 | Phase 16 | Pending |
+| INGEST-05 | Phase 16 | Pending |
+| GRAPH-01 | Phase 17 | Pending |
+| GRAPH-02 | Phase 17 | Pending |
+| GRAPH-03 | Phase 17 | Pending |
+| GRAPH-04 | Phase 17 | Pending |
+| GRAPH-05 | Phase 17 | Pending |
+| GRAPH-06 | Phase 17 | Pending |
+| RETR-01 | Phase 18 | Pending |
+| RETR-02 | Phase 18 | Pending |
+| RETR-03 | Phase 18 | Pending |
+| RETR-04 | Phase 18 | Pending |
+| RETR-05 | Phase 18 | Pending |
+| ANSWER-01 | Phase 19 | Pending |
+| ANSWER-02 | Phase 19 | Pending |
+| ANSWER-03 | Phase 19 | Pending |
+| ANSWER-04 | Phase 19 | Pending |
+| ANSWER-05 | Phase 19 | Pending |
+| ANSWER-06 | Phase 19 | Pending |
+| ANSWER-07 | Phase 19 | Pending |
+| QUAL-01 | Phase 20 | Pending |
+| QUAL-02 | Phase 20 | Pending |
+| QUAL-03 | Phase 20 | Pending |
+| QUAL-04 | Phase 20 | Pending |
+| QUAL-05 | Phase 20 | Pending |
 
 **Coverage:**
 - v1.2 requirements: 28 total
-- Mapped to phases: 0
-- Unmapped: 28
+- Mapped to phases: 28
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-10-07*
-*Last updated: 2026-10-07 after v1.2 scope approval*
+*Last updated: 2026-10-07 after v1.2 roadmap creation*
