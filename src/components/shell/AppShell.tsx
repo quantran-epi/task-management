@@ -550,14 +550,11 @@ const AppShellInner: React.FC<AppShellProps> = ({
             )}
           </Space>
 
-          {/* Center: GitHub sync status dot & ActiveTimerWidget */}
-          <Space size="middle" align="center">
+          {/* Right: GitHub sync dot, ActiveTimerWidget, Mobile search, Daily Review, AI Assistant, NotificationBell, InstallButton, UpdateBadge */}
+          <Space size="small" align="center">
             <GitHubSyncStatusDot />
             <ActiveTimerWidget />
-          </Space>
 
-          {/* Right: Mobile search, Daily Review, AI Assistant, NotificationBell, InstallButton, UpdateBadge */}
-          <Space size="small" align="center">
             {isMobile && (
               <Tooltip title="Tìm kiếm & Lệnh nhanh">
                 <Button

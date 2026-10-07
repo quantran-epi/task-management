@@ -85,4 +85,24 @@ describe('AppShell', () => {
     expect(localStorage.getItem(SIDEBAR_COLLAPSED_KEY)).toBe('false');
     expect(sider).not.toHaveClass('ant-layout-sider-collapsed');
   });
+
+  it('renders header right action group with timer and labeled sync dot placement', () => {
+    render(
+      <AppShell currentRoute="tasks" onNavigate={vi.fn()}>
+        <div>Content</div>
+      </AppShell>
+    );
+
+    const header = document.querySelector('.ant-layout-header');
+    expect(header).toBeInTheDocument();
+
+    // Center space should be removed: header has only 2 direct child Space elements (left and right)
+    const directSpaces = header?.querySelectorAll(':scope > .ant-space');
+    expect(directSpaces?.length).toBe(2);
+
+    const rightSpace = directSpaces?.[1];
+    expect(rightSpace).toBeInTheDocument();
+    // Daily review summary button in right group
+    expect(rightSpace?.textContent).toContain('Tổng kết');
+  });
 });

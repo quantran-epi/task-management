@@ -407,4 +407,58 @@ index 0000000..1111111 100644
       expect(screen.getByText('Tác vụ chuẩn bị dừng')).toBeInTheDocument();
     });
   });
+
+  it('toggles diff reviewer full-screen mode and exits back cleanly', async () => {
+    const mockSessions: AgentSession[] = [
+      {
+        taskId: 'task-fs-diff',
+        taskTitle: 'Diff Fullscreen Test',
+        repoPath: '/repo',
+        worktreePath: '/worktree-fs',
+        branchName: 'pm-agent/fs',
+        masterPid: 3001,
+        masterModel: 'claude-3-5-sonnet-20241022',
+        workerModel: 'claude-3-5-haiku-20241022',
+        status: 'running',
+        startedAt: '2026-10-05T10:00:00Z',
+        activeWorkers: [],
+      },
+    ];
+
+    const mockDiff = `diff --git a/src/demo.ts b/src/demo.ts
+index 0000000..1111111 100644
+--- a/src/demo.ts
++++ b/src/demo.ts
+@@ -1,1 +1,1 @@
+-console.log('before');
++console.log('after');`;
+
+    mockInvoke.mockImplementation((command: string) => {
+      if (command === 'list_agent_sessions') {
+        return Promise.resolve(mockSessions);
+      }
+      if (command === 'get_worktree_diff') {
+        return Promise.resolve(mockDiff);
+      }
+      return Promise.resolve(null);
+    });
+
+    render(<AgentControlView />);
+
+    await waitFor(() => {
+      expect(screen.getByText('demo.ts')).toBeInTheDocument();
+    });
+
+    const expandBtn = screen.getByRole('button', { name: 'Mở rộng diff toàn màn hình' });
+    expect(expandBtn).toBeInTheDocument();
+
+    fireEvent.click(expandBtn);
+
+    const exitBtn = await screen.findByRole('button', { name: 'Thoát toàn màn hình diff' });
+    expect(exitBtn).toBeInTheDocument();
+    expect(screen.getByText('demo.ts')).toBeInTheDocument();
+
+    fireEvent.click(exitBtn);
+    expect(await screen.findByRole('button', { name: 'Mở rộng diff toàn màn hình' })).toBeInTheDocument();
+  });
 });

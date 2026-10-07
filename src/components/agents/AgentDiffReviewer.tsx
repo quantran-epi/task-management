@@ -15,6 +15,8 @@ import {
   UndoOutlined,
   FileTextOutlined,
   ReloadOutlined,
+  FullscreenOutlined,
+  FullscreenExitOutlined,
 } from '@ant-design/icons';
 import type { DiffFile, DiffViewMode } from '../../types/agent';
 import { DiffHunkView } from './DiffHunkView';
@@ -57,6 +59,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
 }) => {
   const { token } = theme.useToken();
   const [acting, setActing] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Inline feedback modal state
   const [commentModalOpen, setCommentModalOpen] = useState(false);
@@ -104,11 +107,19 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
   return (
     <div
       style={{
-        height: '100%',
+        height: isFullscreen ? '100vh' : '100%',
         display: 'flex',
         flexDirection: 'column',
         backgroundColor: token.colorBgContainer,
         overflow: 'hidden',
+        ...(isFullscreen
+          ? {
+              position: 'fixed',
+              inset: 0,
+              zIndex: 1100,
+              borderRadius: 0,
+            }
+          : {}),
       }}
     >
       {/* Top Action Toolbar */}
@@ -150,6 +161,16 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
               />
             </Tooltip>
           )}
+
+          <Tooltip title={isFullscreen ? 'Thoát toàn màn hình diff' : 'Mở rộng diff toàn màn hình'}>
+            <Button
+              size="small"
+              type="text"
+              icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
+              onClick={() => setIsFullscreen((prev) => !prev)}
+              aria-label={isFullscreen ? 'Thoát toàn màn hình diff' : 'Mở rộng diff toàn màn hình'}
+            />
+          </Tooltip>
         </Space>
 
         <Space direction="horizontal" size={8}>
