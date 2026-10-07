@@ -6,10 +6,10 @@ current_phase: 15
 current_phase_name: ghost-dev-local-claude-code-headless-orchestration-with-agen
 status: complete
 stopped_at: Phase 15 executed and verified
-last_updated: "2026-10-07T06:45:00.000Z"
+last_updated: "2026-10-07T08:12:16.962Z"
 last_activity: 2026-10-07
 last_activity_desc: "Completed quick task 261007-gce: allow choosing claude code executable in ghost dev config"
-state_head: 5350a603319f131528b8706ffb00291b60b25073
+state_head: 18d65c719889a9a40075b705c8e6fbabf25e5022
 progress:
   total_phases: 12
   completed_phases: 11
@@ -39,6 +39,7 @@ Last activity: 2026-10-07 -- Completed quick task 261007-gce: allow choosing cla
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261007-kc4 | dynamic mcp config with in-chat toggle and authorship fingerprint | 2026-10-07 | 18d65c7 | complete | [261007-kc4-dynamic-mcp-config-with-in-chat-toggle-a](./quick/261007-kc4-dynamic-mcp-config-with-in-chat-toggle-a/) |
 | 261007-epc | fix ghostDevConfig claudePath exactOptionalPropertyTypes build error | 2026-10-07 | — | complete | [261007-epc-fix-ghost-dev-claude-path-exact-optional-property](./quick/261007-epc-fix-ghost-dev-claude-path-exact-optional-property/) |
 | 261007-gce | allow choosing claude code executable in ghost dev config | 2026-10-07 | 35bbc32 | complete | [261007-gce-allow-choose-claude-executable-ghost-dev](./quick/261007-gce-allow-choose-claude-executable-ghost-dev/) |
 | 261007-iwb | fix noteAttachments test failure after binary exclusion | 2026-10-07 | 7bbd991 | complete | [261007-iwb-fix-noteattachments-test-failure-after-b](./quick/261007-iwb-fix-noteattachments-test-failure-after-b/) |
@@ -118,6 +119,7 @@ Last activity: 2026-10-07 -- Completed quick task 261007-gce: allow choosing cla
 | 261006-ktc | Fix AI normalize thinking text, enrich mutation context, and ground doc context | 2026-10-06 | 5ff5a36 | complete | [261006-ktc-fix-ai-normalize-thinking-text-enrich-ai](./quick/261006-ktc-fix-ai-normalize-thinking-text-enrich-ai/) |
 | 261006-ghd | Ghost dev: human-friendly logs, subagent detection, AI response in feedback history, multi-session history | 2026-10-06 | — | complete | [261006-ghd-ghost-dev-human-logs-subagents-feedback-sessions](./quick/261006-ghd-ghost-dev-human-logs-subagents-feedback-sessions/) |
 | 261006-mjh | Fix ghost dev file permission and worktree path alignment | 2026-10-06 | 156164b | complete | [261006-mjh-fix-ghost-dev-file-permission](./quick/261006-mjh-fix-ghost-dev-file-permission/) |
+| 261007-kc4 | dynamic mcp config with in-chat toggle and sidebar authorship fingerprint | 2026-10-07 | 18d65c7 | complete | [261007-kc4-dynamic-mcp-config-with-in-chat-toggle-a](./quick/261007-kc4-dynamic-mcp-config-with-in-chat-toggle-a/) |
 
 ## Performance Metrics
 
