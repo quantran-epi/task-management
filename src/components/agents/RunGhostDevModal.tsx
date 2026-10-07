@@ -26,7 +26,7 @@ import type { Task } from '../../types/models';
 import type { AppRoute } from '../../types/navigation';
 import { isTauriApp } from '../../utils/timerPopout';
 import { isLocalPath, normalizeLocalPath, browseLocalFolder } from '../../utils/documentLinks';
-import { generateGhostDevMasterPrompt, type GhostDevPromptLanguage } from '../../utils/ghostDevPrompt';
+import { generateGhostDevMasterPrompt } from '../../utils/ghostDevPrompt';
 import {
   getGhostDevConfig,
   sanitizeModelId,
@@ -62,7 +62,6 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
   const [detectedPaths, setDetectedPaths] = useState<string[]>([]);
   const [selectedPathMode, setSelectedPathMode] = useState<'detected' | 'custom'>('detected');
 
-  const [promptLanguage, setPromptLanguage] = useState<GhostDevPromptLanguage>('vi');
   const [promptMode, setPromptMode] = useState<'default' | 'custom'>('default');
   const [customPromptText, setCustomPromptText] = useState<string>('');
   const [isCustomEdited, setIsCustomEdited] = useState<boolean>(false);
@@ -72,7 +71,7 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
   const watchedRepoPath = Form.useWatch('repoPath', form);
   const currentRepo = normalizeLocalPath(watchedRepoPath || (detectedPaths[0] ?? '')) || '/workspace';
   const generatedDefaultPrompt = task
-    ? generateGhostDevMasterPrompt(task, currentRepo, promptLanguage)
+    ? generateGhostDevMasterPrompt(task, currentRepo)
     : '';
 
   useEffect(() => {
@@ -83,7 +82,6 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
 
   useEffect(() => {
     if (visible) {
-      setPromptLanguage('vi');
       setPromptMode('default');
       setExtraInstructionsText('');
       setIsCustomEdited(false);
@@ -91,26 +89,11 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
     }
   }, [visible]);
 
-  const handleLanguageChange = (lang: GhostDevPromptLanguage) => {
-    setPromptLanguage(lang);
-    if (task) {
-      const newPrompt = generateGhostDevMasterPrompt(task, currentRepo, lang);
-      if (!isCustomEdited) {
-        setCustomPromptText(newPrompt);
-      }
-    }
-  };
-
-  const extraHeader =
-    promptLanguage === 'en'
-      ? '## Additional Instructions from User'
-      : '## Chỉ dẫn bổ sung từ người dùng';
-
   const resolvedFinalPrompt =
     promptMode === 'custom'
       ? customPromptText.trim() || generatedDefaultPrompt
       : extraInstructionsText.trim()
-        ? `${generatedDefaultPrompt}\n\n${extraHeader}\n${extraInstructionsText.trim()}`
+        ? `${generatedDefaultPrompt}\n\n## Additional user instructions\n${extraInstructionsText.trim()}`
         : generatedDefaultPrompt;
 
   useEffect(() => {
@@ -391,24 +374,14 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
               <FileTextOutlined style={{ color: '#4f46e5' }} />
               <span style={{ fontWeight: 600 }}>Cấu hình Prompt cho Agent</span>
             </Space>
-            <Space wrap>
-              <Segmented
-                value={promptLanguage}
-                onChange={(val) => handleLanguageChange(val as GhostDevPromptLanguage)}
-                options={[
-                  { label: 'Tiếng Việt', value: 'vi' },
-                  { label: 'English', value: 'en' },
-                ]}
-              />
-              <Segmented
-                value={promptMode}
-                onChange={(val) => setPromptMode(val as 'default' | 'custom')}
-                options={[
-                  { label: 'Prompt mặc định', value: 'default' },
-                  { label: 'Tùy chỉnh toàn bộ prompt', value: 'custom' },
-                ]}
-              />
-            </Space>
+            <Segmented
+              value={promptMode}
+              onChange={(val) => setPromptMode(val as 'default' | 'custom')}
+              options={[
+                { label: 'Prompt mặc định', value: 'default' },
+                { label: 'Tùy chỉnh toàn bộ prompt', value: 'custom' },
+              ]}
+            />
           </div>
 
           {promptMode === 'default' ? (

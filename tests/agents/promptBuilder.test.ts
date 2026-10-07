@@ -23,31 +23,21 @@ describe('ghostDevPrompt', () => {
     ],
   };
 
-  it('generateGhostDevMasterPrompt formats task title, repo path, description, and pending checklist items', () => {
+  it('generateGhostDevMasterPrompt formats task title, repo path, description, and pending checklist items in English', () => {
     const prompt = generateGhostDevMasterPrompt(baseTask, '/Users/dev/repo');
-    expect(prompt).toContain('Master/Lead Agent');
+    expect(prompt).toContain('You are the Master/Lead Agent');
+    expect(prompt).toContain('Project root directory: /Users/dev/repo');
+    expect(prompt).toContain('Detailed description:');
+    expect(prompt).toContain('Goals to complete:');
     expect(prompt).toContain('Implement Ghost Dev Stream');
-    expect(prompt).toContain('/Users/dev/repo');
-    expect(prompt).toContain('Git worktree riêng biệt');
     expect(prompt).toContain('Connect Tauri IPC stream-json chunks to React view');
     expect(prompt).not.toContain('Define chunk types');
     expect(prompt).toContain('Listen to tauri event');
     expect(prompt).toContain('Render auto-scroll terminal');
-    expect(prompt).toContain('Task(description, prompt, subagent_type)');
-  });
-
-  it('generateGhostDevMasterPrompt formats English template when language is "en"', () => {
-    const prompt = generateGhostDevMasterPrompt(baseTask, '/Users/dev/repo', 'en');
-    expect(prompt).toContain('Master/Lead Agent');
-    expect(prompt).toContain('Implement Ghost Dev Stream');
-    expect(prompt).toContain('/Users/dev/repo');
-    expect(prompt).toContain('isolated Git worktree directory');
-    expect(prompt).toContain('Detailed description:');
-    expect(prompt).toContain('Connect Tauri IPC stream-json chunks to React view');
-    expect(prompt).not.toContain('Define chunk types');
-    expect(prompt).toContain('Goals to complete:');
-    expect(prompt).toContain('Listen to tauri event');
-    expect(prompt).toContain('When you need to delegate subtasks');
+    expect(prompt).not.toContain('Bạn là Master/Lead Agent');
+    expect(prompt).not.toContain('Mô tả chi tiết');
+    expect(prompt).not.toContain('Mục tiêu cần hoàn thành');
+    expect(prompt).not.toContain('Thư mục làm việc');
   });
 
   it('formatInlineFeedbackPrompt produces markdown with file path, line number, code block, and user comment per D-13', () => {

@@ -40,6 +40,26 @@ function saveHistory(records: GhostDevSessionAuditRecord[]): void {
   }
 }
 
+function findTargetRecordIndex(
+  records: GhostDevSessionAuditRecord[],
+  targetId: string
+): number {
+  // 1. Exact sessionId match
+  const sessionIdx = records.findIndex((r) => r.sessionId === targetId);
+  if (sessionIdx !== -1) return sessionIdx;
+
+  // 2. Newest record with matching taskId and active status
+  const activeIdx = records.findIndex(
+    (r) =>
+      r.taskId === targetId &&
+      (r.status === 'running' || r.status === 'awaiting_approval' || r.status === 'paused')
+  );
+  if (activeIdx !== -1) return activeIdx;
+
+  // 3. Newest record with matching taskId
+  return records.findIndex((r) => r.taskId === targetId);
+}
+
 export const agentSessionHistoryRepo = {
   recordSessionStart(
     record: Omit<GhostDevSessionAuditRecord, 'sessionId' | 'userFeedbackHistory'> & {
@@ -63,8 +83,8 @@ export const agentSessionHistoryRepo = {
       error: record.error,
     };
 
-    // Keep all historical runs, placing newest session at top
-    const nextList = [newRecord, ...existing.filter((s) => s.sessionId !== newRecord.sessionId)];
+    // Prepend each new session without taskId deduplication
+    const nextList = [newRecord, ...existing];
     saveHistory(nextList);
     return newRecord;
   },
@@ -76,99 +96,93 @@ export const agentSessionHistoryRepo = {
     error?: string
   ): void {
     const existing = loadHistory();
-    let updated = false;
+    const targetIdx = findTargetRecordIndex(existing, taskIdOrSessionId);
+    if (targetIdx === -1) return;
 
-    const nextList = existing.map((item) => {
-      if (item.sessionId === taskIdOrSessionId || item.taskId === taskIdOrSessionId) {
-        updated = true;
-        return {
-          ...item,
-          status,
-          finishedAt: finishedAt !== undefined ? finishedAt : item.finishedAt,
-          error: error !== undefined ? error : item.error,
-        };
-      }
-      return item;
-    });
+    const nextList = [...existing];
+    const current = nextList[targetIdx];
+    if (!current) return;
 
-    if (updated) {
-      saveHistory(nextList);
-    }
+    nextList[targetIdx] = {
+      ...current,
+      status,
+      finishedAt: finishedAt !== undefined ? finishedAt : current.finishedAt,
+      error: error !== undefined ? error : current.error,
+    };
+
+    saveHistory(nextList);
   },
 
   recordUserFeedback(taskIdOrSessionId: string, feedback: string, aiResponse?: string): void {
     const existing = loadHistory();
-    let updated = false;
+    const targetIdx = findTargetRecordIndex(existing, taskIdOrSessionId);
+    if (targetIdx === -1) return;
 
-    const nextList = existing.map((item) => {
-      if (item.sessionId === taskIdOrSessionId || item.taskId === taskIdOrSessionId) {
-        updated = true;
-        const entry: UserFeedbackEntry = {
-          timestamp: new Date().toISOString(),
-          feedback,
-          aiResponse,
-        };
-        return {
-          ...item,
-          userFeedbackHistory: [...(item.userFeedbackHistory || []), entry],
-        };
-      }
-      return item;
-    });
+    const nextList = [...existing];
+    const current = nextList[targetIdx];
+    if (!current) return;
 
-    if (updated) {
-      saveHistory(nextList);
-    }
+    const entry: UserFeedbackEntry = {
+      timestamp: new Date().toISOString(),
+      feedback,
+      ...(aiResponse ? { aiResponse } : {}),
+    };
+
+    nextList[targetIdx] = {
+      ...current,
+      userFeedbackHistory: [...(current.userFeedbackHistory || []), entry],
+    };
+
+    saveHistory(nextList);
   },
 
   attachAiResponseToLatestFeedback(taskIdOrSessionId: string, aiResponse: string): void {
     const existing = loadHistory();
-    let updated = false;
+    const targetIdx = findTargetRecordIndex(existing, taskIdOrSessionId);
+    if (targetIdx === -1) return;
 
-    const nextList = existing.map((item) => {
-      if (item.sessionId === taskIdOrSessionId || item.taskId === taskIdOrSessionId) {
-        const history = [...(item.userFeedbackHistory || [])];
-        if (history.length > 0) {
-          const lastIdx = history.length - 1;
-          const lastEntry = history[lastIdx];
-          if (lastEntry) {
-            history[lastIdx] = {
-              ...lastEntry,
-              aiResponse: lastEntry.aiResponse
-                ? `${lastEntry.aiResponse}\n\n${aiResponse}`
-                : aiResponse,
-            };
-            updated = true;
-            return {
-              ...item,
-              userFeedbackHistory: history,
-            };
-          }
-        }
-      }
-      return item;
-    });
+    const nextList = [...existing];
+    const current = nextList[targetIdx];
+    if (!current) return;
 
-    if (updated) {
-      saveHistory(nextList);
-    }
+    const history = [...(current.userFeedbackHistory || [])];
+    if (history.length === 0) return;
+
+    const lastIdx = history.length - 1;
+    const lastEntry = history[lastIdx];
+    if (!lastEntry) return;
+
+    history[lastIdx] = {
+      ...lastEntry,
+      aiResponse: lastEntry.aiResponse
+        ? `${lastEntry.aiResponse}\n\n${aiResponse}`
+        : aiResponse,
+    };
+
+    nextList[targetIdx] = {
+      ...current,
+      userFeedbackHistory: history,
+    };
+
+    saveHistory(nextList);
   },
 
   listSessionHistory(): GhostDevSessionAuditRecord[] {
     return loadHistory();
   },
 
-  getSessionById(id: string): GhostDevSessionAuditRecord | null {
+  getSessionById(targetId: string): GhostDevSessionAuditRecord | null {
     const existing = loadHistory();
-    return existing.find((item) => item.sessionId === id || item.taskId === id) || null;
+    const targetIdx = findTargetRecordIndex(existing, targetId);
+    return targetIdx !== -1 ? existing[targetIdx] ?? null : null;
   },
 
-  deleteSession(sessionIdOrTaskId: string): void {
+  deleteSession(targetId: string): void {
     const existing = loadHistory();
-    const hasSessionMatch = existing.some((item) => item.sessionId === sessionIdOrTaskId);
+    const hasSessionMatch = existing.some((item) => item.sessionId === targetId);
     const nextList = hasSessionMatch
-      ? existing.filter((item) => item.sessionId !== sessionIdOrTaskId)
-      : existing.filter((item) => item.taskId !== sessionIdOrTaskId);
+      ? existing.filter((item) => item.sessionId !== targetId)
+      : existing.filter((item) => item.taskId !== targetId);
     saveHistory(nextList);
   },
 

@@ -147,41 +147,49 @@ describe('agentSessionHistoryRepo', () => {
     expect(list).toHaveLength(0);
   });
 
-  it('preserves multiple sessions for the same taskId without overwriting', () => {
-    const s1 = agentSessionHistoryRepo.recordSessionStart({
+  it('keeps distinct session rows for same taskId and updates only active/latest session', () => {
+    const sess1 = agentSessionHistoryRepo.recordSessionStart({
       taskId: 'task-same-id',
-      taskTitle: 'Same Task Run 1',
-      startedAt: '2026-10-06T10:00:00.000Z',
+      taskTitle: 'Task Same ID',
+      startedAt: '2026-10-06T09:00:00.000Z',
       repoPath: '/workspace/project',
       branchName: 'pm-agent/task-same-id',
       masterModel: 'claude-3-7-sonnet-20250219',
       workerModel: 'claude-3-5-haiku-20241022',
       status: 'done',
-      initialPrompt: 'Run 1',
+      initialPrompt: 'First prompt',
     });
 
-    const s2 = agentSessionHistoryRepo.recordSessionStart({
+    const sess2 = agentSessionHistoryRepo.recordSessionStart({
       taskId: 'task-same-id',
-      taskTitle: 'Same Task Run 2',
-      startedAt: '2026-10-06T10:30:00.000Z',
+      taskTitle: 'Task Same ID',
+      startedAt: '2026-10-06T10:00:00.000Z',
       repoPath: '/workspace/project',
       branchName: 'pm-agent/task-same-id',
       masterModel: 'claude-3-7-sonnet-20250219',
       workerModel: 'claude-3-5-haiku-20241022',
       status: 'running',
-      initialPrompt: 'Run 2',
+      initialPrompt: 'Second prompt',
     });
 
     const list = agentSessionHistoryRepo.listSessionHistory();
     expect(list).toHaveLength(2);
-    expect(list.map((s) => s.sessionId)).toContain(s1.sessionId);
-    expect(list.map((s) => s.sessionId)).toContain(s2.sessionId);
+    expect(sess1.sessionId).not.toBe(sess2.sessionId);
 
-    // Deleting s1 by sessionId only removes s1
-    agentSessionHistoryRepo.deleteSession(s1.sessionId);
-    const afterDelete = agentSessionHistoryRepo.listSessionHistory();
-    expect(afterDelete).toHaveLength(1);
-    expect(afterDelete[0]?.sessionId).toBe(s2.sessionId);
+    // Feedback sent by taskId should append only to active/latest session (sess2)
+    agentSessionHistoryRepo.recordUserFeedback('task-same-id', 'Active session feedback');
+    const updatedSess1 = agentSessionHistoryRepo.getSessionById(sess1.sessionId);
+    const updatedSess2 = agentSessionHistoryRepo.getSessionById(sess2.sessionId);
+
+    expect(updatedSess1?.userFeedbackHistory).toHaveLength(0);
+    expect(updatedSess2?.userFeedbackHistory).toHaveLength(1);
+    expect(updatedSess2?.userFeedbackHistory?.[0]?.feedback).toBe('Active session feedback');
+
+    // Deleting sess1 by sessionId does not delete sess2
+    agentSessionHistoryRepo.deleteSession(sess1.sessionId);
+    const remaining = agentSessionHistoryRepo.listSessionHistory();
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]?.sessionId).toBe(sess2.sessionId);
   });
 
   it('attaches AI response to latest user feedback', () => {
