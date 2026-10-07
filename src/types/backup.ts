@@ -7,6 +7,10 @@ import type {
   PlannedAllocation,
   WorkSession,
   Note,
+  ChatThread,
+  ChatMessage,
+  ActiveTimer,
+  Setting,
 } from './models';
 
 export interface BackupAttachmentRecord {
@@ -15,7 +19,7 @@ export interface BackupAttachmentRecord {
   fileName: string;
   mimeType: string;
   sizeBytes: number;
-  data?: string | undefined; // Base64 Data URL (optional: omitted for lightweight remote sync)
+  data?: string | undefined; // Base64 Data URL (legacy backups only; modern backups omit binary data)
   filePath?: string | undefined; // Local disk file path
   caption?: string | undefined;
   createdAt: string;
@@ -31,6 +35,10 @@ export interface BackupTableData {
   workSessions?: WorkSession[];
   notes?: Note[];
   noteAttachments?: BackupAttachmentRecord[];
+  chatThreads?: ChatThread[];
+  chatMessages?: ChatMessage[];
+  activeTimers?: ActiveTimer[];
+  settings?: Setting[];
 }
 
 export interface BackupTableCounts {
@@ -43,6 +51,10 @@ export interface BackupTableCounts {
   workSessions?: number;
   notes?: number;
   noteAttachments?: number;
+  chatThreads?: number;
+  chatMessages?: number;
+  activeTimers?: number;
+  settings?: number;
 }
 
 

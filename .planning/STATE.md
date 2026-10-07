@@ -39,6 +39,7 @@ Last activity: 2026-10-07 -- Completed quick task 261007-f4h: implement six UI a
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261007-hip | backup all user data and safe settings without binary data and fix dirty tracking | 2026-10-07 | 5c4b7c5 | complete | [261007-hip-backup-all-user-data-and-safe-settings-w](./quick/261007-hip-backup-all-user-data-and-safe-settings-w/) |
 | 261007-f4h | implement six UI and data fixes for agent control, docs, ghost dev, projects, and header | 2026-10-07 | 1ef6364 | complete | [261007-f4h-implement-six-ui-data-fixes-agent-contro](./quick/261007-f4h-implement-six-ui-data-fixes-agent-contro/) |
 | 261007-dtm | Fix scrollIntoView unhandled error in tests | 2026-10-07 | — | complete | [261007-dtm-fix-scrollintoview-unhandled-error-in-te](./quick/261007-dtm-fix-scrollintoview-unhandled-error-in-te/) |
 | 261006-fxm | Fix Ghost Dev modal input, prompt lang toggle, terminal result json parsing, and file lock defense | 2026-10-06 | — | complete | [261006-fxm-fix-ghost-dev-modal-terminal-lock](./quick/261006-fxm-fix-ghost-dev-modal-terminal-lock/) |

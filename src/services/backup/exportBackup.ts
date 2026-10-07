@@ -5,6 +5,46 @@ import { generateId } from '../../utils/uuid';
 export const APP_MARKER = 'personal-task-planner' as const;
 export const CURRENT_SCHEMA_VERSION = 4 as const;
 
+export const UNSAFE_OR_EPHEMERAL_SETTING_KEYS = new Set<string>([
+  'jira_api_token',
+  'github_pat',
+  'github_token',
+  'github_passphrase',
+  'backup_passphrase',
+  'ninerouter_api_key',
+  'image_api_key',
+  'tauri_keyring_migrated',
+  'tauri_sqlite_queue',
+  'tauri_sqlite_last_flush_at',
+  'tauri_sqlite_missing_path',
+  'tauri_sqlite_path',
+  'tauri_sqlite_enabled',
+  'last_synced_sha',
+  'last_synced_at',
+  'github_auto_sync_last_run_at',
+  'github_auto_sync_last_attempt_at',
+  'github_auto_sync_last_error',
+  'github_auto_sync_state',
+  'github_auto_sync_dirty_since',
+  'github_auto_sync_missed_due_at',
+  'last_pre_import_snapshot',
+]);
+
+export function isSafeBackupSetting(key: string): boolean {
+  if (UNSAFE_OR_EPHEMERAL_SETTING_KEYS.has(key)) return false;
+  const lower = key.toLowerCase();
+  if (
+    lower.endsWith('_token') ||
+    lower.endsWith('_key') ||
+    lower.endsWith('_passphrase') ||
+    lower.endsWith('_secret') ||
+    lower.endsWith('_pat')
+  ) {
+    return false;
+  }
+  return true;
+}
+
 export async function blobToBase64(blob: Blob, fallbackMime?: string): Promise<string> {
   const mime = blob.type || fallbackMime || 'application/octet-stream';
 
@@ -76,7 +116,7 @@ export interface ExportBackupOptions {
 
 export async function exportBackupPayload(
   targetDb: TaskPlannerDatabase = defaultDb,
-  options?: ExportBackupOptions
+  _options?: ExportBackupOptions
 ): Promise<BackupEnvelope> {
   const [
     projects,
@@ -88,6 +128,10 @@ export async function exportBackupPayload(
     workSessions,
     notes,
     rawAttachments,
+    chatThreads,
+    chatMessages,
+    activeTimers,
+    allSettings,
   ] = await Promise.all([
     targetDb.projects.toArray(),
     targetDb.milestones.toArray(),
@@ -98,23 +142,26 @@ export async function exportBackupPayload(
     targetDb.workSessions.toArray(),
     targetDb.notes.toArray(),
     targetDb.noteAttachments.toArray(),
+    targetDb.chatThreads.toArray(),
+    targetDb.chatMessages.toArray(),
+    targetDb.activeTimers.toArray(),
+    targetDb.settings.toArray(),
   ]);
 
-  const excludeData = options?.excludeAttachmentData ?? false;
+  // Strictly exclude binary and base64 image data to prevent storage growth
+  const noteAttachments = rawAttachments.map((att) => ({
+    id: att.id,
+    noteId: att.noteId,
+    fileName: att.fileName,
+    mimeType: att.mimeType,
+    sizeBytes: att.sizeBytes,
+    filePath: att.filePath || `attachments/${att.id}_${att.fileName}`,
+    ...(att.caption ? { caption: att.caption } : {}),
+    createdAt: att.createdAt,
+  }));
 
-  const noteAttachments = await Promise.all(
-    rawAttachments.map(async (att) => ({
-      id: att.id,
-      noteId: att.noteId,
-      fileName: att.fileName,
-      mimeType: att.mimeType,
-      sizeBytes: att.sizeBytes,
-      filePath: att.filePath || `attachments/${att.id}_${att.fileName}`,
-      ...(excludeData ? {} : { data: await blobToBase64(att.data, att.mimeType) }),
-      ...(att.caption ? { caption: att.caption } : {}),
-      createdAt: att.createdAt,
-    }))
-  );
+  // Filter settings to include only safe configuration, stripping secrets and machine-local sync markers
+  const safeSettings = allSettings.filter((s) => isSafeBackupSetting(s.key));
 
   const exportedAt = new Date().toISOString();
 
@@ -128,6 +175,10 @@ export async function exportBackupPayload(
     workSessions,
     notes,
     noteAttachments,
+    chatThreads,
+    chatMessages,
+    activeTimers,
+    settings: safeSettings,
   };
 
   const counts = {
@@ -140,6 +191,10 @@ export async function exportBackupPayload(
     workSessions: workSessions.length,
     notes: notes.length,
     noteAttachments: noteAttachments.length,
+    chatThreads: chatThreads.length,
+    chatMessages: chatMessages.length,
+    activeTimers: activeTimers.length,
+    settings: safeSettings.length,
   };
 
   const envelope: BackupEnvelope = {

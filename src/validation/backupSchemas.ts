@@ -162,11 +162,16 @@ export const BackupWorkSessionRecordSchema = z
 
 export const BackupNoteRecordSchema = z.object({
   id: uuidSchema,
+  type: z.enum(['quick_note', 'document', 'folder']).optional(),
+  parentId: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  slug: z.string().optional(),
   entityType: z.enum(['task', 'project', 'milestone']).optional(),
   entityId: uuidSchema.optional(),
   title: z.string().trim().max(120, 'Title must be 120 characters or less').optional(),
   body: z.string().max(50000, 'Body must be 50000 characters or less'),
   isPinned: z.boolean(),
+  deletedAt: z.string().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -175,7 +180,7 @@ export const BackupNoteAttachmentRecordSchema = z.object({
   id: uuidSchema,
   noteId: uuidSchema,
   fileName: z.string().min(1).max(255),
-  mimeType: z.enum(['image/png', 'image/jpeg', 'image/gif', 'image/webp']),
+  mimeType: z.string().min(1).max(100),
   sizeBytes: z.number().int().min(0).max(50 * 1024 * 1024),
   data: z
     .string()
@@ -186,6 +191,39 @@ export const BackupNoteAttachmentRecordSchema = z.object({
   filePath: z.string().optional(),
   caption: z.string().max(250).optional(),
   createdAt: z.string(),
+});
+
+export const BackupChatThreadRecordSchema = z.object({
+  id: uuidSchema,
+  scopeKey: z.string().min(1),
+  scopeType: z.enum(['global', 'task', 'project', 'milestone']),
+  entityId: uuidSchema.optional(),
+  title: z.string().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const BackupChatMessageRecordSchema = z.object({
+  id: uuidSchema,
+  threadId: uuidSchema,
+  role: z.enum(['user', 'assistant', 'system']),
+  content: z.string(),
+  createdAt: z.string(),
+  isContextBoundary: z.boolean().optional(),
+});
+
+export const BackupActiveTimerRecordSchema = z.object({
+  taskId: uuidSchema,
+  status: z.enum(['running', 'paused']),
+  startedAt: z.number(),
+  accumulatedMs: z.number(),
+  sessionStartTime: z.string(),
+  segments: z.array(timerSegmentSchema).optional(),
+});
+
+export const BackupSettingRecordSchema = z.object({
+  key: z.string().min(1),
+  value: z.unknown(),
 });
 
 

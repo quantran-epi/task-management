@@ -15,6 +15,10 @@ import {
   BackupWorkSessionRecordSchema,
   BackupNoteRecordSchema,
   BackupNoteAttachmentRecordSchema,
+  BackupChatThreadRecordSchema,
+  BackupChatMessageRecordSchema,
+  BackupActiveTimerRecordSchema,
+  BackupSettingRecordSchema,
 } from '../../validation/backupSchemas';
 
 
@@ -139,6 +143,18 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
   const noteAttachments = rawTables.noteAttachments !== undefined
     ? validateTable('noteAttachments', BackupNoteAttachmentRecordSchema, rawTables.noteAttachments)
     : undefined;
+  const chatThreads = rawTables.chatThreads !== undefined
+    ? validateTable('chatThreads', BackupChatThreadRecordSchema, rawTables.chatThreads)
+    : undefined;
+  const chatMessages = rawTables.chatMessages !== undefined
+    ? validateTable('chatMessages', BackupChatMessageRecordSchema, rawTables.chatMessages)
+    : undefined;
+  const activeTimers = rawTables.activeTimers !== undefined
+    ? validateTable('activeTimers', BackupActiveTimerRecordSchema, rawTables.activeTimers)
+    : undefined;
+  const settings = rawTables.settings !== undefined
+    ? validateTable('settings', BackupSettingRecordSchema, rawTables.settings)
+    : undefined;
 
   // If schema validation errors occurred, stop before referential checks
   if (errors.length > 0) {
@@ -253,6 +269,21 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     });
   }
 
+  // Check chatMessages refer to existing thread
+  const threadIds = new Set((chatThreads || []).map((t) => t.id));
+  if (chatMessages && chatThreads) {
+    chatMessages.forEach((cm) => {
+      if (!threadIds.has(cm.threadId)) {
+        errors.push({
+          table: 'chatMessages',
+          recordId: cm.id,
+          field: 'threadId',
+          message: `ChatMessage references threadId "${cm.threadId}" not found in chatThreads`,
+        });
+      }
+    });
+  }
+
   if (errors.length > 0) {
     return { valid: false, errors };
   }
@@ -288,6 +319,10 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       ...(workSessions !== undefined ? { workSessions } : {}),
       ...(notes !== undefined ? { notes } : {}),
       ...(noteAttachments !== undefined ? { noteAttachments } : {}),
+      ...(chatThreads !== undefined ? { chatThreads } : {}),
+      ...(chatMessages !== undefined ? { chatMessages } : {}),
+      ...(activeTimers !== undefined ? { activeTimers } : {}),
+      ...(settings !== undefined ? { settings } : {}),
     },
     counts: {
       projects: projects.length,
@@ -299,6 +334,10 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       ...(workSessions !== undefined ? { workSessions: workSessions.length } : {}),
       ...(notes !== undefined ? { notes: notes.length } : {}),
       ...(noteAttachments !== undefined ? { noteAttachments: noteAttachments.length } : {}),
+      ...(chatThreads !== undefined ? { chatThreads: chatThreads.length } : {}),
+      ...(chatMessages !== undefined ? { chatMessages: chatMessages.length } : {}),
+      ...(activeTimers !== undefined ? { activeTimers: activeTimers.length } : {}),
+      ...(settings !== undefined ? { settings: settings.length } : {}),
     },
   };
 

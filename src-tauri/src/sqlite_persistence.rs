@@ -14,6 +14,10 @@ const ALLOWED_TABLES: &[&str] = &[
     "settings",
     "backupMetadata",
     "activeTimers",
+    "notes",
+    "noteAttachments",
+    "chatThreads",
+    "chatMessages",
 ];
 
 #[derive(Debug, Deserialize)]

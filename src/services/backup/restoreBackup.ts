@@ -2,7 +2,7 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { BackupEnvelope, SnapshotData } from '../../types/backup';
 import type { NoteAttachment } from '../../types/models';
 import { generateId } from '../../utils/uuid';
-import { triggerDownload, APP_MARKER, CURRENT_SCHEMA_VERSION, blobToBase64 } from './exportBackup';
+import { triggerDownload, APP_MARKER, CURRENT_SCHEMA_VERSION, blobToBase64, isSafeBackupSetting } from './exportBackup';
 
 export function base64ToBlob(dataUrl: string, fallbackMime: string): Blob {
   const parts = dataUrl.split(',');
@@ -47,6 +47,8 @@ export async function restoreBackupPayload(
       targetDb.activeTimers,
       targetDb.notes,
       targetDb.noteAttachments,
+      targetDb.chatThreads,
+      targetDb.chatMessages,
       targetDb.settings,
       targetDb.backupMetadata,
     ],
@@ -62,6 +64,8 @@ export async function restoreBackupPayload(
         workSessions,
         notes,
         rawAttachments,
+        chatThreads,
+        chatMessages,
       ] = await Promise.all([
         targetDb.projects.toArray(),
         targetDb.milestones.toArray(),
@@ -72,6 +76,8 @@ export async function restoreBackupPayload(
         targetDb.workSessions.toArray(),
         targetDb.notes.toArray(),
         targetDb.noteAttachments.toArray(),
+        targetDb.chatThreads.toArray(),
+        targetDb.chatMessages.toArray(),
       ]);
 
       const serializedAttachments = await Promise.all(
@@ -99,6 +105,8 @@ export async function restoreBackupPayload(
           workSessions,
           notes,
           noteAttachments: serializedAttachments,
+          chatThreads,
+          chatMessages,
         },
         counts: {
           projects: projects.length,
@@ -110,6 +118,8 @@ export async function restoreBackupPayload(
           workSessions: workSessions.length,
           notes: notes.length,
           noteAttachments: rawAttachments.length,
+          chatThreads: chatThreads.length,
+          chatMessages: chatMessages.length,
         },
       };
 
@@ -119,7 +129,7 @@ export async function restoreBackupPayload(
         value: snapshot,
       });
 
-      // 2. Clear current domain tables, notes, attachments, and active timers
+      // 2. Clear current domain tables, notes, attachments, active timers, and chat
       await Promise.all([
         targetDb.projects.clear(),
         targetDb.milestones.clear(),
@@ -131,6 +141,8 @@ export async function restoreBackupPayload(
         targetDb.activeTimers.clear(),
         targetDb.notes.clear(),
         targetDb.noteAttachments.clear(),
+        targetDb.chatThreads.clear(),
+        targetDb.chatMessages.clear(),
       ]);
 
       // 3. Bulk add incoming records
@@ -171,6 +183,22 @@ export async function restoreBackupPayload(
           createdAt: att.createdAt,
         }));
         await targetDb.noteAttachments.bulkAdd(restoredAttachments);
+      }
+      if (backup.tables.chatThreads && backup.tables.chatThreads.length) {
+        await targetDb.chatThreads.bulkAdd(backup.tables.chatThreads);
+      }
+      if (backup.tables.chatMessages && backup.tables.chatMessages.length) {
+        await targetDb.chatMessages.bulkAdd(backup.tables.chatMessages);
+      }
+      if (backup.tables.activeTimers && backup.tables.activeTimers.length) {
+        await targetDb.activeTimers.bulkAdd(backup.tables.activeTimers);
+      }
+      if (backup.tables.settings && backup.tables.settings.length) {
+        for (const setting of backup.tables.settings) {
+          if (isSafeBackupSetting(setting.key)) {
+            await targetDb.settings.put(setting);
+          }
+        }
       }
 
       // 4. Log restore in backupMetadata
@@ -216,6 +244,8 @@ export async function rollbackToSnapshot(
       targetDb.activeTimers,
       targetDb.notes,
       targetDb.noteAttachments,
+      targetDb.chatThreads,
+      targetDb.chatMessages,
       targetDb.settings,
       targetDb.backupMetadata,
     ],
@@ -232,6 +262,8 @@ export async function rollbackToSnapshot(
         targetDb.activeTimers.clear(),
         targetDb.notes.clear(),
         targetDb.noteAttachments.clear(),
+        targetDb.chatThreads.clear(),
+        targetDb.chatMessages.clear(),
       ]);
 
       // 2. Restore records from snapshot
@@ -272,6 +304,12 @@ export async function rollbackToSnapshot(
           createdAt: att.createdAt,
         }));
         await targetDb.noteAttachments.bulkAdd(restoredAttachments);
+      }
+      if (snapshot.tables.chatThreads && snapshot.tables.chatThreads.length) {
+        await targetDb.chatThreads.bulkAdd(snapshot.tables.chatThreads);
+      }
+      if (snapshot.tables.chatMessages && snapshot.tables.chatMessages.length) {
+        await targetDb.chatMessages.bulkAdd(snapshot.tables.chatMessages);
       }
 
       // 3. Clear the snapshot from settings after rollback

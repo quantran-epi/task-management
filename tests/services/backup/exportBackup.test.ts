@@ -86,10 +86,14 @@ describe('exportBackup service', () => {
         allocatedMinutes: 120,
       });
 
-      // Settings and existing backupMetadata should NOT be exported in tables envelope
+      // Safe settings should be exported, sensitive settings should be stripped, backupMetadata excluded
       await testDb.settings.add({
         key: 'themeMode',
         value: 'dark',
+      });
+      await testDb.settings.add({
+        key: 'github_pat',
+        value: 'ghp_secret123',
       });
 
       await testDb.backupMetadata.add({
@@ -104,7 +108,6 @@ describe('exportBackup service', () => {
       expect(envelope.app).toBe(APP_MARKER);
       expect(envelope.app).toBe('personal-task-planner');
       expect(envelope.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
-      expect(envelope.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
       expect(envelope.exportedAt).toBeDefined();
       expect(new Date(envelope.exportedAt).toString()).not.toBe('Invalid Date');
 
@@ -116,8 +119,8 @@ describe('exportBackup service', () => {
       expect(envelope.tables.capacityOverrides).toHaveLength(1);
       expect(envelope.tables.plannedAllocations).toHaveLength(1);
 
-      // Excluded tables
-      expect((envelope.tables as unknown as Record<string, unknown>).settings).toBeUndefined();
+      // Safe settings exported, secrets stripped, metadata excluded
+      expect(envelope.tables.settings).toEqual([{ key: 'themeMode', value: 'dark' }]);
       expect((envelope.tables as unknown as Record<string, unknown>).backupMetadata).toBeUndefined();
 
       // Counts object
@@ -131,8 +134,11 @@ describe('exportBackup service', () => {
         workSessions: 0,
         notes: 0,
         noteAttachments: 0,
+        chatThreads: 0,
+        chatMessages: 0,
+        activeTimers: 0,
+        settings: 1,
       });
-
 
       // Export history logged in backupMetadata
       const metadataEntries = await testDb.backupMetadata.toArray();
@@ -142,7 +148,7 @@ describe('exportBackup service', () => {
         (entry) => entry.id !== '77777777-7777-4777-8777-777777777777'
       );
       expect(latestLog).toBeDefined();
-      expect(latestLog?.recordCount).toBe(6);
+      expect(latestLog?.recordCount).toBe(7);
       expect(latestLog?.timestamp).toBe(envelope.exportedAt);
       expect(latestLog?.appVersion).toBe('0.1.0');
     });
@@ -160,6 +166,10 @@ describe('exportBackup service', () => {
         workSessions: 0,
         notes: 0,
         noteAttachments: 0,
+        chatThreads: 0,
+        chatMessages: 0,
+        activeTimers: 0,
+        settings: 0,
       });
 
       const metadataEntries = await testDb.backupMetadata.toArray();

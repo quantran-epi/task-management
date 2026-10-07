@@ -18,6 +18,10 @@ export const SQLITE_DOMAIN_TABLES = [
   'capacityOverrides',
   'plannedAllocations',
   'workSessions',
+  'notes',
+  'noteAttachments',
+  'chatThreads',
+  'chatMessages',
 ] as const;
 
 export const SQLITE_LOCAL_TABLES = ['settings', 'backupMetadata', 'activeTimers'] as const;
@@ -92,7 +96,11 @@ function getRowId(tableName: SqliteTableName, value: unknown): string {
   return '';
 }
 
-function serializePayload(value: unknown): string {
+function serializePayload(tableName: SqliteTableName, value: unknown): string {
+  if (tableName === 'noteAttachments' && value && typeof value === 'object') {
+    const { data: _ignored, ...rest } = value as Record<string, unknown>;
+    return JSON.stringify(rest);
+  }
   return JSON.stringify(value ?? null);
 }
 
@@ -156,7 +164,7 @@ export function enqueueLocalSqliteChange(
   const change: QueuedSqliteChange = {
     tableName,
     rowId,
-    payloadJson: deleted ? null : serializePayload(payload),
+    payloadJson: deleted ? null : serializePayload(tableName, payload),
     deleted,
   };
   memoryQueues.set(db, coalesceQueue(memoryQueues.get(db) ?? [], change));
@@ -240,7 +248,13 @@ export async function hydrateDexieFromSqlite(db: TaskPlannerDatabase = defaultDb
 
   for (const row of rows) {
     if (!isSqliteTableName(row.tableName)) continue;
-    await db.table(row.tableName).put(JSON.parse(row.payloadJson));
+    const parsed = JSON.parse(row.payloadJson);
+    if (row.tableName === 'noteAttachments' && parsed && typeof parsed === 'object') {
+      if (!parsed.data) {
+        parsed.data = new Blob([], { type: parsed.mimeType || 'application/octet-stream' });
+      }
+    }
+    await db.table(row.tableName).put(parsed);
   }
   return rows.length;
 }

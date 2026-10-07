@@ -418,7 +418,7 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
                   icon={<ReloadOutlined />}
                   onClick={() => {
                     if (task) {
-                      const def = generateGhostDevMasterPrompt(task, currentRepo, promptLanguage);
+                      const def = generateGhostDevMasterPrompt(task, currentRepo);
                       setCustomPromptText(def);
                     }
                     setIsCustomEdited(false);

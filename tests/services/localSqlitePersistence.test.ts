@@ -93,4 +93,42 @@ describe('localSqlitePersistence', () => {
       value: [expect.objectContaining({ rowId: 'task-1' })],
     });
   });
+
+  it('marks dirty for notes and chat tables and strips binary data on serialization', async () => {
+    await db.settings.delete('github_auto_sync_dirty_since');
+    enqueueLocalSqliteChange(db, 'notes', 'note-1', { id: 'note-1', title: 'Doc' }, false);
+    await new Promise((r) => setTimeout(r, 20));
+    await expect(db.settings.get('github_auto_sync_dirty_since')).resolves.toBeDefined();
+
+    await db.settings.delete('github_auto_sync_dirty_since');
+    enqueueLocalSqliteChange(db, 'chatMessages', 'msg-1', { id: 'msg-1', content: 'hello' }, false);
+    await new Promise((r) => setTimeout(r, 20));
+    await expect(db.settings.get('github_auto_sync_dirty_since')).resolves.toBeDefined();
+
+    await db.settings.bulkPut([
+      { key: SQLITE_SETTING_KEYS.path, value: 'tasks.sqlite' },
+      { key: SQLITE_SETTING_KEYS.enabled, value: true },
+    ]);
+    invokeMock.mockResolvedValueOnce(undefined);
+
+    enqueueLocalSqliteChange(
+      db,
+      'noteAttachments',
+      'att-1',
+      { id: 'att-1', fileName: 'photo.png', data: new Blob([]) },
+      false
+    );
+    await flushLocalSqliteNow(db);
+    expect(invokeMock).toHaveBeenCalledWith('sqlite_apply_changes', {
+      path: 'tasks.sqlite',
+      changes: expect.arrayContaining([
+        {
+          tableName: 'noteAttachments',
+          rowId: 'att-1',
+          payloadJson: '{"id":"att-1","fileName":"photo.png"}',
+          deleted: false,
+        },
+      ]),
+    });
+  });
 });
