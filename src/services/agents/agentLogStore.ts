@@ -1,9 +1,10 @@
 import type { GhostDevStreamChunk } from '../../types/agent';
+import { APP_NAME } from '../../constants/app';
 import { isTauriApp } from '../../utils/timerPopout';
 
 export const MAX_STREAM_LINES = 2000;
 
-const DB_NAME = 'PlannerMateAgentTerminalDB';
+const DB_NAME = `${APP_NAME}AgentTerminalDB`;
 const DB_VERSION = 1;
 const STORE_NAME = 'terminal_logs';
 

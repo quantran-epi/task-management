@@ -10,6 +10,7 @@ import {
   RobotOutlined,
   QuestionCircleOutlined,
 } from '@ant-design/icons';
+import { APP_NAME } from '../../constants/app';
 import { Navigation } from './Navigation';
 import { StatusBadge } from './StatusBadge';
 import { UpgradeModal } from './UpgradeModal';
@@ -444,7 +445,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
                   whiteSpace: 'nowrap',
                 }}
               >
-                PlannerMate
+                {APP_NAME}
               </span>
             )}
           </div>
@@ -503,7 +504,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <BrandLogo size={26} />
               <span style={{ fontWeight: 700, fontSize: 16, letterSpacing: '-0.02em' }}>
-                PlannerMate
+                {APP_NAME}
               </span>
             </div>
           }
@@ -544,7 +545,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <BrandLogo size={26} />
                   <Title level={4} style={{ margin: 0, fontWeight: 700, letterSpacing: '-0.02em' }}>
-                    PlannerMate
+                    {APP_NAME}
                   </Title>
                 </div>
               </>

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { NotificationSettingsCard } from '../../../src/components/settings/NotificationSettingsCard';
+import { APP_NAME } from '../../../src/constants/app';
 import { db } from '../../../src/db';
 import {
   NOTIFICATION_SETTINGS_KEY,
@@ -192,7 +193,7 @@ describe('NotificationSettingsCard (D-10, D-11, NOTIF-08, TAURI-NOTIF-DESKTOP-DI
     await waitFor(() => {
       expect(mockNotification).toHaveBeenCalledTimes(1);
       expect(mockNotification).toHaveBeenCalledWith(
-        'PlannerMate - Thông báo thử nghiệm',
+        `${APP_NAME} - Thông báo thử nghiệm`,
         expect.objectContaining({
           body: expect.stringContaining('Thông báo màn hình đang hoạt động'),
           requireInteraction: true,
@@ -226,7 +227,7 @@ describe('NotificationSettingsCard (D-10, D-11, NOTIF-08, TAURI-NOTIF-DESKTOP-DI
     await waitFor(() => {
       expect(tauriPluginNotification.sendNotification).toHaveBeenCalledWith(
         expect.objectContaining({
-          title: 'PlannerMate - Thông báo thử nghiệm',
+          title: `${APP_NAME} - Thông báo thử nghiệm`,
           body: 'Thông báo màn hình đang hoạt động với cài đặt của bạn.',
         })
       );

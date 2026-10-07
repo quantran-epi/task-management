@@ -5,6 +5,7 @@ import {
   useDesktopNotification,
   SESSION_NOTIFICATION_SHOWN_KEY,
 } from '../../src/hooks/useDesktopNotification';
+import { APP_NAME } from '../../src/constants/app';
 import { db } from '../../src/db';
 import {
   NOTIFICATION_SETTINGS_KEY,
@@ -78,7 +79,7 @@ describe('useDesktopNotification hook (D-09, D-12, NOTIF-07, TAURI-NOTIF-DESKTOP
     await waitFor(() => {
       expect(mockNotification).toHaveBeenCalledTimes(1);
       expect(mockNotification).toHaveBeenCalledWith(
-        'PlannerMate',
+        APP_NAME,
         expect.objectContaining({
           body: expect.stringContaining('1 việc quá hạn'),
           requireInteraction: true,
@@ -135,7 +136,7 @@ describe('useDesktopNotification hook (D-09, D-12, NOTIF-07, TAURI-NOTIF-DESKTOP
     await waitFor(() => {
       expect(mockNotification).toHaveBeenCalledTimes(1);
       expect(mockNotification).toHaveBeenCalledWith(
-        'PlannerMate',
+        APP_NAME,
         expect.objectContaining({
           body: 'Bạn có 0 việc quá hạn, 0 ngày quá tải, và 1 việc cần xử lý.',
         })
@@ -166,7 +167,7 @@ describe('useDesktopNotification hook (D-09, D-12, NOTIF-07, TAURI-NOTIF-DESKTOP
     await waitFor(() => {
       expect(mockNotification).toHaveBeenCalledTimes(1);
       expect(mockNotification).toHaveBeenCalledWith(
-        'PlannerMate',
+        APP_NAME,
         expect.objectContaining({
           requireInteraction: false,
         })

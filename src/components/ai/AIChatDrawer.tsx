@@ -62,6 +62,7 @@ import { AIDebugModal } from './AIDebugModal';
 import { AITaskPlannerInstructionsModal } from './AITaskPlannerInstructionsModal';
 import { McpSettingsModal } from './McpSettingsModal';
 import { aiDebugService } from '../../services/ai/aiDebugService';
+import { APP_NAME } from '../../constants/app';
 import { useAIChat } from '../../context/AIChatContext';
 import { openAiPopout } from '../../utils/aiPopout';
 import {
@@ -633,7 +634,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       console.warn('[AIChatDrawer] MCP instruction resolution error:', err);
     }
 
-    const systemPromptContent = `You are an expert AI assistant embedded inside PlannerMate.
+    const systemPromptContent = `You are an expert AI assistant embedded inside ${APP_NAME}.
 Current Date: ${todayStr} (${dayName}). Time: ${timeStr}.
 
 CRITICAL ANTI-HALLUCINATION RULES:
@@ -936,7 +937,7 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
           const trimmed = fullResponse.trim();
           const snippet = trimmed.slice(0, 120);
           void sendDesktopNotification({
-            title: 'PlannerMate AI',
+            title: `${APP_NAME} AI`,
             body: snippet + (trimmed.length > 120 ? '...' : ''),
             tag: 'ai-turn-finished',
           });

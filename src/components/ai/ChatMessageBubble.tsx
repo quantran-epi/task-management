@@ -18,6 +18,7 @@ import {
   FileMarkdownOutlined,
 } from '@ant-design/icons';
 import type { ChatMessage } from '../../types/models';
+import { APP_NAME, APP_SLUG } from '../../constants/app';
 import { renderSafeMarkdown } from '../../utils/markdown';
 import { exportContentAsFile, type ExportFormat } from '../../utils/fileExport';
 import { exportPresentationAsFile } from '../../utils/pptxExport';
@@ -226,7 +227,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
           .slice(0, 40);
       }
       if (!baseName) {
-        baseName = `plannermate-ai-${new Date().toISOString().slice(0, 10)}`;
+        baseName = `${APP_SLUG}-ai-${new Date().toISOString().slice(0, 10)}`;
       }
 
       if (format === 'pptx') {
@@ -356,7 +357,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
                 {streamingStatus || 'Đang suy nghĩ câu trả lời...'}
               </Text>
               <Text type="secondary" style={{ fontSize: 11 }}>
-                {streamingStatus ? 'PlannerMate AI Harness' : 'Đang xử lý qua 9router...'}
+                {streamingStatus ? `${APP_NAME} AI Harness` : 'Đang xử lý qua 9router...'}
               </Text>
             </div>
           </div>

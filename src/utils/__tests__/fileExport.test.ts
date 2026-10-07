@@ -8,6 +8,7 @@ import {
   generateCsvBlob,
   downloadBlob,
 } from '../fileExport';
+import { APP_NAME } from '../../constants/app';
 
 describe('fileExport', () => {
   beforeEach(() => {
@@ -112,7 +113,7 @@ This is an introduction paragraph with **bold text** and *italic words*.
   describe('generateXlsxBlob', () => {
     it('generates valid uncompressed OpenXML Excel ZIP with PK header from markdown table', async () => {
       const table = `| Project | Estimate | Hours |
-| PlannerMate | 100 | 45 |
+| ${APP_NAME} | 100 | 45 |
 | Website | 50 | 20 |`;
 
       const blob = generateXlsxBlob(table, 'Workload');
@@ -131,7 +132,7 @@ This is an introduction paragraph with **bold text** and *italic words*.
       expect(text).toContain('[Content_Types].xml');
       expect(text).toContain('xl/workbook.xml');
       expect(text).toContain('xl/worksheets/sheet1.xml');
-      expect(text).toContain('PlannerMate');
+      expect(text).toContain(APP_NAME);
       expect(text).toContain('Website');
     });
 
