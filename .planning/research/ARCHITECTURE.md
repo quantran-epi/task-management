@@ -1,8 +1,8 @@
-# Architecture Research: Banking IT Enhancements & Jira Integration
+# Architecture Research: Hybrid GraphRAG Knowledge Assistant (v1.2 MVP)
 
-**Domain:** Personal offline-first task & workload planner (Banking IT development environment / Jira Cloud)  
-**Researched:** 2026-09-27  
-**Confidence:** HIGH (verified against Dexie v4 indexing, Jira Cloud REST API v3, Web Crypto, and existing v1.0 architecture)
+**Domain:** Offline-first personal task & workload planner with hybrid GraphRAG technical assistant  
+**Researched:** 2026-10-07  
+**Overall Confidence:** HIGH (verified against PlannerMate codebase, Tauri Rust layer, Dexie IndexedDB, and sample pilot corpus `60000006-SHB-Credit-calculations`)
 
 ---
 
@@ -10,467 +10,410 @@
 
 ### System Overview
 
-Milestone v1.1 builds strictly upon the existing v1.0 offline-first, client-only architecture. The working data store remains IndexedDB via Dexie.js; no backend server is introduced. New integrations (Jira Cloud REST API) and capabilities (Banking IT fields, date-range search, analytics) fit into existing repository, context, and service layers.
+Milestone v1.2 introduces an **optional, non-blocking Knowledge Server** alongside Neo4j to enrich the existing PlannerMate React/Tauri app.
+Canonical source of truth remains the human-edited Markdown files in `docs/` and IndexedDB notes.
+Graph and vector indexes are purely derived, disposable, and rebuildable.
+When the knowledge server or Neo4j is offline, PlannerMate degrades gracefully to local client-side BM25 search and local AI tools.
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│                               Presentation Layer (React 19 + Ant Design 6)              │
-│  ┌───────────────────────┐ ┌──────────────────────┐ ┌─────────────────────────────────┐ │
-│  │  Tasks & Projects UI  │ │ Date-Range Search Bar│ │ Analytics Dashboard Views       │ │
-│  │  (Ops Owner / BA Tags)│ │ (Range + Filters)    │ │ (Burndown, Trends, Allocation)  │ │
-│  └───────────┬───────────┘ └──────────┬───────────┘ └────────────────┬────────────────┘ │
-│              │                        │                              │                  │
-│  ┌───────────▼────────────────────────▼──────────────────────────────▼────────────────┐ │
-│  │  Jira UI Components (JiraConfigCard, JiraIssueModal, JiraTransitionSyncModal)       │ │
-│  └────────────────────────────────────┬───────────────────────────────────────────────┘ │
-└───────────────────────────────────────┼─────────────────────────────────────────────────┘
-                                        │
-┌───────────────────────────────────────▼─────────────────────────────────────────────────┐
-│                           Context & State Layer (React Context)                         │
-│  ┌─────────────────────────────────┐  ┌──────────────────────────────────────────────┐  │
-│  │ GitHubAuthContext (Session PAT) │  │ JiraAuthContext [NEW] (Session API Token)    │  │
-│  └─────────────────────────────────┘  └──────────────────────────────────────────────┘  │
-│  ┌───────────────────────────────────────────────────────────────────────────────────┐  │
-│  │ Dexie live query subscriptions (useLiveQuery) + TaskFilterState                   │  │
-│  └───────────────────────────────────────────────────────────────────────────────────┘  │
-└───────────────────────────────────────┬─────────────────────────────────────────────────┘
-                                        │
-┌───────────────────────────────────────▼─────────────────────────────────────────────────┐
-│                        Application & Service Layer (Pure TypeScript)                    │
-│  ┌────────────────────────┐ ┌──────────────────────┐ ┌────────────────────────────────┐ │
-│  │ JiraClientService [NEW]│ │ SearchFilterService  │ │ AnalyticsEngine [NEW]          │ │
-│  │ (Auth, Proxy, ADF, Err)│ │ (Multi-criteria Date)│ │ (Burndown, Velocity, Ops/BA)   │ │
-│  └───────────┬────────────┘ └──────────┬───────────┘ └────────────────┬───────────────┘ │
-│              │                         │                              │                 │
-│  ┌───────────▼────────────┐ ┌──────────▼───────────┐                  │                 │
-│  │ GitHubSyncService (v1) │ │ BackupService (v2)   │                  │                 │
-│  └────────────────────────┘ └──────────────────────┘                  │                 │
-└───────────────────────────────────────┬───────────────────────────────┼─────────────────┘
-                                        │                               │
-┌───────────────────────────────────────▼───────────────────────────────▼─────────────────┐
-│                        Data & Persistence Layer (Dexie IndexedDB V2)                    │
-│  ┌───────────────────────────────────────────────────────────────────────────────────┐  │
-│  │ Tables: projects, milestones, tasks, capacityRules, capacityOverrides,            │  │
-│  │         plannedAllocations, settings, backupMetadata                              │  │
-│  │ Indexes: *opsOwner, *businessAnalyst, actualStartDate, actualEndDate, jiraIssueKey │  │
-│  └───────────────────────────────────────────────────────────────────────────────────┘  │
-└───────────────────────────────────────┬─────────────────────────────────────────────────┘
-                                        │
-┌───────────────────────────────────────▼─────────────────────────────────────────────────┐
-│                               External Boundaries                                       │
-│  ┌──────────────────────────────────────────┐ ┌──────────────────────────────────────┐  │
-│  │ Jira Cloud REST API v3                   │ │ GitHub Contents API                  │  │
-│  │ (Direct or via User-Configured CORS Proxy)│ │ (AES-GCM Encrypted Backup Artifact)  │  │
-│  └──────────────────────────────────────────┘ └──────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                        PlannerMate UI Layer (React 19 + Ant Design 6)                  │
+│  ┌───────────────────────┐ ┌──────────────────────┐ ┌────────────────────────────────┐ │
+│  │  AIChatDrawer / Popout│ │ DocEditorPane / Notes│ │  Knowledge Server Config Card  │ │
+│  │  (Citations & Paths)  │ │ (Canonical Markdown) │ │  (Health, Sync, Rebuild)       │ │
+│  └───────────┬───────────┘ └──────────┬───────────┘ └────────────────┬───────────────┘ │
+└──────────────┼────────────────────────┼──────────────────────────────┼─────────────────┘
+               │                        │                              │
+┌──────────────▼────────────────────────▼──────────────────────────────▼─────────────────┐
+│              Client Application & Proxy Boundary (IndexedDB / Tauri Rust)              │
+│  ┌─────────────────────────────────┐  ┌──────────────────────────────────────────────┐ │
+│  │ Dexie IndexedDB (Local Primary) │  │ Fallback: Local BM25 Engine (bm25.ts)        │ │
+│  │ notes, tasks, settings, chat    │  │ client-side keyword search over docs         │ │
+│  └─────────────────────────────────┘  └──────────────────────────────────────────────┘ │
+│  ┌───────────────────────────────────────────────────────────────────────────────────┐ │
+│  │ Tauri IPC Proxy (`knowledge_proxy_request`, `graphiti_mcp_request`)               │ │
+│  │ - Preserves browser CORS isolation & credentials in OS keyring                    │ │
+│  │ - Health-checks optional knowledge endpoint (default: http://localhost:8080)      │ │
+│  └────────────────────────────────────┬──────────────────────────────────────────────┘ │
+└───────────────────────────────────────┼────────────────────────────────────────────────┘
+                                        │ HTTP REST / SSE (Optional)
+┌───────────────────────────────────────▼────────────────────────────────────────────────┐
+│               Optional Knowledge Server (FastAPI / Node / Rust Daemon)                 │
+│  ┌──────────────────────────────────────────────────────────────────────────────────┐  │
+│  │ Ingestion & Extraction Pipeline                                                  │  │
+│  │ ┌─────────────────────────┐  ┌──────────────────────┐  ┌──────────────────────┐  │  │
+│  │ │ Stage 1: Deterministic  │  │ Stage 2: Claude LLM  │  │ Stage 3: Resolution  │  │  │
+│  │ │ Markdown AST Extractor  │─►│ Structured Extractor │─►│ & Evidence Packaging │  │  │
+│  │ │ (Tables, SQL, Headers)  │  │ (Inferred relations) │  │ (Composite ID & Prov)│  │  │
+│  │ └─────────────────────────┘  └──────────────────────┘  └──────────────────────┘  │  │
+│  └────────────────────────────────────┬─────────────────────────────────────────────┘  │
+│  ┌────────────────────────────────────▼─────────────────────────────────────────────┐  │
+│  │ Hybrid Retrieval Coordinator (RRF: Reciprocal Rank Fusion)                       │  │
+│  │ ┌──────────────────────┐  ┌──────────────────────┐  ┌─────────────────────────┐  │  │
+│  │ │ 1. BM25 / Fulltext   │  │ 2. Vector Embedding  │  │ 3. Bounded Graph Walker │  │  │
+│  │ │ (Tokens & Acronyms)  │  │ (Dense Cosine Top-K) │  │ (Cypher 1-3 Hops Paths) │  │  │
+│  │ └──────────┬───────────┘  └──────────┬───────────┘  └────────────┬────────────┘  │  │
+│  └────────────┼─────────────────────────┼───────────────────────────┼───────────────┘  │
+└───────────────┼─────────────────────────┼───────────────────────────┼──────────────────┘
+                │                         │                           │
+┌───────────────▼─────────────────────────▼───────────────────────────▼──────────────────┐
+│                             Storage Layer (Disposable / Rebuildable)                   │
+│  ┌───────────────────────────────────────────────────────────────────────────────────┐ │
+│  │ Neo4j Community / AuraDB (Bolt protocol)                                          │ │
+│  │ Nodes: Process, Container, CycleType, Table, Procedure, Session, Event            │ │
+│  │ Edges: CONTAINS, EXECUTES, FIRES_CYCLE, DRAINS, WRITES, POSTS, MAPS_TO            │ │
+│  │ Indexes: Fulltext, Vector, Composite Uniqueness Constraints                       │ │
+│  └───────────────────────────────────────────────────────────────────────────────────┘ │
+└────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### Component Responsibilities (New vs. Modified)
+### Component Responsibilities
 
-| Component | Status | Responsibility | Implementation Details |
-|-----------|--------|----------------|------------------------|
-| `src/types/models.ts` | **MODIFIED** | Add Banking IT ownership fields and Jira metadata to domain models | `opsOwner?: string[]`, `businessAnalyst?: string[]` on `Project`, `Milestone`, `Task`. Add `jiraIssueKey?: string`, `jiraIssueUrl?: string`, `jiraSyncStatus?: 'synced' \| 'pending' \| 'error'`, `jiraLastSyncedAt?: string` on `Task`. |
-| `src/db/schema.ts` | **MODIFIED** | Define `SCHEMA_V2` with multi-entry and date-range indexes | Add `*opsOwner`, `*businessAnalyst` to projects, milestones, tasks. Add `actualStartDate`, `actualEndDate`, `jiraIssueKey` to tasks. |
-| `src/db/index.ts` | **MODIFIED** | Register Dexie schema version 2 and safe migration step | Call `this.version(2).stores(SCHEMA_V2).upgrade(...)`. Upgrade callback safely guarantees undefined arrays become empty or preserve existing data without rewrite. |
-| `src/validation/schemas.ts` | **MODIFIED** | Enforce input constraints on new fields | Add `opsOwner` and `businessAnalyst` as `z.array(z.string().trim().min(1)).optional().default([])`. Validate Jira keys with regex `^[A-Z][A-Z0-9]+-[0-9]+$`. |
-| `src/validation/backupSchemas.ts` | **MODIFIED** | Ensure export/import validates V2 structures | Accept schemaVersion 1 and 2, migrating v1 records by adding default empty arrays for opsOwner/BA. |
-| `src/context/JiraAuthContext.tsx` | **NEW** | In-memory session store for Jira API token | Protects secret token in RAM. Reads non-sensitive config (host domain, email, proxy URL) from Dexie `settings` table. |
-| `src/services/jira/jiraApi.ts` | **NEW** | Low-level HTTP client with CORS proxy routing and token sanitization | Formats Basic Auth header (`email:apiToken` in base64), routes requests through CORS proxy when configured, sanitizes error logs. |
-| `src/services/jira/jiraSyncService.ts` | **NEW** | Jira business workflows | Tests credentials (`/myself`), creates issue from task (`POST /rest/api/3/issue`), fetches available transitions, pushes transition update. |
-| `src/services/jira/adfConverter.ts` | **NEW** | Convert plain text / Markdown task notes to Atlassian Document Format (ADF) | Required for Jira Cloud API v3 `description` field. |
-| `src/utils/filter.ts` | **MODIFIED** | Multi-criteria task search engine | Extends `TaskFilterState` with date-range filters (`dateRange: [string, string]`, `dateRangeType: 'execution' \| 'planned' \| 'deadline'`), Ops Owner, and BA filters. |
-| `src/db/repositories/taskRepo.ts` | **MODIFIED** | Enhanced task queries | Add repository helpers for searching by date range, multi-entry Ops Owner, and BA. |
-| `src/utils/analytics.ts` | **NEW** | Pure calculation engine for dashboard metrics | Computes milestone burndown datasets, completion velocity, status distribution, and workload allocation per Ops Owner & BA. |
-| `src/views/AnalyticsView.tsx` | **NEW** | Analytics dashboard screen | Visualizes burndown charts, completion trends, and team allocation tables/progress bars. |
-| `src/components/jira/` | **NEW** | UI cards and modals for Jira | `JiraConfigCard.tsx` in SettingsView, `JiraLinkModal.tsx` in TaskDrawer, `JiraTransitionModal.tsx`. |
+| Component | Responsibility | Implementation Details |
+|-----------|----------------|------------------------|
+| `src/services/knowledge/knowledgeClient.ts` | Client HTTP gateway with offline fallback | Connects to Knowledge Server via Tauri proxy or browser fetch; detects offline state and switches to local BM25. |
+| `src/services/ai/aiTools.ts` | LLM tool integration | Extends `AI_DATABASE_TOOLS` with `query_knowledge_graph` and `search_knowledge_hybrid`. |
+| `src/components/ai/AIChatDrawer.tsx` | UI citation & path rendering | Displays citations with file, section, line numbers; renders multi-hop graph paths in expandable timeline. |
+| `KnowledgeServer: Ingestion Pipeline` | Markdown parsing & entity extraction | Runs Stage 1 deterministic AST extraction; calls Stage 2 LLM only for ambiguities; resolves entities. |
+| `KnowledgeServer: Hybrid Retrieval Engine` | Query execution & result ranking | Coordinates lexical BM25, semantic vector search, and Cypher graph traversal; fuses scores via RRF. |
+| `Neo4j Store` | Graph topology & vector embeddings | Stores nodes with composite identities (`PRC_PROCESS:60000006`), typed edges, evidence tags (`observed` vs `inferred`). |
 
 ---
 
 ## Recommended Project Structure
 
 ```
-src/
-├── context/
-│   ├── FormGuardContext.tsx          # Existing: Unsaved form dirty tracking
-│   ├── GitHubAuthContext.tsx         # Existing: In-memory PAT & passphrase
-│   ├── JiraAuthContext.tsx           # [NEW] In-memory Jira API token & config
-│   └── ServiceWorkerContext.tsx      # Existing: PWA SW update notifications
-├── db/
-│   ├── index.ts                      # [MODIFIED] Version 2 registration & upgrade
-│   ├── schema.ts                     # [MODIFIED] SCHEMA_V1 and SCHEMA_V2 definitions
-│   ├── seeds.ts                      # [MODIFIED] Seed initial capacity & settings
-│   └── repositories/
-│       ├── allocationRepo.ts         # Existing: Planned allocations
-│       ├── capacityRepo.ts           # Existing: Weekly capacity & overrides
-│       ├── cascadeRepo.ts            # Existing: Cascading deletions
-│       ├── milestoneRepo.ts          # [MODIFIED] Milestone CRUD with opsOwner/BA
-│       ├── projectRepo.ts            # [MODIFIED] Project CRUD with opsOwner/BA
-│       └── taskRepo.ts               # [MODIFIED] Task CRUD with opsOwner/BA/Jira
-├── services/
-│   ├── backup/                       # Existing: Snapshot, validation, export/import
-│   ├── crypto/                       # Existing: Web Crypto PBKDF2 + AES-GCM
-│   ├── github/                       # Existing: Contents API backup sync
-│   └── jira/                         # [NEW] Jira Cloud Integration
-│       ├── index.ts                  # Public service exports
-│       ├── types.ts                  # Jira config, issue, transition, ADF types
-│       ├── jiraApi.ts                # Base HTTP fetcher with proxy routing
-│       ├── adfConverter.ts           # Plain text / Markdown to Jira ADF
-│       └── jiraSyncService.ts        # Create issue, fetch/apply transitions
-├── types/
-│   ├── backup.ts                     # [MODIFIED] Support V2 schema
-│   ├── dashboard.ts                  # Existing: Dashboard stats
-│   ├── analytics.ts                  # [NEW] Burndown, trend, and allocation types
-│   ├── models.ts                     # [MODIFIED] Project, Milestone, Task V2 models
-│   └── navigation.ts                 # [MODIFIED] Add 'analytics' view route
-├── utils/
-│   ├── analytics.ts                  # [NEW] Pure calculation engine for metrics
-│   ├── filter.ts                     # [MODIFIED] Multi-criteria date-range filter
-│   ├── date.ts                       # Existing: dayjs helpers & YYYY-MM-DD tools
-│   └── uuid.ts                       # Existing: crypto.randomUUID wrappers
-├── views/
-│   ├── DashboardView.tsx             # Existing: Day & forecast dashboard
-│   ├── AnalyticsView.tsx             # [NEW] Enhanced Analytics & Workload views
-│   ├── TasksView.tsx                 # [MODIFIED] Integrated with Date-Range search
-│   ├── ProjectsView.tsx              # [MODIFIED] Ops Owner & BA display
-│   ├── PlannerView.tsx               # Existing: Daily capacity planner
-│   └── SettingsView.tsx              # [MODIFIED] Added JiraConfigCard
-└── components/
-    ├── analytics/                    # [NEW] Analytics view widgets
-    │   ├── BurndownChartCard.tsx     # Milestone burndown visualization
-    │   ├── CompletionTrendCard.tsx   # Weekly/monthly completion velocity
-    │   └── WorkloadAllocationCard.tsx# Ops Owner & BA allocation matrix
-    ├── jira/                         # [NEW] Jira UI components
-    │   ├── JiraConfigCard.tsx        # Settings connection & proxy configuration
-    │   ├── JiraIssueLinkModal.tsx    # Create issue from task or link existing key
-    │   └── JiraStatusSyncModal.tsx   # Transition Jira issue status from Task UI
-    └── tasks/
-        ├── TaskFilterBar.tsx         # [MODIFIED] DateRangePicker, Ops/BA multi-select
-        └── TaskDrawer.tsx            # [MODIFIED] Ops Owner/BA tags & Jira badge
+task-management/
+├── docs/                                    # Canonical Markdown documentation
+│   └── sample-markdown-flow/
+│       └── 60000006-SHB-Credit-calculations/
+├── src/                                     # PlannerMate React frontend
+│   ├── components/
+│   │   ├── ai/
+│   │   │   ├── AIChatDrawer.tsx             # Modified: render citations & graph path cards
+│   │   │   └── KnowledgeGraphPathView.tsx   # New: visual step-by-step path renderer
+│   │   └── settings/
+│   │       └── KnowledgeServerConfigCard.tsx# New: configure endpoint, index stats, rebuild button
+│   ├── services/
+│   │   └── knowledge/
+│   │       ├── types.ts                     # Ingestion, retrieval, citation, and graph DTOs
+│   │       ├── knowledgeClient.ts           # Hybrid retrieval client + fallback logic
+│   │       └── evidenceParser.ts            # Parses citations & provenance tokens for chat
+│   └── utils/
+│       └── bm25.ts                          # Existing offline BM25 keyword fallback
+├── src-tauri/                               # Tauri desktop layer
+│   └── src/
+│       ├── lib.rs                           # Register knowledge commands
+│       └── knowledge_proxy.rs               # Safe HTTP proxy for localhost:8080 knowledge server
+└── knowledge-server/                        # Optional GraphRAG backend (daemon)
+    ├── app/
+    │   ├── main.py                          # FastAPI application entrypoint
+    │   ├── config.py                        # Environment: NEO4J_URI, CLAUDE_API_KEY, CORPUS_PATH
+    │   ├── ingestion/
+    │   │   ├── parser.py                    # AST parser for Markdown tables, lists, and headers
+    │   │   ├── deterministic.py             # Rule-based extractors for PRC_*, CYTP*, tables
+    │   │   ├── llm_extractor.py             # Claude structured prompt for inferred relationships
+    │   │   └── resolver.py                  # Composite ID disambiguation & deduplication
+    │   ├── graph/
+    │   │   ├── neo4j_client.py              # Neo4j Bolt driver & session pools
+    │   │   ├── schema.py                    # Constraints, fulltext, and vector indexes
+    │   │   └── queries.py                   # Bounded Cypher traversals (1-3 hops)
+    │   ├── retrieval/
+    │   │   ├── hybrid_search.py             # Multi-source coordinator & RRF re-ranking
+    │   │   ├── vector_search.py             # Chunk embedding & cosine similarity
+    │   │   └── lexical_search.py            # Local BM25 over markdown sections
+    │   └── synthesis/
+    │       └── evidence_packager.py         # Builds context with provenance tags & conflict warnings
+    └── tests/
+        └── test_benchmark_corpus.py         # Benchmark suite verifying 3-hop multi-hop retrieval
 ```
+
+### Structure Rationale
+
+- `docs/` remains canonical and independent of application code.
+- `knowledge-server/` is self-contained. It can run as a local background daemon, Docker container, or remote server.
+- `src-tauri/` provides the network bridge so web views in desktop mode avoid CORS errors when calling local services.
+- `src/services/knowledge/` sits parallel to `src/services/ai/` and `src/services/jira/`, maintaining the modular pattern of PlannerMate.
 
 ---
 
 ## Architectural Patterns
 
-### Pattern 1: Multi-Entry IndexedDB Array Indexing (`*opsOwner`, `*businessAnalyst`)
+### Pattern 1: Three-Stage Extraction Pipeline (Deterministic First, LLM Second)
 
-**What:** Dexie multi-entry index creates individual index keys for every element inside an array. An asterisk prefix `*` denotes a multi-entry index in Dexie schema definitions.  
-**When to use:** When filtering projects, milestones, or tasks where an item can have multiple owners or BAs (e.g. `['Alice', 'Bob']`).  
-**Trade-offs:** Fast single-value lookup across array fields (`where('opsOwner').equals('Alice')`) without full-table scans. Slight storage overhead for secondary B-tree keys in IndexedDB.  
+**What:** Extract all structural and syntactical facts directly from Markdown AST and regex rules (tables, call chains, package names, SQL blocks) before sending remaining ambiguous text to Claude for inference.  
+**When to use:** Ingesting structured banking IT documentation like `60000006-SHB-Credit-calculations`.  
+**Trade-offs:** Drastically cuts token costs and latency; eliminates hallucination of table names, IDs, and cycle codes; retains strict deterministic provenance.
 
-**Example:**
-```typescript
-// src/db/schema.ts
-export const SCHEMA_V2 = {
-  projects: 'id, status, deadline, *opsOwner, *businessAnalyst',
-  milestones: 'id, projectId, status, deadline, *opsOwner, *businessAnalyst',
-  tasks: 'id, projectId, milestoneId, status, priority, deadline, actualStartDate, actualEndDate, *opsOwner, *businessAnalyst, jiraIssueKey',
-  capacityRules: 'id, &dayOfWeek',
-  capacityOverrides: 'id, date',
-  plannedAllocations: 'id, taskId, date',
-  settings: 'key',
-  backupMetadata: 'id, timestamp',
-} as const;
-
-// src/db/index.ts
-this.version(2)
-  .stores(SCHEMA_V2)
-  .upgrade((tx) => {
-    // Non-destructive: Dexie handles schema additions automatically;
-    // existing records without opsOwner/businessAnalyst remain valid undefined/null
-  });
+```
+Markdown Document
+      │
+      ├─► AST / Regex Parser (Deterministic)
+      │      ├── Tables (PRC_CONTAINER binds 10..80, 200, 210)
+      │      ├── Call Chains (ContainerLauncher -> InternalProcessExecutor -> PL/SQL)
+      │      ├── Data Objects (FCL_CYCLE_COUNTER, EVT_EVENT_OBJECT, CRD_INVOICE)
+      │      └── Cycle Types (CYTP1001..CYTP1016)
+      │      └── Status Codes (EVST0001, OPST0400, PRSR0002)
+      │      └── Evidence Class: OBSERVED
+      │
+      └─► Claude Structured Extraction (Ambiguities / Descriptions)
+             ├── Business intent & conditions ("why CYTP1003 has null handler")
+             ├── Edge nuances across prose paragraphs
+             └── Evidence Class: INFERRED (marked with justification)
 ```
 
----
+### Pattern 2: Collision-Safe Composite Graph Identity
 
-### Pattern 2: Browser-to-Jira Proxy Router with In-Memory Credential Isolation
+**What:** Primary keys in Neo4j must combine namespace, type, and identifier (`<NAMESPACE>:<TYPE>:<ID>`).  
+**When to use:** Whenever entity IDs can collide across database schemas or configuration domains.  
+**Example:** In scheduled process `60000006`, `PRC_PROCESS.ID = 60000006` represents the container process, while `PRC_CONTAINER.ID = 60000006` represents child bind 20 (`CYTP1002`). Without composite keys, these two distinct entities would merge into a single node.
 
-**What:** Direct browser calls from GitHub Pages (`https://<user>.github.io`) to Jira Cloud (`https://<domain>.atlassian.net`) fail due to CORS preflight headers omitted by Atlassian Cloud. The client routes requests through a user-configured CORS proxy (e.g. Cloudflare Worker or reverse proxy) if specified, while sensitive API tokens remain strictly in RAM.  
-**When to use:** All Jira Cloud REST API v3 operations initiated from the client application.  
-**Trade-offs:** Requires user to provide/configure a proxy endpoint for browser use, but avoids backend infrastructure and complies with strict no-server and zero-leakage security constraints.  
+```cypher
+// Neo4j Node Creation Pattern
+MERGE (p:Process {compositeId: "SHB:PRC_PROCESS:60000006"})
+SET p.id = "60000006",
+    p.name = "SHB - Credit calculations",
+    p.isContainer = true,
+    p.sourceDoc = "01-wiring.md",
+    p.sourceLines = [5, 9];
 
-**Example:**
-```typescript
-// src/services/jira/jiraApi.ts
-export interface JiraRequestConfig {
-  domain: string;        // e.g. "mycompany.atlassian.net"
-  email: string;         // user email
-  apiToken: string;      // in-memory only
-  corsProxyUrl?: string; // e.g. "https://my-proxy.workers.dev/?url="
-}
+MERGE (b:ContainerBind {compositeId: "SHB:PRC_CONTAINER:60000006"})
+SET b.bindId = "60000006",
+    b.execOrder = 20,
+    b.cycleType = "CYTP1002",
+    b.sourceDoc = "01-wiring.md",
+    b.sourceLines = [23, 23];
 
-export function buildJiraUrl(path: string, config: JiraRequestConfig): string {
-  const cleanDomain = config.domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
-  const targetUrl = `https://${cleanDomain}/rest/api/3/${path.replace(/^\/+/, '')}`;
-  
-  if (config.corsProxyUrl && config.corsProxyUrl.trim().length > 0) {
-    const proxy = config.corsProxyUrl.trim();
-    return proxy.includes('?') 
-      ? `${proxy}${encodeURIComponent(targetUrl)}`
-      : `${proxy.replace(/\/+$/, '')}/${targetUrl}`;
-  }
-  return targetUrl;
-}
-
-export async function jiraFetch<T>(
-  path: string,
-  options: RequestInit,
-  config: JiraRequestConfig
-): Promise<T> {
-  const url = buildJiraUrl(path, config);
-  const authHeader = `Basic ${btoa(`${config.email}:${config.apiToken}`)}`;
-  
-  const headers = new Headers(options.headers || {});
-  headers.set('Authorization', authHeader);
-  headers.set('Accept', 'application/json');
-  headers.set('Content-Type', 'application/json');
-
-  try {
-    const response = await fetch(url, { ...options, headers });
-    if (!response.ok) {
-      const errorBody = await response.json().catch(() => ({}));
-      const message = errorBody.errorMessages?.join(', ') ||
-                      Object.values(errorBody.errors || {}).join(', ') ||
-                      `Jira HTTP ${response.status}: ${response.statusText}`;
-      throw new Error(sanitizeJiraError(message, config.apiToken));
-    }
-    return (await response.json()) as T;
-  } catch (err: unknown) {
-    if (err instanceof Error) {
-      err.message = sanitizeJiraError(err.message, config.apiToken);
-      throw err;
-    }
-    throw new Error('Jira connection failed');
-  }
-}
+MERGE (p)-[:HAS_BIND {order: 20}]->(b);
 ```
 
----
+### Pattern 3: Bounded Cypher Graph Walker with Multi-Hop Depth Limiter
 
-### Pattern 3: Two-Phase Date-Range Query Engine (Dexie Indexed + In-Memory Pipeline)
+**What:** Graph queries must be bounded to a deterministic depth (1 to 3 hops) with cycle detection, path pruning, and node caps to prevent memory blowups on cyclic process dependencies.  
+**When to use:** Multi-hop queries such as "Trace the path from due counter to operation posting".  
+**Trade-offs:** Guarantees response times under 50ms while answering deep dependency questions.
 
-**What:** Date-range search across tasks supports three modes:
-1. `deadline`: uses indexed `tasks.deadline`.
-2. `execution`: uses indexed `tasks.actualStartDate` and `tasks.actualEndDate`.
-3. `planned`: planned dates exist in the `plannedAllocations` table (`taskId`, `date`). The query first fetches matching `taskId`s from `plannedAllocations.where('date').between(...)`, then filters tasks by ID.  
-**When to use:** Date-range filtering in `TaskFilterBar` and `TasksView`.  
-**Trade-offs:** Avoids denormalizing allocation dates onto task records while maintaining sub-millisecond query performance for personal dataset sizes (< 10,000 records).  
-
-**Example:**
-```typescript
-// Querying tasks planned in date range [startStr, endStr]
-export async function getTaskIdsWithPlannedAllocationsInRange(
-  startDate: string,
-  endDate: string,
-  db: TaskPlannerDatabase
-): Promise<Set<string>> {
-  const allocations = await db.plannedAllocations
-    .where('date')
-    .between(startDate, endDate, true, true)
-    .toArray();
-  return new Set(allocations.map((a) => a.taskId));
-}
+```cypher
+// Bounded traversal finding path between entities up to 3 hops
+MATCH path = (start:Process {compositeId: $startId})-[r:CALLS|FIRES_CYCLE|WRITES|POSTS*1..3]->(target)
+WHERE NOT target:Session // Exclude run-specific high-cardinality noise
+RETURN path,
+       nodes(path) AS entities,
+       relationships(path) AS rels,
+       [rel IN relationships(path) | {type: type(rel), provenance: rel.provenance, class: rel.evidenceClass}] AS evidence
+LIMIT 25;
 ```
 
----
+### Pattern 4: Reciprocal Rank Fusion (RRF) Hybrid Retrieval
 
-### Pattern 4: Pure Functional Analytics Aggregation Projections
-
-**What:** Analytics computations (milestone burndown, completion velocity, status distribution, Ops Owner / BA workload hours) are pure TypeScript calculation functions decoupled from UI components and database writes.  
-**When to use:** Rendering `AnalyticsView` without duplicating calculation logic or maintaining stale cached aggregates.  
-**Trade-offs:** Guarantees absolute consistency with IndexedDB without data drift. Calculations on 5,000 tasks take < 15ms in modern V8.  
-
-**Example:**
-```typescript
-// src/utils/analytics.ts
-export interface OwnerWorkload {
-  name: string;
-  role: 'opsOwner' | 'businessAnalyst';
-  totalTasks: number;
-  activeTasks: number;
-  completedTasks: number;
-  overdueTasks: number;
-  totalPlannedMinutes: number;
-}
-
-export function computeOwnerWorkloadMatrix(
-  tasks: Task[],
-  allocations: PlannedAllocation[],
-  todayStr: string
-): { opsOwners: OwnerWorkload[]; bas: OwnerWorkload[] } {
-  // Pure aggregation mapping tasks to allocation hours and status
-  // ...
-}
-```
+**What:** Combine rank positions from lexical search (BM25), dense vector embeddings, and graph neighborhood lookups using formula:
+$$\text{RRF Score}(d) = \sum_{m \in M} \frac{1}{k + \text{rank}_m(d)} \quad (k = 60)$$
+**When to use:** Resolving user queries that combine specific codes (e.g. `CYTP1001`, `CRD_INVOICE`) with broad natural language concepts (e.g. "what happens during EOD credit billing?").
 
 ---
 
 ## Data Flow
 
-### 1. Jira Issue Creation & Status Transition Flow
+### 1. Ingestion & Indexing Flow
 
 ```
-[User clicks "Push to Jira" in TaskDrawer]
-    │
-    ▼
-[JiraAuthContext provides in-memory API token + JiraConfig]
-    │
-    ▼
-[adfConverter maps Task.description/notes to Atlassian Document Format]
-    │
-    ▼
-[jiraApi dispatches POST /rest/api/3/issue via CORS Proxy]
-    │
-    ├── (Error 401/403/CORS) ──► Sanitize error ──► Ant Design notification
-    │
-    └── (Success 201 Created) ──► Returns Jira Issue Key (e.g. "SHB-1042")
-                                     │
-                                     ▼
-                      [taskRepo.updateTask(taskId, {
-                         jiraIssueKey: 'SHB-1042',
-                         jiraIssueUrl: 'https://shb.atlassian.net/browse/SHB-1042',
-                         jiraSyncStatus: 'synced',
-                         jiraLastSyncedAt: new Date().toISOString()
-                       })]
-                                     │
-                                     ▼
-                      [Dexie commits to IndexedDB]
-                                     │
-                                     ▼
-                      [useLiveQuery automatically re-renders TaskTable / Drawer]
+[Markdown Files in docs/]
+        │
+        ▼
+[File Watcher / Manual "Rebuild Index" in PlannerMate]
+        │
+        ▼
+[Knowledge Server: Section Chunker]
+   Splits markdown by headings (H1..H3) with file path, line offsets, heading slug
+        │
+        ▼
+[Stage 1: Deterministic Extractor]
+   Regex/AST matches: tables, procedures, bind IDs, cycle codes, schemas
+   Nodes & edges tagged: { evidenceClass: 'observed', confidence: 1.0 }
+        │
+        ▼
+[Stage 2: Claude LLM Extractor (Conditional)]
+   Runs on descriptive paragraphs for semantic links
+   Nodes & edges tagged: { evidenceClass: 'inferred', confidence: 0.85 }
+        │
+        ▼
+[Stage 3: Composite Entity Resolver]
+   Prefixes keys: "SHB:PRC_PROCESS:60000006" vs "SHB:PRC_CONTAINER:60000006"
+        │
+        ├─────────────────────────────┬─────────────────────────────┐
+        ▼                             ▼                             ▼
+[Neo4j Graph Store]           [Vector Store / Index]       [Lexical Index]
+Merge nodes & relationships   Generate text embeddings     Index terms & acronyms
 ```
 
-### 2. Multi-Criteria Date-Range Search Flow
+### 2. Query & Answer Synthesis Flow
 
 ```
-[User selects Date Range [2026-10-01 to 2026-10-15] & Mode: "Planned"]
-    │
-    ▼
-[TaskFilterBar dispatches filter change to parent TaskFilterState]
-    │
-    ▼
-[Check dateRangeType]:
-  ├── 'deadline'   ──► Dexie task index query / in-memory filter matches
-  ├── 'execution'  ──► Filters on actualStartDate <= end && actualEndDate >= start
-  └── 'planned'    ──► Step 1: Query db.plannedAllocations.where('date').between()
-                       Step 2: Collect candidate taskIds Set
-                       Step 3: Filter loaded tasks where taskIds.has(task.id)
-    │
-    ▼
-[Secondary in-memory filters applied: Ops Owner, BA, Status, Priority, Text]
-    │
-    ▼
-[TaskTable displays matching filtered subset]
+[User in AIChatDrawer: "What does child 210 post and where did the operations come from?"]
+        │
+        ▼
+[Knowledge Client: Hybrid Query Dispatch]
+        │
+        ├── 1. BM25 search for "child 210 post operations"
+        ├── 2. Vector search on query embedding
+        └── 3. Graph search: Find node for "bind 210" / "60000017" and traverse INCOMING/OUTGOING (3 hops)
+        │
+        ▼
+[Reciprocal Rank Fusion]
+   Merge & de-duplicate top chunks and graph relationship paths
+        │
+        ▼
+[Evidence Packager]
+   Formats context prompt with explicit provenance:
+   - Fact 1: Bind 60000017 (exec_order 210) calls opr_api_process_pkg [01-wiring.md:31] (OBSERVED)
+   - Fact 2: I_PROCESS_CONTAINER=1 restricts to current session tree [03-call-chain.md:34] (OBSERVED)
+   - Fact 3: Operations born in child 200 billing (SESSION_ID) [02-data-objects.md:175] (OBSERVED)
+        │
+        ▼
+[LLM Response Generation (9router / Claude)]
+   Synthesizes answer strictly citing facts; formats citations [doc#line]; handles conflicts
+        │
+        ▼
+[AIChatDrawer]
+   Renders formatted text + interactive Citation Badges + Expandable Graph Path Viewer
+```
+
+### 3. Graceful Fallback Flow (Knowledge Server Offline)
+
+```
+[Knowledge Client: Health Check Ping / Query]
+        │
+        ├── (Knowledge Server Online) ──► Return Hybrid GraphRAG results
+        │
+        └── (Knowledge Server Offline / Unreachable)
+                │
+                ▼
+        [Fallback: Local BM25 Engine (src/utils/bm25.ts)]
+                │
+                ▼
+        [Search IndexedDB Notes & local document cache in browser memory]
+                │
+                ▼
+        [LLM Answer with Banner: "Knowledge graph server offline. Answering from local text notes only."]
+```
+
+---
+
+## Trust Boundaries & Credential Isolation
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│ BROWSER SANDBOX (PlannerMate React Client)                             │
+│ - Zero long-lived credentials stored in localStorage/IndexedDB.        │
+│ - Sensitive keys (Claude API token / 9router key) in RAM or OS Keyring.│
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ IPC (Desktop) / Direct Localhost (Web)
+┌───────────────────────────────────▼────────────────────────────────────┐
+│ TAURI RUST BACKEND                                                     │
+│ - Reads credentials securely from OS Keyring (`keyring_store`).        │
+│ - Proxies requests to localhost:8080 without exposing secrets to web.  │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ Private loopback (127.0.0.1)
+┌───────────────────────────────────▼────────────────────────────────────┐
+│ KNOWLEDGE SERVER (FastAPI Daemon)                                      │
+│ - Connects to Neo4j via internal Bolt protocol (`neo4j://localhost`).  │
+│ - Neo4j password loaded via local .env or system environment variable. │
+│ - Never exposes raw DB connection or master credentials to client.     │
+│ - Validates input against prompt injection before dispatching Cypher.  │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## Scaling Considerations
 
-| Scale | Architecture Adjustments |
-|-------|--------------------------|
-| **0 - 1,000 tasks (Current Personal Scale)** | Single-threaded Dexie queries and in-memory multi-criteria filters run in < 5ms. Direct rendering with Ant Design Table pagination is fluid. |
-| **1,000 - 10,000 tasks** | Multi-entry Dexie indexes (`*opsOwner`, `*businessAnalyst`) prevent linear table scans. Date-range queries use `plannedAllocations.between()` indexes. Analytics aggregations run in pure memoized functions (`useMemo`). |
-| **10,000+ tasks** | Offload analytics calculations (burndown simulations and allocation aggregation) to a native Web Worker to keep the UI at 60 FPS. Keep raw payloads inside IndexedDB. |
+| Metric | MVP Pilot (`60000006`) | Full Credit Subsystem (20 Containers) | Full Core Banking (500 Containers) |
+|---|---|---|---|
+| **Markdown Files** | 6 files (~1,200 lines) | ~120 files (~25,000 lines) | ~3,000 files (~600,000 lines) |
+| **Graph Nodes** | ~150 nodes | ~3,500 nodes | ~85,000 nodes |
+| **Graph Edges** | ~350 relationships | ~12,000 relationships | ~350,000 relationships |
+| **Ingestion Time** | < 2 seconds | ~30 seconds | ~10-15 minutes (parallelized) |
+| **Neo4j Footprint**| < 5 MB RAM | ~50 MB RAM | ~500 MB RAM |
+| **Traversal Latency** | < 5 ms | < 15 ms | < 45 ms (with composite indexes) |
 
-### Scaling Priorities
+### Scaling Priorities & Bottlenecks
 
-1. **First bottleneck (Date-Range Planned Allocations):** A naive loop querying `plannedAllocations` per task creates an N+1 query bottleneck.  
-   *Mitigation:* Single indexed range query on `db.plannedAllocations.where('date').between(start, end)` produces a `Set<taskId>` in one round-trip.
-2. **Second bottleneck (Analytics Aggregation on Large Datasets):** Calculating daily burndowns across hundreds of milestones on every keystroke.  
-   *Mitigation:* Wrap `computeBurndown` in React `useMemo` keyed on `[tasks, allocations, activeMilestoneId]`.
+1. **First Bottleneck: Cypher Cardinality Explosion on Run Sessions**  
+   *Risk:* Modeling individual historical execution runs (e.g. 608 runs of session `2607050000820362`) as individual graph nodes will bloat the graph with transient data.  
+   *Mitigation:* Keep the core graph structural (processes, binds, tables, cycles, parameters). Store sample run data as lightweight node properties or ephemeral test fixtures, not permanent nodes.
+2. **Second Bottleneck: LLM Ingestion Costs**  
+   *Risk:* Re-running LLM extraction over entire files whenever one line changes.  
+   *Mitigation:* Use MD5 content hashing on individual H2/H3 markdown sections. Only re-extract sections whose content hash changed. Stage 1 deterministic parser runs on 100% of files without cost.
 
 ---
 
 ## Anti-Patterns
 
-### Anti-Pattern 1: Storing Jira API Tokens in LocalStorage or IndexedDB
-**What people do:** Persisting the user's Jira API token or Basic Auth string in `localStorage` or unencrypted Dexie settings.  
-**Why it's wrong:** Violates project security principles (zero credential leakage). Any XSS or browser inspection exposes banking IT API tokens.  
-**Do this instead:** Store the token in `JiraAuthContext` in-memory state only (session RAM). Store non-sensitive configuration (domain, user email, proxy URL) in Dexie `settings` table.
+### Anti-Pattern 1: Unprefixed Surrogate Node IDs
+**What people do:** Creating nodes with `{ id: "60000006" }`.  
+**Why it's wrong:** In `60000006-SHB-Credit-calculations`, `PRC_PROCESS.ID = 60000006` is the container, while `PRC_CONTAINER.ID = 60000006` is child bind 20 (Grace period `CYTP1002`). Without prefixes, the container merges with its own child.  
+**Do this instead:** Always use collision-safe composite IDs: `PRC_PROCESS:60000006` and `PRC_CONTAINER:60000006`.
 
-### Anti-Pattern 2: Attempting Direct Jira Cloud Fetch Without Proxy Support
-**What people do:** Calling `https://company.atlassian.net/rest/api/3/...` directly from a browser app hosted on GitHub Pages.  
-**Why it's wrong:** Atlassian Cloud REST API explicitly rejects browser CORS requests with no `Access-Control-Allow-Origin` header, causing uncatchable browser network errors.  
-**Do this instead:** Support a user-configurable CORS proxy URL with transparent routing, validation, and clear troubleshooting instructions in the UI.
+### Anti-Pattern 2: Making Neo4j the Canonical Source of Truth
+**What people do:** Editing graph relationships directly in Neo4j Browser or allowing the UI to mutate Neo4j independently of Markdown.  
+**Why it's wrong:** Breaches project constraint that Markdown is human-reviewable, git-versioned, and portable. If Neo4j becomes corrupt, data is lost.  
+**Do this instead:** Treat Neo4j as an ephemeral read cache. Any correction must be committed to the Markdown documentation; a full rebuild from Markdown must reproduce the graph 100%.
 
-### Anti-Pattern 3: Sending Plain Text / Markdown Directly to Jira API v3 Description
-**What people do:** Submitting `{ description: "Task details..." }` to Jira REST API v3.  
-**Why it's wrong:** Jira API v3 requires `description` to be formatted as Atlassian Document Format (ADF) JSON structure (`{ type: "doc", version: 1, content: [...] }`). Passing a plain string causes HTTP 400 Bad Request.  
-**Do this instead:** Implement a lightweight `adfConverter.ts` that wraps text paragraphs into standard ADF blocks.
+### Anti-Pattern 3: Unbounded Deep Graph Traversals (`*1..10`)
+**What people do:** Running queries like `MATCH (a)-[*]->(b) RETURN path`.  
+**Why it's wrong:** Banking processes contain cyclical interactions (e.g., invoice creates debt -> payment applies to debt -> next invoice reads payment). Unbounded path queries cause catastrophic memory consumption or query timeouts.  
+**Do this instead:** Enforce maximum traversal bounds `*1..3` and explicitly prune high-cardinality edge types.
 
-### Anti-Pattern 4: Hardcoding Ops Owner & Business Analyst Names
-**What people do:** Creating fixed TypeScript enums for team members in banking IT.  
-**Why it's wrong:** Team members change frequently across projects and milestones. Hardcoding requires code deployments for personnel changes.  
-**Do this instead:** Model `opsOwner` and `businessAnalyst` as `string[]` with Ant Design `Select mode="tags"` allowing dynamic entry and autocomplete from existing database values.
-
----
-
-## Integration Points
-
-### External Services
-
-| Service | Integration Pattern | Notes |
-|---------|---------------------|-------|
-| **Jira Cloud REST API v3** | HTTP REST over fetch via CORS Proxy with Basic Auth (`email:apiToken` Base64) | Must use ADF format for description; redact API tokens in all error logs; check HTTP 401/403/404/400. |
-| **CORS Proxy (Cloudflare Worker / Reverse Proxy)** | Prefixing Jira target URL (`{proxyUrl}?url={targetUrl}` or `{proxyUrl}/{targetUrl}`) | Must forward Authorization, Content-Type, and Accept headers transparently. |
-| **GitHub Contents API** | Encrypted backup sync (Phase 8 v1.0 standard) | Backup payload includes new V2 fields (`opsOwner`, `businessAnalyst`, `jiraIssueKey`); backward compatible. |
-
-### Internal Boundaries
-
-| Boundary | Communication | Notes |
-|----------|---------------|-------|
-| **Task Drawer ↔ Jira Service** | Async service calls (`jiraSyncService.createIssue`, `jiraSyncService.transitionIssue`) | UI triggers action, disables buttons with spin indicator, catches errors into Ant Design message/notification. |
-| **Tasks View ↔ Filter Engine** | State passed via `TaskFilterState` | Pure filter pipeline filters task objects before table rendering. |
-| **Analytics View ↔ Database Repositories** | `useLiveQuery` from `dexie-react-hooks` | Subscribes to `tasks`, `milestones`, `projects`, and `plannedAllocations`. Re-computes metrics automatically upon data mutations. |
-| **Backup System ↔ V2 Schema** | `backupSchemas.ts` Zod validation | Validates and migrates V1 backups into V2 shape on import. |
+### Anti-Pattern 4: Hard Dependency on Server Availability
+**What people do:** Routing basic task search or chat through the knowledge server without fallback, crashing or hanging when the daemon is not running.  
+**Why it's wrong:** Breaks PlannerMate's core value: offline-first, 100% local operation on GitHub Pages and desktop.  
+**Do this instead:** Fast-fail network calls (500ms timeout) and degrade to client-side BM25 indexing in `src/utils/bm25.ts`.
 
 ---
 
-## Suggested Build Order (Dependencies Considered)
+## Dependency-Aware Build Order
 
-To deliver Milestone v1.1 smoothly without regressions, execute in this order:
+Execute development in strict dependency sequence:
 
-1. **Phase 1: Domain Models & Database Schema Migration (V1 -> V2)**
-   - Update `src/types/models.ts` with `opsOwner`, `businessAnalyst`, and Jira task fields.
-   - Update `src/db/schema.ts` with `SCHEMA_V2` (`*opsOwner`, `*businessAnalyst`, `actualStartDate`, `actualEndDate`, `jiraIssueKey`).
-   - Add version 2 upgrade in `src/db/index.ts`.
-   - Update Zod schemas in `src/validation/schemas.ts` and `src/validation/backupSchemas.ts`.
-   - Update repository CRUD in `projectRepo`, `milestoneRepo`, and `taskRepo`.
-   - *Validation:* Unit tests verifying V1 database upgrade and backup export/import with V2 fields.
-
-2. **Phase 2: Banking IT UI Fields & Multi-Criteria Date-Range Search**
-   - Add Ops Owner and BA input fields (Ant Design `Select mode="tags"`) to Project, Milestone, and Task forms/drawers.
-   - Extend `TaskFilterBar` with Date Range Picker (Execution, Planned, Deadline) and multi-select tags for Ops Owner & BA.
-   - Update `filterTasks` in `src/utils/filter.ts` to support date-range and multi-owner filtering.
-   - *Validation:* Interactive search and filtering tests across projects, dates, and owners.
-
-3. **Phase 3: Jira Cloud Integration**
-   - Create `JiraAuthContext` for session-only API token storage.
-   - Build `src/services/jira/jiraApi.ts` with CORS proxy routing and error sanitization.
-   - Build `src/services/jira/adfConverter.ts` for text-to-ADF formatting.
-   - Implement `jiraSyncService.ts` for connection testing, issue creation, and status transitions.
-   - Add `JiraConfigCard` in `SettingsView`, and Jira link/sync modals in `TaskDrawer`.
-   - *Validation:* Connection test, issue creation, transition syncing with mock/live Jira API.
-
-4. **Phase 4: Enhanced Analytics Dashboard**
-   - Implement pure calculation engine in `src/utils/analytics.ts` (milestone burndown, completion trends, Ops Owner & BA workload distribution).
-   - Build `AnalyticsView.tsx` with Ant Design cards, progress indicators, and statistics.
-   - Add navigation route in `AppShell` and `App.tsx` for Analytics.
-   - *Validation:* Visual and data verification of analytics metrics across various task states and owner assignments.
+```
+[Phase 1: Knowledge Server Core & Deterministic Ingestion]
+  │  - FastAPI server setup & Neo4j Bolt connection
+  │  - Markdown AST parser & regex extractor for PRC_*, CYTP*, tables
+  │  - Composite identity resolution & Neo4j schema constraints
+  │  - Test: Rebuild graph for 60000006 pilot from markdown in < 2s
+  │
+  ▼
+[Phase 2: Hybrid Retrieval & Multi-Hop Traversal]
+  │  - BM25 section indexing + vector embedding index
+  │  - Bounded Cypher traversal templates (1..3 hops)
+  │  - Reciprocal Rank Fusion (RRF) coordinator
+  │  - Test: Trace path from due counter to fee posting via automated tests
+  │
+  ▼
+[Phase 3: Evidence Packaging & Synthesis]
+  │  - Context prompt formatter with explicit provenance (file, line, confidence)
+  │  - Classification tagging (observed vs inferred)
+  │  - Conflict & missing evidence handler
+  │  - Test: Benchmark corpus evaluation for precision & citation accuracy
+  │
+  ▼
+[Phase 4: PlannerMate Client Integration & Fallback]
+  │  - Knowledge client & Tauri proxy (`knowledge_proxy_request`)
+  │  - AI tools: `query_knowledge_graph` and `search_knowledge_hybrid`
+  │  - AIChatDrawer citation badges & visual graph path viewer
+  │  - Knowledge server settings card with health check & rebuild button
+  │  - Graceful fallback to client BM25 when server is offline
+  │  - Test: Offline smoke test confirming seamless degradation
+```
 
 ---
 
 ## Sources
 
-- [Dexie.js Multi-Entry Index Documentation](https://dexie.org/docs/MultiEntry-Index) — verified syntax and queries for `*arrayField`.
-- [Dexie.js Versioning & Upgrades](https://dexie.org/docs/Tutorial/Design#database-versioning) — zero-downtime client migrations.
-- [Atlassian Jira Cloud REST API v3 Documentation](https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/) — Basic Auth, `/rest/api/3/issue`, `/rest/api/3/issue/{id}/transitions`.
-- [Atlassian Document Format (ADF) Specification](https://developer.atlassian.com/cloud/jira/platform/apis/document/structure/) — JSON schema requirement for issue descriptions.
-- [Existing Project Architecture & CLAUDE.md Constraints](CLAUDE.md) — local-first IndexedDB, session-only credential storage, zero backend server.
-
----
-*Architecture research for: Personal Task & Workload Planner (Milestone v1.1 Banking IT & Jira Integration)*  
-*Researched: 2026-09-27*
+- `CLAUDE.md` — Core constraints: offline-first, IndexedDB source of truth, session-only secrets, Ant Design UI.
+- `.planning/PROJECT.md` — Milestone v1.2 goals, pilot scope (`60000006`), composite identities, citation requirements.
+- `docs/sample-markdown-flow/60000006-SHB-Credit-calculations/` (`README.md`, `01-wiring.md`, `02-data-objects.md`, `03-call-chain.md`, `04-cycles.md`, `05-breadcrumbs.md`) — Pilot corpus ground truth for process structure, ID collisions, cycle codes, and call hierarchies.
+- `src-tauri/src/lib.rs` & `src/services/ai/graphitiMcpClient.ts` — Existing Tauri IPC proxy pattern and MCP client integration.
+- `src/utils/bm25.ts` — Existing client-side lexical search and Vietnamese diacritics normalization engine.
