@@ -193,7 +193,7 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
                   >
                     <Space direction="horizontal" size={6}>
                       <RobotOutlined style={{ color: '#722ed1', fontSize: 13 }} />
-                      <Text style={{ fontSize: 12 }}>Master Lead</Text>
+                      <Text style={{ fontSize: 12 }}>Master</Text>
                     </Space>
                     <Tag color="#722ed1" style={{ margin: 0, fontSize: 10, lineHeight: '18px' }}>
                       {session.masterModel || 'opus'}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { DiffFile, DiffViewMode } from '../types/agent';
-import { parseGitDiff } from '../utils/gitDiffParser';
+import type { DiffFile, DiffHunk, DiffViewMode } from '../types/agent';
+import { parseGitDiff, buildHunkPatch, buildLinePatch } from '../utils/gitDiffParser';
 import { isTauriApp } from '../utils/timerPopout';
 
 async function tauriInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
@@ -21,6 +21,10 @@ export interface UseGhostDevDiffResult {
   loading: boolean;
   refreshDiff: (silent?: boolean) => Promise<void>;
   acceptAll: (commitMessage?: string) => Promise<string>;
+  acceptFile: (filePath: string, commitMessage?: string) => Promise<string>;
+  acceptPatch: (patchContent: string, commitMessage?: string) => Promise<string>;
+  acceptHunk: (file: DiffFile, hunk: DiffHunk) => Promise<string>;
+  acceptLine: (file: DiffFile, hunk: DiffHunk, targetLineIndex: number) => Promise<string>;
   revertAll: () => Promise<void>;
   revertFile: (filePath: string) => Promise<void>;
 }
@@ -152,6 +156,53 @@ export function useGhostDevDiff(worktreePath: string | null): UseGhostDevDiffRes
     [worktreePath, refreshDiff]
   );
 
+  const acceptFile = useCallback(
+    async (filePath: string, commitMessage?: string) => {
+      if (!isTauriApp() || !worktreePath) return '';
+      const sha = await tauriInvoke<string>('accept_file_diff', {
+        worktreePath,
+        filePath,
+        commitMessage,
+      });
+      await refreshDiff();
+      return sha;
+    },
+    [worktreePath, refreshDiff]
+  );
+
+  const acceptPatch = useCallback(
+    async (patchContent: string, commitMessage?: string) => {
+      if (!isTauriApp() || !worktreePath) return '';
+      const sha = await tauriInvoke<string>('accept_patch_diff', {
+        worktreePath,
+        patchContent,
+        commitMessage,
+      });
+      await refreshDiff();
+      return sha;
+    },
+    [worktreePath, refreshDiff]
+  );
+
+  const acceptHunk = useCallback(
+    async (file: DiffFile, hunk: DiffHunk) => {
+      const filePath = file.newPath || file.oldPath;
+      const patch = buildHunkPatch(filePath, hunk);
+      return acceptPatch(patch, `chore(ghost-dev): accept hunk in ${filePath}`);
+    },
+    [acceptPatch]
+  );
+
+  const acceptLine = useCallback(
+    async (file: DiffFile, hunk: DiffHunk, targetLineIndex: number) => {
+      const filePath = file.newPath || file.oldPath;
+      const patch = buildLinePatch(filePath, hunk, targetLineIndex);
+      if (!patch) return '';
+      return acceptPatch(patch, `chore(ghost-dev): accept change line in ${filePath}`);
+    },
+    [acceptPatch]
+  );
+
   const revertAll = useCallback(async () => {
     if (!isTauriApp() || !worktreePath) return;
     await tauriInvoke('revert_all_diff', { worktreePath });
@@ -186,6 +237,10 @@ export function useGhostDevDiff(worktreePath: string | null): UseGhostDevDiffRes
     loading,
     refreshDiff,
     acceptAll,
+    acceptFile,
+    acceptPatch,
+    acceptHunk,
+    acceptLine,
     revertAll,
     revertFile,
   };

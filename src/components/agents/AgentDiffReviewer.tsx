@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Typography,
   Button,
@@ -8,7 +8,9 @@ import {
   Empty,
   Popconfirm,
   theme,
-  Tooltip,
+  Tree,
+  Dropdown,
+  message,
 } from 'antd';
 import {
   CheckOutlined,
@@ -17,8 +19,11 @@ import {
   ReloadOutlined,
   FullscreenOutlined,
   FullscreenExitOutlined,
+  FolderOutlined,
+  FolderOpenOutlined,
+  CommentOutlined,
 } from '@ant-design/icons';
-import type { DiffFile, DiffViewMode } from '../../types/agent';
+import type { DiffFile, DiffHunk, DiffViewMode } from '../../types/agent';
 import { DiffHunkView } from './DiffHunkView';
 import { DiffInlineCommentModal } from './DiffInlineCommentModal';
 
@@ -36,9 +41,24 @@ export interface AgentDiffReviewerProps {
   loading: boolean;
   onRefreshDiff?: () => Promise<void>;
   onAcceptAll: () => Promise<string>;
+  onAcceptFile?: (filePath: string) => Promise<string>;
+  onAcceptHunk?: (file: DiffFile, hunk: DiffHunk) => Promise<string>;
+  onAcceptLine?: (file: DiffFile, hunk: DiffHunk, targetLineIndex: number) => Promise<string>;
   onRevertAll: () => Promise<void>;
   onRevertFile: (filePath: string) => Promise<void>;
   onSendFeedback?: (formattedPrompt: string) => Promise<void>;
+  worktreePath?: string | null;
+}
+
+interface InternalTreeNode {
+  key: string;
+  name: string;
+  isLeaf: boolean;
+  filePath?: string;
+  diffFile?: DiffFile;
+  additions: number;
+  deletions: number;
+  children?: InternalTreeNode[];
 }
 
 export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
@@ -53,9 +73,13 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
   loading,
   onRefreshDiff,
   onAcceptAll,
+  onAcceptFile,
+  onAcceptHunk,
+  onAcceptLine,
   onRevertAll,
   onRevertFile,
   onSendFeedback,
+  worktreePath,
 }) => {
   const { token } = theme.useToken();
   const [acting, setActing] = useState(false);
@@ -75,10 +99,67 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
     setCommentModalOpen(true);
   };
 
+  const handleReviewFile = (filePath: string) => {
+    if (!onSendFeedback) return;
+    setCommentTarget({ filePath, lineNumber: 0, code: '' });
+    setCommentModalOpen(true);
+  };
+
+  const handleOpenInExplorer = async (filePath: string) => {
+    const fullPath = worktreePath
+      ? `${worktreePath.replace(/[/\\]+$/, '')}/${filePath}`
+      : filePath;
+    try {
+      const api = await import('@tauri-apps/api/core');
+      await api.invoke('open_local_path', { path: fullPath });
+    } catch {
+      message.info(`Đường dẫn tập tin: ${fullPath}`);
+    }
+  };
+
   const handleAcceptAll = async () => {
     setActing(true);
     try {
       await onAcceptAll();
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const handleAcceptFile = async (filePath: string) => {
+    if (!onAcceptFile) return;
+    setActing(true);
+    try {
+      await onAcceptFile(filePath);
+      message.success(`Đã chấp nhận thay đổi cho: ${filePath}`);
+    } catch (err) {
+      message.error(`Không thể chấp nhận thay đổi: ${String(err)}`);
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const handleAcceptHunk = async (file: DiffFile, hunk: DiffHunk) => {
+    if (!onAcceptHunk) return;
+    setActing(true);
+    try {
+      await onAcceptHunk(file, hunk);
+      message.success('Đã chấp nhận hunk thành công');
+    } catch (err) {
+      message.error(`Không thể chấp nhận hunk: ${String(err)}`);
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const handleAcceptLine = async (file: DiffFile, hunk: DiffHunk, targetLineIndex: number) => {
+    if (!onAcceptLine) return;
+    setActing(true);
+    try {
+      await onAcceptLine(file, hunk, targetLineIndex);
+      message.success('Đã chấp nhận dòng thay đổi');
+    } catch (err) {
+      message.error(`Không thể chấp nhận dòng: ${String(err)}`);
     } finally {
       setActing(false);
     }
@@ -103,6 +184,188 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
   };
 
   const hasChanges = diffFiles.length > 0;
+
+  // Build tree hierarchy for changed files
+  const { treeData, expandedKeys } = useMemo(() => {
+    const root: InternalTreeNode = {
+      key: '',
+      name: '',
+      isLeaf: false,
+      additions: 0,
+      deletions: 0,
+      children: [],
+    };
+
+    const folderKeys: string[] = [];
+
+    diffFiles.forEach((file) => {
+      const filePath = file.newPath || file.oldPath;
+      const parts = filePath.split('/');
+      let current = root;
+      let currentPath = '';
+
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i] || '';
+        const isLeaf = i === parts.length - 1;
+        currentPath = currentPath ? `${currentPath}/${part}` : part;
+
+        if (isLeaf) {
+          if (!current.children) current.children = [];
+          current.children.push({
+            key: filePath,
+            name: part,
+            isLeaf: true,
+            filePath,
+            diffFile: file,
+            additions: file.additions,
+            deletions: file.deletions,
+          });
+        } else {
+          const folderKey = `${currentPath}/`;
+          if (!folderKeys.includes(folderKey)) {
+            folderKeys.push(folderKey);
+          }
+          if (!current.children) current.children = [];
+          let folderNode = current.children.find((c) => c.key === folderKey && !c.isLeaf);
+          if (!folderNode) {
+            folderNode = {
+              key: folderKey,
+              name: part,
+              isLeaf: false,
+              additions: 0,
+              deletions: 0,
+              children: [],
+            };
+            current.children.push(folderNode);
+          }
+          current = folderNode;
+        }
+      }
+    });
+
+    const aggregate = (node: InternalTreeNode) => {
+      if (node.isLeaf) return;
+      let add = 0;
+      let del = 0;
+      (node.children || []).forEach((child) => {
+        aggregate(child);
+        add += child.additions;
+        del += child.deletions;
+      });
+      node.additions = add;
+      node.deletions = del;
+      node.children?.sort((a, b) => {
+        if (a.isLeaf !== b.isLeaf) return a.isLeaf ? 1 : -1;
+        return a.name.localeCompare(b.name);
+      });
+    };
+
+    aggregate(root);
+
+    // Map internal tree nodes to Ant Design Tree format
+    const formatTreeNode = (node: InternalTreeNode): any => {
+      if (node.isLeaf && node.diffFile) {
+        const file = node.diffFile;
+        const menuItems = [
+          {
+            key: 'review',
+            icon: <CommentOutlined />,
+            label: 'Review file cho Agent',
+            onClick: () => handleReviewFile(file.newPath),
+          },
+          {
+            key: 'explorer',
+            icon: <FolderOpenOutlined />,
+            label: 'Mở trong Explorer / Finder',
+            onClick: () => handleOpenInExplorer(file.newPath),
+          },
+          { type: 'divider' as const },
+          {
+            key: 'accept',
+            icon: <CheckOutlined style={{ color: '#52c41a' }} />,
+            label: 'Accept file này',
+            disabled: acting,
+            onClick: () => handleAcceptFile(file.newPath),
+          },
+          {
+            key: 'revert',
+            icon: <UndoOutlined style={{ color: '#ff4d4f' }} />,
+            danger: true,
+            label: 'Reject / Hoàn tác file này',
+            disabled: acting,
+            onClick: () => handleRevertCurrentFile(file.newPath),
+          },
+        ];
+
+        return {
+          key: node.key,
+          isLeaf: true,
+          icon: <FileTextOutlined style={{ color: '#6366f1' }} />,
+          title: (
+            <Dropdown menu={{ items: menuItems }} trigger={['contextMenu']}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  width: '100%',
+                }}
+              >
+                <Text style={{ fontSize: 12 }} ellipsis={{ tooltip: file.newPath }}>
+                  {node.name}
+                </Text>
+                <Space size={4} style={{ marginLeft: 6, flexShrink: 0 }}>
+                  {file.additions > 0 && (
+                    <span style={{ color: '#52c41a', fontSize: 10 }}>+{file.additions}</span>
+                  )}
+                  {file.deletions > 0 && (
+                    <span style={{ color: '#ff4d4f', fontSize: 10 }}>-{file.deletions}</span>
+                  )}
+                </Space>
+              </div>
+            </Dropdown>
+          ),
+        };
+      }
+
+      return {
+        key: node.key,
+        isLeaf: false,
+        icon: ({ expanded }: { expanded?: boolean }) =>
+          expanded ? (
+            <FolderOpenOutlined style={{ color: '#f59e0b' }} />
+          ) : (
+            <FolderOutlined style={{ color: '#f59e0b' }} />
+          ),
+        title: (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              width: '100%',
+            }}
+          >
+            <Text style={{ fontSize: 12 }}>{node.name}</Text>
+            <Space size={4} style={{ marginLeft: 6, flexShrink: 0 }}>
+              {node.additions > 0 && (
+                <span style={{ color: '#52c41a', fontSize: 10 }}>+{node.additions}</span>
+              )}
+              {node.deletions > 0 && (
+                <span style={{ color: '#ff4d4f', fontSize: 10 }}>-{node.deletions}</span>
+              )}
+            </Space>
+          </div>
+        ),
+        children: (node.children || []).map(formatTreeNode),
+      };
+    };
+
+    return {
+      treeData: (root.children || []).map(formatTreeNode),
+      expandedKeys: folderKeys,
+    };
+  }, [diffFiles, acting, worktreePath]);
 
   return (
     <div
@@ -130,55 +393,60 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
           justifyContent: 'space-between',
           padding: '8px 12px',
           borderBottom: `1px solid ${token.colorBorderSecondary}`,
-          flexWrap: 'wrap',
-          gap: 8,
+          backgroundColor: token.colorFillAlter,
         }}
       >
         <Space direction="horizontal" size={8}>
+          <Text strong style={{ fontSize: 13 }}>
+            Git Diff
+          </Text>
+          {hasChanges && (
+            <Space size={4} style={{ fontSize: 12 }}>
+              <span style={{ color: '#52c41a', fontWeight: 600 }}>+{totalAdditions}</span>
+              <span style={{ color: '#ff4d4f', fontWeight: 600 }}>-{totalDeletions}</span>
+              <span style={{ color: token.colorTextSecondary }}>({diffFiles.length} files)</span>
+            </Space>
+          )}
+        </Space>
+
+        <Space direction="horizontal" size={8}>
+          {/* View Mode Switcher */}
           <Segmented
+            size="small"
             value={viewMode}
             onChange={(val) => onViewModeChange(val as DiffViewMode)}
             options={[
               { label: 'Unified', value: 'unified' },
-              { label: 'Side-by-side', value: 'split' },
+              { label: 'Split', value: 'split' },
             ]}
-            size="small"
           />
 
-          <Tag color="success" style={{ margin: 0, fontWeight: 600 }}>
-            +{totalAdditions}
-          </Tag>
-          <Tag color="error" style={{ margin: 0, fontWeight: 600 }}>
-            -{totalDeletions}
-          </Tag>
-          {onRefreshDiff && (
-            <Tooltip title="Làm mới diff">
-              <Button
-                size="small"
-                type="text"
-                icon={<ReloadOutlined spin={loading} />}
-                onClick={() => void onRefreshDiff()}
-              />
-            </Tooltip>
-          )}
+          {/* Fullscreen Toggle */}
+          <Button
+            size="small"
+            type="text"
+            icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
+            onClick={() => setIsFullscreen(!isFullscreen)}
+            aria-label={isFullscreen ? 'Thu nhỏ diff' : 'Toàn màn hình diff'}
+          />
 
-          <Tooltip title={isFullscreen ? 'Thoát toàn màn hình diff' : 'Mở rộng diff toàn màn hình'}>
+          {/* Refresh Diff */}
+          {onRefreshDiff && (
             <Button
               size="small"
               type="text"
-              icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
-              onClick={() => setIsFullscreen((prev) => !prev)}
-              aria-label={isFullscreen ? 'Thoát toàn màn hình diff' : 'Mở rộng diff toàn màn hình'}
+              icon={<ReloadOutlined spin={loading} />}
+              onClick={() => void onRefreshDiff()}
+              aria-label="Tải lại Git diff"
             />
-          </Tooltip>
-        </Space>
+          )}
 
-        <Space direction="horizontal" size={8}>
+          {/* Revert All Changes */}
           <Popconfirm
-            title="Hủy bỏ tất cả thay đổi"
-            description="Hoàn tác toàn bộ thay đổi mã nguồn trong worktree này? Tiến trình chưa commit sẽ bị xóa."
+            title="Hoàn tác toàn bộ thay đổi"
+            description="Bạn có chắc chắn muốn hủy tất cả thay đổi mã nguồn trong worktree này?"
             onConfirm={handleRevertAll}
-            okText="Hủy tất cả"
+            okText="Hoàn tác tất cả"
             cancelText="Đóng"
             okButtonProps={{ danger: true }}
             disabled={!hasChanges || acting}
@@ -187,12 +455,14 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
               size="small"
               danger
               icon={<UndoOutlined />}
-              disabled={!hasChanges || acting}
+              loading={acting}
+              disabled={!hasChanges}
             >
               Revert All
             </Button>
           </Popconfirm>
 
+          {/* Accept All Changes */}
           <Button
             size="small"
             type="primary"
@@ -207,7 +477,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
         </Space>
       </div>
 
-      {/* Main Diff Content Pane (File List on Left + Code Diff on Right) */}
+      {/* Main Diff Content Pane (File Tree on Left + Code Diff on Right) */}
       {!hasChanges && !loading ? (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <Empty
@@ -217,12 +487,13 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
         </div>
       ) : (
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-          {/* File List Sidebar */}
+          {/* File Folder Tree Sidebar */}
           <div
             style={{
-              width: 220,
+              width: 260,
               borderRight: `1px solid ${token.colorBorderSecondary}`,
               overflowY: 'auto',
+              overflowX: 'auto',
               backgroundColor: token.colorFillAlter,
               display: 'flex',
               flexDirection: 'column',
@@ -240,52 +511,22 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
             >
               TẬP TIN ĐÃ THAY ĐỔI ({diffFiles.length})
             </div>
-            {diffFiles.map((file) => {
-              const isSelected =
-                file.newPath === selectedFilePath || file.oldPath === selectedFilePath;
-              return (
-                <div
-                  key={file.newPath}
-                  onClick={() => onSelectFilePath(file.newPath)}
-                  style={{
-                    padding: '8px 10px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    cursor: 'pointer',
-                    fontSize: 12,
-                    backgroundColor: isSelected ? token.colorBgContainer : 'transparent',
-                    borderLeft: isSelected ? `3px solid #4f46e5` : '3px solid transparent',
-                  }}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      onSelectFilePath(file.newPath);
-                    }
-                  }}
-                >
-                  <Space direction="horizontal" size={6} style={{ overflow: 'hidden', flex: 1 }}>
-                    <FileTextOutlined style={{ fontSize: 13 }} />
-                    <Text
-                      style={{ fontSize: 12, width: 120 }}
-                      ellipsis={{ tooltip: file.newPath }}
-                    >
-                      {file.newPath.split('/').pop() || file.newPath}
-                    </Text>
-                  </Space>
-                  <Space direction="horizontal" size={4}>
-                    {file.additions > 0 && (
-                      <span style={{ color: '#52c41a', fontSize: 10 }}>+{file.additions}</span>
-                    )}
-                    {file.deletions > 0 && (
-                      <span style={{ color: '#ff4d4f', fontSize: 10 }}>-{file.deletions}</span>
-                    )}
-                  </Space>
-                </div>
-              );
-            })}
+            <div style={{ padding: '4px', flex: 1 }}>
+              <Tree
+                showIcon
+                blockNode
+                defaultExpandedKeys={expandedKeys}
+                selectedKeys={selectedFilePath ? [selectedFilePath] : []}
+                onSelect={(keys) => {
+                  const key = keys[0];
+                  if (typeof key === 'string' && !key.endsWith('/')) {
+                    onSelectFilePath(key);
+                  }
+                }}
+                treeData={treeData}
+                style={{ backgroundColor: 'transparent', fontSize: 12 }}
+              />
+            </div>
           </div>
 
           {/* Code Comparator View */}
@@ -329,25 +570,64 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
                     </Tag>
                   </Space>
 
-                  <Popconfirm
-                    title="Hủy bỏ thay đổi"
-                    description={`Hoàn tác toàn bộ thay đổi mã nguồn trong file "${selectedFile.newPath}" về trạng thái ban đầu?`}
-                    onConfirm={() => handleRevertCurrentFile(selectedFile.newPath)}
-                    okText="Hoàn tác"
-                    cancelText="Đóng"
-                    okButtonProps={{ danger: true }}
-                    disabled={acting}
-                  >
+                  <Space direction="horizontal" size={6}>
+                    {/* Review File Button */}
+                    {onSendFeedback && (
+                      <Button
+                        size="small"
+                        type="default"
+                        icon={<CommentOutlined />}
+                        onClick={() => handleReviewFile(selectedFile.newPath)}
+                      >
+                        Review File
+                      </Button>
+                    )}
+
+                    {/* Open in Explorer Button */}
                     <Button
                       size="small"
-                      danger
-                      type="text"
-                      icon={<UndoOutlined />}
+                      type="default"
+                      icon={<FolderOpenOutlined />}
+                      onClick={() => handleOpenInExplorer(selectedFile.newPath)}
+                    >
+                      Explorer
+                    </Button>
+
+                    {/* Accept File Button */}
+                    {onAcceptFile && (
+                      <Button
+                        size="small"
+                        type="primary"
+                        icon={<CheckOutlined />}
+                        style={{ backgroundColor: '#16a34a' }}
+                        onClick={() => handleAcceptFile(selectedFile.newPath)}
+                        loading={acting}
+                      >
+                        Accept File
+                      </Button>
+                    )}
+
+                    {/* Revert File Button */}
+                    <Popconfirm
+                      title="Hủy bỏ thay đổi"
+                      description={`Hoàn tác toàn bộ thay đổi mã nguồn trong file "${selectedFile.newPath}" về trạng thái ban đầu?`}
+                      onConfirm={() => handleRevertCurrentFile(selectedFile.newPath)}
+                      okText="Hoàn tác"
+                      cancelText="Đóng"
+                      okButtonProps={{ danger: true }}
                       disabled={acting}
                     >
-                      Revert File
-                    </Button>
-                  </Popconfirm>
+                      <Button
+                        size="small"
+                        danger
+                        type="text"
+                        icon={<UndoOutlined />}
+                        disabled={acting}
+                      >
+                        Revert File
+                      </Button>
+                    </Popconfirm>
+                  </Space>
                 </div>
 
                 {/* Hunks */}
@@ -358,6 +638,8 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
                     filePath={selectedFile.newPath}
                     viewMode={viewMode}
                     onLineClick={handleLineClick}
+                    onAcceptHunk={(h) => handleAcceptHunk(selectedFile, h)}
+                    onAcceptLine={(_h, lineIdx) => handleAcceptLine(selectedFile, hunk, lineIdx)}
                   />
                 ))}
               </div>
@@ -377,7 +659,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
         </div>
       )}
 
-      {/* Inline Comment Modal */}
+      {/* Inline / File Comment Modal */}
       {onSendFeedback && (
         <DiffInlineCommentModal
           open={commentModalOpen}

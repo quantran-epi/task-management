@@ -218,6 +218,7 @@ pub fn is_command_whitelisted(command: &str) -> bool {
 }
 
 /// Strip read-only flag from all files recursively (prevent EPERM on Windows NTFS)
+#[cfg(windows)]
 fn strip_readonly_recursive(dir: &Path) {
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
@@ -286,6 +287,7 @@ pub fn ensure_git_worktree(repo_root: &Path, task_id: &str) -> Result<PathBuf, S
 
     // If worktree already exists, reuse it per D-18 resume capability
     if worktree_path.exists() && worktree_path.is_dir() {
+        #[cfg(windows)]
         strip_readonly_recursive(&worktree_path);
         return Ok(worktree_path);
     }
@@ -313,6 +315,7 @@ pub fn ensure_git_worktree(repo_root: &Path, task_id: &str) -> Result<PathBuf, S
         return Err(format!("git worktree add failed: {}", err_msg.trim()));
     }
 
+    #[cfg(windows)]
     strip_readonly_recursive(&worktree_path);
 
     Ok(worktree_path)
@@ -389,10 +392,8 @@ pub async fn start_ghost_dev_session(
         .or_else(|| std::env::var("CLAUDE_PATH").ok())
         .unwrap_or_else(|| "claude".to_string());
 
-    let worktree_dir_str = worktree_path.to_string_lossy().to_string();
     let master_args = [
         "-p",
-        "--verbose",
         "--output-format",
         "stream-json",
         "--input-format",
@@ -400,10 +401,6 @@ pub async fn start_ghost_dev_session(
         "--permission-mode",
         "bypassPermissions",
         "--dangerously-skip-permissions",
-        "--add-dir",
-        &worktree_dir_str,
-        "--add-dir",
-        &payload.repo_path,
         "--model",
         &payload.master_model,
     ];
@@ -551,7 +548,14 @@ pub async fn start_ghost_dev_session(
                 let mut chunk_source = "master".to_string();
 
                 if trimmed.starts_with('{') {
-                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(trimmed) {
+                    // Fast path: skip DOM parse for plain text/progress deltas without tools or subagents
+                    let needs_dom_inspect = trimmed.contains("\"tool_")
+                        || trimmed.contains("\"parent_tool_use_id\"")
+                        || trimmed.contains("\"dispatch_subtask\"")
+                        || trimmed.contains("\"content_block_start\"");
+
+                    if needs_dom_inspect {
+                        if let Ok(val) = serde_json::from_str::<serde_json::Value>(trimmed) {
                         // Inspect for parent_tool_use_id on stream-json events (native subagent output)
                         let parent_tool_use_id = val.get("parent_tool_use_id")
                             .or_else(|| val.get("message").and_then(|m| m.get("parent_tool_use_id")))
@@ -736,19 +740,13 @@ pub async fn start_ghost_dev_session(
                                     let _ = stdin_tx_for_reader.send(resp.to_string()).await;
                                 } else {
                                     let worker_id = format!("w-{}-{}", tid, chrono_iso_now());
-                                    let worker_worktree_str = worktree_dir.to_string_lossy().to_string();
                                     let worker_args = [
                                         "-p",
-                                        "--verbose",
                                         "--output-format",
                                         "stream-json",
                                         "--permission-mode",
                                         "bypassPermissions",
                                         "--dangerously-skip-permissions",
-                                        "--add-dir",
-                                        &worker_worktree_str,
-                                        "--add-dir",
-                                        &repo_path_str,
                                         "--model",
                                         &subtask_model,
                                         &subtask_prompt,
@@ -902,6 +900,7 @@ pub async fn start_ghost_dev_session(
                         }
                     }
                 }
+            }
 
                 let chunk = StreamEventChunk {
                     task_id: tid.clone(),
@@ -1083,6 +1082,143 @@ pub async fn accept_all_diff(worktree_path: String, commit_message: String) -> R
     }
 
     // Return current commit sha
+    let rev_out = hidden_std_command("git")
+        .current_dir(&path)
+        .args(["rev-parse", "--short", "HEAD"])
+        .output()
+        .map_err(|e| format!("Failed to get commit sha: {}", e))?;
+
+    Ok(String::from_utf8_lossy(&rev_out.stdout).trim().to_string())
+}
+
+#[tauri::command]
+pub async fn accept_file_diff(
+    worktree_path: String,
+    file_path: String,
+    commit_message: Option<String>,
+) -> Result<String, String> {
+    let path = PathBuf::from(&worktree_path);
+    if !path.exists() {
+        return Err(format!("Worktree path does not exist: {}", worktree_path));
+    }
+
+    let canonical_worktree = path.canonicalize().map_err(|e| e.to_string())?;
+
+    // Block path traversal attempts
+    let relative = Path::new(&file_path);
+    if file_path.contains("..") || relative.is_absolute() {
+        return Err("Path traversal attempt detected".to_string());
+    }
+
+    let target_file = path.join(&file_path);
+    if target_file.exists() {
+        let canonical_target = target_file.canonicalize().map_err(|e| e.to_string())?;
+        if !canonical_target.starts_with(&canonical_worktree) {
+            return Err("Path traversal attempt detected".to_string());
+        }
+    }
+
+    // git add -- <file_path>
+    let add_out = hidden_std_command("git")
+        .current_dir(&path)
+        .args(["add", "--", &file_path])
+        .output()
+        .map_err(|e| format!("Failed to git add file: {}", e))?;
+
+    if !add_out.status.success() {
+        return Err(format!("git add failed: {}", String::from_utf8_lossy(&add_out.stderr)));
+    }
+
+    let msg = match commit_message {
+        Some(m) if !m.trim().is_empty() => m,
+        _ => format!("chore(ghost-dev): accept changes in {}", file_path),
+    };
+
+    let commit_out = hidden_std_command("git")
+        .current_dir(&path)
+        .args(["commit", "-m", &msg])
+        .output()
+        .map_err(|e| format!("Failed to git commit: {}", e))?;
+
+    if !commit_out.status.success() {
+        let err = String::from_utf8_lossy(&commit_out.stderr);
+        if err.contains("nothing to commit") || String::from_utf8_lossy(&commit_out.stdout).contains("nothing to commit") {
+            return Ok("nothing_to_commit".to_string());
+        }
+        return Err(format!("git commit failed: {}", err));
+    }
+
+    let rev_out = hidden_std_command("git")
+        .current_dir(&path)
+        .args(["rev-parse", "--short", "HEAD"])
+        .output()
+        .map_err(|e| format!("Failed to get commit sha: {}", e))?;
+
+    Ok(String::from_utf8_lossy(&rev_out.stdout).trim().to_string())
+}
+
+#[tauri::command]
+pub async fn accept_patch_diff(
+    worktree_path: String,
+    patch_content: String,
+    commit_message: Option<String>,
+) -> Result<String, String> {
+    let path = PathBuf::from(&worktree_path);
+    if !path.exists() {
+        return Err(format!("Worktree path does not exist: {}", worktree_path));
+    }
+
+    if patch_content.trim().is_empty() {
+        return Err("Patch content is empty".to_string());
+    }
+
+    // git apply --recount --cached -
+    let mut child = hidden_std_command("git")
+        .current_dir(&path)
+        .args(["apply", "--recount", "--cached", "-"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Failed to spawn git apply: {}", e))?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        use std::io::Write;
+        stdin
+            .write_all(patch_content.as_bytes())
+            .map_err(|e| format!("Failed to write patch to stdin: {}", e))?;
+    }
+
+    let apply_out = child
+        .wait_with_output()
+        .map_err(|e| format!("Failed to wait for git apply: {}", e))?;
+
+    if !apply_out.status.success() {
+        return Err(format!(
+            "git apply failed: {}",
+            String::from_utf8_lossy(&apply_out.stderr)
+        ));
+    }
+
+    let msg = match commit_message {
+        Some(m) if !m.trim().is_empty() => m,
+        _ => "chore(ghost-dev): accept partial changes".to_string(),
+    };
+
+    let commit_out = hidden_std_command("git")
+        .current_dir(&path)
+        .args(["commit", "-m", &msg])
+        .output()
+        .map_err(|e| format!("Failed to git commit: {}", e))?;
+
+    if !commit_out.status.success() {
+        let err = String::from_utf8_lossy(&commit_out.stderr);
+        if err.contains("nothing to commit") || String::from_utf8_lossy(&commit_out.stdout).contains("nothing to commit") {
+            return Ok("nothing_to_commit".to_string());
+        }
+        return Err(format!("git commit failed: {}", err));
+    }
+
     let rev_out = hidden_std_command("git")
         .current_dir(&path)
         .args(["rev-parse", "--short", "HEAD"])

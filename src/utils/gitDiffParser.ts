@@ -155,3 +155,49 @@ export function parseGitDiff(rawDiff: string): DiffFile[] {
 
   return files;
 }
+
+function formatHunkHeaderLine(hunk: DiffHunk): string {
+  const oldCountStr = hunk.oldCount !== 1 ? `,${hunk.oldCount}` : '';
+  const newCountStr = hunk.newCount !== 1 ? `,${hunk.newCount}` : '';
+  const suffix = hunk.header ? ` ${hunk.header}` : '';
+  return `@@ -${hunk.oldStart}${oldCountStr} +${hunk.newStart}${newCountStr} @@${suffix}`;
+}
+
+export function buildHunkPatch(filePath: string, hunk: DiffHunk): string {
+  const header = `--- a/${filePath}\n+++ b/${filePath}\n${formatHunkHeaderLine(hunk)}\n`;
+  const body = hunk.lines
+    .map((l) => {
+      if (l.type === 'add') return `+${l.content}`;
+      if (l.type === 'delete') return `-${l.content}`;
+      return ` ${l.content}`;
+    })
+    .join('\n');
+  return `${header}${body}\n`;
+}
+
+export function buildLinePatch(filePath: string, hunk: DiffHunk, targetLineIndex: number): string {
+  const targetLine = hunk.lines[targetLineIndex];
+  if (!targetLine || targetLine.type === 'context') return '';
+
+  const header = `--- a/${filePath}\n+++ b/${filePath}\n${formatHunkHeaderLine(hunk)}\n`;
+  const bodyLines: string[] = [];
+
+  for (let i = 0; i < hunk.lines.length; i++) {
+    const l = hunk.lines[i]!;
+    if (l.type === 'context') {
+      bodyLines.push(` ${l.content}`);
+    } else if (l.type === 'add') {
+      if (i === targetLineIndex) {
+        bodyLines.push(`+${l.content}`);
+      }
+    } else if (l.type === 'delete') {
+      if (i === targetLineIndex) {
+        bodyLines.push(`-${l.content}`);
+      } else {
+        bodyLines.push(` ${l.content}`);
+      }
+    }
+  }
+
+  return `${header}${bodyLines.join('\n')}\n`;
+}

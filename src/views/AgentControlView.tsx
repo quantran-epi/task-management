@@ -94,6 +94,9 @@ export const AgentControlView: React.FC = () => {
     loading: diffLoading,
     refreshDiff,
     acceptAll,
+    acceptFile,
+    acceptHunk,
+    acceptLine,
     revertAll,
     revertFile,
   } = useGhostDevDiff(activeSession ? activeSession.worktreePath : null);
@@ -210,9 +213,13 @@ export const AgentControlView: React.FC = () => {
             loading={diffLoading}
             onRefreshDiff={refreshDiff}
             onAcceptAll={acceptAll}
+            onAcceptFile={acceptFile}
+            onAcceptHunk={acceptHunk}
+            onAcceptLine={acceptLine}
             onRevertAll={revertAll}
             onRevertFile={revertFile}
             onSendFeedback={sendChatMessage}
+            worktreePath={activeSession ? activeSession.worktreePath : null}
           />
         </Splitter.Panel>
       </Splitter>

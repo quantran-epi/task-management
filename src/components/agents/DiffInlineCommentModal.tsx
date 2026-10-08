@@ -7,8 +7,8 @@ const { Text, Paragraph } = Typography;
 export interface DiffInlineCommentModalProps {
   open: boolean;
   filePath: string;
-  lineNumber: number;
-  selectedCode: string;
+  lineNumber?: number;
+  selectedCode?: string;
   onClose: () => void;
   onSubmit: (formattedPrompt: string) => Promise<void>;
 }
@@ -16,13 +16,15 @@ export interface DiffInlineCommentModalProps {
 export const DiffInlineCommentModal: React.FC<DiffInlineCommentModalProps> = ({
   open,
   filePath,
-  lineNumber,
-  selectedCode,
+  lineNumber = 0,
+  selectedCode = '',
   onClose,
   onSubmit,
 }) => {
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  const isWholeFile = !lineNumber || lineNumber <= 0;
 
   const handleSubmit = async () => {
     if (!comment.trim()) return;
@@ -46,8 +48,9 @@ export const DiffInlineCommentModal: React.FC<DiffInlineCommentModalProps> = ({
 
   return (
     <Modal
-      title="Thêm phản hồi mã nguồn (Inline Feedback)"
+      title={isWholeFile ? 'Gửi đánh giá tập tin cho Agent (File Review)' : 'Thêm phản hồi mã nguồn (Inline Feedback)'}
       open={open}
+      zIndex={1300}
       onCancel={onClose}
       footer={[
         <Button key="cancel" onClick={onClose} disabled={submitting}>
@@ -68,28 +71,30 @@ export const DiffInlineCommentModal: React.FC<DiffInlineCommentModalProps> = ({
     >
       <Space direction="vertical" style={{ width: '100%' }} size={12}>
         <div>
-          <Text strong>Tập tin:</Text> <Text code>{filePath}</Text> (Dòng {lineNumber})
+          <Text strong>Tập tin:</Text> <Text code>{filePath}</Text> {!isWholeFile && `(Dòng ${lineNumber})`}
         </div>
 
-        <div>
-          <Text type="secondary">Đoạn mã được chọn:</Text>
-          <pre
-            style={{
-              maxHeight: 140,
-              overflowY: 'auto',
-              backgroundColor: '#1e1e1e',
-              color: '#d4d4d4',
-              padding: '8px 12px',
-              borderRadius: 6,
-              fontSize: 12,
-              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-              margin: '6px 0 0 0',
-              lineHeight: 1.4,
-            }}
-          >
-            {selectedCode}
-          </pre>
-        </div>
+        {!isWholeFile && selectedCode && (
+          <div>
+            <Text type="secondary">Đoạn mã được chọn:</Text>
+            <pre
+              style={{
+                maxHeight: 140,
+                overflowY: 'auto',
+                backgroundColor: '#1e1e1e',
+                color: '#d4d4d4',
+                padding: '8px 12px',
+                borderRadius: 6,
+                fontSize: 12,
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                margin: '6px 0 0 0',
+                lineHeight: 1.4,
+              }}
+            >
+              {selectedCode}
+            </pre>
+          </div>
+        )}
 
         <div>
           <Paragraph style={{ marginBottom: 4 }}>
@@ -99,7 +104,11 @@ export const DiffInlineCommentModal: React.FC<DiffInlineCommentModalProps> = ({
             rows={4}
             value={comment}
             onChange={(e) => setComment(e.target.value)}
-            placeholder="Ví dụ: Đổi tên hàm thành calculateTotal và thêm kiểm tra giá trị null..."
+            placeholder={
+              isWholeFile
+                ? "Nhập nhận xét hoặc yêu cầu sửa cho toàn bộ tập tin này..."
+                : "Ví dụ: Đổi tên hàm thành calculateTotal và thêm kiểm tra giá trị null..."
+            }
             aria-label="Nội dung phản hồi mã nguồn"
             autoFocus
           />
