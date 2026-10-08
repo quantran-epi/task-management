@@ -21,6 +21,10 @@ const calendarDateSchema = z
     message: 'Must be a valid calendar date in YYYY-MM-DD format',
   });
 
+const isoDateTimeSchema = z.string().datetime({
+  message: 'Must be a valid ISO 8601 datetime string',
+});
+
 const uuidSchema = z
   .string()
   .refine(isValidUuid, {
@@ -231,14 +235,14 @@ export const BackupDocumentSetRecordSchema = z.object({
   name: z.string().trim().min(1).max(120),
   description: z.string().optional(),
   documentIds: z.array(uuidSchema),
-  createdAt: z.string(),
-  updatedAt: z.string(),
+  createdAt: isoDateTimeSchema,
+  updatedAt: isoDateTimeSchema,
 });
 
 export const BackupPublishedDocumentRecordSchema = z.object({
   setId: uuidSchema,
   documentId: uuidSchema,
-  lastKnownRemoteAt: z.string(),
+  lastKnownRemoteAt: isoDateTimeSchema,
   publishedContentHash: z.string().regex(/^[a-f0-9]{64}$/),
   activeSnapshotId: uuidSchema.optional(),
   activeAttemptId: uuidSchema.optional(),
@@ -258,8 +262,8 @@ export const BackupPublishAttemptRecordSchema = z.object({
   id: uuidSchema,
   setId: uuidSchema,
   attemptKey: z.string().optional(),
-  startedAt: z.string(),
-  completedAt: z.string().optional(),
+  startedAt: isoDateTimeSchema,
+  completedAt: isoDateTimeSchema.optional(),
   durationMs: z.number().int().nonnegative().optional(),
   status: z.enum([
     'Never published',
@@ -283,7 +287,7 @@ export const BackupDlpAuditRecordSchema = z.object({
   setId: uuidSchema,
   attemptId: uuidSchema.optional(),
   ruleSetVersion: z.string().min(1),
-  timestamp: z.string(),
+  timestamp: isoDateTimeSchema,
   documentIds: z.array(uuidSchema),
   contentHashes: z.array(z.string().regex(/^[a-f0-9]{64}$/)),
   findingCountsByCategory: z.record(z.string(), z.number().int().nonnegative()),
