@@ -30,7 +30,7 @@ import {
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
-import type { Note, NoteEntityType } from '../types/models';
+import type { DocumentSet, Note, NoteEntityType } from '../types/models';
 import {
   deleteNote,
   updateNote,
@@ -48,6 +48,7 @@ import { QuickNoteEntry } from '../components/notes/QuickNoteEntry';
 import { PageHeader } from '../components/common/PageHeader';
 import { openNotesPopout } from '../utils/notesPopout';
 import { DocumentSetDrawer } from '../components/knowledge/DocumentSetDrawer';
+import { PublishPreviewModal } from '../components/knowledge/PublishPreviewModal';
 import type { DocumentSetFormValue } from '../components/knowledge/DocumentSetForm';
 import {
   createDocumentSet,
@@ -55,6 +56,10 @@ import {
   updateDocumentSet,
   type DocumentPublishStatus,
 } from '../db/repositories/documentSetRepo';
+import { useOptionalKnowledgeConfig } from '../services/knowledge/knowledgeConfig';
+import { createKnowledgeClient } from '../services/knowledge/knowledgeClient';
+import { PublishSession } from '../services/knowledge/publishOrchestrator';
+import type { CachedActiveSnapshotManifest, ChangePreview } from '../services/knowledge/changePreview';
 
 import { DocFolderTree, type QuickFilterKey } from '../components/notes/DocFolderTree';
 import { DocListPane } from '../components/notes/DocListPane';
@@ -190,6 +195,8 @@ const LAYOUT_PREF_KEY = 'planner:docs_layout_view';
 const FOLDER_PREF_KEY = 'planner:docs_active_folder';
 
 export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
+  const knowledgeConfig = useOptionalKnowledgeConfig();
+  const isConfigured = Boolean(knowledgeConfig.enabled && knowledgeConfig.baseUrl);
   // Layout mode: 3-column Docs app vs classic Grid View
   const [layoutMode, setLayoutMode] = useState<NotesLayoutMode>(() => {
     try {
@@ -219,6 +226,10 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const [aiPromptModalOpen, setAiPromptModalOpen] = useState<boolean>(false);
   const [documentSetDrawerOpen, setDocumentSetDrawerOpen] = useState(false);
+  const [publishModalOpen, setPublishModalOpen] = useState(false);
+  const [publishSession, setPublishSession] = useState<PublishSession | null>(null);
+  const [publishPreview, setPublishPreview] = useState<ChangePreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   // Save preferences
   const handleLayoutModeChange = (mode: NotesLayoutMode) => {
@@ -359,6 +370,49 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
   const handleSaveDocumentSet = async (setId: string | undefined, value: DocumentSetFormValue) => {
     if (setId) await updateDocumentSet(setId, value, db);
     else await createDocumentSet(value, db);
+  };
+
+  const handlePreviewDocumentSet = async (set: DocumentSet) => {
+    if (!isConfigured || previewLoading) {
+      if (!isConfigured) message.warning('Hãy cấu hình Knowledge Server trước khi xuất bản.');
+      return;
+    }
+    setPreviewLoading(true);
+    try {
+      const client = createKnowledgeClient({
+        baseUrl: knowledgeConfig.baseUrl,
+        token: knowledgeConfig.token,
+        db,
+      });
+      const session = new PublishSession({ client, db });
+      let activeManifest: CachedActiveSnapshotManifest | null = null;
+      try {
+        activeManifest = await client.getSnapshotManifest(set.id);
+      } catch {
+        // Offline preview remains available against an empty remote manifest.
+      }
+      const setNotes = (allNotes ?? []).filter(
+        (note) => set.documentIds.includes(note.id) && !note.deletedAt
+      );
+      const preview = await session.buildPreview({
+        documentSet: set,
+        notes: setNotes,
+        activeManifest,
+      });
+      setPublishSession(session);
+      setPublishPreview(preview);
+      setPublishModalOpen(true);
+    } catch {
+      message.error('Không thể tạo bản xem trước xuất bản.');
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const closePublishPreview = () => {
+    setPublishModalOpen(false);
+    setPublishSession(null);
+    setPublishPreview(null);
   };
 
   // Subfolders in current scope (either inside current folder or root folders for inbox)
@@ -1032,13 +1086,27 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
         sets={documentSets ?? []}
         notes={allNotes ?? []}
         attempts={publishAttempts ?? []}
-        configured={false}
+        configured={isConfigured}
+        loading={previewLoading}
         {...(cachedAt ? { cachedAt } : {})}
         {...(currentFolder?.id ? { currentFolderId: currentFolder.id } : {})}
         onClose={() => setDocumentSetDrawerOpen(false)}
         onSave={handleSaveDocumentSet}
-        onPreview={() => {}}
+        onPreview={handlePreviewDocumentSet}
+        onOpenSettings={() => { window.location.hash = '#/settings'; }}
       />
+
+      {publishSession && publishPreview && (
+        <PublishPreviewModal
+          open={publishModalOpen}
+          preview={publishPreview}
+          session={publishSession}
+          documentTitles={Object.fromEntries(
+            (allNotes ?? []).map((note) => [note.id, note.title || 'Không tiêu đề'])
+          )}
+          onClose={closePublishPreview}
+        />
+      )}
 
       {/* Note Detail Modal */}
       <NoteDetailModal
