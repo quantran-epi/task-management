@@ -916,7 +916,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                         fontWeight: 700,
                       }}
                     >
-                      👑 Master Lead
+                      👑 Master
                     </span>
                   ),
                   value: 'master',
@@ -1118,7 +1118,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                                 border: '1px solid #9333ea',
                               }}
                             >
-                              Master Lead
+                              Master
                             </Tag>
                           )}
                           <Text strong style={{ color: '#ffffff', fontSize: 12 }}>
@@ -1543,7 +1543,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
             >
               <CheckCircleOutlined style={{ fontSize: 14, color: '#4ade80' }} />
               <span style={{ fontSize: 12, fontWeight: 500 }}>
-                Đã hoàn thành trong {formatDuration(displayElapsedSec || 0)} ({formatTokenCount(sessionTokens)}) — Sẵn sàng nhận chỉ đạo mới.
+                Đã hoàn thành {latestResultInfo.durationStr ? `trong ${latestResultInfo.durationStr}` : (displayElapsedSec ? `trong ${formatDuration(displayElapsedSec)}` : '')} ({formatTokenCount(sessionTokens)}) — Sẵn sàng nhận chỉ đạo mới.
               </span>
             </div>
           ) : null}
