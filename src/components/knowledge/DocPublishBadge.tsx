@@ -7,6 +7,7 @@ import {
   WarningOutlined,
 } from '@ant-design/icons';
 import { Space, Tag, Tooltip, Typography } from 'antd';
+import { useEffect, useState } from 'react';
 import type { DocumentPublishStatus } from '../../db/repositories/documentSetRepo';
 import type { PublishPrimaryState } from '../../types/models';
 
@@ -30,7 +31,23 @@ export interface DocPublishBadgeProps {
   compact?: boolean | undefined;
 }
 
-export function DocPublishBadge({ status, compact = false }: DocPublishBadgeProps) {
+function useCompactBadge(explicit?: boolean): boolean {
+  const [compact, setCompact] = useState(() => explicit ?? (typeof window !== 'undefined' && window.innerWidth < 1100));
+  useEffect(() => {
+    if (explicit !== undefined) {
+      setCompact(explicit);
+      return;
+    }
+    const update = () => setCompact(window.innerWidth < 1100);
+    window.addEventListener('resize', update);
+    update();
+    return () => window.removeEventListener('resize', update);
+  }, [explicit]);
+  return compact;
+}
+
+export function DocPublishBadge({ status, compact: explicitCompact }: DocPublishBadgeProps) {
+  const compact = useCompactBadge(explicitCompact);
   const state = status?.aggregateState ?? 'Never published';
   const stateUi = STATE_UI[state];
   const details = status?.containingSets.length

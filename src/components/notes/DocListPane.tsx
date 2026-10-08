@@ -54,7 +54,7 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
   onNavigateFolder,
   onCreateDoc,
   publishStatuses,
-  compactPublishBadges = false,
+  compactPublishBadges,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<DocSortOption>('updatedAt');

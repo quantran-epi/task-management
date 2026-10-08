@@ -25,6 +25,7 @@ import {
   UnorderedListOutlined,
   RobotOutlined,
   CopyOutlined,
+  DatabaseOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
@@ -45,6 +46,14 @@ import { NoteDetailModal } from '../components/notes/NoteDetailModal';
 import { QuickNoteEntry } from '../components/notes/QuickNoteEntry';
 import { PageHeader } from '../components/common/PageHeader';
 import { openNotesPopout } from '../utils/notesPopout';
+import { DocumentSetDrawer } from '../components/knowledge/DocumentSetDrawer';
+import type { DocumentSetFormValue } from '../components/knowledge/DocumentSetForm';
+import {
+  createDocumentSet,
+  getDocumentPublishStatuses,
+  updateDocumentSet,
+  type DocumentPublishStatus,
+} from '../db/repositories/documentSetRepo';
 
 import { DocFolderTree, type QuickFilterKey } from '../components/notes/DocFolderTree';
 import { DocListPane } from '../components/notes/DocListPane';
@@ -208,6 +217,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const [aiPromptModalOpen, setAiPromptModalOpen] = useState<boolean>(false);
+  const [documentSetDrawerOpen, setDocumentSetDrawerOpen] = useState(false);
 
   // Save preferences
   const handleLayoutModeChange = (mode: NotesLayoutMode) => {
@@ -322,6 +332,33 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
     const found = allNotes.find((n) => n.id === selectedDocId && n.type !== 'folder');
     return found || null;
   }, [allNotes, selectedDocId]);
+
+  const publishStatuses = useLiveQuery(async () => {
+    const documentIds = (allNotes ?? [])
+      .filter((note) => note.type !== 'folder' && !note.deletedAt)
+      .map((note) => note.id);
+    return getDocumentPublishStatuses(documentIds, db);
+  }, [db, allNotes]) as Record<string, DocumentPublishStatus> | undefined;
+
+  const documentSets = useLiveQuery(() => db.documentSets.toArray(), [db]);
+  const publishAttempts = useLiveQuery(() => db.publishAttempts.toArray(), [db]);
+  const cachedAt = useMemo(() => {
+    const timestamps = Object.values(publishStatuses ?? {}).flatMap((status) =>
+      status.containingSets.map((set) => {
+        const documentId = status.documentId;
+        return { setId: set.setId, documentId };
+      })
+    );
+    return timestamps.length > 0
+      ? (allNotes ?? []).reduce<string | undefined>((latest, current) =>
+          !latest || current.updatedAt > latest ? current.updatedAt : latest, undefined)
+      : undefined;
+  }, [publishStatuses, allNotes]);
+
+  const handleSaveDocumentSet = async (setId: string | undefined, value: DocumentSetFormValue) => {
+    if (setId) await updateDocumentSet(setId, value, db);
+    else await createDocumentSet(value, db);
+  };
 
   // Subfolders in current scope (either inside current folder or root folders for inbox)
   const currentSubfolders = useMemo(() => {
@@ -731,6 +768,9 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
                 { value: 'grid', icon: <AppstoreOutlined />, label: 'Ghi chú nhanh (Grid)' },
               ]}
             />
+            <Button icon={<DatabaseOutlined />} onClick={() => setDocumentSetDrawerOpen(true)}>
+              Bộ tài liệu
+            </Button>
             <Tooltip title="Xem prompt chuẩn để dán vào AI ngoài tạo tài liệu Markdown phù hợp tìm kiếm">
               <Button icon={<RobotOutlined />} onClick={() => setAiPromptModalOpen(true)}>
                 Prompt AI cho tài liệu
@@ -802,6 +842,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
             folderPath={folderPath}
             onNavigateFolder={(id) => handleFilterChange(id)}
             onCreateDoc={() => handleCreateDocument(currentFolder?.id)}
+            publishStatuses={publishStatuses}
           />
 
           {/* Column 3: Editor or Folder Contents View */}
@@ -814,6 +855,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
               onRestoreDoc={handleRestoreDocument}
               onSelectDoc={(id) => setSelectedDocId(id)}
               db={db}
+              publishStatus={publishStatuses?.[activeDocument.id]}
             />
           ) : (
             <DocFolderContentsView
@@ -983,6 +1025,19 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
           )}
         </div>
       )}
+
+      <DocumentSetDrawer
+        open={documentSetDrawerOpen}
+        sets={documentSets ?? []}
+        notes={allNotes ?? []}
+        attempts={publishAttempts ?? []}
+        configured={false}
+        {...(cachedAt ? { cachedAt } : {})}
+        {...(currentFolder?.id ? { currentFolderId: currentFolder.id } : {})}
+        onClose={() => setDocumentSetDrawerOpen(false)}
+        onSave={handleSaveDocumentSet}
+        onPreview={() => {}}
+      />
 
       {/* Note Detail Modal */}
       <NoteDetailModal

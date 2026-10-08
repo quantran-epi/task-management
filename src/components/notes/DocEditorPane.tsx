@@ -76,7 +76,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
   onOpenProject,
   db = defaultDb,
   publishStatus,
-  compactPublishBadge = false,
+  compactPublishBadge,
 }) => {
   const [viewMode, setViewMode] = useState<EditorViewMode>('split');
   const [isFullscreen, setIsFullscreen] = useState(false);

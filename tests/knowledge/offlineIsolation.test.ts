@@ -27,7 +27,7 @@ describe('optional daemon outage isolation', () => {
     expect(navigation.map((item) => item.id)).toContain(document.id);
 
     expect(rankBM25('tra cuu ngoai tuyen', navigation.map((item) => ({
-      id: item.id, title: item.title, body: item.body, tags: item.tags ?? [],
+      id: item.id, title: item.title ?? '', body: item.body, tags: item.tags ?? [],
     })))[0]?.doc.id).toBe(document.id);
 
     await database.documentSets.add({
@@ -58,7 +58,7 @@ describe('optional daemon outage isolation', () => {
     const document = await createNote({ title: 'Khởi động cục bộ', body: 'Không cần máy chủ tri thức', type: 'document' }, database);
 
     expect(await database.notes.get(document.id)).toEqual(document);
-    expect(rankBM25('khoi dong cuc bo', [{ id: document.id, title: document.title, body: document.body, tags: document.tags ?? [] }])).toHaveLength(1);
+    expect(rankBM25('khoi dong cuc bo', [{ id: document.id, title: document.title ?? '', body: document.body, tags: document.tags ?? [] }])).toHaveLength(1);
     expect(fetcher).not.toHaveBeenCalled();
   });
 });

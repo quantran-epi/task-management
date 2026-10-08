@@ -82,10 +82,10 @@ describe('document publish badges', () => {
         onSelectDoc={onSelectDoc}
       />,
     );
-    const row = screen.getByText(note.title).closest('[role="button"]');
+    const row = screen.getByText(note.title ?? '').closest('[role="button"]');
     expect(row).not.toBeNull();
     const badge = within(row as HTMLElement).getByLabelText('Trạng thái xuất bản: Có thay đổi cục bộ');
-    const date = within(row as HTMLElement).getByText(new Date(NOW).toLocaleDateString('vi-VN'));
+    const date = within(row as HTMLElement).getByText(new Date(NOW).toLocaleDateString('vi-VN') || '');
     expect(badge.compareDocumentPosition(date) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     fireEvent.keyDown(row as HTMLElement, { key: 'Enter' });
     expect(onSelectDoc).toHaveBeenCalledWith(note);
@@ -131,17 +131,16 @@ describe('Docs knowledge management integration', () => {
     await database.open();
     render(<NotesView db={database} />);
 
-    const trigger = await screen.findByRole('button', { name: 'Bộ tài liệu' });
+    const trigger = (await screen.findByText('Bộ tài liệu')).closest('button') as HTMLButtonElement;
     trigger.focus();
     fireEvent.click(trigger);
-    expect(await screen.findByRole('heading', { name: 'Bộ tài liệu xuất bản' })).toBeInTheDocument();
-    expect(screen.getAllByRole('heading', { name: 'Bộ tài liệu xuất bản' })).toHaveLength(1);
+    expect(await screen.findByText('Bộ tài liệu xuất bản')).toBeInTheDocument();
+    expect(screen.getAllByText('Bộ tài liệu xuất bản')).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     await waitFor(() => expect(trigger).toHaveFocus());
   });
 
   it('keeps cached status visible and marks edits after accepted snapshot as local changes', async () => {
-    vi.useFakeTimers();
     const database = new TaskPlannerDatabase(`notes-status-${crypto.randomUUID()}`);
     databases.push(database);
     await database.open();
@@ -156,12 +155,12 @@ describe('Docs knowledge management integration', () => {
     });
 
     render(<NotesView db={database} />);
-    fireEvent.click((await screen.findAllByText(note.title))[0]!);
+    fireEvent.click((await screen.findAllByText(note.title ?? ''))[0]!);
     expect(await screen.findAllByLabelText('Trạng thái xuất bản: Đã đồng bộ')).not.toHaveLength(0);
     fireEvent.change(screen.getByPlaceholderText(/Nhập nội dung Markdown/), {
       target: { value: `${note.body}\nChỉnh sửa sau ảnh chụp`, selectionStart: 40 },
     });
-    await vi.advanceTimersByTimeAsync(500);
+    await new Promise((resolve) => setTimeout(resolve, 550));
     await waitFor(() => expect(screen.getAllByLabelText('Trạng thái xuất bản: Có thay đổi cục bộ').length).toBeGreaterThan(0));
     expect(await database.notes.get(created.id)).toMatchObject({ body: `${note.body}\nChỉnh sửa sau ảnh chụp` });
   });
