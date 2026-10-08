@@ -457,8 +457,8 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
     <div
       className="doc-folder-tree"
       style={{
-        width: 240,
-        minWidth: 240,
+        width: 260,
+        minWidth: 260,
         flexShrink: 0,
         height: '100%',
         display: 'flex',
@@ -471,10 +471,18 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
       }}
     >
       {/* Top CTA buttons */}
-      <div style={{ display: 'flex', gap: 6 }}>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
         <Button
           type="primary"
-          style={{ flex: 1, backgroundColor: '#4f46e5' }}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            padding: '4px 8px',
+            backgroundColor: '#4f46e5',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
           icon={<PlusOutlined />}
           onClick={() => {
             const targetFolder =
@@ -487,11 +495,19 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
           {activeFilter === 'quick_notes' ? 'Tạo ghi chú nhanh' : 'Tạo tài liệu'}
         </Button>
         <Tooltip title="Tạo thư mục mới ở cấp gốc">
-          <Button icon={<FolderAddOutlined />} onClick={handleOpenCreateRootFolder} />
+          <Button
+            style={{ flexShrink: 0 }}
+            icon={<FolderAddOutlined />}
+            onClick={handleOpenCreateRootFolder}
+          />
         </Tooltip>
         {onOpenZipImport && (
           <Tooltip title="Nhập tài liệu từ file Zip">
-            <Button icon={<UploadOutlined />} onClick={onOpenZipImport} />
+            <Button
+              style={{ flexShrink: 0 }}
+              icon={<UploadOutlined />}
+              onClick={onOpenZipImport}
+            />
           </Tooltip>
         )}
       </div>

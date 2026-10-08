@@ -772,7 +772,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
             backgroundColor: '#ffffff',
           }}
         >
-          {/* Column 1: Folder Tree (~240px) */}
+          {/* Column 1: Folder Tree (~260px) */}
           <DocFolderTree
             notes={allNotes || []}
             activeFilter={activeFilter}
