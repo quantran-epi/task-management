@@ -215,8 +215,8 @@
   4. Republishing unchanged or partially modified documents projects only added, changed, or removed chunks via SHA-256 comparison; unchanged chunks retain their indexed representation.
   5. User can inspect publish and indexing status for each document set in PlannerMate.
 
-**Plans**: 13 plans in 9 waves
-Plans:
+**Plans**: 15 plans in 10 waves
+Plans:
 **Wave 1**
 
 - [x] 16-01-PLAN.md — Client publish contracts and additive Dexie V10 stores (Wave 1)
@@ -256,6 +256,11 @@
 **Wave 9** *(blocked on Wave 8 completion)*
 
 - [x] 16-13-PLAN.md — Pilot and client Phase 16 acceptance gates (Wave 9)
+
+**Wave 10** *(blocked on Wave 9 completion - Gap Closure)*
+
+- [ ] 16-14-PLAN.md — Docs workspace publishing preview and DLP modal trigger (Wave 10)
+- [ ] 16-15-PLAN.md — Schema V10 knowledge tables backup export and transactional restore (Wave 10)
 
 ### Phase 17: Pilot Ontology, Deterministic Extraction & Neo4j Knowledge Graph
 
@@ -317,35 +322,3 @@
   2. Benchmark verifies expected sources, required graph paths, required facts, and forbidden unsupported claims.
   3. Milestone meets an agreed accuracy threshold for three-hop pilot queries and reports failures rather than masking them.
   4. Automated checks prove indexes are rebuildable, sensitive-data checks and any required fresh override confirmation run before external calls, and local search remains available offline.
-  5. Claude and Neo4j credentials remain server-side and never enter PlannerMate source, IndexedDB, logs, or published bundles.
-
-**Plans**: TBD
-
-## Progress
-
-| Phase | Milestone | Plans Complete | Status | Completed |
-|---|---|---|---|---|
-| 1. Foundation & Deployment Shell | v1.0 | 4/4 | Complete | 2026-09-26 |
-| 2. Work Hierarchy & Fast Task Management | v1.0 | 3/3 | Complete | 2026-09-26 |
-| 3. Capacity Model & Daily Planning Ledger | v1.0 | 4/4 | Complete | 2026-09-26 |
-| 4. Feasibility Engine & Workload Distribution | v1.0 | 3/3 | Complete | 2026-09-27 |
-| 5. Actionable Dashboard & Workload Forecasting | v1.0 | 4/4 | Complete | 2026-09-27 |
-| 6. Safe Local Backup & Restore | v1.0 | 3/3 | Complete | 2026-09-27 |
-| 7. PWA Offline Capability & Lifecycle Hardening | v1.0 | 4/4 | Complete | 2026-09-27 |
-| 8. Optional Encrypted GitHub Backup | v1.0 | 3/3 | Complete | 2026-09-27 |
-| 9. Banking IT Domain Fields & Work Types | v1.1 | 3/3 | Complete | 2026-09-28 |
-| 10. Date-Range Search, Multi-Criteria Filtering & Standup Export | v1.1 | 2/2 | Complete | 2026-09-28 |
-| 11. Jira Cloud Integration & Task Lifecycle | v1.1 | 3/3 | Complete | 2026-09-28 |
-| 12. In-App Notifications, Proactive Alerts & Custom Reminders | v1.1 | 3/3 | Complete | 2026-09-29 |
-| 12.1. Task Timer, Work Session Logs & Spent Time Tracking | v1.1 | 4/4 | Complete | 2026-09-29 |
-| 12.2. Multiple Reminders with Time, Notification Settings, Table Customization & Sidebar Persistence | v1.1 | 4/4 | Complete | 2026-09-29 |
-| 13. Enhanced Workload Analytics & Milestone Burndown | v1.1 | 3/3 | Complete | 2026-09-30 |
-| 13.1. Timer, Jira, Sticky Notes, Actual Worklog & Sync Improvements | v1.1 | 5/5 | Complete | 2026-10-01 |
-| 13.2. AI Chat Drawer, Item Context Grounding & 9router Ask-Answer Integration | v1.1 | 3/3 | Complete | 2026-10-03 |
-| 14. Knowledge Base Integration (Docs, Linking & AI Retrieval) | v1.1 | 4/4 | Complete | 2026-10-04 |
-| 15. Ghost Dev: Local Claude Code Headless Orchestration with Agent Control Page and Live Git Diff Reviewer | v1.1 | 4/4 | Complete | 2026-10-06 |
-| 16. Knowledge Server Foundation, DLP Checks & AST Ingestion | v1.2 | 13/13 | Complete   | 2026-10-08 |
-| 17. Pilot Ontology, Deterministic Extraction & Neo4j Knowledge Graph | v1.2 | 0/TBD | Not started | - |
-| 18. Multi-Modal Hybrid Retrieval Engine | v1.2 | 0/TBD | Not started | - |
-| 19. Grounded Assistant, Provenance Citations & Offline Fallback | v1.2 | 0/TBD | Not started | - |
-| 20. Benchmark Evaluation Suite, Integrity Hardening & Credential Isolation | v1.2 | 0/TBD | Not started | - |
