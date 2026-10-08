@@ -15,7 +15,9 @@ import {
   UndoOutlined,
 } from '@ant-design/icons';
 import type { Note } from '../../types/models';
+import type { DocumentPublishStatus } from '../../db/repositories/documentSetRepo';
 import { matchesDocSearch } from '../../utils/docSearch';
+import { DocPublishBadge } from '../knowledge/DocPublishBadge';
 
 const { Text } = Typography;
 
@@ -34,6 +36,8 @@ export interface DocListPaneProps {
   folderPath?: Note[] | undefined;
   onNavigateFolder?: ((folderId: string) => void) | undefined;
   onCreateDoc?: (() => void) | undefined;
+  publishStatuses?: Readonly<Record<string, DocumentPublishStatus>> | undefined;
+  compactPublishBadges?: boolean | undefined;
 }
 
 export const DocListPane: React.FC<DocListPaneProps> = ({
@@ -49,6 +53,8 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
   folderPath,
   onNavigateFolder,
   onCreateDoc,
+  publishStatuses,
+  compactPublishBadges = false,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<DocSortOption>('updatedAt');
@@ -440,7 +446,10 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
                       <span style={{ fontSize: 10 }}>+{(doc.tags?.length || 0) - 2}</span>
                     )}
                   </div>
-                  <span>{new Date(doc.updatedAt).toLocaleDateString('vi-VN')}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <DocPublishBadge status={publishStatuses?.[doc.id]} compact={compactPublishBadges} />
+                    <span>{new Date(doc.updatedAt).toLocaleDateString('vi-VN')}</span>
+                  </div>
                 </div>
               </div>
             );

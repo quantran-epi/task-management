@@ -43,7 +43,7 @@ describe('document publish badges', () => {
     expect(screen.getByLabelText(`Trạng thái xuất bản: ${label}`)).toBeInTheDocument();
   });
 
-  it('uses aggregate priority and lists every containing set/state without content', () => {
+  it('uses aggregate priority and lists every containing set/state without content', async () => {
     render(
       <DocPublishBadge
         status={status('Failed', [
@@ -55,7 +55,7 @@ describe('document publish badges', () => {
       />,
     );
     fireEvent.mouseOver(screen.getByLabelText('Trạng thái xuất bản: Thất bại'));
-    expect(screen.getByText('Bộ đồng bộ: Đã đồng bộ')).toBeInTheDocument();
+    expect(await screen.findByText('Bộ đồng bộ: Đã đồng bộ')).toBeInTheDocument();
     expect(screen.getByText('Bộ lỗi: Thất bại')).toBeInTheDocument();
     expect(screen.getByText('Bộ đang sửa: Có thay đổi cục bộ')).toBeInTheDocument();
     expect(document.body.textContent).not.toContain(note.body);

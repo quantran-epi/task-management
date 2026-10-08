@@ -32,6 +32,7 @@ import {
   FileMarkdownOutlined,
 } from '@ant-design/icons';
 import type { Note } from '../../types/models';
+import type { DocumentPublishStatus } from '../../db/repositories/documentSetRepo';
 import { renderSafeMarkdown } from '../../utils/markdown';
 import { extractMarkdownMetadata, detectReferencedEntities, isPlaceholderTitle, type DetectedEntity } from '../../utils/smartIngestion';
 import { SmartIngestionBanner } from './SmartIngestionBanner';
@@ -44,6 +45,7 @@ import { TaskDrawer } from '../tasks/TaskDrawer';
 import { exportPresentationAsFile } from '../../utils/pptxExport';
 import { exportContentAsFile } from '../../utils/fileExport';
 import { NormalizeDocModal } from './NormalizeDocModal';
+import { DocPublishBadge } from '../knowledge/DocPublishBadge';
 
 const { Text, Title } = Typography;
 
@@ -60,6 +62,8 @@ export interface DocEditorPaneProps {
   onOpenTask?: (taskId: string) => void;
   onOpenProject?: (projectId: string) => void;
   db?: TaskPlannerDatabase;
+  publishStatus?: DocumentPublishStatus | undefined;
+  compactPublishBadge?: boolean | undefined;
 }
 
 export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
@@ -71,6 +75,8 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
   onOpenTask,
   onOpenProject,
   db = defaultDb,
+  publishStatus,
+  compactPublishBadge = false,
 }) => {
   const [viewMode, setViewMode] = useState<EditorViewMode>('split');
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -1024,9 +1030,12 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
           <span>{charCount} ký tự</span>
           <span>{wordCount} từ</span>
         </Space>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <CloudSyncOutlined style={{ color: '#52c41a' }} />
-          <span>{saveStatus}</span>
+        <div data-testid="doc-editor-status" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <DocPublishBadge status={publishStatus} compact={compactPublishBadge} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <CloudSyncOutlined style={{ color: '#52c41a' }} />
+            <span>{saveStatus}</span>
+          </div>
         </div>
       </div>
     </div>
