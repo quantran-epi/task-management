@@ -850,7 +850,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
         onWidthChange={(w) => setAiChatWidth(w)}
         onOpenSettings={() => {
           closeAiChat();
-          onNavigate('settings');
+          onNavigate('settings', { tab: 'ai' });
         }}
         isMobile={isMobile}
         db={db}

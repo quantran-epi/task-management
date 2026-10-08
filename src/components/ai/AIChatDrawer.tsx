@@ -1261,6 +1261,7 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
         onClose={() => setIsMcpModalOpen(false)}
         db={db}
         onSettingsChange={reloadMcpServers}
+        onOpenSettings={onOpenSettings}
       />
 
       {/* Message List */}
