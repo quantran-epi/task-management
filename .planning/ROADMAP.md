@@ -220,8 +220,8 @@
 **Wave 1**
 
 - [x] 16-01-PLAN.md — Client publish contracts and additive Dexie V10 stores (Wave 1)
-- [ ] 16-03-PLAN.md — Deterministic client DLP scanner, masking, and safe audit (Wave 1)
-- [ ] 16-04-PLAN.md — Independent daemon package and strict shared protocol (Wave 1)
+- [x] 16-03-PLAN.md — Deterministic client DLP scanner, masking, and safe audit (Wave 1)
+- [x] 16-04-PLAN.md — Independent daemon package and strict shared protocol (Wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -344,7 +344,7 @@
 | 13.2. AI Chat Drawer, Item Context Grounding & 9router Ask-Answer Integration | v1.1 | 3/3 | Complete | 2026-10-03 |
 | 14. Knowledge Base Integration (Docs, Linking & AI Retrieval) | v1.1 | 4/4 | Complete | 2026-10-04 |
 | 15. Ghost Dev: Local Claude Code Headless Orchestration with Agent Control Page and Live Git Diff Reviewer | v1.1 | 4/4 | Complete | 2026-10-06 |
-| 16. Knowledge Server Foundation, DLP Checks & AST Ingestion | v1.2 | 0/13 | Planned | - |
+| 16. Knowledge Server Foundation, DLP Checks & AST Ingestion | v1.2 | 3/13 | In Progress|  |
 | 17. Pilot Ontology, Deterministic Extraction & Neo4j Knowledge Graph | v1.2 | 0/TBD | Not started | - |
 | 18. Multi-Modal Hybrid Retrieval Engine | v1.2 | 0/TBD | Not started | - |
 | 19. Grounded Assistant, Provenance Citations & Offline Fallback | v1.2 | 0/TBD | Not started | - |
