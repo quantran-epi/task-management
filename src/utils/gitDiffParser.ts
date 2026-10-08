@@ -156,29 +156,58 @@ export function parseGitDiff(rawDiff: string): DiffFile[] {
   return files;
 }
 
+function formatHunkHeaderLine(hunk: DiffHunk): string {
+  const oldCountStr = hunk.oldCount !== 1 ? `,${hunk.oldCount}` : '';
+  const newCountStr = hunk.newCount !== 1 ? `,${hunk.newCount}` : '';
+  const suffix = hunk.header ? ` ${hunk.header}` : '';
+  return `@@ -${hunk.oldStart}${oldCountStr} +${hunk.newStart}${newCountStr} @@${suffix}`;
+}
+
+export function buildHunkPatch(filePath: string, hunk: DiffHunk): string {
+  const cleanPath = filePath.replace(/\\/g, '/').replace(/^\.\//, '');
+  const header = `diff --git a/${cleanPath} b/${cleanPath}\n--- a/${cleanPath}\n+++ b/${cleanPath}\n${formatHunkHeaderLine(hunk)}\n`;
+  const body = hunk.lines
+    .map((l) => {
+      if (l.type === 'add') return `+${l.content}`;
+      if (l.type === 'delete') return `-${l.content}`;
+      return ` ${l.content}`;
+    })
+    .join('\n');
+  return `${header}${body}\n`;
+}
+
 /**
  * Reconstructs a valid unified git patch string for a single hunk.
  * Compatible with `git apply` / `git apply --reverse`.
  */
 export function formatHunkPatch(filePath: string, hunk: DiffHunk): string {
-  const cleanPath = filePath.replace(/\\/g, '/').replace(/^\.\//, '');
-  const lines: string[] = [
-    `diff --git a/${cleanPath} b/${cleanPath}`,
-    `--- a/${cleanPath}`,
-    `+++ b/${cleanPath}`,
-    `@@ -${hunk.oldStart},${hunk.oldCount} +${hunk.newStart},${hunk.newCount} @@${hunk.header ? ' ' + hunk.header : ''}`,
-  ];
+  return buildHunkPatch(filePath, hunk);
+}
 
-  for (const line of hunk.lines) {
-    if (line.type === 'add') {
-      lines.push(`+${line.content}`);
-    } else if (line.type === 'delete') {
-      lines.push(`-${line.content}`);
-    } else {
-      lines.push(` ${line.content}`);
+export function buildLinePatch(filePath: string, hunk: DiffHunk, targetLineIndex: number): string {
+  const targetLine = hunk.lines[targetLineIndex];
+  if (!targetLine || targetLine.type === 'context') return '';
+
+  const cleanPath = filePath.replace(/\\/g, '/').replace(/^\.\//, '');
+  const header = `diff --git a/${cleanPath} b/${cleanPath}\n--- a/${cleanPath}\n+++ b/${cleanPath}\n${formatHunkHeaderLine(hunk)}\n`;
+  const bodyLines: string[] = [];
+
+  for (let i = 0; i < hunk.lines.length; i++) {
+    const l = hunk.lines[i]!;
+    if (l.type === 'context') {
+      bodyLines.push(` ${l.content}`);
+    } else if (l.type === 'add') {
+      if (i === targetLineIndex) {
+        bodyLines.push(`+${l.content}`);
+      }
+    } else if (l.type === 'delete') {
+      if (i === targetLineIndex) {
+        bodyLines.push(`-${l.content}`);
+      } else {
+        bodyLines.push(` ${l.content}`);
+      }
     }
   }
 
-  return lines.join('\n') + '\n';
+  return `${header}${bodyLines.join('\n')}\n`;
 }
-

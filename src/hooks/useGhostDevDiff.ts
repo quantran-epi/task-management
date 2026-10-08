@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { DiffFile, DiffViewMode } from '../types/agent';
-import { parseGitDiff, formatHunkPatch } from '../utils/gitDiffParser';
+import type { DiffFile, DiffHunk, DiffViewMode } from '../types/agent';
+import { parseGitDiff, formatHunkPatch, buildHunkPatch, buildLinePatch } from '../utils/gitDiffParser';
 import { isTauriApp } from '../utils/timerPopout';
 
 async function tauriInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
@@ -23,69 +23,117 @@ export interface UseGhostDevDiffResult {
   loading: boolean;
   refreshDiff: (silent?: boolean) => Promise<void>;
   acceptAll: (commitMessage?: string) => Promise<string>;
+  acceptFile: (filePath: string, commitMessage?: string) => Promise<string>;
+  acceptPatch: (patchContent: string, commitMessage?: string) => Promise<string>;
+  acceptHunk: (file: DiffFile, hunk: DiffHunk) => Promise<string>;
+  acceptLine: (file: DiffFile, hunk: DiffHunk, targetLineIndex: number) => Promise<string>;
   revertAll: () => Promise<void>;
   revertFile: (filePath: string) => Promise<void>;
-  revertHunk: (filePath: string, hunk: import('../types/agent').DiffHunk) => Promise<void>;
+  revertHunk: (filePath: string, hunk: DiffHunk) => Promise<void>;
 }
 
+interface CachedDiff {
+  rawDiff: string;
+  diffFiles: DiffFile[];
+  selectedFilePath: string | null;
+}
+
+// Module-level in-memory cache to guarantee instant 0ms diff restoration on process switch
+const diffCache = new Map<string, CachedDiff>();
+
 export function useGhostDevDiff(worktreePath: string | null): UseGhostDevDiffResult {
-  const [rawDiff, setRawDiff] = useState<string>('');
-  const [diffFiles, setDiffFiles] = useState<DiffFile[]>([]);
+  const [rawDiff, setRawDiff] = useState<string>(() => {
+    if (worktreePath && diffCache.has(worktreePath)) {
+      return diffCache.get(worktreePath)!.rawDiff;
+    }
+    return '';
+  });
+  const [diffFiles, setDiffFiles] = useState<DiffFile[]>(() => {
+    if (worktreePath && diffCache.has(worktreePath)) {
+      return diffCache.get(worktreePath)!.diffFiles;
+    }
+    return [];
+  });
   const [allWorktreeFiles, setAllWorktreeFiles] = useState<string[]>([]);
   const [selectedFileContent, setSelectedFileContent] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<DiffViewMode>('unified');
-  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
-  const [loading, setLoading] = useState<boolean>(false);
-  const inFlightRef = useRef(false);
+  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(() => {
+    if (worktreePath && diffCache.has(worktreePath)) {
+      return diffCache.get(worktreePath)!.selectedFilePath;
+    }
+    return null;
+  });
+  const [loading, setLoading] = useState<boolean>(() => {
+    return Boolean(worktreePath && !diffCache.has(worktreePath));
+  });
+
+  const requestIdRef = useRef(0);
+  const currentWorktreeRef = useRef<string | null>(worktreePath);
+  currentWorktreeRef.current = worktreePath;
 
   const refreshDiff = useCallback(
     async (silent = false) => {
-      if (!isTauriApp() || !worktreePath) {
+      const targetWorktree = worktreePath;
+      if (!isTauriApp() || !targetWorktree) {
         setRawDiff('');
         setDiffFiles([]);
         setAllWorktreeFiles([]);
         setSelectedFilePath(null);
         setSelectedFileContent(null);
+        setLoading(false);
         return;
       }
 
-      if (inFlightRef.current) {
-        return;
-      }
-      inFlightRef.current = true;
+      const reqId = ++requestIdRef.current;
+      const cached = diffCache.get(targetWorktree);
 
-      if (!silent) {
+      if (!silent && !cached) {
         setLoading(true);
       }
+
       try {
         const [output, fileListRaw] = await Promise.all([
-          tauriInvoke<string>('get_worktree_diff', { worktreePath }).catch(() => ''),
-          tauriInvoke<string[]>('list_worktree_files', { worktreePath }).catch(() => [] as string[]),
+          tauriInvoke<string>('get_worktree_diff', { worktreePath: targetWorktree }).catch(() => ''),
+          tauriInvoke<string[]>('list_worktree_files', { worktreePath: targetWorktree }).catch(() => [] as string[]),
         ]);
 
+        if (requestIdRef.current !== reqId || currentWorktreeRef.current !== targetWorktree) {
+          return;
+        }
+
+        const raw = output || '';
+        const parsed = parseGitDiff(raw);
         const fileList: string[] = Array.isArray(fileListRaw) ? fileListRaw : [];
-        setRawDiff(output || '');
-        const parsed = parseGitDiff(output || '');
+        setRawDiff(raw);
         setDiffFiles(parsed);
         setAllWorktreeFiles(fileList);
 
-        // Maintain valid file selection
+        let nextSelectedPath: string | null = null;
         setSelectedFilePath((prev) => {
           if (
             prev &&
             (parsed.some((f) => f.newPath === prev || f.oldPath === prev) ||
               fileList.includes(prev))
           ) {
+            nextSelectedPath = prev;
             return prev;
           }
           const first = parsed[0]?.newPath || fileList[0] || null;
+          nextSelectedPath = first;
           return first;
         });
+
+        diffCache.set(targetWorktree, {
+          rawDiff: raw,
+          diffFiles: parsed,
+          selectedFilePath: nextSelectedPath,
+        });
       } catch (err) {
-        console.error('[GhostDev] Failed to fetch git diff:', err);
+        if (requestIdRef.current === reqId && currentWorktreeRef.current === targetWorktree) {
+          console.error('[GhostDev] Failed to fetch git diff:', err);
+        }
       } finally {
-        inFlightRef.current = false;
-        if (!silent) {
+        if (requestIdRef.current === reqId && currentWorktreeRef.current === targetWorktree) {
           setLoading(false);
         }
       }
@@ -130,10 +178,33 @@ export function useGhostDevDiff(worktreePath: string | null): UseGhostDevDiffRes
     };
   }, [worktreePath, selectedFilePath, diffFiles]);
 
-  // Initial load on worktree change
+  // Initial load and worktree switch handler
   useEffect(() => {
-    void refreshDiff(false);
-  }, [refreshDiff]);
+    if (!worktreePath) {
+      setRawDiff('');
+      setDiffFiles([]);
+      setAllWorktreeFiles([]);
+      setSelectedFilePath(null);
+      setSelectedFileContent(null);
+      setLoading(false);
+      return;
+    }
+
+    const cached = diffCache.get(worktreePath);
+    if (cached) {
+      setRawDiff(cached.rawDiff);
+      setDiffFiles(cached.diffFiles);
+      setSelectedFilePath(cached.selectedFilePath);
+      setLoading(false);
+    } else {
+      setRawDiff('');
+      setDiffFiles([]);
+      setSelectedFilePath(null);
+      setLoading(true);
+    }
+
+    void refreshDiff(Boolean(cached));
+  }, [worktreePath, refreshDiff]);
 
   // Event-driven refresh: update diff only on actual agent activity or status changes
   useEffect(() => {
@@ -156,21 +227,45 @@ export function useGhostDevDiff(worktreePath: string | null): UseGhostDevDiffRes
           void refreshDiff(true);
         });
 
+        let hasPendingFileMutation = false;
+
         unlistenStream = await listen<{ type?: string; content?: string }>('ghost-dev:stream-chunk', (event) => {
           if (event.payload?.type === 'status_change') {
             void refreshDiff(true);
-          } else if (
+            return;
+          }
+
+          const content = event.payload?.content || '';
+
+          // Detect file-mutating tool invocations (Write, Edit, NotebookEdit, Bash)
+          const isMutationToolCall =
+            event.payload?.type === 'tool_call' &&
+            (/"name"\s*:\s*"(?:Write|Edit|NotebookEdit|Bash)"/i.test(content) ||
+              /\[Tool Use\]:\s*(?:Write|Edit|NotebookEdit|Bash)/i.test(content));
+
+          if (isMutationToolCall) {
+            hasPendingFileMutation = true;
+            return;
+          }
+
+          // Refresh diff only when tool result arrives for file-mutation tools
+          const isToolResult =
             event.payload?.type === 'tool_result' ||
-            event.payload?.type === 'tool_call' ||
-            (event.payload?.type === 'log' &&
-              (event.payload?.content?.includes('"tool_result"') ||
-                event.payload?.content?.includes('"tool_use"')))
-          ) {
-            // Debounce git diff to prevent concurrent Windows file handle conflicts during tool execution
-            if (debounceTimer) clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(() => {
-              void refreshDiff(true);
-            }, 600);
+            (event.payload?.type === 'log' && content.includes('"tool_result"'));
+
+          if (isToolResult) {
+            const hasMutation =
+              hasPendingFileMutation ||
+              /(?:Write|Edit|NotebookEdit|Bash)/i.test(content);
+
+            if (hasMutation) {
+              hasPendingFileMutation = false;
+              // Debounce git diff to prevent concurrent disk I/O and UI freezes
+              if (debounceTimer) clearTimeout(debounceTimer);
+              debounceTimer = setTimeout(() => {
+                void refreshDiff(true);
+              }, 1200);
+            }
           }
         });
       } catch (err) {
@@ -206,6 +301,53 @@ export function useGhostDevDiff(worktreePath: string | null): UseGhostDevDiffRes
     [worktreePath, refreshDiff]
   );
 
+  const acceptFile = useCallback(
+    async (filePath: string, commitMessage?: string) => {
+      if (!isTauriApp() || !worktreePath) return '';
+      const sha = await tauriInvoke<string>('accept_file_diff', {
+        worktreePath,
+        filePath,
+        commitMessage,
+      });
+      await refreshDiff();
+      return sha;
+    },
+    [worktreePath, refreshDiff]
+  );
+
+  const acceptPatch = useCallback(
+    async (patchContent: string, commitMessage?: string) => {
+      if (!isTauriApp() || !worktreePath) return '';
+      const sha = await tauriInvoke<string>('accept_patch_diff', {
+        worktreePath,
+        patchContent,
+        commitMessage,
+      });
+      await refreshDiff();
+      return sha;
+    },
+    [worktreePath, refreshDiff]
+  );
+
+  const acceptHunk = useCallback(
+    async (file: DiffFile, hunk: DiffHunk) => {
+      const filePath = file.newPath || file.oldPath;
+      const patch = buildHunkPatch(filePath, hunk);
+      return acceptPatch(patch, `chore(ghost-dev): accept hunk in ${filePath}`);
+    },
+    [acceptPatch]
+  );
+
+  const acceptLine = useCallback(
+    async (file: DiffFile, hunk: DiffHunk, targetLineIndex: number) => {
+      const filePath = file.newPath || file.oldPath;
+      const patch = buildLinePatch(filePath, hunk, targetLineIndex);
+      if (!patch) return '';
+      return acceptPatch(patch, `chore(ghost-dev): accept change line in ${filePath}`);
+    },
+    [acceptPatch]
+  );
+
   const revertAll = useCallback(async () => {
     if (!isTauriApp() || !worktreePath) return;
     await tauriInvoke('revert_all_diff', { worktreePath });
@@ -222,7 +364,7 @@ export function useGhostDevDiff(worktreePath: string | null): UseGhostDevDiffRes
   );
 
   const revertHunk = useCallback(
-    async (filePath: string, hunk: import('../types/agent').DiffHunk) => {
+    async (filePath: string, hunk: DiffHunk) => {
       if (!isTauriApp() || !worktreePath) return;
       const patch = formatHunkPatch(filePath, hunk);
       await tauriInvoke('revert_hunk_diff', { worktreePath, patchContent: patch });
@@ -252,6 +394,10 @@ export function useGhostDevDiff(worktreePath: string | null): UseGhostDevDiffRes
     loading,
     refreshDiff,
     acceptAll,
+    acceptFile,
+    acceptPatch,
+    acceptHunk,
+    acceptLine,
     revertAll,
     revertFile,
     revertHunk,

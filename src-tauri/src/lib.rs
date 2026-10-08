@@ -1,5 +1,6 @@
 mod agent_diff_ops;
 mod agent_manager;
+mod agent_skill_ops;
 mod ai_proxy;
 mod jira_proxy;
 mod keyring_store;
@@ -50,6 +51,7 @@ pub fn run() {
             agent_diff_ops::list_worktree_files,
             agent_diff_ops::read_worktree_file_content,
             agent_diff_ops::revert_hunk_diff,
+            agent_skill_ops::list_available_skills,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

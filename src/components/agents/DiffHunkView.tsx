@@ -8,8 +8,9 @@ export interface DiffHunkViewProps {
   filePath: string;
   viewMode: DiffViewMode;
   onLineClick: (filePath: string, lineNumber: number, code: string) => void;
-  onAcceptHunk?: (filePath: string, hunk: DiffHunk) => Promise<void>;
-  onRejectHunk?: (filePath: string, hunk: DiffHunk) => Promise<void>;
+  onAcceptHunk?: (filePath: string, hunk: DiffHunk) => Promise<void> | void;
+  onRejectHunk?: (filePath: string, hunk: DiffHunk) => Promise<void> | void;
+  onAcceptLine?: (hunk: DiffHunk, lineIndex: number) => void;
 }
 
 export const DiffHunkView: React.FC<DiffHunkViewProps> = ({
@@ -19,6 +20,7 @@ export const DiffHunkView: React.FC<DiffHunkViewProps> = ({
   onLineClick,
   onAcceptHunk,
   onRejectHunk,
+  onAcceptLine,
 }) => {
   const { token } = theme.useToken();
   const isDark = token.colorBgBase === '#141414' || token.colorTextBase?.includes('255');
@@ -139,6 +141,7 @@ export const DiffHunkView: React.FC<DiffHunkViewProps> = ({
               }}
               style={{
                 display: 'flex',
+                alignItems: 'center',
                 backgroundColor: bg,
                 cursor: 'pointer',
                 transition: 'background-color 0.1s ease',
@@ -200,12 +203,28 @@ export const DiffHunkView: React.FC<DiffHunkViewProps> = ({
                   flex: 1,
                   whiteSpace: 'pre',
                   overflowX: 'auto',
-                  paddingRight: 12,
+                  paddingRight: 8,
                   color: token.colorText,
                 }}
               >
                 {line.content || ' '}
               </div>
+
+              {/* Accept Line action */}
+              {(isAdd || isDel) && onAcceptLine && (
+                <Tooltip title="Accept dòng này" placement="left">
+                  <Button
+                    size="small"
+                    type="text"
+                    icon={<CheckOutlined style={{ color: '#52c41a', fontSize: 11 }} />}
+                    style={{ height: 20, width: 20, padding: 0, marginRight: 6, flexShrink: 0 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAcceptLine(hunk, idx);
+                    }}
+                  />
+                </Tooltip>
+              )}
             </div>
           );
         })}
@@ -224,21 +243,23 @@ export const DiffHunkView: React.FC<DiffHunkViewProps> = ({
     if (cur.type === 'context') {
       rows.push({ left: cur, right: cur });
       i++;
-    } else if (cur.type === 'delete' || cur.type === 'add') {
+    } else {
       const delLines: DiffLine[] = [];
       const addLines: DiffLine[] = [];
+
       while (i < lines.length && (lines[i]?.type === 'delete' || lines[i]?.type === 'add')) {
-        const line = lines[i]!;
-        if (line.type === 'delete') {
-          delLines.push(line);
-        } else {
-          addLines.push(line);
-        }
+        const item = lines[i]!;
+        if (item.type === 'delete') delLines.push(item);
+        if (item.type === 'add') addLines.push(item);
         i++;
       }
+
       const maxLen = Math.max(delLines.length, addLines.length);
-      for (let j = 0; j < maxLen; j++) {
-        rows.push({ left: delLines[j], right: addLines[j] });
+      for (let k = 0; k < maxLen; k++) {
+        rows.push({
+          left: delLines[k],
+          right: addLines[k],
+        });
       }
     }
   }
@@ -255,98 +276,133 @@ export const DiffHunkView: React.FC<DiffHunkViewProps> = ({
     >
       {renderHunkHeader()}
 
-      {rows.map((row, idx) => (
-        <div key={idx} style={{ display: 'flex', width: '100%' }}>
-          {/* Left Column (Deletions / Old) */}
-          <div
-            style={{
-              flex: 1,
-              display: 'flex',
-              backgroundColor: row.left ? (row.left.type === 'delete' ? delBg : 'transparent') : gutterBg,
-              borderRight: `1px solid ${token.colorBorderSecondary}`,
-              overflow: 'hidden',
-              cursor: row.left ? 'pointer' : 'default',
-            }}
-            role={row.left ? 'button' : undefined}
-            tabIndex={row.left ? 0 : undefined}
-            onClick={() => {
-              if (row.left && row.left.oldLineNumber) {
-                onLineClick(filePath, row.left.oldLineNumber, row.left.content);
-              }
-            }}
-          >
-            <div
-              style={{
-                width: 44,
-                textAlign: 'right',
-                paddingRight: 8,
-                userSelect: 'none',
-                color: token.colorTextQuaternary,
-                backgroundColor: gutterBg,
-                flexShrink: 0,
-              }}
-            >
-              {row.left?.oldLineNumber ?? ''}
-            </div>
-            <div
-              style={{
-                flex: 1,
-                whiteSpace: 'pre',
-                overflowX: 'auto',
-                paddingLeft: 6,
-                paddingRight: 6,
-                color: token.colorText,
-              }}
-            >
-              {row.left?.content ?? ''}
-            </div>
-          </div>
+      {rows.map((row, idx) => {
+        const leftHunkIdx = row.left ? hunk.lines.indexOf(row.left) : -1;
+        const rightHunkIdx = row.right ? hunk.lines.indexOf(row.right) : -1;
 
-          {/* Right Column (Additions / New) */}
-          <div
-            style={{
-              flex: 1,
-              display: 'flex',
-              backgroundColor: row.right ? (row.right.type === 'add' ? addBg : 'transparent') : gutterBg,
-              overflow: 'hidden',
-              cursor: row.right ? 'pointer' : 'default',
-            }}
-            role={row.right ? 'button' : undefined}
-            tabIndex={row.right ? 0 : undefined}
-            onClick={() => {
-              if (row.right && row.right.newLineNumber) {
-                onLineClick(filePath, row.right.newLineNumber, row.right.content);
-              }
-            }}
-          >
-            <div
-              style={{
-                width: 44,
-                textAlign: 'right',
-                paddingRight: 8,
-                userSelect: 'none',
-                color: token.colorTextQuaternary,
-                backgroundColor: gutterBg,
-                flexShrink: 0,
-              }}
-            >
-              {row.right?.newLineNumber ?? ''}
-            </div>
+        return (
+          <div key={idx} style={{ display: 'flex', width: '100%' }}>
+            {/* Left Column (Deletions / Old) */}
             <div
               style={{
                 flex: 1,
-                whiteSpace: 'pre',
-                overflowX: 'auto',
-                paddingLeft: 6,
-                paddingRight: 6,
-                color: token.colorText,
+                display: 'flex',
+                alignItems: 'center',
+                backgroundColor: row.left ? (row.left.type === 'delete' ? delBg : 'transparent') : gutterBg,
+                borderRight: `1px solid ${token.colorBorderSecondary}`,
+                overflow: 'hidden',
+                cursor: row.left ? 'pointer' : 'default',
+              }}
+              role={row.left ? 'button' : undefined}
+              tabIndex={row.left ? 0 : undefined}
+              onClick={() => {
+                if (row.left && row.left.oldLineNumber) {
+                  onLineClick(filePath, row.left.oldLineNumber, row.left.content);
+                }
               }}
             >
-              {row.right?.content ?? ''}
+              <div
+                style={{
+                  width: 44,
+                  textAlign: 'right',
+                  paddingRight: 8,
+                  userSelect: 'none',
+                  color: token.colorTextQuaternary,
+                  backgroundColor: gutterBg,
+                  flexShrink: 0,
+                }}
+              >
+                {row.left?.oldLineNumber ?? ''}
+              </div>
+              <div
+                style={{
+                  flex: 1,
+                  whiteSpace: 'pre',
+                  overflowX: 'auto',
+                  paddingLeft: 6,
+                  paddingRight: 6,
+                  color: token.colorText,
+                }}
+              >
+                {row.left?.content ?? ''}
+              </div>
+              {row.left?.type === 'delete' && onAcceptLine && leftHunkIdx !== -1 && (
+                <Tooltip title="Accept dòng này" placement="left">
+                  <Button
+                    size="small"
+                    type="text"
+                    icon={<CheckOutlined style={{ color: '#52c41a', fontSize: 11 }} />}
+                    style={{ height: 20, width: 20, padding: 0, marginRight: 4, flexShrink: 0 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAcceptLine(hunk, leftHunkIdx);
+                    }}
+                  />
+                </Tooltip>
+              )}
+            </div>
+
+            {/* Right Column (Additions / New) */}
+            <div
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                backgroundColor: row.right ? (row.right.type === 'add' ? addBg : 'transparent') : gutterBg,
+                overflow: 'hidden',
+                cursor: row.right ? 'pointer' : 'default',
+              }}
+              role={row.right ? 'button' : undefined}
+              tabIndex={row.right ? 0 : undefined}
+              onClick={() => {
+                if (row.right && row.right.newLineNumber) {
+                  onLineClick(filePath, row.right.newLineNumber, row.right.content);
+                }
+              }}
+            >
+              <div
+                style={{
+                  width: 44,
+                  textAlign: 'right',
+                  paddingRight: 8,
+                  userSelect: 'none',
+                  color: token.colorTextQuaternary,
+                  backgroundColor: gutterBg,
+                  flexShrink: 0,
+                }}
+              >
+                {row.right?.newLineNumber ?? ''}
+              </div>
+              <div
+                style={{
+                  flex: 1,
+                  whiteSpace: 'pre',
+                  overflowX: 'auto',
+                  paddingLeft: 6,
+                  paddingRight: 6,
+                  color: token.colorText,
+                }}
+              >
+                {row.right?.content ?? ''}
+              </div>
+              {row.right?.type === 'add' && onAcceptLine && rightHunkIdx !== -1 && (
+                <Tooltip title="Accept dòng này" placement="left">
+                  <Button
+                    size="small"
+                    type="text"
+                    icon={<CheckOutlined style={{ color: '#52c41a', fontSize: 11 }} />}
+                    style={{ height: 20, width: 20, padding: 0, marginRight: 4, flexShrink: 0 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAcceptLine(hunk, rightHunkIdx);
+                    }}
+                  />
+                </Tooltip>
+              )}
             </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 };

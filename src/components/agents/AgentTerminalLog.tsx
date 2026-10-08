@@ -32,6 +32,7 @@ import {
   BulbOutlined,
 } from '@ant-design/icons';
 import type { GhostDevStreamChunk, WorkerSession, AgentStatus } from '../../types/agent';
+import { loadAvailableSkills, type SkillItem } from '../../services/agents/agentSkillService';
 import {
   extractTokenCount,
   calculateSessionTokens,
@@ -437,6 +438,45 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
   const [dismissedWorkerIds, setDismissedWorkerIds] = useState<string[]>([]);
   const [liveElapsedSec, setLiveElapsedSec] = useState<number>(0);
   const logContainerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<any>(null);
+
+  // Command History state (ArrowUp / ArrowDown)
+  const [commandHistory, setCommandHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState<number>(-1);
+  const [draftText, setDraftText] = useState<string>('');
+
+  // Skill Autocomplete state (loaded on initial mount)
+  const [availableSkills, setAvailableSkills] = useState<SkillItem[]>([]);
+  const [showSkillsMenu, setShowSkillsMenu] = useState<boolean>(false);
+  const [selectedSkillIndex, setSelectedSkillIndex] = useState<number>(0);
+
+  useEffect(() => {
+    void loadAvailableSkills().then((skills) => {
+      setAvailableSkills(skills);
+    });
+  }, []);
+
+  const isSlashCommandPrefix = inputText.startsWith('/') && !inputText.includes(' ');
+  const skillFilter = isSlashCommandPrefix ? inputText.slice(1).toLowerCase().trim() : '';
+
+  const matchingSkills = useMemo(() => {
+    if (!isSlashCommandPrefix) return [];
+    if (!skillFilter) return availableSkills;
+    return availableSkills.filter(
+      (s) =>
+        s.name.toLowerCase().includes(skillFilter) ||
+        s.description.toLowerCase().includes(skillFilter)
+    );
+  }, [isSlashCommandPrefix, skillFilter, availableSkills]);
+
+  useEffect(() => {
+    if (isSlashCommandPrefix && matchingSkills.length > 0) {
+      setShowSkillsMenu(true);
+      setSelectedSkillIndex(0);
+    } else {
+      setShowSkillsMenu(false);
+    }
+  }, [isSlashCommandPrefix, matchingSkills.length]);
 
   // Reset subagent filter & dismissed state when active task changes
   useEffect(() => {
@@ -802,9 +842,76 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
   const handleSend = async () => {
     if (!inputText.trim() || sending) return;
     const msg = inputText.trim();
+    setCommandHistory((prev) => [...prev, msg]);
+    setHistoryIndex(-1);
+    setDraftText('');
+    setShowSkillsMenu(false);
     setInputText('');
     await onSendFeedback(msg);
     setAutoScroll(true);
+  };
+
+  const handleSelectSkill = (skill: SkillItem) => {
+    setInputText(`/${skill.name} `);
+    setShowSkillsMenu(false);
+    inputRef.current?.focus();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // 1. If Skill Autocomplete Dropdown is open
+    if (showSkillsMenu && matchingSkills.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedSkillIndex((prev) => (prev + 1) % matchingSkills.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedSkillIndex((prev) => (prev - 1 + matchingSkills.length) % matchingSkills.length);
+        return;
+      }
+      if (e.key === 'Tab' || e.key === 'Enter') {
+        e.preventDefault();
+        const chosen = matchingSkills[selectedSkillIndex];
+        if (chosen) {
+          handleSelectSkill(chosen);
+        }
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowSkillsMenu(false);
+        return;
+      }
+    }
+
+    // 2. Command History navigation via ArrowUp / ArrowDown
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (commandHistory.length === 0) return;
+      const nextIdx =
+        historyIndex === -1 ? commandHistory.length - 1 : Math.max(0, historyIndex - 1);
+      if (historyIndex === -1) {
+        setDraftText(inputText);
+      }
+      setHistoryIndex(nextIdx);
+      setInputText(commandHistory[nextIdx] ?? '');
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (historyIndex === -1) return;
+      const nextIdx = historyIndex + 1;
+      if (nextIdx >= commandHistory.length) {
+        setHistoryIndex(-1);
+        setInputText(draftText);
+      } else {
+        setHistoryIndex(nextIdx);
+        setInputText(commandHistory[nextIdx] ?? '');
+      }
+      return;
+    }
   };
 
   const handleCopyRawLogs = () => {
@@ -1631,6 +1738,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
         {/* 2-Way Chat Prompt Input */}
         <div
           style={{
+            position: 'relative',
             padding: '8px 12px',
             backgroundColor: '#252526',
             borderTop: '1px solid #333',
@@ -1638,16 +1746,130 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
             gap: 8,
           }}
         >
+          {/* Slash Command Autocomplete Overlay */}
+          {showSkillsMenu && matchingSkills.length > 0 && (
+            <div
+              style={{
+                position: 'absolute',
+                bottom: '100%',
+                left: 12,
+                right: 12,
+                marginBottom: 6,
+                maxHeight: 240,
+                overflowY: 'auto',
+                backgroundColor: '#18181b',
+                border: '1px solid #3f3f46',
+                borderRadius: 6,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                zIndex: 1000,
+                padding: '4px 0',
+              }}
+            >
+              <div
+                style={{
+                  padding: '4px 10px',
+                  fontSize: 10,
+                  fontWeight: 600,
+                  color: '#71717a',
+                  borderBottom: '1px solid #27272a',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <span>GỢI Ý KỸ NĂNG / LỆNH ({matchingSkills.length})</span>
+                <span>Tab / Enter để chọn • Esc để đóng</span>
+              </div>
+              {matchingSkills.map((skill, idx) => {
+                const isSelected = selectedSkillIndex === idx;
+                return (
+                  <div
+                    key={skill.name}
+                    onClick={() => handleSelectSkill(skill)}
+                    onMouseEnter={() => setSelectedSkillIndex(idx)}
+                    style={{
+                      padding: '6px 10px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 2,
+                      backgroundColor: isSelected ? '#27272a' : 'transparent',
+                      borderLeft: isSelected ? '3px solid #6366f1' : '3px solid transparent',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span
+                        style={{
+                          fontWeight: 700,
+                          fontSize: 12,
+                          color: isSelected ? '#a5b4fc' : '#818cf8',
+                          fontFamily: 'monospace',
+                        }}
+                      >
+                        /{skill.name}
+                      </span>
+                      <Tag
+                        bordered={false}
+                        style={{
+                          fontSize: 9,
+                          lineHeight: '14px',
+                          padding: '0 4px',
+                          margin: 0,
+                          backgroundColor:
+                            skill.source === 'project'
+                              ? '#3b0764'
+                              : skill.source === 'user'
+                              ? '#083344'
+                              : '#27272a',
+                          color:
+                            skill.source === 'project'
+                              ? '#d8b4fe'
+                              : skill.source === 'user'
+                              ? '#67e8f9'
+                              : '#a1a1aa',
+                        }}
+                      >
+                        {skill.source}
+                      </Tag>
+                      {skill.argumentHint && (
+                        <span style={{ fontSize: 10, color: '#71717a', fontFamily: 'monospace' }}>
+                          {skill.argumentHint}
+                        </span>
+                      )}
+                    </div>
+                    {skill.description && (
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: '#94a3b8',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}
+                      >
+                        {skill.description}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           <Input
+            ref={inputRef}
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
+            onKeyDown={handleKeyDown}
             onPressEnter={(e) => {
+              if (showSkillsMenu && matchingSkills.length > 0) {
+                return;
+              }
               if (!e.shiftKey) {
                 e.preventDefault();
                 void handleSend();
               }
             }}
-            placeholder="Chỉ đạo trực tiếp Master Agent (Enter để gửi)..."
+            placeholder="Chỉ đạo trực tiếp Master Agent (Enter để gửi, / gợi ý lệnh, ↑↓ lịch sử)..."
             disabled={sending}
             style={{
               backgroundColor: '#1e1e1e',
