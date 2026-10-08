@@ -105,6 +105,72 @@ fn get_builtin_skills() -> Vec<SkillItem> {
             source: "builtin".to_string(),
         },
         SkillItem {
+            name: "status".to_string(),
+            description: "Show system status, git status, tokens, and background tasks".to_string(),
+            argument_hint: None,
+            source: "builtin".to_string(),
+        },
+        SkillItem {
+            name: "goal".to_string(),
+            description: "Set session objective or track long-running goal".to_string(),
+            argument_hint: Some("<goal description>".to_string()),
+            source: "builtin".to_string(),
+        },
+        SkillItem {
+            name: "doctor".to_string(),
+            description: "Health check on environment, toolchain, and permissions".to_string(),
+            argument_hint: None,
+            source: "builtin".to_string(),
+        },
+        SkillItem {
+            name: "memory".to_string(),
+            description: "View and manage persistent memory files".to_string(),
+            argument_hint: None,
+            source: "builtin".to_string(),
+        },
+        SkillItem {
+            name: "model".to_string(),
+            description: "Inspect or switch active model family".to_string(),
+            argument_hint: Some("[model-id]".to_string()),
+            source: "builtin".to_string(),
+        },
+        SkillItem {
+            name: "permissions".to_string(),
+            description: "View and modify tool access and command permissions".to_string(),
+            argument_hint: None,
+            source: "builtin".to_string(),
+        },
+        SkillItem {
+            name: "fast".to_string(),
+            description: "Toggle fast mode on or off".to_string(),
+            argument_hint: None,
+            source: "builtin".to_string(),
+        },
+        SkillItem {
+            name: "verbose".to_string(),
+            description: "Toggle verbose / debug output logging".to_string(),
+            argument_hint: None,
+            source: "builtin".to_string(),
+        },
+        SkillItem {
+            name: "bug".to_string(),
+            description: "Report a bug with diagnostic info".to_string(),
+            argument_hint: Some("<description>".to_string()),
+            source: "builtin".to_string(),
+        },
+        SkillItem {
+            name: "summary".to_string(),
+            description: "Summarize session conversation and actions".to_string(),
+            argument_hint: None,
+            source: "builtin".to_string(),
+        },
+        SkillItem {
+            name: "pr-comments".to_string(),
+            description: "Fetch and display PR review comments".to_string(),
+            argument_hint: None,
+            source: "builtin".to_string(),
+        },
+        SkillItem {
             name: "clear".to_string(),
             description: "Clear terminal log stream".to_string(),
             argument_hint: None,
@@ -131,6 +197,24 @@ fn get_builtin_skills() -> Vec<SkillItem> {
         SkillItem {
             name: "init".to_string(),
             description: "Initialize CLAUDE.md documentation for this repo".to_string(),
+            argument_hint: None,
+            source: "builtin".to_string(),
+        },
+        SkillItem {
+            name: "login".to_string(),
+            description: "Sign in to your Claude account".to_string(),
+            argument_hint: None,
+            source: "builtin".to_string(),
+        },
+        SkillItem {
+            name: "logout".to_string(),
+            description: "Sign out of your Claude account".to_string(),
+            argument_hint: None,
+            source: "builtin".to_string(),
+        },
+        SkillItem {
+            name: "terminal-setup".to_string(),
+            description: "Set up terminal font and styling integration".to_string(),
             argument_hint: None,
             source: "builtin".to_string(),
         },
@@ -178,17 +262,40 @@ pub async fn list_available_skills(repo_path: Option<String>) -> Result<Vec<Skil
     let mut result = Vec::new();
     let mut seen_names = HashSet::new();
 
-    // 1. Project skills if repo_path provided (<repo>/.claude/skills)
+    // 1. Project skills if repo_path provided (<repo>/.claude/skills, .agents/skills, etc.)
     if let Some(ref r_path) = repo_path {
         let repo_dir = PathBuf::from(r_path);
-        let project_skills = repo_dir.join(".claude").join("skills");
-        scan_skills_dir(&project_skills, "project", &mut seen_names, &mut result);
+        for sub in [".claude/skills", ".agents/skills", ".cursor/skills", ".github/skills", ".codex/skills"] {
+            let p = repo_dir.join(sub);
+            scan_skills_dir(&p, "project", &mut seen_names, &mut result);
+        }
     }
 
     // 2. User skills (~/.claude/skills)
     if let Some(home) = dirs_home() {
         let user_skills = home.join(".claude").join("skills");
         scan_skills_dir(&user_skills, "user", &mut seen_names, &mut result);
+
+        // Scan installed plugins (~/.claude/plugins/installed_plugins.json)
+        let plugins_json = home.join(".claude").join("plugins").join("installed_plugins.json");
+        if plugins_json.exists() {
+            if let Ok(content) = fs::read_to_string(&plugins_json) {
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(plugins_obj) = val.get("plugins").and_then(|p| p.as_object()) {
+                        for (_plugin_name, list) in plugins_obj {
+                            if let Some(arr) = list.as_array() {
+                                for item in arr {
+                                    if let Some(install_path) = item.get("installPath").and_then(|p| p.as_str()) {
+                                        let skills_path = PathBuf::from(install_path).join("skills");
+                                        scan_skills_dir(&skills_path, "user", &mut seen_names, &mut result);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // 3. Built-in fallback skills

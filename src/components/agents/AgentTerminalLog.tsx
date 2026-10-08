@@ -53,6 +53,9 @@ export interface AgentTerminalLogProps {
   taskTitle?: string;
   activeWorkers?: WorkerSession[];
   onRemoveWorker?: (workerId: string) => void;
+  repoPath?: string | null;
+  mentionedFilePath?: string | null;
+  onClearMentionedFile?: () => void;
 }
 
 interface ParsedChunk {
@@ -430,6 +433,9 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
   taskTitle,
   activeWorkers = [],
   onRemoveWorker,
+  repoPath,
+  mentionedFilePath,
+  onClearMentionedFile,
 }) => {
   const [inputText, setInputText] = useState('');
   const [autoScroll, setAutoScroll] = useState(true);
@@ -445,16 +451,24 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
   const [draftText, setDraftText] = useState<string>('');
 
-  // Skill Autocomplete state (loaded on initial mount)
+  // Skill Autocomplete state (loaded on initial mount or when repoPath changes)
   const [availableSkills, setAvailableSkills] = useState<SkillItem[]>([]);
   const [showSkillsMenu, setShowSkillsMenu] = useState<boolean>(false);
   const [selectedSkillIndex, setSelectedSkillIndex] = useState<number>(0);
 
   useEffect(() => {
-    void loadAvailableSkills().then((skills) => {
+    void loadAvailableSkills(repoPath).then((skills) => {
       setAvailableSkills(skills);
     });
-  }, []);
+  }, [repoPath]);
+
+  useEffect(() => {
+    if (mentionedFilePath) {
+      setInputText((prev) => (prev ? `${prev.trimEnd()} @${mentionedFilePath} ` : `@${mentionedFilePath} `));
+      inputRef.current?.focus();
+      onClearMentionedFile?.();
+    }
+  }, [mentionedFilePath, onClearMentionedFile]);
 
   const isSlashCommandPrefix = inputText.startsWith('/') && !inputText.includes(' ');
   const skillFilter = isSlashCommandPrefix ? inputText.slice(1).toLowerCase().trim() : '';

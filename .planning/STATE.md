@@ -128,6 +128,7 @@ Last activity: 2026-10-08 -- Completed quick task 261008-jgo: show timer and tok
 | 261008-qmp | Fix diff panel race condition and loading overlay, stop process UX, and multi-task terminal log state | 2026-10-08 | — | complete | [261008-qmp-multi-process-fixes](./quick/261008-qmp-multi-process-fixes/) |
 | 261008-m80 | Fix AgentControlView test failures in AgentDiffReviewer | 2026-10-08 | — | complete | [261008-m80-fix-agentcontrolview-test-failures-in-ag](./quick/261008-m80-fix-agentcontrolview-test-failures-in-ag/) |
 | 261008-tfe | Fix AgentDiffReviewer tree expansion in AgentControlView tests | 2026-10-08 | — | complete | [261008-tfe-fix-agentdiffreviewer-tree-expansion](./quick/261008-tfe-fix-agentdiffreviewer-tree-expansion/) |
+| 261008-fex | Optimize file explorer perf, exclusions, mention in chat, PC reveal, and skills autocomplete | 2026-10-08 | — | complete | [261008-fex-agent-file-explorer-perf-and-skills](./quick/261008-fex-agent-file-explorer-perf-and-skills/) |
 
 ## Performance Metrics
 

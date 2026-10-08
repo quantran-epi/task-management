@@ -342,4 +342,57 @@ describe('AgentTerminalLog Component Tests', () => {
     fireEvent.keyDown(input, { key: 'Tab', code: 'Tab' });
     expect(input).toHaveValue('/gsd-quick ');
   });
+
+  it('includes built-in Claude Code commands like /status and /goal in autocomplete', async () => {
+    render(
+      <AgentTerminalLog
+        logs={[]}
+        sending={false}
+        isRunning={false}
+        onSendFeedback={vi.fn()}
+      />
+    );
+
+    const input = screen.getByRole('textbox', { name: /Nhập hướng dẫn cho Master Agent/i });
+
+    // Type /goal
+    fireEvent.change(input, { target: { value: '/goal' } });
+    expect(await screen.findByText('/goal')).toBeInTheDocument();
+
+    // Type /status
+    fireEvent.change(input, { target: { value: '/status' } });
+    expect(await screen.findByText('/status')).toBeInTheDocument();
+  });
+
+  it('inserts mentioned file path into chat input and triggers onClearMentionedFile', () => {
+    const onClearMock = vi.fn();
+    const { rerender } = render(
+      <AgentTerminalLog
+        logs={[]}
+        sending={false}
+        isRunning={false}
+        onSendFeedback={vi.fn()}
+        mentionedFilePath={null}
+        onClearMentionedFile={onClearMock}
+      />
+    );
+
+    const input = screen.getByRole('textbox', { name: /Nhập hướng dẫn cho Master Agent/i });
+    expect(input).toHaveValue('');
+
+    // Mention a file
+    rerender(
+      <AgentTerminalLog
+        logs={[]}
+        sending={false}
+        isRunning={false}
+        onSendFeedback={vi.fn()}
+        mentionedFilePath="src/components/App.tsx"
+        onClearMentionedFile={onClearMock}
+      />
+    );
+
+    expect(input).toHaveValue('@src/components/App.tsx ');
+    expect(onClearMock).toHaveBeenCalled();
+  });
 });

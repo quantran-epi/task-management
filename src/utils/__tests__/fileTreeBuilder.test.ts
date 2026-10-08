@@ -54,4 +54,28 @@ describe('buildWorktreeFileTree', () => {
     expect(tree[0]?.title).toBe('new-folder');
     expect(tree[0]?.children?.[0]?.title).toBe('new-file.ts');
   });
+
+  it('filters out default excluded directories such as node_modules and .git', () => {
+    const paths = [
+      'node_modules/react/index.js',
+      'node_modules/lodash/lodash.js',
+      '.git/config',
+      'dist/bundle.js',
+      'build/index.html',
+      'src/App.tsx',
+    ];
+
+    const tree = buildWorktreeFileTree(paths);
+    expect(tree.length).toBe(1);
+    expect(tree[0]?.title).toBe('src');
+    expect(tree[0]?.children?.[0]?.title).toBe('App.tsx');
+  });
+
+  it('supports custom exclusion patterns', () => {
+    const paths = ['src/App.tsx', 'temp/cache.json', 'docs/readme.md'];
+    const tree = buildWorktreeFileTree(paths, [], ['temp', 'docs']);
+
+    expect(tree.length).toBe(1);
+    expect(tree[0]?.title).toBe('src');
+  });
 });

@@ -10,14 +10,39 @@ export interface FileTreeNode {
   diffFile?: DiffFile;
 }
 
+export const DEFAULT_EXCLUDED_PATTERNS = [
+  'node_modules',
+  '.git',
+  'dist',
+  'build',
+  'target',
+  '.next',
+  '.turbo',
+  '.output',
+  'coverage',
+  '.cache',
+  '.DS_Store',
+];
+
+export function isPathExcluded(
+  filePath: string,
+  excludePatterns: string[] = DEFAULT_EXCLUDED_PATTERNS
+): boolean {
+  if (!excludePatterns.length) return false;
+  const segments = filePath.split('/').filter(Boolean);
+  return segments.some((seg) => excludePatterns.includes(seg));
+}
+
 /**
  * Builds a folder hierarchy tree from all directory relative paths and changed diff files.
  * @param allPaths List of all relative file paths from working directory (e.g. ['src/App.tsx', 'package.json'])
  * @param diffFiles List of files that have git diff
+ * @param excludePatterns List of folder/file names to exclude (e.g. node_modules, .git)
  */
 export function buildWorktreeFileTree(
   allPaths: string[],
-  diffFiles: DiffFile[] = []
+  diffFiles: DiffFile[] = [],
+  excludePatterns: string[] = DEFAULT_EXCLUDED_PATTERNS
 ): FileTreeNode[] {
   const diffMap = new Map<string, DiffFile>();
   for (const df of diffFiles) {
@@ -28,11 +53,13 @@ export function buildWorktreeFileTree(
     }
   }
 
-  // Combine paths from allPaths and diffMap
+  // Combine paths from allPaths (filtered) and diffMap
   const pathSet = new Set<string>();
   for (const p of allPaths) {
     const clean = p.replace(/\\/g, '/').replace(/^\.\//, '').trim();
-    if (clean) pathSet.add(clean);
+    if (clean && !isPathExcluded(clean, excludePatterns)) {
+      pathSet.add(clean);
+    }
   }
   for (const p of diffMap.keys()) {
     pathSet.add(p);
