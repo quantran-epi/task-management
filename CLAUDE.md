@@ -11,7 +11,7 @@ A private, offline-first web application for one person to manage projects, mile
 ### Constraints
 
 - **Audience**: One personal user — no collaboration model or role system.
-- **Runtime**: 100% local application behavior — no application server.
+- **Runtime**: PlannerMate application behavior remains 100% local and requires no application server. Project-level exception: an optional, independently deployed knowledge daemon may receive manually selected Markdown only after client-side preview/DLP approval; PlannerMate must start and keep local Docs, autosave, IndexedDB, BM25 search, and PWA behavior working when daemon is disabled, unreachable, or absent.
 - **Hosting**: GitHub Pages — production build must support a repository subpath and static routing.
 - **Persistence**: IndexedDB is the working data store — the app must continue functioning offline.
 - **Synchronization**: GitHub Contents API stores only an encrypted backup artifact — secrets remain client-side.
@@ -152,7 +152,7 @@ A private, offline-first web application for one person to manage projects, mile
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| Backend/server/API database | Violates static/offline/no-backend constraints and creates auth/ops burden. | Local IndexedDB plus optional encrypted GitHub backup. |
+| Backend/server/API database as PlannerMate runtime dependency or canonical store | Violates static/offline constraints and creates auth/ops burden. Narrow exception: optional independently deployed knowledge daemon may hold rebuildable published projections; it must never be required for local app operation or become canonical Markdown storage. | Local IndexedDB as canonical app store, optional encrypted GitHub backup, and optional isolated knowledge daemon projection only. |
 | Firebase/Supabase/Appwrite | Adds hosted backend, auth, network dependency, and data exposure model not needed for one-person app. | Dexie + GitHub encrypted backup. |
 | `localStorage` as database | Synchronous, small, string-only, blocks main thread, unsafe for structured task/planning data. | IndexedDB via Dexie. |
 | Raw service worker | Easy to break updates/offline cache; stale SW can cause data-loss UX. | `vite-plugin-pwa` + Workbox generated SW. |

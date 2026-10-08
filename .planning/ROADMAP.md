@@ -208,12 +208,54 @@
 **Depends on**: Phase 15
 **Requirements**: INGEST-01, INGEST-02, INGEST-03, INGEST-04, INGEST-05
 **Success Criteria** (what must be TRUE):
+
   1. User can publish selected Markdown documents to the optional knowledge server without altering local Markdown copies.
   2. Before content leaves PlannerMate, findings for PAN, CVV, PIN, HSM keys, credentials, or customer PII show masked actionable details and require fresh explicit confirmation before publishing may continue.
   3. Published documents preserve headings, tables, code blocks, SQL, ASCII diagrams, and exact source ranges as versioned evidence chunks.
   4. Republishing unchanged or partially modified documents projects only added, changed, or removed chunks via SHA-256 comparison; unchanged chunks retain their indexed representation.
   5. User can inspect publish and indexing status for each document set in PlannerMate.
-**Plans**: TBD
+
+**Plans**: 13 plans in 9 waves
+Plans:
+**Wave 1**
+
+- [ ] 16-01-PLAN.md — Client publish contracts and additive Dexie V10 stores (Wave 1)
+- [ ] 16-03-PLAN.md — Deterministic client DLP scanner, masking, and safe audit (Wave 1)
+- [ ] 16-04-PLAN.md — Independent daemon package and strict shared protocol (Wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 16-02-PLAN.md — Stable document sets and bounded status cache (Wave 2)
+- [ ] 16-05-PLAN.md — Isomorphic lossless AST chunking and shared hash policy (Wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 16-06-PLAN.md — Exact zero-network document-and-chunk four-way preview (Wave 3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 16-07-PLAN.md — Incremental projection, idempotent attempts, and atomic activation (Wave 4)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 16-08-PLAN.md — Authenticated exact-origin daemon API (Wave 5)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 16-09-PLAN.md — Safe client, preview-bound DLP gate, and polling (Wave 6)
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 16-10-PLAN.md — Optional daemon Settings configuration (Wave 7)
+- [ ] 16-11-PLAN.md — Document-set management and guarded publish UI (Wave 7)
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [ ] 16-12-PLAN.md — Docs badges, management wiring, and no-daemon isolation (Wave 8)
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
+- [ ] 16-13-PLAN.md — Pilot and client Phase 16 acceptance gates (Wave 9)
 
 ### Phase 17: Pilot Ontology, Deterministic Extraction & Neo4j Knowledge Graph
 
@@ -221,12 +263,14 @@
 **Depends on**: Phase 16
 **Requirements**: GRAPH-01, GRAPH-02, GRAPH-03, GRAPH-04, GRAPH-05, GRAPH-06
 **Success Criteria** (what must be TRUE):
+
   1. User can build a controlled graph projection for process 60000006 covering scheduled processes, container steps, software components, database objects, cycle types, statuses, and source documents.
   2. Graph keeps identically numbered domain objects distinct through namespaced composite identities (such as `PRC_PROCESS:60000006` vs `PRC_CONTAINER:60000006`).
   3. Structured Markdown tables and explicit identifiers are extracted deterministically before LLM extraction is used for prose-only relationships.
   4. Every graph relation retains source document, section, source range, extraction method, and evidence classification (`OBSERVED`, `INFERRED`, or `BUSINESS_APPROVED`).
   5. User can distinguish `OBSERVED`, `INFERRED`, and `BUSINESS_APPROVED` knowledge in graph-backed results.
   6. User can rebuild graph and indexes from published Markdown without treating Neo4j as canonical storage.
+
 **Plans**: TBD
 
 ### Phase 18: Multi-Modal Hybrid Retrieval Engine
@@ -235,11 +279,13 @@
 **Depends on**: Phase 17
 **Requirements**: RETR-01, RETR-02, RETR-03, RETR-04, RETR-05
 **Success Criteria** (what must be TRUE):
+
   1. User can find exact technical identifiers (process IDs, package names, table names, cycle codes, status codes) through full-text search.
   2. User can find relevant English technical documentation using semantically equivalent Vietnamese or English questions.
   3. User can query process flow and runtime call chains through bounded graph traversal.
   4. User can run dependency and impact queries across one to three graph hops with bounded result counts.
   5. Hybrid results combine full-text, semantic, and graph evidence into one ranked, deduplicated evidence set.
+
 **Plans**: TBD
 
 ### Phase 19: Grounded Assistant, Provenance Citations & Offline Fallback
@@ -248,6 +294,7 @@
 **Depends on**: Phase 18
 **Requirements**: ANSWER-01, ANSWER-02, ANSWER-03, ANSWER-04, ANSWER-05, ANSWER-06, ANSWER-07
 **Success Criteria** (what must be TRUE):
+
   1. User receives AI answers whose material claims cite exact source documents, sections, and ranges.
   2. User can inspect a step-by-step graph path for flow, dependency, and impact answers.
   3. User sees evidence classification on facts and clear labeling when a conclusion is inferred.
@@ -255,6 +302,7 @@
   5. Assistant explicitly reports missing evidence instead of inventing an answer.
   6. When knowledge server is unavailable, user can continue searching local Markdown through existing BM25 retrieval.
   7. Citations and graph paths open the corresponding PlannerMate document context.
+
 **Plans**: TBD
 **UI hint**: yes
 
@@ -264,11 +312,13 @@
 **Depends on**: Phase 19
 **Requirements**: QUAL-01, QUAL-02, QUAL-03, QUAL-04, QUAL-05
 **Success Criteria** (what must be TRUE):
+
   1. Maintainer can run a 30–50 question benchmark covering exact lookup, semantic retrieval, process flow, call chain, three-hop impact, conflict, and abstention cases.
   2. Benchmark verifies expected sources, required graph paths, required facts, and forbidden unsupported claims.
   3. Milestone meets an agreed accuracy threshold for three-hop pilot queries and reports failures rather than masking them.
   4. Automated checks prove indexes are rebuildable, sensitive-data checks and any required fresh override confirmation run before external calls, and local search remains available offline.
   5. Claude and Neo4j credentials remain server-side and never enter PlannerMate source, IndexedDB, logs, or published bundles.
+
 **Plans**: TBD
 
 ## Progress
@@ -294,7 +344,7 @@
 | 13.2. AI Chat Drawer, Item Context Grounding & 9router Ask-Answer Integration | v1.1 | 3/3 | Complete | 2026-10-03 |
 | 14. Knowledge Base Integration (Docs, Linking & AI Retrieval) | v1.1 | 4/4 | Complete | 2026-10-04 |
 | 15. Ghost Dev: Local Claude Code Headless Orchestration with Agent Control Page and Live Git Diff Reviewer | v1.1 | 4/4 | Complete | 2026-10-06 |
-| 16. Knowledge Server Foundation, DLP Checks & AST Ingestion | v1.2 | 0/TBD | Not started | - |
+| 16. Knowledge Server Foundation, DLP Checks & AST Ingestion | v1.2 | 0/13 | Planned | - |
 | 17. Pilot Ontology, Deterministic Extraction & Neo4j Knowledge Graph | v1.2 | 0/TBD | Not started | - |
 | 18. Multi-Modal Hybrid Retrieval Engine | v1.2 | 0/TBD | Not started | - |
 | 19. Grounded Assistant, Provenance Citations & Offline Fallback | v1.2 | 0/TBD | Not started | - |

@@ -577,12 +577,9 @@ export function parseMarkdownToChunks(rawMarkdown: string, documentId: string): 
 | A1 | Knowledge Server daemon runs on `http://127.0.0.1:3001` or configurable port | Architecture | Minimal; user-configurable base URL handles any local/remote host. |
 | A2 | Session bearer token is entered or generated once per user session | Security | None; session tokens can be persisted in memory or securely generated. |
 
-## Open Questions
+## Resolved Questions
 
-1. **How should the Knowledge Server daemon be managed in Tauri Desktop vs Web PWA?**
-   - What we know: In Web PWA, the daemon runs externally as a Node.js process (similar to `jira-proxy`). In Tauri, it can either run externally or be managed as a sidecar process.
-   - What's unclear: Whether sidecar packaging is in scope for Phase 16.
-   - Recommendation: In Phase 16, treat Knowledge Server as an independent daemon started via `npm run knowledge-server` or system service, accessed over HTTP. Sidecar bundling belongs to later desktop packaging phases.
+1. **RESOLVED — Knowledge Server deployment model:** Use an optional, independently deployed Node.js daemon for both Web/PWA and Tauri clients. PlannerMate remains static/offline and fully usable when daemon is absent or unreachable. Phase 16 accesses daemon over configured HTTP(S); it does not start, supervise, bundle, or require the daemon. Tauri sidecar packaging is deferred beyond Phase 16 and is not planned here.
 
 ## Environment Availability
 
