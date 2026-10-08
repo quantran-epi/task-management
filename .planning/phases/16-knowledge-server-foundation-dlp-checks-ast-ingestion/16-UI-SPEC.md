@@ -1,10 +1,11 @@
 ---
 phase: 16
 slug: knowledge-server-foundation-dlp-checks-ast-ingestion
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-10-08
+reviewed_at: 2026-10-08
 ---
 
 # Phase 16 — UI Design Contract
