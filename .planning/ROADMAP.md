@@ -219,7 +219,7 @@
 Plans:
 **Wave 1**
 
-- [ ] 16-01-PLAN.md — Client publish contracts and additive Dexie V10 stores (Wave 1)
+- [x] 16-01-PLAN.md — Client publish contracts and additive Dexie V10 stores (Wave 1)
 - [ ] 16-03-PLAN.md — Deterministic client DLP scanner, masking, and safe audit (Wave 1)
 - [ ] 16-04-PLAN.md — Independent daemon package and strict shared protocol (Wave 1)
 
