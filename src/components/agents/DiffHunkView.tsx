@@ -1,6 +1,6 @@
-import React from 'react';
-import { theme, Button, Tooltip } from 'antd';
-import { CheckOutlined } from '@ant-design/icons';
+import React, { useState } from 'react';
+import { theme, Button, Space, Tooltip } from 'antd';
+import { CheckOutlined, CloseOutlined } from '@ant-design/icons';
 import type { DiffHunk, DiffLine, DiffViewMode } from '../../types/agent';
 
 export interface DiffHunkViewProps {
@@ -8,7 +8,8 @@ export interface DiffHunkViewProps {
   filePath: string;
   viewMode: DiffViewMode;
   onLineClick: (filePath: string, lineNumber: number, code: string) => void;
-  onAcceptHunk?: (hunk: DiffHunk) => void;
+  onAcceptHunk?: (filePath: string, hunk: DiffHunk) => Promise<void> | void;
+  onRejectHunk?: (filePath: string, hunk: DiffHunk) => Promise<void> | void;
   onAcceptLine?: (hunk: DiffHunk, lineIndex: number) => void;
 }
 
@@ -18,15 +19,92 @@ export const DiffHunkView: React.FC<DiffHunkViewProps> = ({
   viewMode,
   onLineClick,
   onAcceptHunk,
+  onRejectHunk,
   onAcceptLine,
 }) => {
   const { token } = theme.useToken();
   const isDark = token.colorBgBase === '#141414' || token.colorTextBase?.includes('255');
+  const [acting, setActing] = useState(false);
 
   // Background colors per 15-UI-SPEC.md
   const addBg = isDark ? '#23452b' : '#e6ffed';
   const delBg = isDark ? '#4d1f24' : '#ffeef0';
   const gutterBg = isDark ? '#1f1f1f' : '#f6f8fa';
+
+  const handleAccept = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onAcceptHunk) return;
+    setActing(true);
+    try {
+      await onAcceptHunk(filePath, hunk);
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const handleReject = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onRejectHunk) return;
+    setActing(true);
+    try {
+      await onRejectHunk(filePath, hunk);
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const renderHunkHeader = () => (
+    <div
+      style={{
+        backgroundColor: gutterBg,
+        color: token.colorTextSecondary,
+        padding: '3px 12px',
+        fontSize: 11,
+        userSelect: 'none',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        borderBottom: `1px solid ${token.colorBorderSecondary}`,
+      }}
+    >
+      <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{hunk.header}</span>
+      {(onAcceptHunk || onRejectHunk) && (
+        <Space size={6}>
+          {onAcceptHunk && (
+            <Tooltip title="Chấp nhận thay đổi ở đoạn này (Accept Hunk)">
+              <Button
+                size="small"
+                type="text"
+                icon={<CheckOutlined style={{ color: '#52c41a' }} />}
+                loading={acting}
+                disabled={acting}
+                onClick={handleAccept}
+                style={{ fontSize: 11, height: 22, padding: '0 6px' }}
+              >
+                Accept
+              </Button>
+            </Tooltip>
+          )}
+          {onRejectHunk && (
+            <Tooltip title="Hủy bỏ/Hoàn tác đoạn thay đổi này (Reject Hunk)">
+              <Button
+                size="small"
+                type="text"
+                danger
+                icon={<CloseOutlined />}
+                loading={acting}
+                disabled={acting}
+                onClick={handleReject}
+                style={{ fontSize: 11, height: 22, padding: '0 6px' }}
+              >
+                Reject
+              </Button>
+            </Tooltip>
+          )}
+        </Space>
+      )}
+    </div>
+  );
 
   if (viewMode === 'unified') {
     return (
@@ -39,35 +117,7 @@ export const DiffHunkView: React.FC<DiffHunkViewProps> = ({
           borderBottom: `1px solid ${token.colorBorderSecondary}`,
         }}
       >
-        {/* Hunk Header */}
-        <div
-          style={{
-            backgroundColor: gutterBg,
-            color: token.colorTextSecondary,
-            padding: '2px 12px',
-            fontSize: 11,
-            userSelect: 'none',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <span>{hunk.header}</span>
-          {onAcceptHunk && (
-            <Button
-              size="small"
-              type="link"
-              icon={<CheckOutlined style={{ color: '#52c41a' }} />}
-              style={{ fontSize: 11, padding: '0 4px', height: 20 }}
-              onClick={(e) => {
-                e.stopPropagation();
-                onAcceptHunk(hunk);
-              }}
-            >
-              Accept Hunk
-            </Button>
-          )}
-        </div>
+        {renderHunkHeader()}
 
         {/* Lines */}
         {hunk.lines.map((line, idx) => {
@@ -183,7 +233,6 @@ export const DiffHunkView: React.FC<DiffHunkViewProps> = ({
   }
 
   // Split (side-by-side) view mode
-  // Group lines into pairs: left (deletion or context), right (addition or context)
   const rows: Array<{ left?: DiffLine | undefined; right?: DiffLine | undefined }> = [];
   const lines = hunk.lines;
   let i = 0;
@@ -194,21 +243,23 @@ export const DiffHunkView: React.FC<DiffHunkViewProps> = ({
     if (cur.type === 'context') {
       rows.push({ left: cur, right: cur });
       i++;
-    } else if (cur.type === 'delete' || cur.type === 'add') {
+    } else {
       const delLines: DiffLine[] = [];
       const addLines: DiffLine[] = [];
+
       while (i < lines.length && (lines[i]?.type === 'delete' || lines[i]?.type === 'add')) {
-        const line = lines[i]!;
-        if (line.type === 'delete') {
-          delLines.push(line);
-        } else {
-          addLines.push(line);
-        }
+        const item = lines[i]!;
+        if (item.type === 'delete') delLines.push(item);
+        if (item.type === 'add') addLines.push(item);
         i++;
       }
+
       const maxLen = Math.max(delLines.length, addLines.length);
-      for (let j = 0; j < maxLen; j++) {
-        rows.push({ left: delLines[j], right: addLines[j] });
+      for (let k = 0; k < maxLen; k++) {
+        rows.push({
+          left: delLines[k],
+          right: addLines[k],
+        });
       }
     }
   }
@@ -223,35 +274,7 @@ export const DiffHunkView: React.FC<DiffHunkViewProps> = ({
         borderBottom: `1px solid ${token.colorBorderSecondary}`,
       }}
     >
-      {/* Hunk Header */}
-      <div
-        style={{
-          backgroundColor: gutterBg,
-          color: token.colorTextSecondary,
-          padding: '2px 12px',
-          fontSize: 11,
-          userSelect: 'none',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <span>{hunk.header}</span>
-        {onAcceptHunk && (
-          <Button
-            size="small"
-            type="link"
-            icon={<CheckOutlined style={{ color: '#52c41a' }} />}
-            style={{ fontSize: 11, padding: '0 4px', height: 20 }}
-            onClick={(e) => {
-              e.stopPropagation();
-              onAcceptHunk(hunk);
-            }}
-          >
-            Accept Hunk
-          </Button>
-        )}
-      </div>
+      {renderHunkHeader()}
 
       {rows.map((row, idx) => {
         const leftHunkIdx = row.left ? hunk.lines.indexOf(row.left) : -1;
@@ -303,7 +326,7 @@ export const DiffHunkView: React.FC<DiffHunkViewProps> = ({
               >
                 {row.left?.content ?? ''}
               </div>
-              {row.left?.type === 'delete' && onAcceptLine && leftHunkIdx >= 0 && (
+              {row.left?.type === 'delete' && onAcceptLine && leftHunkIdx !== -1 && (
                 <Tooltip title="Accept dòng này" placement="left">
                   <Button
                     size="small"
@@ -362,7 +385,7 @@ export const DiffHunkView: React.FC<DiffHunkViewProps> = ({
               >
                 {row.right?.content ?? ''}
               </div>
-              {row.right?.type === 'add' && onAcceptLine && rightHunkIdx >= 0 && (
+              {row.right?.type === 'add' && onAcceptLine && rightHunkIdx !== -1 && (
                 <Tooltip title="Accept dòng này" placement="left">
                   <Button
                     size="small"

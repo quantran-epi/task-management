@@ -85,6 +85,8 @@ export const AgentControlView: React.FC = () => {
   // Worktree diff for active session
   const {
     diffFiles,
+    allWorktreeFiles,
+    selectedFileContent,
     totalAdditions,
     totalDeletions,
     viewMode,
@@ -100,6 +102,7 @@ export const AgentControlView: React.FC = () => {
     acceptLine,
     revertAll,
     revertFile,
+    revertHunk,
   } = useGhostDevDiff(activeSession ? activeSession.worktreePath : null);
 
   const handleStopSession = useCallback(
@@ -142,14 +145,14 @@ export const AgentControlView: React.FC = () => {
       <Splitter
         style={{
           height: '100%',
-          boxShadow: token.boxShadowTertiary,
-          backgroundColor: token.colorBgContainer,
-          borderRadius: 6,
+          boxShadow: token.boxShadowSecondary,
+          borderRadius: 8,
           overflow: 'hidden',
+          backgroundColor: token.colorBgContainer,
         }}
       >
-        {/* Panel 1: Session List (Left, 22%, min 240px, max 360px) */}
-        <Splitter.Panel defaultSize="22%" min="240px" max="360px">
+        {/* Panel 1: Sessions List & History (Left, 22%, min 220px) */}
+        <Splitter.Panel defaultSize="22%" min="220px">
           <AgentSessionList
             sessions={sessions}
             activeSessionId={activeSessionId}
@@ -204,6 +207,8 @@ export const AgentControlView: React.FC = () => {
         <Splitter.Panel defaultSize="33%" min="320px">
           <AgentDiffReviewer
             diffFiles={diffFiles}
+            allWorktreeFiles={allWorktreeFiles}
+            selectedFileContent={selectedFileContent}
             totalAdditions={totalAdditions}
             totalDeletions={totalDeletions}
             viewMode={viewMode}
@@ -219,6 +224,7 @@ export const AgentControlView: React.FC = () => {
             onAcceptLine={acceptLine}
             onRevertAll={revertAll}
             onRevertFile={revertFile}
+            onRevertHunk={revertHunk}
             onSendFeedback={sendChatMessage}
             worktreePath={activeSession ? activeSession.worktreePath : null}
           />
@@ -410,9 +416,10 @@ export const AgentControlView: React.FC = () => {
                   ))}
                 </div>
               ) : (
-                <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-                  Không có phản hồi nào được gửi trong phiên này.
-                </Typography.Text>
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description="Chưa có phản hồi nào trong phiên này"
+                />
               )}
             </div>
           </div>

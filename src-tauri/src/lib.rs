@@ -1,3 +1,4 @@
+mod agent_diff_ops;
 mod agent_manager;
 mod ai_proxy;
 mod jira_proxy;
@@ -46,6 +47,9 @@ pub fn run() {
             agent_manager::revert_file_diff,
             agent_manager::send_agent_feedback,
             agent_manager::respond_shell_permission,
+            agent_diff_ops::list_worktree_files,
+            agent_diff_ops::read_worktree_file_content,
+            agent_diff_ops::revert_hunk_diff,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
