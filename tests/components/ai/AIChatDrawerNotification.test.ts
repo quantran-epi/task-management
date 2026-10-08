@@ -7,6 +7,7 @@ import * as desktopNotification from '../../../src/utils/desktopNotification';
 import * as nineRouterClient from '../../../src/services/ai/nineRouterClient';
 import * as nineRouterTokenService from '../../../src/services/ai/nineRouterTokenService';
 import * as graphitiMcpClient from '../../../src/services/ai/graphitiMcpClient';
+import { APP_NAME } from '../../../src/constants/app';
 
 vi.mock('../../../src/utils/pptxExport', () => ({
   exportPresentationAsFile: vi.fn(),
@@ -66,7 +67,7 @@ describe('AIChatDrawer - Desktop Notification on completion', () => {
     });
     Document.prototype.hasFocus = () => false;
 
-    const mockResponseText = 'Đây là câu trả lời thử nghiệm từ trợ lý AI của PlannerMate.';
+    const mockResponseText = `Đây là câu trả lời thử nghiệm từ trợ lý AI của ${APP_NAME}.`;
     vi.spyOn(nineRouterClient, 'streamChatEvents').mockImplementation(async function* () {
       yield { type: 'text', delta: mockResponseText };
     } as any);
@@ -89,7 +90,7 @@ describe('AIChatDrawer - Desktop Notification on completion', () => {
 
     await waitFor(() => {
       expect(desktopNotification.sendDesktopNotification).toHaveBeenCalledWith({
-        title: 'PlannerMate AI',
+        title: `${APP_NAME} AI`,
         body: mockResponseText,
         tag: 'ai-turn-finished',
       });
@@ -126,7 +127,7 @@ describe('AIChatDrawer - Desktop Notification on completion', () => {
 
     await waitFor(() => {
       expect(desktopNotification.sendDesktopNotification).toHaveBeenCalledWith({
-        title: 'PlannerMate AI',
+        title: `${APP_NAME} AI`,
         body: 'A'.repeat(120) + '...',
         tag: 'ai-turn-finished',
       });

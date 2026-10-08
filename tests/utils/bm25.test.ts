@@ -6,6 +6,7 @@ import {
   extractRelevantSnippet,
   type BM25Document,
 } from '../../src/utils/bm25';
+import { APP_NAME } from '../../src/constants/app';
 
 describe('BM25 Lexical Ranking & Vietnamese Normalization (REQ-14.2, D-10, D-11)', () => {
   describe('normalizeVietnamese', () => {
@@ -99,7 +100,7 @@ describe('BM25 Lexical Ranking & Vietnamese Normalization (REQ-14.2, D-10, D-11)
   describe('extractRelevantSnippet', () => {
     const sampleBody = `
 # Giới thiệu chung
-Dự án PlannerMate hỗ trợ lập kế hoạch công việc và phân bổ thời gian.
+Dự án ${APP_NAME} hỗ trợ lập kế hoạch công việc và phân bổ thời gian.
 
 ## Kiến trúc bảo mật
 Hệ thống sử dụng Web Crypto API với chuẩn AES-GCM 256 bit và PBKDF2 để mã hóa dữ liệu cục bộ trước khi đồng bộ.

@@ -18,6 +18,7 @@ import {
   ControlOutlined,
   AppstoreOutlined,
 } from '@ant-design/icons';
+import { APP_NAME } from '../../constants/app';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import {
@@ -104,7 +105,7 @@ export const NotificationSettingsCard: React.FC<NotificationSettingsCardProps> =
         await saveSettings({ browserNotificationsEnabled: true });
         message.success('Đã bật thông báo màn hình.');
         await sendDesktopNotification({
-          title: 'PlannerMate - Thông báo màn hình',
+          title: `${APP_NAME} - Thông báo màn hình`,
           body: 'Thông báo màn hình đã được kích hoạt thành công.',
           requireInteraction: settings.requireInteractionEnabled,
         });
@@ -128,7 +129,7 @@ export const NotificationSettingsCard: React.FC<NotificationSettingsCardProps> =
           await saveSettings({ browserNotificationsEnabled: true });
           message.success('Đã bật thông báo màn hình.');
           await sendDesktopNotification({
-            title: 'PlannerMate - Thông báo màn hình',
+            title: `${APP_NAME} - Thông báo màn hình`,
             body: 'Thông báo màn hình đã được kích hoạt thành công.',
             requireInteraction: settings.requireInteractionEnabled,
           });
@@ -227,7 +228,7 @@ export const NotificationSettingsCard: React.FC<NotificationSettingsCardProps> =
                 return;
               }
               const sent = await sendDesktopNotification({
-                title: 'PlannerMate - Thông báo thử nghiệm',
+                title: `${APP_NAME} - Thông báo thử nghiệm`,
                 body: 'Thông báo màn hình đang hoạt động với cài đặt của bạn.',
                 requireInteraction: settings.requireInteractionEnabled,
               });

@@ -1,7 +1,7 @@
 [package]
 name = "personal-task-workload-planner"
 version = "0.1.0"
-description = "PlannerMate"
+description = "TaskMate"
 authors = ["Duc Quan Tran"]
 edition = "2021"
 

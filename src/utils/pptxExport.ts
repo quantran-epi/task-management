@@ -1,4 +1,5 @@
 import pptxgenjs from 'pptxgenjs';
+import { APP_NAME } from '../constants/app';
 import { sanitizeFilename, downloadBlob } from './fileExport';
 
 export interface SlideData {
@@ -24,7 +25,7 @@ export interface PptxExportResult {
   blob: Blob;
 }
 
-// PlannerMate Theme Colors
+// TaskMate Theme Colors
 const THEME = {
   primary: '4F46E5', // Indigo
   primaryLight: 'EEF2FF',
@@ -181,9 +182,9 @@ export function buildPptxPresentation(
 
   // Set widescreen 16:9 layout
   pptx.layout = 'LAYOUT_16x9';
-  pptx.title = options?.presentationTitle || 'PlannerMate Presentation';
-  pptx.author = options?.author || 'PlannerMate AI';
-  pptx.company = options?.company || 'PlannerMate';
+  pptx.title = options?.presentationTitle || `${APP_NAME} Presentation`;
+  pptx.author = options?.author || `${APP_NAME} AI`;
+  pptx.company = options?.company || APP_NAME;
   if (options?.revision) pptx.revision = options.revision;
 
   slides.forEach((slideData) => {
@@ -232,7 +233,7 @@ export function buildPptxPresentation(
       }
 
       // Branding watermark
-      slide.addText('PlannerMate Workspace', {
+      slide.addText(`${APP_NAME} Workspace`, {
         x: 0.8,
         y: 6.5,
         w: 5.0,
@@ -336,7 +337,7 @@ export function buildPptxPresentation(
         line: { color: THEME.border, width: 0.5 },
       });
 
-      slide.addText('PlannerMate', {
+      slide.addText(APP_NAME, {
         x: 0.8,
         y: 6.85,
         w: 4.0,

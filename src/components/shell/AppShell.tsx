@@ -10,6 +10,7 @@ import {
   RobotOutlined,
   QuestionCircleOutlined,
 } from '@ant-design/icons';
+import { APP_NAME } from '../../constants/app';
 import { Navigation } from './Navigation';
 import { StatusBadge } from './StatusBadge';
 import { UpgradeModal } from './UpgradeModal';
@@ -412,6 +413,12 @@ const AppShellInner: React.FC<AppShellProps> = ({
           theme={isDark ? 'dark' : 'light'}
           style={{
             borderRight: `1px solid ${token.colorBorderSecondary}`,
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100vh',
+            position: 'sticky',
+            top: 0,
+            left: 0,
           }}
         >
           <div
@@ -424,6 +431,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
               transition: 'all 0.2s',
               borderBottom: `1px solid ${token.colorBorderSecondary}`,
               marginBottom: 8,
+              flexShrink: 0,
             }}
           >
             <BrandLogo size={collapsed ? 32 : 28} />
@@ -437,11 +445,54 @@ const AppShellInner: React.FC<AppShellProps> = ({
                   whiteSpace: 'nowrap',
                 }}
               >
-                PlannerMate
+                {APP_NAME}
               </span>
             )}
           </div>
-          <Navigation currentRoute={currentRoute} onNavigate={onNavigate} />
+          <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+            <Navigation currentRoute={currentRoute} onNavigate={onNavigate} />
+          </div>
+          <div
+            style={{
+              padding: collapsed ? '12px 4px' : '12px 16px',
+              borderTop: `1px solid ${token.colorBorderSecondary}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              userSelect: 'none',
+            }}
+          >
+            {collapsed ? (
+              <Tooltip title="Built by Quan Tran Duc" placement="right">
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: '0.05em',
+                    padding: '2px 6px',
+                    borderRadius: 4,
+                    background: token.colorFillSecondary,
+                    color: token.colorTextTertiary,
+                    cursor: 'default',
+                  }}
+                >
+                  QT
+                </span>
+              </Tooltip>
+            ) : (
+              <span
+                style={{
+                  fontSize: 11,
+                  color: token.colorTextTertiary,
+                  whiteSpace: 'nowrap',
+                  letterSpacing: '-0.01em',
+                }}
+              >
+                v0.1.1 • Built by Quan Tran Duc
+              </span>
+            )}
+          </div>
         </Sider>
       ) : (
         <Drawer
@@ -453,7 +504,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <BrandLogo size={26} />
               <span style={{ fontWeight: 700, fontSize: 16, letterSpacing: '-0.02em' }}>
-                PlannerMate
+                {APP_NAME}
               </span>
             </div>
           }
@@ -494,7 +545,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <BrandLogo size={26} />
                   <Title level={4} style={{ margin: 0, fontWeight: 700, letterSpacing: '-0.02em' }}>
-                    PlannerMate
+                    {APP_NAME}
                   </Title>
                 </div>
               </>
@@ -799,7 +850,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
         onWidthChange={(w) => setAiChatWidth(w)}
         onOpenSettings={() => {
           closeAiChat();
-          onNavigate('settings');
+          onNavigate('settings', { tab: 'ai' });
         }}
         isMobile={isMobile}
         db={db}

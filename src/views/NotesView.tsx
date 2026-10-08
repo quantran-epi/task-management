@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react';
+import { APP_NAME } from '../constants/app';
 import {
   Card,
   Input,
@@ -64,7 +65,7 @@ import { matchesDocSearch } from '../utils/docSearch';
 
 const { Text } = Typography;
 
-export const AI_KNOWLEDGE_DOC_PROMPT = `Bạn là chuyên gia soạn thảo tài liệu tri thức (knowledge document) cho PlannerMate.
+export const AI_KNOWLEDGE_DOC_PROMPT = `Bạn là chuyên gia soạn thảo tài liệu tri thức (knowledge document) cho ${APP_NAME}.
 Hãy tạo tài liệu Markdown tối ưu cho hệ thống tìm kiếm BM25 và ngữ cảnh của AI Assistant theo đúng các nguyên tắc sau:
 
 1. TIÊU ĐỀ BẮT BUỘC:
@@ -811,7 +812,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
             backgroundColor: '#ffffff',
           }}
         >
-          {/* Column 1: Folder Tree (~240px) */}
+          {/* Column 1: Folder Tree (~260px) */}
           <DocFolderTree
             notes={allNotes || []}
             activeFilter={activeFilter}
@@ -1148,7 +1149,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
 
       {/* AI Document Generation Prompt Modal */}
       <Modal
-        title="Hướng dẫn AI tạo tài liệu tối ưu cho PlannerMate"
+        title={`Hướng dẫn AI tạo tài liệu tối ưu cho ${APP_NAME}`}
         open={aiPromptModalOpen}
         onCancel={() => setAiPromptModalOpen(false)}
         width={760}
@@ -1169,7 +1170,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
       >
         <Space direction="vertical" size="small" style={{ width: '100%' }}>
           <Text type="secondary">
-            Dán prompt này vào bất kỳ AI Assistant bên ngoài (Claude, ChatGPT, Open-WebUI, ...) khi bạn muốn tạo tài liệu Markdown để nạp vào PlannerMate.
+            Dán prompt này vào bất kỳ AI Assistant bên ngoài (Claude, ChatGPT, Open-WebUI, ...) khi bạn muốn tạo tài liệu Markdown để nạp vào {APP_NAME}.
           </Text>
           <Input.TextArea
             readOnly

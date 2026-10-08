@@ -1,4 +1,5 @@
 import type { TaskPlannerDatabase } from '../../db';
+import { APP_NAME } from '../../constants/app';
 import type { Task, Project, Milestone, Note, ActiveTimer, ReminderItem } from '../../types/models';
 import { NOTIFICATION_SETTINGS_KEY, DEFAULT_NOTIFICATION_SETTINGS } from '../../types/notifications';
 import { getTodayDateString } from '../../utils/date';
@@ -56,7 +57,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'query_tasks',
       description:
-        'Query or search tasks in PlannerMate. Returns tasks enriched with creation/update dates, notes, project/milestone names, logged hours, recurring schedule, and checklists. Supports comprehensive filtering by dates (createdAt, createdAfter/Before, deadline, updatedAfter/Before), status, priority, workType, recurring state, project, milestone, or search keywords, with customizable sorting.',
+        `Query or search tasks in ${APP_NAME}. Returns tasks enriched with creation/update dates, notes, project/milestone names, logged hours, recurring schedule, and checklists. Supports comprehensive filtering by dates (createdAt, createdAfter/Before, deadline, updatedAfter/Before), status, priority, workType, recurring state, project, milestone, or search keywords, with customizable sorting.`,
       parameters: {
         type: 'object',
         properties: {
@@ -149,7 +150,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'query_projects',
       description:
-        'List or search all projects in PlannerMate. Returns project metadata, statuses, milestone counts, total task counts, dates, notes, and total logged minutes.',
+        `List or search all projects in ${APP_NAME}. Returns project metadata, statuses, milestone counts, total task counts, dates, notes, and total logged minutes.`,
       parameters: {
         type: 'object',
         properties: {
@@ -204,7 +205,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'query_milestones',
       description:
-        'List or search milestones in PlannerMate. Returns milestone metadata, parent project name, task counts, dates, notes, and deadlines.',
+        `List or search milestones in ${APP_NAME}. Returns milestone metadata, parent project name, task counts, dates, notes, and deadlines.`,
       parameters: {
         type: 'object',
         properties: {
@@ -503,7 +504,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'query_recurring_tasks',
       description:
-        'List or filter recurring task templates in PlannerMate, including frequency, repeat days of week, intervals, and recurrence end dates.',
+        `List or filter recurring task templates in ${APP_NAME}, including frequency, repeat days of week, intervals, and recurrence end dates.`,
       parameters: {
         type: 'object',
         properties: {
@@ -550,7 +551,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'create_task',
       description:
-        'Create a new task in PlannerMate. Can optionally specify project, milestone, priority, estimate, deadline, work type, notes, dates, owners, and checklist.',
+        `Create a new task in ${APP_NAME}. Can optionally specify project, milestone, priority, estimate, deadline, work type, notes, dates, owners, and checklist.`,
       parameters: {
         type: 'object',
         properties: {
@@ -747,7 +748,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     type: 'function',
     function: {
       name: 'create_project',
-      description: 'Create a new project in PlannerMate.',
+      description: `Create a new project in ${APP_NAME}.`,
       parameters: {
         type: 'object',
         properties: {
@@ -1178,7 +1179,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'manage_reminders',
       description:
-        'Manage reminders on tasks, projects, or milestones: add a new reminder with date/time/note, remove an existing reminder, or list current reminders. PlannerMate has full native reminder support with browser desktop notifications.',
+        `Manage reminders on tasks, projects, or milestones: add a new reminder with date/time/note, remove an existing reminder, or list current reminders. ${APP_NAME} has full native reminder support with browser desktop notifications.`,
       parameters: {
         type: 'object',
         properties: {
@@ -1247,7 +1248,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'query_notifications',
       description:
-        'Query active notifications and alerts in PlannerMate (overdue tasks, capacity overloads, due-soon deadlines, stale tasks, custom reminders, and timer alerts).',
+        `Query active notifications and alerts in ${APP_NAME} (overdue tasks, capacity overloads, due-soon deadlines, stale tasks, custom reminders, and timer alerts).`,
       parameters: {
         type: 'object',
         properties: {

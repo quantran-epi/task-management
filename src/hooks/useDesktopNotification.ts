@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { APP_NAME } from '../constants/app';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import {
   sendDesktopNotification,
@@ -127,7 +128,7 @@ export function useDesktopNotification({
         const summaryText = `Bạn có ${overdue} việc quá hạn, ${overload} ngày quá tải, và ${totalPending} việc cần xử lý.`;
 
         sendDesktopNotification({
-          title: 'PlannerMate',
+          title: APP_NAME,
           body: summaryText,
           requireInteraction: settingsData.settings.requireInteractionEnabled,
         });
@@ -162,7 +163,7 @@ export function useDesktopNotification({
         item.category === 'reminder'
           ? item.title
           : `[${item.tagLabel || 'Cảnh báo'}] ${item.title}`;
-      const body = item.subtitle || item.tagLabel || 'Thông báo từ PlannerMate';
+      const body = item.subtitle || item.tagLabel || `Thông báo từ ${APP_NAME}`;
 
       sendDesktopNotification({
         title,

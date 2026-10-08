@@ -32,6 +32,12 @@ import {
   BulbOutlined,
 } from '@ant-design/icons';
 import type { GhostDevStreamChunk, WorkerSession, AgentStatus } from '../../types/agent';
+import {
+  extractTokenCount,
+  calculateSessionTokens,
+  formatDuration,
+  formatTokenCount,
+} from '../../utils/agentMetrics';
 
 const { Text } = Typography;
 
@@ -39,6 +45,8 @@ export interface AgentTerminalLogProps {
   logs: GhostDevStreamChunk[];
   sending: boolean;
   isRunning?: boolean;
+  startedAt?: string | undefined;
+  finishedAt?: string | undefined;
   onSendFeedback: (prompt: string) => Promise<void>;
   onClearLogs?: () => void;
   taskTitle?: string;
@@ -99,22 +107,6 @@ function formatToolResultContent(content: unknown): string {
     return JSON.stringify(content, null, 2);
   }
   return String(content ?? '');
-}
-
-function extractTokenCount(val: Record<string, unknown>): number | null {
-  if (typeof val.total_tokens === 'number') return val.total_tokens;
-  if (typeof val.tokens === 'number') return val.tokens;
-  if (val.usage && typeof val.usage === 'object') {
-    const u = val.usage as Record<string, unknown>;
-    if (typeof u.total_tokens === 'number') return u.total_tokens;
-    const input = typeof u.input_tokens === 'number' ? u.input_tokens : 0;
-    const output = typeof u.output_tokens === 'number' ? u.output_tokens : 0;
-    const cacheRead = typeof u.cache_read_input_tokens === 'number' ? u.cache_read_input_tokens : 0;
-    const cacheCreate = typeof u.cache_creation_input_tokens === 'number' ? u.cache_creation_input_tokens : 0;
-    const sum = input + output + cacheRead + cacheCreate;
-    if (sum > 0) return sum;
-  }
-  return null;
 }
 
 function parseStreamChunk(chunk: GhostDevStreamChunk): ParsedChunk {
@@ -430,6 +422,8 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
   logs,
   sending,
   isRunning = false,
+  startedAt,
+  finishedAt,
   onSendFeedback,
   onClearLogs,
   taskTitle,
@@ -441,10 +435,12 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
   const [viewMode, setViewMode] = useState<'human' | 'raw'>('human');
   const [selectedAgent, setSelectedAgent] = useState<string>('all');
   const [dismissedWorkerIds, setDismissedWorkerIds] = useState<string[]>([]);
+  const [liveElapsedSec, setLiveElapsedSec] = useState<number>(0);
   const logContainerRef = useRef<HTMLDivElement>(null);
 
-  // Reset dismissed subagent state when active task changes
+  // Reset subagent filter & dismissed state when active task changes
   useEffect(() => {
+    setSelectedAgent('all');
     setDismissedWorkerIds([]);
   }, [taskTitle]);
 
@@ -456,53 +452,200 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
     }
   };
 
-  // Track active thinking vs turn completion state
+  // Track active thinking vs turn completion state accurately
   const { isThinking, latestResultInfo } = useMemo(() => {
+    if (!isRunning && !sending) {
+      // If agent is not running and not sending feedback, it is definitely not thinking!
+      let resultInfo: { durationStr: string; tokens?: string | undefined } | null = null;
+      for (let i = logs.length - 1; i >= 0; i--) {
+        const chunk = logs[i];
+        if (!chunk) continue;
+        const trimmed = chunk.content.trim();
+        if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+          try {
+            const val = JSON.parse(trimmed) as Record<string, unknown>;
+            if (val.type === 'result') {
+              const durationSec =
+                typeof val.duration_ms === 'number' ? Math.round(val.duration_ms / 1000) : 0;
+              const durationStr =
+                durationSec > 60
+                  ? `${Math.floor(durationSec / 60)}m ${durationSec % 60}s`
+                  : `${durationSec}s`;
+              const tokenCount = extractTokenCount(val);
+              const tokenStr =
+                tokenCount !== null ? `${tokenCount.toLocaleString()} tokens` : undefined;
+              resultInfo = { durationStr, tokens: tokenStr };
+              break;
+            }
+          } catch {
+            // ignore
+          }
+        }
+      }
+      return { isThinking: false, latestResultInfo: resultInfo };
+    }
+
+    if (sending) {
+      return { isThinking: true, latestResultInfo: null };
+    }
+
+    // Determine whether running agent is actively generating/executing or waiting for user
     let resultInfo: { durationStr: string; tokens?: string | undefined } | null = null;
-    let feedbackSentAfterResult = false;
+    let lastUserFeedbackIndex = -1;
+    let lastAiResponseIndex = -1;
+    let lastResultIndex = -1;
+    let lastToolCallIndex = -1;
+    let lastToolResultIndex = -1;
 
     for (let i = logs.length - 1; i >= 0; i--) {
       const chunk = logs[i];
       if (!chunk) continue;
-      if (chunk.content.startsWith('[User Feedback]')) {
-        feedbackSentAfterResult = true;
-        break;
+      const content = chunk.content;
+
+      if (lastUserFeedbackIndex === -1 && content.startsWith('[User Feedback]')) {
+        lastUserFeedbackIndex = i;
       }
-      const trimmed = chunk.content.trim();
+
+      const trimmed = content.trim();
       if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
         try {
           const val = JSON.parse(trimmed) as Record<string, unknown>;
           if (val.type === 'result') {
-            const durationSec =
-              typeof val.duration_ms === 'number' ? Math.round(val.duration_ms / 1000) : 0;
-            const durationStr =
-              durationSec > 60
-                ? `${Math.floor(durationSec / 60)}m ${durationSec % 60}s`
-                : `${durationSec}s`;
-            const tokenCount = extractTokenCount(val);
-            const tokenStr =
-              tokenCount !== null ? `${tokenCount.toLocaleString()} tokens` : undefined;
-            resultInfo = {
-              durationStr,
-              tokens: tokenStr,
-            };
-            break;
+            if (lastResultIndex === -1) {
+              lastResultIndex = i;
+              const durationSec =
+                typeof val.duration_ms === 'number' ? Math.round(val.duration_ms / 1000) : 0;
+              const durationStr =
+                durationSec > 60
+                  ? `${Math.floor(durationSec / 60)}m ${durationSec % 60}s`
+                  : `${durationSec}s`;
+              const tokenCount = extractTokenCount(val);
+              const tokenStr =
+                tokenCount !== null ? `${tokenCount.toLocaleString()} tokens` : undefined;
+              resultInfo = { durationStr, tokens: tokenStr };
+            }
+          } else if (val.type === 'tool_use' || val.type === 'tool_call') {
+            if (lastToolCallIndex === -1) lastToolCallIndex = i;
+          } else if (val.type === 'tool_result') {
+            if (lastToolResultIndex === -1) lastToolResultIndex = i;
+          } else if (
+            val.type === 'assistant' ||
+            (val.message && typeof val.message === 'object') ||
+            val.type === 'message_stop'
+          ) {
+            if (lastAiResponseIndex === -1) lastAiResponseIndex = i;
           }
         } catch {
           // ignore
         }
+      } else if (chunk.type === 'tool_call') {
+        if (lastToolCallIndex === -1) lastToolCallIndex = i;
+      } else if (chunk.type === 'tool_result') {
+        if (lastToolResultIndex === -1) lastToolResultIndex = i;
       }
     }
 
-    const thinking = Boolean(
-      sending || (isRunning && (!resultInfo || feedbackSentAfterResult))
-    );
+    // 1. If user feedback was sent and no AI response/result has arrived after it yet:
+    if (lastUserFeedbackIndex !== -1) {
+      const respondedAfterFeedback =
+        lastAiResponseIndex > lastUserFeedbackIndex ||
+        lastResultIndex > lastUserFeedbackIndex;
+      if (!respondedAfterFeedback) {
+        return { isThinking: true, latestResultInfo: null };
+      }
+    }
 
+    // 2. If a tool call was made and tool result has not returned yet:
+    if (lastToolCallIndex !== -1 && lastToolCallIndex > lastToolResultIndex) {
+      return { isThinking: true, latestResultInfo: resultInfo };
+    }
+
+    // 3. If there is a turn result event, turn has finished:
+    if (lastResultIndex !== -1) {
+      const thinking = lastUserFeedbackIndex > lastResultIndex;
+      return { isThinking: thinking, latestResultInfo: resultInfo };
+    }
+
+    // 4. If AI has responded and no pending tool execution or feedback:
+    if (lastAiResponseIndex !== -1) {
+      return { isThinking: false, latestResultInfo: null };
+    }
+
+    // 5. Initial start: process is running, but no logs or responses yet:
     return {
-      isThinking: thinking,
-      latestResultInfo: resultInfo,
+      isThinking: logs.length === 0,
+      latestResultInfo: null,
     };
   }, [logs, sending, isRunning]);
+
+  // Filter logs by selected agent and exclude dismissed workers
+  const filteredLogs = useMemo(() => {
+    let base = logs;
+    if (dismissedWorkerIds.length > 0) {
+      base = base.filter(
+        (l) => !l.workerId || !dismissedWorkerIds.includes(l.workerId)
+      );
+    }
+    if (selectedAgent === 'all') return base;
+    if (selectedAgent === 'master') return base.filter((l) => l.source !== 'worker');
+    return base.filter((l) => l.workerId === selectedAgent || l.content.includes(selectedAgent));
+  }, [logs, selectedAgent, dismissedWorkerIds]);
+
+  // Track live timer and live session tokens
+  const sessionTokens = useMemo(() => {
+    return calculateSessionTokens(filteredLogs);
+  }, [filteredLogs]);
+
+  // Determine baseline start timestamp for live timer
+  const effectiveStartTimestamp = useMemo(() => {
+    if (startedAt) {
+      const parsed = Date.parse(startedAt);
+      if (!isNaN(parsed) && parsed > 0) return parsed;
+    }
+    // Fall back to first log's timestamp if available
+    const firstChunk = logs[0];
+    if (firstChunk && firstChunk.timestamp) {
+      const parsed = Date.parse(firstChunk.timestamp);
+      if (!isNaN(parsed) && parsed > 0) return parsed;
+    }
+    return null;
+  }, [startedAt, logs]);
+
+  // Calculate static/finished duration in seconds
+  const finishedElapsedSec = useMemo(() => {
+    if (finishedAt && effectiveStartTimestamp) {
+      const parsed = Date.parse(finishedAt);
+      if (!isNaN(parsed) && parsed > effectiveStartTimestamp) {
+        return Math.max(0, Math.round((parsed - effectiveStartTimestamp) / 1000));
+      }
+    }
+    return 0;
+  }, [finishedAt, effectiveStartTimestamp]);
+
+  // Tick timer every second when agent is running or thinking
+  useEffect(() => {
+    if (!isRunning && !isThinking) {
+      return;
+    }
+
+    const updateTimer = () => {
+      if (effectiveStartTimestamp) {
+        const now = Date.now();
+        const diff = Math.max(0, Math.round((now - effectiveStartTimestamp) / 1000));
+        setLiveElapsedSec(diff);
+      } else {
+        setLiveElapsedSec((prev) => prev + 1);
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [isRunning, isThinking, effectiveStartTimestamp]);
+
+  const displayElapsedSec = isRunning || isThinking
+    ? liveElapsedSec
+    : finishedElapsedSec || liveElapsedSec;
 
   // Discover all unique workers from props, logs, and parsed tool calls with exit tracking
   const allWorkers = useMemo(() => {
@@ -609,19 +752,6 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
   const visibleWorkers = useMemo(() => {
     return allWorkers.filter((w) => !dismissedWorkerIds.includes(w.workerId));
   }, [allWorkers, dismissedWorkerIds]);
-
-  // Filter logs by selected agent and exclude dismissed workers
-  const filteredLogs = useMemo(() => {
-    let base = logs;
-    if (dismissedWorkerIds.length > 0) {
-      base = base.filter(
-        (l) => !l.workerId || !dismissedWorkerIds.includes(l.workerId)
-      );
-    }
-    if (selectedAgent === 'all') return base;
-    if (selectedAgent === 'master') return base.filter((l) => l.source !== 'worker');
-    return base.filter((l) => l.workerId === selectedAgent || l.content.includes(selectedAgent));
-  }, [logs, selectedAgent, dismissedWorkerIds]);
 
   // Parse logs for human view, filtering out internal system hooks and deduplicating return display
   const parsedLogs = useMemo(() => {
@@ -733,6 +863,49 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                 {taskTitle ? `Terminal: ${taskTitle}` : 'Terminal Stream'}
               </Text>
               <Text style={{ color: '#888', fontSize: 11 }}>({filteredLogs.length} dòng)</Text>
+
+              {/* Live Claude Code style metrics tag */}
+              {isRunning || isThinking ? (
+                <Tag
+                  color="blue"
+                  bordered={false}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    margin: 0,
+                    backgroundColor: '#1e1b4b',
+                    color: '#93c5fd',
+                  }}
+                >
+                  <LoadingOutlined spin style={{ fontSize: 11 }} />
+                  <span>{formatDuration(displayElapsedSec)}</span>
+                  <span>•</span>
+                  <span>{formatTokenCount(sessionTokens)}</span>
+                </Tag>
+              ) : displayElapsedSec > 0 || sessionTokens > 0 ? (
+                <Tag
+                  color="default"
+                  bordered={false}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    fontSize: 11,
+                    fontWeight: 500,
+                    margin: 0,
+                    backgroundColor: '#18181b',
+                    color: '#a1a1aa',
+                  }}
+                >
+                  <CheckCircleOutlined style={{ fontSize: 11, color: '#10b981' }} />
+                  <span>{formatDuration(displayElapsedSec)}</span>
+                  <span>•</span>
+                  <span>{formatTokenCount(sessionTokens)}</span>
+                </Tag>
+              ) : null}
             </Space>
 
             <Space direction="horizontal" size={8}>
@@ -822,7 +995,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                         fontWeight: 700,
                       }}
                     >
-                      👑 Master Lead
+                      👑 Master
                     </span>
                   ),
                   value: 'master',
@@ -1024,7 +1197,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                                 border: '1px solid #9333ea',
                               }}
                             >
-                              Master Lead
+                              Master
                             </Tag>
                           )}
                           <Text strong style={{ color: '#ffffff', fontSize: 12 }}>
@@ -1414,7 +1587,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 8,
+                justifyContent: 'space-between',
                 padding: '8px 12px',
                 backgroundColor: '#18181b',
                 border: '1px solid #27272a',
@@ -1423,10 +1596,15 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                 color: '#818cf8',
               }}
             >
-              <Spin
-                indicator={<LoadingOutlined style={{ fontSize: 14, color: '#818cf8' }} spin />}
-              />
-              <span style={{ fontSize: 12 }}>Claude AI đang xử lý / suy nghĩ...</span>
+              <Space size={8}>
+                <Spin
+                  indicator={<LoadingOutlined style={{ fontSize: 14, color: '#818cf8' }} spin />}
+                />
+                <span style={{ fontSize: 12 }}>Claude AI đang xử lý / suy nghĩ...</span>
+              </Space>
+              <span style={{ fontSize: 11, color: '#93c5fd', fontFamily: 'monospace' }}>
+                {formatDuration(displayElapsedSec)} • {formatTokenCount(sessionTokens)}
+              </span>
             </div>
           ) : latestResultInfo ? (
             <div
@@ -1444,8 +1622,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
             >
               <CheckCircleOutlined style={{ fontSize: 14, color: '#4ade80' }} />
               <span style={{ fontSize: 12, fontWeight: 500 }}>
-                Đã hoàn thành {latestResultInfo.durationStr ? `trong ${latestResultInfo.durationStr}` : ''}
-                {latestResultInfo.tokens ? ` (${latestResultInfo.tokens})` : ''} — Sẵn sàng nhận chỉ đạo mới.
+                Đã hoàn thành {latestResultInfo.durationStr ? `trong ${latestResultInfo.durationStr}` : (displayElapsedSec ? `trong ${formatDuration(displayElapsedSec)}` : '')} ({formatTokenCount(sessionTokens)}) — Sẵn sàng nhận chỉ đạo mới.
               </span>
             </div>
           ) : null}

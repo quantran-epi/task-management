@@ -1,5 +1,6 @@
 import React from 'react';
 import { Modal, Typography, Tabs, Tag, Alert, theme, Space } from 'antd';
+import { APP_NAME } from '../../constants/app';
 import {
   RobotOutlined,
   ThunderboltOutlined,
@@ -29,7 +30,7 @@ export const AITaskPlannerInstructionsModal: React.FC<AITaskPlannerInstructionsM
       children: (
         <Space direction="vertical" size="middle" style={{ width: '100%', marginTop: 8 }}>
           <Paragraph>
-            Trợ lý AI PlannerMate hỗ trợ các ký tự gợi ý trực tiếp ngay trong thanh nhập tin nhắn:
+            Trợ lý AI {APP_NAME} hỗ trợ các ký tự gợi ý trực tiếp ngay trong thanh nhập tin nhắn:
           </Paragraph>
 
           <div
@@ -172,7 +173,7 @@ export const AITaskPlannerInstructionsModal: React.FC<AITaskPlannerInstructionsM
       children: (
         <Space direction="vertical" size="middle" style={{ width: '100%', marginTop: 8 }}>
           <Paragraph>
-            Trợ lý AI sở hữu đầy đủ công cụ quản lý cơ sở dữ liệu PlannerMate: tạo mới task, cập nhật trạng thái, phân bổ giờ, ghi chú, tạo checklist, và ghi nhật ký công việc (worklog).
+            Trợ lý AI sở hữu đầy đủ công cụ quản lý cơ sở dữ liệu {APP_NAME}: tạo mới task, cập nhật trạng thái, phân bổ giờ, ghi chú, tạo checklist, và ghi nhật ký công việc (worklog).
           </Paragraph>
 
           <Alert
@@ -210,7 +211,7 @@ export const AITaskPlannerInstructionsModal: React.FC<AITaskPlannerInstructionsM
               <Text strong>Nguyên tắc chống ảo giác (Anti-Hallucination)</Text>
             </div>
             <div style={{ color: token.colorTextSecondary, fontSize: 13 }}>
-              AI PlannerMate tuân thủ nguyên tắc grounded data nghiêm ngặt: mọi phản hồi đều truy vấn trực tiếp từ cơ sở dữ liệu IndexedDB của bạn. Nếu một dữ liệu không tồn tại, AI sẽ báo rõ ràng thay vì tự ý bịa đặt.
+              AI {APP_NAME} tuân thủ nguyên tắc grounded data nghiêm ngặt: mọi phản hồi đều truy vấn trực tiếp từ cơ sở dữ liệu IndexedDB của bạn. Nếu một dữ liệu không tồn tại, AI sẽ báo rõ ràng thay vì tự ý bịa đặt.
             </div>
           </div>
         </Space>

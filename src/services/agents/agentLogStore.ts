@@ -1,9 +1,10 @@
 import type { GhostDevStreamChunk } from '../../types/agent';
+import { APP_NAME } from '../../constants/app';
 import { isTauriApp } from '../../utils/timerPopout';
 
 export const MAX_STREAM_LINES = 2000;
 
-const DB_NAME = 'PlannerMateAgentTerminalDB';
+const DB_NAME = `${APP_NAME}AgentTerminalDB`;
 const DB_VERSION = 1;
 const STORE_NAME = 'terminal_logs';
 
@@ -187,10 +188,21 @@ export class AgentLogStore {
     void (async () => {
       try {
         const { listen } = await import('@tauri-apps/api/event');
-        await listen<GhostDevStreamChunk>('ghost-dev:stream-chunk', (event) => {
-          if (event.payload && event.payload.taskId) {
-            this.addChunk(event.payload);
-          }
+        await listen<any>('ghost-dev:stream-chunk', (event) => {
+          const payload = event.payload;
+          if (!payload) return;
+          const tid = payload.taskId || payload.task_id;
+          if (!tid) return;
+
+          const chunk: GhostDevStreamChunk = {
+            taskId: tid,
+            workerId: payload.workerId || payload.worker_id || undefined,
+            source: payload.source || 'master',
+            timestamp: payload.timestamp || new Date().toISOString(),
+            type: payload.type || payload.chunk_type || 'log',
+            content: typeof payload.content === 'string' ? payload.content : JSON.stringify(payload.content || ''),
+          };
+          this.addChunk(chunk);
         });
       } catch (err) {
         console.error('[AgentLogStore] Failed to attach Tauri stream listener:', err);

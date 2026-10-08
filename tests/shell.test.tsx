@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ConfigProvider, theme } from 'antd';
+import { APP_NAME } from '../src/constants/app';
 import { AppShell } from '../src/components/shell/AppShell';
 import App from '../src/App';
 import { db } from '../src/db';
@@ -22,7 +23,7 @@ describe('AppShell Component (UX-01)', () => {
       </ConfigProvider>
     );
 
-    expect(screen.getAllByText('PlannerMate').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(APP_NAME).length).toBeGreaterThan(0);
     expect(screen.getByText('Trực tuyến')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Mở tìm kiếm nhanh/i })).toBeInTheDocument();
     expect(screen.getByText('Shell Content')).toBeInTheDocument();

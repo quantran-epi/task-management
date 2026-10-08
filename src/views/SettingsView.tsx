@@ -22,6 +22,7 @@ import { JiraConfigCard } from '../components/settings/JiraConfigCard';
 import { NineRouterConfigCard } from '../components/settings/NineRouterConfigCard';
 import { KnowledgeServerConfigCard } from '../components/settings/KnowledgeServerConfigCard';
 import { GhostDevConfigCard } from '../components/settings/GhostDevConfigCard';
+import { McpConfigCard } from '../components/settings/McpConfigCard';
 import { PwaStatusCard } from '../components/settings/PwaStatusCard';
 import { StoragePersistenceCard } from '../components/settings/StoragePersistenceCard';
 import { LocalSqlitePersistenceCard } from '../components/settings/LocalSqlitePersistenceCard';
@@ -42,7 +43,7 @@ const { Paragraph } = Typography;
 export interface SettingsViewProps {
   db?: TaskPlannerDatabase;
   onNavigate?: (route: AppRoute) => void;
-  defaultActiveTab?: 'capacity' | 'data' | 'jira' | 'notifications' | 'ai';
+  defaultActiveTab?: 'capacity' | 'data' | 'jira' | 'notifications' | 'ai' | undefined;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -52,6 +53,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'capacity' | 'data' | 'jira' | 'notifications' | 'ai'>(defaultActiveTab);
   const [resetModalOpen, setResetModalOpen] = useState(false);
+
+  React.useEffect(() => {
+    if (defaultActiveTab) {
+      setActiveTab(defaultActiveTab);
+    }
+  }, [defaultActiveTab]);
   const [showPostRestoreBanner, setShowPostRestoreBanner] = useState(false);
   const [remotePayload, setRemotePayload] = useState<BackupEnvelope | null>(null);
   const [remoteSha, setRemoteSha] = useState<string | null>(null);
@@ -219,6 +226,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       ),
       children: (
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <McpConfigCard db={db} />
           <GhostDevConfigCard />
           <NineRouterConfigCard db={db} />
           <KnowledgeConfigProvider db={db}>

@@ -26,9 +26,9 @@ export default defineConfig({
         'pwa-512x512-maskable.png',
       ],
       manifest: {
-        name: 'PlannerMate',
-        short_name: 'PlannerMate',
-        description: 'PlannerMate - Private offline-first personal task and workload planner',
+        name: 'TaskMate',
+        short_name: 'TaskMate',
+        description: 'TaskMate - Private offline-first personal task and workload planner',
         theme_color: '#1677ff',
         background_color: '#ffffff',
         display: 'standalone',

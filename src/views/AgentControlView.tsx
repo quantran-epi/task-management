@@ -32,6 +32,7 @@ export const AgentControlView: React.FC = () => {
     activeSessionId,
     setActiveSessionId,
     activeSession,
+    stoppingTaskIds,
     stopSession,
   } = useGhostDevSessions();
 
@@ -96,6 +97,9 @@ export const AgentControlView: React.FC = () => {
     loading: diffLoading,
     refreshDiff,
     acceptAll,
+    acceptFile,
+    acceptHunk,
+    acceptLine,
     revertAll,
     revertFile,
     revertHunk,
@@ -105,11 +109,10 @@ export const AgentControlView: React.FC = () => {
     async (taskId: string) => {
       await stopSession(taskId);
       if (activeSessionId === taskId) {
-        clearLogs();
         setActiveSessionId(null);
       }
     },
-    [stopSession, activeSessionId, clearLogs, setActiveSessionId]
+    [stopSession, activeSessionId, setActiveSessionId]
   );
 
   // Screen reader announcements on session status changes
@@ -155,6 +158,7 @@ export const AgentControlView: React.FC = () => {
             activeSessionId={activeSessionId}
             onSelectSession={setActiveSessionId}
             onStopSession={handleStopSession}
+            stoppingTaskIds={stoppingTaskIds}
             auditHistory={auditHistory}
             onSelectAuditSession={handleSelectAuditSession}
             onDeleteAuditSession={handleDeleteAuditSession}
@@ -169,6 +173,8 @@ export const AgentControlView: React.FC = () => {
               logs={logs}
               sending={sending}
               isRunning={activeSession?.status === 'running'}
+              startedAt={activeSession.startedAt}
+              finishedAt={activeSession.finishedAt}
               onSendFeedback={sendChatMessage}
               onClearLogs={clearLogs}
               taskTitle={activeSession.taskTitle}
@@ -213,10 +219,14 @@ export const AgentControlView: React.FC = () => {
             loading={diffLoading}
             onRefreshDiff={refreshDiff}
             onAcceptAll={acceptAll}
+            onAcceptFile={acceptFile}
+            onAcceptHunk={acceptHunk}
+            onAcceptLine={acceptLine}
             onRevertAll={revertAll}
             onRevertFile={revertFile}
             onRevertHunk={revertHunk}
             onSendFeedback={sendChatMessage}
+            worktreePath={activeSession ? activeSession.worktreePath : null}
           />
         </Splitter.Panel>
       </Splitter>

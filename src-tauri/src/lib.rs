@@ -41,6 +41,8 @@ pub fn run() {
             agent_manager::list_agent_sessions,
             agent_manager::get_worktree_diff,
             agent_manager::accept_all_diff,
+            agent_manager::accept_file_diff,
+            agent_manager::accept_patch_diff,
             agent_manager::revert_all_diff,
             agent_manager::revert_file_diff,
             agent_manager::send_agent_feedback,

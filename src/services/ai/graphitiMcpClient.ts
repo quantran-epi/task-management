@@ -1,6 +1,8 @@
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
+import { APP_NAME } from '../../constants/app';
 import { isTauriApp } from '../../utils/timerPopout';
 import type { AiToolDefinition } from './aiTools';
+import { MCP_SERVERS_SETTINGS_KEY, type McpServerConfig } from './mcpClient';
 
 export const DEFAULT_GRAPHITI_MCP_ENDPOINT = 'http://10.4.97.70:30456/mcp';
 const GRAPHITI_ENDPOINT_SETTINGS_KEY = 'graphiti_mcp_endpoint';
@@ -50,6 +52,11 @@ export async function getGraphitiMcpEndpoint(
   if (typeof rec?.value === 'string' && rec.value.trim().length > 0) {
     return rec.value.trim();
   }
+  const serversRec = await db.settings.get(MCP_SERVERS_SETTINGS_KEY);
+  if (Array.isArray(serversRec?.value)) {
+    const graphiti = (serversRec.value as McpServerConfig[]).find((s) => s.id === 'graphiti-banking');
+    if (graphiti?.url) return graphiti.url;
+  }
   return DEFAULT_GRAPHITI_MCP_ENDPOINT;
 }
 
@@ -62,6 +69,14 @@ export async function setGraphitiMcpEndpoint(
     key: GRAPHITI_ENDPOINT_SETTINGS_KEY,
     value: cleaned,
   });
+  try {
+    const serversRec = await db.settings.get(MCP_SERVERS_SETTINGS_KEY);
+    if (Array.isArray(serversRec?.value)) {
+      const servers = serversRec.value as McpServerConfig[];
+      const updated = servers.map((s) => (s.id === 'graphiti-banking' ? { ...s, url: cleaned } : s));
+      await db.settings.put({ key: MCP_SERVERS_SETTINGS_KEY, value: updated });
+    }
+  } catch {}
   clearSession();
 }
 
@@ -71,6 +86,11 @@ export async function isGraphitiMcpEnabled(
   const rec = await db.settings.get(GRAPHITI_ENABLED_SETTINGS_KEY);
   if (typeof rec?.value === 'boolean') {
     return rec.value;
+  }
+  const serversRec = await db.settings.get(MCP_SERVERS_SETTINGS_KEY);
+  if (Array.isArray(serversRec?.value)) {
+    const graphiti = (serversRec.value as McpServerConfig[]).find((s) => s.id === 'graphiti-banking');
+    if (typeof graphiti?.enabled === 'boolean') return graphiti.enabled;
   }
   return true;
 }
@@ -83,6 +103,14 @@ export async function setGraphitiMcpEnabled(
     key: GRAPHITI_ENABLED_SETTINGS_KEY,
     value: enabled,
   });
+  try {
+    const serversRec = await db.settings.get(MCP_SERVERS_SETTINGS_KEY);
+    if (Array.isArray(serversRec?.value)) {
+      const servers = serversRec.value as McpServerConfig[];
+      const updated = servers.map((s) => (s.id === 'graphiti-banking' ? { ...s, enabled } : s));
+      await db.settings.put({ key: MCP_SERVERS_SETTINGS_KEY, value: updated });
+    }
+  } catch {}
   if (!enabled) {
     clearSession();
   }
@@ -163,7 +191,7 @@ async function initializeSession(
     {
       protocolVersion: '2025-03-26',
       capabilities: {},
-      clientInfo: { name: 'PlannerMate', version: '1.0' },
+      clientInfo: { name: APP_NAME, version: '1.0' },
     },
     false,
     customEndpoint,

@@ -14,6 +14,7 @@ export interface UseGhostDevSessionsResult {
   setActiveSessionId: (id: string | null) => void;
   activeSession: AgentSession | null;
   loading: boolean;
+  stoppingTaskIds: Set<string>;
   refreshSessions: () => Promise<void>;
   stopSession: (taskId: string) => Promise<void>;
 }
@@ -22,6 +23,7 @@ export function useGhostDevSessions(): UseGhostDevSessionsResult {
   const [sessions, setSessions] = useState<AgentSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [stoppingTaskIds, setStoppingTaskIds] = useState<Set<string>>(new Set());
 
   const refreshSessions = useCallback(async () => {
     if (!isTauriApp()) {
@@ -46,20 +48,31 @@ export function useGhostDevSessions(): UseGhostDevSessionsResult {
   const stopSession = useCallback(
     async (taskId: string) => {
       if (!isTauriApp()) return;
+      setStoppingTaskIds((prev) => new Set(prev).add(taskId));
       try {
         await tauriInvoke('stop_ghost_dev_session', { taskId });
       } catch (err) {
         console.warn(`[GhostDev] Notice when stopping session ${taskId}:`, err);
       } finally {
+        const existingSession = sessions.find((s) => s.taskId === taskId);
+        const finalStatus =
+          existingSession?.status === 'error' || existingSession?.status === 'done'
+            ? existingSession.status
+            : 'interrupted';
         agentSessionHistoryRepo.updateSessionStatus(
           taskId,
-          'interrupted',
+          finalStatus,
           new Date().toISOString()
         );
         if (activeSessionId === taskId) {
           setActiveSessionId(null);
         }
         await refreshSessions();
+        setStoppingTaskIds((prev) => {
+          const next = new Set(prev);
+          next.delete(taskId);
+          return next;
+        });
       }
     },
     [refreshSessions, activeSessionId]
@@ -136,6 +149,7 @@ export function useGhostDevSessions(): UseGhostDevSessionsResult {
     setActiveSessionId,
     activeSession,
     loading,
+    stoppingTaskIds,
     refreshSessions,
     stopSession,
   };

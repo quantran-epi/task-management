@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { TaskPlannerDatabase } from '../../../src/db';
 import { DocEditorPane } from '../../../src/components/notes/DocEditorPane';
+import { APP_NAME } from '../../../src/constants/app';
 import * as aiChatContextModule from '../../../src/context/AIChatContext';
 import type { Note, Task, Project } from '../../../src/types/models';
 
@@ -88,7 +89,7 @@ describe('DocEditorPane', () => {
     };
     const sampleProject: Project = {
       id: 'proj-8888-8888',
-      name: 'Dự án PlannerMate Alpha',
+      name: `Dự án ${APP_NAME} Alpha`,
       status: 'In Progress',
       createdAt: '2026-10-04T00:00:00.000Z',
       updatedAt: '2026-10-04T00:00:00.000Z',
@@ -116,7 +117,7 @@ describe('DocEditorPane', () => {
     // Autocomplete popup should appear
     expect(await screen.findByRole('listbox')).toBeInTheDocument();
     expect(screen.getByText('Triển khai tính năng Wiki')).toBeInTheDocument();
-    expect(screen.getByText('Dự án PlannerMate Alpha')).toBeInTheDocument();
+    expect(screen.getByText(`Dự án ${APP_NAME} Alpha`)).toBeInTheDocument();
     expect(screen.getByText('Tài liệu kiến trúc hệ thống')).toBeInTheDocument();
   });
 

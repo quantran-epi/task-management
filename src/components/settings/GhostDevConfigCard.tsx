@@ -120,12 +120,13 @@ export const GhostDevConfigCard: React.FC = () => {
         </div>
 
         <Form.Item
-          name="claudePath"
           label="Claude Code Executable / CLI Path"
           tooltip="Đường dẫn file thực thi hoặc tên lệnh Claude Code (để trống sẽ dùng 'claude' từ PATH hoặc biến môi trường CLAUDE_PATH)"
         >
           <Space.Compact style={{ width: '100%' }}>
-            <Input placeholder="Mặc định: claude (ví dụ: claude, C:\...\claude.cmd, /usr/local/bin/claude)" />
+            <Form.Item name="claudePath" noStyle>
+              <Input placeholder="Mặc định: claude (ví dụ: claude, C:\...\claude.cmd, /usr/local/bin/claude)" />
+            </Form.Item>
             {isTauriApp() && (
               <Button icon={<FolderOpenOutlined />} onClick={handleBrowseExecutable}>
                 Duyệt tập tin...

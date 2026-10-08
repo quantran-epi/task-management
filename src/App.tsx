@@ -60,8 +60,13 @@ export const App: React.FC = () => {
         return <AnalyticsView />;
       case 'notes':
         return <NotesView />;
-      case 'settings':
-        return <SettingsView onNavigate={navigate} />;
+      case 'settings': {
+        const validTabs = ['capacity', 'data', 'jira', 'notifications', 'ai'] as const;
+        const selectedTab = validTabs.includes(params.tab as any)
+          ? (params.tab as 'capacity' | 'data' | 'jira' | 'notifications' | 'ai')
+          : undefined;
+        return <SettingsView onNavigate={navigate} defaultActiveTab={selectedTab} />;
+      }
       case 'agents':
         return <AgentControlView />;
       case 'insight': {
