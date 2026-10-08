@@ -84,7 +84,7 @@ describe('PublishSession exact-preview DLP gate', () => {
     const remote = client();
     const session = new PublishSession({ client: remote, db });
     await expect(session.scan()).rejects.toThrow('preview');
-    await expect(session.submitConfirmedAttempt('missing')).rejects.toThrow('confirmation');
+    await expect(session.submitConfirmedAttempt('missing')).rejects.toThrow('preview');
     expect(remote.createPublishAttempt).not.toHaveBeenCalled();
 
     const document = note();
@@ -128,7 +128,7 @@ describe('PublishSession exact-preview DLP gate', () => {
     const confirmation = await session.confirmFindings();
     session.closePreview();
     await expect(session.submitConfirmedAttempt(confirmation.nonce)).rejects.toThrow(
-      'confirmation'
+      'preview'
     );
     expect(remote.createPublishAttempt).not.toHaveBeenCalled();
   });
