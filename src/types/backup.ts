@@ -11,6 +11,10 @@ import type {
   ChatMessage,
   ActiveTimer,
   Setting,
+  DocumentSet,
+  PublishedDocumentMetadata,
+  PublishAttemptCache,
+  DlpAuditRecord,
 } from './models';
 
 export interface BackupAttachmentRecord {
@@ -39,6 +43,10 @@ export interface BackupTableData {
   chatMessages?: ChatMessage[];
   activeTimers?: ActiveTimer[];
   settings?: Setting[];
+  documentSets?: DocumentSet[];
+  publishedDocuments?: PublishedDocumentMetadata[];
+  publishAttempts?: PublishAttemptCache[];
+  dlpAudits?: DlpAuditRecord[];
 }
 
 export interface BackupTableCounts {
@@ -55,6 +63,10 @@ export interface BackupTableCounts {
   chatMessages?: number;
   activeTimers?: number;
   settings?: number;
+  documentSets?: number;
+  publishedDocuments?: number;
+  publishAttempts?: number;
+  dlpAudits?: number;
 }
 
 
