@@ -20,11 +20,11 @@ describe('Dexie Schema v9 Migration & Note Repository (REQ-14.1, D-01, D-02, D-1
     await Dexie.delete(dbName);
   });
 
-  it('opens database at version 9 and populates notes table with SCHEMA_V9 indexes', async () => {
+  it('opens database and populates notes table with SCHEMA_V9 indexes', async () => {
     const db = new TaskPlannerDatabase(dbName);
     await db.open();
 
-    expect(db.verno).toBe(9);
+    expect(db.verno).toBeGreaterThanOrEqual(9);
     expect(db.notes.schema.indexes.some((idx) => idx.name === 'type')).toBe(true);
     expect(db.notes.schema.indexes.some((idx) => idx.name === 'parentId')).toBe(true);
     expect(db.notes.schema.indexes.some((idx) => idx.name === 'deletedAt')).toBe(true);

@@ -1,5 +1,8 @@
 // @vitest-environment node
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
+import Dexie from 'dexie';
+import { SCHEMA_V9, SCHEMA_V10 } from '../../src/db/schema';
+import { TaskPlannerDatabase } from '../../src/db/index';
 import {
   PublishPrimaryStateSchema,
   DocumentSetSchema,
@@ -7,6 +10,7 @@ import {
   PublishAttemptCacheSchema,
   DlpAuditRecordSchema,
 } from '../../src/validation/knowledgeSchemas';
+
 
 describe('Phase 16 Knowledge Validation Schemas (D-01, D-08, D-18, D-27, D-29, T-16-02)', () => {
   describe('PublishPrimaryStateSchema (D-27)', () => {
@@ -255,4 +259,94 @@ describe('Phase 16 Knowledge Validation Schemas (D-01, D-08, D-18, D-27, D-29, T
       expect(() => DlpAuditRecordSchema.parse(withSecret)).toThrow();
     });
   });
+
+  describe('Dexie Schema V10 Migration & Table Structure (D-01, D-02, D-08, T-16-01)', () => {
+    const dbName = 'TestMigrationV10DB_' + Math.random().toString(36).slice(2);
+
+    afterEach(async () => {
+      await Dexie.delete(dbName);
+    });
+
+    it('opens empty database at version 10 with all new V10 tables and indexes', async () => {
+      const db = new TaskPlannerDatabase(dbName);
+      await db.open();
+
+      expect(db.verno).toBe(10);
+      expect(SCHEMA_V10.documentSets).toBeDefined();
+      expect(db.documentSets).toBeDefined();
+      expect(db.publishedDocuments).toBeDefined();
+      expect(db.publishAttempts).toBeDefined();
+      expect(db.dlpAudits).toBeDefined();
+
+      // Check documentSets indexes
+      expect(db.documentSets.schema.indexes.some((idx) => idx.name === 'documentIds' && idx.multi)).toBe(true);
+
+      // Check publishedDocuments indexes
+      expect(db.publishedDocuments.schema.primKey.keyPath).toEqual(['setId', 'documentId']);
+      expect(db.publishedDocuments.schema.indexes.some((idx) => idx.name === 'publishedContentHash')).toBe(true);
+
+      // Check publishAttempts indexes
+      expect(db.publishAttempts.schema.indexes.some((idx) => idx.name === 'setId')).toBe(true);
+      expect(db.publishAttempts.schema.indexes.some((idx) => idx.name === 'status')).toBe(true);
+
+      // Check dlpAudits indexes
+      expect(db.dlpAudits.schema.indexes.some((idx) => idx.name === 'setId')).toBe(true);
+      expect(db.dlpAudits.schema.indexes.some((idx) => idx.name === 'timestamp')).toBe(true);
+
+      db.close();
+    });
+
+    it('migrates legacy V9 database to V10 and retains Note records byte-for-byte (T-16-01, D-02)', async () => {
+      // Step 1: populate V9 database with realistic Unicode and CRLF Markdown note
+      const v9Db = new Dexie(dbName);
+      v9Db.version(9).stores(SCHEMA_V9);
+      await v9Db.open();
+
+      const noteId1 = '11111111-1111-4111-8111-111111111111';
+      const rawMarkdown1 = '# Quy trình tính toán tín dụng SHB 60000006\r\n\r\nNội dung có dấu Tiếng Việt: Hạn mức, Dư nợ, Lãi suất.\r\n| Cột 1 | Cột 2 |\r\n|---|---|\r\n| Dữ liệu | 100% |';
+
+      await v9Db.table('notes').add({
+        id: noteId1,
+        type: 'document',
+        parentId: '33333333-3333-4333-8333-333333333333',
+        title: 'Tài liệu nghiệp vụ thẻ',
+        body: rawMarkdown1,
+        tags: ['tín-dụng', 'shb'],
+        isPinned: true,
+        createdAt: '2026-10-01T00:00:00.000Z',
+        updatedAt: '2026-10-01T00:00:00.000Z',
+      });
+
+      v9Db.close();
+
+      // Step 2: Open with TaskPlannerDatabase which registers V10
+      const v10Db = new TaskPlannerDatabase(dbName);
+      await v10Db.open();
+
+      expect(v10Db.verno).toBe(10);
+
+      const note = await v10Db.notes.get(noteId1);
+      expect(note).toBeDefined();
+      expect(note?.id).toBe(noteId1);
+      expect(note?.body).toBe(rawMarkdown1); // Exact byte-for-byte CRLF + Unicode preservation
+      expect(note?.title).toBe('Tài liệu nghiệp vụ thẻ');
+      expect(note?.parentId).toBe('33333333-3333-4333-8333-333333333333');
+      expect(note?.tags).toEqual(['tín-dụng', 'shb']);
+      expect(note?.isPinned).toBe(true);
+
+      // Verify new tables are usable and start empty
+      const setsCount = await v10Db.documentSets.count();
+      const metaCount = await v10Db.publishedDocuments.count();
+      const attemptsCount = await v10Db.publishAttempts.count();
+      const auditCount = await v10Db.dlpAudits.count();
+
+      expect(setsCount).toBe(0);
+      expect(metaCount).toBe(0);
+      expect(attemptsCount).toBe(0);
+      expect(auditCount).toBe(0);
+
+      v10Db.close();
+    });
+  });
 });
+

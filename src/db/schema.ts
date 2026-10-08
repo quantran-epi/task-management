@@ -70,6 +70,15 @@ export const SCHEMA_V9 = {
   notes: 'id, type, parentId, entityType, entityId, isPinned, deletedAt, *tags, createdAt, updatedAt',
 } as const;
 
+export const SCHEMA_V10 = {
+  ...SCHEMA_V9,
+  documentSets: 'id, name, *documentIds, createdAt, updatedAt',
+  publishedDocuments: '[setId+documentId], setId, documentId, lastKnownRemoteAt, publishedContentHash',
+  publishAttempts: 'id, setId, startedAt, status',
+  dlpAudits: 'id, setId, timestamp',
+} as const;
+
+
 
 
 
