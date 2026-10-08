@@ -39,6 +39,7 @@ Last activity: 2026-10-07 -- Completed quick task 261007-gce: allow choosing cla
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261008-b3b | fix claude executable picker, windows cmd execution, and mcp settings card | 2026-10-08 | 68caa53 | complete | [261008-b3b-fix-claude-executable-picker-and-cmd-exe](./quick/261008-b3b-fix-claude-executable-picker-and-cmd-exe/) |
 | 261007-kc4 | dynamic mcp config with in-chat toggle and authorship fingerprint | 2026-10-07 | 18d65c7 | complete | [261007-kc4-dynamic-mcp-config-with-in-chat-toggle-a](./quick/261007-kc4-dynamic-mcp-config-with-in-chat-toggle-a/) |
 | 261007-epc | fix ghostDevConfig claudePath exactOptionalPropertyTypes build error | 2026-10-07 | — | complete | [261007-epc-fix-ghost-dev-claude-path-exact-optional-property](./quick/261007-epc-fix-ghost-dev-claude-path-exact-optional-property/) |
 | 261007-gce | allow choosing claude code executable in ghost dev config | 2026-10-07 | 35bbc32 | complete | [261007-gce-allow-choose-claude-executable-ghost-dev](./quick/261007-gce-allow-choose-claude-executable-ghost-dev/) |
