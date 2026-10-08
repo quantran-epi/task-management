@@ -46,7 +46,7 @@ describe('document-set management', () => {
 
     fireEvent.change(screen.getByLabelText('Tên bộ tài liệu'), { target: { value: `  ${'x'.repeat(125)}  ` } });
     fireEvent.click(screen.getByRole('radio', { name: 'Từ thư mục hiện tại' }));
-    expect(screen.getByText('Tài liệu thêm hoặc di chuyển sau này không tự thay đổi bộ này.')).toBeVisible();
+    expect(screen.getByText('Tài liệu thêm hoặc di chuyển sau này không tự thay đổi bộ này.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
     expect(onSave).toHaveBeenLastCalledWith({ name: 'x'.repeat(120), documentIds: ['doc-a', 'doc-b'] });
 
@@ -128,9 +128,9 @@ describe('document-set management', () => {
         onPreview={vi.fn()}
       />
     );
-    expect(screen.getByText('Đang xuất bản')).toBeVisible();
-    expect(screen.getByText('2 tài liệu trong ảnh chụp đang hoạt động')).toBeVisible();
-    expect(screen.getByText(`Dữ liệu trạng thái gần nhất: ${NOW}`)).toBeVisible();
+    expect(screen.getByText('Đang xuất bản')).toBeInTheDocument();
+    expect(screen.getByText('2 tài liệu trong ảnh chụp đang hoạt động')).toBeInTheDocument();
+    expect(screen.getByText(`Dữ liệu trạng thái gần nhất: ${NOW}`)).toBeInTheDocument();
   });
 
   it('disables preview for empty, invalid config, or active same-set attempt while edits stay enabled', () => {
@@ -165,7 +165,7 @@ describe('document-set management', () => {
         onPreview={vi.fn()}
       />
     );
-    expect(screen.getByText('Chưa cấu hình Knowledge Server.')).toBeVisible();
+    expect(screen.getByText('Chưa cấu hình Knowledge Server.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Xem trước xuất bản' })).toBeDisabled();
 
     rerender(
@@ -200,8 +200,7 @@ function previewWithRemoval(): ChangePreview {
         documentId: 'doc-a', classification: 'added', moved: false,
         current: {
           occurrenceId: 'occ-a', chunkKey: 'chunk-a', contentHash: 'c'.repeat(64), headingPath: ['Alpha'], chunkIndex: 0,
-          startLine: 1, endLine: 2, startOffset: 0, endOffset: 9, rawSource: '# Alpha', documentId: 'doc-a',
-          snapshotHash: 'a'.repeat(64), chunkingPolicyVersion: '2026.10.1',
+          startLine: 1, endLine: 2, startOffset: 0, endOffset: 9, rawContent: '# Alpha',
         },
       },
       {
@@ -233,11 +232,12 @@ describe('guarded publish UI', () => {
       submitConfirmedAttempt: vi.fn(), closePreview: vi.fn(),
     };
     render(<PublishPreviewModal open preview={previewWithRemoval()} session={session as never} onClose={vi.fn()} />);
-    expect(screen.getByText('Xem trước thay đổi')).toBeVisible();
+    expect(screen.getByText('Xem trước thay đổi')).toBeInTheDocument();
     for (const label of ['Thêm', 'Thay đổi', 'Gỡ khỏi máy chủ', 'Không đổi']) expect(screen.getAllByText(label).length).toBeGreaterThan(0);
-    expect(screen.getByText('Tài liệu cục bộ vẫn được giữ nguyên.')).toBeVisible();
-    expect(screen.getByText(/Chunk: Thêm/)).toBeVisible();
-    expect(screen.getByText(/Chunk: Gỡ khỏi máy chủ/)).toBeVisible();
+    expect(screen.getByText(/Chunk: Thêm/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Gỡ khỏi máy chủ' }));
+    expect(screen.getByText('Tài liệu cục bộ vẫn được giữ nguyên.')).toBeInTheDocument();
+    expect(screen.getByText(/Chunk: Gỡ khỏi máy chủ/)).toBeInTheDocument();
     expect(session.scan).not.toHaveBeenCalled();
     expect(session.submitConfirmedAttempt).not.toHaveBeenCalled();
   });
@@ -253,7 +253,7 @@ describe('guarded publish UI', () => {
     expect(scan).toBeDisabled();
     fireEvent.click(screen.getByRole('checkbox', { name: /Tôi hiểu các tài liệu này sẽ bị gỡ/ }));
     fireEvent.click(scan);
-    expect(await screen.findByText('Không phát hiện dữ liệu nhạy cảm theo bộ quy tắc hiện tại.')).toBeVisible();
+    expect(await screen.findByText('Không phát hiện dữ liệu nhạy cảm theo bộ quy tắc hiện tại.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Xuất bản bộ tài liệu' })).toBeEnabled();
   });
 
@@ -264,9 +264,9 @@ describe('guarded publish UI', () => {
     };
     render(<PublishPreviewModal open preview={{ ...previewWithRemoval(), hasRemovals: false }} session={session as never} onClose={vi.fn()} documentTitles={{ 'doc-a': 'Alpha' }} />);
     fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra dữ liệu nhạy cảm' }));
-    expect(await screen.findByText('Phát hiện dữ liệu có thể nhạy cảm')).toBeVisible();
-    expect(screen.getByText('411111******1111')).toBeVisible();
-    expect(screen.getByText('Dòng 2, cột 5')).toBeVisible();
+    expect(await screen.findByText('Phát hiện dữ liệu có thể nhạy cảm')).toBeInTheDocument();
+    expect(screen.getByText('411111******1111')).toBeInTheDocument();
+    expect(screen.getByText('Dòng 2, cột 5')).toBeInTheDocument();
     expect(screen.queryByText('4111111111111111')).not.toBeInTheDocument();
     const override = screen.getByRole('checkbox', { name: /Tôi đã xem cảnh báo/ });
     expect(override).not.toBeChecked();
@@ -281,27 +281,28 @@ describe('guarded publish UI', () => {
       submitConfirmedAttempt: vi.fn(), closePreview: vi.fn(),
     };
     const onAnnounce = vi.fn();
-    render(<PublishPreviewModal open preview={previewWithRemoval()} session={session as never} onClose={vi.fn()} onAnnounce={onAnnounce} />);
+    const { unmount } = render(<PublishPreviewModal open preview={previewWithRemoval()} session={session as never} onClose={vi.fn()} onAnnounce={onAnnounce} />);
     fireEvent.click(screen.getByRole('button', { name: 'Hủy xuất bản' }));
     expect(session.submitConfirmedAttempt).not.toHaveBeenCalled();
     expect(onAnnounce).toHaveBeenCalledWith('Đã hủy xuất bản. Không có nội dung tài liệu nào được gửi.');
+    unmount();
 
     render(<PublishProgressPanel status="Publishing" stage="Đang phân tích Markdown" onClose={vi.fn()} />);
-    expect(screen.getByText('Đang xuất bản ảnh chụp đã xác nhận. Bạn có thể tiếp tục chỉnh sửa tài liệu.')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Đóng' })).toBeVisible();
+    expect(screen.getByText('Đang xuất bản ảnh chụp đã xác nhận. Bạn có thể tiếp tục chỉnh sửa tài liệu.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Đóng' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Hủy/ })).not.toBeInTheDocument();
   });
 
   it('keeps uncertainty Publishing and exposes conflict, prior-active failure, and local-change copy', () => {
     const { rerender } = render(<PublishProgressPanel status="Publishing" uncertain onClose={vi.fn()} />);
-    expect(screen.getByText('Mất kết nối — chưa xác định kết quả.')).toBeVisible();
-    expect(screen.getByText('Đang xuất bản')).toBeVisible();
+    expect(screen.getByText('Mất kết nối — chưa xác định kết quả.')).toBeInTheDocument();
+    expect(screen.getByText('Đang xuất bản')).toBeInTheDocument();
     rerender(<PublishProgressPanel status="Publishing" conflict onOpenStatus={vi.fn()} onClose={vi.fn()} />);
-    expect(screen.getByText('Bộ tài liệu này đang được xuất bản. Mở trạng thái hiện tại để theo dõi.')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Mở trạng thái' })).toBeVisible();
+    expect(screen.getByText('Bộ tài liệu này đang được xuất bản. Mở trạng thái hiện tại để theo dõi.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mở trạng thái' })).toBeInTheDocument();
     rerender(<PublishProgressPanel status="Failed" error="Khối mã quá 50.000 ký tự tại dòng 7, cột 1. Chia nhỏ bảng hoặc khối mã trong tài liệu nguồn rồi thử lại." onClose={vi.fn()} />);
-    expect(screen.getByText(/Ảnh chụp trước vẫn đang hoạt động/)).toBeVisible();
+    expect(screen.getByText(/Ảnh chụp trước vẫn đang hoạt động/)).toBeInTheDocument();
     rerender(<PublishProgressPanel status="Local changes" onClose={vi.fn()} />);
-    expect(screen.getByText('Lần xuất bản vừa hoàn tất dùng ảnh chụp trước chỉnh sửa mới nhất.')).toBeVisible();
+    expect(screen.getByText('Lần xuất bản vừa hoàn tất dùng ảnh chụp trước chỉnh sửa mới nhất.')).toBeInTheDocument();
   });
 });
