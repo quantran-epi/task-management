@@ -8,6 +8,7 @@ import {
   HistoryOutlined,
   DeleteOutlined,
   EyeOutlined,
+  LoadingOutlined,
 } from '@ant-design/icons';
 import type { AgentSession, AgentStatus, GhostDevSessionAuditRecord } from '../../types/agent';
 
@@ -18,6 +19,7 @@ export interface AgentSessionListProps {
   activeSessionId: string | null;
   onSelectSession: (sessionId: string) => void;
   onStopSession?: (taskId: string) => Promise<void>;
+  stoppingTaskIds?: Set<string>;
   auditHistory?: GhostDevSessionAuditRecord[];
   onSelectAuditSession?: (record: GhostDevSessionAuditRecord) => void;
   onDeleteAuditSession?: (sessionId: string) => void;
@@ -48,6 +50,7 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
   activeSessionId,
   onSelectSession,
   onStopSession,
+  stoppingTaskIds,
   auditHistory = [],
   onSelectAuditSession,
   onDeleteAuditSession,
@@ -55,6 +58,7 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
 }) => {
   const { token } = theme.useToken();
   const [currentTab, setCurrentTab] = useState<'active' | 'history'>('active');
+  const [popconfirmOpenTaskId, setPopconfirmOpenTaskId] = useState<string | null>(null);
   const runningSessions = sessions.filter((s) => s.status !== 'interrupted');
 
   return (
@@ -119,6 +123,7 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
           ) : (
             runningSessions.map((session) => {
               const isSelected = session.taskId === activeSessionId;
+              const isStopping = Boolean(stoppingTaskIds?.has(session.taskId));
               const isRunning =
                 session.status === 'running' || session.status === 'awaiting_approval';
 
@@ -126,18 +131,23 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
                 <Card
                   key={session.taskId}
                   size="small"
-                  hoverable
-                  onClick={() => onSelectSession(session.taskId)}
+                  hoverable={!isStopping}
+                  onClick={() => {
+                    if (isStopping) return;
+                    onSelectSession(session.taskId);
+                  }}
                   role="listitem"
-                  tabIndex={0}
+                  tabIndex={isStopping ? -1 : 0}
                   onKeyDown={(e) => {
+                    if (isStopping) return;
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
                       onSelectSession(session.taskId);
                     }
                   }}
                   style={{
-                    cursor: 'pointer',
+                    cursor: isStopping ? 'not-allowed' : 'pointer',
+                    opacity: isStopping ? 0.6 : 1,
                     borderColor: isSelected ? '#4f46e5' : token.colorBorderSecondary,
                     backgroundColor: isSelected ? token.colorFillAlter : token.colorBgContainer,
                     borderWidth: isSelected ? 2 : 1,
@@ -159,7 +169,13 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
                     <Text strong style={{ fontSize: 13, flex: 1, marginRight: 8 }} ellipsis>
                       {session.taskTitle}
                     </Text>
-                    {getStatusBadge(session.status)}
+                    {isStopping ? (
+                      <Tag color="orange" icon={<LoadingOutlined spin />}>
+                        Đang dừng...
+                      </Tag>
+                    ) : (
+                      getStatusBadge(session.status)
+                    )}
                   </div>
 
                   {/* Branch and Workers info */}
@@ -238,7 +254,7 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
                   )}
 
                   {/* Footer with Stop action */}
-                  {isRunning && onStopSession && (
+                  {(isRunning || isStopping) && onStopSession && (
                     <div
                       style={{
                         display: 'flex',
@@ -249,23 +265,44 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
                       }}
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <Popconfirm
-                        title="Dừng Ghost Dev"
-                        description="Dừng ngay lập tức Master Agent và các Worker đang chạy cho tác vụ này? Tiến trình chưa commit sẽ được giữ lại trong worktree."
-                        onConfirm={() => onStopSession(session.taskId)}
-                        okText="Dừng"
-                        cancelText="Hủy"
-                        okButtonProps={{ danger: true }}
-                      >
+                      {isStopping ? (
                         <Button
                           size="small"
                           danger
-                          icon={<StopOutlined />}
-                          aria-label={`Dừng Ghost Dev cho tác vụ ${session.taskTitle}`}
+                          loading
+                          disabled
+                          icon={<LoadingOutlined />}
+                          aria-label={`Đang dừng Ghost Dev cho tác vụ ${session.taskTitle}`}
                         >
-                          Dừng
+                          Đang dừng...
                         </Button>
-                      </Popconfirm>
+                      ) : (
+                        <Popconfirm
+                          open={popconfirmOpenTaskId === session.taskId}
+                          onOpenChange={(open) =>
+                            setPopconfirmOpenTaskId(open ? session.taskId : null)
+                          }
+                          title="Dừng Ghost Dev"
+                          description="Dừng ngay lập tức Master Agent và các Worker đang chạy cho tác vụ này? Tiến trình chưa commit sẽ được giữ lại trong worktree."
+                          onConfirm={() => {
+                            setPopconfirmOpenTaskId(null);
+                            void onStopSession(session.taskId);
+                          }}
+                          onCancel={() => setPopconfirmOpenTaskId(null)}
+                          okText="Dừng"
+                          cancelText="Hủy"
+                          okButtonProps={{ danger: true }}
+                        >
+                          <Button
+                            size="small"
+                            danger
+                            icon={<StopOutlined />}
+                            aria-label={`Dừng Ghost Dev cho tác vụ ${session.taskTitle}`}
+                          >
+                            Dừng
+                          </Button>
+                        </Popconfirm>
+                      )}
                     </div>
                   )}
                 </Card>

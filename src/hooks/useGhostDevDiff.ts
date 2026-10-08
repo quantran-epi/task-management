@@ -29,50 +29,94 @@ export interface UseGhostDevDiffResult {
   revertFile: (filePath: string) => Promise<void>;
 }
 
+interface CachedDiff {
+  rawDiff: string;
+  diffFiles: DiffFile[];
+  selectedFilePath: string | null;
+}
+
+// Module-level in-memory cache to guarantee instant 0ms diff restoration on process switch
+const diffCache = new Map<string, CachedDiff>();
+
 export function useGhostDevDiff(worktreePath: string | null): UseGhostDevDiffResult {
-  const [rawDiff, setRawDiff] = useState<string>('');
-  const [diffFiles, setDiffFiles] = useState<DiffFile[]>([]);
+  const [rawDiff, setRawDiff] = useState<string>(() => {
+    if (worktreePath && diffCache.has(worktreePath)) {
+      return diffCache.get(worktreePath)!.rawDiff;
+    }
+    return '';
+  });
+  const [diffFiles, setDiffFiles] = useState<DiffFile[]>(() => {
+    if (worktreePath && diffCache.has(worktreePath)) {
+      return diffCache.get(worktreePath)!.diffFiles;
+    }
+    return [];
+  });
   const [viewMode, setViewMode] = useState<DiffViewMode>('unified');
-  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
-  const [loading, setLoading] = useState<boolean>(false);
-  const inFlightRef = useRef(false);
+  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(() => {
+    if (worktreePath && diffCache.has(worktreePath)) {
+      return diffCache.get(worktreePath)!.selectedFilePath;
+    }
+    return null;
+  });
+  const [loading, setLoading] = useState<boolean>(() => {
+    return Boolean(worktreePath && !diffCache.has(worktreePath));
+  });
+
+  const requestIdRef = useRef(0);
+  const currentWorktreeRef = useRef<string | null>(worktreePath);
+  currentWorktreeRef.current = worktreePath;
 
   const refreshDiff = useCallback(
     async (silent = false) => {
-      if (!isTauriApp() || !worktreePath) {
+      const targetWorktree = worktreePath;
+      if (!isTauriApp() || !targetWorktree) {
         setRawDiff('');
         setDiffFiles([]);
         setSelectedFilePath(null);
+        setLoading(false);
         return;
       }
 
-      if (inFlightRef.current) {
-        return;
-      }
-      inFlightRef.current = true;
+      const reqId = ++requestIdRef.current;
+      const cached = diffCache.get(targetWorktree);
 
-      if (!silent) {
+      if (!silent && !cached) {
         setLoading(true);
       }
+
       try {
-        const output = await tauriInvoke<string>('get_worktree_diff', { worktreePath });
-        setRawDiff(output || '');
-        const parsed = parseGitDiff(output || '');
+        const output = await tauriInvoke<string>('get_worktree_diff', { worktreePath: targetWorktree });
+        if (requestIdRef.current !== reqId || currentWorktreeRef.current !== targetWorktree) {
+          return;
+        }
+
+        const raw = output || '';
+        const parsed = parseGitDiff(raw);
+        setRawDiff(raw);
         setDiffFiles(parsed);
 
-        // Maintain valid file selection
+        let nextSelectedPath: string | null = null;
         setSelectedFilePath((prev) => {
           if (prev && parsed.some((f) => f.newPath === prev || f.oldPath === prev)) {
+            nextSelectedPath = prev;
             return prev;
           }
           const first = parsed[0];
-          return first ? first.newPath : null;
+          nextSelectedPath = first ? first.newPath : null;
+          return nextSelectedPath;
+        });
+
+        diffCache.set(targetWorktree, {
+          rawDiff: raw,
+          diffFiles: parsed,
+          selectedFilePath: nextSelectedPath,
         });
       } catch (err) {
-        console.error('[GhostDev] Failed to fetch git diff:', err);
+        if (requestIdRef.current === reqId && currentWorktreeRef.current === targetWorktree) {
+          console.error('[GhostDev] Failed to fetch git diff:', err);
+        }
       } finally {
-        inFlightRef.current = false;
-        if (!silent) {
+        if (requestIdRef.current === reqId && currentWorktreeRef.current === targetWorktree) {
           setLoading(false);
         }
       }
@@ -80,10 +124,32 @@ export function useGhostDevDiff(worktreePath: string | null): UseGhostDevDiffRes
     [worktreePath]
   );
 
-  // Initial load on worktree change
+  // Initial load and worktree switch handler
   useEffect(() => {
-    void refreshDiff(false);
-  }, [refreshDiff]);
+    currentWorktreeRef.current = worktreePath;
+    if (!worktreePath) {
+      setRawDiff('');
+      setDiffFiles([]);
+      setSelectedFilePath(null);
+      setLoading(false);
+      return;
+    }
+
+    const cached = diffCache.get(worktreePath);
+    if (cached) {
+      setRawDiff(cached.rawDiff);
+      setDiffFiles(cached.diffFiles);
+      setSelectedFilePath(cached.selectedFilePath);
+      setLoading(false);
+      void refreshDiff(true); // Silent revalidation in background
+    } else {
+      setRawDiff('');
+      setDiffFiles([]);
+      setSelectedFilePath(null);
+      setLoading(true);
+      void refreshDiff(false);
+    }
+  }, [worktreePath, refreshDiff]);
 
   // Event-driven refresh: update diff only on actual agent activity or status changes
   useEffect(() => {

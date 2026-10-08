@@ -124,6 +124,7 @@ Last activity: 2026-10-08 -- Completed quick task 261008-jgo: show timer and tok
 | 261006-mjh | Fix ghost dev file permission and worktree path alignment | 2026-10-06 | 156164b | complete | [261006-mjh-fix-ghost-dev-file-permission](./quick/261006-mjh-fix-ghost-dev-file-permission/) |
 | 261007-kc4 | dynamic mcp config with in-chat toggle and sidebar authorship fingerprint | 2026-10-07 | 18d65c7 | complete | [261007-kc4-dynamic-mcp-config-with-in-chat-toggle-a](./quick/261007-kc4-dynamic-mcp-config-with-in-chat-toggle-a/) |
 | 261008-jgo | show timer and token count in ghost dev running agent | 2026-10-08 | 9f75db4 | — | [261008-jgo-show-timer-and-token-count-in-ghost-dev-](./quick/261008-jgo-show-timer-and-token-count-in-ghost-dev-/) |
+| 261008-qmp | Fix diff panel race condition and loading overlay, stop process UX, and multi-task terminal log state | 2026-10-08 | — | complete | [261008-qmp-multi-process-fixes](./quick/261008-qmp-multi-process-fixes/) |
 
 ## Performance Metrics
 

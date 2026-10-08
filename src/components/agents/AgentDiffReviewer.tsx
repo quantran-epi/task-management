@@ -11,6 +11,7 @@ import {
   Tree,
   Dropdown,
   message,
+  Spin,
 } from 'antd';
 import {
   CheckOutlined,
@@ -449,14 +450,14 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
             okText="Hoàn tác tất cả"
             cancelText="Đóng"
             okButtonProps={{ danger: true }}
-            disabled={!hasChanges || acting}
+            disabled={!hasChanges || acting || loading}
           >
             <Button
               size="small"
               danger
               icon={<UndoOutlined />}
               loading={acting}
-              disabled={!hasChanges}
+              disabled={!hasChanges || loading}
             >
               Revert All
             </Button>
@@ -470,23 +471,28 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
             style={{ backgroundColor: '#4f46e5' }}
             onClick={handleAcceptAll}
             loading={acting}
-            disabled={!hasChanges}
+            disabled={!hasChanges || loading}
           >
             Accept All
           </Button>
         </Space>
       </div>
 
-      {/* Main Diff Content Pane (File Tree on Left + Code Diff on Right) */}
-      {!hasChanges && !loading ? (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description="Chưa có thay đổi mã nguồn nào"
-          />
-        </div>
-      ) : (
-        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      {/* Main Diff Content Pane (File Tree on Left + Code Diff on Right) with Loading Overlay */}
+      <Spin
+        spinning={loading}
+        tip="Đang tải git diff..."
+        style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}
+      >
+        {!hasChanges && !loading ? (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description="Chưa có thay đổi mã nguồn nào"
+            />
+          </div>
+        ) : (
+          <div style={{ flex: 1, display: 'flex', overflow: 'hidden', height: '100%' }}>
           {/* File Folder Tree Sidebar */}
           <div
             style={{
@@ -658,6 +664,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
           </div>
         </div>
       )}
+      </Spin>
 
       {/* Inline / File Comment Modal */}
       {onSendFeedback && (

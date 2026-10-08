@@ -438,8 +438,9 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
   const [liveElapsedSec, setLiveElapsedSec] = useState<number>(0);
   const logContainerRef = useRef<HTMLDivElement>(null);
 
-  // Reset dismissed subagent state when active task changes
+  // Reset subagent filter & dismissed state when active task changes
   useEffect(() => {
+    setSelectedAgent('all');
     setDismissedWorkerIds([]);
   }, [taskTitle]);
 
@@ -451,51 +452,129 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
     }
   };
 
-  // Track active thinking vs turn completion state
+  // Track active thinking vs turn completion state accurately
   const { isThinking, latestResultInfo } = useMemo(() => {
+    if (!isRunning && !sending) {
+      // If agent is not running and not sending feedback, it is definitely not thinking!
+      let resultInfo: { durationStr: string; tokens?: string | undefined } | null = null;
+      for (let i = logs.length - 1; i >= 0; i--) {
+        const chunk = logs[i];
+        if (!chunk) continue;
+        const trimmed = chunk.content.trim();
+        if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+          try {
+            const val = JSON.parse(trimmed) as Record<string, unknown>;
+            if (val.type === 'result') {
+              const durationSec =
+                typeof val.duration_ms === 'number' ? Math.round(val.duration_ms / 1000) : 0;
+              const durationStr =
+                durationSec > 60
+                  ? `${Math.floor(durationSec / 60)}m ${durationSec % 60}s`
+                  : `${durationSec}s`;
+              const tokenCount = extractTokenCount(val);
+              const tokenStr =
+                tokenCount !== null ? `${tokenCount.toLocaleString()} tokens` : undefined;
+              resultInfo = { durationStr, tokens: tokenStr };
+              break;
+            }
+          } catch {
+            // ignore
+          }
+        }
+      }
+      return { isThinking: false, latestResultInfo: resultInfo };
+    }
+
+    if (sending) {
+      return { isThinking: true, latestResultInfo: null };
+    }
+
+    // Determine whether running agent is actively generating/executing or waiting for user
     let resultInfo: { durationStr: string; tokens?: string | undefined } | null = null;
-    let feedbackSentAfterResult = false;
+    let lastUserFeedbackIndex = -1;
+    let lastAiResponseIndex = -1;
+    let lastResultIndex = -1;
+    let lastToolCallIndex = -1;
+    let lastToolResultIndex = -1;
 
     for (let i = logs.length - 1; i >= 0; i--) {
       const chunk = logs[i];
       if (!chunk) continue;
-      if (chunk.content.startsWith('[User Feedback]')) {
-        feedbackSentAfterResult = true;
-        break;
+      const content = chunk.content;
+
+      if (lastUserFeedbackIndex === -1 && content.startsWith('[User Feedback]')) {
+        lastUserFeedbackIndex = i;
       }
-      const trimmed = chunk.content.trim();
+
+      const trimmed = content.trim();
       if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
         try {
           const val = JSON.parse(trimmed) as Record<string, unknown>;
           if (val.type === 'result') {
-            const durationSec =
-              typeof val.duration_ms === 'number' ? Math.round(val.duration_ms / 1000) : 0;
-            const durationStr =
-              durationSec > 60
-                ? `${Math.floor(durationSec / 60)}m ${durationSec % 60}s`
-                : `${durationSec}s`;
-            const tokenCount = extractTokenCount(val);
-            const tokenStr =
-              tokenCount !== null ? `${tokenCount.toLocaleString()} tokens` : undefined;
-            resultInfo = {
-              durationStr,
-              tokens: tokenStr,
-            };
-            break;
+            if (lastResultIndex === -1) {
+              lastResultIndex = i;
+              const durationSec =
+                typeof val.duration_ms === 'number' ? Math.round(val.duration_ms / 1000) : 0;
+              const durationStr =
+                durationSec > 60
+                  ? `${Math.floor(durationSec / 60)}m ${durationSec % 60}s`
+                  : `${durationSec}s`;
+              const tokenCount = extractTokenCount(val);
+              const tokenStr =
+                tokenCount !== null ? `${tokenCount.toLocaleString()} tokens` : undefined;
+              resultInfo = { durationStr, tokens: tokenStr };
+            }
+          } else if (val.type === 'tool_use' || val.type === 'tool_call') {
+            if (lastToolCallIndex === -1) lastToolCallIndex = i;
+          } else if (val.type === 'tool_result') {
+            if (lastToolResultIndex === -1) lastToolResultIndex = i;
+          } else if (
+            val.type === 'assistant' ||
+            (val.message && typeof val.message === 'object') ||
+            val.type === 'message_stop'
+          ) {
+            if (lastAiResponseIndex === -1) lastAiResponseIndex = i;
           }
         } catch {
           // ignore
         }
+      } else if (chunk.type === 'tool_call') {
+        if (lastToolCallIndex === -1) lastToolCallIndex = i;
+      } else if (chunk.type === 'tool_result') {
+        if (lastToolResultIndex === -1) lastToolResultIndex = i;
       }
     }
 
-    const thinking = Boolean(
-      sending || (isRunning && (!resultInfo || feedbackSentAfterResult))
-    );
+    // 1. If user feedback was sent and no AI response/result has arrived after it yet:
+    if (lastUserFeedbackIndex !== -1) {
+      const respondedAfterFeedback =
+        lastAiResponseIndex > lastUserFeedbackIndex ||
+        lastResultIndex > lastUserFeedbackIndex;
+      if (!respondedAfterFeedback) {
+        return { isThinking: true, latestResultInfo: null };
+      }
+    }
 
+    // 2. If a tool call was made and tool result has not returned yet:
+    if (lastToolCallIndex !== -1 && lastToolCallIndex > lastToolResultIndex) {
+      return { isThinking: true, latestResultInfo: resultInfo };
+    }
+
+    // 3. If there is a turn result event, turn has finished:
+    if (lastResultIndex !== -1) {
+      const thinking = lastUserFeedbackIndex > lastResultIndex;
+      return { isThinking: thinking, latestResultInfo: resultInfo };
+    }
+
+    // 4. If AI has responded and no pending tool execution or feedback:
+    if (lastAiResponseIndex !== -1) {
+      return { isThinking: false, latestResultInfo: null };
+    }
+
+    // 5. Initial start: process is running, but no logs or responses yet:
     return {
-      isThinking: thinking,
-      latestResultInfo: resultInfo,
+      isThinking: logs.length === 0,
+      latestResultInfo: null,
     };
   }, [logs, sending, isRunning]);
 

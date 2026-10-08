@@ -32,6 +32,7 @@ export const AgentControlView: React.FC = () => {
     activeSessionId,
     setActiveSessionId,
     activeSession,
+    stoppingTaskIds,
     stopSession,
   } = useGhostDevSessions();
 
@@ -105,11 +106,10 @@ export const AgentControlView: React.FC = () => {
     async (taskId: string) => {
       await stopSession(taskId);
       if (activeSessionId === taskId) {
-        clearLogs();
         setActiveSessionId(null);
       }
     },
-    [stopSession, activeSessionId, clearLogs, setActiveSessionId]
+    [stopSession, activeSessionId, setActiveSessionId]
   );
 
   // Screen reader announcements on session status changes
@@ -155,6 +155,7 @@ export const AgentControlView: React.FC = () => {
             activeSessionId={activeSessionId}
             onSelectSession={setActiveSessionId}
             onStopSession={handleStopSession}
+            stoppingTaskIds={stoppingTaskIds}
             auditHistory={auditHistory}
             onSelectAuditSession={handleSelectAuditSession}
             onDeleteAuditSession={handleDeleteAuditSession}
