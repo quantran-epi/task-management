@@ -59,6 +59,15 @@ export interface KnowledgeConfigValue extends PersistedKnowledgeConfig {
 }
 
 const KnowledgeConfigContext = createContext<KnowledgeConfigValue | null>(null);
+const OPTIONAL_KNOWLEDGE_CONFIG_FALLBACK: KnowledgeConfigValue = {
+  ready: true,
+  enabled: false,
+  baseUrl: '',
+  token: '',
+  loopbackHttpWarning: false,
+  setToken: () => {},
+  savePersistedConfig: async () => {},
+};
 
 export function KnowledgeConfigProvider({
   children,
@@ -117,6 +126,10 @@ export function KnowledgeConfigProvider({
   );
 
   return React.createElement(KnowledgeConfigContext.Provider, { value }, children);
+}
+
+export function useOptionalKnowledgeConfig(): KnowledgeConfigValue {
+  return useContext(KnowledgeConfigContext) ?? OPTIONAL_KNOWLEDGE_CONFIG_FALLBACK;
 }
 
 export function useKnowledgeConfig(): KnowledgeConfigValue {

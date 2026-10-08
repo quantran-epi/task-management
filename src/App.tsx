@@ -21,6 +21,7 @@ import { AIPopoutView } from './views/AIPopoutView';
 import { ItemInsightView } from './views/ItemInsightView';
 import { AgentControlView } from './views/AgentControlView';
 import { TimerProvider } from './context/TimerContext';
+import { KnowledgeConfigProvider } from './services/knowledge/knowledgeConfig';
 
 const { defaultAlgorithm, darkAlgorithm } = theme;
 
@@ -171,9 +172,11 @@ export const App: React.FC = () => {
         },
       }}
     >
-      <AppShell currentRoute={route} onNavigate={navigate} isDark={isDark}>
-        {renderContent()}
-      </AppShell>
+      <KnowledgeConfigProvider>
+        <AppShell currentRoute={route} onNavigate={navigate} isDark={isDark}>
+          {renderContent()}
+        </AppShell>
+      </KnowledgeConfigProvider>
     </ConfigProvider>
   );
 };
