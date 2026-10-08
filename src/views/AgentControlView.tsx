@@ -166,6 +166,8 @@ export const AgentControlView: React.FC = () => {
               logs={logs}
               sending={sending}
               isRunning={activeSession?.status === 'running'}
+              startedAt={activeSession.startedAt}
+              finishedAt={activeSession.finishedAt}
               onSendFeedback={sendChatMessage}
               onClearLogs={clearLogs}
               taskTitle={activeSession.taskTitle}
