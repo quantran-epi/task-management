@@ -44,6 +44,7 @@ created: 2026-10-08
 3. **Set detail:** back control, editable set name, ordered member list, `Thêm tài liệu`, drag/reorder controls with keyboard alternatives `Đưa lên` / `Đưa xuống`, remove control, current remote snapshot summary, and publish history.
 4. **Footer actions:** secondary `Lưu thay đổi`; primary `Xem trước xuất bản`. Disable preview when set has zero members, server configuration is invalid, or same set has active attempt. Local member editing remains available while offline or during another set's publish.
 5. **History:** latest 10 attempts, newest first. Each row exposes timestamp, duration, added/changed/removed/unchanged counts, DLP warning count, terminal status, and concise error summary. Never render body content, sensitive matches, or DLP excerpts in history.
+6. **Primary focal point:** in both empty and populated list states, make `Tạo bộ tài liệu` the drawer's strongest visual action; set rows and `Mở chi tiết` remain secondary.
 
 ### Create/Edit Set
 
@@ -57,11 +58,11 @@ created: 2026-10-08
 
 Use one modal sequence. Modal width 760px desktop, `calc(100vw - 32px)` mobile. Preserve frozen-at-confirmation semantics in copy.
 
-1. **Preview:** title `Xem trước thay đổi`; summary counters in order `Thêm`, `Thay đổi`, `Gỡ khỏi máy chủ`, `Không đổi`. Below counters, use tabs and document rows. Removed rows get warning styling and copy `Tài liệu cục bộ vẫn được giữ nguyên.` No content-bearing request occurs here.
+1. **Preview:** title `Xem trước thay đổi`; summary counters in order `Thêm`, `Thay đổi`, `Gỡ khỏi máy chủ`, `Không đổi`. Below counters, use tabs and document rows. Removed rows get warning styling and copy `Tài liệu cục bộ vẫn được giữ nguyên.` No content-bearing request occurs here. The preview change summary is the primary focal point throughout the pre-publish flow; place it immediately below the title and above tabs, findings, and confirmation controls.
 2. **Removal gate:** if removals exist, require checked checkbox `Tôi hiểu các tài liệu này sẽ bị gỡ khỏi ảnh chụp trên máy chủ, không bị xóa khỏi PlannerMate.` before continuing.
 3. **DLP scan:** after user selects `Kiểm tra dữ liệu nhạy cảm`, show local progress with `Đang kiểm tra dữ liệu trên thiết bị…`. This step completes before publish is enabled.
 4. **No findings:** show success result `Không phát hiện dữ liệu nhạy cảm theo bộ quy tắc hiện tại.` Primary action becomes `Xuất bản bộ tài liệu`.
-5. **Findings:** show warning modal section with count, fixed ruleset version, and table/list containing category, document title, `Dòng {line}, cột {column}` when available, and masked context only. Never offer reveal/copy-full-value controls. Require fresh unchecked checkbox `Tôi đã xem cảnh báo và vẫn muốn xuất bản lần này.` Primary danger-emphasis action label `Vẫn xuất bản lần này`; close/cancel sends zero content.
+5. **Findings:** show warning modal section with count, fixed ruleset version, and table/list containing category, document title, `Dòng {line}, cột {column}` when available, and masked context only. Never offer reveal/copy-full-value controls. Require fresh unchecked checkbox `Tôi đã xem cảnh báo và vẫn muốn xuất bản lần này.` Primary danger-emphasis action label `Vẫn xuất bản lần này`; `Hủy xuất bản` sends zero content.
 6. **Accepted attempt:** freeze displayed member/content snapshot, POST once with idempotency key, close preview, and show publishing state in set detail. Do not block local editing.
 
 ### Publishing Progress & Recovery
@@ -116,7 +117,7 @@ Declared values (multiples of 4):
 | 2xl | 48px | Major vertical separation only |
 | 3xl | 64px | Empty-state top breathing room only |
 
-Exceptions: existing `PageHeader` uses 12px gap; existing compact Docs rows may retain 6px gaps and 12px padding. Inherited values avoid layout churn. Touch targets remain 36px desktop and 44px for mobile confirmation actions.
+Use only declared spacing values in Phase 16 surfaces. Set `PageHeader` gap to 8px, compact Docs row gaps to 8px, and compact row padding to 16px. Touch targets remain 36px desktop and 44px for mobile confirmation actions.
 
 ---
 
@@ -180,7 +181,7 @@ Accent reserved for: `Tạo bộ tài liệu`, `Xem trước xuất bản`, `Ki�
 
 - Drawer and modal use Ant Design focus trap and restore focus to trigger on close.
 - Member list supports keyboard selection and reorder buttons; drag is optional, never sole method.
-- Escape closes pre-send preview/DLP modal and cancels with zero content sent. After accepted POST, Escape only closes progress surface and does not cancel server attempt.
+- Escape closes pre-send preview/DLP modal and invokes `Hủy xuất bản` with zero content sent. After accepted POST, Escape only closes progress surface and does not cancel server attempt.
 - DLP table has accessible caption `Phát hiện dữ liệu nhạy cảm đã che`; category and location are text, not icon-only.
 - Publish status changes announce through existing `AriaLiveRegion`: scan complete, confirmation required, attempt accepted, connection uncertain, success, or failure.
 - Polling does not steal focus or repeatedly announce unchanged status. Announce only transitions.
@@ -214,7 +215,7 @@ Accent reserved for: `Tạo bộ tài liệu`, `Xem trước xuất bản`, `Ki�
 | Start local DLP gate | `Kiểm tra dữ liệu nhạy cảm` |
 | Publish with no findings | `Xuất bản bộ tài liệu` |
 | Publish despite findings | `Vẫn xuất bản lần này` |
-| Cancel before POST | `Hủy` |
+| Cancel before POST | `Hủy xuất bản` |
 | Close after POST | `Đóng` |
 | Retry failed terminal attempt | `Xem lại và thử lại` |
 | Reconcile uncertain attempt | `Kiểm tra trạng thái` |
