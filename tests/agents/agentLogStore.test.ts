@@ -104,4 +104,37 @@ describe('AgentLogStore Unit Tests', () => {
     store.deleteLogs('task-to-delete');
     expect(store.getLogs('task-to-delete')).toHaveLength(0);
   });
+
+  it('tracks isCleared state accurately across clear, add, and delete', () => {
+    expect(store.isCleared('task-1')).toBe(false);
+
+    store.addChunk({
+      taskId: 'task-1',
+      source: 'master',
+      timestamp: '2026-10-08T00:00:00Z',
+      type: 'log',
+      content: 'Output 1',
+    });
+    expect(store.isCleared('task-1')).toBe(false);
+
+    // Clear logs
+    store.clearLogs('task-1');
+    expect(store.isCleared('task-1')).toBe(true);
+
+    // Adding new chunk resets cleared state
+    store.addChunk({
+      taskId: 'task-1',
+      source: 'master',
+      timestamp: '2026-10-08T00:00:01Z',
+      type: 'log',
+      content: 'Output 2',
+    });
+    expect(store.isCleared('task-1')).toBe(false);
+
+    // Deleting logs resets cleared state
+    store.clearLogs('task-1');
+    expect(store.isCleared('task-1')).toBe(true);
+    store.deleteLogs('task-1');
+    expect(store.isCleared('task-1')).toBe(false);
+  });
 });

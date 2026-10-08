@@ -93,6 +93,7 @@ async function loadAllFromDb(): Promise<Map<string, GhostDevStreamChunk[]>> {
 export class AgentLogStore {
   private logsByTask = new Map<string, GhostDevStreamChunk[]>();
   private listeners = new Map<string, Set<(logs: GhostDevStreamChunk[]) => void>>();
+  private clearedTasks = new Set<string>();
   private initialized = false;
   private tauriListening = false;
 
@@ -121,9 +122,16 @@ export class AgentLogStore {
     return this.logsByTask.get(taskId) || [];
   }
 
+  public isCleared(taskId: string | null): boolean {
+    if (!taskId) return false;
+    return this.clearedTasks.has(taskId);
+  }
+
   public addChunk(chunk: GhostDevStreamChunk): void {
     const taskId = chunk.taskId;
     if (!taskId) return;
+
+    this.clearedTasks.delete(taskId);
 
     let list = this.logsByTask.get(taskId);
     if (!list) {
@@ -146,6 +154,7 @@ export class AgentLogStore {
   }
 
   public clearLogs(taskId: string): void {
+    this.clearedTasks.add(taskId);
     this.logsByTask.set(taskId, []);
     scheduleSave(taskId, []);
     const subs = this.listeners.get(taskId);
@@ -155,6 +164,7 @@ export class AgentLogStore {
   }
 
   public deleteLogs(taskId: string): void {
+    this.clearedTasks.delete(taskId);
     this.logsByTask.delete(taskId);
     void deleteFromDb(taskId);
     const subs = this.listeners.get(taskId);

@@ -46,11 +46,15 @@ export interface UseGhostDevStreamResult {
   clearLogs: () => void;
   sendChatMessage: (prompt: string) => Promise<void>;
   sending: boolean;
+  isCleared: boolean;
 }
 
 export function useGhostDevStream(taskId: string | null): UseGhostDevStreamResult {
   const [logs, setLogs] = useState<GhostDevStreamChunk[]>(() =>
     taskId ? agentLogStore.getLogs(taskId) : []
+  );
+  const [isCleared, setIsCleared] = useState<boolean>(() =>
+    taskId ? agentLogStore.isCleared(taskId) : false
   );
   const [sending, setSending] = useState<boolean>(false);
   const taskIdRef = useRef<string | null>(taskId);
@@ -60,6 +64,7 @@ export function useGhostDevStream(taskId: string | null): UseGhostDevStreamResul
   const clearLogs = useCallback(() => {
     if (taskIdRef.current) {
       agentLogStore.clearLogs(taskIdRef.current);
+      setIsCleared(true);
     }
   }, []);
 
@@ -67,17 +72,20 @@ export function useGhostDevStream(taskId: string | null): UseGhostDevStreamResul
   useEffect(() => {
     if (!taskId) {
       setLogs([]);
+      setIsCleared(false);
       awaitingAiResponseRef.current = false;
       return;
     }
 
     // Immediately load stored logs for this task
     setLogs(agentLogStore.getLogs(taskId));
+    setIsCleared(agentLogStore.isCleared(taskId));
     awaitingAiResponseRef.current = false;
 
     // Listen to continuous stream updates from store
     const unsubscribe = agentLogStore.subscribe(taskId, (newLogs) => {
       setLogs(newLogs);
+      setIsCleared(agentLogStore.isCleared(taskId));
 
       // If awaiting AI response to user feedback, capture it
       if (awaitingAiResponseRef.current && newLogs.length > 0) {
@@ -138,5 +146,6 @@ export function useGhostDevStream(taskId: string | null): UseGhostDevStreamResul
     clearLogs,
     sendChatMessage,
     sending,
+    isCleared,
   };
 }

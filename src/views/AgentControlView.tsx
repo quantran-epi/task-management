@@ -80,6 +80,7 @@ export const AgentControlView: React.FC = () => {
     sending,
     sendChatMessage,
     clearLogs,
+    isCleared,
   } = useGhostDevStream(activeSessionId);
 
   // Worktree diff for active session
@@ -175,6 +176,7 @@ export const AgentControlView: React.FC = () => {
               logs={logs}
               sending={sending}
               isRunning={activeSession?.status === 'running'}
+              isCleared={isCleared}
               startedAt={activeSession.startedAt}
               finishedAt={activeSession.finishedAt}
               onSendFeedback={sendChatMessage}
