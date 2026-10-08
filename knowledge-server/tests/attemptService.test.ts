@@ -64,20 +64,26 @@ describe('AttemptService', () => {
     mutable.documents[0]!.body = 'secret mutation';
     mutable.documents[0]!.tags!.push('changed');
 
-    expect(attempt.input.setName).toBe('Pilot');
-    expect(attempt.input.documents[0]!.body).toBe('## Flow\n\nSafe body\n');
-    expect(Object.isFrozen(attempt.input.documents[0]!.tags)).toBe(true);
+    expect(service.getAcceptedInput(attempt.attemptId).setName).toBe('Pilot');
+    expect(service.getAcceptedInput(attempt.attemptId).documents[0]!.body).toBe('## Flow\n\nSafe body\n');
+    expect(Object.isFrozen(service.getAcceptedInput(attempt.attemptId).documents[0]!.tags)).toBe(true);
     blocker.release();
     await service.waitForAttempt(attempt.attemptId);
   });
 
   it('retains active snapshot and safe failed candidate when one document fails', async () => {
     const store = new SnapshotStore();
-    const service = new AttemptService(store);
+    const secret = 'token-super-secret';
+    const service = new AttemptService(store, {
+      beforeDocument(document) {
+        if (document.documentId === DOC_B) {
+          throw Object.assign(new Error(secret), { documentId: DOC_B });
+        }
+      },
+    });
     const baseline = service.accept(SET_A, 'baseline', payload());
     await service.waitForAttempt(baseline.attemptId);
     const activeBefore = structuredClone(service.getActiveSnapshot(SET_A));
-    const secret = 'token-super-secret';
     const failing = service.accept(SET_A, 'failure', {
       setName: 'Pilot',
       documents: [
@@ -85,7 +91,6 @@ describe('AttemptService', () => {
         { documentId: DOC_B, title: 'Broken', body: `## Broken\n\n${secret}`, tags: [] },
       ],
     });
-    service.failDocument(DOC_B, new Error(secret));
     await service.waitForAttempt(failing.attemptId);
 
     expect(service.getActiveSnapshot(SET_A)).toEqual(activeBefore);
