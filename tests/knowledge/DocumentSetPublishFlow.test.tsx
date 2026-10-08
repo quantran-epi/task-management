@@ -46,8 +46,9 @@ describe('document-set management', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
     expect(onSave).toHaveBeenLastCalledWith({ name: 'x'.repeat(120), documentIds: ['doc-a', 'doc-b'] });
 
-    rerender(<DocumentSetForm notes={notes} onSave={onSave} />);
+    rerender(<DocumentSetForm key="empty" notes={notes} onSave={onSave} />);
     fireEvent.change(screen.getByLabelText('Tên bộ tài liệu'), { target: { value: 'Bộ trống' } });
+    fireEvent.click(screen.getByRole('radio', { name: 'Bộ trống' }));
     fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
     expect(onSave).toHaveBeenLastCalledWith({ name: 'Bộ trống', documentIds: [] });
   });
@@ -102,7 +103,7 @@ describe('document-set management', () => {
     }));
     render(<AttemptHistoryList attempts={attempts} />);
     expect(screen.getAllByTestId('attempt-history-item')).toHaveLength(10);
-    expect(screen.getByText(/SAFE_CODE/)).toBeVisible();
+    expect(screen.getAllByText(/SAFE_CODE/)).toHaveLength(10);
     expect(screen.queryByText('attempt-0')).not.toBeInTheDocument();
     expect(document.body.textContent).not.toContain('# Alpha');
 
