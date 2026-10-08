@@ -11,6 +11,36 @@ const uuid = z.string().uuid();
 const SetParamsSchema = z.object({ setId: uuid }).strict();
 const AttemptParamsSchema = z.object({ attemptId: uuid }).strict();
 const AttemptKeyHeadersSchema = z.object({ 'x-attempt-key': uuid }).passthrough();
+const AttemptResponseSchema = z
+  .object({
+    attemptId: uuid,
+    setId: uuid,
+    status: z.enum(['Publishing', 'In sync', 'Failed']),
+    startedAt: z.iso.datetime(),
+    completedAt: z.iso.datetime().optional(),
+    metrics: z
+      .object({
+        addedCount: z.number().int().nonnegative(),
+        changedCount: z.number().int().nonnegative(),
+        removedCount: z.number().int().nonnegative(),
+        unchangedCount: z.number().int().nonnegative(),
+        warningCount: z.number().int().nonnegative(),
+        durationMs: z.number().int().nonnegative().optional(),
+      })
+      .strict(),
+    error: z
+      .object({
+        code: z.string().max(80),
+        message: z.string().max(240),
+        documentId: uuid.optional(),
+        line: z.number().int().positive().optional(),
+        column: z.number().int().positive().optional(),
+      })
+      .strict()
+      .optional(),
+    activeSnapshotId: uuid.optional(),
+  })
+  .strict();
 
 const SAFE_MESSAGE = 'Request could not be processed.';
 
@@ -33,7 +63,7 @@ function metrics(attempt: AttemptResource) {
 }
 
 export function serializeAttempt(attempt: AttemptResource) {
-  return {
+  return AttemptResponseSchema.parse({
     attemptId: attempt.attemptId,
     setId: attempt.setId,
     status: attempt.status,
@@ -52,7 +82,7 @@ export function serializeAttempt(attempt: AttemptResource) {
         }
       : {}),
     ...(attempt.activeSnapshotId ? { activeSnapshotId: attempt.activeSnapshotId } : {}),
-  };
+  });
 }
 
 function invalid(reply: FastifyReply) {

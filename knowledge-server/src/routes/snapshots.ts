@@ -3,7 +3,38 @@ import { z } from 'zod';
 import type { ProjectionSnapshot } from '../indexing/incrementalProjector.js';
 import type { AttemptService } from '../services/attemptService.js';
 
-const SetParamsSchema = z.object({ setId: z.string().uuid() }).strict();
+const uuid = z.string().uuid();
+const hash = z.string().regex(/^[a-f0-9]{64}$/);
+const SetParamsSchema = z.object({ setId: uuid }).strict();
+const SnapshotResponseSchema = z
+  .object({
+    snapshotId: uuid,
+    setId: uuid,
+    chunkingPolicyVersion: z.string().min(1).max(80),
+    documents: z.array(
+      z
+        .object({
+          documentId: uuid,
+          contentHash: hash,
+          chunks: z.array(
+            z
+              .object({
+                occurrenceId: uuid,
+                contentHash: hash,
+                chunkIndex: z.number().int().nonnegative(),
+                headingPath: z.array(z.string()),
+                startLine: z.number().int().positive(),
+                endLine: z.number().int().positive(),
+                startOffset: z.number().int().nonnegative(),
+                endOffset: z.number().int().nonnegative(),
+              })
+              .strict()
+          ),
+        })
+        .strict()
+    ),
+  })
+  .strict();
 
 function invalid(reply: FastifyReply) {
   return reply.code(400).send({
@@ -12,7 +43,7 @@ function invalid(reply: FastifyReply) {
 }
 
 export function serializeSnapshot(snapshot: ProjectionSnapshot) {
-  return {
+  return SnapshotResponseSchema.parse({
     snapshotId: snapshot.snapshotId,
     setId: snapshot.setId,
     chunkingPolicyVersion: snapshot.chunkingPolicyVersion,
@@ -30,7 +61,7 @@ export function serializeSnapshot(snapshot: ProjectionSnapshot) {
         endOffset: chunk.endOffset,
       })),
     })),
-  };
+  });
 }
 
 export function registerSnapshotRoutes(app: FastifyInstance, attemptService: AttemptService) {
