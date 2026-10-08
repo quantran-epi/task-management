@@ -126,6 +126,7 @@ Last activity: 2026-10-08 -- Completed quick task 261008-jgo: show timer and tok
 | 261008-jgo | show timer and token count in ghost dev running agent | 2026-10-08 | 9f75db4 | — | [261008-jgo-show-timer-and-token-count-in-ghost-dev-](./quick/261008-jgo-show-timer-and-token-count-in-ghost-dev-/) |
 | 261008-qmp | Fix diff panel race condition and loading overlay, stop process UX, and multi-task terminal log state | 2026-10-08 | — | complete | [261008-qmp-multi-process-fixes](./quick/261008-qmp-multi-process-fixes/) |
 | 261008-m80 | Fix AgentControlView test failures in AgentDiffReviewer | 2026-10-08 | — | complete | [261008-m80-fix-agentcontrolview-test-failures-in-ag](./quick/261008-m80-fix-agentcontrolview-test-failures-in-ag/) |
+| 261008-tfe | Fix AgentDiffReviewer tree expansion in AgentControlView tests | 2026-10-08 | — | complete | [261008-tfe-fix-agentdiffreviewer-tree-expansion](./quick/261008-tfe-fix-agentdiffreviewer-tree-expansion/) |
 
 ## Performance Metrics
 

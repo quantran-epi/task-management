@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Typography,
   Button,
@@ -227,6 +227,31 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
 
     return rawTree.map(filterNode).filter((n): n is FileTreeNode => n !== null);
   }, [allWorktreeFiles, diffFiles, searchFilter]);
+
+  // Extract all folder keys from treeData to auto-expand directories
+  const folderKeys = useMemo(() => {
+    const keys: string[] = [];
+    function collect(nodes: FileTreeNode[]) {
+      for (const node of nodes) {
+        if (node.isDir || !node.isLeaf) {
+          keys.push(node.key);
+          if (node.children) {
+            collect(node.children);
+          }
+        }
+      }
+    }
+    collect(treeData);
+    return keys;
+  }, [treeData]);
+
+  // Keep folder nodes expanded by default whenever new folders arrive
+  const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
+  useEffect(() => {
+    if (folderKeys.length > 0) {
+      setExpandedKeys((prev) => Array.from(new Set([...prev, ...folderKeys])));
+    }
+  }, [folderKeys]);
 
   // Context menu builder for any file/folder item
   const getContextMenuItems = (node: FileTreeNode): NonNullable<MenuProps['items']> => {
@@ -478,6 +503,9 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
               <Tree
                 showIcon={false}
                 blockNode
+                virtual={false}
+                expandedKeys={expandedKeys}
+                onExpand={(keys) => setExpandedKeys(keys as string[])}
                 selectedKeys={selectedFilePath ? [selectedFilePath] : []}
                 onSelect={(_, info) => {
                   const node = info.node as unknown as FileTreeNode;
