@@ -251,7 +251,7 @@
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 16-12-PLAN.md — Docs badges, management wiring, and no-daemon isolation (Wave 8)
+- [x] 16-12-PLAN.md — Docs badges, management wiring, and no-daemon isolation (Wave 8)
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
@@ -344,7 +344,7 @@
 | 13.2. AI Chat Drawer, Item Context Grounding & 9router Ask-Answer Integration | v1.1 | 3/3 | Complete | 2026-10-03 |
 | 14. Knowledge Base Integration (Docs, Linking & AI Retrieval) | v1.1 | 4/4 | Complete | 2026-10-04 |
 | 15. Ghost Dev: Local Claude Code Headless Orchestration with Agent Control Page and Live Git Diff Reviewer | v1.1 | 4/4 | Complete | 2026-10-06 |
-| 16. Knowledge Server Foundation, DLP Checks & AST Ingestion | v1.2 | 11/13 | In Progress|  |
+| 16. Knowledge Server Foundation, DLP Checks & AST Ingestion | v1.2 | 12/13 | In Progress|  |
 | 17. Pilot Ontology, Deterministic Extraction & Neo4j Knowledge Graph | v1.2 | 0/TBD | Not started | - |
 | 18. Multi-Modal Hybrid Retrieval Engine | v1.2 | 0/TBD | Not started | - |
 | 19. Grounded Assistant, Provenance Citations & Offline Fallback | v1.2 | 0/TBD | Not started | - |
