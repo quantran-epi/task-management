@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Hybrid GraphRAG Knowledge Assistant MVP
 status: executing
-stopped_at: Completed 16-13-PLAN.md
-last_updated: "2026-10-08T10:22:23.434Z"
-last_activity: 2026-10-08 -- Phase 16 execution started
+stopped_at: Completed 16-14-PLAN.md
+last_updated: "2026-10-08T14:24:37.540Z"
+last_activity: 2026-10-08 -- Completed Plan 16-14 Docs publishing preview integration
 progress:
   total_phases: 16
-  completed_phases: 1
-  total_plans: 13
-  completed_plans: 13
-  percent: 6
+  completed_phases: 11
+  total_plans: 53
+  completed_plans: 52
+  percent: 98
 ---
 
 # Project State
@@ -21,22 +21,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-07)
 
 **Core value:** Make planned work realistically fit available time while giving the personal user evidence-grounded access to their local banking IT knowledge.
-**Current focus:** Phase 16 — Knowledge Server Foundation, DLP Checks & AST Ingestion
+**Current focus:** Phase 16 — knowledge-server-foundation-dlp-checks-ast-ingestion
 
 ## Current Position
 
-Phase: 16 (Knowledge Server Foundation, DLP Checks & AST Ingestion) — EXECUTING
-Plan: 9 of 13
-Status: Ready to execute
-Last activity: 2026-10-08 -- Phase 16 execution started
+Phase: 16 (knowledge-server-foundation-dlp-checks-ast-ingestion) — EXECUTING
+Plan: 15 of 15
+Status: Phase 16 plans complete
+Last activity: 2026-10-08 -- Completed Plan 16-14 Docs publishing preview integration
 
-Progress: [█░░░░░░░░░] 8%
+Progress: [██████████] 98%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 1 (v1.2)
+- Total plans completed: 15 (v1.2)
 - Average duration: 8 min
 - Total execution time: 0.13 hours
 
@@ -53,6 +53,7 @@ Progress: [█░░░░░░░░░] 8%
 | Phase 16 P11 | 21min | 2 tasks | 7 files |
 | Phase 16 P12 | 25min | 2 tasks | 6 files |
 | Phase 16 P13 | 28min | 2 tasks | 2 files |
+| Phase 16 P14 | 8min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -87,9 +88,10 @@ Items acknowledged and carried forward:
 |----------|------|--------|-------------|
 | Knowledge scope | Full card-system corpus beyond pilot 60000006 | Deferred to v2 | Milestone v1.2 init |
 | UI | Interactive graph canvas / manual graph editor | Deferred to v2 | Milestone v1.2 init |
+| Verification | Full-project TypeScript check blocked by pre-existing AgentControlView diff contract errors | Deferred outside Plan 16-14 | Plan 16-14 |
 
 ## Session Continuity
 
-Last session: 2026-10-08T09:28:51.512Z
-Stopped at: Completed 16-13-PLAN.md
+Last session: 2026-10-08T14:24:19.023Z
+Stopped at: Completed 16-14-PLAN.md
 Resume file: None

@@ -259,8 +259,8 @@ Plans:
 
 **Wave 10** *(blocked on Wave 9 completion - Gap Closure)*
 
-- [ ] 16-14-PLAN.md — Docs workspace publishing preview and DLP modal trigger (Wave 10)
-- [ ] 16-15-PLAN.md — Schema V10 knowledge tables backup export and transactional restore (Wave 10)
+- [x] 16-14-PLAN.md — Docs workspace publishing preview and DLP modal trigger (Wave 10)
+- [x] 16-15-PLAN.md — Schema V10 knowledge tables backup export and transactional restore (Wave 10)
 
 ### Phase 17: Pilot Ontology, Deterministic Extraction & Neo4j Knowledge Graph
 
