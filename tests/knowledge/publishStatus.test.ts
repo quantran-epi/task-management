@@ -10,7 +10,6 @@ import {
 } from '../../src/db/repositories/publishAttemptRepo';
 import { createDocumentSet } from '../../src/db/repositories/documentSetRepo';
 import { generateId } from '../../src/utils/uuid';
-import type { PublishPrimaryState } from '../../src/types/models';
 
 describe('Publish Attempt Reconciliation & Status (D-08, D-27, D-29, T-16-05, T-16-06, T-16-07)', () => {
   let dbName: string;

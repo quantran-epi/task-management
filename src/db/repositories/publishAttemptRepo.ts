@@ -2,7 +2,6 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../index';
 import type {
   PublishAttemptCache,
   PublishedDocumentMetadata,
-  PublishPrimaryState,
 } from '../../types/models';
 import {
   PublishAttemptCacheSchema,

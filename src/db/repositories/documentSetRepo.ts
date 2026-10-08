@@ -1,19 +1,18 @@
 import { db as defaultDb, type TaskPlannerDatabase } from '../index';
 import type { DocumentSet, PublishPrimaryState } from '../../types/models';
 import { DocumentSetSchema } from '../../validation/knowledgeSchemas';
-import { generateId, isValidUuid } from '../../utils/uuid';
-import { z } from 'zod';
+import { generateId } from '../../utils/uuid';
 
 export interface CreateDocumentSetInput {
   name: string;
-  description?: string;
-  documentIds?: string[];
+  description?: string | undefined;
+  documentIds?: string[] | undefined;
 }
 
 export interface UpdateDocumentSetInput {
-  name?: string;
-  description?: string | null;
-  documentIds?: string[];
+  name?: string | undefined;
+  description?: string | null | undefined;
+  documentIds?: string[] | undefined;
 }
 
 export interface DocumentSetMemberStatus {
@@ -223,7 +222,6 @@ export async function getDocumentPublishStatuses(
   if (documentIds.length === 0) return result;
 
   const allSets = await db.documentSets.toArray();
-  const setMap = new Map(allSets.map((s) => [s.id, s]));
 
   // Active publishing attempts check per set
   const publishingAttempts = await db.publishAttempts
