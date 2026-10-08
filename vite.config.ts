@@ -73,6 +73,6 @@ export default defineConfig({
     globals: true,
     fileParallelism: false,
     testTimeout: 15000,
-    exclude: [...configDefaults.exclude, 'proxy/**', '.claude/**'],
+    exclude: [...configDefaults.exclude, 'proxy/**', '.claude/**', 'knowledge-server/**'],
   },
 });
