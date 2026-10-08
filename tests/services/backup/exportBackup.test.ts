@@ -138,6 +138,10 @@ describe('exportBackup service', () => {
         chatMessages: 0,
         activeTimers: 0,
         settings: 1,
+        documentSets: 0,
+        publishedDocuments: 0,
+        publishAttempts: 0,
+        dlpAudits: 0,
       });
 
       // Export history logged in backupMetadata
@@ -170,6 +174,10 @@ describe('exportBackup service', () => {
         chatMessages: 0,
         activeTimers: 0,
         settings: 0,
+        documentSets: 0,
+        publishedDocuments: 0,
+        publishAttempts: 0,
+        dlpAudits: 0,
       });
 
       const metadataEntries = await testDb.backupMetadata.toArray();
