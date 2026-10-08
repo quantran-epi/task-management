@@ -81,7 +81,8 @@ describe('incremental projection', () => {
   });
 
   it('reuses duplicate moved content while preserving independent occurrences', () => {
-    const body = '## Same\n\nRepeated\n\n## Same\n\nRepeated\n';
+    const duplicate = '## Same\n\nRepeated\n\n';
+    const body = `${duplicate}${duplicate}`;
     const baseline = project([{ documentId: DOCUMENT_ID, title: 'Flow', body }]);
     const moved = project([
       { documentId: DOCUMENT_ID, title: 'Flow', body: `## New\n\nPrefix\n\n${body}` },
@@ -89,7 +90,7 @@ describe('incremental projection', () => {
 
     const baselineDuplicates = baseline.candidate.documents[0]!.chunks;
     const movedDuplicates = moved.candidate.documents[0]!.chunks.slice(1);
-    expect(new Set(baselineDuplicates.map((chunk) => chunk.representationId)).size).toBe(1);
+    expect(new Set(baselineDuplicates.map((chunk) => chunk.contentHash)).size).toBe(1);
     expect(movedDuplicates.map((chunk) => chunk.representationId)).toEqual(
       baselineDuplicates.map((chunk) => chunk.representationId)
     );
