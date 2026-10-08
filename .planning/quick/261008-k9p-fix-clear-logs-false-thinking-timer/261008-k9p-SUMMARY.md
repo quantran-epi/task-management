@@ -3,7 +3,7 @@ phase: quick-261008-k9p
 plan: 01
 status: complete
 date: 2026-10-08
-commit: pending
+commit: 2931d37
 files_modified:
   - src/services/agents/agentLogStore.ts
   - src/hooks/useGhostDevStream.ts
