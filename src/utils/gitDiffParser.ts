@@ -155,3 +155,30 @@ export function parseGitDiff(rawDiff: string): DiffFile[] {
 
   return files;
 }
+
+/**
+ * Reconstructs a valid unified git patch string for a single hunk.
+ * Compatible with `git apply` / `git apply --reverse`.
+ */
+export function formatHunkPatch(filePath: string, hunk: DiffHunk): string {
+  const cleanPath = filePath.replace(/\\/g, '/').replace(/^\.\//, '');
+  const lines: string[] = [
+    `diff --git a/${cleanPath} b/${cleanPath}`,
+    `--- a/${cleanPath}`,
+    `+++ b/${cleanPath}`,
+    `@@ -${hunk.oldStart},${hunk.oldCount} +${hunk.newStart},${hunk.newCount} @@${hunk.header ? ' ' + hunk.header : ''}`,
+  ];
+
+  for (const line of hunk.lines) {
+    if (line.type === 'add') {
+      lines.push(`+${line.content}`);
+    } else if (line.type === 'delete') {
+      lines.push(`-${line.content}`);
+    } else {
+      lines.push(` ${line.content}`);
+    }
+  }
+
+  return lines.join('\n') + '\n';
+}
+

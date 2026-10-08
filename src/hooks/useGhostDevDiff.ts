@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { DiffFile, DiffViewMode } from '../types/agent';
-import { parseGitDiff } from '../utils/gitDiffParser';
+import { parseGitDiff, formatHunkPatch } from '../utils/gitDiffParser';
 import { isTauriApp } from '../utils/timerPopout';
 
 async function tauriInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
@@ -11,6 +11,8 @@ async function tauriInvoke<T>(command: string, args?: Record<string, unknown>): 
 export interface UseGhostDevDiffResult {
   rawDiff: string;
   diffFiles: DiffFile[];
+  allWorktreeFiles: string[];
+  selectedFileContent: string | null;
   totalAdditions: number;
   totalDeletions: number;
   viewMode: DiffViewMode;
@@ -23,11 +25,14 @@ export interface UseGhostDevDiffResult {
   acceptAll: (commitMessage?: string) => Promise<string>;
   revertAll: () => Promise<void>;
   revertFile: (filePath: string) => Promise<void>;
+  revertHunk: (filePath: string, hunk: import('../types/agent').DiffHunk) => Promise<void>;
 }
 
 export function useGhostDevDiff(worktreePath: string | null): UseGhostDevDiffResult {
   const [rawDiff, setRawDiff] = useState<string>('');
   const [diffFiles, setDiffFiles] = useState<DiffFile[]>([]);
+  const [allWorktreeFiles, setAllWorktreeFiles] = useState<string[]>([]);
+  const [selectedFileContent, setSelectedFileContent] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<DiffViewMode>('unified');
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -38,7 +43,9 @@ export function useGhostDevDiff(worktreePath: string | null): UseGhostDevDiffRes
       if (!isTauriApp() || !worktreePath) {
         setRawDiff('');
         setDiffFiles([]);
+        setAllWorktreeFiles([]);
         setSelectedFilePath(null);
+        setSelectedFileContent(null);
         return;
       }
 
@@ -51,18 +58,28 @@ export function useGhostDevDiff(worktreePath: string | null): UseGhostDevDiffRes
         setLoading(true);
       }
       try {
-        const output = await tauriInvoke<string>('get_worktree_diff', { worktreePath });
+        const [output, fileListRaw] = await Promise.all([
+          tauriInvoke<string>('get_worktree_diff', { worktreePath }).catch(() => ''),
+          tauriInvoke<string[]>('list_worktree_files', { worktreePath }).catch(() => [] as string[]),
+        ]);
+
+        const fileList: string[] = Array.isArray(fileListRaw) ? fileListRaw : [];
         setRawDiff(output || '');
         const parsed = parseGitDiff(output || '');
         setDiffFiles(parsed);
+        setAllWorktreeFiles(fileList);
 
         // Maintain valid file selection
         setSelectedFilePath((prev) => {
-          if (prev && parsed.some((f) => f.newPath === prev || f.oldPath === prev)) {
+          if (
+            prev &&
+            (parsed.some((f) => f.newPath === prev || f.oldPath === prev) ||
+              fileList.includes(prev))
+          ) {
             return prev;
           }
-          const first = parsed[0];
-          return first ? first.newPath : null;
+          const first = parsed[0]?.newPath || fileList[0] || null;
+          return first;
         });
       } catch (err) {
         console.error('[GhostDev] Failed to fetch git diff:', err);
@@ -75,6 +92,43 @@ export function useGhostDevDiff(worktreePath: string | null): UseGhostDevDiffRes
     },
     [worktreePath]
   );
+
+  // Load unchanged file content when selectedFilePath is not in diff
+  useEffect(() => {
+    if (!isTauriApp() || !worktreePath || !selectedFilePath) {
+      setSelectedFileContent(null);
+      return;
+    }
+
+    const isChanged = diffFiles.some(
+      (f) => f.newPath === selectedFilePath || f.oldPath === selectedFilePath
+    );
+    if (isChanged) {
+      setSelectedFileContent(null);
+      return;
+    }
+
+    let isSubscribed = true;
+    void (async () => {
+      try {
+        const content = await tauriInvoke<string>('read_worktree_file_content', {
+          worktreePath,
+          filePath: selectedFilePath,
+        });
+        if (isSubscribed) {
+          setSelectedFileContent(content);
+        }
+      } catch (err) {
+        if (isSubscribed) {
+          setSelectedFileContent(`[Không thể đọc file: ${String(err)}]`);
+        }
+      }
+    })();
+
+    return () => {
+      isSubscribed = false;
+    };
+  }, [worktreePath, selectedFilePath, diffFiles]);
 
   // Initial load on worktree change
   useEffect(() => {
@@ -167,6 +221,16 @@ export function useGhostDevDiff(worktreePath: string | null): UseGhostDevDiffRes
     [worktreePath, refreshDiff]
   );
 
+  const revertHunk = useCallback(
+    async (filePath: string, hunk: import('../types/agent').DiffHunk) => {
+      if (!isTauriApp() || !worktreePath) return;
+      const patch = formatHunkPatch(filePath, hunk);
+      await tauriInvoke('revert_hunk_diff', { worktreePath, patchContent: patch });
+      await refreshDiff();
+    },
+    [worktreePath, refreshDiff]
+  );
+
   const totalAdditions = diffFiles.reduce((acc, f) => acc + f.additions, 0);
   const totalDeletions = diffFiles.reduce((acc, f) => acc + f.deletions, 0);
   const selectedFile =
@@ -176,6 +240,8 @@ export function useGhostDevDiff(worktreePath: string | null): UseGhostDevDiffRes
   return {
     rawDiff,
     diffFiles,
+    allWorktreeFiles,
+    selectedFileContent,
     totalAdditions,
     totalDeletions,
     viewMode,
@@ -188,5 +254,6 @@ export function useGhostDevDiff(worktreePath: string | null): UseGhostDevDiffRes
     acceptAll,
     revertAll,
     revertFile,
+    revertHunk,
   };
 }
