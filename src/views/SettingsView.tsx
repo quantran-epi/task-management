@@ -20,6 +20,7 @@ import { GitHubConfigCard } from '../components/settings/GitHubConfigCard';
 import { GitHubSyncCard } from '../components/settings/GitHubSyncCard';
 import { JiraConfigCard } from '../components/settings/JiraConfigCard';
 import { NineRouterConfigCard } from '../components/settings/NineRouterConfigCard';
+import { KnowledgeServerConfigCard } from '../components/settings/KnowledgeServerConfigCard';
 import { GhostDevConfigCard } from '../components/settings/GhostDevConfigCard';
 import { PwaStatusCard } from '../components/settings/PwaStatusCard';
 import { StoragePersistenceCard } from '../components/settings/StoragePersistenceCard';
@@ -34,6 +35,7 @@ import { rollbackToSnapshot, downloadSnapshotFile } from '../services/backup/res
 import { announceToScreenReader } from '../components/common/AriaLiveRegion';
 import type { SnapshotData, BackupEnvelope } from '../types/backup';
 import type { PullBackupResult } from '../services/github/types';
+import { KnowledgeConfigProvider } from '../services/knowledge/knowledgeConfig';
 
 const { Paragraph } = Typography;
 
@@ -219,6 +221,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
           <GhostDevConfigCard />
           <NineRouterConfigCard db={db} />
+          <KnowledgeConfigProvider db={db}>
+            <KnowledgeServerConfigCard />
+          </KnowledgeConfigProvider>
         </Space>
       ),
     },
