@@ -87,7 +87,7 @@ GitHub synchronization is backup synchronization, not collaborative live sync. B
 - **Offline behavior**: Existing local document editing and search remain available when the optional knowledge server is unavailable.
 - **Evidence integrity**: Every extracted relationship must retain document, section, and source-range provenance plus evidence classification.
 - **Pilot scope**: MVP targets only `docs/sample-markdown-flow/60000006-SHB-Credit-calculations/`; broader card-system ingestion is deferred.
-- **Sensitive data**: MVP corpus must exclude real PAN, CVV, PIN/PIN block, HSM keys, production credentials, and customer PII.
+- **Sensitive data**: Every publish attempt must scan for PAN, CVV, PIN/PIN block, HSM keys, credentials, and customer PII before content leaves PlannerMate. Findings require masked details and fresh explicit confirmation; no trust bypass persists.
 
 ## Key Decisions
 

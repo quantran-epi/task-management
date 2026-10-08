@@ -9,7 +9,7 @@
 ### Document Ingestion
 
 - [ ] **INGEST-01**: User can publish selected normalized Markdown documents from PlannerMate to an optional knowledge server without changing local canonical copies.
-- [ ] **INGEST-02**: User receives clear rejection details when pre-ingestion checks detect PAN, CVV, PIN data, HSM keys, credentials, or customer PII.
+- [ ] **INGEST-02**: Before any document content leaves PlannerMate, user receives masked finding details when pre-ingestion checks detect PAN, CVV, PIN data, HSM keys, credentials, or customer PII, and each affected publish attempt requires fresh explicit confirmation before it may continue.
 - [ ] **INGEST-03**: Published documents preserve headings, tables, code blocks, SQL, ASCII diagrams, and exact source ranges as retrievable evidence chunks.
 - [ ] **INGEST-04**: Republish processes only changed documents or sections using stable IDs and SHA-256 hashes.
 - [ ] **INGEST-05**: User can inspect publish and indexing status for each document set.
@@ -46,7 +46,7 @@
 - [ ] **QUAL-01**: Maintainer can run a 30–50 question benchmark covering exact lookup, semantic retrieval, process flow, call chain, three-hop impact, conflict, and abstention cases.
 - [ ] **QUAL-02**: Benchmark verifies expected sources, required graph paths, required facts, and forbidden unsupported claims.
 - [ ] **QUAL-03**: Milestone meets an agreed accuracy threshold for three-hop pilot queries and reports failures rather than masking them.
-- [ ] **QUAL-04**: Automated checks prove indexes are rebuildable, sensitive-data checks run before external calls, and local search remains available offline.
+- [ ] **QUAL-04**: Automated checks prove indexes are rebuildable, sensitive-data checks and any required fresh override confirmation run before external calls, and local search remains available offline.
 - [ ] **QUAL-05**: Claude and Neo4j credentials remain server-side and never enter PlannerMate source, IndexedDB, logs, or published bundles.
 
 ## Future Requirements

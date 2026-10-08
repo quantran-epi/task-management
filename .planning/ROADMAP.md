@@ -38,7 +38,7 @@
 
 ### Milestone v1.2: Hybrid GraphRAG Knowledge Assistant MVP
 
-- [ ] **Phase 16: Knowledge Server Foundation, DLP Checks & AST Ingestion** - Optional Fastify service, pre-ingestion sensitive data rejection, AST evidence chunking, and SHA-256 incremental indexing.
+- [ ] **Phase 16: Knowledge Server Foundation, DLP Checks & AST Ingestion** - Optional knowledge service, pre-ingestion sensitive-data warnings with fresh explicit override, AST evidence chunking, and SHA-256 incremental chunk projection.
 - [ ] **Phase 17: Pilot Ontology, Deterministic Extraction & Neo4j Knowledge Graph** - Controlled process 60000006 ontology, composite URNs, deterministic table extraction, evidence classification, and rebuildable Neo4j graph.
 - [ ] **Phase 18: Multi-Modal Hybrid Retrieval Engine** - Full-text identifier search, semantic vector search, bounded 1-3 hop Cypher traversal, and Reciprocal Rank Fusion.
 - [ ] **Phase 19: Grounded Assistant, Provenance Citations & Offline Fallback** - AI Chat Drawer synthesis with source citations, step-by-step path cards, conflict warnings, abstention handling, and local BM25 fallback.
@@ -204,14 +204,14 @@
 
 ### Phase 16: Knowledge Server Foundation, DLP Checks & AST Ingestion
 
-**Goal**: Establish optional knowledge server publishing pipeline with pre-ingestion sensitive data rejection, AST-based evidence chunking, and SHA-256 incremental reindexing.
+**Goal**: Establish an optional knowledge-server publishing pipeline with pre-ingestion sensitive-data warnings and fresh explicit override, AST-based evidence chunking, and SHA-256 incremental chunk projection.
 **Depends on**: Phase 15
 **Requirements**: INGEST-01, INGEST-02, INGEST-03, INGEST-04, INGEST-05
 **Success Criteria** (what must be TRUE):
   1. User can publish selected Markdown documents to the optional knowledge server without altering local Markdown copies.
-  2. Ingestion halts and returns actionable rejection details when documents contain PAN, CVV, PIN, HSM keys, credentials, or customer PII.
-  3. Published documents preserve headings, tables, code blocks, SQL, ASCII diagrams, and exact source ranges as retrievable evidence chunks.
-  4. Republishing unchanged or partially modified documents re-indexes only altered sections via SHA-256 hash comparison.
+  2. Before content leaves PlannerMate, findings for PAN, CVV, PIN, HSM keys, credentials, or customer PII show masked actionable details and require fresh explicit confirmation before publishing may continue.
+  3. Published documents preserve headings, tables, code blocks, SQL, ASCII diagrams, and exact source ranges as versioned evidence chunks.
+  4. Republishing unchanged or partially modified documents projects only added, changed, or removed chunks via SHA-256 comparison; unchanged chunks retain their indexed representation.
   5. User can inspect publish and indexing status for each document set in PlannerMate.
 **Plans**: TBD
 
@@ -267,7 +267,7 @@
   1. Maintainer can run a 30–50 question benchmark covering exact lookup, semantic retrieval, process flow, call chain, three-hop impact, conflict, and abstention cases.
   2. Benchmark verifies expected sources, required graph paths, required facts, and forbidden unsupported claims.
   3. Milestone meets an agreed accuracy threshold for three-hop pilot queries and reports failures rather than masking them.
-  4. Automated checks prove indexes are rebuildable, sensitive-data checks run before external calls, and local search remains available offline.
+  4. Automated checks prove indexes are rebuildable, sensitive-data checks and any required fresh override confirmation run before external calls, and local search remains available offline.
   5. Claude and Neo4j credentials remain server-side and never enter PlannerMate source, IndexedDB, logs, or published bundles.
 **Plans**: TBD
 

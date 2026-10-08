@@ -1,22 +1,22 @@
 # Phase 16: Knowledge Server Foundation, DLP Checks & AST Ingestion - Context
 
 **Gathered:** 2026-10-08
-**Status:** Context complete — requirement amendment required before planning
+**Status:** Context complete — requirement amendment applied before specification
 
 <domain>
 ## Phase Boundary
 
 Phase 16 establishes an optional knowledge-server publishing pipeline for selected PlannerMate Markdown. It defines document-set publishing, pre-ingestion sensitive-data checks, AST-based evidence chunks, SHA-256 incremental indexing, and user-visible publish/index status. Local Markdown remains canonical and unchanged by publishing; local Docs and BM25 search remain usable when the knowledge server is unavailable.
 
-### Blocking requirement amendment
+### Requirement amendment applied
 
-The discussion changed DLP behavior from mandatory rejection to warning with explicit user override because the knowledge server runs inside the organization network rather than on the public Internet. Before planning, amend these locked artifacts so they no longer require hard rejection:
+DLP behavior changed from mandatory rejection to warning with explicit user override because the knowledge server runs inside the organization network rather than on the public Internet. Phase specification amended these artifacts before planning:
 
 - `.planning/REQUIREMENTS.md` — `INGEST-02` and `QUAL-04`
-- `.planning/ROADMAP.md` — Phase 16 goal and success criterion 2; Phase 20 success criterion 4
-- `.planning/PROJECT.md` — sensitive-data constraint and active requirement wording where needed
+- `.planning/ROADMAP.md` — Phase 16 summary, goal, success criteria 2–4, and Phase 20 success criterion 4
+- `.planning/PROJECT.md` — sensitive-data constraint
 
-Planning against current wording would contradict the decisions below.
+Planning must follow amended warning, masking, pre-send scan, and fresh-confirmation semantics.
 
 </domain>
 
