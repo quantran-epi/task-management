@@ -19,6 +19,10 @@ import {
   BackupChatMessageRecordSchema,
   BackupActiveTimerRecordSchema,
   BackupSettingRecordSchema,
+  BackupDocumentSetRecordSchema,
+  BackupPublishedDocumentRecordSchema,
+  BackupPublishAttemptRecordSchema,
+  BackupDlpAuditRecordSchema,
 } from '../../validation/backupSchemas';
 
 
@@ -155,6 +159,18 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
   const settings = rawTables.settings !== undefined
     ? validateTable('settings', BackupSettingRecordSchema, rawTables.settings)
     : undefined;
+  const documentSets = rawTables.documentSets !== undefined
+    ? validateTable('documentSets', BackupDocumentSetRecordSchema, rawTables.documentSets)
+    : undefined;
+  const publishedDocuments = rawTables.publishedDocuments !== undefined
+    ? validateTable('publishedDocuments', BackupPublishedDocumentRecordSchema, rawTables.publishedDocuments)
+    : undefined;
+  const publishAttempts = rawTables.publishAttempts !== undefined
+    ? validateTable('publishAttempts', BackupPublishAttemptRecordSchema, rawTables.publishAttempts)
+    : undefined;
+  const dlpAudits = rawTables.dlpAudits !== undefined
+    ? validateTable('dlpAudits', BackupDlpAuditRecordSchema, rawTables.dlpAudits)
+    : undefined;
 
   // If schema validation errors occurred, stop before referential checks
   if (errors.length > 0) {
@@ -269,6 +285,59 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     });
   }
 
+  // Validate knowledge-table references only when both sides are present.
+  const documentSetIds = new Set((documentSets || []).map((set) => set.id));
+  if (documentSets && notes) {
+    documentSets.forEach((set) => {
+      set.documentIds.forEach((documentId) => {
+        if (!noteIds.has(documentId)) {
+          errors.push({
+            table: 'documentSets',
+            recordId: set.id,
+            field: 'documentIds',
+            message: `DocumentSet references documentId "${documentId}" not found in notes`,
+          });
+        }
+      });
+    });
+  }
+  if (publishedDocuments && documentSets) {
+    publishedDocuments.forEach((published) => {
+      if (!documentSetIds.has(published.setId)) {
+        errors.push({
+          table: 'publishedDocuments',
+          recordId: `${published.setId}:${published.documentId}`,
+          field: 'setId',
+          message: `PublishedDocument references setId "${published.setId}" not found in documentSets`,
+        });
+      }
+    });
+  }
+  if (publishAttempts && documentSets) {
+    publishAttempts.forEach((attempt) => {
+      if (!documentSetIds.has(attempt.setId)) {
+        errors.push({
+          table: 'publishAttempts',
+          recordId: attempt.id,
+          field: 'setId',
+          message: `PublishAttempt references setId "${attempt.setId}" not found in documentSets`,
+        });
+      }
+    });
+  }
+  if (dlpAudits && documentSets) {
+    dlpAudits.forEach((audit) => {
+      if (!documentSetIds.has(audit.setId)) {
+        errors.push({
+          table: 'dlpAudits',
+          recordId: audit.id,
+          field: 'setId',
+          message: `DlpAudit references setId "${audit.setId}" not found in documentSets`,
+        });
+      }
+    });
+  }
+
   // Check chatMessages refer to existing thread
   const threadIds = new Set((chatThreads || []).map((t) => t.id));
   if (chatMessages && chatThreads) {
@@ -323,6 +392,10 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       ...(chatMessages !== undefined ? { chatMessages } : {}),
       ...(activeTimers !== undefined ? { activeTimers } : {}),
       ...(settings !== undefined ? { settings } : {}),
+      ...(documentSets !== undefined ? { documentSets } : {}),
+      ...(publishedDocuments !== undefined ? { publishedDocuments } : {}),
+      ...(publishAttempts !== undefined ? { publishAttempts } : {}),
+      ...(dlpAudits !== undefined ? { dlpAudits } : {}),
     },
     counts: {
       projects: projects.length,
@@ -338,6 +411,10 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       ...(chatMessages !== undefined ? { chatMessages: chatMessages.length } : {}),
       ...(activeTimers !== undefined ? { activeTimers: activeTimers.length } : {}),
       ...(settings !== undefined ? { settings: settings.length } : {}),
+      ...(documentSets !== undefined ? { documentSets: documentSets.length } : {}),
+      ...(publishedDocuments !== undefined ? { publishedDocuments: publishedDocuments.length } : {}),
+      ...(publishAttempts !== undefined ? { publishAttempts: publishAttempts.length } : {}),
+      ...(dlpAudits !== undefined ? { dlpAudits: dlpAudits.length } : {}),
     },
   };
 

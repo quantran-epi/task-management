@@ -49,6 +49,10 @@ export async function restoreBackupPayload(
       targetDb.noteAttachments,
       targetDb.chatThreads,
       targetDb.chatMessages,
+      targetDb.documentSets,
+      targetDb.publishedDocuments,
+      targetDb.publishAttempts,
+      targetDb.dlpAudits,
       targetDb.settings,
       targetDb.backupMetadata,
     ],
@@ -66,6 +70,10 @@ export async function restoreBackupPayload(
         rawAttachments,
         chatThreads,
         chatMessages,
+        documentSets,
+        publishedDocuments,
+        publishAttempts,
+        dlpAudits,
       ] = await Promise.all([
         targetDb.projects.toArray(),
         targetDb.milestones.toArray(),
@@ -78,6 +86,10 @@ export async function restoreBackupPayload(
         targetDb.noteAttachments.toArray(),
         targetDb.chatThreads.toArray(),
         targetDb.chatMessages.toArray(),
+        targetDb.documentSets.toArray(),
+        targetDb.publishedDocuments.toArray(),
+        targetDb.publishAttempts.toArray(),
+        targetDb.dlpAudits.toArray(),
       ]);
 
       const serializedAttachments = await Promise.all(
@@ -107,6 +119,10 @@ export async function restoreBackupPayload(
           noteAttachments: serializedAttachments,
           chatThreads,
           chatMessages,
+          documentSets,
+          publishedDocuments,
+          publishAttempts,
+          dlpAudits,
         },
         counts: {
           projects: projects.length,
@@ -120,6 +136,10 @@ export async function restoreBackupPayload(
           noteAttachments: rawAttachments.length,
           chatThreads: chatThreads.length,
           chatMessages: chatMessages.length,
+          documentSets: documentSets.length,
+          publishedDocuments: publishedDocuments.length,
+          publishAttempts: publishAttempts.length,
+          dlpAudits: dlpAudits.length,
         },
       };
 
@@ -143,6 +163,10 @@ export async function restoreBackupPayload(
         targetDb.noteAttachments.clear(),
         targetDb.chatThreads.clear(),
         targetDb.chatMessages.clear(),
+        targetDb.documentSets.clear(),
+        targetDb.publishedDocuments.clear(),
+        targetDb.publishAttempts.clear(),
+        targetDb.dlpAudits.clear(),
       ]);
 
       // 3. Bulk add incoming records
@@ -189,6 +213,18 @@ export async function restoreBackupPayload(
       }
       if (backup.tables.chatMessages && backup.tables.chatMessages.length) {
         await targetDb.chatMessages.bulkAdd(backup.tables.chatMessages);
+      }
+      if (backup.tables.documentSets?.length) {
+        await targetDb.documentSets.bulkAdd(backup.tables.documentSets);
+      }
+      if (backup.tables.publishedDocuments?.length) {
+        await targetDb.publishedDocuments.bulkAdd(backup.tables.publishedDocuments);
+      }
+      if (backup.tables.publishAttempts?.length) {
+        await targetDb.publishAttempts.bulkAdd(backup.tables.publishAttempts);
+      }
+      if (backup.tables.dlpAudits?.length) {
+        await targetDb.dlpAudits.bulkAdd(backup.tables.dlpAudits);
       }
       if (backup.tables.activeTimers && backup.tables.activeTimers.length) {
         await targetDb.activeTimers.bulkAdd(backup.tables.activeTimers);
@@ -246,6 +282,10 @@ export async function rollbackToSnapshot(
       targetDb.noteAttachments,
       targetDb.chatThreads,
       targetDb.chatMessages,
+      targetDb.documentSets,
+      targetDb.publishedDocuments,
+      targetDb.publishAttempts,
+      targetDb.dlpAudits,
       targetDb.settings,
       targetDb.backupMetadata,
     ],
@@ -264,6 +304,10 @@ export async function rollbackToSnapshot(
         targetDb.noteAttachments.clear(),
         targetDb.chatThreads.clear(),
         targetDb.chatMessages.clear(),
+        targetDb.documentSets.clear(),
+        targetDb.publishedDocuments.clear(),
+        targetDb.publishAttempts.clear(),
+        targetDb.dlpAudits.clear(),
       ]);
 
       // 2. Restore records from snapshot
@@ -310,6 +354,18 @@ export async function rollbackToSnapshot(
       }
       if (snapshot.tables.chatMessages && snapshot.tables.chatMessages.length) {
         await targetDb.chatMessages.bulkAdd(snapshot.tables.chatMessages);
+      }
+      if (snapshot.tables.documentSets?.length) {
+        await targetDb.documentSets.bulkAdd(snapshot.tables.documentSets);
+      }
+      if (snapshot.tables.publishedDocuments?.length) {
+        await targetDb.publishedDocuments.bulkAdd(snapshot.tables.publishedDocuments);
+      }
+      if (snapshot.tables.publishAttempts?.length) {
+        await targetDb.publishAttempts.bulkAdd(snapshot.tables.publishAttempts);
+      }
+      if (snapshot.tables.dlpAudits?.length) {
+        await targetDb.dlpAudits.bulkAdd(snapshot.tables.dlpAudits);
       }
 
       // 3. Clear the snapshot from settings after rollback

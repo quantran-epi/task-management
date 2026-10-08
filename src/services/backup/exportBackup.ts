@@ -133,6 +133,10 @@ export async function exportBackupPayload(
     chatMessages,
     activeTimers,
     allSettings,
+    documentSets,
+    publishedDocuments,
+    publishAttempts,
+    dlpAudits,
   ] = await Promise.all([
     targetDb.projects.toArray(),
     targetDb.milestones.toArray(),
@@ -147,6 +151,10 @@ export async function exportBackupPayload(
     targetDb.chatMessages.toArray(),
     targetDb.activeTimers.toArray(),
     targetDb.settings.toArray(),
+    targetDb.documentSets.toArray(),
+    targetDb.publishedDocuments.toArray(),
+    targetDb.publishAttempts.toArray(),
+    targetDb.dlpAudits.toArray(),
   ]);
 
   // Strictly exclude binary and base64 image data to prevent storage growth
@@ -180,6 +188,10 @@ export async function exportBackupPayload(
     chatMessages,
     activeTimers,
     settings: safeSettings,
+    documentSets,
+    publishedDocuments,
+    publishAttempts,
+    dlpAudits,
   };
 
   const counts = {
@@ -196,6 +208,10 @@ export async function exportBackupPayload(
     chatMessages: chatMessages.length,
     activeTimers: activeTimers.length,
     settings: safeSettings.length,
+    documentSets: documentSets.length,
+    publishedDocuments: publishedDocuments.length,
+    publishAttempts: publishAttempts.length,
+    dlpAudits: dlpAudits.length,
   };
 
   const envelope: BackupEnvelope = {
