@@ -220,3 +220,62 @@ export interface ChatMessage {
   isContextBoundary?: boolean | undefined; // Phase 13.2 D-06: /clear context reset marker
 }
 
+// Phase 16: Knowledge Server Foundation, DLP Checks & AST Ingestion models (D-01, D-08, D-18, D-27, D-29)
+
+export type PublishPrimaryState =
+  | 'Never published'
+  | 'In sync'
+  | 'Local changes'
+  | 'Publishing'
+  | 'Warning'
+  | 'Failed';
+
+export interface DocumentSet {
+  id: string; // RFC 4122 v4 UUID
+  name: string;
+  description?: string | undefined;
+  documentIds: string[]; // Explicit ordered snapshot of stable Note UUIDs (D-01)
+  createdAt: string; // ISO string metadata
+  updatedAt: string; // ISO string metadata
+}
+
+export interface PublishedDocumentMetadata {
+  setId: string; // Reference to DocumentSet.id
+  documentId: string; // Reference to Note.id
+  lastKnownRemoteAt: string; // ISO string metadata
+  publishedContentHash: string; // SHA-256 of normalized published markdown
+  activeSnapshotId?: string | undefined; // Server-authoritative snapshot ID
+  activeAttemptId?: string | undefined; // Server-authoritative attempt ID
+  lastPrimaryState?: PublishPrimaryState | undefined;
+}
+
+export interface PublishAttemptCache {
+  id: string; // RFC 4122 v4 UUID
+  setId: string; // Reference to DocumentSet.id
+  attemptKey?: string | undefined; // Client-generated idempotency key
+  startedAt: string; // ISO string metadata
+  completedAt?: string | undefined; // ISO string metadata
+  durationMs?: number | undefined;
+  status: PublishPrimaryState;
+  addedCount: number;
+  changedCount: number;
+  removedCount: number;
+  unchangedCount: number;
+  warningCount: number;
+  errorCode?: string | undefined;
+  errorMessage?: string | undefined;
+}
+
+export interface DlpAuditRecord {
+  id: string; // RFC 4122 v4 UUID
+  setId: string; // Reference to DocumentSet.id
+  attemptId?: string | undefined;
+  ruleSetVersion: string;
+  timestamp: string; // ISO string metadata
+  documentIds: string[];
+  contentHashes: string[];
+  findingCountsByCategory: Record<string, number>;
+  userAction: 'confirmed' | 'cancelled' | 'auto_passed';
+}
+
+
