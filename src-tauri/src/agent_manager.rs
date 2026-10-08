@@ -16,6 +16,7 @@ static RUNNING_PROCESS_COUNT: AtomicUsize = AtomicUsize::new(0);
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 pub fn hidden_std_command<P: AsRef<std::ffi::OsStr>>(program: P) -> std::process::Command {
+    #[allow(unused_mut)]
     let mut cmd = std::process::Command::new(program);
     #[cfg(windows)]
     {
@@ -26,11 +27,44 @@ pub fn hidden_std_command<P: AsRef<std::ffi::OsStr>>(program: P) -> std::process
 }
 
 pub fn hidden_tokio_command<P: AsRef<std::ffi::OsStr>>(program: P) -> tokio::process::Command {
+    #[allow(unused_mut)]
     let mut cmd = tokio::process::Command::new(program);
     #[cfg(windows)]
     {
         cmd.creation_flags(CREATE_NO_WINDOW);
     }
+    cmd
+}
+
+pub fn is_windows_batch_script(program: &str) -> bool {
+    let p = program.trim();
+    if p.eq_ignore_ascii_case("claude") {
+        return true;
+    }
+    let lower = p.to_ascii_lowercase();
+    lower.ends_with(".cmd") || lower.ends_with(".bat")
+}
+
+pub fn resolve_agent_command_parts(program: &str, args: &[&str], is_windows: bool) -> (String, Vec<String>) {
+    let p_trimmed = program.trim();
+    if is_windows && is_windows_batch_script(p_trimmed) {
+        let mut resolved_args = Vec::with_capacity(args.len() + 2);
+        resolved_args.push("/c".to_string());
+        resolved_args.push(p_trimmed.to_string());
+        for arg in args {
+            resolved_args.push(arg.to_string());
+        }
+        ("cmd.exe".to_string(), resolved_args)
+    } else {
+        (p_trimmed.to_string(), args.iter().map(|s| s.to_string()).collect())
+    }
+}
+
+pub fn build_agent_tokio_command(program: &str, args: &[&str]) -> tokio::process::Command {
+    let is_windows = cfg!(windows);
+    let (binary, resolved_args) = resolve_agent_command_parts(program, args, is_windows);
+    let mut cmd = hidden_tokio_command(&binary);
+    cmd.args(&resolved_args);
     cmd
 }
 
@@ -355,25 +389,27 @@ pub async fn start_ghost_dev_session(
         .or_else(|| std::env::var("CLAUDE_PATH").ok())
         .unwrap_or_else(|| "claude".to_string());
 
-    let mut cmd = hidden_tokio_command(&claude_binary);
+    let worktree_dir_str = worktree_path.to_string_lossy().to_string();
+    let master_args = [
+        "-p",
+        "--verbose",
+        "--output-format",
+        "stream-json",
+        "--input-format",
+        "stream-json",
+        "--permission-mode",
+        "bypassPermissions",
+        "--dangerously-skip-permissions",
+        "--add-dir",
+        &worktree_dir_str,
+        "--add-dir",
+        &payload.repo_path,
+        "--model",
+        &payload.master_model,
+    ];
+
+    let mut cmd = build_agent_tokio_command(&claude_binary, &master_args);
     cmd.current_dir(&worktree_path)
-        .args([
-            "-p",
-            "--verbose",
-            "--output-format",
-            "stream-json",
-            "--input-format",
-            "stream-json",
-            "--permission-mode",
-            "bypassPermissions",
-            "--dangerously-skip-permissions",
-            "--add-dir",
-            worktree_path.to_str().unwrap_or(""),
-            "--add-dir",
-            &payload.repo_path,
-            "--model",
-            &payload.master_model,
-        ])
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
@@ -700,24 +736,26 @@ pub async fn start_ghost_dev_session(
                                     let _ = stdin_tx_for_reader.send(resp.to_string()).await;
                                 } else {
                                     let worker_id = format!("w-{}-{}", tid, chrono_iso_now());
-                                    let mut wcmd = hidden_tokio_command(&claude_binary_clone);
+                                    let worker_worktree_str = worktree_dir.to_string_lossy().to_string();
+                                    let worker_args = [
+                                        "-p",
+                                        "--verbose",
+                                        "--output-format",
+                                        "stream-json",
+                                        "--permission-mode",
+                                        "bypassPermissions",
+                                        "--dangerously-skip-permissions",
+                                        "--add-dir",
+                                        &worker_worktree_str,
+                                        "--add-dir",
+                                        &repo_path_str,
+                                        "--model",
+                                        &subtask_model,
+                                        &subtask_prompt,
+                                    ];
+                                    let mut wcmd = build_agent_tokio_command(&claude_binary_clone, &worker_args);
                                     wcmd.current_dir(&worktree_dir)
-                                        .args([
-                                            "-p",
-                                            "--verbose",
-                                            "--output-format",
-                                            "stream-json",
-                                            "--permission-mode",
-                                            "bypassPermissions",
-                                            "--dangerously-skip-permissions",
-                                            "--add-dir",
-                                            worktree_dir.to_str().unwrap_or(""),
-                                            "--add-dir",
-                                            &repo_path_str,
-                                            "--model",
-                                            &subtask_model,
-                                            &subtask_prompt,
-                                        ])
+                                        .stdin(std::process::Stdio::piped())
                                         .stdout(std::process::Stdio::piped())
                                         .stderr(std::process::Stdio::piped());
 
@@ -1199,5 +1237,60 @@ fn chrono_iso_now() -> String {
             )
         }
         Err(_) => "1970-01-01T00:00:00Z".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_windows_batch_script() {
+        assert!(is_windows_batch_script("claude"));
+        assert!(is_windows_batch_script("CLAUDE"));
+        assert!(is_windows_batch_script("claude.cmd"));
+        assert!(is_windows_batch_script("C:\\npm\\claude.CMD"));
+        assert!(is_windows_batch_script("run_agent.bat"));
+        assert!(is_windows_batch_script("C:\\tools\\run.BAT"));
+
+        assert!(!is_windows_batch_script("claude.exe"));
+        assert!(!is_windows_batch_script("C:\\bin\\claude.exe"));
+        assert!(!is_windows_batch_script("/usr/local/bin/claude"));
+    }
+
+    #[test]
+    fn test_resolve_agent_command_parts_windows_batch() {
+        let args = ["-p", "--verbose", "--model", "claude-3-5-sonnet"];
+        let (bin, resolved) = resolve_agent_command_parts("claude", &args, true);
+        assert_eq!(bin, "cmd.exe");
+        assert_eq!(resolved[0], "/c");
+        assert_eq!(resolved[1], "claude");
+        assert_eq!(&resolved[2..], args);
+
+        let (bin2, resolved2) = resolve_agent_command_parts("C:\\Users\\user\\AppData\\Roaming\\npm\\claude.cmd", &args, true);
+        assert_eq!(bin2, "cmd.exe");
+        assert_eq!(resolved2[0], "/c");
+        assert_eq!(resolved2[1], "C:\\Users\\user\\AppData\\Roaming\\npm\\claude.cmd");
+        assert_eq!(&resolved2[2..], args);
+    }
+
+    #[test]
+    fn test_resolve_agent_command_parts_windows_exe() {
+        let args = ["-p", "--verbose"];
+        let (bin, resolved) = resolve_agent_command_parts("C:\\tools\\claude.exe", &args, true);
+        assert_eq!(bin, "C:\\tools\\claude.exe");
+        assert_eq!(&resolved[..], args);
+    }
+
+    #[test]
+    fn test_resolve_agent_command_parts_unix() {
+        let args = ["-p", "--verbose"];
+        let (bin, resolved) = resolve_agent_command_parts("claude", &args, false);
+        assert_eq!(bin, "claude");
+        assert_eq!(&resolved[..], args);
+
+        let (bin2, resolved2) = resolve_agent_command_parts("/usr/local/bin/claude", &args, false);
+        assert_eq!(bin2, "/usr/local/bin/claude");
+        assert_eq!(&resolved2[..], args);
     }
 }
