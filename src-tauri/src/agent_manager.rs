@@ -394,6 +394,7 @@ pub async fn start_ghost_dev_session(
 
     let master_args = [
         "-p",
+        "--verbose",
         "--output-format",
         "stream-json",
         "--input-format",
@@ -742,6 +743,7 @@ pub async fn start_ghost_dev_session(
                                     let worker_id = format!("w-{}-{}", tid, chrono_iso_now());
                                     let worker_args = [
                                         "-p",
+                                        "--verbose",
                                         "--output-format",
                                         "stream-json",
                                         "--permission-mode",
@@ -990,8 +992,12 @@ pub async fn stop_ghost_dev_session(app: AppHandle, task_id: String) -> Result<(
         for worker_pid in session.worker_pids.drain(..) {
             kill_process_tree(worker_pid);
         }
-        session.state.status = "interrupted".to_string();
-        session.state.finished_at = Some(chrono_iso_now());
+        if session.state.status != "error" && session.state.status != "done" {
+            session.state.status = "interrupted".to_string();
+        }
+        if session.state.finished_at.is_none() {
+            session.state.finished_at = Some(chrono_iso_now());
+        }
         session.stdin_tx = None;
     }
     let _ = app.emit("ghost-dev:session-updated", ());

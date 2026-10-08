@@ -54,9 +54,14 @@ export function useGhostDevSessions(): UseGhostDevSessionsResult {
       } catch (err) {
         console.warn(`[GhostDev] Notice when stopping session ${taskId}:`, err);
       } finally {
+        const existingSession = sessions.find((s) => s.taskId === taskId);
+        const finalStatus =
+          existingSession?.status === 'error' || existingSession?.status === 'done'
+            ? existingSession.status
+            : 'interrupted';
         agentSessionHistoryRepo.updateSessionStatus(
           taskId,
-          'interrupted',
+          finalStatus,
           new Date().toISOString()
         );
         if (activeSessionId === taskId) {

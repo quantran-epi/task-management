@@ -254,7 +254,7 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
                   )}
 
                   {/* Footer with Stop action */}
-                  {(isRunning || isStopping) && onStopSession && (
+                  {onStopSession && (
                     <div
                       style={{
                         display: 'flex',
@@ -282,8 +282,12 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
                           onOpenChange={(open) =>
                             setPopconfirmOpenTaskId(open ? session.taskId : null)
                           }
-                          title="Dừng Ghost Dev"
-                          description="Dừng ngay lập tức Master Agent và các Worker đang chạy cho tác vụ này? Tiến trình chưa commit sẽ được giữ lại trong worktree."
+                          title={isRunning ? "Dừng Ghost Dev" : "Dừng và chuyển vào lịch sử"}
+                          description={
+                            isRunning
+                              ? "Dừng ngay lập tức Master Agent và các Worker đang chạy cho tác vụ này? Tiến trình chưa commit sẽ được giữ lại trong worktree."
+                              : "Dừng phiên này và chuyển vào tab Lịch sử?"
+                          }
                           onConfirm={() => {
                             setPopconfirmOpenTaskId(null);
                             void onStopSession(session.taskId);
