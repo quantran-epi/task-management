@@ -226,4 +226,68 @@ export const BackupSettingRecordSchema = z.object({
   value: z.unknown(),
 });
 
+export const BackupDocumentSetRecordSchema = z.object({
+  id: uuidSchema,
+  name: z.string().trim().min(1).max(120),
+  description: z.string().optional(),
+  documentIds: z.array(uuidSchema),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const BackupPublishedDocumentRecordSchema = z.object({
+  setId: uuidSchema,
+  documentId: uuidSchema,
+  lastKnownRemoteAt: z.string(),
+  publishedContentHash: z.string().regex(/^[a-f0-9]{64}$/),
+  activeSnapshotId: uuidSchema.optional(),
+  activeAttemptId: uuidSchema.optional(),
+  lastPrimaryState: z
+    .enum([
+      'Never published',
+      'In sync',
+      'Local changes',
+      'Publishing',
+      'Warning',
+      'Failed',
+    ])
+    .optional(),
+});
+
+export const BackupPublishAttemptRecordSchema = z.object({
+  id: uuidSchema,
+  setId: uuidSchema,
+  attemptKey: z.string().optional(),
+  startedAt: z.string(),
+  completedAt: z.string().optional(),
+  durationMs: z.number().int().nonnegative().optional(),
+  status: z.enum([
+    'Never published',
+    'In sync',
+    'Local changes',
+    'Publishing',
+    'Warning',
+    'Failed',
+  ]),
+  addedCount: z.number().int().nonnegative(),
+  changedCount: z.number().int().nonnegative(),
+  removedCount: z.number().int().nonnegative(),
+  unchangedCount: z.number().int().nonnegative(),
+  warningCount: z.number().int().nonnegative(),
+  errorCode: z.string().max(80).optional(),
+  errorMessage: z.string().max(240).optional(),
+});
+
+export const BackupDlpAuditRecordSchema = z.object({
+  id: uuidSchema,
+  setId: uuidSchema,
+  attemptId: uuidSchema.optional(),
+  ruleSetVersion: z.string().min(1),
+  timestamp: z.string(),
+  documentIds: z.array(uuidSchema),
+  contentHashes: z.array(z.string().regex(/^[a-f0-9]{64}$/)),
+  findingCountsByCategory: z.record(z.string(), z.number().int().nonnegative()),
+  userAction: z.enum(['confirmed', 'cancelled', 'auto_passed']),
+});
+
 
