@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import 'fake-indexeddb/auto';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { TaskPlannerDatabase } from '../../src/db';
+import { createNote } from '../../src/db/repositories/noteRepo';
+import { NotesView } from '../../src/views/NotesView';
 import { DocPublishBadge } from '../../src/components/knowledge/DocPublishBadge';
 import { DocEditorPane } from '../../src/components/notes/DocEditorPane';
 import { DocListPane } from '../../src/components/notes/DocListPane';
@@ -110,5 +114,55 @@ describe('document publish badges', () => {
     await vi.advanceTimersByTimeAsync(500);
     expect(onUpdateDoc).toHaveBeenCalledWith(note.id, expect.objectContaining({ body: '# Quy trình thẻ\nNội dung mới' }));
     vi.useRealTimers();
+  });
+});
+
+const databases: TaskPlannerDatabase[] = [];
+
+afterEach(async () => {
+  vi.useRealTimers();
+  await Promise.all(databases.splice(0).map((database) => database.delete()));
+});
+
+describe('Docs knowledge management integration', () => {
+  it('opens and closes one document-set drawer and restores focus', async () => {
+    const database = new TaskPlannerDatabase(`notes-knowledge-${crypto.randomUUID()}`);
+    databases.push(database);
+    await database.open();
+    render(<NotesView db={database} />);
+
+    const trigger = await screen.findByRole('button', { name: 'Bộ tài liệu' });
+    trigger.focus();
+    fireEvent.click(trigger);
+    expect(await screen.findByRole('heading', { name: 'Bộ tài liệu xuất bản' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { name: 'Bộ tài liệu xuất bản' })).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
+  it('keeps cached status visible and marks edits after accepted snapshot as local changes', async () => {
+    vi.useFakeTimers();
+    const database = new TaskPlannerDatabase(`notes-status-${crypto.randomUUID()}`);
+    databases.push(database);
+    await database.open();
+    const created = await createNote({ title: note.title, body: note.body, type: 'document' }, database);
+    await database.documentSets.add({
+      id: 'set-a', name: 'Bộ nghiệp vụ', documentIds: [created.id], createdAt: NOW, updatedAt: NOW,
+    });
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(note.body));
+    const publishedContentHash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+    await database.publishedDocuments.add({
+      setId: 'set-a', documentId: created.id, lastKnownRemoteAt: NOW, publishedContentHash, lastPrimaryState: 'In sync',
+    });
+
+    render(<NotesView db={database} />);
+    fireEvent.click((await screen.findAllByText(note.title))[0]!);
+    expect(await screen.findAllByLabelText('Trạng thái xuất bản: Đã đồng bộ')).not.toHaveLength(0);
+    fireEvent.change(screen.getByPlaceholderText(/Nhập nội dung Markdown/), {
+      target: { value: `${note.body}\nChỉnh sửa sau ảnh chụp`, selectionStart: 40 },
+    });
+    await vi.advanceTimersByTimeAsync(500);
+    await waitFor(() => expect(screen.getAllByLabelText('Trạng thái xuất bản: Có thay đổi cục bộ').length).toBeGreaterThan(0));
+    expect(await database.notes.get(created.id)).toMatchObject({ body: `${note.body}\nChỉnh sửa sau ảnh chụp` });
   });
 });
