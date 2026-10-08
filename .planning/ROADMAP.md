@@ -38,7 +38,7 @@
 
 ### Milestone v1.2: Hybrid GraphRAG Knowledge Assistant MVP
 
-- [ ] **Phase 16: Knowledge Server Foundation, DLP Checks & AST Ingestion** - Optional knowledge service, pre-ingestion sensitive-data warnings with fresh explicit override, AST evidence chunking, and SHA-256 incremental chunk projection.
+- [x] **Phase 16: Knowledge Server Foundation, DLP Checks & AST Ingestion** - Optional knowledge service, pre-ingestion sensitive-data warnings with fresh explicit override, AST evidence chunking, and SHA-256 incremental chunk projection. (completed 2026-10-08)
 - [ ] **Phase 17: Pilot Ontology, Deterministic Extraction & Neo4j Knowledge Graph** - Controlled process 60000006 ontology, composite URNs, deterministic table extraction, evidence classification, and rebuildable Neo4j graph.
 - [ ] **Phase 18: Multi-Modal Hybrid Retrieval Engine** - Full-text identifier search, semantic vector search, bounded 1-3 hop Cypher traversal, and Reciprocal Rank Fusion.
 - [ ] **Phase 19: Grounded Assistant, Provenance Citations & Offline Fallback** - AI Chat Drawer synthesis with source citations, step-by-step path cards, conflict warnings, abstention handling, and local BM25 fallback.
@@ -255,7 +255,7 @@
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
-- [ ] 16-13-PLAN.md — Pilot and client Phase 16 acceptance gates (Wave 9)
+- [x] 16-13-PLAN.md — Pilot and client Phase 16 acceptance gates (Wave 9)
 
 ### Phase 17: Pilot Ontology, Deterministic Extraction & Neo4j Knowledge Graph
 
@@ -344,7 +344,7 @@
 | 13.2. AI Chat Drawer, Item Context Grounding & 9router Ask-Answer Integration | v1.1 | 3/3 | Complete | 2026-10-03 |
 | 14. Knowledge Base Integration (Docs, Linking & AI Retrieval) | v1.1 | 4/4 | Complete | 2026-10-04 |
 | 15. Ghost Dev: Local Claude Code Headless Orchestration with Agent Control Page and Live Git Diff Reviewer | v1.1 | 4/4 | Complete | 2026-10-06 |
-| 16. Knowledge Server Foundation, DLP Checks & AST Ingestion | v1.2 | 12/13 | In Progress|  |
+| 16. Knowledge Server Foundation, DLP Checks & AST Ingestion | v1.2 | 13/13 | Complete   | 2026-10-08 |
 | 17. Pilot Ontology, Deterministic Extraction & Neo4j Knowledge Graph | v1.2 | 0/TBD | Not started | - |
 | 18. Multi-Modal Hybrid Retrieval Engine | v1.2 | 0/TBD | Not started | - |
 | 19. Grounded Assistant, Provenance Citations & Offline Fallback | v1.2 | 0/TBD | Not started | - |
