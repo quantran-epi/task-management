@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Hybrid GraphRAG Knowledge Assistant MVP
-status: executing
+status: completed
 stopped_at: Completed 16-14-PLAN.md
-last_updated: "2026-10-08T14:24:37.540Z"
+last_updated: "2026-10-08T14:28:44.603Z"
 last_activity: 2026-10-08 -- Completed Plan 16-14 Docs publishing preview integration
 progress:
   total_phases: 16
-  completed_phases: 11
+  completed_phases: 12
   total_plans: 53
-  completed_plans: 52
-  percent: 98
+  completed_plans: 53
+  percent: 75
 ---
 
 # Project State
