@@ -6,10 +6,10 @@ current_phase: 15
 current_phase_name: ghost-dev-local-claude-code-headless-orchestration-with-agen
 status: complete
 stopped_at: Phase 15 executed and verified
-last_updated: "2026-10-07T08:12:16.962Z"
-last_activity: 2026-10-07
-last_activity_desc: "Completed quick task 261007-gce: allow choosing claude code executable in ghost dev config"
-state_head: 18d65c719889a9a40075b705c8e6fbabf25e5022
+last_updated: "2026-10-08T07:30:52.017Z"
+last_activity: 2026-10-08
+last_activity_desc: "Completed quick task 261008-jgo: show timer and token count in ghost dev running agent"
+state_head: 9f75db400f6aea8eaccf8c1b7ac9126d2ee819d9
 progress:
   total_phases: 12
   completed_phases: 11
@@ -33,12 +33,14 @@ Phase: 15 (ghost-dev-local-claude-code-headless-orchestration-with-agen) — COM
 Plan: 4 of 4 complete
 Status: Verified (human_needed for desktop smoke check)
 Next recommended run: /gsd-verify-work 15
-Last activity: 2026-10-07 -- Completed quick task 261007-gce: allow choosing claude code executable in ghost dev config
+Last activity: 2026-10-08 -- Completed quick task 261008-jgo: show timer and token count in ghost dev running agent
 
 ### Quick Tasks Completed
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261008-jgo | show timer and token count in ghost dev | 2026-10-08 | 9f75db4 | complete | [261008-jgo-show-timer-and-token-count-in-ghost-dev-](./quick/261008-jgo-show-timer-and-token-count-in-ghost-dev-/) |
+| 261008-j1m | fix DocFolderTree CTA button crowding and panel width | 2026-10-08 | — | complete | [261008-j1m-fix-docfoldertree-cta-button-crowding-an](./quick/261008-j1m-fix-docfoldertree-cta-button-crowding-an/) |
 | 261008-b3b | fix claude executable picker, windows cmd execution, and mcp settings card | 2026-10-08 | 68caa53 | complete | [261008-b3b-fix-claude-executable-picker-and-cmd-exe](./quick/261008-b3b-fix-claude-executable-picker-and-cmd-exe/) |
 | 261007-kc4 | dynamic mcp config with in-chat toggle and authorship fingerprint | 2026-10-07 | 18d65c7 | complete | [261007-kc4-dynamic-mcp-config-with-in-chat-toggle-a](./quick/261007-kc4-dynamic-mcp-config-with-in-chat-toggle-a/) |
 | 261007-epc | fix ghostDevConfig claudePath exactOptionalPropertyTypes build error | 2026-10-07 | — | complete | [261007-epc-fix-ghost-dev-claude-path-exact-optional-property](./quick/261007-epc-fix-ghost-dev-claude-path-exact-optional-property/) |
@@ -121,6 +123,7 @@ Last activity: 2026-10-07 -- Completed quick task 261007-gce: allow choosing cla
 | 261006-ghd | Ghost dev: human-friendly logs, subagent detection, AI response in feedback history, multi-session history | 2026-10-06 | — | complete | [261006-ghd-ghost-dev-human-logs-subagents-feedback-sessions](./quick/261006-ghd-ghost-dev-human-logs-subagents-feedback-sessions/) |
 | 261006-mjh | Fix ghost dev file permission and worktree path alignment | 2026-10-06 | 156164b | complete | [261006-mjh-fix-ghost-dev-file-permission](./quick/261006-mjh-fix-ghost-dev-file-permission/) |
 | 261007-kc4 | dynamic mcp config with in-chat toggle and sidebar authorship fingerprint | 2026-10-07 | 18d65c7 | complete | [261007-kc4-dynamic-mcp-config-with-in-chat-toggle-a](./quick/261007-kc4-dynamic-mcp-config-with-in-chat-toggle-a/) |
+| 261008-jgo | show timer and token count in ghost dev running agent | 2026-10-08 | 9f75db4 | — | [261008-jgo-show-timer-and-token-count-in-ghost-dev-](./quick/261008-jgo-show-timer-and-token-count-in-ghost-dev-/) |
 
 ## Performance Metrics
 
