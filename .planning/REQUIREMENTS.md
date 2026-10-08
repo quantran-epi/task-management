@@ -106,7 +106,7 @@
 - [ ] **INGEST-02**: Before any user-authored document-set name, document title, Markdown body, tag, or other payload text leaves PlannerMate, client-side checks detect PAN, CVV, PIN/PIN block, HSM keys, credentials, and customer PII, show category/document/location with masked context, and require fresh explicit confirmation for every affected publish attempt without any persisted trust bypass or sensitive audit content.
 - [x] **INGEST-03**: Published immutable Markdown snapshots are parsed into versioned section-first AST evidence chunks that preserve headings, tables, fenced code/SQL, ASCII diagrams, duplicate occurrences, exact raw source ranges, and atomic blocks without truncation; an atomic block over 50,000 characters rejects the candidate with exact location and split guidance.
 - [x] **INGEST-04**: Pre-send preview and daemon projection use the same versioned AST/newline-normalization policy and SHA-256 document/chunk hashes to classify added, changed, removed, and unchanged documents and chunks, reuse unchanged content representations, keep occurrence identity separate, and activate a candidate snapshot only after every document succeeds while preserving the prior active snapshot on failure.
-- [ ] **INGEST-05**: User can inspect each document set and member using exactly `Never published`, `In sync`, `Local changes`, `Publishing`, `Warning`, or `Failed`, including subordinate connectivity uncertainty and the 10 newest content-free attempt records, while local Docs CRUD, autosave, folder navigation, and BM25 search continue when the optional knowledge server is disabled, unreachable, or absent.
+- [x] **INGEST-05**: User can inspect each document set and member using exactly `Never published`, `In sync`, `Local changes`, `Publishing`, `Warning`, or `Failed`, including subordinate connectivity uncertainty and the 10 newest content-free attempt records, while local Docs CRUD, autosave, folder navigation, and BM25 search continue when the optional knowledge server is disabled, unreachable, or absent.
 
 ## Future Requirements (Deferred)
 
@@ -184,4 +184,4 @@
 | INGEST-02 | Phase 16 | Pending |
 | INGEST-03 | Phase 16 | Complete |
 | INGEST-04 | Phase 16 | Complete |
-| INGEST-05 | Phase 16 | Pending |
+| INGEST-05 | Phase 16 | Complete |
