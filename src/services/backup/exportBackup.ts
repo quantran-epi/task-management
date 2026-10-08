@@ -12,6 +12,7 @@ export const UNSAFE_OR_EPHEMERAL_SETTING_KEYS = new Set<string>([
   'github_passphrase',
   'backup_passphrase',
   'ninerouter_api_key',
+  'knowledge_server_token',
   'image_api_key',
   'tauri_keyring_migrated',
   'tauri_sqlite_queue',
