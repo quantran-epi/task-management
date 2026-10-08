@@ -187,7 +187,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
   const hasChanges = diffFiles.length > 0;
 
   // Build tree hierarchy for changed files
-  const { treeData, expandedKeys } = useMemo(() => {
+  const { treeData, folderKeys } = useMemo(() => {
     const root: InternalTreeNode = {
       key: '',
       name: '',
@@ -197,7 +197,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
       children: [],
     };
 
-    const folderKeys: string[] = [];
+    const detectedFolderKeys: string[] = [];
 
     diffFiles.forEach((file) => {
       const filePath = file.newPath || file.oldPath;
@@ -223,8 +223,8 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
           });
         } else {
           const folderKey = `${currentPath}/`;
-          if (!folderKeys.includes(folderKey)) {
-            folderKeys.push(folderKey);
+          if (!detectedFolderKeys.includes(folderKey)) {
+            detectedFolderKeys.push(folderKey);
           }
           if (!current.children) current.children = [];
           let folderNode = current.children.find((c) => c.key === folderKey && !c.isLeaf);
@@ -364,9 +364,17 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
 
     return {
       treeData: (root.children || []).map(formatTreeNode),
-      expandedKeys: folderKeys,
+      folderKeys: detectedFolderKeys,
     };
   }, [diffFiles, acting, worktreePath]);
+
+  // Keep folder nodes expanded by default whenever new folders arrive
+  const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
+  React.useEffect(() => {
+    if (folderKeys.length > 0) {
+      setExpandedKeys((prev) => Array.from(new Set([...prev, ...folderKeys])));
+    }
+  }, [folderKeys]);
 
   return (
     <div
@@ -418,7 +426,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
             onChange={(val) => onViewModeChange(val as DiffViewMode)}
             options={[
               { label: 'Unified', value: 'unified' },
-              { label: 'Split', value: 'split' },
+              { label: 'Side-by-side', value: 'split' },
             ]}
           />
 
@@ -428,7 +436,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
             type="text"
             icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
             onClick={() => setIsFullscreen(!isFullscreen)}
-            aria-label={isFullscreen ? 'Thu nhỏ diff' : 'Toàn màn hình diff'}
+            aria-label={isFullscreen ? 'Thoát toàn màn hình diff' : 'Mở rộng diff toàn màn hình'}
           />
 
           {/* Refresh Diff */}
@@ -521,7 +529,9 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
               <Tree
                 showIcon
                 blockNode
-                defaultExpandedKeys={expandedKeys}
+                virtual={false}
+                expandedKeys={expandedKeys}
+                onExpand={(keys) => setExpandedKeys(keys as string[])}
                 selectedKeys={selectedFilePath ? [selectedFilePath] : []}
                 onSelect={(keys) => {
                   const key = keys[0];
