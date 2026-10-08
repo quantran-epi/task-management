@@ -242,7 +242,7 @@
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 16-09-PLAN.md — Safe client, preview-bound DLP gate, and polling (Wave 6)
+- [x] 16-09-PLAN.md — Safe client, preview-bound DLP gate, and polling (Wave 6)
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
@@ -344,7 +344,7 @@
 | 13.2. AI Chat Drawer, Item Context Grounding & 9router Ask-Answer Integration | v1.1 | 3/3 | Complete | 2026-10-03 |
 | 14. Knowledge Base Integration (Docs, Linking & AI Retrieval) | v1.1 | 4/4 | Complete | 2026-10-04 |
 | 15. Ghost Dev: Local Claude Code Headless Orchestration with Agent Control Page and Live Git Diff Reviewer | v1.1 | 4/4 | Complete | 2026-10-06 |
-| 16. Knowledge Server Foundation, DLP Checks & AST Ingestion | v1.2 | 8/13 | In Progress|  |
+| 16. Knowledge Server Foundation, DLP Checks & AST Ingestion | v1.2 | 9/13 | In Progress|  |
 | 17. Pilot Ontology, Deterministic Extraction & Neo4j Knowledge Graph | v1.2 | 0/TBD | Not started | - |
 | 18. Multi-Modal Hybrid Retrieval Engine | v1.2 | 0/TBD | Not started | - |
 | 19. Grounded Assistant, Provenance Citations & Offline Fallback | v1.2 | 0/TBD | Not started | - |
