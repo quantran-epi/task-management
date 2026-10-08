@@ -13,6 +13,7 @@ import {
   Tree,
   Input,
   message,
+  ConfigProvider,
 } from 'antd';
 import type { MenuProps } from 'antd';
 import type { DataNode } from 'antd/es/tree';
@@ -91,6 +92,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchFilter, setSearchFilter] = useState('');
+  const [treeScope, setTreeScope] = useState<'diff' | 'all'>('diff');
 
   // Inline feedback modal state
   const [commentModalOpen, setCommentModalOpen] = useState(false);
@@ -202,9 +204,10 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
     }
   };
 
-  // Build full hierarchy tree from all worktree paths and changed diff files
+  // Build full hierarchy tree from worktree paths and changed diff files
   const treeData = useMemo(() => {
-    const rawTree = buildWorktreeFileTree(allWorktreeFiles, diffFiles);
+    const filesToBuild = treeScope === 'diff' && diffFiles.length > 0 ? [] : allWorktreeFiles;
+    const rawTree = buildWorktreeFileTree(filesToBuild, diffFiles);
     if (!searchFilter.trim()) return rawTree;
 
     const lower = searchFilter.toLowerCase().trim();
@@ -226,32 +229,52 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
     }
 
     return rawTree.map(filterNode).filter((n): n is FileTreeNode => n !== null);
-  }, [allWorktreeFiles, diffFiles, searchFilter]);
+  }, [treeScope, allWorktreeFiles, diffFiles, searchFilter]);
 
-  // Extract all folder keys from treeData to auto-expand directories
-  const folderKeys = useMemo(() => {
-    const keys: string[] = [];
-    function collect(nodes: FileTreeNode[]) {
-      for (const node of nodes) {
-        if (node.isDir || !node.isLeaf) {
-          keys.push(node.key);
-          if (node.children) {
-            collect(node.children);
+  // Extract folder keys containing changed files (diffFiles) or selected file to avoid lag on huge repos
+  const diffFolderKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const df of diffFiles) {
+      const p = (df.newPath || df.oldPath || '').replace(/\\/g, '/');
+      if (!p) continue;
+      const segments = p.split('/').filter(Boolean);
+      let curr = '';
+      for (let i = 0; i < segments.length - 1; i++) {
+        curr = curr ? `${curr}/${segments[i]}` : segments[i]!;
+        keys.add(curr);
+      }
+    }
+    if (selectedFilePath) {
+      const p = selectedFilePath.replace(/\\/g, '/');
+      const segments = p.split('/').filter(Boolean);
+      let curr = '';
+      for (let i = 0; i < segments.length - 1; i++) {
+        curr = curr ? `${curr}/${segments[i]}` : segments[i]!;
+        keys.add(curr);
+      }
+    }
+    // If search filter is active, also expand all matching folders from filtered tree
+    if (searchFilter.trim()) {
+      function collectMatching(nodes: FileTreeNode[]) {
+        for (const n of nodes) {
+          if (n.isDir) {
+            keys.add(n.key);
+            if (n.children) collectMatching(n.children);
           }
         }
       }
+      collectMatching(treeData);
     }
-    collect(treeData);
-    return keys;
-  }, [treeData]);
+    return Array.from(keys);
+  }, [diffFiles, selectedFilePath, searchFilter, treeData]);
 
-  // Keep folder nodes expanded by default whenever new folders arrive
+  // Keep folder nodes containing diffs expanded by default
   const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
   useEffect(() => {
-    if (folderKeys.length > 0) {
-      setExpandedKeys((prev) => Array.from(new Set([...prev, ...folderKeys])));
+    if (diffFolderKeys.length > 0) {
+      setExpandedKeys((prev) => Array.from(new Set([...prev, ...diffFolderKeys])));
     }
-  }, [folderKeys]);
+  }, [diffFolderKeys]);
 
   // Context menu builder for any file/folder item
   const getContextMenuItems = (node: FileTreeNode): NonNullable<MenuProps['items']> => {
@@ -330,23 +353,30 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
   const isSelectedFileChanged = Boolean(selectedFile);
 
   return (
-    <div
-      style={{
-        height: isFullscreen ? '100vh' : '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        backgroundColor: token.colorBgContainer,
-        overflow: 'hidden',
-        ...(isFullscreen
-          ? {
-              position: 'fixed',
-              inset: 0,
-              zIndex: 1100,
-              borderRadius: 0,
-            }
-          : {}),
+    <ConfigProvider
+      theme={{
+        token: {
+          zIndexPopupBase: 2000,
+        },
       }}
     >
+      <div
+        style={{
+          height: isFullscreen ? '100vh' : '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          backgroundColor: token.colorBgContainer,
+          overflow: 'hidden',
+          ...(isFullscreen
+            ? {
+                position: 'fixed',
+                inset: 0,
+                zIndex: 999,
+                borderRadius: 0,
+              }
+            : {}),
+        }}
+      >
       {/* Top Action Toolbar */}
       <div
         style={{
@@ -482,11 +512,16 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
                 }}
               >
                 <span>THƯ MỤC LÀM VIỆC</span>
-                {diffFiles.length > 0 && (
-                  <Tag color="processing" style={{ margin: 0, fontSize: 10 }}>
-                    {diffFiles.length} file đổi
-                  </Tag>
-                )}
+                <Segmented
+                  size="small"
+                  value={treeScope}
+                  onChange={(val) => setTreeScope(val as 'diff' | 'all')}
+                  options={[
+                    { label: `Diff (${diffFiles.length})`, value: 'diff' },
+                    { label: `Tất cả (${allWorktreeFiles.length || diffFiles.length})`, value: 'all' },
+                  ]}
+                  style={{ fontSize: 10 }}
+                />
               </div>
               <Input
                 size="small"
@@ -773,5 +808,6 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
         />
       )}
     </div>
+  </ConfigProvider>
   );
 };

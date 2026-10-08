@@ -227,21 +227,45 @@ export function useGhostDevDiff(worktreePath: string | null): UseGhostDevDiffRes
           void refreshDiff(true);
         });
 
+        let hasPendingFileMutation = false;
+
         unlistenStream = await listen<{ type?: string; content?: string }>('ghost-dev:stream-chunk', (event) => {
           if (event.payload?.type === 'status_change') {
             void refreshDiff(true);
-          } else if (
+            return;
+          }
+
+          const content = event.payload?.content || '';
+
+          // Detect file-mutating tool invocations (Write, Edit, NotebookEdit, Bash)
+          const isMutationToolCall =
+            event.payload?.type === 'tool_call' &&
+            (/"name"\s*:\s*"(?:Write|Edit|NotebookEdit|Bash)"/i.test(content) ||
+              /\[Tool Use\]:\s*(?:Write|Edit|NotebookEdit|Bash)/i.test(content));
+
+          if (isMutationToolCall) {
+            hasPendingFileMutation = true;
+            return;
+          }
+
+          // Refresh diff only when tool result arrives for file-mutation tools
+          const isToolResult =
             event.payload?.type === 'tool_result' ||
-            event.payload?.type === 'tool_call' ||
-            (event.payload?.type === 'log' &&
-              (event.payload?.content?.includes('"tool_result"') ||
-                event.payload?.content?.includes('"tool_use"')))
-          ) {
-            // Debounce git diff to prevent concurrent Windows file handle conflicts during tool execution
-            if (debounceTimer) clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(() => {
-              void refreshDiff(true);
-            }, 600);
+            (event.payload?.type === 'log' && content.includes('"tool_result"'));
+
+          if (isToolResult) {
+            const hasMutation =
+              hasPendingFileMutation ||
+              /(?:Write|Edit|NotebookEdit|Bash)/i.test(content);
+
+            if (hasMutation) {
+              hasPendingFileMutation = false;
+              // Debounce git diff to prevent concurrent disk I/O and UI freezes
+              if (debounceTimer) clearTimeout(debounceTimer);
+              debounceTimer = setTimeout(() => {
+                void refreshDiff(true);
+              }, 1200);
+            }
           }
         });
       } catch (err) {

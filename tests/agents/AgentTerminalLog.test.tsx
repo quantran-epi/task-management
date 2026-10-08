@@ -276,4 +276,70 @@ describe('AgentTerminalLog Component Tests', () => {
     // Subagent should no longer be in the tab list
     expect(screen.queryByText(/tester \(subage\)/)).not.toBeInTheDocument();
   });
+
+  it('supports ArrowUp and ArrowDown command history navigation', () => {
+    const onSendMock = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <AgentTerminalLog
+        logs={[]}
+        sending={false}
+        isRunning={false}
+        onSendFeedback={onSendMock}
+      />
+    );
+
+    const input = screen.getByRole('textbox', { name: /Nhập hướng dẫn cho Master Agent/i });
+    const sendBtn = screen.getByRole('button', { name: /Gửi chỉ đạo/i });
+
+    // Send first message
+    fireEvent.change(input, { target: { value: 'npm run test' } });
+    fireEvent.click(sendBtn);
+
+    // Send second message
+    fireEvent.change(input, { target: { value: 'git status' } });
+    fireEvent.click(sendBtn);
+
+    expect(onSendMock).toHaveBeenCalledTimes(2);
+
+    // Press ArrowUp: should retrieve 'git status'
+    fireEvent.keyDown(input, { key: 'ArrowUp', code: 'ArrowUp' });
+    expect(input).toHaveValue('git status');
+
+    // Press ArrowUp: should retrieve 'npm run test'
+    fireEvent.keyDown(input, { key: 'ArrowUp', code: 'ArrowUp' });
+    expect(input).toHaveValue('npm run test');
+
+    // Press ArrowDown: should go back to 'git status'
+    fireEvent.keyDown(input, { key: 'ArrowDown', code: 'ArrowDown' });
+    expect(input).toHaveValue('git status');
+
+    // Press ArrowDown: should restore draft text (empty)
+    fireEvent.keyDown(input, { key: 'ArrowDown', code: 'ArrowDown' });
+    expect(input).toHaveValue('');
+  });
+
+  it('displays skill autocomplete overlay when starting with slash and accepts tab/click', async () => {
+    render(
+      <AgentTerminalLog
+        logs={[]}
+        sending={false}
+        isRunning={false}
+        onSendFeedback={vi.fn()}
+      />
+    );
+
+    const input = screen.getByRole('textbox', { name: /Nhập hướng dẫn cho Master Agent/i });
+
+    // Type /gsd
+    fireEvent.change(input, { target: { value: '/gsd' } });
+
+    // Autocomplete dropdown should be rendered
+    expect(await screen.findByText(/GỢI Ý KỸ NĂNG/i)).toBeInTheDocument();
+    expect(screen.getByText('/gsd-quick')).toBeInTheDocument();
+
+    // Press Tab to autocomplete selected skill
+    fireEvent.keyDown(input, { key: 'Tab', code: 'Tab' });
+    expect(input).toHaveValue('/gsd-quick ');
+  });
 });

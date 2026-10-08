@@ -39,6 +39,7 @@ Last activity: 2026-10-08 -- Completed quick task 261008-jgo: show timer and tok
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261008-pop | fix diff popover zindex, terminal chat history and skill autocomplete, optimize diff refresh | 2026-10-08 | — | complete | [261008-fix-popover-history-autocomplete-diff-perf](./quick/261008-fix-popover-history-autocomplete-diff-perf/) |
 | 261008-jgo | show timer and token count in ghost dev | 2026-10-08 | 9f75db4 | complete | [261008-jgo-show-timer-and-token-count-in-ghost-dev-](./quick/261008-jgo-show-timer-and-token-count-in-ghost-dev-/) |
 | 261008-j1m | fix DocFolderTree CTA button crowding and panel width | 2026-10-08 | — | complete | [261008-j1m-fix-docfoldertree-cta-button-crowding-an](./quick/261008-j1m-fix-docfoldertree-cta-button-crowding-an/) |
 | 261008-b3b | fix claude executable picker, windows cmd execution, and mcp settings card | 2026-10-08 | 68caa53 | complete | [261008-b3b-fix-claude-executable-picker-and-cmd-exe](./quick/261008-b3b-fix-claude-executable-picker-and-cmd-exe/) |
