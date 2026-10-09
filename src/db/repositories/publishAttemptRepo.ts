@@ -38,25 +38,70 @@ export async function reconcileRemoteAttempt(
     'rw',
     [db.publishAttempts, db.publishedDocuments, db.documentSets],
     async () => {
-      // Preserve existing submittedDocuments manifest if input omits it (D-08, D-10)
+      // Retrieve existing stored attempt to check manifest
+      const existing = await db.publishAttempts.get(validatedAttempt.id);
+
+      // Determine durable frozen manifest: either from incoming attempt or existing stored attempt
+      const manifest = validatedAttempt.submittedDocuments ?? existing?.submittedDocuments;
+
       let attemptToStore = validatedAttempt;
-      if (!validatedAttempt.submittedDocuments) {
-        const existing = await db.publishAttempts.get(validatedAttempt.id);
-        if (existing?.submittedDocuments) {
-          attemptToStore = {
-            ...validatedAttempt,
-            submittedDocuments: existing.submittedDocuments,
-          };
+      if (!validatedAttempt.submittedDocuments && manifest) {
+        attemptToStore = {
+          ...validatedAttempt,
+          submittedDocuments: manifest,
+        };
+      }
+
+      // If status is terminal 'In sync', replacement validation and atomic replacement apply
+      // only when publishedDocuments is explicitly supplied or manifest is present
+      if (validatedAttempt.status === 'In sync') {
+        if (input.publishedDocuments !== undefined) {
+          if (manifest) {
+            // Replacement rows must exactly match the frozen manifest one-to-one
+            if (validatedDocs.length !== manifest.length) {
+              throw new Error(
+                `Replacement publishedDocuments count (${validatedDocs.length}) does not match submitted manifest count (${manifest.length})`
+              );
+            }
+
+            // Check each doc in manifest has exact correspondence in validatedDocs
+            const docMap = new Map(validatedDocs.map((d) => [d.documentId, d]));
+            for (const item of manifest) {
+              const doc = docMap.get(item.documentId);
+              if (!doc) {
+                throw new Error(`Replacement publishedDocuments missing documentId ${item.documentId}`);
+              }
+              if (doc.publishedContentHash !== item.submittedContentHash) {
+                throw new Error(
+                  `Replacement document ${item.documentId} hash ${doc.publishedContentHash} does not match submitted hash ${item.submittedContentHash}`
+                );
+              }
+              if (!doc.activeSnapshotId) {
+                throw new Error(
+                  `Replacement document ${item.documentId} requires activeSnapshotId`
+                );
+              }
+            }
+          }
+
+          // Delete all old rows for set (removes stale rows)
+          await db.publishedDocuments.where('setId').equals(setId).delete();
+
+          // BulkPut replacement rows
+          if (validatedDocs.length > 0) {
+            await db.publishedDocuments.bulkPut(validatedDocs);
+          }
+
+          // Retire frozen manifest on terminal success only when replacement succeeds
+          if (attemptToStore.submittedDocuments) {
+            const { submittedDocuments: _, ...retired } = attemptToStore;
+            attemptToStore = retired as PublishAttemptCache;
+          }
         }
       }
 
       // Put attempt
       await db.publishAttempts.put(attemptToStore);
-
-      // Put published document metadata
-      if (validatedDocs.length > 0) {
-        await db.publishedDocuments.bulkPut(validatedDocs);
-      }
 
       // Bound history: keep exactly newest 10 attempts for this set (D-29)
       const allAttemptsForSet = await db.publishAttempts
