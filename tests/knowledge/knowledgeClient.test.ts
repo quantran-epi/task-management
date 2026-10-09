@@ -276,4 +276,150 @@ describe('strict fixed-route knowledge client', () => {
     expect(err.message).not.toContain(canary);
     expect(err.serverCode).toBeUndefined();
   });
+
+  describe('createPublishAttempt frozen manifest persistence (D-06, D-08, D-10, D-12)', () => {
+    it('persists ordered submitted documents before returning accepted attempt', async () => {
+      const setId = generateId();
+      const docId1 = generateId();
+      const docId2 = generateId();
+      const hash1 = '1'.repeat(64);
+      const hash2 = '2'.repeat(64);
+
+      const snapshot = {
+        setId,
+        setName: 'Test Set',
+        chunkingPolicyVersion: 'v1',
+        documents: [
+          {
+            documentId: docId1,
+            title: 'Doc 1',
+            body: '# Body 1',
+            tags: ['tag1'],
+            contentHash: hash1,
+            chunks: [],
+          },
+          {
+            documentId: docId2,
+            title: 'Doc 2',
+            body: '# Body 2',
+            tags: ['tag2'],
+            contentHash: hash2,
+            chunks: [],
+          },
+        ],
+      };
+
+      const serverAttempt = attempt({ setId });
+      const reconcile = vi.fn();
+
+      const client = createKnowledgeClient({
+        baseUrl: 'https://knowledge.example.com',
+        token: 'token',
+        fetcher: vi.fn(async () => jsonResponse(serverAttempt, 202)),
+        reconcile,
+      });
+
+      const res = await client.createPublishAttempt(snapshot, 'attempt-key-1');
+      expect(res.attemptId).toBe(serverAttempt.attemptId);
+
+      expect(reconcile).toHaveBeenCalledOnce();
+      const reconcileArg = reconcile.mock.calls[0]![0];
+      expect(reconcileArg.attempt.id).toBe(serverAttempt.attemptId);
+      expect(reconcileArg.attempt.submittedDocuments).toEqual([
+        { documentId: docId1, submittedContentHash: hash1 },
+        { documentId: docId2, submittedContentHash: hash2 },
+      ]);
+    });
+
+    it('rejects before cache mutation if server response setId does not match snapshot.setId', async () => {
+      const snapshot = {
+        setId: generateId(),
+        setName: 'Mismatch Set',
+        chunkingPolicyVersion: 'v1',
+        documents: [],
+      };
+
+      const mismatchedAttempt = attempt({ setId: generateId() }); // Different setId!
+      const reconcile = vi.fn();
+
+      const client = createKnowledgeClient({
+        baseUrl: 'https://knowledge.example.com',
+        token: 'token',
+        fetcher: vi.fn(async () => jsonResponse(mismatchedAttempt, 202)),
+        reconcile,
+      });
+
+      await expect(
+        client.createPublishAttempt(snapshot, 'attempt-key-mismatch')
+      ).rejects.toThrow();
+
+      expect(reconcile).not.toHaveBeenCalled();
+    });
+
+    it('rejects if reconcile cache-write fails and does not report accepted attempt', async () => {
+      const snapshot = {
+        setId: generateId(),
+        setName: 'Cache Fail Set',
+        chunkingPolicyVersion: 'v1',
+        documents: [],
+      };
+
+      const serverAttempt = attempt({ setId: snapshot.setId });
+      const reconcile = vi.fn().mockRejectedValue(new Error('IndexedDB quota error'));
+
+      const client = createKnowledgeClient({
+        baseUrl: 'https://knowledge.example.com',
+        token: 'token',
+        fetcher: vi.fn(async () => jsonResponse(serverAttempt, 202)),
+        reconcile,
+      });
+
+      await expect(
+        client.createPublishAttempt(snapshot, 'attempt-key-fail')
+      ).rejects.toThrow('IndexedDB quota error');
+    });
+
+    it('subsequent mutation of local snapshot documents does not change persisted hashes or IDs', async () => {
+      const setId = generateId();
+      const docId = generateId();
+      const hash = 'a'.repeat(64);
+
+      const docObj = {
+        documentId: docId,
+        title: 'Original Title',
+        body: 'Original Body',
+        tags: ['original'],
+        contentHash: hash,
+        chunks: [],
+      };
+
+      const snapshot = {
+        setId,
+        setName: 'Mutate Set',
+        chunkingPolicyVersion: 'v1',
+        documents: [docObj],
+      };
+
+      const serverAttempt = attempt({ setId });
+      const reconcile = vi.fn();
+
+      const client = createKnowledgeClient({
+        baseUrl: 'https://knowledge.example.com',
+        token: 'token',
+        fetcher: vi.fn(async () => jsonResponse(serverAttempt, 202)),
+        reconcile,
+      });
+
+      await client.createPublishAttempt(snapshot, 'attempt-key-mutate');
+
+      // Now mutate local docObj
+      docObj.contentHash = 'f'.repeat(64);
+      docObj.documentId = generateId();
+
+      const reconcileArg = reconcile.mock.calls[0]![0];
+      expect(reconcileArg.attempt.submittedDocuments).toEqual([
+        { documentId: docId, submittedContentHash: hash },
+      ]);
+    });
+  });
 });

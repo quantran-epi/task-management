@@ -295,7 +295,30 @@ export function createKnowledgeClient(options: CreateKnowledgeClientOptions) {
           ...(signal ? { signal } : {}),
         }
       );
-      await reconcileAttempt(resource);
+
+      // Require response setId to match frozen snapshot.setId (T-16-23-01)
+      if (resource.setId !== snapshot.setId) {
+        throw new KnowledgeClientError(
+          'INVALID_RESPONSE',
+          `Knowledge server response setId (${resource.setId}) does not match snapshot setId (${snapshot.setId})`
+        );
+      }
+
+      // Map snapshot documents in exact submitted order to content-free frozen manifest (D-06, D-08, D-10)
+      const submittedDocuments = snapshot.documents.map((doc) => ({
+        documentId: doc.documentId,
+        submittedContentHash: doc.contentHash,
+      }));
+
+      // Reconcile into local cache with frozen manifest before returning accepted resource (D-08, D-10)
+      await reconcile({
+        attempt: {
+          ...attemptCache(resource),
+          attemptKey,
+          submittedDocuments,
+        },
+      });
+
       return resource;
     },
 
