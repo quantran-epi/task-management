@@ -341,4 +341,130 @@ describe('Schema V10 knowledge backup lifecycle', () => {
       expect(rolledBackMsg?.content).toBe('Original pre-restore content');
     });
   });
+
+  describe('Frozen submitted document manifest backup lifecycle (D-06, D-08, D-10, D-18)', () => {
+    it('exports, validates, restores, and rolls back accepted attempt with frozen manifest', async () => {
+      const attemptWithManifest: PublishAttemptCache = {
+        id: ATTEMPT_ID,
+        setId: SET_ID,
+        attemptKey: 'attempt-key-manifest',
+        startedAt: NOW,
+        completedAt: NOW,
+        durationMs: 120,
+        status: 'Publishing',
+        addedCount: 1,
+        changedCount: 0,
+        removedCount: 0,
+        unchangedCount: 0,
+        warningCount: 0,
+        submittedDocuments: [
+          {
+            documentId: NOTE_ID,
+            submittedContentHash: HASH,
+          },
+        ],
+      };
+
+      await sourceDb.notes.add(note);
+      await sourceDb.documentSets.add(documentSet);
+      await sourceDb.publishAttempts.add(attemptWithManifest);
+
+      const envelope = await exportBackupPayload(sourceDb);
+      const validation = validateBackupPayload(envelope);
+
+      expect(validation.valid).toBe(true);
+      expect(envelope.tables.publishAttempts).toEqual([attemptWithManifest]);
+
+      // Serialized payload must not contain content-bearing or credential fields
+      const serialized = JSON.stringify(envelope.tables.publishAttempts);
+      expect(serialized).not.toContain('Canonical Markdown');
+      expect(serialized).not.toContain('Bearer');
+      expect(serialized).not.toContain('token');
+
+      // Seed restoredDb with pre-existing data and restore
+      await seedKnowledge(restoredDb, 'pre-existing');
+      await restoreBackupPayload(envelope, restoredDb);
+
+      const restoredAttempt = await restoredDb.publishAttempts.get(ATTEMPT_ID);
+      expect(restoredAttempt).toEqual(attemptWithManifest);
+
+      // Rollback restores original state
+      await rollbackToSnapshot(restoredDb);
+      const rolledBack = await restoredDb.publishAttempts.get(ATTEMPT_ID);
+      expect(rolledBack?.submittedDocuments).toBeUndefined();
+    });
+
+    it('rejects backup payload with malformed hash, duplicate IDs, or content-bearing fields in manifest', async () => {
+      await seedKnowledge(sourceDb);
+      const envelope = await exportBackupPayload(sourceDb);
+
+      // Malformed hash (not 64 hex or uppercase)
+      const badHashPayload: any = {
+        ...envelope,
+        tables: {
+          ...envelope.tables,
+          publishAttempts: [
+            {
+              ...publishAttempt,
+              submittedDocuments: [
+                { documentId: NOTE_ID, submittedContentHash: 'not-a-valid-hash' },
+              ],
+            },
+          ],
+        },
+      };
+      const resBadHash = validateBackupPayload(badHashPayload);
+      expect(resBadHash.valid).toBe(false);
+      expect(
+        resBadHash.errors.some((e) => e.table === 'publishAttempts')
+      ).toBe(true);
+
+      // Duplicate document IDs in manifest
+      const duplicateDocPayload: any = {
+        ...envelope,
+        tables: {
+          ...envelope.tables,
+          publishAttempts: [
+            {
+              ...publishAttempt,
+              submittedDocuments: [
+                { documentId: NOTE_ID, submittedContentHash: HASH },
+                { documentId: NOTE_ID, submittedContentHash: 'b'.repeat(64) },
+              ],
+            },
+          ],
+        },
+      };
+      const resDuplicate = validateBackupPayload(duplicateDocPayload);
+      expect(resDuplicate.valid).toBe(false);
+      expect(
+        resDuplicate.errors.some((e) => e.table === 'publishAttempts')
+      ).toBe(true);
+
+      // Content-bearing field inside manifest entry
+      const canaryPayload: any = {
+        ...envelope,
+        tables: {
+          ...envelope.tables,
+          publishAttempts: [
+            {
+              ...publishAttempt,
+              submittedDocuments: [
+                {
+                  documentId: NOTE_ID,
+                  submittedContentHash: HASH,
+                  body: '# Leaked Body Content',
+                },
+              ],
+            },
+          ],
+        },
+      };
+      const resCanary = validateBackupPayload(canaryPayload);
+      expect(resCanary.valid).toBe(false);
+      expect(
+        resCanary.errors.some((e) => e.table === 'publishAttempts')
+      ).toBe(true);
+    });
+  });
 });

@@ -271,29 +271,45 @@ export const BackupPublishedDocumentRecordSchema = z.object({
     .optional(),
 });
 
-export const BackupPublishAttemptRecordSchema = z.object({
-  id: uuidSchema,
-  setId: uuidSchema,
-  attemptKey: z.string().optional(),
-  startedAt: isoDateTimeSchema,
-  completedAt: isoDateTimeSchema.optional(),
-  durationMs: z.number().int().nonnegative().optional(),
-  status: z.enum([
-    'Never published',
-    'In sync',
-    'Local changes',
-    'Publishing',
-    'Warning',
-    'Failed',
-  ]),
-  addedCount: z.number().int().nonnegative(),
-  changedCount: z.number().int().nonnegative(),
-  removedCount: z.number().int().nonnegative(),
-  unchangedCount: z.number().int().nonnegative(),
-  warningCount: z.number().int().nonnegative(),
-  errorCode: z.string().max(80).optional(),
-  errorMessage: z.string().max(240).optional(),
-});
+export const BackupFrozenSubmittedDocumentSchema = z
+  .object({
+    documentId: uuidSchema,
+    submittedContentHash: z.string().regex(/^[a-f0-9]{64}$/, 'Must be 64-character lowercase hex SHA-256 hash'),
+  })
+  .strict();
+
+export const BackupPublishAttemptRecordSchema = z
+  .object({
+    id: uuidSchema,
+    setId: uuidSchema,
+    attemptKey: z.string().optional(),
+    startedAt: isoDateTimeSchema,
+    completedAt: isoDateTimeSchema.optional(),
+    durationMs: z.number().int().nonnegative().optional(),
+    status: z.enum([
+      'Never published',
+      'In sync',
+      'Local changes',
+      'Publishing',
+      'Warning',
+      'Failed',
+    ]),
+    addedCount: z.number().int().nonnegative(),
+    changedCount: z.number().int().nonnegative(),
+    removedCount: z.number().int().nonnegative(),
+    unchangedCount: z.number().int().nonnegative(),
+    warningCount: z.number().int().nonnegative(),
+    errorCode: z.string().max(80).optional(),
+    errorMessage: z.string().max(240).optional(),
+    submittedDocuments: z
+      .array(BackupFrozenSubmittedDocumentSchema)
+      .refine(
+        (items) => new Set(items.map((i) => i.documentId)).size === items.length,
+        'Duplicate document IDs are not allowed in submittedDocuments'
+      )
+      .optional(),
+  })
+  .strict();
 
 export const BackupDlpAuditRecordSchema = z.object({
   id: uuidSchema,
