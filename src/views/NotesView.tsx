@@ -30,7 +30,7 @@ import {
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
-import type { DocumentSet, Note, NoteEntityType } from '../types/models';
+import type { DocumentSet, Note, NoteEntityType, PublishPrimaryState } from '../types/models';
 import {
   deleteNote,
   updateNote,
@@ -51,8 +51,10 @@ import { DocumentSetDrawer } from '../components/knowledge/DocumentSetDrawer';
 import { PublishPreviewModal } from '../components/knowledge/PublishPreviewModal';
 import type { DocumentSetFormValue } from '../components/knowledge/DocumentSetForm';
 import {
+  computeSha256,
   createDocumentSet,
   getDocumentPublishStatuses,
+  normalizeMarkdownForHash,
   updateDocumentSet,
   type DocumentPublishStatus,
 } from '../db/repositories/documentSetRepo';
@@ -231,6 +233,8 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
   const [publishSession, setPublishSession] = useState<PublishSession | null>(null);
   const [publishPreview, setPublishPreview] = useState<ChangePreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [reconcilingAttemptId, setReconcilingAttemptId] = useState<string>();
+  const [reconciliationErrorsBySet, setReconciliationErrorsBySet] = useState<Record<string, string>>({});
 
   // Save preferences
   const handleLayoutModeChange = (mode: NotesLayoutMode) => {
@@ -355,6 +359,48 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
 
   const documentSets = useLiveQuery(() => db.documentSets.toArray(), [db]);
   const publishAttempts = useLiveQuery(() => db.publishAttempts.toArray(), [db]);
+  const publishedDocuments = useLiveQuery(() => db.publishedDocuments.toArray(), [db]);
+  const noteHashes = useLiveQuery(async () => {
+    const entries = await Promise.all(
+      (allNotes ?? [])
+        .filter((note) => note.type !== 'folder' && !note.deletedAt)
+        .map(async (note) => [note.id, await computeSha256(normalizeMarkdownForHash(note.body))] as const)
+    );
+    return Object.fromEntries(entries) as Record<string, string>;
+  }, [allNotes], {} as Record<string, string>);
+  const setStatus = useMemo(() => {
+    const statesBySet: Record<string, PublishPrimaryState> = {};
+    const activeAttemptIdsBySet: Record<string, string> = {};
+    for (const set of documentSets ?? []) {
+      const attempts = (publishAttempts ?? [])
+        .filter((attempt) => attempt.setId === set.id)
+        .sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt));
+      const publishing = attempts.find((attempt) => attempt.status === 'Publishing');
+      if (publishing) {
+        statesBySet[set.id] = 'Publishing';
+        activeAttemptIdsBySet[set.id] = publishing.id;
+        continue;
+      }
+      const newestTerminal = attempts[0];
+      if (newestTerminal?.status === 'Failed' || newestTerminal?.status === 'Warning') {
+        statesBySet[set.id] = newestTerminal.status;
+        continue;
+      }
+      const metadata = (publishedDocuments ?? []).filter((item) => item.setId === set.id);
+      if (metadata.length === 0) {
+        statesBySet[set.id] = 'Never published';
+        continue;
+      }
+      const metadataById = new Map(metadata.map((item) => [item.documentId, item]));
+      const membershipMatches = metadata.length === set.documentIds.length &&
+        set.documentIds.every((documentId) => metadataById.has(documentId));
+      const hashesMatch = membershipMatches && set.documentIds.every((documentId) =>
+        noteHashes?.[documentId] === metadataById.get(documentId)?.publishedContentHash
+      );
+      statesBySet[set.id] = hashesMatch ? 'In sync' : 'Local changes';
+    }
+    return { statesBySet, activeAttemptIdsBySet };
+  }, [documentSets, publishAttempts, publishedDocuments, noteHashes]);
   const cachedAt = useMemo(() => {
     const timestamps = Object.values(publishStatuses ?? {}).flatMap((status) =>
       status.containingSets.map((set) => {
@@ -371,6 +417,46 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
   const handleSaveDocumentSet = async (setId: string | undefined, value: DocumentSetFormValue) => {
     if (setId) await updateDocumentSet(setId, value, db);
     else await createDocumentSet(value, db);
+  };
+
+  const handleReconcileAttempt = async (setId: string, attemptId: string) => {
+    if (!isConfigured || reconcilingAttemptId) return;
+    setReconcilingAttemptId(attemptId);
+    setReconciliationErrorsBySet((current) => {
+      const next = { ...current };
+      delete next[setId];
+      return next;
+    });
+    try {
+      const cachedAttempt = await db.publishAttempts.get(attemptId);
+      if (!cachedAttempt?.submittedDocuments?.length) {
+        setReconciliationErrorsBySet((current) => ({
+          ...current,
+          [setId]: 'Không thể tiếp tục kiểm tra: thiếu ảnh chụp đã gửi được lưu cục bộ.',
+        }));
+        return;
+      }
+      const client = createKnowledgeClient({
+        baseUrl: knowledgeConfig.baseUrl,
+        token: knowledgeConfig.token,
+        db,
+      });
+      const session = new PublishSession({ client, db });
+      const result = await session.pollAcceptedAttempt(attemptId);
+      if (result.uncertain) {
+        setReconciliationErrorsBySet((current) => ({
+          ...current,
+          [setId]: 'Mất kết nối — chưa xác định kết quả.',
+        }));
+      }
+    } catch {
+      setReconciliationErrorsBySet((current) => ({
+        ...current,
+        [setId]: 'Không thể kiểm tra trạng thái. Kiểm tra kết nối rồi thử lại.',
+      }));
+    } finally {
+      setReconcilingAttemptId(undefined);
+    }
   };
 
   const handlePreviewDocumentSet = async (set: DocumentSet) => {
@@ -1110,6 +1196,10 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
         sets={documentSets ?? []}
         notes={allNotes ?? []}
         attempts={publishAttempts ?? []}
+        statesBySet={setStatus.statesBySet}
+        activeAttemptIdsBySet={setStatus.activeAttemptIdsBySet}
+        {...(reconcilingAttemptId ? { reconcilingAttemptId } : {})}
+        reconciliationErrorsBySet={reconciliationErrorsBySet}
         configured={isConfigured}
         loading={previewLoading}
         creating={creatingDocumentSet}
@@ -1123,6 +1213,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
         onCancelCreate={() => setCreatingDocumentSet(false)}
         onSave={handleSaveDocumentSet}
         onPreview={handlePreviewDocumentSet}
+        onReconcileAttempt={handleReconcileAttempt}
         onOpenSettings={() => { window.location.hash = '#/settings'; }}
       />
 

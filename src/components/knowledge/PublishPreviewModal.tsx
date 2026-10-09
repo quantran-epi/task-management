@@ -110,10 +110,10 @@ export function PublishPreviewModal({ open, preview, session, documentTitles = {
           setPublishStatus(pollResult.status);
           setUncertain(Boolean(pollResult.uncertain));
           if (pollResult.status === 'Failed') {
-            const err = pollResult.errorMessage || 'Máy chủ gặp lỗi khi xử lý ảnh chụp.';
+            const err = pollResult.error?.message || 'Máy chủ gặp lỗi khi xử lý ảnh chụp.';
             setPublishError(err);
             onAnnounce?.('Xuất bản thất bại.');
-          } else if (pollResult.status === 'In sync' || pollResult.status === 'Local changes') {
+          } else if (pollResult.status === 'In sync') {
             onAnnounce?.('Đã xuất bản bộ tài liệu.');
           } else if (pollResult.uncertain) {
             onAnnounce?.('Mất kết nối — chưa xác định kết quả.');
@@ -151,7 +151,7 @@ export function PublishPreviewModal({ open, preview, session, documentTitles = {
           status={publishStatus}
           conflict={conflict}
           uncertain={uncertain}
-          error={publishError}
+          {...(publishError ? { error: publishError } : {})}
           {...(onOpenStatus ? { onOpenStatus } : {})}
           onClose={closeDuringPublish}
         />

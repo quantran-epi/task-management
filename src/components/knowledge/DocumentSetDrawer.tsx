@@ -38,6 +38,10 @@ export interface DocumentSetDrawerProps {
   attempts?: readonly PublishAttemptCache[];
   selectedSetId?: string;
   state?: PublishPrimaryState;
+  statesBySet?: Readonly<Record<string, PublishPrimaryState>>;
+  activeAttemptIdsBySet?: Readonly<Record<string, string>>;
+  reconcilingAttemptId?: string;
+  reconciliationErrorsBySet?: Readonly<Record<string, string>>;
   activeSetId?: string;
   activeSummary?: string;
   cachedAt?: string;
@@ -49,6 +53,7 @@ export interface DocumentSetDrawerProps {
   onClose: () => void;
   onSave: (setId: string | undefined, value: DocumentSetFormValue) => void | Promise<void>;
   onPreview: (set: DocumentSet) => void;
+  onReconcileAttempt?: (setId: string, attemptId: string) => void | Promise<void>;
   onCreate?: () => void;
   onCancelCreate?: () => void;
   onOpenSettings?: () => void;
@@ -85,8 +90,11 @@ export function DocumentSetDrawer(props: DocumentSetDrawerProps) {
 
   const selectedId = props.selectedSetId ?? internalSelectedId;
   const selected = !isCreating ? liveSets?.find((set) => set.id === selectedId) : undefined;
-  const state = props.state ?? 'Never published';
+  const stateForSet = (setId: string): PublishPrimaryState =>
+    props.statesBySet?.[setId] ?? (setId === selectedId ? props.state : undefined) ?? 'Never published';
+  const state = selected ? stateForSet(selected.id) : 'Never published';
   const stateUi = STATE_UI[state];
+  const activeAttemptId = selected ? props.activeAttemptIdsBySet?.[selected.id] : undefined;
   const previewDisabled = !selected?.documentIds.length || !props.configured || props.activeSetId === selected?.id || state === 'Publishing';
 
   return (
@@ -134,12 +142,18 @@ export function DocumentSetDrawer(props: DocumentSetDrawerProps) {
           ) : (
             <List
               dataSource={liveSets}
-              renderItem={(set) => (
-                <List.Item actions={[<Button key="open" onClick={() => setInternalSelectedId(set.id)}>Mở chi tiết</Button>]}>
-                  <List.Item.Meta title={<Tooltip title={set.name}>{set.name}</Tooltip>} description={`${set.documentIds.length} tài liệu`} />
-                  <Tag icon={STATE_UI['Never published'].icon}>{STATE_UI['Never published'].label}</Tag>
-                </List.Item>
-              )}
+              renderItem={(set) => {
+                const rowState = stateForSet(set.id);
+                const rowStateUi = STATE_UI[rowState];
+                return (
+                  <List.Item actions={[<Button key="open" onClick={() => setInternalSelectedId(set.id)}>Mở chi tiết</Button>]}>
+                    <List.Item.Meta title={<Tooltip title={set.name}>{set.name}</Tooltip>} description={`${set.documentIds.length} tài liệu`} />
+                    <Tooltip title={rowStateUi.label}>
+                      <Tag color={rowStateUi.color} icon={rowStateUi.icon}>{rowStateUi.label}</Tag>
+                    </Tooltip>
+                  </List.Item>
+                );
+              }}
             />
           )
         ) : (
@@ -151,6 +165,18 @@ export function DocumentSetDrawer(props: DocumentSetDrawerProps) {
             </Space>
             {props.offline && props.cachedAt && <Alert type="warning" showIcon message={`Dữ liệu trạng thái gần nhất: ${props.cachedAt}`} description="Không thể tải trạng thái từ Knowledge Server. Bạn vẫn có thể chỉnh sửa và tìm kiếm tài liệu cục bộ. Kiểm tra kết nối rồi thử lại." />}
             {!props.configured && <Alert type="info" showIcon message="Chưa cấu hình Knowledge Server." action={<Button onClick={props.onOpenSettings}>Mở cài đặt</Button>} />}
+            {selected && props.reconciliationErrorsBySet?.[selected.id] && (
+              <Alert type="error" showIcon message={props.reconciliationErrorsBySet[selected.id]} />
+            )}
+            {state === 'Publishing' && activeAttemptId && props.onReconcileAttempt && (
+              <Button
+                loading={props.reconcilingAttemptId === activeAttemptId}
+                disabled={!props.configured || props.reconcilingAttemptId === activeAttemptId}
+                onClick={() => props.onReconcileAttempt?.(selected.id, activeAttemptId)}
+              >
+                Kiểm tra trạng thái
+              </Button>
+            )}
             <DocumentSetForm
               notes={liveNotes}
               initialSet={selected}

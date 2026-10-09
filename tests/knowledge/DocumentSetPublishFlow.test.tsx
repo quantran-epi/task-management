@@ -134,6 +134,63 @@ describe('document-set management', () => {
     expect(screen.getByText(`Dữ liệu trạng thái gần nhất: ${NOW}`)).toBeInTheDocument();
   });
 
+  it('renders each list row and selected detail from its own set state', () => {
+    const secondSet = { ...documentSet, id: 'set-b', name: 'Bộ thứ hai' };
+    const { rerender } = render(
+      <DocumentSetDrawer
+        open
+        sets={[documentSet, secondSet]}
+        notes={notes}
+        attempts={[]}
+        statesBySet={{ 'set-a': 'In sync', 'set-b': 'Local changes' }}
+        configured
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+        onPreview={vi.fn()}
+      />
+    );
+    expect(screen.getByText('Đã đồng bộ')).toBeInTheDocument();
+    expect(screen.getByText('Có thay đổi cục bộ')).toBeInTheDocument();
+
+    rerender(
+      <DocumentSetDrawer
+        open
+        sets={[documentSet, secondSet]}
+        notes={notes}
+        attempts={[]}
+        selectedSetId="set-b"
+        statesBySet={{ 'set-a': 'In sync', 'set-b': 'Local changes' }}
+        configured
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+        onPreview={vi.fn()}
+      />
+    );
+    expect(screen.getByText('Có thay đổi cục bộ')).toBeInTheDocument();
+  });
+
+  it('offers retained-attempt reconciliation for Publishing state', () => {
+    const onReconcileAttempt = vi.fn();
+    render(
+      <DocumentSetDrawer
+        open
+        sets={[documentSet]}
+        notes={notes}
+        attempts={[]}
+        selectedSetId="set-a"
+        statesBySet={{ 'set-a': 'Publishing' }}
+        activeAttemptIdsBySet={{ 'set-a': 'attempt-a' }}
+        configured
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+        onPreview={vi.fn()}
+        onReconcileAttempt={onReconcileAttempt}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra trạng thái' }));
+    expect(onReconcileAttempt).toHaveBeenCalledWith('set-a', 'attempt-a');
+  });
+
   it('disables preview for empty, invalid config, or active same-set attempt while edits stay enabled', () => {
     const { rerender } = render(
       <DocumentSetDrawer
@@ -366,7 +423,7 @@ describe('guarded publish UI', () => {
         attemptId: 'attempt-fail',
         setId: 'set-a',
         status: 'Failed' as const,
-        errorMessage: 'Khối mã quá 50.000 ký tự tại dòng 7, cột 1.',
+        error: { code: 'ATOMIC_BLOCK_TOO_LARGE', message: 'Khối mã quá 50.000 ký tự tại dòng 7, cột 1.' },
         uncertain: false,
       })),
       closePreview: vi.fn(),
