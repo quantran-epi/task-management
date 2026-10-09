@@ -215,7 +215,7 @@
   4. Republishing unchanged or partially modified documents projects only added, changed, or removed chunks via SHA-256 comparison; unchanged chunks retain their indexed representation.
   5. User can inspect publish and indexing status for each document set in PlannerMate.
 
-**Plans**: 15 plans in 10 waves
+**Plans**: 22 plans in 14 waves
 Plans:
 **Wave 1**
 
@@ -261,6 +261,25 @@ Plans:
 
 - [x] 16-14-PLAN.md — Docs workspace publishing preview and DLP modal trigger (Wave 10)
 - [x] 16-15-PLAN.md — Schema V10 knowledge tables backup export and transactional restore (Wave 10)
+
+**Wave 11** *(Gap Closure)*
+
+- [ ] 16-16-PLAN.md — Executable daemon bootstrap and authenticated API health contract (Wave 11)
+- [ ] 16-17-PLAN.md — Shared root configuration and first document-set creation (Wave 11)
+- [ ] 16-18-PLAN.md — Document-scoped chat backup validation safety (Wave 11)
+
+**Wave 12** *(blocked on Wave 11 completion)*
+
+- [ ] 16-19-PLAN.md — Fail-closed authoritative manifest preview (Wave 12)
+- [ ] 16-20-PLAN.md — Service-boundary DLP override consent (Wave 12)
+
+**Wave 13** *(blocked on Wave 12 completion)*
+
+- [ ] 16-21-PLAN.md — Terminal attempt polling and atomic published metadata reconciliation (Wave 13)
+
+**Wave 14** *(blocked on Wave 13 completion)*
+
+- [ ] 16-22-PLAN.md — Terminal publish UI, resumable reconciliation, and truthful set states (Wave 14)
 
 ### Phase 17: Pilot Ontology, Deterministic Extraction & Neo4j Knowledge Graph
 
