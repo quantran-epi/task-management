@@ -275,7 +275,7 @@ Plans:
 
 **Wave 13** *(blocked on Wave 12 completion)*
 
-- [ ] 16-23-PLAN.md — Durable content-free frozen submission manifests and backup preservation (Wave 13)
+- [x] 16-23-PLAN.md — Durable content-free frozen submission manifests and backup preservation (Wave 13)
 
 **Wave 14** *(blocked on Wave 13 completion)*
 
