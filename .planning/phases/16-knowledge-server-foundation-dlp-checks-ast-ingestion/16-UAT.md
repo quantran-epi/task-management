@@ -85,7 +85,16 @@ blocked: 1
   reason: "User reported: not pass, exceed 50k character publish success to knowledge server, one of the docs has character count exceed 50k, but can ignore for now, fix later if its not too important and affect the rightness of the data"
   severity: minor
   test: 9
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
+  root_cause: "The 50,000-character limit applies to one atomic Markdown block, not total document length. Real defect remains: sectionChunker validates only root AST children, so nested oversized code/table/blockquote nodes bypass rejection; client error handling also hides structured location and remedy details."
+  artifacts:
+    - path: "knowledge-server/src/parser/sectionChunker.ts"
+      issue: "Atomic block validation walks only top-level ast.children, missing nested oversized blocks."
+    - path: "src/views/NotesView.tsx"
+      issue: "Generic preview error handler hides line, column, limit, and split guidance."
+    - path: "src/components/knowledge/PublishPreviewModal.tsx"
+      issue: "Server projection errors display only message, omitting structured location and remedy."
+  missing:
+    - "Recursively validate atomic Markdown nodes at any AST depth."
+    - "Surface OversizedAtomicBlockError line, column, 50,000-character limit, and split guidance in client UI."
+    - "Clarify UAT that total document length above 50,000 characters is valid unless one atomic block exceeds the limit."
+  debug_session: ".planning/debug/oversized-block-rejection-bypass.md"
