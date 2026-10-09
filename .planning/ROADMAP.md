@@ -283,7 +283,7 @@ Plans:
 
 **Wave 15** *(blocked on Wave 14 completion)*
 
-- [ ] 16-22-PLAN.md — Terminal publish UI, resumable reconciliation, and truthful set states (Wave 15)
+- [x] 16-22-PLAN.md — Terminal publish UI, resumable reconciliation, and truthful set states (Wave 15)
 
 ### Phase 17: Pilot Ontology, Deterministic Extraction & Neo4j Knowledge Graph
 
