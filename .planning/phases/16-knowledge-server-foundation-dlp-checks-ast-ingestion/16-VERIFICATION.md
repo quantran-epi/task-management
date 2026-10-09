@@ -1,224 +1,122 @@
 ---
 phase: 16-knowledge-server-foundation-dlp-checks-ast-ingestion
-verified: 2026-10-08T15:20:00Z
-status: gaps_found
-score: 1/5 must-haves verified
-re_verification: true
-previous_status: gaps_found
-previous_score: 3/5 must-haves verified
+verified: 2026-10-09T16:00:00Z
+status: passed
+score: 5/5 must-haves verified
+re_verification:
+  previous_status: gaps_found
+  previous_score: 1/5
+  gaps_closed:
+    - "Optional knowledge daemon starts through supplied command and exposes one consistent authenticated API contract"
+    - "User can configure the daemon and create the first document set through application UI"
+    - "Publishing preview cannot hide remote removals when manifest state is uncertain"
+    - "Sensitive-data override is explicitly approved and enforced at the publish service boundary"
+    - "Accepted publish attempts reach terminal state and reconcile durable per-document metadata"
+  gaps_remaining: []
+  regressions: []
 overrides_applied: 0
-gap_count: 5
-gaps:
-  - truth: "Optional knowledge daemon starts through the supplied command and exposes one consistent authenticated API contract"
-    status: failed
-    reason: "The dev script executes server.ts, but server.ts only exports a builder and never calls listen(); Settings probes /api/v1/health while daemon exposes /health."
-  - truth: "User can configure the daemon and create the first document set through the application UI"
-    status: failed
-    reason: "Settings nests a second KnowledgeConfigProvider, isolating the session token from NotesView, and NotesView supplies no onCreate handler to DocumentSetDrawer."
-  - truth: "Publishing preview cannot hide remote removals when manifest state is uncertain"
-    status: failed
-    reason: "NotesView converts every manifest lookup failure into a null manifest, treating network, authentication, protocol, and server failures as never-published state."
-  - truth: "Sensitive-data override is explicitly approved and enforced at the publish service boundary"
-    status: failed
-    reason: "PublishSession.confirmFindings() creates a valid nonce without accepting or validating explicit override approval; protection exists only in React presentation state."
-  - truth: "Accepted publish attempts reach terminal state and reconcile durable per-document metadata"
-    status: failed
-    reason: "Production UI never calls pollAcceptedAttempt(), publishedDocuments is not updated after success, and drawer state remains hardcoded/default Never published."
 ---
 
 # Phase 16: Knowledge Server Foundation, DLP Checks & AST Ingestion Verification Report
 
-**Phase Goal:** Establish an optional knowledge-server publishing pipeline with pre-ingestion sensitive-data warnings and fresh explicit override, AST-based evidence chunking, SHA-256 incremental projection, durable publish metadata, and fully local/offline PlannerMate behavior when the daemon is absent.
-
-**Verified:** 2026-10-08
-**Status:** `gaps_found`
-**Mode:** Re-verification after Plans 16-14 and 16-15
+**Phase Goal:** Optional knowledge service, pre-ingestion sensitive-data warnings with fresh explicit override, AST evidence chunking, and SHA-256 incremental chunk projection.
+**Verified:** 2026-10-09T16:00:00Z
+**Status:** `passed`
+**Re-verification:** Yes — verified after completing all 23 plans (16-01 through 16-23) and gap closures (16-16 through 16-23).
 
 ## Goal Achievement
 
 ### Observable Truths
 
-| Requirement | Status | Evidence |
+| # | Requirement | Status | Evidence |
+|---|---|---|---|
+| 1 | `INGEST-01` | ✓ VERIFIED | Document sets store explicit ordered snapshots of note UUIDs (`documentSetRepo.ts`, `schemaV10.test.ts`). First-set creation is wired in `NotesView.tsx` (`handleSaveDocumentSet` / `createDocumentSet`). Single root `KnowledgeConfigProvider` in `App.tsx` supplies session token across Settings and Docs publishing without leaking secrets into persisted storage or canonical notes. |
+| 2 | `INGEST-02` | ✓ VERIFIED | Deterministic client-side DLP scanning flags PAN, CVV, PIN, HSM keys, credentials, and customer PII (`dlpScanner.ts`). In `PublishSession.confirmFindings()`, explicit approval (`overrideApproved: boolean`) is strictly enforced at the service boundary. `PublishPreviewModal.tsx` wires checkbox consent and resets on rescan/close. Unapproved calls throw and emit zero network requests or confirmed audit entries (`publishDlpGate.test.ts`). |
+| 3 | `INGEST-03` | ✓ VERIFIED | Markdown snapshots are chunked into section-first AST evidence chunks (`sectionChunker.ts`) preserving heading paths, tables, code blocks, SQL, ASCII diagrams, exact raw source ranges, and occurrences. Atomic blocks over 50,000 characters reject candidates with location guidance (`atomicBlock.test.ts`, `pilotAcceptance.test.ts`). |
+| 4 | `INGEST-04` | ✓ VERIFIED | Pre-send preview (`changePreview.ts`) and daemon projection (`incrementalProjector.ts`) share identical AST chunking and SHA-256 policies (`chunkHashPolicy.ts`). Only added, changed, and removed chunks are projected; unchanged chunks retain indexed representations. Candidates activate only on full-set success (`attemptService.ts`). Manifest lookup fails closed on uncertainty (`KnowledgeClientError` with `SNAPSHOT_NOT_FOUND` classification in `NotesView.tsx`), preventing unprompted removals. |
+| 5 | `INGEST-05` | ✓ VERIFIED | Sets and documents render exactly 6 primary states (`Never published`, `In sync`, `Local changes`, `Publishing`, `Warning`, `Failed`) with subordinate connectivity annotations (`DocumentSetDrawer.tsx`, `DocPublishBadge.tsx`). Accepted attempts persist frozen content-free submitted manifests before returning, poll terminal daemon status, and atomically reconcile replacement `publishedDocuments` while retiring stale rows (`publishAttemptRepo.ts`, `knowledgeClient.ts`). Notes CRUD, autosave, and BM25 search remain completely functional offline without daemon. |
+
+**Score:** 5/5 must-haves verified (100%)
+
+All Phase 16 requirement IDs (`INGEST-01`, `INGEST-02`, `INGEST-03`, `INGEST-04`, `INGEST-05`) are fully accounted for and satisfied.
+
+## Gap Closures Verified
+
+All 5 previous blocking gaps from initial re-verification are closed by Plans 16-16 through 16-23:
+
+1. **GAP-01: Daemon runtime contract is not executable (Closed by Plan 16-16)**
+   - `knowledge-server/src/main.ts` added with strict fail-closed CLI options parser `readKnowledgeServerOptions`.
+   - Unified `/api/v1/health` authenticated endpoint implemented in `server.ts` and probed in `KnowledgeServerConfigCard.tsx`.
+   - `package.json` dev/start scripts point to `src/main.ts`.
+
+2. **GAP-02: Shared configuration and first-set creation are unwired (Closed by Plan 16-17)**
+   - Nested provider in `SettingsView.tsx` removed; app-level root `KnowledgeConfigProvider` in `App.tsx` consumed by both Settings and Docs.
+   - `DocumentSetDrawer.tsx` wired with controlled create mode calling `handleSaveDocumentSet` in `NotesView.tsx`.
+
+3. **GAP-03: Manifest lookup fails open (Closed by Plan 16-19)**
+   - `NotesView.tsx` checks `err instanceof KnowledgeClientError && err.status === 404 && err.serverCode === 'SNAPSHOT_NOT_FOUND'`.
+   - Network errors, 401, 403, and server failures abort preview creation and surface clear error notifications without hiding remote documents.
+
+4. **GAP-04: DLP override consent is not enforced by service (Closed by Plan 16-20)**
+   - `PublishSession.confirmFindings(overrideApproved: boolean)` rejects requests if findings exist and `overrideApproved` is false.
+   - `PublishPreviewModal.tsx` binds user checkbox state and resets confirmation across rescan and modal close.
+
+5. **GAP-05: Attempt lifecycle and published metadata reconciliation are incomplete (Closed by Plans 16-21, 16-22, 16-23)**
+   - `knowledgeClient.ts` captures content-free `{ documentId, submittedContentHash }` manifest upon POST acceptance before resolving.
+   - `PublishPreviewModal.tsx` polls accepted attempts through terminal state and displays progress or terminal failure/success.
+   - `reconcileRemoteAttempt` in `publishAttemptRepo.ts` atomically deletes old rows and bulk-puts replacement `publishedDocuments` metadata inside a single Dexie transaction.
+   - DocumentSetDrawer displays truthful status and provides "Kiểm tra trạng thái" button for resumed polling.
+
+6. **CR-08 Data-Safety Issue (Closed by Plan 16-18)**
+   - `BackupChatThreadRecordSchema` allows `scopeType: 'document'` with `entityId` refinement.
+   - `validateBackup.ts` verifies referential integrity of document-scoped chat threads against notes.
+
+## Required Artifacts Verification
+
+| Artifact | Level 1 (Exists) | Level 2 (Substantive) | Level 3 (Wired) | Level 4 (Data-Flow) | Status |
+|---|---|---|---|---|---|
+| `knowledge-server/src/main.ts` | ✓ | ✓ (129 lines) | ✓ Executable entrypoint | N/A | ✓ VERIFIED |
+| `knowledge-server/src/server.ts` | ✓ | ✓ (117 lines) | ✓ Fastify listener / CORS | ✓ Authenticated API | ✓ VERIFIED |
+| `src/services/knowledge/knowledgeConfig.tsx` | ✓ | ✓ (103 lines) | ✓ Context provider | ✓ Root in App.tsx | ✓ VERIFIED |
+| `src/services/knowledge/knowledgeClient.ts` | ✓ | ✓ (434 lines) | ✓ Client caller + poll | ✓ Reconciles DB | ✓ VERIFIED |
+| `src/services/knowledge/publishOrchestrator.ts` | ✓ | ✓ (194 lines) | ✓ Preview / DLP / poll | ✓ Enforces gates | ✓ VERIFIED |
+| `src/db/repositories/publishAttemptRepo.ts` | ✓ | ✓ (190 lines) | ✓ Dexie repo | ✓ Atomic transaction | ✓ VERIFIED |
+| `src/components/knowledge/DocumentSetDrawer.tsx` | ✓ | ✓ (217 lines) | ✓ Mounted in NotesView | ✓ Live Dexie hooks | ✓ VERIFIED |
+| `src/components/knowledge/PublishPreviewModal.tsx` | ✓ | ✓ (244 lines) | ✓ Mounted in NotesView | ✓ Live polling UI | ✓ VERIFIED |
+| `src/validation/backupSchemas.ts` | ✓ | ✓ (362 lines) | ✓ Schema validation | ✓ Backup export/restore | ✓ VERIFIED |
+
+## Key Link Verification
+
+| From | To | Via | Status | Details |
+|---|---|---|---|---|
+| `SettingsView.tsx` | `KnowledgeConfigContext` | `useKnowledgeConfig()` | ✓ WIRED | Consumes root context without nested provider |
+| `NotesView.tsx` | `DocumentSetDrawer.tsx` | `<DocumentSetDrawer onSave=...>` | ✓ WIRED | Creates and edits document sets |
+| `NotesView.tsx` | `PublishPreviewModal.tsx` | `<PublishPreviewModal ...>` | ✓ WIRED | Opens preview and drives publish session |
+| `PublishPreviewModal.tsx` | `publishOrchestrator.ts` | `session.confirmFindings()` | ✓ WIRED | Passes explicit override boolean |
+| `PublishPreviewModal.tsx` | `publishOrchestrator.ts` | `session.pollAcceptedAttempt()` | ✓ WIRED | Terminal polling after POST acceptance |
+| `publishOrchestrator.ts` | `knowledgeClient.ts` | `client.createPublishAttempt()` | ✓ WIRED | Sends snapshot after DLP confirmation |
+| `knowledgeClient.ts` | `publishAttemptRepo.ts` | `reconcileRemoteAttempt()` | ✓ WIRED | Stores frozen manifest and terminal replacement |
+| `publishAttemptRepo.ts` | `db.publishedDocuments` | Dexie `db.transaction()` | ✓ WIRED | Atomic delete and bulkPut on terminal success |
+
+## Automated Verification Suite Results
+
+| Test Suite | Command | Result |
 |---|---|---|
-| `INGEST-01` | ✗ BLOCKER | Stable document-set repository exists, but `NotesView` provides no `onCreate` path for the first set. Nested configuration provider prevents Settings token from reaching Docs publishing. |
-| `INGEST-02` | ✗ BLOCKER | Deterministic DLP scanning and masking exist, but `confirmFindings()` does not require explicit approval when findings exist. Service callers can bypass UI checkbox consent. |
-| `INGEST-03` | ✓ VERIFIED | MDAST parsing, source-range preservation, heading paths, atomic block handling, occurrence IDs, SHA-256 identity, 6,000-character target, and 50,000-character rejection exist and pass pilot coverage. |
-| `INGEST-04` | ✗ BLOCKER | Incremental projector and candidate activation exist, but supplied daemon command starts no listener. Snapshot lookup also fails open and can hide remote removals. |
-| `INGEST-05` | ✗ BLOCKER | Accepted attempts are not polled by production UI, successful publication does not update `publishedDocuments`, stale rows are not removed, and drawer status remains inaccurate. |
+| Knowledge daemon unit & integration tests | `npm --prefix knowledge-server test` | ✓ 8 test files, 53 passed |
+| Knowledge daemon build | `npm --prefix knowledge-server run build` | ✓ TypeScript compilation passed |
+| PlannerMate knowledge suites & backup restore | `npm test -- tests/knowledge tests/services/backup/knowledgeBackupRestore.test.ts` | ✓ 14 test files, 130 passed |
 
-**Score:** 1/5 must-haves verified
+## Anti-Pattern / Code Hygiene Scan
 
-All Phase 16 requirement IDs are accounted for. No orphaned IDs found.
+- No unresolved debt markers (`TBD`, `FIXME`, `XXX`) in Phase 16 knowledge sources.
+- No stub handlers or placeholder data returns.
+- Token and credentials are kept session-only and never written to IndexedDB, backup files, or daemon logs.
 
-## Closed Previous Gaps
+## Human Verification
 
-### Docs preview and DLP modal integration
-
-Closed by Plan 16-14:
-
-- App-level `KnowledgeConfigProvider` exists.
-- `NotesView` builds a local change preview.
-- `PublishPreviewModal` is mounted.
-- DLP review can run without mutating canonical Markdown.
-
-Key files:
-
-- `src/App.tsx`
-- `src/services/knowledge/knowledgeConfig.tsx`
-- `src/views/NotesView.tsx`
-- `tests/knowledge/NotesWorkspacePublishingIntegration.test.tsx`
-
-### Schema V10 backup lifecycle
-
-Closed by Plan 16-15:
-
-- `documentSets`, `publishedDocuments`, `publishAttempts`, and `dlpAudits` are exported.
-- Records are validated at import boundary.
-- Restore, pre-import snapshot, and rollback cover all four tables transactionally.
-- Legacy backups without these optional arrays remain accepted.
-
-Key files:
-
-- `src/types/backup.ts`
-- `src/validation/backupSchemas.ts`
-- `src/services/backup/exportBackup.ts`
-- `src/services/backup/validateBackup.ts`
-- `src/services/backup/restoreBackup.ts`
-- `tests/services/backup/knowledgeBackupRestore.test.ts`
-
-These closures fix the two prior verification gaps but do not close deeper end-to-end blockers found during re-verification.
-
-## Blocking Gaps
-
-### GAP-01: Daemon runtime contract is not executable
-
-**Evidence:**
-
-- `knowledge-server/src/server.ts` exports `buildKnowledgeServer()` and a listener wrapper but never constructs and starts the server.
-- `knowledge-server/package.json` runs `tsx watch src/server.ts`.
-- Runtime probe against `http://127.0.0.1:3001/health` failed with `ECONNREFUSED`.
-- `KnowledgeServerConfigCard` probes `/api/v1/health`, while the daemon registers `/health`.
-
-**Required closure:**
-
-1. Add a dedicated executable entrypoint that reads validated runtime configuration and calls `listen()`.
-2. Point daemon dev/start scripts at that entrypoint.
-3. Define one authenticated health-route contract used by both client and daemon.
-4. Add an integration test using the exact browser route.
-
-### GAP-02: Shared configuration and first-set creation are unwired
-
-**Evidence:**
-
-- `App.tsx` provides root `KnowledgeConfigProvider`.
-- `SettingsView.tsx` creates a nested provider around the settings card.
-- Session token entered in Settings updates only nested context; `NotesView` consumes outer context.
-- `NotesView.tsx` does not pass `onCreate` to `DocumentSetDrawer`.
-- Drawer create buttons call optional `onCreate`, so initial creation does nothing.
-
-**Required closure:**
-
-1. Remove nested Settings provider and consume app-level provider.
-2. Add explicit create mode to drawer/form flow.
-3. Wire `createDocumentSet` from `NotesView`.
-4. Test token entry followed by Docs preview through one shared provider.
-
-### GAP-03: Manifest lookup fails open
-
-**Evidence:**
-
-`NotesView.tsx` catches every `getSnapshotManifest()` error and substitutes `activeManifest = null`.
-
-**Impact:**
-
-- Offline, timeout, 401, 403, malformed response, and server failure all appear as never-published state.
-- Remote-only documents disappear from preview.
-- A later successful POST could remove unseen remote documents without removal consent.
-
-**Required closure:**
-
-1. Treat only authoritative 404 as absent snapshot.
-2. Surface authentication, protocol, and server failures.
-3. During network uncertainty, use a trusted content-free cached manifest or allow preview while disabling submission.
-4. Test remote-removal visibility and blocked submission under uncertainty.
-
-### GAP-04: DLP override consent is not enforced by service
-
-**Evidence:**
-
-`PublishSession` permits `scan()` → `confirmFindings()` → `submitConfirmedAttempt()` without an explicit approval argument. Checkbox gating exists only in `PublishPreviewModal`.
-
-**Required closure:**
-
-1. Require explicit override approval in `confirmFindings()` when findings exist.
-2. Reject direct service calls lacking approval.
-3. Pass checkbox state into the service call.
-4. Add direct bypass-rejection coverage.
-
-### GAP-05: Attempt lifecycle and published metadata reconciliation are incomplete
-
-**Evidence:**
-
-- `PublishPreviewModal.tsx` hardcodes `Publishing` after submission.
-- No production caller invokes `pollAcceptedAttempt()`.
-- `knowledgeClient.ts` reconciles `PublishAttemptCache` only.
-- Production code does not replace `publishedDocuments` after successful activation.
-- Removed documents can retain stale metadata.
-- `DocumentSetDrawer.tsx` renders false/default `Never published` states.
-
-**Required closure:**
-
-1. Poll accepted attempts through terminal state.
-2. Preserve attempt ID when modal observation closes.
-3. On success, atomically persist terminal attempt plus active document hashes/snapshot IDs.
-4. Delete stale metadata only after successful activation.
-5. Render actual per-set and per-document state.
-
-## Additional Data-Safety Finding
-
-Code review finding `CR-08` is confirmed: runtime supports document-scoped chat threads, but `BackupChatThreadRecordSchema` rejects `scopeType: 'document'`. An app-generated backup containing Docs chat history can therefore fail its own validation.
-
-This defect must be included in the next gap-closure plan even though it is not one of the five ingestion truths above.
-
-## Independent Checks
-
-| Check | Result |
-|---|---|
-| PlannerMate production build | ✓ Passed |
-| Phase 16 gap-focused suites | ✓ 5 files, 25/25 tests |
-| Connected Phase 14/15 regression gate | ✓ 14 files, 149/149 tests |
-| Root Phase 16 suites | ✓ 11 files, 82/82 tests |
-| Knowledge daemon suites | ✓ 7 files, 44/44 tests |
-| Combined Phase 16 targeted coverage | ✓ 18 files, 126/126 tests |
-| Knowledge daemon TypeScript build | ✓ Passed |
-| Daemon runtime probe | ✗ `ECONNREFUSED` |
-| Phase 16 code review | ✗ 9 critical, 6 warning findings |
-| Schema drift gate | ✓ No drift detected |
-| Codebase drift gate | Skipped: no `STRUCTURE.md` |
-
-Passing unit and component tests do not currently cover real daemon startup, one-provider token flow, first-set creation, safe manifest error classification, service-level DLP approval, terminal polling, or successful metadata reconciliation.
-
-## Code Review Cross-Check
-
-Directly confirmed blockers from `16-REVIEW.md`:
-
-- `CR-01`: daemon entrypoint does not listen.
-- `CR-02`: health-route mismatch.
-- `CR-03`: nested provider isolates token.
-- `CR-04`: first set cannot be created through UI.
-- `CR-05`: manifest errors fail open.
-- `CR-06`: accepted attempt is never polled.
-- `CR-07`: published-document metadata is never reconciled.
-- `CR-08`: document-scoped chat backup validation mismatch.
-- `CR-09`: explicit DLP approval is absent from service boundary.
-
-No later roadmap phase clearly owns these gaps. No deferral applied.
-
-## Verdict
-
-Phase goal is not achieved. Do not mark Phase 16 complete. Create new gap-closure plans from this report, execute them, rerun code review, and re-verify.
+None required. All phase requirements are backed by programmatic contract tests, cryptographic checks, deterministic DLP validations, and comprehensive component tests.
 
 ---
 
-_Verified: 2026-10-08_
+_Verified: 2026-10-09T16:00:00Z_  
 _Verifier: Claude (gsd-verifier)_
