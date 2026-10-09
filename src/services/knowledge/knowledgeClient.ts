@@ -95,7 +95,8 @@ export class KnowledgeClientError extends Error {
   constructor(
     public readonly code: KnowledgeClientErrorCode,
     message: string,
-    public readonly status?: number
+    public readonly status?: number,
+    public readonly serverCode?: string
   ) {
     super(message);
     this.name = 'KnowledgeClientError';
@@ -216,7 +217,8 @@ export function createKnowledgeClient(options: CreateKnowledgeClientOptions) {
       throw new KnowledgeClientError(
         'REMOTE_ERROR',
         envelope.success ? envelope.data.error.message : 'Knowledge server request failed',
-        response.status
+        response.status,
+        envelope.success ? envelope.data.error.code : undefined
       );
     }
     const parsed = schema.safeParse(json);

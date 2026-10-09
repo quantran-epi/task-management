@@ -221,4 +221,59 @@ describe('strict fixed-route knowledge client', () => {
     });
     expect(reconcile).toHaveBeenCalledOnce();
   });
+
+  it('exposes validated serverCode SNAPSHOT_NOT_FOUND on authoritative 404', async () => {
+    const client = createKnowledgeClient({
+      baseUrl: 'https://knowledge.example.com',
+      token: 'token',
+      fetcher: vi.fn(async () =>
+        jsonResponse(
+          { error: { code: 'SNAPSHOT_NOT_FOUND', message: 'Active snapshot was not found.' } },
+          404
+        )
+      ),
+    });
+
+    await expect(client.getSnapshotManifest('set-1')).rejects.toMatchObject({
+      code: 'REMOTE_ERROR',
+      status: 404,
+      serverCode: 'SNAPSHOT_NOT_FOUND',
+      message: 'Active snapshot was not found.',
+    });
+  });
+
+  it('does not expose serverCode for malformed 404 body or arbitrary HTML/JSON', async () => {
+    const clientWithMalformedJson = createKnowledgeClient({
+      baseUrl: 'https://knowledge.example.com',
+      token: 'token',
+      fetcher: vi.fn(async () =>
+        jsonResponse({ error: 'not-an-envelope' }, 404)
+      ),
+    });
+
+    const err = await clientWithMalformedJson.getSnapshotManifest('set-1').catch((e) => e);
+    expect(err).toBeInstanceOf(KnowledgeClientError);
+    expect(err.status).toBe(404);
+    expect(err.serverCode).toBeUndefined();
+    expect(err.code).toBe('REMOTE_ERROR');
+  });
+
+  it('preserves bounded redaction and does not leak token or raw body in error message', async () => {
+    const canary = 'SECRET_CANARY_VALUE_123';
+    const client = createKnowledgeClient({
+      baseUrl: 'https://knowledge.example.com',
+      token: canary,
+      fetcher: vi.fn(async () =>
+        new Response('<html><body>404 Not Found SECRET_CANARY_VALUE_123</body></html>', {
+          status: 404,
+          headers: { 'Content-Type': 'text/html' },
+        })
+      ),
+    });
+
+    const err = await client.getSnapshotManifest('set-1').catch((e) => e);
+    expect(err).toBeInstanceOf(KnowledgeClientError);
+    expect(err.message).not.toContain(canary);
+    expect(err.serverCode).toBeUndefined();
+  });
 });
