@@ -111,7 +111,20 @@ describe('knowledge server configuration', () => {
 });
 
 describe('strict fixed-route knowledge client', () => {
-  afterEach(() => vi.restoreAllMocks());
+  let dbName: string;
+  let db: TaskPlannerDatabase;
+
+  beforeEach(async () => {
+    dbName = `StrictClient_${generateId()}`;
+    db = new TaskPlannerDatabase(dbName);
+    await db.open();
+  });
+
+  afterEach(async () => {
+    db.close();
+    await Dexie.delete(dbName);
+    vi.restoreAllMocks();
+  });
 
   it('derives fixed routes and redacts token from bounded errors', async () => {
     const token = 'secret-session-token';
@@ -420,6 +433,115 @@ describe('strict fixed-route knowledge client', () => {
       expect(reconcileArg.attempt.submittedDocuments).toEqual([
         { documentId: docId, submittedContentHash: hash },
       ]);
+    });
+
+    it('resumes polling from durable frozen manifest after observer close and post-submit local edit', async () => {
+      // POST accepted with hash H1, observer closes, local Note body changes to H2,
+      // database/session reopens, poll resumes by attempt ID, daemon reports In sync,
+      // and persisted publishedContentHash equals H1 while current local hash H2 yields Local changes.
+      const setId = generateId();
+      const docId = generateId();
+      const h1 = '1'.repeat(64);
+      const h2 = '2'.repeat(64);
+
+      // Create note in db
+      await db.notes.put({
+        id: docId,
+        type: 'document',
+        title: 'Doc 1',
+        body: 'Initial content',
+        tags: [],
+        isPinned: false,
+        createdAt: '2026-10-08T00:00:00.000Z',
+        updatedAt: '2026-10-08T00:00:00.000Z',
+      });
+
+      // Create document set
+      await db.documentSets.put({
+        id: setId,
+        name: 'Set 1',
+        documentIds: [docId],
+        createdAt: '2026-10-08T00:00:00.000Z',
+        updatedAt: '2026-10-08T00:00:00.000Z',
+      });
+
+      const attemptId = generateId();
+      const snapshot = {
+        setId,
+        setName: 'Set 1',
+        chunkingPolicyVersion: 'v1',
+        documents: [
+          {
+            documentId: docId,
+            title: 'Doc 1',
+            body: 'Initial content',
+            tags: [],
+            contentHash: h1,
+            chunks: [],
+          },
+        ],
+      };
+
+      const serverAttempt = attempt({
+        attemptId,
+        setId,
+        status: 'Publishing',
+      });
+
+      const client1 = createKnowledgeClient({
+        baseUrl: 'https://knowledge.example.com',
+        token: 'token',
+        db,
+        fetcher: vi.fn(async () => jsonResponse(serverAttempt, 202)),
+      });
+
+      // Submit attempt
+      await client1.createPublishAttempt(snapshot, 'attempt-key-resume');
+
+      // Observer closes / app reloads: local note body edited to H2!
+      await db.notes.update(docId, {
+        body: 'Modified local content yielding H2',
+        updatedAt: '2026-10-08T00:00:05.000Z',
+      });
+
+      // Server now reports terminal In sync with activeSnapshotId
+      const activeSnapshotId = generateId();
+      const terminalServerAttempt = attempt({
+        attemptId,
+        setId,
+        status: 'In sync',
+        completedAt: '2026-10-08T00:00:06.000Z',
+        activeSnapshotId,
+        metrics: {
+          addedCount: 1,
+          changedCount: 0,
+          removedCount: 0,
+          unchangedCount: 0,
+          warningCount: 0,
+        },
+      });
+
+      // New client / session resumes polling by attemptId only
+      const client2 = createKnowledgeClient({
+        baseUrl: 'https://knowledge.example.com',
+        token: 'token',
+        db,
+        fetcher: vi.fn(async () => jsonResponse(terminalServerAttempt)),
+      });
+
+      const pollResult = await client2.pollAttempt(attemptId);
+      expect(pollResult.status).toBe('In sync');
+
+      // Check publishedDocuments: persisted hash must be submitted H1, not current H2
+      const published = await db.publishedDocuments.get([setId, docId]);
+      expect(published).toBeDefined();
+      expect(published?.publishedContentHash).toBe(h1);
+      expect(published?.activeSnapshotId).toBe(activeSnapshotId);
+
+      // Check document set repo status: current local Note produces 'Local changes'
+      const { getDocumentPublishStatuses } = await import('../../src/db/repositories/documentSetRepo');
+      const statuses = await getDocumentPublishStatuses([docId], db);
+      expect(statuses[docId]?.aggregateState).toBe('Local changes');
     });
   });
 });
