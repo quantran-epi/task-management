@@ -1,6 +1,6 @@
 ---
 phase: 16-knowledge-server-foundation-dlp-checks-ast-ingestion
-verified: 2026-10-09T16:00:00Z
+verified: 2026-10-09T16:36:00Z
 status: passed
 score: 5/5 must-haves verified
 re_verification:
@@ -12,6 +12,7 @@ re_verification:
     - "Publishing preview cannot hide remote removals when manifest state is uncertain"
     - "Sensitive-data override is explicitly approved and enforced at the publish service boundary"
     - "Accepted publish attempts reach terminal state and reconcile durable per-document metadata"
+    - "Nested atomic blocks exceeding 50,000 characters reject candidate snapshot with structured line/column/split guidance, while large multi-chunk documents remain valid"
   gaps_remaining: []
   regressions: []
 overrides_applied: 0
@@ -19,10 +20,10 @@ overrides_applied: 0
 
 # Phase 16: Knowledge Server Foundation, DLP Checks & AST Ingestion Verification Report
 
-**Phase Goal:** Optional knowledge service, pre-ingestion sensitive-data warnings with fresh explicit override, AST evidence chunking, and SHA-256 incremental chunk projection.
-**Verified:** 2026-10-09T16:00:00Z
-**Status:** `passed`
-**Re-verification:** Yes — verified after completing all 23 plans (16-01 through 16-23) and gap closures (16-16 through 16-23).
+**Phase Goal:** Optional knowledge service, pre-ingestion sensitive-data warnings with fresh explicit override, AST evidence chunking, and SHA-256 incremental chunk projection.  
+**Verified:** 2026-10-09T16:36:00Z  
+**Status:** `passed`  
+**Re-verification:** Yes — verified after completing all 24 plans (16-01 through 16-24) including gap closures 16-16 through 16-24.
 
 ## Goal Achievement
 
@@ -32,7 +33,7 @@ overrides_applied: 0
 |---|---|---|---|
 | 1 | `INGEST-01` | ✓ VERIFIED | Document sets store explicit ordered snapshots of note UUIDs (`documentSetRepo.ts`, `schemaV10.test.ts`). First-set creation is wired in `NotesView.tsx` (`handleSaveDocumentSet` / `createDocumentSet`). Single root `KnowledgeConfigProvider` in `App.tsx` supplies session token across Settings and Docs publishing without leaking secrets into persisted storage or canonical notes. |
 | 2 | `INGEST-02` | ✓ VERIFIED | Deterministic client-side DLP scanning flags PAN, CVV, PIN, HSM keys, credentials, and customer PII (`dlpScanner.ts`). In `PublishSession.confirmFindings()`, explicit approval (`overrideApproved: boolean`) is strictly enforced at the service boundary. `PublishPreviewModal.tsx` wires checkbox consent and resets on rescan/close. Unapproved calls throw and emit zero network requests or confirmed audit entries (`publishDlpGate.test.ts`). |
-| 3 | `INGEST-03` | ✓ VERIFIED | Markdown snapshots are chunked into section-first AST evidence chunks (`sectionChunker.ts`) preserving heading paths, tables, code blocks, SQL, ASCII diagrams, exact raw source ranges, and occurrences. Atomic blocks over 50,000 characters reject candidates with location guidance (`atomicBlock.test.ts`, `pilotAcceptance.test.ts`). |
+| 3 | `INGEST-03` | ✓ VERIFIED | Markdown snapshots are chunked into section-first AST evidence chunks (`sectionChunker.ts`) preserving heading paths, tables, code blocks, SQL, ASCII diagrams, exact raw source ranges, and occurrences. Plan 16-24 added recursive AST validation at all depths (`validateAtomicBlocksRecursively`), guaranteed documents over 50,000 characters without oversized blocks remain valid and split across 6,000-character chunks, and surfaced structured line/column/limit/split feedback without raw source leaks (`atomicBlock.test.ts`, `pilotAcceptance.test.ts`, `atomicBlockClientError.test.tsx`). |
 | 4 | `INGEST-04` | ✓ VERIFIED | Pre-send preview (`changePreview.ts`) and daemon projection (`incrementalProjector.ts`) share identical AST chunking and SHA-256 policies (`chunkHashPolicy.ts`). Only added, changed, and removed chunks are projected; unchanged chunks retain indexed representations. Candidates activate only on full-set success (`attemptService.ts`). Manifest lookup fails closed on uncertainty (`KnowledgeClientError` with `SNAPSHOT_NOT_FOUND` classification in `NotesView.tsx`), preventing unprompted removals. |
 | 5 | `INGEST-05` | ✓ VERIFIED | Sets and documents render exactly 6 primary states (`Never published`, `In sync`, `Local changes`, `Publishing`, `Warning`, `Failed`) with subordinate connectivity annotations (`DocumentSetDrawer.tsx`, `DocPublishBadge.tsx`). Accepted attempts persist frozen content-free submitted manifests before returning, poll terminal daemon status, and atomically reconcile replacement `publishedDocuments` while retiring stale rows (`publishAttemptRepo.ts`, `knowledgeClient.ts`). Notes CRUD, autosave, and BM25 search remain completely functional offline without daemon. |
 
@@ -42,7 +43,7 @@ All Phase 16 requirement IDs (`INGEST-01`, `INGEST-02`, `INGEST-03`, `INGEST-04`
 
 ## Gap Closures Verified
 
-All 5 previous blocking gaps from initial re-verification are closed by Plans 16-16 through 16-23:
+All previous blocking gaps from initial re-verification and UAT Test 9 are closed:
 
 1. **GAP-01: Daemon runtime contract is not executable (Closed by Plan 16-16)**
    - `knowledge-server/src/main.ts` added with strict fail-closed CLI options parser `readKnowledgeServerOptions`.
@@ -71,18 +72,26 @@ All 5 previous blocking gaps from initial re-verification are closed by Plans 16
    - `BackupChatThreadRecordSchema` allows `scopeType: 'document'` with `entityId` refinement.
    - `validateBackup.ts` verifies referential integrity of document-scoped chat threads against notes.
 
+7. **UAT Test 9: Oversized atomic block rejection bypass (Closed by Plan 16-24)**
+   - `atomicBlockValidator.ts` exports `validateAtomicBlocksRecursively`, inspecting all AST levels (nested inside lists, blockquotes, container directives).
+   - `sectionChunker.ts` runs recursive validation before chunking. Documents >50k total characters remain valid when no atomic block exceeds 50k.
+   - `NotesView.tsx`, `PublishPreviewModal.tsx`, and `PublishProgressPanel.tsx` extract and display structured `blockType`, `line`, `column`, `50,000` limit, and split guidance with zero raw source leakage.
+
 ## Required Artifacts Verification
 
 | Artifact | Level 1 (Exists) | Level 2 (Substantive) | Level 3 (Wired) | Level 4 (Data-Flow) | Status |
 |---|---|---|---|---|---|
 | `knowledge-server/src/main.ts` | ✓ | ✓ (129 lines) | ✓ Executable entrypoint | N/A | ✓ VERIFIED |
 | `knowledge-server/src/server.ts` | ✓ | ✓ (117 lines) | ✓ Fastify listener / CORS | ✓ Authenticated API | ✓ VERIFIED |
+| `knowledge-server/src/parser/atomicBlockValidator.ts` | ✓ | ✓ (116 lines) | ✓ Recursive AST validator | ✓ Sanitized error metadata | ✓ VERIFIED |
+| `knowledge-server/src/parser/sectionChunker.ts` | ✓ | ✓ (240 lines) | ✓ Pre-chunking pass | ✓ Multi-chunk preservation | ✓ VERIFIED |
 | `src/services/knowledge/knowledgeConfig.tsx` | ✓ | ✓ (103 lines) | ✓ Context provider | ✓ Root in App.tsx | ✓ VERIFIED |
-| `src/services/knowledge/knowledgeClient.ts` | ✓ | ✓ (434 lines) | ✓ Client caller + poll | ✓ Reconciles DB | ✓ VERIFIED |
+| `src/services/knowledge/knowledgeClient.ts` | ✓ | ✓ (436 lines) | ✓ Client caller + poll | ✓ Reconciles DB | ✓ VERIFIED |
 | `src/services/knowledge/publishOrchestrator.ts` | ✓ | ✓ (194 lines) | ✓ Preview / DLP / poll | ✓ Enforces gates | ✓ VERIFIED |
 | `src/db/repositories/publishAttemptRepo.ts` | ✓ | ✓ (190 lines) | ✓ Dexie repo | ✓ Atomic transaction | ✓ VERIFIED |
 | `src/components/knowledge/DocumentSetDrawer.tsx` | ✓ | ✓ (217 lines) | ✓ Mounted in NotesView | ✓ Live Dexie hooks | ✓ VERIFIED |
-| `src/components/knowledge/PublishPreviewModal.tsx` | ✓ | ✓ (244 lines) | ✓ Mounted in NotesView | ✓ Live polling UI | ✓ VERIFIED |
+| `src/components/knowledge/PublishPreviewModal.tsx` | ✓ | ✓ (248 lines) | ✓ Mounted in NotesView | ✓ Live polling UI | ✓ VERIFIED |
+| `src/components/knowledge/PublishProgressPanel.tsx` | ✓ | ✓ (96 lines) | ✓ Formats structured errors | ✓ Location & split guidance | ✓ VERIFIED |
 | `src/validation/backupSchemas.ts` | ✓ | ✓ (362 lines) | ✓ Schema validation | ✓ Backup export/restore | ✓ VERIFIED |
 
 ## Key Link Verification
@@ -94,29 +103,33 @@ All 5 previous blocking gaps from initial re-verification are closed by Plans 16
 | `NotesView.tsx` | `PublishPreviewModal.tsx` | `<PublishPreviewModal ...>` | ✓ WIRED | Opens preview and drives publish session |
 | `PublishPreviewModal.tsx` | `publishOrchestrator.ts` | `session.confirmFindings()` | ✓ WIRED | Passes explicit override boolean |
 | `PublishPreviewModal.tsx` | `publishOrchestrator.ts` | `session.pollAcceptedAttempt()` | ✓ WIRED | Terminal polling after POST acceptance |
+| `PublishPreviewModal.tsx` | `PublishProgressPanel.tsx` | `<PublishProgressPanel error=...>` | ✓ WIRED | Passes safe structured atomic errors |
 | `publishOrchestrator.ts` | `knowledgeClient.ts` | `client.createPublishAttempt()` | ✓ WIRED | Sends snapshot after DLP confirmation |
 | `knowledgeClient.ts` | `publishAttemptRepo.ts` | `reconcileRemoteAttempt()` | ✓ WIRED | Stores frozen manifest and terminal replacement |
 | `publishAttemptRepo.ts` | `db.publishedDocuments` | Dexie `db.transaction()` | ✓ WIRED | Atomic delete and bulkPut on terminal success |
+| `sectionChunker.ts` | `atomicBlockValidator.ts` | `validateAtomicBlocksRecursively()` | ✓ WIRED | Recursive AST scan before section chunking |
 
 ## Automated Verification Suite Results
 
 | Test Suite | Command | Result |
 |---|---|---|
-| Knowledge daemon unit & integration tests | `npm --prefix knowledge-server test` | ✓ 8 test files, 53 passed |
+| Knowledge daemon unit & integration tests | `npm --prefix knowledge-server test` | ✓ 8 test files, 55 passed |
 | Knowledge daemon build | `npm --prefix knowledge-server run build` | ✓ TypeScript compilation passed |
-| PlannerMate knowledge suites & backup restore | `npm test -- tests/knowledge tests/services/backup/knowledgeBackupRestore.test.ts` | ✓ 14 test files, 130 passed |
+| Atomic block server tests | `npm --prefix knowledge-server test -- tests/atomicBlock.test.ts` | ✓ 6 passed |
+| Atomic block client error UI | `npx vitest run tests/knowledge/atomicBlockClientError.test.tsx` | ✓ 3 passed |
 
 ## Anti-Pattern / Code Hygiene Scan
 
 - No unresolved debt markers (`TBD`, `FIXME`, `XXX`) in Phase 16 knowledge sources.
 - No stub handlers or placeholder data returns.
 - Token and credentials are kept session-only and never written to IndexedDB, backup files, or daemon logs.
+- Zero raw Markdown source text emitted across error objects, attempts, or UI failure panels.
 
 ## Human Verification
 
-None required. All phase requirements are backed by programmatic contract tests, cryptographic checks, deterministic DLP validations, and comprehensive component tests.
+None required. All phase requirements are backed by programmatic contract tests, cryptographic checks, deterministic DLP validations, recursive AST checks, and component tests.
 
 ---
 
-_Verified: 2026-10-09T16:00:00Z_  
+_Verified: 2026-10-09T16:36:00Z_  
 _Verifier: Claude (gsd-verifier)_

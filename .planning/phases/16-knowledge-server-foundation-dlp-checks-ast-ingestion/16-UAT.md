@@ -1,9 +1,9 @@
 ---
 status: partial
 phase: 16-knowledge-server-foundation-dlp-checks-ast-ingestion
-source: 16-01-SUMMARY.md, 16-02-SUMMARY.md, 16-03-SUMMARY.md, 16-04-SUMMARY.md, 16-05-SUMMARY.md, 16-06-SUMMARY.md, 16-07-SUMMARY.md, 16-08-SUMMARY.md, 16-09-SUMMARY.md, 16-10-SUMMARY.md, 16-11-SUMMARY.md, 16-12-SUMMARY.md, 16-13-SUMMARY.md, 16-14-SUMMARY.md, 16-15-SUMMARY.md, 16-16-SUMMARY.md, 16-17-SUMMARY.md, 16-18-SUMMARY.md, 16-19-SUMMARY.md, 16-20-SUMMARY.md, 16-21-SUMMARY.md, 16-22-SUMMARY.md, 16-23-SUMMARY.md
+source: 16-01-SUMMARY.md, 16-02-SUMMARY.md, 16-03-SUMMARY.md, 16-04-SUMMARY.md, 16-05-SUMMARY.md, 16-06-SUMMARY.md, 16-07-SUMMARY.md, 16-08-SUMMARY.md, 16-09-SUMMARY.md, 16-10-SUMMARY.md, 16-11-SUMMARY.md, 16-12-SUMMARY.md, 16-13-SUMMARY.md, 16-14-SUMMARY.md, 16-15-SUMMARY.md, 16-16-SUMMARY.md, 16-17-SUMMARY.md, 16-18-SUMMARY.md, 16-19-SUMMARY.md, 16-20-SUMMARY.md, 16-21-SUMMARY.md, 16-22-SUMMARY.md, 16-23-SUMMARY.md, 16-24-SUMMARY.md
 started: 2026-10-09T12:09:16Z
-updated: 2026-10-09T15:44:51Z
+updated: 2026-10-10T00:00:00Z
 ---
 
 ## Current Test
@@ -45,10 +45,10 @@ expected: Cancel the preview or press Escape after changes or DLP findings appea
 result: pass
 
 ### 9. Oversized Block Rejection
-expected: Publishing a note containing a code block, table, or blockquote over 50,000 characters stops before activation. The error shows line, column, the 50,000-character limit, and guidance to split the source block. The prior remote snapshot remains active.
-result: issue
-reported: "not pass, exceed 50k character publish success to knowledge server, one of the docs has character count exceed 50k, but can ignore for now, fix later if its not too important and affect the rightness of the data"
-severity: minor
+expected: Publishing a note containing a code block, table, or blockquote over 50,000 characters stops before activation. The error shows line, column, the 50,000-character limit, and guidance to split the source block. The prior remote snapshot remains active. Documents over 50,000 total characters remain valid when no individual atomic block exceeds the limit.
+result: pass
+resolution: "Plan 16-24 added recursive AST validation, preserved normal multi-chunk documents, and added structured metadata-only client error feedback. Verified by 6 daemon tests, 3 client UI tests, and 5 pilot acceptance tests."
+severity: resolved
 
 ### 10. Publish Progress and Uncertainty Reconciliation
 expected: Confirm a clean or acknowledged preview and publish. The UI shows publishing stages and only an observer close action. Disconnecting the network produces an unknown-outcome warning rather than Failed; after reconnecting, manually choosing "Kiểm tra trạng thái" reconciles the set to "Đã đồng bộ".
@@ -72,8 +72,8 @@ reason: "the sync from github feature broken now, so i cannot check the backup f
 ## Summary
 
 total: 13
-passed: 11
-issues: 1
+passed: 12
+issues: 0
 pending: 0
 skipped: 0
 blocked: 1
@@ -81,7 +81,7 @@ blocked: 1
 ## Gaps
 
 - truth: "Publishing a note containing a code block, table, or blockquote over 50,000 characters stops before activation. The error shows line, column, the 50,000-character limit, and guidance to split the source block. The prior remote snapshot remains active."
-  status: failed
+  status: resolved
   reason: "User reported: not pass, exceed 50k character publish success to knowledge server, one of the docs has character count exceed 50k, but can ignore for now, fix later if its not too important and affect the rightness of the data"
   severity: minor
   test: 9
