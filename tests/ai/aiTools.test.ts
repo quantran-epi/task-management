@@ -260,13 +260,44 @@ describe('aiTools', () => {
       toArray: async () => mockSettings,
       get: async (key: string) => mockSettings.find((s) => s.key === key)?.value,
     },
+    noteAttachments: {
+      toArray: async () => [
+        {
+          id: 'att-1',
+          noteId: 'n-1',
+          fileName: 'mock.png',
+          mimeType: 'image/png',
+          sizeBytes: 1024,
+          caption: 'Mock screenshot',
+          createdAt: '2026-10-01T00:00:00.000Z',
+        },
+      ],
+      where: (field: string) => ({
+        equals: (val: string) => ({
+          toArray: async () => [
+            {
+              id: 'att-1',
+              noteId: 'n-1',
+              fileName: 'mock.png',
+              mimeType: 'image/png',
+              sizeBytes: 1024,
+              caption: 'Mock screenshot',
+              createdAt: '2026-10-01T00:00:00.000Z',
+            },
+          ].filter((a) => (a as any)[field] === val),
+        }),
+      }),
+      delete: async () => {},
+      put: async () => {},
+      add: async () => {},
+    },
     backupMetadata: {
       toArray: async () => mockBackupMetadata,
     },
   };
 
   it('declares comprehensive query and mutation AI_DATABASE_TOOLS', () => {
-    expect(AI_DATABASE_TOOLS.length).toBe(51);
+    expect(AI_DATABASE_TOOLS.length).toBe(66);
     const names = AI_DATABASE_TOOLS.map((t) => t.function.name);
     // Includes standard read tools
     expect(names).toContain('read_file');
@@ -286,6 +317,11 @@ describe('aiTools', () => {
     expect(names).toContain('get_day_insight');
     expect(names).toContain('get_analytics_summary');
     expect(names).toContain('query_notes');
+    expect(names).toContain('query_trash_notes');
+    expect(names).toContain('query_distinct_tags');
+    expect(names).toContain('get_item_insight');
+    expect(names).toContain('get_document_backlinks');
+    expect(names).toContain('generate_standup_report');
     expect(names).toContain('query_attention_items');
     expect(names).toContain('query_recurring_tasks');
     expect(names).toContain('get_system_status');
@@ -297,6 +333,9 @@ describe('aiTools', () => {
     expect(names).toContain('update_task_checklist');
     expect(names).toContain('reparent_task');
     expect(names).toContain('delete_task');
+    expect(names).toContain('batch_create_tasks');
+    expect(names).toContain('batch_update_tasks');
+    expect(names).toContain('spawn_recurring_task_instance');
     expect(names).toContain('create_project');
     expect(names).toContain('update_project');
     expect(names).toContain('delete_project');
@@ -304,6 +343,8 @@ describe('aiTools', () => {
     expect(names).toContain('update_milestone');
     expect(names).toContain('delete_milestone');
     expect(names).toContain('plan_allocation');
+    expect(names).toContain('batch_plan_allocations');
+    expect(names).toContain('clear_allocations');
     expect(names).toContain('delete_allocation');
     expect(names).toContain('log_work_session');
     expect(names).toContain('update_work_session');
@@ -318,10 +359,15 @@ describe('aiTools', () => {
     expect(names).toContain('create_note');
     expect(names).toContain('update_note');
     expect(names).toContain('delete_note');
+    expect(names).toContain('restore_note');
+    expect(names).toContain('batch_create_notes');
+    expect(names).toContain('manage_note_attachments');
+    expect(names).toContain('auto_link_document');
     expect(names).toContain('manage_reminders');
     expect(names).toContain('link_document');
     expect(names).toContain('unlink_document');
     expect(names).toContain('dismiss_notification');
+    expect(names).toContain('clear_dismissed_alerts');
   });
 
   describe('isMutationTool, normalizeToolName, and describeToolMutation', () => {
@@ -341,6 +387,24 @@ describe('aiTools', () => {
       expect(isMutationTool('manage_reminders')).toBe(true);
       expect(isMutationTool('manage_reminders', { action: 'list' })).toBe(false);
       expect(isMutationTool('manage_reminders', { action: 'add' })).toBe(true);
+      expect(isMutationTool('manage_note_attachments')).toBe(true);
+      expect(isMutationTool('manage_note_attachments', { action: 'list' })).toBe(false);
+      expect(isMutationTool('manage_note_attachments', { action: 'add' })).toBe(true);
+      expect(isMutationTool('manage_note_attachments', { action: 'delete' })).toBe(true);
+      expect(isMutationTool('restore_note')).toBe(true);
+      expect(isMutationTool('batch_create_notes')).toBe(true);
+      expect(isMutationTool('auto_link_document')).toBe(true);
+      expect(isMutationTool('batch_plan_allocations')).toBe(true);
+      expect(isMutationTool('clear_allocations')).toBe(true);
+      expect(isMutationTool('clear_dismissed_alerts')).toBe(true);
+      expect(isMutationTool('batch_create_tasks')).toBe(true);
+      expect(isMutationTool('batch_update_tasks')).toBe(true);
+      expect(isMutationTool('spawn_recurring_task_instance')).toBe(true);
+      expect(isMutationTool('query_trash_notes')).toBe(false);
+      expect(isMutationTool('query_distinct_tags')).toBe(false);
+      expect(isMutationTool('get_item_insight')).toBe(false);
+      expect(isMutationTool('get_document_backlinks')).toBe(false);
+      expect(isMutationTool('generate_standup_report')).toBe(false);
       expect(isMutationTool('link_document')).toBe(true);
       expect(isMutationTool('unlink_document')).toBe(true);
       expect(isMutationTool('dismiss_notification')).toBe(true);
@@ -1215,6 +1279,332 @@ describe('aiTools', () => {
         mockDb as any
       );
       expect(notFoundDesc).toContain('task-nonexistent');
+    });
+  });
+
+  describe('comprehensive new tools execution', () => {
+    const validNoteId = '00000000-0000-4000-8000-000000000001';
+    const validTaskId = '00000000-0000-4000-8000-000000000002';
+
+    const testMutationDb: any = {
+      ...mockDb,
+      transaction: vi.fn().mockImplementation(async (_mode, _tables, callback) => {
+        return await callback();
+      }),
+      settings: {
+        ...mockDb.settings,
+        put: vi.fn().mockResolvedValue(undefined),
+      },
+      tasks: {
+        ...mockDb.tasks,
+        get: async (id: string) => {
+          if (id === validTaskId) {
+            return {
+              id: validTaskId,
+              name: 'Valid Task',
+              status: 'Open',
+              priority: 'High',
+              isRecurring: true,
+              recurrenceFrequency: 'weekly',
+            };
+          }
+          return mockTasks.find((t) => t.id === id);
+        },
+        add: vi.fn().mockResolvedValue('task-new'),
+        put: vi.fn().mockResolvedValue('task-updated'),
+        update: vi.fn().mockResolvedValue(1),
+        where: (field: string) => ({
+          equals: (val: string) => ({
+            toArray: async () => mockTasks.filter((t: any) => t[field] === val),
+          }),
+        }),
+        orderBy: (_field: string) => ({
+          uniqueKeys: async () => ['OpsTeam'],
+        }),
+        filter: (fn: any) => ({
+          first: async () => null,
+          toArray: async () => mockTasks.filter(fn),
+        }),
+      },
+      projects: {
+        ...mockDb.projects,
+        add: vi.fn().mockResolvedValue('proj-new'),
+        put: vi.fn().mockResolvedValue('proj-updated'),
+        update: vi.fn().mockResolvedValue(1),
+        orderBy: (_field: string) => ({
+          uniqueKeys: async () => [],
+        }),
+      },
+      milestones: {
+        ...mockDb.milestones,
+        add: vi.fn().mockResolvedValue('ms-new'),
+        put: vi.fn().mockResolvedValue('ms-updated'),
+        update: vi.fn().mockResolvedValue(1),
+        where: (field: string) => ({
+          equals: (val: string) => ({
+            toArray: async () => mockMilestones.filter((m: any) => m[field] === val),
+          }),
+        }),
+        orderBy: (_field: string) => ({
+          uniqueKeys: async () => [],
+        }),
+      },
+      notes: {
+        ...mockDb.notes,
+        get: async (id: string) => {
+          if (id === validNoteId) {
+            return { id: validNoteId, title: 'Valid Note', body: 'Valid Body' };
+          }
+          return mockNotes.find((n) => n.id === id);
+        },
+        add: vi.fn().mockResolvedValue('note-new'),
+        put: vi.fn().mockResolvedValue('note-put'),
+        bulkAdd: vi.fn().mockResolvedValue(['n-b1', 'n-b2']),
+        update: vi.fn().mockResolvedValue(1),
+        delete: vi.fn().mockResolvedValue(undefined),
+        toCollection: () => ({
+          filter: (fn: any) => ({
+            toArray: async () => mockNotes.filter(fn),
+          }),
+        }),
+        filter: (fn: any) => ({
+          toArray: async () => mockNotes.filter(fn),
+        }),
+      },
+      noteAttachments: {
+        ...mockDb.noteAttachments,
+        where: (field: string) => ({
+          equals: (val: string) => ({
+            toArray: async () => [
+              {
+                id: 'att-1',
+                noteId: validNoteId,
+                fileName: 'mock.png',
+                mimeType: 'image/png',
+                sizeBytes: 1024,
+                caption: 'Mock screenshot',
+                createdAt: '2026-10-01T00:00:00.000Z',
+              },
+            ].filter((a) => (a as any)[field] === val),
+          }),
+        }),
+        add: vi.fn().mockResolvedValue('att-new'),
+        put: vi.fn().mockResolvedValue('att-put'),
+        delete: vi.fn().mockResolvedValue(undefined),
+        bulkDelete: vi.fn().mockResolvedValue(undefined),
+      },
+      plannedAllocations: {
+        ...mockDb.plannedAllocations,
+        where: (field: string) => ({
+          equals: (val: string) => ({
+            filter: (_fn: any) => ({
+              first: async () => null,
+            }),
+            toArray: async () => mockPlannedAllocations.filter((a: any) => a[field] === val),
+          }),
+        }),
+        add: vi.fn().mockResolvedValue('pa-new'),
+        put: vi.fn().mockResolvedValue('pa-put'),
+        delete: vi.fn().mockResolvedValue(undefined),
+        bulkDelete: vi.fn().mockResolvedValue(undefined),
+      },
+      notificationDismissals: {
+        clear: vi.fn().mockResolvedValue(undefined),
+      },
+    };
+
+    it('executes manage_note_attachments (list, add, delete)', async () => {
+      // List
+      const listRes = JSON.parse(
+        await executeAiTool('manage_note_attachments', { action: 'list', noteId: validNoteId }, testMutationDb)
+      );
+      expect(listRes.noteId).toBe(validNoteId);
+      expect(listRes.attachmentsCount).toBe(1);
+      expect(listRes.attachments[0].fileName).toBe('mock.png');
+
+      // Add
+      const addRes = JSON.parse(
+        await executeAiTool(
+          'manage_note_attachments',
+          {
+            action: 'add',
+            noteId: validNoteId,
+            fileName: 'screenshot.png',
+            data: 'c2FtcGxl',
+            caption: 'Ảnh chụp màn hình lỗi',
+          },
+          testMutationDb
+        )
+      );
+      expect(addRes.success).toBe(true);
+      expect(addRes.attachment.fileName).toBe('screenshot.png');
+
+      // Delete
+      const deleteRes = JSON.parse(
+        await executeAiTool('manage_note_attachments', { action: 'delete', attachmentId: 'att-1' }, testMutationDb)
+      );
+      expect(deleteRes.success).toBe(true);
+    });
+
+    it('executes restore_note and query_trash_notes', async () => {
+      const trashRes = JSON.parse(
+        await executeAiTool('query_trash_notes', {}, testMutationDb)
+      );
+      expect(trashRes.totalCount).toBeDefined();
+
+      const restoreRes = JSON.parse(
+        await executeAiTool('restore_note', { id: 'n-1' }, testMutationDb)
+      );
+      expect(restoreRes.success).toBe(true);
+      expect(restoreRes.message).toContain('API Spec Draft');
+    });
+
+    it('executes soft delete vs permanent delete in delete_note', async () => {
+      const softRes = JSON.parse(
+        await executeAiTool('delete_note', { id: 'n-1' }, testMutationDb)
+      );
+      expect(softRes.success).toBe(true);
+      expect(softRes.message).toContain('thùng rác');
+
+      const permRes = JSON.parse(
+        await executeAiTool('delete_note', { id: 'n-1', permanent: true }, testMutationDb)
+      );
+      expect(permRes.success).toBe(true);
+      expect(permRes.message).toContain('vĩnh viễn');
+    });
+
+    it('executes batch_create_notes', async () => {
+      const batchNotesRes = JSON.parse(
+        await executeAiTool(
+          'batch_create_notes',
+          {
+            notes: [
+              { title: 'Doc 1', body: 'Content 1', type: 'document' },
+              { title: 'Doc 2', body: 'Content 2', type: 'quick_note' },
+            ],
+          },
+          testMutationDb
+        )
+      );
+      expect(batchNotesRes.success).toBe(true);
+      expect(batchNotesRes.count).toBe(2);
+    });
+
+    it('executes get_document_backlinks and auto_link_document', async () => {
+      const backlinksRes = JSON.parse(
+        await executeAiTool('get_document_backlinks', { documentId: 'n-1' }, testMutationDb)
+      );
+      expect(backlinksRes.documentId).toBe('n-1');
+      expect(backlinksRes.tasks).toBeDefined();
+
+      const autoLinkRes = JSON.parse(
+        await executeAiTool('auto_link_document', { documentId: 'n-1' }, testMutationDb)
+      );
+      expect(autoLinkRes.success).toBe(true);
+    });
+
+    it('executes generate_standup_report', async () => {
+      const standupRes = JSON.parse(
+        await executeAiTool('generate_standup_report', { date: '2026-10-09' }, testMutationDb)
+      );
+      expect(standupRes.date).toBe('2026-10-09');
+      expect(standupRes.markdownReport).toContain('BÁO CÁO STANDUP');
+    });
+
+    it('executes get_item_insight for task, project, and milestone', async () => {
+      const taskInsight = JSON.parse(
+        await executeAiTool('get_item_insight', { type: 'task', id: 'task-1' }, testMutationDb)
+      );
+      expect(taskInsight.type).toBe('task');
+      expect(taskInsight.analysis).toBeDefined();
+      expect(taskInsight.analysis.metrics).toBeDefined();
+
+      const projInsight = JSON.parse(
+        await executeAiTool('get_item_insight', { type: 'project', id: 'proj-1' }, testMutationDb)
+      );
+      expect(projInsight.type).toBe('project');
+      expect(projInsight.analysis.metrics.totalTasks).toBeDefined();
+
+      const msInsight = JSON.parse(
+        await executeAiTool('get_item_insight', { type: 'milestone', id: 'ms-1' }, testMutationDb)
+      );
+      expect(msInsight.type).toBe('milestone');
+      expect(msInsight.analysis.metrics.totalTasks).toBeDefined();
+    });
+
+    it('executes batch_plan_allocations and clear_allocations', async () => {
+      const batchPlanRes = JSON.parse(
+        await executeAiTool(
+          'batch_plan_allocations',
+          {
+            taskId: validTaskId,
+            allocations: [
+              { date: '2026-10-12', allocatedMinutes: 120 },
+              { date: '2026-10-13', allocatedMinutes: 60 },
+            ],
+          },
+          testMutationDb
+        )
+      );
+      expect(batchPlanRes.success).toBe(true);
+      expect(batchPlanRes.plannedCount).toBe(2);
+
+      const clearRes = JSON.parse(
+        await executeAiTool('clear_allocations', { taskId: validTaskId }, testMutationDb)
+      );
+      expect(clearRes.success).toBe(true);
+    });
+
+    it('executes query_distinct_tags and clear_dismissed_alerts', async () => {
+      const tagsRes = JSON.parse(
+        await executeAiTool('query_distinct_tags', {}, testMutationDb)
+      );
+      expect(tagsRes.opsOwners).toBeDefined();
+      expect(tagsRes.businessAnalysts).toBeDefined();
+      expect(tagsRes.noteTags).toBeDefined();
+
+      const alertsRes = JSON.parse(
+        await executeAiTool('clear_dismissed_alerts', {}, testMutationDb)
+      );
+      expect(alertsRes.success).toBe(true);
+    });
+
+    it('executes batch_create_tasks and batch_update_tasks', async () => {
+      const createRes = JSON.parse(
+        await executeAiTool(
+          'batch_create_tasks',
+          {
+            tasks: [
+              { name: 'Task A', estimateMinutes: 60 },
+              { name: 'Task B', priority: 'High' },
+            ],
+          },
+          testMutationDb
+        )
+      );
+      expect(createRes.success).toBe(true);
+      expect(createRes.count).toBe(2);
+
+      const updateRes = JSON.parse(
+        await executeAiTool(
+          'batch_update_tasks',
+          {
+            taskIds: ['task-1', 'task-2'],
+            patch: { status: 'Done', progress: 100 },
+          },
+          testMutationDb
+        )
+      );
+      expect(updateRes.success).toBe(true);
+      expect(updateRes.updatedCount).toBe(2);
+    });
+
+    it('executes spawn_recurring_task_instance', async () => {
+      const spawnRes = JSON.parse(
+        await executeAiTool('spawn_recurring_task_instance', { taskId: validTaskId }, testMutationDb)
+      );
+      expect(spawnRes.success).toBe(true);
+      expect(spawnRes.spawnedTaskId).toBeDefined();
     });
   });
 });

@@ -25,9 +25,40 @@ import {
   setCapacityOverride,
   removeCapacityOverride,
 } from '../../db/repositories/capacityRepo';
-import { createNote, updateNote, deleteNote } from '../../db/repositories/noteRepo';
-import { linkEntitiesToDoc, unlinkEntityFromDoc } from '../../db/repositories/documentLinkRepo';
-import { dismissAlertToday, getDismissedAlerts } from '../../db/repositories/notificationRepo';
+import {
+  createNote,
+  updateNote,
+  deleteNote,
+  softDeleteNote,
+  restoreNote,
+  getTrashNotes,
+  batchCreateNotes,
+  addNoteAttachment,
+  deleteNoteAttachment,
+  getNoteWithAttachments,
+} from '../../db/repositories/noteRepo';
+import {
+  linkEntitiesToDoc,
+  unlinkEntityFromDoc,
+  getBacklinksForDoc,
+} from '../../db/repositories/documentLinkRepo';
+import {
+  dismissAlertToday,
+  getDismissedAlerts,
+  clearDismissedAlerts,
+} from '../../db/repositories/notificationRepo';
+import { detectReferencedEntities } from '../../utils/smartIngestion';
+import { formatStandupSummary } from '../../utils/standup';
+import {
+  analyzeTaskInsight,
+  analyzeProjectInsight,
+  analyzeMilestoneInsight,
+} from '../../utils/itemInsight';
+import {
+  getDistinctOpsOwners,
+  getDistinctBusinessAnalysts,
+} from '../../db/repositories/tagRepo';
+import { spawnNextRecurringTask } from '../../utils/recurrence';
 import { evaluateNotifications } from '../../utils/notifications';
 import { rankBM25, extractRelevantSnippet } from '../../utils/bm25';
 import { isTauriApp } from '../../utils/timerPopout';
@@ -474,9 +505,115 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
             enum: ['asc', 'desc'],
             description: 'Sort direction (default: desc for updatedAt/createdAt; asc for title).',
           },
+          type: {
+            type: 'string',
+            enum: ['quick_note', 'document', 'folder'],
+            description: 'Optional filter by note type: quick_note, document, or folder.',
+          },
+          parentId: {
+            type: 'string',
+            description: 'Optional parent folder UUID (or "root" for top-level unnested items).',
+          },
+          tags: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional array of tags to filter notes having at least one of these tags.',
+          },
           limit: {
             type: 'number',
             description: 'Max number of notes to return (default 20, max 50).',
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'query_trash_notes',
+      description: 'List notes and documents currently in trash (soft-deleted), including deletion dates and titles.',
+      parameters: {
+        type: 'object',
+        properties: {
+          limit: {
+            type: 'number',
+            description: 'Max number of trash notes to return (default 20, max 50).',
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'query_distinct_tags',
+      description: 'Discover all existing unique Ops Owners, Business Analysts, and note tags across the database to prevent inventing non-existent tags.',
+      parameters: {
+        type: 'object',
+        properties: {
+          category: {
+            type: 'string',
+            enum: ['all', 'opsOwners', 'businessAnalysts', 'noteTags'],
+            description: 'Category of tags to retrieve (default: all).',
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_item_insight',
+      description: 'Run deep health analysis, risk calculation, estimate variance, and bottleneck diagnosis on a specific task, project, or milestone.',
+      parameters: {
+        type: 'object',
+        properties: {
+          type: {
+            type: 'string',
+            enum: ['task', 'project', 'milestone'],
+            description: 'Entity type to analyze.',
+          },
+          id: {
+            type: 'string',
+            description: 'UUID of the entity.',
+          },
+        },
+        required: ['type', 'id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_document_backlinks',
+      description: 'Find all tasks, projects, and notes that link to or reference a specific document in the knowledge base.',
+      parameters: {
+        type: 'object',
+        properties: {
+          documentId: {
+            type: 'string',
+            description: 'UUID of the document.',
+          },
+        },
+        required: ['documentId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'generate_standup_report',
+      description: 'Generate standardized Vietnamese Markdown standup report grouping completed, in-progress, and pending tasks with project names, deadlines, and inherited Ops/BA tags.',
+      parameters: {
+        type: 'object',
+        properties: {
+          date: {
+            type: 'string',
+            description: 'Date for the standup in YYYY-MM-DD format (defaults to today).',
+          },
+          projectId: {
+            type: 'string',
+            description: 'Optional project UUID to restrict standup report to a single project.',
           },
         },
       },
@@ -1140,7 +1277,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     type: 'function',
     function: {
       name: 'update_note',
-      description: 'Update content, title, folder location, tags, or pinned state of an existing note/document.',
+      description: 'Update content, title, folder location, tags, slug, entity links, or pinned state of an existing note/document.',
       parameters: {
         type: 'object',
         properties: {
@@ -1154,6 +1291,13 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           },
           parentId: { type: 'string', description: 'Parent folder UUID (or null to move to root).' },
           tags: { type: 'array', items: { type: 'string' }, description: 'Updated tags array.' },
+          slug: { type: 'string', description: 'Updated URL/human readable slug.' },
+          entityType: {
+            type: 'string',
+            enum: ['task', 'project', 'milestone'],
+            description: 'Optional entity type to link or re-bind note to.',
+          },
+          entityId: { type: 'string', description: 'UUID of entity to link or re-bind note to.' },
           isPinned: { type: 'boolean', description: 'Updated pinned state.' },
         },
         required: ['id'],
@@ -1164,13 +1308,297 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     type: 'function',
     function: {
       name: 'delete_note',
-      description: 'Delete a note permanently.',
+      description: 'Delete a note or document. By default moves to trash (soft delete). Set permanent: true to wipe permanently.',
       parameters: {
         type: 'object',
         properties: {
           id: { type: 'string', description: 'UUID of the note to delete.' },
+          permanent: {
+            type: 'boolean',
+            description: 'Whether to permanently delete (true) or move to trash (false, default).',
+          },
         },
         required: ['id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'restore_note',
+      description: 'Restore a soft-deleted note or document from the trash back to active status.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'UUID of the note to restore.' },
+        },
+        required: ['id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'batch_create_notes',
+      description: 'Create multiple notes, documents, or folders in bulk in one operation.',
+      parameters: {
+        type: 'object',
+        properties: {
+          notes: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                title: { type: 'string', description: 'Note title.' },
+                body: { type: 'string', description: 'Note markdown body (required).' },
+                type: {
+                  type: 'string',
+                  enum: ['quick_note', 'document', 'folder'],
+                  description: 'Note type (default: quick_note).',
+                },
+                parentId: { type: 'string', description: 'Optional parent folder UUID.' },
+                tags: { type: 'array', items: { type: 'string' }, description: 'Optional tags array.' },
+                entityType: {
+                  type: 'string',
+                  enum: ['task', 'project', 'milestone'],
+                  description: 'Optional entity type to bind to.',
+                },
+                entityId: { type: 'string', description: 'Optional entity UUID to bind to.' },
+                isPinned: { type: 'boolean', description: 'Whether note is pinned.' },
+              },
+              required: ['body'],
+            },
+            description: 'Array of note objects to create.',
+          },
+        },
+        required: ['notes'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'manage_note_attachments',
+      description: 'Manage image and file attachments on notes: add attachment (from file path, URL, or base64 data), delete an attachment, or list all attachments for a note.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            enum: ['add', 'delete', 'list'],
+            description: 'Action to perform: add, delete, or list attachments.',
+          },
+          noteId: {
+            type: 'string',
+            description: 'UUID of note (required for add and list actions).',
+          },
+          attachmentId: {
+            type: 'string',
+            description: 'UUID of attachment to remove (required for delete action).',
+          },
+          fileName: {
+            type: 'string',
+            description: 'Attachment file name (for add action, e.g. screenshot.png).',
+          },
+          mimeType: {
+            type: 'string',
+            enum: ['image/png', 'image/jpeg', 'image/gif', 'image/webp'],
+            description: 'Image MIME type (for add action, default image/png).',
+          },
+          filePath: {
+            type: 'string',
+            description: 'Local file path on disk to attach (for add action).',
+          },
+          data: {
+            type: 'string',
+            description: 'Base64 encoded file payload or data URL (for add action).',
+          },
+          caption: {
+            type: 'string',
+            description: 'Optional human-readable caption for the attachment.',
+          },
+        },
+        required: ['action'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'auto_link_document',
+      description: 'Scan document content for task titles, project names, and Jira keys, and automatically link referenced entities.',
+      parameters: {
+        type: 'object',
+        properties: {
+          documentId: {
+            type: 'string',
+            description: 'UUID of the document to scan and link.',
+          },
+        },
+        required: ['documentId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'batch_plan_allocations',
+      description: 'Plan workload allocations for a task across multiple dates in a single call.',
+      parameters: {
+        type: 'object',
+        properties: {
+          taskId: {
+            type: 'string',
+            description: 'UUID of the task.',
+          },
+          allocations: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                date: { type: 'string', description: 'Allocation date (YYYY-MM-DD).' },
+                allocatedMinutes: { type: 'number', description: 'Minutes to allocate for that date.' },
+              },
+              required: ['date', 'allocatedMinutes'],
+            },
+            description: 'List of daily allocations to apply.',
+          },
+        },
+        required: ['taskId', 'allocations'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'clear_allocations',
+      description: 'Clear planned workload allocations in bulk by task ID, specific date, or date range.',
+      parameters: {
+        type: 'object',
+        properties: {
+          taskId: {
+            type: 'string',
+            description: 'Optional task UUID to clear allocations for.',
+          },
+          date: {
+            type: 'string',
+            description: 'Optional single date (YYYY-MM-DD) to clear.',
+          },
+          startDate: {
+            type: 'string',
+            description: 'Optional range start date (YYYY-MM-DD).',
+          },
+          endDate: {
+            type: 'string',
+            description: 'Optional range end date (YYYY-MM-DD).',
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'clear_dismissed_alerts',
+      description: 'Reset and un-dismiss all notification alerts that were muted today.',
+      parameters: {
+        type: 'object',
+        properties: {},
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'batch_create_tasks',
+      description: 'Create multiple tasks in bulk with name, estimate, priority, deadline, status, and work type.',
+      parameters: {
+        type: 'object',
+        properties: {
+          tasks: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string', description: 'Task name (required).' },
+                description: { type: 'string', description: 'Optional task description.' },
+                projectId: { type: 'string', description: 'Optional project UUID.' },
+                milestoneId: { type: 'string', description: 'Optional milestone UUID.' },
+                status: {
+                  type: 'string',
+                  enum: ['Open', 'Pending', 'In Progress', 'Resolved', 'In Review', 'Done', 'Cancelled'],
+                  description: 'Task status.',
+                },
+                priority: {
+                  type: 'string',
+                  enum: ['Low', 'Medium', 'High', 'Urgent'],
+                  description: 'Task priority.',
+                },
+                estimateMinutes: { type: 'number', description: 'Estimated minutes.' },
+                deadline: { type: 'string', description: 'Deadline (YYYY-MM-DD).' },
+                workType: {
+                  type: 'string',
+                  enum: ['code', 'document', 'meeting', 'support_testing', 'investigate', 'configuration', 'review_code'],
+                },
+              },
+              required: ['name'],
+            },
+            description: 'Array of task definitions to create.',
+          },
+        },
+        required: ['tasks'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'batch_update_tasks',
+      description: 'Update common fields (status, priority, progress, project, or milestone) across multiple tasks in one call.',
+      parameters: {
+        type: 'object',
+        properties: {
+          taskIds: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'List of task UUIDs to update.',
+          },
+          patch: {
+            type: 'object',
+            properties: {
+              status: {
+                type: 'string',
+                enum: ['Open', 'Pending', 'In Progress', 'Resolved', 'In Review', 'Done', 'Cancelled'],
+              },
+              priority: {
+                type: 'string',
+                enum: ['Low', 'Medium', 'High', 'Urgent'],
+              },
+              progress: { type: 'number', description: 'Progress percentage (0-100).' },
+              projectId: { type: 'string', description: 'Project UUID to assign.' },
+              milestoneId: { type: 'string', description: 'Milestone UUID to assign.' },
+            },
+            description: 'Fields to update on all specified tasks.',
+          },
+        },
+        required: ['taskIds', 'patch'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'spawn_recurring_task_instance',
+      description: 'Manually trigger the spawning of the next occurrence instance of a recurring task template.',
+      parameters: {
+        type: 'object',
+        properties: {
+          taskId: {
+            type: 'string',
+            description: 'UUID of the recurring task template.',
+          },
+        },
+        required: ['taskId'],
       },
     },
   },
@@ -1873,11 +2301,22 @@ export async function executeAiTool(
           } catch {}
         }
 
+        const attachmentCountMap = new Map<string, number>();
+        if (db.noteAttachments) {
+          try {
+            const allAtt = await db.noteAttachments.toArray();
+            for (const a of allAtt) {
+              attachmentCountMap.set(a.noteId, (attachmentCountMap.get(a.noteId) || 0) + 1);
+            }
+          } catch {}
+        }
+
         const formattedStickyNotes = stickyNotes.map((n) => ({
           id: n.id,
           title: n.title,
           body: n.body,
           isPinned: n.isPinned,
+          attachmentsCount: attachmentCountMap.get(n.id) || 0,
         }));
 
         if (type === 'task') {
@@ -2351,7 +2790,7 @@ export async function executeAiTool(
 
       case 'query_notes': {
         if (!db.notes) return JSON.stringify({ error: 'Notes table unavailable' });
-        let notes = await db.notes.toArray();
+        let notes = (await db.notes.toArray()).filter((n) => !n.deletedAt);
         const allTasks = db.tasks ? await db.tasks.toArray() : [];
         const allProjects = db.projects ? await db.projects.toArray() : [];
         const allMilestones = db.milestones ? await db.milestones.toArray() : [];
@@ -2360,6 +2799,20 @@ export async function executeAiTool(
         const projectMap = new Map(allProjects.map((p) => [p.id, p.name]));
         const milestoneMap = new Map(allMilestones.map((m) => [m.id, m.name]));
 
+        if (args.type) {
+          notes = notes.filter((n) => (n.type || 'quick_note') === args.type);
+        }
+        if (args.parentId !== undefined) {
+          if (args.parentId === 'root' || args.parentId === null || args.parentId === '') {
+            notes = notes.filter((n) => !n.parentId);
+          } else {
+            notes = notes.filter((n) => n.parentId === args.parentId);
+          }
+        }
+        if (Array.isArray(args.tags) && args.tags.length > 0) {
+          const filterTags = new Set(args.tags.map((t: string) => String(t).toLowerCase().trim()));
+          notes = notes.filter((n) => n.tags?.some((t) => filterTags.has(t.toLowerCase().trim())));
+        }
         if (args.entityType) {
           if (args.entityType === 'standalone') {
             notes = notes.filter((n) => !n.entityId || !n.entityType);
@@ -2398,6 +2851,16 @@ export async function executeAiTool(
           );
         }
 
+        const attachmentCountMap = new Map<string, number>();
+        if (db.noteAttachments) {
+          try {
+            const allAtt = await db.noteAttachments.toArray();
+            for (const a of allAtt) {
+              attachmentCountMap.set(a.noteId, (attachmentCountMap.get(a.noteId) || 0) + 1);
+            }
+          } catch {}
+        }
+
         // Sorting: pinned first, then by field
         const sortBy = args.sortBy || 'updatedAt';
         const sortOrder = args.sortOrder || (sortBy === 'title' ? 'asc' : 'desc');
@@ -2427,8 +2890,12 @@ export async function executeAiTool(
           return {
             id: n.id,
             title: n.title ?? 'Untitled Note',
+            type: n.type || 'quick_note',
+            parentId: n.parentId ?? null,
+            tags: n.tags || [],
             bodySnippet: n.body.length > 200 ? `${n.body.slice(0, 200)}...` : n.body,
             isPinned: n.isPinned,
+            attachmentsCount: attachmentCountMap.get(n.id) || 0,
             entityType: n.entityType ?? 'standalone',
             entityId: n.entityId ?? null,
             entityName,
@@ -2441,6 +2908,140 @@ export async function executeAiTool(
           totalCount,
           returnedCount: subset.length,
           notes: subset,
+        });
+      }
+
+      case 'query_trash_notes': {
+        const trash = await getTrashNotes(db);
+        const limit = Math.min(Math.max(1, Number(args.limit) || 20), 50);
+        const subset = trash.slice(0, limit).map((n) => ({
+          id: n.id,
+          title: n.title || 'Untitled Note',
+          type: n.type || 'quick_note',
+          deletedAt: n.deletedAt,
+          bodySnippet: n.body.length > 200 ? `${n.body.slice(0, 200)}...` : n.body,
+          tags: n.tags || [],
+        }));
+        return JSON.stringify({
+          totalCount: trash.length,
+          returnedCount: subset.length,
+          notes: subset,
+        });
+      }
+
+      case 'query_distinct_tags': {
+        const [opsOwners, businessAnalysts, allNotes] = await Promise.all([
+          getDistinctOpsOwners(db),
+          getDistinctBusinessAnalysts(db),
+          db.notes ? db.notes.toArray() : [],
+        ]);
+        const noteTagsSet = new Set<string>();
+        for (const n of allNotes) {
+          if (Array.isArray(n.tags)) {
+            for (const tag of n.tags) {
+              if (tag?.trim()) noteTagsSet.add(tag.trim());
+            }
+          }
+        }
+        const noteTags = Array.from(noteTagsSet).sort((a, b) => a.localeCompare(b));
+        const category = args.category || 'all';
+        if (category === 'opsOwners') return JSON.stringify({ opsOwners });
+        if (category === 'businessAnalysts') return JSON.stringify({ businessAnalysts });
+        if (category === 'noteTags') return JSON.stringify({ noteTags });
+        return JSON.stringify({
+          opsOwners,
+          businessAnalysts,
+          noteTags,
+        });
+      }
+
+      case 'get_item_insight': {
+        const { type, id } = args;
+        if (!type || !id) return JSON.stringify({ error: 'type and id are required' });
+        if (type === 'task') {
+          const task = db.tasks ? await db.tasks.get(id) : null;
+          if (!task) return JSON.stringify({ error: `Task not found: ${id}` });
+          const allTasks = db.tasks ? await db.tasks.toArray() : [];
+          const workSessions = db.workSessions
+            ? (await db.workSessions.toArray()).filter((ws) => ws.taskId === id)
+            : [];
+          const allocations = db.plannedAllocations
+            ? (await db.plannedAllocations.toArray()).filter((pa) => pa.taskId === id)
+            : [];
+          const notes = db.notes
+            ? await db.notes.where('entityId').equals(id).filter((n) => n.entityType === 'task').toArray()
+            : [];
+          const analysis = analyzeTaskInsight(task, workSessions, allocations, allTasks, notes);
+          return JSON.stringify({
+            type: 'task',
+            id: task.id,
+            name: task.name,
+            analysis,
+          });
+        } else if (type === 'project') {
+          const project = db.projects ? await db.projects.get(id) : null;
+          if (!project) return JSON.stringify({ error: `Project not found: ${id}` });
+          const projectTasks = db.tasks ? await db.tasks.where('projectId').equals(id).toArray() : [];
+          const projectMilestones = db.milestones ? await db.milestones.where('projectId').equals(id).toArray() : [];
+          const allWorkSessions = db.workSessions ? await db.workSessions.toArray() : [];
+          const allAllocations = db.plannedAllocations ? await db.plannedAllocations.toArray() : [];
+          const analysis = analyzeProjectInsight(project, projectTasks, projectMilestones, allWorkSessions, allAllocations);
+          return JSON.stringify({
+            type: 'project',
+            id: project.id,
+            name: project.name,
+            analysis,
+          });
+        } else if (type === 'milestone') {
+          const milestone = db.milestones ? await db.milestones.get(id) : null;
+          if (!milestone) return JSON.stringify({ error: `Milestone not found: ${id}` });
+          const milestoneTasks = db.tasks ? await db.tasks.where('milestoneId').equals(id).toArray() : [];
+          const capacityRules = db.capacityRules ? await db.capacityRules.toArray() : [];
+          const analysis = analyzeMilestoneInsight(milestone, milestoneTasks, capacityRules);
+          return JSON.stringify({
+            type: 'milestone',
+            id: milestone.id,
+            name: milestone.name,
+            analysis,
+          });
+        }
+        return JSON.stringify({ error: `Invalid item type: ${type}` });
+      }
+
+      case 'get_document_backlinks': {
+        if (!args.documentId) return JSON.stringify({ error: 'documentId parameter is required' });
+        const doc = db.notes ? await db.notes.get(args.documentId) : null;
+        if (!doc) return JSON.stringify({ error: `Document not found: ${args.documentId}` });
+        const backlinks = await getBacklinksForDoc(args.documentId, db);
+        return JSON.stringify({
+          documentId: args.documentId,
+          documentTitle: doc.title || 'Untitled Document',
+          totalBacklinks: backlinks.tasks.length + backlinks.projects.length + backlinks.referencingNotes.length,
+          tasks: backlinks.tasks.map((t) => ({ id: t.id, name: t.name, status: t.status, priority: t.priority })),
+          projects: backlinks.projects.map((p) => ({ id: p.id, name: p.name, status: p.status })),
+          referencingNotes: backlinks.referencingNotes.map((n) => ({ id: n.id, title: n.title, type: n.type })),
+        });
+      }
+
+      case 'generate_standup_report': {
+        const allTasks = db.tasks ? await db.tasks.toArray() : [];
+        const allProjects = db.projects ? await db.projects.toArray() : [];
+        const allMilestones = db.milestones ? await db.milestones.toArray() : [];
+        const projectMap = new Map(allProjects.map((p) => [p.id, p]));
+        const milestoneMap = new Map(allMilestones.map((m) => [m.id, m]));
+        let tasks = allTasks;
+        if (args.projectId) {
+          tasks = tasks.filter((t) => t.projectId === args.projectId);
+        }
+        const report = formatStandupSummary(tasks, {
+          projectMap,
+          milestoneMap,
+          todayStr: args.date || getTodayDateString(),
+        });
+        return JSON.stringify({
+          date: args.date || getTodayDateString(),
+          taskCount: tasks.length,
+          markdownReport: report,
         });
       }
 
@@ -3206,6 +3807,9 @@ export async function executeAiTool(
         if (args.type !== undefined) patch.type = args.type;
         if (args.parentId !== undefined) patch.parentId = args.parentId || undefined;
         if (args.tags !== undefined) patch.tags = args.tags;
+        if (args.slug !== undefined) patch.slug = args.slug;
+        if (args.entityType !== undefined) patch.entityType = args.entityType || undefined;
+        if (args.entityId !== undefined) patch.entityId = args.entityId || undefined;
         if (args.isPinned !== undefined) patch.isPinned = Boolean(args.isPinned);
 
         await updateNote(args.id, patch, db);
@@ -3217,10 +3821,276 @@ export async function executeAiTool(
 
       case 'delete_note': {
         if (!args.id) return JSON.stringify({ error: 'Note ID is required' });
-        await deleteNote(args.id, db);
+        if (args.permanent) {
+          await deleteNote(args.id, db);
+          return JSON.stringify({
+            success: true,
+            message: `Đã xóa vĩnh viễn ghi chú (${args.id}).`,
+          });
+        } else {
+          await softDeleteNote(args.id, db);
+          return JSON.stringify({
+            success: true,
+            message: `Đã chuyển ghi chú (${args.id}) vào thùng rác.`,
+          });
+        }
+      }
+
+      case 'restore_note': {
+        if (!args.id) return JSON.stringify({ error: 'id is required' });
+        const existing = db.notes ? await db.notes.get(args.id) : null;
+        if (!existing) return JSON.stringify({ error: `Note not found: ${args.id}` });
+        await restoreNote(args.id, db);
         return JSON.stringify({
           success: true,
-          message: `Đã xóa ghi chú (${args.id}).`,
+          message: `Đã khôi phục ghi chú/tài liệu "${existing.title || args.id}" từ thùng rác thành công.`,
+        });
+      }
+
+      case 'batch_create_notes': {
+        if (!Array.isArray(args.notes) || args.notes.length === 0) {
+          return JSON.stringify({ error: 'notes array is required' });
+        }
+        const created = await batchCreateNotes(args.notes, db);
+        return JSON.stringify({
+          success: true,
+          message: `Đã tạo ${created.length} ghi chú/tài liệu thành công.`,
+          count: created.length,
+          createdIds: created.map((n) => n.id),
+        });
+      }
+
+      case 'manage_note_attachments': {
+        const { action, noteId, attachmentId } = args;
+        if (!action || !['add', 'delete', 'list'].includes(action)) {
+          return JSON.stringify({ error: 'action must be "add", "delete", or "list"' });
+        }
+
+        if (action === 'list') {
+          if (!noteId) return JSON.stringify({ error: 'noteId is required for list action' });
+          const res = await getNoteWithAttachments(noteId, db);
+          if (!res) return JSON.stringify({ error: `Note not found: ${noteId}` });
+          return JSON.stringify({
+            noteId,
+            noteTitle: res.note.title || 'Untitled Note',
+            attachmentsCount: res.attachments.length,
+            attachments: res.attachments.map((a) => ({
+              id: a.id,
+              fileName: a.fileName,
+              mimeType: a.mimeType,
+              sizeBytes: a.sizeBytes,
+              caption: a.caption ?? null,
+              filePath: a.filePath ?? null,
+              createdAt: a.createdAt,
+            })),
+          });
+        }
+
+        if (action === 'delete') {
+          if (!attachmentId) return JSON.stringify({ error: 'attachmentId is required for delete action' });
+          await deleteNoteAttachment(attachmentId, db);
+          return JSON.stringify({
+            success: true,
+            message: `Đã xóa file đính kèm (${attachmentId}) thành công.`,
+          });
+        }
+
+        if (action === 'add') {
+          if (!noteId) return JSON.stringify({ error: 'noteId is required for add action' });
+          const note = db.notes ? await db.notes.get(noteId) : null;
+          if (!note) return JSON.stringify({ error: `Note not found: ${noteId}` });
+
+          const mimeType = args.mimeType || 'image/png';
+          const fileName = args.fileName || (args.filePath ? String(args.filePath).split(/[/\\]/).pop() : 'attachment.png') || 'attachment.png';
+
+          let blobData: Blob;
+          if (args.data) {
+            const raw = String(args.data).replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, '');
+            try {
+              const byteCharacters = atob(raw);
+              const byteNumbers = new Array(byteCharacters.length);
+              for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+              }
+              blobData = new Blob([new Uint8Array(byteNumbers)], { type: mimeType });
+            } catch {
+              blobData = new Blob([raw], { type: mimeType });
+            }
+          } else if (args.filePath) {
+            blobData = new Blob([args.filePath], { type: mimeType });
+          } else {
+            blobData = new Blob(['attachment'], { type: mimeType });
+          }
+
+          const attachment = await addNoteAttachment(
+            {
+              noteId,
+              fileName,
+              mimeType,
+              sizeBytes: blobData.size || 1,
+              data: blobData,
+              caption: args.caption,
+              filePath: args.filePath,
+            },
+            db
+          );
+
+          return JSON.stringify({
+            success: true,
+            message: `Đã đính kèm tệp "${fileName}" vào ghi chú "${note.title || noteId}" thành công.`,
+            attachment: {
+              id: attachment.id,
+              fileName: attachment.fileName,
+              mimeType: attachment.mimeType,
+              sizeBytes: attachment.sizeBytes,
+              caption: attachment.caption ?? null,
+            },
+          });
+        }
+
+        return JSON.stringify({ error: `Unsupported action: ${action}` });
+      }
+
+      case 'auto_link_document': {
+        if (!args.documentId) return JSON.stringify({ error: 'documentId is required' });
+        const doc = db.notes ? await db.notes.get(args.documentId) : null;
+        if (!doc) return JSON.stringify({ error: `Document not found: ${args.documentId}` });
+        const [allTasks, allProjects, allMilestones] = await Promise.all([
+          db.tasks ? db.tasks.toArray() : [],
+          db.projects ? db.projects.toArray() : [],
+          db.milestones ? db.milestones.toArray() : [],
+        ]);
+        const detected = detectReferencedEntities(doc.body, allTasks, allProjects, allMilestones);
+        if (detected.length === 0) {
+          return JSON.stringify({
+            success: true,
+            message: 'Không phát hiện tác vụ hoặc dự án nào trong tài liệu để liên kết.',
+            linkedCount: 0,
+            detected: [],
+          });
+        }
+        await linkEntitiesToDoc(doc.id, doc.title || 'Tài liệu', detected, db);
+        return JSON.stringify({
+          success: true,
+          message: `Đã tự động liên kết ${detected.length} thực thể với tài liệu "${doc.title || doc.id}".`,
+          linkedCount: detected.length,
+          detected,
+        });
+      }
+
+      case 'batch_plan_allocations': {
+        if (!args.taskId) return JSON.stringify({ error: 'taskId is required' });
+        if (!Array.isArray(args.allocations) || args.allocations.length === 0) {
+          return JSON.stringify({ error: 'allocations array of { date, allocatedMinutes } is required' });
+        }
+        const task = db.tasks ? await db.tasks.get(args.taskId) : null;
+        if (!task) return JSON.stringify({ error: `Task not found: ${args.taskId}` });
+        for (const alloc of args.allocations) {
+          if (alloc.date && typeof alloc.allocatedMinutes === 'number') {
+            await upsertAllocation(args.taskId, String(alloc.date), Number(alloc.allocatedMinutes), db);
+          }
+        }
+        return JSON.stringify({
+          success: true,
+          message: `Đã phân bổ thành công ${args.allocations.length} ngày làm việc cho tác vụ "${task.name}".`,
+          plannedCount: args.allocations.length,
+        });
+      }
+
+      case 'clear_allocations': {
+        if (!db.plannedAllocations) return JSON.stringify({ error: 'PlannedAllocations table unavailable' });
+        let allocations = await db.plannedAllocations.toArray();
+        if (args.taskId) {
+          allocations = allocations.filter((a) => a.taskId === args.taskId);
+        }
+        if (args.date) {
+          allocations = allocations.filter((a) => a.date === args.date);
+        }
+        if (args.startDate) {
+          allocations = allocations.filter((a) => a.date >= args.startDate);
+        }
+        if (args.endDate) {
+          allocations = allocations.filter((a) => a.date <= args.endDate);
+        }
+        const deletedCount = allocations.length;
+        if (deletedCount > 0) {
+          await db.plannedAllocations.bulkDelete(allocations.map((a) => a.id));
+        }
+        return JSON.stringify({
+          success: true,
+          message: `Đã xóa ${deletedCount} mục phân bổ kế hoạch.`,
+          deletedCount,
+        });
+      }
+
+      case 'clear_dismissed_alerts': {
+        await clearDismissedAlerts(db);
+        return JSON.stringify({
+          success: true,
+          message: 'Đã thiết lập lại toàn bộ thông báo đã ẩn hôm nay.',
+        });
+      }
+
+      case 'batch_create_tasks': {
+        if (!Array.isArray(args.tasks) || args.tasks.length === 0) {
+          return JSON.stringify({ error: 'tasks array is required' });
+        }
+        const createdTasks: any[] = [];
+        for (const taskInput of args.tasks) {
+          const t = await createTask(taskInput, db);
+          createdTasks.push({ id: t.id, name: t.name, status: t.status });
+        }
+        return JSON.stringify({
+          success: true,
+          message: `Đã tạo ${createdTasks.length} tác vụ mới thành công.`,
+          count: createdTasks.length,
+          tasks: createdTasks,
+        });
+      }
+
+      case 'batch_update_tasks': {
+        if (!Array.isArray(args.taskIds) || args.taskIds.length === 0) {
+          return JSON.stringify({ error: 'taskIds array is required' });
+        }
+        if (!args.patch || typeof args.patch !== 'object') {
+          return JSON.stringify({ error: 'patch object is required' });
+        }
+        let updatedCount = 0;
+        for (const taskId of args.taskIds) {
+          try {
+            await updateTask(taskId, args.patch, db);
+            updatedCount++;
+          } catch {
+            // Continue with others
+          }
+        }
+        return JSON.stringify({
+          success: true,
+          message: `Đã cập nhật ${updatedCount}/${args.taskIds.length} tác vụ.`,
+          updatedCount,
+          totalRequested: args.taskIds.length,
+        });
+      }
+
+      case 'spawn_recurring_task_instance': {
+        if (!args.taskId) return JSON.stringify({ error: 'taskId is required' });
+        const task = db.tasks ? await db.tasks.get(args.taskId) : null;
+        if (!task) return JSON.stringify({ error: `Task not found: ${args.taskId}` });
+        if (!task.isRecurring) {
+          return JSON.stringify({ error: `Tác vụ "${task.name}" không phải là tác vụ định kỳ.` });
+        }
+        const spawned = await spawnNextRecurringTask(task, db);
+        if (!spawned) {
+          return JSON.stringify({
+            success: false,
+            message: `Không thể tạo phiên bản tiếp theo cho "${task.name}".`,
+          });
+        }
+        return JSON.stringify({
+          success: true,
+          message: `Đã tạo phiên bản tiếp theo cho tác vụ định kỳ "${task.name}": "${spawned.name}" (Hạn: ${spawned.deadline || 'Không có'}).`,
+          spawnedTaskId: spawned.id,
+          deadline: spawned.deadline,
         });
       }
 
@@ -3674,6 +4544,16 @@ const MUTATION_TOOLS = new Set([
   'create_note',
   'update_note',
   'delete_note',
+  'restore_note',
+  'batch_create_notes',
+  'manage_note_attachments',
+  'auto_link_document',
+  'batch_plan_allocations',
+  'clear_allocations',
+  'clear_dismissed_alerts',
+  'batch_create_tasks',
+  'batch_update_tasks',
+  'spawn_recurring_task_instance',
   'manage_reminders',
   'link_document',
   'unlink_document',
@@ -3695,6 +4575,9 @@ export function normalizeToolName(toolName: string): string {
 export function isMutationTool(toolName: string, args?: Record<string, any>): boolean {
   const normalized = normalizeToolName(toolName);
   if (normalized === 'manage_reminders' && args?.action === 'list') {
+    return false;
+  }
+  if (normalized === 'manage_note_attachments' && args?.action === 'list') {
     return false;
   }
   return MUTATION_TOOLS.has(normalized);
@@ -3809,7 +4692,34 @@ export function describeToolMutation(toolName: string, args: Record<string, any>
     case 'update_note':
       return `Cập nhật ghi chú/tài liệu (${args.id}): ${changes || ''}`;
     case 'delete_note':
-      return `Xóa vĩnh viễn ghi chú (${args.id})`;
+      return `Xóa ${args.permanent ? 'vĩnh viễn' : 'vào thùng rác'} ghi chú (${args.id})`;
+    case 'restore_note':
+      return `Khôi phục ghi chú/tài liệu (${args.id}) từ thùng rác`;
+    case 'batch_create_notes':
+      return `Tạo hàng loạt ${Array.isArray(args.notes) ? args.notes.length : ''} ghi chú/tài liệu`;
+    case 'manage_note_attachments': {
+      if (args.action === 'add') {
+        return `Đính kèm tệp "${args.fileName || args.filePath || 'tệp'}" vào ghi chú (${args.noteId})`;
+      }
+      if (args.action === 'delete') {
+        return `Xóa tệp đính kèm (${args.attachmentId})`;
+      }
+      return `Xem danh sách tệp đính kèm của ghi chú (${args.noteId})`;
+    }
+    case 'auto_link_document':
+      return `Quét và tự động liên kết các thực thể trong tài liệu (${args.documentId})`;
+    case 'batch_plan_allocations':
+      return `Phân bổ ${Array.isArray(args.allocations) ? args.allocations.length : ''} ngày làm việc cho tác vụ (${args.taskId})`;
+    case 'clear_allocations':
+      return `Xóa phân bổ công việc${args.taskId ? ` cho tác vụ (${args.taskId})` : ''}${args.date ? ` ngày ${args.date}` : ''}`;
+    case 'clear_dismissed_alerts':
+      return `Thiết lập lại toàn bộ cảnh báo đã ẩn hôm nay`;
+    case 'batch_create_tasks':
+      return `Tạo hàng loạt ${Array.isArray(args.tasks) ? args.tasks.length : ''} tác vụ mới`;
+    case 'batch_update_tasks':
+      return `Cập nhật hàng loạt ${Array.isArray(args.taskIds) ? args.taskIds.length : ''} tác vụ`;
+    case 'spawn_recurring_task_instance':
+      return `Tạo phiên bản tiếp theo cho tác vụ định kỳ (${args.taskId})`;
     case 'manage_reminders': {
       if (args.action === 'add') {
         return `Thêm nhắc nhở ngày ${args.date || ''}${args.time ? ` lúc ${args.time}` : ''} cho ${args.entityType || 'mục'} (${args.entityId})`;
@@ -3953,7 +4863,43 @@ export async function describeToolMutationWithContext(
       case 'delete_note': {
         const note = db.notes ? await db.notes.get(args.id) : null;
         if (!note) return fallback;
-        return `Xóa vĩnh viễn ghi chú/tài liệu "${note.title || 'Chưa đặt tên'}"`;
+        return `Xóa ${args.permanent ? 'vĩnh viễn' : 'vào thùng rác'} ghi chú/tài liệu "${note.title || 'Chưa đặt tên'}"`;
+      }
+
+      case 'restore_note': {
+        const note = db.notes ? await db.notes.get(args.id) : null;
+        if (!note) return fallback;
+        return `Khôi phục ghi chú/tài liệu "${note.title || 'Chưa đặt tên'}" từ thùng rác`;
+      }
+
+      case 'manage_note_attachments': {
+        const note = args.noteId && db.notes ? await db.notes.get(args.noteId) : null;
+        const noteName = note ? `ghi chú "${note.title || 'Chưa đặt tên'}"` : `ghi chú (${args.noteId})`;
+        if (args.action === 'add') {
+          return `Đính kèm tệp "${args.fileName || args.filePath || 'tệp'}" vào ${noteName}`;
+        }
+        if (args.action === 'delete') {
+          return `Xóa tệp đính kèm (${args.attachmentId})`;
+        }
+        return `Xem danh sách tệp đính kèm của ${noteName}`;
+      }
+
+      case 'auto_link_document': {
+        const doc = db.notes ? await db.notes.get(args.documentId) : null;
+        if (!doc) return fallback;
+        return `Quét và tự động liên kết các thực thể trong tài liệu "${doc.title || 'Chưa đặt tên'}"`;
+      }
+
+      case 'batch_plan_allocations': {
+        const task = db.tasks ? await db.tasks.get(args.taskId) : null;
+        const taskName = task ? `tác vụ "${task.name}"` : `tác vụ (${args.taskId})`;
+        return `Phân bổ ${Array.isArray(args.allocations) ? args.allocations.length : ''} ngày làm việc cho ${taskName}`;
+      }
+
+      case 'spawn_recurring_task_instance': {
+        const task = db.tasks ? await db.tasks.get(args.taskId) : null;
+        const taskName = task ? `tác vụ "${task.name}"` : `tác vụ (${args.taskId})`;
+        return `Tạo phiên bản tiếp theo cho tác vụ định kỳ ${taskName}`;
       }
 
       case 'manage_reminders': {
