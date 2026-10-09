@@ -45,10 +45,12 @@ export interface DocumentSetDrawerProps {
   configured: boolean;
   loading?: boolean;
   currentFolderId?: string;
+  creating?: boolean;
   onClose: () => void;
   onSave: (setId: string | undefined, value: DocumentSetFormValue) => void | Promise<void>;
   onPreview: (set: DocumentSet) => void;
   onCreate?: () => void;
+  onCancelCreate?: () => void;
   onOpenSettings?: () => void;
 }
 
@@ -61,8 +63,28 @@ export function DocumentSetDrawer(props: DocumentSetDrawerProps) {
   const liveNotes = props.notes ? [...props.notes] : queriedNotes;
   const liveAttempts = props.attempts ? [...props.attempts] : queriedAttempts;
   const [internalSelectedId, setInternalSelectedId] = useState<string>();
+  const [internalCreating, setInternalCreating] = useState(false);
+  const isCreating = props.creating ?? internalCreating;
+
+  const handleCreate = () => {
+    setInternalSelectedId(undefined);
+    if (props.onCreate) {
+      props.onCreate();
+    } else {
+      setInternalCreating(true);
+    }
+  };
+
+  const handleCancelCreate = () => {
+    if (props.onCancelCreate) {
+      props.onCancelCreate();
+    } else {
+      setInternalCreating(false);
+    }
+  };
+
   const selectedId = props.selectedSetId ?? internalSelectedId;
-  const selected = liveSets?.find((set) => set.id === selectedId);
+  const selected = !isCreating ? liveSets?.find((set) => set.id === selectedId) : undefined;
   const state = props.state ?? 'Never published';
   const stateUi = STATE_UI[state];
   const previewDisabled = !selected?.documentIds.length || !props.configured || props.activeSetId === selected?.id || state === 'Publishing';
@@ -73,16 +95,42 @@ export function DocumentSetDrawer(props: DocumentSetDrawerProps) {
       onClose={props.onClose}
       width={520}
       styles={{ body: { background: token.colorBgContainer, padding: token.padding } }}
-      title="Bộ tài liệu xuất bản"
-      extra={<Button type="primary" icon={<PlusOutlined />} onClick={props.onCreate}>Tạo bộ tài liệu</Button>}
+      title={isCreating ? 'Tạo bộ tài liệu mới' : 'Bộ tài liệu xuất bản'}
+      extra={!isCreating ? <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>Tạo bộ tài liệu</Button> : null}
     >
-      <Text type="secondary">Quản lý nhóm tài liệu gửi thủ công đến Knowledge Server.</Text>
+      <Text type="secondary">
+        {isCreating
+          ? 'Tạo nhóm tài liệu từ thư mục hiện tại hoặc chọn thủ công để chuẩn bị xuất bản.'
+          : 'Quản lý nhóm tài liệu gửi thủ công đến Knowledge Server.'}
+      </Text>
       <div style={{ marginTop: token.margin }}>
         {props.loading || !liveSets || !liveNotes || !liveAttempts ? (
           <Skeleton active />
+        ) : isCreating ? (
+          <Space direction="vertical" size="large" style={{ width: '100%' }}>
+            <Button type="text" icon={<LeftOutlined />} onClick={handleCancelCreate}>
+              Hủy tạo / Quay lại danh sách
+            </Button>
+            <DocumentSetForm
+              notes={liveNotes}
+              {...(props.currentFolderId ? { currentFolderId: props.currentFolderId } : {})}
+              onSave={async (value) => {
+                await props.onSave(undefined, value);
+                handleCancelCreate();
+              }}
+            />
+          </Space>
         ) : !selected ? (
           liveSets.length === 0 ? (
-            <Empty description={<Space direction="vertical"><Title level={3}>Chưa có bộ tài liệu</Title><Text>Tạo một bộ từ thư mục hiện tại hoặc chọn tài liệu thủ công để xuất bản lên Knowledge Server.</Text><Button type="primary" onClick={props.onCreate}>Tạo bộ tài liệu</Button></Space>} />
+            <Empty
+              description={
+                <Space direction="vertical">
+                  <Title level={3}>Chưa có bộ tài liệu</Title>
+                  <Text>Tạo một bộ từ thư mục hiện tại hoặc chọn tài liệu thủ công để xuất bản lên Knowledge Server.</Text>
+                  <Button type="primary" onClick={handleCreate}>Tạo bộ tài liệu</Button>
+                </Space>
+              }
+            />
           ) : (
             <List
               dataSource={liveSets}

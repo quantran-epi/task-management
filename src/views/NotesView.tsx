@@ -226,6 +226,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const [aiPromptModalOpen, setAiPromptModalOpen] = useState<boolean>(false);
   const [documentSetDrawerOpen, setDocumentSetDrawerOpen] = useState(false);
+  const [creatingDocumentSet, setCreatingDocumentSet] = useState(false);
   const [publishModalOpen, setPublishModalOpen] = useState(false);
   const [publishSession, setPublishSession] = useState<PublishSession | null>(null);
   const [publishPreview, setPublishPreview] = useState<ChangePreview | null>(null);
@@ -1088,9 +1089,15 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
         attempts={publishAttempts ?? []}
         configured={isConfigured}
         loading={previewLoading}
+        creating={creatingDocumentSet}
         {...(cachedAt ? { cachedAt } : {})}
         {...(currentFolder?.id ? { currentFolderId: currentFolder.id } : {})}
-        onClose={() => setDocumentSetDrawerOpen(false)}
+        onClose={() => {
+          setDocumentSetDrawerOpen(false);
+          setCreatingDocumentSet(false);
+        }}
+        onCreate={() => setCreatingDocumentSet(true)}
+        onCancelCreate={() => setCreatingDocumentSet(false)}
         onSave={handleSaveDocumentSet}
         onPreview={handlePreviewDocumentSet}
         onOpenSettings={() => { window.location.hash = '#/settings'; }}
