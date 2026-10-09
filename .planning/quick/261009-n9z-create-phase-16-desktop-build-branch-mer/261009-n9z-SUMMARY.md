@@ -25,8 +25,9 @@ completed: 2026-10-09
 
 ## Deployment
 
-- Branch ready to push as `origin/phase-16-desktop-build`.
-- GitHub CLI is unavailable locally; workflow dispatch requires GitHub web UI unless another authenticated API client is available.
-- Manual dispatch must use `publish_to_taskmate=false`; artifacts remain downloadable from workflow run without creating release/tag.
+- Added a branch-specific push trigger for `phase-16-desktop-build` because GitHub CLI is unavailable locally.
+- Pushing `origin/phase-16-desktop-build` starts an artifact-only workflow run automatically.
+- Branch builds upload `desktop-windows` and `desktop-macos` artifacts without creating a release or tag.
+- Manual dispatch remains safe when `publish_to_taskmate=false`.
 
 ## Self-Check: PASSED
