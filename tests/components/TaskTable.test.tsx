@@ -323,4 +323,40 @@ describe('TaskTable Component', () => {
 
     openDocSpy.mockRestore();
   });
+
+  it('renders long document links properly with word-break and tooltip on hover', async () => {
+    const longLink = 'https://example.com/very/deeply/nested/path/to/some/resource/with/very/long/query?param1=value1&param2=value2&param3=value3';
+    const taskWithLongLink: Task = {
+      ...sampleTasks[0]!,
+      id: 'task-long-link',
+      name: 'Task with long link',
+      documentLinks: [longLink],
+    };
+
+    render(
+      <TaskTable
+        tasks={[taskWithLongLink]}
+        projects={[]}
+        milestones={[]}
+        selectedRowKeys={[]}
+        onSelectRows={vi.fn()}
+        onOpenDrawer={vi.fn()}
+        db={db}
+      />
+    );
+
+    const linkTag = screen.getByText('🔗 1');
+    expect(linkTag).toBeInTheDocument();
+
+    fireEvent.mouseEnter(linkTag);
+
+    const docLinkAnchor = await screen.findByRole('link');
+    expect(docLinkAnchor).toBeInTheDocument();
+    expect(docLinkAnchor).toHaveAttribute('title', 'Mở liên kết web');
+
+    const spanElement = screen.getByTitle(longLink);
+    expect(spanElement).toBeInTheDocument();
+    expect(spanElement).toHaveTextContent(longLink);
+    expect(spanElement).toHaveStyle({ wordBreak: 'break-all' });
+  });
 });
