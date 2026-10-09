@@ -254,15 +254,18 @@ describe('guarded publish UI', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: /Tôi hiểu các tài liệu này sẽ bị gỡ/ }));
     fireEvent.click(scan);
     expect(await screen.findByText('Không phát hiện dữ liệu nhạy cảm theo bộ quy tắc hiện tại.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Xuất bản bộ tài liệu' })).toBeEnabled();
+    const publishButton = screen.getByRole('button', { name: 'Xuất bản bộ tài liệu' });
+    expect(publishButton).toBeEnabled();
+    fireEvent.click(publishButton);
+    expect(session.confirmFindings).toHaveBeenCalledWith(false);
   });
 
-  it('shows masked findings and fresh unchecked override', async () => {
+  it('shows masked findings and fresh unchecked override, passing consent to confirmFindings', async () => {
     const session = {
       confirmRemoval: vi.fn(), cancelRemoval: vi.fn(), scan: vi.fn(async () => [finding]),
-      confirmFindings: vi.fn(async () => ({ nonce: 'nonce-a' })), submitConfirmedAttempt: vi.fn(), closePreview: vi.fn(),
+      confirmFindings: vi.fn(async () => ({ nonce: 'nonce-a' })), submitConfirmedAttempt: vi.fn(async () => ({ status: 'Publishing', attemptId: 'attempt-a' })), closePreview: vi.fn(),
     };
-    render(<PublishPreviewModal open preview={{ ...previewWithRemoval(), hasRemovals: false }} session={session as never} onClose={vi.fn()} documentTitles={{ 'doc-a': 'Alpha' }} />);
+    const { rerender } = render(<PublishPreviewModal open preview={{ ...previewWithRemoval(), hasRemovals: false }} session={session as never} onClose={vi.fn()} documentTitles={{ 'doc-a': 'Alpha' }} />);
     fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra dữ liệu nhạy cảm' }));
     expect(await screen.findByText('Phát hiện dữ liệu có thể nhạy cảm')).toBeInTheDocument();
     expect(screen.getByText('411111******1111')).toBeInTheDocument();
@@ -270,9 +273,18 @@ describe('guarded publish UI', () => {
     expect(screen.queryByText('4111111111111111')).not.toBeInTheDocument();
     const override = screen.getByRole('checkbox', { name: /Tôi đã xem cảnh báo/ });
     expect(override).not.toBeChecked();
-    expect(screen.getByRole('button', { name: 'Vẫn xuất bản lần này' })).toBeDisabled();
+    const publishButton = screen.getByRole('button', { name: 'Vẫn xuất bản lần này' });
+    expect(publishButton).toBeDisabled();
+
+    // Check override and publish
     fireEvent.click(override);
-    expect(screen.getByRole('button', { name: 'Vẫn xuất bản lần này' })).toBeEnabled();
+    expect(publishButton).toBeEnabled();
+    fireEvent.click(publishButton);
+    expect(session.confirmFindings).toHaveBeenCalledWith(true);
+
+    // Opening new preview resets checkbox
+    rerender(<PublishPreviewModal open preview={{ ...previewWithRemoval(), hasRemovals: false, setId: 'set-new' }} session={session as never} onClose={vi.fn()} documentTitles={{ 'doc-a': 'Alpha' }} />);
+    expect(screen.queryByRole('checkbox', { name: /Tôi đã xem cảnh báo/ })).not.toBeInTheDocument();
   });
 
   it('cancels before POST and accepted state offers close only', () => {

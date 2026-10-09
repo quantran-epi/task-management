@@ -59,7 +59,7 @@ export function PublishPreviewModal({ open, preview, session, documentTitles = {
   };
 
   const publish = async () => {
-    const confirmation = await session.confirmFindings();
+    const confirmation = await session.confirmFindings(overrideConfirmed);
     const result = await session.submitConfirmedAttempt(confirmation.nonce);
     setConflict(Boolean(result.conflict));
     setStep('publishing');
