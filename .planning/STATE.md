@@ -8,7 +8,7 @@ status: ready
 stopped_at: Phase 16 verified and secured; Phase 17 ready for planning
 last_updated: "2026-10-09T16:15:00.000Z"
 last_activity: 2026-10-09
-last_activity_desc: "Completed quick task 261009-n9z: integrated latest master and prepared artifact-only Phase 16 desktop build branch"
+last_activity_desc: "Completed quick task 261009-v10t: fix Schema V10 table list and verno test assertions"
 state_head: 092f237
 progress:
   total_phases: 16
@@ -40,6 +40,7 @@ Progress: [████████░░] 75%
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261009-v10t | fix Schema V10 table list and verno test assertions | 2026-10-09 | 5ad90bb | complete | [261009-v10t-fix-schema-v10-test-assertions](./quick/261009-v10t-fix-schema-v10-test-assertions/) |
 | 261009-n9z | integrate latest master, prepare artifact-only Phase 16 desktop build branch | 2026-10-09 | — | complete | [261009-n9z-create-phase-16-desktop-build-branch-mer](./quick/261009-n9z-create-phase-16-desktop-build-branch-mer/) |
 | 261009-hkj | write Oracle SQLcl MCP HTTP gateway requirements handoff | 2026-10-09 | — | complete | [261009-hkj-create-concise-requirements-handoff-for-](./quick/261009-hkj-create-concise-requirements-handoff-for-/) |
 | 261009-frs | write desktop stdio MCP implementation handoff with dynamic tool policy | 2026-10-09 | — | complete | [261009-frs-create-an-implementation-instruction-mar](./quick/261009-frs-create-an-implementation-instruction-mar/) |
