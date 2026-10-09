@@ -16,6 +16,7 @@ import {
   FileExcelOutlined,
   FilePptOutlined,
   FileMarkdownOutlined,
+  FolderOpenOutlined,
 } from '@ant-design/icons';
 import type { ChatMessage, ChatGeneratedFile } from '../../types/models';
 import { APP_NAME, APP_SLUG } from '../../constants/app';
@@ -23,6 +24,7 @@ import { renderSafeMarkdown } from '../../utils/markdown';
 import {
   exportContentAsFile,
   saveFileWithPicker,
+  downloadBlob,
   inferFormatFromFilename,
   type ExportFormat,
 } from '../../utils/fileExport';
@@ -219,7 +221,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
     return /\|.+?\|.+?\|/.test(msg.content);
   }, [msg.content]);
 
-  const handleExportFile = async (format: ExportFormat) => {
+  const handleExportFile = async (format: ExportFormat, directDownload: boolean = false) => {
     try {
       // Derive clean base filename: check first heading (# Title) or fallback to timestamp
       const firstHeadingMatch = msg.content.match(/^#{1,3}\s+(.+)$/m);
@@ -242,6 +244,11 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
           undefined,
           false
         );
+        if (directDownload) {
+          downloadBlob(result.filename, result.blob);
+          message.success(`Đã tải xuống ${result.filename} (${result.slideCount} slides)`);
+          return;
+        }
         const saveRes = await saveFileWithPicker(result.filename, result.blob);
         if (saveRes.saved) {
           message.success(`Đã lưu ${result.filename} (${result.slideCount} slides)`);
@@ -250,6 +257,11 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
       }
 
       const result = exportContentAsFile(msg.content, `${baseName}.${format}`, format, false);
+      if (directDownload) {
+        downloadBlob(result.filename, result.blob);
+        message.success(`Đã tải xuống ${result.filename}`);
+        return;
+      }
       const saveRes = await saveFileWithPicker(result.filename, result.blob);
       if (saveRes.saved) {
         message.success(`Đã lưu ${result.filename}`);
@@ -259,7 +271,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
     }
   };
 
-  const handleDownloadGeneratedFile = async (file: ChatGeneratedFile) => {
+  const handleDownloadGeneratedFile = async (file: ChatGeneratedFile, directDownload: boolean = false) => {
     try {
       const format = (file.format as ExportFormat) || inferFormatFromFilename(file.filename);
       let blob: Blob;
@@ -282,6 +294,12 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
         blob = result.blob;
       }
 
+      if (directDownload) {
+        downloadBlob(file.filename, blob);
+        message.success(`Đã tải xuống tệp ${file.filename}`);
+        return;
+      }
+
       const saveRes = await saveFileWithPicker(file.filename, blob);
       if (saveRes.saved) {
         message.success(`Đã lưu tệp ${file.filename}`);
@@ -291,61 +309,71 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
     }
   };
 
-  const exportMenuItems: MenuProps['items'] = useMemo(() => {
+  const buildExportMenuItems = (directDownload: boolean): NonNullable<MenuProps['items']> => {
     const tableHighlightStyle = hasMarkdownTable
       ? { fontWeight: 600, color: token.colorPrimary }
       : undefined;
 
     return [
       {
-        key: 'pptx',
+        key: `${directDownload ? 'dl' : 'save'}-pptx`,
         icon: <FilePptOutlined style={{ color: '#d24726' }} />,
         label: 'PowerPoint Slides (.pptx)',
-        onClick: () => handleExportFile('pptx'),
+        onClick: () => handleExportFile('pptx', directDownload),
       },
       {
-        key: 'docx',
+        key: `${directDownload ? 'dl' : 'save'}-docx`,
         icon: <FileWordOutlined style={{ color: '#185abd' }} />,
         label: 'Word Document (.docx)',
-        onClick: () => handleExportFile('docx'),
+        onClick: () => handleExportFile('docx', directDownload),
       },
       {
-        key: 'xlsx',
+        key: `${directDownload ? 'dl' : 'save'}-xlsx`,
         icon: <FileExcelOutlined style={{ color: '#107c41' }} />,
         label: (
           <span style={tableHighlightStyle}>
             Excel Spreadsheet (.xlsx) {hasMarkdownTable ? '★' : ''}
           </span>
         ),
-        onClick: () => handleExportFile('xlsx'),
+        onClick: () => handleExportFile('xlsx', directDownload),
       },
       {
-        key: 'csv',
+        key: `${directDownload ? 'dl' : 'save'}-csv`,
         icon: <FileTextOutlined style={{ color: '#107c41' }} />,
         label: (
           <span style={tableHighlightStyle}>
             CSV Data (.csv) {hasMarkdownTable ? '★' : ''}
           </span>
         ),
-        onClick: () => handleExportFile('csv'),
+        onClick: () => handleExportFile('csv', directDownload),
       },
       {
         type: 'divider',
       },
       {
-        key: 'md',
+        key: `${directDownload ? 'dl' : 'save'}-md`,
         icon: <FileMarkdownOutlined style={{ color: '#0969da' }} />,
         label: 'Markdown (.md)',
-        onClick: () => handleExportFile('md'),
+        onClick: () => handleExportFile('md', directDownload),
       },
       {
-        key: 'txt',
+        key: `${directDownload ? 'dl' : 'save'}-txt`,
         icon: <FileTextOutlined style={{ color: '#666666' }} />,
         label: 'Văn bản thuần (.txt)',
-        onClick: () => handleExportFile('txt'),
+        onClick: () => handleExportFile('txt', directDownload),
       },
     ];
-  }, [hasMarkdownTable, token.colorPrimary]);
+  };
+
+  const directDownloadMenuItems = useMemo(
+    () => buildExportMenuItems(true),
+    [hasMarkdownTable, token.colorPrimary, msg.content]
+  );
+
+  const saveAsMenuItems = useMemo(
+    () => buildExportMenuItems(false),
+    [hasMarkdownTable, token.colorPrimary, msg.content]
+  );
 
   const formattedTime = msg.createdAt
     ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -493,15 +521,27 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
                     </Text>
                   </div>
                 </div>
-                <Button
-                  type="primary"
-                  size="small"
-                  icon={<DownloadOutlined />}
-                  onClick={() => handleDownloadGeneratedFile(file)}
-                  style={{ fontSize: 12, height: 26, flexShrink: 0 }}
-                >
-                  Lưu tệp (Save As)
-                </Button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                  <Button
+                    size="small"
+                    icon={<DownloadOutlined />}
+                    onClick={() => handleDownloadGeneratedFile(file, true)}
+                    style={{ fontSize: 12, height: 26 }}
+                    title="Tải tệp trực tiếp qua trình duyệt"
+                  >
+                    Tải về
+                  </Button>
+                  <Button
+                    type="primary"
+                    size="small"
+                    icon={<FolderOpenOutlined />}
+                    onClick={() => handleDownloadGeneratedFile(file, false)}
+                    style={{ fontSize: 12, height: 26 }}
+                    title="Lưu tệp và chọn thư mục (Save As)"
+                  >
+                    Lưu tệp...
+                  </Button>
+                </div>
               </div>
             );
           })}
@@ -555,7 +595,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
           )}
 
           <Dropdown
-            menu={{ items: exportMenuItems }}
+            menu={{ items: directDownloadMenuItems }}
             trigger={['click']}
             placement="bottomLeft"
             getPopupContainer={(node) => node.parentElement || document.body}
@@ -565,8 +605,26 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               size="small"
               icon={<DownloadOutlined />}
               style={{ fontSize: 12, height: 24, padding: '0 8px' }}
+              title="Tải tệp trực tiếp qua trình duyệt"
             >
-              Xuất tệp
+              Tải về
+            </Button>
+          </Dropdown>
+
+          <Dropdown
+            menu={{ items: saveAsMenuItems }}
+            trigger={['click']}
+            placement="bottomLeft"
+            getPopupContainer={(node) => node.parentElement || document.body}
+            overlayStyle={{ zIndex: 1500 }}
+          >
+            <Button
+              size="small"
+              icon={<FolderOpenOutlined />}
+              style={{ fontSize: 12, height: 24, padding: '0 8px' }}
+              title="Lưu tệp và chọn vị trí (Save As)"
+            >
+              Lưu tệp...
             </Button>
           </Dropdown>
         </div>
@@ -588,7 +646,11 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
           </Text>
         )}
         {!isUser && !isStreaming && msg.durationMs !== undefined && (
-          <Tooltip title={`Thời gian chạy phản hồi: ${(msg.durationMs / 1000).toFixed(2)}s`}>
+          <Tooltip
+            title={`Thời gian chạy phản hồi: ${(msg.durationMs / 1000).toFixed(2)}s`}
+            zIndex={1500}
+            getPopupContainer={(node) => node.parentElement || document.body}
+          >
             <span
               style={{
                 fontSize: 11,
@@ -606,6 +668,8 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
         {!isUser && !isStreaming && msg.tokenUsage && (msg.tokenUsage.totalTokens || msg.tokenUsage.completionTokens) && (
           <Tooltip
             title={`Tổng token: ${(msg.tokenUsage.totalTokens ?? ((msg.tokenUsage.promptTokens || 0) + (msg.tokenUsage.completionTokens || 0))).toLocaleString()} (Vào: ${(msg.tokenUsage.promptTokens || 0).toLocaleString()}, Ra: ${(msg.tokenUsage.completionTokens || 0).toLocaleString()})`}
+            zIndex={1500}
+            getPopupContainer={(node) => node.parentElement || document.body}
           >
             <span
               style={{
@@ -622,7 +686,11 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
           </Tooltip>
         )}
         {!isUser && (
-          <Tooltip title={copied ? 'Đã sao chép' : 'Sao chép nội dung'}>
+          <Tooltip
+            title={copied ? 'Đã sao chép' : 'Sao chép nội dung'}
+            zIndex={1500}
+            getPopupContainer={(node) => node.parentElement || document.body}
+          >
             <Button
               type="text"
               size="small"

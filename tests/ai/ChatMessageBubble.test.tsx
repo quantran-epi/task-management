@@ -69,6 +69,51 @@ describe('ChatMessageBubble', () => {
     render(<ChatMessageBubble message={streamingMessage} isStreaming />);
     expect(screen.getByText('▋')).toBeInTheDocument();
   });
+
+  it('renders duration and token metrics with tooltips on assistant message', () => {
+    const assistantMsg: ChatMessage = {
+      id: 'msg-metrics',
+      threadId: 'thread-1',
+      role: 'assistant',
+      content: 'Finished response',
+      durationMs: 3420,
+      tokenUsage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+      createdAt: '2026-10-03T10:04:00Z',
+    };
+
+    render(<ChatMessageBubble message={assistantMsg} />);
+    expect(screen.getByText('⏱ 3.4s')).toBeInTheDocument();
+    expect(screen.getByText('🪙 150 tokens')).toBeInTheDocument();
+  });
+
+  it('renders both browser download and save as buttons for generated files and export actions', () => {
+    const fileMsg: ChatMessage = {
+      id: 'msg-file',
+      threadId: 'thread-1',
+      role: 'assistant',
+      content: 'Here is your file',
+      generatedFiles: [
+        {
+          id: 'file-1',
+          filename: 'report.docx',
+          sizeBytes: 1024,
+          format: 'docx',
+          content: 'File content',
+        },
+      ],
+      createdAt: '2026-10-03T10:05:00Z',
+    };
+
+    render(<ChatMessageBubble message={fileMsg} />);
+    expect(screen.getByText('report.docx')).toBeInTheDocument();
+
+    // Check generated file card download actions
+    const downloadBtns = screen.getAllByRole('button', { name: /Tải về/i });
+    expect(downloadBtns.length).toBeGreaterThanOrEqual(1);
+
+    const saveBtns = screen.getAllByRole('button', { name: /Lưu tệp/i });
+    expect(saveBtns.length).toBeGreaterThanOrEqual(1);
+  });
 });
 
 describe('ChatMessageList', () => {

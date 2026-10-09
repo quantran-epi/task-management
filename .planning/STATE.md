@@ -6,9 +6,9 @@ current_phase: 15
 current_phase_name: ghost-dev-local-claude-code-headless-orchestration-with-agen
 status: complete
 stopped_at: Phase 15 executed and verified
-last_updated: "2026-10-09T10:56:00.000Z"
+last_updated: "2026-10-09T14:00:00.000Z"
 last_activity: 2026-10-09
-last_activity_desc: "Completed quick task 261009-exp: fix ai export dropdown, add duration and token metrics, and support save as with location picker"
+last_activity_desc: "Completed quick task 261009-j6f: fix ai export browser download and tooltip zindex"
 state_head: 0cb57c6
 progress:
   total_phases: 12
@@ -39,6 +39,7 @@ Last activity: 2026-10-09 -- Completed quick task 261009-exp: fix ai export drop
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261009-j6f | fix ai export browser download and tooltip zindex | 2026-10-09 | — | complete | [261009-j6f-fix-ai-export-browser-download-and-toolt](./quick/261009-j6f-fix-ai-export-browser-download-and-toolt/) |
 | 261009-exp | fix ai export dropdown, add duration and token metrics, and support save as with location picker | 2026-10-09 | — | complete | [261009-exp-fix-ai-export-dropdown-metrics-save-as](./quick/261009-exp-fix-ai-export-dropdown-metrics-save-as/) |
 | 261009-ait | add comprehensive missing AI mutation and query tools | 2026-10-09 | — | complete | [261009-ait-add-comprehensive-missing-ai-tools](./quick/261009-ait-add-comprehensive-missing-ai-tools/) |
 | 261008-pop | fix diff popover zindex, terminal chat history and skill autocomplete, optimize diff refresh | 2026-10-08 | — | complete | [261008-fix-popover-history-autocomplete-diff-perf](./quick/261008-fix-popover-history-autocomplete-diff-perf/) |
