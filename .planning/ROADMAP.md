@@ -266,7 +266,7 @@ Plans:
 
 - [ ] 16-16-PLAN.md — Executable daemon bootstrap and authenticated API health contract (Wave 11)
 - [ ] 16-17-PLAN.md — Shared root configuration and first document-set creation (Wave 11)
-- [ ] 16-18-PLAN.md — Document-scoped chat backup validation safety (Wave 11)
+- [x] 16-18-PLAN.md — Document-scoped chat backup validation safety (Wave 11)
 
 **Wave 12** *(blocked on Wave 11 completion)*
 

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Hybrid GraphRAG Knowledge Assistant MVP
 status: executing
-stopped_at: Completed 16-14-PLAN.md
-last_updated: "2026-10-09T03:07:01.005Z"
-last_activity: 2026-10-09 -- Phase 16 execution started
+stopped_at: Completed 16-18-PLAN.md
+last_updated: "2026-10-09T03:30:00.000Z"
+last_activity: 2026-10-09 -- Phase 16 execution ongoing (Plan 18 complete)
 progress:
   total_phases: 16
   completed_phases: 11
   total_plans: 61
-  completed_plans: 53
-  percent: 69
+  completed_plans: 54
+  percent: 70
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 ## Current Position
 
 Phase: 16 (knowledge-server-foundation-dlp-checks-ast-ingestion) — EXECUTING
-Plan: 1 of 23
+Plan: 18 of 23
 Status: Executing Phase 16
-Last activity: 2026-10-09 -- Phase 16 execution started
+Last activity: 2026-10-09 -- Phase 16 Plan 18 complete
 
 Progress: [██████████] 98%
 
@@ -148,6 +148,7 @@ Progress: [██████████] 98%
 | Phase 16 P12 | 25min | 2 tasks | 6 files |
 | Phase 16 P13 | 28min | 2 tasks | 2 files |
 | Phase 16 P14 | 8min | 3 tasks | 4 files |
+| Phase 16 P18 | 4min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -155,6 +156,8 @@ Progress: [██████████] 98%
 
 Recent decisions logged in PROJECT.md:
 
+- [Phase 16 Plan 18]: Accept 'document' as valid ChatScopeType in BackupChatThreadRecordSchema, requiring entityId via Zod refinement.
+- [Phase 16 Plan 18]: Validate in Stage 3 that document-scoped chat threads reference existing Note UUIDs in imported payload before committing to restore.
 - [Phase 16 Plan 01]: D-01: DocumentSet persists an explicit ordered snapshot of stable UUIDs; no live folder query.
 - [Phase 16 Plan 01]: D-02: Existing Note body, hierarchy, and tags preserved byte-for-byte during V10 upgrade.
 - [Phase 16 Plan 01]: D-08: Remote metadata is cached non-canonically without Markdown content or tokens.
