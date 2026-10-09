@@ -249,6 +249,11 @@ export interface PublishedDocumentMetadata {
   lastPrimaryState?: PublishPrimaryState | undefined;
 }
 
+export interface FrozenSubmittedDocumentMetadata {
+  documentId: string; // Stable Note UUID
+  submittedContentHash: string; // Lowercase 64-hex SHA-256 hash of submitted content
+}
+
 export interface PublishAttemptCache {
   id: string; // RFC 4122 v4 UUID
   setId: string; // Reference to DocumentSet.id
@@ -264,6 +269,7 @@ export interface PublishAttemptCache {
   warningCount: number;
   errorCode?: string | undefined;
   errorMessage?: string | undefined;
+  submittedDocuments?: FrozenSubmittedDocumentMetadata[] | undefined; // Ordered content-free frozen manifest (D-06, D-08, D-10)
 }
 
 export interface DlpAuditRecord {

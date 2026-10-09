@@ -40,6 +40,25 @@ const isoTimestampSchema = z.string().refine(
 const sha256HexSchema = z.string().regex(/^[0-9a-fA-F]{64}$/, 'Must be 64-character hex SHA-256 hash');
 
 /**
+ * Lowercase SHA-256 hex string validator for frozen manifests (D-06, D-10).
+ */
+const lowercaseSha256HexSchema = z
+  .string()
+  .regex(/^[0-9a-f]{64}$/, 'Must be 64-character lowercase hex SHA-256 hash');
+
+/**
+ * Frozen submitted document metadata schema (D-06, D-08, D-10).
+ * Strictly contains document UUID and lowercase submitted SHA-256 hash only.
+ * No content-bearing or credential fields permitted.
+ */
+export const FrozenSubmittedDocumentMetadataSchema = z
+  .object({
+    documentId: strictUuidSchema,
+    submittedContentHash: lowercaseSha256HexSchema,
+  })
+  .strict();
+
+/**
  * D-01: DocumentSet stores an explicit ordered snapshot of stable document UUIDs.
  */
 export const DocumentSetSchema = z
@@ -98,6 +117,13 @@ export const PublishAttemptCacheSchema = z
     warningCount: z.number().int().nonnegative(),
     errorCode: z.string().max(100).optional(),
     errorMessage: z.string().max(1000).optional(),
+    submittedDocuments: z
+      .array(FrozenSubmittedDocumentMetadataSchema)
+      .refine(
+        (items) => new Set(items.map((i) => i.documentId)).size === items.length,
+        'Duplicate document IDs are not allowed in submittedDocuments'
+      )
+      .optional(),
   })
   .strict();
 

@@ -34,12 +34,24 @@ export async function reconcileRemoteAttempt(
   const setId = validatedAttempt.setId;
 
   // 2. Atomic write transaction
-  await db.transaction(
+  return await db.transaction(
     'rw',
     [db.publishAttempts, db.publishedDocuments, db.documentSets],
     async () => {
+      // Preserve existing submittedDocuments manifest if input omits it (D-08, D-10)
+      let attemptToStore = validatedAttempt;
+      if (!validatedAttempt.submittedDocuments) {
+        const existing = await db.publishAttempts.get(validatedAttempt.id);
+        if (existing?.submittedDocuments) {
+          attemptToStore = {
+            ...validatedAttempt,
+            submittedDocuments: existing.submittedDocuments,
+          };
+        }
+      }
+
       // Put attempt
-      await db.publishAttempts.put(validatedAttempt);
+      await db.publishAttempts.put(attemptToStore);
 
       // Put published document metadata
       if (validatedDocs.length > 0) {
@@ -64,10 +76,10 @@ export async function reconcileRemoteAttempt(
           await db.publishAttempts.bulkDelete(toPrune.map((a) => a.id));
         }
       }
+
+      return attemptToStore;
     }
   );
-
-  return validatedAttempt;
 }
 
 /**
@@ -114,4 +126,16 @@ export async function listRecentAttempts(
         new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
     )
     .slice(0, 10);
+}
+
+/**
+ * Retrieves a cached publish attempt by attempt ID.
+ * Follows D-08, D-10, D-13:
+ * Returns the raw attempt row including durable content-free frozen submittedDocuments manifest if present.
+ */
+export async function getCachedPublishAttempt(
+  attemptId: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<PublishAttemptCache | undefined> {
+  return await db.publishAttempts.get(attemptId);
 }

@@ -6,6 +6,7 @@ import {
   reconcileRemoteAttempt,
   markPollingUncertain,
   listRecentAttempts,
+  getCachedPublishAttempt,
   type ReconcileAttemptInput,
 } from '../../src/db/repositories/publishAttemptRepo';
 import { createDocumentSet } from '../../src/db/repositories/documentSetRepo';
@@ -300,5 +301,230 @@ describe('Publish Attempt Reconciliation & Status (D-08, D-27, D-29, T-16-05, T-
     const allAttemptsInDb = await db.publishAttempts.where('setId').equals(set.id).toArray();
     expect(allAttemptsInDb.some((a) => a.startedAt === '2026-10-08T01:00:00.000Z')).toBe(false);
     expect(allAttemptsInDb.some((a) => a.startedAt === '2026-10-08T02:00:00.000Z')).toBe(false);
+  });
+
+  describe('Frozen Submitted Document Manifest (D-06, D-07, D-08, D-10, D-13, D-18, D-29)', () => {
+    it('persists frozen manifest entries, survives DB close/reopen, and retrieves by attempt ID via getCachedPublishAttempt', async () => {
+      const set = await createDocumentSet({ name: 'Manifest Set' }, db);
+      const attemptId = generateId();
+      const docId1 = generateId();
+      const docId2 = generateId();
+      const hash1 = 'a'.repeat(64);
+      const hash2 = 'b'.repeat(64);
+
+      const submittedDocs = [
+        { documentId: docId1, submittedContentHash: hash1 },
+        { documentId: docId2, submittedContentHash: hash2 },
+      ];
+
+      await reconcileRemoteAttempt(
+        {
+          attempt: {
+            id: attemptId,
+            setId: set.id,
+            startedAt: '2026-10-08T00:00:00.000Z',
+            status: 'Publishing',
+            addedCount: 2,
+            changedCount: 0,
+            removedCount: 0,
+            unchangedCount: 0,
+            warningCount: 0,
+            submittedDocuments: submittedDocs,
+          },
+        },
+        db
+      );
+
+      // Close and reopen database instance to verify durable IndexedDB persistence
+      db.close();
+      const reopenedDb = new TaskPlannerDatabase(dbName);
+      await reopenedDb.open();
+
+      // Retrieve via getCachedPublishAttempt
+      const cached = await getCachedPublishAttempt(attemptId, reopenedDb);
+      expect(cached).toBeDefined();
+      expect(cached?.id).toBe(attemptId);
+      expect(cached?.submittedDocuments).toEqual(submittedDocs);
+
+      reopenedDb.close();
+      await db.open();
+    });
+
+    it('preserves existing manifest byte-for-byte across subsequent status updates that omit submittedDocuments', async () => {
+      const set = await createDocumentSet({ name: 'Preserve Manifest Set' }, db);
+      const attemptId = generateId();
+      const docId1 = generateId();
+      const hash1 = 'c'.repeat(64);
+
+      // 1. Initial write with submitted manifest
+      await reconcileRemoteAttempt(
+        {
+          attempt: {
+            id: attemptId,
+            setId: set.id,
+            startedAt: '2026-10-08T00:00:00.000Z',
+            status: 'Publishing',
+            addedCount: 1,
+            changedCount: 0,
+            removedCount: 0,
+            unchangedCount: 0,
+            warningCount: 0,
+            submittedDocuments: [{ documentId: docId1, submittedContentHash: hash1 }],
+          },
+        },
+        db
+      );
+
+      // 2. Network uncertainty update via markPollingUncertain
+      await markPollingUncertain(attemptId, 'Connection drop', db);
+
+      let inDb = await getCachedPublishAttempt(attemptId, db);
+      expect(inDb?.status).toBe('Publishing');
+      expect(inDb?.errorMessage).toBe('Connection drop');
+      expect(inDb?.submittedDocuments).toEqual([
+        { documentId: docId1, submittedContentHash: hash1 },
+      ]);
+
+      // 3. Terminal update without submittedDocuments
+      await reconcileRemoteAttempt(
+        {
+          attempt: {
+            id: attemptId,
+            setId: set.id,
+            startedAt: '2026-10-08T00:00:00.000Z',
+            completedAt: '2026-10-08T00:00:04.000Z',
+            status: 'In sync',
+            addedCount: 1,
+            changedCount: 0,
+            removedCount: 0,
+            unchangedCount: 0,
+            warningCount: 0,
+          },
+        },
+        db
+      );
+
+      inDb = await getCachedPublishAttempt(attemptId, db);
+      expect(inDb?.status).toBe('In sync');
+      expect(inDb?.submittedDocuments).toEqual([
+        { documentId: docId1, submittedContentHash: hash1 },
+      ]);
+    });
+
+    it('rejects duplicate document IDs, non-lowercase hashes, and content-bearing fields in manifest', async () => {
+      const set = await createDocumentSet({ name: 'Strict Manifest Set' }, db);
+      const docId = generateId();
+
+      // Duplicate document IDs
+      await expect(
+        reconcileRemoteAttempt(
+          {
+            attempt: {
+              id: generateId(),
+              setId: set.id,
+              startedAt: '2026-10-08T00:00:00.000Z',
+              status: 'Publishing',
+              addedCount: 2,
+              changedCount: 0,
+              removedCount: 0,
+              unchangedCount: 0,
+              warningCount: 0,
+              submittedDocuments: [
+                { documentId: docId, submittedContentHash: 'a'.repeat(64) },
+                { documentId: docId, submittedContentHash: 'b'.repeat(64) },
+              ],
+            },
+          },
+          db
+        )
+      ).rejects.toThrow();
+
+      // Non-lowercase SHA-256 hash
+      await expect(
+        reconcileRemoteAttempt(
+          {
+            attempt: {
+              id: generateId(),
+              setId: set.id,
+              startedAt: '2026-10-08T00:00:00.000Z',
+              status: 'Publishing',
+              addedCount: 1,
+              changedCount: 0,
+              removedCount: 0,
+              unchangedCount: 0,
+              warningCount: 0,
+              submittedDocuments: [
+                { documentId: docId, submittedContentHash: 'A'.repeat(64) },
+              ],
+            },
+          },
+          db
+        )
+      ).rejects.toThrow();
+
+      // Content-bearing field inside manifest entry
+      await expect(
+        reconcileRemoteAttempt(
+          {
+            attempt: {
+              id: generateId(),
+              setId: set.id,
+              startedAt: '2026-10-08T00:00:00.000Z',
+              status: 'Publishing',
+              addedCount: 1,
+              changedCount: 0,
+              removedCount: 0,
+              unchangedCount: 0,
+              warningCount: 0,
+              submittedDocuments: [
+                {
+                  documentId: docId,
+                  submittedContentHash: 'a'.repeat(64),
+                  body: '# Secret markdown content',
+                } as any,
+              ],
+            },
+          },
+          db
+        )
+      ).rejects.toThrow();
+    });
+
+    it('proves forbidden canaries (title, body, tag, token, DLP) are completely absent from serialized row', async () => {
+      const set = await createDocumentSet({ name: 'Canary Test Set' }, db);
+      const attemptId = generateId();
+      const docId = generateId();
+
+      await reconcileRemoteAttempt(
+        {
+          attempt: {
+            id: attemptId,
+            setId: set.id,
+            startedAt: '2026-10-08T00:00:00.000Z',
+            status: 'Publishing',
+            addedCount: 1,
+            changedCount: 0,
+            removedCount: 0,
+            unchangedCount: 0,
+            warningCount: 0,
+            submittedDocuments: [
+              { documentId: docId, submittedContentHash: 'f'.repeat(64) },
+            ],
+          },
+        },
+        db
+      );
+
+      const rawRow = await db.publishAttempts.get(attemptId);
+      const serialized = JSON.stringify(rawRow);
+
+      expect(serialized).not.toContain('title');
+      expect(serialized).not.toContain('body');
+      expect(serialized).not.toContain('tags');
+      expect(serialized).not.toContain('token');
+      expect(serialized).not.toContain('Bearer');
+      expect(serialized).not.toContain('dlp');
+      expect(serialized).not.toContain('finding');
+    });
   });
 });
