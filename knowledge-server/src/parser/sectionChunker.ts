@@ -2,7 +2,7 @@ import { toString } from 'mdast-util-to-string';
 import type { Root, RootContent, Heading } from 'mdast';
 import { parseMarkdownToAst } from './markdownAst.js';
 import {
-  validateAtomicBlockNode,
+  validateAtomicBlocksRecursively,
   OversizedAtomicBlockError,
 } from './atomicBlockValidator.js';
 import {
@@ -130,9 +130,7 @@ export function chunkMarkdownSnapshot(
   const ast: Root = parseMarkdownToAst(rawMarkdown);
 
   // Validate all atomic nodes first across entire AST (D-25, T-16-15)
-  for (const node of ast.children) {
-    validateAtomicBlockNode(node, documentId, hardLimit);
-  }
+  validateAtomicBlocksRecursively(ast, documentId, hardLimit);
 
   // Group top-level AST nodes into semantic sections (preamble, H2, H3)
   const sections: SectionAccumulator[] = [];

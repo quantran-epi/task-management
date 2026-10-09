@@ -66,6 +66,7 @@ export interface AstNodeLike {
     start: { line: number; column: number; offset?: number | undefined };
     end: { line: number; column: number; offset?: number | undefined };
   } | undefined;
+  children?: AstNodeLike[] | undefined;
 }
 
 /**
@@ -99,5 +100,17 @@ export function validateAtomicBlockNode(
         limit,
       });
     }
+  }
+}
+
+/** Validates atomic blocks at every AST depth before chunk projection. */
+export function validateAtomicBlocksRecursively(
+  node: AstNodeLike,
+  documentId: string,
+  limit = HARD_ATOMIC_BLOCK_LIMIT
+): void {
+  validateAtomicBlockNode(node, documentId, limit);
+  for (const child of node.children ?? []) {
+    validateAtomicBlocksRecursively(child, documentId, limit);
   }
 }

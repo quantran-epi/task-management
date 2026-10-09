@@ -70,6 +70,38 @@ describe('atomicBlockValidator & over-limit rejection per D-25', () => {
     }
   });
 
+  it('rejects oversized atomic blocks nested inside list items with exact location metadata', () => {
+    const hugeCode = '    ```sql\n' + '    SELECT 1;\n'.repeat(5000) + '    ```\n';
+    const markdown = `# Title\n\n- Nested query:\n${hugeCode}`;
+
+    expect(() => chunkMarkdownSnapshot(docId, markdown)).toThrow(OversizedAtomicBlockError);
+    try {
+      chunkMarkdownSnapshot(docId, markdown);
+    } catch (error: unknown) {
+      expect(error).toBeInstanceOf(OversizedAtomicBlockError);
+      const atomicError = error as OversizedAtomicBlockError;
+      expect(atomicError.code).toBe('OVERSIZED_ATOMIC_BLOCK');
+      expect(atomicError.blockType).toBe('code');
+      expect(atomicError.line).toBe(4);
+      expect(atomicError.column).toBe(5);
+      expect(atomicError.limit).toBe(HARD_ATOMIC_BLOCK_LIMIT);
+      expect(atomicError.message).not.toContain('SELECT 1');
+    }
+  });
+
+  it('chunks documents over 50,000 characters when each block remains below the atomic limit', () => {
+    const markdown = Array.from(
+      { length: 10 },
+      (_, index) => `## Section ${index + 1}\n\n${'regular paragraph content '.repeat(250)}\n\n`
+    ).join('');
+
+    expect(markdown.length).toBeGreaterThan(HARD_ATOMIC_BLOCK_LIMIT);
+    const chunks = chunkMarkdownSnapshot(docId, markdown);
+
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks.map((chunk) => chunk.rawContent).join('')).toBe(markdown);
+  });
+
   it('allows atomic blocks under 50,000 characters even if they exceed 6,000 characters', () => {
     // 10,000 char table: over 6,000 target chunk size, but under 50,000 hard limit
     const header = '| C1 | C2 |\n|---|---|\n';
