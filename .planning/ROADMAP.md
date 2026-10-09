@@ -215,7 +215,7 @@
   4. Republishing unchanged or partially modified documents projects only added, changed, or removed chunks via SHA-256 comparison; unchanged chunks retain their indexed representation.
   5. User can inspect publish and indexing status for each document set in PlannerMate.
 
-**Plans**: 23 plans in 15 waves
+**Plans**: 24 plans in 16 waves
 Plans:
 **Wave 1**
 
@@ -284,6 +284,10 @@ Plans:
 **Wave 15** *(blocked on Wave 14 completion)*
 
 - [x] 16-22-PLAN.md — Terminal publish UI, resumable reconciliation, and truthful set states (Wave 15)
+
+**Wave 16** *(Gap Closure)*
+
+- [ ] 16-24-PLAN.md — Recursive AST atomic block validation and structured rejection feedback (Wave 16)
 
 ### Phase 17: Pilot Ontology, Deterministic Extraction & Neo4j Knowledge Graph
 
