@@ -52,7 +52,6 @@ describe('AnalyticsView', () => {
       {
         taskId: task.id,
         durationMinutes: 60,
-        date: today,
         startTime: `${today}T10:00:00.000Z`,
         endTime: `${today}T11:00:00.000Z`,
       },
