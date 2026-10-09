@@ -13,8 +13,8 @@ state_head: 092f237
 progress:
   total_phases: 16
   completed_phases: 12
-  total_plans: 61
-  completed_plans: 61
+  total_plans: 62
+  completed_plans: 62
   percent: 75
 ---
 
@@ -165,6 +165,7 @@ Progress: [████████░░] 75%
 | Phase 16 P14 | 8min | 3 tasks | 4 files |
 | Phase 16 P16 | 12min | 2 tasks | 5 files |
 | Phase 16 P18 | 4min | 2 tasks | 4 files |
+| Phase 16 P24 | 7min | 2 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -172,6 +173,8 @@ Progress: [████████░░] 75%
 
 Recent decisions logged in PROJECT.md:
 
+- [Phase 16 Plan 24]: Validate atomic Markdown blocks recursively at every AST depth while leaving total document length unconstrained.
+- [Phase 16 Plan 24]: Carry only sanitized block type, location, and limit metadata through daemon polling; never include raw Markdown content.
 - [Phase 16 Plan 16]: Close GAP-01 / CR-01: Export readKnowledgeServerOptions and startKnowledgeServer in knowledge-server/src/main.ts, failing closed before listening on invalid/insecure environment.
 - [Phase 16 Plan 16]: Close CR-02: Register one authenticated /api/v1/health route in Fastify under onRequest hook, eliminating unversioned /health contract divergence with KnowledgeServerConfigCard.
 - [Phase 16 Plan 18]: Accept 'document' as valid ChatScopeType in BackupChatThreadRecordSchema, requiring entityId via Zod refinement.
@@ -207,6 +210,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-09T16:15:00.000Z
-Stopped at: Phase 16 verified and secured; Phase 17 ready for planning
+Last session: 2026-10-09T16:27:42.000Z
+Stopped at: Completed 16-24-PLAN.md
 Resume file: None

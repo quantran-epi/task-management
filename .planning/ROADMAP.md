@@ -287,7 +287,7 @@ Plans:
 
 **Wave 16** *(Gap Closure)*
 
-- [ ] 16-24-PLAN.md — Recursive AST atomic block validation and structured rejection feedback (Wave 16)
+- [x] 16-24-PLAN.md — Recursive AST atomic block validation and structured rejection feedback (Wave 16)
 
 ### Phase 17: Pilot Ontology, Deterministic Extraction & Neo4j Knowledge Graph
 
