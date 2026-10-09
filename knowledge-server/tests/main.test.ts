@@ -188,7 +188,12 @@ describe('executable startup', () => {
         break;
       }
       try {
-        const res = await fetch(`http://127.0.0.1:${port}/health`);
+        const res = await fetch(`http://127.0.0.1:${port}/api/v1/health`, {
+          headers: {
+            Origin: VALID_ORIGIN,
+            Authorization: `Bearer ${TOKEN_CANARY}`,
+          },
+        });
         if (res.ok) {
           ready = true;
           break;
