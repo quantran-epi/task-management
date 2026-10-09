@@ -15,19 +15,46 @@ describe('aiTools generate_file', () => {
     const props = tool?.function.parameters.properties;
     expect(props?.filename).toBeDefined();
     expect(props?.content).toBeDefined();
+    expect(props?.script).toBeDefined();
     expect(props?.format).toBeDefined();
     expect(props?.format?.enum).toEqual(['md', 'txt', 'docx', 'xlsx', 'csv', 'pptx']);
     expect(tool?.function.parameters.required).toContain('filename');
-    expect(tool?.function.parameters.required).toContain('content');
   });
 
-  it('rejects execution when filename or content is missing', async () => {
+  it('rejects execution when filename or content/script is missing', async () => {
     const fakeDb = {} as any;
     const resNoFilename = await executeAiTool('generate_file', { content: 'hello' }, fakeDb);
-    expect(JSON.parse(resNoFilename)).toEqual({ error: 'filename and content are required' });
+    expect(JSON.parse(resNoFilename)).toEqual({ error: 'filename and either content or script are required' });
 
     const resNoContent = await executeAiTool('generate_file', { filename: 'test.docx' }, fakeDb);
-    expect(JSON.parse(resNoContent)).toEqual({ error: 'filename and content are required' });
+    expect(JSON.parse(resNoContent)).toEqual({ error: 'filename and either content or script are required' });
+  });
+
+  it('executes generate_file with dynamic script and returns success payload', async () => {
+    const fakeDb = {} as any;
+    const script = `
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('Sales');
+      ws.addRow(['Product', 'Revenue']);
+      ws.addRow(['TaskMate Pro', 5000]);
+      return wb;
+    `;
+
+    const resultStr = await executeAiTool(
+      'generate_file',
+      {
+        filename: 'sales.xlsx',
+        script,
+      },
+      fakeDb
+    );
+
+    const result = JSON.parse(resultStr);
+    expect(result.success).toBe(true);
+    expect(result.filename).toBe('sales.xlsx');
+    expect(result.format).toBe('xlsx');
+    expect(result.sizeBytes).toBeGreaterThan(100);
+    expect(result.content).toBe(script);
   });
 
   it('executes generate_file for docx and returns success payload with file metadata', async () => {

@@ -150,23 +150,23 @@ Third line`;
 
   describe('exportContentAsFile', () => {
     it('exports MD and TXT directly', async () => {
-      const mdResult = exportContentAsFile('# Test', 'sample.md');
+      const mdResult = await exportContentAsFile('# Test', 'sample.md');
       expect(mdResult.format).toBe('md');
       expect(mdResult.filename).toBe('sample.md');
       expect(mdResult.blob.type).toContain('text/markdown');
 
-      const txtResult = exportContentAsFile('Hello text', 'sample.txt');
+      const txtResult = await exportContentAsFile('Hello text', 'sample.txt');
       expect(txtResult.format).toBe('txt');
       expect(txtResult.filename).toBe('sample.txt');
       expect(txtResult.blob.type).toContain('text/plain');
     });
 
-    it('exports DOCX and XLSX correctly', () => {
-      const docx = exportContentAsFile('# Report\nContent', 'report.docx');
+    it('exports DOCX and XLSX correctly', async () => {
+      const docx = await exportContentAsFile('# Report\nContent', 'report.docx');
       expect(docx.format).toBe('docx');
       expect(docx.sizeBytes).toBeGreaterThan(100);
 
-      const xlsx = exportContentAsFile('| A | B |\n| 1 | 2 |', 'table.xlsx');
+      const xlsx = await exportContentAsFile('| A | B |\n| 1 | 2 |', 'table.xlsx');
       expect(xlsx.format).toBe('xlsx');
       expect(xlsx.sizeBytes).toBeGreaterThan(100);
     });

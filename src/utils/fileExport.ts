@@ -5,6 +5,7 @@
  */
 
 import { isTauriApp } from './timerPopout';
+import { generateDocxBlobWithDocx, generateXlsxBlobWithExcelJS } from './dynamicFileSandbox';
 
 export type ExportFormat = 'md' | 'txt' | 'docx' | 'xlsx' | 'csv' | 'pptx';
 
@@ -206,7 +207,7 @@ export function inferFormatFromFilename(filename: string): ExportFormat {
 /**
  * Parses markdown table lines into 2D array of string cells.
  */
-function parseMarkdownTable(lines: string[], startIdx: number): { rows: string[][]; nextIdx: number } {
+export function parseMarkdownTable(lines: string[], startIdx: number): { rows: string[][]; nextIdx: number } {
   const rows: string[][] = [];
   let idx = startIdx;
 
@@ -434,7 +435,7 @@ function toColumnLetter(colIndex: number): string {
 /**
  * Extracts 2D array of rows from markdown or text for Excel spreadsheet generation.
  */
-function extractGridFromText(content: string): string[][] {
+export function extractGridFromText(content: string): string[][] {
   const lines = (content || '').split('\n');
   const grid: string[][] = [];
 
@@ -726,12 +727,12 @@ export async function saveFileWithPicker(
 /**
  * Unified file export and download helper for MD, TXT, DOCX, XLSX, and CSV.
  */
-export function exportContentAsFile(
+export async function exportContentAsFile(
   content: string,
   filename: string,
   format?: ExportFormat,
   autoDownload: boolean = true
-): FileExportResult {
+): Promise<FileExportResult> {
   const cleanFilename = sanitizeFilename(filename);
   const resolvedFormat = format || inferFormatFromFilename(cleanFilename);
 
@@ -739,10 +740,10 @@ export function exportContentAsFile(
 
   switch (resolvedFormat) {
     case 'docx':
-      blob = generateDocxBlob(content);
+      blob = await generateDocxBlobWithDocx(content);
       break;
     case 'xlsx':
-      blob = generateXlsxBlob(content);
+      blob = await generateXlsxBlobWithExcelJS(content);
       break;
     case 'csv':
       blob = generateCsvBlob(content);

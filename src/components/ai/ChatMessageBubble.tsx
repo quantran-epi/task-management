@@ -29,6 +29,7 @@ import {
   type ExportFormat,
 } from '../../utils/fileExport';
 import { exportPresentationAsFile } from '../../utils/pptxExport';
+import { executeDynamicFileScript } from '../../utils/dynamicFileSandbox';
 
 const { Text } = Typography;
 
@@ -256,7 +257,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
         return;
       }
 
-      const result = exportContentAsFile(msg.content, `${baseName}.${format}`, format, false);
+      const result = await exportContentAsFile(msg.content, `${baseName}.${format}`, format, false);
       if (directDownload) {
         downloadBlob(result.filename, result.blob);
         message.success(`Đã tải xuống ${result.filename}`);
@@ -298,7 +299,14 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
         return;
       }
 
-      if (format === 'pptx') {
+      if (
+        resolvedContent.includes('ExcelJS') ||
+        resolvedContent.includes('docx.') ||
+        resolvedContent.includes('new docx') ||
+        resolvedContent.includes('pptxgen')
+      ) {
+        blob = await executeDynamicFileScript(resolvedContent, format, file.filename);
+      } else if (format === 'pptx') {
         const result = await exportPresentationAsFile(
           resolvedContent,
           file.filename,
@@ -307,7 +315,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
         );
         blob = result.blob;
       } else {
-        const result = exportContentAsFile(
+        const result = await exportContentAsFile(
           resolvedContent,
           file.filename,
           format,

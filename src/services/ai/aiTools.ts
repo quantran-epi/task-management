@@ -64,6 +64,7 @@ import { rankBM25, extractRelevantSnippet } from '../../utils/bm25';
 import { isTauriApp } from '../../utils/timerPopout';
 import { exportContentAsFile, inferFormatFromFilename, type ExportFormat } from '../../utils/fileExport';
 import { exportPresentationAsFile, type SlideData } from '../../utils/pptxExport';
+import { executeDynamicFileScript } from '../../utils/dynamicFileSandbox';
 import { generateImage } from './imageGenerationClient';
 import { getImageConfig, getImageApiKey } from './nineRouterTokenService';
 import { redactApiKey } from './nineRouterClient';
@@ -1779,7 +1780,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'generate_file',
       description:
-        'Generate and prepare a downloadable file in specified format (Markdown .md, plain text .txt, Word .docx, Excel .xlsx, CSV .csv, or PowerPoint .pptx). CRITICAL: The "content" parameter MUST contain the complete, standalone file content (document text, markdown, or table). Do NOT leave empty or summarize. The user will download this exact content.',
+        'Generate and prepare a downloadable file in specified format (Word .docx, Excel .xlsx, PowerPoint .pptx, Markdown .md, plain text .txt, or CSV .csv). You can provide structured text/markdown via "content", OR full JavaScript code via "script" executed directly in the browser sandbox with ExcelJS, docx, or pptxgen for advanced styling, formulas, custom tables, and formatting.',
       parameters: {
         type: 'object',
         properties: {
@@ -1794,14 +1795,18 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           },
           content: {
             type: 'string',
-            description: 'CRITICAL: The full, complete document text, report, markdown, or tabular data. Must be standalone and complete because it will be saved directly to the file without conversational dialogue.',
+            description: 'The full document text, report, markdown, or tabular data. Used by automatic parser.',
+          },
+          script: {
+            type: 'string',
+            description: 'Optional JavaScript code executed in client sandbox. Environment provides ExcelJS, docx, and pptxgen. Return workbook, doc, pptx, or Blob. Perfect for complex spreadsheets (formulas, merged cells, colors), styled Word docs, or custom slide decks.',
           },
           title: {
             type: 'string',
             description: 'Optional title or header for the document.',
           },
         },
-        required: ['filename', 'content'],
+        required: ['filename'],
       },
     },
   },
@@ -4365,11 +4370,30 @@ export async function executeAiTool(
       }
 
       case 'generate_file': {
-        if (!args.filename || !args.content) {
-          return JSON.stringify({ error: 'filename and content are required' });
+        if (!args.filename || (!args.content && !args.script)) {
+          return JSON.stringify({ error: 'filename and either content or script are required' });
         }
 
         const format = (args.format as ExportFormat) || inferFormatFromFilename(String(args.filename));
+
+        if (args.script) {
+          try {
+            const blob = await executeDynamicFileScript(String(args.script), format, String(args.filename));
+            return JSON.stringify({
+              success: true,
+              message: `Đã thực thi mã động và tạo tệp "${args.filename}". Thẻ tải tệp đã sẵn sàng trong giao diện chat để người dùng chọn vị trí lưu.`,
+              filename: String(args.filename),
+              format,
+              sizeBytes: blob.size,
+              content: String(args.script),
+            });
+          } catch (scriptErr: any) {
+            return JSON.stringify({
+              error: `Lỗi thực thi mã tạo tệp động: ${scriptErr?.message || String(scriptErr)}`,
+            });
+          }
+        }
+
         if (format === 'pptx') {
           const exportResult = await exportPresentationAsFile(
             String(args.content),
@@ -4388,7 +4412,7 @@ export async function executeAiTool(
           });
         }
 
-        const exportResult = exportContentAsFile(
+        const exportResult = await exportContentAsFile(
           String(args.content),
           String(args.filename),
           format,
