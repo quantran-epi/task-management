@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { TaskPlannerDatabase } from '../../db';
 import {
+  getCachedPublishAttempt,
   markPollingUncertain,
   reconcileRemoteAttempt,
 } from '../../db/repositories/publishAttemptRepo';
@@ -233,6 +234,51 @@ export function createKnowledgeClient(options: CreateKnowledgeClientOptions) {
   }
 
   async function reconcileAttempt(resource: AttemptResponse) {
+    if (resource.status === 'In sync') {
+      if (!resource.activeSnapshotId) {
+        throw new KnowledgeClientError(
+          'INVALID_RESPONSE',
+          'Terminal In sync response requires activeSnapshotId'
+        );
+      }
+
+      // Load cached attempt to retrieve frozen submitted manifest
+      let cached: PublishAttemptCache | undefined;
+      if (options.db) {
+        cached = await getCachedPublishAttempt(resource.attemptId, options.db);
+      }
+
+      const manifest = cached?.submittedDocuments;
+      if (manifest) {
+        if (cached && cached.setId !== resource.setId) {
+          throw new KnowledgeClientError(
+            'INVALID_RESPONSE',
+            `Daemon response setId (${resource.setId}) does not match cached attempt setId (${cached.setId})`
+          );
+        }
+
+        const terminalCompletedAt =
+          resource.completedAt ?? new Date().toISOString();
+        const publishedDocuments: PublishedDocumentMetadata[] = manifest.map(
+          (doc) => ({
+            setId: resource.setId,
+            documentId: doc.documentId,
+            lastKnownRemoteAt: terminalCompletedAt,
+            publishedContentHash: doc.submittedContentHash,
+            activeSnapshotId: resource.activeSnapshotId!,
+            activeAttemptId: resource.attemptId,
+            lastPrimaryState: 'In sync',
+          })
+        );
+
+        await reconcile({
+          attempt: attemptCache(resource),
+          publishedDocuments,
+        });
+        return;
+      }
+    }
+
     await reconcile({ attempt: attemptCache(resource) });
   }
 

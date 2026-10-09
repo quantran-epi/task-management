@@ -162,10 +162,12 @@ export class PublishSession {
     }
   }
 
-  async pollAcceptedAttempt() {
-    if (!this.acceptedAttemptId) throw new Error('No accepted publish attempt to poll');
+  async pollAcceptedAttempt(attemptId?: string) {
+    const targetAttemptId = attemptId ?? this.acceptedAttemptId;
+    if (!targetAttemptId) throw new Error('No accepted publish attempt to poll');
+    this.acceptedAttemptId = targetAttemptId;
     this.pollController = new AbortController();
-    return this.options.client.pollAttempt(this.acceptedAttemptId, {
+    return this.options.client.pollAttempt(targetAttemptId, {
       signal: this.pollController.signal,
     });
   }
