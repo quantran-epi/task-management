@@ -57,7 +57,7 @@ import {
   type DocumentPublishStatus,
 } from '../db/repositories/documentSetRepo';
 import { useOptionalKnowledgeConfig } from '../services/knowledge/knowledgeConfig';
-import { createKnowledgeClient } from '../services/knowledge/knowledgeClient';
+import { createKnowledgeClient, KnowledgeClientError } from '../services/knowledge/knowledgeClient';
 import { PublishSession } from '../services/knowledge/publishOrchestrator';
 import type { CachedActiveSnapshotManifest, ChangePreview } from '../services/knowledge/changePreview';
 
@@ -385,13 +385,36 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
         token: knowledgeConfig.token,
         db,
       });
-      const session = new PublishSession({ client, db });
       let activeManifest: CachedActiveSnapshotManifest | null = null;
       try {
         activeManifest = await client.getSnapshotManifest(set.id);
-      } catch {
-        // Offline preview remains available against an empty remote manifest.
+      } catch (err: unknown) {
+        if (
+          err instanceof KnowledgeClientError &&
+          err.status === 404 &&
+          err.serverCode === 'SNAPSHOT_NOT_FOUND'
+        ) {
+          activeManifest = null;
+        } else {
+          if (err instanceof KnowledgeClientError) {
+            if (err.code === 'NETWORK_ERROR') {
+              message.error('Không thể kết nối Knowledge Server. Kiểm tra máy chủ và mạng rồi thử lại.');
+            } else if (err.status === 401) {
+              message.error('Token phiên không hợp lệ hoặc đã hết hạn.');
+            } else if (err.status === 403) {
+              message.error('Token phiên không có quyền truy cập Knowledge Server.');
+            } else if (err.code === 'INVALID_RESPONSE') {
+              message.error('Knowledge Server phản hồi không hợp lệ.');
+            } else {
+              message.error('Máy chủ Knowledge Server gặp lỗi khi kiểm tra ảnh chụp.');
+            }
+          } else {
+            message.error('Không thể kiểm tra ảnh chụp trên Knowledge Server.');
+          }
+          return;
+        }
       }
+      const session = new PublishSession({ client, db });
       const setNotes = (allNotes ?? []).filter(
         (note) => set.documentIds.includes(note.id) && !note.deletedAt
       );

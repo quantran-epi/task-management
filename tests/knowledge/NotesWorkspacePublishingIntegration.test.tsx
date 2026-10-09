@@ -42,7 +42,24 @@ client_secret: \"canary-secret\"`;
       name: 'Bộ quy trình thẻ',
       documentIds: [document.id],
     }, database);
-    const fetchSpy = vi.fn().mockRejectedValue(new Error('daemon offline'));
+    const fetchSpy = vi.fn().mockImplementation(async (url: RequestInfo | URL) => {
+      const urlStr = String(url);
+      if (urlStr.includes('/snapshot')) {
+        return new Response(
+          JSON.stringify({
+            error: {
+              code: 'SNAPSHOT_NOT_FOUND',
+              message: 'Active snapshot was not found.',
+            },
+          }),
+          {
+            status: 404,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        );
+      }
+      return new Response('Not found', { status: 404 });
+    });
     vi.stubGlobal('fetch', fetchSpy);
 
     render(
@@ -182,4 +199,228 @@ client_secret: \"canary-secret\"`;
     // Zero network requests made throughout
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  it('displays remote-only document as removal and enforces removal consent before scanning/submitting', async () => {
+    const database = new TaskPlannerDatabase(`notes-removal-${crypto.randomUUID()}`);
+    databases.push(database);
+    await database.open();
+    await database.settings.bulkPut([
+      { key: 'knowledge_server_enabled', value: true },
+      { key: 'knowledge_server_base_url', value: 'http://localhost:3000' },
+    ]);
+
+    const folder = await createNote({ title: 'Tín dụng', body: '', type: 'folder' }, database);
+    const localDoc = await createNote({
+      title: 'Quy trình hiện tại',
+      body: '# Quy trình hiện tại\nNội dung',
+      type: 'document',
+      parentId: folder.id,
+    }, database);
+
+    const remoteOnlyDocId = crypto.randomUUID();
+    const documentSet = await createDocumentSet({
+      name: 'Bộ quy trình thẻ',
+      documentIds: [localDoc.id],
+    }, database);
+
+    const activeManifest = {
+      snapshotId: crypto.randomUUID(),
+      setId: documentSet.id,
+      chunkingPolicyVersion: 'v1',
+      documents: [
+        {
+          documentId: localDoc.id,
+          contentHash: 'a'.repeat(64),
+          chunks: [
+            {
+              occurrenceId: crypto.randomUUID(),
+              contentHash: 'b'.repeat(64),
+              chunkIndex: 0,
+              headingPath: ['Quy trình hiện tại'],
+              startLine: 1,
+              endLine: 2,
+              startOffset: 0,
+              endOffset: 25,
+            },
+          ],
+        },
+        {
+          documentId: remoteOnlyDocId,
+          contentHash: 'c'.repeat(64),
+          chunks: [
+            {
+              occurrenceId: crypto.randomUUID(),
+              contentHash: 'd'.repeat(64),
+              chunkIndex: 0,
+              headingPath: ['Tài liệu cũ'],
+              startLine: 1,
+              endLine: 2,
+              startOffset: 0,
+              endOffset: 20,
+            },
+          ],
+        },
+      ],
+    };
+
+    const fetchSpy = vi.fn().mockImplementation(async (url: RequestInfo | URL) => {
+      const urlStr = String(url);
+      if (urlStr.includes('/snapshot')) {
+        return new Response(JSON.stringify(activeManifest), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response('Not found', { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    render(
+      <KnowledgeConfigProvider db={database}>
+        <NotesView db={database} />
+      </KnowledgeConfigProvider>
+    );
+
+    fireEvent.click((await screen.findByText('Bộ tài liệu')).closest('button') as HTMLButtonElement);
+    fireEvent.click(await screen.findByRole('button', { name: 'Mở chi tiết' }));
+    const previewButton = await screen.findByRole('button', { name: 'Xem trước xuất bản' });
+    await waitFor(() => expect(previewButton).toBeEnabled());
+    fireEvent.click(previewButton);
+
+    expect(await screen.findByText('Xem trước thay đổi')).toBeInTheDocument();
+    const previewDialog = screen.getAllByRole('dialog').at(-1) as HTMLElement;
+
+    // Verify removal statistics and labels
+    expect(within(previewDialog).getAllByText('Gỡ khỏi máy chủ').length).toBeGreaterThan(0);
+    expect(previewDialog.textContent).toContain('Gỡ tài liệu khỏi máy chủ');
+
+    // Consent gate: Scan button is disabled until removal checkbox is checked (D-03 / D-04)
+    const scanButton = within(previewDialog).getByRole('button', { name: 'Kiểm tra dữ liệu nhạy cảm' });
+    expect(scanButton).toBeDisabled();
+
+    const consentCheckbox = within(previewDialog).getByRole('checkbox', {
+      name: /Tôi hiểu các tài liệu này sẽ bị gỡ khỏi ảnh chụp trên máy chủ/i,
+    });
+    expect(consentCheckbox).not.toBeChecked();
+
+    fireEvent.click(consentCheckbox);
+    expect(consentCheckbox).toBeChecked();
+    expect(scanButton).toBeEnabled();
+
+    // Zero POST requests issued
+    const postCalls = fetchSpy.mock.calls.filter((call) =>
+      call[1] && (call[1] as RequestInit).method === 'POST'
+    );
+    expect(postCalls).toHaveLength(0);
+
+    // Cancel modal
+    fireEvent.click(within(previewDialog).getByRole('button', { name: 'Hủy xuất bản' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Xem trước thay đổi' })).not.toBeInTheDocument());
+  });
+
+  it('fails closed on network, auth, and server errors: blocks modal, displays diagnostic, and issues zero POST calls', async () => {
+    const database = new TaskPlannerDatabase(`notes-uncertainty-${crypto.randomUUID()}`);
+    databases.push(database);
+    await database.open();
+    await database.settings.bulkPut([
+      { key: 'knowledge_server_enabled', value: true },
+      { key: 'knowledge_server_base_url', value: 'http://localhost:3000' },
+    ]);
+
+    const folder = await createNote({ title: 'Tín dụng', body: '', type: 'folder' }, database);
+    const doc = await createNote({
+      title: 'Quy trình thẻ',
+      body: '# Quy trình thẻ\nNội dung',
+      type: 'document',
+      parentId: folder.id,
+    }, database);
+    await createDocumentSet({
+      name: 'Bộ quy trình thẻ',
+      documentIds: [doc.id],
+    }, database);
+
+    // Test case A: Network error
+    let fetchHandler = vi.fn().mockRejectedValue(new Error('connection refused'));
+    vi.stubGlobal('fetch', fetchHandler);
+
+    const { unmount } = render(
+      <KnowledgeConfigProvider db={database}>
+        <NotesView db={database} />
+      </KnowledgeConfigProvider>
+    );
+
+    fireEvent.click((await screen.findByText('Bộ tài liệu')).closest('button') as HTMLButtonElement);
+    fireEvent.click(await screen.findByRole('button', { name: 'Mở chi tiết' }));
+    let previewButton = await screen.findByRole('button', { name: 'Xem trước xuất bản' });
+    await waitFor(() => expect(previewButton).toBeEnabled());
+    fireEvent.click(previewButton);
+
+    await waitFor(() => expect(fetchHandler).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole('dialog', { name: 'Xem trước thay đổi' })).not.toBeInTheDocument();
+    expect(await screen.findByText(/Không thể kết nối Knowledge Server/i)).toBeInTheDocument();
+    unmount();
+
+    // Test case B: 401 Unauthorized
+    fetchHandler = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: { code: 'UNAUTHORIZED', message: 'Token expired' } }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    vi.stubGlobal('fetch', fetchHandler);
+
+    const renderedAuth = render(
+      <KnowledgeConfigProvider db={database}>
+        <NotesView db={database} />
+      </KnowledgeConfigProvider>
+    );
+
+    fireEvent.click((await renderedAuth.findByText('Bộ tài liệu')).closest('button') as HTMLButtonElement);
+    fireEvent.click(await renderedAuth.findByRole('button', { name: 'Mở chi tiết' }));
+    previewButton = await renderedAuth.findByRole('button', { name: 'Xem trước xuất bản' });
+    await waitFor(() => expect(previewButton).toBeEnabled());
+    fireEvent.click(previewButton);
+
+    await waitFor(() => expect(fetchHandler).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole('dialog', { name: 'Xem trước thay đổi' })).not.toBeInTheDocument();
+    expect(await screen.findByText(/Token phiên không hợp lệ hoặc đã hết hạn/i)).toBeInTheDocument();
+    renderedAuth.unmount();
+
+    // Test case C: 500 Server Error
+    fetchHandler = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: { code: 'INTERNAL_ERROR', message: 'DB crash' } }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    vi.stubGlobal('fetch', fetchHandler);
+
+    const rendered500 = render(
+      <KnowledgeConfigProvider db={database}>
+        <NotesView db={database} />
+      </KnowledgeConfigProvider>
+    );
+
+    fireEvent.click((await rendered500.findByText('Bộ tài liệu')).closest('button') as HTMLButtonElement);
+    fireEvent.click(await rendered500.findByRole('button', { name: 'Mở chi tiết' }));
+    previewButton = await rendered500.findByRole('button', { name: 'Xem trước xuất bản' });
+    await waitFor(() => expect(previewButton).toBeEnabled());
+    fireEvent.click(previewButton);
+
+    await waitFor(() => expect(fetchHandler).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole('dialog', { name: 'Xem trước thay đổi' })).not.toBeInTheDocument();
+    expect(await screen.findByText(/Máy chủ Knowledge Server gặp lỗi khi kiểm tra ảnh chụp/i)).toBeInTheDocument();
+
+    // Ensure zero POST requests were made across all uncertainty scenarios
+    const allCalls = [
+      ...fetchHandler.mock.calls,
+    ];
+    expect(allCalls.some((call) => call[1] && (call[1] as RequestInit).method === 'POST')).toBe(false);
+
+    // Verify local note editing and browsing remains fully intact
+    const note = await database.notes.get(doc.id);
+    expect(note).toBeDefined();
+    expect(note?.body).toBe('# Quy trình thẻ\nNội dung');
+  });
 });
+
