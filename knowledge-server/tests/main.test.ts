@@ -136,7 +136,12 @@ describe('executable startup', () => {
     expect(serverInstance.port).toBe(port);
 
     // Call health check to verify it is listening
-    const res = await fetch(`http://127.0.0.1:${port}/health`);
+    const res = await fetch(`http://127.0.0.1:${port}/api/v1/health`, {
+      headers: {
+        Origin: VALID_ORIGIN,
+        Authorization: `Bearer ${TOKEN_CANARY}`,
+      },
+    });
     expect(res.status).toBe(200);
 
     await serverInstance.app.close();

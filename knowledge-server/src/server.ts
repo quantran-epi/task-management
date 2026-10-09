@@ -72,7 +72,7 @@ export function buildKnowledgeServer(options: KnowledgeServerOptions): Knowledge
     methods: ['GET', 'POST', 'OPTIONS'],
   });
 
-  app.get('/health', async () => ({ status: 'ok' }));
+  app.get('/api/v1/health', async () => ({ status: 'ok' }));
 
   app.addHook('onRequest', async (request, reply) => {
     if (!request.url.startsWith('/api/v1/')) return;

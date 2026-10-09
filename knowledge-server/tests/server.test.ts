@@ -201,9 +201,41 @@ describe('knowledge server boundary', () => {
     }).app;
     const seededSecret = 'seeded-body-secret';
 
-    const health = await app.inject({ method: 'GET', url: '/health' });
+    const unversionedHealth = await app.inject({ method: 'GET', url: '/health' });
+    expect(unversionedHealth.statusCode).toBe(404);
+
+    const health = await app.inject({
+      method: 'GET',
+      url: '/api/v1/health',
+      headers: {
+        origin: ORIGIN,
+        authorization: `Bearer ${TOKEN}`,
+      },
+    });
     expect(health.statusCode).toBe(200);
+    expect(health.headers['access-control-allow-origin']).toBe(ORIGIN);
     expect(health.json()).toEqual({ status: 'ok' });
+
+    const deniedOriginHealth = await app.inject({
+      method: 'GET',
+      url: '/api/v1/health',
+      headers: {
+        origin: 'https://evil.example',
+        authorization: `Bearer ${TOKEN}`,
+      },
+    });
+    expect(deniedOriginHealth.statusCode).toBe(403);
+    expect(deniedOriginHealth.body).not.toContain(TOKEN);
+
+    const unauthHealth = await app.inject({
+      method: 'GET',
+      url: '/api/v1/health',
+      headers: {
+        origin: ORIGIN,
+      },
+    });
+    expect(unauthHealth.statusCode).toBe(401);
+    expect(unauthHealth.body).not.toContain(TOKEN);
 
     const bad = await app.inject({
       method: 'POST',
