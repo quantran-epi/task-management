@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Hybrid GraphRAG Knowledge Assistant MVP
 status: executing
-stopped_at: Completed 16-18-PLAN.md
-last_updated: "2026-10-09T03:30:00.000Z"
-last_activity: 2026-10-09 -- Phase 16 execution ongoing (Plan 18 complete)
+stopped_at: Completed 16-16-PLAN.md
+last_updated: "2026-10-09T03:50:00.000Z"
+last_activity: 2026-10-09 -- Phase 16 Plan 16 complete (daemon executable and health contract)
 progress:
   total_phases: 16
   completed_phases: 11
@@ -148,6 +148,7 @@ Progress: [██████████] 98%
 | Phase 16 P12 | 25min | 2 tasks | 6 files |
 | Phase 16 P13 | 28min | 2 tasks | 2 files |
 | Phase 16 P14 | 8min | 3 tasks | 4 files |
+| Phase 16 P16 | 12min | 2 tasks | 5 files |
 | Phase 16 P18 | 4min | 2 tasks | 4 files |
 
 ## Accumulated Context
@@ -156,6 +157,8 @@ Progress: [██████████] 98%
 
 Recent decisions logged in PROJECT.md:
 
+- [Phase 16 Plan 16]: Close GAP-01 / CR-01: Export readKnowledgeServerOptions and startKnowledgeServer in knowledge-server/src/main.ts, failing closed before listening on invalid/insecure environment.
+- [Phase 16 Plan 16]: Close CR-02: Register one authenticated /api/v1/health route in Fastify under onRequest hook, eliminating unversioned /health contract divergence with KnowledgeServerConfigCard.
 - [Phase 16 Plan 18]: Accept 'document' as valid ChatScopeType in BackupChatThreadRecordSchema, requiring entityId via Zod refinement.
 - [Phase 16 Plan 18]: Validate in Stage 3 that document-scoped chat threads reference existing Note UUIDs in imported payload before committing to restore.
 - [Phase 16 Plan 01]: D-01: DocumentSet persists an explicit ordered snapshot of stable UUIDs; no live folder query.
