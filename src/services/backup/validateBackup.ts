@@ -338,6 +338,20 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     });
   }
 
+  // Check document-scoped chatThreads refer to existing note
+  if (chatThreads && notes) {
+    chatThreads.forEach((ct) => {
+      if (ct.scopeType === 'document' && ct.entityId && !noteIds.has(ct.entityId)) {
+        errors.push({
+          table: 'chatThreads',
+          recordId: ct.id,
+          field: 'entityId',
+          message: `ChatThread references documentId "${ct.entityId}" not found in notes`,
+        });
+      }
+    });
+  }
+
   // Check chatMessages refer to existing thread
   const threadIds = new Set((chatThreads || []).map((t) => t.id));
   if (chatMessages && chatThreads) {

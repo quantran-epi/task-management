@@ -197,15 +197,28 @@ export const BackupNoteAttachmentRecordSchema = z.object({
   createdAt: z.string(),
 });
 
-export const BackupChatThreadRecordSchema = z.object({
-  id: uuidSchema,
-  scopeKey: z.string().min(1),
-  scopeType: z.enum(['global', 'task', 'project', 'milestone']),
-  entityId: uuidSchema.optional(),
-  title: z.string().optional(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-});
+export const BackupChatThreadRecordSchema = z
+  .object({
+    id: uuidSchema,
+    scopeKey: z.string().min(1),
+    scopeType: z.enum(['global', 'task', 'project', 'milestone', 'document']),
+    entityId: uuidSchema.optional(),
+    title: z.string().optional(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  })
+  .refine(
+    (data) => {
+      if (data.scopeType === 'document') {
+        return Boolean(data.entityId);
+      }
+      return true;
+    },
+    {
+      message: 'entityId is required for document-scoped chat threads',
+      path: ['entityId'],
+    }
+  );
 
 export const BackupChatMessageRecordSchema = z.object({
   id: uuidSchema,

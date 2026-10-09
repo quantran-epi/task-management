@@ -197,4 +197,101 @@ describe('validateBackupPayload', () => {
       result.errors.some((e) => e.table === 'plannedAllocations' && e.field === 'taskId')
     ).toBe(true);
   });
+
+  it('validates document-scoped chat thread and rejects broken or missing document reference', () => {
+    const NOTE_UUID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const THREAD_UUID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+
+    const validDocChat = {
+      ...validPayload,
+      tables: {
+        ...validPayload.tables,
+        notes: [
+          {
+            id: NOTE_UUID,
+            title: 'Doc Note',
+            body: '# Hello',
+            isPinned: false,
+            createdAt: '2026-09-27T10:00:00.000Z',
+            updatedAt: '2026-09-27T10:00:00.000Z',
+          },
+        ],
+        chatThreads: [
+          {
+            id: THREAD_UUID,
+            scopeKey: `document:${NOTE_UUID}`,
+            scopeType: 'document',
+            entityId: NOTE_UUID,
+            createdAt: '2026-09-27T10:00:00.000Z',
+            updatedAt: '2026-09-27T10:00:00.000Z',
+          },
+        ],
+      },
+    };
+    const validRes = validateBackupPayload(validDocChat);
+    expect(validRes.valid).toBe(true);
+
+    const missingEntityId = {
+      ...validPayload,
+      tables: {
+        ...validPayload.tables,
+        notes: [
+          {
+            id: NOTE_UUID,
+            title: 'Doc Note',
+            body: '# Hello',
+            isPinned: false,
+            createdAt: '2026-09-27T10:00:00.000Z',
+            updatedAt: '2026-09-27T10:00:00.000Z',
+          },
+        ],
+        chatThreads: [
+          {
+            id: THREAD_UUID,
+            scopeKey: `document:${NOTE_UUID}`,
+            scopeType: 'document',
+            createdAt: '2026-09-27T10:00:00.000Z',
+            updatedAt: '2026-09-27T10:00:00.000Z',
+          },
+        ],
+      },
+    };
+    const missingEntityRes = validateBackupPayload(missingEntityId);
+    expect(missingEntityRes.valid).toBe(false);
+    expect(
+      missingEntityRes.errors.some((e) => e.table === 'chatThreads' && e.field === 'entityId')
+    ).toBe(true);
+
+    const absentDocRef = {
+      ...validPayload,
+      tables: {
+        ...validPayload.tables,
+        notes: [
+          {
+            id: NOTE_UUID,
+            title: 'Doc Note',
+            body: '# Hello',
+            isPinned: false,
+            createdAt: '2026-09-27T10:00:00.000Z',
+            updatedAt: '2026-09-27T10:00:00.000Z',
+          },
+        ],
+        chatThreads: [
+          {
+            id: THREAD_UUID,
+            scopeKey: 'document:cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+            scopeType: 'document',
+            entityId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+            createdAt: '2026-09-27T10:00:00.000Z',
+            updatedAt: '2026-09-27T10:00:00.000Z',
+          },
+        ],
+      },
+    };
+    const absentDocRes = validateBackupPayload(absentDocRef);
+    expect(absentDocRes.valid).toBe(false);
+    expect(
+      absentDocRes.errors.some((e) => e.table === 'chatThreads' && e.field === 'entityId')
+    ).toBe(true);
+  });
 });
