@@ -17,10 +17,15 @@ import {
   FilePptOutlined,
   FileMarkdownOutlined,
 } from '@ant-design/icons';
-import type { ChatMessage } from '../../types/models';
+import type { ChatMessage, ChatGeneratedFile } from '../../types/models';
 import { APP_NAME, APP_SLUG } from '../../constants/app';
 import { renderSafeMarkdown } from '../../utils/markdown';
-import { exportContentAsFile, type ExportFormat } from '../../utils/fileExport';
+import {
+  exportContentAsFile,
+  saveFileWithPicker,
+  inferFormatFromFilename,
+  type ExportFormat,
+} from '../../utils/fileExport';
 import { exportPresentationAsFile } from '../../utils/pptxExport';
 
 const { Text } = Typography;
@@ -231,15 +236,58 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
       }
 
       if (format === 'pptx') {
-        const result = await exportPresentationAsFile(msg.content, `${baseName}.pptx`);
-        message.success(`Đã tải xuống ${result.filename} (${result.slideCount} slides)`);
+        const result = await exportPresentationAsFile(
+          msg.content,
+          `${baseName}.pptx`,
+          undefined,
+          false
+        );
+        const saveRes = await saveFileWithPicker(result.filename, result.blob);
+        if (saveRes.saved) {
+          message.success(`Đã lưu ${result.filename} (${result.slideCount} slides)`);
+        }
         return;
       }
 
-      const result = exportContentAsFile(msg.content, `${baseName}.${format}`, format);
-      message.success(`Đã tải xuống ${result.filename}`);
+      const result = exportContentAsFile(msg.content, `${baseName}.${format}`, format, false);
+      const saveRes = await saveFileWithPicker(result.filename, result.blob);
+      if (saveRes.saved) {
+        message.success(`Đã lưu ${result.filename}`);
+      }
     } catch (err: unknown) {
       message.error(`Không thể xuất tệp: ${(err as Error)?.message || 'Lỗi không xác định'}`);
+    }
+  };
+
+  const handleDownloadGeneratedFile = async (file: ChatGeneratedFile) => {
+    try {
+      const format = (file.format as ExportFormat) || inferFormatFromFilename(file.filename);
+      let blob: Blob;
+
+      if (format === 'pptx') {
+        const result = await exportPresentationAsFile(
+          file.content || msg.content,
+          file.filename,
+          undefined,
+          false
+        );
+        blob = result.blob;
+      } else {
+        const result = exportContentAsFile(
+          file.content || msg.content,
+          file.filename,
+          format,
+          false
+        );
+        blob = result.blob;
+      }
+
+      const saveRes = await saveFileWithPicker(file.filename, blob);
+      if (saveRes.saved) {
+        message.success(`Đã lưu tệp ${file.filename}`);
+      }
+    } catch (err: unknown) {
+      message.error(`Không thể lưu tệp: ${(err as Error)?.message || 'Lỗi không xác định'}`);
     }
   };
 
@@ -396,6 +444,70 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
         )}
       </div>
 
+      {/* AI-Generated Files Cards */}
+      {!isUser && !isStreaming && msg.generatedFiles && msg.generatedFiles.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+          {msg.generatedFiles.map((file) => {
+            const formatLower = file.format?.toLowerCase() || '';
+            let fileIcon = <FileTextOutlined style={{ color: '#107c41', fontSize: 20 }} />;
+            if (formatLower.includes('docx') || formatLower.includes('doc')) {
+              fileIcon = <FileWordOutlined style={{ color: '#185abd', fontSize: 20 }} />;
+            } else if (formatLower.includes('xlsx') || formatLower.includes('xls') || formatLower.includes('csv')) {
+              fileIcon = <FileExcelOutlined style={{ color: '#107c41', fontSize: 20 }} />;
+            } else if (formatLower.includes('pptx') || formatLower.includes('ppt')) {
+              fileIcon = <FilePptOutlined style={{ color: '#d24726', fontSize: 20 }} />;
+            } else if (formatLower.includes('md')) {
+              fileIcon = <FileMarkdownOutlined style={{ color: '#0969da', fontSize: 20 }} />;
+            }
+
+            const formatSize = (bytes: number): string => {
+              if (bytes <= 0) return '0 B';
+              const k = 1024;
+              const sizes = ['B', 'KB', 'MB', 'GB'];
+              const i = Math.floor(Math.log(bytes) / Math.log(k));
+              return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+            };
+
+            return (
+              <div
+                key={file.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '8px 12px',
+                  borderRadius: 8,
+                  border: `1px solid ${token.colorBorderSecondary}`,
+                  backgroundColor: token.colorFillAlter,
+                  gap: 12,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden' }}>
+                  {fileIcon}
+                  <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                    <Text strong ellipsis style={{ fontSize: 13 }}>
+                      {file.filename}
+                    </Text>
+                    <Text type="secondary" style={{ fontSize: 11 }}>
+                      {formatSize(file.sizeBytes)}{file.slideCount ? ` · ${file.slideCount} slides` : ''}
+                    </Text>
+                  </div>
+                </div>
+                <Button
+                  type="primary"
+                  size="small"
+                  icon={<DownloadOutlined />}
+                  onClick={() => handleDownloadGeneratedFile(file)}
+                  style={{ fontSize: 12, height: 26, flexShrink: 0 }}
+                >
+                  Lưu tệp (Save As)
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* Action Chips for Assistant messages per D-18 */}
       {!isUser && !isStreaming && (
         <div
@@ -442,7 +554,13 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
             </Button>
           )}
 
-          <Dropdown menu={{ items: exportMenuItems }} trigger={['click']} placement="bottomLeft">
+          <Dropdown
+            menu={{ items: exportMenuItems }}
+            trigger={['click']}
+            placement="bottomLeft"
+            getPopupContainer={(node) => node.parentElement || document.body}
+            overlayStyle={{ zIndex: 1500 }}
+          >
             <Button
               size="small"
               icon={<DownloadOutlined />}
@@ -458,7 +576,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 6,
+          gap: 8,
           marginTop: 4,
           paddingLeft: isUser ? 0 : 4,
           paddingRight: isUser ? 4 : 0,
@@ -468,6 +586,40 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
           <Text type="secondary" style={{ fontSize: 11 }}>
             {formattedTime}
           </Text>
+        )}
+        {!isUser && !isStreaming && msg.durationMs !== undefined && (
+          <Tooltip title={`Thời gian chạy phản hồi: ${(msg.durationMs / 1000).toFixed(2)}s`}>
+            <span
+              style={{
+                fontSize: 11,
+                color: token.colorTextQuaternary,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 2,
+                cursor: 'default',
+              }}
+            >
+              ⏱ {(msg.durationMs / 1000).toFixed(1)}s
+            </span>
+          </Tooltip>
+        )}
+        {!isUser && !isStreaming && msg.tokenUsage && (msg.tokenUsage.totalTokens || msg.tokenUsage.completionTokens) && (
+          <Tooltip
+            title={`Tổng token: ${(msg.tokenUsage.totalTokens ?? ((msg.tokenUsage.promptTokens || 0) + (msg.tokenUsage.completionTokens || 0))).toLocaleString()} (Vào: ${(msg.tokenUsage.promptTokens || 0).toLocaleString()}, Ra: ${(msg.tokenUsage.completionTokens || 0).toLocaleString()})`}
+          >
+            <span
+              style={{
+                fontSize: 11,
+                color: token.colorTextQuaternary,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 2,
+                cursor: 'default',
+              }}
+            >
+              🪙 {(msg.tokenUsage.totalTokens ?? ((msg.tokenUsage.promptTokens || 0) + (msg.tokenUsage.completionTokens || 0))).toLocaleString()} tokens
+            </span>
+          </Tooltip>
         )}
         {!isUser && (
           <Tooltip title={copied ? 'Đã sao chép' : 'Sao chép nội dung'}>

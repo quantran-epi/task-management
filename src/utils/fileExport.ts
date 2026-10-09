@@ -4,6 +4,8 @@
  * DOCX and XLSX are created using zero-dependency, pure TypeScript store-mode (uncompressed) OpenXML ZIP archives.
  */
 
+import { isTauriApp } from './timerPopout';
+
 export type ExportFormat = 'md' | 'txt' | 'docx' | 'xlsx' | 'csv' | 'pptx';
 
 export interface FileExportResult {
@@ -586,6 +588,95 @@ export function downloadBlob(filename: string, blob: Blob): void {
       // ignore jsdom / headless environments without Blob createObjectURL support
     }
   }
+}
+
+export interface SaveFilePickerOptions {
+  title?: string;
+  filters?: Array<{ name: string; extensions: string[] }>;
+}
+
+/**
+ * Saves a file by prompting the user with a native or browser "Save As" location dialog.
+ * Supports Tauri desktop native save dialog (with rfd on Windows/macOS/Linux),
+ * modern Web File System Access API (showSaveFilePicker in Chrome/Edge),
+ * and gracefully falls back to standard downloadBlob.
+ */
+export async function saveFileWithPicker(
+  filename: string,
+  blob: Blob,
+  options?: SaveFilePickerOptions
+): Promise<{ saved: boolean; path?: string }> {
+  const cleanFilename = sanitizeFilename(filename);
+
+  // 1. Desktop Tauri environment (native save dialog on Windows/macOS)
+  if (isTauriApp()) {
+    try {
+      const buffer = await blob.arrayBuffer();
+      const uint8 = new Uint8Array(buffer);
+      const ext = cleanFilename.split('.').pop() || '';
+      const filters =
+        options?.filters ||
+        (ext ? [{ name: ext.toUpperCase(), extensions: [ext] }] : undefined);
+
+      const { invoke } = await import('@tauri-apps/api/core');
+      const savedPath = await invoke<string | null>('save_file_dialog', {
+        defaultName: cleanFilename,
+        title: options?.title || 'Lưu tệp',
+        filters,
+        data: Array.from(uint8),
+      });
+
+      if (savedPath) {
+        return { saved: true, path: savedPath };
+      }
+      return { saved: false }; // User cancelled the save dialog
+    } catch (err) {
+      console.warn(
+        '[fileExport] Tauri save_file_dialog failed, falling back to downloadBlob:',
+        err
+      );
+    }
+  }
+
+  // 2. Modern browser with showSaveFilePicker support
+  if (
+    typeof window !== 'undefined' &&
+    'showSaveFilePicker' in window &&
+    typeof (window as any).showSaveFilePicker === 'function'
+  ) {
+    try {
+      const ext = cleanFilename.split('.').pop() || '';
+      const mime = blob.type || 'application/octet-stream';
+      const handle = await (window as any).showSaveFilePicker({
+        suggestedName: cleanFilename,
+        types: ext
+          ? [
+              {
+                description: `${ext.toUpperCase()} File`,
+                accept: { [mime]: [`.${ext}`] },
+              },
+            ]
+          : undefined,
+      });
+
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return { saved: true, path: cleanFilename };
+    } catch (err: any) {
+      if (err?.name === 'AbortError') {
+        return { saved: false }; // User dismissed dialog
+      }
+      console.warn(
+        '[fileExport] showSaveFilePicker failed, falling back to downloadBlob:',
+        err
+      );
+    }
+  }
+
+  // 3. Fallback: classic anchor download
+  downloadBlob(cleanFilename, blob);
+  return { saved: true, path: cleanFilename };
 }
 
 /**

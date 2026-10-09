@@ -1,5 +1,12 @@
 import { db as defaultDb, type TaskPlannerDatabase } from '../index';
-import type { ChatThread, ChatMessage, ChatScopeType, ChatRole } from '../../types/models';
+import type {
+  ChatThread,
+  ChatMessage,
+  ChatScopeType,
+  ChatRole,
+  ChatTokenUsage,
+  ChatGeneratedFile,
+} from '../../types/models';
 import { generateId } from '../../utils/uuid';
 
 export interface CreateOrGetThreadInput {
@@ -13,6 +20,9 @@ export interface SaveMessageInput {
   role: ChatRole;
   content: string;
   isContextBoundary?: boolean | undefined;
+  durationMs?: number | undefined;
+  tokenUsage?: ChatTokenUsage | undefined;
+  generatedFiles?: ChatGeneratedFile[] | undefined;
 }
 
 export function buildScopeKey(scopeType: ChatScopeType, entityId?: string): string {
@@ -66,6 +76,11 @@ export async function saveMessage(
     content: input.content,
     createdAt: now,
     ...(input.isContextBoundary ? { isContextBoundary: true } : {}),
+    ...(typeof input.durationMs === 'number' ? { durationMs: input.durationMs } : {}),
+    ...(input.tokenUsage ? { tokenUsage: input.tokenUsage } : {}),
+    ...(input.generatedFiles && input.generatedFiles.length > 0
+      ? { generatedFiles: input.generatedFiles }
+      : {}),
   };
 
   await db.transaction('rw', [db.chatMessages, db.chatThreads], async () => {

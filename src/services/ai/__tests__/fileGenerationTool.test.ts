@@ -46,7 +46,8 @@ describe('aiTools generate_file', () => {
     expect(exportSpy).toHaveBeenCalledWith(
       '# Project Report\nEverything is on schedule.',
       'project-report.docx',
-      'docx'
+      'docx',
+      false
     );
 
     const result = JSON.parse(resultStr);
@@ -74,7 +75,8 @@ describe('aiTools generate_file', () => {
     expect(exportSpy).toHaveBeenCalledWith(
       '| Task | Hours |\n| Task A | 10 |\n| Task B | 20 |',
       'workload-data',
-      'xlsx'
+      'xlsx',
+      false
     );
 
     const result = JSON.parse(resultStr);

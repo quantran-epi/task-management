@@ -4374,30 +4374,34 @@ export async function executeAiTool(
           const exportResult = await exportPresentationAsFile(
             String(args.content),
             String(args.filename),
-            args.title ? { presentationTitle: String(args.title) } : undefined
+            args.title ? { presentationTitle: String(args.title) } : undefined,
+            false // Do not auto-download silently in background
           );
           return JSON.stringify({
             success: true,
-            message: `Đã tạo và tải xuống bản trình chiếu "${exportResult.filename}" (${exportResult.slideCount} slides) thành công.`,
+            message: `Đã tạo tệp trình chiếu "${exportResult.filename}" (${exportResult.slideCount} slides). Thẻ tải tệp đã sẵn sàng trong giao diện chat để người dùng chọn vị trí lưu.`,
             filename: exportResult.filename,
             format: exportResult.format,
             slideCount: exportResult.slideCount,
             sizeBytes: exportResult.sizeBytes,
+            content: String(args.content),
           });
         }
 
         const exportResult = exportContentAsFile(
           String(args.content),
           String(args.filename),
-          format
+          format,
+          false // Do not auto-download silently in background
         );
 
         return JSON.stringify({
           success: true,
-          message: `Đã tạo và tải xuống tệp "${exportResult.filename}" thành công.`,
+          message: `Đã tạo tệp "${exportResult.filename}". Thẻ tải tệp đã sẵn sàng trong giao diện chat để người dùng chọn vị trí lưu.`,
           filename: exportResult.filename,
           format: exportResult.format,
           sizeBytes: exportResult.sizeBytes,
+          content: String(args.content),
         });
       }
 
@@ -4419,16 +4423,18 @@ export async function executeAiTool(
         const exportResult = await exportPresentationAsFile(
           contentOrSlides,
           filename,
-          presentationTitle ? { presentationTitle } : undefined
+          presentationTitle ? { presentationTitle } : undefined,
+          false // Do not auto-download silently in background
         );
 
         return JSON.stringify({
           success: true,
-          message: `Đã tạo và tải xuống bản trình chiếu PowerPoint "${exportResult.filename}" (${exportResult.slideCount} slides) thành công.`,
+          message: `Đã tạo bản trình chiếu PowerPoint "${exportResult.filename}" (${exportResult.slideCount} slides). Thẻ tải tệp đã sẵn sàng trong giao diện chat để người dùng chọn vị trí lưu.`,
           filename: exportResult.filename,
           format: exportResult.format,
           slideCount: exportResult.slideCount,
           sizeBytes: exportResult.sizeBytes,
+          content: typeof contentOrSlides === 'string' ? contentOrSlides : undefined,
         });
       }
 

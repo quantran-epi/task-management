@@ -3,7 +3,13 @@ import { theme, Button, message, Modal } from 'antd';
 import { DisconnectOutlined } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
-import type { ChatScopeType, ChatThread, ChatMessage } from '../../types/models';
+import type {
+  ChatScopeType,
+  ChatThread,
+  ChatMessage,
+  ChatTokenUsage,
+  ChatGeneratedFile,
+} from '../../types/models';
 import {
   buildScopeKey,
   createOrGetThread,
@@ -683,6 +689,10 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
     setStreamingText('');
     setStreamingStatus('Đang kết nối 9router...');
 
+    const turnStartTime = Date.now();
+    let accumulatedTokenUsage: ChatTokenUsage | undefined;
+    const turnGeneratedFiles: ChatGeneratedFile[] = [];
+
     let fullResponse = '';
     const currentMessages: ChatCompletionMessage[] = [...recentMsgs];
     let loopCount = 0;
@@ -730,6 +740,8 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
             } else if (chunk.type === 'tool_calls') {
               hasToolCalls = true;
               toolCallsToRun = chunk.calls;
+            } else if (chunk.type === 'usage') {
+              accumulatedTokenUsage = chunk.usage;
             }
           }
         } catch (streamErr: any) {
@@ -878,6 +890,22 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
           console.log(`[AI Harness] 📦 Tool result for "${tc.function.name}":`, toolResult);
           aiDebugService.recordToolResult(turnId, tc.id, toolResult, toolDuration);
 
+          if (tc.function.name === 'generate_file' || tc.function.name === 'generate_pptx') {
+            try {
+              const parsedRes = JSON.parse(toolResult);
+              if (parsedRes.success && parsedRes.filename) {
+                turnGeneratedFiles.push({
+                  id: tc.id,
+                  filename: parsedRes.filename,
+                  format: parsedRes.format || 'txt',
+                  sizeBytes: parsedRes.sizeBytes || 0,
+                  slideCount: parsedRes.slideCount,
+                  content: parsedRes.content,
+                });
+              }
+            } catch {}
+          }
+
           currentMessages.push({
             role: 'tool',
             tool_call_id: tc.id,
@@ -922,11 +950,15 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
 
       // 6. Commit assistant response to DB
       if (fullResponse.trim()) {
+        const durationMs = Date.now() - turnStartTime;
         await saveMessage(
           {
             threadId: activeThread.id,
             role: 'assistant',
             content: fullResponse,
+            durationMs,
+            tokenUsage: accumulatedTokenUsage,
+            generatedFiles: turnGeneratedFiles.length > 0 ? turnGeneratedFiles : undefined,
           },
           db
         );
@@ -950,11 +982,15 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
       if (err.name === 'AbortError') {
         // User aborted — commit partial response if exists
         if (fullResponse.trim()) {
+          const durationMs = Date.now() - turnStartTime;
           await saveMessage(
             {
               threadId: activeThread.id,
               role: 'assistant',
               content: fullResponse + ' [Đã dừng]',
+              durationMs,
+              tokenUsage: accumulatedTokenUsage,
+              generatedFiles: turnGeneratedFiles.length > 0 ? turnGeneratedFiles : undefined,
             },
             db
           );

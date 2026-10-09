@@ -7,6 +7,7 @@ import {
   generateXlsxBlob,
   generateCsvBlob,
   downloadBlob,
+  saveFileWithPicker,
 } from '../fileExport';
 import { APP_NAME } from '../../constants/app';
 
@@ -195,6 +196,43 @@ Third line`;
       downloadBlob('test.txt', blob);
 
       expect(clickMock).toHaveBeenCalled();
+    });
+  });
+
+  describe('saveFileWithPicker', () => {
+    it('uses window.showSaveFilePicker when available in browser', async () => {
+      const mockWritable = {
+        write: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn().mockResolvedValue(undefined),
+      };
+      const mockHandle = {
+        createWritable: vi.fn().mockResolvedValue(mockWritable),
+      };
+      (window as any).showSaveFilePicker = vi.fn().mockResolvedValue(mockHandle);
+
+      const blob = new Blob(['sample content'], { type: 'text/plain' });
+      const res = await saveFileWithPicker('test.txt', blob);
+
+      expect(res.saved).toBe(true);
+      expect((window as any).showSaveFilePicker).toHaveBeenCalledWith(
+        expect.objectContaining({ suggestedName: 'test.txt' })
+      );
+      expect(mockWritable.write).toHaveBeenCalledWith(blob);
+      expect(mockWritable.close).toHaveBeenCalled();
+
+      delete (window as any).showSaveFilePicker;
+    });
+
+    it('gracefully handles user cancellation with AbortError', async () => {
+      const abortErr = new Error('The user aborted a request.');
+      abortErr.name = 'AbortError';
+      (window as any).showSaveFilePicker = vi.fn().mockRejectedValue(abortErr);
+
+      const blob = new Blob(['content']);
+      const res = await saveFileWithPicker('cancelled.docx', blob);
+
+      expect(res.saved).toBe(false);
+      delete (window as any).showSaveFilePicker;
     });
   });
 });
