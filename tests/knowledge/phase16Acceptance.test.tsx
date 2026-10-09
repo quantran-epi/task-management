@@ -171,7 +171,7 @@ ${SENSITIVE_CANARIES.PII}
     expect(fetchSpy).not.toHaveBeenCalled();
 
     // 4. Confirm findings and submit with valid nonce
-    const { nonce } = await session.confirmFindings();
+    const { nonce } = await session.confirmFindings(true);
 
     fetchSpy.mockResolvedValueOnce({
       ok: true,

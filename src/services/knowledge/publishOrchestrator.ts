@@ -104,9 +104,13 @@ export class PublishSession {
     return this.findings;
   }
 
-  async confirmFindings(): Promise<{ nonce: string }> {
+  async confirmFindings(overrideApproved: boolean): Promise<{ nonce: string }> {
     const preview = this.requirePreview();
     if (!this.findings) throw new Error('Publish requires a completed DLP scan');
+    if (this.findings.length > 0 && !overrideApproved) {
+      this.confirmation = null;
+      throw new Error('Sensitive-data findings require explicit approval');
+    }
     const attemptKey = generateId();
     const nonce = generateId();
     this.confirmation = {

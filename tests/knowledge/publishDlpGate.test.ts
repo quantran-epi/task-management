@@ -125,7 +125,14 @@ describe('PublishSession exact-preview DLP gate', () => {
     await expect(session.submitConfirmedAttempt('missing')).rejects.toThrow('confirmation');
     expect(remote.createPublishAttempt).not.toHaveBeenCalled();
 
-    const confirmation = await session.confirmFindings();
+    // Rejects if overrideApproved is false or unapproved when findings exist
+    await expect(session.confirmFindings(false)).rejects.toThrow(
+      'Sensitive-data findings require explicit approval'
+    );
+    expect(await db.dlpAudits.count()).toBe(0);
+    expect(remote.createPublishAttempt).not.toHaveBeenCalled();
+
+    const confirmation = await session.confirmFindings(true);
     session.closePreview();
     await expect(session.submitConfirmedAttempt(confirmation.nonce)).rejects.toThrow(
       'preview'
@@ -158,7 +165,7 @@ describe('PublishSession exact-preview DLP gate', () => {
     const session = new PublishSession({ client: remote, db });
     await session.buildPreview({ documentSet: setFor(document), notes: [document], activeManifest: null });
     await session.scan();
-    const confirmation = await session.confirmFindings();
+    const confirmation = await session.confirmFindings(true);
     const result = await session.submitConfirmedAttempt(confirmation.nonce);
     expect(result.status).toBe('Publishing');
     expect(events).toEqual(['post']);
@@ -175,11 +182,11 @@ describe('PublishSession exact-preview DLP gate', () => {
     const session = new PublishSession({ client: remote, db });
     const preview = await session.buildPreview({ documentSet, notes: [document], activeManifest: null });
     await session.scan();
-    const first = await session.confirmFindings();
+    const first = await session.confirmFindings(true);
     await session.scan();
     await expect(session.submitConfirmedAttempt(first.nonce)).rejects.toThrow('confirmation');
 
-    const second = await session.confirmFindings();
+    const second = await session.confirmFindings(true);
     expect(() => {
       (preview.snapshot.documents[0] as { title: string }).title = 'mutated';
     }).toThrow();
@@ -198,7 +205,7 @@ describe('PublishSession exact-preview DLP gate', () => {
     const session = new PublishSession({ client: remote, db });
     await session.buildPreview({ documentSet: setFor(document), notes: [document], activeManifest: null });
     await session.scan();
-    const confirmation = await session.confirmFindings();
+    const confirmation = await session.confirmFindings(false);
     await expect(session.submitConfirmedAttempt(confirmation.nonce)).resolves.toMatchObject({
       status: 'Publishing',
       conflict: true,
@@ -207,11 +214,56 @@ describe('PublishSession exact-preview DLP gate', () => {
     const second = new PublishSession({ client: remote, db });
     await second.buildPreview({ documentSet: setFor(document), notes: [document], activeManifest: null });
     await second.scan();
-    const approval = await second.confirmFindings();
+    const approval = await second.confirmFindings(false);
     await second.submitConfirmedAttempt(approval.nonce);
     const polling = second.pollAcceptedAttempt();
     second.closePreview();
     await polling;
     expect(remote.pollAttempt).toHaveBeenCalledOnce();
+  });
+
+  it('rejects sensitive findings when overrideApproved is false, clearing confirmation and creating zero nonce/audit/POST', async () => {
+    const remote = client();
+    const session = new PublishSession({ client: remote, db });
+    const document = note(undefined, '# Secret\n\napi_key="1234567890abcdef1234567890abcdef"');
+    const documentSet = setFor(document);
+    await session.buildPreview({ documentSet, notes: [document], activeManifest: null });
+    const findings = await session.scan();
+    expect(findings.length).toBeGreaterThan(0);
+
+    // Call with false approval
+    await expect(session.confirmFindings(false)).rejects.toThrow(
+      'Sensitive-data findings require explicit approval'
+    );
+    expect(remote.createPublishAttempt).not.toHaveBeenCalled();
+    expect(await db.dlpAudits.count()).toBe(0);
+
+    // Submitting any nonce fails because no confirmation exists
+    await expect(session.submitConfirmedAttempt('some-nonce')).rejects.toThrow('confirmation');
+    expect(remote.createPublishAttempt).not.toHaveBeenCalled();
+    expect(await db.dlpAudits.count()).toBe(0);
+  });
+
+  it('allows zero-findings scan to proceed with overrideApproved=false and records auto_passed audit', async () => {
+    const remote = client();
+    const session = new PublishSession({ client: remote, db });
+    const document = note(undefined, '# Safe doc\n\nPurely harmless markdown content.');
+    const documentSet = setFor(document);
+    await session.buildPreview({ documentSet, notes: [document], activeManifest: null });
+    const findings = await session.scan();
+    expect(findings.length).toBe(0);
+
+    // confirmFindings(false) succeeds for empty findings
+    const { nonce } = await session.confirmFindings(false);
+    expect(nonce).toBeDefined();
+
+    const result = await session.submitConfirmedAttempt(nonce);
+    expect(result.status).toBe('Publishing');
+    expect(remote.createPublishAttempt).toHaveBeenCalledTimes(1);
+
+    const audits = await db.dlpAudits.toArray();
+    expect(audits.length).toBe(1);
+    expect(audits[0]?.userAction).toBe('auto_passed');
+    expect(audits[0]?.findingCountsByCategory).toEqual({});
   });
 });
