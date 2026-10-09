@@ -56,7 +56,7 @@ jobs:
 
       - name: Install Knowledge Server dependencies
         working-directory: knowledge-server
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Run test suite
         run: npm test
