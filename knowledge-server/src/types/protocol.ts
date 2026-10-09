@@ -133,8 +133,10 @@ export const AttemptErrorDetailsSchema = z
     code: z.string(),
     message: z.string(),
     documentId: uuidSchema.optional(),
+    blockType: z.string().max(80).optional(),
     line: z.number().int().positive().optional(),
     column: z.number().int().positive().optional(),
+    limit: z.number().int().positive().optional(),
   })
   .strict();
 

@@ -12,8 +12,10 @@ export interface SnapshotCandidate {
     code: string;
     message: string;
     documentId?: string | undefined;
+    blockType?: string | undefined;
     line?: number | undefined;
     column?: number | undefined;
+    limit?: number | undefined;
     remedy?: string | undefined;
   }> | undefined;
 }

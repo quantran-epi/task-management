@@ -5,7 +5,7 @@ import type { PublishSession } from '../../services/knowledge/publishOrchestrato
 import type { DlpFinding } from '../../types/dlp';
 import type { PublishPrimaryState } from '../../types/models';
 import { DlpWarningPanel } from './DlpWarningPanel';
-import { PublishProgressPanel } from './PublishProgressPanel';
+import { PublishProgressPanel, type AtomicBlockErrorDetails } from './PublishProgressPanel';
 
 const { Text } = Typography;
 const LABELS: Record<DeltaClassification, string> = {
@@ -38,7 +38,7 @@ export function PublishPreviewModal({ open, preview, session, documentTitles = {
   const [publishBusy, setPublishBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [publishStatus, setPublishStatus] = useState<PublishPrimaryState>('Publishing');
-  const [publishError, setPublishError] = useState<string | undefined>(undefined);
+  const [publishError, setPublishError] = useState<string | AtomicBlockErrorDetails | undefined>(undefined);
   const [uncertain, setUncertain] = useState(false);
 
   useEffect(() => {
@@ -110,8 +110,18 @@ export function PublishPreviewModal({ open, preview, session, documentTitles = {
           setPublishStatus(pollResult.status);
           setUncertain(Boolean(pollResult.uncertain));
           if (pollResult.status === 'Failed') {
-            const err = pollResult.error?.message || 'Máy chủ gặp lỗi khi xử lý ảnh chụp.';
-            setPublishError(err);
+            const error = pollResult.error;
+            setPublishError(
+              error?.code === 'OVERSIZED_ATOMIC_BLOCK'
+                ? {
+                    code: error.code,
+                    ...(error.blockType ? { blockType: error.blockType } : {}),
+                    ...(error.line ? { line: error.line } : {}),
+                    ...(error.column ? { column: error.column } : {}),
+                    ...(error.limit ? { limit: error.limit } : {}),
+                  }
+                : error?.message || 'Máy chủ gặp lỗi khi xử lý ảnh chụp.'
+            );
             onAnnounce?.('Xuất bản thất bại.');
           } else if (pollResult.status === 'In sync') {
             onAnnounce?.('Đã xuất bản bộ tài liệu.');

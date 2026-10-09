@@ -3,23 +3,50 @@ import type { PublishPrimaryState } from '../../types/models';
 
 const { Text } = Typography;
 
+export interface AtomicBlockErrorDetails {
+  code?: string;
+  blockType?: string;
+  line?: number;
+  column?: number;
+  limit?: number;
+}
+
+export function formatOversizedAtomicBlockError(error: unknown): string | undefined {
+  if (!error || typeof error !== 'object') return undefined;
+  const details = error as AtomicBlockErrorDetails;
+  const hasMetadata =
+    typeof details.blockType === 'string' &&
+    typeof details.line === 'number' &&
+    typeof details.column === 'number';
+  if (details.code !== 'OVERSIZED_ATOMIC_BLOCK' && !hasMetadata) return undefined;
+
+  const blockType = ['code', 'table', 'blockquote'].includes(details.blockType ?? '')
+    ? details.blockType
+    : 'Markdown';
+  const line = typeof details.line === 'number' && Number.isSafeInteger(details.line) && details.line > 0 ? details.line : 1;
+  const column = typeof details.column === 'number' && Number.isSafeInteger(details.column) && details.column > 0 ? details.column : 1;
+  const limit = typeof details.limit === 'number' && Number.isSafeInteger(details.limit) && details.limit > 0 ? details.limit : 50_000;
+  return `Khối ${blockType} vượt quá giới hạn an toàn ${limit.toLocaleString('en-US')} ký tự tại dòng ${line}, cột ${column}. Vui lòng chia nhỏ khối trước khi xuất bản.`;
+}
+
 export interface PublishProgressPanelProps {
   status: PublishPrimaryState;
   stage?: string;
   uncertain?: boolean;
   conflict?: boolean;
-  error?: string;
+  error?: string | AtomicBlockErrorDetails;
   onOpenStatus?: () => void;
   onClose: () => void;
 }
 
 export function PublishProgressPanel({ status, stage, uncertain, conflict, error, onOpenStatus, onClose }: PublishProgressPanelProps) {
   if (status === 'Failed') {
+    const errorDescription = formatOversizedAtomicBlockError(error) ?? (typeof error === 'string' ? error : undefined);
     return (
       <Result
         status="error"
         title="Xuất bản thất bại. Ảnh chụp trước vẫn đang hoạt động."
-        subTitle={error}
+        subTitle={errorDescription}
         extra={<Button onClick={onClose}>Đóng</Button>}
       />
     );
@@ -49,7 +76,7 @@ export function PublishProgressPanel({ status, stage, uncertain, conflict, error
       <Result
         status="warning"
         title="Xuất bản có cảnh báo."
-        subTitle={error ?? 'Kiểm tra cảnh báo hoặc vấn đề vận hành trên Knowledge Server.'}
+        subTitle={typeof error === 'string' ? error : 'Kiểm tra cảnh báo hoặc vấn đề vận hành trên Knowledge Server.'}
         extra={<Button onClick={onClose}>Đóng</Button>}
       />
     );

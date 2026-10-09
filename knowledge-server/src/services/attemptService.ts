@@ -61,8 +61,10 @@ function safeError(error: unknown, documentId?: string): NonNullable<SnapshotCan
       code: error.code,
       message: 'Atomic Markdown block exceeds safe limit.',
       documentId: error.documentId,
+      blockType: error.blockType,
       line: error.line,
       column: error.column,
+      limit: error.limit,
       remedy: 'Split the source block and publish again.',
     });
   }

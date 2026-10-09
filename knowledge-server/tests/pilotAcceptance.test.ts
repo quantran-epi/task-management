@@ -407,9 +407,16 @@ describe('Pilot 60000006 acceptance suite', () => {
     // Candidate fails with structured error and remedy
     expect(failedResult?.status).toBe('Failed');
     expect(failedResult?.error).toBeDefined();
-    expect(failedResult?.error?.code).toBe('OVERSIZED_ATOMIC_BLOCK');
+    expect(failedResult?.error).toMatchObject({
+      code: 'OVERSIZED_ATOMIC_BLOCK',
+      documentId: FILE_ENTRIES[0]!.docId,
+      blockType: 'table',
+      line: 4,
+      column: 1,
+      limit: HARD_ATOMIC_BLOCK_LIMIT,
+    });
     expect(failedResult?.error?.remedy).toContain('Split the source block');
-    expect(failedResult?.error?.documentId).toBe(FILE_ENTRIES[0]!.docId);
+    expect(JSON.stringify(failedResult?.error)).not.toContain('Row 0 with long data');
 
     // Active snapshot is untouched and deeply identical
     const activeAfterFailure = store.getActiveSnapshot(SET_ID);

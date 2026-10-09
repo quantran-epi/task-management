@@ -40,8 +40,10 @@ const AttemptResponseSchema = z
         code: z.string().max(80),
         message: z.string().max(240),
         documentId: uuid.optional(),
+        blockType: z.string().max(80).optional(),
         line: z.number().int().positive().optional(),
         column: z.number().int().positive().optional(),
+        limit: z.number().int().positive().optional(),
       })
       .strict()
       .optional(),

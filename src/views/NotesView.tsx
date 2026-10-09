@@ -49,6 +49,7 @@ import { PageHeader } from '../components/common/PageHeader';
 import { openNotesPopout } from '../utils/notesPopout';
 import { DocumentSetDrawer } from '../components/knowledge/DocumentSetDrawer';
 import { PublishPreviewModal } from '../components/knowledge/PublishPreviewModal';
+import { formatOversizedAtomicBlockError } from '../components/knowledge/PublishProgressPanel';
 import type { DocumentSetFormValue } from '../components/knowledge/DocumentSetForm';
 import {
   computeSha256,
@@ -512,8 +513,8 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
       setPublishSession(session);
       setPublishPreview(preview);
       setPublishModalOpen(true);
-    } catch {
-      message.error('Không thể tạo bản xem trước xuất bản.');
+    } catch (error: unknown) {
+      message.error(formatOversizedAtomicBlockError(error) ?? 'Không thể tạo bản xem trước xuất bản.');
     } finally {
       setPreviewLoading(false);
     }
