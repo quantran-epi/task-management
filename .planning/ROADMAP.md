@@ -270,7 +270,7 @@ Plans:
 
 **Wave 12** *(blocked on Wave 11 completion)*
 
-- [ ] 16-19-PLAN.md — Fail-closed authoritative manifest preview (Wave 12)
+- [x] 16-19-PLAN.md — Fail-closed authoritative manifest preview (Wave 12)
 - [ ] 16-20-PLAN.md — Service-boundary DLP override consent (Wave 12)
 
 **Wave 13** *(blocked on Wave 12 completion)*
