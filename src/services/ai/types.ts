@@ -35,9 +35,16 @@ export interface StreamChatCompletionOptions {
   watchdogTimeoutMs?: number;
 }
 
+export interface TokenUsageStats {
+  promptTokens?: number | undefined;
+  completionTokens?: number | undefined;
+  totalTokens?: number | undefined;
+}
+
 export type StreamChatChunk =
   | { type: 'text'; delta: string }
-  | { type: 'tool_calls'; calls: ToolCall[] };
+  | { type: 'tool_calls'; calls: ToolCall[] }
+  | { type: 'usage'; usage: TokenUsageStats };
 
 export interface ConnectionTestOptions {
   endpoint: string;

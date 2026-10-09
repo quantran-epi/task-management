@@ -227,6 +227,26 @@ export const BackupChatMessageRecordSchema = z.object({
   content: z.string(),
   createdAt: z.string(),
   isContextBoundary: z.boolean().optional(),
+  durationMs: z.number().optional(),
+  tokenUsage: z
+    .object({
+      promptTokens: z.number().optional(),
+      completionTokens: z.number().optional(),
+      totalTokens: z.number().optional(),
+    })
+    .optional(),
+  generatedFiles: z
+    .array(
+      z.object({
+        id: z.string(),
+        filename: z.string(),
+        format: z.string(),
+        sizeBytes: z.number(),
+        slideCount: z.number().optional(),
+        content: z.string().optional(),
+      })
+    )
+    .optional(),
 });
 
 export const BackupActiveTimerRecordSchema = z.object({

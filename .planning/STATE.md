@@ -1,11 +1,15 @@
 ---
-gsd_state_version: 1.0
+gsd_state_version: "1.0"
 milestone: v1.2
 milestone_name: Hybrid GraphRAG Knowledge Assistant MVP
+current_phase: 17
+current_phase_name: pilot-ontology-deterministic-extraction-neo4j-knowledge-graph
 status: ready
 stopped_at: Phase 16 verified and secured; Phase 17 ready for planning
 last_updated: "2026-10-09T16:15:00.000Z"
-last_activity: 2026-10-09 -- Phase 16 completed with 5/5 must-haves and 123/123 threats closed
+last_activity: 2026-10-09
+last_activity_desc: "Phase 16 completed with 5/5 must-haves and 123/123 threats closed; retained latest master quick features"
+state_head: 092f237
 progress:
   total_phases: 16
   completed_phases: 12
@@ -28,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 Phase: 17 — READY FOR PLANNING
 Plan: Not started
 Status: Phase 16 verified and secured
-Last activity: 2026-10-09 -- Phase 16 completed with 5/5 must-haves and 123/123 threats closed
+Last activity: 2026-10-09 -- Phase 16 completed; latest master quick features integrated
 
 Progress: [████████░░] 75%
 
@@ -38,6 +42,11 @@ Progress: [████████░░] 75%
 | --- | ------------- | ------ | -------- | -------- | ----------- |
 | 261009-hkj | write Oracle SQLcl MCP HTTP gateway requirements handoff | 2026-10-09 | — | complete | [261009-hkj-create-concise-requirements-handoff-for-](./quick/261009-hkj-create-concise-requirements-handoff-for-/) |
 | 261009-frs | write desktop stdio MCP implementation handoff with dynamic tool policy | 2026-10-09 | — | complete | [261009-frs-create-an-implementation-instruction-mar](./quick/261009-frs-create-an-implementation-instruction-mar/) |
+| 261009-mtb | dynamic browser sandbox for ai generated files using exceljs docx pptxgenjs | 2026-10-09 | — | complete | [261009-mtb-dynamic-browser-sandbox-for-ai-generated](./quick/261009-mtb-dynamic-browser-sandbox-for-ai-generated/) |
+| 261009-le3 | fix ai generated file content mixup and upgrade file generation engine | 2026-10-09 | d5efb54 | complete | [261009-le3-fix-ai-generated-file-content-mixup-and-](./quick/261009-le3-fix-ai-generated-file-content-mixup-and-/) |
+| 261009-j6f | fix ai export browser download and tooltip zindex | 2026-10-09 | — | complete | [261009-j6f-fix-ai-export-browser-download-and-toolt](./quick/261009-j6f-fix-ai-export-browser-download-and-toolt/) |
+| 261009-exp | fix ai export dropdown, add duration and token metrics, and support save as with location picker | 2026-10-09 | — | complete | [261009-exp-fix-ai-export-dropdown-metrics-save-as](./quick/261009-exp-fix-ai-export-dropdown-metrics-save-as/) |
+| 261009-ait | add comprehensive missing AI mutation and query tools | 2026-10-09 | — | complete | [261009-ait-add-comprehensive-missing-ai-tools](./quick/261009-ait-add-comprehensive-missing-ai-tools/) |
 | 261008-pop | fix diff popover zindex, terminal chat history and skill autocomplete, optimize diff refresh | 2026-10-08 | — | complete | [261008-fix-popover-history-autocomplete-diff-perf](./quick/261008-fix-popover-history-autocomplete-diff-perf/) |
 | 261008-jgo | show timer and token count in ghost dev | 2026-10-08 | 9f75db4 | complete | [261008-jgo-show-timer-and-token-count-in-ghost-dev-](./quick/261008-jgo-show-timer-and-token-count-in-ghost-dev-/) |
 | 261008-j1m | fix DocFolderTree CTA button crowding and panel width | 2026-10-08 | — | complete | [261008-j1m-fix-docfoldertree-cta-button-crowding-an](./quick/261008-j1m-fix-docfoldertree-cta-button-crowding-an/) |
@@ -127,6 +136,9 @@ Progress: [████████░░] 75%
 | 261008-qmp | Fix diff panel race condition and loading overlay, stop process UX, and multi-task terminal log state | 2026-10-08 | — | complete | [261008-qmp-multi-process-fixes](./quick/261008-qmp-multi-process-fixes/) |
 | 261008-m80 | Fix AgentControlView test failures in AgentDiffReviewer | 2026-10-08 | — | complete | [261008-m80-fix-agentcontrolview-test-failures-in-ag](./quick/261008-m80-fix-agentcontrolview-test-failures-in-ag/) |
 | 261008-tfe | Fix AgentDiffReviewer tree expansion in AgentControlView tests | 2026-10-08 | — | complete | [261008-tfe-fix-agentdiffreviewer-tree-expansion](./quick/261008-tfe-fix-agentdiffreviewer-tree-expansion/) |
+| 261008-fex | Optimize file explorer perf, exclusions, mention in chat, PC reveal, and skills autocomplete | 2026-10-08 | — | complete | [261008-fex-agent-file-explorer-perf-and-skills](./quick/261008-fex-agent-file-explorer-perf-and-skills/) |
+| 261008-k9p | Fix false thinking state and timer run when clearing logs in ghost dev session | 2026-10-08 | 2931d37 | complete | [261008-k9p-fix-clear-logs-false-thinking-timer](./quick/261008-k9p-fix-clear-logs-false-thinking-timer/) |
+| 261009-ana | Fix build error in AnalyticsView.test.tsx | 2026-10-09 | — | complete | [261009-ana-fix-analytics-view-test-build-error](./quick/261009-ana-fix-analytics-view-test-build-error/) |
 
 ## Performance Metrics
 

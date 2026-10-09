@@ -4,6 +4,9 @@
  * DOCX and XLSX are created using zero-dependency, pure TypeScript store-mode (uncompressed) OpenXML ZIP archives.
  */
 
+import { isTauriApp } from './timerPopout';
+import { generateDocxBlobWithDocx, generateXlsxBlobWithExcelJS } from './dynamicFileSandbox';
+
 export type ExportFormat = 'md' | 'txt' | 'docx' | 'xlsx' | 'csv' | 'pptx';
 
 export interface FileExportResult {
@@ -204,7 +207,7 @@ export function inferFormatFromFilename(filename: string): ExportFormat {
 /**
  * Parses markdown table lines into 2D array of string cells.
  */
-function parseMarkdownTable(lines: string[], startIdx: number): { rows: string[][]; nextIdx: number } {
+export function parseMarkdownTable(lines: string[], startIdx: number): { rows: string[][]; nextIdx: number } {
   const rows: string[][] = [];
   let idx = startIdx;
 
@@ -251,6 +254,35 @@ export function generateDocxBlob(content: string, _title?: string): Blob {
     if (!line) {
       // Empty line / paragraph break
       bodyXmlParts.push('<w:p><w:pPr><w:spacing w:after="120"/></w:pPr></w:p>');
+      i++;
+      continue;
+    }
+
+    // Code block detection: ```
+    if (line.startsWith('```')) {
+      i++;
+      const codeLines: string[] = [];
+      while (i < lines.length && !lines[i]!.trim().startsWith('```')) {
+        codeLines.push(lines[i]!);
+        i++;
+      }
+      if (i < lines.length && lines[i]!.trim().startsWith('```')) {
+        i++; // skip closing ```
+      }
+      for (const cLine of codeLines) {
+        bodyXmlParts.push(
+          `<w:p><w:pPr><w:shd w:val="clear" w:color="auto" w:fill="F3F4F6"/><w:ind w:left="240" w:right="240"/><w:spacing w:after="40"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/><w:sz w:val="20"/><w:color w:val="1F2937"/></w:rPr><w:t xml:space="preserve">${escapeXml(cLine)}</w:t></w:r></w:p>`
+        );
+      }
+      continue;
+    }
+
+    // Blockquote detection: > text
+    if (line.startsWith('>')) {
+      const quoteText = line.replace(/^>\s*/, '');
+      bodyXmlParts.push(
+        `<w:p><w:pPr><w:pBdr><w:left w:val="single" w:sz="18" w:space="8" w:color="6366F1"/></w:pBdr><w:ind w:left="240"/><w:spacing w:after="100"/></w:pPr><w:r><w:rPr><w:i/><w:color w:val="4B5563"/></w:rPr><w:t xml:space="preserve">${escapeXml(quoteText)}</w:t></w:r></w:p>`
+      );
       i++;
       continue;
     }
@@ -403,7 +435,7 @@ function toColumnLetter(colIndex: number): string {
 /**
  * Extracts 2D array of rows from markdown or text for Excel spreadsheet generation.
  */
-function extractGridFromText(content: string): string[][] {
+export function extractGridFromText(content: string): string[][] {
   const lines = (content || '').split('\n');
   const grid: string[][] = [];
 
@@ -485,8 +517,23 @@ export function generateXlsxBlob(content: string, _sheetTitle?: string): Blob {
     rowXmlParts.push(`<row r="${rowNumber}">${cellXmlParts.join('')}</row>`);
   });
 
+  // Calculate auto column widths based on maximum content length
+  const colWidths: number[] = [];
+  grid.forEach((row) => {
+    row.forEach((cellValue, colIdx) => {
+      const len = (cellValue || '').toString().length;
+      colWidths[colIdx] = Math.max(colWidths[colIdx] || 10, Math.min(50, len + 3));
+    });
+  });
+
+  const colsXml =
+    colWidths.length > 0
+      ? `<cols>${colWidths.map((w, idx) => `<col min="${idx + 1}" max="${idx + 1}" width="${w}" customWidth="1"/>`).join('')}</cols>`
+      : '';
+
   const sheet1Xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  ${colsXml}
   <sheetData>
     ${rowXmlParts.join('\n    ')}
   </sheetData>
@@ -588,15 +635,104 @@ export function downloadBlob(filename: string, blob: Blob): void {
   }
 }
 
+export interface SaveFilePickerOptions {
+  title?: string;
+  filters?: Array<{ name: string; extensions: string[] }>;
+}
+
+/**
+ * Saves a file by prompting the user with a native or browser "Save As" location dialog.
+ * Supports Tauri desktop native save dialog (with rfd on Windows/macOS/Linux),
+ * modern Web File System Access API (showSaveFilePicker in Chrome/Edge),
+ * and gracefully falls back to standard downloadBlob.
+ */
+export async function saveFileWithPicker(
+  filename: string,
+  blob: Blob,
+  options?: SaveFilePickerOptions
+): Promise<{ saved: boolean; path?: string }> {
+  const cleanFilename = sanitizeFilename(filename);
+
+  // 1. Desktop Tauri environment (native save dialog on Windows/macOS)
+  if (isTauriApp()) {
+    try {
+      const buffer = await blob.arrayBuffer();
+      const uint8 = new Uint8Array(buffer);
+      const ext = cleanFilename.split('.').pop() || '';
+      const filters =
+        options?.filters ||
+        (ext ? [{ name: ext.toUpperCase(), extensions: [ext] }] : undefined);
+
+      const { invoke } = await import('@tauri-apps/api/core');
+      const savedPath = await invoke<string | null>('save_file_dialog', {
+        defaultName: cleanFilename,
+        title: options?.title || 'Lưu tệp',
+        filters,
+        data: Array.from(uint8),
+      });
+
+      if (savedPath) {
+        return { saved: true, path: savedPath };
+      }
+      return { saved: false }; // User cancelled the save dialog
+    } catch (err) {
+      console.warn(
+        '[fileExport] Tauri save_file_dialog failed, falling back to downloadBlob:',
+        err
+      );
+    }
+  }
+
+  // 2. Modern browser with showSaveFilePicker support
+  if (
+    typeof window !== 'undefined' &&
+    'showSaveFilePicker' in window &&
+    typeof (window as any).showSaveFilePicker === 'function'
+  ) {
+    try {
+      const ext = cleanFilename.split('.').pop() || '';
+      const mime = blob.type || 'application/octet-stream';
+      const handle = await (window as any).showSaveFilePicker({
+        suggestedName: cleanFilename,
+        types: ext
+          ? [
+              {
+                description: `${ext.toUpperCase()} File`,
+                accept: { [mime]: [`.${ext}`] },
+              },
+            ]
+          : undefined,
+      });
+
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return { saved: true, path: cleanFilename };
+    } catch (err: any) {
+      if (err?.name === 'AbortError') {
+        return { saved: false }; // User dismissed dialog
+      }
+      console.warn(
+        '[fileExport] showSaveFilePicker failed, falling back to downloadBlob:',
+        err
+      );
+    }
+  }
+
+  // 3. Fallback: classic anchor download
+  downloadBlob(cleanFilename, blob);
+  return { saved: true, path: cleanFilename };
+}
+
 /**
  * Unified file export and download helper for MD, TXT, DOCX, XLSX, and CSV.
  */
-export function exportContentAsFile(
+export async function exportContentAsFile(
   content: string,
   filename: string,
   format?: ExportFormat,
   autoDownload: boolean = true
-): FileExportResult {
+): Promise<FileExportResult> {
   const cleanFilename = sanitizeFilename(filename);
   const resolvedFormat = format || inferFormatFromFilename(cleanFilename);
 
@@ -604,10 +740,10 @@ export function exportContentAsFile(
 
   switch (resolvedFormat) {
     case 'docx':
-      blob = generateDocxBlob(content);
+      blob = await generateDocxBlobWithDocx(content);
       break;
     case 'xlsx':
-      blob = generateXlsxBlob(content);
+      blob = await generateXlsxBlobWithExcelJS(content);
       break;
     case 'csv':
       blob = generateCsvBlob(content);

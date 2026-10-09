@@ -80,6 +80,7 @@ export const AgentControlView: React.FC = () => {
     sending,
     sendChatMessage,
     clearLogs,
+    isCleared,
   } = useGhostDevStream(activeSessionId);
 
   // Worktree diff for active session
@@ -104,6 +105,8 @@ export const AgentControlView: React.FC = () => {
     revertFile,
     revertHunk,
   } = useGhostDevDiff(activeSession ? activeSession.worktreePath : null);
+
+  const [mentionedFilePath, setMentionedFilePath] = useState<string | null>(null);
 
   const handleStopSession = useCallback(
     async (taskId: string) => {
@@ -173,12 +176,16 @@ export const AgentControlView: React.FC = () => {
               logs={logs}
               sending={sending}
               isRunning={activeSession?.status === 'running'}
+              isCleared={isCleared}
               startedAt={activeSession.startedAt}
               finishedAt={activeSession.finishedAt}
               onSendFeedback={sendChatMessage}
               onClearLogs={clearLogs}
               taskTitle={activeSession.taskTitle}
               activeWorkers={activeSession.activeWorkers}
+              repoPath={activeSession?.worktreePath}
+              mentionedFilePath={mentionedFilePath}
+              onClearMentionedFile={() => setMentionedFilePath(null)}
             />
           ) : (
             <div
@@ -226,6 +233,7 @@ export const AgentControlView: React.FC = () => {
             onRevertFile={revertFile}
             onRevertHunk={revertHunk}
             onSendFeedback={sendChatMessage}
+            onMentionFile={(filePath) => setMentionedFilePath(filePath)}
             worktreePath={activeSession ? activeSession.worktreePath : null}
           />
         </Splitter.Panel>

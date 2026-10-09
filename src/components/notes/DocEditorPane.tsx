@@ -596,9 +596,9 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
                   key: 'docx',
                   icon: <FileWordOutlined style={{ color: '#185abd' }} />,
                   label: 'Word Document (.docx)',
-                  onClick: () => {
+                  onClick: async () => {
                     try {
-                      const res = exportContentAsFile(
+                      const res = await exportContentAsFile(
                         `# ${title || 'Document'}\n\n${body}`,
                         `${title || 'document'}.docx`,
                         'docx'
@@ -613,9 +613,9 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
                   key: 'md',
                   icon: <FileMarkdownOutlined style={{ color: '#0969da' }} />,
                   label: 'Markdown (.md)',
-                  onClick: () => {
+                  onClick: async () => {
                     try {
-                      const res = exportContentAsFile(
+                      const res = await exportContentAsFile(
                         `# ${title || 'Document'}\n\n${body}`,
                         `${title || 'document'}.md`,
                         'md'

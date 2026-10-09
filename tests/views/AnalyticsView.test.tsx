@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import 'fake-indexeddb/auto';
+import dayjs from 'dayjs';
 import { AnalyticsView } from '../../src/views/AnalyticsView';
 import { TaskPlannerDatabase } from '../../src/db/index';
 import { createTask } from '../../src/db/repositories/taskRepo';
@@ -45,12 +46,14 @@ describe('AnalyticsView', () => {
       testDb
     );
 
+    // ponytail: dynamic today fits default 7d window; mock system timer if multi-period testing needed
+    const today = dayjs().format('YYYY-MM-DD');
     await createWorkSession(
       {
         taskId: task.id,
         durationMinutes: 60,
-        startTime: '2026-10-02T10:00:00.000Z',
-        endTime: '2026-10-02T11:00:00.000Z',
+        startTime: `${today}T10:00:00.000Z`,
+        endTime: `${today}T11:00:00.000Z`,
       },
       testDb
     );

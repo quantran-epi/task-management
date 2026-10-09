@@ -14,6 +14,64 @@ export const BUILTIN_SKILLS: SkillItem[] = [
     source: 'builtin',
   },
   {
+    name: 'status',
+    description: 'Show system status, git status, tokens, and background tasks',
+    source: 'builtin',
+  },
+  {
+    name: 'goal',
+    description: 'Set session objective or track long-running goal',
+    argumentHint: '<goal description>',
+    source: 'builtin',
+  },
+  {
+    name: 'doctor',
+    description: 'Health check on environment, toolchain, and permissions',
+    source: 'builtin',
+  },
+  {
+    name: 'memory',
+    description: 'View and manage persistent memory files',
+    source: 'builtin',
+  },
+  {
+    name: 'model',
+    description: 'Inspect or switch active model family',
+    argumentHint: '[model-id]',
+    source: 'builtin',
+  },
+  {
+    name: 'permissions',
+    description: 'View and modify tool access and command permissions',
+    source: 'builtin',
+  },
+  {
+    name: 'fast',
+    description: 'Toggle fast mode on or off',
+    source: 'builtin',
+  },
+  {
+    name: 'verbose',
+    description: 'Toggle verbose / debug output logging',
+    source: 'builtin',
+  },
+  {
+    name: 'bug',
+    description: 'Report a bug with diagnostic info',
+    argumentHint: '<description>',
+    source: 'builtin',
+  },
+  {
+    name: 'summary',
+    description: 'Summarize session conversation and actions',
+    source: 'builtin',
+  },
+  {
+    name: 'pr-comments',
+    description: 'Fetch and display PR review comments',
+    source: 'builtin',
+  },
+  {
     name: 'clear',
     description: 'Clear terminal log stream',
     source: 'builtin',
@@ -37,6 +95,21 @@ export const BUILTIN_SKILLS: SkillItem[] = [
   {
     name: 'init',
     description: 'Initialize CLAUDE.md documentation for this repo',
+    source: 'builtin',
+  },
+  {
+    name: 'login',
+    description: 'Sign in to your Claude account',
+    source: 'builtin',
+  },
+  {
+    name: 'logout',
+    description: 'Sign out of your Claude account',
+    source: 'builtin',
+  },
+  {
+    name: 'terminal-setup',
+    description: 'Set up terminal font and styling integration',
     source: 'builtin',
   },
   {

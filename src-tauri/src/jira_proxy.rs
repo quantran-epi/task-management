@@ -108,6 +108,77 @@ pub fn open_local_path(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn reveal_in_file_explorer(path: String) -> Result<(), String> {
+    let clean_path = clean_file_uri_path(&path)?;
+    let p = std::path::Path::new(&clean_path);
+    if !p.exists() {
+        return Err(format!("Đường dẫn không tồn tại: {}", clean_path));
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg("-R")
+            .arg(&clean_path)
+            .spawn()
+            .map_err(|e| format!("Không thể hiển thị tập tin trong Finder: {}", e))?;
+        return Ok(());
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(format!("/select,{}", clean_path))
+            .spawn()
+            .map_err(|e| format!("Không thể hiển thị tập tin trong Explorer: {}", e))?;
+        return Ok(());
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        let target = if p.is_file() {
+            p.parent().unwrap_or(p).to_string_lossy().to_string()
+        } else {
+            clean_path
+        };
+        open::that(target).map_err(|e| format!("Không thể mở thư mục: {}", e))?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileFilter {
+    pub name: String,
+    pub extensions: Vec<String>,
+}
+
+#[tauri::command]
+pub fn save_file_dialog(
+    default_name: String,
+    title: Option<String>,
+    filters: Option<Vec<FileFilter>>,
+    data: Vec<u8>,
+) -> Result<Option<String>, String> {
+    let mut dialog = rfd::FileDialog::new().set_file_name(&default_name);
+    if let Some(t) = title {
+        dialog = dialog.set_title(&t);
+    }
+    if let Some(filters_list) = filters {
+        for f in &filters_list {
+            let ext_refs: Vec<&str> = f.extensions.iter().map(|s| s.as_str()).collect();
+            dialog = dialog.add_filter(&f.name, &ext_refs);
+        }
+    }
+    if let Some(path) = dialog.save_file() {
+        std::fs::write(&path, &data).map_err(|e| format!("Không thể ghi tệp: {}", e))?;
+        Ok(Some(path.to_string_lossy().to_string()))
+    } else {
+        Ok(None)
+    }
+}
+
+#[tauri::command]
 pub fn select_local_folder() -> Result<Option<String>, String> {
     Ok(rfd::FileDialog::new()
         .set_title("Chọn thư mục liên kết")

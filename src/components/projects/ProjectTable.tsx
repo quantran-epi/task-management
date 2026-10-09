@@ -650,8 +650,19 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
                 {linkCount > 0 && (
                   <Popover
                     title="Tài liệu liên kết"
+                    overlayStyle={{ maxWidth: 420 }}
                     content={
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 8,
+                          maxWidth: 380,
+                          maxHeight: 280,
+                          overflowY: 'auto',
+                          paddingRight: 4,
+                        }}
+                      >
                         {record.documentLinks?.map((link, idx) => {
                           const local = isLocalPath(link);
                           return (
@@ -668,14 +679,31 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
                                 }
                               }}
                               title={local ? 'Mở trong File Explorer' : 'Mở liên kết web'}
-                              style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                              style={{
+                                fontSize: 12,
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                gap: 6,
+                                lineHeight: 1.4,
+                                color: token.colorLink,
+                              }}
                             >
                               {local ? (
-                                <FolderOpenOutlined style={{ color: '#fa8c16' }} />
+                                <FolderOpenOutlined style={{ color: '#fa8c16', flexShrink: 0, marginTop: 2 }} />
                               ) : (
-                                <LinkOutlined style={{ color: '#1677ff' }} />
+                                <LinkOutlined style={{ color: '#1677ff', flexShrink: 0, marginTop: 2 }} />
                               )}
-                              <span>{link}</span>
+                              <span
+                                title={link}
+                                style={{
+                                  flex: 1,
+                                  minWidth: 0,
+                                  wordBreak: 'break-all',
+                                  overflowWrap: 'anywhere',
+                                }}
+                              >
+                                {link}
+                              </span>
                             </a>
                           );
                         })}

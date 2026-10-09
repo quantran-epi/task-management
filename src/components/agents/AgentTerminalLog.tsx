@@ -46,6 +46,7 @@ export interface AgentTerminalLogProps {
   logs: GhostDevStreamChunk[];
   sending: boolean;
   isRunning?: boolean;
+  isCleared?: boolean;
   startedAt?: string | undefined;
   finishedAt?: string | undefined;
   onSendFeedback: (prompt: string) => Promise<void>;
@@ -53,6 +54,9 @@ export interface AgentTerminalLogProps {
   taskTitle?: string;
   activeWorkers?: WorkerSession[];
   onRemoveWorker?: (workerId: string) => void;
+  repoPath?: string | null;
+  mentionedFilePath?: string | null;
+  onClearMentionedFile?: () => void;
 }
 
 interface ParsedChunk {
@@ -423,6 +427,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
   logs,
   sending,
   isRunning = false,
+  isCleared = false,
   startedAt,
   finishedAt,
   onSendFeedback,
@@ -430,12 +435,16 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
   taskTitle,
   activeWorkers = [],
   onRemoveWorker,
+  repoPath,
+  mentionedFilePath,
+  onClearMentionedFile,
 }) => {
   const [inputText, setInputText] = useState('');
   const [autoScroll, setAutoScroll] = useState(true);
   const [viewMode, setViewMode] = useState<'human' | 'raw'>('human');
   const [selectedAgent, setSelectedAgent] = useState<string>('all');
   const [dismissedWorkerIds, setDismissedWorkerIds] = useState<string[]>([]);
+  const [clearedInternally, setClearedInternally] = useState<boolean>(false);
   const [liveElapsedSec, setLiveElapsedSec] = useState<number>(0);
   const logContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<any>(null);
@@ -445,16 +454,24 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
   const [draftText, setDraftText] = useState<string>('');
 
-  // Skill Autocomplete state (loaded on initial mount)
+  // Skill Autocomplete state (loaded on initial mount or when repoPath changes)
   const [availableSkills, setAvailableSkills] = useState<SkillItem[]>([]);
   const [showSkillsMenu, setShowSkillsMenu] = useState<boolean>(false);
   const [selectedSkillIndex, setSelectedSkillIndex] = useState<number>(0);
 
   useEffect(() => {
-    void loadAvailableSkills().then((skills) => {
+    void loadAvailableSkills(repoPath).then((skills) => {
       setAvailableSkills(skills);
     });
-  }, []);
+  }, [repoPath]);
+
+  useEffect(() => {
+    if (mentionedFilePath) {
+      setInputText((prev) => (prev ? `${prev.trimEnd()} @${mentionedFilePath} ` : `@${mentionedFilePath} `));
+      inputRef.current?.focus();
+      onClearMentionedFile?.();
+    }
+  }, [mentionedFilePath, onClearMentionedFile]);
 
   const isSlashCommandPrefix = inputText.startsWith('/') && !inputText.includes(' ');
   const skillFilter = isSlashCommandPrefix ? inputText.slice(1).toLowerCase().trim() : '';
@@ -478,11 +495,26 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
     }
   }, [isSlashCommandPrefix, matchingSkills.length]);
 
+  useEffect(() => {
+    if (logs.length > 0) {
+      setClearedInternally(false);
+    }
+  }, [logs.length]);
+
   // Reset subagent filter & dismissed state when active task changes
   useEffect(() => {
     setSelectedAgent('all');
     setDismissedWorkerIds([]);
+    setClearedInternally(false);
   }, [taskTitle]);
+
+  const effectiveIsCleared = Boolean(isCleared || clearedInternally);
+
+  const handleClearLogs = () => {
+    setClearedInternally(true);
+    setLiveElapsedSec(0);
+    onClearLogs?.();
+  };
 
   const handleRemoveWorker = (workerId: string) => {
     setDismissedWorkerIds((prev) => (prev.includes(workerId) ? prev : [...prev, workerId]));
@@ -496,7 +528,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
   const { isThinking, latestResultInfo } = useMemo(() => {
     if (!isRunning && !sending) {
       // If agent is not running and not sending feedback, it is definitely not thinking!
-      let resultInfo: { durationStr: string; tokens?: string | undefined } | null = null;
+      let resultInfo: { durationStr: string; tokens?: string | undefined; durationSec?: number } | null = null;
       for (let i = logs.length - 1; i >= 0; i--) {
         const chunk = logs[i];
         if (!chunk) continue;
@@ -514,7 +546,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
               const tokenCount = extractTokenCount(val);
               const tokenStr =
                 tokenCount !== null ? `${tokenCount.toLocaleString()} tokens` : undefined;
-              resultInfo = { durationStr, tokens: tokenStr };
+              resultInfo = { durationStr, tokens: tokenStr, durationSec };
               break;
             }
           } catch {
@@ -530,7 +562,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
     }
 
     // Determine whether running agent is actively generating/executing or waiting for user
-    let resultInfo: { durationStr: string; tokens?: string | undefined } | null = null;
+    let resultInfo: { durationStr: string; tokens?: string | undefined; durationSec?: number } | null = null;
     let lastUserFeedbackIndex = -1;
     let lastAiResponseIndex = -1;
     let lastResultIndex = -1;
@@ -562,7 +594,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
               const tokenCount = extractTokenCount(val);
               const tokenStr =
                 tokenCount !== null ? `${tokenCount.toLocaleString()} tokens` : undefined;
-              resultInfo = { durationStr, tokens: tokenStr };
+              resultInfo = { durationStr, tokens: tokenStr, durationSec };
             }
           } else if (val.type === 'tool_use' || val.type === 'tool_call') {
             if (lastToolCallIndex === -1) lastToolCallIndex = i;
@@ -612,11 +644,15 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
     }
 
     // 5. Initial start: process is running, but no logs or responses yet:
+    if (effectiveIsCleared) {
+      return { isThinking: false, latestResultInfo: null };
+    }
+
     return {
       isThinking: logs.length === 0,
       latestResultInfo: null,
     };
-  }, [logs, sending, isRunning]);
+  }, [logs, sending, isRunning, effectiveIsCleared]);
 
   // Filter logs by selected agent and exclude dismissed workers
   const filteredLogs = useMemo(() => {
@@ -662,9 +698,9 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
     return 0;
   }, [finishedAt, effectiveStartTimestamp]);
 
-  // Tick timer every second when agent is running or thinking
+  // Tick timer every second only when agent is actively executing/thinking
   useEffect(() => {
-    if (!isRunning && !isThinking) {
+    if (!isThinking) {
       return;
     }
 
@@ -681,11 +717,11 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
     updateTimer();
     const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
-  }, [isRunning, isThinking, effectiveStartTimestamp]);
+  }, [isThinking, effectiveStartTimestamp]);
 
-  const displayElapsedSec = isRunning || isThinking
+  const displayElapsedSec = isThinking
     ? liveElapsedSec
-    : finishedElapsedSec || liveElapsedSec;
+    : latestResultInfo?.durationSec ?? finishedElapsedSec ?? (effectiveIsCleared ? 0 : liveElapsedSec);
 
   // Discover all unique workers from props, logs, and parsed tool calls with exit tracking
   const allWorkers = useMemo(() => {
@@ -972,7 +1008,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
               <Text style={{ color: '#888', fontSize: 11 }}>({filteredLogs.length} dòng)</Text>
 
               {/* Live Claude Code style metrics tag */}
-              {isRunning || isThinking ? (
+              {isThinking ? (
                 <Tag
                   color="blue"
                   bordered={false}
@@ -992,7 +1028,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                   <span>•</span>
                   <span>{formatTokenCount(sessionTokens)}</span>
                 </Tag>
-              ) : displayElapsedSec > 0 || sessionTokens > 0 ? (
+              ) : (displayElapsedSec > 0 || sessionTokens > 0) && !effectiveIsCleared ? (
                 <Tag
                   color="default"
                   bordered={false}
@@ -1072,7 +1108,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                   size="small"
                   type="text"
                   icon={<ClearOutlined />}
-                  onClick={onClearLogs}
+                  onClick={handleClearLogs}
                   style={{ color: '#888' }}
                   aria-label="Xóa nhật ký terminal"
                 />
@@ -1713,7 +1749,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                 {formatDuration(displayElapsedSec)} • {formatTokenCount(sessionTokens)}
               </span>
             </div>
-          ) : latestResultInfo ? (
+          ) : latestResultInfo && !effectiveIsCleared ? (
             <div
               style={{
                 display: 'flex',

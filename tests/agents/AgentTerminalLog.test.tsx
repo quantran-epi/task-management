@@ -342,4 +342,177 @@ describe('AgentTerminalLog Component Tests', () => {
     fireEvent.keyDown(input, { key: 'Tab', code: 'Tab' });
     expect(input).toHaveValue('/gsd-quick ');
   });
+
+  it('includes built-in Claude Code commands like /status and /goal in autocomplete', async () => {
+    render(
+      <AgentTerminalLog
+        logs={[]}
+        sending={false}
+        isRunning={false}
+        onSendFeedback={vi.fn()}
+      />
+    );
+
+    const input = screen.getByRole('textbox', { name: /Nhập hướng dẫn cho Master Agent/i });
+
+    // Type /goal
+    fireEvent.change(input, { target: { value: '/goal' } });
+    expect(await screen.findByText('/goal')).toBeInTheDocument();
+
+    // Type /status
+    fireEvent.change(input, { target: { value: '/status' } });
+    expect(await screen.findByText('/status')).toBeInTheDocument();
+  });
+
+  it('inserts mentioned file path into chat input and triggers onClearMentionedFile', () => {
+    const onClearMock = vi.fn();
+    const { rerender } = render(
+      <AgentTerminalLog
+        logs={[]}
+        sending={false}
+        isRunning={false}
+        onSendFeedback={vi.fn()}
+        mentionedFilePath={null}
+        onClearMentionedFile={onClearMock}
+      />
+    );
+
+    const input = screen.getByRole('textbox', { name: /Nhập hướng dẫn cho Master Agent/i });
+    expect(input).toHaveValue('');
+
+    // Mention a file
+    rerender(
+      <AgentTerminalLog
+        logs={[]}
+        sending={false}
+        isRunning={false}
+        onSendFeedback={vi.fn()}
+        mentionedFilePath="src/components/App.tsx"
+        onClearMentionedFile={onClearMock}
+      />
+    );
+
+    expect(input).toHaveValue('@src/components/App.tsx ');
+    expect(onClearMock).toHaveBeenCalled();
+  });
+
+  it('does not display thinking status or run timer when logs are cleared in running agent', () => {
+    const onClearMock = vi.fn();
+    const { rerender } = render(
+      <AgentTerminalLog
+        logs={[
+          {
+            taskId: 'task-1',
+            source: 'master',
+            timestamp: '2026-10-08T10:00:00Z',
+            type: 'log',
+            content: JSON.stringify({
+              type: 'result',
+              duration_ms: 25000,
+              result: 'Turn completed successfully',
+            }),
+          },
+        ]}
+        sending={false}
+        isRunning={true}
+        onSendFeedback={vi.fn()}
+        onClearLogs={onClearMock}
+      />
+    );
+
+    // Initial state: turn completed
+    expect(screen.queryByText('Claude AI đang xử lý / suy nghĩ...')).not.toBeInTheDocument();
+    expect(screen.getByText(/Đã hoàn thành/)).toBeInTheDocument();
+
+    // Click clear logs button
+    const clearBtn = screen.getByRole('button', { name: 'Xóa nhật ký terminal' });
+    fireEvent.click(clearBtn);
+    expect(onClearMock).toHaveBeenCalled();
+
+    // Re-render with cleared logs (logs: []) and isCleared={true}
+    rerender(
+      <AgentTerminalLog
+        logs={[]}
+        sending={false}
+        isRunning={true}
+        isCleared={true}
+        onSendFeedback={vi.fn()}
+        onClearLogs={onClearMock}
+      />
+    );
+
+    // MUST NOT show false thinking status
+    expect(screen.queryByText('Claude AI đang xử lý / suy nghĩ...')).not.toBeInTheDocument();
+    // Completed banner is also cleared since logs are empty
+    expect(screen.queryByText(/Đã hoàn thành/)).not.toBeInTheDocument();
+  });
+
+  it('persists idle state when switching to cleared session and restores thinking when user sends feedback', () => {
+    const onSendMock = vi.fn().mockResolvedValue(undefined);
+    const { rerender } = render(
+      <AgentTerminalLog
+        logs={[]}
+        sending={false}
+        isRunning={true}
+        isCleared={true}
+        taskTitle="Task 2 (Idle/Cleared)"
+        onSendFeedback={onSendMock}
+      />
+    );
+
+    // Cleared session must be idle, not thinking
+    expect(screen.queryByText('Claude AI đang xử lý / suy nghĩ...')).not.toBeInTheDocument();
+
+    // Now user sends feedback in this session
+    rerender(
+      <AgentTerminalLog
+        logs={[
+          {
+            taskId: 'task-2',
+            source: 'master',
+            timestamp: '2026-10-08T10:10:00Z',
+            type: 'log',
+            content: '[User Feedback]: fix this issue',
+          },
+        ]}
+        sending={false}
+        isRunning={true}
+        isCleared={false}
+        taskTitle="Task 2 (Idle/Cleared)"
+        onSendFeedback={onSendMock}
+      />
+    );
+
+    // Now agent should be actively thinking
+    expect(screen.getByText('Claude AI đang xử lý / suy nghĩ...')).toBeInTheDocument();
+  });
+
+  it('stops live timer and shows completed tag when agent finishes turn while process is running', () => {
+    render(
+      <AgentTerminalLog
+        logs={[
+          {
+            taskId: 'task-1',
+            source: 'master',
+            timestamp: '2026-10-08T10:00:00Z',
+            type: 'log',
+            content: JSON.stringify({
+              type: 'result',
+              duration_ms: 18000,
+              result: 'Done',
+            }),
+          },
+        ]}
+        sending={false}
+        isRunning={true}
+        startedAt="2026-10-08T10:00:00Z"
+        onSendFeedback={vi.fn()}
+      />
+    );
+
+    // Should not show thinking spinner
+    expect(screen.queryByText('Claude AI đang xử lý / suy nghĩ...')).not.toBeInTheDocument();
+    // Should show completed message with 18s duration
+    expect(screen.getByText(/Đã hoàn thành trong 18s/)).toBeInTheDocument();
+  });
 });

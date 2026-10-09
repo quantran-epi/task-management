@@ -292,6 +292,7 @@ describe('nineRouterClient', () => {
         model: 'gpt-4o',
         messages: [{ role: 'user', content: 'test tauri' }],
         stream: true,
+        stream_options: { include_usage: true },
       }),
     });
     expect(chunks).toEqual([

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Typography,
   Button,
@@ -14,6 +14,8 @@ import {
   Input,
   message,
   ConfigProvider,
+  Popover,
+  Select,
 } from 'antd';
 import type { MenuProps } from 'antd';
 import type { DataNode } from 'antd/es/tree';
@@ -32,11 +34,16 @@ import {
   MenuUnfoldOutlined,
   CommentOutlined,
   FolderOpenOutlined,
+  SettingOutlined,
 } from '@ant-design/icons';
 import type { DiffFile, DiffHunk, DiffViewMode } from '../../types/agent';
 import { DiffHunkView } from './DiffHunkView';
 import { DiffInlineCommentModal } from './DiffInlineCommentModal';
-import { buildWorktreeFileTree, type FileTreeNode } from '../../utils/fileTreeBuilder';
+import {
+  buildWorktreeFileTree,
+  DEFAULT_EXCLUDED_PATTERNS,
+  type FileTreeNode,
+} from '../../utils/fileTreeBuilder';
 
 const { Text } = Typography;
 
@@ -61,8 +68,49 @@ export interface AgentDiffReviewerProps {
   onRevertFile: (filePath: string) => Promise<void>;
   onRevertHunk?: (filePath: string, hunk: DiffHunk) => Promise<void>;
   onSendFeedback?: (formattedPrompt: string) => Promise<void>;
+  onMentionFile?: (filePath: string) => void;
   worktreePath?: string | null;
 }
+
+const detectLanguage = (filePath: string): string => {
+  const ext = filePath.split('.').pop()?.toLowerCase();
+  switch (ext) {
+    case 'ts':
+    case 'tsx':
+      return 'typescript';
+    case 'js':
+    case 'jsx':
+    case 'mjs':
+    case 'cjs':
+      return 'javascript';
+    case 'json':
+      return 'json';
+    case 'html':
+      return 'html';
+    case 'css':
+    case 'scss':
+    case 'less':
+      return 'css';
+    case 'rs':
+      return 'rust';
+    case 'py':
+      return 'python';
+    case 'md':
+    case 'markdown':
+      return 'markdown';
+    case 'yaml':
+    case 'yml':
+      return 'yaml';
+    case 'sh':
+    case 'bash':
+    case 'zsh':
+      return 'bash';
+    case 'sql':
+      return 'sql';
+    default:
+      return 'plaintext';
+  }
+};
 
 export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
   diffFiles,
@@ -85,14 +133,47 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
   onRevertFile,
   onRevertHunk,
   onSendFeedback,
+  onMentionFile,
   worktreePath,
 }) => {
   const { token } = theme.useToken();
   const [acting, setActing] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [searchFilter, setSearchFilter] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [customExcludes, setCustomExcludes] = useState<string[]>(DEFAULT_EXCLUDED_PATTERNS);
+  const [previewLanguageOverride, setPreviewLanguageOverride] = useState<string | null>(null);
   const [treeScope, setTreeScope] = useState<'diff' | 'all'>('diff');
+
+  const treeContainerRef = useRef<HTMLDivElement>(null);
+  const [treeHeight, setTreeHeight] = useState(500);
+
+  const isTestEnv = typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchInput.trim());
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  useEffect(() => {
+    if (!treeContainerRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.contentRect.height > 0) {
+          setTreeHeight(Math.floor(entry.contentRect.height));
+        }
+      }
+    });
+    observer.observe(treeContainerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    setPreviewLanguageOverride(null);
+  }, [selectedFilePath]);
 
   // Inline feedback modal state
   const [commentModalOpen, setCommentModalOpen] = useState(false);
@@ -120,7 +201,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
       : filePath;
     try {
       const api = await import('@tauri-apps/api/core');
-      await api.invoke('open_local_path', { path: fullPath });
+      await api.invoke('reveal_in_file_explorer', { path: fullPath });
     } catch {
       message.info(`Đường dẫn tập tin: ${fullPath}`);
     }
@@ -204,13 +285,13 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
     }
   };
 
-  // Build full hierarchy tree from worktree paths and changed diff files
+  // Build full hierarchy tree from worktree paths and changed diff files with exclusions
   const treeData = useMemo(() => {
     const filesToBuild = treeScope === 'diff' && diffFiles.length > 0 ? [] : allWorktreeFiles;
-    const rawTree = buildWorktreeFileTree(filesToBuild, diffFiles);
-    if (!searchFilter.trim()) return rawTree;
+    const rawTree = buildWorktreeFileTree(filesToBuild, diffFiles, customExcludes);
+    if (!debouncedSearch) return rawTree;
 
-    const lower = searchFilter.toLowerCase().trim();
+    const lower = debouncedSearch.toLowerCase();
     function filterNode(node: FileTreeNode): FileTreeNode | null {
       if (node.path.toLowerCase().includes(lower)) {
         return node;
@@ -229,7 +310,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
     }
 
     return rawTree.map(filterNode).filter((n): n is FileTreeNode => n !== null);
-  }, [treeScope, allWorktreeFiles, diffFiles, searchFilter]);
+  }, [treeScope, allWorktreeFiles, diffFiles, debouncedSearch, customExcludes]);
 
   // Extract folder keys containing changed files (diffFiles) or selected file to avoid lag on huge repos
   const diffFolderKeys = useMemo(() => {
@@ -253,20 +334,26 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
         keys.add(curr);
       }
     }
-    // If search filter is active, also expand all matching folders from filtered tree
-    if (searchFilter.trim()) {
-      function collectMatching(nodes: FileTreeNode[]) {
+    // If search filter is active, expand ONLY ancestors of matching items (max 250 keys)
+    if (debouncedSearch) {
+      function collectMatchingAncestors(nodes: FileTreeNode[], ancestors: string[]) {
         for (const n of nodes) {
-          if (n.isDir) {
-            keys.add(n.key);
-            if (n.children) collectMatching(n.children);
+          if (keys.size >= 250) return;
+          const nextAncestors = n.isDir ? [...ancestors, n.key] : ancestors;
+          if (n.path.toLowerCase().includes(debouncedSearch.toLowerCase())) {
+            for (const anc of ancestors) {
+              keys.add(anc);
+            }
+          }
+          if (n.children) {
+            collectMatchingAncestors(n.children, nextAncestors);
           }
         }
       }
-      collectMatching(treeData);
+      collectMatchingAncestors(treeData, []);
     }
     return Array.from(keys);
-  }, [diffFiles, selectedFilePath, searchFilter, treeData]);
+  }, [diffFiles, selectedFilePath, debouncedSearch, treeData]);
 
   // Keep folder nodes containing diffs expanded by default
   const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
@@ -278,7 +365,6 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
 
   // Context menu builder for any file/folder item
   const getContextMenuItems = (node: FileTreeNode): NonNullable<MenuProps['items']> => {
-    const isChanged = Boolean(node.diffFile);
     const items: NonNullable<MenuProps['items']> = [
       {
         key: 'copy-path',
@@ -286,11 +372,23 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
         label: 'Sao chép đường dẫn (Copy Path)',
         onClick: () => {
           void navigator.clipboard?.writeText(node.path);
+          message.success(`Đã sao chép: ${node.path}`);
         },
       },
     ];
 
     if (node.isLeaf) {
+      if (onMentionFile) {
+        items.push({
+          key: 'mention-file',
+          icon: <CommentOutlined style={{ color: '#1677ff' }} />,
+          label: 'Nhắc đến trong chatbox (@file)',
+          onClick: () => {
+            onMentionFile(node.path);
+            message.success(`Đã thêm @${node.path} vào chatbox`);
+          },
+        });
+      }
       items.push({
         key: 'view-file',
         icon: <EyeOutlined />,
@@ -302,7 +400,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
       items.push({
         key: 'open-explorer',
         icon: <FolderOpenOutlined />,
-        label: 'Mở trong thư mục (Explorer)',
+        label: 'Mở trong PC Explorer/Finder',
         onClick: () => {
           void handleOpenInExplorer(node.path);
         },
@@ -317,33 +415,6 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
           },
         });
       }
-    }
-
-    if (isChanged && node.isLeaf) {
-      if (onAcceptFile) {
-        items.push({
-          key: 'accept-file',
-          icon: <CheckOutlined style={{ color: '#52c41a' }} />,
-          label: 'Chấp nhận thay đổi file (Accept File)',
-          onClick: () => {
-            void handleAcceptFile(node.path);
-          },
-        });
-      }
-      items.push(
-        {
-          type: 'divider',
-        },
-        {
-          key: 'revert-file',
-          danger: true,
-          icon: <UndoOutlined />,
-          label: 'Hoàn tác thay đổi file (Revert)',
-          onClick: () => {
-            void handleRevertCurrentFile(node.path);
-          },
-        }
-      );
     }
 
     return items;
@@ -494,11 +565,11 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
             {/* Sidebar Header & Search */}
             <div
               style={{
-                padding: '6px 8px',
+                padding: '8px 10px',
                 borderBottom: `1px solid ${token.colorBorderSecondary}`,
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 6,
+                gap: 8,
               }}
             >
               <div
@@ -511,34 +582,90 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
                   color: token.colorTextSecondary,
                 }}
               >
-                <span>THƯ MỤC LÀM VIỆC</span>
-                <Segmented
-                  size="small"
-                  value={treeScope}
-                  onChange={(val) => setTreeScope(val as 'diff' | 'all')}
-                  options={[
-                    { label: `Diff (${diffFiles.length})`, value: 'diff' },
-                    { label: `Tất cả (${allWorktreeFiles.length || diffFiles.length})`, value: 'all' },
-                  ]}
-                  style={{ fontSize: 10 }}
-                />
+                <span
+                  style={{
+                    whiteSpace: 'nowrap',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  Thư mục làm việc
+                </span>
+                <Popover
+                  trigger="click"
+                  placement="bottomRight"
+                  title={<span style={{ fontSize: 12 }}>Loại trừ khỏi Explorer</span>}
+                  content={
+                    <div style={{ width: 230, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <Text type="secondary" style={{ fontSize: 11 }}>
+                        Bỏ qua thư mục quá lớn để tối ưu hiệu năng:
+                      </Text>
+                      <Space wrap size={[4, 4]}>
+                        {customExcludes.map((pattern) => (
+                          <Tag
+                            key={pattern}
+                            closable
+                            onClose={() => setCustomExcludes((prev) => prev.filter((p) => p !== pattern))}
+                            style={{ margin: 0, fontSize: 10 }}
+                          >
+                            {pattern}
+                          </Tag>
+                        ))}
+                      </Space>
+                      <Input
+                        size="small"
+                        placeholder="Thêm folder (Enter)..."
+                        onPressEnter={(e) => {
+                          const val = (e.target as HTMLInputElement).value.trim();
+                          if (val && !customExcludes.includes(val)) {
+                            setCustomExcludes((prev) => [...prev, val]);
+                            (e.target as HTMLInputElement).value = '';
+                          }
+                        }}
+                      />
+                    </div>
+                  }
+                >
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<SettingOutlined style={{ fontSize: 11 }} />}
+                    style={{ height: 20, padding: '0 4px', fontSize: 10, color: token.colorTextTertiary }}
+                  >
+                    Bỏ qua
+                  </Button>
+                </Popover>
               </div>
+
+              <Segmented
+                block
+                size="small"
+                value={treeScope}
+                onChange={(val) => setTreeScope(val as 'diff' | 'all')}
+                options={[
+                  { label: `Diff (${diffFiles.length})`, value: 'diff' },
+                  { label: `Tất cả (${allWorktreeFiles.length || diffFiles.length})`, value: 'all' },
+                ]}
+                style={{ fontSize: 11 }}
+              />
+
               <Input
                 size="small"
                 prefix={<SearchOutlined style={{ color: token.colorTextQuaternary }} />}
-                placeholder="Tìm file..."
-                value={searchFilter}
-                onChange={(e) => setSearchFilter(e.target.value)}
+                placeholder="Tìm tập tin..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 allowClear
               />
             </div>
 
             {/* Tree Component */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '4px 2px' }}>
+            <div ref={treeContainerRef} style={{ flex: 1, minHeight: 200, overflow: 'hidden', padding: '4px 2px' }}>
               <Tree
                 showIcon={false}
                 blockNode
-                virtual={false}
+                virtual={!isTestEnv}
+                height={treeHeight}
                 expandedKeys={expandedKeys}
                 onExpand={(keys) => setExpandedKeys(keys as string[])}
                 selectedKeys={selectedFilePath ? [selectedFilePath] : []}
@@ -741,8 +868,8 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
               ))}
             </div>
           ) : selectedFilePath ? (
-            <div>
-              {/* Unchanged File Content Viewer */}
+            <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+              {/* Unchanged File Content Viewer Toolbar */}
               <div
                 style={{
                   padding: '6px 12px',
@@ -751,6 +878,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
+                  flexShrink: 0,
                 }}
               >
                 <Space direction="horizontal" size={8}>
@@ -758,26 +886,121 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
                   <Text strong style={{ fontSize: 12 }}>
                     {selectedFilePath}
                   </Text>
-                  <Tag style={{ fontSize: 10, margin: 0 }}>UNCHANGED</Tag>
+                  <Tag style={{ fontSize: 10, margin: 0 }}>READ-ONLY</Tag>
+                </Space>
+
+                <Space direction="horizontal" size={6}>
+                  <Select
+                    size="small"
+                    style={{ width: 110 }}
+                    value={
+                      previewLanguageOverride ||
+                      (selectedFilePath ? detectLanguage(selectedFilePath) : 'plaintext')
+                    }
+                    onChange={(val) => setPreviewLanguageOverride(val)}
+                    options={[
+                      { label: 'TypeScript', value: 'typescript' },
+                      { label: 'JavaScript', value: 'javascript' },
+                      { label: 'JSON', value: 'json' },
+                      { label: 'HTML', value: 'html' },
+                      { label: 'CSS', value: 'css' },
+                      { label: 'Rust', value: 'rust' },
+                      { label: 'Python', value: 'python' },
+                      { label: 'Markdown', value: 'markdown' },
+                      { label: 'YAML', value: 'yaml' },
+                      { label: 'Bash', value: 'bash' },
+                      { label: 'Plain Text', value: 'plaintext' },
+                    ]}
+                  />
+
+                  {onMentionFile && (
+                    <Button
+                      size="small"
+                      icon={<CommentOutlined />}
+                      onClick={() => {
+                        onMentionFile(selectedFilePath);
+                        message.success(`Đã thêm @${selectedFilePath} vào chatbox`);
+                      }}
+                      style={{ fontSize: 11, padding: '0 6px', height: 22 }}
+                    >
+                      Nhắc (@file)
+                    </Button>
+                  )}
+
+                  <Button
+                    size="small"
+                    icon={<CopyOutlined />}
+                    onClick={() => {
+                      if (selectedFileContent) {
+                        void navigator.clipboard?.writeText(selectedFileContent);
+                        message.success('Đã sao chép nội dung tập tin');
+                      }
+                    }}
+                    style={{ fontSize: 11, padding: '0 6px', height: 22 }}
+                  >
+                    Sao chép
+                  </Button>
+
+                  <Button
+                    size="small"
+                    icon={<FolderOpenOutlined />}
+                    onClick={() => handleOpenInExplorer(selectedFilePath)}
+                    style={{ fontSize: 11, padding: '0 6px', height: 22 }}
+                  >
+                    Explorer
+                  </Button>
                 </Space>
               </div>
-              <pre
+
+              {/* Code viewer with line numbers */}
+              <div
                 style={{
-                  margin: 0,
-                  padding: 12,
-                  fontSize: 12,
-                  lineHeight: '20px',
+                  flex: 1,
+                  overflow: 'auto',
+                  display: 'flex',
+                  backgroundColor: token.colorBgContainer,
                   fontFamily:
                     'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-all',
-                  color: token.colorText,
+                  fontSize: 12,
+                  lineHeight: '20px',
                 }}
               >
-                {selectedFileContent !== null
-                  ? selectedFileContent
-                  : 'Đang tải nội dung tập tin...'}
-              </pre>
+                {selectedFileContent !== null ? (
+                  <>
+                    <div
+                      style={{
+                        padding: '12px 8px',
+                        textAlign: 'right',
+                        userSelect: 'none',
+                        color: token.colorTextQuaternary,
+                        borderRight: `1px solid ${token.colorBorderSecondary}`,
+                        backgroundColor: token.colorFillAlter,
+                        minWidth: 40,
+                      }}
+                    >
+                      {(selectedFileContent || '').split('\n').map((_, i) => (
+                        <div key={i}>{i + 1}</div>
+                      ))}
+                    </div>
+                    <pre
+                      style={{
+                        margin: 0,
+                        padding: '12px 16px',
+                        flex: 1,
+                        whiteSpace: 'pre',
+                        color: token.colorText,
+                        overflowX: 'auto',
+                      }}
+                    >
+                      {selectedFileContent}
+                    </pre>
+                  </>
+                ) : (
+                  <div style={{ padding: 16, color: token.colorTextSecondary }}>
+                    Đang tải nội dung tập tin...
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
             <div

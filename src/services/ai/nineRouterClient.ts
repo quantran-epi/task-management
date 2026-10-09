@@ -167,6 +167,7 @@ export async function* streamChatEvents(
         body: JSON.stringify({
           ...options.payload,
           stream: true,
+          stream_options: { include_usage: true },
         }),
       });
 
@@ -181,6 +182,7 @@ export async function* streamChatEvents(
         body: JSON.stringify({
           ...options.payload,
           stream: true,
+          stream_options: { include_usage: true },
         }),
         ...(options.signal ? { signal: options.signal } : {}),
       });
@@ -299,6 +301,17 @@ export async function* streamChatEvents(
             yieldedAny = true;
           }
 
+          if (parsed?.usage) {
+            yield {
+              type: 'usage',
+              usage: {
+                promptTokens: parsed.usage.prompt_tokens ?? parsed.usage.promptTokens,
+                completionTokens: parsed.usage.completion_tokens ?? parsed.usage.completionTokens,
+                totalTokens: parsed.usage.total_tokens ?? parsed.usage.totalTokens,
+              },
+            };
+          }
+
           if (Array.isArray(delta?.tool_calls)) {
             for (const tc of delta.tool_calls) {
               const idx = tc.index ?? 0;
@@ -352,6 +365,17 @@ export async function* streamChatEvents(
         if (Array.isArray(message?.tool_calls) && message.tool_calls.length > 0) {
           yield { type: 'tool_calls', calls: message.tool_calls };
           yieldedAny = true;
+        }
+
+        if (parsed?.usage) {
+          yield {
+            type: 'usage',
+            usage: {
+              promptTokens: parsed.usage.prompt_tokens ?? parsed.usage.promptTokens,
+              completionTokens: parsed.usage.completion_tokens ?? parsed.usage.completionTokens,
+              totalTokens: parsed.usage.total_tokens ?? parsed.usage.totalTokens,
+            },
+          };
         }
       } catch (err: any) {
         if (err?.message && !err.message.includes('JSON')) {

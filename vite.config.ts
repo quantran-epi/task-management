@@ -58,7 +58,7 @@ export default defineConfig({
         navigateFallback: '/task-management/index.html',
         navigateFallbackAllowlist: [/^\/task-management\//],
         cleanupOutdatedCaches: true,
-        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
       },
     }),
   ],

@@ -211,6 +211,21 @@ export interface ChatThread {
 
 export type ChatRole = 'user' | 'assistant' | 'system';
 
+export interface ChatTokenUsage {
+  promptTokens?: number | undefined;
+  completionTokens?: number | undefined;
+  totalTokens?: number | undefined;
+}
+
+export interface ChatGeneratedFile {
+  id: string;
+  filename: string;
+  format: string;
+  sizeBytes: number;
+  slideCount?: number | undefined;
+  content?: string | undefined;
+}
+
 export interface ChatMessage {
   id: string; // RFC 4122 v4 UUID
   threadId: string; // Reference to ChatThread.id
@@ -218,6 +233,9 @@ export interface ChatMessage {
   content: string; // Markdown text
   createdAt: string; // ISO string metadata
   isContextBoundary?: boolean | undefined; // Phase 13.2 D-06: /clear context reset marker
+  durationMs?: number | undefined; // Total execution time in milliseconds
+  tokenUsage?: ChatTokenUsage | undefined; // Model token usage metrics
+  generatedFiles?: ChatGeneratedFile[] | undefined; // AI-generated downloadable files
 }
 
 // Phase 16: Knowledge Server Foundation, DLP Checks & AST Ingestion models (D-01, D-08, D-18, D-27, D-29)

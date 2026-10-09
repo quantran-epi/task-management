@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import * as fileExportModule from '../../src/utils/fileExport';
 import { ChatMessageBubble } from '../../src/components/ai/ChatMessageBubble';
 import { ChatMessageList } from '../../src/components/ai/ChatMessageList';
 import { ChatInputBar } from '../../src/components/ai/ChatInputBar';
@@ -68,6 +69,90 @@ describe('ChatMessageBubble', () => {
 
     render(<ChatMessageBubble message={streamingMessage} isStreaming />);
     expect(screen.getByText('▋')).toBeInTheDocument();
+  });
+
+  it('renders duration and token metrics with tooltips on assistant message', () => {
+    const assistantMsg: ChatMessage = {
+      id: 'msg-metrics',
+      threadId: 'thread-1',
+      role: 'assistant',
+      content: 'Finished response',
+      durationMs: 3420,
+      tokenUsage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+      createdAt: '2026-10-03T10:04:00Z',
+    };
+
+    render(<ChatMessageBubble message={assistantMsg} />);
+    expect(screen.getByText('⏱ 3.4s')).toBeInTheDocument();
+    expect(screen.getByText('🪙 150 tokens')).toBeInTheDocument();
+  });
+
+  it('renders both browser download and save as buttons for generated files and export actions', () => {
+    const fileMsg: ChatMessage = {
+      id: 'msg-file',
+      threadId: 'thread-1',
+      role: 'assistant',
+      content: 'Here is your file',
+      generatedFiles: [
+        {
+          id: 'file-1',
+          filename: 'report.docx',
+          sizeBytes: 1024,
+          format: 'docx',
+          content: 'File content',
+        },
+      ],
+      createdAt: '2026-10-03T10:05:00Z',
+    };
+
+    render(<ChatMessageBubble message={fileMsg} />);
+    expect(screen.getByText('report.docx')).toBeInTheDocument();
+
+    // Check generated file card download actions
+    const downloadBtns = screen.getAllByRole('button', { name: /Tải về/i });
+    expect(downloadBtns.length).toBeGreaterThanOrEqual(1);
+
+    const saveBtns = screen.getAllByRole('button', { name: /Lưu tệp/i });
+    expect(saveBtns.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('downloads generated file using file.content and does not leak assistant conversation text', () => {
+    const exportSpy = vi.spyOn(fileExportModule, 'exportContentAsFile');
+    vi.spyOn(fileExportModule, 'downloadBlob').mockImplementation(() => {});
+
+    const fileMsg: ChatMessage = {
+      id: 'msg-file-isolate',
+      threadId: 'thread-1',
+      role: 'assistant',
+      content: 'Hello! I have created the document for you as requested.',
+      generatedFiles: [
+        {
+          id: 'file-2',
+          filename: 'tasks.docx',
+          sizeBytes: 2048,
+          format: 'docx',
+          content: '# Genuine Document Content\n- Task 1',
+        },
+      ],
+      createdAt: '2026-10-03T10:06:00Z',
+    };
+
+    render(<ChatMessageBubble message={fileMsg} />);
+    const downloadBtn = screen.getByRole('button', { name: /Tải về/i });
+    fireEvent.click(downloadBtn);
+
+    expect(exportSpy).toHaveBeenCalledWith(
+      '# Genuine Document Content\n- Task 1',
+      'tasks.docx',
+      'docx',
+      false
+    );
+    expect(exportSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining('Hello! I have created'),
+      expect.anything(),
+      expect.anything(),
+      expect.anything()
+    );
   });
 });
 

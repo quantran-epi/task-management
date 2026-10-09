@@ -7,6 +7,7 @@ import {
   generateXlsxBlob,
   generateCsvBlob,
   downloadBlob,
+  saveFileWithPicker,
 } from '../fileExport';
 import { APP_NAME } from '../../constants/app';
 
@@ -149,23 +150,23 @@ Third line`;
 
   describe('exportContentAsFile', () => {
     it('exports MD and TXT directly', async () => {
-      const mdResult = exportContentAsFile('# Test', 'sample.md');
+      const mdResult = await exportContentAsFile('# Test', 'sample.md');
       expect(mdResult.format).toBe('md');
       expect(mdResult.filename).toBe('sample.md');
       expect(mdResult.blob.type).toContain('text/markdown');
 
-      const txtResult = exportContentAsFile('Hello text', 'sample.txt');
+      const txtResult = await exportContentAsFile('Hello text', 'sample.txt');
       expect(txtResult.format).toBe('txt');
       expect(txtResult.filename).toBe('sample.txt');
       expect(txtResult.blob.type).toContain('text/plain');
     });
 
-    it('exports DOCX and XLSX correctly', () => {
-      const docx = exportContentAsFile('# Report\nContent', 'report.docx');
+    it('exports DOCX and XLSX correctly', async () => {
+      const docx = await exportContentAsFile('# Report\nContent', 'report.docx');
       expect(docx.format).toBe('docx');
       expect(docx.sizeBytes).toBeGreaterThan(100);
 
-      const xlsx = exportContentAsFile('| A | B |\n| 1 | 2 |', 'table.xlsx');
+      const xlsx = await exportContentAsFile('| A | B |\n| 1 | 2 |', 'table.xlsx');
       expect(xlsx.format).toBe('xlsx');
       expect(xlsx.sizeBytes).toBeGreaterThan(100);
     });
@@ -195,6 +196,43 @@ Third line`;
       downloadBlob('test.txt', blob);
 
       expect(clickMock).toHaveBeenCalled();
+    });
+  });
+
+  describe('saveFileWithPicker', () => {
+    it('uses window.showSaveFilePicker when available in browser', async () => {
+      const mockWritable = {
+        write: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn().mockResolvedValue(undefined),
+      };
+      const mockHandle = {
+        createWritable: vi.fn().mockResolvedValue(mockWritable),
+      };
+      (window as any).showSaveFilePicker = vi.fn().mockResolvedValue(mockHandle);
+
+      const blob = new Blob(['sample content'], { type: 'text/plain' });
+      const res = await saveFileWithPicker('test.txt', blob);
+
+      expect(res.saved).toBe(true);
+      expect((window as any).showSaveFilePicker).toHaveBeenCalledWith(
+        expect.objectContaining({ suggestedName: 'test.txt' })
+      );
+      expect(mockWritable.write).toHaveBeenCalledWith(blob);
+      expect(mockWritable.close).toHaveBeenCalled();
+
+      delete (window as any).showSaveFilePicker;
+    });
+
+    it('gracefully handles user cancellation with AbortError', async () => {
+      const abortErr = new Error('The user aborted a request.');
+      abortErr.name = 'AbortError';
+      (window as any).showSaveFilePicker = vi.fn().mockRejectedValue(abortErr);
+
+      const blob = new Blob(['content']);
+      const res = await saveFileWithPicker('cancelled.docx', blob);
+
+      expect(res.saved).toBe(false);
+      delete (window as any).showSaveFilePicker;
     });
   });
 });

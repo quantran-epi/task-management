@@ -6,6 +6,7 @@ export interface SlideData {
   title?: string;
   subtitle?: string;
   bullets?: string[];
+  table?: string[][];
   notes?: string;
   layout?: 'title' | 'content' | 'section';
 }
@@ -128,6 +129,35 @@ export function parseMarkdownToSlides(markdown: string): { title: string; slides
         inNotes = false;
       } else if (currentSlide) {
         currentSlide.notes = (currentSlide.notes ? `${currentSlide.notes}\n` : '') + line;
+      }
+      continue;
+    }
+
+    // Table detection: line contains '|'
+    if (line.startsWith('|') || (line.includes('|') && i + 1 < lines.length && lines[i + 1]!.includes('-|-'))) {
+      const tableRows: string[][] = [];
+      while (i < lines.length) {
+        const tLine = lines[i]!.trim();
+        if (!tLine || !tLine.includes('|')) break;
+        // Skip separator row (|---|---|)
+        if (/^\|?(\s*:?-+:?\s*\|)+\s*:?-+:?\s*\|?$/.test(tLine)) {
+          i++;
+          continue;
+        }
+        const cells = tLine
+          .split('|')
+          .map((c) => c.trim())
+          .filter((_, idx, arr) => (idx !== 0 || !tLine.startsWith('|')) && (idx !== arr.length - 1 || !tLine.endsWith('|')));
+        if (cells.length > 0) {
+          tableRows.push(cells);
+        }
+        i++;
+      }
+      if (tableRows.length > 0) {
+        if (!currentSlide) {
+          currentSlide = { title: 'Data Overview', layout: 'content', bullets: [] };
+        }
+        currentSlide.table = tableRows;
       }
       continue;
     }
@@ -302,6 +332,43 @@ export function buildPptxPresentation(
           fontSize: 13,
           color: THEME.textMuted,
           fontFace: 'Helvetica Neue',
+        });
+      }
+
+      // Tables
+      if (slideData.table && slideData.table.length > 0) {
+        const tableData = slideData.table.map((row, rowIdx) => {
+          return row.map((cell) => {
+            if (rowIdx === 0) {
+              return {
+                text: cell,
+                options: {
+                  bold: true,
+                  color: 'FFFFFF',
+                  fill: { color: THEME.primary },
+                  fontSize: 13,
+                  align: 'left' as const,
+                },
+              };
+            }
+            return {
+              text: cell,
+              options: {
+                color: THEME.text,
+                fill: { color: rowIdx % 2 === 0 ? 'F8FAFC' : 'FFFFFF' },
+                fontSize: 12,
+                align: 'left' as const,
+              },
+            };
+          });
+        });
+
+        slide.addTable(tableData as any, {
+          x: 1.1,
+          y: slideData.subtitle ? 1.8 : 1.4,
+          w: 11.0,
+          border: { pt: 0.5, color: THEME.border },
+          margin: 6,
         });
       }
 
