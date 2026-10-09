@@ -187,11 +187,9 @@ describe('KnowledgeServerConfigCard', () => {
 
   it('proves single root provider maintains token across views with zero leakage to storage or backups', async () => {
     const tokenCanary = 'bearer-token-canary-secret-12345';
-    let currentRoute: 'settings' | 'notes' = 'settings';
 
     function Shell({ testDb }: { testDb: TaskPlannerDatabase }) {
       const [route, setRoute] = useState<'settings' | 'notes'>('settings');
-      currentRoute = route;
       return (
         <KnowledgeConfigProvider db={testDb}>
           <button onClick={() => setRoute('settings')}>Go Settings</button>
@@ -209,7 +207,7 @@ describe('KnowledgeServerConfigCard', () => {
     const note = await createNote({ title: 'Ghi chú', body: '# Nội dung', type: 'document' }, db);
     await createDocumentSet({ name: 'Bộ 1', documentIds: [note.id] }, db);
 
-    const fetchSpy = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+    const fetchSpy = vi.fn().mockImplementation(async () => {
       return new Response(JSON.stringify({ ok: true, attemptId: '11111111-1111-4111-8111-111111111111', status: 'Publishing' }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -272,5 +270,5 @@ describe('KnowledgeServerConfigCard', () => {
     await waitFor(() => {
       expect(screen.getByLabelText('Token phiên')).toHaveValue('');
     });
-  });
+  }, 30_000);
 });

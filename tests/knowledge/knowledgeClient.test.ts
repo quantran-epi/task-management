@@ -442,7 +442,6 @@ describe('strict fixed-route knowledge client', () => {
       const setId = generateId();
       const docId = generateId();
       const h1 = '1'.repeat(64);
-      const h2 = '2'.repeat(64);
 
       // Create note in db
       await db.notes.put({

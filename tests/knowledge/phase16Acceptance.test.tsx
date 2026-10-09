@@ -347,7 +347,7 @@ ${SENSITIVE_CANARIES.PII}
     const session = new PublishSession({ client, db });
     await session.buildPreview({ documentSet: set, notes: [doc], activeManifest: null });
     await session.scan();
-    const { nonce } = await session.confirmFindings();
+    const { nonce } = await session.confirmFindings(true);
 
     // Submit with conflict code returns conflict flag
     const submitResult = await session.submitConfirmedAttempt(nonce);
