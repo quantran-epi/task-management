@@ -894,13 +894,14 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
             try {
               const parsedRes = JSON.parse(toolResult);
               if (parsedRes.success && parsedRes.filename) {
+                const rawArgsContent = args?.content || args?.markdownContent || (Array.isArray(args?.slides) ? JSON.stringify(args.slides) : undefined);
                 turnGeneratedFiles.push({
                   id: tc.id,
                   filename: parsedRes.filename,
                   format: parsedRes.format || 'txt',
                   sizeBytes: parsedRes.sizeBytes || 0,
                   slideCount: parsedRes.slideCount,
-                  content: parsedRes.content,
+                  content: parsedRes.content || rawArgsContent,
                 });
               }
             } catch {}

@@ -1779,7 +1779,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'generate_file',
       description:
-        'Generate and trigger immediate browser download of a file in specified format (Markdown .md, plain text .txt, Word .docx, Excel .xlsx, CSV .csv, or PowerPoint .pptx). Useful when the user asks to export or save a document, report, table, summary, or spreadsheet to a file.',
+        'Generate and prepare a downloadable file in specified format (Markdown .md, plain text .txt, Word .docx, Excel .xlsx, CSV .csv, or PowerPoint .pptx). CRITICAL: The "content" parameter MUST contain the complete, standalone file content (document text, markdown, or table). Do NOT leave empty or summarize. The user will download this exact content.',
       parameters: {
         type: 'object',
         properties: {
@@ -1794,7 +1794,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           },
           content: {
             type: 'string',
-            description: 'The full document content, report, markdown text, or tabular data to include in the file.',
+            description: 'CRITICAL: The full, complete document text, report, markdown, or tabular data. Must be standalone and complete because it will be saved directly to the file without conversational dialogue.',
           },
           title: {
             type: 'string',
@@ -1810,7 +1810,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'generate_pptx',
       description:
-        'Generate and trigger immediate browser download of a PowerPoint presentation (.pptx). Accepts markdown content or structured slides with titles, bullet points, and speaker notes.',
+        'Generate and prepare a downloadable PowerPoint presentation (.pptx). CRITICAL: Provide complete slide definitions via "slides" array or full markdown text via "markdownContent". The file will be saved directly with this content.',
       parameters: {
         type: 'object',
         properties: {
@@ -4427,6 +4427,25 @@ export async function executeAiTool(
           false // Do not auto-download silently in background
         );
 
+        let serializedPptxContent = '';
+        if (typeof contentOrSlides === 'string') {
+          serializedPptxContent = contentOrSlides;
+        } else if (Array.isArray(contentOrSlides)) {
+          const titlePrefix = presentationTitle ? `# ${presentationTitle}\n\n---\n\n` : '';
+          const slidesBody = contentOrSlides
+            .map((s) => {
+              let text = s.layout === 'title' ? `# ${s.title || 'Presentation'}\n` : `## ${s.title || 'Slide'}\n`;
+              if (s.subtitle) text += `### ${s.subtitle}\n`;
+              if (s.bullets && s.bullets.length > 0) {
+                text += s.bullets.map((b: string) => `- ${b}`).join('\n') + '\n';
+              }
+              if (s.notes) text += `Note: ${s.notes}\n`;
+              return text.trim();
+            })
+            .join('\n\n---\n\n');
+          serializedPptxContent = `${titlePrefix}${slidesBody}`;
+        }
+
         return JSON.stringify({
           success: true,
           message: `Đã tạo bản trình chiếu PowerPoint "${exportResult.filename}" (${exportResult.slideCount} slides). Thẻ tải tệp đã sẵn sàng trong giao diện chat để người dùng chọn vị trí lưu.`,
@@ -4434,7 +4453,7 @@ export async function executeAiTool(
           format: exportResult.format,
           slideCount: exportResult.slideCount,
           sizeBytes: exportResult.sizeBytes,
-          content: typeof contentOrSlides === 'string' ? contentOrSlides : undefined,
+          content: serializedPptxContent || 'Presentation',
         });
       }
 

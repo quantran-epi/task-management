@@ -257,6 +257,35 @@ export function generateDocxBlob(content: string, _title?: string): Blob {
       continue;
     }
 
+    // Code block detection: ```
+    if (line.startsWith('```')) {
+      i++;
+      const codeLines: string[] = [];
+      while (i < lines.length && !lines[i]!.trim().startsWith('```')) {
+        codeLines.push(lines[i]!);
+        i++;
+      }
+      if (i < lines.length && lines[i]!.trim().startsWith('```')) {
+        i++; // skip closing ```
+      }
+      for (const cLine of codeLines) {
+        bodyXmlParts.push(
+          `<w:p><w:pPr><w:shd w:val="clear" w:color="auto" w:fill="F3F4F6"/><w:ind w:left="240" w:right="240"/><w:spacing w:after="40"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/><w:sz w:val="20"/><w:color w:val="1F2937"/></w:rPr><w:t xml:space="preserve">${escapeXml(cLine)}</w:t></w:r></w:p>`
+        );
+      }
+      continue;
+    }
+
+    // Blockquote detection: > text
+    if (line.startsWith('>')) {
+      const quoteText = line.replace(/^>\s*/, '');
+      bodyXmlParts.push(
+        `<w:p><w:pPr><w:pBdr><w:left w:val="single" w:sz="18" w:space="8" w:color="6366F1"/></w:pBdr><w:ind w:left="240"/><w:spacing w:after="100"/></w:pPr><w:r><w:rPr><w:i/><w:color w:val="4B5563"/></w:rPr><w:t xml:space="preserve">${escapeXml(quoteText)}</w:t></w:r></w:p>`
+      );
+      i++;
+      continue;
+    }
+
     // Table detection: line contains '|'
     if (line.startsWith('|') || (line.includes('|') && i + 1 < lines.length && lines[i + 1]!.includes('-|-'))) {
       const { rows, nextIdx } = parseMarkdownTable(lines, i);
@@ -487,8 +516,23 @@ export function generateXlsxBlob(content: string, _sheetTitle?: string): Blob {
     rowXmlParts.push(`<row r="${rowNumber}">${cellXmlParts.join('')}</row>`);
   });
 
+  // Calculate auto column widths based on maximum content length
+  const colWidths: number[] = [];
+  grid.forEach((row) => {
+    row.forEach((cellValue, colIdx) => {
+      const len = (cellValue || '').toString().length;
+      colWidths[colIdx] = Math.max(colWidths[colIdx] || 10, Math.min(50, len + 3));
+    });
+  });
+
+  const colsXml =
+    colWidths.length > 0
+      ? `<cols>${colWidths.map((w, idx) => `<col min="${idx + 1}" max="${idx + 1}" width="${w}" customWidth="1"/>`).join('')}</cols>`
+      : '';
+
   const sheet1Xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  ${colsXml}
   <sheetData>
     ${rowXmlParts.join('\n    ')}
   </sheetData>

@@ -85,4 +85,28 @@ describe('aiTools generate_file', () => {
     expect(result.format).toBe('xlsx');
     expect(result.sizeBytes).toBeGreaterThan(100);
   });
+
+  it('executes generate_pptx and serializes slides array into non-empty content', async () => {
+    const fakeDb = {} as any;
+    const resultStr = await executeAiTool(
+      'generate_pptx',
+      {
+        filename: 'presentation.pptx',
+        presentationTitle: 'Roadmap Deck',
+        slides: [
+          { title: 'Intro', layout: 'title', subtitle: 'Overview' },
+          { title: 'Plan', layout: 'content', bullets: ['Milestone 1', 'Milestone 2'] },
+        ],
+      },
+      fakeDb
+    );
+
+    const result = JSON.parse(resultStr);
+    expect(result.success).toBe(true);
+    expect(result.filename).toBe('presentation.pptx');
+    expect(result.slideCount).toBe(2);
+    expect(result.content).toBeDefined();
+    expect(result.content).toContain('Roadmap Deck');
+    expect(result.content).toContain('Milestone 1');
+  });
 });

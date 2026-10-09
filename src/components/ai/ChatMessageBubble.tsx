@@ -276,9 +276,31 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
       const format = (file.format as ExportFormat) || inferFormatFromFilename(file.filename);
       let blob: Blob;
 
+      // Extract file content. Never fall back to conversational chat dialogue (msg.content)
+      let resolvedContent = file.content?.trim();
+      if (!resolvedContent) {
+        // Fallback: extract code block contents from message if tool did not capture content directly
+        const codeBlockRegex = /```(?:[a-zA-Z0-9_-]+)?\n([\s\S]*?)```/g;
+        const blocks: string[] = [];
+        let match: RegExpExecArray | null;
+        while ((match = codeBlockRegex.exec(msg.content)) !== null) {
+          if (match[1]?.trim()) {
+            blocks.push(match[1].trim());
+          }
+        }
+        if (blocks.length > 0) {
+          resolvedContent = blocks.join('\n\n');
+        }
+      }
+
+      if (!resolvedContent) {
+        message.error('Không tìm thấy nội dung tệp đã tạo để lưu. Vui lòng yêu cầu AI tạo lại.');
+        return;
+      }
+
       if (format === 'pptx') {
         const result = await exportPresentationAsFile(
-          file.content || msg.content,
+          resolvedContent,
           file.filename,
           undefined,
           false
@@ -286,7 +308,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
         blob = result.blob;
       } else {
         const result = exportContentAsFile(
-          file.content || msg.content,
+          resolvedContent,
           file.filename,
           format,
           false
@@ -605,9 +627,9 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               size="small"
               icon={<DownloadOutlined />}
               style={{ fontSize: 12, height: 24, padding: '0 8px' }}
-              title="Tải tệp trực tiếp qua trình duyệt"
+              title="Tải toàn bộ văn bản hội thoại chat"
             >
-              Tải về
+              Xuất đoạn chat
             </Button>
           </Dropdown>
 
@@ -622,9 +644,9 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               size="small"
               icon={<FolderOpenOutlined />}
               style={{ fontSize: 12, height: 24, padding: '0 8px' }}
-              title="Lưu tệp và chọn vị trí (Save As)"
+              title="Lưu toàn bộ văn bản hội thoại chat (Save As)"
             >
-              Lưu tệp...
+              Lưu đoạn chat...
             </Button>
           </Dropdown>
         </div>
