@@ -24,12 +24,32 @@ export function PublishProgressPanel({ status, stage, uncertain, conflict, error
       />
     );
   }
+  if (status === 'In sync') {
+    return (
+      <Result
+        status="success"
+        title="Đã xuất bản bộ tài liệu."
+        subTitle="Bộ tài liệu đã được đồng bộ với Knowledge Server."
+        extra={<Button onClick={onClose}>Đóng</Button>}
+      />
+    );
+  }
   if (status === 'Local changes') {
     return (
       <Result
         status="success"
         title="Đã xuất bản bộ tài liệu."
         subTitle="Lần xuất bản vừa hoàn tất dùng ảnh chụp trước chỉnh sửa mới nhất."
+        extra={<Button onClick={onClose}>Đóng</Button>}
+      />
+    );
+  }
+  if (status === 'Warning') {
+    return (
+      <Result
+        status="warning"
+        title="Xuất bản có cảnh báo."
+        subTitle={error ?? 'Kiểm tra cảnh báo hoặc vấn đề vận hành trên Knowledge Server.'}
         extra={<Button onClick={onClose}>Đóng</Button>}
       />
     );

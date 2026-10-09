@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import type { ChangePreview, DeltaClassification } from '../../services/knowledge/changePreview';
 import type { PublishSession } from '../../services/knowledge/publishOrchestrator';
 import type { DlpFinding } from '../../types/dlp';
+import type { PublishPrimaryState } from '../../types/models';
 import { DlpWarningPanel } from './DlpWarningPanel';
 import { PublishProgressPanel } from './PublishProgressPanel';
 
@@ -33,6 +34,12 @@ export function PublishPreviewModal({ open, preview, session, documentTitles = {
   const [findings, setFindings] = useState<readonly DlpFinding[] | null>(null);
   const [overrideConfirmed, setOverrideConfirmed] = useState(false);
   const [conflict, setConflict] = useState(false);
+  const [scanBusy, setScanBusy] = useState(false);
+  const [publishBusy, setPublishBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [publishStatus, setPublishStatus] = useState<PublishPrimaryState>('Publishing');
+  const [publishError, setPublishError] = useState<string | undefined>(undefined);
+  const [uncertain, setUncertain] = useState(false);
 
   useEffect(() => {
     setStep('preview');
@@ -40,6 +47,12 @@ export function PublishPreviewModal({ open, preview, session, documentTitles = {
     setFindings(null);
     setOverrideConfirmed(false);
     setConflict(false);
+    setScanBusy(false);
+    setPublishBusy(false);
+    setActionError(null);
+    setPublishStatus('Publishing');
+    setPublishError(undefined);
+    setUncertain(false);
   }, [open, preview]);
 
   const closeBeforePost = () => {
@@ -48,22 +61,73 @@ export function PublishPreviewModal({ open, preview, session, documentTitles = {
     onClose();
   };
 
+  const closeDuringPublish = () => {
+    session.closePreview();
+    onClose();
+  };
+
   const scan = async () => {
+    if (scanBusy || publishBusy) return;
+    setScanBusy(true);
+    setActionError(null);
     setOverrideConfirmed(false);
-    if (preview.hasRemovals) session.confirmRemoval();
-    setStep('scanning');
-    const result = await session.scan();
-    setFindings(result);
-    setStep('review');
-    onAnnounce?.(result.length ? 'Cần xác nhận cảnh báo dữ liệu nhạy cảm.' : 'Đã kiểm tra dữ liệu nhạy cảm.');
+    try {
+      if (preview.hasRemovals) session.confirmRemoval();
+      setStep('scanning');
+      const result = await session.scan();
+      setFindings(result);
+      setStep('review');
+      onAnnounce?.(result.length ? 'Cần xác nhận cảnh báo dữ liệu nhạy cảm.' : 'Đã kiểm tra dữ liệu nhạy cảm.');
+    } catch {
+      setActionError('Không thể kiểm tra dữ liệu nhạy cảm. Thử lại sau.');
+      setStep('preview');
+    } finally {
+      setScanBusy(false);
+    }
   };
 
   const publish = async () => {
-    const confirmation = await session.confirmFindings(overrideConfirmed);
-    const result = await session.submitConfirmedAttempt(confirmation.nonce);
-    setConflict(Boolean(result.conflict));
-    setStep('publishing');
-    onAnnounce?.('Đã chấp nhận lần xuất bản.');
+    if (publishBusy || scanBusy) return;
+    setPublishBusy(true);
+    setActionError(null);
+    try {
+      const confirmation = await session.confirmFindings(overrideConfirmed);
+      const result = await session.submitConfirmedAttempt(confirmation.nonce);
+      if (result.conflict) {
+        setConflict(true);
+        setPublishStatus('Publishing');
+        setStep('publishing');
+        onAnnounce?.('Bộ tài liệu này đang được xuất bản.');
+        return;
+      }
+      setStep('publishing');
+      setPublishStatus('Publishing');
+      onAnnounce?.('Đã chấp nhận lần xuất bản.');
+
+      try {
+        const pollResult = await session.pollAcceptedAttempt();
+        if (pollResult) {
+          setPublishStatus(pollResult.status);
+          setUncertain(Boolean(pollResult.uncertain));
+          if (pollResult.status === 'Failed') {
+            const err = pollResult.errorMessage || 'Máy chủ gặp lỗi khi xử lý ảnh chụp.';
+            setPublishError(err);
+            onAnnounce?.('Xuất bản thất bại.');
+          } else if (pollResult.status === 'In sync' || pollResult.status === 'Local changes') {
+            onAnnounce?.('Đã xuất bản bộ tài liệu.');
+          } else if (pollResult.uncertain) {
+            onAnnounce?.('Mất kết nối — chưa xác định kết quả.');
+          }
+        }
+      } catch {
+        setUncertain(true);
+        onAnnounce?.('Mất kết nối — chưa xác định kết quả.');
+      }
+    } catch {
+      setActionError('Không thể gửi ảnh chụp xuất bản. Kiểm tra kết nối và thử lại.');
+    } finally {
+      setPublishBusy(false);
+    }
   };
 
   const counters = [
@@ -74,23 +138,26 @@ export function PublishPreviewModal({ open, preview, session, documentTitles = {
   ] as const;
 
   const footer = step === 'publishing' ? null : [
-    <Button key="cancel" onClick={closeBeforePost}>Hủy xuất bản</Button>,
+    <Button key="cancel" disabled={scanBusy || publishBusy} onClick={closeBeforePost}>Hủy xuất bản</Button>,
     ...(step === 'preview' || step === 'scanning'
-      ? [<Button key="scan" type="primary" disabled={step === 'scanning' || (preview.hasRemovals && !removalConfirmed)} onClick={scan}>Kiểm tra dữ liệu nhạy cảm</Button>]
-      : [<Button key="publish" type="primary" danger={Boolean(findings?.length)} disabled={Boolean(findings?.length) && !overrideConfirmed} onClick={publish}>{findings?.length ? 'Vẫn xuất bản lần này' : 'Xuất bản bộ tài liệu'}</Button>]),
+      ? [<Button key="scan" type="primary" loading={scanBusy} disabled={scanBusy || (preview.hasRemovals && !removalConfirmed)} onClick={scan}>Kiểm tra dữ liệu nhạy cảm</Button>]
+      : [<Button key="publish" type="primary" loading={publishBusy} danger={Boolean(findings?.length)} disabled={publishBusy || (Boolean(findings?.length) && !overrideConfirmed)} onClick={publish}>{findings?.length ? 'Vẫn xuất bản lần này' : 'Xuất bản bộ tài liệu'}</Button>]),
   ];
 
   return (
-    <Modal open={open} width={760} title={step === 'publishing' ? 'Trạng thái xuất bản' : 'Xem trước thay đổi'} onCancel={step === 'publishing' ? onClose : closeBeforePost} footer={footer}>
+    <Modal open={open} width={760} title={step === 'publishing' ? 'Trạng thái xuất bản' : 'Xem trước thay đổi'} onCancel={step === 'publishing' ? closeDuringPublish : closeBeforePost} footer={footer}>
       {step === 'publishing' ? (
         <PublishProgressPanel
-          status="Publishing"
+          status={publishStatus}
           conflict={conflict}
+          uncertain={uncertain}
+          error={publishError}
           {...(onOpenStatus ? { onOpenStatus } : {})}
-          onClose={onClose}
+          onClose={closeDuringPublish}
         />
       ) : (
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
+          {actionError && <Alert type="error" showIcon message={actionError} />}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: token.marginSM }}>
             {counters.map(([label, documents, chunks]) => (
               <Statistic key={label} title={label} value={documents} suffix={`tài liệu · ${chunks} chunk`} />

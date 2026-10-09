@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import 'fake-indexeddb/auto';
 import '@testing-library/jest-dom/vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
@@ -316,5 +317,170 @@ describe('guarded publish UI', () => {
     expect(screen.getByText(/Ảnh chụp trước vẫn đang hoạt động/)).toBeInTheDocument();
     rerender(<PublishProgressPanel status="Local changes" onClose={vi.fn()} />);
     expect(screen.getByText('Lần xuất bản vừa hoàn tất dùng ảnh chụp trước chỉnh sửa mới nhất.')).toBeInTheDocument();
+  });
+
+  it('polls accepted attempt through terminal In sync without spin', async () => {
+    const session = {
+      confirmRemoval: vi.fn(),
+      cancelRemoval: vi.fn(),
+      scan: vi.fn(async () => []),
+      confirmFindings: vi.fn(async () => ({ nonce: 'nonce-1' })),
+      submitConfirmedAttempt: vi.fn(async () => ({ attemptId: 'attempt-1', status: 'Publishing' as const })),
+      pollAcceptedAttempt: vi.fn(async () => ({
+        attemptId: 'attempt-1',
+        setId: 'set-a',
+        status: 'In sync' as const,
+        uncertain: false,
+      })),
+      closePreview: vi.fn(),
+    };
+    const onAnnounce = vi.fn();
+    render(
+      <PublishPreviewModal
+        open
+        preview={{ ...previewWithRemoval(), hasRemovals: false }}
+        session={session as never}
+        onClose={vi.fn()}
+        onAnnounce={onAnnounce}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra dữ liệu nhạy cảm' }));
+    const publishButton = await screen.findByRole('button', { name: 'Xuất bản bộ tài liệu' });
+    fireEvent.click(publishButton);
+
+    expect(await screen.findByText('Đã xuất bản bộ tài liệu.')).toBeInTheDocument();
+    expect(screen.getByText('Bộ tài liệu đã được đồng bộ với Knowledge Server.')).toBeInTheDocument();
+    expect(session.pollAcceptedAttempt).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Đang xuất bản')).not.toBeInTheDocument();
+  });
+
+  it('renders terminal failure with prior-snapshot assurance and bounded error', async () => {
+    const session = {
+      confirmRemoval: vi.fn(),
+      cancelRemoval: vi.fn(),
+      scan: vi.fn(async () => []),
+      confirmFindings: vi.fn(async () => ({ nonce: 'nonce-1' })),
+      submitConfirmedAttempt: vi.fn(async () => ({ attemptId: 'attempt-fail', status: 'Publishing' as const })),
+      pollAcceptedAttempt: vi.fn(async () => ({
+        attemptId: 'attempt-fail',
+        setId: 'set-a',
+        status: 'Failed' as const,
+        errorMessage: 'Khối mã quá 50.000 ký tự tại dòng 7, cột 1.',
+        uncertain: false,
+      })),
+      closePreview: vi.fn(),
+    };
+    render(
+      <PublishPreviewModal
+        open
+        preview={{ ...previewWithRemoval(), hasRemovals: false }}
+        session={session as never}
+        onClose={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra dữ liệu nhạy cảm' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Xuất bản bộ tài liệu' }));
+
+    expect(await screen.findByText('Xuất bản thất bại. Ảnh chụp trước vẫn đang hoạt động.')).toBeInTheDocument();
+    expect(screen.getByText('Khối mã quá 50.000 ký tự tại dòng 7, cột 1.')).toBeInTheDocument();
+  });
+
+  it('retains Publishing status with warning on network uncertainty', async () => {
+    const session = {
+      confirmRemoval: vi.fn(),
+      cancelRemoval: vi.fn(),
+      scan: vi.fn(async () => []),
+      confirmFindings: vi.fn(async () => ({ nonce: 'nonce-1' })),
+      submitConfirmedAttempt: vi.fn(async () => ({ attemptId: 'attempt-unc', status: 'Publishing' as const })),
+      pollAcceptedAttempt: vi.fn(async () => ({
+        attemptId: 'attempt-unc',
+        setId: 'set-a',
+        status: 'Publishing' as const,
+        uncertain: true,
+      })),
+      closePreview: vi.fn(),
+    };
+    render(
+      <PublishPreviewModal
+        open
+        preview={{ ...previewWithRemoval(), hasRemovals: false }}
+        session={session as never}
+        onClose={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra dữ liệu nhạy cảm' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Xuất bản bộ tài liệu' }));
+
+    expect(await screen.findByText('Mất kết nối — chưa xác định kết quả.')).toBeInTheDocument();
+    expect(screen.getByText('Đang xuất bản')).toBeInTheDocument();
+  });
+
+  it('guards duplicate clicks and renders bounded error on scan or submit rejection', async () => {
+    const session = {
+      confirmRemoval: vi.fn(),
+      cancelRemoval: vi.fn(),
+      scan: vi.fn().mockRejectedValueOnce(new Error('raw internal scan crash')),
+      confirmFindings: vi.fn(async () => ({ nonce: 'nonce-1' })),
+      submitConfirmedAttempt: vi.fn().mockRejectedValueOnce(new Error('raw network connection drop')),
+      closePreview: vi.fn(),
+    };
+    render(
+      <PublishPreviewModal
+        open
+        preview={{ ...previewWithRemoval(), hasRemovals: false }}
+        session={session as never}
+        onClose={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra dữ liệu nhạy cảm' }));
+    expect(await screen.findByText('Không thể kiểm tra dữ liệu nhạy cảm. Thử lại sau.')).toBeInTheDocument();
+    expect(screen.queryByText('raw internal scan crash')).not.toBeInTheDocument();
+
+    // Now test submit failure gracefully
+    session.scan.mockResolvedValueOnce([]);
+    fireEvent.click(await screen.findByRole('button', { name: /Kiểm tra dữ liệu nhạy cảm/ }));
+    const publishButton = await screen.findByRole('button', { name: /Xuất bản bộ tài liệu/ });
+    fireEvent.click(publishButton);
+
+    expect(await screen.findByText('Không thể gửi ảnh chụp xuất bản. Kiểm tra kết nối và thử lại.')).toBeInTheDocument();
+    expect(screen.queryByText('raw network connection drop')).not.toBeInTheDocument();
+  });
+
+  it('closing during publishing calls closePreview to abort observer only, sending zero cancel requests', async () => {
+    let resolvePoll: (value: unknown) => void = () => {};
+    const pollPromise = new Promise((resolve) => { resolvePoll = resolve; });
+    const session = {
+      confirmRemoval: vi.fn(),
+      cancelRemoval: vi.fn(),
+      scan: vi.fn(async () => []),
+      confirmFindings: vi.fn(async () => ({ nonce: 'nonce-1' })),
+      submitConfirmedAttempt: vi.fn(async () => ({ attemptId: 'attempt-running', status: 'Publishing' as const })),
+      pollAcceptedAttempt: vi.fn(() => pollPromise),
+      closePreview: vi.fn(),
+    };
+    const onClose = vi.fn();
+    render(
+      <PublishPreviewModal
+        open
+        preview={{ ...previewWithRemoval(), hasRemovals: false }}
+        session={session as never}
+        onClose={onClose}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra dữ liệu nhạy cảm' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Xuất bản bộ tài liệu' }));
+
+    expect(await screen.findByText('Đang xuất bản')).toBeInTheDocument();
+    const closeButton = screen.getByRole('button', { name: 'Đóng' });
+    fireEvent.click(closeButton);
+
+    expect(session.closePreview).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    resolvePoll({ status: 'Publishing', uncertain: true });
   });
 });
