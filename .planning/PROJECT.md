@@ -42,11 +42,11 @@ Shipped **v1.0 MVP** on 2026-09-27 with all 8 foundational phases complete (28 p
 - ✓ Track Banking IT domain fields (Ops Owner, BA, Work Type) across projects, milestones, tasks. — Phase 9 (SHB-01..SHB-05)
 - ✓ Connect to Jira Cloud REST API v3, create issues, link keys, execute transitions, filter tasks by Jira key/status, and format standup exports. — Phase 11 (JIRA-01..JIRA-05)
 - ✓ AI Chat Drawer with 9router API integration, scoped item context grounding, local file head extraction, and Claude Code CLI terminal bridge. — Phase 13.2 (AI-01..AI-05)
+- ✓ Publish normalized Markdown to an optional knowledge server without breaking local/offline document use. — Phase 16 (INGEST-01..INGEST-05)
+- ✓ Incrementally project changed Markdown sections through shared AST chunking and SHA-256 comparison. — Phase 16 (INGEST-03..INGEST-04)
 
 ### Active
 
-- [ ] Publish normalized Markdown to an optional knowledge server without breaking local/offline document use.
-- [ ] Incrementally index changed Markdown sections for keyword and semantic retrieval.
 - [ ] Build an evidence-backed Neo4j graph for scheduled process `60000006` using collision-safe composite identities.
 - [ ] Query process flow, call chain, dependencies, data objects, cycles, statuses, and diagnostics through bounded graph traversal.
 - [ ] Return AI answers with source citations, graph paths, conflicts, and explicit missing-evidence handling.
@@ -103,7 +103,7 @@ GitHub synchronization is backup synchronization, not collaborative live sync. B
 | Session-only in-memory storage for PAT and passphrase | Eliminates credential leak surface in localStorage, IndexedDB, or logs | ✓ Validated — Phase 8 |
 | Pre-import snapshots with one-click rollback | Prevents accidental data replacement during restore | ✓ Validated — Phase 6 & 8 |
 | ActiveFormGuard reload interception | Prevents service worker updates from destroying dirty form state | ✓ Validated — Phase 7 |
-| Keep Markdown as canonical knowledge source | Human-readable documents remain reviewable and portable; graph/indexes can be rebuilt | — Pending |
+| Keep Markdown as canonical knowledge source | Human-readable documents remain reviewable and portable; graph/indexes can be rebuilt | ✓ Validated — Phase 16 |
 | Use collision-safe composite graph identities | Prevents namespace collisions such as `PRC_PROCESS:60000006` and `PRC_CONTAINER:60000006` | — Pending |
 | Start with scheduled process `60000006` as pilot corpus | Small enough to validate, rich enough for scheduler, call-chain, data, and diagnostic multi-hop queries | — Pending |
 
@@ -125,4 +125,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-07 after starting v1.2 Hybrid GraphRAG Knowledge Assistant MVP*
+*Last updated: 2026-10-09 after completing Phase 16 knowledge publishing foundation*
