@@ -2,6 +2,7 @@
 import 'fake-indexeddb/auto';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import Dexie from 'dexie';
+import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskPlannerDatabase } from '../../src/db';
 import { KnowledgeServerConfigCard } from '../../src/components/settings/KnowledgeServerConfigCard';
@@ -182,5 +183,94 @@ describe('KnowledgeServerConfigCard', () => {
 
     expect(await screen.findAllByText('URL Knowledge Server không hợp lệ.')).not.toHaveLength(0);
     expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('proves single root provider maintains token across views with zero leakage to storage or backups', async () => {
+    const tokenCanary = 'bearer-token-canary-secret-12345';
+    let currentRoute: 'settings' | 'notes' = 'settings';
+
+    function Shell({ testDb }: { testDb: TaskPlannerDatabase }) {
+      const [route, setRoute] = useState<'settings' | 'notes'>('settings');
+      currentRoute = route;
+      return (
+        <KnowledgeConfigProvider db={testDb}>
+          <button onClick={() => setRoute('settings')}>Go Settings</button>
+          <button onClick={() => setRoute('notes')}>Go Notes</button>
+          {route === 'settings' ? <SettingsView db={testDb} defaultActiveTab="ai" /> : <NotesView db={testDb} />}
+        </KnowledgeConfigProvider>
+      );
+    }
+
+    const { NotesView } = await import('../../src/views/NotesView');
+    const { createNote } = await import('../../src/db/repositories/noteRepo');
+    const { createDocumentSet } = await import('../../src/db/repositories/documentSetRepo');
+    const { exportBackupPayload } = await import('../../src/services/backup/exportBackup');
+
+    const note = await createNote({ title: 'Ghi chú', body: '# Nội dung', type: 'document' }, db);
+    await createDocumentSet({ name: 'Bộ 1', documentIds: [note.id] }, db);
+
+    const fetchSpy = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      return new Response(JSON.stringify({ ok: true, attemptId: '11111111-1111-4111-8111-111111111111', status: 'Publishing' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const { unmount } = render(<Shell testDb={db} />);
+
+    // 1. In Settings view, configure Knowledge Server
+    await screen.findByRole('switch', { name: 'Bật Knowledge Server' });
+    fireEvent.click(screen.getByRole('switch', { name: 'Bật Knowledge Server' }));
+    fireEvent.change(screen.getByLabelText('URL Knowledge Server'), {
+      target: { value: 'https://knowledge.example.com' },
+    });
+    fireEvent.change(screen.getByLabelText('Token phiên'), {
+      target: { value: tokenCanary },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Lưu cấu hình/ }));
+
+    await waitFor(async () => {
+      const urlSetting = await db.settings.get('knowledge_server_base_url');
+      expect(urlSetting?.value).toBe('https://knowledge.example.com');
+    });
+
+    // 2. Switch to NotesView without unmounting KnowledgeConfigProvider
+    fireEvent.click(screen.getByRole('button', { name: 'Go Notes' }));
+    expect(await screen.findByText('Ghi chú & Tài liệu')).toBeInTheDocument();
+
+    // 3. Open document set drawer and preview
+    fireEvent.click((await screen.findByText('Bộ tài liệu')).closest('button') as HTMLButtonElement);
+    fireEvent.click(await screen.findByRole('button', { name: 'Mở chi tiết' }));
+    const previewButton = await screen.findByRole('button', { name: 'Xem trước xuất bản' });
+    await waitFor(() => expect(previewButton).toBeEnabled());
+    fireEvent.click(previewButton);
+
+    // 4. Assert Authorization header contains token
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const authHeader = fetchSpy.mock.calls[0]?.[1]?.headers?.Authorization || fetchSpy.mock.calls[0]?.[1]?.headers?.authorization;
+    expect(authHeader).toBe(`Bearer ${tokenCanary}`);
+
+    // 5. Assert zero leakage across storage, DOM, and backup
+    const settingsRows = await db.settings.toArray();
+    expect(JSON.stringify(settingsRows)).not.toContain(tokenCanary);
+    expect(JSON.stringify(localStorage)).not.toContain(tokenCanary);
+    expect(JSON.stringify(sessionStorage)).not.toContain(tokenCanary);
+    expect(document.body.textContent).not.toContain(tokenCanary);
+
+    const backup = await exportBackupPayload(db);
+    expect(JSON.stringify(backup)).not.toContain(tokenCanary);
+
+    // 6. Provider remount clears token
+    unmount();
+    const freshDb = new TaskPlannerDatabase(dbName);
+    render(
+      <KnowledgeConfigProvider db={freshDb}>
+        <SettingsView db={freshDb} defaultActiveTab="ai" />
+      </KnowledgeConfigProvider>
+    );
+    await waitFor(() => {
+      expect(screen.getByLabelText('Token phiên')).toHaveValue('');
+    });
   });
 });

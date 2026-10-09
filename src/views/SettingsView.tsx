@@ -36,7 +36,6 @@ import { rollbackToSnapshot, downloadSnapshotFile } from '../services/backup/res
 import { announceToScreenReader } from '../components/common/AriaLiveRegion';
 import type { SnapshotData, BackupEnvelope } from '../types/backup';
 import type { PullBackupResult } from '../services/github/types';
-import { KnowledgeConfigProvider } from '../services/knowledge/knowledgeConfig';
 
 const { Paragraph } = Typography;
 
@@ -229,9 +228,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <McpConfigCard db={db} />
           <GhostDevConfigCard />
           <NineRouterConfigCard db={db} />
-          <KnowledgeConfigProvider db={db}>
-            <KnowledgeServerConfigCard />
-          </KnowledgeConfigProvider>
+          <KnowledgeServerConfigCard />
         </Space>
       ),
     },
