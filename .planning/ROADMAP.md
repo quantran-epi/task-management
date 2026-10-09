@@ -279,7 +279,7 @@ Plans:
 
 **Wave 14** *(blocked on Wave 13 completion)*
 
-- [ ] 16-21-PLAN.md — Terminal attempt polling and atomic published metadata reconciliation (Wave 14)
+- [x] 16-21-PLAN.md — Terminal attempt polling and atomic published metadata reconciliation (Wave 14)
 
 **Wave 15** *(blocked on Wave 14 completion)*
 
