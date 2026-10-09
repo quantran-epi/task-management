@@ -1,85 +1,26 @@
 ---
 phase: 16-knowledge-server-foundation-dlp-checks-ast-ingestion
-reviewed: 2026-10-09T08:45:00Z
+reviewed: 2026-10-09T16:35:00Z
 depth: standard
-files_reviewed: 58
-files_reviewed_list:
-  - knowledge-server/package.json
-  - knowledge-server/src/indexing/chunkHasher.ts
-  - knowledge-server/src/indexing/incrementalProjector.ts
-  - knowledge-server/src/indexing/snapshotStore.ts
-  - knowledge-server/src/main.ts
-  - knowledge-server/src/routes/attempts.ts
-  - knowledge-server/src/routes/snapshots.ts
-  - knowledge-server/src/server.ts
-  - knowledge-server/src/services/attemptService.ts
-  - knowledge-server/tests/attemptService.test.ts
-  - knowledge-server/tests/incrementalProjector.test.ts
-  - knowledge-server/tests/main.test.ts
-  - knowledge-server/tests/pilotAcceptance.test.ts
-  - knowledge-server/tests/server.test.ts
-  - src/App.tsx
-  - src/components/knowledge/AttemptHistoryList.tsx
-  - src/components/knowledge/DlpWarningPanel.tsx
-  - src/components/knowledge/DocPublishBadge.tsx
-  - src/components/knowledge/DocumentSetDrawer.tsx
-  - src/components/knowledge/DocumentSetForm.tsx
-  - src/components/knowledge/PublishPreviewModal.tsx
-  - src/components/knowledge/PublishProgressPanel.tsx
-  - src/components/notes/DocEditorPane.tsx
-  - src/components/notes/DocListPane.tsx
-  - src/components/settings/KnowledgeServerConfigCard.tsx
-  - src/db/index.ts
-  - src/db/repositories/documentSetRepo.ts
-  - src/db/repositories/publishAttemptRepo.ts
-  - src/db/schema.ts
-  - src/services/backup/exportBackup.ts
-  - src/services/backup/restoreBackup.ts
-  - src/services/backup/validateBackup.ts
-  - src/services/knowledge/changePreview.ts
-  - src/services/knowledge/knowledgeClient.ts
-  - src/services/knowledge/knowledgeConfig.tsx
-  - src/services/knowledge/publishOrchestrator.ts
-  - src/types/backup.ts
-  - src/types/models.ts
-  - src/validation/backupSchemas.ts
-  - src/validation/knowledgeSchemas.ts
-  - src/views/NotesView.tsx
-  - src/views/SettingsView.tsx
-  - tests/db/schemaV9.test.ts
-  - tests/knowledge/DocumentSetPublishFlow.test.tsx
-  - tests/knowledge/KnowledgeServerConfigCard.test.tsx
-  - tests/knowledge/NotesKnowledgePublishing.test.tsx
-  - tests/knowledge/NotesWorkspacePublishingIntegration.test.tsx
-  - tests/knowledge/changePreview.test.ts
-  - tests/knowledge/documentSetRepo.test.ts
-  - tests/knowledge/knowledgeClient.test.ts
-  - tests/knowledge/offlineIsolation.test.ts
-  - tests/knowledge/phase16Acceptance.test.tsx
-  - tests/knowledge/publishDlpGate.test.ts
-  - tests/knowledge/publishStatus.test.ts
-  - tests/knowledge/schemaV10.test.ts
-  - tests/services/backup/exportBackup.test.ts
-  - tests/services/backup/knowledgeBackupRestore.test.ts
-  - tests/services/backup/validateBackup.test.ts
+files_reviewed: 63
+status: issues_found
 findings:
   critical: 0
   warning: 4
   info: 0
   total: 4
-status: issues_found
 ---
 
 # Phase 16: Code Review Report
 
-**Reviewed:** 2026-10-09T08:45:00Z  
+**Reviewed:** 2026-10-09T16:35:00Z  
 **Depth:** standard  
-**Files Reviewed:** 58  
+**Files Reviewed:** 63  
 **Status:** issues_found
 
 ## Summary
 
-Phase 16 gap closure implementations (Plans 16-16 through 16-23) resolved all 9 previous BLOCKER issues (CR-01 through CR-09):
+Phase 16 gap closure implementations (Plans 16-16 through 16-24) resolved all 9 previous BLOCKER issues (CR-01 through CR-09) and closed UAT Test 9 (Plan 16-24):
 - CR-01 / CR-02: `knowledge-server/src/main.ts` added with strict fail-closed option parsing; unified authenticated `/api/v1/health` contract exposed on Fastify.
 - CR-03: `SettingsView` nested provider removed; app-level config provider supplies session token to publish flows.
 - CR-04: `DocumentSetDrawer` wired with explicit create mode and connected to `handleSaveDocumentSet` in `NotesView`.
@@ -88,8 +29,9 @@ Phase 16 gap closure implementations (Plans 16-16 through 16-23) resolved all 9 
 - CR-07: `reconcileAttempt()` in `knowledgeClient.ts` combines frozen submitted manifest with remote `activeSnapshotId`, atomically updating `publishedDocuments` via transaction.
 - CR-08: `backupSchemas.ts` and `validateBackup.ts` accept `'document'` in `chatThreads.scopeType` and enforce referential integrity with notes.
 - CR-09: `PublishSession.confirmFindings(overrideApproved)` strictly gates confirmation nonce creation at service boundary.
+- Plan 16-24 (UAT Test 9): Recursive AST validation added at all depths (`validateAtomicBlocksRecursively`), total document length unconstrained, and safe metadata-only error details (`blockType`, `line`, `column`, `limit`) surfaced to user with actionable Vietnamese remediation advice and zero raw Markdown leaks.
 
-4 non-blocking WARNING items remain open or partially addressed.
+4 non-blocking WARNING items remain from the earlier pass.
 
 ## Warnings
 
@@ -147,6 +89,6 @@ const filteredDocuments = useMemo(() => {
 
 ---
 
-_Reviewed: 2026-10-09T08:45:00Z_  
-_Reviewer: Claude (gsd-code-reviewer)_  
+_Reviewed: 2026-10-09T16:35:00Z_  
+_Reviewer: Claude (gsd-code-review inline)_  
 _Depth: standard_
