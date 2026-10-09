@@ -111,6 +111,8 @@ client_secret: \"canary-secret\"`;
       type: 'document',
       parentId: folder.id,
     }, database);
+    await database.notes.update(doc1.id, { updatedAt: '2026-10-01T00:00:00.000Z' });
+    await database.notes.update(doc2.id, { updatedAt: '2026-10-02T00:00:00.000Z' });
 
     const initialDoc1 = await database.notes.get(doc1.id);
     const initialDoc2 = await database.notes.get(doc2.id);
