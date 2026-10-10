@@ -742,6 +742,24 @@ export function extractDeterministicFacts(snapshot: ProjectionSnapshot): Determi
     const body = doc.chunks.map((c) => c.rawContent).join('');
     const ast = parseMarkdownToAst(body);
 
+    // Register SourceDocument node for each document in snapshot per GRAPH-01 / D-01
+    const docUrn = buildUrn('markdown', 'SourceDocument', doc.documentId);
+    if (!nodesMap.has(docUrn)) {
+      nodesMap.set(docUrn, {
+        urn: docUrn,
+        kind: 'SourceDocument',
+        canonicalName: doc.title,
+        sourceSystem: 'markdown',
+        nativeType: 'SourceDocument',
+        normalizedKey: doc.documentId,
+        properties: {
+          documentId: doc.documentId,
+          title: doc.title,
+        },
+        aliases: [doc.title],
+      });
+    }
+
     const ctx: TraversalContext = {
       doc,
       documentBody: body,

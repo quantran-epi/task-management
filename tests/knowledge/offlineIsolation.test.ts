@@ -4,6 +4,7 @@ import { TaskPlannerDatabase } from '../../src/db';
 import { createNote, permanentDeleteNote, updateNote } from '../../src/db/repositories/noteRepo';
 import { getDocumentPublishStatuses } from '../../src/db/repositories/documentSetRepo';
 import { rankBM25 } from '../../src/utils/bm25';
+import { createKnowledgeClient, KnowledgeClientError } from '../../src/services/knowledge/knowledgeClient';
 
 const databases: TaskPlannerDatabase[] = [];
 
@@ -60,5 +61,20 @@ describe('optional daemon outage isolation', () => {
     expect(await database.notes.get(document.id)).toEqual(document);
     expect(rankBM25('khoi dong cuc bo', [{ id: document.id, title: document.title ?? '', body: document.body, tags: document.tags ?? [] }])).toHaveLength(1);
     expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('gracefully reports NETWORK_ERROR for graph status and rebuild when daemon is offline without throwing unhandled exceptions', async () => {
+    const fetcher = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+    const client = createKnowledgeClient({
+      baseUrl: 'http://127.0.0.1:3001',
+      token: 'test-token',
+      fetcher,
+    });
+
+    await expect(client.getGraphStatus('60000006-0000-4000-8000-000000000000')).rejects.toThrow(KnowledgeClientError);
+    await expect(client.getGraphStatus('60000006-0000-4000-8000-000000000000')).rejects.toMatchObject({ code: 'NETWORK_ERROR' });
+
+    await expect(client.triggerGraphRebuild('60000006-0000-4000-8000-000000000000', 'rebuild-1')).rejects.toThrow(KnowledgeClientError);
+    await expect(client.triggerGraphRebuild('60000006-0000-4000-8000-000000000000', 'rebuild-1')).rejects.toMatchObject({ code: 'NETWORK_ERROR' });
   });
 });
