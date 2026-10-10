@@ -317,7 +317,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 17-04-PLAN.md — Graph HTTP routes + DocumentSetDrawer graph section + GraphEvidenceDrawer (GRAPH-05)
+- [x] 17-04-PLAN.md — Graph HTTP routes + DocumentSetDrawer graph section + GraphEvidenceDrawer (GRAPH-05)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
