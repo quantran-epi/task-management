@@ -108,6 +108,15 @@
 - [x] **INGEST-04**: Pre-send preview and daemon projection use the same versioned AST/newline-normalization policy and SHA-256 document/chunk hashes to classify added, changed, removed, and unchanged documents and chunks, reuse unchanged content representations, keep occurrence identity separate, and activate a candidate snapshot only after every document succeeds while preserving the prior active snapshot on failure.
 - [x] **INGEST-05**: User can inspect each document set and member using exactly `Never published`, `In sync`, `Local changes`, `Publishing`, `Warning`, or `Failed`, including subordinate connectivity uncertainty and the 10 newest content-free attempt records, while local Docs CRUD, autosave, folder navigation, and BM25 search continue when the optional knowledge server is disabled, unreachable, or absent.
 
+### Pilot Ontology, Deterministic Extraction & Neo4j Knowledge Graph (Phase 17)
+
+- [ ] **GRAPH-01**: User can build a controlled graph projection for process 60000006 covering scheduled processes, container steps, software components, database objects, cycle types, statuses, and source documents.
+- [ ] **GRAPH-02**: Graph keeps identically numbered domain objects distinct through namespaced composite identities (such as `PRC_PROCESS:60000006` vs `PRC_CONTAINER:60000006`).
+- [ ] **GRAPH-03**: Structured Markdown tables and explicit identifiers are extracted deterministically before LLM extraction is used for prose-only relationships.
+- [ ] **GRAPH-04**: Every graph relation retains source document, section, source range, extraction method, and evidence classification (`OBSERVED`, `INFERRED`, or `BUSINESS_APPROVED`).
+- [ ] **GRAPH-05**: User can distinguish `OBSERVED`, `INFERRED`, and `BUSINESS_APPROVED` knowledge in graph-backed results.
+- [ ] **GRAPH-06**: User can rebuild graph and indexes from published Markdown without treating Neo4j as canonical storage.
+
 ## Future Requirements (Deferred)
 
 - **FUTR-01**: Full bidirectional Jira issue webhook sync (deferred - requires server/push).
@@ -185,3 +194,9 @@
 | INGEST-03 | Phase 16 | Complete |
 | INGEST-04 | Phase 16 | Complete |
 | INGEST-05 | Phase 16 | Complete |
+| GRAPH-01 | Phase 17 | Pending |
+| GRAPH-02 | Phase 17 | Pending |
+| GRAPH-03 | Phase 17 | Pending |
+| GRAPH-04 | Phase 17 | Pending |
+| GRAPH-05 | Phase 17 | Pending |
+| GRAPH-06 | Phase 17 | Pending |

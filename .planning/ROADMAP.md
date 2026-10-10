@@ -303,7 +303,13 @@ Plans:
   5. User can distinguish `OBSERVED`, `INFERRED`, and `BUSINESS_APPROVED` knowledge in graph-backed results.
   6. User can rebuild graph and indexes from published Markdown without treating Neo4j as canonical storage.
 
-**Plans**: TBD
+**Plans:** 5 plans in 5 waves
+
+- [ ] 17-01-PLAN.md — Ontology, composite URN identity, factKey derivation, pilot gold fixtures (GRAPH-01, GRAPH-02)
+- [ ] 17-02-PLAN.md — Deterministic MDAST extraction + bounded single-call prose fallback (GRAPH-03)
+- [ ] 17-03-PLAN.md — neo4j-driver verify/install, candidate merge + conflict + classification, graph repository (GRAPH-04)
+- [ ] 17-04-PLAN.md — Graph HTTP routes + DocumentSetDrawer graph section + GraphEvidenceDrawer (GRAPH-05)
+- [ ] 17-05-PLAN.md — Durable snapshot store, staged rebuild with atomic pointer swap, pilot acceptance + offline isolation (GRAPH-06)
 
 ### Phase 18: Multi-Modal Hybrid Retrieval Engine
 
