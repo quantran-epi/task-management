@@ -31,7 +31,7 @@ import {
   theme,
 } from 'antd';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { db } from '../../db';
 import type { DocumentSet, Note, PublishAttemptCache, PublishPrimaryState } from '../../types/models';
 import { AttemptHistoryList } from './AttemptHistoryList';
@@ -138,11 +138,14 @@ export function DocumentSetDrawer(props: DocumentSetDrawerProps) {
   const [evidenceDrawerOpen, setEvidenceDrawerOpen] = useState(false);
   const [connectivityUncertain, setConnectivityUncertain] = useState(false);
 
-  const client: KnowledgeClient | undefined =
-    props.knowledgeClient ??
-    (props.configured && config.baseUrl && config.token
-      ? createKnowledgeClient({ baseUrl: config.baseUrl, token: config.token })
-      : undefined);
+  const client = useMemo<KnowledgeClient | undefined>(
+    () =>
+      props.knowledgeClient ??
+      (props.configured && config.baseUrl && config.token
+        ? createKnowledgeClient({ baseUrl: config.baseUrl, token: config.token })
+        : undefined),
+    [props.knowledgeClient, props.configured, config.baseUrl, config.token]
+  );
 
   const handleCreate = () => {
     setInternalSelectedId(undefined);

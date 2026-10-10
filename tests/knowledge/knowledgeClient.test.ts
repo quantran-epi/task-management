@@ -565,7 +565,7 @@ describe('strict fixed-route knowledge client', () => {
       });
     });
 
-    it('retrieves graph status DTO with counts and stage', async () => {
+    it('retrieves graph status repeatedly through one stable client instance', async () => {
       const setId = generateId();
       const fetcher = vi.fn(async (input: RequestInfo | URL) => {
         expect(String(input)).toBe(`https://knowledge.example.com/api/v1/sets/${setId}/graph/status`);
@@ -590,10 +590,13 @@ describe('strict fixed-route knowledge client', () => {
         fetcher,
       });
 
-      const status = await client.getGraphStatus(setId);
-      expect(status.state).toBe('Active');
-      expect(status.nodeCount).toBe(15);
-      expect(status.factCount).toBe(10);
+      const first = await client.getGraphStatus(setId);
+      const second = await client.getGraphStatus(setId);
+      expect(first.state).toBe('Active');
+      expect(first.nodeCount).toBe(15);
+      expect(first.factCount).toBe(10);
+      expect(second.state).toBe('Active');
+      expect(fetcher).toHaveBeenCalledTimes(2);
     });
 
     it('retrieves facts list, fact evidence detail, and quarantines list', async () => {
