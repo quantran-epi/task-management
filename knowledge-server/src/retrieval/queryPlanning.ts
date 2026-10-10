@@ -315,6 +315,13 @@ export type QueryExecutionPlanningOutcome =
       readonly seedUrns: readonly string[];
       readonly graphDirective: 'NO_GRAPH_SEED';
       readonly planTrace: PlanTrace;
+    }
+  | {
+      readonly status: 'unsupported';
+      readonly semanticOutcome: 'UNSUPPORTED';
+      readonly reason: string;
+      readonly unsupportedConstructs: readonly string[];
+      readonly planTrace: PlanTrace;
     };
 
 /**
@@ -595,6 +602,20 @@ export async function buildQueryExecutionPlan(
 
   try {
     const firstResult = await planner.plan(request, plannerContext, options);
+
+    if (firstResult.type === 'unsupported') {
+      return {
+        status: 'unsupported',
+        semanticOutcome: 'UNSUPPORTED',
+        reason: firstResult.reason,
+        unsupportedConstructs: [...firstResult.unsupportedConstructs],
+        planTrace: {
+          fastPath: false,
+          degradedFallback: false,
+          reasonCode: 'UNSUPPORTED',
+        },
+      };
+    }
 
     if (firstResult.type === 'clarification') {
       return {

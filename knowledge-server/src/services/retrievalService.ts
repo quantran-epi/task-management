@@ -214,17 +214,22 @@ export class RetrievalService {
       planner: this.deps.queryPlanner,
     });
 
+    const isUnsupported = planningOutcome.status === 'unsupported';
     const isClarification = planningOutcome.status === 'needsClarification';
     const planTrace = planningOutcome.planTrace;
 
     // Fulltext search terms
     const fulltextKeywords = isClarification
       ? planningOutcome.fulltextKeywords
+      : isUnsupported
+      ? [request.query.trim()]
       : planningOutcome.plan.fulltextKeywords;
 
     // Semantic query string
     const semanticQueryText = isClarification
       ? planningOutcome.semanticQuery
+      : isUnsupported
+      ? request.query.trim()
       : planningOutcome.plan.semanticQuery;
 
     // 4. Modality construction & parallel start in same event loop turn
@@ -370,7 +375,9 @@ export class RetrievalService {
     const hasClarificationCandidates =
       isClarification && (((planningOutcome as any).safeCandidates?.length ?? 0) > 0);
 
-    if (hasClarificationCandidates) {
+    if (isUnsupported) {
+      outcome = 'UNSUPPORTED';
+    } else if (hasClarificationCandidates) {
       outcome = 'NEEDS_CLARIFICATION';
     } else if (finalItems.length === 0) {
       outcome = 'NO_EVIDENCE';
@@ -380,12 +387,21 @@ export class RetrievalService {
       outcome = 'READY';
     }
 
-    const providerMetadata = this.deps.embeddingProvider?.describe() ?? {
+    const rawProviderMeta = this.deps.embeddingProvider?.describe() ?? {
       provider: 'local-onnx',
       model: 'unconfigured',
       revision: 'none',
       dimensions: 384,
       policyVersion: 'none',
+    };
+
+    // T-18-01: Redact any accidental secret/endpoint/key fields from provider metadata
+    const providerMetadata: EmbeddingProviderMetadata = {
+      provider: rawProviderMeta.provider,
+      model: rawProviderMeta.model,
+      revision: rawProviderMeta.revision,
+      dimensions: rawProviderMeta.dimensions,
+      policyVersion: rawProviderMeta.policyVersion,
     };
 
     // Safe envelope assembly
@@ -403,6 +419,12 @@ export class RetrievalService {
       },
       planTrace,
     };
+
+    if (outcome === 'UNSUPPORTED') {
+      const unsupported = planningOutcome as Extract<QueryExecutionPlanningOutcome, { status: 'unsupported' }>;
+      responsePayload.reason = unsupported.reason;
+      responsePayload.unsupportedConstructs = unsupported.unsupportedConstructs;
+    }
 
     if (outcome === 'NEEDS_CLARIFICATION') {
       responsePayload.candidates = (planningOutcome as any).safeCandidates;
@@ -524,8 +546,8 @@ export class RetrievalService {
     snapshotId: string,
     planningOutcome: QueryExecutionPlanningOutcome
   ): Promise<ModalityRunResult<EntityItem | EdgeItem>> {
-    const isClarification = planningOutcome.status === 'needsClarification';
-    const planToTraverse = isClarification
+    const isSpecial = planningOutcome.status === 'needsClarification' || planningOutcome.status === 'unsupported';
+    const planToTraverse = isSpecial
       ? {
           planId: '00000000-0000-0000-0000-000000000000',
           queryIntent: 'LOOKUP' as const,

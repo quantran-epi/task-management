@@ -398,4 +398,370 @@ describe('18-W0-03B: RetrievalService Pinned Parallel Orchestration & Timeouts',
     await expect(service.retrieve(setId, defaultRequest)).rejects.toThrow('Fatal repository failure');
     expect(indexGateway.activeLeases.size).toBe(0); // Lease released despite exception
   });
+
+  describe('18-SERVICE-01: Strict Semantic Outcomes, Fusion, Promotion Race, and Redaction', () => {
+    it('returns READY when all modalities succeed and query returns items', async () => {
+      const indexGateway = new DeterministicIndexGatewayStub();
+      indexGateway.activeSnapshotId = snapshotId;
+      const embedding = new DeterministicEmbeddingStub();
+      const planner = new DeterministicPlannerStub();
+      const graphGateway = new DeterministicGraphGatewayStub();
+
+      graphGateway.mockCandidates = [
+        {
+          urn: URN_TABLE_FCL_CYCLE_COUNTER,
+          canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+          kind: 'DatabaseObject',
+        },
+      ];
+
+      indexGateway.queryFulltext = async () => [
+        {
+          type: 'chunk',
+          id: 'chunk-ft-1',
+          score: 1.0,
+          modalitiesContributed: ['fulltext'],
+          sourceDocumentId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
+          sectionAnchor: 'Sec',
+          lineStart: 1,
+          lineEnd: 5,
+          rawSnippet: 'Ready snippet',
+          snapshotId,
+          hasConflict: false,
+        },
+      ];
+
+      const service = new RetrievalService({
+        indexGateway,
+        embeddingProvider: embedding,
+        queryPlanner: planner,
+        graphGateway,
+      });
+
+      const response = await service.retrieve(setId, {
+        query: 'MAIN1.FCL_CYCLE_COUNTER',
+        limit: 20,
+        includeInferred: false,
+        recentTurns: [],
+      });
+
+      expect(response.outcome).toBe('READY');
+      expect(response.diagnostics.degraded).toBe(false);
+      expect(response.items).toHaveLength(1);
+      expect(response.items[0]?.snapshotId).toBe(snapshotId);
+    });
+
+    it('returns DEGRADED when vector provider is unconfigured, yet retains and fuses fulltext and graph items', async () => {
+      const indexGateway = new DeterministicIndexGatewayStub();
+      indexGateway.activeSnapshotId = snapshotId;
+      const planner = new DeterministicPlannerStub();
+      const graphGateway = new DeterministicGraphGatewayStub();
+
+      graphGateway.mockCandidates = [
+        {
+          urn: URN_TABLE_FCL_CYCLE_COUNTER,
+          canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+          kind: 'DatabaseObject',
+        },
+      ];
+
+      indexGateway.queryFulltext = async () => [
+        {
+          type: 'chunk',
+          id: 'chunk-ft-1',
+          score: 1.0,
+          modalitiesContributed: ['fulltext'],
+          sourceDocumentId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
+          sectionAnchor: 'Sec',
+          lineStart: 1,
+          lineEnd: 5,
+          rawSnippet: 'Fulltext snippet',
+          snapshotId,
+          hasConflict: false,
+        },
+      ];
+
+      graphGateway.traverse = async () => ({
+        entities: [
+          {
+            type: 'entity',
+            id: URN_TABLE_FCL_CYCLE_COUNTER,
+            score: 1.0,
+            modalitiesContributed: ['graph'],
+            urn: URN_TABLE_FCL_CYCLE_COUNTER,
+            canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+            kind: 'DatabaseObject',
+            snapshotId,
+            hasConflict: false,
+          },
+        ],
+        edges: [],
+        truncated: false,
+      });
+
+      // No embedding provider configured
+      const service = new RetrievalService({
+        indexGateway,
+        embeddingProvider: undefined,
+        queryPlanner: planner,
+        graphGateway,
+      });
+
+      const response = await service.retrieve(setId, {
+        query: 'MAIN1.FCL_CYCLE_COUNTER',
+        limit: 20,
+        includeInferred: false,
+        recentTurns: [],
+      });
+
+      expect(response.outcome).toBe('DEGRADED');
+      expect(response.diagnostics.degraded).toBe(true);
+      expect(response.modalityStatus.vector.status).toBe('unavailable');
+      expect(response.modalityStatus.vector.reason).toBe('UNCONFIGURED');
+      expect(response.modalitiesUsed).not.toContain('vector');
+      expect(response.modalitiesUsed).toEqual(expect.arrayContaining(['fulltext', 'graph']));
+      expect(response.items.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('discards candidates from modality returning mismatched snapshotId during mid-query promotion race and marks that modality stale', async () => {
+      const indexGateway = new DeterministicIndexGatewayStub();
+      indexGateway.activeSnapshotId = 'snap-gen-01'; // Leased generation
+      const embedding = new DeterministicEmbeddingStub();
+      const planner = new DeterministicPlannerStub();
+      const graphGateway = new DeterministicGraphGatewayStub();
+
+      graphGateway.mockCandidates = [
+        {
+          urn: URN_TABLE_FCL_CYCLE_COUNTER,
+          canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+          kind: 'DatabaseObject',
+        },
+      ];
+
+      // Fulltext correctly returns pinned snapshot
+      indexGateway.queryFulltext = async () => [
+        {
+          type: 'chunk',
+          id: 'chunk-ft-1',
+          score: 1.0,
+          modalitiesContributed: ['fulltext'],
+          sourceDocumentId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
+          sectionAnchor: 'Sec',
+          lineStart: 1,
+          lineEnd: 5,
+          rawSnippet: 'Pinned generation snippet',
+          snapshotId: 'snap-gen-01',
+          hasConflict: false,
+        },
+      ];
+
+      // Vector adapter raced and read from newly promoted generation 'snap-gen-02'
+      indexGateway.queryVector = async () => [
+        {
+          type: 'chunk',
+          id: 'chunk-vec-mismatched',
+          score: 1.0,
+          modalitiesContributed: ['vector'],
+          sourceDocumentId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
+          sectionAnchor: 'Sec',
+          lineStart: 1,
+          lineEnd: 5,
+          rawSnippet: 'Raced snippet',
+          snapshotId: 'snap-gen-02', // Stale mismatch!
+          hasConflict: false,
+        },
+      ];
+
+      const service = new RetrievalService({
+        indexGateway,
+        embeddingProvider: embedding,
+        queryPlanner: planner,
+        graphGateway,
+      });
+
+      const response = await service.retrieve(setId, {
+        query: 'MAIN1.FCL_CYCLE_COUNTER',
+        limit: 20,
+        includeInferred: false,
+        recentTurns: [],
+      });
+
+      expect(response.snapshotId).toBe('snap-gen-01');
+      expect(response.modalityStatus.vector.status).toBe('stale');
+      expect(response.modalityStatus.vector.reason).toBe('PINNED_SNAPSHOT_UNAVAILABLE');
+      // Mismatched vector item discarded
+      expect(response.items.find((i) => i.id === 'chunk-vec-mismatched')).toBeUndefined();
+      expect(response.items.every((i) => i.snapshotId === 'snap-gen-01')).toBe(true);
+    });
+
+    it('returns UNSUPPORTED outcome when query planner encounters unsupported query construct', async () => {
+      const indexGateway = new DeterministicIndexGatewayStub();
+      indexGateway.activeSnapshotId = snapshotId;
+      const embedding = new DeterministicEmbeddingStub();
+      const planner = new DeterministicPlannerStub();
+      const graphGateway = new DeterministicGraphGatewayStub();
+
+      graphGateway.mockCandidates = [
+        {
+          urn: URN_TABLE_FCL_CYCLE_COUNTER,
+          canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+          kind: 'DatabaseObject',
+        },
+      ];
+
+      planner.scriptedResult = {
+        type: 'unsupported',
+        reason: 'Recursive cycle aggregation query unsupported in Phase 18',
+        unsupportedConstructs: ['RECURSIVE_CYCLE_AGGREGATION'],
+      };
+
+      const service = new RetrievalService({
+        indexGateway,
+        embeddingProvider: embedding,
+        queryPlanner: planner,
+        graphGateway,
+      });
+
+      const response = await service.retrieve(setId, {
+        query: 'find all recursive cycles in 60000006',
+        limit: 20,
+        includeInferred: false,
+        recentTurns: [],
+      });
+
+      expect(response.outcome).toBe('UNSUPPORTED');
+      expect(response.reason).toBe('Recursive cycle aggregation query unsupported in Phase 18');
+      expect(response.unsupportedConstructs).toEqual(['RECURSIVE_CYCLE_AGGREGATION']);
+    });
+
+    it('redacts any provider secrets or endpoint URLs and ensures envelope passes strict schema validation', async () => {
+      const indexGateway = new DeterministicIndexGatewayStub();
+      indexGateway.activeSnapshotId = snapshotId;
+      const planner = new DeterministicPlannerStub();
+      const graphGateway = new DeterministicGraphGatewayStub();
+
+      graphGateway.mockCandidates = [
+        {
+          urn: URN_TABLE_FCL_CYCLE_COUNTER,
+          canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+          kind: 'DatabaseObject',
+        },
+      ];
+
+      // Provider stub with accidental secret properties
+      const contaminatedProvider: any = {
+        describe() {
+          return {
+            provider: 'remote-openai',
+            model: 'text-embedding-3-small',
+            revision: 'v1',
+            dimensions: 1536,
+            policyVersion: '2026.10.1',
+            apiKey: 'sk-secret-token-12345',
+            endpointUrl: 'https://api.openai.com/v1/embeddings',
+          };
+        },
+        async embedDocuments() { return []; },
+        async embedQuery() { return new Array(1536).fill(0.1); },
+      };
+
+      indexGateway.validateVectorIndexMetadata = async () => true;
+
+      const service = new RetrievalService({
+        indexGateway,
+        embeddingProvider: contaminatedProvider,
+        queryPlanner: planner,
+        graphGateway,
+      });
+
+      const response = await service.retrieve(setId, {
+        query: 'MAIN1.FCL_CYCLE_COUNTER',
+        limit: 20,
+        includeInferred: false,
+        recentTurns: [],
+      });
+
+      // Assert secrets not leaked
+      expect((response.embeddingProvider as any).apiKey).toBeUndefined();
+      expect((response.embeddingProvider as any).endpointUrl).toBeUndefined();
+      const serialized = JSON.stringify(response);
+      expect(serialized).not.toContain('sk-secret-token-12345');
+      expect(serialized).not.toContain('https://api.openai.com');
+    });
+
+    it('preserves conflict groups and tags across divergent functional targets in final response', async () => {
+      const indexGateway = new DeterministicIndexGatewayStub();
+      indexGateway.activeSnapshotId = snapshotId;
+      const embedding = new DeterministicEmbeddingStub();
+      const planner = new DeterministicPlannerStub();
+      const graphGateway = new DeterministicGraphGatewayStub();
+
+      graphGateway.mockCandidates = [
+        {
+          urn: URN_TABLE_FCL_CYCLE_COUNTER,
+          canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+          kind: 'DatabaseObject',
+        },
+      ];
+
+      const factKey1 = 'a'.repeat(64);
+      const factKey2 = 'b'.repeat(64);
+
+      // Two conflicting edges with divergent targets for functional HAS_STATUS
+      const edge1: EdgeItem = {
+        type: 'edge',
+        id: factKey1,
+        score: 1.0,
+        modalitiesContributed: ['graph'],
+        factKey: factKey1,
+        sourceUrn: 'urn:plannermate:smartvista:ProcessStep:STEP_A',
+        relationType: 'HAS_STATUS',
+        targetUrn: 'urn:plannermate:smartvista:ProcessingStatus:STATUS_RUNNING',
+        evidenceClass: 'OBSERVED',
+        supportingChunkIds: [],
+        snapshotId,
+        hasConflict: false,
+      };
+
+      const edge2: EdgeItem = {
+        type: 'edge',
+        id: factKey2,
+        score: 0.9,
+        modalitiesContributed: ['graph'],
+        factKey: factKey2,
+        sourceUrn: 'urn:plannermate:smartvista:ProcessStep:STEP_A',
+        relationType: 'HAS_STATUS',
+        targetUrn: 'urn:plannermate:smartvista:ProcessingStatus:STATUS_FAILED',
+        evidenceClass: 'OBSERVED',
+        supportingChunkIds: [],
+        snapshotId,
+        hasConflict: false,
+      };
+
+      graphGateway.traverse = async () => ({
+        entities: [],
+        edges: [edge1, edge2],
+        truncated: false,
+      });
+
+      const service = new RetrievalService({
+        indexGateway,
+        embeddingProvider: embedding,
+        queryPlanner: planner,
+        graphGateway,
+      });
+
+      const response = await service.retrieve(setId, {
+        query: 'MAIN1.FCL_CYCLE_COUNTER',
+        limit: 20,
+        includeInferred: false,
+        recentTurns: [],
+      });
+
+      const conflictingEdges = response.items.filter((i) => i.type === 'edge' && i.hasConflict);
+      expect(conflictingEdges).toHaveLength(2);
+      expect(conflictingEdges[0]?.conflictGroupId).toBeDefined();
+      expect(conflictingEdges[0]?.conflictGroupId).toBe(conflictingEdges[1]?.conflictGroupId);
+    });
+  });
 });
