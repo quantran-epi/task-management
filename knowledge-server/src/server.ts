@@ -25,6 +25,7 @@ export interface KnowledgeServerOptions {
   graphRepository?: GraphRepository | undefined;
   graphBuildService?: GraphBuildService | undefined;
   retrievalService?: Pick<RetrievalService, 'retrieve'> | undefined;
+  onClose?: (() => Promise<void> | void) | undefined;
 }
 
 export interface KnowledgeServer {
@@ -126,6 +127,12 @@ export function buildKnowledgeServer(options: KnowledgeServerOptions): Knowledge
   registerGraphRoutes(app, graphBuildService);
   if (options.retrievalService) {
     registerRetrievalRoutes(app, options.retrievalService);
+  }
+
+  if (options.onClose) {
+    app.addHook('onClose', async () => {
+      await options.onClose?.();
+    });
   }
 
   return {

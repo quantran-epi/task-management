@@ -242,4 +242,23 @@ describe('Fastify retrieval routes (Task 1: 18-ROUTE-01, D-23, T-18-01, T-18-02)
     expect(output).not.toContain(SECRET_ERROR_MSG);
     expect(output).not.toContain(TOKEN);
   });
+
+  it('proves server composition without retrievalService leaves route unregistered (404)', async () => {
+    const app = buildKnowledgeServer({
+      token: TOKEN,
+      allowedOrigins: [ORIGIN],
+    }).app;
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/sets/${SET_ID}/retrieve`,
+      headers: {
+        origin: ORIGIN,
+        authorization: `Bearer ${TOKEN}`,
+      },
+      payload: { query: 'test' },
+    });
+
+    expect(res.statusCode).toBe(404);
+  });
 });

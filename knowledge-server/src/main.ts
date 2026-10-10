@@ -3,6 +3,24 @@ import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { buildKnowledgeServer, type KnowledgeServer } from './server.js';
 import { createEmbeddingProvider } from './embedding/embeddingProviders.js';
+import { Neo4jRepository } from './graph/neo4jRepository.js';
+import {
+  RetrievalService,
+  readRetrievalTimeouts,
+  type RetrievalTimeouts,
+} from './services/retrievalService.js';
+import type {
+  EmbeddingProvider,
+  QueryPlanner,
+  RetrievalIndexGateway,
+  GraphRetrievalGateway,
+} from './retrieval/contracts.js';
+import type {
+  RetrievalRequest,
+  QueryPlannerContext,
+  QueryPlanResult,
+  OperationOptions,
+} from './retrieval/contracts.js';
 
 export interface RemoteEmbeddingConfig {
   enabled: boolean;
@@ -17,6 +35,14 @@ export interface RemotePlannerConfig {
   allowedHosts?: string[];
 }
 
+export interface Neo4jConfig {
+  enabled: boolean;
+  uri?: string;
+  user?: string;
+  password?: string;
+  database?: string;
+}
+
 export interface ReadKnowledgeServerOptionsResult {
   token: string;
   allowedOrigins: string[];
@@ -25,6 +51,8 @@ export interface ReadKnowledgeServerOptionsResult {
   httpsTerminated: boolean;
   remoteEmbedding: RemoteEmbeddingConfig;
   remotePlanner: RemotePlannerConfig;
+  neo4j: Neo4jConfig;
+  timeouts: RetrievalTimeouts;
 }
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
@@ -178,6 +206,42 @@ export function readKnowledgeServerOptions(
     remotePlanner.allowedHosts = allowedPlannerHosts;
   }
 
+  // Validate Neo4j configuration
+  const neo4jUri = (env.NEO4J_URI ?? '').trim();
+  const neo4jUser = (env.NEO4J_USER ?? '').trim();
+  const neo4jPassword = (env.NEO4J_PASSWORD ?? '').trim();
+  const neo4jDatabase = (env.NEO4J_DATABASE ?? '').trim() || undefined;
+
+  let neo4j: Neo4jConfig = { enabled: false };
+  if (neo4jUri) {
+    let parsed: URL;
+    try {
+      parsed = new URL(neo4jUri);
+    } catch {
+      throw new Error(`Invalid NEO4J_URI: "${neo4jUri}". Must be a valid bolt/neo4j URL.`);
+    }
+
+    if (!['bolt:', 'neo4j:', 'bolt+s:', 'neo4j+s:', 'bolt+ssc:', 'neo4j+ssc:'].includes(parsed.protocol)) {
+      throw new Error(`Invalid NEO4J_URI protocol: "${parsed.protocol}".`);
+    }
+
+    if ((neo4jUser && !neo4jPassword) || (!neo4jUser && neo4jPassword)) {
+      throw new Error('NEO4J_USER and NEO4J_PASSWORD must both be provided when authentication is configured.');
+    }
+
+    neo4j = {
+      enabled: true,
+      uri: neo4jUri,
+      user: neo4jUser || undefined,
+      password: neo4jPassword || undefined,
+      database: neo4jDatabase,
+    };
+  } else if (neo4jUser || neo4jPassword) {
+    throw new Error('NEO4J_URI is required when NEO4J_USER or NEO4J_PASSWORD is provided.');
+  }
+
+  const timeouts = readRetrievalTimeouts(env);
+
   return {
     token,
     allowedOrigins,
@@ -186,6 +250,8 @@ export function readKnowledgeServerOptions(
     httpsTerminated,
     remoteEmbedding,
     remotePlanner,
+    neo4j,
+    timeouts,
   };
 }
 
@@ -193,12 +259,68 @@ export async function startKnowledgeServer(
   env: NodeJS.ProcessEnv = process.env
 ): Promise<KnowledgeServer> {
   const options = readKnowledgeServerOptions(env);
+
+  let graphRepository: Neo4jRepository | undefined;
+  let retrievalService: RetrievalService | undefined;
+
+  if (options.neo4j.enabled && options.neo4j.uri) {
+    graphRepository = new Neo4jRepository({
+      uri: options.neo4j.uri,
+      user: options.neo4j.user,
+      password: options.neo4j.password,
+      database: options.neo4j.database,
+    });
+
+    // Initialize constraints & schema on startup
+    await graphRepository.initializeSchemaConstraints();
+
+    const embeddingProvider: EmbeddingProvider = createEmbeddingProvider(env);
+
+    // Provider-neutral baseline query planner
+    const queryPlanner: QueryPlanner = {
+      async plan(
+        _req: RetrievalRequest,
+        _ctx: QueryPlannerContext,
+        _opts?: OperationOptions
+      ): Promise<QueryPlanResult> {
+        return {
+          type: 'unsupported',
+          reason: 'Autonomous query planner not configured',
+          unsupportedConstructs: [],
+        };
+      },
+    };
+
+    // Shared Neo4j repository acts as index gateway and graph gateway
+    const indexGateway = graphRepository as unknown as RetrievalIndexGateway;
+    const graphGateway = graphRepository as unknown as GraphRetrievalGateway;
+
+    retrievalService = new RetrievalService(
+      {
+        indexGateway,
+        embeddingProvider,
+        queryPlanner,
+        graphGateway,
+      },
+      {
+        timeouts: options.timeouts,
+      }
+    );
+  }
+
   const server = buildKnowledgeServer({
     token: options.token,
     allowedOrigins: options.allowedOrigins,
     host: options.host,
     port: options.port,
     httpsTerminated: options.httpsTerminated,
+    graphRepository,
+    retrievalService,
+    onClose: async () => {
+      if (graphRepository) {
+        await graphRepository.close();
+      }
+    },
   });
 
   // Safe operator log - never log token, key, or secret details
@@ -219,6 +341,11 @@ export async function startKnowledgeServer(
   if (options.remotePlanner.enabled) {
     // eslint-disable-next-line no-console
     console.log('[REMOTE EGRESS BANNER] Query planner: remote-enabled');
+  }
+
+  if (options.neo4j.enabled) {
+    // eslint-disable-next-line no-console
+    console.log(`[STORAGE] Graph & retrieval repository: Neo4j (${options.neo4j.uri})`);
   }
 
   await server.listen();

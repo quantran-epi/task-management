@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
 import { describe, expect, it } from 'vitest';
 import { readKnowledgeServerOptions, startKnowledgeServer } from '../src/main.js';
+import { buildKnowledgeServer } from '../src/server.js';
 
 const KNOWLEDGE_SERVER_DIR = resolve(fileURLToPath(import.meta.url), '../../');
 
@@ -39,6 +40,12 @@ describe('readKnowledgeServerOptions', () => {
     expect(opts.httpsTerminated).toBe(false);
     expect(opts.remoteEmbedding.enabled).toBe(false);
     expect(opts.remotePlanner.enabled).toBe(false);
+    expect(opts.neo4j.enabled).toBe(false);
+    expect(opts.timeouts).toEqual({
+      fulltextMs: 500,
+      vectorMs: 1500,
+      graphMs: 2000,
+    });
   });
 
   it('parses multiple comma-separated trimmed origins', () => {
@@ -147,6 +154,50 @@ describe('readKnowledgeServerOptions', () => {
     }
   });
 
+  it('validates Neo4j configuration when enabled', () => {
+    const opts = readKnowledgeServerOptions({
+      KNOWLEDGE_SERVER_TOKEN: 'valid-token',
+      KNOWLEDGE_ALLOWED_ORIGINS: VALID_ORIGIN,
+      NEO4J_URI: 'bolt://localhost:7687',
+      NEO4J_USER: 'neo4j',
+      NEO4J_PASSWORD: 'password123',
+      NEO4J_DATABASE: 'neo4j',
+    });
+    expect(opts.neo4j.enabled).toBe(true);
+    expect(opts.neo4j.uri).toBe('bolt://localhost:7687');
+    expect(opts.neo4j.user).toBe('neo4j');
+    expect(opts.neo4j.password).toBe('password123');
+    expect(opts.neo4j.database).toBe('neo4j');
+  });
+
+  it('rejects partial Neo4j credentials or invalid URI protocol', () => {
+    expect(() =>
+      readKnowledgeServerOptions({
+        KNOWLEDGE_SERVER_TOKEN: 'valid-token',
+        KNOWLEDGE_ALLOWED_ORIGINS: VALID_ORIGIN,
+        NEO4J_URI: 'bolt://localhost:7687',
+        NEO4J_USER: 'neo4j',
+      })
+    ).toThrow(/NEO4J_PASSWORD/i);
+
+    expect(() =>
+      readKnowledgeServerOptions({
+        KNOWLEDGE_SERVER_TOKEN: 'valid-token',
+        KNOWLEDGE_ALLOWED_ORIGINS: VALID_ORIGIN,
+        NEO4J_USER: 'neo4j',
+        NEO4J_PASSWORD: 'pwd',
+      })
+    ).toThrow(/NEO4J_URI/i);
+
+    expect(() =>
+      readKnowledgeServerOptions({
+        KNOWLEDGE_SERVER_TOKEN: 'valid-token',
+        KNOWLEDGE_ALLOWED_ORIGINS: VALID_ORIGIN,
+        NEO4J_URI: 'http://localhost:7474',
+      })
+    ).toThrow(/protocol/i);
+  });
+
   it('rejects remote binding without HTTPS termination', () => {
     expect(() =>
       readKnowledgeServerOptions({
@@ -249,5 +300,19 @@ describe('executable startup', () => {
     expect(ready).toBe(true);
     expect(stdoutData).not.toContain(TOKEN_CANARY);
     expect(stderrData).not.toContain(TOKEN_CANARY);
+  });
+
+  it('proves clean shutdown triggers onClose handler and releases resources', async () => {
+    let closed = false;
+    const serverInstance = buildKnowledgeServer({
+      token: 'test-token',
+      allowedOrigins: [VALID_ORIGIN],
+      onClose: async () => {
+        closed = true;
+      },
+    });
+
+    await serverInstance.app.close();
+    expect(closed).toBe(true);
   });
 });
