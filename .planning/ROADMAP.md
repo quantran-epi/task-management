@@ -340,9 +340,9 @@ Plans:
 
 - [x] 18-01-PLAN.md — Retrieval protocol and neutral collaborator contracts
 - [x] 18-02-PLAN.md — Embedding providers (Local ONNX E5 & Remote OpenAI) and runtime spike
-- [ ] 18-03-PLAN.md — Neo4j index gateway & snapshot leasing
+- [x] 18-03-PLAN.md — Neo4j index gateway & snapshot leasing
 - [x] 18-04-PLAN.md — Closed-ontology query planner
-- [ ] 18-05-PLAN.md — Bounded Cypher traversal & entity resolution
+- [x] 18-05-PLAN.md — Bounded Cypher traversal & entity resolution
 - [x] 18-06-PLAN.md — Reciprocal Rank Fusion & citation synthesis
 - [ ] 18-07-PLAN.md — Hybrid retrieval orchestrator
 - [ ] 18-08-PLAN.md — Retrieval HTTP endpoint
