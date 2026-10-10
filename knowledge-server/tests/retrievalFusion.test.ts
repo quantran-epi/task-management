@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   RRF_K,
   fuseRetrievalCandidates,
+  tagRetrievalConflicts,
   CANDIDATE_INTEGRITY_MISMATCH,
 } from '../src/retrieval/fusion.js';
 import type {
@@ -245,5 +246,282 @@ describe('RRF Fusion Suite (Task 18-W0-03A)', () => {
         vector: [c1ConflictingDoc as any],
       })
     ).toThrow(CANDIDATE_INTEGRITY_MISMATCH);
+  });
+
+  describe('Conflict Tagging & Citation Closure Suite (Task 18-FUSION-01)', () => {
+    it('divergent targetURN on FUNCTIONAL relation shares stable 32-hex conflictGroupId and retains both edges', () => {
+      // HAS_STATUS is FUNCTIONAL in RELATION_SEMANTICS
+      const edge1: EdgeItem = {
+        type: 'edge',
+        id: 'fact-1',
+        score: 0.05,
+        modalitiesContributed: ['graph'],
+        factKey: 'fact-1',
+        sourceUrn: 'urn:plannermate:smartvista:ProcessStep:STEP_1',
+        relationType: 'HAS_STATUS',
+        targetUrn: 'urn:plannermate:smartvista:Status:ACTIVE',
+        evidenceClass: 'OBSERVED',
+        supportingChunkIds: ['c1'],
+        snapshotId,
+        hasConflict: false,
+      };
+
+      const edge2: EdgeItem = {
+        type: 'edge',
+        id: 'fact-2',
+        score: 0.04,
+        modalitiesContributed: ['graph'],
+        factKey: 'fact-2',
+        sourceUrn: 'urn:plannermate:smartvista:ProcessStep:STEP_1',
+        relationType: 'HAS_STATUS',
+        targetUrn: 'urn:plannermate:smartvista:Status:INACTIVE',
+        evidenceClass: 'OBSERVED',
+        supportingChunkIds: ['c2'],
+        snapshotId,
+        hasConflict: false,
+      };
+
+      const c1 = makeChunk('c1');
+      const c2 = makeChunk('c2');
+
+      const tagged = tagRetrievalConflicts([edge1, edge2, c1, c2], { snapshotId });
+      expect(tagged.items).toHaveLength(4);
+
+      const taggedEdge1 = tagged.items.find((i) => i.id === 'fact-1') as EdgeItem;
+      const taggedEdge2 = tagged.items.find((i) => i.id === 'fact-2') as EdgeItem;
+
+      expect(taggedEdge1.hasConflict).toBe(true);
+      expect(taggedEdge2.hasConflict).toBe(true);
+      expect(taggedEdge1.conflictGroupId).toBeDefined();
+      expect(taggedEdge1.conflictGroupId).toHaveLength(32);
+      expect(taggedEdge1.conflictGroupId).toBe(taggedEdge2.conflictGroupId);
+    });
+
+    it('does not falsely classify valid additive relations as conflicts absent explicit conflict record', () => {
+      // WRITES_TO and READS_FROM are ADDITIVE
+      const edge1: EdgeItem = {
+        type: 'edge',
+        id: 'fact-1',
+        score: 0.05,
+        modalitiesContributed: ['graph'],
+        factKey: 'fact-1',
+        sourceUrn: 'urn:plannermate:smartvista:ProcessStep:STEP_1',
+        relationType: 'READS_FROM',
+        targetUrn: 'urn:plannermate:oracle:DatabaseObject:TABLE_A',
+        evidenceClass: 'OBSERVED',
+        supportingChunkIds: [],
+        snapshotId,
+        hasConflict: false,
+      };
+
+      const edge2: EdgeItem = {
+        type: 'edge',
+        id: 'fact-2',
+        score: 0.04,
+        modalitiesContributed: ['graph'],
+        factKey: 'fact-2',
+        sourceUrn: 'urn:plannermate:smartvista:ProcessStep:STEP_1',
+        relationType: 'READS_FROM',
+        targetUrn: 'urn:plannermate:oracle:DatabaseObject:TABLE_B',
+        evidenceClass: 'OBSERVED',
+        supportingChunkIds: [],
+        snapshotId,
+        hasConflict: false,
+      };
+
+      const tagged = tagRetrievalConflicts([edge1, edge2], { snapshotId });
+      const taggedEdge1 = tagged.items.find((i) => i.id === 'fact-1') as EdgeItem;
+      const taggedEdge2 = tagged.items.find((i) => i.id === 'fact-2') as EdgeItem;
+
+      expect(taggedEdge1.hasConflict).toBe(false);
+      expect(taggedEdge1.conflictGroupId).toBeUndefined();
+      expect(taggedEdge2.hasConflict).toBe(false);
+      expect(taggedEdge2.conflictGroupId).toBeUndefined();
+    });
+
+    it('propagates Phase 17 conflict records across edges and referenced supporting chunks', () => {
+      const edgeA: EdgeItem = {
+        type: 'edge',
+        id: 'fact-1',
+        score: 0.05,
+        modalitiesContributed: ['graph'],
+        factKey: 'fact-1',
+        sourceUrn: 'urn:plannermate:smartvista:ProcessStep:STEP_1',
+        relationType: 'READS_FROM',
+        targetUrn: 'urn:plannermate:oracle:DatabaseObject:TABLE_A',
+        evidenceClass: 'OBSERVED',
+        supportingChunkIds: ['c1'],
+        snapshotId,
+        hasConflict: false,
+      };
+
+      const edgeB: EdgeItem = {
+        type: 'edge',
+        id: 'fact-2',
+        score: 0.04,
+        modalitiesContributed: ['graph'],
+        factKey: 'fact-2',
+        sourceUrn: 'urn:plannermate:smartvista:ProcessStep:STEP_1',
+        relationType: 'READS_FROM',
+        targetUrn: 'urn:plannermate:oracle:DatabaseObject:TABLE_A',
+        evidenceClass: 'OBSERVED',
+        supportingChunkIds: ['c2'],
+        snapshotId,
+        hasConflict: false,
+      };
+
+      const c1 = makeChunk('c1');
+      const c2 = makeChunk('c2');
+
+      const phase17Conflict: any = {
+        conflictId: 'd0eebc99-9c0b-4ef8-bb6d-6bb9bd380a99',
+        factKeyA: 'fact-1',
+        factKeyB: 'fact-2',
+        subjectUrn: 'urn:plannermate:smartvista:ProcessStep:STEP_1',
+        relation: 'READS_FROM',
+        conflictType: 'DIRECT_CONTRADICTION',
+        evidenceA: {} as any,
+        evidenceB: {} as any,
+        detectedAt: new Date().toISOString(),
+        resolved: false,
+      };
+
+      const tagged = tagRetrievalConflicts([edgeA, edgeB, c1, c2], {
+        snapshotId,
+        phase17Conflicts: [phase17Conflict],
+      });
+
+      const resEdgeA = tagged.items.find((i) => i.id === 'fact-1') as EdgeItem;
+      const resEdgeB = tagged.items.find((i) => i.id === 'fact-2') as EdgeItem;
+      const resC1 = tagged.items.find((i) => i.id === 'c1') as ChunkItem;
+      const resC2 = tagged.items.find((i) => i.id === 'c2') as ChunkItem;
+
+      expect(resEdgeA.hasConflict).toBe(true);
+      expect(resEdgeB.hasConflict).toBe(true);
+      expect(resEdgeA.conflictGroupId).toBe(resEdgeB.conflictGroupId);
+      expect(resEdgeA.conflictGroupId).toHaveLength(32);
+
+      expect(resC1.hasConflict).toBe(true);
+      expect(resC1.conflictGroupId).toBe(resEdgeA.conflictGroupId);
+      expect(resC2.hasConflict).toBe(true);
+      expect(resC2.conflictGroupId).toBe(resEdgeA.conflictGroupId);
+    });
+
+    it('ensures edge item contains references only, never duplicating evidence prose or snippets', () => {
+      const edge: EdgeItem = {
+        type: 'edge',
+        id: 'fact-1',
+        score: 0.05,
+        modalitiesContributed: ['graph'],
+        factKey: 'fact-1',
+        sourceUrn: 'urn:plannermate:smartvista:ProcessStep:STEP_1',
+        relationType: 'READS_FROM',
+        targetUrn: 'urn:plannermate:oracle:DatabaseObject:TABLE_A',
+        evidenceClass: 'OBSERVED',
+        supportingChunkIds: ['c1'],
+        snapshotId,
+        hasConflict: false,
+      };
+
+      const tagged = tagRetrievalConflicts([edge], { snapshotId });
+      const edgeItem = tagged.items[0] as any;
+      expect(edgeItem.rawSnippet).toBeUndefined();
+      expect(edgeItem.evidenceBody).toBeUndefined();
+      expect(edgeItem.supportingChunkIds).toEqual(['c1']);
+    });
+
+    it('preserves both contradictory branches and assigns stable conflictGroupId', () => {
+      const edge1: EdgeItem = {
+        type: 'edge',
+        id: 'fact-1',
+        score: 0.05,
+        modalitiesContributed: ['graph'],
+        factKey: 'fact-1',
+        sourceUrn: 'urn:plannermate:smartvista:ProcessStep:STEP_1',
+        relationType: 'HAS_STATUS',
+        targetUrn: 'urn:plannermate:smartvista:Status:ACTIVE',
+        evidenceClass: 'OBSERVED',
+        supportingChunkIds: ['c1'],
+        snapshotId,
+        hasConflict: false,
+      };
+
+      const edge2: EdgeItem = {
+        type: 'edge',
+        id: 'fact-2',
+        score: 0.04,
+        modalitiesContributed: ['graph'],
+        factKey: 'fact-2',
+        sourceUrn: 'urn:plannermate:smartvista:ProcessStep:STEP_1',
+        relationType: 'HAS_STATUS',
+        targetUrn: 'urn:plannermate:smartvista:Status:INACTIVE',
+        evidenceClass: 'OBSERVED',
+        supportingChunkIds: ['c2'],
+        snapshotId,
+        hasConflict: false,
+      };
+
+      const runA = tagRetrievalConflicts([edge1, edge2], { snapshotId });
+      const runB = tagRetrievalConflicts([edge1, edge2], { snapshotId });
+
+      // Conflict pass never removes a branch or picks a winner
+      expect(runA.items).toHaveLength(2);
+      expect(runA.items[0]?.id).toBe('fact-1');
+      expect(runA.items[1]?.id).toBe('fact-2');
+
+      // Stability: same snapshot and bucket produces exact same conflictGroupId
+      expect(runA.items[0]?.conflictGroupId).toBe(runB.items[0]?.conflictGroupId);
+    });
+
+    it('enforces citation closure pulling supporting chunks into cutoff or emitting MISSING_SUPPORTING_CHUNK diagnostic', () => {
+      // 10 top items, 1 of which is an edge with supportingChunkId 'support-c1' that was not selected in top 10
+      const edge: EdgeItem = {
+        type: 'edge',
+        id: 'fact-1',
+        score: 0.9, // high rank
+        modalitiesContributed: ['graph'],
+        factKey: 'fact-1',
+        sourceUrn: 'urn:plannermate:smartvista:ProcessStep:STEP_1',
+        relationType: 'READS_FROM',
+        targetUrn: 'urn:plannermate:oracle:DatabaseObject:TABLE_A',
+        evidenceClass: 'OBSERVED',
+        supportingChunkIds: ['support-c1', 'missing-c2'],
+        snapshotId,
+        hasConflict: false,
+      };
+
+      const otherItems: RetrievalItem[] = [];
+      for (let i = 1; i <= 9; i++) {
+        otherItems.push(makeChunk(`other-${i}`));
+      }
+
+      const candidatePool: RetrievalItem[] = [
+        edge,
+        ...otherItems,
+        makeChunk('support-c1'), // in pool, but lower ranked
+      ];
+
+      // Selected items are [edge, other-1..other-9] (size 10)
+      const selectedItems = [edge, ...otherItems];
+
+      const closed = tagRetrievalConflicts(selectedItems, {
+        snapshotId,
+        candidatePool,
+      });
+
+      // support-c1 should replace the lowest-ranked item (other-9) to maintain size 10
+      expect(closed.items).toHaveLength(10);
+      expect(closed.items.some((i) => i.id === 'support-c1')).toBe(true);
+      expect(closed.items.some((i) => i.id === 'other-9')).toBe(false);
+
+      // missing-c2 was not in candidatePool, so diagnostic recorded
+      expect(closed.diagnostics).toEqual([
+        {
+          code: 'MISSING_SUPPORTING_CHUNK',
+          edgeId: 'fact-1',
+          chunkId: 'missing-c2',
+        },
+      ]);
+    });
   });
 });

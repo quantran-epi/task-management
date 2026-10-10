@@ -205,3 +205,177 @@ export function fuseRetrievalCandidates(
     totalCandidates,
   };
 }
+
+export interface MissingSupportingChunkDiagnostic {
+  readonly code: 'MISSING_SUPPORTING_CHUNK';
+  readonly edgeId: string;
+  readonly chunkId: string;
+}
+
+export interface TagRetrievalConflictsOptions {
+  readonly snapshotId: string;
+  readonly phase17Conflicts?: readonly GraphConflictRecord[] | undefined;
+  readonly candidatePool?: readonly RetrievalItem[] | undefined;
+}
+
+export interface TaggedRetrievalResult {
+  readonly items: RetrievalItem[];
+  readonly diagnostics: readonly MissingSupportingChunkDiagnostic[];
+}
+
+/**
+ * Tags conflicting retrieval candidates and performs citation closure per D-21 and D-22.
+ * 1. Divergent targets on FUNCTIONAL relations share a stable 32-hex conflictGroupId.
+ * 2. Phase 17 conflicts map to a stable 32-hex conflictGroupId across edge and supporting chunks.
+ * 3. Selected edges must have their supportingChunkIds closed under the returned cutoff,
+ *    replacing lowest-ranked non-supporting candidates deterministically from candidatePool,
+ *    or emitting MISSING_SUPPORTING_CHUNK diagnostics.
+ */
+export function tagRetrievalConflicts(
+  selectedItems: readonly RetrievalItem[],
+  options: TagRetrievalConflictsOptions
+): TaggedRetrievalResult {
+  const { snapshotId, phase17Conflicts = [], candidatePool = selectedItems } = options;
+  const diagnostics: MissingSupportingChunkDiagnostic[] = [];
+
+  // Clone items to preserve immutability of inputs
+  const items: RetrievalItem[] = selectedItems.map((item) => ({ ...item }));
+
+  // Map candidate pool by composite key for quick lookup during citation closure
+  const candidatePoolByKey = new Map<string, RetrievalItem>();
+  for (const c of candidatePool) {
+    candidatePoolByKey.set(getCompositeKey(c), c);
+  }
+
+  // --- Step 1: Citation Closure ---
+  // Edges selected in items must have their supportingChunkIds present in items.
+  const selectedKeys = new Set<string>(items.map(getCompositeKey));
+  const requiredChunkIds = new Set<string>();
+
+  for (const item of items) {
+    if (item.type === 'edge' && item.supportingChunkIds) {
+      for (const chunkId of item.supportingChunkIds) {
+        requiredChunkIds.add(chunkId);
+      }
+    }
+  }
+
+  for (const item of items) {
+    if (item.type === 'edge' && item.supportingChunkIds) {
+      for (const chunkId of item.supportingChunkIds) {
+        const chunkCompositeKey = `chunk:${chunkId}`;
+        if (!selectedKeys.has(chunkCompositeKey)) {
+          // Check if candidatePool has this chunk
+          const candidateChunk = candidatePoolByKey.get(chunkCompositeKey);
+          if (candidateChunk) {
+            // Find lowest-ranked item in items that is NOT an edge and NOT a required supporting chunk
+            let replaceIndex = -1;
+            for (let idx = items.length - 1; idx >= 0; idx--) {
+              const candidateToEvict = items[idx]!;
+              if (candidateToEvict.type === 'edge') continue;
+              if (candidateToEvict.type === 'chunk' && requiredChunkIds.has(candidateToEvict.id)) {
+                continue;
+              }
+              replaceIndex = idx;
+              break;
+            }
+
+            if (replaceIndex !== -1) {
+              const evicted = items[replaceIndex]!;
+              selectedKeys.delete(getCompositeKey(evicted));
+              items[replaceIndex] = { ...candidateChunk };
+              selectedKeys.add(chunkCompositeKey);
+            } else {
+              // Cannot evict, record diagnostic
+              diagnostics.push({
+                code: 'MISSING_SUPPORTING_CHUNK',
+                edgeId: item.id,
+                chunkId,
+              });
+            }
+          } else {
+            // Genuine missing chunk in pool
+            diagnostics.push({
+              code: 'MISSING_SUPPORTING_CHUNK',
+              edgeId: item.id,
+              chunkId,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // --- Step 2: Phase 17 Conflict Propagation ---
+  // If phase17Conflicts provided, map factKeyA and factKeyB to stable conflictGroupId
+  const conflictGroupMap = new Map<string, string>(); // factKey or chunkId -> conflictGroupId
+
+  for (const conflict of phase17Conflicts) {
+    const rawSeed = `PHASE17_CONFLICT:${snapshotId}:${conflict.conflictId}:${conflict.factKeyA}:${conflict.factKeyB}`;
+    const groupId = sha256Hex(rawSeed).slice(0, 32);
+
+    conflictGroupMap.set(conflict.factKeyA, groupId);
+    conflictGroupMap.set(conflict.factKeyB, groupId);
+  }
+
+  // --- Step 3: Divergent Functional Targets (D-21) ---
+  const functionalEdgeBuckets = new Map<string, EdgeItem[]>();
+  for (const item of items) {
+    if (item.type === 'edge') {
+      const semanticSlot = RELATION_SEMANTICS[item.relationType];
+      if (semanticSlot === 'FUNCTIONAL') {
+        const bucketKey = `${item.sourceUrn}:${item.relationType}`;
+        const bucket = functionalEdgeBuckets.get(bucketKey) || [];
+        bucket.push(item);
+        functionalEdgeBuckets.set(bucketKey, bucket);
+      }
+    }
+  }
+
+  for (const [bucketKey, edgeList] of functionalEdgeBuckets.entries()) {
+    if (edgeList.length > 1) {
+      const targetUrns = new Set(edgeList.map((e) => e.targetUrn));
+      if (targetUrns.size > 1) {
+        // Divergent functional targets
+        const rawSeed = `CONFLICT:${snapshotId}:${bucketKey}`;
+        const groupId = sha256Hex(rawSeed).slice(0, 32);
+        for (const e of edgeList) {
+          conflictGroupMap.set(e.factKey, groupId);
+        }
+      }
+    }
+  }
+
+  // Propagate conflict tags to items
+  // Note: Also propagate to supporting chunks referenced by conflicting edges
+  const conflictingChunkIds = new Map<string, string>(); // chunkId -> conflictGroupId
+
+  for (const item of items) {
+    if (item.type === 'edge') {
+      const groupId = conflictGroupMap.get(item.factKey);
+      if (groupId) {
+        item.hasConflict = true;
+        item.conflictGroupId = groupId;
+        for (const chunkId of item.supportingChunkIds) {
+          conflictingChunkIds.set(chunkId, groupId);
+        }
+      }
+    }
+  }
+
+  for (const item of items) {
+    if (item.type === 'chunk') {
+      const groupId = conflictingChunkIds.get(item.id);
+      if (groupId) {
+        item.hasConflict = true;
+        item.conflictGroupId = groupId;
+      }
+    }
+  }
+
+  return {
+    items,
+    diagnostics,
+  };
+}
+
