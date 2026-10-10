@@ -119,11 +119,11 @@
 
 ### Multi-Modal Hybrid Retrieval Engine (Phase 18)
 
-- [ ] **RETR-01**: User can find exact technical identifiers—including process IDs, package names, table names, cycle codes, and status codes—through full-text retrieval over the active published snapshot.
-- [ ] **RETR-02**: User can find relevant English technical documentation using semantically equivalent Vietnamese or English questions through snapshot-scoped vector retrieval.
-- [ ] **RETR-03**: User can query process flow and runtime call chains through ontology-approved bounded graph traversal.
-- [ ] **RETR-04**: User can run dependency and impact queries across one to three graph hops with bounded result counts and explicit truncation status.
-- [ ] **RETR-05**: User receives full-text, semantic, and graph evidence as one ranked, deduplicated, citation-bearing set with truthful modality and degraded-status metadata.
+- [x] **RETR-01**: User can find exact technical identifiers—including process IDs, package names, table names, cycle codes, and status codes—through full-text retrieval over the active published snapshot.
+- [x] **RETR-02**: User can find relevant English technical documentation using semantically equivalent Vietnamese or English questions through snapshot-scoped vector retrieval.
+- [x] **RETR-03**: User can query process flow and runtime call chains through ontology-approved bounded graph traversal.
+- [x] **RETR-04**: User can run dependency and impact queries across one to three graph hops with bounded result counts and explicit truncation status.
+- [x] **RETR-05**: User receives full-text, semantic, and graph evidence as one ranked, deduplicated, citation-bearing set with truthful modality and degraded-status metadata.
 
 ## Future Requirements (Deferred)
 
@@ -208,8 +208,8 @@
 | GRAPH-04 | Phase 17 | Complete |
 | GRAPH-05 | Phase 17 | Complete |
 | GRAPH-06 | Phase 17 | Complete |
-| RETR-01 | Phase 18 | Pending |
-| RETR-02 | Phase 18 | Pending |
-| RETR-03 | Phase 18 | Pending |
-| RETR-04 | Phase 18 | Pending |
-| RETR-05 | Phase 18 | Pending |
+| RETR-01 | Phase 18 | Complete |
+| RETR-02 | Phase 18 | Complete |
+| RETR-03 | Phase 18 | Complete |
+| RETR-04 | Phase 18 | Complete |
+| RETR-05 | Phase 18 | Complete |
