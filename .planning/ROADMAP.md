@@ -305,7 +305,7 @@ Plans:
 **Plans:** 5 plans in 5 waves
 **Wave 1**
 
-- [ ] 17-01-PLAN.md — Ontology, composite URN identity, factKey derivation, pilot gold fixtures (GRAPH-01, GRAPH-02)
+- [x] 17-01-PLAN.md — Ontology, composite URN identity, factKey derivation, pilot gold fixtures (GRAPH-01, GRAPH-02)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

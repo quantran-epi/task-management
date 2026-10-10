@@ -110,8 +110,8 @@
 
 ### Pilot Ontology, Deterministic Extraction & Neo4j Knowledge Graph (Phase 17)
 
-- [ ] **GRAPH-01**: User can build a controlled graph projection for process 60000006 covering scheduled processes, container steps, software components, database objects, cycle types, statuses, and source documents.
-- [ ] **GRAPH-02**: Graph keeps identically numbered domain objects distinct through namespaced composite identities (such as `PRC_PROCESS:60000006` vs `PRC_CONTAINER:60000006`).
+- [x] **GRAPH-01**: User can build a controlled graph projection for process 60000006 covering scheduled processes, container steps, software components, database objects, cycle types, statuses, and source documents.
+- [x] **GRAPH-02**: Graph keeps identically numbered domain objects distinct through namespaced composite identities (such as `PRC_PROCESS:60000006` vs `PRC_CONTAINER:60000006`).
 - [ ] **GRAPH-03**: Structured Markdown tables and explicit identifiers are extracted deterministically before LLM extraction is used for prose-only relationships.
 - [ ] **GRAPH-04**: Every graph relation retains source document, section, source range, extraction method, and evidence classification (`OBSERVED`, `INFERRED`, or `BUSINESS_APPROVED`).
 - [ ] **GRAPH-05**: User can distinguish `OBSERVED`, `INFERRED`, and `BUSINESS_APPROVED` knowledge in graph-backed results.
@@ -194,8 +194,8 @@
 | INGEST-03 | Phase 16 | Complete |
 | INGEST-04 | Phase 16 | Complete |
 | INGEST-05 | Phase 16 | Complete |
-| GRAPH-01 | Phase 17 | Pending |
-| GRAPH-02 | Phase 17 | Pending |
+| GRAPH-01 | Phase 17 | Complete |
+| GRAPH-02 | Phase 17 | Complete |
 | GRAPH-03 | Phase 17 | Pending |
 | GRAPH-04 | Phase 17 | Pending |
 | GRAPH-05 | Phase 17 | Pending |

@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Hybrid GraphRAG Knowledge Assistant MVP
-status: verifying
+status: executing
 stopped_at: Phase 17 UI-SPEC approved
-last_updated: "2026-10-10T04:26:28.824Z"
-last_activity: 2026-10-10 -- Phase 16 gap closure verified; Phase 17 ready for planning
+last_updated: "2026-10-10T04:35:26.081Z"
+last_activity: 2026-10-10 -- Plan 17-01 completed
 progress:
   total_phases: 16
   completed_phases: 12
-  total_plans: 62
-  completed_plans: 62
-  percent: 75
+  total_plans: 67
+  completed_plans: 63
+  percent: 76
 ---
 
 # Project State
@@ -21,14 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-07)
 
 **Core value:** Make planned work realistically fit available time while giving the personal user evidence-grounded access to their local banking IT knowledge.
-**Current focus:** Phase 17 — pilot-ontology-deterministic-extraction-neo4j-knowledge-graph
+**Current focus:** Phase 17 — pilot-ontology-deterministic-extraction-neo4j-knowledge-grap
 
 ## Current Position
 
-Phase: 17
-Plan: Not started
-Status: Phase 16 verified and secured
-Last activity: 2026-10-10 -- Phase 16 gap closure verified; Phase 17 ready for planning
+Phase: 17 (pilot-ontology-deterministic-extraction-neo4j-knowledge-grap) — EXECUTING
+Plan: 2 of 5
+Status: Executing Phase 17
+Last activity: 2026-10-10 -- Plan 17-01 completed
+Stopped at: Completed 17-01-PLAN.md
 
 Progress: [████████░░] 75%
 
@@ -162,12 +163,18 @@ Progress: [████████░░] 75%
 | Phase 16 P16 | 12min | 2 tasks | 5 files |
 | Phase 16 P18 | 4min | 2 tasks | 4 files |
 | Phase 16 P24 | 7min | 2 tasks | 13 files |
+| Phase 17 P01 | 4min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
 ### Decisions
 
 Recent decisions logged in PROJECT.md:
+
+- [Phase 17 Plan 01]: Lock ONTOLOGY_VERSION to 2026.10.1; keep 7 core node kinds and 10 controlled relation types.
+- [Phase 17 Plan 01]: Exclude deployment environment (SIT/UAT/PROD) from logical URNs; store on evidence records only (D-05).
+- [Phase 17 Plan 01]: Quarantine unqualified Oracle identifiers missing proven schema context to prevent accidental MAIN1 assumptions (D-08, D-16).
+- [Phase 17 Plan 01]: Filter relation qualifiers through strict allow-lists before hashing into semantic factKey (D-14, D-15).
 
 - [Phase 16 Plan 24]: Validate atomic Markdown blocks recursively at every AST depth while leaving total document length unconstrained.
 - [Phase 16 Plan 24]: Carry only sanitized block type, location, and limit metadata through daemon polling; never include raw Markdown content.
