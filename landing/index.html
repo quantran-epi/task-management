@@ -505,43 +505,6 @@ body {
 
 .hero-meta svg { width: 15px; height: 15px; }
 
-/* Hero Developer Fingerprint */
-.hero-fingerprint {
-  display: flex;
-  justify-content: center;
-  margin-top: 18px;
-}
-
-.fingerprint-mini-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 18px;
-  background: var(--bg-card);
-  border: 1px solid var(--surface-border);
-  border-radius: 999px;
-  font-size: 12.5px;
-  color: var(--fg-muted);
-  box-shadow: var(--surface-shadow);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-}
-
-.fingerprint-mini-badge svg {
-  color: var(--accent);
-  flex-shrink: 0;
-}
-
-.fingerprint-mini-badge strong {
-  color: var(--fg);
-  font-weight: 600;
-}
-
-.fingerprint-mini-badge .hero-dev-team {
-  color: var(--accent);
-  font-weight: 600;
-}
-
 /* ─── App Preview Window ─── */
 .preview {
   margin: 0 auto 100px;
@@ -1127,132 +1090,24 @@ body {
 
 /* ─── Footer ─── */
 .footer {
-  padding: 48px 0 36px;
+  padding: 32px 0;
   border-top: 1px solid var(--surface-border);
-  display: flex;
-  flex-direction: column;
-  gap: 32px;
   font-size: 13.5px;
   color: var(--fg-dim);
 }
 
-.footer-fingerprint-card {
-  background: var(--bg-card);
-  border: 1px solid var(--surface-border);
-  border-radius: var(--radius);
-  padding: 24px 28px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 24px;
-  flex-wrap: wrap;
-  box-shadow: var(--surface-shadow);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  position: relative;
-  overflow: hidden;
-}
-
-.footer-fingerprint-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, var(--accent), #818cf8, transparent);
-}
-
-.fingerprint-left {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.fingerprint-icon-wrap {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: var(--accent-soft);
-  border: 1px solid var(--surface-border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--accent);
-  flex-shrink: 0;
-}
-
-.fingerprint-tag {
-  font-family: var(--font-display);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.8px;
-  text-transform: uppercase;
-  color: var(--accent);
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 2px;
-}
-
-.fingerprint-tag::before {
-  content: '';
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--green);
-  box-shadow: 0 0 8px var(--green);
-}
-
-.fingerprint-name {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--fg);
-  font-family: var(--font-display);
-}
-
-.fingerprint-team {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--fg-muted);
-}
-
-.fingerprint-right {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-width: 460px;
-}
-
-.fingerprint-desc {
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--fg-muted);
-  margin: 0;
-}
-
-.fingerprint-pills {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.fingerprint-pill {
-  font-size: 11.5px;
-  font-weight: 600;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: var(--accent-soft);
-  border: 1px solid var(--surface-border);
-  color: var(--accent);
-}
-
-.footer-bottom {
+.footer-content {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 14px;
-  flex-wrap: wrap;
+}
+
+.footer-dev {
+  color: var(--fg-muted);
+  font-size: 13px;
+  letter-spacing: -0.01em;
 }
 
 .footer a {
@@ -1263,21 +1118,11 @@ body {
 
 .footer a:hover { color: var(--accent); }
 
-@media (max-width: 720px) {
-  .footer-fingerprint-card {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  .fingerprint-right {
-    max-width: 100%;
-  }
-}
-
-@media (max-width: 600px) {
+@media (max-width: 680px) {
   .nav-actions { gap: 6px; }
   .nav-link:not(.nav-cta) { display: none; }
   .lang-toggle { padding: 0 8px; }
-  .footer-bottom { flex-direction: column; align-items: flex-start; }
+  .footer-content { flex-direction: column; align-items: flex-start; gap: 8px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1367,18 +1212,6 @@ body {
         <svg viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="10" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M5 1v4M11 1v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
         <span data-i18n="heroFree">Free forever</span>
       </span>
-    </div>
-
-    <div class="hero-fingerprint">
-      <div class="fingerprint-mini-badge">
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"/>
-        </svg>
-        <span data-i18n="heroDevLabel">Architect:</span>
-        <strong class="fingerprint-author">Quan Tran Duc</strong>
-        <span class="hero-dev-sep">·</span>
-        <span class="hero-dev-team">SHB TTPT Core Team</span>
-      </div>
     </div>
   </section>
 
@@ -1558,37 +1391,10 @@ body {
 
   <!-- Footer -->
   <footer class="footer">
-    <div class="footer-fingerprint-card">
-      <div class="fingerprint-left">
-        <div class="fingerprint-icon-wrap">
-          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"/>
-          </svg>
-        </div>
-        <div class="fingerprint-meta">
-          <div class="fingerprint-tag">
-            <span data-i18n="devFingerprintTitle">DEVELOPER FINGERPRINT</span>
-          </div>
-          <div class="fingerprint-name">Quan Tran Duc</div>
-          <div class="fingerprint-team">SHB TTPT Core Team</div>
-        </div>
-      </div>
-      <div class="fingerprint-right">
-        <p class="fingerprint-desc" data-i18n="devFingerprintDesc">
-          Architected &amp; crafted for high-performance offline personal productivity, privacy-first local data, and predictive capacity management.
-        </p>
-        <div class="fingerprint-pills">
-          <span class="fingerprint-pill" data-i18n="devFingerprintRole">Core Architect &amp; Lead Developer</span>
-          <span class="fingerprint-pill">SHB TTPT Core Team</span>
-        </div>
-      </div>
-    </div>
-    <div class="footer-bottom">
-      <span data-i18n="footerCopy">TaskMate — Free &amp; open source personal workspace</span>
-      <div class="footer-links">
-        <span class="footer-credit"><span data-i18n="footerCrafted">Handcrafted with precision by</span> <strong>Quan Tran Duc</strong> · SHB TTPT Core Team</span>
-        <a href="https://github.com/quantran-epi/taskmate" target="_blank" rel="noopener">GitHub</a>
-      </div>
+    <div class="footer-content">
+      <span data-i18n="footerCopy">TaskMate — Free &amp; open source</span>
+      <span class="footer-dev" data-i18n="devFingerprint">Developed by Quan Tran Duc. SHB TTPT Core</span>
+      <a href="https://github.com/quantran-epi/taskmate" target="_blank" rel="noopener">GitHub</a>
     </div>
   </footer>
 
@@ -1633,7 +1439,6 @@ var TRANSLATIONS = {
     heroPlatforms: "macOS & Windows",
     heroVersion: "v0.1.0",
     heroFree: "Free forever",
-    heroDevLabel: "Architect:",
     previewTitle: "TaskMate — Workspace",
     tabDashboard: "Dashboard",
     tabTasks: "Tasks",
@@ -1670,11 +1475,8 @@ var TRANSLATIONS = {
     downloadTitle: "Get TaskMate",
     downloadDesc: "Free, private, and built to help you ship.",
     downloadNote: "Or browse all releases on ",
-    devFingerprintTitle: "DEVELOPER FINGERPRINT",
-    devFingerprintDesc: "Architected & crafted for high-performance offline personal productivity, privacy-first local data, and predictive capacity management.",
-    devFingerprintRole: "Core Architect & Lead Developer",
-    footerCopy: "TaskMate — Free & open source personal workspace",
-    footerCrafted: "Handcrafted with precision by"
+    devFingerprint: "Developed by Quan Tran Duc. SHB TTPT Core",
+    footerCopy: "TaskMate — Free & open source"
   },
   vi: {
     pageTitle: "TaskMate — Lập kế hoạch công việc. Hoàn thành đúng hạn.",
@@ -1690,7 +1492,6 @@ var TRANSLATIONS = {
     heroPlatforms: "macOS & Windows",
     heroVersion: "v0.1.0",
     heroFree: "Miễn phí vĩnh viễn",
-    heroDevLabel: "Kiến trúc sư:",
     previewTitle: "TaskMate — Không gian làm việc",
     tabDashboard: "Tổng quan",
     tabTasks: "Tác vụ",
@@ -1727,11 +1528,8 @@ var TRANSLATIONS = {
     downloadTitle: "Tải ngay TaskMate",
     downloadDesc: "Miễn phí, riêng tư và được tối ưu để giúp bạn hoàn thành mọi dự án.",
     downloadNote: "Hoặc xem tất cả bản phát hành trên ",
-    devFingerprintTitle: "DẤU ẤN LẬP TRÌNH VIÊN",
-    devFingerprintDesc: "Kiến trúc & phát triển cho hiệu suất làm việc cá nhân ngoại tuyến, bảo mật dữ liệu tuyệt đối và quản trị năng suất dự báo.",
-    devFingerprintRole: "Kỹ sư Trưởng & Kiến trúc sư Dự án",
-    footerCopy: "TaskMate — Không gian làm việc cá nhân mã nguồn mở & miễn phí",
-    footerCrafted: "Phát triển tâm huyết bởi"
+    devFingerprint: "Developed by Quan Tran Duc. SHB TTPT Core",
+    footerCopy: "TaskMate — Miễn phí & nguồn mở"
   }
 };
 
