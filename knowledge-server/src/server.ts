@@ -6,7 +6,9 @@ import { AttemptService } from './services/attemptService.js';
 import { registerAttemptRoutes } from './routes/attempts.js';
 import { registerSnapshotRoutes } from './routes/snapshots.js';
 import { registerGraphRoutes, GraphBuildService } from './routes/graph.js';
+import { registerRetrievalRoutes } from './routes/retrieval.js';
 import { GraphRepository } from './graph/graphRepository.js';
+import type { RetrievalService } from './services/retrievalService.js';
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
 const SAFE_ERROR = { error: { code: 'INTERNAL_ERROR', message: 'Request could not be processed.' } };
@@ -22,6 +24,7 @@ export interface KnowledgeServerOptions {
   attemptService?: AttemptService | undefined;
   graphRepository?: GraphRepository | undefined;
   graphBuildService?: GraphBuildService | undefined;
+  retrievalService?: Pick<RetrievalService, 'retrieve'> | undefined;
 }
 
 export interface KnowledgeServer {
@@ -121,6 +124,9 @@ export function buildKnowledgeServer(options: KnowledgeServerOptions): Knowledge
   registerAttemptRoutes(app, attemptService);
   registerSnapshotRoutes(app, attemptService);
   registerGraphRoutes(app, graphBuildService);
+  if (options.retrievalService) {
+    registerRetrievalRoutes(app, options.retrievalService);
+  }
 
   return {
     app,
