@@ -254,14 +254,14 @@ Phase 18 decomposes into 7 implementation waves minimizing shared-file conflicts
 
 ---
 
-## 8. Open Questions
+## 8. Open Questions (RESOLVED)
 
-1. **Local Node 24 `@xenova/transformers` installation on Windows:**
-   - *Status:* NPM registry verifies compatibility, but corporate TLS blocked transitive `sharp` download during exploratory probe.
-   - *Recommendation:* Wave 3 must verify direct installation under Node 24 and fall back gracefully to remote embeddings if local native binaries fail to build.
-2. **Vietnamese diacritic edge cases with `standard-folding`:**
-   - *Status:* Neo4j source confirms ASCII folding, but non-alphanumeric tokenization varies.
-   - *Recommendation:* Covered by Acceptance Test TC-02. If tokenization drops symbols, add a normalized search shadow property.
+1. **Local Node 24 `@xenova/transformers@2.17.2` installation on Windows — resolved procedurally by execution gates:**
+   - Plan `18-02`, task `18-SPIKE-01` blocks installation until exact package legitimacy is approved. Plan `18-02`, task `18-W0-EMBED` then runs the target Windows Node 24 install/load spike and records 384-dimensional finite output, cold start, warm latency, RSS, immutable model revision, and artifact integrity metadata.
+   - Execution cannot rely on the local provider until both gates pass and measurements are recorded. Deterministic embedding stubs remain the default for normal automated tests and never download a model. Gate failure leaves local semantic mode explicitly unavailable; it does not become an assumption or silent fallback.
+2. **Neo4j 5.26.x `standard-folding` behavior for Vietnamese and Oracle identifiers — resolved procedurally by execution gate:**
+   - Plan `18-03`, task `18-INDEX-02` runs the live analyzer gate against accented/unaccented Vietnamese plus process, package, table, cycle, and status identifiers.
+   - Add and populate a deterministic normalized shadow property only when that live accented/unaccented/identifier acceptance fails. Until the gate records evidence, analyzer suitability is not assumed.
 
 ---
 
