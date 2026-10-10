@@ -216,3 +216,70 @@ export const GraphRelationSchema = z
   .strict();
 
 export type GraphRelation = z.infer<typeof GraphRelationSchema>;
+
+/**
+ * Resolved Node alias for extraction and graph candidate processing.
+ */
+export type ResolvedNode = GraphNode;
+
+/**
+ * Semantic fact assertion (domain edge assertion without occurrence binding).
+ */
+export const FactAssertionSchema = z
+  .object({
+    factKey: FactKeySchema,
+    ontologyVersion: z.string().min(1),
+    subjectUrn: UrnSchema,
+    relation: RelationTypeSchema,
+    objectUrn: UrnSchema,
+    qualifiers: z.record(z.string(), z.string()).default({}),
+    classification: EvidenceClassificationSchema,
+  })
+  .strict();
+
+export type FactAssertion = z.infer<typeof FactAssertionSchema>;
+
+/**
+ * Source Range representation for consumed character ranges.
+ */
+export const SourceRangeSchema = z
+  .object({
+    startOffset: z.number().int().nonnegative(),
+    endOffset: z.number().int().nonnegative(),
+    startLine: z.number().int().positive().optional(),
+    endLine: z.number().int().positive().optional(),
+  })
+  .strict();
+
+export type SourceRange = z.infer<typeof SourceRangeSchema>;
+
+/**
+ * Deterministic extraction result contract.
+ */
+export interface DeterministicExtractionResult {
+  nodes: ResolvedNode[];
+  facts: FactAssertion[];
+  evidence: GraphEvidenceRecord[];
+  quarantines: QuarantinedIdentifier[];
+  consumedRanges: Map<string, SourceRange[]>;
+}
+
+/**
+ * Prose Segment for uncovered text extraction.
+ */
+export const ProseSegmentSchema = z
+  .object({
+    segmentId: z.string().min(1),
+    documentId: z.string().uuid(),
+    documentTitle: z.string().min(1),
+    sectionHeadingPath: z.array(z.string()),
+    startOffset: z.number().int().nonnegative(),
+    endOffset: z.number().int().nonnegative(),
+    startLine: z.number().int().positive(),
+    endLine: z.number().int().positive(),
+    text: z.string(),
+  })
+  .strict();
+
+export type ProseSegment = z.infer<typeof ProseSegmentSchema>;
+
