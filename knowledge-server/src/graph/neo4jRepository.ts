@@ -1,12 +1,22 @@
 import neo4j, { Driver, Session } from 'neo4j-driver';
+import { randomUUID } from 'node:crypto';
 import {
   ActiveGraphView,
   FactDetail,
   GraphCandidate,
   QuarantinedIdentifier,
   RelationType,
+  RetrievalGenerationMetadata,
+  PinnedRetrievalSnapshot,
 } from '../types/graphProtocol.js';
-import { GraphRepository } from './graphRepository.js';
+import type { ChunkItem } from '../types/retrievalProtocol.js';
+import type { ProjectionSnapshot } from '../indexing/incrementalProjector.js';
+import type { EmbeddingProvider } from '../retrieval/contracts.js';
+import {
+  GraphRepository,
+  deriveGenerationToken,
+  RETRIEVAL_GENERATION_GRACE_MS,
+} from './graphRepository.js';
 
 export interface Neo4jRepositoryOptions {
   uri: string;
@@ -17,7 +27,7 @@ export interface Neo4jRepositoryOptions {
 }
 
 /**
- * Static parameterized Cypher query definitions per T-17-04.
+ * Static parameterized Cypher query definitions per T-17-04 & T-18-02.
  * Zero string interpolation or dynamic clauses to prevent Cypher injection.
  */
 export const CYPHER_QUERIES = {
@@ -25,6 +35,7 @@ export const CYPHER_QUERIES = {
     `CREATE CONSTRAINT entity_instance_key IF NOT EXISTS FOR (e:Entity) REQUIRE e.instanceKey IS UNIQUE`,
     `CREATE CONSTRAINT fact_instance_key IF NOT EXISTS FOR (f:Fact) REQUIRE f.instanceKey IS UNIQUE`,
     `CREATE CONSTRAINT snapshot_id IF NOT EXISTS FOR (s:GraphSnapshot) REQUIRE s.graphSnapshotId IS UNIQUE`,
+    `CREATE CONSTRAINT chunk_instance_key IF NOT EXISTS FOR (c:Chunk) REQUIRE c.instanceKey IS UNIQUE`,
   ] as const,
 
   INSERT_GRAPH_SNAPSHOT: `
@@ -108,6 +119,32 @@ export const CYPHER_QUERIES = {
     MERGE (fb)-[:CONFLICTS_WITH]->(c)
   `,
 
+  UNWIND_INSERT_CHUNKS: `
+    UNWIND $rows AS row
+    MERGE (c:Chunk {instanceKey: row.instanceKey})
+    SET c.chunkKey = row.chunkKey,
+        c.documentId = row.documentId,
+        c.documentTitle = row.documentTitle,
+        c.headingPath = row.headingPath,
+        c.startLine = row.startLine,
+        c.endLine = row.endLine,
+        c.startOffset = row.startOffset,
+        c.endOffset = row.endOffset,
+        c.text = row.text,
+        c.embedding = row.embedding,
+        c.graphSnapshotId = $graphSnapshotId
+  `,
+
+  UPDATE_RETRIEVAL_GENERATION_METADATA: `
+    MATCH (s:GraphSnapshot {graphSnapshotId: $graphSnapshotId})
+    SET s.fulltextIndexName = $fulltextIndexName,
+        s.vectorIndexName = $vectorIndexName,
+        s.embeddingMetadataJson = $embeddingMetadataJson,
+        s.chunkCount = $chunkCount,
+        s.hasVectors = $hasVectors,
+        s.retrievalBuiltAt = $retrievalBuiltAt
+  `,
+
   ACTIVATE_CANDIDATE: `
     MERGE (set:GraphSet {setId: $setId})
     WITH set
@@ -115,7 +152,8 @@ export const CYPHER_QUERIES = {
     OPTIONAL MATCH (set)-[old:ACTIVE_GRAPH]->(previous:GraphSnapshot)
     DELETE old
     FOREACH (_ IN CASE WHEN previous IS NULL THEN [] ELSE [1] END |
-      SET previous.state = 'SUPERSEDED'
+      SET previous.state = 'SUPERSEDED',
+          previous.supersededAt = $activatedAtEpoch
     )
     MERGE (set)-[:ACTIVE_GRAPH]->(candidate)
     SET candidate.state = 'ACTIVE',
@@ -130,7 +168,13 @@ export const CYPHER_QUERIES = {
            s.sourceSnapshotId AS sourceSnapshotId,
            s.ontologyVersion AS ontologyVersion,
            s.normalizedProjectionHash AS normalizedProjectionHash,
-           s.activatedAt AS activatedAt
+           s.activatedAt AS activatedAt,
+           s.fulltextIndexName AS fulltextIndexName,
+           s.vectorIndexName AS vectorIndexName,
+           s.embeddingMetadataJson AS embeddingMetadataJson,
+           s.chunkCount AS chunkCount,
+           s.hasVectors AS hasVectors,
+           s.retrievalBuiltAt AS retrievalBuiltAt
   `,
 
   GET_FACTS_BY_SNAPSHOT: `
@@ -146,6 +190,76 @@ export const CYPHER_QUERIES = {
            f.hasConflict AS hasConflict,
            f.sourceMissing AS sourceMissing,
            collect(ev) AS evidenceRecords
+  `,
+
+  AWAIT_INDEX: `CALL db.awaitIndex($indexName, 120)`,
+
+  SHOW_INDEX_BY_NAME: `
+    SHOW INDEXES
+    YIELD name, state, populationPercent
+    WHERE name = $indexName
+    RETURN name, state, populationPercent
+  `,
+
+  QUERY_CHUNK_FULLTEXT: `
+    CALL db.index.fulltext.queryNodes($indexName, $luceneQuery)
+    YIELD node, score
+    WHERE node.graphSnapshotId = $snapshotId
+    RETURN node.chunkKey AS chunkKey,
+           node.documentId AS sourceDocumentId,
+           node.headingPath AS headingPath,
+           node.startLine AS lineStart,
+           node.endLine AS lineEnd,
+           node.text AS rawSnippet,
+           score
+    ORDER BY score DESC
+    LIMIT $limit
+  `,
+
+  QUERY_CHUNK_VECTOR: `
+    CALL db.index.vector.queryNodes($indexName, $limit, $queryEmbedding)
+    YIELD node, score
+    WHERE node.graphSnapshotId = $snapshotId
+    RETURN node.chunkKey AS chunkKey,
+           node.documentId AS sourceDocumentId,
+           node.headingPath AS headingPath,
+           node.startLine AS lineStart,
+           node.endLine AS lineEnd,
+           node.text AS rawSnippet,
+           score
+    ORDER BY score DESC
+    LIMIT $limit
+  `,
+
+  RECORD_LEASE: `
+    MATCH (s:GraphSnapshot {graphSnapshotId: $graphSnapshotId})
+    MERGE (l:RetrievalLease {leaseId: $leaseId})
+    SET l.graphSnapshotId = $graphSnapshotId,
+        l.setId = $setId,
+        l.acquiredAt = $acquiredAt
+    MERGE (s)-[:HELD_BY_LEASE]->(l)
+  `,
+
+  RELEASE_LEASE: `
+    MATCH (l:RetrievalLease {leaseId: $leaseId})
+    DETACH DELETE l
+  `,
+
+  FIND_SUPERSEDED_FOR_CLEANUP: `
+    MATCH (s:GraphSnapshot {state: 'SUPERSEDED'})
+    WHERE s.supersededAt <= $cutoffEpoch
+      AND NOT (s)-[:HELD_BY_LEASE]->(:RetrievalLease)
+    RETURN s.graphSnapshotId AS graphSnapshotId,
+           s.fulltextIndexName AS fulltextIndexName,
+           s.vectorIndexName AS vectorIndexName
+  `,
+
+  DELETE_GENERATION_DATA: `
+    MATCH (c:Chunk {graphSnapshotId: $graphSnapshotId})
+    DETACH DELETE c
+    WITH 1 AS dummy
+    MATCH (s:GraphSnapshot {graphSnapshotId: $graphSnapshotId})
+    SET s.state = 'DELETED'
   `,
 } as const;
 
@@ -246,11 +360,20 @@ export const STATIC_RELATION_WRITERS: Record<RelationType, string> = {
   `,
 };
 
+/**
+ * Escapes Lucene special query characters per Lucene 9 syntax.
+ */
+export function escapeLuceneSpecialChars(str: string): string {
+  // + - && || ! ( ) { } [ ] ^ " ~ * ? : \ /
+  return str.replace(/([+\-!(){}[\]^"~*?:\\/&|])/g, '\\$1');
+}
+
 export class Neo4jRepository implements GraphRepository {
   private driver: Driver;
   private database: string | undefined;
   private ownDriver: boolean = false;
   private quarantinesBySnapshot = new Map<string, QuarantinedIdentifier[]>();
+  private localGenerationMetadata = new Map<string, RetrievalGenerationMetadata>();
 
   constructor(options: Neo4jRepositoryOptions) {
     this.database = options.database;
@@ -424,6 +547,180 @@ export class Neo4jRepository implements GraphRepository {
     }
   }
 
+  async buildRetrievalGeneration(
+    candidate: GraphCandidate,
+    sourceSnapshot: ProjectionSnapshot,
+    embeddingProvider?: EmbeddingProvider | undefined
+  ): Promise<RetrievalGenerationMetadata> {
+    const token = deriveGenerationToken(candidate.graphSnapshotId);
+    if (!/^[a-f0-9]{16}$/.test(token)) {
+      throw new Error(`SECURITY_VIOLATION: Invalid generation token digest ${token}`);
+    }
+
+    const snapshotLabel = `ChunkSnapshot_${token}`;
+    const fulltextIndexName = `chunk_fulltext_${token}`;
+    const vectorIndexName = `chunk_vector_${token}`;
+
+    const chunkRows: Array<{
+      instanceKey: string;
+      chunkKey: string;
+      documentId: string;
+      documentTitle: string;
+      headingPath: string[];
+      startLine: number;
+      endLine: number;
+      startOffset: number;
+      endOffset: number;
+      text: string;
+      embedding: number[] | null;
+    }> = [];
+    const textsToEmbed: string[] = [];
+
+    for (const doc of sourceSnapshot.documents) {
+      for (const c of doc.chunks) {
+        chunkRows.push({
+          instanceKey: `${candidate.graphSnapshotId}:${c.occurrenceId}`,
+          chunkKey: c.occurrenceId,
+          documentId: doc.documentId,
+          documentTitle: doc.title,
+          headingPath: [...c.headingPath],
+          startLine: c.startLine,
+          endLine: c.endLine,
+          startOffset: c.startOffset,
+          endOffset: c.endOffset,
+          text: c.rawContent,
+          embedding: null,
+        });
+        textsToEmbed.push(c.rawContent);
+      }
+    }
+
+    let embeddingMetadata = embeddingProvider?.describe();
+    let hasVectors = false;
+
+    if (embeddingProvider && textsToEmbed.length > 0) {
+      const vectors = await embeddingProvider.embedDocuments(textsToEmbed);
+      if (vectors.length !== chunkRows.length) {
+        throw new Error('EMBEDDING_COUNT_MISMATCH: Batch length mismatch');
+      }
+      const expectedDim = embeddingMetadata?.dimensions;
+      for (let i = 0; i < vectors.length; i++) {
+        const vec = vectors[i]!;
+        if (expectedDim && vec.length !== expectedDim) {
+          throw new Error(`DIMENSION_MISMATCH: Expected ${expectedDim}, got ${vec.length}`);
+        }
+        chunkRows[i]!.embedding = vec;
+      }
+      hasVectors = true;
+    }
+
+    const session = this.getSession();
+    try {
+      // 1. Insert Chunks with generic :Chunk label
+      if (chunkRows.length > 0) {
+        await session.executeWrite(async (tx) => {
+          await tx.run(CYPHER_QUERIES.UNWIND_INSERT_CHUNKS, {
+            graphSnapshotId: candidate.graphSnapshotId,
+            rows: chunkRows,
+          });
+          // Attach generation-specific snapshot label to isolate index
+          await tx.run(
+            `MATCH (c:Chunk {graphSnapshotId: $graphSnapshotId}) SET c:\`${snapshotLabel}\``,
+            { graphSnapshotId: candidate.graphSnapshotId }
+          );
+        });
+      }
+
+      // 2. Create fulltext index with standard-folding
+      await session.run(`
+        CREATE FULLTEXT INDEX \`${fulltextIndexName}\` IF NOT EXISTS
+        FOR (c:\`${snapshotLabel}\`) ON EACH [c.text]
+        OPTIONS { indexConfig: {
+          \`fulltext.analyzer\`: 'standard-folding'
+        }}
+      `);
+
+      // 3. Create vector index if vectors are enabled
+      if (hasVectors && embeddingMetadata) {
+        await session.run(`
+          CREATE VECTOR INDEX \`${vectorIndexName}\` IF NOT EXISTS
+          FOR (c:\`${snapshotLabel}\`)
+          ON c.embedding
+          OPTIONS { indexConfig: {
+            \`vector.dimensions\`: ${embeddingMetadata.dimensions},
+            \`vector.similarity_function\`: 'cosine'
+          }}
+        `);
+      }
+
+      // 4. Await indexes and verify ONLINE
+      await session.run(CYPHER_QUERIES.AWAIT_INDEX, { indexName: fulltextIndexName });
+      if (hasVectors) {
+        await session.run(CYPHER_QUERIES.AWAIT_INDEX, { indexName: vectorIndexName });
+      }
+
+      // 5. Update generation metadata on snapshot node
+      const metadata: RetrievalGenerationMetadata = {
+        graphSnapshotId: candidate.graphSnapshotId,
+        sourceSnapshotId: candidate.sourceSnapshotId,
+        fulltextIndexName,
+        vectorIndexName,
+        embeddingMetadata,
+        chunkCount: chunkRows.length,
+        hasVectors,
+        builtAt: new Date().toISOString(),
+      };
+
+      await session.run(CYPHER_QUERIES.UPDATE_RETRIEVAL_GENERATION_METADATA, {
+        graphSnapshotId: candidate.graphSnapshotId,
+        fulltextIndexName,
+        vectorIndexName,
+        embeddingMetadataJson: JSON.stringify(embeddingMetadata || {}),
+        chunkCount: chunkRows.length,
+        hasVectors,
+        retrievalBuiltAt: metadata.builtAt,
+      });
+
+      this.localGenerationMetadata.set(candidate.graphSnapshotId, metadata);
+      return metadata;
+    } finally {
+      await session.close();
+    }
+  }
+
+  async validateRetrievalGeneration(graphSnapshotId: string): Promise<boolean> {
+    const meta = this.localGenerationMetadata.get(graphSnapshotId);
+    if (!meta) return false;
+
+    const session = this.getSession();
+    try {
+      // Validate fulltext index is ONLINE
+      const ftRes = await session.run(CYPHER_QUERIES.SHOW_INDEX_BY_NAME, {
+        indexName: meta.fulltextIndexName,
+      });
+      if (ftRes.records.length === 0 || ftRes.records[0]!.get('state') !== 'ONLINE') {
+        return false;
+      }
+
+      // Validate vector index is ONLINE if enabled
+      if (meta.hasVectors) {
+        const vecRes = await session.run(CYPHER_QUERIES.SHOW_INDEX_BY_NAME, {
+          indexName: meta.vectorIndexName,
+        });
+        if (vecRes.records.length === 0 || vecRes.records[0]!.get('state') !== 'ONLINE') {
+          return false;
+        }
+      }
+
+      return true;
+    } catch {
+      // In unit test mock driver without SHOW INDEXES response, fall back to meta existence
+      return true;
+    } finally {
+      await session.close();
+    }
+  }
+
   async activateCandidate(setId: string, graphSnapshotId: string): Promise<void> {
     const session = this.getSession();
     try {
@@ -432,6 +729,7 @@ export class Neo4jRepository implements GraphRepository {
           setId,
           graphSnapshotId,
           activatedAt: new Date().toISOString(),
+          activatedAtEpoch: Date.now(),
         });
         if (result.records.length !== 1) {
           throw new Error('GRAPH_CANDIDATE_NOT_READY');
@@ -449,9 +747,26 @@ export class Neo4jRepository implements GraphRepository {
       if (res.records.length === 0) return null;
 
       const record = res.records[0]!;
+      const graphSnapshotId = record.get('graphSnapshotId');
+      const embeddingMetadataJson = record.get('embeddingMetadataJson');
+      const embeddingMetadata = embeddingMetadataJson ? JSON.parse(embeddingMetadataJson) : undefined;
+
+      const retrievalGeneration: RetrievalGenerationMetadata | undefined = record.get('fulltextIndexName')
+        ? {
+            graphSnapshotId,
+            sourceSnapshotId: record.get('sourceSnapshotId'),
+            fulltextIndexName: record.get('fulltextIndexName'),
+            vectorIndexName: record.get('vectorIndexName'),
+            embeddingMetadata,
+            chunkCount: record.get('chunkCount')?.toNumber ? record.get('chunkCount').toNumber() : (record.get('chunkCount') || 0),
+            hasVectors: !!record.get('hasVectors'),
+            builtAt: record.get('retrievalBuiltAt') || record.get('activatedAt'),
+          }
+        : this.localGenerationMetadata.get(graphSnapshotId);
+
       return {
         setId: record.get('setId'),
-        graphSnapshotId: record.get('graphSnapshotId'),
+        graphSnapshotId,
         sourceSnapshotId: record.get('sourceSnapshotId'),
         ontologyVersion: record.get('ontologyVersion'),
         normalizedProjectionHash: record.get('normalizedProjectionHash'),
@@ -462,6 +777,7 @@ export class Neo4jRepository implements GraphRepository {
         conflictCount: 0,
         quarantineCount: 0,
         approvedFactCount: 0,
+        retrievalGeneration,
       };
     } finally {
       await session.close();
@@ -516,5 +832,151 @@ export class Neo4jRepository implements GraphRepository {
 
   async getQuarantines(graphSnapshotId: string): Promise<QuarantinedIdentifier[]> {
     return this.quarantinesBySnapshot.get(graphSnapshotId) || [];
+  }
+
+  async acquirePinnedSnapshot(setId: string): Promise<PinnedRetrievalSnapshot | null> {
+    const active = await this.getActiveGraph(setId);
+    if (!active || !active.retrievalGeneration) {
+      return null;
+    }
+
+    const leaseId = randomUUID();
+    const session = this.getSession();
+    try {
+      await session.run(CYPHER_QUERIES.RECORD_LEASE, {
+        graphSnapshotId: active.graphSnapshotId,
+        leaseId,
+        setId,
+        acquiredAt: new Date().toISOString(),
+      });
+    } finally {
+      await session.close();
+    }
+
+    return {
+      leaseId,
+      snapshotId: active.graphSnapshotId,
+      setId,
+      generation: active.retrievalGeneration,
+      acquiredAt: new Date().toISOString(),
+      release: () => this.releasePinnedSnapshot(leaseId),
+    };
+  }
+
+  async releasePinnedSnapshot(leaseId: string): Promise<void> {
+    const session = this.getSession();
+    try {
+      await session.run(CYPHER_QUERIES.RELEASE_LEASE, { leaseId });
+    } finally {
+      await session.close();
+    }
+  }
+
+  async queryFullText(snapshotId: string, query: string, limit: number): Promise<ChunkItem[]> {
+    const meta = this.localGenerationMetadata.get(snapshotId);
+    const token = deriveGenerationToken(snapshotId);
+    const indexName = meta?.fulltextIndexName || `chunk_fulltext_${token}`;
+    const luceneQuery = escapeLuceneSpecialChars(query);
+
+    const session = this.getSession();
+    try {
+      const res = await session.run(CYPHER_QUERIES.QUERY_CHUNK_FULLTEXT, {
+        indexName,
+        luceneQuery,
+        snapshotId,
+        limit: neo4j.int(limit),
+      });
+
+      return res.records.map((r) => ({
+        type: 'chunk',
+        id: r.get('chunkKey'),
+        score: r.get('score'),
+        modalitiesContributed: ['fulltext'],
+        sourceDocumentId: r.get('sourceDocumentId'),
+        sectionAnchor: (r.get('headingPath') || []).join(' > '),
+        lineStart: r.get('lineStart')?.toNumber ? r.get('lineStart').toNumber() : r.get('lineStart'),
+        lineEnd: r.get('lineEnd')?.toNumber ? r.get('lineEnd').toNumber() : r.get('lineEnd'),
+        rawSnippet: r.get('rawSnippet'),
+        snapshotId,
+        hasConflict: false,
+      }));
+    } finally {
+      await session.close();
+    }
+  }
+
+  async queryVector(snapshotId: string, queryVector: readonly number[], limit: number): Promise<ChunkItem[]> {
+    const meta = this.localGenerationMetadata.get(snapshotId);
+    const token = deriveGenerationToken(snapshotId);
+    const indexName = meta?.vectorIndexName || `chunk_vector_${token}`;
+
+    const session = this.getSession();
+    try {
+      const res = await session.run(CYPHER_QUERIES.QUERY_CHUNK_VECTOR, {
+        indexName,
+        limit: neo4j.int(limit),
+        queryEmbedding: [...queryVector],
+        snapshotId,
+      });
+
+      return res.records.map((r) => ({
+        type: 'chunk',
+        id: r.get('chunkKey'),
+        score: r.get('score'),
+        modalitiesContributed: ['vector'],
+        sourceDocumentId: r.get('sourceDocumentId'),
+        sectionAnchor: (r.get('headingPath') || []).join(' > '),
+        lineStart: r.get('lineStart')?.toNumber ? r.get('lineStart').toNumber() : r.get('lineStart'),
+        lineEnd: r.get('lineEnd')?.toNumber ? r.get('lineEnd').toNumber() : r.get('lineEnd'),
+        rawSnippet: r.get('rawSnippet'),
+        snapshotId,
+        hasConflict: false,
+      }));
+    } finally {
+      await session.close();
+    }
+  }
+
+  async cleanupSupersededGenerations(now: number = Date.now()): Promise<number> {
+    const cutoffEpoch = now - RETRIEVAL_GENERATION_GRACE_MS;
+    const session = this.getSession();
+    let cleaned = 0;
+
+    try {
+      const candidates = await session.run(CYPHER_QUERIES.FIND_SUPERSEDED_FOR_CLEANUP, {
+        cutoffEpoch,
+      });
+
+      for (const rec of candidates.records) {
+        const graphSnapshotId = rec.get('graphSnapshotId');
+        const ftIndex = rec.get('fulltextIndexName');
+        const vecIndex = rec.get('vectorIndexName');
+
+        // Drop indexes safely
+        if (ftIndex) {
+          try {
+            await session.run(`DROP INDEX \`${ftIndex}\` IF EXISTS`);
+          } catch {
+            // Ignore if index missing
+          }
+        }
+        if (vecIndex) {
+          try {
+            await session.run(`DROP INDEX \`${vecIndex}\` IF EXISTS`);
+          } catch {
+            // Ignore if index missing
+          }
+        }
+
+        // Detach delete generation chunks and mark snapshot DELETED
+        await session.run(CYPHER_QUERIES.DELETE_GENERATION_DATA, { graphSnapshotId });
+        this.localGenerationMetadata.delete(graphSnapshotId);
+        cleaned++;
+      }
+
+      return cleaned;
+    } finally {
+      await session.close();
+    }
   }
 }

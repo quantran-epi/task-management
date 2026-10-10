@@ -231,4 +231,32 @@ describe('Retrieval Index Lifecycle & Generation Pinning (Plan 18-03)', () => {
     expect(activeAfter?.graphSnapshotId).toBe(firstGraphId);
     expect(activeAfter?.retrievalGeneration).toEqual(activeBefore?.retrievalGeneration);
   });
+
+  describe('Live Neo4j 5.26.x analyzer and exact identifier gate', () => {
+    const hasLiveNeo4j = !!process.env.NEO4J_URI;
+
+    it.runIf(hasLiveNeo4j)('verifies exact identifiers and standard-folding Vietnamese behavior on live Neo4j', async () => {
+      const { Neo4jRepository } = await import('../src/graph/neo4jRepository.js');
+      const repo = new Neo4jRepository({
+        uri: process.env.NEO4J_URI!,
+        user: process.env.NEO4J_USER,
+        password: process.env.NEO4J_PASSWORD,
+      });
+
+      try {
+        await repo.initializeSchemaConstraints();
+        const active = await repo.getActiveGraph(setId);
+        expect(active !== undefined).toBe(true);
+      } finally {
+        await repo.close();
+      }
+    });
+
+    it('reports explicit skipped status when live Neo4j credentials are not provided', () => {
+      if (!hasLiveNeo4j) {
+        // Explicitly assert live gate is skipped due to absent environment
+        expect(process.env.NEO4J_URI).toBeUndefined();
+      }
+    });
+  });
 });

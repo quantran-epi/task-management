@@ -3,8 +3,9 @@ import {
   Neo4jRepository,
   CYPHER_QUERIES,
   STATIC_RELATION_WRITERS,
+  escapeLuceneSpecialChars,
 } from '../src/graph/neo4jRepository.js';
-import { InMemoryGraphRepository } from '../src/graph/graphRepository.js';
+import { InMemoryGraphRepository, deriveGenerationToken } from '../src/graph/graphRepository.js';
 import {
   GraphCandidate,
   GraphNode,
@@ -16,7 +17,7 @@ import {
   URN_SUBPROCESS_10000304,
 } from './fixtures/pilotGoldEntities.js';
 
-describe('Neo4j Repository Adapter & Parameterized Cypher Generation (GRAPH-04, T-17-04)', () => {
+describe('Neo4j Repository Adapter & Parameterized Cypher Generation (GRAPH-04, T-17-04, T-18-02)', () => {
   it('verifies static Cypher query templates contain zero interpolated variables', () => {
     // Assert all query constants are static strings
     for (const [key, query] of Object.entries(CYPHER_QUERIES)) {
@@ -36,6 +37,30 @@ describe('Neo4j Repository Adapter & Parameterized Cypher Generation (GRAPH-04, 
       expect(query).not.toContain('${');
       expect(query).toContain(`:${rel}`);
     }
+  });
+
+  it('verifies full-text and vector query templates use standard parameters only', () => {
+    expect(CYPHER_QUERIES.QUERY_CHUNK_FULLTEXT).toContain('db.index.fulltext.queryNodes($indexName, $luceneQuery)');
+    expect(CYPHER_QUERIES.QUERY_CHUNK_FULLTEXT).toContain('WHERE node.graphSnapshotId = $snapshotId');
+    expect(CYPHER_QUERIES.QUERY_CHUNK_VECTOR).toContain('db.index.vector.queryNodes($indexName, $limit, $queryEmbedding)');
+    expect(CYPHER_QUERIES.QUERY_CHUNK_VECTOR).toContain('WHERE node.graphSnapshotId = $snapshotId');
+  });
+
+  it('escapes Lucene special characters deterministically', () => {
+    const raw = 'MAIN1.FCL_CYCLE_COUNTER && FCL_PRC_CYCLE_COUNTER_PKG.PROCESS + (bind: 60000006)';
+    const escaped = escapeLuceneSpecialChars(raw);
+    expect(escaped).not.toContain('&&');
+    expect(escaped).toContain('\\&\\&');
+    expect(escaped).toContain('\\(');
+    expect(escaped).toContain('\\)');
+    expect(escaped).toContain('\\:');
+    expect(escaped).toContain('\\+');
+  });
+
+  it('validates generation token derives strictly from lowercase hex digest', () => {
+    const token = deriveGenerationToken('7f35a2c1-0000-4000-8000-000000000000');
+    expect(token).toMatch(/^[a-f0-9]{16}$/);
+    expect(token.length).toBe(16);
   });
 
   it('InMemoryGraphRepository writes candidate, activates pointer, and retrieves facts correctly', async () => {
@@ -116,7 +141,7 @@ describe('Neo4j Repository Adapter & Parameterized Cypher Generation (GRAPH-04, 
 
     await repo.initializeSchemaConstraints();
     expect(mockDriver.session).toHaveBeenCalled();
-    expect(mockRun).toHaveBeenCalledTimes(3);
+    expect(mockRun).toHaveBeenCalledTimes(4); // 4 constraints now with Chunk instanceKey
 
     // Verify activateCandidate uses parameterized query
     mockRun.mockResolvedValueOnce({ records: [{ get: () => 'snap-1' }] });
