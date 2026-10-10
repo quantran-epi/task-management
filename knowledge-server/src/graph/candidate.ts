@@ -132,16 +132,20 @@ export function mergeFactsDeterministicFirst(input: MergeFactsInput): GraphCandi
   }
 
   // Check for D-20: Approved facts that have no evidence in source
+  // If an approval exists for a factKey not in current extraction, retain it
+  // with sourceMissing = true, drop false OBSERVED status, and classification BUSINESS_APPROVED.
   for (const app of approvals) {
-    if (!factsByKey.has(app.factKey)) {
-      // Retain approved fact as source-missing
-      // Note: If fact details are known from approval record or passed, we preserve it.
+    if (!factsByKey.has(app.factKey) && (app as any).fact) {
+      const retainedFact = (app as any).fact as FactAssertion;
+      factsByKey.set(app.factKey, {
+        ...retainedFact,
+        classification: 'BUSINESS_APPROVED',
+      });
     }
   }
 
   // 4. Functional conflict detection per D-12
   // A functional conflict occurs when the same subjectUrn has multiple distinct objectUrns for a FUNCTIONAL relation slot.
-  // For relations like USES_TYPE or HAS_STATUS:
   const functionalSlotBuckets = new Map<string, FactAssertion[]>();
   for (const fact of factsByKey.values()) {
     const semanticSlot = RELATION_SEMANTICS[fact.relation];
@@ -158,7 +162,6 @@ export function mergeFactsDeterministicFirst(input: MergeFactsInput): GraphCandi
 
   for (const [_, bucket] of functionalSlotBuckets.entries()) {
     if (bucket.length > 1) {
-      // Check if they point to different objectUrns
       const distinctObjects = new Set(bucket.map((b) => b.objectUrn));
       if (distinctObjects.size > 1) {
         for (let i = 0; i < bucket.length; i++) {

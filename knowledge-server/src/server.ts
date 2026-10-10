@@ -68,7 +68,7 @@ export function buildKnowledgeServer(options: KnowledgeServerOptions): Knowledge
   const attemptService = options.attemptService ?? new AttemptService();
   const graphBuildService =
     options.graphBuildService ??
-    new GraphBuildService(options.graphRepository, attemptService);
+    new GraphBuildService(options.graphRepository, attemptService.store);
 
   void app.register(cors, {
     origin(origin, callback) {
