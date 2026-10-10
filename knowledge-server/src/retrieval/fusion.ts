@@ -2,8 +2,6 @@ import { sha256Hex } from '../indexing/chunkHashPolicy.js';
 import type {
   ModalityKind,
   RetrievalItem,
-  ChunkItem,
-  EntityItem,
   EdgeItem,
 } from '../types/retrievalProtocol.js';
 import { RELATION_SEMANTICS } from '../graph/ontology.js';

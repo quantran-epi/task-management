@@ -12,7 +12,7 @@ import {
   OperationOptions,
   QueryPlanner,
 } from './contracts.js';
-import { NodeKind, RelationType, URN_REGEX } from '../types/graphProtocol.js';
+import { RelationType, URN_REGEX } from '../types/graphProtocol.js';
 import {
   NODE_KINDS,
   RELATION_TYPES,

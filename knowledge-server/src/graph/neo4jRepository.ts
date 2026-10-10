@@ -20,10 +20,10 @@ import {
 
 export interface Neo4jRepositoryOptions {
   uri: string;
-  user?: string;
-  password?: string;
-  database?: string;
-  driver?: Driver;
+  user?: string | undefined;
+  password?: string | undefined;
+  database?: string | undefined;
+  driver?: Driver | undefined;
 }
 
 /**

@@ -14,13 +14,11 @@ import type {
   QueryPlanner,
   RetrievalIndexGateway,
   GraphRetrievalGateway,
-} from './retrieval/contracts.js';
-import type {
-  RetrievalRequest,
   QueryPlannerContext,
   QueryPlanResult,
   OperationOptions,
 } from './retrieval/contracts.js';
+import type { RetrievalRequest } from './types/retrievalProtocol.js';
 
 export interface RemoteEmbeddingConfig {
   enabled: boolean;
@@ -37,10 +35,10 @@ export interface RemotePlannerConfig {
 
 export interface Neo4jConfig {
   enabled: boolean;
-  uri?: string;
-  user?: string;
-  password?: string;
-  database?: string;
+  uri?: string | undefined;
+  user?: string | undefined;
+  password?: string | undefined;
+  database?: string | undefined;
 }
 
 export interface ReadKnowledgeServerOptionsResult {

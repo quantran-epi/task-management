@@ -7,14 +7,11 @@ import {
   ModalityStatusDetail,
   EmbeddingProviderMetadata,
   RetrievalOutcome,
-  PlanTrace,
-  ClarificationCandidate,
   ChunkItem,
   EntityItem,
   EdgeItem,
   RetrievalItem,
   ModalityKind,
-  ReasonCode,
 } from '../types/retrievalProtocol.js';
 import type {
   EmbeddingProvider,
@@ -97,8 +94,7 @@ interface ModalityRunResult<T> {
  */
 async function runWithTimeout<T>(
   timeoutMs: number,
-  task: (signal: AbortSignal) => Promise<T>,
-  timeoutReason: ReasonCode = 'TIMEOUT'
+  task: (signal: AbortSignal) => Promise<T>
 ): Promise<{ result?: T; timedOut: boolean; latencyMs: number; error?: any }> {
   const controller = new AbortController();
   const start = Date.now();
@@ -137,7 +133,6 @@ async function runWithTimeout<T>(
  */
 export class RetrievalService {
   private readonly timeouts: RetrievalTimeouts;
-  private readonly now: () => number;
 
   constructor(
     private readonly deps: RetrievalServiceDependencies,
@@ -148,7 +143,6 @@ export class RetrievalService {
       vectorMs: options?.timeouts?.vectorMs ?? DEFAULT_RETRIEVAL_TIMEOUTS.vectorMs,
       graphMs: options?.timeouts?.graphMs ?? DEFAULT_RETRIEVAL_TIMEOUTS.graphMs,
     };
-    this.now = deps.now ?? Date.now;
   }
 
   /**
@@ -200,7 +194,7 @@ export class RetrievalService {
   }
 
   private async executeUnderLease(
-    setId: string,
+    _setId: string,
     lease: PinnedSnapshotLease,
     request: RetrievalRequest
   ): Promise<RetrievalResponse> {
