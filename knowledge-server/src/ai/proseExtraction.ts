@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Root, RootContent, Paragraph } from 'mdast';
+import type { Root, RootContent } from 'mdast';
 import { toString } from 'mdast-util-to-string';
 import { parseMarkdownToAst } from '../parser/markdownAst.js';
 import type { ProjectionSnapshot } from '../indexing/incrementalProjector.js';
@@ -10,7 +10,6 @@ import {
   GraphEvidenceRecord,
   QuarantinedIdentifier,
   ResolvedNode,
-  RelationType,
   RELATION_TYPES,
 } from '../types/graphProtocol.js';
 import { ONTOLOGY_VERSION } from '../graph/ontology.js';

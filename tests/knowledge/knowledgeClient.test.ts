@@ -565,7 +565,7 @@ describe('strict fixed-route knowledge client', () => {
       });
     });
 
-    it('retrieves graph status DTO with counts and stage', async () => {
+    it('retrieves graph status repeatedly through one stable client instance', async () => {
       const setId = generateId();
       const fetcher = vi.fn(async (input: RequestInfo | URL) => {
         expect(String(input)).toBe(`https://knowledge.example.com/api/v1/sets/${setId}/graph/status`);
@@ -590,10 +590,48 @@ describe('strict fixed-route knowledge client', () => {
         fetcher,
       });
 
-      const status = await client.getGraphStatus(setId);
-      expect(status.state).toBe('Active');
-      expect(status.nodeCount).toBe(15);
-      expect(status.factCount).toBe(10);
+      const first = await client.getGraphStatus(setId);
+      const second = await client.getGraphStatus(setId);
+      expect(first.state).toBe('Active');
+      expect(first.nodeCount).toBe(15);
+      expect(first.factCount).toBe(10);
+      expect(second.state).toBe('Active');
+      expect(fetcher).toHaveBeenCalledTimes(2);
+    });
+
+    it('stops graph status polling immediately on Failed and returns safe error', async () => {
+      const setId = generateId();
+      const sleep = vi.fn();
+      const fetcher = vi.fn(async () =>
+        jsonResponse({
+          setId,
+          state: 'Failed',
+          nodeCount: 0,
+          factCount: 0,
+          evidenceCount: 0,
+          conflictCount: 0,
+          quarantineCount: 0,
+          ontologyVersion: '2026.10.1',
+          rulesVersion: '2026.10.1',
+          error: {
+            code: 'NO_SOURCE_SNAPSHOT',
+            message: 'Bộ tài liệu chưa có bản xuất bản hoàn chỉnh trên máy chủ.',
+          },
+        })
+      );
+      const client = createKnowledgeClient({
+        baseUrl: 'https://knowledge.example.com',
+        token: 'token',
+        fetcher,
+        sleep,
+      });
+
+      await expect(client.pollGraphStatus(setId)).resolves.toMatchObject({
+        state: 'Failed',
+        error: { code: 'NO_SOURCE_SNAPSHOT' },
+      });
+      expect(fetcher).toHaveBeenCalledOnce();
+      expect(sleep).not.toHaveBeenCalled();
     });
 
     it('retrieves facts list, fact evidence detail, and quarantines list', async () => {

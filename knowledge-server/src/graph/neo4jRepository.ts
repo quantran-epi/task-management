@@ -248,7 +248,7 @@ export const STATIC_RELATION_WRITERS: Record<RelationType, string> = {
 
 export class Neo4jRepository implements GraphRepository {
   private driver: Driver;
-  private database?: string;
+  private database: string | undefined;
   private ownDriver: boolean = false;
   private quarantinesBySnapshot = new Map<string, QuarantinedIdentifier[]>();
 

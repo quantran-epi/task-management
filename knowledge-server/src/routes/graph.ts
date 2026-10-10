@@ -50,6 +50,14 @@ export const GraphStatusDTOSchema = z
     ontologyVersion: z.string().min(1),
     rulesVersion: z.string().min(1),
     activatedAt: z.string().datetime().optional(),
+    error: z
+      .object({
+        code: z.string().max(80),
+        message: z.string().max(240),
+        details: z.string().max(400).optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export type GraphStatusDTO = z.infer<typeof GraphStatusDTOSchema>;

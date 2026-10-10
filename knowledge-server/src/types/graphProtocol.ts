@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { EvidenceChunkSchema } from './protocol.js';
 
 /**
  * URN pattern per D-05:

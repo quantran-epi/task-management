@@ -400,9 +400,9 @@ function handlePrcContainerTable(table: Table, ctx: TraversalContext, parentProc
       bindId,
       processId,
       execOrder,
-      isParallel,
-      parallelDegree,
-      note,
+      ...(isParallel !== undefined ? { isParallel } : {}),
+      ...(parallelDegree !== undefined ? { parallelDegree } : {}),
+      ...(note !== undefined ? { note } : {}),
       startLine: rowStartLine,
       endLine: rowEndLine,
       startOffset: rowStartOffset,
@@ -504,7 +504,6 @@ function handleBillingDispatchTable(table: Table, ctx: TraversalContext): void {
   if (!header) return;
   const colNames = getRowCells(header).map((c) => c.toUpperCase());
   const eventIdx = colNames.findIndex((c) => c.includes('EVENT'));
-  const callIdx = colNames.findIndex((c) => c.includes('CALL'));
   const writesIdx = colNames.findIndex((c) => c.includes('WRITES'));
 
   if (eventIdx === -1 || writesIdx === -1) return;
@@ -592,9 +591,6 @@ function handleStatusTable(table: Table, ctx: TraversalContext): void {
 
     // Filter to known status prefixes (PRSR, EVST, OPST)
     if (!code.match(/^(PRSR|EVST|OPST)\d{4}$/i)) continue;
-
-    const rowStartLine = row.position?.start?.line ?? table.position?.start?.line ?? 1;
-    const rowEndLine = row.position?.end?.line ?? table.position?.end?.line ?? rowStartLine;
 
     const statusUrn = buildUrn('smartvista', 'Status', code);
     const statusNode: ResolvedNode = {

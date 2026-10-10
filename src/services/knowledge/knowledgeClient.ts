@@ -119,6 +119,14 @@ export const GraphStatusResponseSchema = z
     ontologyVersion: z.string().min(1),
     rulesVersion: z.string().min(1),
     activatedAt: z.string().datetime().optional(),
+    error: z
+      .object({
+        code: z.string().max(80),
+        message: z.string().max(240),
+        details: z.string().max(400).optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export type GraphStatusResponse = z.infer<typeof GraphStatusResponseSchema>;
@@ -676,9 +684,8 @@ export function createKnowledgeClient(options: CreateKnowledgeClientOptions) {
             GraphStatusResponseSchema,
             pollOptions.signal ? { signal: pollOptions.signal } : {}
           );
-          if (last.state !== 'Building') {
-            return last;
-          }
+          if (last.state === 'Failed') return last;
+          if (last.state !== 'Building') return last;
         } catch (error: unknown) {
           if (
             error instanceof KnowledgeClientError &&
