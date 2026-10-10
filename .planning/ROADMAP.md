@@ -309,7 +309,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 17-02-PLAN.md — Deterministic MDAST extraction + bounded single-call prose fallback (GRAPH-03)
+- [x] 17-02-PLAN.md — Deterministic MDAST extraction + bounded single-call prose fallback (GRAPH-03)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Hybrid GraphRAG Knowledge Assistant MVP
 status: executing
-stopped_at: Phase 17 UI-SPEC approved
-last_updated: "2026-10-10T04:35:26.081Z"
-last_activity: 2026-10-10 -- Plan 17-01 completed
+stopped_at: Completed 17-02-PLAN.md
+last_updated: "2026-10-10T05:00:00.000Z"
+last_activity: 2026-10-10 -- Plan 17-02 completed
 progress:
   total_phases: 16
   completed_phases: 12
   total_plans: 67
-  completed_plans: 63
-  percent: 76
+  completed_plans: 64
+  percent: 78
 ---
 
 # Project State
@@ -26,12 +26,12 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 ## Current Position
 
 Phase: 17 (pilot-ontology-deterministic-extraction-neo4j-knowledge-grap) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Executing Phase 17
-Last activity: 2026-10-10 -- Plan 17-01 completed
-Stopped at: Completed 17-01-PLAN.md
+Last activity: 2026-10-10 -- Plan 17-02 completed
+Stopped at: Completed 17-02-PLAN.md
 
-Progress: [████████░░] 75%
+Progress: [████████░░] 78%
 
 ### Quick Tasks Completed
 
@@ -164,6 +164,7 @@ Progress: [████████░░] 75%
 | Phase 16 P18 | 4min | 2 tasks | 4 files |
 | Phase 16 P24 | 7min | 2 tasks | 13 files |
 | Phase 17 P01 | 4min | 2 tasks | 5 files |
+| Phase 17 P02 | 8min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -171,6 +172,10 @@ Progress: [████████░░] 75%
 
 Recent decisions logged in PROJECT.md:
 
+- [Phase 17 Plan 02]: Lock all deterministic extractions to OBSERVED classification and DETERMINISTIC_TABLE/SQL/CODE methods.
+- [Phase 17 Plan 02]: Track consumed character ranges for every parsed table and code block to exclude them from prose segmentation.
+- [Phase 17 Plan 02]: Enforce zero retries on LLM prose fallback; quarantine malformed responses or HTTP errors without looping.
+- [Phase 17 Plan 02]: Reject prose candidates referencing un-resolved subject/object endpoints and route to quarantine.
 - [Phase 17 Plan 01]: Lock ONTOLOGY_VERSION to 2026.10.1; keep 7 core node kinds and 10 controlled relation types.
 - [Phase 17 Plan 01]: Exclude deployment environment (SIT/UAT/PROD) from logical URNs; store on evidence records only (D-05).
 - [Phase 17 Plan 01]: Quarantine unqualified Oracle identifiers missing proven schema context to prevent accidental MAIN1 assumptions (D-08, D-16).
@@ -213,6 +218,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-10T02:18:19.507Z
-Stopped at: Phase 17 UI-SPEC approved
-Resume file: .planning/phases/17-pilot-ontology-deterministic-extraction-neo4j-knowledge-grap/17-UI-SPEC.md
+Last session: 2026-10-10T05:00:00.000Z
+Stopped at: Completed 17-02-PLAN.md
+Resume file: .planning/phases/17-pilot-ontology-deterministic-extraction-neo4j-knowledge-grap/17-03-PLAN.md
