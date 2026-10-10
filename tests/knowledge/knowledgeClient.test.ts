@@ -599,6 +599,41 @@ describe('strict fixed-route knowledge client', () => {
       expect(fetcher).toHaveBeenCalledTimes(2);
     });
 
+    it('stops graph status polling immediately on Failed and returns safe error', async () => {
+      const setId = generateId();
+      const sleep = vi.fn();
+      const fetcher = vi.fn(async () =>
+        jsonResponse({
+          setId,
+          state: 'Failed',
+          nodeCount: 0,
+          factCount: 0,
+          evidenceCount: 0,
+          conflictCount: 0,
+          quarantineCount: 0,
+          ontologyVersion: '2026.10.1',
+          rulesVersion: '2026.10.1',
+          error: {
+            code: 'NO_SOURCE_SNAPSHOT',
+            message: 'Bộ tài liệu chưa có bản xuất bản hoàn chỉnh trên máy chủ.',
+          },
+        })
+      );
+      const client = createKnowledgeClient({
+        baseUrl: 'https://knowledge.example.com',
+        token: 'token',
+        fetcher,
+        sleep,
+      });
+
+      await expect(client.pollGraphStatus(setId)).resolves.toMatchObject({
+        state: 'Failed',
+        error: { code: 'NO_SOURCE_SNAPSHOT' },
+      });
+      expect(fetcher).toHaveBeenCalledOnce();
+      expect(sleep).not.toHaveBeenCalled();
+    });
+
     it('retrieves facts list, fact evidence detail, and quarantines list', async () => {
       const setId = generateId();
       const graphSnapshotId = generateId();

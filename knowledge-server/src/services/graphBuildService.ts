@@ -159,6 +159,25 @@ export class GraphBuildService {
     this.activeGraphSnapshots.set(setId, candidateSnapshotId);
   }
 
+  private safeBuildError(error: Error): NonNullable<GraphStatusDTO['error']> {
+    if (error.message === 'NO_SOURCE_SNAPSHOT') {
+      return {
+        code: 'NO_SOURCE_SNAPSHOT',
+        message: 'Bộ tài liệu chưa có bản xuất bản hoàn chỉnh trên máy chủ.',
+      };
+    }
+    if (error.message === 'STALE_SOURCE_SNAPSHOT') {
+      return {
+        code: 'STALE_SOURCE_SNAPSHOT',
+        message: 'Bản xuất bản nguồn đã thay đổi trong khi xây dựng.',
+      };
+    }
+    return {
+      code: 'REBUILD_FAILED',
+      message: 'Xây dựng đồ thị tri thức thất bại. Kiểm tra máy chủ rồi thử lại.',
+    };
+  }
+
   async getStatus(setId: string): Promise<GraphStatusDTO> {
     const isBuilding = this.inProgressSets.has(setId);
     const activeView = await this.repository.getActiveGraph(setId);
@@ -180,17 +199,21 @@ export class GraphBuildService {
       };
     }
 
-    if (this.buildErrors.has(setId) && !activeView) {
+    const buildError = this.buildErrors.get(setId);
+    if (buildError) {
       return {
         setId,
         state: 'Failed',
-        nodeCount: 0,
-        factCount: 0,
-        evidenceCount: 0,
-        conflictCount: 0,
-        quarantineCount: 0,
-        ontologyVersion: ONTOLOGY_VERSION,
-        rulesVersion: ONTOLOGY_VERSION,
+        ...(activeView ? { activeGraphSnapshotId: activeView.graphSnapshotId } : {}),
+        nodeCount: activeView ? activeView.nodeCount : 0,
+        factCount: activeView ? activeView.factCount : 0,
+        evidenceCount: activeView ? activeView.relationCount : 0,
+        conflictCount: activeView ? activeView.conflictCount : 0,
+        quarantineCount: activeView ? activeView.quarantineCount : 0,
+        ontologyVersion: activeView?.ontologyVersion ?? ONTOLOGY_VERSION,
+        rulesVersion: activeView?.ontologyVersion ?? ONTOLOGY_VERSION,
+        ...(activeView ? { activatedAt: activeView.activatedAt } : {}),
+        error: this.safeBuildError(buildError),
       };
     }
 

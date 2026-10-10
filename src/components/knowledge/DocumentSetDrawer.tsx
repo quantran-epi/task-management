@@ -224,8 +224,13 @@ export function DocumentSetDrawer(props: DocumentSetDrawerProps) {
       // Poll until completed or failed
       const finalStatus = await client.pollGraphStatus(selected.id);
       setGraphStatus(finalStatus);
-      if (finalStatus.uncertain) {
+      if (finalStatus.state === 'Failed') {
+        message.error(
+          finalStatus.error?.message ?? 'Xây dựng đồ thị tri thức thất bại.'
+        );
+      } else if (finalStatus.uncertain) {
         setConnectivityUncertain(true);
+        message.warning('Mất kết nối — chưa xác định kết quả xây dựng đồ thị.');
       } else {
         message.success('Xây dựng đồ thị tri thức hoàn tất.');
       }
@@ -377,6 +382,22 @@ export function DocumentSetDrawer(props: DocumentSetDrawerProps) {
                       showIcon
                       message="Mất kết nối với Knowledge Server"
                       description="Không thể đồng bộ trạng thái đồ thị mới nhất. Đồ thị đang hoạt động trước đó vẫn được bảo toàn nguyên vẹn."
+                    />
+                  )}
+
+                  {graphStatus?.state === 'Failed' && (
+                    <Alert
+                      type="error"
+                      showIcon
+                      message={
+                        graphStatus.error?.code
+                          ? `Xây dựng thất bại: ${graphStatus.error.code}`
+                          : 'Xây dựng đồ thị thất bại'
+                      }
+                      description={
+                        graphStatus.error?.message ??
+                        'Đồ thị tri thức chưa thể tạo. Kiểm tra tài liệu đã xuất bản rồi bấm Xây dựng lại đồ thị.'
+                      }
                     />
                   )}
 

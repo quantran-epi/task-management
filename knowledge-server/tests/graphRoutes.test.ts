@@ -146,6 +146,45 @@ describe('Fastify graph routes (Task 1: GRAPH-05, D-17, D-18, D-21)', () => {
     await app.close();
   });
 
+  it('returns Failed status with bounded safe error details', async () => {
+    const repository = new InMemoryGraphRepository();
+    const buildService = new GraphBuildService(repository);
+    await expect(buildService.executeRebuildSync(SET_ID)).rejects.toThrow(
+      'NO_SNAPSHOT_STORE'
+    );
+    const app = buildKnowledgeServer({
+      token: TOKEN,
+      allowedOrigins: [ORIGIN],
+      graphBuildService: buildService,
+    }).app;
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/sets/${SET_ID}/graph/status`,
+      headers: requestHeaders(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      setId: SET_ID,
+      state: 'Failed',
+      nodeCount: 0,
+      factCount: 0,
+      evidenceCount: 0,
+      conflictCount: 0,
+      quarantineCount: 0,
+      ontologyVersion: expect.any(String),
+      rulesVersion: expect.any(String),
+      error: {
+        code: 'REBUILD_FAILED',
+        message: 'Xây dựng đồ thị tri thức thất bại. Kiểm tra máy chủ rồi thử lại.',
+      },
+    });
+    expect(JSON.stringify(res.json())).not.toContain('NO_SNAPSHOT_STORE');
+
+    await app.close();
+  });
+
   it('returns Active and Active with warnings graph status with accurate counts', async () => {
     const repository = new InMemoryGraphRepository();
     const candidateSnapshotId = randomUUID();
