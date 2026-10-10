@@ -283,3 +283,48 @@ export const ProseSegmentSchema = z
 
 export type ProseSegment = z.infer<typeof ProseSegmentSchema>;
 
+/**
+ * Fact detail view combining semantic relation and supporting evidence records.
+ */
+export interface FactDetail {
+  relation: GraphRelation;
+  evidence: GraphEvidenceRecord[];
+  conflicts: GraphConflictRecord[];
+  approvals: GraphApprovalRecord[];
+}
+
+/**
+ * Complete Graph Candidate assembled before atomic projection write.
+ */
+export interface GraphCandidate {
+  graphSnapshotId: string;
+  sourceSnapshotId: string;
+  setId: string;
+  ontologyVersion: string;
+  normalizedProjectionHash: string;
+  nodes: GraphNode[];
+  relations: GraphRelation[];
+  evidence: GraphEvidenceRecord[];
+  conflicts: GraphConflictRecord[];
+  approvals: GraphApprovalRecord[];
+  quarantines: QuarantinedIdentifier[];
+  createdAt: string;
+}
+
+/**
+ * Active graph view anchored through set pointer.
+ */
+export interface ActiveGraphView {
+  setId: string;
+  graphSnapshotId: string;
+  sourceSnapshotId: string;
+  ontologyVersion: string;
+  normalizedProjectionHash: string;
+  activatedAt: string;
+  nodeCount: number;
+  relationCount: number;
+  factCount: number;
+  conflictCount: number;
+  quarantineCount: number;
+  approvedFactCount: number;
+}
