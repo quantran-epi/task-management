@@ -302,7 +302,7 @@ Plans:
   4. Every graph relation retains source document, section, source range, extraction method, and evidence classification (`OBSERVED`, `INFERRED`, or `BUSINESS_APPROVED`).
   5. User can distinguish `OBSERVED`, `INFERRED`, and `BUSINESS_APPROVED` knowledge in graph-backed results.
   6. User can rebuild graph and indexes from published Markdown without treating Neo4j as canonical storage.
-**Plans:** 5/5 plans complete
+**Plans:** 6/6 plans complete
 **Wave 1**
 
 - [x] 17-01-PLAN.md — Ontology, composite URN identity, factKey derivation, pilot gold fixtures (GRAPH-01, GRAPH-02)
