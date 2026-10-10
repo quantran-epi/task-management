@@ -87,6 +87,151 @@ const ErrorEnvelopeSchema = z
   })
   .strict();
 
+export const GraphStateSchema = z.enum([
+  'Never built',
+  'Building',
+  'Active',
+  'Active with warnings',
+  'Failed',
+]);
+export type GraphState = z.infer<typeof GraphStateSchema>;
+
+export const GraphBuildStageSchema = z.enum([
+  'Preparing',
+  'Structured extraction',
+  'Prose extraction',
+  'Validation',
+  'Activation',
+]);
+export type GraphBuildStage = z.infer<typeof GraphBuildStageSchema>;
+
+export const GraphStatusResponseSchema = z
+  .object({
+    setId: uuid,
+    state: GraphStateSchema,
+    activeGraphSnapshotId: uuid.optional(),
+    currentStage: GraphBuildStageSchema.optional(),
+    nodeCount: z.number().int().nonnegative(),
+    factCount: z.number().int().nonnegative(),
+    evidenceCount: z.number().int().nonnegative(),
+    conflictCount: z.number().int().nonnegative(),
+    quarantineCount: z.number().int().nonnegative(),
+    ontologyVersion: z.string().min(1),
+    rulesVersion: z.string().min(1),
+    activatedAt: z.string().datetime().optional(),
+  })
+  .strict();
+export type GraphStatusResponse = z.infer<typeof GraphStatusResponseSchema>;
+
+export const RebuildAcceptedResponseSchema = z
+  .object({
+    setId: uuid,
+    rebuildKey: uuid,
+    status: z.literal('ACCEPTED'),
+    candidateSnapshotId: uuid,
+  })
+  .strict();
+export type RebuildAcceptedResponse = z.infer<typeof RebuildAcceptedResponseSchema>;
+
+export const FactSummarySchema = z
+  .object({
+    factKey: hash,
+    subjectUrn: z.string().min(1),
+    subjectName: z.string(),
+    subjectKind: z.string(),
+    relation: z.string(),
+    objectUrn: z.string().min(1),
+    objectName: z.string(),
+    objectKind: z.string(),
+    effectiveClassification: z.enum(['OBSERVED', 'INFERRED', 'BUSINESS_APPROVED']),
+    evidenceCount: z.number().int().nonnegative(),
+    hasConflict: z.boolean(),
+    qualifiers: z.record(z.string(), z.string()),
+  })
+  .strict();
+export type FactSummary = z.infer<typeof FactSummarySchema>;
+
+export const FactsListResponseSchema = z
+  .object({
+    setId: uuid,
+    graphSnapshotId: uuid,
+    totalFacts: z.number().int().nonnegative(),
+    facts: z.array(FactSummarySchema),
+  })
+  .strict();
+export type FactsListResponse = z.infer<typeof FactsListResponseSchema>;
+
+export const EvidenceRecordSchema = z
+  .object({
+    evidenceId: uuid,
+    documentId: uuid,
+    documentTitle: z.string(),
+    headingPath: z.array(z.string()),
+    startLine: z.number().int().positive(),
+    endLine: z.number().int().positive(),
+    startOffset: z.number().int().nonnegative(),
+    endOffset: z.number().int().nonnegative(),
+    method: z.enum([
+      'DETERMINISTIC_TABLE',
+      'DETERMINISTIC_SQL',
+      'DETERMINISTIC_CODE',
+      'LLM_PROSE',
+      'MANUAL_ASSERTION',
+    ]),
+    classification: z.enum(['OBSERVED', 'INFERRED', 'BUSINESS_APPROVED']),
+    confidence: z.number().min(0).max(1),
+    quote: z.string(),
+    environment: z.string().optional(),
+    conflictBranch: z.enum(['A', 'B']).optional(),
+  })
+  .strict();
+export type EvidenceRecord = z.infer<typeof EvidenceRecordSchema>;
+
+export const FactEvidenceDetailResponseSchema = z
+  .object({
+    setId: uuid,
+    factKey: hash,
+    subjectUrn: z.string().min(1),
+    relation: z.string(),
+    objectUrn: z.string().min(1),
+    effectiveClassification: z.enum(['OBSERVED', 'INFERRED', 'BUSINESS_APPROVED']),
+    hasConflict: z.boolean(),
+    qualifiers: z.record(z.string(), z.string()),
+    occurrences: z.array(EvidenceRecordSchema),
+  })
+  .strict();
+export type FactEvidenceDetailResponse = z.infer<typeof FactEvidenceDetailResponseSchema>;
+
+export const QuarantineItemSchema = z
+  .object({
+    rawIdentifier: z.string(),
+    reason: z.string(),
+    documentId: uuid,
+    headingPath: z.array(z.string()),
+    startLine: z.number().int().positive(),
+    endLine: z.number().int().positive(),
+    method: z.enum([
+      'DETERMINISTIC_TABLE',
+      'DETERMINISTIC_SQL',
+      'DETERMINISTIC_CODE',
+      'LLM_PROSE',
+      'MANUAL_ASSERTION',
+    ]),
+    candidateMatches: z.array(z.string()),
+  })
+  .strict();
+export type QuarantineItem = z.infer<typeof QuarantineItemSchema>;
+
+export const QuarantineListResponseSchema = z
+  .object({
+    setId: uuid,
+    graphSnapshotId: uuid,
+    totalQuarantines: z.number().int().nonnegative(),
+    quarantines: z.array(QuarantineItemSchema),
+  })
+  .strict();
+export type QuarantineListResponse = z.infer<typeof QuarantineListResponseSchema>;
+
 type AttemptResponse = z.infer<typeof AttemptResponseSchema>;
 
 export type KnowledgeClientErrorCode =
@@ -433,6 +578,133 @@ export function createKnowledgeClient(options: CreateKnowledgeClientOptions) {
           status: 'Publishing',
           uncertain: true,
         };
+      }
+    },
+
+    async getGraphStatus(
+      setId: string,
+      signal?: AbortSignal
+    ): Promise<GraphStatusResponse> {
+      return request(
+        `/sets/${encodeURIComponent(setId)}/graph/status`,
+        GraphStatusResponseSchema,
+        signal ? { signal } : {}
+      );
+    },
+
+    async triggerGraphRebuild(
+      setId: string,
+      rebuildKey: string,
+      signal?: AbortSignal
+    ): Promise<RebuildAcceptedResponse> {
+      return request(
+        `/sets/${encodeURIComponent(setId)}/graph/rebuild`,
+        RebuildAcceptedResponseSchema,
+        {
+          method: 'POST',
+          headers: {
+            'X-Rebuild-Key': rebuildKey,
+          },
+          ...(signal ? { signal } : {}),
+        }
+      );
+    },
+
+    async getGraphFacts(
+      setId: string,
+      signal?: AbortSignal
+    ): Promise<FactsListResponse> {
+      return request(
+        `/sets/${encodeURIComponent(setId)}/graph/facts`,
+        FactsListResponseSchema,
+        signal ? { signal } : {}
+      );
+    },
+
+    async getFactEvidence(
+      setId: string,
+      factKey: string,
+      signal?: AbortSignal
+    ): Promise<FactEvidenceDetailResponse> {
+      return request(
+        `/sets/${encodeURIComponent(setId)}/graph/facts/${encodeURIComponent(factKey)}/evidence`,
+        FactEvidenceDetailResponseSchema,
+        signal ? { signal } : {}
+      );
+    },
+
+    async getGraphQuarantines(
+      setId: string,
+      signal?: AbortSignal
+    ): Promise<QuarantineListResponse> {
+      return request(
+        `/sets/${encodeURIComponent(setId)}/graph/quarantine`,
+        QuarantineListResponseSchema,
+        signal ? { signal } : {}
+      );
+    },
+
+    async pollGraphStatus(
+      setId: string,
+      pollOptions: PollAttemptOptions = {}
+    ): Promise<GraphStatusResponse & { uncertain?: boolean }> {
+      let delay = pollOptions.initialDelayMs ?? 1000;
+      const maxDelay = pollOptions.maxDelayMs ?? 5000;
+      let last: GraphStatusResponse | undefined;
+
+      while (true) {
+        if (pollOptions.signal?.aborted) {
+          return {
+            ...(last ?? {
+              setId,
+              state: 'Building' as const,
+              nodeCount: 0,
+              factCount: 0,
+              evidenceCount: 0,
+              conflictCount: 0,
+              quarantineCount: 0,
+              ontologyVersion: '2026.10.1',
+              rulesVersion: '2026.10.1',
+            }),
+            uncertain: true,
+          };
+        }
+
+        try {
+          last = await request(
+            `/sets/${encodeURIComponent(setId)}/graph/status`,
+            GraphStatusResponseSchema,
+            pollOptions.signal ? { signal: pollOptions.signal } : {}
+          );
+          if (last.state !== 'Building') {
+            return last;
+          }
+        } catch (error: unknown) {
+          if (
+            error instanceof KnowledgeClientError &&
+            error.code !== 'NETWORK_ERROR' &&
+            !pollOptions.signal?.aborted
+          ) {
+            throw error;
+          }
+          return {
+            ...(last ?? {
+              setId,
+              state: 'Building' as const,
+              nodeCount: 0,
+              factCount: 0,
+              evidenceCount: 0,
+              conflictCount: 0,
+              quarantineCount: 0,
+              ontologyVersion: '2026.10.1',
+              rulesVersion: '2026.10.1',
+            }),
+            uncertain: true,
+          };
+        }
+
+        await sleep(delay, pollOptions.signal);
+        delay = Math.min(maxDelay, delay * 2);
       }
     },
   };

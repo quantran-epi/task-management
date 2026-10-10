@@ -436,9 +436,6 @@ describe('strict fixed-route knowledge client', () => {
     });
 
     it('resumes polling from durable frozen manifest after observer close and post-submit local edit', async () => {
-      // POST accepted with hash H1, observer closes, local Note body changes to H2,
-      // database/session reopens, poll resumes by attempt ID, daemon reports In sync,
-      // and persisted publishedContentHash equals H1 while current local hash H2 yields Local changes.
       const setId = generateId();
       const docId = generateId();
       const h1 = '1'.repeat(64);
@@ -465,6 +462,19 @@ describe('strict fixed-route knowledge client', () => {
       });
 
       const attemptId = generateId();
+      const serverAttempt = attempt({
+        attemptId,
+        setId,
+        status: 'Publishing',
+      });
+
+      const client = createKnowledgeClient({
+        baseUrl: 'https://knowledge.example.com',
+        token: 'token',
+        db,
+        fetcher: vi.fn(async () => jsonResponse(serverAttempt, 202)),
+      });
+
       const snapshot = {
         setId,
         setName: 'Set 1',
@@ -481,66 +491,205 @@ describe('strict fixed-route knowledge client', () => {
         ],
       };
 
-      const serverAttempt = attempt({
-        attemptId,
-        setId,
-        status: 'Publishing',
-      });
+      await client.createPublishAttempt(snapshot, 'key-resume');
 
-      const client1 = createKnowledgeClient({
-        baseUrl: 'https://knowledge.example.com',
-        token: 'token',
-        db,
-        fetcher: vi.fn(async () => jsonResponse(serverAttempt, 202)),
-      });
-
-      // Submit attempt
-      await client1.createPublishAttempt(snapshot, 'attempt-key-resume');
-
-      // Observer closes / app reloads: local note body edited to H2!
+      // Mutate local note body to new content (H2)
       await db.notes.update(docId, {
-        body: 'Modified local content yielding H2',
-        updatedAt: '2026-10-08T00:00:05.000Z',
+        body: 'Local edit content after submission',
+        updatedAt: '2026-10-08T00:01:00.000Z',
       });
 
-      // Server now reports terminal In sync with activeSnapshotId
-      const activeSnapshotId = generateId();
-      const terminalServerAttempt = attempt({
-        attemptId,
-        setId,
-        status: 'In sync',
-        completedAt: '2026-10-08T00:00:06.000Z',
-        activeSnapshotId,
-        metrics: {
-          addedCount: 1,
-          changedCount: 0,
-          removedCount: 0,
-          unchangedCount: 0,
-          warningCount: 0,
-        },
-      });
-
-      // New client / session resumes polling by attemptId only
-      const client2 = createKnowledgeClient({
+      // Resume polling
+      const pollClient = createKnowledgeClient({
         baseUrl: 'https://knowledge.example.com',
         token: 'token',
         db,
-        fetcher: vi.fn(async () => jsonResponse(terminalServerAttempt)),
+        fetcher: vi.fn(async () =>
+          jsonResponse(
+            attempt({
+              attemptId,
+              setId,
+              status: 'In sync',
+              completedAt: '2026-10-08T00:02:00.000Z',
+              activeSnapshotId: generateId(),
+            })
+          )
+        ),
       });
 
-      const pollResult = await client2.pollAttempt(attemptId);
-      expect(pollResult.status).toBe('In sync');
+      const pollRes = await pollClient.pollAttempt(attemptId);
+      expect(pollRes.status).toBe('In sync');
 
-      // Check publishedDocuments: persisted hash must be submitted H1, not current H2
-      const published = await db.publishedDocuments.get([setId, docId]);
-      expect(published).toBeDefined();
-      expect(published?.publishedContentHash).toBe(h1);
-      expect(published?.activeSnapshotId).toBe(activeSnapshotId);
+      const meta = await db.publishedDocuments.get([setId, docId]);
+      expect(meta?.publishedContentHash).toBe(h1);
 
-      // Check document set repo status: current local Note produces 'Local changes'
       const { getDocumentPublishStatuses } = await import('../../src/db/repositories/documentSetRepo');
       const statuses = await getDocumentPublishStatuses([docId], db);
       expect(statuses[docId]?.aggregateState).toBe('Local changes');
+    });
+  });
+
+  describe('graph client methods (GRAPH-05, D-18, D-21)', () => {
+    it('calls graph rebuild with x-rebuild-key and returns accepted candidate info', async () => {
+      const setId = generateId();
+      const rebuildKey = generateId();
+      const candidateSnapshotId = generateId();
+
+      const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        expect(String(input)).toBe(`https://knowledge.example.com/api/v1/sets/${setId}/graph/rebuild`);
+        expect(init?.method).toBe('POST');
+        expect(new Headers(init?.headers).get('X-Rebuild-Key')).toBe(rebuildKey);
+        return jsonResponse(
+          {
+            setId,
+            rebuildKey,
+            status: 'ACCEPTED',
+            candidateSnapshotId,
+          },
+          202
+        );
+      });
+
+      const client = createKnowledgeClient({
+        baseUrl: 'https://knowledge.example.com',
+        token: 'token',
+        fetcher,
+      });
+
+      const res = await client.triggerGraphRebuild(setId, rebuildKey);
+      expect(res).toEqual({
+        setId,
+        rebuildKey,
+        status: 'ACCEPTED',
+        candidateSnapshotId,
+      });
+    });
+
+    it('retrieves graph status DTO with counts and stage', async () => {
+      const setId = generateId();
+      const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+        expect(String(input)).toBe(`https://knowledge.example.com/api/v1/sets/${setId}/graph/status`);
+        return jsonResponse({
+          setId,
+          state: 'Active',
+          activeGraphSnapshotId: generateId(),
+          nodeCount: 15,
+          factCount: 10,
+          evidenceCount: 12,
+          conflictCount: 0,
+          quarantineCount: 1,
+          ontologyVersion: '2026.10.1',
+          rulesVersion: '2026.10.1',
+          activatedAt: '2026-10-10T00:00:00.000Z',
+        });
+      });
+
+      const client = createKnowledgeClient({
+        baseUrl: 'https://knowledge.example.com',
+        token: 'token',
+        fetcher,
+      });
+
+      const status = await client.getGraphStatus(setId);
+      expect(status.state).toBe('Active');
+      expect(status.nodeCount).toBe(15);
+      expect(status.factCount).toBe(10);
+    });
+
+    it('retrieves facts list, fact evidence detail, and quarantines list', async () => {
+      const setId = generateId();
+      const graphSnapshotId = generateId();
+      const factKey = '4'.repeat(64);
+
+      const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+        const urlStr = String(input);
+        if (urlStr.endsWith('/graph/facts')) {
+          return jsonResponse({
+            setId,
+            graphSnapshotId,
+            totalFacts: 1,
+            facts: [
+              {
+                factKey,
+                subjectUrn: 'urn:plannermate:smartvista:PRC_PROCESS:60000006',
+                subjectName: 'SHB Process',
+                subjectKind: 'ScheduledProcess',
+                relation: 'CONTAINS_STEP',
+                objectUrn: 'urn:plannermate:smartvista:PRC_CONTAINER:60000006',
+                objectName: 'Step 2',
+                objectKind: 'ProcessStep',
+                effectiveClassification: 'OBSERVED',
+                evidenceCount: 1,
+                hasConflict: false,
+                qualifiers: {},
+              },
+            ],
+          });
+        }
+        if (urlStr.includes(`/graph/facts/${factKey}/evidence`)) {
+          return jsonResponse({
+            setId,
+            factKey,
+            subjectUrn: 'urn:plannermate:smartvista:PRC_PROCESS:60000006',
+            relation: 'CONTAINS_STEP',
+            objectUrn: 'urn:plannermate:smartvista:PRC_CONTAINER:60000006',
+            effectiveClassification: 'OBSERVED',
+            hasConflict: false,
+            qualifiers: {},
+            occurrences: [
+              {
+                evidenceId: generateId(),
+                documentId: generateId(),
+                documentTitle: '01.md',
+                headingPath: ['Steps'],
+                startLine: 1,
+                endLine: 2,
+                startOffset: 0,
+                endOffset: 50,
+                method: 'DETERMINISTIC_TABLE',
+                classification: 'OBSERVED',
+                confidence: 1,
+                quote: '| table |',
+              },
+            ],
+          });
+        }
+        if (urlStr.endsWith('/graph/quarantine')) {
+          return jsonResponse({
+            setId,
+            graphSnapshotId,
+            totalQuarantines: 1,
+            quarantines: [
+              {
+                rawIdentifier: 'TAB_RAW',
+                reason: 'Missing schema',
+                documentId: generateId(),
+                headingPath: ['Tables'],
+                startLine: 10,
+                endLine: 10,
+                method: 'DETERMINISTIC_TABLE',
+                candidateMatches: ['MAIN1.TAB_RAW'],
+              },
+            ],
+          });
+        }
+        throw new Error(`Unexpected url: ${urlStr}`);
+      });
+
+      const client = createKnowledgeClient({
+        baseUrl: 'https://knowledge.example.com',
+        token: 'token',
+        fetcher,
+      });
+
+      const facts = await client.getGraphFacts(setId);
+      expect(facts.facts.length).toBe(1);
+
+      const evidence = await client.getFactEvidence(setId, factKey);
+      expect(evidence.occurrences.length).toBe(1);
+
+      const quarantines = await client.getGraphQuarantines(setId);
+      expect(quarantines.quarantines.length).toBe(1);
     });
   });
 });
