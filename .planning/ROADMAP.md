@@ -302,13 +302,25 @@ Plans:
   4. Every graph relation retains source document, section, source range, extraction method, and evidence classification (`OBSERVED`, `INFERRED`, or `BUSINESS_APPROVED`).
   5. User can distinguish `OBSERVED`, `INFERRED`, and `BUSINESS_APPROVED` knowledge in graph-backed results.
   6. User can rebuild graph and indexes from published Markdown without treating Neo4j as canonical storage.
-
-**Plans:** 5 plans in 5 waves
+**Plans:** 5 plans in 5 waves
+**Wave 1**
 
 - [ ] 17-01-PLAN.md — Ontology, composite URN identity, factKey derivation, pilot gold fixtures (GRAPH-01, GRAPH-02)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 17-02-PLAN.md — Deterministic MDAST extraction + bounded single-call prose fallback (GRAPH-03)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 17-03-PLAN.md — neo4j-driver verify/install, candidate merge + conflict + classification, graph repository (GRAPH-04)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 17-04-PLAN.md — Graph HTTP routes + DocumentSetDrawer graph section + GraphEvidenceDrawer (GRAPH-05)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 17-05-PLAN.md — Durable snapshot store, staged rebuild with atomic pointer swap, pilot acceptance + offline isolation (GRAPH-06)
 
 ### Phase 18: Multi-Modal Hybrid Retrieval Engine
