@@ -16,6 +16,18 @@ import {
   MODALITY_STATUS_VALUES,
   REASON_CODES,
 } from '../src/types/retrievalProtocol.js';
+import {
+  DeterministicEmbeddingStub,
+  DeterministicPlannerStub,
+  DeterministicIndexGatewayStub,
+  DeterministicGraphGatewayStub,
+} from './fixtures/retrievalStubs.js';
+import type {
+  EmbeddingProvider,
+  QueryPlanner,
+  RetrievalIndexGateway,
+  GraphRetrievalGateway,
+} from '../src/retrieval/contracts.js';
 
 describe('RetrievalProtocol Schema Suite (Task 18-W0-01)', () => {
   const validSnapshotId = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
@@ -526,4 +538,101 @@ describe('RetrievalProtocol Schema Suite (Task 18-W0-01)', () => {
       }
     });
   });
+
+  describe('Provider-Neutral Collaborator Stubs and Invariants (Task 18-CONTRACT-01)', () => {
+    it('DeterministicEmbeddingStub produces exactly 384 finite numbers without network/model', async () => {
+      const stub: EmbeddingProvider = new DeterministicEmbeddingStub();
+      const meta = stub.describe();
+      expect(meta.dimensions).toBe(384);
+      expect(meta.provider).toBe('local-onnx');
+
+      const vec = await stub.embedQuery('AML_RISK lookup');
+      expect(vec).toHaveLength(384);
+      expect(vec.every((n) => Number.isFinite(n))).toBe(true);
+
+      const docs = await stub.embedDocuments(['chunk 1', 'chunk 2']);
+      expect(docs).toHaveLength(2);
+      expect(docs[0]).toHaveLength(384);
+      expect(docs[1]).toHaveLength(384);
+    });
+
+    it('DeterministicEmbeddingStub respects AbortSignal', async () => {
+      const stub = new DeterministicEmbeddingStub();
+      stub.simulatedLatencyMs = 20;
+
+      const controller = new AbortController();
+      controller.abort();
+
+      await expect(
+        stub.embedQuery('test', { signal: controller.signal })
+      ).rejects.toThrow('aborted');
+    });
+
+    it('DeterministicPlannerStub records calls and emits valid plan or clarification', async () => {
+      const planner: QueryPlanner = new DeterministicPlannerStub();
+      const req = RetrievalRequestSchema.parse({ query: 'AML_RISK' });
+      const context = {
+        resolvedCandidates: [
+          {
+            urn: validUrn1,
+            canonicalName: 'AML_RISK',
+            kind: 'DatabaseObject' as const,
+          },
+        ],
+        registeredNodeKinds: ['DatabaseObject' as const],
+        registeredRelationTypes: ['READS_FROM' as const],
+      };
+
+      const result = await planner.plan(req, context);
+      expect(result.type).toBe('plan');
+      if (result.type === 'plan') {
+        expect(result.plan.seedUrns).toEqual([validUrn1]);
+        expect(LogicalQueryPlanSchema.safeParse(result.plan).success).toBe(true);
+      }
+    });
+
+    it('DeterministicIndexGatewayStub acquires and releases snapshot lease', async () => {
+      const indexGateway: RetrievalIndexGateway = new DeterministicIndexGatewayStub();
+      const lease = await indexGateway.acquirePinnedSnapshot('test-set-01');
+      expect(lease).not.toBeNull();
+      expect(lease?.snapshotId).toBe('snapshot-test-01');
+
+      await lease?.release();
+      const validMeta = await indexGateway.validateVectorIndexMetadata('snapshot-test-01', {
+        provider: 'local-onnx',
+        model: 'multilingual-e5-small',
+        revision: 'v1.0.0',
+        dimensions: 384,
+        policyVersion: '2026.10.1',
+      });
+      expect(validMeta).toBe(true);
+    });
+
+    it('DeterministicGraphGatewayStub resolves candidates and traverses with caps', async () => {
+      const graphGateway: GraphRetrievalGateway = new DeterministicGraphGatewayStub();
+      const candidates = await graphGateway.resolveEntities('snapshot-test-01', ['AML_RISK']);
+      expect(candidates).toEqual([]);
+
+      const traversal = await graphGateway.traverse('snapshot-test-01', {
+        seedUrns: [validUrn1],
+        plan: {
+          planId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+          queryIntent: 'LOOKUP',
+          seedUrns: [validUrn1],
+          traversalSteps: [],
+          overallMaxDepth: 1,
+          includeInferred: false,
+          fulltextKeywords: ['AML_RISK'],
+          semanticQuery: 'AML_RISK',
+        },
+        evidenceClasses: ['OBSERVED'],
+        limitNodes: 100,
+        limitEdges: 200,
+      });
+      expect(traversal.entities).toEqual([]);
+      expect(traversal.edges).toEqual([]);
+      expect(traversal.truncated).toBe(false);
+    });
+  });
 });
+
