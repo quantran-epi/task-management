@@ -108,6 +108,42 @@ describe('restoreBackupPayload & rollbackToSnapshot', () => {
     expect(projects).toHaveLength(1);
     expect(projects[0]?.name).toBe('Pre-Restore Project');
   });
+
+  it('restores successfully when local DB contains note attachments with Blob data (no transaction auto-commit)', async () => {
+    // Add existing note and attachment with Blob data
+    await testDb.notes.add({
+      id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      title: 'Local Existing Note',
+      body: 'Local body',
+      createdAt: '2026-09-26T10:00:00.000Z',
+      updatedAt: '2026-09-26T10:00:00.000Z',
+    });
+    await testDb.noteAttachments.add({
+      id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      noteId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      fileName: 'test-blob.png',
+      mimeType: 'image/png',
+      sizeBytes: 12,
+      data: new Blob(['fake-img-data'], { type: 'image/png' }),
+      createdAt: '2026-09-26T10:00:00.000Z',
+    });
+
+    const result = await restoreBackupPayload(sampleBackup, testDb);
+    expect(result.totalRestored).toBe(2);
+
+    // Verify snapshot captured the attachment data
+    const snapshotSetting = await testDb.settings.get('last_pre_import_snapshot');
+    expect(snapshotSetting).toBeDefined();
+    const snapshot = snapshotSetting?.value as SnapshotData;
+    expect(snapshot.tables.noteAttachments).toHaveLength(1);
+    expect(snapshot.tables.noteAttachments?.[0]?.fileName).toBe('test-blob.png');
+    expect(snapshot.tables.noteAttachments?.[0]?.data).toContain('data:image/png;base64,');
+
+    // Verify tables restored
+    const projects = await testDb.projects.toArray();
+    expect(projects).toHaveLength(1);
+    expect(projects[0]?.name).toBe('Restored Project');
+  });
 });
 
 describe('downloadSnapshotFile', () => {

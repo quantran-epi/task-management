@@ -34,6 +34,110 @@ export async function restoreBackupPayload(
 ): Promise<{ totalRestored: number; snapshotTime: string }> {
   const snapshotTime = new Date().toISOString();
 
+  // 1. Capture snapshot of current domain tables before opening the transaction.
+  // Converting attachments via blobToBase64 is asynchronous and must complete outside
+  // the Dexie transaction so IndexedDB does not auto-commit/abort due to non-IDB microtask delays.
+  const [
+    projects,
+    milestones,
+    tasks,
+    capacityRules,
+    capacityOverrides,
+    plannedAllocations,
+    workSessions,
+    notes,
+    rawAttachments,
+    chatThreads,
+    chatMessages,
+    documentSets,
+    publishedDocuments,
+    publishAttempts,
+    dlpAudits,
+  ] = await Promise.all([
+    targetDb.projects.toArray(),
+    targetDb.milestones.toArray(),
+    targetDb.tasks.toArray(),
+    targetDb.capacityRules.toArray(),
+    targetDb.capacityOverrides.toArray(),
+    targetDb.plannedAllocations.toArray(),
+    targetDb.workSessions.toArray(),
+    targetDb.notes.toArray(),
+    targetDb.noteAttachments.toArray(),
+    targetDb.chatThreads.toArray(),
+    targetDb.chatMessages.toArray(),
+    targetDb.documentSets.toArray(),
+    targetDb.publishedDocuments.toArray(),
+    targetDb.publishAttempts.toArray(),
+    targetDb.dlpAudits.toArray(),
+  ]);
+
+  const serializedAttachments = await Promise.all(
+    rawAttachments.map(async (att) => ({
+      id: att.id,
+      noteId: att.noteId,
+      fileName: att.fileName,
+      mimeType: att.mimeType,
+      sizeBytes: att.sizeBytes,
+      data: await blobToBase64(att.data, att.mimeType),
+      ...(att.caption ? { caption: att.caption } : {}),
+      createdAt: att.createdAt,
+    }))
+  );
+
+  const snapshot: SnapshotData = {
+    timestamp: snapshotTime,
+    tables: {
+      projects,
+      milestones,
+      tasks,
+      capacityRules,
+      capacityOverrides,
+      plannedAllocations,
+      workSessions,
+      notes,
+      noteAttachments: serializedAttachments,
+      chatThreads,
+      chatMessages,
+      documentSets,
+      publishedDocuments,
+      publishAttempts,
+      dlpAudits,
+    },
+    counts: {
+      projects: projects.length,
+      milestones: milestones.length,
+      tasks: tasks.length,
+      capacityRules: capacityRules.length,
+      capacityOverrides: capacityOverrides.length,
+      plannedAllocations: plannedAllocations.length,
+      workSessions: workSessions.length,
+      notes: notes.length,
+      noteAttachments: rawAttachments.length,
+      chatThreads: chatThreads.length,
+      chatMessages: chatMessages.length,
+      documentSets: documentSets.length,
+      publishedDocuments: publishedDocuments.length,
+      publishAttempts: publishAttempts.length,
+      dlpAudits: dlpAudits.length,
+    },
+  };
+
+  // Pre-map incoming attachments to avoid CPU work during transaction
+  const restoredAttachments: NoteAttachment[] =
+    backup.tables.noteAttachments && backup.tables.noteAttachments.length
+      ? backup.tables.noteAttachments.map((att) => ({
+          id: att.id,
+          noteId: att.noteId,
+          fileName: att.fileName,
+          mimeType: att.mimeType,
+          sizeBytes: att.sizeBytes,
+          data: att.data ? base64ToBlob(att.data, att.mimeType) : new Blob([], { type: att.mimeType }),
+          ...(att.filePath ? { filePath: att.filePath } : {}),
+          ...(att.caption ? { caption: att.caption } : {}),
+          createdAt: att.createdAt,
+        }))
+      : [];
+
   await targetDb.transaction(
     'rw',
     [
@@ -57,93 +161,7 @@ export async function restoreBackupPayload(
       targetDb.backupMetadata,
     ],
     async () => {
-      // 1. Capture snapshot of current domain tables
-      const [
-        projects,
-        milestones,
-        tasks,
-        capacityRules,
-        capacityOverrides,
-        plannedAllocations,
-        workSessions,
-        notes,
-        rawAttachments,
-        chatThreads,
-        chatMessages,
-        documentSets,
-        publishedDocuments,
-        publishAttempts,
-        dlpAudits,
-      ] = await Promise.all([
-        targetDb.projects.toArray(),
-        targetDb.milestones.toArray(),
-        targetDb.tasks.toArray(),
-        targetDb.capacityRules.toArray(),
-        targetDb.capacityOverrides.toArray(),
-        targetDb.plannedAllocations.toArray(),
-        targetDb.workSessions.toArray(),
-        targetDb.notes.toArray(),
-        targetDb.noteAttachments.toArray(),
-        targetDb.chatThreads.toArray(),
-        targetDb.chatMessages.toArray(),
-        targetDb.documentSets.toArray(),
-        targetDb.publishedDocuments.toArray(),
-        targetDb.publishAttempts.toArray(),
-        targetDb.dlpAudits.toArray(),
-      ]);
-
-      const serializedAttachments = await Promise.all(
-        rawAttachments.map(async (att) => ({
-          id: att.id,
-          noteId: att.noteId,
-          fileName: att.fileName,
-          mimeType: att.mimeType,
-          sizeBytes: att.sizeBytes,
-          data: await blobToBase64(att.data, att.mimeType),
-          ...(att.caption ? { caption: att.caption } : {}),
-          createdAt: att.createdAt,
-        }))
-      );
-
-      const snapshot: SnapshotData = {
-        timestamp: snapshotTime,
-        tables: {
-          projects,
-          milestones,
-          tasks,
-          capacityRules,
-          capacityOverrides,
-          plannedAllocations,
-          workSessions,
-          notes,
-          noteAttachments: serializedAttachments,
-          chatThreads,
-          chatMessages,
-          documentSets,
-          publishedDocuments,
-          publishAttempts,
-          dlpAudits,
-        },
-        counts: {
-          projects: projects.length,
-          milestones: milestones.length,
-          tasks: tasks.length,
-          capacityRules: capacityRules.length,
-          capacityOverrides: capacityOverrides.length,
-          plannedAllocations: plannedAllocations.length,
-          workSessions: workSessions.length,
-          notes: notes.length,
-          noteAttachments: rawAttachments.length,
-          chatThreads: chatThreads.length,
-          chatMessages: chatMessages.length,
-          documentSets: documentSets.length,
-          publishedDocuments: publishedDocuments.length,
-          publishAttempts: publishAttempts.length,
-          dlpAudits: dlpAudits.length,
-        },
-      };
-
-      // Save pre-import snapshot to settings table
+      // 1. Save pre-import snapshot to settings table
       await targetDb.settings.put({
         key: 'last_pre_import_snapshot',
         value: snapshot,
@@ -194,18 +212,7 @@ export async function restoreBackupPayload(
       if (backup.tables.notes && backup.tables.notes.length) {
         await targetDb.notes.bulkAdd(backup.tables.notes);
       }
-      if (backup.tables.noteAttachments && backup.tables.noteAttachments.length) {
-        const restoredAttachments: NoteAttachment[] = backup.tables.noteAttachments.map((att) => ({
-          id: att.id,
-          noteId: att.noteId,
-          fileName: att.fileName,
-          mimeType: att.mimeType,
-          sizeBytes: att.sizeBytes,
-          data: att.data ? base64ToBlob(att.data, att.mimeType) : new Blob([], { type: att.mimeType }),
-          ...(att.filePath ? { filePath: att.filePath } : {}),
-          ...(att.caption ? { caption: att.caption } : {}),
-          createdAt: att.createdAt,
-        }));
+      if (restoredAttachments.length) {
         await targetDb.noteAttachments.bulkAdd(restoredAttachments);
       }
       if (backup.tables.chatThreads && backup.tables.chatThreads.length) {
@@ -266,6 +273,22 @@ export async function rollbackToSnapshot(
 
   const snapshot = snapshotSetting.value as SnapshotData;
   const rollbackTime = new Date().toISOString();
+
+  // Pre-map attachments outside transaction
+  const restoredAttachments: NoteAttachment[] =
+    snapshot.tables.noteAttachments && snapshot.tables.noteAttachments.length
+      ? snapshot.tables.noteAttachments.map((att) => ({
+          id: att.id,
+          noteId: att.noteId,
+          fileName: att.fileName,
+          mimeType: att.mimeType,
+          sizeBytes: att.sizeBytes,
+          data: att.data ? base64ToBlob(att.data, att.mimeType) : new Blob([], { type: att.mimeType }),
+          ...(att.filePath ? { filePath: att.filePath } : {}),
+          ...(att.caption ? { caption: att.caption } : {}),
+          createdAt: att.createdAt,
+        }))
+      : [];
 
   await targetDb.transaction(
     'rw',
@@ -335,18 +358,7 @@ export async function rollbackToSnapshot(
       if (snapshot.tables.notes && snapshot.tables.notes.length) {
         await targetDb.notes.bulkAdd(snapshot.tables.notes);
       }
-      if (snapshot.tables.noteAttachments && snapshot.tables.noteAttachments.length) {
-        const restoredAttachments: NoteAttachment[] = snapshot.tables.noteAttachments.map((att) => ({
-          id: att.id,
-          noteId: att.noteId,
-          fileName: att.fileName,
-          mimeType: att.mimeType,
-          sizeBytes: att.sizeBytes,
-          data: att.data ? base64ToBlob(att.data, att.mimeType) : new Blob([], { type: att.mimeType }),
-          ...(att.filePath ? { filePath: att.filePath } : {}),
-          ...(att.caption ? { caption: att.caption } : {}),
-          createdAt: att.createdAt,
-        }));
+      if (restoredAttachments.length) {
         await targetDb.noteAttachments.bulkAdd(restoredAttachments);
       }
       if (snapshot.tables.chatThreads && snapshot.tables.chatThreads.length) {
