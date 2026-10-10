@@ -177,9 +177,16 @@ function extractQueryTokens(query: string): string[] {
  */
 function queryHasPronoun(query: string): boolean {
   const lower = query.toLowerCase().trim();
+  const words = lower.split(/\s+/);
   for (const p of PRONOUN_TOKENS) {
-    if (lower === p || lower.includes(p)) {
-      return true;
+    if (p.includes(' ')) {
+      if (lower.includes(p)) {
+        return true;
+      }
+    } else {
+      if (words.includes(p)) {
+        return true;
+      }
     }
   }
   return false;
