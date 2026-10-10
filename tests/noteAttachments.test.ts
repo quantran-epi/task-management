@@ -132,7 +132,7 @@ describe('Note Attachments & Backup Serialization', () => {
 
       // Export
       const backup = await exportBackupPayload();
-      expect(backup.schemaVersion).toBe(4);
+      expect(backup.schemaVersion).toBe(10);
       expect(backup.tables.notes).toHaveLength(1);
       expect((backup.tables as any).noteAttachments).toHaveLength(1);
 

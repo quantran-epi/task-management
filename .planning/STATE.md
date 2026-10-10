@@ -37,6 +37,8 @@ Progress: [████████░░] 83%
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261010-pnd | fix missing isPinned property in restoreBackup.test.ts | 2026-10-10 | 551df68 | complete | [261010-pnd-fix-restore-backup-test-note-is-pinned](./quick/261010-pnd-fix-restore-backup-test-note-is-pinned/) |
+| 261009-v10t | fix Schema V10 table list and verno test assertions | 2026-10-09 | 5ad90bb | complete | [261009-v10t-fix-schema-v10-test-assertions](./quick/261009-v10t-fix-schema-v10-test-assertions/) |
 | 261009-n9z | integrate latest master, prepare artifact-only Phase 16 desktop build branch | 2026-10-09 | — | complete | [261009-n9z-create-phase-16-desktop-build-branch-mer](./quick/261009-n9z-create-phase-16-desktop-build-branch-mer/) |
 | 261009-hkj | write Oracle SQLcl MCP HTTP gateway requirements handoff | 2026-10-09 | — | complete | [261009-hkj-create-concise-requirements-handoff-for-](./quick/261009-hkj-create-concise-requirements-handoff-for-/) |
 | 261009-frs | write desktop stdio MCP implementation handoff with dynamic tool policy | 2026-10-09 | — | complete | [261009-frs-create-an-implementation-instruction-mar](./quick/261009-frs-create-an-implementation-instruction-mar/) |
@@ -137,6 +139,7 @@ Progress: [████████░░] 83%
 | 261008-fex | Optimize file explorer perf, exclusions, mention in chat, PC reveal, and skills autocomplete | 2026-10-08 | — | complete | [261008-fex-agent-file-explorer-perf-and-skills](./quick/261008-fex-agent-file-explorer-perf-and-skills/) |
 | 261008-k9p | Fix false thinking state and timer run when clearing logs in ghost dev session | 2026-10-08 | 2931d37 | complete | [261008-k9p-fix-clear-logs-false-thinking-timer](./quick/261008-k9p-fix-clear-logs-false-thinking-timer/) |
 | 261009-ana | Fix build error in AnalyticsView.test.tsx | 2026-10-09 | — | complete | [261009-ana-fix-analytics-view-test-build-error](./quick/261009-ana-fix-analytics-view-test-build-error/) |
+| 261010-btr | Fix backup restore transaction lifetime and schema V10 alignment | 2026-10-10 | — | complete | [261010-btr-fix-backup-restore-transaction-schema-v10](./quick/261010-btr-fix-backup-restore-transaction-schema-v10/) |
 
 ## Performance Metrics
 
