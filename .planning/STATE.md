@@ -8,10 +8,10 @@ last_updated: "2026-10-10T05:50:00.000Z"
 last_activity: 2026-10-10 -- Plan 17-04 completed
 progress:
   total_phases: 16
-  completed_phases: 12
+  completed_phases: 13
   total_plans: 67
-  completed_plans: 66
-  percent: 82
+  completed_plans: 67
+  percent: 83
 ---
 
 # Project State
@@ -25,13 +25,13 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 
 ## Current Position
 
-Phase: 17 (pilot-ontology-deterministic-extraction-neo4j-knowledge-grap) — EXECUTING
+Phase: 17 (pilot-ontology-deterministic-extraction-neo4j-knowledge-grap) — COMPLETE
 Plan: 5 of 5
-Status: Executing Phase 17
-Last activity: 2026-10-10 -- Plan 17-04 completed
-Stopped at: Completed 17-04-PLAN.md
+Status: Phase 17 Complete
+Last activity: 2026-10-10 -- Plan 17-05 completed
+Stopped at: Completed 17-05-PLAN.md
 
-Progress: [████████░░] 82%
+Progress: [████████░░] 83%
 
 ### Quick Tasks Completed
 
@@ -167,6 +167,7 @@ Progress: [████████░░] 82%
 | Phase 17 P02 | 8min | 2 tasks | 4 files |
 | Phase 17 P03 | 6min | 2 tasks | 5 files |
 | Phase 17 P04 | 10min | 2 tasks | 7 files |
+| Phase 17 P05 | 9min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -174,6 +175,10 @@ Progress: [████████░░] 82%
 
 Recent decisions logged in PROJECT.md:
 
+- [Phase 17 Plan 05]: Durably persist published Markdown snapshots and human approvals to disk using atomic .tmp rename pattern.
+- [Phase 17 Plan 05]: Orchestrate rebuild pipeline with stale-source guard ensuring sourceSnapshotId matches before activation.
+- [Phase 17 Plan 05]: Preserve approved facts as sourceMissing=true and BUSINESS_APPROVED when source evidence disappears (D-20).
+- [Phase 17 Plan 05]: Execute atomic pointer swap in single Neo4j transaction ensuring failure leaves prior active graph untouched.
 - [Phase 17 Plan 04]: Protect all graph Fastify endpoints with bearer auth, timing-safe equality, and origin checks.
 - [Phase 17 Plan 04]: Enforce strict Zod parsing on graph DTOs ensuring zero leakage of Cypher strings or credentials.
 - [Phase 17 Plan 04]: Add Đồ thị tri thức section into DocumentSetDrawer before Lịch sử xuất bản with rebuild confirmation modal.
@@ -228,6 +233,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-10T05:15:00.000Z
-Stopped at: Completed 17-03-PLAN.md
-Resume file: .planning/phases/17-pilot-ontology-deterministic-extraction-neo4j-knowledge-grap/17-04-PLAN.md
+Last session: 2026-10-10T06:05:00.000Z
+Stopped at: Completed 17-05-PLAN.md
+Resume file: None (Phase 17 complete)

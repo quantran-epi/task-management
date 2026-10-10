@@ -115,7 +115,7 @@
 - [x] **GRAPH-03**: Structured Markdown tables and explicit identifiers are extracted deterministically before LLM extraction is used for prose-only relationships.
 - [x] **GRAPH-04**: Every graph relation retains source document, section, source range, extraction method, and evidence classification (`OBSERVED`, `INFERRED`, or `BUSINESS_APPROVED`).
 - [x] **GRAPH-05**: User can distinguish `OBSERVED`, `INFERRED`, and `BUSINESS_APPROVED` knowledge in graph-backed results.
-- [ ] **GRAPH-06**: User can rebuild graph and indexes from published Markdown without treating Neo4j as canonical storage.
+- [x] **GRAPH-06**: User can rebuild graph and indexes from published Markdown without treating Neo4j as canonical storage.
 
 ## Future Requirements (Deferred)
 
@@ -198,6 +198,5 @@
 | GRAPH-02 | Phase 17 | Complete |
 | GRAPH-03 | Phase 17 | Complete |
 | GRAPH-04 | Phase 17 | Complete |
-| GRAPH-05 | Phase 17 | Pending |
-| GRAPH-05 | Phase 17 | Pending |
-| GRAPH-06 | Phase 17 | Pending |
+| GRAPH-05 | Phase 17 | Complete |
+| GRAPH-06 | Phase 17 | Complete |
