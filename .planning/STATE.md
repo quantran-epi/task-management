@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Hybrid GraphRAG Knowledge Assistant MVP
 status: executing
-stopped_at: Completed 18-CONTEXT.md
-last_updated: "2026-10-10T14:39:07.175Z"
-last_activity: 2026-10-10 -- Phase 18 execution started
+stopped_at: Completed 18-02-PLAN.md
+last_updated: "2026-10-10T15:35:00.000Z"
+last_activity: 2026-10-10 -- Plan 18-02 completed (embedding providers and runtime spike)
 progress:
   total_phases: 16
   completed_phases: 13
   total_plans: 77
-  completed_plans: 68
-  percent: 81
+  completed_plans: 69
+  percent: 82
 ---
 
 # Project State
@@ -26,12 +26,12 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 ## Current Position
 
 Phase: 18 (multi-modal-hybrid-retrieval-engine) — EXECUTING
-Plan: 1 of 9
+Plan: 2 of 9
 Status: Executing Phase 18
-Last activity: 2026-10-10 -- Phase 18 execution started
-Stopped at: Completed 18-CONTEXT.md
+Last activity: 2026-10-10 -- Plan 18-02 completed
+Stopped at: Completed 18-02-PLAN.md
 
-Progress: [████████░░] 83%
+Progress: [████████░░] 84%
 
 ### Quick Tasks Completed
 
@@ -145,13 +145,14 @@ Progress: [████████░░] 83%
 
 **Velocity:**
 
-- Total plans completed: 67 (v1.2)
+- Total plans completed: 68 (v1.2)
 - Average duration: 8 min
 - Total execution time: 0.13 hours
 
 | Phase | Plan | Duration | Tasks | Files |
 |-------|------|----------|-------|-------|
 | 16 | 01 | 8m | 2 | 5 |
+| 18 | 02 | 18m | 2 | 7 |
 
 *Updated after each plan completion*
 | Phase 16 P06 | 15min | 1 tasks | 2 files |
@@ -179,6 +180,10 @@ Progress: [████████░░] 83%
 
 Recent decisions logged in PROJECT.md:
 
+- [Phase 18 Plan 02]: Installed exact @xenova/transformers@2.17.2 with --ignore-scripts per human approval checkpoint.
+- [Phase 18 Plan 02]: LocalOnnxEmbeddingProvider lazy-loads pipeline and maps model load failures to stable PROVIDER_ERROR for degraded fusion.
+- [Phase 18 Plan 02]: RemoteOpenAiEmbeddingProvider requires HTTPS, exact host allowlist, positive dimensions, and never leaks canary tokens or queries.
+- [Phase 18 Plan 02]: Target spike on Windows host (Node v20.19.5) cleanly probes runtime and captures sharp native binary unavailability due to --ignore-scripts.
 - [Phase 17 Plan 05]: Durably persist published Markdown snapshots and human approvals to disk using atomic .tmp rename pattern.
 - [Phase 17 Plan 05]: Orchestrate rebuild pipeline with stale-source guard ensuring sourceSnapshotId matches before activation.
 - [Phase 17 Plan 05]: Preserve approved facts as sourceMissing=true and BUSINESS_APPROVED when source evidence disappears (D-20).
@@ -237,6 +242,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-10T08:53:58.717Z
-Stopped at: Completed 17-05-PLAN.md
+Last session: 2026-10-10T15:35:00.000Z
+Stopped at: Completed 18-02-PLAN.md
 Resume file: None

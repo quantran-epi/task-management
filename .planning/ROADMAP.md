@@ -336,7 +336,17 @@ Plans:
   4. User can run dependency and impact queries across one to three graph hops with bounded result counts.
   5. Hybrid results combine full-text, semantic, and graph evidence into one ranked, deduplicated evidence set.
 
-**Plans**: TBD
+**Plans**: 2/9 plans executed
+
+- [x] 18-01-PLAN.md — Retrieval protocol and neutral collaborator contracts
+- [x] 18-02-PLAN.md — Embedding providers (Local ONNX E5 & Remote OpenAI) and runtime spike
+- [ ] 18-03-PLAN.md — Neo4j index gateway & snapshot leasing
+- [ ] 18-04-PLAN.md — Closed-ontology query planner
+- [ ] 18-05-PLAN.md — Bounded Cypher traversal & entity resolution
+- [ ] 18-06-PLAN.md — Reciprocal Rank Fusion & citation synthesis
+- [ ] 18-07-PLAN.md — Hybrid retrieval orchestrator
+- [ ] 18-08-PLAN.md — Retrieval HTTP endpoint
+- [ ] 18-09-PLAN.md — End-to-end integration & acceptance gates
 
 ### Phase 19: Grounded Assistant, Provenance Citations & Offline Fallback
 
