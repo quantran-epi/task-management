@@ -1,9 +1,24 @@
 import {
   ClarificationCandidate,
   ConversationTurn,
+  LogicalQueryPlan,
+  LogicalQueryPlanSchema,
+  PlanTrace,
+  RetrievalRequest,
+  TraversalStep,
 } from '../types/retrievalProtocol.js';
-import { GraphRetrievalGateway, OperationOptions } from './contracts.js';
-import { URN_REGEX } from '../types/graphProtocol.js';
+import {
+  GraphRetrievalGateway,
+  OperationOptions,
+  QueryPlanner,
+} from './contracts.js';
+import { NodeKind, RelationType, URN_REGEX } from '../types/graphProtocol.js';
+import {
+  NODE_KINDS,
+  RELATION_TYPES,
+  RETRIEVAL_ONTOLOGY_REGISTRY,
+} from '../graph/ontology.js';
+import { randomUUID } from 'node:crypto';
 
 /**
  * Technical identifier regexes:
@@ -277,5 +292,388 @@ export async function resolveQueryEntities(
   return {
     status: 'ambiguous',
     candidates: filtered,
+  };
+}
+
+/**
+ * Outcome of buildQueryExecutionPlan.
+ */
+export type QueryExecutionPlanningOutcome =
+  | {
+      readonly status: 'executable';
+      readonly plan: LogicalQueryPlan;
+      readonly planTrace: PlanTrace;
+      readonly isFastPath: boolean;
+      readonly isDegraded: boolean;
+    }
+  | {
+      readonly status: 'needsClarification';
+      readonly semanticOutcome: 'NEEDS_CLARIFICATION';
+      readonly safeCandidates: readonly ClarificationCandidate[];
+      readonly fulltextKeywords: readonly string[];
+      readonly semanticQuery: string;
+      readonly seedUrns: readonly string[];
+      readonly graphDirective: 'NO_GRAPH_SEED';
+      readonly planTrace: PlanTrace;
+    };
+
+/**
+ * Validates logical plan against server-resolved allowlists and ontology registry bounds.
+ */
+function validatePlanSemantics(
+  plan: LogicalQueryPlan,
+  allowedUrnSet: ReadonlySet<string>
+): { valid: boolean; issues: string[] } {
+  const issues: string[] = [];
+
+  // Check seed URNs against server-resolved allowlist
+  for (const seed of plan.seedUrns) {
+    if (!allowedUrnSet.has(seed)) {
+      issues.push(`Seed URN ${seed} is not in server-resolved candidate allowlist`);
+    }
+  }
+
+  // Traversal steps bounds: max 5
+  if (plan.traversalSteps.length > 5) {
+    issues.push(`Traversal steps count ${plan.traversalSteps.length} exceeds maximum 5`);
+  }
+
+  // Overall max depth 1..3
+  if (plan.overallMaxDepth < 1 || plan.overallMaxDepth > 3) {
+    issues.push(`Overall max depth ${plan.overallMaxDepth} outside permitted range 1..3`);
+  }
+
+  // Traversal steps relation and direction checks
+  for (let i = 0; i < plan.traversalSteps.length; i++) {
+    const step = plan.traversalSteps[i]!;
+    const registryEntry = RETRIEVAL_ONTOLOGY_REGISTRY[step.relationType];
+    if (!registryEntry) {
+      issues.push(`Unknown relation type ${step.relationType} at step ${i}`);
+      continue;
+    }
+
+    if (step.maxHops < 1 || step.maxHops > 3) {
+      issues.push(`Step ${i} maxHops ${step.maxHops} outside range 1..3`);
+    }
+    if (step.maxHops > registryEntry.maxHops) {
+      issues.push(`Step ${i} maxHops ${step.maxHops} exceeds ontology ceiling ${registryEntry.maxHops}`);
+    }
+
+    if (step.targetKind && !NODE_KINDS.includes(step.targetKind)) {
+      issues.push(`Step ${i} targetKind ${step.targetKind} not in allowed NODE_KINDS`);
+    }
+  }
+
+  return {
+    valid: issues.length === 0,
+    issues,
+  };
+}
+
+/**
+ * Builds a deterministic degraded fallback plan (D-06, D-16).
+ */
+export function buildDeterministicFallbackPlan(
+  rawQuery: string,
+  resolvedSeeds: readonly ClarificationCandidate[],
+  reasonCode: string = 'PLANNER_SCHEMA_FAILURE'
+): { plan: LogicalQueryPlan; planTrace: PlanTrace } {
+  const hasSeeds = resolvedSeeds.length > 0;
+  const seedUrns = hasSeeds
+    ? resolvedSeeds.slice(0, 5).map((c) => c.urn)
+    : [];
+
+  // If seeds exist, generate max 5 one-hop BOTH traversal entries across registry relations
+  const traversalSteps: TraversalStep[] = [];
+  if (hasSeeds) {
+    const defaultRelations: RelationType[] = [
+      'CALLS',
+      'READS_FROM',
+      'WRITES_TO',
+      'PRECEDES',
+      'CONTAINS_STEP',
+    ];
+    for (const rel of defaultRelations) {
+      if (traversalSteps.length >= 5) break;
+      const reg = RETRIEVAL_ONTOLOGY_REGISTRY[rel];
+      if (reg) {
+        traversalSteps.push({
+          relationType: rel,
+          direction: 'BOTH',
+          maxHops: 1,
+        });
+      }
+    }
+  }
+
+  const keywords = hasSeeds
+    ? [rawQuery.trim(), ...resolvedSeeds.map((s) => s.canonicalName)]
+    : [rawQuery.trim()];
+
+  const fallbackPlan: LogicalQueryPlan = {
+    planId: randomUUID(),
+    queryIntent: hasSeeds ? 'LOOKUP' : 'LOOKUP',
+    seedUrns: seedUrns.length > 0 ? seedUrns : ['urn:plannermate:fallback:none'], // placeholder if empty, but seedUrns validated with min 1
+    traversalSteps,
+    overallMaxDepth: 1,
+    includeInferred: false,
+    fulltextKeywords: keywords.filter(Boolean),
+    semanticQuery: rawQuery.trim(),
+  };
+
+  const planTrace: PlanTrace = {
+    fastPath: false,
+    degradedFallback: true,
+    intent: 'LOOKUP',
+    resolvedUrns: seedUrns.length > 0 ? seedUrns : undefined,
+    depth: 1,
+    reasonCode,
+  };
+
+  return { plan: fallbackPlan, planTrace };
+}
+
+/**
+ * Builds default fast-path execution plan for a uniquely resolved entity identifier.
+ */
+function buildFastPathPlan(
+  rawQuery: string,
+  resolvedEntity: ClarificationCandidate
+): { plan: LogicalQueryPlan; planTrace: PlanTrace } {
+  const traversalSteps: TraversalStep[] = [];
+  const candidateRelations: RelationType[] = [
+    'CALLS',
+    'READS_FROM',
+    'WRITES_TO',
+    'PRECEDES',
+    'CONTAINS_STEP',
+  ];
+  for (const rel of candidateRelations) {
+    if (traversalSteps.length >= 5) break;
+    traversalSteps.push({
+      relationType: rel,
+      direction: 'BOTH',
+      maxHops: 1,
+    });
+  }
+
+  const plan: LogicalQueryPlan = {
+    planId: randomUUID(),
+    queryIntent: 'LOOKUP',
+    seedUrns: [resolvedEntity.urn],
+    traversalSteps,
+    overallMaxDepth: 1,
+    includeInferred: false,
+    fulltextKeywords: [rawQuery.trim(), resolvedEntity.canonicalName],
+    semanticQuery: rawQuery.trim(),
+  };
+
+  const planTrace: PlanTrace = {
+    fastPath: true,
+    degradedFallback: false,
+    intent: 'LOOKUP',
+    resolvedUrns: [resolvedEntity.urn],
+    depth: 1,
+  };
+
+  return { plan, planTrace };
+}
+
+export interface BuildPlanParams {
+  readonly request: RetrievalRequest;
+  readonly pinnedSnapshotId: string;
+  readonly gateway: GraphRetrievalGateway;
+  readonly planner: QueryPlanner;
+  readonly options?: OperationOptions | undefined;
+}
+
+/**
+ * Coordinator for query planning (18-W0-02B):
+ * 1. Pure identifier check: if match and unique resolution, return fast-path plan without calling planner.
+ * 2. Natural language / unresolved fast path: resolve candidate entities.
+ * 3. If entity resolution is ambiguous or unresolvable pronoun: return NEEDS_CLARIFICATION outcome with safe candidates, raw query text for fulltext/semantic, empty seedUrns, and explicit NO_GRAPH_SEED. Does not short-circuit D-01 fan-out.
+ * 4. Otherwise call injected QueryPlanner with bounded query/turns, typed resolved candidates, and registry.
+ * 5. Validate output with LogicalQueryPlanSchema and server-side semantic rules (allowed seeds, closed relations, max hops, no cypher).
+ * 6. Allow exactly one repair attempt.
+ * 7. On second failure, emit deterministic degraded fallback with PLANNER_SCHEMA_FAILURE trace.
+ */
+export async function buildQueryExecutionPlan(
+  params: BuildPlanParams
+): Promise<QueryExecutionPlanningOutcome> {
+  const { request, pinnedSnapshotId, gateway, planner, options } = params;
+  const rawQuery = request.query;
+
+  // Step 1: Check pure identifier fast path (D-03)
+  if (isPureIdentifierQuery(rawQuery)) {
+    const resolution = await resolveQueryEntities(
+      gateway,
+      pinnedSnapshotId,
+      rawQuery,
+      request.recentTurns,
+      options
+    );
+
+    if (resolution.status === 'resolved') {
+      const fastPathResult = buildFastPathPlan(rawQuery, resolution.resolved);
+      return {
+        status: 'executable',
+        plan: fastPathResult.plan,
+        planTrace: fastPathResult.planTrace,
+        isFastPath: true,
+        isDegraded: false,
+      };
+    }
+    // If pure identifier is ambiguous or needs clarification, fall through to natural resolution & clarification logic
+  }
+
+  // Step 2: Natural language entity resolution
+  const resolution = await resolveQueryEntities(
+    gateway,
+    pinnedSnapshotId,
+    rawQuery,
+    request.recentTurns,
+    options
+  );
+
+  // Step 3: Handle ambiguity & unresolvable references (D-04)
+  if (resolution.status === 'ambiguous' || resolution.status === 'needsClarification') {
+    const safeCandidates = resolution.candidates || [];
+    return {
+      status: 'needsClarification',
+      semanticOutcome: 'NEEDS_CLARIFICATION',
+      safeCandidates,
+      fulltextKeywords: [rawQuery.trim()],
+      semanticQuery: rawQuery.trim(),
+      seedUrns: [],
+      graphDirective: 'NO_GRAPH_SEED',
+      planTrace: {
+        fastPath: false,
+        degradedFallback: false,
+        reasonCode: 'NO_GRAPH_SEED',
+      },
+    };
+  }
+
+  // At this point status === 'resolved'
+  const resolvedCandidate = resolution.resolved;
+  const resolvedCandidates = [resolvedCandidate];
+  const allowedUrnSet = new Set(resolvedCandidates.map((c) => c.urn));
+
+  // Step 4: Invoke QueryPlanner
+  const plannerContext = {
+    resolvedCandidates,
+    registeredNodeKinds: NODE_KINDS,
+    registeredRelationTypes: RELATION_TYPES,
+  };
+
+  // Helper to validate a returned plan
+  const validateResultPlan = (candidatePlan: any): { valid: boolean; plan?: LogicalQueryPlan; issues: string[] } => {
+    // 1. Zod schema validation
+    const parsed = LogicalQueryPlanSchema.safeParse(candidatePlan);
+    if (!parsed.success) {
+      return {
+        valid: false,
+        issues: parsed.error.issues.map((iss) => `${iss.path.join('.')}: ${iss.message}`),
+      };
+    }
+
+    // 2. Semantic validation against allowed URNs & registry
+    const semanticCheck = validatePlanSemantics(parsed.data, allowedUrnSet);
+    if (!semanticCheck.valid) {
+      return {
+        valid: false,
+        issues: semanticCheck.issues,
+      };
+    }
+
+    return {
+      valid: true,
+      plan: parsed.data,
+      issues: [],
+    };
+  };
+
+  try {
+    const firstResult = await planner.plan(request, plannerContext, options);
+
+    if (firstResult.type === 'clarification') {
+      return {
+        status: 'needsClarification',
+        semanticOutcome: 'NEEDS_CLARIFICATION',
+        safeCandidates: firstResult.candidates,
+        fulltextKeywords: [rawQuery.trim()],
+        semanticQuery: rawQuery.trim(),
+        seedUrns: [],
+        graphDirective: 'NO_GRAPH_SEED',
+        planTrace: {
+          fastPath: false,
+          degradedFallback: false,
+          reasonCode: 'NO_GRAPH_SEED',
+        },
+      };
+    }
+
+    if (firstResult.type === 'plan') {
+      const check = validateResultPlan(firstResult.plan);
+      if (check.valid && check.plan) {
+        return {
+          status: 'executable',
+          plan: check.plan,
+          planTrace: {
+            fastPath: false,
+            degradedFallback: false,
+            intent: check.plan.queryIntent,
+            resolvedUrns: [...check.plan.seedUrns],
+            depth: check.plan.overallMaxDepth,
+          },
+          isFastPath: false,
+          isDegraded: false,
+        };
+      }
+
+      // Exactly ONE repair attempt (D-06, D-16, T-18-02)
+      // Call planner again with repair feedback (issues codes/paths only, no secrets or raw output)
+      const repairRequest: RetrievalRequest = {
+        ...request,
+        query: `${rawQuery} [REPAIR_VALIDATION_ERRORS: ${check.issues.join('; ')}]`,
+      };
+
+      const repairResult = await planner.plan(repairRequest, plannerContext, options);
+      if (repairResult.type === 'plan') {
+        const repairCheck = validateResultPlan(repairResult.plan);
+        if (repairCheck.valid && repairCheck.plan) {
+          return {
+            status: 'executable',
+            plan: repairCheck.plan,
+            planTrace: {
+              fastPath: false,
+              degradedFallback: false,
+              intent: repairCheck.plan.queryIntent,
+              resolvedUrns: [...repairCheck.plan.seedUrns],
+              depth: repairCheck.plan.overallMaxDepth,
+            },
+            isFastPath: false,
+            isDegraded: false,
+          };
+        }
+      }
+    }
+  } catch {
+    // If planner throws, proceed to degraded fallback
+  }
+
+  // Degraded fallback on planner failure or validation failure
+  const fallback = buildDeterministicFallbackPlan(
+    rawQuery,
+    resolvedCandidates,
+    'PLANNER_SCHEMA_FAILURE'
+  );
+
+  return {
+    status: 'executable',
+    plan: fallback.plan,
+    planTrace: fallback.planTrace,
+    isFastPath: false,
+    isDegraded: true,
   };
 }

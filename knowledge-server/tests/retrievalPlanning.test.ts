@@ -7,6 +7,8 @@ import {
 import {
   isPureIdentifierQuery,
   resolveQueryEntities,
+  buildQueryExecutionPlan,
+  buildDeterministicFallbackPlan,
 } from '../src/retrieval/queryPlanning.js';
 import {
   PILOT_GOLD_NODES,
@@ -263,6 +265,375 @@ describe('18-W0-02A: Retrieval Ontology Registry & Identifier/Entity Resolution'
       );
 
       expect(passedTokens.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('18-W0-02B: buildQueryExecutionPlan Coordinator', () => {
+    const pinnedSnapshot = 'snapshot-pinned-01';
+
+    it('fast-paths pure identifier and calls planner zero times', async () => {
+      const gateway = new MockGraphGateway([
+        {
+          urn: URN_TABLE_FCL_CYCLE_COUNTER,
+          canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+          kind: 'DatabaseObject',
+        },
+      ]);
+
+      let plannerCallCount = 0;
+      const planner = {
+        async plan(): Promise<any> {
+          plannerCallCount++;
+          throw new Error('Planner should not be called for fast path');
+        },
+      };
+
+      const result = await buildQueryExecutionPlan({
+        request: {
+          query: 'MAIN1.FCL_CYCLE_COUNTER',
+          limit: 20,
+          includeInferred: false,
+          recentTurns: [],
+        },
+        pinnedSnapshotId: pinnedSnapshot,
+        gateway,
+        planner,
+      });
+
+      expect(plannerCallCount).toBe(0);
+      expect(result.status).toBe('executable');
+      if (result.status === 'executable') {
+        expect(result.isFastPath).toBe(true);
+        expect(result.isDegraded).toBe(false);
+        expect(result.plan.seedUrns).toEqual([URN_TABLE_FCL_CYCLE_COUNTER]);
+        expect(result.plan.fulltextKeywords).toContain('MAIN1.FCL_CYCLE_COUNTER');
+        expect(result.plan.overallMaxDepth).toBe(1);
+        expect(result.plan.traversalSteps.length).toBeGreaterThan(0);
+        expect(result.planTrace.fastPath).toBe(true);
+        expect(result.planTrace.resolvedUrns).toEqual([URN_TABLE_FCL_CYCLE_COUNTER]);
+      }
+    });
+
+    it('calls planner exactly once for valid natural-language query', async () => {
+      const gateway = new MockGraphGateway([
+        {
+          urn: URN_TABLE_FCL_CYCLE_COUNTER,
+          canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+          kind: 'DatabaseObject',
+        },
+      ]);
+
+      let plannerCalls: any[] = [];
+      const planner = {
+        async plan(req: any, ctx: any): Promise<any> {
+          plannerCalls.push({ req, ctx });
+          return {
+            type: 'plan',
+            plan: {
+              planId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+              queryIntent: 'IMPACT_ANALYSIS',
+              seedUrns: [URN_TABLE_FCL_CYCLE_COUNTER],
+              traversalSteps: [
+                {
+                  relationType: 'READS_FROM',
+                  direction: 'INCOMING',
+                  maxHops: 2,
+                },
+              ],
+              overallMaxDepth: 2,
+              includeInferred: false,
+              fulltextKeywords: ['FCL_CYCLE_COUNTER'],
+              semanticQuery: req.query,
+            },
+          };
+        },
+      };
+
+      const result = await buildQueryExecutionPlan({
+        request: {
+          query: 'who reads from FCL_CYCLE_COUNTER?',
+          limit: 20,
+          includeInferred: false,
+          recentTurns: [],
+        },
+        pinnedSnapshotId: pinnedSnapshot,
+        gateway,
+        planner,
+      });
+
+      expect(plannerCalls).toHaveLength(1);
+      expect(plannerCalls[0].ctx.resolvedCandidates).toHaveLength(1);
+      expect(result.status).toBe('executable');
+      if (result.status === 'executable') {
+        expect(result.isFastPath).toBe(false);
+        expect(result.isDegraded).toBe(false);
+        expect(result.plan.queryIntent).toBe('IMPACT_ANALYSIS');
+        expect(result.plan.seedUrns).toEqual([URN_TABLE_FCL_CYCLE_COUNTER]);
+        expect(result.plan.traversalSteps[0]?.relationType).toBe('READS_FROM');
+        expect(result.planTrace.fastPath).toBe(false);
+        expect(result.planTrace.degradedFallback).toBe(false);
+      }
+    });
+
+    it('repairs once when first response fails validation and succeeds on second call', async () => {
+      const gateway = new MockGraphGateway([
+        {
+          urn: URN_TABLE_FCL_CYCLE_COUNTER,
+          canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+          kind: 'DatabaseObject',
+        },
+      ]);
+
+      let callCount = 0;
+      const planner = {
+        async plan(req: any): Promise<any> {
+          callCount++;
+          if (callCount === 1) {
+            // First call: returns invalid schema (missing semanticQuery, unknown relation)
+            return {
+              type: 'plan',
+              plan: {
+                planId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+                queryIntent: 'INVALID_INTENT',
+                seedUrns: [URN_TABLE_FCL_CYCLE_COUNTER],
+                traversalSteps: [],
+              },
+            };
+          }
+          // Second call (repair): returns valid plan
+          return {
+            type: 'plan',
+            plan: {
+              planId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+              queryIntent: 'LOOKUP',
+              seedUrns: [URN_TABLE_FCL_CYCLE_COUNTER],
+              traversalSteps: [],
+              overallMaxDepth: 1,
+              includeInferred: false,
+              fulltextKeywords: ['FCL_CYCLE_COUNTER'],
+              semanticQuery: 'valid query',
+            },
+          };
+        },
+      };
+
+      const result = await buildQueryExecutionPlan({
+        request: {
+          query: 'explain FCL_CYCLE_COUNTER',
+          limit: 20,
+          includeInferred: false,
+          recentTurns: [],
+        },
+        pinnedSnapshotId: pinnedSnapshot,
+        gateway,
+        planner,
+      });
+
+      expect(callCount).toBe(2);
+      expect(result.status).toBe('executable');
+      if (result.status === 'executable') {
+        expect(result.isDegraded).toBe(false);
+        expect(result.plan.queryIntent).toBe('LOOKUP');
+      }
+    });
+
+    it('degrades to deterministic fallback after two failed planner attempts without exposing secrets', async () => {
+      const gateway = new MockGraphGateway([
+        {
+          urn: URN_TABLE_FCL_CYCLE_COUNTER,
+          canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+          kind: 'DatabaseObject',
+        },
+      ]);
+
+      let callCount = 0;
+      const planner = {
+        async plan(): Promise<any> {
+          callCount++;
+          // Always return invalid plan (invented seed URN)
+          return {
+            type: 'plan',
+            plan: {
+              planId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+              queryIntent: 'LOOKUP',
+              seedUrns: ['urn:plannermate:oracle:DatabaseObject:INVENTED_TABLE'],
+              traversalSteps: [],
+              overallMaxDepth: 1,
+              includeInferred: false,
+              fulltextKeywords: ['INVENTED'],
+              semanticQuery: 'query',
+            },
+          };
+        },
+      };
+
+      const result = await buildQueryExecutionPlan({
+        request: {
+          query: 'explain FCL_CYCLE_COUNTER',
+          limit: 20,
+          includeInferred: false,
+          recentTurns: [],
+        },
+        pinnedSnapshotId: pinnedSnapshot,
+        gateway,
+        planner,
+      });
+
+      expect(callCount).toBe(2);
+      expect(result.status).toBe('executable');
+      if (result.status === 'executable') {
+        expect(result.isDegraded).toBe(true);
+        expect(result.planTrace.degradedFallback).toBe(true);
+        expect(result.planTrace.reasonCode).toBe('PLANNER_SCHEMA_FAILURE');
+        // Traversal capped at 5 one-hop entries
+        expect(result.plan.traversalSteps.length).toBeLessThanOrEqual(5);
+        for (const s of result.plan.traversalSteps) {
+          expect(s.maxHops).toBe(1);
+          expect(s.direction).toBe('BOTH');
+        }
+        // Invented URN was rejected, only server-resolved URN is used
+        expect(result.plan.seedUrns).toEqual([URN_TABLE_FCL_CYCLE_COUNTER]);
+      }
+    });
+
+    it('returns NEEDS_CLARIFICATION for unresolved pronoun and does not call planner', async () => {
+      const gateway = new MockGraphGateway([]);
+
+      let plannerCalled = false;
+      const planner = {
+        async plan(): Promise<any> {
+          plannerCalled = true;
+          throw new Error('Planner must not be called on ambiguity');
+        },
+      };
+
+      const result = await buildQueryExecutionPlan({
+        request: {
+          query: 'cái này đổi có ảnh hưởng gì',
+          limit: 20,
+          includeInferred: false,
+          recentTurns: [],
+        },
+        pinnedSnapshotId: pinnedSnapshot,
+        gateway,
+        planner,
+      });
+
+      expect(plannerCalled).toBe(false);
+      expect(result.status).toBe('needsClarification');
+      if (result.status === 'needsClarification') {
+        expect(result.semanticOutcome).toBe('NEEDS_CLARIFICATION');
+        expect(result.seedUrns).toEqual([]);
+        expect(result.graphDirective).toBe('NO_GRAPH_SEED');
+        expect(result.semanticQuery).toBe('cái này đổi có ảnh hưởng gì');
+        expect(result.fulltextKeywords).toEqual(['cái này đổi có ảnh hưởng gì']);
+        expect(result.safeCandidates).toEqual([]);
+      }
+    });
+
+    it('returns NEEDS_CLARIFICATION with safe candidates on ambiguous name collision', async () => {
+      const gateway = new MockGraphGateway([
+        {
+          urn: URN_PROCESS_60000006,
+          canonicalName: 'SHB - Credit calculations',
+          kind: 'ScheduledProcess',
+        },
+        {
+          urn: URN_CONTAINER_60000006,
+          canonicalName: 'Step 20 - Grace period length cycle',
+          kind: 'ProcessStep',
+        },
+      ]);
+
+      let plannerCalled = false;
+      const planner = {
+        async plan(): Promise<any> {
+          plannerCalled = true;
+          throw new Error('Planner must not be called on collision');
+        },
+      };
+
+      const result = await buildQueryExecutionPlan({
+        request: {
+          query: '60000006 ảnh hưởng gì?',
+          limit: 20,
+          includeInferred: false,
+          recentTurns: [],
+        },
+        pinnedSnapshotId: pinnedSnapshot,
+        gateway,
+        planner,
+      });
+
+      expect(plannerCalled).toBe(false);
+      expect(result.status).toBe('needsClarification');
+      if (result.status === 'needsClarification') {
+        expect(result.semanticOutcome).toBe('NEEDS_CLARIFICATION');
+        expect(result.safeCandidates).toHaveLength(2);
+        expect(result.safeCandidates.map((c) => c.urn)).toContain(URN_PROCESS_60000006);
+        expect(result.safeCandidates.map((c) => c.urn)).toContain(URN_CONTAINER_60000006);
+        // None promoted to graph seed
+        expect(result.seedUrns).toEqual([]);
+        expect(result.graphDirective).toBe('NO_GRAPH_SEED');
+        expect(result.semanticQuery).toBe('60000006 ảnh hưởng gì?');
+      }
+    });
+
+    it('rejects raw cypher, 6th traversal entry, depth 4, or unknown relations from reaching output', async () => {
+      const gateway = new MockGraphGateway([
+        {
+          urn: URN_TABLE_FCL_CYCLE_COUNTER,
+          canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+          kind: 'DatabaseObject',
+        },
+      ]);
+
+      const maliciousPlanner = {
+        async plan(): Promise<any> {
+          return {
+            type: 'plan',
+            plan: {
+              planId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+              queryIntent: 'LOOKUP',
+              seedUrns: [URN_TABLE_FCL_CYCLE_COUNTER],
+              traversalSteps: [
+                { relationType: 'READS_FROM', direction: 'OUTGOING', maxHops: 1 },
+                { relationType: 'WRITES_TO', direction: 'OUTGOING', maxHops: 1 },
+                { relationType: 'CALLS', direction: 'OUTGOING', maxHops: 1 },
+                { relationType: 'INVOKES', direction: 'OUTGOING', maxHops: 1 },
+                { relationType: 'PRECEDES', direction: 'OUTGOING', maxHops: 1 },
+                { relationType: 'CONTAINS_STEP', direction: 'OUTGOING', maxHops: 1 }, // 6th entry!
+              ],
+              overallMaxDepth: 4, // Depth 4!
+              cypher: 'MATCH (n) DETACH DELETE n', // Raw cypher injection!
+              includeInferred: false,
+              fulltextKeywords: ['MAIN1'],
+              semanticQuery: 'query',
+            },
+          };
+        },
+      };
+
+      const result = await buildQueryExecutionPlan({
+        request: {
+          query: 'check FCL_CYCLE_COUNTER relations',
+          limit: 20,
+          includeInferred: false,
+          recentTurns: [],
+        },
+        pinnedSnapshotId: pinnedSnapshot,
+        gateway,
+        planner: maliciousPlanner,
+      });
+
+      // Must be rejected and fall back to degraded safe plan
+      expect(result.status).toBe('executable');
+      if (result.status === 'executable') {
+        expect(result.isDegraded).toBe(true);
+        expect((result.plan as any).cypher).toBeUndefined();
+        expect(result.plan.traversalSteps.length).toBeLessThanOrEqual(5);
+        expect(result.plan.overallMaxDepth).toBeLessThanOrEqual(3);
+      }
     });
   });
 });
