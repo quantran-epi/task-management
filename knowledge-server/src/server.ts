@@ -5,6 +5,8 @@ import Fastify, { type FastifyServerOptions } from 'fastify';
 import { AttemptService } from './services/attemptService.js';
 import { registerAttemptRoutes } from './routes/attempts.js';
 import { registerSnapshotRoutes } from './routes/snapshots.js';
+import { registerGraphRoutes, GraphBuildService } from './routes/graph.js';
+import { GraphRepository } from './graph/graphRepository.js';
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
 const SAFE_ERROR = { error: { code: 'INTERNAL_ERROR', message: 'Request could not be processed.' } };
@@ -18,6 +20,8 @@ export interface KnowledgeServerOptions {
   bodyLimit?: number | undefined;
   logger?: Exclude<FastifyServerOptions['logger'], boolean> | undefined;
   attemptService?: AttemptService | undefined;
+  graphRepository?: GraphRepository | undefined;
+  graphBuildService?: GraphBuildService | undefined;
 }
 
 export interface KnowledgeServer {
@@ -62,13 +66,16 @@ export function buildKnowledgeServer(options: KnowledgeServerOptions): Knowledge
           },
   });
   const attemptService = options.attemptService ?? new AttemptService();
+  const graphBuildService =
+    options.graphBuildService ??
+    new GraphBuildService(options.graphRepository, attemptService);
 
   void app.register(cors, {
     origin(origin, callback) {
       callback(null, origin !== undefined && allowedOrigins.has(origin));
     },
     credentials: false,
-    allowedHeaders: ['authorization', 'content-type', 'x-attempt-key'],
+    allowedHeaders: ['authorization', 'content-type', 'x-attempt-key', 'x-rebuild-key'],
     methods: ['GET', 'POST', 'OPTIONS'],
   });
 
@@ -113,6 +120,7 @@ export function buildKnowledgeServer(options: KnowledgeServerOptions): Knowledge
 
   registerAttemptRoutes(app, attemptService);
   registerSnapshotRoutes(app, attemptService);
+  registerGraphRoutes(app, graphBuildService);
 
   return {
     app,
