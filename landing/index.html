@@ -1169,6 +1169,10 @@ body {
             <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/><path d="M10 6l-4 4M6 6l4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
             Analytics
           </div>
+          <div class="preview-nav-item" data-tab="docs">
+            <svg viewBox="0 0 16 16" fill="none"><path d="M4 2h8a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="currentColor" stroke-width="1.5"/><path d="M6 5h4M6 8h4M6 11h2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            Docs
+          </div>
         </div>
 
         <!-- Main Dynamic Panel -->
@@ -1591,6 +1595,32 @@ document.querySelectorAll('a[href^="#"]').forEach(function(a) {
     previewMain.appendChild(panel);
   }
 
+  function renderDocsView() {
+    previewMain.innerHTML = '';
+    var panel = document.createElement('div');
+    panel.className = 'preview-view-panel';
+    panel.innerHTML = '<div class="preview-header">' +
+        '<h3>Knowledge Docs &amp; Notes</h3>' +
+        '<div class="preview-stats"><span class="preview-stat">Local Markdown</span></div>' +
+      '</div>' +
+      '<div style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px;">' +
+        [
+          { title: 'Local Banking IT Knowledge Base', date: 'Oct 10, 2026', tags: 'Banking, Spec' },
+          { title: 'Offline Graph Assistant Architecture', date: 'Oct 09, 2026', tags: 'GraphRAG, Neo4j' },
+          { title: 'Sprint 14 Retrospective & Release Notes', date: 'Oct 08, 2026', tags: 'v1.2, Release' }
+        ].map(function(doc) {
+          return '<div style="background: var(--bg-card); padding: 14px 18px; border-radius: var(--radius-sm); border: 1px solid var(--surface-border); display: flex; justify-content: space-between; align-items: center;">' +
+            '<div>' +
+              '<div style="font-size: 14px; font-weight: 600; color: var(--fg);">' + doc.title + '</div>' +
+              '<div style="font-size: 12px; color: var(--fg-dim); margin-top: 2px;">' + doc.tags + '</div>' +
+            '</div>' +
+            '<span style="font-size: 12px; color: var(--fg-muted);">' + doc.date + '</span>' +
+          '</div>';
+        }).join('') +
+      '</div>';
+    previewMain.appendChild(panel);
+  }
+
   function switchTab(tab) {
     currentTab = tab;
     navItems.forEach(function(item) {
@@ -1606,6 +1636,7 @@ document.querySelectorAll('a[href^="#"]').forEach(function(a) {
     else if (tab === 'planner') renderPlannerView();
     else if (tab === 'projects') renderProjectsView();
     else if (tab === 'analytics') renderAnalyticsView();
+    else if (tab === 'docs') renderDocsView();
   }
 
   navItems.forEach(function(item) {
