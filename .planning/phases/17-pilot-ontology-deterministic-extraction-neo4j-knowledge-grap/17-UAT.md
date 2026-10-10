@@ -3,12 +3,12 @@ status: partial
 phase: 17-pilot-ontology-deterministic-extraction-neo4j-knowledge-grap
 source: 17-01-SUMMARY.md, 17-02-SUMMARY.md, 17-03-SUMMARY.md, 17-04-SUMMARY.md, 17-05-SUMMARY.md
 started: 2026-10-10T06:51:29Z
-updated: 2026-10-10T08:23:07Z
+updated: 2026-10-10T15:51:00Z
 ---
 
 ## Current Test
 
-[testing paused — 4 items blocked pending rebuild fixes]
+Retest Tests 2 and 3 after Plan 17-06, then continue Tests 4 through 7.
 
 ## Tests
 
@@ -68,7 +68,8 @@ blocked: 4
 ## Gaps
 
 - truth: "Graph status loads once for the selected document set and then displays a stable Never built or active summary."
-  status: failed
+  status: addressed
+  addressed_by: 17-06
   reason: "User reported: Graph status returns 200 with Never built, but the client calls the status endpoint repeatedly without stopping and the section remains/loading repeatedly."
   severity: major
   test: 2
@@ -82,7 +83,8 @@ blocked: 4
   debug_session: ""
 
 - truth: "A rebuild reports success only after a candidate activates; failures display a clear reason while preserving any prior active graph."
-  status: failed
+  status: addressed
+  addressed_by: 17-06
   reason: "User reported: After confirmation, the UI shows start and finished toasts at nearly the same time, then the graph section displays a Failed badge with no explanation."
   severity: major
   test: 3
@@ -101,3 +103,27 @@ blocked: 4
     - "Expose and render a safe graph-build error code/message with next action."
     - "Add regression tests for Failed polling and failure copy."
   debug_session: ""
+
+## Retest Sequence After Plan 17-06
+
+1. **Retest 2 — Graph Status Summary**
+   - Open a published document-set drawer.
+   - Verify `GET /graph/status` runs once for the stable selected set and configuration.
+   - Verify status remains visible without continuous skeleton or spinner flicker.
+2. **Retest 3 — Safe Graph Rebuild**
+   - Start Knowledge Server and select a set with an active published snapshot.
+   - Trigger `Xây dựng lại đồ thị` and confirm.
+   - If source snapshot is missing, verify alert `Xây dựng thất bại: NO_SOURCE_SNAPSHOT`, an actionable message, and no success toast.
+   - With a valid snapshot, verify stages advance through Preparing, Structured extraction, Prose extraction, Validation, and Activation before status becomes `Đang hoạt động`.
+3. **Retest 4 — Evidence and Classification Inspection**
+   - After activation, click `Xem bằng chứng`.
+   - Verify nested drawer, fact cards, evidence occurrences, and `OBSERVED`/`INFERRED`/`BUSINESS_APPROVED` tags.
+4. **Retest 5 — Pilot Identity and Deterministic Facts**
+   - Inspect process `60000006` in evidence drawer.
+   - Verify process and container identities remain distinct and deterministic step/container facts are not duplicated.
+5. **Retest 6 — Conflict and Quarantine Safety**
+   - Verify contradictory functional facts retain both conflict branches.
+   - Verify unqualified raw identifiers remain quarantined and absent from active facts.
+6. **Retest 7 — Durable Rebuild and Failure Isolation**
+   - Restart Knowledge Server and verify active snapshot remains available.
+   - Trigger a failed rebuild and verify prior active snapshot ID and evidence remain unchanged.
