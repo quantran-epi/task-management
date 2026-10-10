@@ -40,7 +40,7 @@
 
 - [x] **Phase 16: Knowledge Server Foundation, DLP Checks & AST Ingestion** - Optional knowledge service, pre-ingestion sensitive-data warnings with fresh explicit override, AST evidence chunking, and SHA-256 incremental chunk projection. (completed 2026-10-08)
 - [x] **Phase 17: Pilot Ontology, Deterministic Extraction & Neo4j Knowledge Graph** - Controlled process 60000006 ontology, composite URNs, deterministic table extraction, evidence classification, and rebuildable Neo4j graph. (completed 2026-10-10)
-- [ ] **Phase 18: Multi-Modal Hybrid Retrieval Engine** - Full-text identifier search, semantic vector search, bounded 1-3 hop Cypher traversal, and Reciprocal Rank Fusion.
+- [x] **Phase 18: Multi-Modal Hybrid Retrieval Engine** - Full-text identifier search, semantic vector search, bounded 1-3 hop Cypher traversal, and Reciprocal Rank Fusion. (completed 2026-10-10)
 - [ ] **Phase 19: Grounded Assistant, Provenance Citations & Offline Fallback** - AI Chat Drawer synthesis with source citations, step-by-step path cards, conflict warnings, abstention handling, and local BM25 fallback.
 - [ ] **Phase 20: Benchmark Evaluation Suite, Integrity Hardening & Credential Isolation** - 30-50 question evaluation benchmark, path/claim verification, index rebuild tests, and server-side secret isolation.
 
@@ -346,7 +346,7 @@ Plans:
 - [x] 18-06-PLAN.md — Reciprocal Rank Fusion & citation synthesis
 - [x] 18-07-PLAN.md — Hybrid retrieval orchestrator
 - [x] 18-08-PLAN.md — Retrieval HTTP endpoint
-- [ ] 18-09-PLAN.md — End-to-end integration & acceptance gates
+- [x] 18-09-PLAN.md — End-to-end integration & acceptance gates
 
 ### Phase 19: Grounded Assistant, Provenance Citations & Offline Fallback
 
