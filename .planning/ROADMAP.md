@@ -345,7 +345,7 @@ Plans:
 - [x] 18-05-PLAN.md — Bounded Cypher traversal & entity resolution
 - [x] 18-06-PLAN.md — Reciprocal Rank Fusion & citation synthesis
 - [x] 18-07-PLAN.md — Hybrid retrieval orchestrator
-- [ ] 18-08-PLAN.md — Retrieval HTTP endpoint
+- [x] 18-08-PLAN.md — Retrieval HTTP endpoint
 - [ ] 18-09-PLAN.md — End-to-end integration & acceptance gates
 
 ### Phase 19: Grounded Assistant, Provenance Citations & Offline Fallback
