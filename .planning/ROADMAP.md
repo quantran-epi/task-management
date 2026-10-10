@@ -344,7 +344,7 @@ Plans:
 - [x] 18-04-PLAN.md — Closed-ontology query planner
 - [x] 18-05-PLAN.md — Bounded Cypher traversal & entity resolution
 - [x] 18-06-PLAN.md — Reciprocal Rank Fusion & citation synthesis
-- [ ] 18-07-PLAN.md — Hybrid retrieval orchestrator
+- [x] 18-07-PLAN.md — Hybrid retrieval orchestrator
 - [ ] 18-08-PLAN.md — Retrieval HTTP endpoint
 - [ ] 18-09-PLAN.md — End-to-end integration & acceptance gates
 
