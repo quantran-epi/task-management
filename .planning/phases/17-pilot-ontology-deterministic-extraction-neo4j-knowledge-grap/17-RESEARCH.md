@@ -393,13 +393,13 @@ Persist document/occurrence/heading/line/UTF-16 offsets, quote hash, method, env
 | A7 | Community edition is baseline. | Enterprise requirements alter schema/security plan. |
 | A8 | Publish and rebuild may overlap with stale-source guard. | Serialization decision would change state machine. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Durable active published snapshot location?** Current store is memory-only. Add early decision/checkpoint; native filesystem is minimum recommendation. `[VERIFIED; ASSUMED]`
-2. **Which facts are truly BUSINESS_APPROVED?** Never fabricate. Support zero count; require authorized curated manifest if acceptance needs real example. `[CITED: D-19]`
-3. **Neo4j deployment/edition?** Docker CLI exists, daemon/CLI/env do not. Recommend pinned Community image unless secured remote supplied. `[VERIFIED; ASSUMED]`
-4. **Auto-build after publish?** Not locked. Recommend explicit manual rebuild to preserve optional-server isolation. `[ASSUMED]`
-5. **Requirements source sync?** Root file lacks GRAPH entries. Owning workflow should synchronize before phase verification. `[VERIFIED]`
+1. **Durable active published snapshot location?** **(RESOLVED)** Durable filesystem snapshot store adopted; native atomic `.tmp`+rename file persistence surviving daemon restart planned in 17-05 Task 1 (`snapshotStore.ts`). Memory-only store replaced. `[RESOLVED: 17-05-PLAN.md Task 1; VERIFIED: snapshotStore.ts]`
+2. **Which facts are truly BUSINESS_APPROVED?** **(RESOLVED)** Zero real `BUSINESS_APPROVED` facts seeded; never fabricated. Approval tests inject fixture approvals against exact `factKey` (17-03 Task 2 approval overlay / 17-04 classification tests); production may show zero approved count. `[RESOLVED: 17-03/17-04 approval fixtures; CITED: D-19]`
+3. **Neo4j deployment/edition?** **(RESOLVED)** Pinned Community image baseline; `neo4j-driver@6.2.0` legitimacy gated by blocking `checkpoint:human-verify` in 17-03 Task 1 before install, with opt-in official-image integration. `[RESOLVED: 17-03-PLAN.md Task 1 human-verify checkpoint; VERIFIED]`
+4. **Auto-build after publish?** **(RESOLVED)** Explicit manual rebuild chosen (not auto-after-publish) to preserve optional-server isolation; rebuild consumes active server snapshot only. `[RESOLVED: 17-05-PLAN.md rebuild orchestration; ASSUMED]`
+5. **Requirements source sync?** **(RESOLVED)** `.planning/REQUIREMENTS.md` now carries GRAPH-01..06 descriptions (lines 113-118) and traceability rows (lines 197-202); root source synchronized. `[RESOLVED: REQUIREMENTS.md lines 113-118/197-202; VERIFIED]`
 
 ## Environment Availability
 
