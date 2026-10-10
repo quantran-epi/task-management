@@ -313,7 +313,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 17-03-PLAN.md — neo4j-driver verify/install, candidate merge + conflict + classification, graph repository (GRAPH-04)
+- [x] 17-03-PLAN.md — neo4j-driver verify/install, candidate merge + conflict + classification, graph repository (GRAPH-04)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 

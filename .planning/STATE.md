@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Hybrid GraphRAG Knowledge Assistant MVP
 status: executing
-stopped_at: Completed 17-02-PLAN.md
-last_updated: "2026-10-10T05:00:00.000Z"
-last_activity: 2026-10-10 -- Plan 17-02 completed
+stopped_at: Completed 17-03-PLAN.md
+last_updated: "2026-10-10T05:15:00.000Z"
+last_activity: 2026-10-10 -- Plan 17-03 completed
 progress:
   total_phases: 16
   completed_phases: 12
   total_plans: 67
-  completed_plans: 64
-  percent: 78
+  completed_plans: 65
+  percent: 80
 ---
 
 # Project State
@@ -26,12 +26,12 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 ## Current Position
 
 Phase: 17 (pilot-ontology-deterministic-extraction-neo4j-knowledge-grap) — EXECUTING
-Plan: 3 of 5
+Plan: 4 of 5
 Status: Executing Phase 17
-Last activity: 2026-10-10 -- Plan 17-02 completed
-Stopped at: Completed 17-02-PLAN.md
+Last activity: 2026-10-10 -- Plan 17-03 completed
+Stopped at: Completed 17-03-PLAN.md
 
-Progress: [████████░░] 78%
+Progress: [████████░░] 80%
 
 ### Quick Tasks Completed
 
@@ -165,6 +165,7 @@ Progress: [████████░░] 78%
 | Phase 16 P24 | 7min | 2 tasks | 13 files |
 | Phase 17 P01 | 4min | 2 tasks | 5 files |
 | Phase 17 P02 | 8min | 2 tasks | 4 files |
+| Phase 17 P03 | 6min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -172,6 +173,10 @@ Progress: [████████░░] 78%
 
 Recent decisions logged in PROJECT.md:
 
+- [Phase 17 Plan 03]: Verified and installed exact neo4j-driver@6.2.0 dependency after human gate.
+- [Phase 17 Plan 03]: Map relations to static parameterized query constants preventing Cypher injection.
+- [Phase 17 Plan 03]: Preserve both branches of contradictory assertions in functional relation slots as explicit Conflict records.
+- [Phase 17 Plan 03]: Calculate normalizedProjectionHash over sorted canonical entity and relation tuples excluding build timestamps.
 - [Phase 17 Plan 02]: Lock all deterministic extractions to OBSERVED classification and DETERMINISTIC_TABLE/SQL/CODE methods.
 - [Phase 17 Plan 02]: Track consumed character ranges for every parsed table and code block to exclude them from prose segmentation.
 - [Phase 17 Plan 02]: Enforce zero retries on LLM prose fallback; quarantine malformed responses or HTTP errors without looping.
@@ -218,6 +223,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-10T05:00:00.000Z
-Stopped at: Completed 17-02-PLAN.md
-Resume file: .planning/phases/17-pilot-ontology-deterministic-extraction-neo4j-knowledge-grap/17-03-PLAN.md
+Last session: 2026-10-10T05:15:00.000Z
+Stopped at: Completed 17-03-PLAN.md
+Resume file: .planning/phases/17-pilot-ontology-deterministic-extraction-neo4j-knowledge-grap/17-04-PLAN.md
