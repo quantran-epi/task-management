@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 Phase: 17
 Plan: Not started
 Status: Phase 16 verified and secured
-Last activity: 2026-10-10 -- Phase 16 gap closure verified; Phase 17 ready for planning
+Last activity: 2026-10-10 -- Completed quick task 261010-jap: landing-page-enhancement
 
 Progress: [████████░░] 75%
 
@@ -36,6 +36,7 @@ Progress: [████████░░] 75%
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261010-jap | overhaul landing page with mesh aura, glassmorphism, theme toggle, and interactive preview | 2026-10-10 | 2d60547 | complete | [261010-jap-landing-page-enhancement](./quick/261010-jap-landing-page-enhancement/) |
 | 261010-pnd | fix missing isPinned property in restoreBackup.test.ts | 2026-10-10 | 551df68 | complete | [261010-pnd-fix-restore-backup-test-note-is-pinned](./quick/261010-pnd-fix-restore-backup-test-note-is-pinned/) |
 | 261009-v10t | fix Schema V10 table list and verno test assertions | 2026-10-09 | 5ad90bb | complete | [261009-v10t-fix-schema-v10-test-assertions](./quick/261009-v10t-fix-schema-v10-test-assertions/) |
 | 261009-n9z | integrate latest master, prepare artifact-only Phase 16 desktop build branch | 2026-10-09 | — | complete | [261009-n9z-create-phase-16-desktop-build-branch-mer](./quick/261009-n9z-create-phase-16-desktop-build-branch-mer/) |
