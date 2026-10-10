@@ -115,6 +115,7 @@ describe('restoreBackupPayload & rollbackToSnapshot', () => {
       id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
       title: 'Local Existing Note',
       body: 'Local body',
+      isPinned: false,
       createdAt: '2026-09-26T10:00:00.000Z',
       updatedAt: '2026-09-26T10:00:00.000Z',
     });
