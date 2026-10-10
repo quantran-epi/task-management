@@ -379,6 +379,8 @@ export class RetrievalService {
       outcome = 'UNSUPPORTED';
     } else if (hasClarificationCandidates) {
       outcome = 'NEEDS_CLARIFICATION';
+    } else if (isClarification && !hasClarificationCandidates) {
+      outcome = 'NO_EVIDENCE';
     } else if (finalItems.length === 0) {
       outcome = 'NO_EVIDENCE';
     } else if (isDegraded) {
