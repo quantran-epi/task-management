@@ -17,7 +17,13 @@ import type {
   EvidenceRecordDTO,
   QuarantineItemDTO,
 } from '../routes/graph.js';
-import { GraphBuildInProgressError } from '../routes/graph.js';
+
+export class GraphBuildInProgressError extends Error {
+  constructor(message = 'Graph rebuild is already in progress for this document set.') {
+    super(message);
+    this.name = 'GraphBuildInProgressError';
+  }
+}
 
 export interface GraphBuildServiceOptions {
   repository?: GraphRepository | undefined;

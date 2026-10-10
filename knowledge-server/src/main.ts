@@ -1,4 +1,6 @@
 import 'dotenv/config';
+import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 import { buildKnowledgeServer, type KnowledgeServer } from './server.js';
 
 export interface ReadKnowledgeServerOptionsResult {
@@ -115,10 +117,12 @@ export async function startKnowledgeServer(
   return server;
 }
 
+const currentFile = fileURLToPath(import.meta.url);
+const invokedFile = process.argv[1] ? resolve(process.argv[1]) : '';
 const isDirectRun =
-  import.meta.url === `file://${process.argv[1]?.replace(/\\/g, '/')}` ||
-  process.argv[1]?.endsWith('main.ts') ||
-  process.argv[1]?.endsWith('main.js');
+  currentFile === invokedFile ||
+  invokedFile.endsWith('main.ts') ||
+  invokedFile.endsWith('main.js');
 
 if (isDirectRun) {
   startKnowledgeServer().catch((err: unknown) => {
