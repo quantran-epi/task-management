@@ -2,6 +2,20 @@ import 'dotenv/config';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { buildKnowledgeServer, type KnowledgeServer } from './server.js';
+import { createEmbeddingProvider } from './embedding/embeddingProviders.js';
+
+export interface RemoteEmbeddingConfig {
+  enabled: boolean;
+  endpoint?: string;
+  allowedHosts?: string[];
+  model?: string;
+  dimensions?: number;
+}
+
+export interface RemotePlannerConfig {
+  enabled: boolean;
+  allowedHosts?: string[];
+}
 
 export interface ReadKnowledgeServerOptionsResult {
   token: string;
@@ -9,9 +23,27 @@ export interface ReadKnowledgeServerOptionsResult {
   host: string;
   port: number;
   httpsTerminated: boolean;
+  remoteEmbedding: RemoteEmbeddingConfig;
+  remotePlanner: RemotePlannerConfig;
 }
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
+
+function parseAllowedHosts(rawHosts: string, varName: string): string[] {
+  const hosts = rawHosts
+    .split(',')
+    .map((h) => h.trim())
+    .filter(Boolean);
+  if (hosts.length === 0) {
+    throw new Error(`${varName} must contain at least one valid host when remote is enabled.`);
+  }
+  for (const host of hosts) {
+    if (host.includes('/') || host.includes(':') || host.includes('@') || host.includes('*')) {
+      throw new Error(`Invalid host in ${varName}: "${host}". Must be an exact hostname without port, path, or wildcards.`);
+    }
+  }
+  return hosts;
+}
 
 export function readKnowledgeServerOptions(
   env: NodeJS.ProcessEnv = process.env
@@ -89,12 +121,71 @@ export function readKnowledgeServerOptions(
     throw new Error('Remote knowledge server binding requires HTTPS termination.');
   }
 
+  // Validate remote embedding configuration
+  const embeddingRemoteEnabled = (env.EMBEDDING_REMOTE_ENABLED ?? '').trim().toLowerCase() === 'true';
+  const remoteEmbedding: RemoteEmbeddingConfig = { enabled: embeddingRemoteEnabled };
+
+  if (embeddingRemoteEnabled) {
+    const endpoint = (env.EMBEDDING_REMOTE_ENDPOINT ?? '').trim();
+    if (!endpoint) throw new Error('EMBEDDING_REMOTE_ENDPOINT is required when EMBEDDING_REMOTE_ENABLED is true.');
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(endpoint);
+    } catch {
+      throw new Error(`Invalid EMBEDDING_REMOTE_ENDPOINT: "${endpoint}". Must be a valid URL.`);
+    }
+    if (parsedUrl.protocol !== 'https:') {
+      throw new Error(`EMBEDDING_REMOTE_ENDPOINT must use HTTPS protocol: "${endpoint}".`);
+    }
+    if (parsedUrl.username || parsedUrl.password) {
+      throw new Error('EMBEDDING_REMOTE_ENDPOINT must not contain credentials.');
+    }
+    if (parsedUrl.search || parsedUrl.hash) {
+      throw new Error('EMBEDDING_REMOTE_ENDPOINT must not contain query parameters or hash.');
+    }
+
+    const rawHosts = (env.EMBEDDING_REMOTE_ALLOWED_HOSTS ?? '').trim();
+    const allowedHosts = parseAllowedHosts(rawHosts, 'EMBEDDING_REMOTE_ALLOWED_HOSTS');
+    if (!allowedHosts.includes(parsedUrl.hostname)) {
+      throw new Error(`EMBEDDING_REMOTE_ENDPOINT host "${parsedUrl.hostname}" is not in EMBEDDING_REMOTE_ALLOWED_HOSTS.`);
+    }
+
+    const apiKey = (env.EMBEDDING_REMOTE_API_KEY ?? '').trim();
+    if (!apiKey) throw new Error('EMBEDDING_REMOTE_API_KEY is required when EMBEDDING_REMOTE_ENABLED is true.');
+
+    const model = (env.EMBEDDING_REMOTE_MODEL ?? '').trim();
+    if (!model) throw new Error('EMBEDDING_REMOTE_MODEL is required when EMBEDDING_REMOTE_ENABLED is true.');
+
+    const rawDims = (env.EMBEDDING_REMOTE_DIMENSIONS ?? '').trim();
+    const dims = parseInt(rawDims, 10);
+    if (!Number.isInteger(dims) || dims <= 0 || String(dims) !== rawDims) {
+      throw new Error(`Invalid EMBEDDING_REMOTE_DIMENSIONS: "${rawDims}". Must be a positive integer.`);
+    }
+
+    remoteEmbedding.endpoint = endpoint;
+    remoteEmbedding.allowedHosts = allowedHosts;
+    remoteEmbedding.model = model;
+    remoteEmbedding.dimensions = dims;
+  }
+
+  // Validate remote planner configuration
+  const plannerRemoteEnabled = (env.PLANNER_REMOTE_ENABLED ?? '').trim().toLowerCase() === 'true';
+  const remotePlanner: RemotePlannerConfig = { enabled: plannerRemoteEnabled };
+
+  if (plannerRemoteEnabled) {
+    const rawPlannerHosts = (env.PLANNER_REMOTE_ALLOWED_HOSTS ?? '').trim();
+    const allowedPlannerHosts = parseAllowedHosts(rawPlannerHosts, 'PLANNER_REMOTE_ALLOWED_HOSTS');
+    remotePlanner.allowedHosts = allowedPlannerHosts;
+  }
+
   return {
     token,
     allowedOrigins,
     host,
     port,
     httpsTerminated,
+    remoteEmbedding,
+    remotePlanner,
   };
 }
 
@@ -110,10 +201,27 @@ export async function startKnowledgeServer(
     httpsTerminated: options.httpsTerminated,
   });
 
-  await server.listen();
-  // Safe operator log - never log token or secret details
+  // Safe operator log - never log token, key, or secret details
   // eslint-disable-next-line no-console
   console.log(`Knowledge server listening on http://${server.host}:${server.port}`);
+
+  if (options.remoteEmbedding.enabled) {
+    const host = new URL(options.remoteEmbedding.endpoint!).hostname;
+    // eslint-disable-next-line no-console
+    console.log(
+      `[REMOTE EGRESS BANNER] Semantic embeddings: remote-openai (host: ${host}, model: ${options.remoteEmbedding.model}, dim: ${options.remoteEmbedding.dimensions})`
+    );
+  } else {
+    // eslint-disable-next-line no-console
+    console.log('[LOCAL RUNTIME] Semantic embeddings: local-onnx (Xenova/multilingual-e5-small)');
+  }
+
+  if (options.remotePlanner.enabled) {
+    // eslint-disable-next-line no-console
+    console.log('[REMOTE EGRESS BANNER] Query planner: remote-enabled');
+  }
+
+  await server.listen();
   return server;
 }
 

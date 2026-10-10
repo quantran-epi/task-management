@@ -27,7 +27,7 @@ function getFreePort(): Promise<number> {
 }
 
 describe('readKnowledgeServerOptions', () => {
-  it('parses valid minimal environment', () => {
+  it('parses valid minimal environment with remote off by default', () => {
     const opts = readKnowledgeServerOptions({
       KNOWLEDGE_SERVER_TOKEN: 'valid-token',
       KNOWLEDGE_ALLOWED_ORIGINS: 'https://planner.example',
@@ -37,6 +37,8 @@ describe('readKnowledgeServerOptions', () => {
     expect(opts.host).toBe('127.0.0.1');
     expect(opts.port).toBe(3001);
     expect(opts.httpsTerminated).toBe(false);
+    expect(opts.remoteEmbedding.enabled).toBe(false);
+    expect(opts.remotePlanner.enabled).toBe(false);
   });
 
   it('parses multiple comma-separated trimmed origins', () => {
@@ -51,6 +53,39 @@ describe('readKnowledgeServerOptions', () => {
     expect(opts.host).toBe('localhost');
     expect(opts.port).toBe(8080);
     expect(opts.httpsTerminated).toBe(true);
+  });
+
+  it('validates remote embedding configuration when enabled', () => {
+    const opts = readKnowledgeServerOptions({
+      KNOWLEDGE_SERVER_TOKEN: 'valid-token',
+      KNOWLEDGE_ALLOWED_ORIGINS: VALID_ORIGIN,
+      EMBEDDING_REMOTE_ENABLED: 'true',
+      EMBEDDING_REMOTE_ENDPOINT: 'https://api.openai.com',
+      EMBEDDING_REMOTE_ALLOWED_HOSTS: 'api.openai.com, custom.openai.azure.com',
+      EMBEDDING_REMOTE_API_KEY: 'sk-secret-123',
+      EMBEDDING_REMOTE_MODEL: 'text-embedding-3-small',
+      EMBEDDING_REMOTE_DIMENSIONS: '1536',
+    });
+    expect(opts.remoteEmbedding.enabled).toBe(true);
+    expect(opts.remoteEmbedding.endpoint).toBe('https://api.openai.com');
+    expect(opts.remoteEmbedding.allowedHosts).toEqual(['api.openai.com', 'custom.openai.azure.com']);
+    expect(opts.remoteEmbedding.model).toBe('text-embedding-3-small');
+    expect(opts.remoteEmbedding.dimensions).toBe(1536);
+  });
+
+  it('rejects remote embedding with invalid or unapproved host', () => {
+    expect(() =>
+      readKnowledgeServerOptions({
+        KNOWLEDGE_SERVER_TOKEN: 'valid-token',
+        KNOWLEDGE_ALLOWED_ORIGINS: VALID_ORIGIN,
+        EMBEDDING_REMOTE_ENABLED: 'true',
+        EMBEDDING_REMOTE_ENDPOINT: 'https://evil.example.com',
+        EMBEDDING_REMOTE_ALLOWED_HOSTS: 'api.openai.com',
+        EMBEDDING_REMOTE_API_KEY: 'sk-secret',
+        EMBEDDING_REMOTE_MODEL: 'text-embedding-3-small',
+        EMBEDDING_REMOTE_DIMENSIONS: '1536',
+      })
+    ).toThrow(/EMBEDDING_REMOTE_ALLOWED_HOSTS/);
   });
 
   it('rejects missing or empty token without leaking canary', () => {
