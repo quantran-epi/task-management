@@ -11,7 +11,16 @@ import {
 import type {
   LogicalQueryPlan,
   TraversalStep,
+  EntityItem,
+  EdgeItem,
+  ModalityStatusDetail,
 } from '../types/retrievalProtocol.js';
+import type {
+  GraphRetrievalGateway,
+  GraphTraversalCriteria,
+  GraphTraversalResult,
+  OperationOptions,
+} from './contracts.js';
 
 /**
  * Key format: `${relationType}:${direction}:${hops}`
@@ -228,5 +237,255 @@ export function validateTraversalPlan(
       includeInferred: !!plan.includeInferred,
     },
     warnings,
+  };
+}
+
+export interface GraphTraversalOptions extends OperationOptions {
+  readonly allowedSeedSet?: ReadonlySet<string> | undefined;
+}
+
+export interface BoundedGraphTraversalResult {
+  readonly status: ModalityStatusDetail;
+  readonly entities: readonly EntityItem[];
+  readonly edges: readonly EdgeItem[];
+}
+
+/**
+ * Hard caps enforced at Cypher boundary and TypeScript mapping (D-15).
+ */
+export const GRAPH_CAP_MAX_NODES = 100;
+export const GRAPH_CAP_MAX_EDGES = 200;
+
+/**
+ * Executes safe bounded graph traversal across validated plans (RETR-03, RETR-04, 18-GRAPH-01).
+ * Features:
+ * - Empty seed yields NO_GRAPH_SEED with zero gateway invocations (D-12).
+ * - Enforces simple paths and deduplicates items by identity (URN / factKey).
+ * - Enforces evidence classification filter (INFERRED excluded by default).
+ * - Bounded node (100) and edge (200) caps with sentinel overflow mapping to RESULT_LIMIT_REACHED (D-15).
+ * - Content-free error and timeout mapping without leaking Cypher, query, or exception text (T-18-01).
+ */
+export async function runBoundedGraphTraversal(
+  plan: LogicalQueryPlan | ValidatedTraversalPlanPayload,
+  pinnedSnapshotId: string,
+  gateway: GraphRetrievalGateway,
+  optionsOrSignal?: GraphTraversalOptions | AbortSignal
+): Promise<BoundedGraphTraversalResult> {
+  const options: GraphTraversalOptions =
+    optionsOrSignal instanceof AbortSignal
+      ? { signal: optionsOrSignal }
+      : optionsOrSignal ?? {};
+
+  // 1. Missing or stale pinned snapshot ID
+  if (!pinnedSnapshotId || !pinnedSnapshotId.trim()) {
+    return {
+      status: {
+        status: 'stale',
+        latencyMs: 0,
+        itemCount: 0,
+        reason: 'PINNED_SNAPSHOT_UNAVAILABLE',
+      },
+      entities: [],
+      edges: [],
+    };
+  }
+
+  // 2. Check seeds existence (D-12)
+  const rawSeeds = (plan.seedUrns || []).filter((s) => s && !s.includes('fallback:none'));
+  if (rawSeeds.length === 0) {
+    return {
+      status: {
+        status: 'unavailable',
+        latencyMs: 0,
+        itemCount: 0,
+        reason: 'NO_GRAPH_SEED',
+      },
+      entities: [],
+      edges: [],
+    };
+  }
+
+  // 3. Plan validation
+  let validatedPlan: ValidatedTraversalPlanPayload;
+  if ('steps' in plan && 'clampedDepth' in plan) {
+    validatedPlan = plan;
+  } else {
+    const allowedSet = options.allowedSeedSet ?? new Set(rawSeeds);
+    const validation = validateTraversalPlan(plan as LogicalQueryPlan, allowedSet);
+    if (!validation.valid) {
+      if (validation.reason === 'NO_GRAPH_SEED') {
+        return {
+          status: {
+            status: 'unavailable',
+            latencyMs: 0,
+            itemCount: 0,
+            reason: 'NO_GRAPH_SEED',
+          },
+          entities: [],
+          edges: [],
+        };
+      }
+      return {
+        status: {
+          status: 'error',
+          latencyMs: 0,
+          itemCount: 0,
+          reason: 'PROVIDER_ERROR',
+        },
+        entities: [],
+        edges: [],
+      };
+    }
+    validatedPlan = validation.plan;
+  }
+
+  // 4. Build gateway criteria with +1 sentinel beyond caps to detect truncation
+  const criteria: GraphTraversalCriteria = {
+    seedUrns: validatedPlan.seedUrns,
+    plan: 'traversalSteps' in plan ? (plan as LogicalQueryPlan) : ({
+      planId: validatedPlan.planId,
+      queryIntent: 'FLOW_TRAVERSAL',
+      seedUrns: [...validatedPlan.seedUrns],
+      traversalSteps: validatedPlan.steps.map((s) => ({
+        relationType: s.relationType,
+        direction: s.direction,
+        maxHops: s.hops,
+      })),
+      overallMaxDepth: validatedPlan.clampedDepth,
+      includeInferred: validatedPlan.includeInferred,
+      fulltextKeywords: [],
+      semanticQuery: '',
+    } as LogicalQueryPlan),
+    evidenceClasses: validatedPlan.evidenceClasses,
+    limitNodes: GRAPH_CAP_MAX_NODES + 1,
+    limitEdges: GRAPH_CAP_MAX_EDGES + 1,
+  };
+
+  const startMs = Date.now();
+
+  // 5. Execute gateway traversal
+  let rawResult: GraphTraversalResult;
+  try {
+    rawResult = await gateway.traverse(pinnedSnapshotId, criteria, options);
+  } catch (err: any) {
+    const latencyMs = Math.max(0, Date.now() - startMs);
+    const errName = err?.name || '';
+    const errMsg = (err?.message || '').toLowerCase();
+
+    if (errName === 'AbortError' || errMsg.includes('abort') || errMsg.includes('timeout')) {
+      return {
+        status: {
+          status: 'timeout',
+          latencyMs,
+          itemCount: 0,
+          reason: 'TIMEOUT',
+        },
+        entities: [],
+        edges: [],
+      };
+    }
+
+    if (
+      errMsg.includes('stale') ||
+      errMsg.includes('pinned_snapshot_unavailable') ||
+      errMsg.includes('snapshot')
+    ) {
+      return {
+        status: {
+          status: 'stale',
+          latencyMs,
+          itemCount: 0,
+          reason: 'PINNED_SNAPSHOT_UNAVAILABLE',
+        },
+        entities: [],
+        edges: [],
+      };
+    }
+
+    return {
+      status: {
+        status: 'error',
+        latencyMs,
+        itemCount: 0,
+        reason: 'PROVIDER_ERROR',
+      },
+      entities: [],
+      edges: [],
+    };
+  }
+
+  const allowedEvidenceSet = new Set(validatedPlan.evidenceClasses);
+  let isTruncated = rawResult.truncated === true;
+
+  // 6. Map and deduplicate entities by URN
+  const entityMap = new Map<string, EntityItem>();
+  for (const rawEntity of rawResult.entities) {
+    if (!rawEntity.urn) continue;
+    if (!entityMap.has(rawEntity.urn)) {
+      entityMap.set(rawEntity.urn, {
+        type: 'entity',
+        id: rawEntity.urn,
+        score: rawEntity.score ?? 1.0,
+        modalitiesContributed: ['graph'],
+        urn: rawEntity.urn,
+        canonicalName: rawEntity.canonicalName,
+        kind: rawEntity.kind,
+        snapshotId: pinnedSnapshotId,
+        firstSeenInDoc: rawEntity.firstSeenInDoc,
+        conflictGroupId: rawEntity.conflictGroupId,
+        hasConflict: !!rawEntity.hasConflict,
+      });
+    }
+  }
+
+  if (rawResult.entities.length > GRAPH_CAP_MAX_NODES || entityMap.size > GRAPH_CAP_MAX_NODES) {
+    isTruncated = true;
+  }
+  const entityList = Array.from(entityMap.values()).slice(0, GRAPH_CAP_MAX_NODES);
+
+  // 7. Map and deduplicate edges by factKey and enforce evidence classification filter
+  const edgeMap = new Map<string, EdgeItem>();
+  for (const rawEdge of rawResult.edges) {
+    if (!rawEdge.factKey) continue;
+    // Strict evidence classification filter (D-14)
+    if (!allowedEvidenceSet.has(rawEdge.evidenceClass)) {
+      continue;
+    }
+    if (!edgeMap.has(rawEdge.factKey)) {
+      edgeMap.set(rawEdge.factKey, {
+        type: 'edge',
+        id: rawEdge.factKey,
+        score: rawEdge.score ?? 1.0,
+        modalitiesContributed: ['graph'],
+        factKey: rawEdge.factKey,
+        sourceUrn: rawEdge.sourceUrn,
+        relationType: rawEdge.relationType,
+        targetUrn: rawEdge.targetUrn,
+        evidenceClass: rawEdge.evidenceClass,
+        supportingChunkIds: rawEdge.supportingChunkIds ? [...rawEdge.supportingChunkIds] : [],
+        snapshotId: pinnedSnapshotId,
+        conflictGroupId: rawEdge.conflictGroupId,
+        hasConflict: !!rawEdge.hasConflict,
+      });
+    }
+  }
+
+  if (rawResult.edges.length > GRAPH_CAP_MAX_EDGES || edgeMap.size > GRAPH_CAP_MAX_EDGES) {
+    isTruncated = true;
+  }
+  const edgeList = Array.from(edgeMap.values()).slice(0, GRAPH_CAP_MAX_EDGES);
+
+  const latencyMs = Math.max(0, Date.now() - startMs);
+  const itemCount = entityList.length + edgeList.length;
+
+  return {
+    status: {
+      status: isTruncated ? 'truncated' : 'ok',
+      latencyMs,
+      itemCount,
+      reason: isTruncated ? 'RESULT_LIMIT_REACHED' : undefined,
+    },
+    entities: entityList,
+    edges: edgeList,
   };
 }

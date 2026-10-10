@@ -2,17 +2,32 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   STATIC_TRAVERSAL_QUERIES,
   validateTraversalPlan,
+  runBoundedGraphTraversal,
   type ValidatedTraversalPlan,
+  type BoundedGraphTraversalResult,
 } from '../src/retrieval/graphTraversal.js';
 import {
   RELATION_TYPES,
   RETRIEVAL_ONTOLOGY_REGISTRY,
   type TraversalDirection,
 } from '../src/graph/ontology.js';
-import type { LogicalQueryPlan } from '../src/types/retrievalProtocol.js';
+import type {
+  LogicalQueryPlan,
+  EntityItem,
+  EdgeItem,
+} from '../types/retrievalProtocol.js';
+import type {
+  GraphRetrievalGateway,
+  GraphTraversalCriteria,
+  GraphTraversalResult,
+  OperationOptions,
+} from '../src/retrieval/contracts.js';
 import {
   URN_PROCESS_60000006,
+  URN_CONTAINER_60000005,
   URN_CONTAINER_60000006,
+  URN_SUBPROCESS_10000304,
+  URN_PKG_FCL_CYCLE_COUNTER,
   URN_TABLE_FCL_CYCLE_COUNTER,
 } from './fixtures/pilotGoldEntities.js';
 
@@ -205,4 +220,503 @@ describe('18-W0-02C: Static Bounded Cypher Templates & Plan Validation', () => {
       expect(validated.reason).toContain('Unknown relation type UNKNOWN_RELATION');
     });
   });
+
+  describe('18-GRAPH-01: runBoundedGraphTraversal', () => {
+    const pinnedSnapshot = 'snapshot-pinned-01';
+
+    const createPlan = (overrides?: Partial<LogicalQueryPlan>): LogicalQueryPlan => ({
+      planId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
+      queryIntent: 'FLOW_TRAVERSAL',
+      seedUrns: [URN_PROCESS_60000006],
+      traversalSteps: [
+        {
+          relationType: 'CONTAINS_STEP',
+          direction: 'OUTGOING',
+          maxHops: 1,
+        },
+      ],
+      overallMaxDepth: 1,
+      includeInferred: false,
+      fulltextKeywords: ['credit'],
+      semanticQuery: 'process flow',
+      ...overrides,
+    });
+
+    class StubGateway implements GraphRetrievalGateway {
+      public traverseCalls: Array<{ snapshotId: string; criteria: GraphTraversalCriteria }> = [];
+      public mockEntities: EntityItem[] = [];
+      public mockEdges: EdgeItem[] = [];
+      public isTruncated: boolean = false;
+      public throwError: Error | null = null;
+
+      async resolveEntities() {
+        return [];
+      }
+
+      async traverse(
+        snapshotId: string,
+        criteria: GraphTraversalCriteria,
+        options?: OperationOptions
+      ): Promise<GraphTraversalResult> {
+        if (options?.signal?.aborted) {
+          const err = new Error('The operation was aborted');
+          err.name = 'AbortError';
+          throw err;
+        }
+        if (this.throwError) {
+          throw this.throwError;
+        }
+        this.traverseCalls.push({ snapshotId, criteria });
+        return {
+          entities: this.mockEntities.slice(0, criteria.limitNodes),
+          edges: this.mockEdges.slice(0, criteria.limitEdges),
+          truncated: this.isTruncated,
+          truncationReason: this.isTruncated ? 'RESULT_LIMIT_REACHED' : undefined,
+        };
+      }
+    }
+
+    it('returns unavailable / NO_GRAPH_SEED with zero gateway calls when seeds are empty', async () => {
+      const gateway = new StubGateway();
+      const plan = createPlan({ seedUrns: [] });
+
+      const result = await runBoundedGraphTraversal(plan, pinnedSnapshot, gateway);
+
+      expect(gateway.traverseCalls.length).toBe(0);
+      expect(result.status.status).toBe('unavailable');
+      expect(result.status.reason).toBe('NO_GRAPH_SEED');
+      expect(result.entities).toEqual([]);
+      expect(result.edges).toEqual([]);
+    });
+
+    it('executes 1-hop flow path returning deduplicated entities and edges with citations', async () => {
+      const gateway = new StubGateway();
+      gateway.mockEntities = [
+        {
+          type: 'entity',
+          id: URN_PROCESS_60000006,
+          score: 1.0,
+          modalitiesContributed: ['graph'],
+          urn: URN_PROCESS_60000006,
+          canonicalName: 'SHB - Credit calculations',
+          kind: 'ScheduledProcess',
+          snapshotId: pinnedSnapshot,
+          hasConflict: false,
+        },
+        {
+          type: 'entity',
+          id: URN_CONTAINER_60000005,
+          score: 1.0,
+          modalitiesContributed: ['graph'],
+          urn: URN_CONTAINER_60000005,
+          canonicalName: 'Step 10 - Due date period cycle',
+          kind: 'ProcessStep',
+          snapshotId: pinnedSnapshot,
+          hasConflict: false,
+        },
+      ];
+      gateway.mockEdges = [
+        {
+          type: 'edge',
+          id: 'fact-1',
+          score: 1.0,
+          modalitiesContributed: ['graph'],
+          factKey: 'fact-1',
+          sourceUrn: URN_PROCESS_60000006,
+          relationType: 'CONTAINS_STEP',
+          targetUrn: URN_CONTAINER_60000005,
+          evidenceClass: 'OBSERVED',
+          supportingChunkIds: ['chunk-101'],
+          snapshotId: pinnedSnapshot,
+          hasConflict: false,
+        },
+      ];
+
+      const plan = createPlan();
+      const result = await runBoundedGraphTraversal(plan, pinnedSnapshot, gateway);
+
+      expect(gateway.traverseCalls.length).toBe(1);
+      expect(result.status.status).toBe('ok');
+      expect(result.status.itemCount).toBe(3);
+      expect(result.entities.length).toBe(2);
+      expect(result.edges.length).toBe(1);
+
+      const edge = result.edges[0]!;
+      expect(edge.factKey).toBe('fact-1');
+      expect(edge.evidenceClass).toBe('OBSERVED');
+      expect(edge.supportingChunkIds).toEqual(['chunk-101']);
+      expect(edge.snapshotId).toBe(pinnedSnapshot);
+    });
+
+    it('executes 2-hop call chain path returning intermediate process and component', async () => {
+      const gateway = new StubGateway();
+      gateway.mockEntities = [
+        {
+          type: 'entity',
+          id: URN_CONTAINER_60000006,
+          score: 1.0,
+          modalitiesContributed: ['graph'],
+          urn: URN_CONTAINER_60000006,
+          canonicalName: 'Step 20 - Grace period length cycle',
+          kind: 'ProcessStep',
+          snapshotId: pinnedSnapshot,
+          hasConflict: false,
+        },
+        {
+          type: 'entity',
+          id: URN_SUBPROCESS_10000304,
+          score: 1.0,
+          modalitiesContributed: ['graph'],
+          urn: URN_SUBPROCESS_10000304,
+          canonicalName: 'Switch cycle',
+          kind: 'ScheduledProcess',
+          snapshotId: pinnedSnapshot,
+          hasConflict: false,
+        },
+        {
+          type: 'entity',
+          id: URN_PKG_FCL_CYCLE_COUNTER,
+          score: 1.0,
+          modalitiesContributed: ['graph'],
+          urn: URN_PKG_FCL_CYCLE_COUNTER,
+          canonicalName: 'MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS',
+          kind: 'SoftwareComponent',
+          snapshotId: pinnedSnapshot,
+          hasConflict: false,
+        },
+      ];
+      gateway.mockEdges = [
+        {
+          type: 'edge',
+          id: 'fact-invokes',
+          score: 1.0,
+          modalitiesContributed: ['graph'],
+          factKey: 'fact-invokes',
+          sourceUrn: URN_CONTAINER_60000006,
+          relationType: 'INVOKES',
+          targetUrn: URN_SUBPROCESS_10000304,
+          evidenceClass: 'OBSERVED',
+          supportingChunkIds: ['chunk-102'],
+          snapshotId: pinnedSnapshot,
+          hasConflict: false,
+        },
+        {
+          type: 'edge',
+          id: 'fact-calls',
+          score: 1.0,
+          modalitiesContributed: ['graph'],
+          factKey: 'fact-calls',
+          sourceUrn: URN_SUBPROCESS_10000304,
+          relationType: 'CALLS',
+          targetUrn: URN_PKG_FCL_CYCLE_COUNTER,
+          evidenceClass: 'OBSERVED',
+          supportingChunkIds: ['chunk-103'],
+          snapshotId: pinnedSnapshot,
+          hasConflict: false,
+        },
+      ];
+
+      const plan = createPlan({
+        seedUrns: [URN_CONTAINER_60000006],
+        traversalSteps: [
+          { relationType: 'INVOKES', direction: 'OUTGOING', maxHops: 1 },
+          { relationType: 'CALLS', direction: 'OUTGOING', maxHops: 1 },
+        ],
+        overallMaxDepth: 2,
+      });
+
+      const result = await runBoundedGraphTraversal(plan, pinnedSnapshot, gateway);
+
+      expect(result.status.status).toBe('ok');
+      expect(result.entities.length).toBe(3);
+      expect(result.edges.length).toBe(2);
+      expect(result.edges.map((e) => e.relationType)).toEqual(['INVOKES', 'CALLS']);
+    });
+
+    it('executes 3-hop reverse impact path starting from DatabaseObject', async () => {
+      const gateway = new StubGateway();
+      gateway.mockEntities = [
+        {
+          type: 'entity',
+          id: URN_TABLE_FCL_CYCLE_COUNTER,
+          score: 1.0,
+          modalitiesContributed: ['graph'],
+          urn: URN_TABLE_FCL_CYCLE_COUNTER,
+          canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+          kind: 'DatabaseObject',
+          snapshotId: pinnedSnapshot,
+          hasConflict: false,
+        },
+        {
+          type: 'entity',
+          id: URN_PKG_FCL_CYCLE_COUNTER,
+          score: 1.0,
+          modalitiesContributed: ['graph'],
+          urn: URN_PKG_FCL_CYCLE_COUNTER,
+          canonicalName: 'MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS',
+          kind: 'SoftwareComponent',
+          snapshotId: pinnedSnapshot,
+          hasConflict: false,
+        },
+        {
+          type: 'entity',
+          id: URN_SUBPROCESS_10000304,
+          score: 1.0,
+          modalitiesContributed: ['graph'],
+          urn: URN_SUBPROCESS_10000304,
+          canonicalName: 'Switch cycle',
+          kind: 'ScheduledProcess',
+          snapshotId: pinnedSnapshot,
+          hasConflict: false,
+        },
+        {
+          type: 'entity',
+          id: URN_CONTAINER_60000006,
+          score: 1.0,
+          modalitiesContributed: ['graph'],
+          urn: URN_CONTAINER_60000006,
+          canonicalName: 'Step 20 - Grace period length cycle',
+          kind: 'ProcessStep',
+          snapshotId: pinnedSnapshot,
+          hasConflict: false,
+        },
+      ];
+      gateway.mockEdges = [
+        {
+          type: 'edge',
+          id: 'fact-impact-1',
+          score: 1.0,
+          modalitiesContributed: ['graph'],
+          factKey: 'fact-impact-1',
+          sourceUrn: URN_PKG_FCL_CYCLE_COUNTER,
+          relationType: 'READS_FROM',
+          targetUrn: URN_TABLE_FCL_CYCLE_COUNTER,
+          evidenceClass: 'OBSERVED',
+          supportingChunkIds: ['chunk-104'],
+          snapshotId: pinnedSnapshot,
+          hasConflict: false,
+        },
+        {
+          type: 'edge',
+          id: 'fact-impact-2',
+          score: 1.0,
+          modalitiesContributed: ['graph'],
+          factKey: 'fact-impact-2',
+          sourceUrn: URN_SUBPROCESS_10000304,
+          relationType: 'CALLS',
+          targetUrn: URN_PKG_FCL_CYCLE_COUNTER,
+          evidenceClass: 'OBSERVED',
+          supportingChunkIds: ['chunk-105'],
+          snapshotId: pinnedSnapshot,
+          hasConflict: false,
+        },
+        {
+          type: 'edge',
+          id: 'fact-impact-3',
+          score: 1.0,
+          modalitiesContributed: ['graph'],
+          factKey: 'fact-impact-3',
+          sourceUrn: URN_CONTAINER_60000006,
+          relationType: 'INVOKES',
+          targetUrn: URN_SUBPROCESS_10000304,
+          evidenceClass: 'OBSERVED',
+          supportingChunkIds: ['chunk-106'],
+          snapshotId: pinnedSnapshot,
+          hasConflict: false,
+        },
+      ];
+
+      const plan = createPlan({
+        seedUrns: [URN_TABLE_FCL_CYCLE_COUNTER],
+        traversalSteps: [
+          { relationType: 'READS_FROM', direction: 'INCOMING', maxHops: 3 },
+        ],
+        overallMaxDepth: 3,
+      });
+
+      const result = await runBoundedGraphTraversal(plan, pinnedSnapshot, gateway);
+
+      expect(result.status.status).toBe('ok');
+      expect(result.entities.length).toBe(4);
+      expect(result.edges.length).toBe(3);
+    });
+
+    it('filters out INFERRED edges when includeInferred is false', async () => {
+      const gateway = new StubGateway();
+      gateway.mockEntities = [
+        {
+          type: 'entity',
+          id: URN_PROCESS_60000006,
+          score: 1.0,
+          modalitiesContributed: ['graph'],
+          urn: URN_PROCESS_60000006,
+          canonicalName: 'SHB - Credit calculations',
+          kind: 'ScheduledProcess',
+          snapshotId: pinnedSnapshot,
+          hasConflict: false,
+        },
+      ];
+      gateway.mockEdges = [
+        {
+          type: 'edge',
+          id: 'fact-observed',
+          score: 1.0,
+          modalitiesContributed: ['graph'],
+          factKey: 'fact-observed',
+          sourceUrn: URN_PROCESS_60000006,
+          relationType: 'CONTAINS_STEP',
+          targetUrn: URN_CONTAINER_60000005,
+          evidenceClass: 'OBSERVED',
+          supportingChunkIds: ['c1'],
+          snapshotId: pinnedSnapshot,
+          hasConflict: false,
+        },
+        {
+          type: 'edge',
+          id: 'fact-inferred',
+          score: 1.0,
+          modalitiesContributed: ['graph'],
+          factKey: 'fact-inferred',
+          sourceUrn: URN_PROCESS_60000006,
+          relationType: 'CONTAINS_STEP',
+          targetUrn: URN_CONTAINER_60000006,
+          evidenceClass: 'INFERRED',
+          supportingChunkIds: ['c2'],
+          snapshotId: pinnedSnapshot,
+          hasConflict: false,
+        },
+      ];
+
+      const plan = createPlan({ includeInferred: false });
+      const result = await runBoundedGraphTraversal(plan, pinnedSnapshot, gateway);
+
+      expect(result.edges.length).toBe(1);
+      expect(result.edges[0]!.factKey).toBe('fact-observed');
+    });
+
+    it('allows INFERRED edges when includeInferred is true', async () => {
+      const gateway = new StubGateway();
+      gateway.mockEdges = [
+        {
+          type: 'edge',
+          id: 'fact-inferred',
+          score: 1.0,
+          modalitiesContributed: ['graph'],
+          factKey: 'fact-inferred',
+          sourceUrn: URN_PROCESS_60000006,
+          relationType: 'CONTAINS_STEP',
+          targetUrn: URN_CONTAINER_60000006,
+          evidenceClass: 'INFERRED',
+          supportingChunkIds: ['c2'],
+          snapshotId: pinnedSnapshot,
+          hasConflict: false,
+        },
+      ];
+
+      const plan = createPlan({ includeInferred: true });
+      const result = await runBoundedGraphTraversal(plan, pinnedSnapshot, gateway);
+
+      expect(result.edges.length).toBe(1);
+      expect(result.edges[0]!.evidenceClass).toBe('INFERRED');
+    });
+
+    it('enforces 100 node cap and reports truncated / RESULT_LIMIT_REACHED on overflow', async () => {
+      const gateway = new StubGateway();
+      // Generate 105 mock entities
+      for (let i = 0; i < 105; i++) {
+        const urn = `urn:plannermate:smartvista:ProcessStep:step-${i}` as any;
+        gateway.mockEntities.push({
+          type: 'entity',
+          id: urn,
+          score: 1.0,
+          modalitiesContributed: ['graph'],
+          urn,
+          canonicalName: `Step ${i}`,
+          kind: 'ProcessStep',
+          snapshotId: pinnedSnapshot,
+          hasConflict: false,
+        });
+      }
+
+      const plan = createPlan();
+      const result = await runBoundedGraphTraversal(plan, pinnedSnapshot, gateway);
+
+      expect(result.status.status).toBe('truncated');
+      expect(result.status.reason).toBe('RESULT_LIMIT_REACHED');
+      expect(result.entities.length).toBe(100);
+    });
+
+    it('enforces 200 edge cap and reports truncated / RESULT_LIMIT_REACHED on overflow', async () => {
+      const gateway = new StubGateway();
+      // Generate 205 mock edges
+      for (let i = 0; i < 205; i++) {
+        const factKey = `fact-${i}`;
+        gateway.mockEdges.push({
+          type: 'edge',
+          id: factKey,
+          score: 1.0,
+          modalitiesContributed: ['graph'],
+          factKey,
+          sourceUrn: URN_PROCESS_60000006,
+          relationType: 'CONTAINS_STEP',
+          targetUrn: `urn:plannermate:smartvista:ProcessStep:step-${i}` as any,
+          evidenceClass: 'OBSERVED',
+          supportingChunkIds: [`c-${i}`],
+          snapshotId: pinnedSnapshot,
+          hasConflict: false,
+        });
+      }
+
+      const plan = createPlan();
+      const result = await runBoundedGraphTraversal(plan, pinnedSnapshot, gateway);
+
+      expect(result.status.status).toBe('truncated');
+      expect(result.status.reason).toBe('RESULT_LIMIT_REACHED');
+      expect(result.edges.length).toBe(200);
+    });
+
+    it('maps gateway timeout or abort to timeout status without leaking internal query or error text', async () => {
+      const gateway = new StubGateway();
+      const controller = new AbortController();
+      controller.abort();
+
+      const plan = createPlan();
+      const result = await runBoundedGraphTraversal(plan, pinnedSnapshot, gateway, controller.signal);
+
+      expect(result.status.status).toBe('timeout');
+      expect(result.status.reason).toBe('TIMEOUT');
+      expect(result.status.reason).not.toContain('Cypher');
+      expect(result.status.reason).not.toContain('SELECT');
+      expect(result.entities).toEqual([]);
+      expect(result.edges).toEqual([]);
+    });
+
+    it('maps missing or stale snapshot error to stale / PINNED_SNAPSHOT_UNAVAILABLE', async () => {
+      const gateway = new StubGateway();
+      gateway.throwError = new Error('Pinned snapshot lease expired / stale snapshot');
+
+      const plan = createPlan();
+      const result = await runBoundedGraphTraversal(plan, pinnedSnapshot, gateway);
+
+      expect(result.status.status).toBe('stale');
+      expect(result.status.reason).toBe('PINNED_SNAPSHOT_UNAVAILABLE');
+      expect(result.status.reason).not.toContain('Cypher');
+      expect(result.entities).toEqual([]);
+    });
+
+    it('maps unknown provider error to error / PROVIDER_ERROR without leaking raw error text', async () => {
+      const gateway = new StubGateway();
+      gateway.throwError = new Error('Neo4j connection reset by peer at cypher MATCH (n) FAIL');
+
+      const plan = createPlan();
+      const result = await runBoundedGraphTraversal(plan, pinnedSnapshot, gateway);
+
+      expect(result.status.status).toBe('error');
+      expect(result.status.reason).toBe('PROVIDER_ERROR');
+      expect(result.status.reason).not.toContain('Neo4j');
+      expect(result.status.reason).not.toContain('cypher');
+      expect(result.entities).toEqual([]);
+    });
+  });
 });
+
