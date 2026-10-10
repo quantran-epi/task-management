@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { EmbeddingProviderMetadata } from './retrievalProtocol.js';
 
 /**
  * URN pattern per D-05:
@@ -326,4 +327,31 @@ export interface ActiveGraphView {
   conflictCount: number;
   quarantineCount: number;
   approvedFactCount: number;
+  retrievalGeneration?: RetrievalGenerationMetadata | undefined;
+}
+
+/**
+ * Retrieval generation metadata persisted per graph generation (D-08, D-09).
+ */
+export interface RetrievalGenerationMetadata {
+  graphSnapshotId: string;
+  sourceSnapshotId: string;
+  fulltextIndexName: string;
+  vectorIndexName: string;
+  embeddingMetadata?: EmbeddingProviderMetadata | undefined;
+  chunkCount: number;
+  hasVectors: boolean;
+  builtAt: string;
+}
+
+/**
+ * Pinned retrieval snapshot contract returned during request start lease acquisition (D-24).
+ */
+export interface PinnedRetrievalSnapshot {
+  readonly leaseId: string;
+  readonly snapshotId: string;
+  readonly setId: string;
+  readonly generation: RetrievalGenerationMetadata;
+  readonly acquiredAt: string;
+  release(): Promise<void>;
 }

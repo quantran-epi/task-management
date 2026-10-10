@@ -32,6 +32,7 @@ export const GraphBuildStageSchema = z.enum([
   'Structured extraction',
   'Prose extraction',
   'Validation',
+  'Retrieval generation',
   'Activation',
 ]);
 export type GraphBuildStage = z.infer<typeof GraphBuildStageSchema>;

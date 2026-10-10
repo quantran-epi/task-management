@@ -5,6 +5,7 @@ import type { SnapshotStore } from '../indexing/snapshotStore.js';
 import { extractDeterministicFacts } from '../graph/extraction.js';
 import { mergeFactsDeterministicFirst } from '../graph/candidate.js';
 import { ONTOLOGY_VERSION } from '../graph/ontology.js';
+import type { EmbeddingProvider } from '../retrieval/contracts.js';
 import type {
   GraphBuildStage,
   GraphState,
@@ -29,6 +30,7 @@ export class GraphBuildInProgressError extends Error {
 export interface GraphBuildServiceOptions {
   repository?: GraphRepository | undefined;
   snapshotStore?: SnapshotStore | undefined;
+  embeddingProvider?: EmbeddingProvider | undefined;
 }
 
 export class GraphBuildService {
@@ -37,11 +39,26 @@ export class GraphBuildService {
   private rebuildReplays = new Map<string, RebuildAcceptedDTO>(); // setId:rebuildKey -> DTO
   private activeGraphSnapshots = new Map<string, string>(); // setId -> graphSnapshotId
   private buildErrors = new Map<string, Error>(); // setId -> last error
+  readonly repository: GraphRepository;
+  readonly snapshotStore?: SnapshotStore | undefined;
+  readonly embeddingProvider?: EmbeddingProvider | undefined;
 
   constructor(
-    readonly repository: GraphRepository = new InMemoryGraphRepository(),
-    readonly snapshotStore?: SnapshotStore | undefined
-  ) {}
+    repositoryOrOptions?: GraphRepository | GraphBuildServiceOptions,
+    snapshotStore?: SnapshotStore | undefined,
+    options?: GraphBuildServiceOptions
+  ) {
+    if (repositoryOrOptions && typeof (repositoryOrOptions as any).writeCandidate === 'function') {
+      this.repository = repositoryOrOptions as GraphRepository;
+      this.snapshotStore = snapshotStore ?? options?.snapshotStore;
+      this.embeddingProvider = options?.embeddingProvider;
+    } else {
+      const opts = (repositoryOrOptions as GraphBuildServiceOptions) || {};
+      this.repository = opts.repository ?? new InMemoryGraphRepository();
+      this.snapshotStore = opts.snapshotStore;
+      this.embeddingProvider = opts.embeddingProvider;
+    }
+  }
 
   isBuilding(setId: string): boolean {
     return this.inProgressSets.has(setId);
@@ -147,6 +164,20 @@ export class GraphBuildService {
 
     // Write candidate to repository with READY state
     await this.repository.writeCandidate(candidate);
+
+    // Stage f: Build retrieval generation (chunks, fulltext index, vector index) before activation
+    this.currentStages.set(setId, 'Retrieval generation');
+    await this.repository.buildRetrievalGeneration(
+      candidate,
+      sourceSnapshot,
+      this.embeddingProvider
+    );
+
+    // Stage g: Validate retrieval generation readiness
+    const isValidGeneration = await this.repository.validateRetrievalGeneration(candidateSnapshotId);
+    if (!isValidGeneration) {
+      throw new Error('RETRIEVAL_GENERATION_INVALID: Candidate generation failed validation');
+    }
 
     // Stage h: Stale-source guard
     const latestSnapshot = this.snapshotStore.getActiveSnapshot(setId);
