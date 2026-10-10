@@ -3,7 +3,7 @@ import type { BackupEnvelope } from '../../types/backup';
 import { generateId } from '../../utils/uuid';
 
 export const APP_MARKER = 'personal-task-planner' as const;
-export const CURRENT_SCHEMA_VERSION = 4 as const;
+export const CURRENT_SCHEMA_VERSION = 10 as const;
 
 export const UNSAFE_OR_EPHEMERAL_SETTING_KEYS = new Set<string>([
   'jira_api_token',

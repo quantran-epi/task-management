@@ -137,6 +137,7 @@ Progress: [████████░░] 75%
 | 261008-fex | Optimize file explorer perf, exclusions, mention in chat, PC reveal, and skills autocomplete | 2026-10-08 | — | complete | [261008-fex-agent-file-explorer-perf-and-skills](./quick/261008-fex-agent-file-explorer-perf-and-skills/) |
 | 261008-k9p | Fix false thinking state and timer run when clearing logs in ghost dev session | 2026-10-08 | 2931d37 | complete | [261008-k9p-fix-clear-logs-false-thinking-timer](./quick/261008-k9p-fix-clear-logs-false-thinking-timer/) |
 | 261009-ana | Fix build error in AnalyticsView.test.tsx | 2026-10-09 | — | complete | [261009-ana-fix-analytics-view-test-build-error](./quick/261009-ana-fix-analytics-view-test-build-error/) |
+| 261010-btr | Fix backup restore transaction lifetime and schema V10 alignment | 2026-10-10 | — | complete | [261010-btr-fix-backup-restore-transaction-schema-v10](./quick/261010-btr-fix-backup-restore-transaction-schema-v10/) |
 
 ## Performance Metrics
 
