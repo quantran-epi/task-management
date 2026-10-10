@@ -19,6 +19,7 @@ import type {
 } from '../routes/graph.js';
 
 export class GraphBuildInProgressError extends Error {
+  readonly code = 'BUILD_IN_PROGRESS';
   constructor(message = 'Graph rebuild is already in progress for this document set.') {
     super(message);
     this.name = 'GraphBuildInProgressError';
