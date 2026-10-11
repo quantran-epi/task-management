@@ -392,7 +392,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 19-14-PLAN.md — AIChatDrawer wiring + ChatMessageBubble/List grounding render (Wave 5)
+- [x] 19-14-PLAN.md — AIChatDrawer wiring + ChatMessageBubble/List grounding render (Wave 5)
 
 **Wave 6** *(blocked on Wave 5 completion)*
 

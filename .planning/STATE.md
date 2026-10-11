@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Hybrid GraphRAG Knowledge Assistant MVP
 status: executing
-stopped_at: Completed 19-13-PLAN.md
-last_updated: "2026-10-11T13:45:00.000Z"
-last_activity: 2026-10-11 -- Completed 19-13-PLAN.md
+stopped_at: Completed 19-14-PLAN.md
+last_updated: "2026-10-11T14:30:00.000Z"
+last_activity: 2026-10-11 -- Completed 19-14-PLAN.md
 progress:
   total_phases: 16
   completed_phases: 13
   total_plans: 92
-  completed_plans: 81
-  percent: 83
+  completed_plans: 82
+  percent: 84
 ---
 
 # Project State
@@ -26,12 +26,12 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 ## Current Position
 
 Phase: 19 (grounded-assistant-provenance-citations-offline-fallback) — EXECUTING
-Plan: 14 of 15
+Plan: 15 of 15
 Status: Executing Phase 19
-Last activity: 2026-10-11 -- Completed 19-13-PLAN.md
-Stopped at: Completed 19-13-PLAN.md
+Last activity: 2026-10-11 -- Completed 19-14-PLAN.md
+Stopped at: Completed 19-14-PLAN.md
 
-Progress: [████████░░] 83%
+Progress: [████████░░] 84%
 
 ### Quick Tasks Completed
 
@@ -179,12 +179,19 @@ Progress: [████████░░] 83%
 | Phase 19 P11 | 10m | 2 tasks | 8 files |
 | Phase 19 P12 | 6m | 2 tasks | 11 files |
 | Phase 19 P13 | 15m | 2 tasks | 9 files |
+| Phase 19 P14 | 14m | 2 tasks | 8 files |
 
 ## Accumulated Context
 
 ### Decisions
 
 Recent decisions logged in PROJECT.md:
+
+- [Phase 19 Plan 14]: AIChatDrawer owns exactly one AbortController per turn; drawer close, scope change, and new submits abort the prior signal (AI-SPEC §4b).
+- [Phase 19 Plan 14]: Model API key gate moved to pre-synthesis; unconfigured models yield MODEL_UNAVAILABLE with interactive evidence exploration rather than failing retrieval (AI-SPEC Pitfall 5, D-43).
+- [Phase 19 Plan 14]: ChatMessageBubble branches on message.grounding to render GroundedAnswerCard or EvidenceOnlyCard with slotted cards (D-05, D-43).
+- [Phase 19 Plan 14]: Tra cứu lại (fresh lookup) creates a new assistant message while keeping historical grounding immutable (D-49).
+- [Phase 19 Plan 14]: Tạo câu trả lời từ bằng chứng synthesizes against stored evidence pack updating message grounding in place (D-44).
 
 - [Phase 19 Plan 13]: QuickPreviewDrawer renders snapshot-first line-numbered raw pre excerpt above current markdown when citedExcerpt is present (D-47, D-48).
 - [Phase 19 Plan 13]: QuickPreviewDrawer performs SHA-256 comparison between normalized current markdown and citedContentHash only for server authority, showing destructive alert banner on mismatch (D-10, D-21).
