@@ -15,7 +15,6 @@ import {
 } from '../../src/services/ai/evidencePack';
 import {
   ChatMessageGroundingSchema,
-  type ChatMessageGrounding,
 } from '../../src/services/ai/groundedAnswerSchemas';
 import { BackupChatMessageRecordSchema } from '../../src/validation/backupSchemas';
 import { KnowledgeClientError } from '../../src/services/knowledge/knowledgeClient';
@@ -154,9 +153,13 @@ describe('groundedAssistantEval: 20-case reference fixture replay', () => {
         catalog: [
           {
             setId: '10000000-0000-4000-8000-000000000001',
-            setName: 'Bộ tài liệu kiểm thử',
+            canonicalName: 'Bộ tài liệu kiểm thử',
+            domain: 'General',
+            environment: null,
+            version: null,
+            aliases: [],
+            relation: null,
             isBase: true,
-            documentIds: [],
           },
         ],
         recentSessionId: 'session-eval',

@@ -167,7 +167,18 @@ describe('optional daemon outage isolation', () => {
         promptVersion: 'v1.0',
         routerVersion: 'v1.0',
       },
-      catalog: [{ setId, setName: 'Bộ quy trình thẻ', isBase: true, documentIds: [note.id] }],
+      catalog: [
+        {
+          setId,
+          canonicalName: 'Bộ quy trình thẻ',
+          domain: 'General',
+          environment: null,
+          version: null,
+          aliases: [],
+          relation: null,
+          isBase: true,
+        },
+      ],
       recentSessionId: 'sess-1',
     };
 
@@ -267,7 +278,18 @@ describe('optional daemon outage isolation', () => {
         promptVersion: 'v1.0',
         routerVersion: 'v1.0',
       },
-      catalog: [{ setId, setName: 'Bộ tài liệu cục bộ', isBase: true, documentIds: [note.id] }],
+      catalog: [
+        {
+          setId,
+          canonicalName: 'Bộ tài liệu cục bộ',
+          domain: 'General',
+          environment: null,
+          version: null,
+          aliases: [],
+          relation: null,
+          isBase: true,
+        },
+      ],
       recentSessionId: 'sess-2',
     };
 
