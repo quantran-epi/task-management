@@ -45,13 +45,13 @@ Shipped **v1.0 MVP** on 2026-09-27 with all 8 foundational phases complete. Ship
 - ✓ Publish normalized Markdown to an optional knowledge server without breaking local/offline document use. — Phase 16 (INGEST-01..INGEST-05)
 - ✓ Incrementally project changed Markdown sections through shared AST chunking and SHA-256 comparison. — Phase 16 (INGEST-03..INGEST-04)
 - ✓ Build a rebuildable Neo4j knowledge graph for process 60000006 using collision-safe composite identities, deterministic table extraction, and explicit evidence classification. — Phase 17 (GRAPH-01..GRAPH-06)
+- ✓ Query process flow, call chain, dependencies, data objects, cycles, statuses, and diagnostics through multi-modal hybrid retrieval. — Phase 18 (RETR-01..RETR-05)
+- ✓ Return AI answers with source citations, graph paths, conflicts, and explicit missing-evidence handling with offline fallback. — Phase 19 (ANSWER-01..ANSWER-07)
 
 ### Active
 
-- [ ] Query process flow, call chain, dependencies, data objects, cycles, statuses, and diagnostics through bounded graph traversal.
-- [ ] Return AI answers with source citations, graph paths, conflicts, and explicit missing-evidence handling.
-- [ ] Keep technical reconstruction facts classified as observed or inferred unless business approval is documented.
-- [ ] Verify retrieval and multi-hop answer quality against a benchmark corpus.
+- [ ] Verify retrieval and multi-hop answer quality against a 30-50 question benchmark corpus.
+- [ ] Harden index rebuild performance and enforce server-side secret isolation.
 
 ### Out of Scope
 
@@ -106,6 +106,9 @@ GitHub synchronization is backup synchronization, not collaborative live sync. B
 | Keep Markdown as canonical knowledge source | Human-readable documents remain reviewable and portable; graph/indexes can be rebuilt | ✓ Validated — Phase 16 |
 | Use collision-safe composite graph identities | Prevents namespace collisions such as `PRC_PROCESS:60000006` and `PRC_CONTAINER:60000006` | ✓ Validated — Phase 17 |
 | Start with scheduled process `60000006` as pilot corpus | Small enough to validate, rich enough for scheduler, call-chain, data, and diagnostic multi-hop queries | ✓ Validated — Phase 17 |
+| Synthesize grounded answers with closure validation | Prevents hallucination, enforces exact source ranges and graph paths | ✓ Validated — Phase 19 |
+| Automatic local BM25 fallback on daemon unavailability | Guarantees zero downtime and zero egress for local Markdown searches | ✓ Validated — Phase 19 |
+
 
 ## Evolution
 

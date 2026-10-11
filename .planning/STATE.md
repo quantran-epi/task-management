@@ -8,10 +8,10 @@ last_updated: "2026-10-11T14:30:00.000Z"
 last_activity: 2026-10-11 -- Completed 19-14-PLAN.md
 progress:
   total_phases: 16
-  completed_phases: 13
+  completed_phases: 14
   total_plans: 92
-  completed_plans: 82
-  percent: 84
+  completed_plans: 83
+  percent: 85
 ---
 
 # Project State
@@ -21,17 +21,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-07)
 
 **Core value:** Make planned work realistically fit available time while giving the personal user evidence-grounded access to their local banking IT knowledge.
-**Current focus:** Phase 19 — grounded-assistant-provenance-citations-offline-fallback
+**Current focus:** Phase 19 — grounded-assistant-provenance-citations-offline-fallback (COMPLETE)
 
 ## Current Position
 
-Phase: 19 (grounded-assistant-provenance-citations-offline-fallback) — EXECUTING
+Phase: 19 (grounded-assistant-provenance-citations-offline-fallback) — COMPLETE
 Plan: 15 of 15
-Status: Executing Phase 19
-Last activity: 2026-10-11 -- Completed 19-14-PLAN.md
-Stopped at: Completed 19-14-PLAN.md
+Status: Phase 19 Complete
+Last activity: 2026-10-11 -- Completed 19-15-PLAN.md
+Stopped at: Completed 19-15-PLAN.md
 
-Progress: [████████░░] 84%
+Progress: [█████████░] 85%
 
 ### Quick Tasks Completed
 
@@ -180,12 +180,18 @@ Progress: [████████░░] 84%
 | Phase 19 P12 | 6m | 2 tasks | 11 files |
 | Phase 19 P13 | 15m | 2 tasks | 9 files |
 | Phase 19 P14 | 14m | 2 tasks | 8 files |
+| Phase 19 P15 | 25m | 2 tasks | 7 files |
 
 ## Accumulated Context
 
 ### Decisions
 
 Recent decisions logged in PROJECT.md:
+
+- [Phase 19 Plan 15]: Replay 20 hand-crafted reference cases across direct lookup, paths, conflicts, abstention, fallback, safety, and persistence without network or provider calls.
+- [Phase 19 Plan 15]: Enforce D-06 language lock and UTF-8 byte-identical quote preservation on mixed-language cases using Buffer.equals.
+- [Phase 19 Plan 15]: Extend offlineIsolation.test.ts to verify zero retrieve egress during local fallback.
+- [Phase 19 Plan 15]: Enforce firstSeenInDoc is never used as citation authority (D-34) via pickRepresentativeSource sorted by evidenceClass then stable documentId.
 
 - [Phase 19 Plan 14]: AIChatDrawer owns exactly one AbortController per turn; drawer close, scope change, and new submits abort the prior signal (AI-SPEC §4b).
 - [Phase 19 Plan 14]: Model API key gate moved to pre-synthesis; unconfigured models yield MODEL_UNAVAILABLE with interactive evidence exploration rather than failing retrieval (AI-SPEC Pitfall 5, D-43).
