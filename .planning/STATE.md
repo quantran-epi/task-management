@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Hybrid GraphRAG Knowledge Assistant MVP
 status: executing
-stopped_at: Phase 19 UI-SPEC approved
-last_updated: "2026-10-11T09:03:00.956Z"
-last_activity: 2026-10-11 -- Phase 19 planning complete
+stopped_at: Completed 19-01-PLAN.md
+last_updated: "2026-10-11T09:31:06.601Z"
+last_activity: 2026-10-11 -- Completed Plan 19-01 retrieval provenance protocol
 progress:
   total_phases: 16
-  completed_phases: 14
-  total_plans: 77
-  completed_plans: 77
-  percent: 88
+  completed_phases: 13
+  total_plans: 92
+  completed_plans: 72
+  percent: 78
 ---
 
 # Project State
@@ -21,17 +21,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-07)
 
 **Core value:** Make planned work realistically fit available time while giving the personal user evidence-grounded access to their local banking IT knowledge.
-**Current focus:** Phase 18 — multi-modal-hybrid-retrieval-engine
+**Current focus:** Phase 19 — grounded assistant provenance, citations, and offline fallback
 
 ## Current Position
 
 Phase: 19
-Plan: Not started
+Plan: 2 of 15
 Status: Ready to execute
-Last activity: 2026-10-11 -- Phase 19 planning complete
-Stopped at: Phase 19 UI-SPEC approved
+Last activity: 2026-10-11 -- Completed Plan 19-01 retrieval provenance protocol
+Stopped at: Completed 19-01-PLAN.md
 
-Progress: [████████░░] 84%
+Progress: [████████░░] 77%
 
 ### Quick Tasks Completed
 
@@ -173,6 +173,7 @@ Progress: [████████░░] 84%
 | Phase 17 P04 | 10min | 2 tasks | 7 files |
 | Phase 17 P05 | 9min | 2 tasks | 7 files |
 | Phase 17 P06 | 9 min | 3 tasks | 7 files |
+| Phase 19 P01 | 18m | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -221,6 +222,8 @@ Recent decisions logged in PROJECT.md:
 - [Milestone v1.2]: Start with scheduled process `60000006` as bounded pilot corpus.
 - [Milestone v1.2]: Preserve local BM25 fallback in PlannerMate when optional knowledge server is offline.
 - [Milestone v1.2]: Retain evidence classifications `OBSERVED`, `INFERRED`, and `BUSINESS_APPROVED` across all graph relations.
+- [Phase 19]: Path citation IDs resolve only to returned chunk item IDs. — Makes citation closure deterministic at strict protocol boundary.
+- [Phase 19]: Conflict scope stays metadata-only through fixed dimension allowlist. — Prevents free-text or model-invented scope proof.
 
 ### Pending Todos
 
@@ -242,6 +245,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-11T03:20:56.146Z
+Last session: 2026-10-11T09:29:31.928Z
 Stopped at: Completed 18-02-PLAN.md
-Resume file: .planning/phases/19-grounded-assistant-provenance-citations-offline-fallback/19-UI-SPEC.md
+Resume file: None
