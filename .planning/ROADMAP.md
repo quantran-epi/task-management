@@ -372,12 +372,12 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 19-03-PLAN.md — Snapshot-scoped graph traversal + response enrichment with source metadata (Wave 2)
-- [ ] 19-04-PLAN.md — Federated retrieval service + POST /api/v1/retrieve route (Wave 2)
-- [ ] 19-05-PLAN.md — completeJson + intentRouter + semanticScopeRouter (Wave 2)
-- [ ] 19-06-PLAN.md — Scoped local BM25 fallback with range-bearing snippets (Wave 2)
-- [ ] 19-07-PLAN.md — Evidence pack + closure validator (Wave 2)
-- [ ] 19-10-PLAN.md — ChatMessage.grounding persistence + backup round-trip (Wave 2)
+- [x] 19-03-PLAN.md — Snapshot-scoped graph traversal + response enrichment with source metadata (Wave 2)
+- [x] 19-04-PLAN.md — Federated retrieval service + POST /api/v1/retrieve route (Wave 2)
+- [x] 19-05-PLAN.md — completeJson + intentRouter + semanticScopeRouter (Wave 2)
+- [x] 19-06-PLAN.md — Scoped local BM25 fallback with range-bearing snippets (Wave 2)
+- [x] 19-07-PLAN.md — Evidence pack + closure validator (Wave 2)
+- [x] 19-10-PLAN.md — ChatMessage.grounding persistence + backup round-trip (Wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
