@@ -2,6 +2,10 @@ import { z } from 'zod';
 import { isValidCalendarDate } from '../utils/date';
 import { isValidUuid } from '../utils/uuid';
 import {
+  ChatMessageGroundingSchema,
+  type ChatMessageGrounding,
+} from '../services/ai/groundedAnswerSchemas';
+import {
   PROJECT_STATUSES,
   MILESTONE_STATUSES,
   TASK_STATUSES,
@@ -220,34 +224,129 @@ export const BackupChatThreadRecordSchema = z
     }
   );
 
-export const BackupChatMessageRecordSchema = z.object({
-  id: uuidSchema,
-  threadId: uuidSchema,
-  role: z.enum(['user', 'assistant', 'system']),
-  content: z.string(),
-  createdAt: z.string(),
-  isContextBoundary: z.boolean().optional(),
-  durationMs: z.number().optional(),
-  tokenUsage: z
-    .object({
-      promptTokens: z.number().optional(),
-      completionTokens: z.number().optional(),
-      totalTokens: z.number().optional(),
-    })
-    .optional(),
-  generatedFiles: z
-    .array(
-      z.object({
-        id: z.string(),
-        filename: z.string(),
-        format: z.string(),
-        sizeBytes: z.number(),
-        slideCount: z.number().optional(),
-        content: z.string().optional(),
+const FORBIDDEN_GROUNDING_KEYS = [
+  'apiKey',
+  'bearerToken',
+  'systemPrompt',
+  'rawModelResponse',
+  'authorization',
+] as const;
+
+function findForbiddenKeyInObject(obj: unknown): string | null {
+  if (!obj || typeof obj !== 'object') {
+    return null;
+  }
+  if (Array.isArray(obj)) {
+    for (const item of obj) {
+      const found = findForbiddenKeyInObject(item);
+      if (found) return found;
+    }
+    return null;
+  }
+  for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+    if ((FORBIDDEN_GROUNDING_KEYS as readonly string[]).includes(key)) {
+      return key;
+    }
+    const nested = findForbiddenKeyInObject(value);
+    if (nested) return nested;
+  }
+  return null;
+}
+
+export const BackupChatMessageRecordSchema = z
+  .object({
+    id: uuidSchema,
+    threadId: uuidSchema,
+    role: z.enum(['user', 'assistant', 'system']),
+    content: z.string(),
+    createdAt: z.string(),
+    isContextBoundary: z.boolean().optional(),
+    durationMs: z.number().optional(),
+    tokenUsage: z
+      .object({
+        promptTokens: z.number().optional(),
+        completionTokens: z.number().optional(),
+        totalTokens: z.number().optional(),
       })
-    )
-    .optional(),
-});
+      .optional(),
+    generatedFiles: z
+      .array(
+        z.object({
+          id: z.string(),
+          filename: z.string(),
+          format: z.string(),
+          sizeBytes: z.number(),
+          slideCount: z.number().optional(),
+          content: z.string().optional(),
+        })
+      )
+      .optional(),
+    grounding: z.unknown().optional() as z.ZodType<ChatMessageGrounding | undefined>,
+  })
+  .superRefine((msg, ctx) => {
+    if (msg.grounding === undefined || msg.grounding === null) return;
+
+    const forbiddenKey = findForbiddenKeyInObject(msg.grounding);
+    if (forbiddenKey) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['grounding', forbiddenKey],
+        message: `FORBIDDEN_FIELD: grounding must not contain secret or prompt field '${forbiddenKey}'`,
+        params: { code: 'FORBIDDEN_FIELD' },
+      });
+      return;
+    }
+
+    if (typeof msg.grounding === 'object' && msg.grounding !== null) {
+      const rawG = msg.grounding as Record<string, unknown>;
+      if (Array.isArray(rawG.citations)) {
+        if (rawG.citations.length > 20) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['grounding', 'citations'],
+            message: 'GROUNDING_SIZE_EXCEEDED: citations count exceeds 20',
+            params: { code: 'GROUNDING_SIZE_EXCEEDED' },
+          });
+        }
+        rawG.citations.forEach((c: unknown, idx: number) => {
+          if (c && typeof c === 'object' && typeof (c as any).citedExcerpt === 'string' && (c as any).citedExcerpt.length > 1200) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ['grounding', 'citations', idx, 'citedExcerpt'],
+              message: 'GROUNDING_SIZE_EXCEEDED: citation excerpt exceeds 1200 characters',
+              params: { code: 'GROUNDING_SIZE_EXCEEDED' },
+            });
+          }
+        });
+      }
+      if (Array.isArray(rawG.paths) && rawG.paths.length > 20) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['grounding', 'paths'],
+          message: 'GROUNDING_SIZE_EXCEEDED: paths count exceeds 20',
+          params: { code: 'GROUNDING_SIZE_EXCEEDED' },
+        });
+      }
+      if (Array.isArray(rawG.conflicts) && rawG.conflicts.length > 10) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['grounding', 'conflicts'],
+          message: 'GROUNDING_SIZE_EXCEEDED: conflicts count exceeds 10',
+          params: { code: 'GROUNDING_SIZE_EXCEEDED' },
+        });
+      }
+    }
+
+    const parsedGrounding = ChatMessageGroundingSchema.safeParse(msg.grounding);
+    if (!parsedGrounding.success) {
+      parsedGrounding.error.issues.forEach((issue) => {
+        ctx.addIssue({
+          ...issue,
+          path: ['grounding', ...issue.path],
+        });
+      });
+    }
+  });
 
 export const BackupActiveTimerRecordSchema = z.object({
   taskId: uuidSchema,
