@@ -3,7 +3,10 @@ import type {
   ModalityKind,
   RetrievalItem,
   EdgeItem,
+  OrderedPath,
+  ConflictGroup,
 } from '../types/retrievalProtocol.js';
+import type { OrderedPathCandidate } from './graphTraversal.js';
 import { RELATION_SEMANTICS } from '../graph/ontology.js';
 import type { GraphConflictRecord } from '../types/graphProtocol.js';
 
@@ -41,6 +44,58 @@ export interface FusedRetrievalResult {
   readonly totalCandidates: number;
 }
 
+const CLASSIFICATION_STRENGTH = {
+  BUSINESS_APPROVED: 0,
+  OBSERVED: 1,
+  INFERRED: 2,
+} as const;
+
+/**
+ * Converts traversal candidates to response paths only when every hop citation survived fusion.
+ */
+export function closeOrderedPaths(
+  candidates: readonly OrderedPathCandidate[],
+  finalItems: readonly RetrievalItem[]
+): OrderedPath[] {
+  const returnedChunkIds = new Set(
+    finalItems.filter((item) => item.type === 'chunk').map((item) => item.id)
+  );
+
+  return candidates.flatMap((candidate, index) => {
+    if (!candidate.hopSupportingChunkIds.flat().every((id) => returnedChunkIds.has(id))) {
+      return [];
+    }
+
+    const classification = candidate.hopClassifications.reduce((weakest, current) =>
+      CLASSIFICATION_STRENGTH[current] > CLASSIFICATION_STRENGTH[weakest] ? current : weakest
+    );
+
+    return [{
+      pathId: `P${index + 1}`,
+      snapshotId: candidate.snapshotId,
+      nodeUrns: candidate.nodeUrns,
+      edgeFactKeys: candidate.edgeFactKeys,
+      hopClassifications: candidate.hopClassifications,
+      hopCitationIds: candidate.hopSupportingChunkIds,
+      hasConflict: candidate.hasConflict,
+      classification,
+    }];
+  });
+}
+
+/** Conflict groups default to unknown scope unless structured metadata proves otherwise. */
+export function buildConflictGroups(items: readonly RetrievalItem[]): ConflictGroup[] {
+  const groupIds = new Set(
+    items.flatMap((item) => item.conflictGroupId ? [item.conflictGroupId] : [])
+  );
+
+  return [...groupIds].sort().map((conflictGroupId) => ({
+    conflictGroupId,
+    dimension: 'Unknown',
+    scopeProof: null,
+  }));
+}
+
 /**
  * Validates immutable identity/provenance fields between two occurrences of the same candidate.
  */
@@ -55,9 +110,11 @@ function assertCandidateIntegrity(existing: RetrievalItem, incoming: RetrievalIt
   if (existing.type === 'chunk' && incoming.type === 'chunk') {
     if (
       existing.sourceDocumentId !== incoming.sourceDocumentId ||
+      existing.sourceDocumentTitle !== incoming.sourceDocumentTitle ||
       existing.sectionAnchor !== incoming.sectionAnchor ||
       existing.lineStart !== incoming.lineStart ||
-      existing.lineEnd !== incoming.lineEnd
+      existing.lineEnd !== incoming.lineEnd ||
+      existing.publishedContentHash !== incoming.publishedContentHash
     ) {
       throw new Error(CANDIDATE_INTEGRITY_MISMATCH);
     }

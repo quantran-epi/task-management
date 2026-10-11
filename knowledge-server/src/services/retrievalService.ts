@@ -12,6 +12,7 @@ import {
   EdgeItem,
   RetrievalItem,
   ModalityKind,
+  OrderedPath,
 } from '../types/retrievalProtocol.js';
 import type {
   EmbeddingProvider,
@@ -29,6 +30,8 @@ import {
   type BoundedGraphTraversalResult,
 } from '../retrieval/graphTraversal.js';
 import {
+  buildConflictGroups,
+  closeOrderedPaths,
   fuseRetrievalCandidates,
   tagRetrievalConflicts,
 } from '../retrieval/fusion.js';
@@ -87,7 +90,12 @@ export interface RetrievalServiceOptions {
 interface ModalityRunResult<T> {
   readonly status: ModalityStatusDetail;
   readonly items: readonly T[];
+  readonly paths?: readonly OrderedPath[] | undefined;
 }
+
+type GraphModalityRunResult = Omit<ModalityRunResult<EntityItem | EdgeItem>, 'paths'> & {
+  readonly pathCandidates: BoundedGraphTraversalResult['paths'];
+};
 
 /**
  * Executes an async task with AbortController deadline.
@@ -268,12 +276,13 @@ export class RetrievalService {
             items: [],
           };
 
-    const graphResult: ModalityRunResult<EntityItem | EdgeItem> =
+    const graphResult: GraphModalityRunResult =
       graphSettled.status === 'fulfilled'
         ? graphSettled.value
         : {
             status: { status: 'error', latencyMs: 0, itemCount: 0, reason: 'PROVIDER_ERROR' },
             items: [],
+            pathCandidates: [],
           };
 
     // Filter stale candidates if any adapter returned mismatched snapshotId
@@ -330,6 +339,8 @@ export class RetrievalService {
     });
 
     const finalItems = tagged.items;
+    const paths = closeOrderedPaths(graphResult.pathCandidates, finalItems);
+    const conflictGroups = buildConflictGroups(finalItems);
 
     // Determine modalities used (contributing list)
     const modalitiesUsedSet = new Set<ModalityKind>();
@@ -406,6 +417,8 @@ export class RetrievalService {
       snapshotId: pinnedSnapshotId,
       embeddingProvider: providerMetadata,
       items: finalItems,
+      paths,
+      conflictGroups,
       totalCandidates: fused.totalCandidates,
       modalitiesUsed,
       modalityStatus,
@@ -541,7 +554,7 @@ export class RetrievalService {
   private async runGraphModality(
     snapshotId: string,
     planningOutcome: QueryExecutionPlanningOutcome
-  ): Promise<ModalityRunResult<EntityItem | EdgeItem>> {
+  ): Promise<GraphModalityRunResult> {
     const isSpecial = planningOutcome.status === 'needsClarification' || planningOutcome.status === 'unsupported';
     const planToTraverse = isSpecial
       ? {
@@ -570,6 +583,7 @@ export class RetrievalService {
       return {
         status: { status: 'timeout', latencyMs: run.latencyMs, itemCount: 0, reason: 'TIMEOUT' },
         items: [],
+        pathCandidates: [],
       };
     }
 
@@ -577,6 +591,7 @@ export class RetrievalService {
       return {
         status: { status: 'error', latencyMs: run.latencyMs, itemCount: 0, reason: 'PROVIDER_ERROR' },
         items: [],
+        pathCandidates: [],
       };
     }
 
@@ -584,12 +599,14 @@ export class RetrievalService {
       status: { status: 'unavailable', latencyMs: run.latencyMs, itemCount: 0, reason: 'PROVIDER_ERROR' },
       entities: [],
       edges: [],
+      paths: [],
     };
 
     const combined: Array<EntityItem | EdgeItem> = [...result.entities, ...result.edges];
     return {
       status: result.status,
       items: combined,
+      pathCandidates: result.paths,
     };
   }
 }

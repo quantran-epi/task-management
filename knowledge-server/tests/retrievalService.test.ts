@@ -21,7 +21,7 @@ import { URN_TABLE_FCL_CYCLE_COUNTER } from './fixtures/pilotGoldEntities.js';
 
 describe('18-W0-03B: RetrievalService Pinned Parallel Orchestration & Timeouts', () => {
   const setId = 'test-set-1';
-  const snapshotId = 'snap-test-1';
+  const snapshotId = 'gsnap_abcdef12';
 
   const defaultRequest: RetrievalRequest = {
     query: 'explain FCL_CYCLE_COUNTER',
@@ -196,6 +196,8 @@ describe('18-W0-03B: RetrievalService Pinned Parallel Orchestration & Timeouts',
         score: 0.9,
         modalitiesContributed: ['vector'],
         sourceDocumentId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
+        sourceDocumentTitle: 'Credit calculations',
+        publishedContentHash: 'a'.repeat(64),
         sectionAnchor: 'Sec',
         lineStart: 1,
         lineEnd: 5,
@@ -234,6 +236,12 @@ describe('18-W0-03B: RetrievalService Pinned Parallel Orchestration & Timeouts',
     expect(response.outcome).toBe('DEGRADED');
     expect(response.diagnostics.degraded).toBe(true);
     expect(response.items.length).toBeGreaterThan(0);
+    expect(response.paths).toEqual([]);
+    const chunk = response.items.find((item) => item.type === 'chunk');
+    expect(chunk).toMatchObject({
+      sourceDocumentTitle: 'Credit calculations',
+      publishedContentHash: 'a'.repeat(64),
+    });
     expect(indexGateway.activeLeases.size).toBe(0); // Lease released in finally
   });
 
@@ -329,6 +337,8 @@ describe('18-W0-03B: RetrievalService Pinned Parallel Orchestration & Timeouts',
           score: 1.0,
           modalitiesContributed: ['fulltext'],
           sourceDocumentId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
+          sourceDocumentTitle: 'Credit calculations',
+          publishedContentHash: 'a'.repeat(64),
           sectionAnchor: 'Sec',
           lineStart: 1,
           lineEnd: 5,
@@ -374,6 +384,109 @@ describe('18-W0-03B: RetrievalService Pinned Parallel Orchestration & Timeouts',
     expect(response.modalityStatus.graph.reason).toBe('NO_GRAPH_SEED');
     expect(response.items.length).toBeGreaterThan(0); // Lexical evidence retained
     expect(indexGateway.activeLeases.size).toBe(0); // Lease released
+  });
+
+  it('returns an ordered path only when every hop citation survives fusion', async () => {
+    const indexGateway = new DeterministicIndexGatewayStub();
+    indexGateway.activeSnapshotId = snapshotId;
+    const embedding = new DeterministicEmbeddingStub();
+    const planner = new DeterministicPlannerStub();
+    const graphGateway = new DeterministicGraphGatewayStub();
+    graphGateway.mockCandidates = [{
+      urn: URN_TABLE_FCL_CYCLE_COUNTER,
+      canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+      kind: 'DatabaseObject',
+    }];
+    indexGateway.queryFulltext = async () => [{
+      type: 'chunk',
+      id: 'chunk-path-1',
+      score: 1,
+      modalitiesContributed: ['fulltext'],
+      sourceDocumentId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
+      sourceDocumentTitle: 'Credit calculations',
+      sectionAnchor: 'Flow',
+      lineStart: 1,
+      lineEnd: 3,
+      rawSnippet: 'Path evidence',
+      publishedContentHash: 'a'.repeat(64),
+      snapshotId,
+      hasConflict: false,
+    }];
+    graphGateway.traverse = async () => ({
+      entities: [],
+      edges: [],
+      paths: [{
+        nodeUrns: [
+          'urn:plannermate:smartvista:PRC_PROCESS:60000006',
+          'urn:plannermate:smartvista:PRC_CONTAINER:60000006',
+        ],
+        edgeFactKeys: ['a'.repeat(64)],
+        hopClassifications: ['OBSERVED'],
+        hopSupportingChunkIds: [['chunk-path-1']],
+        edgeSnapshotIds: [snapshotId],
+        hasConflict: false,
+      }],
+      truncated: false,
+    });
+
+    const service = new RetrievalService({
+      indexGateway,
+      embeddingProvider: embedding,
+      queryPlanner: planner,
+      graphGateway,
+    });
+    const closed = await service.retrieve(setId, defaultRequest);
+    expect(closed.paths).toHaveLength(1);
+    expect(closed.paths[0]?.hopCitationIds).toEqual([['chunk-path-1']]);
+
+    indexGateway.queryFulltext = async () => [];
+    const dropped = await service.retrieve(setId, defaultRequest);
+    expect(dropped.paths).toEqual([]);
+  });
+
+  it('returns null conflict scope proof when structured metadata is absent', async () => {
+    const indexGateway = new DeterministicIndexGatewayStub();
+    indexGateway.activeSnapshotId = snapshotId;
+    const embedding = new DeterministicEmbeddingStub();
+    const planner = new DeterministicPlannerStub();
+    const graphGateway = new DeterministicGraphGatewayStub();
+    graphGateway.mockCandidates = [{
+      urn: URN_TABLE_FCL_CYCLE_COUNTER,
+      canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+      kind: 'DatabaseObject',
+    }];
+    graphGateway.mockEdges = [
+      {
+        type: 'edge', id: 'a'.repeat(64), factKey: 'a'.repeat(64), score: 1,
+        modalitiesContributed: ['graph'],
+        sourceUrn: 'urn:plannermate:smartvista:ProcessStep:STEP_A',
+        relationType: 'HAS_STATUS',
+        targetUrn: 'urn:plannermate:smartvista:ProcessingStatus:RUNNING',
+        evidenceClass: 'OBSERVED', supportingChunkIds: [], snapshotId, hasConflict: false,
+      },
+      {
+        type: 'edge', id: 'b'.repeat(64), factKey: 'b'.repeat(64), score: 1,
+        modalitiesContributed: ['graph'],
+        sourceUrn: 'urn:plannermate:smartvista:ProcessStep:STEP_A',
+        relationType: 'HAS_STATUS',
+        targetUrn: 'urn:plannermate:smartvista:ProcessingStatus:FAILED',
+        evidenceClass: 'OBSERVED', supportingChunkIds: [], snapshotId, hasConflict: false,
+      },
+    ];
+
+    const service = new RetrievalService({
+      indexGateway,
+      embeddingProvider: embedding,
+      queryPlanner: planner,
+      graphGateway,
+    });
+    const response = await service.retrieve(setId, defaultRequest);
+
+    expect(response.conflictGroups).toHaveLength(1);
+    expect(response.conflictGroups[0]).toMatchObject({
+      dimension: 'Unknown',
+      scopeProof: null,
+    });
   });
 
   it('releases lease in finally even when planner, modalities, or fusion throw', async () => {
@@ -422,6 +535,8 @@ describe('18-W0-03B: RetrievalService Pinned Parallel Orchestration & Timeouts',
           score: 1.0,
           modalitiesContributed: ['fulltext'],
           sourceDocumentId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
+          sourceDocumentTitle: 'Credit calculations',
+          publishedContentHash: 'a'.repeat(64),
           sectionAnchor: 'Sec',
           lineStart: 1,
           lineEnd: 5,
@@ -472,6 +587,8 @@ describe('18-W0-03B: RetrievalService Pinned Parallel Orchestration & Timeouts',
           score: 1.0,
           modalitiesContributed: ['fulltext'],
           sourceDocumentId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
+          sourceDocumentTitle: 'Credit calculations',
+          publishedContentHash: 'a'.repeat(64),
           sectionAnchor: 'Sec',
           lineStart: 1,
           lineEnd: 5,
@@ -546,6 +663,8 @@ describe('18-W0-03B: RetrievalService Pinned Parallel Orchestration & Timeouts',
           score: 1.0,
           modalitiesContributed: ['fulltext'],
           sourceDocumentId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
+          sourceDocumentTitle: 'Credit calculations',
+          publishedContentHash: 'a'.repeat(64),
           sectionAnchor: 'Sec',
           lineStart: 1,
           lineEnd: 5,
@@ -563,6 +682,8 @@ describe('18-W0-03B: RetrievalService Pinned Parallel Orchestration & Timeouts',
           score: 1.0,
           modalitiesContributed: ['vector'],
           sourceDocumentId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
+          sourceDocumentTitle: 'Credit calculations',
+          publishedContentHash: 'a'.repeat(64),
           sectionAnchor: 'Sec',
           lineStart: 1,
           lineEnd: 5,

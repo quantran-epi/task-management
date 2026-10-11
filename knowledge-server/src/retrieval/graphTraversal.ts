@@ -338,6 +338,7 @@ export async function runBoundedGraphTraversal(
           },
           entities: [],
           edges: [],
+          paths: [],
         };
       }
       return {
@@ -349,6 +350,7 @@ export async function runBoundedGraphTraversal(
         },
         entities: [],
         edges: [],
+        paths: [],
       };
     }
     validatedPlan = validation.plan;
@@ -397,6 +399,7 @@ export async function runBoundedGraphTraversal(
         },
         entities: [],
         edges: [],
+        paths: [],
       };
     }
 
@@ -414,6 +417,7 @@ export async function runBoundedGraphTraversal(
         },
         entities: [],
         edges: [],
+        paths: [],
       };
     }
 
