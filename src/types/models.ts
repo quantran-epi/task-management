@@ -1,3 +1,5 @@
+import type { ChatMessageGrounding } from '../services/ai/groundedAnswerSchemas';
+
 export type ProjectStatus = 'Open' | 'Pending' | 'In Progress' | 'Done' | 'Cancelled';
 export type MilestoneStatus = 'Open' | 'Pending' | 'In Progress' | 'Done' | 'Cancelled';
 export type TaskStatus = 'Open' | 'Pending' | 'In Progress' | 'Resolved' | 'In Review' | 'Done' | 'Cancelled';
@@ -236,6 +238,7 @@ export interface ChatMessage {
   durationMs?: number | undefined; // Total execution time in milliseconds
   tokenUsage?: ChatTokenUsage | undefined; // Model token usage metrics
   generatedFiles?: ChatGeneratedFile[] | undefined; // AI-generated downloadable files
+  grounding?: ChatMessageGrounding | undefined; // Structured grounding (Plan 19-10 D-46)
 }
 
 // Phase 16: Knowledge Server Foundation, DLP Checks & AST Ingestion models (D-01, D-08, D-18, D-27, D-29)

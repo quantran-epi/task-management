@@ -7,6 +7,10 @@ import type {
   ChatTokenUsage,
   ChatGeneratedFile,
 } from '../../types/models';
+import {
+  ChatMessageGroundingSchema,
+  type ChatMessageGrounding,
+} from '../../services/ai/groundedAnswerSchemas';
 import { generateId } from '../../utils/uuid';
 
 export interface CreateOrGetThreadInput {
@@ -23,6 +27,7 @@ export interface SaveMessageInput {
   durationMs?: number | undefined;
   tokenUsage?: ChatTokenUsage | undefined;
   generatedFiles?: ChatGeneratedFile[] | undefined;
+  grounding?: ChatMessageGrounding | undefined;
 }
 
 export function buildScopeKey(scopeType: ChatScopeType, entityId?: string): string {
@@ -68,6 +73,15 @@ export async function saveMessage(
   input: SaveMessageInput,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<ChatMessage> {
+  if (input.grounding !== undefined) {
+    const parseResult = ChatMessageGroundingSchema.safeParse(input.grounding);
+    if (!parseResult.success) {
+      const error = new Error(`Malformed message grounding: ${parseResult.error.message}`);
+      (error as Error & { code: string }).code = 'INVALID_GROUNDING';
+      throw error;
+    }
+  }
+
   const now = new Date().toISOString();
   const message: ChatMessage = {
     id: generateId(),
@@ -81,6 +95,7 @@ export async function saveMessage(
     ...(input.generatedFiles && input.generatedFiles.length > 0
       ? { generatedFiles: input.generatedFiles }
       : {}),
+    ...(input.grounding ? { grounding: input.grounding } : {}),
   };
 
   await db.transaction('rw', [db.chatMessages, db.chatThreads], async () => {
