@@ -364,22 +364,38 @@ Plans:
   6. When knowledge server is unavailable, user can continue searching local Markdown through existing BM25 retrieval.
   7. Citations and graph paths open the corresponding PlannerMate document context.
 
-**Plans**: 15 plans in 6 waves
-Plans:
+**Plans**: 15 plans in 6 wavesPlans:
+**Wave 1**
+
 - [ ] 19-01-PLAN.md — Retrieval protocol: ordered paths, source hash+title, scope proof (Wave 1)
 - [ ] 19-02-PLAN.md — Browser retrievalProtocol mirror, knowledgeClient.retrieve, groundedAnswerSchemas (Wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 19-03-PLAN.md — Snapshot-scoped graph traversal + response enrichment with source metadata (Wave 2)
 - [ ] 19-04-PLAN.md — Federated retrieval service + POST /api/v1/retrieve route (Wave 2)
 - [ ] 19-05-PLAN.md — completeJson + intentRouter + semanticScopeRouter (Wave 2)
 - [ ] 19-06-PLAN.md — Scoped local BM25 fallback with range-bearing snippets (Wave 2)
 - [ ] 19-07-PLAN.md — Evidence pack + closure validator (Wave 2)
-- [ ] 19-08-PLAN.md — groundedSynthesis: structured completion + bounded repair (Wave 3)
-- [ ] 19-09-PLAN.md — groundedTurn state machine + synthesizeFromStoredEvidence (Wave 4)
 - [ ] 19-10-PLAN.md — ChatMessage.grounding persistence + backup round-trip (Wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 19-08-PLAN.md — groundedSynthesis: structured completion + bounded repair (Wave 3)
 - [ ] 19-11-PLAN.md — CitationChip extension + GroundedBanner/CitationGroup/ClaimBlock/GroundedAnswerCard (Wave 3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 19-09-PLAN.md — groundedTurn state machine + synthesizeFromStoredEvidence (Wave 4)
 - [ ] 19-12-PLAN.md — GraphPathCard/SourcesPanel/CandidateChipList/DiagnosticsPanel/EvidenceOnlyCard/ScopeChipsBar/IntentRoutingPrompt (Wave 4)
 - [ ] 19-13-PLAN.md — QuickPreviewDrawer snapshot excerpt + DocumentSet scope presets (Wave 4)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 19-14-PLAN.md — AIChatDrawer wiring + ChatMessageBubble/List grounding render (Wave 5)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 19-15-PLAN.md — ANSWER-01..07 REQUIREMENTS sync, 20-case reference fixture + eval harness + offline isolation + firstSeenInDoc audit (Wave 6)
 
 ### Phase 20: Benchmark Evaluation Suite, Integrity Hardening & Credential Isolation
