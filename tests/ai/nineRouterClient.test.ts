@@ -4,6 +4,9 @@ import {
   streamChatEvents,
   testNineRouterConnection,
   redactApiKey,
+  completeJson,
+  probeStructuredOutputCapability,
+  clearCapabilityProbeCache,
 } from '../../src/services/ai/nineRouterClient';
 
 const invokeMock = vi.hoisted(() => vi.fn());
@@ -415,5 +418,226 @@ describe('nineRouterClient', () => {
         // drain
       }
     }).rejects.toThrowError(/Máy chủ AI đóng kết nối mà không trả về nội dung hoặc công cụ hợp lệ/);
+  });
+
+  describe('completeJson and probeStructuredOutputCapability', () => {
+    beforeEach(() => {
+      clearCapabilityProbeCache();
+    });
+
+    it('completeJson POSTs with stream: false, no tools key, correct response_format', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          choices: [{ message: { content: '{"answer": "ok"}' } }],
+        }),
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      const controller = new AbortController();
+      const res = await completeJson({
+        endpoint: 'http://localhost:20128',
+        apiKey: 'secret-key-1234',
+        model: 'gpt-4o',
+        temperature: 0,
+        maxTokens: 500,
+        messages: [{ role: 'user', content: 'Hi' }],
+        responseFormat: {
+          type: 'json_schema',
+          json_schema: {
+            name: 'test_schema',
+            strict: true,
+            schema: { type: 'object' },
+          },
+        },
+        signal: controller.signal,
+      });
+
+      expect(res).toEqual({ answer: 'ok' });
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0]!;
+      expect(call[0]).toBe('http://localhost:20128/v1/chat/completions');
+      const body = JSON.parse(call[1]?.body as string);
+      expect(body.stream).toBe(false);
+      expect(body.tools).toBeUndefined();
+      expect(body.tool_choice).toBeUndefined();
+      expect(body.response_format).toEqual({
+        type: 'json_schema',
+        json_schema: {
+          name: 'test_schema',
+          strict: true,
+          schema: { type: 'object' },
+        },
+      });
+    });
+
+    it('completeJson throws TIMEOUT when AbortSignal.timeout fires', async () => {
+      const slowFetch = vi.fn().mockImplementation((_url, opts) => {
+        if (opts?.signal?.aborted) {
+          return Promise.reject(opts.signal.reason);
+        }
+        return new Promise((_resolve, reject) => {
+          opts?.signal?.addEventListener('abort', () => {
+            reject(opts.signal.reason);
+          });
+        });
+      });
+      vi.stubGlobal('fetch', slowFetch);
+
+      const timeoutError = new DOMException('Timeout', 'TimeoutError');
+      const timeoutSignal = AbortSignal.abort(timeoutError);
+      const anySpy = vi.spyOn(AbortSignal as any, 'any').mockReturnValue(timeoutSignal);
+
+      const controller = new AbortController();
+      await expect(
+        completeJson({
+          endpoint: 'http://localhost:20128',
+          model: 'gpt-4o',
+          messages: [{ role: 'user', content: 'Hi' }],
+          responseFormat: {
+            type: 'json_schema',
+            json_schema: { name: 's', strict: true, schema: {} },
+          },
+          signal: controller.signal,
+        })
+      ).rejects.toMatchObject({
+        code: 'TIMEOUT',
+      });
+
+      anySpy.mockRestore();
+    });
+
+    it('completeJson throws ABORTED when upstream signal aborts', async () => {
+      const slowFetch = vi.fn().mockImplementation((_url, opts) => {
+        return new Promise((_resolve, reject) => {
+          opts.signal.addEventListener('abort', () => {
+            reject(new DOMException('Aborted', 'AbortError'));
+          });
+        });
+      });
+      vi.stubGlobal('fetch', slowFetch);
+
+      const controller = new AbortController();
+      const promise = completeJson({
+        endpoint: 'http://localhost:20128',
+        model: 'gpt-4o',
+        messages: [{ role: 'user', content: 'Hi' }],
+        responseFormat: {
+          type: 'json_schema',
+          json_schema: { name: 's', strict: true, schema: {} },
+        },
+        signal: controller.signal,
+      });
+
+      controller.abort();
+
+      await expect(promise).rejects.toMatchObject({
+        code: 'ABORTED',
+      });
+    });
+
+    it('returns parsed JSON when provider responds with valid JSON content', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          choices: [{ message: { content: '{"hello": 42}' } }],
+        }),
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      const res = await completeJson({
+        endpoint: 'http://localhost:20128',
+        model: 'gpt-4o',
+        messages: [{ role: 'user', content: 'Hi' }],
+        responseFormat: {
+          type: 'json_schema',
+          json_schema: { name: 's', strict: true, schema: {} },
+        },
+        signal: new AbortController().signal,
+      });
+
+      expect(res).toEqual({ hello: 42 });
+    });
+
+    it('throws INVALID_RESPONSE when content is not JSON', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          choices: [{ message: { content: 'Not valid JSON' } }],
+        }),
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      await expect(
+        completeJson({
+          endpoint: 'http://localhost:20128',
+          model: 'gpt-4o',
+          messages: [{ role: 'user', content: 'Hi' }],
+          responseFormat: {
+            type: 'json_schema',
+            json_schema: { name: 's', strict: true, schema: {} },
+          },
+          signal: new AbortController().signal,
+        })
+      ).rejects.toMatchObject({
+        code: 'INVALID_RESPONSE',
+      });
+    });
+
+    it('probeStructuredOutputCapability caches second call under same key (one fetch call total)', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          choices: [{ message: { content: '{"ok": true}' } }],
+        }),
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      const res1 = await probeStructuredOutputCapability(
+        'http://localhost:20128/v1',
+        'gpt-4o'
+      );
+      const res2 = await probeStructuredOutputCapability(
+        'http://localhost:20128',
+        'gpt-4o'
+      );
+
+      expect(res1).toEqual({ ok: true, strictJsonSchema: true });
+      expect(res2).toEqual({ ok: true, strictJsonSchema: true });
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('apiKey never leaks in thrown error messages', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: async () => ({
+          error: { message: 'Failed upstream with sk-leak-99999-secret' },
+        }),
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      await expect(
+        completeJson({
+          endpoint: 'http://localhost:20128',
+          apiKey: 'sk-leak-99999-secret',
+          model: 'gpt-4o',
+          messages: [{ role: 'user', content: 'Hi' }],
+          responseFormat: {
+            type: 'json_schema',
+            json_schema: { name: 's', strict: true, schema: {} },
+          },
+          signal: new AbortController().signal,
+        })
+      ).rejects.toSatisfy((err: any) => {
+        expect(err.message).not.toContain('sk-leak-99999-secret');
+        expect(err.message).toContain('***');
+        return true;
+      });
+    });
   });
 });

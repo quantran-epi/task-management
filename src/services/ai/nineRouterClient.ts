@@ -409,3 +409,268 @@ export async function* streamChatCompletion(
     }
   }
 }
+
+export type NineRouterClientErrorCode =
+  | 'REMOTE_ERROR'
+  | 'TIMEOUT'
+  | 'ABORTED'
+  | 'INVALID_RESPONSE'
+  | 'NETWORK_ERROR';
+
+export class NineRouterClientError extends Error {
+  constructor(
+    public readonly code: NineRouterClientErrorCode,
+    message: string,
+    public readonly status?: number
+  ) {
+    super(message);
+    this.name = 'NineRouterClientError';
+  }
+}
+
+export interface CompleteJsonRequest {
+  endpoint: string;
+  apiKey?: string | undefined;
+  model: string;
+  temperature?: number | undefined;
+  maxTokens?: number | undefined;
+  messages: Array<{ role: 'system' | 'user'; content: string }>;
+  responseFormat?: {
+    type: 'json_schema';
+    json_schema: {
+      name: string;
+      strict: true;
+      schema: Record<string, unknown>;
+    };
+  } | undefined;
+  response_format?: {
+    type: 'json_schema';
+    json_schema: {
+      name: string;
+      strict: true;
+      schema: Record<string, unknown>;
+    };
+  } | undefined;
+  signal: AbortSignal;
+}
+
+export async function completeJson(req: CompleteJsonRequest): Promise<unknown> {
+  const baseEndpoint = sanitizeEndpoint(req.endpoint);
+  const targetUrl = `${baseEndpoint}/v1/chat/completions`;
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  };
+  if (req.apiKey && req.apiKey.trim()) {
+    headers.Authorization = `Bearer ${req.apiKey.trim()}`;
+  }
+
+  const timeoutSignal = AbortSignal.timeout(45_000);
+  const combinedSignal = (AbortSignal as any).any
+    ? (AbortSignal as any).any([req.signal, timeoutSignal])
+    : req.signal;
+
+  const response_format = req.response_format ?? req.responseFormat;
+  const requestBody = {
+    model: req.model,
+    temperature: req.temperature ?? 0,
+    max_tokens: req.maxTokens ?? 1800,
+    stream: false,
+    response_format,
+    messages: req.messages,
+  };
+
+  let response: Response;
+  try {
+    if (isTauriApp()) {
+      const proxyResponse = await tauriInvoke<TauriProxyResponse>('ai_proxy_request', {
+        method: 'POST',
+        url: targetUrl,
+        headers,
+        body: JSON.stringify(requestBody),
+      });
+
+      if (combinedSignal.aborted) {
+        const reason = combinedSignal.reason;
+        const timedOut =
+          timeoutSignal.aborted ||
+          (reason instanceof DOMException && reason.name === 'TimeoutError');
+        throw new NineRouterClientError(
+          timedOut ? 'TIMEOUT' : 'ABORTED',
+          timedOut ? 'Request timed out' : 'Request was aborted'
+        );
+      }
+
+      response = new Response(proxyResponse.body, {
+        status: proxyResponse.status,
+        headers: proxyResponse.headers,
+      });
+    } else {
+      response = await fetch(targetUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(requestBody),
+        signal: combinedSignal,
+      });
+    }
+  } catch (error: unknown) {
+    if (error instanceof NineRouterClientError) {
+      throw error;
+    }
+    const message = redactApiKey(
+      error instanceof Error ? error.message : 'Network request failed',
+      req.apiKey
+    ).slice(0, 240);
+
+    if (combinedSignal.aborted) {
+      const reason = combinedSignal.reason;
+      const timedOut =
+        timeoutSignal.aborted ||
+        (reason instanceof DOMException && reason.name === 'TimeoutError');
+      throw new NineRouterClientError(
+        timedOut ? 'TIMEOUT' : 'ABORTED',
+        timedOut ? 'Request timed out' : 'Request was aborted'
+      );
+    }
+    throw new NineRouterClientError('NETWORK_ERROR', message);
+  }
+
+  let json: any;
+  try {
+    json = await response.json();
+  } catch {
+    throw new NineRouterClientError(
+      'INVALID_RESPONSE',
+      'Model provider returned invalid JSON',
+      response.status
+    );
+  }
+
+  if (!response.ok) {
+    const rawError = typeof json?.error?.message === 'string'
+      ? json.error.message
+      : JSON.stringify(json);
+    const safeMsg = redactApiKey(
+      rawError || response.statusText || 'Model API error',
+      req.apiKey
+    );
+    throw new NineRouterClientError('REMOTE_ERROR', safeMsg, response.status);
+  }
+
+  const choice = json?.choices?.[0];
+  if (!choice || choice.message?.refusal) {
+    const refusalMsg = redactApiKey(
+      choice?.message?.refusal || 'Model refused or returned empty choice',
+      req.apiKey
+    );
+    throw new NineRouterClientError('INVALID_RESPONSE', refusalMsg, response.status);
+  }
+
+  const content = choice.message?.content;
+  if (typeof content !== 'string' || !content.trim()) {
+    throw new NineRouterClientError(
+      'INVALID_RESPONSE',
+      'Model returned empty content',
+      response.status
+    );
+  }
+
+  try {
+    return JSON.parse(content);
+  } catch {
+    throw new NineRouterClientError(
+      'INVALID_RESPONSE',
+      'Model content is not valid JSON',
+      response.status
+    );
+  }
+}
+
+interface CapabilityCacheEntry {
+  result: { ok: true; strictJsonSchema: boolean } | { ok: false; reason: string };
+  expiresAt: number;
+}
+
+const capabilityCache = new Map<string, CapabilityCacheEntry>();
+
+function getHostKey(endpoint: string, model: string): string {
+  const sanitized = sanitizeEndpoint(endpoint);
+  try {
+    const parsed = new URL(sanitized);
+    return `${parsed.host}::${model}`;
+  } catch {
+    return `${sanitized}::${model}`;
+  }
+}
+
+export function clearCapabilityProbeCache(): void {
+  capabilityCache.clear();
+}
+
+export async function probeStructuredOutputCapability(
+  endpoint: string,
+  model: string,
+  apiKey?: string,
+  signal?: AbortSignal
+): Promise<{ ok: true; strictJsonSchema: boolean } | { ok: false; reason: string }> {
+  const cacheKey = getHostKey(endpoint, model);
+  const now = Date.now();
+  const cached = capabilityCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) {
+    return cached.result;
+  }
+
+  const probeSignal = signal ?? new AbortController().signal;
+
+  try {
+    const parsed = await completeJson({
+      endpoint,
+      apiKey,
+      model,
+      temperature: 0,
+      maxTokens: 50,
+      messages: [
+        { role: 'system', content: 'Return {"ok": true}' },
+        { role: 'user', content: 'Probe' },
+      ],
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: 'probe_test',
+          strict: true,
+          schema: {
+            type: 'object',
+            properties: { ok: { type: 'boolean' } },
+            required: ['ok'],
+            additionalProperties: false,
+          },
+        },
+      },
+      signal: probeSignal,
+    });
+
+    const isOk = (parsed as any)?.ok === true;
+    const result: { ok: true; strictJsonSchema: boolean } | { ok: false; reason: string } =
+      isOk
+        ? { ok: true, strictJsonSchema: true }
+        : { ok: false, reason: 'Probe returned non-conforming JSON' };
+
+    capabilityCache.set(cacheKey, {
+      result,
+      expiresAt: now + 24 * 60 * 60 * 1000,
+    });
+    return result;
+  } catch (error: unknown) {
+    const reason = redactApiKey(
+      error instanceof Error ? error.message : 'Probe request failed',
+      apiKey
+    );
+    const result: { ok: false; reason: string } = { ok: false, reason };
+    capabilityCache.set(cacheKey, {
+      result,
+      expiresAt: now + 24 * 60 * 60 * 1000,
+    });
+    return result;
+  }
+}
