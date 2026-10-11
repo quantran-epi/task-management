@@ -21,6 +21,8 @@ function sampleResponse(outcome: RetrievalResponse['outcome'], overrides: Partia
       policyVersion: '2026.10.1',
     },
     items: [],
+    paths: [],
+    conflictGroups: [],
     totalCandidates: 0,
     modalitiesUsed: ['fulltext'],
     modalityStatus: {
