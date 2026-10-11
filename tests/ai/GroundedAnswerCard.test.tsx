@@ -674,4 +674,132 @@ describe('GroundedAnswerCard', () => {
 
     expect(window.matchMedia('(prefers-reduced-motion: reduce)').matches).toBe(true);
   });
+
+  it('23. IntentRoutingPrompt renders two chips with Vietnamese copy', async () => {
+    const { IntentRoutingPrompt } = await import(
+      '../../src/components/ai/grounded/IntentRoutingPrompt'
+    );
+    const handleSelect = vi.fn();
+    render(<IntentRoutingPrompt onSelect={handleSelect} />);
+
+    expect(screen.getByText('Bạn muốn:')).toBeInTheDocument();
+    const knowledgeChip = screen.getByRole('button', { name: 'Tra cứu tài liệu' });
+    const opChip = screen.getByRole('button', { name: 'Thao tác PlannerMate' });
+
+    expect(knowledgeChip).toBeInTheDocument();
+    expect(opChip).toBeInTheDocument();
+
+    fireEvent.click(knowledgeChip);
+    expect(handleSelect).toHaveBeenCalledWith('knowledge');
+
+    fireEvent.click(opChip);
+    expect(handleSelect).toHaveBeenCalledWith('operational');
+  });
+
+  it('24. ScopeChipsBar renders "Đang tra cứu:" prefix after routing', async () => {
+    const { ScopeChipsBar } = await import(
+      '../../src/components/ai/grounded/ScopeChipsBar'
+    );
+    const handleEdit = vi.fn();
+    render(
+      <ScopeChipsBar
+        routedScope={{
+          domain: 'Core Banking',
+          environment: 'STAGING',
+          version: 'v2.1',
+          comparisonMode: 'baseline_vs_scope',
+        }}
+        onEditScope={handleEdit}
+      />
+    );
+
+    expect(screen.getByText('Đang tra cứu:')).toBeInTheDocument();
+    expect(screen.getByText('Core Banking')).toBeInTheDocument();
+    expect(screen.getByText('STAGING')).toBeInTheDocument();
+    expect(screen.getByText('v2.1')).toBeInTheDocument();
+    expect(screen.getByText('(so sánh môi trường)')).toBeInTheDocument();
+
+    const domainChip = screen.getByText('Core Banking');
+    fireEvent.click(domainChip);
+    expect(handleEdit).toHaveBeenCalledTimes(1);
+  });
+
+  it('25. EvidenceOnlyCard button "Tạo câu trả lời từ bằng chứng" calls callback', async () => {
+    const { EvidenceOnlyCard } = await import(
+      '../../src/components/ai/grounded/EvidenceOnlyCard'
+    );
+    const handleSynthesize = vi.fn();
+    const grounding = createMockGrounding({
+      outcome: 'MODEL_UNAVAILABLE',
+      answer: null,
+    });
+
+    render(
+      <EvidenceOnlyCard
+        grounding={grounding}
+        onSynthesizeFromStored={handleSynthesize}
+        sourcesSlot={<div data-testid="sources-slot-child">Sources slot</div>}
+      />
+    );
+
+    expect(screen.getByTestId('sources-slot-child')).toBeInTheDocument();
+    const btn = screen.getByRole('button', { name: 'Tạo câu trả lời từ bằng chứng' });
+    fireEvent.click(btn);
+    expect(handleSynthesize).toHaveBeenCalledTimes(1);
+  });
+
+  it('26. DiagnosticsPanel renders modality statuses + fallbackReason + repair count', async () => {
+    const { DiagnosticsPanel } = await import(
+      '../../src/components/ai/grounded/DiagnosticsPanel'
+    );
+    const mockDiagnostics = {
+      fulltext: { status: 'ok' as const, latencyMs: 25, itemCount: 4 },
+      vector: { status: 'degraded' as const, latencyMs: 120, itemCount: 2 },
+      graph: { status: 'ok' as const, latencyMs: 40, itemCount: 1 },
+    };
+
+    render(
+      <DiagnosticsPanel
+        diagnostics={mockDiagnostics}
+        fallbackReason="NETWORK_ERROR"
+        routerSource="semantic"
+        promptVersion="2026.10"
+        schemaVersion={1}
+        repairs={2}
+        coverageWarnings={['Vector index partially stale']}
+      />
+    );
+
+    // Expand collapse
+    const collapseHeader = screen.getByText('Chi tiết chẩn đoán truy xuất');
+    fireEvent.click(collapseHeader);
+
+    expect(screen.getByText(/25ms \(4 mục\)/)).toBeInTheDocument();
+    expect(screen.getByText(/120ms \(2 mục\)/)).toBeInTheDocument();
+    expect(screen.getByText('NETWORK_ERROR')).toBeInTheDocument();
+    expect(screen.getByText(/2 lần sửa/)).toBeInTheDocument();
+    expect(screen.getByText('Vector index partially stale')).toBeInTheDocument();
+  });
+
+  it('27. DiagnosticsPanel contains no query text / source text (content-free invariant)', async () => {
+    const { DiagnosticsPanel } = await import(
+      '../../src/components/ai/grounded/DiagnosticsPanel'
+    );
+    const secretQuery = 'BI_MAT_KHOANG_CACH_12345';
+    const secretExcerpt = 'NOI_DUNG_NGUON_SECRET_67890';
+
+    const { container } = render(
+      <DiagnosticsPanel
+        diagnostics={{
+          fulltext: { status: 'ok' as const, latencyMs: 15, itemCount: 3 },
+          vector: { status: 'ok' as const, latencyMs: 30, itemCount: 2 },
+          graph: { status: 'ok' as const, latencyMs: 10, itemCount: 1 },
+        }}
+        fallbackReason="NONE"
+      />
+    );
+
+    expect(container.textContent).not.toContain(secretQuery);
+    expect(container.textContent).not.toContain(secretExcerpt);
+  });
 });
