@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 ## Current Position
 
 Phase: 19 (grounded-assistant-provenance-citations-offline-fallback) — EXECUTING
-Plan: 11 of 15
+Plan: 12 of 15
 Status: Executing Phase 19
-Last activity: 2026-10-11 -- Completed 19-11-PLAN.md
-Stopped at: Completed 19-11-PLAN.md
+Last activity: 2026-10-11 -- Completed 19-09-PLAN.md
+Stopped at: Completed 19-09-PLAN.md
 
 Progress: [████████░░] 82%
 
@@ -175,6 +175,7 @@ Progress: [████████░░] 82%
 | Phase 17 P06 | 9 min | 3 tasks | 7 files |
 | Phase 19 P01 | 18m | 2 tasks | 5 files |
 | Phase 19 P08 | 10m | 2 tasks | 2 files |
+| Phase 19 P09 | 6m | 2 tasks | 2 files |
 | Phase 19 P11 | 10m | 2 tasks | 8 files |
 
 ## Accumulated Context
@@ -183,6 +184,10 @@ Progress: [████████░░] 82%
 
 Recent decisions logged in PROJECT.md:
 
+- [Phase 19 Plan 09]: Fallback allowlist triggers local BM25 only on NETWORK_ERROR, TIMEOUT, and 5xx; inhibits fallback on AUTH (401/403), CONFIG (400/404), and INVALID_RESPONSE (D-41).
+- [Phase 19 Plan 09]: Enforce zero model calls on NO_EVIDENCE, UNSUPPORTED, and NEEDS_CLARIFICATION (D-04, D-07).
+- [Phase 19 Plan 09]: Persist citations, paths, and conflicts in MODEL_UNAVAILABLE outcome so UI can show evidence and trigger synthesizeFromStoredEvidence (D-43, D-44).
+- [Phase 19 Plan 09]: createFreshLookupTurn preserves prior grounding byte-immutable and passes query to a new message turn (D-49).
 - [Phase 18 Plan 02]: Installed exact @xenova/transformers@2.17.2 with --ignore-scripts per human approval checkpoint.
 - [Phase 18 Plan 02]: LocalOnnxEmbeddingProvider lazy-loads pipeline and maps model load failures to stable PROVIDER_ERROR for degraded fusion.
 - [Phase 18 Plan 02]: RemoteOpenAiEmbeddingProvider requires HTTPS, exact host allowlist, positive dimensions, and never leaks canary tokens or queries.

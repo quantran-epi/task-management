@@ -386,7 +386,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 19-09-PLAN.md — groundedTurn state machine + synthesizeFromStoredEvidence (Wave 4)
+- [x] 19-09-PLAN.md — groundedTurn state machine + synthesizeFromStoredEvidence (Wave 4)
 - [ ] 19-12-PLAN.md — GraphPathCard/SourcesPanel/CandidateChipList/DiagnosticsPanel/EvidenceOnlyCard/ScopeChipsBar/IntentRoutingPrompt (Wave 4)
 - [ ] 19-13-PLAN.md — QuickPreviewDrawer snapshot excerpt + DocumentSet scope presets (Wave 4)
 
