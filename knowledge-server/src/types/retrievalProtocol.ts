@@ -515,3 +515,98 @@ export const RetrievalResponseSchema = BaseRetrievalResponseSchema.superRefine((
 });
 
 export type RetrievalResponse = z.infer<typeof RetrievalResponseSchema>;
+
+export const ModalityStatusSchema = CompleteModalityStatusSchema;
+export type ModalityStatus = z.infer<typeof ModalityStatusSchema>;
+
+export const FederatedSetTierAssignmentSchema = z.strictObject({
+  setId: z.string().uuid(),
+  tier: z.enum(['REQUIRED', 'LIKELY', 'OPTIONAL']),
+  roleGroup: z.enum(['baseline', 'scope_diff']),
+});
+
+export const FederatedRetrievalBudgetsSchema = z.strictObject({
+  concurrency: z.number().int().min(1).max(10),
+  elapsedMs: z.number().int().min(100).max(120_000),
+  maxSets: z.number().int().min(1).max(50),
+  maxItems: z.number().int().min(1).max(200),
+  maxEvidenceChars: z.number().int().min(1).max(100_000),
+});
+
+export const FederatedRetrievalRequestSchema = z.strictObject({
+  query: z.string().trim().min(1).max(4000),
+  setTierAssignments: z.array(FederatedSetTierAssignmentSchema).min(1).max(50),
+  comparisonMode: z.enum(['single', 'baseline_vs_scope']).nullable(),
+  budgets: FederatedRetrievalBudgetsSchema,
+  limit: z.number().int().min(10).max(50).default(20),
+  includeInferred: z.boolean().default(false),
+  recentTurns: z.array(ConversationTurnSchema).max(3).default([]),
+});
+
+export type FederatedRetrievalRequest = z.infer<typeof FederatedRetrievalRequestSchema>;
+
+export const FederatedRetrievalItemSchema = z.strictObject({
+  setId: z.string().uuid(),
+  snapshotId: SnapshotIdSchema,
+  roleGroup: z.enum(['baseline', 'scope_diff']),
+  item: RetrievalItemSchema,
+});
+
+export const FederatedRetrievalPathSchema = z.strictObject({
+  setId: z.string().uuid(),
+  snapshotId: SnapshotIdSchema,
+  roleGroup: z.enum(['baseline', 'scope_diff']),
+  path: OrderedPathSchema,
+});
+
+export const FederatedConflictGroupSchema = z.strictObject({
+  setId: z.string().uuid(),
+  snapshotId: SnapshotIdSchema,
+  roleGroup: z.enum(['baseline', 'scope_diff']),
+  conflictGroup: ConflictGroupSchema,
+});
+
+export const FederatedCoverageWarningSchema = z.strictObject({
+  code: z.enum(['TIMEOUT', 'STALE', 'ERROR', 'BUDGET_SETS', 'BUDGET_ITEMS', 'BUDGET_EVIDENCE', 'BUDGET_ELAPSED']),
+  setId: z.string().uuid().nullable(),
+  message: z.string().min(1).max(300),
+});
+
+export const FederatedRetrievalResponseSchema = z
+  .strictObject({
+    outcome: RetrievalOutcomeSchema,
+    items: z.array(FederatedRetrievalItemSchema).max(200),
+    paths: z.array(FederatedRetrievalPathSchema).max(100),
+    conflictGroups: z.array(FederatedConflictGroupSchema).max(100),
+    modalityStatus: ModalityStatusSchema,
+    diagnostics: z.strictObject({
+      degraded: z.boolean(),
+      coverageWarnings: z.array(FederatedCoverageWarningSchema).max(100),
+    }),
+  })
+  .superRefine((response, ctx) => {
+    const snapshotsBySet = new Map<string, string>();
+    const entries = [...response.items, ...response.paths, ...response.conflictGroups];
+    entries.forEach((entry, index) => {
+      const pinned = snapshotsBySet.get(entry.setId);
+      if (pinned && pinned !== entry.snapshotId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['items', index, 'snapshotId'],
+          message: 'One setId must not contain multiple snapshotIds',
+        });
+      } else {
+        snapshotsBySet.set(entry.setId, entry.snapshotId);
+      }
+    });
+    if (response.outcome === 'DEGRADED' && !response.diagnostics.degraded) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['diagnostics', 'degraded'],
+        message: 'DEGRADED outcome requires diagnostics.degraded to be true',
+      });
+    }
+  });
+
+export type FederatedRetrievalResponse = z.infer<typeof FederatedRetrievalResponseSchema>;
+
