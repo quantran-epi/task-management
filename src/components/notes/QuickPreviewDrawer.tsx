@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Drawer, Button, Typography, Space, Tag, Empty, Divider, Spin } from 'antd';
+import React, { useEffect, useRef, useState } from 'react';
+import { Drawer, Button, Typography, Space, Tag, Empty, Divider, Spin, Tooltip } from 'antd';
 import {
   FileTextOutlined,
   ExportOutlined,
@@ -11,6 +11,8 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { Note, Task, Project } from '../../types/models';
 import { renderSafeMarkdown } from '../../utils/markdown';
 import { getBacklinksForDoc, type BacklinksResult } from '../../db/repositories/documentLinkRepo';
+import { computeSha256, normalizeMarkdownForHash } from '../../db/repositories/documentSetRepo';
+import { GroundedBanner } from '../ai/grounded/GroundedBanner';
 
 const { Title, Text } = Typography;
 
@@ -20,11 +22,21 @@ export interface QuickPreviewDrawerProps {
   onClose: () => void;
   onNavigateToDocs?: ((docId: string) => void) | undefined;
   db?: TaskPlannerDatabase | undefined;
+
+  // Plan 13 extensions (D-10, D-47, D-48, ANSWER-07)
+  sectionAnchor?: string | undefined;
+  lineRange?: { start: number; end: number } | undefined;
+  citedSnapshotId?: string | undefined;
+  citedExcerpt?: string | undefined;
+  citedContentHash?: string | undefined;
+  citationAuthority?: 'server' | 'local' | undefined;
+  snapshotAvailable?: boolean | undefined;
 }
 
 /**
  * Slide-out document preview reader preserving ongoing task or chat context (D-07, D-13).
  * Renders on the right edge (`width: 480px`, `zIndex: 1100`).
+ * Extended with snapshot-first excerpt, mismatch banner, line-range focus/highlight (D-10, D-47, D-48).
  */
 export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
   open,
@@ -32,6 +44,13 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
   onClose,
   onNavigateToDocs,
   db = defaultDb,
+  sectionAnchor: _sectionAnchor,
+  lineRange,
+  citedSnapshotId,
+  citedExcerpt,
+  citedContentHash,
+  citationAuthority,
+  snapshotAvailable = true,
 }) => {
   const [doc, setDoc] = useState<Note | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -40,12 +59,23 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
     projects: [],
     referencingNotes: [],
   });
+  const [hashMismatch, setHashMismatch] = useState<boolean>(false);
+  const [isHighlighted, setIsHighlighted] = useState<boolean>(false);
+  const [isReducedMotion, setIsReducedMotion] = useState<boolean>(false);
+
+  const targetAnchorRef = useRef<HTMLDivElement | null>(null);
+
+  const effectiveAuthority =
+    citationAuthority ??
+    (citedSnapshotId || citedExcerpt || citedContentHash ? 'server' : 'local');
 
   useEffect(() => {
     let active = true;
     if (!open || !docId) {
       setDoc(null);
       setBacklinks({ tasks: [], projects: [], referencingNotes: [] });
+      setHashMismatch(false);
+      setIsHighlighted(false);
       return () => {
         active = false;
       };
@@ -56,10 +86,24 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
       db.notes.get(docId),
       getBacklinksForDoc(docId, db),
     ])
-      .then(([noteData, backlinksData]) => {
+      .then(async ([noteData, backlinksData]) => {
         if (!active) return;
         setDoc(noteData || null);
         setBacklinks(backlinksData);
+
+        // Check hash mismatch only for server authority when citedContentHash is present (D-10, D-21)
+        if (effectiveAuthority === 'server' && citedContentHash && noteData?.body !== undefined) {
+          try {
+            const currentHash = await computeSha256(normalizeMarkdownForHash(noteData.body));
+            if (active) {
+              setHashMismatch(currentHash !== citedContentHash);
+            }
+          } catch (err) {
+            console.error('[QuickPreviewDrawer] Hash check failed:', err);
+          }
+        } else {
+          setHashMismatch(false);
+        }
       })
       .catch((err) => {
         console.error('[QuickPreviewDrawer] Failed to load document:', err);
@@ -71,7 +115,33 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
     return () => {
       active = false;
     };
-  }, [db, docId, open]);
+  }, [db, docId, open, effectiveAuthority, citedContentHash]);
+
+  // Focus + scroll + highlight on open when lineRange is provided
+  useEffect(() => {
+    if (!open || !lineRange || !doc) return;
+
+    const prefersReduced =
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    setIsReducedMotion(prefersReduced);
+
+    if (targetAnchorRef.current) {
+      targetAnchorRef.current.focus({ preventScroll: false });
+      targetAnchorRef.current.scrollIntoView({ block: 'center' });
+    }
+
+    setIsHighlighted(true);
+    const duration = prefersReduced ? 2000 : 1600;
+    const timer = setTimeout(() => {
+      setIsHighlighted(false);
+    }, duration);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [open, lineRange, doc]);
 
   const handleOpenInDocs = () => {
     if (!docId) return;
@@ -86,6 +156,10 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
     backlinks.tasks.length > 0 ||
     backlinks.projects.length > 0 ||
     backlinks.referencingNotes.length > 0;
+
+  // Split raw excerpt lines for line numbering
+  const excerptLines = citedExcerpt ? citedExcerpt.split('\n') : [];
+  const startLineNumber = lineRange?.start ?? 1;
 
   return (
     <Drawer
@@ -131,12 +205,109 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
         <Empty description="Không tìm thấy tài liệu hoặc đã bị xóa" />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {/* Header metadata */}
+          {/* 1. Snapshot-mismatch banner when currentHash !== citedContentHash (D-10) */}
+          {hashMismatch && (
+            <div data-testid="snapshot-mismatch-banner">
+              <GroundedBanner variant="snapshot-mismatch" />
+            </div>
+          )}
+
+          {/* 2. Snapshot excerpt panel when citedExcerpt is present (D-47, D-48) */}
+          {citedExcerpt && (
+            <div
+              data-testid="cited-excerpt-panel"
+              style={{
+                borderRadius: 6,
+                border: '1px solid #d9d9d9',
+                backgroundColor: '#fafafa',
+                overflow: 'hidden',
+              }}
+            >
+              {/* Header */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '6px 12px',
+                  backgroundColor: '#f0f0f0',
+                  borderBottom: '1px solid #d9d9d9',
+                  fontSize: 12,
+                  fontWeight: 600,
+                }}
+              >
+                <span>
+                  {effectiveAuthority === 'server' ? 'Trích dẫn từ bản chụp' : 'Trích dẫn cục bộ'}
+                </span>
+                {effectiveAuthority === 'server' && citedSnapshotId && (
+                  <Tooltip title={citedSnapshotId}>
+                    <Text type="secondary" style={{ fontSize: 11, fontFamily: 'monospace' }}>
+                      {citedSnapshotId.slice(0, 7)}…
+                    </Text>
+                  </Tooltip>
+                )}
+              </div>
+
+              {/* Daemon-missing snapshot state banner (D-48) */}
+              {!snapshotAvailable && (
+                <div style={{ padding: '8px 12px 0 12px' }}>
+                  <GroundedBanner variant="snapshot-mismatch" />
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: '#cf1322',
+                      fontWeight: 600,
+                      marginBottom: 8,
+                    }}
+                  >
+                    Bản chụp không còn khả dụng
+                  </div>
+                </div>
+              )}
+
+              {/* Raw line-numbered pre */}
+              <pre
+                style={{
+                  margin: 0,
+                  padding: '8px 12px',
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                  fontSize: 13,
+                  lineHeight: '20px',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  overflowX: 'auto',
+                }}
+              >
+                {excerptLines.map((line, idx) => {
+                  const lineNum = startLineNumber + idx;
+                  return (
+                    <div key={idx} style={{ display: 'flex', gap: 12 }}>
+                      <span
+                        data-testid={`excerpt-line-num-${lineNum}`}
+                        style={{
+                          width: 32,
+                          color: '#8c8c8c',
+                          textAlign: 'right',
+                          userSelect: 'none',
+                          flexShrink: 0,
+                        }}
+                      >
+                        {lineNum}
+                      </span>
+                      <span style={{ flex: 1 }}>{line || ' '}</span>
+                    </div>
+                  );
+                })}
+              </pre>
+            </div>
+          )}
+
+          {/* 3. Header metadata */}
           <div>
             <Title level={4} style={{ marginTop: 0, marginBottom: 8 }}>
               {doc.title || 'Untitled Document'}
             </Title>
-            <Space orientation="horizontal" size={[4, 6]} wrap>
+            <Space size={[4, 6]} wrap>
               {doc.tags?.map((tag) => (
                 <Tag key={tag} color="blue">
                   {tag}
@@ -151,6 +322,35 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
           </div>
 
           <Divider style={{ margin: '8px 0' }} />
+
+          {/* Target scroll/focus anchor for lineRange */}
+          {lineRange && (
+            <div
+              ref={targetAnchorRef}
+              tabIndex={-1}
+              data-testid="line-range-anchor"
+              aria-label={`Target line ${lineRange.start}`}
+              className={
+                isHighlighted
+                  ? isReducedMotion
+                    ? 'gsd-grounded-highlight gsd-static-highlight'
+                    : 'gsd-grounded-highlight gsd-fade-highlight'
+                  : undefined
+              }
+              style={{
+                outline: 'none',
+                padding: '4px 8px',
+                borderRadius: 4,
+                backgroundColor: isHighlighted ? 'rgba(79, 70, 229, 0.12)' : 'transparent',
+                borderLeft: isHighlighted ? '3px solid #4f46e5' : '3px solid transparent',
+                transition: isReducedMotion ? 'none' : 'background-color 0.4s ease',
+              }}
+            >
+              <Text type="secondary" style={{ fontSize: 11, fontWeight: 600 }}>
+                Dòng {lineRange.start}–{lineRange.end}
+              </Text>
+            </div>
+          )}
 
           {/* Rendered markdown body */}
           <div
@@ -173,7 +373,11 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                 }}
               >
                 <LinkOutlined />
-                <span>Liên kết đến tài liệu này ({backlinks.tasks.length + backlinks.projects.length + backlinks.referencingNotes.length})</span>
+                <span>
+                  Liên kết đến tài liệu này (
+                  {backlinks.tasks.length + backlinks.projects.length + backlinks.referencingNotes.length}
+                  )
+                </span>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

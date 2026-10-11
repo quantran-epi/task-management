@@ -1,9 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import React, { useState } from 'react';
 import { CitationChip } from '../../src/components/ai/CitationChip';
+import { CitationGroup } from '../../src/components/ai/grounded/CitationGroup';
 import { QuickPreviewDrawer } from '../../src/components/notes/QuickPreviewDrawer';
 import { TaskPlannerDatabase } from '../../src/db';
 import type { Note, Task } from '../../src/types/models';
+import type { PersistedCitation } from '../../src/services/ai/groundedAnswerSchemas';
+import { computeSha256, normalizeMarkdownForHash } from '../../src/db/repositories/documentSetRepo';
 
 describe('CitationChip', () => {
   it('renders citation title and heading in legacy mode', () => {
@@ -177,6 +181,7 @@ describe('CitationChip', () => {
 
 describe('QuickPreviewDrawer', () => {
   let db: TaskPlannerDatabase;
+  const docBody = '# Kubernetes Setup\nDeploy pods with `kubectl apply -f app.yaml`.\n\n- Scale to 3 replicas\n- Monitor with Prometheus';
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -187,7 +192,7 @@ describe('QuickPreviewDrawer', () => {
       type: 'document',
       title: 'DevOps Kubernetes Runbook',
       tags: ['devops', 'k8s'],
-      body: '# Kubernetes Setup\nDeploy pods with `kubectl apply -f app.yaml`.\n\n- Scale to 3 replicas\n- Monitor with Prometheus',
+      body: docBody,
       isPinned: false,
       createdAt: '2026-10-01T00:00:00Z',
       updatedAt: '2026-10-02T00:00:00Z',
@@ -248,5 +253,224 @@ describe('QuickPreviewDrawer', () => {
     const btn = screen.getByRole('button', { name: /Mở trong Docs/i });
     fireEvent.click(btn);
     expect(handleNav).toHaveBeenCalledWith('doc-preview-1');
+  });
+
+  // Task 1 additional cases (cases 8-15)
+
+  it('8. citedExcerpt provided -> raw panel renders with left gutter line numbers starting at lineRange.start', async () => {
+    render(
+      <QuickPreviewDrawer
+        open={true}
+        docId="doc-preview-1"
+        onClose={vi.fn()}
+        db={db}
+        lineRange={{ start: 10, end: 12 }}
+        citedExcerpt={'line 10 content\nline 11 content\nline 12 content'}
+        citedSnapshotId="gsnap_1234567"
+        citationAuthority="server"
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('cited-excerpt-panel')).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId('excerpt-line-num-10')).toHaveTextContent('10');
+    expect(screen.getByTestId('excerpt-line-num-11')).toHaveTextContent('11');
+    expect(screen.getByTestId('excerpt-line-num-12')).toHaveTextContent('12');
+    expect(screen.getByText('line 10 content')).toBeInTheDocument();
+    expect(screen.getByText('Trích dẫn từ bản chụp')).toBeInTheDocument();
+  });
+
+  it('9. citedContentHash !== currentHash -> snapshot-mismatch banner with role="alert" rendered', async () => {
+    render(
+      <QuickPreviewDrawer
+        open={true}
+        docId="doc-preview-1"
+        onClose={vi.fn()}
+        db={db}
+        citedContentHash="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        citationAuthority="server"
+      />
+    );
+
+    await waitFor(() => {
+      const banner = screen.getByRole('alert');
+      expect(banner).toBeInTheDocument();
+      expect(
+        screen.getByText(/Nội dung cục bộ khác với bản chụp đã trích dẫn/i)
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('10. citedContentHash === currentHash -> no mismatch banner', async () => {
+    const validHash = await computeSha256(normalizeMarkdownForHash(docBody));
+
+    render(
+      <QuickPreviewDrawer
+        open={true}
+        docId="doc-preview-1"
+        onClose={vi.fn()}
+        db={db}
+        citedContentHash={validHash}
+        citationAuthority="server"
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByText('DevOps Kubernetes Runbook').length).toBeGreaterThan(0);
+    });
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Nội dung cục bộ khác với bản chụp đã trích dẫn/i)
+    ).not.toBeInTheDocument();
+  });
+
+  it('11. Local authority -> no mismatch comparison regardless of hashes (banner not rendered)', async () => {
+    render(
+      <QuickPreviewDrawer
+        open={true}
+        docId="doc-preview-1"
+        onClose={vi.fn()}
+        db={db}
+        citedContentHash="wrong_hash_should_not_matter_for_local_authority"
+        citationAuthority="local"
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByText('DevOps Kubernetes Runbook').length).toBeGreaterThan(0);
+    });
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Nội dung cục bộ khác với bản chụp đã trích dẫn/i)
+    ).not.toBeInTheDocument();
+  });
+
+  it('12. snapshotAvailable === false -> excerpt still rendered + "Bản chụp không còn khả dụng" banner', async () => {
+    render(
+      <QuickPreviewDrawer
+        open={true}
+        docId="doc-preview-1"
+        onClose={vi.fn()}
+        db={db}
+        citedExcerpt="Historical text that must remain visible"
+        lineRange={{ start: 5, end: 5 }}
+        snapshotAvailable={false}
+        citationAuthority="server"
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('cited-excerpt-panel')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Historical text that must remain visible')).toBeInTheDocument();
+    expect(screen.getByText('Bản chụp không còn khả dụng')).toBeInTheDocument();
+  });
+
+  it('13. prefers-reduced-motion: reduce -> highlight class applied statically; no CSS transition class', async () => {
+    vi.spyOn(window, 'matchMedia').mockImplementation((query) => ({
+      matches: query.includes('prefers-reduced-motion: reduce'),
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+
+    render(
+      <QuickPreviewDrawer
+        open={true}
+        docId="doc-preview-1"
+        onClose={vi.fn()}
+        db={db}
+        lineRange={{ start: 1, end: 3 }}
+      />
+    );
+
+    await waitFor(() => {
+      const anchor = screen.getByTestId('line-range-anchor');
+      expect(anchor).toBeInTheDocument();
+      expect(anchor.className).toContain('gsd-static-highlight');
+      expect(anchor.className).not.toContain('gsd-fade-highlight');
+    });
+  });
+
+  it('14. Keyboard focus lands on target element after open (assert document.activeElement)', async () => {
+    render(
+      <QuickPreviewDrawer
+        open={true}
+        docId="doc-preview-1"
+        onClose={vi.fn()}
+        db={db}
+        lineRange={{ start: 2, end: 4 }}
+      />
+    );
+
+    await waitFor(() => {
+      const anchor = screen.getByTestId('line-range-anchor');
+      expect(anchor).toBeInTheDocument();
+      expect(document.activeElement).toBe(anchor);
+    });
+  });
+
+  it('15. Click server citation chip (from CitationGroup) -> QuickPreviewDrawer opens with correct lineRange/citedExcerpt/citedSnapshotId passed through', async () => {
+    const citation: PersistedCitation = {
+      citationId: 'C1',
+      documentId: 'doc-preview-1',
+      documentTitle: 'DevOps Kubernetes Runbook',
+      sectionAnchor: 'Kubernetes Setup',
+      lineStart: 4,
+      lineEnd: 6,
+      authority: 'server',
+      evidenceClass: 'OBSERVED',
+      snapshotId: 'gsnap_abcdef123',
+      publishedContentHash: '0000000000000000000000000000000000000000000000000000000000000000',
+      citedExcerpt: 'Excerpt for lines 4 to 6',
+    };
+
+    const Harness: React.FC = () => {
+      const [activeCitation, setActiveCitation] = useState<PersistedCitation | null>(null);
+
+      return (
+        <div>
+          <CitationGroup
+            citations={[citation]}
+            onActivate={(c) => setActiveCitation(c)}
+          />
+          <QuickPreviewDrawer
+            open={Boolean(activeCitation)}
+            docId={activeCitation?.documentId ?? null}
+            lineRange={
+              activeCitation
+                ? { start: activeCitation.lineStart, end: activeCitation.lineEnd }
+                : undefined
+            }
+            citedExcerpt={activeCitation?.citedExcerpt}
+            citedSnapshotId={activeCitation?.snapshotId ?? undefined}
+            citedContentHash={activeCitation?.publishedContentHash ?? undefined}
+            citationAuthority={activeCitation?.authority}
+            onClose={() => setActiveCitation(null)}
+            db={db}
+          />
+        </div>
+      );
+    };
+
+    render(<Harness />);
+
+    const chip = screen.getByRole('button', { name: /\[1\]/ });
+    fireEvent.click(chip);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('cited-excerpt-panel')).toBeInTheDocument();
+      expect(screen.getByText('Excerpt for lines 4 to 6')).toBeInTheDocument();
+      expect(screen.getByText('4')).toBeInTheDocument();
+    });
   });
 });
