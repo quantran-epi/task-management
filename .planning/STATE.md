@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Hybrid GraphRAG Knowledge Assistant MVP
 status: executing
-stopped_at: Completed 19-12-PLAN.md
-last_updated: "2026-10-11T13:00:00.000Z"
-last_activity: 2026-10-11 -- Completed 19-12-PLAN.md
+stopped_at: Completed 19-13-PLAN.md
+last_updated: "2026-10-11T13:45:00.000Z"
+last_activity: 2026-10-11 -- Completed 19-13-PLAN.md
 progress:
   total_phases: 16
   completed_phases: 13
   total_plans: 92
-  completed_plans: 80
-  percent: 82
+  completed_plans: 81
+  percent: 83
 ---
 
 # Project State
@@ -26,12 +26,12 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 ## Current Position
 
 Phase: 19 (grounded-assistant-provenance-citations-offline-fallback) — EXECUTING
-Plan: 13 of 15
+Plan: 14 of 15
 Status: Executing Phase 19
-Last activity: 2026-10-11 -- Completed 19-12-PLAN.md
-Stopped at: Completed 19-12-PLAN.md
+Last activity: 2026-10-11 -- Completed 19-13-PLAN.md
+Stopped at: Completed 19-13-PLAN.md
 
-Progress: [████████░░] 82%
+Progress: [████████░░] 83%
 
 ### Quick Tasks Completed
 
@@ -178,12 +178,19 @@ Progress: [████████░░] 82%
 | Phase 19 P09 | 6m | 2 tasks | 2 files |
 | Phase 19 P11 | 10m | 2 tasks | 8 files |
 | Phase 19 P12 | 6m | 2 tasks | 11 files |
+| Phase 19 P13 | 15m | 2 tasks | 9 files |
 
 ## Accumulated Context
 
 ### Decisions
 
 Recent decisions logged in PROJECT.md:
+
+- [Phase 19 Plan 13]: QuickPreviewDrawer renders snapshot-first line-numbered raw pre excerpt above current markdown when citedExcerpt is present (D-47, D-48).
+- [Phase 19 Plan 13]: QuickPreviewDrawer performs SHA-256 comparison between normalized current markdown and citedContentHash only for server authority, showing destructive alert banner on mismatch (D-10, D-21).
+- [Phase 19 Plan 13]: QuickPreviewDrawer focuses anchor, scrolls center, and applies static highlight for prefers-reduced-motion or 1600ms animated highlight (ANSWER-07).
+- [Phase 19 Plan 13]: DocumentSet carries scope (domain, environment, version), aliases, relations[], isBase, presentationRevision, preset without requiring shape migration for pre-19 data (D-17, D-18, D-32, D-35).
+- [Phase 19 Plan 13]: updatePresentationOrder updates ordering column and increments presentationRevision by 1 without touching graphSnapshotId, publishedContentHash, or publish state (D-32, D-33).
 
 - [Phase 19 Plan 12]: GraphPathCard groups by snapshotId with zero cross-snapshot hop concatenation (D-14).
 - [Phase 19 Plan 12]: GraphPathCard partitions paths into neutral variation container for EXTENDS/SUPPLEMENTS (D-25/D-27) vs destructive alert container for unproven conflicts (D-29).
