@@ -14,6 +14,16 @@ import type {
   CachedActiveSnapshotManifest,
   FrozenPublishSnapshot,
 } from './changePreview';
+import {
+  FederatedRetrievalRequestSchema,
+  FederatedRetrievalResponseSchema,
+  RetrievalRequestSchema,
+  RetrievalResponseSchema,
+} from './retrievalProtocol';
+import type {
+  FederatedRetrievalResponse,
+  RetrievalResponse,
+} from './retrievalProtocol';
 
 const uuid = z.string().uuid();
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
@@ -245,7 +255,9 @@ type AttemptResponse = z.infer<typeof AttemptResponseSchema>;
 export type KnowledgeClientErrorCode =
   | 'NETWORK_ERROR'
   | 'INVALID_RESPONSE'
-  | 'REMOTE_ERROR';
+  | 'REMOTE_ERROR'
+  | 'TIMEOUT'
+  | 'ABORTED';
 
 export class KnowledgeClientError extends Error {
   constructor(
@@ -351,11 +363,17 @@ export function createKnowledgeClient(options: CreateKnowledgeClientOptions) {
         },
       });
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Network request failed';
-      throw new KnowledgeClientError(
-        'NETWORK_ERROR',
-        redact(message, options.token).slice(0, 240)
-      );
+      const message = redact(
+        error instanceof Error ? error.message : 'Network request failed',
+        options.token
+      ).slice(0, 240);
+      if (init.signal?.aborted) {
+        const reason = init.signal.reason;
+        const timedOut =
+          reason instanceof DOMException && reason.name === 'TimeoutError';
+        throw new KnowledgeClientError(timedOut ? 'TIMEOUT' : 'ABORTED', message);
+      }
+      throw new KnowledgeClientError('NETWORK_ERROR', message);
     }
 
     let json: unknown;
@@ -587,6 +605,37 @@ export function createKnowledgeClient(options: CreateKnowledgeClientOptions) {
           uncertain: true,
         };
       }
+    },
+
+    async retrieve(
+      setId: string,
+      body: unknown,
+      signal?: AbortSignal
+    ): Promise<RetrievalResponse> {
+      const validatedBody = RetrievalRequestSchema.parse(body);
+      return request(
+        `/sets/${encodeURIComponent(setId)}/retrieve`,
+        RetrievalResponseSchema,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(validatedBody),
+          ...(signal ? { signal } : {}),
+        }
+      );
+    },
+
+    async retrieveFederated(
+      body: unknown,
+      signal?: AbortSignal
+    ): Promise<FederatedRetrievalResponse> {
+      const validatedBody = FederatedRetrievalRequestSchema.parse(body);
+      return request('/retrieve', FederatedRetrievalResponseSchema, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(validatedBody),
+        ...(signal ? { signal } : {}),
+      });
     },
 
     async getGraphStatus(

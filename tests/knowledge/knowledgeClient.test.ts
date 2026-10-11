@@ -529,6 +529,119 @@ describe('strict fixed-route knowledge client', () => {
     });
   });
 
+  describe('grounded retrieval client', () => {
+    const requestBody = { query: 'What calls PR_GET_CYCLE?', limit: 20 };
+    const responseBody = {
+      outcome: 'READY',
+      snapshotId: 'gsnap_1234abcd',
+      embeddingProvider: {
+        provider: 'local-onnx',
+        model: 'test-model',
+        revision: 'v1',
+        dimensions: 3,
+        policyVersion: 'v1',
+      },
+      items: [],
+      paths: [],
+      conflictGroups: [],
+      totalCandidates: 0,
+      modalitiesUsed: [],
+      modalityStatus: {
+        fulltext: { status: 'ok', latencyMs: 1, itemCount: 0 },
+        vector: { status: 'unavailable', latencyMs: 0, itemCount: 0 },
+        graph: { status: 'ok', latencyMs: 1, itemCount: 0 },
+      },
+      diagnostics: { degraded: false },
+      planTrace: { fastPath: true, degradedFallback: false },
+    };
+
+    it('posts validated per-set retrieval and rejects malformed daemon JSON', async () => {
+      const setId = generateId();
+      const fetcher = vi
+        .fn()
+        .mockImplementationOnce(async (input: RequestInfo | URL, init?: RequestInit) => {
+          expect(String(input)).toBe(
+            `https://knowledge.example.com/api/v1/sets/${setId}/retrieve`
+          );
+          expect(init?.method).toBe('POST');
+          expect(JSON.parse(String(init?.body))).toMatchObject(requestBody);
+          return jsonResponse(responseBody);
+        })
+        .mockResolvedValueOnce(jsonResponse({ outcome: 'READY' }));
+      const client = createKnowledgeClient({
+        baseUrl: 'https://knowledge.example.com',
+        token: 'token',
+        fetcher,
+      });
+
+      await expect(client.retrieve(setId, requestBody)).resolves.toMatchObject({
+        outcome: 'READY',
+      });
+      await expect(client.retrieve(setId, requestBody)).rejects.toMatchObject({
+        code: 'INVALID_RESPONSE',
+      });
+    });
+
+    it('posts validated federated retrieval without a set route', async () => {
+      const setId = generateId();
+      const body = {
+        query: 'Compare SIT and PROD',
+        setTierAssignments: [{ setId, tier: 'REQUIRED', roleGroup: 'baseline' }],
+        comparisonMode: 'single',
+        budgets: {
+          concurrency: 1,
+          elapsedMs: 1000,
+          maxSets: 1,
+          maxItems: 20,
+          maxEvidenceChars: 8000,
+        },
+      };
+      const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+        expect(String(input)).toBe('https://knowledge.example.com/api/v1/retrieve');
+        return jsonResponse({
+          outcome: 'READY',
+          items: [],
+          paths: [],
+          conflictGroups: [],
+          modalityStatus: responseBody.modalityStatus,
+          diagnostics: { degraded: false, coverageWarnings: [] },
+        });
+      });
+      const client = createKnowledgeClient({
+        baseUrl: 'https://knowledge.example.com',
+        token: 'token',
+        fetcher,
+      });
+
+      await expect(client.retrieveFederated(body)).resolves.toMatchObject({
+        outcome: 'READY',
+      });
+    });
+
+    it.each([
+      [new DOMException('Timed out', 'TimeoutError'), 'TIMEOUT'],
+      [new DOMException('Stopped', 'AbortError'), 'ABORTED'],
+    ] as const)('classifies aborted requests as %s', async (reason, code) => {
+      const controller = new AbortController();
+      const token = 'secret-session-token';
+      const client = createKnowledgeClient({
+        baseUrl: 'https://knowledge.example.com',
+        token,
+        fetcher: vi.fn(async () => {
+          controller.abort(reason);
+          throw new Error(`request failed ${token}`);
+        }),
+      });
+
+      await expect(
+        client.retrieve(generateId(), requestBody, controller.signal)
+      ).rejects.toMatchObject({
+        code,
+        message: expect.not.stringContaining(token),
+      });
+    });
+  });
+
   describe('graph client methods (GRAPH-05, D-18, D-21)', () => {
     it('calls graph rebuild with x-rebuild-key and returns accepted candidate info', async () => {
       const setId = generateId();
