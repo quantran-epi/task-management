@@ -9,6 +9,10 @@ import * as nineRouterTokenService from '../../src/services/ai/nineRouterTokenSe
 import * as graphitiMcpClient from '../../src/services/ai/graphitiMcpClient';
 import * as mcpClient from '../../src/services/ai/mcpClient';
 import { aiDebugService } from '../../src/services/ai/aiDebugService';
+import {
+  setGroundedTurnTestHooks,
+  clearGroundedTurnTestHooks,
+} from '../../src/services/ai/groundedTurnDeps';
 
 vi.mock('../../src/utils/pptxExport', () => ({
   exportPresentationAsFile: vi.fn(),
@@ -125,9 +129,20 @@ describe('AIChatDrawer', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    clearGroundedTurnTestHooks();
+    setGroundedTurnTestHooks({
+      runGroundedTurn: async (input) => ({
+        kind: 'operational',
+        routedQuery: input.query,
+      }),
+    });
     vi.spyOn(graphitiMcpClient, 'getGraphitiMcpToolDefinitions').mockResolvedValue([]);
     vi.spyOn(mcpClient, 'discoverAllMcpTools').mockResolvedValue([]);
     db = new TaskPlannerDatabase(`test-aichat-drawer-${Date.now()}-${Math.random()}`);
+  });
+
+  afterEach(() => {
+    clearGroundedTurnTestHooks();
   });
 
   it('renders drawer when open is true, handles drag resize and clamp', () => {

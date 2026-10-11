@@ -10,6 +10,7 @@ import type {
   ChatTokenUsage,
   ChatGeneratedFile,
 } from '../../types/models';
+import { generateId, isValidUuid } from '../../utils/uuid';
 import {
   buildScopeKey,
   createOrGetThread,
@@ -76,6 +77,19 @@ import {
   isNotificationPermissionGranted,
   requestNotificationPermission,
 } from '../../utils/desktopNotification';
+import { useOptionalKnowledgeConfig } from '../../services/knowledge/knowledgeConfig';
+import { fetchSetCatalog } from '../../db/repositories/documentSetRepo';
+import {
+  executeGroundedTurn as runGroundedTurn,
+  executeSynthesizeFromStoredEvidence as synthesizeFromStoredEvidence,
+  executeCreateFreshLookupTurn as createFreshLookupTurn,
+  createDefaultGroundedTurnDeps,
+} from '../../services/ai/groundedTurnDeps';
+import type { ChatMessageGrounding, PersistedCitation } from '../../services/ai/groundedAnswerSchemas';
+import { QuickPreviewDrawer } from '../notes/QuickPreviewDrawer';
+import { ScopeChipsBar } from './grounded/ScopeChipsBar';
+import { IntentRoutingPrompt } from './grounded/IntentRoutingPrompt';
+import type { GroundedAnswerCardCallbacks } from './ChatMessageBubble';
 
 export const AI_CHAT_WIDTH_KEY = 'planner:ai_chat_width';
 export const AI_AUTO_APPROVE_MUTATIONS_KEY = 'planner:ai_auto_approve_mutations';
@@ -190,6 +204,16 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const [isMcpModalOpen, setIsMcpModalOpen] = useState(false);
   const [mcpServers, setMcpServers] = useState<McpServerConfig[]>([]);
   const [sessionAttachedFiles, setSessionAttachedFiles] = useState<string[]>([]);
+  const knowledgeConfig = useOptionalKnowledgeConfig();
+
+  // Grounded turn state & abort controller per turn (AI-SPEC §4b)
+  const currentTurnAbortRef = useRef<AbortController | null>(null);
+  const [activePreviewCitation, setActivePreviewCitation] = useState<PersistedCitation | null>(null);
+  const [latestRoutedScope, setLatestRoutedScope] = useState<ChatMessageGrounding['scope']>(null);
+  const [transientClarifyMessage, setTransientClarifyMessage] = useState<{
+    id: string;
+    query: string;
+  } | null>(null);
 
   // Reload MCP servers on open or change
   const reloadMcpServers = useCallback(async () => {
@@ -339,6 +363,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     resolve: (confirmed: boolean) => void;
   } | null>(null);
 
+  const [externalInputValue, setExternalInputValue] = useState<string | null>(null);
+
   // Auto-approve mutation toggle (bypasses confirmation modal if explicitly enabled by user)
   const [autoApproveMutations, setAutoApproveMutations] = useState<boolean>(() => {
     try {
@@ -388,8 +414,21 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
+      if (currentTurnAbortRef.current) {
+        currentTurnAbortRef.current.abort();
+        currentTurnAbortRef.current = null;
+      }
     }
   }, [open]);
+
+  // Abort previous grounded turn on scope change (AI-SPEC §4b)
+  useEffect(() => {
+    if (currentTurnAbortRef.current) {
+      currentTurnAbortRef.current.abort();
+      currentTurnAbortRef.current = null;
+    }
+    setTransientClarifyMessage(null);
+  }, [currentScope.type, currentScope.id]);
 
   const handleStopGeneration = () => {
     if (pendingConfirmationRef.current) {
@@ -402,7 +441,11 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     }
   };
 
-  const handleSendMessage = async (text: string, overrideScope?: ActiveScope) => {
+  const handleSendMessage = async (
+    text: string,
+    overrideScope?: ActiveScope,
+    routeOverride?: 'knowledge' | 'operational'
+  ) => {
     const trimmed = text.trim();
     if (!trimmed) return;
 
@@ -493,14 +536,227 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       db
     );
 
-    // 3. Check API key
+    // Cancel older turn before owning new one per AI-SPEC §4b
+    if (currentTurnAbortRef.current) {
+      currentTurnAbortRef.current.abort();
+    }
+    const turnController = new AbortController();
+    currentTurnAbortRef.current = turnController;
+
     const apiKey = await getNineRouterApiKey(db);
+    const config = await getNineRouterConfig(db);
+    const catalog = await fetchSetCatalog(db);
+
+    const capabilities = {
+      serverEnabled: Boolean(knowledgeConfig.enabled && knowledgeConfig.baseUrl),
+      modelConfigured: Boolean(apiKey && config.endpoint && selectedModel),
+    };
+
+    const deps = createDefaultGroundedTurnDeps({
+      knowledgeBaseUrl: knowledgeConfig.baseUrl,
+      knowledgeToken: knowledgeConfig.token,
+      db,
+    });
+
+    if (routeOverride) {
+      deps.routeIntent = () => ({ route: routeOverride, confidence: 1 });
+    }
+
+    const msgsForRecent = await getMessagesByThreadId(activeThread.id, db);
+    const last3Turns = msgsForRecent
+      .filter((m) => m.role === 'user' || m.role === 'assistant')
+      .slice(-3)
+      .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+
+    try {
+      if (routeOverride !== 'operational') {
+        const groundedResult = await runGroundedTurn(
+          {
+            query: trimmed,
+            recentTurns: last3Turns,
+            signal: turnController.signal,
+            capabilities,
+            config: {
+              endpoint: config.endpoint,
+              apiKey,
+              model: selectedModel || config.defaultModel,
+              promptVersion: 'grounded-v1',
+              routerVersion: 'router-v1',
+            },
+            catalog,
+            recentSessionId: activeThread.id,
+          },
+          deps
+        );
+
+        if (turnController.signal.aborted) {
+          return;
+        }
+
+        if (groundedResult.kind === 'clarify_intent') {
+          setTransientClarifyMessage({
+            id: `transient-${Date.now()}`,
+            query: trimmed,
+          });
+          return;
+        }
+
+        if (groundedResult.kind === 'clarify_entity') {
+        const entityCitations: PersistedCitation[] = groundedResult.candidates.map((c, idx) => {
+          const rawId = c.urn.split(':').pop() || '';
+          const docId = isValidUuid(rawId) ? rawId : generateId();
+          return {
+            citationId: `S${idx + 1}`,
+            documentId: docId,
+            documentTitle: c.canonicalName,
+            sectionAnchor: null,
+            lineStart: 1,
+            lineEnd: 1,
+            authority: 'server' as const,
+            evidenceClass: 'OBSERVED' as const,
+            snapshotId: 'gsnap_00000000',
+            publishedContentHash: '0'.repeat(64),
+            citedExcerpt: c.canonicalName,
+          };
+        });
+
+        await saveMessage(
+          {
+            threadId: activeThread.id,
+            role: 'assistant',
+            content: '',
+            grounding: {
+              schemaVersion: 1,
+              authority: 'server',
+              outcome: 'NEEDS_CLARIFICATION',
+              answer: null,
+              citations: entityCitations,
+              paths: [],
+              conflicts: [],
+              scope: {
+                setIds: catalog.map((s) => s.setId).filter(isValidUuid),
+                routedScope: {
+                  domain: null,
+                  environment: null,
+                  version: null,
+                  comparisonMode: null,
+                },
+              },
+              modalityDiagnostics: {
+                fulltext: { status: 'ok', latencyMs: 0, itemCount: 0 },
+                vector: { status: 'ok', latencyMs: 0, itemCount: 0 },
+                graph: { status: 'ok', latencyMs: 0, itemCount: 0 },
+              },
+              coverageWarnings: ['Cần xác định rõ đối tượng tra cứu'],
+              fallbackReason: 'NONE',
+              routerVersion: 'router-v1',
+              promptVersion: 'grounded-v1',
+              modelId: selectedModel || config.defaultModel,
+              createdAt: new Date().toISOString(),
+            },
+          },
+          db
+        );
+        return;
+      }
+
+      if (groundedResult.kind === 'refine') {
+        const refineGrounding: ChatMessageGrounding = {
+          schemaVersion: 1,
+          authority: 'server',
+          outcome: groundedResult.outcome,
+          answer: null,
+          citations: [],
+          paths: [],
+          conflicts: [],
+          scope: {
+            setIds: catalog.map((s) => s.setId).filter(isValidUuid),
+            routedScope: {
+              domain: null,
+              environment: null,
+              version: null,
+              comparisonMode: null,
+            },
+          },
+          modalityDiagnostics: {
+            fulltext: { status: 'ok', latencyMs: 0, itemCount: 0 },
+            vector: { status: 'ok', latencyMs: 0, itemCount: 0 },
+            graph: { status: 'ok', latencyMs: 0, itemCount: 0 },
+          },
+          coverageWarnings: [...groundedResult.refinementChips],
+          fallbackReason: 'NONE',
+          routerVersion: 'router-v1',
+          promptVersion: 'grounded-v1',
+          modelId: selectedModel || config.defaultModel,
+          createdAt: new Date().toISOString(),
+        };
+
+        await saveMessage(
+          {
+            threadId: activeThread.id,
+            role: 'assistant',
+            content: '',
+            grounding: refineGrounding,
+          },
+          db
+        );
+        return;
+      }
+
+      if (
+        groundedResult.kind === 'grounded_answer' ||
+        groundedResult.kind === 'local_fallback_results' ||
+        groundedResult.kind === 'evidence_only'
+      ) {
+        if (!turnController.signal.aborted) {
+          if (groundedResult.grounding.scope) {
+            setLatestRoutedScope(groundedResult.grounding.scope);
+          }
+          await saveMessage(
+            {
+              threadId: activeThread.id,
+              role: 'assistant',
+              content: '',
+              grounding: groundedResult.grounding,
+            },
+            db
+          );
+        }
+        if (
+          groundedResult.kind !== 'grounded_answer' ||
+          !groundedResult.requiresOperationalContinuation
+        ) {
+          return;
+        }
+      }
+
+        if (groundedResult.kind === 'error') {
+          if (!turnController.signal.aborted) {
+            await saveMessage(
+              {
+                threadId: activeThread.id,
+                role: 'assistant',
+                content: '',
+                grounding: groundedResult.grounding,
+              },
+              db
+            );
+          }
+          return;
+        }
+      }
+    } catch (groundedErr: any) {
+      if (turnController.signal.aborted) {
+        return;
+      }
+      console.warn('[AIChatDrawer] Grounded pipeline error, checking operational fallback:', groundedErr);
+    }
+
+    // 3. Operational tool loop (for operational / mixed / fallback turns)
     if (!apiKey) {
       setApiError('Chưa cấu hình API Key 9router. Vui lòng mở Cài đặt AI để thiết lập.');
       return;
     }
-
-    const config = await getNineRouterConfig(db);
 
     // 4. Assemble context payload (messages after last context boundary, capped at 20)
     // If scoped item exists, inject system context prompt with grounding
@@ -1011,6 +1267,143 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
     }
   };
 
+  const handleFreshLookup = async (prevGrounding: ChatMessageGrounding) => {
+    let activeThread = thread;
+    if (!activeThread) {
+      activeThread = await createOrGetThread(
+        {
+          scopeType: currentScope.type,
+          entityId: currentScope.id,
+          title: currentScope.title,
+        },
+        db
+      );
+    }
+    const apiKey = await getNineRouterApiKey(db);
+    const config = await getNineRouterConfig(db);
+    const catalog = await fetchSetCatalog(db);
+
+    const capabilities = {
+      serverEnabled: Boolean(knowledgeConfig.enabled && knowledgeConfig.baseUrl),
+      modelConfigured: Boolean(apiKey && config.endpoint && selectedModel),
+    };
+
+    const deps = createDefaultGroundedTurnDeps({
+      knowledgeBaseUrl: knowledgeConfig.baseUrl,
+      knowledgeToken: knowledgeConfig.token,
+      db,
+    });
+
+    if (currentTurnAbortRef.current) {
+      currentTurnAbortRef.current.abort();
+    }
+    const freshController = new AbortController();
+    currentTurnAbortRef.current = freshController;
+
+    const baseInput = {
+      query: lastSubmittedText || 'Tra cứu lại',
+      recentTurns: [],
+      signal: freshController.signal,
+      capabilities,
+      config: {
+        endpoint: config.endpoint,
+        apiKey,
+        model: selectedModel || config.defaultModel,
+        promptVersion: 'grounded-v1',
+        routerVersion: 'router-v1',
+      },
+      catalog,
+      recentSessionId: activeThread.id,
+    };
+
+    const freshInput = createFreshLookupTurn(prevGrounding, baseInput, deps);
+    const result = await runGroundedTurn(freshInput, deps);
+    if (freshController.signal.aborted) return;
+
+    if (
+      result.kind === 'grounded_answer' ||
+      result.kind === 'local_fallback_results' ||
+      result.kind === 'evidence_only' ||
+      result.kind === 'error'
+    ) {
+      await saveMessage(
+        {
+          threadId: activeThread.id,
+          role: 'assistant',
+          content: '',
+          grounding: result.grounding,
+        },
+        db
+      );
+    }
+  };
+
+  const handleEvidenceOnlySynthesize = async (prevGrounding: ChatMessageGrounding) => {
+    let activeThread = thread;
+    if (!activeThread) return;
+
+    const apiKey = await getNineRouterApiKey(db);
+    const config = await getNineRouterConfig(db);
+    const deps = createDefaultGroundedTurnDeps({
+      knowledgeBaseUrl: knowledgeConfig.baseUrl,
+      knowledgeToken: knowledgeConfig.token,
+      db,
+    });
+
+    const res = await synthesizeFromStoredEvidence(prevGrounding, deps, {
+      endpoint: config.endpoint,
+      apiKey,
+      model: selectedModel || config.defaultModel,
+      promptVersion: 'grounded-v1',
+    });
+
+    if (res.kind === 'grounded_answer') {
+      const allMsgs = await getMessagesByThreadId(activeThread.id, db);
+      const target = allMsgs.find(
+        (m) => m.grounding && m.grounding.createdAt === prevGrounding.createdAt
+      );
+      if (target) {
+        await db.chatMessages.update(target.id, {
+          grounding: res.grounding,
+        });
+      }
+    }
+  };
+
+  const groundedCallbacks: GroundedAnswerCardCallbacks = {
+    onCitationActivate: (c) => setActivePreviewCitation(c),
+    onCandidateSelect: (urn) => {
+      void handleSendMessage(urn);
+    },
+    onRefinementSelect: (label) => {
+      // Populates input without auto-send (UI-SPEC Interaction Contracts)
+      setExternalInputValue(label);
+    },
+    onFreshLookup: () => {
+      const lastGrounded = [...messages].reverse().find((m) => m.grounding)?.grounding;
+      if (lastGrounded) {
+        void handleFreshLookup(lastGrounded);
+      }
+    },
+    onEvidenceOnlySynthesize: () => {
+      const lastGrounded = [...messages].reverse().find((m) => m.grounding)?.grounding;
+      if (lastGrounded) {
+        void handleEvidenceOnlySynthesize(lastGrounded);
+      }
+    },
+    onInvalidRetry: () => {
+      if (lastSubmittedText) {
+        void handleSendMessage(lastSubmittedText);
+      }
+    },
+    onAuthRepair: () => {
+      onOpenSettings?.();
+    },
+    onConfigRepair: () => {
+      onOpenSettings?.();
+    },
+  };
+
   const handleClearContext = async () => {
     if (pendingConfirmationRef.current) {
       pendingConfirmationRef.current.resolve(false);
@@ -1301,6 +1694,29 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
         onOpenSettings={onOpenSettings}
       />
 
+      {/* ScopeChipsBar after routing per D-15 */}
+      {latestRoutedScope && latestRoutedScope.routedScope && (
+        <div style={{ padding: '0 14px' }}>
+          <ScopeChipsBar
+            routedScope={latestRoutedScope.routedScope}
+            onEditScope={() => setScopeModalOpen(true)}
+          />
+        </div>
+      )}
+
+      {/* Transient intent routing prompt */}
+      {transientClarifyMessage && (
+        <div style={{ padding: '8px 14px' }}>
+          <IntentRoutingPrompt
+            onSelect={(route) => {
+              const q = transientClarifyMessage.query;
+              setTransientClarifyMessage(null);
+              void handleSendMessage(q, undefined, route);
+            }}
+          />
+        </div>
+      )}
+
       {/* Message List */}
       <ChatMessageList
         messages={messages}
@@ -1319,6 +1735,26 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
         onRunClaudeCode={handleRunClaudeCode}
         pendingConfirmation={pendingConfirmation}
         onConfirmAction={handleConfirmAction}
+        groundedCallbacks={groundedCallbacks}
+      />
+
+      {/* QuickPreviewDrawer on citation activation per ANSWER-07, D-10 */}
+      <QuickPreviewDrawer
+        open={Boolean(activePreviewCitation)}
+        docId={activePreviewCitation?.documentId ?? null}
+        onClose={() => setActivePreviewCitation(null)}
+        sectionAnchor={activePreviewCitation?.sectionAnchor ?? undefined}
+        lineRange={
+          activePreviewCitation
+            ? { start: activePreviewCitation.lineStart, end: activePreviewCitation.lineEnd }
+            : undefined
+        }
+        citedSnapshotId={activePreviewCitation?.snapshotId ?? undefined}
+        citedExcerpt={activePreviewCitation?.citedExcerpt ?? undefined}
+        citedContentHash={activePreviewCitation?.publishedContentHash ?? undefined}
+        citationAuthority={activePreviewCitation?.authority ?? undefined}
+        snapshotAvailable={true}
+        db={db}
       />
 
       {/* Chat Input Bar */}
@@ -1338,6 +1774,8 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
         attachedFiles={sessionAttachedFiles}
         onAttachFile={handleAttachFile}
         onRemoveFile={handleRemoveFile}
+        externalValue={externalInputValue ?? undefined}
+        onExternalValueConsumed={() => setExternalInputValue(null)}
       />
     </div>
   );

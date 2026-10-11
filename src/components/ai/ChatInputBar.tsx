@@ -32,6 +32,8 @@ export interface ChatInputBarProps {
   attachedFiles?: string[] | undefined;
   onAttachFile?: ((filePath: string) => void) | undefined;
   onRemoveFile?: ((filePath: string) => void) | undefined;
+  externalValue?: string | undefined;
+  onExternalValueConsumed?: (() => void) | undefined;
 }
 
 const COMMANDS = [
@@ -111,9 +113,18 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   attachedFiles = [],
   onAttachFile,
   onRemoveFile,
+  externalValue,
+  onExternalValueConsumed,
 }) => {
   const { token } = theme.useToken();
   const [value, setValue] = useState('');
+
+  useEffect(() => {
+    if (typeof externalValue === 'string') {
+      setValue(externalValue);
+      onExternalValueConsumed?.();
+    }
+  }, [externalValue, onExternalValueConsumed]);
   const [searchInfo, setSearchInfo] = useState<{ text: string; prefix: string }>({
     text: '',
     prefix: '',
