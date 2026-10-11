@@ -302,7 +302,8 @@ Plans:
   4. Every graph relation retains source document, section, source range, extraction method, and evidence classification (`OBSERVED`, `INFERRED`, or `BUSINESS_APPROVED`).
   5. User can distinguish `OBSERVED`, `INFERRED`, and `BUSINESS_APPROVED` knowledge in graph-backed results.
   6. User can rebuild graph and indexes from published Markdown without treating Neo4j as canonical storage.
-**Plans:** 6/6 plans complete
+
+**Plans:** 6/6 plans complete
 **Wave 1**
 
 - [x] 17-01-PLAN.md — Ontology, composite URN identity, factKey derivation, pilot gold fixtures (GRAPH-01, GRAPH-02)
@@ -363,8 +364,23 @@ Plans:
   6. When knowledge server is unavailable, user can continue searching local Markdown through existing BM25 retrieval.
   7. Citations and graph paths open the corresponding PlannerMate document context.
 
-**Plans**: TBD
-**UI hint**: yes
+**Plans**: 15 plans in 6 waves
+Plans:
+- [ ] 19-01-PLAN.md — Retrieval protocol: ordered paths, source hash+title, scope proof (Wave 1)
+- [ ] 19-02-PLAN.md — Browser retrievalProtocol mirror, knowledgeClient.retrieve, groundedAnswerSchemas (Wave 1)
+- [ ] 19-03-PLAN.md — Snapshot-scoped graph traversal + response enrichment with source metadata (Wave 2)
+- [ ] 19-04-PLAN.md — Federated retrieval service + POST /api/v1/retrieve route (Wave 2)
+- [ ] 19-05-PLAN.md — completeJson + intentRouter + semanticScopeRouter (Wave 2)
+- [ ] 19-06-PLAN.md — Scoped local BM25 fallback with range-bearing snippets (Wave 2)
+- [ ] 19-07-PLAN.md — Evidence pack + closure validator (Wave 2)
+- [ ] 19-08-PLAN.md — groundedSynthesis: structured completion + bounded repair (Wave 3)
+- [ ] 19-09-PLAN.md — groundedTurn state machine + synthesizeFromStoredEvidence (Wave 4)
+- [ ] 19-10-PLAN.md — ChatMessage.grounding persistence + backup round-trip (Wave 2)
+- [ ] 19-11-PLAN.md — CitationChip extension + GroundedBanner/CitationGroup/ClaimBlock/GroundedAnswerCard (Wave 3)
+- [ ] 19-12-PLAN.md — GraphPathCard/SourcesPanel/CandidateChipList/DiagnosticsPanel/EvidenceOnlyCard/ScopeChipsBar/IntentRoutingPrompt (Wave 4)
+- [ ] 19-13-PLAN.md — QuickPreviewDrawer snapshot excerpt + DocumentSet scope presets (Wave 4)
+- [ ] 19-14-PLAN.md — AIChatDrawer wiring + ChatMessageBubble/List grounding render (Wave 5)
+- [ ] 19-15-PLAN.md — ANSWER-01..07 REQUIREMENTS sync, 20-case reference fixture + eval harness + offline isolation + firstSeenInDoc audit (Wave 6)
 
 ### Phase 20: Benchmark Evaluation Suite, Integrity Hardening & Credential Isolation
 
