@@ -125,6 +125,7 @@ export const CYPHER_QUERIES = {
     SET c.chunkKey = row.chunkKey,
         c.documentId = row.documentId,
         c.documentTitle = row.documentTitle,
+        c.publishedContentHash = row.publishedContentHash,
         c.headingPath = row.headingPath,
         c.startLine = row.startLine,
         c.endLine = row.endLine,
@@ -207,6 +208,8 @@ export const CYPHER_QUERIES = {
     WHERE node.graphSnapshotId = $snapshotId
     RETURN node.chunkKey AS chunkKey,
            node.documentId AS sourceDocumentId,
+           node.documentTitle AS sourceDocumentTitle,
+           node.publishedContentHash AS publishedContentHash,
            node.headingPath AS headingPath,
            node.startLine AS lineStart,
            node.endLine AS lineEnd,
@@ -222,6 +225,8 @@ export const CYPHER_QUERIES = {
     WHERE node.graphSnapshotId = $snapshotId
     RETURN node.chunkKey AS chunkKey,
            node.documentId AS sourceDocumentId,
+           node.documentTitle AS sourceDocumentTitle,
+           node.publishedContentHash AS publishedContentHash,
            node.headingPath AS headingPath,
            node.startLine AS lineStart,
            node.endLine AS lineEnd,
@@ -566,6 +571,7 @@ export class Neo4jRepository implements GraphRepository {
       chunkKey: string;
       documentId: string;
       documentTitle: string;
+      publishedContentHash: string;
       headingPath: string[];
       startLine: number;
       endLine: number;
@@ -583,6 +589,7 @@ export class Neo4jRepository implements GraphRepository {
           chunkKey: c.occurrenceId,
           documentId: doc.documentId,
           documentTitle: doc.title,
+          publishedContentHash: doc.contentHash,
           headingPath: [...c.headingPath],
           startLine: c.startLine,
           endLine: c.endLine,
@@ -893,10 +900,12 @@ export class Neo4jRepository implements GraphRepository {
         score: r.get('score'),
         modalitiesContributed: ['fulltext'],
         sourceDocumentId: r.get('sourceDocumentId'),
+        sourceDocumentTitle: r.get('sourceDocumentTitle'),
         sectionAnchor: (r.get('headingPath') || []).join(' > '),
         lineStart: r.get('lineStart')?.toNumber ? r.get('lineStart').toNumber() : r.get('lineStart'),
         lineEnd: r.get('lineEnd')?.toNumber ? r.get('lineEnd').toNumber() : r.get('lineEnd'),
         rawSnippet: r.get('rawSnippet'),
+        publishedContentHash: r.get('publishedContentHash'),
         snapshotId,
         hasConflict: false,
       }));
@@ -925,10 +934,12 @@ export class Neo4jRepository implements GraphRepository {
         score: r.get('score'),
         modalitiesContributed: ['vector'],
         sourceDocumentId: r.get('sourceDocumentId'),
+        sourceDocumentTitle: r.get('sourceDocumentTitle'),
         sectionAnchor: (r.get('headingPath') || []).join(' > '),
         lineStart: r.get('lineStart')?.toNumber ? r.get('lineStart').toNumber() : r.get('lineStart'),
         lineEnd: r.get('lineEnd')?.toNumber ? r.get('lineEnd').toNumber() : r.get('lineEnd'),
         rawSnippet: r.get('rawSnippet'),
+        publishedContentHash: r.get('publishedContentHash'),
         snapshotId,
         hasConflict: false,
       }));

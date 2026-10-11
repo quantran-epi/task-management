@@ -167,6 +167,85 @@ export const RetrievalRequestSchema = z
 
 export type RetrievalRequest = z.infer<typeof RetrievalRequestSchema>;
 
+const SnapshotIdSchema = z.string().regex(/^gsnap_[0-9a-f]{8,}$/);
+const PublishedContentHashSchema = z.string().regex(/^[0-9a-f]{64}$/);
+const PathIdSchema = z.string().regex(/^P[1-9][0-9]*$/);
+
+/**
+ * Structured proof for scope variation and conflict dimensions (D-17, D-25, D-29).
+ * Deliberately contains no free-text field: callers must derive this data from metadata.
+ */
+export const ScopeProofSchema = z.strictObject({
+  dimension: z.enum(['Version', 'Environment', 'Behavior', 'Unknown']),
+  environment: z.string().max(32).nullable(),
+  version: z.string().max(32).nullable(),
+  overrideRelation: z.enum(['EXTENDS', 'SUPPLEMENTS', 'SUPERSEDES']).nullable(),
+});
+
+export type ScopeProof = z.infer<typeof ScopeProofSchema>;
+
+/** Immutable source identity retained with cited evidence. */
+export const SourceRefSchema = z
+  .strictObject({
+    documentId: z.string().uuid(),
+    documentTitle: z.string().min(1).max(400),
+    sectionAnchor: z.string().min(1).max(256).nullable(),
+    lineStart: z.number().int().positive(),
+    lineEnd: z.number().int().positive(),
+    publishedContentHash: PublishedContentHashSchema,
+    snapshotId: SnapshotIdSchema,
+    scope: ScopeProofSchema.nullable(),
+  })
+  .superRefine((source, ctx) => {
+    if (source.lineEnd < source.lineStart) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['lineEnd'],
+        message: 'lineEnd must be greater than or equal to lineStart',
+      });
+    }
+  });
+
+export type SourceRef = z.infer<typeof SourceRefSchema>;
+
+/** Ordered, snapshot-isolated 1-3 hop graph path (D-14). */
+export const OrderedPathSchema = z
+  .strictObject({
+    pathId: PathIdSchema,
+    snapshotId: SnapshotIdSchema,
+    nodeUrns: z.array(UrnSchema).min(2).max(4).readonly(),
+    edgeFactKeys: z.array(FactKeySchema).min(1).max(3).readonly(),
+    hopClassifications: z.array(EvidenceClassificationSchema).min(1).max(3).readonly(),
+    hopCitationIds: z.array(z.array(z.string().min(1)).min(1).readonly()).min(1).max(3).readonly(),
+    hasConflict: z.boolean(),
+    classification: EvidenceClassificationSchema,
+  })
+  .superRefine((path, ctx) => {
+    if (path.nodeUrns.length !== path.edgeFactKeys.length + 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['edgeFactKeys'],
+        message: 'nodeUrns must contain exactly one more entry than edgeFactKeys',
+      });
+    }
+    if (path.hopClassifications.length !== path.edgeFactKeys.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['hopClassifications'],
+        message: 'hopClassifications must align with edgeFactKeys',
+      });
+    }
+    if (path.hopCitationIds.length !== path.edgeFactKeys.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['hopCitationIds'],
+        message: 'hopCitationIds must align with edgeFactKeys',
+      });
+    }
+  });
+
+export type OrderedPath = z.infer<typeof OrderedPathSchema>;
+
 /**
  * Chunk citation & retrieval item per D-18, D-20, D-22.
  */
@@ -177,10 +256,12 @@ export const ChunkItemSchema = z
     score: z.number().positive(),
     modalitiesContributed: z.array(ModalityKindSchema).min(1),
     sourceDocumentId: z.string().uuid(),
+    sourceDocumentTitle: z.string().min(1).max(400),
     sectionAnchor: z.string(),
     lineStart: z.number().int().positive(),
     lineEnd: z.number().int().positive(),
     rawSnippet: z.string(),
+    publishedContentHash: PublishedContentHashSchema,
     snapshotId: z.string().min(1),
     conflictGroupId: z.string().optional(),
     hasConflict: z.boolean().default(false),
@@ -302,15 +383,42 @@ export const ClarificationCandidateSchema = z
 
 export type ClarificationCandidate = z.infer<typeof ClarificationCandidateSchema>;
 
+/** Structured conflict group; branches remain represented by tagged retrieval items. */
+export const ConflictGroupSchema = z
+  .strictObject({
+    conflictGroupId: z.string().min(1),
+    dimension: z.enum(['Version', 'Environment', 'Behavior', 'Unknown']),
+    scopeProof: ScopeProofSchema.nullable().optional(),
+  })
+  .superRefine((group, ctx) => {
+    if (
+      group.dimension === 'Unknown' &&
+      group.scopeProof &&
+      (group.scopeProof.environment !== null ||
+        group.scopeProof.version !== null ||
+        group.scopeProof.overrideRelation !== null)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['scopeProof'],
+        message: 'Unknown conflict scope must not carry invented scope details',
+      });
+    }
+  });
+
+export type ConflictGroup = z.infer<typeof ConflictGroupSchema>;
+
 /**
- * Base envelope shape.
+ * Base envelope shape. Exported so server-out callers can validate before returning.
  */
-const BaseRetrievalResponseSchema = z
+export const BaseRetrievalResponseSchema = z
   .object({
     outcome: RetrievalOutcomeSchema,
     snapshotId: z.string().min(1),
     embeddingProvider: EmbeddingProviderMetadataSchema,
     items: z.array(RetrievalItemSchema),
+    paths: z.array(OrderedPathSchema).max(20).default([]),
+    conflictGroups: z.array(ConflictGroupSchema).default([]),
     totalCandidates: z.number().int().nonnegative(),
     modalitiesUsed: z.array(ModalityKindSchema),
     modalityStatus: CompleteModalityStatusSchema,
@@ -321,7 +429,34 @@ const BaseRetrievalResponseSchema = z
     suggestedRefinements: z.array(z.string()).optional(),
     unsupportedConstructs: z.array(z.string()).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((response, ctx) => {
+    const citationIds = new Set(
+      response.items.filter((item) => item.type === 'chunk').map((item) => item.id)
+    );
+
+    response.paths.forEach((path, pathIndex) => {
+      if (path.snapshotId !== response.snapshotId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['paths', pathIndex, 'snapshotId'],
+          message: 'Path snapshotId must match response snapshotId',
+        });
+      }
+
+      path.hopCitationIds.forEach((hopIds, hopIndex) => {
+        hopIds.forEach((citationId, citationIndex) => {
+          if (!citationIds.has(citationId)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ['paths', pathIndex, 'hopCitationIds', hopIndex, citationIndex],
+              message: 'Path citation must reference a returned chunk item',
+            });
+          }
+        });
+      });
+    });
+  });
 
 /**
  * Super-refined Retrieval Response Envelope adhering to D-23 invariants:

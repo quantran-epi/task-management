@@ -25,6 +25,7 @@ export interface ChunkNodeRecord {
   chunkKey: string;
   documentId: string;
   documentTitle: string;
+  publishedContentHash: string;
   headingPath: string[];
   startLine: number;
   endLine: number;
@@ -144,6 +145,7 @@ export class InMemoryGraphRepository implements GraphRepository {
           chunkKey: c.occurrenceId, // occurrenceId as unique chunkKey
           documentId: doc.documentId,
           documentTitle: doc.title,
+          publishedContentHash: doc.contentHash,
           headingPath: [...c.headingPath],
           startLine: c.startLine,
           endLine: c.endLine,
@@ -351,10 +353,12 @@ export class InMemoryGraphRepository implements GraphRepository {
           score: 1.0,
           modalitiesContributed: ['fulltext'],
           sourceDocumentId: c.documentId,
+          sourceDocumentTitle: c.documentTitle,
           sectionAnchor: c.headingPath.join(' > '),
           lineStart: c.startLine,
           lineEnd: c.endLine,
           rawSnippet: c.rawContent,
+          publishedContentHash: c.publishedContentHash,
           snapshotId,
           hasConflict: false,
         });
@@ -396,10 +400,12 @@ export class InMemoryGraphRepository implements GraphRepository {
       score: score > 0 ? score : 0.001,
       modalitiesContributed: ['vector'],
       sourceDocumentId: chunk.documentId,
+      sourceDocumentTitle: chunk.documentTitle,
       sectionAnchor: chunk.headingPath.join(' > '),
       lineStart: chunk.startLine,
       lineEnd: chunk.endLine,
       rawSnippet: chunk.rawContent,
+      publishedContentHash: chunk.publishedContentHash,
       snapshotId,
       hasConflict: false,
     }));
