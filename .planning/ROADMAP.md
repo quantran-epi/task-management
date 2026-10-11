@@ -368,7 +368,7 @@ Plans:
 **Wave 1**
 
 - [x] 19-01-PLAN.md — Retrieval protocol: ordered paths, source hash+title, scope proof (Wave 1)
-- [ ] 19-02-PLAN.md — Browser retrievalProtocol mirror, knowledgeClient.retrieve, groundedAnswerSchemas (Wave 1)
+- [x] 19-02-PLAN.md — Browser retrievalProtocol mirror, knowledgeClient.retrieve, groundedAnswerSchemas (Wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
