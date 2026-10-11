@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Hybrid GraphRAG Knowledge Assistant MVP
 status: executing
-stopped_at: Completed 19-11-PLAN.md
-last_updated: "2026-10-11T12:47:00.000Z"
-last_activity: 2026-10-11 -- Completed 19-11-PLAN.md
+stopped_at: Completed 19-12-PLAN.md
+last_updated: "2026-10-11T13:00:00.000Z"
+last_activity: 2026-10-11 -- Completed 19-12-PLAN.md
 progress:
   total_phases: 16
   completed_phases: 13
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 ## Current Position
 
 Phase: 19 (grounded-assistant-provenance-citations-offline-fallback) — EXECUTING
-Plan: 12 of 15
+Plan: 13 of 15
 Status: Executing Phase 19
-Last activity: 2026-10-11 -- Completed 19-09-PLAN.md
-Stopped at: Completed 19-09-PLAN.md
+Last activity: 2026-10-11 -- Completed 19-12-PLAN.md
+Stopped at: Completed 19-12-PLAN.md
 
 Progress: [████████░░] 82%
 
@@ -177,12 +177,17 @@ Progress: [████████░░] 82%
 | Phase 19 P08 | 10m | 2 tasks | 2 files |
 | Phase 19 P09 | 6m | 2 tasks | 2 files |
 | Phase 19 P11 | 10m | 2 tasks | 8 files |
+| Phase 19 P12 | 6m | 2 tasks | 11 files |
 
 ## Accumulated Context
 
 ### Decisions
 
 Recent decisions logged in PROJECT.md:
+
+- [Phase 19 Plan 12]: GraphPathCard groups by snapshotId with zero cross-snapshot hop concatenation (D-14).
+- [Phase 19 Plan 12]: GraphPathCard partitions paths into neutral variation container for EXTENDS/SUPPLEMENTS (D-25/D-27) vs destructive alert container for unproven conflicts (D-29).
+- [Phase 19 Plan 12]: DiagnosticsPanel strictly enforces content-free invariant (AI-SPEC §7) exposing only enums, timings, and counts without user query or raw excerpt leakage.
 
 - [Phase 19 Plan 09]: Fallback allowlist triggers local BM25 only on NETWORK_ERROR, TIMEOUT, and 5xx; inhibits fallback on AUTH (401/403), CONFIG (400/404), and INVALID_RESPONSE (D-41).
 - [Phase 19 Plan 09]: Enforce zero model calls on NO_EVIDENCE, UNSUPPORTED, and NEEDS_CLARIFICATION (D-04, D-07).
