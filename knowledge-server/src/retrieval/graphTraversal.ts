@@ -51,20 +51,23 @@ function buildStaticTemplate(
     '  AND ALL(n IN nodes(path) WHERE n.graphSnapshotId = $snapshotId AND single(m IN nodes(path) WHERE m = n))',
     'WITH path',
     'LIMIT $pathLimit',
-    'UNWIND relationships(path) AS rel',
-    'UNWIND nodes(path) AS node',
-    'RETURN DISTINCT',
-    '  node.urn AS nodeUrn,',
-    '  node.canonicalName AS nodeName,',
-    '  node.kind AS nodeKind,',
-    '  node.firstSeenInDoc AS firstSeenInDoc,',
-    '  rel.factKey AS factKey,',
-    '  rel.subjectUrn AS subjectUrn,',
-    '  type(rel) AS relationType,',
-    '  rel.objectUrn AS objectUrn,',
-    '  rel.effectiveClassification AS evidenceClass,',
-    '  rel.hasConflict AS hasConflict,',
-    '  rel.supportingChunkIds AS supportingChunkIds',
+    'RETURN',
+    '  [node IN nodes(path) | {',
+    '    urn: node.urn,',
+    '    canonicalName: node.canonicalName,',
+    '    kind: node.kind,',
+    '    firstSeenInDoc: node.firstSeenInDoc',
+    '  }] AS pathNodes,',
+    '  [rel IN relationships(path) | {',
+    '    factKey: rel.factKey,',
+    '    subjectUrn: rel.subjectUrn,',
+    '    relationType: type(rel),',
+    '    objectUrn: rel.objectUrn,',
+    '    evidenceClass: rel.effectiveClassification,',
+    '    hasConflict: coalesce(rel.hasConflict, false),',
+    '    supportingChunkIds: coalesce(rel.supportingChunkIds, []),',
+    '    graphSnapshotId: rel.graphSnapshotId',
+    '  }] AS pathEdges',
     'LIMIT $maxEdges',
   ].join('\n');
 }
@@ -244,10 +247,20 @@ export interface GraphTraversalOptions extends OperationOptions {
   readonly allowedSeedSet?: ReadonlySet<string> | undefined;
 }
 
+export interface OrderedPathCandidate {
+  readonly nodeUrns: readonly Urn[];
+  readonly edgeFactKeys: readonly string[];
+  readonly hopClassifications: readonly EvidenceClassification[];
+  readonly hopSupportingChunkIds: readonly (readonly string[])[];
+  readonly snapshotId: string;
+  readonly hasConflict: boolean;
+}
+
 export interface BoundedGraphTraversalResult {
   readonly status: ModalityStatusDetail;
   readonly entities: readonly EntityItem[];
   readonly edges: readonly EdgeItem[];
+  readonly paths: readonly OrderedPathCandidate[];
 }
 
 /**
@@ -287,6 +300,7 @@ export async function runBoundedGraphTraversal(
       },
       entities: [],
       edges: [],
+      paths: [],
     };
   }
 
@@ -302,6 +316,7 @@ export async function runBoundedGraphTraversal(
       },
       entities: [],
       edges: [],
+      paths: [],
     };
   }
 
@@ -411,6 +426,7 @@ export async function runBoundedGraphTraversal(
       },
       entities: [],
       edges: [],
+      paths: [],
     };
   }
 
@@ -475,6 +491,30 @@ export async function runBoundedGraphTraversal(
   }
   const edgeList = Array.from(edgeMap.values()).slice(0, GRAPH_CAP_MAX_EDGES);
 
+  // 8. Preserve ordered path identity. Fail closed on mixed snapshots or citationless hops.
+  const paths: OrderedPathCandidate[] = [];
+  for (const rawPath of rawResult.paths ?? []) {
+    if (paths.length >= 20) break;
+    if (rawPath.nodeUrns.length !== rawPath.edgeFactKeys.length + 1) continue;
+    if (rawPath.hopClassifications.length !== rawPath.edgeFactKeys.length) continue;
+    if (rawPath.hopSupportingChunkIds.length !== rawPath.edgeFactKeys.length) continue;
+    if (rawPath.edgeSnapshotIds.length !== rawPath.edgeFactKeys.length) continue;
+    if (rawPath.edgeSnapshotIds.some((snapshotId) => snapshotId !== pinnedSnapshotId)) continue;
+    if (rawPath.hopSupportingChunkIds.some((chunkIds) => chunkIds.length === 0)) continue;
+    if (rawPath.hopClassifications.some((classification) => !allowedEvidenceSet.has(classification))) {
+      continue;
+    }
+
+    paths.push({
+      nodeUrns: [...rawPath.nodeUrns],
+      edgeFactKeys: [...rawPath.edgeFactKeys],
+      hopClassifications: [...rawPath.hopClassifications],
+      hopSupportingChunkIds: rawPath.hopSupportingChunkIds.map((ids) => [...ids]),
+      snapshotId: pinnedSnapshotId,
+      hasConflict: rawPath.hasConflict,
+    });
+  }
+
   const latencyMs = Math.max(0, Date.now() - startMs);
   const itemCount = entityList.length + edgeList.length;
 
@@ -487,5 +527,6 @@ export async function runBoundedGraphTraversal(
     },
     entities: entityList,
     edges: edgeList,
+    paths,
   };
 }

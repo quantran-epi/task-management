@@ -154,9 +154,19 @@ export interface GraphTraversalCriteria {
 /**
  * Result of graph traversal containing reached entities and traversed edges.
  */
+export interface GraphTraversalPathRecord {
+  readonly nodeUrns: readonly Urn[];
+  readonly edgeFactKeys: readonly string[];
+  readonly hopClassifications: readonly EvidenceClassification[];
+  readonly hopSupportingChunkIds: readonly (readonly string[])[];
+  readonly edgeSnapshotIds: readonly string[];
+  readonly hasConflict: boolean;
+}
+
 export interface GraphTraversalResult {
   readonly entities: readonly EntityItem[];
   readonly edges: readonly EdgeItem[];
+  readonly paths?: readonly GraphTraversalPathRecord[] | undefined;
   readonly truncated: boolean;
   readonly truncationReason?: string | undefined;
 }

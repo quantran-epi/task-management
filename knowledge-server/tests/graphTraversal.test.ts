@@ -246,6 +246,7 @@ describe('18-W0-02C: Static Bounded Cypher Templates & Plan Validation', () => {
       public traverseCalls: Array<{ snapshotId: string; criteria: GraphTraversalCriteria }> = [];
       public mockEntities: EntityItem[] = [];
       public mockEdges: EdgeItem[] = [];
+      public mockPaths: NonNullable<GraphTraversalResult['paths']> = [];
       public isTruncated: boolean = false;
       public throwError: Error | null = null;
 
@@ -270,6 +271,7 @@ describe('18-W0-02C: Static Bounded Cypher Templates & Plan Validation', () => {
         return {
           entities: this.mockEntities.slice(0, criteria.limitNodes),
           edges: this.mockEdges.slice(0, criteria.limitEdges),
+          paths: this.mockPaths,
           truncated: this.isTruncated,
           truncationReason: this.isTruncated ? 'RESULT_LIMIT_REACHED' : undefined,
         };
@@ -431,6 +433,57 @@ describe('18-W0-02C: Static Bounded Cypher Templates & Plan Validation', () => {
       expect(result.entities.length).toBe(3);
       expect(result.edges.length).toBe(2);
       expect(result.edges.map((e) => e.relationType)).toEqual(['INVOKES', 'CALLS']);
+    });
+
+    it('preserves ordered 2-hop path provenance', async () => {
+      const gateway = new StubGateway();
+      gateway.mockPaths = [{
+        nodeUrns: [URN_CONTAINER_60000006, URN_SUBPROCESS_10000304, URN_PKG_FCL_CYCLE_COUNTER],
+        edgeFactKeys: ['fact-invokes', 'fact-calls'],
+        hopClassifications: ['OBSERVED', 'OBSERVED'],
+        hopSupportingChunkIds: [['chunk-102'], ['chunk-103']],
+        edgeSnapshotIds: [pinnedSnapshot, pinnedSnapshot],
+        hasConflict: false,
+      }];
+
+      const result = await runBoundedGraphTraversal(createPlan(), pinnedSnapshot, gateway);
+
+      expect(result.paths).toHaveLength(1);
+      expect(result.paths[0]!.nodeUrns).toHaveLength(3);
+      expect(result.paths[0]!.edgeFactKeys).toEqual(['fact-invokes', 'fact-calls']);
+      expect(result.paths[0]!.hopSupportingChunkIds).toEqual([['chunk-102'], ['chunk-103']]);
+    });
+
+    it('drops paths containing an edge from another graph snapshot', async () => {
+      const gateway = new StubGateway();
+      gateway.mockPaths = [{
+        nodeUrns: [URN_CONTAINER_60000006, URN_SUBPROCESS_10000304, URN_PKG_FCL_CYCLE_COUNTER],
+        edgeFactKeys: ['fact-invokes', 'fact-calls'],
+        hopClassifications: ['OBSERVED', 'OBSERVED'],
+        hopSupportingChunkIds: [['chunk-102'], ['chunk-103']],
+        edgeSnapshotIds: [pinnedSnapshot, 'snapshot-foreign'],
+        hasConflict: false,
+      }];
+
+      const result = await runBoundedGraphTraversal(createPlan(), pinnedSnapshot, gateway);
+
+      expect(result.paths).toEqual([]);
+    });
+
+    it('caps ordered paths at 20 entries', async () => {
+      const gateway = new StubGateway();
+      gateway.mockPaths = Array.from({ length: 25 }, (_, index) => ({
+        nodeUrns: [URN_PROCESS_60000006, URN_CONTAINER_60000005],
+        edgeFactKeys: [`fact-${index}`],
+        hopClassifications: ['OBSERVED'] as const,
+        hopSupportingChunkIds: [[`chunk-${index}`]],
+        edgeSnapshotIds: [pinnedSnapshot],
+        hasConflict: false,
+      }));
+
+      const result = await runBoundedGraphTraversal(createPlan(), pinnedSnapshot, gateway);
+
+      expect(result.paths).toHaveLength(20);
     });
 
     it('executes 3-hop reverse impact path starting from DatabaseObject', async () => {
