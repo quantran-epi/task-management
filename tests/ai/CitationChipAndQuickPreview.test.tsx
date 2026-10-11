@@ -6,7 +6,7 @@ import { TaskPlannerDatabase } from '../../src/db';
 import type { Note, Task } from '../../src/types/models';
 
 describe('CitationChip', () => {
-  it('renders citation title and heading', () => {
+  it('renders citation title and heading in legacy mode', () => {
     const handleOpen = vi.fn();
     render(
       <CitationChip
@@ -25,7 +25,7 @@ describe('CitationChip', () => {
     expect(handleOpen).toHaveBeenCalledWith('doc-123');
   });
 
-  it('renders without heading when heading is omitted', () => {
+  it('renders without heading when heading is omitted in legacy mode', () => {
     const handleOpen = vi.fn();
     render(
       <CitationChip
@@ -36,6 +36,141 @@ describe('CitationChip', () => {
     );
 
     const chip = screen.getByText('Release Notes');
+    expect(chip).toBeInTheDocument();
+  });
+
+  it('renders local chip [L2] with Local tag visible', () => {
+    render(
+      <CitationChip
+        index={2}
+        source="local"
+        documentTitle="Local Note"
+        evidenceClass="LOCAL"
+        range={{ startLine: 10, endLine: 20 }}
+      />
+    );
+
+    expect(screen.getByText('[L2]')).toBeInTheDocument();
+    expect(screen.getByText('Local')).toBeInTheDocument();
+  });
+
+  it('renders server chip [2] without Local tag', () => {
+    render(
+      <CitationChip
+        index={2}
+        source="server"
+        documentTitle="Server Spec"
+        evidenceClass="OBSERVED"
+        range={{ startLine: 5, endLine: 15 }}
+        snapshotId="gsnap_12345678"
+      />
+    );
+
+    expect(screen.getByText('[2]')).toBeInTheDocument();
+    expect(screen.queryByText('Local')).not.toBeInTheDocument();
+  });
+
+  it('activates onActivate on Enter key for server and local variants', () => {
+    const handleActivateServer = vi.fn();
+    const handleActivateLocal = vi.fn();
+
+    const { rerender } = render(
+      <CitationChip
+        index={1}
+        source="server"
+        documentTitle="Doc 1"
+        onActivate={handleActivateServer}
+      />
+    );
+
+    const serverChip = screen.getByRole('button', { name: /\[1\]/ });
+    fireEvent.keyDown(serverChip, { key: 'Enter' });
+    expect(handleActivateServer).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <CitationChip
+        index={1}
+        source="local"
+        documentTitle="Doc 2"
+        onActivate={handleActivateLocal}
+      />
+    );
+
+    const localChip = screen.getByRole('button', { name: /\[L1\]/ });
+    fireEvent.keyDown(localChip, { key: 'Enter' });
+    expect(handleActivateLocal).toHaveBeenCalledTimes(1);
+  });
+
+  it('activates onActivate on Space key', () => {
+    const handleActivate = vi.fn();
+    render(
+      <CitationChip
+        index={3}
+        source="server"
+        documentTitle="Doc 3"
+        onActivate={handleActivate}
+      />
+    );
+
+    const chip = screen.getByRole('button', { name: /\[3\]/ });
+    fireEvent.keyDown(chip, { key: ' ' });
+    expect(handleActivate).toHaveBeenCalledTimes(1);
+  });
+
+  it('tooltip shows truncated 7-char snapshot id for server chip', async () => {
+    render(
+      <CitationChip
+        index={1}
+        source="server"
+        documentTitle="Architecture Guide"
+        snapshotId="gsnap_abcdef1234"
+        range={{ startLine: 1, endLine: 5 }}
+      />
+    );
+
+    const chip = screen.getByRole('button', { name: /\[1\]/ });
+    fireEvent.mouseEnter(chip);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Bản chụp: gsnap_a…/)).toBeInTheDocument();
+    });
+  });
+
+  it('tooltip omits snapshot id for local chip and shows "Local · chưa xuất bản" when publishedContentHash is null', async () => {
+    render(
+      <CitationChip
+        index={1}
+        source="local"
+        documentTitle="Draft Guide"
+        publishedContentHash={null}
+        range={{ startLine: 1, endLine: 5 }}
+      />
+    );
+
+    const chip = screen.getByRole('button', { name: /\[L1\]/ });
+    fireEvent.mouseEnter(chip);
+
+    await waitFor(() => {
+      expect(screen.getByText('Local · chưa xuất bản')).toBeInTheDocument();
+      expect(screen.queryByText(/Bản chụp:/)).not.toBeInTheDocument();
+    });
+  });
+
+  it('aria-label includes documentTitle + range + classification', () => {
+    render(
+      <CitationChip
+        index={4}
+        source="server"
+        documentTitle="Process Spec"
+        evidenceClass="OBSERVED"
+        range={{ startLine: 12, endLine: 24 }}
+        snapshotId="gsnap_99887766"
+      />
+    );
+
+    const chip = screen.getByRole('button', {
+      name: /\[4\] Process Spec, L12-24, OBSERVED, Snapshot gsnap_9/,
+    });
     expect(chip).toBeInTheDocument();
   });
 });
