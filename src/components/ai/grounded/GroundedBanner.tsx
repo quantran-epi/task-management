@@ -107,17 +107,25 @@ export const GroundedBanner: React.FC<GroundedBannerProps> = ({
   ) : undefined;
 
   return (
-    <div
-      style={{ marginBottom: 12 }}
-      {...(isAlertRole ? { role: 'alert' } : {})}
-    >
-      <Alert
-        message={message}
-        description={description}
-        type={type}
-        showIcon
-        action={actionNode}
-      />
+    <div style={{ marginBottom: 12 }}>
+      {isAlertRole ? (
+        <Alert
+          message={message}
+          description={description}
+          type={type}
+          showIcon
+          action={actionNode}
+          role="alert"
+        />
+      ) : (
+        <Alert
+          message={message}
+          description={description}
+          type={type}
+          showIcon
+          action={actionNode}
+        />
+      )}
     </div>
   );
 };

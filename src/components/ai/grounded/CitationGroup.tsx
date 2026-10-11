@@ -1,5 +1,5 @@
 import React from 'react';
-import type { PersistedCitation } from '../../services/ai/groundedAnswerSchemas';
+import type { PersistedCitation } from '../../../services/ai/groundedAnswerSchemas';
 import { CitationChip } from '../CitationChip';
 
 export interface CitationGroupProps {
