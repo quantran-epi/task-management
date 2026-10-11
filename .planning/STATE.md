@@ -4,14 +4,14 @@ milestone: v1.2
 milestone_name: Hybrid GraphRAG Knowledge Assistant MVP
 status: executing
 stopped_at: Completed 19-01-PLAN.md
-last_updated: "2026-10-11T09:31:06.601Z"
-last_activity: 2026-10-11 -- Completed Plan 19-01 retrieval provenance protocol
+last_updated: "2026-10-11T12:31:53.397Z"
+last_activity: 2026-10-11 -- Phase 19 execution started
 progress:
   total_phases: 16
   completed_phases: 13
   total_plans: 92
-  completed_plans: 72
-  percent: 78
+  completed_plans: 79
+  percent: 81
 ---
 
 # Project State
@@ -21,17 +21,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-07)
 
 **Core value:** Make planned work realistically fit available time while giving the personal user evidence-grounded access to their local banking IT knowledge.
-**Current focus:** Phase 19 — grounded assistant provenance, citations, and offline fallback
+**Current focus:** Phase 19 — grounded-assistant-provenance-citations-offline-fallback
 
 ## Current Position
 
-Phase: 19
-Plan: 2 of 15
-Status: Ready to execute
-Last activity: 2026-10-11 -- Completed Plan 19-01 retrieval provenance protocol
-Stopped at: Completed 19-01-PLAN.md
+Phase: 19 (grounded-assistant-provenance-citations-offline-fallback) — EXECUTING
+Plan: 8 of 15
+Status: Executing Phase 19
+Last activity: 2026-10-11 -- Completed 19-08-PLAN.md
+Stopped at: Completed 19-08-PLAN.md
 
-Progress: [████████░░] 77%
+Progress: [████████░░] 81%
 
 ### Quick Tasks Completed
 
@@ -174,6 +174,7 @@ Progress: [████████░░] 77%
 | Phase 17 P05 | 9min | 2 tasks | 7 files |
 | Phase 17 P06 | 9 min | 3 tasks | 7 files |
 | Phase 19 P01 | 18m | 2 tasks | 5 files |
+| Phase 19 P08 | 10m | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -222,6 +223,9 @@ Recent decisions logged in PROJECT.md:
 - [Milestone v1.2]: Start with scheduled process `60000006` as bounded pilot corpus.
 - [Milestone v1.2]: Preserve local BM25 fallback in PlannerMate when optional knowledge server is offline.
 - [Milestone v1.2]: Retain evidence classifications `OBSERVED`, `INFERRED`, and `BUSINESS_APPROVED` across all graph relations.
+- [Phase 19 Plan 08]: Enforce serial bounded repair at most 2 attempts carrying only validation issues and previous raw output without expanding evidence.
+- [Phase 19 Plan 08]: Enforce D-06 language lock in system prompt: response language mirrors query language; technical identifiers and source quotes must be reproduced byte-identical.
+- [Phase 19 Plan 08]: Throw GroundedSynthesisError('INVALID_GROUNDED_OUTPUT') after exhausted repairs for safe error rendering (D-45).
 - [Phase 19]: Path citation IDs resolve only to returned chunk item IDs. — Makes citation closure deterministic at strict protocol boundary.
 - [Phase 19]: Conflict scope stays metadata-only through fixed dimension allowlist. — Prevents free-text or model-invented scope proof.
 
