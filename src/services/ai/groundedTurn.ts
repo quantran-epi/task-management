@@ -7,27 +7,25 @@ import type {
 } from './groundedAnswerSchemas';
 import type { SetCatalogEntry, ResolvedScope } from './semanticScopeRouter';
 import type {
+  ConflictGroup,
   FederatedRetrievalRequest,
   FederatedRetrievalResponse,
   ModalityStatus,
 } from '../knowledge/retrievalProtocol';
 import {
   KnowledgeClientError,
-  type KnowledgeClientErrorCode,
 } from '../knowledge/knowledgeClient';
 import type {
   LocalGroundedResult,
   LocalGroundedRetrievalInput,
   LocalGroundedRetrievalDeps,
 } from '../search/localGroundedRetrieval';
-import {
-  packEvidence,
-  type EvidencePack,
-  type PackEvidenceOptions,
-  type SourceRecord,
+import type {
+  EvidencePack,
+  PackEvidenceOptions,
+  SourceRecord,
 } from './evidencePack';
 import {
-  synthesizeGroundedAnswer,
   GroundedSynthesisError,
   type SynthesisInput,
 } from './groundedSynthesis';
@@ -172,15 +170,7 @@ function toPersistedPaths(
 }
 
 function toPersistedConflicts(
-  conflicts: readonly {
-    conflictGroupId: string;
-    dimension: 'Version' | 'Environment' | 'Behavior' | 'Unknown';
-    scopeProof?: {
-      environment: string | null;
-      version: string | null;
-      overrideRelation: 'SUPERSEDES' | 'EXTENDS' | 'SUPPLEMENTS' | null;
-    } | null;
-  }[],
+  conflicts: readonly ConflictGroup[],
   citations: readonly PersistedCitation[]
 ): PersistedConflictGroup[] {
   const allCitationIds = citations.map((c) => c.citationId);
@@ -199,7 +189,14 @@ function toPersistedConflicts(
         citationIds: allCitationIds.slice(0, 1).length > 0 ? allCitationIds.slice(0, 1) : ['S1'],
       },
     ],
-    scopeProof: cg.scopeProof ?? null,
+    scopeProof: cg.scopeProof
+      ? {
+          dimension: cg.scopeProof.dimension ?? cg.dimension,
+          environment: cg.scopeProof.environment ?? null,
+          version: cg.scopeProof.version ?? null,
+          overrideRelation: cg.scopeProof.overrideRelation ?? null,
+        }
+      : null,
   }));
 }
 
@@ -231,14 +228,12 @@ export async function runGroundedTurn(
   }
 
   // 2. Resolve scope
-  const completeJsonForScope = input.capabilities.modelConfigured ? undefined : undefined;
   // If model is configured, semanticScopeRouter probe/complete can be passed if caller wired it,
-  // but if modelConfigured === false, pass completeJson = undefined (D-20).
+  // but if modelConfigured === false, omit completeJson (D-20).
   const resolvedScope = await deps.routeScope(
     { query: input.query, routedIntent: intentDecision.route },
     {
       catalog: input.catalog,
-      completeJson: completeJsonForScope,
       signal: input.signal,
     }
   );
@@ -376,11 +371,15 @@ export async function runGroundedTurn(
         })),
         comparisonMode: resolvedScope.comparisonMode,
         budgets: {
+          concurrency: 4,
+          elapsedMs: 2500,
           maxSets: 10,
-          maxItemsPerSet: 15,
-          maxTotalItems: 50,
+          maxItems: 50,
           maxEvidenceChars: 30000,
         },
+        limit: 20,
+        includeInferred: false,
+        recentTurns: [],
       },
       input.signal
     );

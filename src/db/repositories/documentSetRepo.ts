@@ -1,5 +1,12 @@
 import { db as defaultDb, type TaskPlannerDatabase } from '../index';
-import type { DocumentSet, PublishPrimaryState } from '../../types/models';
+import type {
+  DocumentSet,
+  DocumentSetPreset,
+  DocumentSetRelation,
+  DocumentSetScope,
+  PublishPrimaryState,
+} from '../../types/models';
+import type { SetCatalogEntry } from '../../services/ai/semanticScopeRouter';
 import { DocumentSetSchema } from '../../validation/knowledgeSchemas';
 import { generateId } from '../../utils/uuid';
 
@@ -7,12 +14,24 @@ export interface CreateDocumentSetInput {
   name: string;
   description?: string | undefined;
   documentIds?: string[] | undefined;
+  scope?: DocumentSetScope | undefined;
+  aliases?: readonly string[] | undefined;
+  relations?: readonly DocumentSetRelation[] | undefined;
+  isBase?: boolean | undefined;
+  presentationRevision?: number | undefined;
+  preset?: DocumentSetPreset | undefined;
 }
 
 export interface UpdateDocumentSetInput {
   name?: string | undefined;
   description?: string | null | undefined;
   documentIds?: string[] | undefined;
+  scope?: DocumentSetScope | undefined;
+  aliases?: readonly string[] | undefined;
+  relations?: readonly DocumentSetRelation[] | undefined;
+  isBase?: boolean | undefined;
+  presentationRevision?: number | undefined;
+  preset?: DocumentSetPreset | undefined;
 }
 
 export interface DocumentSetMemberStatus {
@@ -66,6 +85,7 @@ export async function computeSha256(text: string): Promise<string> {
 
 /**
  * Creates a new document set with explicit ordered UUID membership (D-01).
+ * Extended with scope presets, aliases, relations, presentationRevision (D-17, D-18, D-32, D-35).
  */
 export async function createDocumentSet(
   input: CreateDocumentSetInput,
@@ -81,6 +101,16 @@ export async function createDocumentSet(
     documentIds: input.documentIds ?? [],
     createdAt: now,
     updatedAt: now,
+    scope: input.scope ?? {
+      domain: 'General',
+      environment: null,
+      version: null,
+    },
+    aliases: input.aliases ?? [],
+    relations: input.relations ?? [],
+    isBase: input.isBase ?? false,
+    presentationRevision: input.presentationRevision ?? 0,
+    preset: input.preset ?? 'TuyChinh',
   };
 
   const validated = DocumentSetSchema.parse(candidate);
@@ -154,6 +184,14 @@ export async function updateDocumentSet(
       ...(updates.documentIds !== undefined
         ? { documentIds: updates.documentIds }
         : {}),
+      ...(updates.scope !== undefined ? { scope: updates.scope } : {}),
+      ...(updates.aliases !== undefined ? { aliases: updates.aliases } : {}),
+      ...(updates.relations !== undefined ? { relations: updates.relations } : {}),
+      ...(updates.isBase !== undefined ? { isBase: updates.isBase } : {}),
+      ...(updates.presentationRevision !== undefined
+        ? { presentationRevision: updates.presentationRevision }
+        : {}),
+      ...(updates.preset !== undefined ? { preset: updates.preset } : {}),
       updatedAt: now,
     };
 
@@ -301,4 +339,58 @@ export async function getDocumentPublishStatuses(
   );
 
   return result;
+}
+
+/**
+ * Updates presentation ordering of documents in a document set (D-32, D-33).
+ * Increments presentationRevision by 1 inside a Dexie transaction.
+ * MUST NOT touch graphSnapshotId, publishedContentHash, or publish state.
+ * No legacy migration from pre-19 shape; existing sets may be deleted/rebuilt (D-35).
+ */
+export async function updatePresentationOrder(
+  setId: string,
+  orderedDocumentIds: readonly string[],
+  db: TaskPlannerDatabase = defaultDb
+): Promise<void> {
+  await db.transaction('rw', [db.documentSets], async () => {
+    const existing = await db.documentSets.get(setId);
+    if (!existing) return;
+
+    const nextRevision = (existing.presentationRevision ?? 0) + 1;
+    const now = new Date().toISOString();
+
+    const updated: DocumentSet = {
+      ...existing,
+      documentIds: [...orderedDocumentIds],
+      presentationRevision: nextRevision,
+      updatedAt: now,
+    };
+
+    const validated = DocumentSetSchema.parse(updated);
+    await db.documentSets.put(validated);
+  });
+}
+
+/**
+ * Fetches lightweight set catalog entries consumed by semanticScopeRouter.routeScope (D-19, D-20).
+ * Fetches directly from IndexedDB without network requests.
+ * Safely defaults missing/pre-19 fields to safe values without schema migration (D-35).
+ */
+export async function fetchSetCatalog(
+  db: TaskPlannerDatabase = defaultDb
+): Promise<SetCatalogEntry[]> {
+  const sets = await db.documentSets.toArray();
+  return sets.map((s) => {
+    const relationFirst = s.relations && s.relations.length > 0 ? s.relations[0]?.kind ?? null : null;
+    return {
+      setId: s.id,
+      canonicalName: s.name,
+      domain: s.scope?.domain ?? 'General',
+      environment: s.scope?.environment ?? null,
+      version: s.scope?.version ?? null,
+      aliases: s.aliases ?? [],
+      relation: relationFirst,
+      isBase: Boolean(s.isBase),
+    };
+  });
 }

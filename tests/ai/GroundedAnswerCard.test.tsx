@@ -754,7 +754,7 @@ describe('GroundedAnswerCard', () => {
     );
     const mockDiagnostics = {
       fulltext: { status: 'ok' as const, latencyMs: 25, itemCount: 4 },
-      vector: { status: 'degraded' as const, latencyMs: 120, itemCount: 2 },
+      vector: { status: 'stale' as const, latencyMs: 120, itemCount: 2 },
       graph: { status: 'ok' as const, latencyMs: 40, itemCount: 1 },
     };
 

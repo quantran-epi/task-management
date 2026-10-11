@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Card, Tag, Tooltip, theme } from 'antd';
-import { NodeIndexOutlined, CheckCircleOutlined, InfoCircleOutlined, WarningOutlined } from '@ant-design/icons';
+import { Card, Tag, theme } from 'antd';
+import { NodeIndexOutlined, CheckCircleOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import type {
   PersistedCitation,
   PersistedConflictGroup,

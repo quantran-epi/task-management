@@ -251,6 +251,27 @@ export type PublishPrimaryState =
   | 'Warning'
   | 'Failed';
 
+export type DocumentSetPreset =
+  | 'Chung'
+  | 'TheoMoiTruong'
+  | 'TheoModule'
+  | 'TheoPhienBan'
+  | 'BoSung'
+  | 'TuyChinh';
+
+export type DocumentSetRelationKind = 'EXTENDS' | 'SUPPLEMENTS' | 'SUPERSEDES';
+
+export interface DocumentSetRelation {
+  kind: DocumentSetRelationKind;
+  targetSetId: string;
+}
+
+export interface DocumentSetScope {
+  domain: string;
+  environment: string | null;
+  version: string | null;
+}
+
 export interface DocumentSet {
   id: string; // RFC 4122 v4 UUID
   name: string;
@@ -258,6 +279,15 @@ export interface DocumentSet {
   documentIds: string[]; // Explicit ordered snapshot of stable Note UUIDs (D-01)
   createdAt: string; // ISO string metadata
   updatedAt: string; // ISO string metadata
+
+  // Plan 13 extensions (D-17, D-18, D-32, D-33, D-35)
+  // Optional at model interface so pre-19 test records without these fields load safely without migration (D-35).
+  scope?: DocumentSetScope | undefined;
+  aliases?: readonly string[] | undefined;
+  relations?: readonly DocumentSetRelation[] | undefined;
+  isBase?: boolean | undefined;
+  presentationRevision?: number | undefined;
+  preset?: DocumentSetPreset | undefined;
 }
 
 export interface PublishedDocumentMetadata {

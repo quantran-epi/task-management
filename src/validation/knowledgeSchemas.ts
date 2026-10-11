@@ -59,8 +59,39 @@ export const FrozenSubmittedDocumentMetadataSchema = z
   .strict();
 
 /**
- * D-01: DocumentSet stores an explicit ordered snapshot of stable document UUIDs.
+ * D-01 / D-17 / D-18 / D-32 / D-35: DocumentSet stores an explicit ordered snapshot
+ * of stable document UUIDs and carries scope facets, aliases, relations, presentationRevision.
  */
+export const DocumentSetPresetSchema = z.enum([
+  'Chung',
+  'TheoMoiTruong',
+  'TheoModule',
+  'TheoPhienBan',
+  'BoSung',
+  'TuyChinh',
+]);
+
+export const DocumentSetRelationKindSchema = z.enum([
+  'EXTENDS',
+  'SUPPLEMENTS',
+  'SUPERSEDES',
+]);
+
+export const DocumentSetRelationSchema = z
+  .object({
+    kind: DocumentSetRelationKindSchema,
+    targetSetId: strictUuidSchema,
+  })
+  .strict();
+
+export const DocumentSetScopeSchema = z
+  .object({
+    domain: z.string().trim().min(1, 'Domain is required'),
+    environment: z.string().trim().nullable(),
+    version: z.string().trim().nullable(),
+  })
+  .strict();
+
 export const DocumentSetSchema = z
   .object({
     id: strictUuidSchema,
@@ -78,6 +109,16 @@ export const DocumentSetSchema = z
       ),
     createdAt: isoTimestampSchema,
     updatedAt: isoTimestampSchema,
+    scope: DocumentSetScopeSchema.default({
+      domain: 'General',
+      environment: null,
+      version: null,
+    }),
+    aliases: z.array(z.string().trim().min(1)).default([]),
+    relations: z.array(DocumentSetRelationSchema).default([]),
+    isBase: z.boolean().default(false),
+    presentationRevision: z.number().int().nonnegative().default(0),
+    preset: DocumentSetPresetSchema.default('TuyChinh'),
   })
   .strict();
 

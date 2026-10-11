@@ -297,6 +297,7 @@ export function DocumentSetDrawer(props: DocumentSetDrawerProps) {
               </Button>
               <DocumentSetForm
                 notes={liveNotes}
+                availableSets={liveSets}
                 {...(props.currentFolderId ? { currentFolderId: props.currentFolderId } : {})}
                 onSave={async (value) => {
                   await props.onSave(undefined, value);
@@ -356,6 +357,7 @@ export function DocumentSetDrawer(props: DocumentSetDrawerProps) {
               <DocumentSetForm
                 notes={liveNotes}
                 initialSet={selected}
+                availableSets={liveSets.filter((s) => s.id !== selected.id)}
                 {...(props.currentFolderId ? { currentFolderId: props.currentFolderId } : {})}
                 onSave={(value) => props.onSave(selected.id, value)}
               />
