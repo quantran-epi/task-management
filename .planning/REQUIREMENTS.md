@@ -125,6 +125,16 @@
 - [x] **RETR-04**: User can run dependency and impact queries across one to three graph hops with bounded result counts and explicit truncation status.
 - [x] **RETR-05**: User receives full-text, semantic, and graph evidence as one ranked, deduplicated, citation-bearing set with truthful modality and degraded-status metadata.
 
+### Grounded Assistant, Provenance Citations & Offline Fallback (Phase 19)
+
+- [x] **ANSWER-01**: Material claims cite exact source documents, sections, and line ranges with snapshot provenance.
+- [x] **ANSWER-02**: Flow, dependency, and impact answers expose step-by-step graph paths with per-hop evidence class and citation.
+- [x] **ANSWER-03**: Facts retain evidence classification; derived claims show visible INFERRED badge; mixed-classification uses weakest supporting.
+- [x] **ANSWER-04**: Conflicting indexed sources trigger warning with dimension (Version/Environment/Behavior/Unknown); no primary branch; scope variation labeled neutrally when metadata proves.
+- [x] **ANSWER-05**: Missing evidence produces explicit abstention (NEEDS_CLARIFICATION, NO_EVIDENCE, UNSUPPORTED); never guesses or falls back to ungrounded model knowledge.
+- [x] **ANSWER-06**: Local BM25 fallback runs automatically on allowed availability failures scoped to resolved set members; strong-evidence synthesis vs weak-evidence ranked list; local citations use [L#] and Local badge.
+- [x] **ANSWER-07**: Citation and graph-path interactions open QuickPreviewDrawer at exact document range with snapshot-first excerpt and mismatch warning when current content differs; historical citations durable with bounded excerpt.
+
 ## Future Requirements (Deferred)
 
 - **FUTR-01**: Full bidirectional Jira issue webhook sync (deferred - requires server/push).
@@ -213,3 +223,10 @@
 | RETR-03 | Phase 18 | Complete |
 | RETR-04 | Phase 18 | Complete |
 | RETR-05 | Phase 18 | Complete |
+| ANSWER-01 | Phase 19 | Complete |
+| ANSWER-02 | Phase 19 | Complete |
+| ANSWER-03 | Phase 19 | Complete |
+| ANSWER-04 | Phase 19 | Complete |
+| ANSWER-05 | Phase 19 | Complete |
+| ANSWER-06 | Phase 19 | Complete |
+| ANSWER-07 | Phase 19 | Complete |
