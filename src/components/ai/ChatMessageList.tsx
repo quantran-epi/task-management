@@ -3,7 +3,7 @@ import { Divider, Button, theme } from 'antd';
 import { SyncOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import type { ChatMessage } from '../../types/models';
 import { APP_NAME } from '../../constants/app';
-import { ChatMessageBubble } from './ChatMessageBubble';
+import { ChatMessageBubble, type GroundedAnswerCardCallbacks } from './ChatMessageBubble';
 import { InlineApiErrorCard } from './InlineApiErrorCard';
 
 export interface PendingConfirmationInfo {
@@ -29,6 +29,7 @@ export interface ChatMessageListProps {
   onRunClaudeCode?: (() => Promise<void> | void) | undefined;
   pendingConfirmation?: PendingConfirmationInfo | null;
   onConfirmAction?: (confirmed: boolean) => void;
+  groundedCallbacks?: GroundedAnswerCardCallbacks | undefined;
 }
 
 export const ChatMessageList: React.FC<ChatMessageListProps> = ({
@@ -48,6 +49,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   onRunClaudeCode,
   pendingConfirmation,
   onConfirmAction,
+  groundedCallbacks,
 }) => {
   const { token } = theme.useToken();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -131,6 +133,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
           );
         }
 
+        // Pass message with grounding intact for structured rendering
         return (
           <ChatMessageBubble
             key={msg.id}
@@ -141,6 +144,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
             onAddToChecklist={onAddToChecklist}
             onSaveStickyNote={onSaveStickyNote}
             onRunClaudeCode={onRunClaudeCode}
+            groundedCallbacks={groundedCallbacks}
           />
         );
       })}

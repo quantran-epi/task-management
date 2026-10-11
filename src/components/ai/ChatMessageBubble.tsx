@@ -30,8 +30,26 @@ import {
 } from '../../utils/fileExport';
 import { exportPresentationAsFile } from '../../utils/pptxExport';
 import { executeDynamicFileScript } from '../../utils/dynamicFileSandbox';
+import type { PersistedCitation } from '../../services/ai/groundedAnswerSchemas';
+import { GroundedAnswerCard } from './grounded/GroundedAnswerCard';
+import { GraphPathCard } from './grounded/GraphPathCard';
+import { SourcesPanel } from './grounded/SourcesPanel';
+import { DiagnosticsPanel } from './grounded/DiagnosticsPanel';
+import { CandidateChipList } from './grounded/CandidateChipList';
+import { EvidenceOnlyCard } from './grounded/EvidenceOnlyCard';
 
 const { Text } = Typography;
+
+export interface GroundedAnswerCardCallbacks {
+  onCitationActivate?: ((c: PersistedCitation) => void) | undefined;
+  onCandidateSelect?: ((urn: string) => void) | undefined;
+  onRefinementSelect?: ((refinement: string) => void) | undefined;
+  onEvidenceOnlySynthesize?: (() => void) | undefined;
+  onFreshLookup?: (() => void) | undefined;
+  onInvalidRetry?: (() => void) | undefined;
+  onAuthRepair?: (() => void) | undefined;
+  onConfigRepair?: (() => void) | undefined;
+}
 
 export interface ChatMessageBubbleProps {
   message: ChatMessage;
@@ -43,6 +61,7 @@ export interface ChatMessageBubbleProps {
   onAddToChecklist?: ((items: string[]) => Promise<void> | void) | undefined;
   onSaveStickyNote?: ((content: string) => Promise<void> | void) | undefined;
   onRunClaudeCode?: (() => Promise<void> | void) | undefined;
+  groundedCallbacks?: GroundedAnswerCardCallbacks | undefined;
 }
 
 /**
@@ -177,6 +196,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   onAddToChecklist,
   onSaveStickyNote,
   onRunClaudeCode,
+  groundedCallbacks,
 }) => {
   const { token } = theme.useToken();
   const [copied, setCopied] = useState(false);
@@ -184,6 +204,111 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   const [noteSaved, setNoteSaved] = useState(false);
 
   const isUser = msg.role === 'user';
+
+  // Branch assistant display on message.grounding payload
+  if (!isUser && msg.grounding) {
+    const g = msg.grounding;
+    const pathsSlot = g.paths && g.paths.length > 0 ? (
+      <GraphPathCard
+        paths={g.paths}
+        citations={g.citations}
+        conflictGroups={g.conflicts ?? []}
+        onCitationActivate={(c) => groundedCallbacks?.onCitationActivate?.(c)}
+      />
+    ) : undefined;
+
+    const sourcesSlot = g.citations && g.citations.length > 0 ? (
+      <SourcesPanel
+        citations={g.citations}
+        onOpenCitation={(c) => groundedCallbacks?.onCitationActivate?.(c)}
+      />
+    ) : undefined;
+
+    const diagnosticsSlot = g.modalityDiagnostics ? (
+      <DiagnosticsPanel
+        diagnostics={g.modalityDiagnostics}
+        scope={g.scope}
+        coverageWarnings={g.coverageWarnings}
+        fallbackReason={g.fallbackReason}
+        routerSource={g.routerVersion ?? undefined}
+        promptVersion={g.promptVersion}
+        schemaVersion={g.schemaVersion}
+      />
+    ) : undefined;
+
+    const candidateChips = (g.citations ?? []).map((c) => ({
+      id: c.documentId,
+      label: c.documentTitle,
+      urn: `urn:plannermate:docs:doc:${c.documentId}`,
+    }));
+
+    const candidatesSlot = g.outcome === 'NEEDS_CLARIFICATION' ? (
+      <CandidateChipList
+        items={candidateChips}
+        variant="candidate"
+        onSelect={(item) => groundedCallbacks?.onCandidateSelect?.(item.urn || item.id)}
+      />
+    ) : undefined;
+
+    const refinementChips = (g.coverageWarnings ?? []).map((w, idx) => ({
+      id: `refine-${idx}`,
+      label: w,
+    }));
+
+    const refinementsSlot = (g.outcome === 'NO_EVIDENCE' || g.outcome === 'UNSUPPORTED') ? (
+      <CandidateChipList
+        items={refinementChips.length > 0 ? refinementChips : [
+          { id: 'r1', label: 'Thử với tên quy trình khác' },
+          { id: 'r2', label: 'Mở rộng phạm vi tìm kiếm' },
+        ]}
+        variant="refinement"
+        onSelect={(item) => groundedCallbacks?.onRefinementSelect?.(item.label)}
+      />
+    ) : undefined;
+
+    return (
+      <div
+        data-role="assistant"
+        data-testid="grounded-bubble"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-start',
+          marginBottom: 12,
+          width: '100%',
+        }}
+      >
+        <div style={{ width: '100%', maxWidth: '98%' }}>
+          {g.outcome === 'MODEL_UNAVAILABLE' ? (
+            <EvidenceOnlyCard
+              grounding={g}
+              onSynthesizeFromStored={() => groundedCallbacks?.onEvidenceOnlySynthesize?.()}
+              onCitationActivate={(c) => groundedCallbacks?.onCitationActivate?.(c)}
+              sourcesSlot={sourcesSlot}
+              pathsSlot={pathsSlot}
+            />
+          ) : (
+            <GroundedAnswerCard
+              grounding={g}
+              onCitationActivate={(c) => groundedCallbacks?.onCitationActivate?.(c)}
+              onCandidateSelect={(urn) => groundedCallbacks?.onCandidateSelect?.(urn)}
+              onRefinementSelect={(ref) => groundedCallbacks?.onRefinementSelect?.(ref)}
+              onEvidenceOnlySynthesize={() => groundedCallbacks?.onEvidenceOnlySynthesize?.()}
+              onFreshLookup={() => groundedCallbacks?.onFreshLookup?.()}
+              onInvalidRetry={() => groundedCallbacks?.onInvalidRetry?.()}
+              onAuthRepair={() => groundedCallbacks?.onAuthRepair?.()}
+              onConfigRepair={() => groundedCallbacks?.onConfigRepair?.()}
+              pathsSlot={pathsSlot}
+              sourcesSlot={sourcesSlot}
+              diagnosticsSlot={diagnosticsSlot}
+              candidatesSlot={candidatesSlot}
+              refinementsSlot={refinementsSlot}
+            />
+          )}
+        </div>
+      </div>
+    );
+  }
 
   const handleCopy = async () => {
     try {

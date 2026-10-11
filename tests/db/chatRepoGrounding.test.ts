@@ -145,6 +145,7 @@ describe('chatRepo Grounding Persistence (Plan 19-10 Task 1, D-46)', () => {
       },
       testDb
     );
+    await new Promise((r) => setTimeout(r, 5));
 
     const assistantMsg1 = await saveMessage(
       {
@@ -155,6 +156,7 @@ describe('chatRepo Grounding Persistence (Plan 19-10 Task 1, D-46)', () => {
       },
       testDb
     );
+    await new Promise((r) => setTimeout(r, 5));
 
     const secondGrounding: ChatMessageGrounding = {
       ...validLocalGrounding,
