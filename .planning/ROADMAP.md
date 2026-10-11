@@ -382,7 +382,7 @@ Plans:
 **Wave 3** *(blocked on Wave 2 completion)*
 
 - [x] 19-08-PLAN.md — groundedSynthesis: structured completion + bounded repair (Wave 3)
-- [ ] 19-11-PLAN.md — CitationChip extension + GroundedBanner/CitationGroup/ClaimBlock/GroundedAnswerCard (Wave 3)
+- [x] 19-11-PLAN.md — CitationChip extension + GroundedBanner/CitationGroup/ClaimBlock/GroundedAnswerCard (Wave 3)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
