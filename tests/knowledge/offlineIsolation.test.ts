@@ -5,6 +5,9 @@ import { createNote, permanentDeleteNote, updateNote } from '../../src/db/reposi
 import { getDocumentPublishStatuses } from '../../src/db/repositories/documentSetRepo';
 import { rankBM25 } from '../../src/utils/bm25';
 import { createKnowledgeClient, KnowledgeClientError } from '../../src/services/knowledge/knowledgeClient';
+import { runGroundedTurn, type GroundedTurnDeps, type GroundedTurnInput } from '../../src/services/ai/groundedTurn';
+import { packEvidence } from '../../src/services/ai/evidencePack';
+import { runLocalGroundedRetrieval } from '../../src/services/search/localGroundedRetrieval';
 
 const databases: TaskPlannerDatabase[] = [];
 
@@ -76,5 +79,208 @@ describe('optional daemon outage isolation', () => {
 
     await expect(client.triggerGraphRebuild('60000006-0000-4000-8000-000000000000', 'rebuild-1')).rejects.toThrow(KnowledgeClientError);
     await expect(client.triggerGraphRebuild('60000006-0000-4000-8000-000000000000', 'rebuild-1')).rejects.toMatchObject({ code: 'NETWORK_ERROR' });
+  });
+
+  it('runs grounded local-fallback turn with zero daemon retrieve egress when server fails network', async () => {
+    const fetcher = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+    vi.stubGlobal('fetch', fetcher);
+
+    const database = new TaskPlannerDatabase(`grounded-fallback-${crypto.randomUUID()}`);
+    databases.push(database);
+    await database.open();
+
+    const note = await createNote(
+      {
+        title: 'Quy trình thẻ tín dụng nội bộ',
+        body: 'Quy trình trích nợ tự động chạy ngày 25 hàng tháng cho toàn bộ thẻ tín dụng.',
+        type: 'document',
+      },
+      database
+    );
+
+    const setId = '10000000-0000-4000-8000-000000000001';
+    await database.documentSets.add({
+      id: setId,
+      name: 'Bộ quy trình thẻ',
+      documentIds: [note.id],
+      createdAt: note.createdAt,
+      updatedAt: note.updatedAt,
+    });
+
+    const client = createKnowledgeClient({
+      baseUrl: 'http://127.0.0.1:3001',
+      token: 'test-token',
+      fetcher,
+    });
+
+    const deps: GroundedTurnDeps = {
+      routeIntent: vi.fn().mockResolvedValue({ route: 'knowledge', confidence: 1 }),
+      routeScope: vi.fn().mockResolvedValue({
+        setTierAssignments: [{ setId, tier: 'REQUIRED', roleGroup: 'baseline' }],
+        comparisonMode: 'single',
+        routerSource: 'base_default',
+      }),
+      retrieveFederated: (req, sig) => client.retrieveFederated(req, sig),
+      runLocalBm25: (inp, d) => runLocalGroundedRetrieval(inp, d),
+      localBm25Deps: {
+        loadSetMembers: async (setIds) => {
+          const sets = await database.documentSets.where('id').anyOf(setIds).toArray();
+          return sets.flatMap((s) => (s.documentIds ?? []).map((docId) => ({ setId: s.id, setName: s.name, documentId: docId })));
+        },
+        loadNoteBody: async (docId) => {
+          const n = await database.notes.get(docId);
+          return n ? { title: n.title, body: n.body, updatedAt: n.updatedAt } : null;
+        },
+      },
+      packEvidence: (inp, opt) => packEvidence(inp, opt),
+      synthesizeGroundedAnswer: vi.fn().mockResolvedValue({
+        answer: {
+          schemaVersion: 1,
+          language: 'vi',
+          conclusion: 'Quy trình trích nợ tự động chạy ngày 25 hàng tháng.',
+          claims: [
+            {
+              id: 'C1',
+              text: 'Quy trình trích nợ tự động chạy ngày 25 hàng tháng.',
+              classification: 'DIRECT',
+              citationIds: ['L1'],
+              pathId: null,
+            },
+          ],
+          unsupportedParts: [],
+        },
+        attempts: [],
+        responseLanguage: 'vi',
+      }),
+      now: () => '2026-10-11T12:00:00.000Z',
+    };
+
+    const input: GroundedTurnInput = {
+      query: 'Quy trình trích nợ tự động chạy ngày nào?',
+      recentTurns: [],
+      signal: new AbortController().signal,
+      capabilities: { serverEnabled: true, modelConfigured: true },
+      config: {
+        endpoint: 'https://api.9router.com',
+        apiKey: 'test-key',
+        model: 'gpt-4o',
+        promptVersion: 'v1.0',
+        routerVersion: 'v1.0',
+      },
+      catalog: [{ setId, setName: 'Bộ quy trình thẻ', isBase: true, documentIds: [note.id] }],
+      recentSessionId: 'sess-1',
+    };
+
+    const result = await runGroundedTurn(input, deps);
+
+    expect(result.kind).toBe('grounded_answer');
+    if (result.kind === 'grounded_answer') {
+      expect(result.grounding.outcome).toBe('LOCAL_FALLBACK_SYNTHESIS');
+      expect(result.grounding.fallbackReason).toBe('NETWORK_ERROR');
+      expect(result.grounding.authority).toBe('local');
+      expect(result.grounding.citations[0]?.authority).toBe('local');
+      expect(result.grounding.citations[0]?.snapshotId).toBeNull();
+    }
+
+    // Verify fetcher called exactly once for initial failed retrieve, zero subsequent calls
+    const retrieveCalls = fetcher.mock.calls.filter((c) => String(c[0]).includes('/retrieve'));
+    expect(retrieveCalls.length).toBe(1);
+  });
+
+  it('runs grounded turn with serverEnabled: false with zero retrieve calls and SERVER_DISABLED', async () => {
+    const fetcher = vi.fn();
+    vi.stubGlobal('fetch', fetcher);
+
+    const database = new TaskPlannerDatabase(`server-disabled-${crypto.randomUUID()}`);
+    databases.push(database);
+    await database.open();
+
+    const note = await createNote(
+      {
+        title: 'Tài liệu không máy chủ',
+        body: 'Thông tin tài liệu cục bộ chỉ đọc.',
+        type: 'document',
+      },
+      database
+    );
+
+    const setId = '20000000-0000-4000-8000-000000000002';
+    await database.documentSets.add({
+      id: setId,
+      name: 'Bộ tài liệu cục bộ',
+      documentIds: [note.id],
+      createdAt: note.createdAt,
+      updatedAt: note.updatedAt,
+    });
+
+    const deps: GroundedTurnDeps = {
+      routeIntent: vi.fn().mockResolvedValue({ route: 'knowledge', confidence: 1 }),
+      routeScope: vi.fn().mockResolvedValue({
+        setTierAssignments: [{ setId, tier: 'REQUIRED', roleGroup: 'baseline' }],
+        comparisonMode: 'single',
+        routerSource: 'base_default',
+      }),
+      retrieveFederated: vi.fn(),
+      runLocalBm25: (inp, d) => runLocalGroundedRetrieval(inp, d),
+      localBm25Deps: {
+        loadSetMembers: async (setIds) => {
+          const sets = await database.documentSets.where('id').anyOf(setIds).toArray();
+          return sets.flatMap((s) => (s.documentIds ?? []).map((docId) => ({ setId: s.id, setName: s.name, documentId: docId })));
+        },
+        loadNoteBody: async (docId) => {
+          const n = await database.notes.get(docId);
+          return n ? { title: n.title, body: n.body, updatedAt: n.updatedAt } : null;
+        },
+      },
+      packEvidence: (inp, opt) => packEvidence(inp, opt),
+      synthesizeGroundedAnswer: vi.fn().mockResolvedValue({
+        answer: {
+          schemaVersion: 1,
+          language: 'vi',
+          conclusion: 'Thông tin tài liệu cục bộ chỉ đọc.',
+          claims: [
+            {
+              id: 'C1',
+              text: 'Thông tin tài liệu cục bộ chỉ đọc.',
+              classification: 'DIRECT',
+              citationIds: ['L1'],
+              pathId: null,
+            },
+          ],
+          unsupportedParts: [],
+        },
+        attempts: [],
+        responseLanguage: 'vi',
+      }),
+      now: () => '2026-10-11T12:00:00.000Z',
+    };
+
+    const input: GroundedTurnInput = {
+      query: 'Tài liệu cục bộ ghi gì?',
+      recentTurns: [],
+      signal: new AbortController().signal,
+      capabilities: { serverEnabled: false, modelConfigured: true },
+      config: {
+        endpoint: 'https://api.9router.com',
+        apiKey: 'test-key',
+        model: 'gpt-4o',
+        promptVersion: 'v1.0',
+        routerVersion: 'v1.0',
+      },
+      catalog: [{ setId, setName: 'Bộ tài liệu cục bộ', isBase: true, documentIds: [note.id] }],
+      recentSessionId: 'sess-2',
+    };
+
+    const result = await runGroundedTurn(input, deps);
+
+    expect(result.kind).toBe('grounded_answer');
+    if (result.kind === 'grounded_answer') {
+      expect(result.grounding.outcome).toBe('LOCAL_FALLBACK_SYNTHESIS');
+      expect(result.grounding.fallbackReason).toBe('SERVER_DISABLED');
+      expect(result.grounding.authority).toBe('local');
+    }
+
+    const retrieveCalls = fetcher.mock.calls.filter((c) => String(c[0]).includes('/retrieve'));
+    expect(retrieveCalls.length).toBe(0);
   });
 });

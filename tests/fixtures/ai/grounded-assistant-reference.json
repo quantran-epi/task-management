@@ -415,7 +415,8 @@
               "rawSnippet": "Ghi chú nâng cấp: Phiên bản 2 thay thế phiên bản 1.",
               "publishedContentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
               "snapshotId": "gsnap_11111111",
-              "hasConflict": false
+              "hasConflict": false,
+              "evidenceKind": "migration_record"
             }
           }
         ],
@@ -536,8 +537,8 @@
               "pathId": "P1",
               "snapshotId": "gsnap_11111111",
               "nodeUrns": [
-                "urn:taskmate:node:process:60000006",
-                "urn:taskmate:node:container:60000006"
+                "urn:plannermate:core:process:60000006",
+                "urn:plannermate:core:container:60000006"
               ],
               "edgeFactKeys": [
                 "1111111111111111111111111111111111111111111111111111111111111111"
@@ -696,9 +697,9 @@
               "pathId": "P1",
               "snapshotId": "gsnap_11111111",
               "nodeUrns": [
-                "urn:taskmate:node:job:JOB_CARD_CALC",
-                "urn:taskmate:node:procedure:PKG_CALC.RUN_INTEREST",
-                "urn:taskmate:node:table:TBL_CARD_INTEREST"
+                "urn:plannermate:core:job:JOB_CARD_CALC",
+                "urn:plannermate:core:procedure:PKG_CALC.RUN_INTEREST",
+                "urn:plannermate:core:table:TBL_CARD_INTEREST"
               ],
               "edgeFactKeys": [
                 "2222222222222222222222222222222222222222222222222222222222222222",
@@ -888,10 +889,10 @@
               "pathId": "P1",
               "snapshotId": "gsnap_11111111",
               "nodeUrns": [
-                "urn:taskmate:node:table:TBL_CARD_LIMIT",
-                "urn:taskmate:node:view:VW_CARD_AVAILABLE",
-                "urn:taskmate:node:service:SVC_AUTH_CHECK",
-                "urn:taskmate:node:gateway:POS_GATEWAY"
+                "urn:plannermate:core:table:TBL_CARD_LIMIT",
+                "urn:plannermate:core:view:VW_CARD_AVAILABLE",
+                "urn:plannermate:core:service:SVC_AUTH_CHECK",
+                "urn:plannermate:core:gateway:POS_GATEWAY"
               ],
               "edgeFactKeys": [
                 "4444444444444444444444444444444444444444444444444444444444444444",
@@ -1257,18 +1258,10 @@
       "claims": [
         {
           "id": "C1",
-          "text": "CYTP1002 quy định mức phí thường niên 500,000 VND.",
+          "text": "CYTP1002 quy định mức phí thường niên 500,000 VND trong Biểu phí 2024, trong khi CYTP1003 áp dụng 800,000 VND trong Biểu phí 2025.",
           "classification": "DIRECT",
           "citationIds": [
-            "S1"
-          ],
-          "pathId": null
-        },
-        {
-          "id": "C2",
-          "text": "CYTP1003 quy định mức phí thường niên 800,000 VND.",
-          "classification": "DIRECT",
-          "citationIds": [
+            "S1",
             "S2"
           ],
           "pathId": null
@@ -1417,18 +1410,10 @@
       "claims": [
         {
           "id": "C1",
-          "text": "In SIT environment, connection timeout is configured to 60 seconds.",
+          "text": "Connection timeout varies by Environment: 60 seconds in SIT compared to 15 seconds in PROD.",
           "classification": "DIRECT",
           "citationIds": [
-            "S1"
-          ],
-          "pathId": null
-        },
-        {
-          "id": "C2",
-          "text": "In PROD environment, connection timeout is strictly limited to 15 seconds.",
-          "classification": "DIRECT",
-          "citationIds": [
+            "S1",
             "S2"
           ],
           "pathId": null
@@ -1572,18 +1557,10 @@
       "claims": [
         {
           "id": "C1",
-          "text": "Báo cáo A ghi nhận giờ chốt là 17:00.",
+          "text": "Giờ chốt số dư có sự mâu thuẫn giữa 17:00 trong Báo cáo A và 18:30 trong Báo cáo B.",
           "classification": "DIRECT",
           "citationIds": [
-            "S1"
-          ],
-          "pathId": null
-        },
-        {
-          "id": "C2",
-          "text": "Báo cáo B ghi nhận giờ chốt là 18:30.",
-          "classification": "DIRECT",
-          "citationIds": [
+            "S1",
             "S2"
           ],
           "pathId": null

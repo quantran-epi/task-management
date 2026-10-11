@@ -434,3 +434,27 @@ export function tagRetrievalConflicts(
   };
 }
 
+export interface CandidateSourceOccurrence {
+  readonly documentId: string;
+  readonly evidenceClass: 'BUSINESS_APPROVED' | 'OBSERVED' | 'INFERRED';
+  readonly lineStart?: number;
+}
+
+/**
+ * Pick representative source when UI needs a single source reference.
+ * Note: firstSeenInDoc is NOT authority (D-34). All supporting occurrences must be cited.
+ * Selection priority: (evidenceClass weight) -> (stable documentId).
+ */
+export function pickRepresentativeSource<T extends CandidateSourceOccurrence>(
+  sources: readonly T[]
+): T | null {
+  if (sources.length === 0) return null;
+  const sorted = [...sources].sort((a, b) => {
+    const classDiff = CLASSIFICATION_STRENGTH[a.evidenceClass] - CLASSIFICATION_STRENGTH[b.evidenceClass];
+    if (classDiff !== 0) return classDiff;
+    return a.documentId.localeCompare(b.documentId);
+  });
+  return sorted[0] ?? null;
+}
+
+
