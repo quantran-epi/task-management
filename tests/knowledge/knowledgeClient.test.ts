@@ -57,7 +57,7 @@ describe('knowledge server configuration', () => {
     vi.restoreAllMocks();
   });
 
-  it('allows HTTPS and loopback HTTP only, normalizes one base URL, and warns for loopback', () => {
+  it('allows HTTPS and HTTP, normalizes one base URL, and warns for HTTP', () => {
     expect(validateKnowledgeBaseUrl('https://knowledge.example.com///')).toEqual({
       baseUrl: 'https://knowledge.example.com',
       loopbackHttpWarning: false,
@@ -66,14 +66,12 @@ describe('knowledge server configuration', () => {
       baseUrl: 'http://localhost:4100',
       loopbackHttpWarning: true,
     });
-    expect(validateKnowledgeBaseUrl('http://127.0.0.1:4100')).toMatchObject({
+    expect(validateKnowledgeBaseUrl('http://192.168.1.100:30080')).toEqual({
+      baseUrl: 'http://192.168.1.100:30080',
       loopbackHttpWarning: true,
     });
-    expect(validateKnowledgeBaseUrl('http://[::1]:4100')).toMatchObject({
-      loopbackHttpWarning: true,
-    });
-    expect(() => validateKnowledgeBaseUrl('http://knowledge.example.com')).toThrow(
-      'HTTPS'
+    expect(() => validateKnowledgeBaseUrl('ftp://knowledge.example.com')).toThrow(
+      'HTTP'
     );
     expect(() => validateKnowledgeBaseUrl('https://knowledge.example.com/api/v1')).toThrow(
       'base URL'

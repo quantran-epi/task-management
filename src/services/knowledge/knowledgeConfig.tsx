@@ -29,15 +29,8 @@ export function validateKnowledgeBaseUrl(value: string): ValidatedKnowledgeBaseU
   if (url.pathname && !/^\/+$/u.test(url.pathname)) {
     throw new Error('Enter only the knowledge server base URL without /api/v1 paths');
   }
-  const loopback =
-    url.hostname === 'localhost' ||
-    url.hostname === '127.0.0.1' ||
-    url.hostname === '[::1]';
-  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) {
-    throw new Error('Knowledge server requires HTTPS except for loopback HTTP');
-  }
   if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-    throw new Error('Knowledge server requires HTTPS except for loopback HTTP');
+    throw new Error('Knowledge server requires HTTP or HTTPS');
   }
   return {
     baseUrl: `${url.protocol}//${url.host}`,
