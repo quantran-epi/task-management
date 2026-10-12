@@ -404,7 +404,7 @@ Plans:
 **Goal:** Deploy the knowledge stack to the SHB internal Kubernetes cluster and prove process 60000006 end-to-end through TaskMate UI against persistent Neo4j storage.
 **Requirements**: D-01..D-23
 **Depends on:** Phase 19
-**Plans:** 3/5 plans complete
+**Plans:** 4/5 plans complete
 
 Plans:
 **Wave 1**
@@ -418,7 +418,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 19.1-04-PLAN.md — Package Kubernetes manifests (neo4j StatefulSet, knowledge-server Deployment) and secret runbook (Wave 3)
+- [x] 19.1-04-PLAN.md — Package Kubernetes manifests (neo4j StatefulSet, knowledge-server Deployment) and secret runbook (Wave 3)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 

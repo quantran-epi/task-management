@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Hybrid GraphRAG Knowledge Assistant MVP
 status: executing
-stopped_at: Completed 19.1-03-PLAN.md
-last_updated: "2026-10-12T08:15:00.000Z"
-last_activity: 2026-10-12 -- Phase 19.1 Plan 03 complete
+stopped_at: Completed 19.1-04-PLAN.md
+last_updated: "2026-10-12T08:25:00.000Z"
+last_activity: 2026-10-12 -- Phase 19.1 Plan 04 complete
 progress:
   total_phases: 17
   completed_phases: 15
   total_plans: 97
-  completed_plans: 95
-  percent: 91
+  completed_plans: 96
+  percent: 92
 ---
 
 # Project State
@@ -26,12 +26,12 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 ## Current Position
 
 Phase: 19.1 (production-neo4j-integration-live-retrieval-validation) — EXECUTING
-Plan: 3 of 5
+Plan: 4 of 5
 Status: Executing Phase 19.1
-Last activity: 2026-10-12 -- Phase 19.1 Plan 03 complete
-Stopped at: Completed 19.1-03-PLAN.md
+Last activity: 2026-10-12 -- Phase 19.1 Plan 04 complete
+Stopped at: Completed 19.1-04-PLAN.md
 
-Progress: [█████████░] 91%
+Progress: [█████████░] 92%
 
 ### Quick Tasks Completed
 
@@ -184,6 +184,7 @@ Progress: [█████████░] 91%
 | Phase 19.1 P01 | 15m | 2 tasks | 3 files |
 | Phase 19.1 P02 | 12m | 2 tasks | 4 files |
 | Phase 19.1 P03 | 8m | 1 tasks | 3 files |
+| Phase 19.1 P04 | 10m | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -191,6 +192,8 @@ Progress: [█████████░] 91%
 
 Recent decisions logged in PROJECT.md:
 
+- [Phase 19.1 Plan 04]: Package production knowledge stack in exactly two K8s manifests (k8s/neo4j.yaml StatefulSet and k8s/knowledge-server.yaml Deployment) with zero hardcoded credentials, relying strictly on secretKeyRef and documented operator pre-flight (D-01..D-05).
+- [Phase 19.1 Plan 04]: Keep Neo4j Bolt/HTTP ports strictly internal behind ClusterIP service; expose knowledge-server via NodePort 30080 for TaskMate access (D-01..D-04).
 - [Phase 19.1 Plan 03]: Enforce strict error taxonomy via isTransportFailure and isFallbackAllowed in knowledgeClient.ts and groundedTurn.ts, preventing silent BM25 fallback for auth, config, invalid response, and abort errors (D-21, D-22).
 - [Phase 19.1 Plan 02]: Implement NineRouterQueryPlanner using native fetch against /v1/chat/completions with response_format json_object and zero Cypher string leakage (D-11, D-12).
 - [Phase 19.1 Plan 02]: Validate model completions with LogicalQueryPlanSchema and server-resolved candidates; enforce bounded 1-shot repair before returning PLANNER_SCHEMA_FAILURE (D-15, D-16, D-17).
