@@ -47,10 +47,6 @@ export const KnowledgeServerConfigCard: React.FC<KnowledgeServerConfigCardProps>
   }, [config.ready, config.enabled, config.baseUrl]);
 
   const validationMessage = baseUrl ? invalidUrlMessage(baseUrl) : '';
-  const loopbackWarning = (() => {
-    if (!baseUrl || validationMessage) return false;
-    return validateKnowledgeBaseUrl(baseUrl).loopbackHttpWarning;
-  })();
 
   const showDiagnostic = (next: Diagnostic) => {
     setDiagnostic(next);
@@ -167,23 +163,11 @@ export const KnowledgeServerConfigCard: React.FC<KnowledgeServerConfigCardProps>
           />
         </Form.Item>
 
-        {loopbackWarning && (
-          <Alert
-            type="warning"
-            showIcon
-            message="HTTP chỉ được phép cho máy cục bộ."
-            style={{ marginBottom: 16 }}
-          />
-        )}
-
-        <Form.Item
-          label="Token phiên"
-          extra="Chỉ giữ trong bộ nhớ và sẽ mất khi tải lại ứng dụng."
-        >
+        <Form.Item label="Bearer Token">
           <Input.Password
             value={config.token}
             onChange={(event) => config.setToken(event.target.value)}
-            aria-label="Token phiên"
+            aria-label="Bearer Token"
             autoComplete="new-password"
           />
         </Form.Item>

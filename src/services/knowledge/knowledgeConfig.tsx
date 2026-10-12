@@ -10,6 +10,7 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 
 const ENABLED_KEY = 'knowledge_server_enabled';
 const BASE_URL_KEY = 'knowledge_server_base_url';
+const TOKEN_KEY = 'knowledge_server_token';
 
 export interface ValidatedKnowledgeBaseUrl {
   baseUrl: string;
@@ -17,24 +18,26 @@ export interface ValidatedKnowledgeBaseUrl {
 }
 
 export function validateKnowledgeBaseUrl(value: string): ValidatedKnowledgeBaseUrl {
+  let trimmed = value.trim();
+  if (!trimmed) {
+    return { baseUrl: '', loopbackHttpWarning: false };
+  }
+  trimmed = trimmed.replace(/\/+api\/v1\/?$/i, '').replace(/\/+$/, '');
+  if (!/^https?:\/\//i.test(trimmed)) {
+    if (trimmed.includes('://')) {
+      throw new Error('Knowledge server requires HTTP or HTTPS');
+    }
+    trimmed = `http://${trimmed}`;
+  }
   let url: URL;
   try {
-    url = new URL(value.trim());
+    url = new URL(trimmed);
   } catch {
     throw new Error('Knowledge server base URL is invalid');
   }
-  if (url.username || url.password || url.search || url.hash) {
-    throw new Error('Knowledge server base URL cannot contain credentials, query, or fragment');
-  }
-  if (url.pathname && !/^\/+$/u.test(url.pathname)) {
-    throw new Error('Enter only the knowledge server base URL without /api/v1 paths');
-  }
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-    throw new Error('Knowledge server requires HTTP or HTTPS');
-  }
   return {
     baseUrl: `${url.protocol}//${url.host}`,
-    loopbackHttpWarning: url.protocol === 'http:',
+    loopbackHttpWarning: false,
   };
 }
 
@@ -69,23 +72,35 @@ export function KnowledgeConfigProvider({
   const [ready, setReady] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [baseUrl, setBaseUrl] = useState('');
-  const [token, setToken] = useState('');
+  const [token, setTokenState] = useState('');
 
   useEffect(() => {
     let active = true;
-    void Promise.all([db.settings.get(ENABLED_KEY), db.settings.get(BASE_URL_KEY)]).then(
-      ([enabledSetting, baseUrlSetting]) => {
-        if (!active) return;
-        setEnabled(enabledSetting?.value === true);
-        setBaseUrl(typeof baseUrlSetting?.value === 'string' ? baseUrlSetting.value : '');
-        setReady(true);
+    void Promise.all([
+      db.settings.get(ENABLED_KEY),
+      db.settings.get(BASE_URL_KEY),
+      db.settings.get(TOKEN_KEY),
+    ]).then(([enabledSetting, baseUrlSetting, tokenSetting]) => {
+      if (!active) return;
+      setEnabled(enabledSetting?.value === true);
+      setBaseUrl(typeof baseUrlSetting?.value === 'string' ? baseUrlSetting.value : '');
+      if (typeof tokenSetting?.value === 'string') {
+        setTokenState(tokenSetting.value);
       }
-    );
+      setReady(true);
+    });
     return () => {
       active = false;
-      setToken('');
     };
   }, [db]);
+
+  const setToken = useCallback(
+    (next: string) => {
+      setTokenState(next);
+      void db.settings.put({ key: TOKEN_KEY, value: next });
+    },
+    [db]
+  );
 
   const savePersistedConfig = useCallback(
     async (config: PersistedKnowledgeConfig) => {

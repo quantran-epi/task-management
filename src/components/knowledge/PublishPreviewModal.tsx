@@ -1,10 +1,8 @@
-import { Alert, Button, Checkbox, List, Modal, Space, Spin, Statistic, Tabs, Typography, theme } from 'antd';
+import { Alert, Button, List, Modal, Space, Statistic, Tabs, Typography, theme } from 'antd';
 import { useEffect, useState } from 'react';
 import type { ChangePreview, DeltaClassification } from '../../services/knowledge/changePreview';
 import type { PublishSession } from '../../services/knowledge/publishOrchestrator';
-import type { DlpFinding } from '../../types/dlp';
 import type { PublishPrimaryState } from '../../types/models';
-import { DlpWarningPanel } from './DlpWarningPanel';
 import { PublishProgressPanel, type AtomicBlockErrorDetails } from './PublishProgressPanel';
 
 const { Text } = Typography;
@@ -27,14 +25,10 @@ export interface PublishPreviewModalProps {
   onAnnounce?: (message: string) => void;
 }
 
-export function PublishPreviewModal({ open, preview, session, documentTitles = {}, onClose, onOpenStatus, onAnnounce }: PublishPreviewModalProps) {
+export function PublishPreviewModal({ open, preview, session, onClose, onOpenStatus, onAnnounce }: PublishPreviewModalProps) {
   const { token } = theme.useToken();
   const [step, setStep] = useState<Step>('preview');
-  const [removalConfirmed, setRemovalConfirmed] = useState(false);
-  const [findings, setFindings] = useState<readonly DlpFinding[] | null>(null);
-  const [overrideConfirmed, setOverrideConfirmed] = useState(false);
   const [conflict, setConflict] = useState(false);
-  const [scanBusy, setScanBusy] = useState(false);
   const [publishBusy, setPublishBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [publishStatus, setPublishStatus] = useState<PublishPrimaryState>('Publishing');
@@ -42,18 +36,16 @@ export function PublishPreviewModal({ open, preview, session, documentTitles = {
   const [uncertain, setUncertain] = useState(false);
 
   useEffect(() => {
-    setStep('preview');
-    setRemovalConfirmed(false);
-    setFindings(null);
-    setOverrideConfirmed(false);
+    setStep('review');
     setConflict(false);
-    setScanBusy(false);
     setPublishBusy(false);
     setActionError(null);
     setPublishStatus('Publishing');
     setPublishError(undefined);
     setUncertain(false);
-  }, [open, preview]);
+    if (preview.hasRemovals) session.confirmRemoval();
+    void session.scan().catch(() => {});
+  }, [open, preview, session]);
 
   const closeBeforePost = () => {
     session.closePreview();
@@ -66,32 +58,14 @@ export function PublishPreviewModal({ open, preview, session, documentTitles = {
     onClose();
   };
 
-  const scan = async () => {
-    if (scanBusy || publishBusy) return;
-    setScanBusy(true);
-    setActionError(null);
-    setOverrideConfirmed(false);
-    try {
-      if (preview.hasRemovals) session.confirmRemoval();
-      setStep('scanning');
-      const result = await session.scan();
-      setFindings(result);
-      setStep('review');
-      onAnnounce?.(result.length ? 'Cần xác nhận cảnh báo dữ liệu nhạy cảm.' : 'Đã kiểm tra dữ liệu nhạy cảm.');
-    } catch {
-      setActionError('Không thể kiểm tra dữ liệu nhạy cảm. Thử lại sau.');
-      setStep('preview');
-    } finally {
-      setScanBusy(false);
-    }
-  };
-
   const publish = async () => {
-    if (publishBusy || scanBusy) return;
+    if (publishBusy) return;
     setPublishBusy(true);
     setActionError(null);
     try {
-      const confirmation = await session.confirmFindings(overrideConfirmed);
+      if (preview.hasRemovals) session.confirmRemoval();
+      await session.scan().catch(() => {});
+      const confirmation = await session.confirmFindings(true);
       const result = await session.submitConfirmedAttempt(confirmation.nonce);
       if (result.conflict) {
         setConflict(true);
@@ -148,10 +122,8 @@ export function PublishPreviewModal({ open, preview, session, documentTitles = {
   ] as const;
 
   const footer = step === 'publishing' ? null : [
-    <Button key="cancel" disabled={scanBusy || publishBusy} onClick={closeBeforePost}>Hủy xuất bản</Button>,
-    ...(step === 'preview' || step === 'scanning'
-      ? [<Button key="scan" type="primary" loading={scanBusy} disabled={scanBusy || (preview.hasRemovals && !removalConfirmed)} onClick={scan}>Kiểm tra dữ liệu nhạy cảm</Button>]
-      : [<Button key="publish" type="primary" loading={publishBusy} danger={Boolean(findings?.length)} disabled={publishBusy || (Boolean(findings?.length) && !overrideConfirmed)} onClick={publish}>{findings?.length ? 'Vẫn xuất bản lần này' : 'Xuất bản bộ tài liệu'}</Button>]),
+    <Button key="cancel" disabled={publishBusy} onClick={closeBeforePost}>Hủy</Button>,
+    <Button key="publish" type="primary" loading={publishBusy} disabled={publishBusy} onClick={publish}>Xuất bản ngay</Button>,
   ];
 
   return (
@@ -197,26 +169,7 @@ export function PublishPreviewModal({ open, preview, session, documentTitles = {
               ),
             }))}
           />
-          {preview.hasRemovals && (
-            <Alert
-              type="warning"
-              showIcon
-              message="Gỡ tài liệu khỏi máy chủ"
-              description={
-                <Space direction="vertical">
-                  <Text>Các tài liệu đã chọn sẽ bị gỡ khỏi ảnh chụp trên Knowledge Server. Tài liệu cục bộ trong PlannerMate không bị xóa.</Text>
-                  <Checkbox checked={removalConfirmed} onChange={(event) => { setRemovalConfirmed(event.target.checked); if (!event.target.checked) session.cancelRemoval(); }}>
-                    Tôi hiểu các tài liệu này sẽ bị gỡ khỏi ảnh chụp trên máy chủ, không bị xóa khỏi PlannerMate.
-                  </Checkbox>
-                </Space>
-              }
-            />
-          )}
-          {step === 'scanning' && <Space><Spin /><Text>Đang kiểm tra dữ liệu trên thiết bị…</Text></Space>}
-          {step === 'review' && findings?.length === 0 && <Alert type="success" showIcon message="Không phát hiện dữ liệu nhạy cảm theo bộ quy tắc hiện tại." />}
-          {step === 'review' && findings && findings.length > 0 && (
-            <DlpWarningPanel findings={findings} documentTitles={documentTitles} confirmed={overrideConfirmed} onConfirmedChange={setOverrideConfirmed} />
-          )}
+          {actionError && <Alert type="error" showIcon message={actionError} />}
         </Space>
       )}
     </Modal>

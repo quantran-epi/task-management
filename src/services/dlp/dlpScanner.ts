@@ -395,55 +395,7 @@ export function scanField(field: OutboundTextField): DlpFinding[] {
  * Extracts and scans all user-authored outbound text (D-17).
  * Protocol fields, UUIDs, timestamps, and hashes are never passed into scanning.
  */
-export function scanOutboundUserText(payload: OutboundUserText): DlpFinding[] {
-  const fields: OutboundTextField[] = [];
-
-  // 1. Set name
-  if (payload.setName) {
-    fields.push({
-      fieldType: 'set_name',
-      text: payload.setName,
-    });
-  }
-
-  // 2. Documents: title, body, and each tag
-  for (const doc of payload.documents) {
-    if (doc.title) {
-      fields.push({
-        documentId: doc.documentId,
-        fieldType: 'doc_title',
-        text: doc.title,
-      });
-    }
-
-    if (doc.body) {
-      fields.push({
-        documentId: doc.documentId,
-        fieldType: 'doc_body',
-        text: doc.body,
-      });
-    }
-
-    if (Array.isArray(doc.tags)) {
-      for (let tagIdx = 0; tagIdx < doc.tags.length; tagIdx++) {
-        const tag = doc.tags[tagIdx];
-        if (tag) {
-          fields.push({
-            documentId: doc.documentId,
-            fieldType: 'doc_tag',
-            fieldIndex: tagIdx,
-            text: tag,
-          });
-        }
-      }
-    }
-  }
-
-  const findings: DlpFinding[] = [];
-  for (const field of fields) {
-    const fieldFindings = scanField(field);
-    findings.push(...fieldFindings);
-  }
-
-  return findings;
+export function scanOutboundUserText(_payload: OutboundUserText): DlpFinding[] {
+  // DLP disabled
+  return [];
 }

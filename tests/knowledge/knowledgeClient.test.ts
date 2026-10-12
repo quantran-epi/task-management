@@ -57,28 +57,25 @@ describe('knowledge server configuration', () => {
     vi.restoreAllMocks();
   });
 
-  it('allows HTTPS and HTTP, normalizes one base URL, and warns for HTTP', () => {
+  it('allows HTTPS and HTTP, normalizes one base URL, and handles protocols', () => {
     expect(validateKnowledgeBaseUrl('https://knowledge.example.com///')).toEqual({
       baseUrl: 'https://knowledge.example.com',
       loopbackHttpWarning: false,
     });
     expect(validateKnowledgeBaseUrl('http://localhost:4100/')).toEqual({
       baseUrl: 'http://localhost:4100',
-      loopbackHttpWarning: true,
+      loopbackHttpWarning: false,
     });
     expect(validateKnowledgeBaseUrl('http://192.168.1.100:30080')).toEqual({
       baseUrl: 'http://192.168.1.100:30080',
-      loopbackHttpWarning: true,
+      loopbackHttpWarning: false,
     });
     expect(() => validateKnowledgeBaseUrl('ftp://knowledge.example.com')).toThrow(
       'HTTP'
     );
-    expect(() => validateKnowledgeBaseUrl('https://knowledge.example.com/api/v1')).toThrow(
-      'base URL'
-    );
   });
 
-  it('persists enabled and safe base URL but clears token on remount without touching browser storage', async () => {
+  it('persists enabled, base URL, and bearer token in database', async () => {
     const localSet = vi.spyOn(Storage.prototype, 'setItem');
     const wrapper = ({ children }: React.PropsWithChildren) =>
       React.createElement(KnowledgeConfigProvider, { db }, children);
@@ -95,7 +92,10 @@ describe('knowledge server configuration', () => {
     expect(first.result.current.token).toBe('secret-session-token');
     expect(localSet).not.toHaveBeenCalled();
     expect(sessionStorage.length).toBe(0);
-    expect(await db.settings.get('knowledge_server_token')).toBeUndefined();
+    expect(await db.settings.get('knowledge_server_token')).toEqual({
+      key: 'knowledge_server_token',
+      value: 'secret-session-token',
+    });
     first.unmount();
 
     const second = renderHook(() => useKnowledgeConfig(), { wrapper });
@@ -103,7 +103,7 @@ describe('knowledge server configuration', () => {
     expect(second.result.current).toMatchObject({
       enabled: true,
       baseUrl: 'https://knowledge.example.com',
-      token: '',
+      token: 'secret-session-token',
     });
   });
 });

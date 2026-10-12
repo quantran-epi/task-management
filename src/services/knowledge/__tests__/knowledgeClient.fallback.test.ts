@@ -9,7 +9,6 @@ import {
   type GroundedTurnInput,
   type GroundedTurnDeps,
 } from '../../ai/groundedTurn';
-import type { FederatedRetrievalResponse } from '../retrievalProtocol';
 import type { LocalGroundedResult } from '../../search/localGroundedRetrieval';
 import type { EvidencePack } from '../../ai/evidencePack';
 import type { GroundedAnswer } from '../../ai/groundedAnswerSchemas';
@@ -105,7 +104,13 @@ describe('groundedTurn error taxonomy and fallback allowlist integration (D-21, 
         sectionAnchor: 'Section 1',
         lineStart: 1,
         lineEnd: 5,
-        citedExcerpt: 'Khách hàng xác nhận OTP SMS.',
+        startOffset: 0,
+        endOffset: 30,
+        rawSnippet: 'Khách hàng xác nhận OTP SMS.',
+        contentHash: 'a'.repeat(64),
+        score: 1.0,
+        matchedTerms: ['OTP'],
+        setMemberships: [{ setId: '10000000-0000-0000-0000-000000000001', setName: 'Core' }],
       },
     ],
     strongEvidence: true,
@@ -159,9 +164,13 @@ describe('groundedTurn error taxonomy and fallback allowlist integration (D-21, 
       catalog: [
         {
           setId: '10000000-0000-0000-0000-000000000001',
-          name: 'Core Banking',
+          canonicalName: 'Core Banking',
+          domain: 'Core',
+          environment: null,
+          version: null,
           aliases: ['core', 'cytp'],
-          roleGroup: 'baseline',
+          relation: null,
+          isBase: true,
         },
       ],
       recentSessionId: 'sess-1',
@@ -183,8 +192,8 @@ describe('groundedTurn error taxonomy and fallback allowlist integration (D-21, 
       retrieveFederated: vi.fn(),
       runLocalBm25: vi.fn().mockResolvedValue(dummyLocalResult),
       localBm25Deps: {
-        db: {} as any,
-        tokenize: (q) => q.split(' '),
+        loadSetMembers: vi.fn().mockResolvedValue([]),
+        loadNoteBody: vi.fn().mockResolvedValue(null),
       },
       packEvidence: vi.fn().mockReturnValue(dummyLocalPack),
       synthesizeGroundedAnswer: vi.fn().mockResolvedValue({
