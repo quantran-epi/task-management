@@ -85,7 +85,7 @@ describe('AIChatDrawer - Desktop Notification on completion', () => {
     );
 
     const textarea = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
-    fireEvent.change(textarea, { target: { value: 'Xin chào' } });
+    fireEvent.change(textarea, { target: { value: 'Tạo công việc kiểm tra thông báo' } });
     fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
     await waitFor(() => {
@@ -122,7 +122,7 @@ describe('AIChatDrawer - Desktop Notification on completion', () => {
     );
 
     const textarea = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
-    fireEvent.change(textarea, { target: { value: 'Tin nhắn dài' } });
+    fireEvent.change(textarea, { target: { value: 'Cập nhật tiến độ dự án' } });
     fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
     await waitFor(() => {
@@ -159,7 +159,7 @@ describe('AIChatDrawer - Desktop Notification on completion', () => {
     );
 
     const textarea = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
-    fireEvent.change(textarea, { target: { value: 'Đang xem tab' } });
+    fireEvent.change(textarea, { target: { value: 'Tạo công việc kiểm tra tab' } });
     fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
     await waitFor(() => {

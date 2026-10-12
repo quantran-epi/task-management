@@ -49,13 +49,17 @@ describe('document-set management', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Từ thư mục hiện tại' }));
     expect(screen.getByText('Tài liệu thêm hoặc di chuyển sau này không tự thay đổi bộ này.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
-    expect(onSave).toHaveBeenLastCalledWith({ name: 'x'.repeat(120), documentIds: ['doc-a', 'doc-b'] });
+    expect(onSave).toHaveBeenLastCalledWith(
+      expect.objectContaining({ name: 'x'.repeat(120), documentIds: ['doc-a', 'doc-b'] })
+    );
 
     rerender(<DocumentSetForm key="empty" notes={notes} onSave={onSave} />);
     fireEvent.change(screen.getByLabelText('Tên bộ tài liệu'), { target: { value: 'Bộ trống' } });
     fireEvent.click(screen.getByRole('radio', { name: 'Bộ trống' }));
     fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
-    expect(onSave).toHaveBeenLastCalledWith({ name: 'Bộ trống', documentIds: [] });
+    expect(onSave).toHaveBeenLastCalledWith(
+      expect.objectContaining({ name: 'Bộ trống', documentIds: [] })
+    );
   });
 
   it('adds, removes, and reorders members with labeled controls; save never publishes', () => {
@@ -78,7 +82,9 @@ describe('document-set management', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Xong' }));
     fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
 
-    expect(onSave).toHaveBeenCalledWith({ name: 'Bộ nghiệp vụ', documentIds: ['doc-b', 'doc-c'] });
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Bộ nghiệp vụ', documentIds: ['doc-b', 'doc-c'] })
+    );
     expect(onPublish).not.toHaveBeenCalled();
   });
 

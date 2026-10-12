@@ -142,6 +142,7 @@ function toPersistedCitations(
     snapshotId: source.snapshotId,
     publishedContentHash: source.publishedContentHash,
     citedExcerpt: source.citedExcerpt,
+    evidenceKind: source.evidenceKind,
   }));
 }
 
@@ -679,6 +680,7 @@ export async function synthesizeFromStoredEvidence(
   storedGrounding: ChatMessageGrounding,
   deps: GroundedTurnDeps,
   options?: {
+    query?: string;
     endpoint?: string;
     apiKey?: string;
     model?: string;
@@ -707,6 +709,7 @@ export async function synthesizeFromStoredEvidence(
       publishedContentHash: c.publishedContentHash,
       citedExcerpt: c.citedExcerpt,
       setMemberships: [],
+      evidenceKind: c.evidenceKind,
     };
   }
 
@@ -753,7 +756,7 @@ export async function synthesizeFromStoredEvidence(
   const promptVersion = options?.promptVersion ?? storedGrounding.promptVersion;
 
   const synthResult = await deps.synthesizeGroundedAnswer({
-    query: '',
+    query: options?.query ?? '',
     pack: rebuiltPack,
     endpoint,
     apiKey,
@@ -771,6 +774,10 @@ export async function synthesizeFromStoredEvidence(
 
   const newGrounding: ChatMessageGrounding = {
     ...storedGrounding,
+    outcome:
+      storedGrounding.authority === 'server'
+        ? 'READY'
+        : 'LOCAL_FALLBACK_SYNTHESIS',
     answer: synthResult.answer,
     modelId: model,
     createdAt: nowIso,

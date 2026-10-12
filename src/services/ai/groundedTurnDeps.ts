@@ -26,6 +26,7 @@ export interface GroundedTurnRuntimeHooks {
     storedGrounding: ChatMessageGrounding,
     deps: GroundedTurnDeps,
     options?: {
+      query?: string;
       endpoint?: string;
       apiKey?: string;
       model?: string;
@@ -121,6 +122,7 @@ export async function executeSynthesizeFromStoredEvidence(
   storedGrounding: ChatMessageGrounding,
   deps: GroundedTurnDeps,
   options?: {
+    query?: string;
     endpoint?: string;
     apiKey?: string;
     model?: string;

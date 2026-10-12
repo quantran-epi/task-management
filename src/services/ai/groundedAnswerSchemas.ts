@@ -77,6 +77,9 @@ export const PersistedCitationSchema = z
     snapshotId: SnapshotIdSchema.nullable(),
     publishedContentHash: HashSchema.nullable(),
     citedExcerpt: z.string().min(1).max(1200),
+    evidenceKind: z
+      .enum(['policy_change', 'release_note', 'migration_record', 'other'])
+      .optional(),
   })
   .superRefine((citation, ctx) => {
     if (citation.lineEnd < citation.lineStart) {

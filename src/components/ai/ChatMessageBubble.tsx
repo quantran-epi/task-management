@@ -239,7 +239,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
     const candidateChips = (g.citations ?? []).map((c) => ({
       id: c.documentId,
       label: c.documentTitle,
-      urn: `urn:plannermate:docs:doc:${c.documentId}`,
+      urn: c.sectionAnchor || c.citedExcerpt || `urn:plannermate:docs:doc:${c.documentId}`,
     }));
 
     const candidatesSlot = g.outcome === 'NEEDS_CLARIFICATION' ? (

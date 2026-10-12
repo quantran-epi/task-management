@@ -367,6 +367,33 @@ export const BackupDocumentSetRecordSchema = z.object({
   name: z.string().trim().min(1).max(120),
   description: z.string().optional(),
   documentIds: z.array(uuidSchema),
+  preset: z
+    .enum([
+      'Chung',
+      'TheoMoiTruong',
+      'TheoModule',
+      'TheoPhienBan',
+      'BoSung',
+      'TuyChinh',
+    ])
+    .optional(),
+  scope: z
+    .object({
+      domain: z.string().min(1),
+      environment: z.string().nullable(),
+      version: z.string().nullable(),
+    })
+    .optional(),
+  aliases: z.array(z.string()).optional(),
+  relations: z
+    .array(
+      z.object({
+        kind: z.enum(['EXTENDS', 'SUPPLEMENTS', 'SUPERSEDES']),
+        targetSetId: uuidSchema,
+      })
+    )
+    .optional(),
+  isBase: z.boolean().optional(),
   createdAt: isoDateTimeSchema,
   updatedAt: isoDateTimeSchema,
 });

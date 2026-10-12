@@ -94,6 +94,7 @@ export function DocumentSetForm({
   const [supplementTargetSetId, setSupplementTargetSetId] = useState<string>(
     initialSet?.relations?.[0]?.targetSetId ?? ''
   );
+  const [customEnvSelected, setCustomEnvSelected] = useState<boolean>(false);
   const [activeCollapseKeys, setActiveCollapseKeys] = useState<string[]>([]);
   const [submittedAttempt, setSubmittedAttempt] = useState<boolean>(false);
 
@@ -240,8 +241,16 @@ export function DocumentSetForm({
           <Select
             aria-label="Môi trường"
             placeholder="Chọn môi trường (SIT, UAT, PROD...)"
-            value={environment}
-            onChange={(val) => setEnvironment(val)}
+            value={customEnvSelected ? 'Khac' : environment}
+            onChange={(val) => {
+              if (val === 'Khac') {
+                setCustomEnvSelected(true);
+                setEnvironment('');
+              } else {
+                setCustomEnvSelected(false);
+                setEnvironment(val);
+              }
+            }}
             allowClear
             options={[
               { label: 'SIT', value: 'SIT' },
@@ -250,11 +259,12 @@ export function DocumentSetForm({
               { label: 'Khác (nhập tự do)', value: 'Khac' },
             ]}
           />
-          {environment === 'Khac' && (
+          {customEnvSelected && (
             <Input
               aria-label="Tên môi trường khác"
               placeholder="Nhập tên môi trường..."
               style={{ marginTop: 8 }}
+              value={environment ?? ''}
               onChange={(e) => setEnvironment(e.target.value)}
             />
           )}

@@ -602,23 +602,23 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         }
 
         if (groundedResult.kind === 'clarify_entity') {
-        const entityCitations: PersistedCitation[] = groundedResult.candidates.map((c, idx) => {
-          const rawId = c.urn.split(':').pop() || '';
-          const docId = isValidUuid(rawId) ? rawId : generateId();
-          return {
-            citationId: `S${idx + 1}`,
-            documentId: docId,
-            documentTitle: c.canonicalName,
-            sectionAnchor: null,
-            lineStart: 1,
-            lineEnd: 1,
-            authority: 'server' as const,
-            evidenceClass: 'OBSERVED' as const,
-            snapshotId: 'gsnap_00000000',
-            publishedContentHash: '0'.repeat(64),
-            citedExcerpt: c.canonicalName,
-          };
-        });
+          const entityCitations: PersistedCitation[] = groundedResult.candidates.map((c, idx) => {
+            const rawId = c.urn.split(':').pop() || '';
+            const docId = isValidUuid(rawId) ? rawId : generateId();
+            return {
+              citationId: `S${idx + 1}`,
+              documentId: docId,
+              documentTitle: c.canonicalName,
+              sectionAnchor: c.urn,
+              lineStart: 1,
+              lineEnd: 1,
+              authority: 'server' as const,
+              evidenceClass: 'OBSERVED' as const,
+              snapshotId: 'gsnap_00000000',
+              publishedContentHash: '0'.repeat(64),
+              citedExcerpt: c.urn,
+            };
+          });
 
         await saveMessage(
           {
@@ -1350,7 +1350,23 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
       db,
     });
 
+    const allMsgs = await getMessagesByThreadId(activeThread.id, db);
+    const msgIndex = allMsgs.findIndex(
+      (m) => m.grounding && m.grounding.createdAt === prevGrounding.createdAt
+    );
+    let originalQuery = '';
+    if (msgIndex > 0) {
+      for (let i = msgIndex - 1; i >= 0; i--) {
+        const candidateMsg = allMsgs[i];
+        if (candidateMsg && candidateMsg.role === 'user' && candidateMsg.content) {
+          originalQuery = candidateMsg.content;
+          break;
+        }
+      }
+    }
+
     const res = await synthesizeFromStoredEvidence(prevGrounding, deps, {
+      query: originalQuery,
       endpoint: config.endpoint,
       apiKey,
       model: selectedModel || config.defaultModel,
@@ -1358,7 +1374,6 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
     });
 
     if (res.kind === 'grounded_answer') {
-      const allMsgs = await getMessagesByThreadId(activeThread.id, db);
       const target = allMsgs.find(
         (m) => m.grounding && m.grounding.createdAt === prevGrounding.createdAt
       );
