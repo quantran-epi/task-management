@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Hybrid GraphRAG Knowledge Assistant MVP
 status: executing
-stopped_at: Completed 19.1-01-PLAN.md
-last_updated: "2026-10-12T07:52:00.000Z"
-last_activity: 2026-10-12 -- Phase 19.1 Plan 01 complete
+stopped_at: Completed 19.1-02-PLAN.md
+last_updated: "2026-10-12T08:05:00.000Z"
+last_activity: 2026-10-12 -- Phase 19.1 Plan 02 complete
 progress:
   total_phases: 17
   completed_phases: 15
   total_plans: 97
-  completed_plans: 93
-  percent: 89
+  completed_plans: 94
+  percent: 90
 ---
 
 # Project State
@@ -26,12 +26,12 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 ## Current Position
 
 Phase: 19.1 (production-neo4j-integration-live-retrieval-validation) — EXECUTING
-Plan: 1 of 5
+Plan: 2 of 5
 Status: Executing Phase 19.1
-Last activity: 2026-10-12 -- Phase 19.1 execution started
-Stopped at: Phase 19.1 context gathered
+Last activity: 2026-10-12 -- Phase 19.1 Plan 02 complete
+Stopped at: Completed 19.1-02-PLAN.md
 
-Progress: [█████████░] 85%
+Progress: [█████████░] 90%
 
 ### Quick Tasks Completed
 
@@ -181,6 +181,8 @@ Progress: [█████████░] 85%
 | Phase 19 P13 | 15m | 2 tasks | 9 files |
 | Phase 19 P14 | 14m | 2 tasks | 8 files |
 | Phase 19 P15 | 25m | 2 tasks | 7 files |
+| Phase 19.1 P01 | 15m | 2 tasks | 3 files |
+| Phase 19.1 P02 | 12m | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -188,6 +190,9 @@ Progress: [█████████░] 85%
 
 Recent decisions logged in PROJECT.md:
 
+- [Phase 19.1 Plan 02]: Implement NineRouterQueryPlanner using native fetch against /v1/chat/completions with response_format json_object and zero Cypher string leakage (D-11, D-12).
+- [Phase 19.1 Plan 02]: Validate model completions with LogicalQueryPlanSchema and server-resolved candidates; enforce bounded 1-shot repair before returning PLANNER_SCHEMA_FAILURE (D-15, D-16, D-17).
+- [Phase 19.1 Plan 02]: Fail closed on missing PLANNER_ENDPOINT, PLANNER_MODEL, PLANNER_API_KEY, or allowed hosts on startup without exposing secret values (D-13, D-14).
 - [Phase 19 Plan 15]: Replay 20 hand-crafted reference cases across direct lookup, paths, conflicts, abstention, fallback, safety, and persistence without network or provider calls.
 - [Phase 19 Plan 15]: Enforce D-06 language lock and UTF-8 byte-identical quote preservation on mixed-language cases using Buffer.equals.
 - [Phase 19 Plan 15]: Extend offlineIsolation.test.ts to verify zero retrieve egress during local fallback.

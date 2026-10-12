@@ -404,7 +404,8 @@ Plans:
 **Goal:** Deploy the knowledge stack to the SHB internal Kubernetes cluster and prove process 60000006 end-to-end through TaskMate UI against persistent Neo4j storage.
 **Requirements**: D-01..D-23
 **Depends on:** Phase 19
-**Plans:** 5 plans
+**Plans:** 2/5 plans complete
+
 Plans:
 **Wave 1**
 
@@ -412,7 +413,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 19.1-02-PLAN.md — Implement OpenAI-compatible 9router QueryPlanner adapter with bounded repair (Wave 2)
+- [x] 19.1-02-PLAN.md — Implement OpenAI-compatible 9router QueryPlanner adapter with bounded repair (Wave 2)
 - [ ] 19.1-03-PLAN.md — Enforce client-side error taxonomy and strict local BM25 fallback allowlist (Wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
