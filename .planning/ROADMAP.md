@@ -42,6 +42,7 @@
 - [x] **Phase 17: Pilot Ontology, Deterministic Extraction & Neo4j Knowledge Graph** - Controlled process 60000006 ontology, composite URNs, deterministic table extraction, evidence classification, and rebuildable Neo4j graph. (completed 2026-10-10)
 - [x] **Phase 18: Multi-Modal Hybrid Retrieval Engine** - Full-text identifier search, semantic vector search, bounded 1-3 hop Cypher traversal, and Reciprocal Rank Fusion. (completed 2026-10-10)
 - [x] **Phase 19: Grounded Assistant, Provenance Citations & Offline Fallback** - AI Chat Drawer synthesis with source citations, step-by-step path cards, conflict warnings, abstention handling, and local BM25 fallback. (completed 2026-10-11)
+- [ ] **Phase 19.1: Production Neo4j Integration & Live Retrieval Validation** (INSERTED) - Deploy knowledge stack to SHB Kubernetes cluster and prove process 60000006 end-to-end through TaskMate UI against persistent Neo4j storage.
 - [ ] **Phase 20: Benchmark Evaluation Suite, Integrity Hardening & Credential Isolation** - 30-50 question evaluation benchmark, path/claim verification, index rebuild tests, and server-side secret isolation.
 
 ## Phase Details
@@ -232,7 +233,7 @@ Plans:
 
 - [x] 16-06-PLAN.md — Exact zero-network document-and-chunk four-way preview (Wave 3)
 
-**Wave 4** *(blocked on Wave 3 completion)*
+**Wave 4** *(blocked on Wave 2 completion)*
 
 - [x] 16-07-PLAN.md — Incremental projection, idempotent attempts, and atomic activation (Wave 4)
 
@@ -240,7 +241,7 @@ Plans:
 
 - [x] 16-08-PLAN.md — Authenticated exact-origin daemon API (Wave 5)
 
-**Wave 6** *(blocked on Wave 5 completion)*
+**Wave 6** *(blocked on Wave 4 completion)*
 
 - [x] 16-09-PLAN.md — Safe client, preview-bound DLP gate, and polling (Wave 6)
 
@@ -364,7 +365,7 @@ Plans:
   6. When knowledge server is unavailable, user can continue searching local Markdown through existing BM25 retrieval.
   7. Citations and graph paths open the corresponding PlannerMate document context.
 
-**Plans**: 15 plans in 6 wavesPlans:
+**Plans**: 15 plans in 6 wavesPlans:
 **Wave 1**
 
 - [x] 19-01-PLAN.md — Retrieval protocol: ordered paths, source hash+title, scope proof (Wave 1)
@@ -397,6 +398,30 @@ Plans:
 **Wave 6** *(blocked on Wave 5 completion)*
 
 - [x] 19-15-PLAN.md — ANSWER-01..07 REQUIREMENTS sync, 20-case reference fixture + eval harness + offline isolation + firstSeenInDoc audit (Wave 6)
+
+### Phase 19.1: Production Neo4j Integration & Live Retrieval Validation (INSERTED)
+
+**Goal:** Deploy the knowledge stack to the SHB internal Kubernetes cluster and prove process 60000006 end-to-end through TaskMate UI against persistent Neo4j storage.
+**Requirements**: D-01..D-23
+**Depends on:** Phase 19
+**Plans:** 5 plans
+Plans:
+**Wave 1**
+
+- [ ] 19.1-01-PLAN.md — Persist real GraphSnapshot status counts and durable quarantine storage in Neo4j (Wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 19.1-02-PLAN.md — Implement OpenAI-compatible 9router QueryPlanner adapter with bounded repair (Wave 2)
+- [ ] 19.1-03-PLAN.md — Enforce client-side error taxonomy and strict local BM25 fallback allowlist (Wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 19.1-04-PLAN.md — Package Kubernetes manifests (neo4j StatefulSet, knowledge-server Deployment) and secret runbook (Wave 3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 19.1-05-PLAN.md — Execute metadata-only smoke runner and human UAT verification with Pod restart proof (Wave 4)
 
 ### Phase 20: Benchmark Evaluation Suite, Integrity Hardening & Credential Isolation
 
