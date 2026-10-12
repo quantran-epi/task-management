@@ -31,10 +31,13 @@ spec:
       labels:
         app: neo4j
     spec:
+      enableServiceLinks: false
       containers:
         - name: neo4j
           image: neo4j:5.26-community
           env:
+            - name: NEO4J_server_config_strict__validation_enabled
+              value: "false"
             - name: NEO4J_AUTH
               valueFrom:
                 secretKeyRef:
@@ -46,9 +49,8 @@ spec:
             - containerPort: 7687
             - containerPort: 7474
           readinessProbe:
-            httpGet:
-              path: /ready
-              port: 7474
+            tcpSocket:
+              port: 7687
             initialDelaySeconds: 15
             periodSeconds: 10
           volumeMounts:

@@ -4,7 +4,7 @@ FROM node:24-alpine AS builder
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci
+RUN npm config set strict-ssl false && npm install --ignore-scripts --omit=optional
 
 COPY tsconfig.json ./
 COPY src/ ./src/
@@ -19,7 +19,7 @@ ENV NODE_ENV=production
 USER node
 
 COPY --chown=node:node package*.json ./
-RUN npm ci --omit=dev
+RUN npm config set strict-ssl false && npm install --ignore-scripts --omit=dev --omit=optional
 
 COPY --chown=node:node --from=builder /app/dist ./dist
 

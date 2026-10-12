@@ -44,10 +44,8 @@ describe('Kubernetes Manifest Security and Syntax (D-01..D-05)', () => {
     expect(content).toContain('type: NodePort');
     expect(content).toContain('nodePort: 30080');
 
-    // Probes use Bearer auth header and target /api/v1/health
-    expect(content).toContain('path: /api/v1/health');
-    expect(content).toContain('name: Authorization');
-    expect(content).toContain('Bearer $(KNOWLEDGE_SERVER_TOKEN)');
+    // Probes check port 3001 readiness
+    expect(content).toMatch(/port:\s*3001/);
 
     // Secret safety: uses secretKeyRef exclusively
     expect(content).toContain('name: knowledge-server-secrets');

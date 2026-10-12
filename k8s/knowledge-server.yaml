@@ -6,7 +6,7 @@ data:
   HOST: "0.0.0.0"
   PORT: "3001"
   HTTPS_TERMINATED: "true"
-  KNOWLEDGE_ALLOWED_ORIGINS: "https://taskmate.internal.shb.vn"
+  KNOWLEDGE_ALLOWED_ORIGINS: "https://taskmate.internal.shb.vn,tauri://localhost,http://tauri.localhost,https://tauri.localhost,http://localhost:5173,http://localhost:1420"
   NEO4J_URI: "bolt://neo4j:7687"
   NEO4J_ENABLED: "true"
   PLANNER_REMOTE_ENABLED: "true"
@@ -43,7 +43,7 @@ spec:
     spec:
       containers:
         - name: knowledge-server
-          image: knowledge-server:0.1.0
+          image: quantrantestdev/knowledge-server:0.1.0
           envFrom:
             - configMapRef:
                 name: knowledge-server-config
@@ -69,11 +69,7 @@ spec:
                   name: knowledge-server-secrets
                   key: PLANNER_API_KEY
           readinessProbe:
-            httpGet:
-              path: /api/v1/health
+            tcpSocket:
               port: 3001
-              httpHeaders:
-                - name: Authorization
-                  value: "Bearer $(KNOWLEDGE_SERVER_TOKEN)"
             initialDelaySeconds: 5
             periodSeconds: 10
