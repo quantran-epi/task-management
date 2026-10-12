@@ -45,7 +45,14 @@ export const CYPHER_QUERIES = {
         s.ontologyVersion = $ontologyVersion,
         s.normalizedProjectionHash = $normalizedProjectionHash,
         s.state = 'READY',
-        s.createdAt = $createdAt
+        s.createdAt = $createdAt,
+        s.nodeCount = $nodeCount,
+        s.relationCount = $relationCount,
+        s.factCount = $factCount,
+        s.conflictCount = $conflictCount,
+        s.quarantineCount = $quarantineCount,
+        s.approvedFactCount = $approvedFactCount,
+        s.quarantinesJson = $quarantinesJson
   `,
 
   UNWIND_INSERT_NODES: `
@@ -175,7 +182,18 @@ export const CYPHER_QUERIES = {
            s.embeddingMetadataJson AS embeddingMetadataJson,
            s.chunkCount AS chunkCount,
            s.hasVectors AS hasVectors,
-           s.retrievalBuiltAt AS retrievalBuiltAt
+           s.retrievalBuiltAt AS retrievalBuiltAt,
+           s.nodeCount AS nodeCount,
+           s.relationCount AS relationCount,
+           s.factCount AS factCount,
+           s.conflictCount AS conflictCount,
+           s.quarantineCount AS quarantineCount,
+           s.approvedFactCount AS approvedFactCount
+  `,
+
+  GET_QUARANTINES_BY_SNAPSHOT: `
+    MATCH (s:GraphSnapshot {graphSnapshotId: $graphSnapshotId})
+    RETURN s.quarantinesJson AS quarantinesJson
   `,
 
   GET_FACTS_BY_SNAPSHOT: `
@@ -373,6 +391,17 @@ export function escapeLuceneSpecialChars(str: string): string {
   return str.replace(/([+\-!(){}[\]^"~*?:\\/&|])/g, '\\$1');
 }
 
+/**
+ * Convert Neo4j Integer or raw number to JS number safely.
+ * Returns 0 for null/undefined to preserve historical zero-default behavior.
+ */
+export function toSafeInt(v: any): number {
+  if (v === null || v === undefined) return 0;
+  if (typeof v === 'number') return v;
+  if (typeof v?.toNumber === 'function') return v.toNumber();
+  return Number(v) || 0;
+}
+
 export class Neo4jRepository implements GraphRepository {
   private driver: Driver;
   private database: string | undefined;
@@ -418,8 +447,13 @@ export class Neo4jRepository implements GraphRepository {
   async writeCandidate(candidate: GraphCandidate): Promise<void> {
     const session = this.getSession();
     try {
+      const approvedFactCount = candidate.relations.filter(
+        (r) => r.effectiveClassification === 'BUSINESS_APPROVED'
+      ).length;
+      const quarantinesJson = JSON.stringify(candidate.quarantines || []);
+
       await session.executeWrite(async (tx) => {
-        // 1. Insert snapshot record
+        // 1. Insert snapshot record with real counts and durable quarantines
         await tx.run(CYPHER_QUERIES.INSERT_GRAPH_SNAPSHOT, {
           graphSnapshotId: candidate.graphSnapshotId,
           sourceSnapshotId: candidate.sourceSnapshotId,
@@ -427,6 +461,13 @@ export class Neo4jRepository implements GraphRepository {
           ontologyVersion: candidate.ontologyVersion,
           normalizedProjectionHash: candidate.normalizedProjectionHash,
           createdAt: candidate.createdAt,
+          nodeCount: candidate.nodes.length,
+          relationCount: candidate.relations.length,
+          factCount: candidate.relations.length,
+          conflictCount: candidate.conflicts.length,
+          quarantineCount: (candidate.quarantines || []).length,
+          approvedFactCount,
+          quarantinesJson,
         });
 
         // 2. Unwind insert nodes
@@ -778,12 +819,12 @@ export class Neo4jRepository implements GraphRepository {
         ontologyVersion: record.get('ontologyVersion'),
         normalizedProjectionHash: record.get('normalizedProjectionHash'),
         activatedAt: record.get('activatedAt'),
-        nodeCount: 0,
-        relationCount: 0,
-        factCount: 0,
-        conflictCount: 0,
-        quarantineCount: 0,
-        approvedFactCount: 0,
+        nodeCount: toSafeInt(record.get('nodeCount')),
+        relationCount: toSafeInt(record.get('relationCount')),
+        factCount: toSafeInt(record.get('factCount')),
+        conflictCount: toSafeInt(record.get('conflictCount')),
+        quarantineCount: toSafeInt(record.get('quarantineCount')),
+        approvedFactCount: toSafeInt(record.get('approvedFactCount')),
         retrievalGeneration,
       };
     } finally {
