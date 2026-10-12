@@ -14,6 +14,7 @@ import type {
 } from '../knowledge/retrievalProtocol';
 import {
   KnowledgeClientError,
+  isFallbackAllowed,
 } from '../knowledge/knowledgeClient';
 import type {
   LocalGroundedResult,
@@ -385,7 +386,7 @@ export async function runGroundedTurn(
       input.signal
     );
   } catch (error: unknown) {
-    // 4. Handle retrieve error (D-41 fallback allowlist)
+    // 4. Handle retrieve error (D-41 fallback allowlist, D-21, D-22)
     if (input.signal.aborted) {
       throw error;
     }
@@ -499,6 +500,12 @@ export async function runGroundedTurn(
           ]);
         }
       }
+    }
+
+    if (isFallbackAllowed(error)) {
+      return executeLocalPath('NETWORK_ERROR', [
+        'Máy chủ tri thức không phản hồi (lỗi kết nối mạng)',
+      ]);
     }
 
     throw error;

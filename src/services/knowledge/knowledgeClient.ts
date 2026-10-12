@@ -271,6 +271,27 @@ export class KnowledgeClientError extends Error {
   }
 }
 
+export function isTransportFailure(error: unknown): boolean {
+  if (error instanceof KnowledgeClientError) {
+    if (error.code === 'NETWORK_ERROR' || error.code === 'TIMEOUT') {
+      return true;
+    }
+    if (error.code === 'REMOTE_ERROR' && typeof error.status === 'number' && error.status >= 500) {
+      return true;
+    }
+    return false;
+  }
+  if (error instanceof TypeError) {
+    // Native fetch failure (e.g. Failed to fetch, NetworkError, fetch failed)
+    return true;
+  }
+  return false;
+}
+
+export function isFallbackAllowed(error: unknown): boolean {
+  return isTransportFailure(error);
+}
+
 export interface ReconcileAttemptPayload {
   attempt: PublishAttemptCache;
   publishedDocuments?: PublishedDocumentMetadata[];
