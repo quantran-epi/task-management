@@ -408,7 +408,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 19.1-01-PLAN.md — Persist real GraphSnapshot status counts and durable quarantine storage in Neo4j (Wave 1)
+- [x] 19.1-01-PLAN.md — Persist real GraphSnapshot status counts and durable quarantine storage in Neo4j (Wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
