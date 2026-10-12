@@ -9,6 +9,7 @@ import {
   readRetrievalTimeouts,
   type RetrievalTimeouts,
 } from './services/retrievalService.js';
+import { NineRouterQueryPlanner } from './retrieval/nineRouterQueryPlanner.js';
 import type {
   EmbeddingProvider,
   QueryPlanner,
@@ -30,6 +31,9 @@ export interface RemoteEmbeddingConfig {
 
 export interface RemotePlannerConfig {
   enabled: boolean;
+  endpoint?: string;
+  model?: string;
+  apiKey?: string;
   allowedHosts?: string[];
 }
 
@@ -199,8 +203,44 @@ export function readKnowledgeServerOptions(
   const remotePlanner: RemotePlannerConfig = { enabled: plannerRemoteEnabled };
 
   if (plannerRemoteEnabled) {
+    const endpoint = (env.PLANNER_ENDPOINT ?? '').trim();
+    if (!endpoint) {
+      throw new Error('PLANNER_ENDPOINT is required when PLANNER_REMOTE_ENABLED is true.');
+    }
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(endpoint);
+    } catch {
+      throw new Error(`Invalid PLANNER_ENDPOINT: "${endpoint}". Must be a valid URL.`);
+    }
+    if (parsedUrl.username || parsedUrl.password) {
+      throw new Error('PLANNER_ENDPOINT must not contain credentials.');
+    }
+    if (parsedUrl.search || parsedUrl.hash) {
+      throw new Error('PLANNER_ENDPOINT must not contain query parameters or hash.');
+    }
+
+    const model = (env.PLANNER_MODEL ?? '').trim();
+    if (!model) {
+      throw new Error('PLANNER_MODEL is required when PLANNER_REMOTE_ENABLED is true.');
+    }
+
+    const apiKey = (env.PLANNER_API_KEY ?? '').trim();
+    if (!apiKey) {
+      throw new Error('PLANNER_API_KEY is required when PLANNER_REMOTE_ENABLED is true.');
+    }
+
     const rawPlannerHosts = (env.PLANNER_REMOTE_ALLOWED_HOSTS ?? '').trim();
     const allowedPlannerHosts = parseAllowedHosts(rawPlannerHosts, 'PLANNER_REMOTE_ALLOWED_HOSTS');
+    if (!allowedPlannerHosts.includes(parsedUrl.hostname)) {
+      throw new Error(
+        `PLANNER_ENDPOINT host "${parsedUrl.hostname}" is not in PLANNER_REMOTE_ALLOWED_HOSTS.`
+      );
+    }
+
+    remotePlanner.endpoint = endpoint;
+    remotePlanner.model = model;
+    remotePlanner.apiKey = apiKey;
     remotePlanner.allowedHosts = allowedPlannerHosts;
   }
 
@@ -274,20 +314,31 @@ export async function startKnowledgeServer(
 
     const embeddingProvider: EmbeddingProvider = createEmbeddingProvider(env);
 
-    // Provider-neutral baseline query planner
-    const queryPlanner: QueryPlanner = {
-      async plan(
-        _req: RetrievalRequest,
-        _ctx: QueryPlannerContext,
-        _opts?: OperationOptions
-      ): Promise<QueryPlanResult> {
-        return {
-          type: 'unsupported',
-          reason: 'Autonomous query planner not configured',
-          unsupportedConstructs: [],
-        };
-      },
-    };
+    // Query planner: either remote 9router planner or baseline fallback
+    let queryPlanner: QueryPlanner;
+    if (options.remotePlanner.enabled) {
+      queryPlanner = new NineRouterQueryPlanner({
+        enabled: true,
+        endpoint: options.remotePlanner.endpoint!,
+        model: options.remotePlanner.model!,
+        apiKey: options.remotePlanner.apiKey!,
+        allowedHosts: options.remotePlanner.allowedHosts!,
+      });
+    } else {
+      queryPlanner = {
+        async plan(
+          _req: RetrievalRequest,
+          _ctx: QueryPlannerContext,
+          _opts?: OperationOptions
+        ): Promise<QueryPlanResult> {
+          return {
+            type: 'unsupported',
+            reason: 'Autonomous query planner not configured',
+            unsupportedConstructs: [],
+          };
+        },
+      };
+    }
 
     // Shared Neo4j repository acts as index gateway and graph gateway
     const indexGateway = graphRepository as unknown as RetrievalIndexGateway;

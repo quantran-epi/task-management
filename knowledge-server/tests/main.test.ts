@@ -315,4 +315,76 @@ describe('executable startup', () => {
     await serverInstance.app.close();
     expect(closed).toBe(true);
   });
+
+  describe('Remote planner configuration validation (D-13, D-14)', () => {
+    it('throws when PLANNER_REMOTE_ENABLED is true but PLANNER_ENDPOINT is missing', () => {
+      expect(() =>
+        readKnowledgeServerOptions({
+          KNOWLEDGE_SERVER_TOKEN: 'valid-token',
+          KNOWLEDGE_ALLOWED_ORIGINS: VALID_ORIGIN,
+          PLANNER_REMOTE_ENABLED: 'true',
+          PLANNER_MODEL: 'qwen2.5-72b-instruct',
+          PLANNER_API_KEY: 'secret-key',
+          PLANNER_REMOTE_ALLOWED_HOSTS: '9router.internal.shb.vn',
+        })
+      ).toThrow(/PLANNER_ENDPOINT is required/);
+    });
+
+    it('throws when PLANNER_REMOTE_ENABLED is true but PLANNER_MODEL is missing', () => {
+      expect(() =>
+        readKnowledgeServerOptions({
+          KNOWLEDGE_SERVER_TOKEN: 'valid-token',
+          KNOWLEDGE_ALLOWED_ORIGINS: VALID_ORIGIN,
+          PLANNER_REMOTE_ENABLED: 'true',
+          PLANNER_ENDPOINT: 'https://9router.internal.shb.vn',
+          PLANNER_API_KEY: 'secret-key',
+          PLANNER_REMOTE_ALLOWED_HOSTS: '9router.internal.shb.vn',
+        })
+      ).toThrow(/PLANNER_MODEL is required/);
+    });
+
+    it('throws when PLANNER_REMOTE_ENABLED is true but PLANNER_API_KEY is missing', () => {
+      expect(() =>
+        readKnowledgeServerOptions({
+          KNOWLEDGE_SERVER_TOKEN: 'valid-token',
+          KNOWLEDGE_ALLOWED_ORIGINS: VALID_ORIGIN,
+          PLANNER_REMOTE_ENABLED: 'true',
+          PLANNER_ENDPOINT: 'https://9router.internal.shb.vn',
+          PLANNER_MODEL: 'qwen2.5-72b-instruct',
+          PLANNER_REMOTE_ALLOWED_HOSTS: '9router.internal.shb.vn',
+        })
+      ).toThrow(/PLANNER_API_KEY is required/);
+    });
+
+    it('throws when PLANNER_ENDPOINT host is not in PLANNER_REMOTE_ALLOWED_HOSTS', () => {
+      expect(() =>
+        readKnowledgeServerOptions({
+          KNOWLEDGE_SERVER_TOKEN: 'valid-token',
+          KNOWLEDGE_ALLOWED_ORIGINS: VALID_ORIGIN,
+          PLANNER_REMOTE_ENABLED: 'true',
+          PLANNER_ENDPOINT: 'https://evil.host.com',
+          PLANNER_MODEL: 'qwen2.5-72b-instruct',
+          PLANNER_API_KEY: 'secret-key',
+          PLANNER_REMOTE_ALLOWED_HOSTS: '9router.internal.shb.vn',
+        })
+      ).toThrow(/not in PLANNER_REMOTE_ALLOWED_HOSTS/);
+    });
+
+    it('parses valid remote planner configuration correctly', () => {
+      const opts = readKnowledgeServerOptions({
+        KNOWLEDGE_SERVER_TOKEN: 'valid-token',
+        KNOWLEDGE_ALLOWED_ORIGINS: VALID_ORIGIN,
+        PLANNER_REMOTE_ENABLED: 'true',
+        PLANNER_ENDPOINT: 'https://9router.internal.shb.vn',
+        PLANNER_MODEL: 'qwen2.5-72b-instruct',
+        PLANNER_API_KEY: 'secret-key',
+        PLANNER_REMOTE_ALLOWED_HOSTS: '9router.internal.shb.vn',
+      });
+      expect(opts.remotePlanner.enabled).toBe(true);
+      expect(opts.remotePlanner.endpoint).toBe('https://9router.internal.shb.vn');
+      expect(opts.remotePlanner.model).toBe('qwen2.5-72b-instruct');
+      expect(opts.remotePlanner.apiKey).toBe('secret-key');
+      expect(opts.remotePlanner.allowedHosts).toEqual(['9router.internal.shb.vn']);
+    });
+  });
 });
