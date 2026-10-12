@@ -879,7 +879,26 @@ export class Neo4jRepository implements GraphRepository {
   }
 
   async getQuarantines(graphSnapshotId: string): Promise<QuarantinedIdentifier[]> {
-    return this.quarantinesBySnapshot.get(graphSnapshotId) || [];
+    const session = this.getSession();
+    try {
+      const res = await session.run(CYPHER_QUERIES.GET_QUARANTINES_BY_SNAPSHOT, {
+        graphSnapshotId,
+      });
+      if (res.records.length === 0) {
+        // Fallback to in-memory cache for parity with pre-19.1 behavior
+        return this.quarantinesBySnapshot.get(graphSnapshotId) || [];
+      }
+      const json = res.records[0]!.get('quarantinesJson');
+      if (!json) return [];
+      try {
+        const parsed = JSON.parse(json);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    } finally {
+      await session.close();
+    }
   }
 
   async acquirePinnedSnapshot(setId: string): Promise<PinnedRetrievalSnapshot | null> {
