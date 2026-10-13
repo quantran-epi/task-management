@@ -19,6 +19,7 @@ export interface GroundedAnswerCardProps {
   onInvalidRetry?: (() => void) | undefined;
   onAuthRepair?: (() => void) | undefined;
   onConfigRepair?: (() => void) | undefined;
+  isFreshLookingUp?: boolean | undefined;
 
   // External slots for Plan 12 expansion panels
   pathsSlot?: React.ReactNode | undefined;
@@ -48,6 +49,7 @@ export const GroundedAnswerCard: React.FC<GroundedAnswerCardProps> = ({
   candidatesSlot,
   refinementsSlot,
   resultsSlot,
+  isFreshLookingUp = false,
 }) => {
   const { token } = theme.useToken();
 
@@ -59,8 +61,10 @@ export const GroundedAnswerCard: React.FC<GroundedAnswerCardProps> = ({
           size="small"
           icon={<ReloadOutlined />}
           onClick={onFreshLookup}
+          loading={isFreshLookingUp}
+          disabled={isFreshLookingUp}
         >
-          Tra cứu lại
+          {isFreshLookingUp ? 'Đang tra cứu...' : 'Tra cứu lại'}
         </Button>
       </div>
     );

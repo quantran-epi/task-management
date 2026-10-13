@@ -269,7 +269,11 @@ export async function resolveQueryEntities(
   // 5. Check if query text provides kind context to disambiguate collisions
   const lowerQuery = query.toLowerCase();
   const processKeywords = ['quy trình', 'process', 'scheduledprocess'];
-  const stepKeywords = ['bước', 'step', 'container', 'processstep'];
+  // ponytail: 'container' removed — it is an entity-type noun, not a ProcessStep NL cue;
+  // keeping it here forced container queries onto kind==='ProcessStep' (Bug 4 collision).
+  // Ceiling: this whole keyword->kind heuristic should be replaced by dynamic graph-trace
+  // disambiguation. Upgrade when the resolver can rank candidate kinds from the pinned graph.
+  const stepKeywords = ['bước', 'step', 'processstep'];
 
   const mentionsProcess = processKeywords.some((k) => lowerQuery.includes(k));
   const mentionsStep = stepKeywords.some((k) => lowerQuery.includes(k));

@@ -5,7 +5,13 @@ import type { SnapshotStore } from '../indexing/snapshotStore.js';
 import { extractDeterministicFacts } from '../graph/extraction.js';
 import { mergeFactsDeterministicFirst } from '../graph/candidate.js';
 import { ONTOLOGY_VERSION } from '../graph/ontology.js';
+import { collectUncoveredProse, extractProseCandidatesOnce } from '../ai/proseExtraction.js';
 import type { EmbeddingProvider } from '../retrieval/contracts.js';
+import type {
+  FactAssertion,
+  GraphEvidenceRecord,
+  QuarantinedIdentifier,
+} from '../types/graphProtocol.js';
 import type {
   GraphBuildStage,
   GraphState,
@@ -27,10 +33,22 @@ export class GraphBuildInProgressError extends Error {
   }
 }
 
+/**
+ * Optional LLM config for bounded prose extraction (Bug 3 cause B). When absent, the
+ * prose stage is a safe no-op and the build stays fully deterministic.
+ */
+export interface ProseExtractionConfig {
+  endpoint: string;
+  model: string;
+  apiKey?: string | undefined;
+  fetchFn?: typeof fetch | undefined;
+}
+
 export interface GraphBuildServiceOptions {
   repository?: GraphRepository | undefined;
   snapshotStore?: SnapshotStore | undefined;
   embeddingProvider?: EmbeddingProvider | undefined;
+  proseExtraction?: ProseExtractionConfig | undefined;
 }
 
 export class GraphBuildService {
@@ -42,6 +60,7 @@ export class GraphBuildService {
   readonly repository: GraphRepository;
   readonly snapshotStore?: SnapshotStore | undefined;
   readonly embeddingProvider?: EmbeddingProvider | undefined;
+  readonly proseExtraction?: ProseExtractionConfig | undefined;
 
   constructor(
     repositoryOrOptions?: GraphRepository | GraphBuildServiceOptions,
@@ -52,11 +71,13 @@ export class GraphBuildService {
       this.repository = repositoryOrOptions as GraphRepository;
       this.snapshotStore = snapshotStore ?? options?.snapshotStore;
       this.embeddingProvider = options?.embeddingProvider;
+      this.proseExtraction = options?.proseExtraction;
     } else {
       const opts = (repositoryOrOptions as GraphBuildServiceOptions) || {};
       this.repository = opts.repository ?? new InMemoryGraphRepository();
       this.snapshotStore = opts.snapshotStore;
       this.embeddingProvider = opts.embeddingProvider;
+      this.proseExtraction = opts.proseExtraction;
     }
   }
 
@@ -142,9 +163,34 @@ export class GraphBuildService {
     this.currentStages.set(setId, 'Structured extraction');
     const extractionResult = extractDeterministicFacts(sourceSnapshot);
 
-    // Stage d: Prose extraction
+    // Stage d: Prose extraction (Bug 3 cause B)
+    // Wire the previously-orphaned prose extractors into the pipeline. For every document
+    // this collects paragraphs NOT already consumed by the deterministic table/code parser,
+    // then asks the LLM (closed-ontology, exact-quote, zero-retry) to extract INFERRED
+    // relations between already-resolved nodes. Documents without a matching table — which
+    // previously yielded entities only, zero relations — can now gain relations/evidence
+    // from prose. Safe no-op when no LLM is configured, keeping the build deterministic.
     this.currentStages.set(setId, 'Prose extraction');
-    // Bounded prose extraction placeholder for uncovered segments
+    let inferredFacts: FactAssertion[] = [];
+    let inferredEvidence: GraphEvidenceRecord[] = [];
+    const proseQuarantines: QuarantinedIdentifier[] = [];
+
+    if (this.proseExtraction) {
+      const segments = collectUncoveredProse(sourceSnapshot, extractionResult.consumedRanges);
+      if (segments.length > 0) {
+        const proseResult = await extractProseCandidatesOnce({
+          endpoint: this.proseExtraction.endpoint,
+          model: this.proseExtraction.model,
+          ...(this.proseExtraction.apiKey ? { apiKey: this.proseExtraction.apiKey } : {}),
+          segments,
+          resolvedEndpoints: extractionResult.nodes,
+          ...(this.proseExtraction.fetchFn ? { fetchFn: this.proseExtraction.fetchFn } : {}),
+        });
+        inferredFacts = proseResult.facts;
+        inferredEvidence = proseResult.evidence;
+        proseQuarantines.push(...proseResult.quarantines);
+      }
+    }
 
     // Stage e: Validation
     this.currentStages.set(setId, 'Validation');
@@ -158,8 +204,10 @@ export class GraphBuildService {
       nodes: extractionResult.nodes,
       deterministicFacts: extractionResult.facts,
       deterministicEvidence: extractionResult.evidence,
+      inferredFacts,
+      inferredEvidence,
       approvals,
-      quarantines: extractionResult.quarantines,
+      quarantines: [...extractionResult.quarantines, ...proseQuarantines],
     });
 
     // Write candidate to repository with READY state

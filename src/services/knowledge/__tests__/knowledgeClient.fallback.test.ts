@@ -177,7 +177,14 @@ describe('groundedTurn error taxonomy and fallback allowlist integration (D-21, 
     };
 
     mockDeps = {
-      routeIntent: vi.fn().mockResolvedValue({ route: 'knowledge', confidence: 0.95 }),
+      routeIntent: vi.fn().mockResolvedValue({
+        intent: 'query_knowledge',
+        confidence: 0.95,
+        entities: [],
+        language: 'vi',
+        needs_clarification: false,
+        clarify_question: null,
+      }),
       routeScope: vi.fn().mockResolvedValue({
         setTierAssignments: [
           {

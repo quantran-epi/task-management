@@ -30,7 +30,7 @@ import {
   GroundedSynthesisError,
   type SynthesisInput,
 } from './groundedSynthesis';
-import type { RouteIntentResult, RouteIntentDeps } from './intentRouter';
+import type { RouteIntentResult, RouteIntentDeps, IntentLabel } from './intentRouter';
 import type { completeJson as defaultCompleteJson } from './nineRouterClient';
 
 export interface GroundedTurnInput {
@@ -60,7 +60,7 @@ export interface CandidateRef {
 
 export type GroundedTurnResult =
   | { kind: 'operational'; routedQuery: string }
-  | { kind: 'clarify_intent' }
+  | { kind: 'clarify_intent'; clarifyQuestion?: string }
   | {
       kind: 'clarify_entity';
       candidates: readonly CandidateRef[];
@@ -94,7 +94,7 @@ export interface GroundedTurnDeps {
     deps?: RouteIntentDeps
   ): Promise<RouteIntentResult> | RouteIntentResult;
   routeScope(
-    input: { query: string; routedIntent?: 'knowledge' | 'operational' | 'mixed' | 'clarify' },
+    input: { query: string; routedIntent?: IntentLabel },
     deps: {
       catalog: readonly SetCatalogEntry[];
       completeJson?: typeof defaultCompleteJson;
@@ -220,20 +220,40 @@ export async function runGroundedTurn(
 
   const nowIso = deps.now ? deps.now() : new Date().toISOString();
 
-  // 1. Route intent
-  const intentDecision = await deps.routeIntent(input.query);
-  if (intentDecision.route === 'operational') {
+  // 1. Route intent via the LLM-reasoned app contract (Bug 2 / vision hard gate).
+  //    operate_taskmate + query_taskmate both drive the TaskMate tool loop (mutate vs read);
+  //    query_knowledge + mixed drive knowledge retrieval; clarify asks the user back.
+  //    NOTE: no keyword/verb routing — intent is reasoned by the LLM. If the LLM is
+  //    unreachable, routeIntent throws (AI feature UNAVAILABLE, no routing fallback).
+  const intentDecision = await deps.routeIntent(input.query, {
+    completeJsonArgs: {
+      endpoint: input.config.endpoint,
+      apiKey: input.config.apiKey,
+      model: input.config.model,
+    },
+    signal: input.signal,
+  });
+
+  if (
+    intentDecision.intent === 'operate_taskmate' ||
+    intentDecision.intent === 'query_taskmate'
+  ) {
     return { kind: 'operational', routedQuery: input.query };
   }
-  if (intentDecision.route === 'clarify') {
-    return { kind: 'clarify_intent' };
+  if (intentDecision.needs_clarification || intentDecision.intent === 'clarify') {
+    return {
+      kind: 'clarify_intent',
+      ...(intentDecision.clarify_question
+        ? { clarifyQuestion: intentDecision.clarify_question }
+        : {}),
+    };
   }
 
   // 2. Resolve scope
   // If model is configured, semanticScopeRouter probe/complete can be passed if caller wired it,
   // but if modelConfigured === false, omit completeJson (D-20).
   const resolvedScope = await deps.routeScope(
-    { query: input.query, routedIntent: intentDecision.route },
+    { query: input.query, routedIntent: intentDecision.intent },
     {
       catalog: input.catalog,
       signal: input.signal,
@@ -307,7 +327,7 @@ export async function runGroundedTurn(
         return {
           kind: 'grounded_answer',
           grounding,
-          ...(intentDecision.route === 'mixed' ? { requiresOperationalContinuation: true } : {}),
+          ...(intentDecision.intent === 'mixed' ? { requiresOperationalContinuation: true } : {}),
         };
       } catch (err: unknown) {
         if (err instanceof GroundedSynthesisError && err.code === 'ABORTED') {
@@ -627,7 +647,7 @@ export async function runGroundedTurn(
     return {
       kind: 'grounded_answer',
       grounding,
-      ...(intentDecision.route === 'mixed' ? { requiresOperationalContinuation: true } : {}),
+      ...(intentDecision.intent === 'mixed' ? { requiresOperationalContinuation: true } : {}),
     };
   } catch (synthErr: unknown) {
     if (synthErr instanceof GroundedSynthesisError) {

@@ -340,9 +340,24 @@ export async function startKnowledgeServer(
       };
     }
 
-    // Shared Neo4j repository acts as index gateway and graph gateway
-    const indexGateway = graphRepository as unknown as RetrievalIndexGateway;
-    const graphGateway = graphRepository as unknown as GraphRetrievalGateway;
+    // Typed adapter bridges repo method names/criteria shapes to the gateway contracts.
+    // Compiler now enforces both interfaces instead of the old `as unknown as` casts.
+    // const capture: closures must not re-widen the `let graphRepository` back to undefined.
+    const repo = graphRepository;
+    const indexGateway: RetrievalIndexGateway = {
+      acquirePinnedSnapshot: (setId) => repo.acquirePinnedSnapshot(setId),
+      queryFulltext: (snapshotId, criteria) =>
+        repo.queryFullText(snapshotId, criteria.keywords.join(' '), criteria.limit),
+      queryVector: (snapshotId, criteria) =>
+        repo.queryVector(snapshotId, criteria.vector, criteria.limit),
+      validateVectorIndexMetadata: (snapshotId, metadata) =>
+        repo.validateVectorIndexMetadata(snapshotId, metadata),
+      // ponytail: repo ignores setId + gracePeriodMs and uses its global grace constant;
+      //   add per-set retention + custom grace when multi-set policies diverge.
+      cleanupSupersededSnapshots: (_setId, _gracePeriodMs) =>
+        repo.cleanupSupersededGenerations(),
+    };
+    const graphGateway: GraphRetrievalGateway = repo;
 
     retrievalService = new RetrievalService(
       {

@@ -37,6 +37,10 @@ interface TraversalContext {
   evidenceList: GraphEvidenceRecord[];
   quarantinesList: QuarantinedIdentifier[];
   consumedRangesMap: Map<string, SourceRange[]>;
+  // Container process ID discovered dynamically from the PRC_PROCESS table of the
+  // current document (the row with IS_CONTAINER=1). Used to resolve the parent of a
+  // PRC_CONTAINER step table without hardcoding a document-specific process ID.
+  containerProcessId?: string;
 }
 
 function cleanCellText(cell: TableCell): string {
@@ -193,11 +197,20 @@ function handlePrcProcessTable(table: Table, ctx: TraversalContext): void {
     const instId = instIdx >= 0 && cells[instIdx] ? Number(cells[instIdx]) : undefined;
     const isParallel = isParIdx >= 0 && cells[isParIdx] ? Number(cells[isParIdx]) : undefined;
 
+    // Bug 3 cause A: discover the container process dynamically from the table itself
+    // (the row flagged IS_CONTAINER=1) instead of hardcoding a document-specific ID.
+    if (isContainer === 1) {
+      ctx.containerProcessId = rawId;
+    }
+
     const processUrn = buildUrn('smartvista', 'PRC_PROCESS', rawId);
     const processNode: ResolvedNode = {
       urn: processUrn,
       kind: 'ScheduledProcess',
-      canonicalName: rawId === '60000006' ? 'SHB - Credit calculations' : rawProc,
+      // ponytail: canonicalName is the PROCEDURE_NAME from the table (document-agnostic).
+      // A friendlier display name (e.g. COM_I18N or prose) is a separate concern handled
+      // by prose extraction — never by special-casing a specific process ID here.
+      canonicalName: rawProc,
       sourceSystem: 'smartvista',
       nativeType: 'PRC_PROCESS',
       normalizedKey: rawId,
@@ -260,7 +273,7 @@ function handlePrcProcessTable(table: Table, ctx: TraversalContext): void {
  * Parses and extracts PRC_CONTAINER table:
  * Columns: Bind ID / BIND_ID, PROCESS_ID, EXEC_ORDER, IS_PARALLEL, PARALLEL_DEGREE, Cycle / note
  */
-function handlePrcContainerTable(table: Table, ctx: TraversalContext, parentProcessId: string = '60000006'): void {
+function handlePrcContainerTable(table: Table, ctx: TraversalContext): void {
   const header = table.children[0];
   if (!header) return;
   const colNames = getRowCells(header).map((c) => c.toUpperCase());
@@ -273,7 +286,16 @@ function handlePrcContainerTable(table: Table, ctx: TraversalContext, parentProc
 
   if (bindIdx === -1 || procIdx === -1 || orderIdx === -1) return;
 
-  const parentProcessUrn = buildUrn('smartvista', 'PRC_PROCESS', parentProcessId);
+  // Bug 3 cause A: resolve the parent container process dynamically — it was captured
+  // from this document's PRC_PROCESS row flagged IS_CONTAINER=1 — instead of a hardcoded
+  // document-specific process ID. If no container process was found in this document,
+  // skip the parent CONTAINS_STEP links but still extract step nodes and their relations.
+  // ponytail: assumes one container process per document (last IS_CONTAINER=1 row wins).
+  // Upgrade to multi-container documents if a corpus ever ships them.
+  const parentProcessId = ctx.containerProcessId;
+  const parentProcessUrn = parentProcessId
+    ? buildUrn('smartvista', 'PRC_PROCESS', parentProcessId)
+    : null;
 
   interface ParsedStep {
     bindId: string;
@@ -331,19 +353,21 @@ function handlePrcContainerTable(table: Table, ctx: TraversalContext, parentProc
     };
     addNode(ctx, stepNode);
 
-    // Parent ScheduledProcess CONTAINS_STEP ProcessStep
-    addFactAndEvidence(
-      ctx,
-      parentProcessUrn,
-      'CONTAINS_STEP',
-      stepUrn,
-      {},
-      rowStartLine,
-      rowEndLine,
-      rowStartOffset,
-      rowEndOffset,
-      rawSnippet
-    );
+    // Parent ScheduledProcess CONTAINS_STEP ProcessStep (only if a parent was resolved)
+    if (parentProcessUrn) {
+      addFactAndEvidence(
+        ctx,
+        parentProcessUrn,
+        'CONTAINS_STEP',
+        stepUrn,
+        {},
+        rowStartLine,
+        rowEndLine,
+        rowStartOffset,
+        rowEndOffset,
+        rawSnippet
+      );
+    }
 
     // ProcessStep INVOKES child ScheduledProcess (processId)
     const childProcUrn = buildUrn('smartvista', 'PRC_PROCESS', processId);

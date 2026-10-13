@@ -69,7 +69,11 @@ export function detectQueryLanguage(query: string): 'vi' | 'en' {
   return 'en';
 }
 
-export function buildSystemPrompt(targetLanguage: 'vi' | 'en', promptVersion: string): string {
+export function buildSystemPrompt(
+  targetLanguage: 'vi' | 'en',
+  promptVersion: string,
+  sampleCitationId: string = 'S1'
+): string {
   const languageInstruction =
     targetLanguage === 'vi'
       ? 'Respond in Vietnamese; this is the user\'s query language. Source quotes and identifiers (URNs, codes, document titles, section anchors) MUST be reproduced byte-identical from EVIDENCE regardless of response language. If you need to translate a quote, present the original verbatim first, then an inline translation in parentheses; NEVER replace the quote with a translation. (D-06)'
@@ -91,7 +95,7 @@ export function buildSystemPrompt(targetLanguage: 'vi' | 'en', promptVersion: st
               ? 'Khách hàng phải xác thực mã OTP qua tin nhắn SMS.'
               : 'Customer must verify the OTP code via SMS message.',
           classification: 'DIRECT',
-          citationIds: ['S1'],
+          citationIds: [sampleCitationId],
           pathId: null,
         },
       ],
@@ -180,6 +184,7 @@ export function normalizeRawGroundedOutput(
   const allowedCitationSet = new Set(allowedCitationIds);
   const allowedPathSet = new Set(allowedPathIds);
   const fallbackCitationId = allowedCitationIds[0];
+  const isLocalAuthority = allowedCitationIds.some((id) => id.startsWith('L'));
 
   // 5. Coerce claims
   let rawClaims: unknown[] = [];
@@ -222,29 +227,39 @@ export function normalizeRawGroundedOutput(
     for (const item of claimCitations) {
       let candidate = '';
       if (typeof item === 'number') {
-        const asS = `S${item}`;
-        const asL = `L${item}`;
-        if (allowedCitationSet.has(asS)) {
-          candidate = asS;
-        } else if (allowedCitationSet.has(asL)) {
-          candidate = asL;
+        const primary = isLocalAuthority ? `L${item}` : `S${item}`;
+        const secondary = isLocalAuthority ? `S${item}` : `L${item}`;
+        if (allowedCitationSet.has(primary)) {
+          candidate = primary;
+        } else if (allowedCitationSet.has(secondary)) {
+          candidate = secondary;
         } else {
-          candidate = asS;
+          candidate = primary;
         }
       } else if (typeof item === 'string') {
         const clean = item.replace(/[\[\]\(\)\s]/g, '').trim();
         if (/^[0-9]+$/.test(clean)) {
-          const asS = `S${clean}`;
-          const asL = `L${clean}`;
-          if (allowedCitationSet.has(asS)) {
-            candidate = asS;
-          } else if (allowedCitationSet.has(asL)) {
-            candidate = asL;
+          const primary = isLocalAuthority ? `L${clean}` : `S${clean}`;
+          const secondary = isLocalAuthority ? `S${clean}` : `L${clean}`;
+          if (allowedCitationSet.has(primary)) {
+            candidate = primary;
+          } else if (allowedCitationSet.has(secondary)) {
+            candidate = secondary;
           } else {
-            candidate = asS;
+            candidate = primary;
           }
         } else {
-          candidate = clean;
+          const matchS = clean.match(/^S([0-9]+)$/);
+          const matchL = clean.match(/^L([0-9]+)$/);
+          if (matchS && isLocalAuthority) {
+            const mappedToL = `L${matchS[1]}`;
+            candidate = allowedCitationSet.has(mappedToL) ? mappedToL : clean;
+          } else if (matchL && !isLocalAuthority) {
+            const mappedToS = `S${matchL[1]}`;
+            candidate = allowedCitationSet.has(mappedToS) ? mappedToS : clean;
+          } else {
+            candidate = clean;
+          }
         }
       }
 
@@ -345,7 +360,8 @@ export async function synthesizeGroundedAnswer(
   const allowedCitationIds = Object.keys(input.pack.citations);
   const allowedPathIds = Object.keys(input.pack.paths);
 
-  const primarySystemPrompt = buildSystemPrompt(targetLanguage, input.promptVersion);
+  const sampleCitationId = allowedCitationIds[0] || 'S1';
+  const primarySystemPrompt = buildSystemPrompt(targetLanguage, input.promptVersion, sampleCitationId);
   const baseUserPayload = {
     query: input.query,
     evidence: input.pack.promptEvidence,

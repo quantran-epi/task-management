@@ -120,7 +120,14 @@ describe('groundedTurn state machine', () => {
 
   beforeEach(() => {
     mockDeps = {
-      routeIntent: vi.fn().mockResolvedValue({ route: 'knowledge', confidence: 0.9 }),
+      routeIntent: vi.fn().mockResolvedValue({
+        intent: 'query_knowledge',
+        confidence: 0.9,
+        entities: [],
+        language: 'vi',
+        needs_clarification: false,
+        clarify_question: null,
+      }),
       routeScope: vi.fn().mockResolvedValue({
         setTierAssignments: [
           {
@@ -204,8 +211,12 @@ describe('groundedTurn state machine', () => {
   // 1. Operational intent -> {kind: 'operational'}; zero retrieve/synthesize calls
   it('1. Operational intent -> {kind: "operational"} with zero retrieve/synthesize', async () => {
     vi.mocked(mockDeps.routeIntent).mockResolvedValueOnce({
-      route: 'operational',
+      intent: 'operate_taskmate',
       confidence: 0.95,
+      entities: [],
+      language: 'vi',
+      needs_clarification: false,
+      clarify_question: null,
     });
 
     const res = await runGroundedTurn(mockInput, mockDeps);
@@ -306,8 +317,12 @@ describe('groundedTurn state machine', () => {
   // 7. Clarify intent (D-09) -> routeIntent returns 'clarify' -> {kind: 'clarify_intent'}; retrieve NOT called
   it('7. Clarify intent -> {kind: "clarify_intent"} with retrieve NOT called', async () => {
     vi.mocked(mockDeps.routeIntent).mockResolvedValueOnce({
-      route: 'clarify',
+      intent: 'clarify',
       confidence: 0.5,
+      entities: [],
+      language: 'vi',
+      needs_clarification: true,
+      clarify_question: null,
     });
 
     const res = await runGroundedTurn(mockInput, mockDeps);
@@ -572,8 +587,12 @@ describe('groundedTurn state machine', () => {
   // 21. Mixed intent -> routeIntent returns 'mixed' -> grounded_answer with requiresOperationalContinuation: true
   it('21. Mixed intent -> grounded_answer with requiresOperationalContinuation', async () => {
     vi.mocked(mockDeps.routeIntent).mockResolvedValueOnce({
-      route: 'mixed',
+      intent: 'mixed',
       confidence: 0.85,
+      entities: [],
+      language: 'vi',
+      needs_clarification: false,
+      clarify_question: null,
     });
 
     const res = await runGroundedTurn(mockInput, mockDeps);

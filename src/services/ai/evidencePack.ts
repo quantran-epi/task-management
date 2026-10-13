@@ -526,8 +526,8 @@ export function validateGroundedAnswerClosure(
       }
     }
 
-    // 5. D-26 override-language guard
-    if (claimAssertsOverride(claim.text)) {
+    // 5. D-26 override-language guard (server authority only; local authority has no server conflict metadata)
+    if (pack.authority !== 'local' && claimAssertsOverride(claim.text)) {
       let allowed = false;
 
       // Condition 1: SUPERSEDES metadata

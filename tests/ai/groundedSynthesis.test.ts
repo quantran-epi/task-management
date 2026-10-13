@@ -628,6 +628,17 @@ describe('groundedSynthesis', () => {
       expect(res.conclusion).toBe('Done');
       expect(res.schemaVersion).toBe(1);
     });
+
+    it('27. normalizes S1 to L1 when only local citations are allowed', () => {
+      const raw = {
+        conclusion: 'Done',
+        claims: [
+          { id: 'C1', text: 'Local fact', classification: 'DIRECT', citationIds: ['S1'], pathId: null },
+        ],
+      };
+      const res = normalizeRawGroundedOutput(raw, ['L1'], []) as any;
+      expect(res.claims[0].citationIds).toEqual(['L1']);
+    });
   });
 
   describe('buildSystemPrompt', () => {
@@ -643,6 +654,11 @@ describe('groundedSynthesis', () => {
       expect(promptEn).toContain('Respond in English');
       expect(promptEn).toContain('VALID OUTPUT EXAMPLE:');
       expect(promptEn).toContain('"language": "en"');
+    });
+
+    it('28. adapts few-shot citationId to L1 when local authority citation provided', () => {
+      const promptVi = buildSystemPrompt('vi', 'test-v1', 'L1');
+      expect(promptVi).toContain('"citationIds": [\n        "L1"\n      ]');
     });
   });
 });

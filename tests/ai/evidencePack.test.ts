@@ -767,4 +767,52 @@ describe('evidencePack', () => {
     expect(claimAssertsOverride('Dữ liệu này ghi đè cấu hình mặc định')).toBe(true);
     expect(claimAssertsOverride('Không có từ khóa liên quan')).toBe(false);
   });
+
+  // 17. Local authority relaxes override language guard
+  it('17. Local authority relaxes override language guard', () => {
+    const localPack: EvidencePack = {
+      authority: 'local',
+      citations: {
+        L1: {
+          citationId: 'L1',
+          documentId: DOC_1,
+          documentTitle: 'Local Spec',
+          sectionAnchor: null,
+          lineStart: 1,
+          lineEnd: 5,
+          authority: 'local',
+          evidenceClass: 'LOCAL',
+          snapshotId: null,
+          publishedContentHash: null,
+          citedExcerpt: 'evidence text',
+          setMemberships: [{ setId: SET_1, setName: 'Set 1' }],
+          evidenceKind: 'other',
+        },
+      },
+      paths: {},
+      conflicts: [],
+      promptEvidence: [{ id: 'L1', text: 'evidence text' }],
+      contextTruncated: false,
+      coverageWarnings: [],
+    };
+
+    const answer: GroundedAnswer = {
+      schemaVersion: 1,
+      language: 'vi',
+      conclusion: 'Conclusion',
+      claims: [
+        {
+          id: 'C1',
+          text: 'Chức năng mới thay thế quy trình cũ',
+          classification: 'DIRECT',
+          citationIds: ['L1'],
+          pathId: null,
+        },
+      ],
+      unsupportedParts: [],
+    };
+
+    const result = validateGroundedAnswerClosure(answer, localPack);
+    expect(result.valid).toBe(true);
+  });
 });

@@ -4,6 +4,7 @@ import {
   completeJson as defaultCompleteJson,
   probeStructuredOutputCapability,
 } from './nineRouterClient';
+import type { IntentLabel } from './intentRouter';
 
 export interface SetCatalogEntry {
   setId: string;
@@ -30,7 +31,7 @@ export interface ResolvedScope {
 
 export interface RouteScopeInput {
   query: string;
-  routedIntent?: 'knowledge' | 'operational' | 'mixed' | 'clarify';
+  routedIntent?: IntentLabel;
 }
 
 export interface RouteScopeDeps {

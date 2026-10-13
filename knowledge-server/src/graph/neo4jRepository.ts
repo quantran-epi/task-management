@@ -8,10 +8,23 @@ import {
   RelationType,
   RetrievalGenerationMetadata,
   PinnedRetrievalSnapshot,
+  NodeKind,
+  EvidenceClassification,
 } from '../types/graphProtocol.js';
-import type { ChunkItem } from '../types/retrievalProtocol.js';
+import type {
+  ChunkItem,
+  EntityItem,
+  EdgeItem,
+  ClarificationCandidate,
+  EmbeddingProviderMetadata,
+} from '../types/retrievalProtocol.js';
 import type { ProjectionSnapshot } from '../indexing/incrementalProjector.js';
-import type { EmbeddingProvider } from '../retrieval/contracts.js';
+import type {
+  EmbeddingProvider,
+  GraphTraversalCriteria,
+  GraphTraversalResult,
+  OperationOptions,
+} from '../retrieval/contracts.js';
 import {
   GraphRepository,
   deriveGenerationToken,
@@ -283,6 +296,40 @@ export const CYPHER_QUERIES = {
     WITH 1 AS dummy
     MATCH (s:GraphSnapshot {graphSnapshotId: $graphSnapshotId})
     SET s.state = 'DELETED'
+  `,
+
+  GET_GENERATION_META_BY_SNAPSHOT: `
+    MATCH (s:GraphSnapshot {graphSnapshotId: $snapshotId})
+    RETURN s.embeddingMetadataJson AS embeddingMetadataJson, s.hasVectors AS hasVectors
+  `,
+
+  RESOLVE_ENTITIES: `
+    UNWIND $tokens AS token
+    MATCH (e:Entity {graphSnapshotId: $snapshotId})
+    WHERE e.urn = token
+       OR e.normalizedKey = token
+       OR toLower(e.canonicalName) CONTAINS toLower(token)
+       OR any(a IN e.aliases WHERE toLower(a) = toLower(token))
+    RETURN DISTINCT e.urn AS urn, e.canonicalName AS canonicalName, e.kind AS kind
+    LIMIT 25
+  `,
+
+  TRAVERSE_FROM_SEEDS: `
+    MATCH (s:Entity {graphSnapshotId: $snapshotId})-[r]-(o:Entity {graphSnapshotId: $snapshotId})
+    WHERE s.urn IN $seedUrns AND r.graphSnapshotId = $snapshotId
+    MATCH (f:Fact {graphSnapshotId: $snapshotId, factKey: r.factKey})
+    RETURN DISTINCT
+      o.urn AS neighborUrn,
+      o.canonicalName AS neighborName,
+      o.kind AS neighborKind,
+      o.hasConflict AS neighborHasConflict,
+      f.factKey AS factKey,
+      f.subjectUrn AS subjectUrn,
+      f.relation AS relation,
+      f.objectUrn AS objectUrn,
+      f.effectiveClassification AS evidenceClass,
+      f.hasConflict AS edgeHasConflict
+    LIMIT $limit
   `,
 } as const;
 
@@ -1046,6 +1093,144 @@ export class Neo4jRepository implements GraphRepository {
       }
 
       return cleaned;
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * D-09: Confirms the pinned snapshot's embedding generation matches the query provider.
+   * Dimension mismatch => vector modality must degrade (MODEL_INDEX_MISMATCH).
+   * ponytail: compares dimensions only; add provider/model/revision match when
+   *   multiple e5 variants coexist in one deployment.
+   */
+  async validateVectorIndexMetadata(
+    snapshotId: string,
+    metadata: EmbeddingProviderMetadata
+  ): Promise<boolean> {
+    const cached = this.localGenerationMetadata.get(snapshotId)?.embeddingMetadata;
+    if (cached) {
+      return cached.dimensions === metadata.dimensions;
+    }
+
+    const session = this.getSession();
+    try {
+      const res = await session.run(CYPHER_QUERIES.GET_GENERATION_META_BY_SNAPSHOT, { snapshotId });
+      if (res.records.length === 0) return false;
+      const json = res.records[0]!.get('embeddingMetadataJson');
+      const hasVectors = res.records[0]!.get('hasVectors');
+      if (!hasVectors || !json) return false;
+      try {
+        const parsed = JSON.parse(json) as Partial<EmbeddingProviderMetadata>;
+        return parsed.dimensions === metadata.dimensions;
+      } catch {
+        return false;
+      }
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * D-04/D-05: Resolves raw query tokens to candidate entities in the pinned snapshot.
+   * Enables clarification when a token maps to multiple entities.
+   */
+  async resolveEntities(
+    snapshotId: string,
+    queryTokens: readonly string[],
+    options?: OperationOptions
+  ): Promise<ClarificationCandidate[]> {
+    if (options?.signal?.aborted) throw new Error('Entity resolution aborted');
+    if (queryTokens.length === 0) return [];
+
+    const session = this.getSession();
+    try {
+      const res = await session.run(CYPHER_QUERIES.RESOLVE_ENTITIES, {
+        snapshotId,
+        tokens: [...queryTokens],
+      });
+      return res.records.map((r) => ({
+        urn: r.get('urn'),
+        canonicalName: r.get('canonicalName'),
+        kind: r.get('kind') as NodeKind,
+      }));
+    } finally {
+      await session.close();
+    }
+  }
+
+  /**
+   * D-13..D-16: Bounded 1-hop traversal from resolved seeds over Entity-Entity edges.
+   * Returns reached neighbor entities and the Fact-backed edges connecting them.
+   * ponytail: single undirected hop only; evidenceClass filtering + multi-hop
+   *   (plan.traversalSteps depth/direction) not applied yet — add when FLOW_TRAVERSAL
+   *   / IMPACT_ANALYSIS plans need depth>1.
+   */
+  async traverse(
+    snapshotId: string,
+    criteria: GraphTraversalCriteria,
+    options?: OperationOptions
+  ): Promise<GraphTraversalResult> {
+    if (options?.signal?.aborted) throw new Error('Graph traversal aborted');
+    if (criteria.seedUrns.length === 0) {
+      return { entities: [], edges: [], truncated: false };
+    }
+
+    const fetchLimit = criteria.limitNodes + criteria.limitEdges;
+    const session = this.getSession();
+    try {
+      const res = await session.run(CYPHER_QUERIES.TRAVERSE_FROM_SEEDS, {
+        snapshotId,
+        seedUrns: [...criteria.seedUrns],
+        limit: neo4j.int(fetchLimit),
+      });
+
+      const entityByUrn = new Map<string, EntityItem>();
+      const edgeByKey = new Map<string, EdgeItem>();
+
+      for (const r of res.records) {
+        const neighborUrn = r.get('neighborUrn');
+        if (neighborUrn && !entityByUrn.has(neighborUrn)) {
+          entityByUrn.set(neighborUrn, {
+            type: 'entity',
+            id: neighborUrn,
+            score: 1,
+            modalitiesContributed: ['graph'],
+            urn: neighborUrn,
+            canonicalName: r.get('neighborName'),
+            kind: r.get('neighborKind') as NodeKind,
+            snapshotId,
+            hasConflict: Boolean(r.get('neighborHasConflict')),
+          });
+        }
+
+        const factKey = r.get('factKey');
+        if (factKey && !edgeByKey.has(factKey)) {
+          edgeByKey.set(factKey, {
+            type: 'edge',
+            id: factKey,
+            score: 1,
+            modalitiesContributed: ['graph'],
+            factKey,
+            sourceUrn: r.get('subjectUrn'),
+            relationType: r.get('relation') as RelationType,
+            targetUrn: r.get('objectUrn'),
+            evidenceClass: r.get('evidenceClass') as EvidenceClassification,
+            supportingChunkIds: [],
+            snapshotId,
+            hasConflict: Boolean(r.get('edgeHasConflict')),
+          });
+        }
+      }
+
+      const entities = [...entityByUrn.values()].slice(0, criteria.limitNodes);
+      const edges = [...edgeByKey.values()].slice(0, criteria.limitEdges);
+      const truncated =
+        entityByUrn.size > criteria.limitNodes || edgeByKey.size > criteria.limitEdges;
+
+      return truncated
+        ? { entities, edges, truncated, truncationReason: 'RESULT_LIMIT_REACHED' }
+        : { entities, edges, truncated };
     } finally {
       await session.close();
     }

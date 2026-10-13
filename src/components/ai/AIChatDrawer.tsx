@@ -577,7 +577,18 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     });
 
     if (routeOverride) {
-      deps.routeIntent = () => ({ route: routeOverride, confidence: 1 });
+      // User explicitly picked a route from the clarify chips — this IS their
+      // clarification answer, so bypass the LLM intent step with a fixed decision.
+      const overrideIntent =
+        routeOverride === 'knowledge' ? 'query_knowledge' : 'operate_taskmate';
+      deps.routeIntent = () => ({
+        intent: overrideIntent,
+        confidence: 1,
+        entities: [],
+        language: 'vi',
+        needs_clarification: false,
+        clarify_question: null,
+      });
     }
 
     const routeScope = deps.routeScope;
@@ -1030,6 +1041,11 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
     try {
       while (loopCount < MAX_TOOL_LOOPS) {
         loopCount++;
+        // Bug 2 cause B: reset the per-turn stream buffer so each tool-loop turn's text
+        // is isolated. Previously fullResponse accumulated across turns, so stale
+        // prior-turn text was re-concatenated into the next turn's assistant message and
+        // the final committed answer — producing the repeated degraded chain.
+        fullResponse = '';
         let hasToolCalls = false;
         let toolCallsToRun: ToolCall[] = [];
 

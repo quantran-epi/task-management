@@ -50,6 +50,7 @@ export interface GroundedAnswerCardCallbacks {
   onAuthRepair?: (() => void) | undefined;
   onConfigRepair?: (() => void) | undefined;
   synthesizingEvidenceId?: string | null | undefined;
+  freshLookingUpId?: string | null | undefined;
   evidenceSynthesisError?: {
     id: string;
     message: string;
@@ -272,6 +273,18 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
       />
     ) : undefined;
 
+    const resultsSlot = (g.outcome === 'LOCAL_FALLBACK_RESULTS' && g.citations && g.citations.length > 0) ? (
+      <div style={{ marginTop: 12 }}>
+        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6, opacity: 0.85 }}>
+          Tài liệu cục bộ tìm thấy ({g.citations.length})
+        </div>
+        <SourcesPanel
+          citations={g.citations}
+          onOpenCitation={(c) => groundedCallbacks?.onCitationActivate?.(c)}
+        />
+      </div>
+    ) : undefined;
+
     return (
       <div
         data-role="assistant"
@@ -316,6 +329,8 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               diagnosticsSlot={diagnosticsSlot}
               candidatesSlot={candidatesSlot}
               refinementsSlot={refinementsSlot}
+              resultsSlot={resultsSlot}
+              isFreshLookingUp={groundedCallbacks?.freshLookingUpId === g.createdAt}
             />
           )}
         </div>
