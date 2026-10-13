@@ -31,6 +31,19 @@ export function sanitizeEndpoint(endpoint: string): string {
   return trimmed || 'http://localhost:20128';
 }
 
+export function extractJsonContent(raw: string): string {
+  let text = raw.trim();
+  if (text.startsWith('```')) {
+    text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+  }
+  const firstBrace = text.indexOf('{');
+  const lastBrace = text.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    return text.slice(firstBrace, lastBrace + 1);
+  }
+  return text;
+}
+
 function parseModelIds(data: any): string[] {
   const models: string[] = [];
   if (Array.isArray(data?.data)) {
@@ -577,7 +590,7 @@ export async function completeJson(req: CompleteJsonRequest): Promise<unknown> {
   }
 
   try {
-    return JSON.parse(content);
+    return JSON.parse(extractJsonContent(content));
   } catch {
     throw new NineRouterClientError(
       'INVALID_RESPONSE',

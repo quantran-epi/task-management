@@ -171,11 +171,11 @@ export async function synthesizeGroundedAnswer(
       });
     }
 
-    // Repair timeout: 20s (half primary budget)
+    // Repair timeout: 45s (allow model sufficient generation time)
     let callSignal = input.signal;
     let repairCleanup: (() => void) | undefined;
     if (isRepair) {
-      const repairTimeout = AbortSignal.timeout(20_000);
+      const repairTimeout = AbortSignal.timeout(45_000);
       callSignal = (AbortSignal as any).any
         ? (AbortSignal as any).any([input.signal, repairTimeout])
         : input.signal;

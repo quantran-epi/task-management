@@ -363,6 +363,7 @@ export async function startKnowledgeServer(
     host: options.host,
     port: options.port,
     httpsTerminated: options.httpsTerminated,
+    logger: { level: env.LOG_LEVEL || 'info' },
     graphRepository,
     retrievalService,
     onClose: async () => {

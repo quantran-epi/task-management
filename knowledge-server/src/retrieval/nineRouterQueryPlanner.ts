@@ -23,6 +23,19 @@ export interface NineRouterPlannerConfig {
   readonly timeoutMs?: number | undefined;
 }
 
+function extractJsonContent(raw: string): string {
+  let text = raw.trim();
+  if (text.startsWith('```')) {
+    text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+  }
+  const firstBrace = text.indexOf('{');
+  const lastBrace = text.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    return text.slice(firstBrace, lastBrace + 1);
+  }
+  return text;
+}
+
 interface ValidationResult {
   readonly valid: boolean;
   readonly plan?: LogicalQueryPlan | undefined;
@@ -165,7 +178,7 @@ export class NineRouterQueryPlanner implements QueryPlanner {
     messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
     options?: OperationOptions
   ): Promise<unknown> {
-    const cleanEndpoint = this.config.endpoint.replace(/\/+$/, '');
+    const cleanEndpoint = this.config.endpoint.replace(/\/+$/, '').replace(/\/v1$/, '');
     const url = `${cleanEndpoint}/v1/chat/completions`;
 
     const timeoutMs = options?.timeoutMs ?? this.config.timeoutMs ?? 15_000;
@@ -205,7 +218,7 @@ export class NineRouterQueryPlanner implements QueryPlanner {
       throw new Error('9router returned empty completion content');
     }
 
-    return JSON.parse(rawContent);
+    return JSON.parse(extractJsonContent(rawContent));
   }
 
   async plan(

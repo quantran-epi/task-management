@@ -39,23 +39,25 @@ function validateClaimPath(
 }
 
 export const GroundedClaimSchema = z
-  .strictObject({
+  .object({
     id: z.string().regex(/^C[1-9][0-9]*$/),
     text: z.string().min(1).max(800),
     classification: z.enum(['DIRECT', 'INFERRED']),
     citationIds: z.array(CitationIdSchema).min(1).max(8),
     pathId: PathIdSchema.nullable(),
   })
+  .strip()
   .superRefine(validateClaimPath);
 
 export const GroundedAnswerSchema = z
-  .strictObject({
+  .object({
     schemaVersion: z.literal(1),
     language: z.string().min(2).max(16),
     conclusion: z.string().min(1).max(1200),
     claims: z.array(GroundedClaimSchema).max(12),
     unsupportedParts: z.array(z.string().min(1).max(300)).max(5),
   })
+  .strip()
   .superRefine((answer, ctx) => {
     answer.claims.forEach((claim, index) => {
       validateClaimPath(claim, ctx, ['claims', index]);
