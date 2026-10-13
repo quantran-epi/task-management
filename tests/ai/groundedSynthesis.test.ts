@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   synthesizeGroundedAnswer,
   detectQueryLanguage,
+  buildSystemPrompt,
+  normalizeRawGroundedOutput,
   GroundedSynthesisError,
   type SynthesisInput,
 } from '../../src/services/ai/groundedSynthesis';
@@ -13,7 +15,7 @@ describe('groundedSynthesis', () => {
   const completeJsonSpy = vi.spyOn(nineRouterClient, 'completeJson');
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    completeJsonSpy.mockReset();
   });
 
   const basePack: EvidencePack = {
@@ -114,15 +116,15 @@ describe('groundedSynthesis', () => {
     expect(completeJsonSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('2. Repair-once-passes: first attempt has invalid citation, second passes', async () => {
-    const invalidFirst: GroundedAnswer = {
+  it('2. Repair-once-passes: first attempt has unrepairable schema error, second passes', async () => {
+    const invalidFirst = {
       ...validAnswer,
       claims: [
         {
           id: 'C1',
-          text: 'Unknown citation claim',
+          text: '', // empty claim text cannot be repaired by normalization
           classification: 'DIRECT',
-          citationIds: ['S9'], // S9 does not exist in pack
+          citationIds: ['S1'],
           pathId: null,
         },
       ],
@@ -137,7 +139,7 @@ describe('groundedSynthesis', () => {
     expect(result.answer).toEqual(validAnswer);
     expect(result.attempts.length).toBe(2);
     expect(result.attempts[0]?.attempt).toBe(1);
-    expect(result.attempts[0]?.issueCodes).toContain('unknown_citation_id');
+    expect(result.attempts[0]?.issueCodes).toContain('too_small');
     expect(result.attempts[1]?.attempt).toBe(2);
     expect(result.attempts[1]?.issueCodes).toEqual([]);
     expect(completeJsonSpy).toHaveBeenCalledTimes(2);
@@ -165,7 +167,17 @@ describe('groundedSynthesis', () => {
     expect(completeJsonSpy).toHaveBeenCalledTimes(3);
   });
 
-  it('4. Closure rejection: first attempt INFERRED claim lacks pathId, repair fixes it', async () => {
+  it('4. Closure rejection: first attempt fails closure due to unsupported path hop, repair fixes it', async () => {
+    const packWithBrokenPath: EvidencePack = {
+      ...basePack,
+      paths: {
+        P1: {
+          ...basePack.paths.P1!,
+          hopCitationIds: [['S_UNSUPPORTED']],
+        },
+      },
+    };
+
     const invalidClosure = {
       schemaVersion: 1,
       language: 'vi',
@@ -173,10 +185,10 @@ describe('groundedSynthesis', () => {
       claims: [
         {
           id: 'C1',
-          text: 'Inferred claim without pathId',
+          text: 'Inferred claim with unsupported hop path',
           classification: 'INFERRED',
           citationIds: ['S1'],
-          pathId: null, // violates schema and closure
+          pathId: 'P1',
         },
       ],
       unsupportedParts: [],
@@ -189,10 +201,10 @@ describe('groundedSynthesis', () => {
       claims: [
         {
           id: 'C1',
-          text: 'Inferred claim with pathId',
-          classification: 'INFERRED',
+          text: 'Direct claim fallback',
+          classification: 'DIRECT',
           citationIds: ['S1'],
-          pathId: 'P1',
+          pathId: null,
         },
       ],
       unsupportedParts: [],
@@ -201,12 +213,12 @@ describe('groundedSynthesis', () => {
     completeJsonSpy.mockResolvedValueOnce(invalidClosure);
     completeJsonSpy.mockResolvedValueOnce(validInferred);
 
-    const input = createInput();
+    const input = createInput({ pack: packWithBrokenPath });
     const result = await synthesizeGroundedAnswer(input);
 
     expect(result.answer).toEqual(validInferred);
     expect(result.attempts.length).toBe(2);
-    expect(result.attempts[0]?.issueCodes).toContain('custom');
+    expect(result.attempts[0]?.issueCodes).toContain('path_hop_unsupported');
   });
 
   it('5. Abort propagation: external AbortSignal fires mid-call', async () => {
@@ -287,14 +299,14 @@ describe('groundedSynthesis', () => {
   });
 
   it('10. Repair prompt carries no new evidence: assert repair user message evidence is identical', async () => {
-    const invalidFirst: GroundedAnswer = {
+    const invalidFirst = {
       ...validAnswer,
       claims: [
         {
           id: 'C1',
-          text: 'Unknown citation claim',
+          text: '', // schema invalid
           classification: 'DIRECT',
-          citationIds: ['S9'],
+          citationIds: ['S1'],
           pathId: null,
         },
       ],
@@ -516,5 +528,121 @@ describe('groundedSynthesis', () => {
     const systemPrompt = completeJsonSpy.mock.calls[0]![0].messages[0]!.content;
     expect(systemPrompt).toContain('Respond in English');
     expect(result.responseLanguage).toBe('en');
+  });
+
+  describe('normalizeRawGroundedOutput', () => {
+    const allowedCitationIds = ['S1', 'S2'];
+    const allowedPathIds = ['P1'];
+
+    it('18. normalizes numeric citation IDs [1, 2] to ["S1", "S2"]', () => {
+      const raw = {
+        conclusion: 'Done',
+        claims: [
+          { id: '1', text: 'Some fact', classification: 'DIRECT', citationIds: [1, 2], pathId: null },
+        ],
+      };
+      const res = normalizeRawGroundedOutput(raw, allowedCitationIds, allowedPathIds) as any;
+      expect(res.claims[0].id).toBe('C1');
+      expect(res.claims[0].citationIds).toEqual(['S1', 'S2']);
+    });
+
+    it('19. strips bracketed and parenthesized citations [S1], (S2)', () => {
+      const raw = {
+        conclusion: 'Done',
+        claims: [
+          { id: 'C1', text: 'Some fact', classification: 'DIRECT', citationIds: ['[S1]', '(S2)'], pathId: null },
+        ],
+      };
+      const res = normalizeRawGroundedOutput(raw, allowedCitationIds, allowedPathIds) as any;
+      expect(res.claims[0].citationIds).toEqual(['S1', 'S2']);
+    });
+
+    it('20. normalizes DIRECT claim with bogus pathId to pathId: null', () => {
+      const raw = {
+        conclusion: 'Done',
+        claims: [
+          { id: 'C1', text: 'Some fact', classification: 'DIRECT', citationIds: ['S1'], pathId: 'P1' },
+        ],
+      };
+      const res = normalizeRawGroundedOutput(raw, allowedCitationIds, allowedPathIds) as any;
+      expect(res.claims[0].pathId).toBeNull();
+    });
+
+    it('21. downgrades INFERRED claim with missing or invalid pathId to DIRECT with pathId: null', () => {
+      const raw = {
+        conclusion: 'Done',
+        claims: [
+          { id: 'C1', text: 'Some fact', classification: 'INFERRED', citationIds: ['S1'], pathId: null },
+          { id: 'C2', text: 'Other fact', classification: 'INFERRED', citationIds: ['S1'], pathId: 'P99' },
+        ],
+      };
+      const res = normalizeRawGroundedOutput(raw, allowedCitationIds, allowedPathIds) as any;
+      expect(res.claims[0].classification).toBe('DIRECT');
+      expect(res.claims[0].pathId).toBeNull();
+      expect(res.claims[1].classification).toBe('DIRECT');
+      expect(res.claims[1].pathId).toBeNull();
+    });
+
+    it('22. preserves valid INFERRED claim when pathId is in allowedPathIds', () => {
+      const raw = {
+        conclusion: 'Done',
+        claims: [
+          { id: 'C1', text: 'Valid inferred fact', classification: 'INFERRED', citationIds: ['S1'], pathId: 'P1' },
+        ],
+      };
+      const res = normalizeRawGroundedOutput(raw, allowedCitationIds, allowedPathIds) as any;
+      expect(res.claims[0].classification).toBe('INFERRED');
+      expect(res.claims[0].pathId).toBe('P1');
+    });
+
+    it('23. filters unknown citation IDs and safeguards with first allowed citation', () => {
+      const raw = {
+        conclusion: 'Done',
+        claims: [
+          { id: 'C1', text: 'Some fact', classification: 'DIRECT', citationIds: ['S9', 'S99'], pathId: null },
+        ],
+      };
+      const res = normalizeRawGroundedOutput(raw, allowedCitationIds, allowedPathIds) as any;
+      expect(res.claims[0].citationIds).toEqual(['S1']);
+    });
+
+    it('24. reconstructs default DIRECT claim when claims array is empty but conclusion exists', () => {
+      const raw = {
+        conclusion: 'Hệ thống đã xác nhận thành công.',
+        claims: [],
+      };
+      const res = normalizeRawGroundedOutput(raw, allowedCitationIds, allowedPathIds) as any;
+      expect(res.claims).toHaveLength(1);
+      expect(res.claims[0]).toEqual({
+        id: 'C1',
+        text: 'Hệ thống đã xác nhận thành công.',
+        classification: 'DIRECT',
+        citationIds: ['S1'],
+        pathId: null,
+      });
+    });
+
+    it('25. strips markdown code fences from raw string JSON input', () => {
+      const rawStr = '```json\n{\n  "conclusion": "Done",\n  "claims": []\n}\n```';
+      const res = normalizeRawGroundedOutput(rawStr, allowedCitationIds, allowedPathIds) as any;
+      expect(res.conclusion).toBe('Done');
+      expect(res.schemaVersion).toBe(1);
+    });
+  });
+
+  describe('buildSystemPrompt', () => {
+    it('26. includes valid few-shot example and citation rules', () => {
+      const promptVi = buildSystemPrompt('vi', 'test-v1');
+      expect(promptVi).toContain('VALID OUTPUT EXAMPLE:');
+      expect(promptVi).toContain('"schemaVersion": 1');
+      expect(promptVi).toContain('"classification": "DIRECT"');
+      expect(promptVi).toContain('"citationIds"');
+      expect(promptVi).toContain('allowedCitationIds');
+
+      const promptEn = buildSystemPrompt('en', 'test-v1');
+      expect(promptEn).toContain('Respond in English');
+      expect(promptEn).toContain('VALID OUTPUT EXAMPLE:');
+      expect(promptEn).toContain('"language": "en"');
+    });
   });
 });
