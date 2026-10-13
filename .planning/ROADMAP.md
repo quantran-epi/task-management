@@ -42,7 +42,7 @@
 - [x] **Phase 17: Pilot Ontology, Deterministic Extraction & Neo4j Knowledge Graph** - Controlled process 60000006 ontology, composite URNs, deterministic table extraction, evidence classification, and rebuildable Neo4j graph. (completed 2026-10-10)
 - [x] **Phase 18: Multi-Modal Hybrid Retrieval Engine** - Full-text identifier search, semantic vector search, bounded 1-3 hop Cypher traversal, and Reciprocal Rank Fusion. (completed 2026-10-10)
 - [x] **Phase 19: Grounded Assistant, Provenance Citations & Offline Fallback** - AI Chat Drawer synthesis with source citations, step-by-step path cards, conflict warnings, abstention handling, and local BM25 fallback. (completed 2026-10-11)
-- [ ] **Phase 19.1: Production Neo4j Integration & Live Retrieval Validation** (INSERTED) - Deploy knowledge stack to SHB Kubernetes cluster and prove process 60000006 end-to-end through TaskMate UI against persistent Neo4j storage.
+- [x] **Phase 19.1: Production Neo4j Integration & Live Retrieval Validation** (INSERTED) - Deploy knowledge stack to SHB Kubernetes cluster and prove process 60000006 end-to-end through TaskMate UI against persistent Neo4j storage. (completed 2026-10-13)
 - [ ] **Phase 20: Benchmark Evaluation Suite, Integrity Hardening & Credential Isolation** - 30-50 question evaluation benchmark, path/claim verification, index rebuild tests, and server-side secret isolation.
 
 ## Phase Details
@@ -404,7 +404,7 @@ Plans:
 **Goal:** Deploy the knowledge stack to the SHB internal Kubernetes cluster and prove process 60000006 end-to-end through TaskMate UI against persistent Neo4j storage.
 **Requirements**: D-01..D-23
 **Depends on:** Phase 19
-**Plans:** 4/5 plans complete
+**Plans:** 5/5 plans complete
 
 Plans:
 **Wave 1**
@@ -422,7 +422,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 19.1-05-PLAN.md — Execute metadata-only smoke runner and human UAT verification with Pod restart proof (Wave 4)
+- [x] 19.1-05-PLAN.md — Execute metadata-only smoke runner and human UAT verification with Pod restart proof (Wave 4)
 
 ### Phase 20: Benchmark Evaluation Suite, Integrity Hardening & Credential Isolation
 
