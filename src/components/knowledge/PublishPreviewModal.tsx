@@ -43,9 +43,7 @@ export function PublishPreviewModal({ open, preview, session, onClose, onOpenSta
     setPublishStatus('Publishing');
     setPublishError(undefined);
     setUncertain(false);
-    if (preview.hasRemovals) session.confirmRemoval();
-    void session.scan().catch(() => {});
-  }, [open, preview, session]);
+  }, [open, preview]);
 
   const closeBeforePost = () => {
     session.closePreview();

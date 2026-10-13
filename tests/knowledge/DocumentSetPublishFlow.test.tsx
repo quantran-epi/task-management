@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import 'fake-indexeddb/auto';
 import '@testing-library/jest-dom/vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { DocumentSetForm, snapshotFolderMembers } from '../../src/components/knowledge/DocumentSetForm';
 import { AttemptHistoryList } from '../../src/components/knowledge/AttemptHistoryList';
@@ -306,49 +306,29 @@ describe('guarded publish UI', () => {
     expect(session.submitConfirmedAttempt).not.toHaveBeenCalled();
   });
 
-  it('requires removal consent before scan, then renders no-findings result', async () => {
+  it('publishes immediately without DLP or removal consent', async () => {
     const session = {
       confirmRemoval: vi.fn(), cancelRemoval: vi.fn(), scan: vi.fn(async () => []),
       confirmFindings: vi.fn(async () => ({ nonce: 'nonce-a' })),
-      submitConfirmedAttempt: vi.fn(async () => ({ status: 'Publishing', attemptId: 'attempt-a' })), closePreview: vi.fn(),
+      submitConfirmedAttempt: vi.fn(async () => ({ status: 'Publishing', attemptId: 'attempt-a' })),
+      pollAcceptedAttempt: vi.fn(async () => null), closePreview: vi.fn(),
     };
     render(<PublishPreviewModal open preview={previewWithRemoval()} session={session as never} onClose={vi.fn()} />);
-    const scan = screen.getByRole('button', { name: 'Kiểm tra dữ liệu nhạy cảm' });
-    expect(scan).toBeDisabled();
-    fireEvent.click(screen.getByRole('checkbox', { name: /Tôi hiểu các tài liệu này sẽ bị gỡ/ }));
-    fireEvent.click(scan);
-    expect(await screen.findByText('Không phát hiện dữ liệu nhạy cảm theo bộ quy tắc hiện tại.')).toBeInTheDocument();
-    const publishButton = screen.getByRole('button', { name: 'Xuất bản bộ tài liệu' });
-    expect(publishButton).toBeEnabled();
-    fireEvent.click(publishButton);
-    expect(session.confirmFindings).toHaveBeenCalledWith(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Xuất bản ngay' }));
+    await waitFor(() => expect(session.submitConfirmedAttempt).toHaveBeenCalled());
+    expect(session.confirmRemoval).toHaveBeenCalled();
+    expect(session.confirmFindings).toHaveBeenCalledWith(true);
   });
 
-  it('shows masked findings and fresh unchecked override, passing consent to confirmFindings', async () => {
+  it('does not render DLP findings or consent controls', () => {
     const session = {
       confirmRemoval: vi.fn(), cancelRemoval: vi.fn(), scan: vi.fn(async () => [finding]),
-      confirmFindings: vi.fn(async () => ({ nonce: 'nonce-a' })), submitConfirmedAttempt: vi.fn(async () => ({ status: 'Publishing', attemptId: 'attempt-a' })), closePreview: vi.fn(),
+      confirmFindings: vi.fn(async () => ({ nonce: 'nonce-a' })), submitConfirmedAttempt: vi.fn(), closePreview: vi.fn(),
     };
-    const { rerender } = render(<PublishPreviewModal open preview={{ ...previewWithRemoval(), hasRemovals: false }} session={session as never} onClose={vi.fn()} documentTitles={{ 'doc-a': 'Alpha' }} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra dữ liệu nhạy cảm' }));
-    expect(await screen.findByText('Phát hiện dữ liệu có thể nhạy cảm')).toBeInTheDocument();
-    expect(screen.getByText('411111******1111')).toBeInTheDocument();
-    expect(screen.getByText('Dòng 2, cột 5')).toBeInTheDocument();
-    expect(screen.queryByText('4111111111111111')).not.toBeInTheDocument();
-    const override = screen.getByRole('checkbox', { name: /Tôi đã xem cảnh báo/ });
-    expect(override).not.toBeChecked();
-    const publishButton = screen.getByRole('button', { name: 'Vẫn xuất bản lần này' });
-    expect(publishButton).toBeDisabled();
-
-    // Check override and publish
-    fireEvent.click(override);
-    expect(publishButton).toBeEnabled();
-    fireEvent.click(publishButton);
-    expect(session.confirmFindings).toHaveBeenCalledWith(true);
-
-    // Opening new preview resets checkbox
-    rerender(<PublishPreviewModal open preview={{ ...previewWithRemoval(), hasRemovals: false, setId: 'set-new' }} session={session as never} onClose={vi.fn()} documentTitles={{ 'doc-a': 'Alpha' }} />);
-    expect(screen.queryByRole('checkbox', { name: /Tôi đã xem cảnh báo/ })).not.toBeInTheDocument();
+    render(<PublishPreviewModal open preview={{ ...previewWithRemoval(), hasRemovals: false }} session={session as never} onClose={vi.fn()} />);
+    expect(screen.queryByText('Phát hiện dữ liệu có thể nhạy cảm')).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Xuất bản ngay' })).toBeEnabled();
   });
 
   it('cancels before POST and accepted state offers close only', () => {
@@ -358,7 +338,7 @@ describe('guarded publish UI', () => {
     };
     const onAnnounce = vi.fn();
     const { unmount } = render(<PublishPreviewModal open preview={previewWithRemoval()} session={session as never} onClose={vi.fn()} onAnnounce={onAnnounce} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Hủy xuất bản' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Hủy' }));
     expect(session.submitConfirmedAttempt).not.toHaveBeenCalled();
     expect(onAnnounce).toHaveBeenCalledWith('Đã hủy xuất bản. Không có nội dung tài liệu nào được gửi.');
     unmount();
@@ -408,9 +388,7 @@ describe('guarded publish UI', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra dữ liệu nhạy cảm' }));
-    const publishButton = await screen.findByRole('button', { name: 'Xuất bản bộ tài liệu' });
-    fireEvent.click(publishButton);
+    fireEvent.click(screen.getByRole('button', { name: 'Xuất bản ngay' }));
 
     expect(await screen.findByText('Đã xuất bản bộ tài liệu.')).toBeInTheDocument();
     expect(screen.getByText('Bộ tài liệu đã được đồng bộ với Knowledge Server.')).toBeInTheDocument();
@@ -443,8 +421,7 @@ describe('guarded publish UI', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra dữ liệu nhạy cảm' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Xuất bản bộ tài liệu' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Xuất bản ngay' }));
 
     expect(await screen.findByText('Xuất bản thất bại. Ảnh chụp trước vẫn đang hoạt động.')).toBeInTheDocument();
     expect(screen.getByText('Khối mã quá 50.000 ký tự tại dòng 7, cột 1.')).toBeInTheDocument();
@@ -474,18 +451,17 @@ describe('guarded publish UI', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra dữ liệu nhạy cảm' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Xuất bản bộ tài liệu' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Xuất bản ngay' }));
 
     expect(await screen.findByText('Mất kết nối — chưa xác định kết quả.')).toBeInTheDocument();
     expect(screen.getByText('Đang xuất bản')).toBeInTheDocument();
   });
 
-  it('guards duplicate clicks and renders bounded error on scan or submit rejection', async () => {
+  it('renders bounded error on immediate publish rejection', async () => {
     const session = {
       confirmRemoval: vi.fn(),
       cancelRemoval: vi.fn(),
-      scan: vi.fn().mockRejectedValueOnce(new Error('raw internal scan crash')),
+      scan: vi.fn(async () => []),
       confirmFindings: vi.fn(async () => ({ nonce: 'nonce-1' })),
       submitConfirmedAttempt: vi.fn().mockRejectedValueOnce(new Error('raw network connection drop')),
       closePreview: vi.fn(),
@@ -499,17 +475,9 @@ describe('guarded publish UI', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra dữ liệu nhạy cảm' }));
-    expect(await screen.findByText('Không thể kiểm tra dữ liệu nhạy cảm. Thử lại sau.')).toBeInTheDocument();
-    expect(screen.queryByText('raw internal scan crash')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Xuất bản ngay' }));
 
-    // Now test submit failure gracefully
-    session.scan.mockResolvedValueOnce([]);
-    fireEvent.click(await screen.findByRole('button', { name: /Kiểm tra dữ liệu nhạy cảm/ }));
-    const publishButton = await screen.findByRole('button', { name: /Xuất bản bộ tài liệu/ });
-    fireEvent.click(publishButton);
-
-    expect(await screen.findByText('Không thể gửi ảnh chụp xuất bản. Kiểm tra kết nối và thử lại.')).toBeInTheDocument();
+    expect((await screen.findAllByText('Không thể gửi ảnh chụp xuất bản. Kiểm tra kết nối và thử lại.')).length).toBeGreaterThan(0);
     expect(screen.queryByText('raw network connection drop')).not.toBeInTheDocument();
   });
 
@@ -535,8 +503,7 @@ describe('guarded publish UI', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra dữ liệu nhạy cảm' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Xuất bản bộ tài liệu' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Xuất bản ngay' }));
 
     expect(await screen.findByText('Đang xuất bản')).toBeInTheDocument();
     const closeButton = screen.getByRole('button', { name: 'Đóng' });

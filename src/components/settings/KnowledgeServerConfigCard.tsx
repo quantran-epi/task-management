@@ -163,11 +163,11 @@ export const KnowledgeServerConfigCard: React.FC<KnowledgeServerConfigCardProps>
           />
         </Form.Item>
 
-        <Form.Item label="Bearer Token">
+        <Form.Item label="Token phiên">
           <Input.Password
             value={config.token}
             onChange={(event) => config.setToken(event.target.value)}
-            aria-label="Bearer Token"
+            aria-label="Token phiên"
             autoComplete="new-password"
           />
         </Form.Item>

@@ -84,19 +84,11 @@ client_secret: \"canary-secret\"`;
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     expect(fetchSpy.mock.calls[0]?.[1]).not.toEqual(expect.objectContaining({ method: 'POST' }));
 
-    fireEvent.click(within(previewDialog).getByRole('button', { name: 'Kiểm tra dữ liệu nhạy cảm' }));
-    expect(await within(previewDialog).findByText('Phát hiện dữ liệu có thể nhạy cảm')).toBeInTheDocument();
-    const maskedContexts = previewDialog.querySelectorAll('code');
-    expect(maskedContexts.length).toBeGreaterThan(0);
-    expect(
-      Array.from(maskedContexts).some((element) =>
-        /[•]|REDACTED/u.test(element.textContent ?? '')
-      )
-    ).toBe(true);
-    expect(previewDialog.textContent).not.toContain('4532015112830366');
-    expect(previewDialog.textContent).not.toContain('canary-secret');
+    expect(within(previewDialog).queryByText('Phát hiện dữ liệu có thể nhạy cảm')).not.toBeInTheDocument();
+    expect(within(previewDialog).queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(within(previewDialog).getByRole('button', { name: 'Xuất bản ngay' })).toBeEnabled();
 
-    fireEvent.click(within(previewDialog).getByRole('button', { name: 'Hủy xuất bản' }));
+    fireEvent.click(within(previewDialog).getByRole('button', { name: 'Hủy' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Xem trước thay đổi' })).not.toBeInTheDocument());
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     expect(await database.notes.get(document.id)).toMatchObject({
@@ -290,31 +282,19 @@ client_secret: \"canary-secret\"`;
     expect(await screen.findByText('Xem trước thay đổi')).toBeInTheDocument();
     const previewDialog = screen.getAllByRole('dialog').at(-1) as HTMLElement;
 
-    // Verify removal statistics and labels
+    // Verify removal statistics without consent gate
     expect(within(previewDialog).getAllByText('Gỡ khỏi máy chủ').length).toBeGreaterThan(0);
-    expect(previewDialog.textContent).toContain('Gỡ tài liệu khỏi máy chủ');
+    expect(within(previewDialog).queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(within(previewDialog).getByRole('button', { name: 'Xuất bản ngay' })).toBeEnabled();
 
-    // Consent gate: Scan button is disabled until removal checkbox is checked (D-03 / D-04)
-    const scanButton = within(previewDialog).getByRole('button', { name: 'Kiểm tra dữ liệu nhạy cảm' });
-    expect(scanButton).toBeDisabled();
-
-    const consentCheckbox = within(previewDialog).getByRole('checkbox', {
-      name: /Tôi hiểu các tài liệu này sẽ bị gỡ khỏi ảnh chụp trên máy chủ/i,
-    });
-    expect(consentCheckbox).not.toBeChecked();
-
-    fireEvent.click(consentCheckbox);
-    expect(consentCheckbox).toBeChecked();
-    expect(scanButton).toBeEnabled();
-
-    // Zero POST requests issued
+    // Zero POST requests issued before explicit publish
     const postCalls = fetchSpy.mock.calls.filter((call) =>
       call[1] && (call[1] as RequestInit).method === 'POST'
     );
     expect(postCalls).toHaveLength(0);
 
     // Cancel modal
-    fireEvent.click(within(previewDialog).getByRole('button', { name: 'Hủy xuất bản' }));
+    fireEvent.click(within(previewDialog).getByRole('button', { name: 'Hủy' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Xem trước thay đổi' })).not.toBeInTheDocument());
   });
 

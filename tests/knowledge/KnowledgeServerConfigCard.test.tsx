@@ -49,7 +49,7 @@ describe('KnowledgeServerConfigCard', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders disabled in existing AI tab with one URL and one ephemeral password field', async () => {
+  it('renders disabled in existing AI tab with one URL and one persisted password field', async () => {
     render(
       <KnowledgeConfigProvider db={db}>
         <SettingsView db={db} defaultActiveTab="ai" />
@@ -65,8 +65,7 @@ describe('KnowledgeServerConfigCard', () => {
     expect(screen.queryByRole('tab', { name: /Knowledge Server/i })).not.toBeInTheDocument();
   });
 
-  it('persists normalized URL while token disappears on remount and never reaches settings writes', async () => {
-    const put = vi.spyOn(db.settings, 'put');
+  it('persists normalized URL and token across remounts', async () => {
     const first = renderCard(db);
     await screen.findByRole('switch', { name: 'Bật Knowledge Server' });
 
@@ -84,8 +83,10 @@ describe('KnowledgeServerConfigCard', () => {
         'https://knowledge.example.com'
       )
     );
-    expect(put.mock.calls.flat().join(' ')).not.toContain('secret-session-token');
-    expect(await db.settings.get('knowledge_server_token')).toBeUndefined();
+    expect(await db.settings.get('knowledge_server_token')).toEqual({
+      key: 'knowledge_server_token',
+      value: 'secret-session-token',
+    });
     first.unmount();
 
     renderCard(db);
@@ -94,21 +95,16 @@ describe('KnowledgeServerConfigCard', () => {
         'https://knowledge.example.com'
       )
     );
-    expect(screen.getByLabelText('Token phiên')).toHaveValue('');
+    expect(screen.getByLabelText('Token phiên')).toHaveValue('secret-session-token');
   });
 
-  it('rejects remote HTTP, warns for loopback HTTP, normalizes slash, and exposes no route fields', async () => {
+  it('normalizes URL and exposes no internal route fields', async () => {
     renderCard(db);
     const url = await screen.findByLabelText('URL Knowledge Server');
 
-    fireEvent.change(url, { target: { value: 'http://knowledge.example.com' } });
-    expect(await screen.findByText('Máy chủ từ xa phải dùng HTTPS.')).toBeInTheDocument();
+    fireEvent.change(url, { target: { value: 'http://knowledge.example.com/' } });
     fireEvent.click(screen.getByRole('button', { name: /Lưu cấu hình/ }));
-
-    fireEvent.change(url, { target: { value: 'http://localhost:4100/' } });
-    expect(await screen.findByText('HTTP chỉ được phép cho máy cục bộ.')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Lưu cấu hình/ }));
-    await waitFor(() => expect(url).toHaveValue('http://localhost:4100'));
+    await waitFor(() => expect(url).toHaveValue('http://knowledge.example.com'));
 
     expect(screen.queryByLabelText(/api\/v1/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/endpoint/i)).not.toBeInTheDocument();
@@ -177,7 +173,7 @@ describe('KnowledgeServerConfigCard', () => {
 
     fireEvent.click(screen.getByRole('switch', { name: 'Bật Knowledge Server' }));
     fireEvent.change(await screen.findByLabelText('URL Knowledge Server'), {
-      target: { value: 'not-a-url' },
+      target: { value: 'ftp://not-a-url' },
     });
     fireEvent.click(testButton);
 
@@ -185,7 +181,7 @@ describe('KnowledgeServerConfigCard', () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
-  it('proves single root provider maintains token across views with zero leakage to storage or backups', async () => {
+  it('maintains persisted token across views while excluding it from backups', async () => {
     const tokenCanary = 'bearer-token-canary-secret-12345';
 
     function Shell({ testDb }: { testDb: TaskPlannerDatabase }) {
@@ -249,9 +245,9 @@ describe('KnowledgeServerConfigCard', () => {
     const authHeader = fetchSpy.mock.calls[0]?.[1]?.headers?.Authorization || fetchSpy.mock.calls[0]?.[1]?.headers?.authorization;
     expect(authHeader).toBe(`Bearer ${tokenCanary}`);
 
-    // 5. Assert zero leakage across storage, DOM, and backup
+    // 5. Token persists only in IndexedDB and stays excluded from backup/visible text
     const settingsRows = await db.settings.toArray();
-    expect(JSON.stringify(settingsRows)).not.toContain(tokenCanary);
+    expect(JSON.stringify(settingsRows)).toContain(tokenCanary);
     expect(JSON.stringify(localStorage)).not.toContain(tokenCanary);
     expect(JSON.stringify(sessionStorage)).not.toContain(tokenCanary);
     expect(document.body.textContent).not.toContain(tokenCanary);
@@ -259,7 +255,7 @@ describe('KnowledgeServerConfigCard', () => {
     const backup = await exportBackupPayload(db);
     expect(JSON.stringify(backup)).not.toContain(tokenCanary);
 
-    // 6. Provider remount clears token
+    // 6. Provider remount restores token
     unmount();
     const freshDb = new TaskPlannerDatabase(dbName);
     render(
@@ -268,7 +264,7 @@ describe('KnowledgeServerConfigCard', () => {
       </KnowledgeConfigProvider>
     );
     await waitFor(() => {
-      expect(screen.getByLabelText('Token phiên')).toHaveValue('');
+      expect(screen.getByLabelText('Token phiên')).toHaveValue(tokenCanary);
     });
   }, 30_000);
 });

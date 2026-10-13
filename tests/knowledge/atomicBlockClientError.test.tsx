@@ -71,8 +71,7 @@ describe('oversized atomic block client errors', () => {
     };
 
     render(<PublishPreviewModal open preview={preview} session={session as never} onClose={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra dữ liệu nhạy cảm' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Xuất bản bộ tài liệu' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Xuất bản ngay' }));
 
     expect(await screen.findByText(/Khối code vượt quá giới hạn an toàn 50,000 ký tự/)).toBeInTheDocument();
     expect(screen.getByText(/dòng 7, cột 5/)).toBeInTheDocument();
