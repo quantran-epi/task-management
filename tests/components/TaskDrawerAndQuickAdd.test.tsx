@@ -110,7 +110,9 @@ describe('QuickAddBar and TaskDrawer Banking IT Fields', () => {
     expect(screen.getByText('Business Analyst')).toBeInTheDocument();
 
     // Inheritance hint check: for ms-1, opsOwners has TuanLA from milestone, BA inherits HuongTT from project
-    expect(screen.getByText(/Kế thừa: \[TuanLA\] \(từ Milestone\)/i)).toBeInTheDocument();
-    expect(screen.getByText(/Kế thừa: \[HuongTT\] \(từ Dự án\)/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(/Kế thừa: \[TuanLA\] \(từ Milestone\)/i)).toBeInTheDocument();
+      expect(screen.getByText(/Kế thừa: \[HuongTT\] \(từ Dự án\)/i)).toBeInTheDocument();
+    });
   });
 });

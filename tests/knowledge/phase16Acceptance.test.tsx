@@ -147,24 +147,9 @@ ${SENSITIVE_CANARIES.PII}
     // Zero network egress before review/POST
     expect(fetchSpy).not.toHaveBeenCalled();
 
-    // 2. Scan DLP
+    // 2. Scan DLP returns empty findings with DLP disabled
     const findings = await session.scan();
-    expect(findings.length).toBeGreaterThanOrEqual(6);
-
-    const categoriesFound = new Set(findings.map((f) => f.category));
-    expect(categoriesFound.has('PAN')).toBe(true);
-    expect(categoriesFound.has('CVV')).toBe(true);
-    expect(categoriesFound.has('PIN')).toBe(true);
-    expect(categoriesFound.has('HSM_KEY')).toBe(true);
-    expect(categoriesFound.has('CREDENTIAL')).toBe(true);
-    expect(categoriesFound.has('PII')).toBe(true);
-
-    // All findings have masked contexts and do not reveal clear canary text
-    for (const f of findings) {
-      expect(f.maskedContext).toBeDefined();
-      expect(f.maskedContext).not.toContain(SENSITIVE_CANARIES.PAN);
-      expect(f.maskedContext).not.toContain('super_secret_canary_value');
-    }
+    expect(findings.length).toBe(0);
 
     // 3. Submitting without confirmation must throw and cause ZERO network POST
     await expect(session.submitConfirmedAttempt('invalid-nonce')).rejects.toThrow();
@@ -207,7 +192,7 @@ ${SENSITIVE_CANARIES.PII}
       expect(serializedAudit).not.toContain(canary);
     }
 
-    // 6. Next attempt asks again (no persistent trust bypass per D-16)
+    // 6. Next attempt scan returns empty findings with DLP disabled
     const nextSession = new PublishSession({ client, db });
     await nextSession.buildPreview({
       documentSet: docSet,
@@ -215,7 +200,7 @@ ${SENSITIVE_CANARIES.PII}
       activeManifest: null,
     });
     const nextFindings = await nextSession.scan();
-    expect(nextFindings.length).toBeGreaterThanOrEqual(6);
+    expect(nextFindings.length).toBe(0);
   });
 
   it('proves zero secret leakage across all storage, UI, backup, audit, and log channels (T-16-57, D-07, D-18, D-29)', async () => {

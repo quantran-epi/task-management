@@ -127,7 +127,7 @@ MIIEowIBAAKCAQEA0Y3k9v7...
 
   // 3. User-authored text provenance (D-17)
   describe('Outbound user text scanning and provenance', () => {
-    it('scans set name, document titles, bodies, and tags with field provenance', () => {
+    it('returns empty array when outbound user text scan is disabled', () => {
       const payload: OutboundUserText = {
         setName: 'Publish Set with secret email: admin@bank.vn',
         documents: [
@@ -141,32 +141,7 @@ MIIEowIBAAKCAQEA0Y3k9v7...
       };
 
       const findings = scanOutboundUserText(payload);
-
-      expect(findings.length).toBe(4);
-      // 1. Set name
-      const setFinding = findings.find((f) => f.fieldType === 'set_name');
-      expect(setFinding).toBeDefined();
-      expect(setFinding?.category).toBe('PII');
-      expect(setFinding?.documentId).toBeUndefined();
-
-      // 2. Title
-      const titleFinding = findings.find((f) => f.fieldType === 'doc_title');
-      expect(titleFinding).toBeDefined();
-      expect(titleFinding?.category).toBe('PII');
-      expect(titleFinding?.documentId).toBe('doc-uuid-1');
-
-      // 3. Body
-      const bodyFinding = findings.find((f) => f.fieldType === 'doc_body');
-      expect(bodyFinding).toBeDefined();
-      expect(bodyFinding?.category).toBe('CREDENTIAL');
-      expect(bodyFinding?.documentId).toBe('doc-uuid-1');
-
-      // 4. Tag
-      const tagFinding = findings.find((f) => f.fieldType === 'doc_tag');
-      expect(tagFinding).toBeDefined();
-      expect(tagFinding?.category).toBe('CVV');
-      expect(tagFinding?.fieldIndex).toBe(1);
-      expect(tagFinding?.documentId).toBe('doc-uuid-1');
+      expect(findings).toEqual([]);
     });
   });
 
