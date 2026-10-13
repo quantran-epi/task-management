@@ -11,7 +11,12 @@ import type {
   GroundedTurnResult,
 } from '../../src/services/ai/groundedTurn';
 import type { ChatMessageGrounding } from '../../src/services/ai/groundedAnswerSchemas';
-import { createOrGetThread, saveMessage } from '../../src/db/repositories/chatRepo';
+import {
+  createOrGetThread,
+  getMessagesByThreadId,
+  saveMessage,
+} from '../../src/db/repositories/chatRepo';
+import * as nineRouterTokenService from '../../src/services/ai/nineRouterTokenService';
 
 vi.mock('../../src/utils/pptxExport', () => ({
   exportPresentationAsFile: vi.fn(),
@@ -88,6 +93,7 @@ describe('AIChatDrawer Grounded Turn Wiring (Plan 19-14)', () => {
     testDb = new TaskPlannerDatabase('TestGroundedWiring_' + Math.random().toString(36).slice(2));
     await testDb.open();
     clearGroundedTurnTestHooks();
+    vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-api-key');
   });
 
   afterEach(() => {
@@ -299,6 +305,14 @@ describe('AIChatDrawer Grounded Turn Wiring (Plan 19-14)', () => {
     await waitFor(() => {
       expect(runMock).toHaveBeenCalledTimes(2);
     });
+
+    const thread = await createOrGetThread({ scopeType: 'global' }, testDb);
+    await waitFor(async () => {
+      const userMessages = (await getMessagesByThreadId(thread.id, testDb)).filter(
+        (msg) => msg.role === 'user' && msg.content === 'Tôi muốn tìm hiểu'
+      );
+      expect(userMessages).toHaveLength(1);
+    });
   });
 
   it('7. Fresh lookup -> old message grounding immutable; new assistant message appended', async () => {
@@ -372,7 +386,51 @@ describe('AIChatDrawer Grounded Turn Wiring (Plan 19-14)', () => {
     });
   });
 
-  it('9. Citation chip click opens QuickPreviewDrawer with range focus', async () => {
+  it('9. Evidence-only synthesis shows configuration error instead of failing silently', async () => {
+    vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('');
+    const onOpenSettings = vi.fn();
+    const synthMock = vi.fn();
+    const modelUnavailGrounding: ChatMessageGrounding = {
+      ...validGroundedAnswer,
+      outcome: 'MODEL_UNAVAILABLE',
+      answer: null,
+    };
+
+    setGroundedTurnTestHooks({
+      runGroundedTurn: vi.fn().mockResolvedValue({
+        kind: 'evidence_only',
+        grounding: modelUnavailGrounding,
+      } as GroundedTurnResult),
+      synthesizeFromStoredEvidence: synthMock,
+    });
+
+    render(
+      <AIChatDrawer
+        open={true}
+        onClose={() => {}}
+        onOpenSettings={onOpenSettings}
+        db={testDb}
+      />
+    );
+
+    submitMessage('CYTP1002 offline');
+
+    await waitFor(() => {
+      expect(screen.getByText('Tạo câu trả lời từ bằng chứng')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText('Tạo câu trả lời từ bằng chứng'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Không thể tạo câu trả lời từ bằng chứng')).toBeInTheDocument();
+      expect(screen.getByText('Chưa cấu hình đầy đủ API Key, endpoint hoặc mô hình 9router.')).toBeInTheDocument();
+    });
+    expect(synthMock).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByText('Cài đặt'));
+    expect(onOpenSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it('10. Citation chip click opens QuickPreviewDrawer with range focus', async () => {
     const runMock = vi.fn().mockResolvedValue({
       kind: 'grounded_answer',
       grounding: validGroundedAnswer,

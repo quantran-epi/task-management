@@ -49,6 +49,12 @@ export interface GroundedAnswerCardCallbacks {
   onInvalidRetry?: (() => void) | undefined;
   onAuthRepair?: (() => void) | undefined;
   onConfigRepair?: (() => void) | undefined;
+  synthesizingEvidenceId?: string | null | undefined;
+  evidenceSynthesisError?: {
+    id: string;
+    message: string;
+    requiresConfig: boolean;
+  } | null | undefined;
 }
 
 export interface ChatMessageBubbleProps {
@@ -284,6 +290,13 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               grounding={g}
               onSynthesizeFromStored={() => groundedCallbacks?.onEvidenceOnlySynthesize?.()}
               onCitationActivate={(c) => groundedCallbacks?.onCitationActivate?.(c)}
+              isSynthesizing={groundedCallbacks?.synthesizingEvidenceId === g.createdAt}
+              synthesisError={
+                groundedCallbacks?.evidenceSynthesisError?.id === g.createdAt
+                  ? groundedCallbacks.evidenceSynthesisError
+                  : null
+              }
+              onConfigRepair={() => groundedCallbacks?.onConfigRepair?.()}
               sourcesSlot={sourcesSlot}
               pathsSlot={pathsSlot}
             />

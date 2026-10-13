@@ -348,6 +348,13 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingText, setStreamingText] = useState('');
   const [streamingStatus, setStreamingStatus] = useState<string | null>(null);
+  const [groundedLoadingStatus, setGroundedLoadingStatus] = useState<string | null>(null);
+  const [synthesizingEvidenceId, setSynthesizingEvidenceId] = useState<string | null>(null);
+  const [evidenceSynthesisError, setEvidenceSynthesisError] = useState<{
+    id: string;
+    message: string;
+    requiresConfig: boolean;
+  } | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
   const [lastSubmittedText, setLastSubmittedText] = useState('');
   const [scrollTrigger, setScrollTrigger] = useState(0);
@@ -418,6 +425,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         currentTurnAbortRef.current.abort();
         currentTurnAbortRef.current = null;
       }
+      setGroundedLoadingStatus(null);
     }
   }, [open]);
 
@@ -428,6 +436,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       currentTurnAbortRef.current = null;
     }
     setTransientClarifyMessage(null);
+    setGroundedLoadingStatus(null);
   }, [currentScope.type, currentScope.id]);
 
   const handleStopGeneration = () => {
@@ -439,12 +448,18 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
+    if (currentTurnAbortRef.current) {
+      currentTurnAbortRef.current.abort();
+      currentTurnAbortRef.current = null;
+    }
+    setGroundedLoadingStatus(null);
   };
 
   const handleSendMessage = async (
     text: string,
     overrideScope?: ActiveScope,
-    routeOverride?: 'knowledge' | 'operational'
+    routeOverride?: 'knowledge' | 'operational',
+    skipSavingUserMessage = false
   ) => {
     const trimmed = text.trim();
     if (!trimmed) return;
@@ -526,15 +541,19 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       );
     }
 
-    // 2. Save user message
-    const savedUserMsg = await saveMessage(
-      {
-        threadId: activeThread.id,
-        role: 'user',
-        content: trimmed,
-      },
-      db
-    );
+    // 2. Save user message unless this is the routed continuation of an existing turn.
+    const savedUserMsg = skipSavingUserMessage
+      ? [...(await getMessagesByThreadId(activeThread.id, db))]
+          .reverse()
+          .find((m) => m.role === 'user' && m.content === trimmed)
+      : await saveMessage(
+          {
+            threadId: activeThread.id,
+            role: 'user',
+            content: trimmed,
+          },
+          db
+        );
 
     // Cancel older turn before owning new one per AI-SPEC §4b
     if (currentTurnAbortRef.current) {
@@ -562,6 +581,27 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       deps.routeIntent = () => ({ route: routeOverride, confidence: 1 });
     }
 
+    const routeScope = deps.routeScope;
+    deps.routeScope = (input, routeDeps) => {
+      setGroundedLoadingStatus('Đang xác định phạm vi tài liệu...');
+      return routeScope(input, routeDeps);
+    };
+    const retrieveFederated = deps.retrieveFederated;
+    deps.retrieveFederated = (request, signal) => {
+      setGroundedLoadingStatus('Đang truy xuất tài liệu và đồ thị liên quan...');
+      return retrieveFederated(request, signal);
+    };
+    const runLocalBm25 = deps.runLocalBm25;
+    deps.runLocalBm25 = (input, localDeps) => {
+      setGroundedLoadingStatus('Đang tìm kiếm trong tài liệu cục bộ...');
+      return runLocalBm25(input, localDeps);
+    };
+    const synthesizeGroundedAnswer = deps.synthesizeGroundedAnswer;
+    deps.synthesizeGroundedAnswer = (input) => {
+      setGroundedLoadingStatus('Đang tổng hợp câu trả lời từ bằng chứng...');
+      return synthesizeGroundedAnswer(input);
+    };
+
     const msgsForRecent = await getMessagesByThreadId(activeThread.id, db);
     const last3Turns = msgsForRecent
       .filter((m) => m.role === 'user' || m.role === 'assistant')
@@ -570,6 +610,11 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
     try {
       if (routeOverride !== 'operational') {
+        setGroundedLoadingStatus(
+          routeOverride === 'knowledge'
+            ? 'Đang truy xuất tài liệu và đồ thị liên quan...'
+            : 'Đang phân tích ý định câu hỏi...'
+        );
         const groundedResult = await runGroundedTurn(
           {
             query: trimmed,
@@ -598,7 +643,14 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
             id: `transient-${Date.now()}`,
             query: trimmed,
           });
+          setGroundedLoadingStatus(null);
           return;
+        }
+
+        if (groundedResult.kind === 'operational') {
+          setGroundedLoadingStatus('Đang chuẩn bị ngữ cảnh TaskMate...');
+        } else {
+          setGroundedLoadingStatus('Đang xử lý kết quả tra cứu...');
         }
 
         if (groundedResult.kind === 'clarify_entity') {
@@ -657,6 +709,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           },
           db
         );
+        setGroundedLoadingStatus(null);
         return;
       }
 
@@ -700,6 +753,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           },
           db
         );
+        setGroundedLoadingStatus(null);
         return;
       }
 
@@ -726,6 +780,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           groundedResult.kind !== 'grounded_answer' ||
           !groundedResult.requiresOperationalContinuation
         ) {
+          setGroundedLoadingStatus(null);
           return;
         }
       }
@@ -742,18 +797,22 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
               db
             );
           }
+          setGroundedLoadingStatus(null);
           return;
         }
       }
     } catch (groundedErr: any) {
       if (turnController.signal.aborted) {
+        setGroundedLoadingStatus(null);
         return;
       }
       console.warn('[AIChatDrawer] Grounded pipeline error, checking operational fallback:', groundedErr);
+      setGroundedLoadingStatus('Đang chuyển sang trợ lý TaskMate...');
     }
 
     // 3. Operational tool loop (for operational / mixed / fallback turns)
     if (!apiKey) {
+      setGroundedLoadingStatus(null);
       setApiError('Chưa cấu hình API Key 9router. Vui lòng mở Cài đặt AI để thiết lập.');
       return;
     }
@@ -934,11 +993,12 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
     for (const m of budgetedMsgs) {
       recentMsgs.push({
         role: m.role,
-        content: m.id === savedUserMsg.id && effectivePrompt !== trimmed ? effectivePrompt : m.content,
+        content: m.id === savedUserMsg?.id && effectivePrompt !== trimmed ? effectivePrompt : m.content,
       });
     }
 
     // 5. Start SSE Streaming with Tool Execution Harness
+    setGroundedLoadingStatus(null);
     const controller = new AbortController();
     abortControllerRef.current = controller;
     setIsStreaming(true);
@@ -1339,49 +1399,74 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
   };
 
   const handleEvidenceOnlySynthesize = async (prevGrounding: ChatMessageGrounding) => {
-    let activeThread = thread;
-    if (!activeThread) return;
+    const activeThread = thread;
+    if (!activeThread || synthesizingEvidenceId) return;
+
+    const evidenceId = prevGrounding.createdAt;
+    setEvidenceSynthesisError(null);
 
     const apiKey = await getNineRouterApiKey(db);
     const config = await getNineRouterConfig(db);
-    const deps = createDefaultGroundedTurnDeps({
-      knowledgeBaseUrl: knowledgeConfig.baseUrl,
-      knowledgeToken: knowledgeConfig.token,
-      db,
-    });
-
-    const allMsgs = await getMessagesByThreadId(activeThread.id, db);
-    const msgIndex = allMsgs.findIndex(
-      (m) => m.grounding && m.grounding.createdAt === prevGrounding.createdAt
-    );
-    let originalQuery = '';
-    if (msgIndex > 0) {
-      for (let i = msgIndex - 1; i >= 0; i--) {
-        const candidateMsg = allMsgs[i];
-        if (candidateMsg && candidateMsg.role === 'user' && candidateMsg.content) {
-          originalQuery = candidateMsg.content;
-          break;
-        }
-      }
+    const model = selectedModel || config.defaultModel;
+    if (!apiKey || !config.endpoint || !model) {
+      setEvidenceSynthesisError({
+        id: evidenceId,
+        message: 'Chưa cấu hình đầy đủ API Key, endpoint hoặc mô hình 9router.',
+        requiresConfig: true,
+      });
+      return;
     }
 
-    const res = await synthesizeFromStoredEvidence(prevGrounding, deps, {
-      query: originalQuery,
-      endpoint: config.endpoint,
-      apiKey,
-      model: selectedModel || config.defaultModel,
-      promptVersion: 'grounded-v1',
-    });
+    setSynthesizingEvidenceId(evidenceId);
+    try {
+      const deps = createDefaultGroundedTurnDeps({
+        knowledgeBaseUrl: knowledgeConfig.baseUrl,
+        knowledgeToken: knowledgeConfig.token,
+        db,
+      });
 
-    if (res.kind === 'grounded_answer') {
-      const target = allMsgs.find(
-        (m) => m.grounding && m.grounding.createdAt === prevGrounding.createdAt
+      const allMsgs = await getMessagesByThreadId(activeThread.id, db);
+      const msgIndex = allMsgs.findIndex(
+        (m) => m.grounding && m.grounding.createdAt === evidenceId
       );
-      if (target) {
-        await db.chatMessages.update(target.id, {
-          grounding: res.grounding,
-        });
+      let originalQuery = '';
+      if (msgIndex > 0) {
+        for (let i = msgIndex - 1; i >= 0; i--) {
+          const candidateMsg = allMsgs[i];
+          if (candidateMsg && candidateMsg.role === 'user' && candidateMsg.content) {
+            originalQuery = candidateMsg.content;
+            break;
+          }
+        }
       }
+
+      const res = await synthesizeFromStoredEvidence(prevGrounding, deps, {
+        query: originalQuery,
+        endpoint: config.endpoint,
+        apiKey,
+        model,
+        promptVersion: 'grounded-v1',
+      });
+
+      if (res.kind !== 'grounded_answer') {
+        throw new Error('Mô hình không tạo được câu trả lời từ bằng chứng đã lưu.');
+      }
+
+      const target = allMsgs.find(
+        (m) => m.grounding && m.grounding.createdAt === evidenceId
+      );
+      if (!target) {
+        throw new Error('Không tìm thấy kết quả bằng chứng cần tổng hợp.');
+      }
+      await db.chatMessages.update(target.id, { grounding: res.grounding });
+    } catch (err: any) {
+      setEvidenceSynthesisError({
+        id: evidenceId,
+        message: err?.message || 'Không thể tạo câu trả lời từ bằng chứng.',
+        requiresConfig: false,
+      });
+    } finally {
+      setSynthesizingEvidenceId(null);
     }
   };
 
@@ -1417,6 +1502,8 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
     onConfigRepair: () => {
       onOpenSettings?.();
     },
+    synthesizingEvidenceId,
+    evidenceSynthesisError,
   };
 
   const handleClearContext = async () => {
@@ -1726,7 +1813,7 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
             onSelect={(route) => {
               const q = transientClarifyMessage.query;
               setTransientClarifyMessage(null);
-              void handleSendMessage(q, undefined, route);
+              void handleSendMessage(q, undefined, route, true);
             }}
           />
         </div>
@@ -1736,8 +1823,8 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
       <ChatMessageList
         messages={messages}
         streamingText={streamingText}
-        isStreaming={isStreaming}
-        streamingStatus={streamingStatus}
+        isStreaming={isStreaming || Boolean(groundedLoadingStatus)}
+        streamingStatus={groundedLoadingStatus || streamingStatus}
         error={apiError}
         scrollTrigger={scrollTrigger}
         onRetry={handleRetry}

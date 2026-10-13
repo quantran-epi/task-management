@@ -19,6 +19,8 @@ export interface GroundedBannerProps {
   repairCta?: {
     label: string;
     onClick: () => void;
+    loading?: boolean | undefined;
+    disabled?: boolean | undefined;
   } | undefined;
 }
 
@@ -101,7 +103,13 @@ export const GroundedBanner: React.FC<GroundedBannerProps> = ({
   }
 
   const actionNode = repairCta ? (
-    <Button size="small" type="primary" onClick={repairCta.onClick}>
+    <Button
+      size="small"
+      type="primary"
+      onClick={repairCta.onClick}
+      loading={repairCta.loading ?? false}
+      disabled={repairCta.disabled ?? false}
+    >
       {repairCta.label}
     </Button>
   ) : undefined;

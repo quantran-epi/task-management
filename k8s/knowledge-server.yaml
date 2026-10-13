@@ -6,13 +6,13 @@ data:
   HOST: "0.0.0.0"
   PORT: "3001"
   HTTPS_TERMINATED: "true"
-  KNOWLEDGE_ALLOWED_ORIGINS: "https://taskmate.internal.shb.vn,tauri://localhost,http://tauri.localhost,https://tauri.localhost,http://localhost:5173,http://localhost:1420"
+  KNOWLEDGE_ALLOWED_ORIGINS: "https://taskmate.internal.shb.vn,http://tauri.localhost,https://tauri.localhost,http://localhost:5173,http://localhost:1420"
   NEO4J_URI: "bolt://neo4j:7687"
   NEO4J_ENABLED: "true"
   PLANNER_REMOTE_ENABLED: "true"
-  PLANNER_ENDPOINT: "https://9router.internal.shb.vn"
-  PLANNER_MODEL: "qwen2.5-72b-instruct"
-  PLANNER_REMOTE_ALLOWED_HOSTS: "9router.internal.shb.vn"
+  PLANNER_ENDPOINT: "http://10.4.97.70:30129/v1"
+  PLANNER_MODEL: "ag/gemini-3.8-flash"
+  PLANNER_REMOTE_ALLOWED_HOSTS: "10.4.97.70"
 ---
 apiVersion: v1
 kind: Service
