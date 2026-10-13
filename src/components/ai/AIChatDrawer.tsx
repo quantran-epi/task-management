@@ -88,7 +88,6 @@ import {
 import type { ChatMessageGrounding, PersistedCitation } from '../../services/ai/groundedAnswerSchemas';
 import { QuickPreviewDrawer } from '../notes/QuickPreviewDrawer';
 import { ScopeChipsBar } from './grounded/ScopeChipsBar';
-import { IntentRoutingPrompt } from './grounded/IntentRoutingPrompt';
 import type { GroundedAnswerCardCallbacks } from './ChatMessageBubble';
 
 export const AI_CHAT_WIDTH_KEY = 'planner:ai_chat_width';
@@ -1806,19 +1805,6 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
         </div>
       )}
 
-      {/* Transient intent routing prompt */}
-      {transientClarifyMessage && (
-        <div style={{ padding: '8px 14px' }}>
-          <IntentRoutingPrompt
-            onSelect={(route) => {
-              const q = transientClarifyMessage.query;
-              setTransientClarifyMessage(null);
-              void handleSendMessage(q, undefined, route, true);
-            }}
-          />
-        </div>
-      )}
-
       {/* Message List */}
       <ChatMessageList
         messages={messages}
@@ -1838,6 +1824,13 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
         pendingConfirmation={pendingConfirmation}
         onConfirmAction={handleConfirmAction}
         groundedCallbacks={groundedCallbacks}
+        transientClarifyMessage={transientClarifyMessage}
+        onSelectRoute={(route) => {
+          if (!transientClarifyMessage) return;
+          const q = transientClarifyMessage.query;
+          setTransientClarifyMessage(null);
+          void handleSendMessage(q, undefined, route, true);
+        }}
       />
 
       {/* QuickPreviewDrawer on citation activation per ANSWER-07, D-10 */}

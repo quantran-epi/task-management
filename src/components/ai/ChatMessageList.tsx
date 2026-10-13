@@ -5,6 +5,7 @@ import type { ChatMessage } from '../../types/models';
 import { APP_NAME } from '../../constants/app';
 import { ChatMessageBubble, type GroundedAnswerCardCallbacks } from './ChatMessageBubble';
 import { InlineApiErrorCard } from './InlineApiErrorCard';
+import { IntentRoutingPrompt } from './grounded/IntentRoutingPrompt';
 
 export interface PendingConfirmationInfo {
   toolName: string;
@@ -30,6 +31,8 @@ export interface ChatMessageListProps {
   pendingConfirmation?: PendingConfirmationInfo | null;
   onConfirmAction?: (confirmed: boolean) => void;
   groundedCallbacks?: GroundedAnswerCardCallbacks | undefined;
+  transientClarifyMessage?: { id: string; query: string } | null | undefined;
+  onSelectRoute?: ((route: 'knowledge' | 'operational') => void) | undefined;
 }
 
 export const ChatMessageList: React.FC<ChatMessageListProps> = ({
@@ -50,6 +53,8 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   pendingConfirmation,
   onConfirmAction,
   groundedCallbacks,
+  transientClarifyMessage,
+  onSelectRoute,
 }) => {
   const { token } = theme.useToken();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -71,17 +76,17 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
     }
   }, [scrollTrigger]);
 
-  // Auto-scroll on new message added or confirmation prompt displayed
+  // Auto-scroll on new message added, confirmation prompt displayed, or clarify prompt shown
   useEffect(() => {
     scrollToBottom(false);
-  }, [messages.length, pendingConfirmation]);
+  }, [messages.length, pendingConfirmation, transientClarifyMessage]);
 
   // Keep pinned to bottom during streaming or errors
   useEffect(() => {
-    if (isStreaming || streamingText || error || pendingConfirmation) {
+    if (isStreaming || streamingText || error || pendingConfirmation || transientClarifyMessage) {
       scrollToBottom(true);
     }
-  }, [streamingText, isStreaming, error, pendingConfirmation]);
+  }, [streamingText, isStreaming, error, pendingConfirmation, transientClarifyMessage]);
 
   return (
     <div
@@ -135,19 +140,32 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
 
         // Pass message with grounding intact for structured rendering
         return (
-          <ChatMessageBubble
-            key={msg.id}
-            message={msg}
-            canAddToChecklist={canAddToChecklist}
-            canSaveStickyNote={canSaveStickyNote}
-            canRunClaudeCode={canRunClaudeCode}
-            onAddToChecklist={onAddToChecklist}
-            onSaveStickyNote={onSaveStickyNote}
-            onRunClaudeCode={onRunClaudeCode}
-            groundedCallbacks={groundedCallbacks}
-          />
+          <React.Fragment key={msg.id}>
+            <ChatMessageBubble
+              message={msg}
+              canAddToChecklist={canAddToChecklist}
+              canSaveStickyNote={canSaveStickyNote}
+              canRunClaudeCode={canRunClaudeCode}
+              onAddToChecklist={onAddToChecklist}
+              onSaveStickyNote={onSaveStickyNote}
+              onRunClaudeCode={onRunClaudeCode}
+              groundedCallbacks={groundedCallbacks}
+            />
+            {transientClarifyMessage && msg.role === 'user' && msg.content === transientClarifyMessage.query && onSelectRoute && (
+              <div style={{ marginTop: -4, marginBottom: 12, display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+                <IntentRoutingPrompt onSelect={onSelectRoute} />
+              </div>
+            )}
+          </React.Fragment>
         );
       })}
+
+      {/* Fallback IntentRoutingPrompt if user query message not found in list */}
+      {transientClarifyMessage && onSelectRoute && !messages.some((m) => m.role === 'user' && m.content === transientClarifyMessage.query) && (
+        <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+          <IntentRoutingPrompt onSelect={onSelectRoute} />
+        </div>
+      )}
 
       {/* Active SSE Streaming Assistant Bubble */}
       {isStreaming && (streamingText || !pendingConfirmation) && (
