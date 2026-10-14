@@ -38,6 +38,7 @@ export interface LocalGroundedRetrievalInput {
   readonly resolvedSetIds: readonly string[];
   readonly maxResults?: number;
   readonly maxSnippetChars?: number;
+  readonly prioritizedDocIds?: readonly string[];
 }
 
 export interface LocalGroundedRetrievalDeps {
@@ -219,7 +220,7 @@ export async function runLocalGroundedRetrieval(
   }
 
   // Load canonical note bodies for resolved set members only
-  const bm25Docs: BM25Document[] = [];
+  let bm25Docs: BM25Document[] = [];
   const rawBodies = new Map<string, string>();
 
   for (const documentId of docMembershipsMap.keys()) {
@@ -243,6 +244,18 @@ export async function runLocalGroundedRetrieval(
       strongEvidence: false,
       totalScanned: 0,
     };
+  }
+
+  // Prioritize prioritizedDocIds if provided and present in the corpus
+  const prioritizedSet = new Set(input.prioritizedDocIds ?? []);
+  if (prioritizedSet.size > 0) {
+    const prioritizedDocs = bm25Docs.filter((d) => prioritizedSet.has(d.id));
+    if (prioritizedDocs.length > 0) {
+      const prioritizedRanked = rankBM25(query, prioritizedDocs, { limit: maxResults });
+      if (prioritizedRanked.some((m) => m.score > 0)) {
+        bm25Docs = prioritizedDocs;
+      }
+    }
   }
 
   // Rank with BM25 (Title x3, Tags x2, Body x1)

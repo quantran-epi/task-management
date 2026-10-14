@@ -570,6 +570,14 @@ export const FederatedRetrievalBudgetsSchema = z.strictObject({
   maxEvidenceChars: z.number().int().min(1).max(100_000),
 });
 
+export const RetrievalContextHintsSchema = z.strictObject({
+  setIds: z.array(z.string().uuid()).default([]),
+  urns: z.array(z.string().min(1)).default([]),
+  docIds: z.array(z.string().uuid()).default([]),
+});
+
+export type RetrievalContextHints = z.infer<typeof RetrievalContextHintsSchema>;
+
 export const FederatedRetrievalRequestSchema = z.strictObject({
   query: z.string().trim().min(1).max(4000),
   setTierAssignments: z.array(FederatedSetTierAssignmentSchema).min(1).max(50),
@@ -578,6 +586,7 @@ export const FederatedRetrievalRequestSchema = z.strictObject({
   limit: z.number().int().min(10).max(50).default(20),
   includeInferred: z.boolean().default(false),
   recentTurns: z.array(ConversationTurnSchema).max(3).default([]),
+  contextHints: RetrievalContextHintsSchema.optional(),
 });
 
 export type FederatedRetrievalRequest = z.infer<typeof FederatedRetrievalRequestSchema>;

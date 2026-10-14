@@ -613,4 +613,83 @@ describe('groundedTurn state machine', () => {
     expect(mockDeps.retrieveFederated).not.toHaveBeenCalled();
     expect(mockDeps.synthesizeGroundedAnswer).not.toHaveBeenCalled();
   });
+
+  // 22. Scoped retrieval context hints (LINK-05, D-24)
+  it('22. Scoped retrieval context hints forwards linked URNs and docIds into retrieval payload', async () => {
+    const dummyLinks = [
+      {
+        id: 'link-1',
+        linkKey: 'task:task-123:10000000-0000-0000-0000-000000000001:urn:node:process:cytp1002',
+        taskMateEntityType: 'task' as const,
+        taskMateEntityId: 'task-123',
+        setId: '10000000-0000-0000-0000-000000000001',
+        urn: 'urn:node:process:cytp1002',
+        docId: '00000000-0000-0000-0000-000000000001',
+        displayLabel: 'CYTP1002 Node',
+        createdAt: '2026-10-14T00:00:00.000Z',
+        updatedAt: '2026-10-14T00:00:00.000Z',
+      },
+    ];
+
+    mockDeps.loadKnowledgeLinks = vi.fn().mockResolvedValue(dummyLinks);
+    mockInput.scopedEntity = { type: 'task', id: 'task-123' };
+
+    const res = await runGroundedTurn(mockInput, mockDeps);
+    expect(res.kind).toBe('grounded_answer');
+    expect(mockDeps.loadKnowledgeLinks).toHaveBeenCalledWith('task', 'task-123');
+
+    // Assert retrieveFederated called with contextHints
+    expect(mockDeps.retrieveFederated).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contextHints: {
+          setIds: ['10000000-0000-0000-0000-000000000001'],
+          urns: ['urn:node:process:cytp1002'],
+          docIds: ['00000000-0000-0000-0000-000000000001'],
+        },
+      }),
+      mockInput.signal
+    );
+  });
+
+  it('23. Stale or failing knowledge links gracefully degrades without crashing turn', async () => {
+    mockDeps.loadKnowledgeLinks = vi.fn().mockRejectedValue(new Error('IndexedDB link read failed'));
+    mockInput.scopedEntity = { type: 'task', id: 'task-stale' };
+
+    const res = await runGroundedTurn(mockInput, mockDeps);
+    expect(res.kind).toBe('grounded_answer');
+    // Retrieval proceeds without contextHints
+    expect(mockDeps.retrieveFederated).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        contextHints: expect.anything(),
+      }),
+      mockInput.signal
+    );
+  });
+
+  it('24. Scoped entity in local daemon-down fallback passes prioritizedDocIds to local BM25', async () => {
+    mockInput.capabilities.serverEnabled = false;
+    mockInput.scopedEntity = { type: 'task', id: 'task-local' };
+    mockDeps.loadKnowledgeLinks = vi.fn().mockResolvedValue([
+      {
+        id: 'link-2',
+        linkKey: 'task:task-local:10000000-0000-0000-0000-000000000001:doc-999',
+        taskMateEntityType: 'task' as const,
+        taskMateEntityId: 'task-local',
+        setId: '10000000-0000-0000-0000-000000000001',
+        docId: '00000000-0000-0000-0000-000000000001',
+        displayLabel: 'Local Linked Doc',
+        createdAt: '2026-10-14T00:00:00.000Z',
+        updatedAt: '2026-10-14T00:00:00.000Z',
+      },
+    ]);
+
+    const res = await runGroundedTurn(mockInput, mockDeps);
+    expect(res.kind).toBe('grounded_answer');
+    expect(mockDeps.runLocalBm25).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prioritizedDocIds: ['00000000-0000-0000-0000-000000000001'],
+      }),
+      mockDeps.localBm25Deps
+    );
+  });
 });

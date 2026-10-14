@@ -16,6 +16,7 @@ import { synthesizeGroundedAnswer } from './groundedSynthesis';
 import { createKnowledgeClient } from '../knowledge/knowledgeClient';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { ChatMessageGrounding } from './groundedAnswerSchemas';
+import { getKnowledgeLinksForEntity } from '../../db/repositories/knowledgeLinkRepo';
 
 export interface GroundedTurnRuntimeHooks {
   runGroundedTurn?: (
@@ -104,6 +105,7 @@ export function createDefaultGroundedTurnDeps(options: {
     },
     packEvidence: (inp, opt) => packEvidence(inp, opt),
     synthesizeGroundedAnswer: (inp) => synthesizeGroundedAnswer(inp),
+    loadKnowledgeLinks: (entityType, entityId) => getKnowledgeLinksForEntity(entityType, entityId, database),
     now: () => new Date().toISOString(),
   };
 }

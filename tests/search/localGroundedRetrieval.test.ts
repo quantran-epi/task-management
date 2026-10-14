@@ -268,4 +268,32 @@ describe('localGroundedRetrieval', () => {
     expect(res.ranges.length).toBe(1);
     expect(res.ranges[0]?.documentId).toBe('doc-present');
   });
+
+  it('13. Prioritized docIds: prioritizes documents referenced by knowledgeLinks', async () => {
+    const loadSetMembers = vi.fn().mockResolvedValue([
+      { setId: 'set-A', setName: 'Set A', documentId: 'doc-1' },
+      { setId: 'set-A', setName: 'Set A', documentId: 'doc-2' },
+    ]);
+    const loadNoteBody = vi.fn().mockImplementation(async (id: string) => {
+      if (id === 'doc-1') {
+        return { title: 'Doc One', body: 'Accounts detail overview.' };
+      }
+      if (id === 'doc-2') {
+        return { title: 'Doc Two', body: 'Accounts detail overview.' };
+      }
+      return null;
+    });
+
+    const res = await runLocalGroundedRetrieval(
+      {
+        query: 'accounts',
+        resolvedSetIds: ['set-A'],
+        prioritizedDocIds: ['doc-2'],
+      },
+      { loadSetMembers, loadNoteBody }
+    );
+
+    expect(res.ranges.length).toBe(1);
+    expect(res.ranges[0]?.documentId).toBe('doc-2');
+  });
 });

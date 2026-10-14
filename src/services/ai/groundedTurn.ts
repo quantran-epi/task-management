@@ -11,6 +11,7 @@ import type {
   FederatedRetrievalRequest,
   FederatedRetrievalResponse,
   ModalityStatus,
+  RetrievalContextHints,
 } from '../knowledge/retrievalProtocol';
 import {
   KnowledgeClientError,
@@ -32,6 +33,7 @@ import {
 } from './groundedSynthesis';
 import type { RouteIntentResult, RouteIntentDeps, IntentLabel } from './intentRouter';
 import type { completeJson as defaultCompleteJson } from './nineRouterClient';
+import type { KnowledgeLink, TaskMateEntityType } from '../../types/models';
 
 export interface GroundedTurnInput {
   query: string;
@@ -50,6 +52,10 @@ export interface GroundedTurnInput {
   };
   catalog: readonly SetCatalogEntry[];
   recentSessionId: string;
+  scopedEntity?: {
+    type: TaskMateEntityType;
+    id: string;
+  };
 }
 
 export interface CandidateRef {
@@ -124,6 +130,10 @@ export interface GroundedTurnDeps {
     attempts: readonly unknown[];
     responseLanguage: 'vi' | 'en';
   }>;
+  loadKnowledgeLinks?(
+    entityType: TaskMateEntityType,
+    entityId: string
+  ): Promise<KnowledgeLink[]>;
   now?(): string;
   generateTurnId?(): string;
 }
@@ -260,6 +270,30 @@ export async function runGroundedTurn(
     }
   );
 
+  // Load context hints if scoped entity is provided
+  let contextHints: RetrievalContextHints | undefined;
+  if (input.scopedEntity && deps.loadKnowledgeLinks) {
+    try {
+      const links = await deps.loadKnowledgeLinks(
+        input.scopedEntity.type,
+        input.scopedEntity.id
+      );
+      if (links && links.length > 0) {
+        const setIds = Array.from(new Set(links.map((l) => l.setId).filter(Boolean)));
+        const urns = Array.from(
+          new Set(links.map((l) => l.urn).filter((u): u is string => Boolean(u)))
+        );
+        const docIds = Array.from(
+          new Set(links.map((l) => l.docId).filter((d): d is string => Boolean(d)))
+        );
+        contextHints = { setIds, urns, docIds };
+      }
+    } catch {
+      // Graceful degradation: failure to load links does not crash the turn
+      contextHints = undefined;
+    }
+  }
+
   // Helper for step 6: Local BM25 path
   const executeLocalPath = async (
     fallbackReason: 'SERVER_DISABLED' | 'NETWORK_ERROR' | 'TIMEOUT',
@@ -274,6 +308,7 @@ export async function runGroundedTurn(
       {
         query: input.query,
         resolvedSetIds: resolvedScope.setTierAssignments.map((s) => s.setId),
+        prioritizedDocIds: contextHints?.docIds,
       },
       deps.localBm25Deps
     );
@@ -402,6 +437,7 @@ export async function runGroundedTurn(
         limit: 20,
         includeInferred: false,
         recentTurns: [],
+        ...(contextHints ? { contextHints } : {}),
       },
       input.signal
     );
