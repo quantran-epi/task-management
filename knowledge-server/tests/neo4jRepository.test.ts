@@ -145,7 +145,10 @@ describe('Neo4j Repository Adapter & Parameterized Cypher Generation (GRAPH-04, 
       CYPHER_QUERIES.CREATE_CONSTRAINTS.length + CYPHER_QUERIES.CREATE_INDEXES.length
     );
 
-    // Verify activateCandidate uses parameterized query
+    // Verify activation supports READY candidates and SUPERSEDED rollback targets.
+    expect(CYPHER_QUERIES.ACTIVATE_CANDIDATE).toContain(
+      "candidate.state IN ['READY', 'SUPERSEDED']"
+    );
     mockRun.mockResolvedValueOnce({ records: [{ get: () => 'snap-1' }] });
     await repo.activateCandidate('set-1', 'snap-1');
     expect(mockExecuteWrite).toHaveBeenCalled();
