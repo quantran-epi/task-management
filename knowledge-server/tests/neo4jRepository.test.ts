@@ -141,7 +141,9 @@ describe('Neo4j Repository Adapter & Parameterized Cypher Generation (GRAPH-04, 
 
     await repo.initializeSchemaConstraints();
     expect(mockDriver.session).toHaveBeenCalled();
-    expect(mockRun).toHaveBeenCalledTimes(4); // 4 constraints now with Chunk instanceKey
+    expect(mockRun).toHaveBeenCalledTimes(
+      CYPHER_QUERIES.CREATE_CONSTRAINTS.length + CYPHER_QUERIES.CREATE_INDEXES.length
+    );
 
     // Verify activateCandidate uses parameterized query
     mockRun.mockResolvedValueOnce({ records: [{ get: () => 'snap-1' }] });

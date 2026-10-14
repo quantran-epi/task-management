@@ -49,6 +49,15 @@ export const CYPHER_QUERIES = {
     `CREATE CONSTRAINT fact_instance_key IF NOT EXISTS FOR (f:Fact) REQUIRE f.instanceKey IS UNIQUE`,
     `CREATE CONSTRAINT snapshot_id IF NOT EXISTS FOR (s:GraphSnapshot) REQUIRE s.graphSnapshotId IS UNIQUE`,
     `CREATE CONSTRAINT chunk_instance_key IF NOT EXISTS FOR (c:Chunk) REQUIRE c.instanceKey IS UNIQUE`,
+    `CREATE CONSTRAINT c_snapshot_entity_urn IF NOT EXISTS FOR (e:Entity) REQUIRE (e.graphSnapshotId, e.urn) IS NODE KEY`,
+    `CREATE CONSTRAINT c_snapshot_chunk_id IF NOT EXISTS FOR (c:Chunk) REQUIRE (c.graphSnapshotId, c.chunkId) IS NODE KEY`,
+    `CREATE CONSTRAINT c_snapshot_fact_key IF NOT EXISTS FOR (f:Fact) REQUIRE (f.graphSnapshotId, f.factKey) IS NODE KEY`,
+  ] as const,
+
+  CREATE_INDEXES: [
+    `CREATE INDEX idx_entity_name IF NOT EXISTS FOR (e:Entity) ON (e.graphSnapshotId, e.canonicalName)`,
+    `CREATE INDEX idx_entity_normalized IF NOT EXISTS FOR (e:Entity) ON (e.graphSnapshotId, e.normalizedKey)`,
+    `CREATE INDEX idx_chunk_doc_range IF NOT EXISTS FOR (c:Chunk) ON (c.graphSnapshotId, c.documentId, c.lineStart, c.lineEnd)`,
   ] as const,
 
   INSERT_GRAPH_SNAPSHOT: `
@@ -143,6 +152,7 @@ export const CYPHER_QUERIES = {
     UNWIND $rows AS row
     MERGE (c:Chunk {instanceKey: row.instanceKey})
     SET c.chunkKey = row.chunkKey,
+        c.chunkId = row.chunkId,
         c.documentId = row.documentId,
         c.documentTitle = row.documentTitle,
         c.publishedContentHash = row.publishedContentHash,
@@ -154,6 +164,14 @@ export const CYPHER_QUERIES = {
         c.text = row.text,
         c.embedding = row.embedding,
         c.graphSnapshotId = $graphSnapshotId
+  `,
+
+  LINK_FACT_CHUNK_SUPPORT: `
+    UNWIND $rows AS row
+    MATCH (f:Fact {graphSnapshotId: $graphSnapshotId, factKey: row.factKey})
+    MATCH (c:Chunk {graphSnapshotId: $graphSnapshotId, chunkKey: row.chunkKey})
+    MERGE (f)-[r:SUPPORTED_BY {graphSnapshotId: $graphSnapshotId}]->(c)
+    SET r.chunkId = row.chunkId
   `,
 
   UPDATE_RETRIEVAL_GENERATION_METADATA: `
@@ -486,6 +504,9 @@ export class Neo4jRepository implements GraphRepository {
       for (const query of CYPHER_QUERIES.CREATE_CONSTRAINTS) {
         await session.run(query);
       }
+      for (const query of CYPHER_QUERIES.CREATE_INDEXES) {
+        await session.run(query);
+      }
     } finally {
       await session.close();
     }
@@ -657,6 +678,7 @@ export class Neo4jRepository implements GraphRepository {
     const chunkRows: Array<{
       instanceKey: string;
       chunkKey: string;
+      chunkId: string;
       documentId: string;
       documentTitle: string;
       publishedContentHash: string;
@@ -675,6 +697,7 @@ export class Neo4jRepository implements GraphRepository {
         chunkRows.push({
           instanceKey: `${candidate.graphSnapshotId}:${c.occurrenceId}`,
           chunkKey: c.occurrenceId,
+          chunkId: c.occurrenceId,
           documentId: doc.documentId,
           documentTitle: doc.title,
           publishedContentHash: doc.contentHash,
@@ -723,6 +746,37 @@ export class Neo4jRepository implements GraphRepository {
             `MATCH (c:Chunk {graphSnapshotId: $graphSnapshotId}) SET c:\`${snapshotLabel}\``,
             { graphSnapshotId: candidate.graphSnapshotId }
           );
+
+          // Link Fact nodes to overlapping Chunk nodes with SUPPORTED_BY
+          const supportRows: Array<{ factKey: string; chunkKey: string; chunkId: string }> = [];
+          for (const ev of candidate.evidence) {
+            for (const chunk of chunkRows) {
+              if (chunk.documentId === ev.documentId) {
+                const lineOverlap = ev.startLine <= chunk.endLine && ev.endLine >= chunk.startLine;
+                const offsetOverlap =
+                  ev.startOffset !== undefined &&
+                  ev.endOffset !== undefined &&
+                  chunk.startOffset !== undefined &&
+                  chunk.endOffset !== undefined
+                    ? ev.startOffset <= chunk.endOffset && ev.endOffset >= chunk.startOffset
+                    : lineOverlap;
+                if (lineOverlap || offsetOverlap) {
+                  supportRows.push({
+                    factKey: ev.factKey,
+                    chunkKey: chunk.chunkKey,
+                    chunkId: chunk.chunkId,
+                  });
+                }
+              }
+            }
+          }
+
+          if (supportRows.length > 0) {
+            await tx.run(CYPHER_QUERIES.LINK_FACT_CHUNK_SUPPORT, {
+              graphSnapshotId: candidate.graphSnapshotId,
+              rows: supportRows,
+            });
+          }
         });
       }
 
