@@ -134,6 +134,7 @@ describe('Fastify graph routes (Task 1: GRAPH-05, D-17, D-18, D-21)', () => {
     expect(res.json()).toEqual({
       setId: SET_ID,
       state: 'Never built',
+      canRollback: false,
       nodeCount: 0,
       factCount: 0,
       evidenceCount: 0,
@@ -168,6 +169,7 @@ describe('Fastify graph routes (Task 1: GRAPH-05, D-17, D-18, D-21)', () => {
     expect(res.json()).toEqual({
       setId: SET_ID,
       state: 'Failed',
+      canRollback: false,
       nodeCount: 0,
       factCount: 0,
       evidenceCount: 0,

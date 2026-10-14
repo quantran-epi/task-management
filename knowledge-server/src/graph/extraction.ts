@@ -37,9 +37,6 @@ interface TraversalContext {
   evidenceList: GraphEvidenceRecord[];
   quarantinesList: QuarantinedIdentifier[];
   consumedRangesMap: Map<string, SourceRange[]>;
-  // Container process ID discovered dynamically from the PRC_PROCESS table of the
-  // current document (the row with IS_CONTAINER=1). Used to resolve the parent of a
-  // PRC_CONTAINER step table without hardcoding a document-specific process ID.
   containerProcessId?: string;
 }
 
@@ -158,27 +155,157 @@ function addQuarantine(
 }
 
 /**
- * Parses and extracts PRC_PROCESS table:
- * Columns: ID, PROCEDURE_NAME, IS_EXTERNAL, IS_CONTAINER, INST_ID, IS_PARALLEL
+ * Normalizes header string by stripping accents and non-alphanumeric chars for role matching.
  */
-function handlePrcProcessTable(table: Table, ctx: TraversalContext): void {
-  const header = table.children[0];
-  if (!header) return;
-  const colNames = getRowCells(header).map((c) => c.toUpperCase());
-  const idIdx = colNames.findIndex((c) => c === 'ID' || c === 'PROCESS_ID');
-  const procIdx = colNames.findIndex((c) => c.includes('PROCEDURE'));
-  const isContIdx = colNames.findIndex((c) => c.includes('IS_CONTAINER'));
-  const isExtIdx = colNames.findIndex((c) => c.includes('IS_EXTERNAL'));
-  const instIdx = colNames.findIndex((c) => c.includes('INST_ID'));
-  const isParIdx = colNames.findIndex((c) => c.includes('IS_PARALLEL'));
+function normalizeHeader(h: string): string {
+  return h
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '_');
+}
 
-  if (idIdx === -1 || procIdx === -1) return;
+/**
+ * Standard column roles for schema-driven table detection.
+ */
+export interface TableSchemaRoles {
+  idIdx: number;
+  nameIdx: number;
+  actionIdx: number;
+  targetIdx: number;
+  orderIdx: number;
+  descIdx: number;
+  typeIdx: number;
+  writesIdx: number;
+  isContIdx: number;
+  isExtIdx: number;
+  instIdx: number;
+  isParIdx: number;
+  parallelDegreeIdx: number;
+}
+
+export function detectTableSchema(headers: string[]): TableSchemaRoles {
+  const norm = headers.map(normalizeHeader);
+
+  const findIdx = (patterns: RegExp[], excludeIndices: number[] = []): number => {
+    return norm.findIndex((col, idx) => !excludeIndices.includes(idx) && patterns.some((p) => p.test(col)));
+  };
+
+  // Step bind / row ID vs target process ID disambiguation
+  const hasBindCol = norm.some((col) => /BIND_ID|^BIND$|MA_BUOC|STEP_ID/.test(col));
+  const idPatterns = hasBindCol
+    ? [/BIND_ID/, /^BIND$/, /STEP_ID/, /MA_BUOC/, /^ID$/]
+    : [/^ID$/, /^CODE$/, /PROCESS_ID/, /STEP_ID/, /BIND_ID/, /^BIND$/, /MA_BUOC/, /MA_TIEN_TRINH/, /MA_SO/, /MA/];
+
+  const idIdx = findIdx(idPatterns);
+
+  const targetIdx = findIdx(
+    [/TARGET/, /DOI_TUONG/, /DICH/, /RECEIVER/, /COMPONENT/, /PROCESS_ID/, /MA_TIEN_TRINH/],
+    idIdx !== -1 ? [idIdx] : []
+  );
+
+  const nameIdx = findIdx(
+    [/PROCEDURE_NAME/, /PROCEDURE/, /^NAME$/, /TEN_BUOC/, /TEN/, /DISPLAY_NAME/, /TITLE/],
+    idIdx !== -1 ? [idIdx] : []
+  );
+
+  const actionIdx = findIdx([
+    /ACTION/,
+    /THAO_TAC/,
+    /HANH_DONG/,
+    /CALL/,
+    /GOI/,
+    /METHOD/,
+    /OPERATION/,
+  ]);
+
+  const orderIdx = findIdx([
+    /EXEC_ORDER/,
+    /^ORDER$/,
+    /^EXEC$/,
+    /THU_TU/,
+    /THU_TU_CHAY/,
+    /SEQUENCE/,
+    /STEP_NO/,
+  ]);
+
+  const descIdx = findIdx([
+    /DESC/,
+    /DESCRIPTION/,
+    /GHI_CHU/,
+    /MO_TA/,
+    /NOTE/,
+    /CYCLE.*NOTE/,
+  ]);
+
+  const typeIdx = findIdx([
+    /CYCLE_TYPE/,
+    /^TYPE$/,
+    /LOAI/,
+    /I_CYCLE_TYPE/,
+  ]);
+
+  const writesIdx = findIdx([
+    /WRITES/,
+    /GHI/,
+    /WRITE_TO/,
+    /TARGET_TABLE/,
+  ]);
+
+  const isContIdx = findIdx([
+    /IS_CONTAINER/,
+    /CONTAINER/,
+  ]);
+
+  const isExtIdx = findIdx([
+    /IS_EXTERNAL/,
+    /EXTERNAL/,
+  ]);
+
+  const instIdx = findIdx([
+    /INST_ID/,
+    /INSTANCE/,
+  ]);
+
+  const isParIdx = findIdx([
+    /IS_PARALLEL/,
+    /PARALLEL/,
+  ]);
+
+  const parallelDegreeIdx = findIdx([
+    /PARALLEL_DEGREE/,
+    /DEGREE/,
+  ]);
+
+  return {
+    idIdx,
+    nameIdx,
+    actionIdx,
+    targetIdx,
+    orderIdx,
+    descIdx,
+    typeIdx,
+    writesIdx,
+    isContIdx,
+    isExtIdx,
+    instIdx,
+    isParIdx,
+    parallelDegreeIdx,
+  };
+}
+
+/**
+ * Handles Process Table: Identified by idIdx and nameIdx or isContIdx.
+ */
+function handleProcessTable(table: Table, roles: TableSchemaRoles, ctx: TraversalContext): void {
+  const { idIdx, nameIdx, isContIdx, isExtIdx, instIdx, isParIdx } = roles;
+  if (idIdx === -1 || nameIdx === -1) return;
 
   for (let r = 1; r < table.children.length; r++) {
     const row = table.children[r]!;
     const cells = getRowCells(row);
     const rawId = cells[idIdx]?.trim();
-    const rawProc = cells[procIdx]?.trim();
+    const rawProc = cells[nameIdx]?.trim();
     if (!rawId || !rawProc) continue;
 
     const rowStartLine = row.position?.start?.line ?? table.position?.start?.line ?? 1;
@@ -197,8 +324,6 @@ function handlePrcProcessTable(table: Table, ctx: TraversalContext): void {
     const instId = instIdx >= 0 && cells[instIdx] ? Number(cells[instIdx]) : undefined;
     const isParallel = isParIdx >= 0 && cells[isParIdx] ? Number(cells[isParIdx]) : undefined;
 
-    // Bug 3 cause A: discover the container process dynamically from the table itself
-    // (the row flagged IS_CONTAINER=1) instead of hardcoding a document-specific ID.
     if (isContainer === 1) {
       ctx.containerProcessId = rawId;
     }
@@ -207,9 +332,6 @@ function handlePrcProcessTable(table: Table, ctx: TraversalContext): void {
     const processNode: ResolvedNode = {
       urn: processUrn,
       kind: 'ScheduledProcess',
-      // ponytail: canonicalName is the PROCEDURE_NAME from the table (document-agnostic).
-      // A friendlier display name (e.g. COM_I18N or prose) is a separate concern handled
-      // by prose extraction — never by special-casing a specific process ID here.
       canonicalName: rawProc,
       sourceSystem: 'smartvista',
       nativeType: 'PRC_PROCESS',
@@ -225,7 +347,6 @@ function handlePrcProcessTable(table: Table, ctx: TraversalContext): void {
     };
     addNode(ctx, processNode);
 
-    // If procedure name is not CONTAINER, it invokes a SoftwareComponent
     if (rawProc.toUpperCase() !== 'CONTAINER') {
       const procWithSchema = rawProc.toUpperCase().startsWith('MAIN1.') ? rawProc : `MAIN1.${rawProc}`;
       const normRes = normalizeTechnicalIdentifier(procWithSchema, 'MAIN1');
@@ -250,8 +371,6 @@ function handlePrcProcessTable(table: Table, ctx: TraversalContext): void {
         };
         addNode(ctx, compNode);
 
-        // Process INVOKES SoftwareComponent or CALLS SoftwareComponent
-        // ScheduledProcess calling SoftwareComponent is INVOKES or CALLS (per gold fixtures, subprocess 10000304 CALLS component)
         addFactAndEvidence(
           ctx,
           processUrn,
@@ -270,40 +389,21 @@ function handlePrcProcessTable(table: Table, ctx: TraversalContext): void {
 }
 
 /**
- * Parses and extracts PRC_CONTAINER table:
- * Columns: Bind ID / BIND_ID, PROCESS_ID, EXEC_ORDER, IS_PARALLEL, PARALLEL_DEGREE, Cycle / note
+ * Handles Step Table: Columns with idIdx/bindIdx, orderIdx, and optional target/process.
  */
-function handlePrcContainerTable(table: Table, ctx: TraversalContext): void {
-  const header = table.children[0];
-  if (!header) return;
-  const colNames = getRowCells(header).map((c) => c.toUpperCase());
-  const bindIdx = colNames.findIndex((c) => c.includes('BIND'));
-  const procIdx = colNames.findIndex((c) => c === 'PROCESS_ID' || c === 'PROCESS');
-  const orderIdx = colNames.findIndex((c) => c.includes('EXEC_ORDER') || c.includes('ORDER'));
-  const isParIdx = colNames.findIndex((c) => c.includes('IS_PARALLEL'));
-  const degIdx = colNames.findIndex((c) => c.includes('PARALLEL_DEGREE') || c.includes('DEGREE'));
-  const noteIdx = colNames.findIndex((c) => c.includes('NOTE') || c.includes('CYCLE') || c.includes('NAME'));
+function handleStepTable(table: Table, roles: TableSchemaRoles, ctx: TraversalContext): void {
+  const { idIdx, orderIdx, isParIdx, parallelDegreeIdx, descIdx, targetIdx } = roles;
+  if (idIdx === -1 || orderIdx === -1) return;
 
-  if (bindIdx === -1 || procIdx === -1 || orderIdx === -1) return;
-
-  // Bug 3 cause A: resolve the parent container process dynamically — it was captured
-  // from this document's PRC_PROCESS row flagged IS_CONTAINER=1 — instead of a hardcoded
-  // document-specific process ID. If no container process was found in this document,
-  // skip the parent CONTAINS_STEP links but still extract step nodes and their relations.
-  // ponytail: assumes one container process per document (last IS_CONTAINER=1 row wins).
-  // Upgrade to multi-container documents if a corpus ever ships them.
   const parentProcessId = ctx.containerProcessId;
   const parentProcessUrn = parentProcessId
     ? buildUrn('smartvista', 'PRC_PROCESS', parentProcessId)
     : null;
 
   interface ParsedStep {
-    bindId: string;
-    processId: string;
+    stepId: string;
+    targetId?: string | undefined;
     execOrder: number;
-    isParallel?: number;
-    parallelDegree?: number;
-    note?: string;
     startLine: number;
     endLine: number;
     startOffset: number;
@@ -317,10 +417,9 @@ function handlePrcContainerTable(table: Table, ctx: TraversalContext): void {
   for (let r = 1; r < table.children.length; r++) {
     const row = table.children[r]!;
     const cells = getRowCells(row);
-    const bindId = cells[bindIdx]?.trim();
-    const processId = cells[procIdx]?.trim();
+    const rawStepId = cells[idIdx]?.trim();
     const orderStr = cells[orderIdx]?.trim();
-    if (!bindId || !processId || !orderStr) continue;
+    if (!rawStepId || !orderStr) continue;
 
     const execOrder = parseInt(orderStr, 10);
     if (isNaN(execOrder)) continue;
@@ -332,28 +431,28 @@ function handlePrcContainerTable(table: Table, ctx: TraversalContext): void {
     const rawSnippet = ctx.documentBody.slice(rowStartOffset, rowEndOffset);
 
     const isParallel = isParIdx >= 0 && cells[isParIdx] ? Number(cells[isParIdx]) : undefined;
-    const parallelDegree = degIdx >= 0 && cells[degIdx] ? Number(cells[degIdx]) : undefined;
-    const note = noteIdx >= 0 ? cells[noteIdx]?.trim() : undefined;
+    const parallelDegree = parallelDegreeIdx >= 0 && cells[parallelDegreeIdx] ? Number(cells[parallelDegreeIdx]) : undefined;
+    const note = descIdx >= 0 ? cells[descIdx]?.trim() : undefined;
+    const target = targetIdx >= 0 ? cells[targetIdx]?.trim() : undefined;
 
-    // D-07: ProcessStep nodes keyed by PRC_CONTAINER.ID (bindId)
-    const stepUrn = buildUrn('smartvista', 'PRC_CONTAINER', bindId);
+    const stepUrn = buildUrn('smartvista', 'PRC_CONTAINER', rawStepId);
     const stepNode: ResolvedNode = {
       urn: stepUrn,
       kind: 'ProcessStep',
       canonicalName: note ? `Step ${execOrder} - ${note}` : `Step ${execOrder}`,
       sourceSystem: 'smartvista',
       nativeType: 'PRC_CONTAINER',
-      normalizedKey: bindId,
+      normalizedKey: rawStepId,
       properties: {
         execOrder,
         ...(isParallel !== undefined ? { isParallel } : {}),
         ...(parallelDegree !== undefined ? { parallelDegree } : {}),
+        ...(note !== undefined ? { note } : {}),
       },
       aliases: [],
     };
     addNode(ctx, stepNode);
 
-    // Parent ScheduledProcess CONTAINS_STEP ProcessStep (only if a parent was resolved)
     if (parentProcessUrn) {
       addFactAndEvidence(
         ctx,
@@ -369,20 +468,51 @@ function handlePrcContainerTable(table: Table, ctx: TraversalContext): void {
       );
     }
 
-    // ProcessStep INVOKES child ScheduledProcess (processId)
-    const childProcUrn = buildUrn('smartvista', 'PRC_PROCESS', processId);
-    addFactAndEvidence(
-      ctx,
-      stepUrn,
-      'INVOKES',
-      childProcUrn,
-      {},
-      rowStartLine,
-      rowEndLine,
-      rowStartOffset,
-      rowEndOffset,
-      rawSnippet
-    );
+    if (target) {
+      // Check if target is a process ID (all numeric)
+      if (/^\d+$/.test(target)) {
+        const childProcUrn = buildUrn('smartvista', 'PRC_PROCESS', target);
+        addFactAndEvidence(
+          ctx,
+          stepUrn,
+          'INVOKES',
+          childProcUrn,
+          {},
+          rowStartLine,
+          rowEndLine,
+          rowStartOffset,
+          rowEndOffset,
+          rawSnippet
+        );
+      } else {
+        // Target is a service or component
+        const compUrn = buildUrn('system', 'SoftwareComponent', target);
+        const compNode: ResolvedNode = {
+          urn: compUrn,
+          kind: 'SoftwareComponent',
+          canonicalName: target,
+          sourceSystem: 'system',
+          nativeType: 'Service',
+          normalizedKey: target,
+          properties: {},
+          aliases: [],
+        };
+        addNode(ctx, compNode);
+
+        addFactAndEvidence(
+          ctx,
+          stepUrn,
+          'INVOKES',
+          compUrn,
+          {},
+          rowStartLine,
+          rowEndLine,
+          rowStartOffset,
+          rowEndOffset,
+          rawSnippet
+        );
+      }
+    }
 
     // Check if note mentions CYTP cycle type code (e.g. CYTP1002)
     if (note) {
@@ -404,7 +534,6 @@ function handlePrcContainerTable(table: Table, ctx: TraversalContext): void {
         };
         addNode(ctx, cycleNode);
 
-        // Step USES_TYPE cycleType
         addFactAndEvidence(
           ctx,
           stepUrn,
@@ -421,12 +550,9 @@ function handlePrcContainerTable(table: Table, ctx: TraversalContext): void {
     }
 
     steps.push({
-      bindId,
-      processId,
+      stepId: rawStepId,
+      targetId: target,
       execOrder,
-      ...(isParallel !== undefined ? { isParallel } : {}),
-      ...(parallelDegree !== undefined ? { parallelDegree } : {}),
-      ...(note !== undefined ? { note } : {}),
       startLine: rowStartLine,
       endLine: rowEndLine,
       startOffset: rowStartOffset,
@@ -457,25 +583,18 @@ function handlePrcContainerTable(table: Table, ctx: TraversalContext): void {
 }
 
 /**
- * Parses and extracts Cycle bind parameter table:
- * Columns: Bind, exec, I_CYCLE_TYPE, Dict name
+ * Handles Cycle parameter bind table: idIdx/bindIdx, typeIdx, optional name.
  */
-function handleCycleBindTable(table: Table, ctx: TraversalContext): void {
-  const header = table.children[0];
-  if (!header) return;
-  const colNames = getRowCells(header).map((c) => c.toUpperCase());
-  const bindIdx = colNames.findIndex((c) => c.includes('BIND'));
-  const cycleIdx = colNames.findIndex((c) => c.includes('CYCLE_TYPE') || c.includes('TYPE'));
-  const nameIdx = colNames.findIndex((c) => c.includes('NAME') || c.includes('DICT'));
-
-  if (bindIdx === -1 || cycleIdx === -1) return;
+function handleCycleBindTable(table: Table, roles: TableSchemaRoles, ctx: TraversalContext): void {
+  const { idIdx, typeIdx, nameIdx, descIdx } = roles;
+  if (idIdx === -1 || typeIdx === -1) return;
 
   for (let r = 1; r < table.children.length; r++) {
     const row = table.children[r]!;
     const cells = getRowCells(row);
-    const bindId = cells[bindIdx]?.trim();
-    const cycleType = cells[cycleIdx]?.trim();
-    const dictName = nameIdx >= 0 ? cells[nameIdx]?.trim() : '';
+    const bindId = cells[idIdx]?.trim();
+    const cycleType = cells[typeIdx]?.trim();
+    const dictName = nameIdx >= 0 ? cells[nameIdx]?.trim() : (descIdx >= 0 ? cells[descIdx]?.trim() : '');
 
     if (!bindId || !cycleType || !cycleType.startsWith('CYTP')) continue;
 
@@ -503,7 +622,6 @@ function handleCycleBindTable(table: Table, ctx: TraversalContext): void {
     };
     addNode(ctx, cycleNode);
 
-    // Step USES_TYPE CycleType
     addFactAndEvidence(
       ctx,
       stepUrn,
@@ -520,26 +638,31 @@ function handleCycleBindTable(table: Table, ctx: TraversalContext): void {
 }
 
 /**
- * Parses and extracts Billing dispatch table (04-cycles.md):
- * Columns: Event, Call, Writes
+ * Handles Dispatch/Write tables: actionIdx/callIdx, writesIdx.
+ * Uses section heading context to dynamically identify the caller SoftwareComponent.
  */
-function handleBillingDispatchTable(table: Table, ctx: TraversalContext): void {
-  const header = table.children[0];
-  if (!header) return;
-  const colNames = getRowCells(header).map((c) => c.toUpperCase());
-  const eventIdx = colNames.findIndex((c) => c.includes('EVENT'));
-  const writesIdx = colNames.findIndex((c) => c.includes('WRITES'));
+function handleDispatchTable(table: Table, roles: TableSchemaRoles, ctx: TraversalContext): void {
+  const { writesIdx } = roles;
+  if (writesIdx === -1) return;
 
-  if (eventIdx === -1 || writesIdx === -1) return;
-
-  const billingProcUrn = buildUrn('plsql', 'PLSQL_PROCEDURE', 'MAIN1.CRD_PRC_BILLING_PKG.PROCESS');
+  // Derives caller component from current section heading context
+  let callerProcUrn: string | null = null;
+  for (const h of ctx.headingPath) {
+    const tokenMatch = h.match(/`?([A-Za-z0-9_]{3,}\.[A-Za-z0-9_.]+)`?/);
+    if (tokenMatch) {
+      const normRes = normalizeTechnicalIdentifier(tokenMatch[1]!, 'MAIN1');
+      if (!normRes.isQuarantined) {
+        callerProcUrn = buildUrn('plsql', 'PLSQL_PROCEDURE', normRes.qualifiedIdentifier);
+        break;
+      }
+    }
+  }
 
   for (let r = 1; r < table.children.length; r++) {
     const row = table.children[r]!;
     const cells = getRowCells(row);
-    const event = cells[eventIdx]?.trim();
     const writes = cells[writesIdx]?.trim();
-    if (!event || !writes || writes.toLowerCase() === 'null') continue;
+    if (!writes || writes.toLowerCase() === 'null') continue;
 
     const rowStartLine = row.position?.start?.line ?? table.position?.start?.line ?? 1;
     const rowEndLine = row.position?.end?.line ?? table.position?.end?.line ?? rowStartLine;
@@ -547,11 +670,10 @@ function handleBillingDispatchTable(table: Table, ctx: TraversalContext): void {
     const rowEndOffset = row.position?.end?.offset ?? table.position?.end?.offset ?? 0;
     const rawSnippet = ctx.documentBody.slice(rowStartOffset, rowEndOffset);
 
-    // Extract table names mentioned in writes (e.g. CRD_DEBT_INTEREST, CRD_INVOICE, CRD_AGING, OPR_OPERATION)
     const tableTokens = writes.match(/[A-Z][A-Z0-9_]{3,}/g) || [];
     for (const token of tableTokens) {
-      if (token === 'CRD_PRC_BILLING_PKG' || token === 'PROCESS') continue;
-      // Controlled D-06: Qualify by schema MAIN1
+      if (token.includes('PKG') || token === 'PROCESS') continue;
+
       const normRes = normalizeTechnicalIdentifier(token, 'MAIN1');
       if (normRes.isQuarantined) {
         addQuarantine(ctx, token, normRes.quarantineReason || 'Unqualified DB object', rowStartLine, rowEndLine);
@@ -575,46 +697,40 @@ function handleBillingDispatchTable(table: Table, ctx: TraversalContext): void {
       };
       addNode(ctx, dbNode);
 
-      // Billing procedure WRITES_TO table with controlled qualifier INSERT or UPDATE
-      const op = writes.toLowerCase().includes('update') ? 'UPDATE' : 'INSERT';
-      addFactAndEvidence(
-        ctx,
-        billingProcUrn,
-        'WRITES_TO',
-        tableUrn,
-        { operation: op },
-        rowStartLine,
-        rowEndLine,
-        rowStartOffset,
-        rowEndOffset,
-        rawSnippet
-      );
+      if (callerProcUrn) {
+        const op = writes.toLowerCase().includes('update') ? 'UPDATE' : 'INSERT';
+        addFactAndEvidence(
+          ctx,
+          callerProcUrn,
+          'WRITES_TO',
+          tableUrn,
+          { operation: op },
+          rowStartLine,
+          rowEndLine,
+          rowStartOffset,
+          rowEndOffset,
+          rawSnippet
+        );
+      }
     }
   }
 }
 
 /**
- * Parses and extracts Status / Result codes table:
- * Columns: Code, Name
+ * Handles status / result code tables.
  */
-function handleStatusTable(table: Table, ctx: TraversalContext): void {
-  const header = table.children[0];
-  if (!header) return;
-  const colNames = getRowCells(header).map((c) => c.toUpperCase());
-  const codeIdx = colNames.findIndex((c) => c === 'CODE');
-  const nameIdx = colNames.findIndex((c) => c === 'NAME');
-
-  if (codeIdx === -1 || nameIdx === -1) return;
+function handleStatusTable(table: Table, roles: TableSchemaRoles, ctx: TraversalContext): void {
+  const { idIdx, nameIdx } = roles;
+  if (idIdx === -1 || nameIdx === -1) return;
 
   for (let r = 1; r < table.children.length; r++) {
     const row = table.children[r]!;
     const cells = getRowCells(row);
-    const code = cells[codeIdx]?.trim();
+    const code = cells[idIdx]?.trim();
     const name = cells[nameIdx]?.trim();
     if (!code || !name) continue;
 
-    // Filter to known status prefixes (PRSR, EVST, OPST)
-    if (!code.match(/^(PRSR|EVST|OPST)\d{4}$/i)) continue;
+    if (!code.match(/^(PRSR|EVST|OPST)\d{4}$/i) && code !== 'READY') continue;
 
     const statusUrn = buildUrn('smartvista', 'Status', code);
     const statusNode: ResolvedNode = {
@@ -635,18 +751,15 @@ function handleStatusTable(table: Table, ctx: TraversalContext): void {
 }
 
 /**
- * Parses and extracts Database object tables from 02-data-objects.md:
- * Section headings like ## `FCL_CYCLE_COUNTER` — due work queue
- * or tables with What, How built, Key cols, etc.
+ * Handles data object description tables whose subject is derived from heading context.
  */
 function handleDataObjectsTables(table: Table, ctx: TraversalContext): void {
-  // Check current heading path for table names (e.g. ## `FCL_CYCLE_COUNTER` or ## Table Schema: T_LN_ACCT)
   const lastHeading = ctx.headingPath[ctx.headingPath.length - 1] || '';
   const match = lastHeading.match(/`?([A-Za-z0-9_]{3,})`?/);
   if (!match) return;
 
   const rawTable = match[1]!;
-  if (['WHAT', 'HOW', 'SAMPLE', 'ONE', 'LAYER'].includes(rawTable.toUpperCase())) return;
+  if (['WHAT', 'HOW', 'SAMPLE', 'ONE', 'LAYER', 'ID', 'MAP'].includes(rawTable.toUpperCase())) return;
 
   const normRes = normalizeTechnicalIdentifier(rawTable, 'MAIN1');
   if (normRes.isQuarantined) {
@@ -671,7 +784,7 @@ function handleDataObjectsTables(table: Table, ctx: TraversalContext): void {
   };
   addNode(ctx, dbNode);
 
-  // If table mentions key packages in 'How built', attach relations
+  // Inspect table rows for mentions of procedure packages in 'How built' or descriptions
   const tableRows = table.children.slice(1);
   for (const row of tableRows) {
     const text = getRowCells(row).join(' ');
@@ -681,16 +794,43 @@ function handleDataObjectsTables(table: Table, ctx: TraversalContext): void {
     const rowEndOffset = row.position?.end?.offset ?? table.position?.end?.offset ?? 0;
     const rawSnippet = ctx.documentBody.slice(rowStartOffset, rowEndOffset);
 
-    if (text.includes('FCL_PRC_CYCLE_COUNTER_PKG.PROCESS') || text.includes('update_cycle_counter')) {
-      const procUrn = buildUrn('plsql', 'PLSQL_PROCEDURE', 'MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS');
-      addFactAndEvidence(ctx, procUrn, 'READS_FROM', tableUrn, { operation: 'READ' }, rowStartLine, rowEndLine, rowStartOffset, rowEndOffset, rawSnippet);
-      addFactAndEvidence(ctx, procUrn, 'WRITES_TO', tableUrn, { operation: 'UPDATE' }, rowStartLine, rowEndLine, rowStartOffset, rowEndOffset, rawSnippet);
+    // Look for procedure tokens like [A-Z0-9_]+_PKG\.[A-Z0-9_]+
+    const procMatches = text.match(/([A-Z0-9_]+_PKG)\.([A-Z0-9_]+)/gi) || [];
+    for (const procMatch of procMatches) {
+      const procNorm = normalizeTechnicalIdentifier(procMatch, 'MAIN1');
+      if (!procNorm.isQuarantined) {
+        const procUrn = buildUrn('plsql', 'PLSQL_PROCEDURE', procNorm.qualifiedIdentifier);
+        addFactAndEvidence(
+          ctx,
+          procUrn,
+          'READS_FROM',
+          tableUrn,
+          { operation: 'READ' },
+          rowStartLine,
+          rowEndLine,
+          rowStartOffset,
+          rowEndOffset,
+          rawSnippet
+        );
+        addFactAndEvidence(
+          ctx,
+          procUrn,
+          'WRITES_TO',
+          tableUrn,
+          { operation: 'UPDATE' },
+          rowStartLine,
+          rowEndLine,
+          rowStartOffset,
+          rowEndOffset,
+          rawSnippet
+        );
+      }
     }
   }
 }
 
 /**
- * Recursively traverses markdown AST to extract deterministic facts and record consumed ranges.
+ * Traverses markdown AST to extract deterministic facts and record consumed ranges.
  */
 function traverseAst(node: RootContent | Root, ctx: TraversalContext): void {
   if (node.type === 'heading') {
@@ -711,28 +851,28 @@ function traverseAst(node: RootContent | Root, ctx: TraversalContext): void {
     const startLine = table.position?.start?.line ?? 1;
     const endLine = table.position?.end?.line ?? 1;
 
-    // Record consumed range for the table
     recordConsumedRange(ctx, startOffset, endOffset, startLine, endLine);
 
     const header = table.children[0];
     if (header) {
-      const headerText = getRowCells(header).join(' ').toUpperCase();
-      if (headerText.includes('PROCEDURE_NAME') && headerText.includes('IS_CONTAINER')) {
-        handlePrcProcessTable(table, ctx);
-      } else if (headerText.includes('BIND') && headerText.includes('EXEC_ORDER')) {
-        handlePrcContainerTable(table, ctx);
-      } else if (headerText.includes('I_CYCLE_TYPE') || (headerText.includes('BIND') && headerText.includes('CYCLE'))) {
-        handleCycleBindTable(table, ctx);
-      } else if (headerText.includes('EVENT') && headerText.includes('WRITES')) {
-        handleBillingDispatchTable(table, ctx);
-      } else if (headerText.includes('CODE') && headerText.includes('NAME') && (ctx.headingPath.some((h) => h.includes('Result') || h.includes('Status')))) {
-        handleStatusTable(table, ctx);
+      const headers = getRowCells(header);
+      const roles = detectTableSchema(headers);
+
+      if (roles.idIdx !== -1 && roles.nameIdx !== -1 && roles.orderIdx === -1 && roles.isContIdx !== -1) {
+        handleProcessTable(table, roles, ctx);
+      } else if (roles.idIdx !== -1 && roles.orderIdx !== -1) {
+        handleStepTable(table, roles, ctx);
+      } else if (roles.typeIdx !== -1 && roles.idIdx !== -1) {
+        handleCycleBindTable(table, roles, ctx);
+      } else if (roles.writesIdx !== -1) {
+        handleDispatchTable(table, roles, ctx);
+      } else if (roles.idIdx !== -1 && roles.nameIdx !== -1 && ctx.headingPath.some((h) => /Result|Status|Trang_thai/i.test(h))) {
+        handleStatusTable(table, roles, ctx);
       } else {
         handleDataObjectsTables(table, ctx);
       }
     }
   } else if (node.type === 'code') {
-    // Code blocks are consumed ranges
     const startOffset = node.position?.start?.offset ?? 0;
     const endOffset = node.position?.end?.offset ?? 0;
     const startLine = node.position?.start?.line ?? 1;
@@ -758,11 +898,9 @@ export function extractDeterministicFacts(snapshot: ProjectionSnapshot): Determi
   const consumedRangesMap = new Map<string, SourceRange[]>();
 
   for (const doc of snapshot.documents) {
-    // Reconstruct raw document body from chunks
     const body = doc.chunks.map((c) => c.rawContent).join('');
     const ast = parseMarkdownToAst(body);
 
-    // Register SourceDocument node for each document in snapshot per GRAPH-01 / D-01
     const docUrn = buildUrn('markdown', 'SourceDocument', doc.documentId);
     if (!nodesMap.has(docUrn)) {
       nodesMap.set(docUrn, {
