@@ -266,43 +266,18 @@ export async function resolveQueryEntities(
     };
   }
 
-  // 5. Check if query text provides kind context to disambiguate collisions
-  const lowerQuery = query.toLowerCase();
-  const processKeywords = ['quy trình', 'process', 'scheduledprocess'];
-  // ponytail: 'container' removed — it is an entity-type noun, not a ProcessStep NL cue;
-  // keeping it here forced container queries onto kind==='ProcessStep' (Bug 4 collision).
-  // Ceiling: this whole keyword->kind heuristic should be replaced by dynamic graph-trace
-  // disambiguation. Upgrade when the resolver can rank candidate kinds from the pinned graph.
-  const stepKeywords = ['bước', 'step', 'processstep'];
-
-  const mentionsProcess = processKeywords.some((k) => lowerQuery.includes(k));
-  const mentionsStep = stepKeywords.some((k) => lowerQuery.includes(k));
-
-  let filtered = [...rawCandidates];
-  if (mentionsProcess && !mentionsStep) {
-    const onlyProcess = rawCandidates.filter((c) => c.kind === 'ScheduledProcess');
-    if (onlyProcess.length > 0) {
-      filtered = onlyProcess;
-    }
-  } else if (mentionsStep && !mentionsProcess) {
-    const onlyStep = rawCandidates.filter((c) => c.kind === 'ProcessStep');
-    if (onlyStep.length > 0) {
-      filtered = onlyStep;
-    }
-  }
-
-  if (filtered.length === 1) {
+  if (rawCandidates.length === 1) {
     return {
       status: 'resolved',
-      resolved: filtered[0]!,
-      candidates: filtered,
+      resolved: rawCandidates[0]!,
+      candidates: rawCandidates,
     };
   }
 
-  // Multiple candidates -> Ambiguous per D-04
+  // Multiple candidate entities -> Ambiguous; forward all candidates without heuristics
   return {
     status: 'ambiguous',
-    candidates: filtered,
+    candidates: rawCandidates,
   };
 }
 
@@ -553,8 +528,8 @@ export async function buildQueryExecutionPlan(
     options
   );
 
-  // Step 3: Handle ambiguity & unresolvable references (D-04)
-  if (resolution.status === 'ambiguous' || resolution.status === 'needsClarification') {
+  // Step 3: Handle unresolvable references (D-04)
+  if (resolution.status === 'needsClarification' || resolution.candidates.length === 0) {
     const safeCandidates = resolution.candidates || [];
     return {
       status: 'needsClarification',
@@ -572,9 +547,8 @@ export async function buildQueryExecutionPlan(
     };
   }
 
-  // At this point status === 'resolved'
-  const resolvedCandidate = resolution.resolved;
-  const resolvedCandidates = [resolvedCandidate];
+  // Forward all resolved/ambiguous candidates to QueryPlanner
+  const resolvedCandidates = [...resolution.candidates];
   const allowedUrnSet = new Set(resolvedCandidates.map((c) => c.urn));
 
   // Step 4: Invoke QueryPlanner

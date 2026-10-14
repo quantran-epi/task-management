@@ -3,6 +3,9 @@ import { Neo4jRepository, CYPHER_QUERIES } from '../src/graph/neo4jRepository.js
 import type { GraphCandidate } from '../src/types/graphProtocol.js';
 import type { ProjectionSnapshot } from '../src/indexing/snapshotStore.js';
 import { URN_PROCESS_60000006, URN_SUBPROCESS_10000304 } from './fixtures/pilotGoldEntities.js';
+import { resolveQueryEntities, buildQueryExecutionPlan } from '../src/retrieval/queryPlanning.js';
+import { NineRouterQueryPlanner } from '../src/retrieval/nineRouterQueryPlanner.js';
+import type { GraphRetrievalGateway, QueryPlanner } from '../src/retrieval/contracts.js';
 
 function makeMockDriver(records: any[] = []) {
   const mockRun = vi.fn().mockResolvedValue({ records });
@@ -238,4 +241,116 @@ describe('19.2-06-T2: Multi-hop Plan-Driven Traversal and Deletion of Catch-All 
     expect(query).toContain('CONTAINS_STEP');
   });
 });
+
+describe('19.2-06-T3: Delete Keyword Heuristics and Implement Candidate Disambiguation', () => {
+  const candidateProc = {
+    urn: URN_PROCESS_60000006,
+    canonicalName: 'SHB - Credit calculations',
+    kind: 'ScheduledProcess' as const,
+  };
+  const candidateStep = {
+    urn: 'urn:plannermate:test:ProcessStep:60000006',
+    canonicalName: 'Step Container 60000006',
+    kind: 'ProcessStep' as const,
+  };
+
+  it('forwards all matching candidates as ambiguous without keyword heuristics', async () => {
+    const mockGateway: GraphRetrievalGateway = {
+      resolveEntities: vi.fn().mockResolvedValue([candidateProc, candidateStep]),
+      traverse: vi.fn(),
+    };
+
+    const res = await resolveQueryEntities(
+      mockGateway,
+      'snap-1',
+      'quy trình 60000006'
+    );
+
+    expect(res.status).toBe('ambiguous');
+    expect(res.candidates).toHaveLength(2);
+    expect(res.candidates).toEqual([candidateProc, candidateStep]);
+  });
+
+  it('routes multiple candidate URNs to planner and successfully executes when planner disambiguates', async () => {
+    const mockGateway: GraphRetrievalGateway = {
+      resolveEntities: vi.fn().mockResolvedValue([candidateProc, candidateStep]),
+      traverse: vi.fn(),
+    };
+
+    const mockPlanner: QueryPlanner = {
+      plan: vi.fn().mockResolvedValue({
+        type: 'plan',
+        plan: {
+          planId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
+          queryIntent: 'LOOKUP',
+          seedUrns: [URN_PROCESS_60000006],
+          traversalSteps: [],
+          overallMaxDepth: 1,
+          includeInferred: false,
+          fulltextKeywords: ['credit'],
+          semanticQuery: 'credit process',
+        },
+      }),
+    };
+
+    const outcome = await buildQueryExecutionPlan({
+      request: {
+        query: 'chi tiết quy trình 60000006',
+        limit: 20,
+        includeInferred: false,
+        recentTurns: [],
+      },
+      pinnedSnapshotId: 'snap-1',
+      gateway: mockGateway,
+      planner: mockPlanner,
+    });
+
+    expect(outcome.status).toBe('executable');
+    if (outcome.status === 'executable') {
+      expect(outcome.plan.seedUrns).toEqual([URN_PROCESS_60000006]);
+    }
+
+    // Verify planner was called with resolvedCandidates containing both collision candidates
+    expect(mockPlanner.plan).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        resolvedCandidates: [candidateProc, candidateStep],
+      }),
+      undefined
+    );
+  });
+
+  it('falls back to needsClarification when planner cannot disambiguate or returns clarification', async () => {
+    const mockGateway: GraphRetrievalGateway = {
+      resolveEntities: vi.fn().mockResolvedValue([candidateProc, candidateStep]),
+      traverse: vi.fn(),
+    };
+
+    const mockPlanner: QueryPlanner = {
+      plan: vi.fn().mockResolvedValue({
+        type: 'clarification',
+        candidates: [candidateProc, candidateStep],
+      }),
+    };
+
+    const outcome = await buildQueryExecutionPlan({
+      request: {
+        query: 'thông tin 60000006',
+        limit: 20,
+        includeInferred: false,
+        recentTurns: [],
+      },
+      pinnedSnapshotId: 'snap-1',
+      gateway: mockGateway,
+      planner: mockPlanner,
+    });
+
+    expect(outcome.status).toBe('needsClarification');
+    if (outcome.status === 'needsClarification') {
+      expect(outcome.safeCandidates).toEqual([candidateProc, candidateStep]);
+      expect(outcome.semanticOutcome).toBe('NEEDS_CLARIFICATION');
+    }
+  });
+});
+
 
