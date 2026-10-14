@@ -94,6 +94,47 @@ describe('acceptance CLI', () => {
     expect(JSON.stringify(result)).not.toContain('test-secret-token');
   });
 
+  it('retains safe diagnostics for a degraded T1 failure without leaking snippets', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      json: async () => ({
+        ...baseResponse,
+        outcome: 'DEGRADED',
+        planTrace: { fastPath: true, degradedFallback: false, intent: 'LOOKUP' },
+        diagnostics: { degraded: true, degradedReasons: ['vector: MODEL_INDEX_MISMATCH'] },
+        items: [{
+          ...baseResponse.items[0],
+          sourceDocumentTitle: '02-data-objects.md',
+          publishedContentHash: 'a'.repeat(64),
+        }],
+      }),
+    }));
+
+    const result = await runAcceptanceCli({
+      endpoint: 'http://localhost:3001',
+      setId: 'set-1',
+      token: 'test-token',
+      origin: 'http://localhost:5173',
+      caseIds: ['T1'],
+      strict: true,
+      timeoutMs: 1000,
+    });
+
+    expect(result.results[0]).toMatchObject({
+      id: 'T1',
+      passed: false,
+      outcome: 'DEGRADED',
+      intent: 'LOOKUP',
+      fastPath: true,
+      itemCount: 1,
+      snapshotId: 'snap-1',
+      degradedReasons: ['vector: MODEL_INDEX_MISMATCH'],
+      sourceTitles: ['02-data-objects.md'],
+      modalityStatus: baseResponse.modalityStatus,
+      error: 'Expected outcome READY, got DEGRADED',
+    });
+    expect(JSON.stringify(result)).not.toContain('safe schema-required snippet');
+  });
+
   it('rejects T1 semantic mismatch even without --strict', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       json: async () => ({

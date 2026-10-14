@@ -34,6 +34,9 @@ export interface SmokeResult {
   fastPath?: boolean;
   itemCount?: number;
   snapshotId?: string;
+  modalityStatus?: RetrievalResponse['modalityStatus'];
+  degradedReasons?: string[];
+  sourceTitles?: string[];
   error?: string;
 }
 
@@ -162,6 +165,27 @@ async function fetchCase(options: CliOptions, caseDef: SmokeCase): Promise<Retri
   }
 }
 
+function safeResponseMetadata(parsed: RetrievalResponse): Omit<SmokeResult, 'id' | 'passed' | 'latencyMs' | 'error'> {
+  return {
+    outcome: parsed.outcome,
+    intent: String(parsed.planTrace.intent ?? ''),
+    fastPath: parsed.planTrace.fastPath,
+    itemCount: parsed.items.length,
+    snapshotId: parsed.snapshotId,
+    modalityStatus: parsed.modalityStatus,
+    ...(parsed.diagnostics.degradedReasons
+      ? { degradedReasons: [...parsed.diagnostics.degradedReasons] }
+      : {}),
+    sourceTitles: [
+      ...new Set(
+        parsed.items
+          .filter((item) => item.type === 'chunk')
+          .map((item) => item.sourceDocumentTitle)
+      ),
+    ],
+  };
+}
+
 export async function runAcceptanceCli(options: CliOptions): Promise<{ passed: boolean; results: SmokeResult[] }> {
   const results: SmokeResult[] = [];
   const selectedCases = options.caseIds && options.caseIds.length > 0
@@ -169,8 +193,9 @@ export async function runAcceptanceCli(options: CliOptions): Promise<{ passed: b
     : SMOKE_CASES;
   for (const caseDef of selectedCases) {
     const startedAt = Date.now();
+    let parsed: RetrievalResponse | undefined;
     try {
-      const parsed = await fetchCase(options, caseDef);
+      parsed = await fetchCase(options, caseDef);
       // Scenario expectations define acceptance. A schema-valid but semantically wrong
       // response must never be reported as passed, even when --strict is omitted.
       assertStrict(caseDef, parsed);
@@ -178,11 +203,7 @@ export async function runAcceptanceCli(options: CliOptions): Promise<{ passed: b
         id: caseDef.id,
         passed: true,
         latencyMs: Date.now() - startedAt,
-        outcome: parsed.outcome,
-        intent: String(parsed.planTrace.intent ?? ''),
-        fastPath: parsed.planTrace.fastPath,
-        itemCount: parsed.items.length,
-        snapshotId: parsed.snapshotId,
+        ...safeResponseMetadata(parsed),
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'unknown error';
@@ -190,6 +211,7 @@ export async function runAcceptanceCli(options: CliOptions): Promise<{ passed: b
         id: caseDef.id,
         passed: false,
         latencyMs: Date.now() - startedAt,
+        ...(parsed ? safeResponseMetadata(parsed) : {}),
         error: message.replaceAll(options.token, '[REDACTED]'),
       });
     }
