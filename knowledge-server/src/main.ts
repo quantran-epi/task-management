@@ -5,6 +5,12 @@ import { buildKnowledgeServer, type KnowledgeServer } from './server.js';
 import { createEmbeddingProvider } from './embedding/embeddingProviders.js';
 import { Neo4jRepository } from './graph/neo4jRepository.js';
 import {
+  GraphBuildService,
+  type ProseExtractionConfig,
+} from './services/graphBuildService.js';
+import { SnapshotStore } from './indexing/snapshotStore.js';
+import { AttemptService } from './services/attemptService.js';
+import {
   RetrievalService,
   readRetrievalTimeouts,
   type RetrievalTimeouts,
@@ -45,6 +51,14 @@ export interface Neo4jConfig {
   database?: string | undefined;
 }
 
+export interface ProseExtractionServerConfig {
+  enabled: boolean;
+  endpoint?: string | undefined;
+  model?: string | undefined;
+  apiKey?: string | undefined;
+  allowedHosts?: string[] | undefined;
+}
+
 export interface ReadKnowledgeServerOptionsResult {
   token: string;
   allowedOrigins: string[];
@@ -54,6 +68,8 @@ export interface ReadKnowledgeServerOptionsResult {
   remoteEmbedding: RemoteEmbeddingConfig;
   remotePlanner: RemotePlannerConfig;
   neo4j: Neo4jConfig;
+  proseExtraction: ProseExtractionServerConfig;
+  rollbackGracePeriodMs: number;
   timeouts: RetrievalTimeouts;
 }
 
@@ -278,6 +294,59 @@ export function readKnowledgeServerOptions(
     throw new Error('NEO4J_URI is required when NEO4J_USER or NEO4J_PASSWORD is provided.');
   }
 
+  // Validate prose extraction configuration
+  const proseExtractionEnabled = (env.PROSE_EXTRACTION_ENABLED ?? '').trim().toLowerCase() === 'true';
+  const proseExtraction: ProseExtractionServerConfig = { enabled: proseExtractionEnabled };
+
+  if (proseExtractionEnabled) {
+    const endpoint = (env.PROSE_EXTRACTION_ENDPOINT ?? '').trim();
+    if (!endpoint) {
+      throw new Error('PROSE_EXTRACTION_ENDPOINT is required when PROSE_EXTRACTION_ENABLED is true.');
+    }
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(endpoint);
+    } catch {
+      throw new Error(`Invalid PROSE_EXTRACTION_ENDPOINT: "${endpoint}". Must be a valid URL.`);
+    }
+    if (parsedUrl.protocol !== 'https:') {
+      throw new Error(`PROSE_EXTRACTION_ENDPOINT must use HTTPS protocol: "${endpoint}".`);
+    }
+    if (parsedUrl.username || parsedUrl.password) {
+      throw new Error('PROSE_EXTRACTION_ENDPOINT must not contain credentials.');
+    }
+    if (parsedUrl.search || parsedUrl.hash) {
+      throw new Error('PROSE_EXTRACTION_ENDPOINT must not contain query parameters or hash.');
+    }
+
+    const model = (env.PROSE_EXTRACTION_MODEL ?? '').trim();
+    if (!model) {
+      throw new Error('PROSE_EXTRACTION_MODEL is required when PROSE_EXTRACTION_ENABLED is true.');
+    }
+
+    const rawHosts = (env.PROSE_EXTRACTION_ALLOWED_HOSTS ?? '').trim();
+    const allowedHosts = parseAllowedHosts(rawHosts, 'PROSE_EXTRACTION_ALLOWED_HOSTS');
+    if (!allowedHosts.includes(parsedUrl.hostname)) {
+      throw new Error(
+        `PROSE_EXTRACTION_ENDPOINT host "${parsedUrl.hostname}" is not in PROSE_EXTRACTION_ALLOWED_HOSTS.`
+      );
+    }
+
+    const apiKey = (env.PROSE_EXTRACTION_API_KEY ?? '').trim() || undefined;
+
+    proseExtraction.endpoint = endpoint;
+    proseExtraction.model = model;
+    proseExtraction.apiKey = apiKey;
+    proseExtraction.allowedHosts = allowedHosts;
+  }
+
+  // Validate rollback grace period
+  const rawGrace = (env.ROLLBACK_GRACE_PERIOD_MS ?? '600000').trim() || '600000';
+  const rollbackGracePeriodMs = Number(rawGrace);
+  if (!Number.isInteger(rollbackGracePeriodMs) || rollbackGracePeriodMs <= 0 || String(rollbackGracePeriodMs) !== rawGrace) {
+    throw new Error(`Invalid ROLLBACK_GRACE_PERIOD_MS: "${rawGrace}". Must be a positive integer.`);
+  }
+
   const timeouts = readRetrievalTimeouts(env);
 
   return {
@@ -289,6 +358,8 @@ export function readKnowledgeServerOptions(
     remoteEmbedding,
     remotePlanner,
     neo4j,
+    proseExtraction,
+    rollbackGracePeriodMs,
     timeouts,
   };
 }
@@ -300,6 +371,12 @@ export async function startKnowledgeServer(
 
   let graphRepository: Neo4jRepository | undefined;
   let retrievalService: RetrievalService | undefined;
+  let graphBuildService: GraphBuildService | undefined;
+
+  const snapshotStore = new SnapshotStore({
+    storageDir: env.SNAPSHOT_STORAGE_DIR,
+  });
+  const attemptService = new AttemptService(snapshotStore);
 
   if (options.neo4j.enabled && options.neo4j.uri) {
     graphRepository = new Neo4jRepository({
@@ -313,6 +390,23 @@ export async function startKnowledgeServer(
     await graphRepository.initializeSchemaConstraints();
 
     const embeddingProvider: EmbeddingProvider = createEmbeddingProvider(env);
+
+    const proseConfig: ProseExtractionConfig | undefined = options.proseExtraction.enabled
+      ? {
+          endpoint: options.proseExtraction.endpoint!,
+          model: options.proseExtraction.model!,
+          apiKey: options.proseExtraction.apiKey,
+        }
+      : undefined;
+
+    graphBuildService = new GraphBuildService({
+      repository: graphRepository,
+      snapshotStore,
+      embeddingProvider,
+      proseExtraction: proseConfig,
+      productionMode: true,
+      rollbackGracePeriodMs: options.rollbackGracePeriodMs,
+    });
 
     // Query planner: either remote 9router planner or baseline fallback
     let queryPlanner: QueryPlanner;
@@ -379,7 +473,9 @@ export async function startKnowledgeServer(
     port: options.port,
     httpsTerminated: options.httpsTerminated,
     logger: { level: env.LOG_LEVEL || 'info' },
+    attemptService,
     graphRepository,
+    graphBuildService,
     retrievalService,
     onClose: async () => {
       if (graphRepository) {

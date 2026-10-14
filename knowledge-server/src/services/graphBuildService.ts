@@ -49,6 +49,8 @@ export interface GraphBuildServiceOptions {
   snapshotStore?: SnapshotStore | undefined;
   embeddingProvider?: EmbeddingProvider | undefined;
   proseExtraction?: ProseExtractionConfig | undefined;
+  productionMode?: boolean | undefined;
+  rollbackGracePeriodMs?: number | undefined;
 }
 
 export class GraphBuildService {
@@ -61,6 +63,7 @@ export class GraphBuildService {
   readonly snapshotStore?: SnapshotStore | undefined;
   readonly embeddingProvider?: EmbeddingProvider | undefined;
   readonly proseExtraction?: ProseExtractionConfig | undefined;
+  readonly rollbackGracePeriodMs: number;
 
   constructor(
     repositoryOrOptions?: GraphRepository | GraphBuildServiceOptions,
@@ -72,12 +75,22 @@ export class GraphBuildService {
       this.snapshotStore = snapshotStore ?? options?.snapshotStore;
       this.embeddingProvider = options?.embeddingProvider;
       this.proseExtraction = options?.proseExtraction;
+      this.rollbackGracePeriodMs = options?.rollbackGracePeriodMs ?? 600000;
     } else {
       const opts = (repositoryOrOptions as GraphBuildServiceOptions) || {};
+      if (opts.productionMode) {
+        if (!opts.repository) {
+          throw new Error('GraphBuildService requires explicit repository in production mode.');
+        }
+        if (!opts.snapshotStore) {
+          throw new Error('GraphBuildService requires explicit snapshotStore in production mode.');
+        }
+      }
       this.repository = opts.repository ?? new InMemoryGraphRepository();
       this.snapshotStore = opts.snapshotStore;
       this.embeddingProvider = opts.embeddingProvider;
       this.proseExtraction = opts.proseExtraction;
+      this.rollbackGracePeriodMs = opts.rollbackGracePeriodMs ?? 600000;
     }
   }
 
