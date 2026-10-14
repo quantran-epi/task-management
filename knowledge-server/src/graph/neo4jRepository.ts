@@ -54,12 +54,12 @@ export const CYPHER_QUERIES = {
     `CREATE CONSTRAINT fact_instance_key IF NOT EXISTS FOR (f:Fact) REQUIRE f.instanceKey IS UNIQUE`,
     `CREATE CONSTRAINT snapshot_id IF NOT EXISTS FOR (s:GraphSnapshot) REQUIRE s.graphSnapshotId IS UNIQUE`,
     `CREATE CONSTRAINT chunk_instance_key IF NOT EXISTS FOR (c:Chunk) REQUIRE c.instanceKey IS UNIQUE`,
+    `CREATE CONSTRAINT c_snapshot_entity_urn IF NOT EXISTS FOR (e:Entity) REQUIRE (e.graphSnapshotId, e.urn) IS NODE KEY`,
+    `CREATE CONSTRAINT c_snapshot_chunk_id IF NOT EXISTS FOR (c:Chunk) REQUIRE (c.graphSnapshotId, c.chunkId) IS NODE KEY`,
+    `CREATE CONSTRAINT c_snapshot_fact_key IF NOT EXISTS FOR (f:Fact) REQUIRE (f.graphSnapshotId, f.factKey) IS NODE KEY`,
   ] as const,
 
   CREATE_INDEXES: [
-    `CREATE INDEX idx_snapshot_entity_urn IF NOT EXISTS FOR (e:Entity) ON (e.graphSnapshotId, e.urn)`,
-    `CREATE INDEX idx_snapshot_chunk_id IF NOT EXISTS FOR (c:Chunk) ON (c.graphSnapshotId, c.chunkId)`,
-    `CREATE INDEX idx_snapshot_fact_key IF NOT EXISTS FOR (f:Fact) ON (f.graphSnapshotId, f.factKey)`,
     `CREATE INDEX idx_entity_name IF NOT EXISTS FOR (e:Entity) ON (e.graphSnapshotId, e.canonicalName)`,
     `CREATE INDEX idx_entity_normalized IF NOT EXISTS FOR (e:Entity) ON (e.graphSnapshotId, e.normalizedKey)`,
     `CREATE INDEX idx_chunk_doc_range IF NOT EXISTS FOR (c:Chunk) ON (c.graphSnapshotId, c.documentId, c.lineStart, c.lineEnd)`,
