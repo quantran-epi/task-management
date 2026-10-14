@@ -575,6 +575,21 @@ export function validateGroundedAnswerClosure(
     }
   }
 
+  // 6. Hypotheses validation for Schema V2 (D-10)
+  if (answer.schemaVersion === 2 && answer.hypotheses) {
+    for (let hIdx = 0; hIdx < answer.hypotheses.length; hIdx++) {
+      const hyp = answer.hypotheses[hIdx]!;
+      // Hypotheses must never have citations
+      if ((hyp as unknown as { citationIds?: unknown }).citationIds !== undefined) {
+        issues.push({
+          path: `hypotheses[${hIdx}]`,
+          code: 'hypothesis_has_citations',
+          message: 'Hypotheses must not contain citation IDs',
+        });
+      }
+    }
+  }
+
   return {
     valid: issues.length === 0,
     issues,

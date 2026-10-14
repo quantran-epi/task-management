@@ -12,7 +12,12 @@ import type {
   FederatedRetrievalResponse,
   ChunkItem,
 } from '../../src/services/knowledge/retrievalProtocol';
-import type { GroundedAnswer } from '../../src/services/ai/groundedAnswerSchemas';
+import {
+  GroundedAnswerSchema,
+  GroundedAnswerSchemaV2,
+  toGroundedAnswerDisplay,
+  type GroundedAnswer,
+} from '../../src/services/ai/groundedAnswerSchemas';
 import type { LocalGroundedResult } from '../../src/services/search/localGroundedRetrieval';
 
 function makeMockChunk(
@@ -814,5 +819,108 @@ describe('evidencePack', () => {
 
     const result = validateGroundedAnswerClosure(answer, localPack);
     expect(result.valid).toBe(true);
+  });
+
+  // 18. Schema V2 parses valid v2 output with confidence and hypotheses
+  it('18. Schema V2 parses valid v2 output with confidence and hypotheses', () => {
+    const v2Valid = {
+      schemaVersion: 2,
+      language: 'vi',
+      conclusion: 'MAIN1.FCL_CYCLE_COUNTER là bảng lưu trữ chu kỳ.',
+      confidence: 'high',
+      confidenceReason: 'Trực tiếp trích dẫn đầy đủ.',
+      claims: [
+        {
+          id: 'C1',
+          text: 'MAIN1.FCL_CYCLE_COUNTER lưu trữ số đếm chu kỳ.',
+          classification: 'DIRECT',
+          citationIds: ['S1'],
+          pathId: null,
+        },
+      ],
+      hypotheses: [],
+      unsupportedParts: [],
+    };
+    const parsed = GroundedAnswerSchemaV2.safeParse(v2Valid);
+    expect(parsed.success).toBe(true);
+
+    const unionParsed = GroundedAnswerSchema.safeParse(v2Valid);
+    expect(unionParsed.success).toBe(true);
+  });
+
+  // 19. Discriminated union parses legacy v1 and toGroundedAnswerDisplay maps it safely
+  it('19. Discriminated union parses legacy v1 and toGroundedAnswerDisplay maps it safely', () => {
+    const v1Legacy: GroundedAnswer = {
+      schemaVersion: 1,
+      language: 'vi',
+      conclusion: 'Kết quả v1 cũ',
+      claims: [
+        {
+          id: 'C1',
+          text: 'Nội dung v1',
+          classification: 'DIRECT',
+          citationIds: ['S1'],
+          pathId: null,
+        },
+      ],
+      unsupportedParts: [],
+    };
+    const unionParsed = GroundedAnswerSchema.safeParse(v1Legacy);
+    expect(unionParsed.success).toBe(true);
+
+    const display = toGroundedAnswerDisplay(v1Legacy);
+    expect(display.schemaVersion).toBe(2);
+    expect(display.confidence).toBe('unknown');
+    expect(display.confidenceReason).toBe('Bản ghi lịch sử (schema v1)');
+    expect(display.hypotheses).toEqual([]);
+    expect(display.claims[0]?.id).toBe('C1');
+  });
+
+  // 20. HypothesisClaimSchema enforces id ^H[1-9][0-9]*$, justification, and no citations
+  it('20. Hypothesis in V2 validated without citation IDs', () => {
+    const pack: EvidencePack = {
+      authority: 'server',
+      citations: {},
+      paths: {},
+      conflicts: [],
+      promptEvidence: [],
+      contextTruncated: false,
+      coverageWarnings: [],
+    };
+
+    const v2WithHypothesis: GroundedAnswer = {
+      schemaVersion: 2,
+      language: 'vi',
+      conclusion: 'Suy đoán về cổng thanh toán',
+      confidence: 'low',
+      confidenceReason: 'Suy đoán theo yêu cầu người dùng',
+      claims: [],
+      hypotheses: [
+        {
+          id: 'H1',
+          text: 'Cổng thanh toán trung gian chuyển tiếp điện',
+          justification: 'Dựa trên kiến trúc thường gặp',
+        },
+      ],
+      unsupportedParts: [],
+    };
+
+    const closureResult = validateGroundedAnswerClosure(v2WithHypothesis, pack);
+    expect(closureResult.valid).toBe(true);
+
+    const illegalHypothesis = {
+      ...v2WithHypothesis,
+      hypotheses: [
+        {
+          id: 'H1',
+          text: 'Cổng thanh toán trung gian',
+          justification: 'Dựa trên kiến trúc',
+          citationIds: ['S1'],
+        },
+      ],
+    };
+    const badClosureResult = validateGroundedAnswerClosure(illegalHypothesis as unknown as GroundedAnswer, pack);
+    expect(badClosureResult.valid).toBe(false);
+    expect(badClosureResult.issues.some((i) => i.code === 'hypothesis_has_citations')).toBe(true);
   });
 });

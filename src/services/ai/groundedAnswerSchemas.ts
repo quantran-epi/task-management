@@ -38,7 +38,10 @@ function validateClaimPath(
   }
 }
 
-export const GroundedClaimSchema = z
+export const ConfidenceLevelSchema = z.enum(['high', 'medium', 'low', 'unknown']);
+export type ConfidenceLevel = z.infer<typeof ConfidenceLevelSchema>;
+
+export const GroundedClaimSchemaV1 = z
   .object({
     id: z.string().regex(/^C[1-9][0-9]*$/),
     text: z.string().min(1).max(800),
@@ -49,12 +52,30 @@ export const GroundedClaimSchema = z
   .strip()
   .superRefine(validateClaimPath);
 
-export const GroundedAnswerSchema = z
+export const GroundedClaimSchemaV2 = z
+  .strictObject({
+    id: z.string().regex(/^C[1-9][0-9]*$/),
+    text: z.string().min(1).max(1000),
+    classification: z.enum(['DIRECT', 'INFERRED']),
+    citationIds: z.array(CitationIdSchema).min(1).max(8),
+    pathId: PathIdSchema.nullable(),
+  })
+  .superRefine(validateClaimPath);
+
+export const GroundedClaimSchema = GroundedClaimSchemaV2;
+
+export const HypothesisClaimSchema = z.strictObject({
+  id: z.string().regex(/^H[1-9][0-9]*$/),
+  text: z.string().min(1).max(1000),
+  justification: z.string().min(1).max(500),
+});
+
+export const GroundedAnswerSchemaV1 = z
   .object({
     schemaVersion: z.literal(1),
     language: z.string().min(2).max(16),
     conclusion: z.string().min(1).max(1200),
-    claims: z.array(GroundedClaimSchema).max(12),
+    claims: z.array(GroundedClaimSchemaV1).max(12),
     unsupportedParts: z.array(z.string().min(1).max(300)).max(5),
   })
   .strip()
@@ -64,7 +85,51 @@ export const GroundedAnswerSchema = z
     });
   });
 
-export const GroundedAnswerJsonSchema = z.toJSONSchema(GroundedAnswerSchema);
+export const GroundedAnswerSchemaV2 = z
+  .strictObject({
+    schemaVersion: z.literal(2),
+    language: z.string().min(2).max(16),
+    conclusion: z.string().min(1).max(2000),
+    confidence: ConfidenceLevelSchema,
+    confidenceReason: z.string().min(1).max(500),
+    claims: z.array(GroundedClaimSchemaV2).max(15),
+    hypotheses: z.array(HypothesisClaimSchema).max(5),
+    unsupportedParts: z.array(z.string().min(1).max(500)).max(5),
+  })
+  .superRefine((answer, ctx) => {
+    answer.claims.forEach((claim, index) => {
+      validateClaimPath(claim, ctx, ['claims', index]);
+    });
+  });
+
+export const GroundedAnswerSchema = z.discriminatedUnion('schemaVersion', [
+  GroundedAnswerSchemaV1,
+  GroundedAnswerSchemaV2,
+]);
+
+export const GroundedAnswerJsonSchema = z.toJSONSchema(GroundedAnswerSchemaV2);
+
+export function toGroundedAnswerDisplay(raw: GroundedAnswer): GroundedAnswerV2 {
+  if (raw.schemaVersion === 2) {
+    return raw;
+  }
+  return {
+    schemaVersion: 2,
+    language: raw.language,
+    conclusion: raw.conclusion,
+    confidence: 'unknown',
+    confidenceReason: 'Bản ghi lịch sử (schema v1)',
+    claims: raw.claims.map((c) => ({
+      id: c.id,
+      text: c.text,
+      classification: c.classification,
+      citationIds: [...c.citationIds],
+      pathId: c.pathId,
+    })),
+    hypotheses: [],
+    unsupportedParts: [...raw.unsupportedParts],
+  };
+}
 
 export const PersistedCitationSchema = z
   .strictObject({
@@ -283,8 +348,13 @@ export const ChatMessageGroundingSchema = z
     }
   });
 
-export type GroundedClaim = z.infer<typeof GroundedClaimSchema>;
-export type GroundedAnswer = z.infer<typeof GroundedAnswerSchema>;
+export type GroundedClaimV1 = z.infer<typeof GroundedClaimSchemaV1>;
+export type GroundedClaimV2 = z.infer<typeof GroundedClaimSchemaV2>;
+export type GroundedClaim = GroundedClaimV2 | GroundedClaimV1;
+export type HypothesisClaim = z.infer<typeof HypothesisClaimSchema>;
+export type GroundedAnswerV1 = z.infer<typeof GroundedAnswerSchemaV1>;
+export type GroundedAnswerV2 = z.infer<typeof GroundedAnswerSchemaV2>;
+export type GroundedAnswer = GroundedAnswerV1 | GroundedAnswerV2;
 export type PersistedCitation = z.infer<typeof PersistedCitationSchema>;
 export type PersistedPath = z.infer<typeof PersistedPathSchema>;
 export type PersistedConflictGroup = z.infer<typeof PersistedConflictGroupSchema>;
