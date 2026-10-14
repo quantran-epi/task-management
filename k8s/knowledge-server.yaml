@@ -18,6 +18,17 @@ data:
   EMBEDDING_REMOTE_MODEL: "Xenova/multilingual-e5-small"
   EMBEDDING_REMOTE_DIMENSIONS: "384"
   PROSE_EXTRACTION_ENABLED: "false"
+  SNAPSHOT_STORAGE_DIR: "/var/lib/knowledge-server/snapshots"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: knowledge-server-data
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -25,6 +36,8 @@ metadata:
   name: knowledge-server
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: knowledge-server
@@ -90,6 +103,13 @@ spec:
             limits:
               cpu: 1000m
               memory: 1Gi
+          volumeMounts:
+            - name: knowledge-server-data
+              mountPath: /var/lib/knowledge-server
+      volumes:
+        - name: knowledge-server-data
+          persistentVolumeClaim:
+            claimName: knowledge-server-data
 ---
 apiVersion: v1
 kind: Service

@@ -5,7 +5,7 @@ This guide documents deploying the production Neo4j and Knowledge Server stack t
 ## Architecture & Topology
 
 - **Neo4j 5.26 Community**: Runs as a single-replica `StatefulSet` with a 10Gi `PersistentVolumeClaim` mounted at `/data`. Fronted by a strictly cluster-internal `ClusterIP` Service on ports `7687` (Bolt) and `7474` (HTTP). Neo4j is never exposed outside the cluster.
-- **Knowledge Server**: Runs as a `Deployment` exposed externally via a `NodePort` Service on port `30080` (mapped to targetPort `3001`). Communicates with Neo4j via cluster DNS (`bolt://neo4j:7687`).
+- **Knowledge Server**: Runs as a single-replica `Deployment` exposed externally via a `NodePort` Service on port `30080` (mapped to targetPort `3001`). A 1Gi `ReadWriteOnce` PVC mounted at `/var/lib/knowledge-server` persists published source snapshots across `Recreate` rollouts. Communicates with Neo4j via cluster DNS (`bolt://neo4j:7687`).
 - **Secrets**: Separated into external Kubernetes secrets. Zero cleartext credentials or Base64 secrets are stored in version control.
 
 ---
@@ -74,7 +74,10 @@ kubectl apply -f k8s/knowledge-server.yaml
 ```bash
 kubectl rollout status deployment/knowledge-server --timeout=120s
 kubectl get pods -l app=knowledge-server
+kubectl get pvc knowledge-server-data
 ```
+
+The first rollout creates an empty snapshot volume. Republish approved Document Sets once through the normal TaskMate DLP preview and confirmation flow before requesting a graph rebuild. Later rollouts reload those snapshots from `SNAPSHOT_STORAGE_DIR`.
 
 ### 3.2 Smoke Test Health Endpoint
 

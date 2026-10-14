@@ -44,6 +44,16 @@ describe('Kubernetes Manifest Security and Syntax (D-01..D-05)', () => {
     expect(content).toContain('type: NodePort');
     expect(content).toContain('nodePort: 30080');
 
+    // Published source snapshots survive Deployment rollouts.
+    expect(content).toContain('kind: PersistentVolumeClaim');
+    expect(content).toContain('name: knowledge-server-data');
+    expect(content).toContain('accessModes: ["ReadWriteOnce"]');
+    expect(content).toContain('storage: 1Gi');
+    expect(content).toContain('SNAPSHOT_STORAGE_DIR: "/var/lib/knowledge-server/snapshots"');
+    expect(content).toContain('mountPath: /var/lib/knowledge-server');
+    expect(content).toContain('claimName: knowledge-server-data');
+    expect(content).toMatch(/strategy:\s*\n\s+type: Recreate/);
+
     // Probes check port 3001 readiness
     expect(content).toMatch(/port:\s*3001/);
 
