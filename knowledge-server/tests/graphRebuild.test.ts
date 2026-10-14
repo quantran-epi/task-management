@@ -99,30 +99,29 @@ describe('Graph Rebuild Orchestration & Snapshot Persistence (D-19, D-20, D-21)'
     const firstActive = await repo.getActiveGraph(setId);
     expect(firstActive?.graphSnapshotId).toBe(firstGraphId);
 
-    // Controlled pause during activation
-    let releaseActivation!: () => void;
-    const activationHold = new Promise<void>((resolve) => {
-      releaseActivation = resolve;
-    });
-
-    const origActivate = repo.activateCandidate.bind(repo);
-    repo.activateCandidate = async (sId, snapId) => {
-      await activationHold;
-      return origActivate(sId, snapId);
-    };
-
-    // Trigger second build (runs asynchronously)
+    // Trigger phase-1 rebuild (runs asynchronously)
     const rebuildAccepted = await service.triggerRebuild(setId, 'rebuild-key-1');
     expect(rebuildAccepted.status).toBe('ACCEPTED');
 
-    // Prior active graph remains accessible and unchanged while rebuild is underway
-    const activeDuringBuild = await repo.getActiveGraph(setId);
-    expect(activeDuringBuild?.graphSnapshotId).toBe(firstGraphId);
+    // Wait for candidate preparation. Public rebuild must not activate it.
+    await vi.waitFor(async () => {
+      const status = await service.getStatus(setId);
+      expect(status.candidateStatus).toBe('READY');
+    });
 
-    // Release activation and wait for completion
-    releaseActivation();
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    const activeAfterPreparation = await repo.getActiveGraph(setId);
+    expect(activeAfterPreparation?.graphSnapshotId).toBe(firstGraphId);
 
+    const status = await service.getStatus(setId);
+    expect(status.candidateSnapshotId).toBe(rebuildAccepted.candidateSnapshotId);
+    expect(status.candidateStatus).toBe('READY');
+
+    // Explicit CAS activation is phase 2.
+    await service.activateCandidate(
+      setId,
+      rebuildAccepted.candidateSnapshotId,
+      firstGraphId
+    );
     const activeAfterPromotion = await repo.getActiveGraph(setId);
     expect(activeAfterPromotion?.graphSnapshotId).toBe(rebuildAccepted.candidateSnapshotId);
   });

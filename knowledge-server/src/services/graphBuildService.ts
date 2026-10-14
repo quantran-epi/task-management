@@ -382,8 +382,9 @@ export class GraphBuildService {
   }
 
   private async executeRebuild(setId: string, candidateSnapshotId: string): Promise<void> {
+    // Public rebuild is phase 1 only. Operator verifies READY candidate before the
+    // separate CAS activation endpoint changes the live pointer.
     await this.prepareCandidate(setId, candidateSnapshotId);
-    await this.activateCandidate(setId, candidateSnapshotId);
   }
 
   private safeBuildError(error: Error): NonNullable<GraphStatusDTO['error']> {
