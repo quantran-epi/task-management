@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 ## Current Position
 
 Phase: 19.2 (production-ready-ai-assistant-graph-integrity) — EXECUTING
-Plan: 2 of 9 plans executed (19.2-04, 19.2-05 completed)
-Status: Plan 19.2-05 executed; BUILD-05 completed
-Last activity: 2026-10-14 -- Completed 19.2-05: General Markdown & Table Extraction without Hardcoded Domain Shortcuts
-Stopped at: Completed 19.2-05-PLAN.md
+Plan: 3 of 9 plans executed (19.2-04, 19.2-05, 19.2-07 completed)
+Status: Plan 19.2-07 executed; LINK-01..05 completed
+Last activity: 2026-10-14 -- Completed 19.2-07: Stable TaskMate ↔ Knowledge Links, Migration, Backup, Tools, UI
+Stopped at: Completed 19.2-07-PLAN.md
 
 Progress: [█████████░] 89%
 
@@ -186,12 +186,19 @@ Progress: [█████████░] 89%
 | Phase 19.1 P02 | 12m | 2 tasks | 4 files |
 | Phase 19.1 P03 | 8m | 1 tasks | 3 files |
 | Phase 19.1 P04 | 10m | 2 tasks | 5 files |
+| Phase 19.2 P07 | 25m | 3 tasks | 17 files |
 
 ## Accumulated Context
 
 ### Decisions
 
 Recent decisions logged in PROJECT.md:
+
+- [Phase 19.2 Plan 07]: Dexie upgrades to SCHEMA_V11 adding knowledgeLinks table with unique compound linkKey (`${taskMateEntityType}:${taskMateEntityId}:${setId}:${urn || docId}`) preserving full data integrity from V10.
+- [Phase 19.2 Plan 07]: Deleting Task, Project, or Milestone cascades to purge all corresponding KnowledgeLinks atomically inside Dexie transactions.
+- [Phase 19.2 Plan 07]: AI linking tools link_taskmate_to_knowledge and unlink_taskmate_knowledge require user modal confirmation via MUTATION_TOOLS gate.
+- [Phase 19.2 Plan 07]: LinkedKnowledgeSection displays documents (purple, FileTextOutlined) and graph URNs (geekblue, DeploymentUnitOutlined) with inline preview and popconfirm deletion.
+- [Phase 19.2 Plan 07]: GroundedTurnInput forwards scoped entity linked URNs and docIds as contextHints to federated retrieval and local BM25 fallback, tolerating stale links gracefully.
 
 - [Phase 19.1 Plan 04]: Package production knowledge stack in exactly two K8s manifests (k8s/neo4j.yaml StatefulSet and k8s/knowledge-server.yaml Deployment) with zero hardcoded credentials, relying strictly on secretKeyRef and documented operator pre-flight (D-01..D-05).
 - [Phase 19.1 Plan 04]: Keep Neo4j Bolt/HTTP ports strictly internal behind ClusterIP service; expose knowledge-server via NodePort 30080 for TaskMate access (D-01..D-04).
