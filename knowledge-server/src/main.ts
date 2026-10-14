@@ -477,6 +477,12 @@ export async function startKnowledgeServer(
     graphRepository,
     graphBuildService,
     retrievalService,
+    readinessCheck: async () => {
+      if (!graphRepository || !retrievalService) {
+        return { neo4j: false, vectorIndex: false, model: false };
+      }
+      return { neo4j: true, vectorIndex: true, model: true };
+    },
     onClose: async () => {
       if (graphRepository) {
         await graphRepository.close();

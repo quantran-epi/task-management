@@ -9,23 +9,15 @@ data:
   KNOWLEDGE_ALLOWED_ORIGINS: "https://taskmate.internal.shb.vn,http://tauri.localhost,https://tauri.localhost,http://localhost:5173,http://localhost:1420"
   NEO4J_URI: "bolt://neo4j:7687"
   NEO4J_ENABLED: "true"
+  NEO4J_DATABASE: "neo4j"
   PLANNER_REMOTE_ENABLED: "true"
   PLANNER_ENDPOINT: "http://10.4.97.70:30129"
   PLANNER_MODEL: "ag/gemini-3.8-flash"
   PLANNER_REMOTE_ALLOWED_HOSTS: "10.4.97.70"
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: knowledge-server
-spec:
-  type: NodePort
-  ports:
-    - port: 3001
-      targetPort: 3001
-      nodePort: 30080
-  selector:
-    app: knowledge-server
+  EMBEDDING_REMOTE_ENABLED: "false"
+  EMBEDDING_REMOTE_MODEL: "Xenova/multilingual-e5-small"
+  EMBEDDING_REMOTE_DIMENSIONS: "384"
+  PROSE_EXTRACTION_ENABLED: "false"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -44,6 +36,10 @@ spec:
       containers:
         - name: knowledge-server
           image: quantrantestdev/knowledge-server:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3001
           envFrom:
             - configMapRef:
                 name: knowledge-server-config
@@ -68,8 +64,43 @@ spec:
                 secretKeyRef:
                   name: knowledge-server-secrets
                   key: PLANNER_API_KEY
-          readinessProbe:
-            tcpSocket:
-              port: 3001
-            initialDelaySeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health/liveness
+              port: http
+            initialDelaySeconds: 10
             periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health/readiness
+              port: http
+              httpHeaders:
+                - name: Authorization
+                  value: "Bearer $(KNOWLEDGE_SERVER_TOKEN)"
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: knowledge-server
+spec:
+  type: NodePort
+  selector:
+    app: knowledge-server
+  ports:
+    - name: http
+      port: 3001
+      targetPort: http
+      nodePort: 30080
