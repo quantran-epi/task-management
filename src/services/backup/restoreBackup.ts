@@ -2,25 +2,26 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { BackupEnvelope, SnapshotData } from '../../types/backup';
 import type { NoteAttachment } from '../../types/models';
 import { generateId } from '../../utils/uuid';
-import { triggerDownload, APP_MARKER, CURRENT_SCHEMA_VERSION, blobToBase64, isSafeBackupSetting } from './exportBackup';
+import { isSafeBackupSetting, blobToBase64 } from './exportBackup';
 
-export function base64ToBlob(dataUrl: string, fallbackMime: string): Blob {
-  const parts = dataUrl.split(',');
-  const mimeMatch = parts[0]?.match(/:(.*?);/);
-  const mime = mimeMatch ? mimeMatch[1] : fallbackMime;
-  const b64 = parts.length > 1 ? parts[1]! : parts[0]!;
-  const binary = atob(b64);
-  const len = binary.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binary.charCodeAt(i);
+const APP_MARKER = 'personal-task-planner' as const;
+const CURRENT_SCHEMA_VERSION = 1;
+
+/**
+ * Converts a Base64 Data URL or raw base64 back into a browser Blob.
+ */
+function base64ToBlob(base64Data: string, mimeType: string): Blob {
+  try {
+    const raw = base64Data.includes(',') ? base64Data.split(',')[1] || '' : base64Data;
+    const binary = atob(raw);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return new Blob([bytes], { type: mimeType });
+  } catch {
+    return new Blob([], { type: mimeType });
   }
-  const BlobConstructor = typeof globalThis !== 'undefined' && (globalThis as any).Blob
-    ? (globalThis as any).Blob
-    : typeof window !== 'undefined' && window.Blob
-      ? window.Blob
-      : Blob;
-  return new BlobConstructor([bytes], { type: mime });
 }
 
 /**
@@ -53,6 +54,7 @@ export async function restoreBackupPayload(
     publishedDocuments,
     publishAttempts,
     dlpAudits,
+    knowledgeLinks,
   ] = await Promise.all([
     targetDb.projects.toArray(),
     targetDb.milestones.toArray(),
@@ -69,6 +71,7 @@ export async function restoreBackupPayload(
     targetDb.publishedDocuments.toArray(),
     targetDb.publishAttempts.toArray(),
     targetDb.dlpAudits.toArray(),
+    targetDb.knowledgeLinks.toArray(),
   ]);
 
   const serializedAttachments = await Promise.all(
@@ -102,6 +105,7 @@ export async function restoreBackupPayload(
       publishedDocuments,
       publishAttempts,
       dlpAudits,
+      knowledgeLinks,
     },
     counts: {
       projects: projects.length,
@@ -119,6 +123,7 @@ export async function restoreBackupPayload(
       publishedDocuments: publishedDocuments.length,
       publishAttempts: publishAttempts.length,
       dlpAudits: dlpAudits.length,
+      knowledgeLinks: knowledgeLinks.length,
     },
   };
 
@@ -157,6 +162,7 @@ export async function restoreBackupPayload(
       targetDb.publishedDocuments,
       targetDb.publishAttempts,
       targetDb.dlpAudits,
+      targetDb.knowledgeLinks,
       targetDb.settings,
       targetDb.backupMetadata,
     ],
@@ -167,7 +173,7 @@ export async function restoreBackupPayload(
         value: snapshot,
       });
 
-      // 2. Clear current domain tables, notes, attachments, active timers, and chat
+      // 2. Clear current domain tables, notes, attachments, active timers, knowledgeLinks, and chat
       await Promise.all([
         targetDb.projects.clear(),
         targetDb.milestones.clear(),
@@ -185,6 +191,7 @@ export async function restoreBackupPayload(
         targetDb.publishedDocuments.clear(),
         targetDb.publishAttempts.clear(),
         targetDb.dlpAudits.clear(),
+        targetDb.knowledgeLinks.clear(),
       ]);
 
       // 3. Bulk add incoming records
@@ -232,6 +239,9 @@ export async function restoreBackupPayload(
       }
       if (backup.tables.dlpAudits?.length) {
         await targetDb.dlpAudits.bulkAdd(backup.tables.dlpAudits);
+      }
+      if (backup.tables.knowledgeLinks?.length) {
+        await targetDb.knowledgeLinks.bulkAdd(backup.tables.knowledgeLinks);
       }
       if (backup.tables.activeTimers && backup.tables.activeTimers.length) {
         await targetDb.activeTimers.bulkAdd(backup.tables.activeTimers);
@@ -309,6 +319,7 @@ export async function rollbackToSnapshot(
       targetDb.publishedDocuments,
       targetDb.publishAttempts,
       targetDb.dlpAudits,
+      targetDb.knowledgeLinks,
       targetDb.settings,
       targetDb.backupMetadata,
     ],
@@ -331,6 +342,7 @@ export async function rollbackToSnapshot(
         targetDb.publishedDocuments.clear(),
         targetDb.publishAttempts.clear(),
         targetDb.dlpAudits.clear(),
+        targetDb.knowledgeLinks.clear(),
       ]);
 
       // 2. Restore records from snapshot
@@ -379,6 +391,9 @@ export async function rollbackToSnapshot(
       if (snapshot.tables.dlpAudits?.length) {
         await targetDb.dlpAudits.bulkAdd(snapshot.tables.dlpAudits);
       }
+      if (snapshot.tables.knowledgeLinks?.length) {
+        await targetDb.knowledgeLinks.bulkAdd(snapshot.tables.knowledgeLinks);
+      }
 
       // 3. Clear the snapshot from settings after rollback
       await targetDb.settings.delete('last_pre_import_snapshot');
@@ -413,5 +428,13 @@ export function downloadSnapshotFile(snapshot: SnapshotData): void {
     counts: snapshot.counts,
   };
   const content = JSON.stringify(envelope, null, 2);
-  triggerDownload(content, fileName);
+  const blob = new Blob([content], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
 }

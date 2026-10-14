@@ -10,6 +10,7 @@ import {
   SCHEMA_V8,
   SCHEMA_V9,
   SCHEMA_V10,
+  SCHEMA_V11,
 } from './schema';
 import type {
   Project,
@@ -30,6 +31,7 @@ import type {
   PublishedDocumentMetadata,
   PublishAttemptCache,
   DlpAuditRecord,
+  KnowledgeLink,
 } from '../types/models';
 
 export class TaskPlannerDatabase extends Dexie {
@@ -51,6 +53,7 @@ export class TaskPlannerDatabase extends Dexie {
   publishedDocuments!: Table<PublishedDocumentMetadata, [string, string]>;
   publishAttempts!: Table<PublishAttemptCache, string>;
   dlpAudits!: Table<DlpAuditRecord, string>;
+  knowledgeLinks!: Table<KnowledgeLink, string>;
 
 
   constructor(databaseName = 'PersonalTaskPlannerDB') {
@@ -172,6 +175,8 @@ export class TaskPlannerDatabase extends Dexie {
       });
 
     this.version(10).stores(SCHEMA_V10);
+
+    this.version(11).stores(SCHEMA_V11);
 
     // Multi-tab concurrency handlers (DATA-04, D-09, D-10)
     this.on('blocked', () => {

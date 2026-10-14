@@ -1,12 +1,13 @@
 import { db as defaultDb, type TaskPlannerDatabase } from '../index';
 import type { Task } from '../../types/models';
+import { deleteLinksForTaskMateEntity } from './knowledgeLinkRepo';
 
 /**
  * Atomically deletes a project and handles child milestones, tasks, and allocations per D-13, D-16, WORK-05.
  * - 'cascade' mode: deletes project, all child milestones, all child tasks, associated planned allocations,
- *   work sessions, and active timers.
+ *   work sessions, active timers, and knowledge links.
  * - 'orphan' mode: deletes project and child milestones, but unhooks child tasks (clearing projectId and milestoneId)
- *   preserving tasks, their planned allocations, and work sessions.
+ *   preserving tasks, their planned allocations, work sessions, and knowledge links.
  */
 export async function deleteProjectWithCascade(
   projectId: string,
@@ -25,6 +26,7 @@ export async function deleteProjectWithCascade(
       db.notes,
       db.chatThreads,
       db.chatMessages,
+      db.knowledgeLinks,
     ],
     async () => {
       const milestones = await db.milestones.where('projectId').equals(projectId).toArray();
@@ -73,7 +75,17 @@ export async function deleteProjectWithCascade(
         await db.chatThreads.bulkDelete(threadIds);
       }
 
+      // Clean up knowledge links (D-22, LINK-02)
+      await deleteLinksForTaskMateEntity('project', projectId, db);
+      for (const mId of milestoneIds) {
+        await deleteLinksForTaskMateEntity('milestone', mId, db);
+      }
+
       if (mode === 'cascade') {
+        for (const tId of childTaskIds) {
+          await deleteLinksForTaskMateEntity('task', tId, db);
+        }
+
         if (childTaskIds.length > 0) {
           const allocations = await db.plannedAllocations.where('taskId').anyOf(childTaskIds).toArray();
           if (allocations.length > 0) {
@@ -96,7 +108,6 @@ export async function deleteProjectWithCascade(
         await db.projects.delete(projectId);
       } else {
         // Orphan mode: unhook child tasks (clear projectId and milestoneId) preserving original IDs
-        const now = new Date().toISOString();
         const updatedTasks = allChildTasks.map((task) => {
           const updated: Task = {
             ...task,
@@ -123,7 +134,7 @@ export async function deleteProjectWithCascade(
 
 /**
  * Atomically deletes a milestone and handles child tasks and allocations per D-14, D-16, WORK-05.
- * - 'cascade' mode: deletes milestone, all child tasks, their planned allocations, work sessions, and active timers.
+ * - 'cascade' mode: deletes milestone, all child tasks, their planned allocations, work sessions, active timers, and knowledge links.
  * - 'orphan' mode: deletes milestone and promotes child tasks to project root (clearing milestoneId, keeping projectId).
  */
 export async function deleteMilestoneWithCascade(
@@ -142,6 +153,7 @@ export async function deleteMilestoneWithCascade(
       db.notes,
       db.chatThreads,
       db.chatMessages,
+      db.knowledgeLinks,
     ],
     async () => {
       const childTasks = await db.tasks.where('milestoneId').equals(milestoneId).toArray();
@@ -175,7 +187,14 @@ export async function deleteMilestoneWithCascade(
         await db.chatThreads.bulkDelete(threadIds);
       }
 
+      // Clean up knowledge links (D-22, LINK-02)
+      await deleteLinksForTaskMateEntity('milestone', milestoneId, db);
+
       if (mode === 'cascade') {
+        for (const tId of childTaskIds) {
+          await deleteLinksForTaskMateEntity('task', tId, db);
+        }
+
         if (childTaskIds.length > 0) {
           const allocations = await db.plannedAllocations.where('taskId').anyOf(childTaskIds).toArray();
           if (allocations.length > 0) {
@@ -193,7 +212,6 @@ export async function deleteMilestoneWithCascade(
         await db.milestones.delete(milestoneId);
       } else {
         // Orphan mode: promote child tasks to project root (retain task.projectId, remove milestoneId)
-        const now = new Date().toISOString();
         const updatedTasks = childTasks.map((task) => {
           const updated: Task = {
             ...task,
@@ -213,7 +231,7 @@ export async function deleteMilestoneWithCascade(
 }
 
 /**
- * Atomically deletes a task and all its associated planned allocations, work sessions, and active timer per D-16.
+ * Atomically deletes a task and all its associated planned allocations, work sessions, active timer, and knowledge links per D-16, D-22.
  */
 export async function deleteTaskWithAllocations(
   taskId: string,
@@ -229,6 +247,7 @@ export async function deleteTaskWithAllocations(
       db.notes,
       db.chatThreads,
       db.chatMessages,
+      db.knowledgeLinks,
     ],
     async () => {
       // Detach notes associated with the task (D-25: notes become standalone)
@@ -250,6 +269,9 @@ export async function deleteTaskWithAllocations(
         await db.chatThreads.bulkDelete(threadIds);
       }
 
+      // Purge knowledge links (D-22, LINK-02)
+      await deleteLinksForTaskMateEntity('task', taskId, db);
+
       const allocations = await db.plannedAllocations.where('taskId').equals(taskId).toArray();
       if (allocations.length > 0) {
         await db.plannedAllocations.bulkDelete(allocations.map((a) => a.id));
@@ -265,4 +287,3 @@ export async function deleteTaskWithAllocations(
     }
   );
 }
-

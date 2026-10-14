@@ -78,6 +78,11 @@ export const SCHEMA_V10 = {
   dlpAudits: 'id, setId, timestamp',
 } as const;
 
+export const SCHEMA_V11 = {
+  ...SCHEMA_V10,
+  knowledgeLinks: 'id, &linkKey, taskMateEntityType, taskMateEntityId, setId, urn, docId, updatedAt',
+} as const;
+
 
 
 

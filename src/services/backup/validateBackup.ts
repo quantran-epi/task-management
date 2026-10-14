@@ -23,6 +23,7 @@ import {
   BackupPublishedDocumentRecordSchema,
   BackupPublishAttemptRecordSchema,
   BackupDlpAuditRecordSchema,
+  BackupKnowledgeLinkRecordSchema,
 } from '../../validation/backupSchemas';
 
 
@@ -170,6 +171,9 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     : undefined;
   const dlpAudits = rawTables.dlpAudits !== undefined
     ? validateTable('dlpAudits', BackupDlpAuditRecordSchema, rawTables.dlpAudits)
+    : undefined;
+  const knowledgeLinks = rawTables.knowledgeLinks !== undefined
+    ? validateTable('knowledgeLinks', BackupKnowledgeLinkRecordSchema, rawTables.knowledgeLinks)
     : undefined;
 
   // If schema validation errors occurred, stop before referential checks
@@ -410,6 +414,7 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       ...(publishedDocuments !== undefined ? { publishedDocuments } : {}),
       ...(publishAttempts !== undefined ? { publishAttempts } : {}),
       ...(dlpAudits !== undefined ? { dlpAudits } : {}),
+      ...(knowledgeLinks !== undefined ? { knowledgeLinks } : {}),
     },
     counts: {
       projects: projects.length,
@@ -429,6 +434,7 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       ...(publishedDocuments !== undefined ? { publishedDocuments: publishedDocuments.length } : {}),
       ...(publishAttempts !== undefined ? { publishAttempts: publishAttempts.length } : {}),
       ...(dlpAudits !== undefined ? { dlpAudits: dlpAudits.length } : {}),
+      ...(knowledgeLinks !== undefined ? { knowledgeLinks: knowledgeLinks.length } : {}),
     },
   };
 

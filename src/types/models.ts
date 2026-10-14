@@ -335,4 +335,19 @@ export interface DlpAuditRecord {
   userAction: 'confirmed' | 'cancelled' | 'auto_passed';
 }
 
+export type TaskMateEntityType = 'task' | 'project' | 'milestone';
+
+export interface KnowledgeLink {
+  id: string; // RFC 4122 v4 UUID
+  linkKey: string; // Unique composite key `${taskMateEntityType}:${taskMateEntityId}:${setId}:${urn || docId}`
+  taskMateEntityType: TaskMateEntityType;
+  taskMateEntityId: string; // UUID of task, project, or milestone
+  setId: string; // UUID of DocumentSet
+  urn?: string | undefined; // Optional canonical knowledge graph URN
+  docId?: string | undefined; // Optional stable Note/Document UUID
+  displayLabel: string; // Human-readable label for badges/pills
+  createdAt: string; // ISO 8601
+  updatedAt: string; // ISO 8601
+}
+
 

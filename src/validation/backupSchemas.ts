@@ -469,4 +469,21 @@ export const BackupDlpAuditRecordSchema = z.object({
   userAction: z.enum(['confirmed', 'cancelled', 'auto_passed']),
 });
 
+export const BackupKnowledgeLinkRecordSchema = z
+  .object({
+    id: uuidSchema,
+    linkKey: z.string().min(1),
+    taskMateEntityType: z.enum(['task', 'project', 'milestone']),
+    taskMateEntityId: uuidSchema,
+    setId: uuidSchema,
+    urn: z.string().min(1).optional(),
+    docId: uuidSchema.optional(),
+    displayLabel: z.string().min(1),
+    createdAt: isoDateTimeSchema,
+    updatedAt: isoDateTimeSchema,
+  })
+  .refine((data) => Boolean(data.urn || data.docId), {
+    message: 'KnowledgeLink must contain at least one of urn or docId',
+  });
+
 

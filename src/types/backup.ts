@@ -15,6 +15,7 @@ import type {
   PublishedDocumentMetadata,
   PublishAttemptCache,
   DlpAuditRecord,
+  KnowledgeLink,
 } from './models';
 
 export interface BackupAttachmentRecord {
@@ -47,6 +48,7 @@ export interface BackupTableData {
   publishedDocuments?: PublishedDocumentMetadata[];
   publishAttempts?: PublishAttemptCache[];
   dlpAudits?: DlpAuditRecord[];
+  knowledgeLinks?: KnowledgeLink[];
 }
 
 export interface BackupTableCounts {
@@ -67,6 +69,7 @@ export interface BackupTableCounts {
   publishedDocuments?: number;
   publishAttempts?: number;
   dlpAudits?: number;
+  knowledgeLinks?: number;
 }
 
 

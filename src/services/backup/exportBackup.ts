@@ -137,6 +137,7 @@ export async function exportBackupPayload(
     publishedDocuments,
     publishAttempts,
     dlpAudits,
+    knowledgeLinks,
   ] = await Promise.all([
     targetDb.projects.toArray(),
     targetDb.milestones.toArray(),
@@ -155,6 +156,7 @@ export async function exportBackupPayload(
     targetDb.publishedDocuments.toArray(),
     targetDb.publishAttempts.toArray(),
     targetDb.dlpAudits.toArray(),
+    targetDb.knowledgeLinks.toArray(),
   ]);
 
   // Strictly exclude binary and base64 image data to prevent storage growth
@@ -192,6 +194,7 @@ export async function exportBackupPayload(
     publishedDocuments,
     publishAttempts,
     dlpAudits,
+    knowledgeLinks,
   };
 
   const counts = {
@@ -212,6 +215,7 @@ export async function exportBackupPayload(
     publishedDocuments: publishedDocuments.length,
     publishAttempts: publishAttempts.length,
     dlpAudits: dlpAudits.length,
+    knowledgeLinks: knowledgeLinks.length,
   };
 
   const envelope: BackupEnvelope = {
