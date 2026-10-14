@@ -16,6 +16,7 @@ import type {
   GraphBuildStage,
   GraphState,
   GraphStatusDTO,
+  CandidateStatus,
   FactsListDTO,
   FactEvidenceDetailDTO,
   QuarantineListDTO,
@@ -30,6 +31,14 @@ export class GraphBuildInProgressError extends Error {
   constructor(message = 'Graph rebuild is already in progress for this document set.') {
     super(message);
     this.name = 'GraphBuildInProgressError';
+  }
+}
+
+export class GraphCASConflictError extends Error {
+  readonly code = 'CAS_CONFLICT';
+  constructor(message = 'Active snapshot pointer does not match expected prior snapshot.') {
+    super(message);
+    this.name = 'GraphCASConflictError';
   }
 }
 
@@ -58,6 +67,8 @@ export class GraphBuildService {
   private currentStages = new Map<string, GraphBuildStage>();
   private rebuildReplays = new Map<string, RebuildAcceptedDTO>(); // setId:rebuildKey -> DTO
   private activeGraphSnapshots = new Map<string, string>(); // setId -> graphSnapshotId
+  private candidateBySet = new Map<string, { candidateSnapshotId: string; status: CandidateStatus }>();
+  private rollbackPointers = new Map<string, { priorSnapshotId?: string; rollbackExpiresAt?: string }>();
   private buildErrors = new Map<string, Error>(); // setId -> last error
   readonly repository: GraphRepository;
   readonly snapshotStore?: SnapshotStore | undefined;
@@ -146,7 +157,8 @@ export class GraphBuildService {
     this.buildErrors.delete(setId);
 
     try {
-      await this.executeRebuild(setId, candidateSnapshotId);
+      await this.prepareCandidate(setId, candidateSnapshotId);
+      await this.activateCandidate(setId, candidateSnapshotId);
       return candidateSnapshotId;
     } catch (err: unknown) {
       this.buildErrors.set(setId, err instanceof Error ? err : new Error(String(err)));
@@ -157,7 +169,10 @@ export class GraphBuildService {
     }
   }
 
-  private async executeRebuild(setId: string, candidateSnapshotId: string): Promise<void> {
+  async prepareCandidate(
+    setId: string,
+    candidateSnapshotId: string = randomUUID()
+  ): Promise<string> {
     if (!this.snapshotStore) {
       throw new Error('NO_SNAPSHOT_STORE');
     }
@@ -169,87 +184,142 @@ export class GraphBuildService {
     }
     const frozenSourceSnapshotId = sourceSnapshot.snapshotId;
 
-    // Stage b: Preparing
-    this.currentStages.set(setId, 'Preparing');
+    this.candidateBySet.set(setId, {
+      candidateSnapshotId,
+      status: 'PREPARING',
+    });
 
-    // Stage c: Structured extraction
-    this.currentStages.set(setId, 'Structured extraction');
-    const extractionResult = extractDeterministicFacts(sourceSnapshot);
+    try {
+      // Stage b: Preparing
+      this.currentStages.set(setId, 'Preparing');
 
-    // Stage d: Prose extraction (Bug 3 cause B)
-    // Wire the previously-orphaned prose extractors into the pipeline. For every document
-    // this collects paragraphs NOT already consumed by the deterministic table/code parser,
-    // then asks the LLM (closed-ontology, exact-quote, zero-retry) to extract INFERRED
-    // relations between already-resolved nodes. Documents without a matching table — which
-    // previously yielded entities only, zero relations — can now gain relations/evidence
-    // from prose. Safe no-op when no LLM is configured, keeping the build deterministic.
-    this.currentStages.set(setId, 'Prose extraction');
-    let inferredFacts: FactAssertion[] = [];
-    let inferredEvidence: GraphEvidenceRecord[] = [];
-    const proseQuarantines: QuarantinedIdentifier[] = [];
+      // Stage c: Structured extraction
+      this.currentStages.set(setId, 'Structured extraction');
+      const extractionResult = extractDeterministicFacts(sourceSnapshot);
 
-    if (this.proseExtraction) {
-      const segments = collectUncoveredProse(sourceSnapshot, extractionResult.consumedRanges);
-      if (segments.length > 0) {
-        const proseResult = await extractProseCandidatesOnce({
-          endpoint: this.proseExtraction.endpoint,
-          model: this.proseExtraction.model,
-          ...(this.proseExtraction.apiKey ? { apiKey: this.proseExtraction.apiKey } : {}),
-          segments,
-          resolvedEndpoints: extractionResult.nodes,
-          ...(this.proseExtraction.fetchFn ? { fetchFn: this.proseExtraction.fetchFn } : {}),
-        });
-        inferredFacts = proseResult.facts;
-        inferredEvidence = proseResult.evidence;
-        proseQuarantines.push(...proseResult.quarantines);
+      // Stage d: Prose extraction (Bug 3 cause B)
+      this.currentStages.set(setId, 'Prose extraction');
+      let inferredFacts: FactAssertion[] = [];
+      let inferredEvidence: GraphEvidenceRecord[] = [];
+      const proseQuarantines: QuarantinedIdentifier[] = [];
+
+      if (this.proseExtraction) {
+        const segments = collectUncoveredProse(sourceSnapshot, extractionResult.consumedRanges);
+        if (segments.length > 0) {
+          const proseResult = await extractProseCandidatesOnce({
+            endpoint: this.proseExtraction.endpoint,
+            model: this.proseExtraction.model,
+            ...(this.proseExtraction.apiKey ? { apiKey: this.proseExtraction.apiKey } : {}),
+            segments,
+            resolvedEndpoints: extractionResult.nodes,
+            ...(this.proseExtraction.fetchFn ? { fetchFn: this.proseExtraction.fetchFn } : {}),
+          });
+          inferredFacts = proseResult.facts;
+          inferredEvidence = proseResult.evidence;
+          proseQuarantines.push(...proseResult.quarantines);
+        }
+      }
+
+      // Stage e: Validation
+      this.currentStages.set(setId, 'Validation');
+      const approvals = this.snapshotStore.getApprovals(setId);
+
+      const candidate = mergeFactsDeterministicFirst({
+        graphSnapshotId: candidateSnapshotId,
+        sourceSnapshotId: frozenSourceSnapshotId,
+        setId,
+        ontologyVersion: ONTOLOGY_VERSION,
+        nodes: extractionResult.nodes,
+        deterministicFacts: extractionResult.facts,
+        deterministicEvidence: extractionResult.evidence,
+        inferredFacts,
+        inferredEvidence,
+        approvals,
+        quarantines: [...extractionResult.quarantines, ...proseQuarantines],
+      });
+
+      // Write candidate to repository with READY state
+      await this.repository.writeCandidate(candidate);
+
+      // Stage f: Build retrieval generation (chunks, fulltext index, vector index) before activation
+      this.currentStages.set(setId, 'Retrieval generation');
+      await this.repository.buildRetrievalGeneration(
+        candidate,
+        sourceSnapshot,
+        this.embeddingProvider
+      );
+
+      // Stage g: Validate candidate & retrieval generation readiness
+      const isValidCandidate = await this.validateCandidate(setId, candidateSnapshotId);
+      if (!isValidCandidate) {
+        throw new Error('RETRIEVAL_GENERATION_INVALID: Candidate generation failed validation');
+      }
+
+      // Stage h: Stale-source guard
+      const latestSnapshot = this.snapshotStore.getActiveSnapshot(setId);
+      if (!latestSnapshot || latestSnapshot.snapshotId !== frozenSourceSnapshotId) {
+        throw new Error('STALE_SOURCE_SNAPSHOT');
+      }
+
+      this.candidateBySet.set(setId, {
+        candidateSnapshotId,
+        status: 'READY',
+      });
+
+      return candidateSnapshotId;
+    } catch (err: unknown) {
+      this.candidateBySet.set(setId, {
+        candidateSnapshotId,
+        status: 'FAILED',
+      });
+      throw err;
+    }
+  }
+
+  async validateCandidate(setId: string, candidateSnapshotId: string): Promise<boolean> {
+    const isValidGeneration = await this.repository.validateRetrievalGeneration(candidateSnapshotId);
+    return isValidGeneration;
+  }
+
+  async activateCandidate(
+    setId: string,
+    candidateSnapshotId: string,
+    expectedPriorSnapshotId?: string
+  ): Promise<void> {
+    const currentActive = await this.repository.getActiveGraph(setId);
+    const actualPriorSnapshotId = currentActive?.graphSnapshotId;
+
+    if (expectedPriorSnapshotId !== undefined) {
+      if (actualPriorSnapshotId !== expectedPriorSnapshotId) {
+        throw new GraphCASConflictError(
+          `CAS_CONFLICT: Active snapshot pointer ${actualPriorSnapshotId ?? 'none'} does not match expected prior snapshot ${expectedPriorSnapshotId}`
+        );
       }
     }
 
-    // Stage e: Validation
-    this.currentStages.set(setId, 'Validation');
-    const approvals = this.snapshotStore.getApprovals(setId);
-
-    const candidate = mergeFactsDeterministicFirst({
-      graphSnapshotId: candidateSnapshotId,
-      sourceSnapshotId: frozenSourceSnapshotId,
-      setId,
-      ontologyVersion: ONTOLOGY_VERSION,
-      nodes: extractionResult.nodes,
-      deterministicFacts: extractionResult.facts,
-      deterministicEvidence: extractionResult.evidence,
-      inferredFacts,
-      inferredEvidence,
-      approvals,
-      quarantines: [...extractionResult.quarantines, ...proseQuarantines],
-    });
-
-    // Write candidate to repository with READY state
-    await this.repository.writeCandidate(candidate);
-
-    // Stage f: Build retrieval generation (chunks, fulltext index, vector index) before activation
-    this.currentStages.set(setId, 'Retrieval generation');
-    await this.repository.buildRetrievalGeneration(
-      candidate,
-      sourceSnapshot,
-      this.embeddingProvider
-    );
-
-    // Stage g: Validate retrieval generation readiness
-    const isValidGeneration = await this.repository.validateRetrievalGeneration(candidateSnapshotId);
-    if (!isValidGeneration) {
-      throw new Error('RETRIEVAL_GENERATION_INVALID: Candidate generation failed validation');
-    }
-
-    // Stage h: Stale-source guard
-    const latestSnapshot = this.snapshotStore.getActiveSnapshot(setId);
-    if (!latestSnapshot || latestSnapshot.snapshotId !== frozenSourceSnapshotId) {
-      throw new Error('STALE_SOURCE_SNAPSHOT');
-    }
-
-    // Stage i: Activation - atomic pointer swap
     this.currentStages.set(setId, 'Activation');
     await this.repository.activateCandidate(setId, candidateSnapshotId);
     this.activeGraphSnapshots.set(setId, candidateSnapshotId);
+
+    const candidateRecord = this.candidateBySet.get(setId);
+    if (candidateRecord?.candidateSnapshotId === candidateSnapshotId) {
+      this.candidateBySet.delete(setId);
+    }
+
+    const now = Date.now();
+    const rollbackExpiresAt = actualPriorSnapshotId
+      ? new Date(now + this.rollbackGracePeriodMs).toISOString()
+      : undefined;
+
+    this.rollbackPointers.set(setId, {
+      priorSnapshotId: actualPriorSnapshotId,
+      rollbackExpiresAt,
+    });
+  }
+
+  private async executeRebuild(setId: string, candidateSnapshotId: string): Promise<void> {
+    await this.prepareCandidate(setId, candidateSnapshotId);
+    await this.activateCandidate(setId, candidateSnapshotId);
   }
 
   private safeBuildError(error: Error): NonNullable<GraphStatusDTO['error']> {
@@ -274,6 +344,20 @@ export class GraphBuildService {
   async getStatus(setId: string): Promise<GraphStatusDTO> {
     const isBuilding = this.inProgressSets.has(setId);
     const activeView = await this.repository.getActiveGraph(setId);
+    const candidateInfo = this.candidateBySet.get(setId);
+    const rollbackInfo = this.rollbackPointers.get(setId);
+
+    const now = Date.now();
+    const canRollback = Boolean(
+      rollbackInfo?.priorSnapshotId &&
+        rollbackInfo.rollbackExpiresAt &&
+        new Date(rollbackInfo.rollbackExpiresAt).getTime() > now
+    );
+
+    const candidateSnapshotId = candidateInfo?.candidateSnapshotId;
+    const candidateStatus = candidateInfo?.status;
+    const priorSnapshotId = rollbackInfo?.priorSnapshotId;
+    const rollbackExpiresAt = rollbackInfo?.rollbackExpiresAt;
 
     if (isBuilding) {
       return {
@@ -289,6 +373,11 @@ export class GraphBuildService {
         ontologyVersion: ONTOLOGY_VERSION,
         rulesVersion: ONTOLOGY_VERSION,
         ...(activeView ? { activatedAt: activeView.activatedAt } : {}),
+        ...(candidateSnapshotId ? { candidateSnapshotId } : {}),
+        ...(candidateStatus ? { candidateStatus } : {}),
+        ...(priorSnapshotId ? { priorSnapshotId } : {}),
+        ...(rollbackExpiresAt ? { rollbackExpiresAt } : {}),
+        canRollback,
       };
     }
 
@@ -306,6 +395,11 @@ export class GraphBuildService {
         ontologyVersion: activeView?.ontologyVersion ?? ONTOLOGY_VERSION,
         rulesVersion: activeView?.ontologyVersion ?? ONTOLOGY_VERSION,
         ...(activeView ? { activatedAt: activeView.activatedAt } : {}),
+        ...(candidateSnapshotId ? { candidateSnapshotId } : {}),
+        ...(candidateStatus ? { candidateStatus } : {}),
+        ...(priorSnapshotId ? { priorSnapshotId } : {}),
+        ...(rollbackExpiresAt ? { rollbackExpiresAt } : {}),
+        canRollback,
         error: this.safeBuildError(buildError),
       };
     }
@@ -321,6 +415,11 @@ export class GraphBuildService {
         quarantineCount: 0,
         ontologyVersion: ONTOLOGY_VERSION,
         rulesVersion: ONTOLOGY_VERSION,
+        ...(candidateSnapshotId ? { candidateSnapshotId } : {}),
+        ...(candidateStatus ? { candidateStatus } : {}),
+        ...(priorSnapshotId ? { priorSnapshotId } : {}),
+        ...(rollbackExpiresAt ? { rollbackExpiresAt } : {}),
+        canRollback,
       };
     }
 
@@ -338,6 +437,11 @@ export class GraphBuildService {
       ontologyVersion: activeView.ontologyVersion,
       rulesVersion: activeView.ontologyVersion,
       activatedAt: activeView.activatedAt,
+      ...(candidateSnapshotId ? { candidateSnapshotId } : {}),
+      ...(candidateStatus ? { candidateStatus } : {}),
+      ...(priorSnapshotId ? { priorSnapshotId } : {}),
+      ...(rollbackExpiresAt ? { rollbackExpiresAt } : {}),
+      canRollback,
     };
   }
 

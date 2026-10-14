@@ -6,9 +6,13 @@ import {
   EvidenceClassificationSchema,
   ExtractionMethodSchema,
 } from '../types/graphProtocol.js';
-import { GraphBuildService, GraphBuildInProgressError } from '../services/graphBuildService.js';
+import {
+  GraphBuildService,
+  GraphBuildInProgressError,
+  GraphCASConflictError,
+} from '../services/graphBuildService.js';
 
-export { GraphBuildService, GraphBuildInProgressError };
+export { GraphBuildService, GraphBuildInProgressError, GraphCASConflictError };
 
 const uuid = z.string().uuid();
 const SetParamsSchema = z.object({ setId: uuid }).strict();
@@ -37,6 +41,14 @@ export const GraphBuildStageSchema = z.enum([
 ]);
 export type GraphBuildStage = z.infer<typeof GraphBuildStageSchema>;
 
+export const CandidateStatusSchema = z.enum([
+  'NONE',
+  'PREPARING',
+  'READY',
+  'FAILED',
+]);
+export type CandidateStatus = z.infer<typeof CandidateStatusSchema>;
+
 export const GraphStatusDTOSchema = z
   .object({
     setId: uuid,
@@ -51,6 +63,11 @@ export const GraphStatusDTOSchema = z
     ontologyVersion: z.string().min(1),
     rulesVersion: z.string().min(1),
     activatedAt: z.string().datetime().optional(),
+    candidateSnapshotId: uuid.optional(),
+    candidateStatus: CandidateStatusSchema.optional(),
+    priorSnapshotId: uuid.optional(),
+    rollbackExpiresAt: z.string().datetime().optional(),
+    canRollback: z.boolean().default(false),
     error: z
       .object({
         code: z.string().max(80),
@@ -160,6 +177,14 @@ export const RebuildAcceptedDTOSchema = z
   .strict();
 export type RebuildAcceptedDTO = z.infer<typeof RebuildAcceptedDTOSchema>;
 
+export const ActivateCandidateBodySchema = z
+  .object({
+    candidateSnapshotId: uuid,
+    expectedPriorSnapshotId: uuid.optional(),
+  })
+  .strict();
+export type ActivateCandidateBody = z.infer<typeof ActivateCandidateBodySchema>;
+
 function invalid(reply: FastifyReply) {
   return reply.code(400).send({
     error: { code: 'INVALID_REQUEST', message: 'Request could not be processed.' },
@@ -185,6 +210,35 @@ export function registerGraphRoutes(app: FastifyInstance, buildService: GraphBui
           error: {
             code: err.code,
             message: 'A graph rebuild is already in progress for this document set.',
+          },
+        });
+      }
+      return reply.code(500).send({
+        error: { code: 'INTERNAL_ERROR', message: 'Request could not be processed.' },
+      });
+    }
+  });
+
+  // 1b. POST /api/v1/sets/:setId/graph/activate
+  app.post('/api/v1/sets/:setId/graph/activate', async (request, reply) => {
+    const params = SetParamsSchema.safeParse(request.params);
+    const body = ActivateCandidateBodySchema.safeParse(request.body);
+    if (!params.success || !body.success) return invalid(reply);
+
+    try {
+      await buildService.activateCandidate(
+        params.data.setId,
+        body.data.candidateSnapshotId,
+        body.data.expectedPriorSnapshotId
+      );
+      const status = await buildService.getStatus(params.data.setId);
+      return reply.code(200).send(GraphStatusDTOSchema.parse(status));
+    } catch (err: unknown) {
+      if (err instanceof GraphCASConflictError) {
+        return reply.code(409).send({
+          error: {
+            code: err.code,
+            message: err.message,
           },
         });
       }
