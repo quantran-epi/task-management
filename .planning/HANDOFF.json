@@ -1,0 +1,98 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-10-14T14:51:05.609Z",
+  "phase": "19.2",
+  "phase_name": "production-ready-ai-assistant-graph-integrity",
+  "phase_dir": ".planning/phases/19.2-production-ready-ai-assistant-graph-integrity",
+  "plan": 9,
+  "task": 2,
+  "total_tasks": 3,
+  "status": "paused",
+  "completed_tasks": [
+    {
+      "id": 1,
+      "name": "Baseline discovery and isolated canary runner",
+      "status": "done",
+      "commit": "6b3bbc1"
+    },
+    {
+      "id": 2,
+      "name": "Live retrieval matrix T1-T16",
+      "status": "in_progress",
+      "progress": "T1 strict passes on active vector-enabled snapshot. T2-T7 still expose vector timeout, intermittent planner timeout, missing graph paths, and absent no-evidence relevance gating. T8-T16 not honestly executed end-to-end."
+    }
+  ],
+  "remaining_tasks": [
+    {
+      "id": 2,
+      "name": "Finish live retrieval matrix and produce metadata-only evidence",
+      "status": "in_progress"
+    },
+    {
+      "id": 3,
+      "name": "Restart durability proof and seven-gate release signoff",
+      "status": "not_started"
+    }
+  ],
+  "blockers": [
+    {
+      "description": "T4 and T5 planner intents are correct but graph modality returns zero items and no closed path.",
+      "type": "technical",
+      "workaround": "Inspect plan-driven Neo4j traversal, actual edge schema, seed URNs, and fact-to-chunk SUPPORTED_BY closure. Do not weaken path assertions."
+    },
+    {
+      "description": "T6 and T7 return READY from weak lexical/vector matches for an unsupported SWIFT MT103 topic.",
+      "type": "technical",
+      "workaround": "Add evidence relevance/abstention gate based on defensible retrieval signals and tests; do not special-case acceptance queries."
+    },
+    {
+      "description": "T2 cold vector request exceeded current 1500ms vector timeout; T3 planner behavior remains intermittent around 30 seconds.",
+      "type": "external",
+      "workaround": "Measure warm and cold latency; change bounded timeout only with targeted tests and operational rationale."
+    }
+  ],
+  "human_actions_pending": [
+    {
+      "action": "Deploy next reviewed knowledge-server image and K8s ConfigMap after remaining fixes.",
+      "context": "User manually copies dist/package files to remote, builds prebuilt image, and rolls out in namespace shb-corebank.",
+      "blocking": true
+    },
+    {
+      "action": "Approve any future active snapshot change before activation.",
+      "context": "Activation changes live Neo4j pointer. Current active snapshot was already changed to ebe19d75-2f03-4ace-b0ca-354578b449c0; rollback grace expired.",
+      "blocking": true
+    }
+  ],
+  "decisions": [
+    {
+      "decision": "Keep source snapshots on a 1Gi RWO PVC mounted at /var/lib/knowledge-server and configure SNAPSHOT_STORAGE_DIR.",
+      "rationale": "Canonical published Markdown must survive pod restart; Neo4j is only a rebuildable projection.",
+      "phase": "19.2"
+    },
+    {
+      "decision": "Use local Xenova multilingual-e5-small embeddings with 384 dimensions and sub-batch document embedding.",
+      "rationale": "K8s environment uses local ONNX; batches avoid peak memory growth and persistent cache avoids repeat model download.",
+      "phase": "19.2"
+    },
+    {
+      "decision": "Rebuild prepares READY candidate only; activation is separate CAS operation.",
+      "rationale": "Allows validation before changing live pointer and preserves rollback semantics.",
+      "phase": "19.2"
+    }
+  ],
+  "uncommitted_files": [
+    "k8s/knowledge-server.yaml",
+    "knowledge-server/Dockerfile.prebuilt",
+    "knowledge-server/package.json",
+    "knowledge-server/src/embedding/embeddingProviders.ts",
+    "knowledge-server/src/main.ts",
+    "knowledge-server/src/retrieval/nineRouterQueryPlanner.ts",
+    "knowledge-server/src/server.ts",
+    "knowledge-server/src/services/graphBuildService.ts",
+    "knowledge-server/src/graph/neo4jRepository.ts",
+    "knowledge-server/tests/main.test.ts",
+    "plus unrelated pre-existing user changes shown by git status"
+  ],
+  "next_action": "Resume agent a23c8c2a409a4b8b4 or read its result, then diagnose T4/T5 traversal closure and T6/T7 abstention before another deployment. Re-run targeted tests and official strict smoke cases; do not create 19.2-09-SUMMARY.md until all live and human gates pass.",
+  "context_notes": "Active namespace shb-corebank; endpoint http://10.4.97.70:30080; set ae60b412-56ff-476b-9321-ed919600a94a. Active graph snapshot ebe19d75-2f03-4ace-b0ca-354578b449c0 (74 nodes, 107 facts/evidence, vectors enabled). Prior snapshot d5cebd28-acc9-4c80-b412-c9876c7666e6. Published source snapshot 5095e2a6-53d0-4d55-9489-828c61bf93cb on PVC. Never persist or echo production secrets; current token is user-declared test-only."
+}
