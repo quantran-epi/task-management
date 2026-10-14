@@ -301,6 +301,7 @@ export interface CreateKnowledgeClientOptions {
   baseUrl: string;
   token: string;
   fetcher?: typeof fetch;
+  correlationId?: string;
   db?: TaskPlannerDatabase;
   reconcile?: (input: ReconcileAttemptPayload) => Promise<unknown> | unknown;
   markUncertain?: (attemptId: string, reason: string) => Promise<unknown> | unknown;
@@ -380,6 +381,7 @@ export function createKnowledgeClient(options: CreateKnowledgeClientOptions) {
         headers: {
           Accept: 'application/json',
           Authorization: `Bearer ${options.token}`,
+          'X-Correlation-ID': options.correlationId ?? crypto.randomUUID(),
           ...init.headers,
         },
       });

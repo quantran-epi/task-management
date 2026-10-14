@@ -25,6 +25,7 @@ export interface KnowledgeServerOptions {
   graphRepository?: GraphRepository | undefined;
   graphBuildService?: GraphBuildService | undefined;
   retrievalService?: Pick<RetrievalService, 'retrieve'> | undefined;
+  readinessCheck?: (() => Promise<{ neo4j: boolean; vectorIndex: boolean; model: boolean }>) | undefined;
   onClose?: (() => Promise<void> | void) | undefined;
 }
 
@@ -79,16 +80,35 @@ export function buildKnowledgeServer(options: KnowledgeServerOptions): Knowledge
       callback(null, origin !== undefined && allowedOrigins.has(origin));
     },
     credentials: false,
-    allowedHeaders: ['authorization', 'content-type', 'x-attempt-key', 'x-rebuild-key'],
+    allowedHeaders: ['authorization', 'content-type', 'x-attempt-key', 'x-rebuild-key', 'x-correlation-id'],
     methods: ['GET', 'POST', 'OPTIONS'],
   });
 
   app.get('/api/v1/health', async () => ({ status: 'ok' }));
+  app.get('/api/v1/health/liveness', async () => ({ status: 'alive' }));
+  app.get('/api/v1/health/readiness', async (request, reply) => {
+    if (!authorized(request.headers.authorization, token)) {
+      return reply.code(401).send({
+        error: { code: 'UNAUTHORIZED', message: 'Valid bearer authorization is required.' },
+      });
+    }
+    const checks = options.readinessCheck
+      ? await options.readinessCheck()
+      : {
+          neo4j: Boolean(options.graphRepository),
+          vectorIndex: Boolean(options.graphRepository),
+          model: Boolean(options.retrievalService),
+        };
+    const ready = checks.neo4j && checks.vectorIndex && checks.model;
+    return reply.code(ready ? 200 : 503).send({ status: ready ? 'ready' : 'not_ready', checks });
+  });
 
   app.addHook('onRequest', async (request, reply) => {
     if (!request.url.startsWith('/api/v1/')) return;
+    if (request.url.startsWith('/api/v1/health/liveness')) return;
     const origin = request.headers.origin;
-    if (!origin || !allowedOrigins.has(origin)) {
+    const isProbe = request.url.startsWith('/api/v1/health/readiness');
+    if (!isProbe && (!origin || !allowedOrigins.has(origin))) {
       return reply.code(403).send({
         error: { code: 'ORIGIN_DENIED', message: 'Request origin is not allowed.' },
       });

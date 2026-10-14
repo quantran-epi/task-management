@@ -69,6 +69,7 @@ import { AIDebugModal } from './AIDebugModal';
 import { AITaskPlannerInstructionsModal } from './AITaskPlannerInstructionsModal';
 import { McpSettingsModal } from './McpSettingsModal';
 import { aiDebugService } from '../../services/ai/aiDebugService';
+import { createPhaseLogger } from '../../services/ai/phaseLogger';
 import { APP_NAME } from '../../constants/app';
 import { useAIChat } from '../../context/AIChatContext';
 import { openAiPopout } from '../../utils/aiPopout';
@@ -1015,6 +1016,11 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
     setStreamingText('');
     setStreamingStatus('Đang kết nối 9router...');
 
+    const correlationId = crypto.randomUUID();
+    const routeLog = createPhaseLogger('[ROUTE]', { correlationId });
+    const toolLog = createPhaseLogger('[TOOL]', { correlationId });
+    const synthesisLog = createPhaseLogger('[SYNTHESIS]', { correlationId });
+
     const turnStartTime = Date.now();
     let accumulatedTokenUsage: ChatTokenUsage | undefined;
     const turnGeneratedFiles: ChatGeneratedFile[] = [];
@@ -1029,6 +1035,13 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
       selectedModel && (availableModels.length === 0 || availableModels.includes(selectedModel))
         ? selectedModel
         : availableModels[0] || config.defaultModel;
+
+    routeLog.log({
+      outcome: 'ok',
+      safeIds: [savedUserMsg.id, activeThread.id],
+      counts: { queryLength: effectivePrompt.length },
+      metadata: { model: targetModel, scopeType: effectiveScope.type },
+    });
 
     const turnId = aiDebugService.startTurn({
       scope: effectiveScope.title || `${effectiveScope.type}${effectiveScope.id ? `:${effectiveScope.id}` : ''}`,
@@ -1217,6 +1230,13 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
             });
           }
           const toolDuration = Date.now() - toolStartTime;
+          toolLog.log({
+            outcome: toolResult.includes('"error"') ? 'error' : 'ok',
+            latencyMs: toolDuration,
+            safeIds: [tc.id],
+            counts: { args: Object.keys(args).length },
+            metadata: { toolName: normalizedToolName, isMutation: isLocalDbTool && isMutationTool(tc.function.name, args) },
+          });
 
           console.log(`[AI Harness] 📦 Tool result for "${tc.function.name}":`, toolResult);
           aiDebugService.recordToolResult(turnId, tc.id, toolResult, toolDuration);
@@ -1315,6 +1335,16 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
         // User aborted — commit partial response if exists
         if (fullResponse.trim()) {
           const durationMs = Date.now() - turnStartTime;
+          synthesisLog.log({
+            outcome: 'ok',
+            latencyMs: durationMs,
+            safeIds: [activeThread.id],
+            counts: {
+              responseLength: fullResponse.length,
+              generatedFiles: turnGeneratedFiles.length,
+            },
+            metadata: { hasToolCalls: lastHadToolCalls },
+          });
           await saveMessage(
             {
               threadId: activeThread.id,

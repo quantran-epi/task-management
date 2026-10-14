@@ -11,6 +11,7 @@ import {
   runFederatedRetrieval,
   type FederatedRetrievalDependencies,
 } from '../services/federatedRetrievalService.js';
+import { createRetrievalLogger } from '../retrieval/retrievalLogger.js';
 
 const uuid = z.string().uuid();
 const SetParamsSchema = z.object({ setId: uuid }).strict();
@@ -34,12 +35,39 @@ export function registerRetrievalRoutes(
       return invalid(reply);
     }
 
+    const startedAt = Date.now();
+    const correlationHeader = request.headers['x-correlation-id'];
+    const correlationId = Array.isArray(correlationHeader) ? correlationHeader[0] : correlationHeader;
+    const phaseLogger = createRetrievalLogger('[RETRIEVE]', { correlationId });
+
     try {
       const response = await retrievalService.retrieve(params.data.setId, body.data);
       const validated = RetrievalResponseSchema.parse(response);
+      phaseLogger.log({
+        outcome: validated.outcome === 'DEGRADED' ? 'degraded' : 'ok',
+        latencyMs: Date.now() - startedAt,
+        safeIds: [params.data.setId, validated.snapshotId],
+        counts: {
+          items: validated.items.length,
+          totalCandidates: validated.totalCandidates,
+          modalitiesUsed: validated.modalitiesUsed.length,
+        },
+        metadata: {
+          outcome: validated.outcome,
+          fastPath: validated.planTrace.fastPath,
+          degraded: validated.diagnostics.degraded,
+        },
+      });
       return reply.code(200).send(validated);
     } catch {
-      request.log.error({ code: 'INTERNAL_ERROR', setId: params.data.setId }, 'Retrieval failed');
+      phaseLogger.log({
+        outcome: 'error',
+        latencyMs: Date.now() - startedAt,
+        safeIds: params.success ? [params.data.setId] : [],
+        counts: {},
+        metadata: { code: 'INTERNAL_ERROR' },
+      });
+      request.log.error({ code: 'INTERNAL_ERROR', setId: params.data.setId, correlationId: phaseLogger.correlationId }, 'Retrieval failed');
       return reply.code(500).send({
         error: { code: 'INTERNAL_ERROR', message: 'Request could not be processed.' },
       });
