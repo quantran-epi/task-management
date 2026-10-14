@@ -103,7 +103,7 @@ export interface GraphRepository {
    * Cleans up superseded generation indexes/nodes where grace period elapsed and active lease count is zero.
    * Returns number of generations cleaned.
    */
-  cleanupSupersededGenerations(now?: number): Promise<number>;
+  cleanupSupersededGenerations(now?: number, gracePeriodMs?: number): Promise<number>;
 }
 
 interface StoredGeneration {
@@ -411,13 +411,16 @@ export class InMemoryGraphRepository implements GraphRepository {
     }));
   }
 
-  async cleanupSupersededGenerations(now: number = Date.now()): Promise<number> {
+  async cleanupSupersededGenerations(
+    now: number = Date.now(),
+    gracePeriodMs: number = RETRIEVAL_GENERATION_GRACE_MS
+  ): Promise<number> {
     let cleaned = 0;
 
     for (const [snapshotId, gen] of this.generations.entries()) {
       if (!gen.supersededAt) continue; // Not superseded
       if (gen.activeLeases.size > 0) continue; // Active leases held
-      if (now - gen.supersededAt < RETRIEVAL_GENERATION_GRACE_MS) continue; // In grace period
+      if (now - gen.supersededAt < gracePeriodMs) continue; // In grace period
 
       this.generations.delete(snapshotId);
       cleaned++;

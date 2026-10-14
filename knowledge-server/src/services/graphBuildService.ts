@@ -42,6 +42,15 @@ export class GraphCASConflictError extends Error {
   }
 }
 
+export class GraphRollbackError extends Error {
+  readonly code: 'NO_PRIOR_SNAPSHOT' | 'ROLLBACK_EXPIRED';
+  constructor(code: 'NO_PRIOR_SNAPSHOT' | 'ROLLBACK_EXPIRED', message: string) {
+    super(message);
+    this.name = 'GraphRollbackError';
+    this.code = code;
+  }
+}
+
 /**
  * Optional LLM config for bounded prose extraction (Bug 3 cause B). When absent, the
  * prose stage is a safe no-op and the build stays fully deterministic.
@@ -68,7 +77,7 @@ export class GraphBuildService {
   private rebuildReplays = new Map<string, RebuildAcceptedDTO>(); // setId:rebuildKey -> DTO
   private activeGraphSnapshots = new Map<string, string>(); // setId -> graphSnapshotId
   private candidateBySet = new Map<string, { candidateSnapshotId: string; status: CandidateStatus }>();
-  private rollbackPointers = new Map<string, { priorSnapshotId?: string; rollbackExpiresAt?: string }>();
+  private rollbackPointers = new Map<string, { priorSnapshotId?: string | undefined; rollbackExpiresAt?: string | undefined }>();
   private buildErrors = new Map<string, Error>(); // setId -> last error
   readonly repository: GraphRepository;
   readonly snapshotStore?: SnapshotStore | undefined;
@@ -276,7 +285,7 @@ export class GraphBuildService {
     }
   }
 
-  async validateCandidate(setId: string, candidateSnapshotId: string): Promise<boolean> {
+  async validateCandidate(_setId: string, candidateSnapshotId: string): Promise<boolean> {
     const isValidGeneration = await this.repository.validateRetrievalGeneration(candidateSnapshotId);
     return isValidGeneration;
   }
@@ -315,6 +324,61 @@ export class GraphBuildService {
       priorSnapshotId: actualPriorSnapshotId,
       rollbackExpiresAt,
     });
+  }
+
+  async rollbackCandidate(setId: string): Promise<void> {
+    const rollbackInfo = this.rollbackPointers.get(setId);
+    if (!rollbackInfo || !rollbackInfo.priorSnapshotId) {
+      throw new GraphRollbackError(
+        'NO_PRIOR_SNAPSHOT',
+        `NO_PRIOR_SNAPSHOT: No prior active snapshot recorded for document set ${setId}.`
+      );
+    }
+
+    const now = Date.now();
+    if (!rollbackInfo.rollbackExpiresAt || new Date(rollbackInfo.rollbackExpiresAt).getTime() <= now) {
+      throw new GraphRollbackError(
+        'ROLLBACK_EXPIRED',
+        `ROLLBACK_EXPIRED: Rollback grace period has expired for document set ${setId}.`
+      );
+    }
+
+    const priorSnapshotId = rollbackInfo.priorSnapshotId;
+
+    // Atomically swap active pointer back to priorSnapshotId
+    this.currentStages.set(setId, 'Activation');
+    await this.repository.activateCandidate(setId, priorSnapshotId);
+    this.activeGraphSnapshots.set(setId, priorSnapshotId);
+
+    // Clear rollback window to prevent duplicate rollbacks or reset state
+    this.rollbackPointers.delete(setId);
+
+    // Structured audit logging per D-15 / BUILD-03
+    // eslint-disable-next-line no-console
+    console.log(
+      JSON.stringify({
+        event: '[PUBLISH]',
+        action: 'ROLLBACK',
+        setId,
+        restoredSnapshotId: priorSnapshotId,
+        timestamp: new Date().toISOString(),
+      })
+    );
+  }
+
+  async cleanupExpiredSnapshots(setId: string): Promise<number> {
+    const rollbackInfo = this.rollbackPointers.get(setId);
+    const now = Date.now();
+
+    // If a rollback window is still active for this set, do not clean up
+    if (
+      rollbackInfo?.rollbackExpiresAt &&
+      new Date(rollbackInfo.rollbackExpiresAt).getTime() > now
+    ) {
+      return 0;
+    }
+
+    return await this.repository.cleanupSupersededGenerations(now, this.rollbackGracePeriodMs);
   }
 
   private async executeRebuild(setId: string, candidateSnapshotId: string): Promise<void> {

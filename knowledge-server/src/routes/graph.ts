@@ -10,9 +10,15 @@ import {
   GraphBuildService,
   GraphBuildInProgressError,
   GraphCASConflictError,
+  GraphRollbackError,
 } from '../services/graphBuildService.js';
 
-export { GraphBuildService, GraphBuildInProgressError, GraphCASConflictError };
+export {
+  GraphBuildService,
+  GraphBuildInProgressError,
+  GraphCASConflictError,
+  GraphRollbackError,
+};
 
 const uuid = z.string().uuid();
 const SetParamsSchema = z.object({ setId: uuid }).strict();
@@ -236,6 +242,31 @@ export function registerGraphRoutes(app: FastifyInstance, buildService: GraphBui
     } catch (err: unknown) {
       if (err instanceof GraphCASConflictError) {
         return reply.code(409).send({
+          error: {
+            code: err.code,
+            message: err.message,
+          },
+        });
+      }
+      return reply.code(500).send({
+        error: { code: 'INTERNAL_ERROR', message: 'Request could not be processed.' },
+      });
+    }
+  });
+
+  // 1c. POST /api/v1/sets/:setId/graph/rollback
+  app.post('/api/v1/sets/:setId/graph/rollback', async (request, reply) => {
+    const params = SetParamsSchema.safeParse(request.params);
+    if (!params.success) return invalid(reply);
+
+    try {
+      await buildService.rollbackCandidate(params.data.setId);
+      const status = await buildService.getStatus(params.data.setId);
+      return reply.code(200).send(GraphStatusDTOSchema.parse(status));
+    } catch (err: unknown) {
+      if (err instanceof GraphRollbackError) {
+        const statusCode = err.code === 'ROLLBACK_EXPIRED' ? 409 : 400;
+        return reply.code(statusCode).send({
           error: {
             code: err.code,
             message: err.message,

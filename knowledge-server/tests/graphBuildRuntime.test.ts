@@ -281,4 +281,160 @@ describe('19.2-04-T1: DI and configuration validation', () => {
       expect(body.candidateSnapshotId).toBeUndefined();
     });
   });
+
+  describe('19.2-04-T3: Authenticated rollback endpoint and lease-safe cleanup', () => {
+    const SET_ID = '00000000-0000-4000-8000-000000000001';
+
+    function createRollbackFixture(gracePeriodMs: number = 600000) {
+      const repo = new InMemoryGraphRepository();
+      const store = new SnapshotStore();
+      const service = new GraphBuildService({
+        repository: repo,
+        snapshotStore: store,
+        rollbackGracePeriodMs: gracePeriodMs,
+      });
+
+      store.createCandidate('c-1', 'att-1', SET_ID);
+      store.completeCandidate('c-1', {
+        snapshotId: '11111111-1111-4000-8000-111111111111',
+        setId: SET_ID,
+        chunkingPolicyVersion: '2026.10.1',
+        documents: [
+          {
+            documentId: '22222222-2222-4000-8000-222222222222',
+            title: 'Sample Document',
+            contentHash: 'a'.repeat(64),
+            chunks: [
+              {
+                occurrenceId: '33333333-3333-4000-8000-333333333333',
+                contentHash: 'b'.repeat(64),
+                chunkIndex: 0,
+                headingPath: ['Introduction'],
+                startLine: 1,
+                endLine: 5,
+                startOffset: 0,
+                endOffset: 50,
+                text: 'System PRC_SAMPLE_1 process definition.',
+              },
+            ],
+          },
+        ],
+      });
+      store.promoteCandidate('c-1');
+
+      return { repo, store, service };
+    }
+
+    it('rollbackCandidate within grace period reverts active pointer to prior snapshot', async () => {
+      const { service } = createRollbackFixture(600000);
+
+      const candidate1 = await service.prepareCandidate(SET_ID);
+      await service.activateCandidate(SET_ID, candidate1);
+
+      const candidate2 = await service.prepareCandidate(SET_ID);
+      await service.activateCandidate(SET_ID, candidate2, candidate1);
+
+      let status = await service.getStatus(SET_ID);
+      expect(status.activeGraphSnapshotId).toBe(candidate2);
+      expect(status.canRollback).toBe(true);
+
+      // Perform rollback
+      await service.rollbackCandidate(SET_ID);
+
+      status = await service.getStatus(SET_ID);
+      expect(status.activeGraphSnapshotId).toBe(candidate1);
+      expect(status.canRollback).toBe(false);
+      expect(status.priorSnapshotId).toBeUndefined();
+    });
+
+    it('rollbackCandidate rejects when grace period has expired', async () => {
+      const { service } = createRollbackFixture(10); // 10ms grace period
+
+      const candidate1 = await service.prepareCandidate(SET_ID);
+      await service.activateCandidate(SET_ID, candidate1);
+
+      const candidate2 = await service.prepareCandidate(SET_ID);
+      await service.activateCandidate(SET_ID, candidate2, candidate1);
+
+      // Wait 25ms for grace period to expire
+      await new Promise((resolve) => setTimeout(resolve, 25));
+
+      await expect(service.rollbackCandidate(SET_ID)).rejects.toThrow(/ROLLBACK_EXPIRED|elapsed/);
+
+      // Status should reflect canRollback is false
+      const status = await service.getStatus(SET_ID);
+      expect(status.activeGraphSnapshotId).toBe(candidate2);
+      expect(status.canRollback).toBe(false);
+    });
+
+    it('rollbackCandidate rejects when no prior snapshot exists', async () => {
+      const { service } = createRollbackFixture(600000);
+
+      const candidate1 = await service.prepareCandidate(SET_ID);
+      await service.activateCandidate(SET_ID, candidate1);
+
+      await expect(service.rollbackCandidate(SET_ID)).rejects.toThrow(/NO_PRIOR_SNAPSHOT/);
+    });
+
+    it('POST /api/v1/sets/:setId/graph/rollback route executes rollback and returns 200', async () => {
+      const { buildKnowledgeServer } = await import('../src/server.js');
+      const { repo, service } = createRollbackFixture(600000);
+      const server = buildKnowledgeServer({
+        token: 'test-token',
+        allowedOrigins: ['https://taskmate.local'],
+        graphBuildService: service,
+        graphRepository: repo,
+      });
+
+      const candidate1 = await service.prepareCandidate(SET_ID);
+      await service.activateCandidate(SET_ID, candidate1);
+
+      const candidate2 = await service.prepareCandidate(SET_ID);
+      await service.activateCandidate(SET_ID, candidate2, candidate1);
+
+      const res = await server.app.inject({
+        method: 'POST',
+        url: `/api/v1/sets/${SET_ID}/graph/rollback`,
+        headers: {
+          authorization: 'Bearer test-token',
+          origin: 'https://taskmate.local',
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.activeGraphSnapshotId).toBe(candidate1);
+      expect(body.canRollback).toBe(false);
+    });
+
+    it('cleanupExpiredSnapshots deletes snapshot only when grace window expired and zero active leases', async () => {
+      const { service, repo } = createRollbackFixture(50); // 50ms grace
+
+      const candidate1 = await service.prepareCandidate(SET_ID);
+      await service.activateCandidate(SET_ID, candidate1);
+
+      // Acquire read lease on candidate1 while it is active
+      const lease = await repo.acquirePinnedSnapshot(SET_ID);
+      expect(lease?.snapshotId).toBe(candidate1);
+
+      const candidate2 = await service.prepareCandidate(SET_ID);
+      await service.activateCandidate(SET_ID, candidate2, candidate1);
+
+      // Wait 60ms so grace window expires
+      await new Promise((resolve) => setTimeout(resolve, 60));
+
+      // Cleanup while lease on candidate1 is active should clean 0
+      const cleanedWithLease = await service.cleanupExpiredSnapshots(SET_ID);
+      expect(cleanedWithLease).toBe(0);
+
+      // Release lease
+      if (lease) {
+        await lease.release();
+      }
+
+      // Cleanup after release should succeed
+      const cleaned = await service.cleanupExpiredSnapshots(SET_ID);
+      expect(cleaned).toBeGreaterThanOrEqual(1);
+    });
+  });
 });
