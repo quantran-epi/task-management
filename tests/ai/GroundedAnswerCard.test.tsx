@@ -145,7 +145,7 @@ describe('GroundedAnswerCard', () => {
     expect(screen.queryByText('Hệ thống hỗ trợ 1000 TPS.')).not.toBeInTheDocument();
   });
 
-  it('5. NO_EVIDENCE renders "Không tìm thấy bằng chứng" heading + refinement chip slots invoked', () => {
+  it('5. NO_EVIDENCE renders "Không tìm thấy bằng chứng trong tri thức đã xuất bản" heading + refinement chip slots invoked', () => {
     const grounding = createMockGrounding({
       outcome: 'NO_EVIDENCE',
       answer: null,
@@ -159,7 +159,9 @@ describe('GroundedAnswerCard', () => {
       />
     );
 
-    expect(screen.getByText('Không tìm thấy bằng chứng')).toBeInTheDocument();
+    expect(
+      screen.getByText('Không tìm thấy bằng chứng trong tri thức đã xuất bản')
+    ).toBeInTheDocument();
     expect(screen.getByTestId('refinements-slot')).toBeInTheDocument();
   });
 
@@ -675,25 +677,101 @@ describe('GroundedAnswerCard', () => {
     expect(window.matchMedia('(prefers-reduced-motion: reduce)').matches).toBe(true);
   });
 
-  it('23. IntentRoutingPrompt renders two chips with Vietnamese copy', async () => {
+  it('23. IntentRoutingPrompt renders clarification question with role="status"', async () => {
     const { IntentRoutingPrompt } = await import(
       '../../src/components/ai/grounded/IntentRoutingPrompt'
     );
-    const handleSelect = vi.fn();
-    render(<IntentRoutingPrompt onSelect={handleSelect} />);
+    const handleCancel = vi.fn();
+    render(
+      <IntentRoutingPrompt
+        question="Bạn muốn tra cứu chu kỳ tính lãi hay sao kê thẻ?"
+        originalQuery="Xem chu kỳ"
+        onCancel={handleCancel}
+      />
+    );
 
-    expect(screen.getByText('Bạn muốn:')).toBeInTheDocument();
-    const knowledgeChip = screen.getByRole('button', { name: 'Tra cứu tài liệu' });
-    const opChip = screen.getByRole('button', { name: 'Thao tác PlannerMate' });
+    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(screen.getByText('Cần thêm thông tin để xử lý chính xác')).toBeInTheDocument();
+    expect(
+      screen.getByText('Bạn muốn tra cứu chu kỳ tính lãi hay sao kê thẻ?')
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Xem chu kỳ/)).toBeInTheDocument();
 
-    expect(knowledgeChip).toBeInTheDocument();
-    expect(opChip).toBeInTheDocument();
+    const cancelBtn = screen.getByRole('button', { name: 'Hủy làm rõ' });
+    fireEvent.click(cancelBtn);
+    expect(handleCancel).toHaveBeenCalledTimes(1);
+  });
 
-    fireEvent.click(knowledgeChip);
-    expect(handleSelect).toHaveBeenCalledWith('knowledge');
+  it('28. GroundedAnswerCard renders confidence badge with tooltip', () => {
+    const grounding = createMockGrounding({
+      answer: {
+        schemaVersion: 2,
+        language: 'vi',
+        conclusion: 'Hệ thống hỗ trợ 1000 TPS.',
+        confidence: 'high',
+        confidenceReason: 'Trực tiếp trích dẫn đầy đủ.',
+        claims: [
+          {
+            id: 'C1',
+            text: 'Hệ thống hỗ trợ 1000 TPS.',
+            classification: 'DIRECT',
+            citationIds: ['S1'],
+            pathId: null,
+          },
+        ],
+        hypotheses: [],
+        unsupportedParts: [],
+      },
+    });
 
-    fireEvent.click(opChip);
-    expect(handleSelect).toHaveBeenCalledWith('operational');
+    render(
+      <GroundedAnswerCard grounding={grounding} onCitationActivate={vi.fn()} />
+    );
+
+    expect(screen.getByText('Độ tin cậy: Cao')).toBeInTheDocument();
+  });
+
+  it('29. GroundedAnswerCard renders HypothesisBlock with amber styling and no citations', () => {
+    const grounding = createMockGrounding({
+      answer: {
+        schemaVersion: 2,
+        language: 'vi',
+        conclusion: 'Kết luận có suy đoán.',
+        confidence: 'low',
+        confidenceReason: 'Bao gồm suy đoán theo yêu cầu.',
+        claims: [
+          {
+            id: 'C1',
+            text: 'Dữ liệu thực tế',
+            classification: 'DIRECT',
+            citationIds: ['S1'],
+            pathId: null,
+          },
+        ],
+        hypotheses: [
+          {
+            id: 'H1',
+            text: 'Cổng thanh toán có thể trung gian chuyển mạch.',
+            justification: 'Kinh nghiệm kiến trúc vi dịch vụ.',
+          },
+        ],
+        unsupportedParts: [],
+      },
+    });
+
+    render(
+      <GroundedAnswerCard grounding={grounding} onCitationActivate={vi.fn()} />
+    );
+
+    expect(
+      screen.getByText('Giả thuyết (Chưa có bằng chứng xác thực)')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Cổng thanh toán có thể trung gian chuyển mạch/)
+    ).toBeInTheDocument();
+    expect(screen.getByText('Độ tin cậy: Thấp')).toBeInTheDocument();
+    // Hypothesis does not render any citation chip [H1] or [1] for hypothesis
+    expect(screen.queryByRole('button', { name: /\[H1\]/i })).not.toBeInTheDocument();
   });
 
   it('24. ScopeChipsBar renders "Đang tra cứu:" prefix after routing', async () => {

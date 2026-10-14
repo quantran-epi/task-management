@@ -1,9 +1,11 @@
 import React from 'react';
-import { Card, Collapse, Button, theme } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
-import type {
-  ChatMessageGrounding,
-  PersistedCitation,
+import { Card, Collapse, Button, Tag, Tooltip, Divider, theme } from 'antd';
+import { InfoCircleOutlined, ReloadOutlined } from '@ant-design/icons';
+import {
+  toGroundedAnswerDisplay,
+  type ChatMessageGrounding,
+  type PersistedCitation,
+  type ConfidenceLevel,
 } from '../../../services/ai/groundedAnswerSchemas';
 import { GroundedBanner } from './GroundedBanner';
 import { ClaimBlock } from './ClaimBlock';
@@ -105,10 +107,10 @@ export const GroundedAnswerCard: React.FC<GroundedAnswerCardProps> = ({
           styles={{ body: { padding: 16 } }}
         >
           <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 8, color: token.colorText }}>
-            Không tìm thấy bằng chứng
+            Không tìm thấy bằng chứng trong tri thức đã xuất bản
           </div>
           <div style={{ fontSize: 14, color: token.colorTextSecondary, marginBottom: 12 }}>
-            Chưa có tài liệu đã xuất bản nào hỗ trợ câu hỏi này. Thử gợi ý thu hẹp bên dưới.
+            Hệ thống không tìm thấy tài liệu hoặc đường đi đồ thị phù hợp để trả lời. Không suy đoán khi chưa có yêu cầu.
           </div>
           {refinementsSlot}
         </Card>
@@ -222,6 +224,7 @@ export const GroundedAnswerCard: React.FC<GroundedAnswerCardProps> = ({
     default: {
       const isDegraded = grounding.outcome === 'DEGRADED';
       const isLocal = grounding.outcome === 'LOCAL_FALLBACK_SYNTHESIS';
+      const displayAnswer = grounding.answer ? toGroundedAnswerDisplay(grounding.answer) : null;
 
       // Format degraded modalities
       const degradedList: string[] = [];
@@ -306,23 +309,55 @@ export const GroundedAnswerCard: React.FC<GroundedAnswerCardProps> = ({
 
           {conflictBanners}
 
-          {/* Section Heading: Trả lời */}
+          {/* Section Heading: Trả lời & Confidence Badge */}
           <div
             style={{
-              fontWeight: 600,
-              fontSize: 14,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
               marginBottom: 8,
-              color: token.colorText,
             }}
           >
-            Trả lời
+            <div
+              style={{
+                fontWeight: 600,
+                fontSize: 14,
+                color: token.colorText,
+              }}
+            >
+              Trả lời
+            </div>
+            {displayAnswer && (
+              <Tooltip title={displayAnswer.confidenceReason}>
+                <Tag
+                  color={
+                    displayAnswer.confidence === 'high'
+                      ? 'success'
+                      : displayAnswer.confidence === 'medium'
+                      ? 'processing'
+                      : displayAnswer.confidence === 'low'
+                      ? 'warning'
+                      : 'default'
+                  }
+                  style={{ marginRight: 0 }}
+                >
+                  {displayAnswer.confidence === 'high'
+                    ? 'Độ tin cậy: Cao'
+                    : displayAnswer.confidence === 'medium'
+                    ? 'Độ tin cậy: Trung bình'
+                    : displayAnswer.confidence === 'low'
+                    ? 'Độ tin cậy: Thấp'
+                    : 'Độ tin cậy: Chưa xác định'}
+                </Tag>
+              </Tooltip>
+            )}
           </div>
 
           {/* Conclusion prose with Claims */}
-          {grounding.answer ? (
+          {displayAnswer ? (
             <div style={{ marginBottom: 12 }}>
-              {grounding.answer.claims.length > 0 ? (
-                grounding.answer.claims.map((claim) => (
+              {displayAnswer.claims.length > 0 ? (
+                displayAnswer.claims.map((claim) => (
                   <ClaimBlock
                     key={claim.id}
                     claim={claim}
@@ -333,7 +368,7 @@ export const GroundedAnswerCard: React.FC<GroundedAnswerCardProps> = ({
                 ))
               ) : (
                 <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5 }}>
-                  {grounding.answer.conclusion}
+                  {displayAnswer.conclusion}
                 </p>
               )}
             </div>
@@ -343,11 +378,64 @@ export const GroundedAnswerCard: React.FC<GroundedAnswerCardProps> = ({
             </div>
           )}
 
+          {/* Speculation / Hypotheses Block (D-10, UI-SPEC 6.4) */}
+          {displayAnswer && displayAnswer.hypotheses.length > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <Divider dashed style={{ margin: '12px 0 8px' }} />
+              <div
+                style={{
+                  border: `1px solid ${token.colorWarningBorder ?? '#ffe58f'}`,
+                  backgroundColor: token.colorWarningBg ?? '#fffbe6',
+                  borderRadius: token.borderRadiusSM ?? 6,
+                  padding: '10px 14px',
+                }}
+              >
+                <div
+                  style={{
+                    fontWeight: 600,
+                    fontSize: 13,
+                    color: token.colorWarningText ?? token.colorWarning,
+                    marginBottom: 4,
+                  }}
+                >
+                  Giả thuyết (Chưa có bằng chứng xác thực)
+                </div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: token.colorTextSecondary,
+                    marginBottom: 8,
+                    fontStyle: 'italic',
+                  }}
+                >
+                  Các giả định bên dưới được tạo theo yêu cầu suy đoán và không có trích dẫn tài liệu chứng minh.
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {displayAnswer.hypotheses.map((h) => (
+                    <div
+                      key={h.id}
+                      style={{
+                        fontSize: 13,
+                        color: token.colorText,
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      <strong>{h.id}:</strong> {h.text}{' '}
+                      <span style={{ color: token.colorTextSecondary, fontSize: 12 }}>
+                        ({h.justification})
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Scope variations rendered below answer */}
           {scopeVariations}
 
           {/* Unsupported parts if present (D-03) */}
-          {grounding.answer && grounding.answer.unsupportedParts.length > 0 && (
+          {displayAnswer && displayAnswer.unsupportedParts.length > 0 && (
             <div style={{ marginBottom: 12 }}>
               <div
                 style={{
@@ -360,7 +448,7 @@ export const GroundedAnswerCard: React.FC<GroundedAnswerCardProps> = ({
                 Chưa đủ bằng chứng cho
               </div>
               <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13 }}>
-                {grounding.answer.unsupportedParts.map((part, idx) => (
+                {displayAnswer.unsupportedParts.map((part, idx) => (
                   <li key={idx}>{part}</li>
                 ))}
               </ul>

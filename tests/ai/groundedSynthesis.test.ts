@@ -9,7 +9,7 @@ import {
 } from '../../src/services/ai/groundedSynthesis';
 import * as nineRouterClient from '../../src/services/ai/nineRouterClient';
 import type { EvidencePack } from '../../src/services/ai/evidencePack';
-import type { GroundedAnswer } from '../../src/services/ai/groundedAnswerSchemas';
+import type { GroundedAnswerV2 } from '../../src/services/ai/groundedAnswerSchemas';
 
 describe('groundedSynthesis', () => {
   const completeJsonSpy = vi.spyOn(nineRouterClient, 'completeJson');
@@ -71,10 +71,12 @@ describe('groundedSynthesis', () => {
     coverageWarnings: [],
   };
 
-  const validAnswer: GroundedAnswer = {
-    schemaVersion: 1,
+  const validAnswer: GroundedAnswerV2 = {
+    schemaVersion: 2,
     language: 'vi',
     conclusion: 'Quy trình CYTP1002 yêu cầu OTP SMS.',
+    confidence: 'high',
+    confidenceReason: 'Trực tiếp trích xuất từ tài liệu với độ bao phủ đầy đủ.',
     claims: [
       {
         id: 'C1',
@@ -84,6 +86,7 @@ describe('groundedSynthesis', () => {
         pathId: null,
       },
     ],
+    hypotheses: [],
     unsupportedParts: [],
   };
 
@@ -179,9 +182,11 @@ describe('groundedSynthesis', () => {
     };
 
     const invalidClosure = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       language: 'vi',
       conclusion: 'Derived conclusion',
+      confidence: 'medium',
+      confidenceReason: 'Inferred path',
       claims: [
         {
           id: 'C1',
@@ -191,13 +196,16 @@ describe('groundedSynthesis', () => {
           pathId: 'P1',
         },
       ],
+      hypotheses: [],
       unsupportedParts: [],
     };
 
-    const validInferred: GroundedAnswer = {
-      schemaVersion: 1,
+    const validInferred: GroundedAnswerV2 = {
+      schemaVersion: 2,
       language: 'vi',
       conclusion: 'Derived conclusion',
+      confidence: 'high',
+      confidenceReason: 'Direct fallback',
       claims: [
         {
           id: 'C1',
@@ -207,6 +215,7 @@ describe('groundedSynthesis', () => {
           pathId: null,
         },
       ],
+      hypotheses: [],
       unsupportedParts: [],
     };
 
@@ -283,7 +292,7 @@ describe('groundedSynthesis', () => {
     expect(callArg.response_format).toEqual({
       type: 'json_schema',
       json_schema: {
-        name: 'taskmate_grounded_answer_v1',
+        name: 'taskmate_grounded_answer_v2',
         strict: true,
         schema: expect.any(Object),
       },
@@ -325,7 +334,6 @@ describe('groundedSynthesis', () => {
     const initialUserJson = JSON.parse(initialCall.messages[1]!.content);
     const repairUserJson = JSON.parse(repairCall.messages[1]!.content);
 
-    // Repair message does NOT carry new evidence; repairUserJson has only issues, previousJson, allowed IDs
     expect(repairUserJson.evidence).toBeUndefined();
     expect(initialUserJson.evidence).toEqual(basePack.promptEvidence);
     expect(repairUserJson.allowedCitationIds).toEqual(Object.keys(basePack.citations));
@@ -378,7 +386,7 @@ describe('groundedSynthesis', () => {
     const enQuery = 'What is process CYTP1002?';
     expect(detectQueryLanguage(enQuery)).toBe('en');
 
-    const enAnswer: GroundedAnswer = {
+    const enAnswer: GroundedAnswerV2 = {
       ...validAnswer,
       language: 'en',
       conclusion: 'Process CYTP1002 requires OTP SMS.',
@@ -396,11 +404,12 @@ describe('groundedSynthesis', () => {
   it('15. D-06 source quotes byte-identical regardless of query language', async () => {
     const expectedQuote = 'Khách hàng phải xác nhận qua OTP SMS.';
 
-    // VI query run
-    const viAnswer: GroundedAnswer = {
-      schemaVersion: 1,
+    const viAnswer: GroundedAnswerV2 = {
+      schemaVersion: 2,
       language: 'vi',
       conclusion: 'Kết luận',
+      confidence: 'high',
+      confidenceReason: 'Trực tiếp trích dẫn',
       claims: [
         {
           id: 'C1',
@@ -410,6 +419,7 @@ describe('groundedSynthesis', () => {
           pathId: null,
         },
       ],
+      hypotheses: [],
       unsupportedParts: [],
     };
     completeJsonSpy.mockResolvedValueOnce(viAnswer);
@@ -418,11 +428,12 @@ describe('groundedSynthesis', () => {
       createInput({ query: 'Quy trình CYTP1002 là gì?', responseLanguage: 'vi' })
     );
 
-    // EN query run
-    const enAnswer: GroundedAnswer = {
-      schemaVersion: 1,
+    const enAnswer: GroundedAnswerV2 = {
+      schemaVersion: 2,
       language: 'en',
       conclusion: 'Conclusion',
+      confidence: 'high',
+      confidenceReason: 'Direct quote',
       claims: [
         {
           id: 'C1',
@@ -432,6 +443,7 @@ describe('groundedSynthesis', () => {
           pathId: null,
         },
       ],
+      hypotheses: [],
       unsupportedParts: [],
     };
     completeJsonSpy.mockResolvedValueOnce(enAnswer);
@@ -446,7 +458,6 @@ describe('groundedSynthesis', () => {
     expect(viClaimText).toContain(expectedQuote);
     expect(enClaimText).toContain(expectedQuote);
 
-    // Byte-identical comparison using Buffer.from
     const expectedBuffer = Buffer.from(expectedQuote, 'utf8');
     const viExtracted = viClaimText.slice(
       viClaimText.indexOf(expectedQuote),
@@ -465,10 +476,12 @@ describe('groundedSynthesis', () => {
     const id1 = 'PRC_PROCESS:60000006';
     const id2 = 'CYTP1002';
 
-    const viAnswer: GroundedAnswer = {
-      schemaVersion: 1,
+    const viAnswer: GroundedAnswerV2 = {
+      schemaVersion: 2,
       language: 'vi',
       conclusion: `Thực thể ${id1} cho ${id2}`,
+      confidence: 'high',
+      confidenceReason: 'Trực tiếp trích dẫn',
       claims: [
         {
           id: 'C1',
@@ -478,6 +491,7 @@ describe('groundedSynthesis', () => {
           pathId: null,
         },
       ],
+      hypotheses: [],
       unsupportedParts: [],
     };
     completeJsonSpy.mockResolvedValueOnce(viAnswer);
@@ -486,10 +500,12 @@ describe('groundedSynthesis', () => {
       createInput({ query: 'Quy trình CYTP1002 là gì?', responseLanguage: 'vi' })
     );
 
-    const enAnswer: GroundedAnswer = {
-      schemaVersion: 1,
+    const enAnswer: GroundedAnswerV2 = {
+      schemaVersion: 2,
       language: 'en',
       conclusion: `Entity ${id1} for ${id2}`,
+      confidence: 'high',
+      confidenceReason: 'Direct quote',
       claims: [
         {
           id: 'C1',
@@ -499,6 +515,7 @@ describe('groundedSynthesis', () => {
           pathId: null,
         },
       ],
+      hypotheses: [],
       unsupportedParts: [],
     };
     completeJsonSpy.mockResolvedValueOnce(enAnswer);
@@ -514,8 +531,8 @@ describe('groundedSynthesis', () => {
   });
 
   it('17. D-06 explicit override: input.responseLanguage overrides query detection', async () => {
-    const viQuery = 'Quy trình CYTP1002 là gì?'; // Vietnamese query
-    const enAnswer: GroundedAnswer = {
+    const viQuery = 'Quy trình CYTP1002 là gì?';
+    const enAnswer: GroundedAnswerV2 = {
       ...validAnswer,
       language: 'en',
       conclusion: 'Process CYTP1002 in English',
@@ -530,7 +547,70 @@ describe('groundedSynthesis', () => {
     expect(result.responseLanguage).toBe('en');
   });
 
-  describe('normalizeRawGroundedOutput', () => {
+  describe('D-11 NO_EVIDENCE honest abstention', () => {
+    it('returns outcome NO_EVIDENCE, confidence unknown, 0 claims, 0 hypotheses when 0 citations and speculation_requested is false', async () => {
+      const zeroPack: EvidencePack = {
+        ...basePack,
+        citations: {},
+        paths: {},
+        promptEvidence: [],
+      };
+
+      const input = createInput({ pack: zeroPack, speculation_requested: false });
+      const result = await synthesizeGroundedAnswer(input);
+
+      expect(completeJsonSpy).not.toHaveBeenCalled(); // zero evidence short-circuits without LLM call
+      expect(result.answer.schemaVersion).toBe(2);
+      expect(result.answer.confidence).toBe('unknown');
+      expect(result.answer.claims).toEqual([]);
+      expect(result.answer.hypotheses).toEqual([]);
+      expect(result.answer.conclusion).toContain('Không tìm thấy thông tin');
+    });
+  });
+
+  describe('D-10 Hypotheses & Speculation isolation', () => {
+    it('strips hypotheses when speculation_requested is false', async () => {
+      const modelOutputWithUnrequestedHypothesis = {
+        ...validAnswer,
+        hypotheses: [
+          {
+            id: 'H1',
+            text: 'Có thể có quy trình phụ trợ',
+            justification: 'Đoán mò',
+          },
+        ],
+      };
+      completeJsonSpy.mockResolvedValueOnce(modelOutputWithUnrequestedHypothesis);
+
+      const input = createInput({ speculation_requested: false });
+      const result = await synthesizeGroundedAnswer(input);
+
+      expect(result.answer.hypotheses).toEqual([]);
+    });
+
+    it('permits hypotheses and sets confidence to low when speculation_requested is true', async () => {
+      const modelOutputWithHypothesis = {
+        ...validAnswer,
+        confidence: 'high', // model might claim high, but system must enforce low
+        hypotheses: [
+          {
+            id: 'H1',
+            text: 'Cổng thanh toán trung gian xử lý điện',
+            justification: 'Dựa trên kinh nghiệm kiến trúc',
+          },
+        ],
+      };
+      completeJsonSpy.mockResolvedValueOnce(modelOutputWithHypothesis);
+
+      const input = createInput({ speculation_requested: true });
+      const result = await synthesizeGroundedAnswer(input);
+
+      expect(result.answer.hypotheses.length).toBe(1);
+      expect(result.answer.confidence).toBe('low');
+    });
+  });
+
+  describe('normalizeRawGroundedOutput & D-13 No Fallback Citation', () => {
     const allowedCitationIds = ['S1', 'S2'];
     const allowedPathIds = ['P1'];
 
@@ -595,38 +675,33 @@ describe('groundedSynthesis', () => {
       expect(res.claims[0].pathId).toBe('P1');
     });
 
-    it('23. filters unknown citation IDs and safeguards with first allowed citation', () => {
+    it('23. D-13: does NOT inject fallback citation for ungrounded claims; moves to unsupportedParts', () => {
       const raw = {
         conclusion: 'Done',
         claims: [
-          { id: 'C1', text: 'Some fact', classification: 'DIRECT', citationIds: ['S9', 'S99'], pathId: null },
+          { id: 'C1', text: 'Ungrounded fact', classification: 'DIRECT', citationIds: ['S9', 'S99'], pathId: null },
         ],
       };
       const res = normalizeRawGroundedOutput(raw, allowedCitationIds, allowedPathIds) as any;
-      expect(res.claims[0].citationIds).toEqual(['S1']);
+      // Claim has no valid citations; MUST NOT inherit S1
+      expect(res.claims).toHaveLength(0);
+      expect(res.unsupportedParts).toContain('Ungrounded fact');
     });
 
-    it('24. reconstructs default DIRECT claim when claims array is empty but conclusion exists', () => {
+    it('24. D-13: does NOT reconstruct default DIRECT claim when claims array is empty', () => {
       const raw = {
         conclusion: 'Hệ thống đã xác nhận thành công.',
         claims: [],
       };
       const res = normalizeRawGroundedOutput(raw, allowedCitationIds, allowedPathIds) as any;
-      expect(res.claims).toHaveLength(1);
-      expect(res.claims[0]).toEqual({
-        id: 'C1',
-        text: 'Hệ thống đã xác nhận thành công.',
-        classification: 'DIRECT',
-        citationIds: ['S1'],
-        pathId: null,
-      });
+      expect(res.claims).toHaveLength(0);
     });
 
     it('25. strips markdown code fences from raw string JSON input', () => {
       const rawStr = '```json\n{\n  "conclusion": "Done",\n  "claims": []\n}\n```';
       const res = normalizeRawGroundedOutput(rawStr, allowedCitationIds, allowedPathIds) as any;
       expect(res.conclusion).toBe('Done');
-      expect(res.schemaVersion).toBe(1);
+      expect(res.schemaVersion).toBe(2);
     });
 
     it('27. normalizes S1 to L1 when only local citations are allowed', () => {
@@ -642,13 +717,12 @@ describe('groundedSynthesis', () => {
   });
 
   describe('buildSystemPrompt', () => {
-    it('26. includes valid few-shot example and citation rules', () => {
+    it('26. includes valid few-shot example and citation rules for schema v2', () => {
       const promptVi = buildSystemPrompt('vi', 'test-v1');
       expect(promptVi).toContain('VALID OUTPUT EXAMPLE:');
-      expect(promptVi).toContain('"schemaVersion": 1');
-      expect(promptVi).toContain('"classification": "DIRECT"');
-      expect(promptVi).toContain('"citationIds"');
-      expect(promptVi).toContain('allowedCitationIds');
+      expect(promptVi).toContain('"schemaVersion": 2');
+      expect(promptVi).toContain('"confidence": "high"');
+      expect(promptVi).toContain('NO-EVIDENCE RULE:');
 
       const promptEn = buildSystemPrompt('en', 'test-v1');
       expect(promptEn).toContain('Respond in English');
