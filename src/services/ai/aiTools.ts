@@ -43,6 +43,11 @@ import {
   getBacklinksForDoc,
 } from '../../db/repositories/documentLinkRepo';
 import {
+  createKnowledgeLink,
+  deleteKnowledgeLink,
+  getKnowledgeLinksForEntity,
+} from '../../db/repositories/knowledgeLinkRepo';
+import {
   dismissAlertToday,
   getDismissedAlerts,
   clearDismissedAlerts,
@@ -1886,6 +1891,79 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           },
         },
         required: ['prompt'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'link_taskmate_to_knowledge',
+      description:
+        'Link a TaskMate entity (task, project, or milestone) to a knowledge entity (canonical graph URN or document UUID).',
+      parameters: {
+        type: 'object',
+        properties: {
+          taskMateEntityType: {
+            type: 'string',
+            enum: ['task', 'project', 'milestone'],
+            description: 'Type of the TaskMate entity to link.',
+          },
+          taskMateEntityId: {
+            type: 'string',
+            description: 'UUID of the TaskMate entity.',
+          },
+          setId: {
+            type: 'string',
+            description: 'UUID of the DocumentSet.',
+          },
+          urn: {
+            type: 'string',
+            description: 'Optional stable canonical graph URN (e.g. "urn:node:table:accounts").',
+          },
+          docId: {
+            type: 'string',
+            description: 'Optional stable document UUID from notes/documents.',
+          },
+          displayLabel: {
+            type: 'string',
+            description: 'Human-readable label for badges/pills.',
+          },
+        },
+        required: ['taskMateEntityType', 'taskMateEntityId', 'setId', 'displayLabel'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'unlink_taskmate_knowledge',
+      description:
+        'Remove a link between a TaskMate entity and a knowledge entity by linkId or entity coordinates.',
+      parameters: {
+        type: 'object',
+        properties: {
+          linkId: {
+            type: 'string',
+            description: 'Optional UUID of the KnowledgeLink record to remove.',
+          },
+          taskMateEntityType: {
+            type: 'string',
+            enum: ['task', 'project', 'milestone'],
+            description: 'Optional entity type when removing by entity coordinates.',
+          },
+          taskMateEntityId: {
+            type: 'string',
+            description: 'Optional entity UUID when removing by entity coordinates.',
+          },
+          urn: {
+            type: 'string',
+            description: 'Optional target URN when removing by entity coordinates.',
+          },
+          docId: {
+            type: 'string',
+            description: 'Optional target docId when removing by entity coordinates.',
+          },
+        },
       },
     },
   },
@@ -4230,6 +4308,73 @@ export async function executeAiTool(
         });
       }
 
+      case 'link_taskmate_to_knowledge': {
+        const { taskMateEntityType, taskMateEntityId, setId, urn, docId, displayLabel } = args;
+        if (!taskMateEntityType || !taskMateEntityId || !setId || !displayLabel) {
+          return JSON.stringify({
+            error: 'Missing required parameters: taskMateEntityType, taskMateEntityId, setId, displayLabel',
+          });
+        }
+        if (!urn && !docId) {
+          return JSON.stringify({
+            error: 'Must provide at least one of urn or docId to create a KnowledgeLink',
+          });
+        }
+
+        const link = await createKnowledgeLink(
+          {
+            taskMateEntityType,
+            taskMateEntityId,
+            setId,
+            urn,
+            docId,
+            displayLabel,
+          },
+          db
+        );
+
+        return JSON.stringify({
+          success: true,
+          message: `Đã liên kết tri thức "${displayLabel}" với ${taskMateEntityType} (${taskMateEntityId}).`,
+          link,
+        });
+      }
+
+      case 'unlink_taskmate_knowledge': {
+        if (args.linkId) {
+          await deleteKnowledgeLink(args.linkId, db);
+          return JSON.stringify({
+            success: true,
+            message: `Đã gỡ bỏ liên kết tri thức (${args.linkId}).`,
+          });
+        }
+
+        if (args.taskMateEntityType && args.taskMateEntityId) {
+          const links = await getKnowledgeLinksForEntity(args.taskMateEntityType, args.taskMateEntityId, db);
+          const target = links.filter((l) => {
+            if (args.urn && l.urn === args.urn) return true;
+            if (args.docId && l.docId === args.docId) return true;
+            return false;
+          });
+          if (target.length > 0) {
+            for (const t of target) {
+              await deleteKnowledgeLink(t.id, db);
+            }
+            return JSON.stringify({
+              success: true,
+              message: `Đã gỡ bỏ ${target.length} liên kết tri thức khớp điều kiện.`,
+            });
+          }
+          return JSON.stringify({
+            error: 'Không tìm thấy liên kết tri thức phù hợp để gỡ bỏ',
+          });
+        }
+
+        return JSON.stringify({
+          error: 'Must provide either linkId or taskMateEntityType + taskMateEntityId',
+        });
+      }
+
       case 'query_notifications': {
         const tasks = db.tasks ? await db.tasks.toArray() : [];
         const projects = db.projects ? await db.projects.toArray() : [];
@@ -4606,6 +4751,8 @@ const MUTATION_TOOLS = new Set([
   'manage_reminders',
   'link_document',
   'unlink_document',
+  'link_taskmate_to_knowledge',
+  'unlink_taskmate_knowledge',
   'dismiss_notification',
 ]);
 
@@ -4782,6 +4929,10 @@ export function describeToolMutation(toolName: string, args: Record<string, any>
       return `Liên kết tài liệu (${args.documentId}) với ${args.entityType} (${args.entityId})`;
     case 'unlink_document':
       return `Hủy liên kết tài liệu (${args.documentId}) khỏi ${args.entityType} (${args.entityId})`;
+    case 'link_taskmate_to_knowledge':
+      return `Liên kết tri thức "${args.displayLabel || args.urn || args.docId}" với ${args.taskMateEntityType || 'thực thể'} (${args.taskMateEntityId})`;
+    case 'unlink_taskmate_knowledge':
+      return `Hủy liên kết tri thức ${args.linkId ? `(${args.linkId})` : `khỏi ${args.taskMateEntityType} (${args.taskMateEntityId})`}`;
     case 'dismiss_notification':
       return `Tạm ẩn cảnh báo (${args.alertKey}) trong ngày hôm nay`;
     default:
@@ -5010,6 +5161,36 @@ export async function describeToolMutationWithContext(
           return `Hủy liên kết tài liệu "${doc.title || 'Chưa đặt tên'}" khỏi ${entityName}`;
         }
         return fallback;
+      }
+
+      case 'link_taskmate_to_knowledge': {
+        let entityName = '';
+        if (args.taskMateEntityType === 'task' && db.tasks) {
+          const t = await db.tasks.get(args.taskMateEntityId);
+          if (t) entityName = `tác vụ "${t.name}"`;
+        } else if (args.taskMateEntityType === 'project' && db.projects) {
+          const p = await db.projects.get(args.taskMateEntityId);
+          if (p) entityName = `dự án "${p.name}"`;
+        } else if (args.taskMateEntityType === 'milestone' && db.milestones) {
+          const m = await db.milestones.get(args.taskMateEntityId);
+          if (m) entityName = `mốc "${m.name}"`;
+        }
+        return `Liên kết tri thức "${args.displayLabel || args.urn || args.docId}" với ${entityName || `${args.taskMateEntityType} (${args.taskMateEntityId})`}`;
+      }
+
+      case 'unlink_taskmate_knowledge': {
+        let entityName = '';
+        if (args.taskMateEntityType === 'task' && db.tasks) {
+          const t = await db.tasks.get(args.taskMateEntityId);
+          if (t) entityName = `tác vụ "${t.name}"`;
+        } else if (args.taskMateEntityType === 'project' && db.projects) {
+          const p = await db.projects.get(args.taskMateEntityId);
+          if (p) entityName = `dự án "${p.name}"`;
+        } else if (args.taskMateEntityType === 'milestone' && db.milestones) {
+          const m = await db.milestones.get(args.taskMateEntityId);
+          if (m) entityName = `mốc "${m.name}"`;
+        }
+        return `Hủy liên kết tri thức khỏi ${entityName || `${args.taskMateEntityType || 'thực thể'} (${args.taskMateEntityId || args.linkId})`}`;
       }
 
       default:

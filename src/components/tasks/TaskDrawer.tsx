@@ -757,6 +757,8 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
         <>
           <LinkedKnowledgeSection
             taskId={currentTask?.id || ''}
+            entityType="task"
+            entityId={currentTask?.id || ''}
             notes={currentTask?.notes}
             documentLinks={currentTask?.documentLinks}
             onOpenDocPreview={(docId) => setPreviewDocId(docId)}
