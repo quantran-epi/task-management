@@ -147,6 +147,15 @@ export class SnapshotStore {
     return snapshot ? clone(snapshot) : null;
   }
 
+  registerActiveSnapshot(setId: string, snapshot: ProjectionSnapshot): void {
+    const active = clone(snapshot);
+    this.#activeBySet.set(setId, active);
+    if (this.#storageDir) {
+      const filePath = path.join(this.#storageDir, 'snapshots', `${setId}.json`);
+      atomicWriteJson(filePath, active);
+    }
+  }
+
   listCandidates(setId: string): SnapshotCandidate[] {
     return (this.#candidateIdsBySet.get(setId) ?? []).map((id) => clone(this.#requireCandidate(id)));
   }

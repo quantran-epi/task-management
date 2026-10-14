@@ -38,7 +38,7 @@ export function registerRetrievalRoutes(
     const startedAt = Date.now();
     const correlationHeader = request.headers['x-correlation-id'];
     const correlationId = Array.isArray(correlationHeader) ? correlationHeader[0] : correlationHeader;
-    const phaseLogger = createRetrievalLogger('[RETRIEVE]', { correlationId });
+    const phaseLogger = createRetrievalLogger('[RETRIEVE]', correlationId ? { correlationId } : {});
 
     try {
       const response = await retrievalService.retrieve(params.data.setId, body.data);
