@@ -1,10 +1,16 @@
+import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { writeFile } from 'node:fs/promises';
 import { RetrievalResponseSchema, type RetrievalResponse } from '../types/retrievalProtocol.js';
+import { LIVE_SCENARIOS } from './realDataAcceptance.js';
 
 export interface CliOptions {
   endpoint: string;
   setId: string;
+  token: string;
+  origin: string;
+  caseIds?: string[];
   strict: boolean;
   output?: string;
   timeoutMs: number;
@@ -15,6 +21,7 @@ export interface SmokeCase {
   expectedIntent: string;
   expectedFastPath: boolean;
   expectedOutcome: RetrievalResponse['outcome'];
+  expectedSourceDocumentTitle?: string;
   requirePath?: boolean;
 }
 
@@ -30,24 +37,23 @@ export interface SmokeResult {
   error?: string;
 }
 
-export const SMOKE_CASES: SmokeCase[] = [
-  { id: 'T1', expectedIntent: 'LOOKUP', expectedFastPath: true, expectedOutcome: 'READY' },
-  { id: 'T2', expectedIntent: 'LOOKUP', expectedFastPath: false, expectedOutcome: 'READY' },
-  { id: 'T3', expectedIntent: 'LOOKUP', expectedFastPath: false, expectedOutcome: 'READY' },
-  { id: 'T4', expectedIntent: 'FLOW_TRAVERSAL', expectedFastPath: false, expectedOutcome: 'READY', requirePath: true },
-  { id: 'T5', expectedIntent: 'IMPACT_ANALYSIS', expectedFastPath: false, expectedOutcome: 'READY', requirePath: true },
-  { id: 'T6', expectedIntent: 'LOOKUP', expectedFastPath: false, expectedOutcome: 'NO_EVIDENCE' },
-  { id: 'T7', expectedIntent: 'LOOKUP', expectedFastPath: false, expectedOutcome: 'NO_EVIDENCE' },
-  { id: 'T8', expectedIntent: 'LOOKUP', expectedFastPath: false, expectedOutcome: 'READY' },
-  { id: 'T9', expectedIntent: 'LOOKUP', expectedFastPath: false, expectedOutcome: 'READY' },
-  { id: 'T10', expectedIntent: 'LOOKUP', expectedFastPath: false, expectedOutcome: 'NEEDS_CLARIFICATION' },
-  { id: 'T11', expectedIntent: 'LOOKUP', expectedFastPath: false, expectedOutcome: 'READY' },
-  { id: 'T12', expectedIntent: 'LOOKUP', expectedFastPath: false, expectedOutcome: 'READY' },
-  { id: 'T13', expectedIntent: 'LOOKUP', expectedFastPath: false, expectedOutcome: 'DEGRADED' },
-  { id: 'T14', expectedIntent: 'LOOKUP', expectedFastPath: false, expectedOutcome: 'UNSUPPORTED' },
-  { id: 'T15', expectedIntent: 'LOOKUP', expectedFastPath: false, expectedOutcome: 'READY' },
-  { id: 'T16', expectedIntent: 'LOOKUP', expectedFastPath: false, expectedOutcome: 'READY' },
-];
+export const SMOKE_CASES: SmokeCase[] = LIVE_SCENARIOS.map((scenario) => ({
+  id: scenario.id,
+  expectedIntent:
+    scenario.id === 'T4'
+      ? 'FLOW_TRAVERSAL'
+      : scenario.id === 'T5'
+        ? 'IMPACT_ANALYSIS'
+        : 'LOOKUP',
+  expectedFastPath: scenario.expectedFastPath ?? false,
+  expectedOutcome: scenario.expectedOutcome ?? 'READY',
+  ...(scenario.id === 'T1' || scenario.id === 'T12' || scenario.id === 'T15'
+    ? { expectedSourceDocumentTitle: '02-data-objects.md' }
+    : {}),
+  ...(scenario.requirePath ? { requirePath: true } : {}),
+}));
+
+const QUERY_BY_CASE_ID = new Map(LIVE_SCENARIOS.map((scenario) => [scenario.id, scenario.query]));
 
 export function parseCliArgs(argv: string[]): CliOptions {
   const { values } = parseArgs({
@@ -55,6 +61,9 @@ export function parseCliArgs(argv: string[]): CliOptions {
     options: {
       endpoint: { type: 'string' },
       'set-id': { type: 'string' },
+      token: { type: 'string' },
+      origin: { type: 'string' },
+      cases: { type: 'string' },
       strict: { type: 'boolean', default: false },
       output: { type: 'string' },
       timeout: { type: 'string', default: '15000' },
@@ -65,15 +74,26 @@ export function parseCliArgs(argv: string[]): CliOptions {
 
   const endpoint = values.endpoint?.trim();
   const setId = values['set-id']?.trim();
+  const token = values.token?.trim();
+  const origin = values.origin?.trim();
   const timeoutMs = Number(values.timeout);
-  if (!endpoint || !setId || !Number.isInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 120000) {
-    throw new Error('Usage: --endpoint <url> --set-id <uuid> [--strict] [--output <file>] [--timeout <ms>]');
+  const rawCases = values.cases?.trim();
+  const caseIds = rawCases ? rawCases.split(',').map((c) => c.trim()).filter(Boolean) : undefined;
+  if (!endpoint || !setId || !token || !origin || !Number.isInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 120000) {
+    throw new Error('Usage: --endpoint <url> --set-id <uuid> --token <value> --origin <url> [--cases <T1,T2>] [--strict] [--output <file>] [--timeout <ms>]');
   }
 
   new URL(endpoint);
+  const parsedOrigin = new URL(origin);
+  if (parsedOrigin.origin !== origin) {
+    throw new Error('--origin must be an exact origin without path or trailing slash.');
+  }
   return {
     endpoint: endpoint.replace(/\/$/, ''),
     setId,
+    token,
+    origin,
+    ...(caseIds ? { caseIds } : {}),
     strict: Boolean(values.strict),
     ...(values.output ? { output: values.output } : {}),
     timeoutMs,
@@ -94,8 +114,16 @@ function assertStrict(caseDef: SmokeCase, response: RetrievalResponse) {
   if (response.planTrace.fastPath !== caseDef.expectedFastPath) {
     throw new Error(`Expected fastPath ${caseDef.expectedFastPath}, got ${response.planTrace.fastPath}`);
   }
-  if (response.planTrace.intent && response.planTrace.intent !== caseDef.expectedIntent) {
-    throw new Error(`Expected intent ${caseDef.expectedIntent}, got ${response.planTrace.intent}`);
+  if (response.planTrace.intent !== caseDef.expectedIntent) {
+    throw new Error(`Expected intent ${caseDef.expectedIntent}, got ${response.planTrace.intent ?? 'missing'}`);
+  }
+  if (
+    caseDef.expectedSourceDocumentTitle &&
+    !response.items.some(
+      (item) => item.type === 'chunk' && item.sourceDocumentTitle === caseDef.expectedSourceDocumentTitle
+    )
+  ) {
+    throw new Error(`Expected citation from ${caseDef.expectedSourceDocumentTitle}`);
   }
   if (caseDef.requirePath && !response.items.some((item) => item.type === 'edge' && item.supportingChunkIds.length > 0)) {
     throw new Error('Expected at least one closed edge path with supporting chunks');
@@ -113,9 +141,14 @@ async function fetchCase(options: CliOptions, caseDef: SmokeCase): Promise<Retri
   try {
     const response = await fetch(`${options.endpoint}/api/v1/sets/${encodeURIComponent(options.setId)}/retrieve`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Correlation-ID': crypto.randomUUID() },
+      headers: {
+        Authorization: `Bearer ${options.token}`,
+        Origin: options.origin,
+        'Content-Type': 'application/json',
+        'X-Correlation-ID': crypto.randomUUID(),
+      },
       body: JSON.stringify({
-        query: `smoke-${caseDef.id}`,
+        query: QUERY_BY_CASE_ID.get(caseDef.id) ?? caseDef.id,
         limit: 10,
         includeInferred: true,
         recentTurns: [],
@@ -131,11 +164,16 @@ async function fetchCase(options: CliOptions, caseDef: SmokeCase): Promise<Retri
 
 export async function runAcceptanceCli(options: CliOptions): Promise<{ passed: boolean; results: SmokeResult[] }> {
   const results: SmokeResult[] = [];
-  for (const caseDef of SMOKE_CASES) {
+  const selectedCases = options.caseIds && options.caseIds.length > 0
+    ? SMOKE_CASES.filter((c) => options.caseIds!.includes(c.id))
+    : SMOKE_CASES;
+  for (const caseDef of selectedCases) {
     const startedAt = Date.now();
     try {
       const parsed = await fetchCase(options, caseDef);
-      if (options.strict) assertStrict(caseDef, parsed);
+      // Scenario expectations define acceptance. A schema-valid but semantically wrong
+      // response must never be reported as passed, even when --strict is omitted.
+      assertStrict(caseDef, parsed);
       results.push({
         id: caseDef.id,
         passed: true,
@@ -147,11 +185,12 @@ export async function runAcceptanceCli(options: CliOptions): Promise<{ passed: b
         snapshotId: parsed.snapshotId,
       });
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'unknown error';
       results.push({
         id: caseDef.id,
         passed: false,
         latencyMs: Date.now() - startedAt,
-        error: error instanceof Error ? error.message : 'unknown error',
+        error: message.replaceAll(options.token, '[REDACTED]'),
       });
     }
   }
@@ -180,7 +219,14 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
   return report.passed ? 0 : 1;
 }
 
-if (import.meta.url === `file://${process.argv[1]?.replace(/\\/g, '/')}`) {
+const currentFile = fileURLToPath(import.meta.url);
+const invokedFile = process.argv[1] ? resolve(process.argv[1]) : '';
+const isDirectRun =
+  currentFile === invokedFile ||
+  invokedFile.endsWith('cli.ts') ||
+  invokedFile.endsWith('cli.js');
+
+if (isDirectRun) {
   main().then((code) => {
     process.exitCode = code;
   });

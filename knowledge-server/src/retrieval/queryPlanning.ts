@@ -244,8 +244,12 @@ export async function resolveQueryEntities(
     };
   }
 
-  // 4. Extract tokens from query
-  const tokens = extractQueryTokens(query);
+  // 4. Keep pure identifiers intact. Splitting MAIN1.FCL_CYCLE_COUNTER into
+  // MAIN1/FCL_CYCLE_COUNTER broadens Neo4j substring matching and creates false ambiguity.
+  const trimmedQuery = query.trim();
+  const tokens = isPureIdentifierQuery(trimmedQuery)
+    ? [trimmedQuery.startsWith('`') && trimmedQuery.endsWith('`') ? trimmedQuery.slice(1, -1).trim() : trimmedQuery]
+    : extractQueryTokens(query);
   if (tokens.length === 0) {
     return {
       status: 'needsClarification',

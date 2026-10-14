@@ -132,6 +132,38 @@ describe('18-W0-02A: Retrieval Ontology Registry & Identifier/Entity Resolution'
       }
     });
 
+    it('keeps a pure qualified identifier intact so broad schema tokens cannot create false ambiguity', async () => {
+      let passedTokens: readonly string[] = [];
+      const target = {
+        urn: URN_TABLE_FCL_CYCLE_COUNTER,
+        canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+        kind: 'DatabaseObject' as const,
+      };
+      const unrelated = {
+        urn: 'urn:plannermate:oracle:ORACLE_TABLE:MAIN1.OTHER_TABLE',
+        canonicalName: 'MAIN1.OTHER_TABLE',
+        kind: 'DatabaseObject' as const,
+      };
+      const gateway: GraphRetrievalGateway = {
+        async resolveEntities(_snapshotId, tokens) {
+          passedTokens = tokens;
+          return tokens.includes('MAIN1') ? [target, unrelated] : [target];
+        },
+        async traverse(): Promise<any> {
+          throw new Error('Not implemented');
+        },
+      };
+
+      const result = await resolveQueryEntities(
+        gateway,
+        pinnedSnapshot,
+        'MAIN1.FCL_CYCLE_COUNTER'
+      );
+
+      expect(passedTokens).toEqual(['MAIN1.FCL_CYCLE_COUNTER']);
+      expect(result.status).toBe('resolved');
+    });
+
     it('detects numeric collision 60000006 and returns both process and container candidates as ambiguity', async () => {
       const gateway = new MockGraphGateway([
         {

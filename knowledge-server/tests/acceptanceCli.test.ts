@@ -39,9 +39,18 @@ const baseResponse = {
 
 describe('acceptance CLI', () => {
   it('parses required arguments', () => {
-    expect(parseCliArgs(['--endpoint', 'http://localhost:3001/', '--set-id', 'set-1', '--strict', '--timeout', '5000'])).toEqual({
+    expect(parseCliArgs([
+      '--endpoint', 'http://localhost:3001/',
+      '--set-id', 'set-1',
+      '--token', 'test-token',
+      '--origin', 'http://localhost:5173',
+      '--strict',
+      '--timeout', '5000',
+    ])).toEqual({
       endpoint: 'http://localhost:3001',
       setId: 'set-1',
+      token: 'test-token',
+      origin: 'http://localhost:5173',
       strict: true,
       timeoutMs: 5000,
     });
@@ -53,14 +62,120 @@ describe('acceptance CLI', () => {
     err.mockRestore();
   });
 
-  it('runs smoke cases and returns assertion failures as failed results', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ json: async () => baseResponse }));
-    const result = await runAcceptanceCli({ endpoint: 'http://localhost:3001', setId: 'set-1', strict: true, timeoutMs: 1000 });
+  it('sends bearer authorization and exact Origin without leaking the token', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ json: async () => baseResponse });
+    vi.stubGlobal('fetch', fetchMock);
+    const result = await runAcceptanceCli({
+      endpoint: 'http://localhost:3001',
+      setId: 'set-1',
+      token: 'test-secret-token',
+      origin: 'http://localhost:5173',
+      strict: true,
+      timeoutMs: 1000,
+    });
 
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:3001/api/v1/sets/set-1/retrieve',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer test-secret-token',
+          Origin: 'http://localhost:5173',
+        }),
+      })
+    );
+    const firstRequest = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(JSON.parse(String(firstRequest.body))).toMatchObject({
+      query: 'MAIN1.FCL_CYCLE_COUNTER',
+    });
     expect(result.passed).toBe(false);
     expect(result.results).toHaveLength(16);
     expect(result.results.some((r) => r.passed === false)).toBe(true);
     expect(JSON.stringify(result)).not.toContain('safe schema-required snippet');
+    expect(JSON.stringify(result)).not.toContain('test-secret-token');
+  });
+
+  it('rejects T1 semantic mismatch even without --strict', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      json: async () => ({
+        ...baseResponse,
+        outcome: 'UNSUPPORTED',
+        items: [],
+        planTrace: { fastPath: false, degradedFallback: false },
+        reason: 'unsupported',
+        unsupportedConstructs: ['planner'],
+      }),
+    }));
+
+    const result = await runAcceptanceCli({
+      endpoint: 'http://localhost:3001',
+      setId: 'set-1',
+      token: 'test-token',
+      origin: 'http://localhost:5173',
+      caseIds: ['T1'],
+      strict: false,
+      timeoutMs: 1000,
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.results[0]).toMatchObject({
+      id: 'T1',
+      passed: false,
+      error: 'Expected outcome READY, got UNSUPPORTED',
+    });
+  });
+
+  it('rejects T1 when server plan intent is missing', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      json: async () => ({
+        ...baseResponse,
+        planTrace: { fastPath: true, degradedFallback: false },
+        items: [{
+          ...baseResponse.items[0],
+          sourceDocumentTitle: '02-data-objects.md',
+          publishedContentHash: 'a'.repeat(64),
+        }],
+      }),
+    }));
+
+    const result = await runAcceptanceCli({
+      endpoint: 'http://localhost:3001',
+      setId: 'set-1',
+      token: 'test-token',
+      origin: 'http://localhost:5173',
+      caseIds: ['T1'],
+      strict: false,
+      timeoutMs: 1000,
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.results[0]?.error).toBe('Expected intent LOOKUP, got missing');
+  });
+
+  it('rejects T1 without a citation from 02-data-objects.md', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      json: async () => ({
+        ...baseResponse,
+        planTrace: { fastPath: true, degradedFallback: false, intent: 'LOOKUP' },
+        items: [{
+          ...baseResponse.items[0],
+          sourceDocumentTitle: 'wrong-source.md',
+          publishedContentHash: 'a'.repeat(64),
+        }],
+      }),
+    }));
+
+    const result = await runAcceptanceCli({
+      endpoint: 'http://localhost:3001',
+      setId: 'set-1',
+      token: 'test-token',
+      origin: 'http://localhost:5173',
+      caseIds: ['T1'],
+      strict: true,
+      timeoutMs: 1000,
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.results[0]?.error).toBe('Expected citation from 02-data-objects.md');
   });
 
   it('returns 1 when metadata-only audit detects forbidden output', async () => {
@@ -68,7 +183,12 @@ describe('acceptance CLI', () => {
     const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
 
-    await expect(main(['--endpoint', 'http://localhost:3001', '--set-id', 'set-1'])).resolves.toBe(1);
+    await expect(main([
+      '--endpoint', 'http://localhost:3001',
+      '--set-id', 'set-1',
+      '--token', 'test-token',
+      '--origin', 'http://localhost:5173',
+    ])).resolves.toBe(1);
 
     err.mockRestore();
     log.mockRestore();
