@@ -10,6 +10,7 @@ import {
   PinnedRetrievalSnapshot,
   NodeKind,
   EvidenceClassification,
+  Urn,
 } from '../types/graphProtocol.js';
 import type {
   ChunkItem,
@@ -22,9 +23,13 @@ import type { ProjectionSnapshot } from '../indexing/incrementalProjector.js';
 import type {
   EmbeddingProvider,
   GraphTraversalCriteria,
+  GraphTraversalPathRecord,
   GraphTraversalResult,
   OperationOptions,
 } from '../retrieval/contracts.js';
+import {
+  STATIC_TRAVERSAL_QUERIES,
+} from '../retrieval/graphTraversal.js';
 import {
   GraphRepository,
   deriveGenerationToken,
@@ -330,24 +335,6 @@ export const CYPHER_QUERIES = {
        OR any(a IN e.aliases WHERE toLower(a) = toLower(token))
     RETURN DISTINCT e.urn AS urn, e.canonicalName AS canonicalName, e.kind AS kind
     LIMIT 25
-  `,
-
-  TRAVERSE_FROM_SEEDS: `
-    MATCH (s:Entity {graphSnapshotId: $snapshotId})-[r]-(o:Entity {graphSnapshotId: $snapshotId})
-    WHERE s.urn IN $seedUrns AND r.graphSnapshotId = $snapshotId
-    MATCH (f:Fact {graphSnapshotId: $snapshotId, factKey: r.factKey})
-    RETURN DISTINCT
-      o.urn AS neighborUrn,
-      o.canonicalName AS neighborName,
-      o.kind AS neighborKind,
-      o.hasConflict AS neighborHasConflict,
-      f.factKey AS factKey,
-      f.subjectUrn AS subjectUrn,
-      f.relation AS relation,
-      f.objectUrn AS objectUrn,
-      f.effectiveClassification AS evidenceClass,
-      f.hasConflict AS edgeHasConflict
-    LIMIT $limit
   `,
 } as const;
 
@@ -1214,11 +1201,8 @@ export class Neo4jRepository implements GraphRepository {
   }
 
   /**
-   * D-13..D-16: Bounded 1-hop traversal from resolved seeds over Entity-Entity edges.
-   * Returns reached neighbor entities and the Fact-backed edges connecting them.
-   * ponytail: single undirected hop only; evidenceClass filtering + multi-hop
-   *   (plan.traversalSteps depth/direction) not applied yet — add when FLOW_TRAVERSAL
-   *   / IMPACT_ANALYSIS plans need depth>1.
+   * Plan-driven multi-hop traversal matching LogicalQueryPlan.traversalSteps.
+   * Uses STATIC_TRAVERSAL_QUERIES catalog with cycle prevention and node/edge caps.
    */
   async traverse(
     snapshotId: string,
@@ -1227,64 +1211,110 @@ export class Neo4jRepository implements GraphRepository {
   ): Promise<GraphTraversalResult> {
     if (options?.signal?.aborted) throw new Error('Graph traversal aborted');
     if (criteria.seedUrns.length === 0) {
-      return { entities: [], edges: [], truncated: false };
+      return { entities: [], edges: [], paths: [], truncated: false };
     }
 
-    const fetchLimit = criteria.limitNodes + criteria.limitEdges;
     const session = this.getSession();
+    const entityByUrn = new Map<string, EntityItem>();
+    const edgeByKey = new Map<string, EdgeItem>();
+    const pathRecords: GraphTraversalPathRecord[] = [];
+    let isTruncated = false;
+
+    const steps = criteria.plan.traversalSteps && criteria.plan.traversalSteps.length > 0
+      ? criteria.plan.traversalSteps
+      : [{ relationType: 'CONTAINS_STEP' as RelationType, direction: 'OUTGOING' as const, maxHops: 1 }];
+
+    const evidenceClasses = criteria.evidenceClasses && criteria.evidenceClasses.length > 0
+      ? [...criteria.evidenceClasses]
+      : ['OBSERVED', 'BUSINESS_APPROVED'];
+
     try {
-      const res = await session.run(CYPHER_QUERIES.TRAVERSE_FROM_SEEDS, {
-        snapshotId,
-        seedUrns: [...criteria.seedUrns],
-        limit: neo4j.int(fetchLimit),
-      });
+      for (const step of steps) {
+        if (options?.signal?.aborted) throw new Error('Graph traversal aborted');
 
-      const entityByUrn = new Map<string, EntityItem>();
-      const edgeByKey = new Map<string, EdgeItem>();
-
-      for (const r of res.records) {
-        const neighborUrn = r.get('neighborUrn');
-        if (neighborUrn && !entityByUrn.has(neighborUrn)) {
-          entityByUrn.set(neighborUrn, {
-            type: 'entity',
-            id: neighborUrn,
-            score: 1,
-            modalitiesContributed: ['graph'],
-            urn: neighborUrn,
-            canonicalName: r.get('neighborName'),
-            kind: r.get('neighborKind') as NodeKind,
-            snapshotId,
-            hasConflict: Boolean(r.get('neighborHasConflict')),
-          });
+        const queryKey = `${step.relationType}:${step.direction}:${step.maxHops}`;
+        const query = STATIC_TRAVERSAL_QUERIES[queryKey];
+        if (!query) {
+          continue;
         }
 
-        const factKey = r.get('factKey');
-        if (factKey && !edgeByKey.has(factKey)) {
-          edgeByKey.set(factKey, {
-            type: 'edge',
-            id: factKey,
-            score: 1,
-            modalitiesContributed: ['graph'],
-            factKey,
-            sourceUrn: r.get('subjectUrn'),
-            relationType: r.get('relation') as RelationType,
-            targetUrn: r.get('objectUrn'),
-            evidenceClass: r.get('evidenceClass') as EvidenceClassification,
-            supportingChunkIds: [],
-            snapshotId,
-            hasConflict: Boolean(r.get('edgeHasConflict')),
-          });
+        const res = await session.run(query, {
+          snapshotId,
+          seedUrns: [...criteria.seedUrns],
+          evidenceClasses,
+          pathLimit: neo4j.int(50),
+          maxEdges: neo4j.int(criteria.limitEdges),
+        });
+
+        for (const record of res.records) {
+          const rawNodes = record.get('pathNodes') as any[] || [];
+          const rawEdges = record.get('pathEdges') as any[] || [];
+
+          for (const node of rawNodes) {
+            if (node.urn && !entityByUrn.has(node.urn)) {
+              if (entityByUrn.size >= criteria.limitNodes) {
+                isTruncated = true;
+              } else {
+                entityByUrn.set(node.urn, {
+                  type: 'entity',
+                  id: node.urn,
+                  score: 1,
+                  modalitiesContributed: ['graph'],
+                  urn: node.urn,
+                  canonicalName: node.canonicalName || node.urn,
+                  kind: node.kind as NodeKind,
+                  snapshotId,
+                  firstSeenInDoc: node.firstSeenInDoc,
+                  hasConflict: false,
+                });
+              }
+            }
+          }
+
+          for (const edge of rawEdges) {
+            if (edge.factKey && !edgeByKey.has(edge.factKey)) {
+              if (edgeByKey.size >= criteria.limitEdges) {
+                isTruncated = true;
+              } else {
+                edgeByKey.set(edge.factKey, {
+                  type: 'edge',
+                  id: edge.factKey,
+                  score: 1,
+                  modalitiesContributed: ['graph'],
+                  factKey: edge.factKey,
+                  sourceUrn: edge.subjectUrn,
+                  relationType: edge.relationType as RelationType,
+                  targetUrn: edge.objectUrn,
+                  evidenceClass: edge.evidenceClass as EvidenceClassification,
+                  supportingChunkIds: Array.isArray(edge.supportingChunkIds) ? edge.supportingChunkIds : [],
+                  snapshotId,
+                  hasConflict: Boolean(edge.hasConflict),
+                });
+              }
+            }
+          }
+
+          if (rawNodes.length > 0 && rawEdges.length > 0) {
+            pathRecords.push({
+              nodeUrns: rawNodes.map((n: any) => n.urn as Urn),
+              edgeFactKeys: rawEdges.map((e: any) => e.factKey),
+              hopClassifications: rawEdges.map((e: any) => e.evidenceClass as EvidenceClassification),
+              hopSupportingChunkIds: rawEdges.map((e: any) =>
+                Array.isArray(e.supportingChunkIds) ? e.supportingChunkIds : []
+              ),
+              edgeSnapshotIds: rawEdges.map((e: any) => e.graphSnapshotId || snapshotId),
+              hasConflict: rawEdges.some((e: any) => Boolean(e.hasConflict)),
+            });
+          }
         }
       }
 
-      const entities = [...entityByUrn.values()].slice(0, criteria.limitNodes);
-      const edges = [...edgeByKey.values()].slice(0, criteria.limitEdges);
-      const truncated =
-        entityByUrn.size > criteria.limitNodes || edgeByKey.size > criteria.limitEdges;
+      const entities = [...entityByUrn.values()];
+      const edges = [...edgeByKey.values()];
 
-      return truncated
-        ? { entities, edges, truncated, truncationReason: 'RESULT_LIMIT_REACHED' }
-        : { entities, edges, truncated };
+      return isTruncated
+        ? { entities, edges, paths: pathRecords, truncated: true, truncationReason: 'RESULT_LIMIT_REACHED' }
+        : { entities, edges, paths: pathRecords, truncated: false };
     } finally {
       await session.close();
     }
