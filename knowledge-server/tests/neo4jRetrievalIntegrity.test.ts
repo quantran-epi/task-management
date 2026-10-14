@@ -162,3 +162,80 @@ describe('19.2-06-T1: Neo4j Constraints, Indexes, and SUPPORTED_BY Closure', () 
     });
   });
 });
+
+describe('19.2-06-T2: Multi-hop Plan-Driven Traversal and Deletion of Catch-All Query', () => {
+  it('verifies CYPHER_QUERIES does not define TRAVERSE_FROM_SEEDS catch-all query', () => {
+    expect((CYPHER_QUERIES as any).TRAVERSE_FROM_SEEDS).toBeUndefined();
+  });
+
+  it('executes ordered traversal steps with simple-path cycle prevention, caps, and returns GraphTraversalPathRecord', async () => {
+    const record1 = {
+      get: (k: string) => {
+        if (k === 'pathNodes') {
+          return [
+            { urn: URN_PROCESS_60000006, canonicalName: 'Credit Proc', kind: 'ScheduledProcess' },
+            { urn: URN_SUBPROCESS_10000304, canonicalName: 'Sub Proc', kind: 'ProcessStep' },
+          ];
+        }
+        if (k === 'pathEdges') {
+          return [
+            {
+              factKey: 'f'.repeat(64),
+              subjectUrn: URN_PROCESS_60000006,
+              relationType: 'CONTAINS_STEP',
+              objectUrn: URN_SUBPROCESS_10000304,
+              evidenceClass: 'OBSERVED',
+              hasConflict: false,
+              supportingChunkIds: ['chunk-101'],
+              graphSnapshotId: 'snap-1',
+            },
+          ];
+        }
+        return null;
+      },
+    };
+
+    const { mockDriver, mockSession, mockRun } = makeMockDriver([record1]);
+    const repo = new Neo4jRepository({ uri: 'bolt://test', driver: mockDriver as any });
+
+    const criteria = {
+      seedUrns: [URN_PROCESS_60000006],
+      plan: {
+        planId: '00000000-0000-0000-0000-000000000001',
+        queryIntent: 'FLOW_TRAVERSAL' as const,
+        seedUrns: [URN_PROCESS_60000006],
+        traversalSteps: [
+          {
+            relationType: 'CONTAINS_STEP' as const,
+            direction: 'OUTGOING' as const,
+            maxHops: 1,
+          },
+        ],
+        overallMaxDepth: 1,
+        includeInferred: false,
+        fulltextKeywords: ['credit'],
+        semanticQuery: 'credit process',
+      },
+      evidenceClasses: ['OBSERVED' as const],
+      limitNodes: 100,
+      limitEdges: 200,
+    };
+
+    const result = await repo.traverse('snap-1', criteria);
+
+    expect(result.entities).toHaveLength(2);
+    expect(result.edges).toHaveLength(1);
+    expect(result.edges[0]!.supportingChunkIds).toEqual(['chunk-101']);
+    expect(result.paths).toBeDefined();
+    expect(result.paths).toHaveLength(1);
+    expect(result.paths![0]!.nodeUrns).toEqual([URN_PROCESS_60000006, URN_SUBPROCESS_10000304]);
+    expect(result.paths![0]!.hopSupportingChunkIds).toEqual([['chunk-101']]);
+
+    // Verify session.run called with parameterized query containing simple path cycle check
+    expect(mockRun).toHaveBeenCalled();
+    const query = mockRun.mock.calls[0][0];
+    expect(query).toContain('ALL(n IN nodes(path) WHERE n.graphSnapshotId = $snapshotId AND single(m IN nodes(path) WHERE m = n))');
+    expect(query).toContain('CONTAINS_STEP');
+  });
+});
+
