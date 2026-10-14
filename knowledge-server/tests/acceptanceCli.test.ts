@@ -192,7 +192,39 @@ describe('acceptance CLI', () => {
     expect(result.results[0]?.error).toBe('Expected intent LOOKUP, got missing');
   });
 
-  it('rejects T1 without a citation from 02-data-objects.md', async () => {
+  it('accepts the live document title for 02-data-objects.md', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      json: async () => ({
+        ...baseResponse,
+        planTrace: { fastPath: true, degradedFallback: false, intent: 'LOOKUP' },
+        modalityStatus: {
+          fulltext: { status: 'ok', latencyMs: 1, itemCount: 1 },
+          vector: { status: 'ok', latencyMs: 1, itemCount: 1 },
+          graph: { status: 'ok', latencyMs: 1, itemCount: 0 },
+        },
+        items: [{
+          ...baseResponse.items[0],
+          sourceDocumentTitle: '02 — Data objects',
+          publishedContentHash: 'a'.repeat(64),
+        }],
+      }),
+    }));
+
+    const result = await runAcceptanceCli({
+      endpoint: 'http://localhost:3001',
+      setId: 'set-1',
+      token: 'test-token',
+      origin: 'http://localhost:5173',
+      caseIds: ['T1'],
+      strict: true,
+      timeoutMs: 1000,
+    });
+
+    expect(result.passed).toBe(true);
+    expect(result.results[0]?.sourceTitles).toEqual(['02 — Data objects']);
+  });
+
+  it('rejects T1 without a citation from the data objects document', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       json: async () => ({
         ...baseResponse,
@@ -216,7 +248,9 @@ describe('acceptance CLI', () => {
     });
 
     expect(result.passed).toBe(false);
-    expect(result.results[0]?.error).toBe('Expected citation from 02-data-objects.md');
+    expect(result.results[0]?.error).toBe(
+      'Expected citation from 02-data-objects.md or 02 — Data objects'
+    );
   });
 
   it('returns 1 when metadata-only audit detects forbidden output', async () => {

@@ -21,7 +21,7 @@ export interface SmokeCase {
   expectedIntent: string;
   expectedFastPath: boolean;
   expectedOutcome: RetrievalResponse['outcome'];
-  expectedSourceDocumentTitle?: string;
+  expectedSourceDocumentTitles?: string[];
   requirePath?: boolean;
 }
 
@@ -51,7 +51,7 @@ export const SMOKE_CASES: SmokeCase[] = LIVE_SCENARIOS.map((scenario) => ({
   expectedFastPath: scenario.expectedFastPath ?? false,
   expectedOutcome: scenario.expectedOutcome ?? 'READY',
   ...(scenario.id === 'T1' || scenario.id === 'T12' || scenario.id === 'T15'
-    ? { expectedSourceDocumentTitle: '02-data-objects.md' }
+    ? { expectedSourceDocumentTitles: ['02-data-objects.md', '02 — Data objects'] }
     : {}),
   ...(scenario.requirePath ? { requirePath: true } : {}),
 }));
@@ -121,12 +121,14 @@ function assertStrict(caseDef: SmokeCase, response: RetrievalResponse) {
     throw new Error(`Expected intent ${caseDef.expectedIntent}, got ${response.planTrace.intent ?? 'missing'}`);
   }
   if (
-    caseDef.expectedSourceDocumentTitle &&
+    caseDef.expectedSourceDocumentTitles &&
     !response.items.some(
-      (item) => item.type === 'chunk' && item.sourceDocumentTitle === caseDef.expectedSourceDocumentTitle
+      (item) =>
+        item.type === 'chunk' &&
+        caseDef.expectedSourceDocumentTitles!.includes(item.sourceDocumentTitle)
     )
   ) {
-    throw new Error(`Expected citation from ${caseDef.expectedSourceDocumentTitle}`);
+    throw new Error(`Expected citation from ${caseDef.expectedSourceDocumentTitles.join(' or ')}`);
   }
   if (caseDef.requirePath && !response.items.some((item) => item.type === 'edge' && item.supportingChunkIds.length > 0)) {
     throw new Error('Expected at least one closed edge path with supporting chunks');
