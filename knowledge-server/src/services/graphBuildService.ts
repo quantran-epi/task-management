@@ -148,6 +148,7 @@ export class GraphBuildService {
 
     // Run rebuild in background or await if invoked directly
     this.executeRebuild(setId, candidateSnapshotId).catch((err: unknown) => {
+      console.error('[GRAPH_BUILD_FATAL]', err);
       this.buildErrors.set(setId, err instanceof Error ? err : new Error(String(err)));
     }).finally(() => {
       this.inProgressSets.delete(setId);
@@ -403,6 +404,7 @@ export class GraphBuildService {
     return {
       code: 'REBUILD_FAILED',
       message: 'Xây dựng đồ thị tri thức thất bại. Kiểm tra máy chủ rồi thử lại.',
+      details: error.message ? error.message.slice(0, 400) : undefined,
     };
   }
 
@@ -432,7 +434,7 @@ export class GraphBuildService {
         currentStage: this.currentStages.get(setId) || 'Preparing',
         nodeCount: activeView ? activeView.nodeCount : 0,
         factCount: activeView ? activeView.factCount : 0,
-        evidenceCount: activeView ? activeView.relationCount : 0,
+        evidenceCount: activeView ? activeView.evidenceCount : 0,
         conflictCount: activeView ? activeView.conflictCount : 0,
         quarantineCount: activeView ? activeView.quarantineCount : 0,
         ontologyVersion: ONTOLOGY_VERSION,
@@ -454,7 +456,7 @@ export class GraphBuildService {
         ...(activeView ? { activeGraphSnapshotId: activeView.graphSnapshotId } : {}),
         nodeCount: activeView ? activeView.nodeCount : 0,
         factCount: activeView ? activeView.factCount : 0,
-        evidenceCount: activeView ? activeView.relationCount : 0,
+        evidenceCount: activeView ? activeView.evidenceCount : 0,
         conflictCount: activeView ? activeView.conflictCount : 0,
         quarantineCount: activeView ? activeView.quarantineCount : 0,
         ontologyVersion: activeView?.ontologyVersion ?? ONTOLOGY_VERSION,
@@ -496,7 +498,7 @@ export class GraphBuildService {
       activeGraphSnapshotId: activeView.graphSnapshotId,
       nodeCount: activeView.nodeCount,
       factCount: activeView.factCount,
-      evidenceCount: activeView.relationCount,
+      evidenceCount: activeView.evidenceCount,
       conflictCount: activeView.conflictCount,
       quarantineCount: activeView.quarantineCount,
       ontologyVersion: activeView.ontologyVersion,

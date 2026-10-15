@@ -794,12 +794,37 @@ function handleDataObjectsTables(table: Table, ctx: TraversalContext): void {
     const rowEndOffset = row.position?.end?.offset ?? table.position?.end?.offset ?? 0;
     const rawSnippet = ctx.documentBody.slice(rowStartOffset, rowEndOffset);
 
-    // Look for procedure tokens like [A-Z0-9_]+_PKG\.[A-Z0-9_]+
-    const procMatches = text.match(/([A-Z0-9_]+_PKG)\.([A-Z0-9_]+)/gi) || [];
+    // Look for package procedures, including source prose that abbreviates later calls to an unqualified method.
+    const qualifiedProcMatches = text.match(/([A-Z0-9_]+_PKG)\.([A-Z0-9_]+)/gi) || [];
+    const packagePrefix = qualifiedProcMatches[0]?.match(/^([A-Z0-9_]+_PKG)\./i)?.[1];
+    const procMatches = [...qualifiedProcMatches];
+    if (packagePrefix) {
+      for (const match of text.matchAll(/\/\s*`?([a-z][a-z0-9_]+)`?/g)) {
+        procMatches.push(`${packagePrefix}.${match[1]}`);
+      }
+    }
     for (const procMatch of procMatches) {
       const procNorm = normalizeTechnicalIdentifier(procMatch, 'MAIN1');
       if (!procNorm.isQuarantined) {
-        const procUrn = buildUrn('plsql', 'PLSQL_PROCEDURE', procNorm.qualifiedIdentifier);
+        const procedureKey = procNorm.subObject
+          ? `${procNorm.objectName}.${procNorm.subObject}`
+          : procNorm.qualifiedIdentifier;
+        const procUrn = buildUrn('plsql', 'PLSQL_PROCEDURE', procedureKey);
+        addNode(ctx, {
+          urn: procUrn,
+          kind: 'SoftwareComponent',
+          canonicalName: procedureKey,
+          sourceSystem: 'plsql',
+          nativeType: 'PLSQL_PROCEDURE',
+          normalizedKey: procedureKey,
+          subkind: 'PLSQL_PROCEDURE',
+          properties: {
+            schema: procNorm.schema || 'MAIN1',
+            package: procNorm.objectName,
+            ...(procNorm.subObject ? { procedure: procNorm.subObject } : {}),
+          },
+          aliases: [procMatch],
+        });
         addFactAndEvidence(
           ctx,
           procUrn,

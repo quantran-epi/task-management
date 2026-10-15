@@ -11,6 +11,7 @@ import {
 import type {
   LogicalQueryPlan,
   TraversalStep,
+  ChunkItem,
   EntityItem,
   EdgeItem,
   ModalityStatusDetail,
@@ -47,9 +48,38 @@ function buildStaticTemplate(
     'UNWIND $seedUrns AS seedUrn',
     'MATCH (seed:Entity {urn: seedUrn, graphSnapshotId: $snapshotId})',
     `MATCH path = (seed)${relPattern}(target:Entity {graphSnapshotId: $snapshotId})`,
-    'WHERE ALL(r IN relationships(path) WHERE r.graphSnapshotId = $snapshotId AND r.effectiveClassification IN $evidenceClasses)',
-    '  AND ALL(n IN nodes(path) WHERE n.graphSnapshotId = $snapshotId AND single(m IN nodes(path) WHERE m = n))',
-    'WITH path',
+    'WHERE ALL(n IN nodes(path) WHERE n.graphSnapshotId = $snapshotId AND single(m IN nodes(path) WHERE m = n))',
+    'UNWIND range(0, size(relationships(path)) - 1) AS relIndex',
+    'WITH path, relIndex, relationships(path)[relIndex] AS rel',
+    'MATCH (fact:Fact {graphSnapshotId: $snapshotId, factKey: rel.factKey})',
+    'WHERE fact.effectiveClassification IN $evidenceClasses',
+    'MATCH (fact)-[:SUPPORTED_BY]->(chunk:Chunk {graphSnapshotId: $snapshotId})',
+    'WITH path, relIndex, fact, chunk',
+    'ORDER BY relIndex, chunk.chunkId',
+    'WITH path, relIndex, fact, collect(DISTINCT {',
+    '  chunkId: chunk.chunkId,',
+    '  sourceDocumentId: chunk.documentId,',
+    '  sourceDocumentTitle: chunk.documentTitle,',
+    '  publishedContentHash: chunk.publishedContentHash,',
+    '  headingPath: chunk.headingPath,',
+    '  lineStart: chunk.startLine,',
+    '  lineEnd: chunk.endLine,',
+    '  rawSnippet: chunk.text',
+    '}) AS supportingChunks',
+    'ORDER BY relIndex',
+    'WITH path, collect({',
+    '  factKey: fact.factKey,',
+    '  subjectUrn: fact.subjectUrn,',
+    '  relationType: fact.relation,',
+    '  objectUrn: fact.objectUrn,',
+    '  evidenceClass: fact.effectiveClassification,',
+    '  hasConflict: coalesce(fact.hasConflict, false),',
+    '  supportingChunks: supportingChunks,',
+    '  graphSnapshotId: fact.graphSnapshotId',
+    '}) AS pathEdges',
+    'WHERE size(pathEdges) = size(relationships(path))',
+    'WITH path, pathEdges',
+    'ORDER BY [node IN nodes(path) | node.urn], [edge IN pathEdges | edge.factKey]',
     'LIMIT $pathLimit',
     'RETURN',
     '  [node IN nodes(path) | {',
@@ -58,16 +88,7 @@ function buildStaticTemplate(
     '    kind: node.kind,',
     '    firstSeenInDoc: node.firstSeenInDoc',
     '  }] AS pathNodes,',
-    '  [rel IN relationships(path) | {',
-    '    factKey: rel.factKey,',
-    '    subjectUrn: rel.subjectUrn,',
-    '    relationType: type(rel),',
-    '    objectUrn: rel.objectUrn,',
-    '    evidenceClass: rel.effectiveClassification,',
-    '    hasConflict: coalesce(rel.hasConflict, false),',
-    '    supportingChunkIds: coalesce(rel.supportingChunkIds, []),',
-    '    graphSnapshotId: rel.graphSnapshotId',
-    '  }] AS pathEdges',
+    '  pathEdges',
     'LIMIT $maxEdges',
   ].join('\n');
 }
@@ -258,6 +279,7 @@ export interface OrderedPathCandidate {
 
 export interface BoundedGraphTraversalResult {
   readonly status: ModalityStatusDetail;
+  readonly chunks: readonly ChunkItem[];
   readonly entities: readonly EntityItem[];
   readonly edges: readonly EdgeItem[];
   readonly paths: readonly OrderedPathCandidate[];
@@ -298,6 +320,7 @@ export async function runBoundedGraphTraversal(
         itemCount: 0,
         reason: 'PINNED_SNAPSHOT_UNAVAILABLE',
       },
+      chunks: [],
       entities: [],
       edges: [],
       paths: [],
@@ -314,6 +337,7 @@ export async function runBoundedGraphTraversal(
         itemCount: 0,
         reason: 'NO_GRAPH_SEED',
       },
+      chunks: [],
       entities: [],
       edges: [],
       paths: [],
@@ -336,6 +360,7 @@ export async function runBoundedGraphTraversal(
             itemCount: 0,
             reason: 'NO_GRAPH_SEED',
           },
+          chunks: [],
           entities: [],
           edges: [],
           paths: [],
@@ -348,7 +373,8 @@ export async function runBoundedGraphTraversal(
           itemCount: 0,
           reason: 'PROVIDER_ERROR',
         },
-        entities: [],
+        chunks: [],
+      entities: [],
         edges: [],
         paths: [],
       };
@@ -397,7 +423,8 @@ export async function runBoundedGraphTraversal(
           itemCount: 0,
           reason: 'TIMEOUT',
         },
-        entities: [],
+        chunks: [],
+      entities: [],
         edges: [],
         paths: [],
       };
@@ -415,7 +442,8 @@ export async function runBoundedGraphTraversal(
           itemCount: 0,
           reason: 'PINNED_SNAPSHOT_UNAVAILABLE',
         },
-        entities: [],
+        chunks: [],
+      entities: [],
         edges: [],
         paths: [],
       };
@@ -428,6 +456,7 @@ export async function runBoundedGraphTraversal(
         itemCount: 0,
         reason: 'PROVIDER_ERROR',
       },
+      chunks: [],
       entities: [],
       edges: [],
       paths: [],
@@ -436,6 +465,17 @@ export async function runBoundedGraphTraversal(
 
   const allowedEvidenceSet = new Set(validatedPlan.evidenceClasses);
   let isTruncated = rawResult.truncated === true;
+
+  const chunkMap = new Map<string, ChunkItem>();
+  for (const rawChunk of rawResult.chunks ?? []) {
+    if (!rawChunk.id || rawChunk.snapshotId !== pinnedSnapshotId || chunkMap.has(rawChunk.id)) continue;
+    chunkMap.set(rawChunk.id, {
+      ...rawChunk,
+      modalitiesContributed: ['graph'],
+      snapshotId: pinnedSnapshotId,
+    });
+  }
+  const chunkList = Array.from(chunkMap.values()).slice(0, GRAPH_CAP_MAX_EDGES);
 
   // 6. Map and deduplicate entities by URN
   const entityMap = new Map<string, EntityItem>();
@@ -451,8 +491,8 @@ export async function runBoundedGraphTraversal(
         canonicalName: rawEntity.canonicalName,
         kind: rawEntity.kind,
         snapshotId: pinnedSnapshotId,
-        firstSeenInDoc: rawEntity.firstSeenInDoc,
-        conflictGroupId: rawEntity.conflictGroupId,
+        ...(rawEntity.firstSeenInDoc ? { firstSeenInDoc: rawEntity.firstSeenInDoc } : {}),
+        ...(rawEntity.conflictGroupId ? { conflictGroupId: rawEntity.conflictGroupId } : {}),
         hasConflict: !!rawEntity.hasConflict,
       });
     }
@@ -520,7 +560,7 @@ export async function runBoundedGraphTraversal(
   }
 
   const latencyMs = Math.max(0, Date.now() - startMs);
-  const itemCount = entityList.length + edgeList.length;
+  const itemCount = chunkList.length + entityList.length + edgeList.length;
 
   return {
     status: {
@@ -529,6 +569,7 @@ export async function runBoundedGraphTraversal(
       itemCount,
       reason: isTruncated ? 'RESULT_LIMIT_REACHED' : undefined,
     },
+    chunks: chunkList,
     entities: entityList,
     edges: edgeList,
     paths,

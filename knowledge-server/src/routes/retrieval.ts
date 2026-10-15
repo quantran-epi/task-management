@@ -22,6 +22,49 @@ function invalid(reply: FastifyReply) {
   });
 }
 
+type SafeRetrievalErrorCode =
+  | 'RESPONSE_VALIDATION_ERROR'
+  | 'CANDIDATE_INTEGRITY_MISMATCH'
+  | 'NEO4J_ERROR'
+  | 'TYPE_ERROR'
+  | 'ABORT_ERROR'
+  | 'INTERNAL_ERROR';
+
+function safeZodIssues(error: z.ZodError): Array<{ code: string; path: string }> {
+  return error.issues.slice(0, 5).map((issue) => ({
+    code: issue.code,
+    path: issue.path
+      .slice(0, 5)
+      .map((segment) => {
+        const value = String(segment);
+        return /^[A-Za-z0-9_-]{1,64}$/.test(value) ? value : '[field]';
+      })
+      .join('.'),
+  }));
+}
+
+function classifyRetrievalError(error: unknown): {
+  errorCode: SafeRetrievalErrorCode;
+  issues?: Array<{ code: string; path: string }>;
+} {
+  if (error instanceof z.ZodError) {
+    return { errorCode: 'RESPONSE_VALIDATION_ERROR', issues: safeZodIssues(error) };
+  }
+  if (error instanceof Error && error.message === 'CANDIDATE_INTEGRITY_MISMATCH') {
+    return { errorCode: 'CANDIDATE_INTEGRITY_MISMATCH' };
+  }
+  if (error instanceof Error && error.name === 'Neo4jError') {
+    return { errorCode: 'NEO4J_ERROR' };
+  }
+  if (error instanceof Error && error.name === 'TypeError') {
+    return { errorCode: 'TYPE_ERROR' };
+  }
+  if (error instanceof Error && error.name === 'AbortError') {
+    return { errorCode: 'ABORT_ERROR' };
+  }
+  return { errorCode: 'INTERNAL_ERROR' };
+}
+
 export function registerRetrievalRoutes(
   app: FastifyInstance,
   retrievalService: Pick<RetrievalService, 'retrieve'>,
@@ -59,15 +102,24 @@ export function registerRetrievalRoutes(
         },
       });
       return reply.code(200).send(validated);
-    } catch {
+    } catch (error: unknown) {
+      const diagnostic = classifyRetrievalError(error);
       phaseLogger.log({
         outcome: 'error',
         latencyMs: Date.now() - startedAt,
         safeIds: params.success ? [params.data.setId] : [],
         counts: {},
-        metadata: { code: 'INTERNAL_ERROR' },
+        metadata: diagnostic,
       });
-      request.log.error({ code: 'INTERNAL_ERROR', setId: params.data.setId, correlationId: phaseLogger.correlationId }, 'Retrieval failed');
+      request.log.error(
+        {
+          code: 'INTERNAL_ERROR',
+          setId: params.data.setId,
+          correlationId: phaseLogger.correlationId,
+          ...diagnostic,
+        },
+        'Retrieval failed'
+      );
       return reply.code(500).send({
         error: { code: 'INTERNAL_ERROR', message: 'Request could not be processed.' },
       });

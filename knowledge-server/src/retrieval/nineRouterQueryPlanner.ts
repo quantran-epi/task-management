@@ -42,6 +42,13 @@ interface ValidationResult {
   readonly issues: readonly string[];
 }
 
+export class PlannerTransportError extends Error {
+  constructor() {
+    super('PLANNER_TRANSPORT_FAILURE');
+    this.name = 'PlannerTransportError';
+  }
+}
+
 export class NineRouterQueryPlanner implements QueryPlanner {
   private readonly config: NineRouterPlannerConfig;
   private readonly fetchFn: typeof fetch;
@@ -149,29 +156,51 @@ export class NineRouterQueryPlanner implements QueryPlanner {
 
     return [
       'You are a deterministic query planner for a banking IT knowledge assistant.',
-      'Translate user questions into a JSON LogicalQueryPlan matching the schema below.',
-      'RULES:',
-      '1. NEVER generate or accept Cypher statements, SQL, or arbitrary code.',
-      '2. seedUrns MUST only contain URNs from the provided resolved candidates.',
-      '3. traversalSteps MUST only use registered relation types and obey max hops.',
-      '4. Output ONLY valid JSON adhering strictly to LogicalQueryPlanSchema.',
-      '5. If multiple candidates are provided, disambiguate using query intent or select matching candidate from list.',
+      'Return exactly one complete JSON object. Never return Markdown fences, commentary, partial patches, Cypher, SQL, code, or unknown fields.',
       '',
-      'RESOLVED CANDIDATES (Choose from these allowlisted URNs):',
+      'REQUIRED JSON SHAPE:',
+      '{',
+      '  "planId": "00000000-0000-4000-8000-000000000000",',
+      '  "queryIntent": "LOOKUP",',
+      '  "seedUrns": ["<one of the resolved candidate URNs below>"],',
+      '  "traversalSteps": [],',
+      '  "overallMaxDepth": 1,',
+      '  "includeInferred": false,',
+      '  "fulltextKeywords": ["non-empty search phrase"],',
+      '  "semanticQuery": "non-empty semantic search text"',
+      '}',
+      '',
+      'FIELD CONTRACT:',
+      '- planId: valid UUID.',
+      '- queryIntent: exactly LOOKUP, FLOW_TRAVERSAL, IMPACT_ANALYSIS, or DEPENDENCY_CHECK.',
+      '- seedUrns: 1..5 values copied exactly from RESOLVED CANDIDATES.',
+      '- traversalSteps: 0..5 objects with only relationType, direction, maxHops, and optional targetKind.',
+      '- direction: exactly OUTGOING, INCOMING, or BOTH.',
+      '- maxHops: integer 1..3 and no greater than registered relation maxHops.',
+      '- overallMaxDepth: integer 1..3 and at least the complete requested path depth.',
+      '- includeInferred: boolean; never enable unless user explicitly requests inferred evidence.',
+      '- fulltextKeywords: at least one non-empty string.',
+      '- semanticQuery: non-empty string preserving user meaning.',
+      '',
+      'INTENT CONTRACT:',
+      '- LOOKUP: entity properties, catalog details, data tables, or calculation cycles. Use zero traversal steps unless a direct relation is required.',
+      '- FLOW_TRAVERSAL: ordered execution steps or flow from one component to another. Use ordered traversal steps matching the flow.',
+      '- IMPACT_ANALYSIS: upstream/downstream effects of changing an entity. Use relation directions that discover affected dependents. For DatabaseObject seeds, use reverse INCOMING steps: READS_FROM or WRITES_TO to SoftwareComponent, then CALLS to SoftwareComponent, then INVOKES to ProcessStep.',
+      '- DEPENDENCY_CHECK: whether named entities have a direct dependency. Do not use for general property or catalog questions.',
+      '',
+      'EXAMPLES OF INTENT ONLY; replace every value with allowed runtime values:',
+      '- "What data tables and calculation cycles belong to this container?" => LOOKUP.',
+      '- "What execution steps run from Scheduler to PL/SQL?" => FLOW_TRAVERSAL.',
+      '- "What packages and processes are affected if this table changes?" => IMPACT_ANALYSIS.',
+      '- "Does package A directly read table B?" => DEPENDENCY_CHECK.',
+      '',
+      'RESOLVED CANDIDATES (only allowed seedUrns):',
       candidatesStr || 'None',
       '',
       'REGISTERED RELATION TYPES:',
       relationsStr,
       '',
-      'SCHEMA FIELDS:',
-      '- planId: UUID string',
-      '- queryIntent: "LOOKUP" | "FLOW_TRAVERSAL" | "IMPACT_ANALYSIS" | "DEPENDENCY_CHECK"',
-      '- seedUrns: array of URN strings (1..5)',
-      '- traversalSteps: array of { relationType, direction ("OUTGOING"|"INCOMING"|"BOTH"), maxHops (1..3), targetKind? } (0..5)',
-      '- overallMaxDepth: integer 1..3',
-      '- includeInferred: boolean',
-      '- fulltextKeywords: array of non-empty strings (>=1)',
-      '- semanticQuery: non-empty string',
+      'If multiple candidates exist, select only candidates supported by the question. Output JSON only.',
     ].join('\n');
   }
 
@@ -193,6 +222,7 @@ export class NineRouterQueryPlanner implements QueryPlanner {
       messages,
       response_format: { type: 'json_object' },
       temperature: 0.0,
+      stream: false,
     };
 
     const response = await this.fetchFn(url, {
@@ -206,20 +236,55 @@ export class NineRouterQueryPlanner implements QueryPlanner {
     });
 
     if (!response.ok) {
-      const errText = await response.text().catch(() => '');
-      throw new Error(`9router HTTP ${response.status}: ${errText.slice(0, 200)}`);
+      throw new PlannerTransportError();
     }
 
-    const data = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-    };
+    let rawText: string;
+    try {
+      rawText = await response.text();
+    } catch {
+      throw new PlannerTransportError();
+    }
+    let rawContent: string | undefined;
 
-    const rawContent = data.choices?.[0]?.message?.content;
+    // Some approved proxies stream despite stream=false. Require every SSE data frame to parse.
+    if (rawText.trim().startsWith('data:')) {
+      let accumulated = '';
+      for (const line of rawText.split('\n')) {
+        const frame = line.trim();
+        if (!frame.startsWith('data:')) continue;
+        const payload = frame.slice(5).trim();
+        if (payload === '[DONE]') continue;
+        try {
+          const parsed = JSON.parse(payload);
+          const content = parsed.choices?.[0]?.delta?.content ?? parsed.choices?.[0]?.message?.content;
+          if (typeof content === 'string') accumulated += content;
+        } catch {
+          throw new PlannerTransportError();
+        }
+      }
+      rawContent = accumulated;
+    } else {
+      try {
+        const data = JSON.parse(rawText) as {
+          choices?: Array<{ message?: { content?: string } }>;
+        };
+        rawContent = data.choices?.[0]?.message?.content;
+      } catch {
+        throw new PlannerTransportError();
+      }
+    }
+
     if (!rawContent) {
-      throw new Error('9router returned empty completion content');
+      throw new PlannerTransportError();
     }
 
-    return JSON.parse(extractJsonContent(rawContent));
+    try {
+      return JSON.parse(extractJsonContent(rawContent));
+    } catch {
+      // Completed model output with invalid JSON is schema failure and gets one repair.
+      return rawContent;
+    }
   }
 
   async plan(
@@ -233,16 +298,7 @@ export class NineRouterQueryPlanner implements QueryPlanner {
       { role: 'user', content: request.query },
     ];
 
-    let firstOutput: unknown;
-    try {
-      firstOutput = await this.executeCompletion(initialMessages, options);
-    } catch (err) {
-      return {
-        type: 'unsupported',
-        reason: 'PLANNER_SCHEMA_FAILURE',
-        unsupportedConstructs: [err instanceof Error ? err.message : 'HTTP error'],
-      };
-    }
+    const firstOutput = await this.executeCompletion(initialMessages, options);
 
     const firstCheck = this.validatePlan(firstOutput, context);
     if (firstCheck.valid && firstCheck.plan) {
@@ -259,25 +315,13 @@ export class NineRouterQueryPlanner implements QueryPlanner {
       { role: 'assistant', content: JSON.stringify(firstOutput) },
       {
         role: 'user',
-        content: `Repair this logical query plan. Schema and ontology validation errors: ${firstCheck.issues.join(
+        content: `Return one complete corrected LogicalQueryPlan JSON object only. Do not return prose, Markdown, or a partial patch. Schema and ontology validation errors: ${firstCheck.issues.join(
           '; '
-        )}. Output ONLY corrected JSON.`,
+        )}.`,
       },
     ];
 
-    let secondOutput: unknown;
-    try {
-      secondOutput = await this.executeCompletion(repairMessages, options);
-    } catch (err) {
-      return {
-        type: 'unsupported',
-        reason: 'PLANNER_SCHEMA_FAILURE',
-        unsupportedConstructs: [
-          ...firstCheck.issues,
-          err instanceof Error ? err.message : 'HTTP error on repair',
-        ],
-      };
-    }
+    const secondOutput = await this.executeCompletion(repairMessages, options);
 
     const secondCheck = this.validatePlan(secondOutput, context);
     if (secondCheck.valid && secondCheck.plan) {

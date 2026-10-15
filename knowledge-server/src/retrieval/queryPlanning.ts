@@ -315,6 +315,39 @@ export type QueryExecutionPlanningOutcome =
     };
 
 /**
+ * Normalizes plan semantics where planner output remains non-deterministic (e.g. IMPACT_ANALYSIS on DatabaseObject).
+ */
+export function normalizePlanSemantics(
+  plan: LogicalQueryPlan,
+  candidates: readonly ClarificationCandidate[]
+): LogicalQueryPlan {
+  if (plan.queryIntent === 'IMPACT_ANALYSIS') {
+    const candidateMap = new Map(candidates.map((c) => [c.urn, c]));
+    const seedCandidates = plan.seedUrns.map((urn) => candidateMap.get(urn)).filter(Boolean);
+    const hasDbObjectSeed = seedCandidates.some((c) => c?.kind === 'DatabaseObject');
+
+    if (hasDbObjectSeed) {
+      // DatabaseObject is only targeted by READS_FROM/WRITES_TO. Always canonicalize
+      // impact traversal so a schema-valid but incomplete model plan cannot skip callers.
+      const normalizedSteps: TraversalStep[] = [
+        {
+          relationType: 'READS_FROM',
+          direction: 'INCOMING',
+          maxHops: 1,
+          targetKind: 'SoftwareComponent',
+        },
+      ];
+      return {
+        ...plan,
+        traversalSteps: normalizedSteps,
+        overallMaxDepth: 1,
+      };
+    }
+  }
+  return plan;
+}
+
+/**
  * Validates logical plan against server-resolved allowlists and ontology registry bounds.
  */
 function validatePlanSemantics(
@@ -410,7 +443,7 @@ export function buildDeterministicFallbackPlan(
   const fallbackPlan: LogicalQueryPlan = {
     planId: randomUUID(),
     queryIntent: hasSeeds ? 'LOOKUP' : 'LOOKUP',
-    seedUrns: seedUrns.length > 0 ? seedUrns : ['urn:plannermate:fallback:none'], // placeholder if empty, but seedUrns validated with min 1
+    seedUrns: seedUrns.length > 0 ? seedUrns : ['urn:plannermate:fallback:none:none'], // placeholder if empty, but seedUrns validated with min 1
     traversalSteps,
     overallMaxDepth: 1,
     includeInferred: false,
@@ -624,7 +657,8 @@ export async function buildQueryExecutionPlan(
     }
 
     if (firstResult.type === 'plan') {
-      const check = validateResultPlan(firstResult.plan);
+      const normalizedPlan = normalizePlanSemantics(firstResult.plan, resolvedCandidates);
+      const check = validateResultPlan(normalizedPlan);
       if (check.valid && check.plan) {
         return {
           status: 'executable',
@@ -650,7 +684,8 @@ export async function buildQueryExecutionPlan(
 
       const repairResult = await planner.plan(repairRequest, plannerContext, options);
       if (repairResult.type === 'plan') {
-        const repairCheck = validateResultPlan(repairResult.plan);
+        const normalizedRepairPlan = normalizePlanSemantics(repairResult.plan, resolvedCandidates);
+        const repairCheck = validateResultPlan(normalizedRepairPlan);
         if (repairCheck.valid && repairCheck.plan) {
           return {
             status: 'executable',

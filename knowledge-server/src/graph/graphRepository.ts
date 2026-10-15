@@ -250,6 +250,7 @@ export class InMemoryGraphRepository implements GraphRepository {
       conflictCount: candidate.conflicts.length,
       quarantineCount: candidate.quarantines.length,
       approvedFactCount: approvedCount,
+      evidenceCount: new Set(candidate.evidence.map((evidence) => evidence.factKey)).size,
       retrievalGeneration: gen?.metadata,
     };
 

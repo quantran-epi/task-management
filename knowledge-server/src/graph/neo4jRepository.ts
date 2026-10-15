@@ -54,12 +54,12 @@ export const CYPHER_QUERIES = {
     `CREATE CONSTRAINT fact_instance_key IF NOT EXISTS FOR (f:Fact) REQUIRE f.instanceKey IS UNIQUE`,
     `CREATE CONSTRAINT snapshot_id IF NOT EXISTS FOR (s:GraphSnapshot) REQUIRE s.graphSnapshotId IS UNIQUE`,
     `CREATE CONSTRAINT chunk_instance_key IF NOT EXISTS FOR (c:Chunk) REQUIRE c.instanceKey IS UNIQUE`,
-    `CREATE CONSTRAINT c_snapshot_entity_urn IF NOT EXISTS FOR (e:Entity) REQUIRE (e.graphSnapshotId, e.urn) IS NODE KEY`,
-    `CREATE CONSTRAINT c_snapshot_chunk_id IF NOT EXISTS FOR (c:Chunk) REQUIRE (c.graphSnapshotId, c.chunkId) IS NODE KEY`,
-    `CREATE CONSTRAINT c_snapshot_fact_key IF NOT EXISTS FOR (f:Fact) REQUIRE (f.graphSnapshotId, f.factKey) IS NODE KEY`,
   ] as const,
 
   CREATE_INDEXES: [
+    `CREATE INDEX idx_snapshot_entity_urn IF NOT EXISTS FOR (e:Entity) ON (e.graphSnapshotId, e.urn)`,
+    `CREATE INDEX idx_snapshot_chunk_id IF NOT EXISTS FOR (c:Chunk) ON (c.graphSnapshotId, c.chunkId)`,
+    `CREATE INDEX idx_snapshot_fact_key IF NOT EXISTS FOR (f:Fact) ON (f.graphSnapshotId, f.factKey)`,
     `CREATE INDEX idx_entity_name IF NOT EXISTS FOR (e:Entity) ON (e.graphSnapshotId, e.canonicalName)`,
     `CREATE INDEX idx_entity_normalized IF NOT EXISTS FOR (e:Entity) ON (e.graphSnapshotId, e.normalizedKey)`,
     `CREATE INDEX idx_chunk_doc_range IF NOT EXISTS FOR (c:Chunk) ON (c.graphSnapshotId, c.documentId, c.lineStart, c.lineEnd)`,
@@ -185,8 +185,34 @@ export const CYPHER_QUERIES = {
         s.vectorIndexName = $vectorIndexName,
         s.embeddingMetadataJson = $embeddingMetadataJson,
         s.chunkCount = $chunkCount,
+        s.evidenceCount = $evidenceCount,
         s.hasVectors = $hasVectors,
         s.retrievalBuiltAt = $retrievalBuiltAt
+  `,
+
+  VALIDATE_CITATION_CLOSURE: `
+    MATCH (s:GraphSnapshot {graphSnapshotId: $graphSnapshotId})
+    OPTIONAL MATCH (f:Fact {graphSnapshotId: $graphSnapshotId})
+    WHERE coalesce(f.sourceMissing, false) = false
+    WITH s, collect(f) AS facts
+    UNWIND CASE WHEN size(facts) = 0 THEN [null] ELSE facts END AS fact
+    OPTIONAL MATCH (fact)-[support:SUPPORTED_BY]->(chunk:Chunk)
+    WITH s, facts,
+         count(DISTINCT support) AS supportCount,
+         count(DISTINCT CASE
+           WHEN support.graphSnapshotId = $graphSnapshotId
+            AND chunk.graphSnapshotId = $graphSnapshotId
+           THEN fact END) AS closedFactCount,
+         count(DISTINCT CASE
+           WHEN support IS NOT NULL AND (
+             support.graphSnapshotId <> $graphSnapshotId OR
+             chunk IS NULL OR
+             chunk.graphSnapshotId <> $graphSnapshotId
+           ) THEN support END) AS invalidSupportCount
+    RETURN size([f IN facts WHERE f IS NOT NULL]) AS eligibleFactCount,
+           closedFactCount,
+           supportCount,
+           invalidSupportCount
   `,
 
   ACTIVATE_CANDIDATE: `
@@ -225,7 +251,8 @@ export const CYPHER_QUERIES = {
            s.factCount AS factCount,
            s.conflictCount AS conflictCount,
            s.quarantineCount AS quarantineCount,
-           s.approvedFactCount AS approvedFactCount
+           s.approvedFactCount AS approvedFactCount,
+           s.evidenceCount AS evidenceCount
   `,
 
   GET_QUARANTINES_BY_SNAPSHOT: `
@@ -735,29 +762,29 @@ export class Neo4jRepository implements GraphRepository {
             { graphSnapshotId: candidate.graphSnapshotId }
           );
 
-          // Link Fact nodes to overlapping Chunk nodes with SUPPORTED_BY
-          const supportRows: Array<{ factKey: string; chunkKey: string; chunkId: string }> = [];
+          // Link facts only to same-document chunks whose source coordinates overlap.
+          const supportByKey = new Map<string, { factKey: string; chunkKey: string; chunkId: string }>();
           for (const ev of candidate.evidence) {
             for (const chunk of chunkRows) {
-              if (chunk.documentId === ev.documentId) {
-                const lineOverlap = ev.startLine <= chunk.endLine && ev.endLine >= chunk.startLine;
-                const offsetOverlap =
-                  ev.startOffset !== undefined &&
-                  ev.endOffset !== undefined &&
-                  chunk.startOffset !== undefined &&
-                  chunk.endOffset !== undefined
-                    ? ev.startOffset <= chunk.endOffset && ev.endOffset >= chunk.startOffset
-                    : lineOverlap;
-                if (lineOverlap || offsetOverlap) {
-                  supportRows.push({
-                    factKey: ev.factKey,
-                    chunkKey: chunk.chunkKey,
-                    chunkId: chunk.chunkId,
-                  });
-                }
-              }
+              if (chunk.documentId !== ev.documentId) continue;
+              const lineOverlap = ev.startLine <= chunk.endLine && ev.endLine >= chunk.startLine;
+              const hasOffsets =
+                ev.startOffset !== undefined &&
+                ev.endOffset !== undefined &&
+                chunk.startOffset !== undefined &&
+                chunk.endOffset !== undefined;
+              const offsetOverlap = hasOffsets
+                ? ev.startOffset! < chunk.endOffset && ev.endOffset! > chunk.startOffset
+                : false;
+              if (!lineOverlap && !offsetOverlap) continue;
+              supportByKey.set(`${ev.factKey}\u0000${chunk.chunkKey}`, {
+                factKey: ev.factKey,
+                chunkKey: chunk.chunkKey,
+                chunkId: chunk.chunkId,
+              });
             }
           }
+          const supportRows = [...supportByKey.values()];
 
           if (supportRows.length > 0) {
             await tx.run(CYPHER_QUERIES.LINK_FACT_CHUNK_SUPPORT, {
@@ -814,6 +841,7 @@ export class Neo4jRepository implements GraphRepository {
         vectorIndexName,
         embeddingMetadataJson: JSON.stringify(embeddingMetadata || {}),
         chunkCount: chunkRows.length,
+        evidenceCount: new Set(candidate.evidence.map((evidence) => evidence.factKey)).size,
         hasVectors,
         retrievalBuiltAt: metadata.builtAt,
       });
@@ -849,10 +877,17 @@ export class Neo4jRepository implements GraphRepository {
         }
       }
 
-      return true;
+      const closureRes = await session.run(CYPHER_QUERIES.VALIDATE_CITATION_CLOSURE, {
+        graphSnapshotId,
+      });
+      if (closureRes.records.length !== 1) return false;
+      const closure = closureRes.records[0]!;
+      const eligibleFactCount = toSafeInt(closure.get('eligibleFactCount'));
+      const closedFactCount = toSafeInt(closure.get('closedFactCount'));
+      const invalidSupportCount = toSafeInt(closure.get('invalidSupportCount'));
+      return eligibleFactCount === closedFactCount && invalidSupportCount === 0;
     } catch {
-      // In unit test mock driver without SHOW INDEXES response, fall back to meta existence
-      return true;
+      return false;
     } finally {
       await session.close();
     }
@@ -914,6 +949,7 @@ export class Neo4jRepository implements GraphRepository {
         conflictCount: toSafeInt(record.get('conflictCount')),
         quarantineCount: toSafeInt(record.get('quarantineCount')),
         approvedFactCount: toSafeInt(record.get('approvedFactCount')),
+        evidenceCount: toSafeInt(record.get('evidenceCount')),
         retrievalGeneration,
       };
     } finally {
@@ -1203,7 +1239,7 @@ export class Neo4jRepository implements GraphRepository {
 
   /**
    * Plan-driven multi-hop traversal matching LogicalQueryPlan.traversalSteps.
-   * Uses STATIC_TRAVERSAL_QUERIES catalog with cycle prevention and node/edge caps.
+   * Uses static per-step Cypher and composes only complete connected paths.
    */
   async traverse(
     snapshotId: string,
@@ -1212,110 +1248,246 @@ export class Neo4jRepository implements GraphRepository {
   ): Promise<GraphTraversalResult> {
     if (options?.signal?.aborted) throw new Error('Graph traversal aborted');
     if (criteria.seedUrns.length === 0) {
-      return { entities: [], edges: [], paths: [], truncated: false };
+      return { chunks: [], entities: [], edges: [], paths: [], truncated: false };
     }
 
-    const session = this.getSession();
-    const entityByUrn = new Map<string, EntityItem>();
-    const edgeByKey = new Map<string, EdgeItem>();
-    const pathRecords: GraphTraversalPathRecord[] = [];
-    let isTruncated = false;
-
-    const steps = criteria.plan.traversalSteps && criteria.plan.traversalSteps.length > 0
+    const steps = criteria.plan.traversalSteps.length > 0
       ? criteria.plan.traversalSteps
       : [{ relationType: 'CONTAINS_STEP' as RelationType, direction: 'OUTGOING' as const, maxHops: 1 }];
+    if (steps.length > criteria.plan.overallMaxDepth) {
+      return { chunks: [], entities: [], edges: [], paths: [], truncated: false };
+    }
 
-    const evidenceClasses = criteria.evidenceClasses && criteria.evidenceClasses.length > 0
+    type RawNode = {
+      urn: Urn;
+      canonicalName?: string;
+      kind?: NodeKind;
+      firstSeenInDoc?: string;
+    };
+    type RawChunk = {
+      chunkId: string;
+      sourceDocumentId: string;
+      sourceDocumentTitle: string;
+      publishedContentHash: string;
+      headingPath?: string[];
+      lineStart: number | { toNumber(): number };
+      lineEnd: number | { toNumber(): number };
+      rawSnippet: string;
+    };
+    type RawEdge = {
+      factKey: string;
+      subjectUrn: Urn;
+      relationType: RelationType;
+      objectUrn: Urn;
+      evidenceClass: EvidenceClassification;
+      hasConflict?: boolean;
+      supportingChunks: RawChunk[];
+      graphSnapshotId: string;
+    };
+    type PartialPath = { nodes: RawNode[]; edges: RawEdge[] };
+    const toRawEdge = (edge: any): RawEdge => ({
+      ...edge,
+      supportingChunks: Array.isArray(edge.supportingChunks) ? edge.supportingChunks : [],
+    });
+
+    const session = this.getSession();
+    const evidenceClasses = criteria.evidenceClasses.length > 0
       ? [...criteria.evidenceClasses]
       : ['OBSERVED', 'BUSINESS_APPROVED'];
+    let frontier: PartialPath[] = criteria.seedUrns.map((urn) => ({ nodes: [{ urn }], edges: [] }));
+    let isTruncated = false;
 
     try {
       for (const step of steps) {
         if (options?.signal?.aborted) throw new Error('Graph traversal aborted');
+        const query = STATIC_TRAVERSAL_QUERIES[`${step.relationType}:${step.direction}:${step.maxHops}`];
+        if (!query) return { chunks: [], entities: [], edges: [], paths: [], truncated: false };
 
-        const queryKey = `${step.relationType}:${step.direction}:${step.maxHops}`;
-        const query = STATIC_TRAVERSAL_QUERIES[queryKey];
-        if (!query) {
-          continue;
-        }
-
+        const activeSeeds = [...new Set(frontier.map((path) => path.nodes.at(-1)?.urn).filter(Boolean))];
+        if (activeSeeds.length === 0) break;
         const res = await session.run(query, {
           snapshotId,
-          seedUrns: [...criteria.seedUrns],
+          seedUrns: activeSeeds,
           evidenceClasses,
-          pathLimit: neo4j.int(50),
+          pathLimit: neo4j.int(51),
           maxEdges: neo4j.int(criteria.limitEdges),
         });
 
-        for (const record of res.records) {
-          const rawNodes = record.get('pathNodes') as any[] || [];
-          const rawEdges = record.get('pathEdges') as any[] || [];
+        const records = [...res.records];
+        if (
+          criteria.plan.queryIntent === 'IMPACT_ANALYSIS' &&
+          step.relationType === 'READS_FROM' &&
+          step.direction === 'INCOMING'
+        ) {
+          const writesQuery = STATIC_TRAVERSAL_QUERIES[`WRITES_TO:INCOMING:${step.maxHops}`];
+          if (writesQuery) {
+            const writesRes = await session.run(writesQuery, {
+              snapshotId,
+              seedUrns: activeSeeds,
+              evidenceClasses,
+              pathLimit: neo4j.int(51),
+              maxEdges: neo4j.int(criteria.limitEdges),
+            });
+            records.push(...writesRes.records);
+          }
+        }
 
-          for (const node of rawNodes) {
-            if (node.urn && !entityByUrn.has(node.urn)) {
-              if (entityByUrn.size >= criteria.limitNodes) {
-                isTruncated = true;
-              } else {
-                entityByUrn.set(node.urn, {
-                  type: 'entity',
-                  id: node.urn,
-                  score: 1,
-                  modalitiesContributed: ['graph'],
-                  urn: node.urn,
-                  canonicalName: node.canonicalName || node.urn,
-                  kind: node.kind as NodeKind,
-                  snapshotId,
-                  firstSeenInDoc: node.firstSeenInDoc,
-                  hasConflict: false,
-                });
-              }
-            }
+        const segmentsBySeed = new Map<string, PartialPath[]>();
+        for (const record of records) {
+          const nodes = (record.get('pathNodes') as RawNode[] | null) ?? [];
+          const edges = ((record.get('pathEdges') as any[] | null) ?? []).map(toRawEdge);
+          if (nodes.length !== edges.length + 1 || edges.length === 0) continue;
+          if (step.targetKind) {
+            const target = nodes.at(-1);
+            if (target?.kind !== step.targetKind) continue;
+          }
+          if (
+            edges.some(
+              (edge) =>
+                edge.graphSnapshotId !== snapshotId ||
+                edge.supportingChunks.length === 0 ||
+                !evidenceClasses.includes(edge.evidenceClass)
+            )
+          ) continue;
+          const seedUrn = nodes[0]?.urn;
+          if (!seedUrn) continue;
+          const segments = segmentsBySeed.get(seedUrn) ?? [];
+          segments.push({ nodes, edges });
+          segmentsBySeed.set(seedUrn, segments);
+        }
+
+        const next = new Map<string, PartialPath>();
+        const completed = new Map<string, PartialPath>();
+        for (const partial of frontier) {
+          const endpoint = partial.nodes.at(-1)?.urn;
+          if (!endpoint) continue;
+          const candidateSegments = (segmentsBySeed.get(endpoint) ?? []).filter((segment) => {
+            const visited = new Set(partial.nodes.map((node) => node.urn));
+            return !segment.nodes.slice(1).some((node) => visited.has(node.urn));
+          });
+
+          if (candidateSegments.length === 0 && partial.edges.length > 0) {
+            const key = JSON.stringify([
+              partial.nodes.map((node) => node.urn),
+              partial.edges.map((edge) => edge.factKey),
+            ]);
+            completed.set(key, partial);
+            continue;
           }
 
-          for (const edge of rawEdges) {
-            if (edge.factKey && !edgeByKey.has(edge.factKey)) {
-              if (edgeByKey.size >= criteria.limitEdges) {
-                isTruncated = true;
-              } else {
-                edgeByKey.set(edge.factKey, {
-                  type: 'edge',
-                  id: edge.factKey,
-                  score: 1,
-                  modalitiesContributed: ['graph'],
-                  factKey: edge.factKey,
-                  sourceUrn: edge.subjectUrn,
-                  relationType: edge.relationType as RelationType,
-                  targetUrn: edge.objectUrn,
-                  evidenceClass: edge.evidenceClass as EvidenceClassification,
-                  supportingChunkIds: Array.isArray(edge.supportingChunkIds) ? edge.supportingChunkIds : [],
-                  snapshotId,
-                  hasConflict: Boolean(edge.hasConflict),
-                });
-              }
-            }
+          for (const segment of candidateSegments) {
+            const nodes = partial.edges.length === 0
+              ? segment.nodes
+              : [...partial.nodes, ...segment.nodes.slice(1)];
+            const edges = [...partial.edges, ...segment.edges];
+            if (edges.length > criteria.plan.overallMaxDepth) continue;
+            const key = JSON.stringify([
+              nodes.map((node) => node.urn),
+              edges.map((edge) => edge.factKey),
+            ]);
+            next.set(key, { nodes, edges });
           }
+        }
 
-          if (rawNodes.length > 0 && rawEdges.length > 0) {
-            pathRecords.push({
-              nodeUrns: rawNodes.map((n: any) => n.urn as Urn),
-              edgeFactKeys: rawEdges.map((e: any) => e.factKey),
-              hopClassifications: rawEdges.map((e: any) => e.evidenceClass as EvidenceClassification),
-              hopSupportingChunkIds: rawEdges.map((e: any) =>
-                Array.isArray(e.supportingChunkIds) ? e.supportingChunkIds : []
-              ),
-              edgeSnapshotIds: rawEdges.map((e: any) => e.graphSnapshotId || snapshotId),
-              hasConflict: rawEdges.some((e: any) => Boolean(e.hasConflict)),
+        const combined = new Map([...completed.entries(), ...next.entries()]);
+        const sorted = [...combined.entries()].sort(([a], [b]) => a.localeCompare(b));
+        if (sorted.length > 50) isTruncated = true;
+        frontier = sorted.slice(0, 50).map(([, path]) => path);
+        if (next.size === 0 && frontier.length > 0) break;
+        if (frontier.length === 0) break;
+      }
+
+      const entityByUrn = new Map<string, EntityItem>();
+      const edgeByKey = new Map<string, EdgeItem>();
+      const chunkById = new Map<string, ChunkItem>();
+      const pathRecords: GraphTraversalPathRecord[] = [];
+
+      for (const path of frontier) {
+        if (path.edges.length === 0) continue;
+        const newNodeCount = path.nodes.filter((node) => !entityByUrn.has(node.urn)).length;
+        const newEdgeCount = path.edges.filter((edge) => !edgeByKey.has(edge.factKey)).length;
+        if (
+          entityByUrn.size + newNodeCount > criteria.limitNodes ||
+          edgeByKey.size + newEdgeCount > criteria.limitEdges
+        ) {
+          isTruncated = true;
+          continue;
+        }
+
+        for (const node of path.nodes) {
+          if (!entityByUrn.has(node.urn)) {
+            entityByUrn.set(node.urn, {
+              type: 'entity',
+              id: node.urn,
+              score: 1,
+              modalitiesContributed: ['graph'],
+              urn: node.urn,
+              canonicalName: node.canonicalName || node.urn,
+              kind: node.kind!,
+              snapshotId,
+              ...(node.firstSeenInDoc ? { firstSeenInDoc: node.firstSeenInDoc } : {}),
+              hasConflict: false,
             });
           }
         }
+
+        for (const edge of path.edges) {
+          const supportingChunkIds = edge.supportingChunks.map((chunk) => chunk.chunkId);
+          if (!edgeByKey.has(edge.factKey)) {
+            edgeByKey.set(edge.factKey, {
+              type: 'edge',
+              id: edge.factKey,
+              score: 1,
+              modalitiesContributed: ['graph'],
+              factKey: edge.factKey,
+              sourceUrn: edge.subjectUrn,
+              relationType: edge.relationType,
+              targetUrn: edge.objectUrn,
+              evidenceClass: edge.evidenceClass,
+              supportingChunkIds,
+              snapshotId,
+              hasConflict: Boolean(edge.hasConflict),
+            });
+          }
+          for (const chunk of edge.supportingChunks) {
+            if (!chunkById.has(chunk.chunkId)) {
+              chunkById.set(chunk.chunkId, {
+                type: 'chunk',
+                id: chunk.chunkId,
+                score: 1,
+                modalitiesContributed: ['graph'],
+                sourceDocumentId: chunk.sourceDocumentId,
+                sourceDocumentTitle: chunk.sourceDocumentTitle,
+                sectionAnchor: (chunk.headingPath ?? []).join(' > '),
+                lineStart: toSafeInt(chunk.lineStart),
+                lineEnd: toSafeInt(chunk.lineEnd),
+                rawSnippet: chunk.rawSnippet,
+                publishedContentHash: chunk.publishedContentHash,
+                snapshotId,
+                hasConflict: Boolean(edge.hasConflict),
+              });
+            }
+          }
+        }
+
+        pathRecords.push({
+          nodeUrns: path.nodes.map((node) => node.urn),
+          edgeFactKeys: path.edges.map((edge) => edge.factKey),
+          hopClassifications: path.edges.map((edge) => edge.evidenceClass),
+          hopSupportingChunkIds: path.edges.map((edge) => edge.supportingChunks.map((chunk) => chunk.chunkId)),
+          edgeSnapshotIds: path.edges.map((edge) => edge.graphSnapshotId),
+          hasConflict: path.edges.some((edge) => Boolean(edge.hasConflict)),
+        });
       }
 
-      const entities = [...entityByUrn.values()];
-      const edges = [...edgeByKey.values()];
-
-      return isTruncated
-        ? { entities, edges, paths: pathRecords, truncated: true, truncationReason: 'RESULT_LIMIT_REACHED' }
-        : { entities, edges, paths: pathRecords, truncated: false };
+      const result = {
+        chunks: [...chunkById.values()],
+        entities: [...entityByUrn.values()],
+        edges: [...edgeByKey.values()],
+        paths: pathRecords,
+        truncated: isTruncated,
+      };
+      return isTruncated ? { ...result, truncationReason: 'RESULT_LIMIT_REACHED' } : result;
     } finally {
       await session.close();
     }

@@ -86,12 +86,7 @@ export function buildKnowledgeServer(options: KnowledgeServerOptions): Knowledge
 
   app.get('/api/v1/health', async () => ({ status: 'ok' }));
   app.get('/api/v1/health/liveness', async () => ({ status: 'alive' }));
-  app.get('/api/v1/health/readiness', async (request, reply) => {
-    if (!authorized(request.headers.authorization, token)) {
-      return reply.code(401).send({
-        error: { code: 'UNAUTHORIZED', message: 'Valid bearer authorization is required.' },
-      });
-    }
+  app.get('/api/v1/health/readiness', async (_request, reply) => {
     const checks = options.readinessCheck
       ? await options.readinessCheck()
       : {
@@ -106,9 +101,9 @@ export function buildKnowledgeServer(options: KnowledgeServerOptions): Knowledge
   app.addHook('onRequest', async (request, reply) => {
     if (!request.url.startsWith('/api/v1/')) return;
     if (request.url.startsWith('/api/v1/health/liveness')) return;
+    if (request.url.startsWith('/api/v1/health/readiness')) return;
     const origin = request.headers.origin;
-    const isProbe = request.url.startsWith('/api/v1/health/readiness');
-    if (!isProbe && (!origin || !allowedOrigins.has(origin))) {
+    if (!origin || !allowedOrigins.has(origin)) {
       return reply.code(403).send({
         error: { code: 'ORIGIN_DENIED', message: 'Request origin is not allowed.' },
       });

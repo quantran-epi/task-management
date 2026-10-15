@@ -62,7 +62,12 @@ export function closeOrderedPaths(
   );
 
   return candidates.flatMap((candidate, index) => {
-    if (!candidate.hopSupportingChunkIds.flat().every((id) => returnedChunkIds.has(id))) {
+    if (
+      candidate.hopSupportingChunkIds.length === 0 ||
+      !candidate.hopSupportingChunkIds.every(
+        (hopIds) => hopIds.length > 0 && hopIds.every((id) => returnedChunkIds.has(id))
+      )
+    ) {
       return [];
     }
 

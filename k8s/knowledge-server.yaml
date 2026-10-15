@@ -14,9 +14,11 @@ data:
   PLANNER_ENDPOINT: "http://10.4.97.70:30129"
   PLANNER_MODEL: "ag/gemini-3.8-flash"
   PLANNER_REMOTE_ALLOWED_HOSTS: "10.4.97.70"
+  PLANNER_TIMEOUT_MS: "30000"
   EMBEDDING_REMOTE_ENABLED: "false"
   EMBEDDING_REMOTE_MODEL: "Xenova/multilingual-e5-small"
   EMBEDDING_REMOTE_DIMENSIONS: "384"
+  EMBEDDING_CACHE_DIR: "/var/lib/knowledge-server/transformers_cache"
   PROSE_EXTRACTION_ENABLED: "false"
   SNAPSHOT_STORAGE_DIR: "/var/lib/knowledge-server/snapshots"
 ---
@@ -81,28 +83,25 @@ spec:
             httpGet:
               path: /api/v1/health/liveness
               port: http
-            initialDelaySeconds: 10
-            periodSeconds: 10
-            timeoutSeconds: 2
-            failureThreshold: 3
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 6
           readinessProbe:
             httpGet:
               path: /api/v1/health/readiness
               port: http
-              httpHeaders:
-                - name: Authorization
-                  value: "Bearer $(KNOWLEDGE_SERVER_TOKEN)"
             initialDelaySeconds: 15
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 3
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 6
           resources:
             requests:
-              cpu: 100m
-              memory: 256Mi
+              cpu: 200m
+              memory: 512Mi
             limits:
-              cpu: 1000m
-              memory: 1Gi
+              cpu: 2000m
+              memory: 3Gi
           volumeMounts:
             - name: knowledge-server-data
               mountPath: /var/lib/knowledge-server

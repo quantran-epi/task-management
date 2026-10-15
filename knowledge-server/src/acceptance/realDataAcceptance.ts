@@ -22,6 +22,7 @@ export const LIVE_SCENARIOS: readonly LiveScenarioDefinition[] = [
     title: 'Technical Identifier Fast-Path',
     query: 'MAIN1.FCL_CYCLE_COUNTER',
     expectedFastPath: true,
+    expectedIntent: 'LOOKUP',
     expectedOutcome: 'READY',
     importedFrom: '19.1 UAT Test 5',
   },
@@ -30,6 +31,7 @@ export const LIVE_SCENARIOS: readonly LiveScenarioDefinition[] = [
     title: 'Natural Language Query with Disambiguation',
     query: 'Chu kỳ tính lãi/phí container 60000006',
     expectedFastPath: false,
+    expectedIntent: 'LOOKUP',
     expectedOutcome: 'READY',
     importedFrom: '19.1 UAT Test 6',
   },
@@ -38,6 +40,7 @@ export const LIVE_SCENARIOS: readonly LiveScenarioDefinition[] = [
     title: 'Cross-Lingual Vector Retrieval',
     query: 'Các bảng dữ liệu và chu kỳ tính toán lãi suất container 60000006 là gì?',
     expectedFastPath: false,
+    expectedIntent: 'LOOKUP',
     expectedOutcome: 'READY',
     importedFrom: '19.2 RETR-10',
   },
@@ -46,6 +49,7 @@ export const LIVE_SCENARIOS: readonly LiveScenarioDefinition[] = [
     title: 'Flow Traversal Path Card',
     query: 'Quy trình thực thi của container 60000006 diễn ra theo các bước nào từ Scheduler đến PL/SQL?',
     expectedFastPath: false,
+    expectedIntent: 'FLOW_TRAVERSAL',
     expectedOutcome: 'READY',
     requirePath: true,
     importedFrom: '19.1 UAT Test 7',
@@ -55,6 +59,7 @@ export const LIVE_SCENARIOS: readonly LiveScenarioDefinition[] = [
     title: 'Multi-Hop Impact Analysis',
     query: 'Nếu thay đổi cấu trúc bảng MAIN1.FCL_CYCLE_COUNTER thì những package và quy trình nào bị ảnh hưởng?',
     expectedFastPath: false,
+    expectedIntent: 'IMPACT_ANALYSIS',
     expectedOutcome: 'READY',
     requirePath: true,
     importedFrom: '19.1 UAT Test 8',
@@ -113,6 +118,7 @@ export const LIVE_SCENARIOS: readonly LiveScenarioDefinition[] = [
     title: 'Interactive Citation Preview',
     query: 'MAIN1.FCL_CYCLE_COUNTER',
     expectedFastPath: true,
+    expectedIntent: 'LOOKUP',
     expectedOutcome: 'READY',
     importedFrom: '19.1 UAT Test 10',
   },
@@ -137,6 +143,7 @@ export const LIVE_SCENARIOS: readonly LiveScenarioDefinition[] = [
     title: 'Pod Restart Durability',
     query: 'MAIN1.FCL_CYCLE_COUNTER',
     expectedFastPath: true,
+    expectedIntent: 'LOOKUP',
     expectedOutcome: 'READY',
     importedFrom: '19.1 UAT Test 11',
   },
@@ -234,8 +241,14 @@ export async function runLiveRetrievalMatrix(
       if (scenario.expectedFastPath !== undefined && resp.planTrace.fastPath !== scenario.expectedFastPath) {
         throw new Error(`Expected fastPath ${scenario.expectedFastPath}, got ${resp.planTrace.fastPath}`);
       }
+      if (scenario.expectedIntent && resp.planTrace.intent !== scenario.expectedIntent) {
+        throw new Error(`Expected intent ${scenario.expectedIntent}, got ${resp.planTrace.intent ?? 'none'}`);
+      }
       if (scenario.requirePath && resp.paths.length === 0) {
         throw new Error('Expected at least one ordered path record');
+      }
+      if (scenario.expectedOutcome === 'NO_EVIDENCE' && (resp.items.length > 0 || resp.paths.length > 0)) {
+        throw new Error('NO_EVIDENCE response must not contain answer evidence');
       }
 
       // Fact-to-chunk closure assertion

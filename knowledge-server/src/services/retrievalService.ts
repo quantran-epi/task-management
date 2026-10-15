@@ -48,6 +48,87 @@ export const DEFAULT_RETRIEVAL_TIMEOUTS: RetrievalTimeouts = Object.freeze({
   graphMs: 2000,
 });
 
+const SEMANTIC_EVIDENCE_FLOOR = 0.7;
+const CROSS_LINGUAL_SEMANTIC_EVIDENCE_FLOOR = 0.5;
+const NON_ASCII_LETTER_RE = /[^\x00-\x7F]/;
+const QUERY_STOPWORDS = new Set([
+  'ai', 'cai', 'cac', 'cau', 'cho', 'co', 'cua', 'dien', 'do', 'duoc', 'gi', 'hay',
+  'hoat', 'khi', 'la', 'lam', 'nao', 'nay', 'nhung', 'o', 'ra', 'sao', 'the', 'thi',
+  'trong', 'tu', 'va', 've', 'voi', 'what', 'which', 'who', 'where', 'why', 'how',
+  'is', 'are', 'does', 'do', 'of', 'the', 'to', 'from', 'in', 'for', 'and', 'or',
+  'explain', 'describe', 'detail', 'details', 'information',
+  'container', 'process', 'procedure', 'quy', 'trinh', 'thu', 'tuc',
+]);
+
+function normalizeEvidenceTokens(text: string): string[] {
+  return text
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .match(/[a-z0-9_$#]+/g) ?? [];
+}
+
+interface MaterialQueryTerms {
+  readonly all: readonly string[];
+  readonly technical: readonly string[];
+}
+
+function materialQueryTerms(
+  query: string,
+  resolvedUrns: readonly string[],
+  graphItems: readonly (ChunkItem | EntityItem | EdgeItem)[]
+): MaterialQueryTerms {
+  const entityTokens = new Set<string>();
+  for (const urn of resolvedUrns) {
+    for (const token of normalizeEvidenceTokens(decodeURIComponent(urn))) entityTokens.add(token);
+  }
+  for (const item of graphItems) {
+    if (item.type !== 'entity' || !resolvedUrns.includes(item.urn)) continue;
+    for (const token of normalizeEvidenceTokens(item.canonicalName)) entityTokens.add(token);
+  }
+  const all = [...new Set(normalizeEvidenceTokens(query))].filter(
+    (token) => token.length >= 2 && !QUERY_STOPWORDS.has(token) && !entityTokens.has(token)
+  );
+  const technical = [...new Set(
+    (query.match(/[A-Za-z0-9_$#]+/g) ?? [])
+      .filter((token) => /[A-Z]{2,}/.test(token) || /(?:[A-Za-z]\d|\d[A-Za-z])/.test(token))
+      .flatMap(normalizeEvidenceTokens)
+      .filter((token) => all.includes(token))
+  )];
+  return { all, technical };
+}
+
+function chunkSupportsTerms(
+  chunk: ChunkItem,
+  terms: MaterialQueryTerms,
+  options?: { isMultiHopFlow?: boolean; technicalCorroborated?: boolean }
+): boolean {
+  if (terms.all.length === 0) return true;
+  const tokens = new Set(normalizeEvidenceTokens(
+    `${chunk.sourceDocumentTitle} ${chunk.sectionAnchor ?? ''} ${chunk.rawSnippet}`
+  ));
+
+  const multiHopCorroborated = Boolean(options?.isMultiHopFlow && options?.technicalCorroborated);
+
+  if (terms.technical.length > 0) {
+    if (!multiHopCorroborated) {
+      if (!terms.technical.every((term) => tokens.has(term))) {
+        return false;
+      }
+    } else {
+      if (!terms.all.some((term) => tokens.has(term))) {
+        return false;
+      }
+    }
+  }
+
+  const matched = terms.all.filter((term) => tokens.has(term)).length;
+  if (multiHopCorroborated) {
+    return matched >= 1;
+  }
+  return matched >= Math.min(2, terms.all.length) && matched / terms.all.length >= 0.5;
+}
+
 /**
  * Validates integer in range [min, max] or throws error.
  */
@@ -93,7 +174,7 @@ interface ModalityRunResult<T> {
   readonly paths?: readonly OrderedPath[] | undefined;
 }
 
-type GraphModalityRunResult = Omit<ModalityRunResult<EntityItem | EdgeItem>, 'paths'> & {
+type GraphModalityRunResult = Omit<ModalityRunResult<ChunkItem | EntityItem | EdgeItem>, 'paths'> & {
   readonly pathCandidates: BoundedGraphTraversalResult['paths'];
 };
 
@@ -166,7 +247,7 @@ export class RetrievalService {
       // D-24: Return NO_EVIDENCE when no active snapshot exists
       return RetrievalResponseSchema.parse({
         outcome: 'NO_EVIDENCE',
-        snapshotId: 'unassigned',
+        snapshotId: 'gsnap_00000000',
         embeddingProvider: this.deps.embeddingProvider?.describe() ?? {
           provider: 'local-onnx',
           model: 'unconfigured',
@@ -220,7 +301,7 @@ export class RetrievalService {
     const isClarification = planningOutcome.status === 'needsClarification';
     const planTrace = planningOutcome.planTrace;
 
-    // Fulltext search terms
+    // Keep planner keywords, but do not turn several alternatives into one mandatory phrase.
     const fulltextKeywords = isClarification
       ? planningOutcome.fulltextKeywords
       : isUnsupported
@@ -308,6 +389,64 @@ export class RetrievalService {
       (graphResult.status as any).reason = 'PINNED_SNAPSHOT_UNAVAILABLE';
     }
 
+    const enforceRelevanceGate = !planTrace.fastPath && !isClarification && !isUnsupported;
+    const resolvedUrns = planTrace.resolvedUrns ?? [];
+    const materialTerms = materialQueryTerms(request.query, resolvedUrns, graphValidItems);
+
+    const isMultiHopFlow =
+      planTrace.intent === 'FLOW_TRAVERSAL' ||
+      planTrace.intent === 'IMPACT_ANALYSIS' ||
+      (planTrace.depth ?? 1) > 1 ||
+      graphResult.pathCandidates.some((p) => p.edgeFactKeys.length > 1);
+
+    const poolTokens = new Set<string>();
+    const allCandidateChunks = [
+      ...ftValidItems,
+      ...vecValidItems,
+      ...graphValidItems.filter((item): item is ChunkItem => item.type === 'chunk'),
+    ];
+    for (const chunk of allCandidateChunks) {
+      for (const token of normalizeEvidenceTokens(
+        `${chunk.sourceDocumentTitle} ${chunk.sectionAnchor ?? ''} ${chunk.rawSnippet}`
+      )) {
+        poolTokens.add(token);
+      }
+    }
+
+    const technicalCorroborated =
+      materialTerms.technical.length === 0 ||
+      materialTerms.technical.every((term) => poolTokens.has(term));
+
+    const lexicalEvidence = technicalCorroborated
+      ? ftValidItems.filter((item) => chunkSupportsTerms(item, materialTerms, {
+          isMultiHopFlow,
+          technicalCorroborated,
+        }))
+      : [];
+    // ponytail: calibrated for multilingual-e5-small; move floors into provider policy when models vary.
+    const semanticFloor = resolvedUrns.length > 0 && NON_ASCII_LETTER_RE.test(request.query)
+      ? CROSS_LINGUAL_SEMANTIC_EVIDENCE_FLOOR
+      : SEMANTIC_EVIDENCE_FLOOR;
+    const semanticEvidence = technicalCorroborated
+      ? vecValidItems.filter((item) => item.score >= semanticFloor)
+      : [];
+    const citedGraphChunks = graphValidItems.filter(
+      (item): item is ChunkItem =>
+        item.type === 'chunk' && chunkSupportsTerms(item, materialTerms, {
+          isMultiHopFlow,
+          technicalCorroborated,
+        })
+    );
+    const hasTextualSupport =
+      technicalCorroborated &&
+      (materialTerms.all.length === 0 ||
+        lexicalEvidence.length > 0 ||
+        semanticEvidence.length > 0 ||
+        citedGraphChunks.length > 0);
+    const relevantVectorItems = enforceRelevanceGate && !hasTextualSupport ? [] : vecValidItems;
+    const relevantFulltextItems = enforceRelevanceGate && !hasTextualSupport ? [] : ftValidItems;
+    const relevantGraphItems = enforceRelevanceGate && !hasTextualSupport ? [] : graphValidItems;
+
     const modalityStatus: CompleteModalityStatus = {
       fulltext: fulltextResult.status,
       vector: vectorResult.status,
@@ -318,17 +457,17 @@ export class RetrievalService {
     const candidatesForFusion: {
       vector?: ChunkItem[];
       fulltext?: ChunkItem[];
-      graph?: Array<EntityItem | EdgeItem>;
+      graph?: Array<ChunkItem | EntityItem | EdgeItem>;
     } = {};
 
     if (modalityStatus.vector.status === 'ok' || modalityStatus.vector.status === 'truncated') {
-      candidatesForFusion.vector = vecValidItems;
+      candidatesForFusion.vector = relevantVectorItems;
     }
     if (modalityStatus.fulltext.status === 'ok' || modalityStatus.fulltext.status === 'truncated') {
-      candidatesForFusion.fulltext = ftValidItems;
+      candidatesForFusion.fulltext = relevantFulltextItems;
     }
     if (modalityStatus.graph.status === 'ok' || modalityStatus.graph.status === 'truncated') {
-      candidatesForFusion.graph = graphValidItems;
+      candidatesForFusion.graph = relevantGraphItems;
     }
 
     const fused = fuseRetrievalCandidates(candidatesForFusion, request.limit);
@@ -336,10 +475,17 @@ export class RetrievalService {
     // Step 7: Citation closure & conflict tagging
     const tagged = tagRetrievalConflicts(fused.items, {
       snapshotId: pinnedSnapshotId,
+      candidatePool: [
+        ...relevantVectorItems,
+        ...relevantFulltextItems,
+        ...relevantGraphItems,
+      ],
     });
 
     const finalItems = tagged.items;
-    const paths = closeOrderedPaths(graphResult.pathCandidates, finalItems);
+    const paths = hasTextualSupport
+      ? closeOrderedPaths(graphResult.pathCandidates, finalItems)
+      : [];
     const conflictGroups = buildConflictGroups(finalItems);
 
     // Determine modalities used (contributing list)
@@ -597,12 +743,17 @@ export class RetrievalService {
 
     const result: BoundedGraphTraversalResult = run.result ?? {
       status: { status: 'unavailable', latencyMs: run.latencyMs, itemCount: 0, reason: 'PROVIDER_ERROR' },
+      chunks: [],
       entities: [],
       edges: [],
       paths: [],
     };
 
-    const combined: Array<EntityItem | EdgeItem> = [...result.entities, ...result.edges];
+    const combined: Array<ChunkItem | EntityItem | EdgeItem> = [
+      ...result.chunks,
+      ...result.entities,
+      ...result.edges,
+    ];
     return {
       status: result.status,
       items: combined,

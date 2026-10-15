@@ -164,6 +164,7 @@ export interface GraphTraversalPathRecord {
 }
 
 export interface GraphTraversalResult {
+  readonly chunks?: readonly ChunkItem[] | undefined;
   readonly entities: readonly EntityItem[];
   readonly edges: readonly EdgeItem[];
   readonly paths?: readonly GraphTraversalPathRecord[] | undefined;

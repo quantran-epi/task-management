@@ -41,6 +41,7 @@ export interface RemotePlannerConfig {
   model?: string;
   apiKey?: string;
   allowedHosts?: string[];
+  timeoutMs?: number;
 }
 
 export interface Neo4jConfig {
@@ -254,10 +255,19 @@ export function readKnowledgeServerOptions(
       );
     }
 
+    const rawTimeout = (env.PLANNER_TIMEOUT_MS ?? '30000').trim() || '30000';
+    const timeoutMs = Number(rawTimeout);
+    if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 120000) {
+      throw new Error(
+        `Invalid PLANNER_TIMEOUT_MS: "${rawTimeout}". Must be an integer between 1000 and 120000.`
+      );
+    }
+
     remotePlanner.endpoint = endpoint;
     remotePlanner.model = model;
     remotePlanner.apiKey = apiKey;
     remotePlanner.allowedHosts = allowedPlannerHosts;
+    remotePlanner.timeoutMs = timeoutMs;
   }
 
   // Validate Neo4j configuration
@@ -417,6 +427,7 @@ export async function startKnowledgeServer(
         model: options.remotePlanner.model!,
         apiKey: options.remotePlanner.apiKey!,
         allowedHosts: options.remotePlanner.allowedHosts!,
+        timeoutMs: options.remotePlanner.timeoutMs,
       });
     } else {
       queryPlanner = {

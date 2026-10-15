@@ -327,6 +327,7 @@ export interface ActiveGraphView {
   conflictCount: number;
   quarantineCount: number;
   approvedFactCount: number;
+  evidenceCount: number;
   retrievalGeneration?: RetrievalGenerationMetadata | undefined;
 }
 

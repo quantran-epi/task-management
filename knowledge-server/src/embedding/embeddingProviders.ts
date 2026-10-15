@@ -43,11 +43,16 @@ export class LocalOnnxEmbeddingProvider implements EmbeddingProvider {
         // Dynamic import so tests without the real package or weights won't fail
         const { pipeline, env } = await import('@xenova/transformers');
         env.cacheDir = process.env.EMBEDDING_CACHE_DIR ?? './.cache/transformers';
-        const extractor = await pipeline('feature-extraction', this.metadata.model, {
-          revision: this.metadata.revision,
-          quantized: true,
-        });
-        return extractor as unknown as PipelineExtractor;
+        try {
+          const extractor = await pipeline('feature-extraction', this.metadata.model, {
+            revision: this.metadata.revision,
+            quantized: true,
+          });
+          return extractor as unknown as PipelineExtractor;
+        } catch (err: unknown) {
+          console.error('[ONNX_PIPELINE_LOAD_ERROR]', err);
+          throw err;
+        }
       });
   }
 
@@ -82,35 +87,44 @@ export class LocalOnnxEmbeddingProvider implements EmbeddingProvider {
         throw new EmbeddingError('TIMEOUT', 'Operation aborted after model load');
       }
 
-      const prefixed = texts.map((t) => `passage: ${t}`);
-      const output = await extractor(prefixed, { pooling: 'mean', normalize: true });
-      const flat = Array.from(output.data);
-
-      const expectedTotal = texts.length * this.metadata.dimensions;
-      if (flat.length !== expectedTotal) {
-        throw new EmbeddingError(
-          'MODEL_INDEX_MISMATCH',
-          `Output vector dimension mismatch: expected ${expectedTotal}, received ${flat.length}`
-        );
-      }
-
+      // Chia texts thành các sub-batch nhỏ (10 texts/lần) để tránh tràn bộ nhớ RAM (OOM)
+      const BATCH_SIZE = 10;
       const results: number[][] = [];
-      for (let i = 0; i < texts.length; i++) {
-        const slice = flat.slice(i * this.metadata.dimensions, (i + 1) * this.metadata.dimensions);
-        for (const num of slice) {
-          if (!Number.isFinite(num)) {
-            throw new EmbeddingError('PROVIDER_ERROR', 'Vector contains non-finite numbers');
-          }
+      for (let b = 0; b < texts.length; b += BATCH_SIZE) {
+        const batchTexts = texts.slice(b, b + BATCH_SIZE);
+        const prefixed = batchTexts.map((t) => `passage: ${t}`);
+        const output = await extractor(prefixed, { pooling: 'mean', normalize: true });
+        const flat = Array.from(output.data);
+
+        const expectedTotal = batchTexts.length * this.metadata.dimensions;
+        if (flat.length !== expectedTotal) {
+          throw new EmbeddingError(
+            'MODEL_INDEX_MISMATCH',
+            `Output vector dimension mismatch: expected ${expectedTotal}, received ${flat.length}`
+          );
         }
-        results.push(slice);
+
+        for (let i = 0; i < batchTexts.length; i++) {
+          const slice = flat.slice(i * this.metadata.dimensions, (i + 1) * this.metadata.dimensions);
+          for (const num of slice) {
+            if (!Number.isFinite(num)) {
+              throw new EmbeddingError('PROVIDER_ERROR', 'Vector contains non-finite numbers');
+            }
+          }
+          results.push(slice);
+        }
+        // Nhường event loop một tick để Fastify trả lời liveness probe của K8s
+        await new Promise((resolve) => setTimeout(resolve, 50));
       }
       return results;
     } catch (err: unknown) {
+      console.error('[EMBED_DOCUMENTS_ERROR]', err);
       if (err instanceof EmbeddingError) throw err;
       if (options?.signal?.aborted || (err as Error)?.name === 'AbortError') {
         throw new EmbeddingError('TIMEOUT', 'Embedding operation timed out or was aborted');
       }
-      throw new EmbeddingError('PROVIDER_ERROR', 'Local embedding failed');
+      const rawMsg = err instanceof Error ? err.message : String(err);
+      throw new EmbeddingError('PROVIDER_ERROR', `Local embedding failed: ${rawMsg.slice(0, 200)}`);
     }
   }
 

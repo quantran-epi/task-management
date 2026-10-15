@@ -167,7 +167,10 @@ export const RetrievalRequestSchema = z
 
 export type RetrievalRequest = z.infer<typeof RetrievalRequestSchema>;
 
-const SnapshotIdSchema = z.string().regex(/^gsnap_[0-9a-f]{8,}$/);
+export const SnapshotIdSchema = z.union([
+  z.string().uuid(),
+  z.string().regex(/^gsnap_[0-9a-f]{8,}$/),
+]);
 const PublishedContentHashSchema = z.string().regex(/^[0-9a-f]{64}$/);
 const PathIdSchema = z.string().regex(/^P[1-9][0-9]*$/);
 
@@ -262,7 +265,7 @@ export const ChunkItemSchema = z
     lineEnd: z.number().int().positive(),
     rawSnippet: z.string(),
     publishedContentHash: PublishedContentHashSchema,
-    snapshotId: z.string().min(1),
+    snapshotId: SnapshotIdSchema,
     conflictGroupId: z.string().optional(),
     hasConflict: z.boolean().default(false),
   })
@@ -282,7 +285,7 @@ export const EntityItemSchema = z
     urn: UrnSchema,
     canonicalName: z.string().min(1),
     kind: NodeKindSchema,
-    snapshotId: z.string().min(1),
+    snapshotId: SnapshotIdSchema,
     firstSeenInDoc: z.string().uuid().optional(),
     conflictGroupId: z.string().optional(),
     hasConflict: z.boolean().default(false),
@@ -307,7 +310,7 @@ export const EdgeItemSchema = z
     targetUrn: UrnSchema,
     evidenceClass: EvidenceClassificationSchema,
     supportingChunkIds: z.array(z.string()).default([]),
-    snapshotId: z.string().min(1),
+    snapshotId: SnapshotIdSchema,
     conflictGroupId: z.string().optional(),
     hasConflict: z.boolean().default(false),
   })
@@ -414,7 +417,7 @@ export type ConflictGroup = z.infer<typeof ConflictGroupSchema>;
 export const BaseRetrievalResponseSchema = z
   .object({
     outcome: RetrievalOutcomeSchema,
-    snapshotId: z.string().min(1),
+    snapshotId: SnapshotIdSchema,
     embeddingProvider: EmbeddingProviderMetadataSchema,
     items: z.array(RetrievalItemSchema),
     paths: z.array(OrderedPathSchema).max(20).default([]),

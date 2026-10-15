@@ -18,7 +18,7 @@ export interface CliOptions {
 
 export interface SmokeCase {
   id: string;
-  expectedIntent: string;
+  expectedIntent?: string;
   expectedFastPath: boolean;
   expectedOutcome: RetrievalResponse['outcome'];
   expectedSourceDocumentTitles?: string[];
@@ -42,12 +42,7 @@ export interface SmokeResult {
 
 export const SMOKE_CASES: SmokeCase[] = LIVE_SCENARIOS.map((scenario) => ({
   id: scenario.id,
-  expectedIntent:
-    scenario.id === 'T4'
-      ? 'FLOW_TRAVERSAL'
-      : scenario.id === 'T5'
-        ? 'IMPACT_ANALYSIS'
-        : 'LOOKUP',
+  ...(scenario.expectedIntent ? { expectedIntent: scenario.expectedIntent } : {}),
   expectedFastPath: scenario.expectedFastPath ?? false,
   expectedOutcome: scenario.expectedOutcome ?? 'READY',
   ...(scenario.id === 'T1' || scenario.id === 'T12' || scenario.id === 'T15'
@@ -117,7 +112,7 @@ function assertStrict(caseDef: SmokeCase, response: RetrievalResponse) {
   if (response.planTrace.fastPath !== caseDef.expectedFastPath) {
     throw new Error(`Expected fastPath ${caseDef.expectedFastPath}, got ${response.planTrace.fastPath}`);
   }
-  if (response.planTrace.intent !== caseDef.expectedIntent) {
+  if (caseDef.expectedIntent && response.planTrace.intent !== caseDef.expectedIntent) {
     throw new Error(`Expected intent ${caseDef.expectedIntent}, got ${response.planTrace.intent ?? 'missing'}`);
   }
   if (
@@ -130,7 +125,11 @@ function assertStrict(caseDef: SmokeCase, response: RetrievalResponse) {
   ) {
     throw new Error(`Expected citation from ${caseDef.expectedSourceDocumentTitles.join(' or ')}`);
   }
-  if (caseDef.requirePath && !response.items.some((item) => item.type === 'edge' && item.supportingChunkIds.length > 0)) {
+  if (
+    caseDef.requirePath &&
+    response.paths.length === 0 &&
+    !response.items.some((item) => item.type === 'edge' && item.supportingChunkIds.length > 0)
+  ) {
     throw new Error('Expected at least one closed edge path with supporting chunks');
   }
   for (const item of response.items) {
@@ -160,6 +159,16 @@ async function fetchCase(options: CliOptions, caseDef: SmokeCase): Promise<Retri
       }),
       signal: controller.signal,
     });
+    if (response.status !== undefined && response.status !== 200) {
+      let errorDetail = '';
+      try {
+        const errJson = (await response.json()) as any;
+        errorDetail = errJson?.error?.message ?? errJson?.message ?? '';
+      } catch {
+        errorDetail = await response.text().catch(() => '');
+      }
+      throw new Error(`HTTP ${response.status}: ${errorDetail || response.statusText || 'Request failed'}`);
+    }
     const json = await response.json();
     return RetrievalResponseSchema.parse(json);
   } finally {
