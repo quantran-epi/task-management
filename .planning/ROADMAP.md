@@ -409,15 +409,15 @@ Plans:
 
 Plans:
 
-- [ ] 19.2-01-PLAN.md — Contract/eval foundation and metadata-only live-test protocol (Wave 1)
-- [ ] 19.2-02-PLAN.md — Client LLM-first state machine, clarification, fail-closed behavior, scope wiring (Wave 2)
-- [ ] 19.2-03-PLAN.md — Grounded truth contract, confidence, abstention, explicit-only speculation (Wave 3)
+- [x] 19.2-01-PLAN.md — Contract/eval foundation and metadata-only live-test protocol (Wave 1)
+- [x] 19.2-02-PLAN.md — Client LLM-first state machine, clarification, fail-closed behavior, scope wiring (Wave 2)
+- [x] 19.2-03-PLAN.md — Grounded truth contract, confidence, abstention, explicit-only speculation (Wave 3)
 - [x] 19.2-04-PLAN.md — Graph-build dependency injection and two-phase activation/rollback (Wave 2)
 - [x] 19.2-05-PLAN.md — General document extraction and table-less/non-SHB coverage (Wave 3)
-- [ ] 19.2-06-PLAN.md — Plan-driven Neo4j traversal, indexes, evidence closure, disambiguation (Wave 3)
+- [x] 19.2-06-PLAN.md — Plan-driven Neo4j traversal, indexes, evidence closure, disambiguation (Wave 3)
 - [x] 19.2-07-PLAN.md — Stable TaskMate↔knowledge links, migration, backup, tools, UI (Wave 3)
-- [ ] 19.2-08-PLAN.md — Observability, deployment, CI, smoke CLI, browser E2E (Wave 4)
-- [ ] 19.2-09-PLAN.md — Real-data Neo4j/9router canary, failure matrix, restart release proof (Wave 5)
+- [x] 19.2-08-PLAN.md — Observability, deployment, CI, smoke CLI, browser E2E (Wave 4)
+- [x] 19.2-09-PLAN.md — Real-data Neo4j/9router canary, failure matrix, restart release proof (Wave 5)
 
 ### Phase 19.1: Production Neo4j Integration & Live Retrieval Validation (INSERTED)
 
