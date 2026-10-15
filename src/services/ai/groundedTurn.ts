@@ -244,9 +244,13 @@ export async function runGroundedTurn(
     signal: input.signal,
   });
 
+  const effectiveIntent =
+    intentDecision.intent ||
+    ((intentDecision as any).route === 'operational' ? 'operate_taskmate' : 'query_knowledge');
+
   if (
-    intentDecision.intent === 'operate_taskmate' ||
-    intentDecision.intent === 'query_taskmate'
+    effectiveIntent === 'operate_taskmate' ||
+    effectiveIntent === 'query_taskmate'
   ) {
     return { kind: 'operational', routedQuery: input.query };
   }

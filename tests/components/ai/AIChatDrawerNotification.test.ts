@@ -7,6 +7,10 @@ import * as desktopNotification from '../../../src/utils/desktopNotification';
 import * as nineRouterClient from '../../../src/services/ai/nineRouterClient';
 import * as nineRouterTokenService from '../../../src/services/ai/nineRouterTokenService';
 import * as graphitiMcpClient from '../../../src/services/ai/graphitiMcpClient';
+import {
+  setGroundedTurnTestHooks,
+  clearGroundedTurnTestHooks,
+} from '../../../src/services/ai/groundedTurnDeps';
 import { APP_NAME } from '../../../src/constants/app';
 
 vi.mock('../../../src/utils/pptxExport', () => ({
@@ -33,9 +37,16 @@ describe('AIChatDrawer - Desktop Notification on completion', () => {
     vi.spyOn(desktopNotification, 'sendDesktopNotification').mockResolvedValue(true);
 
     db = new TaskPlannerDatabase(`test-aichat-notif-${Date.now()}-${Math.random()}`);
+    setGroundedTurnTestHooks({
+      runGroundedTurn: async (input) => ({
+        kind: 'operational',
+        routedQuery: input.query,
+      }),
+    });
   });
 
   afterEach(() => {
+    clearGroundedTurnTestHooks();
     if (originalHidden) {
       Object.defineProperty(Document.prototype, 'hidden', originalHidden);
     }

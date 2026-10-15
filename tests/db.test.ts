@@ -27,6 +27,7 @@ describe('Dexie Database Persistence & Seed Layer (DATA-02, D-05, D-07)', () => 
       'chatThreads',
       'dlpAudits',
       'documentSets',
+      'knowledgeLinks',
       'milestones',
       'noteAttachments',
       'notes',

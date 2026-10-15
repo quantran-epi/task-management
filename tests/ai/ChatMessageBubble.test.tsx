@@ -279,11 +279,11 @@ describe('InlineApiErrorCard', () => {
     );
 
     expect(screen.getByText(/Unauthorized 401/i)).toBeInTheDocument();
-    const retryBtn = screen.getByText('Thử lại tin nhắn');
+    const retryBtn = screen.getByText('Thử lại');
     fireEvent.click(retryBtn);
     expect(handleRetry).toHaveBeenCalled();
 
-    const settingsBtn = screen.getByText('Cài đặt AI');
+    const settingsBtn = screen.getByText('Mở Cài đặt AI');
     fireEvent.click(settingsBtn);
     expect(handleOpenSettings).toHaveBeenCalled();
   });

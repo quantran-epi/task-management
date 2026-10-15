@@ -271,7 +271,7 @@ describe('Phase 16 Knowledge Validation Schemas (D-01, D-08, D-18, D-27, D-29, T
       const db = new TaskPlannerDatabase(dbName);
       await db.open();
 
-      expect(db.verno).toBe(10);
+      expect(db.verno).toBeGreaterThanOrEqual(10);
       expect(SCHEMA_V10.documentSets).toBeDefined();
       expect(db.documentSets).toBeDefined();
       expect(db.publishedDocuments).toBeDefined();
@@ -323,7 +323,7 @@ describe('Phase 16 Knowledge Validation Schemas (D-01, D-08, D-18, D-27, D-29, T
       const v10Db = new TaskPlannerDatabase(dbName);
       await v10Db.open();
 
-      expect(v10Db.verno).toBe(10);
+      expect(v10Db.verno).toBeGreaterThanOrEqual(10);
 
       const note = await v10Db.notes.get(noteId1);
       expect(note).toBeDefined();

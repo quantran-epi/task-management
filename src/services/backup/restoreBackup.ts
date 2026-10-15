@@ -2,10 +2,7 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { BackupEnvelope, SnapshotData } from '../../types/backup';
 import type { NoteAttachment } from '../../types/models';
 import { generateId } from '../../utils/uuid';
-import { isSafeBackupSetting, blobToBase64 } from './exportBackup';
-
-const APP_MARKER = 'personal-task-planner' as const;
-const CURRENT_SCHEMA_VERSION = 1;
+import { isSafeBackupSetting, blobToBase64, triggerDownload, APP_MARKER, CURRENT_SCHEMA_VERSION } from './exportBackup';
 
 /**
  * Converts a Base64 Data URL or raw base64 back into a browser Blob.
@@ -428,13 +425,5 @@ export function downloadSnapshotFile(snapshot: SnapshotData): void {
     counts: snapshot.counts,
   };
   const content = JSON.stringify(envelope, null, 2);
-  const blob = new Blob([content], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = fileName;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
+  triggerDownload(content, fileName);
 }

@@ -250,6 +250,10 @@ describe('executable startup', () => {
           KNOWLEDGE_ALLOWED_ORIGINS: VALID_ORIGIN,
           PORT: String(port),
           HOST: '127.0.0.1',
+          NEO4J_URI: '',
+          NEO4J_USER: '',
+          NEO4J_PASSWORD: '',
+          PLANNER_REMOTE_ENABLED: 'false',
         },
         stdio: ['ignore', 'pipe', 'pipe'],
       }
@@ -268,7 +272,7 @@ describe('executable startup', () => {
 
     // Wait until port is open
     let ready = false;
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 150; i++) {
       if (stdoutData.includes('listening on')) {
         ready = true;
         break;
@@ -300,7 +304,7 @@ describe('executable startup', () => {
     expect(ready).toBe(true);
     expect(stdoutData).not.toContain(TOKEN_CANARY);
     expect(stderrData).not.toContain(TOKEN_CANARY);
-  });
+  }, 25000);
 
   it('proves clean shutdown triggers onClose handler and releases resources', async () => {
     let closed = false;

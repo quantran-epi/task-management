@@ -66,7 +66,7 @@ export const LinkedKnowledgeSection: React.FC<LinkedKnowledgeSectionProps> = ({
   // Query first-class KnowledgeLink records
   const firstClassLinks = useLiveQuery(
     async () => {
-      if (!resolvedEntityId) return [];
+      if (!resolvedEntityId || !db.knowledgeLinks) return [];
       return db.knowledgeLinks
         .where('taskMateEntityId')
         .equals(resolvedEntityId)

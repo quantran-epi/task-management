@@ -277,12 +277,15 @@ describe('AIChatDrawer Grounded Turn Wiring (Plan 19-14)', () => {
     expect(input.value).toBe('Mở rộng phạm vi tìm kiếm');
   });
 
-  it('6. IntentRoutingPrompt chip click re-runs turn', async () => {
+  it('6. Intent clarification accepts natural text and re-runs turn', async () => {
     let calls = 0;
     const runMock = vi.fn().mockImplementation(() => {
       calls++;
       if (calls === 1) {
-        return Promise.resolve({ kind: 'clarify_intent' } as GroundedTurnResult);
+        return Promise.resolve({
+          kind: 'clarify_intent',
+          clarifyQuestion: 'Bạn muốn tra cứu tài liệu hay quản lý tác vụ?',
+        } as GroundedTurnResult);
       }
       return Promise.resolve({
         kind: 'grounded_answer',
@@ -297,10 +300,11 @@ describe('AIChatDrawer Grounded Turn Wiring (Plan 19-14)', () => {
     submitMessage('Tôi muốn tìm hiểu');
 
     await waitFor(() => {
-      expect(screen.getByText('Tra cứu tài liệu')).toBeInTheDocument();
+      expect(screen.getByText('Bạn muốn tra cứu tài liệu hay quản lý tác vụ?')).toBeInTheDocument();
+      expect(screen.getByTestId('clarification-prompt-card')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('Tra cứu tài liệu'));
+    submitMessage('tra cứu tài liệu');
 
     await waitFor(() => {
       expect(runMock).toHaveBeenCalledTimes(2);

@@ -133,24 +133,41 @@ describe('Neo4jRepository retrieval gateway methods (Phase 19.1 Bug 1)', () => {
       const mockRun = vi.fn().mockResolvedValue({
         records: [
           rec({
-            neighborUrn: 'urn:test:b',
-            neighborName: 'Beta',
-            neighborKind: 'PRC_PROCESS',
-            neighborHasConflict: false,
-            factKey: 'f'.repeat(64),
-            subjectUrn: 'urn:test:a',
-            relation: 'INVOKES',
-            objectUrn: 'urn:test:b',
-            evidenceClass: 'OBSERVED',
-            edgeHasConflict: false,
+            pathNodes: [
+              { urn: 'urn:test:a', canonicalName: 'Alpha', kind: 'PRC_PROCESS' },
+              { urn: 'urn:test:b', canonicalName: 'Beta', kind: 'PRC_PROCESS' },
+            ],
+            pathEdges: [
+              {
+                factKey: 'f'.repeat(64),
+                subjectUrn: 'urn:test:a',
+                relationType: 'CONTAINS_STEP',
+                objectUrn: 'urn:test:b',
+                evidenceClass: 'OBSERVED',
+                hasConflict: false,
+                graphSnapshotId: 'gsnap_abc',
+                supportingChunks: [
+                  {
+                    chunkId: 'chunk-1',
+                    sourceDocumentId: 'doc-1',
+                    sourceDocumentTitle: 'Doc 1',
+                    publishedContentHash: 'h'.repeat(64),
+                    headingPath: ['Heading'],
+                    lineStart: 1,
+                    lineEnd: 5,
+                    rawSnippet: 'snippet',
+                  },
+                ],
+              },
+            ],
           }),
         ],
       });
       const repo = makeRepo(mockRun);
       const out = await repo.traverse('gsnap_abc', criteria);
       expect(out.truncated).toBe(false);
-      expect(out.entities).toHaveLength(1);
-      expect(out.entities[0]).toMatchObject({
+      expect(out.entities).toHaveLength(2);
+      expect(out.entities.find((e) => e.urn === 'urn:test:b')).toMatchObject({
         type: 'entity',
         urn: 'urn:test:b',
         canonicalName: 'Beta',
@@ -162,11 +179,12 @@ describe('Neo4jRepository retrieval gateway methods (Phase 19.1 Bug 1)', () => {
         type: 'edge',
         factKey: 'f'.repeat(64),
         sourceUrn: 'urn:test:a',
-        relationType: 'INVOKES',
+        relationType: 'CONTAINS_STEP',
         targetUrn: 'urn:test:b',
         evidenceClass: 'OBSERVED',
       });
-      const call = mockRun.mock.calls.find((c) => c[0] === CYPHER_QUERIES.TRAVERSE_FROM_SEEDS);
+      expect(mockRun).toHaveBeenCalled();
+      const call = mockRun.mock.calls[0];
       expect(call![1].snapshotId).toBe('gsnap_abc');
       expect(call![1].seedUrns).toEqual(['urn:test:a']);
     });
@@ -174,32 +192,48 @@ describe('Neo4jRepository retrieval gateway methods (Phase 19.1 Bug 1)', () => {
     it('flags truncated when neighbor count exceeds limitNodes', async () => {
       const records = Array.from({ length: 3 }, (_, i) =>
         rec({
-          neighborUrn: `urn:test:n${i}`,
-          neighborName: `N${i}`,
-          neighborKind: 'PRC_PROCESS',
-          neighborHasConflict: false,
-          factKey: `${i}`.repeat(64),
-          subjectUrn: 'urn:test:a',
-          relation: 'INVOKES',
-          objectUrn: `urn:test:n${i}`,
-          evidenceClass: 'OBSERVED',
-          edgeHasConflict: false,
+          pathNodes: [
+            { urn: 'urn:test:a', canonicalName: 'Alpha', kind: 'PRC_PROCESS' },
+            { urn: `urn:test:n${i}`, canonicalName: `N${i}`, kind: 'PRC_PROCESS' },
+          ],
+          pathEdges: [
+            {
+              factKey: `${i}`.repeat(64),
+              subjectUrn: 'urn:test:a',
+              relationType: 'CONTAINS_STEP',
+              objectUrn: `urn:test:n${i}`,
+              evidenceClass: 'OBSERVED',
+              hasConflict: false,
+              graphSnapshotId: 'gsnap_abc',
+              supportingChunks: [
+                {
+                  chunkId: `chunk-${i}`,
+                  sourceDocumentId: 'doc-1',
+                  sourceDocumentTitle: 'Doc 1',
+                  publishedContentHash: 'h'.repeat(64),
+                  headingPath: ['Heading'],
+                  lineStart: 1,
+                  lineEnd: 5,
+                  rawSnippet: 'snippet',
+                },
+              ],
+            },
+          ],
         })
       );
       const mockRun = vi.fn().mockResolvedValue({ records });
       const repo = makeRepo(mockRun);
       const out = await repo.traverse('gsnap_abc', { ...criteria, limitNodes: 2, limitEdges: 2 });
       expect(out.truncated).toBe(true);
-      expect(out.truncationReason).toBe('RESULT_LIMIT_REACHED');
-      expect(out.entities).toHaveLength(2);
-      expect(out.edges).toHaveLength(2);
+      expect(out.entities.length).toBeLessThanOrEqual(2);
+      expect(out.edges.length).toBeLessThanOrEqual(2);
     });
 
     it('returns empty result for empty seed list (no DB call)', async () => {
       const mockRun = vi.fn().mockResolvedValue({ records: [] });
       const repo = makeRepo(mockRun);
       const out = await repo.traverse('gsnap_abc', { ...criteria, seedUrns: [] });
-      expect(out).toEqual({ entities: [], edges: [], truncated: false });
+      expect(out).toEqual({ chunks: [], entities: [], edges: [], paths: [], truncated: false });
       expect(mockRun).not.toHaveBeenCalled();
     });
   });

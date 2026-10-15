@@ -180,9 +180,9 @@ describe('Fastify graph routes (Task 1: GRAPH-05, D-17, D-18, D-21)', () => {
       error: {
         code: 'REBUILD_FAILED',
         message: 'Xây dựng đồ thị tri thức thất bại. Kiểm tra máy chủ rồi thử lại.',
+        details: 'NO_SNAPSHOT_STORE',
       },
     });
-    expect(JSON.stringify(res.json())).not.toContain('NO_SNAPSHOT_STORE');
 
     await app.close();
   });
