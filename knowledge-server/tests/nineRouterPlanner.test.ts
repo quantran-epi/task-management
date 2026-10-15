@@ -1,6 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import { NineRouterQueryPlanner } from '../src/retrieval/nineRouterQueryPlanner.js';
-import type { QueryPlannerContext } from '../src/retrieval/contracts.js';
+import {
+  NineRouterQueryPlanner,
+  PlannerTransportError,
+} from '../src/retrieval/nineRouterQueryPlanner.js';
+import { buildQueryExecutionPlan } from '../src/retrieval/queryPlanning.js';
+import type { GraphRetrievalGateway, QueryPlannerContext } from '../src/retrieval/contracts.js';
 import type { RetrievalRequest } from '../src/types/retrievalProtocol.js';
 
 const URN_TABLE_FCL_CYCLE_COUNTER =
@@ -150,6 +154,92 @@ describe('NineRouterQueryPlanner (D-11..D-17)', () => {
     expect((calledInit.headers as Record<string, string>)['Authorization']).toBe(
       'Bearer secret-key-123'
     );
+  });
+
+  it('sends an exact JSON and intent contract to the model', async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      createJsonResponse({ choices: [{ message: { content: JSON.stringify(validPlanObject) } }] })
+    );
+    const planner = new NineRouterQueryPlanner(
+      {
+        enabled: true,
+        endpoint: 'https://9router.internal.shb.vn',
+        model: 'qwen2.5-72b-instruct',
+        apiKey: 'secret-key-123',
+        allowedHosts: ['9router.internal.shb.vn'],
+      },
+      mockFetch as unknown as typeof fetch
+    );
+
+    await planner.plan(defaultRequest, defaultContext);
+
+    const body = JSON.parse((mockFetch.mock.calls[0]![1] as RequestInit).body as string);
+    const prompt = body.messages[0].content as string;
+    expect(body.response_format).toEqual({ type: 'json_object' });
+    expect(body.stream).toBe(false);
+    expect(prompt).toContain('REQUIRED JSON SHAPE:');
+    expect(prompt).toContain('Return exactly one complete JSON object');
+    expect(prompt).toContain('LOOKUP: entity properties, catalog details, data tables, or calculation cycles');
+    expect(prompt).toContain('FLOW_TRAVERSAL: ordered execution steps');
+    expect(prompt).toContain('IMPACT_ANALYSIS: upstream/downstream effects');
+    expect(prompt).not.toContain('DEPEDENCY_CHECK');
+    expect(prompt).toContain('DEPENDENCY_CHECK: whether named entities have a direct dependency');
+    expect(prompt).toContain(URN_TABLE_FCL_CYCLE_COUNTER);
+    expect(prompt).toContain('READS_FROM: maxHops=');
+  });
+
+  it('throws a content-free transport error for HTTP, malformed envelope, and empty response', async () => {
+    const config = {
+      enabled: true,
+      endpoint: 'https://9router.internal.shb.vn',
+      model: 'qwen2.5-72b-instruct',
+      apiKey: 'secret-key-123',
+      allowedHosts: ['9router.internal.shb.vn'],
+    } as const;
+
+    for (const response of [
+      createJsonResponse({ message: 'secret upstream detail' }, 503),
+      { ok: true, status: 200, text: async () => '{broken' },
+      createJsonResponse({ choices: [] }),
+    ]) {
+      const planner = new NineRouterQueryPlanner(
+        config,
+        vi.fn().mockResolvedValue(response) as unknown as typeof fetch
+      );
+      await expect(planner.plan(defaultRequest, defaultContext)).rejects.toEqual(
+        expect.objectContaining({ name: 'PlannerTransportError', message: 'PLANNER_TRANSPORT_FAILURE' })
+      );
+    }
+  });
+
+  it('maps planner transport failure to deterministic degraded execution instead of UNSUPPORTED', async () => {
+    const planner = new NineRouterQueryPlanner(
+      {
+        enabled: true,
+        endpoint: 'https://9router.internal.shb.vn',
+        model: 'qwen2.5-72b-instruct',
+        apiKey: 'secret-key-123',
+        allowedHosts: ['9router.internal.shb.vn'],
+      },
+      vi.fn().mockRejectedValue(new PlannerTransportError()) as unknown as typeof fetch
+    );
+    const gateway: GraphRetrievalGateway = {
+      resolveEntities: vi.fn().mockResolvedValue([defaultContext.resolvedCandidates[0]]),
+      traverse: vi.fn(),
+    };
+
+    const outcome = await buildQueryExecutionPlan({
+      request: defaultRequest,
+      pinnedSnapshotId: 'snapshot-1',
+      gateway,
+      planner,
+    });
+
+    expect(outcome.status).toBe('executable');
+    if (outcome.status === 'executable') {
+      expect(outcome.isDegraded).toBe(true);
+      expect(outcome.planTrace.degradedFallback).toBe(true);
+    }
   });
 
   it('triggers exactly one repair completion call on schema mismatch and succeeds with repaired=true (D-15, D-16)', async () => {

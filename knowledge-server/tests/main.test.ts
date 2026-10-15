@@ -385,6 +385,7 @@ describe('executable startup', () => {
       expect(opts.remotePlanner.model).toBe('qwen2.5-72b-instruct');
       expect(opts.remotePlanner.apiKey).toBe('secret-key');
       expect(opts.remotePlanner.allowedHosts).toEqual(['9router.internal.shb.vn']);
+      expect(opts.remotePlanner.timeoutMs).toBe(30000);
     });
   });
 });

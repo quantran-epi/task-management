@@ -90,7 +90,7 @@ describe('Real Data Acceptance & Canary Lifecycle', () => {
 
   it('runLiveRetrievalMatrix evaluates all scenarios and formats metadata evidence', async () => {
     const setId = '44444444-4444-4444-8444-444444444444';
-    const mockSnapshotId = 'gsnap_mock_001';
+    const mockSnapshotId = '4240bf63-95f7-4b96-a1c7-45c5f80ba3c4';
 
     const mockFetcher = async (scenario: (typeof LIVE_SCENARIOS)[number]): Promise<RetrievalResponse> => {
       const isFast = Boolean(scenario.expectedFastPath);
@@ -107,7 +107,7 @@ describe('Real Data Acceptance & Canary Lifecycle', () => {
           dimensions: 384,
           policyVersion: 'v1',
         },
-        items: [
+        items: outcome === 'NO_EVIDENCE' ? [] : [
           {
             type: 'chunk',
             id: 'c1',
@@ -145,7 +145,7 @@ describe('Real Data Acceptance & Canary Lifecycle', () => {
         paths: isPath
           ? [
               {
-                pathId: 'path1',
+                pathId: 'P1',
                 snapshotId: mockSnapshotId,
                 nodeUrns: ['urn:plannermate:sys:proc:p1', 'urn:plannermate:sys:proc:p2'],
                 edgeFactKeys: ['f'.repeat(64)],
@@ -167,7 +167,7 @@ describe('Real Data Acceptance & Canary Lifecycle', () => {
         diagnostics: { degraded: false },
         planTrace: {
           fastPath: isFast,
-          intent: 'LOOKUP',
+          intent: scenario.expectedIntent ?? 'LOOKUP',
         },
         ...(outcome === 'NEEDS_CLARIFICATION'
           ? {
@@ -198,5 +198,16 @@ describe('Real Data Acceptance & Canary Lifecycle', () => {
     expect(matrixResult.results.length).toBe(LIVE_SCENARIOS.length);
     expect(matrixResult.smokeEvidence).toBeDefined();
     expect(matrixResult.smokeEvidence.cases.every((c) => c.status === 'PASS')).toBe(true);
+
+    const t4 = matrixResult.results.find((item) => item.id === 'T4');
+    const t5 = matrixResult.results.find((item) => item.id === 'T5');
+    const t6 = matrixResult.results.find((item) => item.id === 'T6');
+    const t7 = matrixResult.results.find((item) => item.id === 'T7');
+
+    expect(t4?.pathCount).toBeGreaterThan(0);
+    expect(t5?.pathCount).toBeGreaterThan(0);
+    expect(t6?.citationCount).toBe(0);
+    expect(t7?.citationCount).toBe(0);
+    expect(matrixResult.activeSnapshotId).toBe(mockSnapshotId);
   });
 });

@@ -191,7 +191,7 @@ describe('18-W0-02A: Retrieval Ontology Registry & Identifier/Entity Resolution'
       expect(urns).toContain(URN_CONTAINER_60000006);
     });
 
-    it('disambiguates collision when query contains explicit kind discriminator', async () => {
+    it('returns ambiguous on name collision forwarding candidates for planner disambiguation', async () => {
       const gateway = new MockGraphGateway([
         {
           urn: URN_PROCESS_60000006,
@@ -205,25 +205,15 @@ describe('18-W0-02A: Retrieval Ontology Registry & Identifier/Entity Resolution'
         },
       ]);
 
-      const resultProcess = await resolveQueryEntities(
+      const result = await resolveQueryEntities(
         gateway,
         pinnedSnapshot,
         'quy trình 60000006'
       );
-      expect(resultProcess.status).toBe('resolved');
-      if (resultProcess.status === 'resolved') {
-        expect(resultProcess.resolved.urn).toBe(URN_PROCESS_60000006);
-      }
-
-      const resultStep = await resolveQueryEntities(
-        gateway,
-        pinnedSnapshot,
-        'bước 60000006'
-      );
-      expect(resultStep.status).toBe('resolved');
-      if (resultStep.status === 'resolved') {
-        expect(resultStep.resolved.urn).toBe(URN_CONTAINER_60000006);
-      }
+      expect(result.status).toBe('ambiguous');
+      expect(result.candidates).toHaveLength(2);
+      expect(result.candidates.map((c) => c.urn)).toContain(URN_PROCESS_60000006);
+      expect(result.candidates.map((c) => c.urn)).toContain(URN_CONTAINER_60000006);
     });
 
     it('resolves pronoun using recent turns if present', async () => {
@@ -401,7 +391,15 @@ describe('18-W0-02A: Retrieval Ontology Registry & Identifier/Entity Resolution'
         expect(result.isDegraded).toBe(false);
         expect(result.plan.queryIntent).toBe('IMPACT_ANALYSIS');
         expect(result.plan.seedUrns).toEqual([URN_TABLE_FCL_CYCLE_COUNTER]);
-        expect(result.plan.traversalSteps[0]?.relationType).toBe('READS_FROM');
+        expect(result.plan.traversalSteps).toEqual([
+          {
+            relationType: 'READS_FROM',
+            direction: 'INCOMING',
+            maxHops: 1,
+            targetKind: 'SoftwareComponent',
+          },
+        ]);
+        expect(result.plan.overallMaxDepth).toBe(1);
         expect(result.planTrace.fastPath).toBe(false);
         expect(result.planTrace.degradedFallback).toBe(false);
       }
@@ -581,7 +579,22 @@ describe('18-W0-02A: Retrieval Ontology Registry & Identifier/Entity Resolution'
       const planner = {
         async plan(): Promise<any> {
           plannerCalled = true;
-          throw new Error('Planner must not be called on collision');
+          return {
+            type: 'clarification',
+            reason: 'Ambiguous name collision requires user clarification',
+            candidates: [
+              {
+                urn: URN_PROCESS_60000006,
+                canonicalName: '60000006 - Grace period length cycle',
+                kind: 'ScheduledProcess',
+              },
+              {
+                urn: URN_CONTAINER_60000006,
+                canonicalName: 'Step 20 - Grace period length cycle',
+                kind: 'ProcessStep',
+              },
+            ],
+          };
         },
       };
 
@@ -597,7 +610,7 @@ describe('18-W0-02A: Retrieval Ontology Registry & Identifier/Entity Resolution'
         planner,
       });
 
-      expect(plannerCalled).toBe(false);
+      expect(plannerCalled).toBe(true);
       expect(result.status).toBe('needsClarification');
       if (result.status === 'needsClarification') {
         expect(result.semanticOutcome).toBe('NEEDS_CLARIFICATION');

@@ -17,7 +17,13 @@ import type {
   EdgeItem,
   ClarificationCandidate,
 } from '../src/types/retrievalProtocol.js';
-import { URN_TABLE_FCL_CYCLE_COUNTER } from './fixtures/pilotGoldEntities.js';
+import {
+  URN_TABLE_FCL_CYCLE_COUNTER,
+  URN_PROCESS_60000006,
+  URN_CONTAINER_60000006,
+  URN_SUBPROCESS_10000304,
+  URN_PKG_FCL_CYCLE_COUNTER,
+} from './fixtures/pilotGoldEntities.js';
 
 describe('18-W0-03B: RetrievalService Pinned Parallel Orchestration & Timeouts', () => {
   const setId = 'test-set-1';
@@ -413,6 +419,21 @@ describe('18-W0-03B: RetrievalService Pinned Parallel Orchestration & Timeouts',
       hasConflict: false,
     }];
     graphGateway.traverse = async () => ({
+      chunks: [{
+        type: 'chunk',
+        id: 'chunk-path-1',
+        score: 1,
+        modalitiesContributed: ['graph'],
+        sourceDocumentId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
+        sourceDocumentTitle: 'Credit calculations',
+        sectionAnchor: 'Flow',
+        lineStart: 1,
+        lineEnd: 3,
+        rawSnippet: 'Path evidence',
+        publishedContentHash: 'a'.repeat(64),
+        snapshotId,
+        hasConflict: false,
+      }],
       entities: [],
       edges: [],
       paths: [{
@@ -440,6 +461,23 @@ describe('18-W0-03B: RetrievalService Pinned Parallel Orchestration & Timeouts',
     expect(closed.paths[0]?.hopCitationIds).toEqual([['chunk-path-1']]);
 
     indexGateway.queryFulltext = async () => [];
+    graphGateway.traverse = async () => ({
+      chunks: [],
+      entities: [],
+      edges: [],
+      paths: [{
+        nodeUrns: [
+          'urn:plannermate:smartvista:PRC_PROCESS:60000006',
+          'urn:plannermate:smartvista:PRC_CONTAINER:60000006',
+        ],
+        edgeFactKeys: ['a'.repeat(64)],
+        hopClassifications: ['OBSERVED'],
+        hopSupportingChunkIds: [['chunk-path-1']],
+        edgeSnapshotIds: [snapshotId],
+        hasConflict: false,
+      }],
+      truncated: false,
+    });
     const dropped = await service.retrieve(setId, defaultRequest);
     expect(dropped.paths).toEqual([]);
   });
@@ -513,6 +551,166 @@ describe('18-W0-03B: RetrievalService Pinned Parallel Orchestration & Timeouts',
   });
 
   describe('18-SERVICE-01: Strict Semantic Outcomes, Fusion, Promotion Race, and Redaction', () => {
+    it('returns NO_EVIDENCE when non-fast-path retrieval only has weak uncorroborated candidates', async () => {
+      const indexGateway = new DeterministicIndexGatewayStub();
+      indexGateway.activeSnapshotId = snapshotId;
+      const embedding = new DeterministicEmbeddingStub();
+      const planner = new DeterministicPlannerStub();
+      const graphGateway = new DeterministicGraphGatewayStub();
+      graphGateway.mockCandidates = [{
+        urn: URN_TABLE_FCL_CYCLE_COUNTER,
+        canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+        kind: 'DatabaseObject',
+      }];
+      planner.scriptedResult = {
+        type: 'plan',
+        plan: {
+          planId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+          queryIntent: 'DEPENDENCY_CHECK',
+          seedUrns: [URN_TABLE_FCL_CYCLE_COUNTER],
+          traversalSteps: [],
+          overallMaxDepth: 1,
+          includeInferred: false,
+          fulltextKeywords: ['unrelated topic'],
+          semanticQuery: 'unrelated topic',
+        },
+      };
+      const weakChunk: ChunkItem = {
+        type: 'chunk',
+        id: 'weak-noise',
+        score: 0.55,
+        modalitiesContributed: ['vector'],
+        sourceDocumentId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
+        sourceDocumentTitle: 'Credit calculations',
+        publishedContentHash: 'a'.repeat(64),
+        sectionAnchor: 'Sec',
+        lineStart: 1,
+        lineEnd: 5,
+        rawSnippet: 'Unrelated evidence',
+        snapshotId,
+        hasConflict: false,
+      };
+      indexGateway.vectorChunks = [weakChunk];
+      indexGateway.fulltextChunks = [{ ...weakChunk, modalitiesContributed: ['fulltext'] }];
+
+      const response = await new RetrievalService({
+        indexGateway,
+        embeddingProvider: embedding,
+        queryPlanner: planner,
+        graphGateway,
+      }).retrieve(setId, {
+        query: 'unsupported natural language question',
+        limit: 20,
+        includeInferred: false,
+        recentTurns: [],
+      });
+
+      expect(response.outcome).toBe('NO_EVIDENCE');
+      expect(response.items).toEqual([]);
+      expect(response.reason).toBe('NO_MATCHING_EVIDENCE');
+    });
+
+    it.each([
+      'Thủ tục xử lý chuyển tiền quốc tế SWIFT MT103 trong container 60000006 hoạt động ra sao?',
+      'Hãy phỏng đoán xem container 60000006 có thể hỗ trợ chuẩn SWIFT MT103 trong tương lai không?',
+    ])('returns NO_EVIDENCE when graph seed resolves but material domain has no textual support: %s', async (query) => {
+      const indexGateway = new DeterministicIndexGatewayStub();
+      indexGateway.activeSnapshotId = snapshotId;
+      const embedding = new DeterministicEmbeddingStub();
+      const planner = new DeterministicPlannerStub();
+      const graphGateway = new DeterministicGraphGatewayStub();
+      const processUrn = 'urn:plannermate:smartvista:ScheduledProcess:60000006';
+      graphGateway.mockCandidates = [{
+        urn: processUrn,
+        canonicalName: 'SHB Credit calculations container 60000006',
+        kind: 'ScheduledProcess',
+      }];
+      planner.scriptedResult = {
+        type: 'plan',
+        plan: {
+          planId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+          queryIntent: 'LOOKUP',
+          seedUrns: [processUrn],
+          traversalSteps: [{ relationType: 'CONTAINS_STEP', direction: 'OUTGOING', maxHops: 1 }],
+          overallMaxDepth: 1,
+          includeInferred: false,
+          fulltextKeywords: ['SWIFT MT103'],
+          semanticQuery: query,
+        },
+      };
+      const graphChunk: ChunkItem = {
+        type: 'chunk', id: 'credit-flow', score: 1, modalitiesContributed: ['graph'],
+        sourceDocumentId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
+        sourceDocumentTitle: 'Credit calculations', publishedContentHash: 'a'.repeat(64),
+        sectionAnchor: 'Flow', lineStart: 1, lineEnd: 3,
+        rawSnippet: 'Container executes credit calculation and billing cycles.', snapshotId,
+        hasConflict: false,
+      };
+      graphGateway.traverse = async () => ({
+        chunks: [graphChunk],
+        entities: [{
+          type: 'entity', id: processUrn, score: 1, modalitiesContributed: ['graph'],
+          urn: processUrn, canonicalName: 'SHB Credit calculations container 60000006',
+          kind: 'ScheduledProcess', snapshotId, hasConflict: false,
+        }],
+        edges: [], paths: [], truncated: false,
+      });
+      indexGateway.fulltextChunks = [{ ...graphChunk, modalitiesContributed: ['fulltext'], score: 0.2 }];
+      indexGateway.vectorChunks = [{ ...graphChunk, modalitiesContributed: ['vector'], score: 0.55 }];
+
+      const response = await new RetrievalService({
+        indexGateway, embeddingProvider: embedding, queryPlanner: planner, graphGateway,
+      }).retrieve(setId, { query, limit: 20, includeInferred: false, recentTurns: [] });
+
+      expect(response.outcome).toBe('NO_EVIDENCE');
+      expect(response.items).toEqual([]);
+      expect(response.paths).toEqual([]);
+    });
+
+    it('keeps cross-lingual semantic evidence at the calibrated multilingual floor', async () => {
+      const indexGateway = new DeterministicIndexGatewayStub();
+      indexGateway.activeSnapshotId = snapshotId;
+      const embedding = new DeterministicEmbeddingStub();
+      const planner = new DeterministicPlannerStub();
+      const graphGateway = new DeterministicGraphGatewayStub();
+      graphGateway.mockCandidates = [{
+        urn: URN_TABLE_FCL_CYCLE_COUNTER,
+        canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+        kind: 'DatabaseObject',
+      }];
+      const relevant: ChunkItem = {
+        type: 'chunk',
+        id: 'cross-lingual-hit',
+        score: 0.69,
+        modalitiesContributed: ['vector'],
+        sourceDocumentId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
+        sourceDocumentTitle: 'Credit calculations',
+        publishedContentHash: 'a'.repeat(64),
+        sectionAnchor: 'Data objects',
+        lineStart: 1,
+        lineEnd: 5,
+        rawSnippet: 'English evidence for Vietnamese query',
+        snapshotId,
+        hasConflict: false,
+      };
+      indexGateway.vectorChunks = [relevant];
+
+      const response = await new RetrievalService({
+        indexGateway,
+        embeddingProvider: embedding,
+        queryPlanner: planner,
+        graphGateway,
+      }).retrieve(setId, {
+        query: 'Các bảng dữ liệu và chu kỳ tính toán lãi suất container 60000006 là gì?',
+        limit: 20,
+        includeInferred: false,
+        recentTurns: [],
+      });
+
+      expect(response.outcome).toBe('READY');
+      expect(response.items.map((item) => item.id)).toContain(relevant.id);
+    });
+
     it('returns READY when all modalities succeed and query returns items', async () => {
       const indexGateway = new DeterministicIndexGatewayStub();
       indexGateway.activeSnapshotId = snapshotId;
@@ -642,7 +840,7 @@ describe('18-W0-03B: RetrievalService Pinned Parallel Orchestration & Timeouts',
 
     it('discards candidates from modality returning mismatched snapshotId during mid-query promotion race and marks that modality stale', async () => {
       const indexGateway = new DeterministicIndexGatewayStub();
-      indexGateway.activeSnapshotId = 'snap-gen-01'; // Leased generation
+      indexGateway.activeSnapshotId = 'gsnap_00000001'; // Leased generation
       const embedding = new DeterministicEmbeddingStub();
       const planner = new DeterministicPlannerStub();
       const graphGateway = new DeterministicGraphGatewayStub();
@@ -669,12 +867,12 @@ describe('18-W0-03B: RetrievalService Pinned Parallel Orchestration & Timeouts',
           lineStart: 1,
           lineEnd: 5,
           rawSnippet: 'Pinned generation snippet',
-          snapshotId: 'snap-gen-01',
+          snapshotId: 'gsnap_00000001',
           hasConflict: false,
         },
       ];
 
-      // Vector adapter raced and read from newly promoted generation 'snap-gen-02'
+      // Vector adapter raced and read from newly promoted generation 'gsnap_00000002'
       indexGateway.queryVector = async () => [
         {
           type: 'chunk',
@@ -688,7 +886,7 @@ describe('18-W0-03B: RetrievalService Pinned Parallel Orchestration & Timeouts',
           lineStart: 1,
           lineEnd: 5,
           rawSnippet: 'Raced snippet',
-          snapshotId: 'snap-gen-02', // Stale mismatch!
+          snapshotId: 'gsnap_00000002', // Stale mismatch!
           hasConflict: false,
         },
       ];
@@ -707,12 +905,12 @@ describe('18-W0-03B: RetrievalService Pinned Parallel Orchestration & Timeouts',
         recentTurns: [],
       });
 
-      expect(response.snapshotId).toBe('snap-gen-01');
+      expect(response.snapshotId).toBe('gsnap_00000001');
       expect(response.modalityStatus.vector.status).toBe('stale');
       expect(response.modalityStatus.vector.reason).toBe('PINNED_SNAPSHOT_UNAVAILABLE');
       // Mismatched vector item discarded
       expect(response.items.find((i) => i.id === 'chunk-vec-mismatched')).toBeUndefined();
-      expect(response.items.every((i) => i.snapshotId === 'snap-gen-01')).toBe(true);
+      expect(response.items.every((i) => i.snapshotId === 'gsnap_00000001')).toBe(true);
     });
 
     it('returns UNSUPPORTED outcome when query planner encounters unsupported query construct', async () => {
@@ -883,6 +1081,350 @@ describe('18-W0-03B: RetrievalService Pinned Parallel Orchestration & Timeouts',
       expect(conflictingEdges).toHaveLength(2);
       expect(conflictingEdges[0]?.conflictGroupId).toBeDefined();
       expect(conflictingEdges[0]?.conflictGroupId).toBe(conflictingEdges[1]?.conflictGroupId);
+    });
+
+    it('T4 regression: corroborates multi-hop technical terms across returned evidence pool without requiring all terms per chunk', async () => {
+      const indexGateway = new DeterministicIndexGatewayStub();
+      indexGateway.activeSnapshotId = snapshotId;
+      const embedding = new DeterministicEmbeddingStub();
+      const planner = new DeterministicPlannerStub();
+      const graphGateway = new DeterministicGraphGatewayStub();
+
+      const query = 'Quy trình thực thi của container 60000006 diễn ra theo các bước nào từ Scheduler đến PL/SQL?';
+
+      graphGateway.mockCandidates = [
+        {
+          urn: URN_CONTAINER_60000006,
+          canonicalName: 'Step 20 - Grace period length cycle',
+          kind: 'ProcessStep',
+        },
+      ];
+
+      planner.scriptedResult = {
+        type: 'plan',
+        plan: {
+          planId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+          queryIntent: 'FLOW_TRAVERSAL',
+          seedUrns: [URN_CONTAINER_60000006],
+          traversalSteps: [
+            { relationType: 'INVOKES', direction: 'OUTGOING', maxHops: 1 },
+            { relationType: 'CALLS', direction: 'OUTGOING', maxHops: 1 },
+          ],
+          overallMaxDepth: 2,
+          includeInferred: false,
+          fulltextKeywords: ['container 60000006', 'Scheduler', 'PL/SQL'],
+          semanticQuery: query,
+        },
+      };
+
+      // Chunk 1 from 01-wiring.md contains Scheduler and Container but not PL/SQL
+      const chunkWiring: ChunkItem = {
+        type: 'chunk',
+        id: 'chunk-wiring-01',
+        score: 0.95,
+        modalitiesContributed: ['fulltext'],
+        sourceDocumentId: '00000000-0000-4000-8000-000000000001',
+        sourceDocumentTitle: '01-wiring.md',
+        sectionAnchor: 'Scheduler to Container',
+        lineStart: 1,
+        lineEnd: 20,
+        rawSnippet: 'Scheduler kích hoạt container 60000006 để bắt đầu quy trình thực thi.',
+        publishedContentHash: 'a'.repeat(64),
+        snapshotId,
+        hasConflict: false,
+      };
+
+      // Chunk 2 from 03-call-chain.md contains PL/SQL and package call but not Scheduler
+      const chunkCallChain: ChunkItem = {
+        type: 'chunk',
+        id: 'chunk-callchain-03',
+        score: 0.9,
+        modalitiesContributed: ['graph'],
+        sourceDocumentId: '00000000-0000-4000-8000-000000000002',
+        sourceDocumentTitle: '03-call-chain.md',
+        sectionAnchor: 'PL/SQL Call Chain',
+        lineStart: 10,
+        lineEnd: 30,
+        rawSnippet: 'Quy trình bước này gọi PL/SQL package procedure MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS.',
+        publishedContentHash: 'b'.repeat(64),
+        snapshotId,
+        hasConflict: false,
+      };
+
+      indexGateway.fulltextChunks = [chunkWiring];
+      indexGateway.vectorChunks = [chunkWiring];
+
+      const edgeFactKey = 'f'.repeat(64);
+      graphGateway.traverse = async () => ({
+        chunks: [chunkCallChain],
+        entities: [
+          {
+            type: 'entity',
+            id: URN_CONTAINER_60000006,
+            score: 1.0,
+            modalitiesContributed: ['graph'],
+            urn: URN_CONTAINER_60000006,
+            canonicalName: 'Step 20 - Grace period length cycle',
+            kind: 'ProcessStep',
+            snapshotId,
+            hasConflict: false,
+          },
+          {
+            type: 'entity',
+            id: URN_PKG_FCL_CYCLE_COUNTER,
+            score: 1.0,
+            modalitiesContributed: ['graph'],
+            urn: URN_PKG_FCL_CYCLE_COUNTER,
+            canonicalName: 'MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS',
+            kind: 'SoftwareComponent',
+            snapshotId,
+            hasConflict: false,
+          },
+        ],
+        edges: [
+          {
+            type: 'edge',
+            id: edgeFactKey,
+            score: 1.0,
+            modalitiesContributed: ['graph'],
+            factKey: edgeFactKey,
+            sourceUrn: URN_CONTAINER_60000006,
+            relationType: 'INVOKES',
+            targetUrn: URN_PKG_FCL_CYCLE_COUNTER,
+            evidenceClass: 'OBSERVED',
+            supportingChunkIds: ['chunk-callchain-03'],
+            snapshotId,
+            hasConflict: false,
+          },
+        ],
+        paths: [
+          {
+            nodeUrns: [URN_CONTAINER_60000006, URN_PKG_FCL_CYCLE_COUNTER],
+            edgeFactKeys: [edgeFactKey],
+            hopClassifications: ['OBSERVED'],
+            hopSupportingChunkIds: [['chunk-callchain-03']],
+            edgeSnapshotIds: [snapshotId],
+            hasConflict: false,
+          },
+        ],
+        truncated: false,
+      });
+
+      const service = new RetrievalService({
+        indexGateway,
+        embeddingProvider: embedding,
+        queryPlanner: planner,
+        graphGateway,
+      });
+
+      const response = await service.retrieve(setId, {
+        query,
+        limit: 20,
+        includeInferred: false,
+        recentTurns: [],
+      });
+
+      expect(response.outcome).toBe('READY');
+      expect(response.items.length).toBeGreaterThan(0);
+      expect(response.paths).toHaveLength(1);
+      expect(response.paths[0]?.nodeUrns).toEqual([URN_CONTAINER_60000006, URN_PKG_FCL_CYCLE_COUNTER]);
+      expect(response.paths[0]?.hopCitationIds).toEqual([['chunk-callchain-03']]);
+    });
+
+    it('T5 regression: normalizes IMPACT_ANALYSIS on DatabaseObject to retain directly affected procedures', async () => {
+      const indexGateway = new DeterministicIndexGatewayStub();
+      indexGateway.activeSnapshotId = snapshotId;
+      const embedding = new DeterministicEmbeddingStub();
+      const planner = new DeterministicPlannerStub();
+      const graphGateway = new DeterministicGraphGatewayStub();
+
+      const query = 'Nếu thay đổi cấu trúc bảng MAIN1.FCL_CYCLE_COUNTER thì những package và quy trình nào bị ảnh hưởng?';
+
+      graphGateway.mockCandidates = [
+        {
+          urn: URN_TABLE_FCL_CYCLE_COUNTER,
+          canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+          kind: 'DatabaseObject',
+        },
+      ];
+
+      // Planner returns IMPACT_ANALYSIS with empty steps (simulating model output requiring semantic normalization)
+      planner.scriptedResult = {
+        type: 'plan',
+        plan: {
+          planId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
+          queryIntent: 'IMPACT_ANALYSIS',
+          seedUrns: [URN_TABLE_FCL_CYCLE_COUNTER],
+          traversalSteps: [], // empty steps
+          overallMaxDepth: 1,
+          includeInferred: false,
+          fulltextKeywords: ['MAIN1.FCL_CYCLE_COUNTER'],
+          semanticQuery: query,
+        },
+      };
+
+      const chunkImpact: ChunkItem = {
+        type: 'chunk',
+        id: 'chunk-impact-01',
+        score: 0.95,
+        modalitiesContributed: ['fulltext'],
+        sourceDocumentId: '00000000-0000-4000-8000-000000000003',
+        sourceDocumentTitle: 'Data Dictionary',
+        sectionAnchor: 'FCL_CYCLE_COUNTER',
+        lineStart: 1,
+        lineEnd: 15,
+        rawSnippet: 'Bảng MAIN1.FCL_CYCLE_COUNTER được đọc và cập nhật bởi gói thủ tục chu kỳ.',
+        publishedContentHash: 'c'.repeat(64),
+        snapshotId,
+        hasConflict: false,
+      };
+
+      indexGateway.fulltextChunks = [chunkImpact];
+      indexGateway.vectorChunks = [chunkImpact];
+
+      const factKey1 = '1'.repeat(64);
+      const factKey2 = '2'.repeat(64);
+      const factKey3 = '3'.repeat(64);
+
+      let traversedCriteria: any = null;
+      graphGateway.traverse = async (_snapshotId, criteria) => {
+        traversedCriteria = criteria;
+        return {
+          chunks: [chunkImpact],
+          entities: [
+            {
+              type: 'entity',
+              id: URN_TABLE_FCL_CYCLE_COUNTER,
+              score: 1.0,
+              modalitiesContributed: ['graph'],
+              urn: URN_TABLE_FCL_CYCLE_COUNTER,
+              canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+              kind: 'DatabaseObject',
+              snapshotId,
+              hasConflict: false,
+            },
+            {
+              type: 'entity',
+              id: URN_PKG_FCL_CYCLE_COUNTER,
+              score: 1.0,
+              modalitiesContributed: ['graph'],
+              urn: URN_PKG_FCL_CYCLE_COUNTER,
+              canonicalName: 'MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS',
+              kind: 'SoftwareComponent',
+              snapshotId,
+              hasConflict: false,
+            },
+            {
+              type: 'entity',
+              id: URN_SUBPROCESS_10000304,
+              score: 1.0,
+              modalitiesContributed: ['graph'],
+              urn: URN_SUBPROCESS_10000304,
+              canonicalName: 'Switch cycle',
+              kind: 'SoftwareComponent',
+              snapshotId,
+              hasConflict: false,
+            },
+            {
+              type: 'entity',
+              id: URN_CONTAINER_60000006,
+              score: 1.0,
+              modalitiesContributed: ['graph'],
+              urn: URN_CONTAINER_60000006,
+              canonicalName: 'Step 20 - Grace period length cycle',
+              kind: 'ProcessStep',
+              snapshotId,
+              hasConflict: false,
+            },
+          ],
+          edges: [
+            {
+              type: 'edge',
+              id: factKey1,
+              score: 1.0,
+              modalitiesContributed: ['graph'],
+              factKey: factKey1,
+              sourceUrn: URN_PKG_FCL_CYCLE_COUNTER,
+              relationType: 'READS_FROM',
+              targetUrn: URN_TABLE_FCL_CYCLE_COUNTER,
+              evidenceClass: 'OBSERVED',
+              supportingChunkIds: ['chunk-impact-01'],
+              snapshotId,
+              hasConflict: false,
+            },
+            {
+              type: 'edge',
+              id: factKey2,
+              score: 1.0,
+              modalitiesContributed: ['graph'],
+              factKey: factKey2,
+              sourceUrn: URN_SUBPROCESS_10000304,
+              relationType: 'CALLS',
+              targetUrn: URN_PKG_FCL_CYCLE_COUNTER,
+              evidenceClass: 'OBSERVED',
+              supportingChunkIds: ['chunk-impact-01'],
+              snapshotId,
+              hasConflict: false,
+            },
+            {
+              type: 'edge',
+              id: factKey3,
+              score: 1.0,
+              modalitiesContributed: ['graph'],
+              factKey: factKey3,
+              sourceUrn: URN_CONTAINER_60000006,
+              relationType: 'INVOKES',
+              targetUrn: URN_SUBPROCESS_10000304,
+              evidenceClass: 'OBSERVED',
+              supportingChunkIds: ['chunk-impact-01'],
+              snapshotId,
+              hasConflict: false,
+            },
+          ],
+          paths: [
+            {
+              nodeUrns: [
+                URN_TABLE_FCL_CYCLE_COUNTER,
+                URN_PKG_FCL_CYCLE_COUNTER,
+                URN_SUBPROCESS_10000304,
+                URN_CONTAINER_60000006,
+              ],
+              edgeFactKeys: [factKey1, factKey2, factKey3],
+              hopClassifications: ['OBSERVED', 'OBSERVED', 'OBSERVED'],
+              hopSupportingChunkIds: [['chunk-impact-01'], ['chunk-impact-01'], ['chunk-impact-01']],
+              edgeSnapshotIds: [snapshotId, snapshotId, snapshotId],
+              hasConflict: false,
+            },
+          ],
+          truncated: false,
+        };
+      };
+
+      const service = new RetrievalService({
+        indexGateway,
+        embeddingProvider: embedding,
+        queryPlanner: planner,
+        graphGateway,
+      });
+
+      const response = await service.retrieve(setId, {
+        query,
+        limit: 20,
+        includeInferred: false,
+        recentTurns: [],
+      });
+
+      expect(response.outcome).toBe('READY');
+      expect(traversedCriteria.plan.traversalSteps).toEqual([
+        {
+          relationType: 'READS_FROM',
+          direction: 'INCOMING',
+          maxHops: 1,
+          targetKind: 'SoftwareComponent',
+        },
+      ]);
+      expect(traversedCriteria.plan.overallMaxDepth).toBe(1);
+      expect(response.paths).toHaveLength(1);
     });
   });
 });

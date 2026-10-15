@@ -80,8 +80,18 @@ function validConflictGroup() {
 }
 
 describe('retrieval path protocol', () => {
-  it('accepts an ordered two-hop path', () => {
+  it('accepts ordered paths with legacy and production UUID snapshot IDs', () => {
     expect(OrderedPathSchema.safeParse(validPath()).success).toBe(true);
+    expect(
+      OrderedPathSchema.safeParse({
+        ...validPath(),
+        snapshotId: '4240bf63-95f7-4b96-a1c7-45c5f80ba3c4',
+      }).success
+    ).toBe(true);
+  });
+
+  it('rejects malformed snapshot IDs', () => {
+    expect(OrderedPathSchema.safeParse({ ...validPath(), snapshotId: 'snapshot-live' }).success).toBe(false);
   });
 
   it('rejects broken node and edge adjacency', () => {
@@ -106,10 +116,16 @@ describe('retrieval path protocol', () => {
     expect(BaseRetrievalResponseSchema.safeParse(response).success).toBe(false);
   });
 
-  it('rejects path snapshots outside response snapshot', () => {
-    const response = validResponse();
-    response.paths[0] = { ...validPath(), snapshotId: otherSnapshotId };
-    expect(BaseRetrievalResponseSchema.safeParse(response).success).toBe(false);
+  it('accepts a production UUID response and rejects path snapshots outside it', () => {
+    const productionSnapshotId = '4240bf63-95f7-4b96-a1c7-45c5f80ba3c4';
+    const uuidResponse = validResponse();
+    uuidResponse.snapshotId = productionSnapshotId;
+    uuidResponse.items = uuidResponse.items.map((item) => ({ ...item, snapshotId: productionSnapshotId }));
+    uuidResponse.paths[0] = { ...validPath(), snapshotId: productionSnapshotId };
+    expect(BaseRetrievalResponseSchema.safeParse(uuidResponse).success).toBe(true);
+
+    uuidResponse.paths[0] = { ...validPath(), snapshotId: otherSnapshotId };
+    expect(BaseRetrievalResponseSchema.safeParse(uuidResponse).success).toBe(false);
   });
 
   it('rejects chunk without immutable source title or content hash', () => {

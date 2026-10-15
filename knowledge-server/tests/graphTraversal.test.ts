@@ -67,17 +67,18 @@ describe('18-W0-02C: Static Bounded Cypher Templates & Plan Validation', () => {
       }
     });
 
-    it('enforces snapshot property on all nodes and relations in every template', () => {
+    it('enforces snapshot property on path nodes, topology relations, facts, and chunks', () => {
       for (const cypher of Object.values(STATIC_TRAVERSAL_QUERIES)) {
         expect(cypher).toContain('graphSnapshotId: $snapshotId');
-        expect(cypher).toContain('r.graphSnapshotId = $snapshotId');
         expect(cypher).toContain('n.graphSnapshotId = $snapshotId');
+        expect(cypher).toContain('fact:Fact {graphSnapshotId: $snapshotId');
+        expect(cypher).toContain('chunk:Chunk {graphSnapshotId: $snapshotId');
       }
     });
 
-    it('enforces evidence classification allowlist parameter in every template', () => {
+    it('enforces evidence classification allowlist on authoritative Fact nodes', () => {
       for (const cypher of Object.values(STATIC_TRAVERSAL_QUERIES)) {
-        expect(cypher).toContain('r.effectiveClassification IN $evidenceClasses');
+        expect(cypher).toContain('fact.effectiveClassification IN $evidenceClasses');
       }
     });
 
@@ -348,6 +349,29 @@ describe('18-W0-02C: Static Bounded Cypher Templates & Plan Validation', () => {
       expect(edge.evidenceClass).toBe('OBSERVED');
       expect(edge.supportingChunkIds).toEqual(['chunk-101']);
       expect(edge.snapshotId).toBe(pinnedSnapshot);
+    });
+
+    it('omits undefined optional entity provenance before response validation', async () => {
+      const gateway = new StubGateway();
+      gateway.mockEntities = [
+        {
+          type: 'entity',
+          id: URN_PROCESS_60000006,
+          score: 1.0,
+          modalitiesContributed: ['graph'],
+          urn: URN_PROCESS_60000006,
+          canonicalName: 'SHB - Credit calculations',
+          kind: 'ScheduledProcess',
+          snapshotId: pinnedSnapshot,
+          firstSeenInDoc: undefined,
+          hasConflict: false,
+        } as EntityItem,
+      ];
+
+      const result = await runBoundedGraphTraversal(createPlan(), pinnedSnapshot, gateway);
+
+      expect(result.entities).toHaveLength(1);
+      expect(result.entities[0]).not.toHaveProperty('firstSeenInDoc');
     });
 
     it('executes 2-hop call chain path returning intermediate process and component', async () => {

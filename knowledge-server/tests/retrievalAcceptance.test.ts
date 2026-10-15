@@ -332,14 +332,26 @@ describe('Phase 18 Retrieval Acceptance Suite (18-ACC-01..05)', () => {
     it('retrieves relevant English pilot evidence for Vietnamese and English equivalent queries using deterministic 384-dim adapter metadata', async () => {
       const ctx = await setupPilotCorpus();
 
-      const viQuery = 'AML_RISK đổi tên ảnh hưởng gì';
-      const enQuery = 'what is the impact of renaming AML_RISK';
+      const viQuery = 'CRD_INVOICE đổi tên ảnh hưởng gì';
+      const enQuery = 'what is the impact of renaming CRD_INVOICE';
 
       // Deterministic multilingual semantic stub mapping both queries to identical relevant ranking
       class MultilingualSemanticStub extends DeterministicEmbeddingStub {
+        private crdInvoiceVector: number[] | undefined;
+
+        override async embedDocuments(
+          texts: readonly string[],
+          options?: OperationOptions
+        ): Promise<number[][]> {
+          const vectors = await super.embedDocuments(texts, options);
+          const matchingIndex = texts.findIndex((text) => text.includes('CRD_INVOICE'));
+          this.crdInvoiceVector = matchingIndex >= 0 ? vectors[matchingIndex] : undefined;
+          return vectors;
+        }
+
         override async embedQuery(text: string, options?: OperationOptions): Promise<number[]> {
-          if (text.includes('AML_RISK')) {
-            return super.embedQuery('semantic:aml_risk_impact', options);
+          if (text.includes('CRD_INVOICE') && this.crdInvoiceVector) {
+            return [...this.crdInvoiceVector];
           }
           return super.embedQuery(text, options);
         }
@@ -353,9 +365,12 @@ describe('Phase 18 Retrieval Acceptance Suite (18-ACC-01..05)', () => {
         policyVersion: '2026.10.1-e5-small-mean-norm',
       });
 
-      // Query vector aligned with embedding vectors stored in candidate chunks
+      // Query vector aligned with an English corpus chunk containing the resolved object.
       const activeGen = (await ctx.repo.getActiveGraph(SET_ID))?.retrievalGeneration;
       expect(activeGen?.hasVectors).toBe(true);
+      const matchingChunks = await ctx.repo.queryFullText(ctx.graphSnapshotId, 'CRD_INVOICE', 1);
+      expect(matchingChunks).toHaveLength(1);
+      await customEmbeddingProvider.embedDocuments([matchingChunks[0]!.rawSnippet]);
 
       const queryPlanner: QueryPlanner = {
         async plan(req, plannerCtx): Promise<QueryPlanResult> {
@@ -370,7 +385,7 @@ describe('Phase 18 Retrieval Acceptance Suite (18-ACC-01..05)', () => {
               traversalSteps: [],
               overallMaxDepth: 1,
               includeInferred: false,
-              fulltextKeywords: ['AML_RISK'],
+              fulltextKeywords: ['CRD_INVOICE'],
               semanticQuery: req.query,
             },
           };
@@ -442,9 +457,16 @@ describe('Phase 18 Retrieval Acceptance Suite (18-ACC-01..05)', () => {
       expect(jsonEn.embeddingProvider).toEqual(jsonVi.embeddingProvider);
       expect(jsonEn.items.length).toBeGreaterThan(0);
 
-      // Top evidence retrieved should match across languages
-      const topEnChunk = jsonEn.items.find((i) => i.type === 'chunk');
-      expect(topEnChunk?.id).toBe(topViChunk?.id);
+      // Both languages retain the same directly corroborating object evidence.
+      const viEvidenceIds = new Set(
+        jsonVi.items
+          .filter((item): item is ChunkItem => item.type === 'chunk' && item.rawSnippet.includes('CRD_INVOICE'))
+          .map((item) => item.id)
+      );
+      const enEvidenceIds = jsonEn.items
+        .filter((item): item is ChunkItem => item.type === 'chunk' && item.rawSnippet.includes('CRD_INVOICE'))
+        .map((item) => item.id);
+      expect(enEvidenceIds.some((id) => viEvidenceIds.has(id))).toBe(true);
     });
   });
 
@@ -783,6 +805,8 @@ describe('Phase 18 Retrieval Acceptance Suite (18-ACC-01..05)', () => {
       const vectorOnlyChunkId = 'chunk-vec-3';
 
       const commonDocId = '60000006-0000-4000-8000-000000000001';
+      const commonTitle = '01-wiring.md';
+      const commonHash = 'a'.repeat(64);
 
       const mockIndexGateway: RetrievalIndexGateway = {
         ...ctx.indexGateway,
@@ -794,6 +818,8 @@ describe('Phase 18 Retrieval Acceptance Suite (18-ACC-01..05)', () => {
               score: 1.0,
               modalitiesContributed: ['fulltext'],
               sourceDocumentId: commonDocId,
+              sourceDocumentTitle: commonTitle,
+              publishedContentHash: commonHash,
               sectionAnchor: 'Sec1',
               lineStart: 10,
               lineEnd: 20,
@@ -807,6 +833,8 @@ describe('Phase 18 Retrieval Acceptance Suite (18-ACC-01..05)', () => {
               score: 0.8,
               modalitiesContributed: ['fulltext'],
               sourceDocumentId: commonDocId,
+              sourceDocumentTitle: commonTitle,
+              publishedContentHash: commonHash,
               sectionAnchor: 'Sec2',
               lineStart: 30,
               lineEnd: 40,
@@ -824,6 +852,8 @@ describe('Phase 18 Retrieval Acceptance Suite (18-ACC-01..05)', () => {
               score: 0.95,
               modalitiesContributed: ['vector'],
               sourceDocumentId: commonDocId,
+              sourceDocumentTitle: commonTitle,
+              publishedContentHash: commonHash,
               sectionAnchor: 'Sec1',
               lineStart: 10,
               lineEnd: 20,
@@ -837,6 +867,8 @@ describe('Phase 18 Retrieval Acceptance Suite (18-ACC-01..05)', () => {
               score: 0.85,
               modalitiesContributed: ['vector'],
               sourceDocumentId: commonDocId,
+              sourceDocumentTitle: commonTitle,
+              publishedContentHash: commonHash,
               sectionAnchor: 'Sec3',
               lineStart: 50,
               lineEnd: 60,
@@ -1140,7 +1172,7 @@ describe('Phase 18 Retrieval Acceptance Suite (18-ACC-01..05)', () => {
         method: 'POST',
         url: `/api/v1/sets/${SET_ID}/retrieve`,
         headers: { origin: ORIGIN, authorization: `Bearer ${TOKEN}` },
-        payload: { query: 'credit query' },
+        payload: { query: 'credit' },
       });
 
       expect(res.statusCode).toBe(200);

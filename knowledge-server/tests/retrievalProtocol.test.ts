@@ -599,10 +599,10 @@ describe('RetrievalProtocol Schema Suite (Task 18-W0-01)', () => {
       const indexGateway: RetrievalIndexGateway = new DeterministicIndexGatewayStub();
       const lease = await indexGateway.acquirePinnedSnapshot('test-set-01');
       expect(lease).not.toBeNull();
-      expect(lease?.snapshotId).toBe('snapshot-test-01');
+      expect(lease?.snapshotId).toBe('gsnap_00000001');
 
       await lease?.release();
-      const validMeta = await indexGateway.validateVectorIndexMetadata('snapshot-test-01', {
+      const validMeta = await indexGateway.validateVectorIndexMetadata('gsnap_00000001', {
         provider: 'local-onnx',
         model: 'multilingual-e5-small',
         revision: 'v1.0.0',
@@ -614,10 +614,10 @@ describe('RetrievalProtocol Schema Suite (Task 18-W0-01)', () => {
 
     it('DeterministicGraphGatewayStub resolves candidates and traverses with caps', async () => {
       const graphGateway: GraphRetrievalGateway = new DeterministicGraphGatewayStub();
-      const candidates = await graphGateway.resolveEntities('snapshot-test-01', ['AML_RISK']);
+      const candidates = await graphGateway.resolveEntities('gsnap_00000001', ['AML_RISK']);
       expect(candidates).toEqual([]);
 
-      const traversal = await graphGateway.traverse('snapshot-test-01', {
+      const traversal = await graphGateway.traverse('gsnap_00000001', {
         seedUrns: [validUrn1],
         plan: {
           planId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',

@@ -3,7 +3,7 @@ import { main, parseCliArgs, runAcceptanceCli } from '../src/acceptance/cli.js';
 
 const baseResponse = {
   outcome: 'READY',
-  snapshotId: 'snap-1',
+  snapshotId: 'gsnap_00000001',
   embeddingProvider: {
     provider: 'local-onnx',
     model: 'Xenova/multilingual-e5-small',
@@ -22,7 +22,7 @@ const baseResponse = {
       lineStart: 1,
       lineEnd: 2,
       rawSnippet: 'safe schema-required snippet',
-      snapshotId: 'snap-1',
+      snapshotId: 'gsnap_00000001',
       hasConflict: false,
     },
   ],
@@ -126,7 +126,7 @@ describe('acceptance CLI', () => {
       intent: 'LOOKUP',
       fastPath: true,
       itemCount: 1,
-      snapshotId: 'snap-1',
+      snapshotId: 'gsnap_00000001',
       degradedReasons: ['vector: MODEL_INDEX_MISMATCH'],
       sourceTitles: ['02-data-objects.md'],
       modalityStatus: baseResponse.modalityStatus,

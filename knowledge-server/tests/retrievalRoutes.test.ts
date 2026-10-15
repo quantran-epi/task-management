@@ -12,7 +12,7 @@ const SET_ID = randomUUID();
 function sampleResponse(outcome: RetrievalResponse['outcome'], overrides: Partial<RetrievalResponse> = {}): RetrievalResponse {
   const base: any = {
     outcome,
-    snapshotId: 'snap-1',
+    snapshotId: 'gsnap_00000001',
     embeddingProvider: {
       provider: 'local-onnx',
       model: 'Xenova/multilingual-e5-small',
@@ -243,6 +243,90 @@ describe('Fastify retrieval routes (Task 1: 18-ROUTE-01, D-23, T-18-01, T-18-02)
     expect(output).not.toContain(SECRET_QUERY);
     expect(output).not.toContain(SECRET_ERROR_MSG);
     expect(output).not.toContain(TOKEN);
+  });
+
+  it('logs only bounded response-validation diagnostics', async () => {
+    const SECRET_QUERY = 'CONFIDENTIAL_QUERY_SECRET_ZOD';
+    const retrieveMock = vi.fn().mockResolvedValue({
+      ...sampleResponse('READY'),
+      snapshotId: 'invalid-snapshot',
+    });
+
+    const logs: string[] = [];
+    const app = buildKnowledgeServer({
+      token: TOKEN,
+      allowedOrigins: [ORIGIN],
+      retrievalService: { retrieve: retrieveMock } as any,
+      logger: {
+        stream: {
+          write: (line: string) => {
+            logs.push(line);
+          },
+        },
+      },
+    }).app;
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/sets/${SET_ID}/retrieve`,
+      headers: {
+        origin: ORIGIN,
+        authorization: `Bearer ${TOKEN}`,
+      },
+      payload: { query: SECRET_QUERY },
+    });
+
+    expect(res.statusCode).toBe(500);
+    expect(res.json()).toEqual({
+      error: { code: 'INTERNAL_ERROR', message: 'Request could not be processed.' },
+    });
+
+    const output = logs.join('');
+    expect(output).toContain('RESPONSE_VALIDATION_ERROR');
+    expect(output).toContain('snapshotId');
+    expect(output).toContain('invalid_union');
+    expect(output).not.toContain(SECRET_QUERY);
+    expect(output).not.toContain('invalid-snapshot');
+    expect(output).not.toContain(TOKEN);
+    expect(output).not.toContain('stack');
+  });
+
+  it('logs fixed candidate-integrity code without leaking error internals', async () => {
+    const SECRET_ERROR_MSG = 'DATABASE_PASSWORD_LEAK_DIAGNOSTIC';
+    const integrityError = new Error('CANDIDATE_INTEGRITY_MISMATCH');
+    integrityError.stack = SECRET_ERROR_MSG;
+    const retrieveMock = vi.fn().mockRejectedValue(integrityError);
+
+    const logs: string[] = [];
+    const app = buildKnowledgeServer({
+      token: TOKEN,
+      allowedOrigins: [ORIGIN],
+      retrievalService: { retrieve: retrieveMock } as any,
+      logger: {
+        stream: {
+          write: (line: string) => {
+            logs.push(line);
+          },
+        },
+      },
+    }).app;
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/sets/${SET_ID}/retrieve`,
+      headers: {
+        origin: ORIGIN,
+        authorization: `Bearer ${TOKEN}`,
+      },
+      payload: { query: 'safe query' },
+    });
+
+    expect(res.statusCode).toBe(500);
+    const output = logs.join('');
+    expect(output).toContain('CANDIDATE_INTEGRITY_MISMATCH');
+    expect(output).not.toContain(SECRET_ERROR_MSG);
+    expect(output).not.toContain(TOKEN);
+    expect(output).not.toContain('stack');
   });
 
   it('proves server composition without retrievalService leaves route unregistered (404)', async () => {

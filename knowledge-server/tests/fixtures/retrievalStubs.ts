@@ -159,7 +159,7 @@ export class DeterministicPlannerStub implements QueryPlanner {
  * Deterministic retrieval index stub with snapshot leasing and mock search.
  */
 export class DeterministicIndexGatewayStub implements RetrievalIndexGateway {
-  public activeSnapshotId: string = 'snapshot-test-01';
+  public activeSnapshotId: string = 'gsnap_00000001';
   public fulltextChunks: ChunkItem[] = [];
   public vectorChunks: ChunkItem[] = [];
   public activeLeases: Set<string> = new Set();

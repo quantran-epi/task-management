@@ -79,13 +79,16 @@ describe('Deterministic MDAST Extraction (GRAPH-03, D-11, D-12, D-16)', () => {
     expect(urns.has(URN_PKG_FCL_CYCLE_COUNTER)).toBe(true);
   });
 
-  it('extracts cycle binds and database object nodes with schema qualification', () => {
+  it('extracts cycle binds, database objects, and referenced procedures with semantic kinds', () => {
     const result = extractDeterministicFacts(snapshot);
-    const urns = new Set(result.nodes.map((n) => n.urn));
+    const nodesByUrn = new Map(result.nodes.map((node) => [node.urn, node]));
 
-    expect(urns.has(URN_CYTP_1003)).toBe(true);
-    expect(urns.has(URN_CYTP_1002)).toBe(true);
-    expect(urns.has(URN_TABLE_FCL_CYCLE_COUNTER)).toBe(true);
+    expect(nodesByUrn.has(URN_CYTP_1003)).toBe(true);
+    expect(nodesByUrn.has(URN_CYTP_1002)).toBe(true);
+    expect(nodesByUrn.get(URN_TABLE_FCL_CYCLE_COUNTER)?.kind).toBe('DatabaseObject');
+    expect(
+      nodesByUrn.get('urn:plannermate:plsql:PLSQL_PROCEDURE:FCL_API_CYCLE_PKG.SWITCH_CYCLE')?.kind
+    ).toBe('SoftwareComponent');
   });
 
   it('extracts core structural and execution relations with OBSERVED classification', () => {
