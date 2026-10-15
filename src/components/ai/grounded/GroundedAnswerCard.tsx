@@ -1,11 +1,10 @@
 import React from 'react';
 import { Card, Collapse, Button, Tag, Tooltip, Divider, theme } from 'antd';
-import { InfoCircleOutlined, ReloadOutlined } from '@ant-design/icons';
+import { ReloadOutlined } from '@ant-design/icons';
 import {
   toGroundedAnswerDisplay,
   type ChatMessageGrounding,
   type PersistedCitation,
-  type ConfidenceLevel,
 } from '../../../services/ai/groundedAnswerSchemas';
 import { GroundedBanner } from './GroundedBanner';
 import { ClaimBlock } from './ClaimBlock';

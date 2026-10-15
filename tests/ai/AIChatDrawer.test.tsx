@@ -1297,4 +1297,113 @@ describe('AIChatDrawer', () => {
       expect(confirmCard).toHaveTextContent(/Ưu tiên: "Urgent"/);
     });
   });
+
+  it('renders clarify question with role="status" and loops composite query upon reply', async () => {
+    vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-api-key');
+    vi.spyOn(nineRouterTokenService, 'getNineRouterConfig').mockResolvedValue({
+      endpoint: 'http://localhost:20128',
+      defaultModel: 'gpt-4o',
+      charLimit: 12000,
+    });
+
+    let turnCalls = 0;
+    const queriesReceived: string[] = [];
+    setGroundedTurnTestHooks({
+      runGroundedTurn: async (input) => {
+        turnCalls++;
+        queriesReceived.push(input.query);
+        if (turnCalls === 1) {
+          return {
+            kind: 'clarify_intent',
+            clarifyQuestion: 'Bạn muốn hỏi về tiến độ hay quy trình nào?',
+          };
+        }
+        return {
+          kind: 'operational',
+          routedQuery: input.query,
+        };
+      },
+    });
+
+    async function* mockEvents() {
+      yield { type: 'text', delta: 'Đã hoàn tất sau khi làm rõ.' };
+    }
+    vi.spyOn(nineRouterClient, 'streamChatEvents').mockImplementation(mockEvents as any);
+
+    render(
+      <AIChatDrawer
+        open={true}
+        onClose={vi.fn()}
+        db={db}
+        activeScope={{ type: 'global' }}
+      />
+    );
+
+    const textarea = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
+    fireEvent.change(textarea, { target: { value: 'cái đó' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Bạn muốn hỏi về tiến độ hay quy trình nào?')
+      ).toBeInTheDocument();
+      expect(screen.getByTestId('clarification-prompt-card')).toBeInTheDocument();
+    });
+
+    // Replying with natural text continues loop without route chips
+    fireEvent.change(textarea, { target: { value: 'về tính lãi thẻ tín dụng' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+    await waitFor(() => {
+      expect(turnCalls).toBe(2);
+      expect(queriesReceived[1]).toContain('cái đó');
+      expect(queriesReceived[1]).toContain('[Thông tin bổ sung]: về tính lãi thẻ tín dụng');
+    });
+  });
+
+  it('fails closed when IntentRouterUnavailableError is thrown without executing tools', async () => {
+    vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-api-key');
+    vi.spyOn(nineRouterTokenService, 'getNineRouterConfig').mockResolvedValue({
+      endpoint: 'http://localhost:20128',
+      defaultModel: 'gpt-4o',
+      charLimit: 12000,
+    });
+
+    const streamSpy = vi.spyOn(nineRouterClient, 'streamChatEvents');
+
+    const { IntentRouterUnavailableError } = await import(
+      '../../src/services/ai/intentRouter'
+    );
+
+    setGroundedTurnTestHooks({
+      runGroundedTurn: async () => {
+        throw new IntentRouterUnavailableError(
+          'LLM endpoint is not configured; intent routing is unavailable.'
+        );
+      },
+    });
+
+    render(
+      <AIChatDrawer
+        open={true}
+        onClose={vi.fn()}
+        db={db}
+        activeScope={{ type: 'global' }}
+      />
+    );
+
+    const textarea = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
+    fireEvent.change(textarea, { target: { value: 'Hỏi bất kỳ điều gì khi LLM chết' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('inline-api-error-card')).toBeInTheDocument();
+      expect(
+        screen.getAllByText(/Trợ lý AI tạm thời không khả dụng/i).length
+      ).toBeGreaterThanOrEqual(1);
+    });
+
+    // Zero tools run
+    expect(streamSpy).not.toHaveBeenCalled();
+  });
 });

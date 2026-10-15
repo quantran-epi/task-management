@@ -1,83 +1,84 @@
 import React from 'react';
-import { Tag, theme } from 'antd';
-import { BookOutlined, AppstoreOutlined } from '@ant-design/icons';
+import { Card, Typography, Space, Button, theme } from 'antd';
+import { QuestionCircleOutlined, CloseOutlined } from '@ant-design/icons';
 
-export interface IntentRoutingPromptProps {
-  onSelect: (route: 'knowledge' | 'operational') => void;
+const { Text, Paragraph } = Typography;
+
+export interface ClarificationPromptCardProps {
+  question: string;
+  originalQuery?: string | undefined;
+  onCancel?: (() => void) | undefined;
 }
 
-export const IntentRoutingPrompt: React.FC<IntentRoutingPromptProps> = ({ onSelect }) => {
+/**
+ * ClarificationPromptCard presents the exact model clarification question with
+ * role="status" and polite conversational framing per D-06 and UI-SPEC 6.1.
+ * Binary route override chips (knowledge vs operational) are eliminated.
+ */
+export const IntentRoutingPrompt: React.FC<ClarificationPromptCardProps> = ({
+  question,
+  originalQuery,
+  onCancel,
+}) => {
   const { token } = theme.useToken();
 
-  const handleActivate = (route: 'knowledge' | 'operational') => {
-    onSelect(route);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent, route: 'knowledge' | 'operational') => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      onSelect(route);
-    }
-  };
-
   return (
-    <div
-      className="intent-routing-prompt"
+    <Card
+      role="status"
+      aria-live="polite"
+      size="small"
+      data-testid="clarification-prompt-card"
       style={{
-        display: 'flex',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: 8,
-        marginTop: 8,
+        margin: '8px 0',
+        borderColor: token.colorInfoBorder ?? '#91caff',
+        backgroundColor: token.colorInfoBg ?? '#e6f4ff',
+        borderRadius: 8,
+        width: '100%',
+      }}
+      styles={{
+        body: { padding: '12px 16px' },
       }}
     >
-      <span style={{ fontSize: 13, fontWeight: 500, color: token.colorTextSecondary }}>
-        Bạn muốn:
-      </span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Space orientation="horizontal" size={6}>
+            <QuestionCircleOutlined style={{ color: token.colorInfo ?? '#1677ff', fontSize: 15 }} />
+            <Text strong style={{ fontSize: 13, color: token.colorText }}>
+              Cần thêm thông tin để xử lý chính xác
+            </Text>
+          </Space>
+          {onCancel && (
+            <Button
+              type="text"
+              size="small"
+              icon={<CloseOutlined style={{ fontSize: 12 }} />}
+              onClick={onCancel}
+              aria-label="Hủy làm rõ"
+              style={{ color: token.colorTextSecondary }}
+            >
+              Hủy
+            </Button>
+          )}
+        </div>
 
-      <Tag
-        role="button"
-        tabIndex={0}
-        aria-label="Tra cứu tài liệu"
-        icon={<BookOutlined />}
-        onClick={() => handleActivate('knowledge')}
-        onKeyDown={(e) => handleKeyDown(e, 'knowledge')}
-        style={{
-          cursor: 'pointer',
-          margin: 0,
-          padding: '4px 10px',
-          borderRadius: token.borderRadiusSM,
-          background: token.colorBgContainer,
-          borderColor: token.colorPrimaryBorder ?? token.colorPrimary,
-          color: token.colorPrimary,
-          fontSize: 13,
-          fontWeight: 600,
-        }}
-      >
-        Tra cứu tài liệu
-      </Tag>
+        {originalQuery && (
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            Dựa trên yêu cầu: <em>"{originalQuery}"</em>
+          </Text>
+        )}
 
-      <Tag
-        role="button"
-        tabIndex={0}
-        aria-label="Thao tác PlannerMate"
-        icon={<AppstoreOutlined />}
-        onClick={() => handleActivate('operational')}
-        onKeyDown={(e) => handleKeyDown(e, 'operational')}
-        style={{
-          cursor: 'pointer',
-          margin: 0,
-          padding: '4px 10px',
-          borderRadius: token.borderRadiusSM,
-          background: token.colorBgContainer,
-          borderColor: token.colorBorder,
-          color: token.colorText,
-          fontSize: 13,
-          fontWeight: 600,
-        }}
-      >
-        Thao tác PlannerMate
-      </Tag>
-    </div>
+        <Paragraph
+          style={{
+            margin: '4px 0 0',
+            fontSize: 14,
+            fontWeight: 500,
+            color: token.colorText,
+            lineHeight: 1.5,
+          }}
+        >
+          {question}
+        </Paragraph>
+      </div>
+    </Card>
   );
 };

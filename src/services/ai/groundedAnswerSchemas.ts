@@ -4,12 +4,12 @@ import {
   FactKeySchema,
   ModalityStatusSchema,
   ScopeProofSchema,
+  SnapshotIdSchema,
   UrnSchema,
 } from '../knowledge/retrievalProtocol';
 
 const CitationIdSchema = z.string().regex(/^(S|L)[1-9][0-9]*$/);
 const PathIdSchema = z.string().regex(/^P[1-9][0-9]*$/);
-const SnapshotIdSchema = z.string().regex(/^gsnap_[0-9a-f]{8,}$/);
 const HashSchema = z.string().regex(/^[0-9a-f]{64}$/);
 const ServerEvidenceClassificationSchema = z.enum([
   'OBSERVED',

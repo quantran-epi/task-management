@@ -87,6 +87,7 @@ import {
   createDefaultGroundedTurnDeps,
 } from '../../services/ai/groundedTurnDeps';
 import type { ChatMessageGrounding, PersistedCitation } from '../../services/ai/groundedAnswerSchemas';
+import { IntentRouterUnavailableError } from '../../services/ai/intentRouter';
 import { QuickPreviewDrawer } from '../notes/QuickPreviewDrawer';
 import { ScopeChipsBar } from './grounded/ScopeChipsBar';
 import type { GroundedAnswerCardCallbacks } from './ChatMessageBubble';
@@ -212,7 +213,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const [latestRoutedScope, setLatestRoutedScope] = useState<ChatMessageGrounding['scope']>(null);
   const [transientClarifyMessage, setTransientClarifyMessage] = useState<{
     id: string;
-    query: string;
+    originalQuery: string;
+    clarifyQuestion: string;
+    turnCount: number;
   } | null>(null);
 
   // Reload MCP servers on open or change
@@ -458,7 +461,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const handleSendMessage = async (
     text: string,
     overrideScope?: ActiveScope,
-    routeOverride?: 'knowledge' | 'operational',
     skipSavingUserMessage = false
   ) => {
     const trimmed = text.trim();
@@ -487,6 +489,21 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     setScrollTrigger((prev) => prev + 1);
     setApiError(null);
     setLastSubmittedText(trimmed);
+
+    // Clarification transcript continuation handling per D-06
+    let effectiveQuery = trimmed;
+    let nextClarifyTurnCount = 1;
+    if (transientClarifyMessage) {
+      nextClarifyTurnCount = transientClarifyMessage.turnCount + 1;
+      if (nextClarifyTurnCount > 2) {
+        setTransientClarifyMessage(null);
+        setApiError(
+          'Chưa thể xác định rõ ý định sau 2 lần hỏi. Vui lòng đặt câu hỏi cụ thể hơn hoặc chọn tác vụ cụ thể trong giao diện.'
+        );
+        return;
+      }
+      effectiveQuery = `${transientClarifyMessage.originalQuery}\n[Thông tin bổ sung]: ${trimmed}`;
+    }
 
     // Gracefully request notification permission upon user interaction if not yet granted
     void (async () => {
@@ -577,21 +594,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       db,
     });
 
-    if (routeOverride) {
-      // User explicitly picked a route from the clarify chips — this IS their
-      // clarification answer, so bypass the LLM intent step with a fixed decision.
-      const overrideIntent =
-        routeOverride === 'knowledge' ? 'query_knowledge' : 'operate_taskmate';
-      deps.routeIntent = () => ({
-        intent: overrideIntent,
-        confidence: 1,
-        entities: [],
-        language: 'vi',
-        needs_clarification: false,
-        clarify_question: null,
-      });
-    }
-
     const routeScope = deps.routeScope;
     deps.routeScope = (input, routeDeps) => {
       setGroundedLoadingStatus('Đang xác định phạm vi tài liệu...');
@@ -620,49 +622,51 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
 
     try {
-      if (routeOverride !== 'operational') {
-        setGroundedLoadingStatus(
-          routeOverride === 'knowledge'
-            ? 'Đang truy xuất tài liệu và đồ thị liên quan...'
-            : 'Đang phân tích ý định câu hỏi...'
-        );
-        const groundedResult = await runGroundedTurn(
-          {
-            query: trimmed,
-            recentTurns: last3Turns,
-            signal: turnController.signal,
-            capabilities,
-            config: {
-              endpoint: config.endpoint,
-              apiKey,
-              model: selectedModel || config.defaultModel,
-              promptVersion: 'grounded-v1',
-              routerVersion: 'router-v1',
-            },
-            catalog,
-            recentSessionId: activeThread.id,
+      setGroundedLoadingStatus('Đang phân tích ý định câu hỏi...');
+      const groundedResult = await runGroundedTurn(
+        {
+          query: effectiveQuery,
+          recentTurns: last3Turns,
+          signal: turnController.signal,
+          capabilities,
+          config: {
+            endpoint: config.endpoint,
+            apiKey,
+            model: selectedModel || config.defaultModel,
+            promptVersion: 'grounded-v1',
+            routerVersion: 'router-v1',
           },
-          deps
-        );
+          catalog,
+          recentSessionId: activeThread.id,
+        },
+        deps
+      );
 
-        if (turnController.signal.aborted) {
-          return;
-        }
+      if (turnController.signal.aborted) {
+        return;
+      }
 
-        if (groundedResult.kind === 'clarify_intent') {
-          setTransientClarifyMessage({
-            id: `transient-${Date.now()}`,
-            query: trimmed,
-          });
-          setGroundedLoadingStatus(null);
-          return;
-        }
+      if (groundedResult.kind === 'clarify_intent') {
+        setTransientClarifyMessage({
+          id: `transient-${Date.now()}`,
+          originalQuery: transientClarifyMessage ? transientClarifyMessage.originalQuery : trimmed,
+          clarifyQuestion:
+            groundedResult.clarifyQuestion ||
+            'Bạn có thể cung cấp thêm chi tiết để tôi hỗ trợ chính xác hơn không?',
+          turnCount: nextClarifyTurnCount,
+        });
+        setGroundedLoadingStatus(null);
+        return;
+      }
 
-        if (groundedResult.kind === 'operational') {
-          setGroundedLoadingStatus('Đang chuẩn bị ngữ cảnh TaskMate...');
-        } else {
-          setGroundedLoadingStatus('Đang xử lý kết quả tra cứu...');
-        }
+      // Clarification succeeded or normal turn: clear transient clarify state
+      setTransientClarifyMessage(null);
+
+      if (groundedResult.kind === 'operational') {
+        setGroundedLoadingStatus('Đang chuẩn bị ngữ cảnh TaskMate...');
+      } else {
+        setGroundedLoadingStatus('Đang xử lý kết quả tra cứu...');
+      }
 
         if (groundedResult.kind === 'clarify_entity') {
           const entityCitations: PersistedCitation[] = groundedResult.candidates.map((c, idx) => {
@@ -811,12 +815,25 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           setGroundedLoadingStatus(null);
           return;
         }
-      }
     } catch (groundedErr: any) {
       if (turnController.signal.aborted) {
         setGroundedLoadingStatus(null);
         return;
       }
+
+      // Fail-closed gate per D-04: If intent router is unavailable, stop immediately.
+      if (
+        groundedErr instanceof IntentRouterUnavailableError ||
+        groundedErr?.name === 'IntentRouterUnavailableError' ||
+        groundedErr?.message?.includes('intent routing is unavailable')
+      ) {
+        setGroundedLoadingStatus(null);
+        setApiError(
+          'Trợ lý AI tạm thời không khả dụng. Vui lòng kiểm tra lại cấu hình kết nối AI.'
+        );
+        return;
+      }
+
       console.warn('[AIChatDrawer] Grounded pipeline error, checking operational fallback:', groundedErr);
       setGroundedLoadingStatus('Đang chuyển sang trợ lý TaskMate...');
     }
@@ -1038,7 +1055,7 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
 
     routeLog.log({
       outcome: 'ok',
-      safeIds: [savedUserMsg.id, activeThread.id],
+      safeIds: [savedUserMsg?.id || 'unknown', activeThread.id],
       counts: { queryLength: effectivePrompt.length },
       metadata: { model: targetModel, scopeType: effectiveScope.type },
     });
@@ -1871,12 +1888,7 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
         onConfirmAction={handleConfirmAction}
         groundedCallbacks={groundedCallbacks}
         transientClarifyMessage={transientClarifyMessage}
-        onSelectRoute={(route) => {
-          if (!transientClarifyMessage) return;
-          const q = transientClarifyMessage.query;
-          setTransientClarifyMessage(null);
-          void handleSendMessage(q, undefined, route, true);
-        }}
+        onCancelClarify={() => setTransientClarifyMessage(null)}
       />
 
       {/* QuickPreviewDrawer on citation activation per ANSWER-07, D-10 */}

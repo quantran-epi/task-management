@@ -24,6 +24,7 @@ describe('intentRouter (LLM-reasoned, no keyword/verb lists)', () => {
       language: 'vi',
       needs_clarification: false,
       clarify_question: null,
+      speculation_requested: false,
     });
 
     const result = await routeIntent('tình hình click to pay như nào rồi', {
@@ -44,6 +45,7 @@ describe('intentRouter (LLM-reasoned, no keyword/verb lists)', () => {
       language: 'vi',
       needs_clarification: false, // contradicts intent
       clarify_question: 'Bạn muốn hỏi về việc gì?',
+      speculation_requested: false,
     });
 
     const result = await routeIntent('cái đó', { ...baseArgs, completeJson });
@@ -60,6 +62,7 @@ describe('intentRouter (LLM-reasoned, no keyword/verb lists)', () => {
       language: 'en',
       needs_clarification: true,
       clarify_question: 'Which process do you mean?',
+      speculation_requested: false,
     });
 
     const result = await routeIntent('how does it work', { ...baseArgs, completeJson });
@@ -78,6 +81,7 @@ describe('intentRouter (LLM-reasoned, no keyword/verb lists)', () => {
         language: 'vi',
         needs_clarification: false,
         clarify_question: null,
+        speculation_requested: false,
       });
 
     const result = await routeIntent('tạo task mới', { ...baseArgs, completeJson });

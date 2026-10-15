@@ -308,7 +308,7 @@ export async function runGroundedTurn(
       {
         query: input.query,
         resolvedSetIds: resolvedScope.setTierAssignments.map((s) => s.setId),
-        prioritizedDocIds: contextHints?.docIds,
+        ...(contextHints?.docIds ? { prioritizedDocIds: contextHints.docIds } : {}),
       },
       deps.localBm25Deps
     );

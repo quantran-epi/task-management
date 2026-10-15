@@ -6,7 +6,6 @@ import { createMilestone } from '../../src/db/repositories/milestoneRepo';
 import { createTask } from '../../src/db/repositories/taskRepo';
 import {
   deleteProjectWithCascade,
-  deleteMilestoneWithCascade,
   deleteTaskWithAllocations,
 } from '../../src/db/repositories/cascadeRepo';
 import {
@@ -15,8 +14,6 @@ import {
   getKnowledgeLinksForEntity,
   getKnowledgeLinksForSet,
   deleteKnowledgeLink,
-  deleteLinksForTaskMateEntity,
-  buildKnowledgeLinkKey,
 } from '../../src/db/repositories/knowledgeLinkRepo';
 
 describe('KnowledgeLink Repository & Cascade Deletions (LINK-01, LINK-02, D-21, D-22)', () => {

@@ -39,6 +39,7 @@ export const IntentResultSchema = z.strictObject({
   language: z.string().trim().min(2).max(16),
   needs_clarification: z.boolean(),
   clarify_question: z.string().trim().min(1).max(500).nullable(),
+  speculation_requested: z.boolean(),
 });
 
 export type IntentResult = z.infer<typeof IntentResultSchema>;
@@ -71,22 +72,51 @@ export class IntentRouterUnavailableError extends Error {
   }
 }
 
-const INTENT_SYSTEM_PROMPT = `You are the intent classifier for TaskMate, a personal task & knowledge assistant used by ONE non-technical person. Classify the user's message into EXACTLY ONE intent from this fixed taxonomy and return STRICT JSON. Never invent intents outside the taxonomy. Never add commentary.
+export const INTENT_SYSTEM_PROMPT = `You are the intent classifier for TaskMate, a personal task and knowledge assistant used by ONE non-technical person.
+Classify the user's message into EXACTLY ONE intent from the fixed taxonomy and return STRICT JSON matching the schema.
+Never invent intents outside the taxonomy. Never add conversational text or markdown code fences outside JSON.
 
-Taxonomy:
-- "operate_taskmate": the user wants to CHANGE their own work data in TaskMate (create/update/delete a task, project or milestone; set status; log work time; start/pause/finish a timer; plan an allocation; assign or move items). Any mutation of personal work data.
-- "query_taskmate": the user wants to READ their own work data or ask about its STATUS/PROGRESS (e.g. "how is X going", "what tasks are due today", "tình hình click to pay như nào rồi", "mấy việc hôm nay"). No change is requested — only reading TaskMate data.
-- "query_knowledge": the user asks about documented knowledge — processes, business flows, how a system works, definitions, dependencies — i.e. information that lives in the knowledge documents / knowledge graph, NOT in their personal task list.
-- "mixed": the message clearly requires BOTH operating/reading TaskMate work data AND consulting documented knowledge.
-- "clarify": the message is too vague, ambiguous, or underspecified to classify or act on confidently.
+TAXONOMY:
+- "operate_taskmate": User wants to CHANGE or CREATE personal work data in TaskMate (create/update/delete task, project, milestone; change status; log work hours; start/pause/finish timer; plan daily allocation; create/remove links). Any mutation.
+- "query_taskmate": User wants to READ personal work data, schedules, or asks about progress/status (e.g., "how is X going", "what tasks are due today", "tình hình click to pay như nào rồi", "tiến độ milestone"). Status checks are ALWAYS query_taskmate.
+- "query_knowledge": User asks about documented knowledge, business processes, system architecture, database objects, code logic, or provides a technical identifier (e.g., "MAIN1.FCL_CYCLE_COUNTER", "PRC_PROCESS:60000006", "quy trình tính phí"). Information lives in documents/graph.
+- "mixed": User explicitly asks to BOTH inspect/operate TaskMate items AND inspect documented knowledge in the same turn.
+- "clarify": User's request is genuinely ambiguous, fragmented, or lacks critical parameters required to identify what they want.
 
-Rules:
-1. "confidence" is your calibrated confidence in the chosen intent, a number from 0 to 1.
-2. "entities" is a short list of the salient subjects mentioned (feature names, task/project titles, process names). Use the user's own words. Empty array if none.
-3. "language" is the BCP-47-ish code of the user's message language (e.g. "vi", "en"). Detect it from the message.
-4. Set "needs_clarification" true ONLY when you cannot classify confidently or cannot act without more detail; then "intent" should be "clarify" and "clarify_question" MUST be a single, specific follow-up question written IN THE USER'S LANGUAGE. Otherwise "needs_clarification" is false and "clarify_question" is null.
-5. A status/progress/read question about the user's own work is ALWAYS "query_taskmate", never "clarify", even if it is short.
-6. Output ONLY a JSON object matching the required schema. No markdown, no prose.`;
+RULES:
+1. "confidence": Calibrated number between 0.0 and 1.0.
+2. "entities": List of key subjects, identifiers, task names, or process names mentioned. Empty array [] if none.
+3. "language": BCP-47 language tag detected from input (e.g., "vi" or "en").
+4. "needs_clarification": Set to true ONLY when intent is "clarify". Then "clarify_question" MUST contain a single, polite, targeted follow-up question in the user's detected language. When needs_clarification is false, "clarify_question" MUST be null.
+5. "speculation_requested": Set to true IF AND ONLY IF the user explicitly asks to guess, hypothesize, speculate, or imagine possibilities (e.g., "đoán xem", "nếu giả sử", "speculate why", "what might happen if"). If user asks factual questions, this MUST be false.
+6. TECHNICAL IDENTIFIER RULE: A bare technical identifier, database table, column name, or system code (e.g., "MAIN1.FCL_CYCLE_COUNTER", "PKG_SETTLEMENT", "60000006") is ALWAYS "query_knowledge", NEVER "clarify".
+7. READ VS CLARIFY RULE: A progress/status question about work is ALWAYS "query_taskmate", even if concise.
+
+FEW-SHOT EXAMPLES:
+
+User: "tình hình click to pay như nào rồi"
+{"intent":"query_taskmate","confidence":0.95,"entities":["click to pay"],"language":"vi","needs_clarification":false,"clarify_question":null,"speculation_requested":false}
+
+User: "tạo task làm báo cáo quyết toán hạn thứ 6 tuần này"
+{"intent":"operate_taskmate","confidence":0.98,"entities":["làm báo cáo quyết toán"],"language":"vi","needs_clarification":false,"clarify_question":null,"speculation_requested":false}
+
+User: "MAIN1.FCL_CYCLE_COUNTER"
+{"intent":"query_knowledge","confidence":0.99,"entities":["MAIN1.FCL_CYCLE_COUNTER"],"language":"en","needs_clarification":false,"clarify_question":null,"speculation_requested":false}
+
+User: "Chu kỳ tính lãi container 60000006 hoạt động như thế nào?"
+{"intent":"query_knowledge","confidence":0.96,"entities":["Chu kỳ tính lãi","container 60000006"],"language":"vi","needs_clarification":false,"clarify_question":null,"speculation_requested":false}
+
+User: "xem quy trình 60000006 rồi tạo task review cấu hình này cho tôi"
+{"intent":"mixed","confidence":0.94,"entities":["quy trình 60000006","review cấu hình"],"language":"vi","needs_clarification":false,"clarify_question":null,"speculation_requested":false}
+
+User: "cái đó sao rồi"
+{"intent":"clarify","confidence":0.90,"entities":[],"language":"vi","needs_clarification":true,"clarify_question":"Bạn đang muốn hỏi tiến độ của công việc hay tài liệu quy trình nào cụ thể?","speculation_requested":false}
+
+User: "Đoán xem tại sao bước tính phí container 60000006 có thể bị chậm nếu cơ sở dữ liệu quá tải?"
+{"intent":"query_knowledge","confidence":0.92,"entities":["bước tính phí","container 60000006","cơ sở dữ liệu"],"language":"vi","needs_clarification":false,"clarify_question":null,"speculation_requested":true}
+
+User: "What tasks are blocked today and can you speculate what happens if we delay them?"
+{"intent":"query_taskmate","confidence":0.91,"entities":["tasks"],"language":"en","needs_clarification":false,"clarify_question":null,"speculation_requested":true}`;
 
 const INTENT_JSON_SCHEMA = {
   type: 'object',
@@ -97,6 +127,7 @@ const INTENT_JSON_SCHEMA = {
     language: { type: 'string' },
     needs_clarification: { type: 'boolean' },
     clarify_question: { type: ['string', 'null'] },
+    speculation_requested: { type: 'boolean' },
   },
   required: [
     'intent',
@@ -105,6 +136,7 @@ const INTENT_JSON_SCHEMA = {
     'language',
     'needs_clarification',
     'clarify_question',
+    'speculation_requested',
   ],
   additionalProperties: false,
 } as const;
@@ -170,7 +202,7 @@ export async function routeIntent(
             {
               role: 'user' as const,
               content:
-                'Your previous reply did not match the required JSON schema. Reply again with ONLY a JSON object that exactly matches the schema (intent from the fixed taxonomy, confidence 0..1, entities array, language code, needs_clarification boolean, clarify_question string or null).',
+                'Your previous reply violated the strict JSON schema. Return ONLY a valid JSON object matching the required schema with keys: intent, confidence, entities, language, needs_clarification, clarify_question, speculation_requested.',
             },
           ];
 

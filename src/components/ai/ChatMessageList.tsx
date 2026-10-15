@@ -13,6 +13,13 @@ export interface PendingConfirmationInfo {
   args?: Record<string, any>;
 }
 
+export interface TransientClarifyState {
+  id: string;
+  originalQuery: string;
+  clarifyQuestion: string;
+  turnCount: number;
+}
+
 export interface ChatMessageListProps {
   messages: ChatMessage[];
   streamingText?: string | undefined;
@@ -31,8 +38,8 @@ export interface ChatMessageListProps {
   pendingConfirmation?: PendingConfirmationInfo | null;
   onConfirmAction?: (confirmed: boolean) => void;
   groundedCallbacks?: GroundedAnswerCardCallbacks | undefined;
-  transientClarifyMessage?: { id: string; query: string } | null | undefined;
-  onSelectRoute?: ((route: 'knowledge' | 'operational') => void) | undefined;
+  transientClarifyMessage?: TransientClarifyState | null | undefined;
+  onCancelClarify?: (() => void) | undefined;
 }
 
 export const ChatMessageList: React.FC<ChatMessageListProps> = ({
@@ -54,7 +61,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   onConfirmAction,
   groundedCallbacks,
   transientClarifyMessage,
-  onSelectRoute,
+  onCancelClarify,
 }) => {
   const { token } = theme.useToken();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -151,21 +158,34 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
               onRunClaudeCode={onRunClaudeCode}
               groundedCallbacks={groundedCallbacks}
             />
-            {transientClarifyMessage && msg.role === 'user' && msg.content === transientClarifyMessage.query && onSelectRoute && (
-              <div style={{ marginTop: -4, marginBottom: 12, display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
-                <IntentRoutingPrompt onSelect={onSelectRoute} />
-              </div>
-            )}
+            {transientClarifyMessage &&
+              msg.role === 'user' &&
+              msg.content === transientClarifyMessage.originalQuery && (
+                <div style={{ marginTop: -4, marginBottom: 12, display: 'flex', width: '100%' }}>
+                  <IntentRoutingPrompt
+                    question={transientClarifyMessage.clarifyQuestion}
+                    originalQuery={transientClarifyMessage.originalQuery}
+                    onCancel={onCancelClarify}
+                  />
+                </div>
+              )}
           </React.Fragment>
         );
       })}
 
       {/* Fallback IntentRoutingPrompt if user query message not found in list */}
-      {transientClarifyMessage && onSelectRoute && !messages.some((m) => m.role === 'user' && m.content === transientClarifyMessage.query) && (
-        <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
-          <IntentRoutingPrompt onSelect={onSelectRoute} />
-        </div>
-      )}
+      {transientClarifyMessage &&
+        !messages.some(
+          (m) => m.role === 'user' && m.content === transientClarifyMessage.originalQuery
+        ) && (
+          <div style={{ marginBottom: 12, display: 'flex', width: '100%' }}>
+            <IntentRoutingPrompt
+              question={transientClarifyMessage.clarifyQuestion}
+              originalQuery={transientClarifyMessage.originalQuery}
+              onCancel={onCancelClarify}
+            />
+          </div>
+        )}
 
       {/* Active SSE Streaming Assistant Bubble */}
       {isStreaming && (streamingText || !pendingConfirmation) && (
@@ -187,11 +207,11 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
         <div
           data-testid="ai-mutation-confirmation"
           style={{
-            margin: '10px 0',
-            padding: '12px 14px',
-            borderRadius: 8,
-            border: `1px solid ${token.colorWarningBorder}`,
+            margin: '8px 0 12px',
+            padding: '12px 16px',
             backgroundColor: token.colorWarningBg,
+            border: `1px solid ${token.colorWarningBorder}`,
+            borderRadius: 8,
             display: 'flex',
             flexDirection: 'column',
             gap: 8,

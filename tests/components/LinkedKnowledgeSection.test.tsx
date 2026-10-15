@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { TaskPlannerDatabase } from '../../src/db';
 import { createTask } from '../../src/db/repositories/taskRepo';
 import { createKnowledgeLink } from '../../src/db/repositories/knowledgeLinkRepo';

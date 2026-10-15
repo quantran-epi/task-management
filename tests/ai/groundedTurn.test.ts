@@ -217,6 +217,7 @@ describe('groundedTurn state machine', () => {
       language: 'vi',
       needs_clarification: false,
       clarify_question: null,
+      speculation_requested: false,
     });
 
     const res = await runGroundedTurn(mockInput, mockDeps);
@@ -323,6 +324,7 @@ describe('groundedTurn state machine', () => {
       language: 'vi',
       needs_clarification: true,
       clarify_question: null,
+      speculation_requested: false,
     });
 
     const res = await runGroundedTurn(mockInput, mockDeps);
@@ -593,6 +595,7 @@ describe('groundedTurn state machine', () => {
       language: 'vi',
       needs_clarification: false,
       clarify_question: null,
+      speculation_requested: false,
     });
 
     const res = await runGroundedTurn(mockInput, mockDeps);
