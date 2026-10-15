@@ -1009,6 +1009,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
             onNavigateFolder={(id) => handleFilterChange(id)}
             onCreateDoc={() => handleCreateDocument(currentFolder?.id)}
             publishStatuses={publishStatuses}
+            entityNames={entityNames}
           />
 
           {/* Column 3: Editor or Folder Contents View */}
@@ -1033,6 +1034,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
               onNavigateFolder={handleFilterChange}
               onSelectDoc={(doc) => setSelectedDocId(doc.id)}
               onCreateDoc={() => handleCreateDocument(currentFolder?.id)}
+              entityNames={entityNames}
               onCreateSubfolder={() => {
                 let tempName = '';
                 Modal.confirm({

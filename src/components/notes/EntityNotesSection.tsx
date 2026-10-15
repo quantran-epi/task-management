@@ -85,6 +85,7 @@ export const EntityNotesSection: React.FC<EntityNotesSectionProps> = ({
 
   const handleDelete = async (id: string) => {
     try {
+      setSelectedNote((prev) => (prev?.id === id ? null : prev));
       await deleteNote(id, db);
       message.success('Đã xóa ghi chú');
     } catch {
@@ -215,21 +216,27 @@ export const EntityNotesSection: React.FC<EntityNotesSectionProps> = ({
                         }}
                       />
                     </Tooltip>
-                    <Popconfirm
-                      title="Xóa ghi chú này?"
-                      description="Ghi chú và tất cả ảnh đính kèm sẽ bị xóa."
-                      onConfirm={() => void handleDelete(note.id)}
-                      okText="Xóa"
-                      cancelText="Hủy"
-                    >
-                      <Button
-                        type="text"
-                        danger
-                        size="small"
-                        icon={<DeleteOutlined />}
-                        onClick={(event) => event.stopPropagation()}
-                      />
-                    </Popconfirm>
+                    <span onClick={(e) => e.stopPropagation()}>
+                      <Popconfirm
+                        title="Xóa ghi chú này?"
+                        description="Ghi chú và tất cả ảnh đính kèm sẽ bị xóa."
+                        onConfirm={(e) => {
+                          e?.stopPropagation();
+                          void handleDelete(note.id);
+                        }}
+                        onCancel={(e) => e?.stopPropagation()}
+                        okText="Xóa"
+                        cancelText="Hủy"
+                      >
+                        <Button
+                          type="text"
+                          danger
+                          size="small"
+                          icon={<DeleteOutlined />}
+                          onClick={(event) => event.stopPropagation()}
+                        />
+                      </Popconfirm>
+                    </span>
                   </Space>
                 </div>
 

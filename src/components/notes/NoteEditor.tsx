@@ -261,7 +261,22 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             <Input.TextArea
               rows={8}
               placeholder="Nhập nội dung markdown... Hỗ trợ tiêu đề (#), in đậm (**), danh sách việc cần làm (- [ ] hoặc - [x]), mã (`code`), liên kết ([text](url))..."
-              onChange={(e) => setMarkdownBody(e.target.value)}
+              value={markdownBody}
+              onChange={(e) => {
+                const val = e.target.value;
+                setMarkdownBody(val);
+                form.setFieldValue('body', val);
+              }}
+              onPaste={(e) => {
+                const text = e.clipboardData?.getData('text');
+                if (text) {
+                  // Ensure pasted text is immediately tracked in both local state and form field
+                  setTimeout(() => {
+                    const currentVal = form.getFieldValue('body') || text;
+                    setMarkdownBody(currentVal);
+                  }, 0);
+                }
+              }}
             />
           </Form.Item>
         ) : (

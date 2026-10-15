@@ -38,6 +38,7 @@ export interface DocListPaneProps {
   onCreateDoc?: (() => void) | undefined;
   publishStatuses?: Readonly<Record<string, DocumentPublishStatus>> | undefined;
   compactPublishBadges?: boolean | undefined;
+  entityNames?: Map<string, string> | undefined;
 }
 
 export const DocListPane: React.FC<DocListPaneProps> = ({
@@ -55,9 +56,11 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
   onCreateDoc,
   publishStatuses,
   compactPublishBadges,
+  entityNames,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<DocSortOption>('updatedAt');
+  const [entityFilter, setEntityFilter] = useState<'all' | 'standalone' | 'task' | 'project' | 'milestone'>('all');
 
   const { matchIds } = useDocWorkerSearch(notes, searchTerm);
 
@@ -65,13 +68,38 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
   const filteredAndSortedDocs = useMemo(() => {
     let result = [...notes];
 
+    // Filter by entity type when in quick notes mode
+    if (activeFilter === 'quick_notes') {
+      if (entityFilter === 'standalone') {
+        result = result.filter((n) => !n.entityType);
+      } else if (entityFilter !== 'all') {
+        result = result.filter((n) => n.entityType === entityFilter);
+      }
+    }
+
     // Filter by search term
     if (searchTerm.trim()) {
+      const lower = searchTerm.toLowerCase();
       if (matchIds !== null) {
         const idSet = new Set(matchIds);
-        result = result.filter((n) => idSet.has(n.id));
+        result = result.filter((n) => {
+          if (idSet.has(n.id)) return true;
+          // also search entity name if available
+          if (n.entityType && n.entityId && entityNames) {
+            const entName = entityNames.get(`${n.entityType}:${n.entityId}`)?.toLowerCase();
+            if (entName?.includes(lower)) return true;
+          }
+          return false;
+        });
       } else {
-        result = result.filter((n) => matchesDocSearch(searchTerm, n));
+        result = result.filter((n) => {
+          if (matchesDocSearch(searchTerm, n)) return true;
+          if (n.entityType && n.entityId && entityNames) {
+            const entName = entityNames.get(`${n.entityType}:${n.entityId}`)?.toLowerCase();
+            if (entName?.includes(lower)) return true;
+          }
+          return false;
+        });
       }
     }
 
@@ -92,7 +120,7 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
     });
 
     return result;
-  }, [notes, searchTerm, sortBy, matchIds]);
+  }, [notes, searchTerm, sortBy, matchIds, activeFilter, entityFilter, entityNames]);
 
   const getItemMenuItems = (doc: Note): MenuProps['items'] => {
     if (doc.deletedAt) {
@@ -266,6 +294,21 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
           allowClear
           size="middle"
         />
+        {activeFilter === 'quick_notes' && (
+          <Select
+            size="small"
+            value={entityFilter}
+            onChange={(val) => setEntityFilter(val)}
+            style={{ width: '100%' }}
+            options={[
+              { value: 'all', label: 'Tất cả liên kết' },
+              { value: 'standalone', label: 'Độc lập' },
+              { value: 'task', label: 'Tác vụ (Task)' },
+              { value: 'project', label: 'Dự án (Project)' },
+              { value: 'milestone', label: 'Cột mốc (Milestone)' },
+            ]}
+          />
+        )}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text type="secondary" style={{ fontSize: 11 }}>
             {filteredAndSortedDocs.length} tài liệu
@@ -408,6 +451,14 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
                     </Dropdown>
                   </div>
                 </div>
+
+                {isQuickNote && doc.entityType && (
+                  <div style={{ marginTop: 2 }}>
+                    <Tag color="purple" style={{ margin: 0, fontSize: 10, padding: '0 4px', lineHeight: '18px', maxWidth: '100%' }}>
+                      {doc.entityType}: {entityNames?.get(`${doc.entityType}:${doc.entityId}`) || doc.entityId}
+                    </Tag>
+                  </div>
+                )}
 
                 {/* Snippet (2 lines max) */}
                 <div

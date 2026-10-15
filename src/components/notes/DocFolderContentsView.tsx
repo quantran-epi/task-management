@@ -1,5 +1,5 @@
-import React from 'react';
-import { Breadcrumb, Button, Card, Col, Empty, Row, Space, Tag, Typography } from 'antd';
+import React, { useState, useEffect } from 'react';
+import { Breadcrumb, Button, Card, Col, Empty, Pagination, Row, Space, Tag, Typography } from 'antd';
 import {
   FolderFilled,
   FolderOpenFilled,
@@ -26,6 +26,7 @@ export interface DocFolderContentsViewProps {
   onCreateDoc: () => void;
   onCreateSubfolder?: () => void;
   onOpenZipImport?: () => void;
+  entityNames?: Map<string, string> | undefined;
 }
 
 export const DocFolderContentsView: React.FC<DocFolderContentsViewProps> = ({
@@ -39,7 +40,15 @@ export const DocFolderContentsView: React.FC<DocFolderContentsViewProps> = ({
   onCreateDoc,
   onCreateSubfolder,
   onOpenZipImport,
+  entityNames,
 }) => {
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(12);
+
+  // Reset to page 1 when folder/filter or documents length changes significantly
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [currentFolder?.id, activeFilter]);
   const getFilterTitle = (): string => {
     if (currentFolder) return currentFolder.title || 'Thư mục không tên';
     switch (activeFilter) {
@@ -68,6 +77,10 @@ export const DocFolderContentsView: React.FC<DocFolderContentsViewProps> = ({
       .trim();
     return clean || 'Chưa có nội dung xem trước';
   };
+
+  // Pagination logic
+  const totalDocs = documents.length;
+  const paginatedDocs = documents.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   return (
     <div
@@ -232,74 +245,106 @@ export const DocFolderContentsView: React.FC<DocFolderContentsViewProps> = ({
               </Empty>
             </div>
           ) : (
-            <Row gutter={[12, 12]}>
-              {documents.map((doc) => {
-                const isQuick = doc.type === 'quick_note';
-                const snippet = getCleanSnippet(doc.body);
-                const updatedTime = new Date(doc.updatedAt).toLocaleDateString('vi-VN', {
-                  day: '2-digit',
-                  month: '2-digit',
-                  year: 'numeric',
-                });
+            <>
+              <Row gutter={[12, 12]}>
+                {paginatedDocs.map((doc) => {
+                  const isQuick = doc.type === 'quick_note';
+                  const snippet = getCleanSnippet(doc.body);
+                  const updatedTime = new Date(doc.updatedAt).toLocaleDateString('vi-VN', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                  });
+                  const entityLabel =
+                    doc.entityType && doc.entityId
+                      ? entityNames?.get(`${doc.entityType}:${doc.entityId}`) || doc.entityType
+                      : null;
 
-                return (
-                  <Col xs={24} sm={12} md={12} lg={8} key={doc.id}>
-                    <Card
-                      hoverable
-                      size="small"
-                      onClick={() => onSelectDoc(doc)}
-                      style={{
-                        borderRadius: 8,
-                        border: '1px solid #e5e7eb',
-                        height: '100%',
-                        display: 'flex',
-                        flexDirection: 'column',
-                      }}
-                      bodyStyle={{
-                        padding: 14,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        height: '100%',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                        {isQuick ? (
-                          <FormOutlined style={{ color: '#faad14', fontSize: 15 }} />
-                        ) : (
-                          <FileTextOutlined style={{ color: '#4f46e5', fontSize: 15 }} />
-                        )}
-                        <Text strong style={{ fontSize: 14, color: '#111827', flex: 1 }} ellipsis={{ tooltip: doc.title }}>
-                          {doc.title || 'Không có tiêu đề'}
-                        </Text>
-                        {doc.isPinned && <Tag color="blue">Ghim</Tag>}
-                      </div>
-
-                      <Paragraph
-                        type="secondary"
-                        ellipsis={{ rows: 2 }}
-                        style={{ fontSize: 12, marginBottom: 8, flex: 1, color: '#6b7280' }}
+                  return (
+                    <Col xs={24} sm={12} md={12} lg={8} key={doc.id}>
+                      <Card
+                        hoverable
+                        size="small"
+                        onClick={() => onSelectDoc(doc)}
+                        style={{
+                          borderRadius: 8,
+                          border: '1px solid #e5e7eb',
+                          height: '100%',
+                          display: 'flex',
+                          flexDirection: 'column',
+                        }}
+                        bodyStyle={{
+                          padding: 14,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          height: '100%',
+                        }}
                       >
-                        {snippet}
-                      </Paragraph>
-
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto' }}>
-                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                          {doc.tags?.slice(0, 2).map((t) => (
-                            <Tag key={t} style={{ fontSize: 10, margin: 0, padding: '0 4px', lineHeight: '18px' }}>
-                              #{t}
-                            </Tag>
-                          ))}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                          {isQuick ? (
+                            <FormOutlined style={{ color: '#faad14', fontSize: 15 }} />
+                          ) : (
+                            <FileTextOutlined style={{ color: '#4f46e5', fontSize: 15 }} />
+                          )}
+                          <Text strong style={{ fontSize: 14, color: '#111827', flex: 1 }} ellipsis={{ tooltip: doc.title }}>
+                            {doc.title || 'Không có tiêu đề'}
+                          </Text>
+                          {doc.isPinned && <Tag color="blue">Ghim</Tag>}
                         </div>
-                        <Text type="secondary" style={{ fontSize: 11 }}>
-                          <CalendarOutlined style={{ marginRight: 4 }} />
-                          {updatedTime}
-                        </Text>
-                      </div>
-                    </Card>
-                  </Col>
-                );
-              })}
-            </Row>
+
+                        {isQuick && doc.entityType && (
+                          <div style={{ marginBottom: 6 }}>
+                            <Tag color="purple" style={{ margin: 0, fontSize: 11, maxWidth: '100%' }}>
+                              <Text ellipsis={{ tooltip: `${doc.entityType}: ${entityLabel}` }} style={{ color: 'inherit', fontSize: 11 }}>
+                                {doc.entityType}: {entityLabel}
+                              </Text>
+                            </Tag>
+                          </div>
+                        )}
+
+                        <Paragraph
+                          type="secondary"
+                          ellipsis={{ rows: 2 }}
+                          style={{ fontSize: 12, marginBottom: 8, flex: 1, color: '#6b7280' }}
+                        >
+                          {snippet}
+                        </Paragraph>
+
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto' }}>
+                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                            {doc.tags?.slice(0, 2).map((t) => (
+                              <Tag key={t} style={{ fontSize: 10, margin: 0, padding: '0 4px', lineHeight: '18px' }}>
+                                #{t}
+                              </Tag>
+                            ))}
+                          </div>
+                          <Text type="secondary" style={{ fontSize: 11 }}>
+                            <CalendarOutlined style={{ marginRight: 4 }} />
+                            {updatedTime}
+                          </Text>
+                        </div>
+                      </Card>
+                    </Col>
+                  );
+                })}
+              </Row>
+              {totalDocs > pageSize && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
+                  <Pagination
+                    current={currentPage}
+                    pageSize={pageSize}
+                    total={totalDocs}
+                    onChange={(page, pSize) => {
+                      setCurrentPage(page);
+                      if (pSize && pSize !== pageSize) setPageSize(pSize);
+                    }}
+                    showSizeChanger
+                    pageSizeOptions={['12', '24', '48']}
+                    size="small"
+                  />
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
