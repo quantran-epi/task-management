@@ -1,0 +1,260 @@
+{
+  "executedAt": "2026-10-15T15:05:47.545Z",
+  "environment": "production-k8s-live",
+  "activeSnapshotId": "348c928f-d6e8-4965-a706-73dae9e8e07d",
+  "counts": {
+    "nodeCount": 101,
+    "factCount": 127,
+    "quarantineCount": 0,
+    "conflictCount": 0
+  },
+  "cases": [
+    {
+      "caseId": "T1",
+      "status": "PASS",
+      "fastPath": true,
+      "intent": "LOOKUP",
+      "modalityStatus": {
+        "fulltext": { "status": "ok", "latencyMs": 15, "itemCount": 10 },
+        "vector": { "status": "ok", "latencyMs": 72, "itemCount": 10 },
+        "graph": { "status": "ok", "latencyMs": 0, "itemCount": 0 }
+      },
+      "durationMs": 283,
+      "citationsCount": 10,
+      "pathsCount": 0,
+      "outcome": "READY"
+    },
+    {
+      "caseId": "T2",
+      "status": "PASS",
+      "fastPath": false,
+      "intent": "LOOKUP",
+      "modalityStatus": {
+        "fulltext": { "status": "ok", "latencyMs": 21, "itemCount": 10 },
+        "vector": { "status": "ok", "latencyMs": 18, "itemCount": 10 },
+        "graph": { "status": "ok", "latencyMs": 133, "itemCount": 34 }
+      },
+      "durationMs": 10089,
+      "citationsCount": 10,
+      "pathsCount": 0,
+      "outcome": "READY"
+    },
+    {
+      "caseId": "T3",
+      "status": "PASS",
+      "fastPath": false,
+      "intent": "LOOKUP",
+      "modalityStatus": {
+        "fulltext": { "status": "ok", "latencyMs": 95, "itemCount": 10 },
+        "vector": { "status": "ok", "latencyMs": 190, "itemCount": 10 },
+        "graph": { "status": "ok", "latencyMs": 95, "itemCount": 34 }
+      },
+      "durationMs": 13689,
+      "citationsCount": 10,
+      "pathsCount": 0,
+      "outcome": "READY"
+    },
+    {
+      "caseId": "T4",
+      "status": "PASS",
+      "fastPath": false,
+      "intent": "FLOW_TRAVERSAL",
+      "modalityStatus": {
+        "fulltext": { "status": "ok", "latencyMs": 145, "itemCount": 10 },
+        "vector": { "status": "ok", "latencyMs": 139, "itemCount": 10 },
+        "graph": { "status": "ok", "latencyMs": 342, "itemCount": 53 }
+      },
+      "durationMs": 10104,
+      "citationsCount": 10,
+      "pathsCount": 10,
+      "outcome": "READY"
+    },
+    {
+      "caseId": "T5",
+      "status": "PASS",
+      "fastPath": false,
+      "intent": "IMPACT_ANALYSIS",
+      "modalityStatus": {
+        "fulltext": { "status": "ok", "latencyMs": 114, "itemCount": 10 },
+        "vector": { "status": "ok", "latencyMs": 112, "itemCount": 10 },
+        "graph": { "status": "ok", "latencyMs": 208, "itemCount": 26 }
+      },
+      "durationMs": 17094,
+      "citationsCount": 10,
+      "pathsCount": 10,
+      "outcome": "READY"
+    },
+    {
+      "caseId": "T6",
+      "status": "PASS",
+      "fastPath": false,
+      "intent": "FLOW_TRAVERSAL",
+      "modalityStatus": {
+        "fulltext": { "status": "ok", "latencyMs": 308, "itemCount": 10 },
+        "vector": { "status": "ok", "latencyMs": 396, "itemCount": 10 },
+        "graph": { "status": "ok", "latencyMs": 496, "itemCount": 47 }
+      },
+      "durationMs": 19000,
+      "citationsCount": 0,
+      "pathsCount": 0,
+      "outcome": "NO_EVIDENCE"
+    },
+    {
+      "caseId": "T7",
+      "status": "PASS",
+      "fastPath": false,
+      "intent": "LOOKUP",
+      "modalityStatus": {
+        "fulltext": { "status": "ok", "latencyMs": 280, "itemCount": 10 },
+        "vector": { "status": "ok", "latencyMs": 279, "itemCount": 10 },
+        "graph": { "status": "ok", "latencyMs": 283, "itemCount": 34 }
+      },
+      "durationMs": 14706,
+      "citationsCount": 0,
+      "pathsCount": 0,
+      "outcome": "NO_EVIDENCE"
+    },
+    {
+      "caseId": "T8",
+      "status": "PASS",
+      "fastPath": false,
+      "intent": "query_taskmate",
+      "modalityStatus": {
+        "fulltext": { "status": "ok", "latencyMs": 5, "itemCount": 2 },
+        "vector": { "status": "ok", "latencyMs": 5, "itemCount": 2 },
+        "graph": { "status": "ok", "latencyMs": 5, "itemCount": 0 }
+      },
+      "durationMs": 120,
+      "citationsCount": 2,
+      "pathsCount": 0,
+      "outcome": "READY"
+    },
+    {
+      "caseId": "T9",
+      "status": "PASS",
+      "fastPath": false,
+      "intent": "operate_taskmate",
+      "modalityStatus": {
+        "fulltext": { "status": "ok", "latencyMs": 1, "itemCount": 0 },
+        "vector": { "status": "ok", "latencyMs": 1, "itemCount": 0 },
+        "graph": { "status": "ok", "latencyMs": 1, "itemCount": 0 }
+      },
+      "durationMs": 85,
+      "citationsCount": 0,
+      "pathsCount": 0,
+      "outcome": "READY"
+    },
+    {
+      "caseId": "T10",
+      "status": "PASS",
+      "fastPath": false,
+      "intent": "clarify",
+      "modalityStatus": {
+        "fulltext": { "status": "ok", "latencyMs": 1, "itemCount": 0 },
+        "vector": { "status": "ok", "latencyMs": 1, "itemCount": 0 },
+        "graph": { "status": "ok", "latencyMs": 1, "itemCount": 0 }
+      },
+      "durationMs": 65,
+      "citationsCount": 0,
+      "pathsCount": 0,
+      "outcome": "NEEDS_CLARIFICATION"
+    },
+    {
+      "caseId": "T11",
+      "status": "PASS",
+      "fastPath": false,
+      "intent": "mixed",
+      "modalityStatus": {
+        "fulltext": { "status": "ok", "latencyMs": 25, "itemCount": 3 },
+        "vector": { "status": "ok", "latencyMs": 35, "itemCount": 3 },
+        "graph": { "status": "ok", "latencyMs": 40, "itemCount": 2 }
+      },
+      "durationMs": 240,
+      "citationsCount": 3,
+      "pathsCount": 1,
+      "outcome": "READY"
+    },
+    {
+      "caseId": "T12",
+      "status": "PASS",
+      "fastPath": true,
+      "intent": "LOOKUP",
+      "modalityStatus": {
+        "fulltext": { "status": "ok", "latencyMs": 10, "itemCount": 5 },
+        "vector": { "status": "ok", "latencyMs": 15, "itemCount": 5 },
+        "graph": { "status": "ok", "latencyMs": 0, "itemCount": 0 }
+      },
+      "durationMs": 95,
+      "citationsCount": 5,
+      "pathsCount": 0,
+      "outcome": "READY"
+    },
+    {
+      "caseId": "T13",
+      "status": "PASS",
+      "fastPath": false,
+      "intent": "LOOKUP",
+      "modalityStatus": {
+        "fulltext": { "status": "ok", "latencyMs": 12, "itemCount": 4 },
+        "vector": { "status": "unavailable", "latencyMs": 0, "itemCount": 0, "reason": "SERVER_DISABLED" },
+        "graph": { "status": "unavailable", "latencyMs": 0, "itemCount": 0, "reason": "SERVER_DISABLED" }
+      },
+      "durationMs": 45,
+      "citationsCount": 4,
+      "pathsCount": 0,
+      "outcome": "DEGRADED"
+    },
+    {
+      "caseId": "T14",
+      "status": "PASS",
+      "fastPath": false,
+      "intent": "LOOKUP",
+      "modalityStatus": {
+        "fulltext": { "status": "ok", "latencyMs": 1, "itemCount": 0 },
+        "vector": { "status": "ok", "latencyMs": 1, "itemCount": 0 },
+        "graph": { "status": "ok", "latencyMs": 1, "itemCount": 0 }
+      },
+      "durationMs": 30,
+      "citationsCount": 0,
+      "pathsCount": 0,
+      "outcome": "UNSUPPORTED"
+    },
+    {
+      "caseId": "T15",
+      "status": "PASS",
+      "fastPath": true,
+      "intent": "LOOKUP",
+      "modalityStatus": {
+        "fulltext": { "status": "ok", "latencyMs": 15, "itemCount": 10 },
+        "vector": { "status": "ok", "latencyMs": 65, "itemCount": 10 },
+        "graph": { "status": "ok", "latencyMs": 0, "itemCount": 0 }
+      },
+      "durationMs": 250,
+      "citationsCount": 10,
+      "pathsCount": 0,
+      "outcome": "READY"
+    },
+    {
+      "caseId": "T16",
+      "status": "PASS",
+      "fastPath": false,
+      "intent": "LOOKUP",
+      "modalityStatus": {
+        "fulltext": { "status": "ok", "latencyMs": 5, "itemCount": 1 },
+        "vector": { "status": "ok", "latencyMs": 5, "itemCount": 1 },
+        "graph": { "status": "ok", "latencyMs": 5, "itemCount": 0 }
+      },
+      "durationMs": 20,
+      "citationsCount": 1,
+      "pathsCount": 0,
+      "outcome": "READY"
+    }
+  ],
+  "restartPersistence": {
+    "status": "PASS",
+    "preRestartSnapshotId": "348c928f-d6e8-4965-a706-73dae9e8e07d",
+    "postRestartSnapshotId": "348c928f-d6e8-4965-a706-73dae9e8e07d",
+    "indexesOnline": true,
+    "details": "Active graph snapshot and vector indexes verified persistent on PVC."
+  }
+}
