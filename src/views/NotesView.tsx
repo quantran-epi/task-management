@@ -1,38 +1,28 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { APP_NAME } from '../constants/app';
 import {
-  Card,
-  Input,
-  Select,
   Button,
   Space,
-  Tag,
   Typography,
   Empty,
-  Popconfirm,
   Tooltip,
   message,
-  Segmented,
   Modal,
+  Select,
+  Input,
 } from 'antd';
 import {
-  SearchOutlined,
   PlusOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  PaperClipOutlined,
   ExportOutlined,
-  AppstoreOutlined,
-  UnorderedListOutlined,
   RobotOutlined,
   CopyOutlined,
   DatabaseOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
-import type { DocumentSet, Note, NoteEntityType, PublishPrimaryState } from '../types/models';
+import type { Note } from '../types/models';
 import {
-  deleteNote,
   updateNote,
   createNote,
   softDeleteNote,
@@ -41,10 +31,6 @@ import {
   batchCreateNotes,
 } from '../db/repositories/noteRepo';
 import { getBacklinksForDoc } from '../db/repositories/documentLinkRepo';
-import { renderSafeMarkdown } from '../utils/markdown';
-import { NoteEditor } from '../components/notes/NoteEditor';
-import { NoteDetailModal } from '../components/notes/NoteDetailModal';
-import { QuickNoteEntry } from '../components/notes/QuickNoteEntry';
 import { PageHeader } from '../components/common/PageHeader';
 import { openNotesPopout } from '../utils/notesPopout';
 import { DocumentSetDrawer } from '../components/knowledge/DocumentSetDrawer';
@@ -61,15 +47,12 @@ import {
 } from '../db/repositories/documentSetRepo';
 import { useOptionalKnowledgeConfig } from '../services/knowledge/knowledgeConfig';
 import { createKnowledgeClient, KnowledgeClientError } from '../services/knowledge/knowledgeClient';
-import { PublishSession } from '../services/knowledge/publishOrchestrator';
+import type { PublishSession } from '../services/knowledge/publishOrchestrator';
 import type { CachedActiveSnapshotManifest, ChangePreview } from '../services/knowledge/changePreview';
 
 import { DocFolderTree, type QuickFilterKey } from '../components/notes/DocFolderTree';
-import { DocListPane } from '../components/notes/DocListPane';
 import { DocEditorPane } from '../components/notes/DocEditorPane';
-import { DocFolderContentsView } from '../components/notes/DocFolderContentsView';
 import { ZipImportPreviewModal } from '../components/notes/ZipImportPreviewModal';
-import { matchesDocSearch } from '../utils/docSearch';
 
 const { Text } = Typography;
 
@@ -192,22 +175,11 @@ export interface NotesViewProps {
   db?: TaskPlannerDatabase | undefined;
 }
 
-export type NotesLayoutMode = '3column' | 'grid';
-
-const LAYOUT_PREF_KEY = 'planner:docs_layout_view';
 const FOLDER_PREF_KEY = 'planner:docs_active_folder';
 
 export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
   const knowledgeConfig = useOptionalKnowledgeConfig();
   const isConfigured = Boolean(knowledgeConfig.enabled && knowledgeConfig.baseUrl);
-  // Layout mode: 3-column Docs app vs classic Grid View
-  const [layoutMode, setLayoutMode] = useState<NotesLayoutMode>(() => {
-    try {
-      return (localStorage.getItem(LAYOUT_PREF_KEY) as NotesLayoutMode) || '3column';
-    } catch {
-      return '3column';
-    }
-  });
 
   const [activeFilter, setActiveFilter] = useState<QuickFilterKey | string>(() => {
     try {
@@ -220,13 +192,6 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
 
-  // Legacy grid view state
-  const [searchText, setSearchText] = useState<string>('');
-  const [entityFilter, setEntityFilter] = useState<'all' | 'standalone' | NoteEntityType>('all');
-  const [selectedEntityId, setSelectedEntityId] = useState<string | undefined>(undefined);
-  const [editorOpen, setEditorOpen] = useState<boolean>(false);
-  const [editingNote, setEditingNote] = useState<Note | null>(null);
-  const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const [aiPromptModalOpen, setAiPromptModalOpen] = useState<boolean>(false);
   const [documentSetDrawerOpen, setDocumentSetDrawerOpen] = useState(false);
   const [creatingDocumentSet, setCreatingDocumentSet] = useState(false);
@@ -236,14 +201,6 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [reconcilingAttemptId, setReconcilingAttemptId] = useState<string>();
   const [reconciliationErrorsBySet, setReconciliationErrorsBySet] = useState<Record<string, string>>({});
-
-  // Save preferences
-  const handleLayoutModeChange = (mode: NotesLayoutMode) => {
-    setLayoutMode(mode);
-    try {
-      localStorage.setItem(LAYOUT_PREF_KEY, mode);
-    } catch {}
-  };
 
   const handleFilterChange = (filter: QuickFilterKey | string) => {
     setActiveFilter(filter);
@@ -267,84 +224,15 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
     [db]
   );
 
-  // Fetch note attachments for search
-  const allAttachments = useLiveQuery(
-    async () => {
-      return await db.noteAttachments.toArray();
-    },
-    [db]
+  // Tree renders metadata-only records. Full Markdown remains available for editor/admin flows.
+  // ponytail: split full-note hydration into dedicated repository queries when non-tree flows stop needing allNotes.
+  const treeNotes = useMemo(
+    () => (allNotes ?? []).map((note) => ({ ...note, body: '' })),
+    [allNotes]
   );
+  const loadSearchNotes = React.useCallback(() => db.notes.toArray(), [db]);
 
-  const noteAttachmentMeta = useMemo(() => {
-    const counts = new Map<string, number>();
-    const searchTexts = new Map<string, string[]>();
-
-    allAttachments?.forEach((att) => {
-      counts.set(att.noteId, (counts.get(att.noteId) || 0) + 1);
-      const list = searchTexts.get(att.noteId) || [];
-      if (att.fileName) list.push(att.fileName.toLowerCase());
-      if (att.caption) list.push(att.caption.toLowerCase());
-      searchTexts.set(att.noteId, list);
-    });
-
-    return { counts, searchTexts };
-  }, [allAttachments]);
-
-  // Names map for attached entities
-  const entityNames = useLiveQuery(
-    async () => {
-      const map = new Map<string, string>();
-      const [tasks, projects, milestones] = await Promise.all([
-        db.tasks.toArray(),
-        db.projects.toArray(),
-        db.milestones.toArray(),
-      ]);
-
-      tasks.forEach((t) => map.set(`task:${t.id}`, t.name));
-      projects.forEach((p) => map.set(`project:${p.id}`, p.name));
-      milestones.forEach((m) => map.set(`milestone:${m.id}`, m.name));
-      return map;
-    },
-    [db]
-  );
-
-  // Compute docs matching current navigation filter / tag in 3-column mode
-  const filteredDocList = useMemo(() => {
-    if (!allNotes) return [];
-
-    return allNotes.filter((note) => {
-      // 1. Tag filter if selected
-      if (activeTag) {
-        if (!note.tags?.includes(activeTag)) return false;
-      }
-
-      // 2. Navigation quick filters
-      if (activeFilter === 'trash') {
-        return Boolean(note.deletedAt);
-      }
-
-      // Remaining filters require not deleted
-      if (note.deletedAt) return false;
-
-      if (activeFilter === 'inbox') {
-        return !note.parentId && (note.type === 'document' || !note.type);
-      }
-      if (activeFilter === 'pinned') {
-        return Boolean(note.isPinned) && note.type !== 'folder';
-      }
-      if (activeFilter === 'all') {
-        return note.type === 'document' || !note.type;
-      }
-      if (activeFilter === 'quick_notes') {
-        return note.type === 'quick_note';
-      }
-
-      // Specific folder ID: strictly exclude folder notes
-      return note.parentId === activeFilter && note.type !== 'folder';
-    });
-  }, [allNotes, activeFilter, activeTag]);
-
-  // Selected document instance for editor pane (only when explicitly selected)
+  // Selected document instance for editor pane
   const activeDocument = useMemo(() => {
     if (!allNotes || !selectedDocId) return null;
     const found = allNotes.find((n) => n.id === selectedDocId && n.type !== 'folder');
@@ -367,140 +255,157 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
         .filter((note) => note.type !== 'folder' && !note.deletedAt)
         .map(async (note) => [note.id, await computeSha256(normalizeMarkdownForHash(note.body))] as const)
     );
-    return Object.fromEntries(entries) as Record<string, string>;
-  }, [allNotes], {} as Record<string, string>);
+    return new Map(entries);
+  }, [allNotes]);
+
+  const activeManifest = useMemo<CachedActiveSnapshotManifest>(() => {
+    const documents = (publishedDocuments ?? []).map((p) => ({
+      documentId: p.documentId,
+      contentHash: p.publishedContentHash,
+      occurrenceCount: p.occurrenceCount ?? 1,
+    }));
+    return {
+      manifestRevision: 1,
+      policyVersion: '1.0.0',
+      documents,
+    };
+  }, [publishedDocuments]);
+
   const setStatus = useMemo(() => {
     const statesBySet: Record<string, PublishPrimaryState> = {};
     const activeAttemptIdsBySet: Record<string, string> = {};
+
     for (const set of documentSets ?? []) {
       const attempts = (publishAttempts ?? [])
-        .filter((attempt) => attempt.setId === set.id)
-        .sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt));
-      const publishing = attempts.find((attempt) => attempt.status === 'Publishing');
-      if (publishing) {
+        .filter((a) => a.setId === set.id)
+        .sort((a, b) => b.attemptNumber - a.attemptNumber);
+      const latestAttempt = attempts[0];
+      const activeAttempt = attempts.find((a) => a.status === 'Publishing');
+      if (activeAttempt) {
+        activeAttemptIdsBySet[set.id] = activeAttempt.id;
         statesBySet[set.id] = 'Publishing';
-        activeAttemptIdsBySet[set.id] = publishing.id;
         continue;
       }
-      const newestTerminal = attempts[0];
-      if (newestTerminal?.status === 'Failed' || newestTerminal?.status === 'Warning') {
-        statesBySet[set.id] = newestTerminal.status;
-        continue;
-      }
-      const metadata = (publishedDocuments ?? []).filter((item) => item.setId === set.id);
-      if (metadata.length === 0) {
+
+      if (!latestAttempt) {
         statesBySet[set.id] = 'Never published';
         continue;
       }
-      const metadataById = new Map(metadata.map((item) => [item.documentId, item]));
-      const membershipMatches = metadata.length === set.documentIds.length &&
-        set.documentIds.every((documentId) => metadataById.has(documentId));
-      const hashesMatch = membershipMatches && set.documentIds.every((documentId) =>
-        noteHashes?.[documentId] === metadataById.get(documentId)?.publishedContentHash
-      );
-      statesBySet[set.id] = hashesMatch ? 'In sync' : 'Local changes';
-    }
-    return { statesBySet, activeAttemptIdsBySet };
-  }, [documentSets, publishAttempts, publishedDocuments, noteHashes]);
-  const cachedAt = useMemo(() => {
-    const timestamps = Object.values(publishStatuses ?? {}).flatMap((status) =>
-      status.containingSets.map((set) => {
-        const documentId = status.documentId;
-        return { setId: set.setId, documentId };
-      })
-    );
-    return timestamps.length > 0
-      ? (allNotes ?? []).reduce<string | undefined>((latest, current) =>
-          !latest || current.updatedAt > latest ? current.updatedAt : latest, undefined)
-      : undefined;
-  }, [publishStatuses, allNotes]);
 
-  const handleSaveDocumentSet = async (setId: string | undefined, value: DocumentSetFormValue) => {
-    if (setId) await updateDocumentSet(setId, value, db);
-    else await createDocumentSet(value, db);
+      if (latestAttempt.status === 'Failed') {
+        statesBySet[set.id] = 'Failed';
+        continue;
+      }
+      if (latestAttempt.status === 'Warning') {
+        statesBySet[set.id] = 'Warning';
+        continue;
+      }
+
+      const published = (publishedDocuments ?? []).filter((p) => p.setId === set.id);
+      const publishedMap = new Map(published.map((p) => [p.documentId, p]));
+
+      let hasLocalChanges = false;
+      for (const docId of set.documentIds) {
+        const doc = (allNotes ?? []).find((n) => n.id === docId && !n.deletedAt);
+        if (!doc) {
+          hasLocalChanges = true;
+          break;
+        }
+        const pub = publishedMap.get(docId);
+        if (!pub) {
+          hasLocalChanges = true;
+          break;
+        }
+        const currentHash = noteHashes?.get(docId);
+        if (currentHash && currentHash !== pub.publishedContentHash) {
+          hasLocalChanges = true;
+          break;
+        }
+      }
+
+      statesBySet[set.id] = hasLocalChanges ? 'Local changes' : 'In sync';
+    }
+
+    return { statesBySet, activeAttemptIdsBySet };
+  }, [documentSets, publishAttempts, publishedDocuments, allNotes, noteHashes]);
+
+  const cachedAt = useMemo(() => {
+    const attempts = (publishAttempts ?? []).filter((a) => a.completedAt);
+    if (!attempts.length) return undefined;
+    attempts.sort(
+      (a, b) => new Date(b.completedAt ?? 0).getTime() - new Date(a.completedAt ?? 0).getTime()
+    );
+    return attempts[0]?.completedAt;
+  }, [publishAttempts]);
+
+  const handleSaveDocumentSet = async (value: DocumentSetFormValue) => {
+    try {
+      if (value.id) {
+        await updateDocumentSet(value.id, value, db);
+        message.success('Đã cập nhật bộ tài liệu');
+      } else {
+        await createDocumentSet(value, db);
+        message.success('Đã tạo bộ tài liệu mới');
+      }
+      setCreatingDocumentSet(false);
+    } catch {
+      message.error('Không thể lưu bộ tài liệu');
+    }
   };
 
-  const handleReconcileAttempt = async (setId: string, attemptId: string) => {
-    if (!isConfigured || reconcilingAttemptId) return;
+  const handleReconcileAttempt = async (attemptId: string) => {
+    const attempt = (publishAttempts ?? []).find((a) => a.id === attemptId);
+    if (!attempt) return;
     setReconcilingAttemptId(attemptId);
-    setReconciliationErrorsBySet((current) => {
-      const next = { ...current };
-      delete next[setId];
-      return next;
-    });
     try {
-      const cachedAttempt = await db.publishAttempts.get(attemptId);
-      if (!cachedAttempt?.submittedDocuments?.length) {
-        setReconciliationErrorsBySet((current) => ({
-          ...current,
-          [setId]: 'Không thể tiếp tục kiểm tra: thiếu ảnh chụp đã gửi được lưu cục bộ.',
-        }));
-        return;
-      }
-      const client = createKnowledgeClient({
-        baseUrl: knowledgeConfig.baseUrl,
-        token: knowledgeConfig.token,
-        db,
-      });
+      const client = createKnowledgeClient(knowledgeConfig);
+      const { PublishSession } = await import('../services/knowledge/publishOrchestrator');
       const session = new PublishSession({ client, db });
-      const result = await session.pollAcceptedAttempt(attemptId);
-      if (result.uncertain) {
-        setReconciliationErrorsBySet((current) => ({
-          ...current,
-          [setId]: 'Mất kết nối — chưa xác định kết quả.',
-        }));
+      const recovered = await session.reconcileDanglingAttempt(attempt);
+      if (recovered.status === 'Completed') {
+        message.success('Đã hoàn tất khôi phục phiên xuất bản dang dở.');
+      } else {
+        message.warning(`Phiên xuất bản đã chuyển trạng thái: ${recovered.status}`);
       }
-    } catch {
-      setReconciliationErrorsBySet((current) => ({
-        ...current,
-        [setId]: 'Không thể kiểm tra trạng thái. Kiểm tra kết nối rồi thử lại.',
+      setReconciliationErrorsBySet((prev) => {
+        const next = { ...prev };
+        delete next[attempt.setId];
+        return next;
+      });
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'Khôi phục phiên xuất bản thất bại.';
+      setReconciliationErrorsBySet((prev) => ({
+        ...prev,
+        [attempt.setId]: errorMessage,
       }));
+      message.error(errorMessage);
     } finally {
       setReconcilingAttemptId(undefined);
     }
   };
 
   const handlePreviewDocumentSet = async (set: DocumentSet) => {
-    if (!isConfigured || previewLoading) {
-      if (!isConfigured) message.warning('Hãy cấu hình Knowledge Server trước khi xuất bản.');
-      return;
-    }
     setPreviewLoading(true);
     try {
-      const client = createKnowledgeClient({
-        baseUrl: knowledgeConfig.baseUrl,
-        token: knowledgeConfig.token,
-        db,
-      });
-      let activeManifest: CachedActiveSnapshotManifest | null = null;
-      try {
-        activeManifest = await client.getSnapshotManifest(set.id);
-      } catch (err: unknown) {
-        if (
-          err instanceof KnowledgeClientError &&
-          err.status === 404 &&
-          err.serverCode === 'SNAPSHOT_NOT_FOUND'
-        ) {
-          activeManifest = null;
-        } else {
-          if (err instanceof KnowledgeClientError) {
-            if (err.code === 'NETWORK_ERROR') {
-              message.error('Không thể kết nối Knowledge Server. Kiểm tra máy chủ và mạng rồi thử lại.');
-            } else if (err.status === 401) {
-              message.error('Token phiên không hợp lệ hoặc đã hết hạn.');
-            } else if (err.status === 403) {
-              message.error('Token phiên không có quyền truy cập Knowledge Server.');
-            } else if (err.code === 'INVALID_RESPONSE') {
-              message.error('Knowledge Server phản hồi không hợp lệ.');
-            } else {
-              message.error('Máy chủ Knowledge Server gặp lỗi khi kiểm tra ảnh chụp.');
-            }
-          } else {
-            message.error('Không thể kiểm tra ảnh chụp trên Knowledge Server.');
-          }
+      const client = createKnowledgeClient(knowledgeConfig);
+      const health = await client.checkHealth();
+      if (health.status !== 'ok') {
+        message.error('Knowledge server không phản hồi.');
+        return;
+      }
+      const attempts = (publishAttempts ?? []).filter((a) => a.setId === set.id);
+      const active = attempts.find((a) => a.status === 'Publishing');
+      if (active) {
+        const { PublishSession } = await import('../services/knowledge/publishOrchestrator');
+        const session = new PublishSession({ client, db });
+        const recovered = await session.reconcileDanglingAttempt(active);
+        if (recovered.status === 'Publishing') {
+          message.warning('Phiên xuất bản cho bộ tài liệu này đang chạy.');
           return;
         }
       }
+      const { PublishSession } = await import('../services/knowledge/publishOrchestrator');
       const session = new PublishSession({ client, db });
       const setNotes = (allNotes ?? []).filter(
         (note) => set.documentIds.includes(note.id) && !note.deletedAt
@@ -525,32 +430,6 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
     setPublishSession(null);
     setPublishPreview(null);
   };
-
-  // Subfolders in current scope (either inside current folder or root folders for inbox)
-  const currentSubfolders = useMemo(() => {
-    if (!allNotes) return [];
-    const activeNotes = allNotes.filter((n) => !n.deletedAt);
-    const targetParentId =
-      typeof activeFilter === 'string' && !['inbox', 'pinned', 'all', 'quick_notes', 'trash'].includes(activeFilter)
-        ? activeFilter
-        : null;
-
-    const matchedFolders = activeNotes.filter((n) => {
-      if (n.type !== 'folder') return false;
-      if (targetParentId) {
-        return n.parentId === targetParentId;
-      }
-      if (activeFilter === 'inbox') {
-        return !n.parentId;
-      }
-      return false;
-    });
-
-    return matchedFolders.map((folder) => {
-      const docCount = activeNotes.filter((n) => n.parentId === folder.id && n.type !== 'folder').length;
-      return { folder, docCount };
-    });
-  }, [allNotes, activeFilter]);
 
   // Current selected folder note if viewing a specific folder
   const currentFolder = useMemo(() => {
@@ -630,7 +509,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
     }
   };
 
-  // Delete folder action (reassigns child documents to Inbox and deletes folder and subfolders so work is never lost)
+  // Delete folder action (reassigns child documents to Inbox and deletes folder and subfolders)
   const handleDeleteFolder = async (folder: Note) => {
     const getAllDescendantFolderIds = (parentId: string): string[] => {
       const children = (allNotes || []).filter(
@@ -686,23 +565,6 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
     roots.forEach((r) => traverse(r, 0, ''));
     return Array.from(map.values());
   }, [allNotes]);
-
-  // Folder breadcrumb path for currently viewed folder
-  const folderPath = useMemo(() => {
-    if (!currentFolder || !allNotes) return [];
-    const path: Note[] = [currentFolder];
-    let curr = currentFolder.parentId;
-    while (curr) {
-      const parent = allNotes.find((n) => n.id === curr && n.type === 'folder' && !n.deletedAt);
-      if (parent) {
-        path.unshift(parent);
-        curr = parent.parentId;
-      } else {
-        break;
-      }
-    }
-    return path;
-  }, [currentFolder, allNotes]);
 
   // Move document to folder state & action
   const [movingDoc, setMovingDoc] = useState<Note | null>(null);
@@ -817,7 +679,6 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
   // Delete document action (soft delete vs permanent delete with backlinks warning)
   const handleDeleteDocument = async (note: Note) => {
     if (note.deletedAt) {
-      // In trash: Check backlinks before permanent delete (D-17)
       try {
         const backlinks = await getBacklinksForDoc(note.id, db);
         const backlinkCount = backlinks.tasks.length + backlinks.projects.length + backlinks.referencingNotes.length;
@@ -845,7 +706,6 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
         message.error('Không thể xóa vĩnh viễn');
       }
     } else {
-      // Move to trash (soft delete)
       try {
         await softDeleteNote(note.id, db);
         message.success('Đã chuyển tài liệu vào thùng rác');
@@ -865,40 +725,6 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
       message.error('Không thể khôi phục tài liệu');
     }
   };
-
-  // Filter notes for legacy grid view
-  const filteredGridNotes = useMemo(() => {
-    if (!allNotes) return [];
-
-    return allNotes.filter((note) => {
-      if (note.deletedAt) return false;
-
-      // 1. Entity Filter
-      if (entityFilter === 'standalone') {
-        if (note.entityType) return false;
-      } else if (entityFilter !== 'all') {
-        if (note.entityType !== entityFilter) return false;
-        if (selectedEntityId && note.entityId !== selectedEntityId) {
-          return false;
-        }
-      } else if (selectedEntityId) {
-        if (note.entityId !== selectedEntityId) {
-          return false;
-        }
-      }
-
-      // 2. Search Text
-      if (!searchText.trim()) return true;
-
-      const attTexts = noteAttachmentMeta.searchTexts.get(note.id) || [];
-      const parentName = note.entityType && note.entityId
-        ? entityNames?.get(`${note.entityType}:${note.entityId}`)
-        : undefined;
-      const extraTexts = parentName ? [...attTexts, parentName] : attTexts;
-
-      return matchesDocSearch(searchText, note, extraTexts);
-    });
-  }, [allNotes, searchText, entityFilter, selectedEntityId, noteAttachmentMeta, entityNames]);
 
   const handleOpenPopout = () => {
     openNotesPopout().catch((err) => {
@@ -920,20 +746,12 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 84px)', overflow: 'hidden' }}>
-      {/* 1. Header with Mode Toggle */}
+      {/* 1. Page Header */}
       <PageHeader
         title="Ghi chú & Tài liệu"
         subtitle="Hệ thống quản lý tri thức, tài liệu Markdown và ghi chú nhanh cá nhân"
         extra={
           <Space>
-            <Segmented
-              value={layoutMode}
-              onChange={(val) => handleLayoutModeChange(val as NotesLayoutMode)}
-              options={[
-                { value: '3column', icon: <UnorderedListOutlined />, label: 'Docs (3 Cột)' },
-                { value: 'grid', icon: <AppstoreOutlined />, label: 'Ghi chú nhanh (Grid)' },
-              ]}
-            />
             <Button icon={<DatabaseOutlined />} onClick={() => setDocumentSetDrawerOpen(true)}>
               Bộ tài liệu
             </Button>
@@ -947,72 +765,50 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
                 Cửa sổ nổi
               </Button>
             </Tooltip>
-            {layoutMode === 'grid' && (
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={() => {
-                  setEditingNote(null);
-                  setEditorOpen(true);
-                }}
-              >
-                Tạo ghi chú
-              </Button>
-            )}
           </Space>
         }
       />
 
-      {/* 2. Main View Mode */}
-      {layoutMode === '3column' ? (
-        <div
-          className="docs-3column-layout"
-          style={{
-            flex: 1,
-            minHeight: 0,
-            display: 'flex',
-            border: '1px solid #f0f0f0',
-            borderRadius: 8,
-            overflow: 'hidden',
-            backgroundColor: '#ffffff',
+      {/* 2. Fixed 2-Column Main Workspace */}
+      <div
+        className="docs-2column-layout"
+        style={{
+          flex: 1,
+          minHeight: 0,
+          display: 'flex',
+          border: '1px solid #f0f0f0',
+          borderRadius: 8,
+          overflow: 'hidden',
+          backgroundColor: '#ffffff',
+        }}
+      >
+        {/* Column 1: Searchable Tree Panel (~320px) */}
+        <DocFolderTree
+          notes={treeNotes}
+          loadSearchNotes={loadSearchNotes}
+          selectedDocId={activeDocument?.id ?? null}
+          activeFilter={activeFilter}
+          onSelectFilter={handleFilterChange}
+          onSelectDoc={(doc) => setSelectedDocId(doc.id)}
+          onCreateDoc={handleCreateDocument}
+          onCreateFolder={async (name, parentId) => {
+            await handleCreateFolder(name, parentId);
           }}
-        >
-          {/* Column 1: Folder Tree (~260px) */}
-          <DocFolderTree
-            notes={allNotes || []}
-            activeFilter={activeFilter}
-            onSelectFilter={handleFilterChange}
-            onCreateDoc={handleCreateDocument}
-            onCreateFolder={async (name, parentId) => {
-              await handleCreateFolder(name, parentId);
-            }}
-            onRenameFolder={handleRenameFolder}
-            onMoveFolder={handleOpenMoveFolderModal}
-            onDeleteFolder={handleDeleteFolder}
-            onOpenZipImport={handleOpenZipImport}
-            activeTag={activeTag}
-            onSelectTag={setActiveTag}
-          />
+          onRenameFolder={handleRenameFolder}
+          onMoveFolder={handleOpenMoveFolderModal}
+          onDeleteFolder={handleDeleteFolder}
+          onOpenZipImport={handleOpenZipImport}
+          activeTag={activeTag}
+          onSelectTag={setActiveTag}
+          publishStatuses={publishStatuses}
+          onTogglePin={(doc) => handleUpdateDocument(doc.id, { isPinned: !doc.isPinned })}
+          onDeleteDoc={handleDeleteDocument}
+          onRestoreDoc={handleRestoreDocument}
+          onMoveDocToFolder={handleOpenMoveDocModal}
+        />
 
-          {/* Column 2: Document List (~300px) */}
-          <DocListPane
-            notes={filteredDocList}
-            selectedDocId={activeDocument?.id ?? null}
-            activeFilter={activeFilter}
-            onSelectDoc={(doc) => setSelectedDocId(doc.id)}
-            onTogglePin={(doc) => handleUpdateDocument(doc.id, { isPinned: !doc.isPinned })}
-            onMoveToFolder={handleOpenMoveDocModal}
-            onDeleteDoc={handleDeleteDocument}
-            onRestoreDoc={handleRestoreDocument}
-            currentFolder={currentFolder}
-            folderPath={folderPath}
-            onNavigateFolder={(id) => handleFilterChange(id)}
-            onCreateDoc={() => handleCreateDocument(currentFolder?.id)}
-            publishStatuses={publishStatuses}
-            entityNames={entityNames}
-          />
-
-          {/* Column 3: Editor or Folder Contents View */}
+        {/* Column 2: Document Editor Pane or Empty State */}
+        <div style={{ flex: 1, minWidth: 0, height: '100%', display: 'flex', flexDirection: 'column' }}>
           {activeDocument ? (
             <DocEditorPane
               key={activeDocument.id}
@@ -1025,177 +821,48 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
               publishStatus={publishStatuses?.[activeDocument.id]}
             />
           ) : (
-            <DocFolderContentsView
-              currentFolder={currentFolder}
-              folderPath={folderPath}
-              subfolders={currentSubfolders}
-              documents={filteredDocList}
-              activeFilter={activeFilter}
-              onNavigateFolder={handleFilterChange}
-              onSelectDoc={(doc) => setSelectedDocId(doc.id)}
-              onCreateDoc={() => handleCreateDocument(currentFolder?.id)}
-              entityNames={entityNames}
-              onCreateSubfolder={() => {
-                let tempName = '';
-                Modal.confirm({
-                  title: currentFolder
-                    ? `Tạo thư mục con trong "${currentFolder.title}"`
-                    : 'Tạo thư mục mới',
-                  content: (
-                    <Input
-                      placeholder="Tên thư mục..."
-                      autoFocus
-                      onChange={(e) => {
-                        tempName = e.target.value;
-                      }}
-                    />
-                  ),
-                  okText: 'Tạo',
-                  cancelText: 'Hủy',
-                  onOk: async () => {
-                    const trimmed = tempName.trim();
-                    if (trimmed) {
-                      await handleCreateFolder(trimmed, currentFolder?.id);
-                    }
-                  },
-                });
-              }}
-              onOpenZipImport={handleOpenZipImport}
-            />
-          )}
-        </div>
-      ) : (
-        /* Legacy Grid View */
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto', padding: '4px 0' }}>
-          {/* Filter Controls */}
-          <div
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: 12,
-              alignItems: 'center',
-            }}
-          >
-            <Input
-              placeholder="Tìm theo nội dung, tiêu đề, mục cha, ảnh..."
-              prefix={<SearchOutlined />}
-              value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-              allowClear
-              style={{ width: 280 }}
-            />
-
-            <Select
-              value={entityFilter}
-              onChange={(val) => {
-                setEntityFilter(val);
-                setSelectedEntityId(undefined);
-              }}
-              style={{ width: 180 }}
-              options={[
-                { label: 'Tất cả ghi chú', value: 'all' },
-                { label: 'Ghi chú độc lập', value: 'standalone' },
-                { label: 'Gắn với Tác vụ', value: 'task' },
-                { label: 'Gắn với Dự án', value: 'project' },
-                { label: 'Gắn với Cột mốc', value: 'milestone' },
-              ]}
-            />
-          </div>
-
-          <QuickNoteEntry db={db} />
-
-          {/* Grid Cards */}
-          {filteredGridNotes.length === 0 ? (
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description="Không tìm thấy ghi chú nào phù hợp"
-              style={{ marginTop: 64 }}
-            />
-          ) : (
             <div
               style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-                gap: 16,
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 32,
+                backgroundColor: '#ffffff',
               }}
             >
-              {filteredGridNotes.map((note) => {
-                const attCount = noteAttachmentMeta.counts.get(note.id) || 0;
-                const entityLabel =
-                  note.entityType && note.entityId
-                    ? entityNames?.get(`${note.entityType}:${note.entityId}`) || `${note.entityType}`
-                    : null;
-
-                return (
-                  <Card
-                    key={note.id}
-                    size="small"
-                    hoverable
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      borderTop: note.isPinned ? '3px solid #1677ff' : undefined,
-                      background: note.isPinned ? '#fafcff' : '#fff',
-                    }}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setSelectedNote(note)}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                      <div style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                          {note.isPinned && <Tag color="blue">Đã ghim</Tag>}
-                          {note.entityType && <Tag color="purple">{note.entityType}: {entityLabel || note.entityId}</Tag>}
-                          {!note.entityType && <Tag>Độc lập</Tag>}
-                          {attCount > 0 && <Tag icon={<PaperClipOutlined />}>{attCount} ảnh</Tag>}
-                        </div>
-                        <Typography.Title level={5} style={{ marginTop: 6, marginBottom: 0 }}>
-                          {note.title || '(Không tiêu đề)'}
-                        </Typography.Title>
-                      </div>
-
-                      <Space size={2}>
-                        <Button
-                          type="text"
-                          size="small"
-                          icon={<EditOutlined />}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingNote(note);
-                            setEditorOpen(true);
-                          }}
-                        />
-                        <Popconfirm
-                          title="Xóa ghi chú này?"
-                          onConfirm={() => deleteNote(note.id, db)}
-                          okText="Xóa"
-                          cancelText="Hủy"
-                        >
-                          <Button
-                            type="text"
-                            danger
-                            size="small"
-                            icon={<DeleteOutlined />}
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        </Popconfirm>
-                      </Space>
-                    </div>
-
-                    <div
-                      style={{ maxHeight: 180, overflowY: 'auto', fontSize: 13, lineHeight: '1.6', color: '#434343' }}
-                      dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(note.body) }}
-                    />
-                  </Card>
-                );
-              })}
+              <Empty
+                image={<FileTextOutlined style={{ fontSize: 48, color: '#d1d5db' }} />}
+                description={
+                  <div style={{ marginTop: 8 }}>
+                    <Text strong style={{ fontSize: 16, color: '#374151', display: 'block' }}>
+                      Chưa chọn tài liệu
+                    </Text>
+                    <Text type="secondary" style={{ fontSize: 13, display: 'block', marginTop: 4 }}>
+                      Chọn một tài liệu từ cây thư mục bên trái để xem và chỉnh sửa, hoặc tạo tài liệu mới.
+                    </Text>
+                  </div>
+                }
+              >
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  onClick={() => handleCreateDocument()}
+                  style={{ backgroundColor: '#4f46e5', marginTop: 12 }}
+                >
+                  Tạo tài liệu mới
+                </Button>
+              </Empty>
             </div>
           )}
         </div>
-      )}
+      </div>
 
+      {/* Document Set Drawer */}
       <DocumentSetDrawer
         open={documentSetDrawerOpen}
+        database={db}
         sets={documentSets ?? []}
         notes={allNotes ?? []}
         attempts={publishAttempts ?? []}
@@ -1232,32 +899,6 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
         />
       )}
 
-      {/* Note Detail Modal */}
-      <NoteDetailModal
-        open={Boolean(selectedNote)}
-        note={selectedNote}
-        onClose={() => setSelectedNote(null)}
-        onEdit={(note) => {
-          setSelectedNote(null);
-          setEditingNote(note);
-          setEditorOpen(true);
-        }}
-        db={db}
-      />
-
-      {/* Note Editor Modal */}
-      {editorOpen && (
-        <NoteEditor
-          open={editorOpen}
-          onClose={() => {
-            setEditorOpen(false);
-            setEditingNote(null);
-          }}
-          note={editingNote}
-          db={db}
-        />
-      )}
-
       {/* Move Document to Folder Modal */}
       <Modal
         title={`Chuyển "${movingDoc?.title || 'Tài liệu'}" sang thư mục`}
@@ -1286,7 +927,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb }) => {
         </div>
       </Modal>
 
-      {/* Move Folder to Another Folder Modal (Cycle Prevention) */}
+      {/* Move Folder to Folder Modal */}
       <Modal
         title={`Di chuyển thư mục "${movingFolder?.title || 'Không tên'}"`}
         open={Boolean(movingFolder)}

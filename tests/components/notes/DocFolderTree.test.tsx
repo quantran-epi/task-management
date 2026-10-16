@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { DocFolderTree } from '../../../src/components/notes/DocFolderTree';
 import type { Note } from '../../../src/types/models';
 
@@ -50,13 +50,15 @@ describe('DocFolderTree Component', () => {
     expect(screen.getByText('Kỹ thuật & Kiến trúc')).toBeInTheDocument();
   });
 
-  it('selects folder when folder row is clicked', () => {
+  it('selects folder and expands it when folder row is clicked, without triggering onSelectDoc', () => {
     const handleSelectFilter = vi.fn();
+    const handleSelectDoc = vi.fn();
     render(
       <DocFolderTree
         notes={mockNotes}
         activeFilter="inbox"
         onSelectFilter={handleSelectFilter}
+        onSelectDoc={handleSelectDoc}
         onCreateDoc={vi.fn()}
       />
     );
@@ -64,6 +66,34 @@ describe('DocFolderTree Component', () => {
     const folderRow = screen.getByText('Kỹ thuật & Kiến trúc');
     fireEvent.click(folderRow);
     expect(handleSelectFilter).toHaveBeenCalledWith('folder-1');
+    expect(handleSelectDoc).not.toHaveBeenCalled();
+
+    // After expanding folder, child doc becomes visible
+    expect(screen.getByText('Database Schema Spec')).toBeInTheDocument();
+  });
+
+  it('calls onSelectDoc when document inside folder is clicked', () => {
+    const handleSelectDoc = vi.fn();
+    render(
+      <DocFolderTree
+        notes={mockNotes}
+        activeFilter="folder-1"
+        onSelectFilter={vi.fn()}
+        onSelectDoc={handleSelectDoc}
+        onCreateDoc={vi.fn()}
+      />
+    );
+
+    // Click folder to expand
+    const folderRow = screen.getByText('Kỹ thuật & Kiến trúc');
+    fireEvent.click(folderRow);
+
+    const docItem = screen.getByText('Database Schema Spec');
+    fireEvent.click(docItem);
+
+    expect(handleSelectDoc).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'doc-1', title: 'Database Schema Spec' })
+    );
   });
 
   it('triggers onCreateDoc with target folder id when clicking folder add button', () => {
@@ -115,5 +145,74 @@ describe('DocFolderTree Component', () => {
       fireEvent.click(submitBtn);
       expect(handleCreateFolder).toHaveBeenCalledWith('Thư mục thử nghiệm', undefined);
     }
+  });
+
+  it('renders inbox root documents and only reveals folder documents after expansion', () => {
+    render(
+      <DocFolderTree
+        notes={mockNotes.map((note) => ({ ...note, body: '' }))}
+        activeFilter="inbox"
+        onSelectFilter={vi.fn()}
+        onCreateDoc={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Inbox Document')).toBeInTheDocument();
+    expect(screen.queryByText('Database Schema Spec')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('Kỹ thuật & Kiến trúc'));
+    expect(screen.getByText('Database Schema Spec')).toBeInTheDocument();
+  });
+
+  it('loads folder documents in pages of 20 with accessible fallback', () => {
+    const pagedNotes = [
+      mockNotes[0]!,
+      ...Array.from({ length: 21 }, (_, index) => ({
+        ...mockNotes[1]!,
+        id: `doc-${index}`,
+        title: `Paged document ${index}`,
+      })),
+    ];
+    render(
+      <DocFolderTree
+        notes={pagedNotes}
+        activeFilter="inbox"
+        onSelectFilter={vi.fn()}
+        onCreateDoc={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Kỹ thuật & Kiến trúc'));
+    expect(screen.getByText('Paged document 19')).toBeInTheDocument();
+    expect(screen.queryByText('Paged document 20')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Xem thêm/ }));
+    expect(screen.getByText('Paged document 20')).toBeInTheDocument();
+  });
+
+  it('searches documents using BM25 worker and displays search results', async () => {
+    const handleSelectDoc = vi.fn();
+    render(
+      <DocFolderTree
+        notes={mockNotes.map((note) => ({ ...note, body: '' }))}
+        loadSearchNotes={async () => mockNotes}
+        activeFilter="inbox"
+        onSelectFilter={vi.fn()}
+        onSelectDoc={handleSelectDoc}
+        onCreateDoc={vi.fn()}
+      />
+    );
+
+    const searchInput = screen.getByPlaceholderText('Tìm kiếm tài liệu (BM25)...');
+    fireEvent.change(searchInput, { target: { value: 'Database' } });
+
+    await waitFor(() => {
+      expect(screen.getByText(/KẾT QUẢ TÌM KIẾM/i)).toBeInTheDocument();
+      expect(screen.getByText('Database Schema Spec')).toBeInTheDocument();
+    });
+
+    // Clicking document from search result opens editor
+    fireEvent.click(screen.getByText('Database Schema Spec'));
+    expect(handleSelectDoc).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'doc-1' })
+    );
   });
 });

@@ -1492,4 +1492,58 @@ export class Neo4jRepository implements GraphRepository {
       await session.close();
     }
   }
+
+  async purgeSet(setId: string): Promise<boolean> {
+    const session = this.getSession();
+    try {
+      // Find snapshots for set to drop their fulltext/vector indexes
+      const res = await session.run(
+        `MATCH (s:GraphSnapshot {setId: $setId})
+         RETURN s.graphSnapshotId AS graphSnapshotId,
+                s.fulltextIndexName AS fulltextIndexName,
+                s.vectorIndexName AS vectorIndexName`,
+        { setId }
+      );
+
+      for (const rec of res.records) {
+        const graphSnapshotId = rec.get('graphSnapshotId');
+        const ftIndex = rec.get('fulltextIndexName');
+        const vecIndex = rec.get('vectorIndexName');
+        if (ftIndex) {
+          try {
+            await session.run(`DROP INDEX \`${ftIndex}\` IF EXISTS`);
+          } catch {
+            // Ignore missing index
+          }
+        }
+        if (vecIndex) {
+          try {
+            await session.run(`DROP INDEX \`${vecIndex}\` IF EXISTS`);
+          } catch {
+            // Ignore missing index
+          }
+        }
+        this.localGenerationMetadata.delete(graphSnapshotId);
+      }
+
+      // Detach and delete all entities, facts, chunks, evidence, leases, and snapshots for this setId
+      const deleteResult = await session.run(
+        `MATCH (s:GraphSnapshot {setId: $setId})
+         OPTIONAL MATCH (c:Chunk {graphSnapshotId: s.graphSnapshotId})
+         OPTIONAL MATCH (e:Entity {graphSnapshotId: s.graphSnapshotId})
+         OPTIONAL MATCH (f:Fact {graphSnapshotId: s.graphSnapshotId})
+         OPTIONAL MATCH (ev:Evidence {graphSnapshotId: s.graphSnapshotId})
+         OPTIONAL MATCH (l:RetrievalLease {setId: $setId})
+         DETACH DELETE c, e, f, ev, l, s
+         WITH 1 AS dummy
+         OPTIONAL MATCH (set:GraphSet {setId: $setId})
+         DETACH DELETE set`,
+        { setId }
+      );
+
+      return res.records.length > 0;
+    } finally {
+      await session.close();
+    }
+  }
 }

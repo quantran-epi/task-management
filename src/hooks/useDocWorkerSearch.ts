@@ -23,7 +23,11 @@ function getWorker(): Worker | null {
   return workerInstance;
 }
 
-export function useDocWorkerSearch(notes: Note[], query: string) {
+export function useDocWorkerSearch(
+  notes: Note[],
+  query: string,
+  loadSearchNotes?: (() => Promise<Note[]>) | undefined
+) {
   const [matchIds, setMatchIds] = useState<string[] | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const activeRequestId = useRef<number>(0);
@@ -36,48 +40,50 @@ export function useDocWorkerSearch(notes: Note[], query: string) {
       return;
     }
 
-    const worker = getWorker();
-    if (!worker) {
-      // Fallback matching in main thread if Worker unavailable
-      const ids = notes
-        .filter((n) => matchesDocSearch(trimmed, n))
-        .map((n) => n.id);
-      setMatchIds(ids);
-      return;
-    }
-
     const reqId = ++requestIdCounter;
     activeRequestId.current = reqId;
     setIsSearching(true);
+    const worker = getWorker();
+    let disposed = false;
+    let handleMessage: ((e: MessageEvent<DocSearchWorkerResponse>) => void) | undefined;
 
-    const handleMessage = (e: MessageEvent<DocSearchWorkerResponse>) => {
-      if (e.data.id === activeRequestId.current) {
-        setMatchIds(e.data.results);
-        setIsSearching(false);
+    void (async () => {
+      const corpus = loadSearchNotes ? await loadSearchNotes() : notes;
+      if (disposed || reqId !== activeRequestId.current) return;
+
+      if (!worker) {
+        const ids = corpus.filter((note) => matchesDocSearch(trimmed, note)).map((note) => note.id);
+        if (reqId === activeRequestId.current) {
+          setMatchIds(ids);
+          setIsSearching(false);
+        }
+        return;
       }
-    };
 
-    worker.addEventListener('message', handleMessage);
-
-    const docs = notes.map((n) => ({
-      id: n.id,
-      title: n.title,
-      tags: n.tags,
-      body: n.body,
-    }));
-
-    const req: DocSearchWorkerRequest = {
-      id: reqId,
-      query: trimmed,
-      docs,
-    };
-
-    worker.postMessage(req);
+      handleMessage = (event: MessageEvent<DocSearchWorkerResponse>) => {
+        if (event.data.id === activeRequestId.current) {
+          setMatchIds(event.data.results);
+          setIsSearching(false);
+        }
+      };
+      worker.addEventListener('message', handleMessage);
+      worker.postMessage({
+        id: reqId,
+        query: trimmed,
+        docs: corpus.map((note) => ({
+          id: note.id,
+          title: note.title,
+          tags: note.tags,
+          body: note.body,
+        })),
+      } satisfies DocSearchWorkerRequest);
+    })();
 
     return () => {
-      worker.removeEventListener('message', handleMessage);
+      disposed = true;
+      if (worker && handleMessage) worker.removeEventListener('message', handleMessage);
     };
-  }, [notes, query]);
+  }, [notes, query, loadSearchNotes]);
 
   return { matchIds, isSearching };
 }

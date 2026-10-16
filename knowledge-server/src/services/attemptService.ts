@@ -136,6 +136,25 @@ export class AttemptService {
     return [...this.#attempts.values()].map((attempt) => this.#response(attempt));
   }
 
+  purgeSet(setId: string): boolean {
+    const storePurged = this.store.purgeSet(setId);
+    let attemptsPurged = false;
+    for (const [attemptId, attempt] of this.#attempts.entries()) {
+      if (attempt.setId === setId) {
+        this.#attempts.delete(attemptId);
+        this.#completionByAttempt.delete(attemptId);
+        attemptsPurged = true;
+      }
+    }
+    for (const [key, attemptId] of this.#attemptIdByKey.entries()) {
+      if (key.startsWith(`${setId}:`)) {
+        this.#attemptIdByKey.delete(key);
+      }
+    }
+    this.#activeAttemptBySet.delete(setId);
+    return storePurged || attemptsPurged;
+  }
+
   getActiveSnapshot(setId: string) {
     return this.store.getActiveSnapshot(setId);
   }

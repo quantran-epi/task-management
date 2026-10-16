@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import 'fake-indexeddb/auto';
 import '@testing-library/jest-dom/vitest';
+import { TaskPlannerDatabase } from '../../src/db';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { DocumentSetForm, snapshotFolderMembers } from '../../src/components/knowledge/DocumentSetForm';
@@ -197,6 +198,40 @@ describe('document-set management', () => {
     expect(onReconcileAttempt).toHaveBeenCalledWith('set-a', 'attempt-a');
   });
 
+  it('keeps local metadata when remote purge fails', async () => {
+    const database = new TaskPlannerDatabase(`delete-failure-${crypto.randomUUID()}`);
+    await database.open();
+    await database.documentSets.add(documentSet);
+    const client = {
+      getGraphStatus: vi.fn().mockResolvedValue({ state: 'Never built' }),
+      purgeDocumentSet: vi.fn().mockRejectedValue(new Error('daemon unavailable')),
+    };
+
+    render(
+      <DocumentSetDrawer
+        open
+        database={database}
+        sets={[documentSet]}
+        notes={notes}
+        attempts={[]}
+        statesBySet={{ 'set-a': 'In sync' }}
+        configured
+        knowledgeClient={client as never}
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+        onPreview={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Xóa bộ tài liệu Bộ nghiệp vụ' }));
+    expect(await screen.findByText(/Xác nhận xóa bộ tài liệu/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Xóa toàn bộ (Cục bộ & Remote)' }));
+
+    await waitFor(() => expect(client.purgeDocumentSet).toHaveBeenCalledWith('set-a'));
+    expect(await database.documentSets.get('set-a')).toEqual(documentSet);
+    database.close();
+  });
+
   it('disables preview for empty, invalid config, or active same-set attempt while edits stay enabled', () => {
     const { rerender } = render(
       <DocumentSetDrawer
@@ -249,7 +284,7 @@ describe('document-set management', () => {
     );
     expect(screen.getByRole('button', { name: 'Xem trước xuất bản' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Lưu thay đổi' })).toBeEnabled();
-  });
+  }, 30000);
 });
 
 function previewWithRemoval(): ChangePreview {

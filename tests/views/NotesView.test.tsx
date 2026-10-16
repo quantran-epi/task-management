@@ -1,11 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import 'fake-indexeddb/auto';
 import { NotesView } from '../../src/views/NotesView';
 import { TaskPlannerDatabase } from '../../src/db/index';
 import { createNote } from '../../src/db/repositories/noteRepo';
 
-describe('NotesView 3-Column Document Workspace', () => {
+describe('NotesView 2-Column Document Workspace', () => {
   let testDb: TaskPlannerDatabase;
 
   beforeEach(async () => {
@@ -18,15 +18,17 @@ describe('NotesView 3-Column Document Workspace', () => {
     await testDb.delete();
   });
 
-  it('renders standard PageHeader and 3-column layout components', async () => {
+  it('renders standard PageHeader and 2-column layout components', async () => {
     render(<NotesView db={testDb} />);
 
     expect(await screen.findByText('Ghi chú & Tài liệu')).toBeInTheDocument();
-    // 3-column elements
+    // 2-column tree elements
     expect(screen.getByText('Tạo tài liệu')).toBeInTheDocument();
     expect(screen.getByText('Tất cả tài liệu')).toBeInTheDocument();
     expect(screen.getByText('Inbox')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Tìm trong danh sách...')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Tìm kiếm tài liệu (BM25)...')).toBeInTheDocument();
+    // Empty state when no document is selected
+    expect(screen.getByText('Chưa chọn tài liệu')).toBeInTheDocument();
   });
 
   it('renders DocFolderTree with quick filters and counts', async () => {
@@ -44,55 +46,30 @@ describe('NotesView 3-Column Document Workspace', () => {
     expect(screen.getByText('Thùng rác')).toBeInTheDocument();
   });
 
-  it('filters documents in DocListPane and displays selection in DocEditorPane', async () => {
+  it('selects document from tree and opens in DocEditorPane', async () => {
     await createNote({ title: 'Design Specs', body: '# Design Specs\nUI Guidelines here', type: 'document' }, testDb);
-    await createNote({ title: 'Meeting Notes', body: 'Discuss sprint goals without title heading', type: 'document' }, testDb);
+    await createNote({ title: 'Meeting Notes', body: 'Discuss sprint goals', type: 'document' }, testDb);
 
     render(<NotesView db={testDb} />);
 
-    // Wait until docs render in list pane
+    // Wait until docs render in tree
     await waitFor(() => {
-      const designElements = screen.getAllByText('Design Specs');
-      expect(designElements.length).toBeGreaterThan(0);
-      expect(screen.getAllByText('Meeting Notes').length).toBeGreaterThan(0);
+      expect(screen.getByText('Design Specs')).toBeInTheDocument();
+      expect(screen.getByText('Meeting Notes')).toBeInTheDocument();
     });
 
-    // Click on Design Specs in doc list to select it
-    const listItems = screen.getAllByText('Design Specs');
-    if (listItems[0]) {
-      fireEvent.click(listItems[0]);
-    }
+    // Initially shows empty state
+    expect(screen.getByText('Chưa chọn tài liệu')).toBeInTheDocument();
 
-    // Search filter
-    const searchInput = screen.getByPlaceholderText('Tìm trong danh sách...');
-    fireEvent.change(searchInput, { target: { value: 'Design' } });
-
-    await waitFor(() => {
-      const designElements = screen.getAllByText('Design Specs');
-      expect(designElements.length).toBeGreaterThan(0);
-      expect(screen.queryByText('Meeting Notes')).not.toBeInTheDocument();
-    });
+    // Click on Design Specs in tree to select it
+    const designItem = screen.getByText('Design Specs');
+    fireEvent.click(designItem);
 
     // Editor displays selected document title input
     await waitFor(() => {
       const titleInputs = screen.getAllByDisplayValue('Design Specs');
       expect(titleInputs.length).toBeGreaterThan(0);
     });
-  });
-
-  it('switches between 3-Column Docs and Grid View mode', async () => {
-    await createNote({ title: 'Sample Grid Note', body: 'Body content', type: 'document' }, testDb);
-
-    render(<NotesView db={testDb} />);
-
-    expect(await screen.findByText('Tạo tài liệu')).toBeInTheDocument();
-
-    // Click segmented switch to Grid View
-    const gridBtn = screen.getByText('Ghi chú nhanh (Grid)');
-    fireEvent.click(gridBtn);
-
-    // Grid view renders legacy "Tạo ghi chú" CTA
-    expect(await screen.findByText('Tạo ghi chú')).toBeInTheDocument();
   });
 
   it('renders visible AI document instructions button, opens modal, and copies prompt to clipboard', async () => {
@@ -188,7 +165,7 @@ describe('NotesView 3-Column Document Workspace', () => {
     });
   });
 
-  it('supports broken-words and diacritic-insensitive search in Docs list pane', async () => {
+  it('supports BM25 search in tree panel to filter documents', async () => {
     await createNote({
       title: 'Kế hoạch phát triển 2026',
       body: 'Tài liệu kiến trúc hệ thống và hướng dẫn API chi tiết',
@@ -205,87 +182,28 @@ describe('NotesView 3-Column Document Workspace', () => {
 
     render(<NotesView db={testDb} />);
 
-    // Wait until both docs appear
+    // Wait until both docs appear in tree
     await waitFor(() => {
-      expect(screen.getAllByText('Kế hoạch phát triển 2026').length).toBeGreaterThan(0);
-      expect(screen.getAllByText('Báo cáo tài chính quý 1').length).toBeGreaterThan(0);
+      expect(screen.getByText('Kế hoạch phát triển 2026')).toBeInTheDocument();
+      expect(screen.getByText('Báo cáo tài chính quý 1')).toBeInTheDocument();
     });
 
-    // Click on Kế hoạch phát triển 2026 to select it and activate DocEditorPane
-    const listItems = screen.getAllByText('Kế hoạch phát triển 2026');
-    if (listItems[0]) {
-      fireEvent.click(listItems[0]);
-    }
+    const searchInput = screen.getByPlaceholderText('Tìm kiếm tài liệu (BM25)...');
 
-    const searchInput = screen.getByPlaceholderText('Tìm trong danh sách...');
-
-    // 1. Broken-words multi-term query (words split across title and body) without accents
-    // "ke hoach" in title, "kien truc" in body/tag, "api" in body
-    fireEvent.change(searchInput, { target: { value: 'ke hoach kien truc api' } });
+    // Search for "tài chính"
+    fireEvent.change(searchInput, { target: { value: 'tài chính' } });
 
     await waitFor(() => {
-      expect(screen.getAllByText('Kế hoạch phát triển 2026').length).toBeGreaterThan(0);
-      expect(screen.queryByText('Báo cáo tài chính quý 1')).not.toBeInTheDocument();
-    });
-
-    // 2. Out-of-order terms
-    fireEvent.change(searchInput, { target: { value: 'api 2026' } });
-
-    await waitFor(() => {
-      expect(screen.getAllByText('Kế hoạch phát triển 2026').length).toBeGreaterThan(0);
-      expect(screen.queryByText('Báo cáo tài chính quý 1')).not.toBeInTheDocument();
-    });
-
-    // 3. Negative search where one word doesn't match
-    fireEvent.change(searchInput, { target: { value: 'ke hoach khongtontai' } });
-
-    await waitFor(() => {
+      expect(screen.getByText('Báo cáo tài chính quý 1')).toBeInTheDocument();
       expect(screen.queryByText('Kế hoạch phát triển 2026')).not.toBeInTheDocument();
-      expect(screen.queryByText('Báo cáo tài chính quý 1')).not.toBeInTheDocument();
-    });
-  });
-
-  it('supports broken-words and diacritic-insensitive search in Grid View mode', async () => {
-    await createNote({
-      title: 'Kế hoạch triển khai Sprint 10',
-      body: 'Mục tiêu hoàn thành tính năng tìm kiếm tokenized',
-      type: 'quick_note',
-    }, testDb);
-
-    await createNote({
-      title: 'Ghi chú họp tuần',
-      body: 'Đánh giá tiến độ dự án',
-      type: 'quick_note',
-    }, testDb);
-
-    render(<NotesView db={testDb} />);
-
-    // Switch to Grid view
-    const gridBtn = await screen.findByText('Ghi chú nhanh (Grid)');
-    fireEvent.click(gridBtn);
-
-    await waitFor(() => {
-      expect(screen.getByText('Kế hoạch triển khai Sprint 10')).toBeInTheDocument();
-      expect(screen.getByText('Ghi chú họp tuần')).toBeInTheDocument();
     });
 
-    const searchInput = screen.getByPlaceholderText('Tìm theo nội dung, tiêu đề, mục cha, ảnh...');
-
-    // Broken multi-word search with unaccented query terms across title and body
-    // "ke hoach" in title, "tim kiem" in body
-    fireEvent.change(searchInput, { target: { value: 'ke hoach tim kiem' } });
+    // Click search result opens in editor
+    fireEvent.click(screen.getByText('Báo cáo tài chính quý 1'));
 
     await waitFor(() => {
-      expect(screen.getByText('Kế hoạch triển khai Sprint 10')).toBeInTheDocument();
-      expect(screen.queryByText('Ghi chú họp tuần')).not.toBeInTheDocument();
-    });
-
-    // Reversed order
-    fireEvent.change(searchInput, { target: { value: 'tokenized sprint' } });
-
-    await waitFor(() => {
-      expect(screen.getByText('Kế hoạch triển khai Sprint 10')).toBeInTheDocument();
-      expect(screen.queryByText('Ghi chú họp tuần')).not.toBeInTheDocument();
+      const titleInputs = screen.getAllByDisplayValue('Báo cáo tài chính quý 1');
+      expect(titleInputs.length).toBeGreaterThan(0);
     });
   });
 });

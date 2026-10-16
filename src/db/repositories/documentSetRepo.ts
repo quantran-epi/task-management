@@ -213,16 +213,23 @@ export async function deleteDocumentSet(
   id: string,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<void> {
-  await db.transaction(
-    'rw',
-    [db.documentSets, db.publishedDocuments, db.publishAttempts, db.dlpAudits],
-    async () => {
-      await db.documentSets.delete(id);
-      await db.publishedDocuments.where('setId').equals(id).delete();
-      await db.publishAttempts.where('setId').equals(id).delete();
-      await db.dlpAudits.where('setId').equals(id).delete();
+  const tables = [
+    db.documentSets,
+    db.publishedDocuments,
+    db.publishAttempts,
+    db.dlpAudits,
+    ...(db.knowledgeLinks ? [db.knowledgeLinks] : []),
+  ];
+
+  await db.transaction('rw', tables, async () => {
+    await db.documentSets.delete(id);
+    await db.publishedDocuments.where('setId').equals(id).delete();
+    await db.publishAttempts.where('setId').equals(id).delete();
+    await db.dlpAudits.where('setId').equals(id).delete();
+    if (db.knowledgeLinks) {
+      await db.knowledgeLinks.where('setId').equals(id).delete();
     }
-  );
+  });
 }
 
 /**

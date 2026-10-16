@@ -104,6 +104,11 @@ export interface GraphRepository {
    * Returns number of generations cleaned.
    */
   cleanupSupersededGenerations(now?: number, gracePeriodMs?: number): Promise<number>;
+
+  /**
+   * Purges all graph data, snapshots, candidates, generations, and leases for a specific document set.
+   */
+  purgeSet?(setId: string): Promise<boolean>;
 }
 
 interface StoredGeneration {
@@ -428,5 +433,30 @@ export class InMemoryGraphRepository implements GraphRepository {
     }
 
     return cleaned;
+  }
+
+  async purgeSet(setId: string): Promise<boolean> {
+    let purged = false;
+    if (this.activeGraphPointers.has(setId)) {
+      this.activeGraphPointers.delete(setId);
+      purged = true;
+    }
+    if (this.activeViews.has(setId)) {
+      this.activeViews.delete(setId);
+      purged = true;
+    }
+    for (const [key, candidate] of this.candidates.entries()) {
+      if (candidate.setId === setId) {
+        this.candidates.delete(key);
+        this.generations.delete(candidate.graphSnapshotId);
+        purged = true;
+      }
+    }
+    for (const [leaseId, lease] of this.leases.entries()) {
+      if (lease.setId === setId) {
+        this.leases.delete(leaseId);
+      }
+    }
+    return purged;
   }
 }

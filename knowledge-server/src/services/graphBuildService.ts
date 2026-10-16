@@ -630,4 +630,24 @@ export class GraphBuildService {
       quarantines: items,
     };
   }
+
+  async purgeSet(setId: string): Promise<boolean> {
+    this.inProgressSets.delete(setId);
+    this.currentStages.delete(setId);
+    this.activeGraphSnapshots.delete(setId);
+    this.candidateBySet.delete(setId);
+    this.rollbackPointers.delete(setId);
+    this.buildErrors.delete(setId);
+
+    for (const key of this.rebuildReplays.keys()) {
+      if (key.startsWith(`${setId}:`)) {
+        this.rebuildReplays.delete(key);
+      }
+    }
+
+    if (this.repository.purgeSet) {
+      return await this.repository.purgeSet(setId);
+    }
+    return false;
+  }
 }

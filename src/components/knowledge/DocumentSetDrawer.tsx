@@ -10,6 +10,7 @@ import {
   PlusOutlined,
   ReloadOutlined,
   WarningOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons';
 import {
   Alert,
@@ -46,6 +47,7 @@ import {
 } from '../../services/knowledge/knowledgeClient';
 import { useOptionalKnowledgeConfig } from '../../services/knowledge/knowledgeConfig';
 import { generateId } from '../../utils/uuid';
+import { deleteDocumentSet } from '../../db/repositories/documentSetRepo';
 
 const { Text, Title, Paragraph } = Typography;
 
@@ -115,14 +117,16 @@ export interface DocumentSetDrawerProps {
   // Injected for test isolation
   knowledgeClient?: KnowledgeClient;
   graphStatusOverride?: GraphStatusResponse;
+  database?: typeof db;
 }
 
 export function DocumentSetDrawer(props: DocumentSetDrawerProps) {
+  const database = props.database ?? db;
   const { token } = theme.useToken();
   const config = useOptionalKnowledgeConfig();
-  const queriedSets = useLiveQuery(() => db.documentSets.toArray(), []);
-  const queriedNotes = useLiveQuery(() => db.notes.toArray(), []);
-  const queriedAttempts = useLiveQuery(() => db.publishAttempts.toArray(), []);
+  const queriedSets = useLiveQuery(() => database.documentSets.toArray(), [database]);
+  const queriedNotes = useLiveQuery(() => database.notes.toArray(), [database]);
+  const queriedAttempts = useLiveQuery(() => database.publishAttempts.toArray(), [database]);
   const liveSets = props.sets ? [...props.sets] : queriedSets;
   const liveNotes = props.notes ? [...props.notes] : queriedNotes;
   const liveAttempts = props.attempts ? [...props.attempts] : queriedAttempts;
@@ -137,6 +141,9 @@ export function DocumentSetDrawer(props: DocumentSetDrawerProps) {
   const [rebuilding, setRebuilding] = useState(false);
   const [evidenceDrawerOpen, setEvidenceDrawerOpen] = useState(false);
   const [connectivityUncertain, setConnectivityUncertain] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deletingSet, setDeletingSet] = useState<DocumentSet | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const client = useMemo<KnowledgeClient | undefined>(
     () =>
@@ -263,6 +270,47 @@ export function DocumentSetDrawer(props: DocumentSetDrawerProps) {
     }
   };
 
+  const openDeleteModal = (targetSet: DocumentSet) => {
+    setDeletingSet(targetSet);
+    setDeleteModalOpen(true);
+  };
+
+  const executeDeleteLocalOnly = async (targetSet: DocumentSet) => {
+    setIsDeleting(true);
+    try {
+      await deleteDocumentSet(targetSet.id, database);
+      message.success(`Đã xóa bộ tài liệu "${targetSet.name}" khỏi cơ sở dữ liệu cục bộ.`);
+      if (internalSelectedId === targetSet.id) {
+        setInternalSelectedId(undefined);
+      }
+      setDeleteModalOpen(false);
+      setDeletingSet(null);
+    } catch (err: any) {
+      message.error(err?.message || 'Không thể xóa bộ tài liệu cục bộ.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const executeDeleteFull = async (targetSet: DocumentSet) => {
+    setIsDeleting(true);
+    try {
+      if (!client) throw new Error('Knowledge Server chưa được cấu hình hoặc không khả dụng.');
+      await client.purgeDocumentSet(targetSet.id);
+      await deleteDocumentSet(targetSet.id, database);
+      message.success(`Đã xóa hoàn toàn bộ tài liệu "${targetSet.name}" (cục bộ & remote).`);
+      if (internalSelectedId === targetSet.id) {
+        setInternalSelectedId(undefined);
+      }
+      setDeleteModalOpen(false);
+      setDeletingSet(null);
+    } catch (err: any) {
+      message.error(`Xóa thất bại trên máy chủ: ${err?.message || 'Lỗi không xác định'}. Metadata cục bộ được giữ nguyên.`);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   // Rebuild button enable conditions per D-18 / UI spec:
   // Enabled only when active published snapshot exists, daemon reachable, no rebuild in progress
   const hasPublishedSnapshot = state === 'In sync' || state === 'Local changes' || state === 'Warning';
@@ -323,10 +371,29 @@ export function DocumentSetDrawer(props: DocumentSetDrawerProps) {
                   const rowState = stateForSet(set.id);
                   const rowStateUi = STATE_UI[rowState];
                   return (
-                    <List.Item actions={[<Button key="open" onClick={() => setInternalSelectedId(set.id)}>Mở chi tiết</Button>]}>
-                      <List.Item.Meta title={<Tooltip title={set.name}>{set.name}</Tooltip>} description={`${set.documentIds.length} tài liệu`} />
+                    <List.Item
+                      actions={[
+                        <Button key="open" onClick={() => setInternalSelectedId(set.id)}>
+                          Mở chi tiết
+                        </Button>,
+                        <Button
+                          key="delete"
+                          type="text"
+                          danger
+                          icon={<DeleteOutlined />}
+                          aria-label={`Xóa bộ tài liệu ${set.name}`}
+                          onClick={() => openDeleteModal(set)}
+                        />,
+                      ]}
+                    >
+                      <List.Item.Meta
+                        title={<Tooltip title={set.name}>{set.name}</Tooltip>}
+                        description={`${set.documentIds.length} tài liệu`}
+                      />
                       <Tooltip title={rowStateUi.label}>
-                        <Tag color={rowStateUi.color} icon={rowStateUi.icon}>{rowStateUi.label}</Tag>
+                        <Tag color={rowStateUi.color} icon={rowStateUi.icon}>
+                          {rowStateUi.label}
+                        </Tag>
                       </Tooltip>
                     </List.Item>
                   );
@@ -335,7 +402,19 @@ export function DocumentSetDrawer(props: DocumentSetDrawerProps) {
             )
           ) : (
             <Space direction="vertical" size="large" style={{ width: '100%' }}>
-              <Button type="text" icon={<LeftOutlined />} onClick={() => setInternalSelectedId(undefined)}>Danh sách bộ tài liệu</Button>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Button type="text" icon={<LeftOutlined />} onClick={() => setInternalSelectedId(undefined)}>Danh sách bộ tài liệu</Button>
+                {selected && (
+                  <Button
+                    type="text"
+                    danger
+                    icon={<DeleteOutlined />}
+                    onClick={() => openDeleteModal(selected)}
+                  >
+                    Xóa bộ tài liệu
+                  </Button>
+                )}
+              </div>
               <Space wrap>
                 <Tooltip title={stateUi.label}><Tag color={stateUi.color} icon={stateUi.icon}>{stateUi.label}</Tag></Tooltip>
                 {props.activeSummary && <Text>{props.activeSummary}</Text>}
@@ -541,6 +620,77 @@ export function DocumentSetDrawer(props: DocumentSetDrawerProps) {
           {...(client ? { client } : {})}
           onClose={() => setEvidenceDrawerOpen(false)}
         />
+      )}
+
+      {/* Delete document set confirmation modal */}
+      {deletingSet && (
+        <Modal
+          open={deleteModalOpen}
+          title={`Xác nhận xóa bộ tài liệu: "${deletingSet.name}"`}
+          onCancel={() => {
+            if (!isDeleting) {
+              setDeleteModalOpen(false);
+              setDeletingSet(null);
+            }
+          }}
+          footer={null}
+        >
+          {stateForSet(deletingSet.id) === 'Never published' ? (
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <Paragraph>
+                Bộ tài liệu này chưa từng xuất bản lên máy chủ Knowledge Server. Bạn có chắc chắn muốn xóa bản ghi này khỏi cơ sở dữ liệu cục bộ không?
+              </Paragraph>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+                <Button disabled={isDeleting} onClick={() => setDeleteModalOpen(false)}>
+                  Hủy
+                </Button>
+                <Button
+                  type="primary"
+                  danger
+                  loading={isDeleting}
+                  onClick={() => executeDeleteLocalOnly(deletingSet)}
+                >
+                  Xóa cục bộ
+                </Button>
+              </div>
+            </Space>
+          ) : (
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <Paragraph>
+                Bộ tài liệu này đã được xuất bản hoặc có liên kết đồ thị tri thức trên Knowledge Server. Vui lòng chọn chế độ xóa phù hợp:
+              </Paragraph>
+              <Alert
+                type="warning"
+                showIcon
+                message="Lưu ý quan trọng"
+                description='Nếu chọn "Chỉ xóa cục bộ", dữ liệu snapshot/graph trên Knowledge Server sẽ không được dọn dẹp và có thể trở thành dữ liệu mồ côi.'
+              />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
+                <Button
+                  type="primary"
+                  danger
+                  loading={isDeleting}
+                  onClick={() => executeDeleteFull(deletingSet)}
+                >
+                  Xóa toàn bộ (Cục bộ & Remote)
+                </Button>
+                <Button
+                  danger
+                  disabled={isDeleting}
+                  onClick={() => executeDeleteLocalOnly(deletingSet)}
+                >
+                  Chỉ xóa cục bộ (Giữ remote)
+                </Button>
+                <Button
+                  disabled={isDeleting}
+                  onClick={() => setDeleteModalOpen(false)}
+                >
+                  Hủy
+                </Button>
+              </div>
+            </Space>
+          )}
+        </Modal>
       )}
     </>
   );

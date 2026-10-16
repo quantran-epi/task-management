@@ -192,6 +192,45 @@ describe('knowledge server boundary', () => {
     await app.close();
   });
 
+  it('authenticates, validates, and purges set snapshots plus graph data', async () => {
+    const graphPurgeCalls: string[] = [];
+    const graphBuildService = {
+      purgeSet: async (setId: string) => {
+        graphPurgeCalls.push(setId);
+        return true;
+      },
+    };
+    const attemptService = new AttemptService();
+    const app = buildKnowledgeServer({
+      token: TOKEN,
+      allowedOrigins: [ORIGIN],
+      attemptService,
+      graphBuildService: graphBuildService as never,
+    }).app;
+
+    const created = await app.inject({
+      method: 'POST',
+      url: `/api/v1/sets/${SET_ID}/attempts`,
+      headers: requestHeaders(),
+      payload: payload(),
+    });
+    await attemptService.waitForAttempt(created.json<{ attemptId: string }>().attemptId);
+
+    expect((await app.inject({ method: 'DELETE', url: `/api/v1/sets/${SET_ID}`, headers: { origin: ORIGIN } })).statusCode).toBe(401);
+    expect((await app.inject({ method: 'DELETE', url: '/api/v1/sets/not-a-uuid', headers: requestHeaders() })).statusCode).toBe(400);
+
+    const purged = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/sets/${SET_ID}`,
+      headers: requestHeaders(),
+    });
+    expect(purged.statusCode).toBe(200);
+    expect(purged.json()).toEqual({ status: 'purged', setId: SET_ID });
+    expect(graphPurgeCalls).toEqual([SET_ID]);
+    expect(attemptService.getActiveSnapshot(SET_ID)).toBeNull();
+    await app.close();
+  });
+
   it('keeps health content-free, exposes no cancel route, and redacts sensitive logs/errors', async () => {
     const logs: string[] = [];
     const app = buildKnowledgeServer({

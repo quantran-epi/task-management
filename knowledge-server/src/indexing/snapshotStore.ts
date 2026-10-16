@@ -180,6 +180,50 @@ export class SnapshotStore {
     return Array.from(map.values()).map(clone);
   }
 
+  purgeSet(setId: string): boolean {
+    let purgedAny = false;
+    if (this.#activeBySet.has(setId)) {
+      this.#activeBySet.delete(setId);
+      purgedAny = true;
+      if (this.#storageDir) {
+        const filePath = path.join(this.#storageDir, 'snapshots', `${setId}.json`);
+        if (fs.existsSync(filePath)) {
+          try {
+            fs.unlinkSync(filePath);
+          } catch {
+            // Ignore error removing snapshot file
+          }
+        }
+      }
+    }
+
+    if (this.#approvalsBySet.has(setId)) {
+      this.#approvalsBySet.delete(setId);
+      purgedAny = true;
+      if (this.#storageDir) {
+        const filePath = path.join(this.#storageDir, 'approvals', `${setId}.json`);
+        if (fs.existsSync(filePath)) {
+          try {
+            fs.unlinkSync(filePath);
+          } catch {
+            // Ignore error removing approval file
+          }
+        }
+      }
+    }
+
+    const candidateIds = this.#candidateIdsBySet.get(setId);
+    if (candidateIds && candidateIds.length > 0) {
+      for (const id of candidateIds) {
+        this.#candidates.delete(id);
+      }
+      this.#candidateIdsBySet.delete(setId);
+      purgedAny = true;
+    }
+
+    return purgedAny;
+  }
+
   #requireCandidate(candidateId: string): SnapshotCandidate {
     const candidate = this.#candidates.get(candidateId);
     if (!candidate) throw new Error(`Unknown candidate: ${candidateId}`);

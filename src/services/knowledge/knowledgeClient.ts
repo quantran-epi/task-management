@@ -786,6 +786,25 @@ export function createKnowledgeClient(options: CreateKnowledgeClientOptions) {
         delay = Math.min(maxDelay, delay * 2);
       }
     },
+
+    async purgeDocumentSet(setId: string, signal?: AbortSignal): Promise<void> {
+      try {
+        await request(
+          `/sets/${encodeURIComponent(setId)}`,
+          z.object({ status: z.string(), setId: z.string() }).passthrough(),
+          {
+            method: 'DELETE',
+            ...(signal ? { signal } : {}),
+          }
+        );
+      } catch (error: unknown) {
+        if (error instanceof KnowledgeClientError && error.status === 404) {
+          // 404 means the document set is already absent or purged on remote daemon
+          return;
+        }
+        throw error;
+      }
+    },
   };
 }
 

@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import type { ProjectionSnapshot } from '../indexing/incrementalProjector.js';
 import type { AttemptService } from '../services/attemptService.js';
+import type { GraphBuildService } from '../services/graphBuildService.js';
 
 const uuid = z.string().uuid();
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
@@ -64,7 +65,11 @@ export function serializeSnapshot(snapshot: ProjectionSnapshot) {
   });
 }
 
-export function registerSnapshotRoutes(app: FastifyInstance, attemptService: AttemptService) {
+export function registerSnapshotRoutes(
+  app: FastifyInstance,
+  attemptService: AttemptService,
+  graphBuildService?: GraphBuildService
+) {
   app.get('/api/v1/sets/:setId/snapshot', async (request, reply) => {
     const params = SetParamsSchema.safeParse(request.params);
     if (!params.success) return invalid(reply);
@@ -75,5 +80,25 @@ export function registerSnapshotRoutes(app: FastifyInstance, attemptService: Att
       });
     }
     return serializeSnapshot(snapshot);
+  });
+
+  app.delete('/api/v1/sets/:setId', async (request, reply) => {
+    const params = SetParamsSchema.safeParse(request.params);
+    if (!params.success) return invalid(reply);
+    const { setId } = params.data;
+
+    const attemptPurged = attemptService.purgeSet(setId);
+    let graphPurged = false;
+    if (graphBuildService) {
+      graphPurged = await graphBuildService.purgeSet(setId);
+    }
+
+    if (!attemptPurged && !graphPurged) {
+      return reply.code(404).send({
+        error: { code: 'SET_NOT_FOUND', message: 'Document set not found or already purged.' },
+      });
+    }
+
+    return reply.code(200).send({ status: 'purged', setId });
   });
 }

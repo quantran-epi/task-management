@@ -81,7 +81,7 @@ export function buildKnowledgeServer(options: KnowledgeServerOptions): Knowledge
     },
     credentials: false,
     allowedHeaders: ['authorization', 'content-type', 'x-attempt-key', 'x-rebuild-key', 'x-correlation-id'],
-    methods: ['GET', 'POST', 'OPTIONS'],
+    methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
   });
 
   app.get('/api/v1/health', async () => ({ status: 'ok' }));
@@ -138,7 +138,7 @@ export function buildKnowledgeServer(options: KnowledgeServerOptions): Knowledge
   });
 
   registerAttemptRoutes(app, attemptService);
-  registerSnapshotRoutes(app, attemptService);
+  registerSnapshotRoutes(app, attemptService, graphBuildService);
   registerGraphRoutes(app, graphBuildService);
   if (options.retrievalService) {
     registerRetrievalRoutes(app, options.retrievalService);
