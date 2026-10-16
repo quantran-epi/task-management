@@ -131,6 +131,16 @@ A private, offline-first web application for one person to manage projects, mile
 - Use fine-grained token with least repository contents permission where possible. Classic/OAuth tokens need `repo` scope for private repos.
 - Respect rate limits: personal tokens generally have 5,000 requests/hour; content-generating requests capped separately.
 
+### Local Docker Knowledge Stack
+
+- Start: `docker compose up -d`
+- Stop: `docker compose down`
+- Verify live: `npm run test:knowledge:live`
+- Knowledge Server: `http://127.0.0.1:3001` (Bearer: `local-dev-knowledge-token`)
+- Neo4j Bolt: `bolt://localhost:7687`, HTTP Browser: `http://localhost:7474` (`neo4j` / `localneo4jpassword`)
+- Embedding model: local ONNX `Xenova/multilingual-e5-small` (384 dimensions)
+- TaskMate Settings UI: enable Knowledge Server at `http://127.0.0.1:3001` with token `local-dev-knowledge-token`
+
 ## Alternatives Considered
 
 | Recommended | Alternative | When to Use Alternative |

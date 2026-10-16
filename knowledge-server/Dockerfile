@@ -1,25 +1,28 @@
 # syntax=docker/dockerfile:1
-FROM node:24-alpine AS builder
+FROM node:24-slim AS builder
 
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm config set strict-ssl false && npm install --ignore-scripts --omit=optional
+RUN npm install --ignore-scripts
 
 COPY tsconfig.json ./
 COPY src/ ./src/
 RUN npm run build
 
-FROM node:24-alpine AS runner
+FROM node:24-slim AS runner
 
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Run as non-root user
+# Prepare writable directories for non-root user
+RUN mkdir -p /app /var/lib/knowledge-server/transformers_cache /var/lib/knowledge-server/snapshots \
+    && chown -R node:node /app /var/lib/knowledge-server
+
 USER node
 
 COPY --chown=node:node package*.json ./
-RUN npm config set strict-ssl false && npm install --ignore-scripts --omit=dev --omit=optional
+RUN npm install --omit=dev --omit=optional
 
 COPY --chown=node:node --from=builder /app/dist ./dist
 

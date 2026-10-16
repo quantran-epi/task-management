@@ -1527,7 +1527,7 @@ export class Neo4jRepository implements GraphRepository {
       }
 
       // Detach and delete all entities, facts, chunks, evidence, leases, and snapshots for this setId
-      const deleteResult = await session.run(
+      await session.run(
         `MATCH (s:GraphSnapshot {setId: $setId})
          OPTIONAL MATCH (c:Chunk {graphSnapshotId: s.graphSnapshotId})
          OPTIONAL MATCH (e:Entity {graphSnapshotId: s.graphSnapshotId})

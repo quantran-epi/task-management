@@ -146,7 +146,7 @@ export class AttemptService {
         attemptsPurged = true;
       }
     }
-    for (const [key, attemptId] of this.#attemptIdByKey.entries()) {
+    for (const key of this.#attemptIdByKey.keys()) {
       if (key.startsWith(`${setId}:`)) {
         this.#attemptIdByKey.delete(key);
       }

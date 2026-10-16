@@ -16,6 +16,7 @@ import {
   type RetrievalTimeouts,
 } from './services/retrievalService.js';
 import { NineRouterQueryPlanner } from './retrieval/nineRouterQueryPlanner.js';
+import { buildDeterministicFallbackPlan } from './retrieval/queryPlanning.js';
 import type {
   EmbeddingProvider,
   QueryPlanner,
@@ -432,14 +433,18 @@ export async function startKnowledgeServer(
     } else {
       queryPlanner = {
         async plan(
-          _req: RetrievalRequest,
-          _ctx: QueryPlannerContext,
+          req: RetrievalRequest,
+          ctx: QueryPlannerContext,
           _opts?: OperationOptions
         ): Promise<QueryPlanResult> {
+          const fallback = buildDeterministicFallbackPlan(
+            req.query,
+            ctx.resolvedCandidates,
+            'AUTONOMOUS_PLANNER_NOT_CONFIGURED'
+          );
           return {
-            type: 'unsupported',
-            reason: 'Autonomous query planner not configured',
-            unsupportedConstructs: [],
+            type: 'plan',
+            plan: fallback.plan,
           };
         },
       };

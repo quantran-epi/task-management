@@ -37,6 +37,7 @@ Progress: [██████████] 100%
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261016-dck | setup local knowledge server and neo4j via docker compose for testing and taskmate integration | 2026-10-16 | — | complete | [261016-dck-setup-local-knowledge-server-neo4j-docker](./quick/261016-dck-setup-local-knowledge-server-neo4j-docker/) |
 | 261013-gfv | fix AI chat routing duplication, loading feedback, evidence synthesis, and planner host config | 2026-10-13 | — | complete | [261013-gfv-fix-ai-chat-duplicate-routed-questions-t](./quick/261013-gfv-fix-ai-chat-duplicate-routed-questions-t/) |
 | 261010-pnd | fix missing isPinned property in restoreBackup.test.ts | 2026-10-10 | 551df68 | complete | [261010-pnd-fix-restore-backup-test-note-is-pinned](./quick/261010-pnd-fix-restore-backup-test-note-is-pinned/) |
 | 261009-v10t | fix Schema V10 table list and verno test assertions | 2026-10-09 | 5ad90bb | complete | [261009-v10t-fix-schema-v10-test-assertions](./quick/261009-v10t-fix-schema-v10-test-assertions/) |

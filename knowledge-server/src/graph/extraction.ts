@@ -755,7 +755,9 @@ function handleStatusTable(table: Table, roles: TableSchemaRoles, ctx: Traversal
  */
 function handleDataObjectsTables(table: Table, ctx: TraversalContext): void {
   const lastHeading = ctx.headingPath[ctx.headingPath.length - 1] || '';
-  const match = lastHeading.match(/`?([A-Za-z0-9_]{3,})`?/);
+  const match =
+    lastHeading.match(/`([^`]+)`/) ||
+    lastHeading.match(/`?([A-Za-z0-9_]{3,}(?:\.[A-Za-z0-9_]{3,})*)`?/);
   if (!match) return;
 
   const rawTable = match[1]!;

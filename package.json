@@ -8,6 +8,7 @@
     "build": "tsc && vite build",
     "test": "vitest run",
     "test:knowledge": "npm --prefix knowledge-server test",
+    "test:knowledge:live": "node scripts/test-knowledge-live.mjs",
     "knowledge:dev": "npm --prefix knowledge-server run dev",
     "knowledge:build": "npm --prefix knowledge-server run build",
     "test:jira-proxy": "node --test proxy/jira-proxy.test.mjs",
