@@ -695,4 +695,48 @@ describe('groundedTurn state machine', () => {
       mockDeps.localBm25Deps
     );
   });
+
+  it('25. Uses a bounded 20-second federated retrieval budget', async () => {
+    await runGroundedTurn(mockInput, mockDeps);
+
+    expect(mockDeps.retrieveFederated).toHaveBeenCalledWith(
+      expect.objectContaining({
+        budgets: expect.objectContaining({ elapsedMs: 20000 }),
+      }),
+      mockInput.signal
+    );
+  });
+
+  it('26. Falls back locally when federated retrieval times out without evidence', async () => {
+    mockDeps.retrieveFederated = vi.fn().mockResolvedValue({
+      outcome: 'DEGRADED',
+      items: [],
+      paths: [],
+      conflictGroups: [],
+      modalityStatus: {
+        fulltext: { status: 'timeout', latencyMs: 2500, itemCount: 0 },
+        vector: { status: 'timeout', latencyMs: 2500, itemCount: 0 },
+        graph: { status: 'timeout', latencyMs: 2500, itemCount: 0 },
+      },
+      diagnostics: {
+        degraded: true,
+        coverageWarnings: [
+          {
+            code: 'TIMEOUT',
+            setId: '10000000-0000-0000-0000-000000000001',
+            message: 'Set timed out',
+          },
+        ],
+      },
+    });
+
+    const res = await runGroundedTurn(mockInput, mockDeps);
+
+    expect(mockDeps.runLocalBm25).toHaveBeenCalled();
+    expect(res.kind).toBe('grounded_answer');
+    if (res.kind === 'grounded_answer') {
+      expect(res.grounding.authority).toBe('local');
+      expect(res.grounding.fallbackReason).toBe('TIMEOUT');
+    }
+  });
 });

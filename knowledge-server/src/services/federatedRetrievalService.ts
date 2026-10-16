@@ -184,10 +184,9 @@ export async function runFederatedRetrieval(
       budgetStopCode = 'BUDGET_SETS';
     }
 
-    // Compute remaining time per set for this tier
+    // Sets in one tier run concurrently, so each can use the remaining global deadline.
     const elapsedSoFar = now() - startTime;
-    const remainingMs = Math.max(10, budgets.elapsedMs - elapsedSoFar);
-    const perSetTimeoutMs = Math.max(10, Math.floor(remainingMs / (tierOrder.length - tierIdx)));
+    const perSetTimeoutMs = Math.max(10, budgets.elapsedMs - elapsedSoFar);
 
     const tierRunResults = await mapConcurrent(
       assignmentsToRun,
@@ -338,20 +337,32 @@ export async function runFederatedRetrieval(
     graph: { status: 'ok', latencyMs: 0, itemCount: 0 },
   };
 
-  for (const setRes of perSetResults) {
-    if (setRes.response) {
-      const ms = setRes.response.modalityStatus;
-      modalityStatus.fulltext.latencyMs = Math.max(modalityStatus.fulltext.latencyMs, ms.fulltext.latencyMs);
-      modalityStatus.fulltext.itemCount += ms.fulltext.itemCount;
-      if (ms.fulltext.status !== 'ok') modalityStatus.fulltext.status = ms.fulltext.status;
+  const successfulSets = perSetResults.filter((result) => Boolean(result.response));
+  const allTimedOut =
+    perSetResults.length > 0 &&
+    successfulSets.length === 0 &&
+    perSetResults.every((result) => result.failureReason === 'TIMEOUT');
 
-      modalityStatus.vector.latencyMs = Math.max(modalityStatus.vector.latencyMs, ms.vector.latencyMs);
-      modalityStatus.vector.itemCount += ms.vector.itemCount;
-      if (ms.vector.status !== 'ok') modalityStatus.vector.status = ms.vector.status;
+  if (allTimedOut) {
+    modalityStatus.fulltext.status = 'timeout';
+    modalityStatus.vector.status = 'timeout';
+    modalityStatus.graph.status = 'timeout';
+  } else {
+    for (const setRes of perSetResults) {
+      if (setRes.response) {
+        const ms = setRes.response.modalityStatus;
+        modalityStatus.fulltext.latencyMs = Math.max(modalityStatus.fulltext.latencyMs, ms.fulltext.latencyMs);
+        modalityStatus.fulltext.itemCount += ms.fulltext.itemCount;
+        if (ms.fulltext.status !== 'ok') modalityStatus.fulltext.status = ms.fulltext.status;
 
-      modalityStatus.graph.latencyMs = Math.max(modalityStatus.graph.latencyMs, ms.graph.latencyMs);
-      modalityStatus.graph.itemCount += ms.graph.itemCount;
-      if (ms.graph.status !== 'ok') modalityStatus.graph.status = ms.graph.status;
+        modalityStatus.vector.latencyMs = Math.max(modalityStatus.vector.latencyMs, ms.vector.latencyMs);
+        modalityStatus.vector.itemCount += ms.vector.itemCount;
+        if (ms.vector.status !== 'ok') modalityStatus.vector.status = ms.vector.status;
+
+        modalityStatus.graph.latencyMs = Math.max(modalityStatus.graph.latencyMs, ms.graph.latencyMs);
+        modalityStatus.graph.itemCount += ms.graph.itemCount;
+        if (ms.graph.status !== 'ok') modalityStatus.graph.status = ms.graph.status;
+      }
     }
   }
 

@@ -431,4 +431,89 @@ describe('Federated Retrieval Route and Orchestration (Task 2)', () => {
     });
     expect(retrieveMock).not.toHaveBeenCalled();
   });
+
+  it('allows REQUIRED retrieval to use the remaining global deadline', async () => {
+    vi.useFakeTimers();
+    try {
+      const response = mockSingleSetResponse('gsnap_abcdef12', [
+        mockChunkItem('c1', 'gsnap_abcdef12'),
+      ]);
+      const retrieveMock = vi.fn().mockImplementation(
+        () => new Promise((resolve) => setTimeout(() => resolve(response), 70))
+      );
+      const app = buildKnowledgeServer({
+        token: TOKEN,
+        allowedOrigins: [ORIGIN],
+        retrievalService: { retrieve: retrieveMock },
+      }).app;
+
+      const responsePromise = app.inject({
+        method: 'POST',
+        url: '/api/v1/retrieve',
+        headers: {
+          origin: ORIGIN,
+          authorization: `Bearer ${TOKEN}`,
+        },
+        payload: {
+          query: 'slow but within budget',
+          setTierAssignments: [
+            { setId: SET_ID_1, tier: 'REQUIRED', roleGroup: 'baseline' },
+          ],
+          comparisonMode: 'single',
+          budgets: { ...baseBudgets, elapsedMs: 100 },
+        },
+      });
+      await vi.advanceTimersByTimeAsync(70);
+      const res = await responsePromise;
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as FederatedRetrievalResponse;
+      expect(body.outcome).toBe('READY');
+      expect(body.items).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('marks all modalities as timeout when every set times out', async () => {
+    const retrieveMock = vi.fn().mockImplementation(
+      (_setId: string, _request: unknown, signal?: AbortSignal) =>
+        new Promise((_resolve, reject) => {
+          signal?.addEventListener('abort', () => reject(new DOMException('Timed out', 'AbortError')));
+        })
+    );
+    const app = buildKnowledgeServer({
+      token: TOKEN,
+      allowedOrigins: [ORIGIN],
+      retrievalService: { retrieve: retrieveMock },
+    }).app;
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/retrieve',
+      headers: {
+        origin: ORIGIN,
+        authorization: `Bearer ${TOKEN}`,
+      },
+      payload: {
+        query: 'slow query',
+        setTierAssignments: [
+          { setId: SET_ID_1, tier: 'REQUIRED', roleGroup: 'baseline' },
+        ],
+        comparisonMode: 'single',
+        budgets: { ...baseBudgets, elapsedMs: 100 },
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as FederatedRetrievalResponse;
+    expect(body.outcome).toBe('DEGRADED');
+    expect(body.items).toHaveLength(0);
+    expect(body.modalityStatus.fulltext.status).toBe('timeout');
+    expect(body.modalityStatus.vector.status).toBe('timeout');
+    expect(body.modalityStatus.graph.status).toBe('timeout');
+    expect(body.diagnostics.coverageWarnings).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'TIMEOUT', setId: SET_ID_1 })])
+    );
+  });
 });

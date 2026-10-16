@@ -433,7 +433,7 @@ export async function runGroundedTurn(
         comparisonMode: resolvedScope.comparisonMode,
         budgets: {
           concurrency: 4,
-          elapsedMs: 2500,
+          elapsedMs: 20000,
           maxSets: 10,
           maxItems: 50,
           maxEvidenceChars: 30000,
@@ -572,6 +572,18 @@ export async function runGroundedTurn(
   }
 
   // 5. Branch on retrieval outcome
+  if (
+    serverResponse.items.length === 0 &&
+    (serverResponse.diagnostics.coverageWarnings.some((warning) => warning.code === 'TIMEOUT') ||
+      (serverResponse.modalityStatus.fulltext.status === 'timeout' &&
+        serverResponse.modalityStatus.vector.status === 'timeout' &&
+        serverResponse.modalityStatus.graph.status === 'timeout'))
+  ) {
+    return executeLocalPath('TIMEOUT', [
+      'Máy chủ tri thức quá thời gian phản hồi (timeout)',
+    ]);
+  }
+
   if (serverResponse.outcome === 'NEEDS_CLARIFICATION') {
     const rawCandidates = (serverResponse as unknown as { candidates?: readonly CandidateRef[] }).candidates ?? [];
     return {
