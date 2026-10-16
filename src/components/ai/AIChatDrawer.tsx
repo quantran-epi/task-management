@@ -415,6 +415,22 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
   // Abort stream on unmount or drawer close
   useEffect(() => {
+    return () => {
+      if (pendingConfirmationRef.current) {
+        pendingConfirmationRef.current.resolve(false);
+        pendingConfirmationRef.current = null;
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      if (currentTurnAbortRef.current) {
+        currentTurnAbortRef.current.abort();
+        currentTurnAbortRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (!open) {
       if (pendingConfirmationRef.current) {
         pendingConfirmationRef.current.resolve(false);
@@ -839,6 +855,11 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     }
 
     // 3. Operational tool loop (for operational / mixed / fallback turns)
+    if (turnController.signal.aborted) {
+      setGroundedLoadingStatus(null);
+      return;
+    }
+
     if (!apiKey) {
       setGroundedLoadingStatus(null);
       setApiError('Chưa cấu hình API Key 9router. Vui lòng mở Cài đặt AI để thiết lập.');

@@ -1358,6 +1358,7 @@ describe('AIChatDrawer', () => {
       expect(turnCalls).toBe(2);
       expect(queriesReceived[1]).toContain('cái đó');
       expect(queriesReceived[1]).toContain('[Thông tin bổ sung]: về tính lãi thẻ tín dụng');
+      expect(screen.getByText('Đã hoàn tất sau khi làm rõ.')).toBeInTheDocument();
     });
   });
 

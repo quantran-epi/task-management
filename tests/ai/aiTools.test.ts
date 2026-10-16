@@ -8,6 +8,7 @@ import {
   formatFieldChanges,
   normalizeToolName,
 } from '../../src/services/ai/aiTools';
+import { getTodayDateString } from '../../src/utils/date';
 
 describe('aiTools', () => {
   const mockTasks = [
@@ -27,7 +28,7 @@ describe('aiTools', () => {
       notes: 'Some task notes',
       isRecurring: true,
       recurrenceFrequency: 'weekly',
-      reminders: [{ id: 'r1', date: '2026-10-15', note: 'Check tests' }],
+      reminders: [{ id: 'r1', date: getTodayDateString(), note: 'Check tests' }],
       createdAt: '2026-10-01T08:00:00.000Z',
       updatedAt: '2026-10-02T08:00:00.000Z',
     },
