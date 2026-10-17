@@ -135,6 +135,14 @@
 - [x] **ANSWER-06**: Local BM25 fallback runs automatically on allowed availability failures scoped to resolved set members; strong-evidence synthesis vs weak-evidence ranked list; local citations use [L#] and Local badge.
 - [x] **ANSWER-07**: Citation and graph-path interactions open QuickPreviewDrawer at exact document range with snapshot-first excerpt and mismatch warning when current content differs; historical citations durable with bounded excerpt.
 
+### Benchmark Evaluation Suite & Integrity Hardening (Phase 20)
+
+- [ ] **QUAL-01**: Maintainer can execute a version-controlled 40-case benchmark harness covering exact lookup, semantic retrieval, process flow, call chain, three-hop impact, conflict, abstention, security, and offline recovery cases.
+- [ ] **QUAL-02**: Benchmark asserts semantic expectations (expected sources/ranges, required graph paths with hop source/rel/target, required facts) and zero-tolerance trust invariants (no unsupported claims, single-snapshot path closure, balanced conflicts, zero credential leakage, zero offline egress).
+- [ ] **QUAL-03**: Automated release gate enforces aggregate pass rate `>= 90%`, per-category pass rate `>= 80%`, three-hop answer success `>= 90%`, graph path fidelity `100%`, and zero invariant violations, reporting all failures without masking retries.
+- [ ] **QUAL-04**: Automated checks prove knowledge graph rebuild produces semantic equivalence (stable URNs, factKeys, classifications, paths, retrieval results) and offline transport failures (connection refused, timeout) safely fall back to local BM25 with zero network egress while auth/config/parse errors remain visible.
+- [ ] **QUAL-05**: Verification proves daemon secrets never leak across API endpoints or generated benchmark reports, and Phase 16 sensitive-data scanning / fresh confirmation remains enforced before document publication.
+
 ## Future Requirements (Deferred)
 
 - **FUTR-01**: Full bidirectional Jira issue webhook sync (deferred - requires server/push).
@@ -230,3 +238,8 @@
 | ANSWER-05 | Phase 19 | Complete |
 | ANSWER-06 | Phase 19 | Complete |
 | ANSWER-07 | Phase 19 | Complete |
+| QUAL-01 | Phase 20 | Pending |
+| QUAL-02 | Phase 20 | Pending |
+| QUAL-03 | Phase 20 | Pending |
+| QUAL-04 | Phase 20 | Pending |
+| QUAL-05 | Phase 20 | Pending |

@@ -1,5 +1,15 @@
 import { z } from 'zod';
 
+export const BenchmarkCategorySchema = z.enum([
+  'multi_hop_path',
+  'semantic_scope',
+  'conflict_abstention',
+  'security_integrity',
+  'rebuild_offline',
+]);
+
+export type BenchmarkCategory = z.infer<typeof BenchmarkCategorySchema>;
+
 export const GroundedReferenceExpectedSchema = z.strictObject({
   kind: z.enum([
     'operational',
@@ -50,6 +60,7 @@ export const GroundedReferenceExpectedSchema = z.strictObject({
 
 export const GroundedReferenceCaseSchema = z.strictObject({
   id: z.string().min(1),
+  category: BenchmarkCategorySchema,
   language: z.enum(['vi', 'en', 'mixed']),
   query: z.string().min(1),
   recentTurns: z.array(
