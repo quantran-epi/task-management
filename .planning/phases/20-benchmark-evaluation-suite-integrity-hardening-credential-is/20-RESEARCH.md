@@ -592,9 +592,9 @@ export type BenchmarkReport = z.infer<typeof BenchmarkReportSchema>;
 | A1 | Exactly 40 cases (20 existing + 20 new) is sufficient to achieve complete coverage across all 5 risk categories without test runtime degradation. | Benchmark Case Mix | Low — test suite runs in < 2 seconds; additional synthetic edge cases can be added easily if gaps appear. |
 | A2 | Canonical JSON and Markdown reports stored under `.benchmark-reports/` should be gitignored locally and uploaded as CI artifacts. | Harness and Reports | Low — standard CI artifact pattern prevents dirtying working tree during local runs. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **How should `npm run benchmark` interact with Vitest?**
+1. **How should `npm run benchmark` interact with Vitest?** — RESOLVED: Use shared `tests/ai/evaluatorCore.ts` engine called by both Vitest runner (`tests/ai/groundedAssistantEval.test.ts`) and standalone CLI script (`scripts/run-benchmark.ts`).
    - What we know: Maintainers need a fast CLI entry point (`npm run benchmark`) that returns exit code 0 on pass or 1 on fail and produces JSON/Markdown reports, while developers also want `npx vitest run tests/ai/groundedAssistantEval.test.ts` for step-through debugging.
    - What's clear: Building a shared `evaluatorCore.ts` library allows the CLI runner script (`scripts/run-benchmark.ts`) and the Vitest test file to share 100% of the evaluation logic without duplicate assertion engines.
    - Recommendation: Implement `tests/ai/evaluatorCore.ts` as the single authoritative evaluator, called by both `tests/ai/groundedAssistantEval.test.ts` and `scripts/run-benchmark.ts`.
