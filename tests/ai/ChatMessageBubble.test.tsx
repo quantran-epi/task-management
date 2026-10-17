@@ -154,6 +154,79 @@ describe('ChatMessageBubble', () => {
       expect.anything()
     );
   });
+
+  it('renders grounded message with inline interactive citation chips and calls onCitationActivate', () => {
+    const handleActivate = vi.fn();
+    const groundedMsg: ChatMessage = {
+      id: 'msg-grounded',
+      threadId: 'thread-1',
+      role: 'assistant',
+      content: '',
+      grounding: {
+        schemaVersion: 1,
+        authority: 'server',
+        outcome: 'READY',
+        answer: {
+          schemaVersion: 1,
+          language: 'vi',
+          conclusion: 'Tiến trình 60000004 chạy phân bổ nợ [S1].',
+          claims: [
+            {
+              id: 'C1',
+              text: 'Quy trình apply_payment xử lý cấn trừ.',
+              classification: 'DIRECT',
+              citationIds: ['S1'],
+              pathId: null,
+            },
+          ],
+          unsupportedParts: [],
+        },
+        citations: [
+          {
+            citationId: 'S1',
+            documentId: '00000000-0000-0000-0000-000000000001',
+            documentTitle: '03 - Call chain',
+            sectionAnchor: 'Billing',
+            lineStart: 10,
+            lineEnd: 25,
+            authority: 'server',
+            evidenceClass: 'OBSERVED',
+            snapshotId: 'gsnap_123',
+            publishedContentHash: 'a'.repeat(64),
+            citedExcerpt: 'Billing dispatch code',
+          },
+        ],
+        paths: [],
+        conflicts: [],
+        scope: null,
+        modalityDiagnostics: null,
+        coverageWarnings: [],
+        fallbackReason: 'NONE',
+        routerVersion: null,
+        promptVersion: 'v1',
+        modelId: 'gpt-4o',
+        createdAt: new Date().toISOString(),
+      },
+      createdAt: '2026-10-03T10:07:00Z',
+    };
+
+    const { container } = render(
+      <ChatMessageBubble
+        message={groundedMsg}
+        groundedCallbacks={{ onCitationActivate: handleActivate }}
+      />
+    );
+
+    expect(screen.getByText('Nguồn tài liệu:')).toBeInTheDocument();
+    const chip = container.querySelector('.grounded-inline-chip');
+    expect(chip).toBeInTheDocument();
+    expect(chip).toHaveTextContent('[1]');
+
+    if (chip) {
+      fireEvent.click(chip);
+      expect(handleActivate).toHaveBeenCalledWith(groundedMsg.grounding!.citations[0]);
+    }
+  });
 });
 
 describe('ChatMessageList', () => {

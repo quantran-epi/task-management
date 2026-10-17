@@ -40,6 +40,10 @@ import { EvidenceOnlyCard } from './grounded/EvidenceOnlyCard';
 
 const { Text } = Typography;
 
+function escapeAttr(text?: string | null): string {
+  return (text || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 export interface GroundedAnswerCardCallbacks {
   onCitationActivate?: ((c: PersistedCitation) => void) | undefined;
   onCandidateSelect?: ((urn: string) => void) | undefined;
@@ -216,6 +220,16 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
 
   const handleMarkdownClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
+    const citationChip = target.closest('.grounded-inline-chip') as HTMLElement | null;
+    if (citationChip) {
+      const cid = citationChip.getAttribute('data-citation-id');
+      const citation = msg.grounding?.citations?.find((c) => c.citationId === cid);
+      if (citation) {
+        groundedCallbacks?.onCitationActivate?.(citation);
+        return;
+      }
+    }
+
     const copyBtn = target.closest('.code-copy-btn');
     if (copyBtn) {
       const wrapper = copyBtn.closest('.code-block-wrapper');
@@ -237,9 +251,52 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
 
     // Render friendly markdown answer with inline citation tags instead of bulky technical card
     if (g.answer && (g.answer.conclusion || (g.answer.claims && g.answer.claims.length > 0))) {
-      const fullText = g.answer.conclusion
-        ? `${g.answer.conclusion}\n\n${g.answer.claims.map((c) => c.text).join('\n\n')}`
-        : g.answer.claims.map((c) => c.text).join('\n\n');
+      const citationMap = new Map<string, { num: number; isLocal: boolean; citation: PersistedCitation }>();
+      (g.citations || []).forEach((c, idx) => {
+        const entry = { num: idx + 1, isLocal: c.authority === 'local', citation: c };
+        citationMap.set(c.citationId, entry);
+        citationMap.set(`S${idx + 1}`, entry);
+        citationMap.set(`L${idx + 1}`, entry);
+        citationMap.set(String(idx + 1), entry);
+      });
+
+      // Format claims with inline citation tags
+      const formattedClaims = (g.answer.claims || []).map((c) => {
+        const citedBadges = (c.citationIds || [])
+          .map((cid) => {
+            const info = citationMap.get(cid);
+            if (!info) return null;
+            return info.isLocal ? `[L${info.num}]` : `[${info.num}]`;
+          })
+          .filter(Boolean);
+        const suffix = citedBadges.length > 0 ? ` ${citedBadges.join(' ')}` : '';
+        return `${c.text}${suffix}`;
+      });
+
+      let formattedConclusion = g.answer.conclusion || '';
+      formattedConclusion = formattedConclusion.replace(/\[(S|L)?(\d+)\]/gi, (match, prefix, numStr) => {
+        const cleanTag = prefix ? `${prefix.toUpperCase()}${numStr}` : numStr;
+        const info = citationMap.get(cleanTag);
+        if (info) {
+          return info.isLocal ? `[L${info.num}]` : `[${info.num}]`;
+        }
+        return match;
+      });
+
+      const fullText = formattedConclusion
+        ? (formattedClaims.length > 0 ? `${formattedConclusion}\n\n${formattedClaims.join('\n\n')}` : formattedConclusion)
+        : formattedClaims.join('\n\n');
+
+      // Inject interactive styling for inline citations like [1], [L1]
+      let renderedHtml = renderSafeMarkdown(fullText);
+      if (g.citations && g.citations.length > 0) {
+        renderedHtml = renderedHtml.replace(/\[(L?[0-9]+|S[0-9]+)\]/g, (match, tag) => {
+          const info = citationMap.get(tag);
+          if (!info) return match;
+          const label = info.isLocal ? `L${info.num}` : `${info.num}`;
+          return `<span class="grounded-inline-chip" data-citation-id="${info.citation.citationId}" style="cursor:pointer;margin:0 2px;padding:0 5px;border-radius:4px;font-weight:600;font-size:11px;line-height:16px;display:inline-flex;align-items:center;vertical-align:baseline;background:#e6f4ff;border:1px solid #1677ff;color:#1677ff;" title="${escapeAttr(info.citation.documentTitle)}">[${label}]</span>`;
+        });
+      }
 
       return (
         <div
@@ -270,7 +327,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
             <div
               className="chat-markdown-body"
               onClick={handleMarkdownClick}
-              dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(fullText) }}
+              dangerouslySetInnerHTML={{ __html: renderedHtml }}
             />
 
             {g.citations && g.citations.length > 0 && (
@@ -311,8 +368,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
                         tabIndex={0}
                         aria-label={`${label} ${c.documentTitle}`}
                       >
-                        <span>{label}</span>
-                        {c.documentTitle ? ` ${c.documentTitle}` : ''}
+                        {`${label} ${c.documentTitle || ''}`.trim()}
                       </Tag>
                     );
                   })}
