@@ -455,3 +455,15 @@ Plans:
   2. Benchmark verifies expected sources, required graph paths, required facts, and forbidden unsupported claims.
   3. Milestone meets an agreed accuracy threshold for three-hop pilot queries and reports failures rather than masking them.
   4. Automated checks prove indexes are rebuildable, sensitive-data checks and any required fresh override confirmation run before external calls, and local search remains available offline.
+
+**Plans:** 3 plans in 3 waves
+
+Plans:
+**Wave 1**
+- [ ] 20-01-PLAN.md — Benchmark Fixtures, Zod Schema Extension & Shared Evaluation Core (Wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 20-02-PLAN.md — Hybrid Release Gate, Reporting & Maintainer Benchmark CLI (Wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 20-03-PLAN.md — Semantic Rebuild Equivalence, Offline Recovery Taxonomy & Credential Isolation (Wave 3)
