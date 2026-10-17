@@ -5,6 +5,7 @@ import type {
   ConnectionTestOptions,
   ConnectionTestResult,
 } from './types';
+import type { ChatTokenUsage } from '../../types/models';
 import { isTauriApp } from '../../utils/timerPopout';
 
 export interface TauriProxyResponse {
@@ -31,8 +32,16 @@ export function sanitizeEndpoint(endpoint: string): string {
   return trimmed || 'http://localhost:20128';
 }
 
+export function stripThinkingBlocks(raw: string): string {
+  if (!raw) return '';
+  return raw
+    .replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '')
+    .replace(/<think(?:ing)?>[\s\S]*$/gi, '')
+    .trim();
+}
+
 export function extractJsonContent(raw: string): string {
-  let text = raw.trim();
+  let text = stripThinkingBlocks(raw);
   if (text.startsWith('```')) {
     text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
   }
@@ -308,9 +317,11 @@ export async function* streamChatEvents(
           }
 
           const delta = choice?.delta;
-          const deltaText = delta?.content ?? delta?.reasoning_content;
-          if (typeof deltaText === 'string' && deltaText.length > 0) {
-            yield { type: 'text', delta: deltaText };
+          if (typeof delta?.reasoning_content === 'string' && delta.reasoning_content.length > 0) {
+            yield { type: 'reasoning', delta: delta.reasoning_content };
+          }
+          if (typeof delta?.content === 'string' && delta.content.length > 0) {
+            yield { type: 'text', delta: delta.content };
             yieldedAny = true;
           }
 
@@ -369,9 +380,11 @@ export async function* streamChatEvents(
         }
 
         const message = parsed.choices?.[0]?.message;
-        const deltaText = message?.content ?? message?.reasoning_content;
-        if (typeof deltaText === 'string' && deltaText.length > 0) {
-          yield { type: 'text', delta: deltaText };
+        if (typeof message?.reasoning_content === 'string' && message.reasoning_content.length > 0) {
+          yield { type: 'reasoning', delta: message.reasoning_content };
+        }
+        if (typeof message?.content === 'string' && message.content.length > 0) {
+          yield { type: 'text', delta: message.content };
           yieldedAny = true;
         }
 
@@ -465,6 +478,7 @@ export interface CompleteJsonRequest {
     };
   } | undefined;
   signal: AbortSignal;
+  onUsage?: ((usage: ChatTokenUsage) => void) | undefined;
 }
 
 export async function completeJson(req: CompleteJsonRequest): Promise<unknown> {
@@ -587,6 +601,18 @@ export async function completeJson(req: CompleteJsonRequest): Promise<unknown> {
       'Model returned empty content',
       response.status
     );
+  }
+
+  if (json?.usage && req.onUsage) {
+    try {
+      req.onUsage({
+        promptTokens: json.usage.prompt_tokens ?? json.usage.promptTokens,
+        completionTokens: json.usage.completion_tokens ?? json.usage.completionTokens,
+        totalTokens: json.usage.total_tokens ?? json.usage.totalTokens,
+      });
+    } catch {
+      // Ignore usage callback error
+    }
   }
 
   try {

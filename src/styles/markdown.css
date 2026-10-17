@@ -167,8 +167,9 @@
 
 .chat-markdown-body .markdown-table,
 .markdown-rendered-view .markdown-table {
-  width: 100%;
-  max-width: 100%;
+  min-width: 100%;
+  width: max-content;
+  max-width: none;
   border-collapse: collapse;
   font-size: 13px;
   line-height: 1.5;
@@ -181,8 +182,10 @@
 .chat-markdown-body .markdown-table td,
 .markdown-rendered-view .markdown-table th,
 .markdown-rendered-view .markdown-table td {
-  padding: 6px 12px;
+  padding: 8px 14px;
   border: 1px solid rgba(128, 128, 128, 0.2);
+  white-space: normal;
+  word-break: normal;
 }
 
 .chat-markdown-body .markdown-table th,

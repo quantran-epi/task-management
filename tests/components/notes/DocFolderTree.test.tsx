@@ -35,18 +35,19 @@ describe('DocFolderTree Component', () => {
     },
   ];
 
-  it('renders quick filters and folder items with badge counts', () => {
+  it('renders special folders and user folder items with badge counts', () => {
     render(
       <DocFolderTree
         notes={mockNotes}
-        activeFilter="inbox"
+        activeFilter="root_docs"
         onSelectFilter={vi.fn()}
         onCreateDoc={vi.fn()}
       />
     );
 
-    expect(screen.getByText('Inbox')).toBeInTheDocument();
-    expect(screen.getByText('Tất cả tài liệu')).toBeInTheDocument();
+    expect(screen.getByText('Đã ghim')).toBeInTheDocument();
+    expect(screen.getByText('Ghi chú nhanh')).toBeInTheDocument();
+    expect(screen.getByText('Thùng rác')).toBeInTheDocument();
     expect(screen.getByText('Kỹ thuật & Kiến trúc')).toBeInTheDocument();
   });
 
@@ -147,16 +148,18 @@ describe('DocFolderTree Component', () => {
     }
   });
 
-  it('renders inbox root documents and only reveals folder documents after expansion', () => {
+  it('renders root documents in special folder and only reveals folder documents after expansion', () => {
     render(
       <DocFolderTree
         notes={mockNotes.map((note) => ({ ...note, body: '' }))}
-        activeFilter="inbox"
+        activeFilter="root_docs"
         onSelectFilter={vi.fn()}
         onCreateDoc={vi.fn()}
       />
     );
 
+    // Expand root_docs
+    fireEvent.click(screen.getByText('Tài liệu chung (Chưa phân loại)'));
     expect(screen.getByText('Inbox Document')).toBeInTheDocument();
     expect(screen.queryByText('Database Schema Spec')).not.toBeInTheDocument();
     fireEvent.click(screen.getByText('Kỹ thuật & Kiến trúc'));
@@ -214,5 +217,50 @@ describe('DocFolderTree Component', () => {
     expect(handleSelectDoc).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'doc-1' })
     );
+  });
+
+  it('indents documents inside special folders with sufficient visual hierarchy', () => {
+    const specialMockNotes: Note[] = [
+      {
+        id: 'pinned-doc-1',
+        title: 'Pinned Guide',
+        body: '',
+        type: 'document',
+        isPinned: true,
+        createdAt: '2026-10-01T00:00:00Z',
+        updatedAt: '2026-10-01T00:00:00Z',
+      },
+      {
+        id: 'trash-doc-1',
+        title: 'Deleted Draft',
+        body: '',
+        type: 'document',
+        isPinned: false,
+        deletedAt: '2026-10-02T00:00:00Z',
+        createdAt: '2026-10-01T00:00:00Z',
+        updatedAt: '2026-10-01T00:00:00Z',
+      },
+    ];
+
+    render(
+      <DocFolderTree
+        notes={specialMockNotes}
+        activeFilter="pinned"
+        onSelectFilter={vi.fn()}
+        onCreateDoc={vi.fn()}
+      />
+    );
+
+    // Expand pinned
+    fireEvent.click(screen.getByText('Đã ghim'));
+    const pinnedItem = screen.getByText('Pinned Guide').closest('.doc-tree-item');
+    expect(pinnedItem).toBeInTheDocument();
+    expect(pinnedItem).toHaveStyle({ paddingLeft: '34px' });
+
+    // Expand trash
+    fireEvent.click(screen.getByText('Thùng rác'));
+    const trashItem = screen.getByText('Deleted Draft').closest('.doc-tree-item');
+    expect(trashItem).toBeInTheDocument();
+    expect(trashItem).toHaveStyle({ paddingLeft: '34px' });
   });
 });

@@ -30,6 +30,8 @@ services:
     depends_on:
       neo4j:
         condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - HOST=0.0.0.0
       - PORT=3001
@@ -49,6 +51,7 @@ services:
       - PLANNER_MODEL=${PLANNER_MODEL:-}
       - PLANNER_API_KEY=${PLANNER_API_KEY:-}
       - PLANNER_REMOTE_ALLOWED_HOSTS=${PLANNER_REMOTE_ALLOWED_HOSTS:-}
+      - PLANNER_TIMEOUT_MS=${PLANNER_TIMEOUT_MS:-30000}
       - PROSE_EXTRACTION_ENABLED=${PROSE_EXTRACTION_ENABLED:-false}
     volumes:
       - knowledge-server-data:/var/lib/knowledge-server

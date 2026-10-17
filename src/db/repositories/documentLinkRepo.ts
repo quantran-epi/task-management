@@ -187,6 +187,21 @@ export async function getBacklinksForDoc(
     return Boolean(p.notes && p.notes.includes(docWikiPattern));
   });
 
+  const currentDoc = allNotes.find((n) => n.id === docId);
+  if (currentDoc?.entityType && currentDoc?.entityId) {
+    if (currentDoc.entityType === 'task') {
+      const parentTask = allTasks.find((t) => t.id === currentDoc.entityId);
+      if (parentTask && !tasks.some((t) => t.id === parentTask.id)) {
+        tasks.unshift(parentTask);
+      }
+    } else if (currentDoc.entityType === 'project') {
+      const parentProject = allProjects.find((p) => p.id === currentDoc.entityId);
+      if (parentProject && !projects.some((p) => p.id === parentProject.id)) {
+        projects.unshift(parentProject);
+      }
+    }
+  }
+
   const referencingNotes = allNotes.filter((n) => {
     return n.id !== docId && !n.deletedAt && n.body.includes(docWikiPattern);
   });

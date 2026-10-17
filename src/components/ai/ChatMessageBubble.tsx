@@ -50,7 +50,6 @@ export interface GroundedAnswerCardCallbacks {
   onAuthRepair?: (() => void) | undefined;
   onConfigRepair?: (() => void) | undefined;
   synthesizingEvidenceId?: string | null | undefined;
-  freshLookingUpId?: string | null | undefined;
   evidenceSynthesisError?: {
     id: string;
     message: string;
@@ -211,10 +210,179 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   const [noteSaved, setNoteSaved] = useState(false);
 
   const isUser = msg.role === 'user';
+  const formattedTime = msg.createdAt
+    ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : '';
+
+  const handleMarkdownClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    const copyBtn = target.closest('.code-copy-btn');
+    if (copyBtn) {
+      const wrapper = copyBtn.closest('.code-block-wrapper');
+      const codeEl = wrapper?.querySelector('code');
+      if (codeEl) {
+        navigator.clipboard.writeText(codeEl.innerText).then(() => {
+          copyBtn.textContent = 'Copied!';
+          setTimeout(() => {
+            copyBtn.textContent = 'Copy';
+          }, 2000);
+        });
+      }
+    }
+  };
 
   // Branch assistant display on message.grounding payload
   if (!isUser && msg.grounding) {
     const g = msg.grounding;
+
+    // Render friendly markdown answer with inline citation tags instead of bulky technical card
+    if (g.answer && (g.answer.conclusion || (g.answer.claims && g.answer.claims.length > 0))) {
+      const fullText = g.answer.conclusion
+        ? `${g.answer.conclusion}\n\n${g.answer.claims.map((c) => c.text).join('\n\n')}`
+        : g.answer.claims.map((c) => c.text).join('\n\n');
+
+      return (
+        <div
+          data-role={msg.role}
+          data-testid="grounded-bubble"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-start',
+            marginBottom: 12,
+            width: '100%',
+          }}
+        >
+          <div
+            style={{
+              maxWidth: '95%',
+              backgroundColor: token.colorFillAlter,
+              color: token.colorText,
+              borderRadius: '12px 12px 12px 2px',
+              border: `1px solid ${token.colorBorderSecondary}`,
+              padding: '12px 16px',
+              wordBreak: 'break-word',
+              fontSize: 14,
+              lineHeight: 1.57,
+              boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+            }}
+          >
+            <div
+              className="chat-markdown-body"
+              onClick={handleMarkdownClick}
+              dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(fullText) }}
+            />
+
+            {g.citations && g.citations.length > 0 && (
+              <div style={{ marginTop: 10, paddingTop: 8, borderTop: `1px dashed ${token.colorBorderSecondary}` }}>
+                <span style={{ fontSize: 11, color: token.colorTextSecondary, marginRight: 6 }}>
+                  Nguồn tài liệu:
+                </span>
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                >
+                  {g.citations.map((c, idx) => {
+                    const isLocal = c.authority === 'local';
+                    const num = idx + 1;
+                    const label = isLocal ? `[L${num}]` : `[${num}]`;
+                    return (
+                      <Tag
+                        key={c.citationId}
+                        style={{
+                          cursor: 'pointer',
+                          margin: '0 2px',
+                          padding: '0 6px',
+                          borderRadius: 4,
+                          fontWeight: 600,
+                          fontSize: 11,
+                          lineHeight: '18px',
+                          height: 18,
+                          background: isLocal ? token.colorFillSecondary : token.colorBgContainer,
+                          borderColor: isLocal ? token.colorBorder : token.colorPrimary,
+                          color: isLocal ? token.colorText : token.colorPrimary,
+                        }}
+                        onClick={() => groundedCallbacks?.onCitationActivate?.(c)}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`${label} ${c.documentTitle}`}
+                      >
+                        <span>{label}</span>
+                        {c.documentTitle ? ` ${c.documentTitle}` : ''}
+                      </Tag>
+                    );
+                  })}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Footer duration & tokens for grounded knowledge messages */}
+          {((!isStreaming && msg.durationMs !== undefined) || (!isStreaming && msg.tokenUsage && (msg.tokenUsage.totalTokens || msg.tokenUsage.completionTokens))) && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                marginTop: 4,
+                paddingLeft: 4,
+              }}
+            >
+              {formattedTime && (
+                <Text type="secondary" style={{ fontSize: 11 }}>
+                  {formattedTime}
+                </Text>
+              )}
+              {msg.durationMs !== undefined && (
+                <Tooltip
+                  title={`Thời gian tra cứu & phản hồi: ${(msg.durationMs / 1000).toFixed(2)}s`}
+                  zIndex={1500}
+                  getPopupContainer={(node) => node.parentElement || document.body}
+                >
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: token.colorTextQuaternary,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 2,
+                      cursor: 'default',
+                    }}
+                  >
+                    ⏱ {(msg.durationMs / 1000).toFixed(1)}s
+                  </span>
+                </Tooltip>
+              )}
+              {msg.tokenUsage && (msg.tokenUsage.totalTokens || msg.tokenUsage.completionTokens) && (
+                <Tooltip
+                  title={`Tổng token: ${(msg.tokenUsage.totalTokens ?? ((msg.tokenUsage.promptTokens || 0) + (msg.tokenUsage.completionTokens || 0))).toLocaleString()} (Vào: ${(msg.tokenUsage.promptTokens || 0).toLocaleString()}, Ra: ${(msg.tokenUsage.completionTokens || 0).toLocaleString()})`}
+                  zIndex={1500}
+                  getPopupContainer={(node) => node.parentElement || document.body}
+                >
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: token.colorTextQuaternary,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 2,
+                      cursor: 'default',
+                    }}
+                  >
+                    🪙 {(msg.tokenUsage.totalTokens ?? ((msg.tokenUsage.promptTokens || 0) + (msg.tokenUsage.completionTokens || 0))).toLocaleString()} tokens
+                  </span>
+                </Tooltip>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
     const pathsSlot = g.paths && g.paths.length > 0 ? (
       <GraphPathCard
         paths={g.paths}
@@ -297,7 +465,20 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
           width: '100%',
         }}
       >
-        <div style={{ width: '100%', maxWidth: '98%' }}>
+        <div
+          style={{
+            maxWidth: '95%',
+            backgroundColor: token.colorFillAlter,
+            color: token.colorText,
+            borderRadius: '12px 12px 12px 2px',
+            border: `1px solid ${token.colorBorderSecondary}`,
+            padding: '12px 16px',
+            wordBreak: 'break-word',
+            fontSize: 14,
+            lineHeight: 1.57,
+            boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+          }}
+        >
           {g.outcome === 'MODEL_UNAVAILABLE' ? (
             <EvidenceOnlyCard
               grounding={g}
@@ -320,7 +501,6 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               onCandidateSelect={(urn) => groundedCallbacks?.onCandidateSelect?.(urn)}
               onRefinementSelect={(ref) => groundedCallbacks?.onRefinementSelect?.(ref)}
               onEvidenceOnlySynthesize={() => groundedCallbacks?.onEvidenceOnlySynthesize?.()}
-              onFreshLookup={() => groundedCallbacks?.onFreshLookup?.()}
               onInvalidRetry={() => groundedCallbacks?.onInvalidRetry?.()}
               onAuthRepair={() => groundedCallbacks?.onAuthRepair?.()}
               onConfigRepair={() => groundedCallbacks?.onConfigRepair?.()}
@@ -330,10 +510,68 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               candidatesSlot={candidatesSlot}
               refinementsSlot={refinementsSlot}
               resultsSlot={resultsSlot}
-              isFreshLookingUp={groundedCallbacks?.freshLookingUpId === g.createdAt}
             />
           )}
         </div>
+
+        {/* Duration and Token badges for grounded messages */}
+        {((!isStreaming && msg.durationMs !== undefined) || (!isStreaming && msg.tokenUsage && (msg.tokenUsage.totalTokens || msg.tokenUsage.completionTokens))) && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              marginTop: 4,
+              paddingLeft: 4,
+            }}
+          >
+            {formattedTime && (
+              <Text type="secondary" style={{ fontSize: 11 }}>
+                {formattedTime}
+              </Text>
+            )}
+            {msg.durationMs !== undefined && (
+              <Tooltip
+                title={`Thời gian tra cứu & phản hồi: ${(msg.durationMs / 1000).toFixed(2)}s`}
+                zIndex={1500}
+                getPopupContainer={(node) => node.parentElement || document.body}
+              >
+                <span
+                  style={{
+                    fontSize: 11,
+                    color: token.colorTextQuaternary,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 2,
+                    cursor: 'default',
+                  }}
+                >
+                  ⏱ {(msg.durationMs / 1000).toFixed(1)}s
+                </span>
+              </Tooltip>
+            )}
+            {msg.tokenUsage && (msg.tokenUsage.totalTokens || msg.tokenUsage.completionTokens) && (
+              <Tooltip
+                title={`Tổng token: ${(msg.tokenUsage.totalTokens ?? ((msg.tokenUsage.promptTokens || 0) + (msg.tokenUsage.completionTokens || 0))).toLocaleString()} (Vào: ${(msg.tokenUsage.promptTokens || 0).toLocaleString()}, Ra: ${(msg.tokenUsage.completionTokens || 0).toLocaleString()})`}
+                zIndex={1500}
+                getPopupContainer={(node) => node.parentElement || document.body}
+              >
+                <span
+                  style={{
+                    fontSize: 11,
+                    color: token.colorTextQuaternary,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 2,
+                    cursor: 'default',
+                  }}
+                >
+                  🪙 {(msg.tokenUsage.totalTokens ?? ((msg.tokenUsage.promptTokens || 0) + (msg.tokenUsage.completionTokens || 0))).toLocaleString()} tokens
+                </span>
+              </Tooltip>
+            )}
+          </div>
+        )}
       </div>
     );
   }
@@ -557,27 +795,6 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
     () => buildExportMenuItems(false),
     [hasMarkdownTable, token.colorPrimary, msg.content]
   );
-
-  const formattedTime = msg.createdAt
-    ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : '';
-
-  const handleMarkdownClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    const target = e.target as HTMLElement;
-    const copyBtn = target.closest('.code-copy-btn');
-    if (copyBtn) {
-      const wrapper = copyBtn.closest('.code-block-wrapper');
-      const codeEl = wrapper?.querySelector('code');
-      if (codeEl) {
-        navigator.clipboard.writeText(codeEl.innerText).then(() => {
-          copyBtn.textContent = 'Copied!';
-          setTimeout(() => {
-            copyBtn.textContent = 'Copy';
-          }, 2000);
-        });
-      }
-    }
-  };
 
   return (
     <div

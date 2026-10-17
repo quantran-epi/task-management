@@ -43,6 +43,7 @@ export interface TokenUsageStats {
 
 export type StreamChatChunk =
   | { type: 'text'; delta: string }
+  | { type: 'reasoning'; delta: string }
   | { type: 'tool_calls'; calls: ToolCall[] }
   | { type: 'usage'; usage: TokenUsageStats };
 

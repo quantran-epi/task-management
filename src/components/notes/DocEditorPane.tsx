@@ -31,7 +31,7 @@ import {
   FileWordOutlined,
   FileMarkdownOutlined,
 } from '@ant-design/icons';
-import type { Note } from '../../types/models';
+import type { Note, Task, Project } from '../../types/models';
 import type { DocumentPublishStatus } from '../../db/repositories/documentSetRepo';
 import { renderSafeMarkdown } from '../../utils/markdown';
 import { extractMarkdownMetadata, detectReferencedEntities, isPlaceholderTitle, type DetectedEntity } from '../../utils/smartIngestion';
@@ -86,6 +86,8 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
   const [saveStatus, setSaveStatus] = useState<string>('');
   const [detectedEntities, setDetectedEntities] = useState<DetectedEntity[]>([]);
   const [backlinks, setBacklinks] = useState<BacklinksResult>({ tasks: [], projects: [], referencingNotes: [] });
+  const [parentTask, setParentTask] = useState<Task | null>(null);
+  const [parentProject, setParentProject] = useState<Project | null>(null);
   const [isNormalizeModalOpen, setIsNormalizeModalOpen] = useState(false);
   const [showToC, setShowToC] = useState<boolean>(() => {
     try {
@@ -162,6 +164,18 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
     getBacklinksForDoc(doc.id, db)
       .then((res) => setBacklinks(res))
       .catch((err) => console.warn('Failed to load backlinks:', err));
+
+    // Load direct parent task or project if linked
+    if (doc.entityType === 'task' && doc.entityId) {
+      db.tasks.get(doc.entityId).then((t) => setParentTask(t || null)).catch(() => setParentTask(null));
+    } else {
+      setParentTask(null);
+    }
+    if (doc.entityType === 'project' && doc.entityId) {
+      db.projects.get(doc.entityId).then((p) => setParentProject(p || null)).catch(() => setParentProject(null));
+    } else {
+      setParentProject(null);
+    }
   }, [doc?.id, db]);
 
   // Debounced auto-save (500ms)
@@ -742,15 +756,40 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
             width: '100%',
           }}
         />
-        {tags.length > 0 && (
-          <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
-            {tags.map((t) => (
-              <Tag key={t} color="purple" style={{ fontSize: 11 }}>
-                #{t}
-              </Tag>
-            ))}
-          </div>
-        )}
+        <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          {parentTask && (
+            <Tag
+              color="blue"
+              icon={<CheckSquareOutlined />}
+              style={{ cursor: 'pointer', padding: '2px 8px', fontSize: 12 }}
+              onClick={() => {
+                if (onOpenTask) {
+                  onOpenTask(parentTask.id);
+                } else {
+                  setLocalDrawerTaskId(parentTask.id);
+                }
+              }}
+            >
+              Thuộc tác vụ: <strong>{parentTask.name}</strong>
+              {parentTask.jiraKey ? ` (${parentTask.jiraKey})` : ''}
+            </Tag>
+          )}
+          {parentProject && (
+            <Tag
+              color="purple"
+              icon={<FolderOutlined />}
+              style={{ cursor: onOpenProject ? 'pointer' : 'default', padding: '2px 8px', fontSize: 12 }}
+              onClick={() => onOpenProject?.(parentProject.id)}
+            >
+              Thuộc dự án: <strong>{parentProject.name}</strong>
+            </Tag>
+          )}
+          {tags.map((t) => (
+            <Tag key={t} color="purple" style={{ fontSize: 11 }}>
+              #{t}
+            </Tag>
+          ))}
+        </div>
       </div>
 
       {/* Main Content Area: Editor + Preview + ToC */}

@@ -12,7 +12,7 @@ import {
   OperationOptions,
   QueryPlanner,
 } from './contracts.js';
-import { RelationType, URN_REGEX } from '../types/graphProtocol.js';
+import { URN_REGEX } from '../types/graphProtocol.js';
 import {
   NODE_KINDS,
   RELATION_TYPES,
@@ -413,27 +413,14 @@ export function buildDeterministicFallbackPlan(
     ? resolvedSeeds.slice(0, 5).map((c) => c.urn)
     : [];
 
-  // If seeds exist, generate max 5 one-hop BOTH traversal entries across registry relations
+  // If seeds exist, generate a single one-hop BOTH traversal step matching overallMaxDepth = 1
   const traversalSteps: TraversalStep[] = [];
   if (hasSeeds) {
-    const defaultRelations: RelationType[] = [
-      'CALLS',
-      'READS_FROM',
-      'WRITES_TO',
-      'PRECEDES',
-      'CONTAINS_STEP',
-    ];
-    for (const rel of defaultRelations) {
-      if (traversalSteps.length >= 5) break;
-      const reg = RETRIEVAL_ONTOLOGY_REGISTRY[rel];
-      if (reg) {
-        traversalSteps.push({
-          relationType: rel,
-          direction: 'BOTH',
-          maxHops: 1,
-        });
-      }
-    }
+    traversalSteps.push({
+      relationType: 'CONTAINS_STEP',
+      direction: 'BOTH',
+      maxHops: 1,
+    });
   }
 
   const keywords = hasSeeds
@@ -470,22 +457,13 @@ function buildFastPathPlan(
   rawQuery: string,
   resolvedEntity: ClarificationCandidate
 ): { plan: LogicalQueryPlan; planTrace: PlanTrace } {
-  const traversalSteps: TraversalStep[] = [];
-  const candidateRelations: RelationType[] = [
-    'CALLS',
-    'READS_FROM',
-    'WRITES_TO',
-    'PRECEDES',
-    'CONTAINS_STEP',
-  ];
-  for (const rel of candidateRelations) {
-    if (traversalSteps.length >= 5) break;
-    traversalSteps.push({
-      relationType: rel,
+  const traversalSteps: TraversalStep[] = [
+    {
+      relationType: 'CONTAINS_STEP',
       direction: 'BOTH',
       maxHops: 1,
-    });
-  }
+    },
+  ];
 
   const plan: LogicalQueryPlan = {
     planId: randomUUID(),

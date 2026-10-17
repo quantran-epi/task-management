@@ -1,6 +1,5 @@
 import React from 'react';
-import { Card, Collapse, Button, Tag, Tooltip, Divider, theme } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
+import { Card, Collapse, Tag, Tooltip, Divider, theme } from 'antd';
 import {
   toGroundedAnswerDisplay,
   type ChatMessageGrounding,
@@ -40,7 +39,7 @@ export const GroundedAnswerCard: React.FC<GroundedAnswerCardProps> = ({
   grounding,
   onCitationActivate,
   onEvidenceOnlySynthesize,
-  onFreshLookup,
+  onFreshLookup: _onFreshLookup,
   onInvalidRetry,
   onAuthRepair,
   onConfigRepair,
@@ -50,26 +49,11 @@ export const GroundedAnswerCard: React.FC<GroundedAnswerCardProps> = ({
   candidatesSlot,
   refinementsSlot,
   resultsSlot,
-  isFreshLookingUp = false,
+  isFreshLookingUp: _isFreshLookingUp = false,
 }) => {
   const { token } = theme.useToken();
 
-  const renderSecondaryCta = () => {
-    if (!onFreshLookup) return null;
-    return (
-      <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
-        <Button
-          size="small"
-          icon={<ReloadOutlined />}
-          onClick={onFreshLookup}
-          loading={isFreshLookingUp}
-          disabled={isFreshLookingUp}
-        >
-          {isFreshLookingUp ? 'Đang tra cứu...' : 'Tra cứu lại'}
-        </Button>
-      </div>
-    );
-  };
+  const renderSecondaryCta = () => null;
 
   // Branch on grounding.outcome (12 outcomes from ChatMessageGroundingSchema)
   switch (grounding.outcome) {

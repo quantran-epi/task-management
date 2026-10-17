@@ -32,6 +32,7 @@ export interface ResolvedScope {
 export interface RouteScopeInput {
   query: string;
   routedIntent?: IntentLabel;
+  recentTurns?: readonly { role: 'user' | 'assistant'; content: string }[];
 }
 
 export interface RouteScopeDeps {
@@ -313,6 +314,7 @@ export async function routeScope(
               role: 'user',
               content: JSON.stringify({
                 query: input.query,
+                context_history: input.recentTurns && input.recentTurns.length > 0 ? input.recentTurns.slice(-3) : undefined,
                 catalog: sanitizedCatalog,
               }),
             },

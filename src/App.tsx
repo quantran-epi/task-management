@@ -60,7 +60,7 @@ export const App: React.FC = () => {
       case 'analytics':
         return <AnalyticsView />;
       case 'notes':
-        return <NotesView />;
+        return <NotesView initialDocId={params.doc} />;
       case 'settings': {
         const validTabs = ['capacity', 'data', 'jira', 'notifications', 'ai'] as const;
         const selectedTab = validTabs.includes(params.tab as any)

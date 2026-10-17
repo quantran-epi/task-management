@@ -13,3 +13,6 @@ dist-ssr/
 *.sw?
 src-tauri/target/
 .planning/research/.cache/
+.env
+.env.*
+!.env.example

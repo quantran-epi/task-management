@@ -62,11 +62,13 @@ export function closeOrderedPaths(
   );
 
   return candidates.flatMap((candidate, index) => {
+    const survivingHops = candidate.hopSupportingChunkIds.map((hopIds) =>
+      hopIds.filter((id) => returnedChunkIds.has(id))
+    );
+
     if (
-      candidate.hopSupportingChunkIds.length === 0 ||
-      !candidate.hopSupportingChunkIds.every(
-        (hopIds) => hopIds.length > 0 && hopIds.every((id) => returnedChunkIds.has(id))
-      )
+      survivingHops.length === 0 ||
+      survivingHops.some((hop) => hop.length === 0)
     ) {
       return [];
     }
@@ -81,7 +83,7 @@ export function closeOrderedPaths(
       nodeUrns: candidate.nodeUrns,
       edgeFactKeys: candidate.edgeFactKeys,
       hopClassifications: candidate.hopClassifications,
-      hopCitationIds: candidate.hopSupportingChunkIds,
+      hopCitationIds: survivingHops,
       hasConflict: candidate.hasConflict,
       classification,
     }];

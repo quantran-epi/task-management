@@ -15,6 +15,25 @@ export interface ScopeChipsBarProps {
 }
 
 /**
+ * Checks whether the routed scope contains concrete, meaningful facets (domain, env, version, comparison).
+ * Avoids showing redundant "Đang tra cứu: Mặc định" chips when scope is merely the default/unspecified corpus.
+ */
+export function hasMeaningfulRoutedScope(
+  routedScope: RoutedScopeInfo | null | undefined
+): boolean {
+  if (!routedScope) return false;
+  const hasDomain = Boolean(
+    routedScope.domain &&
+      routedScope.domain !== 'Mặc định' &&
+      routedScope.domain !== 'default'
+  );
+  const hasEnv = Boolean(routedScope.environment);
+  const hasVersion = Boolean(routedScope.version);
+  const isComparison = routedScope.comparisonMode === 'baseline_vs_scope';
+  return hasDomain || hasEnv || hasVersion || isComparison;
+}
+
+/**
  * ScopeChipsBar renders resolved scope after routing (D-15).
  * It is editable via onEditScope and never acts as a blocking pre-ask dropdown.
  */
@@ -23,6 +42,10 @@ export const ScopeChipsBar: React.FC<ScopeChipsBarProps> = ({
   onEditScope,
 }) => {
   const { token } = theme.useToken();
+
+  if (!hasMeaningfulRoutedScope(routedScope)) {
+    return null;
+  }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {

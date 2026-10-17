@@ -126,6 +126,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
 
       {messages.map((msg) => {
         if (msg.isContextBoundary) {
+          const isCompacted = msg.content?.includes('Tóm tắt ngữ cảnh') || msg.content?.includes('Compact Context');
           return (
             <Divider
               key={msg.id}
@@ -139,7 +140,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
             >
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                 <SyncOutlined spin={false} style={{ fontSize: 11 }} />
-                Ngữ cảnh đã được đặt lại
+                {isCompacted ? 'Đã tóm tắt ngữ cảnh trước đó' : 'Ngữ cảnh đã được đặt lại'}
               </span>
             </Divider>
           );

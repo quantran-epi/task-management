@@ -13,9 +13,11 @@ import {
   NineRouterClientError,
   type CompleteJsonRequest,
 } from './nineRouterClient';
+import type { ChatTokenUsage } from '../../types/models';
 
 export interface SynthesisInput {
   query: string;
+  recentTurns?: readonly { role: 'user' | 'assistant'; content: string }[];
   pack: EvidencePack;
   endpoint: string;
   apiKey: string;
@@ -119,13 +121,14 @@ export function buildSystemPrompt(
     'Never guess or introduce external training facts not present in EVIDENCE.',
     'INPUT STRUCTURE:',
     '- QUERY: User\'s question.',
+    '- CONVERSATION_HISTORY: Prior turns between user and assistant for context resolution.',
     '- SPECULATION_REQUESTED: true | false.',
     '- EVIDENCE:',
     '  - Citations: [ { id: "S1", title: "...", excerpt: "..." }, ... ]',
     '  - Paths: [ { id: "P1", summary: "...", steps: [...] }, ... ]',
     'RULES:',
     '1. "language": ' + languageInstruction,
-    '2. "conclusion": High-level synthesis directly answering the query.',
+    '2. "conclusion": High-level executive synthesis answering the query directly in natural, beautiful, human-friendly Markdown formatting (using bullet points, bold key terms, tables or code blocks where appropriate) before technical citations.',
     '3. "confidence":',
     '   - "high": Query answered completely with direct evidence from authoritative documents or verified graph paths.',
     '   - "medium": Query partially answered or synthesized from multi-hop inferred paths without conflicts.',
@@ -135,7 +138,7 @@ export function buildSystemPrompt(
     '5. "claims":',
     '   - Every claim must state an atomic fact supported by one or more citationIds ("S1", "L1", etc.).',
     '   - classification is "DIRECT" if directly quoted/extracted from a citation (pathId must be null).',
-    '   - classification is "INFERRED" if derived from graph traversal path (pathId must be "P1", "P2", etc.).',
+    '   - classification is "INFERRED" if derived from graph traversal path (pathId must be "P1", "P2", etc.). Whenever an answer describes execution sequence, container flow, caller-callee steps, or entity relationships supported by a Path, you MUST set classification to "INFERRED" and pathId to the corresponding path id (e.g. "P1").',
     '   - If you cannot point to an exact citationId, DO NOT include the claim in claims. Put it in "unsupportedParts".',
     '6. "hypotheses":',
     '   - If SPECULATION_REQUESTED is false, this array MUST be empty [].',
@@ -338,14 +341,22 @@ export function normalizeRawGroundedOutput(
     }
     claim.citationIds = resolvedCitations;
 
-    // Coerce classification and pathId
+    // Coerce classification and pathId (D-30: DIRECT claim must have null pathId)
     if (claim.classification === 'INFERRED') {
+      let inferredPathId: string | null = null;
       if (
         typeof claim.pathId === 'string' &&
         allowedPathSet.has(claim.pathId) &&
         /^P[1-9][0-9]*$/.test(claim.pathId)
       ) {
-        claim.pathId = claim.pathId;
+        inferredPathId = claim.pathId;
+      } else if (allowedPathIds.length === 1 && /quy trình|bước|luồng|container|flow|scheduler|pl\/sql/i.test(claim.text || '')) {
+        inferredPathId = allowedPathIds[0] || null;
+      }
+
+      if (inferredPathId) {
+        claim.classification = 'INFERRED';
+        claim.pathId = inferredPathId;
       } else {
         claim.classification = 'DIRECT';
         claim.pathId = null;
@@ -397,6 +408,7 @@ export async function synthesizeGroundedAnswer(
   answer: GroundedAnswerV2;
   attempts: readonly SynthesisAttemptLog[];
   responseLanguage: 'vi' | 'en';
+  tokenUsage?: ChatTokenUsage | undefined;
 }> {
   const targetLanguage: 'vi' | 'en' =
     input.responseLanguage === 'auto' || input.responseLanguage == null
@@ -407,8 +419,8 @@ export async function synthesizeGroundedAnswer(
   const allowedPathIds = Object.keys(input.pack.paths);
   const speculationRequested = !!input.speculation_requested;
 
-  // D-11: Zero evidence abstention when 0 citations and no speculation requested
-  if (allowedCitationIds.length === 0 && !speculationRequested) {
+  // D-11: Zero evidence abstention when 0 citations AND 0 paths, and no speculation requested
+  if (allowedCitationIds.length === 0 && allowedPathIds.length === 0 && !speculationRequested) {
     const noEvidenceAnswer: GroundedAnswerV2 = {
       schemaVersion: 2,
       language: targetLanguage,
@@ -448,6 +460,7 @@ export async function synthesizeGroundedAnswer(
   const primarySystemPrompt = buildSystemPrompt(targetLanguage, input.promptVersion, sampleCitationId);
   const baseUserPayload = {
     query: input.query,
+    conversation_history: input.recentTurns && input.recentTurns.length > 0 ? input.recentTurns : undefined,
     speculation_requested: speculationRequested,
     evidence: input.pack.promptEvidence,
     allowedCitationIds,
@@ -510,8 +523,9 @@ export async function synthesizeGroundedAnswer(
           }
         : ({ type: 'json_object' } as any);
 
-    const startTime = Date.now();
+  const startTime = Date.now();
     let rawOutput: unknown;
+    let capturedUsage: ChatTokenUsage | undefined;
 
     try {
       rawOutput = await completeJson({
@@ -524,6 +538,9 @@ export async function synthesizeGroundedAnswer(
         ],
         response_format: responseFormat,
         signal: callSignal,
+        onUsage: (u) => {
+          capturedUsage = u;
+        },
       });
     } catch (err: unknown) {
       repairCleanup?.();
@@ -554,10 +571,14 @@ export async function synthesizeGroundedAnswer(
       const closureResult = validateGroundedAnswerClosure(answer, input.pack);
 
       if (closureResult.valid) {
+        const usageObj: SynthesisAttemptLog['usage'] = {};
+        if (capturedUsage?.promptTokens !== undefined) usageObj.inputTokens = capturedUsage.promptTokens;
+        if (capturedUsage?.completionTokens !== undefined) usageObj.outputTokens = capturedUsage.completionTokens;
+
         attempts.push({
           attempt: attemptNum,
           latencyMs,
-          usage: {},
+          usage: usageObj,
           issueCodes: [],
           responseLanguage: targetLanguage,
         });
@@ -565,6 +586,7 @@ export async function synthesizeGroundedAnswer(
           answer,
           attempts,
           responseLanguage: targetLanguage,
+          ...(capturedUsage ? { tokenUsage: capturedUsage } : {}),
         };
       }
 

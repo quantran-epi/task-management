@@ -111,9 +111,18 @@ export const GraphBuildStageSchema = z.enum([
   'Structured extraction',
   'Prose extraction',
   'Validation',
+  'Retrieval generation',
   'Activation',
 ]);
 export type GraphBuildStage = z.infer<typeof GraphBuildStageSchema>;
+
+export const CandidateStatusSchema = z.enum([
+  'NONE',
+  'PREPARING',
+  'READY',
+  'FAILED',
+]);
+export type CandidateStatus = z.infer<typeof CandidateStatusSchema>;
 
 export const GraphStatusResponseSchema = z
   .object({
@@ -129,6 +138,11 @@ export const GraphStatusResponseSchema = z
     ontologyVersion: z.string().min(1),
     rulesVersion: z.string().min(1),
     activatedAt: z.string().datetime().optional(),
+    candidateSnapshotId: uuid.optional(),
+    candidateStatus: CandidateStatusSchema.optional(),
+    priorSnapshotId: uuid.optional(),
+    rollbackExpiresAt: z.string().datetime().optional(),
+    canRollback: z.boolean().optional(),
     error: z
       .object({
         code: z.string().max(80),
@@ -685,6 +699,27 @@ export function createKnowledgeClient(options: CreateKnowledgeClientOptions) {
           headers: {
             'X-Rebuild-Key': rebuildKey,
           },
+          ...(signal ? { signal } : {}),
+        }
+      );
+    },
+
+    async activateGraphCandidate(
+      setId: string,
+      candidateSnapshotId: string,
+      expectedPriorSnapshotId?: string,
+      signal?: AbortSignal
+    ): Promise<GraphStatusResponse> {
+      return request(
+        `/sets/${encodeURIComponent(setId)}/graph/activate`,
+        GraphStatusResponseSchema,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            candidateSnapshotId,
+            ...(expectedPriorSnapshotId ? { expectedPriorSnapshotId } : {}),
+          }),
           ...(signal ? { signal } : {}),
         }
       );

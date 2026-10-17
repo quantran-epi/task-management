@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Drawer, Button, Typography, Space, Tag, Empty, Divider, Spin, Tooltip } from 'antd';
+import { Modal, Button, Typography, Space, Tag, Empty, Divider, Spin, Tooltip } from 'antd';
 import {
   FileTextOutlined,
   ExportOutlined,
@@ -13,6 +13,7 @@ import { renderSafeMarkdown } from '../../utils/markdown';
 import { getBacklinksForDoc, type BacklinksResult } from '../../db/repositories/documentLinkRepo';
 import { computeSha256, normalizeMarkdownForHash } from '../../db/repositories/documentSetRepo';
 import { GroundedBanner } from '../ai/grounded/GroundedBanner';
+import { TaskDrawer } from '../tasks/TaskDrawer';
 
 const { Title, Text } = Typography;
 
@@ -35,7 +36,7 @@ export interface QuickPreviewDrawerProps {
 
 /**
  * Slide-out document preview reader preserving ongoing task or chat context (D-07, D-13).
- * Renders on the right edge (`width: 480px`, `zIndex: 1100`).
+ * Renders on the right edge (`width: 480px`, `zIndex: 1300` to sit above AIChatDrawer `1200`).
  * Extended with snapshot-first excerpt, mismatch banner, line-range focus/highlight (D-10, D-47, D-48).
  */
 export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
@@ -62,6 +63,9 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
   const [hashMismatch, setHashMismatch] = useState<boolean>(false);
   const [isHighlighted, setIsHighlighted] = useState<boolean>(false);
   const [isReducedMotion, setIsReducedMotion] = useState<boolean>(false);
+  const [linkedParentTask, setLinkedParentTask] = useState<Task | null>(null);
+  const [linkedParentProject, setLinkedParentProject] = useState<Project | null>(null);
+  const [activeDrawerTaskId, setActiveDrawerTaskId] = useState<string | null>(null);
 
   const targetAnchorRef = useRef<HTMLDivElement | null>(null);
 
@@ -74,6 +78,8 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
     if (!open || !docId) {
       setDoc(null);
       setBacklinks({ tasks: [], projects: [], referencingNotes: [] });
+      setLinkedParentTask(null);
+      setLinkedParentProject(null);
       setHashMismatch(false);
       setIsHighlighted(false);
       return () => {
@@ -90,6 +96,21 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
         if (!active) return;
         setDoc(noteData || null);
         setBacklinks(backlinksData);
+
+        // Fetch direct parent entity if note belongs to task or project
+        if (noteData?.entityType === 'task' && noteData.entityId) {
+          const t = await db.tasks.get(noteData.entityId);
+          if (active) setLinkedParentTask(t || null);
+        } else {
+          if (active) setLinkedParentTask(null);
+        }
+
+        if (noteData?.entityType === 'project' && noteData.entityId) {
+          const p = await db.projects.get(noteData.entityId);
+          if (active) setLinkedParentProject(p || null);
+        } else {
+          if (active) setLinkedParentProject(null);
+        }
 
         // Check hash mismatch only for server authority when citedContentHash is present (D-10, D-21)
         if (effectiveAuthority === 'server' && citedContentHash && noteData?.body !== undefined) {
@@ -150,6 +171,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
     } else {
       window.location.hash = `#/notes?doc=${encodeURIComponent(docId)}`;
     }
+    onClose();
   };
 
   const hasBacklinks =
@@ -162,40 +184,46 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
   const startLineNumber = lineRange?.start ?? 1;
 
   return (
-    <Drawer
+    <Modal
       title={
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-          <FileTextOutlined style={{ color: '#1677ff', flexShrink: 0 }} />
-          <span
-            style={{
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              maxWidth: 260,
-            }}
-          >
-            {doc?.title || 'Xem nhanh tài liệu'}
-          </span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 24, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            <FileTextOutlined style={{ color: '#1677ff', flexShrink: 0 }} />
+            <span
+              style={{
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                maxWidth: 'calc(92vw - 240px)',
+                fontWeight: 600,
+              }}
+            >
+              {doc?.title || 'Xem nhanh tài liệu'}
+            </span>
+          </div>
+          <Space size="small">
+            <Button
+              type="primary"
+              size="small"
+              icon={<ExportOutlined />}
+              onClick={handleOpenInDocs}
+              disabled={!doc}
+            >
+              Mở trong Docs
+            </Button>
+          </Space>
         </div>
       }
-      placement="right"
-      width={480}
+      width="min(1240px, 94vw)"
+      style={{ top: 20, maxWidth: '96vw' }}
       open={open}
-      onClose={onClose}
-      zIndex={1100}
-      extra={
-        <Space size="small">
-          <Button
-            type="primary"
-            size="small"
-            icon={<ExportOutlined />}
-            onClick={handleOpenInDocs}
-            disabled={!doc}
-          >
-            Mở trong Docs
-          </Button>
-        </Space>
-      }
+      onCancel={onClose}
+      footer={null}
+      destroyOnClose
+      styles={{
+        body: { maxHeight: 'calc(85vh - 110px)', overflowY: 'auto', padding: '16px 24px' },
+      }}
+      zIndex={1300}
     >
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 0' }}>
@@ -308,6 +336,23 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
               {doc.title || 'Untitled Document'}
             </Title>
             <Space size={[4, 6]} wrap>
+              {/* Parent linked entity badge */}
+              {linkedParentTask && (
+                <Tag
+                  color="blue"
+                  icon={<CheckSquareOutlined />}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => setActiveDrawerTaskId(linkedParentTask.id)}
+                >
+                  Tác vụ: {linkedParentTask.name}
+                  {linkedParentTask.jiraKey ? ` (${linkedParentTask.jiraKey})` : ''}
+                </Tag>
+              )}
+              {linkedParentProject && (
+                <Tag color="purple" icon={<ProjectOutlined />}>
+                  Dự án: {linkedParentProject.name}
+                </Tag>
+              )}
               {doc.tags?.map((tag) => (
                 <Tag key={tag} color="blue">
                   {tag}
@@ -384,6 +429,9 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                 {backlinks.tasks.map((task: Task) => (
                   <div
                     key={`task-backlink-${task.id}`}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setActiveDrawerTaskId(task.id)}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -392,10 +440,11 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                       padding: '4px 8px',
                       backgroundColor: '#f5f5f5',
                       borderRadius: 4,
+                      cursor: 'pointer',
                     }}
                   >
                     <CheckSquareOutlined style={{ color: '#1677ff' }} />
-                    <span style={{ fontWeight: 500 }}>{task.name}</span>
+                    <span style={{ fontWeight: 500, color: '#1677ff' }}>{task.name}</span>
                     {task.jiraKey && (
                       <Tag color="blue" style={{ fontSize: 10, margin: 0, padding: '0 4px' }}>
                         {task.jiraKey}
@@ -444,6 +493,14 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
           )}
         </div>
       )}
-    </Drawer>
+
+      {/* Task Drawer to inspect linked task details */}
+      <TaskDrawer
+        open={Boolean(activeDrawerTaskId)}
+        taskId={activeDrawerTaskId}
+        onClose={() => setActiveDrawerTaskId(null)}
+        db={db}
+      />
+    </Modal>
   );
 };

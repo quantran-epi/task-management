@@ -16,6 +16,7 @@ import {
   DeleteOutlined,
   ApiOutlined,
   SettingOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons';
 import type { McpServerConfig } from '../../services/ai/mcpClient';
 
@@ -40,6 +41,8 @@ export interface ChatHeaderProps {
   selectedModel: string;
   availableModels: string[];
   onModelChange: (model: string) => void;
+  onRefreshModels?: () => Promise<void> | void;
+  isRefreshingModels?: boolean;
   autoApproveMutations?: boolean;
   onToggleAutoApproveMutations?: (() => void) | undefined;
   isPinned: boolean;
@@ -60,6 +63,8 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   selectedModel,
   availableModels,
   onModelChange,
+  onRefreshModels,
+  isRefreshingModels = false,
   autoApproveMutations = false,
   onToggleAutoApproveMutations,
   isPinned,
@@ -319,6 +324,20 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                 : []
           }
         />
+
+        {onRefreshModels && (
+          <Tooltip title="Tải lại danh sách mô hình 9router">
+            <Button
+              type="text"
+              size="small"
+              icon={<ReloadOutlined spin={isRefreshingModels} />}
+              onClick={onRefreshModels}
+              loading={isRefreshingModels}
+              aria-label="Làm mới danh sách mô hình"
+              style={{ minWidth: 28, minHeight: 28 }}
+            />
+          </Tooltip>
+        )}
 
         {/* Quick MCP Toggle Popover */}
         <Popover

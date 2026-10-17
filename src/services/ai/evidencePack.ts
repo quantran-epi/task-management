@@ -56,7 +56,7 @@ export interface PackEvidenceOptions {
   readonly maxPerSnippetChars?: number;
 }
 
-export const OVERRIDE_TERMS = /(?:^|\P{L})(overrides?|supersed(e|es|ed|ing)|replaces?|th(a|ạ|a)y th(ế|e)|ghi đè|thay th(ế|e))(?:\P{L}|$)/iu;
+export const OVERRIDE_TERMS = /(?:^|\P{L})(overrides?|supersed(e|es|ed|ing)|replaces?|thay thế|ghi đè)(?:\P{L}|$)/iu;
 
 export const ALLOWED_EVIDENCE_KINDS = new Set<string>([
   'policy_change',
@@ -293,12 +293,14 @@ export function packEvidence(
           const mapped = chunkIdToCitationId.get(origId);
           if (mapped && citations[mapped]) {
             mappedHop.push(mapped);
-          } else {
-            closureValid = false;
-            break;
+          } else if (citations[origId]) {
+            mappedHop.push(origId);
           }
         }
-        if (!closureValid) break;
+        if (mappedHop.length === 0) {
+          closureValid = false;
+          break;
+        }
         mappedHopCitations.push(mappedHop);
       }
 

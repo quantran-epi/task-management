@@ -5,7 +5,6 @@ import {
   FolderFilled,
   FolderOpenFilled,
   PlusOutlined,
-  InboxOutlined,
   PushpinOutlined,
   PushpinFilled,
   FileTextOutlined,
@@ -21,6 +20,8 @@ import {
   CaretDownOutlined,
   SearchOutlined,
   UndoOutlined,
+  CheckSquareOutlined,
+  ProjectOutlined,
 } from '@ant-design/icons';
 import type { Note } from '../../types/models';
 import type { DocumentPublishStatus } from '../../db/repositories/documentSetRepo';
@@ -29,7 +30,7 @@ import { useDocWorkerSearch } from '../../hooks/useDocWorkerSearch';
 
 const { Text } = Typography;
 
-export type QuickFilterKey = 'inbox' | 'pinned' | 'all' | 'quick_notes' | 'trash';
+export type QuickFilterKey = 'pinned' | 'quick_notes' | 'trash';
 
 export interface FolderTreeNode {
   id: string;
@@ -48,8 +49,8 @@ export interface DocFolderTreeProps {
   /** Full records are loaded only when searching, then sent to the worker. */
   loadSearchNotes?: (() => Promise<Note[]>) | undefined;
   selectedDocId?: string | null | undefined;
-  activeFilter: QuickFilterKey | string; // filter key or folderId
-  onSelectFilter: (filterKeyOrFolderId: QuickFilterKey | string) => void;
+  activeFilter: string; // folderId or 'pinned' | 'quick_notes' | 'trash' | 'root'
+  onSelectFilter: (filterKeyOrFolderId: string) => void;
   onSelectDoc?: ((doc: Note) => void) | undefined;
   onCreateDoc: (targetFolderId?: string) => Promise<void> | void;
   onCreateFolder?: (folderName: string, parentId?: string) => Promise<void> | void;
@@ -89,10 +90,9 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
   onRestoreDoc,
   onMoveDocToFolder,
 }) => {
-  // Search state with debounce
   const [searchInput, setSearchInput] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
-  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (debounceTimerRef.current) {
@@ -109,36 +109,31 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
     };
   }, [searchInput]);
 
-  // New folder modal state
+  // Modal states
   const [newFolderModalOpen, setNewFolderModalOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [parentFolderForNew, setParentFolderForNew] = useState<Note | null>(null);
 
-  // Rename folder modal state
   const [renameModalOpen, setRenameModalOpen] = useState(false);
   const [renamingFolder, setRenamingFolder] = useState<{ id: string; name: string } | null>(null);
   const [renamedName, setRenamedName] = useState('');
 
-  // Expand / collapse folder nodes in tree
+  // Expanded folders in tree
   const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(() => new Set<string>());
-
-  // Pagination limit per folder: key is folder id, 'inbox', or filter key
   const [pageLimits, setPageLimits] = useState<Record<string, number>>({});
 
-  // 1. Separate deleted vs active notes
+  // Active vs deleted notes
   const activeNotes = useMemo(() => notes.filter((n) => !n.deletedAt), [notes]);
   const trashNotes = useMemo(() => notes.filter((n) => Boolean(n.deletedAt)), [notes]);
 
-  // 2. Count for quick filters
-  const inboxCount = activeNotes.filter((n) => !n.parentId && (n.type === 'document' || !n.type)).length;
-  const pinnedCount = activeNotes.filter((n) => n.isPinned).length;
-  const allDocsCount = activeNotes.filter((n) => n.type === 'document' || !n.type).length;
-  const stickyNotesCount = activeNotes.filter((n) => n.type === 'quick_note').length;
-  const trashCount = trashNotes.length;
+  // Counts for special folders
+  const pinnedDocs = useMemo(() => activeNotes.filter((n) => n.isPinned && n.type !== 'folder'), [activeNotes]);
+  const quickNotes = useMemo(() => activeNotes.filter((n) => n.type === 'quick_note'), [activeNotes]);
+  const rootDirectDocs = useMemo(() => activeNotes.filter((n) => !n.parentId && n.type === 'document'), [activeNotes]);
+  const deletedDocs = useMemo(() => trashNotes.filter((n) => n.type !== 'folder'), [trashNotes]);
 
-  // Search corpus may contain Markdown bodies; result rendering resolves IDs against metadata-only notes.
+  // Search
   const { matchIds } = useDocWorkerSearch(notes, debouncedQuery, loadSearchNotes);
-
   const searchResults = useMemo(() => {
     if (!debouncedQuery || matchIds === null) return null;
     const metadataById = new Map(notes.map((note) => [note.id, note]));
@@ -148,7 +143,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
     }).slice(0, 100);
   }, [notes, debouncedQuery, matchIds]);
 
-  // 4. Extract all tags with counts
+  // Tags
   const tagCounts = useMemo(() => {
     const map = new Map<string, number>();
     for (const note of activeNotes) {
@@ -161,7 +156,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
     return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
   }, [activeNotes]);
 
-  // 5. Build recursive folder tree
+  // User Folder Tree
   const folderTree = useMemo(() => {
     const folders = activeNotes.filter((n) => n.type === 'folder');
     const folderMap = new Map<string, FolderTreeNode>();
@@ -189,16 +184,6 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
       }
     }
 
-    // Sort alphabetically
-    const sortNodes = (nodesList: FolderTreeNode[]) => {
-      nodesList.sort((a, b) => a.title.localeCompare(b.title));
-      for (const n of nodesList) {
-        sortNodes(n.children);
-      }
-    };
-    sortNodes(roots);
-
-    // Compute depth and recursive doc count
     const computeMeta = (node: FolderTreeNode, depth: number): number => {
       node.depth = depth;
       let total = node.directDocCount;
@@ -216,34 +201,45 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
     return roots;
   }, [activeNotes]);
 
-  // Auto-expand path to currently active folder or selected document's parent
+  // Auto-expand path to selected document
   useEffect(() => {
     if (selectedDocId) {
       const doc = notes.find((n) => n.id === selectedDocId);
-      if (doc && doc.parentId) {
-        setExpandedFolderIds((prev) => {
-          const next = new Set(prev);
-          let curr: string | undefined = doc.parentId;
-          while (curr) {
-            next.add(curr);
-            const parent = notes.find((n) => n.id === curr);
-            curr = parent?.parentId;
-          }
-          return next;
-        });
+      if (doc) {
+        if (doc.isPinned) {
+          setExpandedFolderIds((prev) => new Set(prev).add('pinned'));
+        }
+        if (doc.type === 'quick_note') {
+          setExpandedFolderIds((prev) => new Set(prev).add('quick_notes'));
+        }
+        if (doc.deletedAt) {
+          setExpandedFolderIds((prev) => new Set(prev).add('trash'));
+        }
+        if (!doc.parentId && doc.type === 'document') {
+          setExpandedFolderIds((prev) => new Set(prev).add('root_docs'));
+        }
+        if (doc.parentId) {
+          setExpandedFolderIds((prev) => {
+            const next = new Set(prev);
+            let curr: string | undefined = doc.parentId;
+            while (curr) {
+              next.add(curr);
+              const parent = notes.find((n) => n.id === curr);
+              curr = parent?.parentId;
+            }
+            return next;
+          });
+        }
       }
     }
   }, [selectedDocId, notes]);
 
-  const toggleFolderExpand = (folderId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const toggleFolderExpand = (folderId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     setExpandedFolderIds((prev) => {
       const next = new Set(prev);
-      if (next.has(folderId)) {
-        next.delete(folderId);
-      } else {
-        next.add(folderId);
-      }
+      if (next.has(folderId)) next.delete(folderId);
+      else next.add(folderId);
       return next;
     });
   };
@@ -289,23 +285,10 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
     setRenamedName('');
   };
 
-  const quickFilterItems: Array<{
-    key: QuickFilterKey;
-    label: string;
-    icon: React.ReactNode;
-    count: number;
-    color?: string;
-  }> = [
-    { key: 'inbox', label: 'Inbox', icon: <InboxOutlined />, count: inboxCount },
-    { key: 'pinned', label: 'Đã ghim', icon: <PushpinOutlined />, count: pinnedCount },
-    { key: 'all', label: 'Tất cả tài liệu', icon: <FileTextOutlined />, count: allDocsCount },
-    { key: 'quick_notes', label: 'Ghi chú nhanh', icon: <FormOutlined />, count: stickyNotesCount },
-    { key: 'trash', label: 'Thùng rác', icon: <DeleteOutlined />, count: trashCount, color: '#ff4d4f' },
-  ];
-
-  // Helper to get paginated docs for a folder
   const getFolderDocs = (folderId: string) => {
-    return activeNotes.filter((n) => n.parentId === folderId && n.type !== 'folder');
+    let docs = activeNotes.filter((n) => n.parentId === folderId && n.type !== 'folder');
+    if (activeTag) docs = docs.filter((n) => n.tags?.includes(activeTag));
+    return docs;
   };
 
   const loadMoreDocs = (scopeId: string) => {
@@ -319,32 +302,6 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
     e.stopPropagation();
     loadMoreDocs(scopeId);
   };
-
-  const observeLoadMore = (scopeId: string) => (node: HTMLDivElement | null) => {
-    if (!node || typeof IntersectionObserver === 'undefined') return;
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry?.isIntersecting) {
-        loadMoreDocs(scopeId);
-        observer.disconnect();
-      }
-    }, { rootMargin: '80px' });
-    observer.observe(node);
-  };
-
-  const rootDocs = useMemo(() => {
-    const docs = activeNotes.filter((note) => note.type !== 'folder');
-    if (activeTag) return docs.filter((note) => note.tags?.includes(activeTag));
-    if (activeFilter === 'trash') return trashNotes.filter((note) => note.type !== 'folder');
-    if (activeFilter === 'pinned') return docs.filter((note) => note.isPinned);
-    if (activeFilter === 'quick_notes') return docs.filter((note) => note.type === 'quick_note');
-    if (activeFilter === 'all') return docs;
-    if (activeFilter === 'inbox') return docs.filter((note) => !note.parentId && note.type !== 'quick_note');
-    return [];
-  }, [activeNotes, trashNotes, activeFilter, activeTag]);
-
-  const rootDocLimit = pageLimits[`root:${activeFilter}`] ?? PAGE_SIZE;
-  const visibleRootDocs = rootDocs.slice(0, rootDocLimit);
-  const hasMoreRootDocs = rootDocs.length > visibleRootDocs.length;
 
   // Render individual document item
   const renderDocItem = (doc: Note, depth: number = 0) => {
@@ -377,7 +334,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
             {
               key: 'restore',
               label: 'Khôi phục',
-              icon: <UndoOutlined style={{ color: '#16a34a' }} />,
+              icon: <UndoOutlined />,
               onClick: () => onRestoreDoc(doc),
             },
           ]
@@ -389,7 +346,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
             },
             {
               key: 'delete',
-              label: doc.deletedAt ? 'Xóa vĩnh viễn' : 'Chuyển vào thùng rác',
+              label: doc.deletedAt ? 'Xóa vĩnh viễn' : 'Xóa tài liệu',
               icon: <DeleteOutlined />,
               danger: true,
               onClick: () => onDeleteDoc(doc),
@@ -401,7 +358,6 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
     return (
       <div
         key={doc.id}
-        className="doc-tree-leaf-item"
         role="button"
         tabIndex={0}
         onClick={() => onSelectDoc?.(doc)}
@@ -416,18 +372,20 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '4px 8px 4px 6px',
-          paddingLeft: 12 + depth * 14,
-          borderRadius: 6,
+          paddingLeft: depth === 0 ? 8 : 34 + (depth - 1) * 16,
+          borderRadius: 4,
           cursor: 'pointer',
           backgroundColor: isSelected ? '#e0e7ff' : 'transparent',
           color: isSelected ? '#3730a3' : '#374151',
           fontWeight: isSelected ? 600 : 400,
           fontSize: 12.5,
-          transition: 'all 0.12s ease',
+          transition: 'all 0.15s ease',
+          margin: '1px 0',
         }}
+        className="doc-tree-item"
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
-          <span style={{ fontSize: 13, flexShrink: 0, color: isQuickNote ? '#10b981' : '#6366f1' }}>
+          <span style={{ fontSize: 13, flexShrink: 0, color: isSelected ? '#4f46e5' : '#6b7280' }}>
             {isQuickNote ? <FormOutlined /> : <FileTextOutlined />}
           </span>
           <span
@@ -435,14 +393,25 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
-              color: isSelected ? '#3730a3' : '#1f2937',
+              textDecoration: doc.deletedAt ? 'line-through' : 'none',
+              opacity: doc.deletedAt ? 0.6 : 1,
             }}
-            title={doc.title || 'Tài liệu không tên'}
+            title={doc.title || (isQuickNote ? 'Ghi chú nhanh' : 'Không tiêu đề')}
           >
-            {doc.title || 'Tài liệu không tên'}
+            {doc.title || (isQuickNote ? 'Ghi chú nhanh' : 'Không tiêu đề')}
           </span>
-          {doc.isPinned && (
-            <PushpinFilled style={{ color: '#f59e0b', fontSize: 10, flexShrink: 0 }} />
+          {doc.isPinned && !isQuickNote && (
+            <PushpinFilled style={{ fontSize: 10, color: '#f59e0b', flexShrink: 0 }} />
+          )}
+          {doc.entityType === 'task' && (
+            <Tooltip title="Thuộc về một tác vụ">
+              <CheckSquareOutlined style={{ fontSize: 11, color: '#1677ff', flexShrink: 0 }} />
+            </Tooltip>
+          )}
+          {doc.entityType === 'project' && (
+            <Tooltip title="Thuộc về một dự án">
+              <ProjectOutlined style={{ fontSize: 11, color: '#722ed1', flexShrink: 0 }} />
+            </Tooltip>
           )}
         </div>
 
@@ -468,7 +437,130 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
     );
   };
 
-  // Recursive folder node renderer
+  // Render a special folder (Pinned, Quick notes, Trash, Root docs)
+  const renderSpecialFolder = (
+    id: string,
+    title: string,
+    icon: React.ReactNode,
+    docs: Note[],
+    color: string = '#4f46e5',
+    extraAction?: React.ReactNode
+  ) => {
+    const isExpanded = expandedFolderIds.has(id);
+    const isActive = activeFilter === id;
+    const currentLimit = pageLimits[id] ?? PAGE_SIZE;
+    const filteredDocs = activeTag ? docs.filter((d) => d.tags?.includes(activeTag)) : docs;
+    const visibleDocs = filteredDocs.slice(0, currentLimit);
+    const hasMore = filteredDocs.length > visibleDocs.length;
+    const count = docs.length;
+
+    return (
+      <div key={id} style={{ display: 'flex', flexDirection: 'column' }}>
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => {
+            toggleFolderExpand(id);
+            onSelectFilter(id);
+            if (onSelectTag) onSelectTag(null);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              toggleFolderExpand(id);
+              onSelectFilter(id);
+              if (onSelectTag) onSelectTag(null);
+            }
+          }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '5px 8px 5px 4px',
+            borderRadius: 6,
+            cursor: 'pointer',
+            backgroundColor: isActive ? '#f0f2ff' : 'transparent',
+            color: isActive ? '#4f46e5' : '#262626',
+            fontWeight: isActive ? 600 : 400,
+            fontSize: 13,
+            transition: 'all 0.15s ease',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, flex: 1 }}>
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => toggleFolderExpand(id, e)}
+              style={{
+                width: 16,
+                height: 16,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 10,
+                color: '#9ca3af',
+                cursor: 'pointer',
+                flexShrink: 0,
+              }}
+            >
+              {count > 0 ? (isExpanded ? <CaretDownOutlined /> : <CaretRightOutlined />) : <span style={{ width: 10 }} />}
+            </span>
+            <span style={{ fontSize: 14, flexShrink: 0, color, display: 'flex', alignItems: 'center' }}>
+              {icon}
+            </span>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {title}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, marginLeft: 4 }} onClick={(e) => e.stopPropagation()}>
+            <span
+              style={{
+                fontSize: 11,
+                padding: '1px 6px',
+                borderRadius: 10,
+                backgroundColor: isActive ? '#e0e7ff' : '#f0f0f0',
+                color: isActive ? '#4f46e5' : '#8c8c8c',
+              }}
+            >
+              {count}
+            </span>
+            {extraAction}
+          </div>
+        </div>
+
+        {isExpanded && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            {visibleDocs.length === 0 ? (
+              <div style={{ padding: '4px 8px 4px 34px', fontSize: 11, color: '#9ca3af', fontStyle: 'italic' }}>
+                Trống
+              </div>
+            ) : (
+              visibleDocs.map((doc) => renderDocItem(doc, 1))
+            )}
+            {hasMore && (
+              <Button
+                type="link"
+                size="small"
+                onClick={(e) => handleLoadMoreDocs(id, e)}
+                style={{
+                  alignSelf: 'flex-start',
+                  fontSize: 11,
+                  padding: '2px 8px',
+                  marginLeft: 34,
+                  height: 24,
+                }}
+              >
+                Xem thêm ({filteredDocs.length - visibleDocs.length} tài liệu)...
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Recursive regular folder node renderer
   const renderFolderNode = (node: FolderTreeNode): React.ReactNode => {
     const isActive = activeFilter === node.id;
     const hasChildren = node.children.length > 0;
@@ -531,25 +623,14 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
           role="button"
           tabIndex={0}
           onClick={() => {
-            // Expand/collapse on row click per specification; do NOT open editor
-            setExpandedFolderIds((prev) => {
-              const next = new Set(prev);
-              if (next.has(node.id)) next.delete(node.id);
-              else next.add(node.id);
-              return next;
-            });
+            toggleFolderExpand(node.id);
             onSelectFilter(node.id);
             if (onSelectTag) onSelectTag(null);
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
-              setExpandedFolderIds((prev) => {
-                const next = new Set(prev);
-                if (next.has(node.id)) next.delete(node.id);
-                else next.add(node.id);
-                return next;
-              });
+              toggleFolderExpand(node.id);
               onSelectFilter(node.id);
               if (onSelectTag) onSelectTag(null);
             }
@@ -559,7 +640,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '5px 8px 5px 4px',
-            paddingLeft: 4 + node.depth * 14,
+            paddingLeft: 4 + node.depth * 16,
             borderRadius: 6,
             cursor: 'pointer',
             backgroundColor: isActive ? '#fef3c7' : 'transparent',
@@ -579,18 +660,11 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
               flex: 1,
             }}
           >
-            {/* Expand / Collapse Caret */}
             {hasContent ? (
               <span
                 role="button"
                 tabIndex={0}
                 onClick={(e) => toggleFolderExpand(node.id, e)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    toggleFolderExpand(node.id, e as unknown as React.MouseEvent);
-                  }
-                }}
                 style={{
                   width: 16,
                   height: 16,
@@ -660,7 +734,6 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
               </span>
             </Tooltip>
 
-            {/* Quick Add Doc */}
             <Tooltip title="Thêm tài liệu vào thư mục này">
               <Button
                 type="text"
@@ -674,7 +747,6 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
               />
             </Tooltip>
 
-            {/* Dropdown Menu */}
             <Dropdown menu={{ items: folderMenu }} trigger={['click']} placement="bottomRight">
               <Button
                 type="text"
@@ -689,29 +761,23 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
         {/* Expanded Content: Subfolders and Child Documents */}
         {isExpanded && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            {/* 1. Subfolders */}
             {node.children.map((child) => renderFolderNode(child))}
-
-            {/* 2. Documents inside this folder */}
             {visibleDocs.map((doc) => renderDocItem(doc, node.depth + 1))}
-
             {hasMoreDocs && (
-              <div ref={observeLoadMore(node.id)}>
-                <Button
-                  type="link"
-                  size="small"
-                  onClick={(e) => handleLoadMoreDocs(node.id, e)}
-                  style={{
-                    alignSelf: 'flex-start',
-                    fontSize: 11,
-                    padding: '2px 8px',
-                    marginLeft: 16 + (node.depth + 1) * 14,
-                    height: 24,
-                  }}
-                >
-                  Xem thêm ({directDocs.length - visibleDocs.length} tài liệu)...
-                </Button>
-              </div>
+              <Button
+                type="link"
+                size="small"
+                onClick={(e) => handleLoadMoreDocs(node.id, e)}
+                style={{
+                  alignSelf: 'flex-start',
+                  fontSize: 11,
+                  padding: '2px 8px',
+                  marginLeft: 34 + node.depth * 16,
+                  height: 24,
+                }}
+              >
+                Xem thêm ({directDocs.length - visibleDocs.length} tài liệu)...
+              </Button>
             )}
           </div>
         )}
@@ -766,7 +832,8 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
           icon={<PlusOutlined />}
           onClick={() => {
             const targetFolder =
-              typeof activeFilter === 'string' && !quickFilterItems.some((q) => q.key === activeFilter)
+              typeof activeFilter === 'string' &&
+              !['pinned', 'quick_notes', 'trash', 'root_docs'].includes(activeFilter)
                 ? activeFilter
                 : undefined;
             onCreateDoc(targetFolder);
@@ -809,83 +876,64 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
           )}
         </div>
       ) : (
-        /* 4. Normal Mode: Quick Filters, Hierarchical Folders with Child Documents, and Tags */
-        <>
-          {/* Quick Filters */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {quickFilterItems.map((item) => {
-              const isActive = activeFilter === item.key;
-              return (
-                <div
-                  key={item.key}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => {
-                    onSelectFilter(item.key);
-                    if (onSelectTag) onSelectTag(null);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      onSelectFilter(item.key);
-                      if (onSelectTag) onSelectTag(null);
-                    }
-                  }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '6px 10px',
-                    borderRadius: 6,
-                    cursor: 'pointer',
-                    backgroundColor: isActive ? '#f0f2ff' : 'transparent',
-                    color: isActive ? '#4f46e5' : item.color || '#262626',
-                    fontWeight: isActive ? 600 : 400,
-                    fontSize: 13,
-                    transition: 'background 0.15s ease',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 14 }}>{item.icon}</span>
-                    <span>{item.label}</span>
-                  </div>
-                  <span
-                    style={{
-                      fontSize: 11,
-                      padding: '1px 6px',
-                      borderRadius: 10,
-                      backgroundColor: isActive ? '#e0e7ff' : '#f0f0f0',
-                      color: isActive ? '#4f46e5' : '#8c8c8c',
-                    }}
-                  >
-                    {item.count}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-
-          {visibleRootDocs.length > 0 && (
-            <div aria-label="Tài liệu trong phạm vi hiện tại" style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              {visibleRootDocs.map((doc) => renderDocItem(doc))}
-              {hasMoreRootDocs && (
-                <div ref={observeLoadMore(`root:${activeFilter}`)}>
-                  <Button type="link" size="small" onClick={(e) => handleLoadMoreDocs(`root:${activeFilter}`, e)}>
-                    Xem thêm ({rootDocs.length - visibleRootDocs.length} tài liệu)...
-                  </Button>
-                </div>
-              )}
-            </div>
+        /* 4. Normal Mode: Unified Tree with Special Folders + User Folders + Root Documents */
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
+          {/* Top Special System Folders */}
+          {renderSpecialFolder('pinned', 'Đã ghim', <PushpinFilled style={{ color: '#f59e0b' }} />, pinnedDocs, '#f59e0b')}
+          {renderSpecialFolder(
+            'quick_notes',
+            'Ghi chú nhanh',
+            <FormOutlined style={{ color: '#059669' }} />,
+            quickNotes,
+            '#059669',
+            <Tooltip title="Tạo ghi chú nhanh mới">
+              <Button
+                type="text"
+                size="small"
+                icon={<PlusOutlined style={{ fontSize: 11, color: '#059669' }} />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelectFilter('quick_notes');
+                  onCreateDoc();
+                }}
+                style={{ width: 18, height: 18, padding: 0 }}
+              />
+            </Tooltip>
           )}
 
-          {/* Folders Section */}
-          <div style={{ marginTop: 4 }}>
+          {/* Root-level documents (without folder) */}
+          {rootDirectDocs.length > 0 &&
+            renderSpecialFolder(
+              'root_docs',
+              'Tài liệu chung (Chưa phân loại)',
+              <FileTextOutlined style={{ color: '#6366f1' }} />,
+              rootDirectDocs,
+              '#6366f1',
+              <Tooltip title="Tạo tài liệu mới ở cấp gốc">
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<PlusOutlined style={{ fontSize: 11, color: '#6366f1' }} />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCreateDoc(undefined);
+                  }}
+                  style={{ width: 18, height: 18, padding: 0 }}
+                />
+              </Tooltip>
+            )}
+
+          {/* Trash Special Folder on Top */}
+          {renderSpecialFolder('trash', 'Thùng rác', <DeleteOutlined style={{ color: '#ef4444' }} />, deletedDocs, '#ef4444')}
+
+          {/* User Folders Header */}
+          <div style={{ marginTop: 8, marginBottom: 2 }}>
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                padding: '2px 8px 6px 8px',
+                padding: '4px 8px',
               }}
             >
               <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', color: '#8c8c8c' }}>
@@ -897,7 +945,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
                   size="small"
                   icon={<PlusOutlined style={{ fontSize: 11, color: '#8c8c8c' }} />}
                   onClick={handleOpenCreateRootFolder}
-                  style={{ width: 22, height: 22, padding: 0 }}
+                  style={{ width: 20, height: 20, padding: 0 }}
                 />
               </Tooltip>
             </div>
@@ -905,14 +953,14 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
             {folderTree.length === 0 ? (
               <div
                 style={{
-                  padding: '10px 8px',
+                  padding: '8px',
                   textAlign: 'center',
                   border: '1px dashed #e5e7eb',
                   borderRadius: 6,
                   margin: '2px 4px',
                 }}
               >
-                <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 6 }}>
+                <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
                   Chưa có thư mục
                 </Text>
                 <Button
@@ -926,7 +974,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
                 </Button>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                 {folderTree.map((rootNode) => renderFolderNode(rootNode))}
               </div>
             )}
@@ -993,26 +1041,22 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
               </div>
             </div>
           )}
-        </>
+        </div>
       )}
 
-      {/* New Folder Modal (supports Root and Subfolder) */}
+      {/* Modal: New Folder */}
       <Modal
-        title={
-          parentFolderForNew
-            ? `Tạo thư mục con trong "${parentFolderForNew.title || 'Không tên'}"`
-            : 'Tạo thư mục mới'
-        }
+        title={parentFolderForNew ? `Tạo thư mục con trong "${parentFolderForNew.title}"` : 'Tạo thư mục mới'}
         open={newFolderModalOpen}
         onOk={handleCreateFolder}
         onCancel={() => {
           setNewFolderModalOpen(false);
-          setParentFolderForNew(null);
           setNewFolderName('');
+          setParentFolderForNew(null);
         }}
         okText="Tạo thư mục"
         cancelText="Hủy"
-        okButtonProps={{ disabled: !newFolderName.trim(), style: { backgroundColor: '#4f46e5' } }}
+        okButtonProps={{ disabled: !newFolderName.trim() }}
       >
         <Input
           placeholder="Nhập tên thư mục..."
@@ -1024,7 +1068,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
         />
       </Modal>
 
-      {/* Rename Folder Modal */}
+      {/* Modal: Rename Folder */}
       <Modal
         title="Đổi tên thư mục"
         open={renameModalOpen}
@@ -1034,12 +1078,12 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
           setRenamingFolder(null);
           setRenamedName('');
         }}
-        okText="Lưu"
+        okText="Lưu tên mới"
         cancelText="Hủy"
-        okButtonProps={{ disabled: !renamedName.trim(), style: { backgroundColor: '#4f46e5' } }}
+        okButtonProps={{ disabled: !renamedName.trim() }}
       >
         <Input
-          placeholder="Tên mới..."
+          placeholder="Nhập tên mới cho thư mục..."
           value={renamedName}
           onChange={(e) => setRenamedName(e.target.value)}
           onPressEnter={handleConfirmRename}

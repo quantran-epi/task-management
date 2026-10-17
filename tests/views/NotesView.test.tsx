@@ -24,14 +24,14 @@ describe('NotesView 2-Column Document Workspace', () => {
     expect(await screen.findByText('Ghi chú & Tài liệu')).toBeInTheDocument();
     // 2-column tree elements
     expect(screen.getByText('Tạo tài liệu')).toBeInTheDocument();
-    expect(screen.getByText('Tất cả tài liệu')).toBeInTheDocument();
-    expect(screen.getByText('Inbox')).toBeInTheDocument();
+    expect(screen.getByText('Đã ghim')).toBeInTheDocument();
+    expect(screen.getByText('Ghi chú nhanh')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Tìm kiếm tài liệu (BM25)...')).toBeInTheDocument();
     // Empty state when no document is selected
     expect(screen.getByText('Chưa chọn tài liệu')).toBeInTheDocument();
   });
 
-  it('renders DocFolderTree with quick filters and counts', async () => {
+  it('renders DocFolderTree with special folders and counts', async () => {
     // Seed docs
     await createNote({ title: 'Inbox Doc', body: '# Inbox\nHello', type: 'document' }, testDb);
     await createNote({ title: 'Pinned Doc', body: 'Pinned', isPinned: true, type: 'document' }, testDb);
@@ -39,9 +39,7 @@ describe('NotesView 2-Column Document Workspace', () => {
 
     render(<NotesView db={testDb} />);
 
-    expect((await screen.findAllByText('Inbox Doc')).length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Pinned Doc').length).toBeGreaterThan(0);
-    expect(screen.getByText('Tất cả tài liệu')).toBeInTheDocument();
+    expect(await screen.findByText('Đã ghim')).toBeInTheDocument();
     expect(screen.getByText('Ghi chú nhanh')).toBeInTheDocument();
     expect(screen.getByText('Thùng rác')).toBeInTheDocument();
   });
@@ -53,6 +51,13 @@ describe('NotesView 2-Column Document Workspace', () => {
     render(<NotesView db={testDb} />);
 
     // Wait until docs render in tree
+    await waitFor(() => {
+      expect(screen.getByText('Tài liệu chung (Chưa phân loại)')).toBeInTheDocument();
+    });
+
+    // Expand root_docs
+    fireEvent.click(screen.getByText('Tài liệu chung (Chưa phân loại)'));
+
     await waitFor(() => {
       expect(screen.getByText('Design Specs')).toBeInTheDocument();
       expect(screen.getByText('Meeting Notes')).toBeInTheDocument();
@@ -182,10 +187,9 @@ describe('NotesView 2-Column Document Workspace', () => {
 
     render(<NotesView db={testDb} />);
 
-    // Wait until both docs appear in tree
+    // Wait until tree renders
     await waitFor(() => {
-      expect(screen.getByText('Kế hoạch phát triển 2026')).toBeInTheDocument();
-      expect(screen.getByText('Báo cáo tài chính quý 1')).toBeInTheDocument();
+      expect(screen.getByText('Tài liệu chung (Chưa phân loại)')).toBeInTheDocument();
     });
 
     const searchInput = screen.getByPlaceholderText('Tìm kiếm tài liệu (BM25)...');
@@ -203,6 +207,20 @@ describe('NotesView 2-Column Document Workspace', () => {
 
     await waitFor(() => {
       const titleInputs = screen.getAllByDisplayValue('Báo cáo tài chính quý 1');
+      expect(titleInputs.length).toBeGreaterThan(0);
+    });
+  });
+
+  it('selects and focuses document when initialDocId is provided', async () => {
+    const note = await createNote(
+      { title: 'Tài liệu hướng dẫn', body: 'Nội dung chi tiết', type: 'document' },
+      testDb
+    );
+
+    render(<NotesView db={testDb} initialDocId={note.id} />);
+
+    await waitFor(() => {
+      const titleInputs = screen.getAllByDisplayValue('Tài liệu hướng dẫn');
       expect(titleInputs.length).toBeGreaterThan(0);
     });
   });

@@ -37,6 +37,7 @@ Progress: [██████████] 100%
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261016-ukb | Fix Grounded AI answer readability and QuickPreviewDrawer z-index under AIChatDrawer | 2026-10-16 | — | complete | [261016-ukb-fix-grounded-ai-answer-readability-and-q](./quick/261016-ukb-fix-grounded-ai-answer-readability-and-q/) |
 | 261016-dck | setup local knowledge server and neo4j via docker compose for testing and taskmate integration | 2026-10-16 | — | complete | [261016-dck-setup-local-knowledge-server-neo4j-docker](./quick/261016-dck-setup-local-knowledge-server-neo4j-docker/) |
 | 261013-gfv | fix AI chat routing duplication, loading feedback, evidence synthesis, and planner host config | 2026-10-13 | — | complete | [261013-gfv-fix-ai-chat-duplicate-routed-questions-t](./quick/261013-gfv-fix-ai-chat-duplicate-routed-questions-t/) |
 | 261010-pnd | fix missing isPinned property in restoreBackup.test.ts | 2026-10-10 | 551df68 | complete | [261010-pnd-fix-restore-backup-test-note-is-pinned](./quick/261010-pnd-fix-restore-backup-test-note-is-pinned/) |
@@ -142,6 +143,9 @@ Progress: [██████████] 100%
 | 261008-k9p | Fix false thinking state and timer run when clearing logs in ghost dev session | 2026-10-08 | 2931d37 | complete | [261008-k9p-fix-clear-logs-false-thinking-timer](./quick/261008-k9p-fix-clear-logs-false-thinking-timer/) |
 | 261009-ana | Fix build error in AnalyticsView.test.tsx | 2026-10-09 | — | complete | [261009-ana-fix-analytics-view-test-build-error](./quick/261009-ana-fix-analytics-view-test-build-error/) |
 | 261010-btr | Fix backup restore transaction lifetime and schema V10 alignment | 2026-10-10 | — | complete | [261010-btr-fix-backup-restore-transaction-schema-v10](./quick/261010-btr-fix-backup-restore-transaction-schema-v10/) |
+| 261016-scn | Fix AI scope chips, citation modal width/table layout, and docs navigation | 2026-10-16 | — | complete | [261016-scn-fix-ai-scope-chips-citation-modal-docs-navigation](./quick/261016-scn-fix-ai-scope-chips-citation-modal-docs-navigation/) |
+| 261016-g5i | Fix 5 AI Grounded Chat & Knowledge issues: graph paths, full history, thinking separation, stop button, retrieval stability | 2026-10-16 | — | complete | [261016-fix-5-grounded-chat-issues](./quick/261016-fix-5-grounded-chat-issues/) |
+| 261017-dti | Fix Document Tree Item Indentation for Special Folders and Subfolders | 2026-10-17 | — | complete | [261017-dti-fix-document-tree-item-indentation](./quick/261017-dti-fix-document-tree-item-indentation/) |
 
 ## Performance Metrics
 

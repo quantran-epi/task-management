@@ -55,6 +55,7 @@ export interface RouteIntentDeps {
     model: string;
   };
   signal?: AbortSignal;
+  recentTurns?: readonly { role: 'user' | 'assistant'; content: string }[];
 }
 
 /**
@@ -91,6 +92,7 @@ RULES:
 5. "speculation_requested": Set to true IF AND ONLY IF the user explicitly asks to guess, hypothesize, speculate, or imagine possibilities (e.g., "đoán xem", "nếu giả sử", "speculate why", "what might happen if"). If user asks factual questions, this MUST be false.
 6. TECHNICAL IDENTIFIER RULE: A bare technical identifier, database table, column name, or system code (e.g., "MAIN1.FCL_CYCLE_COUNTER", "PKG_SETTLEMENT", "60000006") is ALWAYS "query_knowledge", NEVER "clarify".
 7. READ VS CLARIFY RULE: A progress/status question about work is ALWAYS "query_taskmate", even if concise.
+8. CONVERSATION CONTINUITY & ANAPHORA RULE: When past conversation turns are provided in context, resolve pronouns and anaphoric references ("nó", "đó", "cái này", "bước tiếp theo", "quy trình này", "task đó") against the recent turns. If the previous discussion was about a knowledge entity or process, follow-up questions inquiring about it are "query_knowledge", NEVER "clarify". If previous turn discussed a task or project, follow-up questions are "query_taskmate" or "operate_taskmate".
 
 FEW-SHOT EXAMPLES:
 
@@ -177,9 +179,18 @@ export async function routeIntent(
   const complete = deps?.completeJson ?? defaultCompleteJson;
   const signal = deps?.signal ?? new AbortController().signal;
 
+  let queryContent = query;
+  if (deps?.recentTurns && deps.recentTurns.length > 0) {
+    const formattedHistory = deps.recentTurns
+      .slice(-4)
+      .map((t) => `${t.role === 'user' ? 'User' : 'Assistant'}: ${t.content}`)
+      .join('\n');
+    queryContent = `<recent_dialogue>\n${formattedHistory}\n</recent_dialogue>\n\nCurrent User Message: ${query}`;
+  }
+
   const baseMessages: Array<{ role: 'system' | 'user'; content: string }> = [
     { role: 'system', content: INTENT_SYSTEM_PROMPT },
-    { role: 'user', content: query },
+    { role: 'user', content: queryContent },
   ];
 
   const responseFormat = {

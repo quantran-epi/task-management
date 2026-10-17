@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "PreToolCall": [
+      {
+        "matcher": "Read",
+        "command": "node scripts/anti-read-loop.mjs"
+      }
+    ]
+  }
+}

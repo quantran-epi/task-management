@@ -473,4 +473,98 @@ describe('QuickPreviewDrawer', () => {
       expect(screen.getByText('4')).toBeInTheDocument();
     });
   });
+
+  it('16. "Mở trong Docs" button navigates to hash and calls onClose', async () => {
+    const handleClose = vi.fn();
+    const handleNav = vi.fn();
+
+    render(
+      <QuickPreviewDrawer
+        open={true}
+        docId="doc-preview-1"
+        onClose={handleClose}
+        onNavigateToDocs={handleNav}
+        db={db}
+      />
+    );
+
+    await waitFor(() => {
+      const openBtn = screen.getByRole('button', { name: /Mở trong Docs/i });
+      expect(openBtn).not.toBeDisabled();
+    });
+
+    const openBtn = screen.getByRole('button', { name: /Mở trong Docs/i });
+    fireEvent.click(openBtn);
+
+    expect(handleNav).toHaveBeenCalledWith('doc-preview-1');
+    expect(handleClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders linked parent task badge and opens task details', async () => {
+    const parentTask: Task = {
+      id: 'task-parent-99',
+      name: 'Implement OAuth Token Refresh',
+      status: 'In Progress',
+      priority: 'High',
+      progress: 50,
+      estimateMinutes: 120,
+      jiraKey: 'PROJ-1234',
+      createdAt: '2026-10-01T00:00:00Z',
+      updatedAt: '2026-10-01T00:00:00Z',
+    };
+    await db.tasks.add(parentTask);
+
+    const childDoc: Note = {
+      id: 'doc-with-parent-task',
+      type: 'document',
+      title: 'OAuth Refresh Token Spec',
+      entityType: 'task',
+      entityId: 'task-parent-99',
+      body: '# OAuth Spec\nToken lifecycle details...',
+      isPinned: false,
+      createdAt: '2026-10-01T00:00:00Z',
+      updatedAt: '2026-10-01T00:00:00Z',
+    };
+    await db.notes.add(childDoc);
+
+    render(
+      <QuickPreviewDrawer
+        open={true}
+        docId="doc-with-parent-task"
+        onClose={vi.fn()}
+        db={db}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Tác vụ: Implement OAuth Token Refresh/)).toBeInTheDocument();
+    });
+  });
+});
+
+describe('ScopeChipsBar meaningful scope check', () => {
+  it('returns null when routed scope has only default/empty scope', async () => {
+    const { ScopeChipsBar, hasMeaningfulRoutedScope } = await import(
+      '../../src/components/ai/grounded/ScopeChipsBar'
+    );
+
+    expect(hasMeaningfulRoutedScope(undefined)).toBe(false);
+    expect(hasMeaningfulRoutedScope(null)).toBe(false);
+    expect(hasMeaningfulRoutedScope({})).toBe(false);
+    expect(hasMeaningfulRoutedScope({ domain: 'Mặc định' })).toBe(false);
+    expect(hasMeaningfulRoutedScope({ domain: 'default' })).toBe(false);
+
+    expect(hasMeaningfulRoutedScope({ domain: 'Fintech' })).toBe(true);
+    expect(hasMeaningfulRoutedScope({ environment: 'STAGING' })).toBe(true);
+    expect(hasMeaningfulRoutedScope({ version: 'v1.0' })).toBe(true);
+    expect(hasMeaningfulRoutedScope({ comparisonMode: 'baseline_vs_scope' })).toBe(true);
+
+    const { container } = render(
+      <ScopeChipsBar
+        routedScope={{ domain: 'Mặc định' }}
+        onEditScope={vi.fn()}
+      />
+    );
+    expect(container.firstChild).toBeNull();
+  });
 });

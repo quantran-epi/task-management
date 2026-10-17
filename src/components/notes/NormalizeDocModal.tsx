@@ -99,7 +99,18 @@ export const NormalizeDocModal: React.FC<NormalizeDocModalProps> = ({
       }
 
       const config = await getNineRouterConfig(db);
-      const userPrompt = `Hãy chuẩn hóa nội dung ghi chú/tài liệu sau đây vào đúng cấu trúc khung chuẩn Markdown đã hướng dẫn. Giữ lại toàn bộ thông tin quan trọng, từ khóa và dữ liệu thực tế, bổ sung các mục còn thiếu (hoặc để placeholder hợp lý) theo đúng định dạng. Chỉ trả về nội dung Markdown kết quả, không viết thêm lời dẫn chào hay giải thích ngoài lề. Tuyệt đối không xuất thẻ <think> hoặc quá trình suy nghĩ, chỉ trả về nội dung Markdown kết quả.\n\nNội dung hiện tại:\n"""\n${originalContent}\n"""`;
+      const userPrompt = `Hãy chuẩn hóa nội dung ghi chú/tài liệu sau đây vào đúng cấu trúc khung chuẩn Markdown tối ưu cho BM25 tìm kiếm và Knowledge Graph (Neo4j) đã hướng dẫn trong system prompt.
+Yêu cầu cụ thể:
+1. Giữ lại toàn bộ thông tin quan trọng, từ khóa và dữ liệu thực tế.
+2. Chuẩn hóa định danh kỹ thuật (schema.package.procedure, schema.table_name) và nếu có bảng quy trình/bước thực thi hãy áp dụng các cột chuẩn (STEP_ID, THU_TU, TEN_BUOC, TARGET, WRITES).
+3. Đảm bảo cấu trúc H1, hashtags, H2/H3 và mục Nguồn (Sources) theo đúng định dạng.
+4. Tuyệt đối không để khối bảng hoặc code vượt quá 50.000 ký tự.
+5. Chỉ trả về nội dung Markdown kết quả, không viết thêm lời dẫn chào hay giải thích ngoài lề. Tuyệt đối không xuất thẻ <think> hoặc quá trình suy nghĩ, chỉ trả về nội dung Markdown kết quả.
+
+Nội dung hiện tại:
+"""
+${originalContent}
+"""`;
 
       const stream = streamChatCompletion({
         endpoint: config.endpoint,
@@ -214,7 +225,7 @@ export const NormalizeDocModal: React.FC<NormalizeDocModalProps> = ({
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            Chuyển đổi tài liệu hiện tại theo cấu trúc BM25/AI Knowledge chuẩn.
+            Chuyển đổi tài liệu hiện tại theo cấu trúc BM25 và Knowledge Graph chuẩn.
           </Text>
           <Segmented
             size="small"

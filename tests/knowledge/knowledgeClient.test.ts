@@ -676,6 +676,42 @@ describe('strict fixed-route knowledge client', () => {
       });
     });
 
+    it('activates candidate snapshot and receives updated active graph status', async () => {
+      const setId = generateId();
+      const candidateSnapshotId = generateId();
+      const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        expect(String(input)).toBe(`https://knowledge.example.com/api/v1/sets/${setId}/graph/activate`);
+        expect(init?.method).toBe('POST');
+        expect(JSON.parse(String(init?.body))).toEqual({
+          candidateSnapshotId,
+        });
+        return jsonResponse({
+          setId,
+          state: 'Active',
+          activeGraphSnapshotId: candidateSnapshotId,
+          nodeCount: 20,
+          factCount: 15,
+          evidenceCount: 18,
+          conflictCount: 0,
+          quarantineCount: 0,
+          ontologyVersion: '2026.10.1',
+          rulesVersion: '2026.10.1',
+          canRollback: false,
+        });
+      });
+
+      const client = createKnowledgeClient({
+        baseUrl: 'https://knowledge.example.com',
+        token: 'token',
+        fetcher,
+      });
+
+      const res = await client.activateGraphCandidate(setId, candidateSnapshotId);
+      expect(res.state).toBe('Active');
+      expect(res.activeGraphSnapshotId).toBe(candidateSnapshotId);
+      expect(res.nodeCount).toBe(20);
+    });
+
     it('retrieves graph status repeatedly through one stable client instance', async () => {
       const setId = generateId();
       const fetcher = vi.fn(async (input: RequestInfo | URL) => {
@@ -708,6 +744,41 @@ describe('strict fixed-route knowledge client', () => {
       expect(first.factCount).toBe(10);
       expect(second.state).toBe('Active');
       expect(fetcher).toHaveBeenCalledTimes(2);
+    });
+
+    it('parses graph status with candidate snapshot, stage, and rollback metadata', async () => {
+      const setId = generateId();
+      const candidateSnapshotId = generateId();
+      const fetcher = vi.fn(async () =>
+        jsonResponse({
+          setId,
+          state: 'Building',
+          currentStage: 'Retrieval generation',
+          nodeCount: 0,
+          factCount: 0,
+          evidenceCount: 0,
+          conflictCount: 0,
+          quarantineCount: 0,
+          ontologyVersion: '2026.10.1',
+          rulesVersion: '2026.10.1',
+          candidateSnapshotId,
+          candidateStatus: 'PREPARING',
+          canRollback: false,
+        })
+      );
+
+      const client = createKnowledgeClient({
+        baseUrl: 'https://knowledge.example.com',
+        token: 'token',
+        fetcher,
+      });
+
+      const res = await client.getGraphStatus(setId);
+      expect(res.state).toBe('Building');
+      expect(res.currentStage).toBe('Retrieval generation');
+      expect(res.candidateSnapshotId).toBe(candidateSnapshotId);
+      expect(res.candidateStatus).toBe('PREPARING');
+      expect(res.canRollback).toBe(false);
     });
 
     it('stops graph status polling immediately on Failed and returns safe error', async () => {

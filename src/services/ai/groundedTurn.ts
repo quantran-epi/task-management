@@ -33,7 +33,7 @@ import {
 } from './groundedSynthesis';
 import type { RouteIntentResult, RouteIntentDeps, IntentLabel } from './intentRouter';
 import type { completeJson as defaultCompleteJson } from './nineRouterClient';
-import type { KnowledgeLink, TaskMateEntityType } from '../../types/models';
+import type { KnowledgeLink, TaskMateEntityType, ChatTokenUsage } from '../../types/models';
 
 export interface GroundedTurnInput {
   query: string;
@@ -81,6 +81,7 @@ export type GroundedTurnResult =
       kind: 'grounded_answer';
       grounding: ChatMessageGrounding;
       requiresOperationalContinuation?: boolean;
+      tokenUsage?: ChatTokenUsage | undefined;
     }
   | { kind: 'local_fallback_results'; grounding: ChatMessageGrounding }
   | { kind: 'evidence_only'; grounding: ChatMessageGrounding }
@@ -100,7 +101,11 @@ export interface GroundedTurnDeps {
     deps?: RouteIntentDeps
   ): Promise<RouteIntentResult> | RouteIntentResult;
   routeScope(
-    input: { query: string; routedIntent?: IntentLabel },
+    input: {
+      query: string;
+      routedIntent?: IntentLabel;
+      recentTurns?: readonly { role: 'user' | 'assistant'; content: string }[];
+    },
     deps: {
       catalog: readonly SetCatalogEntry[];
       completeJson?: typeof defaultCompleteJson;
@@ -129,6 +134,7 @@ export interface GroundedTurnDeps {
     answer: GroundedAnswer;
     attempts: readonly unknown[];
     responseLanguage: 'vi' | 'en';
+    tokenUsage?: ChatTokenUsage | undefined;
   }>;
   loadKnowledgeLinks?(
     entityType: TaskMateEntityType,
@@ -242,6 +248,7 @@ export async function runGroundedTurn(
       model: input.config.model,
     },
     signal: input.signal,
+    recentTurns: input.recentTurns,
   });
 
   const effectiveIntent =
@@ -267,7 +274,7 @@ export async function runGroundedTurn(
   // If model is configured, semanticScopeRouter probe/complete can be passed if caller wired it,
   // but if modelConfigured === false, omit completeJson (D-20).
   const resolvedScope = await deps.routeScope(
-    { query: input.query, routedIntent: intentDecision.intent },
+    { query: input.query, routedIntent: intentDecision.intent, recentTurns: input.recentTurns },
     {
       catalog: input.catalog,
       signal: input.signal,
@@ -332,6 +339,7 @@ export async function runGroundedTurn(
       try {
         const synthRes = await deps.synthesizeGroundedAnswer({
           query: input.query,
+          recentTurns: input.recentTurns,
           pack: localPack,
           endpoint: input.config.endpoint,
           apiKey: input.config.apiKey,
@@ -439,8 +447,14 @@ export async function runGroundedTurn(
           maxEvidenceChars: 30000,
         },
         limit: 20,
-        includeInferred: false,
-        recentTurns: [],
+        includeInferred: true,
+        recentTurns: (input.recentTurns && input.recentTurns.length > 0
+          ? input.recentTurns.slice(-3).map((t) => ({
+              role: t.role,
+              text: t.content.slice(0, 2000),
+              resolvedUrns: [],
+            }))
+          : []) as { role: 'user' | 'assistant'; text: string; resolvedUrns: string[] }[],
         ...(contextHints ? { contextHints } : {}),
       },
       input.signal
@@ -665,6 +679,7 @@ export async function runGroundedTurn(
   try {
     const synthResult = await deps.synthesizeGroundedAnswer({
       query: input.query,
+      recentTurns: input.recentTurns,
       pack: serverPack,
       endpoint: input.config.endpoint,
       apiKey: input.config.apiKey,
@@ -699,6 +714,7 @@ export async function runGroundedTurn(
     return {
       kind: 'grounded_answer',
       grounding,
+      ...(synthResult.tokenUsage ? { tokenUsage: synthResult.tokenUsage } : {}),
       ...(intentDecision.intent === 'mixed' ? { requiresOperationalContinuation: true } : {}),
     };
   } catch (synthErr: unknown) {

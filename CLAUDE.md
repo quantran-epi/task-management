@@ -266,7 +266,10 @@ A private, offline-first web application for one person to manage projects, mile
 
 ## Conventions
 
-Conventions not yet established. Will populate as patterns emerge during development.
+### Anti-Loop & Tool Usage Rules
+- **No Read Loop Bug**: Tuyệt đối cấm lặp tool `Read` (read loop bug) — không đọc đi đọc lại cùng một file, cùng một khoảng dòng hoặc các khoảng dòng trùng lặp nhỏ (20-40 lines). Hành vi đọc lặp không sinh ra tiến độ bị coi là critical bug.
+- **Anti-Read-Loop Mandate**: Đọc 1 lần với phạm vi rộng (100-300+ dòng hoặc toàn bộ file). Không bao giờ re-read lại đoạn vừa đọc. Cần context thì đọc rộng 1 lần duy nhất và thực hiện action/edit ngay.
+- **Single Read Before Edit**: Đọc đúng block mục tiêu 1 lần, đối chiếu chuỗi và gọi `Edit` ngay lập tức. Không chần chừ hay đọc qua lại giữa các lần read.
 <!-- GSD:conventions-end -->
 
 <!-- GSD:architecture-start source:ARCHITECTURE.md -->

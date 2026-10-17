@@ -26,7 +26,11 @@ import {
   setNineRouterConfig,
   fetchAvailableModels,
 } from '../../services/ai/nineRouterTokenService';
-import { streamChatEvents, streamChatCompletion } from '../../services/ai/nineRouterClient';
+import {
+  streamChatEvents,
+  streamChatCompletion,
+  stripThinkingBlocks,
+} from '../../services/ai/nineRouterClient';
 import {
   buildItemContextPrompt,
   buildGlobalContextPrompt,
@@ -37,6 +41,7 @@ import {
   pruneToolOutputsInMessages,
   selectMessagesWithinBudget,
 } from '../../services/ai/historyPruning';
+import { compactThreadContext, extractMessageText } from '../../services/ai/contextCompaction';
 import {
   AI_DATABASE_TOOLS,
   type AiToolDefinition,
@@ -83,13 +88,12 @@ import { fetchSetCatalog } from '../../db/repositories/documentSetRepo';
 import {
   executeGroundedTurn as runGroundedTurn,
   executeSynthesizeFromStoredEvidence as synthesizeFromStoredEvidence,
-  executeCreateFreshLookupTurn as createFreshLookupTurn,
   createDefaultGroundedTurnDeps,
 } from '../../services/ai/groundedTurnDeps';
 import type { ChatMessageGrounding, PersistedCitation } from '../../services/ai/groundedAnswerSchemas';
 import { IntentRouterUnavailableError } from '../../services/ai/intentRouter';
 import { QuickPreviewDrawer } from '../notes/QuickPreviewDrawer';
-import { ScopeChipsBar } from './grounded/ScopeChipsBar';
+import { ScopeChipsBar, hasMeaningfulRoutedScope } from './grounded/ScopeChipsBar';
 import type { GroundedAnswerCardCallbacks } from './ChatMessageBubble';
 
 export const AI_CHAT_WIDTH_KEY = 'planner:ai_chat_width';
@@ -287,6 +291,28 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   // Model & Token settings
   const [selectedModel, setSelectedModel] = useState<string>('gpt-4o');
   const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [isRefreshingModels, setIsRefreshingModels] = useState(false);
+
+  const handleRefreshModels = useCallback(async () => {
+    setIsRefreshingModels(true);
+    try {
+      const liveModels = await fetchAvailableModels(db);
+      if (liveModels.length > 0) {
+        setAvailableModels(liveModels);
+        setSelectedModel((prev) => {
+          if (liveModels.includes(prev)) return prev;
+          return liveModels[0] ?? prev;
+        });
+        message.success(`Đã cập nhật ${liveModels.length} mô hình từ 9router`);
+      } else {
+        message.warning('Không tìm thấy mô hình nào từ 9router');
+      }
+    } catch (err: any) {
+      message.error(`Không thể tải danh sách mô hình: ${err?.message || err}`);
+    } finally {
+      setIsRefreshingModels(false);
+    }
+  }, [db]);
 
   useEffect(() => {
     let mounted = true;
@@ -500,7 +526,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       return;
     }
 
-    if (isStreaming) return;
+    if (isStreaming || Boolean(groundedLoadingStatus)) return;
 
     setScrollTrigger((prev) => prev + 1);
     setApiError(null);
@@ -631,18 +657,42 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       return synthesizeGroundedAnswer(input);
     };
 
-    const msgsForRecent = await getMessagesByThreadId(activeThread.id, db);
-    const last3Turns = msgsForRecent
-      .filter((m) => m.role === 'user' || m.role === 'assistant')
-      .slice(-3)
-      .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+    if (apiKey && config.endpoint) {
+      void compactThreadContext({
+        threadId: activeThread.id,
+        db,
+        endpoint: config.endpoint,
+        apiKey,
+        model: selectedModel || config.defaultModel,
+      }).catch((compErr) => {
+        console.warn('[AIChatDrawer] Auto context compaction check error:', compErr);
+      });
+    }
 
+    const allThreadMsgs = await getMessagesByThreadId(activeThread.id, db);
+    let boundaryIndex = -1;
+    for (let i = allThreadMsgs.length - 1; i >= 0; i--) {
+      if (allThreadMsgs[i]?.isContextBoundary) {
+        boundaryIndex = i;
+        break;
+      }
+    }
+    const threadMsgsToSend = boundaryIndex >= 0 ? allThreadMsgs.slice(boundaryIndex + 1) : allThreadMsgs;
+    const allHistoryTurns = threadMsgsToSend
+      .filter((m) => (m.role === 'user' || m.role === 'assistant') && m.id !== savedUserMsg?.id)
+      .map((m) => ({
+        role: m.role as 'user' | 'assistant',
+        content: extractMessageText(m),
+      }))
+      .filter((m) => m.content.trim().length > 0);
+
+    const turnOverallStartTime = Date.now();
     try {
       setGroundedLoadingStatus('Đang phân tích ý định câu hỏi...');
       const groundedResult = await runGroundedTurn(
         {
           query: effectiveQuery,
-          recentTurns: last3Turns,
+          recentTurns: allHistoryTurns,
           signal: turnController.signal,
           capabilities,
           config: {
@@ -703,11 +753,13 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
             };
           });
 
+        const groundedDurationMs = Date.now() - turnOverallStartTime;
         await saveMessage(
           {
             threadId: activeThread.id,
             role: 'assistant',
             content: '',
+            durationMs: groundedDurationMs,
             grounding: {
               schemaVersion: 1,
               authority: 'server',
@@ -775,11 +827,13 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           createdAt: new Date().toISOString(),
         };
 
+        const groundedDurationMs = Date.now() - turnOverallStartTime;
         await saveMessage(
           {
             threadId: activeThread.id,
             role: 'assistant',
             content: '',
+            durationMs: groundedDurationMs,
             grounding: refineGrounding,
           },
           db
@@ -797,11 +851,14 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           if (groundedResult.grounding.scope) {
             setLatestRoutedScope(groundedResult.grounding.scope);
           }
+          const groundedDurationMs = Date.now() - turnOverallStartTime;
           await saveMessage(
             {
               threadId: activeThread.id,
               role: 'assistant',
               content: '',
+              durationMs: groundedDurationMs,
+              tokenUsage: (groundedResult as any).tokenUsage,
               grounding: groundedResult.grounding,
             },
             db
@@ -818,11 +875,13 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
         if (groundedResult.kind === 'error') {
           if (!turnController.signal.aborted) {
+            const groundedDurationMs = Date.now() - turnOverallStartTime;
             await saveMessage(
               {
                 threadId: activeThread.id,
                 role: 'assistant',
                 content: '',
+                durationMs: groundedDurationMs,
                 grounding: groundedResult.grounding,
               },
               db
@@ -1034,15 +1093,21 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
     });
 
     const historyBudget = (config.charLimit || 12000) * 2.5;
-    const budgetedMsgs = selectMessagesWithinBudget(msgsToSend, {
-      maxMessages: 20,
-      maxTotalChars: historyBudget,
-    });
+    const budgetedMsgs = selectMessagesWithinBudget(
+      msgsToSend.map((m) => ({
+        ...m,
+        content: extractMessageText(m),
+      })),
+      {
+        maxMessages: 20,
+        maxTotalChars: historyBudget,
+      }
+    );
 
     for (const m of budgetedMsgs) {
       recentMsgs.push({
         role: m.role,
-        content: m.id === savedUserMsg?.id && effectivePrompt !== trimmed ? effectivePrompt : m.content,
+        content: m.id === savedUserMsg?.id && effectivePrompt !== trimmed ? effectivePrompt : (m.content || ''),
       });
     }
 
@@ -1114,16 +1179,26 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
           });
 
           for await (const chunk of stream) {
-            if (chunk.type === 'text') {
+            if (chunk.type === 'reasoning') {
+              // Show thinking line dynamically during loading indicator, newest overrides previous
+              const cleanReasoning = chunk.delta.trim().replace(/\n+/g, ' ');
+              if (cleanReasoning) {
+                setStreamingStatus(`Suy nghĩ: ${cleanReasoning.slice(0, 100)}...`);
+              }
+            } else if (chunk.type === 'text') {
               fullResponse += chunk.delta;
               aiDebugService.appendStreamChunk(turnId, chunk.delta);
-              setStreamingText(fullResponse);
+              setStreamingText(stripThinkingBlocks(fullResponse));
               setStreamingStatus(null);
             } else if (chunk.type === 'tool_calls') {
               hasToolCalls = true;
               toolCallsToRun = chunk.calls;
             } else if (chunk.type === 'usage') {
-              accumulatedTokenUsage = chunk.usage;
+              accumulatedTokenUsage = {
+                promptTokens: (accumulatedTokenUsage?.promptTokens || 0) + (chunk.usage.promptTokens || 0),
+                completionTokens: (accumulatedTokenUsage?.completionTokens || 0) + (chunk.usage.completionTokens || 0),
+                totalTokens: (accumulatedTokenUsage?.totalTokens || 0) + (chunk.usage.totalTokens || 0),
+              };
             }
           }
         } catch (streamErr: any) {
@@ -1333,19 +1408,20 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
         for await (const delta of synthesisStream) {
           fullResponse += delta;
           aiDebugService.appendStreamChunk(turnId, delta);
-          setStreamingText(fullResponse);
+          setStreamingText(stripThinkingBlocks(fullResponse));
           setStreamingStatus(null);
         }
       }
 
       // 6. Commit assistant response to DB
-      if (fullResponse.trim()) {
+      const cleanCommittedResponse = stripThinkingBlocks(fullResponse);
+      if (cleanCommittedResponse.trim()) {
         const durationMs = Date.now() - turnStartTime;
         await saveMessage(
           {
             threadId: activeThread.id,
             role: 'assistant',
-            content: fullResponse,
+            content: cleanCommittedResponse,
             durationMs,
             tokenUsage: accumulatedTokenUsage,
             generatedFiles: turnGeneratedFiles.length > 0 ? turnGeneratedFiles : undefined,
@@ -1407,77 +1483,6 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
       setPendingConfirmation(null);
       pendingConfirmationRef.current = null;
       abortControllerRef.current = null;
-    }
-  };
-
-  const handleFreshLookup = async (prevGrounding: ChatMessageGrounding) => {
-    let activeThread = thread;
-    if (!activeThread) {
-      activeThread = await createOrGetThread(
-        {
-          scopeType: currentScope.type,
-          entityId: currentScope.id,
-          title: currentScope.title,
-        },
-        db
-      );
-    }
-    const apiKey = await getNineRouterApiKey(db);
-    const config = await getNineRouterConfig(db);
-    const catalog = await fetchSetCatalog(db);
-
-    const capabilities = {
-      serverEnabled: Boolean(knowledgeConfig.enabled && knowledgeConfig.baseUrl),
-      modelConfigured: Boolean(apiKey && config.endpoint && selectedModel),
-    };
-
-    const deps = createDefaultGroundedTurnDeps({
-      knowledgeBaseUrl: knowledgeConfig.baseUrl,
-      knowledgeToken: knowledgeConfig.token,
-      db,
-    });
-
-    if (currentTurnAbortRef.current) {
-      currentTurnAbortRef.current.abort();
-    }
-    const freshController = new AbortController();
-    currentTurnAbortRef.current = freshController;
-
-    const baseInput = {
-      query: lastSubmittedText || 'Tra cứu lại',
-      recentTurns: [],
-      signal: freshController.signal,
-      capabilities,
-      config: {
-        endpoint: config.endpoint,
-        apiKey,
-        model: selectedModel || config.defaultModel,
-        promptVersion: 'grounded-v1',
-        routerVersion: 'router-v1',
-      },
-      catalog,
-      recentSessionId: activeThread.id,
-    };
-
-    const freshInput = createFreshLookupTurn(prevGrounding, baseInput, deps);
-    const result = await runGroundedTurn(freshInput, deps);
-    if (freshController.signal.aborted) return;
-
-    if (
-      result.kind === 'grounded_answer' ||
-      result.kind === 'local_fallback_results' ||
-      result.kind === 'evidence_only' ||
-      result.kind === 'error'
-    ) {
-      await saveMessage(
-        {
-          threadId: activeThread.id,
-          role: 'assistant',
-          content: '',
-          grounding: result.grounding,
-        },
-        db
-      );
     }
   };
 
@@ -1562,12 +1567,6 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
       // Populates input without auto-send (UI-SPEC Interaction Contracts)
       setExternalInputValue(label);
     },
-    onFreshLookup: () => {
-      const lastGrounded = [...messages].reverse().find((m) => m.grounding)?.grounding;
-      if (lastGrounded) {
-        void handleFreshLookup(lastGrounded);
-      }
-    },
     onEvidenceOnlySynthesize: () => {
       const lastGrounded = [...messages].reverse().find((m) => m.grounding)?.grounding;
       if (lastGrounded) {
@@ -1584,6 +1583,11 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
     },
     onConfigRepair: () => {
       onOpenSettings?.();
+    },
+    onFreshLookup: () => {
+      if (lastSubmittedText) {
+        void handleSendMessage(lastSubmittedText);
+      }
     },
     synthesizingEvidenceId,
     evidenceSynthesisError,
@@ -1769,6 +1773,8 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
         selectedModel={selectedModel}
         availableModels={availableModels}
         onModelChange={handleModelChange}
+        onRefreshModels={handleRefreshModels}
+        isRefreshingModels={isRefreshingModels}
         autoApproveMutations={autoApproveMutations}
         onToggleAutoApproveMutations={handleToggleAutoApproveMutations}
         isPinned={isPinned}
@@ -1879,11 +1885,11 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
         onOpenSettings={onOpenSettings}
       />
 
-      {/* ScopeChipsBar after routing per D-15 */}
-      {latestRoutedScope && latestRoutedScope.routedScope && (
+      {/* ScopeChipsBar after routing per D-15 (only when routed scope has concrete facets) */}
+      {latestRoutedScope && hasMeaningfulRoutedScope(latestRoutedScope.routedScope) && (
         <div style={{ padding: '0 14px' }}>
           <ScopeChipsBar
-            routedScope={latestRoutedScope.routedScope}
+            routedScope={latestRoutedScope.routedScope!}
             onEditScope={() => setScopeModalOpen(true)}
           />
         </div>
@@ -1938,7 +1944,7 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
         onClear={handleClearContext}
         onClearAll={handleClearAllHistory}
         onStop={handleStopGeneration}
-        isStreaming={isStreaming && !pendingConfirmation}
+        isStreaming={(isStreaming || Boolean(groundedLoadingStatus)) && !pendingConfirmation}
         placeholder={
           pendingConfirmation
             ? 'Gõ "yes" để xác nhận hoặc "no" để từ chối...'

@@ -77,14 +77,16 @@ const STAGE_LABELS: Record<GraphBuildStage, string> = {
   'Structured extraction': 'Trích xuất có cấu trúc',
   'Prose extraction': 'Trích xuất văn xuôi',
   Validation: 'Kiểm tra',
+  'Retrieval generation': 'Tạo chỉ mục truy xuất',
   Activation: 'Kích hoạt',
 };
 
 const STAGE_PROGRESS: Record<GraphBuildStage, number> = {
-  Preparing: 20,
-  'Structured extraction': 40,
-  'Prose extraction': 60,
-  Validation: 80,
+  Preparing: 15,
+  'Structured extraction': 35,
+  'Prose extraction': 55,
+  Validation: 75,
+  'Retrieval generation': 90,
   Activation: 100,
 };
 
@@ -225,11 +227,24 @@ export function DocumentSetDrawer(props: DocumentSetDrawerProps) {
     const rebuildKey = generateId();
 
     try {
-      await client.triggerGraphRebuild(selected.id, rebuildKey);
+      const rebuildAccepted = await client.triggerGraphRebuild(selected.id, rebuildKey);
       message.info('Đã bắt đầu xây dựng lại đồ thị tri thức.');
 
-      // Poll until completed or failed
-      const finalStatus = await client.pollGraphStatus(selected.id);
+      // Poll until candidate is prepared or build failed
+      let finalStatus = await client.pollGraphStatus(selected.id);
+
+      // If candidate is ready but not yet activated, activate it to make graph live
+      if (
+        finalStatus.state !== 'Failed' &&
+        !finalStatus.uncertain &&
+        (finalStatus.candidateStatus === 'READY' ||
+          (finalStatus.state === 'Never built' && rebuildAccepted.candidateSnapshotId))
+      ) {
+        const candidateId =
+          finalStatus.candidateSnapshotId || rebuildAccepted.candidateSnapshotId;
+        finalStatus = await client.activateGraphCandidate(selected.id, candidateId);
+      }
+
       setGraphStatus(finalStatus);
       if (finalStatus.state === 'Failed') {
         message.error(
@@ -257,7 +272,11 @@ export function DocumentSetDrawer(props: DocumentSetDrawerProps) {
     setGraphLoading(true);
     setConnectivityUncertain(false);
     try {
-      const res = await client.getGraphStatus(selected.id);
+      let res = await client.getGraphStatus(selected.id);
+      // Auto-activate if candidate is ready but no active graph yet
+      if (res.state === 'Never built' && res.candidateStatus === 'READY' && res.candidateSnapshotId) {
+        res = await client.activateGraphCandidate(selected.id, res.candidateSnapshotId);
+      }
       setGraphStatus(res);
     } catch (err: any) {
       if (err?.code === 'NETWORK_ERROR') {
