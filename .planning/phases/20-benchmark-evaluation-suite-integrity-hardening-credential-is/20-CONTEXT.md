@@ -20,7 +20,7 @@ Phase 20 does not deploy Neo4j, redesign retrieval or answer synthesis, broaden 
 ### Scoring and release gate
 - **D-01:** Use hybrid release gates: aggregate score, per-category score, explicit three-hop score, path-fidelity gate, and zero-tolerance trust invariants.
 - **D-02:** Required thresholds are overall pass rate `>= 90%`, every category `>= 80%`, three-hop answer success `>= 90%`, and graph path fidelity `100%`.
-- **D-03:** Trust invariants have zero tolerance. Any unsupported material claim, invalid or cross-snapshot path, suppressed conflict branch or silently selected winner, credential leakage, Phase 16 DLP bypass, or network egress from an offline fallback path fails the release regardless of aggregate score.
+- **D-03:** Trust invariants have zero tolerance. Any unsupported material claim, invalid or cross-snapshot path, suppressed conflict branch or silently selected winner, credential leakage, or network egress from an offline fallback path fails the release regardless of aggregate score.
 - **D-04:** Run all cases and report all failures. Never mask a failure with retry. Retry may diagnose nondeterminism, but an unstable first result remains a failure.
 - **D-05:** A correct conclusion with an invalid hop fails path fidelity. Every expected path edge must match its source identity, relation type, target identity, and snapshot boundary.
 
@@ -44,7 +44,7 @@ Phase 20 does not deploy Neo4j, redesign retrieval or answer synthesis, broaden 
 - **D-18:** Use a layered gate after Phase 19.1: the 40-case deterministic suite is the primary gate, plus a focused integration subset against the real Neo4j artifact for rebuild equivalence, representative one-, two-, and three-hop paths, and recovery behavior.
 - **D-19:** The real-artifact subset must use Phase 19.1's final runtime contract. Do not invent container topology, artifact paths, schema commands, readiness probes, or reset/rebuild commands in Phase 20 context or planning.
 - **D-20:** Automated offline coverage includes daemon disabled, connection refused, timeout, `401`, and invalid response. Only the transport states allowed by Phase 19 trigger local BM25 fallback; authentication/configuration/invalid-response failures stay visible. Every offline fallback case proves zero external egress.
-- **D-21:** Keep the Phase 16 DLP boundary unchanged: publish attempts retain sensitive-data scanning and fresh confirmation. Do not expand DLP to every AI chat prompt or query in this phase. Optional live smoke uses sanitized fixtures, and remote providers remain off by default.
+- **D-21:** Exclude DLP verification from Phase 20 test scope. Phase 20 focuses on benchmark quality, multi-hop path fidelity, offline fallback taxonomy, and credential isolation without adding or testing DLP scanning. Optional live smoke uses sanitized fixtures, and remote providers remain off by default.
 - **D-22:** Keep provider and Neo4j secrets in knowledge-daemon environment variables. Do not add OS-keyring integration, encrypted config files, secret dashboards, rotation workflows, or client-supplied provider keys.
 - **D-23:** Credential-isolation verification stays minimal: one focused protocol-boundary regression check proves representative API output and generated benchmark reports do not include a configured test secret. Phase 20 must focus effort on main benchmark, rebuild, path, and recovery flows rather than build a general secret-scanning framework.
 

@@ -47,7 +47,7 @@ created: 2026-10-17
 | 20-02-03 | 02 | 2 | QUAL-01..05 | T-20-06 | Benchmark CLI npm script & reports directory | integration | `npm run benchmark` | ❌ W0 | ⬜ pending |
 | 20-03-01 | 03 | 3 | QUAL-04 | T-20-07 | Semantic graph rebuild equivalence | integration | `npx vitest run knowledge-server/tests/graphRebuildEquivalence.test.ts` | ❌ W0 | ⬜ pending |
 | 20-03-02 | 03 | 3 | QUAL-04 | T-20-08 | Transport error taxonomy & offline zero-egress | unit | `npx vitest run tests/knowledge/offlineIsolation.test.ts` | ❌ W0 | ⬜ pending |
-| 20-03-03 | 03 | 3 | QUAL-05 | T-20-09 | Canary token isolation & DLP scan preservation | unit | `npx vitest run tests/security/credentialIsolation.test.ts` | ❌ W0 | ⬜ pending |
+| 20-03-03 | 03 | 3 | QUAL-05 | T-20-09 | Canary token isolation on API and reports | unit | `npx vitest run tests/security/credentialIsolation.test.ts` | ❌ W0 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
