@@ -737,6 +737,31 @@ describe('groundedSynthesis', () => {
       const res = normalizeRawGroundedOutput(raw, allowedCitationIds, allowedPathIds) as any;
       expect(res.claims[0].citationIds).toEqual(['S1', 'S2']);
     });
+
+    it('34. attributes claims and adds inline citations when claims are empty but conclusion matches promptEvidence identifiers', () => {
+      const raw = {
+        conclusion: 'Tiến trình 60000004 xử lý chỉ thị MAIN1.OPR_OPERATION.\nMAIN1.CRD_PAYMENT_PKG.APPLY_PAYMENT cấn trừ nợ.',
+        claims: [],
+      };
+      const mockEvidence = [
+        {
+          id: 'S1',
+          documentTitle: '03 - Call chain',
+          text: 'Tiến trình 60000004 kích hoạt chỉ thị MAIN1.OPR_OPERATION OPST0100',
+        },
+        {
+          id: 'S2',
+          documentTitle: 'Credit payment allocation',
+          text: 'Thủ tục MAIN1.CRD_PAYMENT_PKG.APPLY_PAYMENT cấn trừ dư nợ',
+        },
+      ];
+      const res = normalizeRawGroundedOutput(raw, ['S1', 'S2'], [], mockEvidence) as any;
+      expect(res.claims).toHaveLength(2);
+      expect(res.claims[0].citationIds).toEqual(['S1']);
+      expect(res.claims[1].citationIds).toEqual(['S2']);
+      expect(res.conclusion).toContain('[S1]');
+      expect(res.conclusion).toContain('[S2]');
+    });
   });
 
   describe('buildSystemPrompt', () => {

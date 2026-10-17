@@ -923,4 +923,35 @@ describe('evidencePack', () => {
     expect(badClosureResult.valid).toBe(false);
     expect(badClosureResult.issues.some((i) => i.code === 'hypothesis_has_citations')).toBe(true);
   });
+
+  it('21. sorts general bucketD candidates by relevance score descending before budget drop', () => {
+    const lowScoreChunk = makeMockChunk('c_low', DOC_1, 'Low Doc', 1, 10, 'low score snippet', HASH_A, { score: 0.01 });
+    const highScoreChunk = makeMockChunk('c_high', DOC_2, 'High Doc', 1, 10, 'high score snippet', HASH_B, { score: 0.99 });
+
+    const mockResponse: FederatedRetrievalResponse = {
+      outcome: 'READY',
+      items: [
+        { setId: SET_1, snapshotId: 'gsnap_11111111', roleGroup: 'baseline', item: lowScoreChunk },
+        { setId: SET_2, snapshotId: 'gsnap_11111111', roleGroup: 'baseline', item: highScoreChunk },
+      ],
+      paths: [],
+      conflictGroups: [],
+      modalityStatus: {
+        fulltext: { status: 'ok', latencyMs: 10, itemCount: 2 },
+        vector: { status: 'ok', latencyMs: 20, itemCount: 2 },
+        graph: { status: 'ok', latencyMs: 15, itemCount: 0 },
+      },
+      diagnostics: { degraded: false, coverageWarnings: [] },
+    };
+
+    const pack = packEvidence(
+      { authority: 'server', serverResponse: mockResponse },
+      { maxPromptEvidenceCount: 1 }
+    );
+
+    expect(pack.promptEvidence).toHaveLength(1);
+    // Highest score chunk should be packed first even though it appeared second in items list
+    expect(pack.promptEvidence[0]?.id).toBe('S2');
+    expect(pack.promptEvidence[0]?.text).toBe('high score snippet');
+  });
 });

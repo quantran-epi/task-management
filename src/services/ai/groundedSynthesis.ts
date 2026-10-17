@@ -88,8 +88,8 @@ export function buildSystemPrompt(
       language: targetLanguage,
       conclusion:
         targetLanguage === 'vi'
-          ? 'Quy trình CYTP1002 hoàn tất bước xác thực OTP theo đặc tả.'
-          : 'Process CYTP1002 completes OTP verification per specification.',
+          ? `Quy trình CYTP1002 hoàn tất bước xác thực OTP theo đặc tả [${sampleCitationId}].`
+          : `Process CYTP1002 completes OTP verification per specification [${sampleCitationId}].`,
       confidence: 'high',
       confidenceReason:
         targetLanguage === 'vi'
@@ -128,7 +128,7 @@ export function buildSystemPrompt(
     '  - Paths: [ { id: "P1", summary: "...", steps: [...] }, ... ]',
     'RULES:',
     '1. "language": ' + languageInstruction,
-    '2. "conclusion": High-level executive synthesis answering the query directly in natural, beautiful, human-friendly Markdown formatting (using bullet points, bold key terms, tables or code blocks where appropriate). You should include inline citation brackets such as [S1] or [S2] referring to the evidence.',
+    '2. "conclusion": High-level executive synthesis answering the query directly in natural, beautiful, human-friendly Markdown formatting (using bullet points, bold key terms, tables or code blocks where appropriate). MANDATORY INLINE CITATIONS: Every single fact, step, bullet point, or package name in "conclusion" MUST have an inline citation tag like [S1] or [S2] immediately after it (e.g. "Tiến trình 60000004 [S1] kích hoạt từ chỉ thị MAIN1.OPR_OPERATION [S1]"). Statements in "conclusion" without citation brackets are FORBIDDEN when EVIDENCE is available.',
     '3. "confidence":',
     '   - "high": Query answered completely with direct evidence from authoritative documents or verified graph paths.',
     '   - "medium": Query partially answered or synthesized from multi-hop inferred paths without conflicts.',
@@ -153,6 +153,38 @@ export function buildSystemPrompt(
   ].join('\n');
 }
 
+function findBestMatchingCitation(
+  line: string,
+  promptEvidence: readonly { id: string; text?: string; excerpt?: string; documentTitle?: string }[],
+  allowedCitationSet: Set<string>
+): string | null {
+  const technicalTokens = line.match(/[A-Za-z0-9_#$]{4,}/g) || [];
+  if (technicalTokens.length === 0) return null;
+
+  let bestId: string | null = null;
+  let maxScore = 0;
+
+  for (const ev of promptEvidence) {
+    if (!allowedCitationSet.has(ev.id)) continue;
+    const content = `${ev.text || ''} ${ev.excerpt || ''} ${ev.documentTitle || ''}`.toLowerCase();
+    let score = 0;
+
+    for (const token of technicalTokens) {
+      const lowerToken = token.toLowerCase();
+      if (content.includes(lowerToken)) {
+        score += token.includes('_') || /\d/.test(token) ? 3 : 1;
+      }
+    }
+
+    if (score > maxScore && score >= 2) {
+      maxScore = score;
+      bestId = ev.id;
+    }
+  }
+
+  return bestId;
+}
+
 /**
  * Tolerant pre-parsing normalization:
  * Coerces common LLM formatting deviations before schema parsing and closure validation:
@@ -165,7 +197,8 @@ export function buildSystemPrompt(
 export function normalizeRawGroundedOutput(
   raw: unknown,
   allowedCitationIds: string[],
-  allowedPathIds: string[]
+  allowedPathIds: string[],
+  promptEvidence?: readonly { id: string; text?: string; excerpt?: string; documentTitle?: string }[]
 ): unknown {
   if (raw == null) return raw;
 
@@ -387,6 +420,54 @@ export function normalizeRawGroundedOutput(
     normalizedClaims.push(claim);
   }
 
+  // 8. If conclusion has no inline citations and claims are empty or uncited,
+  // attempt factual attribution from promptEvidence based on exact identifiers (D-13 safe)
+  if (
+    normalizedClaims.length === 0 &&
+    typeof obj.conclusion === 'string' &&
+    !/\[[SL]?\d+\]/i.test(obj.conclusion) &&
+    Array.isArray(promptEvidence) &&
+    promptEvidence.length > 0
+  ) {
+    const lines = obj.conclusion.split('\n');
+    let hasModifiedConclusion = false;
+    const synthesizedClaims: any[] = [];
+    let claimCounter = normalizedClaims.length + 1;
+
+    const modifiedLines = lines.map((line) => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#') || trimmed.length < 10) {
+        return line;
+      }
+      if (/\[[SL]?\d+\]/i.test(line)) {
+        return line;
+      }
+
+      const matchedCitationId = findBestMatchingCitation(trimmed, promptEvidence, allowedCitationSet);
+      if (matchedCitationId) {
+        hasModifiedConclusion = true;
+        if (normalizedClaims.length === 0) {
+          synthesizedClaims.push({
+            id: `C${claimCounter++}`,
+            text: trimmed.replace(/^[-*•\d.]+\s*/, ''),
+            classification: 'DIRECT',
+            citationIds: [matchedCitationId],
+            pathId: null,
+          });
+        }
+        return `${line} [${matchedCitationId}]`;
+      }
+      return line;
+    });
+
+    if (hasModifiedConclusion) {
+      obj.conclusion = modifiedLines.join('\n');
+    }
+    if (normalizedClaims.length === 0 && synthesizedClaims.length > 0) {
+      normalizedClaims.push(...synthesizedClaims);
+    }
+  }
+
   obj.claims = normalizedClaims;
   obj.unsupportedParts = unsupportedParts;
 
@@ -569,7 +650,12 @@ export async function synthesizeGroundedAnswer(
     const latencyMs = Date.now() - startTime;
 
     // Tolerant pre-parsing normalization
-    const normalizedOutput = normalizeRawGroundedOutput(rawOutput, allowedCitationIds, allowedPathIds);
+    const normalizedOutput = normalizeRawGroundedOutput(
+      rawOutput,
+      allowedCitationIds,
+      allowedPathIds,
+      input.pack.promptEvidence
+    );
     lastRaw = normalizedOutput;
 
     // Speculation policy check (D-10)

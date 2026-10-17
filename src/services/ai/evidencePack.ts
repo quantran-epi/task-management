@@ -119,6 +119,7 @@ interface RawCandidateCitation {
   readonly originalChunkId?: string | undefined;
   readonly conflictGroupId?: string | undefined;
   readonly isIdentifierMatch?: boolean | undefined;
+  readonly score?: number | undefined;
 }
 
 export function packEvidence(
@@ -178,6 +179,7 @@ export function packEvidence(
           originalChunkId: chunk.id,
           conflictGroupId: chunk.conflictGroupId,
           isIdentifierMatch: isId,
+          score: typeof (chunk as any).score === 'number' ? (chunk as any).score : 0,
         });
       }
     }
@@ -202,6 +204,7 @@ export function packEvidence(
         citedExcerpt: excerpt,
         setMemberships: r.setMemberships,
         evidenceKind: 'other',
+        score: typeof (r as any).score === 'number' ? (r as any).score : 0,
       });
     }
   }
@@ -346,14 +349,14 @@ export function packEvidence(
   // (a) every citation referenced by a conflict branch
   // (b) exact identifier/title hits
   // (c) citations supporting any complete ValidatedPath
-  // (d) remaining ranked items
-  const bucketA: { id: string; text: string }[] = [];
-  const bucketB: { id: string; text: string }[] = [];
-  const bucketC: { id: string; text: string }[] = [];
-  const bucketD: { id: string; text: string }[] = [];
+  // (d) remaining ranked items sorted by relevance score
+  const bucketA: { id: string; text: string; score: number }[] = [];
+  const bucketB: { id: string; text: string; score: number }[] = [];
+  const bucketC: { id: string; text: string; score: number }[] = [];
+  const bucketD: { id: string; text: string; score: number }[] = [];
 
   for (const { candidate, citationId } of dedupedMap.values()) {
-    const promptItem = { id: citationId, text: candidate.citedExcerpt };
+    const promptItem = { id: citationId, text: candidate.citedExcerpt, score: candidate.score ?? 0 };
     if (conflictCitationIds.has(citationId)) {
       bucketA.push(promptItem);
     } else if (candidate.isIdentifierMatch) {
@@ -364,6 +367,10 @@ export function packEvidence(
       bucketD.push(promptItem);
     }
   }
+
+  // Sort remaining general chunks by relevance score descending so that top-ranking documents
+  // across any document set are not starved by the 20-chunk budget cap
+  bucketD.sort((a, b) => b.score - a.score);
 
   const orderedPromptEvidence = [...bucketA, ...bucketB, ...bucketC, ...bucketD];
 
