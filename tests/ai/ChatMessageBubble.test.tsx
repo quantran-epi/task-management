@@ -227,6 +227,85 @@ describe('ChatMessageBubble', () => {
       expect(handleActivate).toHaveBeenCalledWith(groundedMsg.grounding!.citations[0]);
     }
   });
+
+  it('automatically attributes un-bracketed conclusion lines with matching citation chips', () => {
+    const handleActivate = vi.fn();
+    const messageWithoutBrackets: ChatMessage = {
+      id: 'msg-auto-attribute',
+      threadId: 'thread-1',
+      role: 'assistant',
+      content: '',
+      grounding: {
+        schemaVersion: 1,
+        authority: 'server',
+        outcome: 'READY',
+        answer: {
+          schemaVersion: 1,
+          language: 'vi',
+          conclusion: 'Tiến trình quy tắc 60000004 xử lý phân bổ thanh toán từ MAIN1.OPR_OPERATION.\n1. MAIN1.OPR_API_RULE_PROC_PKG: Xác định tài khoản, ghi Có Ledger BLTP0001.',
+          claims: [],
+          unsupportedParts: [],
+        },
+        citations: [
+          {
+            citationId: 'S1',
+            documentId: '00000000-0000-0000-0000-000000000001',
+            documentTitle: '01 - Luồng xử lý',
+            sectionAnchor: 'Luồng xử lý',
+            lineStart: 1,
+            lineEnd: 10,
+            authority: 'server',
+            evidenceClass: 'OBSERVED',
+            snapshotId: 'gsnap_1',
+            publishedContentHash: 'a'.repeat(64),
+            citedExcerpt: 'Tiến trình quy tắc 60000004 kích hoạt từ chỉ thị MAIN1.OPR_OPERATION OPST0100',
+          },
+          {
+            citationId: 'S2',
+            documentId: '00000000-0000-0000-0000-000000000002',
+            documentTitle: '02 - Các bước thực thi',
+            sectionAnchor: 'Các bước thực thi',
+            lineStart: 1,
+            lineEnd: 10,
+            authority: 'server',
+            evidenceClass: 'OBSERVED',
+            snapshotId: 'gsnap_2',
+            publishedContentHash: 'b'.repeat(64),
+            citedExcerpt: 'MAIN1.OPR_API_RULE_PROC_PKG.SELECT_OBJECT_ACCOUNT ghi Có Ledger BLTP0001',
+          },
+        ],
+        paths: [],
+        conflicts: [],
+        scope: null,
+        modalityDiagnostics: null,
+        coverageWarnings: [],
+        fallbackReason: 'NONE',
+        routerVersion: null,
+        promptVersion: 'v1',
+        modelId: 'gpt-4o',
+        createdAt: new Date().toISOString(),
+      },
+      createdAt: '2026-10-03T10:08:00Z',
+    };
+
+    const { container } = render(
+      <ChatMessageBubble
+        message={messageWithoutBrackets}
+        groundedCallbacks={{ onCitationActivate: handleActivate }}
+      />
+    );
+
+    const chips = container.querySelectorAll('.grounded-inline-chip');
+    expect(chips.length).toBeGreaterThanOrEqual(2);
+    expect(chips[0]).toHaveTextContent('[1]');
+    expect(chips[1]).toHaveTextContent('[2]');
+
+    fireEvent.click(chips[0]!);
+    expect(handleActivate).toHaveBeenCalledWith(messageWithoutBrackets.grounding!.citations[0]);
+
+    fireEvent.click(chips[1]!);
+    expect(handleActivate).toHaveBeenCalledWith(messageWithoutBrackets.grounding!.citations[1]);
+  });
 });
 
 describe('ChatMessageList', () => {

@@ -447,10 +447,10 @@ describe('AIChatDrawer Grounded Turn Wiring (Plan 19-14)', () => {
     submitMessage('CYTP1002 là gì?');
 
     await waitFor(() => {
-      expect(screen.getByText('[1]')).toBeInTheDocument();
+      expect(screen.getAllByText('[1]')[0]).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('[1]'));
+    fireEvent.click(screen.getAllByText('[1]')[0]!);
 
     // Drawer opens
     await waitFor(() => {
@@ -588,10 +588,10 @@ describe('AIChatDrawer Grounded Turn Wiring (Plan 19-14)', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Khách hàng xác thực OTP qua SMS.')).toBeInTheDocument();
-      expect(screen.getByText('[1]')).toBeInTheDocument();
+      expect(screen.getAllByText('[1]')[0]).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('[1]'));
+    fireEvent.click(screen.getAllByText('[1]')[0]!);
     await waitFor(() => {
       expect(screen.getByText('Xem nhanh tài liệu')).toBeInTheDocument();
     });

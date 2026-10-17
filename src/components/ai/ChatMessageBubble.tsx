@@ -196,6 +196,63 @@ export function renderUserMessageWithMentions(content: string): React.ReactNode 
   return parts;
 }
 
+function attributeLinesWithCitations(
+  text: string,
+  citations: readonly PersistedCitation[]
+): string {
+  if (!text || citations.length === 0) return text;
+  if (/\[(S|L)?\d+\]/i.test(text)) return text;
+
+  const lines = text.split('\n');
+  const resultLines: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#') || trimmed.length < 8) {
+      resultLines.push(line);
+      continue;
+    }
+    if (/\[(S|L)?\d+\]/i.test(line)) {
+      resultLines.push(line);
+      continue;
+    }
+
+    const technicalTokens = trimmed.match(/[A-Za-z0-9_#$]{4,}/g) || [];
+    if (technicalTokens.length === 0) {
+      resultLines.push(line);
+      continue;
+    }
+
+    let bestCitation: PersistedCitation | null = null;
+    let maxScore = 0;
+
+    for (const c of citations) {
+      const content = `${c.citedExcerpt || ''} ${c.sectionAnchor || ''} ${c.documentTitle || ''}`.toLowerCase();
+      let score = 0;
+
+      for (const token of technicalTokens) {
+        const lowerToken = token.toLowerCase();
+        if (content.includes(lowerToken)) {
+          score += token.includes('_') || /\d/.test(token) ? 3 : 1;
+        }
+      }
+
+      if (score > maxScore && score >= 2) {
+        maxScore = score;
+        bestCitation = c;
+      }
+    }
+
+    if (bestCitation) {
+      resultLines.push(`${line} [${bestCitation.citationId}]`);
+    } else {
+      resultLines.push(line);
+    }
+  }
+
+  return resultLines.join('\n');
+}
+
 export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   message: msg,
   isStreaming = false,
@@ -262,18 +319,34 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
 
       // Format claims with inline citation tags
       const formattedClaims = (g.answer.claims || []).map((c) => {
-        const citedBadges = (c.citationIds || [])
+        let citedBadges = (c.citationIds || [])
           .map((cid) => {
             const info = citationMap.get(cid);
             if (!info) return null;
             return info.isLocal ? `[L${info.num}]` : `[${info.num}]`;
           })
           .filter(Boolean);
+
+        if (citedBadges.length === 0 && g.citations && g.citations.length > 0) {
+          const attributedText = attributeLinesWithCitations(c.text, g.citations);
+          const match = attributedText.match(/\[([SL]?\d+)\]/i);
+          if (match && match[1]) {
+            const cleanTag = match[1];
+            const info = citationMap.get(cleanTag);
+            if (info) {
+              citedBadges = [info.isLocal ? `[L${info.num}]` : `[${info.num}]`];
+            }
+          }
+        }
+
         const suffix = citedBadges.length > 0 ? ` ${citedBadges.join(' ')}` : '';
         return `${c.text}${suffix}`;
       });
 
       let formattedConclusion = g.answer.conclusion || '';
+      if (g.citations && g.citations.length > 0) {
+        formattedConclusion = attributeLinesWithCitations(formattedConclusion, g.citations);
+      }
       formattedConclusion = formattedConclusion.replace(/\[(S|L)?(\d+)\]/gi, (match, prefix, numStr) => {
         const cleanTag = prefix ? `${prefix.toUpperCase()}${numStr}` : numStr;
         const info = citationMap.get(cleanTag);
@@ -330,51 +403,77 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               dangerouslySetInnerHTML={{ __html: renderedHtml }}
             />
 
-            {g.citations && g.citations.length > 0 && (
-              <div style={{ marginTop: 10, paddingTop: 8, borderTop: `1px dashed ${token.colorBorderSecondary}` }}>
-                <span style={{ fontSize: 11, color: token.colorTextSecondary, marginRight: 6 }}>
-                  Nguồn tài liệu:
-                </span>
-                <span
-                  style={{
-                    display: 'inline-flex',
-                    flexWrap: 'wrap',
-                    alignItems: 'center',
-                    gap: 4,
-                  }}
-                >
-                  {g.citations.map((c, idx) => {
-                    const isLocal = c.authority === 'local';
-                    const num = idx + 1;
-                    const label = isLocal ? `[L${num}]` : `[${num}]`;
-                    return (
-                      <Tag
-                        key={c.citationId}
-                        style={{
-                          cursor: 'pointer',
-                          margin: '0 2px',
-                          padding: '0 6px',
-                          borderRadius: 4,
-                          fontWeight: 600,
-                          fontSize: 11,
-                          lineHeight: '18px',
-                          height: 18,
-                          background: isLocal ? token.colorFillSecondary : token.colorBgContainer,
-                          borderColor: isLocal ? token.colorBorder : token.colorPrimary,
-                          color: isLocal ? token.colorText : token.colorPrimary,
-                        }}
-                        onClick={() => groundedCallbacks?.onCitationActivate?.(c)}
-                        role="button"
-                        tabIndex={0}
-                        aria-label={`${label} ${c.documentTitle}`}
-                      >
-                        {`${label} ${c.documentTitle || ''}`.trim()}
-                      </Tag>
-                    );
-                  })}
-                </span>
-              </div>
-            )}
+            {g.citations && g.citations.length > 0 && (() => {
+              const citedCitationIds = new Set<string>();
+              (g.answer.claims || []).forEach((c) => {
+                (c.citationIds || []).forEach((id) => citedCitationIds.add(id));
+              });
+              const chipMatches = renderedHtml.matchAll(/data-citation-id="([^"]+)"/g);
+              for (const m of chipMatches) {
+                if (m[1]) citedCitationIds.add(m[1]);
+              }
+
+              const displayCitations = [...g.citations].sort((a, b) => {
+                const aCited = citedCitationIds.has(a.citationId) ? 1 : 0;
+                const bCited = citedCitationIds.has(b.citationId) ? 1 : 0;
+                return bCited - aCited;
+              });
+
+              return (
+                <div style={{ marginTop: 10, paddingTop: 8, borderTop: `1px dashed ${token.colorBorderSecondary}` }}>
+                  <span style={{ fontSize: 11, color: token.colorTextSecondary, marginRight: 6 }}>
+                    Nguồn tài liệu:
+                  </span>
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      flexWrap: 'wrap',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    {displayCitations.map((c) => {
+                      const isLocal = c.authority === 'local';
+                      const info = citationMap.get(c.citationId);
+                      const num = info ? info.num : 1;
+                      const label = isLocal ? `[L${num}]` : `[${num}]`;
+                      const isCited = citedCitationIds.has(c.citationId);
+
+                      return (
+                        <Tag
+                          key={c.citationId}
+                          style={{
+                            cursor: 'pointer',
+                            margin: '0 2px',
+                            padding: '0 6px',
+                            borderRadius: 4,
+                            fontWeight: isCited ? 700 : 500,
+                            fontSize: 11,
+                            lineHeight: '18px',
+                            height: 18,
+                            background: isCited
+                              ? (isLocal ? token.colorFillSecondary : '#e6f4ff')
+                              : token.colorFillAlter,
+                            borderColor: isCited
+                              ? (isLocal ? token.colorBorder : '#1677ff')
+                              : token.colorBorderSecondary,
+                            color: isCited
+                              ? (isLocal ? token.colorText : '#1677ff')
+                              : token.colorTextSecondary,
+                          }}
+                          onClick={() => groundedCallbacks?.onCitationActivate?.(c)}
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`${label} ${c.documentTitle}`}
+                        >
+                          {`${label} ${c.documentTitle || ''}`.trim()}
+                        </Tag>
+                      );
+                    })}
+                  </span>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Footer duration & tokens for grounded knowledge messages */}
