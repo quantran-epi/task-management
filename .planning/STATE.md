@@ -37,7 +37,7 @@ Progress: [██████████] 100%
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
-| 261017-owv | fix grounded citation rendering and synthesis prompt for vector and fulltext when graph has no paths | 2026-10-17 | — | complete | [261017-owv-fix-vector-fulltext-citations-no-graph](./quick/261017-owv-fix-vector-fulltext-citations-no-graph/) |
+| 261017-owv | fix grounded citation rendering and synthesis prompt for vector and fulltext when graph has no paths | 2026-10-17 | ba0f060 | complete | [261017-owv-fix-vector-fulltext-citations-no-graph](./quick/261017-owv-fix-vector-fulltext-citations-no-graph/) |
 | 261016-ukb | Fix Grounded AI answer readability and QuickPreviewDrawer z-index under AIChatDrawer | 2026-10-16 | — | complete | [261016-ukb-fix-grounded-ai-answer-readability-and-q](./quick/261016-ukb-fix-grounded-ai-answer-readability-and-q/) |
 | 261016-dck | setup local knowledge server and neo4j via docker compose for testing and taskmate integration | 2026-10-16 | — | complete | [261016-dck-setup-local-knowledge-server-neo4j-docker](./quick/261016-dck-setup-local-knowledge-server-neo4j-docker/) |
 | 261013-gfv | fix AI chat routing duplication, loading feedback, evidence synthesis, and planner host config | 2026-10-13 | — | complete | [261013-gfv-fix-ai-chat-duplicate-routed-questions-t](./quick/261013-gfv-fix-ai-chat-duplicate-routed-questions-t/) |
