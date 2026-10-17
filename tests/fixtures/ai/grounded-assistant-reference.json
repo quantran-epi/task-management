@@ -2496,11 +2496,11 @@
         {
           "id": "C1",
           "text": "PRC_PROCESS:60000006 liên kết trực tiếp tới TBL_CFG_CREDIT.",
-          "classification": "DIRECT",
+          "classification": "INFERRED",
           "citationIds": [
             "S1"
           ],
-          "pathId": "P_21_1"
+          "pathId": "P1"
         }
       ],
       "unsupportedParts": []
@@ -2517,7 +2517,7 @@
         "TBL_CFG_CREDIT"
       ],
       "requiredPathIds": [
-        "P_21_1"
+        "P1"
       ],
       "requiredCoverageWarnings": [],
       "requiredFallbackReason": null,
@@ -2666,7 +2666,7 @@
             "S1",
             "S2"
           ],
-          "pathId": "P_22_1"
+          "pathId": "P1"
         }
       ],
       "unsupportedParts": []
@@ -2685,7 +2685,7 @@
         "VW_SUMMARY_FEES"
       ],
       "requiredPathIds": [
-        "P_22_1"
+        "P1"
       ],
       "requiredCoverageWarnings": [],
       "requiredFallbackReason": null,
@@ -2865,7 +2865,7 @@
             "S2",
             "S3"
           ],
-          "pathId": "P_23_3HOP"
+          "pathId": "P1"
         }
       ],
       "unsupportedParts": []
@@ -2888,7 +2888,7 @@
         "WORKER_DISPATCH"
       ],
       "requiredPathIds": [
-        "P_23_3HOP"
+        "P1"
       ],
       "requiredCoverageWarnings": [],
       "requiredFallbackReason": null,
@@ -3007,11 +3007,11 @@
         {
           "id": "C1",
           "text": "BATCH_JOB_EOD thực thi gọi tới PKG_SETTLEMENT.",
-          "classification": "DIRECT",
+          "classification": "INFERRED",
           "citationIds": [
             "S1"
           ],
-          "pathId": "P_24_REV"
+          "pathId": "P1"
         }
       ],
       "unsupportedParts": []
@@ -3030,7 +3030,7 @@
         "PKG_SETTLEMENT"
       ],
       "requiredPathIds": [
-        "P_24_REV"
+        "P1"
       ],
       "requiredCoverageWarnings": [],
       "requiredFallbackReason": null,
@@ -3146,11 +3146,11 @@
         {
           "id": "C1",
           "text": "PRC_CONTAINER:60000006 bao gói và điều phối quy trình PRC_PROCESS:60000006.",
-          "classification": "DIRECT",
+          "classification": "INFERRED",
           "citationIds": [
             "S1"
           ],
-          "pathId": "P_25_DISAMBIG"
+          "pathId": "P1"
         }
       ],
       "unsupportedParts": []
@@ -3169,7 +3169,7 @@
         "PRC_PROCESS:60000006"
       ],
       "requiredPathIds": [
-        "P_25_DISAMBIG"
+        "P1"
       ],
       "requiredCoverageWarnings": [],
       "requiredFallbackReason": null,
@@ -3286,11 +3286,11 @@
         {
           "id": "C1",
           "text": "Graph path P_26_SNAP is anchored within snapshot gsnap_11111111.",
-          "classification": "DIRECT",
+          "classification": "INFERRED",
           "citationIds": [
             "S1"
           ],
-          "pathId": "P_26_SNAP"
+          "pathId": "P1"
         }
       ],
       "unsupportedParts": []
@@ -3309,7 +3309,7 @@
         "gsnap_11111111"
       ],
       "requiredPathIds": [
-        "P_26_SNAP"
+        "P1"
       ],
       "requiredCoverageWarnings": [],
       "requiredFallbackReason": null,
@@ -3805,7 +3805,8 @@
               "rawSnippet": "Thời hạn ân hạn là 45 ngày.",
               "publishedContentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "snapshotId": "gsnap_11111111",
-              "hasConflict": true
+              "hasConflict": true,
+              "conflictGroupId": "CONF_31"
             }
           },
           {
@@ -3827,27 +3828,19 @@
               "rawSnippet": "Thời hạn ân hạn là 55 ngày.",
               "publishedContentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
               "snapshotId": "gsnap_11111111",
-              "hasConflict": true
+              "hasConflict": true,
+              "conflictGroupId": "CONF_31"
             }
           }
         ],
         "paths": [],
         "conflictGroups": [
           {
-            "conflictId": "CONF_31",
-            "description": "Mâu thuẫn thời hạn ân hạn giữa 2 phiên bản",
-            "branches": [
-              {
-                "branchId": "B1",
-                "sourceDocumentId": "00000000-0000-4000-8000-000000000001",
-                "claimSnippet": "Thời hạn ân hạn là 45 ngày."
-              },
-              {
-                "branchId": "B2",
-                "sourceDocumentId": "00000000-0000-4000-8000-000000000002",
-                "claimSnippet": "Thời hạn ân hạn là 55 ngày."
-              }
-            ]
+            "conflictGroup": {
+              "conflictGroupId": "CONF_31",
+              "dimension": "Version",
+              "scopeProof": null
+            }
           }
         ],
         "modalityStatus": {
@@ -3882,7 +3875,7 @@
         {
           "id": "C1",
           "text": "Chính sách v1 nêu 45 ngày và Chính sách v2 nêu 55 ngày.",
-          "classification": "CONFLICTING",
+          "classification": "DIRECT",
           "citationIds": [
             "S1",
             "S2"
@@ -3935,10 +3928,10 @@
       "modelConfigured": true
     },
     "retrievalMock": {
-      "outcome": "NEEDS_CLARIFICATION",
+      "outcome": "UNSUPPORTED",
       "errorCode": null,
       "response": {
-        "outcome": "NEEDS_CLARIFICATION",
+        "outcome": "UNSUPPORTED",
         "snapshotId": "gsnap_11111111",
         "items": [],
         "paths": [],
@@ -3965,14 +3958,18 @@
           "coverageWarnings": [
             "Thiếu dữ liệu chi tiết thuật toán trong tài liệu xuất bản"
           ]
-        }
+        },
+        "suggestedRefinements": [
+          "Tìm kiếm quy tắc phân bổ nợ",
+          "Xem tài liệu chính sách thu hồi nợ"
+        ]
       }
     },
     "localResultMock": null,
     "synthesisMock": null,
     "expected": {
       "kind": "refine",
-      "outcome": "NEEDS_CLARIFICATION",
+      "outcome": "UNSUPPORTED",
       "requiredCitationIds": [],
       "forbiddenClaims": [
         "Hệ thống tự động suy diễn thuật toán nợ không cần căn cứ"
@@ -4174,11 +4171,11 @@
     "synthesisMock": {
       "schemaVersion": 1,
       "language": "en",
-      "conclusion": "Table column LIMIT_VAL holds standard numeric limit values; injected drop table commands are rejected as plain text.",
+      "conclusion": "Table column LIMIT_VAL holds Standard limit amount; injected drop table commands are rejected as plain text.",
       "claims": [
         {
           "id": "C1",
-          "text": "Column LIMIT_VAL contains standard limit amount.",
+          "text": "Column LIMIT_VAL contains Standard limit amount.",
           "classification": "DIRECT",
           "citationIds": [
             "S1"
@@ -4286,11 +4283,11 @@
     "synthesisMock": {
       "schemaVersion": 1,
       "language": "en",
-      "conclusion": "Daemon security specifications strictly forbid exposing internal authentication tokens or credentials in responses.",
+      "conclusion": "Daemon security specifications strictly require that internal credentials must never be exposed or logged in answer bodies.",
       "claims": [
         {
           "id": "C1",
-          "text": "Internal credentials and tokens are redacted and never returned.",
+          "text": "Internal credentials and canary tokens must never be exposed.",
           "classification": "DIRECT",
           "citationIds": [
             "S1"
@@ -4495,13 +4492,26 @@
     "localResultMock": {
       "ranges": [
         {
-          "sourceDocumentId": "00000000-0000-4000-8000-000000000001",
-          "sourceDocumentTitle": "Tài liệu cục bộ offline",
+          "documentId": "00000000-0000-4000-8000-000000000001",
+          "documentTitle": "Tài liệu cục bộ offline",
           "sectionAnchor": "local-calc",
           "lineStart": 1,
           "lineEnd": 10,
+          "startOffset": 0,
+          "endOffset": 100,
           "rawSnippet": "Thuật toán tính lãi cục bộ lưu tại bộ nhớ offline IndexedDB.",
-          "score": 18
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "score": 18,
+          "matchedTerms": [
+            "tinh",
+            "lai"
+          ],
+          "setMemberships": [
+            {
+              "setId": "10000000-0000-4000-8000-000000000001",
+              "setName": "Bộ tài liệu"
+            }
+          ]
         }
       ],
       "strongEvidence": true,
@@ -4538,7 +4548,7 @@
       ],
       "requiredPathIds": [],
       "requiredCoverageWarnings": [
-        "Máy chủ tri thức phản hồi chậm (timeout), chuyển sang tìm kiếm cục bộ"
+        "Máy chủ tri thức quá thời gian phản hồi (timeout)"
       ],
       "requiredFallbackReason": "TIMEOUT",
       "requiredRefinementCount": null,
