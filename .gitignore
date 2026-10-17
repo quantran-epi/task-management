@@ -16,3 +16,4 @@ src-tauri/target/
 .env
 .env.*
 !.env.example
+.benchmark-reports/
