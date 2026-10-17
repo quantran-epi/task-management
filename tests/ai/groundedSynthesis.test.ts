@@ -714,6 +714,29 @@ describe('groundedSynthesis', () => {
       const res = normalizeRawGroundedOutput(raw, ['L1'], []) as any;
       expect(res.claims[0].citationIds).toEqual(['L1']);
     });
+
+    it('29. extracts inline [S1] from claim.text when citationIds is omitted', () => {
+      const raw = {
+        conclusion: 'Done',
+        claims: [
+          { id: 'C1', text: 'Tiến trình 60000004 phân bổ nợ [S1].', classification: 'DIRECT' },
+        ],
+      };
+      const res = normalizeRawGroundedOutput(raw, allowedCitationIds, allowedPathIds) as any;
+      expect(res.claims).toHaveLength(1);
+      expect(res.claims[0].citationIds).toEqual(['S1']);
+    });
+
+    it('30. expands comma-separated citation strings like "S1, S2"', () => {
+      const raw = {
+        conclusion: 'Done',
+        claims: [
+          { id: 'C1', text: 'Fact', classification: 'DIRECT', citationIds: ['S1, S2'] },
+        ],
+      };
+      const res = normalizeRawGroundedOutput(raw, allowedCitationIds, allowedPathIds) as any;
+      expect(res.claims[0].citationIds).toEqual(['S1', 'S2']);
+    });
   });
 
   describe('buildSystemPrompt', () => {

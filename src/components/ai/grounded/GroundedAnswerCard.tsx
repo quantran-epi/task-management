@@ -1,5 +1,6 @@
 import React from 'react';
-import { Card, Collapse, Tag, Tooltip, Divider, theme } from 'antd';
+import { Card, Collapse, Button, Tag, Tooltip, Divider, theme } from 'antd';
+import { ReloadOutlined } from '@ant-design/icons';
 import {
   toGroundedAnswerDisplay,
   type ChatMessageGrounding,
@@ -8,6 +9,7 @@ import {
 import { GroundedBanner } from './GroundedBanner';
 import { ClaimBlock } from './ClaimBlock';
 import { ScopeVariationCard } from './ScopeVariationCard';
+import { CitationGroup } from './CitationGroup';
 
 export interface GroundedAnswerCardProps {
   grounding: ChatMessageGrounding;
@@ -30,6 +32,54 @@ export interface GroundedAnswerCardProps {
   resultsSlot?: React.ReactNode | undefined;
 }
 
+function renderProseWithCitations(
+  text: string,
+  citations: readonly PersistedCitation[],
+  onCitationActivate: (c: PersistedCitation) => void
+): React.ReactNode {
+  if (!text) return null;
+  const citationPattern = /\[(S\d+|L\d+)\]/g;
+  const citationMap = new Map<string, PersistedCitation>();
+  for (const c of citations) {
+    citationMap.set(c.citationId, c);
+  }
+
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = citationPattern.exec(text)) !== null) {
+    const rawMatch = match[0];
+    const cid = match[1]!;
+    const matchIndex = match.index;
+
+    if (matchIndex > lastIndex) {
+      parts.push(text.slice(lastIndex, matchIndex));
+    }
+
+    const citation = citationMap.get(cid);
+    if (citation) {
+      parts.push(
+        <CitationGroup
+          key={`${cid}-${matchIndex}`}
+          citations={[citation]}
+          onActivate={onCitationActivate}
+        />
+      );
+    } else {
+      parts.push(rawMatch);
+    }
+
+    lastIndex = matchIndex + rawMatch.length;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+
+  return parts.length > 0 ? parts : text;
+}
+
 /**
  * GroundedAnswerCard renders the complete ChatMessageGrounding outcome family
  * with answer-first layout, inline citation flow, conflict vs scope-variation routing,
@@ -39,7 +89,7 @@ export const GroundedAnswerCard: React.FC<GroundedAnswerCardProps> = ({
   grounding,
   onCitationActivate,
   onEvidenceOnlySynthesize,
-  onFreshLookup: _onFreshLookup,
+  onFreshLookup,
   onInvalidRetry,
   onAuthRepair,
   onConfigRepair,
@@ -49,11 +99,25 @@ export const GroundedAnswerCard: React.FC<GroundedAnswerCardProps> = ({
   candidatesSlot,
   refinementsSlot,
   resultsSlot,
-  isFreshLookingUp: _isFreshLookingUp = false,
+  isFreshLookingUp = false,
 }) => {
   const { token } = theme.useToken();
 
-  const renderSecondaryCta = () => null;
+  const renderSecondaryCta = () => {
+    if (!onFreshLookup) return null;
+    return (
+      <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
+        <Button
+          size="small"
+          icon={<ReloadOutlined />}
+          onClick={onFreshLookup}
+          loading={isFreshLookingUp}
+        >
+          Tra cứu lại
+        </Button>
+      </div>
+    );
+  };
 
   // Branch on grounding.outcome (12 outcomes from ChatMessageGroundingSchema)
   switch (grounding.outcome) {
@@ -214,7 +278,18 @@ export const GroundedAnswerCard: React.FC<GroundedAnswerCardProps> = ({
       if (grounding.modalityDiagnostics) {
         if (grounding.modalityDiagnostics.fulltext.status !== 'ok') degradedList.push('Văn bản');
         if (grounding.modalityDiagnostics.vector.status !== 'ok') degradedList.push('Vector');
-        if (grounding.modalityDiagnostics.graph.status !== 'ok') degradedList.push('Đồ thị');
+        if (grounding.modalityDiagnostics.graph.status !== 'ok') {
+          degradedList.push('Đồ thị');
+        } else if (grounding.modalityDiagnostics.graph.itemCount === 0 && isDegraded) {
+          degradedList.push('Đồ thị (0 kết quả)');
+        }
+      }
+      if (degradedList.length === 0 && isDegraded) {
+        if (grounding.coverageWarnings && grounding.coverageWarnings.length > 0) {
+          degradedList.push(grounding.coverageWarnings[0]!);
+        } else {
+          degradedList.push('Một số kênh tìm kiếm');
+        }
       }
 
       // Conflict / Variation classification (D-25, D-27, D-29)
@@ -350,9 +425,36 @@ export const GroundedAnswerCard: React.FC<GroundedAnswerCardProps> = ({
                   />
                 ))
               ) : (
-                <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5 }}>
-                  {displayAnswer.conclusion}
-                </p>
+                <div>
+                  <div style={{ margin: 0, fontSize: 14, lineHeight: 1.6 }}>
+                    {renderProseWithCitations(
+                      displayAnswer.conclusion,
+                      grounding.citations,
+                      onCitationActivate
+                    )}
+                  </div>
+                  {grounding.citations.length > 0 && (
+                    <div
+                      style={{
+                        marginTop: 10,
+                        paddingTop: 8,
+                        borderTop: `1px dashed ${token.colorBorderSecondary}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <span style={{ fontSize: 12, color: token.colorTextSecondary }}>
+                        Nguồn trích dẫn:
+                      </span>
+                      <CitationGroup
+                        citations={grounding.citations}
+                        onActivate={onCitationActivate}
+                      />
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           ) : (

@@ -128,7 +128,7 @@ export function buildSystemPrompt(
     '  - Paths: [ { id: "P1", summary: "...", steps: [...] }, ... ]',
     'RULES:',
     '1. "language": ' + languageInstruction,
-    '2. "conclusion": High-level executive synthesis answering the query directly in natural, beautiful, human-friendly Markdown formatting (using bullet points, bold key terms, tables or code blocks where appropriate) before technical citations.',
+    '2. "conclusion": High-level executive synthesis answering the query directly in natural, beautiful, human-friendly Markdown formatting (using bullet points, bold key terms, tables or code blocks where appropriate). You should include inline citation brackets such as [S1] or [S2] referring to the evidence.',
     '3. "confidence":',
     '   - "high": Query answered completely with direct evidence from authoritative documents or verified graph paths.',
     '   - "medium": Query partially answered or synthesized from multi-hop inferred paths without conflicts.',
@@ -137,7 +137,8 @@ export function buildSystemPrompt(
     '4. "confidenceReason": One sentence explaining the confidence assignment based on evidence coverage.',
     '5. "claims":',
     '   - Every claim must state an atomic fact supported by one or more citationIds ("S1", "L1", etc.).',
-    '   - classification is "DIRECT" if directly quoted/extracted from a citation (pathId must be null).',
+    '   - MANDATORY: When EVIDENCE citations are provided, you MUST extract the key factual statements into "claims", each citing the supporting citationId(s) (e.g. ["S1"], ["S2"]). NEVER return an empty claims array when EVIDENCE has citations.',
+    '   - If no graph paths are present (allowedPathIds is empty or paths are absent), all claims MUST have classification "DIRECT" with pathId null, citing the relevant citationIds (e.g. ["S1"]).',
     '   - classification is "INFERRED" if derived from graph traversal path (pathId must be "P1", "P2", etc.). Whenever an answer describes execution sequence, container flow, caller-callee steps, or entity relationships supported by a Path, you MUST set classification to "INFERRED" and pathId to the corresponding path id (e.g. "P1").',
     '   - If you cannot point to an exact citationId, DO NOT include the claim in claims. Put it in "unsupportedParts".',
     '6. "hypotheses":',
@@ -285,8 +286,25 @@ export function normalizeRawGroundedOutput(
       claimCitations = claim.citations;
     }
 
-    const resolvedCitations: string[] = [];
+    // If citationIds was omitted or empty, attempt extraction from inline text markers like [S1]
+    if (claimCitations.length === 0 && typeof claim.text === 'string') {
+      const inlineMatches = claim.text.matchAll(/\[([SL]\d+)\]/gi);
+      for (const m of inlineMatches) {
+        if (m[1]) claimCitations.push(m[1].toUpperCase());
+      }
+    }
+
+    const flatClaimCitations: unknown[] = [];
     for (const item of claimCitations) {
+      if (typeof item === 'string' && item.includes(',')) {
+        flatClaimCitations.push(...item.split(',').map((s) => s.trim()));
+      } else {
+        flatClaimCitations.push(item);
+      }
+    }
+
+    const resolvedCitations: string[] = [];
+    for (const item of flatClaimCitations) {
       let candidate = '';
       if (typeof item === 'number') {
         const primary = isLocalAuthority ? `L${item}` : `S${item}`;

@@ -880,4 +880,45 @@ describe('GroundedAnswerCard', () => {
     expect(container.textContent).not.toContain(secretQuery);
     expect(container.textContent).not.toContain(secretExcerpt);
   });
+
+  it('28. renders inline parsed citation chip and source group when claims is empty', () => {
+    const handleActivate = vi.fn();
+    const grounding = createMockGrounding({
+      answer: {
+        schemaVersion: 1,
+        language: 'vi',
+        conclusion: 'Tiến trình 60000004 chạy phân bổ nợ [S1].',
+        claims: [],
+        unsupportedParts: [],
+      },
+    });
+
+    render(
+      <GroundedAnswerCard
+        grounding={grounding}
+        onCitationActivate={handleActivate}
+      />
+    );
+
+    expect(screen.getByText('Nguồn trích dẫn:')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /\[1\]/ }).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('29. DEGRADED renders "Đồ thị (0 kết quả)" when graph status is ok but itemCount is 0', () => {
+    const grounding = createMockGrounding({
+      outcome: 'DEGRADED',
+      modalityDiagnostics: {
+        fulltext: { status: 'ok', latencyMs: 10, itemCount: 5 },
+        vector: { status: 'ok', latencyMs: 20, itemCount: 5 },
+        graph: { status: 'ok', latencyMs: 15, itemCount: 0 },
+      },
+    });
+
+    render(
+      <GroundedAnswerCard grounding={grounding} onCitationActivate={vi.fn()} />
+    );
+
+    expect(screen.getByText('Kết quả thiếu một phần phương thức')).toBeInTheDocument();
+    expect(screen.getByText(/Đồ thị \(0 kết quả\)/)).toBeInTheDocument();
+  });
 });
