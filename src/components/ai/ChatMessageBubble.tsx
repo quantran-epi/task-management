@@ -196,28 +196,47 @@ export function renderUserMessageWithMentions(content: string): React.ReactNode 
   return parts;
 }
 
+const CHAT_STOP_WORDS = new Set([
+  'của', 'và', 'hoặc', 'là', 'trong', 'không', 'được', 'với', 'này', 'cho',
+  'các', 'một', 'những', 'theo', 'trên', 'dưới', 'khi', 'như', 'vào', 'bởi',
+  'the', 'and', 'or', 'is', 'in', 'not', 'with', 'this', 'for', 'that', 'from',
+]);
+
 function attributeLinesWithCitations(
   text: string,
   citations: readonly PersistedCitation[]
 ): string {
   if (!text || citations.length === 0) return text;
-  if (/\[(S|L)?\d+\]/i.test(text)) return text;
+
+  const validCitationTags = new Set<string>();
+  citations.forEach((c, idx) => {
+    validCitationTags.add(c.citationId.toLowerCase());
+    validCitationTags.add(`s${idx + 1}`);
+    validCitationTags.add(`l${idx + 1}`);
+    validCitationTags.add(String(idx + 1));
+  });
 
   const lines = text.split('\n');
   const resultLines: string[] = [];
+  let attributedAny = false;
 
   for (const line of lines) {
     const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#') || trimmed.length < 8) {
-      resultLines.push(line);
-      continue;
-    }
-    if (/\[(S|L)?\d+\]/i.test(line)) {
+    if (!trimmed || trimmed.startsWith('#') || trimmed.length < 6) {
       resultLines.push(line);
       continue;
     }
 
-    const technicalTokens = trimmed.match(/[A-Za-z0-9_#$]{4,}/g) || [];
+    const existingTags = Array.from(trimmed.matchAll(/\[([SL]?\d+)\]/gi));
+    const hasValidCitation = existingTags.some((m) => m[1] && validCitationTags.has(m[1].toLowerCase()));
+    if (hasValidCitation) {
+      resultLines.push(line);
+      attributedAny = true;
+      continue;
+    }
+
+    const rawTokens = trimmed.match(/[\p{L}\p{N}_#$-]{2,}/gu) || [];
+    const technicalTokens = rawTokens.filter((t) => !CHAT_STOP_WORDS.has(t.toLowerCase()));
     if (technicalTokens.length === 0) {
       resultLines.push(line);
       continue;
@@ -237,7 +256,7 @@ function attributeLinesWithCitations(
         }
       }
 
-      if (score > maxScore && score >= 2) {
+      if (score > maxScore && score >= 1) {
         maxScore = score;
         bestCitation = c;
       }
@@ -245,8 +264,21 @@ function attributeLinesWithCitations(
 
     if (bestCitation) {
       resultLines.push(`${line} [${bestCitation.citationId}]`);
+      attributedAny = true;
     } else {
       resultLines.push(line);
+    }
+  }
+
+  // Fallback: If no line had any valid citation tag attached, attach top citation to last substantive line
+  if (!attributedAny && citations.length > 0 && resultLines.length > 0) {
+    const topCitation = citations[0]!;
+    for (let i = resultLines.length - 1; i >= 0; i--) {
+      const line = resultLines[i]!;
+      if (line.trim().length > 0 && !line.trim().startsWith('#')) {
+        resultLines[i] = `${line} [${topCitation.citationId}]`;
+        break;
+      }
     }
   }
 
@@ -362,12 +394,15 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
 
       // Inject interactive styling for inline citations like [1], [L1]
       let renderedHtml = renderSafeMarkdown(fullText);
+      const chipBg = token.colorPrimaryBg ?? '#e6f4ff';
+      const chipBorder = token.colorPrimaryBorder ?? '#91caff';
+      const chipColor = token.colorPrimary ?? '#1677ff';
       if (g.citations && g.citations.length > 0) {
         renderedHtml = renderedHtml.replace(/\[(L?[0-9]+|S[0-9]+)\]/g, (match, tag) => {
           const info = citationMap.get(tag);
           if (!info) return match;
           const label = info.isLocal ? `L${info.num}` : `${info.num}`;
-          return `<span class="grounded-inline-chip" data-citation-id="${info.citation.citationId}" style="cursor:pointer;margin:0 2px;padding:0 5px;border-radius:4px;font-weight:600;font-size:11px;line-height:16px;display:inline-flex;align-items:center;vertical-align:baseline;background:#e6f4ff;border:1px solid #1677ff;color:#1677ff;" title="${escapeAttr(info.citation.documentTitle)}">[${label}]</span>`;
+          return `<span class="grounded-inline-chip" data-citation-id="${info.citation.citationId}" style="cursor:pointer;margin:0 2px;padding:0 5px;border-radius:4px;font-weight:600;font-size:11px;line-height:16px;display:inline-flex;align-items:center;vertical-align:baseline;background:${chipBg};border:1px solid ${chipBorder};color:${chipColor};" title="${escapeAttr(info.citation.documentTitle)}">[${label}]</span>`;
         });
       }
 
@@ -437,7 +472,6 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
                       const info = citationMap.get(c.citationId);
                       const num = info ? info.num : 1;
                       const label = isLocal ? `[L${num}]` : `[${num}]`;
-                      const isCited = citedCitationIds.has(c.citationId);
 
                       return (
                         <Tag
@@ -447,19 +481,13 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
                             margin: '0 2px',
                             padding: '0 6px',
                             borderRadius: 4,
-                            fontWeight: isCited ? 700 : 500,
+                            fontWeight: 600,
                             fontSize: 11,
                             lineHeight: '18px',
                             height: 18,
-                            background: isCited
-                              ? (isLocal ? token.colorFillSecondary : '#e6f4ff')
-                              : token.colorFillAlter,
-                            borderColor: isCited
-                              ? (isLocal ? token.colorBorder : '#1677ff')
-                              : token.colorBorderSecondary,
-                            color: isCited
-                              ? (isLocal ? token.colorText : '#1677ff')
-                              : token.colorTextSecondary,
+                            background: chipBg,
+                            borderColor: chipBorder,
+                            color: chipColor,
                           }}
                           onClick={() => groundedCallbacks?.onCitationActivate?.(c)}
                           role="button"

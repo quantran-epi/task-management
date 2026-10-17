@@ -306,6 +306,180 @@ describe('ChatMessageBubble', () => {
     fireEvent.click(chips[1]!);
     expect(handleActivate).toHaveBeenCalledWith(messageWithoutBrackets.grounding!.citations[1]);
   });
+
+  it('guarantees inline citation chips appear for vector-only retrieval with natural Vietnamese text and bracketed numbers', () => {
+    const handleActivate = vi.fn();
+    const vectorOnlyMessage: ChatMessage = {
+      id: 'msg-vector-only',
+      threadId: 'thread-1',
+      role: 'assistant',
+      content: '',
+      grounding: {
+        schemaVersion: 1,
+        authority: 'server',
+        outcome: 'READY',
+        answer: {
+          schemaVersion: 1,
+          language: 'vi',
+          conclusion: 'Dự án TaskMate theo quy định [2024] quản lý tác vụ và năng suất cá nhân hoàn toàn cục bộ.',
+          claims: [],
+          unsupportedParts: [],
+        },
+        citations: [
+          {
+            citationId: 'S1',
+            documentId: '00000000-0000-0000-0000-000000000003',
+            documentTitle: 'Giới thiệu TaskMate',
+            sectionAnchor: 'Tổng quan',
+            lineStart: 1,
+            lineEnd: 5,
+            authority: 'server',
+            evidenceClass: 'OBSERVED',
+            snapshotId: 'gsnap_3',
+            publishedContentHash: 'c'.repeat(64),
+            citedExcerpt: 'TaskMate là ứng dụng quản lý tác vụ cá nhân và năng suất làm việc.',
+          },
+        ],
+        paths: [], // 0 graph paths (vector/fulltext only)
+        conflicts: [],
+        scope: null,
+        modalityDiagnostics: null,
+        coverageWarnings: [],
+        fallbackReason: 'NONE',
+        routerVersion: null,
+        promptVersion: 'v1',
+        modelId: 'gpt-4o',
+        createdAt: new Date().toISOString(),
+      },
+      createdAt: '2026-10-03T10:09:00Z',
+    };
+
+    const { container } = render(
+      <ChatMessageBubble
+        message={vectorOnlyMessage}
+        groundedCallbacks={{ onCitationActivate: handleActivate }}
+      />
+    );
+
+    // [2024] is preserved in the text
+    expect(screen.getByText(/\[2024\]/)).toBeInTheDocument();
+
+    // Inline citation chip [1] MUST be rendered in the answer body
+    const chips = container.querySelectorAll('.grounded-inline-chip');
+    expect(chips.length).toBeGreaterThanOrEqual(1);
+    expect(chips[0]).toHaveTextContent('[1]');
+
+    fireEvent.click(chips[0]!);
+    expect(handleActivate).toHaveBeenCalledWith(vectorOnlyMessage.grounding!.citations[0]);
+  });
+
+  it('renders unified and consistent border styling across all citation tags in Nguồn tài liệu', () => {
+    const graphMessageWithMultipleCitations: ChatMessage = {
+      id: 'msg-graph-consistent-style',
+      threadId: 'thread-1',
+      role: 'assistant',
+      content: '',
+      grounding: {
+        schemaVersion: 1,
+        authority: 'server',
+        outcome: 'READY',
+        answer: {
+          schemaVersion: 1,
+          language: 'vi',
+          conclusion: 'Tiến trình 60000004 xử lý dữ liệu [1].',
+          claims: [
+            {
+              id: 'C1',
+              text: 'Bước 1 thực thi.',
+              classification: 'DIRECT',
+              citationIds: ['S1'],
+              pathId: null,
+            },
+          ],
+          unsupportedParts: [],
+        },
+        citations: [
+          {
+            citationId: 'S1', // cited
+            documentId: '00000000-0000-0000-0000-000000000001',
+            documentTitle: 'Doc Server 1',
+            sectionAnchor: 'Sec 1',
+            lineStart: 1,
+            lineEnd: 5,
+            authority: 'server',
+            evidenceClass: 'OBSERVED',
+            snapshotId: 'gsnap_1',
+            publishedContentHash: 'a'.repeat(64),
+            citedExcerpt: 'Server excerpt 1',
+          },
+          {
+            citationId: 'S2', // uncited
+            documentId: '00000000-0000-0000-0000-000000000002',
+            documentTitle: 'Doc Server 2',
+            sectionAnchor: 'Sec 2',
+            lineStart: 1,
+            lineEnd: 5,
+            authority: 'server',
+            evidenceClass: 'OBSERVED',
+            snapshotId: 'gsnap_2',
+            publishedContentHash: 'b'.repeat(64),
+            citedExcerpt: 'Server excerpt 2',
+          },
+          {
+            citationId: 'L1', // local
+            documentId: '00000000-0000-0000-0000-000000000003',
+            documentTitle: 'Doc Local 1',
+            sectionAnchor: 'Sec 3',
+            lineStart: 1,
+            lineEnd: 5,
+            authority: 'local',
+            evidenceClass: 'LOCAL',
+            snapshotId: null,
+            publishedContentHash: null,
+            citedExcerpt: 'Local excerpt 1',
+          },
+        ],
+        paths: [
+          {
+            pathId: 'P1',
+            snapshotId: 'gsnap_1',
+            nodeUrns: ['urn:1', 'urn:2'],
+            edgeFactKeys: ['fact:1'],
+            hopClassifications: ['OBSERVED'],
+            hopCitationIds: [['S1']],
+            classification: 'OBSERVED',
+            hasConflict: false,
+          },
+        ],
+        conflicts: [],
+        scope: null,
+        modalityDiagnostics: null,
+        coverageWarnings: [],
+        fallbackReason: 'NONE',
+        routerVersion: null,
+        promptVersion: 'v1',
+        modelId: 'gpt-4o',
+        createdAt: new Date().toISOString(),
+      },
+      createdAt: '2026-10-03T10:10:00Z',
+    };
+
+    const { container } = render(
+      <ChatMessageBubble message={graphMessageWithMultipleCitations} />
+    );
+
+    const sourceTags = container.querySelectorAll('.ant-tag');
+    expect(sourceTags.length).toBe(3);
+
+    // Verify all 3 tags have identical unified border color (no dark blue vs gray mismatch)
+    const borderColors = Array.from(sourceTags).map((tag) => (tag as HTMLElement).style.borderColor);
+    expect(new Set(borderColors).size).toBe(1);
+    expect(borderColors[0]).toBeTruthy();
+
+    // Verify all 3 tags have identical unified background
+    const bgColors = Array.from(sourceTags).map((tag) => (tag as HTMLElement).style.background);
+    expect(new Set(bgColors).size).toBe(1);
+  });
 });
 
 describe('ChatMessageList', () => {

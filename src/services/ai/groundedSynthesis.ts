@@ -153,12 +153,19 @@ export function buildSystemPrompt(
   ].join('\n');
 }
 
+const SYNTHESIS_STOP_WORDS = new Set([
+  'của', 'và', 'hoặc', 'là', 'trong', 'không', 'được', 'với', 'này', 'cho',
+  'các', 'một', 'những', 'theo', 'trên', 'dưới', 'khi', 'như', 'vào', 'bởi',
+  'the', 'and', 'or', 'is', 'in', 'not', 'with', 'this', 'for', 'that', 'from',
+]);
+
 function findBestMatchingCitation(
   line: string,
   promptEvidence: readonly { id: string; text?: string; excerpt?: string; documentTitle?: string }[],
   allowedCitationSet: Set<string>
 ): string | null {
-  const technicalTokens = line.match(/[A-Za-z0-9_#$]{4,}/g) || [];
+  const rawTokens = line.match(/[\p{L}\p{N}_#$-]{2,}/gu) || [];
+  const technicalTokens = rawTokens.filter((t) => !SYNTHESIS_STOP_WORDS.has(t.toLowerCase()));
   if (technicalTokens.length === 0) return null;
 
   let bestId: string | null = null;
@@ -176,7 +183,7 @@ function findBestMatchingCitation(
       }
     }
 
-    if (score > maxScore && score >= 2) {
+    if (score > maxScore && score >= 1) {
       maxScore = score;
       bestId = ev.id;
     }
@@ -462,7 +469,19 @@ export function normalizeRawGroundedOutput(
 
     if (hasModifiedConclusion) {
       obj.conclusion = modifiedLines.join('\n');
+    } else if (allowedCitationIds.length > 0 && typeof obj.conclusion === 'string' && obj.conclusion.trim().length > 0) {
+      const defaultCitationId = allowedCitationIds[0]!;
+      obj.conclusion = `${obj.conclusion} [${defaultCitationId}]`;
+      hasModifiedConclusion = true;
+      synthesizedClaims.push({
+        id: `C${claimCounter++}`,
+        text: obj.conclusion.replace(/\[[SL]?\d+\]/gi, '').trim(),
+        classification: 'DIRECT',
+        citationIds: [defaultCitationId],
+        pathId: null,
+      });
     }
+
     if (normalizedClaims.length === 0 && synthesizedClaims.length > 0) {
       normalizedClaims.push(...synthesizedClaims);
     }
