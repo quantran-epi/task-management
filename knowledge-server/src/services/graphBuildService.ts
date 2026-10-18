@@ -213,20 +213,28 @@ export class GraphBuildService {
       let inferredEvidence: GraphEvidenceRecord[] = [];
       const proseQuarantines: QuarantinedIdentifier[] = [];
 
-      if (this.proseExtraction) {
-        const segments = collectUncoveredProse(sourceSnapshot, extractionResult.consumedRanges);
-        if (segments.length > 0) {
-          const proseResult = await extractProseCandidatesOnce({
-            endpoint: this.proseExtraction.endpoint,
-            model: this.proseExtraction.model,
-            ...(this.proseExtraction.apiKey ? { apiKey: this.proseExtraction.apiKey } : {}),
-            segments,
-            resolvedEndpoints: extractionResult.nodes,
-            ...(this.proseExtraction.fetchFn ? { fetchFn: this.proseExtraction.fetchFn } : {}),
-          });
-          inferredFacts = proseResult.facts;
-          inferredEvidence = proseResult.evidence;
-          proseQuarantines.push(...proseResult.quarantines);
+      if (this.proseExtraction && this.proseExtraction.endpoint) {
+        try {
+          const segments = collectUncoveredProse(sourceSnapshot, extractionResult.consumedRanges);
+          if (segments.length > 0) {
+            const proseResult = await extractProseCandidatesOnce({
+              endpoint: this.proseExtraction.endpoint,
+              model: this.proseExtraction.model,
+              ...(this.proseExtraction.apiKey ? { apiKey: this.proseExtraction.apiKey } : {}),
+              segments,
+              resolvedEndpoints: extractionResult.nodes,
+              ...(this.proseExtraction.fetchFn ? { fetchFn: this.proseExtraction.fetchFn } : {}),
+            });
+            inferredFacts = proseResult.facts;
+            inferredEvidence = proseResult.evidence;
+            proseQuarantines.push(...proseResult.quarantines);
+          }
+        } catch (proseErr) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            '[PROSE_EXTRACTION_FALLBACK] Error during prose extraction; falling back to deterministic only:',
+            proseErr
+          );
         }
       }
 
