@@ -392,4 +392,60 @@ describe('executable startup', () => {
       expect(opts.remotePlanner.timeoutMs).toBe(30000);
     });
   });
+
+  describe('Prose extraction configuration & fallback hardening', () => {
+    it('allows PROSE_EXTRACTION_ENABLED=true and falls back to PLANNER credentials if PROSE_EXTRACTION_ENDPOINT is not explicitly set', () => {
+      const opts = readKnowledgeServerOptions({
+        KNOWLEDGE_SERVER_TOKEN: 'valid-token',
+        KNOWLEDGE_ALLOWED_ORIGINS: VALID_ORIGIN,
+        PROSE_EXTRACTION_ENABLED: 'true',
+        PLANNER_REMOTE_ENABLED: 'true',
+        PLANNER_ENDPOINT: 'https://9router.internal.shb.vn',
+        PLANNER_MODEL: 'qwen2.5-72b-instruct',
+        PLANNER_API_KEY: 'secret-key',
+        PLANNER_REMOTE_ALLOWED_HOSTS: '9router.internal.shb.vn',
+      });
+      expect(opts.proseExtraction.enabled).toBe(true);
+      expect(opts.proseExtraction.endpoint).toBe('https://9router.internal.shb.vn');
+      expect(opts.proseExtraction.model).toBe('qwen2.5-72b-instruct');
+      expect(opts.proseExtraction.apiKey).toBe('secret-key');
+      expect(opts.proseExtraction.allowedHosts).toEqual(['9router.internal.shb.vn']);
+    });
+
+    it('does not crash the server if PROSE_EXTRACTION_ENABLED=true but no LLM endpoint is provided; sets enabled=false', () => {
+      const opts = readKnowledgeServerOptions({
+        KNOWLEDGE_SERVER_TOKEN: 'valid-token',
+        KNOWLEDGE_ALLOWED_ORIGINS: VALID_ORIGIN,
+        PROSE_EXTRACTION_ENABLED: 'true',
+        PLANNER_REMOTE_ENABLED: 'false',
+      });
+      expect(opts.proseExtraction.enabled).toBe(false);
+      expect(opts.proseExtraction.endpoint).toBeUndefined();
+    });
+
+    it('allows http:// protocol for localhost / loopback endpoints', () => {
+      const opts = readKnowledgeServerOptions({
+        KNOWLEDGE_SERVER_TOKEN: 'valid-token',
+        KNOWLEDGE_ALLOWED_ORIGINS: VALID_ORIGIN,
+        PROSE_EXTRACTION_ENABLED: 'true',
+        PROSE_EXTRACTION_ENDPOINT: 'http://127.0.0.1:20128',
+        PROSE_EXTRACTION_MODEL: 'local-qwen',
+      });
+      expect(opts.proseExtraction.enabled).toBe(true);
+      expect(opts.proseExtraction.endpoint).toBe('http://127.0.0.1:20128');
+    });
+
+    it('rejects http:// protocol for non-loopback endpoints', () => {
+      expect(() =>
+        readKnowledgeServerOptions({
+          KNOWLEDGE_SERVER_TOKEN: 'valid-token',
+          KNOWLEDGE_ALLOWED_ORIGINS: VALID_ORIGIN,
+          PROSE_EXTRACTION_ENABLED: 'true',
+          PROSE_EXTRACTION_ENDPOINT: 'http://remote.host.com',
+          PROSE_EXTRACTION_MODEL: 'test-model',
+          PROSE_EXTRACTION_ALLOWED_HOSTS: 'remote.host.com',
+        })
+      ).toThrow(/PROSE_EXTRACTION_ENDPOINT must use HTTPS protocol/);
+    });
+  });
 });
