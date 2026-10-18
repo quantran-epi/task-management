@@ -4,6 +4,8 @@ import { DailyReviewModal } from '../../../src/components/dailyReview/DailyRevie
 import { TaskPlannerDatabase } from '../../../src/db';
 import 'fake-indexeddb/auto';
 import type { Task, PlannedAllocation } from '../../../src/types/models';
+import * as nineRouterClient from '../../../src/services/ai/nineRouterClient';
+import * as nineRouterTokenService from '../../../src/services/ai/nineRouterTokenService';
 
 describe('DailyReviewModal', () => {
   let db: TaskPlannerDatabase;
@@ -11,9 +13,10 @@ describe('DailyReviewModal', () => {
   beforeEach(async () => {
     db = new TaskPlannerDatabase('test-daily-review-' + Math.random());
     await db.open();
+    vi.restoreAllMocks();
   });
 
-  it('renders modal with summary metrics and date header', async () => {
+  it('renders modal with summary metrics and date header for briefing by default', async () => {
     const onClose = vi.fn();
 
     render(
@@ -25,12 +28,12 @@ describe('DailyReviewModal', () => {
       />
     );
 
-    expect(screen.getByText(/Tổng kết ngày/)).toBeInTheDocument();
-    expect(screen.getByText('Đã ghi nhận (Actual)')).toBeInTheDocument();
-    expect(screen.getByText('Công suất mục tiêu')).toBeInTheDocument();
+    expect(screen.getByText(/Khởi động ngày \(Briefing\)/)).toBeInTheDocument();
+    expect(screen.getByText('Kế hoạch (Planned)')).toBeInTheDocument();
+    expect(screen.getByText('Công suất ngày')).toBeInTheDocument();
   });
 
-  it('displays empty state when no incomplete tasks exist', async () => {
+  it('renders debriefing view when initialTab is debriefing', async () => {
     const onClose = vi.fn();
 
     render(
@@ -38,6 +41,50 @@ describe('DailyReviewModal', () => {
         open={true}
         onClose={onClose}
         date="2026-10-02"
+        initialTab="debriefing"
+        db={db}
+      />
+    );
+
+    expect(screen.getByText(/Tổng kết ngày \(Debriefing\)/)).toBeInTheDocument();
+    expect(screen.getByText('Đã ghi nhận (Actual)')).toBeInTheDocument();
+    expect(screen.getByText('Công suất mục tiêu')).toBeInTheDocument();
+  });
+
+  it('allows switching between Briefing and Debriefing tabs', async () => {
+    const onClose = vi.fn();
+
+    render(
+      <DailyReviewModal
+        open={true}
+        onClose={onClose}
+        date="2026-10-02"
+        db={db}
+      />
+    );
+
+    // Initial is Briefing
+    expect(screen.getByText('Kế hoạch (Planned)')).toBeInTheDocument();
+
+    // Click Debriefing tab
+    const debriefingTab = screen.getByText('Debriefing (Tổng kết)');
+    fireEvent.click(debriefingTab);
+
+    await waitFor(() => {
+      expect(screen.getByText('Đã ghi nhận (Actual)')).toBeInTheDocument();
+      expect(screen.getByText('Công suất mục tiêu')).toBeInTheDocument();
+    });
+  });
+
+  it('displays empty state in Debriefing when no incomplete tasks exist', async () => {
+    const onClose = vi.fn();
+
+    render(
+      <DailyReviewModal
+        open={true}
+        onClose={onClose}
+        date="2026-10-02"
+        initialTab="debriefing"
         db={db}
       />
     );
@@ -47,7 +94,7 @@ describe('DailyReviewModal', () => {
     });
   });
 
-  it('renders incomplete tasks and allows rolling over to tomorrow', async () => {
+  it('renders incomplete tasks in Debriefing and allows rolling over to tomorrow', async () => {
     const onClose = vi.fn();
     const taskId = 'a0000000-0000-4000-8000-000000000001';
     const allocId = 'b0000000-0000-4000-8000-000000000001';
@@ -79,6 +126,7 @@ describe('DailyReviewModal', () => {
         open={true}
         onClose={onClose}
         date="2026-10-02"
+        initialTab="debriefing"
         db={db}
       />
     );
@@ -102,6 +150,60 @@ describe('DailyReviewModal', () => {
       expect(tomorrowAllocs.length).toBe(1);
       expect(tomorrowAllocs[0]?.taskId).toBe(taskId);
       expect(tomorrowAllocs[0]?.allocatedMinutes).toBe(60);
+    });
+  });
+
+  it('shows graceful warning message when AI key is missing on AI button click', async () => {
+    const onClose = vi.fn();
+    vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('');
+
+    render(
+      <DailyReviewModal
+        open={true}
+        onClose={onClose}
+        date="2026-10-02"
+        db={db}
+      />
+    );
+
+    const aiBtn = screen.getByText('Nhận diện & Gợi ý AI');
+    fireEvent.click(aiBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Chưa cấu hình API Key cho Trợ lý AI/)).toBeInTheDocument();
+    });
+  });
+
+  it('streams AI insight when AI key is present and button is clicked', async () => {
+    const onClose = vi.fn();
+    vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-key');
+    vi.spyOn(nineRouterTokenService, 'getNineRouterConfig').mockResolvedValue({
+      endpoint: 'http://localhost:20128',
+      defaultModel: 'gpt-4o',
+      charLimit: 12000,
+    });
+
+    async function* mockStream() {
+      yield 'Tập trung hoàn thành ';
+      yield 'task ưu tiên cao trước.';
+    }
+
+    vi.spyOn(nineRouterClient, 'streamChatCompletion').mockImplementation(() => mockStream() as any);
+
+    render(
+      <DailyReviewModal
+        open={true}
+        onClose={onClose}
+        date="2026-10-02"
+        db={db}
+      />
+    );
+
+    const aiBtn = screen.getByText('Nhận diện & Gợi ý AI');
+    fireEvent.click(aiBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Tập trung hoàn thành task ưu tiên cao trước./)).toBeInTheDocument();
     });
   });
 
