@@ -151,6 +151,7 @@ Progress: [██████████] 100%
 | 261016-g5i | Fix 5 AI Grounded Chat & Knowledge issues: graph paths, full history, thinking separation, stop button, retrieval stability | 2026-10-16 | — | complete | [261016-fix-5-grounded-chat-issues](./quick/261016-fix-5-grounded-chat-issues/) |
 | 261017-dti | Fix Document Tree Item Indentation for Special Folders and Subfolders | 2026-10-17 | — | complete | [261017-dti-fix-document-tree-item-indentation](./quick/261017-dti-fix-document-tree-item-indentation/) |
 | 261017-j6q | reminder drawer complete button and context menu quick add reminder | 2026-10-17 | — | complete | [261017-j6q-reminder-drawer-complete-and-context-men](./quick/261017-j6q-reminder-drawer-complete-and-context-men/) |
+| 261018-mc9 | fix ai chat citation document title overflow issue | 2026-10-18 | — | complete | [261018-mc9-fix-ai-chat-citation-document-title-over](./quick/261018-mc9-fix-ai-chat-citation-document-title-over/) |
 
 ## Performance Metrics
 

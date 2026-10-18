@@ -46,8 +46,21 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
       key: 'documentTitle',
       ellipsis: true,
       render: (title: string, record) => (
-        <div>
-          <span style={{ fontWeight: 500, color: token.colorText }}>{title}</span>
+        <div style={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
+          <span
+            style={{
+              fontWeight: 500,
+              color: token.colorText,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              minWidth: 0,
+              flex: 1,
+            }}
+            title={title}
+          >
+            {title}
+          </span>
           {record.authority === 'local' && (
             <Tag
               style={{
@@ -57,6 +70,7 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
                 background: token.colorFillSecondary,
                 borderColor: token.colorBorder,
                 color: token.colorTextSecondary,
+                flexShrink: 0,
               }}
             >
               Local

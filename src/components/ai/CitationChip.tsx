@@ -157,7 +157,7 @@ export const CitationChip: React.FC<CitationChipProps> = ({
 
   const chipContent = (
     <Tag
-      icon={<FileTextOutlined style={{ marginRight: 4 }} />}
+      icon={<FileTextOutlined style={{ marginRight: 4, flexShrink: 0 }} />}
       color="geekblue"
       style={{
         cursor: 'pointer',
@@ -169,13 +169,23 @@ export const CitationChip: React.FC<CitationChipProps> = ({
         display: 'inline-flex',
         alignItems: 'center',
         verticalAlign: 'baseline',
+        maxWidth: 200,
       }}
       onClick={handleActivate}
       role="button"
       tabIndex={0}
       onKeyDown={handleKeyDown}
     >
-      {displayLabel}
+      <span
+        style={{
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          minWidth: 0,
+        }}
+      >
+        {displayLabel}
+      </span>
     </Tag>
   );
 
@@ -183,7 +193,7 @@ export const CitationChip: React.FC<CitationChipProps> = ({
     return (
       <Tooltip
         title={
-          <div style={{ maxWidth: 300, maxHeight: 150, overflowY: 'auto', fontSize: 12 }}>
+          <div style={{ maxWidth: 300, maxHeight: 150, overflowY: 'auto', fontSize: 12, wordBreak: 'break-word' }}>
             <div style={{ fontWeight: 600, marginBottom: 4 }}>{displayLabel}</div>
             <div style={{ whiteSpace: 'pre-wrap', opacity: 0.9 }}>{snippet.trim()}</div>
           </div>

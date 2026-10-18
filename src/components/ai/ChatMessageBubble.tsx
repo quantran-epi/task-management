@@ -540,7 +540,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
                       <Tooltip
                         key={c.citationId}
                         title={
-                          <div style={{ maxWidth: 360, whiteSpace: 'pre-wrap' }}>
+                          <div style={{ maxWidth: 360, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                             <div style={{ fontWeight: 600 }}>{c.documentTitle || ''}</div>
                             {c.relevanceReason && (
                               <div style={{ marginTop: 4, fontSize: 12 }}>
@@ -562,6 +562,12 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
                             fontSize: 11,
                             lineHeight: '18px',
                             height: 18,
+                            maxWidth: 220,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            verticalAlign: 'middle',
+                            display: 'inline-block',
                             background: chipBg,
                             borderColor: chipBorder,
                             color: chipColor,
