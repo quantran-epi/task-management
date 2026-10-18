@@ -44,6 +44,7 @@
 - [x] **Phase 19: Grounded Assistant, Provenance Citations & Offline Fallback** - AI Chat Drawer synthesis with source citations, step-by-step path cards, conflict warnings, abstention handling, and local BM25 fallback. (completed 2026-10-11)
 - [x] **Phase 19.1: Production Neo4j Integration & Live Retrieval Validation** (INSERTED) - Deploy knowledge stack to SHB Kubernetes cluster and prove process 60000006 end-to-end through TaskMate UI against persistent Neo4j storage. (completed 2026-10-13)
 - [ ] **Phase 20: Benchmark Evaluation Suite, Integrity Hardening & Credential Isolation** - 30-50 question evaluation benchmark, path/claim verification, index rebuild tests, and server-side secret isolation.
+- [ ] **Phase 21: Knowledge Graph Entity Extraction & Semantic Retrieval Improvement** - Eliminate dummy STEP_xxx entities, extract TEN_BUOC & WRITES, enhance Neo4j seed resolution, and activate hybrid prose extraction.
 
 ## Phase Details
 
@@ -191,7 +192,7 @@
 
 ### Phase 14: Knowledge Base Integration (Docs, Linking & AI Retrieval)
 
-**Goal:** Deliver an offline-first Personal Knowledge Management (PKM) engine with 3-column Docs workspace, folder tree taxonomy, Markdown split preview with outline ToC, Wiki-link bidirectional linking, 1-Click Smart Ingestion flow, lexical BM25 search with Vietnamese diacritic tolerance, and grounded AI retrieval with clickable citations.
+**Goal:** Deliver an offline-first Personal Knowledge Management (PKM) engine with 3-column Docs workspace, folder tree taxonomy, Markdown split editor/reader, Wiki-links, BM25 search, and grounded AI retrieval with clickable citations.
 **Requirements**: REQ-14.1, REQ-14.2, REQ-14.3, REQ-14.4, REQ-14.5, REQ-14.6
 **Depends on:** Phase 13
 **Plans:** 4/4 plans complete
@@ -385,7 +386,7 @@ Plans:
 - [x] 19-08-PLAN.md — groundedSynthesis: structured completion + bounded repair (Wave 3)
 - [x] 19-11-PLAN.md — CitationChip extension + GroundedBanner/CitationGroup/ClaimBlock/GroundedAnswerCard (Wave 3)
 
-**Wave 4** *(blocked on Wave 3 completion)*
+**Wave 4** *(blocked on Wave 2 completion)*
 
 - [x] 19-09-PLAN.md — groundedTurn state machine + synthesizeFromStoredEvidence (Wave 4)
 - [x] 19-12-PLAN.md — GraphPathCard/SourcesPanel/CandidateChipList/DiagnosticsPanel/EvidenceOnlyCard/ScopeChipsBar/IntentRoutingPrompt (Wave 4)
@@ -467,3 +468,23 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 20-03-PLAN.md — Semantic Rebuild Equivalence, Offline Recovery Taxonomy & Credential Isolation (Wave 3)
+
+### Phase 21: Knowledge Graph Entity Extraction & Semantic Retrieval Improvement
+
+**Goal:** Eliminate dummy `STEP_xxx` entity extraction, extract meaningful `TEN_BUOC` and `WRITES` (DatabaseObject/WRITES_TO) from process tables, improve Neo4j seed resolution for natural language queries, and activate hybrid LLM prose extraction so graph retrieval yields relevant items (> 0 count).
+**Reference:** `.planning/proposals/knowledge-graph-extraction-fix-plan.md`
+**Requirements**: GRAPH-EXTRACT-01, GRAPH-RETRIEVE-01
+**Depends on**: Phase 20
+**Plans:** 4 plans in 3 waves
+
+Plans:
+
+**Wave 1**
+- [ ] 21-01-PLAN.md — Deterministic extraction for step names, database writes, and code spans (Wave 1)
+- [ ] 21-02-PLAN.md — Knowledge document prompt and template standardization in NotesView (Wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 21-03-PLAN.md — Semantic seed resolution and graph retrieval alignment (Wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 21-04-PLAN.md — Hybrid prose extraction activation and fallback hardening (Wave 3)
