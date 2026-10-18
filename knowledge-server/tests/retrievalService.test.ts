@@ -1426,5 +1426,141 @@ describe('18-W0-03B: RetrievalService Pinned Parallel Orchestration & Timeouts',
       expect(traversedCriteria.plan.overallMaxDepth).toBe(1);
       expect(response.paths).toHaveLength(1);
     });
+
+    it('GRAPH-RETRIEVE-01: retrieves graph items and paths when natural language query matches ProcessStep entity', async () => {
+      const indexGateway = new DeterministicIndexGatewayStub();
+      indexGateway.activeSnapshotId = snapshotId;
+      const embedding = new DeterministicEmbeddingStub();
+      const planner = new DeterministicPlannerStub();
+      const graphGateway = new DeterministicGraphGatewayStub();
+
+      const query = 'quy trình thanh toán hoá đơn diễn ra thế nào?';
+      const stepUrn = 'urn:plannermate:process:ProcessStep:step_khoi_tao_thanh_toan';
+      const tableUrn = 'urn:plannermate:oracle:DatabaseObject:MAIN1.TBL_PAYMENT_LOG';
+      const edgeFactKey = 'f'.repeat(64);
+
+      const stepCandidate: ClarificationCandidate = {
+        urn: stepUrn,
+        canonicalName: 'Khởi tạo giao dịch thanh toán',
+        kind: 'ProcessStep',
+      };
+
+      // Mock resolveEntities to return stepCandidate when tokens include thanh toan
+      graphGateway.resolveEntities = async (_s, tokens) => {
+        const matches = tokens.some((t) => t.toLowerCase().includes('thanh toan') || t.toLowerCase().includes('thanh toán'));
+        return matches ? [stepCandidate] : [];
+      };
+
+      planner.scriptedResult = {
+        type: 'plan',
+        plan: {
+          planId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a99',
+          queryIntent: 'LOOKUP',
+          seedUrns: [stepUrn],
+          traversalSteps: [
+            { relationType: 'WRITES_TO', direction: 'OUTGOING', maxHops: 1 },
+          ],
+          overallMaxDepth: 1,
+          includeInferred: false,
+          fulltextKeywords: ['thanh toán', 'hoá đơn'],
+          semanticQuery: query,
+        },
+      };
+
+      indexGateway.queryFulltext = async () => [
+        {
+          type: 'chunk',
+          id: 'chunk-step-01',
+          score: 1.0,
+          modalitiesContributed: ['fulltext'],
+          sourceDocumentId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
+          sourceDocumentTitle: 'Quy trình thanh toán hoá đơn',
+          publishedContentHash: 'a'.repeat(64),
+          sectionAnchor: 'Sec',
+          lineStart: 1,
+          lineEnd: 5,
+          rawSnippet: 'Khởi tạo giao dịch thanh toán hoá đơn diễn ra bằng cách ghi vào MAIN1.TBL_PAYMENT_LOG',
+          snapshotId,
+          hasConflict: false,
+        },
+      ];
+
+      graphGateway.traverse = async () => ({
+        entities: [
+          {
+            type: 'entity',
+            id: stepUrn,
+            score: 1.0,
+            modalitiesContributed: ['graph'],
+            urn: stepUrn,
+            canonicalName: 'Khởi tạo giao dịch thanh toán',
+            kind: 'ProcessStep',
+            snapshotId,
+            hasConflict: false,
+          },
+          {
+            type: 'entity',
+            id: tableUrn,
+            score: 1.0,
+            modalitiesContributed: ['graph'],
+            urn: tableUrn,
+            canonicalName: 'MAIN1.TBL_PAYMENT_LOG',
+            kind: 'DatabaseObject',
+            snapshotId,
+            hasConflict: false,
+          },
+        ],
+        edges: [
+          {
+            type: 'edge',
+            id: edgeFactKey,
+            score: 1.0,
+            modalitiesContributed: ['graph'],
+            factKey: edgeFactKey,
+            sourceUrn: stepUrn,
+            relationType: 'WRITES_TO',
+            targetUrn: tableUrn,
+            evidenceClass: 'OBSERVED',
+            supportingChunkIds: ['chunk-step-01'],
+            snapshotId,
+            hasConflict: false,
+          },
+        ],
+        paths: [
+          {
+            nodeUrns: [stepUrn, tableUrn],
+            edgeFactKeys: [edgeFactKey],
+            hopClassifications: ['OBSERVED'],
+            hopSupportingChunkIds: [['chunk-step-01']],
+            edgeSnapshotIds: [snapshotId],
+            hasConflict: false,
+          },
+        ],
+        truncated: false,
+      });
+
+      const service = new RetrievalService({
+        indexGateway,
+        embeddingProvider: embedding,
+        queryPlanner: planner,
+        graphGateway,
+      });
+
+      const response = await service.retrieve(setId, {
+        query,
+        limit: 20,
+        includeInferred: false,
+        recentTurns: [],
+      });
+
+      expect(response.outcome).toBe('READY');
+      const graphItems = response.items.filter((item) => item.modalitiesContributed.includes('graph'));
+      expect(graphItems.length).toBeGreaterThan(0);
+      expect(response.modalitiesUsed).toContain('graph');
+      expect(response.modalityStatus.graph.status).toBe('ok');
+      expect(response.modalityStatus.graph.itemCount).toBeGreaterThan(0);
+      expect(response.paths).toHaveLength(1);
+      expect(response.paths[0]?.nodeUrns).toEqual([stepUrn, tableUrn]);
+    });
   });
 });
