@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Button, Dropdown, Input, Modal, Tooltip, Typography, Empty, type MenuProps } from 'antd';
+import { Button, Dropdown, Input, Modal, Segmented, Tooltip, Typography, Empty, type MenuProps } from 'antd';
 import {
   FolderOutlined,
   FolderFilled,
@@ -65,6 +65,8 @@ export interface DocFolderTreeProps {
   onDeleteDoc?: ((doc: Note) => void) | undefined;
   onRestoreDoc?: ((doc: Note) => void) | undefined;
   onMoveDocToFolder?: ((doc: Note) => void) | undefined;
+  /** Custom panel width when resizable */
+  width?: number | undefined;
 }
 
 const PAGE_SIZE = 20;
@@ -89,9 +91,11 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
   onDeleteDoc,
   onRestoreDoc,
   onMoveDocToFolder,
+  width,
 }) => {
   const [searchInput, setSearchInput] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [searchScope, setSearchScope] = useState<'all' | 'folder'>('all');
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -132,16 +136,79 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
   const rootDirectDocs = useMemo(() => activeNotes.filter((n) => !n.parentId && n.type === 'document'), [activeNotes]);
   const deletedDocs = useMemo(() => trashNotes.filter((n) => n.type !== 'folder'), [trashNotes]);
 
+  // Active folder / scope info
+  const activeScopeInfo = useMemo(() => {
+    if (activeFilter === 'pinned') {
+      return { type: 'special' as const, name: 'Đã ghim', descendantFolderIds: null };
+    }
+    if (activeFilter === 'quick_notes') {
+      return { type: 'special' as const, name: 'Ghi chú nhanh', descendantFolderIds: null };
+    }
+    if (activeFilter === 'root_docs') {
+      return { type: 'special' as const, name: 'Tài liệu chung', descendantFolderIds: null };
+    }
+    if (activeFilter === 'trash') {
+      return { type: 'special' as const, name: 'Thùng rác', descendantFolderIds: null };
+    }
+
+    const folder = notes.find((n) => n.id === activeFilter && n.type === 'folder' && !n.deletedAt);
+    if (!folder) {
+      return { type: 'none' as const, name: 'Chưa chọn thư mục', descendantFolderIds: null };
+    }
+
+    const descendantIds = new Set<string>([folder.id]);
+    const addDescendants = (parentId: string) => {
+      const children = notes.filter((n) => n.type === 'folder' && n.parentId === parentId && !n.deletedAt);
+      for (const child of children) {
+        descendantIds.add(child.id);
+        addDescendants(child.id);
+      }
+    };
+    addDescendants(folder.id);
+
+    return {
+      type: 'folder' as const,
+      name: folder.title || 'Thư mục không tên',
+      descendantFolderIds: descendantIds,
+    };
+  }, [activeFilter, notes]);
+
   // Search
   const { matchIds } = useDocWorkerSearch(notes, debouncedQuery, loadSearchNotes);
   const searchResults = useMemo(() => {
     if (!debouncedQuery || matchIds === null) return null;
     const metadataById = new Map(notes.map((note) => [note.id, note]));
-    return matchIds.flatMap((id) => {
+    const matchedDocs = matchIds.flatMap((id) => {
       const note = metadataById.get(id);
       return note && note.type !== 'folder' ? [note] : [];
-    }).slice(0, 100);
-  }, [notes, debouncedQuery, matchIds]);
+    });
+
+    if (searchScope === 'all') {
+      return matchedDocs.slice(0, 100);
+    }
+
+    // Scoped to active folder or active special category
+    const filtered = matchedDocs.filter((doc) => {
+      if (activeScopeInfo.type === 'folder' && activeScopeInfo.descendantFolderIds) {
+        return !doc.deletedAt && Boolean(doc.parentId && activeScopeInfo.descendantFolderIds.has(doc.parentId));
+      }
+      if (activeFilter === 'root_docs') {
+        return !doc.parentId && doc.type === 'document' && !doc.deletedAt;
+      }
+      if (activeFilter === 'quick_notes') {
+        return doc.type === 'quick_note' && !doc.deletedAt;
+      }
+      if (activeFilter === 'pinned') {
+        return Boolean(doc.isPinned) && doc.type !== 'folder' && !doc.deletedAt;
+      }
+      if (activeFilter === 'trash') {
+        return Boolean(doc.deletedAt) && doc.type !== 'folder';
+      }
+      return false;
+    });
+
+    return filtered.slice(0, 100);
+  }, [notes, debouncedQuery, matchIds, searchScope, activeScopeInfo, activeFilter]);
 
   // Tags
   const tagCounts = useMemo(() => {
@@ -789,9 +856,9 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
     <div
       className="doc-folder-tree"
       style={{
-        width: 320,
-        minWidth: 280,
-        maxWidth: 380,
+        width: width ?? 320,
+        minWidth: width !== undefined ? width : 280,
+        maxWidth: width !== undefined ? width : 380,
         flexShrink: 0,
         height: '100%',
         display: 'flex',
@@ -803,8 +870,8 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
         overflowY: 'auto',
       }}
     >
-      {/* 1. Search Bar */}
-      <div>
+      {/* 1. Search Bar & Scope Toggle */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <Input
           placeholder="Tìm kiếm tài liệu (BM25)..."
           prefix={<SearchOutlined style={{ color: '#9ca3af' }} />}
@@ -813,6 +880,34 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
           allowClear
           size="middle"
           style={{ borderRadius: 6 }}
+        />
+        <Segmented<'all' | 'folder'>
+          size="small"
+          block
+          value={searchScope}
+          onChange={(val) => setSearchScope(val)}
+          options={[
+            { label: 'Tất cả', value: 'all' },
+            {
+              label: (
+                <Tooltip title={activeScopeInfo.name} placement="bottom">
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      maxWidth: 130,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      verticalAlign: 'bottom',
+                    }}
+                  >
+                    Thư mục hiện tại
+                  </span>
+                </Tooltip>
+              ),
+              value: 'folder',
+            },
+          ]}
         />
       </div>
 
@@ -864,6 +959,11 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, overflowY: 'auto' }}>
           <div style={{ padding: '4px 8px', fontSize: 11, fontWeight: 700, color: '#6b7280' }}>
             KẾT QUẢ TÌM KIẾM ({searchResults?.length || 0})
+            {searchScope === 'folder' && (
+              <span style={{ fontWeight: 400, color: '#4f46e5', marginLeft: 4 }}>
+                • {activeScopeInfo.name}
+              </span>
+            )}
           </div>
           {searchResults && searchResults.length > 0 ? (
             searchResults.map((doc) => renderDocItem(doc, 0))
