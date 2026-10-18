@@ -44,7 +44,7 @@
 - [x] **Phase 19: Grounded Assistant, Provenance Citations & Offline Fallback** - AI Chat Drawer synthesis with source citations, step-by-step path cards, conflict warnings, abstention handling, and local BM25 fallback. (completed 2026-10-11)
 - [x] **Phase 19.1: Production Neo4j Integration & Live Retrieval Validation** (INSERTED) - Deploy knowledge stack to SHB Kubernetes cluster and prove process 60000006 end-to-end through TaskMate UI against persistent Neo4j storage. (completed 2026-10-13)
 - [ ] **Phase 20: Benchmark Evaluation Suite, Integrity Hardening & Credential Isolation** - 30-50 question evaluation benchmark, path/claim verification, index rebuild tests, and server-side secret isolation.
-- [ ] **Phase 21: Knowledge Graph Entity Extraction & Semantic Retrieval Improvement** - Eliminate dummy STEP_xxx entities, extract TEN_BUOC & WRITES, enhance Neo4j seed resolution, and activate hybrid prose extraction.
+- [x] **Phase 21: Knowledge Graph Entity Extraction & Semantic Retrieval Improvement** - Eliminate dummy STEP_xxx entities, extract TEN_BUOC & WRITES, enhance Neo4j seed resolution, and activate hybrid prose extraction.
 
 ## Phase Details
 
@@ -475,16 +475,16 @@ Plans:
 **Reference:** `.planning/proposals/knowledge-graph-extraction-fix-plan.md`
 **Requirements**: GRAPH-EXTRACT-01, GRAPH-RETRIEVE-01
 **Depends on**: Phase 20
-**Plans:** 4 plans in 3 waves
+**Plans:** 4/4 plans complete in 3 waves
 
 Plans:
 
 **Wave 1**
-- [ ] 21-01-PLAN.md — Deterministic extraction for step names, database writes, and code spans (Wave 1)
-- [ ] 21-02-PLAN.md — Knowledge document prompt and template standardization in NotesView (Wave 1)
+- [x] 21-01-PLAN.md — Deterministic extraction for step names, database writes, and code spans (Wave 1)
+- [x] 21-02-PLAN.md — Knowledge document prompt and template standardization in NotesView (Wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 21-03-PLAN.md — Semantic seed resolution and graph retrieval alignment (Wave 2)
+- [x] 21-03-PLAN.md — Semantic seed resolution and graph retrieval alignment (Wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 21-04-PLAN.md — Hybrid prose extraction activation and fallback hardening (Wave 3)
+- [x] 21-04-PLAN.md — Hybrid prose extraction activation and fallback hardening (Wave 3)
