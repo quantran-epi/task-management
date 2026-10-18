@@ -307,48 +307,74 @@ export function readKnowledgeServerOptions(
 
   // Validate prose extraction configuration
   const proseExtractionEnabled = (env.PROSE_EXTRACTION_ENABLED ?? '').trim().toLowerCase() === 'true';
-  const proseExtraction: ProseExtractionServerConfig = { enabled: proseExtractionEnabled };
+  let proseExtraction: ProseExtractionServerConfig = { enabled: proseExtractionEnabled };
 
   if (proseExtractionEnabled) {
-    const endpoint = (env.PROSE_EXTRACTION_ENDPOINT ?? '').trim();
+    let endpoint = (env.PROSE_EXTRACTION_ENDPOINT ?? '').trim();
+    let model = (env.PROSE_EXTRACTION_MODEL ?? '').trim();
+    let apiKey = (env.PROSE_EXTRACTION_API_KEY ?? '').trim() || undefined;
+    let rawHosts = (env.PROSE_EXTRACTION_ALLOWED_HOSTS ?? '').trim();
+
+    // a. Fallback to planner credentials if endpoint is not explicitly provided
+    if (!endpoint && remotePlanner.enabled && remotePlanner.endpoint) {
+      endpoint = remotePlanner.endpoint;
+      model = model || remotePlanner.model || '';
+      apiKey = apiKey ?? remotePlanner.apiKey;
+      if (!rawHosts && remotePlanner.allowedHosts) {
+        rawHosts = remotePlanner.allowedHosts.join(',');
+      }
+    }
+
+    // b. If no endpoint configured at all, fallback to enabled: false with a diagnostic warning
     if (!endpoint) {
-      throw new Error('PROSE_EXTRACTION_ENDPOINT is required when PROSE_EXTRACTION_ENABLED is true.');
-    }
-    let parsedUrl: URL;
-    try {
-      parsedUrl = new URL(endpoint);
-    } catch {
-      throw new Error(`Invalid PROSE_EXTRACTION_ENDPOINT: "${endpoint}". Must be a valid URL.`);
-    }
-    if (parsedUrl.protocol !== 'https:') {
-      throw new Error(`PROSE_EXTRACTION_ENDPOINT must use HTTPS protocol: "${endpoint}".`);
-    }
-    if (parsedUrl.username || parsedUrl.password) {
-      throw new Error('PROSE_EXTRACTION_ENDPOINT must not contain credentials.');
-    }
-    if (parsedUrl.search || parsedUrl.hash) {
-      throw new Error('PROSE_EXTRACTION_ENDPOINT must not contain query parameters or hash.');
-    }
-
-    const model = (env.PROSE_EXTRACTION_MODEL ?? '').trim();
-    if (!model) {
-      throw new Error('PROSE_EXTRACTION_MODEL is required when PROSE_EXTRACTION_ENABLED is true.');
-    }
-
-    const rawHosts = (env.PROSE_EXTRACTION_ALLOWED_HOSTS ?? '').trim();
-    const allowedHosts = parseAllowedHosts(rawHosts, 'PROSE_EXTRACTION_ALLOWED_HOSTS');
-    if (!allowedHosts.includes(parsedUrl.hostname)) {
-      throw new Error(
-        `PROSE_EXTRACTION_ENDPOINT host "${parsedUrl.hostname}" is not in PROSE_EXTRACTION_ALLOWED_HOSTS.`
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[PROSE_EXTRACTION_FALLBACK] PROSE_EXTRACTION_ENABLED is true but no endpoint is configured. Disabling prose extraction; falling back to deterministic extraction.'
       );
+      proseExtraction = { enabled: false };
+    } else {
+      let parsedUrl: URL;
+      try {
+        parsedUrl = new URL(endpoint);
+      } catch {
+        throw new Error(`Invalid PROSE_EXTRACTION_ENDPOINT: "${endpoint}". Must be a valid URL.`);
+      }
+
+      // c. Validate URL protocol (allowing http:// for localhost/test environments or https:// for remote hosts)
+      const isLoopback = LOOPBACK_HOSTS.has(parsedUrl.hostname);
+      if (parsedUrl.protocol !== 'https:' && !(parsedUrl.protocol === 'http:' && isLoopback)) {
+        throw new Error(`PROSE_EXTRACTION_ENDPOINT must use HTTPS protocol: "${endpoint}".`);
+      }
+      if (parsedUrl.username || parsedUrl.password) {
+        throw new Error('PROSE_EXTRACTION_ENDPOINT must not contain credentials.');
+      }
+      if (parsedUrl.search || parsedUrl.hash) {
+        throw new Error('PROSE_EXTRACTION_ENDPOINT must not contain query parameters or hash.');
+      }
+
+      if (!model) {
+        throw new Error('PROSE_EXTRACTION_MODEL is required when PROSE_EXTRACTION_ENABLED is true.');
+      }
+
+      let allowedHosts: string[] | undefined;
+      if (rawHosts) {
+        allowedHosts = parseAllowedHosts(rawHosts, 'PROSE_EXTRACTION_ALLOWED_HOSTS');
+        if (!allowedHosts.includes(parsedUrl.hostname) && !isLoopback) {
+          throw new Error(
+            `PROSE_EXTRACTION_ENDPOINT host "${parsedUrl.hostname}" is not in PROSE_EXTRACTION_ALLOWED_HOSTS.`
+          );
+        }
+      } else if (!isLoopback) {
+        throw new Error(
+          'PROSE_EXTRACTION_ALLOWED_HOSTS must contain at least one valid host when remote is enabled.'
+        );
+      }
+
+      proseExtraction.endpoint = endpoint;
+      proseExtraction.model = model;
+      proseExtraction.apiKey = apiKey;
+      proseExtraction.allowedHosts = allowedHosts;
     }
-
-    const apiKey = (env.PROSE_EXTRACTION_API_KEY ?? '').trim() || undefined;
-
-    proseExtraction.endpoint = endpoint;
-    proseExtraction.model = model;
-    proseExtraction.apiKey = apiKey;
-    proseExtraction.allowedHosts = allowedHosts;
   }
 
   // Validate rollback grace period

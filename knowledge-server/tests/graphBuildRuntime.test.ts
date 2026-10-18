@@ -22,15 +22,14 @@ describe('19.2-04-T1: DI and configuration validation', () => {
       expect(opts.proseExtraction.endpoint).toBeUndefined();
     });
 
-    it('fails fast if prose extraction enabled without endpoint', () => {
-      expect(() => {
-        readKnowledgeServerOptions({
-          ...baseValidEnv,
-          PROSE_EXTRACTION_ENABLED: 'true',
-          PROSE_EXTRACTION_MODEL: 'gpt-4o-mini',
-          PROSE_EXTRACTION_ALLOWED_HOSTS: 'api.openai.com',
-        });
-      }).toThrow(/PROSE_EXTRACTION_ENDPOINT is required/);
+    it('falls back to disabled if prose extraction enabled without endpoint', () => {
+      const opts = readKnowledgeServerOptions({
+        ...baseValidEnv,
+        PROSE_EXTRACTION_ENABLED: 'true',
+        PROSE_EXTRACTION_MODEL: 'gpt-4o-mini',
+        PROSE_EXTRACTION_ALLOWED_HOSTS: 'api.openai.com',
+      });
+      expect(opts.proseExtraction.enabled).toBe(false);
     });
 
     it('fails fast if prose extraction endpoint is not HTTPS', () => {
