@@ -160,4 +160,125 @@ describe('Neo4j Repository Adapter & Parameterized Cypher Generation (GRAPH-04, 
       })
     );
   });
+
+  it('purgeSet executes scoped non-cartesian deletes and cleans up indexes', async () => {
+    const executedQueries: string[] = [];
+    const mockRun = vi.fn().mockImplementation(async (query: string) => {
+      executedQueries.push(query);
+      if (query.includes('MATCH (s:GraphSnapshot {setId: $setId})')) {
+        return {
+          records: [
+            {
+              get: (k: string) => {
+                if (k === 'graphSnapshotId') return 'snap-to-purge-1';
+                if (k === 'fulltextIndexName') return 'idx_ft_1';
+                if (k === 'vectorIndexName') return 'idx_vec_1';
+                return null;
+              },
+            },
+          ],
+        };
+      }
+      if (query.includes('MATCH (set:GraphSet {setId: $setId})')) {
+        return { records: [{ get: () => 'set-purge-1' }] };
+      }
+      if (query.includes('MATCH (l:RetrievalLease {setId: $setId})')) {
+        return { records: [{ get: () => 0 }] };
+      }
+      return { records: [] };
+    });
+
+    const mockExecuteWrite = vi.fn().mockImplementation(async (cb) => {
+      const tx = { run: mockRun };
+      return cb(tx);
+    });
+
+    const mockSession = {
+      run: mockRun,
+      executeWrite: mockExecuteWrite,
+      close: vi.fn().mockResolvedValue(undefined),
+    };
+    const mockDriver = {
+      session: vi.fn().mockReturnValue(mockSession),
+      close: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const repo = new Neo4jRepository({
+      uri: 'bolt://localhost:7687',
+      driver: mockDriver as any,
+    });
+
+    const purged = await repo.purgeSet('set-purge-1');
+    expect(purged).toBe(true);
+
+    // Verify index drops
+    expect(executedQueries.some((q) => q.includes('DROP INDEX `idx_ft_1` IF EXISTS'))).toBe(true);
+    expect(executedQueries.some((q) => q.includes('DROP INDEX `idx_vec_1` IF EXISTS'))).toBe(true);
+
+    // Verify all scoped queries were run inside executeWrite
+    expect(mockExecuteWrite).toHaveBeenCalled();
+    expect(executedQueries.some((q) => q.includes('Evidence') && q.includes('DETACH DELETE ev'))).toBe(true);
+    expect(executedQueries.some((q) => q.includes('Conflict') && q.includes('DETACH DELETE co'))).toBe(true);
+    expect(executedQueries.some((q) => q.includes('Fact') && q.includes('DETACH DELETE f'))).toBe(true);
+    expect(executedQueries.some((q) => q.includes('Entity') && q.includes('DETACH DELETE e'))).toBe(true);
+    expect(executedQueries.some((q) => q.includes('Chunk') && q.includes('DETACH DELETE c'))).toBe(true);
+    expect(executedQueries.some((q) => q.includes('GraphSnapshot') && q.includes('DETACH DELETE s'))).toBe(true);
+    expect(executedQueries.some((q) => q.includes('GraphSet') && q.includes('DETACH DELETE set'))).toBe(true);
+
+    // Assert zero stacked OPTIONAL MATCH cartesian products
+    for (const q of executedQueries) {
+      const optionalMatches = (q.match(/OPTIONAL MATCH/g) || []).length;
+      expect(optionalMatches).toBeLessThanOrEqual(1);
+    }
+  });
+
+  describe('RESOLVE_ENTITIES parameterized Cypher template', () => {
+    it('verifies RESOLVE_ENTITIES template uses substring contains for canonicalName and aliases', () => {
+      const query = CYPHER_QUERIES.RESOLVE_ENTITIES;
+      expect(query).toContain('toLower(e.canonicalName) CONTAINS toLower(token)');
+      expect(query).toContain('any(a IN e.aliases WHERE toLower(a) CONTAINS toLower(token))');
+      expect(query).toContain('e.urn = token');
+      expect(query).toContain('e.normalizedKey = token');
+      expect(query).toContain('LIMIT 25');
+    });
+
+    it('passes tokens array parameter to session.run in resolveEntities', async () => {
+      const mockRun = vi.fn().mockResolvedValue({
+        records: [
+          {
+            get: (k: string) => {
+              if (k === 'urn') return 'urn:test:1';
+              if (k === 'canonicalName') return 'Thanh toán hoá đơn';
+              if (k === 'kind') return 'ProcessStep';
+              return null;
+            },
+          },
+        ],
+      });
+      const mockSession = {
+        run: mockRun,
+        close: vi.fn().mockResolvedValue(undefined),
+      };
+      const mockDriver = {
+        session: vi.fn().mockReturnValue(mockSession),
+        close: vi.fn().mockResolvedValue(undefined),
+      };
+
+      const repo = new Neo4jRepository({
+        uri: 'bolt://localhost:7687',
+        driver: mockDriver as any,
+      });
+
+      const results = await repo.resolveEntities('snap-1', ['thanh toan']);
+      expect(results).toHaveLength(1);
+      expect(results[0]?.urn).toBe('urn:test:1');
+      expect(mockRun).toHaveBeenCalledWith(
+        CYPHER_QUERIES.RESOLVE_ENTITIES,
+        {
+          snapshotId: 'snap-1',
+          tokens: ['thanh toan'],
+        }
+      );
+    });
+  });
 });

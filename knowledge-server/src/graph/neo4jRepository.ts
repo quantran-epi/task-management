@@ -360,7 +360,7 @@ export const CYPHER_QUERIES = {
     WHERE e.urn = token
        OR e.normalizedKey = token
        OR toLower(e.canonicalName) CONTAINS toLower(token)
-       OR any(a IN e.aliases WHERE toLower(a) = toLower(token))
+       OR any(a IN e.aliases WHERE toLower(a) CONTAINS toLower(token))
     RETURN DISTINCT e.urn AS urn, e.canonicalName AS canonicalName, e.kind AS kind
     LIMIT 25
   `,
@@ -1505,8 +1505,12 @@ export class Neo4jRepository implements GraphRepository {
         { setId }
       );
 
+      const snapshotIds: string[] = [];
       for (const rec of res.records) {
         const graphSnapshotId = rec.get('graphSnapshotId');
+        if (graphSnapshotId) {
+          snapshotIds.push(graphSnapshotId);
+        }
         const ftIndex = rec.get('fulltextIndexName');
         const vecIndex = rec.get('vectorIndexName');
         if (ftIndex) {
@@ -1523,25 +1527,70 @@ export class Neo4jRepository implements GraphRepository {
             // Ignore missing index
           }
         }
-        this.localGenerationMetadata.delete(graphSnapshotId);
+        if (graphSnapshotId) {
+          this.localGenerationMetadata.delete(graphSnapshotId);
+        }
       }
 
-      // Detach and delete all entities, facts, chunks, evidence, leases, and snapshots for this setId
-      await session.run(
-        `MATCH (s:GraphSnapshot {setId: $setId})
-         OPTIONAL MATCH (c:Chunk {graphSnapshotId: s.graphSnapshotId})
-         OPTIONAL MATCH (e:Entity {graphSnapshotId: s.graphSnapshotId})
-         OPTIONAL MATCH (f:Fact {graphSnapshotId: s.graphSnapshotId})
-         OPTIONAL MATCH (ev:Evidence {graphSnapshotId: s.graphSnapshotId})
-         OPTIONAL MATCH (l:RetrievalLease {setId: $setId})
-         DETACH DELETE c, e, f, ev, l, s
-         WITH 1 AS dummy
-         OPTIONAL MATCH (set:GraphSet {setId: $setId})
-         DETACH DELETE set`,
+      const setRes = await session.run(
+        `MATCH (set:GraphSet {setId: $setId}) RETURN set.setId AS setId`,
         { setId }
       );
+      const leaseRes = await session.run(
+        `MATCH (l:RetrievalLease {setId: $setId}) RETURN count(l) AS leaseCount`,
+        { setId }
+      );
+      const rawLeaseCount = leaseRes.records[0]?.get('leaseCount');
+      const leaseCount = typeof rawLeaseCount?.toNumber === 'function'
+        ? rawLeaseCount.toNumber()
+        : Number(rawLeaseCount ?? 0);
 
-      return res.records.length > 0;
+      const hadData = snapshotIds.length > 0 || setRes.records.length > 0 || leaseCount > 0;
+
+      // Detach and delete without Cartesian product (separate scoped deletes per node type)
+      await session.executeWrite(async (tx) => {
+        if (snapshotIds.length > 0) {
+          await tx.run(
+            `MATCH (ev:Evidence) WHERE ev.graphSnapshotId IN $snapshotIds DETACH DELETE ev`,
+            { snapshotIds }
+          );
+          await tx.run(
+            `MATCH (co:Conflict) WHERE co.graphSnapshotId IN $snapshotIds DETACH DELETE co`,
+            { snapshotIds }
+          );
+          await tx.run(
+            `MATCH (f:Fact) WHERE f.graphSnapshotId IN $snapshotIds DETACH DELETE f`,
+            { snapshotIds }
+          );
+          await tx.run(
+            `MATCH (e:Entity) WHERE e.graphSnapshotId IN $snapshotIds DETACH DELETE e`,
+            { snapshotIds }
+          );
+          await tx.run(
+            `MATCH (c:Chunk) WHERE c.graphSnapshotId IN $snapshotIds DETACH DELETE c`,
+            { snapshotIds }
+          );
+          await tx.run(
+            `MATCH (s:GraphSnapshot) WHERE s.graphSnapshotId IN $snapshotIds DETACH DELETE s`,
+            { snapshotIds }
+          );
+        }
+
+        await tx.run(
+          `MATCH (l:RetrievalLease {setId: $setId}) DETACH DELETE l`,
+          { setId }
+        );
+        await tx.run(
+          `MATCH (s:GraphSnapshot {setId: $setId}) DETACH DELETE s`,
+          { setId }
+        );
+        await tx.run(
+          `MATCH (set:GraphSet {setId: $setId}) DETACH DELETE set`,
+          { setId }
+        );
+      });
+
+      return hadData;
     } finally {
       await session.close();
     }
