@@ -142,7 +142,37 @@ export const GroundedAnswerCard: React.FC<GroundedAnswerCardProps> = ({
         </Card>
       );
 
-    case 'NO_EVIDENCE':
+    case 'NO_EVIDENCE': {
+      const isTimeout =
+        grounding.coverageWarnings?.some(
+          (w) => typeof w === 'string' && /timeout|quá thời gian/i.test(w)
+        ) ||
+        (grounding.modalityDiagnostics &&
+          grounding.modalityDiagnostics.fulltext.status === 'timeout' &&
+          grounding.modalityDiagnostics.vector.status === 'timeout');
+
+      if (isTimeout) {
+        return (
+          <Card
+            size="small"
+            style={{
+              borderColor: token.colorWarningBorder ?? token.colorWarning,
+              background: token.colorBgContainer,
+              borderRadius: token.borderRadius,
+            }}
+            styles={{ body: { padding: 16 } }}
+          >
+            <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 8, color: token.colorText }}>
+              Máy chủ tri thức phản hồi quá thời gian (Timeout)
+            </div>
+            <div style={{ fontSize: 14, color: token.colorTextSecondary, marginBottom: 12 }}>
+              Các kênh tìm kiếm không kịp phản hồi trong thời gian quy định. Vui lòng thử tra cứu lại hoặc kiểm tra kết nối máy chủ tri thức.
+            </div>
+            {renderSecondaryCta()}
+          </Card>
+        );
+      }
+
       return (
         <Card
           size="small"
@@ -162,6 +192,7 @@ export const GroundedAnswerCard: React.FC<GroundedAnswerCardProps> = ({
           {refinementsSlot}
         </Card>
       );
+    }
 
     case 'UNSUPPORTED':
       return (
@@ -195,8 +226,14 @@ export const GroundedAnswerCard: React.FC<GroundedAnswerCardProps> = ({
           }}
           styles={{ body: { padding: 16 } }}
         >
-          <GroundedBanner variant="local" />
-          {resultsSlot}
+          <GroundedBanner variant="local" fallbackReason={grounding.fallbackReason} />
+          {resultsSlot ? (
+            resultsSlot
+          ) : (
+            <div style={{ marginTop: 12, fontSize: 13, color: token.colorTextSecondary }}>
+              Không tìm thấy tài liệu liên quan trong kho lưu trữ cục bộ.
+            </div>
+          )}
           {renderSecondaryCta()}
         </Card>
       );

@@ -15,7 +15,8 @@ import { RELATION_QUALIFIER_ALLOWLIST, ONTOLOGY_VERSION } from './ontology.js';
  */
 function encodeUrnSegment(str: string): string {
   return str.replace(/[^a-zA-Z0-9_.~%-]/g, (char) => {
-    return encodeURIComponent(char);
+    const encoded = encodeURIComponent(char);
+    return encoded.replace(/[^a-zA-Z0-9_.~%-]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
   });
 }
 

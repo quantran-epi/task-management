@@ -458,9 +458,8 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
         return match;
       });
 
-      const fullText = formattedConclusion
-        ? (formattedClaims.length > 0 ? `${formattedConclusion}\n\n${formattedClaims.join('\n\n')}` : formattedConclusion)
-        : formattedClaims.join('\n\n');
+      // Use formattedConclusion as the complete executive answer; fallback to formattedClaims if conclusion is absent
+      const fullText = formattedConclusion || formattedClaims.join('\n\n');
 
       // Inject interactive styling for inline citations like [1], [L1]
       let renderedHtml = renderSafeMarkdown(fullText);

@@ -734,6 +734,71 @@ describe('ChatMessageBubble', () => {
     const tags = container.querySelectorAll('.ant-tag');
     expect(tags.length).toBe(0);
   });
+
+  it('renders conclusion without duplicating claims when both are present in grounded answer', () => {
+    const groundedMsgWithBoth: ChatMessage = {
+      id: 'msg-both-conclusion-claims',
+      threadId: 'thread-1',
+      role: 'assistant',
+      content: '',
+      grounding: {
+        schemaVersion: 1,
+        authority: 'server',
+        outcome: 'READY',
+        answer: {
+          schemaVersion: 2,
+          language: 'vi',
+          conclusion: 'Bảng MAIN1.DPP_PAYMENT_PLAN lưu hợp đồng trả góp [1].',
+          confidence: 'high',
+          confidenceReason: 'Bằng chứng đầy đủ',
+          claims: [
+            {
+              id: 'C1',
+              text: 'Bảng DPP_PAYMENT_PLAN quản lý trạng thái hợp đồng trả góp.',
+              classification: 'DIRECT',
+              citationIds: ['S1'],
+              pathId: null,
+            },
+          ],
+          hypotheses: [],
+          unsupportedParts: [],
+        },
+        citations: [
+          {
+            citationId: 'S1',
+            documentId: '00000000-0000-0000-0000-000000000001',
+            documentTitle: 'DPP Spec',
+            sectionAnchor: 'Sec 1',
+            lineStart: 1,
+            lineEnd: 5,
+            authority: 'server',
+            evidenceClass: 'OBSERVED',
+            snapshotId: 'gsnap_1',
+            publishedContentHash: 'a'.repeat(64),
+            citedExcerpt: 'DPP_PAYMENT_PLAN excerpt',
+          },
+        ],
+        paths: [],
+        conflicts: [],
+        scope: null,
+        modalityDiagnostics: null,
+        coverageWarnings: [],
+        fallbackReason: 'NONE',
+        routerVersion: null,
+        promptVersion: 'v1',
+        modelId: 'gpt-4o',
+        createdAt: new Date().toISOString(),
+      },
+      createdAt: '2026-10-18T10:05:00Z',
+    };
+
+    render(<ChatMessageBubble message={groundedMsgWithBoth} />);
+
+    // Conclusion is rendered
+    expect(screen.getByText(/Bảng MAIN1.DPP_PAYMENT_PLAN lưu hợp đồng trả góp/)).toBeInTheDocument();
+    // Claims are NOT appended after conclusion
+    expect(screen.queryByText(/Bảng DPP_PAYMENT_PLAN quản lý trạng thái hợp đồng trả góp/)).not.toBeInTheDocument();
+  });
 });
 
 describe('ChatMessageList', () => {

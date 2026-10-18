@@ -921,4 +921,41 @@ describe('GroundedAnswerCard', () => {
     expect(screen.getByText('Kết quả thiếu một phần phương thức')).toBeInTheDocument();
     expect(screen.getByText(/Đồ thị \(0 kết quả\)/)).toBeInTheDocument();
   });
+
+  it('30. NO_EVIDENCE with timeout warning or timeout modalityDiagnostics renders timeout notice instead of no-evidence', () => {
+    const grounding = createMockGrounding({
+      outcome: 'NO_EVIDENCE',
+      answer: null,
+      coverageWarnings: ['Máy chủ tri thức quá thời gian phản hồi (timeout)'],
+      modalityDiagnostics: {
+        fulltext: { status: 'timeout', latencyMs: 2000, itemCount: 0 },
+        vector: { status: 'timeout', latencyMs: 2000, itemCount: 0 },
+        graph: { status: 'unavailable', latencyMs: 0, itemCount: 0 },
+      },
+    });
+
+    render(
+      <GroundedAnswerCard grounding={grounding} onCitationActivate={vi.fn()} />
+    );
+
+    expect(screen.getByText('Máy chủ tri thức phản hồi quá thời gian (Timeout)')).toBeInTheDocument();
+    expect(screen.queryByText('Không tìm thấy bằng chứng trong tri thức đã xuất bản')).not.toBeInTheDocument();
+  });
+
+  it('31. LOCAL_FALLBACK_RESULTS without resultsSlot renders empty local notice', () => {
+    const grounding = createMockGrounding({
+      outcome: 'LOCAL_FALLBACK_RESULTS',
+      authority: 'local',
+      fallbackReason: 'TIMEOUT',
+      answer: null,
+      citations: [],
+    });
+
+    render(
+      <GroundedAnswerCard grounding={grounding} onCitationActivate={vi.fn()} />
+    );
+
+    expect(screen.getByText('Đang dùng tìm kiếm cục bộ (BM25)')).toBeInTheDocument();
+    expect(screen.getByText('Không tìm thấy tài liệu liên quan trong kho lưu trữ cục bộ.')).toBeInTheDocument();
+  });
 });

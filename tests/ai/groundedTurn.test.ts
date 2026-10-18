@@ -739,4 +739,31 @@ describe('groundedTurn state machine', () => {
       expect(res.grounding.fallbackReason).toBe('TIMEOUT');
     }
   });
+
+  it('27. Falls back locally when text modalities time out and graph is unavailable (e.g. NO_GRAPH_SEED)', async () => {
+    mockDeps.retrieveFederated = vi.fn().mockResolvedValue({
+      outcome: 'NO_EVIDENCE',
+      items: [],
+      paths: [],
+      conflictGroups: [],
+      modalityStatus: {
+        fulltext: { status: 'timeout', latencyMs: 2500, itemCount: 0 },
+        vector: { status: 'timeout', latencyMs: 2500, itemCount: 0 },
+        graph: { status: 'unavailable', latencyMs: 0, itemCount: 0, reason: 'NO_GRAPH_SEED' },
+      },
+      diagnostics: {
+        degraded: true,
+        coverageWarnings: [],
+      },
+    });
+
+    const res = await runGroundedTurn(mockInput, mockDeps);
+
+    expect(mockDeps.runLocalBm25).toHaveBeenCalled();
+    expect(res.kind).toBe('grounded_answer');
+    if (res.kind === 'grounded_answer') {
+      expect(res.grounding.authority).toBe('local');
+      expect(res.grounding.fallbackReason).toBe('TIMEOUT');
+    }
+  });
 });

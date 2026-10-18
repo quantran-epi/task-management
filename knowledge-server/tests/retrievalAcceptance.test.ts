@@ -42,18 +42,23 @@ const FILE_NAMES = [
   'README.md',
 ];
 
+const CORPUS_AVAILABLE = fs.existsSync(path.join(CORPUS_DIR, FILE_NAMES[0]!)) ||
+  fs.existsSync(path.resolve(process.cwd(), 'docs/sample-markdown-flow/60000006-SHB-Credit-calculations', FILE_NAMES[0]!));
+
 const PILOT_FILES: Record<string, string> = {};
-for (const fileName of FILE_NAMES) {
-  const filePath = path.join(CORPUS_DIR, fileName);
-  if (fs.existsSync(filePath)) {
-    PILOT_FILES[fileName] = fs.readFileSync(filePath, 'utf-8');
-  } else {
-    const altPath = path.resolve(
-      process.cwd(),
-      'docs/sample-markdown-flow/60000006-SHB-Credit-calculations',
-      fileName
-    );
-    PILOT_FILES[fileName] = fs.readFileSync(altPath, 'utf-8');
+if (CORPUS_AVAILABLE) {
+  for (const fileName of FILE_NAMES) {
+    const filePath = path.join(CORPUS_DIR, fileName);
+    if (fs.existsSync(filePath)) {
+      PILOT_FILES[fileName] = fs.readFileSync(filePath, 'utf-8');
+    } else {
+      const altPath = path.resolve(
+        process.cwd(),
+        'docs/sample-markdown-flow/60000006-SHB-Credit-calculations',
+        fileName
+      );
+      PILOT_FILES[fileName] = fs.readFileSync(altPath, 'utf-8');
+    }
   }
 }
 
@@ -149,7 +154,7 @@ async function setupPilotCorpus(): Promise<PilotTestContext> {
   };
 }
 
-describe('Phase 18 Retrieval Acceptance Suite (18-ACC-01..05)', () => {
+describe.skipIf(!CORPUS_AVAILABLE)('Phase 18 Retrieval Acceptance Suite (18-ACC-01..05)', () => {
   describe('18-ACC-01 identifier: Pure identifier fast-path retrieval (RETR-01, D-03)', () => {
     it('resolves process, procedure, table, cycle, and status codes without query planner invocation', async () => {
       const ctx = await setupPilotCorpus();

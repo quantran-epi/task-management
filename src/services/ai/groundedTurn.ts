@@ -600,12 +600,23 @@ export async function runGroundedTurn(
   }
 
   // 5. Branch on retrieval outcome
+  const isAllTextSearchTimedOut =
+    serverResponse.modalityStatus.fulltext.status === 'timeout' &&
+    serverResponse.modalityStatus.vector.status === 'timeout';
+  const isGraphNonProductive =
+    serverResponse.modalityStatus.graph.status === 'timeout' ||
+    serverResponse.modalityStatus.graph.status === 'unavailable' ||
+    serverResponse.modalityStatus.graph.status === 'error' ||
+    serverResponse.modalityStatus.graph.status === 'stale' ||
+    serverResponse.modalityStatus.graph.itemCount === 0;
+
   if (
     serverResponse.items.length === 0 &&
     (serverResponse.diagnostics.coverageWarnings.some((warning) => warning.code === 'TIMEOUT') ||
       (serverResponse.modalityStatus.fulltext.status === 'timeout' &&
         serverResponse.modalityStatus.vector.status === 'timeout' &&
-        serverResponse.modalityStatus.graph.status === 'timeout'))
+        serverResponse.modalityStatus.graph.status === 'timeout') ||
+      (isAllTextSearchTimedOut && isGraphNonProductive))
   ) {
     return executeLocalPath('TIMEOUT', [
       'Máy chủ tri thức quá thời gian phản hồi (timeout)',

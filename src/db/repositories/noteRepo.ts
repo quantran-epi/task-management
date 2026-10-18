@@ -305,3 +305,18 @@ export async function deleteNoteAttachment(
 ): Promise<void> {
   await db.noteAttachments.delete(attachmentId);
 }
+
+export async function bulkPermanentDeleteNotes(
+  ids: string[],
+  db: TaskPlannerDatabase = defaultDb
+): Promise<void> {
+  if (ids.length === 0) return;
+  await db.transaction('rw', [db.notes, db.noteAttachments], async () => {
+    const attachments = await db.noteAttachments.where('noteId').anyOf(ids).toArray();
+    if (attachments.length > 0) {
+      await db.noteAttachments.bulkDelete(attachments.map((a) => a.id));
+    }
+    await db.notes.bulkDelete(ids);
+  });
+}
+

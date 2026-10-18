@@ -53,18 +53,13 @@ export function extractMessageText(msg: ChatMessage): string {
     return msg.content.trim();
   }
   if (msg.grounding) {
-    const parts: string[] = [];
-    if (msg.grounding.answer?.conclusion) {
-      parts.push(msg.grounding.answer.conclusion);
+    if (msg.grounding.answer?.conclusion && msg.grounding.answer.conclusion.trim()) {
+      return msg.grounding.answer.conclusion.trim();
     }
     if (msg.grounding.answer?.claims && msg.grounding.answer.claims.length > 0) {
-      const claimTexts = msg.grounding.answer.claims
+      return msg.grounding.answer.claims
         .map((c) => `- ${c.text}`)
         .join('\n');
-      parts.push(claimTexts);
-    }
-    if (parts.length > 0) {
-      return parts.join('\n');
     }
     if (msg.grounding.outcome === 'NEEDS_CLARIFICATION') {
       return '[Yêu cầu làm rõ đối tượng/thực thể tra cứu]';

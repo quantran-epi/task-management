@@ -17,7 +17,7 @@ describe('contextCompaction', () => {
     expect(extractMessageText(msg)).toBe('Hello TaskMate');
   });
 
-  it('extracts grounded conclusion and claims if content is empty', () => {
+  it('extracts grounded conclusion without duplicating claims if content is empty', () => {
     const msg: ChatMessage = {
       id: '2',
       threadId: 't1',
@@ -61,8 +61,54 @@ describe('contextCompaction', () => {
     };
 
     const extracted = extractMessageText(msg);
-    expect(extracted).toContain('Quy trình tính phí 60000006 hoàn tất.');
-    expect(extracted).toContain('Bước 1 xác thực container');
+    expect(extracted).toBe('Quy trình tính phí 60000006 hoàn tất.');
+  });
+
+  it('falls back to claims when conclusion is empty', () => {
+    const msg: ChatMessage = {
+      id: '3',
+      threadId: 't1',
+      role: 'assistant',
+      content: '',
+      createdAt: '2026-10-17T00:00:00Z',
+      grounding: {
+        schemaVersion: 1,
+        authority: 'server',
+        outcome: 'READY',
+        answer: {
+          schemaVersion: 2,
+          language: 'vi',
+          conclusion: '',
+          confidence: 'high',
+          confidenceReason: 'Bằng chứng đầy đủ',
+          claims: [
+            {
+              id: 'C1',
+              text: 'Bước 1 xác thực container',
+              classification: 'DIRECT',
+              citationIds: ['S1'],
+              pathId: null,
+            },
+          ],
+          hypotheses: [],
+          unsupportedParts: [],
+        },
+        citations: [],
+        paths: [],
+        conflicts: [],
+        scope: { setIds: [], routedScope: { domain: null, environment: null, version: null, comparisonMode: null } },
+        modalityDiagnostics: { fulltext: { status: 'ok', latencyMs: 0, itemCount: 0 }, vector: { status: 'ok', latencyMs: 0, itemCount: 0 }, graph: { status: 'ok', latencyMs: 0, itemCount: 0 } },
+        coverageWarnings: [],
+        fallbackReason: 'NONE',
+        routerVersion: 'router-v1',
+        promptVersion: 'grounded-v1',
+        modelId: 'gpt-4o',
+        createdAt: '2026-10-17T00:00:00Z',
+      },
+    };
+
+    const extracted = extractMessageText(msg);
+    expect(extracted).toBe('- Bước 1 xác thực container');
   });
 
   it('detects when thread exceeds message threshold and needs compaction', async () => {

@@ -16,6 +16,7 @@ export interface GroundedBannerProps {
   variant: GroundedBannerVariant;
   modalities?: string | undefined;
   dimension?: string | undefined;
+  fallbackReason?: string | undefined;
   repairCta?: {
     label: string;
     onClick: () => void;
@@ -32,6 +33,7 @@ export const GroundedBanner: React.FC<GroundedBannerProps> = ({
   variant,
   modalities,
   dimension = 'Unknown',
+  fallbackReason,
   repairCta,
 }) => {
   let type: 'warning' | 'error' | 'info' = 'warning';
@@ -44,7 +46,9 @@ export const GroundedBanner: React.FC<GroundedBannerProps> = ({
       type = 'warning';
       message = 'Đang dùng tìm kiếm cục bộ (BM25)';
       description =
-        'Máy chủ tri thức không khả dụng. Chỉ tìm từ khoá trên Markdown đã lập chỉ mục cục bộ. Không có đồ thị hoặc tìm kiếm ngữ nghĩa.';
+        fallbackReason === 'TIMEOUT'
+          ? 'Máy chủ tri thức phản hồi quá thời gian (timeout). Đang chuyển sang tìm từ khoá trên Markdown cục bộ.'
+          : 'Máy chủ tri thức không khả dụng. Chỉ tìm từ khoá trên Markdown đã lập chỉ mục cục bộ. Không có đồ thị hoặc tìm kiếm ngữ nghĩa.';
       break;
 
     case 'degraded':

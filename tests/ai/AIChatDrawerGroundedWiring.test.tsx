@@ -38,7 +38,7 @@ describe('AIChatDrawer Grounded Turn Wiring (Plan 19-14)', () => {
     answer: {
       schemaVersion: 1,
       language: 'vi',
-      conclusion: 'Quy trình CYTP1002 hoàn tất bước xác thực OTP.',
+      conclusion: 'Quy trình CYTP1002 hoàn tất bước xác thực OTP. Khách hàng xác thực OTP qua SMS [S1].',
       claims: [
         {
           id: 'C1',
@@ -119,7 +119,7 @@ describe('AIChatDrawer Grounded Turn Wiring (Plan 19-14)', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText('Khách hàng xác thực OTP qua SMS.')).toBeInTheDocument();
+      expect(screen.getByText(/Khách hàng xác thực OTP qua SMS/)).toBeInTheDocument();
     });
   });
 
@@ -587,7 +587,7 @@ describe('AIChatDrawer Grounded Turn Wiring (Plan 19-14)', () => {
     render(<AIChatDrawer open={true} onClose={() => {}} db={testDb} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Khách hàng xác thực OTP qua SMS.')).toBeInTheDocument();
+      expect(screen.getByText(/Khách hàng xác thực OTP qua SMS/)).toBeInTheDocument();
       expect(screen.getAllByText('[1]')[0]).toBeInTheDocument();
     });
 

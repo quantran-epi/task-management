@@ -57,6 +57,10 @@ export interface DocFolderTreeProps {
   onRenameFolder?: (folderId: string, newName: string) => Promise<void> | void;
   onMoveFolder?: (folder: Note) => void;
   onDeleteFolder?: (folder: Note) => Promise<void> | void;
+  onDeleteFolderRecursive?: (folder: Note) => Promise<void> | void;
+  onEmptyTrash?: () => Promise<void> | void;
+  onClearSpecialFolder?: (specialKey: 'root_docs' | 'quick_notes', title: string) => Promise<void> | void;
+  onUnpinAll?: () => Promise<void> | void;
   onOpenZipImport?: () => void;
   activeTag?: string | null;
   onSelectTag?: (tag: string | null) => void;
@@ -83,6 +87,10 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
   onRenameFolder,
   onMoveFolder,
   onDeleteFolder,
+  onDeleteFolderRecursive,
+  onEmptyTrash,
+  onClearSpecialFolder,
+  onUnpinAll,
   onOpenZipImport,
   activeTag,
   onSelectTag,
@@ -423,84 +431,86 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
     ];
 
     return (
-      <div
-        key={doc.id}
-        role="button"
-        tabIndex={0}
-        onClick={() => onSelectDoc?.(doc)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            onSelectDoc?.(doc);
-          }
-        }}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '4px 8px 4px 6px',
-          paddingLeft: depth === 0 ? 8 : 34 + (depth - 1) * 16,
-          borderRadius: 4,
-          cursor: 'pointer',
-          backgroundColor: isSelected ? '#e0e7ff' : 'transparent',
-          color: isSelected ? '#3730a3' : '#374151',
-          fontWeight: isSelected ? 600 : 400,
-          fontSize: 12.5,
-          transition: 'all 0.15s ease',
-          margin: '1px 0',
-        }}
-        className="doc-tree-item"
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
-          <span style={{ fontSize: 13, flexShrink: 0, color: isSelected ? '#4f46e5' : '#6b7280' }}>
-            {isQuickNote ? <FormOutlined /> : <FileTextOutlined />}
-          </span>
-          <span
-            style={{
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              textDecoration: doc.deletedAt ? 'line-through' : 'none',
-              opacity: doc.deletedAt ? 0.6 : 1,
-            }}
-            title={doc.title || (isQuickNote ? 'Ghi chú nhanh' : 'Không tiêu đề')}
-          >
-            {doc.title || (isQuickNote ? 'Ghi chú nhanh' : 'Không tiêu đề')}
-          </span>
-          {doc.isPinned && !isQuickNote && (
-            <PushpinFilled style={{ fontSize: 10, color: '#f59e0b', flexShrink: 0 }} />
-          )}
-          {doc.entityType === 'task' && (
-            <Tooltip title="Thuộc về một tác vụ">
-              <CheckSquareOutlined style={{ fontSize: 11, color: '#1677ff', flexShrink: 0 }} />
-            </Tooltip>
-          )}
-          {doc.entityType === 'project' && (
-            <Tooltip title="Thuộc về một dự án">
-              <ProjectOutlined style={{ fontSize: 11, color: '#722ed1', flexShrink: 0 }} />
-            </Tooltip>
-          )}
-        </div>
-
+      <Dropdown menu={{ items: docMenu }} trigger={['contextMenu']}>
         <div
-          style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0, marginLeft: 4 }}
-          onClick={(e) => e.stopPropagation()}
+          key={doc.id}
+          role="button"
+          tabIndex={0}
+          onClick={() => onSelectDoc?.(doc)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onSelectDoc?.(doc);
+            }
+          }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '4px 8px 4px 6px',
+            paddingLeft: depth === 0 ? 8 : 34 + (depth - 1) * 16,
+            borderRadius: 4,
+            cursor: 'pointer',
+            backgroundColor: isSelected ? '#e0e7ff' : 'transparent',
+            color: isSelected ? '#3730a3' : '#374151',
+            fontWeight: isSelected ? 600 : 400,
+            fontSize: 12.5,
+            transition: 'all 0.15s ease',
+            margin: '1px 0',
+          }}
+          className="doc-tree-item"
         >
-          {publishStatuses?.[doc.id] && (
-            <DocPublishBadge status={publishStatuses[doc.id]} compact />
-          )}
-          {docMenu.length > 0 && (
-            <Dropdown menu={{ items: docMenu }} trigger={['click']} placement="bottomRight">
-              <Button
-                type="text"
-                size="small"
-                icon={<MoreOutlined style={{ fontSize: 11, color: '#9ca3af' }} />}
-                style={{ width: 18, height: 18, padding: 0 }}
-              />
-            </Dropdown>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
+            <span style={{ fontSize: 13, flexShrink: 0, color: isSelected ? '#4f46e5' : '#6b7280' }}>
+              {isQuickNote ? <FormOutlined /> : <FileTextOutlined />}
+            </span>
+            <span
+              style={{
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                textDecoration: doc.deletedAt ? 'line-through' : 'none',
+                opacity: doc.deletedAt ? 0.6 : 1,
+              }}
+              title={doc.title || (isQuickNote ? 'Ghi chú nhanh' : 'Không tiêu đề')}
+            >
+              {doc.title || (isQuickNote ? 'Ghi chú nhanh' : 'Không tiêu đề')}
+            </span>
+            {doc.isPinned && !isQuickNote && (
+              <PushpinFilled style={{ fontSize: 10, color: '#f59e0b', flexShrink: 0 }} />
+            )}
+            {doc.entityType === 'task' && (
+              <Tooltip title="Thuộc về một tác vụ">
+                <CheckSquareOutlined style={{ fontSize: 11, color: '#1677ff', flexShrink: 0 }} />
+              </Tooltip>
+            )}
+            {doc.entityType === 'project' && (
+              <Tooltip title="Thuộc về một dự án">
+                <ProjectOutlined style={{ fontSize: 11, color: '#722ed1', flexShrink: 0 }} />
+              </Tooltip>
+            )}
+          </div>
+
+          <div
+            style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0, marginLeft: 4 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {publishStatuses?.[doc.id] && (
+              <DocPublishBadge status={publishStatuses[doc.id]} compact />
+            )}
+            {docMenu.length > 0 && (
+              <Dropdown menu={{ items: docMenu }} trigger={['click']} placement="bottomRight">
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<MoreOutlined style={{ fontSize: 11, color: '#9ca3af' }} />}
+                  style={{ width: 18, height: 18, padding: 0 }}
+                />
+              </Dropdown>
+            )}
+          </div>
         </div>
-      </div>
+      </Dropdown>
     );
   };
 
@@ -521,80 +531,163 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
     const hasMore = filteredDocs.length > visibleDocs.length;
     const count = docs.length;
 
-    return (
-      <div key={id} style={{ display: 'flex', flexDirection: 'column' }}>
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => {
+    const specialMenu: MenuProps['items'] = [
+      ...(id === 'quick_notes'
+        ? [
+            {
+              key: 'create_quick_note',
+              label: 'Tạo ghi chú nhanh',
+              icon: <PlusOutlined />,
+              onClick: () => {
+                onSelectFilter('quick_notes');
+                onCreateDoc();
+              },
+            },
+          ]
+        : []),
+      ...(id === 'root_docs'
+        ? [
+            {
+              key: 'create_root_doc',
+              label: 'Tạo tài liệu mới',
+              icon: <PlusOutlined />,
+              onClick: () => {
+                onCreateDoc(undefined);
+              },
+            },
+          ]
+        : []),
+      ...(id === 'pinned' && onUnpinAll && docs.length > 0
+        ? [
+            {
+              key: 'unpin_all',
+              label: 'Bỏ ghim tất cả tài liệu',
+              icon: <PushpinOutlined />,
+              onClick: () => onUnpinAll(),
+            },
+          ]
+        : []),
+      ...(id === 'trash' && onEmptyTrash && docs.length > 0
+        ? [
+            {
+              key: 'empty_trash',
+              label: 'Dọn sạch thùng rác (Xóa vĩnh viễn)',
+              icon: <DeleteOutlined />,
+              danger: true,
+              onClick: () => onEmptyTrash(),
+            },
+          ]
+        : []),
+      ...((id === 'root_docs' || id === 'quick_notes') && onClearSpecialFolder && docs.length > 0
+        ? [
+            {
+              type: 'divider' as const,
+            },
+            {
+              key: 'clear_special',
+              label: id === 'root_docs' ? 'Xóa toàn bộ tài liệu chưa phân loại' : 'Xóa toàn bộ ghi chú nhanh',
+              icon: <DeleteOutlined />,
+              danger: true,
+              onClick: () => onClearSpecialFolder(id, title),
+            },
+          ]
+        : []),
+    ];
+
+    const folderContent = (
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => {
+          toggleFolderExpand(id);
+          onSelectFilter(id);
+          if (onSelectTag) onSelectTag(null);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
             toggleFolderExpand(id);
             onSelectFilter(id);
             if (onSelectTag) onSelectTag(null);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              toggleFolderExpand(id);
-              onSelectFilter(id);
-              if (onSelectTag) onSelectTag(null);
-            }
-          }}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '5px 8px 5px 4px',
-            borderRadius: 6,
-            cursor: 'pointer',
-            backgroundColor: isActive ? '#f0f2ff' : 'transparent',
-            color: isActive ? '#4f46e5' : '#262626',
-            fontWeight: isActive ? 600 : 400,
-            fontSize: 13,
-            transition: 'all 0.15s ease',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, flex: 1 }}>
-            <span
-              role="button"
-              tabIndex={0}
-              onClick={(e) => toggleFolderExpand(id, e)}
-              style={{
-                width: 16,
-                height: 16,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 10,
-                color: '#9ca3af',
-                cursor: 'pointer',
-                flexShrink: 0,
-              }}
-            >
-              {count > 0 ? (isExpanded ? <CaretDownOutlined /> : <CaretRightOutlined />) : <span style={{ width: 10 }} />}
-            </span>
-            <span style={{ fontSize: 14, flexShrink: 0, color, display: 'flex', alignItems: 'center' }}>
-              {icon}
-            </span>
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {title}
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, marginLeft: 4 }} onClick={(e) => e.stopPropagation()}>
-            <span
-              style={{
-                fontSize: 11,
-                padding: '1px 6px',
-                borderRadius: 10,
-                backgroundColor: isActive ? '#e0e7ff' : '#f0f0f0',
-                color: isActive ? '#4f46e5' : '#8c8c8c',
-              }}
-            >
-              {count}
-            </span>
-            {extraAction}
-          </div>
+          }
+        }}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '5px 8px 5px 4px',
+          borderRadius: 6,
+          cursor: 'pointer',
+          backgroundColor: isActive ? '#f0f2ff' : 'transparent',
+          color: isActive ? '#4f46e5' : '#262626',
+          fontWeight: isActive ? 600 : 400,
+          fontSize: 13,
+          transition: 'all 0.15s ease',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, flex: 1 }}>
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(e) => toggleFolderExpand(id, e)}
+            style={{
+              width: 16,
+              height: 16,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 10,
+              color: '#9ca3af',
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+          >
+            {count > 0 ? (isExpanded ? <CaretDownOutlined /> : <CaretRightOutlined />) : <span style={{ width: 10 }} />}
+          </span>
+          <span style={{ fontSize: 14, flexShrink: 0, color, display: 'flex', alignItems: 'center' }}>
+            {icon}
+          </span>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {title}
+          </span>
         </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, marginLeft: 4 }} onClick={(e) => e.stopPropagation()}>
+          <span
+            style={{
+              fontSize: 11,
+              padding: '1px 6px',
+              borderRadius: 10,
+              backgroundColor: isActive ? '#e0e7ff' : '#f0f0f0',
+              color: isActive ? '#4f46e5' : '#8c8c8c',
+            }}
+          >
+            {count}
+          </span>
+          {extraAction}
+          {specialMenu.length > 0 && (
+            <Dropdown menu={{ items: specialMenu }} trigger={['click']} placement="bottomRight">
+              <Button
+                type="text"
+                size="small"
+                icon={<MoreOutlined style={{ fontSize: 11, color: '#9ca3af' }} />}
+                style={{ width: 18, height: 18, padding: 0 }}
+              />
+            </Dropdown>
+          )}
+        </div>
+      </div>
+    );
+
+    return (
+      <div key={id} style={{ display: 'flex', flexDirection: 'column' }}>
+        {specialMenu.length > 0 ? (
+          <Dropdown menu={{ items: specialMenu }} trigger={['contextMenu']}>
+            {folderContent}
+          </Dropdown>
+        ) : (
+          folderContent
+        )}
 
         {isExpanded && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -667,163 +760,183 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
             },
           ]
         : []),
-      ...(onDeleteFolder
+      ...(onDeleteFolder || onDeleteFolderRecursive
         ? [
             {
               type: 'divider' as const,
             },
+          ]
+        : []),
+      ...(onDeleteFolder
+        ? [
             {
               key: 'delete',
-              label: 'Xóa thư mục',
+              label: 'Xóa thư mục (giữ lại file)',
+              icon: <DeleteOutlined />,
+              onClick: () => onDeleteFolder(node.folder),
+            },
+          ]
+        : []),
+      ...(onDeleteFolderRecursive
+        ? [
+            {
+              key: 'delete_recursive',
+              label: 'Xóa toàn bộ thư mục & file (Recursive)',
               icon: <DeleteOutlined />,
               danger: true,
-              onClick: () => onDeleteFolder(node.folder),
+              onClick: () => onDeleteFolderRecursive(node.folder),
             },
           ]
         : []),
     ];
 
-    return (
-      <div key={node.id} style={{ display: 'flex', flexDirection: 'column' }}>
-        <div
-          className="doc-folder-item"
-          role="button"
-          tabIndex={0}
-          onClick={() => {
+    const nodeContent = (
+      <div
+        className="doc-folder-item"
+        role="button"
+        tabIndex={0}
+        onClick={() => {
+          toggleFolderExpand(node.id);
+          onSelectFilter(node.id);
+          if (onSelectTag) onSelectTag(null);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
             toggleFolderExpand(node.id);
             onSelectFilter(node.id);
             if (onSelectTag) onSelectTag(null);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              toggleFolderExpand(node.id);
-              onSelectFilter(node.id);
-              if (onSelectTag) onSelectTag(null);
-            }
-          }}
+          }
+        }}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '5px 8px 5px 4px',
+          paddingLeft: 4 + node.depth * 16,
+          borderRadius: 6,
+          cursor: 'pointer',
+          backgroundColor: isActive ? '#fef3c7' : 'transparent',
+          color: isActive ? '#92400e' : '#262626',
+          fontWeight: isActive ? 600 : 400,
+          fontSize: 13,
+          transition: 'all 0.15s ease',
+        }}
+      >
+        {/* Left: Caret + Folder Icon + Title */}
+        <div
           style={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '5px 8px 5px 4px',
-            paddingLeft: 4 + node.depth * 16,
-            borderRadius: 6,
-            cursor: 'pointer',
-            backgroundColor: isActive ? '#fef3c7' : 'transparent',
-            color: isActive ? '#92400e' : '#262626',
-            fontWeight: isActive ? 600 : 400,
-            fontSize: 13,
-            transition: 'all 0.15s ease',
+            gap: 4,
+            minWidth: 0,
+            flex: 1,
           }}
         >
-          {/* Left: Caret + Folder Icon + Title */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 4,
-              minWidth: 0,
-              flex: 1,
-            }}
-          >
-            {hasContent ? (
-              <span
-                role="button"
-                tabIndex={0}
-                onClick={(e) => toggleFolderExpand(node.id, e)}
-                style={{
-                  width: 16,
-                  height: 16,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 10,
-                  color: '#9ca3af',
-                  cursor: 'pointer',
-                  flexShrink: 0,
-                }}
-              >
-                {isExpanded ? <CaretDownOutlined /> : <CaretRightOutlined />}
-              </span>
-            ) : (
-              <span style={{ width: 16, flexShrink: 0 }} />
-            )}
-
-            <span style={{ fontSize: 14, flexShrink: 0, display: 'flex', alignItems: 'center' }}>
-              {isActive ? (
-                <FolderOpenFilled style={{ color: '#d97706' }} />
-              ) : (
-                <FolderFilled style={{ color: '#f59e0b' }} />
-              )}
+          {hasContent ? (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => toggleFolderExpand(node.id, e)}
+              style={{
+                width: 16,
+                height: 16,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 10,
+                color: '#9ca3af',
+                cursor: 'pointer',
+                flexShrink: 0,
+              }}
+            >
+              {isExpanded ? <CaretDownOutlined /> : <CaretRightOutlined />}
             </span>
+          ) : (
+            <span style={{ width: 16, flexShrink: 0 }} />
+          )}
+
+          <span style={{ fontSize: 14, flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+            {isActive ? (
+              <FolderOpenFilled style={{ color: '#d97706' }} />
+            ) : (
+              <FolderFilled style={{ color: '#f59e0b' }} />
+            )}
+          </span>
+          <span
+            style={{
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              color: isActive ? '#92400e' : '#1f2937',
+            }}
+            title={node.title}
+          >
+            {node.title}
+          </span>
+        </div>
+
+        {/* Right: Badge and actions */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 2,
+            flexShrink: 0,
+            marginLeft: 4,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Tooltip
+            title={
+              hasChildren && node.totalDocCount !== node.directDocCount
+                ? `${node.directDocCount} tài liệu trực tiếp, tổng ${node.totalDocCount} gồm thư mục con`
+                : undefined
+            }
+          >
             <span
               style={{
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                color: isActive ? '#92400e' : '#1f2937',
+                fontSize: 11,
+                padding: '1px 6px',
+                borderRadius: 10,
+                backgroundColor: isActive ? '#fde68a' : '#f0f0f0',
+                color: isActive ? '#b45309' : '#8c8c8c',
               }}
-              title={node.title}
             >
-              {node.title}
+              {node.directDocCount}
             </span>
-          </div>
+          </Tooltip>
 
-          {/* Right: Badge and actions */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 2,
-              flexShrink: 0,
-              marginLeft: 4,
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Tooltip
-              title={
-                hasChildren && node.totalDocCount !== node.directDocCount
-                  ? `${node.directDocCount} tài liệu trực tiếp, tổng ${node.totalDocCount} gồm thư mục con`
-                  : undefined
-              }
-            >
-              <span
-                style={{
-                  fontSize: 11,
-                  padding: '1px 6px',
-                  borderRadius: 10,
-                  backgroundColor: isActive ? '#fde68a' : '#f0f0f0',
-                  color: isActive ? '#b45309' : '#8c8c8c',
-                }}
-              >
-                {node.directDocCount}
-              </span>
-            </Tooltip>
+          <Tooltip title="Thêm tài liệu vào thư mục này">
+            <Button
+              type="text"
+              size="small"
+              icon={<FileAddOutlined style={{ fontSize: 12, color: isActive ? '#b45309' : '#6b7280' }} />}
+              onClick={(e) => {
+                e.stopPropagation();
+                onCreateDoc(node.id);
+              }}
+              style={{ width: 20, height: 20, padding: 0 }}
+            />
+          </Tooltip>
 
-            <Tooltip title="Thêm tài liệu vào thư mục này">
-              <Button
-                type="text"
-                size="small"
-                icon={<FileAddOutlined style={{ fontSize: 12, color: isActive ? '#b45309' : '#6b7280' }} />}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onCreateDoc(node.id);
-                }}
-                style={{ width: 20, height: 20, padding: 0 }}
-              />
-            </Tooltip>
-
-            <Dropdown menu={{ items: folderMenu }} trigger={['click']} placement="bottomRight">
-              <Button
-                type="text"
-                size="small"
-                icon={<MoreOutlined style={{ fontSize: 12, color: isActive ? '#b45309' : '#8c8c8c' }} />}
-                style={{ width: 20, height: 20, padding: 0 }}
-              />
-            </Dropdown>
-          </div>
+          <Dropdown menu={{ items: folderMenu }} trigger={['click']} placement="bottomRight">
+            <Button
+              type="text"
+              size="small"
+              icon={<MoreOutlined style={{ fontSize: 12, color: isActive ? '#b45309' : '#8c8c8c' }} />}
+              style={{ width: 20, height: 20, padding: 0 }}
+            />
+          </Dropdown>
         </div>
+      </div>
+    );
+
+    return (
+      <div key={node.id} style={{ display: 'flex', flexDirection: 'column' }}>
+        <Dropdown menu={{ items: folderMenu }} trigger={['contextMenu']}>
+          {nodeContent}
+        </Dropdown>
 
         {/* Expanded Content: Subfolders and Child Documents */}
         {isExpanded && (
