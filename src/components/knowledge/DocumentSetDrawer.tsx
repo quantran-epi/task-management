@@ -495,8 +495,27 @@ export function DocumentSetDrawer(props: DocumentSetDrawerProps) {
                           : 'Xây dựng đồ thị thất bại'
                       }
                       description={
-                        graphStatus.error?.message ??
-                        'Đồ thị tri thức chưa thể tạo. Kiểm tra tài liệu đã xuất bản rồi bấm Xây dựng lại đồ thị.'
+                        <Space direction="vertical" style={{ width: '100%' }}>
+                          <Text>
+                            {graphStatus.error?.message ??
+                              'Đồ thị tri thức chưa thể tạo. Kiểm tra tài liệu đã xuất bản hoặc LLM server rồi bấm Thử lại.'}
+                          </Text>
+                          {graphStatus.error?.details && (
+                            <Text type="secondary" style={{ fontSize: 12, display: 'block', wordBreak: 'break-all' }}>
+                              Chi tiết: {graphStatus.error.details}
+                            </Text>
+                          )}
+                          <Button
+                            type="primary"
+                            danger
+                            size="small"
+                            icon={<ReloadOutlined />}
+                            onClick={() => setRebuildConfirmOpen(true)}
+                            style={{ marginTop: 4 }}
+                          >
+                            Thử lại xây dựng đồ thị
+                          </Button>
+                        </Space>
                       }
                     />
                   )}
@@ -513,14 +532,25 @@ export function DocumentSetDrawer(props: DocumentSetDrawerProps) {
                               <Text strong>
                                 Giai đoạn: {STAGE_LABELS[graphStatus?.currentStage ?? 'Preparing']}
                               </Text>
-                              <Text type="secondary">Ứng viên riêng biệt</Text>
+                              {graphStatus?.progress?.totalChunks ? (
+                                <Text type="secondary" style={{ fontSize: 12 }}>
+                                  Phần: {graphStatus.progress.processedChunks}/{graphStatus.progress.totalChunks}
+                                </Text>
+                              ) : (
+                                <Text type="secondary">Đang khởi tạo...</Text>
+                              )}
                             </Space>
                             <Progress
-                              percent={STAGE_PROGRESS[graphStatus?.currentStage ?? 'Preparing']}
+                              percent={graphStatus?.progress?.percent ?? STAGE_PROGRESS[graphStatus?.currentStage ?? 'Preparing']}
                               status="active"
                               size="small"
                             />
-                            <Text type="secondary" style={{ fontSize: 12 }}>
+                            {graphStatus?.progress?.stageMessage && (
+                              <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 2 }}>
+                                {graphStatus.progress.stageMessage}
+                              </Text>
+                            )}
+                            <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4, color: token.colorTextTertiary }}>
                               Đồ thị đang hoạt động trước đó vẫn khả dụng cho đến khi ứng viên hoàn tất.
                             </Text>
                           </div>

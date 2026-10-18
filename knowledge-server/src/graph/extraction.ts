@@ -260,10 +260,8 @@ export function detectTableSchema(headers: string[]): TableSchemaRoles {
     /^WRITES$/,
     /WRITE_TO/,
     /WRITES_TO/,
-    /^GHI$/,
-    /^GHI_VAO$/,
-    /TARGET_TABLE/,
-    /BANG_DICH/,
+    /^TARGET_TABLE$/,
+    /^BANG_DICH$/,
   ]);
 
   const isContIdx = findIdx([
@@ -432,8 +430,9 @@ function handleStepTable(table: Table, roles: TableSchemaRoles, ctx: TraversalCo
     const row = table.children[r]!;
     const cells = getRowCells(row);
     const orderStr = orderIdx >= 0 ? cells[orderIdx]?.trim() : undefined;
-    const rawStepId = (idIdx >= 0 ? cells[idIdx]?.trim() : '') || (orderStr ? `STEP_${orderStr}` : `STEP_${r}`);
-    if (!orderStr && !rawStepId) continue;
+    const rawStepId = idIdx >= 0 ? cells[idIdx]?.trim() : '';
+    // Never invent generic dummy steps like STEP_1, STEP_2 when id is missing
+    if (!rawStepId || rawStepId.length < 2) continue;
 
     const execOrder = orderStr ? parseInt(orderStr, 10) : r;
     if (isNaN(execOrder)) continue;
@@ -549,8 +548,8 @@ function handleStepTable(table: Table, roles: TableSchemaRoles, ctx: TraversalCo
 
     // Process WRITES column if present
     if (writes && writes.toLowerCase() !== 'null' && writes.toLowerCase() !== '-') {
-      // Split tokens by comma, semicolon, or whitespace
-      const rawTokens = writes.match(/[A-Za-z0-9_.]+/g) || [];
+      // Split tokens by comma, semicolon, or whitespace, matching explicit table identifiers
+      const rawTokens = writes.match(/\b(?:([A-Za-z0-9_]{2,}\.[A-Za-z0-9_]{2,})|((?:TBL|ACC|OPR|CRD|AUT|PRC|FCL|NPS|VIS|MCW|EVT)_[A-Z0-9_]+))\b/gi) || [];
       for (const token of rawTokens) {
         if (token.toUpperCase().includes('PKG') || token.toUpperCase() === 'PROCESS') continue;
 
@@ -577,22 +576,8 @@ function handleStepTable(table: Table, roles: TableSchemaRoles, ctx: TraversalCo
         };
         addNode(ctx, dbNode);
 
-        const op = writes.toLowerCase().includes('update') ? 'UPDATE' : 'INSERT';
-        addFactAndEvidence(
-          ctx,
-          stepUrn,
-          'WRITES_TO',
-          tableUrn,
-          { operation: op },
-          rowStartLine,
-          rowEndLine,
-          rowStartOffset,
-          rowEndOffset,
-          rawSnippet,
-          'DETERMINISTIC_TABLE'
-        );
-
         if (compUrn) {
+          const op = writes.toLowerCase().includes('update') ? 'UPDATE' : 'INSERT';
           addFactAndEvidence(
             ctx,
             compUrn,
@@ -766,7 +751,7 @@ function handleDispatchTable(table: Table, roles: TableSchemaRoles, ctx: Travers
     const rowEndOffset = row.position?.end?.offset ?? table.position?.end?.offset ?? 0;
     const rawSnippet = ctx.documentBody.slice(rowStartOffset, rowEndOffset);
 
-    const tableTokens = writes.match(/[A-Z][A-Z0-9_]{3,}/g) || [];
+    const tableTokens = writes.match(/\b(?:([A-Za-z0-9_]{2,}\.[A-Za-z0-9_]{2,})|((?:TBL|ACC|OPR|CRD|AUT|PRC|FCL|NPS|VIS|MCW|EVT)_[A-Z0-9_]+))\b/gi) || [];
     for (const token of tableTokens) {
       if (token.includes('PKG') || token === 'PROCESS') continue;
 
@@ -851,10 +836,12 @@ function handleStatusTable(table: Table, roles: TableSchemaRoles, ctx: Traversal
  */
 function handleDataObjectsTables(table: Table, ctx: TraversalContext): void {
   const lastHeading = ctx.headingPath[ctx.headingPath.length - 1] || '';
+  // Only accept explicit backticked identifiers, schema-qualified tables (e.g. MAIN1.ACC_ENTRY),
+  // or known table prefix naming patterns (e.g. TBL_*, ACC_*, OPR_*, CRD_*, AUT_*, PRC_*, FCL_*).
   const match =
     lastHeading.match(/`([^`]+)`/) ||
     lastHeading.match(/\b([A-Za-z0-9_]{2,}\.[A-Za-z0-9_]{2,}(?:\.[A-Za-z0-9_]+)*)\b/) ||
-    lastHeading.match(/`?([A-Za-z0-9_]{3,}(?:\.[A-Za-z0-9_]{3,})*)`?/);
+    lastHeading.match(/\b((?:TBL|ACC|OPR|CRD|AUT|PRC|FCL|NPS|VIS|MCW|EVT)_[A-Z0-9_]+)\b/i);
   if (!match) return;
 
   const rawTable = match[1]!;
@@ -959,8 +946,8 @@ function handleDataObjectsTables(table: Table, ctx: TraversalContext): void {
 function extractTechnicalEntitiesFromText(
   text: string,
   ctx: TraversalContext,
-  startLine: number,
-  endLine: number
+  _startLine?: number,
+  _endLine?: number
 ): void {
   if (!text || text.trim().length === 0) return;
 

@@ -124,12 +124,24 @@ export const CandidateStatusSchema = z.enum([
 ]);
 export type CandidateStatus = z.infer<typeof CandidateStatusSchema>;
 
+export const GraphStatusProgressSchema = z
+  .object({
+    processedChunks: z.number().int().nonnegative(),
+    totalChunks: z.number().int().nonnegative(),
+    percent: z.number().min(0).max(100),
+    currentDocumentTitle: z.string().optional(),
+    stageMessage: z.string().optional(),
+  })
+  .strict();
+export type GraphStatusProgress = z.infer<typeof GraphStatusProgressSchema>;
+
 export const GraphStatusResponseSchema = z
   .object({
     setId: uuid,
     state: GraphStateSchema,
     activeGraphSnapshotId: uuid.optional(),
     currentStage: GraphBuildStageSchema.optional(),
+    progress: GraphStatusProgressSchema.optional(),
     nodeCount: z.number().int().nonnegative(),
     factCount: z.number().int().nonnegative(),
     evidenceCount: z.number().int().nonnegative(),

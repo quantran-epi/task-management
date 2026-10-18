@@ -14,10 +14,16 @@ import { RELATION_QUALIFIER_ALLOWLIST, ONTOLOGY_VERSION } from './ontology.js';
  * Percent-encodes characters that violate URN syntax.
  */
 function encodeUrnSegment(str: string): string {
-  return str.replace(/[^a-zA-Z0-9_.~%-]/g, (char) => {
-    const encoded = encodeURIComponent(char);
-    return encoded.replace(/[^a-zA-Z0-9_.~%-]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
-  });
+  // Replace characters not allowed in URN segment: only [A-Za-z0-9_.~%-] allowed
+  return str.replace(/[^a-zA-Z0-9_.~%-]/g, '_');
+}
+
+/**
+ * Normalizes system/type segment for URN compatibility.
+ */
+function sanitizeUrnIdentifier(str: string, fallback: string): string {
+  const cleaned = str.trim().replace(/[^a-zA-Z0-9_-]/g, '_');
+  return cleaned.length > 0 ? cleaned : fallback;
 }
 
 /**
@@ -32,9 +38,9 @@ export function buildUrn(
   normalizedKey: string,
   segments: readonly string[] = []
 ): Urn {
-  const normSystem = sourceSystem.trim().toLowerCase();
-  const normType = nativeType.trim();
-  const normKey = encodeUrnSegment(normalizedKey.trim());
+  const normSystem = sanitizeUrnIdentifier(sourceSystem.toLowerCase(), 'system');
+  const normType = sanitizeUrnIdentifier(nativeType, 'Generic');
+  const normKey = encodeUrnSegment(normalizedKey.trim()) || 'unknown';
 
   let urnStr = `urn:plannermate:${normSystem}:${normType}:${normKey}`;
   if (segments.length > 0) {

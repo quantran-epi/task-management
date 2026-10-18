@@ -2,20 +2,15 @@ import { randomUUID } from 'node:crypto';
 import type { GraphRepository } from '../graph/graphRepository.js';
 import { InMemoryGraphRepository } from '../graph/graphRepository.js';
 import type { SnapshotStore } from '../indexing/snapshotStore.js';
-import { extractDeterministicFacts } from '../graph/extraction.js';
 import { mergeFactsDeterministicFirst } from '../graph/candidate.js';
 import { ONTOLOGY_VERSION } from '../graph/ontology.js';
-import { collectUncoveredProse, extractProseCandidatesOnce } from '../ai/proseExtraction.js';
+import { extractWithLLMPure, type LLMExtractionProgress } from '../ai/llmExtraction.js';
 import type { EmbeddingProvider } from '../retrieval/contracts.js';
-import type {
-  FactAssertion,
-  GraphEvidenceRecord,
-  QuarantinedIdentifier,
-} from '../types/graphProtocol.js';
 import type {
   GraphBuildStage,
   GraphState,
   GraphStatusDTO,
+  GraphStatusProgress,
   CandidateStatus,
   FactsListDTO,
   FactEvidenceDetailDTO,
@@ -74,6 +69,7 @@ export interface GraphBuildServiceOptions {
 export class GraphBuildService {
   private inProgressSets = new Set<string>();
   private currentStages = new Map<string, GraphBuildStage>();
+  private currentProgress = new Map<string, GraphStatusProgress>();
   private rebuildReplays = new Map<string, RebuildAcceptedDTO>(); // setId:rebuildKey -> DTO
   private activeGraphSnapshots = new Map<string, string>(); // setId -> graphSnapshotId
   private candidateBySet = new Map<string, { candidateSnapshotId: string; status: CandidateStatus }>();
@@ -202,44 +198,51 @@ export class GraphBuildService {
     try {
       // Stage b: Preparing
       this.currentStages.set(setId, 'Preparing');
+      this.currentProgress.set(setId, {
+        processedChunks: 0,
+        totalChunks: 0,
+        percent: 10,
+        stageMessage: 'Đang chuẩn bị tài liệu để trích xuất...',
+      });
 
-      // Stage c: Structured extraction
-      this.currentStages.set(setId, 'Structured extraction');
-      const extractionResult = extractDeterministicFacts(sourceSnapshot);
-
-      // Stage d: Prose extraction (Bug 3 cause B)
+      // Stage c & d: Pure LLM Extraction (No local regex heuristic, no STEP_x generation)
       this.currentStages.set(setId, 'Prose extraction');
-      let inferredFacts: FactAssertion[] = [];
-      let inferredEvidence: GraphEvidenceRecord[] = [];
-      const proseQuarantines: QuarantinedIdentifier[] = [];
-
-      if (this.proseExtraction && this.proseExtraction.endpoint) {
-        try {
-          const segments = collectUncoveredProse(sourceSnapshot, extractionResult.consumedRanges);
-          if (segments.length > 0) {
-            const proseResult = await extractProseCandidatesOnce({
-              endpoint: this.proseExtraction.endpoint,
-              model: this.proseExtraction.model,
-              ...(this.proseExtraction.apiKey ? { apiKey: this.proseExtraction.apiKey } : {}),
-              segments,
-              resolvedEndpoints: extractionResult.nodes,
-              ...(this.proseExtraction.fetchFn ? { fetchFn: this.proseExtraction.fetchFn } : {}),
-            });
-            inferredFacts = proseResult.facts;
-            inferredEvidence = proseResult.evidence;
-            proseQuarantines.push(...proseResult.quarantines);
-          }
-        } catch (proseErr) {
-          // eslint-disable-next-line no-console
-          console.warn(
-            '[PROSE_EXTRACTION_FALLBACK] Error during prose extraction; falling back to deterministic only:',
-            proseErr
-          );
-        }
+      if (!this.proseExtraction || !this.proseExtraction.endpoint) {
+        throw new Error(
+          'PROSE_EXTRACTION_NOT_CONFIGURED: Không tìm thấy cấu hình LLM để trích xuất đồ thị. Vui lòng cấu hình PROSE_EXTRACTION_ENDPOINT và MODEL trong phần cài đặt.'
+        );
       }
+
+      const onProgress = (p: LLMExtractionProgress) => {
+        const percent = p.totalChunks > 0 ? Math.round((p.processedChunks / p.totalChunks) * 70) + 15 : 15;
+        this.currentProgress.set(setId, {
+          processedChunks: p.processedChunks,
+          totalChunks: p.totalChunks,
+          percent: Math.min(percent, 85),
+          currentDocumentTitle: p.currentDocumentTitle,
+          stageMessage: p.stageMessage,
+        });
+      };
+
+      const pureResult = await extractWithLLMPure(
+        sourceSnapshot,
+        {
+          endpoint: this.proseExtraction.endpoint,
+          model: this.proseExtraction.model,
+          apiKey: this.proseExtraction.apiKey,
+          fetchFn: this.proseExtraction.fetchFn,
+          onProgress,
+        }
+      );
 
       // Stage e: Validation
       this.currentStages.set(setId, 'Validation');
+      this.currentProgress.set(setId, {
+        processedChunks: pureResult.nodes.length,
+        totalChunks: pureResult.nodes.length,
+        percent: 88,
+        stageMessage: 'Đang kiểm tra và chuẩn hóa cấu trúc thực thể, quan hệ...',
+      });
       const approvals = this.snapshotStore.getApprovals(setId);
 
       const candidate = mergeFactsDeterministicFirst({
@@ -247,13 +250,13 @@ export class GraphBuildService {
         sourceSnapshotId: frozenSourceSnapshotId,
         setId,
         ontologyVersion: ONTOLOGY_VERSION,
-        nodes: extractionResult.nodes,
-        deterministicFacts: extractionResult.facts,
-        deterministicEvidence: extractionResult.evidence,
-        inferredFacts,
-        inferredEvidence,
+        nodes: pureResult.nodes,
+        deterministicFacts: [], // Zero local regex facts
+        deterministicEvidence: [],
+        inferredFacts: pureResult.facts,
+        inferredEvidence: pureResult.evidence,
         approvals,
-        quarantines: [...extractionResult.quarantines, ...proseQuarantines],
+        quarantines: pureResult.quarantines,
       });
 
       // Write candidate to repository with READY state
@@ -261,6 +264,12 @@ export class GraphBuildService {
 
       // Stage f: Build retrieval generation (chunks, fulltext index, vector index) before activation
       this.currentStages.set(setId, 'Retrieval generation');
+      this.currentProgress.set(setId, {
+        processedChunks: 1,
+        totalChunks: 1,
+        percent: 95,
+        stageMessage: 'Đang xây dựng vector embeddings và fulltext index...',
+      });
       await this.repository.buildRetrievalGeneration(
         candidate,
         sourceSnapshot,
@@ -440,6 +449,7 @@ export class GraphBuildService {
         state: 'Building',
         ...(activeView ? { activeGraphSnapshotId: activeView.graphSnapshotId } : {}),
         currentStage: this.currentStages.get(setId) || 'Preparing',
+        progress: this.currentProgress.get(setId),
         nodeCount: activeView ? activeView.nodeCount : 0,
         factCount: activeView ? activeView.factCount : 0,
         evidenceCount: activeView ? activeView.evidenceCount : 0,
