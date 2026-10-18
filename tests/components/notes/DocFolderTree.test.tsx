@@ -263,4 +263,125 @@ describe('DocFolderTree Component', () => {
     expect(trashItem).toBeInTheDocument();
     expect(trashItem).toHaveStyle({ paddingLeft: '34px' });
   });
+
+  it('renders search scope toggle with "Tất cả" and "Thư mục hiện tại"', () => {
+    render(
+      <DocFolderTree
+        notes={mockNotes}
+        activeFilter="folder-1"
+        onSelectFilter={vi.fn()}
+        onCreateDoc={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Tất cả')).toBeInTheDocument();
+    expect(screen.getByText('Thư mục hiện tại')).toBeInTheDocument();
+  });
+
+  it('filters search results to active folder hierarchy when scope is folder', async () => {
+    const hierarchicalNotes: Note[] = [
+      {
+        id: 'folder-A',
+        title: 'Thư mục A',
+        body: '',
+        type: 'folder',
+        isPinned: false,
+        createdAt: '2026-10-01T00:00:00Z',
+        updatedAt: '2026-10-01T00:00:00Z',
+      },
+      {
+        id: 'doc-A1',
+        title: 'Kiến trúc hệ thống A1',
+        body: 'Nội dung kiến trúc A1',
+        type: 'document',
+        parentId: 'folder-A',
+        isPinned: false,
+        createdAt: '2026-10-01T00:00:00Z',
+        updatedAt: '2026-10-01T00:00:00Z',
+      },
+      {
+        id: 'folder-A-sub',
+        title: 'Thư mục con A Sub',
+        body: '',
+        type: 'folder',
+        parentId: 'folder-A',
+        isPinned: false,
+        createdAt: '2026-10-01T00:00:00Z',
+        updatedAt: '2026-10-01T00:00:00Z',
+      },
+      {
+        id: 'doc-A-sub1',
+        title: 'Kiến trúc hệ thống Sub A1',
+        body: 'Nội dung kiến trúc Sub A1',
+        type: 'document',
+        parentId: 'folder-A-sub',
+        isPinned: false,
+        createdAt: '2026-10-01T00:00:00Z',
+        updatedAt: '2026-10-01T00:00:00Z',
+      },
+      {
+        id: 'folder-B',
+        title: 'Thư mục B',
+        body: '',
+        type: 'folder',
+        isPinned: false,
+        createdAt: '2026-10-01T00:00:00Z',
+        updatedAt: '2026-10-01T00:00:00Z',
+      },
+      {
+        id: 'doc-B1',
+        title: 'Kiến trúc hệ thống B1',
+        body: 'Nội dung kiến trúc B1',
+        type: 'document',
+        parentId: 'folder-B',
+        isPinned: false,
+        createdAt: '2026-10-01T00:00:00Z',
+        updatedAt: '2026-10-01T00:00:00Z',
+      },
+      {
+        id: 'doc-root',
+        title: 'Kiến trúc hệ thống Root',
+        body: 'Nội dung kiến trúc root',
+        type: 'document',
+        isPinned: false,
+        createdAt: '2026-10-01T00:00:00Z',
+        updatedAt: '2026-10-01T00:00:00Z',
+      },
+    ];
+
+    render(
+      <DocFolderTree
+        notes={hierarchicalNotes}
+        loadSearchNotes={async () => hierarchicalNotes}
+        activeFilter="folder-A"
+        onSelectFilter={vi.fn()}
+        onCreateDoc={vi.fn()}
+      />
+    );
+
+    const searchInput = screen.getByPlaceholderText('Tìm kiếm tài liệu (BM25)...');
+    fireEvent.change(searchInput, { target: { value: 'Kiến trúc' } });
+
+    // In 'Tất cả' scope (default), all matching docs appear
+    await waitFor(() => {
+      expect(screen.getByText('Kiến trúc hệ thống A1')).toBeInTheDocument();
+      expect(screen.getByText('Kiến trúc hệ thống Sub A1')).toBeInTheDocument();
+      expect(screen.getByText('Kiến trúc hệ thống B1')).toBeInTheDocument();
+      expect(screen.getByText('Kiến trúc hệ thống Root')).toBeInTheDocument();
+    });
+
+    // Switch to 'Thư mục hiện tại'
+    fireEvent.click(screen.getByText('Thư mục hiện tại'));
+
+    // Should only contain doc-A1 and doc-A-sub1 (descendant subfolder)
+    await waitFor(() => {
+      expect(screen.getByText('Kiến trúc hệ thống A1')).toBeInTheDocument();
+      expect(screen.getByText('Kiến trúc hệ thống Sub A1')).toBeInTheDocument();
+      expect(screen.queryByText('Kiến trúc hệ thống B1')).not.toBeInTheDocument();
+      expect(screen.queryByText('Kiến trúc hệ thống Root')).not.toBeInTheDocument();
+    });
+
+    // Verify scope indicator in search results header
+    expect(screen.getByText(/Thư mục A/)).toBeInTheDocument();
+  });
 });
