@@ -618,14 +618,14 @@ const AppShellInner: React.FC<AppShellProps> = ({
               </Tooltip>
             )}
 
-            <Tooltip title="Tổng kết ngày & Standup">
+            <Tooltip title="Tổng quan & Đánh giá ngày (Briefing & Debriefing)">
               <Button
                 type="text"
                 icon={<CheckCircleOutlined style={{ fontSize: 16, color: '#4f46e5' }} />}
                 onClick={() => setDailyReviewOpen(true)}
-                aria-label="Mở tổng kết ngày"
+                aria-label="Mở tổng quan và đánh giá ngày"
               >
-                {!isMobile && <span style={{ fontSize: 13, color: token.colorTextSecondary }}>Tổng kết</span>}
+                {!isMobile && <span style={{ fontSize: 13, color: token.colorTextSecondary }}>Tổng quan ngày</span>}
               </Button>
             </Tooltip>
 
