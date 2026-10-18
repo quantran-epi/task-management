@@ -276,6 +276,35 @@ export const QuarantineListResponseSchema = z
   .strict();
 export type QuarantineListResponse = z.infer<typeof QuarantineListResponseSchema>;
 
+export const ChunkStatusItemSchema = z
+  .object({
+    chunkId: z.string(),
+    documentId: uuid,
+    documentTitle: z.string(),
+    chunkIndex: z.number().int().nonnegative(),
+    totalChunksInDoc: z.number().int().nonnegative(),
+    status: z.enum(['PENDING', 'EXTRACTING', 'SUCCESS', 'FAILED']),
+    error: z.string().optional(),
+    updatedAt: z.string(),
+    nodesCount: z.number().int().nonnegative(),
+    factsCount: z.number().int().nonnegative(),
+  })
+  .strict();
+export type ChunkStatusItem = z.infer<typeof ChunkStatusItemSchema>;
+
+export const ChunksListResponseSchema = z
+  .object({
+    setId: uuid,
+    total: z.number().int().nonnegative(),
+    success: z.number().int().nonnegative(),
+    failed: z.number().int().nonnegative(),
+    pending: z.number().int().nonnegative(),
+    extracting: z.number().int().nonnegative(),
+    chunks: z.array(ChunkStatusItemSchema),
+  })
+  .strict();
+export type ChunksListResponse = z.infer<typeof ChunksListResponseSchema>;
+
 type AttemptResponse = z.infer<typeof AttemptResponseSchema>;
 
 export type KnowledgeClientErrorCode =
@@ -771,9 +800,45 @@ export function createKnowledgeClient(options: CreateKnowledgeClientOptions) {
       );
     },
 
+    async getGraphChunks(
+      setId: string,
+      signal?: AbortSignal
+    ): Promise<ChunksListResponse> {
+      return request(
+        `/sets/${encodeURIComponent(setId)}/graph/chunks`,
+        ChunksListResponseSchema,
+        signal ? { signal } : {}
+      );
+    },
+
+    async retryGraphChunks(
+      setId: string,
+      chunkIds?: string[],
+      signal?: AbortSignal
+    ): Promise<RebuildAcceptedResponse> {
+      const rebuildKey = crypto.randomUUID();
+      return request(
+        `/sets/${encodeURIComponent(setId)}/graph/retry-chunks`,
+        RebuildAcceptedResponseSchema,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Rebuild-Key': rebuildKey,
+          },
+          body: JSON.stringify({
+            ...(chunkIds && chunkIds.length > 0 ? { chunkIds } : {}),
+          }),
+          ...(signal ? { signal } : {}),
+        }
+      );
+    },
+
     async pollGraphStatus(
       setId: string,
-      pollOptions: PollAttemptOptions = {}
+      pollOptions: PollAttemptOptions & {
+        onProgress?: (status: GraphStatusResponse) => void;
+      } = {}
     ): Promise<GraphStatusResponse & { uncertain?: boolean }> {
       let delay = pollOptions.initialDelayMs ?? 1000;
       const maxDelay = pollOptions.maxDelayMs ?? 5000;
@@ -803,6 +868,9 @@ export function createKnowledgeClient(options: CreateKnowledgeClientOptions) {
             GraphStatusResponseSchema,
             pollOptions.signal ? { signal: pollOptions.signal } : {}
           );
+          if (pollOptions.onProgress && last) {
+            pollOptions.onProgress(last);
+          }
           if (last.state === 'Failed') return last;
           if (last.state !== 'Building') return last;
         } catch (error: unknown) {

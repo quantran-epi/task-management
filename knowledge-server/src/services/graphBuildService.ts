@@ -4,7 +4,12 @@ import { InMemoryGraphRepository } from '../graph/graphRepository.js';
 import type { SnapshotStore } from '../indexing/snapshotStore.js';
 import { mergeFactsDeterministicFirst } from '../graph/candidate.js';
 import { ONTOLOGY_VERSION } from '../graph/ontology.js';
-import { extractWithLLMPure, type LLMExtractionProgress } from '../ai/llmExtraction.js';
+import {
+  extractWithLLMPure,
+  globalChunkStore,
+  type LLMExtractionProgress,
+  type ChunkExtractionItem,
+} from '../ai/llmExtraction.js';
 import type { EmbeddingProvider } from '../retrieval/contracts.js';
 import type {
   GraphBuildStage,
@@ -19,6 +24,7 @@ import type {
   FactSummaryDTO,
   EvidenceRecordDTO,
   QuarantineItemDTO,
+  ChunksListDTO,
 } from '../routes/graph.js';
 
 export class GraphBuildInProgressError extends Error {
@@ -177,7 +183,8 @@ export class GraphBuildService {
 
   async prepareCandidate(
     setId: string,
-    candidateSnapshotId: string = randomUUID()
+    candidateSnapshotId: string = randomUUID(),
+    options?: { targetChunkIds?: string[] }
   ): Promise<string> {
     if (!this.snapshotStore) {
       throw new Error('NO_SNAPSHOT_STORE');
@@ -231,6 +238,7 @@ export class GraphBuildService {
           model: this.proseExtraction.model,
           apiKey: this.proseExtraction.apiKey,
           fetchFn: this.proseExtraction.fetchFn,
+          targetChunkIds: options?.targetChunkIds,
           onProgress,
         }
       );
@@ -399,10 +407,14 @@ export class GraphBuildService {
     return await this.repository.cleanupSupersededGenerations(now, this.rollbackGracePeriodMs);
   }
 
-  private async executeRebuild(setId: string, candidateSnapshotId: string): Promise<void> {
+  private async executeRebuild(
+    setId: string,
+    candidateSnapshotId: string,
+    options?: { targetChunkIds?: string[] }
+  ): Promise<void> {
     // Public rebuild is phase 1 only. Operator verifies READY candidate before the
     // separate CAS activation endpoint changes the live pointer.
-    await this.prepareCandidate(setId, candidateSnapshotId);
+    await this.prepareCandidate(setId, candidateSnapshotId, options);
   }
 
   private safeBuildError(error: Error): NonNullable<GraphStatusDTO['error']> {
@@ -647,6 +659,88 @@ export class GraphBuildService {
       totalQuarantines: items.length,
       quarantines: items,
     };
+  }
+
+  getChunkStatusList(setId: string): ChunksListDTO {
+    const chunks: ChunkExtractionItem[] = globalChunkStore.getChunkItems(setId);
+    const total = chunks.length;
+    let success = 0;
+    let failed = 0;
+    let pending = 0;
+    let extracting = 0;
+
+    for (const c of chunks) {
+      if (c.status === 'SUCCESS') success++;
+      else if (c.status === 'FAILED') failed++;
+      else if (c.status === 'EXTRACTING') extracting++;
+      else pending++;
+    }
+
+    return {
+      setId,
+      total,
+      success,
+      failed,
+      pending,
+      extracting,
+      chunks: chunks.map((c) => ({
+        chunkId: c.chunkId,
+        documentId: c.documentId,
+        documentTitle: c.documentTitle,
+        chunkIndex: c.chunkIndex,
+        totalChunksInDoc: c.totalChunksInDoc,
+        status: c.status,
+        ...(c.error ? { error: c.error } : {}),
+        updatedAt: c.updatedAt,
+        nodesCount: c.nodesCount ?? 0,
+        factsCount: c.factsCount ?? 0,
+      })),
+    };
+  }
+
+  async triggerRetryChunks(
+    setId: string,
+    rebuildKey: string,
+    chunkIds?: string[]
+  ): Promise<RebuildAcceptedDTO> {
+    const replayKey = `${setId}:${rebuildKey}`;
+    const existing = this.rebuildReplays.get(replayKey);
+    if (existing) {
+      return existing;
+    }
+
+    if (this.inProgressSets.has(setId)) {
+      throw new GraphBuildInProgressError(setId);
+    }
+
+    const candidateSnapshotId = randomUUID();
+    const dto: RebuildAcceptedDTO = {
+      setId,
+      rebuildKey,
+      status: 'ACCEPTED',
+      candidateSnapshotId,
+    };
+
+    this.rebuildReplays.set(replayKey, dto);
+    this.inProgressSets.add(setId);
+    this.currentStages.set(setId, 'Preparing');
+    this.buildErrors.delete(setId);
+
+    // Reset targeted chunk statuses
+    globalChunkStore.resetFailedChunks(setId, chunkIds);
+
+    const rebuildOpts = chunkIds ? { targetChunkIds: chunkIds } : undefined;
+    this.executeRebuild(setId, candidateSnapshotId, rebuildOpts)
+      .catch((err: unknown) => {
+        console.error('[GRAPH_RETRY_CHUNKS_FATAL]', err);
+        this.buildErrors.set(setId, err instanceof Error ? err : new Error(String(err)));
+      })
+      .finally(() => {
+        this.inProgressSets.delete(setId);
+        this.currentStages.delete(setId);
+      });
+
+    return dto;
   }
 
   async purgeSet(setId: string): Promise<boolean> {

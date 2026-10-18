@@ -30,6 +30,7 @@ function deterministicUuid(seed: string): string {
 }
 
 export interface TextChunk {
+  chunkId: string;
   documentId: string;
   documentTitle: string;
   chunkIndex: number;
@@ -38,6 +39,116 @@ export interface TextChunk {
   startOffset: number;
   endOffset: number;
 }
+
+export interface ChunkExtractionItem {
+  chunkId: string;
+  documentId: string;
+  documentTitle: string;
+  chunkIndex: number;
+  totalChunksInDoc: number;
+  status: 'PENDING' | 'EXTRACTING' | 'SUCCESS' | 'FAILED';
+  error?: string | undefined;
+  updatedAt: string;
+  nodesCount: number;
+  factsCount: number;
+}
+
+export interface ChunkCachedResult {
+  chunkId: string;
+  nodes: ResolvedNode[];
+  facts: FactAssertion[];
+  evidence: GraphEvidenceRecord[];
+  quarantines: QuarantinedIdentifier[];
+}
+
+export class ChunkExtractionStore {
+  private chunksBySet = new Map<string, Map<string, ChunkExtractionItem>>();
+  private cachedResults = new Map<string, Map<string, ChunkCachedResult>>();
+
+  initChunks(setId: string, chunks: TextChunk[]): void {
+    let itemMap = this.chunksBySet.get(setId);
+    if (!itemMap) {
+      itemMap = new Map();
+      this.chunksBySet.set(setId, itemMap);
+    }
+
+    const now = new Date().toISOString();
+    for (const c of chunks) {
+      if (!itemMap.has(c.chunkId)) {
+        itemMap.set(c.chunkId, {
+          chunkId: c.chunkId,
+          documentId: c.documentId,
+          documentTitle: c.documentTitle,
+          chunkIndex: c.chunkIndex,
+          totalChunksInDoc: c.totalChunksInDoc,
+          status: 'PENDING',
+          updatedAt: now,
+          nodesCount: 0,
+          factsCount: 0,
+        });
+      }
+    }
+  }
+
+  setChunkStatus(
+    setId: string,
+    chunkId: string,
+    status: ChunkExtractionItem['status'],
+    error?: string,
+    nodesCount = 0,
+    factsCount = 0
+  ): void {
+    const itemMap = this.chunksBySet.get(setId);
+    const item = itemMap?.get(chunkId);
+    if (item) {
+      item.status = status;
+      item.error = error;
+      item.updatedAt = new Date().toISOString();
+      if (nodesCount) item.nodesCount = nodesCount;
+      if (factsCount) item.factsCount = factsCount;
+    }
+  }
+
+  saveChunkResult(setId: string, chunkId: string, result: ChunkCachedResult): void {
+    let resMap = this.cachedResults.get(setId);
+    if (!resMap) {
+      resMap = new Map();
+      this.cachedResults.set(setId, resMap);
+    }
+    resMap.set(chunkId, result);
+    this.setChunkStatus(setId, chunkId, 'SUCCESS', undefined, result.nodes.length, result.facts.length);
+  }
+
+  getChunkResult(setId: string, chunkId: string): ChunkCachedResult | undefined {
+    return this.cachedResults.get(setId)?.get(chunkId);
+  }
+
+  getAllCachedResults(setId: string): ChunkCachedResult[] {
+    const resMap = this.cachedResults.get(setId);
+    return resMap ? Array.from(resMap.values()) : [];
+  }
+
+  getChunkItems(setId: string): ChunkExtractionItem[] {
+    const itemMap = this.chunksBySet.get(setId);
+    return itemMap ? Array.from(itemMap.values()) : [];
+  }
+
+  resetFailedChunks(setId: string, targetChunkIds?: string[]): void {
+    const itemMap = this.chunksBySet.get(setId);
+    if (!itemMap) return;
+    for (const item of itemMap.values()) {
+      if (item.status === 'FAILED') {
+        if (!targetChunkIds || targetChunkIds.length === 0 || targetChunkIds.includes(item.chunkId)) {
+          item.status = 'PENDING';
+          item.error = undefined;
+          item.updatedAt = new Date().toISOString();
+        }
+      }
+    }
+  }
+}
+
+export const globalChunkStore = new ChunkExtractionStore();
 
 /**
  * Splits document content into clean, semantic chunks (~2500 chars) preserving section boundaries.
@@ -61,10 +172,12 @@ export function splitDocumentIntoChunks(doc: ProjectedDocument): TextChunk[] {
     }
 
     if (currentText.length + trimmed.length > CHUNK_MAX_CHARS && currentText.length >= CHUNK_TARGET_CHARS) {
+      const idx = chunks.length;
       chunks.push({
+        chunkId: `${doc.documentId}:${idx}`,
         documentId: doc.documentId,
         documentTitle: doc.title,
-        chunkIndex: chunks.length,
+        chunkIndex: idx,
         totalChunksInDoc: 0,
         text: currentText.trim(),
         startOffset: currentStart,
@@ -80,10 +193,12 @@ export function splitDocumentIntoChunks(doc: ProjectedDocument): TextChunk[] {
   }
 
   if (currentText.trim()) {
+    const idx = chunks.length;
     chunks.push({
+      chunkId: `${doc.documentId}:${idx}`,
       documentId: doc.documentId,
       documentTitle: doc.title,
-      chunkIndex: chunks.length,
+      chunkIndex: idx,
       totalChunksInDoc: 0,
       text: currentText.trim(),
       startOffset: currentStart,
@@ -99,9 +214,6 @@ export function splitDocumentIntoChunks(doc: ProjectedDocument): TextChunk[] {
   return chunks;
 }
 
-/**
- * Zod schema for structured LLM extraction response.
- */
 export const ExtractedEntitySchema = z.object({
   name: z.string().trim().min(1).max(200),
   kind: z.enum(NODE_KINDS),
@@ -139,8 +251,8 @@ export type LLMExtractionPayload = z.infer<typeof LLMExtractionPayloadSchema>;
 export interface LLMExtractionProgress {
   processedChunks: number;
   totalChunks: number;
-  currentDocumentTitle?: string;
-  stageMessage?: string;
+  currentDocumentTitle?: string | undefined;
+  stageMessage?: string | undefined;
 }
 
 export type ProgressCallback = (progress: LLMExtractionProgress) => void;
@@ -153,6 +265,7 @@ export interface LLMExtractorOptions {
   maxRetries?: number | undefined;
   fetchFn?: typeof fetch | undefined;
   onProgress?: ProgressCallback | undefined;
+  targetChunkIds?: string[] | undefined;
 }
 
 export interface PureLLMExtractionResult {
@@ -260,7 +373,6 @@ async function callLLMWithRetry(
       const rawText = await response.text();
       let content = '';
 
-      // Handle SSE stream lines if proxy forces streaming despite stream=false
       if (rawText.trim().startsWith('data:')) {
         let accumulated = '';
         for (const line of rawText.split('\n')) {
@@ -319,7 +431,6 @@ async function callLLMWithRetry(
         );
       }
 
-      // Exponential backoff: 2s, 4s, 8s
       const delayMs = Math.pow(2, attempt) * 1000;
       await new Promise((r) => setTimeout(r, delayMs));
     }
@@ -329,19 +440,20 @@ async function callLLMWithRetry(
 }
 
 /**
- * Pure LLM Extractor: iterates all chunks, queries LLM, strictly parses & links entities and facts.
+ * Pure LLM Extractor with per-chunk caching & selective retry capability.
  */
 export async function extractWithLLMPure(
   snapshot: ProjectionSnapshot,
   options: LLMExtractorOptions,
   signal?: AbortSignal
 ): Promise<PureLLMExtractionResult> {
+  const setId = snapshot.setId;
   const nodesMap = new Map<string, ResolvedNode>();
   const factsMap = new Map<string, FactAssertion>();
   const evidenceList: GraphEvidenceRecord[] = [];
   const quarantinesList: QuarantinedIdentifier[] = [];
 
-  // 1. Add SourceDocument nodes directly (guaranteed clean anchors)
+  // 1. Add SourceDocument nodes directly (clean anchors)
   for (const doc of snapshot.documents) {
     const docUrn = buildUrn('markdown', 'SourceDocument', doc.documentId);
     nodesMap.set(docUrn, {
@@ -359,16 +471,16 @@ export async function extractWithLLMPure(
     });
   }
 
-  // 2. Collect all document chunks
+  // 2. Collect and initialize all chunks
   const allChunks: TextChunk[] = [];
   for (const doc of snapshot.documents) {
     const docChunks = splitDocumentIntoChunks(doc);
     allChunks.push(...docChunks);
   }
 
-  const totalChunks = allChunks.length;
-  let processedChunks = 0;
+  globalChunkStore.initChunks(setId, allChunks);
 
+  const totalChunks = allChunks.length;
   if (totalChunks === 0) {
     return {
       nodes: Array.from(nodesMap.values()),
@@ -378,55 +490,80 @@ export async function extractWithLLMPure(
     };
   }
 
+  const targetChunkIds = options.targetChunkIds;
+
   options.onProgress?.({
     processedChunks: 0,
     totalChunks,
-    stageMessage: `Bắt đầu trích xuất đồ thị bằng LLM (tổng cộng ${totalChunks} phần)...`,
+    stageMessage: `Khởi tạo trích xuất ${totalChunks} phần...`,
   });
 
-  // 3. Process each chunk sequentially with progress reporting
+  let processedCount = 0;
+
+  // 3. Process each chunk (skipping already cached ones if not targeted for retry)
   for (const chunk of allChunks) {
     if (signal?.aborted) {
       throw new Error('EXTRACTION_ABORTED_BY_USER');
     }
 
+    const isTargeted = !targetChunkIds || targetChunkIds.length === 0 || targetChunkIds.includes(chunk.chunkId);
+    const cached = globalChunkStore.getChunkResult(setId, chunk.chunkId);
+
+    if (cached && !isTargeted) {
+      // Use cached result
+      for (const n of cached.nodes) nodesMap.set(n.urn, n);
+      for (const f of cached.facts) factsMap.set(f.factKey, f);
+      evidenceList.push(...cached.evidence);
+      quarantinesList.push(...cached.quarantines);
+      processedCount++;
+      continue;
+    }
+
+    if (!isTargeted) {
+      processedCount++;
+      continue;
+    }
+
+    globalChunkStore.setChunkStatus(setId, chunk.chunkId, 'EXTRACTING');
     options.onProgress?.({
-      processedChunks,
+      processedChunks: processedCount,
       totalChunks,
       currentDocumentTitle: chunk.documentTitle,
-      stageMessage: `Đang xử lý tài liệu "${chunk.documentTitle}" (${processedChunks + 1}/${totalChunks})...`,
+      stageMessage: `Đang trích xuất "${chunk.documentTitle}" (${processedCount + 1}/${totalChunks})...`,
     });
 
-    const userPrompt = `Document: "${chunk.documentTitle}" (chunk ${chunk.chunkIndex + 1}/${chunk.totalChunksInDoc})\n\nContent:\n${chunk.text}`;
+    const chunkNodes: ResolvedNode[] = [];
+    const chunkFacts: FactAssertion[] = [];
+    const chunkEvidence: GraphEvidenceRecord[] = [];
+    const chunkQuarantines: QuarantinedIdentifier[] = [];
 
-    const extraction = await callLLMWithRetry(userPrompt, options, signal);
+    try {
+      const userPrompt = `Document: "${chunk.documentTitle}" (chunk ${chunk.chunkIndex + 1}/${chunk.totalChunksInDoc})\n\nContent:\n${chunk.text}`;
+      const extraction = await callLLMWithRetry(userPrompt, options, signal);
 
-    // Entity resolution map (name -> URN)
-    const entityNameToUrn = new Map<string, { urn: string; kind: NodeKind }>();
+      const entityNameToUrn = new Map<string, { urn: string; kind: NodeKind }>();
 
-    for (const ent of extraction.entities) {
-      // Discard invalid / dummy entity names
-      const normName = ent.name.trim();
-      if (/^STEP[_\s-]*\d+$/i.test(normName) || /^BUOC[_\s-]*\d+$/i.test(normName)) {
-        quarantinesList.push({
-          rawIdentifier: normName,
-          reason: 'Dummy step entity rejected',
-          documentId: chunk.documentId,
-          sectionHeadingPath: [chunk.documentTitle],
-          startLine: 1,
-          endLine: 1,
-          extractionMethod: 'LLM_PROSE',
-          possibleMatches: [],
-        });
-        continue;
-      }
+      for (const ent of extraction.entities) {
+        const normName = ent.name.trim();
+        if (/^STEP[_\s-]*\d+$/i.test(normName) || /^BUOC[_\s-]*\d+$/i.test(normName)) {
+          chunkQuarantines.push({
+            rawIdentifier: normName,
+            reason: 'Dummy step entity rejected',
+            documentId: chunk.documentId,
+            sectionHeadingPath: [chunk.documentTitle],
+            startLine: 1,
+            endLine: 1,
+            extractionMethod: 'LLM_PROSE',
+            possibleMatches: [],
+          });
+          continue;
+        }
 
-      const sourceSystem = ent.sourceSystem || 'system';
-      const nativeType = ent.nativeType || ent.kind;
-      const urn = buildUrn(sourceSystem, ent.kind, normName);
+        const sourceSystem = ent.sourceSystem || 'system';
+        const nativeType = ent.nativeType || ent.kind;
+        const urn = buildUrn(sourceSystem, ent.kind, normName);
 
-      if (!nodesMap.has(urn)) {
-        nodesMap.set(urn, {
+        const nodeObj: ResolvedNode = {
           urn,
           kind: ent.kind,
           canonicalName: normName,
@@ -435,86 +572,89 @@ export async function extractWithLLMPure(
           normalizedKey: normName,
           properties: ent.description ? { description: ent.description } : {},
           aliases: Array.from(new Set([normName, ...ent.aliases])),
-        });
+        };
+
+        chunkNodes.push(nodeObj);
+        nodesMap.set(urn, nodeObj);
+        entityNameToUrn.set(normName.toLowerCase(), { urn, kind: ent.kind });
       }
 
-      entityNameToUrn.set(normName.toLowerCase(), { urn, kind: ent.kind });
-    }
+      for (const rel of extraction.relations) {
+        const srcKey = rel.sourceEntityName.trim().toLowerCase();
+        const tgtKey = rel.targetEntityName.trim().toLowerCase();
 
-    // Process relations
-    for (const rel of extraction.relations) {
-      const srcKey = rel.sourceEntityName.trim().toLowerCase();
-      const tgtKey = rel.targetEntityName.trim().toLowerCase();
+        const ontologyEntry = RETRIEVAL_ONTOLOGY_REGISTRY[rel.relation];
+        if (!ontologyEntry) continue;
 
-      // Check relation validity against retrieval ontology registry
-      const ontologyEntry = RETRIEVAL_ONTOLOGY_REGISTRY[rel.relation];
-      if (!ontologyEntry) continue;
+        if (
+          !ontologyEntry.allowedSourceKinds.includes(rel.sourceKind) ||
+          !ontologyEntry.allowedTargetKinds.includes(rel.targetKind)
+        ) {
+          chunkQuarantines.push({
+            rawIdentifier: `${rel.sourceEntityName}(${rel.sourceKind})-[${rel.relation}]->${rel.targetEntityName}(${rel.targetKind})`,
+            reason: `Relation ${rel.relation} does not allow sourceKind ${rel.sourceKind} or targetKind ${rel.targetKind}`,
+            documentId: chunk.documentId,
+            sectionHeadingPath: [chunk.documentTitle],
+            startLine: 1,
+            endLine: 1,
+            extractionMethod: 'LLM_PROSE',
+            possibleMatches: [],
+          });
+          continue;
+        }
 
-      if (
-        !ontologyEntry.allowedSourceKinds.includes(rel.sourceKind) ||
-        !ontologyEntry.allowedTargetKinds.includes(rel.targetKind)
-      ) {
-        quarantinesList.push({
-          rawIdentifier: `${rel.sourceEntityName}(${rel.sourceKind})-[${rel.relation}]->${rel.targetEntityName}(${rel.targetKind})`,
-          reason: `Relation ${rel.relation} does not allow sourceKind ${rel.sourceKind} or targetKind ${rel.targetKind}`,
-          documentId: chunk.documentId,
-          sectionHeadingPath: [chunk.documentTitle],
-          startLine: 1,
-          endLine: 1,
-          extractionMethod: 'LLM_PROSE',
-          possibleMatches: [],
+        const sourceInfo = entityNameToUrn.get(srcKey) || {
+          urn: buildUrn('system', rel.sourceKind, rel.sourceEntityName.trim()),
+          kind: rel.sourceKind,
+        };
+        const targetInfo = entityNameToUrn.get(tgtKey) || {
+          urn: buildUrn('system', rel.targetKind, rel.targetEntityName.trim()),
+          kind: rel.targetKind,
+        };
+
+        if (!nodesMap.has(sourceInfo.urn)) {
+          const sNode: ResolvedNode = {
+            urn: sourceInfo.urn,
+            kind: sourceInfo.kind,
+            canonicalName: rel.sourceEntityName.trim(),
+            sourceSystem: 'system',
+            nativeType: sourceInfo.kind,
+            normalizedKey: rel.sourceEntityName.trim(),
+            properties: {},
+            aliases: [rel.sourceEntityName.trim()],
+          };
+          chunkNodes.push(sNode);
+          nodesMap.set(sourceInfo.urn, sNode);
+        }
+
+        if (!nodesMap.has(targetInfo.urn)) {
+          const tNode: ResolvedNode = {
+            urn: targetInfo.urn,
+            kind: targetInfo.kind,
+            canonicalName: rel.targetEntityName.trim(),
+            sourceSystem: 'system',
+            nativeType: targetInfo.kind,
+            normalizedKey: rel.targetEntityName.trim(),
+            properties: {},
+            aliases: [rel.targetEntityName.trim()],
+          };
+          chunkNodes.push(tNode);
+          nodesMap.set(targetInfo.urn, tNode);
+        }
+
+        const qualifiers: Record<string, string> = {};
+        if (rel.operation) qualifiers.operation = rel.operation;
+        if (rel.condition) qualifiers.condition = rel.condition;
+
+        const factKey = buildFactKey({
+          ontologyVersion: ONTOLOGY_VERSION,
+          subjectUrn: sourceInfo.urn,
+          relation: rel.relation,
+          objectUrn: targetInfo.urn,
+          qualifiers,
         });
-        continue;
-      }
 
-      const sourceInfo = entityNameToUrn.get(srcKey) || {
-        urn: buildUrn('system', rel.sourceKind, rel.sourceEntityName.trim()),
-        kind: rel.sourceKind,
-      };
-      const targetInfo = entityNameToUrn.get(tgtKey) || {
-        urn: buildUrn('system', rel.targetKind, rel.targetEntityName.trim()),
-        kind: rel.targetKind,
-      };
-
-      if (!nodesMap.has(sourceInfo.urn)) {
-        nodesMap.set(sourceInfo.urn, {
-          urn: sourceInfo.urn,
-          kind: sourceInfo.kind,
-          canonicalName: rel.sourceEntityName.trim(),
-          sourceSystem: 'system',
-          nativeType: sourceInfo.kind,
-          normalizedKey: rel.sourceEntityName.trim(),
-          properties: {},
-          aliases: [rel.sourceEntityName.trim()],
-        });
-      }
-      if (!nodesMap.has(targetInfo.urn)) {
-        nodesMap.set(targetInfo.urn, {
-          urn: targetInfo.urn,
-          kind: targetInfo.kind,
-          canonicalName: rel.targetEntityName.trim(),
-          sourceSystem: 'system',
-          nativeType: targetInfo.kind,
-          normalizedKey: rel.targetEntityName.trim(),
-          properties: {},
-          aliases: [rel.targetEntityName.trim()],
-        });
-      }
-
-      const qualifiers: Record<string, string> = {};
-      if (rel.operation) qualifiers.operation = rel.operation;
-      if (rel.condition) qualifiers.condition = rel.condition;
-
-      const factKey = buildFactKey({
-        ontologyVersion: ONTOLOGY_VERSION,
-        subjectUrn: sourceInfo.urn,
-        relation: rel.relation,
-        objectUrn: targetInfo.urn,
-        qualifiers,
-      });
-
-      if (!factsMap.has(factKey)) {
-        factsMap.set(factKey, {
+        const factObj: FactAssertion = {
           factKey,
           ontologyVersion: ONTOLOGY_VERSION,
           subjectUrn: sourceInfo.urn,
@@ -522,39 +662,74 @@ export async function extractWithLLMPure(
           objectUrn: targetInfo.urn,
           qualifiers,
           classification: 'INFERRED',
-        });
+        };
+
+        if (!factsMap.has(factKey)) {
+          factsMap.set(factKey, factObj);
+        }
+        chunkFacts.push(factObj);
+
+        const quote = rel.evidenceQuote.trim();
+        const evidenceSeed = `${chunk.documentId}:${factKey}:${chunk.startOffset}:${quote.slice(0, 40)}`;
+        const evidenceId = deterministicUuid(evidenceSeed);
+
+        const evObj: GraphEvidenceRecord = {
+          evidenceId,
+          factKey,
+          documentId: chunk.documentId,
+          documentTitle: chunk.documentTitle,
+          sectionHeadingPath: [chunk.documentTitle],
+          chunkIndex: chunk.chunkIndex,
+          startLine: 1,
+          endLine: 1,
+          startOffset: chunk.startOffset,
+          endOffset: chunk.endOffset,
+          rawSnippet: quote,
+          extractionMethod: 'LLM_PROSE',
+          classification: 'INFERRED',
+          confidence: rel.confidence,
+          observedAt: new Date().toISOString(),
+        };
+
+        chunkEvidence.push(evObj);
+        evidenceList.push(evObj);
       }
 
-      const quote = rel.evidenceQuote.trim();
-      const evidenceSeed = `${chunk.documentId}:${factKey}:${chunk.startOffset}:${quote.slice(0, 40)}`;
-      const evidenceId = deterministicUuid(evidenceSeed);
+      quarantinesList.push(...chunkQuarantines);
 
-      evidenceList.push({
-        evidenceId,
-        factKey,
-        documentId: chunk.documentId,
-        documentTitle: chunk.documentTitle,
-        sectionHeadingPath: [chunk.documentTitle],
-        chunkIndex: chunk.chunkIndex,
-        startLine: 1,
-        endLine: 1,
-        startOffset: chunk.startOffset,
-        endOffset: chunk.endOffset,
-        rawSnippet: quote,
-        extractionMethod: 'LLM_PROSE',
-        classification: 'INFERRED',
-        confidence: rel.confidence,
-        observedAt: new Date().toISOString(),
+      // Save chunk to cache
+      globalChunkStore.saveChunkResult(setId, chunk.chunkId, {
+        chunkId: chunk.chunkId,
+        nodes: chunkNodes,
+        facts: chunkFacts,
+        evidence: chunkEvidence,
+        quarantines: chunkQuarantines,
       });
+    } catch (err: any) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      globalChunkStore.setChunkStatus(setId, chunk.chunkId, 'FAILED', errMsg);
+      throw err;
     }
 
-    processedChunks++;
+    processedCount++;
     options.onProgress?.({
-      processedChunks,
+      processedChunks: processedCount,
       totalChunks,
       currentDocumentTitle: chunk.documentTitle,
-      stageMessage: `Đã hoàn thành ${processedChunks}/${totalChunks} phần.`,
+      stageMessage: `Đã hoàn thành ${processedCount}/${totalChunks} phần.`,
     });
+  }
+
+  // Final merge of all cached results
+  const allCached = globalChunkStore.getAllCachedResults(setId);
+  for (const c of allCached) {
+    for (const n of c.nodes) nodesMap.set(n.urn, n);
+    for (const f of c.facts) factsMap.set(f.factKey, f);
+    for (const ev of c.evidence) {
+      if (!evidenceList.some((e) => e.evidenceId === ev.evidenceId)) {
+        evidenceList.push(ev);
+      }
+    }
   }
 
   return {

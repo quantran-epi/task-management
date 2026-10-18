@@ -75,7 +75,7 @@ export interface ReadKnowledgeServerOptionsResult {
   timeouts: RetrievalTimeouts;
 }
 
-const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost', 'host.docker.internal']);
 
 function parseAllowedHosts(rawHosts: string, varName: string): string[] {
   const hosts = rawHosts

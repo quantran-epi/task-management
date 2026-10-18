@@ -28,6 +28,7 @@ import {
   Tag,
   Tooltip,
   Typography,
+  Table,
   message,
   theme,
 } from 'antd';
@@ -44,6 +45,8 @@ import {
   type GraphState,
   type GraphStatusResponse,
   type KnowledgeClient,
+  type ChunkStatusItem,
+  type ChunksListResponse,
 } from '../../services/knowledge/knowledgeClient';
 import { useOptionalKnowledgeConfig } from '../../services/knowledge/knowledgeConfig';
 import { generateId } from '../../utils/uuid';
@@ -146,6 +149,10 @@ export function DocumentSetDrawer(props: DocumentSetDrawerProps) {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deletingSet, setDeletingSet] = useState<DocumentSet | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [chunkModalOpen, setChunkModalOpen] = useState(false);
+  const [chunkData, setChunkData] = useState<ChunksListResponse | null>(null);
+  const [chunkLoading, setChunkLoading] = useState(false);
+  const [retryingChunkId, setRetryingChunkId] = useState<string | null>(null);
 
   const client = useMemo<KnowledgeClient | undefined>(
     () =>
@@ -230,8 +237,14 @@ export function DocumentSetDrawer(props: DocumentSetDrawerProps) {
       const rebuildAccepted = await client.triggerGraphRebuild(selected.id, rebuildKey);
       message.info('Đã bắt đầu xây dựng lại đồ thị tri thức.');
 
-      // Poll until candidate is prepared or build failed
-      let finalStatus = await client.pollGraphStatus(selected.id);
+      // Poll until candidate is prepared or build failed with real-time UI updates
+      let finalStatus = await client.pollGraphStatus(selected.id, {
+        initialDelayMs: 800,
+        maxDelayMs: 2000,
+        onProgress: (liveStatus) => {
+          setGraphStatus(liveStatus);
+        },
+      });
 
       // If candidate is ready but not yet activated, activate it to make graph live
       if (
@@ -262,6 +275,65 @@ export function DocumentSetDrawer(props: DocumentSetDrawerProps) {
       } else {
         message.error(err instanceof Error ? err.message : 'Xây dựng lại đồ thị thất bại.');
       }
+    } finally {
+      setRebuilding(false);
+    }
+  };
+
+  const handleFetchChunks = async () => {
+    if (!selected?.id || !client) return;
+    setChunkLoading(true);
+    try {
+      const res = await client.getGraphChunks(selected.id);
+      setChunkData(res);
+    } catch (err: any) {
+      message.error('Không thể lấy danh sách trạng thái từng phần.');
+    } finally {
+      setChunkLoading(false);
+    }
+  };
+
+  const handleRetrySelectiveChunks = async (chunkIds?: string[]) => {
+    if (!selected?.id || !client) return;
+    setRebuilding(true);
+    setConnectivityUncertain(false);
+    try {
+      message.loading({ content: 'Đang bắt đầu thử lại các phần đã chọn...', key: 'retry-chunks' });
+      const accepted = await client.retryGraphChunks(selected.id, chunkIds);
+      message.success({ content: 'Đã nhận yêu cầu thử lại trích xuất.', key: 'retry-chunks' });
+      await handleFetchChunks();
+
+      // Poll graph status until complete
+      let finalStatus = await client.pollGraphStatus(selected.id, {
+        initialDelayMs: 1500,
+        maxDelayMs: 4000,
+        onProgress: (status) => {
+          setGraphStatus(status);
+          handleFetchChunks().catch(() => {});
+        },
+      });
+
+      if (
+        finalStatus.state !== 'Failed' &&
+        !finalStatus.uncertain &&
+        (finalStatus.candidateStatus === 'READY' ||
+          (finalStatus.state === 'Never built' && accepted.candidateSnapshotId))
+      ) {
+        const candidateId =
+          finalStatus.candidateSnapshotId || accepted.candidateSnapshotId;
+        finalStatus = await client.activateGraphCandidate(selected.id, candidateId);
+      }
+
+      setGraphStatus(finalStatus);
+      await handleFetchChunks();
+
+      if (finalStatus.state === 'Failed') {
+        message.error(finalStatus.error?.message ?? 'Thử lại trích xuất đồ thị thất bại.');
+      } else {
+        message.success('Hoàn thành trích xuất và cập nhật đồ thị tri thức.');
+      }
+    } catch (err: any) {
+      message.error(err instanceof Error ? err.message : 'Thử lại thất bại.');
     } finally {
       setRebuilding(false);
     }
@@ -505,16 +577,27 @@ export function DocumentSetDrawer(props: DocumentSetDrawerProps) {
                               Chi tiết: {graphStatus.error.details}
                             </Text>
                           )}
-                          <Button
-                            type="primary"
-                            danger
-                            size="small"
-                            icon={<ReloadOutlined />}
-                            onClick={() => setRebuildConfirmOpen(true)}
-                            style={{ marginTop: 4 }}
-                          >
-                            Thử lại xây dựng đồ thị
-                          </Button>
+                          <Space size="small" style={{ marginTop: 4 }}>
+                            <Button
+                              type="primary"
+                              danger
+                              size="small"
+                              icon={<ReloadOutlined />}
+                              onClick={() => setRebuildConfirmOpen(true)}
+                            >
+                              Xây dựng lại toàn bộ
+                            </Button>
+                            <Button
+                              size="small"
+                              icon={<EyeOutlined />}
+                              onClick={() => {
+                                handleFetchChunks();
+                                setChunkModalOpen(true);
+                              }}
+                            >
+                              Chi tiết từng phần & Thử lại lỗi
+                            </Button>
+                          </Space>
                         </Space>
                       }
                     />
@@ -624,6 +707,17 @@ export function DocumentSetDrawer(props: DocumentSetDrawerProps) {
                       onClick={handleRefreshStatus}
                     >
                       Kiểm tra trạng thái
+                    </Button>
+
+                    <Button
+                      icon={<DatabaseOutlined />}
+                      disabled={!props.configured}
+                      onClick={() => {
+                        handleFetchChunks();
+                        setChunkModalOpen(true);
+                      }}
+                    >
+                      Tiến trình từng phần
                     </Button>
                   </Space>
                 </Space>
@@ -741,6 +835,147 @@ export function DocumentSetDrawer(props: DocumentSetDrawerProps) {
           )}
         </Modal>
       )}
+
+      {/* Granular Chunk Progress & Selective Retry Modal */}
+      <Modal
+        open={chunkModalOpen}
+        title="Tiến trình trích xuất từng phần (Chunks)"
+        width={850}
+        onCancel={() => setChunkModalOpen(false)}
+        footer={[
+          <Button key="close" onClick={() => setChunkModalOpen(false)}>
+            Đóng
+          </Button>,
+          <Button
+            key="refresh"
+            icon={<ReloadOutlined />}
+            loading={chunkLoading}
+            onClick={handleFetchChunks}
+          >
+            Làm mới
+          </Button>,
+          <Button
+            key="retryFailed"
+            type="primary"
+            danger
+            icon={<ReloadOutlined />}
+            loading={rebuilding}
+            disabled={!chunkData || chunkData.failed === 0}
+            onClick={() => handleRetrySelectiveChunks()}
+          >
+            Thử lại tất cả phần lỗi ({chunkData?.failed ?? 0})
+          </Button>,
+        ]}
+      >
+        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+          {chunkData && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
+              <Statistic title="Tổng số phần" value={chunkData.total} />
+              <Statistic
+                title="Thành công"
+                value={chunkData.success}
+                valueStyle={{ color: token.colorSuccess }}
+              />
+              <Statistic
+                title="Thất bại"
+                value={chunkData.failed}
+                valueStyle={{ color: chunkData.failed > 0 ? token.colorError : undefined }}
+              />
+              <Statistic
+                title="Đang xử lý"
+                value={chunkData.extracting}
+                valueStyle={{ color: token.colorPrimary }}
+              />
+              <Statistic title="Chờ xử lý" value={chunkData.pending} />
+            </div>
+          )}
+
+          <Table<ChunkStatusItem>
+            size="small"
+            rowKey="chunkId"
+            loading={chunkLoading}
+            dataSource={chunkData?.chunks ?? []}
+            pagination={{ pageSize: 8 }}
+            columns={[
+              {
+                title: 'Tài liệu',
+                dataIndex: 'documentTitle',
+                key: 'documentTitle',
+                ellipsis: true,
+              },
+              {
+                title: 'Phần',
+                key: 'chunkIndex',
+                width: 90,
+                render: (_, r) => `${r.chunkIndex + 1}/${r.totalChunksInDoc}`,
+              },
+              {
+                title: 'Trạng thái',
+                key: 'status',
+                width: 140,
+                render: (_, r) => {
+                  if (r.status === 'SUCCESS') {
+                    return (
+                      <Tag color="success">
+                        Thành công ({r.nodesCount}E / {r.factsCount}R)
+                      </Tag>
+                    );
+                  }
+                  if (r.status === 'FAILED') {
+                    return (
+                      <Tooltip title={r.error ?? 'Lỗi không xác định'}>
+                        <Tag color="error">Thất bại</Tag>
+                      </Tooltip>
+                    );
+                  }
+                  if (r.status === 'EXTRACTING') {
+                    return <Tag color="processing" icon={<LoadingOutlined spin />}>Đang gọi LLM</Tag>;
+                  }
+                  return <Tag color="default">Chờ xử lý</Tag>;
+                },
+              },
+              {
+                title: 'Chi tiết / Lỗi',
+                dataIndex: 'error',
+                key: 'error',
+                ellipsis: true,
+                render: (text) =>
+                  text ? (
+                    <Text type="danger" style={{ fontSize: 12 }}>
+                      {text}
+                    </Text>
+                  ) : (
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      -
+                    </Text>
+                  ),
+              },
+              {
+                title: 'Thao tác',
+                key: 'action',
+                width: 110,
+                render: (_, r) =>
+                  r.status === 'FAILED' ? (
+                    <Button
+                      size="small"
+                      type="link"
+                      danger
+                      loading={rebuilding && retryingChunkId === r.chunkId}
+                      onClick={() => {
+                        setRetryingChunkId(r.chunkId);
+                        handleRetrySelectiveChunks([r.chunkId]).finally(() => {
+                          setRetryingChunkId(null);
+                        });
+                      }}
+                    >
+                      Thử lại
+                    </Button>
+                  ) : null,
+              },
+            ]}
+          />
+        </Space>
+      </Modal>
     </>
   );
 }

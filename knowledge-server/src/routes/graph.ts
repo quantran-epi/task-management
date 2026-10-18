@@ -185,6 +185,42 @@ export const QuarantineListDTOSchema = z
   .strict();
 export type QuarantineListDTO = z.infer<typeof QuarantineListDTOSchema>;
 
+export const RetryChunksBodySchema = z
+  .object({
+    chunkIds: z.array(z.string()).optional(),
+  })
+  .strict();
+export type RetryChunksBody = z.infer<typeof RetryChunksBodySchema>;
+
+export const ChunkStatusItemDTOSchema = z
+  .object({
+    chunkId: z.string(),
+    documentId: uuid,
+    documentTitle: z.string(),
+    chunkIndex: z.number().int().nonnegative(),
+    totalChunksInDoc: z.number().int().nonnegative(),
+    status: z.enum(['PENDING', 'EXTRACTING', 'SUCCESS', 'FAILED']),
+    error: z.string().optional(),
+    updatedAt: z.string(),
+    nodesCount: z.number().int().nonnegative(),
+    factsCount: z.number().int().nonnegative(),
+  })
+  .strict();
+export type ChunkStatusItemDTO = z.infer<typeof ChunkStatusItemDTOSchema>;
+
+export const ChunksListDTOSchema = z
+  .object({
+    setId: uuid,
+    total: z.number().int().nonnegative(),
+    success: z.number().int().nonnegative(),
+    failed: z.number().int().nonnegative(),
+    pending: z.number().int().nonnegative(),
+    extracting: z.number().int().nonnegative(),
+    chunks: z.array(ChunkStatusItemDTOSchema),
+  })
+  .strict();
+export type ChunksListDTO = z.infer<typeof ChunksListDTOSchema>;
+
 export const RebuildAcceptedDTOSchema = z
   .object({
     setId: uuid,
@@ -357,6 +393,44 @@ export function registerGraphRoutes(app: FastifyInstance, buildService: GraphBui
       if (err?.message === 'ACTIVE_GRAPH_NOT_FOUND') {
         return reply.code(404).send({
           error: { code: 'GRAPH_NOT_FOUND', message: 'No active graph for this document set.' },
+        });
+      }
+      return reply.code(500).send({
+        error: { code: 'INTERNAL_ERROR', message: 'Request could not be processed.' },
+      });
+    }
+  });
+
+  // 6. GET /api/v1/sets/:setId/graph/chunks
+  app.get('/api/v1/sets/:setId/graph/chunks', async (request, reply) => {
+    const params = SetParamsSchema.safeParse(request.params);
+    if (!params.success) return invalid(reply);
+
+    const chunkData = buildService.getChunkStatusList(params.data.setId);
+    return reply.code(200).send(ChunksListDTOSchema.parse(chunkData));
+  });
+
+  // 7. POST /api/v1/sets/:setId/graph/retry-chunks
+  app.post('/api/v1/sets/:setId/graph/retry-chunks', async (request, reply) => {
+    const params = SetParamsSchema.safeParse(request.params);
+    const headers = RebuildHeadersSchema.safeParse(request.headers);
+    const body = RetryChunksBodySchema.safeParse(request.body || {});
+    if (!params.success || !headers.success || !body.success) return invalid(reply);
+
+    try {
+      const result = await buildService.triggerRetryChunks(
+        params.data.setId,
+        headers.data['x-rebuild-key'],
+        body.data.chunkIds
+      );
+      return reply.code(202).send(RebuildAcceptedDTOSchema.parse(result));
+    } catch (err: unknown) {
+      if (err instanceof GraphBuildInProgressError) {
+        return reply.code(409).send({
+          error: {
+            code: err.code,
+            message: 'A graph build or retry is already in progress.',
+          },
         });
       }
       return reply.code(500).send({
