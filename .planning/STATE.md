@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Hybrid GraphRAG Knowledge Assistant MVP
-status: executing
-stopped_at: Ready for Phase 20 (Benchmark Evaluation Suite)
-last_updated: "2026-10-17T08:11:30.465Z"
-last_activity: 2026-10-17 -- Phase 20 execution started
+status: completed
+stopped_at: Completed Phase 20 (All 3 plans verified)
+last_updated: "2026-10-18T10:33:33.449Z"
+last_activity: 2026-10-17 -- Phase 20 execution finished
 progress:
   total_phases: 18
   completed_phases: 16
@@ -37,6 +37,7 @@ Progress: [██████████] 100%
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261018-d7u | fix duplicate AI chat response in UI and history | 2026-10-18 | — | complete | [261018-d7u-fix-ai-chat-duplicate-response](./quick/261018-d7u-fix-ai-chat-duplicate-response/) |
 | 261018-jrd | add AI briefing and debriefing insights to header summary modal | 2026-10-18 | 4b5c951 | complete | [261018-jrd-add-ai-briefing-and-debriefing-insights-](./quick/261018-jrd-add-ai-briefing-and-debriefing-insights-/) |
 | 261018-iea | add toggle for search scope (all vs active folder) in doc folder tree | 2026-10-18 | 09ad259 | complete | [261018-iea-add-toggle-for-search-scope-in-doc-folde](./quick/261018-iea-add-toggle-for-search-scope-in-doc-folde/) |
 | 261018-rsd | add resizable sidebars to document page (folder tree, editor, table of contents) | 2026-10-18 | — | complete | [261018-resizable-sidebars-docs](./quick/261018-resizable-sidebars-docs/) |
@@ -152,6 +153,7 @@ Progress: [██████████] 100%
 | 261017-dti | Fix Document Tree Item Indentation for Special Folders and Subfolders | 2026-10-17 | — | complete | [261017-dti-fix-document-tree-item-indentation](./quick/261017-dti-fix-document-tree-item-indentation/) |
 | 261017-j6q | reminder drawer complete button and context menu quick add reminder | 2026-10-17 | — | complete | [261017-j6q-reminder-drawer-complete-and-context-men](./quick/261017-j6q-reminder-drawer-complete-and-context-men/) |
 | 261018-mc9 | fix ai chat citation document title overflow issue | 2026-10-18 | — | complete | [261018-mc9-fix-ai-chat-citation-document-title-over](./quick/261018-mc9-fix-ai-chat-citation-document-title-over/) |
+| 261018-tmo | Fix retrieval timeout misleading no evidence message on client | 2026-10-18 | — | complete | [261018-tmo-fix-retrieval-timeout-client-ui](./quick/261018-tmo-fix-retrieval-timeout-client-ui/) |
 
 ## Performance Metrics
 
@@ -304,6 +306,7 @@ None yet.
 
 - Phase 19.1 inserted after Phase 19: Production Neo4j Integration & Live Retrieval Validation (URGENT)
 - Phase 19.2 inserted after Phase 19.1: Production-Ready AI Assistant & Graph Integrity; Phase 19.1 partial UAT preserved and imported as blocking acceptance.
+- Phase 21 added: Knowledge Graph Entity Extraction & Semantic Retrieval Improvement (resolves dummy STEP_xxx, extracts TEN_BUOC & WRITES, improves Neo4j seed resolution, enables hybrid prose extraction per .planning/proposals/knowledge-graph-extraction-fix-plan.md)
 
 ## Deferred Items
 
