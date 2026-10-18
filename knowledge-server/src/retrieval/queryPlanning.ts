@@ -18,6 +18,7 @@ import {
   RELATION_TYPES,
   RETRIEVAL_ONTOLOGY_REGISTRY,
 } from '../graph/ontology.js';
+import { removeVietnameseDiacritics } from '../graph/extraction.js';
 import { randomUUID } from 'node:crypto';
 
 /**
@@ -138,38 +139,90 @@ export type EntityResolutionResult =
   | { readonly status: 'ambiguous'; readonly candidates: readonly ClarificationCandidate[] }
   | { readonly status: 'needsClarification'; readonly candidates: readonly ClarificationCandidate[] };
 
+const CONVERSATIONAL_STOPWORDS = new Set([
+  'cho',
+  'toi',
+  'tôi',
+  'biet',
+  'biết',
+  'la',
+  'là',
+  'nhung',
+  'những',
+  'cua',
+  'của',
+  'cac',
+  'các',
+  'co',
+  'có',
+  'va',
+  'và',
+  'hay',
+  'giúp',
+  'giup',
+]);
+
 /**
  * Extracts searchable candidate tokens from query text.
+ * Generates single tokens, diacritic-stripped variants, and 2-word n-grams (bigrams)
+ * to capture natural Vietnamese business terms while mitigating token explosion (max 20).
  */
-function extractQueryTokens(query: string): string[] {
+export function extractQueryTokens(query: string): string[] {
   // Strip backticks and common punctuation, keep alphanumeric, dots, underscores
   const cleaned = query.replace(/[`"'?,;:!()]/g, ' ');
-  const words = cleaned.split(/\s+/).filter(Boolean);
-  const tokens: string[] = [];
+  const rawWords = cleaned.split(/\s+/).filter(Boolean);
+  const words: string[] = [];
 
-  for (const w of words) {
+  for (const w of rawWords) {
     const trimmed = w.trim();
     if (trimmed.length >= 2) {
-      tokens.push(trimmed);
-      // If qualified dot-separated, also push parts
+      words.push(trimmed);
       if (trimmed.includes('.')) {
-        tokens.push(...trimmed.split('.').filter((p) => p.length >= 2));
+        words.push(...trimmed.split('.').filter((p) => p.length >= 2));
       }
     }
   }
 
-  // Deduplicate case-insensitively
   const seen = new Set<string>();
-  const unique: string[] = [];
-  for (const t of tokens) {
-    const lower = t.toLowerCase();
-    if (!seen.has(lower)) {
+  const tokens: string[] = [];
+
+  const addToken = (token: string) => {
+    if (tokens.length >= 20) return;
+    const lower = token.toLowerCase();
+    if (lower.length >= 2 && !seen.has(lower)) {
       seen.add(lower);
-      unique.push(t);
+      tokens.push(token);
+    }
+  };
+
+  // 1. Generate bigrams first (both accented and unaccented) as they have high semantic value
+  for (let i = 0; i < rawWords.length - 1; i++) {
+    const w1 = rawWords[i]!.trim();
+    const w2 = rawWords[i + 1]!.trim();
+    if (w1.length >= 2 && w2.length >= 2) {
+      const bigram = `${w1} ${w2}`;
+      addToken(bigram);
+      const unaccentedBigram = removeVietnameseDiacritics(bigram);
+      if (unaccentedBigram !== bigram) {
+        addToken(unaccentedBigram);
+      }
     }
   }
 
-  return unique;
+  // 2. Generate single words and their unaccented counterparts (skipping conversational stopwords)
+  for (const w of words) {
+    const lower = w.toLowerCase();
+    if (CONVERSATIONAL_STOPWORDS.has(lower)) {
+      continue;
+    }
+    addToken(w);
+    const unaccented = removeVietnameseDiacritics(w);
+    if (unaccented !== w && !CONVERSATIONAL_STOPWORDS.has(unaccented.toLowerCase())) {
+      addToken(unaccented);
+    }
+  }
+
+  return tokens;
 }
 
 /**

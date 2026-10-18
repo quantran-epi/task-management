@@ -6,6 +6,7 @@ import {
 } from '../src/graph/ontology.js';
 import {
   isPureIdentifierQuery,
+  extractQueryTokens,
   resolveQueryEntities,
   buildQueryExecutionPlan,
   buildDeterministicFallbackPlan,
@@ -287,6 +288,38 @@ describe('18-W0-02A: Retrieval Ontology Registry & Identifier/Entity Resolution'
       );
 
       expect(passedTokens.length).toBeGreaterThan(0);
+    });
+
+    describe('extractQueryTokens and Vietnamese diacritic / bigram extraction', () => {
+      it('produces single words, diacritic-stripped variants, and bigrams for natural Vietnamese queries', () => {
+        const tokens = extractQueryTokens('quy trình thanh toán hoá đơn');
+        expect(tokens).toContain('quy trình');
+        expect(tokens).toContain('thanh toán');
+        expect(tokens).toContain('hoá đơn');
+        expect(tokens).toContain('quy trinh');
+        expect(tokens).toContain('thanh toan');
+        expect(tokens).toContain('hoa don');
+        expect(tokens).toContain('thanh');
+        expect(tokens).toContain('toán');
+        expect(tokens).toContain('toan');
+      });
+
+      it('filters out conversational stopwords from single tokens but retains domain action words', () => {
+        const tokens = extractQueryTokens('cho tôi biết bước thanh toán');
+        expect(tokens).not.toContain('cho');
+        expect(tokens).not.toContain('tôi');
+        expect(tokens).not.toContain('biết');
+        expect(tokens).toContain('thanh toán');
+        expect(tokens).toContain('thanh toan');
+        expect(tokens).toContain('thanh');
+        expect(tokens).toContain('toán');
+      });
+
+      it('caps extracted tokens to at most 20 tokens to mitigate explosion', () => {
+        const longQuery = 'một hai ba bốn năm sáu bảy tám chín mười mười một mười hai mười ba mười bốn mười lăm mười sáu';
+        const tokens = extractQueryTokens(longQuery);
+        expect(tokens.length).toBeLessThanOrEqual(20);
+      });
     });
   });
 
@@ -679,6 +712,162 @@ describe('18-W0-02A: Retrieval Ontology Registry & Identifier/Entity Resolution'
         expect(result.plan.traversalSteps.length).toBeLessThanOrEqual(5);
         expect(result.plan.overallMaxDepth).toBeLessThanOrEqual(3);
       }
+    });
+
+    describe('Vietnamese natural language query resolution with enhanced tokens', () => {
+      it('resolves ProcessStep entity from accented natural query "quy trình thanh toán"', async () => {
+        const processStepCandidate = {
+          urn: 'urn:plannermate:process:ProcessStep:step_khoi_tao_thanh_toan',
+          canonicalName: 'Khởi tạo giao dịch thanh toán',
+          kind: 'ProcessStep' as const,
+        };
+
+        const gateway: GraphRetrievalGateway = {
+          async resolveEntities(_s, tokens) {
+            // Verify bigram or token contains thanh toan or thanh toán
+            const hasMatch = tokens.some((t) => t.toLowerCase().includes('thanh toán') || t.toLowerCase().includes('thanh toan'));
+            return hasMatch ? [processStepCandidate] : [];
+          },
+          async traverse(): Promise<any> {
+            throw new Error('Not implemented');
+          },
+        };
+
+        const planner = {
+          async plan(): Promise<any> {
+            return {
+              type: 'plan',
+              plan: {
+                planId: 'plan-test-1',
+                queryIntent: 'LOOKUP',
+                seedUrns: [processStepCandidate.urn],
+                traversalSteps: [{ relationType: 'CONTAINS_STEP', direction: 'BOTH', maxHops: 1 }],
+                overallMaxDepth: 1,
+                includeInferred: false,
+                fulltextKeywords: ['thanh toán'],
+                semanticQuery: 'quy trình thanh toán',
+              },
+            };
+          },
+        };
+
+        const result = await buildQueryExecutionPlan({
+          request: {
+            query: 'quy trình thanh toán',
+            limit: 20,
+            includeInferred: false,
+            recentTurns: [],
+          },
+          pinnedSnapshotId: pinnedSnapshot,
+          gateway,
+          planner,
+        });
+
+        expect(result.status).toBe('executable');
+        if (result.status === 'executable') {
+          expect(result.plan.seedUrns).toContain(processStepCandidate.urn);
+        }
+      });
+
+      it('resolves ProcessStep entity from unaccented natural query "quy trinh thanh toan" via unaccented alias/token', async () => {
+        const processStepCandidate = {
+          urn: 'urn:plannermate:process:ProcessStep:step_khoi_tao_thanh_toan',
+          canonicalName: 'Khởi tạo giao dịch thanh toán',
+          kind: 'ProcessStep' as const,
+        };
+
+        let capturedTokens: readonly string[] = [];
+        const gateway: GraphRetrievalGateway = {
+          async resolveEntities(_s, tokens) {
+            capturedTokens = tokens;
+            const hasMatch = tokens.includes('thanh toan');
+            return hasMatch ? [processStepCandidate] : [];
+          },
+          async traverse(): Promise<any> {
+            throw new Error('Not implemented');
+          },
+        };
+
+        const planner = {
+          async plan(): Promise<any> {
+            return {
+              type: 'plan',
+              plan: {
+                planId: 'plan-test-2',
+                queryIntent: 'LOOKUP',
+                seedUrns: [processStepCandidate.urn],
+                traversalSteps: [{ relationType: 'CONTAINS_STEP', direction: 'BOTH', maxHops: 1 }],
+                overallMaxDepth: 1,
+                includeInferred: false,
+                fulltextKeywords: ['thanh toan'],
+                semanticQuery: 'quy trinh thanh toan',
+              },
+            };
+          },
+        };
+
+        const result = await buildQueryExecutionPlan({
+          request: {
+            query: 'quy trinh thanh toan',
+            limit: 20,
+            includeInferred: false,
+            recentTurns: [],
+          },
+          pinnedSnapshotId: pinnedSnapshot,
+          gateway,
+          planner,
+        });
+
+        expect(capturedTokens).toContain('thanh toan');
+        expect(result.status).toBe('executable');
+        if (result.status === 'executable') {
+          expect(result.plan.seedUrns).toContain(processStepCandidate.urn);
+        }
+      });
+
+      it('pure identifier query continues to fast-path directly without NLP tokenization', async () => {
+        const dbCandidate = {
+          urn: 'urn:plannermate:oracle:DatabaseObject:MAIN1.TBL_PAYMENT_LOG',
+          canonicalName: 'MAIN1.TBL_PAYMENT_LOG',
+          kind: 'DatabaseObject' as const,
+        };
+
+        let capturedTokens: readonly string[] = [];
+        const gateway: GraphRetrievalGateway = {
+          async resolveEntities(_s, tokens) {
+            capturedTokens = tokens;
+            return [dbCandidate];
+          },
+          async traverse(): Promise<any> {
+            throw new Error('Not implemented');
+          },
+        };
+
+        const planner = {
+          async plan(): Promise<any> {
+            throw new Error('Should not call planner');
+          },
+        };
+
+        const result = await buildQueryExecutionPlan({
+          request: {
+            query: 'MAIN1.TBL_PAYMENT_LOG',
+            limit: 20,
+            includeInferred: false,
+            recentTurns: [],
+          },
+          pinnedSnapshotId: pinnedSnapshot,
+          gateway,
+          planner,
+        });
+
+        expect(capturedTokens).toEqual(['MAIN1.TBL_PAYMENT_LOG']);
+        expect(result.status).toBe('executable');
+        if (result.status === 'executable') {
+          expect(result.isFastPath).toBe(true);
+          expect(result.plan.seedUrns).toEqual([dbCandidate.urn]);
+        }
+      });
     });
   });
 });
