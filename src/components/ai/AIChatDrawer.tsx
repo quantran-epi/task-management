@@ -627,7 +627,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
     const capabilities = {
       serverEnabled: Boolean(knowledgeConfig.enabled && knowledgeConfig.baseUrl),
-      modelConfigured: Boolean(apiKey && config.endpoint && selectedModel),
+      modelConfigured: Boolean(apiKey && config.endpoint && (selectedModel || config.defaultModel)),
     };
 
     const deps = createDefaultGroundedTurnDeps({
@@ -1386,12 +1386,22 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
       // perform a final synthesis pass to guarantee an answer is generated
       if (lastHadToolCalls || (!fullResponse.trim() && loopCount > 1)) {
         setStreamingStatus('Đang tổng hợp câu trả lời hoàn chỉnh...');
+        // Reset fullResponse to prevent duplicating previous tool-call draft text
+        fullResponse = '';
+        setStreamingText('');
+
         const synthesisMessages: ChatCompletionMessage[] = [
           ...pruneToolOutputsInMessages(currentMessages),
           {
             role: 'user',
             content:
-              'Dựa trên tất cả các kết quả công cụ và thông tin đã thu thập ở trên, hãy tổng hợp câu trả lời đầy đủ, chi tiết và rõ ràng cho yêu cầu ban đầu. Không gọi thêm công cụ nào nữa.',
+              'Dựa trên tất cả các kết quả công cụ và thông tin đã thu thập ở trên, hãy tổng hợp câu trả lời đầy đủ, chi tiết, chính xác và rõ ràng cho yêu cầu ban đầu.\n' +
+              'Yêu cầu định dạng:\n' +
+              '- Trình bày bằng Markdown hoàn chỉnh, mạch lạc, trực quan.\n' +
+              '- Sử dụng tiêu đề (heading), danh sách gạch đầu dòng / số thứ tự hợp lý.\n' +
+              '- In đậm các từ khóa, mã trạng thái, ID, bảng hoặc tham số quan trọng.\n' +
+              '- Nếu có nhiều bước quy trình hoặc phân nhánh, trình bày theo từng giai đoạn rõ ràng.\n' +
+              '- Không gọi thêm bất kỳ công cụ nào nữa.',
           },
         ];
 
@@ -1931,6 +1941,7 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
         }
         citedSnapshotId={activePreviewCitation?.snapshotId ?? undefined}
         citedExcerpt={activePreviewCitation?.citedExcerpt ?? undefined}
+        relevanceReason={activePreviewCitation?.relevanceReason ?? undefined}
         citedContentHash={activePreviewCitation?.publishedContentHash ?? undefined}
         citationAuthority={activePreviewCitation?.authority ?? undefined}
         snapshotAvailable={true}

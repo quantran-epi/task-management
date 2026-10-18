@@ -140,6 +140,47 @@ describe('grounded answer trust boundary', () => {
     ).toBe(false);
   });
 
+  it('supports up to 100 citations (e.g. 32 chunk items when graph is empty) without schema rejection', () => {
+    const thirtyTwoCitations = Array.from({ length: 32 }, (_, i) => ({
+      ...serverCitation,
+      citationId: `S${i + 1}`,
+      documentId: generateId(),
+      documentTitle: `Doc ${i + 1}`,
+      snapshotId: 'gsnap_00000001',
+      publishedContentHash: 'a'.repeat(64),
+      citedExcerpt: `Excerpt ${i + 1}`,
+    }));
+
+    const serverGrounding = {
+      schemaVersion: 1,
+      authority: 'server',
+      outcome: 'DEGRADED',
+      answer: validAnswer,
+      citations: thirtyTwoCitations,
+      paths: [],
+      conflicts: [],
+      scope: {
+        setIds: [generateId()],
+        routedScope: {
+          domain: null,
+          environment: null,
+          version: null,
+          comparisonMode: 'single',
+        },
+      },
+      modalityDiagnostics: validModalityDiagnostics,
+      coverageWarnings: [],
+      fallbackReason: 'NONE',
+      routerVersion: 'router-v1',
+      promptVersion: 'grounded-v1',
+      modelId: 'model-1',
+      createdAt: '2026-10-17T00:00:00.000Z',
+    };
+
+    const parseResult = ChatMessageGroundingSchema.safeParse(serverGrounding);
+    expect(parseResult.success).toBe(true);
+  });
+
   it('exports strict top-level and claim JSON Schema objects', () => {
     expect(GroundedAnswerJsonSchema).toMatchObject({
       type: 'object',

@@ -1,0 +1,21 @@
+{
+  "id": "chatcmpl-sample-grounded-9router",
+  "object": "chat.completion",
+  "created": 1729188000,
+  "model": "gpt-4o",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\n  \"schemaVersion\": 2,\n  \"language\": \"vi\",\n  \"conclusion\": \"Quy trình phân bổ thanh toán thẻ tín dụng được điều phối thông qua tiến trình xử lý quy tắc **60000004** [S5] từ chỉ thị vận hành `MAIN1.OPR_OPERATION` [S5]. Tiến trình này thực thi chuỗi thủ tục và package sau để phân bổ nguồn tiền vào tài khoản và cấn trừ dư nợ:\\n\\n* **Xác định tài khoản và ghi nhận Có Ledger**: Thủ tục `MAIN1.OPR_API_RULE_PROC_PKG.SELECT_OBJECT_ACCOUNT` [S6] và `POST_MACROS` ghi nhận Có vào Ledger `BLTP0001` [S6][S7].\\n* **Khởi tạo bản ghi thanh toán tín dụng**: Thực hiện qua `MAIN1.CRD_API_PAYMENT_PKG.CREATE_PAYMENT` [S6] tạo bản ghi `MAIN1.CRD_PAYMENT` với trạng thái `PMTSACTV` [S3][S5].\\n* **Truy vấn và sắp xếp danh sách dư nợ**: Gọi package `MAIN1.CRD_CST_PAYMENT_PKG.ENUM_DEBT_ORDER` [S6] để duyệt các xô nợ trong `MAIN1.CRD_DEBT_BALANCE` theo cơ chế ưu tiên thu hồi nợ (Waterfall Priority) [S2][S6][S7].\\n* **Cấn trừ dư nợ từng bucket**: Vòng lặp `apply_payment` kích hoạt thủ tục `MAIN1.CRD_PAYMENT_PKG.APPLY_PAYMENT` [S5][S6] ghi nhận quan hệ cấn trừ vào `MAIN1.CRD_DEBT_PAYMENT` [S6][S7].\\n* **Cập nhật số dư nợ**: Sử dụng `MAIN1.CRD_DEBT_PKG.CHANGE_DEBT` [S6] để điều chỉnh giảm số dư nợ tương ứng [S5][S6].\\n* **Hạch toán GL thứ cấp**: Hoàn tất qua `MAIN1.CRD_CST_APC_PAYMENT_PKG.APPLY_PAYMENT` [S6] ghi sổ `MAIN1.CST_CBS_GL_ENTRY` [S6].\\n\\nNếu tiền thanh toán cấn trừ hết dư nợ, trạng thái khoản thanh toán chuyển thành `PMTSSPNT` [S3][S5]. Nếu còn dư, duy trì `PMTSACTV` trên Ledger để chờ đợt chi tiêu mới hoặc kỳ sao kê [S3][S5].\",\n  \"confidence\": \"high\",\n  \"confidenceReason\": \"Thông tin được trích xuất trực tiếp và đầy đủ từ tài liệu kỹ thuật phân bổ thanh toán thẻ tín dụng với các bước thực thi, gói thủ tục và mã tiến trình cụ thể.\",\n  \"claims\": [\n    {\n      \"id\": \"C1\",\n      \"text\": \"Tiến trình xử lý quy tắc 60000004 kích hoạt từ chỉ thị MAIN1.OPR_OPERATION để bắt đầu luồng phân bổ thanh toán.\",\n      \"classification\": \"DIRECT\",\n      \"citationIds\": [\n        \"S5\"\n      ],\n      \"pathId\": null\n    },\n    {\n      \"id\": \"C2\",\n      \"text\": \"Thủ tục MAIN1.CRD_API_PAYMENT_PKG.CREATE_PAYMENT khởi tạo bản ghi thanh toán MAIN1.CRD_PAYMENT với trạng thái PMTSACTV.\",\n      \"classification\": \"DIRECT\",\n      \"citationIds\": [\n        \"S5\",\n        \"S6\"\n      ],\n      \"pathId\": null\n    },\n    {\n      \"id\": \"C3\",\n      \"text\": \"MAIN1.CRD_CST_PAYMENT_PKG.ENUM_DEBT_ORDER thực hiện truy vấn và sắp xếp danh sách dư nợ theo thứ tự ưu tiên.\",\n      \"classification\": \"DIRECT\",\n      \"citationIds\": [\n        \"S6\"\n      ],\n      \"pathId\": null\n    },\n    {\n      \"id\": \"C4\",\n      \"text\": \"MAIN1.CRD_PAYMENT_PKG.APPLY_PAYMENT thực hiện cấn trừ nợ từng bucket và ghi nhận vào MAIN1.CRD_DEBT_PAYMENT.\",\n      \"classification\": \"DIRECT\",\n      \"citationIds\": [\n        \"S6\",\n        \"S7\"\n      ],\n      \"pathId\": null\n    },\n    {\n      \"id\": \"C5\",\n      \"text\": \"MAIN1.CRD_DEBT_PKG.CHANGE_DEBT cập nhật lại số dư nợ trong bảng MAIN1.CRD_DEBT_BALANCE.\",\n      \"classification\": \"DIRECT\",\n      \"citationIds\": [\n        \"S6\",\n        \"S7\"\n      ],\n      \"pathId\": null\n    },\n    {\n      \"id\": \"C6\",\n      \"text\": \"Khi khoản thanh toán được cấn trừ hết dư nợ, trạng thái chuyển sang PMTSSPNT; nếu còn dư tiếp tục giữ PMTSACTV.\",\n      \"classification\": \"DIRECT\",\n      \"citationIds\": [\n        \"S3\",\n        \"S5\"\n      ],\n      \"pathId\": null\n    }\n  ],\n  \"hypotheses\": [],\n  \"unsupportedParts\": []\n}"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 3150,
+    "completion_tokens": 580,
+    "total_tokens": 3730
+  }
+}

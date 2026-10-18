@@ -224,4 +224,19 @@ describe('NotesView 2-Column Document Workspace', () => {
       expect(titleInputs.length).toBeGreaterThan(0);
     });
   });
+
+  it('renders resize splitters and persists tree width in localStorage', async () => {
+    render(<NotesView db={testDb} />);
+
+    // Check splitter exists
+    const splitters = await screen.findAllByRole('separator');
+    expect(splitters.length).toBeGreaterThanOrEqual(1);
+
+    const treeSplitter = splitters[0]!;
+    expect(treeSplitter).toHaveAttribute('aria-orientation', 'vertical');
+
+    // Simulate double click to reset
+    fireEvent.doubleClick(treeSplitter);
+    expect(localStorage.getItem('planner:docs_tree_width')).toBe('320');
+  });
 });

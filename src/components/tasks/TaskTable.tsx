@@ -31,6 +31,7 @@ import {
   SyncOutlined,
   FolderOpenOutlined,
   RobotOutlined,
+  BellOutlined,
 } from '@ant-design/icons';
 import { useAIChat } from '../../context/AIChatContext';
 import type { Task, Project, Milestone, TaskPriority, WorkType } from '../../types/models';
@@ -59,6 +60,7 @@ import {
 } from '../../utils/filter';
 import type { AppRoute } from '../../types/navigation';
 import { RunGhostDevModal } from '../agents/RunGhostDevModal';
+import { QuickReminderModal } from '../common/QuickReminderModal';
 
 export interface TaskTableProps {
   tasks: Task[];
@@ -326,6 +328,8 @@ export const TaskTable: React.FC<TaskTableProps> = ({
     y: number;
   } | null>(null);
 
+  const [reminderTargetTask, setReminderTargetTask] = useState<Task | null>(null);
+
   const getTaskMenuItems = (record: Task): NonNullable<MenuProps['items']> => [
     {
       key: 'run-ghost-dev',
@@ -341,6 +345,14 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       label: 'Hỏi Trợ lý AI',
       onClick: () => {
         openChat({ type: 'task', id: record.id, title: record.name });
+      },
+    },
+    {
+      key: 'add-reminder',
+      icon: <BellOutlined style={{ color: '#faad14' }} />,
+      label: 'Thêm nhắc nhở',
+      onClick: () => {
+        setReminderTargetTask(record);
       },
     },
     {
@@ -1014,6 +1026,15 @@ export const TaskTable: React.FC<TaskTableProps> = ({
             }}
           />
         </Dropdown>
+      )}
+
+      {reminderTargetTask && (
+        <QuickReminderModal
+          open={!!reminderTargetTask}
+          onClose={() => setReminderTargetTask(null)}
+          target={{ type: 'task', entity: reminderTargetTask }}
+          db={db}
+        />
       )}
 
       {/* Fallback modal for clipboard copy in non-secure or restricted contexts */}

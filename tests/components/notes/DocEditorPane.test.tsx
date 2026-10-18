@@ -312,4 +312,20 @@ describe('DocEditorPane', () => {
     expect(promptArg).toContain('[Tags: kien-truc, backend]');
     expect(promptArg).toContain('Hãy phân tích nội dung, tóm tắt các điểm then chốt và gợi ý các hành động tiếp theo');
   });
+
+  it('renders resizable splitter for ToC rail when headings exist and ToC is visible', () => {
+    const docWithHeadings: Note = {
+      ...mockDoc,
+      body: '# Heading 1\nContent 1\n## Heading 2\nContent 2',
+    };
+    render(<DocEditorPane doc={docWithHeadings} onUpdateDoc={vi.fn()} db={db} />);
+
+    const splitter = screen.getByRole('separator');
+    expect(splitter).toBeInTheDocument();
+    expect(splitter).toHaveAttribute('aria-valuenow', '200');
+
+    // Double click to reset
+    fireEvent.doubleClick(splitter);
+    expect(localStorage.getItem('planner:docs_toc_width')).toBe('200');
+  });
 });

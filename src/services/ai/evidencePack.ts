@@ -18,6 +18,7 @@ export interface SourceRecord {
   readonly snapshotId: string | null;
   readonly publishedContentHash: string | null;
   readonly citedExcerpt: string;
+  readonly relevanceReason?: string | undefined;
   readonly setMemberships: readonly { readonly setId: string; readonly setName: string }[];
   readonly evidenceKind?: 'policy_change' | 'release_note' | 'migration_record' | 'other' | undefined;
   readonly conflictGroupId?: string | undefined;
@@ -34,12 +35,20 @@ export interface ValidatedPath {
   readonly hasConflict: boolean;
 }
 
+export interface PromptEvidenceItem {
+  readonly id: string;
+  readonly text: string;
+  readonly score?: number | undefined;
+  readonly documentTitle?: string | undefined;
+  readonly sectionAnchor?: string | null | undefined;
+}
+
 export interface EvidencePack {
   readonly authority: 'server' | 'local';
   readonly citations: Readonly<Record<string, SourceRecord>>;
   readonly paths: Readonly<Record<string, ValidatedPath>>;
   readonly conflicts: readonly ConflictGroup[];
-  readonly promptEvidence: readonly { readonly id: string; readonly text: string }[];
+  readonly promptEvidence: readonly PromptEvidenceItem[];
   readonly contextTruncated: boolean;
   readonly coverageWarnings: readonly string[];
 }
@@ -114,6 +123,7 @@ interface RawCandidateCitation {
   readonly snapshotId: string | null;
   readonly publishedContentHash: string | null;
   readonly citedExcerpt: string;
+  readonly relevanceReason?: string | undefined;
   readonly setMemberships: readonly { readonly setId: string; readonly setName: string }[];
   readonly evidenceKind?: 'policy_change' | 'release_note' | 'migration_record' | 'other' | undefined;
   readonly originalChunkId?: string | undefined;
@@ -146,12 +156,14 @@ export function packEvidence(
     }
 
     for (const fedItem of resp.items) {
-      if (fedItem.item.type === 'chunk') {
-        const chunk = fedItem.item as unknown as ChunkItem & {
-          readonly evidenceKind?: 'policy_change' | 'release_note' | 'migration_record' | 'other';
-          readonly matchType?: string;
-        };
+      const chunk = ((fedItem as any).item ?? fedItem) as unknown as ChunkItem & {
+        readonly evidenceKind?: 'policy_change' | 'release_note' | 'migration_record' | 'other';
+        readonly matchType?: string;
+        readonly snapshotId?: string;
+        readonly setId?: string;
+      };
 
+      if (chunk && chunk.type === 'chunk') {
         const dedupKey = `${chunk.sourceDocumentId}:${chunk.lineStart}:${chunk.lineEnd}:${chunk.publishedContentHash}`;
         let excerpt = chunk.rawSnippet ?? '';
         if (excerpt.length > maxPerSnippetChars) {
@@ -160,7 +172,12 @@ export function packEvidence(
 
         const isId =
           chunk.matchType === 'identifier' ||
-          (chunk.modalitiesContributed.includes('fulltext') && chunk.score > 100);
+          (Array.isArray(chunk.modalitiesContributed) &&
+            chunk.modalitiesContributed.includes('fulltext') &&
+            chunk.score > 100);
+
+        const snapshotId = (fedItem as any).snapshotId ?? chunk.snapshotId ?? (resp as any).snapshotId ?? null;
+        const setId = (fedItem as any).setId ?? chunk.setId ?? 'default_set';
 
         rawCandidates.push({
           dedupKey,
@@ -171,10 +188,10 @@ export function packEvidence(
           lineEnd: chunk.lineEnd,
           authority: 'server',
           evidenceClass: 'OBSERVED',
-          snapshotId: fedItem.snapshotId,
+          snapshotId,
           publishedContentHash: chunk.publishedContentHash,
           citedExcerpt: excerpt,
-          setMemberships: [{ setId: fedItem.setId, setName: fedItem.setId }],
+          setMemberships: [{ setId, setName: setId }],
           evidenceKind: chunk.evidenceKind ?? 'other',
           originalChunkId: chunk.id,
           conflictGroupId: chunk.conflictGroupId,
@@ -246,6 +263,7 @@ export function packEvidence(
         snapshotId: updatedCandidate.snapshotId,
         publishedContentHash: updatedCandidate.publishedContentHash,
         citedExcerpt: updatedCandidate.citedExcerpt,
+        relevanceReason: updatedCandidate.relevanceReason,
         setMemberships: updatedCandidate.setMemberships,
         evidenceKind: updatedCandidate.evidenceKind,
         conflictGroupId: updatedCandidate.conflictGroupId,
@@ -350,13 +368,19 @@ export function packEvidence(
   // (b) exact identifier/title hits
   // (c) citations supporting any complete ValidatedPath
   // (d) remaining ranked items sorted by relevance score
-  const bucketA: { id: string; text: string; score: number }[] = [];
-  const bucketB: { id: string; text: string; score: number }[] = [];
-  const bucketC: { id: string; text: string; score: number }[] = [];
-  const bucketD: { id: string; text: string; score: number }[] = [];
+  const bucketA: PromptEvidenceItem[] = [];
+  const bucketB: PromptEvidenceItem[] = [];
+  const bucketC: PromptEvidenceItem[] = [];
+  const bucketD: PromptEvidenceItem[] = [];
 
   for (const { candidate, citationId } of dedupedMap.values()) {
-    const promptItem = { id: citationId, text: candidate.citedExcerpt, score: candidate.score ?? 0 };
+    const promptItem: PromptEvidenceItem = {
+      id: citationId,
+      text: candidate.citedExcerpt,
+      score: candidate.score ?? 0,
+      documentTitle: candidate.documentTitle,
+      sectionAnchor: candidate.sectionAnchor || undefined,
+    };
     if (conflictCitationIds.has(citationId)) {
       bucketA.push(promptItem);
     } else if (candidate.isIdentifierMatch) {
@@ -370,12 +394,12 @@ export function packEvidence(
 
   // Sort remaining general chunks by relevance score descending so that top-ranking documents
   // across any document set are not starved by the 20-chunk budget cap
-  bucketD.sort((a, b) => b.score - a.score);
+  bucketD.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 
   const orderedPromptEvidence = [...bucketA, ...bucketB, ...bucketC, ...bucketD];
 
   // Budget drop: whole units dropped when exceeding maxEvidenceChars or maxPromptEvidenceCount (D-03)
-  const finalPromptEvidence: { id: string; text: string }[] = [];
+  const finalPromptEvidence: PromptEvidenceItem[] = [];
   let totalChars = 0;
   let droppedCount = 0;
   let contextTruncated = false;

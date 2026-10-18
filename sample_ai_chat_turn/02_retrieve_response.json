@@ -1,0 +1,447 @@
+{
+  "outcome": "DEGRADED",
+  "items": [
+    {
+      "setId": "d6dc9334-5802-49ac-a1a7-b058931b1825",
+      "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+      "roleGroup": "baseline",
+      "item": {
+        "type": "chunk",
+        "id": "797a558e-365a-4494-9a90-5b742ae9679a",
+        "score": 0.03252247488101534,
+        "modalitiesContributed": [
+          "vector",
+          "fulltext"
+        ],
+        "sourceDocumentId": "ebfbd89b-c49a-492b-a1e6-9c06b4e2beb4",
+        "sourceDocumentTitle": "Credit payment allocation — FE/BO pay → debts",
+        "sectionAnchor": "Quy trình phân bổ thanh toán thẻ tín dụng và xử lý nợ MAIN1",
+        "lineStart": 1,
+        "lineEnd": 3,
+        "rawSnippet": "# Quy trình phân bổ thanh toán thẻ tín dụng và xử lý nợ MAIN1\n\n#credit-card #payment-allocation #main1 #crd-payment #waterfall\n\n",
+        "publishedContentHash": "7c7314500fce951ee9e324cb59b1beb900f3198381419d48c3ce69aae7e21a08",
+        "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+        "hasConflict": false
+      }
+    },
+    {
+      "setId": "d6dc9334-5802-49ac-a1a7-b058931b1825",
+      "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+      "roleGroup": "baseline",
+      "item": {
+        "type": "chunk",
+        "id": "8b4a5896-82b4-4b80-9fff-17a08b70c29c",
+        "score": 0.03252247488101534,
+        "modalitiesContributed": [
+          "vector",
+          "fulltext"
+        ],
+        "sourceDocumentId": "ebfbd89b-c49a-492b-a1e6-9c06b4e2beb4",
+        "sourceDocumentTitle": "Credit payment allocation — FE/BO pay → debts",
+        "sectionAnchor": "Tóm tắt",
+        "lineStart": 5,
+        "lineEnd": 6,
+        "rawSnippet": "## Tóm tắt\nQuy trình phân bổ nguồn tiền thanh toán từ kênh Front-End (FE) hoặc Back-Office (BO) vào tài khoản tín dụng, hạch toán ghi Có sổ cái Ledger và cấn trừ các loại dư nợ thẻ tín dụng (`MAIN1.CRD_DEBT`) theo cơ chế ưu tiên (waterfall).\n\n",
+        "publishedContentHash": "7c7314500fce951ee9e324cb59b1beb900f3198381419d48c3ce69aae7e21a08",
+        "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+        "hasConflict": false
+      }
+    },
+    {
+      "setId": "d6dc9334-5802-49ac-a1a7-b058931b1825",
+      "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+      "roleGroup": "baseline",
+      "item": {
+        "type": "chunk",
+        "id": "88787c16-35dc-4eec-b30e-519302cf03e6",
+        "score": 0.03125763125763126,
+        "modalitiesContributed": [
+          "vector",
+          "fulltext"
+        ],
+        "sourceDocumentId": "ebfbd89b-c49a-492b-a1e6-9c06b4e2beb4",
+        "sourceDocumentTitle": "Credit payment allocation — FE/BO pay → debts",
+        "sectionAnchor": "Trạng thái và mã lỗi",
+        "lineStart": 68,
+        "lineEnd": 77,
+        "rawSnippet": "## Trạng thái và mã lỗi\n\n| Mã trạng thái / Lỗi | Ý nghĩa | Hành động xử lý |\n|---|---|---|\n| PMTSACTV | Khoản thanh toán còn hạn mức khả dụng | Giữ trạng thái, chờ cấn trừ đợt chi tiêu mới hoặc kỳ sao kê |\n| PMTSSPNT | Khoản thanh toán đã phân bổ hết | Hoàn tất phân bổ, kết thúc vòng đời giao dịch thanh toán |\n| DBTSACTV | Khoản nợ đang mở, cần thanh toán | Cho phép đưa vào con trỏ phân bổ nợ |\n| DBTSPAID | Khoản nợ đã được cấn trừ hoàn tất | Đóng khoản nợ, không duyệt trong các chu kỳ sau |\n| PARTIAL_PAYMENT_REVERSAL_NOT_SUPPORTED | Hệ thống không hỗ trợ hoàn trả/đảo một phần tiền thanh toán | Từ chối yêu cầu, kiểm tra luồng hoàn toàn phần |\n| Service not found | Tài khoản tiết kiệm `ACTP0110` không có dịch vụ tín dụng | Dừng xử lý thanh toán nợ, tiền giữ nguyên tại Ledger |\n\n",
+        "publishedContentHash": "7c7314500fce951ee9e324cb59b1beb900f3198381419d48c3ce69aae7e21a08",
+        "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+        "hasConflict": false
+      }
+    },
+    {
+      "setId": "d6dc9334-5802-49ac-a1a7-b058931b1825",
+      "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+      "roleGroup": "baseline",
+      "item": {
+        "type": "chunk",
+        "id": "393c921e-7a35-4081-b5f2-f681d79a36d3",
+        "score": 0.030330882352941176,
+        "modalitiesContributed": [
+          "vector",
+          "fulltext"
+        ],
+        "sourceDocumentId": "ebfbd89b-c49a-492b-a1e6-9c06b4e2beb4",
+        "sourceDocumentTitle": "Credit payment allocation — FE/BO pay → debts",
+        "sectionAnchor": "Phạm vi",
+        "lineStart": 8,
+        "lineEnd": 11,
+        "rawSnippet": "## Phạm vi\n- Hệ thống Back-Office thẻ `MAIN1` (Oracle Database 19.18, inst 1001).\n- Áp dụng cho các giao dịch thanh toán nguồn từ FE ISO8583, trích nợ tự động CBS (`MAIN1.PMO_ORDER`), giao diện BO UI, nạp tiền P2P, hoàn tiền mua hàng.\n- Loại trừ: Phân hệ `PMO_ORDER` chỉ tạo chỉ thị vận hành `MAIN1.OPR_OPERATION`, không tham gia phân bổ nợ chi tiết.\n\n",
+        "publishedContentHash": "7c7314500fce951ee9e324cb59b1beb900f3198381419d48c3ce69aae7e21a08",
+        "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+        "hasConflict": false
+      }
+    },
+    {
+      "setId": "d6dc9334-5802-49ac-a1a7-b058931b1825",
+      "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+      "roleGroup": "baseline",
+      "item": {
+        "type": "chunk",
+        "id": "d090d086-624e-4a1c-8a96-0bb5a9a1a2e7",
+        "score": 0.02976190476190476,
+        "modalitiesContributed": [
+          "vector",
+          "fulltext"
+        ],
+        "sourceDocumentId": "ebfbd89b-c49a-492b-a1e6-9c06b4e2beb4",
+        "sourceDocumentTitle": "Credit payment allocation — FE/BO pay → debts",
+        "sectionAnchor": "Luồng xử lý",
+        "lineStart": 47,
+        "lineEnd": 52,
+        "rawSnippet": "## Luồng xử lý\n1. Giao dịch thanh toán từ các kênh tạo bản ghi chỉ thị `MAIN1.OPR_OPERATION` với trạng thái `OPST0100`.\n2. Tiến trình xử lý quy tắc `60000004` kích hoạt gọi thủ tục xác định tài khoản và ghi nhận macro credit 1003.\n3. Hệ thống tạo bản ghi thanh toán `MAIN1.CRD_PAYMENT` với trạng thái `PMTSACTV`.\n4. Vòng lặp `apply_payment` duyệt con trỏ danh sách nợ mở theo thứ tự ưu tiên và hạch toán giảm nợ tương ứng (`EVNT1003`).\n5. Nếu tiền thanh toán cấn trừ hết dư nợ, trạng thái chuyển sang `PMTSSPNT`. Nếu còn dư, duy trì `PMTSACTV` chờ chi tiêu kế tiếp hoặc kỳ sao kê `CYTP1001`.\n\n",
+        "publishedContentHash": "7c7314500fce951ee9e324cb59b1beb900f3198381419d48c3ce69aae7e21a08",
+        "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+        "hasConflict": false
+      }
+    },
+    {
+      "setId": "d6dc9334-5802-49ac-a1a7-b058931b1825",
+      "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+      "roleGroup": "baseline",
+      "item": {
+        "type": "chunk",
+        "id": "b4a1ab9e-ba19-47fd-84b1-253c8c9c6d9c",
+        "score": 0.029631255487269532,
+        "modalitiesContributed": [
+          "vector",
+          "fulltext"
+        ],
+        "sourceDocumentId": "ebfbd89b-c49a-492b-a1e6-9c06b4e2beb4",
+        "sourceDocumentTitle": "Credit payment allocation — FE/BO pay → debts",
+        "sectionAnchor": "Các bước thực thi & Quan hệ thành phần",
+        "lineStart": 54,
+        "lineEnd": 66,
+        "rawSnippet": "## Các bước thực thi & Quan hệ thành phần\n\n| STEP_ID | THU_TU | TEN_BUOC | TARGET | WRITES |\n|---|---|---|---|---|\n| 1001 | 1 | Xác định tài khoản đối tượng | MAIN1.OPR_API_RULE_PROC_PKG.SELECT_OBJECT_ACCOUNT | MAIN1.OPR_OPERATION |\n| 1002 | 2 | Xác định số tiền hạch toán | MAIN1.OPR_API_RULE_PROC_PKG.SELECT_AMOUNT_TO_POST_ACCOUNT | MAIN1.OPR_OPERATION |\n| 1003 | 3 | Tạo macro ghi Có Ledger | MAIN1.OPR_API_RULE_PROC_PKG.POST_MACROS | MAIN1.ACC_ENTRY |\n| 1004 | 4 | Đẩy dữ liệu tài khoản vào hệ thống | MAIN1.ACC_API_ENTRY_PKG.FLUSH_JOB | MAIN1.ACC_ENTRY |\n| 1005 | 5 | Khởi tạo bản ghi thanh toán tín dụng | MAIN1.CRD_API_PAYMENT_PKG.CREATE_PAYMENT | MAIN1.CRD_PAYMENT |\n| 1006 | 6 | Truy vấn sắp xếp danh sách dư nợ | MAIN1.CRD_CST_PAYMENT_PKG.ENUM_DEBT_ORDER | MAIN1.CRD_DEBT_BALANCE |\n| 1007 | 7 | Cấn trừ nợ từng bucket | MAIN1.CRD_PAYMENT_PKG.APPLY_PAYMENT | MAIN1.CRD_DEBT_PAYMENT |\n| 1008 | 8 | Cập nhật lại số dư nợ | MAIN1.CRD_DEBT_PKG.CHANGE_DEBT | MAIN1.CRD_DEBT_BALANCE |\n| 1009 | 9 | Hạch toán GL thứ cấp | MAIN1.CRD_CST_APC_PAYMENT_PKG.APPLY_PAYMENT | MAIN1.CST_CBS_GL_ENTRY |\n\n",
+        "publishedContentHash": "7c7314500fce951ee9e324cb59b1beb900f3198381419d48c3ce69aae7e21a08",
+        "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+        "hasConflict": false
+      }
+    },
+    {
+      "setId": "d6dc9334-5802-49ac-a1a7-b058931b1825",
+      "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+      "roleGroup": "baseline",
+      "item": {
+        "type": "chunk",
+        "id": "972eeeae-3ea9-436c-a7f0-1bc37514773f",
+        "score": 0.029437229437229435,
+        "modalitiesContributed": [
+          "vector",
+          "fulltext"
+        ],
+        "sourceDocumentId": "ebfbd89b-c49a-492b-a1e6-9c06b4e2beb4",
+        "sourceDocumentTitle": "Credit payment allocation — FE/BO pay → debts",
+        "sectionAnchor": "Thuật ngữ",
+        "lineStart": 13,
+        "lineEnd": 24,
+        "rawSnippet": "## Thuật ngữ\n- **MAIN1.CRD_PAYMENT**: Bảng lưu thông tin khoản thanh toán tín dụng. Định danh `ID` dùng chung với `MACROS_ID`.\n- **MAIN1.CRD_DEBT**: Bảng lưu trữ hồ sơ nợ tín dụng theo giao dịch gốc.\n- **MAIN1.CRD_DEBT_BALANCE**: Bảng lưu trữ chi tiết dư nợ theo từng phân nhóm số dư (`BALANCE_TYPE`).\n- **MAIN1.CRD_DEBT_PAYMENT**: Bảng liên kết giao dịch thanh toán và khoản nợ được cấn trừ.\n- **BLTP0001 (Ledger)**: Nhóm số dư sổ cái chính của tài khoản.\n- **BLTP1002 (Overdraft)**: Dư nợ trong hạn (thấu chi/gốc tiêu dùng).\n- **BLTP1003 (Interest)**: Dư nợ lãi trong hạn.\n- **BLTP1004 (Overdue)**: Dư nợ gốc quá hạn.\n- **BLTP1005 (Overdue interest)**: Dư nợ lãi quá hạn.\n- **BLTP1007 (Overlimit)**: Dư nợ vượt hạn mức.\n- **REPAY_PRIORITY**: Trọng số ưu tiên thu hồi nợ (giá trị số càng nhỏ ưu tiên cấn trừ càng cao).\n\n",
+        "publishedContentHash": "7c7314500fce951ee9e324cb59b1beb900f3198381419d48c3ce69aae7e21a08",
+        "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+        "hasConflict": false
+      }
+    },
+    {
+      "setId": "d6dc9334-5802-49ac-a1a7-b058931b1825",
+      "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+      "roleGroup": "baseline",
+      "item": {
+        "type": "chunk",
+        "id": "84d91967-73fa-43c3-bd30-073f5b4b0a6b",
+        "score": 0.0288981288981289,
+        "modalitiesContributed": [
+          "vector",
+          "fulltext"
+        ],
+        "sourceDocumentId": "5b337816-24bb-48af-a212-452ed320199e",
+        "sourceDocumentTitle": "Issuing application under the hood + how to manipulate templates",
+        "sectionAnchor": "Ngoại lệ",
+        "lineStart": 198,
+        "lineEnd": 201,
+        "rawSnippet": "## Ngoại lệ\n1. **Trùng lặp số hồ sơ (`APPLICATION_NUMBER`)**: Nếu `APPLICATION_NUMBER` bị trùng trong cùng một Tổ chức (`INSTITUTION_ID`), `MAIN1.APP_UI_APPLICATION_PKG.ADD_APPLICATION_INTERNAL` không làm dừng chương trình bằng exception mà gán trạng thái hồ sơ thành trạng thái báo trùng (Duplicated).\n2. **Kênh tự đóng gói toàn bộ XML**: Khi kênh tích hợp sử dụng `sendApplication` thay vì `doIssueCard`, hệ thống bỏ qua toàn bộ logic phân giải SVIS Product Template và chuyển trực tiếp payload sang cổng `ApplicationsPort`.\n3. **Thẻ tức thì (Instant Card)**: Với luồng thẻ tức thì hoặc dịch vụ đơn vị chấp nhận thanh toán, ràng buộc liên kết bắt buộc giữa thẻ và tài khoản trong `IAP_API_CARD_PKG` được nới lỏng theo cấu hình luồng.\n\n",
+        "publishedContentHash": "153e8357121ddd56040b2fdba14a885ce36f76dfa6abd42c4358d48aa3c61bca",
+        "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+        "hasConflict": false
+      }
+    },
+    {
+      "setId": "d6dc9334-5802-49ac-a1a7-b058931b1825",
+      "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+      "roleGroup": "baseline",
+      "item": {
+        "type": "chunk",
+        "id": "7de27160-0db3-4484-8f0d-6c4048d20b46",
+        "score": 0.028381642512077296,
+        "modalitiesContributed": [
+          "vector",
+          "fulltext"
+        ],
+        "sourceDocumentId": "ebfbd89b-c49a-492b-a1e6-9c06b4e2beb4",
+        "sourceDocumentTitle": "Credit payment allocation — FE/BO pay → debts",
+        "sectionAnchor": "Ngoại lệ",
+        "lineStart": 91,
+        "lineEnd": 94,
+        "rawSnippet": "## Ngoại lệ\n- Không hỗ trợ đảo giao dịch một phần (`cancel_payment` chỉ cho phép đảo toàn phần).\n- Giao dịch thanh toán đã lên sao kê (`IS_NEW=0`) không được phép đảo/hoàn trả tự động.\n- Tài khoản tiết kiệm (`ACTP0110`) không có dịch vụ credit: `MAIN1.CRD_API_RULE_PROC_PKG.CREDIT_PAYMENT` ghi log dừng luồng, tiền nằm cố định tại Ledger `TRNT0101`, không sinh bản ghi `MAIN1.CRD_PAYMENT`.\n\n",
+        "publishedContentHash": "7c7314500fce951ee9e324cb59b1beb900f3198381419d48c3ce69aae7e21a08",
+        "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+        "hasConflict": false
+      }
+    },
+    {
+      "setId": "d6dc9334-5802-49ac-a1a7-b058931b1825",
+      "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+      "roleGroup": "baseline",
+      "item": {
+        "type": "chunk",
+        "id": "0849d02a-94ef-413d-b6ff-8303b0b9e6ce",
+        "score": 0.028370221327967807,
+        "modalitiesContributed": [
+          "vector",
+          "fulltext"
+        ],
+        "sourceDocumentId": "5b337816-24bb-48af-a212-452ed320199e",
+        "sourceDocumentTitle": "Issuing application under the hood + how to manipulate templates",
+        "sectionAnchor": "Phạm vi",
+        "lineStart": 8,
+        "lineEnd": 12,
+        "rawSnippet": "## Phạm vi\n- Hệ thống áp dụng: SmartVista Issuing (SVBO), SmartVista Integration Server (SVIS).\n- Phân hệ cơ sở dữ liệu: Phân hệ quản lý hồ sơ ứng dụng `MAIN1.APP_*`, phân hệ phát hành `MAIN1.ISS_*`, sản phẩm `MAIN1.PRD_*`, tài khoản `MAIN1.ACC_*`, gói tùy biến khách hàng `MAIN1.CST_API_APPLICATION_PKG`.\n- Giao thức tích hợp: CmsSvng SOAP Service, SVBO ApplicationService (`/sv/ApplicationService?wsdl`).\n- Không áp dụng cho: Mẫu lệnh thanh toán (`IS_PAYMENT_ORDER_TEMPLATE`) và phôi cá thể hóa thẻ EMV.\n\n",
+        "publishedContentHash": "153e8357121ddd56040b2fdba14a885ce36f76dfa6abd42c4358d48aa3c61bca",
+        "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+        "hasConflict": false
+      }
+    },
+    {
+      "setId": "d6dc9334-5802-49ac-a1a7-b058931b1825",
+      "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+      "roleGroup": "baseline",
+      "item": {
+        "type": "chunk",
+        "id": "56632e99-dc7a-4f97-94a2-9a92ff5fb37c",
+        "score": 0.028125,
+        "modalitiesContributed": [
+          "vector",
+          "fulltext"
+        ],
+        "sourceDocumentId": "5b337816-24bb-48af-a212-452ed320199e",
+        "sourceDocumentTitle": "Issuing application under the hood + how to manipulate templates",
+        "sectionAnchor": "Luồng xử lý",
+        "lineStart": 28,
+        "lineEnd": 29,
+        "rawSnippet": "## Luồng xử lý\nQuy trình tiếp nhận và xử lý hồ sơ phát hành thẻ chia thành hai nhánh kênh chính:\n\n",
+        "publishedContentHash": "153e8357121ddd56040b2fdba14a885ce36f76dfa6abd42c4358d48aa3c61bca",
+        "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+        "hasConflict": false
+      }
+    },
+    {
+      "setId": "d6dc9334-5802-49ac-a1a7-b058931b1825",
+      "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+      "roleGroup": "baseline",
+      "item": {
+        "type": "chunk",
+        "id": "876e7254-d72c-4446-833c-af7bd9aa1d6e",
+        "score": 0.027809742999616416,
+        "modalitiesContributed": [
+          "vector",
+          "fulltext"
+        ],
+        "sourceDocumentId": "5b337816-24bb-48af-a212-452ed320199e",
+        "sourceDocumentTitle": "Issuing application under the hood + how to manipulate templates",
+        "sectionAnchor": "Bảng tiến trình & bước thực thi",
+        "lineStart": 44,
+        "lineEnd": 60,
+        "rawSnippet": "## Bảng tiến trình & bước thực thi\nQuy trình chi tiết thực thi xử lý hồ sơ phát hành thẻ (`APTPISSA`) trong cơ sở dữ liệu:\n\n| STEP_ID | THU_TU | TEN_BUOC | TARGET | WRITES |\n|---|---|---|---|---|\n| STEP_APP_01 | 1 | Tiếp nhận và khởi tạo hồ sơ | MAIN1.APP_UI_APPLICATION_PKG.ADD_APPLICATION_INTERNAL | MAIN1.APP_APPLICATION |\n| STEP_APP_02 | 2 | Lưu trữ phẳng cấu trúc XML hồ sơ | MAIN1.APP_UI_APPLICATION_PKG.ADD_APPLICATION_INTERNAL | MAIN1.APP_DATA |\n| STEP_APP_03 | 3 | Ghi vết lịch sử khởi tạo hồ sơ | MAIN1.APP_UI_APPLICATION_PKG.ADD_APPLICATION_INTERNAL | MAIN1.APP_HISTORY |\n| STEP_APP_04 | 4 | Khóa bản ghi hồ sơ để xử lý | MAIN1.APP_PROCESS_PKG.PROCESS_APPLICATION | MAIN1.APP_APPLICATION |\n| STEP_APP_05 | 5 | Thực thi tiền xử lý tùy biến khách hàng | MAIN1.CST_API_APPLICATION_PKG.PROCESS_CUSTOMER_BEFORE | MAIN1.APP_HISTORY |\n| STEP_APP_06 | 6 | Xử lý thông tin khách hàng và hợp đồng | MAIN1.PRD_API_CUSTOMER_PKG.PROCESS_CUSTOMER | MAIN1.PRD_CUSTOMER |\n| STEP_APP_07 | 7 | Xử lý tài khoản liên kết thẻ | MAIN1.APP_API_ACCOUNT_PKG.PROCESS_ACCOUNT | MAIN1.ACC_ACCOUNT |\n| STEP_APP_08 | 8 | Điều phối xử lý nghiệp vụ phát hành thẻ | MAIN1.IAP_API_APPLICATION_PKG.PROCESS_APPLICATION | MAIN1.APP_OBJECT |\n| STEP_APP_09 | 9 | Khởi tạo thông tin thẻ và chủ thẻ | MAIN1.IAP_API_CARD_PKG.PROCESS_CARD | MAIN1.ISS_CARD |\n| STEP_APP_10 | 10 | Lưu trữ thực thể thẻ vật lý | MAIN1.ISS_API_CARD_PKG.CREATE_CARD | MAIN1.ISS_CARD |\n| STEP_APP_11 | 11 | Thực thi hậu xử lý tùy biến khách hàng | MAIN1.CST_API_APPLICATION_PKG.PROCESS_CONTRACT_AFTER | MAIN1.APP_HISTORY |\n| STEP_APP_12 | 12 | Cập nhật trạng thái kết quả hồ sơ | MAIN1.APP_PROCESS_PKG.MODIFY_APPLICATION | MAIN1.APP_APPLICATION |\n\n",
+        "publishedContentHash": "153e8357121ddd56040b2fdba14a885ce36f76dfa6abd42c4358d48aa3c61bca",
+        "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+        "hasConflict": false
+      }
+    },
+    {
+      "setId": "d6dc9334-5802-49ac-a1a7-b058931b1825",
+      "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+      "roleGroup": "baseline",
+      "item": {
+        "type": "chunk",
+        "id": "b63886da-35fe-4d52-b15c-85fbeaae9dfd",
+        "score": 0.027783137179239824,
+        "modalitiesContributed": [
+          "vector",
+          "fulltext"
+        ],
+        "sourceDocumentId": "ebfbd89b-c49a-492b-a1e6-9c06b4e2beb4",
+        "sourceDocumentTitle": "Credit payment allocation — FE/BO pay → debts",
+        "sectionAnchor": "Ví dụ",
+        "lineStart": 79,
+        "lineEnd": 89,
+        "rawSnippet": "## Ví dụ\nGiao dịch thanh toán ID `2806010003043021` số tiền 105.002.798 VND hạch toán vào tài khoản đang có nợ:\n1. Gốc POS quá hạn (`OPTP0000`, Pri 50, Overdue 1004): cấn trừ 75.000 VND.\n2. Phí cũ trong hạn (`OPTP0119`, Pri 110, Overdraft 1002): cấn trừ 150.000 VND.\n3. Phí mới trong hạn (`OPTP0119`, Pri 110, Overdraft 1002): cấn trừ 299.000 VND.\n4. Gốc POS cũ trong hạn (`OPTP0000`, Pri 140, Overdraft 1002): cấn trừ 1.425.000 VND.\n5. Gốc POS cũ trong hạn (`OPTP0000`, Pri 140, Overdraft 1002): cấn trừ 2.500.000 VND.\n6. Gốc POS mới trong hạn (`OPTP0000`, Pri 140, Overdraft 1002): cấn trừ 12.500.000 VND.\n7. Tổng tiền cấn trừ nợ: 16.949.000 VND.\n8. Số tiền thừa còn lại: 88.053.798 VND lưu trên Ledger. Trạng thái bản ghi `MAIN1.CRD_PAYMENT` là `PMTSACTV`.\n9. Khi phát sinh chi tiêu mới 125.000.000 VND: Hệ thống tự động trừ 88.053.798 VND từ tiền thừa (tạo `MAIN1.CRD_DEBT_PAYMENT` có `BALANCE_TYPE = NULL`), phần thiếu 36.946.202 VND tạo thành nợ thấu chi mới. Bản ghi thanh toán chuyển trạng thái `PMTSSPNT`.\n\n",
+        "publishedContentHash": "7c7314500fce951ee9e324cb59b1beb900f3198381419d48c3ce69aae7e21a08",
+        "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+        "hasConflict": false
+      }
+    },
+    {
+      "setId": "d6dc9334-5802-49ac-a1a7-b058931b1825",
+      "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+      "roleGroup": "baseline",
+      "item": {
+        "type": "chunk",
+        "id": "208a7c2f-ebbb-4d48-93a3-922fd26c450c",
+        "score": 0.027425373134328357,
+        "modalitiesContributed": [
+          "vector",
+          "fulltext"
+        ],
+        "sourceDocumentId": "5b337816-24bb-48af-a212-452ed320199e",
+        "sourceDocumentTitle": "Issuing application under the hood + how to manipulate templates",
+        "sectionAnchor": "Luồng xử lý > Luồng 1: Xử lý qua SVIS (Kênh tích hợp ESB / Mobile / Teller)",
+        "lineStart": 31,
+        "lineEnd": 36,
+        "rawSnippet": "### Luồng 1: Xử lý qua SVIS (Kênh tích hợp ESB / Mobile / Teller)\n1. Kênh gửi yêu cầu SOAP `doIssueCard` (kèm `productName` và bộ tham số) hoặc `sendApplication` (kèm toàn bộ XML `iss:applicationType`) đến endpoint `CmsSvng`.\n2. `ru.bpc.svis.modules.processes.impl.sv.DoIssueCardProcessor` đọc cấu hình từ `orach.properties` và quét tệp mẫu trong thư mục quy định.\n3. Trình phân giải mẫu (Freemarker 2.3.31 nếu chứa chuỗi `FTL`, hoặc `StrSubstitutor` với biến `${param}`) thay thế giá trị và escape ký tự XML an toàn (`StringEscapeUtils.escapeXml10`).\n4. SVIS unmarshal nội dung thành đối tượng `iss.ApplicationType` và gọi SVBO qua web service `ApplicationsPort.applicationIss` (WSDL: `/sv/ApplicationService?wsdl`).\n5. SVBO tiếp nhận và khởi chạy gói cơ sở dữ liệu xử lý hồ sơ. Sau khi thành công, SVIS thực hiện trích xuất dữ liệu thẻ (`IssueCardUtils.extractCard`), dỡ tải sang Front-End (`unloadCardData`), nạp dữ liệu thẻ (`uploadCardData`) và sinh CVV2 nếu bật cấu hình.\n\n",
+        "publishedContentHash": "153e8357121ddd56040b2fdba14a885ce36f76dfa6abd42c4358d48aa3c61bca",
+        "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+        "hasConflict": false
+      }
+    },
+    {
+      "setId": "d6dc9334-5802-49ac-a1a7-b058931b1825",
+      "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+      "roleGroup": "baseline",
+      "item": {
+        "type": "chunk",
+        "id": "9d331fe0-f9df-4401-94e5-1e5934bb69a9",
+        "score": 0.026153846153846153,
+        "modalitiesContributed": [
+          "vector",
+          "fulltext"
+        ],
+        "sourceDocumentId": "5b337816-24bb-48af-a212-452ed320199e",
+        "sourceDocumentTitle": "Issuing application under the hood + how to manipulate templates",
+        "sectionAnchor": "Tóm tắt",
+        "lineStart": 5,
+        "lineEnd": 6,
+        "rawSnippet": "## Tóm tắt\nTài liệu phân tích kiến trúc xử lý hồ sơ phát hành thẻ (Issuing Application) qua hai tầng mẫu dữ liệu độc lập: SVIS Product Template và SVBO Application Template trên hệ thống SmartVista (SIT MAIN1). Tài liệu hướng dẫn chi tiết luồng xử lý kỹ thuật, cấu trúc XML SVAP, quy trình cấu hình mẫu cho kênh tích hợp (ESB/SOAP) và giao diện người dùng SVNG GUI.\n\n",
+        "publishedContentHash": "153e8357121ddd56040b2fdba14a885ce36f76dfa6abd42c4358d48aa3c61bca",
+        "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+        "hasConflict": false
+      }
+    },
+    {
+      "setId": "d6dc9334-5802-49ac-a1a7-b058931b1825",
+      "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+      "roleGroup": "baseline",
+      "item": {
+        "type": "chunk",
+        "id": "c5839d3e-0a3c-486f-b6e1-32a6d2fcbe78",
+        "score": 0.026153846153846153,
+        "modalitiesContributed": [
+          "vector",
+          "fulltext"
+        ],
+        "sourceDocumentId": "ebfbd89b-c49a-492b-a1e6-9c06b4e2beb4",
+        "sourceDocumentTitle": "Credit payment allocation — FE/BO pay → debts",
+        "sectionAnchor": "Quy tắc",
+        "lineStart": 26,
+        "lineEnd": 45,
+        "rawSnippet": "## Quy tắc\n1. **Tiếp nhận Ledger trước**: Tiền thanh toán luôn ghi Có vào Ledger `BLTP0001` trước (`TRNT0101`, tăng Available Balance), sau đó mới trích từ Ledger chuyển sang cấn trừ các xô nợ `BLTP100x` (`TRNT105x`).\n2. **Ưu tiên thu hồi (Waterfall Priority)**: Xác định dựa trên thuộc tính sản phẩm `CRD_REPAYMENT_PRIORITY` (modifier scale 6009) gán vào `MAIN1.CRD_DEBT_BALANCE.REPAY_PRIORITY` khi tạo nợ:\n   - Priority 10: Gốc DPP (`OPTP1501`, `OPTP1502`) quá hạn `BLTP1004`.\n   - Priority 40: Gốc rút tiền mặt ATM (`OPTP0001`) quá hạn `BLTP1004`.\n   - Priority 50: Gốc mua sắm POS/Retail (`OPTP0000`, `OPTP0012`) quá hạn `BLTP1004`.\n   - Priority 60: Các giao dịch khác quá hạn `BLTP1004`.\n   - Priority 70: Phí quá hạn (`OPTP0119` hoặc `FETP%`) `BLTP1004`.\n   - Priority 80: Lãi quá hạn `BLTP1005` (mọi loại giao dịch).\n   - Priority 90: Gốc DPP trong hạn.\n   - Priority 100: Dư nợ vượt hạn mức `BLTP1007`.\n   - Priority 110: Phí trong hạn.\n   - Priority 120: Lãi trong hạn `BLTP1003`.\n   - Priority 130: Gốc rút tiền mặt ATM trong hạn.\n   - Priority 140: Gốc mua sắm POS/Retail trong hạn.\n   - Priority 150: Các loại dư nợ khác trong hạn.\n   - Priority 1000: Mặc định không khớp điều kiện.\n3. **Thứ tự sắp xếp con**: Các khoản nợ cùng mức ưu tiên `REPAY_PRIORITY` áp dụng thuật toán FIFO theo ngày hạch toán `posting_date` (`DRSA0000`).\n4. **Tiền tự có thừa (Own Funds)**: Nếu tiền thanh toán lớn hơn tổng nợ, cờ `CRD_USE_OWN_FUNDS=1` giữ nguyên tiền thừa tại Ledger `BLTP0001`. Khoản thanh toán giữ trạng thái `PMTSACTV`.\n5. **Cấn trừ chi tiêu mới bằng tiền thừa**: Khi phát sinh chi tiêu mới, hệ thống trừ trực tiếp vào Ledger tiền thừa; tạo bản ghi `MAIN1.CRD_DEBT_PAYMENT` có `BALANCE_TYPE = NULL` và chuyển `MAIN1.CRD_PAYMENT` sang `PMTSSPNT`.\n\n",
+        "publishedContentHash": "7c7314500fce951ee9e324cb59b1beb900f3198381419d48c3ce69aae7e21a08",
+        "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+        "hasConflict": false
+      }
+    },
+    {
+      "setId": "d6dc9334-5802-49ac-a1a7-b058931b1825",
+      "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+      "roleGroup": "baseline",
+      "item": {
+        "type": "chunk",
+        "id": "10ee33eb-bed6-4e90-a007-557e183ff7f4",
+        "score": 0.02581612258494337,
+        "modalitiesContributed": [
+          "vector",
+          "fulltext"
+        ],
+        "sourceDocumentId": "5b337816-24bb-48af-a212-452ed320199e",
+        "sourceDocumentTitle": "Issuing application under the hood + how to manipulate templates",
+        "sectionAnchor": "Quy tắc",
+        "lineStart": 21,
+        "lineEnd": 26,
+        "rawSnippet": "## Quy tắc\n1. **Phân tách tầng mẫu (Template Separation)**: Tuyệt đối không nhầm lẫn giữa SVIS Product Template (tệp trên OS/properties) và SVBO Application Template (bản ghi DB trong `MAIN1.APP_APPLICATION`). Hai cơ chế này phục vụ hai kênh nạp dữ liệu khác nhau.\n2. **Không lưu số thẻ thực (PAN) trong mẫu**: Thuộc tính thẻ `%CARD_NUMBER` hoặc số PAN thực tế tuyệt đối không được cấu hình sẵn trong cả hai loại template. Số thẻ chỉ được sinh động qua tiến trình xử lý.\n3. **Quy tắc ghi đè dữ liệu mẫu SVBO**: Cơ chế nhân bản mẫu SVBO (`MAIN1.APP_UI_APPLICATION_PKG.GET_APPLICATION`) chỉ áp dụng cho giao diện web SVNG Wizard, không áp dụng cho kênh nạp qua SOAP API hoặc tệp hàng loạt session file.\n4. **Quy tắc toàn vẹn mã luồng**: Mã `APPLICATION_FLOW_ID` và `APPLICATION_TYPE` (`APTPISSA`) là bắt buộc trong mọi thông điệp nạp hồ sơ phát hành thẻ.\n5. **Cấm can thiệp trực tiếp bảng lõi**: Mọi kênh giao dịch và quản trị viên không được ghi trực tiếp vào các bảng `MAIN1.ISS_*`, `MAIN1.PRD_*`, `MAIN1.ACC_*`. Dữ liệu nghiệp vụ bắt buộc phải đi qua cơ chế xử lý hồ sơ `MAIN1.APP_*`.\n\n",
+        "publishedContentHash": "153e8357121ddd56040b2fdba14a885ce36f76dfa6abd42c4358d48aa3c61bca",
+        "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+        "hasConflict": false
+      }
+    },
+    {
+      "setId": "d6dc9334-5802-49ac-a1a7-b058931b1825",
+      "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+      "roleGroup": "baseline",
+      "item": {
+        "type": "chunk",
+        "id": "2156a36a-ecff-477f-bb42-768c2f96291b",
+        "score": 0.014492753623188406,
+        "modalitiesContributed": [
+          "vector"
+        ],
+        "sourceDocumentId": "5b337816-24bb-48af-a212-452ed320199e",
+        "sourceDocumentTitle": "Issuing application under the hood + how to manipulate templates",
+        "sectionAnchor": "Ví dụ > Ví dụ 1: Cấu trúc mẫu SVIS FTL phát hành thẻ phụ trên hợp đồng có sẵn (Flow 1003)",
+        "lineStart": 129,
+        "lineEnd": 163,
+        "rawSnippet": "### Ví dụ 1: Cấu trúc mẫu SVIS FTL phát hành thẻ phụ trên hợp đồng có sẵn (Flow 1003)\n```xml\n<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!-- FTL -->\n<application>\n  <application_type>APTPISSA</application_type>\n  <application_flow_id>1003</application_flow_id>\n  <application_status>APST0006</application_status>\n  <application_number>${applicationNumber}</application_number>\n  <institution_id>${institutionId}</institution_id>\n  <agent_number>${agentNumber}</agent_number>\n  <customer_type>ENTTPERS</customer_type>\n  <customer>\n    <command>CMMDEXPR</command>\n    <customer_number>${customerNumber}</customer_number>\n    <contract>\n      <command>CMMDEXPR</command>\n      <contract_number>${contractNumber}</contract_number>\n      <product_number>${productNumber}</product_number>\n      <account>\n        <command>CMMDEXPR</command>\n        <account_number>${accountNumber}</account_number>\n      </account>\n      <card>\n        <command>CMMDCREX</command>\n        <card_type>${cardType}</card_type>\n        <cardholder>\n          <command>CMMDCRPR</command>\n          <cardholder_name>${embossedName}</cardholder_name>\n        </cardholder>\n      </card>\n    </contract>\n  </customer>\n</application>\n```\n\n",
+        "publishedContentHash": "153e8357121ddd56040b2fdba14a885ce36f76dfa6abd42c4358d48aa3c61bca",
+        "snapshotId": "74fab859-34ec-498c-ac3b-eec4c17d3e45",
+        "hasConflict": false
+      }
+    }
+  ],
+  "paths": [],
+  "conflictGroups": [],
+  "modalityStatus": {
+    "fulltext": {
+      "status": "ok",
+      "latencyMs": 76,
+      "itemCount": 27
+    },
+    "vector": {
+      "status": "ok",
+      "latencyMs": 72,
+      "itemCount": 40
+    },
+    "graph": {
+      "status": "ok",
+      "latencyMs": 75,
+      "itemCount": 0
+    }
+  },
+  "diagnostics": {
+    "degraded": true,
+    "coverageWarnings": [
+      {
+        "code": "BUDGET_ITEMS",
+        "setId": null,
+        "message": "Retrieval stopped by budget limit: BUDGET_ITEMS"
+      }
+    ]
+  }
+}

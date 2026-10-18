@@ -762,6 +762,31 @@ describe('groundedSynthesis', () => {
       expect(res.conclusion).toContain('[S1]');
       expect(res.conclusion).toContain('[S2]');
     });
+
+    it('35. does NOT attribute citations or claims when confidence is unknown or response is no-evidence abstention', () => {
+      const raw = {
+        schemaVersion: 2,
+        language: 'vi',
+        conclusion: 'Không tìm thấy thông tin hoặc bằng chứng liên quan trong tài liệu và đồ thị tri thức hiện có.',
+        confidence: 'unknown',
+        confidenceReason: 'Không có trích dẫn hoặc đường đi đồ thị nào khớp với câu hỏi.',
+        citationReasons: {},
+        claims: [],
+        hypotheses: [],
+        unsupportedParts: ['Toàn bộ yêu cầu không có dữ liệu đối chiếu trong hệ thống'],
+      };
+      const mockEvidence = [
+        {
+          id: 'S1',
+          documentTitle: '03 - Call chain',
+          text: 'Tiến trình 60000004 kích hoạt chỉ thị MAIN1.OPR_OPERATION OPST0100',
+        },
+      ];
+      const res = normalizeRawGroundedOutput(raw, ['S1'], [], mockEvidence) as any;
+      expect(res.claims).toEqual([]);
+      expect(res.conclusion).toBe('Không tìm thấy thông tin hoặc bằng chứng liên quan trong tài liệu và đồ thị tri thức hiện có.');
+      expect(res.conclusion).not.toContain('[S1]');
+    });
   });
 
   describe('buildSystemPrompt', () => {
@@ -781,6 +806,13 @@ describe('groundedSynthesis', () => {
     it('28. adapts few-shot citationId to L1 when local authority citation provided', () => {
       const promptVi = buildSystemPrompt('vi', 'test-v1', 'L1');
       expect(promptVi).toContain('"citationIds": [\n        "L1"\n      ]');
+    });
+
+    it('29. enforces citationReasons with explicit entity/subject reference in system prompt', () => {
+      const promptVi = buildSystemPrompt('vi', 'test-v1', 'S1');
+      expect(promptVi).toContain('"citationReasons"');
+      expect(promptVi).toContain('main subject/entity from the user query');
+      expect(promptVi).toContain('Be strictly truthful and faithful to EVIDENCE');
     });
   });
 });

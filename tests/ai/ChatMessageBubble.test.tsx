@@ -468,10 +468,11 @@ describe('ChatMessageBubble', () => {
       <ChatMessageBubble message={graphMessageWithMultipleCitations} />
     );
 
+    // Only cited citations (S1, L1) are displayed; uncited S2 is excluded to prevent user confusion
     const sourceTags = container.querySelectorAll('.ant-tag');
-    expect(sourceTags.length).toBe(3);
+    expect(sourceTags.length).toBe(2);
 
-    // Verify all 3 tags have identical unified border color (no dark blue vs gray mismatch)
+    // Verify all cited tags have identical unified border color (no dark blue vs gray mismatch)
     const borderColors = Array.from(sourceTags).map((tag) => (tag as HTMLElement).style.borderColor);
     expect(new Set(borderColors).size).toBe(1);
     expect(borderColors[0]).toBeTruthy();
@@ -479,6 +480,259 @@ describe('ChatMessageBubble', () => {
     // Verify all 3 tags have identical unified background
     const bgColors = Array.from(sourceTags).map((tag) => (tag as HTMLElement).style.background);
     expect(new Set(bgColors).size).toBe(1);
+  });
+
+  it('renders interactive chips for case-insensitive tags [s1], [l1] and attributes SQL packages from vector/fulltext when paths are empty', () => {
+    const handleActivate = vi.fn();
+    const sqlProcessAnswerText =
+      'Hệ thống Back-Office thẻ MAIN1. Tiến trình xử lý theo quy tắc 60000004 (kích hoạt từ MAIN1.OPR_OPERATION OPST0100).\n' +
+      'Các package xử lý chính:\n' +
+      'MAIN1.CRD_API_PAYMENT_PKG.CREATE_PAYMENT: Tạo bản ghi MAIN1.CRD_PAYMENT (PMTSACTV).\n' +
+      'MAIN1.CRD_CST_PAYMENT_PKG.ENUM_DEBT_ORDER: Quét và sắp xếp xô nợ MAIN1.CRD_DEBT_BALANCE theo độ ưu tiên REPAY_PRIORITY (waterfall) + FIFO theo posting_date.\n' +
+      'MAIN1.CRD_PAYMENT_PKG.APPLY_PAYMENT: Trích tiền từ Ledger BLTP0001, cấn trừ nợ, ghi nhận MAIN1.CRD_DEBT_PAYMENT.\n' +
+      'MAIN1.CRD_DEBT_PKG.CHANGE_DEBT: Cập nhật giảm số dư nợ trên MAIN1.CRD_DEBT_BALANCE.\n' +
+      'MAIN1.CRD_CST_APC_PAYMENT_PKG.APPLY_PAYMENT: Hạch toán GL thứ cấp CBS (MAIN1.CST_CBS_GL_ENTRY).\n' +
+      'Thứ tự cấn trừ theo priority: nợ gốc quá hạn (BLTP1004) -> lãi quá hạn (BLTP1005) -> nợ vượt hạn mức (BLTP1007) -> phí trong hạn -> lãi trong hạn (BLTP1003) -> gốc trong hạn (BLTP1002). Còn dư giữ ở Ledger BLTP0001 chờ chi tiêu mới hoặc kỳ sao kê CYTP1001.';
+
+    const message: ChatMessage = {
+      id: 'msg-sql-empty-graph',
+      threadId: 'thread-1',
+      role: 'assistant',
+      content: '',
+      grounding: {
+        schemaVersion: 1,
+        authority: 'server',
+        outcome: 'DEGRADED',
+        answer: {
+          schemaVersion: 2,
+          language: 'vi',
+          conclusion: sqlProcessAnswerText,
+          confidence: 'high',
+          confidenceReason: 'Grounded against available vector and fulltext items.',
+          claims: [],
+          hypotheses: [],
+          unsupportedParts: [],
+        },
+        citations: [
+          {
+            citationId: 'S1',
+            documentId: 'e46a4f8f-1111-2222-3333-444455556666',
+            documentTitle: '01 — DB wiring on main1',
+            sectionAnchor: 'MAIN1 schema',
+            lineStart: 1,
+            lineEnd: 20,
+            authority: 'server',
+            evidenceClass: 'OBSERVED',
+            snapshotId: 'gsnap_main1',
+            publishedContentHash: 'hash_main1',
+            citedExcerpt: 'Hệ thống thẻ MAIN1 quy tắc 60000004 OPR_OPERATION OPST0100 CRD_PAYMENT CRD_DEBT_BALANCE',
+          },
+          {
+            citationId: 'S2',
+            documentId: 'ebfbd89b-7777-8888-9999-000011112222',
+            documentTitle: 'Credit payment allocation — FE/BO pay → debts',
+            sectionAnchor: 'Allocation rules',
+            lineStart: 1,
+            lineEnd: 30,
+            authority: 'server',
+            evidenceClass: 'OBSERVED',
+            snapshotId: 'gsnap_crd',
+            publishedContentHash: 'hash_crd',
+            citedExcerpt: 'Thủ tục MAIN1.CRD_API_PAYMENT_PKG.CREATE_PAYMENT và ENUM_DEBT_ORDER cấn trừ Ledger BLTP0001',
+          },
+        ],
+        paths: [], // 0 graph paths
+        conflicts: [],
+        scope: null,
+        modalityDiagnostics: {
+          fulltext: { status: 'ok', latencyMs: 12, itemCount: 4 },
+          vector: { status: 'ok', latencyMs: 25, itemCount: 3 },
+          graph: { status: 'ok', latencyMs: 10, itemCount: 0 },
+        },
+        coverageWarnings: [],
+        fallbackReason: 'NONE',
+        routerVersion: 'router-v1',
+        promptVersion: 'grounded-v1',
+        modelId: 'gpt-4o',
+        createdAt: new Date().toISOString(),
+      },
+      createdAt: '2026-10-17T15:20:00Z',
+    };
+
+    const { container } = render(
+      <ChatMessageBubble
+        message={message}
+        groundedCallbacks={{ onCitationActivate: handleActivate }}
+      />
+    );
+
+    // Verify inline citation chips are rendered in the message body
+    const chips = container.querySelectorAll('.grounded-inline-chip');
+    expect(chips.length).toBeGreaterThanOrEqual(1);
+
+    // Verify Nguồn tài liệu tags are rendered
+    const tags = container.querySelectorAll('.ant-tag');
+    expect(tags.length).toBe(2);
+    expect(tags[0]).toHaveTextContent('01 — DB wiring on main1');
+    expect(tags[1]).toHaveTextContent('Credit payment allocation — FE/BO pay → debts');
+
+    // Clicking chip invokes callback with matching citation
+    fireEvent.click(chips[0]!);
+    expect(handleActivate).toHaveBeenCalled();
+  });
+
+  it('renders multi-citations inside a single bracket [S1, S2] as separate interactive chips', () => {
+    const handleActivate = vi.fn();
+    const conclusionWithMultiCitations =
+      'Thủ tục cấn trừ nợ: `MAIN1.CRD_PAYMENT_PKG.APPLY_PAYMENT` phân bổ tiền theo thứ tự ưu tiên [S1, S2].\n' +
+      'Xử lý theo kỳ sao kê: `CRD_PRC_BILLING_PKG.PROCESS` kích hoạt chu kỳ CYTP1001 [S1].';
+
+    const message: ChatMessage = {
+      id: 'msg-multi-citations',
+      threadId: 'thread-1',
+      role: 'assistant',
+      content: '',
+      grounding: {
+        schemaVersion: 1,
+        authority: 'server',
+        outcome: 'DEGRADED',
+        answer: {
+          schemaVersion: 2,
+          language: 'vi',
+          conclusion: conclusionWithMultiCitations,
+          confidence: 'high',
+          confidenceReason: 'Verified with multiple citations in single bracket.',
+          claims: [],
+          hypotheses: [],
+          unsupportedParts: [],
+        },
+        citations: [
+          {
+            citationId: 'S1',
+            documentId: 'e46a4f8f-1111-2222-3333-444455556666',
+            documentTitle: '01 — DB wiring on main1',
+            sectionAnchor: 'Section 1',
+            lineStart: 1,
+            lineEnd: 20,
+            authority: 'server',
+            evidenceClass: 'OBSERVED',
+            snapshotId: 'gsnap_1',
+            publishedContentHash: 'a'.repeat(64),
+            citedExcerpt: 'DB wiring excerpt',
+          },
+          {
+            citationId: 'S2',
+            documentId: 'ebfbd89b-7777-8888-9999-000011112222',
+            documentTitle: 'Credit payment allocation — FE/BO pay → debts',
+            sectionAnchor: 'Section 2',
+            lineStart: 1,
+            lineEnd: 30,
+            authority: 'server',
+            evidenceClass: 'OBSERVED',
+            snapshotId: 'gsnap_2',
+            publishedContentHash: 'b'.repeat(64),
+            citedExcerpt: 'Allocation excerpt',
+          },
+        ],
+        paths: [],
+        conflicts: [],
+        scope: null,
+        modalityDiagnostics: null,
+        coverageWarnings: [],
+        fallbackReason: 'NONE',
+        routerVersion: 'router-v1',
+        promptVersion: 'grounded-v1',
+        modelId: 'gpt-4o',
+        createdAt: new Date().toISOString(),
+      },
+      createdAt: '2026-10-17T15:25:00Z',
+    };
+
+    const { container } = render(
+      <ChatMessageBubble
+        message={message}
+        groundedCallbacks={{ onCitationActivate: handleActivate }}
+      />
+    );
+
+    const chips = container.querySelectorAll('.grounded-inline-chip');
+    // Expect 3 chips total: [1] and [2] from [S1, S2], and [1] from [S1]
+    expect(chips.length).toBe(3);
+    const chipLabels = Array.from(chips).map((c) => c.textContent);
+    expect(chipLabels).toContain('[1]');
+    expect(chipLabels).toContain('[2]');
+
+    // Ensure raw un-converted [S1, S2] is no longer present
+    expect(container.textContent).not.toContain('[S1, S2]');
+  });
+
+  it('does NOT render inline chips or Nguồn tài liệu when confidence is unknown and claims are empty', () => {
+    const handleActivate = vi.fn();
+    const unknownMessage: ChatMessage = {
+      id: 'msg-unknown-abstention',
+      threadId: 'thread-1',
+      role: 'assistant',
+      content: '',
+      grounding: {
+        schemaVersion: 1,
+        authority: 'server',
+        outcome: 'READY',
+        answer: {
+          schemaVersion: 2,
+          language: 'vi',
+          conclusion: 'Không tìm thấy thông tin hoặc bằng chứng liên quan trong tài liệu và đồ thị tri thức hiện có.',
+          confidence: 'unknown',
+          confidenceReason: 'Không có trích dẫn hoặc đường đi đồ thị nào khớp với câu hỏi.',
+          claims: [],
+          hypotheses: [],
+          unsupportedParts: ['Toàn bộ yêu cầu không có dữ liệu đối chiếu trong hệ thống'],
+        },
+        citations: [
+          {
+            citationId: 'S1',
+            documentId: '00000000-0000-0000-0000-000000000001',
+            documentTitle: '01 - Luồng xử lý',
+            sectionAnchor: 'Luồng xử lý',
+            lineStart: 1,
+            lineEnd: 10,
+            authority: 'server',
+            evidenceClass: 'OBSERVED',
+            snapshotId: 'gsnap_1',
+            publishedContentHash: 'a'.repeat(64),
+            citedExcerpt: 'Tiến trình quy tắc 60000004 kích hoạt từ chỉ thị MAIN1.OPR_OPERATION',
+          },
+        ],
+        paths: [],
+        conflicts: [],
+        scope: null,
+        modalityDiagnostics: null,
+        coverageWarnings: [],
+        fallbackReason: 'NONE',
+        routerVersion: null,
+        promptVersion: 'v1',
+        modelId: 'gpt-4o',
+        createdAt: new Date().toISOString(),
+      },
+      createdAt: '2026-10-18T10:00:00Z',
+    };
+
+    const { container } = render(
+      <ChatMessageBubble
+        message={unknownMessage}
+        groundedCallbacks={{ onCitationActivate: handleActivate }}
+      />
+    );
+
+    // Verify 0 inline citation chips exist in message body
+    const chips = container.querySelectorAll('.grounded-inline-chip');
+    expect(chips.length).toBe(0);
+
+    // Verify "Nguồn tài liệu:" does NOT render
+    expect(screen.queryByText(/Nguồn tài liệu:/i)).not.toBeInTheDocument();
+
+    // Verify ant-tag citations do NOT render
+    const tags = container.querySelectorAll('.ant-tag');
+    expect(tags.length).toBe(0);
   });
 });
 

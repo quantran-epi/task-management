@@ -13,6 +13,7 @@ import { KnowledgeClientError } from '../../src/services/knowledge/knowledgeClie
 import type { FederatedRetrievalResponse } from '../../src/services/knowledge/retrievalProtocol';
 import type { LocalGroundedResult } from '../../src/services/search/localGroundedRetrieval';
 import type { GroundedReferenceCase } from '../fixtures/ai/grounded-reference-fixture-schema';
+import type { RouteIntentResult } from '../../src/services/ai/intentRouter';
 
 export interface CaseInvariantViolation {
   readonly caseId: string;
@@ -36,19 +37,29 @@ export function createMockDepsForCase(
   networkSpy: { calls: number },
   synthesizeCalls: Array<{
     query: string;
-    targetLanguage?: string;
-    promptVersion?: string;
+    targetLanguage?: string | undefined;
+    promptVersion?: string | undefined;
   }> = []
 ): GroundedTurnDeps {
   return {
-    routeIntent: async (query: string) => {
-      if (tc.routeOverride) {
-        return { route: tc.routeOverride, confidence: 1.0 };
-      }
-      if (query.toLowerCase().includes('tạo công việc')) {
-        return { route: 'operational', confidence: 1.0 };
-      }
-      return { route: 'knowledge', confidence: 1.0 };
+    routeIntent: async (query: string): Promise<RouteIntentResult> => {
+      const intent = tc.routeOverride === 'operational'
+        ? 'operate_taskmate'
+        : tc.routeOverride === 'mixed'
+        ? 'mixed'
+        : query.toLowerCase().includes('tạo công việc')
+        ? 'operate_taskmate'
+        : 'query_knowledge';
+
+      return {
+        intent,
+        confidence: 1.0,
+        entities: [],
+        language: tc.language === 'en' ? 'en' : 'vi',
+        needs_clarification: false,
+        clarify_question: null,
+        speculation_requested: false,
+      };
     },
 
     routeScope: async () => ({
@@ -104,8 +115,12 @@ export function createMockDepsForCase(
     synthesizeGroundedAnswer: async (synthInput) => {
       synthesizeCalls.push({
         query: synthInput.query,
-        targetLanguage: synthInput.responseLanguage,
-        promptVersion: synthInput.promptVersion,
+        ...(synthInput.responseLanguage !== undefined
+          ? { targetLanguage: synthInput.responseLanguage }
+          : {}),
+        ...(synthInput.promptVersion !== undefined
+          ? { promptVersion: synthInput.promptVersion }
+          : {}),
       });
 
       if (!tc.synthesisMock) {

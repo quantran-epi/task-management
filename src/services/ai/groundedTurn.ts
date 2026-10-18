@@ -353,12 +353,26 @@ export async function runGroundedTurn(
           throw new Error('ABORTED');
         }
 
+        const citationReasons = (synthRes.answer as any).citationReasons || {};
+        const enrichedLocalCitations = localCitations.map((c) => {
+          let reason = citationReasons[c.citationId] || citationReasons[c.citationId.replace(/^[SL]/, '')];
+          if (!reason && synthRes.answer.claims) {
+            const supportingClaim = synthRes.answer.claims.find((cl) =>
+              (cl.citationIds || []).some((cid) => cid.toUpperCase() === c.citationId.toUpperCase())
+            );
+            if (supportingClaim) {
+              reason = `Căn cứ chứng minh cho nhận định: "${supportingClaim.text}"`;
+            }
+          }
+          return reason ? { ...c, relevanceReason: reason } : c;
+        });
+
         const grounding: ChatMessageGrounding = {
           schemaVersion: 1,
           authority: 'local',
           outcome: 'LOCAL_FALLBACK_SYNTHESIS',
           answer: synthRes.answer,
-          citations: localCitations,
+          citations: enrichedLocalCitations,
           paths: null,
           conflicts: null,
           scope: null,
@@ -693,12 +707,26 @@ export async function runGroundedTurn(
       throw new Error('ABORTED');
     }
 
+    const citationReasons = (synthResult.answer as any).citationReasons || {};
+    const enrichedCitations = persistedCitations.map((c) => {
+      let reason = citationReasons[c.citationId] || citationReasons[c.citationId.replace(/^[SL]/, '')];
+      if (!reason && synthResult.answer.claims) {
+        const supportingClaim = synthResult.answer.claims.find((cl) =>
+          (cl.citationIds || []).some((cid) => cid.toUpperCase() === c.citationId.toUpperCase())
+        );
+        if (supportingClaim) {
+          reason = `Căn cứ chứng minh cho nhận định: "${supportingClaim.text}"`;
+        }
+      }
+      return reason ? { ...c, relevanceReason: reason } : c;
+    });
+
     const grounding: ChatMessageGrounding = {
       schemaVersion: 1,
       authority: 'server',
       outcome: serverResponse.outcome as 'READY' | 'DEGRADED',
       answer: synthResult.answer,
-      citations: persistedCitations,
+      citations: enrichedCitations,
       paths: persistedPaths,
       conflicts: persistedConflicts,
       scope: scopePayload,
@@ -867,6 +895,12 @@ export async function synthesizeFromStoredEvidence(
 
   const nowIso = deps.now ? deps.now() : new Date().toISOString();
 
+  const citationReasons = (synthResult.answer as any).citationReasons || {};
+  const enrichedCitations = storedGrounding.citations.map((c) => {
+    const reason = citationReasons[c.citationId] || citationReasons[c.citationId.replace(/^[SL]/, '')];
+    return reason ? { ...c, relevanceReason: reason } : c;
+  });
+
   const newGrounding: ChatMessageGrounding = {
     ...storedGrounding,
     outcome:
@@ -874,6 +908,7 @@ export async function synthesizeFromStoredEvidence(
         ? 'READY'
         : 'LOCAL_FALLBACK_SYNTHESIS',
     answer: synthResult.answer,
+    citations: enrichedCitations,
     modelId: model,
     createdAt: nowIso,
   };

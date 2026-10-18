@@ -207,6 +207,13 @@ function attributeLinesWithCitations(
   citations: readonly PersistedCitation[]
 ): string {
   if (!text || citations.length === 0) return text;
+  if (
+    /(không tìm thấy|không có thông tin|không có dữ liệu|chưa có thông tin|no relevant information|no evidence found|insufficient evidence)/i.test(
+      text
+    )
+  ) {
+    return text;
+  }
 
   const validCitationTags = new Set<string>();
   citations.forEach((c, idx) => {
@@ -227,10 +234,14 @@ function attributeLinesWithCitations(
       continue;
     }
 
-    const existingTags = Array.from(trimmed.matchAll(/\[([SL]?\d+)\]/gi));
+    const normalizedLine = line.replace(
+      /\[\s*([SL]?\d+(?:\s*,\s*[SL]?\d+)+)\s*\]/gi,
+      (_match, inner) => inner.split(/\s*,\s*/).map((tag: string) => `[${tag}]`).join(' ')
+    );
+    const existingTags = Array.from(normalizedLine.matchAll(/\[([SL]?\d+)\]/gi));
     const hasValidCitation = existingTags.some((m) => m[1] && validCitationTags.has(m[1].toLowerCase()));
     if (hasValidCitation) {
-      resultLines.push(line);
+      resultLines.push(normalizedLine);
       attributedAny = true;
       continue;
     }
@@ -340,44 +351,103 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
 
     // Render friendly markdown answer with inline citation tags instead of bulky technical card
     if (g.answer && (g.answer.conclusion || (g.answer.claims && g.answer.claims.length > 0))) {
+      const isAbstention =
+        ('confidence' in g.answer && g.answer.confidence === 'unknown') ||
+        (typeof g.answer.conclusion === 'string' &&
+          /(không tìm thấy|không có thông tin|không có dữ liệu|chưa có thông tin|no relevant information|no evidence found|insufficient evidence)/i.test(
+            g.answer.conclusion
+          ));
+
+      let formattedConclusion = g.answer.conclusion || '';
+      if (isAbstention) {
+        formattedConclusion = formattedConclusion.replace(/\[\s*[SL]?\d+\s*\]/gi, '').trim();
+      } else {
+        formattedConclusion = formattedConclusion.replace(
+          /\[\s*([SL]?\d+(?:\s*,\s*[SL]?\d+)+)\s*\]/gi,
+          (_match, inner) => inner.split(/\s*,\s*/).map((tag: string) => `[${tag}]`).join(' ')
+        );
+      }
+
+      // Collect only citations actually referenced by the AI (claims, conclusion, citationReasons)
+      const citedIds = new Set<string>();
+      if (!isAbstention) {
+        (g.answer.claims || []).forEach((c) => {
+          (c.citationIds || []).forEach((id) => citedIds.add(id.toUpperCase()));
+        });
+        const inlineMatches = Array.from((formattedConclusion + ' ' + (msg.content || '')).matchAll(/\[([SL]?\d+)\]/gi));
+        inlineMatches.forEach((m) => {
+          if (m[1]) citedIds.add(m[1].toUpperCase());
+        });
+        const answerReasons = (g.answer as any).citationReasons;
+        if (answerReasons && typeof answerReasons === 'object') {
+          Object.keys(answerReasons).forEach((k) => citedIds.add(k.toUpperCase()));
+        }
+      }
+
+      // Filter to ONLY cited citations to eliminate irrelevant retrieval clutter
+      const citedCitations = isAbstention
+        ? []
+        : (g.citations || []).filter((c) => {
+            const cleanId = c.citationId.toUpperCase();
+            const numOnly = cleanId.replace(/^[SL]/, '');
+            return (
+              citedIds.has(cleanId) ||
+              citedIds.has(`S${numOnly}`) ||
+              citedIds.has(`L${numOnly}`) ||
+              citedIds.has(numOnly)
+            );
+          });
+
+      const activeCitations = isAbstention
+        ? []
+        : citedCitations.length > 0
+          ? citedCitations
+          : (g.citations || []);
+
       const citationMap = new Map<string, { num: number; isLocal: boolean; citation: PersistedCitation }>();
-      (g.citations || []).forEach((c, idx) => {
+      activeCitations.forEach((c, idx) => {
         const entry = { num: idx + 1, isLocal: c.authority === 'local', citation: c };
-        citationMap.set(c.citationId, entry);
+        const cleanId = c.citationId.toUpperCase();
+        const numOnly = cleanId.replace(/^[SL]/, '');
+        citationMap.set(cleanId, entry);
+        citationMap.set(`S${numOnly}`, entry);
+        citationMap.set(`L${numOnly}`, entry);
+        citationMap.set(numOnly, entry);
         citationMap.set(`S${idx + 1}`, entry);
         citationMap.set(`L${idx + 1}`, entry);
         citationMap.set(String(idx + 1), entry);
       });
 
       // Format claims with inline citation tags
-      const formattedClaims = (g.answer.claims || []).map((c) => {
-        let citedBadges = (c.citationIds || [])
-          .map((cid) => {
-            const info = citationMap.get(cid);
-            if (!info) return null;
-            return info.isLocal ? `[L${info.num}]` : `[${info.num}]`;
-          })
-          .filter(Boolean);
+      const formattedClaims = isAbstention
+        ? []
+        : (g.answer.claims || []).map((c) => {
+            let citedBadges = (c.citationIds || [])
+              .map((cid) => {
+                const info = citationMap.get(cid.toUpperCase()) || citationMap.get(cid);
+                if (!info) return null;
+                return info.isLocal ? `[L${info.num}]` : `[${info.num}]`;
+              })
+              .filter(Boolean);
 
-        if (citedBadges.length === 0 && g.citations && g.citations.length > 0) {
-          const attributedText = attributeLinesWithCitations(c.text, g.citations);
-          const match = attributedText.match(/\[([SL]?\d+)\]/i);
-          if (match && match[1]) {
-            const cleanTag = match[1];
-            const info = citationMap.get(cleanTag);
-            if (info) {
-              citedBadges = [info.isLocal ? `[L${info.num}]` : `[${info.num}]`];
+            if (citedBadges.length === 0 && activeCitations.length > 0) {
+              const attributedText = attributeLinesWithCitations(c.text, activeCitations);
+              const match = attributedText.match(/\[([SL]?\d+)\]/i);
+              if (match && match[1]) {
+                const cleanTag = match[1].toUpperCase();
+                const info = citationMap.get(cleanTag);
+                if (info) {
+                  citedBadges = [info.isLocal ? `[L${info.num}]` : `[${info.num}]`];
+                }
+              }
             }
-          }
-        }
 
-        const suffix = citedBadges.length > 0 ? ` ${citedBadges.join(' ')}` : '';
-        return `${c.text}${suffix}`;
-      });
+            const suffix = citedBadges.length > 0 ? ` ${citedBadges.join(' ')}` : '';
+            return `${c.text}${suffix}`;
+          });
 
-      let formattedConclusion = g.answer.conclusion || '';
-      if (g.citations && g.citations.length > 0) {
-        formattedConclusion = attributeLinesWithCitations(formattedConclusion, g.citations);
+      if (!isAbstention && activeCitations.length > 0) {
+        formattedConclusion = attributeLinesWithCitations(formattedConclusion, activeCitations);
       }
       formattedConclusion = formattedConclusion.replace(/\[(S|L)?(\d+)\]/gi, (match, prefix, numStr) => {
         const cleanTag = prefix ? `${prefix.toUpperCase()}${numStr}` : numStr;
@@ -397,12 +467,20 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
       const chipBg = token.colorPrimaryBg ?? '#e6f4ff';
       const chipBorder = token.colorPrimaryBorder ?? '#91caff';
       const chipColor = token.colorPrimary ?? '#1677ff';
-      if (g.citations && g.citations.length > 0) {
-        renderedHtml = renderedHtml.replace(/\[(L?[0-9]+|S[0-9]+)\]/g, (match, tag) => {
-          const info = citationMap.get(tag);
+      if (activeCitations.length > 0) {
+        renderedHtml = renderedHtml.replace(
+          /\[\s*([SL]?[0-9]+(?:\s*,\s*[SL]?[0-9]+)+)\s*\]/gi,
+          (_match, inner) => inner.split(/\s*,\s*/).map((tag: string) => `[${tag}]`).join(' ')
+        );
+        renderedHtml = renderedHtml.replace(/\[(L?[0-9]+|S[0-9]+)\]/gi, (match, tag) => {
+          const cleanTag = tag.toUpperCase();
+          const info = citationMap.get(cleanTag) || citationMap.get(tag);
           if (!info) return match;
           const label = info.isLocal ? `L${info.num}` : `${info.num}`;
-          return `<span class="grounded-inline-chip" data-citation-id="${info.citation.citationId}" style="cursor:pointer;margin:0 2px;padding:0 5px;border-radius:4px;font-weight:600;font-size:11px;line-height:16px;display:inline-flex;align-items:center;vertical-align:baseline;background:${chipBg};border:1px solid ${chipBorder};color:${chipColor};" title="${escapeAttr(info.citation.documentTitle)}">[${label}]</span>`;
+          const tooltipText = info.citation.relevanceReason
+            ? `${info.citation.documentTitle}\n\n💡 Căn cứ: ${info.citation.relevanceReason}`
+            : info.citation.documentTitle;
+          return `<span class="grounded-inline-chip" data-citation-id="${info.citation.citationId}" style="cursor:pointer;margin:0 2px;padding:0 5px;border-radius:4px;font-weight:600;font-size:11px;line-height:16px;display:inline-flex;align-items:center;vertical-align:baseline;background:${chipBg};border:1px solid ${chipBorder};color:${chipColor};" title="${escapeAttr(tooltipText)}">[${label}]</span>`;
         });
       }
 
@@ -438,44 +516,43 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               dangerouslySetInnerHTML={{ __html: renderedHtml }}
             />
 
-            {g.citations && g.citations.length > 0 && (() => {
-              const citedCitationIds = new Set<string>();
-              (g.answer.claims || []).forEach((c) => {
-                (c.citationIds || []).forEach((id) => citedCitationIds.add(id));
-              });
-              const chipMatches = renderedHtml.matchAll(/data-citation-id="([^"]+)"/g);
-              for (const m of chipMatches) {
-                if (m[1]) citedCitationIds.add(m[1]);
-              }
+            {activeCitations.length > 0 && (
+              <div style={{ marginTop: 10, paddingTop: 8, borderTop: `1px dashed ${token.colorBorderSecondary}` }}>
+                <span style={{ fontSize: 11, color: token.colorTextSecondary, marginRight: 6 }}>
+                  Nguồn tài liệu:
+                </span>
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                >
+                  {activeCitations.map((c) => {
+                    const isLocal = c.authority === 'local';
+                    const cleanId = c.citationId.toUpperCase();
+                    const info = citationMap.get(cleanId) || citationMap.get(c.citationId);
+                    const num = info ? info.num : 1;
+                    const label = isLocal ? `[L${num}]` : `[${num}]`;
 
-              const displayCitations = [...g.citations].sort((a, b) => {
-                const aCited = citedCitationIds.has(a.citationId) ? 1 : 0;
-                const bCited = citedCitationIds.has(b.citationId) ? 1 : 0;
-                return bCited - aCited;
-              });
-
-              return (
-                <div style={{ marginTop: 10, paddingTop: 8, borderTop: `1px dashed ${token.colorBorderSecondary}` }}>
-                  <span style={{ fontSize: 11, color: token.colorTextSecondary, marginRight: 6 }}>
-                    Nguồn tài liệu:
-                  </span>
-                  <span
-                    style={{
-                      display: 'inline-flex',
-                      flexWrap: 'wrap',
-                      alignItems: 'center',
-                      gap: 4,
-                    }}
-                  >
-                    {displayCitations.map((c) => {
-                      const isLocal = c.authority === 'local';
-                      const info = citationMap.get(c.citationId);
-                      const num = info ? info.num : 1;
-                      const label = isLocal ? `[L${num}]` : `[${num}]`;
-
-                      return (
+                    return (
+                      <Tooltip
+                        key={c.citationId}
+                        title={
+                          <div style={{ maxWidth: 360, whiteSpace: 'pre-wrap' }}>
+                            <div style={{ fontWeight: 600 }}>{c.documentTitle || ''}</div>
+                            {c.relevanceReason && (
+                              <div style={{ marginTop: 4, fontSize: 12 }}>
+                                💡 Căn cứ: {c.relevanceReason}
+                              </div>
+                            )}
+                          </div>
+                        }
+                        zIndex={1500}
+                        getPopupContainer={(node) => node.parentElement || document.body}
+                      >
                         <Tag
-                          key={c.citationId}
                           style={{
                             cursor: 'pointer',
                             margin: '0 2px',
@@ -496,12 +573,12 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
                         >
                           {`${label} ${c.documentTitle || ''}`.trim()}
                         </Tag>
-                      );
-                    })}
-                  </span>
-                </div>
-              );
-            })()}
+                      </Tooltip>
+                    );
+                  })}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Footer duration & tokens for grounded knowledge messages */}

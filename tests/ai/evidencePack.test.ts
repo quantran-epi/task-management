@@ -954,4 +954,34 @@ describe('evidencePack', () => {
     expect(pack.promptEvidence[0]?.id).toBe('S2');
     expect(pack.promptEvidence[0]?.text).toBe('high score snippet');
   });
+
+  it('22. handles flat chunk items in resp.items and populates documentTitle in promptEvidence', () => {
+    const chunkA = makeMockChunk('c_1', DOC_1, '01 — DB wiring on main1', 1, 10, 'main1 debt packages', HASH_A, { score: 0.85 });
+    const chunkB = makeMockChunk('c_2', DOC_2, 'Credit payment allocation — FE/BO pay → debts', 1, 10, 'MAIN1.CRD_API_PAYMENT_PKG.CREATE_PAYMENT', HASH_B, { score: 0.95 });
+
+    // Mock response where items are flat ChunkItems (no nested .item)
+    const mockFlatResponse: any = {
+      outcome: 'DEGRADED',
+      snapshotId: 'gsnap_22222222',
+      items: [chunkA, chunkB],
+      paths: [],
+      conflictGroups: [],
+      modalityStatus: {
+        fulltext: { status: 'ok', latencyMs: 10, itemCount: 2 },
+        vector: { status: 'ok', latencyMs: 20, itemCount: 2 },
+        graph: { status: 'ok', latencyMs: 15, itemCount: 0 },
+      },
+      diagnostics: { degraded: true, coverageWarnings: [] },
+    };
+
+    const pack = packEvidence({ authority: 'server', serverResponse: mockFlatResponse });
+
+    expect(pack.promptEvidence).toHaveLength(2);
+    // Encounter order preserved in citations map (D-39)
+    expect(pack.citations['S1']?.documentTitle).toBe('01 — DB wiring on main1');
+    expect(pack.citations['S2']?.documentTitle).toBe('Credit payment allocation — FE/BO pay → debts');
+    // Score descending order in promptEvidence (chunkB 0.95 > chunkA 0.85)
+    expect(pack.promptEvidence[0]?.documentTitle).toBe('Credit payment allocation — FE/BO pay → debts');
+    expect(pack.promptEvidence[1]?.documentTitle).toBe('01 — DB wiring on main1');
+  });
 });

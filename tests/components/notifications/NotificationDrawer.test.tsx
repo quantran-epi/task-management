@@ -126,6 +126,10 @@ describe('NotificationDrawer', () => {
     expect(dismissButtons.length).toBe(2); // stale + reminder
     fireEvent.click(dismissButtons[0]!);
     expect(handleDismiss).toHaveBeenCalledWith(mockItems[2]);
+
+    // Reminder item has "Đã xong" complete button
+    const completeReminderButtons = screen.getAllByRole('button', { name: /đã xong/i });
+    expect(completeReminderButtons.length).toBeGreaterThan(0);
   });
 
   it('filters items correctly when switching tabs', () => {

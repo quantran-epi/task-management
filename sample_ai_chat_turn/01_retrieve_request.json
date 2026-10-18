@@ -1,0 +1,26 @@
+{
+  "query": "process nào xử lý phân bổ khoản thanh toán thẻ tín dụng",
+  "setTierAssignments": [
+    {
+      "setId": "d6dc9334-5802-49ac-a1a7-b058931b1825",
+      "tier": "REQUIRED",
+      "roleGroup": "baseline"
+    },
+    {
+      "setId": "2fc3b8af-4b75-4c12-90cb-8854dfa87094",
+      "tier": "REQUIRED",
+      "roleGroup": "baseline"
+    }
+  ],
+  "comparisonMode": null,
+  "budgets": {
+    "concurrency": 2,
+    "elapsedMs": 20000,
+    "maxSets": 5,
+    "maxItems": 20,
+    "maxEvidenceChars": 15000
+  },
+  "limit": 20,
+  "includeInferred": true,
+  "recentTurns": []
+}

@@ -13,7 +13,7 @@ function escapeHtml(text: string): string {
     .replace(/'/g, '&#39;');
 }
 
-function renderInlineFormatting(rawText: string): string {
+export function renderInlineFormatting(rawText: string): string {
   // First escape raw HTML
   let text = escapeHtml(rawText);
 
@@ -129,36 +129,52 @@ interface ListStackItem {
   indent: number;
 }
 
-export function renderSafeMarkdown(source: string): string {
+export interface MarkdownRenderOptions {
+  sourceLines?: boolean;
+}
+
+export function renderSafeMarkdown(source: string, options?: MarkdownRenderOptions): string {
   if (!source) return '';
 
+  const sourceLines = Boolean(options?.sourceLines);
   const lines = source.split(/\r?\n/);
   const output: string[] = [];
 
   let inCodeBlock = false;
   let codeBlockLang = '';
   let codeBlockLines: string[] = [];
+  let codeBlockStartLine = 1;
 
   // Blockquote accumulator
   let blockquoteLines: string[] = [];
+  let blockquoteStartLine = 1;
 
   // Table accumulator
   let inTable = false;
   let tableAlignments: Array<'left' | 'center' | 'right' | null> = [];
   let tableHeaderCells: string[] = [];
   let tableRows: string[][] = [];
+  let tableRowLines: number[] = [];
+  let tableStartLine = 1;
+  let tableEndLine = 1;
 
   // Paragraph lines accumulator (for soft line breaks with <br />)
   let paragraphLines: string[] = [];
+  let paragraphStartLine = 1;
 
   // List hierarchy stack and buffer
   const listStack: ListStackItem[] = [];
   let listHtmlBuffer = '';
 
+  const lineAttr = (start: number, end: number) => {
+    return sourceLines ? ` data-line-start="${start}" data-line-end="${end}"` : '';
+  };
+
   const flushParagraph = () => {
     if (paragraphLines.length > 0) {
+      const endLine = paragraphStartLine + paragraphLines.length - 1;
       const formatted = paragraphLines.map((l) => renderInlineFormatting(l)).join('<br />');
-      output.push(`<p>${formatted}</p>`);
+      output.push(`<p${lineAttr(paragraphStartLine, endLine)}>${formatted}</p>`);
       paragraphLines = [];
     }
   };
@@ -174,9 +190,14 @@ export function renderSafeMarkdown(source: string): string {
     }
   };
 
-  const flushBlockquote = () => {
+  const flushBlockquote = (endLine?: number) => {
     if (blockquoteLines.length > 0) {
-      output.push(`<blockquote>${blockquoteLines.map((l) => `<p>${renderInlineFormatting(l)}</p>`).join('')}</blockquote>`);
+      const lastLine = endLine ?? blockquoteStartLine + blockquoteLines.length - 1;
+      output.push(
+        `<blockquote${lineAttr(blockquoteStartLine, lastLine)}>${blockquoteLines
+          .map((l) => `<p>${renderInlineFormatting(l)}</p>`)
+          .join('')}</blockquote>`
+      );
       blockquoteLines = [];
     }
   };
@@ -192,7 +213,8 @@ export function renderSafeMarkdown(source: string): string {
         .join('');
 
       const tbodyTrs = tableRows
-        .map((row) => {
+        .map((row, rIdx) => {
+          const rowLine = tableRowLines[rIdx] ?? tableStartLine + 2 + rIdx;
           const tds = tableHeaderCells
             .map((_, idx) => {
               const cell = row[idx] ?? '';
@@ -201,18 +223,19 @@ export function renderSafeMarkdown(source: string): string {
               return `<td${style}>${renderInlineFormatting(cell)}</td>`;
             })
             .join('');
-          return `<tr>${tds}</tr>`;
+          return `<tr${lineAttr(rowLine, rowLine)}>${tds}</tr>`;
         })
         .join('');
 
       output.push(
-        `<div class="markdown-table-wrapper"><table class="markdown-table"><thead><tr>${theadThs}</tr></thead><tbody>${tbodyTrs}</tbody></table></div>`
+        `<div class="markdown-table-wrapper"${lineAttr(tableStartLine, tableEndLine)}><table class="markdown-table"><thead><tr${lineAttr(tableStartLine, tableStartLine + 1)}>${theadThs}</tr></thead><tbody>${tbodyTrs}</tbody></table></div>`
       );
 
       inTable = false;
       tableAlignments = [];
       tableHeaderCells = [];
       tableRows = [];
+      tableRowLines = [];
     }
   };
 
@@ -231,11 +254,12 @@ export function renderSafeMarkdown(source: string): string {
     if (codeFenceMatch) {
       if (inCodeBlock) {
         // Closing code block
+        const codeBlockEndLine = i + 1;
         const escapedCode = codeBlockLines.map((l) => escapeHtml(l)).join('\n');
         const langAttr = codeBlockLang ? ` class="language-${codeBlockLang}"` : '';
         const langLabel = codeBlockLang || 'code';
         output.push(
-          `<div class="code-block-wrapper"><div class="code-block-header"><span class="code-block-lang">${langLabel}</span><button class="code-copy-btn" type="button">Copy</button></div><pre class="code-block"><code${langAttr}>${escapedCode}</code></pre></div>`
+          `<div class="code-block-wrapper"${lineAttr(codeBlockStartLine, codeBlockEndLine)}><div class="code-block-header"><span class="code-block-lang">${langLabel}</span><button class="code-copy-btn" type="button">Copy</button></div><pre class="code-block"><code${langAttr}>${escapedCode}</code></pre></div>`
         );
         inCodeBlock = false;
         codeBlockLang = '';
@@ -244,6 +268,7 @@ export function renderSafeMarkdown(source: string): string {
         // Opening code block
         flushAll();
         inCodeBlock = true;
+        codeBlockStartLine = i + 1;
         codeBlockLang = codeFenceMatch[1] || '';
         codeBlockLines = [];
       }
@@ -258,7 +283,7 @@ export function renderSafeMarkdown(source: string): string {
     // 2. Horizontal rule (---, ***, ___)
     if (/^(?:---|\*\*\*|___)\s*$/.test(line)) {
       flushAll();
-      output.push('<hr />');
+      output.push(`<hr${lineAttr(i + 1, i + 1)} />`);
       continue;
     }
 
@@ -267,7 +292,7 @@ export function renderSafeMarkdown(source: string): string {
     if (headingMatch && headingMatch[1] && headingMatch[2]) {
       flushAll();
       const level = headingMatch[1].length;
-      output.push(`<h${level}>${renderInlineFormatting(headingMatch[2])}</h${level}>`);
+      output.push(`<h${level}${lineAttr(i + 1, i + 1)}>${renderInlineFormatting(headingMatch[2])}</h${level}>`);
       continue;
     }
 
@@ -277,10 +302,13 @@ export function renderSafeMarkdown(source: string): string {
       flushParagraph();
       flushList();
       flushTable();
+      if (blockquoteLines.length === 0) {
+        blockquoteStartLine = i + 1;
+      }
       blockquoteLines.push(blockquoteMatch[1]);
       continue;
     } else if (blockquoteLines.length > 0) {
-      flushBlockquote();
+      flushBlockquote(i);
     }
 
     // 5. GFM Tables
@@ -288,6 +316,8 @@ export function renderSafeMarkdown(source: string): string {
     if (!inTable && line.includes('|') && i + 1 < lines.length && isTableDelimiter(lines[i + 1] ?? '')) {
       flushAll();
       inTable = true;
+      tableStartLine = i + 1;
+      tableEndLine = i + 2;
       tableHeaderCells = splitTableRow(line);
       tableAlignments = parseTableAlignments(lines[i + 1] ?? '');
       i++; // Skip delimiter line
@@ -297,6 +327,8 @@ export function renderSafeMarkdown(source: string): string {
     if (inTable) {
       if (line.trim().length > 0 && line.includes('|')) {
         tableRows.push(splitTableRow(line));
+        tableRowLines.push(i + 1);
+        tableEndLine = i + 1;
         continue;
       } else {
         flushTable();
@@ -317,6 +349,7 @@ export function renderSafeMarkdown(source: string): string {
       const indentStr = taskMatch?.[1] ?? ulMatch?.[1] ?? olMatch?.[1] ?? '';
       const indent = indentStr.length;
       const type: 'ul' | 'ol' = olMatch ? 'ol' : 'ul';
+      const itemLine = i + 1;
 
       let itemContent = '';
       let isTaskItem = false;
@@ -332,21 +365,22 @@ export function renderSafeMarkdown(source: string): string {
       }
 
       const liClass = isTaskItem ? ' class="task-item"' : '';
+      const liAttr = `${liClass}${lineAttr(itemLine, itemLine)}`;
 
       // Adjust listStack according to indent
       if (listStack.length === 0) {
-        listHtmlBuffer = `<${type}><li${liClass}>${itemContent}`;
+        listHtmlBuffer = `<${type}><li${liAttr}>${itemContent}`;
         listStack.push({ type, indent });
       } else {
         const top = listStack[listStack.length - 1]!;
         if (indent > top.indent) {
-          listHtmlBuffer += `<${type}><li${liClass}>${itemContent}`;
+          listHtmlBuffer += `<${type}><li${liAttr}>${itemContent}`;
           listStack.push({ type, indent });
         } else if (indent === top.indent) {
           if (top.type === type) {
-            listHtmlBuffer += `</li><li${liClass}>${itemContent}`;
+            listHtmlBuffer += `</li><li${liAttr}>${itemContent}`;
           } else {
-            listHtmlBuffer += `</li></${top.type}><${type}><li${liClass}>${itemContent}`;
+            listHtmlBuffer += `</li></${top.type}><${type}><li${liAttr}>${itemContent}`;
             top.type = type;
           }
         } else {
@@ -358,13 +392,13 @@ export function renderSafeMarkdown(source: string): string {
           if (listStack.length > 0) {
             const currentTop = listStack[listStack.length - 1]!;
             if (currentTop.type === type) {
-              listHtmlBuffer += `</li><li${liClass}>${itemContent}`;
+              listHtmlBuffer += `</li><li${liAttr}>${itemContent}`;
             } else {
-              listHtmlBuffer += `</li></${currentTop.type}><${type}><li${liClass}>${itemContent}`;
+              listHtmlBuffer += `</li></${currentTop.type}><${type}><li${liAttr}>${itemContent}`;
               currentTop.type = type;
             }
           } else {
-            listHtmlBuffer += `<${type}><li${liClass}>${itemContent}`;
+            listHtmlBuffer += `<${type}><li${liAttr}>${itemContent}`;
             listStack.push({ type, indent });
           }
         }
@@ -381,6 +415,9 @@ export function renderSafeMarkdown(source: string): string {
     }
 
     // 8. Paragraph line (accumulated for soft breaks)
+    if (paragraphLines.length === 0) {
+      paragraphStartLine = i + 1;
+    }
     paragraphLines.push(line);
   }
 
@@ -390,7 +427,7 @@ export function renderSafeMarkdown(source: string): string {
     const langAttr = codeBlockLang ? ` class="language-${codeBlockLang}"` : '';
     const langLabel = codeBlockLang || 'code';
     output.push(
-      `<div class="code-block-wrapper"><div class="code-block-header"><span class="code-block-lang">${langLabel}</span><button class="code-copy-btn" type="button">Copy</button></div><pre class="code-block"><code${langAttr}>${escapedCode}</code></pre></div>`
+      `<div class="code-block-wrapper"${lineAttr(codeBlockStartLine, lines.length)}><div class="code-block-header"><span class="code-block-lang">${langLabel}</span><button class="code-copy-btn" type="button">Copy</button></div><pre class="code-block"><code${langAttr}>${escapedCode}</code></pre></div>`
     );
   }
 

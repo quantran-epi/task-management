@@ -22,6 +22,7 @@ import {
   FolderOpenOutlined,
   RobotOutlined,
   MoreOutlined,
+  BellOutlined,
 } from '@ant-design/icons';
 import type { Project, Milestone, Task } from '../../types/models';
 import { EmptyState } from '../common/EmptyState';
@@ -33,6 +34,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { getJiraBrowseUrl, openJiraExternalUrl } from '../../services/jira/jiraApi';
 import { openDocumentLink, isLocalPath } from '../../utils/documentLinks';
 import { useAIChat } from '../../context/AIChatContext';
+import { QuickReminderModal } from '../common/QuickReminderModal';
 
 export interface ProjectTableProps {
   projects: Project[];
@@ -94,6 +96,8 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
     y: number;
   } | null>(null);
 
+  const [reminderTargetProject, setReminderTargetProject] = useState<Project | null>(null);
+
   const getProjectMenuItems = (record: Project): NonNullable<MenuProps['items']> => [
     {
       key: 'ai-chat',
@@ -102,6 +106,12 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
       onClick: () => {
         openChat({ type: 'project', id: record.id, title: record.name });
       },
+    },
+    {
+      key: 'add-reminder',
+      icon: <BellOutlined style={{ color: '#faad14' }} />,
+      label: 'Thêm nhắc nhở',
+      onClick: () => setReminderTargetProject(record),
     },
     {
       key: 'add-task',
@@ -891,6 +901,15 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
             }}
           />
         </Dropdown>
+      )}
+
+      {reminderTargetProject && (
+        <QuickReminderModal
+          open={!!reminderTargetProject}
+          onClose={() => setReminderTargetProject(null)}
+          target={{ type: 'project', entity: reminderTargetProject }}
+          db={db}
+        />
       )}
     </>
   );

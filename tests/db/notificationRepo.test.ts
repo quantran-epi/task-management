@@ -6,6 +6,7 @@ import {
   dismissAlertToday,
   clearDismissedAlerts,
   isAlertDismissible,
+  completeReminderAlert,
 } from '../../src/db/repositories/notificationRepo';
 
 describe('Notification Repository (D-14, D-15, D-16)', () => {
@@ -100,6 +101,76 @@ describe('Notification Repository (D-14, D-15, D-16)', () => {
       await clearDismissedAlerts(testDb);
       const cleared = await getDismissedAlerts(testDb);
       expect(cleared).toEqual({});
+    });
+  });
+
+  describe('completeReminderAlert', () => {
+    it('removes specific reminder from task reminders array', async () => {
+      const taskId = 'task-rem-1';
+      const remId1 = '00000000-0000-4000-8000-000000000001';
+      const remId2 = '00000000-0000-4000-8000-000000000002';
+      await testDb.tasks.add({
+        id: taskId,
+        name: 'Task with reminders',
+        status: 'Open',
+        priority: 'High',
+        progress: 0,
+        estimateMinutes: 30,
+        workType: 'code',
+        reminders: [
+          { id: remId1, date: '2026-09-28', note: 'First reminder' },
+          { id: remId2, date: '2026-09-29', note: 'Second reminder' },
+        ],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+
+      await completeReminderAlert(`reminder:task:${taskId}:${remId1}`, testDb);
+
+      const updated = await testDb.tasks.get(taskId);
+      expect(updated?.reminders).toHaveLength(1);
+      expect(updated?.reminders?.[0]?.id).toBe(remId2);
+    });
+
+    it('clears legacy reminder from task', async () => {
+      const taskId = 'task-rem-legacy';
+      await testDb.tasks.add({
+        id: taskId,
+        name: 'Task with legacy reminder',
+        status: 'Open',
+        priority: 'Medium',
+        progress: 0,
+        estimateMinutes: 30,
+        workType: 'code',
+        reminderDate: '2026-09-28',
+        reminderNote: 'Legacy note',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+
+      await completeReminderAlert(`reminder:task:${taskId}`, testDb);
+
+      const updated = await testDb.tasks.get(taskId);
+      expect(updated?.reminderDate).toBeUndefined();
+      expect(updated?.reminderNote).toBeUndefined();
+    });
+
+    it('removes reminder from project', async () => {
+      const projId = 'proj-rem-1';
+      const remId = '00000000-0000-4000-8000-000000000003';
+      await testDb.projects.add({
+        id: projId,
+        name: 'Project with reminder',
+        status: 'Open',
+        reminders: [{ id: remId, date: '2026-09-28' }],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+
+      await completeReminderAlert(`reminder:project:${projId}:${remId}`, testDb);
+
+      const updated = await testDb.projects.get(projId);
+      expect(updated?.reminders).toHaveLength(0);
     });
   });
 });

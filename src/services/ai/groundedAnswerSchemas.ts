@@ -93,6 +93,7 @@ export const GroundedAnswerSchemaV2 = z
     confidence: ConfidenceLevelSchema,
     confidenceReason: z.string().min(1).max(500),
     claims: z.array(GroundedClaimSchemaV2).max(15),
+    citationReasons: z.record(CitationIdSchema, z.string().min(1).max(1000)).optional(),
     hypotheses: z.array(HypothesisClaimSchema).max(5),
     unsupportedParts: z.array(z.string().min(1).max(500)).max(5),
   })
@@ -144,6 +145,7 @@ export const PersistedCitationSchema = z
     snapshotId: SnapshotIdSchema.nullable(),
     publishedContentHash: HashSchema.nullable(),
     citedExcerpt: z.string().min(1).max(1200),
+    relevanceReason: z.string().min(1).max(1000).optional(),
     evidenceKind: z
       .enum(['policy_change', 'release_note', 'migration_record', 'other'])
       .optional(),
@@ -276,9 +278,9 @@ export const ChatMessageGroundingSchema = z
     authority: z.enum(['server', 'local']),
     outcome: GroundingOutcomeSchema,
     answer: GroundedAnswerSchema.nullable(),
-    citations: z.array(PersistedCitationSchema).max(20),
-    paths: z.array(PersistedPathSchema).max(20).nullable(),
-    conflicts: z.array(PersistedConflictGroupSchema).max(10).nullable(),
+    citations: z.array(PersistedCitationSchema).max(100),
+    paths: z.array(PersistedPathSchema).max(50).nullable(),
+    conflicts: z.array(PersistedConflictGroupSchema).max(20).nullable(),
     scope: z
       .strictObject({
         setIds: z.array(z.string().uuid()).max(50),
@@ -286,7 +288,7 @@ export const ChatMessageGroundingSchema = z
       })
       .nullable(),
     modalityDiagnostics: ModalityStatusSchema.nullable(),
-    coverageWarnings: z.array(z.string().min(1).max(300)).max(10),
+    coverageWarnings: z.array(z.string().min(1).max(300)).max(50),
     fallbackReason: FallbackReasonSchema,
     routerVersion: z.string().min(1).max(80).nullable(),
     promptVersion: z.string().min(1).max(80),

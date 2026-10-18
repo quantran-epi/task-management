@@ -54,6 +54,7 @@ import { DocFolderTree } from '../components/notes/DocFolderTree';
 import { DocEditorPane } from '../components/notes/DocEditorPane';
 import { ZipImportPreviewModal } from '../components/notes/ZipImportPreviewModal';
 import { TaskDrawer } from '../components/tasks/TaskDrawer';
+import { ResizeSplitter } from '../components/common/ResizeSplitter';
 
 const { Text } = Typography;
 
@@ -203,10 +204,41 @@ export interface NotesViewProps {
 }
 
 const FOLDER_PREF_KEY = 'planner:docs_active_folder';
+const TREE_WIDTH_PREF_KEY = 'planner:docs_tree_width';
+const DEFAULT_TREE_WIDTH = 320;
+const MIN_TREE_WIDTH = 220;
+const MAX_TREE_WIDTH = 600;
 
 export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb, initialDocId }) => {
   const knowledgeConfig = useOptionalKnowledgeConfig();
   const isConfigured = Boolean(knowledgeConfig.enabled && knowledgeConfig.baseUrl);
+
+  const [treeWidth, setTreeWidth] = useState<number>(() => {
+    try {
+      const stored = localStorage.getItem(TREE_WIDTH_PREF_KEY);
+      if (stored) {
+        const val = parseInt(stored, 10);
+        if (!isNaN(val) && val >= MIN_TREE_WIDTH && val <= MAX_TREE_WIDTH) {
+          return val;
+        }
+      }
+    } catch {}
+    return DEFAULT_TREE_WIDTH;
+  });
+
+  const handleTreeResize = (newWidth: number) => {
+    setTreeWidth(newWidth);
+    try {
+      localStorage.setItem(TREE_WIDTH_PREF_KEY, String(newWidth));
+    } catch {}
+  };
+
+  const handleTreeReset = () => {
+    setTreeWidth(DEFAULT_TREE_WIDTH);
+    try {
+      localStorage.setItem(TREE_WIDTH_PREF_KEY, String(DEFAULT_TREE_WIDTH));
+    } catch {}
+  };
 
   const [activeFilter, setActiveFilter] = useState<string>(() => {
     try {
@@ -855,7 +887,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb, initialDoc
           backgroundColor: '#ffffff',
         }}
       >
-        {/* Column 1: Searchable Tree Panel (~320px) */}
+        {/* Column 1: Searchable Tree Panel (resizable) */}
         <DocFolderTree
           notes={treeNotes}
           loadSearchNotes={loadSearchNotes}
@@ -878,6 +910,18 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb, initialDoc
           onDeleteDoc={handleDeleteDocument}
           onRestoreDoc={handleRestoreDocument}
           onMoveDocToFolder={handleOpenMoveDocModal}
+          width={treeWidth}
+        />
+
+        {/* Resizable Divider between Tree and Editor Pane */}
+        <ResizeSplitter
+          side="left"
+          currentWidth={treeWidth}
+          minWidth={MIN_TREE_WIDTH}
+          maxWidth={MAX_TREE_WIDTH}
+          defaultWidth={DEFAULT_TREE_WIDTH}
+          onResize={handleTreeResize}
+          onReset={handleTreeReset}
         />
 
         {/* Column 2: Document Editor Pane or Empty State */}

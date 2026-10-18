@@ -107,6 +107,12 @@ export function buildSystemPrompt(
           pathId: null,
         },
       ],
+      citationReasons: {
+        [sampleCitationId]:
+          targetLanguage === 'vi'
+            ? `Tài liệu kỹ thuật xác nhận quy trình CYTP1002 điều phối và hoàn tất bước xác thực mã OTP qua tin nhắn SMS cho giao dịch thanh toán của khách hàng, đảm bảo an toàn giao dịch theo đúng quy chuẩn nghiệp vụ thanh toán.`
+            : `Technical specification confirms process CYTP1002 orchestrates and completes the OTP SMS verification step for customer payment transactions, ensuring transaction security per standard payment procedures.`,
+      },
       hypotheses: [],
       unsupportedParts: [],
     },
@@ -129,13 +135,9 @@ export function buildSystemPrompt(
     'RULES:',
     '1. "language": ' + languageInstruction,
     '2. "conclusion": High-level executive synthesis answering the query directly in natural, beautiful, human-friendly Markdown formatting (using bullet points, bold key terms, tables or code blocks where appropriate). MANDATORY INLINE CITATIONS: Every single fact, step, bullet point, or package name in "conclusion" MUST have an inline citation tag like [S1] or [S2] immediately after it (e.g. "Tiến trình 60000004 [S1] kích hoạt từ chỉ thị MAIN1.OPR_OPERATION [S1]"). Statements in "conclusion" without citation brackets are FORBIDDEN when EVIDENCE is available.',
-    '3. "confidence":',
-    '   - "high": Query answered completely with direct evidence from authoritative documents or verified graph paths.',
-    '   - "medium": Query partially answered or synthesized from multi-hop inferred paths without conflicts.',
-    '   - "low": Conflicting evidence present, major steps missing, or speculative hypotheses requested.',
-    '   - "unknown": Zero evidence found in the pack.',
     '4. "confidenceReason": One sentence explaining the confidence assignment based on evidence coverage.',
-    '5. "claims":',
+    '5. "citationReasons": MANDATORY object mapping every cited citationId (e.g. "S1", "S2") to a clear, specific, and detailed explanation of WHY this citation answers or relates to the query. The explanation MUST explicitly mention the main subject/entity from the user query (e.g. query about "tiến trình phân bổ thanh toán thẻ tín dụng" -> reason must state: "Đoạn này xác nhận tiến trình quy tắc 60000004 điều phối luồng phân bổ thanh toán thẻ tín dụng qua chỉ thị MAIN1.OPR_OPERATION"). Explain thoroughly in detail so the user understands why this citation answers or relates to the question — never be terse, vague, or curt. Be strictly truthful and faithful to EVIDENCE — do not extrapolate or speculate beyond what is written. If an evidence snippet is not directly relevant to the question, DO NOT cite it and DO NOT include it in citationReasons.',
+    '6. "claims":',
     '   - Every claim must state an atomic fact supported by one or more citationIds ("S1", "L1", etc.).',
     '   - MANDATORY: When EVIDENCE citations are provided, you MUST extract the key factual statements into "claims", each citing the supporting citationId(s) (e.g. ["S1"], ["S2"]). NEVER return an empty claims array when EVIDENCE has citations.',
     '   - If no graph paths are present (allowedPathIds is empty or paths are absent), all claims MUST have classification "DIRECT" with pathId null, citing the relevant citationIds (e.g. ["S1"]).',
@@ -161,7 +163,7 @@ const SYNTHESIS_STOP_WORDS = new Set([
 
 function findBestMatchingCitation(
   line: string,
-  promptEvidence: readonly { id: string; text?: string; excerpt?: string; documentTitle?: string }[],
+  promptEvidence: readonly { id: string; text?: string; excerpt?: string; documentTitle?: string | undefined; sectionAnchor?: string | null | undefined }[],
   allowedCitationSet: Set<string>
 ): string | null {
   const rawTokens = line.match(/[\p{L}\p{N}_#$-]{2,}/gu) || [];
@@ -205,7 +207,7 @@ export function normalizeRawGroundedOutput(
   raw: unknown,
   allowedCitationIds: string[],
   allowedPathIds: string[],
-  promptEvidence?: readonly { id: string; text?: string; excerpt?: string; documentTitle?: string }[]
+  promptEvidence?: readonly { id: string; text?: string; excerpt?: string; documentTitle?: string | undefined; sectionAnchor?: string | null | undefined }[]
 ): unknown {
   if (raw == null) return raw;
 
@@ -252,6 +254,20 @@ export function normalizeRawGroundedOutput(
     obj.confidenceReason = 'Đánh giá tự động dựa trên bằng chứng.';
   } else {
     obj.confidenceReason = obj.confidenceReason.trim();
+  }
+
+  // 4b. Coerce citationReasons
+  if (obj.citationReasons && typeof obj.citationReasons === 'object' && !Array.isArray(obj.citationReasons)) {
+    const normalizedCitationReasons: Record<string, string> = {};
+    for (const [k, v] of Object.entries(obj.citationReasons)) {
+      if (typeof v === 'string' && v.trim()) {
+        const cleanKey = k.replace(/[\[\]]/g, '').trim().toUpperCase();
+        normalizedCitationReasons[cleanKey] = v.trim();
+      }
+    }
+    obj.citationReasons = normalizedCitationReasons;
+  } else {
+    delete obj.citationReasons;
   }
 
   // 5. Coerce unsupportedParts
@@ -427,9 +443,26 @@ export function normalizeRawGroundedOutput(
     normalizedClaims.push(claim);
   }
 
+  const isAbstentionAnswer =
+    (typeof obj.conclusion === 'string' &&
+      /(không tìm thấy|không có thông tin|không có dữ liệu|chưa có thông tin|no relevant information|no evidence found|insufficient evidence)/i.test(
+        obj.conclusion
+      )) ||
+    ((raw as any)?.confidence === 'unknown' && normalizedClaims.length === 0);
+
+  if (isAbstentionAnswer) {
+    normalizedClaims.length = 0;
+    delete obj.citationReasons;
+    obj.confidence = 'unknown';
+    if (typeof obj.conclusion === 'string') {
+      obj.conclusion = obj.conclusion.replace(/\[\s*[SL]?\d+\s*\]/gi, '').trim();
+    }
+  }
+
   // 8. If conclusion has no inline citations and claims are empty or uncited,
   // attempt factual attribution from promptEvidence based on exact identifiers (D-13 safe)
   if (
+    !isAbstentionAnswer &&
     normalizedClaims.length === 0 &&
     typeof obj.conclusion === 'string' &&
     !/\[[SL]?\d+\]/i.test(obj.conclusion) &&
@@ -469,7 +502,12 @@ export function normalizeRawGroundedOutput(
 
     if (hasModifiedConclusion) {
       obj.conclusion = modifiedLines.join('\n');
-    } else if (allowedCitationIds.length > 0 && typeof obj.conclusion === 'string' && obj.conclusion.trim().length > 0) {
+    } else if (
+      !isAbstentionAnswer &&
+      allowedCitationIds.length > 0 &&
+      typeof obj.conclusion === 'string' &&
+      obj.conclusion.trim().length > 0
+    ) {
       const defaultCitationId = allowedCitationIds[0]!;
       obj.conclusion = `${obj.conclusion} [${defaultCitationId}]`;
       hasModifiedConclusion = true;

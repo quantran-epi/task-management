@@ -1,0 +1,159 @@
+{
+  "model": "gpt-4o",
+  "temperature": 0,
+  "max_tokens": 1800,
+  "stream": false,
+  "response_format": {
+    "type": "json_schema",
+    "json_schema": {
+      "name": "taskmate_grounded_answer_v2",
+      "strict": true,
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "type": "number",
+            "const": 2
+          },
+          "language": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 16
+          },
+          "conclusion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low",
+              "unknown"
+            ]
+          },
+          "confidenceReason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "claims": {
+            "maxItems": 15,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^C[1-9][0-9]*$"
+                },
+                "text": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1000
+                },
+                "classification": {
+                  "type": "string",
+                  "enum": [
+                    "DIRECT",
+                    "INFERRED"
+                  ]
+                },
+                "citationIds": {
+                  "minItems": 1,
+                  "maxItems": 8,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^(S|L)[1-9][0-9]*$"
+                  }
+                },
+                "pathId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^P[1-9][0-9]*$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "text",
+                "classification",
+                "citationIds",
+                "pathId"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "hypotheses": {
+            "maxItems": 5,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^H[1-9][0-9]*$"
+                },
+                "text": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1000
+                },
+                "justification": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                }
+              },
+              "required": [
+                "id",
+                "text",
+                "justification"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "unsupportedParts": {
+            "maxItems": 5,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            }
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "language",
+          "conclusion",
+          "confidence",
+          "confidenceReason",
+          "claims",
+          "hypotheses",
+          "unsupportedParts"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "Version: 2026.10.1\nYou are the Grounded Synthesis Engine for TaskMate. Your sole job is to answer the user query STRICTLY based on the provided EVIDENCE PACK.\nYou must return a valid JSON object matching GroundedAnswerSchemaV2 (schemaVersion: 2).\nNever guess or introduce external training facts not present in EVIDENCE.\nINPUT STRUCTURE:\n- QUERY: User's question.\n- CONVERSATION_HISTORY: Prior turns between user and assistant for context resolution.\n- SPECULATION_REQUESTED: true | false.\n- EVIDENCE:\n  - Citations: [ { id: \"S1\", title: \"...\", excerpt: \"...\" }, ... ]\n  - Paths: [ { id: \"P1\", summary: \"...\", steps: [...] }, ... ]\nRULES:\n1. \"language\": Respond in Vietnamese; this is the user's query language. Source quotes and identifiers (URNs, codes, document titles, section anchors) MUST be reproduced byte-identical from EVIDENCE regardless of response language. If you need to translate a quote, present the original verbatim first, then an inline translation in parentheses; NEVER replace the quote with a translation. (D-06)\n2. \"conclusion\": High-level executive synthesis answering the query directly in natural, beautiful, human-friendly Markdown formatting (using bullet points, bold key terms, tables or code blocks where appropriate). MANDATORY INLINE CITATIONS: Every single fact, step, bullet point, or package name in \"conclusion\" MUST have an inline citation tag like [S1] or [S2] immediately after it (e.g. \"Tiến trình 60000004 [S1] kích hoạt từ chỉ thị MAIN1.OPR_OPERATION [S1]\"). Statements in \"conclusion\" without citation brackets are FORBIDDEN when EVIDENCE is available.\n3. \"confidence\":\n   - \"high\": Query answered completely with direct evidence from authoritative documents or verified graph paths.\n   - \"medium\": Query partially answered or synthesized from multi-hop inferred paths without conflicts.\n   - \"low\": Conflicting evidence present, major steps missing, or speculative hypotheses requested.\n   - \"unknown\": Zero evidence found in the pack.\n4. \"confidenceReason\": One sentence explaining the confidence assignment based on evidence coverage.\n5. \"claims\":\n   - Every claim must state an atomic fact supported by one or more citationIds (\"S1\", \"L1\", etc.).\n   - MANDATORY: When EVIDENCE citations are provided, you MUST extract the key factual statements into \"claims\", each citing the supporting citationId(s) (e.g. [\"S1\"], [\"S2\"]). NEVER return an empty claims array when EVIDENCE has citations.\n   - If no graph paths are present (allowedPathIds is empty or paths are absent), all claims MUST have classification \"DIRECT\" with pathId null, citing the relevant citationIds (e.g. [\"S1\"]).\n   - classification is \"INFERRED\" if derived from graph traversal path (pathId must be \"P1\", \"P2\", etc.). Whenever an answer describes execution sequence, container flow, caller-callee steps, or entity relationships supported by a Path, you MUST set classification to \"INFERRED\" and pathId to the corresponding path id (e.g. \"P1\").\n   - If you cannot point to an exact citationId, DO NOT include the claim in claims. Put it in \"unsupportedParts\".\n6. \"hypotheses\":\n   - If SPECULATION_REQUESTED is false, this array MUST be empty [].\n   - If SPECULATION_REQUESTED is true, you may propose reasonable hypotheses based on domain context, each with a \"justification\". Hypotheses have NO citationIds.\n7. \"unsupportedParts\": Information requested by user that has no supporting evidence in the pack.\nNO-EVIDENCE RULE:\nIf EVIDENCE is empty or contains no relevant facts:\n{\"schemaVersion\":2,\"language\":\"vi\",\"conclusion\":\"Không tìm thấy thông tin hoặc bằng chứng liên quan trong tài liệu và đồ thị tri thức hiện có.\",\"confidence\":\"unknown\",\"confidenceReason\":\"Không có trích dẫn hoặc đường đi đồ thị nào khớp với câu hỏi.\",\"claims\":[],\"hypotheses\":[],\"unsupportedParts\":[\"Toàn bộ yêu cầu không có dữ liệu đối chiếu trong hệ thống\"]}\nVALID OUTPUT EXAMPLE:\n{\n  \"schemaVersion\": 2,\n  \"language\": \"vi\",\n  \"conclusion\": \"Quy trình CYTP1002 hoàn tất bước xác thực OTP theo đặc tả [S1].\",\n  \"confidence\": \"high\",\n  \"confidenceReason\": \"Trực tiếp trích xuất từ tài liệu với độ bao phủ đầy đủ.\",\n  \"claims\": [\n    {\n      \"id\": \"C1\",\n      \"text\": \"Khách hàng phải xác thực mã OTP qua tin nhắn SMS.\",\n      \"classification\": \"DIRECT\",\n      \"citationIds\": [\n        \"S1\"\n      ],\n      \"pathId\": null\n    }\n  ],\n  \"hypotheses\": [],\n  \"unsupportedParts\": []\n}"
+    },
+    {
+      "role": "user",
+      "content": "{\n  \"query\": \"process nào xử lý phân bổ khoản thanh toán thẻ tín dụng\",\n  \"speculation_requested\": false,\n  \"evidence\": [\n    {\n      \"id\": \"S1\",\n      \"text\": \"# Quy trình phân bổ thanh toán thẻ tín dụng và xử lý nợ MAIN1\\n\\n#credit-card #payment-allocation #main1 #crd-payment #waterfall\\n\\n\",\n      \"score\": 0.03252247488101534,\n      \"documentTitle\": \"Credit payment allocation — FE/BO pay → debts\",\n      \"sectionAnchor\": \"Quy trình phân bổ thanh toán thẻ tín dụng và xử lý nợ MAIN1\"\n    },\n    {\n      \"id\": \"S2\",\n      \"text\": \"## Tóm tắt\\nQuy trình phân bổ nguồn tiền thanh toán từ kênh Front-End (FE) hoặc Back-Office (BO) vào tài khoản tín dụng, hạch toán ghi Có sổ cái Ledger và cấn trừ các loại dư nợ thẻ tín dụng (`MAIN1.CRD_DEBT`) theo cơ chế ưu tiên (waterfall).\\n\\n\",\n      \"score\": 0.03252247488101534,\n      \"documentTitle\": \"Credit payment allocation — FE/BO pay → debts\",\n      \"sectionAnchor\": \"Tóm tắt\"\n    },\n    {\n      \"id\": \"S3\",\n      \"text\": \"## Trạng thái và mã lỗi\\n\\n| Mã trạng thái / Lỗi | Ý nghĩa | Hành động xử lý |\\n|---|---|---|\\n| PMTSACTV | Khoản thanh toán còn hạn mức khả dụng | Giữ trạng thái, chờ cấn trừ đợt chi tiêu mới hoặc kỳ sao kê |\\n| PMTSSPNT | Khoản thanh toán đã phân bổ hết | Hoàn tất phân bổ, kết thúc vòng đời giao dịch thanh toán |\\n| DBTSACTV | Khoản nợ đang mở, cần thanh toán | Cho phép đưa vào con trỏ phân bổ nợ |\\n| DBTSPAID | Khoản nợ đã được cấn trừ hoàn tất | Đóng khoản nợ, không duyệt trong các chu kỳ sau |\\n| PARTIAL_PAYMENT_REVERSAL_NOT_SUPPORTED | Hệ thống không hỗ trợ hoàn trả/đảo một phần tiền thanh toán | Từ chối yêu cầu, kiểm tra luồng hoàn toàn phần |\\n| Service not found | Tài khoản tiết kiệm `ACTP0110` không có dịch vụ tín dụng | Dừng xử lý thanh toán nợ, tiền giữ nguyên tại Ledger |\\n\\n\",\n      \"score\": 0.03125763125763126,\n      \"documentTitle\": \"Credit payment allocation — FE/BO pay → debts\",\n      \"sectionAnchor\": \"Trạng thái và mã lỗi\"\n    },\n    {\n      \"id\": \"S4\",\n      \"text\": \"## Phạm vi\\n- Hệ thống Back-Office thẻ `MAIN1` (Oracle Database 19.18, inst 1001).\\n- Áp dụng cho các giao dịch thanh toán nguồn từ FE ISO8583, trích nợ tự động CBS (`MAIN1.PMO_ORDER`), giao diện BO UI, nạp tiền P2P, hoàn tiền mua hàng.\\n- Loại trừ: Phân hệ `PMO_ORDER` chỉ tạo chỉ thị vận hành `MAIN1.OPR_OPERATION`, không tham gia phân bổ nợ chi tiết.\\n\\n\",\n      \"score\": 0.030330882352941176,\n      \"documentTitle\": \"Credit payment allocation — FE/BO pay → debts\",\n      \"sectionAnchor\": \"Phạm vi\"\n    },\n    {\n      \"id\": \"S5\",\n      \"text\": \"## Luồng xử lý\\n1. Giao dịch thanh toán từ các kênh tạo bản ghi chỉ thị `MAIN1.OPR_OPERATION` với trạng thái `OPST0100`.\\n2. Tiến trình xử lý quy tắc `60000004` kích hoạt gọi thủ tục xác định tài khoản và ghi nhận macro credit 1003.\\n3. Hệ thống tạo bản ghi thanh toán `MAIN1.CRD_PAYMENT` với trạng thái `PMTSACTV`.\\n4. Vòng lặp `apply_payment` duyệt con trỏ danh sách nợ mở theo thứ tự ưu tiên và hạch toán giảm nợ tương ứng (`EVNT1003`).\\n5. Nếu tiền thanh toán cấn trừ hết dư nợ, trạng thái chuyển sang `PMTSSPNT`. Nếu còn dư, duy trì `PMTSACTV` chờ chi tiêu kế tiếp hoặc kỳ sao kê `CYTP1001`.\\n\\n\",\n      \"score\": 0.02976190476190476,\n      \"documentTitle\": \"Credit payment allocation — FE/BO pay → debts\",\n      \"sectionAnchor\": \"Luồng xử lý\"\n    },\n    {\n      \"id\": \"S6\",\n      \"text\": \"## Các bước thực thi & Quan hệ thành phần\\n\\n| STEP_ID | THU_TU | TEN_BUOC | TARGET | WRITES |\\n|---|---|---|---|---|\\n| 1001 | 1 | Xác định tài khoản đối tượng | MAIN1.OPR_API_RULE_PROC_PKG.SELECT_OBJECT_ACCOUNT | MAIN1.OPR_OPERATION |\\n| 1002 | 2 | Xác định số tiền hạch toán | MAIN1.OPR_API_RULE_PROC_PKG.SELECT_AMOUNT_TO_POST_ACCOUNT | MAIN1.OPR_OPERATION |\\n| 1003 | 3 | Tạo macro ghi Có Ledger | MAIN1.OPR_API_RULE_PROC_PKG.POST_MACROS | MAIN1.ACC_ENTRY |\\n| 1004 | 4 | Đẩy dữ liệu tài khoản vào hệ thống | MAIN1.ACC_API_ENTRY_PKG.FLUSH_JOB | MAIN1.ACC_ENTRY |\\n| 1005 | 5 | Khởi tạo bản ghi thanh toán tín dụng | MAIN1.CRD_API_PAYMENT_PKG.CREATE_PAYMENT | MAIN1.CRD_PAYMENT |\\n| 1006 | 6 | Truy vấn sắp xếp danh sách dư nợ | MAIN1.CRD_CST_PAYMENT_PKG.ENUM_DEBT_ORDER | MAIN1.CRD_DEBT_BALANCE |\\n| 1007 | 7 | Cấn trừ nợ từng bucket | MAIN1.CRD_PAYMENT_PKG.APPLY_PAYMENT | MAIN1.CRD_DEBT_PAYMENT |\\n| 1008 | 8 | Cập nhật lại số dư nợ | MAIN1.CRD_DEBT_PKG.CHANGE_DEBT | MAIN1.CRD_DEBT_BALANCE |\\n| 1009 | 9 | Hạch toán GL thứ cấp | MAIN1.CRD_CST_APC_PAYMENT_PKG.APPLY_PAYMENT | MAIN1.CST_CBS_GL_ENTRY |\\n\\n\",\n      \"score\": 0.029631255487269532,\n      \"documentTitle\": \"Credit payment allocation — FE/BO pay → debts\",\n      \"sectionAnchor\": \"Các bước thực thi & Quan hệ thành phần\"\n    },\n    {\n      \"id\": \"S7\",\n      \"text\": \"## Thuật ngữ\\n- **MAIN1.CRD_PAYMENT**: Bảng lưu thông tin khoản thanh toán tín dụng. Định danh `ID` dùng chung với `MACROS_ID`.\\n- **MAIN1.CRD_DEBT**: Bảng lưu trữ hồ sơ nợ tín dụng theo giao dịch gốc.\\n- **MAIN1.CRD_DEBT_BALANCE**: Bảng lưu trữ chi tiết dư nợ theo từng phân nhóm số dư (`BALANCE_TYPE`).\\n- **MAIN1.CRD_DEBT_PAYMENT**: Bảng liên kết giao dịch thanh toán và khoản nợ được cấn trừ.\\n- **BLTP0001 (Ledger)**: Nhóm số dư sổ cái chính của tài khoản.\\n- **BLTP1002 (Overdraft)**: Dư nợ trong hạn (thấu chi/gốc tiêu dùng).\\n- **BLTP1003 (Interest)**: Dư nợ lãi trong hạn.\\n- **BLTP1004 (Overdue)**: Dư nợ gốc quá hạn.\\n- **BLTP1005 (Overdue interest)**: Dư nợ lãi quá hạn.\\n- **BLTP1007 (Overlimit)**: Dư nợ vượt hạn mức.\\n- **REPAY_PRIORITY**: Trọng số ưu tiên thu hồi nợ (giá trị số càng nhỏ ưu tiên cấn trừ càng cao).\\n\\n\",\n      \"score\": 0.029437229437229435,\n      \"documentTitle\": \"Credit payment allocation — FE/BO pay → debts\",\n      \"sectionAnchor\": \"Thuật ngữ\"\n    },\n    {\n      \"id\": \"S8\",\n      \"text\": \"## Ngoại lệ\\n1. **Trùng lặp số hồ sơ (`APPLICATION_NUMBER`)**: Nếu `APPLICATION_NUMBER` bị trùng trong cùng một Tổ chức (`INSTITUTION_ID`), `MAIN1.APP_UI_APPLICATION_PKG.ADD_APPLICATION_INTERNAL` không làm dừng chương trình bằng exception mà gán trạng thái hồ sơ thành trạng thái báo trùng (Duplicated).\\n2. **Kênh tự đóng gói toàn bộ XML**: Khi kênh tích hợp sử dụng `sendApplication` thay vì `doIssueCard`, hệ thống bỏ qua toàn bộ logic phân giải SVIS Product Template và chuyển trực tiếp payload sang cổng `ApplicationsPort`.\\n3. **Thẻ tức thì (Instant Card)**: Với luồng thẻ tức thì hoặc dịch vụ đơn vị chấp nhận thanh toán, ràng buộc liên kết bắt buộc giữa thẻ và tài khoản trong `IAP_API_CARD_PKG` được nới lỏng theo cấu hình luồng.\\n\\n\",\n      \"score\": 0.0288981288981289,\n      \"documentTitle\": \"Issuing application under the hood + how to manipulate templates\",\n      \"sectionAnchor\": \"Ngoại lệ\"\n    },\n    {\n      \"id\": \"S9\",\n      \"text\": \"## Ngoại lệ\\n- Không hỗ trợ đảo giao dịch một phần (`cancel_payment` chỉ cho phép đảo toàn phần).\\n- Giao dịch thanh toán đã lên sao kê (`IS_NEW=0`) không được phép đảo/hoàn trả tự động.\\n- Tài khoản tiết kiệm (`ACTP0110`) không có dịch vụ credit: `MAIN1.CRD_API_RULE_PROC_PKG.CREDIT_PAYMENT` ghi log dừng luồng, tiền nằm cố định tại Ledger `TRNT0101`, không sinh bản ghi `MAIN1.CRD_PAYMENT`.\\n\\n\",\n      \"score\": 0.028381642512077296,\n      \"documentTitle\": \"Credit payment allocation — FE/BO pay → debts\",\n      \"sectionAnchor\": \"Ngoại lệ\"\n    },\n    {\n      \"id\": \"S10\",\n      \"text\": \"## Phạm vi\\n- Hệ thống áp dụng: SmartVista Issuing (SVBO), SmartVista Integration Server (SVIS).\\n- Phân hệ cơ sở dữ liệu: Phân hệ quản lý hồ sơ ứng dụng `MAIN1.APP_*`, phân hệ phát hành `MAIN1.ISS_*`, sản phẩm `MAIN1.PRD_*`, tài khoản `MAIN1.ACC_*`, gói tùy biến khách hàng `MAIN1.CST_API_APPLICATION_PKG`.\\n- Giao thức tích hợp: CmsSvng SOAP Service, SVBO ApplicationService (`/sv/ApplicationService?wsdl`).\\n- Không áp dụng cho: Mẫu lệnh thanh toán (`IS_PAYMENT_ORDER_TEMPLATE`) và phôi cá thể hóa thẻ EMV.\\n\\n\",\n      \"score\": 0.028370221327967807,\n      \"documentTitle\": \"Issuing application under the hood + how to manipulate templates\",\n      \"sectionAnchor\": \"Phạm vi\"\n    },\n    {\n      \"id\": \"S11\",\n      \"text\": \"## Luồng xử lý\\nQuy trình tiếp nhận và xử lý hồ sơ phát hành thẻ chia thành hai nhánh kênh chính:\\n\\n\",\n      \"score\": 0.028125,\n      \"documentTitle\": \"Issuing application under the hood + how to manipulate templates\",\n      \"sectionAnchor\": \"Luồng xử lý\"\n    },\n    {\n      \"id\": \"S12\",\n      \"text\": \"## Bảng tiến trình & bước thực thi\\nQuy trình chi tiết thực thi xử lý hồ sơ phát hành thẻ (`APTPISSA`) trong cơ sở dữ liệu:\\n\\n| STEP_ID | THU_TU | TEN_BUOC | TARGET | WRITES |\\n|---|---|---|---|---|\\n| STEP_APP_01 | 1 | Tiếp nhận và khởi tạo hồ sơ | MAIN1.APP_UI_APPLICATION_PKG.ADD_APPLICATION_INTERNAL | MAIN1.APP_APPLICATION |\\n| STEP_APP_02 | 2 | Lưu trữ phẳng cấu trúc XML hồ sơ | MAIN1.APP_UI_APPLICATION_PKG.ADD_APPLICATION_INTERNAL | MAIN1.APP_DATA |\\n| STEP_APP_03 | 3 | Ghi vết lịch sử khởi tạo hồ sơ | MAIN1.APP_UI_APPLICATION_PKG.ADD_APPLICATION_INTERNAL | MAIN1.APP_HISTORY |\\n| STEP_APP_04 | 4 | Khóa bản ghi hồ sơ để xử lý | MAIN1.APP_PROCESS_PKG.PROCESS_APPLICATION | MAIN1.APP_APPLICATION |\\n| STEP_APP_05 | 5 | Thực thi tiền xử lý tùy biến khách hàng | MAIN1.CST_API_APPLICATION_PKG.PROCESS_CUSTOMER_BEFORE | MAIN1.APP_HISTORY |\\n| STEP_APP_06 | 6 | Xử lý thông tin khách hàng và hợp đồng | MAIN1.PRD_API_CUSTOMER_PKG.PROCESS_CUSTOMER | MAIN1.PRD_CUSTOMER |\\n| STEP_APP_07 | 7 | Xử lý tài khoản liên kết thẻ | MAIN1.APP_API_ACCOUNT_PKG.PROCESS_ACCOUNT | MAIN1.ACC_ACCOUNT |\\n| STEP_APP_08 | 8 | Điều phối xử lý nghiệp vụ phát hành thẻ | MAIN1.IAP_API_APPLICATION_PKG.PROCESS_APPLICATION | MAIN\",\n      \"score\": 0.027809742999616416,\n      \"documentTitle\": \"Issuing application under the hood + how to manipulate templates\",\n      \"sectionAnchor\": \"Bảng tiến trình & bước thực thi\"\n    },\n    {\n      \"id\": \"S13\",\n      \"text\": \"## Ví dụ\\nGiao dịch thanh toán ID `2806010003043021` số tiền 105.002.798 VND hạch toán vào tài khoản đang có nợ:\\n1. Gốc POS quá hạn (`OPTP0000`, Pri 50, Overdue 1004): cấn trừ 75.000 VND.\\n2. Phí cũ trong hạn (`OPTP0119`, Pri 110, Overdraft 1002): cấn trừ 150.000 VND.\\n3. Phí mới trong hạn (`OPTP0119`, Pri 110, Overdraft 1002): cấn trừ 299.000 VND.\\n4. Gốc POS cũ trong hạn (`OPTP0000`, Pri 140, Overdraft 1002): cấn trừ 1.425.000 VND.\\n5. Gốc POS cũ trong hạn (`OPTP0000`, Pri 140, Overdraft 1002): cấn trừ 2.500.000 VND.\\n6. Gốc POS mới trong hạn (`OPTP0000`, Pri 140, Overdraft 1002): cấn trừ 12.500.000 VND.\\n7. Tổng tiền cấn trừ nợ: 16.949.000 VND.\\n8. Số tiền thừa còn lại: 88.053.798 VND lưu trên Ledger. Trạng thái bản ghi `MAIN1.CRD_PAYMENT` là `PMTSACTV`.\\n9. Khi phát sinh chi tiêu mới 125.000.000 VND: Hệ thống tự động trừ 88.053.798 VND từ tiền thừa (tạo `MAIN1.CRD_DEBT_PAYMENT` có `BALANCE_TYPE = NULL`), phần thiếu 36.946.202 VND tạo thành nợ thấu chi mới. Bản ghi thanh toán chuyển trạng thái `PMTSSPNT`.\\n\\n\",\n      \"score\": 0.027783137179239824,\n      \"documentTitle\": \"Credit payment allocation — FE/BO pay → debts\",\n      \"sectionAnchor\": \"Ví dụ\"\n    }\n  ],\n  \"allowedCitationIds\": [\n    \"S1\",\n    \"S2\",\n    \"S3\",\n    \"S4\",\n    \"S5\",\n    \"S6\",\n    \"S7\",\n    \"S8\",\n    \"S9\",\n    \"S10\",\n    \"S11\",\n    \"S12\",\n    \"S13\",\n    \"S14\",\n    \"S15\",\n    \"S16\",\n    \"S17\",\n    \"S18\"\n  ],\n  \"allowedPathIds\": [],\n  \"conflicts\": [],\n  \"responseLanguage\": \"vi\"\n}"
+    }
+  ]
+}

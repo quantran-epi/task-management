@@ -1,15 +1,17 @@
 import React from 'react';
-import { Checkbox, Tag, Typography, Button, message } from 'antd';
+import { Checkbox, Tag, Typography, Button, Tooltip, message } from 'antd';
 import {
   CalendarOutlined,
   FolderOutlined,
   FlagOutlined,
   EyeInvisibleOutlined,
+  CheckOutlined,
 } from '@ant-design/icons';
 import type { AlertNotificationItem } from '../../types/notifications';
 import type { TaskPlannerDatabase } from '../../db';
 import type { TaskStatus } from '../../types/models';
 import { updateTaskStatus } from '../../db/repositories/taskRepo';
+import { completeReminderAlert } from '../../db/repositories/notificationRepo';
 
 export interface NotificationItemRowProps {
   item: AlertNotificationItem;
@@ -36,7 +38,32 @@ export const NotificationItemRow: React.FC<NotificationItemRowProps> = ({
     }
   };
 
+  const handleCompleteReminder = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await completeReminderAlert(item.id, db);
+      message.success('Đã hoàn thành nhắc nhở');
+    } catch {
+      message.error('Không thể hoàn thành nhắc nhở');
+    }
+  };
+
   const renderLeading = () => {
+    if (item.category === 'reminder') {
+      return (
+        <Tooltip title="Đánh dấu đã xong nhắc nhở">
+          <Button
+            type="text"
+            shape="circle"
+            size="small"
+            icon={<CheckOutlined style={{ color: '#52c41a' }} />}
+            onClick={handleCompleteReminder}
+            aria-label={`Đã xong nhắc nhở ${item.title}`}
+            style={{ width: 22, height: 22, minWidth: 22, padding: 0 }}
+          />
+        </Tooltip>
+      );
+    }
     if (item.entityType === 'task' && item.task) {
       return (
         <Checkbox
@@ -74,23 +101,38 @@ export const NotificationItemRow: React.FC<NotificationItemRowProps> = ({
         </Button>
       );
     }
-    if (item.canDismiss) {
-      return (
-        <Button
-          type="text"
-          size="small"
-          icon={<EyeInvisibleOutlined />}
-          onClick={(e) => {
-            e.stopPropagation();
-            onDismiss(item);
-          }}
-          style={{ padding: '0 4px', color: '#8c8c8c' }}
-        >
-          Bỏ qua
-        </Button>
-      );
-    }
-    return null;
+
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        {item.category === 'reminder' && (
+          <Tooltip title="Đánh dấu đã xong nhắc nhở">
+            <Button
+              type="text"
+              size="small"
+              icon={<CheckOutlined style={{ color: '#52c41a' }} />}
+              onClick={handleCompleteReminder}
+              style={{ padding: '0 6px', color: '#52c41a' }}
+            >
+              Đã xong
+            </Button>
+          </Tooltip>
+        )}
+        {item.canDismiss && (
+          <Button
+            type="text"
+            size="small"
+            icon={<EyeInvisibleOutlined />}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDismiss(item);
+            }}
+            style={{ padding: '0 4px', color: '#8c8c8c' }}
+          >
+            Bỏ qua
+          </Button>
+        )}
+      </div>
+    );
   };
 
   return (

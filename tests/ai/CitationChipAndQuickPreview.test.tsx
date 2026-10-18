@@ -257,17 +257,18 @@ describe('QuickPreviewDrawer', () => {
 
   // Task 1 additional cases (cases 8-15)
 
-  it('8. citedExcerpt provided -> raw panel renders with left gutter line numbers starting at lineRange.start', async () => {
+  it('8. citedExcerpt provided -> renders full document with chunk highlighted at lineRange lines', async () => {
     render(
       <QuickPreviewDrawer
         open={true}
         docId="doc-preview-1"
         onClose={vi.fn()}
         db={db}
-        lineRange={{ start: 10, end: 12 }}
-        citedExcerpt={'line 10 content\nline 11 content\nline 12 content'}
+        lineRange={{ start: 1, end: 2 }}
+        citedExcerpt={'# Kubernetes Setup\nDeploy pods with `kubectl apply -f app.yaml`.'}
         citedSnapshotId="gsnap_1234567"
         citationAuthority="server"
+        relevanceReason="Căn cứ hướng dẫn thiết lập cụm Kubernetes"
       />
     );
 
@@ -275,11 +276,10 @@ describe('QuickPreviewDrawer', () => {
       expect(screen.getByTestId('cited-excerpt-panel')).toBeInTheDocument();
     });
 
-    expect(screen.getByTestId('excerpt-line-num-10')).toHaveTextContent('10');
-    expect(screen.getByTestId('excerpt-line-num-11')).toHaveTextContent('11');
-    expect(screen.getByTestId('excerpt-line-num-12')).toHaveTextContent('12');
-    expect(screen.getByText('line 10 content')).toBeInTheDocument();
+    expect(screen.getByTestId('line-range-anchor')).toHaveTextContent('Dòng 1–2');
+    expect(screen.getByText(/Căn cứ hướng dẫn thiết lập cụm Kubernetes/)).toBeInTheDocument();
     expect(screen.getByText('Trích dẫn từ bản chụp')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Kubernetes Setup');
   });
 
   it('9. citedContentHash !== currentHash -> snapshot-mismatch banner with role="alert" rendered', async () => {
@@ -349,7 +349,7 @@ describe('QuickPreviewDrawer', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('12. snapshotAvailable === false -> excerpt still rendered + "Bản chụp không còn khả dụng" banner', async () => {
+  it('12. snapshotAvailable === false -> "Bản chụp không còn khả dụng" banner rendered', async () => {
     render(
       <QuickPreviewDrawer
         open={true}
@@ -367,7 +367,6 @@ describe('QuickPreviewDrawer', () => {
       expect(screen.getByTestId('cited-excerpt-panel')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('Historical text that must remain visible')).toBeInTheDocument();
     expect(screen.getByText('Bản chụp không còn khả dụng')).toBeInTheDocument();
   });
 
@@ -425,13 +424,13 @@ describe('QuickPreviewDrawer', () => {
       documentId: 'doc-preview-1',
       documentTitle: 'DevOps Kubernetes Runbook',
       sectionAnchor: 'Kubernetes Setup',
-      lineStart: 4,
-      lineEnd: 6,
+      lineStart: 1,
+      lineEnd: 2,
       authority: 'server',
       evidenceClass: 'OBSERVED',
       snapshotId: 'gsnap_abcdef123',
       publishedContentHash: '0000000000000000000000000000000000000000000000000000000000000000',
-      citedExcerpt: 'Excerpt for lines 4 to 6',
+      citedExcerpt: '# Kubernetes Setup',
     };
 
     const Harness: React.FC = () => {
@@ -469,8 +468,8 @@ describe('QuickPreviewDrawer', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('cited-excerpt-panel')).toBeInTheDocument();
-      expect(screen.getByText('Excerpt for lines 4 to 6')).toBeInTheDocument();
-      expect(screen.getByText('4')).toBeInTheDocument();
+      expect(screen.getByTestId('line-range-anchor')).toHaveTextContent('Dòng 1–2');
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Kubernetes Setup');
     });
   });
 
@@ -539,6 +538,79 @@ describe('QuickPreviewDrawer', () => {
     await waitFor(() => {
       expect(screen.getByText(/Tác vụ: Implement OAuth Token Refresh/)).toBeInTheDocument();
     });
+  });
+
+  it('17. highlights markdown tables, headings, and CRLF line breaks accurately in rendered HTML', async () => {
+    const tableDoc: Note = {
+      id: 'doc-table-crlf',
+      type: 'document',
+      title: 'Credit Payment Workflow Spec',
+      body: '## Luồng xử lý chi tiết\r\n\r\n| STEP | PROC | WRITES |\r\n|---|---|---|\r\n| 1001 | MAIN1.OPR_API_RULE_PROC_PKG.SELECT_OBJECT_ACCOUNT | MAIN1.OPR_OPERATION |\r\n| 1002 | MAIN1.CRD_PAYMENT_PKG.APPLY_PAYMENT | MAIN1.CRD_DEBT_PAYMENT |\r\n',
+      isPinned: false,
+      createdAt: '2026-10-01T00:00:00Z',
+      updatedAt: '2026-10-01T00:00:00Z',
+    };
+    await db.notes.add(tableDoc);
+
+    const { unmount } = render(
+      <QuickPreviewDrawer
+        open={true}
+        docId="doc-table-crlf"
+        onClose={vi.fn()}
+        db={db}
+        citedExcerpt={'## Luồng xử lý chi tiết\r\n| 1002 | MAIN1.CRD_PAYMENT_PKG.APPLY_PAYMENT | MAIN1.CRD_DEBT_PAYMENT |\r\n'}
+      />
+    );
+
+    await waitFor(() => {
+      const marks = Array.from(document.querySelectorAll('mark.gsd-citation-mark'));
+      expect(marks.length).toBeGreaterThan(0);
+      expect(marks.some((m) => m.textContent?.includes('Luồng xử lý chi tiết'))).toBe(true);
+    });
+
+    unmount();
+  });
+
+  it('18. renders line numbers for every line in full document and highlights citation line range', async () => {
+    const multiLineDoc: Note = {
+      id: 'doc-multiline-test',
+      type: 'document',
+      title: 'Credit Card Billing Manual',
+      body: 'Line 1: Header\nLine 2: Overview\nLine 3: Process 60000004\nLine 4: Apply Payment\nLine 5: Summary',
+      isPinned: false,
+      createdAt: '2026-10-01T00:00:00Z',
+      updatedAt: '2026-10-01T00:00:00Z',
+    };
+    await db.notes.add(multiLineDoc);
+
+    render(
+      <QuickPreviewDrawer
+        open={true}
+        docId="doc-multiline-test"
+        onClose={vi.fn()}
+        db={db}
+        lineRange={{ start: 3, end: 4 }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('document-line-num-1')).toHaveTextContent('1');
+    });
+
+    expect(screen.getByTestId('document-line-num-2')).toHaveTextContent('2');
+    expect(screen.getByTestId('document-line-num-3')).toHaveTextContent('3');
+    expect(screen.getByTestId('document-line-num-4')).toHaveTextContent('4');
+    expect(screen.getByTestId('document-line-num-5')).toHaveTextContent('5');
+
+    // Lines 3 and 4 are highlighted
+    const row3 = screen.getByTestId('document-line-row-3');
+    const row4 = screen.getByTestId('document-line-row-4');
+    expect(row3.className).toContain('gsd-citation-highlight-line');
+    expect(row4.className).toContain('gsd-citation-highlight-line');
+
+    // Line 1 is not highlighted
+    const row1 = screen.getByTestId('document-line-row-1');
+    expect(row1.className).not.toContain('gsd-citation-highlight-line');
   });
 });
 

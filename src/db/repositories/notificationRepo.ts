@@ -1,4 +1,7 @@
 import { db as defaultDb, type TaskPlannerDatabase } from '../index';
+import { updateTask } from './taskRepo';
+import { updateProject } from './projectRepo';
+import { updateMilestone } from './milestoneRepo';
 
 export const DISMISSED_ALERTS_KEY = 'dismissedAlerts';
 
@@ -77,4 +80,77 @@ export async function clearDismissedAlerts(
     key: DISMISSED_ALERTS_KEY,
     value: {},
   });
+}
+
+/**
+ * Removes a triggered reminder from its associated entity (Task, Project, or Milestone)
+ * when marked as complete/done by the user from the Notification Drawer.
+ */
+export async function completeReminderAlert(
+  alertId: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<void> {
+  // Format: "reminder:entityType:entityId" or "reminder:entityType:entityId:reminderId"
+  const parts = alertId.split(':');
+  if (parts.length < 3 || parts[0] !== 'reminder') return;
+
+  const entityType = parts[1];
+  const entityId = parts[2];
+  const reminderId = parts[3];
+
+  if (!entityId) return;
+
+  if (entityType === 'task') {
+    const task = await db.tasks.get(entityId);
+    if (!task) return;
+    if (reminderId && task.reminders) {
+      const updatedReminders = task.reminders.filter((r) => r.id !== reminderId);
+      await updateTask(entityId, { reminders: updatedReminders }, db);
+    } else {
+      // Legacy single reminder removal
+      await updateTask(
+        entityId,
+        {
+          reminderDate: undefined,
+          reminderNote: undefined,
+          reminders: [],
+        },
+        db
+      );
+    }
+  } else if (entityType === 'project') {
+    const project = await db.projects.get(entityId);
+    if (!project) return;
+    if (reminderId && project.reminders) {
+      const updatedReminders = project.reminders.filter((r) => r.id !== reminderId);
+      await updateProject(entityId, { reminders: updatedReminders }, db);
+    } else {
+      await updateProject(
+        entityId,
+        {
+          reminderDate: undefined,
+          reminderNote: undefined,
+          reminders: [],
+        },
+        db
+      );
+    }
+  } else if (entityType === 'milestone') {
+    const milestone = await db.milestones.get(entityId);
+    if (!milestone) return;
+    if (reminderId && milestone.reminders) {
+      const updatedReminders = milestone.reminders.filter((r) => r.id !== reminderId);
+      await updateMilestone(entityId, { reminders: updatedReminders }, db);
+    } else {
+      await updateMilestone(
+        entityId,
+        {
+          reminderDate: undefined,
+          reminderNote: undefined,
+          reminders: [],
+        },
+        db
+      );
+    }
+  }
 }

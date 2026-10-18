@@ -46,12 +46,17 @@ import { exportPresentationAsFile } from '../../utils/pptxExport';
 import { exportContentAsFile } from '../../utils/fileExport';
 import { NormalizeDocModal } from './NormalizeDocModal';
 import { DocPublishBadge } from '../knowledge/DocPublishBadge';
+import { ResizeSplitter } from '../common/ResizeSplitter';
 
 const { Text, Title } = Typography;
 
 export type EditorViewMode = 'edit' | 'preview' | 'split';
 
 const TOC_PREF_KEY = 'planner:docs_toc_visible';
+const TOC_WIDTH_PREF_KEY = 'planner:docs_toc_width';
+const DEFAULT_TOC_WIDTH = 200;
+const MIN_TOC_WIDTH = 140;
+const MAX_TOC_WIDTH = 420;
 
 export interface DocEditorPaneProps {
   doc: Note | null;
@@ -97,6 +102,33 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
       return true;
     }
   });
+
+  const [tocWidth, setTocWidth] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem(TOC_WIDTH_PREF_KEY);
+      if (saved) {
+        const val = parseInt(saved, 10);
+        if (!isNaN(val) && val >= MIN_TOC_WIDTH && val <= MAX_TOC_WIDTH) {
+          return val;
+        }
+      }
+    } catch {}
+    return DEFAULT_TOC_WIDTH;
+  });
+
+  const handleTocResize = (newWidth: number) => {
+    setTocWidth(newWidth);
+    try {
+      localStorage.setItem(TOC_WIDTH_PREF_KEY, String(newWidth));
+    } catch {}
+  };
+
+  const handleTocReset = () => {
+    setTocWidth(DEFAULT_TOC_WIDTH);
+    try {
+      localStorage.setItem(TOC_WIDTH_PREF_KEY, String(DEFAULT_TOC_WIDTH));
+    } catch {}
+  };
 
   const toggleToC = () => {
     setShowToC((prev) => {
@@ -1011,13 +1043,26 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
           </div>
         )}
 
-        {/* Outline ToC Rail */}
+        {/* Resizable Divider between Editor/Preview and ToC Rail */}
+        {showToC && hasHeadings && (
+          <ResizeSplitter
+            side="right"
+            currentWidth={tocWidth}
+            minWidth={MIN_TOC_WIDTH}
+            maxWidth={MAX_TOC_WIDTH}
+            defaultWidth={DEFAULT_TOC_WIDTH}
+            onResize={handleTocResize}
+            onReset={handleTocReset}
+          />
+        )}
+
+        {/* Outline ToC Rail (resizable) */}
         {showToC && hasHeadings && (
           <div
             style={{
-              width: 180,
-              minWidth: 160,
-              maxWidth: 220,
+              width: tocWidth,
+              minWidth: tocWidth,
+              maxWidth: tocWidth,
               flexShrink: 0,
               height: '100%',
               borderLeft: '1px solid #f0f0f0',

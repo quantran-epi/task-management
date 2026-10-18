@@ -132,5 +132,14 @@ describe('renderSafeMarkdown', () => {
       expect(output).toContain('<code>AUTH_STATUS</code>');
       expect(output).not.toContain('<em>');
     });
+
+    it('emits data-line-start and data-line-end attributes when sourceLines option is true', () => {
+      const input = '# Title\n\nFirst paragraph.\n\n| Col1 | Col2 |\n|---|---|\n| A | B |\n\n```ts\nconst x = 1;\n```';
+      const output = renderSafeMarkdown(input, { sourceLines: true });
+      expect(output).toContain('<h1 data-line-start="1" data-line-end="1">Title</h1>');
+      expect(output).toContain('<p data-line-start="3" data-line-end="3">First paragraph.</p>');
+      expect(output).toContain('<tr data-line-start="7" data-line-end="7">');
+      expect(output).toContain('<div class="code-block-wrapper" data-line-start="9" data-line-end="11">');
+    });
   });
 });
