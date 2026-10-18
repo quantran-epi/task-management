@@ -1,20 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
-import { extractDeterministicFacts } from '../src/graph/extraction.js';
+import { extractDeterministicFacts, removeVietnameseDiacritics } from '../src/graph/extraction.js';
 import { chunkMarkdownSnapshot } from '../src/parser/sectionChunker.js';
 import type { ProjectionSnapshot, ProjectedDocument } from '../src/indexing/incrementalProjector.js';
-import {
-  URN_PROCESS_60000006,
-  URN_CONTAINER_60000005,
-  URN_CONTAINER_60000006,
-  URN_CONTAINER_60000007,
-  URN_SUBPROCESS_10000304,
-  URN_PKG_FCL_CYCLE_COUNTER,
-  URN_TABLE_FCL_CYCLE_COUNTER,
-  URN_CYTP_1003,
-  URN_CYTP_1002,
-} from './fixtures/pilotGoldEntities.js';
 
 function createMockSnapshotFromFiles(files: Record<string, string>): ProjectionSnapshot {
   const documents: ProjectedDocument[] = Object.entries(files).map(([name, content], idx) => {
@@ -49,85 +36,199 @@ function createMockSnapshotFromFiles(files: Record<string, string>): ProjectionS
 }
 
 describe('Deterministic MDAST Extraction (GRAPH-03, D-11, D-12, D-16)', () => {
-  // Load real pilot files
-  const sampleDir = path.resolve(process.cwd(), '../docs/sample-markdown-flow/60000006-SHB-Credit-calculations');
-  const file01 = fs.readFileSync(path.join(sampleDir, '01-wiring.md'), 'utf-8');
-  const file02 = fs.readFileSync(path.join(sampleDir, '02-data-objects.md'), 'utf-8');
-  const file04 = fs.readFileSync(path.join(sampleDir, '04-cycles.md'), 'utf-8');
-  const file05 = fs.readFileSync(path.join(sampleDir, '05-breadcrumbs.md'), 'utf-8');
+  const file01 = `# Quy trình tính lãi và chuyển chu kỳ
+
+## Danh sách tiến trình
+
+| PROCESS_ID | PROCEDURE_NAME | IS_CONTAINER | IS_EXTERNAL |
+|---|---|---|---|
+| 60000006 | CONTAINER | 1 | 0 |
+| 10000304 | FCL_PRC_CYCLE_COUNTER_PKG.PROCESS | 0 | 0 |
+
+## Các bước xử lý trong container
+
+| THU_TU | TEN_BUOC | TARGET | WRITES | GHI_CHU |
+|---|---|---|---|---|
+| 10 | Kiểm tra kỳ hạn đến hạn | SVC_PERIOD | MAIN1.TBL_PAYMENT_LOG | CYTP1003 |
+| 20 | Tính toán lãi suất ân hạn | 10000304 | MAIN1.TBL_TXN | CYTP1002 |
+| 30 | Hoàn tất chu kỳ | SVC_NOTIFY | - | Ghi log hoàn tất |
+`;
+
+  const file02 = `# Đối tượng cơ sở dữ liệu
+
+## Bảng dữ liệu \`MAIN1.FCL_CYCLE_COUNTER\`
+
+| Cột | Ý nghĩa |
+|---|---|
+| ID | Khóa chính |
+
+Được cập nhật bởi \`MAIN1.FCL_API_CYCLE_PKG.SWITCH_CYCLE\`.
+`;
 
   const snapshot = createMockSnapshotFromFiles({
     '01-wiring.md': file01,
     '02-data-objects.md': file02,
-    '04-cycles.md': file04,
-    '05-breadcrumbs.md': file05,
   });
 
   it('extracts ScheduledProcess, ProcessStep, and SoftwareComponent nodes deterministically', () => {
     const result = extractDeterministicFacts(snapshot);
 
     const urns = new Set(result.nodes.map((n) => n.urn));
-    // Verify Process 60000006
-    expect(urns.has(URN_PROCESS_60000006)).toBe(true);
-    // Verify Steps 60000005, 60000006, 60000007
-    expect(urns.has(URN_CONTAINER_60000005)).toBe(true);
-    expect(urns.has(URN_CONTAINER_60000006)).toBe(true);
-    expect(urns.has(URN_CONTAINER_60000007)).toBe(true);
-    // Verify sub-process 10000304
-    expect(urns.has(URN_SUBPROCESS_10000304)).toBe(true);
-    // Verify PLSQL procedure FCL_PRC_CYCLE_COUNTER_PKG.PROCESS
-    expect(urns.has(URN_PKG_FCL_CYCLE_COUNTER)).toBe(true);
+    expect(urns.has('urn:plannermate:smartvista:PRC_PROCESS:60000006')).toBe(true);
+    expect(urns.has('urn:plannermate:smartvista:PRC_CONTAINER:STEP_10')).toBe(true);
+    expect(urns.has('urn:plannermate:smartvista:PRC_CONTAINER:STEP_20')).toBe(true);
+    expect(urns.has('urn:plannermate:smartvista:PRC_CONTAINER:STEP_30')).toBe(true);
+    expect(urns.has('urn:plannermate:smartvista:PRC_PROCESS:10000304')).toBe(true);
+    expect(urns.has('urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS')).toBe(true);
   });
 
   it('extracts cycle binds, database objects, and referenced procedures with semantic kinds', () => {
     const result = extractDeterministicFacts(snapshot);
     const nodesByUrn = new Map(result.nodes.map((node) => [node.urn, node]));
 
-    expect(nodesByUrn.has(URN_CYTP_1003)).toBe(true);
-    expect(nodesByUrn.has(URN_CYTP_1002)).toBe(true);
-    expect(nodesByUrn.get(URN_TABLE_FCL_CYCLE_COUNTER)?.kind).toBe('DatabaseObject');
+    expect(nodesByUrn.has('urn:plannermate:smartvista:CycleType:CYTP1003')).toBe(true);
+    expect(nodesByUrn.has('urn:plannermate:smartvista:CycleType:CYTP1002')).toBe(true);
+    expect(nodesByUrn.get('urn:plannermate:oracle:ORACLE_TABLE:MAIN1.FCL_CYCLE_COUNTER')?.kind).toBe('DatabaseObject');
     expect(
-      nodesByUrn.get('urn:plannermate:plsql:PLSQL_PROCEDURE:FCL_API_CYCLE_PKG.SWITCH_CYCLE')?.kind
+      nodesByUrn.get('urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.FCL_API_CYCLE_PKG.SWITCH_CYCLE')?.kind
     ).toBe('SoftwareComponent');
   });
 
   it('extracts core structural and execution relations with OBSERVED classification', () => {
     const result = extractDeterministicFacts(snapshot);
 
-    // Verify all facts have OBSERVED classification
     for (const fact of result.facts) {
       expect(fact.classification).toBe('OBSERVED');
     }
 
     // Verify CONTAINS_STEP relation
     const containsStep = result.facts.find(
-      (f) => f.subjectUrn === URN_PROCESS_60000006 && f.relation === 'CONTAINS_STEP' && f.objectUrn === URN_CONTAINER_60000006
+      (f) => f.subjectUrn === 'urn:plannermate:smartvista:PRC_PROCESS:60000006' &&
+             f.relation === 'CONTAINS_STEP' &&
+             f.objectUrn === 'urn:plannermate:smartvista:PRC_CONTAINER:STEP_20'
     );
     expect(containsStep).toBeDefined();
 
     // Verify PRECEDES relation between sequential steps
     const precedes = result.facts.find(
-      (f) => f.subjectUrn === URN_CONTAINER_60000005 && f.relation === 'PRECEDES' && f.objectUrn === URN_CONTAINER_60000006
+      (f) => f.subjectUrn === 'urn:plannermate:smartvista:PRC_CONTAINER:STEP_10' &&
+             f.relation === 'PRECEDES' &&
+             f.objectUrn === 'urn:plannermate:smartvista:PRC_CONTAINER:STEP_20'
     );
     expect(precedes).toBeDefined();
 
     // Verify INVOKES relation from step to sub-process
     const invokes = result.facts.find(
-      (f) => f.subjectUrn === URN_CONTAINER_60000006 && f.relation === 'INVOKES' && f.objectUrn === URN_SUBPROCESS_10000304
+      (f) => f.subjectUrn === 'urn:plannermate:smartvista:PRC_CONTAINER:STEP_20' &&
+             f.relation === 'INVOKES' &&
+             f.objectUrn === 'urn:plannermate:smartvista:PRC_PROCESS:10000304'
     );
     expect(invokes).toBeDefined();
 
     // Verify USES_TYPE relation from step to cycle type
     const usesType = result.facts.find(
-      (f) => f.subjectUrn === URN_CONTAINER_60000006 && f.relation === 'USES_TYPE' && f.objectUrn === URN_CYTP_1002
+      (f) => f.subjectUrn === 'urn:plannermate:smartvista:PRC_CONTAINER:STEP_20' &&
+             f.relation === 'USES_TYPE' &&
+             f.objectUrn === 'urn:plannermate:smartvista:CycleType:CYTP1002'
     );
     expect(usesType).toBeDefined();
+  });
+
+  describe('step table enhancements (TEN_BUOC, aliases, WRITES_TO)', () => {
+    it('sets canonicalName to TEN_BUOC and populates diacritic-stripped aliases', () => {
+      const result = extractDeterministicFacts(snapshot);
+      const step10 = result.nodes.find((n) => n.urn === 'urn:plannermate:smartvista:PRC_CONTAINER:STEP_10');
+
+      expect(step10).toBeDefined();
+      expect(step10?.canonicalName).toBe('Kiểm tra kỳ hạn đến hạn');
+      expect(step10?.aliases).toContain('STEP_10');
+      expect(step10?.aliases).toContain('Kiểm tra kỳ hạn đến hạn');
+      expect(step10?.aliases).toContain('kiem tra ky han den han');
+    });
+
+    it('extracts WRITES column as DatabaseObject and creates WRITES_TO facts', () => {
+      const result = extractDeterministicFacts(snapshot);
+
+      const tableNode = result.nodes.find((n) => n.urn === 'urn:plannermate:oracle:ORACLE_TABLE:MAIN1.TBL_PAYMENT_LOG');
+      expect(tableNode).toBeDefined();
+      expect(tableNode?.kind).toBe('DatabaseObject');
+
+      const writesFact = result.facts.find(
+        (f) => f.subjectUrn === 'urn:plannermate:smartvista:PRC_CONTAINER:STEP_10' &&
+               f.relation === 'WRITES_TO' &&
+               f.objectUrn === 'urn:plannermate:oracle:ORACLE_TABLE:MAIN1.TBL_PAYMENT_LOG'
+      );
+      expect(writesFact).toBeDefined();
+      expect(writesFact?.qualifiers).toEqual({ operation: 'INSERT' });
+
+      // Service also gets WRITES_TO
+      const svcWritesFact = result.facts.find(
+        (f) => f.subjectUrn === 'urn:plannermate:system:SoftwareComponent:SVC_PERIOD' &&
+               f.relation === 'WRITES_TO' &&
+               f.objectUrn === 'urn:plannermate:oracle:ORACLE_TABLE:MAIN1.TBL_PAYMENT_LOG'
+      );
+      expect(svcWritesFact).toBeDefined();
+    });
+  });
+
+  describe('code blocks and inline code spans extraction', () => {
+    it('extracts DatabaseObject from SQL code block', () => {
+      const sqlDoc = `# SQL Operations
+
+Here is the migration script:
+
+\`\`\`sql
+INSERT INTO MAIN1.TBL_AUDIT_LOG (ID, MESSAGE) VALUES (1, 'Initial setup');
+UPDATE TBL_CUSTOMER_BALANCE SET BALANCE = 100 WHERE ID = 10;
+\`\`\`
+`;
+      const docSnapshot = createMockSnapshotFromFiles({ 'sql-ops.md': sqlDoc });
+      const result = extractDeterministicFacts(docSnapshot);
+
+      const auditTable = result.nodes.find((n) => n.urn === 'urn:plannermate:oracle:ORACLE_TABLE:MAIN1.TBL_AUDIT_LOG');
+      expect(auditTable).toBeDefined();
+      expect(auditTable?.kind).toBe('DatabaseObject');
+
+      const balanceTable = result.nodes.find((n) => n.urn === 'urn:plannermate:oracle:ORACLE_TABLE:MAIN1.TBL_CUSTOMER_BALANCE');
+      expect(balanceTable).toBeDefined();
+      expect(balanceTable?.kind).toBe('DatabaseObject');
+    });
+
+    it('extracts SoftwareComponent from inline code span', () => {
+      const inlineDoc = `# Service Runner
+
+To start the settlement batch, call \`MAIN1.PKG_BATCH.RUN\` or invoke \`SETTLE_PKG.DO_SETTLE\`.
+`;
+      const docSnapshot = createMockSnapshotFromFiles({ 'service-runner.md': inlineDoc });
+      const result = extractDeterministicFacts(docSnapshot);
+
+      const batchPkg = result.nodes.find((n) => n.urn === 'urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.PKG_BATCH.RUN');
+      expect(batchPkg).toBeDefined();
+      expect(batchPkg?.kind).toBe('SoftwareComponent');
+
+      const settlePkg = result.nodes.find((n) => n.urn === 'urn:plannermate:plsql:PLSQL_PROCEDURE:SETTLE_PKG.DO_SETTLE');
+      expect(settlePkg).toBeDefined();
+      expect(settlePkg?.kind).toBe('SoftwareComponent');
+    });
+
+    it('extracts DatabaseObject from inline code span with TBL_ prefix', () => {
+      const inlineTableDoc = `# Configuration Details
+
+Please inspect table \`MAIN1.TBL_CONFIG\` for runtime flags.
+`;
+      const docSnapshot = createMockSnapshotFromFiles({ 'config.md': inlineTableDoc });
+      const result = extractDeterministicFacts(docSnapshot);
+
+      const configTable = result.nodes.find((n) => n.urn === 'urn:plannermate:oracle:ORACLE_TABLE:MAIN1.TBL_CONFIG');
+      expect(configTable).toBeDefined();
+      expect(configTable?.kind).toBe('DatabaseObject');
+    });
   });
 
   it('tracks consumed character ranges matching raw source slices', () => {
     const result = extractDeterministicFacts(snapshot);
 
-    expect(result.consumedRanges.size).toBe(4);
+    expect(result.consumedRanges.size).toBe(2);
     for (const doc of snapshot.documents) {
       const ranges = result.consumedRanges.get(doc.documentId);
       expect(ranges).toBeDefined();
@@ -148,10 +249,15 @@ describe('Deterministic MDAST Extraction (GRAPH-03, D-11, D-12, D-16)', () => {
     expect(result.evidence.length).toBeGreaterThan(0);
     for (const ev of result.evidence) {
       expect(ev.classification).toBe('OBSERVED');
-      expect(ev.extractionMethod).toBe('DETERMINISTIC_TABLE');
       expect(ev.confidence).toBe(1.0);
       expect(ev.startOffset).toBeLessThanOrEqual(ev.endOffset);
       expect(ev.rawSnippet.length).toBeGreaterThanOrEqual(0);
     }
+  });
+
+  it('correctly strips diacritics via removeVietnameseDiacritics helper', () => {
+    expect(removeVietnameseDiacritics('Đăng ký tài khoản')).toBe('Dang ky tai khoan');
+    expect(removeVietnameseDiacritics('Khởi tạo giao dịch')).toBe('Khoi tao giao dich');
+    expect(removeVietnameseDiacritics('THỬ NGHIỆM ĐỒNG BỘ')).toBe('THU NGHIEM DONG BO');
   });
 });

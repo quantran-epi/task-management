@@ -111,6 +111,59 @@ describe('General Document Extraction (BUILD-05, D-16)', () => {
       const stepNodes = result.nodes.filter((n) => n.kind === 'ProcessStep');
       expect(stepNodes.length).toBe(2);
     });
+
+    it('extracts ProcessStep canonicalName from TEN_BUOC and populates diacritic-free aliases and WRITES_TO facts', () => {
+      const vnDoc = `# Quy trình đối soát và hạch toán
+
+## Các bước tiến trình
+
+| THU_TU | TEN_BUOC | TARGET | WRITES | GHI_CHU |
+|---|---|---|---|---|
+| 1 | Khởi tạo giao dịch | SVC_INIT | MAIN1.TBL_ORDER | Bắt đầu quy trình |
+| 2 | Hạch toán vào sổ cái | SVC_LEDGER | MAIN1.TBL_LEDGER_ENTRY | Ghi nhận bút toán |
+`;
+
+      const snapshot = createMockSnapshotFromFiles({ 'doi-soat.md': vnDoc });
+      const result = extractDeterministicFacts(snapshot);
+
+      const stepNodes = result.nodes.filter((n) => n.kind === 'ProcessStep');
+      expect(stepNodes.length).toBe(2);
+
+      const step1 = stepNodes.find((s) => s.normalizedKey === 'STEP_1');
+      expect(step1).toBeDefined();
+      expect(step1?.canonicalName).toBe('Khởi tạo giao dịch');
+      expect(step1?.aliases).toContain('STEP_1');
+      expect(step1?.aliases).toContain('Khởi tạo giao dịch');
+      expect(step1?.aliases).toContain('khoi tao giao dich');
+
+      const step2 = stepNodes.find((s) => s.normalizedKey === 'STEP_2');
+      expect(step2).toBeDefined();
+      expect(step2?.canonicalName).toBe('Hạch toán vào sổ cái');
+      expect(step2?.aliases).toContain('hach toan vao so cai');
+
+      // DatabaseObject nodes from WRITES
+      const orderTable = result.nodes.find((n) => n.urn === 'urn:plannermate:oracle:ORACLE_TABLE:MAIN1.TBL_ORDER');
+      expect(orderTable).toBeDefined();
+      expect(orderTable?.kind).toBe('DatabaseObject');
+
+      const ledgerTable = result.nodes.find((n) => n.urn === 'urn:plannermate:oracle:ORACLE_TABLE:MAIN1.TBL_LEDGER_ENTRY');
+      expect(ledgerTable).toBeDefined();
+
+      // WRITES_TO facts
+      const writesFact1 = result.facts.find(
+        (f) => f.subjectUrn === step1?.urn &&
+               f.relation === 'WRITES_TO' &&
+               f.objectUrn === orderTable?.urn
+      );
+      expect(writesFact1).toBeDefined();
+
+      const writesFact2 = result.facts.find(
+        (f) => f.subjectUrn === step2?.urn &&
+               f.relation === 'WRITES_TO' &&
+               f.objectUrn === ledgerTable?.urn
+      );
+      expect(writesFact2).toBeDefined();
+    });
   });
 
   describe('Prose and Table-less Document Extraction (prose|table-less)', () => {

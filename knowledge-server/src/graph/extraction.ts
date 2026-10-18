@@ -1,4 +1,4 @@
-import type { Root, RootContent, Table, TableRow, TableCell, Heading } from 'mdast';
+import type { Root, RootContent, Table, TableRow, TableCell, Heading, Code, InlineCode } from 'mdast';
 import { toString } from 'mdast-util-to-string';
 import { parseMarkdownToAst } from '../parser/markdownAst.js';
 import type { ProjectionSnapshot, ProjectedDocument } from '../indexing/incrementalProjector.js';
@@ -26,6 +26,17 @@ function deterministicUuid(seed: string): string {
   const part4 = ((parseInt(hash.slice(16, 18), 16) & 0x3f) | 0x80).toString(16).padStart(2, '0') + hash.slice(18, 20);
   const part5 = hash.slice(20, 32);
   return `${part1}-${part2}-${part3}-${part4}-${part5}`;
+}
+
+/**
+ * Strips Vietnamese and Latin diacritics using Unicode NFD decomposition.
+ */
+export function removeVietnameseDiacritics(str: string): string {
+  return str
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D');
 }
 
 interface TraversalContext {
@@ -246,10 +257,13 @@ export function detectTableSchema(headers: string[]): TableSchemaRoles {
   ]);
 
   const writesIdx = findIdx([
-    /WRITES/,
-    /GHI/,
+    /^WRITES$/,
     /WRITE_TO/,
+    /WRITES_TO/,
+    /^GHI$/,
+    /^GHI_VAO$/,
     /TARGET_TABLE/,
+    /BANG_DICH/,
   ]);
 
   const isContIdx = findIdx([
@@ -389,11 +403,11 @@ function handleProcessTable(table: Table, roles: TableSchemaRoles, ctx: Traversa
 }
 
 /**
- * Handles Step Table: Columns with idIdx/bindIdx, orderIdx, and optional target/process.
+ * Handles Step Table: Columns with orderIdx and (idIdx or nameIdx), plus optional target/writes.
  */
 function handleStepTable(table: Table, roles: TableSchemaRoles, ctx: TraversalContext): void {
-  const { idIdx, orderIdx, isParIdx, parallelDegreeIdx, descIdx, targetIdx } = roles;
-  if (idIdx === -1 || orderIdx === -1) return;
+  const { idIdx, nameIdx, orderIdx, isParIdx, parallelDegreeIdx, descIdx, targetIdx, writesIdx } = roles;
+  if (orderIdx === -1 || (idIdx === -1 && nameIdx === -1)) return;
 
   const parentProcessId = ctx.containerProcessId;
   const parentProcessUrn = parentProcessId
@@ -417,11 +431,11 @@ function handleStepTable(table: Table, roles: TableSchemaRoles, ctx: TraversalCo
   for (let r = 1; r < table.children.length; r++) {
     const row = table.children[r]!;
     const cells = getRowCells(row);
-    const rawStepId = cells[idIdx]?.trim();
-    const orderStr = cells[orderIdx]?.trim();
-    if (!rawStepId || !orderStr) continue;
+    const orderStr = orderIdx >= 0 ? cells[orderIdx]?.trim() : undefined;
+    const rawStepId = (idIdx >= 0 ? cells[idIdx]?.trim() : '') || (orderStr ? `STEP_${orderStr}` : `STEP_${r}`);
+    if (!orderStr && !rawStepId) continue;
 
-    const execOrder = parseInt(orderStr, 10);
+    const execOrder = orderStr ? parseInt(orderStr, 10) : r;
     if (isNaN(execOrder)) continue;
 
     const rowStartLine = row.position?.start?.line ?? table.position?.start?.line ?? 1;
@@ -434,22 +448,40 @@ function handleStepTable(table: Table, roles: TableSchemaRoles, ctx: TraversalCo
     const parallelDegree = parallelDegreeIdx >= 0 && cells[parallelDegreeIdx] ? Number(cells[parallelDegreeIdx]) : undefined;
     const note = descIdx >= 0 ? cells[descIdx]?.trim() : undefined;
     const target = targetIdx >= 0 ? cells[targetIdx]?.trim() : undefined;
+    const stepName = nameIdx >= 0 ? cells[nameIdx]?.trim() : undefined;
+    const writes = writesIdx >= 0 ? cells[writesIdx]?.trim() : undefined;
+
+    const canonicalName = stepName || (note ? `Step ${execOrder} - ${note}` : `Step ${execOrder}`);
+
+    const aliasesSet = new Set<string>();
+    if (rawStepId) aliasesSet.add(rawStepId);
+    if (stepName) {
+      aliasesSet.add(stepName);
+      const diacriticFree = removeVietnameseDiacritics(stepName).toLowerCase().trim();
+      if (diacriticFree) aliasesSet.add(diacriticFree);
+    }
+    if (note) {
+      aliasesSet.add(note);
+      const diacriticFreeNote = removeVietnameseDiacritics(note).toLowerCase().trim();
+      if (diacriticFreeNote) aliasesSet.add(diacriticFreeNote);
+    }
 
     const stepUrn = buildUrn('smartvista', 'PRC_CONTAINER', rawStepId);
     const stepNode: ResolvedNode = {
       urn: stepUrn,
       kind: 'ProcessStep',
-      canonicalName: note ? `Step ${execOrder} - ${note}` : `Step ${execOrder}`,
+      canonicalName,
       sourceSystem: 'smartvista',
       nativeType: 'PRC_CONTAINER',
       normalizedKey: rawStepId,
       properties: {
         execOrder,
+        ...(stepName ? { stepName } : {}),
         ...(isParallel !== undefined ? { isParallel } : {}),
         ...(parallelDegree !== undefined ? { parallelDegree } : {}),
         ...(note !== undefined ? { note } : {}),
       },
-      aliases: [],
+      aliases: Array.from(aliasesSet),
     };
     addNode(ctx, stepNode);
 
@@ -468,6 +500,7 @@ function handleStepTable(table: Table, roles: TableSchemaRoles, ctx: TraversalCo
       );
     }
 
+    let compUrn: string | null = null;
     if (target) {
       // Check if target is a process ID (all numeric)
       if (/^\d+$/.test(target)) {
@@ -486,7 +519,7 @@ function handleStepTable(table: Table, roles: TableSchemaRoles, ctx: TraversalCo
         );
       } else {
         // Target is a service or component
-        const compUrn = buildUrn('system', 'SoftwareComponent', target);
+        compUrn = buildUrn('system', 'SoftwareComponent', target);
         const compNode: ResolvedNode = {
           urn: compUrn,
           kind: 'SoftwareComponent',
@@ -511,6 +544,69 @@ function handleStepTable(table: Table, roles: TableSchemaRoles, ctx: TraversalCo
           rowEndOffset,
           rawSnippet
         );
+      }
+    }
+
+    // Process WRITES column if present
+    if (writes && writes.toLowerCase() !== 'null' && writes.toLowerCase() !== '-') {
+      // Split tokens by comma, semicolon, or whitespace
+      const rawTokens = writes.match(/[A-Za-z0-9_.]+/g) || [];
+      for (const token of rawTokens) {
+        if (token.toUpperCase().includes('PKG') || token.toUpperCase() === 'PROCESS') continue;
+
+        const normRes = normalizeTechnicalIdentifier(token, 'MAIN1');
+        if (normRes.isQuarantined) {
+          addQuarantine(ctx, token, normRes.quarantineReason || 'Unqualified DB object', rowStartLine, rowEndLine);
+          continue;
+        }
+
+        const tableUrn = buildUrn('oracle', 'ORACLE_TABLE', normRes.qualifiedIdentifier);
+        const dbNode: ResolvedNode = {
+          urn: tableUrn,
+          kind: 'DatabaseObject',
+          canonicalName: normRes.qualifiedIdentifier,
+          sourceSystem: 'oracle',
+          nativeType: 'ORACLE_TABLE',
+          normalizedKey: normRes.qualifiedIdentifier,
+          subkind: 'ORACLE_TABLE',
+          properties: {
+            schema: normRes.schema || 'MAIN1',
+            tableName: normRes.objectName,
+          },
+          aliases: [token.toLowerCase()],
+        };
+        addNode(ctx, dbNode);
+
+        const op = writes.toLowerCase().includes('update') ? 'UPDATE' : 'INSERT';
+        addFactAndEvidence(
+          ctx,
+          stepUrn,
+          'WRITES_TO',
+          tableUrn,
+          { operation: op },
+          rowStartLine,
+          rowEndLine,
+          rowStartOffset,
+          rowEndOffset,
+          rawSnippet,
+          'DETERMINISTIC_TABLE'
+        );
+
+        if (compUrn) {
+          addFactAndEvidence(
+            ctx,
+            compUrn,
+            'WRITES_TO',
+            tableUrn,
+            { operation: op },
+            rowStartLine,
+            rowEndLine,
+            rowStartOffset,
+            rowEndOffset,
+            rawSnippet,
+            'DETERMINISTIC_TABLE'
+          );
+        }
       }
     }
 
@@ -757,6 +853,7 @@ function handleDataObjectsTables(table: Table, ctx: TraversalContext): void {
   const lastHeading = ctx.headingPath[ctx.headingPath.length - 1] || '';
   const match =
     lastHeading.match(/`([^`]+)`/) ||
+    lastHeading.match(/\b([A-Za-z0-9_]{2,}\.[A-Za-z0-9_]{2,}(?:\.[A-Za-z0-9_]+)*)\b/) ||
     lastHeading.match(/`?([A-Za-z0-9_]{3,}(?:\.[A-Za-z0-9_]{3,})*)`?/);
   if (!match) return;
 
@@ -857,6 +954,76 @@ function handleDataObjectsTables(table: Table, ctx: TraversalContext): void {
 }
 
 /**
+ * Extracts DatabaseObject and SoftwareComponent entities from text inside code blocks or inline code spans.
+ */
+function extractTechnicalEntitiesFromText(
+  text: string,
+  ctx: TraversalContext,
+  startLine: number,
+  endLine: number
+): void {
+  if (!text || text.trim().length === 0) return;
+
+  // 1. Table patterns: SCHEMA.TBL_[A-Z0-9_]+ or standalone TBL_[A-Z0-9_]+
+  const tableRegex = /\b(?:([A-Za-z0-9_]+)\.)?(TBL_[A-Za-z0-9_]+)\b/gi;
+  for (const match of text.matchAll(tableRegex)) {
+    const raw = match[0];
+    const normRes = normalizeTechnicalIdentifier(raw, 'MAIN1');
+    if (!normRes.isQuarantined) {
+      const tableUrn = buildUrn('oracle', 'ORACLE_TABLE', normRes.qualifiedIdentifier);
+      if (!ctx.nodesMap.has(tableUrn)) {
+        const dbNode: ResolvedNode = {
+          urn: tableUrn,
+          kind: 'DatabaseObject',
+          canonicalName: normRes.qualifiedIdentifier,
+          sourceSystem: 'oracle',
+          nativeType: 'ORACLE_TABLE',
+          normalizedKey: normRes.qualifiedIdentifier,
+          subkind: 'ORACLE_TABLE',
+          properties: {
+            schema: normRes.schema || 'MAIN1',
+            tableName: normRes.objectName,
+          },
+          aliases: [raw.toLowerCase()],
+        };
+        addNode(ctx, dbNode);
+      }
+    }
+  }
+
+  // 2. Package / Procedure patterns:
+  // Any dotted technical identifier containing PKG, e.g. SCHEMA.PKG.PROC or PKG.PROC or SCHEMA.PKG
+  const pkgProcRegex = /\b[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+\b/g;
+  for (const match of text.matchAll(pkgProcRegex)) {
+    const raw = match[0];
+    if (!raw.toUpperCase().includes('PKG') || raw.toUpperCase().includes('TBL_')) continue;
+    const normRes = normalizeTechnicalIdentifier(raw, 'MAIN1');
+    if (!normRes.isQuarantined) {
+      const procedureKey = normRes.qualifiedIdentifier;
+      const procUrn = buildUrn('plsql', 'PLSQL_PROCEDURE', procedureKey);
+      if (!ctx.nodesMap.has(procUrn)) {
+        const compNode: ResolvedNode = {
+          urn: procUrn,
+          kind: 'SoftwareComponent',
+          canonicalName: procedureKey,
+          sourceSystem: 'plsql',
+          nativeType: 'PLSQL_PROCEDURE',
+          normalizedKey: procedureKey,
+          subkind: 'PLSQL_PROCEDURE',
+          properties: {
+            schema: normRes.schema || 'MAIN1',
+            package: normRes.objectName,
+            ...(normRes.subObject ? { procedure: normRes.subObject } : {}),
+          },
+          aliases: [raw.toLowerCase()],
+        };
+        addNode(ctx, compNode);
+      }
+    }
+  }
+}
+
+/**
  * Traverses markdown AST to extract deterministic facts and record consumed ranges.
  */
 function traverseAst(node: RootContent | Root, ctx: TraversalContext): void {
@@ -887,7 +1054,7 @@ function traverseAst(node: RootContent | Root, ctx: TraversalContext): void {
 
       if (roles.idIdx !== -1 && roles.nameIdx !== -1 && roles.orderIdx === -1 && roles.isContIdx !== -1) {
         handleProcessTable(table, roles, ctx);
-      } else if (roles.idIdx !== -1 && roles.orderIdx !== -1) {
+      } else if (roles.orderIdx !== -1 && (roles.idIdx !== -1 || roles.nameIdx !== -1)) {
         handleStepTable(table, roles, ctx);
       } else if (roles.typeIdx !== -1 && roles.idIdx !== -1) {
         handleCycleBindTable(table, roles, ctx);
@@ -900,11 +1067,19 @@ function traverseAst(node: RootContent | Root, ctx: TraversalContext): void {
       }
     }
   } else if (node.type === 'code') {
-    const startOffset = node.position?.start?.offset ?? 0;
-    const endOffset = node.position?.end?.offset ?? 0;
-    const startLine = node.position?.start?.line ?? 1;
-    const endLine = node.position?.end?.line ?? 1;
+    const codeNode = node as Code;
+    const startOffset = codeNode.position?.start?.offset ?? 0;
+    const endOffset = codeNode.position?.end?.offset ?? 0;
+    const startLine = codeNode.position?.start?.line ?? 1;
+    const endLine = codeNode.position?.end?.line ?? 1;
     recordConsumedRange(ctx, startOffset, endOffset, startLine, endLine);
+
+    extractTechnicalEntitiesFromText(codeNode.value, ctx, startLine, endLine);
+  } else if (node.type === 'inlineCode') {
+    const inlineNode = node as InlineCode;
+    const startLine = inlineNode.position?.start?.line ?? 1;
+    const endLine = inlineNode.position?.end?.line ?? 1;
+    extractTechnicalEntitiesFromText(inlineNode.value, ctx, startLine, endLine);
   }
 
   if ('children' in node && Array.isArray((node as any).children)) {
