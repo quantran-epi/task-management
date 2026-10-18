@@ -102,7 +102,7 @@ export const NormalizeDocModal: React.FC<NormalizeDocModalProps> = ({
       const userPrompt = `Hãy chuẩn hóa nội dung ghi chú/tài liệu sau đây vào đúng cấu trúc khung chuẩn Markdown tối ưu cho BM25 tìm kiếm và Knowledge Graph (Neo4j) đã hướng dẫn trong system prompt.
 Yêu cầu cụ thể:
 1. Giữ lại toàn bộ thông tin quan trọng, từ khóa và dữ liệu thực tế.
-2. Chuẩn hóa định danh kỹ thuật (schema.package.procedure, schema.table_name) và nếu có bảng quy trình/bước thực thi hãy áp dụng các cột chuẩn (STEP_ID, THU_TU, TEN_BUOC, TARGET, WRITES).
+2. Chuẩn hóa định danh kỹ thuật (bọc \`schema.package.procedure\`, \`schema.table_name\` trong backtick code). Nếu có bảng quy trình/bước thực thi hãy áp dụng các cột chuẩn (THU_TU, TEN_BUOC, TARGET, WRITES, GHI_CHU). Không tự sinh mã giả STEP_ID nếu tài liệu gốc không có mã bước cũ.
 3. Đảm bảo cấu trúc H1, hashtags, H2/H3 và mục Nguồn (Sources) theo đúng định dạng.
 4. Tuyệt đối không để khối bảng hoặc code vượt quá 50.000 ký tự.
 5. Chỉ trả về nội dung Markdown kết quả, không viết thêm lời dẫn chào hay giải thích ngoài lề. Tuyệt đối không xuất thẻ <think> hoặc quá trình suy nghĩ, chỉ trả về nội dung Markdown kết quả.

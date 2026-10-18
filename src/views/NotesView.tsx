@@ -29,6 +29,7 @@ import {
   permanentDeleteNote,
   restoreNote,
   batchCreateNotes,
+  bulkPermanentDeleteNotes,
 } from '../db/repositories/noteRepo';
 import { getBacklinksForDoc } from '../db/repositories/documentLinkRepo';
 import { PageHeader } from '../components/common/PageHeader';
@@ -87,14 +88,16 @@ Hãy tạo tài liệu Markdown tối ưu đồng thời cho hệ thống tìm k
 
 6. ĐỊNH DANH KỸ THUẬT & TRÍCH XUẤT KNOWLEDGE GRAPH:
 - Để hệ thống build Graph quan hệ (Neo4j) tự động trích xuất chính xác các thực thể và quan hệ (CALLS, INVOKES, WRITES_TO, USES_TYPE, PRECEDES):
-  + Tên thủ tục/hàm/thành phần (SoftwareComponent): Sử dụng cú pháp có tiền tố schema hoặc hệ thống rõ ràng (ví dụ: \`MAIN1.PKG_PAYMENT.PROCESS_TXN\`, \`BILLING.SYNC_SERVICE\`). Tránh viết tên cộc lốc không rõ schema khiến parser cách ly (quarantine).
-  + Tên bảng dữ liệu (DatabaseObject): Viết hoa, có tiền tố schema nếu có (ví dụ: \`MAIN1.TBL_TRANSACTIONS\`, \`PAYMENT_LOGS\`).
+  + Tên thủ tục/hàm/thành phần (SoftwareComponent): Sử dụng cú pháp có tiền tố schema hoặc hệ thống rõ ràng và luôn bọc trong cặp dấu backtick code (ví dụ: \`MAIN1.PKG_PAYMENT.PROCESS_TXN\`, \`BILLING.SYNC_SERVICE\`). Tránh viết tên cộc lốc không rõ schema khiến parser cách ly (quarantine).
+  + Tên bảng dữ liệu (DatabaseObject): Viết hoa, có tiền tố schema nếu có và luôn bọc trong cặp dấu backtick code (ví dụ: \`MAIN1.TBL_PAYMENT_LOG\`, \`MAIN1.TBL_TRANSACTIONS\`).
   + Mã chu kỳ/loại (CycleType): Sử dụng mã chuẩn có định danh (ví dụ: \`CYTP1002\`, \`DAILY_CYCLE\`).
-  + Cột bảng kỹ thuật: Khi mô tả luồng hoặc bước xử lý kỹ thuật, sử dụng bảng có tên cột chuẩn sau để parser trích xuất quan hệ:
-    * ID / STEP_ID / MA_BUOC: Mã định danh bước hoặc tiến trình (số hoặc mã định danh duy nhất).
-    * THU_TU / ORDER: Thứ tự thực thi tuần tự (1, 2, 3...) để xây dựng quan hệ PRECEDES.
-    * TEN_BUOC / PROCEDURE / TARGET: Thủ tục hoặc đối tượng/tiến trình được gọi (quan hệ CALLS / INVOKES).
-    * GHI / WRITES / TARGET_TABLE: Tên bảng cơ sở dữ liệu bị ghi/cập nhật (quan hệ WRITES_TO).
+  + Bảng các bước thực thi: Khi mô tả luồng hoặc bước xử lý kỹ thuật, sử dụng bảng có các cột chuẩn sau:
+    * THU_TU / ORDER: Thứ tự thực thi tuần tự (1, 2, 3...) để xác định luồng và xây dựng quan hệ PRECEDES.
+    * TEN_BUOC / PROCEDURE: Tên hành động hoặc tên bước rõ nghĩa đóng vai trò định danh chính (canonical step identity).
+    * TARGET: Thủ tục hoặc đối tượng/tiến trình được gọi (quan hệ CALLS / INVOKES). Bọc mã trong cặp dấu backtick code.
+    * WRITES / GHI / TARGET_TABLE: Tên bảng cơ sở dữ liệu bị ghi hoặc cập nhật (quan hệ WRITES_TO). Bọc mã trong cặp dấu backtick code.
+    * GHI_CHU: Ghi chú hoặc mô tả bổ sung cho bước.
+    * QUY TẮC ĐỊNH DANH BƯỚC (STEP_ID): Chỉ đưa cột STEP_ID / MA_BUOC vào bảng khi tài liệu gốc ĐÃ CÓ SẴN mã định danh bước từ hệ thống cũ. TUYỆT ĐỐI KHÔNG tự bịa hoặc tự sinh mã giả như STEP_01, STEP_02 nếu nguồn không có.
 
 7. ĐỊNH DẠNG NGÀY & NGUỒN (SOURCES):
 - Dùng ngày tuyệt đối dạng ISO YYYY-MM-DD (ví dụ: 2026-10-05). Tuyệt đối không dùng ngày tương đối ("hôm qua", "tuần tới", "sắp tới").
@@ -132,11 +135,11 @@ Phạm vi áp dụng của quy tắc hoặc thành phần này (hệ thống, ph
 2. Bước 2: Hành động tiếp theo.
 
 ## Các bước thực thi & Quan hệ thành phần
-| STEP_ID | THU_TU | TEN_BUOC | TARGET | WRITES |
+| THU_TU | TEN_BUOC | TARGET | WRITES | GHI_CHU |
 |---|---|---|---|---|
-| 1001 | 1 | Khởi tạo giao dịch | MAIN1.PKG_PAYMENT.INIT_TXN | MAIN1.TBL_TXN_QUEUE |
-| 1002 | 2 | Xử lý thanh toán | MAIN1.PKG_PAYMENT.EXECUTE_PAYMENT | MAIN1.TBL_PAYMENT_LOG |
-| 1003 | 3 | Đồng bộ đối soát | 2005 | MAIN1.TBL_SETTLEMENT |
+| 1 | Khởi tạo giao dịch | \`MAIN1.PKG_PAYMENT.INIT_TXN\` | \`MAIN1.TBL_TXN_QUEUE\` | Khởi tạo phiên thanh toán mới |
+| 2 | Xử lý thanh toán | \`MAIN1.PKG_PAYMENT.EXECUTE_PAYMENT\` | \`MAIN1.TBL_PAYMENT_LOG\` | Trừ số dư và ghi nhận nhật ký |
+| 3 | Đồng bộ đối soát | \`MAIN1.PKG_SETTLEMENT.SYNC\` | \`MAIN1.TBL_SETTLEMENT\` | Đối soát dữ liệu cuối ngày |
 
 ## Trạng thái và mã lỗi
 | Mã | Ý nghĩa | Hành động xử lý |
@@ -177,10 +180,10 @@ Phạm vi áp dụng của quy tắc hoặc thành phần này.
 2. Bước 2: Hành động tiếp theo.
 
 ## Các bước thực thi & Quan hệ thành phần
-| STEP_ID | THU_TU | TEN_BUOC | TARGET | WRITES |
+| THU_TU | TEN_BUOC | TARGET | WRITES | GHI_CHU |
 |---|---|---|---|---|
-| 1001 | 1 | Khởi tạo quy trình | MAIN1.PKG_EXAMPLE.INIT | MAIN1.TBL_STAGING |
-| 1002 | 2 | Xử lý nghiệp vụ chính | MAIN1.PKG_EXAMPLE.PROCESS | MAIN1.TBL_CORE_DATA |
+| 1 | Khởi tạo quy trình | \`MAIN1.PKG_EXAMPLE.INIT\` | \`MAIN1.TBL_STAGING\` | Nạp dữ liệu vào bảng tạm |
+| 2 | Xử lý nghiệp vụ chính | \`MAIN1.PKG_EXAMPLE.PROCESS\` | \`MAIN1.TBL_CORE_DATA\` | Cập nhật bảng nghiệp vụ chính |
 
 ## Trạng thái và mã lỗi
 | Mã | Ý nghĩa | Hành động xử lý |
@@ -655,6 +658,139 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb, initialDoc
     });
   };
 
+  // Recursive delete folder action: permanently deletes folder, all subfolders and all contained documents
+  const handleDeleteFolderRecursive = async (folder: Note) => {
+    const getAllDescendantFolderIds = (parentId: string): string[] => {
+      const children = (allNotes || []).filter(
+        (n) => n.type === 'folder' && n.parentId === parentId && !n.deletedAt
+      );
+      return [parentId, ...children.flatMap((c) => getAllDescendantFolderIds(c.id))];
+    };
+    const folderIdsToDelete = getAllDescendantFolderIds(folder.id);
+    const affectedDocs = (allNotes || []).filter(
+      (n) => n.type !== 'folder' && folderIdsToDelete.includes(n.parentId || '')
+    );
+    const totalItems = folderIdsToDelete.length + affectedDocs.length;
+    const subfolderCount = folderIdsToDelete.length - 1;
+
+    Modal.confirm({
+      title: `Xóa vĩnh viễn toàn bộ thư mục "${folder.title || 'Không tên'}"?`,
+      content: (
+        <div>
+          <p style={{ color: '#dc2626', fontWeight: 600, marginBottom: 8 }}>
+            Hành động này KHÔNG THỂ hoàn tác!
+          </p>
+          <p style={{ margin: 0 }}>
+            Sẽ xóa vĩnh viễn thư mục này
+            {subfolderCount > 0 ? `, ${subfolderCount} thư mục con` : ''} và{' '}
+            <strong>{affectedDocs.length} tài liệu/file</strong> bên trong.
+          </p>
+        </div>
+      ),
+      okText: `Xóa vĩnh viễn (${totalItems} mục)`,
+      okType: 'danger',
+      cancelText: 'Hủy',
+      onOk: async () => {
+        try {
+          const docIdsToDelete = affectedDocs.map((d) => d.id);
+          const allIdsToDelete = [...folderIdsToDelete, ...docIdsToDelete];
+
+          await bulkPermanentDeleteNotes(allIdsToDelete, db);
+
+          if (selectedDocId && docIdsToDelete.includes(selectedDocId)) {
+            setSelectedDocId(null);
+          }
+
+          if (folderIdsToDelete.includes(typeof activeFilter === 'string' ? activeFilter : '')) {
+            handleFilterChange('root_docs');
+          }
+          message.success(`Đã xóa vĩnh viễn thư mục và ${affectedDocs.length} tài liệu`);
+        } catch {
+          message.error('Không thể xóa thư mục');
+        }
+      },
+    });
+  };
+
+  // Special folder clear/empty handlers
+  const handleEmptyTrash = async () => {
+    const trashItems = (allNotes || []).filter((n) => Boolean(n.deletedAt));
+    if (trashItems.length === 0) return;
+
+    Modal.confirm({
+      title: 'Dọn sạch thùng rác?',
+      content: `Sẽ xóa vĩnh viễn ${trashItems.length} mục trong thùng rác. Hành động này không thể hoàn tác!`,
+      okText: `Xóa vĩnh viễn (${trashItems.length})`,
+      okType: 'danger',
+      cancelText: 'Hủy',
+      onOk: async () => {
+        try {
+          const ids = trashItems.map((n) => n.id);
+          await bulkPermanentDeleteNotes(ids, db);
+          if (selectedDocId && ids.includes(selectedDocId)) {
+            setSelectedDocId(null);
+          }
+          message.success('Đã dọn sạch thùng rác');
+        } catch {
+          message.error('Không thể dọn sạch thùng rác');
+        }
+      },
+    });
+  };
+
+  const handleClearSpecialFolder = async (
+    specialKey: 'root_docs' | 'quick_notes',
+    title: string
+  ) => {
+    const targetNotes = (allNotes || []).filter((n) => {
+      if (n.deletedAt) return false;
+      if (specialKey === 'root_docs') {
+        return !n.parentId && n.type === 'document';
+      }
+      if (specialKey === 'quick_notes') {
+        return n.type === 'quick_note';
+      }
+      return false;
+    });
+
+    if (targetNotes.length === 0) return;
+
+    Modal.confirm({
+      title: `Xóa tất cả trong "${title}"?`,
+      content: `Chuyển toàn bộ ${targetNotes.length} tài liệu vào thùng rác?`,
+      okText: 'Chuyển vào thùng rác',
+      okType: 'danger',
+      cancelText: 'Hủy',
+      onOk: async () => {
+        try {
+          for (const doc of targetNotes) {
+            await softDeleteNote(doc.id, db);
+          }
+          if (selectedDocId && targetNotes.some((d) => d.id === selectedDocId)) {
+            setSelectedDocId(null);
+          }
+          message.success(`Đã chuyển ${targetNotes.length} tài liệu vào thùng rác`);
+        } catch {
+          message.error('Không thể xóa tài liệu');
+        }
+      },
+    });
+  };
+
+  const handleUnpinAll = async () => {
+    const pinned = (allNotes || []).filter((n) => n.isPinned && !n.deletedAt);
+    if (pinned.length === 0) return;
+
+    try {
+      for (const doc of pinned) {
+        await updateNote(doc.id, { isPinned: false }, db);
+      }
+      message.success(`Đã bỏ ghim ${pinned.length} tài liệu`);
+    } catch {
+      message.error('Không thể bỏ ghim tài liệu');
+    }
+  };
+
   // Hierarchical folder options with indentation and breadcrumb path
   const hierarchicalFolderOptions = useMemo(() => {
     const folders = (allNotes || []).filter((n) => n.type === 'folder' && !n.deletedAt);
@@ -902,6 +1038,10 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb, initialDoc
           onRenameFolder={handleRenameFolder}
           onMoveFolder={handleOpenMoveFolderModal}
           onDeleteFolder={handleDeleteFolder}
+          onDeleteFolderRecursive={handleDeleteFolderRecursive}
+          onEmptyTrash={handleEmptyTrash}
+          onClearSpecialFolder={handleClearSpecialFolder}
+          onUnpinAll={handleUnpinAll}
           onOpenZipImport={handleOpenZipImport}
           activeTag={activeTag}
           onSelectTag={setActiveTag}

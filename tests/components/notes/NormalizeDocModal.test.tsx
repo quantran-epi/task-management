@@ -155,4 +155,52 @@ describe('NormalizeDocModal', () => {
 
     expect(onClose).toHaveBeenCalled();
   });
+
+  it('passes modernized AI_KNOWLEDGE_DOC_PROMPT with THU_TU and TEN_BUOC guidelines without mandatory STEP_ID', async () => {
+    vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-api-key');
+    vi.spyOn(nineRouterTokenService, 'getNineRouterConfig').mockResolvedValue({
+      endpoint: 'http://localhost:20128',
+      defaultModel: 'gpt-4o',
+      charLimit: 12000,
+    });
+
+    let capturedPayload: any = null;
+    vi.spyOn(nineRouterClient, 'streamChatCompletion').mockImplementation(({ payload }) => {
+      capturedPayload = payload;
+      async function* emptyStream() {
+        yield '# Tiêu đề\n\nNội dung';
+      }
+      return emptyStream() as any;
+    });
+
+    render(
+      <NormalizeDocModal
+        open={true}
+        originalContent="Nội dung cần kiểm tra prompt"
+        docTitle="Doc Kiểm Tra Prompt"
+        onClose={vi.fn()}
+        onApply={vi.fn()}
+        db={db}
+      />
+    );
+
+    await waitFor(() => {
+      expect(capturedPayload).not.toBeNull();
+    });
+
+    const systemMessage = capturedPayload.messages.find((m: any) => m.role === 'system')?.content || '';
+    const userMessage = capturedPayload.messages.find((m: any) => m.role === 'user')?.content || '';
+
+    // Verify system prompt features THU_TU, TEN_BUOC, TARGET, WRITES, GHI_CHU
+    expect(systemMessage).toContain('| THU_TU | TEN_BUOC | TARGET | WRITES | GHI_CHU |');
+    expect(systemMessage).toContain('THU_TU / ORDER');
+    expect(systemMessage).toContain('TEN_BUOC / PROCEDURE');
+    expect(systemMessage).toContain('TARGET');
+    expect(systemMessage).toContain('WRITES / GHI / TARGET_TABLE');
+    expect(systemMessage).toContain('TUYỆT ĐỐI KHÔNG tự bịa hoặc tự sinh mã giả như STEP_01, STEP_02');
+
+    // Verify user prompt instructs not to fabricate STEP_ID and use standard columns
+    expect(userMessage).toContain('THU_TU, TEN_BUOC, TARGET, WRITES, GHI_CHU');
+    expect(userMessage).toContain('Không tự sinh mã giả STEP_ID nếu tài liệu gốc không có mã bước cũ');
+  });
 });
