@@ -31,12 +31,18 @@ describe('selectionContext utility', () => {
     expect(context.entityId).toBeUndefined();
   });
 
-  it('resolves hierarchy for task and project correctly', async () => {
+  it('resolves hierarchy and eager full context text for task and project correctly', async () => {
     const fakeDb = {
       tasks: {
         get: vi.fn().mockResolvedValue({
           id: 'task-1',
           name: 'Implement OAuth',
+          description: 'OAuth2 with PKCE flow',
+          status: 'In Progress',
+          priority: 'High',
+          progress: 50,
+          estimateMinutes: 120,
+          checklist: [{ id: 'c1', text: 'Define routes', done: true }],
           projectId: 'proj-1',
         }),
       },
@@ -44,6 +50,8 @@ describe('selectionContext utility', () => {
         get: vi.fn().mockResolvedValue({
           id: 'proj-1',
           name: 'Identity Service',
+          description: 'Single Sign-On platform',
+          status: 'In Progress',
         }),
       },
     } as any;
@@ -53,6 +61,13 @@ describe('selectionContext utility', () => {
     expect(hierarchy.targetTitle).toBe('Implement OAuth');
     expect(hierarchy.parentProject?.name).toBe('Identity Service');
     expect(hierarchy.hierarchyPath).toContain('Dự án "Identity Service" > Tác vụ "Implement OAuth"');
+
+    // Verify full eager context serialization
+    expect(hierarchy.fullContextText).toBeDefined();
+    expect(hierarchy.fullContextText).toContain('Implement OAuth');
+    expect(hierarchy.fullContextText).toContain('OAuth2 with PKCE flow');
+    expect(hierarchy.fullContextText).toContain('Identity Service');
+    expect(hierarchy.fullContextText).toContain('Define routes');
   });
 
   it('formats mention prompt with quote block and hierarchy path', () => {

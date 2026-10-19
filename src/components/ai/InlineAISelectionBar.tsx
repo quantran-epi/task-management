@@ -18,11 +18,21 @@ import {
   type SelectionContextPayload,
 } from '../../utils/selectionContext';
 import { getNineRouterApiKey, getNineRouterConfig } from '../../services/ai/nineRouterTokenService';
-import { streamChatCompletion } from '../../services/ai/nineRouterClient';
+import { streamChatEvents, stripThinkingBlocks } from '../../services/ai/nineRouterClient';
+import {
+  AI_DATABASE_TOOLS,
+  executeAiTool,
+  isMutationTool,
+  normalizeToolName,
+} from '../../services/ai/aiTools';
+import type { ChatCompletionMessage, ToolCall } from '../../services/ai/types';
 
 export interface InlineAISelectionBarProps {
   db?: TaskPlannerDatabase;
 }
+
+// Read-only subset of AI_DATABASE_TOOLS to ensure safety inside inline popover
+const READ_ONLY_AI_TOOLS = AI_DATABASE_TOOLS.filter((t) => !isMutationTool(t.function.name));
 
 export const InlineAISelectionBar: React.FC<InlineAISelectionBarProps> = ({ db = defaultDb }) => {
   const { token } = theme.useToken();
@@ -36,6 +46,7 @@ export const InlineAISelectionBar: React.FC<InlineAISelectionBarProps> = ({ db =
   const [isAskingInline, setIsAskingInline] = useState(false);
   const [inlineQuery, setInlineQuery] = useState('');
   const [inlineResponse, setInlineResponse] = useState('');
+  const [inlineStatus, setInlineStatus] = useState<string | null>(null);
   const [isLoadingInline, setIsLoadingInline] = useState(false);
   const inlineAbortRef = useRef<AbortController | null>(null);
 
@@ -51,6 +62,7 @@ export const InlineAISelectionBar: React.FC<InlineAISelectionBarProps> = ({ db =
     setIsAskingInline(false);
     setInlineQuery('');
     setInlineResponse('');
+    setInlineStatus(null);
     setIsLoadingInline(false);
     setCurrentPayload(null);
   }, []);
@@ -172,13 +184,14 @@ export const InlineAISelectionBar: React.FC<InlineAISelectionBarProps> = ({ db =
     handleDismiss();
   };
 
-  // Action: Run inline quick prompt
+  // Action: Run inline prompt with eager context and read-only tools
   const handleRunInlinePrompt = async (actionLabel: string, promptInstruction: string) => {
     if (!currentPayload) return;
     setIsAskingInline(true);
     setIsLoadingInline(true);
     setInlineQuery(actionLabel);
     setInlineResponse('');
+    setInlineStatus(null);
 
     try {
       const apiKey = await getNineRouterApiKey(db);
@@ -193,30 +206,99 @@ export const InlineAISelectionBar: React.FC<InlineAISelectionBarProps> = ({ db =
       const controller = new AbortController();
       inlineAbortRef.current = controller;
 
-      const stream = streamChatCompletion({
-        endpoint: config.endpoint,
-        apiKey,
-        payload: {
-          model: config.defaultModel || 'gpt-4o',
-          messages: [
-            {
-              role: 'system',
-              content:
-                'Bạn là trợ lý AI súc tích, giải quyết trực tiếp yêu cầu của người dùng về đoạn văn bản được chọn. Trả lời ngắn gọn, trực diện, không dài dòng.',
-            },
-            {
-              role: 'user',
-              content: `Ngữ cảnh nguồn: ${currentPayload.hierarchyPath}\n\nĐoạn trích:\n"${currentPayload.selectedText}"\n\nYêu cầu: ${promptInstruction}`,
-            },
-          ],
-        },
-        signal: controller.signal,
-      });
+      const systemPrompt = `Bạn là trợ lý AI súc tích trong ứng dụng TaskMate.
+Nhiệm vụ: Trả lời trực diện, chính xác và hữu ích nhất cho người dùng về đoạn văn bản được chọn.
+Nguyên tắc:
+1. Bạn đã được cung cấp TOÀN BỘ NGỮ CẢNH GỐC (full metadata, task details, document content) của thực thể chứa đoạn trích ở bên dưới. Hãy khai thác tối đa thông tin này.
+2. Nếu câu hỏi đòi hỏi tra cứu thêm dữ liệu chéo trong hệ thống (như tìm kiếm task khác, kiểm tra lịch hoặc tài liệu khác), BẠN ĐÃ CÓ CÁC CÔNG CỤ ĐỌC DỮ LIỆU (read-only tools). Hãy gọi công cụ phù hợp.
+3. Trả lời súc tích, mạch lạc, dùng Markdown rõ ràng.`;
 
-      let full = '';
-      for await (const chunk of stream) {
-        full += chunk;
-        setInlineResponse(full);
+      const userContent = `Ngữ cảnh nguồn: ${currentPayload.hierarchyPath}
+${currentPayload.fullContextText ? `\n[DỮ LIỆU ĐẦY ĐỦ CỦA THỰC THỂ NGUỒN]:\n${currentPayload.fullContextText}\n` : ''}
+[ĐOẠN TRÍCH ĐƯỢC CHỌN]:
+"${currentPayload.selectedText}"
+
+[YÊU CẦU]: ${promptInstruction}`;
+
+      const messages: ChatCompletionMessage[] = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userContent },
+      ];
+
+      const targetModel = config.defaultModel || 'gpt-4o';
+      let loopCount = 0;
+      const MAX_LOOPS = 3;
+
+      while (loopCount < MAX_LOOPS) {
+        loopCount++;
+        let turnResponse = '';
+        let hasToolCalls = false;
+        let toolCallsToRun: ToolCall[] = [];
+
+        const stream = streamChatEvents({
+          endpoint: config.endpoint,
+          apiKey,
+          payload: {
+            model: targetModel,
+            messages,
+            tools: READ_ONLY_AI_TOOLS,
+          },
+          signal: controller.signal,
+        });
+
+        for await (const chunk of stream) {
+          if (chunk.type === 'reasoning') {
+            const cleanReasoning = chunk.delta.trim().replace(/\n+/g, ' ');
+            if (cleanReasoning) {
+              setInlineStatus(`Đang suy nghĩ: ${cleanReasoning.slice(0, 60)}...`);
+            }
+          } else if (chunk.type === 'text') {
+            turnResponse += chunk.delta;
+            setInlineResponse(stripThinkingBlocks(turnResponse));
+            setInlineStatus(null);
+          } else if (chunk.type === 'tool_calls') {
+            hasToolCalls = true;
+            toolCallsToRun = chunk.calls;
+          }
+        }
+
+        if (!hasToolCalls) {
+          // Finished generating text answer
+          break;
+        }
+
+        // Execute read-only tools
+        messages.push({
+          role: 'assistant',
+          content: turnResponse || null,
+          tool_calls: toolCallsToRun,
+        });
+
+        for (const tc of toolCallsToRun) {
+          const normalized = normalizeToolName(tc.function.name);
+          setInlineStatus(`Đang đọc dữ liệu (${normalized})...`);
+
+          let args: Record<string, any> = {};
+          try {
+            args = JSON.parse(tc.function.arguments || '{}');
+          } catch {}
+
+          let toolResult = '';
+          try {
+            toolResult = await executeAiTool(tc.function.name, args, db);
+          } catch (err: any) {
+            toolResult = JSON.stringify({ error: err?.message || String(err) });
+          }
+
+          messages.push({
+            role: 'tool',
+            tool_call_id: tc.id,
+            name: tc.function.name,
+            content: toolResult,
+          });
+        }
+
+        setInlineStatus('Đang tổng hợp câu trả lời...');
       }
     } catch (err: any) {
       if (err.name !== 'AbortError') {
@@ -224,6 +306,7 @@ export const InlineAISelectionBar: React.FC<InlineAISelectionBarProps> = ({ db =
       }
     } finally {
       setIsLoadingInline(false);
+      setInlineStatus(null);
       inlineAbortRef.current = null;
     }
   };
@@ -246,8 +329,8 @@ export const InlineAISelectionBar: React.FC<InlineAISelectionBarProps> = ({ db =
         display: 'flex',
         flexDirection: 'column',
         gap: 6,
-        maxWidth: 380,
-        minWidth: 260,
+        maxWidth: 420,
+        minWidth: 280,
       }}
     >
       {/* Context Breadcrumb Badge */}
@@ -267,7 +350,7 @@ export const InlineAISelectionBar: React.FC<InlineAISelectionBarProps> = ({ db =
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
-            maxWidth: 300,
+            maxWidth: 340,
             fontWeight: 500,
           }}
           title={currentPayload.hierarchyPath}
@@ -302,7 +385,7 @@ export const InlineAISelectionBar: React.FC<InlineAISelectionBarProps> = ({ db =
               type="text"
               size="small"
               icon={<BulbOutlined style={{ color: '#faad14' }} />}
-              onClick={() => handleRunInlinePrompt('Giải thích', 'Giải thích ngắn gọn ý nghĩa của đoạn văn bản trên.')}
+              onClick={() => handleRunInlinePrompt('Giải thích', 'Giải thích ngắn gọn ý nghĩa của đoạn văn bản trên dựa trên toàn bộ ngữ cảnh gốc.')}
             >
               Giải thích
             </Button>
@@ -313,7 +396,7 @@ export const InlineAISelectionBar: React.FC<InlineAISelectionBarProps> = ({ db =
               type="text"
               size="small"
               icon={<FileSearchOutlined style={{ color: '#52c41a' }} />}
-              onClick={() => handleRunInlinePrompt('Tóm tắt', 'Tóm tắt các ý chính của đoạn văn bản này thành 2-3 gạch đầu dòng.')}
+              onClick={() => handleRunInlinePrompt('Tóm tắt', 'Tóm tắt các ý chính của đoạn văn bản này thành 2-3 gạch đầu dòng rõ ràng.')}
             >
               Tóm tắt
             </Button>
@@ -373,7 +456,7 @@ export const InlineAISelectionBar: React.FC<InlineAISelectionBarProps> = ({ db =
           {(isLoadingInline || inlineResponse) && (
             <div
               style={{
-                maxHeight: 180,
+                maxHeight: 220,
                 overflowY: 'auto',
                 padding: '6px 8px',
                 borderRadius: 4,
@@ -382,7 +465,13 @@ export const InlineAISelectionBar: React.FC<InlineAISelectionBarProps> = ({ db =
                 lineHeight: 1.5,
               }}
             >
-              {isLoadingInline && !inlineResponse && <Spin size="small" style={{ marginRight: 6 }} />}
+              {inlineStatus && (
+                <div style={{ color: token.colorTextTertiary, fontSize: 11, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <Spin size="small" />
+                  <span>{inlineStatus}</span>
+                </div>
+              )}
+              {isLoadingInline && !inlineResponse && !inlineStatus && <Spin size="small" style={{ marginRight: 6 }} />}
               <Typography.Text style={{ whiteSpace: 'pre-wrap' }}>{inlineResponse}</Typography.Text>
             </div>
           )}

@@ -1,5 +1,10 @@
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import type { Task, Project, Note } from '../types/models';
+import {
+  serializeTaskContext,
+  serializeProjectContext,
+  serializeDocumentContext,
+} from '../services/ai/contextGrounding';
 
 export type AIContextEntityType = 'doc' | 'note' | 'task' | 'project' | 'unknown';
 
@@ -9,7 +14,8 @@ export interface ResolvedHierarchyContext {
   targetTitle?: string | undefined;
   parentTask?: { id: string; name: string } | undefined;
   parentProject?: { id: string; name: string } | undefined;
-  hierarchyPath: string; // e.g., 'Project: "App" > Task: "Auth" > Document: "Spec"'
+  hierarchyPath: string; // e.g., 'Dự án "App" > Tác vụ "Auth" > Tài liệu "Spec"'
+  fullContextText?: string | undefined; // Full markdown / XML serialization of the source entities
 }
 
 export interface SelectionContextPayload extends ResolvedHierarchyContext {
@@ -53,7 +59,7 @@ export function getDomContextFromNode(node: Node | null): { entityType: AIContex
 }
 
 /**
- * Resolves full hierarchy information for an entity from IndexedDB.
+ * Resolves full hierarchy information and eager context data for an entity from IndexedDB.
  */
 export async function resolveEntityHierarchy(
   entityType: AIContextEntityType,
@@ -74,6 +80,11 @@ export async function resolveEntityHierarchy(
 
       let parentTask: { id: string; name: string } | undefined = undefined;
       let parentProject: { id: string; name: string } | undefined = undefined;
+      const contextBlocks: string[] = [];
+
+      if (note) {
+        contextBlocks.push(serializeDocumentContext(note));
+      }
 
       // Check explicit task relation
       const taskId = note?.entityType === 'task' ? note.entityId : undefined;
@@ -81,10 +92,13 @@ export async function resolveEntityHierarchy(
         const task: Task | undefined = await db.tasks?.get(taskId);
         if (task) {
           parentTask = { id: task.id, name: task.name };
+          contextBlocks.push(serializeTaskContext(task));
+
           if (task.projectId) {
             const project: Project | undefined = await db.projects?.get(task.projectId);
             if (project) {
               parentProject = { id: project.id, name: project.name };
+              contextBlocks.push(serializeProjectContext(project));
             }
           }
         }
@@ -97,6 +111,7 @@ export async function resolveEntityHierarchy(
           const project: Project | undefined = await db.projects?.get(projectId);
           if (project) {
             parentProject = { id: project.id, name: project.name };
+            contextBlocks.push(serializeProjectContext(project));
           }
         }
       }
@@ -114,6 +129,7 @@ export async function resolveEntityHierarchy(
         parentTask,
         parentProject,
         hierarchyPath: parts.join(' > '),
+        fullContextText: contextBlocks.join('\n\n'),
       };
     }
 
@@ -121,11 +137,17 @@ export async function resolveEntityHierarchy(
       const task: Task | undefined = await db.tasks?.get(entityId);
       const title = task?.name || 'Tác vụ không tên';
       let parentProject: { id: string; name: string } | undefined = undefined;
+      const contextBlocks: string[] = [];
+
+      if (task) {
+        contextBlocks.push(serializeTaskContext(task));
+      }
 
       if (task?.projectId) {
         const project: Project | undefined = await db.projects?.get(task.projectId);
         if (project) {
           parentProject = { id: project.id, name: project.name };
+          contextBlocks.push(serializeProjectContext(project));
         }
       }
 
@@ -139,18 +161,25 @@ export async function resolveEntityHierarchy(
         targetTitle: title,
         parentProject,
         hierarchyPath: parts.join(' > '),
+        fullContextText: contextBlocks.join('\n\n'),
       };
     }
 
     if (entityType === 'project') {
       const project: Project | undefined = await db.projects?.get(entityId);
       const title = project?.name || 'Dự án không tên';
+      const contextBlocks: string[] = [];
+
+      if (project) {
+        contextBlocks.push(serializeProjectContext(project));
+      }
 
       return {
         targetType: 'project',
         targetId: entityId,
         targetTitle: title,
         hierarchyPath: `Dự án "${title}"`,
+        fullContextText: contextBlocks.join('\n\n'),
       };
     }
   } catch (err) {
