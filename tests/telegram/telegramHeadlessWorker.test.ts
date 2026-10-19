@@ -112,7 +112,8 @@ describe('Telegram Headless Worker', () => {
     );
 
     expect(mockSendReply).toHaveBeenCalledTimes(1);
-    expect(replies[0]).toContain('Chưa được cấp quyền truy cập');
+    expect(replies[0]).toContain('Chưa được phân quyền truy cập');
+    expect(replies[0]).toContain('@quan_tr96');
     expect(replies[0]).toContain('unknown_999');
     expect(mockSendAction).not.toHaveBeenCalled();
   });

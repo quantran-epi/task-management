@@ -153,7 +153,7 @@ export async function processTelegramInboundMessage(
 
   if (!quota.allowed) {
     if (quota.reason === 'not_whitelisted') {
-      const msg = `⚠️ **Chưa được cấp quyền truy cập**\n\nXin chào ${from_name}, tài khoản Telegram của bạn chưa nằm trong danh sách được phép sử dụng TaskMate AI Bot.\n\n🆔 **Chat ID của bạn:** \`${chat_id}\`\n\nVui lòng cung cấp Chat ID này cho quản trị viên TaskMate để được thêm vào Whitelist.`;
+      const msg = `⚠️ **Chưa được phân quyền truy cập**\n\nXin chào ${from_name}, bạn chưa được phân quyền sử dụng TaskMate AI Bot.\n\n🆔 **Chat ID của bạn:** \`${chat_id}\`\n\nVui lòng cung cấp ID của bạn cho admin @quan_tr96 để được phân quyền.`;
       await sendReply(botToken, chat_id, msg, message_id);
       await logTelegramSession(
         {
