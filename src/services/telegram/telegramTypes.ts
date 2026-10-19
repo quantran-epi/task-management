@@ -26,11 +26,11 @@ export interface TelegramWhitelistUser {
 export interface TelegramSessionLog {
   id: string; // UUID
   chatId: string;
-  userName?: string;
+  userName?: string | undefined;
   userMessage: string;
   aiResponse: string;
   dataScopeUsed: TelegramDataScope;
-  tokenCount?: number;
+  tokenCount?: number | undefined;
   createdAt: string; // ISO 8601
 }
 

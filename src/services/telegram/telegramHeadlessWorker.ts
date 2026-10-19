@@ -5,13 +5,13 @@ import {
   saveTelegramSettings,
   checkAndConsumeQuota,
   logTelegramSession,
-  getWhitelistUser,
 } from './telegramSettingsService';
 import type {
   TelegramInboundEvent,
   TelegramConflictEvent,
   TelegramDataScope,
 } from './telegramTypes';
+import type { ChatCompletionMessage } from '../ai/types';
 import { isTauriApp } from '../../utils/timerPopout';
 import { getNineRouterConfig, getNineRouterApiKey } from '../ai/nineRouterTokenService';
 import { streamChatEvents } from '../ai/nineRouterClient';
@@ -51,7 +51,7 @@ export function splitTelegramMessage(text: string, maxLen = TELEGRAM_MAX_MESSAGE
 
 export async function resolveScopedContext(
   scope: TelegramDataScope,
-  query: string,
+  _query: string,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<string> {
   const parts: string[] = [];
@@ -194,7 +194,7 @@ export async function processTelegramInboundMessage(
     context ? `\n\n--- LOCAL TASKMATE CONTEXT (${dataScope.toUpperCase()}) ---\n${context}\n------------------------------------------` : '',
   ].join('\n');
 
-  const messages = [
+  const messages: ChatCompletionMessage[] = [
     { role: 'system', content: systemPrompt },
     { role: 'user', content: text },
   ];
@@ -217,8 +217,8 @@ export async function processTelegramInboundMessage(
       if (chunk.type === 'text') {
         fullAiResponse += chunk.delta;
       }
-      if (chunk.type === 'usage' && chunk.usage?.total_tokens) {
-        tokenCount = chunk.usage.total_tokens;
+      if (chunk.type === 'usage' && chunk.usage?.totalTokens) {
+        tokenCount = chunk.usage.totalTokens;
       }
     }
   } catch (aiErr: any) {

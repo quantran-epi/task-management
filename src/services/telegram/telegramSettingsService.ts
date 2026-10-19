@@ -3,8 +3,6 @@ import type {
   TelegramSettingsRecord,
   TelegramWhitelistUser,
   TelegramSessionLog,
-  TelegramDataScope,
-  TelegramUserStatus,
 } from './telegramTypes';
 import { getTodayDateString } from '../../utils/date';
 import { generateId } from '../../utils/uuid';

@@ -4,7 +4,6 @@ import {
   splitTelegramMessage,
   resolveScopedContext,
   processTelegramInboundMessage,
-  TELEGRAM_MAX_MESSAGE_LENGTH,
 } from '../../src/services/telegram/telegramHeadlessWorker';
 import {
   upsertWhitelistUser,
@@ -56,6 +55,7 @@ describe('Telegram Headless Worker', () => {
       status: 'Open',
       priority: 'High',
       progress: 50,
+      estimateMinutes: 120,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
@@ -66,6 +66,7 @@ describe('Telegram Headless Worker', () => {
       body: 'Long polling with CancellationToken',
       type: 'quick_note',
       tags: [],
+      isPinned: false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });

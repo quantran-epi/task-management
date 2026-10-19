@@ -9,6 +9,7 @@ import {
   FileTextOutlined,
   SettingOutlined,
   RobotOutlined,
+  SendOutlined,
 } from '@ant-design/icons';
 import type { AppRoute } from '../../types/navigation';
 import { useGhostDevSessions } from '../../hooks/useGhostDevSessions';
@@ -75,6 +76,11 @@ export const Navigation: React.FC<NavigationProps> = ({ currentRoute, onNavigate
       key: 'notes',
       icon: <FileTextOutlined style={{ fontSize: 16 }} />,
       label: 'Ghi chú',
+    },
+    {
+      key: 'telegram',
+      icon: <SendOutlined style={{ fontSize: 16 }} />,
+      label: 'Telegram Bot',
     },
     {
       key: 'settings',

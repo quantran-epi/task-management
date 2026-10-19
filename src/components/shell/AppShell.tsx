@@ -29,6 +29,7 @@ import { useDesktopNotification } from '../../hooks/useDesktopNotification';
 import { useTimerAlertMonitor } from '../../hooks/useTimerAlertMonitor';
 import { useLocalSqlitePersistence } from '../../hooks/useLocalSqlitePersistence';
 import { useGitHubAutoSync } from '../../hooks/useGitHubAutoSync';
+import { useTelegramHeadlessWorker } from '../../services/telegram/telegramHeadlessWorker';
 import { GitHubSyncStatusDot } from './GitHubSyncStatusDot';
 import { ActiveTimerWidget } from '../timer/ActiveTimerWidget';
 import { NotificationBell } from '../notifications/NotificationBell';
@@ -122,6 +123,9 @@ const AppShellInner: React.FC<AppShellProps> = ({
 
   // Scheduled dirty-only GitHub auto sync
   useGitHubAutoSync();
+
+  // Headless Telegram AI Gateway background listener
+  useTelegramHeadlessWorker();
 
   // Notification UI & Inspection State (D-02, D-03, D-12)
   const [notificationDrawerOpen, setNotificationDrawerOpen] = useState(false);
