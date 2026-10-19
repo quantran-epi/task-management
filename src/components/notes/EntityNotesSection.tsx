@@ -156,6 +156,8 @@ export const EntityNotesSection: React.FC<EntityNotesSectionProps> = ({
               <Card
                 key={note.id}
                 size="small"
+                data-ai-context-type="note"
+                data-ai-context-id={note.id}
                 style={{
                   borderLeft: note.isPinned ? '3px solid #1677ff' : undefined,
                   background: note.isPinned ? '#f0f7ff' : '#fff',

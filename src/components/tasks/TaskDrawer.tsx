@@ -930,7 +930,13 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
         </div>
       }
     >
-      <Tabs defaultActiveKey="details" items={tabItems} />
+      <div
+        data-ai-context-type="task"
+        data-ai-context-id={currentTask?.id || taskId || ''}
+        style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+      >
+        <Tabs defaultActiveKey="details" items={tabItems} />
+      </div>
 
       <QuickPreviewDrawer
         docId={previewDocId}

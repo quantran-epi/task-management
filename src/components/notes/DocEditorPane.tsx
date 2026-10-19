@@ -532,6 +532,8 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
     <div
       ref={containerRef}
       className={`doc-editor-pane ${isFullscreen ? 'fullscreen-mode' : ''}`}
+      data-ai-context-type="doc"
+      data-ai-context-id={doc.id}
       style={{
         flex: 1,
         minWidth: 0,

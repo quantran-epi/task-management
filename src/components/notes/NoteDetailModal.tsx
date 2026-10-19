@@ -107,7 +107,11 @@ export const NoteDetailModal: React.FC<NoteDetailModalProps> = ({
       ].filter(Boolean)}
     >
       {note && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div
+          data-ai-context-type="note"
+          data-ai-context-id={note.id}
+          style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+        >
           <div>
             {note.entityType ? (
               <Tag color="purple">{getEntityDisplayText()}</Tag>

@@ -228,7 +228,11 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({
         </Button>,
       ].filter(Boolean)}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 12 }}>
+      <div
+        data-ai-context-type="project"
+        data-ai-context-id={project.id}
+        style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 12 }}
+      >
         {/* Progress & Quick stats */}
         <div style={{ background: '#fafafa', padding: 12, borderRadius: 6 }}>
           <Space direction="vertical" style={{ width: '100%' }}>

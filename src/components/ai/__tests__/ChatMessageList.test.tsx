@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ChatMessageList } from '../ChatMessageList';
@@ -42,7 +41,9 @@ describe('ChatMessageList pendingConfirmation rendering', () => {
 
     // Click Yes in modal
     const yesButtons = screen.getAllByRole('button', { name: /xác nhận thao tác/i });
-    fireEvent.click(yesButtons[yesButtons.length - 1]); // click the button in modal
+    const targetYesButton = yesButtons[yesButtons.length - 1];
+    expect(targetYesButton).toBeDefined();
+    fireEvent.click(targetYesButton!);
 
     expect(onConfirmAction).toHaveBeenCalledWith(true);
   });

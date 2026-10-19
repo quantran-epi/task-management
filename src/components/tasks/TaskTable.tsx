@@ -979,6 +979,8 @@ export const TaskTable: React.FC<TaskTableProps> = ({
           index === highlightedIndex ? 'ant-table-row-selected keyboard-active-row' : ''
         }
         onRow={(record) => ({
+          'data-ai-context-type': 'task',
+          'data-ai-context-id': record.id,
           onContextMenu: (e) => {
             e.preventDefault();
             setContextMenu({

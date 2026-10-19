@@ -42,6 +42,7 @@ import { NoteEditor } from '../notes/NoteEditor';
 import { CommandPaletteModal } from '../palette/CommandPaletteModal';
 import { DailyReviewModal } from '../dailyReview/DailyReviewModal';
 import { AIChatDrawer, DEFAULT_AI_CHAT_WIDTH, type ActiveScope } from '../ai/AIChatDrawer';
+import { InlineAISelectionBar } from '../ai/InlineAISelectionBar';
 import { useGitHubAuth } from '../../context/GitHubAuthContext';
 import { executeGitHubBackupPush } from '../../services/github/githubSyncService';
 import { useGlobalShortcuts } from '../../hooks/useGlobalShortcuts';
@@ -855,6 +856,8 @@ const AppShellInner: React.FC<AppShellProps> = ({
         isMobile={isMobile}
         db={db}
       />
+
+      <InlineAISelectionBar db={db} />
 
       <UpgradeModal />
       <AriaLiveRegion />

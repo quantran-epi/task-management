@@ -401,6 +401,14 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
   const [externalInputValue, setExternalInputValue] = useState<string | null>(null);
 
+  // Consume pendingPrompt from AIChatContext when drawer opens or prompt updates
+  useEffect(() => {
+    if (open && pendingPrompt) {
+      setExternalInputValue(pendingPrompt);
+      clearPendingPrompt();
+    }
+  }, [open, pendingPrompt, clearPendingPrompt]);
+
   // Auto-approve mutation toggle (bypasses confirmation modal if explicitly enabled by user)
   const [autoApproveMutations, setAutoApproveMutations] = useState<boolean>(() => {
     try {
