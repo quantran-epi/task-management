@@ -37,6 +37,7 @@ Progress: [██████████] 100%
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261019-fsm | add fullscreen popup modal for long message input in AI chat drawer | 2026-10-19 | — | complete | [261019-fsm-fullscreen-ai-chat-input](./quick/261019-fsm-fullscreen-ai-chat-input/) |
 | 261018-d7u | fix duplicate AI chat response in UI and history | 2026-10-18 | — | complete | [261018-d7u-fix-ai-chat-duplicate-response](./quick/261018-d7u-fix-ai-chat-duplicate-response/) |
 | 261018-jrd | add AI briefing and debriefing insights to header summary modal | 2026-10-18 | 4b5c951 | complete | [261018-jrd-add-ai-briefing-and-debriefing-insights-](./quick/261018-jrd-add-ai-briefing-and-debriefing-insights-/) |
 | 261018-iea | add toggle for search scope (all vs active folder) in doc folder tree | 2026-10-18 | 09ad259 | complete | [261018-iea-add-toggle-for-search-scope-in-doc-folde](./quick/261018-iea-add-toggle-for-search-scope-in-doc-folde/) |

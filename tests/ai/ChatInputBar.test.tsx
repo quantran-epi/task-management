@@ -180,6 +180,48 @@ describe('ChatInputBar - Mentions & Command Palette', () => {
       expect(handleAttach).toHaveBeenCalledWith('/Users/admin/notes.txt');
     });
   });
+
+  it('opens fullscreen modal on expand button click, syncs draft, and allows send directly', async () => {
+    const handleSubmit = vi.fn();
+    render(<ChatInputBar onSubmit={handleSubmit} db={db} />);
+
+    const textarea = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
+    fireEvent.change(textarea, { target: { value: 'Prompt dài cần chỉnh sửa kỹ' } });
+
+    const expandBtn = screen.getByLabelText('Mở rộng soạn thảo');
+    expect(expandBtn).toBeInTheDocument();
+    fireEvent.click(expandBtn);
+
+    // Modal should be opened
+    const modalTextarea = screen.getByLabelText('Soạn thảo tin nhắn mở rộng');
+    expect(modalTextarea).toBeInTheDocument();
+    expect(modalTextarea).toHaveValue('Prompt dài cần chỉnh sửa kỹ');
+
+    // Edit in modal
+    fireEvent.change(modalTextarea, { target: { value: 'Prompt dài đã được bổ sung thêm chi tiết' } });
+
+    // Send from modal directly
+    const sendBtn = screen.getByRole('button', { name: /Gửi ngay/i });
+    fireEvent.click(sendBtn);
+
+    expect(handleSubmit).toHaveBeenCalledWith('Prompt dài đã được bổ sung thêm chi tiết');
+  });
+
+  it('applies text back to input when clicking Xong in fullscreen modal', async () => {
+    render(<ChatInputBar onSubmit={vi.fn()} db={db} />);
+
+    const expandBtn = screen.getByLabelText('Mở rộng soạn thảo');
+    fireEvent.click(expandBtn);
+
+    const modalTextarea = screen.getByLabelText('Soạn thảo tin nhắn mở rộng');
+    fireEvent.change(modalTextarea, { target: { value: 'Soạn thảo xong đóng lại' } });
+
+    const applyBtn = screen.getByRole('button', { name: /Xong \(Lưu vào ô chat\)/i });
+    fireEvent.click(applyBtn);
+
+    const textarea = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
+    expect(textarea).toHaveValue('Soạn thảo xong đóng lại');
+  });
 });
 
 describe('extractMentionedEntityIds', () => {

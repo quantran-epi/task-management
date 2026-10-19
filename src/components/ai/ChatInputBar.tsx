@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Mentions, Button, Tooltip, Tag, theme } from 'antd';
+import { Mentions, Button, Tooltip, Tag, theme, Modal, Input } from 'antd';
 import type { MentionsRef } from 'antd';
 import {
   SendOutlined,
@@ -13,6 +13,7 @@ import {
   QuestionCircleOutlined,
   PaperClipOutlined,
   FileTextOutlined,
+  FullscreenOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
@@ -118,6 +119,8 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
 }) => {
   const { token } = theme.useToken();
   const [value, setValue] = useState('');
+  const [isFullscreenModalOpen, setIsFullscreenModalOpen] = useState(false);
+  const [fullscreenDraft, setFullscreenDraft] = useState('');
 
   useEffect(() => {
     if (typeof externalValue === 'string') {
@@ -236,6 +239,40 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
       return;
     }
 
+    onSubmit(trimmed);
+  };
+
+  const handleOpenFullscreen = () => {
+    setFullscreenDraft(value);
+    setIsFullscreenModalOpen(true);
+  };
+
+  const handleApplyFullscreen = () => {
+    setValue(fullscreenDraft);
+    setIsFullscreenModalOpen(false);
+    setTimeout(() => {
+      mentionsRef.current?.focus();
+    }, 50);
+  };
+
+  const handleSendFromFullscreen = () => {
+    const trimmed = fullscreenDraft.trim();
+    if (!trimmed) return;
+    clearInput();
+    setIsFullscreenModalOpen(false);
+
+    if (trimmed === '/clear') {
+      onClear?.();
+      return;
+    }
+    if (trimmed === '/clear-all') {
+      onClearAll?.();
+      return;
+    }
+    if (trimmed === '/file') {
+      handlePickFile();
+      return;
+    }
     onSubmit(trimmed);
   };
 
@@ -708,6 +745,16 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
         />
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+        <Tooltip title="Mở rộng soạn thảo toàn màn hình">
+          <Button
+            type="text"
+            icon={<FullscreenOutlined />}
+            onClick={handleOpenFullscreen}
+            disabled={disabled || isStreaming}
+            aria-label="Mở rộng soạn thảo"
+            style={{ height: 32, width: 32, padding: 0 }}
+          />
+        </Tooltip>
         <Tooltip title="Tham chiếu tập tin cục bộ">
           <Button
             type="text"
@@ -746,6 +793,73 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
           </Tooltip>
         )}
       </div>
+
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <FullscreenOutlined style={{ color: token.colorPrimary }} />
+            <span>Soạn thảo tin nhắn AI toàn màn hình</span>
+          </div>
+        }
+        open={isFullscreenModalOpen}
+        onCancel={() => setIsFullscreenModalOpen(false)}
+        width="80vw"
+        style={{ top: 32, maxWidth: 1200 }}
+        styles={{
+          body: {
+            padding: '16px 0 8px 0',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 12,
+          },
+        }}
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 12, color: token.colorTextSecondary }}>
+              Mẹo: Nhấn <b>Cmd + Enter</b> (hoặc <b>Ctrl + Enter</b>) để gửi trực tiếp.
+            </span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button onClick={() => setIsFullscreenModalOpen(false)}>
+                Hủy
+              </Button>
+              <Button onClick={handleApplyFullscreen}>
+                Xong (Lưu vào ô chat)
+              </Button>
+              <Button
+                type="primary"
+                icon={<SendOutlined />}
+                onClick={handleSendFromFullscreen}
+                disabled={!fullscreenDraft.trim()}
+              >
+                Gửi ngay
+              </Button>
+            </div>
+          </div>
+        }
+        destroyOnClose={false}
+      >
+        <Input.TextArea
+          autoFocus
+          value={fullscreenDraft}
+          onChange={(e) => setFullscreenDraft(e.target.value)}
+          placeholder={placeholder}
+          aria-label="Soạn thảo tin nhắn mở rộng"
+          rows={16}
+          showCount
+          onKeyDown={(e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+              e.preventDefault();
+              handleSendFromFullscreen();
+            }
+          }}
+          style={{
+            fontSize: 15,
+            lineHeight: 1.6,
+            resize: 'vertical',
+            borderRadius: 8,
+          }}
+        />
+      </Modal>
     </div>
   );
 };
