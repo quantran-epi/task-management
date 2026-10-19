@@ -89,6 +89,78 @@ export async function deleteWhitelistUser(
   await db.telegramWhitelist.delete(chatId);
 }
 
+/**
+ * Records an unauthorized incoming user as a pending user in telegramWhitelist.
+ * If user does not exist in telegramWhitelist, inserts record with status 'pending' and returns { user, isNew: true }.
+ * If user already exists (e.g. pending or blocked or active), returns { user, isNew: false }.
+ */
+export async function recordPendingTelegramUser(
+  chatId: string,
+  name?: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<{ user: TelegramWhitelistUser; isNew: boolean }> {
+  return await db.transaction('rw', db.telegramWhitelist, async () => {
+    const existing = await db.telegramWhitelist.get(chatId);
+    if (existing) {
+      return { user: existing, isNew: false };
+    }
+
+    const now = new Date().toISOString();
+    const today = getTodayDateString();
+    const newUser: TelegramWhitelistUser = {
+      chatId,
+      name: name?.trim() || `User_${chatId}`,
+      status: 'pending',
+      dataScope: 'full',
+      dailyLimit: 30,
+      usedToday: 0,
+      lastActiveDate: today,
+      maxHistoryTurns: 5,
+      overQuotaCommandsUsed: 0,
+      overQuotaAttempts: 0,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await db.telegramWhitelist.put(newUser);
+    return { user: newUser, isNew: true };
+  });
+}
+
+export async function getPendingTelegramUsers(
+  db: TaskPlannerDatabase = defaultDb
+): Promise<TelegramWhitelistUser[]> {
+  return await db.telegramWhitelist.where('status').equals('pending').toArray();
+}
+
+export async function approvePendingUser(
+  chatId: string,
+  overrides?: Partial<TelegramWhitelistUser>,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<TelegramWhitelistUser> {
+  return await upsertWhitelistUser(
+    {
+      chatId,
+      status: 'active',
+      ...overrides,
+    },
+    db
+  );
+}
+
+export async function blockPendingUser(
+  chatId: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<TelegramWhitelistUser> {
+  return await upsertWhitelistUser(
+    {
+      chatId,
+      status: 'blocked',
+    },
+    db
+  );
+}
+
 export const TELEGRAM_COMMAND_OVER_QUOTA_GRACE = 3;
 export const TELEGRAM_OVER_QUOTA_SPAM_LOG_THRESHOLD = 3;
 
@@ -116,8 +188,8 @@ export async function checkAndConsumeQuota(
 ): Promise<QuotaCheckResult> {
   return await db.transaction('rw', db.telegramWhitelist, async () => {
     const user = await db.telegramWhitelist.get(chatId);
-    if (!user) {
-      return { allowed: false, reason: 'not_whitelisted' };
+    if (!user || user.status === 'pending') {
+      return { allowed: false, reason: 'not_whitelisted', user: user ?? undefined };
     }
 
     if (user.status === 'blocked') {
@@ -208,8 +280,8 @@ export async function checkAndConsumeCommandQuota(
 ): Promise<CommandAccessResult> {
   return await db.transaction('rw', db.telegramWhitelist, async () => {
     const user = await db.telegramWhitelist.get(chatId);
-    if (!user) {
-      return { allowed: false, reason: 'not_whitelisted' };
+    if (!user || user.status === 'pending') {
+      return { allowed: false, reason: 'not_whitelisted', user: user ?? undefined };
     }
 
     if (user.status === 'blocked') {

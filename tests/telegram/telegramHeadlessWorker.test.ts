@@ -22,6 +22,11 @@ vi.mock('../../src/services/ai/nineRouterClient', () => ({
   }),
 }));
 
+const mockSendDesktopNotification = vi.fn();
+vi.mock('../../src/utils/desktopNotification', () => ({
+  sendDesktopNotification: (...args: any[]) => mockSendDesktopNotification(...args),
+}));
+
 describe('Telegram Headless Worker', () => {
   let testDb: TaskPlannerDatabase;
   const testDbName = 'TestTelegramWorkerDB';
@@ -404,7 +409,8 @@ describe('Telegram Headless Worker', () => {
     expect(logs.some((l) => l.userMessage === 'hello spam flood 4')).toBe(false);
   });
 
-  it('rejects unauthorized chat ID with approval instructions in HTML format', async () => {
+  it('rejects unauthorized chat ID with approval instructions in HTML format, saves pending user, logs session, and sends desktop notification', async () => {
+    mockSendDesktopNotification.mockClear();
     const replies: string[] = [];
     const mockSendReply = vi.fn(async (_token: string, _chatId: string, text: string) => {
       replies.push(text);
@@ -433,6 +439,83 @@ describe('Telegram Headless Worker', () => {
     expect(replies[0]).toContain('@quan_tr96');
     expect(replies[0]).toContain('<code>unknown_999</code>');
     expect(mockSendAction).not.toHaveBeenCalled();
+
+    // Verify user was recorded as pending
+    const pendingUser = await getWhitelistUser('unknown_999', testDb);
+    expect(pendingUser).toBeDefined();
+    expect(pendingUser?.status).toBe('pending');
+    expect(pendingUser?.name).toBe('Stranger');
+
+    // Verify session was logged
+    const logs = await getRecentTelegramLogs(10, testDb);
+    expect(logs.some((l) => l.chatId === 'unknown_999' && l.userMessage === 'Who are you?')).toBe(true);
+
+    // Verify desktop notification dispatched on first inbound
+    expect(mockSendDesktopNotification).toHaveBeenCalledTimes(1);
+    expect(mockSendDesktopNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: expect.stringContaining('Người dùng mới'),
+        tag: 'telegram-pending-unknown_999',
+      })
+    );
+
+    // Second message from same pending user -> notification should NOT trigger again (isNew === false)
+    mockSendDesktopNotification.mockClear();
+    await processTelegramInboundMessage(
+      {
+        update_id: 2,
+        message_id: 102,
+        chat_id: 'unknown_999',
+        from_name: 'Stranger',
+        text: 'Still waiting for access',
+        date: 1234568,
+      },
+      'test_token',
+      testDb,
+      mockSendReply,
+      mockSendAction
+    );
+    expect(mockSendDesktopNotification).not.toHaveBeenCalled();
+  });
+
+  it('records pending user, sends notification, and logs session for unauthorized /start command', async () => {
+    mockSendDesktopNotification.mockClear();
+    const replies: string[] = [];
+    const mockSendReply = vi.fn(async (_token: string, _chatId: string, text: string) => {
+      replies.push(text);
+    });
+    const mockSendAction = vi.fn(async () => {});
+
+    const event: TelegramInboundEvent = {
+      update_id: 3,
+      message_id: 103,
+      chat_id: 'unauth_slash_1',
+      from_name: 'Newcomer',
+      text: '/start',
+      date: 1234569,
+    };
+
+    await processTelegramInboundMessage(
+      event,
+      'test_token',
+      testDb,
+      mockSendReply,
+      mockSendAction
+    );
+
+    expect(mockSendReply).toHaveBeenCalledTimes(1);
+    expect(replies[0]).toContain('Chưa được phân quyền truy cập');
+
+    // Pending user recorded
+    const pending = await getWhitelistUser('unauth_slash_1', testDb);
+    expect(pending?.status).toBe('pending');
+
+    // Log recorded for /start
+    const logs = await getRecentTelegramLogs(10, testDb);
+    expect(logs.some((l) => l.chatId === 'unauth_slash_1' && l.userMessage === '/start')).toBe(true);
+
+    // Desktop notification triggered
+    expect(mockSendDesktopNotification).toHaveBeenCalledTimes(1);
   });
 
   it('processes authorized user message, strips citations, formats HTML, and logs session', async () => {

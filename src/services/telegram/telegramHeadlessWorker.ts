@@ -8,7 +8,9 @@ import {
   logTelegramSession,
   resetTelegramUserSession,
   getTelegramChatHistory,
+  recordPendingTelegramUser,
 } from './telegramSettingsService';
+import { sendDesktopNotification } from '../../utils/desktopNotification';
 import type {
   TelegramInboundEvent,
   TelegramConflictEvent,
@@ -277,26 +279,76 @@ export async function processTelegramInboundMessage(
     lowerText === '/help' ||
     lowerText === '/start';
 
+  // Helper to handle and notify unauthorized (pending) users
+  const handleUnauthorizedUser = async () => {
+    const { isNew } = await recordPendingTelegramUser(chat_id, from_name, db);
+    if (isNew) {
+      try {
+        await sendDesktopNotification({
+          title: 'Telegram Bot: Người dùng mới yêu cầu cấp quyền',
+          body: `${from_name} (Chat ID: ${chat_id}): "${text}"`,
+          tag: `telegram-pending-${chat_id}`,
+        });
+      } catch (notifErr) {
+        console.warn('Failed to send desktop notification for new pending user:', notifErr);
+      }
+    }
+  };
+
   // Step 1: Whitelist & Authorization Check
   if (isSlashCommand) {
     const cmdAccess = await checkAndConsumeCommandQuota(chat_id, db);
     if (!cmdAccess.allowed) {
       if (cmdAccess.reason === 'not_whitelisted') {
+        await handleUnauthorizedUser();
         const rawMsg = `⚠️ **Chưa được phân quyền truy cập**\n\nXin chào ${from_name}, bạn chưa được phân quyền sử dụng TaskMate AI Bot.\n\n🆔 **Chat ID của bạn:** \`${chat_id}\`\n\nVui lòng cung cấp ID của bạn cho admin @quan_tr96 để được phân quyền.`;
         const htmlMsg = markdownToTelegramHtml(rawMsg);
         await sendReply(botToken, chat_id, htmlMsg, message_id);
+        await logTelegramSession(
+          {
+            chatId: chat_id,
+            userName: from_name,
+            userMessage: text,
+            aiResponse: rawMsg,
+            dataScopeUsed: 'pure_llm',
+            tokenCount: 0,
+          },
+          db
+        );
         return;
       }
       if (cmdAccess.reason === 'blocked') {
         const rawMsg = `⛔ **Tài khoản bị tạm khoá**\n\nChat ID \`${chat_id}\` đã bị tạm ngưng quyền truy cập TaskMate AI Bot.`;
         const htmlMsg = markdownToTelegramHtml(rawMsg);
         await sendReply(botToken, chat_id, htmlMsg, message_id);
+        await logTelegramSession(
+          {
+            chatId: chat_id,
+            userName: from_name,
+            userMessage: text,
+            aiResponse: rawMsg,
+            dataScopeUsed: 'pure_llm',
+            tokenCount: 0,
+          },
+          db
+        );
         return;
       }
       if (cmdAccess.reason === 'quota_exceeded') {
         const rawMsg = `⏳ **Hết hạn mức trong ngày**\n\nBạn đã sử dụng hết hạn mức trong ngày và đã dùng hết 3 lượt lệnh (/help, /start, /reset) bổ sung. Vui lòng quay lại vào 00:00 ngày mai.`;
         const htmlMsg = markdownToTelegramHtml(rawMsg);
         await sendReply(botToken, chat_id, htmlMsg, message_id);
+        await logTelegramSession(
+          {
+            chatId: chat_id,
+            userName: from_name,
+            userMessage: text,
+            aiResponse: rawMsg,
+            dataScopeUsed: 'pure_llm',
+            tokenCount: 0,
+          },
+          db
+        );
         return;
       }
     }
@@ -380,6 +432,7 @@ export async function processTelegramInboundMessage(
 
   if (!quota.allowed) {
     if (quota.reason === 'not_whitelisted') {
+      await handleUnauthorizedUser();
       const rawMsg = `⚠️ **Chưa được phân quyền truy cập**\n\nXin chào ${from_name}, bạn chưa được phân quyền sử dụng TaskMate AI Bot.\n\n🆔 **Chat ID của bạn:** \`${chat_id}\`\n\nVui lòng cung cấp ID của bạn cho admin @quan_tr96 để được phân quyền.`;
       const htmlMsg = markdownToTelegramHtml(rawMsg);
       await sendReply(botToken, chat_id, htmlMsg, message_id);

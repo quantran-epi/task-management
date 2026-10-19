@@ -1,6 +1,6 @@
 export type TelegramDataScope = 'full' | 'knowledge_only' | 'tasks_only' | 'pure_llm';
 
-export type TelegramUserStatus = 'active' | 'blocked';
+export type TelegramUserStatus = 'active' | 'blocked' | 'pending';
 
 export interface TelegramSettingsRecord {
   id: 'default';

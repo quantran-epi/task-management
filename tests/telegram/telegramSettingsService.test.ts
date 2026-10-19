@@ -12,6 +12,10 @@ import {
   getRecentTelegramLogs,
   resetTelegramUserSession,
   getTelegramChatHistory,
+  recordPendingTelegramUser,
+  getPendingTelegramUsers,
+  approvePendingUser,
+  blockPendingUser,
 } from '../../src/services/telegram/telegramSettingsService';
 import { getTodayDateString } from '../../src/utils/date';
 
@@ -286,5 +290,51 @@ describe('Telegram Settings Service (Dexie V12)', () => {
     // When maxTurns is 0
     const history0 = await getTelegramChatHistory('user_history_1', 0, undefined, testDb);
     expect(history0).toEqual([]);
+  });
+
+  it('records pending users and handles approval and blocking', async () => {
+    // 1. First record -> isNew: true, status: 'pending'
+    const res1 = await recordPendingTelegramUser('pending_chat_1', 'John Doe', testDb);
+    expect(res1.isNew).toBe(true);
+    expect(res1.user.status).toBe('pending');
+    expect(res1.user.name).toBe('John Doe');
+
+    // 2. Second record -> isNew: false
+    const res2 = await recordPendingTelegramUser('pending_chat_1', 'John Doe', testDb);
+    expect(res2.isNew).toBe(false);
+    expect(res2.user.status).toBe('pending');
+
+    // 3. Pending users are treated as unauthorized by quota checks
+    const quotaCheck = await checkAndConsumeQuota('pending_chat_1', testDb);
+    expect(quotaCheck.allowed).toBe(false);
+    expect(quotaCheck.reason).toBe('not_whitelisted');
+
+    const cmdCheck = await checkAndConsumeCommandQuota('pending_chat_1', testDb);
+    expect(cmdCheck.allowed).toBe(false);
+    expect(cmdCheck.reason).toBe('not_whitelisted');
+
+    // 4. getPendingTelegramUsers returns all pending users
+    const pendingList = await getPendingTelegramUsers(testDb);
+    expect(pendingList).toHaveLength(1);
+    expect(pendingList[0]?.chatId).toBe('pending_chat_1');
+
+    // 5. approvePendingUser activates the user
+    const approved = await approvePendingUser('pending_chat_1', { dailyLimit: 50 }, testDb);
+    expect(approved.status).toBe('active');
+    expect(approved.dailyLimit).toBe(50);
+
+    const pendingAfterApproval = await getPendingTelegramUsers(testDb);
+    expect(pendingAfterApproval).toHaveLength(0);
+
+    const quotaAfterApproval = await checkAndConsumeQuota('pending_chat_1', testDb);
+    expect(quotaAfterApproval.allowed).toBe(true);
+
+    // 6. blockPendingUser blocks the user
+    await recordPendingTelegramUser('pending_chat_2', 'Spammer', testDb);
+    const blocked = await blockPendingUser('pending_chat_2', testDb);
+    expect(blocked.status).toBe('blocked');
+    const quotaBlocked = await checkAndConsumeQuota('pending_chat_2', testDb);
+    expect(quotaBlocked.allowed).toBe(false);
+    expect(quotaBlocked.reason).toBe('blocked');
   });
 });
