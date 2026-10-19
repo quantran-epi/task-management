@@ -278,6 +278,7 @@ describe('DocEditorPane', () => {
     vi.spyOn(aiChatContextModule, 'useAIChat').mockReturnValue({
       isOpen: false,
       openChat: openChatMock,
+      openChatWithDraft: vi.fn(),
       closeChat: vi.fn(),
       toggleChat: vi.fn(),
       activeScope: { type: 'global' },
@@ -285,6 +286,8 @@ describe('DocEditorPane', () => {
       registerActiveItem: () => () => {},
       pendingPrompt: null,
       clearPendingPrompt: vi.fn(),
+      pendingDraft: null,
+      clearPendingDraft: vi.fn(),
     });
 
     const docWithMetadata: Note = {

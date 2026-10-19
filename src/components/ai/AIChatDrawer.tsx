@@ -138,7 +138,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   isPopoutWindow = false,
 }) => {
   const { token } = theme.useToken();
-  const { pendingPrompt, clearPendingPrompt, setCustomScope } = useAIChat();
+  const { pendingPrompt, clearPendingPrompt, pendingDraft, clearPendingDraft, setCustomScope } = useAIChat();
 
   // Width management with drag-resize clamping
   const [internalWidth, setInternalWidth] = useState<number>(() => {
@@ -401,13 +401,13 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
   const [externalInputValue, setExternalInputValue] = useState<string | null>(null);
 
-  // Consume pendingPrompt from AIChatContext when drawer opens or prompt updates
+  // Consume pendingDraft from AIChatContext into input draft without auto-sending
   useEffect(() => {
-    if (open && pendingPrompt) {
-      setExternalInputValue(pendingPrompt);
-      clearPendingPrompt();
+    if (open && pendingDraft) {
+      setExternalInputValue(pendingDraft);
+      clearPendingDraft();
     }
-  }, [open, pendingPrompt, clearPendingPrompt]);
+  }, [open, pendingDraft, clearPendingDraft]);
 
   // Auto-approve mutation toggle (bypasses confirmation modal if explicitly enabled by user)
   const [autoApproveMutations, setAutoApproveMutations] = useState<boolean>(() => {

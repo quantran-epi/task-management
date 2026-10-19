@@ -10,6 +10,7 @@ export interface ActiveScope {
 export interface AIChatContextValue {
   isOpen: boolean;
   openChat: (scope?: ActiveScope, initialPrompt?: string) => void;
+  openChatWithDraft: (scope?: ActiveScope, draftText?: string) => void;
   closeChat: () => void;
   toggleChat: () => void;
   activeScope: ActiveScope;
@@ -17,6 +18,8 @@ export interface AIChatContextValue {
   registerActiveItem: (scope: ActiveScope | null) => () => void;
   pendingPrompt: string | null;
   clearPendingPrompt: () => void;
+  pendingDraft: string | null;
+  clearPendingDraft: () => void;
 }
 
 const AIChatContext = createContext<AIChatContextValue | null>(null);
@@ -44,6 +47,7 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
   // User manually selected scope (overrides registered items if set)
   const [customScope, setCustomScopeState] = useState<ActiveScope | null>(null);
   const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
+  const [pendingDraft, setPendingDraft] = useState<string | null>(null);
 
   const saveOpenState = (open: boolean) => {
     setIsOpen(open);
@@ -62,8 +66,22 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
     saveOpenState(true);
   }, []);
 
+  const openChatWithDraft = useCallback((scope?: ActiveScope, draftText?: string) => {
+    if (scope) {
+      setCustomScopeState(scope);
+    }
+    if (draftText && draftText.trim()) {
+      setPendingDraft(draftText.trim());
+    }
+    saveOpenState(true);
+  }, []);
+
   const clearPendingPrompt = useCallback(() => {
     setPendingPrompt(null);
+  }, []);
+
+  const clearPendingDraft = useCallback(() => {
+    setPendingDraft(null);
   }, []);
 
   const closeChat = useCallback(() => {
@@ -108,6 +126,7 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
   const value: AIChatContextValue = {
     isOpen,
     openChat,
+    openChatWithDraft,
     closeChat,
     toggleChat,
     activeScope,
@@ -115,6 +134,8 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
     registerActiveItem,
     pendingPrompt,
     clearPendingPrompt,
+    pendingDraft,
+    clearPendingDraft,
   };
 
   return <AIChatContext.Provider value={value}>{children}</AIChatContext.Provider>;
@@ -123,6 +144,7 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
 const defaultContextValue: AIChatContextValue = {
   isOpen: false,
   openChat: () => {},
+  openChatWithDraft: () => {},
   closeChat: () => {},
   toggleChat: () => {},
   activeScope: { type: 'global' },
@@ -130,6 +152,8 @@ const defaultContextValue: AIChatContextValue = {
   registerActiveItem: () => () => {},
   pendingPrompt: null,
   clearPendingPrompt: () => {},
+  pendingDraft: null,
+  clearPendingDraft: () => {},
 };
 
 export const useAIChat = (): AIChatContextValue => {
