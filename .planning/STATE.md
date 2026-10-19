@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 Phase: 21 (Knowledge Graph Entity Extraction & Semantic Retrieval Improvement) — COMPLETE
 Plan: 4 of 4
 Status: Phase 21 execution complete
-Last activity: 2026-10-19 -- Completed quick task 261019-qib: Implement Telegram AI Gateway with on/off controls per docs/TELEGRAM_AI_GATEWAY_PLAN.md
+Last activity: 2026-10-19 -- Completed quick task 261019-sb0: Upgrade Telegram AI Gateway with grounded retrieval, multi-turn history with per-user max turns, /reset and /help commands, and Telegram HTML formatting
 Stopped at: Completed Phase 21 (All 4 plans verified)
 
 Progress: [██████████] 100%
@@ -37,6 +37,7 @@ Progress: [██████████] 100%
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261019-sb0 | Upgrade Telegram AI Gateway with grounded retrieval, multi-turn history with per-user max turns, /reset and /help commands, and Telegram HTML formatting | 2026-10-19 | — | complete | [261019-sb0-upgrade-telegram-ai-gateway-with-grounde](./quick/261019-sb0-upgrade-telegram-ai-gateway-with-grounde/) |
 | 261019-qib | Implement Telegram AI Gateway with on/off controls per docs/TELEGRAM_AI_GATEWAY_PLAN.md | 2026-10-19 | — | complete | [261019-qib-implement-telegram-ai-gateway-with-on-of](./quick/261019-qib-implement-telegram-ai-gateway-with-on-of/) |
 | 261019-fsm | add fullscreen popup modal for long message input in AI chat drawer | 2026-10-19 | — | complete | [261019-fsm-fullscreen-ai-chat-input](./quick/261019-fsm-fullscreen-ai-chat-input/) |
 | 261018-d7u | fix duplicate AI chat response in UI and history | 2026-10-18 | — | complete | [261018-d7u-fix-ai-chat-duplicate-response](./quick/261018-d7u-fix-ai-chat-duplicate-response/) |
