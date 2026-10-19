@@ -155,18 +155,51 @@ export async function processTelegramInboundMessage(
     if (quota.reason === 'not_whitelisted') {
       const msg = `⚠️ **Chưa được cấp quyền truy cập**\n\nXin chào ${from_name}, tài khoản Telegram của bạn chưa nằm trong danh sách được phép sử dụng TaskMate AI Bot.\n\n🆔 **Chat ID của bạn:** \`${chat_id}\`\n\nVui lòng cung cấp Chat ID này cho quản trị viên TaskMate để được thêm vào Whitelist.`;
       await sendReply(botToken, chat_id, msg, message_id);
+      await logTelegramSession(
+        {
+          chatId: chat_id,
+          userName: from_name,
+          userMessage: text,
+          aiResponse: msg,
+          dataScopeUsed: 'pure_llm',
+          tokenCount: 0,
+        },
+        db
+      );
       return;
     }
 
     if (quota.reason === 'blocked') {
       const msg = `⛔ **Tài khoản bị tạm khoá**\n\nChat ID \`${chat_id}\` đã bị tạm ngưng quyền truy cập TaskMate AI Bot.`;
       await sendReply(botToken, chat_id, msg, message_id);
+      await logTelegramSession(
+        {
+          chatId: chat_id,
+          userName: from_name,
+          userMessage: text,
+          aiResponse: msg,
+          dataScopeUsed: 'pure_llm',
+          tokenCount: 0,
+        },
+        db
+      );
       return;
     }
 
     if (quota.reason === 'quota_exceeded') {
       const msg = `⏳ **Hết hạn mức trong ngày**\n\nBạn đã sử dụng hết hạn mức ${quota.dailyLimit} tin nhắn/ngày. Hạn mức sẽ được đặt lại vào 00:00 ngày mai.`;
       await sendReply(botToken, chat_id, msg, message_id);
+      await logTelegramSession(
+        {
+          chatId: chat_id,
+          userName: from_name,
+          userMessage: text,
+          aiResponse: msg,
+          dataScopeUsed: 'pure_llm',
+          tokenCount: 0,
+        },
+        db
+      );
       return;
     }
   }
