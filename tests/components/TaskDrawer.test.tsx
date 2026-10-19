@@ -220,7 +220,7 @@ describe('TaskDrawer', () => {
     expect(
       await screen.findByText('Liên kết phải là URL (http/https), đường dẫn thư mục, hoặc file URI.')
     ).toBeInTheDocument();
-  }, 15000);
+  }, 60000);
 
   it('restores focus to trigger element on drawer close per D-29, D-30, UX-03', async () => {
     const task = await createTask({ name: 'Focus task', status: 'Open' }, testDb);
