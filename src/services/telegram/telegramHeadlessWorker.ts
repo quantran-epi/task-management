@@ -18,6 +18,35 @@ import { streamChatEvents } from '../ai/nineRouterClient';
 
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4000; // Telegram hard limit is 4096, buffer to 4000
 
+export async function sendTelegramDirectMessage(
+  token: string,
+  chatId: string,
+  text: string,
+  replyToMessageId?: number
+): Promise<void> {
+  if (isTauriApp()) {
+    const api = await import('@tauri-apps/api/core');
+    await api.invoke('send_telegram_reply', {
+      token,
+      chatId,
+      text,
+      replyToMessageId,
+    });
+  } else {
+    // Fallback for non-tauri or testing
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        reply_to_message_id: replyToMessageId,
+        parse_mode: 'Markdown',
+      }),
+    });
+  }
+}
+
 export function splitTelegramMessage(text: string, maxLen = TELEGRAM_MAX_MESSAGE_LENGTH): string[] {
   if (text.length <= maxLen) return [text];
 

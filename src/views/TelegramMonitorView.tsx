@@ -39,6 +39,7 @@ import {
   upsertWhitelistUser,
   deleteWhitelistUser,
 } from '../services/telegram/telegramSettingsService';
+import { sendTelegramDirectMessage } from '../services/telegram/telegramHeadlessWorker';
 import type {
   TelegramWhitelistUser,
   TelegramSessionLog,
@@ -215,6 +216,7 @@ export const TelegramMonitorView: React.FC = () => {
   const handleSaveUser = async () => {
     try {
       const values = await userForm.validateFields();
+      const isNewUser = !editingUser;
       await upsertWhitelistUser({
         chatId: values.chatId.trim(),
         name: values.name.trim(),
@@ -222,7 +224,18 @@ export const TelegramMonitorView: React.FC = () => {
         dataScope: values.dataScope,
         dailyLimit: values.dailyLimit,
       });
-      message.success(editingUser ? 'Đã cập nhật người dùng' : 'Đã thêm người dùng vào Whitelist');
+
+      // Send telegram notification to user on approval/activation
+      if (values.status === 'active' && botToken.trim()) {
+        try {
+          const notifyMsg = `🎉 **Tài khoản của bạn đã được phê duyệt!**\n\nXin chào ${values.name.trim()}, quản trị viên đã kích hoạt quyền sử dụng TaskMate AI Bot cho bạn.\n\n📊 **Hạn mức:** ${values.dailyLimit} tin nhắn/ngày\n🔍 **Phạm vi dữ liệu:** \`${values.dataScope}\`\n\nBạn có thể bắt đầu đặt câu hỏi ngay bây giờ!`;
+          await sendTelegramDirectMessage(botToken.trim(), values.chatId.trim(), notifyMsg);
+        } catch (sendErr) {
+          console.warn('Could not send approval notice to Telegram:', sendErr);
+        }
+      }
+
+      message.success(isNewUser ? 'Đã thêm và thông báo người dùng qua Telegram' : 'Đã cập nhật người dùng');
       setUserModalOpen(false);
       userForm.resetFields();
     } catch (err) {

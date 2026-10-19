@@ -294,6 +294,7 @@ pub async fn get_telegram_status(
 struct SendMessageBody {
     chat_id: String,
     text: String,
+    parse_mode: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     reply_to_message_id: Option<i64>,
 }
@@ -311,27 +312,46 @@ pub async fn send_telegram_reply(
     }
 
     let url = format!("https://api.telegram.org/bot{}/sendMessage", clean_token);
-    let body = SendMessageBody {
-        chat_id,
-        text,
-        reply_to_message_id,
-    };
-
     let client = Client::builder()
         .timeout(Duration::from_secs(15))
         .build()
         .map_err(|e| e.to_string())?;
 
+    // Try HTML parse_mode first (convert standard markdown to safe HTML),
+    // or try Markdown first then fallback to plain text if Telegram Markdown parsing fails.
+    let body_markdown = SendMessageBody {
+        chat_id: chat_id.clone(),
+        text: text.clone(),
+        parse_mode: "Markdown".to_string(),
+        reply_to_message_id,
+    };
+
     let res = client
         .post(&url)
-        .json(&body)
+        .json(&body_markdown)
         .send()
         .await
         .map_err(|e| format!("Network error sending reply: {}", e))?;
 
     if !res.status().is_success() {
-        let err_text = res.text().await.unwrap_or_default();
-        return Err(format!("Telegram Bot API error: {}", err_text));
+        // Fallback: If Markdown parsing failed (e.g. unclosed tags/asterisks), send as plain text without parse_mode
+        let body_plain = serde_json::json!({
+            "chat_id": chat_id,
+            "text": text,
+            "reply_to_message_id": reply_to_message_id,
+        });
+
+        let fallback_res = client
+            .post(&url)
+            .json(&body_plain)
+            .send()
+            .await
+            .map_err(|e| format!("Network error sending fallback reply: {}", e))?;
+
+        if !fallback_res.status().is_success() {
+            let err_text = fallback_res.text().await.unwrap_or_default();
+            return Err(format!("Telegram Bot API error: {}", err_text));
+        }
     }
 
     Ok(())
