@@ -14,6 +14,7 @@ import {
 import type { AppRoute } from '../../types/navigation';
 import { useGhostDevSessions } from '../../hooks/useGhostDevSessions';
 import { useGhostDevNotifications } from '../../hooks/useGhostDevNotifications';
+import { useTelegramPendingUsers } from '../../hooks/useTelegramPendingUsers';
 
 export interface NavigationProps {
   currentRoute: AppRoute;
@@ -25,6 +26,7 @@ type MenuItem = Required<MenuProps>['items'][number];
 export const Navigation: React.FC<NavigationProps> = ({ currentRoute, onNavigate }) => {
   const { sessions } = useGhostDevSessions();
   useGhostDevNotifications(sessions);
+  const { pendingCount } = useTelegramPendingUsers();
 
   const runningCount = sessions.filter(
     (s) => s.status === 'running' || s.status === 'awaiting_approval'
@@ -80,7 +82,18 @@ export const Navigation: React.FC<NavigationProps> = ({ currentRoute, onNavigate
     {
       key: 'telegram',
       icon: <SendOutlined style={{ fontSize: 16 }} />,
-      label: 'Telegram Bot',
+      label: (
+        <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+          <span>Telegram Bot</span>
+          {pendingCount > 0 && (
+            <Badge
+              count={pendingCount}
+              size="small"
+              style={{ backgroundColor: '#ef4444' }}
+            />
+          )}
+        </span>
+      ),
     },
     {
       key: 'settings',

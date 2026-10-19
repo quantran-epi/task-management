@@ -42,6 +42,7 @@ import {
   upsertWhitelistUser,
   deleteWhitelistUser,
 } from '../services/telegram/telegramSettingsService';
+import { useTelegramPendingUsers } from '../hooks/useTelegramPendingUsers';
 import {
   sendTelegramDirectMessage,
   broadcastTelegramMessage,
@@ -87,7 +88,8 @@ export const TelegramMonitorView: React.FC = () => {
   const [messageText, setMessageText] = useState<string>('');
   const [isSending, setIsSending] = useState<boolean>(false);
 
-  // Live queries from Dexie
+  // Live queries and hooks
+  const { pendingUsers, pendingCount, quickApprove, blockUser, dismissUser } = useTelegramPendingUsers();
   const settingsRecord = useLiveQuery(() => db.telegramSettings.get('default'));
   const whitelist = useLiveQuery(() => db.telegramWhitelist.toArray(), []) || [];
   const logs =
@@ -95,6 +97,10 @@ export const TelegramMonitorView: React.FC = () => {
       () => db.telegramSessionLogs.orderBy('createdAt').reverse().limit(100).toArray(),
       []
     ) || [];
+
+  const activeUsersCount = useMemo(() => {
+    return whitelist.filter((u) => u.status === 'active').length;
+  }, [whitelist]);
 
   // Sync settings when loaded
   useEffect(() => {
@@ -349,24 +355,6 @@ export const TelegramMonitorView: React.FC = () => {
       return matchSearch && matchChat;
     });
   }, [logs, logSearch, logChatFilter]);
-
-  // Pending unrecognized users from logs who aren't whitelisted
-  const pendingUsers = useMemo(() => {
-    const whitelistedSet = new Set(whitelist.map((w) => w.chatId));
-    const map = new Map<string, { chatId: string; name: string | undefined; lastSeen: string; message: string }>();
-
-    for (const log of logs) {
-      if (!whitelistedSet.has(log.chatId) && !map.has(log.chatId)) {
-        map.set(log.chatId, {
-          chatId: log.chatId,
-          name: log.userName,
-          lastSeen: log.createdAt,
-          message: log.userMessage,
-        });
-      }
-    }
-    return Array.from(map.values());
-  }, [logs, whitelist]);
 
   const renderStatusBadge = () => {
     if (conflictInfo) {
@@ -673,8 +661,12 @@ export const TelegramMonitorView: React.FC = () => {
             {
               key: 'whitelist',
               label: (
-                <span>
-                  <SafetyCertificateOutlined /> Whitelist & Phân quyền ({whitelist.length})
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <SafetyCertificateOutlined />
+                  <span>Whitelist & Phân quyền ({activeUsersCount})</span>
+                  {pendingCount > 0 && (
+                    <Badge count={pendingCount} size="small" style={{ backgroundColor: '#ef4444' }} />
+                  )}
                 </span>
               ),
               children: (
@@ -710,50 +702,122 @@ export const TelegramMonitorView: React.FC = () => {
                   </div>
 
                   {pendingUsers.length > 0 && (
-                    <Alert
-                      style={{ marginBottom: 20 }}
-                      type="info"
-                      showIcon
-                      message={`Hàng chờ phê duyệt (${pendingUsers.length} người gửi lạ)`}
-                      description={
-                        <div style={{ marginTop: 8 }}>
-                          {pendingUsers.map((p) => (
-                            <div
-                              key={p.chatId}
-                              style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                padding: '4px 0',
-                                borderBottom: '1px dashed #e2e8f0',
-                              }}
-                            >
-                              <span>
-                                <strong>{p.name || 'User'}</strong> (Chat ID: <code>{p.chatId}</code>) — tin nhắn gần nhất: "{p.message}"
-                              </span>
+                    <Card
+                      style={{
+                        marginBottom: 20,
+                        borderColor: '#fed7aa',
+                        backgroundColor: '#fffbeb',
+                        borderRadius: 8,
+                      }}
+                      title={
+                        <Space>
+                          <UserOutlined style={{ color: '#d97706' }} />
+                          <strong style={{ color: '#b45309' }}>
+                            Hàng chờ phê duyệt ({pendingCount} người dùng mới)
+                          </strong>
+                        </Space>
+                      }
+                      size="small"
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {pendingUsers.map((p) => (
+                          <div
+                            key={p.chatId}
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              padding: '10px 12px',
+                              background: '#ffffff',
+                              borderRadius: 6,
+                              border: '1px solid #fde68a',
+                              flexWrap: 'wrap',
+                              gap: 8,
+                            }}
+                          >
+                            <Space orientation="vertical" size={2}>
+                              <Space>
+                                <strong style={{ fontSize: 14 }}>{p.name || 'Người dùng mới'}</strong>
+                                <Tag color="warning">Pending</Tag>
+                                <Text copyable style={{ fontSize: 12, color: '#4f46e5' }}>
+                                  {p.chatId}
+                                </Text>
+                              </Space>
+                              <Text type="secondary" style={{ fontSize: 12 }}>
+                                Đăng ký lúc: {new Date(p.createdAt).toLocaleString()}
+                              </Text>
+                            </Space>
+
+                            <Space wrap>
                               <Button
                                 size="small"
                                 type="primary"
+                                style={{ backgroundColor: '#10b981', borderColor: '#10b981' }}
+                                icon={<CheckCircleOutlined />}
+                                onClick={async () => {
+                                  try {
+                                    await quickApprove(p.chatId, botToken);
+                                    message.success(`Đã duyệt nhanh người dùng ${p.name || p.chatId}`);
+                                  } catch (err: any) {
+                                    message.error('Lỗi khi phê duyệt: ' + (err?.message || String(err)));
+                                  }
+                                }}
+                              >
+                                Phê duyệt nhanh
+                              </Button>
+
+                              <Button
+                                size="small"
+                                icon={<EditOutlined />}
                                 onClick={() => {
-                                  setEditingUser(null);
+                                  setEditingUser(p);
                                   userForm.setFieldsValue({
                                     chatId: p.chatId,
                                     name: p.name || `User_${p.chatId}`,
                                     status: 'active',
-                                    dataScope: defaultScope,
-                                    dailyLimit: 30,
-                                    maxHistoryTurns: defaultMaxHistoryTurns,
+                                    dataScope: p.dataScope || defaultScope,
+                                    dailyLimit: p.dailyLimit || 30,
+                                    maxHistoryTurns: p.maxHistoryTurns ?? defaultMaxHistoryTurns,
                                   });
                                   setUserModalOpen(true);
                                 }}
                               >
-                                Phê duyệt
+                                Tuỳ chỉnh & Duyệt
                               </Button>
-                            </div>
-                          ))}
-                        </div>
-                      }
-                    />
+
+                              <Popconfirm
+                                title="Chặn người dùng này?"
+                                description="Người dùng sẽ không thể gửi tin nhắn đến bot."
+                                onConfirm={async () => {
+                                  await blockUser(p.chatId);
+                                  message.info(`Đã chặn người dùng ${p.chatId}`);
+                                }}
+                                okText="Chặn"
+                                cancelText="Huỷ"
+                              >
+                                <Button size="small" danger icon={<StopOutlined />}>
+                                  Chặn
+                                </Button>
+                              </Popconfirm>
+
+                              <Popconfirm
+                                title="Xoá khỏi hàng chờ?"
+                                onConfirm={async () => {
+                                  await dismissUser(p.chatId);
+                                  message.info('Đã xoá yêu cầu');
+                                }}
+                                okText="Xoá"
+                                cancelText="Huỷ"
+                              >
+                                <Button size="small" type="text" danger icon={<DeleteOutlined />}>
+                                  Xoá
+                                </Button>
+                              </Popconfirm>
+                            </Space>
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
                   )}
 
                   <Table
@@ -776,11 +840,11 @@ export const TelegramMonitorView: React.FC = () => {
                         title: 'Trạng thái',
                         dataIndex: 'status',
                         key: 'status',
-                        render: (st: string) => (
-                          <Tag color={st === 'active' ? 'success' : 'error'}>
-                            {st === 'active' ? 'Hoạt động' : 'Tạm khoá'}
-                          </Tag>
-                        ),
+                        render: (st: string) => {
+                          if (st === 'active') return <Tag color="success">Hoạt động</Tag>;
+                          if (st === 'pending') return <Tag color="warning">Chờ duyệt</Tag>;
+                          return <Tag color="error">Tạm khoá</Tag>;
+                        },
                       },
                       {
                         title: 'Phạm vi dữ liệu (Scope)',
@@ -965,6 +1029,7 @@ export const TelegramMonitorView: React.FC = () => {
             <Select
               options={[
                 { value: 'active', label: 'Hoạt động (Active)' },
+                { value: 'pending', label: 'Chờ duyệt (Pending)' },
                 { value: 'blocked', label: 'Tạm khoá (Blocked)' },
               ]}
             />

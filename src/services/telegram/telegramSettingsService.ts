@@ -166,14 +166,14 @@ export const TELEGRAM_OVER_QUOTA_SPAM_LOG_THRESHOLD = 3;
 
 export interface QuotaCheckResult {
   allowed: boolean;
-  reason?: 'not_whitelisted' | 'blocked' | 'quota_exceeded';
-  user?: TelegramWhitelistUser;
-  usedToday?: number;
-  dailyLimit?: number;
-  isOverQuota?: boolean;
-  overQuotaAttempts?: number;
-  isSpamming?: boolean;
-  shouldDropLog?: boolean;
+  reason?: 'not_whitelisted' | 'blocked' | 'quota_exceeded' | undefined;
+  user?: TelegramWhitelistUser | undefined;
+  usedToday?: number | undefined;
+  dailyLimit?: number | undefined;
+  isOverQuota?: boolean | undefined;
+  overQuotaAttempts?: number | undefined;
+  isSpamming?: boolean | undefined;
+  shouldDropLog?: boolean | undefined;
 }
 
 /**
@@ -263,10 +263,10 @@ export async function checkAndConsumeQuota(
 
 export interface CommandAccessResult {
   allowed: boolean;
-  reason?: 'not_whitelisted' | 'blocked' | 'quota_exceeded';
-  user?: TelegramWhitelistUser;
-  isOverQuota?: boolean;
-  overQuotaCommandsRemaining?: number;
+  reason?: 'not_whitelisted' | 'blocked' | 'quota_exceeded' | undefined;
+  user?: TelegramWhitelistUser | undefined;
+  isOverQuota?: boolean | undefined;
+  overQuotaCommandsRemaining?: number | undefined;
 }
 
 /**
