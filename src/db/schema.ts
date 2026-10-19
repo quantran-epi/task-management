@@ -83,6 +83,14 @@ export const SCHEMA_V11 = {
   knowledgeLinks: 'id, &linkKey, taskMateEntityType, taskMateEntityId, setId, urn, docId, updatedAt',
 } as const;
 
+export const SCHEMA_V12 = {
+  ...SCHEMA_V11,
+  telegramSettings: 'id',
+  telegramWhitelist: 'chatId, name, status, dataScope, dailyLimit, usedToday, lastActiveDate',
+  telegramSessionLogs: 'id, chatId, dataScopeUsed, createdAt',
+} as const;
+
+
 
 
 

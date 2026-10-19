@@ -350,4 +350,17 @@ export interface KnowledgeLink {
   updatedAt: string; // ISO 8601
 }
 
+// Telegram AI Gateway Models
+export type {
+  TelegramDataScope,
+  TelegramUserStatus,
+  TelegramSettingsRecord,
+  TelegramWhitelistUser,
+  TelegramSessionLog,
+  TelegramInboundEvent,
+  TelegramConflictEvent,
+  TelegramStatusEvent,
+} from '../services/telegram/telegramTypes';
+
+
 

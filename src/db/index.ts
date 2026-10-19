@@ -11,6 +11,7 @@ import {
   SCHEMA_V9,
   SCHEMA_V10,
   SCHEMA_V11,
+  SCHEMA_V12,
 } from './schema';
 import type {
   Project,
@@ -32,6 +33,9 @@ import type {
   PublishAttemptCache,
   DlpAuditRecord,
   KnowledgeLink,
+  TelegramSettingsRecord,
+  TelegramWhitelistUser,
+  TelegramSessionLog,
 } from '../types/models';
 
 export class TaskPlannerDatabase extends Dexie {
@@ -54,6 +58,9 @@ export class TaskPlannerDatabase extends Dexie {
   publishAttempts!: Table<PublishAttemptCache, string>;
   dlpAudits!: Table<DlpAuditRecord, string>;
   knowledgeLinks!: Table<KnowledgeLink, string>;
+  telegramSettings!: Table<TelegramSettingsRecord, string>;
+  telegramWhitelist!: Table<TelegramWhitelistUser, string>;
+  telegramSessionLogs!: Table<TelegramSessionLog, string>;
 
 
   constructor(databaseName = 'PersonalTaskPlannerDB') {
@@ -177,6 +184,8 @@ export class TaskPlannerDatabase extends Dexie {
     this.version(10).stores(SCHEMA_V10);
 
     this.version(11).stores(SCHEMA_V11);
+
+    this.version(12).stores(SCHEMA_V12);
 
     // Multi-tab concurrency handlers (DATA-04, D-09, D-10)
     this.on('blocked', () => {
