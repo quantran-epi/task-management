@@ -4,8 +4,8 @@ milestone: v1.2
 milestone_name: Hybrid GraphRAG Knowledge Assistant MVP
 status: completed
 stopped_at: Completed Phase 21 (All 4 plans verified)
-last_updated: "2026-10-18T18:25:00.000Z"
-last_activity: 2026-10-18 -- Phase 21 Plan 04 execution finished
+last_updated: "2026-10-19T14:48:00.000Z"
+last_activity: 2026-10-19 -- Completed quick task 261019-u17: fix inline AI popup positioning and add mention to chat drawer draft
 progress:
   total_phases: 19
   completed_phases: 17
@@ -157,6 +157,7 @@ Progress: [██████████] 100%
 | 261017-j6q | reminder drawer complete button and context menu quick add reminder | 2026-10-17 | — | complete | [261017-j6q-reminder-drawer-complete-and-context-men](./quick/261017-j6q-reminder-drawer-complete-and-context-men/) |
 | 261018-mc9 | fix ai chat citation document title overflow issue | 2026-10-18 | — | complete | [261018-mc9-fix-ai-chat-citation-document-title-over](./quick/261018-mc9-fix-ai-chat-citation-document-title-over/) |
 | 261018-tmo | Fix retrieval timeout misleading no evidence message on client | 2026-10-18 | — | complete | [261018-tmo-fix-retrieval-timeout-client-ui](./quick/261018-tmo-fix-retrieval-timeout-client-ui/) |
+| 261019-u17 | Fix inline AI popup positioning and add mention to chat drawer draft | 2026-10-19 | c77d7c4 | complete | [261019-u17-fix-inline-ai-popup-positioning-and-add-](./quick/261019-u17-fix-inline-ai-popup-positioning-and-add-/) |
 
 ## Performance Metrics
 
