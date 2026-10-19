@@ -44,7 +44,8 @@ Tích hợp Telegram Bot chạy dạng **Headless Listener** ngay trong ứng d�
 
 ### 3.1. `telegram_settings`
 - `bot_token`: Token lấy từ `@BotFather`.
-- `is_enabled`: Bật / tắt listener.
+- `is_enabled`: Bật / tắt listener (device-local, mặc định `false`, không sync sang máy khác).
+- `auto_start_on_launch`: Tự động chạy polling khi mở TaskMate trên thiết bị này (mặc định `false`).
 - `default_scope`: Scope mặc định khi tạo mới user.
 
 ### 3.2. `telegram_whitelist`
@@ -71,10 +72,12 @@ Tích hợp Telegram Bot chạy dạng **Headless Listener** ngay trong ứng d�
 
 ### Module 1: Tauri Rust Backend (`src-tauri`)
 - Cấu hình tắt throttle Webview khi minimize: `--disable-background-timer-throttling`.
-- Task chạy ngầm (`tokio::spawn`): Long-polling Telegram `getUpdates`.
-- Event emitter: Bắn tin nhắn vào Webview (`telegram-inbound`).
+- Task chạy ngầm (`tokio::spawn`): Long-polling Telegram `getUpdates` với `CancellationToken`.
+- Bắt lỗi 409 Conflict (khi bật đồng thời ở thiết bị khác) ➔ Tự ngắt polling và bắn event `telegram-conflict-detected` vào Webview.
+- Event emitter: Bắn tin nhắn vào Webview (`telegram-inbound`), trạng thái (`telegram-status-changed`).
 - Commands:
   - `start_telegram_polling(token)` / `stop_telegram_polling()`
+  - `get_telegram_status() -> bool`
   - `send_telegram_reply(chat_id, text, reply_to_message_id)`
   - `send_telegram_action(chat_id, action: "typing")`
 
@@ -86,6 +89,10 @@ Tích hợp Telegram Bot chạy dạng **Headless Listener** ngay trong ứng d�
 - Cắt tin nhắn nếu vượt giới hạn 4096 ký tự của Telegram và gọi lệnh gửi.
 
 ### Module 3: Giao diện quản trị & Giám sát (`src/pages/TelegramMonitor`)
+- **Header & Controls:**
+  - Badge trạng thái Realtime: Running / Stopped / Conflict (409).
+  - Switch Bật/Tắt Bot nhanh và Checkbox tự khởi động cùng app.
+  - Tự động ngắt switch và cảnh báo khi bắt được `telegram-conflict-detected`.
 - **Tab 1: Live Monitor**
   - Danh sách hội thoại theo `chat_id` (real-time stream).
   - Chi tiết luồng xử lý: Câu hỏi ➔ Scope áp dụng ➔ Token dùng ➔ Câu trả lời.
