@@ -67,6 +67,9 @@ export default defineConfig({
       'virtual:pwa-register/react': fileURLToPath(
         new URL('./tests/mocks/pwaRegister.ts', import.meta.url)
       ),
+      '../../../knowledge-server/src/parser/sectionChunker': fileURLToPath(
+        new URL('./tests/mocks/sectionChunker.ts', import.meta.url)
+      ),
     },
     environment: 'jsdom',
     setupFiles: ['./tests/setup.ts'],

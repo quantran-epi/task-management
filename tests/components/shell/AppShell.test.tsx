@@ -103,6 +103,6 @@ describe('AppShell', () => {
     const rightSpace = directSpaces?.[1];
     expect(rightSpace).toBeInTheDocument();
     // Daily review summary button in right group
-    expect(rightSpace?.textContent).toContain('Tổng kết');
+    expect(rightSpace?.textContent).toContain('Tổng quan ngày');
   });
 });

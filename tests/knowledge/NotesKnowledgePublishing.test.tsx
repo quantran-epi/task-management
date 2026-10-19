@@ -154,8 +154,8 @@ describe('Docs knowledge management integration', () => {
       setId: 'set-a', documentId: created.id, lastKnownRemoteAt: NOW, publishedContentHash, lastPrimaryState: 'In sync',
     });
 
-    render(<NotesView db={database} />);
-    fireEvent.click((await screen.findAllByText(note.title ?? ''))[0]!);
+    render(<NotesView db={database} initialDocId={created.id} />);
+    expect(await screen.findByDisplayValue(note.title ?? '')).toBeInTheDocument();
     expect(await screen.findAllByLabelText('Trạng thái xuất bản: Đã đồng bộ')).not.toHaveLength(0);
     fireEvent.change(screen.getByPlaceholderText(/Nhập nội dung Markdown/), {
       target: { value: `${note.body}\nChỉnh sửa sau ảnh chụp`, selectionStart: 40 },

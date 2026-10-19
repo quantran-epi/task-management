@@ -39,6 +39,7 @@ describe('NotesView 2-Column Document Workspace', () => {
 
     render(<NotesView db={testDb} />);
 
+    expect(await screen.findByText('Ghi chú & Tài liệu')).toBeInTheDocument();
     expect(await screen.findByText('Đã ghim')).toBeInTheDocument();
     expect(screen.getByText('Ghi chú nhanh')).toBeInTheDocument();
     expect(screen.getByText('Thùng rác')).toBeInTheDocument();
