@@ -5,6 +5,7 @@ mod ai_proxy;
 mod jira_proxy;
 mod keyring_store;
 mod sqlite_persistence;
+mod telegram_gateway;
 
 #[tauri::command]
 fn open_devtools(window: tauri::WebviewWindow) {
@@ -15,6 +16,7 @@ fn open_devtools(window: tauri::WebviewWindow) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
+        .manage(telegram_gateway::TelegramGatewayState::new())
         .invoke_handler(tauri::generate_handler![
             open_devtools,
             sqlite_persistence::select_sqlite_path,
@@ -54,6 +56,11 @@ pub fn run() {
             agent_diff_ops::read_worktree_file_content,
             agent_diff_ops::revert_hunk_diff,
             agent_skill_ops::list_available_skills,
+            telegram_gateway::start_telegram_polling,
+            telegram_gateway::stop_telegram_polling,
+            telegram_gateway::get_telegram_status,
+            telegram_gateway::send_telegram_reply,
+            telegram_gateway::send_telegram_action,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
