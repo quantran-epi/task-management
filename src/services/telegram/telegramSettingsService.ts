@@ -13,6 +13,7 @@ export const DEFAULT_TELEGRAM_SETTINGS: TelegramSettingsRecord = {
   isEnabled: false,
   autoStartOnLaunch: false,
   defaultScope: 'full',
+  maxHistoryTurns: 5,
 };
 
 export async function getTelegramSettings(
@@ -69,6 +70,8 @@ export async function upsertWhitelistUser(
     dailyLimit: user.dailyLimit ?? existing?.dailyLimit ?? 30,
     usedToday: user.usedToday ?? existing?.usedToday ?? 0,
     lastActiveDate: user.lastActiveDate ?? existing?.lastActiveDate ?? today,
+    maxHistoryTurns: user.maxHistoryTurns ?? existing?.maxHistoryTurns ?? 5,
+    sessionResetAt: user.sessionResetAt !== undefined ? user.sessionResetAt : existing?.sessionResetAt,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   };
@@ -177,3 +180,60 @@ export async function getRecentTelegramLogs(
     .limit(limit)
     .toArray();
 }
+
+export async function resetTelegramUserSession(
+  chatId: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<TelegramWhitelistUser | undefined> {
+  const user = await db.telegramWhitelist.get(chatId);
+  if (!user) return undefined;
+  const now = new Date().toISOString();
+  const updatedUser: TelegramWhitelistUser = {
+    ...user,
+    sessionResetAt: now,
+    updatedAt: now,
+  };
+  await db.telegramWhitelist.put(updatedUser);
+  return updatedUser;
+}
+
+export async function getTelegramChatHistory(
+  chatId: string,
+  maxTurns: number,
+  sinceIso?: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<Array<{ role: 'user' | 'assistant'; content: string }>> {
+  if (maxTurns <= 0) return [];
+
+  let query = db.telegramSessionLogs
+    .where('chatId')
+    .equals(chatId);
+
+  let logs = await query.toArray();
+
+  if (sinceIso) {
+    logs = logs.filter((log) => log.createdAt > sinceIso);
+  }
+
+  // Sort descending by createdAt
+  logs.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+  // Take up to maxTurns items
+  const recentLogs = logs.slice(0, maxTurns);
+
+  // Reverse back to chronological order (oldest first)
+  recentLogs.reverse();
+
+  const history: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+  for (const log of recentLogs) {
+    if (log.userMessage?.trim()) {
+      history.push({ role: 'user', content: log.userMessage.trim() });
+    }
+    if (log.aiResponse?.trim()) {
+      history.push({ role: 'assistant', content: log.aiResponse.trim() });
+    }
+  }
+
+  return history;
+}
+

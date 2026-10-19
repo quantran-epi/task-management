@@ -8,6 +8,7 @@ export interface TelegramSettingsRecord {
   isEnabled: boolean;
   autoStartOnLaunch: boolean;
   defaultScope: TelegramDataScope;
+  maxHistoryTurns?: number; // default 5 turns
   updatedAt?: string;
 }
 
@@ -19,6 +20,8 @@ export interface TelegramWhitelistUser {
   dailyLimit: number;
   usedToday: number;
   lastActiveDate: string; // YYYY-MM-DD
+  maxHistoryTurns?: number; // default 5 turns, 0 = single-turn
+  sessionResetAt?: string; // ISO timestamp to filter history
   createdAt: string;
   updatedAt: string;
 }

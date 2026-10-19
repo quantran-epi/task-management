@@ -9,6 +9,8 @@ import {
   checkAndConsumeQuota,
   logTelegramSession,
   getRecentTelegramLogs,
+  resetTelegramUserSession,
+  getTelegramChatHistory,
 } from '../../src/services/telegram/telegramSettingsService';
 import { getTodayDateString } from '../../src/utils/date';
 
@@ -163,5 +165,89 @@ describe('Telegram Settings Service (Dexie V12)', () => {
     expect(logs).toHaveLength(2);
     expect(logs[0]?.userMessage).toBe('What are my tasks?');
     expect(logs[1]?.userMessage).toBe('Hello bot');
+  });
+
+  it('resets user session and extracts bounded chat history', async () => {
+    await upsertWhitelistUser(
+      {
+        chatId: 'user_history_1',
+        name: 'History User',
+        status: 'active',
+        maxHistoryTurns: 3,
+      },
+      testDb
+    );
+
+    // Seed 4 session logs
+    await logTelegramSession(
+      {
+        chatId: 'user_history_1',
+        userMessage: 'Question 1',
+        aiResponse: 'Answer 1',
+        dataScopeUsed: 'full',
+        createdAt: '2026-10-19T09:00:00Z',
+      },
+      testDb
+    );
+
+    await logTelegramSession(
+      {
+        chatId: 'user_history_1',
+        userMessage: 'Question 2',
+        aiResponse: 'Answer 2',
+        dataScopeUsed: 'full',
+        createdAt: '2026-10-19T09:05:00Z',
+      },
+      testDb
+    );
+
+    await logTelegramSession(
+      {
+        chatId: 'user_history_1',
+        userMessage: 'Question 3',
+        aiResponse: 'Answer 3',
+        dataScopeUsed: 'full',
+        createdAt: '2026-10-19T09:10:00Z',
+      },
+      testDb
+    );
+
+    await logTelegramSession(
+      {
+        chatId: 'user_history_1',
+        userMessage: 'Question 4',
+        aiResponse: 'Answer 4',
+        dataScopeUsed: 'full',
+        createdAt: '2026-10-19T09:15:00Z',
+      },
+      testDb
+    );
+
+    // Fetch max 2 turns (should be Question 3 and Question 4)
+    const history2 = await getTelegramChatHistory('user_history_1', 2, undefined, testDb);
+    expect(history2).toHaveLength(4);
+    expect(history2[0]).toEqual({ role: 'user', content: 'Question 3' });
+    expect(history2[1]).toEqual({ role: 'assistant', content: 'Answer 3' });
+    expect(history2[2]).toEqual({ role: 'user', content: 'Question 4' });
+    expect(history2[3]).toEqual({ role: 'assistant', content: 'Answer 4' });
+
+    // Reset session at 09:12:00
+    const resetUser = await resetTelegramUserSession('user_history_1', testDb);
+    expect(resetUser?.sessionResetAt).toBeDefined();
+
+    // Query with sinceIso filter (e.g. 09:12:00)
+    const historyAfterReset = await getTelegramChatHistory(
+      'user_history_1',
+      5,
+      '2026-10-19T09:12:00Z',
+      testDb
+    );
+    expect(historyAfterReset).toHaveLength(2);
+    expect(historyAfterReset[0]).toEqual({ role: 'user', content: 'Question 4' });
+    expect(historyAfterReset[1]).toEqual({ role: 'assistant', content: 'Answer 4' });
+
+    // When maxTurns is 0
+    const history0 = await getTelegramChatHistory('user_history_1', 0, undefined, testDb);
+    expect(history0).toEqual([]);
   });
 });

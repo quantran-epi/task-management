@@ -90,6 +90,11 @@ export const SCHEMA_V12 = {
   telegramSessionLogs: 'id, chatId, dataScopeUsed, createdAt',
 } as const;
 
+export const SCHEMA_V13 = {
+  ...SCHEMA_V12,
+} as const;
+
+
 
 
 

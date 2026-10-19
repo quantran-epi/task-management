@@ -12,6 +12,7 @@ import {
   SCHEMA_V10,
   SCHEMA_V11,
   SCHEMA_V12,
+  SCHEMA_V13,
 } from './schema';
 import type {
   Project,
@@ -186,6 +187,28 @@ export class TaskPlannerDatabase extends Dexie {
     this.version(11).stores(SCHEMA_V11);
 
     this.version(12).stores(SCHEMA_V12);
+
+    this.version(13)
+      .stores(SCHEMA_V13)
+      .upgrade(async (tx) => {
+        await tx
+          .table('telegramSettings')
+          .toCollection()
+          .modify((settings: Record<string, unknown>) => {
+            if (settings.maxHistoryTurns === undefined) {
+              settings.maxHistoryTurns = 5;
+            }
+          });
+
+        await tx
+          .table('telegramWhitelist')
+          .toCollection()
+          .modify((user: Record<string, unknown>) => {
+            if (user.maxHistoryTurns === undefined) {
+              user.maxHistoryTurns = 5;
+            }
+          });
+      });
 
     // Multi-tab concurrency handlers (DATA-04, D-09, D-10)
     this.on('blocked', () => {
