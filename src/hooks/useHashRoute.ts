@@ -21,6 +21,7 @@ const VALID_ROUTES: readonly AppRoute[] = [
   'ai-popout',
   'insight',
   'agents',
+  'telegram',
 ] as const;
 
 /**
