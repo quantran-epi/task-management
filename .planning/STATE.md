@@ -37,6 +37,7 @@ Progress: [██████████] 100%
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261019-v0s | Sửa thông báo và hàng chờ user mới Telegram chưa phân quyền | 2026-10-19 | 1b262fd | complete | [261019-v0s-s-a-th-ng-b-o-v-h-ng-ch-user-m-i-telegra](./quick/261019-v0s-s-a-th-ng-b-o-v-h-ng-ch-user-m-i-telegra/) |
 | 261019-sqs | Limit inline AI popup to doc/note text and add over-quota spam protection with log drop | 2026-10-19 | — | complete | [261019-inline-ai-scope-quota-spam](./quick/261019-inline-ai-scope-quota-spam/) |
 | 261019-sb0 | Upgrade Telegram AI Gateway with grounded retrieval, multi-turn history with per-user max turns, /reset and /help commands, and Telegram HTML formatting | 2026-10-19 | — | complete | [261019-sb0-upgrade-telegram-ai-gateway-with-grounde](./quick/261019-sb0-upgrade-telegram-ai-gateway-with-grounde/) |
 | 261019-qib | Implement Telegram AI Gateway with on/off controls per docs/TELEGRAM_AI_GATEWAY_PLAN.md | 2026-10-19 | — | complete | [261019-qib-implement-telegram-ai-gateway-with-on-of](./quick/261019-qib-implement-telegram-ai-gateway-with-on-of/) |
