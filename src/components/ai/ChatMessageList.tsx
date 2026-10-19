@@ -1,8 +1,9 @@
-import React, { useRef, useEffect } from 'react';
-import { Divider, Button, theme } from 'antd';
-import { SyncOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
+import { Divider, Button, Modal, Tooltip, theme } from 'antd';
+import { SyncOutlined, ExclamationCircleOutlined, ExpandAltOutlined } from '@ant-design/icons';
 import type { ChatMessage } from '../../types/models';
 import { APP_NAME } from '../../constants/app';
+import { renderSafeMarkdown } from '../../utils/markdown';
 import { ChatMessageBubble, type GroundedAnswerCardCallbacks } from './ChatMessageBubble';
 import { InlineApiErrorCard } from './InlineApiErrorCard';
 import { IntentRoutingPrompt } from './grounded/IntentRoutingPrompt';
@@ -66,6 +67,11 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   const { token } = theme.useToken();
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [isPopoutOpen, setIsPopoutOpen] = useState(false);
+
+  const renderedSummaryHtml = useMemo(() => {
+    return pendingConfirmation?.summary ? renderSafeMarkdown(pendingConfirmation.summary) : '';
+  }, [pendingConfirmation?.summary]);
 
   const scrollToBottom = (instant = false) => {
     if (containerRef.current) {
@@ -222,25 +228,39 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 6,
+              justifyContent: 'space-between',
               fontWeight: 600,
               color: token.colorWarningText,
               fontSize: 13,
             }}
           >
-            <ExclamationCircleOutlined />
-            <span>Xác nhận thực hiện hành động</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <ExclamationCircleOutlined />
+              <span>Xác nhận thực hiện hành động</span>
+            </div>
+            <Tooltip title="Mở rộng xem chi tiết" placement="top">
+              <Button
+                type="text"
+                size="small"
+                icon={<ExpandAltOutlined />}
+                onClick={() => setIsPopoutOpen(true)}
+                aria-label="Mở rộng chi tiết xác nhận"
+                style={{ color: token.colorWarningText, padding: '0 4px', height: 22 }}
+              />
+            </Tooltip>
           </div>
           <div
+            className="chat-markdown-body"
             style={{
               fontSize: 13,
               color: token.colorText,
               lineHeight: 1.5,
               wordBreak: 'break-word',
+              maxHeight: 260,
+              overflowY: 'auto',
             }}
-          >
-            {pendingConfirmation.summary}
-          </div>
+            dangerouslySetInnerHTML={{ __html: renderedSummaryHtml }}
+          />
           <div
             style={{
               display: 'flex',
@@ -270,6 +290,55 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
               </Button>
             </div>
           </div>
+
+          <Modal
+            open={isPopoutOpen}
+            title={
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: token.colorWarningText }}>
+                <ExclamationCircleOutlined />
+                <span>Xác nhận thực hiện hành động</span>
+              </div>
+            }
+            onCancel={() => setIsPopoutOpen(false)}
+            footer={[
+              <Button
+                key="cancel"
+                onClick={() => {
+                  setIsPopoutOpen(false);
+                  onConfirmAction(false);
+                }}
+                aria-label="Từ chối thao tác"
+              >
+                Không (No)
+              </Button>,
+              <Button
+                key="confirm"
+                type="primary"
+                onClick={() => {
+                  setIsPopoutOpen(false);
+                  onConfirmAction(true);
+                }}
+                aria-label="Xác nhận thao tác"
+              >
+                Có (Yes)
+              </Button>,
+            ]}
+            width={720}
+            destroyOnClose
+          >
+            <div
+              className="chat-markdown-body"
+              style={{
+                maxHeight: '65vh',
+                overflowY: 'auto',
+                padding: '12px 4px',
+                fontSize: 14,
+                lineHeight: 1.6,
+                color: token.colorText,
+              }}
+              dangerouslySetInnerHTML={{ __html: renderedSummaryHtml }}
+            />
+          </Modal>
         </div>
       )}
 
