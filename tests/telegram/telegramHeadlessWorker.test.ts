@@ -6,6 +6,7 @@ import {
   processTelegramInboundMessage,
   cleanCitationTags,
   broadcastTelegramMessage,
+  clearTelegramProcessedUpdateIdsForTesting,
 } from '../../src/services/telegram/telegramHeadlessWorker';
 import {
   upsertWhitelistUser,
@@ -34,9 +35,11 @@ describe('Telegram Headless Worker', () => {
   beforeEach(async () => {
     testDb = new TaskPlannerDatabase(testDbName);
     await testDb.open();
+    clearTelegramProcessedUpdateIdsForTesting();
   });
 
   afterEach(async () => {
+    clearTelegramProcessedUpdateIdsForTesting();
     await testDb.delete();
   });
 
@@ -554,12 +557,11 @@ describe('Telegram Headless Worker', () => {
     );
 
     expect(mockSendAction).toHaveBeenCalledWith('test_token', 'authorized_user_1', 'typing');
-    // Notice reply + AI reply
-    expect(mockSendReply).toHaveBeenCalledTimes(2);
-    expect(replies[0]).toContain('Đang truy vấn dữ liệu');
+    // AI reply only (no intermediate query notice message to avoid duplicate clutter)
+    expect(mockSendReply).toHaveBeenCalledTimes(1);
     // [S1] citation stripped, **bold** converted to <b>bold</b>
-    expect(replies[1]).toContain('<b>bold</b>');
-    expect(replies[1]).not.toContain('[S1]');
+    expect(replies[0]).toContain('<b>bold</b>');
+    expect(replies[0]).not.toContain('[S1]');
 
     const logs = await getRecentTelegramLogs(5, testDb);
     expect(logs).toHaveLength(1);
@@ -592,5 +594,136 @@ describe('Telegram Headless Worker', () => {
     expect(res.failures[0]?.chatId).toBe('fail_chat');
 
     fetchSpy.mockRestore();
+  });
+
+  it('routes admin user messages through admin wizard commands and notifies approved user', async () => {
+    // 1. Setup admin and pending guest
+    await upsertWhitelistUser(
+      {
+        chatId: 'admin_worker_chat',
+        name: 'The Admin',
+        status: 'active',
+        isAdmin: true,
+      },
+      testDb
+    );
+
+    await upsertWhitelistUser(
+      {
+        chatId: 'guest_to_approve',
+        name: 'Guest Pending',
+        status: 'pending',
+      },
+      testDb
+    );
+
+    const replies: Array<{ chatId: string; text: string }> = [];
+    const mockSendReply = vi.fn(async (_token: string, chatId: string, text: string) => {
+      replies.push({ chatId, text });
+    });
+    const mockSendAction = vi.fn(async () => {});
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url: any, init: any) => {
+      const body = JSON.parse(init.body);
+      replies.push({ chatId: body.chat_id, text: body.text });
+      return {
+        ok: true,
+        json: async () => ({ ok: true, result: { message_id: 111 } }),
+      } as any;
+    });
+
+    // 1. Admin sends /approve_user
+    await processTelegramInboundMessage(
+      {
+        update_id: 80,
+        message_id: 801,
+        chat_id: 'admin_worker_chat',
+        from_name: 'The Admin',
+        text: '/approve_user',
+        date: 1234590,
+      },
+      'test_token',
+      testDb,
+      mockSendReply,
+      mockSendAction
+    );
+    expect(replies[0]?.text).toContain('Vui lòng nhập <b>Chat ID</b>');
+    replies.length = 0;
+
+    // 2. Admin replies with Chat ID to approve
+    await processTelegramInboundMessage(
+      {
+        update_id: 81,
+        message_id: 802,
+        chat_id: 'admin_worker_chat',
+        from_name: 'The Admin',
+        text: 'guest_to_approve',
+        date: 1234591,
+      },
+      'test_token',
+      testDb,
+      mockSendReply,
+      mockSendAction
+    );
+
+    // Response to admin
+    expect(replies.some((r) => r.chatId === 'admin_worker_chat' && r.text.includes('Phê duyệt thành công!'))).toBe(true);
+    // Direct notification sent to approved guest
+    expect(replies.some((r) => r.chatId === 'guest_to_approve' && r.text.includes('Tài khoản của bạn đã được phê duyệt!'))).toBe(true);
+
+    const approvedUser = await getWhitelistUser('guest_to_approve', testDb);
+    expect(approvedUser?.status).toBe('active');
+
+    fetchSpy.mockRestore();
+  });
+
+  it('deduplicates duplicate inbound events with identical update_id', async () => {
+    await upsertWhitelistUser(
+      {
+        chatId: 'dedup_user',
+        name: 'Dedup User',
+        status: 'active',
+        dataScope: 'pure_llm',
+        dailyLimit: 10,
+        usedToday: 0,
+        lastActiveDate: getTodayDateString(),
+      },
+      testDb
+    );
+
+    const replies: string[] = [];
+    const mockSendReply = vi.fn(async (_token: string, _chatId: string, text: string) => {
+      replies.push(text);
+    });
+    const mockSendAction = vi.fn(async () => {});
+
+    const duplicateEvent: TelegramInboundEvent = {
+      update_id: 999123,
+      message_id: 777,
+      chat_id: 'dedup_user',
+      from_name: 'Dedup User',
+      text: '/help',
+      date: 1234599,
+    };
+
+    // First delivery -> processed
+    await processTelegramInboundMessage(
+      duplicateEvent,
+      'test_token',
+      testDb,
+      mockSendReply,
+      mockSendAction
+    );
+    expect(mockSendReply).toHaveBeenCalledTimes(1);
+
+    // Second delivery of same update_id -> dropped, no second reply
+    await processTelegramInboundMessage(
+      duplicateEvent,
+      'test_token',
+      testDb,
+      mockSendReply,
+      mockSendAction
+    );
+    expect(mockSendReply).toHaveBeenCalledTimes(1);
   });
 });

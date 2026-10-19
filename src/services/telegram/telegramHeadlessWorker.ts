@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import {
   getTelegramSettings,
@@ -25,6 +25,7 @@ import { markdownToTelegramHtml } from './telegramHtml';
 import { buildGlobalContextPrompt } from '../ai/contextGrounding';
 import { rankBM25, tokenize, type BM25Document } from '../../utils/bm25';
 import type { Note } from '../../types/models';
+import { handleAdminCommand } from './telegramAdminWizard';
 
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4000; // Telegram hard limit is 4096, buffer to 4000
 
@@ -236,6 +237,13 @@ export function cleanCitationTags(text: string): string {
     .trim();
 }
 
+// In-memory set of recently processed update_ids to prevent duplicate execution from double listener/HMR
+const processedUpdateIds = new Set<number>();
+
+export function clearTelegramProcessedUpdateIdsForTesting(): void {
+  processedUpdateIds.clear();
+}
+
 export async function processTelegramInboundMessage(
   event: TelegramInboundEvent,
   botToken: string,
@@ -243,7 +251,22 @@ export async function processTelegramInboundMessage(
   sendReplyFn?: (token: string, chatId: string, text: string, replyTo?: number) => Promise<void>,
   sendActionFn?: (token: string, chatId: string, action: string) => Promise<void>
 ): Promise<void> {
-  const { chat_id, from_name, text, message_id } = event;
+  const { update_id, chat_id, from_name, text, message_id } = event;
+
+  // Deduplicate incoming update_id
+  if (update_id && processedUpdateIds.has(update_id)) {
+    console.warn(`[telegramWorker] Dropping duplicate inbound update_id: ${update_id}`);
+    return;
+  }
+  if (update_id) {
+    processedUpdateIds.add(update_id);
+    if (processedUpdateIds.size > 1000) {
+      const oldest = Array.from(processedUpdateIds).slice(0, 500);
+      for (const id of oldest) {
+        processedUpdateIds.delete(id);
+      }
+    }
+  }
 
   const defaultSendReply = async (token: string, cid: string, replyText: string, rId?: number) => {
     if (isTauriApp()) {
@@ -273,6 +296,39 @@ export async function processTelegramInboundMessage(
 
   const trimmedText = (text || '').trim();
   const lowerText = trimmedText.toLowerCase();
+
+  // Step 0: Check for Admin multi-step conversation or admin commands
+  const adminResult = await handleAdminCommand(chat_id, trimmedText, db);
+  if (adminResult.handled) {
+    if (adminResult.replyText) {
+      const htmlReply = markdownToTelegramHtml(adminResult.replyText);
+      await sendReply(botToken, chat_id, htmlReply, message_id);
+      await logTelegramSession(
+        {
+          chatId: chat_id,
+          userName: from_name,
+          userMessage: text,
+          aiResponse: adminResult.replyText,
+          dataScopeUsed: 'pure_llm',
+          tokenCount: 0,
+        },
+        db
+      );
+    }
+
+    // If an approval was made via admin wizard, notify the approved user immediately
+    if (adminResult.approvedUser && botToken.trim()) {
+      try {
+        const u = adminResult.approvedUser;
+        const welcomeMsg = `🎉 **Tài khoản của bạn đã được phê duyệt!**\n\nXin chào ${u.name}, quản trị viên đã phê duyệt quyền truy cập TaskMate AI Bot cho bạn.\n\n📊 **Hạn mức:** ${u.dailyLimit} tin nhắn/ngày\n🔍 **Phạm vi:** ${u.dataScope}\n🧠 **Lịch sử:** ${u.maxHistoryTurns ?? 5} lượt\n\n💡 *Gõ /help để xem hướng dẫn hoặc đặt câu hỏi trực tiếp.*`;
+        await sendTelegramDirectMessage(botToken.trim(), u.chatId, welcomeMsg);
+      } catch (notifyErr) {
+        console.warn('Failed to send Telegram approval notice from admin wizard:', notifyErr);
+      }
+    }
+    return;
+  }
+
   const isSlashCommand =
     lowerText === '/reset' ||
     lowerText === '/clear' ||
@@ -504,19 +560,11 @@ export async function processTelegramInboundMessage(
   const user = quota.user!;
   const dataScope = user.dataScope || 'full';
 
-  // Step 3: Send typing action and immediate acknowledgment so user knows AI is working
+  // Step 3: Send typing action so user knows AI is working
   try {
     await sendAction(botToken, chat_id, 'typing');
   } catch (err) {
     console.warn('[telegramWorker] sendAction failed:', err);
-  }
-
-  try {
-    const queryingNotice = `🔍 *Đang truy vấn dữ liệu và suy nghĩ câu trả lời...*`;
-    const queryingHtml = markdownToTelegramHtml(queryingNotice);
-    await sendReply(botToken, chat_id, queryingHtml, message_id);
-  } catch (noticeErr) {
-    console.warn('[telegramWorker] send query notice failed:', noticeErr);
   }
 
   // Step 4: Gather grounded context & history
@@ -615,19 +663,19 @@ export async function processTelegramInboundMessage(
  * Headless background worker hook mounted at AppShell
  */
 export function useTelegramHeadlessWorker(db: TaskPlannerDatabase = defaultDb) {
-  const isInitialized = useRef(false);
-
   useEffect(() => {
-    if (!isTauriApp() || isInitialized.current) return;
-    isInitialized.current = true;
+    if (!isTauriApp()) return;
 
     let unlistenInbound: (() => void) | undefined;
     let unlistenConflict: (() => void) | undefined;
+    let isDisposed = false;
 
     const setup = async () => {
       try {
         const { listen } = await import('@tauri-apps/api/event');
         const { invoke } = await import('@tauri-apps/api/core');
+
+        if (isDisposed) return;
 
         // Check settings and auto-start if configured
         const settings = await getTelegramSettings(db);
@@ -639,17 +687,24 @@ export function useTelegramHeadlessWorker(db: TaskPlannerDatabase = defaultDb) {
           }
         }
 
+        if (isDisposed) return;
+
         // Listen for 409 Conflict
-        unlistenConflict = await listen<TelegramConflictEvent>(
+        const cleanupConflict = await listen<TelegramConflictEvent>(
           'telegram-conflict-detected',
           async (event) => {
             console.warn('[telegramWorker] Conflict detected:', event.payload);
             await saveTelegramSettings({ isEnabled: false }, db);
           }
         );
+        if (isDisposed) {
+          cleanupConflict();
+          return;
+        }
+        unlistenConflict = cleanupConflict;
 
         // Listen for Inbound updates
-        unlistenInbound = await listen<TelegramInboundEvent>(
+        const cleanupInbound = await listen<TelegramInboundEvent>(
           'telegram-inbound',
           async (event) => {
             const currentSettings = await getTelegramSettings(db);
@@ -667,6 +722,11 @@ export function useTelegramHeadlessWorker(db: TaskPlannerDatabase = defaultDb) {
             }
           }
         );
+        if (isDisposed) {
+          cleanupInbound();
+          return;
+        }
+        unlistenInbound = cleanupInbound;
       } catch (err) {
         console.warn('[telegramWorker] Failed to setup listeners:', err);
       }
@@ -675,6 +735,7 @@ export function useTelegramHeadlessWorker(db: TaskPlannerDatabase = defaultDb) {
     setup();
 
     return () => {
+      isDisposed = true;
       if (unlistenInbound) unlistenInbound();
       if (unlistenConflict) unlistenConflict();
     };

@@ -70,6 +70,7 @@ export async function upsertWhitelistUser(
     dailyLimit: user.dailyLimit ?? existing?.dailyLimit ?? 30,
     usedToday: user.usedToday ?? existing?.usedToday ?? 0,
     lastActiveDate: user.lastActiveDate ?? existing?.lastActiveDate ?? today,
+    isAdmin: user.isAdmin !== undefined ? user.isAdmin : existing?.isAdmin,
     maxHistoryTurns: user.maxHistoryTurns ?? existing?.maxHistoryTurns ?? 5,
     sessionResetAt: user.sessionResetAt !== undefined ? user.sessionResetAt : existing?.sessionResetAt,
     overQuotaCommandsUsed: user.overQuotaCommandsUsed ?? existing?.overQuotaCommandsUsed ?? 0,

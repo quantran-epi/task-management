@@ -20,6 +20,7 @@ export interface TelegramWhitelistUser {
   dailyLimit: number;
   usedToday: number;
   lastActiveDate: string; // YYYY-MM-DD
+  isAdmin?: boolean | undefined; // Admin privileges for Telegram bot commands
   maxHistoryTurns?: number | undefined; // default 5 turns, 0 = single-turn
   sessionResetAt?: string | undefined; // ISO timestamp to filter history
   overQuotaCommandsUsed?: number | undefined; // Count of /help or /reset used after reaching daily limit

@@ -19,6 +19,7 @@ import {
   Tooltip,
   Popconfirm,
   Radio,
+  Checkbox,
   message,
 } from 'antd';
 import {
@@ -247,6 +248,7 @@ export const TelegramMonitorView: React.FC = () => {
         status: values.status,
         dataScope: values.dataScope,
         dailyLimit: values.dailyLimit,
+        isAdmin: Boolean(values.isAdmin),
         maxHistoryTurns: turns,
       });
 
@@ -276,6 +278,7 @@ export const TelegramMonitorView: React.FC = () => {
       status: user.status,
       dataScope: user.dataScope,
       dailyLimit: user.dailyLimit,
+      isAdmin: Boolean(user.isAdmin),
       maxHistoryTurns: user.maxHistoryTurns ?? defaultMaxHistoryTurns,
     });
     setUserModalOpen(true);
@@ -835,6 +838,16 @@ export const TelegramMonitorView: React.FC = () => {
                         title: 'Tên gợi nhớ',
                         dataIndex: 'name',
                         key: 'name',
+                        render: (name: string, r: TelegramWhitelistUser) => (
+                          <Space size={6}>
+                            <Text>{name}</Text>
+                            {r.isAdmin && (
+                              <Tag color="gold" style={{ fontWeight: 600 }}>
+                                👑 Admin
+                              </Tag>
+                            )}
+                          </Space>
+                        ),
                       },
                       {
                         title: 'Trạng thái',
@@ -1033,6 +1046,16 @@ export const TelegramMonitorView: React.FC = () => {
                 { value: 'blocked', label: 'Tạm khoá (Blocked)' },
               ]}
             />
+          </Form.Item>
+
+          <Form.Item
+            name="isAdmin"
+            valuePropName="checked"
+            extra="Cho phép thực hiện các lệnh quản trị bot (/list_users, /list_pending, /approve_user, /adjust_quota, /block_user)"
+          >
+            <Checkbox>
+              <strong>👑 Phân quyền Quản trị viên (Admin)</strong>
+            </Checkbox>
           </Form.Item>
 
           <Form.Item name="dataScope" label="Phạm vi dữ liệu được truy cập">
