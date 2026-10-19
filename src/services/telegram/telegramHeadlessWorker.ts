@@ -4,6 +4,7 @@ import {
   getTelegramSettings,
   saveTelegramSettings,
   checkAndConsumeQuota,
+  checkAndConsumeCommandQuota,
   logTelegramSession,
   resetTelegramUserSession,
   getTelegramChatHistory,
@@ -12,6 +13,7 @@ import type {
   TelegramInboundEvent,
   TelegramConflictEvent,
   TelegramDataScope,
+  TelegramBroadcastResult,
 } from './telegramTypes';
 import type { ChatCompletionMessage } from '../ai/types';
 import { isTauriApp } from '../../utils/timerPopout';
@@ -41,7 +43,7 @@ export async function sendTelegramDirectMessage(
     });
   } else {
     // Fallback for non-tauri or testing
-    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -51,7 +53,38 @@ export async function sendTelegramDirectMessage(
         parse_mode: 'HTML',
       }),
     });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData?.description || `Telegram API error: ${res.status}`);
+    }
   }
+}
+
+export async function broadcastTelegramMessage(
+  token: string,
+  chatIds: string[],
+  text: string
+): Promise<TelegramBroadcastResult> {
+  let successCount = 0;
+  let failureCount = 0;
+  const failures: Array<{ chatId: string; error: string }> = [];
+
+  for (const chatId of chatIds) {
+    try {
+      await sendTelegramDirectMessage(token, chatId, text);
+      successCount++;
+    } catch (err: any) {
+      failureCount++;
+      failures.push({ chatId, error: err?.message || String(err) });
+    }
+  }
+
+  return {
+    total: chatIds.length,
+    successCount,
+    failureCount,
+    failures,
+  };
 }
 
 export function splitTelegramMessage(text: string, maxLen = TELEGRAM_MAX_MESSAGE_LENGTH): string[] {
@@ -238,8 +271,111 @@ export async function processTelegramInboundMessage(
 
   const trimmedText = (text || '').trim();
   const lowerText = trimmedText.toLowerCase();
+  const isSlashCommand =
+    lowerText === '/reset' ||
+    lowerText === '/clear' ||
+    lowerText === '/help' ||
+    lowerText === '/start';
 
   // Step 1: Whitelist & Authorization Check
+  if (isSlashCommand) {
+    const cmdAccess = await checkAndConsumeCommandQuota(chat_id, db);
+    if (!cmdAccess.allowed) {
+      if (cmdAccess.reason === 'not_whitelisted') {
+        const rawMsg = `⚠️ **Chưa được phân quyền truy cập**\n\nXin chào ${from_name}, bạn chưa được phân quyền sử dụng TaskMate AI Bot.\n\n🆔 **Chat ID của bạn:** \`${chat_id}\`\n\nVui lòng cung cấp ID của bạn cho admin @quan_tr96 để được phân quyền.`;
+        const htmlMsg = markdownToTelegramHtml(rawMsg);
+        await sendReply(botToken, chat_id, htmlMsg, message_id);
+        return;
+      }
+      if (cmdAccess.reason === 'blocked') {
+        const rawMsg = `⛔ **Tài khoản bị tạm khoá**\n\nChat ID \`${chat_id}\` đã bị tạm ngưng quyền truy cập TaskMate AI Bot.`;
+        const htmlMsg = markdownToTelegramHtml(rawMsg);
+        await sendReply(botToken, chat_id, htmlMsg, message_id);
+        return;
+      }
+      if (cmdAccess.reason === 'quota_exceeded') {
+        const rawMsg = `⏳ **Hết hạn mức trong ngày**\n\nBạn đã sử dụng hết hạn mức trong ngày và đã dùng hết 3 lượt lệnh (/help, /start, /reset) bổ sung. Vui lòng quay lại vào 00:00 ngày mai.`;
+        const htmlMsg = markdownToTelegramHtml(rawMsg);
+        await sendReply(botToken, chat_id, htmlMsg, message_id);
+        return;
+      }
+    }
+
+    const cmdUser = cmdAccess.user!;
+    const dataScope = cmdUser.dataScope || 'full';
+
+    // Step 2: Conversational Slash Command Handlers (/reset, /clear, /start, /help)
+    if (lowerText === '/reset' || lowerText === '/clear') {
+      await resetTelegramUserSession(chat_id, db);
+      const graceNote = cmdAccess.isOverQuota
+        ? `\n\n⚠️ *(Bạn đã hết hạn mức tin nhắn chính, còn ${cmdAccess.overQuotaCommandsRemaining ?? 0}/3 lượt lệnh hôm nay)*`
+        : '';
+      const replyMd = `🔄 **Đã đặt lại phiên trò chuyện!**\n\nLịch sử hội thoại trước đây của bạn đã được xoá khỏi ngữ cảnh. Bạn có thể bắt đầu chủ đề mới.${graceNote}`;
+      const replyHtml = markdownToTelegramHtml(replyMd);
+      await sendReply(botToken, chat_id, replyHtml, message_id);
+      await logTelegramSession(
+        {
+          chatId: chat_id,
+          userName: from_name,
+          userMessage: text,
+          aiResponse: replyMd,
+          dataScopeUsed: dataScope,
+          tokenCount: 0,
+        },
+        db
+      );
+      return;
+    }
+
+    if (lowerText === '/help' || lowerText === '/start') {
+      const remainingQuota = Math.max(0, cmdUser.dailyLimit - cmdUser.usedToday);
+      const isOver = cmdUser.usedToday >= cmdUser.dailyLimit;
+      const scopeDescriptions: Record<TelegramDataScope, string> = {
+        full: 'Toàn bộ (Tasks + Projects + Docs)',
+        knowledge_only: 'Chỉ Docs & Notes',
+        tasks_only: 'Chỉ Tasks & Projects',
+        pure_llm: 'Chỉ LLM (Không dữ liệu TaskMate)',
+      };
+
+      const quotaStatusLine = isOver
+        ? `- Hạn mức hôm nay: \`0 / ${cmdUser.dailyLimit} (đã hết hạn mức - còn ${cmdAccess.overQuotaCommandsRemaining ?? 0}/3 lượt lệnh trợ giúp/reset)\``
+        : `- Hạn mức hôm nay: \`${remainingQuota} / ${cmdUser.dailyLimit} tin nhắn còn lại\``;
+
+      const replyMd = [
+        `🤖 **TaskMate AI Bot — Trợ lý Thông minh**`,
+        ``,
+        `Xin chào **${cmdUser.name}**! Tôi là bot hỗ trợ quản lý công việc và tra cứu tài liệu từ TaskMate cá nhân của bạn.`,
+        ``,
+        `📊 **Thông tin tài khoản:**`,
+        `- Phạm vi dữ liệu: \`${scopeDescriptions[dataScope]}\``,
+        `- Lượt nhớ hội thoại: \`${cmdUser.maxHistoryTurns ?? 5} lượt\``,
+        quotaStatusLine,
+        ``,
+        `⚡ **Lệnh nhanh:**`,
+        `- \`/help\` hoặc \`/start\`: Xem thông tin trợ giúp và hạn mức (không tốn hạn mức chat)`,
+        `- \`/reset\` hoặc \`/clear\`: Xoá ngữ cảnh hội thoại, bắt đầu phiên mới (không tốn hạn mức chat)`,
+        ``,
+        `💡 *Hãy đặt câu hỏi trực tiếp, ví dụ: "Hôm nay tôi có task nào gấp?" hoặc "Tóm tắt ghi chú kiến trúc bot".*`,
+      ].join('\n');
+
+      const replyHtml = markdownToTelegramHtml(replyMd);
+      await sendReply(botToken, chat_id, replyHtml, message_id);
+      await logTelegramSession(
+        {
+          chatId: chat_id,
+          userName: from_name,
+          userMessage: text,
+          aiResponse: replyMd,
+          dataScopeUsed: dataScope,
+          tokenCount: 0,
+        },
+        db
+      );
+      return;
+    }
+  }
+
+  // Regular chat message: check and consume quota
   const quota = await checkAndConsumeQuota(chat_id, db);
 
   if (!quota.allowed) {
@@ -280,7 +416,7 @@ export async function processTelegramInboundMessage(
     }
 
     if (quota.reason === 'quota_exceeded') {
-      const rawMsg = `⏳ **Hết hạn mức trong ngày**\n\nBạn đã sử dụng hết hạn mức ${quota.dailyLimit} tin nhắn/ngày. Hạn mức sẽ được đặt lại vào 00:00 ngày mai.`;
+      const rawMsg = `⏳ **Hết hạn mức trong ngày**\n\nBạn đã sử dụng hết hạn mức ${quota.dailyLimit} tin nhắn/ngày. Hạn mức sẽ được đặt lại vào 00:00 ngày mai.\n\n💡 *Gõ /help hoặc /reset nếu cần xem thông tin hoặc đặt lại phiên.*`;
       const htmlMsg = markdownToTelegramHtml(rawMsg);
       await sendReply(botToken, chat_id, htmlMsg, message_id);
       await logTelegramSession(
@@ -301,74 +437,19 @@ export async function processTelegramInboundMessage(
   const user = quota.user!;
   const dataScope = user.dataScope || 'full';
 
-  // Step 2: Conversational Slash Command Handlers (/reset, /clear, /start, /help)
-  // These commands do NOT call AI and should preserve user quota
-  if (lowerText === '/reset' || lowerText === '/clear') {
-    await resetTelegramUserSession(chat_id, db);
-    const replyMd = `🔄 **Đã đặt lại phiên trò chuyện!**\n\nLịch sử hội thoại trước đây của bạn đã được xoá khỏi ngữ cảnh. Bạn có thể bắt đầu chủ đề mới.`;
-    const replyHtml = markdownToTelegramHtml(replyMd);
-    await sendReply(botToken, chat_id, replyHtml, message_id);
-    await logTelegramSession(
-      {
-        chatId: chat_id,
-        userName: from_name,
-        userMessage: text,
-        aiResponse: replyMd,
-        dataScopeUsed: dataScope,
-        tokenCount: 0,
-      },
-      db
-    );
-    return;
-  }
-
-  if (lowerText === '/help' || lowerText === '/start') {
-    const remainingQuota = Math.max(0, user.dailyLimit - user.usedToday);
-    const scopeDescriptions: Record<TelegramDataScope, string> = {
-      full: 'Toàn bộ (Tasks + Projects + Docs)',
-      knowledge_only: 'Chỉ Docs & Notes',
-      tasks_only: 'Chỉ Tasks & Projects',
-      pure_llm: 'Chỉ LLM (Không dữ liệu TaskMate)',
-    };
-
-    const replyMd = [
-      `🤖 **TaskMate AI Bot — Trợ lý Thông minh**`,
-      ``,
-      `Xin chào **${user.name}**! Tôi là bot hỗ trợ quản lý công việc và tra cứu tài liệu từ TaskMate cá nhân của bạn.`,
-      ``,
-      `📊 **Thông tin tài khoản:**`,
-      `- Phạm vi dữ liệu: \`${scopeDescriptions[dataScope]}\``,
-      `- Lượt nhớ hội thoại: \`${user.maxHistoryTurns ?? 5} lượt\``,
-      `- Hạn mức hôm nay: \`${remainingQuota} / ${user.dailyLimit} tin nhắn còn lại\``,
-      ``,
-      `⚡ **Lệnh nhanh:**`,
-      `- \`/help\` hoặc \`/start\`: Xem thông tin trợ giúp và hạn mức`,
-      `- \`/reset\` hoặc \`/clear\`: Xoá ngữ cảnh hội thoại, bắt đầu phiên mới`,
-      ``,
-      `💡 *Hãy đặt câu hỏi trực tiếp, ví dụ: "Hôm nay tôi có task nào gấp?" hoặc "Tóm tắt ghi chú kiến trúc bot".*`,
-    ].join('\n');
-
-    const replyHtml = markdownToTelegramHtml(replyMd);
-    await sendReply(botToken, chat_id, replyHtml, message_id);
-    await logTelegramSession(
-      {
-        chatId: chat_id,
-        userName: from_name,
-        userMessage: text,
-        aiResponse: replyMd,
-        dataScopeUsed: dataScope,
-        tokenCount: 0,
-      },
-      db
-    );
-    return;
-  }
-
-  // Step 3: Send typing action
+  // Step 3: Send typing action and immediate acknowledgment so user knows AI is working
   try {
     await sendAction(botToken, chat_id, 'typing');
   } catch (err) {
     console.warn('[telegramWorker] sendAction failed:', err);
+  }
+
+  try {
+    const queryingNotice = `🔍 *Đang truy vấn dữ liệu và suy nghĩ câu trả lời...*`;
+    const queryingHtml = markdownToTelegramHtml(queryingNotice);
+    await sendReply(botToken, chat_id, queryingHtml, message_id);
+  } catch (noticeErr) {
+    console.warn('[telegramWorker] send query notice failed:', noticeErr);
   }
 
   // Step 4: Gather grounded context & history

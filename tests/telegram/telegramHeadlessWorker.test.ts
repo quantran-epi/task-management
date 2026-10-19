@@ -5,6 +5,7 @@ import {
   resolveScopedContext,
   processTelegramInboundMessage,
   cleanCitationTags,
+  broadcastTelegramMessage,
 } from '../../src/services/telegram/telegramHeadlessWorker';
 import {
   upsertWhitelistUser,
@@ -48,6 +49,16 @@ describe('Telegram Headless Worker', () => {
   it('cleans citation tags properly', () => {
     const raw = 'Answer based on [S1] and [Doc 2] and [Source 3] sources.';
     expect(cleanCitationTags(raw)).toBe('Answer based on  and  and  sources.');
+  });
+
+  it('converts markdown with multiple inline codes and underscores correctly without placeholder leak', async () => {
+    const { markdownToTelegramHtml } = await import('../../src/services/telegram/telegramHtml');
+    const input = 'Bảng giao dịch phổ biến trong SmartVista FE thường là `TXN_LOG` hoặc `AUTH_LOG`, nhưng cần xác nhận trực tiếp trên schema DB của môi trường DEV (`10.4.97.110`).';
+    const result = markdownToTelegramHtml(input);
+    expect(result).not.toContain('TG_INLINE_CODE');
+    expect(result).toContain('<code>TXN_LOG</code>');
+    expect(result).toContain('<code>AUTH_LOG</code>');
+    expect(result).toContain('<code>10.4.97.110</code>');
   });
 
   it('resolves scoped context based on dataScope', async () => {
@@ -180,6 +191,117 @@ describe('Telegram Headless Worker', () => {
     expect(replies[0]).toContain('Help User');
   });
 
+  it('allows 3 /help or /reset command executions when over quota but rejects regular messages', async () => {
+    await upsertWhitelistUser(
+      {
+        chatId: 'over_quota_user',
+        name: 'Over Quota User',
+        status: 'active',
+        dailyLimit: 2,
+        usedToday: 2,
+      },
+      testDb
+    );
+
+    const replies: string[] = [];
+    const mockSendReply = vi.fn(async (_token: string, _chatId: string, text: string) => {
+      replies.push(text);
+    });
+    const mockSendAction = vi.fn(async () => {});
+
+    // 1. Regular chat message -> blocked immediately
+    await processTelegramInboundMessage(
+      {
+        update_id: 20,
+        message_id: 301,
+        chat_id: 'over_quota_user',
+        from_name: 'Over Quota User',
+        text: 'Hello, what are my tasks?',
+        date: 1234570,
+      },
+      'test_token',
+      testDb,
+      mockSendReply,
+      mockSendAction
+    );
+    expect(replies[0]).toContain('Hết hạn mức trong ngày');
+    replies.length = 0;
+
+    // 2. /help -> allowed (1/3)
+    await processTelegramInboundMessage(
+      {
+        update_id: 21,
+        message_id: 302,
+        chat_id: 'over_quota_user',
+        from_name: 'Over Quota User',
+        text: '/help',
+        date: 1234571,
+      },
+      'test_token',
+      testDb,
+      mockSendReply,
+      mockSendAction
+    );
+    expect(replies[0]).toContain('TaskMate AI Bot — Trợ lý Thông minh');
+    expect(replies[0]).toContain('đã hết hạn mức - còn 2/3 lượt lệnh');
+    replies.length = 0;
+
+    // 3. /reset -> allowed (2/3)
+    await processTelegramInboundMessage(
+      {
+        update_id: 22,
+        message_id: 303,
+        chat_id: 'over_quota_user',
+        from_name: 'Over Quota User',
+        text: '/reset',
+        date: 1234572,
+      },
+      'test_token',
+      testDb,
+      mockSendReply,
+      mockSendAction
+    );
+    expect(replies[0]).toContain('Đã đặt lại phiên trò chuyện');
+    expect(replies[0]).toContain('còn 1/3 lượt lệnh');
+    replies.length = 0;
+
+    // 4. /help -> allowed (3/3)
+    await processTelegramInboundMessage(
+      {
+        update_id: 23,
+        message_id: 304,
+        chat_id: 'over_quota_user',
+        from_name: 'Over Quota User',
+        text: '/help',
+        date: 1234573,
+      },
+      'test_token',
+      testDb,
+      mockSendReply,
+      mockSendAction
+    );
+    expect(replies[0]).toContain('TaskMate AI Bot — Trợ lý Thông minh');
+    replies.length = 0;
+
+    // 5. 4th command -> blocked
+    await processTelegramInboundMessage(
+      {
+        update_id: 24,
+        message_id: 305,
+        chat_id: 'over_quota_user',
+        from_name: 'Over Quota User',
+        text: '/help',
+        date: 1234574,
+      },
+      'test_token',
+      testDb,
+      mockSendReply,
+      mockSendAction
+    );
+    expect(replies[0]).toContain('Hết hạn mức trong ngày');
+    expect(replies[0]).toContain('3 lượt lệnh');
+  });
+
   it('rejects unauthorized chat ID with approval instructions in HTML format', async () => {
     const replies: string[] = [];
     const mockSendReply = vi.fn(async (_token: string, _chatId: string, text: string) => {
@@ -247,15 +369,43 @@ describe('Telegram Headless Worker', () => {
     );
 
     expect(mockSendAction).toHaveBeenCalledWith('test_token', 'authorized_user_1', 'typing');
-    expect(mockSendReply).toHaveBeenCalledTimes(1);
+    // Notice reply + AI reply
+    expect(mockSendReply).toHaveBeenCalledTimes(2);
+    expect(replies[0]).toContain('Đang truy vấn dữ liệu');
     // [S1] citation stripped, **bold** converted to <b>bold</b>
-    expect(replies[0]).toContain('<b>bold</b>');
-    expect(replies[0]).not.toContain('[S1]');
+    expect(replies[1]).toContain('<b>bold</b>');
+    expect(replies[1]).not.toContain('[S1]');
 
     const logs = await getRecentTelegramLogs(5, testDb);
     expect(logs).toHaveLength(1);
     expect(logs[0]?.chatId).toBe('authorized_user_1');
     expect(logs[0]?.userMessage).toBe('Summary my projects');
     expect(logs[0]?.aiResponse).toContain('AI reply with');
+  });
+
+  it('broadcastTelegramMessage sends messages to all target chat IDs and reports results', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url: any, opts: any) => {
+      const body = typeof opts?.body === 'string' ? JSON.parse(opts.body) : {};
+      if (body.chat_id === 'fail_chat') {
+        return {
+          ok: false,
+          status: 400,
+          json: async () => ({ ok: false, description: 'Chat not found' }),
+        } as any;
+      }
+      return {
+        ok: true,
+        json: async () => ({ ok: true, result: { message_id: 999 } }),
+      } as any;
+    });
+
+    const res = await broadcastTelegramMessage('dummy_token', ['user_1', 'fail_chat', 'user_2'], 'Hello **World**');
+    expect(res.total).toBe(3);
+    expect(res.successCount).toBe(2);
+    expect(res.failureCount).toBe(1);
+    expect(res.failures).toHaveLength(1);
+    expect(res.failures[0]?.chatId).toBe('fail_chat');
+
+    fetchSpy.mockRestore();
   });
 });

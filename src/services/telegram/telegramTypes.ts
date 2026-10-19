@@ -22,6 +22,7 @@ export interface TelegramWhitelistUser {
   lastActiveDate: string; // YYYY-MM-DD
   maxHistoryTurns?: number | undefined; // default 5 turns, 0 = single-turn
   sessionResetAt?: string | undefined; // ISO timestamp to filter history
+  overQuotaCommandsUsed?: number | undefined; // Count of /help or /reset used after reaching daily limit
   createdAt: string;
   updatedAt: string;
 }
@@ -54,4 +55,11 @@ export interface TelegramConflictEvent {
 export interface TelegramStatusEvent {
   running: boolean;
   error?: string | null;
+}
+
+export interface TelegramBroadcastResult {
+  total: number;
+  successCount: number;
+  failureCount: number;
+  failures: Array<{ chatId: string; error: string }>;
 }

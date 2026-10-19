@@ -7,6 +7,7 @@ import {
   upsertWhitelistUser,
   deleteWhitelistUser,
   checkAndConsumeQuota,
+  checkAndConsumeCommandQuota,
   logTelegramSession,
   getRecentTelegramLogs,
   resetTelegramUserSession,
@@ -120,11 +121,30 @@ describe('Telegram Settings Service (Dexie V12)', () => {
     expect(req3.allowed).toBe(false);
     expect(req3.reason).toBe('quota_exceeded');
 
-    // 4. Auto-reset quota on new day
+    // 4. Slash commands don't consume dailyLimit, but allow max 3 commands when over quota
+    const cmd1 = await checkAndConsumeCommandQuota('user_limit_2', testDb);
+    expect(cmd1.allowed).toBe(true);
+    expect(cmd1.isOverQuota).toBe(true);
+    expect(cmd1.overQuotaCommandsRemaining).toBe(2);
+
+    const cmd2 = await checkAndConsumeCommandQuota('user_limit_2', testDb);
+    expect(cmd2.allowed).toBe(true);
+    expect(cmd2.overQuotaCommandsRemaining).toBe(1);
+
+    const cmd3 = await checkAndConsumeCommandQuota('user_limit_2', testDb);
+    expect(cmd3.allowed).toBe(true);
+    expect(cmd3.overQuotaCommandsRemaining).toBe(0);
+
+    const cmd4 = await checkAndConsumeCommandQuota('user_limit_2', testDb);
+    expect(cmd4.allowed).toBe(false);
+    expect(cmd4.reason).toBe('quota_exceeded');
+
+    // 5. Auto-reset quota on new day
     await upsertWhitelistUser(
       {
         chatId: 'user_limit_2',
         usedToday: 2,
+        overQuotaCommandsUsed: 3,
         lastActiveDate: '2020-01-01',
       },
       testDb

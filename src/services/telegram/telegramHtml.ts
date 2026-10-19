@@ -32,20 +32,22 @@ export function markdownToTelegramHtml(markdown: string): string {
   if (!markdown) return '';
 
   // Step 1: Extract code blocks (fenced ```...```) to prevent formatting inside code
+  // Use unique null-character safe alphanumeric markers without underscores or asterisks
   const codeBlocks: string[] = [];
   let text = markdown.replace(/```([a-zA-Z0-9_-]*)\n?([\s\S]*?)```/g, (_match, lang, code) => {
     const escapedCode = escapeHtmlEntities(code.replace(/\n$/, ''));
     const langAttr = lang ? ` class="language-${escapeHtmlEntities(lang)}"` : '';
-    const placeholder = `__TG_CODE_BLOCK_${codeBlocks.length}__`;
+    const placeholder = `@@@TGCODEBLOCK${codeBlocks.length}@@@`;
     codeBlocks.push(`<pre><code${langAttr}>${escapedCode}</code></pre>`);
     return placeholder;
   });
 
   // Step 2: Extract inline code (`...`) to preserve content untouched
+  // Use markers without underscores or asterisks so bold/italic regex cannot match them
   const inlineCodes: string[] = [];
   text = text.replace(/`([^`\n]+)`/g, (_match, code) => {
     const escaped = escapeHtmlEntities(code);
-    const placeholder = `__TG_INLINE_CODE_${inlineCodes.length}__`;
+    const placeholder = `@@@TGINLINECODE${inlineCodes.length}@@@`;
     inlineCodes.push(`<code>${escaped}</code>`);
     return placeholder;
   });
@@ -75,12 +77,12 @@ export function markdownToTelegramHtml(markdown: string): string {
   text = text.replace(/^#{1,6}\s+(.+)$/gm, '<b>$1</b>');
 
   // Step 9: Re-insert inline code placeholders
-  text = text.replace(/__TG_INLINE_CODE_(\d+)__/g, (_match, idx) => {
+  text = text.replace(/@@@TGINLINECODE(\d+)@@@/g, (_match, idx) => {
     return inlineCodes[Number(idx)] || '';
   });
 
   // Step 10: Re-insert code block placeholders
-  text = text.replace(/__TG_CODE_BLOCK_(\d+)__/g, (_match, idx) => {
+  text = text.replace(/@@@TGCODEBLOCK(\d+)@@@/g, (_match, idx) => {
     return codeBlocks[Number(idx)] || '';
   });
 

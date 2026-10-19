@@ -72,6 +72,7 @@ export async function upsertWhitelistUser(
     lastActiveDate: user.lastActiveDate ?? existing?.lastActiveDate ?? today,
     maxHistoryTurns: user.maxHistoryTurns ?? existing?.maxHistoryTurns ?? 5,
     sessionResetAt: user.sessionResetAt !== undefined ? user.sessionResetAt : existing?.sessionResetAt,
+    overQuotaCommandsUsed: user.overQuotaCommandsUsed ?? existing?.overQuotaCommandsUsed ?? 0,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   };
@@ -87,17 +88,20 @@ export async function deleteWhitelistUser(
   await db.telegramWhitelist.delete(chatId);
 }
 
+export const TELEGRAM_COMMAND_OVER_QUOTA_GRACE = 3;
+
 export interface QuotaCheckResult {
   allowed: boolean;
   reason?: 'not_whitelisted' | 'blocked' | 'quota_exceeded';
   user?: TelegramWhitelistUser;
   usedToday?: number;
   dailyLimit?: number;
+  isOverQuota?: boolean;
 }
 
 /**
  * Checks if the user is authorized and has quota remaining.
- * Automatically resets `usedToday` if `lastActiveDate !== today`.
+ * Automatically resets `usedToday` and `overQuotaCommandsUsed` if `lastActiveDate !== today`.
  * Increments `usedToday` atomically if allowed.
  */
 export async function checkAndConsumeQuota(
@@ -129,6 +133,7 @@ export async function checkAndConsumeQuota(
         user,
         usedToday,
         dailyLimit: user.dailyLimit,
+        isOverQuota: true,
       };
     }
 
@@ -136,6 +141,7 @@ export async function checkAndConsumeQuota(
     const updatedUser: TelegramWhitelistUser = {
       ...user,
       usedToday,
+      overQuotaCommandsUsed: user.lastActiveDate !== today ? 0 : (user.overQuotaCommandsUsed ?? 0),
       lastActiveDate: today,
       updatedAt: new Date().toISOString(),
     };
@@ -147,6 +153,83 @@ export async function checkAndConsumeQuota(
       user: updatedUser,
       usedToday,
       dailyLimit: user.dailyLimit,
+      isOverQuota: false,
+    };
+  });
+}
+
+export interface CommandAccessResult {
+  allowed: boolean;
+  reason?: 'not_whitelisted' | 'blocked' | 'quota_exceeded';
+  user?: TelegramWhitelistUser;
+  isOverQuota?: boolean;
+  overQuotaCommandsRemaining?: number;
+}
+
+/**
+ * Checks authorization for slash commands (/help, /reset, /start, /clear).
+ * Slash commands do NOT consume dailyLimit.
+ * If user has exhausted dailyLimit, they get TELEGRAM_COMMAND_OVER_QUOTA_GRACE (3) extra command executions.
+ */
+export async function checkAndConsumeCommandQuota(
+  chatId: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<CommandAccessResult> {
+  return await db.transaction('rw', db.telegramWhitelist, async () => {
+    const user = await db.telegramWhitelist.get(chatId);
+    if (!user) {
+      return { allowed: false, reason: 'not_whitelisted' };
+    }
+
+    if (user.status === 'blocked') {
+      return { allowed: false, reason: 'blocked', user };
+    }
+
+    const today = getTodayDateString();
+    let usedToday = user.usedToday;
+    let overQuotaCommandsUsed = user.overQuotaCommandsUsed ?? 0;
+
+    if (user.lastActiveDate !== today) {
+      usedToday = 0;
+      overQuotaCommandsUsed = 0;
+    }
+
+    const isOverQuota = usedToday >= user.dailyLimit;
+
+    if (isOverQuota) {
+      if (overQuotaCommandsUsed >= TELEGRAM_COMMAND_OVER_QUOTA_GRACE) {
+        return {
+          allowed: false,
+          reason: 'quota_exceeded',
+          user,
+          isOverQuota: true,
+          overQuotaCommandsRemaining: 0,
+        };
+      }
+
+      overQuotaCommandsUsed += 1;
+      const updatedUser: TelegramWhitelistUser = {
+        ...user,
+        usedToday,
+        overQuotaCommandsUsed,
+        lastActiveDate: today,
+        updatedAt: new Date().toISOString(),
+      };
+      await db.telegramWhitelist.put(updatedUser);
+
+      return {
+        allowed: true,
+        user: updatedUser,
+        isOverQuota: true,
+        overQuotaCommandsRemaining: Math.max(0, TELEGRAM_COMMAND_OVER_QUOTA_GRACE - overQuotaCommandsUsed),
+      };
+    }
+
+    return {
+      allowed: true,
+      user,
+      isOverQuota: false,
+      overQuotaCommandsRemaining: TELEGRAM_COMMAND_OVER_QUOTA_GRACE,
     };
   });
 }
