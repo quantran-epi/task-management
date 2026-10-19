@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { Button, Input, Space, Tooltip, Typography, Spin, theme } from 'antd';
 import {
   RobotOutlined,
@@ -31,15 +31,53 @@ export interface InlineAISelectionBarProps {
   db?: TaskPlannerDatabase;
 }
 
+export interface SelectionRectInfo {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+  width: number;
+}
+
+export const GAP = 8;
+
+export function calculatePopupPosition(
+  rect: SelectionRectInfo,
+  popupWidth: number,
+  popupHeight: number,
+  viewportWidth: number = typeof window !== 'undefined' ? window.innerWidth : 1024,
+  scrollX: number = typeof window !== 'undefined' ? window.scrollX : 0,
+  scrollY: number = typeof window !== 'undefined' ? window.scrollY : 0
+): { x: number; y: number; placedBelow: boolean } {
+  // Vertical positioning:
+  // Strictly above if sufficient clearance (rect.top >= popupHeight + GAP + 10)
+  // Else flip strictly below (rect.bottom + GAP)
+  const canFitAbove = rect.top >= popupHeight + GAP + 10;
+  const placedBelow = !canFitAbove;
+  const y = canFitAbove ? rect.top - popupHeight - GAP : rect.bottom + GAP;
+
+  // Horizontal positioning:
+  // Center relative to selection and clamp to viewport margins
+  const rawX = rect.left + rect.width / 2 - popupWidth / 2;
+  const clampedX = Math.max(16, Math.min(viewportWidth - popupWidth - 16, rawX));
+
+  return {
+    x: clampedX + scrollX,
+    y: y + scrollY,
+    placedBelow,
+  };
+}
+
 // Read-only subset of AI_DATABASE_TOOLS to ensure safety inside inline popover
 const READ_ONLY_AI_TOOLS = AI_DATABASE_TOOLS.filter((t) => !isMutationTool(t.function.name));
 
 export const InlineAISelectionBar: React.FC<InlineAISelectionBarProps> = ({ db = defaultDb }) => {
   const { token } = theme.useToken();
-  const { openChat } = useAIChat();
+  const { openChatWithDraft } = useAIChat();
 
   const [visible, setVisible] = useState(false);
   const [position, setPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [selectionRect, setSelectionRect] = useState<SelectionRectInfo | null>(null);
   const [currentPayload, setCurrentPayload] = useState<SelectionContextPayload | null>(null);
 
   // Inline ask popover mode
@@ -65,7 +103,39 @@ export const InlineAISelectionBar: React.FC<InlineAISelectionBarProps> = ({ db =
     setInlineStatus(null);
     setIsLoadingInline(false);
     setCurrentPayload(null);
+    setSelectionRect(null);
   }, []);
+
+  // Update position based on selectionRect and actual/estimated container dimensions
+  const updatePosition = useCallback(() => {
+    if (!selectionRect) return;
+
+    let popupWidth = isAskingInline ? 380 : 320;
+    let popupHeight = isAskingInline ? 280 : 38;
+
+    if (containerRef.current) {
+      const measured = containerRef.current.getBoundingClientRect();
+      if (measured.width > 0) popupWidth = measured.width;
+      if (measured.height > 0) popupHeight = measured.height;
+    }
+
+    const { x, y } = calculatePopupPosition(
+      selectionRect,
+      popupWidth,
+      popupHeight,
+      window.innerWidth,
+      window.scrollX,
+      window.scrollY
+    );
+    setPosition({ x, y });
+  }, [selectionRect, isAskingInline]);
+
+  // Recalculate position dynamically when visible, asking mode toggles, or container dimensions change
+  useLayoutEffect(() => {
+    if (visible && selectionRect) {
+      updatePosition();
+    }
+  }, [visible, isAskingInline, selectionRect, updatePosition, inlineResponse, inlineStatus]);
 
   // Listen to mouseup & selectionchange
   useEffect(() => {
@@ -79,19 +149,24 @@ export const InlineAISelectionBar: React.FC<InlineAISelectionBarProps> = ({ db =
       if (!selection || selection.isCollapsed) {
         if (!isAskingInline) {
           setVisible(false);
+          setSelectionRect(null);
         }
         return;
       }
 
       const text = selection.toString().trim();
       if (text.length < 3) {
-        if (!isAskingInline) setVisible(false);
+        if (!isAskingInline) {
+          setVisible(false);
+          setSelectionRect(null);
+        }
         return;
       }
 
       // Check if selection originates from an input or textarea
       const anchorNode = selection.anchorNode;
-      const targetElement = anchorNode?.nodeType === Node.ELEMENT_NODE ? (anchorNode as HTMLElement) : anchorNode?.parentElement;
+      const targetElement =
+        anchorNode?.nodeType === Node.ELEMENT_NODE ? (anchorNode as HTMLElement) : anchorNode?.parentElement;
       if (
         targetElement?.tagName === 'INPUT' ||
         targetElement?.closest('.ant-input') ||
@@ -106,6 +181,14 @@ export const InlineAISelectionBar: React.FC<InlineAISelectionBarProps> = ({ db =
         const rect = range.getBoundingClientRect();
         if (rect.width === 0 && rect.height === 0) return;
 
+        const rectInfo: SelectionRectInfo = {
+          top: rect.top,
+          bottom: rect.bottom,
+          left: rect.left,
+          right: rect.right,
+          width: rect.width,
+        };
+
         const domContext = getDomContextFromNode(anchorNode);
         const hierarchy = await resolveEntityHierarchy(domContext.entityType, domContext.entityId, db);
 
@@ -115,12 +198,17 @@ export const InlineAISelectionBar: React.FC<InlineAISelectionBarProps> = ({ db =
         };
 
         setCurrentPayload(payload);
+        setSelectionRect(rectInfo);
 
-        // Calculate position above selection or below if near top
-        const x = Math.max(16, Math.min(window.innerWidth - 320, rect.left + rect.width / 2 - 140));
-        const y = rect.top > 80 ? rect.top - 48 : rect.bottom + 8;
-
-        setPosition({ x, y: y + window.scrollY });
+        const initialPos = calculatePopupPosition(
+          rectInfo,
+          320,
+          38,
+          window.innerWidth,
+          window.scrollX,
+          window.scrollY
+        );
+        setPosition({ x: initialPos.x, y: initialPos.y });
         setVisible(true);
       } catch (err) {
         console.warn('[InlineAISelectionBar] Error getting selection range:', err);
@@ -133,6 +221,7 @@ export const InlineAISelectionBar: React.FC<InlineAISelectionBarProps> = ({ db =
       }
       if (!isAskingInline) {
         setVisible(false);
+        setSelectionRect(null);
       }
     };
 
@@ -172,7 +261,7 @@ export const InlineAISelectionBar: React.FC<InlineAISelectionBarProps> = ({ db =
       scopeTitle = currentPayload.parentProject.name;
     }
 
-    openChat(
+    openChatWithDraft(
       {
         type: scopeType,
         id: scopeId,
@@ -369,14 +458,14 @@ ${currentPayload.fullContextText ? `\n[DỮ LIỆU ĐẦY ĐỦ CỦA THỰC TH�
       {!isAskingInline ? (
         /* Floating Toolbar Quick Actions */
         <Space size={2} wrap>
-          <Tooltip title="Đưa vào AI Chat Drawer với đầy đủ ngữ cảnh">
+          <Tooltip title="Mention đoạn trích vào khung chat để chỉnh sửa trước khi gửi">
             <Button
               type="text"
               size="small"
               icon={<CommentOutlined style={{ color: token.colorPrimary }} />}
               onClick={handleMentionToDrawer}
             >
-              Hỏi Chat Drawer
+              Mention vào Chat
             </Button>
           </Tooltip>
 
@@ -385,7 +474,12 @@ ${currentPayload.fullContextText ? `\n[DỮ LIỆU ĐẦY ĐỦ CỦA THỰC TH�
               type="text"
               size="small"
               icon={<BulbOutlined style={{ color: '#faad14' }} />}
-              onClick={() => handleRunInlinePrompt('Giải thích', 'Giải thích ngắn gọn ý nghĩa của đoạn văn bản trên dựa trên toàn bộ ngữ cảnh gốc.')}
+              onClick={() =>
+                handleRunInlinePrompt(
+                  'Giải thích',
+                  'Giải thích ngắn gọn ý nghĩa của đoạn văn bản trên dựa trên toàn bộ ngữ cảnh gốc.'
+                )
+              }
             >
               Giải thích
             </Button>
@@ -396,7 +490,12 @@ ${currentPayload.fullContextText ? `\n[DỮ LIỆU ĐẦY ĐỦ CỦA THỰC TH�
               type="text"
               size="small"
               icon={<FileSearchOutlined style={{ color: '#52c41a' }} />}
-              onClick={() => handleRunInlinePrompt('Tóm tắt', 'Tóm tắt các ý chính của đoạn văn bản này thành 2-3 gạch đầu dòng rõ ràng.')}
+              onClick={() =>
+                handleRunInlinePrompt(
+                  'Tóm tắt',
+                  'Tóm tắt các ý chính của đoạn văn bản này thành 2-3 gạch đầu dòng rõ ràng.'
+                )
+              }
             >
               Tóm tắt
             </Button>
@@ -407,7 +506,12 @@ ${currentPayload.fullContextText ? `\n[DỮ LIỆU ĐẦY ĐỦ CỦA THỰC TH�
               type="text"
               size="small"
               icon={<CheckCircleOutlined style={{ color: '#13c2c2' }} />}
-              onClick={() => handleRunInlinePrompt('Sửa câu từ', 'Viết lại đoạn văn bản trên cho rõ ràng, chuẩn ngữ pháp và trau chuốt hơn.')}
+              onClick={() =>
+                handleRunInlinePrompt(
+                  'Sửa câu từ',
+                  'Viết lại đoạn văn bản trên cho rõ ràng, chuẩn ngữ pháp và trau chuốt hơn.'
+                )
+              }
             >
               Viết lại
             </Button>
@@ -466,7 +570,16 @@ ${currentPayload.fullContextText ? `\n[DỮ LIỆU ĐẦY ĐỦ CỦA THỰC TH�
               }}
             >
               {inlineStatus && (
-                <div style={{ color: token.colorTextTertiary, fontSize: 11, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <div
+                  style={{
+                    color: token.colorTextTertiary,
+                    fontSize: 11,
+                    marginBottom: 4,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                >
                   <Spin size="small" />
                   <span>{inlineStatus}</span>
                 </div>
@@ -478,7 +591,7 @@ ${currentPayload.fullContextText ? `\n[DỮ LIỆU ĐẦY ĐỦ CỦA THỰC TH�
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 4 }}>
             <Button size="small" onClick={handleMentionToDrawer}>
-              Mở trong Chat Drawer
+              Mention vào Chat
             </Button>
             <Button size="small" type="text" onClick={() => setIsAskingInline(false)}>
               Quay lại
