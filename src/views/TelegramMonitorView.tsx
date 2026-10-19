@@ -62,6 +62,7 @@ export const TelegramMonitorView: React.FC = () => {
   const [botToken, setBotToken] = useState<string>('');
   const [autoStart, setAutoStart] = useState<boolean>(false);
   const [defaultScope, setDefaultScope] = useState<TelegramDataScope>('full');
+  const [defaultMaxHistoryTurns, setDefaultMaxHistoryTurns] = useState<number>(5);
   const [savingSettings, setSavingSettings] = useState<boolean>(false);
 
   // Whitelist Modal State
@@ -88,6 +89,7 @@ export const TelegramMonitorView: React.FC = () => {
       setBotToken(settingsRecord.botToken || '');
       setAutoStart(Boolean(settingsRecord.autoStartOnLaunch));
       setDefaultScope(settingsRecord.defaultScope || 'full');
+      setDefaultMaxHistoryTurns(settingsRecord.maxHistoryTurns ?? 5);
     }
   }, [settingsRecord]);
 
@@ -183,6 +185,7 @@ export const TelegramMonitorView: React.FC = () => {
         botToken: botToken.trim(),
         autoStartOnLaunch: autoStart,
         defaultScope,
+        maxHistoryTurns: defaultMaxHistoryTurns,
       });
       message.success('Đã lưu cấu hình Telegram Bot');
     } catch (err) {
@@ -217,18 +220,20 @@ export const TelegramMonitorView: React.FC = () => {
     try {
       const values = await userForm.validateFields();
       const isNewUser = !editingUser;
+      const turns = values.maxHistoryTurns !== undefined ? values.maxHistoryTurns : defaultMaxHistoryTurns;
       await upsertWhitelistUser({
         chatId: values.chatId.trim(),
         name: values.name.trim(),
         status: values.status,
         dataScope: values.dataScope,
         dailyLimit: values.dailyLimit,
+        maxHistoryTurns: turns,
       });
 
       // Send telegram notification to user on approval/activation
       if (values.status === 'active' && botToken.trim()) {
         try {
-          const notifyMsg = `🎉 **Tài khoản của bạn đã được phê duyệt!**\n\nXin chào ${values.name.trim()}, quản trị viên đã kích hoạt quyền sử dụng TaskMate AI Bot cho bạn.\n\n📊 **Hạn mức:** ${values.dailyLimit} tin nhắn/ngày\n🔍 **Phạm vi dữ liệu:** \`${values.dataScope}\`\n\nBạn có thể bắt đầu đặt câu hỏi ngay bây giờ!`;
+          const notifyMsg = `🎉 **Tài khoản của bạn đã được phê duyệt!**\n\nXin chào ${values.name.trim()}, quản trị viên đã kích hoạt quyền sử dụng TaskMate AI Bot cho bạn.\n\n📊 **Hạn mức:** ${values.dailyLimit} tin nhắn/ngày\n🔍 **Phạm vi:** ${values.dataScope}\n🧠 **Lịch sử:** ${turns} lượt\n\n💡 *Gõ /help để xem hướng dẫn hoặc /reset để đặt lại phiên trò chuyện.*`;
           await sendTelegramDirectMessage(botToken.trim(), values.chatId.trim(), notifyMsg);
         } catch (sendErr) {
           console.warn('Could not send approval notice to Telegram:', sendErr);
@@ -251,6 +256,7 @@ export const TelegramMonitorView: React.FC = () => {
       status: user.status,
       dataScope: user.dataScope,
       dailyLimit: user.dailyLimit,
+      maxHistoryTurns: user.maxHistoryTurns ?? defaultMaxHistoryTurns,
     });
     setUserModalOpen(true);
   };
@@ -546,6 +552,7 @@ export const TelegramMonitorView: React.FC = () => {
                           status: 'active',
                           dataScope: defaultScope,
                           dailyLimit: 30,
+                          maxHistoryTurns: defaultMaxHistoryTurns,
                         });
                         setUserModalOpen(true);
                       }}
@@ -587,6 +594,7 @@ export const TelegramMonitorView: React.FC = () => {
                                     status: 'active',
                                     dataScope: defaultScope,
                                     dailyLimit: 30,
+                                    maxHistoryTurns: defaultMaxHistoryTurns,
                                   });
                                   setUserModalOpen(true);
                                 }}
@@ -661,6 +669,16 @@ export const TelegramMonitorView: React.FC = () => {
                         },
                       },
                       {
+                        title: 'Lịch sử',
+                        key: 'historyTurns',
+                        width: 110,
+                        render: (_, r: TelegramWhitelistUser) => (
+                          <Tag color="cyan">
+                            {r.maxHistoryTurns ?? 5} lượt
+                          </Tag>
+                        ),
+                      },
+                      {
                         title: 'Thao tác',
                         key: 'actions',
                         render: (_, r: TelegramWhitelistUser) => (
@@ -717,6 +735,19 @@ export const TelegramMonitorView: React.FC = () => {
                           { value: 'tasks_only', label: 'Chỉ Tasks & Projects' },
                           { value: 'pure_llm', label: 'Chỉ LLM (Không chia sẻ dữ liệu TaskMate)' },
                         ]}
+                      />
+                    </Form.Item>
+
+                    <Form.Item
+                      label={<strong>Số lượt nhớ hội thoại mặc định (Turns)</strong>}
+                      extra="Số câu hỏi - trả lời gần nhất bot ghi nhớ làm ngữ cảnh trước khi trả lời. 0 = Single-turn."
+                    >
+                      <InputNumber
+                        min={0}
+                        max={20}
+                        value={defaultMaxHistoryTurns}
+                        onChange={(v) => setDefaultMaxHistoryTurns(v ?? 5)}
+                        style={{ width: '100%' }}
                       />
                     </Form.Item>
 
@@ -793,6 +824,14 @@ export const TelegramMonitorView: React.FC = () => {
             rules={[{ required: true, message: 'Nhập số hạn mức' }]}
           >
             <InputNumber min={1} max={500} style={{ width: '100%' }} />
+          </Form.Item>
+
+          <Form.Item
+            name="maxHistoryTurns"
+            label="Số lượt nhớ hội thoại (Turns)"
+            tooltip="0 = Single-turn không nhớ ngữ cảnh trước; 5 = nhớ 5 câu hỏi gần nhất"
+          >
+            <InputNumber min={0} max={20} style={{ width: '100%' }} placeholder="Mặc định: 5" />
           </Form.Item>
         </Form>
       </Modal>
