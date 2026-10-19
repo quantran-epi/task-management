@@ -317,27 +317,42 @@ pub async fn send_telegram_reply(
         .build()
         .map_err(|e| e.to_string())?;
 
-    // Try HTML parse_mode first (convert standard markdown to safe HTML),
-    // or try Markdown first then fallback to plain text if Telegram Markdown parsing fails.
-    let body_markdown = SendMessageBody {
+    // Try HTML parse_mode first.
+    // Fall back to plain text (with HTML tags stripped) if Telegram HTML parser rejects the payload.
+    let body_html = SendMessageBody {
         chat_id: chat_id.clone(),
         text: text.clone(),
-        parse_mode: "Markdown".to_string(),
+        parse_mode: "HTML".to_string(),
         reply_to_message_id,
     };
 
     let res = client
         .post(&url)
-        .json(&body_markdown)
+        .json(&body_html)
         .send()
         .await
         .map_err(|e| format!("Network error sending reply: {}", e))?;
 
     if !res.status().is_success() {
-        // Fallback: If Markdown parsing failed (e.g. unclosed tags/asterisks), send as plain text without parse_mode
+        // Fallback: strip basic html tags and send as plain text without parse_mode
+        let stripped_text = text
+            .replace("<b>", "")
+            .replace("</b>", "")
+            .replace("<i>", "")
+            .replace("</i>", "")
+            .replace("<code>", "")
+            .replace("</code>", "")
+            .replace("<pre>", "")
+            .replace("</pre>", "")
+            .replace("<s>", "")
+            .replace("</s>", "")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&amp;", "&");
+
         let body_plain = serde_json::json!({
             "chat_id": chat_id,
-            "text": text,
+            "text": stripped_text,
             "reply_to_message_id": reply_to_message_id,
         });
 
