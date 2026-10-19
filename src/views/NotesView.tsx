@@ -54,6 +54,7 @@ import type { CachedActiveSnapshotManifest, ChangePreview } from '../services/kn
 import { DocFolderTree } from '../components/notes/DocFolderTree';
 import { DocEditorPane } from '../components/notes/DocEditorPane';
 import { ZipImportPreviewModal } from '../components/notes/ZipImportPreviewModal';
+import { exportFolderAsZip } from '../utils/exportFolderZip';
 import { TaskDrawer } from '../components/tasks/TaskDrawer';
 import { ResizeSplitter } from '../components/common/ResizeSplitter';
 
@@ -967,6 +968,18 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb, initialDoc
     }
   };
 
+  const handleDownloadFolder = async (folder: Note) => {
+    try {
+      message.loading({ content: `Đang nén thư mục "${folder.title || 'Thư mục'}"...`, key: 'download-folder' });
+      const fullNotes = allNotes || (await db.notes.toArray());
+      await exportFolderAsZip(folder, fullNotes);
+      message.success({ content: `Tải xuống thành công thư mục "${folder.title || 'Thư mục'}"`, key: 'download-folder' });
+    } catch (err: any) {
+      console.error('Download folder error:', err);
+      message.error({ content: `Không thể tải thư mục: ${err?.message || 'Lỗi không xác định'}`, key: 'download-folder' });
+    }
+  };
+
   const handleOpenPopout = () => {
     openNotesPopout().catch((err) => {
       console.warn('Failed to open notes popout:', err);
@@ -1043,6 +1056,7 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb, initialDoc
           onClearSpecialFolder={handleClearSpecialFolder}
           onUnpinAll={handleUnpinAll}
           onOpenZipImport={handleOpenZipImport}
+          onDownloadFolder={handleDownloadFolder}
           activeTag={activeTag}
           onSelectTag={setActiveTag}
           publishStatuses={publishStatuses}

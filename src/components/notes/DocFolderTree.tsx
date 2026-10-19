@@ -22,6 +22,7 @@ import {
   UndoOutlined,
   CheckSquareOutlined,
   ProjectOutlined,
+  DownloadOutlined,
 } from '@ant-design/icons';
 import type { Note } from '../../types/models';
 import type { DocumentPublishStatus } from '../../db/repositories/documentSetRepo';
@@ -62,6 +63,7 @@ export interface DocFolderTreeProps {
   onClearSpecialFolder?: (specialKey: 'root_docs' | 'quick_notes', title: string) => Promise<void> | void;
   onUnpinAll?: () => Promise<void> | void;
   onOpenZipImport?: () => void;
+  onDownloadFolder?: ((folder: Note) => Promise<void> | void) | undefined;
   activeTag?: string | null;
   onSelectTag?: (tag: string | null) => void;
   publishStatuses?: Readonly<Record<string, DocumentPublishStatus>> | undefined;
@@ -92,6 +94,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
   onClearSpecialFolder,
   onUnpinAll,
   onOpenZipImport,
+  onDownloadFolder,
   activeTag,
   onSelectTag,
   publishStatuses,
@@ -757,6 +760,16 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
               label: 'Di chuyển thư mục',
               icon: <FolderOutlined />,
               onClick: () => onMoveFolder(node.folder),
+            },
+          ]
+        : []),
+      ...(onDownloadFolder
+        ? [
+            {
+              key: 'download_folder',
+              label: 'Tải thư mục (ZIP)',
+              icon: <DownloadOutlined />,
+              onClick: () => onDownloadFolder(node.folder),
             },
           ]
         : []),
