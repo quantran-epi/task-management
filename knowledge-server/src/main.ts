@@ -30,19 +30,19 @@ import type { RetrievalRequest } from './types/retrievalProtocol.js';
 
 export interface RemoteEmbeddingConfig {
   enabled: boolean;
-  endpoint?: string;
-  allowedHosts?: string[];
-  model?: string;
-  dimensions?: number;
+  endpoint?: string | undefined;
+  allowedHosts?: string[] | undefined;
+  model?: string | undefined;
+  dimensions?: number | undefined;
 }
 
 export interface RemotePlannerConfig {
   enabled: boolean;
-  endpoint?: string;
-  model?: string;
-  apiKey?: string;
-  allowedHosts?: string[];
-  timeoutMs?: number;
+  endpoint?: string | undefined;
+  model?: string | undefined;
+  apiKey?: string | undefined;
+  allowedHosts?: string[] | undefined;
+  timeoutMs?: number | undefined;
 }
 
 export interface Neo4jConfig {
@@ -182,19 +182,10 @@ export function readKnowledgeServerOptions(
     } catch {
       throw new Error(`Invalid EMBEDDING_REMOTE_ENDPOINT: "${endpoint}". Must be a valid URL.`);
     }
-    if (parsedUrl.protocol !== 'https:') {
-      throw new Error(`EMBEDDING_REMOTE_ENDPOINT must use HTTPS protocol: "${endpoint}".`);
-    }
-    if (parsedUrl.username || parsedUrl.password) {
-      throw new Error('EMBEDDING_REMOTE_ENDPOINT must not contain credentials.');
-    }
-    if (parsedUrl.search || parsedUrl.hash) {
-      throw new Error('EMBEDDING_REMOTE_ENDPOINT must not contain query parameters or hash.');
-    }
 
     const rawHosts = (env.EMBEDDING_REMOTE_ALLOWED_HOSTS ?? '').trim();
-    const allowedHosts = parseAllowedHosts(rawHosts, 'EMBEDDING_REMOTE_ALLOWED_HOSTS');
-    if (!allowedHosts.includes(parsedUrl.hostname)) {
+    const allowedHosts = rawHosts ? parseAllowedHosts(rawHosts, 'EMBEDDING_REMOTE_ALLOWED_HOSTS') : undefined;
+    if (allowedHosts && !allowedHosts.includes(parsedUrl.hostname)) {
       throw new Error(`EMBEDDING_REMOTE_ENDPOINT host "${parsedUrl.hostname}" is not in EMBEDDING_REMOTE_ALLOWED_HOSTS.`);
     }
 
@@ -231,12 +222,6 @@ export function readKnowledgeServerOptions(
     } catch {
       throw new Error(`Invalid PLANNER_ENDPOINT: "${endpoint}". Must be a valid URL.`);
     }
-    if (parsedUrl.username || parsedUrl.password) {
-      throw new Error('PLANNER_ENDPOINT must not contain credentials.');
-    }
-    if (parsedUrl.search || parsedUrl.hash) {
-      throw new Error('PLANNER_ENDPOINT must not contain query parameters or hash.');
-    }
 
     const model = (env.PLANNER_MODEL ?? '').trim();
     if (!model) {
@@ -249,8 +234,8 @@ export function readKnowledgeServerOptions(
     }
 
     const rawPlannerHosts = (env.PLANNER_REMOTE_ALLOWED_HOSTS ?? '').trim();
-    const allowedPlannerHosts = parseAllowedHosts(rawPlannerHosts, 'PLANNER_REMOTE_ALLOWED_HOSTS');
-    if (!allowedPlannerHosts.includes(parsedUrl.hostname)) {
+    const allowedPlannerHosts = rawPlannerHosts ? parseAllowedHosts(rawPlannerHosts, 'PLANNER_REMOTE_ALLOWED_HOSTS') : undefined;
+    if (allowedPlannerHosts && !allowedPlannerHosts.includes(parsedUrl.hostname)) {
       throw new Error(
         `PLANNER_ENDPOINT host "${parsedUrl.hostname}" is not in PLANNER_REMOTE_ALLOWED_HOSTS.`
       );
@@ -340,18 +325,6 @@ export function readKnowledgeServerOptions(
         throw new Error(`Invalid PROSE_EXTRACTION_ENDPOINT: "${endpoint}". Must be a valid URL.`);
       }
 
-      // c. Validate URL protocol (allowing http:// for localhost/test environments or https:// for remote hosts)
-      const isLoopback = LOOPBACK_HOSTS.has(parsedUrl.hostname);
-      if (parsedUrl.protocol !== 'https:' && !(parsedUrl.protocol === 'http:' && isLoopback)) {
-        throw new Error(`PROSE_EXTRACTION_ENDPOINT must use HTTPS protocol: "${endpoint}".`);
-      }
-      if (parsedUrl.username || parsedUrl.password) {
-        throw new Error('PROSE_EXTRACTION_ENDPOINT must not contain credentials.');
-      }
-      if (parsedUrl.search || parsedUrl.hash) {
-        throw new Error('PROSE_EXTRACTION_ENDPOINT must not contain query parameters or hash.');
-      }
-
       if (!model) {
         throw new Error('PROSE_EXTRACTION_MODEL is required when PROSE_EXTRACTION_ENABLED is true.');
       }
@@ -359,15 +332,11 @@ export function readKnowledgeServerOptions(
       let allowedHosts: string[] | undefined;
       if (rawHosts) {
         allowedHosts = parseAllowedHosts(rawHosts, 'PROSE_EXTRACTION_ALLOWED_HOSTS');
-        if (!allowedHosts.includes(parsedUrl.hostname) && !isLoopback) {
+        if (!allowedHosts.includes(parsedUrl.hostname)) {
           throw new Error(
             `PROSE_EXTRACTION_ENDPOINT host "${parsedUrl.hostname}" is not in PROSE_EXTRACTION_ALLOWED_HOSTS.`
           );
         }
-      } else if (!isLoopback) {
-        throw new Error(
-          'PROSE_EXTRACTION_ALLOWED_HOSTS must contain at least one valid host when remote is enabled.'
-        );
       }
 
       proseExtraction.endpoint = endpoint;

@@ -64,6 +64,9 @@ export default defineConfig({
   ],
   test: {
     alias: {
+      'aria-query': fileURLToPath(
+        new URL('./node_modules/aria-query', import.meta.url)
+      ),
       'virtual:pwa-register/react': fileURLToPath(
         new URL('./tests/mocks/pwaRegister.ts', import.meta.url)
       ),

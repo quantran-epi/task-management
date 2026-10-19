@@ -2,7 +2,7 @@ import {
   CHUNKING_POLICY_VERSION,
   type EvidenceChunk,
 } from '../../../knowledge-server/src/types/protocol';
-import { chunkMarkdownSnapshot } from '../../../knowledge-server/src/parser/sectionChunker';
+import { chunkMarkdownSnapshot } from './sectionChunker';
 import {
   buildDocumentHashInput,
   normalizeNewlines,

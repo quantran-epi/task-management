@@ -226,10 +226,9 @@ export function DocumentSetForm({
   }, [draftSelection, notes]);
 
   const handleTreeCheck = (
-    checked: React.Key[] | { checked: React.Key[]; halfChecked: React.Key[] },
+    _checked: React.Key[] | { checked: React.Key[]; halfChecked: React.Key[] },
     info: any
   ) => {
-    const checkedKeyList = Array.isArray(checked) ? checked.map(String) : checked.checked.map(String);
     const activeNotes = notes.filter((n) => !n.deletedAt);
     const clickedKey = String(info.node.key);
     const isChecked = info.checked;
