@@ -120,6 +120,23 @@ describe('Telegram Settings Service (Dexie V12)', () => {
     const req3 = await checkAndConsumeQuota('user_limit_2', testDb);
     expect(req3.allowed).toBe(false);
     expect(req3.reason).toBe('quota_exceeded');
+    expect(req3.overQuotaAttempts).toBe(1);
+    expect(req3.isSpamming).toBe(false);
+    expect(req3.shouldDropLog).toBe(false);
+
+    // Spamming over quota: attempts increment and triggers drop log when > 3
+    const reqSpam2 = await checkAndConsumeQuota('user_limit_2', testDb);
+    expect(reqSpam2.overQuotaAttempts).toBe(2);
+    expect(reqSpam2.isSpamming).toBe(true);
+    expect(reqSpam2.shouldDropLog).toBe(false);
+
+    const reqSpam3 = await checkAndConsumeQuota('user_limit_2', testDb);
+    expect(reqSpam3.overQuotaAttempts).toBe(3);
+    expect(reqSpam3.shouldDropLog).toBe(false);
+
+    const reqSpam4 = await checkAndConsumeQuota('user_limit_2', testDb);
+    expect(reqSpam4.overQuotaAttempts).toBe(4);
+    expect(reqSpam4.shouldDropLog).toBe(true);
 
     // 4. Slash commands don't consume dailyLimit, but allow max 3 commands when over quota
     const cmd1 = await checkAndConsumeCommandQuota('user_limit_2', testDb);

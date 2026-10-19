@@ -416,20 +416,34 @@ export async function processTelegramInboundMessage(
     }
 
     if (quota.reason === 'quota_exceeded') {
-      const rawMsg = `⏳ **Hết hạn mức trong ngày**\n\nBạn đã sử dụng hết hạn mức ${quota.dailyLimit} tin nhắn/ngày. Hạn mức sẽ được đặt lại vào 00:00 ngày mai.\n\n💡 *Gõ /help hoặc /reset nếu cần xem thông tin hoặc đặt lại phiên.*`;
+      const attempts = quota.overQuotaAttempts || 1;
+      let rawMsg = '';
+
+      if (attempts === 1) {
+        rawMsg = `⏳ **Hết hạn mức trong ngày**\n\nBạn đã sử dụng hết hạn mức ${quota.dailyLimit} tin nhắn/ngày. Hạn mức sẽ được đặt lại vào 00:00 ngày mai.\n\n💡 *Gõ /help hoặc /reset nếu cần xem thông tin hoặc đặt lại phiên.*`;
+      } else if (attempts <= 3) {
+        rawMsg = `⚠️ **Cảnh báo spam (${attempts}/3): Hết hạn mức**\n\nBạn đã hết hạn mức ${quota.dailyLimit} tin nhắn/ngày. Vui lòng dừng gửi tin nhắn lặp lại để tránh bị hệ thống chặn. Hạn mức sẽ mở lại vào 00:00 ngày mai.\n\n💡 *Gõ /help hoặc /reset nếu cần xem thông tin.*`;
+      } else {
+        rawMsg = `⛔ **Cảnh báo spam: Tạm ngưng phản hồi**\n\nBạn đã gửi tin nhắn vượt hạn mức quá nhiều lần (${attempts} lần). Hệ thống đã ngừng ghi nhận phiên của bạn hôm nay để bảo vệ tài nguyên.`;
+      }
+
       const htmlMsg = markdownToTelegramHtml(rawMsg);
       await sendReply(botToken, chat_id, htmlMsg, message_id);
-      await logTelegramSession(
-        {
-          chatId: chat_id,
-          userName: from_name,
-          userMessage: text,
-          aiResponse: rawMsg,
-          dataScopeUsed: 'pure_llm',
-          tokenCount: 0,
-        },
-        db
-      );
+
+      // Only log if within spam threshold to prevent junk logs from flooding DB
+      if (!quota.shouldDropLog) {
+        await logTelegramSession(
+          {
+            chatId: chat_id,
+            userName: from_name,
+            userMessage: text,
+            aiResponse: rawMsg,
+            dataScopeUsed: 'pure_llm',
+            tokenCount: 0,
+          },
+          db
+        );
+      }
       return;
     }
   }

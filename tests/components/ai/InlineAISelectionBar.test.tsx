@@ -95,12 +95,12 @@ describe('InlineAISelectionBar component mention workflow', () => {
     });
   });
 
-  it('renders "Mention vào Chat" button and populates AIChatDrawer input without auto-sending', async () => {
+  it('renders "Mention vào Chat" button for document/note selection and populates AIChatDrawer', async () => {
     vi.spyOn(selectionContextUtils, 'resolveEntityHierarchy').mockResolvedValue({
-      targetType: 'task',
-      targetId: 'task-123',
-      targetTitle: 'Task Kiểm Thử',
-      hierarchyPath: 'Dự án "Demo" > Tác vụ "Task Kiểm Thử"',
+      targetType: 'doc',
+      targetId: 'doc-123',
+      targetTitle: 'Doc Kiểm Thử',
+      hierarchyPath: 'Dự án "Demo" > Tài liệu "Doc Kiểm Thử"',
       fullContextText: 'Context content',
     });
 
@@ -125,6 +125,10 @@ describe('InlineAISelectionBar component mention workflow', () => {
       </AIChatProvider>
     );
 
+    const docNode = document.createElement('div');
+    docNode.setAttribute('data-ai-context-type', 'doc');
+    docNode.setAttribute('data-ai-context-id', 'doc-123');
+
     // Mock window selection
     const mockRange = {
       getBoundingClientRect: () => ({
@@ -140,7 +144,7 @@ describe('InlineAISelectionBar component mention workflow', () => {
     const mockSelection = {
       isCollapsed: false,
       toString: () => 'Đoạn văn bản được chọn để kiểm thử draft mention',
-      anchorNode: document.createElement('div'),
+      anchorNode: docNode,
       getRangeAt: () => mockRange,
     };
 
@@ -159,11 +163,48 @@ describe('InlineAISelectionBar component mention workflow', () => {
     // Wait for ChatDrawer textarea to open and have the draft value loaded
     const textarea = (await screen.findByLabelText('Nội dung tin nhắn trò chuyện AI')) as HTMLTextAreaElement;
     await waitFor(() => {
-      expect(textarea.value).toContain('[Trích đoạn từ Dự án "Demo" > Tác vụ "Task Kiểm Thử"]');
+      expect(textarea.value).toContain('[Trích đoạn từ Dự án "Demo" > Tài liệu "Doc Kiểm Thử"]');
       expect(textarea.value).toContain('> Đoạn văn bản được chọn để kiểm thử draft mention');
     });
+  });
 
-    // Check that scope is attached to task-123 and not forced to global
-    expect(screen.getByText(/Đang gắn ngữ cảnh: Task Kiểm Thử/i)).toBeInTheDocument();
+  it('does NOT activate toolbar when selection is outside doc/note (e.g. task, table, plain text)', async () => {
+    const TestShell = () => (
+      <div>
+        <InlineAISelectionBar db={db} />
+      </div>
+    );
+
+    render(
+      <AIChatProvider>
+        <TestShell />
+      </AIChatProvider>
+    );
+
+    const taskNode = document.createElement('div');
+    taskNode.setAttribute('data-ai-context-type', 'task');
+    taskNode.setAttribute('data-ai-context-id', 'task-999');
+
+    const mockSelection = {
+      isCollapsed: false,
+      toString: () => 'Đoạn văn bản bôi ngoài danh sách task không được kích hoạt popup',
+      anchorNode: taskNode,
+      getRangeAt: () => ({
+        getBoundingClientRect: () => ({
+          top: 250,
+          bottom: 270,
+          left: 200,
+          right: 400,
+          width: 200,
+          height: 20,
+        }),
+      }),
+    };
+
+    vi.spyOn(window, 'getSelection').mockReturnValue(mockSelection as any);
+    fireEvent.mouseUp(document);
+
+    // Should not render "Mention vào Chat" button
+    expect(screen.queryByRole('button', { name: /Mention vào Chat/i })).not.toBeInTheDocument();
   });
 });

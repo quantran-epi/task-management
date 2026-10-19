@@ -802,6 +802,7 @@ export const TelegramMonitorView: React.FC = () => {
                         key: 'quota',
                         render: (_, r: TelegramWhitelistUser) => {
                           const percent = Math.min(100, Math.round((r.usedToday / r.dailyLimit) * 100));
+                          const hasSpam = (r.overQuotaAttempts ?? 0) > 0;
                           return (
                             <div style={{ minWidth: 120 }}>
                               <div style={{ fontSize: 12, marginBottom: 2 }}>
@@ -812,6 +813,13 @@ export const TelegramMonitorView: React.FC = () => {
                                 size="small"
                                 status={r.usedToday >= r.dailyLimit ? 'exception' : 'normal'}
                               />
+                              {hasSpam && (
+                                <div style={{ marginTop: 4 }}>
+                                  <Tag color={(r.overQuotaAttempts ?? 0) > 3 ? 'red' : 'volcano'} style={{ fontSize: 11 }}>
+                                    Spam over-quota: {r.overQuotaAttempts} lần
+                                  </Tag>
+                                </div>
+                              )}
                             </div>
                           );
                         },

@@ -73,6 +73,7 @@ export async function upsertWhitelistUser(
     maxHistoryTurns: user.maxHistoryTurns ?? existing?.maxHistoryTurns ?? 5,
     sessionResetAt: user.sessionResetAt !== undefined ? user.sessionResetAt : existing?.sessionResetAt,
     overQuotaCommandsUsed: user.overQuotaCommandsUsed ?? existing?.overQuotaCommandsUsed ?? 0,
+    overQuotaAttempts: user.overQuotaAttempts ?? existing?.overQuotaAttempts ?? 0,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   };
@@ -89,6 +90,7 @@ export async function deleteWhitelistUser(
 }
 
 export const TELEGRAM_COMMAND_OVER_QUOTA_GRACE = 3;
+export const TELEGRAM_OVER_QUOTA_SPAM_LOG_THRESHOLD = 3;
 
 export interface QuotaCheckResult {
   allowed: boolean;
@@ -97,12 +99,16 @@ export interface QuotaCheckResult {
   usedToday?: number;
   dailyLimit?: number;
   isOverQuota?: boolean;
+  overQuotaAttempts?: number;
+  isSpamming?: boolean;
+  shouldDropLog?: boolean;
 }
 
 /**
  * Checks if the user is authorized and has quota remaining.
- * Automatically resets `usedToday` and `overQuotaCommandsUsed` if `lastActiveDate !== today`.
+ * Automatically resets `usedToday`, `overQuotaCommandsUsed`, and `overQuotaAttempts` if `lastActiveDate !== today`.
  * Increments `usedToday` atomically if allowed.
+ * Increments `overQuotaAttempts` if over quota. Drops logging if attempts exceed threshold.
  */
 export async function checkAndConsumeQuota(
   chatId: string,
@@ -120,20 +126,41 @@ export async function checkAndConsumeQuota(
 
     const today = getTodayDateString();
     let usedToday = user.usedToday;
+    let overQuotaAttempts = user.overQuotaAttempts ?? 0;
+    let overQuotaCommandsUsed = user.overQuotaCommandsUsed ?? 0;
 
     // Reset quota if new day
     if (user.lastActiveDate !== today) {
       usedToday = 0;
+      overQuotaAttempts = 0;
+      overQuotaCommandsUsed = 0;
     }
 
     if (usedToday >= user.dailyLimit) {
+      overQuotaAttempts += 1;
+      const updatedUser: TelegramWhitelistUser = {
+        ...user,
+        usedToday,
+        overQuotaAttempts,
+        overQuotaCommandsUsed,
+        lastActiveDate: today,
+        updatedAt: new Date().toISOString(),
+      };
+      await db.telegramWhitelist.put(updatedUser);
+
+      const isSpamming = overQuotaAttempts > 1;
+      const shouldDropLog = overQuotaAttempts > TELEGRAM_OVER_QUOTA_SPAM_LOG_THRESHOLD;
+
       return {
         allowed: false,
         reason: 'quota_exceeded',
-        user,
+        user: updatedUser,
         usedToday,
         dailyLimit: user.dailyLimit,
         isOverQuota: true,
+        overQuotaAttempts,
+        isSpamming,
+        shouldDropLog,
       };
     }
 
@@ -141,7 +168,8 @@ export async function checkAndConsumeQuota(
     const updatedUser: TelegramWhitelistUser = {
       ...user,
       usedToday,
-      overQuotaCommandsUsed: user.lastActiveDate !== today ? 0 : (user.overQuotaCommandsUsed ?? 0),
+      overQuotaCommandsUsed,
+      overQuotaAttempts: 0,
       lastActiveDate: today,
       updatedAt: new Date().toISOString(),
     };
@@ -154,6 +182,9 @@ export async function checkAndConsumeQuota(
       usedToday,
       dailyLimit: user.dailyLimit,
       isOverQuota: false,
+      overQuotaAttempts: 0,
+      isSpamming: false,
+      shouldDropLog: false,
     };
   });
 }

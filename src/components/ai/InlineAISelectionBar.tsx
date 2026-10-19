@@ -190,6 +190,15 @@ export const InlineAISelectionBar: React.FC<InlineAISelectionBarProps> = ({ db =
         };
 
         const domContext = getDomContextFromNode(anchorNode);
+        // Only activate inline AI toolbar for documents and notes
+        if (domContext.entityType !== 'doc' && domContext.entityType !== 'note') {
+          if (!isAskingInline) {
+            setVisible(false);
+            setSelectionRect(null);
+          }
+          return;
+        }
+
         const hierarchy = await resolveEntityHierarchy(domContext.entityType, domContext.entityId, db);
 
         const payload: SelectionContextPayload = {

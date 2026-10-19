@@ -12,6 +12,7 @@ import {
   getRecentTelegramLogs,
   getWhitelistUser,
 } from '../../src/services/telegram/telegramSettingsService';
+import { getTodayDateString } from '../../src/utils/date';
 import type { TelegramInboundEvent } from '../../src/services/telegram/telegramTypes';
 
 vi.mock('../../src/services/ai/nineRouterClient', () => ({
@@ -300,6 +301,107 @@ describe('Telegram Headless Worker', () => {
     );
     expect(replies[0]).toContain('Hết hạn mức trong ngày');
     expect(replies[0]).toContain('3 lượt lệnh');
+  });
+
+  it('handles over-quota chat message spam with progressive warnings and drops logs after threshold', async () => {
+    await upsertWhitelistUser(
+      {
+        chatId: 'spam_tester',
+        name: 'Spam User',
+        status: 'active',
+        dailyLimit: 1,
+        usedToday: 1,
+        lastActiveDate: getTodayDateString(),
+      },
+      testDb
+    );
+
+    const replies: string[] = [];
+    const mockSendReply = vi.fn(async (_token: string, _chatId: string, text: string) => {
+      replies.push(text);
+    });
+    const mockSendAction = vi.fn(async () => {});
+
+    // Attempt 1: First over-quota message -> standard notice + log
+    await processTelegramInboundMessage(
+      {
+        update_id: 50,
+        message_id: 501,
+        chat_id: 'spam_tester',
+        from_name: 'Spam User',
+        text: 'hello over quota 1',
+        date: 1234580,
+      },
+      'test_token',
+      testDb,
+      mockSendReply,
+      mockSendAction
+    );
+    expect(replies[0]).toContain('Hết hạn mức trong ngày');
+    let logs = await getRecentTelegramLogs(50, testDb);
+    expect(logs.some((l) => l.userMessage === 'hello over quota 1')).toBe(true);
+    replies.length = 0;
+
+    // Attempt 2: Second over-quota message -> spam warning (2/3) + log
+    await processTelegramInboundMessage(
+      {
+        update_id: 51,
+        message_id: 502,
+        chat_id: 'spam_tester',
+        from_name: 'Spam User',
+        text: 'hello over quota 2',
+        date: 1234581,
+      },
+      'test_token',
+      testDb,
+      mockSendReply,
+      mockSendAction
+    );
+    expect(replies[0]).toContain('Cảnh báo spam (2/3)');
+    logs = await getRecentTelegramLogs(50, testDb);
+    expect(logs.some((l) => l.userMessage === 'hello over quota 2')).toBe(true);
+    replies.length = 0;
+
+    // Attempt 3: Third over-quota message -> spam warning (3/3) + log
+    await processTelegramInboundMessage(
+      {
+        update_id: 52,
+        message_id: 503,
+        chat_id: 'spam_tester',
+        from_name: 'Spam User',
+        text: 'hello over quota 3',
+        date: 1234582,
+      },
+      'test_token',
+      testDb,
+      mockSendReply,
+      mockSendAction
+    );
+    expect(replies[0]).toContain('Cảnh báo spam (3/3)');
+    logs = await getRecentTelegramLogs(50, testDb);
+    expect(logs.some((l) => l.userMessage === 'hello over quota 3')).toBe(true);
+    replies.length = 0;
+
+    // Attempt 4: Fourth over-quota message -> final warning + DROP LOG
+    await processTelegramInboundMessage(
+      {
+        update_id: 53,
+        message_id: 504,
+        chat_id: 'spam_tester',
+        from_name: 'Spam User',
+        text: 'hello spam flood 4',
+        date: 1234583,
+      },
+      'test_token',
+      testDb,
+      mockSendReply,
+      mockSendAction
+    );
+    expect(replies[0]).toContain('Tạm ngưng phản hồi');
+    expect(replies[0]).toContain('4 lần');
+    // Verify log for message 4 was dropped (not persisted in DB)
+    logs = await getRecentTelegramLogs(50, testDb);
+    expect(logs.some((l) => l.userMessage === 'hello spam flood 4')).toBe(false);
   });
 
   it('rejects unauthorized chat ID with approval instructions in HTML format', async () => {
