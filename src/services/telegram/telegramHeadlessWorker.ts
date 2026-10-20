@@ -9,7 +9,17 @@ import {
   resetTelegramUserSession,
   getTelegramChatHistory,
   recordPendingTelegramUser,
+  getWhitelistUser,
+  refundQuota,
 } from './telegramSettingsService';
+import {
+  getPendingMutation,
+  clearPendingMutation,
+  isConfirmationMessage,
+  isCancellationMessage,
+  executeAdminMutationTurn,
+} from './telegramMutationSession';
+import { executeAiTool } from '../ai/aiTools';
 import { sendDesktopNotification } from '../../utils/desktopNotification';
 import type {
   TelegramInboundEvent,
@@ -386,6 +396,123 @@ export async function processTelegramInboundMessage(
     return;
   }
 
+  // Step 0b: Check if Admin is in an active pending mutation confirmation/adjustment flow
+  const pendingMutation = getPendingMutation(chat_id);
+  const callerUser = await getWhitelistUser(chat_id, db);
+  if (pendingMutation && callerUser?.isAdmin && callerUser.status === 'active') {
+    // 1. Affirmative Confirmation ("OK", "Xác nhận", "Đồng ý", etc.)
+    if (isConfirmationMessage(trimmedText)) {
+      try {
+        const rawResult = await executeAiTool(pendingMutation.toolName, pendingMutation.args, db);
+        let parsedResult: any = {};
+        try {
+          parsedResult = JSON.parse(rawResult);
+        } catch {
+          parsedResult = { message: rawResult };
+        }
+
+        clearPendingMutation(chat_id);
+
+        let replyMd = '';
+        if (parsedResult.error) {
+          replyMd = `❌ **Thao tác không thành công:** ${parsedResult.error}`;
+        } else {
+          replyMd = [
+            `✅ **Đã thực hiện thành công!**`,
+            ``,
+            `👉 **${pendingMutation.summary}**`,
+            parsedResult.message ? `\n_${parsedResult.message}_` : '',
+          ]
+            .filter(Boolean)
+            .join('\n');
+        }
+
+        const htmlReply = markdownToTelegramHtml(replyMd);
+        await sendReply(botToken, chat_id, htmlReply, message_id);
+        await logTelegramSession(
+          {
+            chatId: chat_id,
+            userName: from_name,
+            userMessage: text,
+            aiResponse: replyMd,
+            dataScopeUsed: 'full',
+            tokenCount: 0,
+          },
+          db
+        );
+        return;
+      } catch (err: any) {
+        clearPendingMutation(chat_id);
+        const errMsg = `❌ **Lỗi khi thực thi thao tác:** ${err?.message || String(err)}`;
+        await sendReply(botToken, chat_id, markdownToTelegramHtml(errMsg), message_id);
+        return;
+      }
+    }
+
+    // 2. Cancellation ("Hủy", "Cancel", "Bỏ qua", etc.)
+    if (isCancellationMessage(trimmedText)) {
+      clearPendingMutation(chat_id);
+      const cancelMd = `🚫 **Đã hủy thao tác.** Không có dữ liệu nào trong TaskMate bị thay đổi.`;
+      const htmlReply = markdownToTelegramHtml(cancelMd);
+      await sendReply(botToken, chat_id, htmlReply, message_id);
+      await logTelegramSession(
+        {
+          chatId: chat_id,
+          userName: from_name,
+          userMessage: text,
+          aiResponse: cancelMd,
+          dataScopeUsed: 'full',
+          tokenCount: 0,
+        },
+        db
+      );
+      return;
+    }
+
+    // 3. Adjustment: Admin wants to adjust the draft parameters
+    const aiConfig = await getNineRouterConfig(db);
+    const apiKey = await getNineRouterApiKey(db);
+    if (apiKey && aiConfig.endpoint) {
+      try {
+        await sendAction(botToken, chat_id, 'typing');
+      } catch {}
+
+      const scoped = await resolveScopedContext('full', trimmedText, db);
+      const adjResult = await executeAdminMutationTurn({
+        chatId: chat_id,
+        userMessage: trimmedText,
+        chatHistory: pendingMutation.chatHistory || [],
+        aiConfig: { endpoint: aiConfig.endpoint, defaultModel: aiConfig.defaultModel },
+        apiKey,
+        db,
+        existingPending: pendingMutation,
+        contextText: scoped.contextText,
+      });
+
+      const htmlMsg = markdownToTelegramHtml(adjResult.replyMarkdown);
+      const chunks = splitTelegramMessage(htmlMsg);
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        if (chunk) {
+          await sendReply(botToken, chat_id, chunk, i === 0 ? message_id : undefined);
+        }
+      }
+
+      await logTelegramSession(
+        {
+          chatId: chat_id,
+          userName: from_name,
+          userMessage: text,
+          aiResponse: adjResult.replyMarkdown,
+          dataScopeUsed: 'full',
+          tokenCount: adjResult.tokenCount || 0,
+        },
+        db
+      );
+      return;
+    }
+  }
+
   const isSlashCommand =
     lowerText === '/reset' ||
     lowerText === '/clear' ||
@@ -582,35 +709,38 @@ export async function processTelegramInboundMessage(
     }
 
     if (quota.reason === 'quota_exceeded') {
-      const attempts = quota.overQuotaAttempts || 1;
-      let rawMsg = '';
+      // Admins are exempt from daily limit blockades for TaskMate management
+      if (!quota.user?.isAdmin) {
+        const attempts = quota.overQuotaAttempts || 1;
+        let rawMsg = '';
 
-      if (attempts === 1) {
-        rawMsg = `⏳ **Hết hạn mức trong ngày**\n\nBạn đã sử dụng hết hạn mức ${quota.dailyLimit} tin nhắn/ngày. Hạn mức sẽ được đặt lại vào 00:00 ngày mai.\n\n💡 *Gõ /help hoặc /reset nếu cần xem thông tin hoặc đặt lại phiên.*`;
-      } else if (attempts <= 3) {
-        rawMsg = `⚠️ **Cảnh báo spam (${attempts}/3): Hết hạn mức**\n\nBạn đã hết hạn mức ${quota.dailyLimit} tin nhắn/ngày. Vui lòng dừng gửi tin nhắn lặp lại để tránh bị hệ thống chặn. Hạn mức sẽ mở lại vào 00:00 ngày mai.\n\n💡 *Gõ /help hoặc /reset nếu cần xem thông tin.*`;
-      } else {
-        rawMsg = `⛔ **Cảnh báo spam: Tạm ngưng phản hồi**\n\nBạn đã gửi tin nhắn vượt hạn mức quá nhiều lần (${attempts} lần). Hệ thống đã ngừng ghi nhận phiên của bạn hôm nay để bảo vệ tài nguyên.`;
+        if (attempts === 1) {
+          rawMsg = `⏳ **Hết hạn mức trong ngày**\n\nBạn đã sử dụng hết hạn mức ${quota.dailyLimit} tin nhắn/ngày. Hạn mức sẽ được đặt lại vào 00:00 ngày mai.\n\n💡 *Gõ /help hoặc /reset nếu cần xem thông tin hoặc đặt lại phiên.*`;
+        } else if (attempts <= 3) {
+          rawMsg = `⚠️ **Cảnh báo spam (${attempts}/3): Hết hạn mức**\n\nBạn đã hết hạn mức ${quota.dailyLimit} tin nhắn/ngày. Vui lòng dừng gửi tin nhắn lặp lại để tránh bị hệ thống chặn. Hạn mức sẽ mở lại vào 00:00 ngày mai.\n\n💡 *Gõ /help hoặc /reset nếu cần xem thông tin.*`;
+        } else {
+          rawMsg = `⛔ **Cảnh báo spam: Tạm ngưng phản hồi**\n\nBạn đã gửi tin nhắn vượt hạn mức quá nhiều lần (${attempts} lần). Hệ thống đã ngừng ghi nhận phiên của bạn hôm nay để bảo vệ tài nguyên.`;
+        }
+
+        const htmlMsg = markdownToTelegramHtml(rawMsg);
+        await sendReply(botToken, chat_id, htmlMsg, message_id);
+
+        // Only log if within spam threshold to prevent junk logs from flooding DB
+        if (!quota.shouldDropLog) {
+          await logTelegramSession(
+            {
+              chatId: chat_id,
+              userName: from_name,
+              userMessage: text,
+              aiResponse: rawMsg,
+              dataScopeUsed: 'pure_llm',
+              tokenCount: 0,
+            },
+            db
+          );
+        }
+        return;
       }
-
-      const htmlMsg = markdownToTelegramHtml(rawMsg);
-      await sendReply(botToken, chat_id, htmlMsg, message_id);
-
-      // Only log if within spam threshold to prevent junk logs from flooding DB
-      if (!quota.shouldDropLog) {
-        await logTelegramSession(
-          {
-            chatId: chat_id,
-            userName: from_name,
-            userMessage: text,
-            aiResponse: rawMsg,
-            dataScopeUsed: 'pure_llm',
-            tokenCount: 0,
-          },
-          db
-        );
-      }
-      return;
     }
   }
 
@@ -707,6 +837,63 @@ export async function processTelegramInboundMessage(
         aiResponse: scopeRefusal,
         dataScopeUsed: dataScope,
         tokenCount: 0,
+      },
+      db
+    );
+    return;
+  }
+
+  // Step 5b: Handle TaskMate Mutation Requests (operate_taskmate / mixed)
+  if (routedIntent?.intent === 'operate_taskmate' || routedIntent?.intent === 'mixed') {
+    if (!user.isAdmin) {
+      const scopeRefusal = `⚠️ **Không có quyền thao tác dữ liệu**\n\nChỉ quản trị viên (Admin) mới có quyền yêu cầu tạo, cập nhật, hoặc xóa dữ liệu TaskMate qua Telegram.\n\n💡 *Vui lòng liên hệ quản trị viên hoặc thao tác trực tiếp trên ứng dụng TaskMate.*`;
+      const htmlRefusal = markdownToTelegramHtml(scopeRefusal);
+      await sendReply(botToken, chat_id, htmlRefusal, message_id);
+      await logTelegramSession(
+        {
+          chatId: chat_id,
+          userName: from_name,
+          userMessage: text,
+          aiResponse: scopeRefusal,
+          dataScopeUsed: dataScope,
+          tokenCount: 0,
+        },
+        db
+      );
+      return;
+    }
+
+    // User is Admin: exempt from quota, refund any deducted turn
+    await refundQuota(chat_id, db);
+
+    const scoped = await resolveScopedContext('full', trimmedText, db);
+    const mutationResult = await executeAdminMutationTurn({
+      chatId: chat_id,
+      userMessage: trimmedText,
+      chatHistory,
+      aiConfig: { endpoint: aiConfig.endpoint, defaultModel: aiConfig.defaultModel },
+      apiKey,
+      db,
+      contextText: scoped.contextText,
+    });
+
+    const htmlMsg = markdownToTelegramHtml(mutationResult.replyMarkdown);
+    const chunks = splitTelegramMessage(htmlMsg);
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+      if (chunk) {
+        await sendReply(botToken, chat_id, chunk, i === 0 ? message_id : undefined);
+      }
+    }
+
+    await logTelegramSession(
+      {
+        chatId: chat_id,
+        userName: from_name,
+        userMessage: text,
+        aiResponse: mutationResult.replyMarkdown,
+        dataScopeUsed: dataScope,
+        tokenCount: mutationResult.tokenCount || 0,
       },
       db
     );

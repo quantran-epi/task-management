@@ -353,6 +353,26 @@ export async function checkAndConsumeCommandQuota(
   });
 }
 
+/**
+ * Refunds 1 used turn to the user's dailyLimit, e.g. when an admin executes a mutation
+ * or a turn is classified as exempt from quota limits.
+ */
+export async function refundQuota(
+  chatId: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<void> {
+  await db.transaction('rw', db.telegramWhitelist, async () => {
+    const user = await db.telegramWhitelist.get(chatId);
+    if (!user) return;
+    const usedToday = Math.max(0, (user.usedToday || 0) - 1);
+    await db.telegramWhitelist.put({
+      ...user,
+      usedToday,
+      updatedAt: new Date().toISOString(),
+    });
+  });
+}
+
 export async function logTelegramSession(
   log: Omit<TelegramSessionLog, 'id' | 'createdAt'> & { id?: string; createdAt?: string },
   db: TaskPlannerDatabase = defaultDb
