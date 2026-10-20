@@ -14,6 +14,7 @@ import { runLocalGroundedRetrieval } from '../search/localGroundedRetrieval';
 import { packEvidence } from './evidencePack';
 import { synthesizeGroundedAnswer } from './groundedSynthesis';
 import { createKnowledgeClient } from '../knowledge/knowledgeClient';
+import { runMcpRetrieval } from './mcpRetrievalRunner';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { ChatMessageGrounding } from './groundedAnswerSchemas';
 import { getKnowledgeLinksForEntity } from '../../db/repositories/knowledgeLinkRepo';
@@ -105,6 +106,7 @@ export function createDefaultGroundedTurnDeps(options: {
     },
     packEvidence: (inp, opt) => packEvidence(inp, opt),
     synthesizeGroundedAnswer: (inp) => synthesizeGroundedAnswer(inp),
+    runMcpRetrieval: (inp) => runMcpRetrieval(inp),
     loadKnowledgeLinks: (entityType, entityId) => getKnowledgeLinksForEntity(entityType, entityId, database),
     now: () => new Date().toISOString(),
   };

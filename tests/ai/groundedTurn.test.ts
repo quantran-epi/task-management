@@ -707,6 +707,101 @@ describe('groundedTurn state machine', () => {
     );
   });
 
+  // 26. Dynamic MCP retrieval parallel dispatch (MCP-FEDERATED-01)
+  it('26. When require_mcp is false, runs only Docs retrieval without invoking runMcpRetrieval', async () => {
+    mockDeps.runMcpRetrieval = vi.fn();
+    vi.mocked(mockDeps.routeIntent).mockResolvedValueOnce({
+      intent: 'query_knowledge',
+      confidence: 0.9,
+      entities: [],
+      language: 'vi',
+      needs_clarification: false,
+      clarify_question: null,
+      require_mcp: false,
+      target_mcp_servers: [],
+    } as any);
+
+    const res = await runGroundedTurn(mockInput, mockDeps);
+    expect(res.kind).toBe('grounded_answer');
+    expect(mockDeps.retrieveFederated).toHaveBeenCalled();
+    expect(mockDeps.runMcpRetrieval).not.toHaveBeenCalled();
+    expect(mockDeps.packEvidence).toHaveBeenCalledWith(
+      expect.objectContaining({
+        authority: 'server',
+        mcpItems: [],
+      })
+    );
+  });
+
+  it('27. When require_mcp is true, dispatches Docs and MCP retrieval in parallel and packs both', async () => {
+    const dummyMcpItems = [
+      {
+        serverId: 'graphiti-banking',
+        serverName: 'Graphiti Banking MCP',
+        toolName: 'search_nodes',
+        args: { query: 'SVFE_SHB.ACCOUNTS' },
+        rawResult: 'Account details found',
+        timestamp: '2026-10-20T00:00:00.000Z',
+      },
+    ];
+
+    mockDeps.runMcpRetrieval = vi.fn().mockResolvedValue({
+      items: dummyMcpItems,
+      warnings: [],
+    });
+
+    vi.mocked(mockDeps.routeIntent).mockResolvedValueOnce({
+      intent: 'query_knowledge',
+      confidence: 0.95,
+      entities: [],
+      language: 'vi',
+      needs_clarification: false,
+      clarify_question: null,
+      require_mcp: true,
+      target_mcp_servers: ['graphiti-banking'],
+    } as any);
+
+    const res = await runGroundedTurn(mockInput, mockDeps);
+    expect(res.kind).toBe('grounded_answer');
+    expect(mockDeps.retrieveFederated).toHaveBeenCalled();
+    expect(mockDeps.runMcpRetrieval).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: mockInput.query,
+        serverIds: ['graphiti-banking'],
+      })
+    );
+    expect(mockDeps.packEvidence).toHaveBeenCalledWith(
+      expect.objectContaining({
+        authority: 'server',
+        mcpItems: dummyMcpItems,
+      })
+    );
+  });
+
+  it('28. When MCP retrieval fails, turn recovers with warning and completes synthesis from Docs', async () => {
+    mockDeps.runMcpRetrieval = vi.fn().mockRejectedValue(new Error('MCP server timeout or connection reset'));
+
+    vi.mocked(mockDeps.routeIntent).mockResolvedValueOnce({
+      intent: 'query_knowledge',
+      confidence: 0.95,
+      entities: [],
+      language: 'vi',
+      needs_clarification: false,
+      clarify_question: null,
+      require_mcp: true,
+      target_mcp_servers: ['graphiti-banking'],
+    } as any);
+
+    const res = await runGroundedTurn(mockInput, mockDeps);
+    expect(res.kind).toBe('grounded_answer');
+    if (res.kind === 'grounded_answer') {
+      expect(res.grounding.coverageWarnings).toContain(
+        'Máy chủ MCP không phản hồi kịp thời; câu trả lời được tổng hợp từ tài liệu nội bộ.'
+      );
+    }
+    expect(mockDeps.synthesizeGroundedAnswer).toHaveBeenCalled();
+  });
+
   it('26. Falls back locally when federated retrieval times out without evidence', async () => {
     mockDeps.retrieveFederated = vi.fn().mockResolvedValue({
       outcome: 'DEGRADED',

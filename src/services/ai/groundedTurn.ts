@@ -34,6 +34,7 @@ import {
 import type { RouteIntentResult, RouteIntentDeps, IntentLabel } from './intentRouter';
 import type { completeJson as defaultCompleteJson } from './nineRouterClient';
 import type { KnowledgeLink, TaskMateEntityType, ChatTokenUsage } from '../../types/models';
+import type { runMcpRetrieval } from './mcpRetrievalRunner';
 
 export interface GroundedTurnInput {
   query: string;
@@ -127,6 +128,7 @@ export interface GroundedTurnDeps {
       authority: 'server' | 'local';
       serverResponse?: FederatedRetrievalResponse;
       localResult?: LocalGroundedResult;
+      mcpItems?: readonly any[];
     },
     options?: PackEvidenceOptions
   ): EvidencePack;
@@ -136,6 +138,7 @@ export interface GroundedTurnDeps {
     responseLanguage: 'vi' | 'en';
     tokenUsage?: ChatTokenUsage | undefined;
   }>;
+  runMcpRetrieval?: typeof runMcpRetrieval;
   loadKnowledgeLinks?(
     entityType: TaskMateEntityType,
     entityId: string
@@ -442,37 +445,79 @@ export async function runGroundedTurn(
     return executeLocalPath('SERVER_DISABLED');
   }
 
+  // Check if MCP retrieval is required per routing decision (MCP-FEDERATED-01)
+  const requireMcp = Boolean((intentDecision as any).require_mcp);
+  const targetMcpServers: readonly string[] = (intentDecision as any).target_mcp_servers ?? [];
+
   let serverResponse: FederatedRetrievalResponse;
-  try {
-    serverResponse = await deps.retrieveFederated(
-      {
-        query: input.query,
-        setTierAssignments: resolvedScope.setTierAssignments.map((s) => ({
-          setId: s.setId,
-          tier: s.tier,
-          roleGroup: s.roleGroup,
-        })),
-        comparisonMode: resolvedScope.comparisonMode,
-        budgets: {
-          concurrency: 4,
-          elapsedMs: 20000,
-          maxSets: 10,
-          maxItems: 50,
-          maxEvidenceChars: 30000,
-        },
-        limit: 20,
-        includeInferred: true,
-        recentTurns: (input.recentTurns && input.recentTurns.length > 0
-          ? input.recentTurns.slice(-3).map((t) => ({
-              role: t.role,
-              text: t.content.slice(0, 2000),
-              resolvedUrns: [],
-            }))
-          : []) as { role: 'user' | 'assistant'; text: string; resolvedUrns: string[] }[],
-        ...(contextHints ? { contextHints } : {}),
+  let mcpItems: any[] = [];
+  const mcpWarnings: string[] = [];
+
+  const docsRetrievalPromise = deps.retrieveFederated(
+    {
+      query: input.query,
+      setTierAssignments: resolvedScope.setTierAssignments.map((s) => ({
+        setId: s.setId,
+        tier: s.tier,
+        roleGroup: s.roleGroup,
+      })),
+      comparisonMode: resolvedScope.comparisonMode,
+      budgets: {
+        concurrency: 4,
+        elapsedMs: 20000,
+        maxSets: 10,
+        maxItems: 50,
+        maxEvidenceChars: 30000,
       },
-      input.signal
-    );
+      limit: 20,
+      includeInferred: true,
+      recentTurns: (input.recentTurns && input.recentTurns.length > 0
+        ? input.recentTurns.slice(-3).map((t) => ({
+            role: t.role,
+            text: t.content.slice(0, 2000),
+            resolvedUrns: [],
+          }))
+        : []) as { role: 'user' | 'assistant'; text: string; resolvedUrns: string[] }[],
+      ...(contextHints ? { contextHints } : {}),
+    },
+    input.signal
+  );
+
+  const mcpRetrievalPromise =
+    requireMcp && deps.runMcpRetrieval && targetMcpServers.length > 0
+      ? deps.runMcpRetrieval({
+          query: input.query,
+          serverIds: targetMcpServers,
+          signal: input.signal,
+          modelConfig: {
+            endpoint: input.config.endpoint,
+            apiKey: input.config.apiKey,
+            model: input.config.model,
+          },
+        })
+      : Promise.resolve(null);
+
+  try {
+    const [docsSettled, mcpSettled] = await Promise.allSettled([
+      docsRetrievalPromise,
+      mcpRetrievalPromise,
+    ]);
+
+    if (docsSettled.status === 'rejected') {
+      throw docsSettled.reason;
+    }
+    serverResponse = docsSettled.value;
+
+    if (mcpSettled.status === 'fulfilled' && mcpSettled.value) {
+      mcpItems = mcpSettled.value.items ?? [];
+      if (mcpSettled.value.warnings?.length) {
+        mcpWarnings.push(...mcpSettled.value.warnings);
+      }
+    } else if (mcpSettled.status === 'rejected') {
+      mcpWarnings.push(
+        'Máy chủ MCP không phản hồi kịp thời; câu trả lời được tổng hợp từ tài liệu nội bộ.'
+      );
+    }
   } catch (error: unknown) {
     // 4. Handle retrieve error (D-41 fallback allowlist, D-21, D-22)
     if (input.signal.aborted) {
@@ -656,6 +701,7 @@ export async function runGroundedTurn(
   const serverPack = deps.packEvidence({
     authority: 'server',
     serverResponse,
+    mcpItems,
   });
 
   const persistedCitations = toPersistedCitations(serverPack.citations);
@@ -677,6 +723,7 @@ export async function runGroundedTurn(
 
   const coverageWarnings = [
     ...serverResponse.diagnostics.coverageWarnings.map((w) => w.message),
+    ...mcpWarnings,
     ...serverPack.coverageWarnings,
   ];
 
