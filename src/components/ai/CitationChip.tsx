@@ -100,9 +100,9 @@ export const CitationChip: React.FC<CitationChipProps> = ({
       display: 'inline-flex',
       alignItems: 'center',
       verticalAlign: 'baseline',
-      background: token.colorPurpleBg ?? '#f9f0ff',
-      borderColor: token.colorPurple ?? '#722ed1',
-      color: token.colorPurpleText ?? '#531dab',
+      background: (token as any).colorPurpleBg ?? '#f9f0ff',
+      borderColor: (token as any).colorPurple ?? '#722ed1',
+      color: (token as any).colorPurpleText ?? '#531dab',
     };
 
     const chipContent = (
@@ -122,8 +122,8 @@ export const CitationChip: React.FC<CitationChipProps> = ({
             fontWeight: 600,
             padding: '0 3px',
             borderRadius: 3,
-            background: token.colorPurpleBgHover ?? '#efdbff',
-            color: token.colorPurpleTextHover ?? '#391085',
+            background: (token as any).colorPurpleBgHover ?? '#efdbff',
+            color: (token as any).colorPurpleTextHover ?? '#391085',
             lineHeight: '14px',
           }}
         >

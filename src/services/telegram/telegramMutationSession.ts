@@ -8,7 +8,7 @@ import {
   normalizeToolName,
   formatFieldChanges,
 } from '../ai/aiTools';
-import { discoverAllMcpTools, executeDynamicMcpTool } from '../ai/mcpClient';
+import { discoverAllMcpTools } from '../ai/mcpClient';
 import { streamChatEvents } from '../ai/nineRouterClient';
 import type { ChatCompletionMessage, ToolCall } from '../ai/types';
 import { getTodayDateString } from '../../utils/date';
@@ -21,8 +21,8 @@ export interface PendingMutation {
   summary: string;
   createdAt: number;
   chatHistory: Array<{ role: 'user' | 'assistant'; content: string }>;
-  isMcp?: boolean;
-  serverName?: string;
+  isMcp?: boolean | undefined;
+  serverName?: string | undefined;
 }
 
 const pendingMutations = new Map<string, PendingMutation>();
