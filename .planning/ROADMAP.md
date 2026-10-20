@@ -94,7 +94,7 @@ Plans:
 
 **Wave 1**
 
-- [ ] 23-01-PLAN.md — Vietnamese Entity Fidelity, Unicode NFD Slugification & Canonical Name Joins (Wave 1)
+- [x] 23-01-PLAN.md — Vietnamese Entity Fidelity, Unicode NFD Slugification & Canonical Name Joins (Wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

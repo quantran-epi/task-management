@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: milestone
-status: planning
-stopped_at: Created Phase 23 from requirements draft
-last_updated: "2026-10-20T09:09:18.326Z"
-last_activity: "2026-10-20 -- Added Phase 23: Knowledge Graph Build Reliability & Entity Fidelity"
+status: in_progress
+stopped_at: Completed 23-01-PLAN.md
+last_updated: "2026-10-20T14:50:00.000Z"
+last_activity: "2026-10-20 -- Completed 23-01: Vietnamese Entity Fidelity, Unicode NFD Slugification & Canonical Name Joins"
 progress:
   total_phases: 21
   completed_phases: 20
-  total_plans: 117
-  completed_plans: 108
+  total_plans: 120
+  completed_plans: 109
   percent: 92
 ---
 
@@ -21,15 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-07)
 
 **Core value:** Make planned work realistically fit available time while giving the personal user evidence-grounded access to their local banking IT knowledge.
-**Current focus:** Phase 23 — Knowledge Graph Build Reliability & Entity Fidelity (NOT PLANNED)
+**Current focus:** Phase 23 — Knowledge Graph Build Reliability & Entity Fidelity
 
 ## Current Position
 
-Phase: 23 (Knowledge Graph Build Reliability & Entity Fidelity) — NOT PLANNED
-Plan: 0 of TBD
-Status: Ready for planning
-Last activity: 2026-10-20 -- Completed quick task 261020-nal: Telegram AI read-tool loop
-Stopped at: Created Phase 23 from requirements draft
+Phase: 23 (Knowledge Graph Build Reliability & Entity Fidelity)
+Plan: 1 of 3 complete
+Status: In progress
+Last activity: 2026-10-20 -- Completed 23-01: Vietnamese Entity Fidelity, Unicode NFD Slugification & Canonical Name Joins
+Stopped at: Completed 23-01-PLAN.md
 
 Progress: [█████████░] 92%
 
