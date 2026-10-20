@@ -2,6 +2,7 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { APP_NAME } from '../../constants/app';
 import { isTauriApp } from '../../utils/timerPopout';
 import type { AiToolDefinition } from './aiTools';
+import type { McpServerCapabilitySummary } from './intentRouter';
 
 export const MCP_SERVERS_SETTINGS_KEY = 'mcp_servers';
 
@@ -12,6 +13,8 @@ export interface McpServerConfig {
   enabled: boolean;
   instruction: string;
   desktopOnly?: boolean;
+  description?: string;
+  cachedTools?: string[];
 }
 
 export const DEFAULT_GRAPHITI_INSTRUCTION = `SMARTVISTA BANKING DOMAIN DICTIONARY & GRAPHITI MCP RULES:
@@ -165,6 +168,31 @@ export async function getEnabledMcpInstructions(
       (s) => `\n[MCP SERVER INSTRUCTION: ${s.name.toUpperCase()}]\n${s.instruction.trim()}`
     )
     .join('\n');
+}
+
+/**
+ * Returns compact capability summaries for all enabled MCP servers without prompt blowup.
+ * Tool lists are capped to max 10 tools per server.
+ */
+export async function getEnabledMcpCapabilitySummaries(
+  db: TaskPlannerDatabase = defaultDb
+): Promise<McpServerCapabilitySummary[]> {
+  const servers = await getMcpServers(db);
+  const isTauri = isTauriApp();
+  const enabledServers = servers.filter((s) => s.enabled && (!s.desktopOnly || isTauri));
+
+  return enabledServers.map((s) => {
+    const rawTools = Array.isArray(s.cachedTools) ? s.cachedTools : [];
+    const tools = rawTools.slice(0, 10);
+    const description = (s.description || s.instruction || '').trim();
+
+    return {
+      id: s.id,
+      name: s.name,
+      description,
+      tools,
+    };
+  });
 }
 
 function extractSessionId(headers: Record<string, string>): string | undefined {
