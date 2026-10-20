@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Hybrid GraphRAG Knowledge Assistant MVP
 status: in_progress
-stopped_at: Completed 22-02-PLAN.md
-last_updated: "2026-10-20T14:05:00.000Z"
-last_activity: 2026-10-20 -- Completed 22-02: dynamic MCP retrieval runner, parallel grounded turn & evidence packing
+stopped_at: Completed 22-03-PLAN.md
+last_updated: "2026-10-20T14:20:00.000Z"
+last_activity: 2026-10-20 -- Completed 22-03: unified citations & UI grounding with MCP badges
 progress:
   total_phases: 20
   completed_phases: 18
   total_plans: 117
-  completed_plans: 106
+  completed_plans: 107
   percent: 91
 ---
 
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 ## Current Position
 
 Phase: 22 (Federated MCP Knowledge & Hybrid Tool Grounding) — IN PROGRESS
-Plan: 2 of 4 (22-02 complete)
-Status: Plan 22-02 complete, ready for Plan 22-03
-Last activity: 2026-10-20 -- Completed 22-02: dynamic MCP retrieval runner, parallel grounded turn & evidence packing
-Stopped at: Completed 22-02-PLAN.md
+Plan: 3 of 4 (22-03 complete)
+Status: Plan 22-03 complete, ready for Plan 22-04
+Last activity: 2026-10-20 -- Completed 22-03: unified citations & UI grounding with MCP badges
+Stopped at: Completed 22-03-PLAN.md
 
 Progress: [█████████░] 91%
 
