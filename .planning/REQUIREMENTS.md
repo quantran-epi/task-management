@@ -143,6 +143,13 @@
 - [ ] **QUAL-04**: Automated checks prove knowledge graph rebuild produces semantic equivalence (stable URNs, factKeys, classifications, paths, retrieval results) and offline transport failures (connection refused, timeout) safely fall back to local BM25 with zero network egress while auth/config/parse errors remain visible.
 - [ ] **QUAL-05**: Verification proves daemon secrets never leak across API endpoints or generated benchmark reports, and Phase 16 sensitive-data scanning / fresh confirmation remains enforced before document publication.
 
+### Federated MCP Knowledge & Hybrid Tool Grounding (Phase 22)
+
+- [x] **MCP-ROUTE-01**: `intentRouter` dynamically inspects enabled MCP server capabilities and routes queries with `require_mcp` boolean and `target_mcp_servers` array without context explosion.
+- [ ] **MCP-FEDERATED-01**: `groundedTurn` executes parallel retrieval across Knowledge Docs RAG and dynamic MCP tool execution loop with fail-soft isolation.
+- [ ] **MCP-SYNTH-01**: Evidence pack integrates MCP findings with `M1`, `M2`... citations and synthesis validates closure across doc and tool findings.
+- [ ] **MCP-TELE-01**: Telegram bot assistant dynamically discovers enabled MCP tools and supports remote MCP queries for authorized users.
+
 ## Future Requirements (Deferred)
 
 - **FUTR-01**: Full bidirectional Jira issue webhook sync (deferred - requires server/push).
@@ -243,3 +250,7 @@
 | QUAL-03 | Phase 20 | Pending |
 | QUAL-04 | Phase 20 | Pending |
 | QUAL-05 | Phase 20 | Pending |
+| MCP-ROUTE-01 | Phase 22 | Complete |
+| MCP-FEDERATED-01 | Phase 22 | Pending |
+| MCP-SYNTH-01 | Phase 22 | Pending |
+| MCP-TELE-01 | Phase 22 | Pending |

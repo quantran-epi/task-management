@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Hybrid GraphRAG Knowledge Assistant MVP
-status: completed
-stopped_at: Completed Phase 21 (All 4 plans verified)
-last_updated: "2026-10-19T14:48:00.000Z"
-last_activity: 2026-10-19 -- Completed quick task 261019-u17: fix inline AI popup positioning and add mention to chat drawer draft
+status: in_progress
+stopped_at: Completed 22-01-PLAN.md
+last_updated: "2026-10-20T13:45:00.000Z"
+last_activity: 2026-10-20 -- Completed 22-01: dynamic MCP capability discovery & intent routing
 progress:
-  total_phases: 19
-  completed_phases: 17
-  total_plans: 113
-  completed_plans: 104
-  percent: 92
+  total_phases: 20
+  completed_phases: 18
+  total_plans: 117
+  completed_plans: 105
+  percent: 90
 ---
 
 # Project State
@@ -21,17 +21,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-07)
 
 **Core value:** Make planned work realistically fit available time while giving the personal user evidence-grounded access to their local banking IT knowledge.
-**Current focus:** Phase 21 — Knowledge Graph Entity Extraction & Semantic Retrieval Improvement
+**Current focus:** Phase 22 — Federated MCP Knowledge & Hybrid Tool Grounding
 
 ## Current Position
 
-Phase: 21 (Knowledge Graph Entity Extraction & Semantic Retrieval Improvement) — COMPLETE
-Plan: 4 of 4
-Status: Phase 21 execution complete
-Last activity: 2026-10-20 -- Completed quick task 261020-du1: Connect Telegram chat to federated retrieval pipeline with intent pre-gating
-Stopped at: Completed Phase 21 (All 4 plans verified)
+Phase: 22 (Federated MCP Knowledge & Hybrid Tool Grounding) — IN PROGRESS
+Plan: 1 of 4 (22-01 complete)
+Status: Plan 22-01 complete, ready for Plan 22-02
+Last activity: 2026-10-20 -- Completed 22-01: dynamic MCP capability discovery & intent routing
+Stopped at: Completed 22-01-PLAN.md
 
-Progress: [██████████] 100%
+Progress: [█████████░] 90%
 
 ### Quick Tasks Completed
 

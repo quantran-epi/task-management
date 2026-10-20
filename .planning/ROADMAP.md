@@ -56,7 +56,7 @@ Plans:
 
 **Wave 1**
 
-- [ ] 22-01-PLAN.md — Dynamic MCP capability discovery & IntentRouter extension (Wave 1)
+- [x] 22-01-PLAN.md — Dynamic MCP capability discovery & IntentRouter extension (Wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
