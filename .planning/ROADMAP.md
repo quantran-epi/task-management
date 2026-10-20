@@ -102,4 +102,4 @@ Plans:
 
 **Wave 3** *(blocked on Wave 1 and Wave 2 completion)*
 
-- [ ] 23-03-PLAN.md — Stream Batching for Vector Embedding & Neo4j Insertion (Wave 3)
+- [x] 23-03-PLAN.md — Stream Batching for Vector Embedding & Neo4j Insertion (Wave 3)
