@@ -21,10 +21,14 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
   const { token } = theme.useToken();
   const [selectedMcp, setSelectedMcp] = useState<PersistedCitation | null>(null);
 
-  // Deduplicate by unique key
+  // Deduplicate citations: document citations deduplicate by document range,
+  // whereas MCP tool citations deduplicate by citationId.
   const dedupedMap = new Map<string, PersistedCitation>();
   for (const c of citations) {
-    const key = `${c.citationId}:${c.documentId}:${c.lineStart}:${c.lineEnd}:${c.publishedContentHash ?? 'local'}`;
+    const isMcp = c.citationId.startsWith('M') || c.evidenceKind === 'mcp_tool';
+    const key = isMcp
+      ? `mcp:${c.citationId}`
+      : `${c.documentId}:${c.lineStart}:${c.lineEnd}:${c.publishedContentHash ?? 'local'}`;
     if (!dedupedMap.has(key)) {
       dedupedMap.set(key, c);
     }

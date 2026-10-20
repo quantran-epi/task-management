@@ -15,6 +15,7 @@ import { packEvidence } from './evidencePack';
 import { synthesizeGroundedAnswer } from './groundedSynthesis';
 import { createKnowledgeClient } from '../knowledge/knowledgeClient';
 import { runMcpRetrieval } from './mcpRetrievalRunner';
+import { getEnabledMcpCapabilitySummaries } from './mcpClient';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { ChatMessageGrounding } from './groundedAnswerSchemas';
 import { getKnowledgeLinksForEntity } from '../../db/repositories/knowledgeLinkRepo';
@@ -78,7 +79,12 @@ export function createDefaultGroundedTurnDeps(options: {
   }
 
   return {
-    routeIntent: (q, d) => routeIntent(q, d),
+    routeIntent: async (q, d) => {
+      const mcpCapabilities =
+        d?.mcpCapabilities ??
+        (await getEnabledMcpCapabilitySummaries(database).catch(() => []));
+      return routeIntent(q, { ...d, mcpCapabilities });
+    },
     routeScope: (inp, d) => routeScope(inp, d),
     retrieveFederated: async (req, signal) => {
       if (!client) {
