@@ -1170,4 +1170,171 @@ describe('Telegram Headless Worker', () => {
     expect(mockSendReply).toHaveBeenCalledTimes(1);
     expect(replies[0]).toContain('Không tìm thấy tài liệu hoặc bằng chứng nào phù hợp');
   });
+
+  describe('Dynamic MCP Capabilities and Grounding in Telegram Worker', () => {
+    beforeEach(async () => {
+      await testDb.settings.put({
+        key: 'nine_router_config',
+        value: {
+          endpoint: 'https://api.openai.com/v1',
+          defaultModel: 'gpt-4o',
+        },
+      });
+    });
+
+    it('loads enabled MCP capabilities and passes them to routeIntent', async () => {
+      await setNineRouterApiKey('test-key', testDb);
+      await upsertWhitelistUser(
+        {
+          chatId: 'mcp_user_1',
+          name: 'MCP User',
+          status: 'active',
+          dataScope: 'full',
+        },
+        testDb
+      );
+
+      // Seed an enabled MCP server
+      await testDb.settings.put({
+        key: 'mcp_servers',
+        value: [
+          {
+            id: 'mock-mcp',
+            name: 'Mock MCP Server',
+            url: 'http://localhost:9999/mcp',
+            enabled: true,
+            instruction: 'Mock instruction',
+            cachedTools: ['lookup_table', 'search_facts'],
+          },
+        ],
+      });
+
+      mockRouteIntent.mockResolvedValueOnce({
+        intent: 'query_knowledge',
+        confidence: 0.95,
+        entities: ['Card schema'],
+        language: 'vi',
+        needs_clarification: false,
+        clarify_question: null,
+        speculation_requested: false,
+        require_mcp: true,
+        target_mcp_servers: ['mock-mcp'],
+      });
+
+      const mockSendReply = vi.fn(async () => {});
+      const mockSendAction = vi.fn(async () => {});
+
+      await processTelegramInboundMessage(
+        {
+          update_id: 201,
+          message_id: 1001,
+          chat_id: 'mcp_user_1',
+          from_name: 'MCP User',
+          text: 'Tra cứu bảng thẻ CMS',
+          date: 1234610,
+        },
+        'test_token',
+        testDb,
+        mockSendReply,
+        mockSendAction
+      );
+
+      expect(mockRouteIntent).toHaveBeenCalledTimes(1);
+      const routeIntentDeps = mockRouteIntent.mock.calls[0]?.[1];
+      expect(routeIntentDeps?.mcpCapabilities).toBeDefined();
+      expect(routeIntentDeps.mcpCapabilities.some((c: any) => c.id === 'mock-mcp')).toBe(true);
+    });
+
+    it('blocks MCP tool retrieval when user dataScope is tasks_only and require_mcp is true', async () => {
+      await setNineRouterApiKey('test-key', testDb);
+      await upsertWhitelistUser(
+        {
+          chatId: 'tasks_only_mcp_user',
+          name: 'Tasks Only MCP',
+          status: 'active',
+          dataScope: 'tasks_only',
+        },
+        testDb
+      );
+
+      mockRouteIntent.mockResolvedValueOnce({
+        intent: 'query_taskmate',
+        confidence: 0.95,
+        entities: [],
+        language: 'vi',
+        needs_clarification: false,
+        clarify_question: null,
+        speculation_requested: false,
+        require_mcp: true,
+        target_mcp_servers: ['mock-mcp'],
+      });
+
+      const replies: string[] = [];
+      const mockSendReply = vi.fn(async (_t: string, _c: string, text: string) => {
+        replies.push(text);
+      });
+      const mockSendAction = vi.fn(async () => {});
+
+      await processTelegramInboundMessage(
+        {
+          update_id: 202,
+          message_id: 1002,
+          chat_id: 'tasks_only_mcp_user',
+          from_name: 'Tasks Only MCP',
+          text: 'Tra cứu schema hệ thống ngoài',
+          date: 1234611,
+        },
+        'test_token',
+        testDb,
+        mockSendReply,
+        mockSendAction
+      );
+
+      expect(mockSendReply).toHaveBeenCalledTimes(1);
+      expect(replies[0]).toContain('tasks_only');
+      expect(replies[0]).toContain('không thể tra cứu công cụ hệ thống bên ngoài');
+      expect(mockRunGroundedTurn).not.toHaveBeenCalled();
+      expect(mockStreamChatEvents).not.toHaveBeenCalled();
+    });
+
+    it('formatGroundedAnswerForTelegram formats M* citations with Live MCP label', async () => {
+      const { formatGroundedAnswerForTelegram } = await import(
+        '../../src/services/telegram/telegramHeadlessWorker'
+      );
+
+      const grounding: any = {
+        schemaVersion: 1,
+        authority: 'server',
+        outcome: 'READY',
+        answer: {
+          schemaVersion: 2,
+          conclusion: 'Bảng CMS_CARD chứa thông tin thẻ.',
+          confidence: 'high',
+          claims: [{ id: 'C1', text: 'PAN được mã hóa trong bảng.', classification: 'DIRECT', citationIds: ['M1'] }],
+          hypotheses: [],
+          unsupportedParts: [],
+        },
+        citations: [
+          {
+            citationId: 'S1',
+            documentTitle: 'Tài liệu nghiệp vụ thẻ',
+          },
+          {
+            citationId: 'M1',
+            documentTitle: 'Graphiti Banking MCP: search_nodes',
+          },
+        ],
+      };
+
+      const formatted = formatGroundedAnswerForTelegram(grounding);
+      expect(formatted).toContain('Bảng CMS_CARD chứa thông tin thẻ.');
+      expect(formatted).toContain('📚 **Nguồn tài liệu:** Tài liệu nghiệp vụ thẻ');
+      expect(formatted).toContain('🔌 **Dữ liệu thực tế từ MCP:** Graphiti Banking MCP: search_nodes');
+    });
+
+    it('cleanCitationTags removes [M1], [M2] MCP citation tags as well', async () => {
+      const raw = 'Thông tin thẻ [M1] và quy trình [S2] từ máy chủ [M12].';
+      expect(cleanCitationTags(raw)).toBe('Thông tin thẻ  và quy trình  từ máy chủ .');
+    });
+  });
 });
