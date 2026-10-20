@@ -319,6 +319,7 @@ None yet.
 - Phase 19.1 inserted after Phase 19: Production Neo4j Integration & Live Retrieval Validation (URGENT)
 - Phase 19.2 inserted after Phase 19.1: Production-Ready AI Assistant & Graph Integrity; Phase 19.1 partial UAT preserved and imported as blocking acceptance.
 - Phase 21 added: Knowledge Graph Entity Extraction & Semantic Retrieval Improvement (resolves dummy STEP_xxx, extracts TEN_BUOC & WRITES, improves Neo4j seed resolution, enables hybrid prose extraction per .planning/proposals/knowledge-graph-extraction-fix-plan.md)
+- Phase 22 added: Federated MCP Knowledge & Hybrid Tool Grounding (generic, server-agnostic routing and parallel retrieval across ALL enabled MCP servers for both AI Chat Drawer and Telegram)
 
 ## Deferred Items
 
