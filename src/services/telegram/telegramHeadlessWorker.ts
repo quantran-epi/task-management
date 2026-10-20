@@ -26,6 +26,9 @@ import { buildGlobalContextPrompt } from '../ai/contextGrounding';
 import { rankBM25, tokenize, type BM25Document } from '../../utils/bm25';
 import type { Note } from '../../types/models';
 import { handleAdminCommand } from './telegramAdminWizard';
+import { routeIntent, type RouteIntentResult, type IntentLabel } from '../ai/intentRouter';
+import { getTodayDateString } from '../../utils/date';
+import dayjs from 'dayjs';
 
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4000; // Telegram hard limit is 4096, buffer to 4000
 
@@ -129,7 +132,9 @@ export interface GroundedContextResult {
 export async function resolveScopedContext(
   scope: TelegramDataScope,
   query: string,
-  db: TaskPlannerDatabase = defaultDb
+  db: TaskPlannerDatabase = defaultDb,
+  intent?: IntentLabel,
+  entities?: string[]
 ): Promise<GroundedContextResult> {
   const parts: string[] = [];
   const matchedSourceTitles: string[] = [];
@@ -139,7 +144,11 @@ export async function resolveScopedContext(
   }
 
   // 1. Tasks & Projects Scope
-  if (scope === 'full' || scope === 'tasks_only') {
+  const shouldIncludeTasks =
+    (scope === 'full' || scope === 'tasks_only') &&
+    (!intent || intent === 'query_taskmate' || intent === 'operate_taskmate' || intent === 'mixed');
+
+  if (shouldIncludeTasks) {
     try {
       const globalOverview = await buildGlobalContextPrompt(db);
       if (globalOverview) {
@@ -147,16 +156,21 @@ export async function resolveScopedContext(
       }
 
       // Query tokens matching open tasks
-      const qTokens = tokenize(query);
+      const searchTokens = Array.from(
+        new Set([
+          ...tokenize(query),
+          ...(entities ? entities.flatMap((e) => tokenize(e)) : []),
+        ])
+      );
       const allTasks = await db.tasks
         .filter((t) => t.status !== 'Done' && t.status !== 'Cancelled')
         .toArray();
 
       let matchedTasks = allTasks;
-      if (qTokens.length > 0) {
+      if (searchTokens.length > 0) {
         const filtered = allTasks.filter((t) => {
           const tText = `${t.name} ${t.description || ''} ${t.jiraKey || ''}`.toLowerCase();
-          return qTokens.some((token) => tText.includes(token));
+          return searchTokens.some((token) => tText.includes(token));
         });
         if (filtered.length > 0) {
           matchedTasks = filtered;
@@ -180,7 +194,11 @@ export async function resolveScopedContext(
   }
 
   // 2. Knowledge Docs Scope with BM25 ranking
-  if (scope === 'full' || scope === 'knowledge_only') {
+  const shouldIncludeKnowledge =
+    (scope === 'full' || scope === 'knowledge_only') &&
+    (!intent || intent === 'query_knowledge' || intent === 'mixed');
+
+  if (shouldIncludeKnowledge) {
     try {
       const notes: Note[] = await db.notes.toArray();
       if (notes.length > 0) {
@@ -193,8 +211,9 @@ export async function resolveScopedContext(
         }));
 
         let selectedNotes: Note[] = [];
-        if (query && query.trim()) {
-          const ranked = rankBM25(query, bm25Docs, { limit: 5 });
+        const searchQuery = entities && entities.length > 0 ? `${query} ${entities.join(' ')}` : query;
+        if (searchQuery && searchQuery.trim()) {
+          const ranked = rankBM25(searchQuery, bm25Docs, { limit: 5 });
           const rankedPositive = ranked.filter((r) => r.score > 0);
           if (rankedPositive.length > 0) {
             const matchedIds = new Set(rankedPositive.map((r) => r.doc.id));
@@ -202,11 +221,8 @@ export async function resolveScopedContext(
           }
         }
 
-        // If no BM25 matches or query is empty/generic, take up to 3 pinned or recently updated notes
-        if (selectedNotes.length === 0) {
-          selectedNotes = notes.slice(0, 3);
-        }
-
+        // Strictly NO arbitrary fallback (notes.slice(0, 3)).
+        // If no matching notes found for a knowledge query, state it explicitly.
         if (selectedNotes.length > 0) {
           parts.push('## Relevant Knowledge Notes & Docs:');
           for (const n of selectedNotes) {
@@ -215,7 +231,15 @@ export async function resolveScopedContext(
             const bodyPreview = (n.body || '').slice(0, 500).trim();
             parts.push(`### [Doc] ${title}\n${bodyPreview}`);
           }
+        } else if (intent === 'query_knowledge') {
+          parts.push(
+            '## Relevant Knowledge Notes & Docs:\n*(Không tìm thấy tài liệu hoặc ghi chú nào phù hợp với yêu cầu trong kho tri thức TaskMate)*'
+          );
         }
+      } else if (intent === 'query_knowledge') {
+        parts.push(
+          '## Relevant Knowledge Notes & Docs:\n*(Hệ thống hiện tại chưa có tài liệu hoặc ghi chú nào)*'
+        );
       }
     } catch (e) {
       console.warn('[telegramWorker] Failed to query knowledge context:', e);
@@ -567,8 +591,9 @@ export async function processTelegramInboundMessage(
     console.warn('[telegramWorker] sendAction failed:', err);
   }
 
-  // Step 4: Gather grounded context & history
-  const { contextText, matchedSourceTitles } = await resolveScopedContext(dataScope, trimmedText, db);
+  // Step 4: Gather history & configuration
+  const aiConfig = await getNineRouterConfig(db);
+  const apiKey = await getNineRouterApiKey(db);
 
   const settings = await getTelegramSettings(db);
   const userTurns = user.maxHistoryTurns !== undefined ? user.maxHistoryTurns : settings.maxHistoryTurns ?? 5;
@@ -579,15 +604,109 @@ export async function processTelegramInboundMessage(
     chatHistory = await getTelegramChatHistory(chat_id, historyTurns, user.sessionResetAt, db);
   }
 
-  // Step 5: Invoke AI
-  const aiConfig = await getNineRouterConfig(db);
-  const apiKey = await getNineRouterApiKey(db);
+  // Step 5: Intent routing via LLM (matching AI Chat Drawer architecture)
+  let routedIntent: RouteIntentResult | null = null;
+  if (apiKey && aiConfig.endpoint && dataScope !== 'pure_llm') {
+    try {
+      routedIntent = await routeIntent(trimmedText, {
+        completeJsonArgs: {
+          endpoint: aiConfig.endpoint,
+          apiKey,
+          model: aiConfig.defaultModel,
+        },
+        recentTurns: chatHistory,
+      });
+    } catch (intentErr) {
+      console.warn('[telegramWorker] routeIntent error, proceeding with heuristic context:', intentErr);
+    }
+  }
+
+  // Handle clarification intent directly per AI-SPEC D-06
+  if (routedIntent?.intent === 'clarify' && routedIntent.clarify_question) {
+    const clarifyMsg = routedIntent.clarify_question;
+    const htmlClarify = markdownToTelegramHtml(clarifyMsg);
+    await sendReply(botToken, chat_id, htmlClarify, message_id);
+    await logTelegramSession(
+      {
+        chatId: chat_id,
+        userName: from_name,
+        userMessage: text,
+        aiResponse: clarifyMsg,
+        dataScopeUsed: dataScope,
+        tokenCount: 0,
+      },
+      db
+    );
+    return;
+  }
+
+  // Scope Security Gate: enforce user dataScope against detected intent
+  if (dataScope === 'tasks_only' && routedIntent?.intent === 'query_knowledge') {
+    const scopeRefusal = `⚠️ **Phạm vi truy cập bị giới hạn**\n\nTài khoản của bạn được cấu hình phạm vi **Chỉ Tasks & Projects** (\`tasks_only\`), không có quyền truy cập hệ thống tài liệu và tri thức (Knowledge Docs).\n\n💡 *Vui lòng chỉ đặt câu hỏi liên quan đến công việc hoặc liên hệ quản trị viên để mở rộng phạm vi.*`;
+    const htmlRefusal = markdownToTelegramHtml(scopeRefusal);
+    await sendReply(botToken, chat_id, htmlRefusal, message_id);
+    await logTelegramSession(
+      {
+        chatId: chat_id,
+        userName: from_name,
+        userMessage: text,
+        aiResponse: scopeRefusal,
+        dataScopeUsed: dataScope,
+        tokenCount: 0,
+      },
+      db
+    );
+    return;
+  }
+
+  if (
+    dataScope === 'knowledge_only' &&
+    (routedIntent?.intent === 'query_taskmate' || routedIntent?.intent === 'operate_taskmate')
+  ) {
+    const scopeRefusal = `⚠️ **Phạm vi truy cập bị giới hạn**\n\nTài khoản của bạn được cấu hình phạm vi **Chỉ Docs & Notes** (\`knowledge_only\`), không có quyền truy cập hay thao tác dữ liệu công việc (Tasks & Projects).\n\n💡 *Vui lòng chỉ đặt câu hỏi liên quan đến tài liệu/kiến thức hoặc liên hệ quản trị viên để mở rộng phạm vi.*`;
+    const htmlRefusal = markdownToTelegramHtml(scopeRefusal);
+    await sendReply(botToken, chat_id, htmlRefusal, message_id);
+    await logTelegramSession(
+      {
+        chatId: chat_id,
+        userName: from_name,
+        userMessage: text,
+        aiResponse: scopeRefusal,
+        dataScopeUsed: dataScope,
+        tokenCount: 0,
+      },
+      db
+    );
+    return;
+  }
+
+  // Step 6: Gather grounded context using classified intent and entities
+  const { contextText, matchedSourceTitles } = await resolveScopedContext(
+    dataScope,
+    trimmedText,
+    db,
+    routedIntent?.intent,
+    routedIntent?.entities
+  );
+
+  // Step 7: Invoke AI with Critical Anti-Hallucination rules from AIChatDrawer
+  const todayStr = getTodayDateString();
+  const now = dayjs();
+  const dayName = now.format('dddd');
+  const timeStr = now.format('HH:mm');
 
   const systemPrompt = [
-    'You are TaskMate Telegram Assistant, a helpful, precise personal AI assistant directly integrated with the user\'s local TaskMate productivity app.',
-    'Always answer concisely, helpfully, and format your markdown cleanly for Telegram reading.',
+    `You are TaskMate Telegram Assistant, a helpful, precise personal AI assistant directly integrated with the user's local TaskMate productivity app.`,
+    `Current Date: ${todayStr} (${dayName}). Time: ${timeStr}.`,
+    ``,
+    `CRITICAL ANTI-HALLUCINATION RULES:`,
+    `1. NEVER GUESS, ASSUME, OR INVENT DATA.`,
+    `2. Every statement regarding tasks, projects, milestones, statuses, deadlines, logged work sessions, actual hours, planned allocations, capacity limits, notes, reminders, recurring schedules, or system sync state MUST be strictly grounded in concrete evidence provided in the context below.`,
+    `3. If a requested item or detail is missing, null, empty, or not recorded in the database context, EXPLICITLY STATE THAT IT IS NOT RECORDED. Never extrapolate, approximate, or pretend data exists.`,
+    `4. If no relevant documents or tasks are found in the context, clearly explain that no matching record exists in the system instead of fabricating details.`,
+    `5. Format your markdown cleanly for Telegram reading. Avoid deep nesting and keep responses clear and structured.`,
     contextText
-      ? `\n\n--- LOCAL TASKMATE CONTEXT (${dataScope.toUpperCase()}) ---\n${contextText}\n------------------------------------------`
+      ? `\n--- LOCAL TASKMATE CONTEXT (${dataScope.toUpperCase()}) ---\n${contextText}\n------------------------------------------`
       : '',
   ].join('\n');
 
@@ -607,7 +726,7 @@ export async function processTelegramInboundMessage(
       payload: {
         model: aiConfig.defaultModel,
         messages,
-        temperature: 0.7,
+        temperature: 0.1,
       },
     });
 
@@ -635,7 +754,7 @@ export async function processTelegramInboundMessage(
     processedResponse += `\n\n📚 **Nguồn:** ${uniqueTitles.join(', ')}`;
   }
 
-  // Step 6: Convert to Telegram HTML and Split/Send replies
+  // Step 8: Convert to Telegram HTML and Split/Send replies
   const formattedHtml = markdownToTelegramHtml(processedResponse);
   const chunks = splitTelegramMessage(formattedHtml);
   for (let i = 0; i < chunks.length; i++) {
@@ -645,7 +764,7 @@ export async function processTelegramInboundMessage(
     }
   }
 
-  // Step 7: Log Session
+  // Step 9: Log Session
   await logTelegramSession(
     {
       chatId: chat_id,

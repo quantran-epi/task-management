@@ -16,11 +16,23 @@ import {
 import { getTodayDateString } from '../../src/utils/date';
 import type { TelegramInboundEvent } from '../../src/services/telegram/telegramTypes';
 
+import {
+  setNineRouterApiKey,
+  clearNineRouterMemoryCache,
+} from '../../src/services/ai/nineRouterTokenService';
+
+const mockStreamChatEvents = vi.fn(async function* (_args?: any) {
+  yield { type: 'text', delta: 'AI reply with [S1] and **bold** formatting' };
+  yield { type: 'usage', usage: { total_tokens: 15 } };
+});
+
 vi.mock('../../src/services/ai/nineRouterClient', () => ({
-  streamChatEvents: vi.fn(async function* () {
-    yield { type: 'text', delta: 'AI reply with [S1] and **bold** formatting' };
-    yield { type: 'usage', usage: { total_tokens: 15 } };
-  }),
+  streamChatEvents: (args: any) => mockStreamChatEvents(args),
+}));
+
+const mockRouteIntent = vi.fn();
+vi.mock('../../src/services/ai/intentRouter', () => ({
+  routeIntent: (query: string, deps?: any) => mockRouteIntent(query, deps),
 }));
 
 const mockSendDesktopNotification = vi.fn();
@@ -36,10 +48,22 @@ describe('Telegram Headless Worker', () => {
     testDb = new TaskPlannerDatabase(testDbName);
     await testDb.open();
     clearTelegramProcessedUpdateIdsForTesting();
+    clearNineRouterMemoryCache();
+    mockRouteIntent.mockReset();
+    mockRouteIntent.mockResolvedValue({
+      intent: 'query_taskmate',
+      confidence: 0.95,
+      entities: [],
+      language: 'vi',
+      needs_clarification: false,
+      clarify_question: null,
+      speculation_requested: false,
+    });
   });
 
   afterEach(async () => {
     clearTelegramProcessedUpdateIdsForTesting();
+    clearNineRouterMemoryCache();
     await testDb.delete();
   });
 
@@ -110,10 +134,32 @@ describe('Telegram Headless Worker', () => {
     expect(knowledgeOnly.matchedSourceTitles).toContain('Bot Architecture Note');
     expect(knowledgeOnly.contextText).not.toContain('Implement Telegram Bot');
 
-    // 4. full contains both
-    const full = await resolveScopedContext('full', 'Telegram', testDb);
+    // 4. full contains both when query matches both
+    const full = await resolveScopedContext('full', 'Bot', testDb);
     expect(full.contextText).toContain('Implement Telegram Bot');
     expect(full.contextText).toContain('Bot Architecture Note');
+
+    // 5. query_knowledge with NO matching notes strictly does NOT leak arbitrary notes
+    const noMatchKnowledge = await resolveScopedContext(
+      'knowledge_only',
+      'NonExistentTopic',
+      testDb,
+      'query_knowledge'
+    );
+    expect(noMatchKnowledge.matchedSourceTitles).toEqual([]);
+    expect(noMatchKnowledge.contextText).toContain('Không tìm thấy tài liệu');
+    expect(noMatchKnowledge.contextText).not.toContain('Bot Architecture Note');
+
+    // 6. query_taskmate intent on full scope includes tasks but NOT notes
+    const taskmateIntent = await resolveScopedContext(
+      'full',
+      'Bot',
+      testDb,
+      'query_taskmate'
+    );
+    expect(taskmateIntent.contextText).toContain('Implement Telegram Bot');
+    expect(taskmateIntent.contextText).not.toContain('Bot Architecture Note');
+    expect(taskmateIntent.matchedSourceTitles).toEqual([]);
   });
 
   it('handles /reset and /clear slash commands without invoking AI', async () => {
@@ -725,5 +771,214 @@ describe('Telegram Headless Worker', () => {
       mockSendAction
     );
     expect(mockSendReply).toHaveBeenCalledTimes(1);
+  });
+
+  it('routes clarify intent and returns clarify question without streaming AI response', async () => {
+    await setNineRouterApiKey('test-key', testDb);
+    mockStreamChatEvents.mockClear();
+
+    await upsertWhitelistUser(
+      {
+        chatId: 'clarify_user',
+        name: 'Clarify User',
+        status: 'active',
+        dataScope: 'full',
+      },
+      testDb
+    );
+
+    mockRouteIntent.mockResolvedValueOnce({
+      intent: 'clarify',
+      confidence: 0.9,
+      entities: [],
+      language: 'vi',
+      needs_clarification: true,
+      clarify_question: 'Bạn muốn hỏi về tiến độ task nào cụ thể?',
+      speculation_requested: false,
+    });
+
+    const replies: string[] = [];
+    const mockSendReply = vi.fn(async (_token: string, _chatId: string, text: string) => {
+      replies.push(text);
+    });
+    const mockSendAction = vi.fn(async () => {});
+
+    await processTelegramInboundMessage(
+      {
+        update_id: 111,
+        message_id: 901,
+        chat_id: 'clarify_user',
+        from_name: 'Clarify User',
+        text: 'cái đó sao rồi',
+        date: 1234600,
+      },
+      'test_token',
+      testDb,
+      mockSendReply,
+      mockSendAction
+    );
+
+    expect(mockRouteIntent).toHaveBeenCalledTimes(1);
+    expect(mockStreamChatEvents).not.toHaveBeenCalled();
+    expect(mockSendReply).toHaveBeenCalledTimes(1);
+    expect(replies[0]).toContain('Bạn muốn hỏi về tiến độ task nào cụ thể?');
+  });
+
+  it('enforces scope security gate when tasks_only user queries knowledge', async () => {
+    await setNineRouterApiKey('test-key', testDb);
+    mockStreamChatEvents.mockClear();
+
+    await upsertWhitelistUser(
+      {
+        chatId: 'tasks_only_user',
+        name: 'Tasks Only User',
+        status: 'active',
+        dataScope: 'tasks_only',
+      },
+      testDb
+    );
+
+    mockRouteIntent.mockResolvedValueOnce({
+      intent: 'query_knowledge',
+      confidence: 0.95,
+      entities: ['Quy trình onboarding'],
+      language: 'vi',
+      needs_clarification: false,
+      clarify_question: null,
+      speculation_requested: false,
+    });
+
+    const replies: string[] = [];
+    const mockSendReply = vi.fn(async (_token: string, _chatId: string, text: string) => {
+      replies.push(text);
+    });
+    const mockSendAction = vi.fn(async () => {});
+
+    await processTelegramInboundMessage(
+      {
+        update_id: 112,
+        message_id: 902,
+        chat_id: 'tasks_only_user',
+        from_name: 'Tasks Only User',
+        text: 'Quy trình onboarding như thế nào?',
+        date: 1234601,
+      },
+      'test_token',
+      testDb,
+      mockSendReply,
+      mockSendAction
+    );
+
+    expect(mockRouteIntent).toHaveBeenCalledTimes(1);
+    expect(mockStreamChatEvents).not.toHaveBeenCalled();
+    expect(mockSendReply).toHaveBeenCalledTimes(1);
+    expect(replies[0]).toContain('Phạm vi truy cập bị giới hạn');
+    expect(replies[0]).toContain('tasks_only');
+  });
+
+  it('enforces scope security gate when knowledge_only user queries tasks or operations', async () => {
+    await setNineRouterApiKey('test-key', testDb);
+    mockStreamChatEvents.mockClear();
+
+    await upsertWhitelistUser(
+      {
+        chatId: 'knowledge_only_user',
+        name: 'Knowledge User',
+        status: 'active',
+        dataScope: 'knowledge_only',
+      },
+      testDb
+    );
+
+    mockRouteIntent.mockResolvedValueOnce({
+      intent: 'query_taskmate',
+      confidence: 0.95,
+      entities: ['Task hôm nay'],
+      language: 'vi',
+      needs_clarification: false,
+      clarify_question: null,
+      speculation_requested: false,
+    });
+
+    const replies: string[] = [];
+    const mockSendReply = vi.fn(async (_token: string, _chatId: string, text: string) => {
+      replies.push(text);
+    });
+    const mockSendAction = vi.fn(async () => {});
+
+    await processTelegramInboundMessage(
+      {
+        update_id: 113,
+        message_id: 903,
+        chat_id: 'knowledge_only_user',
+        from_name: 'Knowledge User',
+        text: 'Hôm nay tôi có task nào gấp?',
+        date: 1234602,
+      },
+      'test_token',
+      testDb,
+      mockSendReply,
+      mockSendAction
+    );
+
+    expect(mockRouteIntent).toHaveBeenCalledTimes(1);
+    expect(mockStreamChatEvents).not.toHaveBeenCalled();
+    expect(mockSendReply).toHaveBeenCalledTimes(1);
+    expect(replies[0]).toContain('Phạm vi truy cập bị giới hạn');
+    expect(replies[0]).toContain('knowledge_only');
+  });
+
+  it('passes anti-hallucination rules and temperature 0.1 to streamChatEvents', async () => {
+    await setNineRouterApiKey('test-key', testDb);
+    mockStreamChatEvents.mockClear();
+
+    await upsertWhitelistUser(
+      {
+        chatId: 'grounded_user',
+        name: 'Grounded User',
+        status: 'active',
+        dataScope: 'full',
+      },
+      testDb
+    );
+
+    mockRouteIntent.mockResolvedValueOnce({
+      intent: 'query_taskmate',
+      confidence: 0.98,
+      entities: ['Task'],
+      language: 'vi',
+      needs_clarification: false,
+      clarify_question: null,
+      speculation_requested: false,
+    });
+
+    const replies: string[] = [];
+    const mockSendReply = vi.fn(async (_token: string, _chatId: string, text: string) => {
+      replies.push(text);
+    });
+    const mockSendAction = vi.fn(async () => {});
+
+    await processTelegramInboundMessage(
+      {
+        update_id: 114,
+        message_id: 904,
+        chat_id: 'grounded_user',
+        from_name: 'Grounded User',
+        text: 'Kiểm tra task của tôi',
+        date: 1234603,
+      },
+      'test_token',
+      testDb,
+      mockSendReply,
+      mockSendAction
+    );
+
+    expect(mockStreamChatEvents).toHaveBeenCalledTimes(1);
+    const callArgs = (mockStreamChatEvents.mock.calls as any)[0]?.[0];
+    expect(callArgs?.payload?.temperature).toBe(0.1);
+    const systemMessage = callArgs?.payload?.messages?.find((m: any) => m.role === 'system');
+    expect(systemMessage?.content).toContain('CRITICAL ANTI-HALLUCINATION RULES:');
+    expect(systemMessage?.content).toContain('1. NEVER GUESS, ASSUME, OR INVENT DATA.');
+    expect(systemMessage?.content).toContain('EXPLICITLY STATE THAT IT IS NOT RECORDED');
   });
 });
