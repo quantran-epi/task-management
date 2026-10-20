@@ -68,4 +68,4 @@ Plans:
 
 **Wave 4** *(blocked on Wave 2 completion)*
 
-- [ ] 22-04-PLAN.md — Telegram AI Gateway MCP tool integration and access control parity (Wave 4)
+- [x] 22-04-PLAN.md — Telegram AI Gateway MCP tool integration and access control parity (Wave 4)
