@@ -1,9 +1,9 @@
 ---
 phase: 23
 slug: knowledge-graph-build-reliability-entity-fidelity
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: complete
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-10-20
 ---
 
@@ -38,10 +38,10 @@ created: 2026-10-20
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 23-01-01 | 01 | 1 | ENTITY-FIDELITY-01 | T-23-01 / Injection | Vietnamese text slugifies to ASCII without underscore runs; preserves canonicalName | unit | `npm --prefix knowledge-server test -- tests/graphIdentity.test.ts` | ✅ | ⬜ pending |
-| 23-01-02 | 01 | 1 | ENTITY-FIDELITY-01 | T-23-01 / Injection | GET_FACTS_BY_SNAPSHOT returns canonicalName & kind from nodes; DTO does not slice URN | unit | `npm --prefix knowledge-server test -- tests/graphBuildService.test.ts` | ✅ | ⬜ pending |
-| 23-02-01 | 02 | 2 | BUILD-CACHE-01 | T-23-02 / Traversal | Cache key is hex SHA-256; persists and reloads chunk extractions across restarts | unit | `npm --prefix knowledge-server test -- tests/chunkCache.test.ts` | ❌ W0 | ⬜ pending |
-| 23-03-01 | 03 | 3 | BUILD-OOM-01 | T-23-03 / DoS | Embedding and DB write run in bounded batches (<=50) yielding event loop per batch | unit / integration | `npm --prefix knowledge-server test -- tests/retrievalBatching.test.ts` | ❌ W0 | ⬜ pending |
+| 23-01-01 | 01 | 1 | ENTITY-FIDELITY-01 | T-23-01 / Injection | Vietnamese text slugifies to ASCII without underscore runs; preserves canonicalName | unit | `npm --prefix knowledge-server test -- tests/graphIdentity.test.ts` | ✅ | ✅ green |
+| 23-01-02 | 01 | 1 | ENTITY-FIDELITY-01 | T-23-01 / Injection | GET_FACTS_BY_SNAPSHOT returns canonicalName & kind from nodes; DTO does not slice URN | unit | `npm --prefix knowledge-server test -- tests/graphBuildService.test.ts` | ✅ | ✅ green |
+| 23-02-01 | 02 | 2 | BUILD-CACHE-01 | T-23-02 / Traversal | Cache key is hex SHA-256; persists and reloads chunk extractions across restarts | unit | `npm --prefix knowledge-server test -- tests/chunkCache.test.ts` | ✅ | ✅ green |
+| 23-03-01 | 03 | 3 | BUILD-OOM-01 | T-23-03 / DoS | Embedding and DB write run in bounded batches (<=50) yielding event loop per batch | unit / integration | `npm --prefix knowledge-server test -- tests/retrievalBatching.test.ts` | ✅ | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -49,8 +49,8 @@ created: 2026-10-20
 
 ## Wave 0 Requirements
 
-- [ ] `knowledge-server/tests/chunkCache.test.ts` — covers BUILD-CACHE-01 (disk persistence, key generation, hit/miss flow)
-- [ ] `knowledge-server/tests/retrievalBatching.test.ts` — covers BUILD-OOM-01 (batching logic, event loop yield)
+- [x] `knowledge-server/tests/chunkCache.test.ts` — covers BUILD-CACHE-01 (disk persistence, key generation, hit/miss flow)
+- [x] `knowledge-server/tests/retrievalBatching.test.ts` — covers BUILD-OOM-01 (batching logic, event loop yield)
 
 ---
 
@@ -64,11 +64,11 @@ created: 2026-10-20
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 15s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 15s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending 2026-10-20
+**Approval:** verified 2026-10-20
