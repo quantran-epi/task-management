@@ -158,4 +158,22 @@ describe('Retrieval Stream Batching & Event Loop Yield (BUILD-OOM-01)', () => {
       delete process.env.RETRIEVAL_BATCH_SIZE;
     }
   });
+
+  it('yields event loop via setImmediate between each batch', async () => {
+    process.env.RETRIEVAL_BATCH_SIZE = '25';
+    const setImmediateSpy = vi.spyOn(globalThis, 'setImmediate');
+    try {
+      const repo = new InMemoryGraphRepository();
+      const embeddingProvider = new RecordingEmbeddingProvider();
+      const snapshot = createMockSnapshotWithChunks(100);
+
+      await repo.buildRetrievalGeneration(mockCandidate, snapshot, embeddingProvider);
+
+      // 100 chunks / 25 per batch = 4 batches -> at least 4 setImmediate yields
+      expect(setImmediateSpy).toHaveBeenCalledTimes(4);
+    } finally {
+      setImmediateSpy.mockRestore();
+      delete process.env.RETRIEVAL_BATCH_SIZE;
+    }
+  });
 });

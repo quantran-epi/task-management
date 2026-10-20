@@ -44,6 +44,16 @@ export interface Neo4jRepositoryOptions {
   driver?: Driver | undefined;
 }
 
+export const DEFAULT_RETRIEVAL_BATCH_SIZE = 32;
+
+export function getRetrievalBatchSize(): number {
+  const envVal = process.env.RETRIEVAL_BATCH_SIZE;
+  if (!envVal) return DEFAULT_RETRIEVAL_BATCH_SIZE;
+  const parsed = parseInt(envVal, 10);
+  if (Number.isNaN(parsed) || parsed <= 0) return DEFAULT_RETRIEVAL_BATCH_SIZE;
+  return Math.max(10, Math.min(100, parsed));
+}
+
 /**
  * Static parameterized Cypher query definitions per T-17-04 & T-18-02.
  * Zero string interpolation or dynamic clauses to prevent Cypher injection.
@@ -696,7 +706,7 @@ export class Neo4jRepository implements GraphRepository {
     const fulltextIndexName = `chunk_fulltext_${token}`;
     const vectorIndexName = `chunk_vector_${token}`;
 
-    const chunkRows: Array<{
+    const allChunks: Array<{
       instanceKey: string;
       chunkKey: string;
       chunkId: string;
@@ -709,13 +719,11 @@ export class Neo4jRepository implements GraphRepository {
       startOffset: number;
       endOffset: number;
       text: string;
-      embedding: number[] | null;
     }> = [];
-    const textsToEmbed: string[] = [];
 
     for (const doc of sourceSnapshot.documents) {
       for (const c of doc.chunks) {
-        chunkRows.push({
+        allChunks.push({
           instanceKey: `${candidate.graphSnapshotId}:${c.occurrenceId}`,
           chunkKey: c.occurrenceId,
           chunkId: c.occurrenceId,
@@ -728,40 +736,66 @@ export class Neo4jRepository implements GraphRepository {
           startOffset: c.startOffset,
           endOffset: c.endOffset,
           text: c.rawContent,
-          embedding: null,
         });
-        textsToEmbed.push(c.rawContent);
       }
     }
 
-    let embeddingMetadata = embeddingProvider?.describe();
-    let hasVectors = false;
-
-    if (embeddingProvider && textsToEmbed.length > 0) {
-      const vectors = await embeddingProvider.embedDocuments(textsToEmbed);
-      if (vectors.length !== chunkRows.length) {
-        throw new Error('EMBEDDING_COUNT_MISMATCH: Batch length mismatch');
-      }
-      const expectedDim = embeddingMetadata?.dimensions;
-      for (let i = 0; i < vectors.length; i++) {
-        const vec = vectors[i]!;
-        if (expectedDim && vec.length !== expectedDim) {
-          throw new Error(`DIMENSION_MISMATCH: Expected ${expectedDim}, got ${vec.length}`);
-        }
-        chunkRows[i]!.embedding = vec;
-      }
-      hasVectors = true;
-    }
-
+    const embeddingMetadata = embeddingProvider?.describe();
+    const hasVectors = Boolean(embeddingProvider && allChunks.length > 0);
+    const batchSize = getRetrievalBatchSize();
     const session = this.getSession();
+
     try {
-      // 1. Insert Chunks with generic :Chunk label
-      if (chunkRows.length > 0) {
+      // 1. Process and insert chunks in bounded streaming batches
+      for (let i = 0; i < allChunks.length; i += batchSize) {
+        const batchSlice = allChunks.slice(i, i + batchSize);
+        let batchRows: Array<{
+          instanceKey: string;
+          chunkKey: string;
+          chunkId: string;
+          documentId: string;
+          documentTitle: string;
+          publishedContentHash: string;
+          headingPath: string[];
+          startLine: number;
+          endLine: number;
+          startOffset: number;
+          endOffset: number;
+          text: string;
+          embedding: number[] | null;
+        }>;
+
+        if (embeddingProvider) {
+          const texts = batchSlice.map((c) => c.text);
+          const vectors = await embeddingProvider.embedDocuments(texts);
+          if (vectors.length !== batchSlice.length) {
+            throw new Error('EMBEDDING_COUNT_MISMATCH: Batch length mismatch');
+          }
+          const expectedDim = embeddingMetadata?.dimensions;
+          batchRows = batchSlice.map((c, idx) => {
+            const vec = vectors[idx]!;
+            if (expectedDim && vec.length !== expectedDim) {
+              throw new Error(`DIMENSION_MISMATCH: Expected ${expectedDim}, got ${vec.length}`);
+            }
+            return {
+              ...c,
+              embedding: vec,
+            };
+          });
+        } else {
+          batchRows = batchSlice.map((c) => ({
+            ...c,
+            embedding: null,
+          }));
+        }
+
+        // Insert batch and link evidence overlap immediately to Neo4j
         await session.executeWrite(async (tx) => {
           await tx.run(CYPHER_QUERIES.UNWIND_INSERT_CHUNKS, {
             graphSnapshotId: candidate.graphSnapshotId,
-            rows: chunkRows,
+            rows: batchRows,
           });
+
           // Attach generation-specific snapshot label to isolate index
           await tx.run(
             `MATCH (c:Chunk {graphSnapshotId: $graphSnapshotId}) SET c:\`${snapshotLabel}\``,
@@ -771,7 +805,7 @@ export class Neo4jRepository implements GraphRepository {
           // Link facts only to same-document chunks whose source coordinates overlap.
           const supportByKey = new Map<string, { factKey: string; chunkKey: string; chunkId: string }>();
           for (const ev of candidate.evidence) {
-            for (const chunk of chunkRows) {
+            for (const chunk of batchRows) {
               if (chunk.documentId !== ev.documentId) continue;
               const lineOverlap = ev.startLine <= chunk.endLine && ev.endLine >= chunk.startLine;
               const hasOffsets =
@@ -799,6 +833,9 @@ export class Neo4jRepository implements GraphRepository {
             });
           }
         });
+
+        // Yield event loop between batches for GC and Fastify responsiveness
+        await new Promise((resolve) => setImmediate(resolve));
       }
 
       // 2. Create fulltext index with standard-folding
@@ -836,7 +873,7 @@ export class Neo4jRepository implements GraphRepository {
         fulltextIndexName,
         vectorIndexName,
         embeddingMetadata,
-        chunkCount: chunkRows.length,
+        chunkCount: allChunks.length,
         hasVectors,
         builtAt: new Date().toISOString(),
       };
@@ -846,7 +883,7 @@ export class Neo4jRepository implements GraphRepository {
         fulltextIndexName,
         vectorIndexName,
         embeddingMetadataJson: JSON.stringify(embeddingMetadata || {}),
-        chunkCount: chunkRows.length,
+        chunkCount: allChunks.length,
         evidenceCount: new Set(candidate.evidence.map((evidence) => evidence.factKey)).size,
         hasVectors,
         retrievalBuiltAt: metadata.builtAt,

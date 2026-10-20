@@ -13,6 +13,16 @@ import type { EmbeddingProvider } from '../retrieval/contracts.js';
 
 export const RETRIEVAL_GENERATION_GRACE_MS = 600000; // 10 minutes per D-24
 
+export const DEFAULT_RETRIEVAL_BATCH_SIZE = 32;
+
+export function getRetrievalBatchSize(): number {
+  const envVal = process.env.RETRIEVAL_BATCH_SIZE;
+  if (!envVal) return DEFAULT_RETRIEVAL_BATCH_SIZE;
+  const parsed = parseInt(envVal, 10);
+  if (Number.isNaN(parsed) || parsed <= 0) return DEFAULT_RETRIEVAL_BATCH_SIZE;
+  return Math.max(10, Math.min(100, parsed));
+}
+
 /**
  * Builds deterministic 16-character hex token from graph snapshot ID.
  */
@@ -142,7 +152,6 @@ export class InMemoryGraphRepository implements GraphRepository {
     const vectorIndexName = `chunk_vector_${token}`;
 
     const chunkRecords: ChunkNodeRecord[] = [];
-    const textsToEmbed: string[] = [];
 
     for (const doc of sourceSnapshot.documents) {
       for (const c of doc.chunks) {
@@ -159,28 +168,34 @@ export class InMemoryGraphRepository implements GraphRepository {
           rawContent: c.rawContent,
           graphSnapshotId: candidate.graphSnapshotId,
         });
-        textsToEmbed.push(c.rawContent);
       }
     }
 
-    let embeddingMetadata = embeddingProvider?.describe();
-    let hasVectors = false;
+    const embeddingMetadata = embeddingProvider?.describe();
+    const hasVectors = Boolean(embeddingProvider && chunkRecords.length > 0);
+    const batchSize = getRetrievalBatchSize();
 
-    if (embeddingProvider && textsToEmbed.length > 0) {
-      const vectors = await embeddingProvider.embedDocuments(textsToEmbed);
-      if (vectors.length !== chunkRecords.length) {
-        throw new Error('EMBEDDING_COUNT_MISMATCH: Batch length mismatch');
-      }
-
-      const expectedDim = embeddingMetadata?.dimensions;
-      for (let i = 0; i < vectors.length; i++) {
-        const vec = vectors[i]!;
-        if (expectedDim && vec.length !== expectedDim) {
-          throw new Error(`DIMENSION_MISMATCH: Expected ${expectedDim}, got ${vec.length}`);
+    if (embeddingProvider && chunkRecords.length > 0) {
+      for (let i = 0; i < chunkRecords.length; i += batchSize) {
+        const batchSlice = chunkRecords.slice(i, i + batchSize);
+        const batchTexts = batchSlice.map((c) => c.rawContent);
+        const vectors = await embeddingProvider.embedDocuments(batchTexts);
+        if (vectors.length !== batchSlice.length) {
+          throw new Error('EMBEDDING_COUNT_MISMATCH: Batch length mismatch');
         }
-        chunkRecords[i]!.embedding = vec;
+
+        const expectedDim = embeddingMetadata?.dimensions;
+        for (let j = 0; j < vectors.length; j++) {
+          const vec = vectors[j]!;
+          if (expectedDim && vec.length !== expectedDim) {
+            throw new Error(`DIMENSION_MISMATCH: Expected ${expectedDim}, got ${vec.length}`);
+          }
+          batchSlice[j]!.embedding = vec;
+        }
+
+        // Yield event loop between batches
+        await new Promise((resolve) => setImmediate(resolve));
       }
-      hasVectors = true;
     }
 
     const metadata: RetrievalGenerationMetadata = {
