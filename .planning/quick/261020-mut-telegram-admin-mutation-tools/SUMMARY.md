@@ -3,7 +3,7 @@ task: 261020-mut
 title: Support full mutation tools for admin on Telegram with preview and confirmation loop
 date: 2026-10-20
 status: complete
-commit: pending
+commit: 288ec3b
 ---
 
 # Summary: Telegram Admin Mutation Tools with Preview and Confirmation Loop
