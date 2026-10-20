@@ -130,16 +130,17 @@ export function buildSystemPrompt(
     '- CONVERSATION_HISTORY: Prior turns between user and assistant for context resolution.',
     '- SPECULATION_REQUESTED: true | false.',
     '- EVIDENCE:',
-    '  - Citations: [ { id: "S1", title: "...", excerpt: "..." }, ... ]',
+    '  - Citations: [ { id: "S1", title: "...", excerpt: "..." }, { id: "M1", title: "[MCP] ...", excerpt: "..." }, ... ]',
+    '    (Prefix guide: [S*] = Server Knowledge Doc, [L*] = Local Note, [M*] = Live MCP Tool Observation)',
     '  - Paths: [ { id: "P1", summary: "...", steps: [...] }, ... ]',
     'RULES:',
     '1. "language": ' + languageInstruction,
-    '2. "conclusion": High-level executive synthesis answering the query directly in natural, beautiful, human-friendly Markdown formatting (using bullet points, bold key terms, tables or code blocks where appropriate). MANDATORY INLINE CITATIONS: Every single fact, step, bullet point, or package name in "conclusion" MUST have an inline citation tag like [S1] or [S2] immediately after it (e.g. "Tiến trình 60000004 [S1] kích hoạt từ chỉ thị MAIN1.OPR_OPERATION [S1]"). Statements in "conclusion" without citation brackets are FORBIDDEN when EVIDENCE is available.',
+    '2. "conclusion": High-level executive synthesis answering the query directly in natural, beautiful, human-friendly Markdown formatting (using bullet points, bold key terms, tables or code blocks where appropriate). MANDATORY INLINE CITATIONS: Every single fact, step, bullet point, or package name in "conclusion" MUST have an inline citation tag like [S1], [L1], or [M1] immediately after it. Cite [M*] when claiming facts observed in real-time from external databases, memory graphs, or Live MCP tools. Statements in "conclusion" without citation brackets are FORBIDDEN when EVIDENCE is available.',
     '4. "confidenceReason": One sentence explaining the confidence assignment based on evidence coverage.',
-    '5. "citationReasons": MANDATORY object mapping every cited citationId (e.g. "S1", "S2") to a clear, specific, and detailed explanation of WHY this citation answers or relates to the query. The explanation MUST explicitly mention the main subject/entity from the user query (e.g. query about "tiến trình phân bổ thanh toán thẻ tín dụng" -> reason must state: "Đoạn này xác nhận tiến trình quy tắc 60000004 điều phối luồng phân bổ thanh toán thẻ tín dụng qua chỉ thị MAIN1.OPR_OPERATION"). Explain thoroughly in detail so the user understands why this citation answers or relates to the question — never be terse, vague, or curt. Be strictly truthful and faithful to EVIDENCE — do not extrapolate or speculate beyond what is written. If an evidence snippet is not directly relevant to the question, DO NOT cite it and DO NOT include it in citationReasons.',
+    '5. "citationReasons": MANDATORY object mapping every cited citationId (e.g. "S1", "S2", "M1") to a clear, specific, and detailed explanation of WHY this citation answers or relates to the query. The explanation MUST explicitly mention the main subject/entity from the user query (e.g. query about "tiến trình phân bổ thanh toán thẻ tín dụng" -> reason must state: "Đoạn này xác nhận tiến trình quy tắc 60000004 điều phối luồng phân bổ thanh toán thẻ tín dụng qua chỉ thị MAIN1.OPR_OPERATION"). Explain thoroughly in detail so the user understands why this citation answers or relates to the question — never be terse, vague, or curt. Be strictly truthful and faithful to EVIDENCE — do not extrapolate or speculate beyond what is written. If an evidence snippet is not directly relevant to the question, DO NOT cite it and DO NOT include it in citationReasons.',
     '6. "claims":',
-    '   - Every claim must state an atomic fact supported by one or more citationIds ("S1", "L1", etc.).',
-    '   - MANDATORY: When EVIDENCE citations are provided, you MUST extract the key factual statements into "claims", each citing the supporting citationId(s) (e.g. ["S1"], ["S2"]). NEVER return an empty claims array when EVIDENCE has citations.',
+    '   - Every claim must state an atomic fact supported by one or more citationIds ("S1", "L1", "M1", etc.).',
+    '   - MANDATORY: When EVIDENCE citations are provided, you MUST extract the key factual statements into "claims", each citing the supporting citationId(s) (e.g. ["S1"], ["M1"]). NEVER return an empty claims array when EVIDENCE has citations.',
     '   - If no graph paths are present (allowedPathIds is empty or paths are absent), all claims MUST have classification "DIRECT" with pathId null, citing the relevant citationIds (e.g. ["S1"]).',
     '   - classification is "INFERRED" if derived from graph traversal path (pathId must be "P1", "P2", etc.). Whenever an answer describes execution sequence, container flow, caller-callee steps, or entity relationships supported by a Path, you MUST set classification to "INFERRED" and pathId to the corresponding path id (e.g. "P1").',
     '   - If you cannot point to an exact citationId, DO NOT include the claim in claims. Put it in "unsupportedParts".',
@@ -342,9 +343,9 @@ export function normalizeRawGroundedOutput(
       claimCitations = claim.citations;
     }
 
-    // If citationIds was omitted or empty, attempt extraction from inline text markers like [S1]
+    // If citationIds was omitted or empty, attempt extraction from inline text markers like [S1], [L1], [M1]
     if (claimCitations.length === 0 && typeof claim.text === 'string') {
-      const inlineMatches = claim.text.matchAll(/\[([SL]\d+)\]/gi);
+      const inlineMatches = claim.text.matchAll(/\[([SLM]\d+)\]/gi);
       for (const m of inlineMatches) {
         if (m[1]) claimCitations.push(m[1].toUpperCase());
       }
@@ -455,7 +456,7 @@ export function normalizeRawGroundedOutput(
     delete obj.citationReasons;
     obj.confidence = 'unknown';
     if (typeof obj.conclusion === 'string') {
-      obj.conclusion = obj.conclusion.replace(/\[\s*[SL]?\d+\s*\]/gi, '').trim();
+      obj.conclusion = obj.conclusion.replace(/\[\s*[SLM]?\d+\s*\]/gi, '').trim();
     }
   }
 
@@ -465,7 +466,7 @@ export function normalizeRawGroundedOutput(
     !isAbstentionAnswer &&
     normalizedClaims.length === 0 &&
     typeof obj.conclusion === 'string' &&
-    !/\[[SL]?\d+\]/i.test(obj.conclusion) &&
+    !/\[[SLM]?\d+\]/i.test(obj.conclusion) &&
     Array.isArray(promptEvidence) &&
     promptEvidence.length > 0
   ) {
@@ -479,7 +480,7 @@ export function normalizeRawGroundedOutput(
       if (!trimmed || trimmed.startsWith('#') || trimmed.length < 10) {
         return line;
       }
-      if (/\[[SL]?\d+\]/i.test(line)) {
+      if (/\[[SLM]?\d+\]/i.test(line)) {
         return line;
       }
 
@@ -513,7 +514,7 @@ export function normalizeRawGroundedOutput(
       hasModifiedConclusion = true;
       synthesizedClaims.push({
         id: `C${claimCounter++}`,
-        text: obj.conclusion.replace(/\[[SL]?\d+\]/gi, '').trim(),
+        text: obj.conclusion.replace(/\[[SLM]?\d+\]/gi, '').trim(),
         classification: 'DIRECT',
         citationIds: [defaultCitationId],
         pathId: null,
