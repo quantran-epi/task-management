@@ -218,6 +218,8 @@ describe('groundedTurn state machine', () => {
       needs_clarification: false,
       clarify_question: null,
       speculation_requested: false,
+      require_mcp: false,
+      target_mcp_servers: [],
     });
 
     const res = await runGroundedTurn(mockInput, mockDeps);
@@ -325,6 +327,8 @@ describe('groundedTurn state machine', () => {
       needs_clarification: true,
       clarify_question: null,
       speculation_requested: false,
+      require_mcp: false,
+      target_mcp_servers: [],
     });
 
     const res = await runGroundedTurn(mockInput, mockDeps);
@@ -596,6 +600,8 @@ describe('groundedTurn state machine', () => {
       needs_clarification: false,
       clarify_question: null,
       speculation_requested: false,
+      require_mcp: false,
+      target_mcp_servers: [],
     });
 
     const res = await runGroundedTurn(mockInput, mockDeps);

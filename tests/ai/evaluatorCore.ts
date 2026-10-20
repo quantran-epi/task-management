@@ -59,6 +59,8 @@ export function createMockDepsForCase(
         needs_clarification: false,
         clarify_question: null,
         speculation_requested: false,
+        require_mcp: false,
+        target_mcp_servers: [],
       };
     },
 

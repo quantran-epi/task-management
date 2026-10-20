@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
-import React from 'react';
+import { render, screen } from '@testing-library/react';
 import { CitationChip } from '../../src/components/ai/CitationChip';
 import { GroundedAnswerCard } from '../../src/components/ai/grounded/GroundedAnswerCard';
 import { SourcesPanel } from '../../src/components/ai/grounded/SourcesPanel';
@@ -48,6 +47,8 @@ describe('Task 1: CitationChip, GroundedAnswerCard, SourcesPanel MCP citations',
       };
 
       const grounding: ChatMessageGrounding = {
+        schemaVersion: 1,
+        authority: 'server',
         outcome: 'READY',
         answer: {
           schemaVersion: 2,
@@ -68,7 +69,28 @@ describe('Task 1: CitationChip, GroundedAnswerCard, SourcesPanel MCP citations',
           unsupportedParts: [],
         },
         citations: [mockCitation],
+        paths: [],
+        conflicts: [],
+        scope: {
+          setIds: ['10000000-0000-4000-8000-000000000001'],
+          routedScope: {
+            domain: null,
+            environment: null,
+            version: null,
+            comparisonMode: null,
+          },
+        },
+        modalityDiagnostics: {
+          vector: { status: 'ok', latencyMs: 10, itemCount: 1 },
+          fulltext: { status: 'ok', latencyMs: 5, itemCount: 1 },
+          graph: { status: 'ok', latencyMs: 15, itemCount: 0 },
+        },
         coverageWarnings: [],
+        fallbackReason: 'NONE',
+        routerVersion: 'test-router',
+        promptVersion: 'test-prompt',
+        modelId: 'test-model',
+        createdAt: new Date().toISOString(),
       };
 
       const handleCitationActivate = vi.fn();

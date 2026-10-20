@@ -108,11 +108,11 @@ describe('intentRouter (LLM-reasoned, no keyword/verb lists)', () => {
     expect(result.require_mcp).toBe(true);
     expect(result.target_mcp_servers).toEqual(['graphiti-banking']);
 
-    const callArgs = completeJson.mock.calls[0][0];
-    const systemMessage = callArgs.messages.find((m: any) => m.role === 'system');
-    expect(systemMessage.content).toContain('<enabled_mcp_servers>');
-    expect(systemMessage.content).toContain('graphiti-banking');
-    expect(systemMessage.content).toContain('search_nodes');
+    const callArgs = completeJson.mock.calls[0]?.[0];
+    const systemMessage = callArgs?.messages.find((m: any) => m.role === 'system');
+    expect(systemMessage?.content).toContain('<enabled_mcp_servers>');
+    expect(systemMessage?.content).toContain('graphiti-banking');
+    expect(systemMessage?.content).toContain('search_nodes');
   });
 
   it('normalizes a clarify intent to needs_clarification=true even if model contradicts itself', async () => {

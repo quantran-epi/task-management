@@ -1427,7 +1427,7 @@ describe('Telegram Headless Worker', () => {
       });
 
       // Mock streamChatEvents to simulate LLM returning tool_calls for update_card_status
-      mockStreamChatEvents.mockImplementationOnce(async function* () {
+      mockStreamChatEvents.mockImplementationOnce((async function* () {
         yield {
           type: 'tool_calls',
           calls: [
@@ -1440,8 +1440,8 @@ describe('Telegram Headless Worker', () => {
               },
             },
           ],
-        };
-      });
+        } as any;
+      }) as any);
 
       const replies: string[] = [];
       const mockSendReply = vi.fn(async (_t: string, _c: string, text: string) => {
