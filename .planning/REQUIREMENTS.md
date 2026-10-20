@@ -146,8 +146,8 @@
 ### Federated MCP Knowledge & Hybrid Tool Grounding (Phase 22)
 
 - [x] **MCP-ROUTE-01**: `intentRouter` dynamically inspects enabled MCP server capabilities and routes queries with `require_mcp` boolean and `target_mcp_servers` array without context explosion.
-- [ ] **MCP-FEDERATED-01**: `groundedTurn` executes parallel retrieval across Knowledge Docs RAG and dynamic MCP tool execution loop with fail-soft isolation.
-- [ ] **MCP-SYNTH-01**: Evidence pack integrates MCP findings with `M1`, `M2`... citations and synthesis validates closure across doc and tool findings.
+- [x] **MCP-FEDERATED-01**: `groundedTurn` executes parallel retrieval across Knowledge Docs RAG and dynamic MCP tool execution loop with fail-soft isolation.
+- [x] **MCP-SYNTH-01**: Evidence pack integrates MCP findings with `M1`, `M2`... citations and synthesis validates closure across doc and tool findings.
 - [ ] **MCP-TELE-01**: Telegram bot assistant dynamically discovers enabled MCP tools and supports remote MCP queries for authorized users.
 
 ## Future Requirements (Deferred)
@@ -251,6 +251,6 @@
 | QUAL-04 | Phase 20 | Pending |
 | QUAL-05 | Phase 20 | Pending |
 | MCP-ROUTE-01 | Phase 22 | Complete |
-| MCP-FEDERATED-01 | Phase 22 | Pending |
-| MCP-SYNTH-01 | Phase 22 | Pending |
+| MCP-FEDERATED-01 | Phase 22 | Complete |
+| MCP-SYNTH-01 | Phase 22 | Complete |
 | MCP-TELE-01 | Phase 22 | Pending |
