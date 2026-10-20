@@ -547,6 +547,12 @@ describe('groundedSynthesis', () => {
     expect(result.responseLanguage).toBe('en');
   });
 
+  it('17b. system prompt instructs LLM to cite [M*] for live MCP tools', () => {
+    const prompt = buildSystemPrompt('vi', '2026.10.1', 'S1');
+    expect(prompt).toContain('[M*]');
+    expect(prompt).toContain('Live MCP');
+  });
+
   describe('D-11 NO_EVIDENCE honest abstention', () => {
     it('returns outcome NO_EVIDENCE, confidence unknown, 0 claims, 0 hypotheses when 0 citations and speculation_requested is false', async () => {
       const zeroPack: EvidencePack = {
@@ -786,6 +792,39 @@ describe('groundedSynthesis', () => {
       expect(res.claims).toEqual([]);
       expect(res.conclusion).toBe('Không tìm thấy thông tin hoặc bằng chứng liên quan trong tài liệu và đồ thị tri thức hiện có.');
       expect(res.conclusion).not.toContain('[S1]');
+    });
+
+    it('36. normalizes and validates [M*] citations from live MCP tools', () => {
+      const raw = {
+        conclusion: 'Sở thích người dùng là chế độ tối [M1].',
+        claims: [
+          {
+            id: 'C1',
+            text: 'Người dùng chọn giao diện tối',
+            classification: 'DIRECT',
+            citationIds: ['M1'],
+            pathId: null,
+          },
+        ],
+      };
+      const allowedCitationIds = ['S1', 'M1'];
+      const res = normalizeRawGroundedOutput(raw, allowedCitationIds, []) as any;
+      expect(res.claims).toHaveLength(1);
+      expect(res.claims[0].citationIds).toEqual(['M1']);
+      expect(res.claims[0].classification).toBe('DIRECT');
+      expect(res.conclusion).toContain('[M1]');
+    });
+
+    it('37. extracts inline [M1] from claim.text when citationIds is omitted', () => {
+      const raw = {
+        conclusion: 'Done',
+        claims: [
+          { id: 'C1', text: 'Thông tin bộ nhớ thực tế [M1].', classification: 'DIRECT' },
+        ],
+      };
+      const res = normalizeRawGroundedOutput(raw, ['M1'], []) as any;
+      expect(res.claims).toHaveLength(1);
+      expect(res.claims[0].citationIds).toEqual(['M1']);
     });
   });
 
