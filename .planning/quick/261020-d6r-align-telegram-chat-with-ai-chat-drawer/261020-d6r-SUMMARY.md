@@ -32,4 +32,4 @@
 
 ## Commits
 
-- Commit pending: `feat(telegram): align chat with ai drawer intent routing and anti-hallucination guardrails`
+- `5262a7f`: feat(telegram): align chat with ai drawer intent routing and anti-hallucination guardrails

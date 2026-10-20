@@ -37,7 +37,7 @@ Progress: [██████████] 100%
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
-| 261020-d6r | Align Telegram chat with AI chat drawer intent routing, scope security gates, and anti-hallucination guardrails | 2026-10-20 | pending | complete | [261020-d6r-align-telegram-chat-with-ai-chat-drawer](./quick/261020-d6r-align-telegram-chat-with-ai-chat-drawer/) |
+| 261020-d6r | Align Telegram chat with AI chat drawer intent routing, scope security gates, and anti-hallucination guardrails | 2026-10-20 | 5262a7f | complete | [261020-d6r-align-telegram-chat-with-ai-chat-drawer](./quick/261020-d6r-align-telegram-chat-with-ai-chat-drawer/) |
 | 261020-c95 | Admin unblock Telegram user and backup Telegram data excluding session logs | 2026-10-20 | 1b28187 | complete | [261020-c95-admin-unblock-and-telegram-backup](./quick/261020-c95-admin-unblock-and-telegram-backup/) |
 | 261019-adm | Telegram admin commands with multi-step conversation | 2026-10-19 | b455adb | complete | [261019-adm-telegram-admin-commands](./quick/261019-adm-telegram-admin-commands/) |
 | 261019-v0s | Sửa thông báo và hàng chờ user mới Telegram chưa phân quyền | 2026-10-19 | 1b262fd | complete | [261019-v0s-s-a-th-ng-b-o-v-h-ng-ch-user-m-i-telegra](./quick/261019-v0s-s-a-th-ng-b-o-v-h-ng-ch-user-m-i-telegra/) |
