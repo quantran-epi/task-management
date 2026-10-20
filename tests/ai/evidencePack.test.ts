@@ -984,4 +984,66 @@ describe('evidencePack', () => {
     expect(pack.promptEvidence[0]?.documentTitle).toBe('Credit payment allocation — FE/BO pay → debts');
     expect(pack.promptEvidence[1]?.documentTitle).toBe('01 — DB wiring on main1');
   });
+
+  it('23. packs MCP retrieved items into citations with M1, M2... IDs and validates closure', () => {
+    const mcpItems = [
+      {
+        serverId: 'graphiti-banking',
+        serverName: 'Graphiti Banking MCP',
+        toolName: 'search_nodes',
+        args: { query: 'ACCOUNTS' },
+        rawResult: JSON.stringify([{ name: 'SVFE_SHB.ACCOUNTS', type: 'Table' }]),
+        timestamp: '2026-10-20T00:00:00.000Z',
+      },
+      {
+        serverId: 'oracle-db',
+        serverName: 'Oracle Database',
+        toolName: 'describe_table',
+        args: { table: 'SVFE_SHB.ACCOUNTS' },
+        rawResult: 'COLUMNS: ID, ACC_NUM, BALANCE',
+        timestamp: '2026-10-20T00:00:00.000Z',
+      },
+    ];
+
+    const pack = packEvidence({
+      authority: 'server',
+      mcpItems,
+    });
+
+    expect(pack.citations['M1']).toBeDefined();
+    expect(pack.citations['M2']).toBeDefined();
+    expect(pack.citations['M1']?.authority).toBe('server');
+    expect(pack.citations['M1']?.evidenceClass).toBe('OBSERVED');
+    expect(pack.citations['M1']?.evidenceKind).toBe('mcp_tool');
+    expect(pack.citations['M1']?.documentTitle).toBe('[MCP] Graphiti Banking MCP - search_nodes');
+    expect(pack.citations['M2']?.documentTitle).toBe('[MCP] Oracle Database - describe_table');
+
+    expect(pack.promptEvidence).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'M1', documentTitle: '[MCP] Graphiti Banking MCP - search_nodes' }),
+        expect.objectContaining({ id: 'M2', documentTitle: '[MCP] Oracle Database - describe_table' }),
+      ])
+    );
+
+    const answerWithMcp: GroundedAnswer = {
+      schemaVersion: 1,
+      language: 'vi',
+      conclusion: 'Thông tin tài khoản từ hệ thống SmartVista.',
+      claims: [
+        {
+          id: 'C1',
+          text: 'Bảng SVFE_SHB.ACCOUNTS lưu trữ số tài khoản và số dư.',
+          classification: 'DIRECT',
+          citationIds: ['M1', 'M2'],
+          pathId: null,
+        },
+      ],
+      unsupportedParts: [],
+    };
+
+    const closureResult = validateGroundedAnswerClosure(answerWithMcp, pack);
+    expect(closureResult.valid).toBe(true);
+    expect(closureResult.issues).toHaveLength(0);
+  });
 });
+

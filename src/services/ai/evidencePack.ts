@@ -5,6 +5,7 @@ import type {
 } from '../knowledge/retrievalProtocol';
 import type { GroundedAnswer } from './groundedAnswerSchemas';
 import type { LocalGroundedResult } from '../search/localGroundedRetrieval';
+import type { McpRetrievedItem } from './mcpRetrievalRunner';
 
 export interface SourceRecord {
   readonly citationId: string;
@@ -20,8 +21,13 @@ export interface SourceRecord {
   readonly citedExcerpt: string;
   readonly relevanceReason?: string | undefined;
   readonly setMemberships: readonly { readonly setId: string; readonly setName: string }[];
-  readonly evidenceKind?: 'policy_change' | 'release_note' | 'migration_record' | 'other' | undefined;
+  readonly evidenceKind?: 'policy_change' | 'release_note' | 'migration_record' | 'mcp_tool' | 'other' | undefined;
   readonly conflictGroupId?: string | undefined;
+  readonly mcpMetadata?: {
+    readonly serverId: string;
+    readonly serverName: string;
+    readonly toolName: string;
+  } | undefined;
 }
 
 export interface ValidatedPath {
@@ -57,6 +63,7 @@ export interface PackEvidenceInput {
   readonly authority: 'server' | 'local';
   readonly serverResponse?: FederatedRetrievalResponse;
   readonly localResult?: LocalGroundedResult;
+  readonly mcpItems?: readonly McpRetrievedItem[];
 }
 
 export interface PackEvidenceOptions {
@@ -125,11 +132,16 @@ interface RawCandidateCitation {
   readonly citedExcerpt: string;
   readonly relevanceReason?: string | undefined;
   readonly setMemberships: readonly { readonly setId: string; readonly setName: string }[];
-  readonly evidenceKind?: 'policy_change' | 'release_note' | 'migration_record' | 'other' | undefined;
+  readonly evidenceKind?: 'policy_change' | 'release_note' | 'migration_record' | 'mcp_tool' | 'other' | undefined;
   readonly originalChunkId?: string | undefined;
   readonly conflictGroupId?: string | undefined;
   readonly isIdentifierMatch?: boolean | undefined;
   readonly score?: number | undefined;
+  readonly mcpMetadata?: {
+    readonly serverId: string;
+    readonly serverName: string;
+    readonly toolName: string;
+  } | undefined;
 }
 
 export function packEvidence(
@@ -421,6 +433,44 @@ export function packEvidence(
 
   if (contextTruncated && droppedCount > 0) {
     coverageWarnings.push(`${droppedCount} lowest-ranked chunks omitted for budget`);
+  }
+
+  // Pack MCP retrieved items with M1, M2... citation IDs
+  if (input.mcpItems && input.mcpItems.length > 0) {
+    let mcpIndex = 1;
+    for (const item of input.mcpItems) {
+      const cId = `M${mcpIndex++}`;
+      const docTitle = `[MCP] ${item.serverName} - ${item.toolName}`;
+      const citedExcerpt = item.rawResult.slice(0, 1500);
+      const mcpCitation: SourceRecord = {
+        citationId: cId,
+        documentId: `mcp:${item.serverId}:${item.toolName}`,
+        documentTitle: docTitle,
+        sectionAnchor: JSON.stringify(item.args).slice(0, 200),
+        lineStart: 1,
+        lineEnd: 1,
+        authority: 'server',
+        evidenceClass: 'OBSERVED',
+        snapshotId: 'mcp_live',
+        publishedContentHash: null,
+        citedExcerpt,
+        setMemberships: [],
+        evidenceKind: 'mcp_tool',
+        mcpMetadata: {
+          serverId: item.serverId,
+          serverName: item.serverName,
+          toolName: item.toolName,
+        },
+      };
+
+      citations[cId] = mcpCitation;
+      finalPromptEvidence.push({
+        id: cId,
+        text: citedExcerpt,
+        documentTitle: docTitle,
+        sectionAnchor: mcpCitation.sectionAnchor,
+      });
+    }
   }
 
   return {

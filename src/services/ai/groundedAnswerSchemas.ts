@@ -8,7 +8,7 @@ import {
   UrnSchema,
 } from '../knowledge/retrievalProtocol';
 
-const CitationIdSchema = z.string().regex(/^(S|L)[1-9][0-9]*$/);
+const CitationIdSchema = z.string().regex(/^(S|L|M)[1-9][0-9]*$/);
 const PathIdSchema = z.string().regex(/^P[1-9][0-9]*$/);
 const HashSchema = z.string().regex(/^[0-9a-f]{64}$/);
 const ServerEvidenceClassificationSchema = z.enum([
@@ -135,7 +135,7 @@ export function toGroundedAnswerDisplay(raw: GroundedAnswer): GroundedAnswerV2 {
 export const PersistedCitationSchema = z
   .strictObject({
     citationId: CitationIdSchema,
-    documentId: z.string().uuid(),
+    documentId: z.string(),
     documentTitle: z.string().min(1).max(400),
     sectionAnchor: z.string().min(1).max(256).nullable(),
     lineStart: z.number().int().positive(),
@@ -144,10 +144,17 @@ export const PersistedCitationSchema = z
     evidenceClass: EvidenceClassificationSchema.or(z.literal('LOCAL')),
     snapshotId: SnapshotIdSchema.nullable(),
     publishedContentHash: HashSchema.nullable(),
-    citedExcerpt: z.string().min(1).max(1200),
+    citedExcerpt: z.string().min(1).max(2000),
     relevanceReason: z.string().min(1).max(1000).optional(),
     evidenceKind: z
-      .enum(['policy_change', 'release_note', 'migration_record', 'other'])
+      .enum(['policy_change', 'release_note', 'migration_record', 'mcp_tool', 'other'])
+      .optional(),
+    mcpMetadata: z
+      .strictObject({
+        serverId: z.string(),
+        serverName: z.string(),
+        toolName: z.string(),
+      })
       .optional(),
   })
   .superRefine((citation, ctx) => {
