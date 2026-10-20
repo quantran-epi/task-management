@@ -336,6 +336,7 @@ CRITICAL SAFETY RULES:
 5. sourceSystem MUST be lowercased alphanumeric without spaces, e.g. "oracle", "plsql", "smartvista", "system".
 6. nativeType MUST be alphanumeric/underscore without spaces, e.g. "ORACLE_TABLE", "PLSQL_PROCEDURE", "Service".
 7. If nothing matches the ontology, return empty arrays: {"entities": [], "relations": []}.
+8. ENTITY NAMING CONSTRAINTS: Entity names MUST be concise, noun-centric identifiers or step labels (e.g. 'Xử lý merchant bị từ chối', 'Verify Card Expiry', 'PRC_SETTLEMENT'). NEVER extract full conversational sentences, instructions, or paragraphs as entity names. For ProcessStep entities, keep names under 80 characters.
 
 Output MUST strictly be a single valid JSON object matching:
 {

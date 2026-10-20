@@ -262,6 +262,8 @@ export const CYPHER_QUERIES = {
 
   GET_FACTS_BY_SNAPSHOT: `
     MATCH (f:Fact {graphSnapshotId: $graphSnapshotId})
+    OPTIONAL MATCH (s:Entity {graphSnapshotId: $graphSnapshotId, urn: f.subjectUrn})
+    OPTIONAL MATCH (o:Entity {graphSnapshotId: $graphSnapshotId, urn: f.objectUrn})
     OPTIONAL MATCH (ev:Evidence {graphSnapshotId: $graphSnapshotId})-[:EVIDENCE_FOR]->(f)
     RETURN f.factKey AS factKey,
            f.ontologyVersion AS ontologyVersion,
@@ -272,6 +274,10 @@ export const CYPHER_QUERIES = {
            f.effectiveClassification AS effectiveClassification,
            f.hasConflict AS hasConflict,
            f.sourceMissing AS sourceMissing,
+           coalesce(s.canonicalName, f.subjectUrn) AS subjectCanonicalName,
+           coalesce(s.kind, 'Entity') AS subjectKind,
+           coalesce(o.canonicalName, f.objectUrn) AS objectCanonicalName,
+           coalesce(o.kind, 'Entity') AS objectKind,
            collect(ev) AS evidenceRecords
   `,
 
@@ -996,6 +1002,10 @@ export class Neo4jRepository implements GraphRepository {
           })),
           conflicts: [],
           approvals: [],
+          subjectCanonicalName: rec.get('subjectCanonicalName'),
+          subjectKind: rec.get('subjectKind'),
+          objectCanonicalName: rec.get('objectCanonicalName'),
+          objectKind: rec.get('objectKind'),
         };
       });
     } finally {

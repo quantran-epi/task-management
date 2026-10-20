@@ -295,12 +295,26 @@ export class InMemoryGraphRepository implements GraphRepository {
       approvalsByFactKey.set(app.factKey, list);
     }
 
-    return candidate.relations.map((relation) => ({
-      relation,
-      evidence: evidenceByFactKey.get(relation.factKey) || [],
-      conflicts: conflictsByFactKey.get(relation.factKey) || [],
-      approvals: approvalsByFactKey.get(relation.factKey) || [],
-    }));
+    const nodeByUrn = new Map<string, (typeof candidate.nodes)[number]>();
+    for (const node of candidate.nodes) {
+      nodeByUrn.set(node.urn, node);
+    }
+
+    return candidate.relations.map((relation) => {
+      const subjectNode = nodeByUrn.get(relation.subjectUrn);
+      const objectNode = nodeByUrn.get(relation.objectUrn);
+
+      return {
+        relation,
+        evidence: evidenceByFactKey.get(relation.factKey) || [],
+        conflicts: conflictsByFactKey.get(relation.factKey) || [],
+        approvals: approvalsByFactKey.get(relation.factKey) || [],
+        subjectCanonicalName: subjectNode?.canonicalName || relation.subjectUrn,
+        subjectKind: subjectNode?.kind || 'Entity',
+        objectCanonicalName: objectNode?.canonicalName || relation.objectUrn,
+        objectKind: objectNode?.kind || 'Entity',
+      };
+    });
   }
 
   async getQuarantines(graphSnapshotId: string): Promise<QuarantinedIdentifier[]> {

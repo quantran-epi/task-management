@@ -291,6 +291,10 @@ export interface FactDetail {
   evidence: GraphEvidenceRecord[];
   conflicts: GraphConflictRecord[];
   approvals: GraphApprovalRecord[];
+  subjectCanonicalName?: string;
+  subjectKind?: string;
+  objectCanonicalName?: string;
+  objectKind?: string;
 }
 
 /**

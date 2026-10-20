@@ -571,13 +571,11 @@ export class GraphBuildService {
 
     const facts: FactSummaryDTO[] = factDetails.map((fd) => {
       const rel = fd.relation;
-      const subjectParts = rel.subjectUrn.split(':');
-      const subjectName = decodeURIComponent(subjectParts[4] || rel.subjectUrn);
-      const subjectKind = subjectParts[3] || 'Entity';
+      const subjectName = fd.subjectCanonicalName || rel.subjectUrn;
+      const subjectKind = fd.subjectKind || 'Entity';
 
-      const objectParts = rel.objectUrn.split(':');
-      const objectName = decodeURIComponent(objectParts[4] || rel.objectUrn);
-      const objectKind = objectParts[3] || 'Entity';
+      const objectName = fd.objectCanonicalName || rel.objectUrn;
+      const objectKind = fd.objectKind || 'Entity';
 
       return {
         factKey: rel.factKey,
