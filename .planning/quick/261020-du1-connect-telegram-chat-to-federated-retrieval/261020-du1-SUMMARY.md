@@ -32,4 +32,4 @@
 
 ## Commits
 
-- Commit pending: `feat(telegram): connect federated retrieval pipeline with intent pre-gating`
+- `6a2e3a0`: feat(telegram): connect federated retrieval pipeline with intent pre-gating
