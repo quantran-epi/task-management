@@ -16,6 +16,8 @@ import type {
   PublishAttemptCache,
   DlpAuditRecord,
   KnowledgeLink,
+  TelegramSettingsRecord,
+  TelegramWhitelistUser,
 } from './models';
 
 export interface BackupAttachmentRecord {
@@ -49,6 +51,8 @@ export interface BackupTableData {
   publishAttempts?: PublishAttemptCache[];
   dlpAudits?: DlpAuditRecord[];
   knowledgeLinks?: KnowledgeLink[];
+  telegramSettings?: TelegramSettingsRecord[];
+  telegramWhitelist?: TelegramWhitelistUser[];
 }
 
 export interface BackupTableCounts {
@@ -70,6 +74,8 @@ export interface BackupTableCounts {
   publishAttempts?: number;
   dlpAudits?: number;
   knowledgeLinks?: number;
+  telegramSettings?: number;
+  telegramWhitelist?: number;
 }
 
 

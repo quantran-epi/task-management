@@ -26,6 +26,7 @@ import {
   SendOutlined,
   CheckCircleOutlined,
   StopOutlined,
+  UnlockOutlined,
   PlusOutlined,
   DeleteOutlined,
   EditOutlined,
@@ -90,7 +91,7 @@ export const TelegramMonitorView: React.FC = () => {
   const [isSending, setIsSending] = useState<boolean>(false);
 
   // Live queries and hooks
-  const { pendingUsers, pendingCount, quickApprove, blockUser, dismissUser } = useTelegramPendingUsers();
+  const { pendingUsers, pendingCount, quickApprove, blockUser, unblockUser: unblockHookUser, dismissUser } = useTelegramPendingUsers();
   const settingsRecord = useLiveQuery(() => db.telegramSettings.get('default'));
   const whitelist = useLiveQuery(() => db.telegramWhitelist.toArray(), []) || [];
   const logs =
@@ -923,6 +924,43 @@ export const TelegramMonitorView: React.FC = () => {
                                 onClick={() => handleOpenSendModal(r.chatId)}
                               />
                             </Tooltip>
+                            {r.status === 'blocked' ? (
+                              <Tooltip title="Mở khóa người dùng này">
+                                <Popconfirm
+                                  title="Mở khóa người dùng này?"
+                                  description="Người dùng sẽ có thể gửi tin nhắn và sử dụng bot trở lại."
+                                  onConfirm={async () => {
+                                    await unblockHookUser(r.chatId, botToken);
+                                    message.success(`Đã mở khóa người dùng ${r.name || r.chatId}`);
+                                  }}
+                                  okText="Mở khóa"
+                                  cancelText="Hủy"
+                                >
+                                  <Button
+                                    size="small"
+                                    icon={<UnlockOutlined style={{ color: '#16a34a' }} />}
+                                  />
+                                </Popconfirm>
+                              </Tooltip>
+                            ) : (
+                              <Tooltip title="Tạm khóa người dùng">
+                                <Popconfirm
+                                  title="Khóa người dùng này?"
+                                  description="Người dùng sẽ bị chặn không thể gửi tin nhắn đến bot."
+                                  onConfirm={async () => {
+                                    await blockUser(r.chatId);
+                                    message.info(`Đã khóa người dùng ${r.name || r.chatId}`);
+                                  }}
+                                  okText="Khóa"
+                                  cancelText="Hủy"
+                                >
+                                  <Button
+                                    size="small"
+                                    icon={<StopOutlined style={{ color: '#dc2626' }} />}
+                                  />
+                                </Popconfirm>
+                              </Tooltip>
+                            )}
                             <Button
                               size="small"
                               icon={<EditOutlined />}

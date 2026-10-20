@@ -42,6 +42,8 @@ const TABLE_NAMES: Record<string, string> = {
   capacityRules: 'Quy tắc công suất (Capacity Rules)',
   capacityOverrides: 'Ngoại lệ công suất (Capacity Overrides)',
   plannedAllocations: 'Phân bổ kế hoạch (Planned Allocations)',
+  telegramSettings: 'Cài đặt Telegram Bot',
+  telegramWhitelist: 'Danh sách Whitelist Telegram',
 };
 
 export const ImportPreviewModal: React.FC<ImportPreviewModalProps> = ({
@@ -66,13 +68,15 @@ export const ImportPreviewModal: React.FC<ImportPreviewModalProps> = ({
   // Query current counts from local database
   const currentCounts = useLiveQuery(
     async () => {
-      const [p, m, t, cr, co, pa] = await Promise.all([
+      const [p, m, t, cr, co, pa, ts, tw] = await Promise.all([
         db.projects.count(),
         db.milestones.count(),
         db.tasks.count(),
         db.capacityRules.count(),
         db.capacityOverrides.count(),
         db.plannedAllocations.count(),
+        db.telegramSettings.count(),
+        db.telegramWhitelist.count(),
       ]);
       return {
         projects: p,
@@ -81,6 +85,8 @@ export const ImportPreviewModal: React.FC<ImportPreviewModalProps> = ({
         capacityRules: cr,
         capacityOverrides: co,
         plannedAllocations: pa,
+        telegramSettings: ts,
+        telegramWhitelist: tw,
       };
     },
     [db],
@@ -91,6 +97,8 @@ export const ImportPreviewModal: React.FC<ImportPreviewModalProps> = ({
       capacityRules: 0,
       capacityOverrides: 0,
       plannedAllocations: 0,
+      telegramSettings: 0,
+      telegramWhitelist: 0,
     }
   );
 

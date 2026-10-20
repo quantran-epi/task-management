@@ -5,11 +5,12 @@ import {
   getPendingTelegramUsers,
   approvePendingUser,
   blockPendingUser,
+  unblockUser,
   upsertWhitelistUser,
   getWhitelistUser,
 } from './telegramSettingsService';
 
-export type AdminWizardAction = 'approve_user' | 'adjust_quota' | 'block_user';
+export type AdminWizardAction = 'approve_user' | 'adjust_quota' | 'block_user' | 'unblock_user';
 
 export interface AdminWizardState {
   chatId: string; // The admin's chatId
@@ -111,6 +112,7 @@ export async function handleAdminCommand(
           '- `/approve_user`: Phê duyệt người dùng vào hệ thống',
           '- `/adjust_quota`: Thay đổi hạn mức tin nhắn hàng ngày của người dùng',
           '- `/block_user`: Tạm khóa người dùng',
+          '- `/unblock_user`: Mở khóa người dùng',
           '- `/cancel`: Hủy lệnh đang thực hiện dở dang',
           '',
           '💡 *Khi gõ lệnh thao tác, bot sẽ hướng dẫn nhập ID từng bước.*',
@@ -179,6 +181,25 @@ export async function handleAdminCommand(
           '⛔ **Khóa người dùng**',
           '',
           'Vui lòng nhập **Chat ID** của người dùng bạn muốn tạm khóa:',
+          '*(Gõ `/cancel` nếu muốn hủy)*',
+        ].join('\n'),
+      };
+
+    case 'unblockuser':
+    case 'unbanuser':
+    case 'unblock':
+      setAdminWizardState({
+        chatId: adminChatId,
+        action: 'unblock_user',
+        step: 1,
+        createdAt: Date.now(),
+      });
+      return {
+        handled: true,
+        replyText: [
+          '🔓 **Mở khóa người dùng**',
+          '',
+          'Vui lòng nhập **Chat ID** của người dùng bạn muốn mở khóa:',
           '*(Gõ `/cancel` nếu muốn hủy)*',
         ].join('\n'),
       };
@@ -315,6 +336,34 @@ async function processWizardStep(
     return {
       handled: true,
       replyText: `⛔ **Đã khóa người dùng thành công!**\n\nNgười dùng **${existing.name}** (Chat ID: \`${targetCid}\`) đã được chuyển sang trạng thái \`blocked\`.`,
+    };
+  }
+
+  // UNBLOCK USER FLOW
+  if (wizard.action === 'unblock_user') {
+    const targetCid = input.trim();
+    if (!targetCid) {
+      return {
+        handled: true,
+        replyText: '⚠️ Chat ID không hợp lệ. Vui lòng nhập lại Chat ID hoặc gõ `/cancel`:',
+      };
+    }
+
+    const existing = await getWhitelistUser(targetCid, db);
+    if (!existing) {
+      return {
+        handled: true,
+        replyText: `⚠️ Không tìm thấy người dùng có Chat ID \`${targetCid}\`.\nVui lòng nhập lại hoặc gõ \`/cancel\`:`,
+      };
+    }
+
+    const unblocked = await unblockUser(targetCid, db);
+    clearAdminWizardState(wizard.chatId);
+
+    return {
+      handled: true,
+      replyText: `🔓 **Đã mở khóa người dùng thành công!**\n\nNgười dùng **${unblocked.name}** (Chat ID: \`${targetCid}\`) đã được kích hoạt lại (trạng thái: \`active\`).`,
+      approvedUser: unblocked,
     };
   }
 

@@ -4,6 +4,7 @@ import type { TelegramWhitelistUser } from '../services/telegram/telegramTypes';
 import {
   approvePendingUser,
   blockPendingUser,
+  unblockUser,
   deleteWhitelistUser,
 } from '../services/telegram/telegramSettingsService';
 import { sendTelegramDirectMessage } from '../services/telegram/telegramHeadlessWorker';
@@ -13,6 +14,7 @@ export interface UseTelegramPendingUsersResult {
   pendingCount: number;
   quickApprove: (chatId: string, botToken?: string) => Promise<TelegramWhitelistUser>;
   blockUser: (chatId: string) => Promise<TelegramWhitelistUser>;
+  unblockUser: (chatId: string, botToken?: string) => Promise<TelegramWhitelistUser>;
   dismissUser: (chatId: string) => Promise<void>;
 }
 
@@ -49,6 +51,24 @@ export function useTelegramPendingUsers(
     return await blockPendingUser(chatId, customDb);
   };
 
+  const unblock = async (
+    chatId: string,
+    botToken?: string
+  ): Promise<TelegramWhitelistUser> => {
+    const user = await unblockUser(chatId, customDb);
+
+    if (botToken && botToken.trim()) {
+      try {
+        const msg = `🔓 **Tài khoản của bạn đã được mở khóa!**\n\nXin chào ${user.name}, quản trị viên đã kích hoạt lại quyền truy cập TaskMate AI Bot cho bạn. Bạn có thể tiếp tục sử dụng bình thường.`;
+        await sendTelegramDirectMessage(botToken.trim(), chatId, msg);
+      } catch (err) {
+        console.warn('Failed to send Telegram unblock notice:', err);
+      }
+    }
+
+    return user;
+  };
+
   const dismissUser = async (chatId: string): Promise<void> => {
     await deleteWhitelistUser(chatId, customDb);
   };
@@ -58,6 +78,7 @@ export function useTelegramPendingUsers(
     pendingCount,
     quickApprove,
     blockUser,
+    unblockUser: unblock,
     dismissUser,
   };
 }

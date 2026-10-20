@@ -24,6 +24,8 @@ import {
   BackupPublishAttemptRecordSchema,
   BackupDlpAuditRecordSchema,
   BackupKnowledgeLinkRecordSchema,
+  BackupTelegramSettingsRecordSchema,
+  BackupTelegramWhitelistUserSchema,
 } from '../../validation/backupSchemas';
 
 
@@ -174,6 +176,12 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     : undefined;
   const knowledgeLinks = rawTables.knowledgeLinks !== undefined
     ? validateTable('knowledgeLinks', BackupKnowledgeLinkRecordSchema, rawTables.knowledgeLinks)
+    : undefined;
+  const telegramSettings = rawTables.telegramSettings !== undefined
+    ? validateTable('telegramSettings', BackupTelegramSettingsRecordSchema, rawTables.telegramSettings)
+    : undefined;
+  const telegramWhitelist = rawTables.telegramWhitelist !== undefined
+    ? validateTable('telegramWhitelist', BackupTelegramWhitelistUserSchema, rawTables.telegramWhitelist)
     : undefined;
 
   // If schema validation errors occurred, stop before referential checks
@@ -415,6 +423,8 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       ...(publishAttempts !== undefined ? { publishAttempts } : {}),
       ...(dlpAudits !== undefined ? { dlpAudits } : {}),
       ...(knowledgeLinks !== undefined ? { knowledgeLinks } : {}),
+      ...(telegramSettings !== undefined ? { telegramSettings } : {}),
+      ...(telegramWhitelist !== undefined ? { telegramWhitelist } : {}),
     },
     counts: {
       projects: projects.length,
@@ -435,6 +445,8 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       ...(publishAttempts !== undefined ? { publishAttempts: publishAttempts.length } : {}),
       ...(dlpAudits !== undefined ? { dlpAudits: dlpAudits.length } : {}),
       ...(knowledgeLinks !== undefined ? { knowledgeLinks: knowledgeLinks.length } : {}),
+      ...(telegramSettings !== undefined ? { telegramSettings: telegramSettings.length } : {}),
+      ...(telegramWhitelist !== undefined ? { telegramWhitelist: telegramWhitelist.length } : {}),
     },
   };
 

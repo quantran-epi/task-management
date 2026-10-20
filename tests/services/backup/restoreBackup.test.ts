@@ -145,6 +145,81 @@ describe('restoreBackupPayload & rollbackToSnapshot', () => {
     expect(projects).toHaveLength(1);
     expect(projects[0]?.name).toBe('Restored Project');
   });
+
+  it('restores telegramSettings and telegramWhitelist, preserving local logs', async () => {
+    // Add local existing session log that must not be cleared by restore
+    await testDb.telegramSessionLogs.add({
+      id: 'local-log-999',
+      chatId: 'local_user',
+      userMessage: 'Keep local log',
+      aiResponse: 'Local log answer',
+      dataScopeUsed: 'full',
+      createdAt: '2026-10-20T00:00:00.000Z',
+    });
+
+    const telegramBackup: BackupEnvelope = {
+      app: APP_MARKER,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+      exportedAt: '2026-10-20T12:00:00.000Z',
+      tables: {
+        projects: [],
+        milestones: [],
+        tasks: [],
+        capacityRules: [],
+        capacityOverrides: [],
+        plannedAllocations: [],
+        telegramSettings: [
+          {
+            id: 'default',
+            botToken: '',
+            isEnabled: true,
+            autoStartOnLaunch: false,
+            defaultScope: 'pure_llm',
+            maxHistoryTurns: 8,
+          },
+        ],
+        telegramWhitelist: [
+          {
+            chatId: 'restored_user_1',
+            name: 'Restored User',
+            status: 'active',
+            dataScope: 'pure_llm',
+            dailyLimit: 25,
+            usedToday: 2,
+            lastActiveDate: '2026-10-20',
+            createdAt: '2026-10-20T10:00:00.000Z',
+            updatedAt: '2026-10-20T10:00:00.000Z',
+          },
+        ],
+      },
+      counts: {
+        projects: 0,
+        milestones: 0,
+        tasks: 0,
+        capacityRules: 0,
+        capacityOverrides: 0,
+        plannedAllocations: 0,
+        telegramSettings: 1,
+        telegramWhitelist: 1,
+      },
+    };
+
+    const res = await restoreBackupPayload(telegramBackup, testDb);
+    expect(res.totalRestored).toBe(2);
+
+    const restoredSettings = await testDb.telegramSettings.get('default');
+    expect(restoredSettings?.defaultScope).toBe('pure_llm');
+    expect(restoredSettings?.maxHistoryTurns).toBe(8);
+
+    const restoredUser = await testDb.telegramWhitelist.get('restored_user_1');
+    expect(restoredUser?.name).toBe('Restored User');
+    expect(restoredUser?.status).toBe('active');
+
+    // Local telegramSessionLogs must remain intact
+    const logs = await testDb.telegramSessionLogs.toArray();
+    expect(logs).toHaveLength(1);
+    expect(logs[0]?.id).toBe('local-log-999');
+  });
 });
 
 describe('downloadSnapshotFile', () => {

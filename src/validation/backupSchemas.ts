@@ -486,4 +486,31 @@ export const BackupKnowledgeLinkRecordSchema = z
     message: 'KnowledgeLink must contain at least one of urn or docId',
   });
 
+export const BackupTelegramSettingsRecordSchema = z.object({
+  id: z.literal('default'),
+  botToken: z.string().optional().default(''),
+  isEnabled: z.boolean(),
+  autoStartOnLaunch: z.boolean(),
+  defaultScope: z.enum(['full', 'knowledge_only', 'tasks_only', 'pure_llm']),
+  maxHistoryTurns: z.number().int().min(0).max(100).optional(),
+  updatedAt: z.string().optional(),
+});
+
+export const BackupTelegramWhitelistUserSchema = z.object({
+  chatId: z.string().min(1),
+  name: z.string(),
+  status: z.enum(['active', 'blocked', 'pending']),
+  dataScope: z.enum(['full', 'knowledge_only', 'tasks_only', 'pure_llm']),
+  dailyLimit: z.number().int().nonnegative(),
+  usedToday: z.number().int().nonnegative(),
+  lastActiveDate: z.string(),
+  isAdmin: z.boolean().optional(),
+  maxHistoryTurns: z.number().int().min(0).max(100).optional(),
+  sessionResetAt: z.string().optional(),
+  overQuotaCommandsUsed: z.number().int().nonnegative().optional(),
+  overQuotaAttempts: z.number().int().nonnegative().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
 

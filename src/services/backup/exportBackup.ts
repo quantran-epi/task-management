@@ -138,6 +138,8 @@ export async function exportBackupPayload(
     publishAttempts,
     dlpAudits,
     knowledgeLinks,
+    telegramSettingsRaw,
+    telegramWhitelist,
   ] = await Promise.all([
     targetDb.projects.toArray(),
     targetDb.milestones.toArray(),
@@ -157,7 +159,15 @@ export async function exportBackupPayload(
     targetDb.publishAttempts.toArray(),
     targetDb.dlpAudits.toArray(),
     targetDb.knowledgeLinks.toArray(),
+    targetDb.telegramSettings.toArray(),
+    targetDb.telegramWhitelist.toArray(),
   ]);
+
+  // Strip sensitive botToken from telegramSettings before export
+  const telegramSettings = telegramSettingsRaw.map((s) => ({
+    ...s,
+    botToken: '',
+  }));
 
   // Strictly exclude binary and base64 image data to prevent storage growth
   const noteAttachments = rawAttachments.map((att) => ({
@@ -195,6 +205,8 @@ export async function exportBackupPayload(
     publishAttempts,
     dlpAudits,
     knowledgeLinks,
+    telegramSettings,
+    telegramWhitelist,
   };
 
   const counts = {
@@ -216,6 +228,8 @@ export async function exportBackupPayload(
     publishAttempts: publishAttempts.length,
     dlpAudits: dlpAudits.length,
     knowledgeLinks: knowledgeLinks.length,
+    telegramSettings: telegramSettings.length,
+    telegramWhitelist: telegramWhitelist.length,
   };
 
   const envelope: BackupEnvelope = {

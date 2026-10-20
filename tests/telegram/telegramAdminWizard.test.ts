@@ -223,4 +223,44 @@ describe('Telegram Admin Wizard & Commands', () => {
     const adminStillActive = await getWhitelistUser('admin_chat_id', testDb);
     expect(adminStillActive?.status).toBe('active');
   });
+
+  it('handles multi-step unblock_user flow', async () => {
+    await upsertWhitelistUser(
+      {
+        chatId: 'admin_chat_id',
+        name: 'Super Admin',
+        status: 'active',
+        isAdmin: true,
+      },
+      testDb
+    );
+
+    await upsertWhitelistUser(
+      {
+        chatId: 'blocked_client',
+        name: 'Blocked Client',
+        status: 'blocked',
+      },
+      testDb
+    );
+
+    // 1. Step 1: Prompt for Chat ID
+    const step1 = await handleAdminCommand('admin_chat_id', '/unblock_user', testDb);
+    expect(step1.handled).toBe(true);
+    expect(step1.replyText).toContain('Mở khóa người dùng');
+    expect(step1.replyText).toContain('Vui lòng nhập **Chat ID**');
+    expect(getAdminWizardState('admin_chat_id')?.action).toBe('unblock_user');
+
+    // 2. Step 2: Submit Chat ID
+    const step2 = await handleAdminCommand('admin_chat_id', 'blocked_client', testDb);
+    expect(step2.handled).toBe(true);
+    expect(step2.replyText).toContain('Đã mở khóa người dùng thành công!');
+    expect(step2.replyText).toContain('Blocked Client');
+    expect(step2.approvedUser?.status).toBe('active');
+    expect(getAdminWizardState('admin_chat_id')).toBeUndefined();
+
+    // Verify DB state
+    const client = await getWhitelistUser('blocked_client', testDb);
+    expect(client?.status).toBe('active');
+  });
 });

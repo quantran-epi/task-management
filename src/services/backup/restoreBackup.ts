@@ -52,6 +52,8 @@ export async function restoreBackupPayload(
     publishAttempts,
     dlpAudits,
     knowledgeLinks,
+    telegramSettingsRaw,
+    telegramWhitelist,
   ] = await Promise.all([
     targetDb.projects.toArray(),
     targetDb.milestones.toArray(),
@@ -69,7 +71,14 @@ export async function restoreBackupPayload(
     targetDb.publishAttempts.toArray(),
     targetDb.dlpAudits.toArray(),
     targetDb.knowledgeLinks.toArray(),
+    targetDb.telegramSettings.toArray(),
+    targetDb.telegramWhitelist.toArray(),
   ]);
+
+  const telegramSettings = telegramSettingsRaw.map((s) => ({
+    ...s,
+    botToken: '',
+  }));
 
   const serializedAttachments = await Promise.all(
     rawAttachments.map(async (att) => ({
@@ -103,6 +112,8 @@ export async function restoreBackupPayload(
       publishAttempts,
       dlpAudits,
       knowledgeLinks,
+      telegramSettings,
+      telegramWhitelist,
     },
     counts: {
       projects: projects.length,
@@ -121,6 +132,8 @@ export async function restoreBackupPayload(
       publishAttempts: publishAttempts.length,
       dlpAudits: dlpAudits.length,
       knowledgeLinks: knowledgeLinks.length,
+      telegramSettings: telegramSettings.length,
+      telegramWhitelist: telegramWhitelist.length,
     },
   };
 
@@ -160,6 +173,8 @@ export async function restoreBackupPayload(
       targetDb.publishAttempts,
       targetDb.dlpAudits,
       targetDb.knowledgeLinks,
+      targetDb.telegramSettings,
+      targetDb.telegramWhitelist,
       targetDb.settings,
       targetDb.backupMetadata,
     ],
@@ -189,6 +204,8 @@ export async function restoreBackupPayload(
         targetDb.publishAttempts.clear(),
         targetDb.dlpAudits.clear(),
         targetDb.knowledgeLinks.clear(),
+        targetDb.telegramSettings.clear(),
+        targetDb.telegramWhitelist.clear(),
       ]);
 
       // 3. Bulk add incoming records
@@ -239,6 +256,12 @@ export async function restoreBackupPayload(
       }
       if (backup.tables.knowledgeLinks?.length) {
         await targetDb.knowledgeLinks.bulkAdd(backup.tables.knowledgeLinks);
+      }
+      if (backup.tables.telegramSettings?.length) {
+        await targetDb.telegramSettings.bulkAdd(backup.tables.telegramSettings);
+      }
+      if (backup.tables.telegramWhitelist?.length) {
+        await targetDb.telegramWhitelist.bulkAdd(backup.tables.telegramWhitelist);
       }
       if (backup.tables.activeTimers && backup.tables.activeTimers.length) {
         await targetDb.activeTimers.bulkAdd(backup.tables.activeTimers);
@@ -317,6 +340,8 @@ export async function rollbackToSnapshot(
       targetDb.publishAttempts,
       targetDb.dlpAudits,
       targetDb.knowledgeLinks,
+      targetDb.telegramSettings,
+      targetDb.telegramWhitelist,
       targetDb.settings,
       targetDb.backupMetadata,
     ],
@@ -340,6 +365,8 @@ export async function rollbackToSnapshot(
         targetDb.publishAttempts.clear(),
         targetDb.dlpAudits.clear(),
         targetDb.knowledgeLinks.clear(),
+        targetDb.telegramSettings.clear(),
+        targetDb.telegramWhitelist.clear(),
       ]);
 
       // 2. Restore records from snapshot
@@ -390,6 +417,12 @@ export async function rollbackToSnapshot(
       }
       if (snapshot.tables.knowledgeLinks?.length) {
         await targetDb.knowledgeLinks.bulkAdd(snapshot.tables.knowledgeLinks);
+      }
+      if (snapshot.tables.telegramSettings?.length) {
+        await targetDb.telegramSettings.bulkAdd(snapshot.tables.telegramSettings);
+      }
+      if (snapshot.tables.telegramWhitelist?.length) {
+        await targetDb.telegramWhitelist.bulkAdd(snapshot.tables.telegramWhitelist);
       }
 
       // 3. Clear the snapshot from settings after rollback

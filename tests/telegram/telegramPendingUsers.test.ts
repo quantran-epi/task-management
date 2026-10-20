@@ -111,4 +111,36 @@ describe('useTelegramPendingUsers hook', () => {
       expect(result.current.pendingCount).toBe(0);
     });
   });
+
+  it('unblockUser updates status back to active and sends notification if token given', async () => {
+    await recordPendingTelegramUser('chat_unblock_1', 'Blocked Client', testDb);
+
+    const { result } = renderHook(() => useTelegramPendingUsers(testDb));
+
+    await vi.waitFor(() => {
+      expect(result.current.pendingCount).toBe(1);
+    });
+
+    // Block first
+    await act(async () => {
+      await result.current.blockUser('chat_unblock_1');
+    });
+
+    let user = await getWhitelistUser('chat_unblock_1', testDb);
+    expect(user?.status).toBe('blocked');
+
+    // Unblock
+    await act(async () => {
+      await result.current.unblockUser('chat_unblock_1', 'bot_token_abc');
+    });
+
+    user = await getWhitelistUser('chat_unblock_1', testDb);
+    expect(user?.status).toBe('active');
+
+    expect(mockSendTelegramDirectMessage).toHaveBeenCalledWith(
+      'bot_token_abc',
+      'chat_unblock_1',
+      expect.stringContaining('Tài khoản của bạn đã được mở khóa')
+    );
+  });
 });

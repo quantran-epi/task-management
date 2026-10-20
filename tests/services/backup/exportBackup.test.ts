@@ -143,6 +143,8 @@ describe('exportBackup service', () => {
         publishedDocuments: 0,
         publishAttempts: 0,
         dlpAudits: 0,
+        telegramSettings: 0,
+        telegramWhitelist: 0,
       });
 
       // Export history logged in backupMetadata
@@ -180,6 +182,8 @@ describe('exportBackup service', () => {
         publishedDocuments: 0,
         publishAttempts: 0,
         dlpAudits: 0,
+        telegramSettings: 0,
+        telegramWhitelist: 0,
       });
 
       const metadataEntries = await testDb.backupMetadata.toArray();
@@ -214,6 +218,53 @@ describe('exportBackup service', () => {
       expect(revokeObjectURLMock).toHaveBeenCalledWith('blob:http://localhost/mock-uuid');
 
       vi.restoreAllMocks();
+    });
+  });
+
+  describe('telegram data export and restore exclusion of logs', () => {
+    it('exports telegramSettings with stripped botToken and telegramWhitelist, ignoring logs', async () => {
+      await testDb.telegramSettings.put({
+        id: 'default',
+        botToken: 'secret_telegram_token_123',
+        isEnabled: true,
+        autoStartOnLaunch: true,
+        defaultScope: 'full',
+        maxHistoryTurns: 10,
+      });
+
+      await testDb.telegramWhitelist.put({
+        chatId: 'user_123',
+        name: 'Member Alice',
+        status: 'active',
+        dataScope: 'knowledge_only',
+        dailyLimit: 50,
+        usedToday: 5,
+        lastActiveDate: '2026-10-20',
+        isAdmin: true,
+        createdAt: '2026-10-20T00:00:00.000Z',
+        updatedAt: '2026-10-20T00:00:00.000Z',
+      });
+
+      await testDb.telegramSessionLogs.add({
+        id: 'log-1',
+        chatId: 'user_123',
+        userMessage: 'Private user question',
+        aiResponse: 'Private AI answer',
+        dataScopeUsed: 'knowledge_only',
+        createdAt: '2026-10-20T01:00:00.000Z',
+      });
+
+      const envelope = await exportBackupPayload(testDb);
+
+      expect(envelope.tables.telegramSettings).toHaveLength(1);
+      expect(envelope.tables.telegramSettings?.[0]?.botToken).toBe('');
+      expect(envelope.tables.telegramSettings?.[0]?.defaultScope).toBe('full');
+      expect(envelope.tables.telegramWhitelist).toHaveLength(1);
+      expect(envelope.tables.telegramWhitelist?.[0]?.chatId).toBe('user_123');
+
+      // Crucial: telegramSessionLogs must NOT be included anywhere in backup payload
+      expect((envelope.tables as any).telegramSessionLogs).toBeUndefined();
+      expect(JSON.stringify(envelope)).not.toContain('Private user question');
     });
   });
 });

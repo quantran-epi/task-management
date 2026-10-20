@@ -162,6 +162,21 @@ export async function blockPendingUser(
   );
 }
 
+export async function unblockUser(
+  chatId: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<TelegramWhitelistUser> {
+  return await upsertWhitelistUser(
+    {
+      chatId,
+      status: 'active',
+      overQuotaAttempts: 0,
+      overQuotaCommandsUsed: 0,
+    },
+    db
+  );
+}
+
 export const TELEGRAM_COMMAND_OVER_QUOTA_GRACE = 3;
 export const TELEGRAM_OVER_QUOTA_SPAM_LOG_THRESHOLD = 3;
 
