@@ -77,7 +77,7 @@ describe('mcpRetrievalRunner', () => {
     );
   });
 
-  it('bounded loop halts after max 3 turns or when model signals completion', async () => {
+  it('bounded loop halts after max turns or when model signals completion', async () => {
     const mockServers: mcpClient.McpServerConfig[] = [
       {
         id: 'srv-1',
@@ -120,9 +120,9 @@ describe('mcpRetrievalRunner', () => {
       },
     });
 
-    // Should halt after 3 turns
-    expect(callsCount).toBe(3);
-    expect(result.items).toHaveLength(3);
+    // Should halt after max turns (4)
+    expect(callsCount).toBe(4);
+    expect(result.items).toHaveLength(4);
     expect(result.warnings).toHaveLength(0);
   });
 
