@@ -153,7 +153,7 @@
 ### Knowledge Graph Build Reliability & Entity Fidelity (Phase 23)
 
 - [ ] **BUILD-OOM-01**: Knowledge server rebuilds large document sets (>200 chunks) in bounded batches with event-loop yield, keeping memory under 1.5Gi without OOM/process death.
-- [ ] **BUILD-CACHE-01**: Knowledge server caches chunk LLM extraction results persistently on disk keyed by `chunkContentHash` + model + promptVersion for instant incremental rebuilds.
+- [x] **BUILD-CACHE-01**: Knowledge server caches chunk LLM extraction results persistently on disk keyed by `chunkContentHash` + model + promptVersion for instant incremental rebuilds.
 - [x] **ENTITY-FIDELITY-01**: Knowledge graph generates clean ASCII URNs via Unicode NFD diacritic stripping and preserves original Vietnamese entity names (`canonicalName`) on fact queries, DTOs, and UI without string-splitting URN segments.
 
 ## Future Requirements (Deferred)
@@ -261,5 +261,5 @@
 | MCP-SYNTH-01 | Phase 22 | Complete |
 | MCP-TELE-01 | Phase 22 | Pending |
 | BUILD-OOM-01 | Phase 23 | Pending |
-| BUILD-CACHE-01 | Phase 23 | Pending |
+| BUILD-CACHE-01 | Phase 23 | Complete |
 | ENTITY-FIDELITY-01 | Phase 23 | Complete |

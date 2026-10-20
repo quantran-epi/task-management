@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 ## Current Position
 
 Phase: 23 (Knowledge Graph Build Reliability & Entity Fidelity)
-Plan: 1 of 3 complete
+Plan: 2 of 3 complete
 Status: In progress
-Last activity: 2026-10-20 -- Completed 23-01: Vietnamese Entity Fidelity, Unicode NFD Slugification & Canonical Name Joins
-Stopped at: Completed 23-01-PLAN.md
+Last activity: 2026-10-20 -- Completed 23-02: Persistent Disk-Backed Chunk Extraction Cache
+Stopped at: Completed 23-02-PLAN.md
 
 Progress: [█████████░] 92%
 
@@ -215,6 +215,8 @@ Progress: [█████████░] 92%
 | Phase 19.1 P03 | 8m | 1 tasks | 3 files |
 | Phase 19.1 P04 | 10m | 2 tasks | 5 files |
 | Phase 19.2 P07 | 25m | 3 tasks | 17 files |
+| Phase 23 P01 | 15m | 2 tasks | 4 files |
+| Phase 23 P02 | 12m | 2 tasks | 3 files |
 
 ## Accumulated Context
 

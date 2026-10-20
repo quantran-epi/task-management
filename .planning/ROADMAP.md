@@ -98,7 +98,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 23-02-PLAN.md — Persistent Disk-Backed Chunk Extraction Cache (Wave 2)
+- [x] 23-02-PLAN.md — Persistent Disk-Backed Chunk Extraction Cache (Wave 2)
 
 **Wave 3** *(blocked on Wave 1 and Wave 2 completion)*
 
