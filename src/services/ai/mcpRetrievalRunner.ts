@@ -34,8 +34,8 @@ export interface McpRetrievalResult {
   warnings: string[];
 }
 
-const MCP_RETRIEVAL_TIMEOUT_MS = 15_000;
-const MAX_RETRIEVAL_TURNS = 3;
+const MCP_RETRIEVAL_TIMEOUT_MS = 20_000;
+const MAX_RETRIEVAL_TURNS = 4;
 
 interface ToolSelectionPlan {
   done: boolean;
@@ -43,6 +43,43 @@ interface ToolSelectionPlan {
     toolName: string;
     args: Record<string, unknown>;
   }>;
+}
+
+/**
+ * Prunes heavy and noisy fields from raw MCP tool output before saving into evidence pack or context.
+ */
+export function pruneMcpRawResult(raw: string, maxChars = 2500): string {
+  if (!raw) return '';
+  try {
+    const parsed = JSON.parse(raw);
+    const cleanObject = (obj: any): any => {
+      if (Array.isArray(obj)) {
+        return obj.slice(0, 15).map(cleanObject);
+      }
+      if (obj !== null && typeof obj === 'object') {
+        const out: Record<string, any> = {};
+        for (const [k, v] of Object.entries(obj)) {
+          // Drop embedding vectors, binary buffers, or heavy internal graph metadata
+          if (
+            k.includes('embedding') ||
+            k.includes('vector') ||
+            k === 'raw_chunks' ||
+            k === 'buffer' ||
+            k === 'visualCoordinates'
+          ) {
+            continue;
+          }
+          out[k] = cleanObject(v);
+        }
+        return out;
+      }
+      return obj;
+    };
+    const pruned = JSON.stringify(cleanObject(parsed));
+    return pruned.length > maxChars ? `${pruned.slice(0, maxChars)}... (truncated)` : pruned;
+  } catch {
+    return raw.length > maxChars ? `${raw.slice(0, maxChars)}... (truncated)` : raw;
+  }
 }
 
 /**
@@ -149,15 +186,25 @@ export async function runMcpRetrieval(
         )
         .join('\n');
 
-      const systemPrompt = `You are a dynamic tool-calling retriever. Select relevant read-only tools to fetch live data answering the user query.
+      const systemPrompt = `You are an intelligent, domain-agnostic dynamic tool-calling retriever. Select relevant read-only tools to fetch live data answering the user query.
 Turn ${turn} of max ${MAX_RETRIEVAL_TURNS}.
 
 Available Tools:
 ${toolsSummary}
 
+DYNAMIC MCP RETRIEVAL RULES:
+1. CHECK INFORMATION DEPTH (Granularity Rule):
+   - If the user asks for fine-grained details (such as specific fields, columns, attributes, parameters, enum values, error codes, or formulas) but the data retrieved so far only contains high-level container objects (such as table/file/document/entity names without property-level details):
+   - DO NOT set "done": true.
+   - You MUST pick the next inspection/detail tool provided in the server's tool list to drill down into that container entity.
+2. COMPLETION CRITERIA:
+   - Set "done": true ONLY when:
+     a) The specific attribute/field answering the query has been found in the tool results, OR
+     b) All available detail/inspection tools for the relevant entity have been exhausted.
+
 Return STRICT JSON adhering to this schema:
 {
-  "done": boolean, // set to true if sufficient data retrieved or no further tool needed
+  "done": boolean, // set to true ONLY if sufficient fine-grained data has been retrieved or no further relevant inspection tool exists
   "toolCalls": [
     {
       "toolName": string,
@@ -217,17 +264,18 @@ Return STRICT JSON adhering to this schema:
 
         try {
           const rawResult = await executeDynamicMcpTool(call.toolName, call.args ?? {}, database);
+          const cleanResult = pruneMcpRawResult(rawResult);
           executedAnyInTurn = true;
           items.push({
             serverId,
             serverName,
             toolName: call.toolName,
             args: call.args ?? {},
-            rawResult,
+            rawResult: cleanResult,
             timestamp: new Date().toISOString(),
           });
           conversationHistory.push(
-            `Called ${call.toolName}(${JSON.stringify(call.args)}):\nResult: ${rawResult.slice(0, 1000)}`
+            `Called ${call.toolName}(${JSON.stringify(call.args)}):\nResult: ${cleanResult.slice(0, 1500)}`
           );
         } catch (err: any) {
           warnings.push(`Lỗi thực thi công cụ "${call.toolName}": ${err?.message || String(err)}`);

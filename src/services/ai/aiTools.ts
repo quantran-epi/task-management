@@ -4779,6 +4779,55 @@ export function isMutationTool(toolName: string, args?: Record<string, any>): bo
   return MUTATION_TOOLS.has(normalized);
 }
 
+/**
+ * Filters available tools dynamically based on conversation intent and context.
+ * For knowledge queries or technical schema lookups, personal operational/mutation tools
+ * (create_task, timer, log_work_session, etc.) are pruned to save massive prompt tokens.
+ */
+export function pruneToolsForContext(
+  allTools: AiToolDefinition[],
+  options: {
+    isKnowledgeContinuation?: boolean;
+    isTaskMateQuery?: boolean;
+    isMutationTurn?: boolean;
+  }
+): AiToolDefinition[] {
+  if (options.isMutationTurn) {
+    return allTools;
+  }
+
+  if (options.isKnowledgeContinuation) {
+    // Keep MCP tools and knowledge/doc inspection tools, exclude heavy personal task manipulation
+    return allTools.filter((t) => {
+      const name = normalizeToolName(t.function.name);
+      // Exclude personal task/project/timer mutations and operations
+      if (
+        isMutationTool(name) ||
+        name === 'start_timer' ||
+        name === 'pause_timer' ||
+        name === 'stop_and_log_timer' ||
+        name === 'discard_timer' ||
+        name === 'query_worklogs' ||
+        name === 'get_daily_schedule' ||
+        name === 'check_capacity_feasibility' ||
+        name === 'get_day_insight' ||
+        name === 'generate_standup_report'
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }
+
+  if (options.isTaskMateQuery) {
+    // Querying personal tasks: exclude mutation tools
+    return allTools.filter((t) => !isMutationTool(t.function.name));
+  }
+
+  return allTools;
+}
+
+
 export function formatFieldChanges(args: Record<string, any>, ignoredKeys: string[] = ['id', 'taskId']): string {
   const fieldLabels: Record<string, string> = {
     name: 'Tên',

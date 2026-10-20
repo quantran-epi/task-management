@@ -37,6 +37,7 @@ Progress: [█████████░] 92%
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261020-tif | optimize-ai-chat-pipeline | 2026-10-20 | — | complete | [261020-tif-optimize-ai-chat-pipeline](./quick/261020-tif-optimize-ai-chat-pipeline/) |
 | 261020-nal | Refactor Telegram worker to use AIChatDrawer read-tool execution loop | 2026-10-20 | ac2b675 | complete | [261020-nal-refactor-telegram-worker-to-use-aichatdr](./quick/261020-nal-refactor-telegram-worker-to-use-aichatdr/) |
 | 261020-mia | fix build typecheck errors in src and tests | 2026-10-20 | d8501cf | complete | [261020-mia-fix-build-typecheck-errors-in-src-and-te](./quick/261020-mia-fix-build-typecheck-errors-in-src-and-te/) |
 | 261020-ckf | Fix chunk extraction failure halting and add pending/failed chunk batch run actions | 2026-10-20 | — | complete | [261020-ckf-fix-chunk-extraction-and-add-pending-retry-actions](./quick/261020-ckf-fix-chunk-extraction-and-add-pending-retry-actions/) |

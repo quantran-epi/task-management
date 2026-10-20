@@ -49,6 +49,7 @@ import {
   isMutationTool,
   describeToolMutationWithContext,
   normalizeToolName,
+  pruneToolsForContext,
 } from '../../services/ai/aiTools';
 import {
   getMcpServers,
@@ -1063,7 +1064,13 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     } catch (err) {
       console.warn('[AIChatDrawer] MCP discovery unavailable:', err);
     }
-    const toolsForTurn = [...AI_DATABASE_TOOLS, ...dynamicMcpTools];
+    const rawToolsForTurn = [...AI_DATABASE_TOOLS, ...dynamicMcpTools];
+    // Dynamic Tool Pruning: prune heavy mutation and task-ops tools for knowledge lookups
+    const toolsForTurn = pruneToolsForContext(rawToolsForTurn, {
+      isKnowledgeContinuation: Boolean(groundedLoadingStatus?.includes('trợ lý') || effectiveScope.type === 'document'),
+      isTaskMateQuery: !autoApproveMutations,
+      isMutationTurn: autoApproveMutations,
+    });
     let dynamicMcpInstructions = '';
     try {
       dynamicMcpInstructions = await getEnabledMcpInstructions(db);
