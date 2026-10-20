@@ -7,16 +7,13 @@ import {
 import {
   upsertWhitelistUser,
   getWhitelistUser,
-  getRecentTelegramLogs,
 } from '../../src/services/telegram/telegramSettingsService';
 import {
   getPendingMutation,
   setPendingMutation,
-  clearPendingMutation,
   clearAllPendingMutationsForTesting,
   isConfirmationMessage,
   isCancellationMessage,
-  formatMutationPreviewMessage,
 } from '../../src/services/telegram/telegramMutationSession';
 import { setNineRouterApiKey } from '../../src/services/ai/nineRouterTokenService';
 
