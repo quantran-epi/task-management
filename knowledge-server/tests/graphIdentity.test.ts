@@ -62,6 +62,24 @@ describe('Graph Identity & Collision Safety (GRAPH-01, GRAPH-02)', () => {
       expect(urnProd).not.toContain('uat');
       expect(urnProd).not.toContain('sit');
     });
+
+    it('slugifies Vietnamese titles into clean ASCII URN segments without underscore chains (ENTITY-FIDELITY-01)', () => {
+      const urn = buildUrn(
+        'system',
+        'ProcessStep',
+        'Xử lý merchant bị Front-End từ chối (Bước 20)'
+      );
+      expect(urn).toBe(
+        'urn:plannermate:system:ProcessStep:Xu_ly_merchant_bi_Front-End_tu_choi_Buoc_20'
+      );
+      expect(urn).not.toMatch(/__/);
+
+      const simpleUrn = buildUrn('system', 'ProcessStep', 'Xử lý merchant bị từ chối');
+      expect(simpleUrn).toBe(
+        'urn:plannermate:system:ProcessStep:Xu_ly_merchant_bi_tu_choi'
+      );
+      expect(simpleUrn).not.toMatch(/__/);
+    });
   });
 
   describe('Oracle technical identifier normalization (D-06, D-08, D-16)', () => {

@@ -9,13 +9,26 @@ import {
 import { RELATION_QUALIFIER_ALLOWLIST, ONTOLOGY_VERSION } from './ontology.js';
 
 /**
+ * Strips Vietnamese diacritics and converts non-ASCII characters to clean ASCII slugs per D-01, ENTITY-FIDELITY-01.
+ */
+export function slugifyVietnamese(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .replace(/[^a-zA-Z0-9_.~%-]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+/**
  * Encodes a string segment for safe inclusion in a URN.
  * Standard RFC 2141 / RFC 8141 URN characters allowed: a-zA-Z0-9()+,-.:=@;$_!*'
  * Percent-encodes characters that violate URN syntax.
  */
 function encodeUrnSegment(str: string): string {
-  // Replace characters not allowed in URN segment: only [A-Za-z0-9_.~%-] allowed
-  return str.replace(/[^a-zA-Z0-9_.~%-]/g, '_');
+  return slugifyVietnamese(str);
 }
 
 /**
