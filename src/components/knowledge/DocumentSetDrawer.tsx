@@ -11,6 +11,7 @@ import {
   ReloadOutlined,
   WarningOutlined,
   DeleteOutlined,
+  PlayCircleOutlined,
 } from '@ant-design/icons';
 import {
   Alert,
@@ -293,14 +294,16 @@ export function DocumentSetDrawer(props: DocumentSetDrawerProps) {
     }
   };
 
-  const handleRetrySelectiveChunks = async (chunkIds?: string[]) => {
+  const handleRetrySelectiveChunks = async (
+    optionsOrChunkIds?: string[] | { chunkIds?: string[]; mode?: 'pending' | 'failed' | 'all' }
+  ) => {
     if (!selected?.id || !client) return;
     setRebuilding(true);
     setConnectivityUncertain(false);
     try {
-      message.loading({ content: 'Đang bắt đầu thử lại các phần đã chọn...', key: 'retry-chunks' });
-      const accepted = await client.retryGraphChunks(selected.id, chunkIds);
-      message.success({ content: 'Đã nhận yêu cầu thử lại trích xuất.', key: 'retry-chunks' });
+      message.loading({ content: 'Đang bắt đầu xử lý các phần đã chọn...', key: 'retry-chunks' });
+      const accepted = await client.retryGraphChunks(selected.id, optionsOrChunkIds);
+      message.success({ content: 'Đã nhận yêu cầu xử lý trích xuất.', key: 'retry-chunks' });
       await handleFetchChunks();
 
       // Poll graph status until complete
@@ -328,12 +331,17 @@ export function DocumentSetDrawer(props: DocumentSetDrawerProps) {
       await handleFetchChunks();
 
       if (finalStatus.state === 'Failed') {
-        message.error(finalStatus.error?.message ?? 'Thử lại trích xuất đồ thị thất bại.');
-      } else {
+        message.error(finalStatus.error?.message ?? 'Trích xuất đồ thị thất bại.');
+      } else if (finalStatus.candidateStatus === 'READY') {
         message.success('Hoàn thành trích xuất và cập nhật đồ thị tri thức.');
+      } else {
+        message.info(
+          finalStatus.progress?.stageMessage ??
+            'Đã xử lý xong các phần đã chọn. Vẫn còn phần chờ xử lý.'
+        );
       }
     } catch (err: any) {
-      message.error(err instanceof Error ? err.message : 'Thử lại thất bại.');
+      message.error(err instanceof Error ? err.message : 'Thao tác thất bại.');
     } finally {
       setRebuilding(false);
     }
@@ -855,13 +863,23 @@ export function DocumentSetDrawer(props: DocumentSetDrawerProps) {
             Làm mới
           </Button>,
           <Button
+            key="runPending"
+            type="primary"
+            icon={<PlayCircleOutlined />}
+            loading={rebuilding}
+            disabled={!chunkData || chunkData.pending === 0}
+            onClick={() => handleRetrySelectiveChunks({ mode: 'pending' })}
+          >
+            Chạy các phần chờ xử lý ({chunkData?.pending ?? 0})
+          </Button>,
+          <Button
             key="retryFailed"
             type="primary"
             danger
             icon={<ReloadOutlined />}
             loading={rebuilding}
             disabled={!chunkData || chunkData.failed === 0}
-            onClick={() => handleRetrySelectiveChunks()}
+            onClick={() => handleRetrySelectiveChunks({ mode: 'failed' })}
           >
             Thử lại tất cả phần lỗi ({chunkData?.failed ?? 0})
           </Button>,
@@ -953,24 +971,45 @@ export function DocumentSetDrawer(props: DocumentSetDrawerProps) {
               {
                 title: 'Thao tác',
                 key: 'action',
-                width: 110,
-                render: (_, r) =>
-                  r.status === 'FAILED' ? (
-                    <Button
-                      size="small"
-                      type="link"
-                      danger
-                      loading={rebuilding && retryingChunkId === r.chunkId}
-                      onClick={() => {
-                        setRetryingChunkId(r.chunkId);
-                        handleRetrySelectiveChunks([r.chunkId]).finally(() => {
-                          setRetryingChunkId(null);
-                        });
-                      }}
-                    >
-                      Thử lại
-                    </Button>
-                  ) : null,
+                width: 120,
+                render: (_, r) => {
+                  if (r.status === 'FAILED') {
+                    return (
+                      <Button
+                        size="small"
+                        type="link"
+                        danger
+                        loading={rebuilding && retryingChunkId === r.chunkId}
+                        onClick={() => {
+                          setRetryingChunkId(r.chunkId);
+                          handleRetrySelectiveChunks([r.chunkId]).finally(() => {
+                            setRetryingChunkId(null);
+                          });
+                        }}
+                      >
+                        Thử lại
+                      </Button>
+                    );
+                  }
+                  if (r.status === 'PENDING') {
+                    return (
+                      <Button
+                        size="small"
+                        type="link"
+                        loading={rebuilding && retryingChunkId === r.chunkId}
+                        onClick={() => {
+                          setRetryingChunkId(r.chunkId);
+                          handleRetrySelectiveChunks([r.chunkId]).finally(() => {
+                            setRetryingChunkId(null);
+                          });
+                        }}
+                      >
+                        Chạy ngay
+                      </Button>
+                    );
+                  }
+                  return null;
+                },
               },
             ]}
           />

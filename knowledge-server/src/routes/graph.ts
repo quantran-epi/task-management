@@ -188,6 +188,7 @@ export type QuarantineListDTO = z.infer<typeof QuarantineListDTOSchema>;
 export const RetryChunksBodySchema = z
   .object({
     chunkIds: z.array(z.string()).optional(),
+    mode: z.enum(['pending', 'failed', 'all']).optional(),
   })
   .strict();
 export type RetryChunksBody = z.infer<typeof RetryChunksBodySchema>;
@@ -421,7 +422,8 @@ export function registerGraphRoutes(app: FastifyInstance, buildService: GraphBui
       const result = await buildService.triggerRetryChunks(
         params.data.setId,
         headers.data['x-rebuild-key'],
-        body.data.chunkIds
+        body.data.chunkIds,
+        body.data.mode
       );
       return reply.code(202).send(RebuildAcceptedDTOSchema.parse(result));
     } catch (err: unknown) {

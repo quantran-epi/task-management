@@ -813,10 +813,17 @@ export function createKnowledgeClient(options: CreateKnowledgeClientOptions) {
 
     async retryGraphChunks(
       setId: string,
-      chunkIds?: string[],
+      optionsOrChunkIds?: string[] | { chunkIds?: string[]; mode?: 'pending' | 'failed' | 'all' },
       signal?: AbortSignal
     ): Promise<RebuildAcceptedResponse> {
       const rebuildKey = crypto.randomUUID();
+      const chunkIds = Array.isArray(optionsOrChunkIds)
+        ? optionsOrChunkIds
+        : optionsOrChunkIds?.chunkIds;
+      const mode = Array.isArray(optionsOrChunkIds)
+        ? undefined
+        : optionsOrChunkIds?.mode;
+
       return request(
         `/sets/${encodeURIComponent(setId)}/graph/retry-chunks`,
         RebuildAcceptedResponseSchema,
@@ -828,6 +835,7 @@ export function createKnowledgeClient(options: CreateKnowledgeClientOptions) {
           },
           body: JSON.stringify({
             ...(chunkIds && chunkIds.length > 0 ? { chunkIds } : {}),
+            ...(mode ? { mode } : {}),
           }),
           ...(signal ? { signal } : {}),
         }

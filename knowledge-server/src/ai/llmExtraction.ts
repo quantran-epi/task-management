@@ -106,6 +106,11 @@ export class ChunkExtractionStore {
       item.updatedAt = new Date().toISOString();
       if (nodesCount) item.nodesCount = nodesCount;
       if (factsCount) item.factsCount = factsCount;
+      if (status === 'FAILED') {
+        this.cachedResults.get(setId)?.delete(chunkId);
+        item.nodesCount = 0;
+        item.factsCount = 0;
+      }
     }
   }
 
@@ -145,6 +150,30 @@ export class ChunkExtractionStore {
         }
       }
     }
+  }
+
+  resetChunks(setId: string, targetChunkIds?: string[]): void {
+    const itemMap = this.chunksBySet.get(setId);
+    if (!itemMap) return;
+    for (const item of itemMap.values()) {
+      if (!targetChunkIds || targetChunkIds.length === 0) {
+        if (item.status === 'FAILED') {
+          item.status = 'PENDING';
+          item.error = undefined;
+          item.updatedAt = new Date().toISOString();
+        }
+      } else if (targetChunkIds.includes(item.chunkId)) {
+        item.status = 'PENDING';
+        item.error = undefined;
+        item.updatedAt = new Date().toISOString();
+        this.cachedResults.get(setId)?.delete(item.chunkId);
+      }
+    }
+  }
+
+  purgeSet(setId: string): void {
+    this.chunksBySet.delete(setId);
+    this.cachedResults.delete(setId);
   }
 }
 
@@ -506,11 +535,11 @@ export async function extractWithLLMPure(
       throw new Error('EXTRACTION_ABORTED_BY_USER');
     }
 
-    const isTargeted = !targetChunkIds || targetChunkIds.length === 0 || targetChunkIds.includes(chunk.chunkId);
+    const isExplicitlyTargeted = Boolean(targetChunkIds && targetChunkIds.includes(chunk.chunkId));
     const cached = globalChunkStore.getChunkResult(setId, chunk.chunkId);
 
-    if (cached && !isTargeted) {
-      // Use cached result
+    // If chunk is already cached and not explicitly targeted for re-extraction, reuse cache
+    if (cached && !isExplicitlyTargeted) {
       for (const n of cached.nodes) nodesMap.set(n.urn, n);
       for (const f of cached.facts) factsMap.set(f.factKey, f);
       evidenceList.push(...cached.evidence);
@@ -519,7 +548,8 @@ export async function extractWithLLMPure(
       continue;
     }
 
-    if (!isTargeted) {
+    // If targetChunkIds was provided, only process chunks in targetChunkIds
+    if (targetChunkIds && targetChunkIds.length > 0 && !targetChunkIds.includes(chunk.chunkId)) {
       processedCount++;
       continue;
     }
@@ -706,9 +736,14 @@ export async function extractWithLLMPure(
         quarantines: chunkQuarantines,
       });
     } catch (err: any) {
+      if (signal?.aborted) {
+        throw new Error('EXTRACTION_ABORTED_BY_USER');
+      }
       const errMsg = err instanceof Error ? err.message : String(err);
       globalChunkStore.setChunkStatus(setId, chunk.chunkId, 'FAILED', errMsg);
-      throw err;
+      console.warn(
+        `[CHUNK_EXTRACTION_FAILED] Document "${chunk.documentTitle}" chunk ${chunk.chunkIndex + 1}/${chunk.totalChunksInDoc} failed: ${errMsg}`
+      );
     }
 
     processedCount++;

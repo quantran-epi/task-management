@@ -253,6 +253,25 @@ export class GraphBuildService {
       });
       const approvals = this.snapshotStore.getApprovals(setId);
 
+      // Check chunk extraction completeness
+      const chunkStats = this.getChunkStatusList(setId);
+      if (chunkStats.pending > 0) {
+        // There are still pending chunks that have not run yet.
+        // We do not finalize candidate or build retrieval generation yet.
+        this.currentStages.set(setId, 'Validation');
+        this.currentProgress.set(setId, {
+          processedChunks: chunkStats.success,
+          totalChunks: chunkStats.total,
+          percent: 50,
+          stageMessage: `Đã xử lý xong các phần đã chọn (${chunkStats.success}/${chunkStats.total}). Còn ${chunkStats.pending} phần chờ xử lý.`,
+        });
+        return candidateSnapshotId;
+      }
+
+      if (chunkStats.total > 0 && chunkStats.success === 0 && chunkStats.failed > 0) {
+        throw new Error('ALL_CHUNKS_FAILED: Tất cả các phần trích xuất đều thất bại. Vui lòng kiểm tra lỗi từng phần.');
+      }
+
       const candidate = mergeFactsDeterministicFirst({
         graphSnapshotId: candidateSnapshotId,
         sourceSnapshotId: frozenSourceSnapshotId,
@@ -701,7 +720,8 @@ export class GraphBuildService {
   async triggerRetryChunks(
     setId: string,
     rebuildKey: string,
-    chunkIds?: string[]
+    chunkIds?: string[],
+    mode?: 'pending' | 'failed' | 'all'
   ): Promise<RebuildAcceptedDTO> {
     const replayKey = `${setId}:${rebuildKey}`;
     const existing = this.rebuildReplays.get(replayKey);
@@ -726,10 +746,31 @@ export class GraphBuildService {
     this.currentStages.set(setId, 'Preparing');
     this.buildErrors.delete(setId);
 
-    // Reset targeted chunk statuses
-    globalChunkStore.resetFailedChunks(setId, chunkIds);
+    // Determine target chunks
+    let finalTargetIds = chunkIds ? [...chunkIds] : undefined;
+    const allItems = globalChunkStore.getChunkItems(setId);
 
-    const rebuildOpts = chunkIds ? { targetChunkIds: chunkIds } : undefined;
+    if (mode === 'pending') {
+      finalTargetIds = allItems
+        .filter((c) => c.status === 'PENDING' || c.status === 'EXTRACTING')
+        .map((c) => c.chunkId);
+    } else if (mode === 'failed') {
+      finalTargetIds = allItems
+        .filter((c) => c.status === 'FAILED')
+        .map((c) => c.chunkId);
+      globalChunkStore.resetFailedChunks(setId, finalTargetIds);
+    } else if (mode === 'all') {
+      finalTargetIds = allItems.map((c) => c.chunkId);
+      globalChunkStore.resetChunks(setId, finalTargetIds);
+    } else if (finalTargetIds && finalTargetIds.length > 0) {
+      // Individual chunk retry: reset targeted chunk to PENDING
+      globalChunkStore.resetChunks(setId, finalTargetIds);
+    } else {
+      // Default: retry all failed chunks
+      globalChunkStore.resetFailedChunks(setId);
+    }
+
+    const rebuildOpts = finalTargetIds ? { targetChunkIds: finalTargetIds } : undefined;
     this.executeRebuild(setId, candidateSnapshotId, rebuildOpts)
       .catch((err: unknown) => {
         console.error('[GRAPH_RETRY_CHUNKS_FATAL]', err);
@@ -750,6 +791,7 @@ export class GraphBuildService {
     this.candidateBySet.delete(setId);
     this.rollbackPointers.delete(setId);
     this.buildErrors.delete(setId);
+    globalChunkStore.purgeSet(setId);
 
     for (const key of this.rebuildReplays.keys()) {
       if (key.startsWith(`${setId}:`)) {
