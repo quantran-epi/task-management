@@ -161,4 +161,88 @@ describe('ChunkExtractionStore disk caching (BUILD-CACHE-01)', () => {
 
     await expect(store.loadDiskCache(maliciousSetId, chunkContentHash, model)).rejects.toThrow(/INVALID_SET_ID/);
   });
+
+  it('extractWithLLMPure uses disk cache and avoids LLM call on unchanged chunk', async () => {
+    const setId = '00000000-0000-0000-0000-000000000003';
+    const model = 'mock-llm-model';
+
+    const testDoc = {
+      documentId: 'doc-cache-test',
+      title: 'Doc Cache Test',
+      contentHash: 'mock-hash',
+      chunks: [
+        {
+          occurrenceId: 'occ-1',
+          representationId: 'rep-1',
+          contentHash: 'mock-chunk-hash',
+          chunkIndex: 0,
+          headingPath: [],
+          startLine: 1,
+          endLine: 1,
+          startOffset: 0,
+          endOffset: 45,
+          rawContent: 'SHB process performs batch card operations.\n\nMore prose description for testing.',
+        },
+      ],
+    };
+
+    const snapshot = {
+      snapshotId: 'snap-1',
+      setId,
+      documents: [testDoc],
+    } as any;
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () =>
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  entities: [
+                    {
+                      name: 'PRC_BATCH_CARD',
+                      kind: 'ScheduledProcess',
+                      sourceSystem: 'system',
+                      nativeType: 'PRC_PROCESS',
+                    },
+                  ],
+                  relations: [],
+                }),
+              },
+            },
+          ],
+        }),
+    });
+
+    // Isolated store using tempDir
+    const testStore = new ChunkExtractionStore(tempDir);
+    const { extractWithLLMPure } = await import('../src/ai/llmExtraction.js');
+
+    // Run 1: First time - should call LLM
+    const res1 = await extractWithLLMPure(snapshot, {
+      endpoint: 'http://mock-llm:1234',
+      model,
+      fetchFn: mockFetch as any,
+      store: testStore,
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(res1.nodes.some((n) => n.canonicalName === 'PRC_BATCH_CARD')).toBe(true);
+
+    // Simulate pod restart: new store instance pointing to same tempDir with empty in-memory state
+    const restartedStore = new ChunkExtractionStore(tempDir);
+
+    // Run 2: Second time with same content - should load from disk cache, 0 new LLM calls
+    const res2 = await extractWithLLMPure(snapshot, {
+      endpoint: 'http://mock-llm:1234',
+      model,
+      fetchFn: mockFetch as any,
+      store: restartedStore,
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(1); // Still 1, 0 new calls!
+    expect(res2.nodes.some((n) => n.canonicalName === 'PRC_BATCH_CARD')).toBe(true);
+  });
 });

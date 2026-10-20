@@ -1,3 +1,5 @@
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
 import { z } from 'zod';
 import type { ProjectionSnapshot, ProjectedDocument } from '../indexing/incrementalProjector.js';
 import {
@@ -13,6 +15,16 @@ import {
 import { ONTOLOGY_VERSION, RETRIEVAL_ONTOLOGY_REGISTRY } from '../graph/ontology.js';
 import { buildUrn, buildFactKey } from '../graph/identity.js';
 import { sha256Hex } from '../indexing/chunkHashPolicy.js';
+
+export const PROMPT_VERSION = '2026.10.1';
+
+export function computeChunkCacheKey(
+  chunkContentHash: string,
+  model: string,
+  promptVersion = PROMPT_VERSION
+): string {
+  return sha256Hex(`${chunkContentHash}:${model}:${promptVersion}`);
+}
 
 export const CHUNK_TARGET_CHARS = 2_500;
 export const CHUNK_MAX_CHARS = 3_500;
@@ -31,6 +43,7 @@ function deterministicUuid(seed: string): string {
 
 export interface TextChunk {
   chunkId: string;
+  chunkContentHash: string;
   documentId: string;
   documentTitle: string;
   chunkIndex: number;
@@ -62,8 +75,84 @@ export interface ChunkCachedResult {
 }
 
 export class ChunkExtractionStore {
+  readonly cacheDir: string;
   private chunksBySet = new Map<string, Map<string, ChunkExtractionItem>>();
   private cachedResults = new Map<string, Map<string, ChunkCachedResult>>();
+
+  constructor(cacheDir?: string) {
+    this.cacheDir = cacheDir || process.env.EXTRACTION_CACHE_DIR || './data/cache/extraction';
+  }
+
+  private validateSetId(setId: string): void {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(setId)) {
+      throw new Error(`INVALID_SET_ID: Set ID must be a valid UUID. Received "${setId}"`);
+    }
+  }
+
+  async ensureSetCacheDir(setId: string): Promise<string> {
+    this.validateSetId(setId);
+    const targetDir = path.join(this.cacheDir, setId);
+    await fs.mkdir(targetDir, { recursive: true });
+    return targetDir;
+  }
+
+  async loadDiskCache(
+    setId: string,
+    chunkContentHash: string,
+    model: string
+  ): Promise<ChunkCachedResult | undefined> {
+    this.validateSetId(setId);
+    const cacheKey = computeChunkCacheKey(chunkContentHash, model, PROMPT_VERSION);
+    if (!/^[0-9a-f]{64}$/.test(cacheKey)) {
+      throw new Error(`INVALID_CACHE_KEY: Key must be 64-char hex string.`);
+    }
+
+    const filePath = path.join(this.cacheDir, setId, `${cacheKey}.json`);
+    try {
+      const raw = await fs.readFile(filePath, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (
+        parsed?.version === 1 &&
+        parsed?.chunkContentHash === chunkContentHash &&
+        parsed?.model === model &&
+        parsed?.promptVersion === PROMPT_VERSION &&
+        parsed?.result
+      ) {
+        return parsed.result as ChunkCachedResult;
+      }
+      return undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  async saveDiskCache(
+    setId: string,
+    chunkContentHash: string,
+    model: string,
+    result: ChunkCachedResult
+  ): Promise<void> {
+    const dir = await this.ensureSetCacheDir(setId);
+    const cacheKey = computeChunkCacheKey(chunkContentHash, model, PROMPT_VERSION);
+    if (!/^[0-9a-f]{64}$/.test(cacheKey)) {
+      throw new Error(`INVALID_CACHE_KEY: Key must be 64-char hex string.`);
+    }
+
+    const filePath = path.join(dir, `${cacheKey}.json`);
+    const tmpPath = path.join(dir, `${cacheKey}.${deterministicUuid(String(Date.now()))}.tmp`);
+
+    const payload = {
+      version: 1,
+      chunkContentHash,
+      model,
+      promptVersion: PROMPT_VERSION,
+      cachedAt: new Date().toISOString(),
+      result,
+    };
+
+    await fs.writeFile(tmpPath, JSON.stringify(payload, null, 2), 'utf-8');
+    await fs.rename(tmpPath, filePath);
+  }
 
   initChunks(setId: string, chunks: TextChunk[]): void {
     let itemMap = this.chunksBySet.get(setId);
@@ -202,13 +291,15 @@ export function splitDocumentIntoChunks(doc: ProjectedDocument): TextChunk[] {
 
     if (currentText.length + trimmed.length > CHUNK_MAX_CHARS && currentText.length >= CHUNK_TARGET_CHARS) {
       const idx = chunks.length;
+      const cleanChunkText = currentText.trim();
       chunks.push({
         chunkId: `${doc.documentId}:${idx}`,
+        chunkContentHash: sha256Hex(cleanChunkText),
         documentId: doc.documentId,
         documentTitle: doc.title,
         chunkIndex: idx,
         totalChunksInDoc: 0,
-        text: currentText.trim(),
+        text: cleanChunkText,
         startOffset: currentStart,
         endOffset: currentStart + currentText.length,
       });
@@ -223,13 +314,15 @@ export function splitDocumentIntoChunks(doc: ProjectedDocument): TextChunk[] {
 
   if (currentText.trim()) {
     const idx = chunks.length;
+    const cleanChunkText = currentText.trim();
     chunks.push({
       chunkId: `${doc.documentId}:${idx}`,
+      chunkContentHash: sha256Hex(cleanChunkText),
       documentId: doc.documentId,
       documentTitle: doc.title,
       chunkIndex: idx,
       totalChunksInDoc: 0,
-      text: currentText.trim(),
+      text: cleanChunkText,
       startOffset: currentStart,
       endOffset: currentStart + currentText.length,
     });
@@ -295,6 +388,7 @@ export interface LLMExtractorOptions {
   fetchFn?: typeof fetch | undefined;
   onProgress?: ProgressCallback | undefined;
   targetChunkIds?: string[] | undefined;
+  store?: ChunkExtractionStore | undefined;
 }
 
 export interface PureLLMExtractionResult {
@@ -477,6 +571,7 @@ export async function extractWithLLMPure(
   options: LLMExtractorOptions,
   signal?: AbortSignal
 ): Promise<PureLLMExtractionResult> {
+  const store = options.store || globalChunkStore;
   const setId = snapshot.setId;
   const nodesMap = new Map<string, ResolvedNode>();
   const factsMap = new Map<string, FactAssertion>();
@@ -508,7 +603,7 @@ export async function extractWithLLMPure(
     allChunks.push(...docChunks);
   }
 
-  globalChunkStore.initChunks(setId, allChunks);
+  store.initChunks(setId, allChunks);
 
   const totalChunks = allChunks.length;
   if (totalChunks === 0) {
@@ -537,9 +632,18 @@ export async function extractWithLLMPure(
     }
 
     const isExplicitlyTargeted = Boolean(targetChunkIds && targetChunkIds.includes(chunk.chunkId));
-    const cached = globalChunkStore.getChunkResult(setId, chunk.chunkId);
+    let cached = store.getChunkResult(setId, chunk.chunkId);
 
-    // If chunk is already cached and not explicitly targeted for re-extraction, reuse cache
+    // If not in memory and not explicitly targeted for retry, check durable disk cache
+    if (!cached && !isExplicitlyTargeted && chunk.chunkContentHash) {
+      const diskCached = await store.loadDiskCache(setId, chunk.chunkContentHash, options.model);
+      if (diskCached) {
+        cached = diskCached;
+        store.saveChunkResult(setId, chunk.chunkId, diskCached);
+      }
+    }
+
+    // If chunk is already cached (in-memory or loaded from disk) and not explicitly targeted, reuse cache
     if (cached && !isExplicitlyTargeted) {
       for (const n of cached.nodes) nodesMap.set(n.urn, n);
       for (const f of cached.facts) factsMap.set(f.factKey, f);
@@ -555,7 +659,7 @@ export async function extractWithLLMPure(
       continue;
     }
 
-    globalChunkStore.setChunkStatus(setId, chunk.chunkId, 'EXTRACTING');
+    store.setChunkStatus(setId, chunk.chunkId, 'EXTRACTING');
     options.onProgress?.({
       processedChunks: processedCount,
       totalChunks,
@@ -728,20 +832,36 @@ export async function extractWithLLMPure(
 
       quarantinesList.push(...chunkQuarantines);
 
-      // Save chunk to cache
-      globalChunkStore.saveChunkResult(setId, chunk.chunkId, {
+      const chunkCachedResult: ChunkCachedResult = {
         chunkId: chunk.chunkId,
         nodes: chunkNodes,
         facts: chunkFacts,
         evidence: chunkEvidence,
         quarantines: chunkQuarantines,
-      });
+      };
+
+      // Save chunk to in-memory store
+      store.saveChunkResult(setId, chunk.chunkId, chunkCachedResult);
+
+      // Save chunk to durable disk cache
+      if (chunk.chunkContentHash) {
+        try {
+          await store.saveDiskCache(
+            setId,
+            chunk.chunkContentHash,
+            options.model,
+            chunkCachedResult
+          );
+        } catch (saveErr) {
+          console.warn(`[CHUNK_CACHE_SAVE_FAILED] Failed to persist cache for chunk ${chunk.chunkId}:`, saveErr);
+        }
+      }
     } catch (err: any) {
       if (signal?.aborted) {
         throw new Error('EXTRACTION_ABORTED_BY_USER');
       }
       const errMsg = err instanceof Error ? err.message : String(err);
-      globalChunkStore.setChunkStatus(setId, chunk.chunkId, 'FAILED', errMsg);
+      store.setChunkStatus(setId, chunk.chunkId, 'FAILED', errMsg);
       console.warn(
         `[CHUNK_EXTRACTION_FAILED] Document "${chunk.documentTitle}" chunk ${chunk.chunkIndex + 1}/${chunk.totalChunksInDoc} failed: ${errMsg}`
       );
@@ -757,7 +877,7 @@ export async function extractWithLLMPure(
   }
 
   // Final merge of all cached results
-  const allCached = globalChunkStore.getAllCachedResults(setId);
+  const allCached = store.getAllCachedResults(setId);
   for (const c of allCached) {
     for (const n of c.nodes) nodesMap.set(n.urn, n);
     for (const f of c.facts) factsMap.set(f.factKey, f);
