@@ -26,9 +26,13 @@ const mockStreamChatEvents = vi.fn(async function* (_args?: any) {
   yield { type: 'usage', usage: { total_tokens: 15 } };
 });
 
-vi.mock('../../src/services/ai/nineRouterClient', () => ({
-  streamChatEvents: (args: any) => mockStreamChatEvents(args),
-}));
+vi.mock('../../src/services/ai/nineRouterClient', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/services/ai/nineRouterClient')>();
+  return {
+    ...actual,
+    streamChatEvents: (args: any) => mockStreamChatEvents(args),
+  };
+});
 
 const mockRouteIntent = vi.fn();
 vi.mock('../../src/services/ai/intentRouter', () => ({
@@ -1529,6 +1533,215 @@ describe('Telegram Headless Worker', () => {
       expect(replies[0]).toContain('Thẻ CARD-123 đã bị khóa thành công');
       executeSpy.mockRestore();
       discoverSpy.mockRestore();
+    });
+  });
+
+  describe('Telegram Read Tool Execution Loop & Synthesis', () => {
+    it('executes read tool query_tasks and synthesizes complete answer for project detail query', async () => {
+      await setNineRouterApiKey('test-key', testDb);
+      mockStreamChatEvents.mockClear();
+
+      // Seed project and tasks
+      const projectId = 'proj-core-banking-1';
+      await testDb.projects.add({
+        id: projectId,
+        name: 'Core Banking Modernization',
+        description: 'Upgrade core banking microservices',
+        status: 'In Progress',
+        createdAt: '2026-10-01T00:00:00.000Z',
+        updatedAt: '2026-10-15T00:00:00.000Z',
+      });
+      await testDb.tasks.add({
+        id: 'task-cb-1',
+        name: 'Implement ISO8583 Adapter',
+        status: 'In Progress',
+        priority: 'High',
+        progress: 60,
+        estimateMinutes: 180,
+        projectId,
+        createdAt: '2026-10-02T00:00:00.000Z',
+        updatedAt: '2026-10-18T00:00:00.000Z',
+      });
+      await testDb.tasks.add({
+        id: 'task-cb-2',
+        name: 'Setup HSM Security Module',
+        status: 'Open',
+        priority: 'Urgent',
+        progress: 10,
+        estimateMinutes: 240,
+        projectId,
+        createdAt: '2026-10-03T00:00:00.000Z',
+        updatedAt: '2026-10-19T00:00:00.000Z',
+      });
+
+      await upsertWhitelistUser(
+        {
+          chatId: 'query_tool_user',
+          name: 'Project Manager',
+          status: 'active',
+          dataScope: 'full',
+          dailyLimit: 20,
+        },
+        testDb
+      );
+
+      mockRouteIntent.mockResolvedValueOnce({
+        intent: 'query_taskmate',
+        confidence: 0.95,
+        entities: ['Core Banking'],
+        language: 'vi',
+        needs_clarification: false,
+        clarify_question: null,
+        speculation_requested: false,
+      });
+
+      // First call emits tool_calls calling query_tasks
+      mockStreamChatEvents.mockImplementationOnce((async function* () {
+        yield {
+          type: 'tool_calls',
+          calls: [
+            {
+              id: 'call_query_1',
+              type: 'function',
+              function: {
+                name: 'query_tasks',
+                arguments: JSON.stringify({ search: 'ISO8583' }),
+              },
+            },
+          ],
+        } as any;
+      }) as any);
+
+      // Synthesis pass yields final answer
+      mockStreamChatEvents.mockImplementationOnce((async function* () {
+        yield {
+          type: 'text',
+          delta: 'Dự án **Core Banking Modernization** có task **Implement ISO8583 Adapter** đang ở trạng thái In Progress (60%).',
+        };
+        yield { type: 'usage', usage: { total_tokens: 45 } };
+      }) as any);
+
+      const replies: string[] = [];
+      const mockSendReply = vi.fn(async (_t: string, _c: string, text: string) => {
+        replies.push(text);
+      });
+      const mockSendAction = vi.fn(async () => {});
+
+      await processTelegramInboundMessage(
+        {
+          update_id: 301,
+          message_id: 1101,
+          chat_id: 'query_tool_user',
+          from_name: 'Project Manager',
+          text: 'Cho tôi biết chi tiết dự án Core Banking',
+          date: 1234700,
+        },
+        'test_token',
+        testDb,
+        mockSendReply,
+        mockSendAction
+      );
+
+      expect(mockStreamChatEvents).toHaveBeenCalledTimes(2);
+      // Verify tools provided in call 1
+      const firstCallArgs = (mockStreamChatEvents.mock.calls as any)[0]?.[0];
+      expect(firstCallArgs?.payload?.tools).toBeDefined();
+      expect(firstCallArgs.payload.tools.some((t: any) => t.function.name === 'query_tasks')).toBe(true);
+      expect(firstCallArgs.payload.tools.some((t: any) => t.function.name === 'get_item_details')).toBe(true);
+      // Verify mutation tools were excluded
+      expect(firstCallArgs.payload.tools.some((t: any) => t.function.name === 'create_task')).toBe(false);
+      expect(firstCallArgs.payload.tools.some((t: any) => t.function.name === 'delete_project')).toBe(false);
+
+      // Verify second call (synthesis) was triggered with tool output in messages
+      const secondCallArgs = (mockStreamChatEvents.mock.calls as any)[1]?.[0];
+      const toolMsg = secondCallArgs?.payload?.messages?.find((m: any) => m.role === 'tool');
+      expect(toolMsg).toBeDefined();
+      expect(toolMsg.content).toContain('Implement ISO8583 Adapter');
+
+      // Verify user received synthesized answer
+      expect(mockSendReply).toHaveBeenCalledTimes(1);
+      expect(replies[0]).toContain('Core Banking Modernization');
+      expect(replies[0]).toContain('Implement ISO8583 Adapter');
+    });
+
+    it('rejects mutation tool execution during normal user query turn without modifying DB', async () => {
+      await setNineRouterApiKey('test-key', testDb);
+      mockStreamChatEvents.mockClear();
+
+      await upsertWhitelistUser(
+        {
+          chatId: 'normal_user_hacker',
+          name: 'Normal User',
+          status: 'active',
+          isAdmin: false,
+          dataScope: 'full',
+          dailyLimit: 20,
+        },
+        testDb
+      );
+
+      mockRouteIntent.mockResolvedValueOnce({
+        intent: 'query_taskmate',
+        confidence: 0.9,
+        entities: [],
+        language: 'vi',
+        needs_clarification: false,
+        clarify_question: null,
+        speculation_requested: false,
+      });
+
+      // Model attempts to call create_task in query loop
+      mockStreamChatEvents.mockImplementationOnce((async function* () {
+        yield {
+          type: 'tool_calls',
+          calls: [
+            {
+              id: 'call_hack_1',
+              type: 'function',
+              function: {
+                name: 'create_task',
+                arguments: JSON.stringify({ name: 'Malicious Task' }),
+              },
+            },
+          ],
+        } as any;
+      }) as any);
+
+      // Synthesis pass yields rejection explanation
+      mockStreamChatEvents.mockImplementationOnce((async function* () {
+        yield {
+          type: 'text',
+          delta: 'Không thể tạo tác vụ vì yêu cầu quyền Admin.',
+        };
+        yield { type: 'usage', usage: { total_tokens: 30 } };
+      }) as any);
+
+      const mockSendReply = vi.fn(async () => {});
+      const mockSendAction = vi.fn(async () => {});
+
+      await processTelegramInboundMessage(
+        {
+          update_id: 302,
+          message_id: 1102,
+          chat_id: 'normal_user_hacker',
+          from_name: 'Normal User',
+          text: 'Tạo task hack',
+          date: 1234701,
+        },
+        'test_token',
+        testDb,
+        mockSendReply,
+        mockSendAction
+      );
+
+      // Verify task was NOT created in DB
+      const allTasks = await testDb.tasks.toArray();
+      expect(allTasks.some((t) => t.name === 'Malicious Task')).toBe(false);
+
+      // Verify tool message sent to model contained error explanation
+      const secondCallArgs = (mockStreamChatEvents.mock.calls as any)[1]?.[0];
+      const toolMsg = secondCallArgs?.payload?.messages?.find((m: any) => m.role === 'tool');
+      expect(toolMsg?.content).toContain('Thao tác thay đổi dữ liệu yêu cầu quyền Admin');
     });
   });
 });

@@ -19,7 +19,12 @@ import {
   isCancellationMessage,
   executeAdminMutationTurn,
 } from './telegramMutationSession';
-import { executeAiTool } from '../ai/aiTools';
+import {
+  AI_DATABASE_TOOLS,
+  executeAiTool,
+  isMutationTool,
+} from '../ai/aiTools';
+import { pruneToolOutputsInMessages } from '../ai/historyPruning';
 import { sendDesktopNotification } from '../../utils/desktopNotification';
 import type {
   TelegramInboundEvent,
@@ -27,10 +32,10 @@ import type {
   TelegramDataScope,
   TelegramBroadcastResult,
 } from './telegramTypes';
-import type { ChatCompletionMessage } from '../ai/types';
+import type { ChatCompletionMessage, ToolCall } from '../ai/types';
 import { isTauriApp } from '../../utils/timerPopout';
 import { getNineRouterConfig, getNineRouterApiKey } from '../ai/nineRouterTokenService';
-import { streamChatEvents } from '../ai/nineRouterClient';
+import { streamChatEvents, stripThinkingBlocks } from '../ai/nineRouterClient';
 import { markdownToTelegramHtml } from './telegramHtml';
 import { buildGlobalContextPrompt } from '../ai/contextGrounding';
 import { rankBM25, tokenize, type BM25Document } from '../../utils/bm25';
@@ -1044,16 +1049,23 @@ export async function processTelegramInboundMessage(
     }
   }
 
-  // Step 7: Gather grounded context using classified intent and entities (for operational / mixed / fallback turns)
-  const { contextText, matchedSourceTitles } = await resolveScopedContext(
-    dataScope,
-    trimmedText,
-    db,
-    routedIntent?.intent,
-    routedIntent?.entities
-  );
+  // Step 7: Filter available read/query tools based on dataScope
+  // CRITICAL SECURITY: strictly exclude mutation tools and adhere to dataScope
+  let availableTools = AI_DATABASE_TOOLS.filter((t) => !isMutationTool(t.function.name));
+  if (dataScope === 'pure_llm') {
+    availableTools = [];
+  } else if (dataScope === 'tasks_only') {
+    // Exclude note and knowledge search tools
+    availableTools = availableTools.filter(
+      (t) =>
+        t.function.name !== 'query_notes' &&
+        t.function.name !== 'search_knowledge_base' &&
+        t.function.name !== 'get_document_details' &&
+        t.function.name !== 'get_document_backlinks'
+    );
+  }
 
-  // Step 8: Invoke AI with Critical Anti-Hallucination rules from AIChatDrawer
+  // Step 8: Invoke AI with AIChatDrawer-style Read-Tool Loop and Anti-Hallucination rules
   const todayStr = getTodayDateString();
   const now = dayjs();
   const dayName = now.format('dddd');
@@ -1065,16 +1077,14 @@ export async function processTelegramInboundMessage(
     ``,
     `CRITICAL ANTI-HALLUCINATION RULES:`,
     `1. NEVER GUESS, ASSUME, OR INVENT DATA.`,
-    `2. Every statement regarding tasks, projects, milestones, statuses, deadlines, logged work sessions, actual hours, planned allocations, capacity limits, notes, reminders, recurring schedules, or system sync state MUST be strictly grounded in concrete evidence provided in the context below.`,
-    `3. If a requested item or detail is missing, null, empty, or not recorded in the database context, EXPLICITLY STATE THAT IT IS NOT RECORDED. Never extrapolate, approximate, or pretend data exists.`,
-    `4. If no relevant documents or tasks are found in the context, clearly explain that no matching record exists in the system instead of fabricating details.`,
-    `5. Format your markdown cleanly for Telegram reading. Avoid deep nesting and keep responses clear and structured.`,
-    contextText
-      ? `\n--- LOCAL TASKMATE CONTEXT (${dataScope.toUpperCase()}) ---\n${contextText}\n------------------------------------------`
-      : '',
+    `2. Every statement regarding tasks, projects, milestones, statuses, deadlines, logged work sessions, actual hours, planned allocations, capacity limits, notes, reminders, recurring schedules, or system sync state MUST be strictly grounded in concrete evidence returned by your tools or recorded in the database.`,
+    `3. If the user asks about tasks, projects, milestones, schedules, worklogs, or notes, YOU MUST CALL THE RELEVANT DATABASE TOOLS to fetch accurate, real-time data instead of assuming or extrapolating.`,
+    `4. If a requested item or detail is missing, null, empty, or not recorded in the database, EXPLICITLY STATE THAT IT IS NOT RECORDED. Never extrapolate, approximate, or pretend data exists.`,
+    `5. If no relevant records are found after calling tools, clearly state that no matching record exists in the system.`,
+    `6. Format your markdown cleanly for Telegram reading. Avoid deep nesting and keep responses clear and structured.`,
   ].join('\n');
 
-  const messages: ChatCompletionMessage[] = [
+  let currentMessages: ChatCompletionMessage[] = [
     { role: 'system', content: systemPrompt },
     ...chatHistory,
     { role: 'user', content: trimmedText },
@@ -1082,24 +1092,124 @@ export async function processTelegramInboundMessage(
 
   let rawAiResponse = '';
   let tokenCount = 0;
+  let loopCount = 0;
+  const MAX_LOOPS = 5;
+  let lastHadToolCalls = false;
 
   try {
-    const generator = streamChatEvents({
-      endpoint: aiConfig.endpoint,
-      apiKey,
-      payload: {
-        model: aiConfig.defaultModel,
-        messages,
-        temperature: 0.1,
-      },
-    });
+    while (loopCount < MAX_LOOPS) {
+      loopCount++;
+      let currentTurnResponse = '';
+      let hasToolCalls = false;
+      let toolCallsToRun: ToolCall[] = [];
 
-    for await (const chunk of generator) {
-      if (chunk.type === 'text') {
-        rawAiResponse += chunk.delta;
+      const payload: {
+        model: string;
+        messages: ChatCompletionMessage[];
+        temperature: number;
+        tools?: any[];
+      } = {
+        model: aiConfig.defaultModel,
+        messages: pruneToolOutputsInMessages(currentMessages),
+        temperature: 0.1,
+      };
+      if (availableTools.length > 0) {
+        payload.tools = availableTools;
       }
-      if (chunk.type === 'usage' && chunk.usage?.totalTokens) {
-        tokenCount = chunk.usage.totalTokens;
+
+      const generator = streamChatEvents({
+        endpoint: aiConfig.endpoint,
+        apiKey,
+        payload,
+      });
+
+      for await (const chunk of generator) {
+        if (chunk.type === 'text') {
+          currentTurnResponse += chunk.delta;
+        } else if (chunk.type === 'tool_calls') {
+          hasToolCalls = true;
+          toolCallsToRun = chunk.calls;
+        } else if (chunk.type === 'usage' && chunk.usage?.totalTokens) {
+          tokenCount = chunk.usage.totalTokens;
+        }
+      }
+
+      rawAiResponse = currentTurnResponse;
+      lastHadToolCalls = hasToolCalls && toolCallsToRun.length > 0;
+
+      if (!hasToolCalls || toolCallsToRun.length === 0) {
+        break;
+      }
+
+      currentMessages.push({
+        role: 'assistant',
+        content: currentTurnResponse || null,
+        tool_calls: toolCallsToRun,
+      });
+
+      for (const tc of toolCallsToRun) {
+        let args: Record<string, any> = {};
+        try {
+          args = JSON.parse(tc.function.arguments || '{}');
+        } catch {}
+
+        let toolResult = '';
+        if (isMutationTool(tc.function.name, args)) {
+          toolResult = JSON.stringify({
+            error: 'Thao tác thay đổi dữ liệu yêu cầu quyền Admin hoặc lệnh cụ thể.',
+          });
+        } else {
+          try {
+            toolResult = await executeAiTool(tc.function.name, args, db);
+          } catch (toolErr: any) {
+            toolResult = JSON.stringify({
+              error: `Lỗi thực thi công cụ '${tc.function.name}': ${toolErr?.message || String(toolErr)}`,
+            });
+          }
+        }
+
+        currentMessages.push({
+          role: 'tool',
+          tool_call_id: tc.id,
+          name: tc.function.name,
+          content: toolResult,
+        });
+      }
+    }
+
+    // Final synthesis pass if tools were called and response is empty, mirroring AIChatDrawer
+    if (lastHadToolCalls || (!rawAiResponse.trim() && loopCount > 1)) {
+      rawAiResponse = '';
+      const synthesisMessages: ChatCompletionMessage[] = [
+        ...pruneToolOutputsInMessages(currentMessages),
+        {
+          role: 'user',
+          content:
+            'Dựa trên tất cả các kết quả công cụ và thông tin đã thu thập ở trên, hãy tổng hợp câu trả lời đầy đủ, chi tiết, chính xác và rõ ràng cho yêu cầu ban đầu.\n' +
+            'Yêu cầu định dạng:\n' +
+            '- Trình bày bằng Markdown hoàn chỉnh, mạch lạc, trực quan cho Telegram.\n' +
+            '- In đậm các từ khóa, mã trạng thái, ID quan trọng.\n' +
+            '- Nếu không tìm thấy thông tin, nêu rõ không có dữ liệu thay vì suy đoán.\n' +
+            '- Không gọi thêm bất kỳ công cụ nào nữa.',
+        },
+      ];
+
+      const synthesisStream = streamChatEvents({
+        endpoint: aiConfig.endpoint,
+        apiKey,
+        payload: {
+          model: aiConfig.defaultModel,
+          messages: synthesisMessages,
+          temperature: 0.1,
+        },
+      });
+
+      for await (const chunk of synthesisStream) {
+        if (chunk.type === 'text') {
+          rawAiResponse += chunk.delta;
+        } else if (chunk.type === 'usage' && chunk.usage?.totalTokens) {
+          tokenCount = chunk.usage.totalTokens;
+        }
       }
     }
   } catch (aiErr: any) {
@@ -1107,16 +1217,14 @@ export async function processTelegramInboundMessage(
     rawAiResponse = `❌ Lỗi khi xử lý yêu cầu AI: ${aiErr?.message || 'Không thể kết nối đến máy chủ AI'}`;
   }
 
+  rawAiResponse = stripThinkingBlocks(rawAiResponse);
+
   if (!rawAiResponse.trim()) {
     rawAiResponse = '*(Không có phản hồi từ mô hình AI)*';
   }
 
-  // Post-processing: clean citation tags and append compact sources footer
+  // Post-processing: clean citation tags
   let processedResponse = cleanCitationTags(rawAiResponse);
-  if (matchedSourceTitles.length > 0 && (dataScope === 'full' || dataScope === 'knowledge_only')) {
-    const uniqueTitles = Array.from(new Set(matchedSourceTitles)).slice(0, 3);
-    processedResponse += `\n\n📚 **Nguồn:** ${uniqueTitles.join(', ')}`;
-  }
 
   // Step 9: Convert to Telegram HTML and Split/Send replies
   const formattedHtml = markdownToTelegramHtml(processedResponse);
