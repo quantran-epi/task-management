@@ -29,6 +29,16 @@ export const INTENT_TAXONOMY = [
 export type IntentLabel = (typeof INTENT_TAXONOMY)[number];
 
 /**
+ * Compact summary of an enabled MCP server's capabilities for intent routing.
+ */
+export interface McpServerCapabilitySummary {
+  id: string;
+  name: string;
+  description: string;
+  tools: readonly string[];
+}
+
+/**
  * Strict output schema the LLM must return. Validated with Zod; off-schema output is
  * rejected and retried once, then the feature is treated as UNAVAILABLE (no fallback).
  */
@@ -40,6 +50,8 @@ export const IntentResultSchema = z.strictObject({
   needs_clarification: z.boolean(),
   clarify_question: z.string().trim().min(1).max(500).nullable(),
   speculation_requested: z.boolean(),
+  require_mcp: z.boolean().default(false),
+  target_mcp_servers: z.array(z.string().trim().min(1).max(100)).max(10).default([]),
 });
 
 export type IntentResult = z.infer<typeof IntentResultSchema>;
@@ -56,6 +68,7 @@ export interface RouteIntentDeps {
   };
   signal?: AbortSignal;
   recentTurns?: readonly { role: 'user' | 'assistant'; content: string }[];
+  mcpCapabilities?: readonly McpServerCapabilitySummary[];
 }
 
 /**
@@ -130,6 +143,8 @@ const INTENT_JSON_SCHEMA = {
     needs_clarification: { type: 'boolean' },
     clarify_question: { type: ['string', 'null'] },
     speculation_requested: { type: 'boolean' },
+    require_mcp: { type: 'boolean' },
+    target_mcp_servers: { type: 'array', items: { type: 'string' } },
   },
   required: [
     'intent',
@@ -139,9 +154,39 @@ const INTENT_JSON_SCHEMA = {
     'needs_clarification',
     'clarify_question',
     'speculation_requested',
+    'require_mcp',
+    'target_mcp_servers',
   ],
   additionalProperties: false,
 } as const;
+
+export function buildSystemPrompt(
+  mcpCapabilities?: readonly McpServerCapabilitySummary[]
+): string {
+  if (!mcpCapabilities || mcpCapabilities.length === 0) {
+    return INTENT_SYSTEM_PROMPT;
+  }
+
+  // Cap to max 10 servers and max 10 tools per server to prevent token blowup (T-22-02)
+  const cappedServers = mcpCapabilities.slice(0, 10);
+  const serverLines = cappedServers.map((s) => {
+    const tools = (s.tools || []).slice(0, 10).join(', ');
+    const desc = s.description.trim() ? ` | Scope: ${s.description.trim()}` : '';
+    return `- ID: "${s.id}" | Name: "${s.name}" | Tools: [${tools}]${desc}`;
+  });
+
+  const mcpSection = `
+
+<enabled_mcp_servers>
+${serverLines.join('\n')}
+</enabled_mcp_servers>
+
+MCP ROUTING INSTRUCTIONS:
+- If the user's question asks to inspect, query, verify, or retrieve live database schemas, catalog objects, transactions, entities, or external system data supported by any of the enabled MCP servers listed above, set "require_mcp": true and list the relevant server IDs in "target_mcp_servers".
+- If no live external MCP tool execution is needed (or the query is purely about TaskMate internal tasks or general concepts), set "require_mcp": false and "target_mcp_servers": [].`;
+
+  return `${INTENT_SYSTEM_PROMPT}${mcpSection}`;
+}
 
 /**
  * Normalizes the Zod-validated output so downstream branches are consistent:
@@ -188,8 +233,10 @@ export async function routeIntent(
     queryContent = `<recent_dialogue>\n${formattedHistory}\n</recent_dialogue>\n\nCurrent User Message: ${query}`;
   }
 
+  const systemPrompt = buildSystemPrompt(deps?.mcpCapabilities);
+
   const baseMessages: Array<{ role: 'system' | 'user'; content: string }> = [
-    { role: 'system', content: INTENT_SYSTEM_PROMPT },
+    { role: 'system', content: systemPrompt },
     { role: 'user', content: queryContent },
   ];
 
