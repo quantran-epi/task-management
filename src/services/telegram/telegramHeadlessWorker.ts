@@ -29,6 +29,10 @@ import { handleAdminCommand } from './telegramAdminWizard';
 import { routeIntent, type RouteIntentResult, type IntentLabel } from '../ai/intentRouter';
 import { getTodayDateString } from '../../utils/date';
 import dayjs from 'dayjs';
+import { createDefaultGroundedTurnDeps } from '../ai/groundedTurnDeps';
+import { runGroundedTurn } from '../ai/groundedTurn';
+import { fetchSetCatalog } from '../../db/repositories/documentSetRepo';
+import type { ChatMessageGrounding } from '../ai/groundedAnswerSchemas';
 
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4000; // Telegram hard limit is 4096, buffer to 4000
 
@@ -259,6 +263,35 @@ export function cleanCitationTags(text: string): string {
     .replace(/\[Doc\s*\d+\]/gi, '')
     .replace(/\[Source\s*\d+\]/gi, '')
     .trim();
+}
+
+export function formatGroundedAnswerForTelegram(grounding: ChatMessageGrounding): string {
+  const ans = grounding.answer;
+  if (!ans) {
+    return '*(Không tìm thấy câu trả lời phù hợp trong tài liệu)*';
+  }
+  const parts: string[] = [];
+  if (ans.conclusion && ans.conclusion.trim()) {
+    parts.push(ans.conclusion.trim());
+  }
+  if (ans.claims && ans.claims.length > 0) {
+    const claimTexts = ans.claims.map((c) => `- ${c.text.trim()}`);
+    parts.push(claimTexts.join('\n'));
+  }
+  const hypotheses = (ans as any).hypotheses;
+  if (Array.isArray(hypotheses) && hypotheses.length > 0) {
+    const hypTexts = hypotheses.map((h: any) => `💡 *Giả thuyết:* ${(h.text || '').trim()}`);
+    parts.push(hypTexts.join('\n'));
+  }
+  if (grounding.citations && grounding.citations.length > 0) {
+    const uniqueDocs = Array.from(
+      new Set(grounding.citations.map((c) => c.documentTitle).filter(Boolean))
+    ).slice(0, 5);
+    if (uniqueDocs.length > 0) {
+      parts.push(`📚 **Nguồn tài liệu:** ${uniqueDocs.join(', ')}`);
+    }
+  }
+  return parts.join('\n\n');
 }
 
 // In-memory set of recently processed update_ids to prevent duplicate execution from double listener/HMR
@@ -680,7 +713,133 @@ export async function processTelegramInboundMessage(
     return;
   }
 
-  // Step 6: Gather grounded context using classified intent and entities
+  // Step 6: Knowledge Query -> Federated Retrieval via runGroundedTurn (Fulltext, Vector, Graphiti Neo4j)
+  if (
+    routedIntent?.intent === 'query_knowledge' &&
+    (dataScope === 'full' || dataScope === 'knowledge_only')
+  ) {
+    try {
+      const [enabledRec, baseUrlRec, tokenRec] = await Promise.all([
+        db.settings.get('knowledge_server_enabled'),
+        db.settings.get('knowledge_server_base_url'),
+        db.settings.get('knowledge_server_token'),
+      ]);
+      const knowledgeConfig = {
+        enabled: enabledRec?.value === true,
+        baseUrl: typeof baseUrlRec?.value === 'string' ? baseUrlRec.value : '',
+        token: typeof tokenRec?.value === 'string' ? tokenRec.value : '',
+      };
+
+      const capabilities = {
+        serverEnabled: Boolean(knowledgeConfig.enabled && knowledgeConfig.baseUrl),
+        modelConfigured: Boolean(apiKey && aiConfig.endpoint && aiConfig.defaultModel),
+      };
+
+      const catalog = await fetchSetCatalog(db);
+      const deps = createDefaultGroundedTurnDeps({
+        knowledgeBaseUrl: knowledgeConfig.baseUrl,
+        knowledgeToken: knowledgeConfig.token,
+        db,
+      });
+
+      const groundedResult = await runGroundedTurn(
+        {
+          query: trimmedText,
+          recentTurns: chatHistory,
+          signal: new AbortController().signal,
+          capabilities,
+          config: {
+            endpoint: aiConfig.endpoint,
+            apiKey,
+            model: aiConfig.defaultModel,
+            promptVersion: 'grounded-v1',
+            routerVersion: 'router-v1',
+          },
+          catalog,
+          recentSessionId: `telegram-${chat_id}`,
+        },
+        deps
+      );
+
+      if (groundedResult.kind === 'grounded_answer') {
+        const rawAnswer = formatGroundedAnswerForTelegram(groundedResult.grounding);
+        const htmlAnswer = markdownToTelegramHtml(rawAnswer);
+        const chunks = splitTelegramMessage(htmlAnswer);
+        for (let i = 0; i < chunks.length; i++) {
+          const chunk = chunks[i];
+          if (chunk) {
+            await sendReply(botToken, chat_id, chunk, i === 0 ? message_id : undefined);
+          }
+        }
+        await logTelegramSession(
+          {
+            chatId: chat_id,
+            userName: from_name,
+            userMessage: text,
+            aiResponse: rawAnswer,
+            dataScopeUsed: dataScope,
+            tokenCount: (groundedResult as any).tokenUsage?.totalTokens || 0,
+          },
+          db
+        );
+        return;
+      }
+
+      if (
+        groundedResult.kind === 'local_fallback_results' ||
+        groundedResult.kind === 'evidence_only'
+      ) {
+        let noEvidenceMsg =
+          '*(Không tìm thấy tài liệu hoặc bằng chứng nào phù hợp với yêu cầu trong kho tri thức TaskMate)*';
+        const citations = groundedResult.grounding?.citations;
+        if (Array.isArray(citations) && citations.length > 0) {
+          const titles = Array.from(
+            new Set(citations.map((c) => c.documentTitle).filter(Boolean))
+          ).slice(0, 3);
+          if (titles.length > 0) {
+            noEvidenceMsg += `\n\n📚 **Tài liệu tham khảo:** ${titles.join(', ')}`;
+          }
+        }
+        const htmlFallback = markdownToTelegramHtml(noEvidenceMsg);
+        await sendReply(botToken, chat_id, htmlFallback, message_id);
+        await logTelegramSession(
+          {
+            chatId: chat_id,
+            userName: from_name,
+            userMessage: text,
+            aiResponse: noEvidenceMsg,
+            dataScopeUsed: dataScope,
+            tokenCount: 0,
+          },
+          db
+        );
+        return;
+      }
+
+      if (groundedResult.kind === 'refine') {
+        const noEvidenceMsg =
+          '*(Không tìm thấy tài liệu hoặc bằng chứng nào phù hợp với yêu cầu trong kho tri thức TaskMate)*';
+        const htmlFallback = markdownToTelegramHtml(noEvidenceMsg);
+        await sendReply(botToken, chat_id, htmlFallback, message_id);
+        await logTelegramSession(
+          {
+            chatId: chat_id,
+            userName: from_name,
+            userMessage: text,
+            aiResponse: noEvidenceMsg,
+            dataScopeUsed: dataScope,
+            tokenCount: 0,
+          },
+          db
+        );
+        return;
+      }
+    } catch (groundedErr) {
+      console.warn('[telegramWorker] runGroundedTurn failed, falling back to local context:', groundedErr);
+    }
+  }
+
+  // Step 7: Gather grounded context using classified intent and entities (for operational / mixed / fallback turns)
   const { contextText, matchedSourceTitles } = await resolveScopedContext(
     dataScope,
     trimmedText,
@@ -689,7 +848,7 @@ export async function processTelegramInboundMessage(
     routedIntent?.entities
   );
 
-  // Step 7: Invoke AI with Critical Anti-Hallucination rules from AIChatDrawer
+  // Step 8: Invoke AI with Critical Anti-Hallucination rules from AIChatDrawer
   const todayStr = getTodayDateString();
   const now = dayjs();
   const dayName = now.format('dddd');
@@ -754,7 +913,7 @@ export async function processTelegramInboundMessage(
     processedResponse += `\n\n📚 **Nguồn:** ${uniqueTitles.join(', ')}`;
   }
 
-  // Step 8: Convert to Telegram HTML and Split/Send replies
+  // Step 9: Convert to Telegram HTML and Split/Send replies
   const formattedHtml = markdownToTelegramHtml(processedResponse);
   const chunks = splitTelegramMessage(formattedHtml);
   for (let i = 0; i < chunks.length; i++) {
@@ -764,7 +923,7 @@ export async function processTelegramInboundMessage(
     }
   }
 
-  // Step 9: Log Session
+  // Step 10: Log Session
   await logTelegramSession(
     {
       chatId: chat_id,

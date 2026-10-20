@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 Phase: 21 (Knowledge Graph Entity Extraction & Semantic Retrieval Improvement) — COMPLETE
 Plan: 4 of 4
 Status: Phase 21 execution complete
-Last activity: 2026-10-20 -- Completed quick task 261020-d6r: Align Telegram chat with AI chat drawer intent routing, scope security gates, and anti-hallucination guardrails
+Last activity: 2026-10-20 -- Completed quick task 261020-du1: Connect Telegram chat to federated retrieval pipeline with intent pre-gating
 Stopped at: Completed Phase 21 (All 4 plans verified)
 
 Progress: [██████████] 100%
@@ -37,6 +37,7 @@ Progress: [██████████] 100%
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261020-du1 | Connect Telegram chat to federated retrieval pipeline with intent pre-gating | 2026-10-20 | pending | complete | [261020-du1-connect-telegram-chat-to-federated-retrieval](./quick/261020-du1-connect-telegram-chat-to-federated-retrieval/) |
 | 261020-d6r | Align Telegram chat with AI chat drawer intent routing, scope security gates, and anti-hallucination guardrails | 2026-10-20 | 5262a7f | complete | [261020-d6r-align-telegram-chat-with-ai-chat-drawer](./quick/261020-d6r-align-telegram-chat-with-ai-chat-drawer/) |
 | 261020-c95 | Admin unblock Telegram user and backup Telegram data excluding session logs | 2026-10-20 | 1b28187 | complete | [261020-c95-admin-unblock-and-telegram-backup](./quick/261020-c95-admin-unblock-and-telegram-backup/) |
 | 261019-adm | Telegram admin commands with multi-step conversation | 2026-10-19 | b455adb | complete | [261019-adm-telegram-admin-commands](./quick/261019-adm-telegram-admin-commands/) |

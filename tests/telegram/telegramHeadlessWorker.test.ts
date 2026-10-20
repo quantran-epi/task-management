@@ -35,6 +35,11 @@ vi.mock('../../src/services/ai/intentRouter', () => ({
   routeIntent: (query: string, deps?: any) => mockRouteIntent(query, deps),
 }));
 
+const mockRunGroundedTurn = vi.fn();
+vi.mock('../../src/services/ai/groundedTurn', () => ({
+  runGroundedTurn: (...args: any[]) => mockRunGroundedTurn(...args),
+}));
+
 const mockSendDesktopNotification = vi.fn();
 vi.mock('../../src/utils/desktopNotification', () => ({
   sendDesktopNotification: (...args: any[]) => mockSendDesktopNotification(...args),
@@ -58,6 +63,11 @@ describe('Telegram Headless Worker', () => {
       needs_clarification: false,
       clarify_question: null,
       speculation_requested: false,
+    });
+    mockRunGroundedTurn.mockReset();
+    mockRunGroundedTurn.mockResolvedValue({
+      kind: 'operational',
+      routedQuery: '',
     });
   });
 
@@ -870,6 +880,7 @@ describe('Telegram Headless Worker', () => {
     );
 
     expect(mockRouteIntent).toHaveBeenCalledTimes(1);
+    expect(mockRunGroundedTurn).not.toHaveBeenCalled();
     expect(mockStreamChatEvents).not.toHaveBeenCalled();
     expect(mockSendReply).toHaveBeenCalledTimes(1);
     expect(replies[0]).toContain('Phạm vi truy cập bị giới hạn');
@@ -980,5 +991,183 @@ describe('Telegram Headless Worker', () => {
     expect(systemMessage?.content).toContain('CRITICAL ANTI-HALLUCINATION RULES:');
     expect(systemMessage?.content).toContain('1. NEVER GUESS, ASSUME, OR INVENT DATA.');
     expect(systemMessage?.content).toContain('EXPLICITLY STATE THAT IT IS NOT RECORDED');
+  });
+
+  it('invokes federated runGroundedTurn and formats grounded answer with citations for authorized knowledge query', async () => {
+    await setNineRouterApiKey('test-key', testDb);
+    mockStreamChatEvents.mockClear();
+    mockRunGroundedTurn.mockClear();
+
+    await upsertWhitelistUser(
+      {
+        chatId: 'knowledge_reader',
+        name: 'Knowledge Reader',
+        status: 'active',
+        dataScope: 'full',
+      },
+      testDb
+    );
+
+    mockRouteIntent.mockResolvedValueOnce({
+      intent: 'query_knowledge',
+      confidence: 0.98,
+      entities: ['Quy trình CYTP1002'],
+      language: 'vi',
+      needs_clarification: false,
+      clarify_question: null,
+      speculation_requested: false,
+    });
+
+    mockRunGroundedTurn.mockResolvedValueOnce({
+      kind: 'grounded_answer',
+      grounding: {
+        schemaVersion: 1,
+        authority: 'server',
+        outcome: 'READY',
+        answer: {
+          schemaVersion: 2,
+          conclusion: 'Quy trình CYTP1002 hoàn tất bước xác thực OTP theo đặc tả [S1].',
+          confidence: 'high',
+          confidenceReason: 'Trực tiếp trích xuất từ tài liệu.',
+          claims: [
+            {
+              id: 'C1',
+              text: 'Khách hàng phải xác thực mã OTP qua tin nhắn SMS.',
+              classification: 'DIRECT',
+              citationIds: ['S1'],
+              pathId: null,
+            },
+          ],
+          hypotheses: [],
+          unsupportedParts: [],
+        },
+        citations: [
+          {
+            citationId: 'S1',
+            documentId: '11111111-1111-1111-1111-111111111111',
+            documentTitle: 'Đặc tả kỹ thuật CYTP1002',
+            sectionAnchor: 'section-1',
+            lineStart: 1,
+            lineEnd: 10,
+            authority: 'server',
+            evidenceClass: 'OBSERVED',
+            snapshotId: 'gsnap_00000001',
+            publishedContentHash: 'a'.repeat(64),
+            citedExcerpt: 'Khách hàng phải xác thực mã OTP...',
+          },
+        ],
+        paths: null,
+        conflicts: null,
+        scope: null,
+        modalityDiagnostics: null,
+        coverageWarnings: [],
+        fallbackReason: 'NONE',
+        routerVersion: 'router-v1',
+        promptVersion: 'grounded-v1',
+        modelId: 'gpt-4o',
+        createdAt: new Date().toISOString(),
+      },
+    });
+
+    const replies: string[] = [];
+    const mockSendReply = vi.fn(async (_token: string, _chatId: string, text: string) => {
+      replies.push(text);
+    });
+    const mockSendAction = vi.fn(async () => {});
+
+    await processTelegramInboundMessage(
+      {
+        update_id: 115,
+        message_id: 905,
+        chat_id: 'knowledge_reader',
+        from_name: 'Knowledge Reader',
+        text: 'Quy trình CYTP1002 hoạt động như thế nào?',
+        date: 1234604,
+      },
+      'test_token',
+      testDb,
+      mockSendReply,
+      mockSendAction
+    );
+
+    expect(mockRunGroundedTurn).toHaveBeenCalledTimes(1);
+    expect(mockStreamChatEvents).not.toHaveBeenCalled();
+    expect(mockSendReply).toHaveBeenCalledTimes(1);
+    expect(replies[0]).toContain('Quy trình CYTP1002 hoàn tất bước xác thực OTP');
+    expect(replies[0]).toContain('Khách hàng phải xác thực mã OTP qua tin nhắn SMS');
+    expect(replies[0]).toContain('Nguồn tài liệu:</b> Đặc tả kỹ thuật CYTP1002');
+  });
+
+  it('handles local_fallback_results from runGroundedTurn with friendly no-evidence message', async () => {
+    await setNineRouterApiKey('test-key', testDb);
+    mockStreamChatEvents.mockClear();
+    mockRunGroundedTurn.mockClear();
+
+    await upsertWhitelistUser(
+      {
+        chatId: 'knowledge_fallback_user',
+        name: 'Knowledge Fallback',
+        status: 'active',
+        dataScope: 'knowledge_only',
+      },
+      testDb
+    );
+
+    mockRouteIntent.mockResolvedValueOnce({
+      intent: 'query_knowledge',
+      confidence: 0.95,
+      entities: ['Quy tắc lạ'],
+      language: 'vi',
+      needs_clarification: false,
+      clarify_question: null,
+      speculation_requested: false,
+    });
+
+    mockRunGroundedTurn.mockResolvedValueOnce({
+      kind: 'local_fallback_results',
+      grounding: {
+        schemaVersion: 1,
+        authority: 'local',
+        outcome: 'NO_EVIDENCE',
+        answer: null,
+        citations: [],
+        paths: null,
+        conflicts: null,
+        scope: null,
+        modalityDiagnostics: null,
+        coverageWarnings: [],
+        fallbackReason: 'SERVER_DISABLED',
+        routerVersion: null,
+        promptVersion: 'grounded-v1',
+        modelId: null,
+        createdAt: new Date().toISOString(),
+      },
+    });
+
+    const replies: string[] = [];
+    const mockSendReply = vi.fn(async (_token: string, _chatId: string, text: string) => {
+      replies.push(text);
+    });
+    const mockSendAction = vi.fn(async () => {});
+
+    await processTelegramInboundMessage(
+      {
+        update_id: 116,
+        message_id: 906,
+        chat_id: 'knowledge_fallback_user',
+        from_name: 'Knowledge Fallback',
+        text: 'Tìm quy tắc lạ',
+        date: 1234605,
+      },
+      'test_token',
+      testDb,
+      mockSendReply,
+      mockSendAction
+    );
+
+    expect(mockRunGroundedTurn).toHaveBeenCalledTimes(1);
+    expect(mockStreamChatEvents).not.toHaveBeenCalled();
+    expect(mockSendReply).toHaveBeenCalledTimes(1);
+    expect(replies[0]).toContain('Không tìm thấy tài liệu hoặc bằng chứng nào phù hợp');
   });
 });
