@@ -14,8 +14,12 @@ export interface CitationChipProps {
 
   // Plan 11 extensions
   index?: number | undefined;
+  citationId?: string | undefined;
   source?: 'server' | 'local' | undefined;
   evidenceClass?: 'OBSERVED' | 'INFERRED' | 'BUSINESS_APPROVED' | 'LOCAL' | undefined;
+  evidenceKind?: 'policy_change' | 'release_note' | 'migration_record' | 'mcp_tool' | 'other' | undefined;
+  serverName?: string | undefined;
+  toolName?: string | undefined;
   range?: { startLine: number; endLine: number } | undefined;
   snapshotId?: string | undefined;
   publishedContentHash?: string | null | undefined;
@@ -37,8 +41,12 @@ export const CitationChip: React.FC<CitationChipProps> = ({
   onOpenDoc,
   onActivate,
   index,
+  citationId,
   source = 'server',
   evidenceClass,
+  evidenceKind,
+  serverName,
+  toolName,
   range,
   snapshotId,
   publishedContentHash,
@@ -64,6 +72,86 @@ export const CitationChip: React.FC<CitationChipProps> = ({
       handleActivate();
     }
   };
+
+  // Check if this is an MCP tool citation
+  const isMcp =
+    (typeof citationId === 'string' && citationId.startsWith('M')) ||
+    evidenceKind === 'mcp_tool' ||
+    effectiveTitle.startsWith('[MCP]');
+
+  if (isMcp) {
+    const rawMatch = typeof citationId === 'string' ? citationId.match(/M\d+/) : null;
+    const mcpId = rawMatch ? rawMatch[0] : (typeof index === 'number' ? `M${index}` : 'M');
+    const label = `[${mcpId}]`;
+    const subLabel = toolName ? `MCP: ${toolName}` : 'MCP';
+    const serverLabel = serverName ?? (effectiveTitle.replace(/^\[MCP\]\s*/, '').split(' - ')[0] || 'MCP Server');
+    const toolLabel = toolName ?? (effectiveTitle.replace(/^\[MCP\]\s*/, '').split(' - ')[1] || 'Tool');
+    const ariaLabel = `${label} MCP Tool ${toolLabel} (${serverLabel})`;
+
+    const tagStyle: React.CSSProperties = {
+      cursor: 'pointer',
+      margin: '0 2px',
+      padding: '0 6px',
+      borderRadius: token.borderRadiusSM ?? 4,
+      fontWeight: 600,
+      fontSize: 12,
+      lineHeight: '20px',
+      height: 20,
+      display: 'inline-flex',
+      alignItems: 'center',
+      verticalAlign: 'baseline',
+      background: token.colorPurpleBg ?? '#f9f0ff',
+      borderColor: token.colorPurple ?? '#722ed1',
+      color: token.colorPurpleText ?? '#531dab',
+    };
+
+    const chipContent = (
+      <Tag
+        style={tagStyle}
+        onClick={handleActivate}
+        role="button"
+        tabIndex={0}
+        onKeyDown={handleKeyDown}
+        aria-label={ariaLabel}
+      >
+        <span>{label}</span>
+        <span
+          style={{
+            marginLeft: 4,
+            fontSize: 10,
+            fontWeight: 600,
+            padding: '0 3px',
+            borderRadius: 3,
+            background: token.colorPurpleBgHover ?? '#efdbff',
+            color: token.colorPurpleTextHover ?? '#391085',
+            lineHeight: '14px',
+          }}
+        >
+          {subLabel}
+        </span>
+      </Tag>
+    );
+
+    const tooltipContent = (
+      <div style={{ maxWidth: 300, fontSize: 12, lineHeight: 1.4 }}>
+        <div style={{ fontWeight: 600, marginBottom: 2 }}>{label} Live MCP Tool</div>
+        <div>Máy chủ: <strong>{serverLabel}</strong></div>
+        <div>Công cụ: <strong>{toolLabel}</strong></div>
+        {sectionAnchor && (
+          <div style={{ marginTop: 4, fontFamily: 'monospace', fontSize: 11, color: token.colorTextSecondary }}>
+            Tham số: {sectionAnchor}
+          </div>
+        )}
+        {snippet?.trim() && (
+          <div style={{ marginTop: 6, whiteSpace: 'pre-wrap', opacity: 0.9, maxHeight: 120, overflowY: 'auto' }}>
+            {snippet.trim()}
+          </div>
+        )}
+      </div>
+    );
+
+    return <Tooltip title={tooltipContent}>{chipContent}</Tooltip>;
+  }
 
   // If index is provided, use compact Phase 19 rendering
   if (typeof index === 'number') {

@@ -1,5 +1,6 @@
-import React from 'react';
-import { Table, Tag, Tooltip, theme } from 'antd';
+import React, { useState } from 'react';
+import { Table, Tag, Tooltip, Typography, Modal, Button, theme } from 'antd';
+import { EyeOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { PersistedCitation } from '../../../services/ai/groundedAnswerSchemas';
 
@@ -18,18 +19,26 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
   onOpenCitation,
 }) => {
   const { token } = theme.useToken();
+  const [selectedMcp, setSelectedMcp] = useState<PersistedCitation | null>(null);
 
-  // Deduplicate by (documentId, lineStart, lineEnd, publishedContentHash ?? 'local')
+  // Deduplicate by unique key
   const dedupedMap = new Map<string, PersistedCitation>();
   for (const c of citations) {
-    const key = `${c.documentId}:${c.lineStart}:${c.lineEnd}:${c.publishedContentHash ?? 'local'}`;
+    const key = `${c.citationId}:${c.documentId}:${c.lineStart}:${c.lineEnd}:${c.publishedContentHash ?? 'local'}`;
     if (!dedupedMap.has(key)) {
       dedupedMap.set(key, c);
     }
   }
-  const dedupedCitations = Array.from(dedupedMap.values());
+  const allCitations = Array.from(dedupedMap.values());
 
-  const columns: ColumnsType<PersistedCitation> = [
+  const docCitations = allCitations.filter(
+    (c) => !c.citationId.startsWith('M') && c.evidenceKind !== 'mcp_tool'
+  );
+  const mcpCitations = allCitations.filter(
+    (c) => c.citationId.startsWith('M') || c.evidenceKind === 'mcp_tool'
+  );
+
+  const docColumns: ColumnsType<PersistedCitation> = [
     {
       title: '#',
       dataIndex: 'citationId',
@@ -164,28 +173,200 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
     },
   ];
 
+  const mcpColumns: ColumnsType<PersistedCitation> = [
+    {
+      title: '#',
+      dataIndex: 'citationId',
+      key: 'citationId',
+      width: 60,
+      render: (citationId: string) => (
+        <Tag color="purple" style={{ margin: 0, fontWeight: 600 }}>
+          {citationId}
+        </Tag>
+      ),
+    },
+    {
+      title: 'Máy chủ & Công cụ MCP',
+      key: 'mcpServerTool',
+      render: (_: unknown, record) => {
+        const server = record.mcpMetadata?.serverName ?? record.documentTitle.replace(/^\[MCP\]\s*/, '').split(' - ')[0] ?? 'MCP Server';
+        const tool = record.mcpMetadata?.toolName ?? record.documentTitle.replace(/^\[MCP\]\s*/, '').split(' - ')[1] ?? 'Tool';
+        return (
+          <div>
+            <div style={{ fontWeight: 600, color: token.colorText }}>{server}</div>
+            <Typography.Text type="secondary" code style={{ fontSize: 11 }}>
+              {tool}
+            </Typography.Text>
+          </div>
+        );
+      },
+    },
+    {
+      title: 'Tham số gọi',
+      dataIndex: 'sectionAnchor',
+      key: 'sectionAnchor',
+      ellipsis: true,
+      render: (args: string | null) => (
+        <Typography.Text code ellipsis style={{ maxWidth: 220, fontSize: 11 }}>
+          {args || '{}'}
+        </Typography.Text>
+      ),
+    },
+    {
+      title: 'Trích xuất kết quả',
+      dataIndex: 'citedExcerpt',
+      key: 'citedExcerpt',
+      ellipsis: true,
+      render: (excerpt: string, record) => (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Typography.Text ellipsis style={{ flex: 1, fontSize: 12, marginRight: 8 }}>
+            {excerpt}
+          </Typography.Text>
+          <Button
+            size="small"
+            type="text"
+            icon={<EyeOutlined />}
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedMcp(record);
+            }}
+          />
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="sources-panel" style={{ marginTop: 8 }}>
-      <Table<PersistedCitation>
-        dataSource={dedupedCitations}
-        columns={columns}
-        rowKey={(r) => `${r.citationId}-${r.documentId}-${r.lineStart}`}
-        size="small"
-        pagination={false}
-        onRow={(record) => ({
-          onClick: () => onOpenCitation(record),
-          onKeyDown: (e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              onOpenCitation(record);
-            }
-          },
-          tabIndex: 0,
-          role: 'button',
-          'aria-label': `${record.documentTitle} L${record.lineStart}-${record.lineEnd} ${record.evidenceClass}`,
-          style: { cursor: 'pointer' },
-        })}
-      />
+      {docCitations.length > 0 && (
+        <div style={{ marginBottom: mcpCitations.length > 0 ? 16 : 0 }}>
+          {mcpCitations.length > 0 && (
+            <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6, color: token.colorTextSecondary }}>
+              TÀI LIỆU NỘI BỘ ({docCitations.length})
+            </div>
+          )}
+          <Table<PersistedCitation>
+            dataSource={docCitations}
+            columns={docColumns}
+            rowKey={(r) => `${r.citationId}-${r.documentId}-${r.lineStart}`}
+            size="small"
+            pagination={false}
+            onRow={(record) => ({
+              onClick: () => onOpenCitation(record),
+              onKeyDown: (e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  onOpenCitation(record);
+                }
+              },
+              tabIndex: 0,
+              role: 'button',
+              'aria-label': `${record.documentTitle} L${record.lineStart}-${record.lineEnd} ${record.evidenceClass}`,
+              style: { cursor: 'pointer' },
+            })}
+          />
+        </div>
+      )}
+
+      {mcpCitations.length > 0 && (
+        <div style={{ marginTop: docCitations.length > 0 ? 12 : 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+            <Tag color="purple" style={{ fontWeight: 700, margin: 0 }}>
+              LIVE MCP
+            </Tag>
+            <span style={{ fontWeight: 600, fontSize: 13, color: token.colorTextSecondary }}>
+              BẰNG CHỨNG CÔNG CỤ NGOÀI ({mcpCitations.length})
+            </span>
+          </div>
+          <Table<PersistedCitation>
+            dataSource={mcpCitations}
+            columns={mcpColumns}
+            rowKey={(r) => r.citationId}
+            size="small"
+            pagination={false}
+            onRow={(record) => ({
+              onClick: () => {
+                setSelectedMcp(record);
+                onOpenCitation(record);
+              },
+              onKeyDown: (e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  setSelectedMcp(record);
+                  onOpenCitation(record);
+                }
+              },
+              tabIndex: 0,
+              role: 'button',
+              'aria-label': `${record.documentTitle} Live MCP Tool`,
+              style: { cursor: 'pointer' },
+            })}
+          />
+        </div>
+      )}
+
+      {/* Modal viewer for detailed MCP Tool raw outputs (T-22-06 Sanitized Text) */}
+      <Modal
+        open={!!selectedMcp}
+        title={
+          selectedMcp
+            ? `Chi tiết bằng chứng [${selectedMcp.citationId}] ${selectedMcp.documentTitle}`
+            : ''
+        }
+        footer={[
+          <Button key="close" onClick={() => setSelectedMcp(null)}>
+            Đóng
+          </Button>,
+        ]}
+        onCancel={() => setSelectedMcp(null)}
+        width={650}
+      >
+        {selectedMcp && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div>
+              <Typography.Text strong>Máy chủ:</Typography.Text>{' '}
+              <Typography.Text>{selectedMcp.mcpMetadata?.serverName ?? 'MCP Server'}</Typography.Text>
+            </div>
+            <div>
+              <Typography.Text strong>Công cụ:</Typography.Text>{' '}
+              <Typography.Text code>{selectedMcp.mcpMetadata?.toolName ?? 'tool'}</Typography.Text>
+            </div>
+            {selectedMcp.sectionAnchor && (
+              <div>
+                <Typography.Text strong>Tham số truyền:</Typography.Text>
+                <pre
+                  style={{
+                    background: token.colorFillTertiary,
+                    padding: 8,
+                    borderRadius: 4,
+                    fontSize: 11,
+                    maxHeight: 120,
+                    overflowY: 'auto',
+                  }}
+                >
+                  {selectedMcp.sectionAnchor}
+                </pre>
+              </div>
+            )}
+            <div>
+              <Typography.Text strong>Nội dung quan sát thực tế (OBSERVED):</Typography.Text>
+              <pre
+                style={{
+                  background: token.colorFillTertiary,
+                  padding: 8,
+                  borderRadius: 4,
+                  fontSize: 12,
+                  whiteSpace: 'pre-wrap',
+                  maxHeight: 300,
+                  overflowY: 'auto',
+                }}
+              >
+                {selectedMcp.citedExcerpt}
+              </pre>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

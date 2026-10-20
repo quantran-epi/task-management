@@ -133,8 +133,9 @@ describe('Task 1: CitationChip, GroundedAnswerCard, SourcesPanel MCP citations',
       );
 
       expect(screen.getByText('Arch Guide')).toBeInTheDocument();
-      // Should display MCP / Live MCP section or badge
-      expect(screen.getByText(/LIVE MCP|Graphiti Memory Server/i)).toBeInTheDocument();
+      // Should display MCP / Live MCP section and server name
+      expect(screen.getByText('LIVE MCP')).toBeInTheDocument();
+      expect(screen.getByText('Graphiti Memory Server')).toBeInTheDocument();
     });
   });
 });

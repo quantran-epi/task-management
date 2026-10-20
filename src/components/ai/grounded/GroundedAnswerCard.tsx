@@ -38,7 +38,7 @@ function renderProseWithCitations(
   onCitationActivate: (c: PersistedCitation) => void
 ): React.ReactNode {
   if (!text) return null;
-  const citationPattern = /\[(S\d+|L\d+)\]/g;
+  const citationPattern = /\[(S\d+|L\d+|M\d+)\]/g;
   const citationMap = new Map<string, PersistedCitation>();
   for (const c of citations) {
     citationMap.set(c.citationId, c);
