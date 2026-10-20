@@ -43,7 +43,7 @@ import { createDefaultGroundedTurnDeps } from '../ai/groundedTurnDeps';
 import { runGroundedTurn } from '../ai/groundedTurn';
 import { fetchSetCatalog } from '../../db/repositories/documentSetRepo';
 import type { ChatMessageGrounding } from '../ai/groundedAnswerSchemas';
-import { getEnabledMcpCapabilitySummaries } from '../ai/mcpClient';
+import { getEnabledMcpCapabilitySummaries, executeDynamicMcpTool } from '../ai/mcpClient';
 
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4000; // Telegram hard limit is 4096, buffer to 4000
 
@@ -415,7 +415,9 @@ export async function processTelegramInboundMessage(
     // 1. Affirmative Confirmation ("OK", "Xác nhận", "Đồng ý", etc.)
     if (isConfirmationMessage(trimmedText)) {
       try {
-        const rawResult = await executeAiTool(pendingMutation.toolName, pendingMutation.args, db);
+        const rawResult = pendingMutation.isMcp
+          ? await executeDynamicMcpTool(pendingMutation.toolName, pendingMutation.args, db)
+          : await executeAiTool(pendingMutation.toolName, pendingMutation.args, db);
         let parsedResult: any = {};
         try {
           parsedResult = JSON.parse(rawResult);

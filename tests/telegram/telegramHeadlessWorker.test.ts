@@ -1336,5 +1336,199 @@ describe('Telegram Headless Worker', () => {
       const raw = 'Thông tin thẻ [M1] và quy trình [S2] từ máy chủ [M12].';
       expect(cleanCitationTags(raw)).toBe('Thông tin thẻ  và quy trình  từ máy chủ .');
     });
+
+    it('non-admin user is rejected from executing dynamic MCP mutation tools', async () => {
+      await setNineRouterApiKey('test-key', testDb);
+      await upsertWhitelistUser(
+        {
+          chatId: 'regular_user_mcp',
+          name: 'Regular User',
+          status: 'active',
+          isAdmin: false,
+          dataScope: 'full',
+        },
+        testDb
+      );
+
+      mockRouteIntent.mockResolvedValueOnce({
+        intent: 'operate_taskmate',
+        confidence: 0.95,
+        entities: [],
+        language: 'vi',
+        needs_clarification: false,
+        clarify_question: null,
+        speculation_requested: false,
+        require_mcp: true,
+      });
+
+      const replies: string[] = [];
+      const mockSendReply = vi.fn(async (_t: string, _c: string, text: string) => {
+        replies.push(text);
+      });
+      const mockSendAction = vi.fn(async () => {});
+
+      await processTelegramInboundMessage(
+        {
+          update_id: 203,
+          message_id: 1003,
+          chat_id: 'regular_user_mcp',
+          from_name: 'Regular User',
+          text: 'Thực thi công cụ sửa đổi ngoài',
+          date: 1234612,
+        },
+        'test_token',
+        testDb,
+        mockSendReply,
+        mockSendAction
+      );
+
+      expect(mockSendReply).toHaveBeenCalledTimes(1);
+      expect(replies[0]).toContain('Không có quyền thao tác dữ liệu');
+      expect(replies[0]).toContain('Chỉ quản trị viên (Admin)');
+    });
+
+    it('admin user previews and executes dynamic MCP mutation tool upon confirmation', async () => {
+      await setNineRouterApiKey('test-key', testDb);
+      await upsertWhitelistUser(
+        {
+          chatId: 'admin_mcp_user',
+          name: 'Admin MCP',
+          status: 'active',
+          isAdmin: true,
+          dataScope: 'full',
+        },
+        testDb
+      );
+
+      // Seed MCP server with a mutating tool
+      await testDb.settings.put({
+        key: 'mcp_servers',
+        value: [
+          {
+            id: 'banking-core',
+            name: 'Banking Core Server',
+            url: 'http://localhost:9999/mcp',
+            enabled: true,
+            instruction: 'Banking tools',
+            cachedTools: ['update_card_status'],
+          },
+        ],
+      });
+
+      mockRouteIntent.mockResolvedValueOnce({
+        intent: 'operate_taskmate',
+        confidence: 0.95,
+        entities: [],
+        language: 'vi',
+        needs_clarification: false,
+        clarify_question: null,
+        speculation_requested: false,
+        require_mcp: true,
+      });
+
+      // Mock streamChatEvents to simulate LLM returning tool_calls for update_card_status
+      mockStreamChatEvents.mockImplementationOnce(async function* () {
+        yield {
+          type: 'tool_calls',
+          calls: [
+            {
+              id: 'call_mcp_1',
+              type: 'function',
+              function: {
+                name: 'update_card_status',
+                arguments: JSON.stringify({ cardId: 'CARD-123', status: 'BLOCKED' }),
+              },
+            },
+          ],
+        };
+      });
+
+      const replies: string[] = [];
+      const mockSendReply = vi.fn(async (_t: string, _c: string, text: string) => {
+        replies.push(text);
+      });
+      const mockSendAction = vi.fn(async () => {});
+
+      // Mock discoverAllMcpTools via mcpClient
+      const mcpClient = await import('../../src/services/ai/mcpClient');
+      const discoverSpy = vi.spyOn(mcpClient, 'discoverAllMcpTools').mockResolvedValueOnce([
+        {
+          type: 'function',
+          function: {
+            name: 'update_card_status',
+            description: '[Banking Core Server] Cập nhật trạng thái thẻ',
+            parameters: {
+              type: 'object',
+              properties: {
+                cardId: { type: 'string' },
+                status: { type: 'string' },
+              },
+              required: ['cardId', 'status'],
+            },
+          },
+        },
+      ]);
+
+      // 1. Initial request from Admin
+      await processTelegramInboundMessage(
+        {
+          update_id: 204,
+          message_id: 1004,
+          chat_id: 'admin_mcp_user',
+          from_name: 'Admin MCP',
+          text: 'Khóa thẻ CARD-123 trên hệ thống ngoài',
+          date: 1234613,
+        },
+        'test_token',
+        testDb,
+        mockSendReply,
+        mockSendAction
+      );
+
+      expect(replies.length).toBeGreaterThan(0);
+      const previewText = replies[0]!;
+      expect(previewText).toContain('Xác nhận thực thi MCP Tool');
+      expect(previewText).toContain('update_card_status');
+      expect(previewText).toContain('CARD-123');
+      expect(previewText).toContain('BLOCKED');
+      replies.length = 0;
+
+      // 2. Admin confirms with OK
+      const { getPendingMutation } = await import(
+        '../../src/services/telegram/telegramMutationSession'
+      );
+      const pending = getPendingMutation('admin_mcp_user');
+      expect(pending).toBeDefined();
+      expect(pending?.isMcp).toBe(true);
+
+      const executeSpy = vi.spyOn(mcpClient, 'executeDynamicMcpTool').mockResolvedValueOnce(
+        JSON.stringify({ success: true, message: 'Thẻ CARD-123 đã bị khóa thành công' })
+      );
+
+      await processTelegramInboundMessage(
+        {
+          update_id: 205,
+          message_id: 1005,
+          chat_id: 'admin_mcp_user',
+          from_name: 'Admin MCP',
+          text: 'OK',
+          date: 1234614,
+        },
+        'test_token',
+        testDb,
+        mockSendReply,
+        mockSendAction
+      );
+
+      expect(executeSpy).toHaveBeenCalledWith(
+        'update_card_status',
+        { cardId: 'CARD-123', status: 'BLOCKED' },
+        testDb
+      );
+      expect(replies[0]).toContain('Đã thực hiện thành công');
+      expect(replies[0]).toContain('Thẻ CARD-123 đã bị khóa thành công');
+      executeSpy.mockRestore();
+      discoverSpy.mockRestore();
+    });
   });
 });

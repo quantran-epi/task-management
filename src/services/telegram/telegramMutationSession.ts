@@ -8,6 +8,7 @@ import {
   normalizeToolName,
   formatFieldChanges,
 } from '../ai/aiTools';
+import { discoverAllMcpTools, executeDynamicMcpTool } from '../ai/mcpClient';
 import { streamChatEvents } from '../ai/nineRouterClient';
 import type { ChatCompletionMessage, ToolCall } from '../ai/types';
 import { getTodayDateString } from '../../utils/date';
@@ -20,6 +21,8 @@ export interface PendingMutation {
   summary: string;
   createdAt: number;
   chatHistory: Array<{ role: 'user' | 'assistant'; content: string }>;
+  isMcp?: boolean;
+  serverName?: string;
 }
 
 const pendingMutations = new Map<string, PendingMutation>();
@@ -161,6 +164,27 @@ export function formatMutationPreviewMessage(
   return lines.join('\n');
 }
 
+export function formatMcpMutationPreviewMessage(
+  toolName: string,
+  args: Record<string, any>,
+  serverName?: string
+): string {
+  const lines = [
+    '⚠️ **Xác nhận thực thi MCP Tool:**',
+    serverName ? `- Server: ${serverName}` : null,
+    `- Tool: ${toolName}`,
+    '- Tham số:',
+    '```json',
+    JSON.stringify(args, null, 2),
+    '```',
+    '────────────────────',
+    '👉 Gõ **OK** hoặc **Xác nhận** để thực hiện',
+    '👉 Gõ **Hủy** để huỷ bỏ',
+  ].filter(Boolean) as string[];
+
+  return lines.join('\n');
+}
+
 export interface AdminMutationTurnParams {
   chatId: string;
   userMessage: string;
@@ -229,6 +253,16 @@ export async function executeAdminMutationTurn(
 
   messages.push({ role: 'user', content: userMessage });
 
+  let mcpTools: any[] = [];
+  try {
+    mcpTools = await discoverAllMcpTools(db);
+  } catch (err) {
+    console.warn('[telegramMutationSession] Failed to discover MCP tools for admin:', err);
+  }
+
+  const allAvailableTools = [...AI_DATABASE_TOOLS, ...mcpTools];
+  const mcpToolNameSet = new Set(mcpTools.map((t) => t.function.name));
+
   let loopCount = 0;
   const MAX_LOOPS = 5;
   let fullResponse = '';
@@ -246,7 +280,7 @@ export async function executeAdminMutationTurn(
       payload: {
         model: aiConfig.defaultModel,
         messages,
-        tools: AI_DATABASE_TOOLS,
+        tools: allAvailableTools,
         temperature: 0.1,
       },
     });
@@ -272,7 +306,47 @@ export async function executeAdminMutationTurn(
       tool_calls: toolCallsToRun,
     });
 
-    // Check if any tool call is a mutation tool
+    // Check if any tool call is an MCP tool call (treat all MCP tool calls in admin turn as requiring preview/approval)
+    const mcpCall = toolCallsToRun.find((tc) => mcpToolNameSet.has(tc.function.name));
+    if (mcpCall) {
+      let args: Record<string, any> = {};
+      try {
+        args = JSON.parse(mcpCall.function.arguments || '{}');
+      } catch {}
+
+      const toolMeta = mcpTools.find((t) => t.function.name === mcpCall.function.name);
+      let serverName: string | undefined;
+      const desc = toolMeta?.function?.description || '';
+      const serverPrefixMatch = desc.match(/^\[([^\]]+)\]/);
+      if (serverPrefixMatch) {
+        serverName = serverPrefixMatch[1];
+      }
+
+      setPendingMutation({
+        chatId,
+        toolName: mcpCall.function.name,
+        args,
+        summary: `Thực thi công cụ MCP: ${mcpCall.function.name}`,
+        createdAt: Date.now(),
+        chatHistory: [...chatHistory, { role: 'user', content: userMessage }],
+        isMcp: true,
+        serverName,
+      });
+
+      const previewMd = formatMcpMutationPreviewMessage(
+        mcpCall.function.name,
+        args,
+        serverName
+      );
+
+      return {
+        kind: 'preview',
+        replyMarkdown: previewMd,
+        tokenCount,
+      };
+    }
+
+    // Check if any tool call is a TaskMate mutation tool
     const mutationCall = toolCallsToRun.find((tc) => isMutationTool(tc.function.name));
     if (mutationCall) {
       let args: Record<string, any> = {};
