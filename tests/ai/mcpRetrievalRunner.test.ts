@@ -1,11 +1,100 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { runMcpRetrieval } from '../../src/services/ai/mcpRetrievalRunner';
+import { runMcpRetrieval, pruneMcpRawResult, adaptToolArguments } from '../../src/services/ai/mcpRetrievalRunner';
 import * as mcpClient from '../../src/services/ai/mcpClient';
 import * as nineRouterClient from '../../src/services/ai/nineRouterClient';
 
 describe('mcpRetrievalRunner', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+  });
+
+  describe('pruneMcpRawResult', () => {
+    it('formats graph nodes list into concise readable markdown lines without breaking JSON', () => {
+      const mockNodes = {
+        message: 'Nodes retrieved successfully',
+        nodes: [
+          {
+            name: 'COLUMN::BO::SHB.MAIN1.COM_ID_OBJECT.ID_ISSUE_DATE',
+            labels: ['Entity', 'Column'],
+            summary: 'Issue date.; column of COM_ID_OBJECT; type: DATE',
+            attributes: JSON.stringify({ database_qualified_name: 'SHB.MAIN1.COM_ID_OBJECT.ID_ISSUE_DATE' }),
+          },
+          {
+            name: 'COLUMN::BO::SHB.MAIN1.ISS_CARD_INSTANCE.ISS_DATE',
+            labels: ['Entity', 'Column'],
+            summary: 'Card instance issuing date; column of ISS_CARD_INSTANCE; type: DATE',
+            attributes: JSON.stringify({ database_qualified_name: 'SHB.MAIN1.ISS_CARD_INSTANCE.ISS_DATE' }),
+          },
+        ],
+      };
+
+      const result = pruneMcpRawResult(JSON.stringify(mockNodes));
+      expect(result).toContain('Nodes retrieved successfully:');
+      expect(result).toContain('- [Entity/Column] COLUMN::BO::SHB.MAIN1.COM_ID_OBJECT.ID_ISSUE_DATE: Issue date.');
+      expect(result).toContain('- [Entity/Column] COLUMN::BO::SHB.MAIN1.ISS_CARD_INSTANCE.ISS_DATE: Card instance issuing date');
+    });
+
+    it('falls back to pruned JSON object for non-entity payloads', () => {
+      const payload = {
+        groups: [{ group_id: 'grp-1', description: 'desc' }],
+        embedding_data: [0.1, 0.2, 0.3],
+      };
+      const result = pruneMcpRawResult(JSON.stringify(payload));
+      expect(result).not.toContain('embedding_data');
+      expect(result).toContain('grp-1');
+    });
+  });
+
+  describe('adaptToolArguments', () => {
+    it('wraps flat arguments when tool schema expects a single root request object', () => {
+      const schema = {
+        type: 'object',
+        properties: {
+          request: {
+            type: 'object',
+            properties: {
+              system_key: { type: 'string' },
+              graph_key: { type: 'string' },
+            },
+            required: ['system_key', 'graph_key'],
+          },
+        },
+        required: ['request'],
+      };
+
+      const flatArgs = { system_key: 'BO', graph_key: 'COLUMN::BO::FOO' };
+      const adapted = adaptToolArguments(schema, flatArgs);
+      expect(adapted).toEqual({
+        request: { system_key: 'BO', graph_key: 'COLUMN::BO::FOO' },
+      });
+    });
+
+    it('does not re-wrap if request wrapper is already provided', () => {
+      const schema = {
+        type: 'object',
+        properties: {
+          request: { type: 'object' },
+        },
+      };
+
+      const wrappedArgs = { request: { system_key: 'BO' } };
+      const adapted = adaptToolArguments(schema, wrappedArgs);
+      expect(adapted).toEqual(wrappedArgs);
+    });
+
+    it('leaves flat schema unchanged', () => {
+      const schema = {
+        type: 'object',
+        properties: {
+          query: { type: 'string' },
+          max_nodes: { type: 'number' },
+        },
+      };
+
+      const args = { query: 'card' };
+      const adapted = adaptToolArguments(schema, args);
+      expect(adapted).toEqual({ query: 'card' });
+    });
   });
 
   it('runs tool discovery for target_mcp_servers and invokes selected tools via executeDynamicMcpTool', async () => {

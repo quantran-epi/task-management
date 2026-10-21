@@ -441,7 +441,8 @@ export function packEvidence(
     for (const item of input.mcpItems) {
       const cId = `M${mcpIndex++}`;
       const docTitle = `[MCP] ${item.serverName} - ${item.toolName}`;
-      const citedExcerpt = item.rawResult.slice(0, 1200);
+      // Allow full pruned/formatted result up to 2500 chars (matching pruneMcpRawResult budget)
+      const citedExcerpt = item.rawResult.length > 2500 ? item.rawResult.slice(0, 2500) : item.rawResult;
       const mcpCitation: SourceRecord = {
         citationId: cId,
         documentId: `mcp:${item.serverId}:${item.toolName}`,
