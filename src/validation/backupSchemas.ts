@@ -309,11 +309,11 @@ export const BackupChatMessageRecordSchema = z
           });
         }
         rawG.citations.forEach((c: unknown, idx: number) => {
-          if (c && typeof c === 'object' && typeof (c as any).citedExcerpt === 'string' && (c as any).citedExcerpt.length > 1200) {
+          if (c && typeof c === 'object' && typeof (c as any).citedExcerpt === 'string' && (c as any).citedExcerpt.length > 2500) {
             ctx.addIssue({
               code: z.ZodIssueCode.custom,
               path: ['grounding', 'citations', idx, 'citedExcerpt'],
-              message: 'GROUNDING_SIZE_EXCEEDED: citation excerpt exceeds 1200 characters',
+              message: 'GROUNDING_SIZE_EXCEEDED: citation excerpt exceeds 2500 characters',
               params: { code: 'GROUNDING_SIZE_EXCEEDED' },
             });
           }

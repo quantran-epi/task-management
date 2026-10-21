@@ -1046,8 +1046,8 @@ describe('evidencePack', () => {
     expect(closureResult.issues).toHaveLength(0);
   });
 
-  it('24. truncates MCP rawResult at 1200 characters to match persistence limits', () => {
-    const longRawResult = 'A'.repeat(2500);
+  it('24. truncates MCP rawResult at 2500 characters to match persistence limits', () => {
+    const longRawResult = 'A'.repeat(3000);
     const pack = packEvidence({
       authority: 'server',
       mcpItems: [
@@ -1062,8 +1062,8 @@ describe('evidencePack', () => {
       ],
     });
 
-    expect(pack.citations['M1']?.citedExcerpt.length).toBe(1200);
-    expect(pack.citations['M1']?.citedExcerpt).toBe('A'.repeat(1200));
+    expect(pack.citations['M1']?.citedExcerpt.length).toBe(2500);
+    expect(pack.citations['M1']?.citedExcerpt).toBe('A'.repeat(2500));
   });
 });
 
