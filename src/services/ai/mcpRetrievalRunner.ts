@@ -119,7 +119,7 @@ function formatGraphEntity(node: Record<string, any>): string {
  * Prunes heavy and noisy fields from raw MCP tool output before saving into evidence pack or context.
  * If output contains a list of graph nodes/entities, formats them as concise Markdown lines.
  */
-export function pruneMcpRawResult(raw: string, maxChars = 2500): string {
+export function pruneMcpRawResult(raw: string, maxChars = 1200): string {
   if (!raw) return '';
   try {
     const parsed = JSON.parse(raw);
