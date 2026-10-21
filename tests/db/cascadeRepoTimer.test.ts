@@ -12,7 +12,7 @@ import type { Task, Project, Milestone } from '../../src/types/models';
 
 describe('cascadeRepo Timer cleanup (D-16, TIMER-01, TIMER-02)', () => {
   let db: TaskPlannerDatabase;
-  const dbName = 'TestCascadeTimerDB_' + Math.random().toString(36).slice(2);
+  let dbName: string;
 
   const sampleProjectId = '11111111-1111-4111-8111-111111111111';
   const sampleMilestoneId = '22222222-2222-4222-8222-222222222222';
@@ -21,6 +21,7 @@ describe('cascadeRepo Timer cleanup (D-16, TIMER-01, TIMER-02)', () => {
   const directTaskId = '33333333-3333-4333-8333-333333333333';
 
   beforeEach(async () => {
+    dbName = 'TestCascadeTimerDB_' + Math.random().toString(36).slice(2);
     db = new TaskPlannerDatabase(dbName);
     await db.open();
 

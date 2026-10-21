@@ -6,9 +6,10 @@ import type { Project, Task } from '../src/types/models';
 
 describe('Dexie Database Persistence & Seed Layer (DATA-02, D-05, D-07)', () => {
   let testDb: TaskPlannerDatabase;
-  const testDbName = 'TestTaskPlannerDB';
+  let testDbName: string;
 
   beforeEach(async () => {
+    testDbName = 'TestTaskPlannerDB_' + Math.random().toString(36).slice(2);
     testDb = new TaskPlannerDatabase(testDbName);
     await testDb.open();
   });
