@@ -142,7 +142,7 @@ export const PersistedCitationSchema = z
     lineEnd: z.number().int().positive(),
     authority: z.enum(['server', 'local']),
     evidenceClass: EvidenceClassificationSchema.or(z.literal('LOCAL')),
-    snapshotId: SnapshotIdSchema.nullable(),
+    snapshotId: SnapshotIdSchema.or(z.literal('mcp_live')).nullable(),
     publishedContentHash: HashSchema.nullable(),
     citedExcerpt: z.string().min(1).max(2000),
     relevanceReason: z.string().min(1).max(1000).optional(),
@@ -166,27 +166,46 @@ export const PersistedCitationSchema = z
       });
     }
     if (citation.authority === 'server') {
+      if (citation.evidenceKind === 'mcp_tool') {
+        if (
+          citation.snapshotId !== 'mcp_live' ||
+          citation.publishedContentHash !== null ||
+          citation.evidenceClass === 'LOCAL' ||
+          !citation.mcpMetadata
+        ) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['authority'],
+            message: 'Server MCP citation requires live MCP provenance and metadata',
+          });
+        }
+      } else {
+        if (
+          citation.snapshotId === null ||
+          citation.snapshotId === 'mcp_live' ||
+          citation.publishedContentHash === null ||
+          citation.evidenceClass === 'LOCAL'
+        ) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['authority'],
+            message: 'Server citation requires immutable snapshot provenance',
+          });
+        }
+      }
+    } else {
       if (
-        citation.snapshotId === null ||
-        citation.publishedContentHash === null ||
-        citation.evidenceClass === 'LOCAL'
+        citation.snapshotId !== null ||
+        citation.publishedContentHash !== null ||
+        citation.evidenceClass !== 'LOCAL' ||
+        citation.evidenceKind === 'mcp_tool'
       ) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['authority'],
-          message: 'Server citation requires immutable snapshot provenance',
+          message: 'Local citation must remain current-local authority',
         });
       }
-    } else if (
-      citation.snapshotId !== null ||
-      citation.publishedContentHash !== null ||
-      citation.evidenceClass !== 'LOCAL'
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['authority'],
-        message: 'Local citation must remain current-local authority',
-      });
     }
   });
 

@@ -441,7 +441,7 @@ export function packEvidence(
     for (const item of input.mcpItems) {
       const cId = `M${mcpIndex++}`;
       const docTitle = `[MCP] ${item.serverName} - ${item.toolName}`;
-      const citedExcerpt = item.rawResult.slice(0, 1500);
+      const citedExcerpt = item.rawResult.slice(0, 1200);
       const mcpCitation: SourceRecord = {
         citationId: cId,
         documentId: `mcp:${item.serverId}:${item.toolName}`,

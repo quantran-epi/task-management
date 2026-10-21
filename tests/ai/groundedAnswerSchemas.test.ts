@@ -140,6 +140,122 @@ describe('grounded answer trust boundary', () => {
     ).toBe(false);
   });
 
+  it('accepts valid live MCP citation with snapshotId mcp_live and publishedContentHash null', () => {
+    const validMcpCitation = {
+      citationId: 'M1',
+      documentId: 'mcp:graphiti-banking:search_nodes',
+      documentTitle: '[MCP] Graphiti Banking - search_nodes',
+      sectionAnchor: '{"query":"iss_card"}',
+      lineStart: 1,
+      lineEnd: 1,
+      authority: 'server' as const,
+      evidenceClass: 'OBSERVED' as const,
+      snapshotId: 'mcp_live',
+      publishedContentHash: null,
+      citedExcerpt: 'ISS_CARD table definition',
+      evidenceKind: 'mcp_tool' as const,
+      mcpMetadata: {
+        serverId: 'graphiti-banking',
+        serverName: 'Graphiti Banking',
+        toolName: 'search_nodes',
+      },
+    };
+
+    expect(PersistedCitationSchema.safeParse(validMcpCitation).success).toBe(true);
+
+    const mcpGrounding = {
+      schemaVersion: 1,
+      authority: 'server',
+      outcome: 'READY',
+      answer: {
+        ...validAnswer,
+        claims: [
+          {
+            id: 'C1',
+            text: 'Bảng ISS_CARD lưu thông tin phát hành thẻ.',
+            classification: 'DIRECT',
+            citationIds: ['M1'],
+            pathId: null,
+          },
+        ],
+      },
+      citations: [validMcpCitation],
+      paths: [],
+      conflicts: [],
+      scope: {
+        setIds: [generateId()],
+        routedScope: {
+          domain: null,
+          environment: null,
+          version: null,
+          comparisonMode: 'single',
+        },
+      },
+      modalityDiagnostics: validModalityDiagnostics,
+      coverageWarnings: [],
+      fallbackReason: 'NONE',
+      routerVersion: 'router-v1',
+      promptVersion: 'grounded-v1',
+      modelId: 'model-1',
+      createdAt: '2026-10-21T00:00:00.000Z',
+    };
+
+    expect(ChatMessageGroundingSchema.safeParse(mcpGrounding).success).toBe(true);
+  });
+
+  it('rejects invalid live MCP citation combinations', () => {
+    const validMcpCitation = {
+      citationId: 'M1',
+      documentId: 'mcp:graphiti-banking:search_nodes',
+      documentTitle: '[MCP] Graphiti Banking - search_nodes',
+      sectionAnchor: '{"query":"iss_card"}',
+      lineStart: 1,
+      lineEnd: 1,
+      authority: 'server' as const,
+      evidenceClass: 'OBSERVED' as const,
+      snapshotId: 'mcp_live',
+      publishedContentHash: null,
+      citedExcerpt: 'ISS_CARD table definition',
+      evidenceKind: 'mcp_tool' as const,
+      mcpMetadata: {
+        serverId: 'graphiti-banking',
+        serverName: 'Graphiti Banking',
+        toolName: 'search_nodes',
+      },
+    };
+
+    // MCP citation cannot have LOCAL evidence class
+    expect(
+      PersistedCitationSchema.safeParse({ ...validMcpCitation, evidenceClass: 'LOCAL' }).success
+    ).toBe(false);
+
+    // MCP citation requires mcpMetadata
+    const { mcpMetadata: _, ...withoutMetadata } = validMcpCitation;
+    expect(PersistedCitationSchema.safeParse(withoutMetadata).success).toBe(false);
+
+    // MCP citation cannot use static snapshot or null snapshot
+    expect(
+      PersistedCitationSchema.safeParse({ ...validMcpCitation, snapshotId: 'gsnap_1234abcd' }).success
+    ).toBe(false);
+    expect(
+      PersistedCitationSchema.safeParse({ ...validMcpCitation, snapshotId: null }).success
+    ).toBe(false);
+
+    // Normal server citation cannot use mcp_live or null publishedContentHash
+    expect(
+      PersistedCitationSchema.safeParse({ ...serverCitation, snapshotId: 'mcp_live' }).success
+    ).toBe(false);
+
+    // Local citation cannot pose as mcp_tool
+    expect(
+      PersistedCitationSchema.safeParse({
+        ...localCitation,
+        evidenceKind: 'mcp_tool',
+        mcpMetadata: validMcpCitation.mcpMetadata,
+      }).success
+    ).toBe(false);
+  });
+
   it('supports up to 100 citations (e.g. 32 chunk items when graph is empty) without schema rejection', () => {
     const thirtyTwoCitations = Array.from({ length: 32 }, (_, i) => ({
       ...serverCitation,

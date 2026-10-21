@@ -218,4 +218,87 @@ describe('chatRepo Grounding Persistence (Plan 19-10 Task 1, D-46)', () => {
     expect(messages[0]?.grounding?.citations[0]?.citedExcerpt).toBe(longExcerpt);
     expect(messages[0]?.grounding?.citations[0]?.citedExcerpt.length).toBe(1200);
   });
+
+  it('7. saves and loads message with valid live MCP citation without INVALID_GROUNDING error', async () => {
+    const thread = await createOrGetThread({ scopeType: 'global' }, testDb);
+    const mcpGrounding: ChatMessageGrounding = {
+      schemaVersion: 1,
+      authority: 'server',
+      outcome: 'READY',
+      answer: {
+        schemaVersion: 1,
+        language: 'vi',
+        conclusion: 'Định nghĩa bảng ISS_CARD lấy từ Graphiti MCP [M1].',
+        claims: [
+          {
+            id: 'C1',
+            text: 'Bảng ISS_CARD lưu trữ thẻ phát hành.',
+            classification: 'DIRECT',
+            citationIds: ['M1'],
+            pathId: null,
+          },
+        ],
+        unsupportedParts: [],
+      },
+      citations: [
+        {
+          citationId: 'M1',
+          documentId: 'mcp:graphiti-banking:search_nodes',
+          documentTitle: '[MCP] Graphiti Banking - search_nodes',
+          sectionAnchor: '{"query":"iss_card"}',
+          lineStart: 1,
+          lineEnd: 1,
+          authority: 'server',
+          evidenceClass: 'OBSERVED',
+          snapshotId: 'mcp_live',
+          publishedContentHash: null,
+          citedExcerpt: 'Bảng ISS_CARD lưu thông tin thẻ phát hành',
+          evidenceKind: 'mcp_tool',
+          mcpMetadata: {
+            serverId: 'graphiti-banking',
+            serverName: 'Graphiti Banking',
+            toolName: 'search_nodes',
+          },
+        },
+      ],
+      paths: [],
+      conflicts: [],
+      scope: {
+        setIds: [generateId()],
+        routedScope: {
+          domain: null,
+          environment: null,
+          version: null,
+          comparisonMode: 'single',
+        },
+      },
+      modalityDiagnostics: {
+        fulltext: { status: 'ok', latencyMs: 5, itemCount: 1 },
+        vector: { status: 'ok', latencyMs: 10, itemCount: 1 },
+        graph: { status: 'ok', latencyMs: 8, itemCount: 0 },
+      },
+      coverageWarnings: [],
+      fallbackReason: 'NONE',
+      routerVersion: 'router-v1',
+      promptVersion: 'grounded-v1',
+      modelId: 'gemini-2.5-pro',
+      createdAt: '2026-10-21T00:00:00.000Z',
+    };
+
+    const saved = await saveMessage(
+      {
+        threadId: thread.id,
+        role: 'assistant',
+        content: 'Định nghĩa bảng ISS_CARD',
+        grounding: mcpGrounding,
+      },
+      testDb
+    );
+
+    expect(saved.grounding).toEqual(mcpGrounding);
+
+    const messages = await getMessagesByThreadId(thread.id, testDb);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.grounding).toEqual(mcpGrounding);
+  });
 });

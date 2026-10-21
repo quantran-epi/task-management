@@ -17,6 +17,8 @@ import {
   saveMessage,
 } from '../../src/db/repositories/chatRepo';
 import * as nineRouterTokenService from '../../src/services/ai/nineRouterTokenService';
+import * as mcpClient from '../../src/services/ai/mcpClient';
+import * as nineRouterClient from '../../src/services/ai/nineRouterClient';
 
 vi.mock('../../src/utils/pptxExport', () => ({
   exportPresentationAsFile: vi.fn(),
@@ -616,5 +618,111 @@ describe('AIChatDrawer Grounded Turn Wiring (Plan 19-14)', () => {
       expect(screen.getByText('Đang tra cứu:')).toBeInTheDocument();
       expect(screen.getByText('CoreBanking')).toBeInTheDocument();
     });
+  });
+
+  it('16. Pure query_knowledge with live MCP citations saves grounded answer and never calls operational tool loop', async () => {
+    const discoverMcpSpy = vi.spyOn(mcpClient, 'discoverAllMcpTools').mockResolvedValue([]);
+    const streamCompletionSpy = vi.spyOn(nineRouterClient, 'streamChatCompletion');
+
+    const mcpGrounding: ChatMessageGrounding = {
+      ...validGroundedAnswer,
+      citations: [
+        {
+          citationId: 'M1',
+          documentId: 'mcp:graphiti-banking:search_nodes',
+          documentTitle: '[MCP] Graphiti Banking - search_nodes',
+          sectionAnchor: '{"query":"iss_card"}',
+          lineStart: 1,
+          lineEnd: 1,
+          authority: 'server',
+          evidenceClass: 'OBSERVED',
+          snapshotId: 'mcp_live',
+          publishedContentHash: null,
+          citedExcerpt: 'Bảng ISS_CARD lưu thông tin thẻ phát hành',
+          evidenceKind: 'mcp_tool',
+          mcpMetadata: {
+            serverId: 'graphiti-banking',
+            serverName: 'Graphiti Banking',
+            toolName: 'search_nodes',
+          },
+        },
+      ],
+      answer: {
+        schemaVersion: 1,
+        language: 'vi',
+        conclusion: 'Bảng ISS_CARD lưu trữ thẻ phát hành [M1].',
+        claims: [
+          {
+            id: 'C1',
+            text: 'Bảng ISS_CARD lưu trữ thẻ phát hành.',
+            classification: 'DIRECT',
+            citationIds: ['M1'],
+            pathId: null,
+          },
+        ],
+        unsupportedParts: [],
+      },
+    };
+
+    const runMock = vi.fn().mockResolvedValue({
+      kind: 'grounded_answer',
+      grounding: mcpGrounding,
+    } as GroundedTurnResult);
+
+    setGroundedTurnTestHooks({ runGroundedTurn: runMock });
+
+    render(<AIChatDrawer open={true} onClose={() => {}} db={testDb} />);
+
+    submitMessage('show definition bảng iss_card');
+
+    await waitFor(() => {
+      expect(runMock).toHaveBeenCalledTimes(1);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Bảng ISS_CARD lưu trữ thẻ phát hành/)).toBeInTheDocument();
+    });
+
+    expect(discoverMcpSpy).not.toHaveBeenCalled();
+    expect(streamCompletionSpy).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Đang chuyển sang trợ lý TaskMate/)).toBeNull();
+  });
+
+  it('17. saveMessage failure after grounded_answer halts turn cleanly with error and never falls through into operational loop', async () => {
+    const discoverMcpSpy = vi.spyOn(mcpClient, 'discoverAllMcpTools').mockResolvedValue([]);
+    const streamCompletionSpy = vi.spyOn(nineRouterClient, 'streamChatCompletion');
+
+    const runMock = vi.fn().mockResolvedValue({
+      kind: 'grounded_answer',
+      grounding: {
+        ...validGroundedAnswer,
+        citations: [
+          {
+            ...validGroundedAnswer.citations[0]!,
+            snapshotId: null, // Invalid server citation, will throw INVALID_GROUNDING in saveMessage
+          },
+        ],
+      },
+    } as GroundedTurnResult);
+
+    setGroundedTurnTestHooks({ runGroundedTurn: runMock });
+
+    render(<AIChatDrawer open={true} onClose={() => {}} db={testDb} />);
+
+    submitMessage('show definition bảng iss_card');
+
+    await waitFor(() => {
+      expect(runMock).toHaveBeenCalledTimes(1);
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Không thể lưu câu trả lời hoặc dữ liệu tri thức không hợp lệ/)
+      ).toBeInTheDocument();
+    });
+
+    expect(discoverMcpSpy).not.toHaveBeenCalled();
+    expect(streamCompletionSpy).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Đang chuyển sang trợ lý TaskMate/)).toBeNull();
   });
 });

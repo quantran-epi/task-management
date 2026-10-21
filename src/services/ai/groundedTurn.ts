@@ -161,8 +161,13 @@ function toPersistedCitations(
     evidenceClass: source.evidenceClass,
     snapshotId: source.snapshotId,
     publishedContentHash: source.publishedContentHash,
-    citedExcerpt: source.citedExcerpt,
+    citedExcerpt:
+      source.citedExcerpt.length > 1200
+        ? source.citedExcerpt.slice(0, 1200)
+        : source.citedExcerpt,
+    relevanceReason: source.relevanceReason,
     evidenceKind: source.evidenceKind,
+    mcpMetadata: source.mcpMetadata,
   }));
 }
 
@@ -889,8 +894,10 @@ export async function synthesizeFromStoredEvidence(
       snapshotId: c.snapshotId,
       publishedContentHash: c.publishedContentHash,
       citedExcerpt: c.citedExcerpt,
+      relevanceReason: c.relevanceReason,
       setMemberships: [],
       evidenceKind: c.evidenceKind,
+      mcpMetadata: c.mcpMetadata,
     };
   }
 

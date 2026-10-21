@@ -1045,5 +1045,25 @@ describe('evidencePack', () => {
     expect(closureResult.valid).toBe(true);
     expect(closureResult.issues).toHaveLength(0);
   });
+
+  it('24. truncates MCP rawResult at 1200 characters to match persistence limits', () => {
+    const longRawResult = 'A'.repeat(2500);
+    const pack = packEvidence({
+      authority: 'server',
+      mcpItems: [
+        {
+          serverId: 'graphiti-banking',
+          serverName: 'Graphiti Banking MCP',
+          toolName: 'search_nodes',
+          args: { query: 'LONG_EXCERPT' },
+          rawResult: longRawResult,
+          timestamp: '2026-10-20T00:00:00.000Z',
+        },
+      ],
+    });
+
+    expect(pack.citations['M1']?.citedExcerpt.length).toBe(1200);
+    expect(pack.citations['M1']?.citedExcerpt).toBe('A'.repeat(1200));
+  });
 });
 

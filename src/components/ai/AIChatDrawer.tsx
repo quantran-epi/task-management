@@ -905,21 +905,25 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         return;
       }
 
+      console.error('[AIChatDrawer] Grounded pipeline or persistence error:', groundedErr);
+      setGroundedLoadingStatus(null);
+
       // Fail-closed gate per D-04: If intent router is unavailable, stop immediately.
       if (
         groundedErr instanceof IntentRouterUnavailableError ||
         groundedErr?.name === 'IntentRouterUnavailableError' ||
         groundedErr?.message?.includes('intent routing is unavailable')
       ) {
-        setGroundedLoadingStatus(null);
         setApiError(
           'Trợ lý AI tạm thời không khả dụng. Vui lòng kiểm tra lại cấu hình kết nối AI.'
         );
         return;
       }
 
-      console.warn('[AIChatDrawer] Grounded pipeline error, checking operational fallback:', groundedErr);
-      setGroundedLoadingStatus('Đang chuyển sang trợ lý TaskMate...');
+      setApiError(
+        'Không thể lưu câu trả lời hoặc dữ liệu tri thức không hợp lệ. Vui lòng thử lại.'
+      );
+      return;
     }
 
     // 3. Operational tool loop (for operational / mixed / fallback turns)

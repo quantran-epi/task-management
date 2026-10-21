@@ -867,4 +867,98 @@ describe('groundedTurn state machine', () => {
       expect(res.grounding.fallbackReason).toBe('TIMEOUT');
     }
   });
+
+  it('29. preserves mcpMetadata and relevanceReason in final grounding citations', async () => {
+    const dummyMcpItems = [
+      {
+        serverId: 'graphiti-banking',
+        serverName: 'Graphiti Banking MCP',
+        toolName: 'search_nodes',
+        args: { query: 'ISS_CARD' },
+        rawResult: 'ISS_CARD table definition',
+        timestamp: '2026-10-20T00:00:00.000Z',
+      },
+    ];
+
+    mockDeps.runMcpRetrieval = vi.fn().mockResolvedValue({
+      items: dummyMcpItems,
+      warnings: [],
+    });
+
+    vi.mocked(mockDeps.routeIntent).mockResolvedValueOnce({
+      intent: 'query_knowledge',
+      confidence: 0.95,
+      entities: [],
+      language: 'vi',
+      needs_clarification: false,
+      clarify_question: null,
+      require_mcp: true,
+      target_mcp_servers: ['graphiti-banking'],
+    } as any);
+
+    mockDeps.packEvidence = vi.fn().mockReturnValue({
+      authority: 'server',
+      citations: {
+        M1: {
+          citationId: 'M1',
+          documentId: 'mcp:graphiti-banking:search_nodes',
+          documentTitle: '[MCP] Graphiti Banking MCP - search_nodes',
+          sectionAnchor: '{"query":"ISS_CARD"}',
+          lineStart: 1,
+          lineEnd: 1,
+          authority: 'server',
+          evidenceClass: 'OBSERVED',
+          snapshotId: 'mcp_live',
+          publishedContentHash: null,
+          citedExcerpt: 'ISS_CARD table definition',
+          setMemberships: [],
+          evidenceKind: 'mcp_tool',
+          mcpMetadata: {
+            serverId: 'graphiti-banking',
+            serverName: 'Graphiti Banking MCP',
+            toolName: 'search_nodes',
+          },
+        },
+      },
+      paths: {},
+      conflicts: [],
+      promptEvidence: [{ id: 'M1', text: 'ISS_CARD table definition' }],
+      contextTruncated: false,
+      coverageWarnings: [],
+    });
+
+    vi.mocked(mockDeps.synthesizeGroundedAnswer).mockResolvedValueOnce({
+      answer: {
+        schemaVersion: 1,
+        language: 'vi',
+        conclusion: 'Bảng ISS_CARD lưu thông tin thẻ phát hành [M1].',
+        claims: [
+          {
+            id: 'C1',
+            text: 'Bảng ISS_CARD lưu thông tin thẻ phát hành.',
+            classification: 'DIRECT',
+            citationIds: ['M1'],
+            pathId: null,
+          },
+        ],
+        unsupportedParts: [],
+      },
+      attempts: [],
+      responseLanguage: 'vi',
+    });
+
+    const res = await runGroundedTurn(mockInput, mockDeps);
+    expect(res.kind).toBe('grounded_answer');
+    if (res.kind === 'grounded_answer') {
+      const mcpCitation = res.grounding.citations.find((c) => c.citationId === 'M1');
+      expect(mcpCitation).toBeDefined();
+      expect(mcpCitation?.mcpMetadata).toEqual({
+        serverId: 'graphiti-banking',
+        serverName: 'Graphiti Banking MCP',
+        toolName: 'search_nodes',
+      });
+      expect(mcpCitation?.snapshotId).toBe('mcp_live');
+      expect(mcpCitation?.publishedContentHash).toBeNull();
+    }
+  });
 });
