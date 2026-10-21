@@ -34,8 +34,9 @@ export interface McpRetrievalResult {
   warnings: string[];
 }
 
-const MCP_RETRIEVAL_TIMEOUT_MS = 20_000;
+const MCP_RETRIEVAL_TIMEOUT_MS = 300_000; // 5-minute safety watchdog
 const MAX_RETRIEVAL_TURNS = 4;
+const MAX_SERVER_INSTRUCTION_CHARS = 4000;
 
 interface ToolSelectionPlan {
   done: boolean;
@@ -83,7 +84,7 @@ export function pruneMcpRawResult(raw: string, maxChars = 2500): string {
 }
 
 /**
- * Runs a bounded dynamic tool-calling retrieval loop (max 3 turns, 15s budget)
+ * Runs a bounded dynamic tool-calling retrieval loop (max 4 turns, 5m safety watchdog)
  * targeting the specified MCP server IDs.
  */
 export async function runMcpRetrieval(
@@ -97,10 +98,12 @@ export async function runMcpRetrieval(
     return { items, warnings };
   }
 
-  // 15-second bounded budget
+  // 5-minute safety watchdog
+  let watchdogFired = false;
   const timeoutController = new AbortController();
   const timer = setTimeout(() => {
-    timeoutController.abort(new Error('MCP retrieval timed out after 15s'));
+    watchdogFired = true;
+    timeoutController.abort(new Error('MCP retrieval safety watchdog expired after 5m'));
   }, MCP_RETRIEVAL_TIMEOUT_MS);
 
   // Combine parent signal + timeout signal
@@ -166,7 +169,7 @@ export async function runMcpRetrieval(
       return { items, warnings };
     }
 
-    // Dynamic bounded tool loop (max 3 turns)
+    // Dynamic bounded tool loop (max 4 turns)
     const executedToolKeys = new Set<string>();
     const conversationHistory: string[] = [
       `User query: "${input.query}"`,
@@ -174,10 +177,26 @@ export async function runMcpRetrieval(
     ];
 
     for (let turn = 1; turn <= MAX_RETRIEVAL_TURNS; turn++) {
-      if (timeoutController.signal.aborted) {
-        warnings.push('Quá thời gian chờ phản hồi MCP (15s timeout)');
+      if (input.signal?.aborted) {
+        warnings.push('Thao tác MCP bị hủy');
         break;
       }
+      if (watchdogFired) {
+        warnings.push('Quá thời gian chờ phản hồi MCP (5m safety watchdog)');
+        break;
+      }
+
+      const serverInstructions = targetServers
+        .filter((s) => typeof s.instruction === 'string' && s.instruction.trim().length > 0)
+        .map((s) => {
+          const trimmed = s.instruction!.trim();
+          const bounded =
+            trimmed.length > MAX_SERVER_INSTRUCTION_CHARS
+              ? `${trimmed.slice(0, MAX_SERVER_INSTRUCTION_CHARS)}... (truncated)`
+              : trimmed;
+          return `- [${s.name} (id: ${s.id})]:\n${bounded}`;
+        })
+        .join('\n\n');
 
       const toolsSummary = availableTools
         .map(
@@ -189,15 +208,22 @@ export async function runMcpRetrieval(
       const systemPrompt = `You are an intelligent, domain-agnostic dynamic tool-calling retriever. Select relevant read-only tools to fetch live data answering the user query.
 Turn ${turn} of max ${MAX_RETRIEVAL_TURNS}.
 
+Target Server Instructions:
+${serverInstructions || 'None provided.'}
+
 Available Tools:
 ${toolsSummary}
 
 DYNAMIC MCP RETRIEVAL RULES:
-1. CHECK INFORMATION DEPTH (Granularity Rule):
+1. TARGET SERVER INSTRUCTIONS & SCHEMAS:
+   - Adhere strictly to the instructions and JSON schemas provided above by the target servers.
+   - If a tool requires arguments produced by another prerequisite tool (such as identifiers, session keys, scopes, or categories), you MUST call only the prerequisite tool in the current turn, inspect its output, and defer calling the dependent tool to a subsequent turn.
+   - Do NOT invent or guess required schema arguments.
+2. CHECK INFORMATION DEPTH (Granularity Rule):
    - If the user asks for fine-grained details (such as specific fields, columns, attributes, parameters, enum values, error codes, or formulas) but the data retrieved so far only contains high-level container objects (such as table/file/document/entity names without property-level details):
    - DO NOT set "done": true.
    - You MUST pick the next inspection/detail tool provided in the server's tool list to drill down into that container entity.
-2. COMPLETION CRITERIA:
+3. COMPLETION CRITERIA:
    - Set "done": true ONLY when:
      a) The specific attribute/field answering the query has been found in the tool results, OR
      b) All available detail/inspection tools for the relevant entity have been exhausted.
@@ -233,23 +259,30 @@ Return STRICT JSON adhering to this schema:
 
         plan = rawPlan as ToolSelectionPlan;
       } catch (err: any) {
-        if (timeoutController.signal.aborted) {
-          warnings.push('Quá thời gian chờ phản hồi MCP (15s timeout)');
+        if (input.signal?.aborted) {
+          warnings.push('Thao tác MCP bị hủy');
+          break;
+        }
+        if (watchdogFired) {
+          warnings.push('Quá thời gian chờ phản hồi MCP (5m safety watchdog)');
           break;
         }
         warnings.push(`Lỗi lập lịch công cụ MCP (turn ${turn}): ${err?.message || String(err)}`);
         break;
       }
 
-      if (!plan || plan.done || !plan.toolCalls || plan.toolCalls.length === 0) {
-        // Model signaled completion
+      if (!plan || !plan.toolCalls || plan.toolCalls.length === 0) {
+        // Model signaled completion with no calls
         break;
       }
 
       // Execute planned tools (up to 2 calls per turn)
-      let executedAnyInTurn = false;
+      let attemptedAnyInTurn = false;
       for (const call of plan.toolCalls.slice(0, 2)) {
-        if (timeoutController.signal.aborted) break;
+        if (input.signal?.aborted) {
+          warnings.push('Thao tác MCP bị hủy');
+          break;
+        }
 
         const callKey = `${call.toolName}:${JSON.stringify(call.args ?? {})}`;
         if (executedToolKeys.has(callKey)) {
@@ -257,6 +290,7 @@ Return STRICT JSON adhering to this schema:
           continue;
         }
         executedToolKeys.add(callKey);
+        attemptedAnyInTurn = true;
 
         const toolMeta = availableTools.find((t) => t.name === call.toolName);
         const serverId = toolMeta?.serverId ?? targetServers[0]!.id;
@@ -265,7 +299,6 @@ Return STRICT JSON adhering to this schema:
         try {
           const rawResult = await executeDynamicMcpTool(call.toolName, call.args ?? {}, database);
           const cleanResult = pruneMcpRawResult(rawResult);
-          executedAnyInTurn = true;
           items.push({
             serverId,
             serverName,
@@ -283,7 +316,7 @@ Return STRICT JSON adhering to this schema:
         }
       }
 
-      if (!executedAnyInTurn) {
+      if (plan.done || !attemptedAnyInTurn) {
         break;
       }
     }
