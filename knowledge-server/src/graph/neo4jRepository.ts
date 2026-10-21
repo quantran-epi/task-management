@@ -1269,6 +1269,12 @@ export class Neo4jRepository implements GraphRepository {
     if (queryTokens.length === 0) return [];
 
     const session = this.getSession();
+    const onAbort = () => {
+      session.close().catch(() => {});
+    };
+    if (options?.signal) {
+      options.signal.addEventListener('abort', onAbort, { once: true });
+    }
     try {
       const res = await session.run(CYPHER_QUERIES.RESOLVE_ENTITIES, {
         snapshotId,
@@ -1280,6 +1286,9 @@ export class Neo4jRepository implements GraphRepository {
         kind: r.get('kind') as NodeKind,
       }));
     } finally {
+      if (options?.signal) {
+        options.signal.removeEventListener('abort', onAbort);
+      }
       await session.close();
     }
   }
@@ -1338,6 +1347,12 @@ export class Neo4jRepository implements GraphRepository {
     });
 
     const session = this.getSession();
+    const onAbort = () => {
+      session.close().catch(() => {});
+    };
+    if (options?.signal) {
+      options.signal.addEventListener('abort', onAbort, { once: true });
+    }
     const evidenceClasses = criteria.evidenceClasses.length > 0
       ? [...criteria.evidenceClasses]
       : ['OBSERVED', 'BUSINESS_APPROVED'];
@@ -1536,6 +1551,9 @@ export class Neo4jRepository implements GraphRepository {
       };
       return isTruncated ? { ...result, truncationReason: 'RESULT_LIMIT_REACHED' } : result;
     } finally {
+      if (options?.signal) {
+        options.signal.removeEventListener('abort', onAbort);
+      }
       await session.close();
     }
   }

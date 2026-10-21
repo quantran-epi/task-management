@@ -469,7 +469,7 @@ export async function runGroundedTurn(
       comparisonMode: resolvedScope.comparisonMode,
       budgets: {
         concurrency: 4,
-        elapsedMs: 20000,
+        elapsedMs: 300000,
         maxSets: 10,
         maxItems: 50,
         maxEvidenceChars: 30000,

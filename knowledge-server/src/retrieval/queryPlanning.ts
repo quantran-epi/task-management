@@ -734,8 +734,11 @@ export async function buildQueryExecutionPlan(
         }
       }
     }
-  } catch {
-    // If planner throws, proceed to degraded fallback
+  } catch (err: unknown) {
+    if (options?.signal?.aborted || (err as Error)?.name === 'AbortError') {
+      throw err;
+    }
+    // If planner throws non-abort error, proceed to degraded fallback
   }
 
   // Degraded fallback on planner failure or validation failure

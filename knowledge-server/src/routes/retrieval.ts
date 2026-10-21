@@ -83,8 +83,14 @@ export function registerRetrievalRoutes(
     const correlationId = Array.isArray(correlationHeader) ? correlationHeader[0] : correlationHeader;
     const phaseLogger = createRetrievalLogger('[RETRIEVE]', correlationId ? { correlationId } : {});
 
+    const requestSignal = (request.raw as any)?.signal as AbortSignal | undefined;
+
     try {
-      const response = await retrievalService.retrieve(params.data.setId, body.data);
+      const response = await retrievalService.retrieve(
+        params.data.setId,
+        body.data,
+        requestSignal ? { signal: requestSignal } : undefined
+      );
       const validated = RetrievalResponseSchema.parse(response);
       phaseLogger.log({
         outcome: validated.outcome === 'DEGRADED' ? 'degraded' : 'ok',
@@ -134,11 +140,18 @@ export function registerRetrievalRoutes(
     }
 
     const deps: FederatedRetrievalDependencies = federatedDeps ?? {
-      retrievePerSet: (setId, req) => retrievalService.retrieve(setId, req),
+      retrievePerSet: (setId, req, signal) =>
+        retrievalService.retrieve(setId, req, signal ? { signal } : undefined),
     };
 
+    const requestSignal = (request.raw as any)?.signal as AbortSignal | undefined;
+
     try {
-      const response = await runFederatedRetrieval(body.data, deps);
+      const response = await runFederatedRetrieval(
+        body.data,
+        deps,
+        requestSignal ? { signal: requestSignal } : undefined
+      );
       const validated = FederatedRetrievalResponseSchema.parse(response);
       return reply.code(200).send(validated);
     } catch {

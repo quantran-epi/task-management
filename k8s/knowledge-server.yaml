@@ -19,8 +19,9 @@ data:
   EMBEDDING_REMOTE_MODEL: "Xenova/multilingual-e5-small"
   EMBEDDING_REMOTE_DIMENSIONS: "384"
   EMBEDDING_CACHE_DIR: "/var/lib/knowledge-server/transformers_cache"
-  PROSE_EXTRACTION_ENABLED: "false"
+  PROSE_EXTRACTION_ENABLED: "true"
   SNAPSHOT_STORAGE_DIR: "/var/lib/knowledge-server/snapshots"
+  EXTRACTION_CACHE_DIR: "/var/lib/knowledge-server/cache/extraction"
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -50,8 +51,8 @@ spec:
     spec:
       containers:
         - name: knowledge-server
-          image: quantrantestdev/knowledge-server:0.1.0
-          imagePullPolicy: IfNotPresent
+          image: quantrantestdev/knowledge-server:latest
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 3001

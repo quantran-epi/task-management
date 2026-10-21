@@ -530,7 +530,7 @@ export const FederatedSetTierAssignmentSchema = z.strictObject({
 
 export const FederatedRetrievalBudgetsSchema = z.strictObject({
   concurrency: z.number().int().min(1).max(10),
-  elapsedMs: z.number().int().min(100).max(120_000),
+  elapsedMs: z.number().int().min(100).max(300_000),
   maxSets: z.number().int().min(1).max(50),
   maxItems: z.number().int().min(1).max(200),
   maxEvidenceChars: z.number().int().min(1).max(100_000),

@@ -20,6 +20,7 @@ import type {
   RetrievalIndexGateway,
   GraphRetrievalGateway,
   PinnedSnapshotLease,
+  OperationOptions,
 } from '../retrieval/contracts.js';
 import {
   buildQueryExecutionPlan,
@@ -179,15 +180,22 @@ type GraphModalityRunResult = Omit<ModalityRunResult<ChunkItem | EntityItem | Ed
 };
 
 /**
- * Executes an async task with AbortController deadline.
+ * Executes an async task with AbortController deadline and optional parent signal.
  */
 async function runWithTimeout<T>(
   timeoutMs: number,
-  task: (signal: AbortSignal) => Promise<T>
+  task: (signal: AbortSignal) => Promise<T>,
+  parentSignal?: AbortSignal
 ): Promise<{ result?: T; timedOut: boolean; latencyMs: number; error?: any }> {
   const controller = new AbortController();
   const start = Date.now();
   let timer: any;
+
+  if (parentSignal?.aborted) {
+    controller.abort(parentSignal.reason);
+  } else if (parentSignal) {
+    parentSignal.addEventListener('abort', () => controller.abort(parentSignal.reason), { once: true });
+  }
 
   const timeoutPromise = new Promise<{ timedOut: true; latencyMs: number }>((resolve) => {
     timer = setTimeout(() => {
@@ -237,7 +245,11 @@ export class RetrievalService {
   /**
    * Retrieves hybrid multi-modal evidence for a query against a document set.
    */
-  async retrieve(setId: string, rawRequest: RetrievalRequest): Promise<RetrievalResponse> {
+  async retrieve(
+    setId: string,
+    rawRequest: RetrievalRequest,
+    options?: OperationOptions
+  ): Promise<RetrievalResponse> {
     // 1. Boundary schema validation
     const request = RetrievalRequestSchema.parse(rawRequest);
 
@@ -271,7 +283,7 @@ export class RetrievalService {
     }
 
     try {
-      return await this.executeUnderLease(setId, lease, request);
+      return await this.executeUnderLease(setId, lease, request, options);
     } finally {
       // Guarantee lease release exactly once in finally block
       try {
@@ -285,7 +297,8 @@ export class RetrievalService {
   private async executeUnderLease(
     _setId: string,
     lease: PinnedSnapshotLease,
-    request: RetrievalRequest
+    request: RetrievalRequest,
+    options?: OperationOptions
   ): Promise<RetrievalResponse> {
     const pinnedSnapshotId = lease.snapshotId;
 
@@ -295,6 +308,7 @@ export class RetrievalService {
       pinnedSnapshotId,
       gateway: this.deps.graphGateway,
       planner: this.deps.queryPlanner,
+      options,
     });
 
     const isUnsupported = planningOutcome.status === 'unsupported';
@@ -319,18 +333,21 @@ export class RetrievalService {
     const fulltextPromise = this.runFulltextModality(
       pinnedSnapshotId,
       fulltextKeywords,
-      request.limit
+      request.limit,
+      options?.signal
     );
 
     const vectorPromise = this.runVectorModality(
       pinnedSnapshotId,
       semanticQueryText,
-      request.limit
+      request.limit,
+      options?.signal
     );
 
     const graphPromise = this.runGraphModality(
       pinnedSnapshotId,
-      planningOutcome
+      planningOutcome,
+      options?.signal
     );
 
     // Concurrently await all 3 modalities using Promise.allSettled
@@ -602,7 +619,8 @@ export class RetrievalService {
   private async runFulltextModality(
     snapshotId: string,
     keywords: readonly string[],
-    limit: number
+    limit: number,
+    parentSignal?: AbortSignal
   ): Promise<ModalityRunResult<ChunkItem>> {
     const queryText = keywords.join(' ').trim();
     if (!queryText) {
@@ -613,13 +631,17 @@ export class RetrievalService {
     }
 
     const timeoutMs = this.timeouts.fulltextMs;
-    const run = await runWithTimeout(timeoutMs, async (signal) => {
-      return await this.deps.indexGateway.queryFulltext(
-        snapshotId,
-        { keywords, limit },
-        { signal }
-      );
-    });
+    const run = await runWithTimeout(
+      timeoutMs,
+      async (signal) => {
+        return await this.deps.indexGateway.queryFulltext(
+          snapshotId,
+          { keywords, limit },
+          { signal }
+        );
+      },
+      parentSignal
+    );
 
     if (run.timedOut) {
       return {
@@ -645,7 +667,8 @@ export class RetrievalService {
   private async runVectorModality(
     snapshotId: string,
     queryText: string,
-    limit: number
+    limit: number,
+    parentSignal?: AbortSignal
   ): Promise<ModalityRunResult<ChunkItem>> {
     if (!this.deps.embeddingProvider) {
       return {
@@ -665,16 +688,20 @@ export class RetrievalService {
     }
 
     const timeoutMs = this.timeouts.vectorMs;
-    const run = await runWithTimeout(timeoutMs, async (signal) => {
-      // 1. Generate query embedding
-      const vector = await this.deps.embeddingProvider!.embedQuery(queryText, { signal });
-      // 2. Query vector index
-      return await this.deps.indexGateway.queryVector(
-        snapshotId,
-        { vector, limit },
-        { signal }
-      );
-    });
+    const run = await runWithTimeout(
+      timeoutMs,
+      async (signal) => {
+        // 1. Generate query embedding
+        const vector = await this.deps.embeddingProvider!.embedQuery(queryText, { signal });
+        // 2. Query vector index
+        return await this.deps.indexGateway.queryVector(
+          snapshotId,
+          { vector, limit },
+          { signal }
+        );
+      },
+      parentSignal
+    );
 
     if (run.timedOut) {
       return {
@@ -699,7 +726,8 @@ export class RetrievalService {
 
   private async runGraphModality(
     snapshotId: string,
-    planningOutcome: QueryExecutionPlanningOutcome
+    planningOutcome: QueryExecutionPlanningOutcome,
+    parentSignal?: AbortSignal
   ): Promise<GraphModalityRunResult> {
     const isSpecial = planningOutcome.status === 'needsClarification' || planningOutcome.status === 'unsupported';
     const planToTraverse = isSpecial
@@ -716,14 +744,18 @@ export class RetrievalService {
       : planningOutcome.plan;
 
     const timeoutMs = this.timeouts.graphMs;
-    const run = await runWithTimeout(timeoutMs, async (signal) => {
-      return await runBoundedGraphTraversal(
-        planToTraverse,
-        snapshotId,
-        this.deps.graphGateway,
-        signal
-      );
-    });
+    const run = await runWithTimeout(
+      timeoutMs,
+      async (signal) => {
+        return await runBoundedGraphTraversal(
+          planToTraverse,
+          snapshotId,
+          this.deps.graphGateway,
+          signal
+        );
+      },
+      parentSignal
+    );
 
     if (run.timedOut) {
       return {

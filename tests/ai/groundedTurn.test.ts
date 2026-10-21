@@ -702,12 +702,12 @@ describe('groundedTurn state machine', () => {
     );
   });
 
-  it('25. Uses a bounded 20-second federated retrieval budget', async () => {
+  it('25. Uses a bounded 300-second federated retrieval budget', async () => {
     await runGroundedTurn(mockInput, mockDeps);
 
     expect(mockDeps.retrieveFederated).toHaveBeenCalledWith(
       expect.objectContaining({
-        budgets: expect.objectContaining({ elapsedMs: 20000 }),
+        budgets: expect.objectContaining({ elapsedMs: 300000 }),
       }),
       mockInput.signal
     );

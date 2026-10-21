@@ -23,17 +23,28 @@ export interface TaskTimeoutResult<T> {
   error?: any;
 }
 
+export interface FederatedRetrievalOptions {
+  readonly signal?: AbortSignal | undefined;
+}
+
 /**
- * Runs task with AbortController deadline. Reuses retrievalService timeout pattern.
+ * Runs task with AbortController deadline combined with optional parent signal.
  */
 async function runWithTimeout<T>(
   timeoutMs: number,
   task: (signal: AbortSignal) => Promise<T>,
-  now: () => number
+  now: () => number,
+  parentSignal?: AbortSignal
 ): Promise<TaskTimeoutResult<T>> {
   const controller = new AbortController();
   const start = now();
   let timer: any;
+
+  if (parentSignal?.aborted) {
+    controller.abort(parentSignal.reason);
+  } else if (parentSignal) {
+    parentSignal.addEventListener('abort', () => controller.abort(parentSignal.reason), { once: true });
+  }
 
   const timeoutPromise = new Promise<{ timedOut: true; latencyMs: number }>((resolve) => {
     timer = setTimeout(() => {
@@ -99,7 +110,8 @@ function computeEvidenceChars(item: any): number {
 
 export async function runFederatedRetrieval(
   request: FederatedRetrievalRequest,
-  deps: FederatedRetrievalDependencies
+  deps: FederatedRetrievalDependencies,
+  options?: FederatedRetrievalOptions
 ): Promise<FederatedRetrievalResponse> {
   const now = deps.now ?? Date.now;
   const startTime = now();
@@ -118,6 +130,7 @@ export async function runFederatedRetrieval(
     assignment: (typeof request.setTierAssignments)[number];
     response?: RetrievalResponse;
     failureReason?: 'TIMEOUT' | 'STALE' | 'ERROR';
+    latencyMs?: number;
   }> = [];
 
   let accumulatedItemsCount = 0;
@@ -208,23 +221,27 @@ export async function runFederatedRetrieval(
               signal
             );
           },
-          now
+          now,
+          options?.signal
         );
 
         if (outcome.timedOut) {
           return {
             assignment,
             failureReason: 'TIMEOUT' as const,
+            latencyMs: outcome.latencyMs,
           };
         } else if (outcome.error || !outcome.result) {
           return {
             assignment,
             failureReason: 'ERROR' as const,
+            latencyMs: outcome.latencyMs,
           };
         } else {
           return {
             assignment,
             response: outcome.result,
+            latencyMs: outcome.latencyMs,
           };
         }
       }
@@ -344,9 +361,13 @@ export async function runFederatedRetrieval(
     perSetResults.every((result) => result.failureReason === 'TIMEOUT');
 
   if (allTimedOut) {
+    const maxSetLatency = Math.max(0, ...perSetResults.map((r) => r.latencyMs ?? 0));
     modalityStatus.fulltext.status = 'timeout';
+    modalityStatus.fulltext.latencyMs = maxSetLatency;
     modalityStatus.vector.status = 'timeout';
+    modalityStatus.vector.latencyMs = maxSetLatency;
     modalityStatus.graph.status = 'timeout';
+    modalityStatus.graph.latencyMs = maxSetLatency;
   } else {
     for (const setRes of perSetResults) {
       if (setRes.response) {
