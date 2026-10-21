@@ -104,7 +104,7 @@ describe('KnowledgeServerConfigCard', () => {
 
     fireEvent.change(url, { target: { value: 'http://knowledge.example.com/' } });
     fireEvent.click(screen.getByRole('button', { name: /Lưu cấu hình/ }));
-    await waitFor(() => expect(url).toHaveValue('http://knowledge.example.com'));
+    await waitFor(() => expect(screen.getByLabelText('URL Knowledge Server')).toHaveValue('http://knowledge.example.com'));
 
     expect(screen.queryByLabelText(/api\/v1/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/endpoint/i)).not.toBeInTheDocument();
