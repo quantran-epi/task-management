@@ -40,9 +40,9 @@ describe('18-W0-03B: RetrievalService Pinned Parallel Orchestration & Timeouts',
     // Default values
     const defaults = readRetrievalTimeouts({});
     expect(defaults).toEqual({
-      fulltextMs: 500,
-      vectorMs: 1500,
-      graphMs: 2000,
+      fulltextMs: 2000,
+      vectorMs: 5000,
+      graphMs: 10000,
     });
 
     // Valid env overrides

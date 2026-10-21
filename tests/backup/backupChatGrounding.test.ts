@@ -203,10 +203,10 @@ describe('Backup Chat Grounding (Plan 19-10 Task 2, D-46, D-48)', () => {
     }
   });
 
-  it('3. Export rejects grounding with a citation citedExcerpt of 1201 chars', () => {
+  it('3. Export rejects grounding with a citation citedExcerpt of 2501 chars', () => {
     const longCitation: PersistedCitation = {
       ...localCitation,
-      citedExcerpt: 'A'.repeat(1201),
+      citedExcerpt: 'A'.repeat(2501),
     };
 
     const invalidGrounding = {

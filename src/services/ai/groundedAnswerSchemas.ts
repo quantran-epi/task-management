@@ -144,7 +144,7 @@ export const PersistedCitationSchema = z
     evidenceClass: EvidenceClassificationSchema.or(z.literal('LOCAL')),
     snapshotId: SnapshotIdSchema.or(z.literal('mcp_live')).nullable(),
     publishedContentHash: HashSchema.nullable(),
-    citedExcerpt: z.string().min(1).max(2000),
+    citedExcerpt: z.string().min(1).max(2500),
     relevanceReason: z.string().min(1).max(1000).optional(),
     evidenceKind: z
       .enum(['policy_change', 'release_note', 'migration_record', 'mcp_tool', 'other'])

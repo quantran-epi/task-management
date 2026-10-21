@@ -44,9 +44,9 @@ export interface RetrievalTimeouts {
 }
 
 export const DEFAULT_RETRIEVAL_TIMEOUTS: RetrievalTimeouts = Object.freeze({
-  fulltextMs: 500,
-  vectorMs: 1500,
-  graphMs: 2000,
+  fulltextMs: 2000,
+  vectorMs: 5000,
+  graphMs: 10000,
 });
 
 const SEMANTIC_EVIDENCE_FLOOR = 0.7;
@@ -147,13 +147,13 @@ function parseSafeTimeout(envVal: string | undefined, defaultVal: number, varNam
 }
 
 /**
- * Reads retrieval timeouts from environment record with exact D-25 defaults (500/1500/2000 ms).
+ * Reads retrieval timeouts from environment record with configurable defaults (2000/5000/10000 ms).
  */
 export function readRetrievalTimeouts(env: Record<string, string | undefined>): RetrievalTimeouts {
   return {
-    fulltextMs: parseSafeTimeout(env.RETRIEVAL_TIMEOUT_FULLTEXT_MS, 500, 'RETRIEVAL_TIMEOUT_FULLTEXT_MS'),
-    vectorMs: parseSafeTimeout(env.RETRIEVAL_TIMEOUT_VECTOR_MS, 1500, 'RETRIEVAL_TIMEOUT_VECTOR_MS'),
-    graphMs: parseSafeTimeout(env.RETRIEVAL_TIMEOUT_GRAPH_MS, 2000, 'RETRIEVAL_TIMEOUT_GRAPH_MS'),
+    fulltextMs: parseSafeTimeout(env.RETRIEVAL_TIMEOUT_FULLTEXT_MS, DEFAULT_RETRIEVAL_TIMEOUTS.fulltextMs, 'RETRIEVAL_TIMEOUT_FULLTEXT_MS'),
+    vectorMs: parseSafeTimeout(env.RETRIEVAL_TIMEOUT_VECTOR_MS, DEFAULT_RETRIEVAL_TIMEOUTS.vectorMs, 'RETRIEVAL_TIMEOUT_VECTOR_MS'),
+    graphMs: parseSafeTimeout(env.RETRIEVAL_TIMEOUT_GRAPH_MS, DEFAULT_RETRIEVAL_TIMEOUTS.graphMs, 'RETRIEVAL_TIMEOUT_GRAPH_MS'),
   };
 }
 
