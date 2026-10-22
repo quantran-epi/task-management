@@ -18,8 +18,18 @@ import {
   RELATION_TYPES,
   RETRIEVAL_ONTOLOGY_REGISTRY,
 } from '../graph/ontology.js';
-import { removeVietnameseDiacritics } from '../graph/extraction.js';
 import { randomUUID } from 'node:crypto';
+
+/**
+ * Strips Vietnamese and Latin diacritics using Unicode NFD decomposition.
+ */
+function removeVietnameseDiacritics(str: string): string {
+  return str
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D');
+}
 
 /**
  * Technical identifier regexes:
@@ -454,6 +464,40 @@ function validatePlanSemantics(
 }
 
 /**
+ * Selects safe default 1-hop traversal steps based on candidate node kind (D-16).
+ */
+export function defaultTraversalStepsForKind(kind?: string): TraversalStep[] {
+  switch (kind) {
+    case 'DatabaseObject':
+      return [
+        {
+          relationType: 'READS_FROM',
+          direction: 'BOTH',
+          maxHops: 1,
+        },
+      ];
+    case 'SoftwareComponent':
+      return [
+        {
+          relationType: 'CALLS',
+          direction: 'BOTH',
+          maxHops: 1,
+        },
+      ];
+    case 'ScheduledProcess':
+    case 'ProcessStep':
+    default:
+      return [
+        {
+          relationType: 'CONTAINS_STEP',
+          direction: 'BOTH',
+          maxHops: 1,
+        },
+      ];
+  }
+}
+
+/**
  * Builds a deterministic degraded fallback plan (D-06, D-16).
  */
 export function buildDeterministicFallbackPlan(
@@ -469,11 +513,7 @@ export function buildDeterministicFallbackPlan(
   // If seeds exist, generate a single one-hop BOTH traversal step matching overallMaxDepth = 1
   const traversalSteps: TraversalStep[] = [];
   if (hasSeeds) {
-    traversalSteps.push({
-      relationType: 'CONTAINS_STEP',
-      direction: 'BOTH',
-      maxHops: 1,
-    });
+    traversalSteps.push(...defaultTraversalStepsForKind(resolvedSeeds[0]?.kind));
   }
 
   const keywords = hasSeeds
@@ -510,13 +550,7 @@ function buildFastPathPlan(
   rawQuery: string,
   resolvedEntity: ClarificationCandidate
 ): { plan: LogicalQueryPlan; planTrace: PlanTrace } {
-  const traversalSteps: TraversalStep[] = [
-    {
-      relationType: 'CONTAINS_STEP',
-      direction: 'BOTH',
-      maxHops: 1,
-    },
-  ];
+  const traversalSteps: TraversalStep[] = defaultTraversalStepsForKind(resolvedEntity.kind);
 
   const plan: LogicalQueryPlan = {
     planId: randomUUID(),

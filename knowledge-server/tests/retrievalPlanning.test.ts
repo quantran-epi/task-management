@@ -364,8 +364,61 @@ describe('18-W0-02A: Retrieval Ontology Registry & Identifier/Entity Resolution'
         expect(result.plan.fulltextKeywords).toContain('MAIN1.FCL_CYCLE_COUNTER');
         expect(result.plan.overallMaxDepth).toBe(1);
         expect(result.plan.traversalSteps.length).toBeGreaterThan(0);
+        expect(result.plan.traversalSteps[0]?.relationType).toBe('READS_FROM');
         expect(result.planTrace.fastPath).toBe(true);
         expect(result.planTrace.resolvedUrns).toEqual([URN_TABLE_FCL_CYCLE_COUNTER]);
+      }
+    });
+
+    it('fast-paths pure identifier with kind-tailored traversal steps for SoftwareComponent and ScheduledProcess', async () => {
+      const swGateway = new MockGraphGateway([
+        {
+          urn: URN_PKG_FCL_CYCLE_COUNTER,
+          canonicalName: 'MAIN1.FCL_PRC_CYCLE_COUNTER_PKG',
+          kind: 'SoftwareComponent',
+        },
+      ]);
+      const noopPlanner = { async plan(): Promise<any> { throw new Error('noop'); } };
+
+      const swResult = await buildQueryExecutionPlan({
+        request: {
+          query: 'MAIN1.FCL_PRC_CYCLE_COUNTER_PKG',
+          limit: 20,
+          includeInferred: false,
+          recentTurns: [],
+        },
+        pinnedSnapshotId: pinnedSnapshot,
+        gateway: swGateway,
+        planner: noopPlanner,
+      });
+
+      expect(swResult.status).toBe('executable');
+      if (swResult.status === 'executable') {
+        expect(swResult.plan.traversalSteps[0]?.relationType).toBe('CALLS');
+      }
+
+      const procGateway = new MockGraphGateway([
+        {
+          urn: URN_PROCESS_60000006,
+          canonicalName: '60000006',
+          kind: 'ScheduledProcess',
+        },
+      ]);
+      const procResult = await buildQueryExecutionPlan({
+        request: {
+          query: '60000006',
+          limit: 20,
+          includeInferred: false,
+          recentTurns: [],
+        },
+        pinnedSnapshotId: pinnedSnapshot,
+        gateway: procGateway,
+        planner: noopPlanner,
+      });
+
+      expect(procResult.status).toBe('executable');
+      if (procResult.status === 'executable') {
+        expect(procResult.plan.traversalSteps[0]?.relationType).toBe('CONTAINS_STEP');
       }
     });
 
