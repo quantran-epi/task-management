@@ -77,5 +77,18 @@ if (typeof window !== 'undefined') {
   }
 }
 
+// Fallback on globalThis for asynchronous React/AntD microtasks or timers
+// that fire after JSDOM environment teardown deletes `global.window`.
+if (typeof window !== 'undefined') {
+  const envWindow = window;
+  if (typeof (globalThis as any).window === 'undefined') {
+    Object.defineProperty(globalThis, 'window', {
+      get: () => envWindow,
+      configurable: true,
+      enumerable: false,
+    });
+  }
+}
+
 
 
