@@ -43,6 +43,7 @@ describe('KnowledgeServerConfigCard', () => {
   });
 
   afterEach(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
     cleanup();
     db.close();
     await Dexie.delete(dbName);
