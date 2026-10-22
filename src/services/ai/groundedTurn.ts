@@ -686,9 +686,14 @@ export async function runGroundedTurn(
     };
   }
 
+  const hasServerItems = Boolean(serverResponse.items && serverResponse.items.length > 0);
+  const hasMcpItems = Boolean(mcpItems && mcpItems.length > 0);
+
   if (
-    serverResponse.outcome === 'NO_EVIDENCE' ||
-    serverResponse.outcome === 'UNSUPPORTED'
+    !hasServerItems &&
+    !hasMcpItems &&
+    (serverResponse.outcome === 'NO_EVIDENCE' ||
+      serverResponse.outcome === 'UNSUPPORTED')
   ) {
     const rawRefinements =
       (serverResponse as unknown as { suggestedRefinements?: readonly string[] })
@@ -788,10 +793,15 @@ export async function runGroundedTurn(
       return reason ? { ...c, relevanceReason: reason } : c;
     });
 
+    const effectiveOutcome: 'READY' | 'DEGRADED' =
+      serverResponse.outcome === 'READY' || serverResponse.outcome === 'DEGRADED'
+        ? serverResponse.outcome
+        : (hasMcpItems ? 'READY' : 'DEGRADED');
+
     const grounding: ChatMessageGrounding = {
       schemaVersion: 1,
       authority: 'server',
-      outcome: serverResponse.outcome as 'READY' | 'DEGRADED',
+      outcome: effectiveOutcome,
       answer: synthResult.answer,
       citations: enrichedCitations,
       paths: persistedPaths,

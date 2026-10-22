@@ -898,6 +898,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       }
 
       console.error('[AIChatDrawer] Grounded pipeline or persistence error:', groundedErr);
+      if (groundedErr?.name === 'ZodError' || groundedErr?.issues) {
+        console.error('[AIChatDrawer] Zod validation details:', JSON.stringify(groundedErr.issues, null, 2));
+      }
       setGroundedLoadingStatus(null);
 
       // Fail-closed gate per D-04: If intent router is unavailable, stop immediately.
