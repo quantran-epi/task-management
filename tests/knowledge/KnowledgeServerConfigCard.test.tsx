@@ -225,9 +225,14 @@ describe('KnowledgeServerConfigCard', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /Lưu cấu hình/ }));
 
+    expect(await screen.findByText('Đã lưu cấu hình Knowledge Server.')).toBeInTheDocument();
     await waitFor(async () => {
-      const urlSetting = await db.settings.get('knowledge_server_base_url');
+      const [urlSetting, enabledSetting] = await Promise.all([
+        db.settings.get('knowledge_server_base_url'),
+        db.settings.get('knowledge_server_enabled'),
+      ]);
       expect(urlSetting?.value).toBe('https://knowledge.example.com');
+      expect(enabledSetting?.value).toBe(true);
     });
 
     // 2. Switch to NotesView without unmounting KnowledgeConfigProvider

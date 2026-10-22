@@ -966,29 +966,33 @@ describe('AIChatDrawer', () => {
       charLimit: 12000,
     });
 
-    // Mock streamChatEvents yielding tool_calls and then completing (hasToolCalls=true)
+    // Mock streamChatEvents: turn 1 emits tool_calls without text, turn 2 (loop after tool execution) returns no text, triggering final synthesis pass
+    let callCount = 0;
     async function* mockEvents() {
-      yield {
-        type: 'tool_calls',
-        calls: [
-          {
-            id: 'call_query_1',
-            type: 'function',
-            function: {
-              name: 'query_tasks',
-              arguments: JSON.stringify({}),
+      callCount++;
+      if (callCount === 1) {
+        yield {
+          type: 'tool_calls',
+          calls: [
+            {
+              id: 'call_query_1',
+              type: 'function',
+              function: {
+                name: 'query_tasks',
+                arguments: JSON.stringify({}),
+              },
             },
-          },
-        ],
-      };
+          ],
+        };
+      } else if (callCount === 2) {
+        // AI returns no text after tool result, causing hasToolCalls=true && !fullResponse
+        yield { type: 'text', delta: '' };
+      } else {
+        // Synthesis pass calls streamChatEvents
+        yield { type: 'text', delta: 'Tổng hợp: Hệ thống hiện có 0 tác vụ.' };
+      }
     }
     vi.spyOn(nineRouterClient, 'streamChatEvents').mockImplementation(mockEvents as any);
-
-    // Mock streamChatCompletion which is called by the synthesis step
-    async function* mockSynthesisCompletion() {
-      yield 'Tổng hợp: Hệ thống hiện có 0 tác vụ.';
-    }
-    vi.spyOn(nineRouterClient, 'streamChatCompletion').mockImplementation(mockSynthesisCompletion as any);
 
     render(
       <AIChatDrawer
