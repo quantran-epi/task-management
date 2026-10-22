@@ -267,6 +267,7 @@ describe('groundedTurn state machine', () => {
   it('4. NO_EVIDENCE -> refine without synthesize (zero-model-call)', async () => {
     vi.mocked(mockDeps.retrieveFederated).mockResolvedValueOnce({
       ...dummyServerResponse,
+      items: [],
       outcome: 'NO_EVIDENCE',
       suggestedRefinements: ['Gợi ý 1', 'Gợi ý 2'],
     } as unknown as FederatedRetrievalResponse);
@@ -284,6 +285,7 @@ describe('groundedTurn state machine', () => {
   it('5. UNSUPPORTED -> refine without synthesize (zero-model-call)', async () => {
     vi.mocked(mockDeps.retrieveFederated).mockResolvedValueOnce({
       ...dummyServerResponse,
+      items: [],
       outcome: 'UNSUPPORTED',
       suggestedRefinements: ['Refinement A'],
     } as unknown as FederatedRetrievalResponse);
