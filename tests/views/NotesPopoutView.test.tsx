@@ -16,7 +16,6 @@ describe('NotesPopoutView', () => {
 
   afterEach(async () => {
     cleanup();
-    await new Promise((resolve) => setTimeout(resolve, 50));
     await db.delete();
   });
 

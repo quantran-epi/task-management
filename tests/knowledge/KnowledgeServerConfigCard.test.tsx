@@ -44,7 +44,6 @@ describe('KnowledgeServerConfigCard', () => {
 
   afterEach(async () => {
     cleanup();
-    await new Promise((resolve) => setTimeout(resolve, 50));
     db.close();
     await Dexie.delete(dbName);
     vi.restoreAllMocks();
