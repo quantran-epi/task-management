@@ -54,7 +54,7 @@ describe('runAiOrchestratorLoop', () => {
 
   it('executes tool call and runs synthesis pass after tool execution', async () => {
     let callCount = 0;
-    mockStreamChatEvents.mockImplementation(async function* (args: any) {
+    mockStreamChatEvents.mockImplementation(async function* () {
       callCount++;
       if (callCount === 1) {
         yield {

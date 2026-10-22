@@ -24,7 +24,7 @@ import {
   executeAiTool,
   isMutationTool,
 } from '../ai/aiTools';
-import { pruneToolOutputsInMessages } from '../ai/historyPruning';
+import { runAiOrchestratorLoop } from '../ai/aiOrchestratorLoop';
 import { sendDesktopNotification } from '../../utils/desktopNotification';
 import type {
   TelegramInboundEvent,
@@ -32,10 +32,10 @@ import type {
   TelegramDataScope,
   TelegramBroadcastResult,
 } from './telegramTypes';
-import type { ChatCompletionMessage, ToolCall } from '../ai/types';
+import type { ChatCompletionMessage } from '../ai/types';
 import { isTauriApp } from '../../utils/timerPopout';
 import { getNineRouterConfig, getNineRouterApiKey } from '../ai/nineRouterTokenService';
-import { streamChatEvents, stripThinkingBlocks } from '../ai/nineRouterClient';
+import { stripThinkingBlocks } from '../ai/nineRouterClient';
 import { markdownToTelegramHtml } from './telegramHtml';
 import { buildGlobalContextPrompt } from '../ai/contextGrounding';
 import { rankBM25, tokenize, type BM25Document } from '../../utils/bm25';
@@ -1092,126 +1092,39 @@ export async function processTelegramInboundMessage(
 
   let rawAiResponse = '';
   let tokenCount = 0;
-  let loopCount = 0;
-  const MAX_LOOPS = 5;
-  let lastHadToolCalls = false;
 
   try {
-    while (loopCount < MAX_LOOPS) {
-      loopCount++;
-      let currentTurnResponse = '';
-      let hasToolCalls = false;
-      let toolCallsToRun: ToolCall[] = [];
-
-      const payload: {
-        model: string;
-        messages: ChatCompletionMessage[];
-        temperature: number;
-        tools?: any[];
-      } = {
-        model: aiConfig.defaultModel,
-        messages: pruneToolOutputsInMessages(currentMessages),
-        temperature: 0.1,
-      };
-      if (availableTools.length > 0) {
-        payload.tools = availableTools;
-      }
-
-      const generator = streamChatEvents({
-        endpoint: aiConfig.endpoint,
-        apiKey,
-        payload,
-      });
-
-      for await (const chunk of generator) {
-        if (chunk.type === 'text') {
-          currentTurnResponse += chunk.delta;
-        } else if (chunk.type === 'tool_calls') {
-          hasToolCalls = true;
-          toolCallsToRun = chunk.calls;
-        } else if (chunk.type === 'usage' && chunk.usage?.totalTokens) {
-          tokenCount = chunk.usage.totalTokens;
+    const loopResult = await runAiOrchestratorLoop({
+      endpoint: aiConfig.endpoint,
+      apiKey,
+      model: aiConfig.defaultModel,
+      messages: currentMessages,
+      ...(availableTools.length > 0 ? { tools: availableTools } : {}),
+      temperature: 0.1,
+      maxLoops: 5,
+      db,
+      synthesisPrompt:
+        'Dựa trên tất cả các kết quả công cụ và thông tin đã thu thập ở trên, hãy tổng hợp câu trả lời đầy đủ, chi tiết, chính xác và rõ ràng cho yêu cầu ban đầu.\n' +
+        'Yêu cầu định dạng:\n' +
+        '- Trình bày bằng Markdown hoàn chỉnh, mạch lạc, trực quan cho Telegram.\n' +
+        '- In đậm các từ khóa, mã trạng thái, ID quan trọng.\n' +
+        '- Nếu không tìm thấy thông tin, nêu rõ không có dữ liệu thay vì suy đoán.\n' +
+        '- Không gọi thêm bất kỳ công cụ nào nữa.',
+      onMutationCheck: async (toolName, args) => {
+        if (isMutationTool(toolName, args)) {
+          return {
+            proceed: false,
+            cancellationResult: JSON.stringify({
+              error: 'Thao tác thay đổi dữ liệu yêu cầu quyền Admin hoặc lệnh cụ thể.',
+            }),
+          };
         }
-      }
+        return { proceed: true };
+      },
+    });
 
-      rawAiResponse = currentTurnResponse;
-      lastHadToolCalls = hasToolCalls && toolCallsToRun.length > 0;
-
-      if (!hasToolCalls || toolCallsToRun.length === 0) {
-        break;
-      }
-
-      currentMessages.push({
-        role: 'assistant',
-        content: currentTurnResponse || null,
-        tool_calls: toolCallsToRun,
-      });
-
-      for (const tc of toolCallsToRun) {
-        let args: Record<string, any> = {};
-        try {
-          args = JSON.parse(tc.function.arguments || '{}');
-        } catch {}
-
-        let toolResult = '';
-        if (isMutationTool(tc.function.name, args)) {
-          toolResult = JSON.stringify({
-            error: 'Thao tác thay đổi dữ liệu yêu cầu quyền Admin hoặc lệnh cụ thể.',
-          });
-        } else {
-          try {
-            toolResult = await executeAiTool(tc.function.name, args, db);
-          } catch (toolErr: any) {
-            toolResult = JSON.stringify({
-              error: `Lỗi thực thi công cụ '${tc.function.name}': ${toolErr?.message || String(toolErr)}`,
-            });
-          }
-        }
-
-        currentMessages.push({
-          role: 'tool',
-          tool_call_id: tc.id,
-          name: tc.function.name,
-          content: toolResult,
-        });
-      }
-    }
-
-    // Final synthesis pass if tools were called and response is empty, mirroring AIChatDrawer
-    if (lastHadToolCalls || (!rawAiResponse.trim() && loopCount > 1)) {
-      rawAiResponse = '';
-      const synthesisMessages: ChatCompletionMessage[] = [
-        ...pruneToolOutputsInMessages(currentMessages),
-        {
-          role: 'user',
-          content:
-            'Dựa trên tất cả các kết quả công cụ và thông tin đã thu thập ở trên, hãy tổng hợp câu trả lời đầy đủ, chi tiết, chính xác và rõ ràng cho yêu cầu ban đầu.\n' +
-            'Yêu cầu định dạng:\n' +
-            '- Trình bày bằng Markdown hoàn chỉnh, mạch lạc, trực quan cho Telegram.\n' +
-            '- In đậm các từ khóa, mã trạng thái, ID quan trọng.\n' +
-            '- Nếu không tìm thấy thông tin, nêu rõ không có dữ liệu thay vì suy đoán.\n' +
-            '- Không gọi thêm bất kỳ công cụ nào nữa.',
-        },
-      ];
-
-      const synthesisStream = streamChatEvents({
-        endpoint: aiConfig.endpoint,
-        apiKey,
-        payload: {
-          model: aiConfig.defaultModel,
-          messages: synthesisMessages,
-          temperature: 0.1,
-        },
-      });
-
-      for await (const chunk of synthesisStream) {
-        if (chunk.type === 'text') {
-          rawAiResponse += chunk.delta;
-        } else if (chunk.type === 'usage' && chunk.usage?.totalTokens) {
-          tokenCount = chunk.usage.totalTokens;
-        }
-      }
-    }
+    rawAiResponse = loopResult.fullResponse;
+    tokenCount = loopResult.tokenUsage?.totalTokens || 0;
   } catch (aiErr: any) {
     console.error('[telegramWorker] AI generation error:', aiErr);
     rawAiResponse = `❌ Lỗi khi xử lý yêu cầu AI: ${aiErr?.message || 'Không thể kết nối đến máy chủ AI'}`;

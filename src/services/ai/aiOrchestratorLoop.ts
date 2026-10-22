@@ -25,7 +25,11 @@ export interface AiOrchestratorLoopOptions {
   onTextChunk?: (delta: string) => void;
   onReasoningChunk?: (delta: string) => void;
   onStatusChange?: (status: string | null) => void;
-  onUsage?: (usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number }) => void;
+  onUsage?: (usage: {
+    promptTokens?: number | undefined;
+    completionTokens?: number | undefined;
+    totalTokens?: number | undefined;
+  }) => void;
   onToolCall?: (call: { id: string; name: string; args: Record<string, any> }) => void;
   onToolResult?: (callId: string, result: string, durationMs: number) => void;
   onMutationCheck?: (
@@ -146,7 +150,7 @@ export async function runAiOrchestratorLoop(
         endpoint,
         apiKey,
         payload,
-        signal,
+        ...(signal ? { signal } : {}),
       });
 
       for await (const chunk of stream) {
@@ -184,7 +188,7 @@ export async function runAiOrchestratorLoop(
             messages: messagesToSend,
             temperature,
           },
-          signal,
+          ...(signal ? { signal } : {}),
         });
         for await (const delta of fallbackStream) {
           fullResponse += delta;
@@ -326,7 +330,7 @@ export async function runAiOrchestratorLoop(
         messages: synthesisMessages,
         temperature,
       },
-      signal,
+      ...(signal ? { signal } : {}),
     });
 
     for await (const chunk of synthesisStream) {

@@ -26,40 +26,32 @@ import {
   setNineRouterConfig,
   fetchAvailableModels,
 } from '../../services/ai/nineRouterTokenService';
-import {
-  streamChatEvents,
-  streamChatCompletion,
-  stripThinkingBlocks,
-} from '../../services/ai/nineRouterClient';
+import { stripThinkingBlocks } from '../../services/ai/nineRouterClient';
 import {
   buildItemContextPrompt,
   buildGlobalContextPrompt,
   serializeDocumentContext,
   extractMentionedEntityIds,
 } from '../../services/ai/contextGrounding';
-import {
-  pruneToolOutputsInMessages,
-  selectMessagesWithinBudget,
-} from '../../services/ai/historyPruning';
+import { selectMessagesWithinBudget } from '../../services/ai/historyPruning';
 import { compactThreadContext, extractMessageText } from '../../services/ai/contextCompaction';
 import {
   AI_DATABASE_TOOLS,
   type AiToolDefinition,
-  executeAiTool,
   isMutationTool,
   describeToolMutationWithContext,
   normalizeToolName,
   pruneToolsForContext,
 } from '../../services/ai/aiTools';
+import { runAiOrchestratorLoop } from '../../services/ai/aiOrchestratorLoop';
 import {
   getMcpServers,
   discoverAllMcpTools,
-  executeDynamicMcpTool,
   getEnabledMcpInstructions,
   toggleMcpServer,
   type McpServerConfig,
 } from '../../services/ai/mcpClient';
-import type { ChatCompletionMessage, ToolCall } from '../../services/ai/types';
+import type { ChatCompletionMessage } from '../../services/ai/types';
 import { launchClaudeTerminal } from '../../services/ai/claudeCliService';
 import { updateTask, getTask } from '../../db/repositories/taskRepo';
 import { createNote } from '../../db/repositories/noteRepo';
@@ -1149,7 +1141,6 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
 
     let fullResponse = '';
     const currentMessages: ChatCompletionMessage[] = [...recentMsgs];
-    let loopCount = 0;
     const MAX_TOOL_LOOPS = 30;
     let lastHadToolCalls = false;
 
@@ -1174,273 +1165,90 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
     });
 
     try {
-      while (loopCount < MAX_TOOL_LOOPS) {
-        loopCount++;
-        // Bug 2 cause B: reset the per-turn stream buffer so each tool-loop turn's text
-        // is isolated. Previously fullResponse accumulated across turns, so stale
-        // prior-turn text was re-concatenated into the next turn's assistant message and
-        // the final committed answer — producing the repeated degraded chain.
-        fullResponse = '';
-        let hasToolCalls = false;
-        let toolCallsToRun: ToolCall[] = [];
-
-        try {
-          const messagesToSend = pruneToolOutputsInMessages(currentMessages);
-          const stream = streamChatEvents({
-            endpoint: config.endpoint,
-            apiKey,
-            payload: {
-              model: targetModel,
-              messages: messagesToSend,
-              tools: toolsForTurn,
-            },
-            signal: controller.signal,
-          });
-
-          for await (const chunk of stream) {
-            if (chunk.type === 'reasoning') {
-              // Show thinking line dynamically during loading indicator, newest overrides previous
-              const cleanReasoning = chunk.delta.trim().replace(/\n+/g, ' ');
-              if (cleanReasoning) {
-                setStreamingStatus(`Suy nghĩ: ${cleanReasoning.slice(0, 100)}...`);
-              }
-            } else if (chunk.type === 'text') {
-              fullResponse += chunk.delta;
-              aiDebugService.appendStreamChunk(turnId, chunk.delta);
-              setStreamingText(stripThinkingBlocks(fullResponse));
-              setStreamingStatus(null);
-            } else if (chunk.type === 'tool_calls') {
-              hasToolCalls = true;
-              toolCallsToRun = chunk.calls;
-            } else if (chunk.type === 'usage') {
-              accumulatedTokenUsage = {
-                promptTokens: (accumulatedTokenUsage?.promptTokens || 0) + (chunk.usage.promptTokens || 0),
-                completionTokens: (accumulatedTokenUsage?.completionTokens || 0) + (chunk.usage.completionTokens || 0),
-                totalTokens: (accumulatedTokenUsage?.totalTokens || 0) + (chunk.usage.totalTokens || 0),
-              };
-            }
-          }
-        } catch (streamErr: any) {
-          if (streamErr.name === 'AbortError') throw streamErr;
-          // If model rejected tools payload, fallback to standard stream without tools
-          if (loopCount === 1 && !fullResponse) {
-            console.warn('[AIChatDrawer] Tools stream error, retrying without tools:', streamErr);
-            const fallbackStream = streamChatCompletion({
-              endpoint: config.endpoint,
-              apiKey,
-              payload: {
-                model: targetModel,
-                messages: pruneToolOutputsInMessages(currentMessages),
-              },
-              signal: controller.signal,
-            });
-            for await (const delta of fallbackStream) {
-              fullResponse += delta;
-              aiDebugService.appendStreamChunk(turnId, delta);
-              setStreamingText(fullResponse);
-              setStreamingStatus(null);
-            }
-            break;
-          }
-          throw streamErr;
-        }
-
-        lastHadToolCalls = hasToolCalls && toolCallsToRun.length > 0;
-        if (!hasToolCalls || toolCallsToRun.length === 0) {
-          break;
-        }
-
-        // Show friendly recognizable status for tool execution
-        const toolLabels = toolCallsToRun
-          .map((tc) => {
-            const normalized = normalizeToolName(tc.function.name);
-            switch (normalized) {
-              case 'query_tasks': return 'Tra cứu tác vụ';
-              case 'query_projects': return 'Tra cứu dự án';
-              case 'query_milestones': return 'Tra cứu cột mốc';
-              case 'get_item_details': return 'Chi tiết mục';
-              case 'query_worklogs': return 'Nhật ký công việc';
-              case 'get_active_timer': return 'Trạng thái bấm giờ';
-              case 'get_daily_schedule': return 'Lịch làm việc';
-              case 'check_capacity_feasibility': return 'Khả thi năng suất';
-              case 'get_day_insight': return 'Đánh giá ngày';
-              case 'get_analytics_summary': return 'Phân tích thống kê';
-              case 'query_notes': return 'Ghi chú';
-              case 'query_attention_items': return 'Mục cần chú ý';
-              case 'query_recurring_tasks': return 'Tác vụ định kỳ';
-              case 'get_system_status': return 'Trạng thái hệ thống';
-              case 'list_advertised_groups': return 'Nhóm Graphiti';
-              case 'search_nodes': return 'Nút Graphiti';
-              case 'search_memory_facts': return 'Dữ kiện Graphiti';
-              case 'get_catalog_object_context': return 'Ngữ cảnh Graphiti';
-              case 'create_task': return 'Tạo tác vụ';
-              case 'update_task': return 'Cập nhật tác vụ';
-              case 'delete_task': return 'Xóa tác vụ';
-              case 'plan_allocation': return 'Lên lịch phân bổ';
-              case 'log_work_session': return 'Ghi nhận thời gian';
-              default: return normalized || tc.function.name;
-            }
-          })
-          .join(', ');
-
-        setStreamingStatus(`Đang truy vấn cơ sở dữ liệu: ${toolLabels}...`);
-
-        currentMessages.push({
-          role: 'assistant',
-          content: fullResponse || null,
-          tool_calls: toolCallsToRun,
-        });
-
-        for (const tc of toolCallsToRun) {
-          let args: Record<string, any> = {};
-          try {
-            args = JSON.parse(tc.function.arguments || '{}');
-          } catch {}
-
-          console.log(`[AI Harness] 🛠️ Model invoked tool "${tc.function.name}":`, args);
-          aiDebugService.recordToolCall(turnId, {
-            id: tc.id,
-            name: tc.function.name,
-            args,
-          });
-
-          const normalizedToolName = normalizeToolName(tc.function.name);
-          const isLocalDbTool = AI_DATABASE_TOOLS.some(
-            (t) => normalizeToolName(t.function.name) === normalizedToolName
-          );
-
-          // Check if this local tool performs a data mutation requiring user confirmation
-          if (isLocalDbTool && isMutationTool(tc.function.name, args)) {
-            if (!autoApproveMutations) {
-              const summary = await describeToolMutationWithContext(tc.function.name, args, db);
-              setStreamingStatus('Chờ xác nhận hành động...');
-              const confirmed = await new Promise<boolean>((resolve) => {
-                pendingConfirmationRef.current = { resolve };
-                setPendingConfirmation({
-                  toolName: tc.function.name,
-                  summary,
-                  args,
-                });
-              });
-              setPendingConfirmation(null);
-              pendingConfirmationRef.current = null;
-
-              if (!confirmed) {
-                const cancelMsg = JSON.stringify({
-                  cancelled: true,
-                  message: 'Người dùng đã từ chối thao tác này (User declined confirmation). Không có dữ liệu nào bị thay đổi.',
-                });
-                console.log(`[AI Harness] 🚫 User declined mutation "${tc.function.name}"`);
-                aiDebugService.recordToolResult(turnId, tc.id, cancelMsg, 0);
-                currentMessages.push({
-                  role: 'tool',
-                  tool_call_id: tc.id,
-                  name: tc.function.name,
-                  content: cancelMsg,
-                });
-                continue;
-              }
-            } else {
-              console.log(`[AI Harness] ⚡ Auto-approving mutation tool "${tc.function.name}" (bypass active)`);
-            }
-          }
-
-          setStreamingStatus('Đang thực thi...');
-          const toolStartTime = Date.now();
-          let toolResult: string;
-          try {
-            if (isLocalDbTool) {
-              toolResult = await executeAiTool(tc.function.name, args, db);
-            } else {
-              // Route to matching enabled MCP server
-              toolResult = await executeDynamicMcpTool(normalizedToolName, args, db);
-            }
-          } catch (toolErr: any) {
-            console.error(`[AI Harness] ❌ Tool execution failed for "${tc.function.name}":`, toolErr);
-            toolResult = JSON.stringify({
-              error: `Lỗi thực thi công cụ '${tc.function.name}': ${toolErr?.message || String(toolErr)}`,
-            });
-          }
-          const toolDuration = Date.now() - toolStartTime;
-          toolLog.log({
-            outcome: toolResult.includes('"error"') ? 'error' : 'ok',
-            latencyMs: toolDuration,
-            safeIds: [tc.id],
-            counts: { args: Object.keys(args).length },
-            metadata: { toolName: normalizedToolName, isMutation: isLocalDbTool && isMutationTool(tc.function.name, args) },
-          });
-
-          console.log(`[AI Harness] 📦 Tool result for "${tc.function.name}":`, toolResult);
-          aiDebugService.recordToolResult(turnId, tc.id, toolResult, toolDuration);
-
-          if (tc.function.name === 'generate_file' || tc.function.name === 'generate_pptx') {
-            try {
-              const parsedRes = JSON.parse(toolResult);
-              if (parsedRes.success && parsedRes.filename) {
-                const rawArgsContent = args?.content || args?.markdownContent || (Array.isArray(args?.slides) ? JSON.stringify(args.slides) : undefined);
-                turnGeneratedFiles.push({
-                  id: tc.id,
-                  filename: parsedRes.filename,
-                  format: parsedRes.format || 'txt',
-                  sizeBytes: parsedRes.sizeBytes || 0,
-                  slideCount: parsedRes.slideCount,
-                  content: parsedRes.content || rawArgsContent,
-                });
-              }
-            } catch {}
-          }
-
-          currentMessages.push({
-            role: 'tool',
-            tool_call_id: tc.id,
-            name: tc.function.name,
-            content: toolResult,
-          });
-        }
-
-        setStreamingStatus('Đang tổng hợp thông tin...');
-      }
-
-      // If loop completed while tools were called, or response is empty after tools ran,
-      // perform a final synthesis pass to guarantee an answer is generated
-      if (lastHadToolCalls || (!fullResponse.trim() && loopCount > 1)) {
-        setStreamingStatus('Đang tổng hợp câu trả lời hoàn chỉnh...');
-        // Reset fullResponse to prevent duplicating previous tool-call draft text
-        fullResponse = '';
-        setStreamingText('');
-
-        const synthesisMessages: ChatCompletionMessage[] = [
-          ...pruneToolOutputsInMessages(currentMessages),
-          {
-            role: 'user',
-            content:
-              'Dựa trên tất cả các kết quả công cụ và thông tin đã thu thập ở trên, hãy tổng hợp câu trả lời đầy đủ, chi tiết, chính xác và rõ ràng cho yêu cầu ban đầu.\n' +
-              'Yêu cầu định dạng:\n' +
-              '- Trình bày bằng Markdown hoàn chỉnh, mạch lạc, trực quan.\n' +
-              '- Sử dụng tiêu đề (heading), danh sách gạch đầu dòng / số thứ tự hợp lý.\n' +
-              '- In đậm các từ khóa, mã trạng thái, ID, bảng hoặc tham số quan trọng.\n' +
-              '- Nếu có nhiều bước quy trình hoặc phân nhánh, trình bày theo từng giai đoạn rõ ràng.\n' +
-              '- Không gọi thêm bất kỳ công cụ nào nữa.',
-          },
-        ];
-
-        const synthesisStream = streamChatCompletion({
-          endpoint: config.endpoint,
-          apiKey,
-          payload: {
-            model: targetModel,
-            messages: synthesisMessages,
-          },
-          signal: controller.signal,
-        });
-
-        for await (const delta of synthesisStream) {
+      const toolCallsById = new Map<string, { name: string; args: Record<string, any> }>();
+      const loopResult = await runAiOrchestratorLoop({
+        endpoint: config.endpoint,
+        apiKey,
+        model: targetModel,
+        messages: currentMessages,
+        tools: toolsForTurn,
+        maxLoops: MAX_TOOL_LOOPS,
+        db,
+        signal: controller.signal,
+        onTextChunk: (delta) => {
           fullResponse += delta;
           aiDebugService.appendStreamChunk(turnId, delta);
           setStreamingText(stripThinkingBlocks(fullResponse));
           setStreamingStatus(null);
-        }
-      }
+        },
+        onStatusChange: (status) => {
+          if (status === 'Đang tổng hợp câu trả lời hoàn chỉnh...') {
+            fullResponse = '';
+            setStreamingText('');
+          }
+          setStreamingStatus(status);
+        },
+        onUsage: (usage) => {
+          accumulatedTokenUsage = {
+            promptTokens: (accumulatedTokenUsage?.promptTokens || 0) + (usage.promptTokens || 0),
+            completionTokens: (accumulatedTokenUsage?.completionTokens || 0) + (usage.completionTokens || 0),
+            totalTokens: (accumulatedTokenUsage?.totalTokens || 0) + (usage.totalTokens || 0),
+          };
+        },
+        onToolCall: (call) => {
+          lastHadToolCalls = true;
+          toolCallsById.set(call.id, { name: call.name, args: call.args });
+          console.log(`[AI Harness] 🛠️ Model invoked tool "${call.name}":`, call.args);
+          aiDebugService.recordToolCall(turnId, call);
+        },
+        onToolResult: (callId, result, durationMs) => {
+          const call = toolCallsById.get(callId);
+          const normalizedToolName = normalizeToolName(call?.name || '');
+          toolLog.log({
+            outcome: result.includes('"error"') ? 'error' : 'ok',
+            latencyMs: durationMs,
+            safeIds: [callId],
+            counts: { args: Object.keys(call?.args || {}).length },
+            metadata: {
+              toolName: normalizedToolName,
+              isMutation: call ? isMutationTool(call.name, call.args) : false,
+            },
+          });
+          console.log(`[AI Harness] 📦 Tool result for "${call?.name || callId}":`, result);
+          aiDebugService.recordToolResult(turnId, callId, result, durationMs);
+        },
+        onMutationCheck: async (toolName, args) => {
+          if (autoApproveMutations) {
+            console.log(`[AI Harness] ⚡ Auto-approving mutation tool "${toolName}" (bypass active)`);
+            return { proceed: true };
+          }
+
+          const summary = await describeToolMutationWithContext(toolName, args, db);
+          setStreamingStatus('Chờ xác nhận hành động...');
+          const confirmed = await new Promise<boolean>((resolve) => {
+            pendingConfirmationRef.current = { resolve };
+            setPendingConfirmation({ toolName, summary, args });
+          });
+          setPendingConfirmation(null);
+          pendingConfirmationRef.current = null;
+
+          return confirmed
+            ? { proceed: true }
+            : {
+                proceed: false,
+                cancellationResult: JSON.stringify({
+                  cancelled: true,
+                  message: 'Người dùng đã từ chối thao tác này (User declined confirmation). Không có dữ liệu nào bị thay đổi.',
+                }),
+              };
+        },
+        onFileGenerated: (file) => {
+          turnGeneratedFiles.push(file);
+        },
+      });
+
+      fullResponse = loopResult.fullResponse;
+      accumulatedTokenUsage = loopResult.tokenUsage;
 
       // 6. Commit assistant response to DB
       const cleanCommittedResponse = stripThinkingBlocks(fullResponse);
