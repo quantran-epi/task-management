@@ -57,6 +57,7 @@ export interface GroundedTurnInput {
     type: TaskMateEntityType;
     id: string;
   };
+  preRoutedIntent?: RouteIntentResult;
 }
 
 export interface CandidateRef {
@@ -249,15 +250,18 @@ export async function runGroundedTurn(
   //    query_knowledge + mixed drive knowledge retrieval; clarify asks the user back.
   //    NOTE: no keyword/verb routing — intent is reasoned by the LLM. If the LLM is
   //    unreachable, routeIntent throws (AI feature UNAVAILABLE, no routing fallback).
-  const intentDecision = await deps.routeIntent(input.query, {
-    completeJsonArgs: {
-      endpoint: input.config.endpoint,
-      apiKey: input.config.apiKey,
-      model: input.config.model,
-    },
-    signal: input.signal,
-    recentTurns: input.recentTurns,
-  });
+  //    Reuse preRoutedIntent if caller already performed routing (prevents duplicate intent calls).
+  const intentDecision =
+    input.preRoutedIntent ??
+    (await deps.routeIntent(input.query, {
+      completeJsonArgs: {
+        endpoint: input.config.endpoint,
+        apiKey: input.config.apiKey,
+        model: input.config.model,
+      },
+      signal: input.signal,
+      recentTurns: input.recentTurns,
+    }));
 
   const effectiveIntent =
     intentDecision.intent ||

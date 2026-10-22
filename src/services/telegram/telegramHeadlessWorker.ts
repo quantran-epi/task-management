@@ -288,13 +288,34 @@ export function formatGroundedAnswerForTelegram(grounding: ChatMessageGrounding)
     return '*(Không tìm thấy câu trả lời phù hợp trong tài liệu)*';
   }
   const parts: string[] = [];
-  if (ans.conclusion && ans.conclusion.trim()) {
-    parts.push(ans.conclusion.trim());
+  const conclusionText = ans.conclusion?.trim() || '';
+  if (conclusionText) {
+    parts.push(conclusionText);
   }
+
+  // Avoid duplicating content if conclusion already covers the claims
   if (ans.claims && ans.claims.length > 0) {
-    const claimTexts = ans.claims.map((c) => `- ${c.text.trim()}`);
-    parts.push(claimTexts.join('\n'));
+    const normalizeForOverlap = (str: string) =>
+      str.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+    const normConclusion = normalizeForOverlap(conclusionText);
+
+    const nonRedundantClaims = ans.claims.filter((c) => {
+      const claimStr = c.text?.trim() || '';
+      if (!claimStr) return false;
+      const normClaim = normalizeForOverlap(claimStr);
+      // If conclusion already contains almost the entire claim or vice-versa, skip it
+      if (normConclusion && normClaim.length > 15 && normConclusion.includes(normClaim)) {
+        return false;
+      }
+      return true;
+    });
+
+    if (nonRedundantClaims.length > 0) {
+      const claimTexts = nonRedundantClaims.map((c) => `- ${c.text.trim()}`);
+      parts.push(claimTexts.join('\n'));
+    }
   }
+
   const hypotheses = (ans as any).hypotheses;
   if (Array.isArray(hypotheses) && hypotheses.length > 0) {
     const hypTexts = hypotheses.map((h: any) => `💡 *Giả thuyết:* ${(h.text || '').trim()}`);
@@ -791,13 +812,15 @@ export async function processTelegramInboundMessage(
   if (apiKey && aiConfig.endpoint && dataScope !== 'pure_llm') {
     try {
       const mcpCapabilities = await getEnabledMcpCapabilitySummaries(db);
+      // Bound history to at most 3 recent turns for intent classification to prevent prompt pollution
+      const routerRecentTurns = chatHistory.slice(-3);
       routedIntent = await routeIntent(trimmedText, {
         completeJsonArgs: {
           endpoint: aiConfig.endpoint,
           apiKey,
           model: aiConfig.defaultModel,
         },
-        recentTurns: chatHistory,
+        recentTurns: routerRecentTurns,
         mcpCapabilities,
       });
     } catch (intentErr) {
@@ -967,6 +990,7 @@ export async function processTelegramInboundMessage(
           },
           catalog,
           recentSessionId: `telegram-${chat_id}`,
+          preRoutedIntent: routedIntent ?? undefined,
         },
         deps
       );
