@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import 'fake-indexeddb/auto';
 import { TaskPlannerDatabase } from '../../src/db';
@@ -15,6 +15,8 @@ describe('NotesPopoutView', () => {
   });
 
   afterEach(async () => {
+    cleanup();
+    await new Promise((resolve) => setTimeout(resolve, 50));
     await db.delete();
   });
 
