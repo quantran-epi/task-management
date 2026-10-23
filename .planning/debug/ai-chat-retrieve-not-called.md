@@ -1,5 +1,5 @@
 ---
-status: resolved
+status: awaiting_human_verify
 trigger: "After recent fix commits, AI chat drawer is comprehensively broken and no longer calls retrieve API."
 created: 2026-10-22
 updated: 2026-10-23
@@ -27,10 +27,20 @@ branch: master
 
 ## Current Focus
 
-hypothesis: "restoreBackupPayload and rollbackToSnapshot unconditionally called documentSets.clear() but only bulkAdd incoming sets when the payload field existed and was non-empty. Any legacy backup (schemaVersion <= 9) or pre-v10 snapshot omitting documentSets permanently erased the local catalog, leaving routeScope with no isBase entries, hence setTierAssignments: [] and the D-37 clarify path instead of retrieve."
-test: "Code inspection of both clear sites, byte inspection of live Tauri IndexedDB, targeted restore/rollback tests with absent vs explicitly-empty documentSets."
-expecting: "Absent field preserves existing knowledge tables; explicit empty array still clears; legacy snapshot rollback preserves sets."
-status: "Data-loss defect CONFIRMED by code and reversible by tests. Causal link to the Oct 22 11:32Z HAR window NOT proven: live backupMetadata contains no restore entry between the good 09:07Z capture and the bad 11:32Z capture, and only three backupMetadata records total (all Oct 2/Oct 18). Treat asymmetry as a real upstream contributor that can produce the observed empty-catalog state, not as the proven trigger for this specific HAR."
+hypothesis: "12c5330 hoisted the D-37 empty-scope guard to run before MCP is considered (right after routeScope). That is too early: a turn with no document sets but a configured MCP target is a valid MCP-only retrieval and must not clarify. Correct contract is docs scope and MCP as independent sources: docs+MCP parallel, docs-only, MCP-only, clarify only when neither available."
+test: "Targeted groundedTurn tests covering the four routing matrix cases, parallel docs+MCP dispatch, and one-source failure degradation."
+expecting: "MCP-only never calls retrieveFederated with setTierAssignments: []; neither-source clarifies; one-source failure still synthesizes remaining evidence and marks degraded."
+status: "Root cause CONFIRMED by code trace. Fix in progress: provider-independent orchestration restructure in runGroundedTurn."
+
+reasoning_checkpoint:
+  hypothesis: "The hoisted guard at groundedTurn.ts:297 returns clarify_intent whenever routeScope yields empty setTierAssignments, even when intent routing selected a configured MCP source. MCP-only turns therefore terminate before any retrieval, reproducing the no-retrieve/no-synthesis symptom."
+  confirming_evidence:
+    - "Commit 12c5330 added the guard immediately after deps.routeScope, before require_mcp/target_mcp_servers are read at old lines 464-465."
+    - "The former MCP dispatch was coupled to a mandatory Docs retrieve: docsRetrievalPromise was built unconditionally with resolvedScope.setTierAssignments, so empty scope would have thrown ZodError client-side (FederatedRetrievalRequestSchema.min(1))."
+    - "INTENT_SYSTEM_PROMPT explicitly routes live external/MCP queries to require_mcp; such queries need not match any local document set."
+  falsification_test: "An MCP-only turn (require_mcp true, target_mcp_servers non-empty, setTierAssignments empty) returning clarify_intent or calling retrieveFederated would disprove the fix."
+  fix_rationale: "Compute source availability once (hasDocsScope, hasConfiguredMcp), clarify only when neither exists, start Docs and MCP promises independently via Promise.allSettled, synthesize whichever succeeds, and degrade rather than crash on a single-source failure."
+  blind_spots: "Live Tauri HAR rerun not performed; MCP-only behavior verified at unit level. UI loading-status hooks still assume retrieve runs; cosmetic only."
 
 ## Upstream Cause Investigation (2026-10-23)
 
@@ -110,27 +120,38 @@ status: "Data-loss defect CONFIRMED by code and reversible by tests. Causal link
 
 ## Resolution
 
-**Root cause:**
-When `semanticScopeRouter.routeScope` returns `setTierAssignments: []` (which occurs when no document sets exist in the local catalog with `isBase === true` and no set aliases match the query, e.g. after database restore wiped documentSets via clear-without-repopulate asymmetry), the server retrieval path (`groundedTurn.ts:465`) dispatched a request body with an empty assignments array. `FederatedRetrievalRequestSchema.parse` (`knowledgeClient.ts:710`) enforces `.min(1)` and throws a ZodError before any HTTP fetch occurs (zero network traffic). The existing D-37 empty-scope guard existed ONLY inside `executeLocalPath` (lines 325-328), leaving the server path unprotected. Because `isFallbackAllowed` does not recognize Zod errors, `groundedTurn.ts:653` re-threw the error, crashing the turn before synthesis.
+**Root cause (corrected 2026-10-23):**
+Two defects stacked on the same orchestration path.
+
+1. Original: server retrieval dispatched `setTierAssignments: []` into `FederatedRetrievalRequestSchema` (`.min(1)`), throwing ZodError before fetch; `isFallbackAllowed` did not recognize it, so the turn crashed (silent zero-traffic failure). Fixed in 12c5330.
+2. Regression introduced by 12c5330: the empty-scope guard was hoisted to immediately after `deps.routeScope`, before `require_mcp` / `target_mcp_servers` are evaluated. Any MCP-only turn (intent routed `require_mcp: true`, valid target server, but no matching document set) was converted to `clarify_intent` and terminated before MCP dispatch — reproducing the no-retrieve / no-synthesis symptom class for MCP-served queries. The former docs dispatch was also unconditional, so docs and MCP were not independent sources.
+
+**Corrected contract (confirmed):**
+- document sets + configured MCP: Docs `/retrieve` and MCP run in parallel, then synthesize.
+- document sets only: Docs retrieval only.
+- no document sets + configured MCP: MCP only; never issue `setTierAssignments: []`.
+- neither: `clarify_intent`.
+- one configured source fails while other succeeds: synthesize remaining evidence, mark degraded, never crash.
 
 **Fix:**
-1. Hoisted D-37 empty-scope guard in `src/services/ai/groundedTurn.ts` to immediately follow `deps.routeScope` (line 295), returning `{ kind: 'clarify_intent', clarifyQuestion: '...' }` before any retrieval dispatch.
-2. Removed duplicate guard inside `executeLocalPath`.
-3. In `groundedTurn.ts` retrieve error handler, degraded unhandled non-transport retrieve errors to `executeLocalPath('NETWORK_ERROR', ...)` instead of hard re-throwing.
-4. Added tests `16b` (server enabled + empty scope returns clarify without retrieve) and `16c` (non-transport retrieve error degrades to local fallback) in `tests/ai/groundedTurn.test.ts`.
-5. Data-loss fix in `src/services/backup/restoreBackup.ts`: knowledge tables (`documentSets`, `publishedDocuments`, `publishAttempts`, `dlpAudits`, `knowledgeLinks`) are now cleared only when the payload/snapshot explicitly carries a `documentSets` field. Legacy payloads omitting the field preserve the live catalog; an explicit `documentSets: []` still clears, preserving existing behavior for intentional empties.
-6. Updated `tests/services/backup/knowledgeBackupRestore.test.ts`: legacy restore preserves the catalog; explicit-empty clears it; rolling back a pre-v10 snapshot preserves the catalog.
+1. `src/services/ai/groundedTurn.ts`: source availability computed once (`hasDocsScope`, `hasConfiguredMcp`). Clarify only when neither exists. Docs promise starts only when `serverEnabled && hasDocsScope`; MCP promise starts only when MCP configured. Both settle via `Promise.allSettled`.
+2. Single-source failure degradation: MCP rejected while Docs enabled -> warning + Docs response marked `DEGRADED`; Docs rejected while MCP yielded items -> warning + synthetic empty `DEGRADED` response so MCP evidence still synthesizes; both failing -> existing fallback/loc error path.
+3. Added `emptyRetrievalResponse(outcome)` helper for the MCP-only and docs-failed degraded cases. No new deps or abstractions beyond this local helper.
+4. Retrieve error handler from 12c5330 retained (unhandled non-transport errors degrade to local path instead of throwing).
+5. Preserved backup data-loss fix from 2427fc2 unchanged.
 
 **Verification:**
-Ran `npx vitest run tests/ai/groundedTurn.test.ts` (34/34 passing) and `tests/ai/semanticScopeRouter.test.ts` (5/5 passing) for 12c5330. Ran `vitest run tests/services/backup/knowledgeBackupRestore.test.ts` (10/10) and `restoreBackup.test.ts`, `restoreFailure.test.ts`, `backupChatGrounding.test.ts`, `exportBackup.test.ts` (20/20 combined) for the restore fix.
+- `npx vitest run tests/ai/groundedTurn.test.ts` — 39/39 passing (includes new routing-matrix suite: MCP-only, Docs-only, parallel Docs+MCP start, Docs-fail/MCP-succeed degraded, neither-source clarify).
+- `npx vitest run src/services/knowledge/__tests__/knowledgeClient.fallback.test.ts` — 14/14 passing.
+- `npx tsc --noEmit -p tsconfig.json` — clean.
 
-**Caveat:** The empty catalog in the live DB is real and the restore/rollback asymmetry could have caused it, but no restore metadata record documents the event. Logged as a real data-loss bug, not proven as this HAR's trigger.
+**Caveat:** The empty catalog in the live DB is real and the restore/rollback asymmetry could have caused it, but no restore metadata record documents the event. Live Tauri HAR rerun not performed; MCP-only behavior verified at unit level.
 
 **Files changed:**
 - `src/services/ai/groundedTurn.ts`
 - `tests/ai/groundedTurn.test.ts`
-- `src/services/backup/restoreBackup.ts`
-- `tests/services/backup/knowledgeBackupRestore.test.ts`
+- `src/services/backup/restoreBackup.ts` (earlier 2427fc2)
+- `tests/services/backup/knowledgeBackupRestore.test.ts` (earlier 2427fc2)
 - `.planning/debug/ai-chat-retrieve-not-called.md`
 
-**Commits:** `12c5330` (retrieve guard), `c32b702` (debug state), `2427fc2` (legacy backup catalog preservation).
+**Commits:** `12c5330` (initial retrieve guard, superseded orchestration), `c32b702` (debug state), `2427fc2` (legacy backup catalog preservation), current commit (independent source orchestration).

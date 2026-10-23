@@ -817,7 +817,7 @@ describe('groundedTurn state machine', () => {
     );
   });
 
-  it('28. When MCP retrieval fails, turn recovers with warning and completes synthesis from Docs', async () => {
+  it('28. When MCP retrieval fails, turn recovers with warning and marks Docs result degraded', async () => {
     mockDeps.runMcpRetrieval = vi.fn().mockRejectedValue(new Error('MCP server timeout or connection reset'));
 
     vi.mocked(mockDeps.routeIntent).mockResolvedValueOnce({
@@ -834,11 +834,135 @@ describe('groundedTurn state machine', () => {
     const res = await runGroundedTurn(mockInput, mockDeps);
     expect(res.kind).toBe('grounded_answer');
     if (res.kind === 'grounded_answer') {
+      expect(res.grounding.outcome).toBe('DEGRADED');
       expect(res.grounding.coverageWarnings).toContain(
         'Máy chủ MCP không phản hồi kịp thời; câu trả lời được tổng hợp từ tài liệu nội bộ.'
       );
     }
     expect(mockDeps.synthesizeGroundedAnswer).toHaveBeenCalled();
+  });
+
+  describe('retrieval source routing matrix', () => {
+    const mcpItems = [
+      {
+        serverId: 'graphiti-banking',
+        serverName: 'Graphiti Banking MCP',
+        toolName: 'search_nodes',
+        args: { query: 'SVFE_SHB.ACCOUNTS' },
+        rawResult: 'Account details found',
+        timestamp: '2026-10-20T00:00:00.000Z',
+      },
+    ];
+
+    function intentWithMcp(requireMcp: boolean, servers: string[]) {
+      return {
+        intent: 'query_knowledge' as const,
+        confidence: 0.95,
+        entities: [],
+        language: 'vi',
+        needs_clarification: false,
+        clarify_question: null,
+        require_mcp: requireMcp,
+        target_mcp_servers: servers,
+      } as any;
+    }
+
+    it('MCP only: empty scope runs MCP without any Docs retrieve request', async () => {
+      mockDeps.runMcpRetrieval = vi.fn().mockResolvedValue({ items: mcpItems, warnings: [] });
+      vi.mocked(mockDeps.routeIntent).mockResolvedValueOnce(intentWithMcp(true, ['graphiti-banking']));
+      vi.mocked(mockDeps.routeScope).mockResolvedValueOnce({
+        setTierAssignments: [],
+        comparisonMode: null,
+        routerSource: 'alias',
+      });
+
+      const res = await runGroundedTurn(mockInput, mockDeps);
+
+      expect(res.kind).toBe('grounded_answer');
+      expect(mockDeps.retrieveFederated).not.toHaveBeenCalled();
+      expect(mockDeps.runMcpRetrieval).toHaveBeenCalledWith(
+        expect.objectContaining({ serverIds: ['graphiti-banking'] })
+      );
+      expect(mockDeps.packEvidence).toHaveBeenCalledWith(
+        expect.objectContaining({ serverResponse: expect.anything(), mcpItems })
+      );
+      expect(mockDeps.synthesizeGroundedAnswer).toHaveBeenCalled();
+    });
+
+    it('Docs only: non-empty scope skips MCP', async () => {
+      mockDeps.runMcpRetrieval = vi.fn();
+      vi.mocked(mockDeps.routeIntent).mockResolvedValueOnce(intentWithMcp(false, []));
+
+      const res = await runGroundedTurn(mockInput, mockDeps);
+
+      expect(res.kind).toBe('grounded_answer');
+      expect(mockDeps.retrieveFederated).toHaveBeenCalled();
+      expect(mockDeps.runMcpRetrieval).not.toHaveBeenCalled();
+    });
+
+    it('Docs + MCP: dispatches both in parallel before either settles', async () => {
+      let resolveDocs!: (value: FederatedRetrievalResponse) => void;
+      let resolveMcp!: (value: { items: typeof mcpItems; warnings: string[] }) => void;
+
+      mockDeps.retrieveFederated = vi.fn().mockImplementation(
+        () => new Promise((resolve) => { resolveDocs = resolve; })
+      );
+      mockDeps.runMcpRetrieval = vi.fn().mockImplementation(
+        () => new Promise((resolve) => { resolveMcp = resolve; })
+      );
+      vi.mocked(mockDeps.routeIntent).mockResolvedValueOnce(intentWithMcp(true, ['graphiti-banking']));
+
+      const turn = runGroundedTurn(mockInput, mockDeps);
+      await vi.waitFor(() => {
+        expect(mockDeps.retrieveFederated).toHaveBeenCalled();
+        expect(mockDeps.runMcpRetrieval).toHaveBeenCalled();
+      });
+
+      resolveDocs(dummyServerResponse);
+      resolveMcp({ items: mcpItems, warnings: [] });
+
+      const res = await turn;
+      expect(res.kind).toBe('grounded_answer');
+      expect(mockDeps.packEvidence).toHaveBeenCalledWith(
+        expect.objectContaining({ authority: 'server', mcpItems })
+      );
+    });
+
+    it('Docs fail + MCP succeeds: synthesizes MCP evidence and marks degraded', async () => {
+      mockDeps.runMcpRetrieval = vi.fn().mockResolvedValue({ items: mcpItems, warnings: [] });
+      vi.mocked(mockDeps.retrieveFederated).mockRejectedValueOnce(
+        new KnowledgeClientError('NETWORK_ERROR', 'Docs down')
+      );
+      vi.mocked(mockDeps.routeIntent).mockResolvedValueOnce(intentWithMcp(true, ['graphiti-banking']));
+
+      const res = await runGroundedTurn(mockInput, mockDeps);
+
+      expect(res.kind).toBe('grounded_answer');
+      if (res.kind === 'grounded_answer') {
+        expect(res.grounding.outcome).toBe('DEGRADED');
+        expect(res.grounding.coverageWarnings).toContain(
+          'Máy chủ tài liệu không phản hồi; câu trả lời được tổng hợp từ dữ liệu MCP.'
+        );
+      }
+      expect(mockDeps.runLocalBm25).not.toHaveBeenCalled();
+      expect(mockDeps.synthesizeGroundedAnswer).toHaveBeenCalled();
+    });
+
+    it('Neither source: empty scope and no configured MCP clarifies without retrieval', async () => {
+      mockDeps.runMcpRetrieval = vi.fn();
+      vi.mocked(mockDeps.routeIntent).mockResolvedValueOnce(intentWithMcp(false, []));
+      vi.mocked(mockDeps.routeScope).mockResolvedValueOnce({
+        setTierAssignments: [],
+        comparisonMode: null,
+        routerSource: 'alias',
+      });
+
+      const res = await runGroundedTurn(mockInput, mockDeps);
+
+      expect(res.kind).toBe('clarify_intent');
+      expect(mockDeps.retrieveFederated).not.toHaveBeenCalled();
+      expect(mockDeps.runMcpRetrieval).not.toHaveBeenCalled();
+    });
   });
 
   it('26. Falls back locally when federated retrieval times out without evidence', async () => {
