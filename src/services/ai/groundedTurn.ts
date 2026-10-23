@@ -293,6 +293,15 @@ export async function runGroundedTurn(
     }
   );
 
+  // D-37: scope cannot be resolved safely (or catalog has no baseline) -> clarify instead of global scan or invalid retrieve body
+  if (resolvedScope.setTierAssignments.length === 0) {
+    return {
+      kind: 'clarify_intent',
+      clarifyQuestion:
+        'Không xác định được phạm vi tài liệu để tra cứu. Vui lòng chỉ rõ bộ tài liệu hoặc phạm vi cần tìm.',
+    };
+  }
+
   // Load context hints if scoped entity is provided
   let contextHints: RetrievalContextHints | undefined;
   if (input.scopedEntity && deps.loadKnowledgeLinks) {
@@ -322,10 +331,7 @@ export async function runGroundedTurn(
     fallbackReason: 'SERVER_DISABLED' | 'NETWORK_ERROR' | 'TIMEOUT',
     extraCoverageWarnings: readonly string[] = []
   ): Promise<GroundedTurnResult> => {
-    if (resolvedScope.setTierAssignments.length === 0) {
-      // D-37: scope cannot be resolved safely -> ask user instead of global scan
-      return { kind: 'clarify_intent' };
-    }
+    // Note: empty resolvedScope.setTierAssignments is already guarded above (D-37)
 
     const localResult = await deps.runLocalBm25(
       {
@@ -650,7 +656,10 @@ export async function runGroundedTurn(
       ]);
     }
 
-    throw error;
+    // Degrade unhandled retrieve errors to local path rather than crashing turn
+    return executeLocalPath('NETWORK_ERROR', [
+      'Máy chủ tri thức gặp sự cố không xác định; chuyển sang tìm kiếm nội bộ',
+    ]);
   }
 
   // 5. Branch on retrieval outcome

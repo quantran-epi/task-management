@@ -458,8 +458,8 @@ describe('groundedTurn state machine', () => {
     expect(mockDeps.synthesizeGroundedAnswer).not.toHaveBeenCalled();
   });
 
-  // 16. Local scope empty (D-37) -> setTierAssignments empty -> {kind: 'clarify_intent'}; runLocalBm25 NOT called
-  it('16. Local scope empty -> clarify_intent without runLocalBm25 (D-37)', async () => {
+  // 16. Scope empty (D-37) -> setTierAssignments empty -> {kind: 'clarify_intent'}; runLocalBm25 NOT called
+  it('16. Scope empty -> clarify_intent without runLocalBm25 or retrieveFederated (D-37)', async () => {
     mockInput.capabilities.serverEnabled = false;
     vi.mocked(mockDeps.routeScope).mockResolvedValueOnce({
       setTierAssignments: [],
@@ -468,9 +468,40 @@ describe('groundedTurn state machine', () => {
     });
 
     const res = await runGroundedTurn(mockInput, mockDeps);
-    expect(res).toEqual({ kind: 'clarify_intent' });
+    expect(res.kind).toBe('clarify_intent');
     expect(mockDeps.runLocalBm25).not.toHaveBeenCalled();
     expect(mockDeps.synthesizeGroundedAnswer).not.toHaveBeenCalled();
+  });
+
+  // 16b. Server-path scope empty -> retrieveFederated NEVER called with invalid empty assignments
+  it('16b. Server enabled + scope empty -> clarify_intent without retrieveFederated', async () => {
+    mockInput.capabilities.serverEnabled = true;
+    vi.mocked(mockDeps.routeScope).mockResolvedValueOnce({
+      setTierAssignments: [],
+      comparisonMode: null,
+      routerSource: 'alias',
+    });
+
+    const res = await runGroundedTurn(mockInput, mockDeps);
+    expect(res.kind).toBe('clarify_intent');
+    expect(mockDeps.retrieveFederated).not.toHaveBeenCalled();
+    expect(mockDeps.synthesizeGroundedAnswer).not.toHaveBeenCalled();
+  });
+
+  // 16c. Non-transport retrieve failure (e.g. ZodError, unexpected error) degrades to local path instead of throwing
+  it('16c. Non-transport retrieve failure degrades to local fallback without throw', async () => {
+    mockInput.capabilities.serverEnabled = true;
+    vi.mocked(mockDeps.retrieveFederated).mockRejectedValueOnce(
+      new Error('ZodError: setTierAssignments invalid')
+    );
+
+    const res = await runGroundedTurn(mockInput, mockDeps);
+    expect(res.kind).toBe('grounded_answer');
+    if (res.kind === 'grounded_answer') {
+      expect(res.grounding.outcome).toBe('LOCAL_FALLBACK_SYNTHESIS');
+      expect(res.grounding.fallbackReason).toBe('NETWORK_ERROR');
+    }
+    expect(mockDeps.runLocalBm25).toHaveBeenCalled();
   });
 
   // 17. Model unavailable + server READY -> capabilities.modelConfigured === false -> {kind: 'evidence_only', grounding.outcome: 'MODEL_UNAVAILABLE'} (D-43)
