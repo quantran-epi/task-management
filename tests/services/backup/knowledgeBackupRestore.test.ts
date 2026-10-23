@@ -201,15 +201,63 @@ describe('Schema V10 knowledge backup lifecycle', () => {
     expect(await restoredDb.dlpAudits.toArray()).toEqual([dlpAudit]);
   });
 
-  it('restores a legacy payload while clearing stale Schema V10 projection metadata', async () => {
+  it('restores a legacy payload without erasing the local knowledge catalog', async () => {
     await seedKnowledge(restoredDb);
 
     await restoreBackupPayload(legacyEnvelope(), restoredDb);
+
+    // Absent documentSets means "legacy payload did not know about sets", not "delete them".
+    expect(await restoredDb.documentSets.toArray()).toEqual([documentSet]);
+    expect(await restoredDb.publishedDocuments.toArray()).toEqual([publishedDocument]);
+    expect(await restoredDb.publishAttempts.toArray()).toEqual([publishAttempt]);
+    expect(await restoredDb.dlpAudits.toArray()).toEqual([dlpAudit]);
+  });
+
+  it('clears knowledge tables when payload explicitly carries an empty documentSets array', async () => {
+    await seedKnowledge(restoredDb);
+
+    const envelope = legacyEnvelope();
+    envelope.tables.documentSets = [];
+
+    await restoreBackupPayload(envelope, restoredDb);
 
     expect(await restoredDb.documentSets.count()).toBe(0);
     expect(await restoredDb.publishedDocuments.count()).toBe(0);
     expect(await restoredDb.publishAttempts.count()).toBe(0);
     expect(await restoredDb.dlpAudits.count()).toBe(0);
+  });
+
+  it('rolls back to a legacy snapshot without erasing the live knowledge catalog', async () => {
+    await seedKnowledge(restoredDb);
+
+    // Simulate a pre-v10 snapshot (no documentSets field at all).
+    const legacySnapshot = {
+      timestamp: NOW,
+      tables: {
+        projects: [],
+        milestones: [],
+        tasks: [],
+        capacityRules: [],
+        capacityOverrides: [],
+        plannedAllocations: [],
+      },
+      counts: {
+        projects: 0,
+        milestones: 0,
+        tasks: 0,
+        capacityRules: 0,
+        capacityOverrides: 0,
+        plannedAllocations: 0,
+      },
+    };
+    await restoredDb.settings.put({ key: 'last_pre_import_snapshot', value: legacySnapshot });
+
+    await rollbackToSnapshot(restoredDb);
+
+    expect(await restoredDb.documentSets.toArray()).toEqual([documentSet]);
+    expect(await restoredDb.publishedDocuments.toArray()).toEqual([publishedDocument]);
+    expect(await restoredDb.publishAttempts.toArray()).toEqual([publishAttempt]);
+    expect(await restoredDb.dlpAudits.toArray()).toEqual([dlpAudit]);
   });
 
   describe('Document chat thread scope validation and restore (CR-08)', () => {

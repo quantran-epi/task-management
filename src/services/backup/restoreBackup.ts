@@ -185,7 +185,7 @@ export async function restoreBackupPayload(
         value: snapshot,
       });
 
-      // 2. Clear current domain tables, notes, attachments, active timers, knowledgeLinks, and chat
+      // 2. Clear current domain tables, notes, attachments, active timers, and chat
       await Promise.all([
         targetDb.projects.clear(),
         targetDb.milestones.clear(),
@@ -199,14 +199,21 @@ export async function restoreBackupPayload(
         targetDb.noteAttachments.clear(),
         targetDb.chatThreads.clear(),
         targetDb.chatMessages.clear(),
-        targetDb.documentSets.clear(),
-        targetDb.publishedDocuments.clear(),
-        targetDb.publishAttempts.clear(),
-        targetDb.dlpAudits.clear(),
-        targetDb.knowledgeLinks.clear(),
         targetDb.telegramSettings.clear(),
         targetDb.telegramWhitelist.clear(),
       ]);
+
+      // 2b. Knowledge tables: only clear when the payload explicitly carries documentSets.
+      // A legacy backup omitting the field must not erase a valid local catalog (data loss).
+      if (backup.tables.documentSets !== undefined) {
+        await Promise.all([
+          targetDb.documentSets.clear(),
+          targetDb.publishedDocuments.clear(),
+          targetDb.publishAttempts.clear(),
+          targetDb.dlpAudits.clear(),
+          targetDb.knowledgeLinks.clear(),
+        ]);
+      }
 
       // 3. Bulk add incoming records
       if (backup.tables.projects.length) {
@@ -360,14 +367,20 @@ export async function rollbackToSnapshot(
         targetDb.noteAttachments.clear(),
         targetDb.chatThreads.clear(),
         targetDb.chatMessages.clear(),
-        targetDb.documentSets.clear(),
-        targetDb.publishedDocuments.clear(),
-        targetDb.publishAttempts.clear(),
-        targetDb.dlpAudits.clear(),
-        targetDb.knowledgeLinks.clear(),
         targetDb.telegramSettings.clear(),
         targetDb.telegramWhitelist.clear(),
       ]);
+
+      // 1b. Pre-v10 snapshots omit documentSets; preserve the live catalog instead of erasing it.
+      if (snapshot.tables.documentSets !== undefined) {
+        await Promise.all([
+          targetDb.documentSets.clear(),
+          targetDb.publishedDocuments.clear(),
+          targetDb.publishAttempts.clear(),
+          targetDb.dlpAudits.clear(),
+          targetDb.knowledgeLinks.clear(),
+        ]);
+      }
 
       // 2. Restore records from snapshot
       if (snapshot.tables.projects.length) {

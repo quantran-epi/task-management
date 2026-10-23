@@ -27,18 +27,22 @@ branch: master
 
 ## Current Focus
 
-reasoning_checkpoint:
-  hypothesis: "When the resolved scope has no set assignments (catalog has no base sets, or was wiped by restoreBackup clear/conditional-add asymmetry), the server path (groundedTurn.ts:465) dispatches setTierAssignments: []. FederatedRetrievalRequestSchema.parse rejects this (.min(1)) inside knowledgeClient.ts:710 before any HTTP fetch occurs (zero network traffic). The resulting ZodError is not a KnowledgeClientError transport failure, so isFallbackAllowed returns false and groundedTurn.ts:653 rethrows, crashing the turn before synthesis. The existing D-37 empty-scope guard lived only inside executeLocalPath (lines 325-328), leaving the server path completely unprotected."
-  confirming_evidence:
-    - "BAD HAR files show INTENT stage and MCP tool loop run, but exactly zero requests to 10.4.97.70:30080 (not even OPTIONS preflight)."
-    - "GOOD HAR files show retrieve request with setTierAssignments: [{setId: 'adbc5da3-...', tier: 'REQUIRED', roleGroup: 'baseline'}]."
-    - "knowledgeClient.ts:710 executes FederatedRetrievalRequestSchema.parse(body) before fetch."
-    - "retrievalProtocol.ts:586 requires setTierAssignments: z.array(...).min(1).max(50)."
-    - "isTransportFailure/isFallbackAllowed only catches KnowledgeClientError (NETWORK_ERROR/TIMEOUT/REMOTE_ERROR>=500) and TypeError; ZodError propagates to groundedTurn.ts:653 which re-throws."
-    - "Commit ba9094c (12:52Z) and 09d0ac0 (12:30Z) postdate error_llm.har (11:32Z); c2c2c87 only adds preRoutedIntent reuse."
-  falsification_test: "If an empty resolvedScope with serverEnabled=true causes retrieveFederated to be called or crashes the turn, hypothesis is false. Verified: after hoisting guard, returns {kind: 'clarify_intent'} and retrieveFederated is never invoked."
-  fix_rationale: "Hoisting the D-37 empty-scope guard to immediately follow routeScope (line 295) protects both server and local paths, returning clarify_intent when no document set baseline exists. Adding generic retrieve error degradation at line 656 prevents unhandled exceptions from killing future turns."
-  blind_spots: "Catalog population in local IndexedDB is the upstream requirement for auto-retrieval without explicit set mentions. restoreBackup.ts clear-always vs conditional-bulkAdd asymmetry can leave documentSets empty if a backup without documentSets is restored."
+hypothesis: "restoreBackupPayload and rollbackToSnapshot unconditionally called documentSets.clear() but only bulkAdd incoming sets when the payload field existed and was non-empty. Any legacy backup (schemaVersion <= 9) or pre-v10 snapshot omitting documentSets permanently erased the local catalog, leaving routeScope with no isBase entries, hence setTierAssignments: [] and the D-37 clarify path instead of retrieve."
+test: "Code inspection of both clear sites, byte inspection of live Tauri IndexedDB, targeted restore/rollback tests with absent vs explicitly-empty documentSets."
+expecting: "Absent field preserves existing knowledge tables; explicit empty array still clears; legacy snapshot rollback preserves sets."
+status: "Data-loss defect CONFIRMED by code and reversible by tests. Causal link to the Oct 22 11:32Z HAR window NOT proven: live backupMetadata contains no restore entry between the good 09:07Z capture and the bad 11:32Z capture, and only three backupMetadata records total (all Oct 2/Oct 18). Treat asymmetry as a real upstream contributor that can produce the observed empty-catalog state, not as the proven trigger for this specific HAR."
+
+## Upstream Cause Investigation (2026-10-23)
+
+- code: `src/services/backup/restoreBackup.ts` cleared `documentSets` (and publishedDocuments, publishAttempts, dlpAudits, knowledgeLinks) unconditionally in both `restoreBackupPayload` and `rollbackToSnapshot`, but repopulated only `if (backup.tables.documentSets?.length)`.
+- code: `exportBackupPayload` always emits `documentSets` (even as `[]`); legacy backups omit it. `validateBackupPayload` preserves that distinction.
+- consequence: importing an older/legacy backup silently destroys a valid catalog. Empty catalog -> `semanticScopeRouter` returns `setTierAssignments: []` for general queries -> D-37 guard returns clarify -> zero retrieve requests. Matches the reported symptom class.
+- data: bytes from live `%LOCALAPPDATA%\com.personal.taskplanner\EBWebView\Default\IndexedDB\http_tauri.localhost_0.indexeddb.leveldb` (000134.ldb) contain zero `documentIds`/`isBase`/`aliases`/`canonicalName`/`documentSets` record markers; catalog is empty now.
+- data: the orphaned IndexedDB blob `...indexeddb.blob/1/05/55c` holds a pre-import snapshot dated 2026-10-19T05:19:27Z whose tables include a document set (`isBase`, `documentIds`, `domain: General`, name `Chung`, id `0a518870-...`). So a valid catalog existed on Oct 19 and is gone now.
+- data (limits causality): live `backupMetadata` has only 3 records (2026-10-02, 2026-10-02, 2026-10-18). A successful restore/rollback would add an entry with its snapshotTime. No entry exists near 2026-10-19T05:19Z or between the good 09:07Z and bad 11:32Z HAR captures. Therefore the exact erasure event is NOT evidenced; other paths (manual set delete) remain possible. The defect is confirmed independently of that event.
+- HAR: good captures call `POST 10.4.97.70:30080/api/v1/retrieve` with `setId adbc5da3-...`; bad captures (`11:32Z`, `14:00Z`) contain only `ipc.localhost` intent/MCP proxy calls and zero requests to `10.4.97.70:30080`, consistent with the client-side ZodError-before-fetch root cause already fixed in 12c5330.
+
+
 
 ## Investigation Requirements
 
@@ -114,13 +118,19 @@ When `semanticScopeRouter.routeScope` returns `setTierAssignments: []` (which oc
 2. Removed duplicate guard inside `executeLocalPath`.
 3. In `groundedTurn.ts` retrieve error handler, degraded unhandled non-transport retrieve errors to `executeLocalPath('NETWORK_ERROR', ...)` instead of hard re-throwing.
 4. Added tests `16b` (server enabled + empty scope returns clarify without retrieve) and `16c` (non-transport retrieve error degrades to local fallback) in `tests/ai/groundedTurn.test.ts`.
+5. Data-loss fix in `src/services/backup/restoreBackup.ts`: knowledge tables (`documentSets`, `publishedDocuments`, `publishAttempts`, `dlpAudits`, `knowledgeLinks`) are now cleared only when the payload/snapshot explicitly carries a `documentSets` field. Legacy payloads omitting the field preserve the live catalog; an explicit `documentSets: []` still clears, preserving existing behavior for intentional empties.
+6. Updated `tests/services/backup/knowledgeBackupRestore.test.ts`: legacy restore preserves the catalog; explicit-empty clears it; rolling back a pre-v10 snapshot preserves the catalog.
 
 **Verification:**
-Ran `npx vitest run tests/ai/groundedTurn.test.ts` (34/34 passing) and `tests/ai/semanticScopeRouter.test.ts` (5/5 passing).
+Ran `npx vitest run tests/ai/groundedTurn.test.ts` (34/34 passing) and `tests/ai/semanticScopeRouter.test.ts` (5/5 passing) for 12c5330. Ran `vitest run tests/services/backup/knowledgeBackupRestore.test.ts` (10/10) and `restoreBackup.test.ts`, `restoreFailure.test.ts`, `backupChatGrounding.test.ts`, `exportBackup.test.ts` (20/20 combined) for the restore fix.
+
+**Caveat:** The empty catalog in the live DB is real and the restore/rollback asymmetry could have caused it, but no restore metadata record documents the event. Logged as a real data-loss bug, not proven as this HAR's trigger.
 
 **Files changed:**
 - `src/services/ai/groundedTurn.ts`
 - `tests/ai/groundedTurn.test.ts`
+- `src/services/backup/restoreBackup.ts`
+- `tests/services/backup/knowledgeBackupRestore.test.ts`
 - `.planning/debug/ai-chat-retrieve-not-called.md`
 
-**Commit:** 12c5330
+**Commits:** 12c5330, c32b702, plus the restore data-loss fix commit.
