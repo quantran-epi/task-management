@@ -1,5 +1,5 @@
 ---
-status: awaiting_human_verify
+status: resolved
 trigger: "After recent fix commits, AI chat drawer is comprehensively broken and no longer calls retrieve API."
 created: 2026-10-22
 updated: 2026-10-23
@@ -133,4 +133,4 @@ Ran `npx vitest run tests/ai/groundedTurn.test.ts` (34/34 passing) and `tests/ai
 - `tests/services/backup/knowledgeBackupRestore.test.ts`
 - `.planning/debug/ai-chat-retrieve-not-called.md`
 
-**Commits:** 12c5330, c32b702, plus the restore data-loss fix commit.
+**Commits:** `12c5330` (retrieve guard), `c32b702` (debug state), `2427fc2` (legacy backup catalog preservation).
