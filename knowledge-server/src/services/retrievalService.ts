@@ -36,8 +36,10 @@ import {
 } from '../retrieval/graphTraversal.js';
 import {
   buildConflictGroups,
+  buildProtectedGraphPackages,
   closeOrderedPaths,
   fuseRetrievalCandidates,
+  rankGraphPackages,
   tagRetrievalConflicts,
 } from '../retrieval/fusion.js';
 
@@ -511,7 +513,32 @@ export class RetrievalService {
       candidatesForFusion.graph = relevantGraphItems;
     }
 
-    const fused = fuseRetrievalCandidates(candidatesForFusion, request.limit);
+    const graphEdges = relevantGraphItems.filter(
+      (item): item is EdgeItem => item.type === 'edge'
+    );
+    const edgesByFactKey = new Map(graphEdges.map((edge) => [edge.factKey, edge]));
+    const builtPackages = buildProtectedGraphPackages({
+      snapshotId: pinnedSnapshotId,
+      chunks: [...relevantVectorItems, ...relevantFulltextItems, ...relevantGraphItems]
+        .filter((item): item is ChunkItem => item.type === 'chunk'),
+      edges: graphEdges,
+      paths: graphResult.pathCandidates,
+    });
+    const selectedRelations = planningOutcome.status === 'executable'
+      ? [...new Set(planningOutcome.plan.traversalSteps.map((step) => step.relationType))]
+      : [];
+    const rankedPackages = rankGraphPackages(builtPackages.packages, {
+      selectedRelations,
+      includeInferred: planningOutcome.status === 'executable'
+        ? Boolean(planningOutcome.plan.includeInferred)
+        : false,
+      relationOf: (factKey) => edgesByFactKey.get(factKey)?.relationType,
+      evidenceStrengthOf: (factKey) => edgesByFactKey.get(factKey)?.evidenceClass,
+    });
+
+    const fused = fuseRetrievalCandidates(candidatesForFusion, request.limit, {
+      protectedGraphPackages: rankedPackages,
+    });
 
     // Step 7: Citation closure & conflict tagging
     const tagged = tagRetrievalConflicts(fused.items, {
@@ -524,9 +551,18 @@ export class RetrievalService {
     });
 
     const finalItems = tagged.items;
-    // Path closure runs whenever a graph path exists; the relevance gate no longer
-    // gates graph evidence.
-    const paths = closeOrderedPaths(graphResult.pathCandidates, finalItems);
+    // Path ordering follows package rank order, never the gateway array index (D-18).
+    const rankOrder = new Map<string, number>();
+    rankedPackages.forEach((pkg, index) => {
+      if (pkg.pathId) rankOrder.set(pkg.edgeIds.join('|'), index);
+    });
+    const orderedCandidates = [...graphResult.pathCandidates].sort((a, b) => {
+      const rankA = rankOrder.get(a.edgeFactKeys.join('|')) ?? Number.MAX_SAFE_INTEGER;
+      const rankB = rankOrder.get(b.edgeFactKeys.join('|')) ?? Number.MAX_SAFE_INTEGER;
+      if (rankA !== rankB) return rankA - rankB;
+      return a.edgeFactKeys.join('|') < b.edgeFactKeys.join('|') ? -1 : 1;
+    });
+    const paths = closeOrderedPaths(orderedCandidates, finalItems);
     const conflictGroups = buildConflictGroups(finalItems);
     const graphAfterFusion = {
       entity: finalItems.filter((item) => item.type === 'entity').length,
