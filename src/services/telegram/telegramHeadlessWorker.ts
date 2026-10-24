@@ -113,32 +113,122 @@ export async function broadcastTelegramMessage(
   };
 }
 
+/** Returns the open HTML tags (full opening strings) at the end of an HTML fragment. */
+function unclosedTags(html: string): string[] {
+  const stack: string[] = [];
+  const tagPattern = /<[^>]+>/g;
+  let match: RegExpExecArray | null;
+  while ((match = tagPattern.exec(html)) !== null) {
+    const tag = match[0];
+    if (tag.startsWith('</')) {
+      stack.pop();
+    } else {
+      stack.push(tag);
+    }
+  }
+  return stack;
+}
+
+/** Shifts a split position backwards so it never lands inside an HTML tag. */
+function avoidTagInterior(html: string, position: number): number {
+  const tagPattern = /<[^>]+>/g;
+  let match: RegExpExecArray | null;
+  while ((match = tagPattern.exec(html)) !== null) {
+    const start = match.index;
+    const end = start + match[0].length;
+    if (position > start && position < end) return start;
+    if (start >= position) break;
+  }
+  return position;
+}
+
+/**
+ * Shifts a split position so a chunk never ends inside a tag, a character
+ * reference (&amp;, &quot;), or a UTF-16 surrogate pair. A truncated entity
+ * gets the chunk rejected with 400; a lone surrogate breaks the JSON IPC.
+ */
+function safeSplitPosition(html: string, position: number): number {
+  let pos = avoidTagInterior(html, position);
+
+  if (pos > 0) {
+    const amp = html.lastIndexOf('&', pos - 1);
+    // No ';' between '&' and the split point means the entity is cut in half.
+    if (amp !== -1 && pos - amp <= 10 && html.indexOf(';', amp) >= pos) {
+      pos = avoidTagInterior(html, amp);
+    }
+  }
+
+  const code = pos > 0 ? html.charCodeAt(pos - 1) : 0;
+  if (code >= 0xd800 && code <= 0xdbff) pos -= 1;
+
+  return pos > 0 ? pos : 0;
+}
+
+function tagName(tag: string): string {
+  return /^<\s*([a-zA-Z][\w-]*)/.exec(tag)?.[1] ?? 'b';
+}
+
 export function splitTelegramMessage(text: string, maxLen = TELEGRAM_MAX_MESSAGE_LENGTH): string[] {
   if (text.length <= maxLen) return [text];
 
   const chunks: string[] = [];
   let remaining = text;
+  // Tags left open by the previous chunk, reopened at the start of the next one.
+  let reopenPrefix = '';
 
   while (remaining.length > 0) {
-    if (remaining.length <= maxLen) {
-      chunks.push(remaining);
+    if (reopenPrefix.length + remaining.length <= maxLen) {
+      chunks.push(reopenPrefix + remaining);
       break;
     }
 
-    // Try finding paragraph break or newline
-    let splitIdx = remaining.lastIndexOf('\n\n', maxLen);
-    if (splitIdx === -1 || splitIdx < maxLen / 2) {
-      splitIdx = remaining.lastIndexOf('\n', maxLen);
+    const available = Math.max(1, maxLen - reopenPrefix.length);
+    const searchWindow = reopenPrefix + remaining;
+    let splitIdx = searchWindow.lastIndexOf('\n\n', available);
+    if (splitIdx === -1 || splitIdx < available / 2) {
+      splitIdx = searchWindow.lastIndexOf('\n', available);
     }
-    if (splitIdx === -1 || splitIdx < maxLen / 2) {
-      splitIdx = remaining.lastIndexOf(' ', maxLen);
+    if (splitIdx === -1 || splitIdx < available / 2) {
+      splitIdx = searchWindow.lastIndexOf(' ', available);
     }
     if (splitIdx === -1) {
-      splitIdx = maxLen;
+      splitIdx = available;
     }
 
-    chunks.push(remaining.slice(0, splitIdx).trim());
-    remaining = remaining.slice(splitIdx).trim();
+    // Never cut inside an opening/closing tag.
+    splitIdx = safeSplitPosition(searchWindow, splitIdx);
+    if (splitIdx <= 0) splitIdx = safeSplitPosition(searchWindow, available);
+    if (splitIdx <= 0) {
+      const tagEnd = searchWindow.indexOf('>');
+      splitIdx = tagEnd === -1 ? searchWindow.length : tagEnd + 1;
+    }
+
+    let head = searchWindow.slice(0, splitIdx);
+    let open = unclosedTags(head);
+    let closers = open
+      .slice()
+      .reverse()
+      .map((tag) => `</${tagName(tag)}>`)
+      .join('');
+
+    // Closing tags appended at the split point also count toward the limit.
+    for (let guard = 0; head.length + closers.length > maxLen && guard < 10; guard++) {
+      const overflow = head.length + closers.length - maxLen;
+      splitIdx = safeSplitPosition(searchWindow, splitIdx - overflow);
+      if (splitIdx <= 0) break;
+      head = searchWindow.slice(0, splitIdx);
+      open = unclosedTags(head);
+      closers = open
+        .slice()
+        .reverse()
+        .map((tag) => `</${tagName(tag)}>`)
+        .join('');
+    }
+
+    chunks.push((head + closers).trim());
+
+    reopenPrefix = open.join('');
+    remaining = searchWindow.slice(splitIdx).trim();
   }
 
   return chunks;

@@ -93,6 +93,60 @@ describe('Telegram Headless Worker', () => {
     }
   });
 
+  it('splits long HTML without breaking tags and keeps every chunk balanced', () => {
+    const longCode = `<pre><code>${'row_value = 1;\n'.repeat(500)}</code></pre>`;
+    const chunks = splitTelegramMessage(longCode, 500);
+    expect(chunks.length).toBeGreaterThan(1);
+
+    for (const chunk of chunks) {
+      expect(chunk.length).toBeLessThanOrEqual(500);
+      const stack: string[] = [];
+      for (const match of chunk.matchAll(/<\/?([a-zA-Z][\w-]*)(?:\s[^>]*)?>/g)) {
+        const name = match[1]!;
+        if (match[0].startsWith('</')) {
+          expect(stack.pop()).toBe(name);
+        } else {
+          stack.push(name);
+        }
+      }
+      expect(stack).toEqual([]);
+    }
+  });
+
+  it('never splits a character reference across chunks', () => {
+    const text = `${'x'.repeat(8)}&amp;${'y'.repeat(40)}`;
+    const chunks = splitTelegramMessage(text, 10);
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const chunk of chunks) {
+      expect(chunk.length).toBeLessThanOrEqual(10);
+      expect(chunk).not.toMatch(/&[a-zA-Z#0-9]{1,7}$/);
+    }
+    expect(chunks.join('')).toBe(text);
+  });
+
+  it('never splits a UTF-16 surrogate pair across chunks', () => {
+    const text = `${'a'.repeat(9)}😀${'b'.repeat(40)}`;
+    const chunks = splitTelegramMessage(text, 10);
+    const loneSurrogate =
+      /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const chunk of chunks) {
+      expect(chunk.length).toBeLessThanOrEqual(10);
+      expect(chunk).not.toMatch(loneSurrogate);
+    }
+    expect(chunks.join('')).toBe(text);
+  });
+
+  it('reopens bold and inline code tags carried across a split', () => {
+    const text = `<b>${'từ '.repeat(300)}<code>ISS_DATE</code>${' cuối'.repeat(200)}</b>`;
+    const chunks = splitTelegramMessage(text, 400);
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const chunk of chunks) {
+      expect(chunk).toContain('<b>');
+      expect(chunk).toContain('</b>');
+    }
+  });
+
   it('cleans citation tags properly', () => {
     const raw = 'Answer based on [S1] and [Doc 2] and [Source 3] sources.';
     expect(cleanCitationTags(raw)).toBe('Answer based on  and  and  sources.');

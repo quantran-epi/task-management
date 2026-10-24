@@ -299,6 +299,27 @@ struct SendMessageBody {
     reply_to_message_id: Option<i64>,
 }
 
+/// Strips every HTML tag (including attributes) and unescapes the three
+/// entities Telegram requires, producing readable plain text for the fallback send.
+fn strip_html_tags(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut in_tag = false;
+
+    for ch in text.chars() {
+        match ch {
+            '<' => in_tag = true,
+            '>' if in_tag => in_tag = false,
+            _ if !in_tag => out.push(ch),
+            _ => {}
+        }
+    }
+
+    out.replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&amp;", "&")
+}
+
 #[tauri::command]
 pub async fn send_telegram_reply(
     token: String,
@@ -334,21 +355,8 @@ pub async fn send_telegram_reply(
         .map_err(|e| format!("Network error sending reply: {}", e))?;
 
     if !res.status().is_success() {
-        // Fallback: strip basic html tags and send as plain text without parse_mode
-        let stripped_text = text
-            .replace("<b>", "")
-            .replace("</b>", "")
-            .replace("<i>", "")
-            .replace("</i>", "")
-            .replace("<code>", "")
-            .replace("</code>", "")
-            .replace("<pre>", "")
-            .replace("</pre>", "")
-            .replace("<s>", "")
-            .replace("</s>", "")
-            .replace("&lt;", "<")
-            .replace("&gt;", ">")
-            .replace("&amp;", "&");
+        // Fallback: strip all html tags (including attributes) and send as plain text without parse_mode
+        let stripped_text = strip_html_tags(&text);
 
         let body_plain = serde_json::json!({
             "chat_id": chat_id,
@@ -410,4 +418,41 @@ pub async fn send_telegram_action(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::strip_html_tags;
+
+    #[test]
+    fn strips_tags_with_attributes() {
+        assert_eq!(
+            strip_html_tags(r#"<code class="language-sql">SELECT 1</code>"#),
+            "SELECT 1"
+        );
+        assert_eq!(
+            strip_html_tags(r#"<a href="https://example.com/x">link</a>"#),
+            "link"
+        );
+        assert_eq!(
+            strip_html_tags("<blockquote>ghi chú</blockquote>"),
+            "ghi chú"
+        );
+    }
+
+    #[test]
+    fn unescapes_telegram_entities() {
+        assert_eq!(strip_html_tags("say &quot;hi&quot;"), "say \"hi\"");
+        assert_eq!(
+            strip_html_tags("a &lt; b &amp;&amp; c &gt; d"),
+            "a < b && c > d"
+        );
+    }
+
+    #[test]
+    fn does_not_double_unescape_amp_lt() {
+        // &amp;lt; is the literal text "&lt;", not "<". The &lt; -> "<" pass runs
+        // before the &amp; -> "&" pass, so the entity is decoded exactly once.
+        assert_eq!(strip_html_tags("&amp;lt;"), "&lt;");
+    }
 }
