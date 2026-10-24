@@ -214,6 +214,7 @@ export class DeterministicIndexGatewayStub implements RetrievalIndexGateway {
  */
 export class DeterministicGraphGatewayStub implements GraphRetrievalGateway {
   public mockCandidates: ClarificationCandidate[] = [];
+  public mockChunks: ChunkItem[] = [];
   public mockEntities: EntityItem[] = [];
   public mockSeedEntities: EntityItem[] = [];
   public mockEdges: EdgeItem[] = [];
@@ -237,6 +238,7 @@ export class DeterministicGraphGatewayStub implements GraphRetrievalGateway {
   ): Promise<GraphTraversalResult> {
     if (options?.signal?.aborted) throw new Error('Graph traversal aborted');
     return {
+      chunks: this.mockChunks,
       entities: this.mockEntities.slice(0, criteria.limitNodes),
       seedEntities: this.mockSeedEntities,
       edges: this.mockEdges.slice(0, criteria.limitEdges),

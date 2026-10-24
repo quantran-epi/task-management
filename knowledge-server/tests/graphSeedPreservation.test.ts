@@ -20,7 +20,13 @@ import {
   URN_PROCESS_60000006,
   URN_CONTAINER_60000005,
   URN_TABLE_FCL_CYCLE_COUNTER,
+  URN_TABLE_EVT_EVENT,
+  URN_PKG_EVT_EVENT_WRITER,
+  PILOT_GOLD_EVT_EVENT_NODES,
+  PILOT_GOLD_EVT_EVENT_RELATIONS,
+  PILOT_GOLD_SUPPORTING_CHUNKS,
 } from './fixtures/pilotGoldEntities.js';
+import { RETRIEVAL_ONTOLOGY_REGISTRY } from '../src/graph/ontology.js';
 
 const pinnedSnapshot = 'gsnap_abcdef12';
 
@@ -269,5 +275,182 @@ describe('24-02-T1: repository traversal preserves zero-edge seeds', () => {
 
     const executedQueries = run.mock.calls.map((call) => String(call[0]));
     expect(executedQueries.some((query) => query.includes('WRITES_TO'))).toBe(false);
+  });
+});
+
+describe('24-02-T3: MAIN1.EVT_EVENT regression fixture', () => {
+  const supportingChunk = PILOT_GOLD_SUPPORTING_CHUNKS[0];
+
+  function seedChunk() {
+    return {
+      type: 'chunk' as const,
+      id: supportingChunk.chunkId,
+      score: 1,
+      modalitiesContributed: ['graph' as const],
+      sourceDocumentId: supportingChunk.documentId,
+      sourceDocumentTitle: supportingChunk.documentTitle,
+      sectionAnchor: supportingChunk.headingPath.join(' > '),
+      lineStart: supportingChunk.startLine,
+      lineEnd: supportingChunk.endLine,
+      rawSnippet: supportingChunk.rawSnippet,
+      publishedContentHash: supportingChunk.publishedContentHash,
+      snapshotId: pinnedSnapshot,
+      hasConflict: false,
+    };
+  }
+
+  function evtEventTrace() {
+    const seedEntity = entity(URN_TABLE_EVT_EVENT, 'MAIN1.EVT_EVENT', 'DatabaseObject');
+    const writerEntity = entity(
+      URN_PKG_EVT_EVENT_WRITER,
+      'MAIN1.EVT_EVENT_PKG.PROCESS',
+      'SoftwareComponent'
+    );
+    const relation = PILOT_GOLD_EVT_EVENT_RELATIONS[0]!;
+    const edge: EdgeItem = {
+      type: 'edge',
+      id: relation.factKey,
+      score: 1,
+      modalitiesContributed: ['graph'],
+      factKey: relation.factKey,
+      sourceUrn: URN_PKG_EVT_EVENT_WRITER,
+      relationType: 'WRITES_TO',
+      targetUrn: URN_TABLE_EVT_EVENT,
+      evidenceClass: 'OBSERVED',
+      supportingChunkIds: [supportingChunk.chunkId],
+      snapshotId: pinnedSnapshot,
+      hasConflict: false,
+    };
+    return {
+      chunks: [seedChunk()],
+      entities: [writerEntity],
+      seedEntities: [seedEntity],
+      edges: [edge],
+      paths: [{
+        nodeUrns: [URN_PKG_EVT_EVENT_WRITER, URN_TABLE_EVT_EVENT],
+        edgeFactKeys: [relation.factKey],
+        hopClassifications: ['OBSERVED' as const],
+        hopSupportingChunkIds: [[supportingChunk.chunkId]],
+        edgeSnapshotIds: [pinnedSnapshot],
+        hasConflict: false,
+      }],
+      truncated: false,
+    };
+  }
+
+  it('exports an EVT_EVENT table, a WRITES_TO writer, and a supporting chunk', () => {
+    const table = PILOT_GOLD_EVT_EVENT_NODES.find((node) => node.urn === URN_TABLE_EVT_EVENT);
+    const writer = PILOT_GOLD_EVT_EVENT_NODES.find((node) => node.urn === URN_PKG_EVT_EVENT_WRITER);
+    const relation = PILOT_GOLD_EVT_EVENT_RELATIONS.find(
+      (rel) => rel.relation === 'WRITES_TO' && rel.objectUrn === URN_TABLE_EVT_EVENT
+    );
+
+    expect(table?.kind).toBe('DatabaseObject');
+    expect(table?.subkind).toBe('ORACLE_TABLE');
+    expect(writer?.kind).toBe('SoftwareComponent');
+    expect(relation?.subjectUrn).toBe(URN_PKG_EVT_EVENT_WRITER);
+    expect(relation?.effectiveClassification).toBe('OBSERVED');
+    expect(supportingChunk.factKey).toBe(relation?.factKey);
+  });
+
+  it('satisfies the WRITES_TO ontology endpoint rules', () => {
+    const entry = RETRIEVAL_ONTOLOGY_REGISTRY.WRITES_TO;
+    const writer = PILOT_GOLD_EVT_EVENT_NODES.find((node) => node.urn === URN_PKG_EVT_EVENT_WRITER);
+    const table = PILOT_GOLD_EVT_EVENT_NODES.find((node) => node.urn === URN_TABLE_EVT_EVENT);
+
+    expect(entry.allowedSourceKinds).toContain(writer!.kind);
+    expect(entry.allowedTargetKinds).toContain(table!.kind);
+  });
+
+  it('emits no URN with diacritics that would break the URN regex', async () => {
+    const { URN_REGEX } = await import('../src/types/graphProtocol.js');
+    for (const node of PILOT_GOLD_EVT_EVENT_NODES) {
+      expect(URN_REGEX.test(node.urn)).toBe(true);
+      expect(node.urn).not.toMatch(/[^\x00-\x7F]/);
+    }
+  });
+
+  it('returns the seed entity, writer, WRITES_TO edge, and a citation-closed path', async () => {
+    const gateway = new SeedStubGateway(evtEventTrace());
+
+    const result = await runBoundedGraphTraversal(
+      plan({
+        queryIntent: 'IMPACT_ANALYSIS',
+        seedUrns: [URN_TABLE_EVT_EVENT],
+        traversalSteps: [{ relationType: 'WRITES_TO', direction: 'INCOMING', maxHops: 1 }],
+      }),
+      pinnedSnapshot,
+      gateway
+    );
+
+    expect(result.status.entityCount).toBe(2);
+    expect(result.status.edgeCount).toBe(1);
+    expect(result.status.pathCount).toBe(1);
+    expect(result.entities.map((item) => item.urn).sort()).toEqual(
+      [URN_PKG_EVT_EVENT_WRITER, URN_TABLE_EVT_EVENT].sort()
+    );
+    expect(result.edges[0]?.relationType).toBe('WRITES_TO');
+    expect(result.paths[0]?.hopSupportingChunkIds[0]).toEqual([supportingChunk.chunkId]);
+  });
+
+  it('degrades to SEED_ONLY with entity count 1 when the same fixture has no edges', async () => {
+    const seedEntity = entity(URN_TABLE_EVT_EVENT, 'MAIN1.EVT_EVENT', 'DatabaseObject');
+    const gateway = new SeedStubGateway({
+      entities: [],
+      seedEntities: [seedEntity],
+      edges: [],
+      truncated: false,
+    });
+
+    const result = await runBoundedGraphTraversal(
+      plan({
+        seedUrns: [URN_TABLE_EVT_EVENT],
+        traversalSteps: [{ relationType: 'WRITES_TO', direction: 'INCOMING', maxHops: 1 }],
+      }),
+      pinnedSnapshot,
+      gateway
+    );
+
+    expect(result.status.entityCount).toBe(1);
+    expect(result.status.edgeCount).toBe(0);
+    expect(result.status.reason).toBe('SEED_FOUND_NO_RELATION');
+    expect(result.entities[0]?.urn).toBe(URN_TABLE_EVT_EVENT);
+  });
+
+  it('returns table evidence plus one failedSeeds entry for an unknown seed', async () => {
+    const gateway = new SeedStubGateway(evtEventTrace());
+    const { buildQueryExecutionPlan } = await import('../src/retrieval/queryPlanning.js');
+    const unknownUrn = 'urn:plannermate:oracle:ORACLE_TABLE:MAIN1.UNKNOWN_EVT' as const;
+
+    const outcome = await buildQueryExecutionPlan({
+      request: {
+        query: 'MAIN1.EVT_EVENT writers',
+        limit: 20,
+        includeInferred: false,
+        recentTurns: [],
+      },
+      pinnedSnapshotId: pinnedSnapshot,
+      gateway: {
+        resolveEntities: async () => [
+          { urn: URN_TABLE_EVT_EVENT, canonicalName: 'MAIN1.EVT_EVENT', kind: 'DatabaseObject' as const },
+        ],
+        traverse: gateway.traverse.bind(gateway),
+      },
+      planner: {
+        plan: async () => ({
+          type: 'plan' as const,
+          plan: plan({
+            queryIntent: 'IMPACT_ANALYSIS',
+            seedUrns: [URN_TABLE_EVT_EVENT, unknownUrn],
+            traversalSteps: [{ relationType: 'WRITES_TO', direction: 'INCOMING', maxHops: 1 }],
+          }),
+        }),
+      },
+    });
+
+    expect(outcome.status).toBe('executable');
+    if (outcome.status !== 'executable') return;
+    expect(outcome.plan.seedUrns).toEqual([URN_TABLE_EVT_EVENT]);
+    expect(outcome.failedSeeds).toEqual([{ urn: unknownUrn, reasonCode: 'SEED_NOT_FOUND' }]);
   });
 });

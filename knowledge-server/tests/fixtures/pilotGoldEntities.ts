@@ -24,6 +24,12 @@ export const URN_PKG_CRD_BILLING = buildUrn('plsql', 'PLSQL_PROCEDURE', 'MAIN1.C
 export const URN_PKG_OPR_PROCESS = buildUrn('plsql', 'PLSQL_PROCEDURE', 'MAIN1.OPR_API_PROCESS_PKG.PROCESS_OPERATIONS');
 
 export const URN_TABLE_FCL_CYCLE_COUNTER = buildUrn('oracle', 'ORACLE_TABLE', 'MAIN1.FCL_CYCLE_COUNTER');
+export const URN_TABLE_EVT_EVENT = buildUrn('oracle', 'ORACLE_TABLE', 'MAIN1.EVT_EVENT');
+export const URN_PKG_EVT_EVENT_WRITER = buildUrn(
+  'plsql',
+  'PLSQL_PROCEDURE',
+  'MAIN1.EVT_EVENT_PKG.PROCESS'
+);
 export const URN_TABLE_FCL_CREDIT_LINE = buildUrn('oracle', 'ORACLE_TABLE', 'MAIN1.FCL_CREDIT_LINE');
 export const URN_TABLE_EVT_EVENT_OBJECT = buildUrn('oracle', 'ORACLE_TABLE', 'MAIN1.EVT_EVENT_OBJECT');
 export const URN_TABLE_CRD_INVOICE = buildUrn('oracle', 'ORACLE_TABLE', 'MAIN1.CRD_INVOICE');
@@ -248,6 +254,78 @@ export const PILOT_GOLD_NODES: readonly GraphNode[] = [
     aliases: ['Failed'],
   },
 ];
+
+/**
+ * Phase 24 regression fixture: MAIN1.EVT_EVENT table plus the PL/SQL writer that
+ * writes to it. Kept separate from PILOT_GOLD_NODES so existing counts stay stable.
+ */
+export const PILOT_GOLD_EVT_EVENT_NODES: readonly GraphNode[] = [
+  {
+    urn: URN_TABLE_EVT_EVENT,
+    kind: 'DatabaseObject',
+    canonicalName: 'MAIN1.EVT_EVENT',
+    sourceSystem: 'oracle',
+    nativeType: 'ORACLE_TABLE',
+    normalizedKey: 'MAIN1.EVT_EVENT',
+    subkind: 'ORACLE_TABLE',
+    properties: {
+      schema: 'MAIN1',
+      tableName: 'EVT_EVENT',
+    },
+    aliases: ['evt_event'],
+  },
+  {
+    urn: URN_PKG_EVT_EVENT_WRITER,
+    kind: 'SoftwareComponent',
+    canonicalName: 'MAIN1.EVT_EVENT_PKG.PROCESS',
+    sourceSystem: 'plsql',
+    nativeType: 'PLSQL_PROCEDURE',
+    normalizedKey: 'MAIN1.EVT_EVENT_PKG.PROCESS',
+    subkind: 'PLSQL_PROCEDURE',
+    properties: {
+      schema: 'MAIN1',
+      package: 'EVT_EVENT_PKG',
+      procedure: 'PROCESS',
+    },
+    aliases: ['evt_event_pkg.process'],
+  },
+];
+
+export const PILOT_GOLD_EVT_EVENT_RELATIONS: readonly GraphRelation[] = [
+  {
+    factKey: buildFactKey({
+      ontologyVersion: ONTOLOGY_VERSION,
+      subjectUrn: URN_PKG_EVT_EVENT_WRITER,
+      relation: 'WRITES_TO',
+      objectUrn: URN_TABLE_EVT_EVENT,
+    }),
+    ontologyVersion: ONTOLOGY_VERSION,
+    subjectUrn: URN_PKG_EVT_EVENT_WRITER,
+    relation: 'WRITES_TO',
+    objectUrn: URN_TABLE_EVT_EVENT,
+    qualifiers: { operation: 'INSERT' },
+    effectiveClassification: 'OBSERVED',
+    hasConflict: false,
+    sourceMissing: false,
+  },
+];
+
+/**
+ * Supporting chunk keyed to the WRITES_TO fact so citation closure has a target.
+ */
+export const PILOT_GOLD_SUPPORTING_CHUNKS = [
+  {
+    chunkId: 'chunk-evt-event-writer',
+    factKey: PILOT_GOLD_EVT_EVENT_RELATIONS[0]!.factKey,
+    documentId: '60000006-0000-4000-8000-000000000024',
+    documentTitle: 'EVT_EVENT data dictionary',
+    publishedContentHash: 'd'.repeat(64),
+    headingPath: ['MAIN1.EVT_EVENT', 'Writers'],
+    startLine: 10,
+    endLine: 14,
+    rawSnippet: 'MAIN1.EVT_EVENT_PKG.PROCESS inserts event rows into MAIN1.EVT_EVENT.',
+  },
+] as const;
 
 export const PILOT_GOLD_RELATIONS: readonly GraphRelation[] = [
   // 1. Process 60000006 CONTAINS_STEP container 60000005

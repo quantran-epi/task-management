@@ -26,6 +26,10 @@ import {
   URN_CONTAINER_60000006,
   URN_SUBPROCESS_10000304,
   URN_PKG_FCL_CYCLE_COUNTER,
+  URN_TABLE_EVT_EVENT,
+  URN_PKG_EVT_EVENT_WRITER,
+  PILOT_GOLD_EVT_EVENT_RELATIONS,
+  PILOT_GOLD_SUPPORTING_CHUNKS,
 } from './fixtures/pilotGoldEntities.js';
 
 describe('18-W0-03B: RetrievalService Pinned Parallel Orchestration & Timeouts', () => {
@@ -1797,6 +1801,117 @@ describe('18-W0-03B: RetrievalService Pinned Parallel Orchestration & Timeouts',
       const serialized = JSON.stringify(response);
       expect(serialized).not.toContain('MATCH (');
       expect(serialized).not.toContain('SELECT ');
+    });
+
+    it('MAIN1.EVT_EVENT regression: writer and WRITES_TO edge reach final items', async () => {
+      const indexGateway = new DeterministicIndexGatewayStub();
+      indexGateway.activeSnapshotId = snapshotId;
+      const embedding = new DeterministicEmbeddingStub();
+      const planner = new DeterministicPlannerStub();
+      const graphGateway = new DeterministicGraphGatewayStub();
+
+      const relation = PILOT_GOLD_EVT_EVENT_RELATIONS[0]!;
+      const supportingChunk = PILOT_GOLD_SUPPORTING_CHUNKS[0];
+      const chunk: ChunkItem = {
+        type: 'chunk',
+        id: supportingChunk.chunkId,
+        score: 1,
+        modalitiesContributed: ['graph'],
+        sourceDocumentId: supportingChunk.documentId,
+        sourceDocumentTitle: supportingChunk.documentTitle,
+        sectionAnchor: supportingChunk.headingPath.join(' > '),
+        lineStart: supportingChunk.startLine,
+        lineEnd: supportingChunk.endLine,
+        rawSnippet: supportingChunk.rawSnippet,
+        publishedContentHash: supportingChunk.publishedContentHash,
+        snapshotId,
+        hasConflict: false,
+      };
+
+      graphGateway.mockCandidates = [
+        { urn: URN_TABLE_EVT_EVENT, canonicalName: 'MAIN1.EVT_EVENT', kind: 'DatabaseObject' },
+      ];
+      graphGateway.mockChunks = [chunk];
+      graphGateway.mockSeedEntities = [{
+        type: 'entity',
+        id: URN_TABLE_EVT_EVENT,
+        score: 1,
+        modalitiesContributed: ['graph'],
+        urn: URN_TABLE_EVT_EVENT,
+        canonicalName: 'MAIN1.EVT_EVENT',
+        kind: 'DatabaseObject',
+        snapshotId,
+        hasConflict: false,
+      }];
+      graphGateway.mockEntities = [{
+        type: 'entity',
+        id: URN_PKG_EVT_EVENT_WRITER,
+        score: 1,
+        modalitiesContributed: ['graph'],
+        urn: URN_PKG_EVT_EVENT_WRITER,
+        canonicalName: 'MAIN1.EVT_EVENT_PKG.PROCESS',
+        kind: 'SoftwareComponent',
+        snapshotId,
+        hasConflict: false,
+      }];
+      graphGateway.mockEdges = [{
+        type: 'edge',
+        id: relation.factKey,
+        score: 1,
+        modalitiesContributed: ['graph'],
+        factKey: relation.factKey,
+        sourceUrn: URN_PKG_EVT_EVENT_WRITER,
+        relationType: 'WRITES_TO',
+        targetUrn: URN_TABLE_EVT_EVENT,
+        evidenceClass: 'OBSERVED',
+        supportingChunkIds: [supportingChunk.chunkId],
+        snapshotId,
+        hasConflict: false,
+      }];
+      graphGateway.mockPaths = [{
+        nodeUrns: [URN_PKG_EVT_EVENT_WRITER, URN_TABLE_EVT_EVENT],
+        edgeFactKeys: [relation.factKey],
+        hopClassifications: ['OBSERVED'],
+        hopSupportingChunkIds: [[supportingChunk.chunkId]],
+        edgeSnapshotIds: [snapshotId],
+        hasConflict: false,
+      }];
+
+      planner.scriptedResult = {
+        type: 'plan',
+        plan: {
+          planId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a42',
+          queryIntent: 'IMPACT_ANALYSIS',
+          seedUrns: [URN_TABLE_EVT_EVENT],
+          traversalSteps: [{ relationType: 'WRITES_TO', direction: 'INCOMING', maxHops: 1 }],
+          overallMaxDepth: 1,
+          includeInferred: false,
+          fulltextKeywords: ['MAIN1.EVT_EVENT'],
+          semanticQuery: 'MAIN1.EVT_EVENT writers',
+        },
+      };
+
+      indexGateway.queryFulltext = async () => [{ ...chunk, modalitiesContributed: ['fulltext'] }];
+
+      const response = await new RetrievalService({
+        indexGateway,
+        embeddingProvider: embedding,
+        queryPlanner: planner,
+        graphGateway,
+      }).retrieve(setId, {
+        query: 'Những package nào ghi vào bảng MAIN1.EVT_EVENT?',
+        limit: 20,
+        includeInferred: false,
+        recentTurns: [],
+      });
+
+      const ids = response.items.map((item) => item.id);
+      expect(ids).toContain(URN_TABLE_EVT_EVENT);
+      expect(ids).toContain(URN_PKG_EVT_EVENT_WRITER);
+      expect(ids).toContain(relation.factKey);
+      expect(response.paths).toHaveLength(1);
+      expect(response.paths[0]?.hopCitationIds).toEqual([[supportingChunk.chunkId]]);
+      expect(response.outcome).not.toBe('SEED_ONLY');
     });
 
     it('marks planning fallback row with FALLBACK_ONE_HOP when the deterministic plan is active', async () => {
