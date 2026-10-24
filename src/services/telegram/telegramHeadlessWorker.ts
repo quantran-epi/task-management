@@ -289,31 +289,13 @@ export function formatGroundedAnswerForTelegram(grounding: ChatMessageGrounding)
   }
   const parts: string[] = [];
   const conclusionText = ans.conclusion?.trim() || '';
-  if (conclusionText) {
+  const claims = ans.claims.filter((c) => c.text?.trim());
+
+  // Structural parity with GroundedAnswerCard: claims replace conclusion when present.
+  if (claims.length > 0) {
+    parts.push(claims.map((c) => `- ${c.text.trim()}`).join('\n'));
+  } else if (conclusionText) {
     parts.push(conclusionText);
-  }
-
-  // Avoid duplicating content if conclusion already covers the claims
-  if (ans.claims && ans.claims.length > 0) {
-    const normalizeForOverlap = (str: string) =>
-      str.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
-    const normConclusion = normalizeForOverlap(conclusionText);
-
-    const nonRedundantClaims = ans.claims.filter((c) => {
-      const claimStr = c.text?.trim() || '';
-      if (!claimStr) return false;
-      const normClaim = normalizeForOverlap(claimStr);
-      // If conclusion already contains almost the entire claim or vice-versa, skip it
-      if (normConclusion && normClaim.length > 15 && normConclusion.includes(normClaim)) {
-        return false;
-      }
-      return true;
-    });
-
-    if (nonRedundantClaims.length > 0) {
-      const claimTexts = nonRedundantClaims.map((c) => `- ${c.text.trim()}`);
-      parts.push(claimTexts.join('\n'));
-    }
   }
 
   const hypotheses = (ans as any).hypotheses;
