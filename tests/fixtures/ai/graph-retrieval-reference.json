@@ -1,0 +1,744 @@
+[
+  {
+    "id": "GRF-01",
+    "category": "direct_lookup",
+    "language": "vi",
+    "query": "Bảng MAIN1.EVT_EVENT được ghi bởi thành phần nào và thành phần nào đọc nó?",
+    "intent": "LOOKUP",
+    "seeds": [
+      { "urn": "urn:plannermate:oracle:ORACLE_TABLE:MAIN1.EVT_EVENT", "kind": "DatabaseObject" }
+    ],
+    "maxDepth": 1,
+    "selectedRelations": ["READS_FROM", "WRITES_TO"],
+    "nodes": [
+      { "urn": "urn:plannermate:oracle:ORACLE_TABLE:MAIN1.EVT_EVENT", "kind": "DatabaseObject", "canonicalName": "MAIN1.EVT_EVENT" },
+      { "urn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.EVT_EVENT_PKG.PROCESS", "kind": "SoftwareComponent", "canonicalName": "MAIN1.EVT_EVENT_PKG.PROCESS" },
+      { "urn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.CRD_PRC_BILLING_PKG.PROCESS", "kind": "SoftwareComponent", "canonicalName": "MAIN1.CRD_PRC_BILLING_PKG.PROCESS" }
+    ],
+    "edges": [
+      {
+        "factKey": "fc121bcd064d8561f0717f0e47ba46f46611ede26a04c30e624f2e0aadf28e4e",
+        "subjectUrn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.EVT_EVENT_PKG.PROCESS",
+        "relation": "WRITES_TO",
+        "objectUrn": "urn:plannermate:oracle:ORACLE_TABLE:MAIN1.EVT_EVENT",
+        "evidenceClass": "OBSERVED",
+        "supportingChunkIds": ["chunk-e1"]
+      },
+      {
+        "factKey": "ce9af291f6bbf028db1719dafb5c1fb632b28a8aec71bfdc16abb7c1ea442fb9",
+        "subjectUrn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.CRD_PRC_BILLING_PKG.PROCESS",
+        "relation": "READS_FROM",
+        "objectUrn": "urn:plannermate:oracle:ORACLE_TABLE:MAIN1.EVT_EVENT",
+        "evidenceClass": "OBSERVED",
+        "supportingChunkIds": ["chunk-e2"]
+      }
+    ],
+    "chunks": [
+      {
+        "id": "chunk-e1",
+        "documentId": "60000006-0000-4000-8000-000000000101",
+        "documentTitle": "EVT_EVENT data dictionary",
+        "sectionAnchor": "writers",
+        "lineStart": 10,
+        "lineEnd": 12,
+        "publishedContentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "rawSnippet": "MAIN1.EVT_EVENT_PKG.PROCESS inserts event rows into MAIN1.EVT_EVENT."
+      },
+      {
+        "id": "chunk-e2",
+        "documentId": "60000006-0000-4000-8000-000000000102",
+        "documentTitle": "EVT_EVENT readers",
+        "sectionAnchor": "readers",
+        "lineStart": 20,
+        "lineEnd": 22,
+        "publishedContentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "rawSnippet": "MAIN1.CRD_PRC_BILLING_PKG.PROCESS reads MAIN1.EVT_EVENT before billing."
+      }
+    ],
+    "expected": {
+      "outcome": "READY",
+      "entityUrns": [
+        "urn:plannermate:oracle:ORACLE_TABLE:MAIN1.EVT_EVENT",
+        "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.EVT_EVENT_PKG.PROCESS",
+        "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.CRD_PRC_BILLING_PKG.PROCESS"
+      ],
+      "edgeFactKeys": [
+        "fc121bcd064d8561f0717f0e47ba46f46611ede26a04c30e624f2e0aadf28e4e",
+        "ce9af291f6bbf028db1719dafb5c1fb632b28a8aec71bfdc16abb7c1ea442fb9"
+      ],
+      "relations": ["READS_FROM", "WRITES_TO"],
+      "maxHops": 1,
+      "minPathCount": 2
+    }
+  },
+  {
+    "id": "GRF-02",
+    "category": "read_write_relation",
+    "language": "vi",
+    "query": "Thành phần nào ghi vào MAIN1.EVT_EVENT?",
+    "intent": "IMPACT_ANALYSIS",
+    "seeds": [
+      { "urn": "urn:plannermate:oracle:ORACLE_TABLE:MAIN1.EVT_EVENT", "kind": "DatabaseObject" }
+    ],
+    "maxDepth": 1,
+    "selectedRelations": ["WRITES_TO"],
+    "nodes": [
+      { "urn": "urn:plannermate:oracle:ORACLE_TABLE:MAIN1.EVT_EVENT", "kind": "DatabaseObject", "canonicalName": "MAIN1.EVT_EVENT" },
+      { "urn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.EVT_EVENT_PKG.PROCESS", "kind": "SoftwareComponent", "canonicalName": "MAIN1.EVT_EVENT_PKG.PROCESS" }
+    ],
+    "edges": [
+      {
+        "factKey": "fc121bcd064d8561f0717f0e47ba46f46611ede26a04c30e624f2e0aadf28e4e",
+        "subjectUrn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.EVT_EVENT_PKG.PROCESS",
+        "relation": "WRITES_TO",
+        "objectUrn": "urn:plannermate:oracle:ORACLE_TABLE:MAIN1.EVT_EVENT",
+        "evidenceClass": "OBSERVED",
+        "supportingChunkIds": ["chunk-e1"]
+      }
+    ],
+    "chunks": [
+      {
+        "id": "chunk-e1",
+        "documentId": "60000006-0000-4000-8000-000000000101",
+        "documentTitle": "EVT_EVENT data dictionary",
+        "sectionAnchor": "writers",
+        "lineStart": 10,
+        "lineEnd": 12,
+        "publishedContentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "rawSnippet": "MAIN1.EVT_EVENT_PKG.PROCESS inserts event rows into MAIN1.EVT_EVENT."
+      }
+    ],
+    "expected": {
+      "outcome": "READY",
+      "entityUrns": [
+        "urn:plannermate:oracle:ORACLE_TABLE:MAIN1.EVT_EVENT",
+        "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.EVT_EVENT_PKG.PROCESS"
+      ],
+      "edgeFactKeys": [
+        "fc121bcd064d8561f0717f0e47ba46f46611ede26a04c30e624f2e0aadf28e4e"
+      ],
+      "relations": ["WRITES_TO"],
+      "maxHops": 1,
+      "minPathCount": 1
+    }
+  },
+  {
+    "id": "GRF-03",
+    "category": "read_write_relation",
+    "language": "vi",
+    "query": "Thành phần nào đọc từ MAIN1.EVT_EVENT?",
+    "intent": "IMPACT_ANALYSIS",
+    "seeds": [
+      { "urn": "urn:plannermate:oracle:ORACLE_TABLE:MAIN1.EVT_EVENT", "kind": "DatabaseObject" }
+    ],
+    "maxDepth": 1,
+    "selectedRelations": ["READS_FROM"],
+    "nodes": [
+      { "urn": "urn:plannermate:oracle:ORACLE_TABLE:MAIN1.EVT_EVENT", "kind": "DatabaseObject", "canonicalName": "MAIN1.EVT_EVENT" },
+      { "urn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.CRD_PRC_BILLING_PKG.PROCESS", "kind": "SoftwareComponent", "canonicalName": "MAIN1.CRD_PRC_BILLING_PKG.PROCESS" }
+    ],
+    "edges": [
+      {
+        "factKey": "ce9af291f6bbf028db1719dafb5c1fb632b28a8aec71bfdc16abb7c1ea442fb9",
+        "subjectUrn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.CRD_PRC_BILLING_PKG.PROCESS",
+        "relation": "READS_FROM",
+        "objectUrn": "urn:plannermate:oracle:ORACLE_TABLE:MAIN1.EVT_EVENT",
+        "evidenceClass": "OBSERVED",
+        "supportingChunkIds": ["chunk-e2"]
+      }
+    ],
+    "chunks": [
+      {
+        "id": "chunk-e2",
+        "documentId": "60000006-0000-4000-8000-000000000102",
+        "documentTitle": "EVT_EVENT readers",
+        "sectionAnchor": "readers",
+        "lineStart": 20,
+        "lineEnd": 22,
+        "publishedContentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "rawSnippet": "MAIN1.CRD_PRC_BILLING_PKG.PROCESS reads MAIN1.EVT_EVENT before billing."
+      }
+    ],
+    "expected": {
+      "outcome": "READY",
+      "entityUrns": [
+        "urn:plannermate:oracle:ORACLE_TABLE:MAIN1.EVT_EVENT",
+        "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.CRD_PRC_BILLING_PKG.PROCESS"
+      ],
+      "edgeFactKeys": [
+        "ce9af291f6bbf028db1719dafb5c1fb632b28a8aec71bfdc16abb7c1ea442fb9"
+      ],
+      "relations": ["READS_FROM"],
+      "maxHops": 1,
+      "minPathCount": 1
+    }
+  },
+  {
+    "id": "GRF-04",
+    "category": "seed_only",
+    "language": "vi",
+    "query": "Thành phần MAIN1.ORPHAN_PKG.PROCESS có quan hệ nào?",
+    "intent": "LOOKUP",
+    "seeds": [
+      { "urn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.ORPHAN_PKG.PROCESS", "kind": "SoftwareComponent" }
+    ],
+    "maxDepth": 1,
+    "nodes": [
+      { "urn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.ORPHAN_PKG.PROCESS", "kind": "SoftwareComponent", "canonicalName": "MAIN1.ORPHAN_PKG.PROCESS" }
+    ],
+    "edges": [],
+    "chunks": [],
+    "expected": {
+      "outcome": "SEED_ONLY",
+      "reasonCode": "SEED_FOUND_NO_RELATION",
+      "entityUrns": ["urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.ORPHAN_PKG.PROCESS"],
+      "edgeFactKeys": [],
+      "relations": [],
+      "maxHops": 1,
+      "minPathCount": 0,
+      "maxPathCount": 0
+    }
+  },
+  {
+    "id": "GRF-05",
+    "category": "nonexistent_entity",
+    "language": "vi",
+    "query": "Bảng MAIN1.DOES_NOT_EXIST được ghi bởi thành phần nào?",
+    "intent": "LOOKUP",
+    "seeds": [
+      { "urn": "urn:plannermate:oracle:ORACLE_TABLE:MAIN1.DOES_NOT_EXIST", "kind": "DatabaseObject" }
+    ],
+    "maxDepth": 1,
+    "nodes": [],
+    "edges": [],
+    "chunks": [],
+    "expected": {
+      "outcome": "NO_EVIDENCE",
+      "reasonCode": "SEED_NOT_FOUND",
+      "entityUrns": [],
+      "edgeFactKeys": [],
+      "relations": [],
+      "maxHops": 1,
+      "minPathCount": 0,
+      "maxPathCount": 0
+    }
+  },
+  {
+    "id": "GRF-06",
+    "category": "mixed_kinds",
+    "language": "vi",
+    "query": "MAIN1.EVT_EVENT và quy trình 60000006 liên quan tới những gì?",
+    "intent": "LOOKUP",
+    "seeds": [
+      { "urn": "urn:plannermate:oracle:ORACLE_TABLE:MAIN1.EVT_EVENT", "kind": "DatabaseObject" },
+      { "urn": "urn:plannermate:smartvista:PRC_PROCESS:60000006", "kind": "ScheduledProcess" }
+    ],
+    "maxDepth": 1,
+    "nodes": [
+      { "urn": "urn:plannermate:oracle:ORACLE_TABLE:MAIN1.EVT_EVENT", "kind": "DatabaseObject", "canonicalName": "MAIN1.EVT_EVENT" },
+      { "urn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.EVT_EVENT_PKG.PROCESS", "kind": "SoftwareComponent", "canonicalName": "MAIN1.EVT_EVENT_PKG.PROCESS" },
+      { "urn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.CRD_PRC_BILLING_PKG.PROCESS", "kind": "SoftwareComponent", "canonicalName": "MAIN1.CRD_PRC_BILLING_PKG.PROCESS" },
+      { "urn": "urn:plannermate:smartvista:PRC_PROCESS:60000006", "kind": "ScheduledProcess", "canonicalName": "SHB - Credit calculations" },
+      { "urn": "urn:plannermate:smartvista:PRC_CONTAINER:60000005", "kind": "ProcessStep", "canonicalName": "Step 10 - Due date period cycle" },
+      { "urn": "urn:plannermate:smartvista:PRC_CONTAINER:60000006", "kind": "ProcessStep", "canonicalName": "Step 20 - Grace period length cycle" }
+    ],
+    "edges": [
+      {
+        "factKey": "fc121bcd064d8561f0717f0e47ba46f46611ede26a04c30e624f2e0aadf28e4e",
+        "subjectUrn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.EVT_EVENT_PKG.PROCESS",
+        "relation": "WRITES_TO",
+        "objectUrn": "urn:plannermate:oracle:ORACLE_TABLE:MAIN1.EVT_EVENT",
+        "evidenceClass": "OBSERVED",
+        "supportingChunkIds": ["chunk-e1"]
+      },
+      {
+        "factKey": "ce9af291f6bbf028db1719dafb5c1fb632b28a8aec71bfdc16abb7c1ea442fb9",
+        "subjectUrn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.CRD_PRC_BILLING_PKG.PROCESS",
+        "relation": "READS_FROM",
+        "objectUrn": "urn:plannermate:oracle:ORACLE_TABLE:MAIN1.EVT_EVENT",
+        "evidenceClass": "OBSERVED",
+        "supportingChunkIds": ["chunk-e2"]
+      },
+      {
+        "factKey": "c1abbe3ca63a0671c70b94497bb0c50d0542bcc6f324be094e634d3ea5297825",
+        "subjectUrn": "urn:plannermate:smartvista:PRC_PROCESS:60000006",
+        "relation": "CONTAINS_STEP",
+        "objectUrn": "urn:plannermate:smartvista:PRC_CONTAINER:60000005",
+        "evidenceClass": "OBSERVED",
+        "supportingChunkIds": ["chunk-e8"]
+      },
+      {
+        "factKey": "1bc846629dda6fc9fff0420eb827d900285927da498122ad55882d8e0031045f",
+        "subjectUrn": "urn:plannermate:smartvista:PRC_PROCESS:60000006",
+        "relation": "CONTAINS_STEP",
+        "objectUrn": "urn:plannermate:smartvista:PRC_CONTAINER:60000006",
+        "evidenceClass": "OBSERVED",
+        "supportingChunkIds": ["chunk-e9"]
+      }
+    ],
+    "chunks": [
+      {
+        "id": "chunk-e1",
+        "documentId": "60000006-0000-4000-8000-000000000101",
+        "documentTitle": "EVT_EVENT data dictionary",
+        "sectionAnchor": "writers",
+        "lineStart": 10,
+        "lineEnd": 12,
+        "publishedContentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "rawSnippet": "MAIN1.EVT_EVENT_PKG.PROCESS inserts event rows into MAIN1.EVT_EVENT."
+      },
+      {
+        "id": "chunk-e2",
+        "documentId": "60000006-0000-4000-8000-000000000102",
+        "documentTitle": "EVT_EVENT readers",
+        "sectionAnchor": "readers",
+        "lineStart": 20,
+        "lineEnd": 22,
+        "publishedContentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "rawSnippet": "MAIN1.CRD_PRC_BILLING_PKG.PROCESS reads MAIN1.EVT_EVENT before billing."
+      },
+      {
+        "id": "chunk-e8",
+        "documentId": "60000006-0000-4000-8000-000000000103",
+        "documentTitle": "Credit calculations process",
+        "sectionAnchor": "steps",
+        "lineStart": 30,
+        "lineEnd": 32,
+        "publishedContentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "rawSnippet": "Process 60000006 contains step 10."
+      },
+      {
+        "id": "chunk-e9",
+        "documentId": "60000006-0000-4000-8000-000000000103",
+        "documentTitle": "Credit calculations process",
+        "sectionAnchor": "steps",
+        "lineStart": 33,
+        "lineEnd": 35,
+        "publishedContentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "rawSnippet": "Process 60000006 contains step 20."
+      }
+    ],
+    "expected": {
+      "outcome": "READY",
+      "entityUrns": [
+        "urn:plannermate:oracle:ORACLE_TABLE:MAIN1.EVT_EVENT",
+        "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.EVT_EVENT_PKG.PROCESS",
+        "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.CRD_PRC_BILLING_PKG.PROCESS",
+        "urn:plannermate:smartvista:PRC_PROCESS:60000006",
+        "urn:plannermate:smartvista:PRC_CONTAINER:60000005",
+        "urn:plannermate:smartvista:PRC_CONTAINER:60000006"
+      ],
+      "edgeFactKeys": [
+        "fc121bcd064d8561f0717f0e47ba46f46611ede26a04c30e624f2e0aadf28e4e",
+        "ce9af291f6bbf028db1719dafb5c1fb632b28a8aec71bfdc16abb7c1ea442fb9",
+        "c1abbe3ca63a0671c70b94497bb0c50d0542bcc6f324be094e634d3ea5297825",
+        "1bc846629dda6fc9fff0420eb827d900285927da498122ad55882d8e0031045f"
+      ],
+      "relations": ["CONTAINS_STEP", "READS_FROM", "WRITES_TO"],
+      "maxHops": 1,
+      "minPathCount": 4
+    }
+  },
+  {
+    "id": "GRF-07",
+    "category": "multiple_relations",
+    "language": "vi",
+    "query": "MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS đọc, ghi và gọi những gì?",
+    "intent": "LOOKUP",
+    "seeds": [
+      { "urn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS", "kind": "SoftwareComponent" }
+    ],
+    "maxDepth": 1,
+    "selectedRelations": ["READS_FROM", "WRITES_TO", "CALLS"],
+    "nodes": [
+      { "urn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS", "kind": "SoftwareComponent", "canonicalName": "MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS" },
+      { "urn": "urn:plannermate:oracle:ORACLE_TABLE:MAIN1.FCL_CREDIT_LINE", "kind": "DatabaseObject", "canonicalName": "MAIN1.FCL_CREDIT_LINE" },
+      { "urn": "urn:plannermate:oracle:ORACLE_TABLE:MAIN1.FCL_CYCLE_COUNTER", "kind": "DatabaseObject", "canonicalName": "MAIN1.FCL_CYCLE_COUNTER" },
+      { "urn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.CRD_PRC_BILLING_PKG.PROCESS", "kind": "SoftwareComponent", "canonicalName": "MAIN1.CRD_PRC_BILLING_PKG.PROCESS" }
+    ],
+    "edges": [
+      {
+        "factKey": "f6201232a78f127192005b9e1ca8f5ddf45968c54f089f3699f738ab54f0d13a",
+        "subjectUrn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS",
+        "relation": "READS_FROM",
+        "objectUrn": "urn:plannermate:oracle:ORACLE_TABLE:MAIN1.FCL_CREDIT_LINE",
+        "evidenceClass": "OBSERVED",
+        "supportingChunkIds": ["chunk-e3"]
+      },
+      {
+        "factKey": "9643487736f67a5d0cd11859a7ff576089ad9acbe544dbf966c24648acef9937",
+        "subjectUrn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS",
+        "relation": "WRITES_TO",
+        "objectUrn": "urn:plannermate:oracle:ORACLE_TABLE:MAIN1.FCL_CYCLE_COUNTER",
+        "evidenceClass": "OBSERVED",
+        "supportingChunkIds": ["chunk-e4"]
+      },
+      {
+        "factKey": "755a26b225b5b8bfd9476c873776a5f67a447d31b2940f24d420b1b0f459f258",
+        "subjectUrn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS",
+        "relation": "READS_FROM",
+        "objectUrn": "urn:plannermate:oracle:ORACLE_TABLE:MAIN1.FCL_CYCLE_COUNTER",
+        "evidenceClass": "OBSERVED",
+        "supportingChunkIds": ["chunk-e5"]
+      },
+      {
+        "factKey": "df82e770b37b84141aa2926083fc59bf23f51cf7844577b53a3965fd1d3dd65e",
+        "subjectUrn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS",
+        "relation": "CALLS",
+        "objectUrn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.CRD_PRC_BILLING_PKG.PROCESS",
+        "evidenceClass": "OBSERVED",
+        "supportingChunkIds": ["chunk-e6"]
+      }
+    ],
+    "chunks": [
+      {
+        "id": "chunk-e3",
+        "documentId": "60000006-0000-4000-8000-000000000104",
+        "documentTitle": "Cycle counter package",
+        "sectionAnchor": "reads",
+        "lineStart": 40,
+        "lineEnd": 42,
+        "publishedContentHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "rawSnippet": "MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS reads MAIN1.FCL_CREDIT_LINE."
+      },
+      {
+        "id": "chunk-e4",
+        "documentId": "60000006-0000-4000-8000-000000000104",
+        "documentTitle": "Cycle counter package",
+        "sectionAnchor": "writes",
+        "lineStart": 43,
+        "lineEnd": 45,
+        "publishedContentHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "rawSnippet": "MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS updates MAIN1.FCL_CYCLE_COUNTER."
+      },
+      {
+        "id": "chunk-e5",
+        "documentId": "60000006-0000-4000-8000-000000000104",
+        "documentTitle": "Cycle counter package",
+        "sectionAnchor": "reads",
+        "lineStart": 46,
+        "lineEnd": 48,
+        "publishedContentHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "rawSnippet": "MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS reads MAIN1.FCL_CYCLE_COUNTER."
+      },
+      {
+        "id": "chunk-e6",
+        "documentId": "60000006-0000-4000-8000-000000000104",
+        "documentTitle": "Cycle counter package",
+        "sectionAnchor": "calls",
+        "lineStart": 49,
+        "lineEnd": 51,
+        "publishedContentHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "rawSnippet": "MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS calls MAIN1.CRD_PRC_BILLING_PKG.PROCESS."
+      }
+    ],
+    "expected": {
+      "outcome": "READY",
+      "entityUrns": [
+        "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS",
+        "urn:plannermate:oracle:ORACLE_TABLE:MAIN1.FCL_CREDIT_LINE",
+        "urn:plannermate:oracle:ORACLE_TABLE:MAIN1.FCL_CYCLE_COUNTER",
+        "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.CRD_PRC_BILLING_PKG.PROCESS"
+      ],
+      "edgeFactKeys": [
+        "f6201232a78f127192005b9e1ca8f5ddf45968c54f089f3699f738ab54f0d13a",
+        "9643487736f67a5d0cd11859a7ff576089ad9acbe544dbf966c24648acef9937",
+        "755a26b225b5b8bfd9476c873776a5f67a447d31b2940f24d420b1b0f459f258",
+        "df82e770b37b84141aa2926083fc59bf23f51cf7844577b53a3965fd1d3dd65e"
+      ],
+      "relations": ["CALLS", "READS_FROM", "WRITES_TO"],
+      "maxHops": 1,
+      "minPathCount": 4
+    }
+  },
+  {
+    "id": "GRF-08",
+    "category": "multi_hop_flow_impact",
+    "language": "vi",
+    "query": "Chuỗi gọi hai bước từ MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS đi tới đâu?",
+    "intent": "FLOW_TRAVERSAL",
+    "seeds": [
+      { "urn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS", "kind": "SoftwareComponent" }
+    ],
+    "maxDepth": 2,
+    "selectedRelations": ["CALLS"],
+    "nodes": [
+      { "urn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS", "kind": "SoftwareComponent", "canonicalName": "MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS" },
+      { "urn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.CRD_PRC_BILLING_PKG.PROCESS", "kind": "SoftwareComponent", "canonicalName": "MAIN1.CRD_PRC_BILLING_PKG.PROCESS" },
+      { "urn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.EVT_EVENT_PKG.PROCESS", "kind": "SoftwareComponent", "canonicalName": "MAIN1.EVT_EVENT_PKG.PROCESS" }
+    ],
+    "edges": [
+      {
+        "factKey": "df82e770b37b84141aa2926083fc59bf23f51cf7844577b53a3965fd1d3dd65e",
+        "subjectUrn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS",
+        "relation": "CALLS",
+        "objectUrn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.CRD_PRC_BILLING_PKG.PROCESS",
+        "evidenceClass": "OBSERVED",
+        "supportingChunkIds": ["chunk-e6"]
+      },
+      {
+        "factKey": "391fd4e9c368d7acf886dca993d1a0595fd8abd3dfd14b3c3126eafd8aea7f93",
+        "subjectUrn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.CRD_PRC_BILLING_PKG.PROCESS",
+        "relation": "CALLS",
+        "objectUrn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.EVT_EVENT_PKG.PROCESS",
+        "evidenceClass": "OBSERVED",
+        "supportingChunkIds": ["chunk-e7"]
+      }
+    ],
+    "chunks": [
+      {
+        "id": "chunk-e6",
+        "documentId": "60000006-0000-4000-8000-000000000104",
+        "documentTitle": "Cycle counter package",
+        "sectionAnchor": "calls",
+        "lineStart": 49,
+        "lineEnd": 51,
+        "publishedContentHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "rawSnippet": "MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS calls MAIN1.CRD_PRC_BILLING_PKG.PROCESS."
+      },
+      {
+        "id": "chunk-e7",
+        "documentId": "60000006-0000-4000-8000-000000000105",
+        "documentTitle": "Billing package",
+        "sectionAnchor": "calls",
+        "lineStart": 60,
+        "lineEnd": 62,
+        "publishedContentHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "rawSnippet": "MAIN1.CRD_PRC_BILLING_PKG.PROCESS calls MAIN1.EVT_EVENT_PKG.PROCESS."
+      }
+    ],
+    "expected": {
+      "outcome": "READY",
+      "entityUrns": [
+        "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS",
+        "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.CRD_PRC_BILLING_PKG.PROCESS",
+        "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.EVT_EVENT_PKG.PROCESS"
+      ],
+      "edgeFactKeys": [
+        "df82e770b37b84141aa2926083fc59bf23f51cf7844577b53a3965fd1d3dd65e",
+        "391fd4e9c368d7acf886dca993d1a0595fd8abd3dfd14b3c3126eafd8aea7f93"
+      ],
+      "relations": ["CALLS"],
+      "maxHops": 2,
+      "minPathCount": 2
+    }
+  },
+  {
+    "id": "GRF-09",
+    "category": "multi_hop_flow_impact",
+    "language": "vi",
+    "query": "Thay đổi MAIN1.EVT_EVENT_PKG.PROCESS ảnh hưởng ngược lên hai bước gọi nào?",
+    "intent": "IMPACT_ANALYSIS",
+    "seeds": [
+      { "urn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.EVT_EVENT_PKG.PROCESS", "kind": "SoftwareComponent" }
+    ],
+    "maxDepth": 2,
+    "selectedRelations": ["CALLS"],
+    "nodes": [
+      { "urn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.EVT_EVENT_PKG.PROCESS", "kind": "SoftwareComponent", "canonicalName": "MAIN1.EVT_EVENT_PKG.PROCESS" },
+      { "urn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.CRD_PRC_BILLING_PKG.PROCESS", "kind": "SoftwareComponent", "canonicalName": "MAIN1.CRD_PRC_BILLING_PKG.PROCESS" },
+      { "urn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS", "kind": "SoftwareComponent", "canonicalName": "MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS" }
+    ],
+    "edges": [
+      {
+        "factKey": "df82e770b37b84141aa2926083fc59bf23f51cf7844577b53a3965fd1d3dd65e",
+        "subjectUrn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS",
+        "relation": "CALLS",
+        "objectUrn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.CRD_PRC_BILLING_PKG.PROCESS",
+        "evidenceClass": "OBSERVED",
+        "supportingChunkIds": ["chunk-e6"]
+      },
+      {
+        "factKey": "391fd4e9c368d7acf886dca993d1a0595fd8abd3dfd14b3c3126eafd8aea7f93",
+        "subjectUrn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.CRD_PRC_BILLING_PKG.PROCESS",
+        "relation": "CALLS",
+        "objectUrn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.EVT_EVENT_PKG.PROCESS",
+        "evidenceClass": "OBSERVED",
+        "supportingChunkIds": ["chunk-e7"]
+      }
+    ],
+    "chunks": [
+      {
+        "id": "chunk-e6",
+        "documentId": "60000006-0000-4000-8000-000000000104",
+        "documentTitle": "Cycle counter package",
+        "sectionAnchor": "calls",
+        "lineStart": 49,
+        "lineEnd": 51,
+        "publishedContentHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "rawSnippet": "MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS calls MAIN1.CRD_PRC_BILLING_PKG.PROCESS."
+      },
+      {
+        "id": "chunk-e7",
+        "documentId": "60000006-0000-4000-8000-000000000105",
+        "documentTitle": "Billing package",
+        "sectionAnchor": "calls",
+        "lineStart": 60,
+        "lineEnd": 62,
+        "publishedContentHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "rawSnippet": "MAIN1.CRD_PRC_BILLING_PKG.PROCESS calls MAIN1.EVT_EVENT_PKG.PROCESS."
+      }
+    ],
+    "expected": {
+      "outcome": "READY",
+      "entityUrns": [
+        "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.EVT_EVENT_PKG.PROCESS",
+        "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.CRD_PRC_BILLING_PKG.PROCESS",
+        "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS"
+      ],
+      "edgeFactKeys": [
+        "df82e770b37b84141aa2926083fc59bf23f51cf7844577b53a3965fd1d3dd65e",
+        "391fd4e9c368d7acf886dca993d1a0595fd8abd3dfd14b3c3126eafd8aea7f93"
+      ],
+      "relations": ["CALLS"],
+      "maxHops": 2,
+      "minPathCount": 2
+    }
+  },
+  {
+    "id": "GRF-10",
+    "category": "multi_hop_flow_impact",
+    "language": "vi",
+    "query": "Truy vết chuỗi gọi năm bước từ MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS.",
+    "intent": "FLOW_TRAVERSAL",
+    "seeds": [
+      { "urn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS", "kind": "SoftwareComponent" }
+    ],
+    "maxDepth": 5,
+    "selectedRelations": ["CALLS"],
+    "nodes": [
+      { "urn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS", "kind": "SoftwareComponent", "canonicalName": "MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS" },
+      { "urn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.CRD_PRC_BILLING_PKG.PROCESS", "kind": "SoftwareComponent", "canonicalName": "MAIN1.CRD_PRC_BILLING_PKG.PROCESS" }
+    ],
+    "edges": [
+      {
+        "factKey": "df82e770b37b84141aa2926083fc59bf23f51cf7844577b53a3965fd1d3dd65e",
+        "subjectUrn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS",
+        "relation": "CALLS",
+        "objectUrn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.CRD_PRC_BILLING_PKG.PROCESS",
+        "evidenceClass": "OBSERVED",
+        "supportingChunkIds": ["chunk-e6"]
+      }
+    ],
+    "chunks": [
+      {
+        "id": "chunk-e6",
+        "documentId": "60000006-0000-4000-8000-000000000104",
+        "documentTitle": "Cycle counter package",
+        "sectionAnchor": "calls",
+        "lineStart": 49,
+        "lineEnd": 51,
+        "publishedContentHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "rawSnippet": "MAIN1.FCL_PRC_CYCLE_COUNTER_PKG.PROCESS calls MAIN1.CRD_PRC_BILLING_PKG.PROCESS."
+      }
+    ],
+    "expected": {
+      "outcome": "NO_EVIDENCE",
+      "reasonCode": "HOP_LIMIT_EXCEEDED",
+      "entityUrns": [],
+      "edgeFactKeys": [],
+      "relations": [],
+      "maxHops": 5,
+      "minPathCount": 0,
+      "maxPathCount": 0
+    }
+  },
+  {
+    "id": "GRF-11",
+    "category": "seed_only",
+    "language": "en",
+    "query": "What relations does MAIN1.UNUSED_PKG.PROCESS have?",
+    "intent": "LOOKUP",
+    "seeds": [
+      { "urn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.UNUSED_PKG.PROCESS", "kind": "SoftwareComponent" }
+    ],
+    "maxDepth": 1,
+    "nodes": [
+      { "urn": "urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.UNUSED_PKG.PROCESS", "kind": "SoftwareComponent", "canonicalName": "MAIN1.UNUSED_PKG.PROCESS" }
+    ],
+    "edges": [],
+    "chunks": [],
+    "expected": {
+      "outcome": "SEED_ONLY",
+      "reasonCode": "SEED_FOUND_NO_RELATION",
+      "entityUrns": ["urn:plannermate:plsql:PLSQL_PROCEDURE:MAIN1.UNUSED_PKG.PROCESS"],
+      "edgeFactKeys": [],
+      "relations": [],
+      "maxHops": 1,
+      "minPathCount": 0,
+      "maxPathCount": 0
+    }
+  },
+  {
+    "id": "GRF-12",
+    "category": "multi_hop_flow_impact",
+    "language": "vi",
+    "query": "Các bước nào chạy sau bước 10 trong quy trình 60000006?",
+    "intent": "FLOW_TRAVERSAL",
+    "seeds": [
+      { "urn": "urn:plannermate:smartvista:PRC_CONTAINER:60000005", "kind": "ProcessStep" }
+    ],
+    "maxDepth": 2,
+    "selectedRelations": ["PRECEDES"],
+    "nodes": [
+      { "urn": "urn:plannermate:smartvista:PRC_CONTAINER:60000005", "kind": "ProcessStep", "canonicalName": "Step 10 - Due date period cycle" },
+      { "urn": "urn:plannermate:smartvista:PRC_CONTAINER:60000006", "kind": "ProcessStep", "canonicalName": "Step 20 - Grace period length cycle" },
+      { "urn": "urn:plannermate:smartvista:PRC_CONTAINER:60000007", "kind": "ProcessStep", "canonicalName": "Step 30 - Aging period cycle" }
+    ],
+    "edges": [
+      {
+        "factKey": "7022a15da2915b048a772cfaeefeaee325791e82108577401986e47600883466",
+        "subjectUrn": "urn:plannermate:smartvista:PRC_CONTAINER:60000005",
+        "relation": "PRECEDES",
+        "objectUrn": "urn:plannermate:smartvista:PRC_CONTAINER:60000006",
+        "evidenceClass": "OBSERVED",
+        "supportingChunkIds": ["chunk-e10"]
+      },
+      {
+        "factKey": "7f42d2a7874d149ec12a7e9d36ac6c4f84a59c13a20e220091bcc071e46972f2",
+        "subjectUrn": "urn:plannermate:smartvista:PRC_CONTAINER:60000006",
+        "relation": "PRECEDES",
+        "objectUrn": "urn:plannermate:smartvista:PRC_CONTAINER:60000007",
+        "evidenceClass": "OBSERVED",
+        "supportingChunkIds": ["chunk-e11"]
+      }
+    ],
+    "chunks": [
+      {
+        "id": "chunk-e10",
+        "documentId": "60000006-0000-4000-8000-000000000106",
+        "documentTitle": "Credit calculations process",
+        "sectionAnchor": "ordering",
+        "lineStart": 70,
+        "lineEnd": 72,
+        "publishedContentHash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "rawSnippet": "Step 10 precedes step 20."
+      },
+      {
+        "id": "chunk-e11",
+        "documentId": "60000006-0000-4000-8000-000000000106",
+        "documentTitle": "Credit calculations process",
+        "sectionAnchor": "ordering",
+        "lineStart": 73,
+        "lineEnd": 75,
+        "publishedContentHash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "rawSnippet": "Step 20 precedes step 30."
+      }
+    ],
+    "expected": {
+      "outcome": "READY",
+      "entityUrns": [
+        "urn:plannermate:smartvista:PRC_CONTAINER:60000005",
+        "urn:plannermate:smartvista:PRC_CONTAINER:60000006",
+        "urn:plannermate:smartvista:PRC_CONTAINER:60000007"
+      ],
+      "edgeFactKeys": [
+        "7022a15da2915b048a772cfaeefeaee325791e82108577401986e47600883466",
+        "7f42d2a7874d149ec12a7e9d36ac6c4f84a59c13a20e220091bcc071e46972f2"
+      ],
+      "relations": ["PRECEDES"],
+      "maxHops": 2,
+      "minPathCount": 2
+    }
+  }
+]
