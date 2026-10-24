@@ -50,8 +50,8 @@ export const IntentResultSchema = z.strictObject({
   needs_clarification: z.boolean(),
   clarify_question: z.string().trim().min(1).max(500).nullable(),
   speculation_requested: z.boolean(),
-  require_mcp: z.boolean().default(false),
-  target_mcp_servers: z.array(z.string().trim().min(1).max(100)).max(10).default([]),
+  require_mcp: z.boolean(),
+  target_mcp_servers: z.array(z.string().trim().min(1).max(100)).max(10),
 });
 
 export type IntentResult = z.infer<typeof IntentResultSchema>;
@@ -259,8 +259,7 @@ export async function routeIntent(
             ...baseMessages,
             {
               role: 'user' as const,
-              content:
-                'Your previous reply violated the strict JSON schema. Return ONLY a valid JSON object matching the required schema with keys: intent, confidence, entities, language, needs_clarification, clarify_question, speculation_requested.',
+              content: `Your previous reply violated the strict JSON schema. Return ONLY a valid JSON object matching the required schema with keys: ${INTENT_JSON_SCHEMA.required.join(', ')}.`,
             },
           ];
 
