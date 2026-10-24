@@ -942,6 +942,174 @@ describe('GroundedAnswerCard', () => {
     expect(screen.queryByText('Không tìm thấy bằng chứng trong tri thức đã xuất bản')).not.toBeInTheDocument();
   });
 
+  describe('Phase 24 SEED_ONLY and stage diagnostics', () => {
+    const seedGrounding = (overrides: Partial<ChatMessageGrounding> = {}): ChatMessageGrounding =>
+      createMockGrounding({
+        outcome: 'SEED_ONLY',
+        answer: null,
+        citations: [],
+        entities: [
+          {
+            urn: 'urn:plannermate:corebanking:DatabaseObject:MAIN1.EVT_EVENT',
+            canonicalName: 'MAIN1.EVT_EVENT',
+            kind: 'DatabaseObject',
+            snapshotId: '10000000-0000-4000-8000-000000000001',
+            evidenceClass: 'OBSERVED',
+          },
+        ],
+        graphCounts: { entity: 1, edge: 0, path: 0 },
+        stageDiagnostics: [
+          {
+            stage: 'entity_resolution',
+            status: 'ok',
+            latencyMs: 12,
+            accepted: 1,
+            rejected: 0,
+            truncated: false,
+            fallback: false,
+            reasonCodes: [],
+          },
+          {
+            stage: 'planning',
+            status: 'ok',
+            latencyMs: 7,
+            accepted: 1,
+            rejected: 1,
+            truncated: true,
+            fallback: true,
+            fallbackReason: 'FALLBACK_ONE_HOP',
+            reasonCodes: ['RESULT_LIMIT_REACHED', 'FALLBACK_ONE_HOP'],
+          },
+        ],
+        failedSeeds: undefined,
+        ...overrides,
+      });
+
+    it('32. stage rows show fixed Vietnamese stage name, status, latency, counts, and reason chips', async () => {
+      const { DiagnosticsPanel } = await import(
+        '../../src/components/ai/grounded/DiagnosticsPanel'
+      );
+      render(
+        <DiagnosticsPanel
+          diagnostics={{
+            fulltext: { status: 'ok', latencyMs: 1, itemCount: 0 },
+            vector: { status: 'ok', latencyMs: 1, itemCount: 0 },
+            graph: { status: 'ok', latencyMs: 15, itemCount: 1, entityCount: 1, edgeCount: 0, pathCount: 0 },
+          }}
+          graphCounts={{ entity: 1, edge: 0, path: 0 }}
+          stages={seedGrounding().stageDiagnostics}
+          graphBeforeFusion={{ entity: 3, edge: 10, path: 2 }}
+          graphAfterFusion={{ entity: 1, edge: 0, path: 0 }}
+        />
+      );
+
+      fireEvent.click(screen.getByText('Chi tiết chẩn đoán truy xuất'));
+
+      expect(screen.getByText('Phân giải thực thể')).toBeInTheDocument();
+      expect(screen.getByText('Lập kế hoạch')).toBeInTheDocument();
+      expect(screen.getByText(/12ms/)).toBeInTheDocument();
+      expect(screen.getByText(/1 chấp nhận \/ 1 loại bỏ/)).toBeInTheDocument();
+      expect(
+        screen.getByLabelText(/RESULT_LIMIT_REACHED: Kết quả đồ thị đã bị giới hạn/)
+      ).toBeInTheDocument();
+    });
+
+    it('33. truncated and fallback flags render indicators; false flags do not', async () => {
+      const { StageDiagnosticsList } = await import(
+        '../../src/components/ai/grounded/StageDiagnosticsList'
+      );
+      render(<StageDiagnosticsList stages={seedGrounding().stageDiagnostics!} />);
+
+      expect(screen.getAllByText('Đã cắt bớt')).toHaveLength(1);
+      expect(screen.getAllByText('Dùng phạm vi dự phòng')).toHaveLength(1);
+      expect(screen.getAllByLabelText(/FALLBACK_ONE_HOP:/)).toHaveLength(1);
+    });
+
+    it('34. diagnostics render entity/edge/path counts and before/after fusion without arbitrary keys', async () => {
+      const { DiagnosticsPanel } = await import(
+        '../../src/components/ai/grounded/DiagnosticsPanel'
+      );
+      const { container } = render(
+        <DiagnosticsPanel
+          diagnostics={{
+            fulltext: { status: 'ok', latencyMs: 1, itemCount: 0 },
+            vector: { status: 'ok', latencyMs: 1, itemCount: 0 },
+            graph: { status: 'ok', latencyMs: 15, itemCount: 1 },
+          }}
+          graphCounts={{ entity: 2, edge: 3, path: 4 }}
+          graphBeforeFusion={{ entity: 9, edge: 8, path: 7 }}
+          graphAfterFusion={{ entity: 2, edge: 3, path: 4 }}
+        />
+      );
+
+      fireEvent.click(screen.getByText('Chi tiết chẩn đoán truy xuất'));
+
+      expect(screen.getByText('Thực thể: 2 · Cạnh: 3 · Đường dẫn: 4')).toBeInTheDocument();
+      expect(screen.getByText(/Trước hợp nhất: 9 thực thể \/ 8 cạnh \/ 7 đường dẫn/)).toBeInTheDocument();
+      expect(screen.getByText(/Sau hợp nhất: 2 thực thể \/ 3 cạnh \/ 4 đường dẫn/)).toBeInTheDocument();
+      expect(container.textContent).not.toContain('message');
+      expect(container.textContent).not.toContain('query');
+    });
+
+    it('35. SEED_ONLY renders title, limited copy, counts, entity slot, and partial notice', () => {
+      const failedSeeds = [
+        {
+          urn: 'urn:plannermate:corebanking:DatabaseObject:MISSING_1' as const,
+          reasonCode: 'SEED_NOT_FOUND' as const,
+        },
+      ];
+      render(
+        <GroundedAnswerCard
+          grounding={seedGrounding({ failedSeeds })}
+          onCitationActivate={vi.fn()}
+          entitiesSlot={<div data-testid="entities-slot">Entity 1</div>}
+        />
+      );
+
+      expect(screen.getByText('Đã tìm thấy thực thể')).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          /Đã tìm thấy MAIN1.EVT_EVENT, nhưng chưa tìm thấy bằng chứng về mối quan hệ/
+        )
+      ).toBeInTheDocument();
+      expect(screen.getByText('Thực thể: 1 · Cạnh: 0 · Đường dẫn: 0')).toBeInTheDocument();
+      expect(screen.getByTestId('entities-slot')).toBeInTheDocument();
+      expect(screen.getByRole('status')).toBeInTheDocument();
+    });
+
+    it('36. SEED_ONLY omits no-evidence copy, degraded/conflict banners, confidence tag, and refinements', () => {
+      render(
+        <GroundedAnswerCard
+          grounding={seedGrounding()}
+          onCitationActivate={vi.fn()}
+          refinementsSlot={<div data-testid="refinements-slot">Refine</div>}
+        />
+      );
+
+      expect(
+        screen.queryByText('Không tìm thấy bằng chứng trong tri thức đã xuất bản')
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText('Kết quả thiếu một phần phương thức')).not.toBeInTheDocument();
+      expect(screen.queryByText(/Độ tin cậy:/)).not.toBeInTheDocument();
+      expect(screen.queryByTestId('refinements-slot')).not.toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    it('37. SEED_ONLY fixture parses through the persisted schema and buffers exact counts', async () => {
+      const { ChatMessageGroundingSchema } = await import(
+        '../../src/services/ai/groundedAnswerSchemas'
+      );
+      const parsed = ChatMessageGroundingSchema.parse(seedGrounding());
+
+      render(
+        <GroundedAnswerCard grounding={parsed} onCitationActivate={vi.fn()} />
+      );
+
+      expect(screen.getByText('Thực thể: 1 · Cạnh: 0 · Đường dẫn: 0')).toBeInTheDocument();
+      expect(screen.queryByText('Trả lời')).not.toBeInTheDocument();
+    });
+  });
+
   it('31. LOCAL_FALLBACK_RESULTS without resultsSlot renders empty local notice', () => {
     const grounding = createMockGrounding({
       outcome: 'LOCAL_FALLBACK_RESULTS',
