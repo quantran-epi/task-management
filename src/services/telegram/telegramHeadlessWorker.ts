@@ -373,6 +373,45 @@ export function cleanCitationTags(text: string): string {
 }
 
 export function formatGroundedAnswerForTelegram(grounding: ChatMessageGrounding): string {
+  // Seed-only evidence is a found entity, not "no evidence" (D-01, D-02).
+  if (grounding.outcome === 'SEED_ONLY') {
+    const parts: string[] = [];
+    const conclusion = grounding.answer?.conclusion?.trim();
+    if (conclusion) parts.push(conclusion);
+    const seedEntities = grounding.entities ?? [];
+    if (seedEntities.length > 0) {
+      parts.push(
+        `Đã tìm thấy thực thể: ${seedEntities
+          .slice(0, 5)
+          .map((e) => e.canonicalName)
+          .join(', ')}`
+      );
+      const urnLines = seedEntities.slice(0, 5).map((e) => `- \`${e.urn}\``);
+      if (urnLines.length > 0) parts.push(urnLines.join('\n'));
+    } else {
+      parts.push('Đã tìm thấy thực thể trong đồ thị tri thức.');
+    }
+
+    const counts = grounding.graphCounts;
+    if (counts) {
+      parts.push(
+        `Thực thể: ${counts.entity} · Cạnh: ${counts.edge} · Đường dẫn: ${counts.path}`
+      );
+    }
+
+    // Only stable identity + code pairs; never stage text, queries, or excerpts.
+    const failedSeeds = grounding.failedSeeds ?? [];
+    if (failedSeeds.length > 0) {
+      parts.push(
+        `Không phân giải được:\n${failedSeeds
+          .map((s) => `- \`${s.urn}\` (${s.reasonCode})`)
+          .join('\n')}`
+      );
+    }
+
+    return parts.join('\n\n');
+  }
+
   const ans = grounding.answer;
   if (!ans) {
     return '*(Không tìm thấy câu trả lời phù hợp trong tài liệu)*';
@@ -1115,13 +1154,18 @@ export async function processTelegramInboundMessage(
       ) {
         let noEvidenceMsg =
           '*(Không tìm thấy tài liệu hoặc bằng chứng nào phù hợp với yêu cầu trong kho tri thức TaskMate)*';
-        const citations = groundedResult.grounding?.citations;
-        if (Array.isArray(citations) && citations.length > 0) {
-          const titles = Array.from(
-            new Set(citations.map((c) => c.documentTitle).filter(Boolean))
-          ).slice(0, 3);
-          if (titles.length > 0) {
-            noEvidenceMsg += `\n\n📚 **Tài liệu tham khảo:** ${titles.join(', ')}`;
+        // A seed-only server result is a found entity, never no-evidence copy.
+        if (groundedResult.grounding?.outcome === 'SEED_ONLY') {
+          noEvidenceMsg = formatGroundedAnswerForTelegram(groundedResult.grounding);
+        } else {
+          const citations = groundedResult.grounding?.citations;
+          if (Array.isArray(citations) && citations.length > 0) {
+            const titles = Array.from(
+              new Set(citations.map((c) => c.documentTitle).filter(Boolean))
+            ).slice(0, 3);
+            if (titles.length > 0) {
+              noEvidenceMsg += `\n\n📚 **Tài liệu tham khảo:** ${titles.join(', ')}`;
+            }
           }
         }
         const htmlFallback = markdownToTelegramHtml(noEvidenceMsg);

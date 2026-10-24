@@ -1798,4 +1798,188 @@ describe('Telegram Headless Worker', () => {
       expect(toolMsg?.content).toContain('Thao tác thay đổi dữ liệu yêu cầu quyền Admin');
     });
   });
+
+  describe('Phase 24 seed-only Telegram handling (SC-6)', () => {
+    const SET_ID = '10000000-0000-0000-0000-000000000001';
+    const SEED_URN = 'urn:plannermate:core:process:cytp1002';
+
+    function seedOnlyGrounding(overrides: Record<string, unknown> = {}): any {
+      return {
+        schemaVersion: 1,
+        authority: 'server',
+        outcome: 'SEED_ONLY',
+        answer: null,
+        citations: [],
+        paths: [],
+        conflicts: [],
+        scope: {
+          setIds: [SET_ID],
+          routedScope: { domain: null, environment: null, version: null, comparisonMode: 'single' },
+        },
+        modalityDiagnostics: {
+          fulltext: { status: 'ok', latencyMs: 1, itemCount: 0 },
+          vector: { status: 'ok', latencyMs: 1, itemCount: 0 },
+          graph: { status: 'ok', latencyMs: 1, itemCount: 1, entityCount: 1, edgeCount: 0, pathCount: 0 },
+        },
+        coverageWarnings: [],
+        fallbackReason: 'NONE',
+        routerVersion: 'router-v1',
+        promptVersion: 'grounded-v1',
+        modelId: 'gpt-4o',
+        entities: [
+          {
+            urn: SEED_URN,
+            canonicalName: 'CYTP1002',
+            kind: 'ScheduledProcess',
+            snapshotId: 'gsnap_11111111',
+          },
+        ],
+        graphCounts: { entity: 1, edge: 0, path: 0 },
+        createdAt: new Date().toISOString(),
+        ...overrides,
+      };
+    }
+
+    it('formats a found-entity message instead of no-answer copy', async () => {
+      const { formatGroundedAnswerForTelegram } = await import(
+        '../../src/services/telegram/telegramHeadlessWorker'
+      );
+
+      const formatted = formatGroundedAnswerForTelegram(seedOnlyGrounding());
+
+      expect(formatted).toContain('Đã tìm thấy thực thể');
+      expect(formatted).toContain('CYTP1002');
+      expect(formatted).toContain(SEED_URN);
+      expect(formatted).toContain('Thực thể: 1 · Cạnh: 0 · Đường dẫn: 0');
+      expect(formatted).not.toContain('Không tìm thấy câu trả lời phù hợp');
+      expect(formatted).not.toContain('Không tìm thấy tài liệu');
+    });
+
+    it('prints only failed-seed URNs and stable codes, never stage text', async () => {
+      const { formatGroundedAnswerForTelegram } = await import(
+        '../../src/services/telegram/telegramHeadlessWorker'
+      );
+
+      const formatted = formatGroundedAnswerForTelegram(
+        seedOnlyGrounding({
+          stageDiagnostics: [
+            {
+              stage: 'neo4j_traversal',
+              status: 'ok',
+              latencyMs: 8,
+              accepted: 1,
+              rejected: 0,
+              truncated: true,
+              fallback: true,
+              fallbackReason: 'FALLBACK_ONE_HOP',
+              reasonCodes: ['SEED_FOUND_NO_RELATION'],
+            },
+          ],
+          failedSeeds: [
+            { urn: 'urn:plannermate:core:process:missing', reasonCode: 'SEED_NOT_FOUND' },
+          ],
+        })
+      );
+
+      expect(formatted).toContain('urn:plannermate:core:process:missing');
+      expect(formatted).toContain('SEED_NOT_FOUND');
+      expect(formatted).not.toContain('neo4j_traversal');
+      expect(formatted).not.toContain('FALLBACK_ONE_HOP');
+      expect(formatted).not.toContain('truncated');
+    });
+
+    it('sends the seed-only formatter result for an evidence_only server result', async () => {
+      await setNineRouterApiKey('test-key', testDb);
+      mockStreamChatEvents.mockClear();
+      mockRunGroundedTurn.mockClear();
+
+      await upsertWhitelistUser(
+        {
+          chatId: 'seed_only_reader',
+          name: 'Seed Only Reader',
+          status: 'active',
+          dataScope: 'full',
+        },
+        testDb
+      );
+
+      mockRouteIntent.mockResolvedValueOnce({
+        intent: 'query_knowledge',
+        confidence: 0.95,
+        entities: ['CYTP1002'],
+        language: 'vi',
+        needs_clarification: false,
+        clarify_question: null,
+        speculation_requested: false,
+      });
+
+      mockRunGroundedTurn.mockResolvedValueOnce({
+        kind: 'evidence_only',
+        grounding: seedOnlyGrounding(),
+      });
+
+      const replies: string[] = [];
+      const mockSendReply = vi.fn(async (_t: string, _c: string, text: string) => {
+        replies.push(text);
+      });
+      const mockSendAction = vi.fn(async () => {});
+
+      await processTelegramInboundMessage(
+        {
+          update_id: 401,
+          message_id: 1201,
+          chat_id: 'seed_only_reader',
+          from_name: 'Seed Only Reader',
+          text: 'CYTP1002 là gì?',
+          date: 1234801,
+        },
+        'test_token',
+        testDb,
+        mockSendReply,
+        mockSendAction
+      );
+
+      expect(mockSendReply).toHaveBeenCalledTimes(1);
+      expect(replies[0]).toContain('Đã tìm thấy thực thể');
+      expect(replies[0]).toContain('CYTP1002');
+      expect(replies[0]).not.toContain('Không tìm thấy tài liệu hoặc bằng chứng');
+    });
+
+    it('keeps READY grounded-answer formatting unchanged', async () => {
+      const { formatGroundedAnswerForTelegram } = await import(
+        '../../src/services/telegram/telegramHeadlessWorker'
+      );
+
+      const formatted = formatGroundedAnswerForTelegram({
+        ...seedOnlyGrounding({ outcome: 'READY', entities: undefined, graphCounts: undefined }),
+        answer: {
+          schemaVersion: 2,
+          conclusion: 'Quy trình CYTP1002 hoàn tất OTP.',
+          confidence: 'high',
+          confidenceReason: 'Đầy đủ.',
+          claims: [],
+          hypotheses: [],
+          unsupportedParts: [],
+        },
+      });
+
+      expect(formatted).toContain('Quy trình CYTP1002 hoàn tất OTP.');
+      expect(formatted).not.toContain('Đã tìm thấy thực thể');
+    });
+
+    it('MCP retrieval contract stays outcome-independent (Open Question 6)', async () => {
+      const fs = await import('node:fs/promises');
+      const path = await import('node:path');
+      const source = await fs.readFile(
+        path.resolve(process.cwd(), 'src/services/ai/mcpRetrievalRunner.ts'),
+        'utf8'
+      );
+
+      expect(source).toContain('interface McpRetrievalResult');
+      expect(source).toMatch(/items:\s*McpRetrievedItem\[\]/);
+      expect(source).toMatch(/warnings:\s*string\[\]/);
+      expect(source).not.toContain('RetrievalOutcome');
+      expect(source).not.toContain('itemCount');
+    });
+  });
 });
