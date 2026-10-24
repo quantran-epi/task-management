@@ -16,6 +16,7 @@ export const RETRIEVAL_OUTCOMES = [
   'NO_EVIDENCE',
   'UNSUPPORTED',
   'DEGRADED',
+  'SEED_ONLY',
 ] as const;
 
 export const RetrievalOutcomeSchema = z.enum(RETRIEVAL_OUTCOMES);
@@ -78,6 +79,10 @@ export const ModalityStatusDetailSchema = z
     latencyMs: z.number().int().nonnegative(),
     itemCount: z.number().int().nonnegative(),
     reason: z.string().optional(),
+    // Graph-specific retained counts; omitted for fulltext/vector (D-03, SC-2).
+    entityCount: z.number().int().nonnegative().optional(),
+    edgeCount: z.number().int().nonnegative().optional(),
+    pathCount: z.number().int().nonnegative().optional(),
   })
   .strict();
 
@@ -137,6 +142,54 @@ export const FailedSeedSchema = z
   .strict();
 
 export type FailedSeed = z.infer<typeof FailedSeedSchema>;
+
+/**
+ * Pipeline stages that can emit a diagnostic row (D-19).
+ */
+export const STAGE_NAMES = [
+  'entity_resolution',
+  'planning',
+  'validation',
+  'neo4j_traversal',
+  'fusion',
+  'rendering',
+] as const;
+
+export const StageNameSchema = z.enum(STAGE_NAMES);
+export type StageName = z.infer<typeof StageNameSchema>;
+
+/**
+ * Bounded, content-free per-stage diagnostic (D-19, T-24-07).
+ * Strict with no message/query keys, so free text cannot be added by construction.
+ */
+export const StageDiagnosticSchema = z
+  .object({
+    stage: StageNameSchema,
+    status: ModalityStatusValueSchema,
+    latencyMs: z.number().int().nonnegative(),
+    accepted: z.number().int().nonnegative(),
+    rejected: z.number().int().nonnegative(),
+    truncated: z.boolean(),
+    fallback: z.boolean(),
+    fallbackReason: ReasonCodeSchema.optional(),
+    reasonCodes: z.array(ReasonCodeSchema).max(8),
+  })
+  .strict();
+
+export type StageDiagnostic = z.infer<typeof StageDiagnosticSchema>;
+
+/**
+ * Retained graph identity counts before and after fusion (SC-2).
+ */
+export const GraphRetainedCountsSchema = z
+  .object({
+    entity: z.number().int().nonnegative(),
+    edge: z.number().int().nonnegative(),
+    path: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export type GraphRetainedCounts = z.infer<typeof GraphRetainedCountsSchema>;
 
 /**
  * Query intent options.
@@ -399,6 +452,10 @@ export const RetrievalDiagnosticsSchema = z
   .object({
     degraded: z.boolean(),
     degradedReasons: z.array(z.string()).optional(),
+    graphBeforeFusion: GraphRetainedCountsSchema.optional(),
+    graphAfterFusion: GraphRetainedCountsSchema.optional(),
+    stageDiagnostics: z.array(StageDiagnosticSchema).max(8).optional(),
+    failedSeeds: z.array(FailedSeedSchema).max(5).optional(),
   })
   .strict();
 
@@ -500,6 +557,51 @@ export const BaseRetrievalResponseSchema = z
  * - DEGRADED requires diagnostics.degraded === true
  */
 export const RetrievalResponseSchema = BaseRetrievalResponseSchema.superRefine((val, ctx) => {
+  if (val.outcome === 'SEED_ONLY') {
+    if (!val.items.some((item) => item.type === 'entity')) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['items'],
+        message: 'SEED_ONLY outcome requires at least one entity item',
+      });
+    }
+    if (val.paths.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['paths'],
+        message: 'SEED_ONLY outcome must not carry graph paths',
+      });
+    }
+    if (val.conflictGroups.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['conflictGroups'],
+        message: 'SEED_ONLY outcome must not carry conflict groups',
+      });
+    }
+    if (val.reason !== 'SEED_FOUND_NO_RELATION') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['reason'],
+        message: 'SEED_ONLY outcome requires reason SEED_FOUND_NO_RELATION',
+      });
+    }
+    const entityUrns = new Set(
+      val.items.filter((item) => item.type === 'entity').map((item) => item.urn)
+    );
+    const reportedUrns = new Set<string>();
+    (val.diagnostics.failedSeeds ?? []).forEach((seed, index) => {
+      if (entityUrns.has(seed.urn) || reportedUrns.has(seed.urn)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['diagnostics', 'failedSeeds', index, 'urn'],
+          message: 'failedSeeds must not repeat a returned entity URN',
+        });
+      }
+      reportedUrns.add(seed.urn);
+    });
+  }
+
   if (val.outcome === 'NEEDS_CLARIFICATION') {
     if (!val.candidates || val.candidates.length === 0) {
       ctx.addIssue({

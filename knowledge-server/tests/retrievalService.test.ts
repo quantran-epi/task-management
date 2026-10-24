@@ -10,6 +10,9 @@ import {
   DeterministicPlannerStub,
   DeterministicGraphGatewayStub,
 } from './fixtures/retrievalStubs.js';
+import {
+  StageDiagnosticSchema,
+} from '../src/types/retrievalProtocol.js';
 import type {
   RetrievalRequest,
   ChunkItem,
@@ -613,7 +616,7 @@ describe('18-W0-03B: RetrievalService Pinned Parallel Orchestration & Timeouts',
     it.each([
       'Thủ tục xử lý chuyển tiền quốc tế SWIFT MT103 trong container 60000006 hoạt động ra sao?',
       'Hãy phỏng đoán xem container 60000006 có thể hỗ trợ chuẩn SWIFT MT103 trong tương lai không?',
-    ])('returns NO_EVIDENCE when graph seed resolves but material domain has no textual support: %s', async (query) => {
+    ])('keeps graph evidence while gating uncorroborated fulltext and vector: %s', async (query) => {
       const indexGateway = new DeterministicIndexGatewayStub();
       indexGateway.activeSnapshotId = snapshotId;
       const embedding = new DeterministicEmbeddingStub();
@@ -662,9 +665,12 @@ describe('18-W0-03B: RetrievalService Pinned Parallel Orchestration & Timeouts',
         indexGateway, embeddingProvider: embedding, queryPlanner: planner, graphGateway,
       }).retrieve(setId, { query, limit: 20, includeInferred: false, recentTurns: [] });
 
-      expect(response.outcome).toBe('NO_EVIDENCE');
-      expect(response.items).toEqual([]);
+      // Graph evidence is exempt from the text-corroboration gate (D-01, T-24-06);
+      // the same chunk arriving as fulltext/vector would still be gated out.
+      expect(response.outcome).toBe('READY');
+      expect(response.items.some((item) => item.type === 'entity' && item.urn === processUrn)).toBe(true);
       expect(response.paths).toEqual([]);
+      expect(response.modalityStatus.graph.status).toBe('ok');
     });
 
     it('keeps cross-lingual semantic evidence at the calibrated multilingual floor', async () => {
@@ -1567,6 +1573,281 @@ describe('18-W0-03B: RetrievalService Pinned Parallel Orchestration & Timeouts',
       expect(response.modalityStatus.graph.itemCount).toBeGreaterThan(0);
       expect(response.paths).toHaveLength(1);
       expect(response.paths[0]?.nodeUrns).toEqual([stepUrn, tableUrn]);
+    });
+
+    it('selects SEED_ONLY when there are entities but zero edges and zero paths', async () => {
+      const indexGateway = new DeterministicIndexGatewayStub();
+      indexGateway.activeSnapshotId = snapshotId;
+      const embedding = new DeterministicEmbeddingStub();
+      const planner = new DeterministicPlannerStub();
+      const graphGateway = new DeterministicGraphGatewayStub();
+
+      graphGateway.mockCandidates = [{
+        urn: URN_TABLE_FCL_CYCLE_COUNTER,
+        canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+        kind: 'DatabaseObject',
+      }];
+      planner.scriptedResult = {
+        type: 'plan',
+        plan: {
+          planId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+          queryIntent: 'LOOKUP',
+          seedUrns: [URN_TABLE_FCL_CYCLE_COUNTER],
+          traversalSteps: [],
+          overallMaxDepth: 1,
+          includeInferred: false,
+          fulltextKeywords: ['MAIN1.FCL_CYCLE_COUNTER'],
+          semanticQuery: 'MAIN1.FCL_CYCLE_COUNTER',
+        },
+      };
+      graphGateway.mockSeedEntities = [{
+        type: 'entity',
+        id: URN_TABLE_FCL_CYCLE_COUNTER,
+        score: 1,
+        modalitiesContributed: ['graph'],
+        urn: URN_TABLE_FCL_CYCLE_COUNTER,
+        canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+        kind: 'DatabaseObject',
+        snapshotId,
+        hasConflict: false,
+      }];
+
+      const response = await new RetrievalService({
+        indexGateway,
+        embeddingProvider: embedding,
+        queryPlanner: planner,
+        graphGateway,
+      }).retrieve(setId, defaultRequest);
+
+      expect(response.outcome).toBe('SEED_ONLY');
+      expect(response.reason).toBe('SEED_FOUND_NO_RELATION');
+      expect(response.items).toHaveLength(1);
+      expect(response.items[0]?.type).toBe('entity');
+      expect(response.paths).toEqual([]);
+      expect(response.conflictGroups).toEqual([]);
+      expect(response.suggestedRefinements?.length).toBeGreaterThan(0);
+      expect(response.modalityStatus.graph.entityCount).toBe(1);
+      expect(response.modalityStatus.graph.edgeCount).toBe(0);
+      expect(response.modalityStatus.graph.pathCount).toBe(0);
+      expect(response.diagnostics.graphAfterFusion).toEqual({ entity: 1, edge: 0, path: 0 });
+    });
+
+    it('reports failedSeeds for a dropped seed while valid seed evidence survives', async () => {
+      const indexGateway = new DeterministicIndexGatewayStub();
+      indexGateway.activeSnapshotId = snapshotId;
+      const embedding = new DeterministicEmbeddingStub();
+      const planner = new DeterministicPlannerStub();
+      const graphGateway = new DeterministicGraphGatewayStub();
+
+      const unknownUrn = 'urn:plannermate:oracle:ORACLE_TABLE:MAIN1.DOES_NOT_EXIST' as const;
+      graphGateway.mockCandidates = [{
+        urn: URN_TABLE_FCL_CYCLE_COUNTER,
+        canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+        kind: 'DatabaseObject',
+      }];
+      planner.scriptedResult = {
+        type: 'plan',
+        plan: {
+          planId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+          queryIntent: 'LOOKUP',
+          seedUrns: [URN_TABLE_FCL_CYCLE_COUNTER, unknownUrn],
+          traversalSteps: [],
+          overallMaxDepth: 1,
+          includeInferred: false,
+          fulltextKeywords: ['MAIN1.FCL_CYCLE_COUNTER'],
+          semanticQuery: 'MAIN1.FCL_CYCLE_COUNTER',
+        },
+      };
+      graphGateway.mockSeedEntities = [{
+        type: 'entity',
+        id: URN_TABLE_FCL_CYCLE_COUNTER,
+        score: 1,
+        modalitiesContributed: ['graph'],
+        urn: URN_TABLE_FCL_CYCLE_COUNTER,
+        canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+        kind: 'DatabaseObject',
+        snapshotId,
+        hasConflict: false,
+      }];
+
+      const response = await new RetrievalService({
+        indexGateway,
+        embeddingProvider: embedding,
+        queryPlanner: planner,
+        graphGateway,
+      }).retrieve(setId, defaultRequest);
+
+      expect(response.diagnostics.failedSeeds).toEqual([
+        { urn: unknownUrn, reasonCode: 'SEED_NOT_FOUND' },
+      ]);
+      expect(response.items.some((item) => item.type === 'entity' && item.urn === URN_TABLE_FCL_CYCLE_COUNTER)).toBe(true);
+    });
+
+    it('omits failedSeeds when every seed resolves', async () => {
+      const indexGateway = new DeterministicIndexGatewayStub();
+      indexGateway.activeSnapshotId = snapshotId;
+      const embedding = new DeterministicEmbeddingStub();
+      const planner = new DeterministicPlannerStub();
+      const graphGateway = new DeterministicGraphGatewayStub();
+
+      graphGateway.mockCandidates = [{
+        urn: URN_TABLE_FCL_CYCLE_COUNTER,
+        canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+        kind: 'DatabaseObject',
+      }];
+      graphGateway.mockSeedEntities = [{
+        type: 'entity',
+        id: URN_TABLE_FCL_CYCLE_COUNTER,
+        score: 1,
+        modalitiesContributed: ['graph'],
+        urn: URN_TABLE_FCL_CYCLE_COUNTER,
+        canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+        kind: 'DatabaseObject',
+        snapshotId,
+        hasConflict: false,
+      }];
+
+      const response = await new RetrievalService({
+        indexGateway,
+        embeddingProvider: embedding,
+        queryPlanner: planner,
+        graphGateway,
+      }).retrieve(setId, defaultRequest);
+
+      expect(response.diagnostics.failedSeeds ?? []).toEqual([]);
+    });
+
+    it('never returns SEED_ONLY when the graph status is error, timeout, or stale', async () => {
+      for (const failure of ['error', 'timeout', 'stale'] as const) {
+        const indexGateway = new DeterministicIndexGatewayStub();
+        indexGateway.activeSnapshotId = snapshotId;
+        const embedding = new DeterministicEmbeddingStub();
+        const planner = new DeterministicPlannerStub();
+        const graphGateway = new DeterministicGraphGatewayStub();
+
+        graphGateway.mockCandidates = [{
+          urn: URN_TABLE_FCL_CYCLE_COUNTER,
+          canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+          kind: 'DatabaseObject',
+        }];
+        graphGateway.traverse = async () => {
+          if (failure === 'timeout') {
+            const err = new Error('timeout');
+            err.name = 'AbortError';
+            throw err;
+          }
+          if (failure === 'stale') throw new Error('stale snapshot');
+          throw new Error('provider blew up');
+        };
+
+        const response = await new RetrievalService({
+          indexGateway,
+          embeddingProvider: embedding,
+          queryPlanner: planner,
+          graphGateway,
+        }).retrieve(setId, defaultRequest);
+
+        expect(response.outcome).not.toBe('SEED_ONLY');
+      }
+    });
+
+    it('emits bounded stage diagnostics with truncation and fallback flags', async () => {
+      const indexGateway = new DeterministicIndexGatewayStub();
+      indexGateway.activeSnapshotId = snapshotId;
+      const embedding = new DeterministicEmbeddingStub();
+      const planner = new DeterministicPlannerStub();
+      const graphGateway = new DeterministicGraphGatewayStub();
+
+      graphGateway.mockCandidates = [{
+        urn: URN_TABLE_FCL_CYCLE_COUNTER,
+        canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+        kind: 'DatabaseObject',
+      }];
+      graphGateway.mockSeedEntities = [{
+        type: 'entity',
+        id: URN_TABLE_FCL_CYCLE_COUNTER,
+        score: 1,
+        modalitiesContributed: ['graph'],
+        urn: URN_TABLE_FCL_CYCLE_COUNTER,
+        canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+        kind: 'DatabaseObject',
+        snapshotId,
+        hasConflict: false,
+      }];
+      graphGateway.isTruncated = true;
+
+      const response = await new RetrievalService({
+        indexGateway,
+        embeddingProvider: embedding,
+        queryPlanner: planner,
+        graphGateway,
+      }).retrieve(setId, defaultRequest);
+
+      const rows = response.diagnostics.stageDiagnostics ?? [];
+      expect(rows.length).toBeGreaterThan(0);
+      for (const row of rows) {
+        expect(StageDiagnosticSchema.safeParse(row).success).toBe(true);
+        expect(typeof row.truncated).toBe('boolean');
+        expect(typeof row.fallback).toBe('boolean');
+      }
+
+      const traversalRow = rows.find((row) => row.stage === 'neo4j_traversal');
+      expect(traversalRow?.truncated).toBe(true);
+
+      const serialized = JSON.stringify(response);
+      expect(serialized).not.toContain('MATCH (');
+      expect(serialized).not.toContain('SELECT ');
+    });
+
+    it('marks planning fallback row with FALLBACK_ONE_HOP when the deterministic plan is active', async () => {
+      const indexGateway = new DeterministicIndexGatewayStub();
+      indexGateway.activeSnapshotId = snapshotId;
+      const embedding = new DeterministicEmbeddingStub();
+      const planner = new DeterministicPlannerStub();
+      const graphGateway = new DeterministicGraphGatewayStub();
+
+      graphGateway.mockCandidates = [{
+        urn: URN_TABLE_FCL_CYCLE_COUNTER,
+        canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+        kind: 'DatabaseObject',
+      }];
+      graphGateway.mockSeedEntities = [{
+        type: 'entity',
+        id: URN_TABLE_FCL_CYCLE_COUNTER,
+        score: 1,
+        modalitiesContributed: ['graph'],
+        urn: URN_TABLE_FCL_CYCLE_COUNTER,
+        canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+        kind: 'DatabaseObject',
+        snapshotId,
+        hasConflict: false,
+      }];
+      // Invalid relation forces one repair attempt, then the deterministic fallback.
+      planner.scriptedResult = {
+        type: 'plan',
+        plan: {
+          planId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+          queryIntent: 'LOOKUP',
+          seedUrns: [URN_TABLE_FCL_CYCLE_COUNTER],
+          traversalSteps: [{ relationType: 'NOT_A_RELATION' as any, direction: 'OUTGOING', maxHops: 1 }],
+          overallMaxDepth: 1,
+          includeInferred: false,
+          fulltextKeywords: ['MAIN1.FCL_CYCLE_COUNTER'],
+          semanticQuery: 'MAIN1.FCL_CYCLE_COUNTER',
+        },
+      };
+
+      const response = await new RetrievalService({
+        indexGateway,
+        embeddingProvider: embedding,
+        queryPlanner: planner,
+        graphGateway,
+      }).retrieve(setId, defaultRequest);
+
+      const planningRow = (response.diagnostics.stageDiagnostics ?? [])
+        .find((row) => row.stage === 'planning');
+      expect(planningRow?.fallback).toBe(true);
+      expect(planningRow?.fallbackReason).toBe('FALLBACK_ONE_HOP');
     });
   });
 });

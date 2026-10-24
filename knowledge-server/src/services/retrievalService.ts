@@ -13,6 +13,9 @@ import {
   RetrievalItem,
   ModalityKind,
   OrderedPath,
+  ReasonCode,
+  REASON_CODES,
+  StageDiagnostic,
 } from '../types/retrievalProtocol.js';
 import type {
   EmbeddingProvider,
@@ -306,6 +309,7 @@ export class RetrievalService {
     const pinnedSnapshotId = lease.snapshotId;
 
     // 3. Planning phase
+    const planningStartMs = Date.now();
     const planningOutcome = await buildQueryExecutionPlan({
       request,
       pinnedSnapshotId,
@@ -313,6 +317,7 @@ export class RetrievalService {
       planner: this.deps.queryPlanner,
       options,
     });
+    const planningLatencyMs = Math.max(0, Date.now() - planningStartMs);
 
     const isUnsupported = planningOutcome.status === 'unsupported';
     const isClarification = planningOutcome.status === 'needsClarification';
@@ -473,12 +478,20 @@ export class RetrievalService {
         citedGraphChunks.length > 0);
     const relevantVectorItems = enforceRelevanceGate && !hasTextualSupport ? [] : vecValidItems;
     const relevantFulltextItems = enforceRelevanceGate && !hasTextualSupport ? [] : ftValidItems;
-    const relevantGraphItems = enforceRelevanceGate && !hasTextualSupport ? [] : graphValidItems;
+    // Graph items are already ontology-valid, snapshot-consistent, cap-bounded, and
+    // citation-closed by the bounded traversal. The text-corroboration gate applies
+    // to fulltext/vector only; a resolved seed must not be blanked (D-01, T-24-06).
+    const relevantGraphItems = graphValidItems;
 
     const modalityStatus: CompleteModalityStatus = {
       fulltext: fulltextResult.status,
       vector: vectorResult.status,
-      graph: graphResult.status,
+      graph: {
+        ...graphResult.status,
+        entityCount: graphResult.status.entityCount ?? 0,
+        edgeCount: graphResult.status.edgeCount ?? 0,
+        pathCount: graphResult.status.pathCount ?? 0,
+      },
     };
 
     // 6. RRF Fusion across surviving ready/truncated candidates
@@ -511,10 +524,20 @@ export class RetrievalService {
     });
 
     const finalItems = tagged.items;
-    const paths = hasTextualSupport
-      ? closeOrderedPaths(graphResult.pathCandidates, finalItems)
-      : [];
+    // Path closure runs whenever a graph path exists; the relevance gate no longer
+    // gates graph evidence.
+    const paths = closeOrderedPaths(graphResult.pathCandidates, finalItems);
     const conflictGroups = buildConflictGroups(finalItems);
+    const graphAfterFusion = {
+      entity: finalItems.filter((item) => item.type === 'entity').length,
+      edge: finalItems.filter((item) => item.type === 'edge').length,
+      path: paths.length,
+    };
+    const graphBeforeFusion = {
+      entity: modalityStatus.graph.entityCount ?? 0,
+      edge: modalityStatus.graph.edgeCount ?? 0,
+      path: modalityStatus.graph.pathCount ?? 0,
+    };
 
     // Determine modalities used (contributing list)
     const modalitiesUsedSet = new Set<ModalityKind>();
@@ -554,12 +577,27 @@ export class RetrievalService {
     const hasClarificationCandidates =
       isClarification && (((planningOutcome as any).safeCandidates?.length ?? 0) > 0);
 
+    const graphStatus = modalityStatus.graph.status;
+    // SEED_ONLY means the whole response is seed identity: at least one entity
+    // item, no edges, no paths, no conflicts, and no chunk evidence at all.
+    const graphSeedOnly =
+      (graphStatus === 'ok' || graphStatus === 'truncated') &&
+      (modalityStatus.graph.entityCount ?? 0) > 0 &&
+      (modalityStatus.graph.edgeCount ?? 0) === 0 &&
+      (modalityStatus.graph.pathCount ?? 0) === 0 &&
+      finalItems.length > 0 &&
+      finalItems.every((item) => item.type === 'entity') &&
+      paths.length === 0 &&
+      conflictGroups.length === 0;
+
     if (isUnsupported) {
       outcome = 'UNSUPPORTED';
     } else if (hasClarificationCandidates) {
       outcome = 'NEEDS_CLARIFICATION';
     } else if (isClarification && !hasClarificationCandidates) {
       outcome = 'NO_EVIDENCE';
+    } else if (graphSeedOnly) {
+      outcome = 'SEED_ONLY';
     } else if (finalItems.length === 0) {
       outcome = 'NO_EVIDENCE';
     } else if (isDegraded) {
@@ -585,6 +623,76 @@ export class RetrievalService {
       policyVersion: rawProviderMeta.policyVersion,
     };
 
+    // 8. Content-free stage diagnostics (D-19, T-24-07)
+    const asReasonCodes = (codes: readonly (string | undefined)[]): ReasonCode[] =>
+      codes.filter((code): code is ReasonCode =>
+        Boolean(code) && (REASON_CODES as readonly string[]).includes(code as string)
+      );
+
+    const stageDiagnostics: StageDiagnostic[] = [];
+    const failedSeeds = planningOutcome.status === 'executable'
+      ? [...planningOutcome.failedSeeds]
+      : [];
+    const resolvedSeedCount = planTrace.resolvedUrns?.length ?? 0;
+
+    stageDiagnostics.push({
+      stage: 'entity_resolution',
+      status: 'ok',
+      latencyMs: 0,
+      accepted: resolvedSeedCount,
+      rejected: failedSeeds.length,
+      truncated: false,
+      fallback: false,
+      reasonCodes: asReasonCodes(failedSeeds.map((seed) => seed.reasonCode)),
+    });
+
+    stageDiagnostics.push({
+      stage: 'validation',
+      status: failedSeeds.length > 0 ? 'truncated' : 'ok',
+      latencyMs: 0,
+      accepted: resolvedSeedCount,
+      rejected: failedSeeds.length,
+      truncated: false,
+      fallback: false,
+      reasonCodes: asReasonCodes(failedSeeds.map((seed) => seed.reasonCode)),
+    });
+
+    stageDiagnostics.push({
+      stage: 'planning',
+      status: planTrace.degradedFallback ? 'truncated' : 'ok',
+      latencyMs: planningLatencyMs,
+      accepted: resolvedSeedCount,
+      rejected: failedSeeds.length,
+      truncated: false,
+      fallback: Boolean(planTrace.degradedFallback),
+      ...(planTrace.degradedFallback ? { fallbackReason: 'FALLBACK_ONE_HOP' as const } : {}),
+      reasonCodes: asReasonCodes([planTrace.reasonCode]),
+    });
+
+    stageDiagnostics.push({
+      stage: 'neo4j_traversal',
+      status: modalityStatus.graph.status,
+      latencyMs: modalityStatus.graph.latencyMs,
+      accepted: (modalityStatus.graph.entityCount ?? 0) + (modalityStatus.graph.edgeCount ?? 0),
+      rejected: 0,
+      truncated: modalityStatus.graph.status === 'truncated',
+      fallback: false,
+      reasonCodes: asReasonCodes([modalityStatus.graph.reason]),
+    });
+
+    const totalCandidateItems =
+      relevantVectorItems.length + relevantFulltextItems.length + relevantGraphItems.length;
+    stageDiagnostics.push({
+      stage: 'fusion',
+      status: 'ok',
+      latencyMs: 0,
+      accepted: finalItems.length,
+      rejected: Math.max(0, totalCandidateItems - finalItems.length),
+      truncated: false,
+      fallback: false,
+      reasonCodes: [],
+    });
+
     // Safe envelope assembly
     const responsePayload: any = {
       outcome,
@@ -599,9 +707,21 @@ export class RetrievalService {
       diagnostics: {
         degraded: outcome === 'DEGRADED' || isDegraded,
         degradedReasons: degradedReasons.length > 0 ? degradedReasons : undefined,
+        graphBeforeFusion,
+        graphAfterFusion,
+        stageDiagnostics,
+        failedSeeds: failedSeeds.length > 0 ? failedSeeds : undefined,
       },
       planTrace,
     };
+
+    if (outcome === 'SEED_ONLY') {
+      responsePayload.reason = 'SEED_FOUND_NO_RELATION';
+      responsePayload.suggestedRefinements = [
+        'Entity exists in the snapshot but has no outbound or inbound relations.',
+        'Try querying related process containers or software components.',
+      ];
+    }
 
     if (outcome === 'UNSUPPORTED') {
       const unsupported = planningOutcome as Extract<QueryExecutionPlanningOutcome, { status: 'unsupported' }>;

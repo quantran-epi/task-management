@@ -15,6 +15,7 @@ import {
   RETRIEVAL_OUTCOMES,
   MODALITY_STATUS_VALUES,
   REASON_CODES,
+  StageDiagnosticSchema,
 } from '../src/types/retrievalProtocol.js';
 import {
   DeterministicEmbeddingStub,
@@ -554,6 +555,180 @@ describe('RetrievalProtocol Schema Suite (Task 18-W0-01)', () => {
       for (const token of forbiddenTokens) {
         expect(jsonStr.toLowerCase()).not.toContain(`"${token}"`);
       }
+    });
+
+    it('accepts SEED_ONLY with one entity, no paths, no conflicts, and SEED_FOUND_NO_RELATION', () => {
+      const seedOnly = {
+        outcome: 'SEED_ONLY' as const,
+        snapshotId: validSnapshotId,
+        embeddingProvider: baseProviderMetadata,
+        items: [{
+          type: 'entity' as const,
+          id: validUrn1,
+          score: 1,
+          modalitiesContributed: ['graph' as const],
+          urn: validUrn1,
+          canonicalName: 'AML_RISK',
+          kind: 'DatabaseObject' as const,
+          snapshotId: validSnapshotId,
+          hasConflict: false,
+        }],
+        totalCandidates: 1,
+        modalitiesUsed: ['graph' as const],
+        modalityStatus: {
+          ...baseModalityStatus,
+          graph: { status: 'ok' as const, latencyMs: 5, itemCount: 1, entityCount: 1, edgeCount: 0, pathCount: 0 },
+        },
+        diagnostics: { degraded: false },
+        planTrace: basePlanTrace,
+        reason: 'SEED_FOUND_NO_RELATION' as const,
+      };
+
+      const parsed = RetrievalResponseSchema.parse(seedOnly);
+      expect(parsed.outcome).toBe('SEED_ONLY');
+      expect(parsed.modalityStatus.graph.entityCount).toBe(1);
+
+      // Missing entity item
+      expect(() => RetrievalResponseSchema.parse({ ...seedOnly, items: [] })).toThrow();
+
+      // Non-empty paths
+      expect(() =>
+        RetrievalResponseSchema.parse({
+          ...seedOnly,
+          paths: [{
+            pathId: 'P1',
+            snapshotId: validSnapshotId,
+            nodeUrns: [validUrn1, validUrn2],
+            edgeFactKeys: [validFactKey],
+            hopClassifications: ['OBSERVED' as const],
+            hopCitationIds: [['chunk-1']],
+            hasConflict: false,
+            classification: 'OBSERVED' as const,
+          }],
+        })
+      ).toThrow();
+
+      // Wrong reason
+      expect(() =>
+        RetrievalResponseSchema.parse({ ...seedOnly, reason: 'NO_MATCHING_EVIDENCE' })
+      ).toThrow();
+    });
+
+    it('rejects failedSeeds naming a URN that is also a returned entity', () => {
+      const seedOnly = {
+        outcome: 'SEED_ONLY' as const,
+        snapshotId: validSnapshotId,
+        embeddingProvider: baseProviderMetadata,
+        items: [{
+          type: 'entity' as const,
+          id: validUrn1,
+          score: 1,
+          modalitiesContributed: ['graph' as const],
+          urn: validUrn1,
+          canonicalName: 'AML_RISK',
+          kind: 'DatabaseObject' as const,
+          snapshotId: validSnapshotId,
+          hasConflict: false,
+        }],
+        totalCandidates: 1,
+        modalitiesUsed: ['graph' as const],
+        modalityStatus: baseModalityStatus,
+        diagnostics: {
+          degraded: false,
+          failedSeeds: [{ urn: validUrn1, reasonCode: 'SEED_NOT_FOUND' as const }],
+        },
+        planTrace: basePlanTrace,
+        reason: 'SEED_FOUND_NO_RELATION' as const,
+      };
+
+      expect(() => RetrievalResponseSchema.parse(seedOnly)).toThrow();
+
+      const othersOnly = {
+        ...seedOnly,
+        diagnostics: {
+          degraded: false,
+          failedSeeds: [{ urn: validUrn2, reasonCode: 'SEED_NOT_FOUND' as const }],
+        },
+      };
+      expect(RetrievalResponseSchema.parse(othersOnly).diagnostics.failedSeeds).toEqual([
+        { urn: validUrn2, reasonCode: 'SEED_NOT_FOUND' },
+      ]);
+    });
+
+    it('validates stageDiagnostics rows and rejects free-text keys', () => {
+      const valid = {
+        stage: 'neo4j_traversal' as const,
+        status: 'truncated' as const,
+        latencyMs: 12,
+        accepted: 3,
+        rejected: 1,
+        truncated: true,
+        fallback: false,
+        reasonCodes: ['RESULT_LIMIT_REACHED' as const],
+      };
+      expect(StageDiagnosticSchema.parse(valid).truncated).toBe(true);
+
+      expect(() => StageDiagnosticSchema.parse({ ...valid, query: 'MATCH (n)' })).toThrow();
+      expect(() => StageDiagnosticSchema.parse({ ...valid, message: 'boom' })).toThrow();
+      expect(() =>
+        StageDiagnosticSchema.parse({ ...valid, reasonCodes: new Array(9).fill('TIMEOUT') })
+      ).toThrow();
+      expect(() =>
+        StageDiagnosticSchema.parse({ ...valid, stage: 'not_a_stage' })
+      ).toThrow();
+
+      const withFallback = {
+        ...valid,
+        fallback: true,
+        fallbackReason: 'FALLBACK_ONE_HOP' as const,
+      };
+      expect(StageDiagnosticSchema.parse(withFallback).fallbackReason).toBe('FALLBACK_ONE_HOP');
+    });
+
+    it('keeps diagnostics content-free: only codes, counts, booleans, timings, and stage names', () => {
+      const response = {
+        outcome: 'SEED_ONLY' as const,
+        snapshotId: validSnapshotId,
+        embeddingProvider: baseProviderMetadata,
+        items: [{
+          type: 'entity' as const,
+          id: validUrn1,
+          score: 1,
+          modalitiesContributed: ['graph' as const],
+          urn: validUrn1,
+          canonicalName: 'AML_RISK',
+          kind: 'DatabaseObject' as const,
+          snapshotId: validSnapshotId,
+          hasConflict: false,
+        }],
+        totalCandidates: 1,
+        modalitiesUsed: ['graph' as const],
+        modalityStatus: baseModalityStatus,
+        diagnostics: {
+          degraded: false,
+          graphBeforeFusion: { entity: 1, edge: 0, path: 0 },
+          graphAfterFusion: { entity: 1, edge: 0, path: 0 },
+          stageDiagnostics: [{
+            stage: 'planning' as const,
+            status: 'ok' as const,
+            latencyMs: 3,
+            accepted: 1,
+            rejected: 0,
+            truncated: false,
+            fallback: false,
+            reasonCodes: [],
+          }],
+        },
+        planTrace: basePlanTrace,
+        reason: 'SEED_FOUND_NO_RELATION' as const,
+      };
+
+      const parsed = RetrievalResponseSchema.parse(response);
+      expect(parsed.diagnostics.graphAfterFusion).toEqual({ entity: 1, edge: 0, path: 0 });
+      const serialized = JSON.stringify(parsed.diagnostics);
+      expect(serialized).not.toContain('MATCH');
+      expect(serialized).not.toContain('SELECT');
+      expect(serialized).not.toContain('AML_RISK =');
     });
   });
 
