@@ -2,9 +2,13 @@ import { z } from 'zod';
 import {
   EvidenceClassificationSchema,
   FactKeySchema,
+  FailedSeedSchema,
+  GraphRetainedCountsSchema,
   ModalityStatusSchema,
+  NodeKindSchema,
   ScopeProofSchema,
   SnapshotIdSchema,
+  StageDiagnosticSchema,
   UrnSchema,
 } from '../knowledge/retrievalProtocol';
 
@@ -267,6 +271,21 @@ export const PersistedConflictGroupSchema = z
     }
   });
 
+/**
+ * Persisted seed-entity reference. Content-free: identity, display name, kind,
+ * and snapshot only; no snippets or query text (D-20).
+ */
+export const PersistedEntityRefSchema = z
+  .strictObject({
+    urn: UrnSchema,
+    canonicalName: z.string().min(1).max(200),
+    kind: NodeKindSchema,
+    snapshotId: z.string().uuid(),
+    evidenceClass: EvidenceClassificationSchema.optional(),
+  });
+
+export type PersistedEntityRef = z.infer<typeof PersistedEntityRefSchema>;
+
 const RoutedScopeSchema = z.strictObject({
   domain: z.string().max(100).nullable(),
   environment: z.string().max(32).nullable(),
@@ -280,6 +299,7 @@ const GroundingOutcomeSchema = z.enum([
   'NEEDS_CLARIFICATION',
   'NO_EVIDENCE',
   'UNSUPPORTED',
+  'SEED_ONLY',
   'LOCAL_FALLBACK_SYNTHESIS',
   'LOCAL_FALLBACK_RESULTS',
   'MODEL_UNAVAILABLE',
@@ -319,6 +339,12 @@ export const ChatMessageGroundingSchema = z
     routerVersion: z.string().min(1).max(80).nullable(),
     promptVersion: z.string().min(1).max(80),
     modelId: z.string().min(1).max(200).nullable(),
+    // Phase 24 seed-only evidence. Every field is optional so historical
+    // records without them keep parsing (SC-6).
+    entities: z.array(PersistedEntityRefSchema).max(50).optional(),
+    graphCounts: GraphRetainedCountsSchema.optional(),
+    stageDiagnostics: z.array(StageDiagnosticSchema).max(20).optional(),
+    failedSeeds: z.array(FailedSeedSchema).max(5).optional(),
     createdAt: z.iso.datetime(),
   })
   .superRefine((grounding, ctx) => {

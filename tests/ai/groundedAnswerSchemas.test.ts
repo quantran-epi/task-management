@@ -297,6 +297,179 @@ describe('grounded answer trust boundary', () => {
     expect(parseResult.success).toBe(true);
   });
 
+  describe('Phase 24 seed-only grounding persistence', () => {
+    const snapshotId = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
+    const seedUrn = 'urn:plannermate:oracle:DatabaseObject:MAIN1.EVT_EVENT';
+    const seedEntity = {
+      urn: seedUrn,
+      canonicalName: 'EVT_EVENT',
+      kind: 'DatabaseObject' as const,
+      snapshotId,
+    };
+
+    const serverBase = {
+      schemaVersion: 1 as const,
+      authority: 'server' as const,
+      outcome: 'READY' as const,
+      answer: validAnswer,
+      citations: [serverCitation],
+      paths: [],
+      conflicts: [],
+      scope: {
+        setIds: [generateId()],
+        routedScope: {
+          domain: null,
+          environment: null,
+          version: null,
+          comparisonMode: 'single' as const,
+        },
+      },
+      modalityDiagnostics: validModalityDiagnostics,
+      coverageWarnings: [],
+      fallbackReason: 'NONE' as const,
+      routerVersion: 'router-v1',
+      promptVersion: 'grounded-v1',
+      modelId: 'model-1',
+      createdAt: '2026-10-24T00:00:00.000Z',
+    };
+
+    const seedOnly = {
+      ...serverBase,
+      outcome: 'SEED_ONLY' as const,
+      answer: null,
+      citations: [],
+      entities: [seedEntity],
+      graphCounts: { entity: 1, edge: 0, path: 0 },
+      stageDiagnostics: [
+        {
+          stage: 'neo4j_traversal',
+          status: 'ok',
+          latencyMs: 7,
+          accepted: 1,
+          rejected: 0,
+          truncated: false,
+          fallback: false,
+          reasonCodes: ['SEED_FOUND_NO_RELATION'],
+        },
+      ],
+      failedSeeds: [],
+    };
+
+    it('parses a historical record without any Phase 24 field', () => {
+      const parsed = ChatMessageGroundingSchema.safeParse(serverBase);
+      expect(parsed.success).toBe(true);
+      if (parsed.success) {
+        expect(parsed.data.entities).toBeUndefined();
+        expect(parsed.data.graphCounts).toBeUndefined();
+        expect(parsed.data.stageDiagnostics).toBeUndefined();
+        expect(parsed.data.failedSeeds).toBeUndefined();
+      }
+    });
+
+    it('parses a seed-only record and preserves new fields with schemaVersion 1', () => {
+      const parsed = ChatMessageGroundingSchema.safeParse(seedOnly);
+      expect(parsed.success).toBe(true);
+      if (parsed.success) {
+        expect(parsed.data.schemaVersion).toBe(1);
+        expect(parsed.data.outcome).toBe('SEED_ONLY');
+        expect(parsed.data.entities).toEqual([seedEntity]);
+        expect(parsed.data.graphCounts).toEqual({ entity: 1, edge: 0, path: 0 });
+        expect(parsed.data.stageDiagnostics?.[0]?.reasonCodes).toEqual([
+          'SEED_FOUND_NO_RELATION',
+        ]);
+        expect(parsed.data.failedSeeds).toEqual([]);
+      }
+    });
+
+    it('caps entities at 50 and rejects unknown kinds', () => {
+      expect(
+        ChatMessageGroundingSchema.safeParse({
+          ...seedOnly,
+          entities: Array.from({ length: 50 }, (_, i) => ({
+            ...seedEntity,
+            urn: `urn:plannermate:oracle:DatabaseObject:OBJ_${i}`,
+          })),
+        }).success
+      ).toBe(true);
+      expect(
+        ChatMessageGroundingSchema.safeParse({
+          ...seedOnly,
+          entities: Array.from({ length: 51 }, (_, i) => ({
+            ...seedEntity,
+            urn: `urn:plannermate:oracle:DatabaseObject:OBJ_${i}`,
+          })),
+        }).success
+      ).toBe(false);
+      expect(
+        ChatMessageGroundingSchema.safeParse({
+          ...seedOnly,
+          entities: [{ ...seedEntity, kind: 'MadeUpKind' }],
+        }).success
+      ).toBe(false);
+    });
+
+    it('rejects negative or incomplete graphCounts', () => {
+      expect(
+        ChatMessageGroundingSchema.safeParse({
+          ...seedOnly,
+          graphCounts: { entity: -1, edge: 0, path: 0 },
+        }).success
+      ).toBe(false);
+      expect(
+        ChatMessageGroundingSchema.safeParse({
+          ...seedOnly,
+          graphCounts: { entity: 1, edge: 0 },
+        }).success
+      ).toBe(false);
+    });
+
+    it('caps failedSeeds at 5 and rejects unknown reason codes', () => {
+      const failedSeed = {
+        urn: 'urn:plannermate:oracle:DatabaseObject:MISSING',
+        reasonCode: 'SEED_NOT_FOUND' as const,
+      };
+      expect(
+        ChatMessageGroundingSchema.safeParse({
+          ...seedOnly,
+          failedSeeds: Array.from({ length: 5 }, (_, i) => ({
+            ...failedSeed,
+            urn: `urn:plannermate:oracle:DatabaseObject:MISSING_${i}`,
+          })),
+        }).success
+      ).toBe(true);
+      expect(
+        ChatMessageGroundingSchema.safeParse({
+          ...seedOnly,
+          failedSeeds: Array.from({ length: 6 }, (_, i) => ({
+            ...failedSeed,
+            urn: `urn:plannermate:oracle:DatabaseObject:MISSING_${i}`,
+          })),
+        }).success
+      ).toBe(false);
+      expect(
+        ChatMessageGroundingSchema.safeParse({
+          ...seedOnly,
+          failedSeeds: [{ ...failedSeed, reasonCode: 'NOT_A_CODE' }],
+        }).success
+      ).toBe(false);
+    });
+
+    it('still enforces server-authority provenance when new fields are present', () => {
+      for (const field of [
+        'paths',
+        'conflicts',
+        'scope',
+        'modalityDiagnostics',
+        'routerVersion',
+        'modelId',
+      ] as const) {
+        expect(
+          ChatMessageGroundingSchema.safeParse({ ...seedOnly, [field]: null }).success
+        ).toBe(false);
+      }
+    });
+  });
+
   it('exports strict top-level and claim JSON Schema objects', () => {
     expect(GroundedAnswerJsonSchema).toMatchObject({
       type: 'object',
