@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 import { SeedEntityCard } from '../../src/components/ai/grounded/SeedEntityCard';
 import { ReasonCodeChip } from '../../src/components/ai/grounded/ReasonCodeChip';
 import { PartialSeedNotice } from '../../src/components/ai/grounded/PartialSeedNotice';
@@ -18,7 +18,7 @@ const entity: PersistedEntityRef = {
 const graphCounts = { entity: 2, edge: 0, path: 0 };
 
 const filePath = (name: string) =>
-  fileURLToPath(new URL(`../../src/components/ai/grounded/${name}`, import.meta.url));
+  resolve(process.cwd(), 'src/components/ai/grounded', name);
 
 describe('SeedEntityCard', () => {
   it('1. renders canonical name, localized kind, URN, evidence class, and separate counts', () => {
