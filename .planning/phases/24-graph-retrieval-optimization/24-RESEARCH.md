@@ -460,42 +460,28 @@ stageDiagnostics: z.array(StageDiagnosticSchema).max(20).optional(),
 | A5 | The 9router LLM is available for planner repair testing | Environment Availability | Planner live tests must be mocked; still valid offline |
 | A6 | Existing corpus exhibits mixed-kind seeds with multiple valid relations | Scenarios | Per-seed planning tests may need synthetic fixtures only |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **How should per-seed plans be represented without breaking the strict single-plan protocol?**
-   - What we know: `LogicalQueryPlanSchema` has one `seedUrns[]` and one `traversalSteps[]` (`retrievalProtocol.ts:128-141`).
-   - What's unclear: whether `TraversalStep` should gain an optional `seedUrn`, or `LogicalQueryPlan` an optional `seedPlans[]`.
-   - Recommendation: add optional `seedUrn` to `TraversalStep` (smallest change; unplanned steps apply to all seeds) OR keep per-seed plans purely internal to the server and expose only aggregate counts. Planner should choose one and test mixed kinds.
+1. **How are per-seed plans represented without breaking the strict single-plan protocol?**
+   - **Resolution:** Add optional `seedUrn` to `TraversalStepSchema` and derive internal per-seed steps from `RETRIEVAL_ONTOLOGY_REGISTRY`. Steps with `seedUrn` apply to that seed; aggregate request/response shapes remain compatible. Unknown seeds become bounded `failedSeeds`; valid seeds continue (D-08, D-13).
 
 2. **What exactly is the `SEED_ONLY` response payload?**
-   - What we know: D-02/D-03 require the outcome, limited answer, entity card, distinct counts.
-   - What's unclear: whether seed entities appear in `items` (as `EntityItem`) or a new `seedEntities` field; whether `paths`/citations are empty.
-   - Recommendation: reuse `EntityItem` in `items` (already a supported union member), return `paths: []`, `conflictGroups: []`, and `diagnostics` reason `SEED_FOUND_NO_RELATION`. No new item type.
+   - **Resolution:** Reuse existing `EntityItem` entries in `items`; require at least one entity, `paths: []`, `conflictGroups: []`, reason `SEED_FOUND_NO_RELATION`, and graph counts with positive entity plus zero edge/path. No new item type (D-01–D-03).
 
 3. **What is the protected graph quota?**
-   - What we know: D-16 requires complete-package survival; D-17 forbids unconditional priority.
-   - What's unclear: exact fraction under `limit` (10–50) and under federated `maxItems` (≤200).
-   - Recommendation: reserve up to 50–60% for graph packages, always keep at least 1 text item when available, and enforce at package granularity.
+   - **Resolution:** `PROTECTED_GRAPH_QUOTA_RATIO = 0.6`. Admit complete citation-closed packages atomically up to `floor(limit * 0.6)` when text evidence exists and retain at least one text item. When no text candidate exists, packages may use the full limit (D-16, D-17).
 
-4. **Where do stage diagnostics live: `ModalityStatusDetail`, `RetrievalDiagnostics`, or a new field?**
-   - What we know: D-19 wants per-stage status/timings/counts/accepted/rejected/codes/truncation/fallback/before-after fusion.
-   - What's unclear: client `ChatMessageGrounding` currently persists only `modalityDiagnostics` + `coverageWarnings`.
-   - Recommendation: extend `ModalityStatusDetail` with optional counts, and add optional `stageDiagnostics[]` to server diagnostics and persisted grounding. Keep content-free.
+4. **Where do stage diagnostics live?**
+   - **Resolution:** Add optional graph counts to `ModalityStatusDetailSchema`; add optional `stageDiagnostics`, `graphBeforeFusion`, `graphAfterFusion`, and `failedSeeds` to response diagnostics; mirror `stageDiagnostics` and `failedSeeds` in federated diagnostics and persisted `ChatMessageGrounding`. Each stage row includes status, latency, accepted/rejected, reason codes, `truncated`, `fallback`, and optional bounded `fallbackReason` (D-19, D-20).
 
-5. **Where is the reference query set stored and what thresholds gate the phase?**
-   - What we know: D-21 lists required query categories; `tests/fixtures/ai/grounded-assistant-reference.json` and `scripts/run-benchmark.ts` already exist.
-   - What's unclear: whether Phase 24 adds a new graph-specific fixture or extends the existing 40-case set; what zero-result/recall/precision thresholds count as pass.
-   - Recommendation: new deterministic graph fixture (no live dependency) with explicit expected URNs/relations; measure zero-result rate, entity recall, edge precision, identity preservation, citation/path closure, deterministic ordering, p50/p95 latency.
+5. **Where is the reference set and what thresholds gate the phase?**
+   - **Resolution:** Create `tests/fixtures/ai/graph-retrieval-reference.json` plus typed schema and evaluator. Gate maximum zero-result rate 0.1, minimum entity recall 0.9, minimum edge precision 0.9, and require identity preservation, citation/path closure, and deterministic ordering. Record p50/p95 latency (D-21, D-22).
 
-6. **Does any Telegram/MCP consumer read the changed fields?**
-   - What we know: repo contains Telegram integration and MCP retrieval runner.
-   - What's unclear: whether either serializes `itemCount` or outcome enums strictly.
-   - Recommendation: grep both consumers during planning; add `SEED_ONLY` handling or map it to a safe message.
+6. **Do Telegram or MCP consumers require adaptation?**
+   - **Resolution:** Telegram consumes `ChatMessageGrounding` and must explicitly format `SEED_ONLY` as found entity plus counts instead of no evidence. MCP retrieval returns `{ items, warnings }` and does not consume `RetrievalOutcome` or `itemCount`; add a regression boundary assertion and no production adapter (D-02, D-20).
 
-7. **How should Neo4j tuning be evidenced?**
-   - What we know: D-22 mandates correctness baseline first, then `EXPLAIN`/`PROFILE` without quality loss.
-   - What's unclear: where plans/profiles are captured.
-   - Recommendation: capture query text hash + plan summary in a dev-only test/script, never in diagnostics; re-run the same reference set after each index/query change.
+7. **How is Neo4j tuning evidenced?**
+   - **Resolution:** First generate `.planning/phases/24-graph-retrieval-optimization/24-GRAPH-BASELINE.json` from the passing offline benchmark with metrics and SHA-256 fixture hash. `EXPLAIN`/`PROFILE` remains outside Phase 24 implementation until baseline passes; later tuning must rerun the same fixture hash or create a reviewed new baseline. Query text and plan output never enter runtime diagnostics (D-22).
 
 ## Environment Availability
 

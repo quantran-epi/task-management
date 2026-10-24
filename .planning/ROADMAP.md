@@ -103,3 +103,53 @@ Plans:
 **Wave 3** *(blocked on Wave 1 and Wave 2 completion)*
 
 - [x] 23-03-PLAN.md — Stream Batching for Vector Embedding & Neo4j Insertion (Wave 3)
+
+### Phase 24: Graph Retrieval Optimization
+
+**Goal:** Make Neo4j retrieval ontology-driven, bounded, deterministic, and observable so existing graph entities and valid evidence survive traversal, ranking, federated fusion, and AI Chat rendering.
+**Requirements**: SC-1, SC-2, SC-3, SC-4, SC-5, SC-6, SC-7, SC-8
+**Depends on:** Phase 23
+**Source:** `docs/GRAPH_RETRIEVAL_OPTIMIZATION_ROADMAP.md`
+**Success Criteria** (what must be TRUE):
+
+  1. Regression coverage traces `MAIN1.EVT_EVENT` from AI Chat through planning, Neo4j retrieval, normalization, fusion, and rendering.
+  2. Resolved seed entities remain retrievable when no matching edge or path exists, with separate entity, edge, and path counts.
+  3. Traversal plans use existing ontology rules per seed, support mixed entity kinds and multiple valid relations, and never accept model-generated raw Cypher.
+  4. Plans validate relations, directions, endpoint kinds, and hop limits before execution, returning stable reason codes for empty or rejected results.
+  5. Stable graph identities, deterministic ranking, and correct deduplication preserve valid graph evidence through federated fusion.
+  6. Stage diagnostics expose only safe metadata, timings, counts, and reason codes—never queries, source content, credentials, or raw Cypher.
+  7. Reference queries measure zero-result rate, recall, precision, and latency before Neo4j performance tuning with `EXPLAIN` and `PROFILE`.
+  8. Live Neo4j and knowledge-server checks prove entity lookup, read/write relations, seed-only results, bounded multi-hop retrieval, and AI Chat Drawer rendering while preserving offline BM25 fallback.
+
+**Plans:** 8 plans in 7 waves
+
+Plans:
+
+**Wave 1**
+
+- [ ] 24-01-PLAN.md — Registry-derived per-seed planning, stable validation codes, one repair, and reject-not-clamp traversal
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 24-02-PLAN.md — Seed-preserving traversal, SEED_ONLY outcome, failed seeds, counts, and stage diagnostics
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 24-03-PLAN.md — Atomic protected graph packages, deterministic ranking, and count/diagnostic-preserving federation
+
+**Wave 4** *(parallel after Wave 3)*
+
+- [ ] 24-04-PLAN.md — Client protocol/federated-schema parity and backward-compatible grounding persistence
+- [ ] 24-07-PLAN.md — Deterministic graph reference set, correctness evaluator, and hashed offline baseline
+
+**Wave 5** *(blocked on 24-04)*
+
+- [ ] 24-05-PLAN.md — Entity-aware evidence packing, SEED_ONLY routing, and Telegram/MCP consumer safety
+
+**Wave 6** *(blocked on 24-05)*
+
+- [ ] 24-06-PLAN.md — Seed-only UI, content-free diagnostics, and explicit non-mutating find-related turns
+
+**Wave 7** *(blocked on 24-06 and 24-07)*
+
+- [ ] 24-08-PLAN.md — Offline live-script self-check, gated live graph checks, offline BM25 proof, and human checkpoint
