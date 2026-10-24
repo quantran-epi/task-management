@@ -121,7 +121,7 @@ Plans:
   7. Reference queries measure zero-result rate, recall, precision, and latency before Neo4j performance tuning with `EXPLAIN` and `PROFILE`.
   8. Live Neo4j and knowledge-server checks prove entity lookup, read/write relations, seed-only results, bounded multi-hop retrieval, and AI Chat Drawer rendering while preserving offline BM25 fallback.
 
-**Plans:** 1/8 plans executed
+**Plans:** 2/8 plans executed
 
 Plans:
 
@@ -131,7 +131,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 24-02-PLAN.md — Seed-preserving traversal, SEED_ONLY outcome, failed seeds, counts, and stage diagnostics
+- [x] 24-02-PLAN.md — Seed-preserving traversal, SEED_ONLY outcome, failed seeds, counts, and stage diagnostics
 
 **Wave 3** *(blocked on Wave 2)*
 
