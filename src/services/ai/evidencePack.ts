@@ -49,11 +49,29 @@ export interface PromptEvidenceItem {
   readonly sectionAnchor?: string | null | undefined;
 }
 
+/** Seed entity carried alongside citations; never converted into a citation (D-02). */
+export interface PackedEntity {
+  readonly urn: string;
+  readonly canonicalName: string;
+  readonly kind: string;
+  readonly snapshotId: string;
+  readonly setId: string;
+  readonly evidenceClass?: 'OBSERVED' | 'INFERRED' | 'BUSINESS_APPROVED' | undefined;
+}
+
+export interface GraphCounts {
+  readonly entity: number;
+  readonly edge: number;
+  readonly path: number;
+}
+
 export interface EvidencePack {
   readonly authority: 'server' | 'local';
   readonly citations: Readonly<Record<string, SourceRecord>>;
   readonly paths: Readonly<Record<string, ValidatedPath>>;
   readonly conflicts: readonly ConflictGroup[];
+  readonly entities?: readonly PackedEntity[] | undefined;
+  readonly graphCounts?: GraphCounts | undefined;
   readonly promptEvidence: readonly PromptEvidenceItem[];
   readonly contextTruncated: boolean;
   readonly coverageWarnings: readonly string[];
@@ -158,6 +176,8 @@ export function packEvidence(
 
   const rawCandidates: RawCandidateCitation[] = [];
   const coverageWarnings: string[] = [];
+  const entities: PackedEntity[] = [];
+  let graphCounts: GraphCounts = { entity: 0, edge: 0, path: 0 };
 
   if (isServer && input.serverResponse) {
     const resp = input.serverResponse;
@@ -165,6 +185,41 @@ export function packEvidence(
       for (const cw of resp.diagnostics.coverageWarnings) {
         coverageWarnings.push(cw.message);
       }
+    }
+
+    const graphStatus = resp.modalityStatus?.graph;
+    graphCounts = {
+      entity: graphStatus?.entityCount ?? 0,
+      edge: graphStatus?.edgeCount ?? 0,
+      path: graphStatus?.pathCount ?? 0,
+    };
+
+    const seenEntities = new Set<string>();
+    for (const fedItem of resp.items) {
+      const item = ((fedItem as any).item ?? fedItem) as {
+        readonly type?: string;
+        readonly urn?: string;
+        readonly canonicalName?: string;
+        readonly kind?: string;
+        readonly snapshotId?: string;
+        readonly evidenceClass?: 'OBSERVED' | 'INFERRED' | 'BUSINESS_APPROVED';
+      };
+      if (item?.type !== 'entity' || !item.urn || !item.canonicalName || !item.kind) continue;
+      if (entities.length >= 50) break;
+      const setId = (fedItem as any).setId ?? 'default_set';
+      const dedupKey = `${setId}:${item.urn}`;
+      if (seenEntities.has(dedupKey)) continue;
+      seenEntities.add(dedupKey);
+      const snapshotId =
+        (fedItem as any).snapshotId ?? item.snapshotId ?? (resp as any).snapshotId ?? '';
+      entities.push({
+        urn: item.urn,
+        canonicalName: item.canonicalName,
+        kind: item.kind,
+        snapshotId,
+        setId,
+        ...(item.evidenceClass ? { evidenceClass: item.evidenceClass } : {}),
+      });
     }
 
     for (const fedItem of resp.items) {
@@ -479,6 +534,8 @@ export function packEvidence(
     citations,
     paths,
     conflicts,
+    entities,
+    graphCounts,
     promptEvidence: finalPromptEvidence,
     contextTruncated,
     coverageWarnings,

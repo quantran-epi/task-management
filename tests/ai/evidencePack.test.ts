@@ -1046,6 +1046,225 @@ describe('evidencePack', () => {
     expect(closureResult.issues).toHaveLength(0);
   });
 
+  describe('Phase 24 entity-aware packing (SC-6)', () => {
+    const ENTITY_URN = 'urn:plannermate:core:process:cytp1002';
+    const ENTITY_URN_2 = 'urn:plannermate:core:process:cytp2002';
+    const SNAP = 'gsnap_11111111';
+
+    function makeEntityItem(
+      urn: string,
+      canonicalName: string,
+      kind = 'ScheduledProcess',
+      score = 5
+    ) {
+      return {
+        type: 'entity' as const,
+        id: urn,
+        score,
+        modalitiesContributed: ['graph' as const],
+        urn,
+        canonicalName,
+        kind,
+        snapshotId: SNAP,
+        hasConflict: false,
+      };
+    }
+
+    function makeEntityResponse(
+      items: FederatedRetrievalResponse['items'],
+      graph: { entityCount?: number; edgeCount?: number; pathCount?: number } = {}
+    ): FederatedRetrievalResponse {
+      return {
+        outcome: 'SEED_ONLY',
+        items,
+        paths: [],
+        conflictGroups: [],
+        modalityStatus: {
+          fulltext: { status: 'ok', latencyMs: 5, itemCount: 0 },
+          vector: { status: 'ok', latencyMs: 5, itemCount: 0 },
+          graph: { status: 'ok', latencyMs: 8, itemCount: items.length, ...graph },
+        },
+        diagnostics: { degraded: false, coverageWarnings: [] },
+      };
+    }
+
+    it('preserves entity identity fields in EvidencePack.entities', () => {
+      const pack = packEvidence({
+        authority: 'server',
+        serverResponse: makeEntityResponse(
+          [
+            {
+              setId: SET_1,
+              snapshotId: SNAP,
+              roleGroup: 'baseline',
+              item: makeEntityItem(ENTITY_URN, 'CYTP1002'),
+            },
+          ],
+          { entityCount: 1, edgeCount: 0, pathCount: 0 }
+        ),
+      });
+
+      expect(pack.entities).toHaveLength(1);
+      expect(pack.entities?.[0]).toEqual({
+        urn: ENTITY_URN,
+        canonicalName: 'CYTP1002',
+        kind: 'ScheduledProcess',
+        snapshotId: SNAP,
+        setId: SET_1,
+      });
+    });
+
+    it('dedupes identical entities within one set but keeps cross-set duplicates', () => {
+      const pack = packEvidence({
+        authority: 'server',
+        serverResponse: makeEntityResponse([
+          {
+            setId: SET_1,
+            snapshotId: SNAP,
+            roleGroup: 'baseline',
+            item: makeEntityItem(ENTITY_URN, 'CYTP1002'),
+          },
+          {
+            setId: SET_1,
+            snapshotId: SNAP,
+            roleGroup: 'baseline',
+            item: makeEntityItem(ENTITY_URN, 'CYTP1002', 'ScheduledProcess', 7),
+          },
+          {
+            setId: SET_2,
+            snapshotId: SNAP,
+            roleGroup: 'scope_diff',
+            item: makeEntityItem(ENTITY_URN, 'CYTP1002'),
+          },
+        ]),
+      });
+
+      expect(pack.entities).toHaveLength(2);
+      expect(pack.entities?.map((e) => e.setId)).toEqual([SET_1, SET_2]);
+    });
+
+    it('copies graph counts from modalityStatus.graph', () => {
+      const pack = packEvidence({
+        authority: 'server',
+        serverResponse: makeEntityResponse(
+          [
+            {
+              setId: SET_1,
+              snapshotId: SNAP,
+              roleGroup: 'baseline',
+              item: makeEntityItem(ENTITY_URN, 'CYTP1002'),
+            },
+          ],
+          { entityCount: 3, edgeCount: 2, pathCount: 1 }
+        ),
+      });
+
+      expect(pack.graphCounts).toEqual({ entity: 3, edge: 2, path: 1 });
+    });
+
+    it('defaults absent graph counts to zero instead of guessing from items', () => {
+      const pack = packEvidence({
+        authority: 'server',
+        serverResponse: makeEntityResponse([
+          {
+            setId: SET_1,
+            snapshotId: SNAP,
+            roleGroup: 'baseline',
+            item: makeEntityItem(ENTITY_URN, 'CYTP1002'),
+          },
+        ]),
+      });
+
+      expect(pack.graphCounts).toEqual({ entity: 0, edge: 0, path: 0 });
+    });
+
+    it('never converts entity items into citations', () => {
+      const pack = packEvidence({
+        authority: 'server',
+        serverResponse: makeEntityResponse([
+          {
+            setId: SET_1,
+            snapshotId: SNAP,
+            roleGroup: 'baseline',
+            item: makeEntityItem(ENTITY_URN, 'CYTP1002'),
+          },
+        ]),
+      });
+
+      expect(Object.keys(pack.citations)).toHaveLength(0);
+      expect(pack.promptEvidence).toHaveLength(0);
+    });
+
+    it('keeps chunk citation packing unchanged when entities are present', () => {
+      const chunk = makeMockChunk('c1', DOC_1, 'Doc 1', 1, 10, 'chunk snippet', HASH_A);
+      const pack = packEvidence({
+        authority: 'server',
+        serverResponse: makeEntityResponse([
+          {
+            setId: SET_1,
+            snapshotId: SNAP,
+            roleGroup: 'baseline',
+            item: chunk,
+          },
+          {
+            setId: SET_1,
+            snapshotId: SNAP,
+            roleGroup: 'baseline',
+            item: makeEntityItem(ENTITY_URN_2, 'CYTP2002'),
+          },
+        ]),
+      });
+
+      expect(Object.keys(pack.citations)).toEqual(['S1']);
+      expect(pack.citations['S1']?.citedExcerpt).toBe('chunk snippet');
+      expect(pack.entities).toHaveLength(1);
+    });
+
+    it('still drops a path whose hop has no surviving citation', () => {
+      const chunk = makeMockChunk('c1', DOC_1, 'Doc 1', 1, 10, 'snippet', HASH_A);
+      const pack = packEvidence({
+        authority: 'server',
+        serverResponse: {
+          ...makeEntityResponse([
+            {
+              setId: SET_1,
+              snapshotId: SNAP,
+              roleGroup: 'baseline',
+              item: chunk,
+            },
+            {
+              setId: SET_1,
+              snapshotId: SNAP,
+              roleGroup: 'baseline',
+              item: makeEntityItem(ENTITY_URN, 'CYTP1002'),
+            },
+          ]),
+          outcome: 'READY',
+          paths: [
+            {
+              setId: SET_1,
+              snapshotId: SNAP,
+              roleGroup: 'baseline',
+              path: {
+                pathId: 'P1',
+                snapshotId: SNAP,
+                nodeUrns: [ENTITY_URN, ENTITY_URN_2],
+                edgeFactKeys: ['1'.repeat(64)],
+                hopClassifications: ['OBSERVED'],
+                hopCitationIds: [['missingChunk']],
+                hasConflict: false,
+                classification: 'OBSERVED',
+              },
+            },
+          ],
+        },
+      });
+
+      expect(pack.paths).toEqual({});
+      expect(pack.entities).toHaveLength(1);
+    });
+  });
+
   it('24. truncates MCP rawResult at 2500 characters to match persistence limits', () => {
     const longRawResult = 'A'.repeat(3000);
     const pack = packEvidence({
