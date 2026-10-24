@@ -987,7 +987,9 @@ describe('ChatMessageBubble Phase 24 seed-only', () => {
     expect(screen.getByText('MAIN1.EVT_EVENT')).toBeInTheDocument();
     expect(screen.getByText('PRC_PROCESS:60000006')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Tìm liên quan' })).toHaveLength(2);
-    expect(screen.getByText('Thực thể: 2 · Cạnh: 0 · Đường dẫn: 0')).toBeInTheDocument();
+    expect(
+      screen.getAllByLabelText('Thực thể: 2 · Cạnh: 0 · Đường dẫn: 0').length
+    ).toBeGreaterThanOrEqual(1);
     expect(screen.getByRole('status')).toBeInTheDocument();
     expect(screen.getByText(/MISSING_SEED/)).toBeInTheDocument();
     expect(

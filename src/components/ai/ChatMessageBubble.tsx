@@ -37,6 +37,8 @@ import { SourcesPanel } from './grounded/SourcesPanel';
 import { DiagnosticsPanel } from './grounded/DiagnosticsPanel';
 import { CandidateChipList } from './grounded/CandidateChipList';
 import { EvidenceOnlyCard } from './grounded/EvidenceOnlyCard';
+import { SeedEntityCard } from './grounded/SeedEntityCard';
+import type { PersistedEntityRef } from '../../services/ai/groundedAnswerSchemas';
 
 const { Text } = Typography;
 
@@ -53,6 +55,10 @@ export interface GroundedAnswerCardCallbacks {
   onInvalidRetry?: (() => void) | undefined;
   onAuthRepair?: (() => void) | undefined;
   onConfigRepair?: (() => void) | undefined;
+  onFindRelated?:
+    | ((entity: PersistedEntityRef, sourceMessageId: string) => void)
+    | undefined;
+  findingRelatedKey?: string | null | undefined;
   synthesizingEvidenceId?: string | null | undefined;
   evidenceSynthesisError?: {
     id: string;
@@ -312,6 +318,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   const [copied, setCopied] = useState(false);
   const [checklistAdded, setChecklistAdded] = useState(false);
   const [noteSaved, setNoteSaved] = useState(false);
+  const [diagnosticsForcedOpen, setDiagnosticsForcedOpen] = useState(false);
 
   const isUser = msg.role === 'user';
   const formattedTime = msg.createdAt
@@ -673,8 +680,31 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
         routerSource={g.routerVersion ?? undefined}
         promptVersion={g.promptVersion}
         schemaVersion={g.schemaVersion}
+        graphCounts={g.graphCounts}
+        stages={g.stageDiagnostics}
+        forceOpen={diagnosticsForcedOpen}
       />
     ) : undefined;
+
+    const seedEntities = (g.entities ?? []).slice(0, 5);
+    const entitiesSlot =
+      seedEntities.length > 0 ? (
+        <>
+          {seedEntities.map((entity) => (
+            <SeedEntityCard
+              key={`${entity.snapshotId}:${entity.urn}`}
+              entity={entity}
+              graphCounts={g.graphCounts ?? { entity: 0, edge: 0, path: 0 }}
+              onFindRelated={(selected) =>
+                groundedCallbacks?.onFindRelated?.(selected, msg.id)
+              }
+              isFindingRelated={
+                groundedCallbacks?.findingRelatedKey === `${msg.id}:${entity.urn}`
+              }
+            />
+          ))}
+        </>
+      ) : undefined;
 
     const candidateChips = (g.citations ?? []).map((c) => ({
       id: c.documentId,
@@ -775,6 +805,10 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               candidatesSlot={candidatesSlot}
               refinementsSlot={refinementsSlot}
               resultsSlot={resultsSlot}
+              entitiesSlot={entitiesSlot}
+              failedSeeds={g.failedSeeds}
+              graphCounts={g.graphCounts}
+              onOpenDiagnostics={() => setDiagnosticsForcedOpen(true)}
             />
           )}
         </div>

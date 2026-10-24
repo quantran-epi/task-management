@@ -23,6 +23,7 @@ export interface DiagnosticsPanelProps {
   stages?: readonly StageDiagnostic[] | undefined;
   graphBeforeFusion?: GraphRetainedCounts | undefined;
   graphAfterFusion?: GraphRetainedCounts | undefined;
+  forceOpen?: boolean | undefined;
 }
 
 function renderStatusTag(status: string) {
@@ -53,6 +54,7 @@ export const DiagnosticsPanel: React.FC<DiagnosticsPanelProps> = ({
   stages,
   graphBeforeFusion,
   graphAfterFusion,
+  forceOpen = false,
 }) => {
   const { token } = theme.useToken();
 
@@ -193,6 +195,7 @@ export const DiagnosticsPanel: React.FC<DiagnosticsPanelProps> = ({
     <div className="diagnostics-panel" style={{ marginTop: 12 }}>
       <Collapse
         size="small"
+        defaultActiveKey={forceOpen ? ['diagnostics'] : []}
         items={[
           {
             key: 'diagnostics',

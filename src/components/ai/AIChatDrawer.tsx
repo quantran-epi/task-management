@@ -83,7 +83,11 @@ import {
   executeSynthesizeFromStoredEvidence as synthesizeFromStoredEvidence,
   createDefaultGroundedTurnDeps,
 } from '../../services/ai/groundedTurnDeps';
-import type { ChatMessageGrounding, PersistedCitation } from '../../services/ai/groundedAnswerSchemas';
+import type {
+  ChatMessageGrounding,
+  PersistedCitation,
+  PersistedEntityRef,
+} from '../../services/ai/groundedAnswerSchemas';
 import { IntentRouterUnavailableError } from '../../services/ai/intentRouter';
 import { QuickPreviewDrawer } from '../notes/QuickPreviewDrawer';
 import { ScopeChipsBar, hasMeaningfulRoutedScope } from './grounded/ScopeChipsBar';
@@ -1398,7 +1402,31 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
     }
   };
 
+  // Explicit broader-retrieval action: one fixed new turn, original message immutable (D-04).
+  const findingRelatedRef = useRef<string | null>(null);
+  const [findingRelatedKey, setFindingRelatedKey] = useState<string | null>(null);
+
+  const handleFindRelated = async (
+    entity: PersistedEntityRef,
+    sourceMessageId: string
+  ) => {
+    const key = `${sourceMessageId}:${entity.urn}`;
+    if (findingRelatedRef.current) return;
+    findingRelatedRef.current = key;
+    setFindingRelatedKey(key);
+    try {
+      await handleSendMessage(`Tìm mọi quan hệ liên quan đến ${entity.canonicalName}`);
+    } finally {
+      findingRelatedRef.current = null;
+      setFindingRelatedKey(null);
+    }
+  };
+
   const groundedCallbacks: GroundedAnswerCardCallbacks = {
+    onFindRelated: (entity, sourceMessageId) => {
+      void handleFindRelated(entity, sourceMessageId);
+    },
+    findingRelatedKey,
     onCitationActivate: (c) => setActivePreviewCitation(c),
     onCandidateSelect: (urn) => {
       void handleSendMessage(urn);

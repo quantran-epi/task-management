@@ -919,7 +919,7 @@ describe('AIChatDrawer find-related wiring (Phase 24)', () => {
     }
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Tìm liên quan' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Tìm liên quan/ })).toBeEnabled();
     });
   });
 

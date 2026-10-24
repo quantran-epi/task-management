@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, Collapse, Button, Tag, Tooltip, Divider, theme } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import {
@@ -114,6 +114,7 @@ export const GroundedAnswerCard: React.FC<GroundedAnswerCardProps> = ({
   isFreshLookingUp = false,
 }) => {
   const { token } = theme.useToken();
+  const [seedDiagnosticsOpen, setSeedDiagnosticsOpen] = useState(false);
 
   const renderSecondaryCta = () => {
     if (!onFreshLookup) return null;
@@ -262,7 +263,10 @@ export const GroundedAnswerCard: React.FC<GroundedAnswerCardProps> = ({
           {(failedSeeds.length > 0 || (grounding.failedSeeds?.length ?? 0) > 0) && (
             <PartialSeedNotice
               failedSeeds={failedSeeds.length > 0 ? failedSeeds : grounding.failedSeeds!}
-              onOpenDiagnostics={onOpenDiagnostics ?? (() => {})}
+              onOpenDiagnostics={() => {
+                setSeedDiagnosticsOpen(true);
+                onOpenDiagnostics?.();
+              }}
             />
           )}
           {entitiesSlot && (
@@ -272,7 +276,12 @@ export const GroundedAnswerCard: React.FC<GroundedAnswerCardProps> = ({
           )}
           <Collapse
             size="small"
-            defaultActiveKey={[]}
+            activeKey={seedDiagnosticsOpen ? ['diagnostics'] : []}
+            onChange={(keys) =>
+              setSeedDiagnosticsOpen(
+                (Array.isArray(keys) ? keys : [keys]).includes('diagnostics')
+              )
+            }
             items={collapseItems}
             style={{ marginTop: 12, background: token.colorFillTertiary, border: 'none' }}
           />
