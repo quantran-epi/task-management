@@ -123,13 +123,15 @@ describe('18-W0-02C: Static Bounded Cypher Templates & Plan Validation', () => {
 
     it('accepts valid plan and returns ValidatedTraversalPlan with default OBSERVED and BUSINESS_APPROVED evidence classes', () => {
       const plan = createBasePlan();
-      const validated = validateTraversalPlan(plan, allowedSeedSet);
+      const validated = validateTraversalPlan(plan, allowedSeedSet, {
+        [URN_PROCESS_60000006]: 'ScheduledProcess',
+      });
 
       expect(validated.valid).toBe(true);
       if (validated.valid) {
         expect(validated.plan.seedUrns).toEqual([URN_PROCESS_60000006]);
         expect(validated.plan.evidenceClasses).toEqual(['OBSERVED', 'BUSINESS_APPROVED']);
-        expect(validated.plan.clampedDepth).toBe(1);
+        expect(validated.plan.validatedDepth).toBe(1);
         expect(validated.plan.steps.length).toBe(1);
         expect(validated.plan.steps[0]!.queryKey).toBe('CONTAINS_STEP:OUTGOING:1');
       }
@@ -159,16 +161,16 @@ describe('18-W0-02C: Static Bounded Cypher Templates & Plan Validation', () => {
       expect(validated.reason).toBe('NO_GRAPH_SEED');
     });
 
-    it('rejects seed URNs not in allowedSeedSet', () => {
+    it('rejects seed URNs not in allowedSeedSet with SEED_NOT_FOUND', () => {
       const plan = createBasePlan();
       plan.seedUrns = ['urn:plannermate:smartvista:PRC_PROCESS:99999999' as any];
       const validated = validateTraversalPlan(plan, allowedSeedSet);
 
       expect(validated.valid).toBe(false);
-      expect(validated.reason).toContain('Unallowlisted seed');
+      expect(validated.reason).toBe('SEED_NOT_FOUND');
     });
 
-    it('rejects more than 5 traversal steps', () => {
+    it('rejects more than 5 traversal steps with PLAN_REJECTED', () => {
       const plan = createBasePlan();
       plan.traversalSteps = [
         { relationType: 'CONTAINS_STEP', direction: 'OUTGOING', maxHops: 1 },
@@ -181,22 +183,19 @@ describe('18-W0-02C: Static Bounded Cypher Templates & Plan Validation', () => {
       const validated = validateTraversalPlan(plan, allowedSeedSet);
 
       expect(validated.valid).toBe(false);
-      expect(validated.reason).toContain('exceeds maximum 5');
+      expect(validated.reason).toBe('PLAN_REJECTED');
     });
 
-    it('clamps overall depth > 3 to 3 and emits bounded clamp warning metadata', () => {
+    it('rejects overall depth 5 with HOP_LIMIT_EXCEEDED instead of clamping', () => {
       const plan = createBasePlan();
       (plan as any).overallMaxDepth = 5;
       const validated = validateTraversalPlan(plan, allowedSeedSet);
 
-      expect(validated.valid).toBe(true);
-      if (validated.valid) {
-        expect(validated.plan.clampedDepth).toBe(3);
-        expect(validated.warnings).toContain('Overall depth 5 clamped to maximum 3');
-      }
+      expect(validated.valid).toBe(false);
+      expect(validated.reason).toBe('HOP_LIMIT_EXCEEDED');
     });
 
-    it('clamps step maxHops exceeding relation registry limit to registry limit and records warning', () => {
+    it('rejects step maxHops above the registry ceiling with HOP_LIMIT_EXCEEDED instead of clamping', () => {
       const plan = createBasePlan();
       // CONTAINS_STEP registry maxHops is 1
       plan.traversalSteps = [
@@ -204,21 +203,17 @@ describe('18-W0-02C: Static Bounded Cypher Templates & Plan Validation', () => {
       ];
       const validated = validateTraversalPlan(plan, allowedSeedSet);
 
-      expect(validated.valid).toBe(true);
-      if (validated.valid) {
-        expect(validated.plan.steps[0]!.hops).toBe(1);
-        expect(validated.plan.steps[0]!.queryKey).toBe('CONTAINS_STEP:OUTGOING:1');
-        expect(validated.warnings.some((w) => w.includes('clamped to registry maximum 1'))).toBe(true);
-      }
+      expect(validated.valid).toBe(false);
+      expect(validated.reason).toBe('HOP_LIMIT_EXCEEDED');
     });
 
-    it('rejects unknown relation type', () => {
+    it('rejects unknown relation type with INVALID_RELATION', () => {
       const plan = createBasePlan();
       (plan.traversalSteps[0] as any).relationType = 'UNKNOWN_RELATION';
       const validated = validateTraversalPlan(plan, allowedSeedSet);
 
       expect(validated.valid).toBe(false);
-      expect(validated.reason).toContain('Unknown relation type UNKNOWN_RELATION');
+      expect(validated.reason).toBe('INVALID_RELATION');
     });
   });
 

@@ -14,7 +14,7 @@ import {
   PlanValidationReasonCode,
   QueryPlanner,
 } from './contracts.js';
-import { URN_REGEX } from '../types/graphProtocol.js';
+import { URN_REGEX, type NodeKind } from '../types/graphProtocol.js';
 import {
   NODE_KINDS,
   RELATION_TYPES,
@@ -369,6 +369,8 @@ export type QueryExecutionPlanningOutcome =
       readonly isFastPath: boolean;
       readonly isDegraded: boolean;
       readonly failedSeeds: readonly FailedSeed[];
+      /** Resolved seed kinds for downstream kind-aware traversal validation (D-10). */
+      readonly seedKinds: Readonly<Record<string, NodeKind>>;
     }
   | {
       readonly status: 'needsClarification';
@@ -393,6 +395,15 @@ export interface PlanSemanticValidation {
   readonly reasonCodes: readonly PlanValidationReasonCode[];
   readonly failedSeeds: readonly FailedSeed[];
   readonly plan?: LooseLogicalQueryPlan | undefined;
+}
+
+/**
+ * Seed-kind map for downstream kind-aware traversal validation (D-10).
+ */
+export function seedKindMap(
+  candidates: readonly ClarificationCandidate[]
+): Readonly<Record<string, NodeKind>> {
+  return Object.fromEntries(candidates.map((candidate) => [candidate.urn, candidate.kind]));
 }
 
 /**
@@ -629,6 +640,7 @@ export async function buildQueryExecutionPlan(
         isFastPath: true,
         isDegraded: false,
         failedSeeds: fastPathResult.failedSeeds,
+        seedKinds: { [resolution.resolved.urn]: resolution.resolved.kind },
       };
     }
     // If pure identifier is ambiguous or needs clarification, fall through to natural resolution & clarification logic
@@ -766,6 +778,7 @@ export async function buildQueryExecutionPlan(
           isFastPath: false,
           isDegraded: false,
           failedSeeds: check.failedSeeds,
+          seedKinds: seedKindMap(resolvedCandidates),
         };
       }
 
@@ -792,6 +805,7 @@ export async function buildQueryExecutionPlan(
             isFastPath: false,
             isDegraded: false,
             failedSeeds: repairCheck.failedSeeds,
+            seedKinds: seedKindMap(resolvedCandidates),
           };
         }
       }
@@ -817,5 +831,6 @@ export async function buildQueryExecutionPlan(
     isFastPath: false,
     isDegraded: true,
     failedSeeds: fallback.failedSeeds,
+    seedKinds: seedKindMap(resolvedCandidates),
   };
 }

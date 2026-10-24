@@ -4,9 +4,11 @@ import {
   Urn,
 } from '../types/graphProtocol.js';
 import {
+  NODE_KINDS,
   RELATION_TYPES,
   RETRIEVAL_ONTOLOGY_REGISTRY,
   TraversalDirection,
+  type NodeKind,
 } from '../graph/ontology.js';
 import type {
   LogicalQueryPlan,
@@ -22,6 +24,13 @@ import type {
   GraphTraversalResult,
   OperationOptions,
 } from './contracts.js';
+import {
+  TRAVERSAL_PLAN_LIMITS,
+  validateOverallDepth,
+  validateStepAgainstRegistry,
+  type LooseTraversalStepCandidate,
+  type PlanValidationReasonCode,
+} from './retrievalPlanDerivation.js';
 
 /**
  * Key format: `${relationType}:${direction}:${hops}`
@@ -128,7 +137,7 @@ export interface ValidatedTraversalPlanPayload {
   readonly planId: string;
   readonly seedUrns: readonly Urn[];
   readonly evidenceClasses: readonly EvidenceClassification[];
-  readonly clampedDepth: number;
+  readonly validatedDepth: number;
   readonly steps: readonly ValidatedTraversalStep[];
   readonly includeInferred: boolean;
 }
@@ -137,103 +146,102 @@ export type ValidatedTraversalPlan =
   | {
       readonly valid: true;
       readonly plan: ValidatedTraversalPlanPayload;
-      readonly warnings: readonly string[];
     }
   | {
       readonly valid: false;
-      readonly reason: string;
-      readonly warnings?: readonly string[] | undefined;
+      readonly reason: PlanValidationReasonCode | 'NO_GRAPH_SEED';
     };
 
+function isPlanValidationCode(
+  code: PlanValidationReasonCode | null
+): code is PlanValidationReasonCode {
+  return code !== null;
+}
+
 /**
- * Validates logical query plan against server-resolved allowlist seeds and ontology bounds (D-12, D-13, D-16).
- * Rechecks seed allowlist, max 5 entries, registry endpoints/direction/hop limits, and clamps depth.
+ * Validates a logical query plan against server-resolved allowlist seeds and ontology
+ * bounds (D-12, D-13, D-16). Depth and hop violations are rejected outright;
+ * every failure returns a stable code only.
  */
 export function validateTraversalPlan(
   plan: LogicalQueryPlan,
-  allowedSeedSet: ReadonlySet<string>
+  allowedSeedSet: ReadonlySet<string>,
+  seedKinds?: Readonly<Record<string, NodeKind>> | undefined
 ): ValidatedTraversalPlan {
-  const warnings: string[] = [];
-
   // 1. Check seed URNs existence
   if (!plan.seedUrns || plan.seedUrns.length === 0) {
-    return {
-      valid: false,
-      reason: 'NO_GRAPH_SEED',
-    };
+    return { valid: false, reason: 'NO_GRAPH_SEED' };
   }
 
   // Filter placeholder seeds
   const validSeeds = plan.seedUrns.filter((s) => s && !s.includes('fallback:none'));
   if (validSeeds.length === 0) {
-    return {
-      valid: false,
-      reason: 'NO_GRAPH_SEED',
-    };
+    return { valid: false, reason: 'NO_GRAPH_SEED' };
   }
 
   // Check seeds against server-resolved allowlist
   for (const seed of validSeeds) {
     if (!allowedSeedSet.has(seed)) {
-      return {
-        valid: false,
-        reason: `Unallowlisted seed URN: ${seed}`,
-      };
+      return { valid: false, reason: 'SEED_NOT_FOUND' };
     }
   }
 
   // 2. Traversal steps bounds: max 5
-  if (plan.traversalSteps.length > 5) {
-    return {
-      valid: false,
-      reason: `Traversal steps count ${plan.traversalSteps.length} exceeds maximum 5`,
-    };
+  if (plan.traversalSteps.length > TRAVERSAL_PLAN_LIMITS.MAX_STEPS) {
+    return { valid: false, reason: 'PLAN_REJECTED' };
   }
 
-  // 3. Clamp overall depth to 1..3
-  let clampedDepth = plan.overallMaxDepth ?? 3;
-  if (clampedDepth > 3) {
-    warnings.push(`Overall depth ${clampedDepth} clamped to maximum 3`);
-    clampedDepth = 3;
-  } else if (clampedDepth < 1) {
-    warnings.push(`Overall depth ${clampedDepth} clamped to minimum 1`);
-    clampedDepth = 1;
+  // 3. Reject over-depth instead of clamping (D-15)
+  const depth = plan.overallMaxDepth ?? TRAVERSAL_PLAN_LIMITS.MAX_DEPTH;
+  if (validateOverallDepth(depth)) {
+    return { valid: false, reason: 'HOP_LIMIT_EXCEEDED' };
   }
 
-  // 4. Validate each traversal step against ontology registry
+  // 4. Validate each traversal step against the ontology registry
   const validatedSteps: ValidatedTraversalStep[] = [];
-  for (let i = 0; i < plan.traversalSteps.length; i++) {
-    const step: TraversalStep = plan.traversalSteps[i]!;
-    const registryEntry = RETRIEVAL_ONTOLOGY_REGISTRY[step.relationType];
-    if (!registryEntry) {
-      return {
-        valid: false,
-        reason: `Unknown relation type ${step.relationType} at step ${i}`,
-      };
+  for (const step of plan.traversalSteps as readonly TraversalStep[]) {
+    const candidate = step as LooseTraversalStepCandidate;
+    const kinds = step.seedUrn
+      ? (seedKinds?.[step.seedUrn] ? [seedKinds[step.seedUrn]!] : [])
+      : validSeeds
+          .map((seed) => seedKinds?.[seed])
+          .filter((kind): kind is NodeKind => Boolean(kind));
+
+    if (kinds.length > 0) {
+      const codes = kinds.map((kind) => validateStepAgainstRegistry(candidate, kind));
+      if (!codes.includes(null)) {
+        return { valid: false, reason: codes.find(isPlanValidationCode) ?? 'PLAN_REJECTED' };
+      }
+    } else {
+      // No kind map supplied: still enforce relation, direction, endpoint, and hop bounds.
+      if (!RETRIEVAL_ONTOLOGY_REGISTRY[step.relationType]) {
+        return { valid: false, reason: 'INVALID_RELATION' };
+      }
+      const direction = step.direction ?? 'OUTGOING';
+      if (!['OUTGOING', 'INCOMING', 'BOTH'].includes(direction)) {
+        return { valid: false, reason: 'INVALID_DIRECTION' };
+      }
+      if (step.targetKind && !NODE_KINDS.includes(step.targetKind)) {
+        return { valid: false, reason: 'INVALID_ENDPOINT_KIND' };
+      }
+      const registryEntry = RETRIEVAL_ONTOLOGY_REGISTRY[step.relationType];
+      const hops = step.maxHops ?? 1;
+      if (
+        !Number.isInteger(hops) ||
+        hops < 1 ||
+        hops > registryEntry.maxHops ||
+        hops > TRAVERSAL_PLAN_LIMITS.MAX_DEPTH
+      ) {
+        return { valid: false, reason: 'HOP_LIMIT_EXCEEDED' };
+      }
     }
 
-    let hops = step.maxHops ?? 1;
-    if (hops > registryEntry.maxHops) {
-      warnings.push(
-        `Step ${i} (${step.relationType}) hops ${hops} clamped to registry maximum ${registryEntry.maxHops}`
-      );
-      hops = registryEntry.maxHops;
-    }
-    if (hops > clampedDepth) {
-      hops = clampedDepth;
-    }
-    if (hops < 1) {
-      hops = 1;
-    }
-
-    const direction: TraversalDirection = step.direction ?? registryEntry.defaultDirection ?? 'OUTGOING';
+    const hops = step.maxHops ?? 1;
+    const direction: TraversalDirection = step.direction ?? 'OUTGOING';
     const queryKey: TraversalQueryKey = `${step.relationType}:${direction}:${hops}`;
 
     if (!STATIC_TRAVERSAL_QUERIES[queryKey]) {
-      return {
-        valid: false,
-        reason: `No static query template registered for ${queryKey}`,
-      };
+      return { valid: false, reason: 'PLAN_REJECTED' };
     }
 
     validatedSteps.push({
@@ -256,16 +264,16 @@ export function validateTraversalPlan(
       planId: plan.planId,
       seedUrns: validSeeds,
       evidenceClasses,
-      clampedDepth,
+      validatedDepth: depth,
       steps: validatedSteps,
       includeInferred: !!plan.includeInferred,
     },
-    warnings,
   };
 }
 
 export interface GraphTraversalOptions extends OperationOptions {
   readonly allowedSeedSet?: ReadonlySet<string> | undefined;
+  readonly seedKinds?: Readonly<Record<string, NodeKind>> | undefined;
 }
 
 export interface OrderedPathCandidate {
@@ -346,35 +354,26 @@ export async function runBoundedGraphTraversal(
 
   // 3. Plan validation
   let validatedPlan: ValidatedTraversalPlanPayload;
-  if ('steps' in plan && 'clampedDepth' in plan) {
+  if ('steps' in plan && 'validatedDepth' in plan) {
     validatedPlan = plan;
   } else {
     const allowedSet = options.allowedSeedSet ?? new Set(rawSeeds);
-    const validation = validateTraversalPlan(plan as LogicalQueryPlan, allowedSet);
+    const validation = validateTraversalPlan(
+      plan as LogicalQueryPlan,
+      allowedSet,
+      options.seedKinds
+    );
     if (!validation.valid) {
-      if (validation.reason === 'NO_GRAPH_SEED') {
-        return {
-          status: {
-            status: 'unavailable',
-            latencyMs: 0,
-            itemCount: 0,
-            reason: 'NO_GRAPH_SEED',
-          },
-          chunks: [],
-          entities: [],
-          edges: [],
-          paths: [],
-        };
-      }
+      // Stable reason code drives the status; no plan content is logged or returned.
       return {
         status: {
-          status: 'error',
+          status: validation.reason === 'NO_GRAPH_SEED' ? 'unavailable' : 'error',
           latencyMs: 0,
           itemCount: 0,
-          reason: 'PROVIDER_ERROR',
+          reason: validation.reason,
         },
         chunks: [],
-      entities: [],
+        entities: [],
         edges: [],
         paths: [],
       };
@@ -394,7 +393,7 @@ export async function runBoundedGraphTraversal(
         direction: s.direction,
         maxHops: s.hops,
       })),
-      overallMaxDepth: validatedPlan.clampedDepth,
+      overallMaxDepth: validatedPlan.validatedDepth,
       includeInferred: validatedPlan.includeInferred,
       fulltextKeywords: [],
       semanticQuery: '',

@@ -1107,10 +1107,10 @@ describe('18-W0-03B: RetrievalService Pinned Parallel Orchestration & Timeouts',
           queryIntent: 'FLOW_TRAVERSAL',
           seedUrns: [URN_CONTAINER_60000006],
           traversalSteps: [
+            // ProcessStep may only INVOKE outbound; CALLS requires a SoftwareComponent seed.
             { relationType: 'INVOKES', direction: 'OUTGOING', maxHops: 1 },
-            { relationType: 'CALLS', direction: 'OUTGOING', maxHops: 1 },
           ],
-          overallMaxDepth: 2,
+          overallMaxDepth: 1,
           includeInferred: false,
           fulltextKeywords: ['container 60000006', 'Scheduler', 'PL/SQL'],
           semanticQuery: query,
@@ -1231,7 +1231,7 @@ describe('18-W0-03B: RetrievalService Pinned Parallel Orchestration & Timeouts',
       expect(response.paths[0]?.hopCitationIds).toEqual([['chunk-callchain-03']]);
     });
 
-    it('T5 regression: normalizes IMPACT_ANALYSIS on DatabaseObject to retain directly affected procedures', async () => {
+    it('T5 regression: preserves a planner IMPACT_ANALYSIS DatabaseObject plan without rewriting it', async () => {
       const indexGateway = new DeterministicIndexGatewayStub();
       indexGateway.activeSnapshotId = snapshotId;
       const embedding = new DeterministicEmbeddingStub();
@@ -1248,14 +1248,17 @@ describe('18-W0-03B: RetrievalService Pinned Parallel Orchestration & Timeouts',
         },
       ];
 
-      // Planner returns IMPACT_ANALYSIS with empty steps (simulating model output requiring semantic normalization)
+      // Server no longer rewrites impact plans; the planner's per-seed steps survive verbatim.
       planner.scriptedResult = {
         type: 'plan',
         plan: {
           planId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
           queryIntent: 'IMPACT_ANALYSIS',
           seedUrns: [URN_TABLE_FCL_CYCLE_COUNTER],
-          traversalSteps: [], // empty steps
+          traversalSteps: [
+            { relationType: 'READS_FROM', direction: 'INCOMING', maxHops: 1 },
+            { relationType: 'WRITES_TO', direction: 'INCOMING', maxHops: 1 },
+          ],
           overallMaxDepth: 1,
           includeInferred: false,
           fulltextKeywords: ['MAIN1.FCL_CYCLE_COUNTER'],
@@ -1420,7 +1423,11 @@ describe('18-W0-03B: RetrievalService Pinned Parallel Orchestration & Timeouts',
           relationType: 'READS_FROM',
           direction: 'INCOMING',
           maxHops: 1,
-          targetKind: 'SoftwareComponent',
+        },
+        {
+          relationType: 'WRITES_TO',
+          direction: 'INCOMING',
+          maxHops: 1,
         },
       ]);
       expect(traversedCriteria.plan.overallMaxDepth).toBe(1);
@@ -1457,9 +1464,8 @@ describe('18-W0-03B: RetrievalService Pinned Parallel Orchestration & Timeouts',
           planId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a99',
           queryIntent: 'LOOKUP',
           seedUrns: [stepUrn],
-          traversalSteps: [
-            { relationType: 'WRITES_TO', direction: 'OUTGOING', maxHops: 1 },
-          ],
+          // A ProcessStep seed has no outbound WRITES_TO; the seed itself still yields evidence.
+          traversalSteps: [],
           overallMaxDepth: 1,
           includeInferred: false,
           fulltextKeywords: ['thanh toán', 'hoá đơn'],

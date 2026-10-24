@@ -744,6 +744,7 @@ export class RetrievalService {
       : planningOutcome.plan;
 
     const timeoutMs = this.timeouts.graphMs;
+    const seedKinds = isSpecial ? undefined : planningOutcome.seedKinds;
     const run = await runWithTimeout(
       timeoutMs,
       async (signal) => {
@@ -751,7 +752,7 @@ export class RetrievalService {
           planToTraverse,
           snapshotId,
           this.deps.graphGateway,
-          signal
+          { signal, seedKinds }
         );
       },
       parentSignal
