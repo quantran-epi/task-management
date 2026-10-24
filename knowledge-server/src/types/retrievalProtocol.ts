@@ -727,6 +727,9 @@ export const FederatedRetrievalResponseSchema = z
     diagnostics: z.strictObject({
       degraded: z.boolean(),
       coverageWarnings: z.array(FederatedCoverageWarningSchema).max(100),
+      // Aggregated content-free stage rows and dropped seeds (D-13, D-19).
+      stageDiagnostics: z.array(StageDiagnosticSchema).max(20).optional(),
+      failedSeeds: z.array(FailedSeedSchema).max(5).optional(),
     }),
   })
   .superRefine((response, ctx) => {

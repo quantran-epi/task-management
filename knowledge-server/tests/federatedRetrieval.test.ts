@@ -517,3 +517,324 @@ describe('Federated Retrieval Route and Orchestration (Task 2)', () => {
     );
   });
 });
+
+describe('Federated aggregation: counts, severity, stages, seeds (24-03)', () => {
+  const URN_A = 'urn:plannermate:test:Entity:A';
+  const URN_B = 'urn:plannermate:test:Entity:B';
+  const URN_C = 'urn:plannermate:test:Entity:C';
+  const URN_DUP = 'urn:plannermate:test:Entity:DUP';
+  const FACT_1 = 'a'.repeat(64);
+  const FACT_DUP = 'b'.repeat(64);
+  const budgets = {
+    concurrency: 2,
+    elapsedMs: 2000,
+    maxSets: 10,
+    maxItems: 20,
+    maxEvidenceChars: 10000,
+  };
+
+  const entityItem = (urn: string, snapshotId: string): any => ({
+    type: 'entity',
+    id: urn,
+    score: 1,
+    modalitiesContributed: ['graph'],
+    urn,
+    canonicalName: urn,
+    kind: 'DatabaseObject',
+    snapshotId,
+    hasConflict: false,
+  });
+
+  const edgeItem = (factKey: string, snapshotId: string, source: string, target: string): any => ({
+    type: 'edge',
+    id: factKey,
+    score: 1,
+    modalitiesContributed: ['graph'],
+    factKey,
+    sourceUrn: source,
+    relationType: 'READS_FROM',
+    targetUrn: target,
+    evidenceClass: 'OBSERVED',
+    supportingChunkIds: [],
+    snapshotId,
+    hasConflict: false,
+  });
+
+  const graphPath = (pathId: string, snapshotId: string, nodeUrns: string[], factKeys: string[]): any => ({
+    pathId,
+    snapshotId,
+    nodeUrns,
+    edgeFactKeys: factKeys,
+    hopClassifications: factKeys.map(() => 'OBSERVED'),
+    hopCitationIds: factKeys.map((key) => [`chunk-${key}`]),
+    hasConflict: false,
+    classification: 'OBSERVED',
+  });
+
+  const setResponse = (overrides: Partial<RetrievalResponse> & { snapshotId: string }): RetrievalResponse => ({
+    outcome: 'READY',
+    embeddingProvider: {
+      provider: 'local-onnx',
+      model: 'Xenova/multilingual-e5-small',
+      revision: 'v1.0.0',
+      dimensions: 384,
+      policyVersion: '2026.10.1',
+    },
+    items: [],
+    paths: [],
+    conflictGroups: [],
+    totalCandidates: 0,
+    modalitiesUsed: ['graph'],
+    modalityStatus: {
+      fulltext: { status: 'ok', latencyMs: 5, itemCount: 0 },
+      vector: { status: 'ok', latencyMs: 5, itemCount: 0 },
+      graph: {
+        status: 'ok',
+        latencyMs: 5,
+        itemCount: 0,
+        entityCount: 0,
+        edgeCount: 0,
+        pathCount: 0,
+      },
+    },
+    diagnostics: { degraded: false },
+    planTrace: { fastPath: true, degradedFallback: false },
+    ...overrides,
+  } as RetrievalResponse);
+
+  const runFederation = async (
+    responses: Record<string, RetrievalResponse>,
+    assignments = [
+      { setId: SET_ID_1, tier: 'REQUIRED' as const, roleGroup: 'baseline' as const },
+      { setId: SET_ID_2, tier: 'REQUIRED' as const, roleGroup: 'scope_diff' as const },
+    ]
+  ) => {
+    const retrieveMock = vi.fn().mockImplementation((setId: string) => {
+      const response = responses[setId];
+      if (!response) throw new Error('Unknown setId');
+      return Promise.resolve(response);
+    });
+    const app = buildKnowledgeServer({
+      token: TOKEN,
+      allowedOrigins: [ORIGIN],
+      retrievalService: { retrieve: retrieveMock },
+    }).app;
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/retrieve',
+      headers: { origin: ORIGIN, authorization: `Bearer ${TOKEN}` },
+      payload: {
+        query: 'graph query',
+        setTierAssignments: assignments,
+        comparisonMode: 'baseline_vs_scope',
+        budgets,
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    return res.json() as FederatedRetrievalResponse;
+  };
+
+  it('sums distinct retained graph identities across sets', async () => {
+    const body = await runFederation({
+      [SET_ID_1]: setResponse({
+        snapshotId: 'gsnap_11111111',
+        items: [entityItem(URN_A, 'gsnap_11111111')],
+        modalityStatus: {
+          fulltext: { status: 'ok', latencyMs: 1, itemCount: 0 },
+          vector: { status: 'ok', latencyMs: 1, itemCount: 0 },
+          graph: { status: 'ok', latencyMs: 1, itemCount: 1, entityCount: 1, edgeCount: 0, pathCount: 0 },
+        },
+      }),
+      [SET_ID_2]: setResponse({
+        snapshotId: 'gsnap_22222222',
+        items: [
+          entityItem(URN_B, 'gsnap_22222222'),
+          entityItem(URN_C, 'gsnap_22222222'),
+          edgeItem(FACT_1, 'gsnap_22222222', URN_B, URN_C),
+        ],
+        modalityStatus: {
+          fulltext: { status: 'ok', latencyMs: 1, itemCount: 0 },
+          vector: { status: 'ok', latencyMs: 1, itemCount: 0 },
+          graph: { status: 'ok', latencyMs: 1, itemCount: 3, entityCount: 2, edgeCount: 1, pathCount: 0 },
+        },
+      }),
+    });
+
+    expect(body.modalityStatus.graph.entityCount).toBe(3);
+    expect(body.modalityStatus.graph.edgeCount).toBe(1);
+    expect(body.modalityStatus.graph.pathCount).toBe(0);
+  });
+
+  it('retains duplicate graph identities exactly once across sets', async () => {
+    const snapshotId = 'gsnap_11111111';
+    const duplicate = {
+      items: [
+        entityItem(URN_DUP, snapshotId),
+        edgeItem(FACT_DUP, snapshotId, URN_DUP, URN_DUP),
+      ],
+      paths: [graphPath('P1', snapshotId, [URN_DUP, URN_DUP], [FACT_DUP])],
+    };
+    const body = await runFederation({
+      [SET_ID_1]: setResponse({
+        snapshotId,
+        ...duplicate,
+        modalityStatus: {
+          fulltext: { status: 'ok', latencyMs: 1, itemCount: 0 },
+          vector: { status: 'ok', latencyMs: 1, itemCount: 0 },
+          graph: { status: 'ok', latencyMs: 1, itemCount: 2, entityCount: 1, edgeCount: 1, pathCount: 1 },
+        },
+      }),
+      [SET_ID_2]: setResponse({
+        snapshotId,
+        ...duplicate,
+        modalityStatus: {
+          fulltext: { status: 'ok', latencyMs: 1, itemCount: 0 },
+          vector: { status: 'ok', latencyMs: 1, itemCount: 0 },
+          graph: { status: 'ok', latencyMs: 1, itemCount: 2, entityCount: 1, edgeCount: 1, pathCount: 1 },
+        },
+      }),
+    });
+
+    expect(body.modalityStatus.graph.entityCount).toBe(1);
+    expect(body.modalityStatus.graph.edgeCount).toBe(1);
+    expect(body.modalityStatus.graph.pathCount).toBe(1);
+    expect(body.items).toHaveLength(2);
+  });
+
+  it('never lets a later ok overwrite an earlier timeout', async () => {
+    const body = await runFederation({
+      [SET_ID_1]: setResponse({
+        snapshotId: 'gsnap_11111111',
+        items: [entityItem(URN_A, 'gsnap_11111111')],
+        modalityStatus: {
+          fulltext: { status: 'timeout', latencyMs: 1, itemCount: 0, reason: 'TIMEOUT' },
+          vector: { status: 'ok', latencyMs: 1, itemCount: 0 },
+          graph: { status: 'ok', latencyMs: 1, itemCount: 1, entityCount: 1, edgeCount: 0, pathCount: 0 },
+        },
+      }),
+      [SET_ID_2]: setResponse({
+        snapshotId: 'gsnap_22222222',
+        items: [entityItem(URN_B, 'gsnap_22222222')],
+        modalityStatus: {
+          fulltext: { status: 'ok', latencyMs: 1, itemCount: 0 },
+          vector: { status: 'ok', latencyMs: 1, itemCount: 0 },
+          graph: { status: 'ok', latencyMs: 1, itemCount: 1, entityCount: 1, edgeCount: 0, pathCount: 0 },
+        },
+      }),
+    });
+
+    expect(body.modalityStatus.fulltext.status).toBe('timeout');
+    expect(body.outcome).toBe('DEGRADED');
+  });
+
+  it('yields SEED_ONLY when every set is seed-only and READY when mixed with graph evidence', async () => {
+    const seedOnly = (snapshotId: string) =>
+      setResponse({
+        snapshotId,
+        outcome: 'SEED_ONLY',
+        reason: 'SEED_FOUND_NO_RELATION',
+        items: [entityItem(`urn:plannermate:test:Entity:seed-${snapshotId.replace(/[^a-z0-9]/g,'')}`, snapshotId)],
+        modalityStatus: {
+          fulltext: { status: 'ok', latencyMs: 1, itemCount: 0 },
+          vector: { status: 'ok', latencyMs: 1, itemCount: 0 },
+          graph: { status: 'ok', latencyMs: 1, itemCount: 1, entityCount: 1, edgeCount: 0, pathCount: 0 },
+        },
+      });
+
+    const allSeed = await runFederation({
+      [SET_ID_1]: seedOnly('gsnap_11111111'),
+      [SET_ID_2]: seedOnly('gsnap_22222222'),
+    });
+    expect(allSeed.outcome).toBe('SEED_ONLY');
+    expect(allSeed.items.some((i) => i.item.type === 'entity')).toBe(true);
+
+    const mixed = await runFederation({
+      [SET_ID_1]: seedOnly('gsnap_11111111'),
+      [SET_ID_2]: setResponse({
+        snapshotId: 'gsnap_22222222',
+        items: [
+          entityItem(URN_B, 'gsnap_22222222'),
+          edgeItem(FACT_1, 'gsnap_22222222', URN_B, URN_B),
+        ],
+        modalityStatus: {
+          fulltext: { status: 'ok', latencyMs: 1, itemCount: 0 },
+          vector: { status: 'ok', latencyMs: 1, itemCount: 0 },
+          graph: { status: 'ok', latencyMs: 1, itemCount: 2, entityCount: 1, edgeCount: 1, pathCount: 0 },
+        },
+      }),
+    });
+    expect(mixed.outcome).toBe('READY');
+    expect(mixed.items.some((i) => i.item.type === 'entity')).toBe(true);
+  });
+
+  it('yields NO_EVIDENCE when all sets are empty', async () => {
+    const empty = (snapshotId: string) => setResponse({ snapshotId, outcome: 'NO_EVIDENCE', reason: 'NO_MATCHING_EVIDENCE', suggestedRefinements: ['broaden'] });
+    const body = await runFederation({
+      [SET_ID_1]: empty('gsnap_11111111'),
+      [SET_ID_2]: empty('gsnap_22222222'),
+    });
+    expect(body.outcome).toBe('NO_EVIDENCE');
+  });
+
+  it('merges, dedupes, and caps failedSeeds at 5', async () => {
+    const seeds = (prefix: string) =>
+      Array.from({ length: 4 }, (_, i) => ({ urn: `urn:plannermate:test:Entity:${prefix}${i}`, reasonCode: 'SEED_NOT_FOUND' as const }));
+    const body = await runFederation({
+      [SET_ID_1]: setResponse({
+        snapshotId: 'gsnap_11111111',
+        diagnostics: { degraded: false, failedSeeds: seeds('x').slice(0, 3) },
+      }),
+      [SET_ID_2]: setResponse({
+        snapshotId: 'gsnap_22222222',
+        diagnostics: { degraded: false, failedSeeds: [seeds('x')[0]!, ...seeds('y')] },
+      }),
+    });
+
+    const failed = body.diagnostics.failedSeeds ?? [];
+    expect(failed.length).toBeLessThanOrEqual(5);
+    expect(new Set(failed.map((s) => `${s.urn}|${s.reasonCode}`)).size).toBe(failed.length);
+  });
+
+  it('preserves stage truncation and fallback flags across sets and has no free text', async () => {
+    const stageRow = (overrides: Record<string, unknown>) => ({
+      stage: 'neo4j_traversal',
+      status: 'ok',
+      latencyMs: 4,
+      accepted: 2,
+      rejected: 0,
+      truncated: false,
+      fallback: false,
+      reasonCodes: [],
+      ...overrides,
+    });
+
+    const body = await runFederation({
+      [SET_ID_1]: setResponse({
+        snapshotId: 'gsnap_11111111',
+        diagnostics: {
+          degraded: false,
+          stageDiagnostics: [
+            stageRow({ truncated: true, status: 'truncated' }) as any,
+            stageRow({ stage: 'planning', fallback: true, fallbackReason: 'FALLBACK_ONE_HOP', status: 'truncated' }) as any,
+          ],
+        },
+      }),
+      [SET_ID_2]: setResponse({
+        snapshotId: 'gsnap_22222222',
+        diagnostics: {
+          degraded: false,
+          stageDiagnostics: [stageRow({}) as any],
+        },
+      }),
+    });
+
+    const stages = body.diagnostics.stageDiagnostics ?? [];
+    expect(stages.some((row) => row.truncated === true)).toBe(true);
+    expect(
+      stages.some((row) => row.fallback === true && row.fallbackReason === 'FALLBACK_ONE_HOP')
+    ).toBe(true);
+    expect(stages.length).toBeLessThanOrEqual(20);
+    const serialized = JSON.stringify(body.diagnostics);
+    expect(serialized).not.toContain('"message"');
+  });
+});

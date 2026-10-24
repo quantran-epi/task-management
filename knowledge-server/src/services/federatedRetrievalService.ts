@@ -4,8 +4,55 @@ import {
   FederatedRetrievalResponseSchema,
   RetrievalResponse,
   CompleteModalityStatus,
+  RetrievalItem,
   RetrievalOutcome,
+  FailedSeed,
+  StageDiagnostic,
+  ModalityStatusValue,
 } from '../types/retrievalProtocol.js';
+
+/**
+ * Status severity: a later `ok` never masks an earlier failure (D-24, T-24-08).
+ */
+const MODALITY_STATUS_SEVERITY: Record<ModalityStatusValue, number> = {
+  error: 6,
+  timeout: 5,
+  stale: 4,
+  truncated: 3,
+  unavailable: 2,
+  ok: 1,
+};
+
+const MAX_FEDERATED_STAGE_DIAGNOSTICS = 20;
+const MAX_FEDERATED_FAILED_SEEDS = 5;
+
+function severityOf(status: ModalityStatusValue): number {
+  return MODALITY_STATUS_SEVERITY[status] ?? 0;
+}
+
+/**
+ * Set-independent retained identity for cross-set graph deduplication (T-24-08).
+ * Paths are snapshot-scoped because `pathId` is only unique within one snapshot.
+ */
+function retainedGraphIdentity(item: RetrievalItem): string | null {
+  if (item.type === 'entity') return `entity:${item.id}`;
+  if (item.type === 'edge') return `edge:${item.id}`;
+  return null;
+}
+
+function stageDiagnosticIdentity(row: StageDiagnostic): string {
+  return [
+    row.stage,
+    row.status,
+    row.latencyMs,
+    row.accepted,
+    row.rejected,
+    row.truncated,
+    row.fallback,
+    row.fallbackReason ?? '',
+    row.reasonCodes.join(','),
+  ].join('|');
+}
 
 export interface FederatedRetrievalDependencies {
   retrievePerSet(
@@ -298,6 +345,13 @@ export async function runFederatedRetrieval(
   const paths: FederatedRetrievalResponse['paths'] = [];
   const conflictGroups: FederatedRetrievalResponse['conflictGroups'] = [];
 
+  // Retained identities across sets: each identity is counted exactly once (T-24-08).
+  const retainedEntityIds = new Set<string>();
+  const retainedEdgeIds = new Set<string>();
+  const retainedPathIds = new Set<string>();
+  const retainedGraphIdentities = new Set<string>();
+  const retainedNonGraphKeys = new Set<string>();
+
   let totalCharsIncluded = 0;
 
   for (const setRes of orderedResults) {
@@ -313,6 +367,7 @@ export async function runFederatedRetrieval(
           roleGroup: assignment.roleGroup,
           path: p,
         });
+        retainedPathIds.add(p.pathId);
       }
     }
 
@@ -332,6 +387,18 @@ export async function runFederatedRetrieval(
     for (const it of response.items) {
       if (items.length >= budgets.maxItems || items.length >= 200) {
         break;
+      }
+      // Graph identities collapse across sets; non-graph items keep the set-aware key.
+      const graphIdentity = retainedGraphIdentity(it);
+      if (graphIdentity) {
+        if (retainedGraphIdentities.has(graphIdentity)) continue;
+        retainedGraphIdentities.add(graphIdentity);
+        if (it.type === 'entity') retainedEntityIds.add(it.id);
+        else if (it.type === 'edge') retainedEdgeIds.add(it.id);
+      } else {
+        const key = `${assignment.setId}:${it.type}:${it.id}`;
+        if (retainedNonGraphKeys.has(key)) continue;
+        retainedNonGraphKeys.add(key);
       }
       const itemChars = computeEvidenceChars(it);
       if (totalCharsIncluded + itemChars > budgets.maxEvidenceChars && items.length > 0) {
@@ -374,26 +441,79 @@ export async function runFederatedRetrieval(
         const ms = setRes.response.modalityStatus;
         modalityStatus.fulltext.latencyMs = Math.max(modalityStatus.fulltext.latencyMs, ms.fulltext.latencyMs);
         modalityStatus.fulltext.itemCount += ms.fulltext.itemCount;
-        if (ms.fulltext.status !== 'ok') modalityStatus.fulltext.status = ms.fulltext.status;
+        if (severityOf(ms.fulltext.status) > severityOf(modalityStatus.fulltext.status)) {
+          modalityStatus.fulltext.status = ms.fulltext.status;
+        }
 
         modalityStatus.vector.latencyMs = Math.max(modalityStatus.vector.latencyMs, ms.vector.latencyMs);
         modalityStatus.vector.itemCount += ms.vector.itemCount;
-        if (ms.vector.status !== 'ok') modalityStatus.vector.status = ms.vector.status;
+        if (severityOf(ms.vector.status) > severityOf(modalityStatus.vector.status)) {
+          modalityStatus.vector.status = ms.vector.status;
+        }
 
         modalityStatus.graph.latencyMs = Math.max(modalityStatus.graph.latencyMs, ms.graph.latencyMs);
         modalityStatus.graph.itemCount += ms.graph.itemCount;
-        if (ms.graph.status !== 'ok') modalityStatus.graph.status = ms.graph.status;
+        if (severityOf(ms.graph.status) > severityOf(modalityStatus.graph.status)) {
+          modalityStatus.graph.status = ms.graph.status;
+        }
       }
     }
   }
 
-  // Outcome calculation:
-  // If partial failure occurred and items exist, outcome = DEGRADED per D-24.
-  // If no items found anywhere, NO_EVIDENCE.
-  // Otherwise READY.
+  // User-visible graph counts derive from retained identities, never per-set sums.
+  modalityStatus.graph.entityCount = retainedEntityIds.size;
+  modalityStatus.graph.edgeCount = retainedEdgeIds.size;
+  modalityStatus.graph.pathCount = retainedPathIds.size;
+  modalityStatus.graph.itemCount = items.length;
+
+  // Aggregate content-free stage rows and dropped seeds across sets (D-13, D-19).
+  const stageDiagnostics: StageDiagnostic[] = [];
+  const stageSeen = new Set<string>();
+  const failedSeeds: FailedSeed[] = [];
+  const failedSeedSeen = new Set<string>();
+
+  for (const setRes of perSetResults) {
+    if (!setRes.response) continue;
+    for (const row of setRes.response.diagnostics.stageDiagnostics ?? []) {
+      if (stageDiagnostics.length >= MAX_FEDERATED_STAGE_DIAGNOSTICS) break;
+      const identity = stageDiagnosticIdentity(row);
+      if (stageSeen.has(identity)) continue;
+      stageSeen.add(identity);
+      stageDiagnostics.push(row);
+    }
+    for (const seed of setRes.response.diagnostics.failedSeeds ?? []) {
+      if (failedSeeds.length >= MAX_FEDERATED_FAILED_SEEDS) break;
+      const identity = `${seed.urn}|${seed.reasonCode}`;
+      if (failedSeedSeen.has(identity)) continue;
+      failedSeedSeen.add(identity);
+      failedSeeds.push(seed);
+    }
+  }
+
+  // Outcome calculation (D-23, D-24):
+  // DEGRADED when any coverage warning or non-ok modality status exists;
+  // SEED_ONLY when every contributing set is entity-only; NO_EVIDENCE when empty.
+  const hasNonOkModality = (['fulltext', 'vector', 'graph'] as const).some(
+    (modality) => modalityStatus[modality].status !== 'ok'
+  );
+
+  const contributingSets = perSetResults.filter((r) => Boolean(r.response));
+  const everySetSeedOnly =
+    contributingSets.length > 0 &&
+    contributingSets.every((r) => {
+      const graph = r.response!.modalityStatus.graph;
+      return (
+        (graph.entityCount ?? 0) > 0 &&
+        (graph.edgeCount ?? 0) === 0 &&
+        (graph.pathCount ?? 0) === 0
+      );
+    });
+
   let outcome: RetrievalOutcome = 'READY';
-  if (hasSetRejection || coverageWarnings.length > 0) {
+  if (hasSetRejection || coverageWarnings.length > 0 || hasNonOkModality) {
     outcome = 'DEGRADED';
+  } else if (everySetSeedOnly) {
+    outcome = 'SEED_ONLY';
   } else if (items.length === 0 && paths.length === 0) {
     outcome = 'NO_EVIDENCE';
   }
@@ -407,6 +527,8 @@ export async function runFederatedRetrieval(
     diagnostics: {
       degraded: outcome === 'DEGRADED',
       coverageWarnings,
+      ...(stageDiagnostics.length > 0 ? { stageDiagnostics } : {}),
+      ...(failedSeeds.length > 0 ? { failedSeeds } : {}),
     },
   };
 
