@@ -493,7 +493,9 @@ export async function completeJson(req: CompleteJsonRequest): Promise<unknown> {
     headers.Authorization = `Bearer ${req.apiKey.trim()}`;
   }
 
-  const timeoutSignal = AbortSignal.timeout(45_000);
+  // Intent routing over the Tauri proxy has been measured at ~56s on large prompts;
+  // 45s caused spurious retries, and a retry can only produce a worse answer.
+  const timeoutSignal = AbortSignal.timeout(90_000);
   const combinedSignal = (AbortSignal as any).any
     ? (AbortSignal as any).any([req.signal, timeoutSignal])
     : req.signal;
