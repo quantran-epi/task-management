@@ -5,6 +5,7 @@ import {
   INTENT_TAXONOMY,
   IntentRouterUnavailableError,
 } from '../../src/services/ai/intentRouter';
+import { NineRouterClientError } from '../../src/services/ai/nineRouterClient';
 
 const baseArgs = {
   completeJsonArgs: {
@@ -25,6 +26,8 @@ describe('intentRouter (LLM-reasoned, no keyword/verb lists)', () => {
       needs_clarification: false,
       clarify_question: null,
       speculation_requested: false,
+      require_mcp: false,
+      target_mcp_servers: [],
     });
 
     const result = await routeIntent('tình hình click to pay như nào rồi', {
@@ -59,21 +62,22 @@ describe('intentRouter (LLM-reasoned, no keyword/verb lists)', () => {
     }
   });
 
-  it('defaults require_mcp to false and target_mcp_servers to [] when missing', () => {
-    const raw = {
-      intent: 'query_taskmate',
-      confidence: 0.9,
-      entities: [],
-      language: 'en',
+  it('rejects output missing require_mcp or target_mcp_servers (no silent default)', () => {
+    const raw7Keys = {
+      intent: 'query_knowledge',
+      confidence: 0.95,
+      entities: ['SVFE_SHB'],
+      language: 'vi',
       needs_clarification: false,
       clarify_question: null,
       speculation_requested: false,
     };
-    const parsed = IntentResultSchema.safeParse(raw);
-    expect(parsed.success).toBe(true);
-    if (parsed.success) {
-      expect(parsed.data.require_mcp).toBe(false);
-      expect(parsed.data.target_mcp_servers).toEqual([]);
+    const parsed = IntentResultSchema.safeParse(raw7Keys);
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      const paths = parsed.error.issues.map((issue) => issue.path.join('.'));
+      expect(paths).toContain('require_mcp');
+      expect(paths).toContain('target_mcp_servers');
     }
   });
 
@@ -124,6 +128,8 @@ describe('intentRouter (LLM-reasoned, no keyword/verb lists)', () => {
       needs_clarification: false, // contradicts intent
       clarify_question: 'Bạn muốn hỏi về việc gì?',
       speculation_requested: false,
+      require_mcp: false,
+      target_mcp_servers: [],
     });
 
     const result = await routeIntent('cái đó', { ...baseArgs, completeJson });
@@ -141,6 +147,8 @@ describe('intentRouter (LLM-reasoned, no keyword/verb lists)', () => {
       needs_clarification: true,
       clarify_question: 'Which process do you mean?',
       speculation_requested: false,
+      require_mcp: false,
+      target_mcp_servers: [],
     });
 
     const result = await routeIntent('how does it work', { ...baseArgs, completeJson });
@@ -160,10 +168,39 @@ describe('intentRouter (LLM-reasoned, no keyword/verb lists)', () => {
         needs_clarification: false,
         clarify_question: null,
         speculation_requested: false,
+        require_mcp: false,
+        target_mcp_servers: [],
       });
 
     const result = await routeIntent('tạo task mới', { ...baseArgs, completeJson });
     expect(result.intent).toBe('operate_taskmate');
+    expect(completeJson).toHaveBeenCalledTimes(2);
+
+    const retryMessages = completeJson.mock.calls[1]?.[0]?.messages ?? [];
+    const repairContent = retryMessages.at(-1)?.content ?? '';
+    expect(repairContent).toContain('require_mcp');
+    expect(repairContent).toContain('target_mcp_servers');
+  });
+
+  it('throws IntentRouterUnavailableError when attempt 1 times out and the 7-key retry payload omits MCP fields', async () => {
+    const completeJson = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new NineRouterClientError('TIMEOUT', 'timeout after 45000ms')
+      )
+      .mockResolvedValueOnce({
+        intent: 'query_knowledge',
+        confidence: 0.95,
+        entities: ['SVFE_SHB'],
+        language: 'vi',
+        needs_clarification: false,
+        clarify_question: null,
+        speculation_requested: false,
+      });
+
+    await expect(
+      routeIntent('kiểm tra bảng SVFE_SHB', { ...baseArgs, completeJson })
+    ).rejects.toBeInstanceOf(IntentRouterUnavailableError);
     expect(completeJson).toHaveBeenCalledTimes(2);
   });
 
