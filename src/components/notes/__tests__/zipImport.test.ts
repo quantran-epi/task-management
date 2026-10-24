@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import JSZip from 'jszip';
-import { stripCommonRootPrefix } from '../ZipImportPreviewModal';
+import { collectMarkdownEntries, stripCommonRootPrefix } from '../ZipImportPreviewModal';
 import { extractMarkdownMetadata } from '../../../utils/smartIngestion';
 
 describe('Zip Markdown Import extraction', () => {
@@ -41,6 +41,24 @@ describe('Zip Markdown Import extraction', () => {
     expect(commonPrefix).toBe('');
     expect(strippedPaths).toEqual(paths);
   });
+  it('normalizes Windows backslash entry names so folder structure is preserved', async () => {
+    const zip = new JSZip();
+    zip.file('flows\\00-business-model.md', '# Flow');
+    zip.file('runtime\\02-svfe-native.md', '# Runtime');
+    zip.file('README.md', '# Readme');
+    zip.file('.hidden\\secret.md', '# Hidden');
+
+    const content = await zip.generateAsync({ type: 'arraybuffer' });
+    const loaded = await JSZip.loadAsync(content);
+    const paths = collectMarkdownEntries(loaded).map((e) => e.relativePath).sort();
+
+    expect(paths).toEqual([
+      'README.md',
+      'flows/00-business-model.md',
+      'runtime/02-svfe-native.md',
+    ]);
+  });
+
   it('unzips and extracts markdown files, detecting titles from first H1 or filename', async () => {
     const zip = new JSZip();
 
