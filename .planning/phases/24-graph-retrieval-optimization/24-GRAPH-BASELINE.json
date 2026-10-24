@@ -1,0 +1,155 @@
+{
+  "schemaVersion": "1.0.0",
+  "createdAt": "2026-10-24T09:01:37.437Z",
+  "fixtureHash": "7db28461ee049581e3c197e4b4e2078d46d1e80a7172b48312ee3fbd608f17b8",
+  "thresholds": {
+    "maxZeroResultRate": 0.1,
+    "minEntityRecall": 0.9,
+    "minEdgePrecision": 0.9,
+    "requireIdentityPreservation": true,
+    "requireCitationClosure": true,
+    "requireDeterministicOrdering": true,
+    "minLatencySamples": 12
+  },
+  "metrics": {
+    "totalCases": 12,
+    "zeroResultRate": 0,
+    "zeroResultDenominator": 10,
+    "entityRecall": 1,
+    "entityRecallDenominator": 28,
+    "edgePrecision": 1,
+    "edgePrecisionDenominator": 18,
+    "identityPreserved": true,
+    "citationClosed": true,
+    "deterministicOrdering": true,
+    "latency": {
+      "samples": 12,
+      "p50Ms": 0.467,
+      "p95Ms": 3.562
+    },
+    "cases": [
+      {
+        "caseId": "GRF-01",
+        "category": "direct_lookup",
+        "passed": true,
+        "outcome": "READY",
+        "reasonCode": null,
+        "failureCodes": [],
+        "returnedItemCount": 7,
+        "latencyMs": 3.562
+      },
+      {
+        "caseId": "GRF-02",
+        "category": "read_write_relation",
+        "passed": true,
+        "outcome": "READY",
+        "reasonCode": null,
+        "failureCodes": [],
+        "returnedItemCount": 4,
+        "latencyMs": 0.494
+      },
+      {
+        "caseId": "GRF-03",
+        "category": "read_write_relation",
+        "passed": true,
+        "outcome": "READY",
+        "reasonCode": null,
+        "failureCodes": [],
+        "returnedItemCount": 4,
+        "latencyMs": 0.268
+      },
+      {
+        "caseId": "GRF-04",
+        "category": "seed_only",
+        "passed": true,
+        "outcome": "SEED_ONLY",
+        "reasonCode": "SEED_FOUND_NO_RELATION",
+        "failureCodes": [],
+        "returnedItemCount": 1,
+        "latencyMs": 0.262
+      },
+      {
+        "caseId": "GRF-05",
+        "category": "nonexistent_entity",
+        "passed": true,
+        "outcome": "NO_EVIDENCE",
+        "reasonCode": "SEED_NOT_FOUND",
+        "failureCodes": [],
+        "returnedItemCount": 0,
+        "latencyMs": 0.014
+      },
+      {
+        "caseId": "GRF-06",
+        "category": "mixed_kinds",
+        "passed": true,
+        "outcome": "READY",
+        "reasonCode": null,
+        "failureCodes": [],
+        "returnedItemCount": 14,
+        "latencyMs": 0.897
+      },
+      {
+        "caseId": "GRF-07",
+        "category": "multiple_relations",
+        "passed": true,
+        "outcome": "READY",
+        "reasonCode": null,
+        "failureCodes": [],
+        "returnedItemCount": 12,
+        "latencyMs": 0.904
+      },
+      {
+        "caseId": "GRF-08",
+        "category": "multi_hop_flow_impact",
+        "passed": true,
+        "outcome": "READY",
+        "reasonCode": null,
+        "failureCodes": [],
+        "returnedItemCount": 7,
+        "latencyMs": 0.463
+      },
+      {
+        "caseId": "GRF-09",
+        "category": "multi_hop_flow_impact",
+        "passed": true,
+        "outcome": "READY",
+        "reasonCode": null,
+        "failureCodes": [],
+        "returnedItemCount": 7,
+        "latencyMs": 0.758
+      },
+      {
+        "caseId": "GRF-10",
+        "category": "multi_hop_flow_impact",
+        "passed": true,
+        "outcome": "NO_EVIDENCE",
+        "reasonCode": "HOP_LIMIT_EXCEEDED",
+        "failureCodes": [],
+        "returnedItemCount": 0,
+        "latencyMs": 0.153
+      },
+      {
+        "caseId": "GRF-11",
+        "category": "seed_only",
+        "passed": true,
+        "outcome": "SEED_ONLY",
+        "reasonCode": "SEED_FOUND_NO_RELATION",
+        "failureCodes": [],
+        "returnedItemCount": 1,
+        "latencyMs": 0.467
+      },
+      {
+        "caseId": "GRF-12",
+        "category": "multi_hop_flow_impact",
+        "passed": true,
+        "outcome": "READY",
+        "reasonCode": null,
+        "failureCodes": [],
+        "returnedItemCount": 7,
+        "latencyMs": 0.533
+      }
+    ]
+  },
+  "passed": true,
+  "failures": []
+}

@@ -15,6 +15,7 @@
     "jira:proxy": "node proxy/jira-proxy.mjs",
     "preview": "vite preview",
     "benchmark": "tsx scripts/run-benchmark.ts",
+    "graph:benchmark": "tsx scripts/run-graph-benchmark.ts",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",

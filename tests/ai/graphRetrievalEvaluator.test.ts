@@ -12,8 +12,12 @@ import { NODE_KINDS, URN_REGEX } from '../../knowledge-server/src/types/graphPro
 import { validateOverallDepth } from '../../knowledge-server/src/retrieval/retrievalPlanDerivation';
 import {
   GRAPH_GATE_THRESHOLDS,
+  buildGraphBaseline,
+  checkBaselineFixtureHash,
+  computeFixtureHash,
   evaluateGraphGate,
   evaluateGraphReferenceCases,
+  serializeGraphBaseline,
   type GraphMetrics,
 } from './graphRetrievalEvaluator';
 
@@ -335,6 +339,46 @@ describe('graph evaluator metrics (D-22)', () => {
       const verdict = evaluateGraphGate({ ...passing, ...override });
       expect(verdict.passed).toBe(false);
     }
+  });
+
+  it('serializes a content-free baseline tied to the fixture hash', async () => {
+    const fixtureBytes = fs.readFileSync(FIXTURE_PATH);
+    const fixtureHash = computeFixtureHash(fixtureBytes);
+    const metrics = await evaluateGraphReferenceCases(loadFixture());
+    const verdict = evaluateGraphGate(metrics);
+    const baseline = buildGraphBaseline(
+      metrics,
+      verdict,
+      fixtureHash,
+      '2026-10-24T00:00:00.000Z'
+    );
+
+    expect(baseline.fixtureHash).toBe(fixtureHash);
+    expect(baseline.passed).toBe(verdict.passed);
+    expect(baseline.thresholds).toEqual(GRAPH_GATE_THRESHOLDS);
+    expect(baseline.metrics.totalCases).toBe(metrics.totalCases);
+
+    const serialized = serializeGraphBaseline(baseline);
+    for (const testCase of loadFixture()) {
+      expect(serialized).not.toContain(testCase.query);
+      for (const chunk of testCase.chunks) {
+        expect(serialized).not.toContain(chunk.rawSnippet);
+        expect(serialized).not.toContain(chunk.documentTitle);
+      }
+    }
+    expect(serialized).not.toMatch(/MATCH\s*\(/i);
+    expect(serialized).not.toMatch(/https?:\/\//i);
+  });
+
+  it('refuses a baseline whose fixture hash no longer matches', () => {
+    const fixtureHash = computeFixtureHash(fs.readFileSync(FIXTURE_PATH));
+    const otherHash = 'e'.repeat(64);
+    expect(checkBaselineFixtureHash(null, fixtureHash)).toBe('ok');
+    expect(checkBaselineFixtureHash(JSON.stringify({ fixtureHash }), fixtureHash)).toBe('ok');
+    expect(
+      checkBaselineFixtureHash(JSON.stringify({ fixtureHash: otherHash }), fixtureHash)
+    ).toBe('FIXTURE_HASH_MISMATCH');
+    expect(checkBaselineFixtureHash('not json', fixtureHash)).toBe('FIXTURE_HASH_MISMATCH');
   });
 
   it('opens no socket and reads no environment during evaluation', async () => {

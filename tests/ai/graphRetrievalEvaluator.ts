@@ -1,10 +1,12 @@
 import { performance } from 'node:perf_hooks';
+import { createHash } from 'node:crypto';
 import type { NodeKind, RelationType } from '../../knowledge-server/src/graph/ontology';
 import type {
   ChunkItem,
   EdgeItem,
   EntityItem,
   LogicalQueryPlan,
+  ModalityKind,
   TraversalStep,
 } from '../../knowledge-server/src/types/retrievalProtocol';
 import type {
@@ -140,7 +142,7 @@ function createFixtureGateway(testCase: GraphReferenceCase): GraphRetrievalGatew
       type: 'chunk' as const,
       id: chunk.id,
       score: 1,
-      modalitiesContributed: ['graph'],
+      modalitiesContributed: ['graph'] as ModalityKind[],
       sourceDocumentId: chunk.documentId,
       sourceDocumentTitle: chunk.documentTitle,
       sectionAnchor: chunk.sectionAnchor,
@@ -157,7 +159,7 @@ function createFixtureGateway(testCase: GraphReferenceCase): GraphRetrievalGatew
       type: 'edge' as const,
       id: edge.factKey,
       score: 1,
-      modalitiesContributed: ['graph'],
+      modalitiesContributed: ['graph'] as ModalityKind[],
       factKey: edge.factKey,
       sourceUrn: edge.subjectUrn,
       relationType: edge.relation,
@@ -262,9 +264,9 @@ function createFixtureGateway(testCase: GraphReferenceCase): GraphRetrievalGatew
         .filter((edge): edge is EdgeItem => edge !== undefined)
         .sort((a, b) => (a.factKey < b.factKey ? -1 : a.factKey > b.factKey ? 1 : 0));
 
-      const supportingChunkIds = sorted(
-        new Set(returnedEdges.flatMap((edge) => edge.supportingChunkIds))
-      );
+      const supportingChunkIds = sorted([
+        ...new Set(returnedEdges.flatMap((edge) => edge.supportingChunkIds)),
+      ]);
       const returnedChunks = supportingChunkIds
         .map((id) => chunkById.get(id))
         .filter((chunk): chunk is ChunkItem => chunk !== undefined);
@@ -622,6 +624,109 @@ export async function evaluateGraphReferenceCases(
 
   const metrics = aggregate(forward.results);
   return { ...metrics, deterministicOrdering };
+}
+
+/**
+ * Content-free baseline artifact (D-22, T-24-17/T-24-18). Only IDs, stable
+ * codes, counts, hashes, thresholds, and metrics are persisted.
+ */
+export const GRAPH_BASELINE_SCHEMA_VERSION = '1.0.0' as const;
+
+export function computeFixtureHash(fixtureBytes: string | Uint8Array): string {
+  return createHash('sha256').update(fixtureBytes).digest('hex');
+}
+
+export interface GraphBaseline {
+  readonly schemaVersion: typeof GRAPH_BASELINE_SCHEMA_VERSION;
+  readonly createdAt: string;
+  readonly fixtureHash: string;
+  readonly thresholds: typeof GRAPH_GATE_THRESHOLDS;
+  readonly metrics: {
+    readonly totalCases: number;
+    readonly zeroResultRate: number;
+    readonly zeroResultDenominator: number;
+    readonly entityRecall: number;
+    readonly entityRecallDenominator: number;
+    readonly edgePrecision: number;
+    readonly edgePrecisionDenominator: number;
+    readonly identityPreserved: boolean;
+    readonly citationClosed: boolean;
+    readonly deterministicOrdering: boolean;
+    readonly latency: GraphMetrics['latency'];
+    readonly cases: readonly {
+      readonly caseId: string;
+      readonly category: string;
+      readonly passed: boolean;
+      readonly outcome: string;
+      readonly reasonCode: string | null;
+      readonly failureCodes: readonly string[];
+      readonly returnedItemCount: number;
+      readonly latencyMs: number;
+    }[];
+  };
+  readonly passed: boolean;
+  readonly failures: readonly GraphGateFailure[];
+}
+
+export function buildGraphBaseline(
+  metrics: GraphMetrics,
+  verdict: GraphGateVerdict,
+  fixtureHash: string,
+  createdAt: string
+): GraphBaseline {
+  return {
+    schemaVersion: GRAPH_BASELINE_SCHEMA_VERSION,
+    createdAt,
+    fixtureHash,
+    thresholds: GRAPH_GATE_THRESHOLDS,
+    metrics: {
+      totalCases: metrics.totalCases,
+      zeroResultRate: metrics.zeroResultRate,
+      zeroResultDenominator: metrics.zeroResultDenominator,
+      entityRecall: metrics.entityRecall,
+      entityRecallDenominator: metrics.entityRecallDenominator,
+      edgePrecision: metrics.edgePrecision,
+      edgePrecisionDenominator: metrics.edgePrecisionDenominator,
+      identityPreserved: metrics.identityPreserved,
+      citationClosed: metrics.citationClosed,
+      deterministicOrdering: metrics.deterministicOrdering,
+      latency: metrics.latency,
+      cases: metrics.caseResults.map((result) => ({
+        caseId: result.caseId,
+        category: result.category,
+        passed: result.passed,
+        outcome: result.outcome,
+        reasonCode: result.reasonCode,
+        failureCodes: result.failureCodes,
+        returnedItemCount: result.returnedItemCount,
+        latencyMs: result.latencyMs,
+      })),
+    },
+    passed: verdict.passed,
+    failures: verdict.failures,
+  };
+}
+
+export function serializeGraphBaseline(baseline: GraphBaseline): string {
+  return `${JSON.stringify(baseline, null, 2)}\n`;
+}
+
+/**
+ * Refuses to overwrite a baseline whose fixture hash differs from the current
+ * committed fixture bytes. Re-baselining must be explicit (delete the artifact).
+ */
+export function checkBaselineFixtureHash(
+  existingBaselineJson: string | null,
+  currentFixtureHash: string
+): 'ok' | 'FIXTURE_HASH_MISMATCH' {
+  if (!existingBaselineJson) return 'ok';
+  try {
+    const parsed = JSON.parse(existingBaselineJson) as { fixtureHash?: unknown };
+    if (parsed.fixtureHash !== currentFixtureHash) return 'FIXTURE_HASH_MISMATCH';
+  } catch {
+    return 'FIXTURE_HASH_MISMATCH';
+  }
+  return 'ok';
 }
 
 /**
