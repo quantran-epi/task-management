@@ -121,7 +121,7 @@ Plans:
   7. Reference queries measure zero-result rate, recall, precision, and latency before Neo4j performance tuning with `EXPLAIN` and `PROFILE`.
   8. Live Neo4j and knowledge-server checks prove entity lookup, read/write relations, seed-only results, bounded multi-hop retrieval, and AI Chat Drawer rendering while preserving offline BM25 fallback.
 
-**Plans:** 3/8 plans executed
+**Plans:** 5/8 plans executed
 
 Plans:
 
@@ -139,8 +139,8 @@ Plans:
 
 **Wave 4** *(parallel after Wave 3)*
 
-- [ ] 24-04-PLAN.md — Client protocol/federated-schema parity and backward-compatible grounding persistence
-- [ ] 24-07-PLAN.md — Deterministic graph reference set, correctness evaluator, and hashed offline baseline
+- [x] 24-04-PLAN.md — Client protocol/federated-schema parity and backward-compatible grounding persistence
+- [x] 24-07-PLAN.md — Deterministic graph reference set, correctness evaluator, and hashed offline baseline
 
 **Wave 5** *(blocked on 24-04)*
 
