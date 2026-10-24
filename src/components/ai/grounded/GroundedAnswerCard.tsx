@@ -10,6 +10,8 @@ import { GroundedBanner } from './GroundedBanner';
 import { ClaimBlock } from './ClaimBlock';
 import { ScopeVariationCard } from './ScopeVariationCard';
 import { CitationGroup } from './CitationGroup';
+import { PartialSeedNotice } from './PartialSeedNotice';
+import type { FailedSeed, GraphRetainedCounts } from '../../../services/knowledge/retrievalProtocol';
 
 export interface GroundedAnswerCardProps {
   grounding: ChatMessageGrounding;
@@ -30,6 +32,12 @@ export interface GroundedAnswerCardProps {
   candidatesSlot?: React.ReactNode | undefined;
   refinementsSlot?: React.ReactNode | undefined;
   resultsSlot?: React.ReactNode | undefined;
+
+  // Phase 24 SEED_ONLY surface (D-02, D-03, D-13)
+  entitiesSlot?: React.ReactNode | undefined;
+  failedSeeds?: readonly FailedSeed[] | undefined;
+  graphCounts?: GraphRetainedCounts | undefined;
+  onOpenDiagnostics?: (() => void) | undefined;
 }
 
 function renderProseWithCitations(
@@ -99,6 +107,10 @@ export const GroundedAnswerCard: React.FC<GroundedAnswerCardProps> = ({
   candidatesSlot,
   refinementsSlot,
   resultsSlot,
+  entitiesSlot,
+  failedSeeds = [],
+  graphCounts,
+  onOpenDiagnostics,
   isFreshLookingUp = false,
 }) => {
   const { token } = theme.useToken();
@@ -190,6 +202,80 @@ export const GroundedAnswerCard: React.FC<GroundedAnswerCardProps> = ({
             Hệ thống không tìm thấy tài liệu hoặc đường đi đồ thị phù hợp để trả lời. Không suy đoán khi chưa có yêu cầu.
           </div>
           {refinementsSlot}
+        </Card>
+      );
+    }
+
+    case 'SEED_ONLY': {
+      // A resolved seed is bounded success: info surface only, never degraded,
+      // conflict, confidence, refinement, or no-evidence copy (D-01..D-03).
+      const counts = graphCounts ?? grounding.graphCounts ?? { entity: 0, edge: 0, path: 0 };
+      const firstEntityName = grounding.entities?.[0]?.canonicalName ?? '';
+      const collapseItems = [
+        {
+          key: 'sources',
+          label: `Xem ${grounding.citations.length} nguồn`,
+          children:
+            sourcesSlot ?? (
+              <div style={{ fontSize: 13, color: token.colorTextSecondary }}>
+                Không có nguồn trích dẫn cho thực thể này.
+              </div>
+            ),
+        },
+        {
+          key: 'diagnostics',
+          label: 'Chi tiết chẩn đoán truy xuất',
+          children:
+            diagnosticsSlot ?? (
+              <div style={{ fontSize: 13, color: token.colorTextSecondary }}>
+                Chưa có thông tin chẩn đoán
+              </div>
+            ),
+        },
+      ];
+
+      return (
+        <Card
+          size="small"
+          className="grounded-answer-card grounded-seed-only-card"
+          style={{
+            borderColor: token.colorInfoBorder ?? token.colorInfo,
+            background: token.colorBgContainer,
+            borderRadius: token.borderRadius,
+          }}
+          styles={{ body: { padding: 16 } }}
+        >
+          <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 8, color: token.colorText }}>
+            Đã tìm thấy thực thể
+          </div>
+          <div style={{ fontSize: 14, color: token.colorTextSecondary, marginBottom: 8 }}>
+            {firstEntityName
+              ? `Đã tìm thấy ${firstEntityName}, nhưng chưa tìm thấy bằng chứng về mối quan hệ của đối tượng này. Không suy đoán quan hệ khi chưa có bằng chứng.`
+              : 'Đã tìm thấy thực thể, nhưng chưa tìm thấy bằng chứng về mối quan hệ. Không suy đoán quan hệ khi chưa có bằng chứng.'}
+          </div>
+          <div
+            aria-label={`Thực thể: ${counts.entity} · Cạnh: ${counts.edge} · Đường dẫn: ${counts.path}`}
+            style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: token.colorText }}
+          >
+            Thực thể: {counts.entity} · Cạnh: {counts.edge} · Đường dẫn: {counts.path}
+          </div>
+          {(failedSeeds.length > 0 || (grounding.failedSeeds?.length ?? 0) > 0) && (
+            <PartialSeedNotice
+              failedSeeds={failedSeeds.length > 0 ? failedSeeds : grounding.failedSeeds!}
+              onOpenDiagnostics={onOpenDiagnostics ?? (() => {})}
+            />
+          )}
+          {entitiesSlot && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+              {entitiesSlot}
+            </div>
+          )}
+          <Collapse
+            size="small"
+            defaultActiveKey={[]}
+            items={collapseItems}
+            style={{ marginTop: 12, background: token.colorFillTertiary, border: 'none' }}
+          />
         </Card>
       );
     }

@@ -1,7 +1,12 @@
 import React from 'react';
 import { Collapse, Descriptions, Tag, Typography, theme } from 'antd';
-import type { CompleteModalityStatus } from '../../../services/knowledge/retrievalProtocol';
+import type {
+  CompleteModalityStatus,
+  GraphRetainedCounts,
+  StageDiagnostic,
+} from '../../../services/knowledge/retrievalProtocol';
 import type { ChatMessageGrounding } from '../../../services/ai/groundedAnswerSchemas';
+import { StageDiagnosticsList } from './StageDiagnosticsList';
 
 const { Text } = Typography;
 
@@ -14,6 +19,10 @@ export interface DiagnosticsPanelProps {
   promptVersion?: string | undefined;
   schemaVersion?: number | undefined;
   repairs?: number | undefined;
+  graphCounts?: GraphRetainedCounts | undefined;
+  stages?: readonly StageDiagnostic[] | undefined;
+  graphBeforeFusion?: GraphRetainedCounts | undefined;
+  graphAfterFusion?: GraphRetainedCounts | undefined;
 }
 
 function renderStatusTag(status: string) {
@@ -40,6 +49,10 @@ export const DiagnosticsPanel: React.FC<DiagnosticsPanelProps> = ({
   promptVersion = 'v1',
   schemaVersion = 1,
   repairs = 0,
+  graphCounts,
+  stages,
+  graphBeforeFusion,
+  graphAfterFusion,
 }) => {
   const { token } = theme.useToken();
 
@@ -80,6 +93,48 @@ export const DiagnosticsPanel: React.FC<DiagnosticsPanelProps> = ({
         </span>
       ) : '—',
     },
+    ...(graphCounts
+      ? [
+          {
+            key: 'graphCounts',
+            label: 'Thực thể / Cạnh / Đường dẫn',
+            children: (
+              <Text style={{ fontSize: 12 }}>
+                Thực thể: {graphCounts.entity} · Cạnh: {graphCounts.edge} · Đường dẫn:{' '}
+                {graphCounts.path}
+              </Text>
+            ),
+          },
+        ]
+      : []),
+    ...(graphBeforeFusion
+      ? [
+          {
+            key: 'graphBeforeFusion',
+            label: 'Trước hợp nhất',
+            children: (
+              <Text style={{ fontSize: 12 }}>
+                Trước hợp nhất: {graphBeforeFusion.entity} thực thể / {graphBeforeFusion.edge}{' '}
+                cạnh / {graphBeforeFusion.path} đường dẫn
+              </Text>
+            ),
+          },
+        ]
+      : []),
+    ...(graphAfterFusion
+      ? [
+          {
+            key: 'graphAfterFusion',
+            label: 'Sau hợp nhất',
+            children: (
+              <Text style={{ fontSize: 12 }}>
+                Sau hợp nhất: {graphAfterFusion.entity} thực thể / {graphAfterFusion.edge} cạnh /{' '}
+                {graphAfterFusion.path} đường dẫn
+              </Text>
+            ),
+          },
+        ]
+      : []),
     {
       key: 'routerSource',
       label: 'Nguồn định tuyến',
@@ -111,6 +166,14 @@ export const DiagnosticsPanel: React.FC<DiagnosticsPanelProps> = ({
       ),
     },
   ];
+
+  if (stages && stages.length > 0) {
+    items.push({
+      key: 'stages',
+      label: 'Chi tiết theo bước',
+      children: <StageDiagnosticsList stages={stages} />,
+    });
+  }
 
   if (coverageWarnings.length > 0) {
     items.push({

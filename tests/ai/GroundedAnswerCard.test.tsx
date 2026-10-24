@@ -958,6 +958,15 @@ describe('GroundedAnswerCard', () => {
           },
         ],
         graphCounts: { entity: 1, edge: 0, path: 0 },
+        scope: {
+          setIds: ['10000000-0000-4000-8000-000000000010'],
+          routedScope: {
+            domain: null,
+            environment: null,
+            version: null,
+            comparisonMode: null,
+          },
+        },
         stageDiagnostics: [
           {
             stage: 'entity_resolution',
