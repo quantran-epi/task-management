@@ -746,6 +746,174 @@ describe('groundedTurn state machine', () => {
     );
   });
 
+  // Phase 24 SC-8: optional-daemon fallback proof (disabled / unreachable / seed-only).
+  describe('optional knowledge daemon (SC-8)', () => {
+    const SEED_URN = 'urn:plannermate:core:process:cytp1002';
+    const SET_ID = '10000000-0000-0000-0000-000000000001';
+    const SNAP = 'gsnap_11111111';
+
+    function seedOnlyResponse(): FederatedRetrievalResponse {
+      return {
+        outcome: 'SEED_ONLY',
+        items: [
+          {
+            setId: SET_ID,
+            snapshotId: SNAP,
+            roleGroup: 'baseline',
+            item: {
+              type: 'entity',
+              id: SEED_URN,
+              score: 5,
+              modalitiesContributed: ['graph'],
+              urn: SEED_URN,
+              canonicalName: 'CYTP1002',
+              kind: 'ScheduledProcess',
+              snapshotId: SNAP,
+              hasConflict: false,
+            },
+          },
+        ],
+        paths: [],
+        conflictGroups: [],
+        modalityStatus: {
+          fulltext: { status: 'ok', latencyMs: 5, itemCount: 0 },
+          vector: { status: 'ok', latencyMs: 5, itemCount: 0 },
+          graph: {
+            status: 'ok',
+            latencyMs: 8,
+            itemCount: 1,
+            entityCount: 1,
+            edgeCount: 0,
+            pathCount: 0,
+          },
+        },
+        diagnostics: { degraded: false, coverageWarnings: [] },
+      };
+    }
+
+    function seedEvidencePack(): EvidencePack {
+      return {
+        authority: 'server',
+        citations: {},
+        paths: {},
+        conflicts: [],
+        entities: [
+          {
+            urn: SEED_URN,
+            canonicalName: 'CYTP1002',
+            kind: 'ScheduledProcess',
+            snapshotId: SNAP,
+            setId: SET_ID,
+          },
+        ],
+        graphCounts: { entity: 1, edge: 0, path: 0 },
+        promptEvidence: [],
+        contextTruncated: false,
+        coverageWarnings: [],
+      };
+    }
+
+    /**
+     * `GroundedTurnDeps` has no domain-write member at all; assert the called set
+     * stays inside the read/synthesis allowlist so no persistence path sneaks in.
+     */
+    const READ_ONLY_DEPS = new Set([
+      'routeIntent',
+      'routeScope',
+      'retrieveFederated',
+      'runLocalBm25',
+      'packEvidence',
+      'synthesizeGroundedAnswer',
+      'runMcpRetrieval',
+      'loadKnowledgeLinks',
+      'now',
+      'generateTurnId',
+    ]);
+
+    function calledDepNames(deps: GroundedTurnDeps): string[] {
+      return Object.entries(deps)
+        .filter(([, value]) => typeof value === 'function' && vi.isMockFunction(value))
+        .filter(([, value]) => (value as ReturnType<typeof vi.fn>).mock.calls.length > 0)
+        .map(([name]) => name);
+    }
+
+    it('disabled daemon: zero server calls, local BM25 once, no seed-only grounding', async () => {
+      mockInput.capabilities.serverEnabled = false;
+      mockInput.capabilities.modelConfigured = false;
+
+      const res = await runGroundedTurn(mockInput, mockDeps);
+
+      expect(res.kind).toBe('local_fallback_results');
+      if (res.kind === 'local_fallback_results') {
+        expect(res.grounding.authority).toBe('local');
+        expect(res.grounding.outcome).toBe('LOCAL_FALLBACK_RESULTS');
+        expect(res.grounding.outcome).not.toBe('SEED_ONLY');
+        expect(res.grounding.fallbackReason).toBe('SERVER_DISABLED');
+      }
+      expect(mockDeps.retrieveFederated).toHaveBeenCalledTimes(0);
+      expect(mockDeps.runLocalBm25).toHaveBeenCalledTimes(1);
+      expect(mockDeps.synthesizeGroundedAnswer).toHaveBeenCalledTimes(0);
+      // Every dep invoked is a read/synthesis dep; the deps contract has no write member.
+      for (const name of calledDepNames(mockDeps)) {
+        expect(READ_ONLY_DEPS.has(name)).toBe(true);
+      }
+      expect(Object.keys(mockDeps)).not.toContain('saveMessage');
+      expect(Object.keys(mockDeps)).not.toContain('writeRepository');
+    });
+
+    it('disabled daemon with model: local BM25 once and synthesis stays local authority', async () => {
+      mockInput.capabilities.serverEnabled = false;
+
+      const res = await runGroundedTurn(mockInput, mockDeps);
+
+      expect(res.kind).toBe('grounded_answer');
+      if (res.kind === 'grounded_answer') {
+        expect(res.grounding.authority).toBe('local');
+        expect(res.grounding.outcome).toBe('LOCAL_FALLBACK_SYNTHESIS');
+        expect(res.grounding.paths).toBeNull();
+      }
+      expect(mockDeps.retrieveFederated).toHaveBeenCalledTimes(0);
+      expect(mockDeps.runLocalBm25).toHaveBeenCalledTimes(1);
+      expect(mockDeps.synthesizeGroundedAnswer).toHaveBeenCalledTimes(1);
+    });
+
+    it('unreachable daemon: one local BM25 call, no seed-only server grounding', async () => {
+      vi.mocked(mockDeps.retrieveFederated).mockRejectedValueOnce(
+        new KnowledgeClientError('NETWORK_ERROR', 'Connection refused')
+      );
+
+      const res = await runGroundedTurn(mockInput, mockDeps);
+
+      expect(res.kind).toBe('grounded_answer');
+      if (res.kind === 'grounded_answer') {
+        expect(res.grounding.authority).toBe('local');
+        expect(res.grounding.fallbackReason).toBe('NETWORK_ERROR');
+        expect(res.grounding.outcome).not.toBe('SEED_ONLY');
+        expect(res.grounding.entities).toBeUndefined();
+      }
+      expect(mockDeps.retrieveFederated).toHaveBeenCalledTimes(1);
+      expect(mockDeps.runLocalBm25).toHaveBeenCalledTimes(1);
+    });
+
+    it('valid server SEED_ONLY: zero local BM25 calls, server authority retained', async () => {
+      vi.mocked(mockDeps.retrieveFederated).mockResolvedValueOnce(seedOnlyResponse());
+      mockDeps.packEvidence = vi.fn().mockReturnValue(seedEvidencePack());
+
+      const res = await runGroundedTurn(mockInput, mockDeps);
+
+      expect(res.kind).toBe('grounded_answer');
+      if (res.kind === 'grounded_answer') {
+        expect(res.grounding.outcome).toBe('SEED_ONLY');
+        expect(res.grounding.authority).toBe('server');
+        expect(res.grounding.citations).toEqual([]);
+        expect(res.grounding.paths).toEqual([]);
+      }
+      expect(mockDeps.runLocalBm25).toHaveBeenCalledTimes(0);
+      expect(mockDeps.retrieveFederated).toHaveBeenCalledTimes(1);
+      expect(mockDeps.synthesizeGroundedAnswer).toHaveBeenCalledTimes(1);
+    });
+  });
+
   // 26. Dynamic MCP retrieval parallel dispatch (MCP-FEDERATED-01)
   it('26. When require_mcp is false, runs only Docs retrieval without invoking runMcpRetrieval', async () => {
     mockDeps.runMcpRetrieval = vi.fn();
