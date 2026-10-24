@@ -2,13 +2,14 @@ import { sha256Hex } from '../indexing/chunkHashPolicy.js';
 import type {
   ModalityKind,
   RetrievalItem,
+  ChunkItem,
   EdgeItem,
   OrderedPath,
   ConflictGroup,
 } from '../types/retrievalProtocol.js';
 import type { OrderedPathCandidate } from './graphTraversal.js';
 import { RELATION_SEMANTICS } from '../graph/ontology.js';
-import type { GraphConflictRecord } from '../types/graphProtocol.js';
+import type { EvidenceClassification, GraphConflictRecord } from '../types/graphProtocol.js';
 
 /**
  * Standard RRF smoothing constant per D-17.
@@ -39,9 +40,221 @@ export interface RankedModalityLists {
   readonly graph?: readonly RetrievalItem[] | undefined;
 }
 
+/**
+ * Maximum share of the result limit that protected graph packages may occupy
+ * when textual evidence is present (D-17, T-24-09).
+ */
+export const PROTECTED_GRAPH_QUOTA_RATIO = 0.6;
+
+/**
+ * Citation-closed unit of graph evidence: seed/target entities, the edge(s) or
+ * path that connects them, and the chunks that support every hop.
+ * Admission is atomic: a package is either wholly present or wholly absent.
+ */
+export interface ProtectedGraphPackage {
+  readonly seedUrns: readonly string[];
+  readonly targetUrns: readonly string[];
+  readonly edgeIds: readonly string[];
+  readonly pathId: string | null;
+  readonly supportingChunkIds: readonly string[];
+  /** Deterministic total-order key derived by rankGraphPackages. */
+  readonly pathRankKey: string;
+}
+
+export interface BuildProtectedGraphPackagesInput {
+  readonly snapshotId: string;
+  readonly chunks: readonly ChunkItem[];
+  readonly edges: readonly EdgeItem[];
+  readonly paths: readonly OrderedPathCandidate[];
+}
+
+export interface BuildProtectedGraphPackagesResult {
+  readonly packages: readonly ProtectedGraphPackage[];
+  readonly diagnostics: readonly MissingSupportingChunkDiagnostic[];
+}
+
+function stableStringCompare(a: string, b: string): number {
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
+}
+
+function packageIdentity(
+  seedUrns: readonly string[],
+  edgeIds: readonly string[]
+): string {
+  return `${[...seedUrns].sort().join('|')}::${[...edgeIds].sort().join('|')}`;
+}
+
+/**
+ * Derives graph packages from citation-closed path candidates plus orphan edges.
+ * Rejects packages whose snapshot differs from the pinned snapshot or whose hops
+ * carry no supporting citation, and reports missing supporting chunks instead of
+ * repairing the package (T-24-07).
+ */
+export function buildProtectedGraphPackages(
+  input: BuildProtectedGraphPackagesInput
+): BuildProtectedGraphPackagesResult {
+  const edgeByFactKey = new Map(input.edges.map((edge) => [edge.factKey, edge]));
+  const chunkIds = new Set(input.chunks.map((chunk) => chunk.id));
+  const diagnostics: MissingSupportingChunkDiagnostic[] = [];
+  const packages: ProtectedGraphPackage[] = [];
+  const consumedEdges = new Set<string>();
+
+  for (const path of input.paths) {
+    if (path.snapshotId !== input.snapshotId) continue;
+    if (path.edgeFactKeys.length === 0) continue;
+    if (path.nodeUrns.length !== path.edgeFactKeys.length + 1) continue;
+    if (path.hopSupportingChunkIds.some((ids) => ids.length === 0)) continue;
+
+    let citationClosed = true;
+    const supporting: string[] = [];
+    for (let hop = 0; hop < path.edgeFactKeys.length; hop++) {
+      const factKey = path.edgeFactKeys[hop]!;
+      const edge = edgeByFactKey.get(factKey);
+      if (!edge || edge.snapshotId !== input.snapshotId) {
+        citationClosed = false;
+        break;
+      }
+      for (const chunkId of path.hopSupportingChunkIds[hop]!) {
+        if (!chunkIds.has(chunkId)) {
+          diagnostics.push({ code: 'MISSING_SUPPORTING_CHUNK', edgeId: factKey, chunkId });
+          citationClosed = false;
+        }
+        if (!supporting.includes(chunkId)) supporting.push(chunkId);
+      }
+      consumedEdges.add(factKey);
+    }
+    if (!citationClosed || supporting.length === 0) continue;
+
+    const seedUrns = [path.nodeUrns[0]!];
+    const targetUrns = path.nodeUrns.slice(1);
+    packages.push({
+      seedUrns,
+      targetUrns,
+      edgeIds: [...path.edgeFactKeys],
+      pathId: packageIdentity(seedUrns, path.edgeFactKeys),
+      supportingChunkIds: supporting,
+      pathRankKey: '',
+    });
+  }
+
+  for (const edge of input.edges) {
+    if (consumedEdges.has(edge.factKey)) continue;
+    if (edge.snapshotId !== input.snapshotId) continue;
+    if (edge.supportingChunkIds.length === 0) continue;
+
+    let citationClosed = true;
+    for (const chunkId of edge.supportingChunkIds) {
+      if (!chunkIds.has(chunkId)) {
+        diagnostics.push({ code: 'MISSING_SUPPORTING_CHUNK', edgeId: edge.factKey, chunkId });
+        citationClosed = false;
+      }
+    }
+    if (!citationClosed) continue;
+
+    const seedUrns = [edge.sourceUrn];
+    packages.push({
+      seedUrns,
+      targetUrns: [edge.targetUrn],
+      edgeIds: [edge.factKey],
+      pathId: null,
+      supportingChunkIds: [...edge.supportingChunkIds],
+      pathRankKey: '',
+    });
+  }
+
+  return { packages, diagnostics };
+}
+
+export interface GraphPackageRankContext {
+  readonly selectedRelations: readonly string[];
+  readonly includeInferred: boolean;
+  readonly relationOf: (factKey: string) => string | undefined;
+  readonly evidenceStrengthOf: (factKey: string) => EvidenceClassification | undefined;
+}
+
+interface ScoredPackage {
+  readonly pkg: ProtectedGraphPackage;
+  readonly intentRelevance: number;
+  readonly answerability: number;
+  readonly evidenceStrength: number;
+  readonly pathLength: number;
+  readonly pathRankKey: string;
+}
+
+/**
+ * Deterministic total order over graph packages (D-18):
+ * intent relevance -> answerability -> evidence strength -> shorter path -> stable identity.
+ * Neo4j return order is never an input. No localeCompare: fixed byte order only.
+ */
+export function rankGraphPackages(
+  packages: readonly ProtectedGraphPackage[],
+  context: GraphPackageRankContext
+): ProtectedGraphPackage[] {
+  const selected = new Set(context.selectedRelations);
+  const strengthOf = (factKey: string): number => {
+    const classification = context.evidenceStrengthOf(factKey);
+    if (classification === 'OBSERVED' || classification === 'BUSINESS_APPROVED') return 1;
+    if (classification === 'INFERRED') return -1;
+    return 0;
+  };
+
+  const scored: ScoredPackage[] = packages.map((pkg) => {
+    let intentRelevance = 0;
+    let evidenceStrength = 0;
+    for (const factKey of pkg.edgeIds) {
+      const relation = context.relationOf(factKey);
+      if (relation && selected.has(relation)) intentRelevance++;
+      evidenceStrength += strengthOf(factKey);
+    }
+    if (!context.includeInferred) {
+      evidenceStrength = Math.max(0, evidenceStrength);
+    }
+    const answerability = new Set(pkg.targetUrns).size + pkg.edgeIds.length;
+    const pathLength = pkg.edgeIds.length;
+    const identity = `${pkg.seedUrns.join('|')}::${pkg.edgeIds.join('|')}::${pkg.pathId ?? ''}`;
+    const pathRankKey =
+      `i${String(intentRelevance).padStart(3, '0')}` +
+      `-a${String(answerability).padStart(3, '0')}` +
+      `-e${String(evidenceStrength + 100).padStart(3, '0')}` +
+      `-l${String(pathLength).padStart(3, '0')}` +
+      `-${identity}`;
+    return { pkg, intentRelevance, answerability, evidenceStrength, pathLength, pathRankKey };
+  });
+
+  scored.sort((a, b) => {
+    if (a.intentRelevance !== b.intentRelevance) return b.intentRelevance - a.intentRelevance;
+    if (a.answerability !== b.answerability) return b.answerability - a.answerability;
+    if (a.evidenceStrength !== b.evidenceStrength) return b.evidenceStrength - a.evidenceStrength;
+    if (a.pathLength !== b.pathLength) return a.pathLength - b.pathLength;
+    return stableStringCompare(a.pathRankKey, b.pathRankKey);
+  });
+
+  return scored.map((entry) => ({ ...entry.pkg, pathRankKey: entry.pathRankKey }));
+}
+
+/** Member composite keys of a package, in stable presentation order. */
+export function protectedPackageMembers(pkg: ProtectedGraphPackage): string[] {
+  const keys: string[] = [];
+  const push = (key: string) => {
+    if (!keys.includes(key)) keys.push(key);
+  };
+  for (const urn of pkg.seedUrns) push(`entity:${urn}`);
+  for (const urn of pkg.targetUrns) push(`entity:${urn}`);
+  for (const factKey of pkg.edgeIds) push(`edge:${factKey}`);
+  for (const chunkId of pkg.supportingChunkIds) push(`chunk:${chunkId}`);
+  return keys;
+}
+
 export interface FusedRetrievalResult {
   readonly items: RetrievalItem[];
   readonly totalCandidates: number;
+}
+
+export interface FusionOptions {
+  /** Ranked packages admitted atomically before RRF fill (D-16, D-17). */
+  readonly protectedGraphPackages?: readonly ProtectedGraphPackage[] | undefined;
 }
 
 const CLASSIFICATION_STRENGTH = {
@@ -170,7 +383,8 @@ interface AccumulatedCandidate {
  */
 export function fuseRetrievalCandidates(
   rankedLists: RankedModalityLists,
-  limit: number = 20
+  limit: number = 20,
+  options?: FusionOptions
 ): FusedRetrievalResult {
   const clampedLimit = Math.max(10, Math.min(50, limit));
   const candidates = new Map<string, AccumulatedCandidate>();
@@ -254,18 +468,86 @@ export function fuseRetrievalCandidates(
     if (priorityDiff !== 0) {
       return priorityDiff;
     }
-    return a.compositeKey.localeCompare(b.compositeKey);
+    return stableStringCompare(a.compositeKey, b.compositeKey);
   });
 
-  const sliced = candidateArray.slice(0, clampedLimit).map((c) => ({
-    ...c.item,
-    score: c.score,
-  }));
+  const packages = options?.protectedGraphPackages ?? [];
+  const sliced = packages.length > 0
+    ? admitProtectedPackages(candidateArray, packages, clampedLimit)
+    : candidateArray.slice(0, clampedLimit).map((c) => ({
+        ...c.item,
+        score: c.score,
+      }));
 
   return {
     items: sliced,
     totalCandidates,
   };
+}
+
+/**
+ * Admits whole graph packages ahead of RRF fill while respecting a bounded quota.
+ * A package is never split; the quota expands to the full limit only when no
+ * text candidate exists (D-17, T-24-09).
+ */
+function admitProtectedPackages(
+  candidateArray: readonly AccumulatedCandidate[],
+  packages: readonly ProtectedGraphPackage[],
+  limit: number
+): RetrievalItem[] {
+  const byKey = new Map(candidateArray.map((candidate) => [candidate.compositeKey, candidate]));
+  const hasTextCandidate = candidateArray.some(
+    (candidate) => candidate.item.type === 'chunk'
+  );
+  const quota = hasTextCandidate
+    ? Math.max(1, Math.floor(limit * PROTECTED_GRAPH_QUOTA_RATIO))
+    : limit;
+
+  const admittedKeys = new Set<string>();
+  const admitted: RetrievalItem[] = [];
+
+  for (const pkg of packages) {
+    const members = protectedPackageMembers(pkg);
+    if (members.length === 0) continue;
+    // Every member must exist in the candidate pool and share the pinned snapshot.
+    const candidates = members.map((key) => byKey.get(key));
+    if (candidates.some((candidate) => candidate === undefined)) continue;
+    const snapshotId = candidates[0]!.item.snapshotId;
+    if (snapshotId && candidates.some((candidate) => candidate!.item.snapshotId !== snapshotId)) {
+      continue;
+    }
+    if (admitted.length + members.length > quota) continue;
+    if (admitted.length + members.length > limit) continue;
+    for (let i = 0; i < members.length; i++) {
+      const key = members[i]!;
+      if (admittedKeys.has(key)) continue;
+      admittedKeys.add(key);
+      const candidate = candidates[i]!;
+      admitted.push({ ...candidate.item, score: candidate.score });
+    }
+  }
+
+  for (const candidate of candidateArray) {
+    if (admitted.length >= limit) break;
+    if (admittedKeys.has(candidate.compositeKey)) continue;
+    admittedKeys.add(candidate.compositeKey);
+    admitted.push({ ...candidate.item, score: candidate.score });
+  }
+
+  // Textual evidence must never be fully crowded out by graph items (D-17).
+  if (hasTextCandidate && !admitted.some((item) => item.type === 'chunk')) {
+    const firstText = candidateArray.find((candidate) => candidate.item.type === 'chunk');
+    if (firstText && !admittedKeys.has(firstText.compositeKey)) {
+      if (admitted.length >= limit) {
+        const evicted = admitted.pop();
+        if (evicted) admittedKeys.delete(getCompositeKey(evicted));
+      }
+      admittedKeys.add(firstText.compositeKey);
+      admitted.push({ ...firstText.item, score: firstText.score });
+    }
+  }
+
+  return admitted;
 }
 
 export interface MissingSupportingChunkDiagnostic {

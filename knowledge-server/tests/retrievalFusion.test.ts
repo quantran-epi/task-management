@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   RRF_K,
+  PROTECTED_GRAPH_QUOTA_RATIO,
+  buildProtectedGraphPackages,
   fuseRetrievalCandidates,
+  rankGraphPackages,
   tagRetrievalConflicts,
   CANDIDATE_INTEGRITY_MISMATCH,
 } from '../src/retrieval/fusion.js';
@@ -523,5 +526,308 @@ describe('RRF Fusion Suite (Task 18-W0-03A)', () => {
         },
       ]);
     });
+  });
+});
+
+describe('Protected Graph Package Suite (24-03)', () => {
+  const snapshotId = 'gsnap_abcdef12';
+  const docId = 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22';
+  const S1 = 'urn:test:Entity:SEED';
+  const T1 = 'urn:test:Entity:TARGET1';
+  const T2 = 'urn:test:Entity:TARGET2';
+
+  const chunk = (id: string, modalities: ModalityKind[] = ['graph']): ChunkItem => ({
+    type: 'chunk',
+    id,
+    score: 1.0,
+    modalitiesContributed: modalities,
+    sourceDocumentId: docId,
+    sourceDocumentTitle: `Doc ${id}`,
+    sectionAnchor: 's',
+    lineStart: 1,
+    lineEnd: 2,
+    rawSnippet: `snippet ${id}`,
+    publishedContentHash: 'a'.repeat(64),
+    snapshotId,
+    hasConflict: false,
+  });
+  const entity = (urn: string): EntityItem => ({
+    type: 'entity',
+    id: urn,
+    score: 1.0,
+    modalitiesContributed: ['graph'],
+    urn,
+    canonicalName: urn,
+    kind: 'DatabaseObject',
+    snapshotId,
+    hasConflict: false,
+  });
+  const edge = (
+    factKey: string,
+    opts: {
+      target?: string;
+      relation?: string;
+      evidence?: 'OBSERVED' | 'INFERRED' | 'BUSINESS_APPROVED';
+      chunks?: string[];
+    } = {}
+  ): EdgeItem => ({
+    type: 'edge',
+    id: factKey,
+    score: 1.0,
+    modalitiesContributed: ['graph'],
+    factKey,
+    sourceUrn: S1,
+    relationType: (opts.relation ?? 'READS_FROM') as EdgeItem['relationType'],
+    targetUrn: opts.target ?? T1,
+    evidenceClass: opts.evidence ?? 'OBSERVED',
+    supportingChunkIds: opts.chunks ?? ['sup-1'],
+    snapshotId,
+    hasConflict: false,
+  });
+  const pathCandidate = (
+    nodeUrns: string[],
+    edgeFactKeys: string[],
+    hopChunks: string[][]
+  ): any => ({
+    nodeUrns,
+    edgeFactKeys,
+    hopClassifications: edgeFactKeys.map(() => 'OBSERVED'),
+    hopSupportingChunkIds: hopChunks,
+    snapshotId,
+    hasConflict: false,
+  });
+
+  it('admits a complete graph package past text candidates and drops it when a supporting chunk is absent', () => {
+    const text = Array.from({ length: 12 }, (_, i) => chunk(`text-${i}`, ['fulltext']));
+    const graphItems: RetrievalItem[] = [chunk('sup-1'), entity(S1), entity(T1), edge('fact-1')];
+    const built = buildProtectedGraphPackages({
+      snapshotId,
+      chunks: graphItems.filter((i): i is ChunkItem => i.type === 'chunk'),
+      edges: graphItems.filter((i): i is EdgeItem => i.type === 'edge'),
+      paths: [pathCandidate([S1, T1], ['fact-1'], [['sup-1']])],
+    });
+    expect(built.packages).toHaveLength(1);
+
+    const fused = fuseRetrievalCandidates(
+      { fulltext: text, graph: graphItems },
+      10,
+      { protectedGraphPackages: built.packages }
+    );
+    const ids = fused.items.map((i) => i.id);
+    for (const id of ['sup-1', S1, T1, 'fact-1']) {
+      expect(ids).toContain(id);
+    }
+
+    const orphan = buildProtectedGraphPackages({
+      snapshotId,
+      chunks: [],
+      edges: [edge('fact-1')],
+      paths: [],
+    });
+    expect(orphan.packages).toHaveLength(0);
+    expect(orphan.diagnostics).toEqual([
+      { code: 'MISSING_SUPPORTING_CHUNK', edgeId: 'fact-1', chunkId: 'sup-1' },
+    ]);
+    // Citation-less package is dropped, never repaired into protected priority.
+    expect(orphan.packages).toHaveLength(0);
+  });
+
+  it('bounds graph packages to the quota and keeps at least one text item', () => {
+    const text = Array.from({ length: 20 }, (_, i) => chunk(`text-${i}`, ['fulltext']));
+    const graphItems: RetrievalItem[] = [
+      chunk('sup-1'),
+      entity(S1),
+      entity(T1),
+      edge('fact-1'),
+      chunk('sup-2'),
+      entity(T2),
+      edge('fact-2', { target: T2, chunks: ['sup-2'] }),
+    ];
+    const built = buildProtectedGraphPackages({
+      snapshotId,
+      chunks: graphItems.filter((i): i is ChunkItem => i.type === 'chunk'),
+      edges: graphItems.filter((i): i is EdgeItem => i.type === 'edge'),
+      paths: [pathCandidate([S1, T1], ['fact-1'], [['sup-1']])],
+    });
+    const limit = 10;
+    const fused = fuseRetrievalCandidates({ fulltext: text, graph: graphItems }, limit, {
+      protectedGraphPackages: built.packages,
+    });
+    const graphCount = fused.items.filter((i) => i.modalitiesContributed.includes('graph')).length;
+    expect(graphCount).toBeLessThanOrEqual(Math.floor(limit * PROTECTED_GRAPH_QUOTA_RATIO));
+    expect(
+      fused.items.some(
+        (i) => i.type === 'chunk' && i.modalitiesContributed.includes('fulltext')
+      )
+    ).toBe(true);
+  });
+
+  it('drops a package whose edge snapshot differs from the pinned snapshot', () => {
+    const foreignEdge = { ...edge('fact-1'), snapshotId: 'gsnap_99999999' };
+    const built = buildProtectedGraphPackages({
+      snapshotId,
+      chunks: [chunk('sup-1')],
+      edges: [foreignEdge],
+      paths: [pathCandidate([S1, T1], ['fact-1'], [['sup-1']])],
+    });
+    expect(built.packages).toHaveLength(0);
+  });
+
+  it('admits a multi-hop path only when every hop citation is present', () => {
+    const graphItems: RetrievalItem[] = [
+      chunk('sup-1'),
+      chunk('sup-2'),
+      entity(S1),
+      entity(T1),
+      entity(T2),
+      edge('fact-1'),
+      edge('fact-2', { target: T2, chunks: ['sup-2'] }),
+    ];
+    const edges = graphItems.filter((i): i is EdgeItem => i.type === 'edge');
+    const built = buildProtectedGraphPackages({
+      snapshotId,
+      chunks: graphItems.filter((i): i is ChunkItem => i.type === 'chunk'),
+      edges,
+      paths: [pathCandidate([S1, T1, T2], ['fact-1', 'fact-2'], [['sup-1'], ['sup-2']])],
+    });
+    expect(built.packages).toHaveLength(1);
+    expect(built.packages[0]!.supportingChunkIds).toEqual(['sup-1', 'sup-2']);
+
+    const incomplete = buildProtectedGraphPackages({
+      snapshotId,
+      chunks: [chunk('sup-1')],
+      edges,
+      paths: [pathCandidate([S1, T1, T2], ['fact-1', 'fact-2'], [['sup-1'], ['sup-2']])],
+    });
+    expect(incomplete.packages).toHaveLength(0);
+  });
+
+  it('produces byte-identical ordering across repeated runs', () => {
+    const text = Array.from({ length: 8 }, (_, i) => chunk(`text-${i}`, ['fulltext']));
+    const graphItems: RetrievalItem[] = [chunk('sup-1'), entity(S1), entity(T1), edge('fact-1')];
+    const built = buildProtectedGraphPackages({
+      snapshotId,
+      chunks: graphItems.filter((i): i is ChunkItem => i.type === 'chunk'),
+      edges: graphItems.filter((i): i is EdgeItem => i.type === 'edge'),
+      paths: [pathCandidate([S1, T1], ['fact-1'], [['sup-1']])],
+    });
+    const run = () =>
+      fuseRetrievalCandidates({ fulltext: text, graph: graphItems }, 10, {
+        protectedGraphPackages: built.packages,
+      });
+    expect(JSON.stringify(run())).toBe(JSON.stringify(run()));
+  });
+
+  it('yields entities and no fabricated package for SEED_ONLY input', () => {
+    const built = buildProtectedGraphPackages({
+      snapshotId,
+      chunks: [],
+      edges: [],
+      paths: [],
+    });
+    expect(built.packages).toHaveLength(0);
+    const fused = fuseRetrievalCandidates({ graph: [entity(S1)] }, 10, {
+      protectedGraphPackages: built.packages,
+    });
+    expect(fused.items).toHaveLength(1);
+    expect(fused.items[0]!.type).toBe('entity');
+  });
+
+  const rankContext = (
+    edges: readonly EdgeItem[],
+    overrides: Partial<{
+      selectedRelations: readonly string[];
+      includeInferred: boolean;
+    }> = {}
+  ) => ({
+    selectedRelations: overrides.selectedRelations ?? [],
+    includeInferred: overrides.includeInferred ?? false,
+    relationOf: (factKey: string) => edges.find((e) => e.factKey === factKey)?.relationType,
+    evidenceStrengthOf: (factKey: string) =>
+      edges.find((e) => e.factKey === factKey)?.evidenceClass,
+  });
+
+  it('shuffling the returned path array produces the same package order', () => {
+    const graphItems: RetrievalItem[] = [
+      chunk('sup-1'),
+      chunk('sup-2'),
+      entity(S1),
+      entity(T1),
+      entity(T2),
+      edge('fact-1', { target: T1, chunks: ['sup-1'] }),
+      edge('fact-2', { target: T2, relation: 'WRITES_TO', chunks: ['sup-2'] }),
+    ];
+    const edges = graphItems.filter((i): i is EdgeItem => i.type === 'edge');
+    const chunks = graphItems.filter((i): i is ChunkItem => i.type === 'chunk');
+    const paths = [
+      pathCandidate([S1, T1], ['fact-1'], [['sup-1']]),
+      pathCandidate([S1, T2], ['fact-2'], [['sup-2']]),
+    ];
+    const ctx = rankContext(edges, { selectedRelations: ['WRITES_TO'] });
+    const orderA = rankGraphPackages(
+      buildProtectedGraphPackages({ snapshotId, chunks, edges, paths }).packages,
+      ctx
+    ).map((p) => p.edgeIds[0]);
+    const orderB = rankGraphPackages(
+      buildProtectedGraphPackages({ snapshotId, chunks, edges, paths: [...paths].reverse() }).packages,
+      ctx
+    ).map((p) => p.edgeIds[0]);
+    expect(orderA).toEqual(orderB);
+    expect(orderA[0]).toBe('fact-2');
+  });
+
+  it('ranks shorter paths first, then stable identity', () => {
+    const graphItems: RetrievalItem[] = [
+      chunk('sup-1'),
+      chunk('sup-2'),
+      entity(S1),
+      entity(T1),
+      entity(T2),
+      edge('fact-1', { target: T1, chunks: ['sup-1'] }),
+      edge('fact-2', { target: T2, chunks: ['sup-2'] }),
+    ];
+    const edges = graphItems.filter((i): i is EdgeItem => i.type === 'edge');
+    const chunks = graphItems.filter((i): i is ChunkItem => i.type === 'chunk');
+    const built = buildProtectedGraphPackages({ snapshotId, chunks, edges, paths: [] });
+    const ranked = rankGraphPackages(built.packages, rankContext(edges));
+    expect(ranked.map((p) => p.edgeIds[0])).toEqual(['fact-1', 'fact-2']);
+  });
+
+  it('ranks an INFERRED path below an otherwise equal OBSERVED path', () => {
+    const graphItems: RetrievalItem[] = [
+      chunk('sup-1'),
+      chunk('sup-2'),
+      entity(S1),
+      entity(T1),
+      entity(T2),
+      edge('fact-inferred', { target: T1, evidence: 'INFERRED', chunks: ['sup-1'] }),
+      edge('fact-observed', { target: T2, evidence: 'OBSERVED', chunks: ['sup-2'] }),
+    ];
+    const edges = graphItems.filter((i): i is EdgeItem => i.type === 'edge');
+    const chunks = graphItems.filter((i): i is ChunkItem => i.type === 'chunk');
+    const built = buildProtectedGraphPackages({ snapshotId, chunks, edges, paths: [] });
+    const ranked = rankGraphPackages(
+      built.packages,
+      rankContext(edges, { includeInferred: true })
+    );
+    expect(ranked[0]!.edgeIds[0]).toBe('fact-observed');
+  });
+
+  it('exposes a deterministic pathRankKey for every package', () => {
+    const graphItems: RetrievalItem[] = [chunk('sup-1'), entity(S1), entity(T1), edge('fact-1')];
+    const built = buildProtectedGraphPackages({
+      snapshotId,
+      chunks: graphItems.filter((i): i is ChunkItem => i.type === 'chunk'),
+      edges: graphItems.filter((i): i is EdgeItem => i.type === 'edge'),
+      paths: [pathCandidate([S1, T1], ['fact-1'], [['sup-1']])],
+    });
+    const ranked = rankGraphPackages(
+      built.packages,
+      rankContext(graphItems.filter((i): i is EdgeItem => i.type === 'edge'), {
+        selectedRelations: ['READS_FROM'],
+      })
+    );
+    expect(ranked[0]!.pathRankKey.length).toBeGreaterThan(0);
+    expect(ranked[0]!.pathRankKey).toContain('i001');
   });
 });
