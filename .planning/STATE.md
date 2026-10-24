@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 Phase: 24 (graph-retrieval-optimization) — EXECUTING
 Plan: 1 of 8
 Status: Executing Phase 24
-Last activity: 2026-10-24 -- Phase 24 execution started
+Last activity: 2026-10-24 - Completed quick task 261024-kq4: Fix intent router retry dropping MCP routing fields; require MCP keys in schema
 Stopped at: Phase 24 UI-SPEC approved
 
 Progress: [██████████] 100%
@@ -37,6 +37,7 @@ Progress: [██████████] 100%
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261024-kq4 | Fix intent router retry dropping MCP routing fields; require MCP keys in schema | 2026-10-24 | e213b63 | complete | [261024-kq4-fix-telegram-intent-router-retry-droppin](./quick/261024-kq4-fix-telegram-intent-router-retry-droppin/) |
 | 261022-djl | Share AI Chat Drawer and Telegram operational orchestration loop | 2026-10-22 | e861cb7 | complete | [261022-djl-refactor-ai-chat-drawer-and-telegram-cha](./quick/261022-djl-refactor-ai-chat-drawer-and-telegram-cha/) |
 | 261021-mcp | Fix MCP retrieval formatting and schema wrapper handling | 2026-10-21 | — | complete | [261021-mcp-fix-mcp-retrieval-formatting-and-schema-wrapper](./quick/261021-mcp-fix-mcp-retrieval-formatting-and-schema-wrapper/) |
 | 261020-tif | optimize-ai-chat-pipeline | 2026-10-20 | — | complete | [261020-tif-optimize-ai-chat-pipeline](./quick/261020-tif-optimize-ai-chat-pipeline/) |
