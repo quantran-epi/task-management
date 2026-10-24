@@ -192,7 +192,7 @@ describe('RetrievalProtocol Schema Suite (Task 18-W0-01)', () => {
       ).toThrow();
     });
 
-    it('enforces traversal step caps (max 5 steps) and depth bounds (1-3)', () => {
+    it('enforces traversal step caps (max 5 steps) and the model input depth ceiling', () => {
       const step = {
         relationType: 'CALLS' as const,
         direction: 'OUTGOING' as const,
@@ -211,13 +211,27 @@ describe('RetrievalProtocol Schema Suite (Task 18-W0-01)', () => {
         })
       ).toThrow();
 
+      // Depths 4..10 parse so semantic validation can return HOP_LIMIT_EXCEEDED.
+      expect(
+        LogicalQueryPlanSchema.parse({
+          planId: 'c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a33',
+          queryIntent: 'FLOW_TRAVERSAL' as const,
+          seedUrns: [validUrn1],
+          traversalSteps: [step],
+          overallMaxDepth: 5,
+          includeInferred: false,
+          fulltextKeywords: ['test'],
+          semanticQuery: 'test',
+        }).overallMaxDepth
+      ).toBe(5);
+
       expect(() =>
         LogicalQueryPlanSchema.parse({
           planId: 'c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a33',
           queryIntent: 'FLOW_TRAVERSAL' as const,
           seedUrns: [validUrn1],
           traversalSteps: [step],
-          overallMaxDepth: 4, // > 3
+          overallMaxDepth: 11, // above MODEL_DEPTH_INPUT_CAP
           includeInferred: false,
           fulltextKeywords: ['test'],
           semanticQuery: 'test',
