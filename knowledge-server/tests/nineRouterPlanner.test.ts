@@ -185,7 +185,9 @@ describe('NineRouterQueryPlanner (D-11..D-17)', () => {
     expect(prompt).not.toContain('DEPEDENCY_CHECK');
     expect(prompt).toContain('DEPENDENCY_CHECK: whether named entities have a direct dependency');
     expect(prompt).toContain(URN_TABLE_FCL_CYCLE_COUNTER);
-    expect(prompt).toContain('READS_FROM: maxHops=');
+    expect(prompt).toContain('CLOSED RELATION ONTOLOGY');
+    expect(prompt).toContain('READS_FROM sources=[SoftwareComponent] targets=[DatabaseObject]');
+    expect(prompt).toContain('NODE KINDS:');
   });
 
   it('throws a content-free transport error for HTTP, malformed envelope, and empty response', async () => {
@@ -293,13 +295,13 @@ describe('NineRouterQueryPlanner (D-11..D-17)', () => {
       expect(result.plan.queryIntent).toBe('LOOKUP');
     }
 
-    // Verify repair payload carried error string and previous output
+    // Verify repair payload carried stable codes only — no free-text issue strings.
     const secondCallInit = mockFetch.mock.calls[1]![1] as RequestInit;
     const body = JSON.parse(secondCallInit.body as string);
     const messages = body.messages as Array<{ role: string; content: string }>;
-    expect(messages.length).toBe(4); // system, user (query), assistant (prev), user (repair feedback)
-    expect(messages[2]!.content).toContain('INVALID_INTENT_NOT_ALLOWED');
-    expect(messages[3]!.content).toContain('queryIntent');
+    expect(messages.length).toBe(3); // system, user (query), user (repair feedback)
+    expect(messages[2]!.content).toContain('PLAN_REJECTED');
+    expect(messages[2]!.content).not.toContain('INVALID_INTENT_NOT_ALLOWED');
   });
 
   it('returns unsupported with reason PLANNER_SCHEMA_FAILURE if repair also fails (D-16, D-17)', async () => {
@@ -337,8 +339,7 @@ describe('NineRouterQueryPlanner (D-11..D-17)', () => {
     expect(result.type).toBe('unsupported');
     if (result.type === 'unsupported') {
       expect(result.reason).toBe('PLANNER_SCHEMA_FAILURE');
-      expect(result.unsupportedConstructs.length).toBeGreaterThan(0);
-      expect(result.unsupportedConstructs[0]).toContain('not in server-resolved candidate allowlist');
+      expect(result.unsupportedConstructs).toEqual(['SEED_NOT_FOUND']);
     }
   });
 
@@ -377,7 +378,7 @@ describe('NineRouterQueryPlanner (D-11..D-17)', () => {
     expect(result.type).toBe('unsupported');
     if (result.type === 'unsupported') {
       expect(result.reason).toBe('PLANNER_SCHEMA_FAILURE');
-      expect(result.unsupportedConstructs.some((c) => c.includes('Unrecognized key'))).toBe(true);
+      expect(result.unsupportedConstructs).toEqual(['PLAN_REJECTED']);
     }
   });
 

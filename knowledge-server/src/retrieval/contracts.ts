@@ -8,6 +8,9 @@ import type {
   ClarificationCandidate,
 } from '../types/retrievalProtocol.js';
 import type { Urn, NodeKind, RelationType, EvidenceClassification } from '../types/graphProtocol.js';
+import type { PlanValidationReasonCode } from './retrievalPlanDerivation.js';
+
+export type { PlanValidationReasonCode };
 
 /**
  * Common cancellation / timeout options accepted across all external collaborators.
@@ -46,6 +49,11 @@ export interface QueryPlannerContext {
   readonly resolvedCandidates: readonly ClarificationCandidate[];
   readonly registeredNodeKinds: readonly NodeKind[];
   readonly registeredRelationTypes: readonly RelationType[];
+  /**
+   * Set only on the single bounded repair call. Carries stable reason codes and
+   * nothing else (no Cypher, secrets, source content, or raw error detail).
+   */
+  readonly repair?: { readonly attempt: 1; readonly reasonCodes: readonly PlanValidationReasonCode[] } | undefined;
 }
 
 /**

@@ -7,7 +7,10 @@ import {
   type RetrievalOntologyEntry,
   type TraversalDirection,
 } from '../graph/ontology.js';
+import { z } from 'zod';
+import { UrnSchema } from '../types/graphProtocol.js';
 import {
+  MODEL_DEPTH_INPUT_CAP,
   TRAVERSAL_DIRECTIONS,
   type ClarificationCandidate,
   type TraversalStep,
@@ -40,13 +43,41 @@ export const TRAVERSAL_PLAN_LIMITS = Object.freeze({
 /**
  * Loose planner-facing step shape. Unknown relations must reach INVALID_RELATION
  * instead of being swallowed by the strict Zod enum.
- */
-export interface LooseTraversalStepCandidate {
+ */export interface LooseTraversalStepCandidate {
   readonly relationType: string;
   readonly direction?: string | undefined;
   readonly maxHops?: number | undefined;
   readonly targetKind?: string | undefined;
 }
+
+/**
+ * Loose planner-facing schemas. Fields are bounded so an unknown relation or
+ * over-depth value reaches semantic validation instead of dying at parse time.
+ */
+export const LooseTraversalStepSchema = z
+  .object({
+    relationType: z.string().min(1).max(64),
+    direction: z.string().max(32).optional(),
+    maxHops: z.number().int().min(1).max(MODEL_DEPTH_INPUT_CAP).optional(),
+    targetKind: z.string().max(64).optional(),
+    seedUrn: UrnSchema.optional(),
+  })
+  .passthrough();
+
+export const LooseLogicalQueryPlanSchema = z
+  .object({
+    planId: z.string().min(1).max(64),
+    queryIntent: z.string().min(1).max(64),
+    seedUrns: z.array(UrnSchema).min(1).max(TRAVERSAL_PLAN_LIMITS.MAX_SEEDS),
+    traversalSteps: z.array(LooseTraversalStepSchema).max(TRAVERSAL_PLAN_LIMITS.MAX_STEPS),
+    overallMaxDepth: z.number().int().min(1).max(MODEL_DEPTH_INPUT_CAP),
+    includeInferred: z.boolean().optional(),
+    fulltextKeywords: z.array(z.string().min(1)).min(1),
+    semanticQuery: z.string().min(1),
+  })
+  .passthrough();
+
+export type LooseLogicalQueryPlan = z.infer<typeof LooseLogicalQueryPlanSchema>;
 
 /**
  * Direction legal for a seed kind: BOTH only when the kind is legal on both

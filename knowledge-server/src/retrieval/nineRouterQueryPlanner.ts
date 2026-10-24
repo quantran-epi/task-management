@@ -13,6 +13,13 @@ import {
   NODE_KINDS,
   RETRIEVAL_ONTOLOGY_REGISTRY,
 } from '../graph/ontology.js';
+import {
+  LooseLogicalQueryPlanSchema,
+  TRAVERSAL_PLAN_LIMITS,
+  validateOverallDepth,
+  validateStepAgainstRegistry,
+  type PlanValidationReasonCode,
+} from './retrievalPlanDerivation.js';
 
 export interface NineRouterPlannerConfig {
   readonly enabled: boolean;
@@ -39,7 +46,7 @@ function extractJsonContent(raw: string): string {
 interface ValidationResult {
   readonly valid: boolean;
   readonly plan?: LogicalQueryPlan | undefined;
-  readonly issues: readonly string[];
+  readonly reasonCodes: readonly PlanValidationReasonCode[];
 }
 
 export class PlannerTransportError extends Error {
@@ -84,62 +91,59 @@ export class NineRouterQueryPlanner implements QueryPlanner {
     this.fetchFn = fetchFn;
   }
 
+  /**
+   * Validates planner output through the loose candidate schema first so unknown
+   * relations and over-depth values reach semantic validation with stable codes
+   * (D-11, D-14). Only a fully valid candidate is re-parsed into the strict plan.
+   */
   private validatePlan(candidate: unknown, context: QueryPlannerContext): ValidationResult {
-    const parsed = LogicalQueryPlanSchema.safeParse(candidate);
+    const parsed = LooseLogicalQueryPlanSchema.safeParse(candidate);
     if (!parsed.success) {
-      return {
-        valid: false,
-        issues: parsed.error.issues.map((iss) => `${iss.path.join('.')}: ${iss.message}`),
-      };
+      return { valid: false, reasonCodes: ['PLAN_REJECTED'] };
     }
 
-    const plan = parsed.data;
-    const issues: string[] = [];
-    const allowedUrns = new Set(context.resolvedCandidates.map((c) => c.urn));
+    const loose = parsed.data;
+    const reasonCodes: PlanValidationReasonCode[] = [];
+    const candidatesByUrn = new Map(context.resolvedCandidates.map((entry) => [entry.urn, entry]));
+    const survivingKinds = loose.seedUrns
+      .map((urn) => candidatesByUrn.get(urn)?.kind)
+      .filter((kind): kind is NonNullable<typeof kind> => Boolean(kind));
 
-    // Seed URNs check against server-resolved allowlist
-    for (const seed of plan.seedUrns) {
-      if (!allowedUrns.has(seed)) {
-        issues.push(`Seed URN ${seed} is not in server-resolved candidate allowlist`);
-      }
+    if (survivingKinds.length === 0) {
+      return { valid: false, reasonCodes: ['SEED_NOT_FOUND'] };
     }
 
-    // Traversal steps bounds: max 5
-    if (plan.traversalSteps.length > 5) {
-      issues.push(`Traversal steps count ${plan.traversalSteps.length} exceeds maximum 5`);
-    }
+    const depthReason = validateOverallDepth(loose.overallMaxDepth);
+    if (depthReason) reasonCodes.push(depthReason);
 
-    // Overall max depth 1..3
-    if (plan.overallMaxDepth < 1 || plan.overallMaxDepth > 3) {
-      issues.push(`Overall max depth ${plan.overallMaxDepth} outside permitted range 1..3`);
-    }
+    for (const step of loose.traversalSteps) {
+      const kinds = step.seedUrn
+        ? [candidatesByUrn.get(step.seedUrn)?.kind].filter(
+            (kind): kind is NonNullable<typeof kind> => Boolean(kind)
+          )
+        : survivingKinds;
 
-    // Traversal steps relation and direction checks
-    for (let i = 0; i < plan.traversalSteps.length; i++) {
-      const step = plan.traversalSteps[i]!;
-      const registryEntry = RETRIEVAL_ONTOLOGY_REGISTRY[step.relationType];
-      if (!registryEntry) {
-        issues.push(`Unknown relation type ${step.relationType} at step ${i}`);
+      if (kinds.length === 0) {
+        reasonCodes.push('SEED_NOT_FOUND');
         continue;
       }
 
-      if (step.maxHops < 1 || step.maxHops > 3) {
-        issues.push(`Step ${i} maxHops ${step.maxHops} outside range 1..3`);
-      }
-      if (step.maxHops > registryEntry.maxHops) {
-        issues.push(`Step ${i} maxHops ${step.maxHops} exceeds ontology ceiling ${registryEntry.maxHops}`);
-      }
-
-      if (step.targetKind && !NODE_KINDS.includes(step.targetKind)) {
-        issues.push(`Step ${i} targetKind ${step.targetKind} not in allowed NODE_KINDS`);
+      const codes = kinds.map((kind) => validateStepAgainstRegistry(step, kind));
+      if (!codes.includes(null)) {
+        reasonCodes.push(codes.find((code) => code !== null) ?? 'PLAN_REJECTED');
       }
     }
 
-    return {
-      valid: issues.length === 0,
-      plan: issues.length === 0 ? plan : undefined,
-      issues,
-    };
+    if (reasonCodes.length > 0) {
+      return { valid: false, reasonCodes: [...new Set(reasonCodes)] };
+    }
+
+    const strict = LogicalQueryPlanSchema.safeParse(candidate);
+    if (!strict.success) {
+      return { valid: false, reasonCodes: ['PLAN_REJECTED'] };
+    }
+
+    return { valid: true, plan: strict.data, reasonCodes: [] };
   }
 
   private composeSystemPrompt(context: QueryPlannerContext): string {
@@ -150,7 +154,14 @@ export class NineRouterQueryPlanner implements QueryPlanner {
     const relationsStr = context.registeredRelationTypes
       .map((r) => {
         const reg = RETRIEVAL_ONTOLOGY_REGISTRY[r];
-        return `- ${r}: maxHops=${reg ? reg.maxHops : 1}`;
+        if (!reg) return `- ${r}`;
+        return [
+          `- ${r}`,
+          `sources=[${reg.allowedSourceKinds.join(',')}]`,
+          `targets=[${reg.allowedTargetKinds.join(',')}]`,
+          `defaultDirection=${reg.defaultDirection}`,
+          `maxHops=${reg.maxHops}`,
+        ].join(' ');
       })
       .join('\n');
 
@@ -173,11 +184,11 @@ export class NineRouterQueryPlanner implements QueryPlanner {
       'FIELD CONTRACT:',
       '- planId: valid UUID.',
       '- queryIntent: exactly LOOKUP, FLOW_TRAVERSAL, IMPACT_ANALYSIS, or DEPENDENCY_CHECK.',
-      '- seedUrns: 1..5 values copied exactly from RESOLVED CANDIDATES.',
-      '- traversalSteps: 0..5 objects with only relationType, direction, maxHops, and optional targetKind.',
-      '- direction: exactly OUTGOING, INCOMING, or BOTH.',
-      '- maxHops: integer 1..3 and no greater than registered relation maxHops.',
-      '- overallMaxDepth: integer 1..3 and at least the complete requested path depth.',
+      `- seedUrns: 1..${TRAVERSAL_PLAN_LIMITS.MAX_SEEDS} values copied exactly from RESOLVED CANDIDATES.`,
+      `- traversalSteps: 0..${TRAVERSAL_PLAN_LIMITS.MAX_STEPS} objects with only relationType, direction, maxHops, optional targetKind, and optional seedUrn.`,
+      '- direction: exactly OUTGOING, INCOMING, or BOTH; it must be legal for that step\'s seed kind and relation.',
+      '- maxHops: integer 1..3 and no greater than the relation maxHops below.',
+      `- overallMaxDepth: integer 1..${TRAVERSAL_PLAN_LIMITS.MAX_DEPTH} and at least the complete requested path depth.`,
       '- includeInferred: boolean; never enable unless user explicitly requests inferred evidence.',
       '- fulltextKeywords: at least one non-empty string.',
       '- semanticQuery: non-empty string preserving user meaning.',
@@ -185,7 +196,7 @@ export class NineRouterQueryPlanner implements QueryPlanner {
       'INTENT CONTRACT:',
       '- LOOKUP: entity properties, catalog details, data tables, or calculation cycles. Use zero traversal steps unless a direct relation is required.',
       '- FLOW_TRAVERSAL: ordered execution steps or flow from one component to another. Use ordered traversal steps matching the flow.',
-      '- IMPACT_ANALYSIS: upstream/downstream effects of changing an entity. Use relation directions that discover affected dependents. For DatabaseObject seeds, use reverse INCOMING steps: READS_FROM or WRITES_TO to SoftwareComponent, then CALLS to SoftwareComponent, then INVOKES to ProcessStep.',
+      '- IMPACT_ANALYSIS: upstream/downstream effects of changing an entity. Select the relations whose target kinds are the entities affected by the change; every step must remain legal for its seed kind.',
       '- DEPENDENCY_CHECK: whether named entities have a direct dependency. Do not use for general property or catalog questions.',
       '',
       'EXAMPLES OF INTENT ONLY; replace every value with allowed runtime values:',
@@ -197,8 +208,13 @@ export class NineRouterQueryPlanner implements QueryPlanner {
       'RESOLVED CANDIDATES (only allowed seedUrns):',
       candidatesStr || 'None',
       '',
-      'REGISTERED RELATION TYPES:',
+      'NODE KINDS:',
+      NODE_KINDS.join(', '),
+      '',
+      'CLOSED RELATION ONTOLOGY (relation sourceKinds targetKinds defaultDirection maxHops):',
       relationsStr,
+      '',
+      `BOUNDS: at most ${TRAVERSAL_PLAN_LIMITS.MAX_STEPS} steps, depth 1..${TRAVERSAL_PLAN_LIMITS.MAX_DEPTH}, at most ${TRAVERSAL_PLAN_LIMITS.MAX_SEEDS} seeds.`,
       '',
       'If multiple candidates exist, select only candidates supported by the question. Output JSON only.',
     ].join('\n');
@@ -293,13 +309,35 @@ export class NineRouterQueryPlanner implements QueryPlanner {
     options?: OperationOptions
   ): Promise<QueryPlanResult> {
     const systemPrompt = this.composeSystemPrompt(context);
-    const initialMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+    const baseMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: request.query },
     ];
 
-    const firstOutput = await this.executeCompletion(initialMessages, options);
+    // The coordinator owns the single repair attempt and passes stable codes only (D-11).
+    if (context.repair) {
+      const repairMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+        ...baseMessages,
+        {
+          role: 'user',
+          content: `Return one complete corrected LogicalQueryPlan JSON object only. Do not return prose, Markdown, or a partial patch. Violations cleared by server validation: ${context.repair.reasonCodes.join(
+            ', '
+          )}.`,
+        },
+      ];
+      const output = await this.executeCompletion(repairMessages, options);
+      const check = this.validatePlan(output, context);
+      if (check.valid && check.plan) {
+        return { type: 'plan', plan: check.plan, repaired: true };
+      }
+      return {
+        type: 'unsupported',
+        reason: 'PLANNER_SCHEMA_FAILURE',
+        unsupportedConstructs: [...check.reasonCodes],
+      };
+    }
 
+    const firstOutput = await this.executeCompletion(baseMessages, options);
     const firstCheck = this.validatePlan(firstOutput, context);
     if (firstCheck.valid && firstCheck.plan) {
       return {
@@ -309,14 +347,13 @@ export class NineRouterQueryPlanner implements QueryPlanner {
       };
     }
 
-    // Exactly one bounded repair attempt (D-15, D-16)
+    // Exactly one bounded repair attempt (D-15, D-16) carrying stable codes only.
     const repairMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
-      ...initialMessages,
-      { role: 'assistant', content: JSON.stringify(firstOutput) },
+      ...baseMessages,
       {
         role: 'user',
-        content: `Return one complete corrected LogicalQueryPlan JSON object only. Do not return prose, Markdown, or a partial patch. Schema and ontology validation errors: ${firstCheck.issues.join(
-          '; '
+        content: `Return one complete corrected LogicalQueryPlan JSON object only. Do not return prose, Markdown, or a partial patch. Violations cleared by server validation: ${firstCheck.reasonCodes.join(
+          ', '
         )}.`,
       },
     ];
@@ -335,7 +372,8 @@ export class NineRouterQueryPlanner implements QueryPlanner {
     return {
       type: 'unsupported',
       reason: 'PLANNER_SCHEMA_FAILURE',
-      unsupportedConstructs: secondCheck.issues.length > 0 ? secondCheck.issues : firstCheck.issues,
+      unsupportedConstructs:
+        secondCheck.reasonCodes.length > 0 ? [...secondCheck.reasonCodes] : [...firstCheck.reasonCodes],
     };
   }
 }

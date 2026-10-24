@@ -363,8 +363,12 @@ describe('18-W0-02A: Retrieval Ontology Registry & Identifier/Entity Resolution'
         expect(result.plan.seedUrns).toEqual([URN_TABLE_FCL_CYCLE_COUNTER]);
         expect(result.plan.fulltextKeywords).toContain('MAIN1.FCL_CYCLE_COUNTER');
         expect(result.plan.overallMaxDepth).toBe(1);
-        expect(result.plan.traversalSteps.length).toBeGreaterThan(0);
-        expect(result.plan.traversalSteps[0]?.relationType).toBe('READS_FROM');
+        expect(
+          result.plan.traversalSteps.map((s) => `${s.relationType}:${s.direction}`)
+        ).toEqual(['READS_FROM:INCOMING', 'WRITES_TO:INCOMING']);
+        expect(result.plan.traversalSteps.every((s) => s.direction !== 'BOTH')).toBe(true);
+        expect(result.plan.traversalSteps.some((s) => s.relationType === 'CONTAINS_STEP')).toBe(false);
+        expect(result.failedSeeds).toEqual([]);
         expect(result.planTrace.fastPath).toBe(true);
         expect(result.planTrace.resolvedUrns).toEqual([URN_TABLE_FCL_CYCLE_COUNTER]);
       }
@@ -394,7 +398,15 @@ describe('18-W0-02A: Retrieval Ontology Registry & Identifier/Entity Resolution'
 
       expect(swResult.status).toBe('executable');
       if (swResult.status === 'executable') {
-        expect(swResult.plan.traversalSteps[0]?.relationType).toBe('CALLS');
+        // SoftwareComponent derives its full ontology set in registry order, bounded to 5 steps.
+        expect(swResult.plan.traversalSteps.map((s) => s.relationType)).toEqual([
+          'CALLS',
+          'INVOKES',
+          'READS_FROM',
+          'WRITES_TO',
+          'EMITS',
+        ]);
+        expect(swResult.plan.traversalSteps.length).toBeLessThanOrEqual(5);
       }
 
       const procGateway = new MockGraphGateway([
@@ -418,7 +430,9 @@ describe('18-W0-02A: Retrieval Ontology Registry & Identifier/Entity Resolution'
 
       expect(procResult.status).toBe('executable');
       if (procResult.status === 'executable') {
-        expect(procResult.plan.traversalSteps[0]?.relationType).toBe('CONTAINS_STEP');
+        expect(procResult.plan.traversalSteps.map((s) => `${s.relationType}:${s.direction}`)).toEqual([
+          'CONTAINS_STEP:OUTGOING',
+        ]);
       }
     });
 
@@ -477,15 +491,11 @@ describe('18-W0-02A: Retrieval Ontology Registry & Identifier/Entity Resolution'
         expect(result.isDegraded).toBe(false);
         expect(result.plan.queryIntent).toBe('IMPACT_ANALYSIS');
         expect(result.plan.seedUrns).toEqual([URN_TABLE_FCL_CYCLE_COUNTER]);
+        // Server no longer rewrites impact plans to a single READS_FROM step.
         expect(result.plan.traversalSteps).toEqual([
-          {
-            relationType: 'READS_FROM',
-            direction: 'INCOMING',
-            maxHops: 1,
-            targetKind: 'SoftwareComponent',
-          },
+          { relationType: 'READS_FROM', direction: 'INCOMING', maxHops: 2 },
         ]);
-        expect(result.plan.overallMaxDepth).toBe(1);
+        expect(result.plan.overallMaxDepth).toBe(2);
         expect(result.planTrace.fastPath).toBe(false);
         expect(result.planTrace.degradedFallback).toBe(false);
       }
@@ -601,14 +611,343 @@ describe('18-W0-02A: Retrieval Ontology Registry & Identifier/Entity Resolution'
         expect(result.isDegraded).toBe(true);
         expect(result.planTrace.degradedFallback).toBe(true);
         expect(result.planTrace.reasonCode).toBe('PLANNER_SCHEMA_FAILURE');
-        // Traversal capped at 5 one-hop entries
+        // DatabaseObject fallback covers all ontology-valid one-hop relations, not one hardcoded relation.
+        expect(result.plan.traversalSteps.map((s) => `${s.relationType}:${s.direction}`)).toEqual([
+          'READS_FROM:INCOMING',
+          'WRITES_TO:INCOMING',
+        ]);
         expect(result.plan.traversalSteps.length).toBeLessThanOrEqual(5);
         for (const s of result.plan.traversalSteps) {
           expect(s.maxHops).toBe(1);
-          expect(s.direction).toBe('BOTH');
+          expect(s.direction).not.toBe('BOTH');
         }
         // Invented URN was rejected, only server-resolved URN is used
         expect(result.plan.seedUrns).toEqual([URN_TABLE_FCL_CYCLE_COUNTER]);
+      }
+    });
+
+    it('derives mixed-kind fallback per seed instead of applying the first seed kind', async () => {
+      const gateway = new MockGraphGateway([
+        {
+          urn: URN_TABLE_FCL_CYCLE_COUNTER,
+          canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+          kind: 'DatabaseObject',
+        },
+        {
+          urn: URN_PROCESS_60000006,
+          canonicalName: 'SHB - Credit calculations',
+          kind: 'ScheduledProcess',
+        },
+      ]);
+
+      const failingPlanner = {
+        async plan(): Promise<any> {
+          throw new Error('planner offline');
+        },
+      };
+
+      const result = await buildQueryExecutionPlan({
+        request: {
+          query: 'what is affected here',
+          limit: 20,
+          includeInferred: false,
+          recentTurns: [],
+        },
+        pinnedSnapshotId: pinnedSnapshot,
+        gateway,
+        planner: failingPlanner,
+      });
+
+      expect(result.status).toBe('executable');
+      if (result.status === 'executable') {
+        expect(result.isDegraded).toBe(true);
+        const dbSteps = result.plan.traversalSteps.filter(
+          (s) => s.seedUrn === URN_TABLE_FCL_CYCLE_COUNTER
+        );
+        const procSteps = result.plan.traversalSteps.filter(
+          (s) => s.seedUrn === URN_PROCESS_60000006
+        );
+        expect(dbSteps.map((s) => s.relationType).sort()).toEqual(['READS_FROM', 'WRITES_TO']);
+        expect(procSteps.map((s) => s.relationType)).toEqual(['CONTAINS_STEP']);
+        expect(procSteps.some((s) => s.relationType === 'READS_FROM')).toBe(false);
+        expect(dbSteps.some((s) => s.relationType === 'CONTAINS_STEP')).toBe(false);
+      }
+    });
+
+    it('keeps a valid seed when a sibling seed is unknown and reports it in failedSeeds', async () => {
+      const unknownUrn = 'urn:plannermate:oracle:ORACLE_TABLE:MAIN1.UNKNOWN_TABLE';
+      const gateway = new MockGraphGateway([
+        {
+          urn: URN_TABLE_FCL_CYCLE_COUNTER,
+          canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+          kind: 'DatabaseObject',
+        },
+      ]);
+
+      const planner = {
+        async plan(): Promise<any> {
+          return {
+            type: 'plan',
+            plan: {
+              planId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+              queryIntent: 'LOOKUP',
+              seedUrns: [URN_TABLE_FCL_CYCLE_COUNTER, unknownUrn],
+              traversalSteps: [
+                { relationType: 'READS_FROM', direction: 'INCOMING', maxHops: 1 },
+              ],
+              overallMaxDepth: 1,
+              includeInferred: false,
+              fulltextKeywords: ['FCL_CYCLE_COUNTER'],
+              semanticQuery: 'who reads FCL_CYCLE_COUNTER',
+            },
+          };
+        },
+      };
+
+      const result = await buildQueryExecutionPlan({
+        request: {
+          query: 'who reads FCL_CYCLE_COUNTER?',
+          limit: 20,
+          includeInferred: false,
+          recentTurns: [],
+        },
+        pinnedSnapshotId: pinnedSnapshot,
+        gateway,
+        planner,
+      });
+
+      expect(result.status).toBe('executable');
+      if (result.status === 'executable') {
+        expect(result.isDegraded).toBe(false);
+        expect(result.plan.seedUrns).toEqual([URN_TABLE_FCL_CYCLE_COUNTER]);
+        expect(result.failedSeeds).toEqual([{ urn: unknownUrn, reasonCode: 'SEED_NOT_FOUND' }]);
+      }
+    });
+
+    it('repairs once with stable codes and an unmodified query for a depth-5 plan', async () => {
+      const gateway = new MockGraphGateway([
+        {
+          urn: URN_TABLE_FCL_CYCLE_COUNTER,
+          canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+          kind: 'DatabaseObject',
+        },
+      ]);
+
+      const calls: Array<{ query: string; repair?: any }> = [];
+      const planner = {
+        async plan(req: any, ctx: any): Promise<any> {
+          calls.push({ query: req.query, repair: ctx.repair });
+          if (calls.length === 1) {
+            return {
+              type: 'plan',
+              plan: {
+                planId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+                queryIntent: 'LOOKUP',
+                seedUrns: [URN_TABLE_FCL_CYCLE_COUNTER],
+                traversalSteps: [
+                  { relationType: 'READS_FROM', direction: 'INCOMING', maxHops: 5 },
+                ],
+                overallMaxDepth: 5,
+                includeInferred: false,
+                fulltextKeywords: ['FCL_CYCLE_COUNTER'],
+                semanticQuery: 'lookup',
+              },
+            };
+          }
+          return {
+            type: 'plan',
+            plan: {
+              planId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+              queryIntent: 'LOOKUP',
+              seedUrns: [URN_TABLE_FCL_CYCLE_COUNTER],
+              traversalSteps: [
+                { relationType: 'READS_FROM', direction: 'INCOMING', maxHops: 1 },
+              ],
+              overallMaxDepth: 1,
+              includeInferred: false,
+              fulltextKeywords: ['FCL_CYCLE_COUNTER'],
+              semanticQuery: 'lookup',
+            },
+          };
+        },
+      };
+
+      const result = await buildQueryExecutionPlan({
+        request: {
+          query: 'explain FCL_CYCLE_COUNTER',
+          limit: 20,
+          includeInferred: false,
+          recentTurns: [],
+        },
+        pinnedSnapshotId: pinnedSnapshot,
+        gateway,
+        planner,
+      });
+
+      expect(calls).toHaveLength(2);
+      expect(calls[1]!.query).toBe('explain FCL_CYCLE_COUNTER');
+      expect(calls[1]!.repair).toEqual({
+        attempt: 1,
+        reasonCodes: ['HOP_LIMIT_EXCEEDED'],
+      });
+      expect(result.status).toBe('executable');
+      if (result.status === 'executable') {
+        expect(result.isDegraded).toBe(false);
+        expect(result.plan.overallMaxDepth).toBe(1);
+      }
+    });
+
+    it('repairs once for an unknown relation and then falls back deterministically', async () => {
+      const gateway = new MockGraphGateway([
+        {
+          urn: URN_TABLE_FCL_CYCLE_COUNTER,
+          canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+          kind: 'DatabaseObject',
+        },
+      ]);
+
+      const repairs: any[] = [];
+      const planner = {
+        async plan(_req: any, ctx: any): Promise<any> {
+          repairs.push(ctx.repair);
+          return {
+            type: 'plan',
+            plan: {
+              planId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+              queryIntent: 'LOOKUP',
+              seedUrns: [URN_TABLE_FCL_CYCLE_COUNTER],
+              traversalSteps: [{ relationType: 'NOT_A_RELATION', maxHops: 1 }],
+              overallMaxDepth: 1,
+              includeInferred: false,
+              fulltextKeywords: ['FCL_CYCLE_COUNTER'],
+              semanticQuery: 'lookup',
+            },
+          };
+        },
+      };
+
+      const result = await buildQueryExecutionPlan({
+        request: {
+          query: 'show everything about FCL_CYCLE_COUNTER',
+          limit: 20,
+          includeInferred: false,
+          recentTurns: [],
+        },
+        pinnedSnapshotId: pinnedSnapshot,
+        gateway,
+        planner,
+      });
+
+      expect(repairs).toHaveLength(2);
+      expect(repairs[0]).toBeUndefined();
+      expect(repairs[1]).toEqual({ attempt: 1, reasonCodes: ['INVALID_RELATION'] });
+      expect(result.status).toBe('executable');
+      if (result.status === 'executable') {
+        expect(result.isDegraded).toBe(true);
+        expect(result.planTrace.reasonCode).toBe('PLANNER_SCHEMA_FAILURE');
+        expect(result.plan.traversalSteps.map((s) => `${s.relationType}:${s.direction}`)).toEqual([
+          'READS_FROM:INCOMING',
+          'WRITES_TO:INCOMING',
+        ]);
+      }
+    });
+
+    it('returns a stable reason code on a second invalid output', async () => {
+      const gateway = new MockGraphGateway([
+        {
+          urn: URN_TABLE_FCL_CYCLE_COUNTER,
+          canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+          kind: 'DatabaseObject',
+        },
+      ]);
+
+      const planner = {
+        async plan(): Promise<any> {
+          return {
+            type: 'plan',
+            plan: {
+              planId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+              queryIntent: 'LOOKUP',
+              seedUrns: [URN_TABLE_FCL_CYCLE_COUNTER],
+              traversalSteps: [{ relationType: 'CONTAINS_STEP', direction: 'OUTGOING', maxHops: 1 }],
+              overallMaxDepth: 1,
+              includeInferred: false,
+              fulltextKeywords: ['x'],
+              semanticQuery: 'x',
+            },
+          };
+        },
+      };
+
+      const result = await buildQueryExecutionPlan({
+        request: {
+          query: 'explain FCL_CYCLE_COUNTER relations',
+          limit: 20,
+          includeInferred: false,
+          recentTurns: [],
+        },
+        pinnedSnapshotId: pinnedSnapshot,
+        gateway,
+        planner,
+      });
+
+      expect(result.status).toBe('executable');
+      if (result.status === 'executable') {
+        expect(result.isDegraded).toBe(true);
+        expect(result.planTrace.reasonCode).toBe('PLANNER_SCHEMA_FAILURE');
+        expect(result.plan.traversalSteps.every((s) => s.direction !== 'BOTH')).toBe(true);
+      }
+    });
+
+    it('does not rewrite an IMPACT_ANALYSIS DatabaseObject plan to a single READS_FROM step', async () => {
+      const gateway = new MockGraphGateway([
+        {
+          urn: URN_TABLE_FCL_CYCLE_COUNTER,
+          canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+          kind: 'DatabaseObject',
+        },
+      ]);
+
+      const planner = {
+        async plan(): Promise<any> {
+          return {
+            type: 'plan',
+            plan: {
+              planId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+              queryIntent: 'IMPACT_ANALYSIS',
+              seedUrns: [URN_TABLE_FCL_CYCLE_COUNTER],
+              traversalSteps: [
+                { relationType: 'WRITES_TO', direction: 'INCOMING', maxHops: 1 },
+                { relationType: 'READS_FROM', direction: 'INCOMING', maxHops: 1 },
+              ],
+              overallMaxDepth: 1,
+              includeInferred: false,
+              fulltextKeywords: ['FCL_CYCLE_COUNTER'],
+              semanticQuery: 'impact',
+            },
+          };
+        },
+      };
+
+      const result = await buildQueryExecutionPlan({
+        request: {
+          query: 'what writes to FCL_CYCLE_COUNTER?',
+          limit: 20,
+          includeInferred: false,
+          recentTurns: [],
+        },
+        pinnedSnapshotId: pinnedSnapshot,
+        gateway,
+        planner,
+      });
+
+      expect(result.status).toBe('executable');
+      if (result.status === 'executable') {
+        expect(result.isDegraded).toBe(false);
+        expect(result.plan.traversalSteps.map((s) => s.relationType)).toEqual([
+          'WRITES_TO',
+          'READS_FROM',
+        ]);
       }
     });
 

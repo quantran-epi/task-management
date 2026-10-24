@@ -1,6 +1,7 @@
 import {
   ClarificationCandidate,
   ConversationTurn,
+  FailedSeed,
   LogicalQueryPlan,
   LogicalQueryPlanSchema,
   PlanTrace,
@@ -10,14 +11,23 @@ import {
 import {
   GraphRetrievalGateway,
   OperationOptions,
+  PlanValidationReasonCode,
   QueryPlanner,
 } from './contracts.js';
 import { URN_REGEX } from '../types/graphProtocol.js';
 import {
   NODE_KINDS,
   RELATION_TYPES,
-  RETRIEVAL_ONTOLOGY_REGISTRY,
 } from '../graph/ontology.js';
+import {
+  deriveSeedPlan,
+  LooseLogicalQueryPlanSchema,
+  TRAVERSAL_PLAN_LIMITS,
+  validateOverallDepth,
+  validateStepAgainstRegistry,
+  type LooseLogicalQueryPlan,
+  type LooseTraversalStepCandidate,
+} from './retrievalPlanDerivation.js';
 import { randomUUID } from 'node:crypto';
 
 /**
@@ -358,6 +368,7 @@ export type QueryExecutionPlanningOutcome =
       readonly planTrace: PlanTrace;
       readonly isFastPath: boolean;
       readonly isDegraded: boolean;
+      readonly failedSeeds: readonly FailedSeed[];
     }
   | {
       readonly status: 'needsClarification';
@@ -377,155 +388,153 @@ export type QueryExecutionPlanningOutcome =
       readonly planTrace: PlanTrace;
     };
 
-/**
- * Normalizes plan semantics where planner output remains non-deterministic (e.g. IMPACT_ANALYSIS on DatabaseObject).
- */
-export function normalizePlanSemantics(
-  plan: LogicalQueryPlan,
-  candidates: readonly ClarificationCandidate[]
-): LogicalQueryPlan {
-  if (plan.queryIntent === 'IMPACT_ANALYSIS') {
-    const candidateMap = new Map(candidates.map((c) => [c.urn, c]));
-    const seedCandidates = plan.seedUrns.map((urn) => candidateMap.get(urn)).filter(Boolean);
-    const hasDbObjectSeed = seedCandidates.some((c) => c?.kind === 'DatabaseObject');
-
-    if (hasDbObjectSeed) {
-      // DatabaseObject is only targeted by READS_FROM/WRITES_TO. Always canonicalize
-      // impact traversal so a schema-valid but incomplete model plan cannot skip callers.
-      const normalizedSteps: TraversalStep[] = [
-        {
-          relationType: 'READS_FROM',
-          direction: 'INCOMING',
-          maxHops: 1,
-          targetKind: 'SoftwareComponent',
-        },
-      ];
-      return {
-        ...plan,
-        traversalSteps: normalizedSteps,
-        overallMaxDepth: 1,
-      };
-    }
-  }
-  return plan;
+export interface PlanSemanticValidation {
+  readonly valid: boolean;
+  readonly reasonCodes: readonly PlanValidationReasonCode[];
+  readonly failedSeeds: readonly FailedSeed[];
+  readonly plan?: LooseLogicalQueryPlan | undefined;
 }
 
 /**
- * Validates logical plan against server-resolved allowlists and ontology registry bounds.
+ * Merges per-seed derived plans into one executable plan, bounded by MAX_STEPS (D-05..D-08).
  */
-function validatePlanSemantics(
-  plan: LogicalQueryPlan,
-  allowedUrnSet: ReadonlySet<string>
-): { valid: boolean; issues: string[] } {
-  const issues: string[] = [];
+function mergeSeedPlans(
+  seeds: readonly ClarificationCandidate[],
+  maxDepth: number
+): { steps: TraversalStep[]; failedSeeds: FailedSeed[] } {
+  const steps: TraversalStep[] = [];
+  const failedSeeds: FailedSeed[] = [];
 
-  // Check seed URNs against server-resolved allowlist
-  for (const seed of plan.seedUrns) {
-    if (!allowedUrnSet.has(seed)) {
-      issues.push(`Seed URN ${seed} is not in server-resolved candidate allowlist`);
-    }
-  }
-
-  // Traversal steps bounds: max 5
-  if (plan.traversalSteps.length > 5) {
-    issues.push(`Traversal steps count ${plan.traversalSteps.length} exceeds maximum 5`);
-  }
-
-  // Overall max depth 1..3
-  if (plan.overallMaxDepth < 1 || plan.overallMaxDepth > 3) {
-    issues.push(`Overall max depth ${plan.overallMaxDepth} outside permitted range 1..3`);
-  }
-
-  // Traversal steps relation and direction checks
-  for (let i = 0; i < plan.traversalSteps.length; i++) {
-    const step = plan.traversalSteps[i]!;
-    const registryEntry = RETRIEVAL_ONTOLOGY_REGISTRY[step.relationType];
-    if (!registryEntry) {
-      issues.push(`Unknown relation type ${step.relationType} at step ${i}`);
+  for (const seed of seeds.slice(0, TRAVERSAL_PLAN_LIMITS.MAX_SEEDS)) {
+    if (steps.length >= TRAVERSAL_PLAN_LIMITS.MAX_STEPS) break;
+    const derived = deriveSeedPlan(seed, {
+      maxDepth,
+      allowAllRelations: true,
+      applySafeFallback: true,
+    });
+    if (derived.steps.length === 0) {
+      failedSeeds.push({ urn: seed.urn, reasonCode: 'PLAN_REJECTED' });
       continue;
     }
+    steps.push(...derived.steps.slice(0, TRAVERSAL_PLAN_LIMITS.MAX_STEPS - steps.length));
+  }
 
-    if (step.maxHops < 1 || step.maxHops > 3) {
-      issues.push(`Step ${i} maxHops ${step.maxHops} outside range 1..3`);
-    }
-    if (step.maxHops > registryEntry.maxHops) {
-      issues.push(`Step ${i} maxHops ${step.maxHops} exceeds ontology ceiling ${registryEntry.maxHops}`);
-    }
+  return { steps, failedSeeds };
+}
 
-    if (step.targetKind && !NODE_KINDS.includes(step.targetKind)) {
-      issues.push(`Step ${i} targetKind ${step.targetKind} not in allowed NODE_KINDS`);
+/**
+ * Per-seed semantic validation against server-resolved candidates and the frozen
+ * registry. Unknown seeds are reported individually and never erase valid ones
+ * (D-13). Returns stable reason codes only — no query text, relation names, or
+ * exception messages (D-11, D-14).
+ */
+export function validatePlanSemantics(
+  plan: LooseLogicalQueryPlan,
+  candidates: readonly ClarificationCandidate[]
+): PlanSemanticValidation {
+  const candidateMap = new Map(candidates.map((candidate) => [candidate.urn, candidate]));
+  const failedSeeds: FailedSeed[] = [];
+  const survivingSeeds: ClarificationCandidate[] = [];
+
+  for (const urn of plan.seedUrns) {
+    const candidate = candidateMap.get(urn);
+    if (candidate) {
+      survivingSeeds.push(candidate);
+    } else {
+      failedSeeds.push({ urn, reasonCode: 'SEED_NOT_FOUND' });
     }
+  }
+
+  if (survivingSeeds.length === 0) {
+    return { valid: false, reasonCodes: ['SEED_NOT_FOUND'], failedSeeds };
+  }
+
+  const reasonCodes: PlanValidationReasonCode[] = [];
+  const depthReason = validateOverallDepth(plan.overallMaxDepth);
+  if (depthReason) reasonCodes.push(depthReason);
+
+  if (plan.traversalSteps.length > TRAVERSAL_PLAN_LIMITS.MAX_STEPS) {
+    reasonCodes.push('PLAN_REJECTED');
+  }
+
+  const survivingUrnSet = new Set(survivingSeeds.map((seed) => seed.urn));
+  const survivingKinds = survivingSeeds.map((seed) => seed.kind);
+  const validSteps: TraversalStep[] = [];
+
+  for (const looseStep of plan.traversalSteps) {
+    const step = {
+      relationType: looseStep.relationType,
+      direction: looseStep.direction ?? 'OUTGOING',
+      maxHops: looseStep.maxHops ?? 1,
+      ...(looseStep.targetKind ? { targetKind: looseStep.targetKind } : {}),
+      ...(looseStep.seedUrn ? { seedUrn: looseStep.seedUrn } : {}),
+    };
+    const kindCandidates = step.seedUrn
+      ? (() => {
+          const seed = candidateMap.get(step.seedUrn);
+          return seed ? [seed.kind] : [];
+        })()
+      : survivingKinds;
+
+    // A step naming a dropped seed is omitted rather than invalidating valid seeds.
+    if (step.seedUrn && !survivingUrnSet.has(step.seedUrn)) continue;
+
+    const codes = kindCandidates.map((kind) =>
+      validateStepAgainstRegistry(step as LooseTraversalStepCandidate, kind)
+    );
+    const stepReason = codes.includes(null)
+      ? null
+      : (codes.find((code) => code !== null) ?? 'PLAN_REJECTED');
+
+    if (stepReason) {
+      reasonCodes.push(stepReason);
+      continue;
+    }
+    validSteps.push(step as TraversalStep);
+  }
+
+  if (reasonCodes.length > 0) {
+    return { valid: false, reasonCodes: [...new Set(reasonCodes)], failedSeeds };
   }
 
   return {
-    valid: issues.length === 0,
-    issues,
+    valid: true,
+    reasonCodes: [],
+    failedSeeds,
+    plan: {
+      ...plan,
+      seedUrns: survivingSeeds.map((seed) => seed.urn),
+      traversalSteps: validSteps.map((step) => ({ ...step })),
+    },
   };
 }
 
 /**
- * Selects safe default 1-hop traversal steps based on candidate node kind (D-16).
- */
-export function defaultTraversalStepsForKind(kind?: string): TraversalStep[] {
-  switch (kind) {
-    case 'DatabaseObject':
-      return [
-        {
-          relationType: 'READS_FROM',
-          direction: 'BOTH',
-          maxHops: 1,
-        },
-      ];
-    case 'SoftwareComponent':
-      return [
-        {
-          relationType: 'CALLS',
-          direction: 'BOTH',
-          maxHops: 1,
-        },
-      ];
-    case 'ScheduledProcess':
-    case 'ProcessStep':
-    default:
-      return [
-        {
-          relationType: 'CONTAINS_STEP',
-          direction: 'BOTH',
-          maxHops: 1,
-        },
-      ];
-  }
-}
-
-/**
- * Builds a deterministic degraded fallback plan (D-06, D-16).
+ * Builds a deterministic degraded fallback plan using all ontology-valid one-hop
+ * relations per seed (D-07, D-12).
  */
 export function buildDeterministicFallbackPlan(
   rawQuery: string,
   resolvedSeeds: readonly ClarificationCandidate[],
   reasonCode: string = 'PLANNER_SCHEMA_FAILURE'
-): { plan: LogicalQueryPlan; planTrace: PlanTrace } {
-  const hasSeeds = resolvedSeeds.length > 0;
-  const seedUrns = hasSeeds
-    ? resolvedSeeds.slice(0, 5).map((c) => c.urn)
-    : [];
+): { plan: LogicalQueryPlan; planTrace: PlanTrace; failedSeeds: FailedSeed[] } {
+  const boundedSeeds = resolvedSeeds.slice(0, TRAVERSAL_PLAN_LIMITS.MAX_SEEDS);
+  const seedUrns = boundedSeeds.map((candidate) => candidate.urn);
+  const { steps, failedSeeds } = mergeSeedPlans(
+    boundedSeeds,
+    TRAVERSAL_PLAN_LIMITS.SAFE_FALLBACK_DEPTH
+  );
 
-  // If seeds exist, generate a single one-hop BOTH traversal step matching overallMaxDepth = 1
-  const traversalSteps: TraversalStep[] = [];
-  if (hasSeeds) {
-    traversalSteps.push(...defaultTraversalStepsForKind(resolvedSeeds[0]?.kind));
-  }
-
-  const keywords = hasSeeds
-    ? [rawQuery.trim(), ...resolvedSeeds.map((s) => s.canonicalName)]
+  const keywords = boundedSeeds.length > 0
+    ? [rawQuery.trim(), ...boundedSeeds.map((seed) => seed.canonicalName)]
     : [rawQuery.trim()];
 
   const fallbackPlan: LogicalQueryPlan = {
     planId: randomUUID(),
-    queryIntent: hasSeeds ? 'LOOKUP' : 'LOOKUP',
-    seedUrns: seedUrns.length > 0 ? seedUrns : ['urn:plannermate:fallback:none:none'], // placeholder if empty, but seedUrns validated with min 1
-    traversalSteps,
-    overallMaxDepth: 1,
+    queryIntent: 'LOOKUP',
+    seedUrns: seedUrns.length > 0 ? seedUrns : ['urn:plannermate:fallback:none:none'],
+    traversalSteps: steps,
+    overallMaxDepth: TRAVERSAL_PLAN_LIMITS.SAFE_FALLBACK_DEPTH,
     includeInferred: false,
     fulltextKeywords: keywords.filter(Boolean),
     semanticQuery: rawQuery.trim(),
@@ -536,28 +545,31 @@ export function buildDeterministicFallbackPlan(
     degradedFallback: true,
     intent: 'LOOKUP',
     resolvedUrns: seedUrns.length > 0 ? seedUrns : undefined,
-    depth: 1,
+    depth: TRAVERSAL_PLAN_LIMITS.SAFE_FALLBACK_DEPTH,
     reasonCode,
   };
 
-  return { plan: fallbackPlan, planTrace };
+  return { plan: fallbackPlan, planTrace, failedSeeds };
 }
 
 /**
- * Builds default fast-path execution plan for a uniquely resolved entity identifier.
+ * Builds the fast-path plan for a uniquely resolved entity identifier.
  */
 function buildFastPathPlan(
   rawQuery: string,
   resolvedEntity: ClarificationCandidate
-): { plan: LogicalQueryPlan; planTrace: PlanTrace } {
-  const traversalSteps: TraversalStep[] = defaultTraversalStepsForKind(resolvedEntity.kind);
+): { plan: LogicalQueryPlan; planTrace: PlanTrace; failedSeeds: FailedSeed[] } {
+  const { steps, failedSeeds } = mergeSeedPlans(
+    [resolvedEntity],
+    TRAVERSAL_PLAN_LIMITS.SAFE_FALLBACK_DEPTH
+  );
 
   const plan: LogicalQueryPlan = {
     planId: randomUUID(),
     queryIntent: 'LOOKUP',
     seedUrns: [resolvedEntity.urn],
-    traversalSteps,
-    overallMaxDepth: 1,
+    traversalSteps: steps,
+    overallMaxDepth: TRAVERSAL_PLAN_LIMITS.SAFE_FALLBACK_DEPTH,
     includeInferred: false,
     fulltextKeywords: [rawQuery.trim(), resolvedEntity.canonicalName],
     semanticQuery: rawQuery.trim(),
@@ -568,10 +580,10 @@ function buildFastPathPlan(
     degradedFallback: false,
     intent: 'LOOKUP',
     resolvedUrns: [resolvedEntity.urn],
-    depth: 1,
+    depth: TRAVERSAL_PLAN_LIMITS.SAFE_FALLBACK_DEPTH,
   };
 
-  return { plan, planTrace };
+  return { plan, planTrace, failedSeeds };
 }
 
 export interface BuildPlanParams {
@@ -616,6 +628,7 @@ export async function buildQueryExecutionPlan(
         planTrace: fastPathResult.planTrace,
         isFastPath: true,
         isDegraded: false,
+        failedSeeds: fastPathResult.failedSeeds,
       };
     }
     // If pure identifier is ambiguous or needs clarification, fall through to natural resolution & clarification logic
@@ -651,7 +664,6 @@ export async function buildQueryExecutionPlan(
 
   // Forward all resolved/ambiguous candidates to QueryPlanner
   const resolvedCandidates = [...resolution.candidates];
-  const allowedUrnSet = new Set(resolvedCandidates.map((c) => c.urn));
 
   // Step 4: Invoke QueryPlanner
   const plannerContext = {
@@ -660,30 +672,47 @@ export async function buildQueryExecutionPlan(
     registeredRelationTypes: RELATION_TYPES,
   };
 
-  // Helper to validate a returned plan
-  const validateResultPlan = (candidatePlan: any): { valid: boolean; plan?: LogicalQueryPlan; issues: string[] } => {
-    // 1. Zod schema validation
-    const parsed = LogicalQueryPlanSchema.safeParse(candidatePlan);
-    if (!parsed.success) {
+  // Helper to validate a returned plan (stable codes only)
+  const validateResultPlan = (
+    candidatePlan: unknown
+  ): {
+    valid: boolean;
+    plan?: LogicalQueryPlan;
+    reasonCodes: PlanValidationReasonCode[];
+    failedSeeds: FailedSeed[];
+  } => {
+    // 1. Loose parse so unknown relations and over-depth values reach semantic
+    //    validation with stable codes instead of dying as PLAN_REJECTED.
+    const loose = LooseLogicalQueryPlanSchema.safeParse(candidatePlan);
+    if (!loose.success) {
+      return { valid: false, reasonCodes: ['PLAN_REJECTED'], failedSeeds: [] };
+    }
+
+    // 2. Per-seed semantic validation against resolved candidates & registry
+    const semanticCheck = validatePlanSemantics(loose.data, resolvedCandidates);
+    if (!semanticCheck.valid || !semanticCheck.plan) {
       return {
         valid: false,
-        issues: parsed.error.issues.map((iss) => `${iss.path.join('.')}: ${iss.message}`),
+        reasonCodes: [...semanticCheck.reasonCodes],
+        failedSeeds: [...semanticCheck.failedSeeds],
       };
     }
 
-    // 2. Semantic validation against allowed URNs & registry
-    const semanticCheck = validatePlanSemantics(parsed.data, allowedUrnSet);
-    if (!semanticCheck.valid) {
+    // 3. Strict parse once semantics pass, producing the typed plan.
+    const strict = LogicalQueryPlanSchema.safeParse(semanticCheck.plan);
+    if (!strict.success) {
       return {
         valid: false,
-        issues: semanticCheck.issues,
+        reasonCodes: ['PLAN_REJECTED'],
+        failedSeeds: [...semanticCheck.failedSeeds],
       };
     }
 
     return {
       valid: true,
-      plan: parsed.data,
-      issues: [],
+      plan: strict.data,
+      reasonCodes: [],
+      failedSeeds: [...semanticCheck.failedSeeds],
     };
   };
 
@@ -722,8 +751,7 @@ export async function buildQueryExecutionPlan(
     }
 
     if (firstResult.type === 'plan') {
-      const normalizedPlan = normalizePlanSemantics(firstResult.plan, resolvedCandidates);
-      const check = validateResultPlan(normalizedPlan);
+      const check = validateResultPlan(firstResult.plan);
       if (check.valid && check.plan) {
         return {
           status: 'executable',
@@ -737,20 +765,19 @@ export async function buildQueryExecutionPlan(
           },
           isFastPath: false,
           isDegraded: false,
+          failedSeeds: check.failedSeeds,
         };
       }
 
-      // Exactly ONE repair attempt (D-06, D-16, T-18-02)
-      // Call planner again with repair feedback (issues codes/paths only, no secrets or raw output)
-      const repairRequest: RetrievalRequest = {
-        ...request,
-        query: `${rawQuery} [REPAIR_VALIDATION_ERRORS: ${check.issues.join('; ')}]`,
+      // Exactly ONE repair attempt. The original query is reused unchanged and the
+      // context carries stable reason codes only (D-11).
+      const repairContext = {
+        ...plannerContext,
+        repair: { attempt: 1 as const, reasonCodes: check.reasonCodes },
       };
-
-      const repairResult = await planner.plan(repairRequest, plannerContext, options);
+      const repairResult = await planner.plan(request, repairContext, options);
       if (repairResult.type === 'plan') {
-        const normalizedRepairPlan = normalizePlanSemantics(repairResult.plan, resolvedCandidates);
-        const repairCheck = validateResultPlan(normalizedRepairPlan);
+        const repairCheck = validateResultPlan(repairResult.plan);
         if (repairCheck.valid && repairCheck.plan) {
           return {
             status: 'executable',
@@ -764,6 +791,7 @@ export async function buildQueryExecutionPlan(
             },
             isFastPath: false,
             isDegraded: false,
+            failedSeeds: repairCheck.failedSeeds,
           };
         }
       }
@@ -775,7 +803,7 @@ export async function buildQueryExecutionPlan(
     // If planner throws non-abort error, proceed to degraded fallback
   }
 
-  // Degraded fallback on planner failure or validation failure
+  // Degraded fallback on planner failure or validation failure (D-12)
   const fallback = buildDeterministicFallbackPlan(
     rawQuery,
     resolvedCandidates,
@@ -788,5 +816,6 @@ export async function buildQueryExecutionPlan(
     planTrace: fallback.planTrace,
     isFastPath: false,
     isDegraded: true,
+    failedSeeds: fallback.failedSeeds,
   };
 }
