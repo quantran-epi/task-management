@@ -175,6 +175,12 @@ export interface GraphTraversalResult {
   readonly chunks?: readonly ChunkItem[] | undefined;
   readonly entities: readonly EntityItem[];
   readonly edges: readonly EdgeItem[];
+  /**
+   * Resolved seed entities, kept independent of path completion so a seed with
+   * zero matching edges still reaches the response (D-01, SC-2). Typed as
+   * EntityItem so snapshot identity travels with the seed.
+   */
+  readonly seedEntities?: readonly EntityItem[] | undefined;
   readonly paths?: readonly GraphTraversalPathRecord[] | undefined;
   readonly truncated: boolean;
   readonly truncationReason?: string | undefined;

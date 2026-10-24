@@ -1376,29 +1376,14 @@ export class Neo4jRepository implements GraphRepository {
         });
 
         const records = [...res.records];
-        if (
-          criteria.plan.queryIntent === 'IMPACT_ANALYSIS' &&
-          step.relationType === 'READS_FROM' &&
-          step.direction === 'INCOMING'
-        ) {
-          const writesQuery = STATIC_TRAVERSAL_QUERIES[`WRITES_TO:INCOMING:${step.maxHops}`];
-          if (writesQuery) {
-            const writesRes = await session.run(writesQuery, {
-              snapshotId,
-              seedUrns: activeSeeds,
-              evidenceClasses,
-              pathLimit: neo4j.int(51),
-              maxEdges: neo4j.int(criteria.limitEdges),
-            });
-            records.push(...writesRes.records);
-          }
-        }
 
         const segmentsBySeed = new Map<string, PartialPath[]>();
         for (const record of records) {
           const nodes = (record.get('pathNodes') as RawNode[] | null) ?? [];
           const edges = ((record.get('pathEdges') as any[] | null) ?? []).map(toRawEdge);
-          if (nodes.length !== edges.length + 1 || edges.length === 0) continue;
+          // A path record with no edges carries no relation segment; the seed itself
+          // is preserved separately via resolveEntities below.
+          if (nodes.length !== edges.length + 1 || edges.length < 1) continue;
           if (step.targetKind) {
             const target = nodes.at(-1);
             if (target?.kind !== step.targetKind) continue;
@@ -1459,13 +1444,22 @@ export class Neo4jRepository implements GraphRepository {
         if (frontier.length === 0) break;
       }
 
+      // Seeds are resolved independently of path completion so a seed with zero
+      // matching edges still reaches the response (D-01, T-24-05). Relation
+      // selection stays planning-owned; no ad-hoc compensation runs here.
+      const seedCandidates = await this.resolveEntities(
+        snapshotId,
+        [...new Set(criteria.seedUrns)],
+        options
+      );
+      const seedByUrn = new Map(seedCandidates.map((candidate) => [candidate.urn, candidate]));
+
       const entityByUrn = new Map<string, EntityItem>();
       const edgeByKey = new Map<string, EdgeItem>();
       const chunkById = new Map<string, ChunkItem>();
       const pathRecords: GraphTraversalPathRecord[] = [];
 
       for (const path of frontier) {
-        if (path.edges.length === 0) continue;
         const newNodeCount = path.nodes.filter((node) => !entityByUrn.has(node.urn)).length;
         const newEdgeCount = path.edges.filter((edge) => !edgeByKey.has(edge.factKey)).length;
         if (
@@ -1478,14 +1472,17 @@ export class Neo4jRepository implements GraphRepository {
 
         for (const node of path.nodes) {
           if (!entityByUrn.has(node.urn)) {
+            const seed = seedByUrn.get(node.urn);
+            const kind = node.kind ?? seed?.kind;
+            if (!kind) continue;
             entityByUrn.set(node.urn, {
               type: 'entity',
               id: node.urn,
               score: 1,
               modalitiesContributed: ['graph'],
               urn: node.urn,
-              canonicalName: node.canonicalName || node.urn,
-              kind: node.kind!,
+              canonicalName: node.canonicalName || seed?.canonicalName || node.urn,
+              kind,
               snapshotId,
               ...(node.firstSeenInDoc ? { firstSeenInDoc: node.firstSeenInDoc } : {}),
               hasConflict: false,
@@ -1542,9 +1539,37 @@ export class Neo4jRepository implements GraphRepository {
         });
       }
 
+      // Seeds always survive, even when every path from them was empty or dropped.
+      const seedEntities: EntityItem[] = [];
+      for (const urn of criteria.seedUrns) {
+        const seed = seedByUrn.get(urn);
+        if (!seed) continue;
+        let entity = entityByUrn.get(seed.urn);
+        if (!entity) {
+          if (entityByUrn.size >= criteria.limitNodes) {
+            isTruncated = true;
+            continue;
+          }
+          entity = {
+            type: 'entity',
+            id: seed.urn,
+            score: 1,
+            modalitiesContributed: ['graph'],
+            urn: seed.urn,
+            canonicalName: seed.canonicalName,
+            kind: seed.kind,
+            snapshotId,
+            hasConflict: false,
+          };
+          entityByUrn.set(seed.urn, entity);
+        }
+        seedEntities.push(entity);
+      }
+
       const result = {
         chunks: [...chunkById.values()],
         entities: [...entityByUrn.values()],
+        seedEntities,
         edges: [...edgeByKey.values()],
         paths: pathRecords,
         truncated: isTruncated,

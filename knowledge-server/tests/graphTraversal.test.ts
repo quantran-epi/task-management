@@ -454,6 +454,92 @@ describe('18-W0-02C: Static Bounded Cypher Templates & Plan Validation', () => {
       expect(result.edges.map((e) => e.relationType)).toEqual(['INVOKES', 'CALLS']);
     });
 
+    it('reports separate entity, edge, and path counts alongside the legacy itemCount', async () => {
+      const gateway = new StubGateway();
+      gateway.mockEntities = [
+        {
+          type: 'entity',
+          id: URN_PROCESS_60000006,
+          score: 1.0,
+          modalitiesContributed: ['graph'],
+          urn: URN_PROCESS_60000006,
+          canonicalName: 'SHB - Credit calculations',
+          kind: 'ScheduledProcess',
+          snapshotId: pinnedSnapshot,
+          hasConflict: false,
+        },
+        {
+          type: 'entity',
+          id: URN_CONTAINER_60000005,
+          score: 1.0,
+          modalitiesContributed: ['graph'],
+          urn: URN_CONTAINER_60000005,
+          canonicalName: 'Step 10 - Due date period cycle',
+          kind: 'ProcessStep',
+          snapshotId: pinnedSnapshot,
+          hasConflict: false,
+        },
+      ];
+      gateway.mockEdges = [{
+        type: 'edge',
+        id: 'fact-count',
+        score: 1.0,
+        modalitiesContributed: ['graph'],
+        factKey: 'fact-count',
+        sourceUrn: URN_PROCESS_60000006,
+        relationType: 'CONTAINS_STEP',
+        targetUrn: URN_CONTAINER_60000005,
+        evidenceClass: 'OBSERVED',
+        supportingChunkIds: ['chunk-count'],
+        snapshotId: pinnedSnapshot,
+        hasConflict: false,
+      }];
+      gateway.mockPaths = [{
+        nodeUrns: [URN_PROCESS_60000006, URN_CONTAINER_60000005],
+        edgeFactKeys: ['fact-count'],
+        hopClassifications: ['OBSERVED'],
+        hopSupportingChunkIds: [['chunk-count']],
+        edgeSnapshotIds: [pinnedSnapshot],
+        hasConflict: false,
+      }];
+
+      const result = await runBoundedGraphTraversal(createPlan(), pinnedSnapshot, gateway);
+
+      expect(result.status.entityCount).toBe(2);
+      expect(result.status.edgeCount).toBe(1);
+      expect(result.status.pathCount).toBe(1);
+      expect(result.status.itemCount).toBe(3);
+      expect(result.status.reason).toBeUndefined();
+    });
+
+    it('returns a zero-edge seed as SEED_FOUND_NO_RELATION rather than an empty result', async () => {
+      const gateway = new StubGateway();
+      gateway.mockEntities = [{
+        type: 'entity',
+        id: URN_TABLE_FCL_CYCLE_COUNTER,
+        score: 1.0,
+        modalitiesContributed: ['graph'],
+        urn: URN_TABLE_FCL_CYCLE_COUNTER,
+        canonicalName: 'MAIN1.FCL_CYCLE_COUNTER',
+        kind: 'DatabaseObject',
+        snapshotId: pinnedSnapshot,
+        hasConflict: false,
+      }];
+
+      const plan = createPlan({
+        seedUrns: [URN_TABLE_FCL_CYCLE_COUNTER],
+        traversalSteps: [],
+      });
+      const result = await runBoundedGraphTraversal(plan, pinnedSnapshot, gateway);
+
+      expect(result.entities).toHaveLength(1);
+      expect(result.status.entityCount).toBe(1);
+      expect(result.status.edgeCount).toBe(0);
+      expect(result.status.pathCount).toBe(0);
+      expect(result.status.status).toBe('ok');
+      expect(result.status.reason).toBe('SEED_FOUND_NO_RELATION');
+    });
+
     it('preserves ordered 2-hop path provenance', async () => {
       const gateway = new StubGateway();
       gateway.mockPaths = [{

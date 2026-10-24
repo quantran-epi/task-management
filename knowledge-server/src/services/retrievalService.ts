@@ -29,6 +29,7 @@ import {
 import {
   runBoundedGraphTraversal,
   type BoundedGraphTraversalResult,
+  type BoundedGraphTraversalStatus,
 } from '../retrieval/graphTraversal.js';
 import {
   buildConflictGroups,
@@ -175,7 +176,9 @@ interface ModalityRunResult<T> {
   readonly paths?: readonly OrderedPath[] | undefined;
 }
 
-type GraphModalityRunResult = Omit<ModalityRunResult<ChunkItem | EntityItem | EdgeItem>, 'paths'> & {
+type GraphModalityRunResult = {
+  readonly status: BoundedGraphTraversalStatus;
+  readonly items: readonly (ChunkItem | EntityItem | EdgeItem)[];
   readonly pathCandidates: BoundedGraphTraversalResult['paths'];
 };
 
@@ -378,7 +381,15 @@ export class RetrievalService {
       graphSettled.status === 'fulfilled'
         ? graphSettled.value
         : {
-            status: { status: 'error', latencyMs: 0, itemCount: 0, reason: 'PROVIDER_ERROR' },
+            status: {
+              status: 'error',
+              latencyMs: 0,
+              itemCount: 0,
+              entityCount: 0,
+              edgeCount: 0,
+              pathCount: 0,
+              reason: 'PROVIDER_ERROR',
+            },
             items: [],
             pathCandidates: [],
           };
@@ -760,7 +771,15 @@ export class RetrievalService {
 
     if (run.timedOut) {
       return {
-        status: { status: 'timeout', latencyMs: run.latencyMs, itemCount: 0, reason: 'TIMEOUT' },
+        status: {
+          status: 'timeout',
+          latencyMs: run.latencyMs,
+          itemCount: 0,
+          entityCount: 0,
+          edgeCount: 0,
+          pathCount: 0,
+          reason: 'TIMEOUT',
+        },
         items: [],
         pathCandidates: [],
       };
@@ -768,16 +787,33 @@ export class RetrievalService {
 
     if (run.error) {
       return {
-        status: { status: 'error', latencyMs: run.latencyMs, itemCount: 0, reason: 'PROVIDER_ERROR' },
+        status: {
+          status: 'error',
+          latencyMs: run.latencyMs,
+          itemCount: 0,
+          entityCount: 0,
+          edgeCount: 0,
+          pathCount: 0,
+          reason: 'PROVIDER_ERROR',
+        },
         items: [],
         pathCandidates: [],
       };
     }
 
     const result: BoundedGraphTraversalResult = run.result ?? {
-      status: { status: 'unavailable', latencyMs: run.latencyMs, itemCount: 0, reason: 'PROVIDER_ERROR' },
+      status: {
+        status: 'unavailable',
+        latencyMs: run.latencyMs,
+        itemCount: 0,
+        entityCount: 0,
+        edgeCount: 0,
+        pathCount: 0,
+        reason: 'PROVIDER_ERROR',
+      },
       chunks: [],
       entities: [],
+      seedEntities: [],
       edges: [],
       paths: [],
     };

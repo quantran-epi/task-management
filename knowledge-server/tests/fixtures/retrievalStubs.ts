@@ -215,7 +215,10 @@ export class DeterministicIndexGatewayStub implements RetrievalIndexGateway {
 export class DeterministicGraphGatewayStub implements GraphRetrievalGateway {
   public mockCandidates: ClarificationCandidate[] = [];
   public mockEntities: EntityItem[] = [];
+  public mockSeedEntities: EntityItem[] = [];
   public mockEdges: EdgeItem[] = [];
+  public mockPaths: NonNullable<GraphTraversalResult['paths']> = [];
+  public mockTruncationReason: string | undefined = undefined;
   public isTruncated: boolean = false;
 
   async resolveEntities(
@@ -235,9 +238,13 @@ export class DeterministicGraphGatewayStub implements GraphRetrievalGateway {
     if (options?.signal?.aborted) throw new Error('Graph traversal aborted');
     return {
       entities: this.mockEntities.slice(0, criteria.limitNodes),
+      seedEntities: this.mockSeedEntities,
       edges: this.mockEdges.slice(0, criteria.limitEdges),
+      paths: this.mockPaths,
       truncated: this.isTruncated,
-      truncationReason: this.isTruncated ? 'RESULT_LIMIT_REACHED' : undefined,
+      truncationReason: this.isTruncated
+        ? this.mockTruncationReason ?? 'RESULT_LIMIT_REACHED'
+        : undefined,
     };
   }
 }

@@ -458,7 +458,11 @@ describe('19.2-06-T2: Multi-hop Plan-Driven Traversal and Deletion of Catch-All 
       limitEdges: 200,
     });
 
-    expect(mockRun.mock.calls.map((entry) => entry[1].seedUrns)).toEqual([
+    expect(
+      mockRun.mock.calls
+        .filter((entry) => entry[1]?.seedUrns !== undefined)
+        .map((entry) => entry[1].seedUrns)
+    ).toEqual([
       [URN_PROCESS_60000006],
       [urnStep],
       [urnComponent],

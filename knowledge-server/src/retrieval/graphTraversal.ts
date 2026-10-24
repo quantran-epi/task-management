@@ -285,13 +285,32 @@ export interface OrderedPathCandidate {
   readonly hasConflict: boolean;
 }
 
+export interface BoundedGraphTraversalStatus extends ModalityStatusDetail {
+  /** Distinct entities retained, including resolved seeds with no edges. */
+  readonly entityCount: number;
+  /** Distinct edges retained. */
+  readonly edgeCount: number;
+  /** Citation-closed ordered paths retained. */
+  readonly pathCount: number;
+}
+
 export interface BoundedGraphTraversalResult {
-  readonly status: ModalityStatusDetail;
+  readonly status: BoundedGraphTraversalStatus;
   readonly chunks: readonly ChunkItem[];
   readonly entities: readonly EntityItem[];
+  /** Resolved seeds; present even when traversal produced no graph edges (D-01). */
+  readonly seedEntities: readonly EntityItem[];
   readonly edges: readonly EdgeItem[];
   readonly paths: readonly OrderedPathCandidate[];
 }
+
+const NO_ENTITIES = {
+  chunks: [],
+  entities: [],
+  seedEntities: [],
+  edges: [],
+  paths: [],
+} as const;
 
 /**
  * Hard caps enforced at Cypher boundary and TypeScript mapping (D-15).
@@ -326,12 +345,12 @@ export async function runBoundedGraphTraversal(
         status: 'stale',
         latencyMs: 0,
         itemCount: 0,
+        entityCount: 0,
+        edgeCount: 0,
+        pathCount: 0,
         reason: 'PINNED_SNAPSHOT_UNAVAILABLE',
       },
-      chunks: [],
-      entities: [],
-      edges: [],
-      paths: [],
+      ...NO_ENTITIES,
     };
   }
 
@@ -343,12 +362,12 @@ export async function runBoundedGraphTraversal(
         status: 'unavailable',
         latencyMs: 0,
         itemCount: 0,
+        entityCount: 0,
+        edgeCount: 0,
+        pathCount: 0,
         reason: 'NO_GRAPH_SEED',
       },
-      chunks: [],
-      entities: [],
-      edges: [],
-      paths: [],
+      ...NO_ENTITIES,
     };
   }
 
@@ -370,12 +389,12 @@ export async function runBoundedGraphTraversal(
           status: validation.reason === 'NO_GRAPH_SEED' ? 'unavailable' : 'error',
           latencyMs: 0,
           itemCount: 0,
+          entityCount: 0,
+          edgeCount: 0,
+          pathCount: 0,
           reason: validation.reason,
         },
-        chunks: [],
-        entities: [],
-        edges: [],
-        paths: [],
+        ...NO_ENTITIES,
       };
     }
     validatedPlan = validation.plan;
@@ -420,12 +439,12 @@ export async function runBoundedGraphTraversal(
           status: 'timeout',
           latencyMs,
           itemCount: 0,
+          entityCount: 0,
+          edgeCount: 0,
+          pathCount: 0,
           reason: 'TIMEOUT',
         },
-        chunks: [],
-      entities: [],
-        edges: [],
-        paths: [],
+        ...NO_ENTITIES,
       };
     }
 
@@ -439,12 +458,12 @@ export async function runBoundedGraphTraversal(
           status: 'stale',
           latencyMs,
           itemCount: 0,
+          entityCount: 0,
+          edgeCount: 0,
+          pathCount: 0,
           reason: 'PINNED_SNAPSHOT_UNAVAILABLE',
         },
-        chunks: [],
-      entities: [],
-        edges: [],
-        paths: [],
+        ...NO_ENTITIES,
       };
     }
 
@@ -453,12 +472,12 @@ export async function runBoundedGraphTraversal(
         status: 'error',
         latencyMs,
         itemCount: 0,
+        entityCount: 0,
+        edgeCount: 0,
+        pathCount: 0,
         reason: 'PROVIDER_ERROR',
       },
-      chunks: [],
-      entities: [],
-      edges: [],
-      paths: [],
+      ...NO_ENTITIES,
     };
   }
 
@@ -476,8 +495,29 @@ export async function runBoundedGraphTraversal(
   }
   const chunkList = Array.from(chunkMap.values()).slice(0, GRAPH_CAP_MAX_EDGES);
 
-  // 6. Map and deduplicate entities by URN
+  // 6. Map and deduplicate entities by URN. Seeds merge first so a resolved seed
+  //    always survives traversal, even when it produced zero edges (D-01, SC-2).
   const entityMap = new Map<string, EntityItem>();
+  const seedEntities: EntityItem[] = [];
+  for (const rawSeed of rawResult.seedEntities ?? []) {
+    if (!rawSeed.urn || !rawSeed.kind) continue;
+    const seed: EntityItem = {
+      type: 'entity',
+      id: rawSeed.urn,
+      score: rawSeed.score ?? 1.0,
+      modalitiesContributed: ['graph'],
+      urn: rawSeed.urn,
+      canonicalName: rawSeed.canonicalName,
+      kind: rawSeed.kind,
+      snapshotId: pinnedSnapshotId,
+      ...(rawSeed.firstSeenInDoc ? { firstSeenInDoc: rawSeed.firstSeenInDoc } : {}),
+      ...(rawSeed.conflictGroupId ? { conflictGroupId: rawSeed.conflictGroupId } : {}),
+      hasConflict: !!rawSeed.hasConflict,
+    };
+    seedEntities.push(seed);
+    if (!entityMap.has(seed.urn)) entityMap.set(seed.urn, seed);
+  }
+
   for (const rawEntity of rawResult.entities) {
     if (!rawEntity.urn) continue;
     if (!entityMap.has(rawEntity.urn)) {
@@ -497,7 +537,10 @@ export async function runBoundedGraphTraversal(
     }
   }
 
-  if (rawResult.entities.length > GRAPH_CAP_MAX_NODES || entityMap.size > GRAPH_CAP_MAX_NODES) {
+  if (
+    rawResult.entities.length + seedEntities.length > GRAPH_CAP_MAX_NODES ||
+    entityMap.size > GRAPH_CAP_MAX_NODES
+  ) {
     isTruncated = true;
   }
   const entityList = Array.from(entityMap.values()).slice(0, GRAPH_CAP_MAX_NODES);
@@ -559,17 +602,30 @@ export async function runBoundedGraphTraversal(
   }
 
   const latencyMs = Math.max(0, Date.now() - startMs);
-  const itemCount = chunkList.length + entityList.length + edgeList.length;
+  const entityCount = entityList.length;
+  const edgeCount = edgeList.length;
+  const pathCount = paths.length;
+  // itemCount stays the legacy sum so existing consumers keep working.
+  const itemCount = chunkList.length + entityCount + edgeCount;
+  const seedOnly = entityCount > 0 && edgeCount === 0 && pathCount === 0 && !isTruncated;
 
   return {
     status: {
       status: isTruncated ? 'truncated' : 'ok',
       latencyMs,
       itemCount,
-      reason: isTruncated ? 'RESULT_LIMIT_REACHED' : undefined,
+      entityCount,
+      edgeCount,
+      pathCount,
+      reason: isTruncated
+        ? 'RESULT_LIMIT_REACHED'
+        : seedOnly
+        ? 'SEED_FOUND_NO_RELATION'
+        : undefined,
     },
     chunks: chunkList,
     entities: entityList,
+    seedEntities,
     edges: edgeList,
     paths,
   };
