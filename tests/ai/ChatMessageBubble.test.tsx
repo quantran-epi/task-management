@@ -6,6 +6,75 @@ import { ChatMessageList } from '../../src/components/ai/ChatMessageList';
 import { ChatInputBar } from '../../src/components/ai/ChatInputBar';
 import { InlineApiErrorCard } from '../../src/components/ai/InlineApiErrorCard';
 import type { ChatMessage } from '../../src/types/models';
+import type { ChatMessageGrounding } from '../../src/services/ai/groundedAnswerSchemas';
+
+const seedOnlyGrounding: ChatMessageGrounding = {
+  schemaVersion: 1,
+  authority: 'server',
+  outcome: 'SEED_ONLY',
+  answer: null,
+  citations: [],
+  paths: [],
+  conflicts: [],
+  scope: {
+    setIds: ['10000000-0000-4000-8000-000000000010'],
+    routedScope: { domain: null, environment: null, version: null, comparisonMode: null },
+  },
+  modalityDiagnostics: {
+    fulltext: { status: 'ok', latencyMs: 4, itemCount: 0 },
+    vector: { status: 'ok', latencyMs: 4, itemCount: 0 },
+    graph: { status: 'ok', latencyMs: 9, itemCount: 2 },
+  },
+  coverageWarnings: [],
+  fallbackReason: 'NONE',
+  routerVersion: 'router-v1',
+  promptVersion: 'grounded-v1',
+  modelId: 'gpt-4o',
+  entities: [
+    {
+      urn: 'urn:plannermate:corebanking:DatabaseObject:MAIN1.EVT_EVENT',
+      canonicalName: 'MAIN1.EVT_EVENT',
+      kind: 'DatabaseObject',
+      snapshotId: '10000000-0000-4000-8000-000000000001',
+      evidenceClass: 'OBSERVED',
+    },
+    {
+      urn: 'urn:plannermate:corebanking:SoftwareComponent:PRC_PROCESS:60000006',
+      canonicalName: 'PRC_PROCESS:60000006',
+      kind: 'SoftwareComponent',
+      snapshotId: '10000000-0000-4000-8000-000000000001',
+    },
+  ],
+  graphCounts: { entity: 2, edge: 0, path: 0 },
+  stageDiagnostics: [
+    {
+      stage: 'entity_resolution',
+      status: 'ok',
+      latencyMs: 11,
+      accepted: 2,
+      rejected: 1,
+      truncated: true,
+      fallback: false,
+      reasonCodes: ['RESULT_LIMIT_REACHED'],
+    },
+  ],
+  failedSeeds: [
+    {
+      urn: 'urn:plannermate:corebanking:DatabaseObject:MISSING_SEED',
+      reasonCode: 'SEED_NOT_FOUND',
+    },
+  ],
+  createdAt: '2026-10-24T10:00:00.000Z',
+};
+
+const seedOnlyMessage: ChatMessage = {
+  id: 'msg-seed-only',
+  threadId: 'thread-1',
+  role: 'assistant',
+  content: '',
+  grounding: seedOnlyGrounding,
+  createdAt: '2026-10-24T10:00:00.000Z',
+};
 
 describe('ChatMessageBubble', () => {
   it('renders user messages with accent styling and user content', () => {
@@ -907,6 +976,98 @@ describe('ChatInputBar', () => {
     expect(stopBtn).toBeInTheDocument();
     fireEvent.click(stopBtn);
     expect(handleStop).toHaveBeenCalled();
+  });
+});
+
+describe('ChatMessageBubble Phase 24 seed-only', () => {
+  it('renders one entity card per entity with separate counts, failed-seed notice, and stage flags', () => {
+    render(<ChatMessageBubble message={seedOnlyMessage} />);
+
+    expect(screen.getByText('Đã tìm thấy thực thể')).toBeInTheDocument();
+    expect(screen.getByText('MAIN1.EVT_EVENT')).toBeInTheDocument();
+    expect(screen.getByText('PRC_PROCESS:60000006')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Tìm liên quan' })).toHaveLength(2);
+    expect(screen.getByText('Thực thể: 2 · Cạnh: 0 · Đường dẫn: 0')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(screen.getByText(/MISSING_SEED/)).toBeInTheDocument();
+    expect(
+      screen.queryByText('Không tìm thấy bằng chứng trong tri thức đã xuất bản')
+    ).not.toBeInTheDocument();
+  });
+
+  it('renders historical grounding without Phase 24 fields unchanged', () => {
+    const historical: ChatMessage = {
+      id: 'msg-historical',
+      threadId: 'thread-1',
+      role: 'assistant',
+      content: '',
+      createdAt: '2026-10-01T10:00:00.000Z',
+      grounding: {
+        schemaVersion: 1,
+        authority: 'server',
+        outcome: 'READY',
+        answer: {
+          schemaVersion: 1,
+          language: 'vi',
+          conclusion: 'Hệ thống hỗ trợ 1000 TPS.',
+          claims: [],
+          unsupportedParts: [],
+        },
+        citations: [],
+        paths: [],
+        conflicts: [],
+        scope: null,
+        modalityDiagnostics: null,
+        coverageWarnings: [],
+        fallbackReason: 'NONE',
+        routerVersion: null,
+        promptVersion: 'v1',
+        modelId: 'gpt-4o',
+        createdAt: '2026-10-01T10:00:00.000Z',
+      },
+    };
+
+    render(<ChatMessageBubble message={historical} />);
+
+    expect(screen.getByText('Hệ thống hỗ trợ 1000 TPS.')).toBeInTheDocument();
+    expect(screen.queryByText('Đã tìm thấy thực thể')).not.toBeInTheDocument();
+  });
+
+  it('card click reports the exact entity plus source message ID', () => {
+    const onFindRelated = vi.fn();
+    render(
+      <ChatMessageBubble
+        message={seedOnlyMessage}
+        groundedCallbacks={{ onFindRelated }}
+      />
+    );
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Tìm liên quan' })[0]!);
+
+    expect(onFindRelated).toHaveBeenCalledTimes(1);
+    expect(onFindRelated).toHaveBeenCalledWith(
+      seedOnlyGrounding.entities![0],
+      'msg-seed-only'
+    );
+  });
+
+  it('pending entity disables only its own CTA and ignores a second click', () => {
+    const onFindRelated = vi.fn();
+    render(
+      <ChatMessageBubble
+        message={seedOnlyMessage}
+        groundedCallbacks={{
+          onFindRelated,
+          findingRelatedKey: `msg-seed-only:${seedOnlyGrounding.entities![0]!.urn}`,
+        }}
+      />
+    );
+
+    const [first, second] = screen.getAllByRole('button', { name: /Tìm liên quan/ });
+    expect(first).toBeDisabled();
+    expect(second).toBeEnabled();
+    fireEvent.click(first!);
+    expect(onFindRelated).not.toHaveBeenCalled();
   });
 });
 

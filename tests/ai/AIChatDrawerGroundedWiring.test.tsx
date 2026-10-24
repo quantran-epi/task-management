@@ -726,3 +726,222 @@ describe('AIChatDrawer Grounded Turn Wiring (Plan 19-14)', () => {
     expect(screen.queryByText(/Đang chuyển sang trợ lý TaskMate/)).toBeNull();
   });
 });
+
+describe('AIChatDrawer find-related wiring (Phase 24)', () => {
+  let testDb: TaskPlannerDatabase;
+
+  const readyGrounding: ChatMessageGrounding = {
+    schemaVersion: 1,
+    authority: 'server',
+    outcome: 'READY',
+    answer: {
+      schemaVersion: 1,
+      language: 'vi',
+      conclusion: 'MAIN1.EVT_EVENT được đọc bởi PRC_PROCESS.',
+      claims: [],
+      unsupportedParts: [],
+    },
+    citations: [],
+    paths: [],
+    conflicts: [],
+    scope: {
+      setIds: ['10000000-0000-4000-8000-000000000010'],
+      routedScope: { domain: null, environment: null, version: null, comparisonMode: null },
+    },
+    modalityDiagnostics: {
+      fulltext: { status: 'ok', latencyMs: 2, itemCount: 0 },
+      vector: { status: 'ok', latencyMs: 2, itemCount: 0 },
+      graph: { status: 'ok', latencyMs: 2, itemCount: 0 },
+    },
+    coverageWarnings: [],
+    fallbackReason: 'NONE',
+    routerVersion: 'router-v1',
+    promptVersion: 'grounded-v1',
+    modelId: 'gpt-4o',
+    createdAt: '2026-10-24T11:00:00.000Z',
+  };
+
+  const seedEntity = {
+    urn: 'urn:plannermate:corebanking:DatabaseObject:MAIN1.EVT_EVENT' as const,
+    canonicalName: 'MAIN1.EVT_EVENT',
+    kind: 'DatabaseObject' as const,
+    snapshotId: '10000000-0000-4000-8000-000000000001',
+    evidenceClass: 'OBSERVED' as const,
+  };
+
+  const seedGrounding: ChatMessageGrounding = {
+    schemaVersion: 1,
+    authority: 'server',
+    outcome: 'SEED_ONLY',
+    answer: null,
+    citations: [],
+    paths: [],
+    conflicts: [],
+    scope: {
+      setIds: ['10000000-0000-4000-8000-000000000010'],
+      routedScope: { domain: null, environment: null, version: null, comparisonMode: null },
+    },
+    modalityDiagnostics: {
+      fulltext: { status: 'ok', latencyMs: 2, itemCount: 0 },
+      vector: { status: 'ok', latencyMs: 2, itemCount: 0 },
+      graph: { status: 'ok', latencyMs: 5, itemCount: 1 },
+    },
+    coverageWarnings: [],
+    fallbackReason: 'NONE',
+    routerVersion: 'router-v1',
+    promptVersion: 'grounded-v1',
+    modelId: 'gpt-4o',
+    entities: [seedEntity],
+    graphCounts: { entity: 1, edge: 0, path: 0 },
+    createdAt: '2026-10-24T10:00:00.000Z',
+  };
+
+  beforeEach(async () => {
+    testDb = new TaskPlannerDatabase('TestFindRelated_' + Math.random().toString(36).slice(2));
+    await testDb.open();
+    clearGroundedTurnTestHooks();
+    vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-api-key');
+  });
+
+  afterEach(() => {
+    clearGroundedTurnTestHooks();
+  });
+
+  const saveSeedOnlyMessage = async () => {
+    const thread = await createOrGetThread({ scopeType: 'global' }, testDb);
+    const userMessage = await saveMessage(
+      { threadId: thread.id, role: 'user', content: 'MAIN1.EVT_EVENT là gì?' },
+      testDb
+    );
+    const assistantMessage = await saveMessage(
+      {
+        threadId: thread.id,
+        role: 'assistant',
+        content: '',
+        grounding: seedGrounding,
+      },
+      testDb
+    );
+    return { thread, userMessage, assistantMessage };
+  };
+
+  it('1. find-related appends the exact fixed new turn and runs the send path once', async () => {
+    const { thread } = await saveSeedOnlyMessage();
+    const runMock = vi.fn().mockResolvedValue({
+      kind: 'grounded_answer',
+      grounding: { ...readyGrounding, createdAt: '2026-10-24T11:00:00.000Z' },
+    } as GroundedTurnResult);
+    setGroundedTurnTestHooks({ runGroundedTurn: runMock });
+
+    render(<AIChatDrawer open={true} onClose={() => {}} db={testDb} />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Tìm liên quan' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tìm liên quan' }));
+
+    await waitFor(() => {
+      expect(runMock).toHaveBeenCalledTimes(1);
+    });
+    expect(runMock.mock.calls[0]?.[0]?.query).toBe(
+      'Tìm mọi quan hệ liên quan đến MAIN1.EVT_EVENT'
+    );
+
+    await waitFor(async () => {
+      const msgs = await getMessagesByThreadId(thread.id, testDb);
+      expect(msgs.filter((m) => m.role === 'user')).toHaveLength(2);
+      expect(msgs.filter((m) => m.role === 'user')[1]?.content).toBe(
+        'Tìm mọi quan hệ liên quan đến MAIN1.EVT_EVENT'
+      );
+    });
+  });
+
+  it('2. original message ID, text, and grounding stay byte-for-byte unchanged', async () => {
+    const { thread, userMessage, assistantMessage } = await saveSeedOnlyMessage();
+    const beforeUser = JSON.stringify(userMessage);
+    const beforeAssistant = JSON.stringify(assistantMessage);
+
+    const runMock = vi.fn().mockResolvedValue({
+      kind: 'grounded_answer',
+      grounding: { ...readyGrounding, createdAt: '2026-10-24T11:05:00.000Z' },
+    } as GroundedTurnResult);
+    setGroundedTurnTestHooks({ runGroundedTurn: runMock });
+
+    render(<AIChatDrawer open={true} onClose={() => {}} db={testDb} />);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Tìm liên quan' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tìm liên quan' }));
+    await waitFor(() => {
+      expect(runMock).toHaveBeenCalledTimes(1);
+    });
+
+    const msgs = await getMessagesByThreadId(thread.id, testDb);
+    expect(JSON.stringify(msgs.find((m) => m.id === userMessage.id))).toBe(beforeUser);
+    expect(JSON.stringify(msgs.find((m) => m.id === assistantMessage.id))).toBe(
+      beforeAssistant
+    );
+  });
+
+  it('3. repeated clicks while pending create no duplicate turn or request', async () => {
+    await saveSeedOnlyMessage();
+    let resolveTurn: ((res: GroundedTurnResult) => void) | null = null;
+    const runMock = vi.fn().mockImplementation(
+      () =>
+        new Promise<GroundedTurnResult>((resolve) => {
+          resolveTurn = resolve;
+        })
+    );
+    setGroundedTurnTestHooks({ runGroundedTurn: runMock });
+
+    render(<AIChatDrawer open={true} onClose={() => {}} db={testDb} />);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Tìm liên quan' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tìm liên quan' }));
+    await waitFor(() => {
+      expect(runMock).toHaveBeenCalledTimes(1);
+    });
+
+    const pendingButton = screen.getByRole('button', { name: /Tìm liên quan/ });
+    expect(pendingButton).toBeDisabled();
+    fireEvent.click(pendingButton);
+    expect(runMock).toHaveBeenCalledTimes(1);
+
+    if (resolveTurn) {
+      (resolveTurn as (res: GroundedTurnResult) => void)({
+        kind: 'grounded_answer',
+        grounding: { ...readyGrounding, createdAt: '2026-10-24T11:10:00.000Z' },
+      });
+    }
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Tìm liên quan' })).toBeInTheDocument();
+    });
+  });
+
+  it('4. manual message sending still submits the typed query unchanged', async () => {
+    await saveSeedOnlyMessage();
+    const runMock = vi.fn().mockResolvedValue({
+      kind: 'grounded_answer',
+      grounding: { ...readyGrounding, createdAt: '2026-10-24T11:15:00.000Z' },
+    } as GroundedTurnResult);
+    setGroundedTurnTestHooks({ runGroundedTurn: runMock });
+
+    render(<AIChatDrawer open={true} onClose={() => {}} db={testDb} />);
+
+    const input = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
+    fireEvent.change(input, { target: { value: 'MAIN1.EVT_EVENT được dùng ở đâu?' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+    await waitFor(() => {
+      expect(runMock).toHaveBeenCalledTimes(1);
+    });
+    expect(runMock.mock.calls[0]?.[0]?.query).toBe(
+      'MAIN1.EVT_EVENT được dùng ở đâu?'
+    );
+  });
+});
