@@ -54,6 +54,7 @@ export const RETRIEVAL_OUTCOMES = [
   'NO_EVIDENCE',
   'UNSUPPORTED',
   'DEGRADED',
+  'SEED_ONLY',
 ] as const;
 
 export const RetrievalOutcomeSchema = z.enum(RETRIEVAL_OUTCOMES);
@@ -93,6 +94,15 @@ export const REASON_CODES = [
   'RESULT_LIMIT_REACHED',
   'PINNED_SNAPSHOT_UNAVAILABLE',
   'PLANNER_SCHEMA_FAILURE',
+  'INVALID_RELATION',
+  'INVALID_DIRECTION',
+  'INVALID_ENDPOINT_KIND',
+  'HOP_LIMIT_EXCEEDED',
+  'SEED_NOT_FOUND',
+  'PLAN_REJECTED',
+  'SEED_FOUND_NO_RELATION',
+  'FALLBACK_ONE_HOP',
+  'MISSING_SUPPORTING_CHUNK',
 ] as const;
 
 export const ReasonCodeSchema = z.enum(REASON_CODES);
@@ -107,6 +117,10 @@ export const ModalityStatusDetailSchema = z
     latencyMs: z.number().int().nonnegative(),
     itemCount: z.number().int().nonnegative(),
     reason: z.string().optional(),
+    // Graph-specific retained counts; omitted for fulltext/vector (D-03, SC-2).
+    entityCount: z.number().int().nonnegative().optional(),
+    edgeCount: z.number().int().nonnegative().optional(),
+    pathCount: z.number().int().nonnegative().optional(),
   })
   .strict();
 
@@ -135,18 +149,87 @@ export const TraversalDirectionSchema = z.enum(TRAVERSAL_DIRECTIONS);
 export type TraversalDirection = z.infer<typeof TraversalDirectionSchema>;
 
 /**
+ * Upper bound for untrusted model depth input. This exists only to bound parser
+ * work: integer depths 1..10 parse, semantic validation accepts only 1..3, and
+ * depths 4..10 are rejected as HOP_LIMIT_EXCEEDED. Values below 1 or above 10
+ * fail Zod parsing and map to PLANNER_SCHEMA_FAILURE.
+ */
+export const MODEL_DEPTH_INPUT_CAP = 10;
+
+/**
  * Traversal step in logical query plan per D-16.
  */
 export const TraversalStepSchema = z
   .object({
     relationType: RelationTypeSchema,
     direction: TraversalDirectionSchema.default('OUTGOING'),
-    maxHops: z.number().int().min(1).max(3).default(1),
+    maxHops: z.number().int().min(1).max(MODEL_DEPTH_INPUT_CAP).default(1),
     targetKind: NodeKindSchema.optional(),
+    seedUrn: UrnSchema.optional(),
   })
   .strict();
 
 export type TraversalStep = z.infer<typeof TraversalStepSchema>;
+
+/**
+ * Seed that could not be resolved or validated during planning (D-13).
+ */
+export const FailedSeedSchema = z
+  .object({
+    urn: UrnSchema,
+    reasonCode: ReasonCodeSchema,
+  })
+  .strict();
+
+export type FailedSeed = z.infer<typeof FailedSeedSchema>;
+
+/**
+ * Pipeline stages that can emit a diagnostic row (D-19).
+ */
+export const STAGE_NAMES = [
+  'entity_resolution',
+  'planning',
+  'validation',
+  'neo4j_traversal',
+  'fusion',
+  'rendering',
+] as const;
+
+export const StageNameSchema = z.enum(STAGE_NAMES);
+export type StageName = z.infer<typeof StageNameSchema>;
+
+/**
+ * Bounded, content-free per-stage diagnostic (D-19, T-24-07).
+ * Strict with no message/query keys, so free text cannot be added by construction.
+ */
+export const StageDiagnosticSchema = z
+  .object({
+    stage: StageNameSchema,
+    status: ModalityStatusValueSchema,
+    latencyMs: z.number().int().nonnegative(),
+    accepted: z.number().int().nonnegative(),
+    rejected: z.number().int().nonnegative(),
+    truncated: z.boolean(),
+    fallback: z.boolean(),
+    fallbackReason: ReasonCodeSchema.optional(),
+    reasonCodes: z.array(ReasonCodeSchema).max(8),
+  })
+  .strict();
+
+export type StageDiagnostic = z.infer<typeof StageDiagnosticSchema>;
+
+/**
+ * Retained graph identity counts before and after fusion (SC-2).
+ */
+export const GraphRetainedCountsSchema = z
+  .object({
+    entity: z.number().int().nonnegative(),
+    edge: z.number().int().nonnegative(),
+    path: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export type GraphRetainedCounts = z.infer<typeof GraphRetainedCountsSchema>;
 
 /**
  * Query intent options.
@@ -163,7 +246,8 @@ export type QueryIntent = z.infer<typeof QueryIntentSchema>;
 
 /**
  * Logical Query Plan per D-02, D-16, T-18-02.
- * Strictly forbids raw cypher and restricts traversal entries to at most 5 and depth 1-3.
+ * Strictly forbids raw cypher and restricts traversal entries to at most 5.
+ * Depth parses up to MODEL_DEPTH_INPUT_CAP; semantic validation accepts 1..3.
  */
 export const LogicalQueryPlanSchema = z
   .object({
@@ -171,7 +255,7 @@ export const LogicalQueryPlanSchema = z
     queryIntent: QueryIntentSchema,
     seedUrns: z.array(UrnSchema).min(1).max(5),
     traversalSteps: z.array(TraversalStepSchema).max(5),
-    overallMaxDepth: z.number().int().min(1).max(3).default(3),
+    overallMaxDepth: z.number().int().min(1).max(MODEL_DEPTH_INPUT_CAP).default(3),
     includeInferred: z.boolean().default(false),
     fulltextKeywords: z.array(z.string().min(1)).min(1),
     semanticQuery: z.string().min(1),
@@ -408,6 +492,10 @@ export const RetrievalDiagnosticsSchema = z
   .object({
     degraded: z.boolean(),
     degradedReasons: z.array(z.string()).optional(),
+    graphBeforeFusion: GraphRetainedCountsSchema.optional(),
+    graphAfterFusion: GraphRetainedCountsSchema.optional(),
+    stageDiagnostics: z.array(StageDiagnosticSchema).max(8).optional(),
+    failedSeeds: z.array(FailedSeedSchema).max(5).optional(),
   })
   .strict();
 
@@ -509,6 +597,51 @@ export const BaseRetrievalResponseSchema = z
  * - DEGRADED requires diagnostics.degraded === true
  */
 export const RetrievalResponseSchema = BaseRetrievalResponseSchema.superRefine((val, ctx) => {
+  if (val.outcome === 'SEED_ONLY') {
+    if (!val.items.some((item) => item.type === 'entity')) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['items'],
+        message: 'SEED_ONLY outcome requires at least one entity item',
+      });
+    }
+    if (val.paths.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['paths'],
+        message: 'SEED_ONLY outcome must not carry graph paths',
+      });
+    }
+    if (val.conflictGroups.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['conflictGroups'],
+        message: 'SEED_ONLY outcome must not carry conflict groups',
+      });
+    }
+    if (val.reason !== 'SEED_FOUND_NO_RELATION') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['reason'],
+        message: 'SEED_ONLY outcome requires reason SEED_FOUND_NO_RELATION',
+      });
+    }
+    const entityUrns = new Set(
+      val.items.filter((item) => item.type === 'entity').map((item) => item.urn)
+    );
+    const reportedUrns = new Set<string>();
+    (val.diagnostics.failedSeeds ?? []).forEach((seed, index) => {
+      if (entityUrns.has(seed.urn) || reportedUrns.has(seed.urn)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['diagnostics', 'failedSeeds', index, 'urn'],
+          message: 'failedSeeds must not repeat a returned entity URN',
+        });
+      }
+      reportedUrns.add(seed.urn);
+    });
+  }
+
   if (val.outcome === 'NEEDS_CLARIFICATION') {
     if (!val.candidates || val.candidates.length === 0) {
       ctx.addIssue({
@@ -631,6 +764,9 @@ export const FederatedRetrievalResponseSchema = z
     diagnostics: z.strictObject({
       degraded: z.boolean(),
       coverageWarnings: z.array(FederatedCoverageWarningSchema).max(100),
+      // Aggregated content-free stage rows and dropped seeds (D-13, D-19).
+      stageDiagnostics: z.array(StageDiagnosticSchema).max(20).optional(),
+      failedSeeds: z.array(FailedSeedSchema).max(5).optional(),
     }),
   })
   .superRefine((response, ctx) => {
