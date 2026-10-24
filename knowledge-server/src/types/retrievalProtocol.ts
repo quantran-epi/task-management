@@ -55,6 +55,15 @@ export const REASON_CODES = [
   'RESULT_LIMIT_REACHED',
   'PINNED_SNAPSHOT_UNAVAILABLE',
   'PLANNER_SCHEMA_FAILURE',
+  'INVALID_RELATION',
+  'INVALID_DIRECTION',
+  'INVALID_ENDPOINT_KIND',
+  'HOP_LIMIT_EXCEEDED',
+  'SEED_NOT_FOUND',
+  'PLAN_REJECTED',
+  'SEED_FOUND_NO_RELATION',
+  'FALLBACK_ONE_HOP',
+  'MISSING_SUPPORTING_CHUNK',
 ] as const;
 
 export const ReasonCodeSchema = z.enum(REASON_CODES);
@@ -95,18 +104,39 @@ export const TraversalDirectionSchema = z.enum(TRAVERSAL_DIRECTIONS);
 export type TraversalDirection = z.infer<typeof TraversalDirectionSchema>;
 
 /**
+ * Upper bound for untrusted model depth input. This exists only to bound parser
+ * work: integer depths 1..10 parse, semantic validation accepts only 1..3, and
+ * depths 4..10 are rejected as HOP_LIMIT_EXCEEDED. Values below 1 or above 10
+ * fail Zod parsing and map to PLANNER_SCHEMA_FAILURE.
+ */
+export const MODEL_DEPTH_INPUT_CAP = 10;
+
+/**
  * Traversal step in logical query plan per D-16.
  */
 export const TraversalStepSchema = z
   .object({
     relationType: RelationTypeSchema,
     direction: TraversalDirectionSchema.default('OUTGOING'),
-    maxHops: z.number().int().min(1).max(3).default(1),
+    maxHops: z.number().int().min(1).max(MODEL_DEPTH_INPUT_CAP).default(1),
     targetKind: NodeKindSchema.optional(),
+    seedUrn: UrnSchema.optional(),
   })
   .strict();
 
 export type TraversalStep = z.infer<typeof TraversalStepSchema>;
+
+/**
+ * Seed that could not be resolved or validated during planning (D-13).
+ */
+export const FailedSeedSchema = z
+  .object({
+    urn: UrnSchema,
+    reasonCode: ReasonCodeSchema,
+  })
+  .strict();
+
+export type FailedSeed = z.infer<typeof FailedSeedSchema>;
 
 /**
  * Query intent options.
@@ -123,7 +153,8 @@ export type QueryIntent = z.infer<typeof QueryIntentSchema>;
 
 /**
  * Logical Query Plan per D-02, D-16, T-18-02.
- * Strictly forbids raw cypher and restricts traversal entries to at most 5 and depth 1-3.
+ * Strictly forbids raw cypher and restricts traversal entries to at most 5.
+ * Depth parses up to MODEL_DEPTH_INPUT_CAP; semantic validation accepts 1..3.
  */
 export const LogicalQueryPlanSchema = z
   .object({
@@ -131,7 +162,7 @@ export const LogicalQueryPlanSchema = z
     queryIntent: QueryIntentSchema,
     seedUrns: z.array(UrnSchema).min(1).max(5),
     traversalSteps: z.array(TraversalStepSchema).max(5),
-    overallMaxDepth: z.number().int().min(1).max(3).default(3),
+    overallMaxDepth: z.number().int().min(1).max(MODEL_DEPTH_INPUT_CAP).default(3),
     includeInferred: z.boolean().default(false),
     fulltextKeywords: z.array(z.string().min(1)).min(1),
     semanticQuery: z.string().min(1),
