@@ -27,6 +27,8 @@ export interface SynthesisInput {
   capabilityProfile: { strictJsonSchema: boolean };
   responseLanguage?: 'vi' | 'en' | 'auto';
   speculation_requested?: boolean;
+  /** Extra system-level constraint for this turn (e.g. seed-only existence claims). */
+  instructions?: string;
 }
 
 export interface SynthesisAttemptLog {
@@ -574,10 +576,17 @@ export async function synthesizeGroundedAnswer(
 
   const allowedCitationIds = Object.keys(input.pack.citations);
   const allowedPathIds = Object.keys(input.pack.paths);
+  const allowedEntityUrns = (input.pack.entities ?? []).map((entity) => entity.urn);
   const speculationRequested = !!input.speculation_requested;
 
-  // D-11: Zero evidence abstention when 0 citations AND 0 paths, and no speculation requested
-  if (allowedCitationIds.length === 0 && allowedPathIds.length === 0 && !speculationRequested) {
+  // D-11: Zero evidence abstention when 0 citations, 0 paths, and 0 seed entities.
+  // Resolved seed entities are existence evidence, so seed-only turns must not abstain (SC-6).
+  if (
+    allowedCitationIds.length === 0 &&
+    allowedPathIds.length === 0 &&
+    allowedEntityUrns.length === 0 &&
+    !speculationRequested
+  ) {
     const noEvidenceAnswer: GroundedAnswerV2 = {
       schemaVersion: 2,
       language: targetLanguage,
@@ -614,12 +623,16 @@ export async function synthesizeGroundedAnswer(
   }
 
   const sampleCitationId = allowedCitationIds[0] || 'S1';
-  const primarySystemPrompt = buildSystemPrompt(targetLanguage, input.promptVersion, sampleCitationId);
+  const baseSystemPrompt = buildSystemPrompt(targetLanguage, input.promptVersion, sampleCitationId);
+  const primarySystemPrompt = input.instructions
+    ? `${baseSystemPrompt}\nTURN-SPECIFIC CONSTRAINT (overrides conflicting rules above):\n${input.instructions}`
+    : baseSystemPrompt;
   const baseUserPayload = {
     query: input.query,
     conversation_history: input.recentTurns && input.recentTurns.length > 0 ? input.recentTurns : undefined,
     speculation_requested: speculationRequested,
     evidence: input.pack.promptEvidence,
+    seedEntities: input.pack.entities,
     allowedCitationIds,
     allowedPathIds,
     conflicts: input.pack.conflicts,

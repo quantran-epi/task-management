@@ -3,6 +3,7 @@ import type {
   GroundedAnswer,
   PersistedCitation,
   PersistedConflictGroup,
+  PersistedEntityRef,
   PersistedPath,
 } from './groundedAnswerSchemas';
 import type { SetCatalogEntry, ResolvedScope } from './semanticScopeRouter';
@@ -705,12 +706,19 @@ export async function runGroundedTurn(
   const isAllTextSearchTimedOut =
     serverResponse.modalityStatus.fulltext.status === 'timeout' &&
     serverResponse.modalityStatus.vector.status === 'timeout';
+  const graphEntityCount = serverResponse.modalityStatus.graph.entityCount ?? 0;
+  const graphHasEntityItems = serverResponse.items.some(
+    (fedItem) => ((fedItem as any).item ?? fedItem)?.type === 'entity'
+  );
+  // A resolved seed is graph evidence: positive entity count/items never count as failure.
   const isGraphNonProductive =
-    serverResponse.modalityStatus.graph.status === 'timeout' ||
-    serverResponse.modalityStatus.graph.status === 'unavailable' ||
-    serverResponse.modalityStatus.graph.status === 'error' ||
-    serverResponse.modalityStatus.graph.status === 'stale' ||
-    serverResponse.modalityStatus.graph.itemCount === 0;
+    graphEntityCount === 0 &&
+    !graphHasEntityItems &&
+    (serverResponse.modalityStatus.graph.status === 'timeout' ||
+      serverResponse.modalityStatus.graph.status === 'unavailable' ||
+      serverResponse.modalityStatus.graph.status === 'error' ||
+      serverResponse.modalityStatus.graph.status === 'stale' ||
+      serverResponse.modalityStatus.graph.itemCount === 0);
 
   if (
     serverResponse.items.length === 0 &&
@@ -736,6 +744,176 @@ export async function runGroundedTurn(
 
   const hasServerItems = Boolean(serverResponse.items && serverResponse.items.length > 0);
   const hasMcpItems = Boolean(mcpItems && mcpItems.length > 0);
+
+  // 6. SEED_ONLY: a resolved seed is bounded success, never fallback/refine/NO_EVIDENCE (D-01..D-03).
+  if (serverResponse.outcome === 'SEED_ONLY') {
+    const seedPack = deps.packEvidence({
+      authority: 'server',
+      serverResponse,
+      mcpItems,
+    });
+    const seedEntities = (seedPack.entities ?? []).map((entity) => ({
+      urn: entity.urn,
+      canonicalName: entity.canonicalName,
+      kind: entity.kind as PersistedEntityRef['kind'],
+      snapshotId: entity.snapshotId,
+      ...(entity.evidenceClass ? { evidenceClass: entity.evidenceClass } : {}),
+    }));
+    const graphCounts = seedPack.graphCounts ?? {
+      entity: serverResponse.modalityStatus.graph.entityCount ?? 0,
+      edge: serverResponse.modalityStatus.graph.edgeCount ?? 0,
+      path: serverResponse.modalityStatus.graph.pathCount ?? 0,
+    };
+    const seedCoverageWarnings = [
+      ...serverResponse.diagnostics.coverageWarnings.map((w) => w.message),
+      ...sourceWarnings,
+      ...seedPack.coverageWarnings,
+    ];
+    const seedStageDiagnostics = serverResponse.diagnostics.stageDiagnostics;
+    const seedFailedSeeds = serverResponse.diagnostics.failedSeeds;
+    const seedPhase24Fields = {
+      entities: seedEntities,
+      graphCounts,
+      ...(seedStageDiagnostics ? { stageDiagnostics: seedStageDiagnostics } : {}),
+      ...(seedFailedSeeds ? { failedSeeds: seedFailedSeeds } : {}),
+    };
+    const seedScopePayload = {
+      setIds: resolvedScope.setTierAssignments.map((s) => s.setId),
+      routedScope: {
+        domain: null,
+        environment: null,
+        version: null,
+        comparisonMode: resolvedScope.comparisonMode,
+      },
+    };
+
+    if (!input.capabilities.modelConfigured) {
+      const seedEvidenceOnlyGrounding: ChatMessageGrounding = {
+        schemaVersion: 1,
+        authority: 'server',
+        outcome: 'SEED_ONLY',
+        answer: null,
+        citations: [],
+        paths: [],
+        conflicts: [],
+        scope: seedScopePayload,
+        modalityDiagnostics: serverResponse.modalityStatus,
+        coverageWarnings: seedCoverageWarnings,
+        fallbackReason: 'NONE',
+        routerVersion: input.config.routerVersion,
+        promptVersion: input.config.promptVersion,
+        modelId: input.config.model,
+        ...seedPhase24Fields,
+        createdAt: nowIso,
+      };
+      return { kind: 'evidence_only', grounding: seedEvidenceOnlyGrounding };
+    }
+
+    try {
+      const seedSynthResult = await deps.synthesizeGroundedAnswer({
+        query: input.query,
+        recentTurns: input.recentTurns,
+        pack: seedPack,
+        endpoint: input.config.endpoint,
+        apiKey: input.config.apiKey,
+        model: input.config.model,
+        promptVersion: input.config.promptVersion,
+        signal: input.signal,
+        capabilityProfile: { strictJsonSchema: true },
+        instructions:
+          'The knowledge graph resolved the seed entity/entities, but no relationship path exists. ' +
+          'Returned entities prove EXISTENCE ONLY. Do not claim any relation, direction, dependency, ' +
+          'impact, reader, writer, sequence, or caller-callee link unless a cited path supports it.',
+      });
+
+      if (input.signal.aborted) {
+        throw new Error('ABORTED');
+      }
+
+      const seedGrounding: ChatMessageGrounding = {
+        schemaVersion: 1,
+        authority: 'server',
+        outcome: 'SEED_ONLY',
+        answer: seedSynthResult.answer,
+        citations: [],
+        paths: [],
+        conflicts: [],
+        scope: seedScopePayload,
+        modalityDiagnostics: serverResponse.modalityStatus,
+        coverageWarnings: seedCoverageWarnings,
+        fallbackReason: 'NONE',
+        routerVersion: input.config.routerVersion,
+        promptVersion: input.config.promptVersion,
+        modelId: input.config.model,
+        ...seedPhase24Fields,
+        createdAt: nowIso,
+      };
+
+      return {
+        kind: 'grounded_answer',
+        grounding: seedGrounding,
+        ...(seedSynthResult.tokenUsage ? { tokenUsage: seedSynthResult.tokenUsage } : {}),
+        ...(intentDecision.intent === 'mixed' ? { requiresOperationalContinuation: true } : {}),
+      };
+    } catch (seedSynthErr: unknown) {
+      if (seedSynthErr instanceof GroundedSynthesisError && seedSynthErr.code === 'ABORTED') {
+        throw seedSynthErr;
+      }
+      if (
+        seedSynthErr instanceof GroundedSynthesisError &&
+        seedSynthErr.code === 'MODEL_UNAVAILABLE'
+      ) {
+        const seedEvidenceOnlyGrounding: ChatMessageGrounding = {
+          schemaVersion: 1,
+          authority: 'server',
+          outcome: 'SEED_ONLY',
+          answer: null,
+          citations: [],
+          paths: [],
+          conflicts: [],
+          scope: seedScopePayload,
+          modalityDiagnostics: serverResponse.modalityStatus,
+          coverageWarnings: [...seedCoverageWarnings, 'Mô hình AI hiện không khả dụng'],
+          fallbackReason: 'NONE',
+          routerVersion: input.config.routerVersion,
+          promptVersion: input.config.promptVersion,
+          modelId: input.config.model,
+          ...seedPhase24Fields,
+          createdAt: nowIso,
+        };
+        return { kind: 'evidence_only', grounding: seedEvidenceOnlyGrounding };
+      }
+      if (
+        seedSynthErr instanceof GroundedSynthesisError &&
+        seedSynthErr.code === 'INVALID_GROUNDED_OUTPUT'
+      ) {
+        const seedErrorGrounding: ChatMessageGrounding = {
+          schemaVersion: 1,
+          authority: 'server',
+          outcome: 'INVALID_GROUNDED_OUTPUT',
+          answer: null,
+          citations: [],
+          paths: [],
+          conflicts: [],
+          scope: seedScopePayload,
+          modalityDiagnostics: serverResponse.modalityStatus,
+          coverageWarnings: [...seedCoverageWarnings, 'Không thể tạo phản hồi hợp lệ'],
+          fallbackReason: 'NONE',
+          routerVersion: input.config.routerVersion,
+          promptVersion: input.config.promptVersion,
+          modelId: input.config.model,
+          ...seedPhase24Fields,
+          createdAt: nowIso,
+        };
+        return {
+          kind: 'error',
+          code: 'INVALID_GROUNDED_OUTPUT',
+          grounding: seedErrorGrounding,
+        };
+      }
+      throw seedSynthErr;
+    }
+  }
 
   if (
     !hasServerItems &&

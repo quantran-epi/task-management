@@ -12,7 +12,7 @@ import { GroundedSynthesisError } from '../../src/services/ai/groundedSynthesis'
 import type { ChatMessageGrounding, GroundedAnswer } from '../../src/services/ai/groundedAnswerSchemas';
 import type { FederatedRetrievalResponse } from '../../src/services/knowledge/retrievalProtocol';
 import type { LocalGroundedResult } from '../../src/services/search/localGroundedRetrieval';
-import type { EvidencePack } from '../../src/services/ai/evidencePack';
+import { validateGroundedAnswerClosure, type EvidencePack } from '../../src/services/ai/evidencePack';
 
 describe('groundedTurn state machine', () => {
   const dummyAnswer: GroundedAnswer = {
@@ -1023,6 +1023,288 @@ describe('groundedTurn state machine', () => {
       expect(res.grounding.authority).toBe('local');
       expect(res.grounding.fallbackReason).toBe('TIMEOUT');
     }
+  });
+
+  describe('Phase 24 SEED_ONLY routing (SC-6)', () => {
+    const SEED_URN = 'urn:plannermate:core:process:cytp1002';
+    const SET_ID = '10000000-0000-0000-0000-000000000001';
+    const SNAP = 'gsnap_11111111';
+
+    function seedOnlyResponse(
+      overrides: Partial<FederatedRetrievalResponse> = {}
+    ): FederatedRetrievalResponse {
+      return {
+        outcome: 'SEED_ONLY',
+        items: [
+          {
+            setId: SET_ID,
+            snapshotId: SNAP,
+            roleGroup: 'baseline',
+            item: {
+              type: 'entity',
+              id: SEED_URN,
+              score: 5,
+              modalitiesContributed: ['graph'],
+              urn: SEED_URN,
+              canonicalName: 'CYTP1002',
+              kind: 'ScheduledProcess',
+              snapshotId: SNAP,
+              hasConflict: false,
+            },
+          },
+        ],
+        paths: [],
+        conflictGroups: [],
+        modalityStatus: {
+          fulltext: { status: 'ok', latencyMs: 5, itemCount: 0 },
+          vector: { status: 'ok', latencyMs: 5, itemCount: 0 },
+          graph: {
+            status: 'ok',
+            latencyMs: 8,
+            itemCount: 1,
+            entityCount: 1,
+            edgeCount: 0,
+            pathCount: 0,
+          },
+        },
+        diagnostics: {
+          degraded: false,
+          coverageWarnings: [],
+          stageDiagnostics: [
+            {
+              stage: 'neo4j_traversal',
+              status: 'ok',
+              latencyMs: 8,
+              accepted: 1,
+              rejected: 0,
+              truncated: true,
+              fallback: true,
+              fallbackReason: 'FALLBACK_ONE_HOP',
+              reasonCodes: ['SEED_FOUND_NO_RELATION'],
+            },
+          ],
+          failedSeeds: [{ urn: 'urn:plannermate:core:process:missing', reasonCode: 'SEED_NOT_FOUND' }],
+        },
+        ...overrides,
+      };
+    }
+
+    function seedPack(): EvidencePack {
+      return {
+        authority: 'server',
+        citations: {},
+        paths: {},
+        conflicts: [],
+        entities: [
+          {
+            urn: SEED_URN,
+            canonicalName: 'CYTP1002',
+            kind: 'ScheduledProcess',
+            snapshotId: SNAP,
+            setId: SET_ID,
+          },
+        ],
+        graphCounts: { entity: 1, edge: 0, path: 0 },
+        promptEvidence: [],
+        contextTruncated: false,
+        coverageWarnings: [],
+      };
+    }
+
+    it('synthesizes a grounded answer for SEED_ONLY without refine or local fallback', async () => {
+      vi.mocked(mockDeps.retrieveFederated).mockResolvedValueOnce(seedOnlyResponse());
+      mockDeps.packEvidence = vi.fn().mockReturnValue(seedPack());
+
+      const res = await runGroundedTurn(mockInput, mockDeps);
+
+      expect(res.kind).toBe('grounded_answer');
+      if (res.kind === 'grounded_answer') {
+        expect(res.grounding.outcome).toBe('SEED_ONLY');
+        expect(res.grounding.authority).toBe('server');
+        expect(res.grounding.answer).toBeTruthy();
+      }
+      expect(mockDeps.runLocalBm25).not.toHaveBeenCalled();
+      expect(mockDeps.retrieveFederated).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns evidence_only with outcome SEED_ONLY when no model is configured', async () => {
+      mockInput.capabilities.modelConfigured = false;
+      vi.mocked(mockDeps.retrieveFederated).mockResolvedValueOnce(seedOnlyResponse());
+      mockDeps.packEvidence = vi.fn().mockReturnValue(seedPack());
+
+      const res = await runGroundedTurn(mockInput, mockDeps);
+
+      expect(res.kind).toBe('evidence_only');
+      if (res.kind === 'evidence_only') {
+        expect(res.grounding.outcome).toBe('SEED_ONLY');
+        expect(res.grounding.authority).toBe('server');
+        expect(res.grounding.answer).toBeNull();
+        expect(res.grounding.entities).toEqual([
+          {
+            urn: SEED_URN,
+            canonicalName: 'CYTP1002',
+            kind: 'ScheduledProcess',
+            snapshotId: SNAP,
+          },
+        ]);
+      }
+      expect(mockDeps.runLocalBm25).not.toHaveBeenCalled();
+      expect(mockDeps.retrieveFederated).toHaveBeenCalledTimes(1);
+      expect(mockDeps.synthesizeGroundedAnswer).not.toHaveBeenCalled();
+    });
+
+    it('persists entities, graph counts, stage diagnostics, and failed seeds', async () => {
+      vi.mocked(mockDeps.retrieveFederated).mockResolvedValueOnce(seedOnlyResponse());
+      mockDeps.packEvidence = vi.fn().mockReturnValue(seedPack());
+
+      const res = await runGroundedTurn(mockInput, mockDeps);
+
+      expect(res.kind).toBe('grounded_answer');
+      if (res.kind === 'grounded_answer') {
+        expect(res.grounding.graphCounts).toEqual({ entity: 1, edge: 0, path: 0 });
+        expect(res.grounding.entities).toHaveLength(1);
+        expect(res.grounding.stageDiagnostics).toEqual([
+          expect.objectContaining({
+            stage: 'neo4j_traversal',
+            truncated: true,
+            fallback: true,
+            fallbackReason: 'FALLBACK_ONE_HOP',
+          }),
+        ]);
+        expect(res.grounding.failedSeeds).toEqual([
+          { urn: 'urn:plannermate:core:process:missing', reasonCode: 'SEED_NOT_FOUND' },
+        ]);
+      }
+    });
+
+    it('sends an existence-only instruction alongside the entity labels', async () => {
+      vi.mocked(mockDeps.retrieveFederated).mockResolvedValueOnce(seedOnlyResponse());
+      mockDeps.packEvidence = vi.fn().mockReturnValue(seedPack());
+
+      await runGroundedTurn(mockInput, mockDeps);
+
+      expect(mockDeps.synthesizeGroundedAnswer).toHaveBeenCalledWith(
+        expect.objectContaining({
+          instructions: expect.stringContaining('EXISTENCE ONLY'),
+        })
+      );
+      expect(mockDeps.synthesizeGroundedAnswer).toHaveBeenCalledWith(
+        expect.objectContaining({
+          pack: expect.objectContaining({
+            entities: expect.arrayContaining([
+              expect.objectContaining({ canonicalName: 'CYTP1002' }),
+            ]),
+          }),
+        })
+      );
+    });
+
+    it('keeps runLocalBm25 at zero and issues no second retrieval', async () => {
+      vi.mocked(mockDeps.retrieveFederated).mockResolvedValueOnce(seedOnlyResponse());
+      mockDeps.packEvidence = vi.fn().mockReturnValue(seedPack());
+
+      await runGroundedTurn(mockInput, mockDeps);
+
+      expect(mockDeps.runLocalBm25).toHaveBeenCalledTimes(0);
+      expect(mockDeps.retrieveFederated).toHaveBeenCalledTimes(1);
+    });
+
+    it('treats positive entity count as productive but zero entities with error as nonproductive', async () => {
+      // Positive entity count + graph error status -> not reason for fallback
+      vi.mocked(mockDeps.retrieveFederated).mockResolvedValueOnce(
+        seedOnlyResponse({
+          modalityStatus: {
+            fulltext: { status: 'timeout', latencyMs: 5, itemCount: 0 },
+            vector: { status: 'timeout', latencyMs: 5, itemCount: 0 },
+            graph: {
+              status: 'error',
+              latencyMs: 8,
+              itemCount: 1,
+              entityCount: 1,
+              edgeCount: 0,
+              pathCount: 0,
+            },
+          },
+        })
+      );
+      mockDeps.packEvidence = vi.fn().mockReturnValue(seedPack());
+
+      const productive = await runGroundedTurn(mockInput, mockDeps);
+      expect(productive.kind).toBe('grounded_answer');
+
+      // Zero entities + timeout text/graph -> local fallback
+      vi.mocked(mockDeps.retrieveFederated).mockResolvedValueOnce({
+        outcome: 'NO_EVIDENCE',
+        items: [],
+        paths: [],
+        conflictGroups: [],
+        modalityStatus: {
+          fulltext: { status: 'timeout', latencyMs: 2500, itemCount: 0 },
+          vector: { status: 'timeout', latencyMs: 2500, itemCount: 0 },
+          graph: { status: 'error', latencyMs: 0, itemCount: 0 },
+        },
+        diagnostics: { degraded: true, coverageWarnings: [] },
+      });
+
+      const nonProductive = await runGroundedTurn(mockInput, mockDeps);
+      expect(nonProductive.kind).toBe('grounded_answer');
+      if (nonProductive.kind === 'grounded_answer') {
+        expect(nonProductive.grounding.authority).toBe('local');
+        expect(nonProductive.grounding.fallbackReason).toBe('TIMEOUT');
+      }
+    });
+
+    it('never emits NO_EVIDENCE copy or broadens the query for SEED_ONLY', async () => {
+      vi.mocked(mockDeps.retrieveFederated).mockResolvedValueOnce(seedOnlyResponse());
+      mockDeps.packEvidence = vi.fn().mockReturnValue(seedPack());
+
+      const res = await runGroundedTurn(mockInput, mockDeps);
+
+      expect(res.kind).not.toBe('refine');
+      expect(mockDeps.retrieveFederated).toHaveBeenCalledTimes(1);
+      expect(mockDeps.retrieveFederated).toHaveBeenCalledWith(
+        expect.objectContaining({ query: mockInput.query }),
+        mockInput.signal
+      );
+    });
+
+    it('rejects a relationship claim unsupported by any path', async () => {
+      // Real closure validation: seed-only pack has zero paths, so INFERRED is impossible.
+      const closure = validateGroundedAnswerClosure(
+        {
+          schemaVersion: 1,
+          language: 'vi',
+          conclusion: 'CYTP1002 gọi CYTP2002.',
+          claims: [
+            {
+              id: 'C1',
+              text: 'CYTP1002 gọi CYTP2002.',
+              classification: 'INFERRED',
+              citationIds: ['S1'],
+              pathId: null,
+            },
+          ],
+          unsupportedParts: [],
+        },
+        seedPack()
+      );
+      expect(closure.valid).toBe(false);
+      expect(closure.issues.some((i) => i.code === 'inferred_requires_path')).toBe(true);
+
+      vi.mocked(mockDeps.retrieveFederated).mockResolvedValueOnce(seedOnlyResponse());
+      mockDeps.packEvidence = vi.fn().mockReturnValue(seedPack());
+      vi.mocked(mockDeps.synthesizeGroundedAnswer).mockRejectedValueOnce(
+        new GroundedSynthesisError('INVALID_GROUNDED_OUTPUT', 'INFERRED requires path')
+      );
+
+      const res = await runGroundedTurn(mockInput, mockDeps);
+
+      expect(res.kind).toBe('error');
+      if (res.kind === 'error') {
+        expect(res.code).toBe('INVALID_GROUNDED_OUTPUT');
+      }
+      expect(mockDeps.runLocalBm25).not.toHaveBeenCalled();
+    });
   });
 
   it('29. preserves mcpMetadata and relevanceReason in final grounding citations', async () => {
