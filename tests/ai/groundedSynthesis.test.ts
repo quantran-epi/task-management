@@ -853,5 +853,13 @@ describe('groundedSynthesis', () => {
       expect(promptVi).toContain('main subject/entity from the user query');
       expect(promptVi).toContain('Be strictly truthful and faithful to EVIDENCE');
     });
+
+    it('30. requires neutral disclosure when Knowledge Server and MCP evidence conflict', () => {
+      const promptVi = buildSystemPrompt('vi', 'test-v1', 'S1');
+      expect(promptVi).toContain('MULTI-SOURCE CONFLICT RULE');
+      expect(promptVi).toContain('describe each source position with its own citations');
+      expect(promptVi).toContain('do not decide which source is correct');
+      expect(promptVi).toContain('Absence from one source is not proof of non-existence');
+    });
   });
 });

@@ -357,6 +357,7 @@ export class RetrievalService {
     const graphPromise = this.runGraphModality(
       pinnedSnapshotId,
       planningOutcome,
+      request.includeInferred,
       options?.signal
     );
 
@@ -529,9 +530,7 @@ export class RetrievalService {
       : [];
     const rankedPackages = rankGraphPackages(builtPackages.packages, {
       selectedRelations,
-      includeInferred: planningOutcome.status === 'executable'
-        ? Boolean(planningOutcome.plan.includeInferred)
-        : false,
+      includeInferred: request.includeInferred,
       relationOf: (factKey) => edgesByFactKey.get(factKey)?.relationType,
       evidenceStrengthOf: (factKey) => edgesByFactKey.get(factKey)?.evidenceClass,
     });
@@ -894,6 +893,7 @@ export class RetrievalService {
   private async runGraphModality(
     snapshotId: string,
     planningOutcome: QueryExecutionPlanningOutcome,
+    includeInferred: boolean,
     parentSignal?: AbortSignal
   ): Promise<GraphModalityRunResult> {
     const isSpecial = planningOutcome.status === 'needsClarification' || planningOutcome.status === 'unsupported';
@@ -908,7 +908,11 @@ export class RetrievalService {
           fulltextKeywords: [],
           semanticQuery: '',
         }
-      : planningOutcome.plan;
+      : {
+          ...planningOutcome.plan,
+          // D-14: the request flag is the only authority for crossing INFERRED edges.
+          includeInferred,
+        };
 
     const timeoutMs = this.timeouts.graphMs;
     const seedKinds = isSpecial ? undefined : planningOutcome.seedKinds;

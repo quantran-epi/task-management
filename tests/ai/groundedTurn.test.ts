@@ -1068,6 +1068,50 @@ describe('groundedTurn state machine', () => {
       expect(mockDeps.runMcpRetrieval).not.toHaveBeenCalled();
     });
 
+    it('Docs + MCP: preserves both source families in the synthesis pack', async () => {
+      const docsAndMcpPack: EvidencePack = {
+        ...dummyServerPack,
+        citations: {
+          ...dummyServerPack.citations,
+          M1: {
+            citationId: 'M1',
+            documentId: 'mcp:graphiti-banking:search_nodes',
+            documentTitle: '[MCP] Graphiti Banking MCP - search_nodes',
+            sectionAnchor: '{}',
+            lineStart: 1,
+            lineEnd: 1,
+            authority: 'server',
+            evidenceClass: 'OBSERVED',
+            snapshotId: 'mcp_live',
+            publishedContentHash: null,
+            citedExcerpt: 'Account details found',
+            setMemberships: [],
+            evidenceKind: 'mcp_tool',
+          },
+        },
+        promptEvidence: [
+          ...dummyServerPack.promptEvidence,
+          { id: 'M1', text: 'Account details found' },
+        ],
+      };
+      mockDeps.packEvidence = vi.fn().mockReturnValue(docsAndMcpPack);
+      mockDeps.runMcpRetrieval = vi.fn().mockResolvedValue({ items: mcpItems, warnings: [] });
+      vi.mocked(mockDeps.routeIntent).mockResolvedValueOnce(intentWithMcp(true, ['graphiti-banking']));
+
+      await runGroundedTurn(mockInput, mockDeps);
+
+      expect(mockDeps.synthesizeGroundedAnswer).toHaveBeenCalledWith(
+        expect.objectContaining({
+          pack: expect.objectContaining({
+            promptEvidence: expect.arrayContaining([
+              expect.objectContaining({ id: 'S1' }),
+              expect.objectContaining({ id: 'M1' }),
+            ]),
+          }),
+        })
+      );
+    });
+
     it('Docs + MCP: dispatches both in parallel before either settles', async () => {
       let resolveDocs!: (value: FederatedRetrievalResponse) => void;
       let resolveMcp!: (value: { items: typeof mcpItems; warnings: string[] }) => void;

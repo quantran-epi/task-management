@@ -1636,6 +1636,80 @@ describe('18-W0-03B: RetrievalService Pinned Parallel Orchestration & Timeouts',
       expect(response.diagnostics.graphAfterFusion).toEqual({ entity: 1, edge: 0, path: 0 });
     });
 
+    it('honors request.includeInferred over the planner default when crossing INFERRED edges', async () => {
+      const indexGateway = new DeterministicIndexGatewayStub();
+      indexGateway.activeSnapshotId = snapshotId;
+      const embedding = new DeterministicEmbeddingStub();
+      const planner = new DeterministicPlannerStub();
+      const graphGateway = new DeterministicGraphGatewayStub();
+
+      graphGateway.mockCandidates = [{
+        urn: URN_TABLE_EVT_EVENT,
+        canonicalName: 'MAIN1.EVT_EVENT',
+        kind: 'DatabaseObject',
+      }];
+      // Planner always emits includeInferred=false; only the request may opt in (D-14).
+      planner.scriptedResult = {
+        type: 'plan',
+        plan: {
+          planId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12',
+          queryIntent: 'DEPENDENCY_CHECK',
+          seedUrns: [URN_TABLE_EVT_EVENT],
+          traversalSteps: [{ relationType: 'WRITES_TO', direction: 'INCOMING', maxHops: 1 }],
+          overallMaxDepth: 1,
+          includeInferred: false,
+          fulltextKeywords: ['MAIN1.EVT_EVENT'],
+          semanticQuery: 'MAIN1.EVT_EVENT',
+        },
+      };
+      let seenEvidenceClasses: readonly string[] = [];
+      graphGateway.traverse = async (_snapshotId, criteria) => {
+        seenEvidenceClasses = criteria.evidenceClasses;
+        return {
+          chunks: [],
+          entities: [],
+          seedEntities: [{
+            type: 'entity',
+            id: URN_TABLE_EVT_EVENT,
+            score: 1,
+            modalitiesContributed: ['graph'],
+            urn: URN_TABLE_EVT_EVENT,
+            canonicalName: 'MAIN1.EVT_EVENT',
+            kind: 'DatabaseObject',
+            snapshotId,
+            hasConflict: false,
+          }],
+          edges: [{
+            type: 'edge',
+            id: 'a'.repeat(64),
+            score: 1,
+            modalitiesContributed: ['graph'],
+            factKey: 'a'.repeat(64),
+            sourceUrn: URN_PKG_EVT_EVENT_WRITER,
+            relationType: 'WRITES_TO',
+            targetUrn: URN_TABLE_EVT_EVENT,
+            evidenceClass: 'INFERRED',
+            supportingChunkIds: [],
+            snapshotId,
+            hasConflict: false,
+          }],
+          paths: [],
+          truncated: false,
+        };
+      };
+
+      const response = await new RetrievalService({
+        indexGateway,
+        embeddingProvider: embedding,
+        queryPlanner: planner,
+        graphGateway,
+      }).retrieve(setId, { ...defaultRequest, includeInferred: true });
+
+      expect(seenEvidenceClasses).toContain('INFERRED');
+      expect(response.modalityStatus.graph.edgeCount).toBe(1);
+      expect(response.outcome).not.toBe('SEED_ONLY');
+    });
+
     it('reports failedSeeds for a dropped seed while valid seed evidence survives', async () => {
       const indexGateway = new DeterministicIndexGatewayStub();
       indexGateway.activeSnapshotId = snapshotId;

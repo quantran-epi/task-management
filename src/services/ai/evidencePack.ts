@@ -558,6 +558,52 @@ export function validateGroundedAnswerClosure(
   pack: EvidencePack
 ): ClosureValidationResult {
   const issues: ClosureIssue[] = [];
+  const availableCitationIds = Object.keys(pack.citations);
+  const hasKnowledgeDocs = availableCitationIds.some((id) => id.startsWith('S'));
+  const hasMcp = availableCitationIds.some((id) => id.startsWith('M'));
+
+  if (hasKnowledgeDocs && hasMcp) {
+    const usedCitationIds = new Set(answer.claims.flatMap((claim) => claim.citationIds));
+    if (![...usedCitationIds].some((id) => id.startsWith('S'))) {
+      issues.push({
+        path: 'claims',
+        code: 'knowledge_source_omitted',
+        message: 'Answer omitted Knowledge Server evidence; represent both Knowledge Server and MCP sources.',
+      });
+    }
+    if (![...usedCitationIds].some((id) => id.startsWith('M'))) {
+      issues.push({
+        path: 'claims',
+        code: 'mcp_source_omitted',
+        message: 'Answer omitted MCP evidence; represent both Knowledge Server and MCP sources.',
+      });
+    }
+
+    const answerText = `${answer.conclusion}\n${answer.claims.map((claim) => claim.text).join('\n')}`;
+    const makesAbsoluteNegativeClaim =
+      /\b(?:no|none|only|does not exist|doesn't exist)\b|(?:không có|không tồn tại|duy nhất)/iu.test(answerText);
+    const disclosesConflict =
+      /\b(?:conflict|conflicting|inconsistent|disagree)\b|(?:xung đột|mâu thuẫn|không nhất quán|chưa nhất quán)/iu.test(answerText);
+    if (makesAbsoluteNegativeClaim && !disclosesConflict) {
+      issues.push({
+        path: 'conclusion',
+        code: 'cross_source_conflict_not_disclosed',
+        message: 'Mixed-source absolute claim must disclose possible source conflict and must not choose a winner.',
+      });
+    }
+    if (
+      disclosesConflict &&
+      answer.schemaVersion === 2 &&
+      answer.confidence !== 'low' &&
+      answer.confidence !== 'unknown'
+    ) {
+      issues.push({
+        path: 'confidence',
+        code: 'cross_source_conflict_confidence_too_high',
+        message: 'A disclosed cross-source conflict requires low or unknown confidence.',
+      });
+    }
+  }
 
   for (let i = 0; i < answer.claims.length; i++) {
     const claim = answer.claims[i]!;

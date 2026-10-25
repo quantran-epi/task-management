@@ -11,6 +11,7 @@ import {
 import type {
   FederatedRetrievalResponse,
   ChunkItem,
+  NodeKind,
 } from '../../src/services/knowledge/retrievalProtocol';
 import {
   GroundedAnswerSchema,
@@ -509,6 +510,55 @@ describe('evidencePack', () => {
     const result = validateGroundedAnswerClosure(answer, pack);
     expect(result.valid).toBe(false);
     expect(result.issues.some((i) => i.code === 'conflict_branch_bias')).toBe(true);
+  });
+
+  it('rejects mixed-source answers that omit one source or hide an absolute conflict', () => {
+    const pack: EvidencePack = {
+      authority: 'server',
+      citations: {
+        S1: {
+          citationId: 'S1', documentId: DOC_1, documentTitle: 'Published doc', sectionAnchor: null,
+          lineStart: 1, lineEnd: 2, authority: 'server', evidenceClass: 'OBSERVED',
+          snapshotId: 'gsnap_11111111', publishedContentHash: HASH_A,
+          citedExcerpt: 'Package EVT_EVENT_PKG.PROCESS writes EVT_EVENT.', setMemberships: [],
+        },
+        M1: {
+          citationId: 'M1', documentId: 'mcp:catalog:search', documentTitle: '[MCP] Catalog', sectionAnchor: null,
+          lineStart: 1, lineEnd: 1, authority: 'server', evidenceClass: 'OBSERVED',
+          snapshotId: 'mcp_live', publishedContentHash: null,
+          citedExcerpt: 'Trigger EVT_EVENT_TRG writes EVT_EVENT.', setMemberships: [], evidenceKind: 'mcp_tool',
+        },
+      },
+      paths: {}, conflicts: [],
+      promptEvidence: [{ id: 'S1', text: 'Package writes table' }, { id: 'M1', text: 'Trigger writes table' }],
+      contextTruncated: false, coverageWarnings: [],
+    };
+
+    const hiddenConflict: GroundedAnswer = {
+      schemaVersion: 2, language: 'vi',
+      conclusion: 'Không có package nào; duy nhất trigger ghi bảng [M1].',
+      confidence: 'high', confidenceReason: 'MCP trả kết quả.',
+      claims: [{ id: 'C1', text: 'Duy nhất trigger ghi bảng.', classification: 'DIRECT', citationIds: ['M1'], pathId: null }],
+      hypotheses: [], unsupportedParts: [],
+    };
+    const invalid = validateGroundedAnswerClosure(hiddenConflict, pack);
+    expect(invalid.valid).toBe(false);
+    expect(invalid.issues.map((issue) => issue.code)).toEqual(expect.arrayContaining([
+      'knowledge_source_omitted',
+      'cross_source_conflict_not_disclosed',
+    ]));
+
+    const disclosedConflict: GroundedAnswer = {
+      schemaVersion: 2, language: 'vi',
+      conclusion: 'Hai nguồn xung đột: tài liệu nói package ghi bảng [S1], MCP nói trigger ghi bảng [M1]. Chưa đủ căn cứ chọn nguồn đúng.',
+      confidence: 'low', confidenceReason: 'Hai nguồn chưa nhất quán.',
+      claims: [
+        { id: 'C1', text: 'Tài liệu nói package ghi bảng.', classification: 'DIRECT', citationIds: ['S1'], pathId: null },
+        { id: 'C2', text: 'MCP nói trigger ghi bảng.', classification: 'DIRECT', citationIds: ['M1'], pathId: null },
+      ],
+      hypotheses: [], unsupportedParts: [],
+    };
+    expect(validateGroundedAnswerClosure(disclosedConflict, pack).valid).toBe(true);
   });
 
   // 10. Weakest classification (D-30)
@@ -1054,7 +1104,7 @@ describe('evidencePack', () => {
     function makeEntityItem(
       urn: string,
       canonicalName: string,
-      kind = 'ScheduledProcess',
+      kind: NodeKind = 'ScheduledProcess',
       score = 5
     ) {
       return {

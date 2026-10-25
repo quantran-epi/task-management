@@ -744,14 +744,17 @@ export async function runGroundedTurn(
 
   const hasServerItems = Boolean(serverResponse.items && serverResponse.items.length > 0);
   const hasMcpItems = Boolean(mcpItems && mcpItems.length > 0);
+  // Pack both sources once. A graph seed does not erase document or MCP evidence.
+  const combinedServerPack = deps.packEvidence({
+    authority: 'server',
+    serverResponse,
+    mcpItems,
+  });
 
-  // 6. SEED_ONLY: a resolved seed is bounded success, never fallback/refine/NO_EVIDENCE (D-01..D-03).
-  if (serverResponse.outcome === 'SEED_ONLY') {
-    const seedPack = deps.packEvidence({
-      authority: 'server',
-      serverResponse,
-      mcpItems,
-    });
+  // 6. SEED_ONLY is existence-only only when no citable text evidence exists.
+  // If Docs or MCP returned citations, route all sources through normal synthesis.
+  if (serverResponse.outcome === 'SEED_ONLY' && combinedServerPack.promptEvidence.length === 0) {
+    const seedPack = combinedServerPack;
     const seedEntities = (seedPack.entities ?? []).map((entity) => ({
       urn: entity.urn,
       canonicalName: entity.canonicalName,
@@ -938,11 +941,7 @@ export async function runGroundedTurn(
   }
 
   // 7. Pack + synthesize (server path)
-  const serverPack = deps.packEvidence({
-    authority: 'server',
-    serverResponse,
-    mcpItems,
-  });
+  const serverPack = combinedServerPack;
 
   const persistedCitations = toPersistedCitations(serverPack.citations);
   const persistedPaths = toPersistedPaths(serverPack.paths);
