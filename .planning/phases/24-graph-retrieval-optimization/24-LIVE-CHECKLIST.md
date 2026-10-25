@@ -2,7 +2,7 @@
 phase: 24-graph-retrieval-optimization
 plan: 08
 slug: live-verification-checklist
-status: pending-live-run
+status: blocked-live-run
 created: 2026-10-24
 ---
 
@@ -153,15 +153,26 @@ Rules:
 
 | Step | Result | Evidence (metadata only) |
 | --- | --- | --- |
-| 1 Offline preflight | ⬜ | |
-| 2 Environment | ⬜ | |
-| 3 Readiness | ⬜ | |
-| 4 Publish/build/activate | ⬜ | |
-| 5 Query families | ⬜ | |
-| 6 Writer evidence | ⬜ | |
-| 7 Seed-only rendering | ⬜ | |
-| 8 Find-related turn | ⬜ | |
-| 9 Diagnostics disclosure | ⬜ | |
-| 10 Offline fallback | ⬜ | |
+| 1 Offline preflight | PASS | `exit=0 network_calls=0 valid=5 rejected=7` |
+| 2 Environment | PASS | `env=set` for all required names; values omitted |
+| 3 Readiness | PASS | `readiness=ready checks=3` |
+| 4 Publish/build/activate | PASS | `publish=accepted rebuild=accepted build=ready activate=active` |
+| 5 Query families | FAIL | Live command `exit=0`, but `writes_to`, `reads_from`, and `bounded_multi_hop` reported `graph=unavailable`, `entities=0`, `paths=0`; gated suite `6/7` with cleanup `HTTP_400` |
+| 6 Writer evidence | FAIL | Live graph writer relation exists in preflight, but retrieval returned zero graph evidence and no relation path/citation proof |
+| 7 Seed-only rendering | BLOCKED | Live endpoint produced no reproducible `SEED_ONLY` result for UI verification |
+| 8 Find-related turn | BLOCKED | Requires live seed-only card from step 7 |
+| 9 Diagnostics disclosure | BLOCKED | No live grounded graph card available for required expanded diagnostics check |
+| 10 Offline fallback | PASS (automated) / BLOCKED (live UI) | `groundedTurn.test.ts: 51/51`; live UI check remains pending |
 
-**Result:** ⬜ PASS / ⬜ FAIL / ⬜ BLOCKED — only explicit live PASS satisfies SC-8.
+## Recorded live checkpoint — 2026-10-25
+
+```text
+SC-8: BLOCKED
+- blocker: live retrieval graph modality unavailable for relation and multi-hop families; seed-only UI prerequisite unavailable
+- evidence gathered: offline preflight PASS; environment PASS; readiness PASS; publish/rebuild/build/activate PASS; live script exit 0; gated assertions 6/7; fallback unit proof 51/51
+- not satisfied: Task 3, plan 24-08, SC-8, phase 24
+```
+
+No token, query text, document content, endpoint URL, stack trace, or Cypher is recorded here.
+
+**Result:** ⬜ PASS / ⬜ FAIL / ☒ BLOCKED — only explicit live PASS satisfies SC-8.
