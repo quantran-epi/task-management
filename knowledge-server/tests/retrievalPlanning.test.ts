@@ -315,6 +315,14 @@ describe('18-W0-02A: Retrieval Ontology Registry & Identifier/Entity Resolution'
         expect(tokens).toContain('toán');
       });
 
+      it('keeps qualified identifiers when bigrams would exhaust the token budget', () => {
+        const tokens = extractQueryTokens(
+          'Gói PL/SQL nào đọc dữ liệu từ bảng MAIN1.FCL_CYCLE_COUNTER?'
+        );
+        expect(tokens).toContain('MAIN1.FCL_CYCLE_COUNTER');
+        expect(tokens.length).toBeLessThanOrEqual(20);
+      });
+
       it('caps extracted tokens to at most 20 tokens to mitigate explosion', () => {
         const longQuery = 'một hai ba bốn năm sáu bảy tám chín mười mười một mười hai mười ba mười bốn mười lăm mười sáu';
         const tokens = extractQueryTokens(longQuery);

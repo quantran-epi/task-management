@@ -227,6 +227,14 @@ describe('knowledge server boundary', () => {
     expect(purged.statusCode).toBe(200);
     expect(purged.json()).toEqual({ status: 'purged', setId: SET_ID });
     expect(graphPurgeCalls).toEqual([SET_ID]);
+
+    // A bodyless DELETE must not advertise JSON; Fastify rejects an empty JSON body with 400.
+    const jsonTyped = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/sets/${SET_ID}`,
+      headers: requestHeaders({ 'content-type': 'application/json' }),
+    });
+    expect(jsonTyped.statusCode).toBe(400);
     expect(attemptService.getActiveSnapshot(SET_ID)).toBeNull();
     await app.close();
   });

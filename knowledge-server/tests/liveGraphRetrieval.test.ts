@@ -38,6 +38,14 @@ function headers(): Record<string, string> {
   };
 }
 
+// Bodyless requests must not advertise JSON: Fastify rejects an empty JSON body with 400.
+function bodylessHeaders(): Record<string, string> {
+  return {
+    Origin: ORIGIN,
+    Authorization: `Bearer ${TOKEN}`,
+  };
+}
+
 async function json(path: string, init: RequestInit = {}): Promise<{ status: number; body: any }> {
   const response = await fetch(`${ENDPOINT}${path}`, init);
   const text = await response.text();
@@ -268,6 +276,8 @@ liveSuite('live graph retrieval (LIVE_KNOWLEDGE=1, SC-8)', () => {
       });
       expect(res.status).toBe(200);
       assertGraphResponse(res.body, ['READY', 'DEGRADED', 'SEED_ONLY']);
+      // A corpus fact exists for this family, so graph modality must have contributed.
+      expect(['ok', 'truncated']).toContain(res.body.modalityStatus.graph.status);
     }
   });
 
@@ -329,7 +339,10 @@ liveSuite('live graph retrieval (LIVE_KNOWLEDGE=1, SC-8)', () => {
   });
 
   it('cleans up the verification set', async () => {
-    const res = await json(`/api/v1/sets/${SET_ID}`, { method: 'DELETE', headers: headers() });
+    const res = await json(`/api/v1/sets/${SET_ID}`, {
+      method: 'DELETE',
+      headers: bodylessHeaders(),
+    });
     expect([200, 202, 204, 404]).toContain(res.status);
   });
 });

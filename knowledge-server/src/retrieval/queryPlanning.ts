@@ -215,7 +215,19 @@ export function extractQueryTokens(query: string): string[] {
     }
   };
 
-  // 1. Generate bigrams first (both accented and unaccented) as they have high semantic value
+  // 1. Technical identifiers first: bigrams must never exhaust the budget before
+  //    the qualified name that entity resolution depends on.
+  for (const w of rawWords) {
+    if (
+      QUALIFIED_IDENTIFIER_REGEX.test(w) ||
+      TOKEN_IDENTIFIER_REGEX.test(w) ||
+      NUMERIC_IDENTIFIER_REGEX.test(w)
+    ) {
+      addToken(w);
+    }
+  }
+
+  // 2. Generate bigrams (both accented and unaccented) as they have high semantic value
   for (let i = 0; i < rawWords.length - 1; i++) {
     const w1 = rawWords[i]!.trim();
     const w2 = rawWords[i + 1]!.trim();
@@ -229,7 +241,7 @@ export function extractQueryTokens(query: string): string[] {
     }
   }
 
-  // 2. Generate single words and their unaccented counterparts (skipping conversational stopwords)
+  // 3. Generate single words and their unaccented counterparts (skipping conversational stopwords)
   for (const w of words) {
     const lower = w.toLowerCase();
     if (CONVERSATIONAL_STOPWORDS.has(lower)) {

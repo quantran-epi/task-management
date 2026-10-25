@@ -255,6 +255,11 @@ export async function runGraphChecks({
     Origin: origin,
     Authorization: `Bearer ${token}`,
   };
+  // Bodyless requests must not advertise JSON: Fastify rejects an empty JSON body with 400.
+  const bodylessHeaders = {
+    Origin: origin,
+    Authorization: `Bearer ${token}`,
+  };
 
   const readiness = await callJson(fetchImpl, `${endpoint}/api/v1/health/readiness`, { headers }, [200]);
   const checks = readiness.checks ?? {};
@@ -356,12 +361,14 @@ export async function runGraphChecks({
       query: `Gói PL/SQL nào ghi dữ liệu vào bảng ${EVT_EVENT}?`,
       expected: ['READY', 'DEGRADED', 'SEED_ONLY'],
       require: () => hasWritesTo || hasEvtEvent,
+      requiresGraph: true,
     },
     {
       name: 'reads_from',
       query: `Gói PL/SQL nào đọc dữ liệu từ bảng ${FCL_COUNTER}?`,
       expected: ['READY', 'DEGRADED', 'SEED_ONLY'],
       require: () => hasReadsFrom,
+      requiresGraph: true,
     },
     {
       name: 'seed_only_or_missing',
@@ -373,7 +380,8 @@ export async function runGraphChecks({
       name: 'bounded_multi_hop',
       query: `Nếu thay đổi cấu trúc bảng ${FCL_COUNTER} thì những package và quy trình nào bị ảnh hưởng?`,
       expected: ['READY', 'DEGRADED', 'SEED_ONLY', 'NO_EVIDENCE'],
-      require: () => true,
+      require: () => hasWritesTo || hasReadsFrom || hasEvtEvent,
+      requiresGraph: true,
     },
   ];
 
@@ -411,6 +419,10 @@ export async function runGraphChecks({
     const graph = response.modalityStatus.graph;
     const pathCount = Array.isArray(response.paths) ? response.paths.length : 0;
     if (pathCount > 20) throw new Error('PATHS_OVER_LIMIT');
+    // A relation family whose corpus fact exists must not report graph=unavailable as a pass.
+    if (family.requiresGraph && !['ok', 'truncated'].includes(graph.status)) {
+      throw new Error(`GRAPH_UNAVAILABLE family=${family.name} status=${graph.status}`);
+    }
     log(
       `[PASS] family=${family.name} outcome=${response.outcome} ` +
         `items=${response.items.length} paths=${pathCount} graph=${graph.status} ` +
@@ -422,7 +434,7 @@ export async function runGraphChecks({
     await callJson(
       fetchImpl,
       `${endpoint}/api/v1/sets/${LIVE_SET_ID}`,
-      { method: 'DELETE', headers },
+      { method: 'DELETE', headers: bodylessHeaders },
       [200, 202, 204, 404]
     );
     log('[PASS] stage=cleanup outcome=deleted');
