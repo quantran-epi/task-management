@@ -111,7 +111,9 @@ describe('TaskDrawerPlanning Component (PLAN-01, PLAN-02, PLAN-06, D-09, D-10)',
     render(<TaskDrawer taskId={task.id} open={true} onClose={() => {}} db={testDb} />);
 
     expect(await screen.findByText('Lập kế hoạch & Phân bổ hàng ngày')).toBeInTheDocument();
-    expect(await screen.findByTestId('planning-metrics-total')).toHaveTextContent('Đã phân bổ: 1h / Ước tính: 2h');
+    await waitFor(() => {
+      expect(screen.getByTestId('planning-metrics-total')).toHaveTextContent('Đã phân bổ: 1h / Ước tính: 2h');
+    });
   });
 
   it('uses loaded task estimate while drawer form watchers are not hydrated', async () => {
@@ -126,7 +128,9 @@ describe('TaskDrawerPlanning Component (PLAN-01, PLAN-02, PLAN-06, D-09, D-10)',
       render(<TaskDrawer taskId={task.id} open={true} onClose={() => {}} db={testDb} />);
 
       expect(await screen.findByText('Lập kế hoạch & Phân bổ hàng ngày')).toBeInTheDocument();
-      expect(await screen.findByTestId('planning-metrics-total')).toHaveTextContent('Đã phân bổ: 1h / Ước tính: 2h');
+      await waitFor(() => {
+        expect(screen.getByTestId('planning-metrics-total')).toHaveTextContent('Đã phân bổ: 1h / Ước tính: 2h');
+      });
     } finally {
       useWatchSpy.mockRestore();
     }

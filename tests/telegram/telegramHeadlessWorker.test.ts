@@ -1151,7 +1151,8 @@ describe('Telegram Headless Worker', () => {
     expect(mockRunGroundedTurn).toHaveBeenCalledTimes(1);
     expect(mockStreamChatEvents).not.toHaveBeenCalled();
     expect(mockSendReply).toHaveBeenCalledTimes(1);
-    expect(replies[0]).toContain('Quy trình CYTP1002 hoàn tất bước xác thực OTP');
+    // Structural parity with GroundedAnswerCard: claims replace conclusion prose.
+    expect(replies[0]).not.toContain('Quy trình CYTP1002 hoàn tất bước xác thực OTP');
     expect(replies[0]).toContain('Khách hàng phải xác thực mã OTP qua tin nhắn SMS');
     expect(replies[0]).toContain('Nguồn tài liệu:</b> Đặc tả kỹ thuật CYTP1002');
   });
@@ -1385,7 +1386,9 @@ describe('Telegram Headless Worker', () => {
       };
 
       const formatted = formatGroundedAnswerForTelegram(grounding);
-      expect(formatted).toContain('Bảng CMS_CARD chứa thông tin thẻ.');
+      // Structural parity with GroundedAnswerCard: claims replace conclusion prose.
+      expect(formatted).not.toContain('Bảng CMS_CARD chứa thông tin thẻ.');
+      expect(formatted).toContain('PAN được mã hóa trong bảng.');
       expect(formatted).toContain('📚 **Nguồn tài liệu:** Tài liệu nghiệp vụ thẻ');
       expect(formatted).toContain('🔌 **Dữ liệu thực tế từ MCP:** Graphiti Banking MCP: search_nodes');
     });

@@ -76,6 +76,29 @@ export function stripCommonRootPrefix(relativePaths: string[]): {
   return { commonPrefix: firstDir, strippedPaths: stripped };
 }
 
+/**
+ * Collects markdown entries from a loaded zip with normalized `/` separators.
+ * Zip tools on Windows may store "\" separators, which would otherwise defeat
+ * all folder-path logic downstream.
+ */
+export function collectMarkdownEntries(
+  zip: JSZip
+): Array<{ relativePath: string; entry: JSZip.JSZipObject }> {
+  const entries: Array<{ relativePath: string; entry: JSZip.JSZipObject }> = [];
+  zip.forEach((rawPath, entry) => {
+    const relativePath = rawPath.replace(/\\/g, '/');
+    if (
+      !entry.dir &&
+      !relativePath.includes('__MACOSX') &&
+      !relativePath.split('/').some((part) => part.startsWith('.')) &&
+      (relativePath.toLowerCase().endsWith('.md') || relativePath.toLowerCase().endsWith('.markdown'))
+    ) {
+      entries.push({ relativePath, entry });
+    }
+  });
+  return entries;
+}
+
 export interface ZipImportPreviewModalProps {
   open: boolean;
   onClose: () => void;
@@ -130,18 +153,7 @@ export const ZipImportPreviewModal: React.FC<ZipImportPreviewModalProps> = ({
         const zip = await JSZip.loadAsync(zipFile);
         const docs: ExtractedZipDoc[] = [];
 
-        const entries: Array<{ relativePath: string; entry: JSZip.JSZipObject }> = [];
-        zip.forEach((relativePath, entry) => {
-          // Exclude folders, macOS hidden files, non-markdown
-          if (
-            !entry.dir &&
-            !relativePath.includes('__MACOSX') &&
-            !relativePath.split('/').some((part) => part.startsWith('.')) &&
-            (relativePath.toLowerCase().endsWith('.md') || relativePath.toLowerCase().endsWith('.markdown'))
-          ) {
-            entries.push({ relativePath, entry });
-          }
-        });
+        const entries = collectMarkdownEntries(zip);
 
         // Strip common root folder prefix if all entries are wrapped in one top-level directory
         const rawPaths = entries.map((e) => e.relativePath);
