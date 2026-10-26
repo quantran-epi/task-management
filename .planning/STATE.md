@@ -4,8 +4,8 @@ milestone: v1.2
 milestone_name: milestone
 status: executing
 stopped_at: Phase 24 UI-SPEC approved
-last_updated: "2026-10-24T06:59:35.566Z"
-last_activity: 2026-10-24 -- Phase 24 execution started
+last_updated: "2026-10-27T00:00:00.000Z"
+last_activity: 2026-10-27 - Completed quick task 261027-0kl: Normalize docs/c06.zip into dist/c06-normalized.zip per TaskMate doc contract
 progress:
   total_phases: 8
   completed_phases: 7
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 Phase: 24 (graph-retrieval-optimization) — EXECUTING
 Plan: 1 of 8
 Status: Executing Phase 24
-Last activity: 2026-10-24 - Completed quick task 261024-kq4: Fix intent router retry dropping MCP routing fields; require MCP keys in schema
+Last activity: 2026-10-27 - Completed quick task 261027-0kl: Normalize docs/c06.zip into dist/c06-normalized.zip per TaskMate doc contract
 Stopped at: Phase 24 UI-SPEC approved
 
 Progress: [██████████] 100%
@@ -37,6 +37,7 @@ Progress: [██████████] 100%
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261027-0kl | Normalize `docs/c06.zip` into `dist/c06-normalized.zip` per TaskMate doc contract | 2026-10-27 | — | complete | [261027-0kl-chu-n-h-a-b-t-i-li-u-docs-c06-zip-theo-c](./quick/261027-0kl-chu-n-h-a-b-t-i-li-u-docs-c06-zip-theo-c/) |
 | fast-38c3095 | Raise AI JSON request timeout to 90s | 2026-10-24 | 38c3095 | complete | — |
 | 261024-kq4 | Fix intent router retry dropping MCP routing fields; require MCP keys in schema | 2026-10-24 | e213b63 | complete | [261024-kq4-fix-telegram-intent-router-retry-droppin](./quick/261024-kq4-fix-telegram-intent-router-retry-droppin/) |
 | 261022-djl | Share AI Chat Drawer and Telegram operational orchestration loop | 2026-10-22 | e861cb7 | complete | [261022-djl-refactor-ai-chat-drawer-and-telegram-cha](./quick/261022-djl-refactor-ai-chat-drawer-and-telegram-cha/) |
