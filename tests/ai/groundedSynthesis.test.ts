@@ -307,7 +307,7 @@ describe('groundedSynthesis', () => {
     });
   });
 
-  it('10. Repair prompt carries no new evidence: assert repair user message evidence is identical', async () => {
+  it('10. Repair prompt reuses the exact frozen evidence without adding new evidence', async () => {
     const invalidFirst = {
       ...validAnswer,
       claims: [
@@ -334,8 +334,8 @@ describe('groundedSynthesis', () => {
     const initialUserJson = JSON.parse(initialCall.messages[1]!.content);
     const repairUserJson = JSON.parse(repairCall.messages[1]!.content);
 
-    expect(repairUserJson.evidence).toBeUndefined();
     expect(initialUserJson.evidence).toEqual(basePack.promptEvidence);
+    expect(repairUserJson.evidence).toEqual(initialUserJson.evidence);
     expect(repairUserJson.allowedCitationIds).toEqual(Object.keys(basePack.citations));
   });
 

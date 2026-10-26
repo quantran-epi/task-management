@@ -43,6 +43,32 @@ describe('mcpRetrievalRunner', () => {
       expect(result).not.toContain('embedding_data');
       expect(result).toContain('grp-1');
     });
+
+    it('keeps query-relevant nested records before truncation', () => {
+      const payload = {
+        neighbors: {
+          edges: [
+            ...Array.from({ length: 20 }, (_, i) => ({
+              edge_type: 'JoinsWith',
+              fact: `unrelated edge ${i} ${'x'.repeat(180)}`,
+            })),
+            {
+              edge_type: 'WritesTo',
+              fact: 'TRIGGER MAIN1.EVT_EVENT_TRG WritesTo MAIN1.EVT_EVENT',
+            },
+          ],
+        },
+      };
+
+      const result = pruneMcpRawResult(
+        JSON.stringify(payload),
+        2500,
+        'Gói nào ghi dữ liệu vào MAIN1.EVT_EVENT?'
+      );
+
+      expect(result).toContain('MAIN1.EVT_EVENT_TRG');
+      expect(result).toContain('WritesTo');
+    });
   });
 
   describe('adaptToolArguments', () => {

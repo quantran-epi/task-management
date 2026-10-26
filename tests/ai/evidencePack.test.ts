@@ -1035,6 +1035,66 @@ describe('evidencePack', () => {
     expect(pack.promptEvidence[1]?.documentTitle).toBe('01 — DB wiring on main1');
   });
 
+  it('drops vector-only document noise when MCP evidence exists', () => {
+    const vectorOnlyChunk = makeMockChunk(
+      'c_noise', DOC_1, 'Unrelated published doc', 1, 5,
+      'MAIN1.EVT_EVENT package writes EVT_EVENT', HASH_A
+    );
+    const response: FederatedRetrievalResponse = {
+      outcome: 'DEGRADED',
+      items: [{
+        setId: SET_1,
+        snapshotId: 'gsnap_11111111',
+        roleGroup: 'baseline',
+        item: vectorOnlyChunk,
+      }],
+      paths: [], conflictGroups: [],
+      modalityStatus: {
+        fulltext: { status: 'ok', latencyMs: 5, itemCount: 0 },
+        vector: { status: 'ok', latencyMs: 5, itemCount: 1 },
+        graph: { status: 'unavailable', latencyMs: 0, itemCount: 0 },
+      },
+      diagnostics: { degraded: true, coverageWarnings: [] },
+    };
+    const mcpItems = [{
+      serverId: 'graphiti-banking', serverName: 'Graphiti Banking MCP', toolName: 'search_nodes',
+      args: { query: 'card issue date' }, rawResult: 'ISS_CARD_INSTANCE.ISS_DATE stores issue date',
+      timestamp: '2026-10-26T00:00:00.000Z',
+    }];
+
+    const pack = packEvidence({ authority: 'server', serverResponse: response, mcpItems });
+
+    expect(Object.keys(pack.citations)).toEqual(['M1']);
+    expect(pack.promptEvidence.map((item) => item.id)).toEqual(['M1']);
+  });
+
+  it('keeps direct document evidence alongside MCP evidence', () => {
+    const directChunk: ChunkItem = {
+      ...makeMockChunk('c_direct', DOC_1, 'Published doc', 1, 5, 'Package writes table', HASH_A),
+      modalitiesContributed: ['vector', 'fulltext', 'graph'],
+    };
+    const response: FederatedRetrievalResponse = {
+      outcome: 'READY',
+      items: [{ setId: SET_1, snapshotId: 'gsnap_11111111', roleGroup: 'baseline', item: directChunk }],
+      paths: [], conflictGroups: [],
+      modalityStatus: {
+        fulltext: { status: 'ok', latencyMs: 5, itemCount: 1 },
+        vector: { status: 'ok', latencyMs: 5, itemCount: 1 },
+        graph: { status: 'ok', latencyMs: 5, itemCount: 1 },
+      },
+      diagnostics: { degraded: false, coverageWarnings: [] },
+    };
+    const mcpItems = [{
+      serverId: 'graphiti-banking', serverName: 'Graphiti Banking MCP', toolName: 'search_nodes',
+      args: { query: 'writer' }, rawResult: 'Trigger writes table', timestamp: '2026-10-26T00:00:00.000Z',
+    }];
+
+    const pack = packEvidence({ authority: 'server', serverResponse: response, mcpItems });
+
+    expect(Object.keys(pack.citations)).toEqual(['S1', 'M1']);
+    expect(pack.promptEvidence.map((item) => item.id)).toEqual(['S1', 'M1']);
+  });
+
   it('23. packs MCP retrieved items into citations with M1, M2... IDs and validates closure', () => {
     const mcpItems = [
       {

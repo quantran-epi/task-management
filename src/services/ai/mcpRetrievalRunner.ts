@@ -119,8 +119,34 @@ function formatGraphEntity(node: Record<string, any>): string {
  * Prunes heavy and noisy fields from raw MCP tool output before saving into evidence pack or context.
  * If output contains a list of graph nodes/entities, formats them as concise Markdown lines.
  */
-export function pruneMcpRawResult(raw: string, maxChars = 2500): string {
+export function pruneMcpRawResult(
+  raw: string,
+  maxChars = 2500,
+  relevanceText = ''
+): string {
   if (!raw) return '';
+  const relevanceTerms = [...new Set(
+    (relevanceText.match(/[\p{L}\p{N}_$.:-]{3,}/gu) ?? []).map((term) => term.toLowerCase())
+  )];
+  const relevanceScore = (value: unknown): number => {
+    if (relevanceTerms.length === 0) return 0;
+    let text = '';
+    try {
+      text = JSON.stringify(value).toLowerCase();
+    } catch {
+      return 0;
+    }
+    return relevanceTerms.reduce(
+      (score, term) => score + (text.includes(term) ? (/[_.:$]/.test(term) ? 3 : 1) : 0),
+      0
+    );
+  };
+  const relevantFirst = <T>(values: readonly T[]): T[] =>
+    values
+      .map((value, index) => ({ value, index, score: relevanceScore(value) }))
+      .sort((a, b) => b.score - a.score || a.index - b.index)
+      .map(({ value }) => value);
+
   try {
     const parsed = JSON.parse(raw);
 
@@ -133,7 +159,7 @@ export function pruneMcpRawResult(raw: string, maxChars = 2500): string {
       null;
 
     if (candidateList && candidateList.length > 0 && typeof candidateList[0] === 'object' && candidateList[0] !== null) {
-      const formattedLines = candidateList
+      const formattedLines = relevantFirst(candidateList)
         .slice(0, 25)
         .map((item: any) => formatGraphEntity(item))
         .filter((line: string) => line.trim().length > 0);
@@ -147,7 +173,7 @@ export function pruneMcpRawResult(raw: string, maxChars = 2500): string {
 
     const cleanObject = (obj: any): any => {
       if (Array.isArray(obj)) {
-        return obj.slice(0, 15).map(cleanObject);
+        return relevantFirst(obj).slice(0, 15).map(cleanObject);
       }
       if (obj !== null && typeof obj === 'object') {
         const out: Record<string, any> = {};
@@ -394,7 +420,7 @@ Return STRICT JSON adhering to this schema:
 
         try {
           const rawResult = await executeDynamicMcpTool(call.toolName, effectiveArgs, database);
-          const cleanResult = pruneMcpRawResult(rawResult);
+          const cleanResult = pruneMcpRawResult(rawResult, 2500, input.query);
           items.push({
             serverId,
             serverName,

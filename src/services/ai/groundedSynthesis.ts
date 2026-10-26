@@ -670,6 +670,11 @@ export async function synthesizeGroundedAnswer(
         allowedCitationIds,
         allowedPathIds,
         previousJson: lastRaw,
+        // Same frozen evidence, never new evidence. Required so repairs cannot invent
+        // what an omitted source said merely to satisfy source-coverage validation.
+        evidence: input.pack.promptEvidence,
+        seedEntities: input.pack.entities,
+        conflicts: input.pack.conflicts,
         speculation_requested: speculationRequested,
         responseLanguage: targetLanguage,
       });

@@ -47,6 +47,7 @@ export interface PromptEvidenceItem {
   readonly score?: number | undefined;
   readonly documentTitle?: string | undefined;
   readonly sectionAnchor?: string | null | undefined;
+  readonly modalities?: readonly ('fulltext' | 'vector' | 'graph')[] | undefined;
 }
 
 /** Seed entity carried alongside citations; never converted into a citation (D-02). */
@@ -160,6 +161,7 @@ interface RawCandidateCitation {
     readonly serverName: string;
     readonly toolName: string;
   } | undefined;
+  readonly modalities?: readonly ('fulltext' | 'vector' | 'graph')[] | undefined;
 }
 
 export function packEvidence(
@@ -264,6 +266,7 @@ export function packEvidence(
           conflictGroupId: chunk.conflictGroupId,
           isIdentifierMatch: isId,
           score: typeof (chunk as any).score === 'number' ? (chunk as any).score : 0,
+          modalities: chunk.modalitiesContributed,
         });
       }
     }
@@ -447,6 +450,7 @@ export function packEvidence(
       score: candidate.score ?? 0,
       documentTitle: candidate.documentTitle,
       sectionAnchor: candidate.sectionAnchor || undefined,
+      ...(candidate.modalities ? { modalities: candidate.modalities } : {}),
     };
     if (conflictCitationIds.has(citationId)) {
       bucketA.push(promptItem);
@@ -492,6 +496,22 @@ export function packEvidence(
 
   // Pack MCP retrieved items with M1, M2... citation IDs
   if (input.mcpItems && input.mcpItems.length > 0) {
+    // Semantic-only document hits are candidates, not direct facts. When live MCP
+    // evidence exists, omit vector-only document snippets so source balancing cannot
+    // force irrelevant text into a fabricated conflict.
+    const vectorOnlyIds = new Set(
+      finalPromptEvidence
+        .filter((item) => item.id.startsWith('S') && item.modalities?.length === 1 && item.modalities[0] === 'vector')
+        .map((item) => item.id)
+    );
+    if (vectorOnlyIds.size > 0) {
+      for (let i = finalPromptEvidence.length - 1; i >= 0; i--) {
+        const item = finalPromptEvidence[i];
+        if (item && vectorOnlyIds.has(item.id)) finalPromptEvidence.splice(i, 1);
+      }
+      for (const id of vectorOnlyIds) delete citations[id];
+    }
+
     let mcpIndex = 1;
     for (const item of input.mcpItems) {
       const cId = `M${mcpIndex++}`;
