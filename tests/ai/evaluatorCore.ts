@@ -112,7 +112,7 @@ export function createMockDepsForCase(
       loadNoteBody: async () => null,
     },
 
-    packEvidence: (inp, opts) => packEvidence(inp, opts),
+    packEvidence: (inp) => packEvidence(inp),
 
     synthesizeGroundedAnswer: async (synthInput) => {
       synthesizeCalls.push({

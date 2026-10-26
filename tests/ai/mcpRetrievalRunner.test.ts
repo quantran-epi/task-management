@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { runMcpRetrieval, pruneMcpRawResult, adaptToolArguments } from '../../src/services/ai/mcpRetrievalRunner';
+import { runMcpRetrieval, adaptToolArguments } from '../../src/services/ai/mcpRetrievalRunner';
 import * as mcpClient from '../../src/services/ai/mcpClient';
 import * as nineRouterClient from '../../src/services/ai/nineRouterClient';
 
@@ -8,66 +8,31 @@ describe('mcpRetrievalRunner', () => {
     vi.restoreAllMocks();
   });
 
-  describe('pruneMcpRawResult', () => {
-    it('formats graph nodes list into concise readable markdown lines without breaking JSON', () => {
-      const mockNodes = {
-        message: 'Nodes retrieved successfully',
-        nodes: [
-          {
-            name: 'COLUMN::BO::SHB.MAIN1.COM_ID_OBJECT.ID_ISSUE_DATE',
-            labels: ['Entity', 'Column'],
-            summary: 'Issue date.; column of COM_ID_OBJECT; type: DATE',
-            attributes: JSON.stringify({ database_qualified_name: 'SHB.MAIN1.COM_ID_OBJECT.ID_ISSUE_DATE' }),
-          },
-          {
-            name: 'COLUMN::BO::SHB.MAIN1.ISS_CARD_INSTANCE.ISS_DATE',
-            labels: ['Entity', 'Column'],
-            summary: 'Card instance issuing date; column of ISS_CARD_INSTANCE; type: DATE',
-            attributes: JSON.stringify({ database_qualified_name: 'SHB.MAIN1.ISS_CARD_INSTANCE.ISS_DATE' }),
-          },
-        ],
-      };
+  describe('normalized evidence', () => {
+    it('keeps the full JSON payload, never a mid-JSON slice', async () => {
+      const records = Array.from({ length: 500 }, (_, i) => ({
+        type: 'edge',
+        edge_type: 'JoinsWith',
+        fact: `Fact ${i} ${'x'.repeat(80)}`,
+      }));
+      records.push({ type: 'edge', edge_type: 'WritesTo', fact: 'TRIGGER MAIN1.EVT_EVENT_TRG WritesTo MAIN1.EVT_EVENT' } as any);
+      const raw = JSON.stringify({ edges: records });
+      expect(raw.length).toBeGreaterThan(20_000);
 
-      const result = pruneMcpRawResult(JSON.stringify(mockNodes));
-      expect(result).toContain('Nodes retrieved successfully:');
-      expect(result).toContain('- [Entity/Column] COLUMN::BO::SHB.MAIN1.COM_ID_OBJECT.ID_ISSUE_DATE: Issue date.');
-      expect(result).toContain('- [Entity/Column] COLUMN::BO::SHB.MAIN1.ISS_CARD_INSTANCE.ISS_DATE: Card instance issuing date');
-    });
-
-    it('falls back to pruned JSON object for non-entity payloads', () => {
-      const payload = {
-        groups: [{ group_id: 'grp-1', description: 'desc' }],
-        embedding_data: [0.1, 0.2, 0.3],
-      };
-      const result = pruneMcpRawResult(JSON.stringify(payload));
-      expect(result).not.toContain('embedding_data');
-      expect(result).toContain('grp-1');
-    });
-
-    it('keeps query-relevant nested records before truncation', () => {
-      const payload = {
-        neighbors: {
-          edges: [
-            ...Array.from({ length: 20 }, (_, i) => ({
-              edge_type: 'JoinsWith',
-              fact: `unrelated edge ${i} ${'x'.repeat(180)}`,
-            })),
-            {
-              edge_type: 'WritesTo',
-              fact: 'TRIGGER MAIN1.EVT_EVENT_TRG WritesTo MAIN1.EVT_EVENT',
-            },
-          ],
+      const { normalizeMcpEvidence } = await import('../../src/services/ai/mcpEvidence');
+      const { records: normalized } = normalizeMcpEvidence([
+        {
+          serverId: 'graphiti-banking',
+          serverName: 'Graphiti Banking MCP',
+          toolName: 'search_memory_facts',
+          args: { query: 'writer' },
+          rawResult: raw,
+          timestamp: '2026-10-26T00:00:00.000Z',
         },
-      };
+      ]);
 
-      const result = pruneMcpRawResult(
-        JSON.stringify(payload),
-        2500,
-        'Gói nào ghi dữ liệu vào MAIN1.EVT_EVENT?'
-      );
-
-      expect(result).toContain('MAIN1.EVT_EVENT_TRG');
-      expect(result).toContain('WritesTo');
+      expect(normalized.some((record) => record.text.includes('WritesTo MAIN1.EVT_EVENT'))).toBe(true);
+      expect(normalized.length).toBe(records.length);
     });
   });
 
@@ -188,7 +153,8 @@ describe('mcpRetrievalRunner', () => {
     expect(mcpClient.executeDynamicMcpTool).toHaveBeenCalledWith(
       'search_nodes',
       { query: 'ACCOUNTS' },
-      expect.anything()
+      expect.anything(),
+      { serverId: 'graphiti-banking' }
     );
   });
 

@@ -110,7 +110,7 @@ export function createDefaultGroundedTurnDeps(options: {
         return { title: note.title, body: note.body, updatedAt: note.updatedAt };
       },
     },
-    packEvidence: (inp, opt) => packEvidence(inp, opt),
+    packEvidence: (inp) => packEvidence(inp),
     synthesizeGroundedAnswer: (inp) => synthesizeGroundedAnswer(inp),
     runMcpRetrieval: (inp) => runMcpRetrieval(inp),
     loadKnowledgeLinks: (entityType, entityId) => getKnowledgeLinksForEntity(entityType, entityId, database),

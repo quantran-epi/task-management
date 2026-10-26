@@ -493,22 +493,7 @@ describe('GroundedAnswerCard', () => {
     expect(screen.queryByText(/Khác biệt theo/)).not.toBeInTheDocument();
   });
 
-  it('17. D-26 override claim without SUPERSEDES renders safe error, not prose', () => {
-    const conflictExtends: PersistedConflictGroup = {
-      conflictId: 'cg-extends',
-      dimension: 'Version',
-      branches: [
-        { factKey: '4'.repeat(64), claimIds: ['C1'], citationIds: ['S1'] },
-        { factKey: '5'.repeat(64), claimIds: ['C1'], citationIds: ['S1'] },
-      ],
-      scopeProof: {
-        dimension: 'Version',
-        environment: null,
-        version: '2.0',
-        overrideRelation: 'EXTENDS',
-      },
-    };
-
+  it('17. override wording renders as written: semantics are judged from evidence, not UI regex', () => {
     const citWithOther = {
       ...baseCitation,
       evidenceKind: 'other' as const,
@@ -516,53 +501,6 @@ describe('GroundedAnswerCard', () => {
 
     const grounding = createMockGrounding({
       citations: [citWithOther],
-      conflicts: [conflictExtends],
-      answer: {
-        schemaVersion: 1,
-        language: 'vi',
-        conclusion: 'Phiên bản 2 ghi đè phiên bản 1',
-        claims: [
-          {
-            id: 'C1',
-            text: 'Phiên bản 2 ghi đè phiên bản 1',
-            classification: 'DIRECT',
-            citationIds: ['S1'],
-            pathId: null,
-          },
-        ],
-        unsupportedParts: [],
-      },
-    });
-
-    render(
-      <GroundedAnswerCard grounding={grounding} onCitationActivate={vi.fn()} />
-    );
-
-    expect(screen.getByTestId('claim-block-invalid')).toBeInTheDocument();
-    expect(
-      screen.getByText(/Không thể khẳng định ghi đè — thiếu bằng chứng SUPERSEDES/)
-    ).toBeInTheDocument();
-    expect(screen.queryByText('Phiên bản 2 ghi đè phiên bản 1')).not.toBeInTheDocument();
-  });
-
-  it('18. D-26 override claim with SUPERSEDES renders normal prose', () => {
-    const conflictSupersedes: PersistedConflictGroup = {
-      conflictId: 'cg-supersedes',
-      dimension: 'Version',
-      branches: [
-        { factKey: '6'.repeat(64), claimIds: ['C1'], citationIds: ['S1'] },
-        { factKey: '7'.repeat(64), claimIds: ['C1'], citationIds: ['S1'] },
-      ],
-      scopeProof: {
-        dimension: 'Version',
-        environment: null,
-        version: '2.0',
-        overrideRelation: 'SUPERSEDES',
-      },
-    };
-
-    const grounding = createMockGrounding({
-      conflicts: [conflictSupersedes],
       answer: {
         schemaVersion: 1,
         language: 'vi',
@@ -586,40 +524,6 @@ describe('GroundedAnswerCard', () => {
 
     expect(screen.queryByTestId('claim-block-invalid')).not.toBeInTheDocument();
     expect(screen.getByText('Phiên bản 2 ghi đè phiên bản 1')).toBeInTheDocument();
-  });
-
-  it('19. D-26 override claim with release_note evidence renders normally', () => {
-    const citWithReleaseNote = {
-      ...baseCitation,
-      evidenceKind: 'release_note' as const,
-    };
-
-    const grounding = createMockGrounding({
-      citations: [citWithReleaseNote],
-      conflicts: [],
-      answer: {
-        schemaVersion: 1,
-        language: 'vi',
-        conclusion: 'Hệ thống supersedes dịch vụ cũ',
-        claims: [
-          {
-            id: 'C1',
-            text: 'Hệ thống supersedes dịch vụ cũ',
-            classification: 'DIRECT',
-            citationIds: ['S1'],
-            pathId: null,
-          },
-        ],
-        unsupportedParts: [],
-      },
-    });
-
-    render(
-      <GroundedAnswerCard grounding={grounding} onCitationActivate={vi.fn()} />
-    );
-
-    expect(screen.queryByTestId('claim-block-invalid')).not.toBeInTheDocument();
-    expect(screen.getByText('Hệ thống supersedes dịch vụ cũ')).toBeInTheDocument();
   });
 
   it('20. "Tra cứu lại" button present on READY and calls onFreshLookup', () => {

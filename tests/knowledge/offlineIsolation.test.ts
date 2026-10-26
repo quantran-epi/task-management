@@ -127,7 +127,7 @@ describe('optional daemon outage isolation', () => {
           return n ? { title: n.title, body: n.body, updatedAt: n.updatedAt } : null;
         },
       },
-      packEvidence: (inp, opt) => packEvidence(inp, opt),
+      packEvidence: (inp) => packEvidence(inp),
       synthesizeGroundedAnswer: vi.fn().mockResolvedValue({
         answer: {
           schemaVersion: 1,
@@ -234,7 +234,7 @@ describe('optional daemon outage isolation', () => {
           return n ? { title: n.title, body: n.body, updatedAt: n.updatedAt } : null;
         },
       },
-      packEvidence: (inp, opt) => packEvidence(inp, opt),
+      packEvidence: (inp) => packEvidence(inp),
       synthesizeGroundedAnswer: vi.fn().mockResolvedValue({
         answer: {
           schemaVersion: 1,
@@ -341,7 +341,7 @@ describe('optional daemon outage isolation', () => {
           return n ? { title: n.title, body: n.body, updatedAt: n.updatedAt } : null;
         },
       },
-      packEvidence: (inp, opt) => packEvidence(inp, opt),
+      packEvidence: (inp) => packEvidence(inp),
       synthesizeGroundedAnswer: vi.fn().mockResolvedValue({
         answer: {
           schemaVersion: 1,
@@ -422,7 +422,7 @@ describe('optional daemon outage isolation', () => {
         loadSetMembers: async () => [],
         loadNoteBody: async () => null,
       },
-      packEvidence: (inp, opt) => packEvidence(inp, opt),
+      packEvidence: (inp) => packEvidence(inp),
       synthesizeGroundedAnswer: vi.fn(),
       now: () => '2026-10-11T12:00:00.000Z',
     };
@@ -486,7 +486,7 @@ describe('optional daemon outage isolation', () => {
         loadSetMembers: async () => [],
         loadNoteBody: async () => null,
       },
-      packEvidence: (inp, opt) => packEvidence(inp, opt),
+      packEvidence: (inp) => packEvidence(inp),
       synthesizeGroundedAnswer: vi.fn(),
       now: () => '2026-10-11T12:00:00.000Z',
     };

@@ -1,0 +1,2021 @@
+{
+  "group_id": "catalog-prod-20260802T070246Z",
+  "found": true,
+  "uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1",
+  "entity_type": "Table",
+  "graph_key": "TABLE::BO::SHB.MAIN1.EVT_EVENT",
+  "name_raw": "EVT_EVENT",
+  "name_canonical": "EVT_EVENT",
+  "labels": [
+    "Table"
+  ],
+  "summary": "Events raising in the system for exact institution.; 6 columns; PK: ID",
+  "attributes": {
+    "normalization_notes": [],
+    "source_refs": [],
+    "source_refs_total": 0,
+    "warnings": []
+  },
+  "content_sha256": "293d03a01a3f98f8884c41aa458d6bd33450df1d8e231c26a8adf59e7b237197",
+  "has_name_embedding": true,
+  "anomalies": [],
+  "neighbors": {
+    "offset": 0,
+    "limit": 100,
+    "total": 49,
+    "truncated": false,
+    "edges": [
+      {
+        "uuid": "0a752eec-8cad-5c7a-ad81-7c873720676d",
+        "edge_type": "JoinsWith",
+        "edge_key": "JoinsWith|TABLE::BO::SHB.MAIN1.EVT_EVENT|TABLE::BO::SHB.MAIN1.EVT_EVENT_OBJECT",
+        "content_sha256": "7967ce34e4b9e7c09213af9d6e025bd3e80f0c1e691b4871f2d326a61a566161",
+        "direction": "outgoing",
+        "neighbor_uuid": "9ede39c0-2169-5f6e-9d69-32672f8a8383",
+        "neighbor_entity_type": "Table",
+        "neighbor_graph_key": "TABLE::BO::SHB.MAIN1.EVT_EVENT_OBJECT",
+        "neighbor_labels": [
+          "Table"
+        ],
+        "fact": "TABLE::BO::SHB.MAIN1.EVT_EVENT JoinsWith TABLE::BO::SHB.MAIN1.EVT_EVENT_OBJECT",
+        "evidence": "1 occurrence(s), first from_clause_cooccurrence at line 117122-117165",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 117165,
+          "line_start": 117122,
+          "occurrence_count": 1,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 117165,
+              "line_start": 117122,
+              "statement_kind": "from_clause_cooccurrence",
+              "statement_sha256": "e9f3c17cee1e57fbf313af40ef2a4d515ad2070a834a35b1503a7ca7739d93b5"
+            }
+          ],
+          "statement_kind": "from_clause_cooccurrence",
+          "statement_sha256": "e9f3c17cee1e57fbf313af40ef2a4d515ad2070a834a35b1503a7ca7739d93b5"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1",
+        "target_node_uuid": "9ede39c0-2169-5f6e-9d69-32672f8a8383"
+      },
+      {
+        "uuid": "e68f5bdc-5177-5480-8686-b5e75921fd39",
+        "edge_type": "JoinsWith",
+        "edge_key": "JoinsWith|TABLE::BO::SHB.MAIN1.EVT_EVENT|TABLE::BO::SHB.MAIN1.ISS_CARD",
+        "content_sha256": "f63154a7f6c9d275fbc7bd2d73462839e12db6ded4c6168c79da2aeec226c68d",
+        "direction": "outgoing",
+        "neighbor_uuid": "1f5a8f5b-fb5e-5936-8ee8-cecfbfcb6af5",
+        "neighbor_entity_type": "Table",
+        "neighbor_graph_key": "TABLE::BO::SHB.MAIN1.ISS_CARD",
+        "neighbor_labels": [
+          "Table"
+        ],
+        "fact": "TABLE::BO::SHB.MAIN1.EVT_EVENT JoinsWith TABLE::BO::SHB.MAIN1.ISS_CARD",
+        "evidence": "1 occurrence(s), first from_clause_cooccurrence at line 117122-117165",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 117165,
+          "line_start": 117122,
+          "occurrence_count": 1,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 117165,
+              "line_start": 117122,
+              "statement_kind": "from_clause_cooccurrence",
+              "statement_sha256": "e9f3c17cee1e57fbf313af40ef2a4d515ad2070a834a35b1503a7ca7739d93b5"
+            }
+          ],
+          "statement_kind": "from_clause_cooccurrence",
+          "statement_sha256": "e9f3c17cee1e57fbf313af40ef2a4d515ad2070a834a35b1503a7ca7739d93b5"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1",
+        "target_node_uuid": "1f5a8f5b-fb5e-5936-8ee8-cecfbfcb6af5"
+      },
+      {
+        "uuid": "88434faa-204d-51c5-ba93-a4db5c2d6e7e",
+        "edge_type": "JoinsWith",
+        "edge_key": "JoinsWith|TABLE::BO::SHB.MAIN1.EVT_EVENT|TABLE::BO::SHB.MAIN1.ISS_CARD_INSTANCE",
+        "content_sha256": "09cabf051741d89876b8b01af7c553e0394ce594f95235a7f85563b533ff67ae",
+        "direction": "outgoing",
+        "neighbor_uuid": "d8520414-1585-5b03-b7e9-a8c343f657c9",
+        "neighbor_entity_type": "Table",
+        "neighbor_graph_key": "TABLE::BO::SHB.MAIN1.ISS_CARD_INSTANCE",
+        "neighbor_labels": [
+          "Table"
+        ],
+        "fact": "TABLE::BO::SHB.MAIN1.EVT_EVENT JoinsWith TABLE::BO::SHB.MAIN1.ISS_CARD_INSTANCE",
+        "evidence": "1 occurrence(s), first from_clause_cooccurrence at line 117122-117165",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 117165,
+          "line_start": 117122,
+          "occurrence_count": 1,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 117165,
+              "line_start": 117122,
+              "statement_kind": "from_clause_cooccurrence",
+              "statement_sha256": "e9f3c17cee1e57fbf313af40ef2a4d515ad2070a834a35b1503a7ca7739d93b5"
+            }
+          ],
+          "statement_kind": "from_clause_cooccurrence",
+          "statement_sha256": "e9f3c17cee1e57fbf313af40ef2a4d515ad2070a834a35b1503a7ca7739d93b5"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1",
+        "target_node_uuid": "d8520414-1585-5b03-b7e9-a8c343f657c9"
+      },
+      {
+        "uuid": "03918520-a324-5398-b03b-4b8d0e44bf4a",
+        "edge_type": "JoinsWith",
+        "edge_key": "JoinsWith|TABLE::BO::SHB.MAIN1.EVT_EVENT|TABLE::BO::SHB.MAIN1.ISS_CARD_NUMBER",
+        "content_sha256": "4bebf5295de00be115760e2786dd05d1edda6ff93337819e5574f69acd72a3c8",
+        "direction": "outgoing",
+        "neighbor_uuid": "649b21ae-87b3-5f9d-a53f-92211ab07901",
+        "neighbor_entity_type": "Table",
+        "neighbor_graph_key": "TABLE::BO::SHB.MAIN1.ISS_CARD_NUMBER",
+        "neighbor_labels": [
+          "Table"
+        ],
+        "fact": "TABLE::BO::SHB.MAIN1.EVT_EVENT JoinsWith TABLE::BO::SHB.MAIN1.ISS_CARD_NUMBER",
+        "evidence": "1 occurrence(s), first from_clause_cooccurrence at line 117122-117165",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 117165,
+          "line_start": 117122,
+          "occurrence_count": 1,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 117165,
+              "line_start": 117122,
+              "statement_kind": "from_clause_cooccurrence",
+              "statement_sha256": "e9f3c17cee1e57fbf313af40ef2a4d515ad2070a834a35b1503a7ca7739d93b5"
+            }
+          ],
+          "statement_kind": "from_clause_cooccurrence",
+          "statement_sha256": "e9f3c17cee1e57fbf313af40ef2a4d515ad2070a834a35b1503a7ca7739d93b5"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1",
+        "target_node_uuid": "649b21ae-87b3-5f9d-a53f-92211ab07901"
+      },
+      {
+        "uuid": "570d6eb4-7228-506f-a891-496895152906",
+        "edge_type": "Contains",
+        "edge_key": "TABLE::BO::SHB.MAIN1.EVT_EVENT|COLUMN::BO::SHB.MAIN1.EVT_EVENT.EVENT_TYPE",
+        "content_sha256": "7db5965e15447fafb6606b92023cb478a6405c07f18b62730d8ac99f00e31bf9",
+        "direction": "outgoing",
+        "neighbor_uuid": "5435628b-220d-55ca-9c29-843e973729ca",
+        "neighbor_entity_type": "Column",
+        "neighbor_graph_key": "COLUMN::BO::SHB.MAIN1.EVT_EVENT.EVENT_TYPE",
+        "neighbor_labels": [
+          "Column"
+        ],
+        "fact": "EVT_EVENT contains EVENT_TYPE",
+        "evidence": "Table EVT_EVENT contains column EVENT_TYPE",
+        "attributes": {
+          "source_refs": [
+            {
+              "document_id": "docling-15867609475948615210",
+              "page": 1,
+              "raw_text": "DDL capture: MAIN1.EVT_EVENT.EVENT_TYPE"
+            }
+          ]
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1",
+        "target_node_uuid": "5435628b-220d-55ca-9c29-843e973729ca"
+      },
+      {
+        "uuid": "bd043f3b-94ab-5177-94fb-820157977aa2",
+        "edge_type": "Contains",
+        "edge_key": "TABLE::BO::SHB.MAIN1.EVT_EVENT|COLUMN::BO::SHB.MAIN1.EVT_EVENT.ID",
+        "content_sha256": "b0698be2020d3d76357decd8597c070be5e5393018c5280c098f2c326c2f1335",
+        "direction": "outgoing",
+        "neighbor_uuid": "276646de-31ec-5cf3-9948-042f18078e34",
+        "neighbor_entity_type": "Column",
+        "neighbor_graph_key": "COLUMN::BO::SHB.MAIN1.EVT_EVENT.ID",
+        "neighbor_labels": [
+          "Column"
+        ],
+        "fact": "EVT_EVENT contains ID",
+        "evidence": "Table EVT_EVENT contains column ID",
+        "attributes": {
+          "source_refs": [
+            {
+              "document_id": "docling-15867609475948615210",
+              "page": 1,
+              "raw_text": "DDL capture: MAIN1.EVT_EVENT.ID"
+            }
+          ]
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1",
+        "target_node_uuid": "276646de-31ec-5cf3-9948-042f18078e34"
+      },
+      {
+        "uuid": "13fd9040-9e2b-5ead-b80a-452b1058dab3",
+        "edge_type": "Contains",
+        "edge_key": "TABLE::BO::SHB.MAIN1.EVT_EVENT|COLUMN::BO::SHB.MAIN1.EVT_EVENT.INST_ID",
+        "content_sha256": "01c0318a7e16ee8d3279658c4218db695a87bc166b3d0fa889e231fe41951ba9",
+        "direction": "outgoing",
+        "neighbor_uuid": "b36ba96d-c5c2-543a-b038-1997b0d3eff8",
+        "neighbor_entity_type": "Column",
+        "neighbor_graph_key": "COLUMN::BO::SHB.MAIN1.EVT_EVENT.INST_ID",
+        "neighbor_labels": [
+          "Column"
+        ],
+        "fact": "EVT_EVENT contains INST_ID",
+        "evidence": "Table EVT_EVENT contains column INST_ID",
+        "attributes": {
+          "source_refs": [
+            {
+              "document_id": "docling-15867609475948615210",
+              "page": 1,
+              "raw_text": "DDL capture: MAIN1.EVT_EVENT.INST_ID"
+            }
+          ]
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1",
+        "target_node_uuid": "b36ba96d-c5c2-543a-b038-1997b0d3eff8"
+      },
+      {
+        "uuid": "527936fa-e354-51ac-928d-f2290c817b9e",
+        "edge_type": "Contains",
+        "edge_key": "TABLE::BO::SHB.MAIN1.EVT_EVENT|COLUMN::BO::SHB.MAIN1.EVT_EVENT.IS_CACHED",
+        "content_sha256": "9674c34039ac52a7f9ac028ed19dda1a0f3a5038d65bb63befc204d1698e72c7",
+        "direction": "outgoing",
+        "neighbor_uuid": "3da86ea0-ba27-51f9-aee1-6c06d25d759d",
+        "neighbor_entity_type": "Column",
+        "neighbor_graph_key": "COLUMN::BO::SHB.MAIN1.EVT_EVENT.IS_CACHED",
+        "neighbor_labels": [
+          "Column"
+        ],
+        "fact": "EVT_EVENT contains IS_CACHED",
+        "evidence": "Table EVT_EVENT contains column IS_CACHED",
+        "attributes": {
+          "source_refs": [
+            {
+              "document_id": "docling-15867609475948615210",
+              "page": 1,
+              "raw_text": "DDL capture: MAIN1.EVT_EVENT.IS_CACHED"
+            }
+          ]
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1",
+        "target_node_uuid": "3da86ea0-ba27-51f9-aee1-6c06d25d759d"
+      },
+      {
+        "uuid": "c06be0d0-87ee-5ab8-9dbc-82ceb23c3160",
+        "edge_type": "Contains",
+        "edge_key": "TABLE::BO::SHB.MAIN1.EVT_EVENT|COLUMN::BO::SHB.MAIN1.EVT_EVENT.SCALE_ID",
+        "content_sha256": "88e6f7f11682ddad32f7382f07b59756ae2245a260d0d25f14c7bd9d9354c677",
+        "direction": "outgoing",
+        "neighbor_uuid": "27e3f966-fab2-5154-b43a-6d35ebbc136e",
+        "neighbor_entity_type": "Column",
+        "neighbor_graph_key": "COLUMN::BO::SHB.MAIN1.EVT_EVENT.SCALE_ID",
+        "neighbor_labels": [
+          "Column"
+        ],
+        "fact": "EVT_EVENT contains SCALE_ID",
+        "evidence": "Table EVT_EVENT contains column SCALE_ID",
+        "attributes": {
+          "source_refs": [
+            {
+              "document_id": "docling-15867609475948615210",
+              "page": 1,
+              "raw_text": "DDL capture: MAIN1.EVT_EVENT.SCALE_ID"
+            }
+          ]
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1",
+        "target_node_uuid": "27e3f966-fab2-5154-b43a-6d35ebbc136e"
+      },
+      {
+        "uuid": "8dd3bdc5-9d29-5c42-8b7a-8b24ff601b8b",
+        "edge_type": "Contains",
+        "edge_key": "TABLE::BO::SHB.MAIN1.EVT_EVENT|COLUMN::BO::SHB.MAIN1.EVT_EVENT.SEQNUM",
+        "content_sha256": "8e777c64547ec14c5054b86f590ff1402efe0601570b9577f0e3bd708840e0f6",
+        "direction": "outgoing",
+        "neighbor_uuid": "ea93b317-c3e2-5077-b00d-6da385a6eaaa",
+        "neighbor_entity_type": "Column",
+        "neighbor_graph_key": "COLUMN::BO::SHB.MAIN1.EVT_EVENT.SEQNUM",
+        "neighbor_labels": [
+          "Column"
+        ],
+        "fact": "EVT_EVENT contains SEQNUM",
+        "evidence": "Table EVT_EVENT contains column SEQNUM",
+        "attributes": {
+          "source_refs": [
+            {
+              "document_id": "docling-15867609475948615210",
+              "page": 1,
+              "raw_text": "DDL capture: MAIN1.EVT_EVENT.SEQNUM"
+            }
+          ]
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1",
+        "target_node_uuid": "ea93b317-c3e2-5077-b00d-6da385a6eaaa"
+      },
+      {
+        "uuid": "0935cf1e-53b5-508b-b17d-a8627c5a7eae",
+        "edge_type": "JoinsWith",
+        "edge_key": "JoinsWith|TABLE::BO::SHB.MAIN1.CSM_STOP_LIST|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "ead0b5326e3462e6027ef65bcfa2fb785e5adf72911816cf66fa5a0b224d5ce8",
+        "direction": "incoming",
+        "neighbor_uuid": "6e17187a-8cbf-5f22-a46e-61c9ddb928a1",
+        "neighbor_entity_type": "Table",
+        "neighbor_graph_key": "TABLE::BO::SHB.MAIN1.CSM_STOP_LIST",
+        "neighbor_labels": [
+          "Table"
+        ],
+        "fact": "TABLE::BO::SHB.MAIN1.CSM_STOP_LIST JoinsWith TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "1 occurrence(s), first from_clause_cooccurrence at line 117122-117165",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 117165,
+          "line_start": 117122,
+          "occurrence_count": 1,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 117165,
+              "line_start": 117122,
+              "statement_kind": "from_clause_cooccurrence",
+              "statement_sha256": "e9f3c17cee1e57fbf313af40ef2a4d515ad2070a834a35b1503a7ca7739d93b5"
+            }
+          ],
+          "statement_kind": "from_clause_cooccurrence",
+          "statement_sha256": "e9f3c17cee1e57fbf313af40ef2a4d515ad2070a834a35b1503a7ca7739d93b5"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "6e17187a-8cbf-5f22-a46e-61c9ddb928a1",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "86796d69-4dc1-560c-8e5b-3c845a06cec7",
+        "edge_type": "JoinsWith",
+        "edge_key": "JoinsWith|VIEW::BO::SHB.MAIN1.COM_LANGUAGE_VW|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "821dc6509bbe8c10d8e46f4b1330406b44d428fe4bdd0627d9277d26a5de89d7",
+        "direction": "incoming",
+        "neighbor_uuid": "220724d4-c19d-5613-a68a-bce180481fb6",
+        "neighbor_entity_type": "View",
+        "neighbor_graph_key": "VIEW::BO::SHB.MAIN1.COM_LANGUAGE_VW",
+        "neighbor_labels": [
+          "View"
+        ],
+        "fact": "VIEW::BO::SHB.MAIN1.COM_LANGUAGE_VW JoinsWith TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "1 occurrence(s), first from_clause_cooccurrence at line 117122-117165",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 117165,
+          "line_start": 117122,
+          "occurrence_count": 1,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 117165,
+              "line_start": 117122,
+              "statement_kind": "from_clause_cooccurrence",
+              "statement_sha256": "e9f3c17cee1e57fbf313af40ef2a4d515ad2070a834a35b1503a7ca7739d93b5"
+            }
+          ],
+          "statement_kind": "from_clause_cooccurrence",
+          "statement_sha256": "e9f3c17cee1e57fbf313af40ef2a4d515ad2070a834a35b1503a7ca7739d93b5"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "220724d4-c19d-5613-a68a-bce180481fb6",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "ae4efcda-52dc-55b8-94e6-7fa71adf4806",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|FUNCTION::BO::SHB.MAIN1.OPR_OPERATION_PARALLEL_EVENTS#0|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "de7a8fc0c2ef9182afd721deec4fb7197b638030e43113a27e1aadbfd40894a1",
+        "direction": "incoming",
+        "neighbor_uuid": "45c0fcf3-0e28-5b44-9784-3fc6a05eeaea",
+        "neighbor_entity_type": "Function",
+        "neighbor_graph_key": "FUNCTION::BO::SHB.MAIN1.OPR_OPERATION_PARALLEL_EVENTS#0",
+        "neighbor_labels": [
+          "Function"
+        ],
+        "fact": "FUNCTION::BO::SHB.MAIN1.OPR_OPERATION_PARALLEL_EVENTS#0 ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "1 occurrence(s), first select_from at line 1295387-1295416",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 1295416,
+          "line_start": 1295387,
+          "occurrence_count": 1,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 1295416,
+              "line_start": 1295387,
+              "statement_kind": "select_from",
+              "statement_sha256": "67ad51ca7b56a3020776f76d483a466ee37c34ba5383c9f797f1962e83bca6cb"
+            }
+          ],
+          "statement_kind": "select_from",
+          "statement_sha256": "67ad51ca7b56a3020776f76d483a466ee37c34ba5383c9f797f1962e83bca6cb"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "45c0fcf3-0e28-5b44-9784-3fc6a05eeaea",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "8a6bd6da-001e-58bd-9643-7b6e244f5389",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|PACKAGE::BO::SHB.MAIN1.ACC_PRC_ACCOUNT_EXPORT_PKG|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "e01082bb992f5be07152b66475d241e6d48d487153f128ffd13dd401428dd8fb",
+        "direction": "incoming",
+        "neighbor_uuid": "a813bdca-4ff9-53ac-a867-7606e70c2500",
+        "neighbor_entity_type": "Package",
+        "neighbor_graph_key": "PACKAGE::BO::SHB.MAIN1.ACC_PRC_ACCOUNT_EXPORT_PKG",
+        "neighbor_labels": [
+          "Package"
+        ],
+        "fact": "PACKAGE::BO::SHB.MAIN1.ACC_PRC_ACCOUNT_EXPORT_PKG ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "2 occurrence(s), first select_from at line 359733-359754",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 359754,
+          "line_start": 359733,
+          "occurrence_count": 2,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 359754,
+              "line_start": 359733,
+              "statement_kind": "select_from",
+              "statement_sha256": "7d543845d41fbc7abe5773fe17d70c798b3562ab6b4a3ada689d23396db5914d"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 359843,
+              "line_start": 359820,
+              "statement_kind": "select_from",
+              "statement_sha256": "b32157b4bf90c6ec4a8e39326818011d5d29ea16ea9b28bec83e21ff272b03c6"
+            }
+          ],
+          "statement_kind": "select_from",
+          "statement_sha256": "7d543845d41fbc7abe5773fe17d70c798b3562ab6b4a3ada689d23396db5914d"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "a813bdca-4ff9-53ac-a867-7606e70c2500",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "5574f0b0-19e0-5815-b4f4-0688cf306035",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|PACKAGE::BO::SHB.MAIN1.ACI_PRC_OUTGOING_PKG|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "044c4e42940ebcb95cb3ecdd5b4c0342111cba50c78ea915fab8ad68e1d67cf2",
+        "direction": "incoming",
+        "neighbor_uuid": "abdfac44-6d31-5869-bc75-77b6007dd5d6",
+        "neighbor_entity_type": "Package",
+        "neighbor_graph_key": "PACKAGE::BO::SHB.MAIN1.ACI_PRC_OUTGOING_PKG",
+        "neighbor_labels": [
+          "Package"
+        ],
+        "fact": "PACKAGE::BO::SHB.MAIN1.ACI_PRC_OUTGOING_PKG ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "6 occurrence(s), first select_from at line 379984-380000",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 380000,
+          "line_start": 379984,
+          "occurrence_count": 6,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 380000,
+              "line_start": 379984,
+              "statement_kind": "select_from",
+              "statement_sha256": "388eee993d1b0c940f57323c80e34fbc5e0e77cd218ed48683a9702e279f7cc7"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 380309,
+              "line_start": 380094,
+              "statement_kind": "select_from",
+              "statement_sha256": "f517a26d2f383cbf8a6dcca0af5f17c47f3c6c7767567fabacc53f91d285e3f9"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 380863,
+              "line_start": 380847,
+              "statement_kind": "select_from",
+              "statement_sha256": "388eee993d1b0c940f57323c80e34fbc5e0e77cd218ed48683a9702e279f7cc7"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 381135,
+              "line_start": 380950,
+              "statement_kind": "select_from",
+              "statement_sha256": "4949f1923b2ad6918043d0f6eb0db9d3c7ba14d9259188c67ff62c356500fa82"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 381377,
+              "line_start": 381361,
+              "statement_kind": "select_from",
+              "statement_sha256": "388eee993d1b0c940f57323c80e34fbc5e0e77cd218ed48683a9702e279f7cc7"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 381743,
+              "line_start": 381464,
+              "statement_kind": "select_from",
+              "statement_sha256": "3c7ddc48fdceb076e7475ed12ef2f3df9a9c61ce7b9770435f2eead0cfc379b5"
+            }
+          ],
+          "statement_kind": "select_from",
+          "statement_sha256": "388eee993d1b0c940f57323c80e34fbc5e0e77cd218ed48683a9702e279f7cc7"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "abdfac44-6d31-5869-bc75-77b6007dd5d6",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "266c3098-4beb-5017-b995-d9665dd6e498",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|PACKAGE::BO::SHB.MAIN1.AMX_PRC_MERCHANT_PKG|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "2d45b47b87dea29b1ec67a944969d5b6064cbeb21836b4175942a05d41359ba6",
+        "direction": "incoming",
+        "neighbor_uuid": "68848ff2-ef2b-537a-b813-4d7e3f0da587",
+        "neighbor_entity_type": "Package",
+        "neighbor_graph_key": "PACKAGE::BO::SHB.MAIN1.AMX_PRC_MERCHANT_PKG",
+        "neighbor_labels": [
+          "Package"
+        ],
+        "fact": "PACKAGE::BO::SHB.MAIN1.AMX_PRC_MERCHANT_PKG ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "1 occurrence(s), first select_from at line 428938-428955",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 428955,
+          "line_start": 428938,
+          "occurrence_count": 1,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 428955,
+              "line_start": 428938,
+              "statement_kind": "select_from",
+              "statement_sha256": "a4935dd2ee137c6da5e49ce95c19a09319836348ae6897f327cdbaf3b7154d71"
+            }
+          ],
+          "statement_kind": "select_from",
+          "statement_sha256": "a4935dd2ee137c6da5e49ce95c19a09319836348ae6897f327cdbaf3b7154d71"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "68848ff2-ef2b-537a-b813-4d7e3f0da587",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "442598e0-f27d-5af5-8cde-fe2ffc00a0f1",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|PACKAGE::BO::SHB.MAIN1.CFG_PRC_INST_EXPORT_PKG|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "6315c63104c326c89a6bcb4ea4c1b7636b74981d0922eb7fc188cc24f399a6fc",
+        "direction": "incoming",
+        "neighbor_uuid": "72f641ea-3a49-5ec5-8f3d-7d7a1f2bfef4",
+        "neighbor_entity_type": "Package",
+        "neighbor_graph_key": "PACKAGE::BO::SHB.MAIN1.CFG_PRC_INST_EXPORT_PKG",
+        "neighbor_labels": [
+          "Package"
+        ],
+        "fact": "PACKAGE::BO::SHB.MAIN1.CFG_PRC_INST_EXPORT_PKG ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "2 occurrence(s), first select_from at line 498453-498462",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 498462,
+          "line_start": 498453,
+          "occurrence_count": 2,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 498462,
+              "line_start": 498453,
+              "statement_kind": "select_from",
+              "statement_sha256": "1b72c3570095dda4cc3714ff3fa56338edcc60a060f70e39c919a08a455eff31"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 498562,
+              "line_start": 498550,
+              "statement_kind": "select_from",
+              "statement_sha256": "6ba889064ea44b268bfb05bb3bffe5fa5dbead13a1f2d969a5fc8d8309aa081f"
+            }
+          ],
+          "statement_kind": "select_from",
+          "statement_sha256": "1b72c3570095dda4cc3714ff3fa56338edcc60a060f70e39c919a08a455eff31"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "72f641ea-3a49-5ec5-8f3d-7d7a1f2bfef4",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "c89801cb-f649-5a7c-b188-536fdc905fe6",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|PACKAGE::BO::SHB.MAIN1.CRD_API_BILLING_PKG|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "bca7029838b833a10cd28b16f77182793646331f3457dcf2cb9dce37fc86bc24",
+        "direction": "incoming",
+        "neighbor_uuid": "42dedac8-8248-5809-9e07-c07355471d84",
+        "neighbor_entity_type": "Package",
+        "neighbor_graph_key": "PACKAGE::BO::SHB.MAIN1.CRD_API_BILLING_PKG",
+        "neighbor_labels": [
+          "Package"
+        ],
+        "fact": "PACKAGE::BO::SHB.MAIN1.CRD_API_BILLING_PKG ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "2 occurrence(s), first cursor_declaration at line 543579-543599",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 543599,
+          "line_start": 543579,
+          "occurrence_count": 2,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 543599,
+              "line_start": 543579,
+              "statement_kind": "cursor_declaration",
+              "statement_sha256": "2a328e8e40d4093488cdfc723a8c4091617753e0ba8805aa9e44a05a2ebf0442"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 543628,
+              "line_start": 543599,
+              "statement_kind": "cursor_declaration",
+              "statement_sha256": "c30e4fc01994f3d290edeb065a23bad2f0586e58873487c0fb44de3c7880bed7"
+            }
+          ],
+          "statement_kind": "cursor_declaration",
+          "statement_sha256": "2a328e8e40d4093488cdfc723a8c4091617753e0ba8805aa9e44a05a2ebf0442"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "42dedac8-8248-5809-9e07-c07355471d84",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "a1ce69a2-4e8e-584e-9eaf-2562231abc32",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|PACKAGE::BO::SHB.MAIN1.CRD_PRC_BILLING_PKG|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "7863e11b3a443e3dc1b11f7453cf81d56191e5caa3901d47a2616e741620fd42",
+        "direction": "incoming",
+        "neighbor_uuid": "bc6068e5-7b66-59ba-9652-2942d4cb7470",
+        "neighbor_entity_type": "Package",
+        "neighbor_graph_key": "PACKAGE::BO::SHB.MAIN1.CRD_PRC_BILLING_PKG",
+        "neighbor_labels": [
+          "Package"
+        ],
+        "fact": "PACKAGE::BO::SHB.MAIN1.CRD_PRC_BILLING_PKG ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "3 occurrence(s), first cursor_declaration at line 564029-564041",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 564041,
+          "line_start": 564029,
+          "occurrence_count": 3,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 564041,
+              "line_start": 564029,
+              "statement_kind": "cursor_declaration",
+              "statement_sha256": "d29b7530ebb028b11a30afec3f76b69c5389ae3efc27a6930a65aa1bce640855"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 564062,
+              "line_start": 564041,
+              "statement_kind": "cursor_declaration",
+              "statement_sha256": "3ab24bc850c24de82ca8c6e2d445ae85666a03adc0c3e86d5e5783cf7ea40a2f"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 564518,
+              "line_start": 564458,
+              "statement_kind": "cursor_declaration",
+              "statement_sha256": "1682971cdf37d9d0804af7bca9f56d0cb65c76c20364562b7fc07d097ee086c9"
+            }
+          ],
+          "statement_kind": "cursor_declaration",
+          "statement_sha256": "d29b7530ebb028b11a30afec3f76b69c5389ae3efc27a6930a65aa1bce640855"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "bc6068e5-7b66-59ba-9652-2942d4cb7470",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "afa1e130-eefb-5c43-a56a-86a347074f4e",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|PACKAGE::BO::SHB.MAIN1.CRD_PRC_EXPORT_PKG|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "570d44207aac62261496f2b32818edfe5770d385b0468d0e48eb086112f8375e",
+        "direction": "incoming",
+        "neighbor_uuid": "674f0b6c-8fac-5a6f-b8c3-623425504565",
+        "neighbor_entity_type": "Package",
+        "neighbor_graph_key": "PACKAGE::BO::SHB.MAIN1.CRD_PRC_EXPORT_PKG",
+        "neighbor_labels": [
+          "Package"
+        ],
+        "fact": "PACKAGE::BO::SHB.MAIN1.CRD_PRC_EXPORT_PKG ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "3 occurrence(s), first select_from at line 565138-565239",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 565239,
+          "line_start": 565138,
+          "occurrence_count": 3,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 565239,
+              "line_start": 565138,
+              "statement_kind": "select_from",
+              "statement_sha256": "f5a9c14b828b1be49206e21bff04372b3693d37fe50d07ad92b1f03a42815b66"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 565583,
+              "line_start": 565479,
+              "statement_kind": "select_from",
+              "statement_sha256": "a866d1c82aec7391df61789b207176ae5295efb9a0bab77636721b2c4a96e0c3"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 566551,
+              "line_start": 566537,
+              "statement_kind": "cursor_declaration",
+              "statement_sha256": "5c66c877f604dfcf9f915e2f0716f8577a8fac4149360d34998fb11f9cc49647"
+            }
+          ],
+          "statement_kind": "select_from",
+          "statement_sha256": "f5a9c14b828b1be49206e21bff04372b3693d37fe50d07ad92b1f03a42815b66"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "674f0b6c-8fac-5a6f-b8c3-623425504565",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "002d01d5-d351-56a5-b89f-d2f56a9621d8",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|PACKAGE::BO::SHB.MAIN1.CSM_UI_STOP_LIST_PKG|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "8ee8131ecce6b5d382d04f17b8935cc90bcc59734b1ad1da2f5ea6a7400f1047",
+        "direction": "incoming",
+        "neighbor_uuid": "7c53ddaf-e404-5366-bcc4-141aa7b207d1",
+        "neighbor_entity_type": "Package",
+        "neighbor_graph_key": "PACKAGE::BO::SHB.MAIN1.CSM_UI_STOP_LIST_PKG",
+        "neighbor_labels": [
+          "Package"
+        ],
+        "fact": "PACKAGE::BO::SHB.MAIN1.CSM_UI_STOP_LIST_PKG ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "1 occurrence(s), first select_from at line 582746-582755",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 582755,
+          "line_start": 582746,
+          "occurrence_count": 1,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 582755,
+              "line_start": 582746,
+              "statement_kind": "select_from",
+              "statement_sha256": "64858bb34f15efb23ab2f7d6c9bdbd114982a7e22172039cd9496840e2c1da34"
+            }
+          ],
+          "statement_kind": "select_from",
+          "statement_sha256": "64858bb34f15efb23ab2f7d6c9bdbd114982a7e22172039cd9496840e2c1da34"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "7c53ddaf-e404-5366-bcc4-141aa7b207d1",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "7218089f-30dc-5c01-8bd2-debd4780cada",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|PACKAGE::BO::SHB.MAIN1.EVT_API_EVENT_PKG|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "5669cfdff3439dd95c0ede9347293e1abec144fb9dcce07440519057de5846f0",
+        "direction": "incoming",
+        "neighbor_uuid": "e2bda4c3-54c5-5434-ac1a-c3e1302ce59e",
+        "neighbor_entity_type": "Package",
+        "neighbor_graph_key": "PACKAGE::BO::SHB.MAIN1.EVT_API_EVENT_PKG",
+        "neighbor_labels": [
+          "Package"
+        ],
+        "fact": "PACKAGE::BO::SHB.MAIN1.EVT_API_EVENT_PKG ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "3 occurrence(s), first select_from at line 646207-646222",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 646222,
+          "line_start": 646207,
+          "occurrence_count": 3,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 646222,
+              "line_start": 646207,
+              "statement_kind": "select_from",
+              "statement_sha256": "bd860647552056ebf6b9a5b68486fc101cb4953f2f6fe295171553b226eba78c"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 646247,
+              "line_start": 646234,
+              "statement_kind": "select_from",
+              "statement_sha256": "21a7fee62a205fe9700d283085284ee8a164e2ac1f361a1e822082561e324bbd"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 646653,
+              "line_start": 646644,
+              "statement_kind": "select_from",
+              "statement_sha256": "7e7b74877ddc8b49422f624f94551f79443c3feda66cfec5226599ce8e0efefe"
+            }
+          ],
+          "statement_kind": "select_from",
+          "statement_sha256": "bd860647552056ebf6b9a5b68486fc101cb4953f2f6fe295171553b226eba78c"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "e2bda4c3-54c5-5434-ac1a-c3e1302ce59e",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "15297713-a5b8-5b76-84c2-4de701de4cc2",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|PACKAGE::BO::SHB.MAIN1.EVT_API_RULE_PROC_PKG|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "e85f1e638a6f4acef5d25d1035f1f9b8bae6cdc6824d9ad216f5938a4aa6bd86",
+        "direction": "incoming",
+        "neighbor_uuid": "050dc039-0716-514b-85cf-37c2141d1cb6",
+        "neighbor_entity_type": "Package",
+        "neighbor_graph_key": "PACKAGE::BO::SHB.MAIN1.EVT_API_RULE_PROC_PKG",
+        "neighbor_labels": [
+          "Package"
+        ],
+        "fact": "PACKAGE::BO::SHB.MAIN1.EVT_API_RULE_PROC_PKG ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "1 occurrence(s), first select_from at line 653835-653872",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 653872,
+          "line_start": 653835,
+          "occurrence_count": 1,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 653872,
+              "line_start": 653835,
+              "statement_kind": "select_from",
+              "statement_sha256": "b4fe608ce9816ded417b203b2061e9ccebc28acc2aa9711d0543aa59dc66846a"
+            }
+          ],
+          "statement_kind": "select_from",
+          "statement_sha256": "b4fe608ce9816ded417b203b2061e9ccebc28acc2aa9711d0543aa59dc66846a"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "050dc039-0716-514b-85cf-37c2141d1cb6",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "0068850f-8495-5fcb-a3bb-44efdba05857",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|PACKAGE::BO::SHB.MAIN1.EVT_PRC_EVENT_PKG|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "4cc7503eda912edb840aaa718a2dcd1aff24ce8ee689df3bd51acce3b1252926",
+        "direction": "incoming",
+        "neighbor_uuid": "e5adecd3-658f-5785-b54e-342a28595a99",
+        "neighbor_entity_type": "Package",
+        "neighbor_graph_key": "PACKAGE::BO::SHB.MAIN1.EVT_PRC_EVENT_PKG",
+        "neighbor_labels": [
+          "Package"
+        ],
+        "fact": "PACKAGE::BO::SHB.MAIN1.EVT_PRC_EVENT_PKG ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "2 occurrence(s), first cursor_declaration at line 656897-656909",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 656909,
+          "line_start": 656897,
+          "occurrence_count": 2,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 656909,
+              "line_start": 656897,
+              "statement_kind": "cursor_declaration",
+              "statement_sha256": "c12a9298d14536ec3e4f15174eb7989737a84fb6d655a80ea4e352dcc876db53"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 656937,
+              "line_start": 656925,
+              "statement_kind": "select_from",
+              "statement_sha256": "34aa062f6cf0dafa1c31c251542b516d455672cef4234cfbfabd8eadcafb9d04"
+            }
+          ],
+          "statement_kind": "cursor_declaration",
+          "statement_sha256": "c12a9298d14536ec3e4f15174eb7989737a84fb6d655a80ea4e352dcc876db53"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "e5adecd3-658f-5785-b54e-342a28595a99",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "1f2c862e-6859-59de-ae99-bee72675cffc",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|PACKAGE::BO::SHB.MAIN1.INS_PRC_PREMIUM_PKG|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "27e9deccc2dd2be10e2626bf3ba9f88f88b2b0cfc6352b9dd1fc11de1bbe3a8a",
+        "direction": "incoming",
+        "neighbor_uuid": "e8b81fc3-06f2-5a90-bfc5-08a8f1733f64",
+        "neighbor_entity_type": "Package",
+        "neighbor_graph_key": "PACKAGE::BO::SHB.MAIN1.INS_PRC_PREMIUM_PKG",
+        "neighbor_labels": [
+          "Package"
+        ],
+        "fact": "PACKAGE::BO::SHB.MAIN1.INS_PRC_PREMIUM_PKG ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "2 occurrence(s), first cursor_declaration at line 716947-716963",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 716963,
+          "line_start": 716947,
+          "occurrence_count": 2,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 716963,
+              "line_start": 716947,
+              "statement_kind": "cursor_declaration",
+              "statement_sha256": "7440e01f64b5d39edeb3f3f4621479f8371a25aeca2ee97bb77ac13a5d21d920"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 716988,
+              "line_start": 716963,
+              "statement_kind": "cursor_declaration",
+              "statement_sha256": "2e6e1a9d28900221a7a59b49bbb35b048374080557e5e48331d88562328fdaf5"
+            }
+          ],
+          "statement_kind": "cursor_declaration",
+          "statement_sha256": "7440e01f64b5d39edeb3f3f4621479f8371a25aeca2ee97bb77ac13a5d21d920"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "e8b81fc3-06f2-5a90-bfc5-08a8f1733f64",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "28447f1f-6e7c-5d90-8526-bc1e14d26eb0",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|PACKAGE::BO::SHB.MAIN1.INV_PRC_BILLING_PKG|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "d78ea0f207730daf0367d9d6f3c458ce939e8b47350a450ad720265a42201dc8",
+        "direction": "incoming",
+        "neighbor_uuid": "a8450e2a-e7f2-5cd1-81ff-f4892de8b62d",
+        "neighbor_entity_type": "Package",
+        "neighbor_graph_key": "PACKAGE::BO::SHB.MAIN1.INV_PRC_BILLING_PKG",
+        "neighbor_labels": [
+          "Package"
+        ],
+        "fact": "PACKAGE::BO::SHB.MAIN1.INV_PRC_BILLING_PKG ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "2 occurrence(s), first cursor_declaration at line 718868-718884",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 718884,
+          "line_start": 718868,
+          "occurrence_count": 2,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 718884,
+              "line_start": 718868,
+              "statement_kind": "cursor_declaration",
+              "statement_sha256": "7440e01f64b5d39edeb3f3f4621479f8371a25aeca2ee97bb77ac13a5d21d920"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 718909,
+              "line_start": 718884,
+              "statement_kind": "cursor_declaration",
+              "statement_sha256": "2e6e1a9d28900221a7a59b49bbb35b048374080557e5e48331d88562328fdaf5"
+            }
+          ],
+          "statement_kind": "cursor_declaration",
+          "statement_sha256": "7440e01f64b5d39edeb3f3f4621479f8371a25aeca2ee97bb77ac13a5d21d920"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "a8450e2a-e7f2-5cd1-81ff-f4892de8b62d",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "d072433b-bbdf-550b-ad82-8368aa1d5040",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|PACKAGE::BO::SHB.MAIN1.ITF_API_FRAUD_MON_VERSION_PKG|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "90b321ac3897f865fa38f95b50e1bf1ccc2f205c73969e87f69bc04f75f057d4",
+        "direction": "incoming",
+        "neighbor_uuid": "8c6f4b18-87d6-5924-b955-5bdf69c7d8a0",
+        "neighbor_entity_type": "Package",
+        "neighbor_graph_key": "PACKAGE::BO::SHB.MAIN1.ITF_API_FRAUD_MON_VERSION_PKG",
+        "neighbor_labels": [
+          "Package"
+        ],
+        "fact": "PACKAGE::BO::SHB.MAIN1.ITF_API_FRAUD_MON_VERSION_PKG ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "1 occurrence(s), first select_from at line 749545-749674",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 749674,
+          "line_start": 749545,
+          "occurrence_count": 1,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 749674,
+              "line_start": 749545,
+              "statement_kind": "select_from",
+              "statement_sha256": "8dbc4db0835b3d8d5774edb29e03d9178200ab2c1e9e5f6ebf2badeb354ba54a"
+            }
+          ],
+          "statement_kind": "select_from",
+          "statement_sha256": "8dbc4db0835b3d8d5774edb29e03d9178200ab2c1e9e5f6ebf2badeb354ba54a"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "8c6f4b18-87d6-5924-b955-5bdf69c7d8a0",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "4f8002e3-c9d8-5258-924a-384c778d9793",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|PACKAGE::BO::SHB.MAIN1.ITF_DWH_PRC_CARD_EXPORT_PKG|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "4d800125bb065dd552bb9c408490d548275890eb6e77128ef26725fa698ba874",
+        "direction": "incoming",
+        "neighbor_uuid": "00e642f8-d7b8-503b-82fa-9490df724290",
+        "neighbor_entity_type": "Package",
+        "neighbor_graph_key": "PACKAGE::BO::SHB.MAIN1.ITF_DWH_PRC_CARD_EXPORT_PKG",
+        "neighbor_labels": [
+          "Package"
+        ],
+        "fact": "PACKAGE::BO::SHB.MAIN1.ITF_DWH_PRC_CARD_EXPORT_PKG ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "1 occurrence(s), first select_from at line 757403-757442",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 757442,
+          "line_start": 757403,
+          "occurrence_count": 1,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 757442,
+              "line_start": 757403,
+              "statement_kind": "select_from",
+              "statement_sha256": "de222968282a504a765402f20dfc8c74902eb18cda494dc3d54742d44b543189"
+            }
+          ],
+          "statement_kind": "select_from",
+          "statement_sha256": "de222968282a504a765402f20dfc8c74902eb18cda494dc3d54742d44b543189"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "00e642f8-d7b8-503b-82fa-9490df724290",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "4ae7cb27-1488-54b6-ac43-784528afb335",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|PACKAGE::BO::SHB.MAIN1.ITF_IP_PRC_OUTGOING_PKG|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "b5f9ad71908d04ef684904247d09fba400e230ff5ae7763fefc74dbc30edc1aa",
+        "direction": "incoming",
+        "neighbor_uuid": "063dd31d-3721-54e9-ba31-54b86e4ce4ce",
+        "neighbor_entity_type": "Package",
+        "neighbor_graph_key": "PACKAGE::BO::SHB.MAIN1.ITF_IP_PRC_OUTGOING_PKG",
+        "neighbor_labels": [
+          "Package"
+        ],
+        "fact": "PACKAGE::BO::SHB.MAIN1.ITF_IP_PRC_OUTGOING_PKG ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "1 occurrence(s), first cursor_declaration at line 760856-760873",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 760873,
+          "line_start": 760856,
+          "occurrence_count": 1,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 760873,
+              "line_start": 760856,
+              "statement_kind": "cursor_declaration",
+              "statement_sha256": "3ff1791200dbb5ee641b4c3b59e042081015dc886e979fa406bb356e49b2cb89"
+            }
+          ],
+          "statement_kind": "cursor_declaration",
+          "statement_sha256": "3ff1791200dbb5ee641b4c3b59e042081015dc886e979fa406bb356e49b2cb89"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "063dd31d-3721-54e9-ba31-54b86e4ce4ce",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "3dba14ed-3fef-5c41-a4cc-0a31c0963ba9",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|PACKAGE::BO::SHB.MAIN1.ITF_MPT_PRC_CUST_EXPORT_PKG|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "122943780016e5407867733896624117e9e4b6158be7cd06bbd482d981eeef21",
+        "direction": "incoming",
+        "neighbor_uuid": "f5e6208a-ee1a-5550-842e-86c93f964a60",
+        "neighbor_entity_type": "Package",
+        "neighbor_graph_key": "PACKAGE::BO::SHB.MAIN1.ITF_MPT_PRC_CUST_EXPORT_PKG",
+        "neighbor_labels": [
+          "Package"
+        ],
+        "fact": "PACKAGE::BO::SHB.MAIN1.ITF_MPT_PRC_CUST_EXPORT_PKG ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "2 occurrence(s), first cursor_declaration at line 762797-762814",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 762814,
+          "line_start": 762797,
+          "occurrence_count": 2,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 762814,
+              "line_start": 762797,
+              "statement_kind": "cursor_declaration",
+              "statement_sha256": "0b0ab7d3e3eee2863ad96ec2f7db31300a6cde00d57ca84d3da8ef56c9b0bc3a"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 763167,
+              "line_start": 763149,
+              "statement_kind": "select_from",
+              "statement_sha256": "e08bf4c498a11f0b6cea88adaf92ab0c00362cd5e75dc7a7f4aac262c43b4442"
+            }
+          ],
+          "statement_kind": "cursor_declaration",
+          "statement_sha256": "0b0ab7d3e3eee2863ad96ec2f7db31300a6cde00d57ca84d3da8ef56c9b0bc3a"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "f5e6208a-ee1a-5550-842e-86c93f964a60",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "367ade4b-ea8f-5999-b289-3c3afb3e6013",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|PACKAGE::BO::SHB.MAIN1.ITF_MT_PRC_OUTGOING_PKG|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "beee0552aeef3ff4cbf6c7b7132277ab1c4115d62fd9e74b35a94e86a715ff37",
+        "direction": "incoming",
+        "neighbor_uuid": "ee4251d7-6212-557a-be22-3a1d89660676",
+        "neighbor_entity_type": "Package",
+        "neighbor_graph_key": "PACKAGE::BO::SHB.MAIN1.ITF_MT_PRC_OUTGOING_PKG",
+        "neighbor_labels": [
+          "Package"
+        ],
+        "fact": "PACKAGE::BO::SHB.MAIN1.ITF_MT_PRC_OUTGOING_PKG ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "2 occurrence(s), first cursor_declaration at line 764228-764248",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 764248,
+          "line_start": 764228,
+          "occurrence_count": 2,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 764248,
+              "line_start": 764228,
+              "statement_kind": "cursor_declaration",
+              "statement_sha256": "b3ed79b53f0cdb955b4f2b5eea86a3594b9b7295dde4e0818f1d59870da98342"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 764570,
+              "line_start": 764550,
+              "statement_kind": "cursor_declaration",
+              "statement_sha256": "da3f86ab1f8dfa316c161522094f6bde68e62c1dc483a4aec430c4da85176bed"
+            }
+          ],
+          "statement_kind": "cursor_declaration",
+          "statement_sha256": "b3ed79b53f0cdb955b4f2b5eea86a3594b9b7295dde4e0818f1d59870da98342"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "ee4251d7-6212-557a-be22-3a1d89660676",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "30f07c25-4d64-5ebd-9abe-20cf8172c971",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|PACKAGE::BO::SHB.MAIN1.ITF_MX_PRC_OUTGOING_PKG|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "0634a16ea093ba33fc62dbbfcc6cc44c77be5ba34464138aa2761451778ad754",
+        "direction": "incoming",
+        "neighbor_uuid": "97d71ddd-5e29-5b89-931c-685e98bdfffe",
+        "neighbor_entity_type": "Package",
+        "neighbor_graph_key": "PACKAGE::BO::SHB.MAIN1.ITF_MX_PRC_OUTGOING_PKG",
+        "neighbor_labels": [
+          "Package"
+        ],
+        "fact": "PACKAGE::BO::SHB.MAIN1.ITF_MX_PRC_OUTGOING_PKG ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "1 occurrence(s), first cursor_declaration at line 765030-765050",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 765050,
+          "line_start": 765030,
+          "occurrence_count": 1,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 765050,
+              "line_start": 765030,
+              "statement_kind": "cursor_declaration",
+              "statement_sha256": "da3f86ab1f8dfa316c161522094f6bde68e62c1dc483a4aec430c4da85176bed"
+            }
+          ],
+          "statement_kind": "cursor_declaration",
+          "statement_sha256": "da3f86ab1f8dfa316c161522094f6bde68e62c1dc483a4aec430c4da85176bed"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "97d71ddd-5e29-5b89-931c-685e98bdfffe",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "b9159aff-8538-5925-82bf-fc18c1d0e31b",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|PACKAGE::BO::SHB.MAIN1.ITF_PRC_EVENT_PKG|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "7f65970a8fef158bb4ccc0e80380b6b8fbf78078208689673100e1a97b3977bf",
+        "direction": "incoming",
+        "neighbor_uuid": "ac4af28c-1842-5ec7-a2df-db70784ff2e2",
+        "neighbor_entity_type": "Package",
+        "neighbor_graph_key": "PACKAGE::BO::SHB.MAIN1.ITF_PRC_EVENT_PKG",
+        "neighbor_labels": [
+          "Package"
+        ],
+        "fact": "PACKAGE::BO::SHB.MAIN1.ITF_PRC_EVENT_PKG ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "1 occurrence(s), first select_from at line 778213-778228",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 778228,
+          "line_start": 778213,
+          "occurrence_count": 1,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 778228,
+              "line_start": 778213,
+              "statement_kind": "select_from",
+              "statement_sha256": "42d1d0ebe4a60aa48e16594f57b3b1506ce9277c97b1cd70750d42f09d0c62b4"
+            }
+          ],
+          "statement_kind": "select_from",
+          "statement_sha256": "42d1d0ebe4a60aa48e16594f57b3b1506ce9277c97b1cd70750d42f09d0c62b4"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "ac4af28c-1842-5ec7-a2df-db70784ff2e2",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "0dc4d2de-f632-57e5-a7f5-89179a6042df",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|PACKAGE::BO::SHB.MAIN1.ITF_PRC_REJECT_FILE_PKG|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "154d31a3caa71057b0194c7d4c6fa8ed5c170890d3acae98df32983955a4127b",
+        "direction": "incoming",
+        "neighbor_uuid": "0308ece4-71c6-52d3-9330-f3bc5efc2062",
+        "neighbor_entity_type": "Package",
+        "neighbor_graph_key": "PACKAGE::BO::SHB.MAIN1.ITF_PRC_REJECT_FILE_PKG",
+        "neighbor_labels": [
+          "Package"
+        ],
+        "fact": "PACKAGE::BO::SHB.MAIN1.ITF_PRC_REJECT_FILE_PKG ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "9 occurrence(s), first select_from at line 788208-788215",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 788215,
+          "line_start": 788208,
+          "occurrence_count": 9,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 788215,
+              "line_start": 788208,
+              "statement_kind": "select_from",
+              "statement_sha256": "dacb371ca4ad9000fdcb58ecf55cb2f901567a2cb3a8183bc0860d5d782ead4e"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 788222,
+              "line_start": 788215,
+              "statement_kind": "select_from",
+              "statement_sha256": "843d24e8e896604d771bb17febfa041d940cf37c6d92311f42ed29b5fa26c937"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 788401,
+              "line_start": 788394,
+              "statement_kind": "select_from",
+              "statement_sha256": "348417d4d1ab50fc4a75236cb6f26c262e44f8f9cdf2513869f66fdfa8df0f52"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 788636,
+              "line_start": 788593,
+              "statement_kind": "select_from",
+              "statement_sha256": "ca15f97b1fc0335198746676bbde1e2cd9dee1f118b26dfddcf6642a4d66221c"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 788778,
+              "line_start": 788735,
+              "statement_kind": "select_from",
+              "statement_sha256": "0406d5fe2d9f7b7f7d6078a430d77418bd2c43679c3d93ba654ecb1097436249"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 788851,
+              "line_start": 788844,
+              "statement_kind": "select_from",
+              "statement_sha256": "8ac978fba5a2e53dcae110bcea010fb8e7e69e716a6deca3c3e2eb16f731fab2"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 788858,
+              "line_start": 788851,
+              "statement_kind": "select_from",
+              "statement_sha256": "7c06913a965f09018fafe10e60b20b96711ff0f5edbf38a1f90e24c1c0138b56"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 789038,
+              "line_start": 789031,
+              "statement_kind": "select_from",
+              "statement_sha256": "a3ac7fe6576633b11c964b389c6fdae778f91335177a140f68cb7deaa529aaa2"
+            }
+          ],
+          "statement_kind": "select_from",
+          "statement_sha256": "dacb371ca4ad9000fdcb58ecf55cb2f901567a2cb3a8183bc0860d5d782ead4e"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "0308ece4-71c6-52d3-9330-f3bc5efc2062",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "2cae06bc-03ee-5c74-a39b-3bf2f92ec32a",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|PACKAGE::BO::SHB.MAIN1.JCB_PRC_MERCHANT_PKG|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "991b831311506064b424ed4f5f37fd628fd8b01c65837ef08574909e8f028c30",
+        "direction": "incoming",
+        "neighbor_uuid": "e7543cf7-55cd-5d70-b4f3-5051375421f8",
+        "neighbor_entity_type": "Package",
+        "neighbor_graph_key": "PACKAGE::BO::SHB.MAIN1.JCB_PRC_MERCHANT_PKG",
+        "neighbor_labels": [
+          "Package"
+        ],
+        "fact": "PACKAGE::BO::SHB.MAIN1.JCB_PRC_MERCHANT_PKG ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "3 occurrence(s), first select_from at line 810210-810226",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 810226,
+          "line_start": 810210,
+          "occurrence_count": 3,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 810226,
+              "line_start": 810210,
+              "statement_kind": "select_from",
+              "statement_sha256": "bff4334aa220e93d74ddf0e05ac14e20da888981db206b327e27f939651f1270"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 810241,
+              "line_start": 810226,
+              "statement_kind": "select_from",
+              "statement_sha256": "7438b1fb6bcef7d8e883e38c069a03235d12e083c4c7fca5027bee2855d3af3c"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 810378,
+              "line_start": 810241,
+              "statement_kind": "select_from",
+              "statement_sha256": "6e7acf0e71ec816d7b93ba55903871c55f860aa1610dc4cba901b1f349600b72"
+            }
+          ],
+          "statement_kind": "select_from",
+          "statement_sha256": "bff4334aa220e93d74ddf0e05ac14e20da888981db206b327e27f939651f1270"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "e7543cf7-55cd-5d70-b4f3-5051375421f8",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "41a47fdc-27bd-587f-9eb2-dc9b19443816",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|PACKAGE::BO::SHB.MAIN1.MCW_PRC_ABU_PKG|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "41a18fff7314e30d903dc2cf22d562d28c9324fcfa0b28f88bd70c066b9e7a97",
+        "direction": "incoming",
+        "neighbor_uuid": "99a6bfb2-c4a2-5253-a0ea-483fc50d39d9",
+        "neighbor_entity_type": "Package",
+        "neighbor_graph_key": "PACKAGE::BO::SHB.MAIN1.MCW_PRC_ABU_PKG",
+        "neighbor_labels": [
+          "Package"
+        ],
+        "fact": "PACKAGE::BO::SHB.MAIN1.MCW_PRC_ABU_PKG ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "2 occurrence(s), first select_join at line 858118-858160",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 858160,
+          "line_start": 858118,
+          "occurrence_count": 2,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 858160,
+              "line_start": 858118,
+              "statement_kind": "select_join",
+              "statement_sha256": "ce3e90548a41085be8e2d4e7b8f3910f10ce6d1dd0eeaf13dde6a7f7f0747008"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 858455,
+              "line_start": 858438,
+              "statement_kind": "select_join",
+              "statement_sha256": "66ca56721886287e90a31e6ece2f1dc7d339d6971d72f2120764922059b1f5a6"
+            }
+          ],
+          "statement_kind": "select_join",
+          "statement_sha256": "ce3e90548a41085be8e2d4e7b8f3910f10ce6d1dd0eeaf13dde6a7f7f0747008"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "99a6bfb2-c4a2-5253-a0ea-483fc50d39d9",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "8f218879-b46c-55a9-a718-08da7d29e915",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|PACKAGE::BO::SHB.MAIN1.MCW_PRC_LTY_PKG|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "27058fedda17f8f6b66495eb3d537099d047f9b7e78392695b9789260da29dd8",
+        "direction": "incoming",
+        "neighbor_uuid": "798f621c-773f-51e8-8004-f9fdf0f8662f",
+        "neighbor_entity_type": "Package",
+        "neighbor_graph_key": "PACKAGE::BO::SHB.MAIN1.MCW_PRC_LTY_PKG",
+        "neighbor_labels": [
+          "Package"
+        ],
+        "fact": "PACKAGE::BO::SHB.MAIN1.MCW_PRC_LTY_PKG ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "1 occurrence(s), first select_from at line 866330-866345",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 866345,
+          "line_start": 866330,
+          "occurrence_count": 1,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 866345,
+              "line_start": 866330,
+              "statement_kind": "select_from",
+              "statement_sha256": "e40eff74de24fb06aac79ada4d11388d4e025b2fd181fdbd1ef5441ddfcb6716"
+            }
+          ],
+          "statement_kind": "select_from",
+          "statement_sha256": "e40eff74de24fb06aac79ada4d11388d4e025b2fd181fdbd1ef5441ddfcb6716"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "798f621c-773f-51e8-8004-f9fdf0f8662f",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "f346dba3-8185-5f0f-a2ae-bf29238b309a",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|PACKAGE::BO::SHB.MAIN1.NTF_PRC_NOTIFICATION_PKG|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "101ef37257344432b172b8fb0c4ce38df9dc7c819699d7da26ec8e94c9cdf243",
+        "direction": "incoming",
+        "neighbor_uuid": "0338cd1d-c970-5524-8446-c7cffc4727bf",
+        "neighbor_entity_type": "Package",
+        "neighbor_graph_key": "PACKAGE::BO::SHB.MAIN1.NTF_PRC_NOTIFICATION_PKG",
+        "neighbor_labels": [
+          "Package"
+        ],
+        "fact": "PACKAGE::BO::SHB.MAIN1.NTF_PRC_NOTIFICATION_PKG ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "3 occurrence(s), first cursor_declaration at line 958763-958783",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 958783,
+          "line_start": 958763,
+          "occurrence_count": 3,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 958783,
+              "line_start": 958763,
+              "statement_kind": "cursor_declaration",
+              "statement_sha256": "f924c939dbcab71f15792a6a82fdd63b6288cce806e0dfb9a03771335f5f6829"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 958985,
+              "line_start": 958972,
+              "statement_kind": "cursor_declaration",
+              "statement_sha256": "ff66a3f3de5e44fccbc1897a56d56936f4fc7757e6f874fe09aae2b42ba62229"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 959004,
+              "line_start": 958985,
+              "statement_kind": "cursor_declaration",
+              "statement_sha256": "a5e9d33614f7d2d453907fd47672c793a5c70dcfd02ec6abf4b5f585afd7588e"
+            }
+          ],
+          "statement_kind": "cursor_declaration",
+          "statement_sha256": "f924c939dbcab71f15792a6a82fdd63b6288cce806e0dfb9a03771335f5f6829"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "0338cd1d-c970-5524-8446-c7cffc4727bf",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "07496910-477e-5d1b-bfbb-e64dba4dbdab",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|PACKAGE::BO::SHB.MAIN1.PMO_API_ORDER_PKG|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "6216ad8648159ba90d0e96e8152c32afedce7822fb1e519c5a784864f17f87e6",
+        "direction": "incoming",
+        "neighbor_uuid": "9e699efd-6750-50fe-b9f3-055428c59920",
+        "neighbor_entity_type": "Package",
+        "neighbor_graph_key": "PACKAGE::BO::SHB.MAIN1.PMO_API_ORDER_PKG",
+        "neighbor_labels": [
+          "Package"
+        ],
+        "fact": "PACKAGE::BO::SHB.MAIN1.PMO_API_ORDER_PKG ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "2 occurrence(s), first select_from at line 1005690-1005725",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 1005725,
+          "line_start": 1005690,
+          "occurrence_count": 2,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 1005725,
+              "line_start": 1005690,
+              "statement_kind": "select_from",
+              "statement_sha256": "c89018dc6dc980313137d891e297825c943f6292aaa428615a52b0bc7873bc4e"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 1005758,
+              "line_start": 1005739,
+              "statement_kind": "cursor_declaration",
+              "statement_sha256": "30264afcdb0ef745918b7d2df2d35b283390684ba49e64686f612dd4d9676abd"
+            }
+          ],
+          "statement_kind": "select_from",
+          "statement_sha256": "c89018dc6dc980313137d891e297825c943f6292aaa428615a52b0bc7873bc4e"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "9e699efd-6750-50fe-b9f3-055428c59920",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "4774164f-d3cc-50d9-8619-36fc636db6b7",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|PACKAGE::BO::SHB.MAIN1.PMO_PRC_RETRY_PKG|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "9d285867b5bb8cb4c74fe463fa23bfadd3040ba8c50f2a0e3537920f8f34888b",
+        "direction": "incoming",
+        "neighbor_uuid": "4deaccdd-c598-5d00-9c13-36f3a0cecd90",
+        "neighbor_entity_type": "Package",
+        "neighbor_graph_key": "PACKAGE::BO::SHB.MAIN1.PMO_PRC_RETRY_PKG",
+        "neighbor_labels": [
+          "Package"
+        ],
+        "fact": "PACKAGE::BO::SHB.MAIN1.PMO_PRC_RETRY_PKG ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "2 occurrence(s), first cursor_declaration at line 1010611-1010629",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 1010629,
+          "line_start": 1010611,
+          "occurrence_count": 2,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 1010629,
+              "line_start": 1010611,
+              "statement_kind": "cursor_declaration",
+              "statement_sha256": "c7e6da6bac7665eff53dd14117dd82535f4dec8f9e4ad015241a82fc932357b4"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 1010661,
+              "line_start": 1010629,
+              "statement_kind": "cursor_declaration",
+              "statement_sha256": "e39047a7c5e5f3ee6222ccac38bf26ea0759d0fa7b1a30bbd8afe88480ec8ced"
+            }
+          ],
+          "statement_kind": "cursor_declaration",
+          "statement_sha256": "c7e6da6bac7665eff53dd14117dd82535f4dec8f9e4ad015241a82fc932357b4"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "4deaccdd-c598-5d00-9c13-36f3a0cecd90",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "5a2785e3-eba1-5313-b75e-bec498dd9085",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|PACKAGE::BO::SHB.MAIN1.PRD_PRC_CUSTOMER_EXPORT_PKG|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "98534b0726fe43b2d83404517908a686bd9c1cf729d6dcd7f96fdaf793568930",
+        "direction": "incoming",
+        "neighbor_uuid": "3d6fe628-1459-5d82-bd14-e5c5a6320436",
+        "neighbor_entity_type": "Package",
+        "neighbor_graph_key": "PACKAGE::BO::SHB.MAIN1.PRD_PRC_CUSTOMER_EXPORT_PKG",
+        "neighbor_labels": [
+          "Package"
+        ],
+        "fact": "PACKAGE::BO::SHB.MAIN1.PRD_PRC_CUSTOMER_EXPORT_PKG ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "2 occurrence(s), first cursor_declaration at line 1033305-1033322",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 1033322,
+          "line_start": 1033305,
+          "occurrence_count": 2,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 1033322,
+              "line_start": 1033305,
+              "statement_kind": "cursor_declaration",
+              "statement_sha256": "83805fabdb7b0ceeed0bd4732ae2da402e05c40cb22286adf50708603b1c770b"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 1033622,
+              "line_start": 1033601,
+              "statement_kind": "select_from",
+              "statement_sha256": "5c59dbff1935f35eaf6a45a1eaf611baffed68c143ff5df858b3dc27f05b6350"
+            }
+          ],
+          "statement_kind": "cursor_declaration",
+          "statement_sha256": "83805fabdb7b0ceeed0bd4732ae2da402e05c40cb22286adf50708603b1c770b"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "3d6fe628-1459-5d82-bd14-e5c5a6320436",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "e0edca1e-5daa-5fa9-9557-159c8ba71e59",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|PACKAGE::BO::SHB.MAIN1.PRS_UI_BATCH_CARD_PKG|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "d703eecb8f48b9469c50c31a062cecc65fa1527ee2ca18495d1e3240f2bc9b8a",
+        "direction": "incoming",
+        "neighbor_uuid": "35b8ab5f-92c1-5a23-8e3b-76719c9c3ef8",
+        "neighbor_entity_type": "Package",
+        "neighbor_graph_key": "PACKAGE::BO::SHB.MAIN1.PRS_UI_BATCH_CARD_PKG",
+        "neighbor_labels": [
+          "Package"
+        ],
+        "fact": "PACKAGE::BO::SHB.MAIN1.PRS_UI_BATCH_CARD_PKG ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "1 occurrence(s), first select_from at line 1053678-1053686",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 1053686,
+          "line_start": 1053678,
+          "occurrence_count": 1,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 1053686,
+              "line_start": 1053678,
+              "statement_kind": "select_from",
+              "statement_sha256": "364db9a4e8f51cc49f66a1629b88309a8232861ad42cdb226b8403c0e4931874"
+            }
+          ],
+          "statement_kind": "select_from",
+          "statement_sha256": "364db9a4e8f51cc49f66a1629b88309a8232861ad42cdb226b8403c0e4931874"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "35b8ab5f-92c1-5a23-8e3b-76719c9c3ef8",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "1f3c45fc-fecf-5af5-98f1-d9186ce22c97",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|PACKAGE::BO::SHB.MAIN1.RCN_PRC_IMPORT_PKG|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "94b4ca7139652370079f58283b146939ee0de8f804e4800ef1a6ecb4103264bd",
+        "direction": "incoming",
+        "neighbor_uuid": "323852d9-19ad-5332-8d08-419927b409c1",
+        "neighbor_entity_type": "Package",
+        "neighbor_graph_key": "PACKAGE::BO::SHB.MAIN1.RCN_PRC_IMPORT_PKG",
+        "neighbor_labels": [
+          "Package"
+        ],
+        "fact": "PACKAGE::BO::SHB.MAIN1.RCN_PRC_IMPORT_PKG ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "1 occurrence(s), first select_from at line 1079786-1079885",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 1079885,
+          "line_start": 1079786,
+          "occurrence_count": 1,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 1079885,
+              "line_start": 1079786,
+              "statement_kind": "select_from",
+              "statement_sha256": "afe57283fe23908f025ac1f968385ce278aef2d8fd126780a7db2cd9100152a3"
+            }
+          ],
+          "statement_kind": "select_from",
+          "statement_sha256": "afe57283fe23908f025ac1f968385ce278aef2d8fd126780a7db2cd9100152a3"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "323852d9-19ad-5332-8d08-419927b409c1",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "88de020b-8627-5749-a786-a7268ead3374",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|PACKAGE::BO::SHB.MAIN1.VIS_PRC_VDEP_PKG|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "f4e2d0d64167a372205e447bbde5e523757b6c5b578a9614b42596a799338616",
+        "direction": "incoming",
+        "neighbor_uuid": "8031f15f-fdcd-5ca7-ad41-2f8123730415",
+        "neighbor_entity_type": "Package",
+        "neighbor_graph_key": "PACKAGE::BO::SHB.MAIN1.VIS_PRC_VDEP_PKG",
+        "neighbor_labels": [
+          "Package"
+        ],
+        "fact": "PACKAGE::BO::SHB.MAIN1.VIS_PRC_VDEP_PKG ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "1 occurrence(s), first select_from at line 1279414-1279429",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 1279429,
+          "line_start": 1279414,
+          "occurrence_count": 1,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 1279429,
+              "line_start": 1279414,
+              "statement_kind": "select_from",
+              "statement_sha256": "bcc996c0f89e36a95f690db365fbda66031229890aab4e09d6a90ad57d86fbd7"
+            }
+          ],
+          "statement_kind": "select_from",
+          "statement_sha256": "bcc996c0f89e36a95f690db365fbda66031229890aab4e09d6a90ad57d86fbd7"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "8031f15f-fdcd-5ca7-ad41-2f8123730415",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "ec9eb1d2-c6c9-52f4-87c9-4a95cafe6091",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|VIEW::BO::SHB.MAIN1.CSM_UI_STOP_LIST_VW|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "89ecdb5b8f68cd058bf513340f0e3c034f86a394f21d3d899e7a1d41df6f134a",
+        "direction": "incoming",
+        "neighbor_uuid": "df1bba70-60ac-5da0-af4b-00f32c667762",
+        "neighbor_entity_type": "View",
+        "neighbor_graph_key": "VIEW::BO::SHB.MAIN1.CSM_UI_STOP_LIST_VW",
+        "neighbor_labels": [
+          "View"
+        ],
+        "fact": "VIEW::BO::SHB.MAIN1.CSM_UI_STOP_LIST_VW ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "1 occurrence(s), first select_join at line 117122-117165",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 117165,
+          "line_start": 117122,
+          "occurrence_count": 1,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 117165,
+              "line_start": 117122,
+              "statement_kind": "select_join",
+              "statement_sha256": "e9f3c17cee1e57fbf313af40ef2a4d515ad2070a834a35b1503a7ca7739d93b5"
+            }
+          ],
+          "statement_kind": "select_join",
+          "statement_sha256": "e9f3c17cee1e57fbf313af40ef2a4d515ad2070a834a35b1503a7ca7739d93b5"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "df1bba70-60ac-5da0-af4b-00f32c667762",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "48795512-165e-579a-9333-ecf04f6956af",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|VIEW::BO::SHB.MAIN1.EVT_EVENT_VW|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "9209833bb4ae4d1c7bca86318610a4161019e483a2e54b4eadc964cbad9b1a56",
+        "direction": "incoming",
+        "neighbor_uuid": "f0e876be-7139-5fbe-a2e2-01548fc4086a",
+        "neighbor_entity_type": "View",
+        "neighbor_graph_key": "VIEW::BO::SHB.MAIN1.EVT_EVENT_VW",
+        "neighbor_labels": [
+          "View"
+        ],
+        "fact": "VIEW::BO::SHB.MAIN1.EVT_EVENT_VW ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "1 occurrence(s), first select_from at line 125242-125250",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 125250,
+          "line_start": 125242,
+          "occurrence_count": 1,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 125250,
+              "line_start": 125242,
+              "statement_kind": "select_from",
+              "statement_sha256": "7462f8311ef92c1a5ba8b2574c610fbad02c283b5ffbdadff56b1fb6217fad71"
+            }
+          ],
+          "statement_kind": "select_from",
+          "statement_sha256": "7462f8311ef92c1a5ba8b2574c610fbad02c283b5ffbdadff56b1fb6217fad71"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "f0e876be-7139-5fbe-a2e2-01548fc4086a",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "53dacb7c-d6f7-55f0-9eeb-05dacad856bd",
+        "edge_type": "ReadsFrom",
+        "edge_key": "ReadsFrom|VIEW::BO::SHB.MAIN1.EVT_UI_EVENT_VW|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "0f7897fc03b66d6af8cb3e9da32436d002f63e50605408c29243f3826ed3d3ed",
+        "direction": "incoming",
+        "neighbor_uuid": "8a15faaa-7433-5b94-8494-c1a316efcbf9",
+        "neighbor_entity_type": "View",
+        "neighbor_graph_key": "VIEW::BO::SHB.MAIN1.EVT_UI_EVENT_VW",
+        "neighbor_labels": [
+          "View"
+        ],
+        "fact": "VIEW::BO::SHB.MAIN1.EVT_UI_EVENT_VW ReadsFrom TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "1 occurrence(s), first select_from at line 125360-125367",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 125367,
+          "line_start": 125360,
+          "occurrence_count": 1,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 125367,
+              "line_start": 125360,
+              "statement_kind": "select_from",
+              "statement_sha256": "d6cd7cba84043be25d4f9c721e2b0e173a24991a2065e3ce53fdaf17628618f5"
+            }
+          ],
+          "statement_kind": "select_from",
+          "statement_sha256": "d6cd7cba84043be25d4f9c721e2b0e173a24991a2065e3ce53fdaf17628618f5"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "8a15faaa-7433-5b94-8494-c1a316efcbf9",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "632cc470-fb6d-546a-bd96-ba937b84d6d9",
+        "edge_type": "Contains",
+        "edge_key": "SCHEMA::BO::SHB.MAIN1|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "0ce2b857908ef2c804830469994c4f9df1c576c218dc3e3f5a5e3b893df1bae0",
+        "direction": "incoming",
+        "neighbor_uuid": "b7f69f8f-5766-5217-8284-106ada2eb663",
+        "neighbor_entity_type": "Schema",
+        "neighbor_graph_key": "SCHEMA::BO::SHB.MAIN1",
+        "neighbor_labels": [
+          "Schema"
+        ],
+        "fact": "MAIN1 contains EVT_EVENT",
+        "evidence": "MAIN1 schema contains table EVT_EVENT",
+        "attributes": {
+          "source_refs": [
+            {
+              "document_id": "docling-15867609475948615210",
+              "page": 1,
+              "raw_text": "DDL capture: MAIN1.EVT_EVENT"
+            }
+          ]
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "b7f69f8f-5766-5217-8284-106ada2eb663",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      },
+      {
+        "uuid": "3a6d8876-29ce-57e2-a5c9-c55da34b20ef",
+        "edge_type": "WritesTo",
+        "edge_key": "WritesTo|TRIGGER::BO::SHB.MAIN1.EVT_EVENT_TRG|TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "content_sha256": "5fab89303ac3b9911fb1d06560cd0b2a1ff36120f05ea1a73209deac429556d7",
+        "direction": "incoming",
+        "neighbor_uuid": "2fb7f208-1966-58b1-9111-8c7a065eb8ba",
+        "neighbor_entity_type": "Trigger",
+        "neighbor_graph_key": "TRIGGER::BO::SHB.MAIN1.EVT_EVENT_TRG",
+        "neighbor_labels": [
+          "Trigger"
+        ],
+        "fact": "TRIGGER::BO::SHB.MAIN1.EVT_EVENT_TRG WritesTo TABLE::BO::SHB.MAIN1.EVT_EVENT",
+        "evidence": "2 occurrence(s), first insert_into at line 226357-226373",
+        "attributes": {
+          "evidence_class": "static_statement",
+          "line_end": 226373,
+          "line_start": 226357,
+          "occurrence_count": 2,
+          "occurrences": [
+            {
+              "evidence_class": "static_statement",
+              "line_end": 226373,
+              "line_start": 226357,
+              "statement_kind": "insert_into",
+              "statement_sha256": "fccb3d5524933f10787e8928e714579a82a7df44a15211dc10195f9f15ad58c3"
+            },
+            {
+              "evidence_class": "static_statement",
+              "line_end": 226391,
+              "line_start": 226383,
+              "statement_kind": "update_set",
+              "statement_sha256": "855e07e2fa716be699d25a8f2b2efc3bf5a5e30f31e05c93682428727ff50b0d"
+            }
+          ],
+          "statement_kind": "insert_into",
+          "statement_sha256": "fccb3d5524933f10787e8928e714579a82a7df44a15211dc10195f9f15ad58c3"
+        },
+        "confidence": 1.0,
+        "source_node_uuid": "2fb7f208-1966-58b1-9111-8c7a065eb8ba",
+        "target_node_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1"
+      }
+    ]
+  },
+  "evidence": {
+    "offset": 0,
+    "limit": 100,
+    "total": 3,
+    "links": [
+      {
+        "uuid": "420237c9-0107-5742-8f5c-467501b9fc7f",
+        "link_key": "completeness::batch-0024|d98f6f98365866c01d08c9f3fc3a99afb2ddd39409f709d4197278222b49ce7b|entity|Table|TABLE::BO::SHB.MAIN1.EVT_EVENT|oracle_dictionary|pilot-offline-converter|1.0.0||",
+        "content_sha256": "3876fded4101c6da5a154b0869ba9d9a7f2e6377f4e18d80e338f8955bf8617d",
+        "source_uuid": "1778b4b6-dc0e-5a38-bd62-b4b3675394ba",
+        "target_kind": "entity",
+        "target_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1",
+        "evidence_kind": "oracle_dictionary",
+        "extractor_name": "pilot-offline-converter",
+        "extractor_version": "1.0.0",
+        "rule_id": null,
+        "confidence": 1.0,
+        "excerpt": null,
+        "locator": null,
+        "locator_hash": null,
+        "source_version": null,
+        "created_at": "2026-08-03T21:28:28.675754000+00:00",
+        "updated_at": "2026-08-03T21:28:28.675754000+00:00",
+        "source_key": "completeness::batch-0024|d98f6f98365866c01d08c9f3fc3a99afb2ddd39409f709d4197278222b49ce7b",
+        "source_content_sha256": "0efb6e89701601b85f43c98db30e51a45519d62f05f6d9a9d77ea40b674128f0",
+        "source_valid_at": "2026-07-24T00:00:00.000000000+00:00"
+      },
+      {
+        "uuid": "983b75c7-2914-56b1-98ad-06609ee4d513",
+        "link_key": "summary-delta::batch-0031|bffec3007303f7f2518039400c6059b9874263d17a379c3aca8ebd23c24a6c90|entity|Table|TABLE::BO::SHB.MAIN1.EVT_EVENT|oracle_dictionary|pilot-offline-converter|1.0.0||",
+        "content_sha256": "731f3df7e3fa2fbbfd13b60e2a87a752387c934961e51851ed057d157a555f58",
+        "source_uuid": "2c8401be-3e59-5326-bee5-97bcb23049ba",
+        "target_kind": "entity",
+        "target_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1",
+        "evidence_kind": "oracle_dictionary",
+        "extractor_name": "pilot-offline-converter",
+        "extractor_version": "1.0.0",
+        "rule_id": null,
+        "confidence": 1.0,
+        "excerpt": null,
+        "locator": null,
+        "locator_hash": null,
+        "source_version": null,
+        "created_at": "2026-08-06T01:28:28.672946000+00:00",
+        "updated_at": "2026-08-06T01:28:28.672946000+00:00",
+        "source_key": "summary-delta::batch-0031|bffec3007303f7f2518039400c6059b9874263d17a379c3aca8ebd23c24a6c90",
+        "source_content_sha256": "ace0751aabf32433c488017bd15106800ee9d2cffd713e20de7a04211c1bde39",
+        "source_valid_at": "2026-07-24T00:00:00.000000000+00:00"
+      },
+      {
+        "uuid": "e46f5998-0ba4-5d02-97f1-9b57f793e45a",
+        "link_key": "code-delta::batch-0005|e6d21e4c95746a985b861f1265d5b072dc2c37e2322169c5d179d702b36b1de7|entity|Table|TABLE::BO::SHB.MAIN1.EVT_EVENT|oracle_dictionary|pilot-offline-converter|1.0.0||",
+        "content_sha256": "fcb91abdc061c8cd3642a2b0347b09e7962fb91fc2cd1ad49a72b5a092bdd4b8",
+        "source_uuid": "ca96d891-bda7-590b-9536-dbde108d57e2",
+        "target_kind": "entity",
+        "target_uuid": "2c01d849-e0e4-5a74-9596-257c7681c1b1",
+        "evidence_kind": "oracle_dictionary",
+        "extractor_name": "pilot-offline-converter",
+        "extractor_version": "1.0.0",
+        "rule_id": null,
+        "confidence": 1.0,
+        "excerpt": null,
+        "locator": null,
+        "locator_hash": null,
+        "source_version": null,
+        "created_at": "2026-08-05T21:40:53.133403000+00:00",
+        "updated_at": "2026-08-05T21:40:53.133403000+00:00",
+        "source_key": "code-delta::batch-0005|e6d21e4c95746a985b861f1265d5b072dc2c37e2322169c5d179d702b36b1de7",
+        "source_content_sha256": "8151817364ed912cd2eabdb55ef8cab3fa4d75e254de43c819b70a7e9f39576a",
+        "source_valid_at": "2026-07-24T00:00:00.000000000+00:00"
+      }
+    ]
+  },
+  "freshness": {
+    "batch_id": "summary-delta::batch-0031",
+    "snapshot_committed_at": "2026-08-06T01:28:28.672946000+00:00",
+    "catalog_sha256": "bffec3007303f7f2518039400c6059b9874263d17a379c3aca8ebd23c24a6c90",
+    "entity_updated_at": "2026-08-06T01:28:28.672946000+00:00",
+    "source_key": "completeness::batch-0024|d98f6f98365866c01d08c9f3fc3a99afb2ddd39409f709d4197278222b49ce7b",
+    "source_content_sha256": "0efb6e89701601b85f43c98db30e51a45519d62f05f6d9a9d77ea40b674128f0",
+    "source_valid_at": "2026-07-24T00:00:00.000000000+00:00",
+    "extractor_version": "1.0.0",
+    "stale": true,
+    "stale_reason": "catalog metadata exceeds freshness window; re-verify against source DDL"
+  },
+  "error_code": null,
+  "error_message": null
+}

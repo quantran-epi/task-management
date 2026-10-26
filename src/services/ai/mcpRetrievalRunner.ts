@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { TaskPlannerDatabase } from '../../db';
 import { db as defaultDb } from '../../db';
 import {
@@ -7,6 +8,14 @@ import {
   type McpServerConfig,
 } from './mcpClient';
 import { completeJson } from './nineRouterClient';
+import {
+  applyPaginationArg,
+  extractPaginationHint,
+  formatRecordsForPlanner,
+  normalizeMcpEvidence,
+  type McpEvidenceRecord,
+  type McpNormalizationStats,
+} from './mcpEvidence';
 
 export interface McpRetrievedItem {
   serverId: string;
@@ -15,6 +24,8 @@ export interface McpRetrievedItem {
   args: Record<string, unknown>;
   rawResult: string;
   timestamp: string;
+  /** Page index for this call (0 = first), used for diagnostics only. */
+  page?: number;
 }
 
 export interface RunMcpRetrievalInput {
@@ -32,19 +43,34 @@ export interface RunMcpRetrievalInput {
 export interface McpRetrievalResult {
   items: McpRetrievedItem[];
   warnings: string[];
+  /** Normalized atomic evidence built from every full tool result. */
+  records: McpEvidenceRecord[];
+  normalization: McpNormalizationStats;
+  /** complete = every requested page was fetched; partial = a safety cap was hit. */
+  completeness: 'complete' | 'partial';
+  pagesFetched: number;
+  pagesCapped: boolean;
 }
 
 const MCP_RETRIEVAL_TIMEOUT_MS = 300_000; // 5-minute safety watchdog
 const MAX_RETRIEVAL_TURNS = 4;
 const MAX_SERVER_INSTRUCTION_CHARS = 4000;
+/** Safety valve only: pagination stops here and completeness becomes 'partial'. */
+const MAX_PAGES_PER_CALL = 20;
 
-interface ToolSelectionPlan {
-  done: boolean;
-  toolCalls?: Array<{
-    toolName: string;
-    args: Record<string, unknown>;
-  }>;
-}
+const ToolSelectionPlanSchema = z.looseObject({
+  done: z.boolean(),
+  toolCalls: z
+    .array(
+      z.looseObject({
+        toolName: z.string().min(1),
+        args: z.record(z.string(), z.unknown()).optional(),
+      })
+    )
+    .optional(),
+});
+
+type ToolSelectionPlan = z.infer<typeof ToolSelectionPlanSchema>;
 
 /**
  * Adaptively wraps flat arguments if the tool's schema expects an enclosing object
@@ -83,125 +109,6 @@ export function adaptToolArguments(
 }
 
 /**
- * Formats a node or entity from graph memory into a concise, readable bullet point.
- */
-function formatGraphEntity(node: Record<string, any>): string {
-  const name = node.name || node.title || node.id || 'Unnamed';
-  const type = (Array.isArray(node.labels) ? node.labels.join('/') : null) || node.entity_type || node.type || '';
-  const summary = node.summary || node.description || '';
-
-  // Try extracting column type, table or other essential attributes if present
-  let attrSummary = '';
-  if (node.attributes) {
-    try {
-      const attrs = typeof node.attributes === 'string' ? JSON.parse(node.attributes) : node.attributes;
-      const parts: string[] = [];
-      if (attrs.database_qualified_name && attrs.database_qualified_name !== name) {
-        parts.push(`qual: ${attrs.database_qualified_name}`);
-      }
-      if (attrs.description_normalized && attrs.description_normalized !== summary) {
-        parts.push(attrs.description_normalized);
-      }
-      if (parts.length > 0) {
-        attrSummary = ` [${parts.join('; ')}]`;
-      }
-    } catch {
-      // Ignore attribute parse error
-    }
-  }
-
-  const typePrefix = type ? `[${type}] ` : '';
-  const descPart = summary ? `: ${summary}` : '';
-  return `- ${typePrefix}${name}${descPart}${attrSummary}`;
-}
-
-/**
- * Prunes heavy and noisy fields from raw MCP tool output before saving into evidence pack or context.
- * If output contains a list of graph nodes/entities, formats them as concise Markdown lines.
- */
-export function pruneMcpRawResult(
-  raw: string,
-  maxChars = 2500,
-  relevanceText = ''
-): string {
-  if (!raw) return '';
-  const relevanceTerms = [...new Set(
-    (relevanceText.match(/[\p{L}\p{N}_$.:-]{3,}/gu) ?? []).map((term) => term.toLowerCase())
-  )];
-  const relevanceScore = (value: unknown): number => {
-    if (relevanceTerms.length === 0) return 0;
-    let text = '';
-    try {
-      text = JSON.stringify(value).toLowerCase();
-    } catch {
-      return 0;
-    }
-    return relevanceTerms.reduce(
-      (score, term) => score + (text.includes(term) ? (/[_.:$]/.test(term) ? 3 : 1) : 0),
-      0
-    );
-  };
-  const relevantFirst = <T>(values: readonly T[]): T[] =>
-    values
-      .map((value, index) => ({ value, index, score: relevanceScore(value) }))
-      .sort((a, b) => b.score - a.score || a.index - b.index)
-      .map(({ value }) => value);
-
-  try {
-    const parsed = JSON.parse(raw);
-
-    // Check if response contains graph nodes/entities (e.g. search_nodes, list_nodes)
-    const candidateList =
-      (Array.isArray(parsed?.nodes) && parsed.nodes) ||
-      (Array.isArray(parsed?.entities) && parsed.entities) ||
-      (Array.isArray(parsed?.items) && parsed.items) ||
-      (Array.isArray(parsed) && parsed) ||
-      null;
-
-    if (candidateList && candidateList.length > 0 && typeof candidateList[0] === 'object' && candidateList[0] !== null) {
-      const formattedLines = relevantFirst(candidateList)
-        .slice(0, 25)
-        .map((item: any) => formatGraphEntity(item))
-        .filter((line: string) => line.trim().length > 0);
-
-      if (formattedLines.length > 0) {
-        const header = parsed.message ? `${parsed.message}:\n` : '';
-        const joined = `${header}${formattedLines.join('\n')}`;
-        return joined.length > maxChars ? `${joined.slice(0, maxChars)}...\n(truncated)` : joined;
-      }
-    }
-
-    const cleanObject = (obj: any): any => {
-      if (Array.isArray(obj)) {
-        return relevantFirst(obj).slice(0, 15).map(cleanObject);
-      }
-      if (obj !== null && typeof obj === 'object') {
-        const out: Record<string, any> = {};
-        for (const [k, v] of Object.entries(obj)) {
-          // Drop embedding vectors, binary buffers, or heavy internal graph metadata
-          if (
-            k.includes('embedding') ||
-            k.includes('vector') ||
-            k === 'raw_chunks' ||
-            k === 'buffer' ||
-            k === 'visualCoordinates'
-          ) {
-            continue;
-          }
-          out[k] = cleanObject(v);
-        }
-        return out;
-      }
-      return obj;
-    };
-    const pruned = JSON.stringify(cleanObject(parsed));
-    return pruned.length > maxChars ? `${pruned.slice(0, maxChars)}... (truncated)` : pruned;
-  } catch {
-    return raw.length > maxChars ? `${raw.slice(0, maxChars)}... (truncated)` : raw;
-  }
-}
-
-/**
  * Runs a bounded dynamic tool-calling retrieval loop (max 4 turns, 5m safety watchdog)
  * targeting the specified MCP server IDs.
  */
@@ -211,9 +118,27 @@ export async function runMcpRetrieval(
   const items: McpRetrievedItem[] = [];
   const warnings: string[] = [];
   const database = input.db ?? defaultDb;
+  let pagesFetched = 0;
+  let pagesCapped = false;
+
+  const finish = (): McpRetrievalResult => {
+    const { records, stats } = normalizeMcpEvidence(
+      items,
+      items.map((item) => item.page ?? 0)
+    );
+    return {
+      items,
+      warnings,
+      records,
+      normalization: stats,
+      completeness: pagesCapped ? 'partial' : 'complete',
+      pagesFetched,
+      pagesCapped,
+    };
+  };
 
   if (!input.serverIds || input.serverIds.length === 0) {
-    return { items, warnings };
+    return finish();
   }
 
   // 5-minute safety watchdog
@@ -231,10 +156,8 @@ export async function runMcpRetrieval(
 
   if (input.signal?.aborted) {
     clearTimeout(timer);
-    return {
-      items,
-      warnings: ['Thao tác MCP bị hủy'],
-    };
+    warnings.push('Thao tác MCP bị hủy');
+    return finish();
   }
 
   input.signal?.addEventListener('abort', onParentAbort, { once: true });
@@ -247,7 +170,7 @@ export async function runMcpRetrieval(
 
     if (targetServers.length === 0) {
       warnings.push(`Không tìm thấy máy chủ MCP nào đang bật trong danh sách: ${input.serverIds.join(', ')}`);
-      return { items, warnings };
+      return finish();
     }
 
     // Discover tools available on target servers
@@ -278,13 +201,13 @@ export async function runMcpRetrieval(
     }
 
     if (availableTools.length === 0) {
-      return { items, warnings };
+      return finish();
     }
 
     // If modelConfig is not provided, cannot plan calls dynamically
     if (!input.modelConfig) {
       warnings.push('Chưa cấu hình mô hình AI để điều phối gọi công cụ MCP');
-      return { items, warnings };
+      return finish();
     }
 
     // Dynamic bounded tool loop (max 4 turns)
@@ -316,10 +239,12 @@ export async function runMcpRetrieval(
         })
         .join('\n\n');
 
+      // Full descriptions and schemas: the planner — not static code — decides the
+      // tool and its structured filters, so it must see exact parameter contracts.
       const toolsSummary = availableTools
         .map(
           (t) =>
-            `- [${t.serverName}] ${t.name}: ${t.description.slice(0, 300)} (schema: ${JSON.stringify(t.parameters)})`
+            `- [${t.serverName}] ${t.name}: ${t.description} (schema: ${JSON.stringify(t.parameters)})`
         )
         .join('\n');
 
@@ -361,6 +286,7 @@ Return STRICT JSON adhering to this schema:
 
       let plan: ToolSelectionPlan | null = null;
       try {
+        // Planner is validated before any tool executes; malformed plans end the turn.
         const rawPlan = await completeJson({
           endpoint: input.modelConfig.endpoint,
           apiKey: input.modelConfig.apiKey,
@@ -377,7 +303,8 @@ Return STRICT JSON adhering to this schema:
           signal: timeoutController.signal,
         });
 
-        plan = rawPlan as ToolSelectionPlan;
+        const parsedPlan = ToolSelectionPlanSchema.safeParse(rawPlan);
+        plan = parsedPlan.success ? parsedPlan.data : null;
       } catch (err: any) {
         if (input.signal?.aborted) {
           warnings.push('Thao tác MCP bị hủy');
@@ -404,7 +331,16 @@ Return STRICT JSON adhering to this schema:
           break;
         }
 
-        const callKey = `${call.toolName}:${JSON.stringify(call.args ?? {})}`;
+        const toolMeta = availableTools.find((t) => t.name === call.toolName);
+        if (!toolMeta) {
+          // Unknown tool is never executed; the planner sees the rejection next turn.
+          const rejected = `Unknown tool "${call.toolName}" is not available; pick one from the tool list.`;
+          warnings.push(rejected);
+          conversationHistory.push(`Called ${call.toolName} rejected: ${rejected}`);
+          continue;
+        }
+
+        const callKey = `${toolMeta.serverId}:${call.toolName}:${JSON.stringify(call.args ?? {})}`;
         if (executedToolKeys.has(callKey)) {
           // Avoid duplicate call loop
           continue;
@@ -412,30 +348,63 @@ Return STRICT JSON adhering to this schema:
         executedToolKeys.add(callKey);
         attemptedAnyInTurn = true;
 
-        const toolMeta = availableTools.find((t) => t.name === call.toolName);
-        const serverId = toolMeta?.serverId ?? targetServers[0]!.id;
-        const serverName = toolMeta?.serverName ?? targetServers[0]!.name;
+        const effectiveArgs = adaptToolArguments(toolMeta.parameters, call.args ?? {});
+        const { serverId, serverName } = toolMeta;
+        const callItems: McpRetrievedItem[] = [];
 
-        const effectiveArgs = adaptToolArguments(toolMeta?.parameters, call.args ?? {});
+        // Deterministic pagination: follow the tool's own continuation without an LLM turn.
+        let pageArgs = effectiveArgs;
+        for (let page = 0; page < MAX_PAGES_PER_CALL; page++) {
+          // A batch already planned is still executed; the watchdog only stops extra pages.
+          if (input.signal?.aborted || (watchdogFired && page > 0)) break;
+          try {
+            const rawResult = await executeDynamicMcpTool(
+              call.toolName,
+              pageArgs,
+              database,
+              { serverId }
+            );
+            const item: McpRetrievedItem = {
+              serverId,
+              serverName,
+              toolName: call.toolName,
+              args: pageArgs,
+              rawResult,
+              timestamp: new Date().toISOString(),
+              page,
+            };
+            items.push(item);
+            callItems.push(item);
+            pagesFetched += 1;
 
-        try {
-          const rawResult = await executeDynamicMcpTool(call.toolName, effectiveArgs, database);
-          const cleanResult = pruneMcpRawResult(rawResult, 2500, input.query);
-          items.push({
-            serverId,
-            serverName,
-            toolName: call.toolName,
-            args: effectiveArgs,
-            rawResult: cleanResult,
-            timestamp: new Date().toISOString(),
-          });
-          conversationHistory.push(
-            `Called ${call.toolName}(${JSON.stringify(effectiveArgs)}):\nResult: ${cleanResult.slice(0, 1500)}`
-          );
-        } catch (err: any) {
-          warnings.push(`Lỗi thực thi công cụ "${call.toolName}": ${err?.message || String(err)}`);
-          conversationHistory.push(`Called ${call.toolName} failed: ${err?.message || String(err)}`);
+            let parsed: unknown;
+            try {
+              parsed = JSON.parse(rawResult);
+            } catch {
+              break; // Non-JSON payload cannot expose a continuation.
+            }
+            const hint = extractPaginationHint(parsed);
+            if (!hint) break;
+            if (page + 1 >= MAX_PAGES_PER_CALL) {
+              pagesCapped = true;
+              warnings.push(
+                `Công cụ "${call.toolName}" còn trang chưa lấy (đã đạt giới hạn ${MAX_PAGES_PER_CALL} trang)`
+              );
+              break;
+            }
+            pageArgs = applyPaginationArg(pageArgs, hint.offsetField, hint.nextOffset);
+          } catch (err: any) {
+            warnings.push(`Lỗi thực thi công cụ "${call.toolName}": ${err?.message || String(err)}`);
+            conversationHistory.push(`Called ${call.toolName} failed: ${err?.message || String(err)}`);
+            break;
+          }
         }
+
+        conversationHistory.push(
+          `Called ${call.toolName}(${JSON.stringify(effectiveArgs)}):\n${formatRecordsForPlanner(
+            normalizeMcpEvidence(callItems).records
+          )}`
+        );
       }
 
       if (plan.done || !attemptedAnyInTurn) {
@@ -449,5 +418,5 @@ Return STRICT JSON adhering to this schema:
     input.signal?.removeEventListener('abort', onParentAbort);
   }
 
-  return { items, warnings };
+  return finish();
 }

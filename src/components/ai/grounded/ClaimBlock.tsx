@@ -1,22 +1,16 @@
 import React from 'react';
-import { Tag, Tooltip, Alert, theme } from 'antd';
+import { Tag, Tooltip, theme } from 'antd';
 import { InfoCircleOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import type {
   GroundedClaim,
   PersistedCitation,
-  PersistedConflictGroup,
 } from '../../../services/ai/groundedAnswerSchemas';
-import {
-  claimAssertsOverride,
-  computeWeakestClassification,
-  ALLOWED_EVIDENCE_KINDS,
-} from '../../../services/ai/evidencePack';
+import { computeWeakestClassification } from '../../../services/ai/evidencePack';
 import { CitationGroup } from './CitationGroup';
 
 export interface ClaimBlockProps {
   claim: GroundedClaim;
   citations: readonly PersistedCitation[];
-  conflictGroups?: readonly PersistedConflictGroup[] | undefined;
   onCitationActivate: (c: PersistedCitation) => void;
 }
 
@@ -27,7 +21,6 @@ export interface ClaimBlockProps {
 export const ClaimBlock: React.FC<ClaimBlockProps> = ({
   claim,
   citations,
-  conflictGroups = [],
   onCitationActivate,
 }) => {
   const { token } = theme.useToken();
@@ -41,50 +34,8 @@ export const ClaimBlock: React.FC<ClaimBlockProps> = ({
     .map((id) => citationMap.get(id))
     .filter((c): c is PersistedCitation => c !== undefined);
 
-  // D-26 invalid-state gate: runs FIRST
-  if (claimAssertsOverride(claim.text)) {
-    // 1. Resolve conflict group intersecting claim.citationIds
-    const intersectingConflict = conflictGroups.find((cg) =>
-      cg.branches.some((branch) =>
-        branch.citationIds.some((cid) => claim.citationIds.includes(cid))
-      )
-    );
-
-    const hasSupersedesProof =
-      intersectingConflict?.scopeProof?.overrideRelation === 'SUPERSEDES';
-
-    // 2. Check if every cited source has evidenceKind in allowed kinds
-    // Note: PersistedCitation doesn't always have evidenceKind typed, but can carry it if source was packed.
-    // Check if resolved citations have an allowed evidenceKind property
-    const allSourcesAllowedKinds =
-      resolved.length > 0 &&
-      resolved.every((c) => {
-        const kind = (c as unknown as { evidenceKind?: string }).evidenceKind;
-        return typeof kind === 'string' && ALLOWED_EVIDENCE_KINDS.has(kind);
-      });
-
-    if (!hasSupersedesProof && !allSourcesAllowedKinds) {
-      return (
-        <div
-          data-testid="claim-block-invalid"
-          className="claim-block--invalid"
-          style={{ marginBottom: 12 }}
-        >
-          <Alert
-            type="error"
-            showIcon
-            message="Không thể khẳng định ghi đè — thiếu bằng chứng SUPERSEDES hoặc nguồn chính sách/phát hành/di cư"
-            style={{ marginBottom: 6 }}
-          />
-          {resolved.length > 0 && (
-            <div style={{ marginTop: 4 }}>
-              <CitationGroup citations={resolved} onActivate={onCitationActivate} />
-            </div>
-          )}
-        </div>
-      );
-    }
-  }
+  // Claims render as written by the model. Override/supersede wording is judged from
+  // evidence by the model, not by a UI regex gate.
 
   // Determine weakest classification for DIRECT claims (D-16, D-30)
   const isDirect = claim.classification === 'DIRECT';

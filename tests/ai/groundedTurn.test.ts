@@ -13,6 +13,19 @@ import type { ChatMessageGrounding, GroundedAnswer } from '../../src/services/ai
 import type { FederatedRetrievalResponse } from '../../src/services/knowledge/retrievalProtocol';
 import type { LocalGroundedResult } from '../../src/services/search/localGroundedRetrieval';
 import { validateGroundedAnswerClosure, type EvidencePack } from '../../src/services/ai/evidencePack';
+import { normalizeMcpEvidence } from '../../src/services/ai/mcpEvidence';
+
+function mcpResultFrom(items: any[]) {
+  return {
+    items,
+    warnings: [],
+    records: normalizeMcpEvidence(items).records,
+    normalization: normalizeMcpEvidence(items).stats,
+    completeness: 'complete' as const,
+    pagesFetched: items.length,
+    pagesCapped: false,
+  };
+}
 
 describe('groundedTurn state machine', () => {
   const dummyAnswer: GroundedAnswer = {
@@ -935,7 +948,7 @@ describe('groundedTurn state machine', () => {
     expect(mockDeps.packEvidence).toHaveBeenCalledWith(
       expect.objectContaining({
         authority: 'server',
-        mcpItems: [],
+        mcpRecords: [],
       })
     );
   });
@@ -980,7 +993,7 @@ describe('groundedTurn state machine', () => {
     expect(mockDeps.packEvidence).toHaveBeenCalledWith(
       expect.objectContaining({
         authority: 'server',
-        mcpItems: dummyMcpItems,
+        mcpRecords: mcpResultFrom(dummyMcpItems).records,
       })
     );
   });
@@ -1036,7 +1049,7 @@ describe('groundedTurn state machine', () => {
     }
 
     it('MCP only: empty scope runs MCP without any Docs retrieve request', async () => {
-      mockDeps.runMcpRetrieval = vi.fn().mockResolvedValue({ items: mcpItems, warnings: [] });
+      mockDeps.runMcpRetrieval = vi.fn().mockResolvedValue(mcpResultFrom(mcpItems));
       vi.mocked(mockDeps.routeIntent).mockResolvedValueOnce(intentWithMcp(true, ['graphiti-banking']));
       vi.mocked(mockDeps.routeScope).mockResolvedValueOnce({
         setTierAssignments: [],
@@ -1052,7 +1065,7 @@ describe('groundedTurn state machine', () => {
         expect.objectContaining({ serverIds: ['graphiti-banking'] })
       );
       expect(mockDeps.packEvidence).toHaveBeenCalledWith(
-        expect.objectContaining({ serverResponse: expect.anything(), mcpItems })
+        expect.objectContaining({ serverResponse: expect.anything(), mcpRecords: mcpResultFrom(mcpItems).records })
       );
       expect(mockDeps.synthesizeGroundedAnswer).toHaveBeenCalled();
     });
@@ -1095,7 +1108,7 @@ describe('groundedTurn state machine', () => {
         ],
       };
       mockDeps.packEvidence = vi.fn().mockReturnValue(docsAndMcpPack);
-      mockDeps.runMcpRetrieval = vi.fn().mockResolvedValue({ items: mcpItems, warnings: [] });
+      mockDeps.runMcpRetrieval = vi.fn().mockResolvedValue(mcpResultFrom(mcpItems));
       vi.mocked(mockDeps.routeIntent).mockResolvedValueOnce(intentWithMcp(true, ['graphiti-banking']));
 
       await runGroundedTurn(mockInput, mockDeps);
@@ -1114,7 +1127,7 @@ describe('groundedTurn state machine', () => {
 
     it('Docs + MCP: dispatches both in parallel before either settles', async () => {
       let resolveDocs!: (value: FederatedRetrievalResponse) => void;
-      let resolveMcp!: (value: { items: typeof mcpItems; warnings: string[] }) => void;
+      let resolveMcp!: (value: any) => void;
 
       mockDeps.retrieveFederated = vi.fn().mockImplementation(
         () => new Promise((resolve) => { resolveDocs = resolve; })
@@ -1131,17 +1144,17 @@ describe('groundedTurn state machine', () => {
       });
 
       resolveDocs(dummyServerResponse);
-      resolveMcp({ items: mcpItems, warnings: [] });
+      resolveMcp(mcpResultFrom(mcpItems));
 
       const res = await turn;
       expect(res.kind).toBe('grounded_answer');
       expect(mockDeps.packEvidence).toHaveBeenCalledWith(
-        expect.objectContaining({ authority: 'server', mcpItems })
+        expect.objectContaining({ authority: 'server', mcpRecords: mcpResultFrom(mcpItems).records })
       );
     });
 
     it('Docs fail + MCP succeeds: synthesizes MCP evidence and marks degraded', async () => {
-      mockDeps.runMcpRetrieval = vi.fn().mockResolvedValue({ items: mcpItems, warnings: [] });
+      mockDeps.runMcpRetrieval = vi.fn().mockResolvedValue(mcpResultFrom(mcpItems));
       vi.mocked(mockDeps.retrieveFederated).mockRejectedValueOnce(
         new KnowledgeClientError('NETWORK_ERROR', 'Docs down')
       );

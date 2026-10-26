@@ -25,7 +25,6 @@ import type {
 } from '../search/localGroundedRetrieval';
 import type {
   EvidencePack,
-  PackEvidenceOptions,
   SourceRecord,
 } from './evidencePack';
 import {
@@ -35,7 +34,9 @@ import {
 import type { RouteIntentResult, RouteIntentDeps, IntentLabel } from './intentRouter';
 import type { completeJson as defaultCompleteJson } from './nineRouterClient';
 import type { KnowledgeLink, TaskMateEntityType, ChatTokenUsage } from '../../types/models';
-import type { runMcpRetrieval } from './mcpRetrievalRunner';
+import type { runMcpRetrieval, McpRetrievalResult } from './mcpRetrievalRunner';
+import { normalizeMcpEvidence, type McpEvidenceRecord } from './mcpEvidence';
+import { sha256Hex } from '../../../knowledge-server/src/indexing/chunkHashPolicy';
 
 export interface GroundedTurnInput {
   query: string;
@@ -130,9 +131,8 @@ export interface GroundedTurnDeps {
       authority: 'server' | 'local';
       serverResponse?: FederatedRetrievalResponse;
       localResult?: LocalGroundedResult;
-      mcpItems?: readonly any[];
+      mcpRecords?: readonly McpEvidenceRecord[];
     },
-    options?: PackEvidenceOptions
   ): EvidencePack;
   synthesizeGroundedAnswer(input: SynthesisInput): Promise<{
     answer: GroundedAnswer;
@@ -163,10 +163,7 @@ function toPersistedCitations(
     evidenceClass: source.evidenceClass,
     snapshotId: source.snapshotId,
     publishedContentHash: source.publishedContentHash,
-    citedExcerpt:
-      source.citedExcerpt.length > 1200
-        ? source.citedExcerpt.slice(0, 1200)
-        : source.citedExcerpt,
+    citedExcerpt: source.citedExcerpt,
     relevanceReason: source.relevanceReason,
     evidenceKind: source.evidenceKind,
     mcpMetadata: source.mcpMetadata,
@@ -199,33 +196,39 @@ function toPersistedPaths(
 
 function toPersistedConflicts(
   conflicts: readonly ConflictGroup[],
-  citations: readonly PersistedCitation[]
+  citations: Readonly<Record<string, SourceRecord>>
 ): PersistedConflictGroup[] {
-  const allCitationIds = citations.map((c) => c.citationId);
-  return conflicts.map((cg) => ({
-    conflictId: cg.conflictGroupId,
-    dimension: cg.dimension,
-    branches: [
-      {
-        factKey: '1'.repeat(64),
-        claimIds: [],
-        citationIds: allCitationIds.slice(0, 1).length > 0 ? allCitationIds.slice(0, 1) : ['S1'],
-      },
-      {
-        factKey: '2'.repeat(64),
-        claimIds: [],
-        citationIds: allCitationIds.slice(0, 1).length > 0 ? allCitationIds.slice(0, 1) : ['S1'],
-      },
-    ],
-    scopeProof: cg.scopeProof
-      ? {
-          dimension: cg.scopeProof.dimension ?? cg.dimension,
-          environment: cg.scopeProof.environment ?? null,
-          version: cg.scopeProof.version ?? null,
-          overrideRelation: cg.scopeProof.overrideRelation ?? null,
-        }
-      : null,
-  }));
+  const byConflictGroup = new Map<string, SourceRecord[]>();
+  for (const citation of Object.values(citations)) {
+    if (!citation.conflictGroupId) continue;
+    const list = byConflictGroup.get(citation.conflictGroupId) ?? [];
+    list.push(citation);
+    byConflictGroup.set(citation.conflictGroupId, list);
+  }
+
+  // Only conflicts backed by real citations are persisted; no synthetic branches.
+  return conflicts
+    .map((cg) => {
+      const members = byConflictGroup.get(cg.conflictGroupId) ?? [];
+      return {
+        conflictId: cg.conflictGroupId,
+        dimension: cg.dimension,
+        branches: members.map((citation) => ({
+          factKey: sha256Hex(`${cg.conflictGroupId}|${citation.citationId}`),
+          claimIds: [] as string[],
+          citationIds: [citation.citationId],
+        })),
+        scopeProof: cg.scopeProof
+          ? {
+              dimension: cg.scopeProof.dimension ?? cg.dimension,
+              environment: cg.scopeProof.environment ?? null,
+              version: cg.scopeProof.version ?? null,
+              overrideRelation: cg.scopeProof.overrideRelation ?? null,
+            }
+          : null,
+      };
+    })
+    .filter((cg) => cg.branches.length >= 2);
 }
 
 function defaultModalityDiagnostics(): ModalityStatus {
@@ -485,7 +488,7 @@ export async function runGroundedTurn(
   let serverResponse: FederatedRetrievalResponse = emptyRetrievalResponse(
     docsEnabled ? 'READY' : 'NO_EVIDENCE'
   );
-  let mcpItems: any[] = [];
+  let mcpResult: McpRetrievalResult | null = null;
   const sourceWarnings: string[] = [];
 
   const docsRetrievalPromise = docsEnabled
@@ -541,7 +544,7 @@ export async function runGroundedTurn(
 
     const mcpFailed = mcpSettled.status === 'rejected';
     if (mcpSettled.status === 'fulfilled' && mcpSettled.value) {
-      mcpItems = mcpSettled.value.items ?? [];
+      mcpResult = mcpSettled.value;
       if (mcpSettled.value.warnings?.length) {
         sourceWarnings.push(...mcpSettled.value.warnings);
       }
@@ -555,7 +558,7 @@ export async function runGroundedTurn(
     }
 
     if (docsSettled.status === 'rejected') {
-      if (mcpItems.length === 0) {
+      if (!mcpResult || mcpResult.items.length === 0) {
         throw docsSettled.reason;
       }
       // Docs failed but MCP succeeded: synthesize MCP evidence, mark degraded.
@@ -743,12 +746,18 @@ export async function runGroundedTurn(
   }
 
   const hasServerItems = Boolean(serverResponse.items && serverResponse.items.length > 0);
-  const hasMcpItems = Boolean(mcpItems && mcpItems.length > 0);
+  const normalizedMcp = mcpResult
+    ? mcpResult.records
+      ? { records: mcpResult.records, stats: mcpResult.normalization }
+      : normalizeMcpEvidence(mcpResult.items)
+    : { records: [] as McpEvidenceRecord[], stats: undefined };
+  const mcpRecords = normalizedMcp.records;
+  const hasMcpItems = mcpRecords.length > 0;
   // Pack both sources once. A graph seed does not erase document or MCP evidence.
   const combinedServerPack = deps.packEvidence({
     authority: 'server',
     serverResponse,
-    mcpItems,
+    mcpRecords,
   });
 
   // 6. SEED_ONLY is existence-only only when no citable text evidence exists.
@@ -945,10 +954,7 @@ export async function runGroundedTurn(
 
   const persistedCitations = toPersistedCitations(serverPack.citations);
   const persistedPaths = toPersistedPaths(serverPack.paths);
-  const persistedConflicts = toPersistedConflicts(
-    serverPack.conflicts,
-    persistedCitations
-  );
+  const persistedConflicts = toPersistedConflicts(serverPack.conflicts, serverPack.citations);
 
   const scopePayload = {
     setIds: resolvedScope.setTierAssignments.map((s) => s.setId),
@@ -964,6 +970,12 @@ export async function runGroundedTurn(
     ...serverResponse.diagnostics.coverageWarnings.map((w) => w.message),
     ...sourceWarnings,
     ...serverPack.coverageWarnings,
+    // Content-free MCP extraction summary: counts only, no query/args/excerpt text.
+    ...(normalizedMcp.stats
+      ? [
+          `MCP: ${normalizedMcp.stats.records} records (${normalizedMcp.stats.facts} facts, ${normalizedMcp.stats.entities} entities, ${normalizedMcp.stats.attributes} attributes), ${normalizedMcp.stats.deduped} duplicates merged, ${mcpResult?.pagesFetched ?? 0} pages, ${mcpResult?.completeness ?? 'complete'}`,
+        ]
+      : []),
   ];
 
   if (!input.capabilities.modelConfigured) {

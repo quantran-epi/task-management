@@ -297,7 +297,7 @@ describe('ChatMessageBubble', () => {
     }
   });
 
-  it('automatically attributes un-bracketed conclusion lines with matching citation chips', () => {
+  it('renders un-bracketed prose verbatim without inventing citation chips', () => {
     const handleActivate = vi.fn();
     const messageWithoutBrackets: ChatMessage = {
       id: 'msg-auto-attribute',
@@ -364,19 +364,12 @@ describe('ChatMessageBubble', () => {
       />
     );
 
-    const chips = container.querySelectorAll('.grounded-inline-chip');
-    expect(chips.length).toBeGreaterThanOrEqual(2);
-    expect(chips[0]).toHaveTextContent('[1]');
-    expect(chips[1]).toHaveTextContent('[2]');
-
-    fireEvent.click(chips[0]!);
-    expect(handleActivate).toHaveBeenCalledWith(messageWithoutBrackets.grounding!.citations[0]);
-
-    fireEvent.click(chips[1]!);
-    expect(handleActivate).toHaveBeenCalledWith(messageWithoutBrackets.grounding!.citations[1]);
+    // The model wrote no tags, so the UI must not invent attributions.
+    expect(container.querySelectorAll('.grounded-inline-chip')).toHaveLength(0);
+    expect(handleActivate).not.toHaveBeenCalled();
   });
 
-  it('guarantees inline citation chips appear for vector-only retrieval with natural Vietnamese text and bracketed numbers', () => {
+  it('does not turn bracketed numbers into citation chips on vector-only retrieval', () => {
     const handleActivate = vi.fn();
     const vectorOnlyMessage: ChatMessage = {
       id: 'msg-vector-only',
@@ -430,16 +423,12 @@ describe('ChatMessageBubble', () => {
       />
     );
 
-    // [2024] is preserved in the text
+    // [2024] is preserved in the text and is not a citation tag.
     expect(screen.getByText(/\[2024\]/)).toBeInTheDocument();
 
-    // Inline citation chip [1] MUST be rendered in the answer body
-    const chips = container.querySelectorAll('.grounded-inline-chip');
-    expect(chips.length).toBeGreaterThanOrEqual(1);
-    expect(chips[0]).toHaveTextContent('[1]');
-
-    fireEvent.click(chips[0]!);
-    expect(handleActivate).toHaveBeenCalledWith(vectorOnlyMessage.grounding!.citations[0]);
+    // No chip is invented: the model did not cite anything.
+    expect(container.querySelectorAll('.grounded-inline-chip')).toHaveLength(0);
+    expect(handleActivate).not.toHaveBeenCalled();
   });
 
   it('renders unified and consistent border styling across all citation tags in Nguồn tài liệu', () => {
@@ -551,17 +540,17 @@ describe('ChatMessageBubble', () => {
     expect(new Set(bgColors).size).toBe(1);
   });
 
-  it('renders interactive chips for case-insensitive tags [s1], [l1] and attributes SQL packages from vector/fulltext when paths are empty', () => {
+  it('renders interactive chips only for tags the model emitted', () => {
     const handleActivate = vi.fn();
     const sqlProcessAnswerText =
-      'Hệ thống Back-Office thẻ MAIN1. Tiến trình xử lý theo quy tắc 60000004 (kích hoạt từ MAIN1.OPR_OPERATION OPST0100).\n' +
+      'Hệ thống Back-Office thẻ MAIN1 [S1]. Tiến trình xử lý theo quy tắc 60000004 (kích hoạt từ MAIN1.OPR_OPERATION OPST0100) [S1].\n' +
       'Các package xử lý chính:\n' +
       'MAIN1.CRD_API_PAYMENT_PKG.CREATE_PAYMENT: Tạo bản ghi MAIN1.CRD_PAYMENT (PMTSACTV).\n' +
       'MAIN1.CRD_CST_PAYMENT_PKG.ENUM_DEBT_ORDER: Quét và sắp xếp xô nợ MAIN1.CRD_DEBT_BALANCE theo độ ưu tiên REPAY_PRIORITY (waterfall) + FIFO theo posting_date.\n' +
       'MAIN1.CRD_PAYMENT_PKG.APPLY_PAYMENT: Trích tiền từ Ledger BLTP0001, cấn trừ nợ, ghi nhận MAIN1.CRD_DEBT_PAYMENT.\n' +
       'MAIN1.CRD_DEBT_PKG.CHANGE_DEBT: Cập nhật giảm số dư nợ trên MAIN1.CRD_DEBT_BALANCE.\n' +
       'MAIN1.CRD_CST_APC_PAYMENT_PKG.APPLY_PAYMENT: Hạch toán GL thứ cấp CBS (MAIN1.CST_CBS_GL_ENTRY).\n' +
-      'Thứ tự cấn trừ theo priority: nợ gốc quá hạn (BLTP1004) -> lãi quá hạn (BLTP1005) -> nợ vượt hạn mức (BLTP1007) -> phí trong hạn -> lãi trong hạn (BLTP1003) -> gốc trong hạn (BLTP1002). Còn dư giữ ở Ledger BLTP0001 chờ chi tiêu mới hoặc kỳ sao kê CYTP1001.';
+      'Thứ tự cấn trừ theo priority: nợ gốc quá hạn (BLTP1004) -> lãi quá hạn (BLTP1005) -> nợ vượt hạn mức (BLTP1007) -> phí trong hạn -> lãi trong hạn (BLTP1003) -> gốc trong hạn (BLTP1002). Còn dư giữ ở Ledger BLTP0001 chờ chi tiêu mới hoặc kỳ sao kê CYTP1001 [S2].';
 
     const message: ChatMessage = {
       id: 'msg-sql-empty-graph',
@@ -635,9 +624,11 @@ describe('ChatMessageBubble', () => {
       />
     );
 
-    // Verify inline citation chips are rendered in the message body
+    // Only tags the model actually emitted become chips.
     const chips = container.querySelectorAll('.grounded-inline-chip');
-    expect(chips.length).toBeGreaterThanOrEqual(1);
+    expect(chips.length).toBeGreaterThanOrEqual(2);
+    expect(chips[0]).toHaveTextContent('[1]');
+    expect(chips[chips.length - 1]).toHaveTextContent('[2]');
 
     // Verify Nguồn tài liệu tags are rendered
     const tags = container.querySelectorAll('.ant-tag');

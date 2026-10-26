@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { APP_NAME } from '../../constants/app';
 import { isTauriApp } from '../../utils/timerPopout';
@@ -62,7 +63,39 @@ let requestIdCounter = 0;
 const serverGroupCaches = new Map<string, Map<string, Promise<string>>>();
 const toolToServerMap = new Map<string, string>(); // toolName -> serverId
 
-const MAX_TOOL_RESULT_CHARS = 20_000;
+/**
+ * Read-only enforcement (fail closed). A tool may be executed only when the server
+ * advertises `readOnlyHint: true` or its name is in this explicit allowlist — the
+ * read-only Graphiti/catalog surface already documented in
+ * DEFAULT_GRAPHITI_INSTRUCTION. Everything else is refused before any tools/call.
+ */
+export const READ_ONLY_TOOL_ALLOWLIST: ReadonlySet<string> = new Set([
+  'list_advertised_groups',
+  'search_nodes',
+  'search_memory_facts',
+  'get_catalog_object_context',
+  'get_catalog_evidence',
+  'resolve_typed_entities',
+  'resolve_typed_edges',
+  'get_group_stats',
+  'get_episodes',
+  'get_episode_entities',
+  'get_entity_edge',
+]);
+
+interface CachedToolMeta {
+  serverId: string;
+  name: string;
+  inputSchema: Record<string, unknown>;
+  readOnly: boolean;
+}
+
+const toolMetaCache = new Map<string, CachedToolMeta>();
+const schemaValidators = new Map<string, z.ZodType>();
+
+function toolMetaKey(serverId: string, toolName: string): string {
+  return `${serverId}::${toolName}`;
+}
 
 function sanitizeUrl(rawUrl: string): string {
   const trimmed = rawUrl.trim().replace(/\/+$/, '');
@@ -321,27 +354,46 @@ function isInputSchema(value: unknown): value is AiToolDefinition['function']['p
 
 export async function fetchServerTools(server: McpServerConfig): Promise<AiToolDefinition[]> {
   await initializeServerSession(server);
-  const result = await invokeServerRpc(server, 'tools/list', undefined, false);
-  if (!Array.isArray(result?.tools)) return [];
-
   const tools: AiToolDefinition[] = [];
-  for (const tool of result.tools) {
-    if (
-      tool &&
-      typeof tool.name === 'string' &&
-      typeof tool.description === 'string' &&
-      isInputSchema(tool.inputSchema)
-    ) {
-      toolToServerMap.set(tool.name, server.id);
-      tools.push({
-        type: 'function',
-        function: {
+  let cursor: string | undefined;
+  // Follow tools/list pagination; bounded so a misbehaving server cannot loop us.
+  for (let page = 0; page < 10; page++) {
+    const result = await invokeServerRpc(
+      server,
+      'tools/list',
+      cursor ? { cursor } : undefined,
+      false
+    );
+    if (!Array.isArray(result?.tools)) break;
+
+    for (const tool of result.tools) {
+      if (
+        tool &&
+        typeof tool.name === 'string' &&
+        typeof tool.description === 'string' &&
+        isInputSchema(tool.inputSchema)
+      ) {
+        toolToServerMap.set(tool.name, server.id);
+        toolMetaCache.set(toolMetaKey(server.id, tool.name), {
+          serverId: server.id,
           name: tool.name,
-          description: `[${server.name}] ${tool.description}`,
-          parameters: tool.inputSchema,
-        },
-      });
+          inputSchema: tool.inputSchema as Record<string, unknown>,
+          readOnly: tool.annotations?.readOnlyHint === true,
+        });
+        tools.push({
+          type: 'function',
+          function: {
+            name: tool.name,
+            description: `[${server.name}] ${tool.description}`,
+            parameters: tool.inputSchema,
+          },
+        });
+      }
     }
+
+    const nextCursor = result?.nextCursor;
+    if (typeof nextCursor !== 'string' || !nextCursor || nextCursor === cursor) break;
+    cursor = nextCursor;
   }
   return tools;
 }
@@ -376,57 +428,107 @@ function stableSerialize(value: unknown): string {
   return JSON.stringify(value);
 }
 
+/**
+ * Serializes the full tool result. No character cap: slicing produced mid-JSON
+ * truncation that silently removed evidence (e.g. the WritesTo fact past 100k).
+ * Size control belongs to normalization + batched synthesis, never to transport.
+ */
 function serializeToolResult(result: any): string {
   const textParts = Array.isArray(result?.content)
     ? result.content
         .filter((item: any) => item?.type === 'text' && typeof item.text === 'string')
         .map((item: any) => item.text)
     : [];
-  const serialized =
-    textParts.length > 0
-      ? textParts.join('\n')
-      : result?.structuredContent !== undefined
-        ? JSON.stringify(result.structuredContent)
-        : JSON.stringify(result ?? null);
-  return serialized.length <= MAX_TOOL_RESULT_CHARS
-    ? serialized
-    : `${serialized.slice(0, MAX_TOOL_RESULT_CHARS)}…`;
+  if (textParts.length > 0) return textParts.join('\n');
+  if (result?.structuredContent !== undefined) return JSON.stringify(result.structuredContent);
+  return JSON.stringify(result ?? null);
+}
+
+function getValidator(meta: CachedToolMeta): z.ZodType | null {
+  const key = toolMetaKey(meta.serverId, meta.name);
+  if (schemaValidators.has(key)) return schemaValidators.get(key)!;
+  try {
+    const validator = z.fromJSONSchema(meta.inputSchema as never);
+    schemaValidators.set(key, validator);
+    return validator;
+  } catch {
+    // Unsupported JSON Schema keyword: skip validation rather than block retrieval.
+    schemaValidators.set(key, z.any());
+    return null;
+  }
+}
+
+export interface ExecuteMcpToolOptions {
+  /** Server that owns the tool. Falls back to the discovery cache (never a blind scan). */
+  serverId?: string;
+  /**
+   * Explicit user-confirmed mutation path (Telegram admin approval). Retrieval and
+   * chat callers must leave this unset so the read-only gate stays fail-closed.
+   */
+  allowMutation?: boolean;
+}
+
+/** Server that advertised a tool during discovery, if already known. */
+export function resolveMcpToolServerId(toolName: string): string | undefined {
+  return toolToServerMap.get(toolName);
 }
 
 export async function executeDynamicMcpTool(
   toolName: string,
   args: Record<string, unknown>,
-  db: TaskPlannerDatabase = defaultDb
+  db: TaskPlannerDatabase = defaultDb,
+  options: ExecuteMcpToolOptions = {}
 ): Promise<string> {
   const servers = await getMcpServers(db);
   const isTauri = isTauriApp();
 
-  let serverId = toolToServerMap.get(toolName);
-  let server = servers.find((s) => s.id === serverId && s.enabled);
-
-  if (!server) {
-    // If not in memory mapping (e.g. freshly loaded or direct call), find candidate
-    for (const s of servers.filter((srv) => srv.enabled && (!srv.desktopOnly || isTauri))) {
-      try {
-        const tools = await fetchServerTools(s);
-        if (tools.some((t) => t.function.name === toolName)) {
-          server = s;
-          serverId = s.id;
-          break;
-        }
-      } catch {}
-    }
-  }
-
-  if (!server) {
+  const serverId = options.serverId ?? toolToServerMap.get(toolName);
+  if (!serverId) {
     const disabledServer = servers.find((s) => !s.enabled);
+    if (disabledServer) {
+      throw new Error(
+        `Máy chủ ${disabledServer.name.replace(' Banking', '')} hiện đang bị tắt bởi người dùng`
+      );
+    }
+    throw new Error(
+      `Không rõ máy chủ MCP cung cấp công cụ "${toolName}"; hãy khám phá công cụ trước khi gọi`
+    );
+  }
+  const server = servers.find((s) => s.id === serverId && s.enabled);
+  if (!server) {
+    const disabledServer = servers.find((s) => s.id === serverId);
     if (disabledServer) {
       throw new Error(`Máy chủ ${disabledServer.name.replace(' Banking', '')} hiện đang bị tắt bởi người dùng`);
     }
-    throw new Error(`Không tìm thấy máy chủ MCP nào đang bật cung cấp công cụ "${toolName}"`);
+    throw new Error(`Máy chủ MCP "${serverId}" không tồn tại hoặc chưa bật`);
   }
   if (server.desktopOnly && !isTauri) {
     throw new Error(`Máy chủ MCP "${server.name}" chỉ khả dụng trong ứng dụng Desktop Tauri`);
+  }
+
+  let meta = toolMetaCache.get(toolMetaKey(server.id, toolName));
+  if (!meta) {
+    await fetchServerTools(server);
+    meta = toolMetaCache.get(toolMetaKey(server.id, toolName));
+  }
+  if (!meta) {
+    throw new Error(`Máy chủ MCP "${server.name}" không cung cấp công cụ "${toolName}"`);
+  }
+
+  if (!options.allowMutation && !meta.readOnly && !READ_ONLY_TOOL_ALLOWLIST.has(toolName)) {
+    throw new Error(`Công cụ MCP "${toolName}" không được phép chạy: chỉ cho phép thao tác đọc`);
+  }
+
+  const validator = getValidator(meta);
+  if (validator) {
+    const parsed = validator.safeParse(args);
+    if (!parsed.success) {
+      throw new Error(
+        `Tham số cho công cụ MCP "${toolName}" không hợp lệ: ${parsed.error.issues
+          .map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`)
+          .join('; ')}`
+      );
+    }
   }
 
   // Handle group caching for list_advertised_groups if invoked
@@ -479,4 +581,6 @@ export function resetMcpClientForTests(): void {
   requestIdCounter = 0;
   serverGroupCaches.clear();
   toolToServerMap.clear();
+  toolMetaCache.clear();
+  schemaValidators.clear();
 }

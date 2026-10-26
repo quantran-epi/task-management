@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import {
   GroundedAnswerSchemaV2,
   GroundedAnswerJsonSchema,
@@ -162,45 +163,6 @@ export function buildSystemPrompt(
   ].join('\n');
 }
 
-const SYNTHESIS_STOP_WORDS = new Set([
-  'của', 'và', 'hoặc', 'là', 'trong', 'không', 'được', 'với', 'này', 'cho',
-  'các', 'một', 'những', 'theo', 'trên', 'dưới', 'khi', 'như', 'vào', 'bởi',
-  'the', 'and', 'or', 'is', 'in', 'not', 'with', 'this', 'for', 'that', 'from',
-]);
-
-function findBestMatchingCitation(
-  line: string,
-  promptEvidence: readonly { id: string; text?: string; excerpt?: string; documentTitle?: string | undefined; sectionAnchor?: string | null | undefined }[],
-  allowedCitationSet: Set<string>
-): string | null {
-  const rawTokens = line.match(/[\p{L}\p{N}_#$-]{2,}/gu) || [];
-  const technicalTokens = rawTokens.filter((t) => !SYNTHESIS_STOP_WORDS.has(t.toLowerCase()));
-  if (technicalTokens.length === 0) return null;
-
-  let bestId: string | null = null;
-  let maxScore = 0;
-
-  for (const ev of promptEvidence) {
-    if (!allowedCitationSet.has(ev.id)) continue;
-    const content = `${ev.text || ''} ${ev.excerpt || ''} ${ev.documentTitle || ''}`.toLowerCase();
-    let score = 0;
-
-    for (const token of technicalTokens) {
-      const lowerToken = token.toLowerCase();
-      if (content.includes(lowerToken)) {
-        score += token.includes('_') || /\d/.test(token) ? 3 : 1;
-      }
-    }
-
-    if (score > maxScore && score >= 1) {
-      maxScore = score;
-      bestId = ev.id;
-    }
-  }
-
-  return bestId;
-}
-
 /**
  * Tolerant pre-parsing normalization:
  * Coerces common LLM formatting deviations before schema parsing and closure validation:
@@ -213,8 +175,7 @@ function findBestMatchingCitation(
 export function normalizeRawGroundedOutput(
   raw: unknown,
   allowedCitationIds: string[],
-  allowedPathIds: string[],
-  promptEvidence?: readonly { id: string; text?: string; excerpt?: string; documentTitle?: string | undefined; sectionAnchor?: string | null | undefined }[]
+  allowedPathIds: string[]
 ): unknown {
   if (raw == null) return raw;
 
@@ -422,26 +383,15 @@ export function normalizeRawGroundedOutput(
     }
     claim.citationIds = resolvedCitations;
 
-    // Coerce classification and pathId (D-30: DIRECT claim must have null pathId)
-    if (claim.classification === 'INFERRED') {
-      let inferredPathId: string | null = null;
-      if (
-        typeof claim.pathId === 'string' &&
-        allowedPathSet.has(claim.pathId) &&
-        /^P[1-9][0-9]*$/.test(claim.pathId)
-      ) {
-        inferredPathId = claim.pathId;
-      } else if (allowedPathIds.length === 1 && /quy trình|bước|luồng|container|flow|scheduler|pl\/sql/i.test(claim.text || '')) {
-        inferredPathId = allowedPathIds[0] || null;
-      }
-
-      if (inferredPathId) {
-        claim.classification = 'INFERRED';
-        claim.pathId = inferredPathId;
-      } else {
-        claim.classification = 'DIRECT';
-        claim.pathId = null;
-      }
+    // Coerce classification and pathId (D-30: DIRECT claim must have null pathId).
+    // No keyword guess: an INFERRED claim survives only with a valid explicit pathId.
+    if (
+      claim.classification === 'INFERRED' &&
+      typeof claim.pathId === 'string' &&
+      allowedPathSet.has(claim.pathId) &&
+      /^P[1-9][0-9]*$/.test(claim.pathId)
+    ) {
+      claim.classification = 'INFERRED';
     } else {
       claim.classification = 'DIRECT';
       claim.pathId = null;
@@ -466,76 +416,157 @@ export function normalizeRawGroundedOutput(
     }
   }
 
-  // 8. If conclusion has no inline citations and claims are empty or uncited,
-  // attempt factual attribution from promptEvidence based on exact identifiers (D-13 safe)
-  if (
-    !isAbstentionAnswer &&
-    normalizedClaims.length === 0 &&
-    typeof obj.conclusion === 'string' &&
-    !/\[[SLM]?\d+\]/i.test(obj.conclusion) &&
-    Array.isArray(promptEvidence) &&
-    promptEvidence.length > 0
-  ) {
-    const lines = obj.conclusion.split('\n');
-    let hasModifiedConclusion = false;
-    const synthesizedClaims: any[] = [];
-    let claimCounter = normalizedClaims.length + 1;
-
-    const modifiedLines = lines.map((line) => {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('#') || trimmed.length < 10) {
-        return line;
-      }
-      if (/\[[SLM]?\d+\]/i.test(line)) {
-        return line;
-      }
-
-      const matchedCitationId = findBestMatchingCitation(trimmed, promptEvidence, allowedCitationSet);
-      if (matchedCitationId) {
-        hasModifiedConclusion = true;
-        if (normalizedClaims.length === 0) {
-          synthesizedClaims.push({
-            id: `C${claimCounter++}`,
-            text: trimmed.replace(/^[-*•\d.]+\s*/, ''),
-            classification: 'DIRECT',
-            citationIds: [matchedCitationId],
-            pathId: null,
-          });
-        }
-        return `${line} [${matchedCitationId}]`;
-      }
-      return line;
-    });
-
-    if (hasModifiedConclusion) {
-      obj.conclusion = modifiedLines.join('\n');
-    } else if (
-      !isAbstentionAnswer &&
-      allowedCitationIds.length > 0 &&
-      typeof obj.conclusion === 'string' &&
-      obj.conclusion.trim().length > 0
-    ) {
-      const defaultCitationId = allowedCitationIds[0]!;
-      obj.conclusion = `${obj.conclusion} [${defaultCitationId}]`;
-      hasModifiedConclusion = true;
-      synthesizedClaims.push({
-        id: `C${claimCounter++}`,
-        text: obj.conclusion.replace(/\[[SLM]?\d+\]/gi, '').trim(),
-        classification: 'DIRECT',
-        citationIds: [defaultCitationId],
-        pathId: null,
-      });
-    }
-
-    if (normalizedClaims.length === 0 && synthesizedClaims.length > 0) {
-      normalizedClaims.push(...synthesizedClaims);
-    }
-  }
-
   obj.claims = normalizedClaims;
   obj.unsupportedParts = unsupportedParts;
 
   return obj;
+}
+
+const MAP_BATCH_RECORDS = 25;
+const REDUCE_TRIGGER_CHARS = 60_000;
+const REDUCE_TRIGGER_RECORDS = 400;
+const MAX_RECORD_RETRIES = 1;
+
+const DigestSchema = z.object({
+  claims: z.array(
+    z.object({
+      text: z.string().min(1),
+      quote: z.string().min(1),
+      recordIds: z.array(z.string().min(1)).min(1),
+    })
+  ),
+});
+
+interface DigestClaim {
+  text: string;
+  quote: string;
+  recordIds: string[];
+}
+
+/**
+ * Accuracy-preserving reduction for payloads too large for one transport call.
+ * Every record is either attested by a digest claim or passed through verbatim;
+ * completeness is checked mechanically and missing records are re-requested.
+ */
+async function digestEvidence(
+  input: SynthesisInput,
+  pack: EvidencePack,
+  targetLanguage: 'vi' | 'en'
+): Promise<EvidencePack> {
+  const items = pack.promptEvidence;
+  // Identity is the MCP record id when present, otherwise the citation id, so both
+  // source families are reducible and completeness can be checked mechanically.
+  const identityOf = (item: (typeof items)[number]): string => item.recordId ?? item.id;
+  const citationByIdentity = new Map<string, string>();
+  for (const item of items) citationByIdentity.set(identityOf(item), item.id);
+
+  const digests: Array<{ claim: DigestClaim; citationIds: string[] }> = [];
+  const uncovered: Array<(typeof items)[number]> = [];
+  const warnings = [...pack.coverageWarnings];
+
+  for (let start = 0; start < items.length; start += MAP_BATCH_RECORDS) {
+    const batch = items.slice(start, start + MAP_BATCH_RECORDS);
+    const claims: DigestClaim[] = [];
+
+    for (let attempt = 0; attempt <= MAX_RECORD_RETRIES; attempt++) {
+      const claimed = new Set(claims.flatMap((claim) => claim.recordIds));
+      const pending = batch.filter((item) => !claimed.has(identityOf(item)));
+      if (pending.length === 0) break;
+
+      const response = await completeJson({
+        endpoint: input.endpoint,
+        apiKey: input.apiKey,
+        model: input.model,
+        temperature: 0,
+        messages: [
+          {
+            role: 'system',
+            content: [
+              'Extract every distinct factual claim from the EVIDENCE entries.',
+              'Return JSON: {"claims":[{"text":"...","quote":"verbatim support","recordIds":["..."]}]}.',
+              'Rules: cover EVERY entry id at least once; quote verbatim;',
+              'never merge two contradictory claims; never add facts absent from the entries;',
+              `respond in ${targetLanguage === 'vi' ? 'Vietnamese' : 'English'} for "text" and keep "quote" byte-identical.`,
+            ].join('\n'),
+          },
+          {
+            role: 'user',
+            content: JSON.stringify({
+              entries: pending.map((item) => ({
+                id: identityOf(item),
+                citationId: item.id,
+                title: item.documentTitle,
+                text: item.text,
+              })),
+            }),
+          },
+        ],
+        response_format: { type: 'json_object' } as never,
+        signal: input.signal,
+      });
+      const parsed = DigestSchema.safeParse(
+        typeof response === 'string' ? safeJsonParse(response) : response
+      );
+      if (parsed.success) claims.push(...parsed.data.claims);
+    }
+
+    const covered = new Set(claims.flatMap((claim) => claim.recordIds));
+    for (const item of batch) {
+      if (!covered.has(identityOf(item))) uncovered.push(item);
+    }
+    for (const claim of claims) {
+      const citationIds = [
+        ...new Set(
+          claim.recordIds
+            .map((recordId) => citationByIdentity.get(recordId))
+            .filter(Boolean) as string[]
+        ),
+      ];
+      if (citationIds.length > 0) digests.push({ claim, citationIds });
+    }
+  }
+
+  if (uncovered.length > 0) {
+    warnings.push(
+      `${uncovered.length} evidence records could not be attested during reduction and were passed through verbatim`
+    );
+  }
+
+  // Deduplicate claims produced by overlapping batches.
+  const seen = new Set<string>();
+  const digestEvidenceItems = digests
+    .filter((entry) => {
+      const key = `${entry.claim.text}|${entry.claim.quote}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .filter((entry) => entry.citationIds.length > 0)
+    .map((entry) => ({
+      // Digests add no new ids: each line is anchored to the real citation it quotes.
+      id: entry.citationIds[0]!,
+      text: `${entry.claim.text}\n> ${entry.claim.quote}\nEvidence: ${entry.citationIds
+        .map((id) => `[${id}]`)
+        .join('')}`,
+    }));
+
+  return {
+    ...pack,
+    promptEvidence: [...digestEvidenceItems, ...uncovered],
+    coverageWarnings: warnings,
+  };
+}
+
+function safeJsonParse(raw: string): unknown {
+  const trimmed = raw.trim();
+  const cleaned = trimmed.startsWith('```')
+    ? trimmed.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+    : trimmed;
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    return null;
+  }
 }
 
 function mapToGroundedSynthesisError(
@@ -631,11 +662,21 @@ export async function synthesizeGroundedAnswer(
   const primarySystemPrompt = input.instructions
     ? `${baseSystemPrompt}\nTURN-SPECIFIC CONSTRAINT (overrides conflicting rules above):\n${input.instructions}`
     : baseSystemPrompt;
+
+  // Accuracy first: only reduce when the payload would not fit one transport call.
+  const evidenceChars = input.pack.promptEvidence.reduce((sum, item) => sum + item.text.length, 0);
+  const needsReduction =
+    evidenceChars > REDUCE_TRIGGER_CHARS ||
+    input.pack.promptEvidence.length > REDUCE_TRIGGER_RECORDS;
+  const synthesisPack = needsReduction
+    ? await digestEvidence(input, input.pack, targetLanguage)
+    : input.pack;
+
   const baseUserPayload = {
     query: input.query,
     conversation_history: input.recentTurns && input.recentTurns.length > 0 ? input.recentTurns : undefined,
     speculation_requested: speculationRequested,
-    evidence: input.pack.promptEvidence,
+    evidence: synthesisPack.promptEvidence,
     seedEntities: input.pack.entities,
     allowedCitationIds,
     allowedPathIds,
@@ -672,7 +713,7 @@ export async function synthesizeGroundedAnswer(
         previousJson: lastRaw,
         // Same frozen evidence, never new evidence. Required so repairs cannot invent
         // what an omitted source said merely to satisfy source-coverage validation.
-        evidence: input.pack.promptEvidence,
+        evidence: synthesisPack.promptEvidence,
         seedEntities: input.pack.entities,
         conflicts: input.pack.conflicts,
         speculation_requested: speculationRequested,
@@ -733,8 +774,7 @@ export async function synthesizeGroundedAnswer(
     const normalizedOutput = normalizeRawGroundedOutput(
       rawOutput,
       allowedCitationIds,
-      allowedPathIds,
-      input.pack.promptEvidence
+      allowedPathIds
     );
     lastRaw = normalizedOutput;
 

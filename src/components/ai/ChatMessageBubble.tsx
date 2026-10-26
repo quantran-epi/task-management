@@ -202,106 +202,6 @@ export function renderUserMessageWithMentions(content: string): React.ReactNode 
   return parts;
 }
 
-const CHAT_STOP_WORDS = new Set([
-  'của', 'và', 'hoặc', 'là', 'trong', 'không', 'được', 'với', 'này', 'cho',
-  'các', 'một', 'những', 'theo', 'trên', 'dưới', 'khi', 'như', 'vào', 'bởi',
-  'the', 'and', 'or', 'is', 'in', 'not', 'with', 'this', 'for', 'that', 'from',
-]);
-
-function attributeLinesWithCitations(
-  text: string,
-  citations: readonly PersistedCitation[]
-): string {
-  if (!text || citations.length === 0) return text;
-  if (
-    /(không tìm thấy|không có thông tin|không có dữ liệu|chưa có thông tin|no relevant information|no evidence found|insufficient evidence)/i.test(
-      text
-    )
-  ) {
-    return text;
-  }
-
-  const validCitationTags = new Set<string>();
-  citations.forEach((c, idx) => {
-    validCitationTags.add(c.citationId.toLowerCase());
-    validCitationTags.add(`s${idx + 1}`);
-    validCitationTags.add(`l${idx + 1}`);
-    validCitationTags.add(String(idx + 1));
-  });
-
-  const lines = text.split('\n');
-  const resultLines: string[] = [];
-  let attributedAny = false;
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#') || trimmed.length < 6) {
-      resultLines.push(line);
-      continue;
-    }
-
-    const normalizedLine = line.replace(
-      /\[\s*([SL]?\d+(?:\s*,\s*[SL]?\d+)+)\s*\]/gi,
-      (_match, inner) => inner.split(/\s*,\s*/).map((tag: string) => `[${tag}]`).join(' ')
-    );
-    const existingTags = Array.from(normalizedLine.matchAll(/\[([SL]?\d+)\]/gi));
-    const hasValidCitation = existingTags.some((m) => m[1] && validCitationTags.has(m[1].toLowerCase()));
-    if (hasValidCitation) {
-      resultLines.push(normalizedLine);
-      attributedAny = true;
-      continue;
-    }
-
-    const rawTokens = trimmed.match(/[\p{L}\p{N}_#$-]{2,}/gu) || [];
-    const technicalTokens = rawTokens.filter((t) => !CHAT_STOP_WORDS.has(t.toLowerCase()));
-    if (technicalTokens.length === 0) {
-      resultLines.push(line);
-      continue;
-    }
-
-    let bestCitation: PersistedCitation | null = null;
-    let maxScore = 0;
-
-    for (const c of citations) {
-      const content = `${c.citedExcerpt || ''} ${c.sectionAnchor || ''} ${c.documentTitle || ''}`.toLowerCase();
-      let score = 0;
-
-      for (const token of technicalTokens) {
-        const lowerToken = token.toLowerCase();
-        if (content.includes(lowerToken)) {
-          score += token.includes('_') || /\d/.test(token) ? 3 : 1;
-        }
-      }
-
-      if (score > maxScore && score >= 1) {
-        maxScore = score;
-        bestCitation = c;
-      }
-    }
-
-    if (bestCitation) {
-      resultLines.push(`${line} [${bestCitation.citationId}]`);
-      attributedAny = true;
-    } else {
-      resultLines.push(line);
-    }
-  }
-
-  // Fallback: If no line had any valid citation tag attached, attach top citation to last substantive line
-  if (!attributedAny && citations.length > 0 && resultLines.length > 0) {
-    const topCitation = citations[0]!;
-    for (let i = resultLines.length - 1; i >= 0; i--) {
-      const line = resultLines[i]!;
-      if (line.trim().length > 0 && !line.trim().startsWith('#')) {
-        resultLines[i] = `${line} [${topCitation.citationId}]`;
-        break;
-      }
-    }
-  }
-
-  return resultLines.join('\n');
-}
-
 export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   message: msg,
   isStreaming = false,
@@ -437,25 +337,11 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               })
               .filter(Boolean);
 
-            if (citedBadges.length === 0 && activeCitations.length > 0) {
-              const attributedText = attributeLinesWithCitations(c.text, activeCitations);
-              const match = attributedText.match(/\[([SL]?\d+)\]/i);
-              if (match && match[1]) {
-                const cleanTag = match[1].toUpperCase();
-                const info = citationMap.get(cleanTag);
-                if (info) {
-                  citedBadges = [info.isLocal ? `[L${info.num}]` : `[${info.num}]`];
-                }
-              }
-            }
-
             const suffix = citedBadges.length > 0 ? ` ${citedBadges.join(' ')}` : '';
             return `${c.text}${suffix}`;
           });
 
-      if (!isAbstention && activeCitations.length > 0) {
-        formattedConclusion = attributeLinesWithCitations(formattedConclusion, activeCitations);
-      }
+      // Prose is rendered exactly as the model wrote it: no inferred attribution.
       formattedConclusion = formattedConclusion.replace(/\[(S|L)?(\d+)\]/gi, (match, prefix, numStr) => {
         const cleanTag = prefix ? `${prefix.toUpperCase()}${numStr}` : numStr;
         const info = citationMap.get(cleanTag);

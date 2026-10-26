@@ -553,7 +553,9 @@ export async function processTelegramInboundMessage(
     if (isConfirmationMessage(trimmedText)) {
       try {
         const rawResult = pendingMutation.isMcp
-          ? await executeDynamicMcpTool(pendingMutation.toolName, pendingMutation.args, db)
+          ? await executeDynamicMcpTool(pendingMutation.toolName, pendingMutation.args, db, {
+              allowMutation: true,
+            })
           : await executeAiTool(pendingMutation.toolName, pendingMutation.args, db);
         let parsedResult: any = {};
         try {

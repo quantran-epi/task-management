@@ -552,7 +552,6 @@ export const GroundedAnswerCard: React.FC<GroundedAnswerCardProps> = ({
                     key={claim.id}
                     claim={claim}
                     citations={grounding.citations}
-                    conflictGroups={grounding.conflicts ?? []}
                     onCitationActivate={onCitationActivate}
                   />
                 ))

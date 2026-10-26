@@ -1584,7 +1584,8 @@ describe('Telegram Headless Worker', () => {
       expect(executeSpy).toHaveBeenCalledWith(
         'update_card_status',
         { cardId: 'CARD-123', status: 'BLOCKED' },
-        testDb
+        testDb,
+        { allowMutation: true }
       );
       expect(replies[0]).toContain('Đã thực hiện thành công');
       expect(replies[0]).toContain('Thẻ CARD-123 đã bị khóa thành công');

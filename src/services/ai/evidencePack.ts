@@ -5,7 +5,7 @@ import type {
 } from '../knowledge/retrievalProtocol';
 import type { GroundedAnswer } from './groundedAnswerSchemas';
 import type { LocalGroundedResult } from '../search/localGroundedRetrieval';
-import type { McpRetrievedItem } from './mcpRetrievalRunner';
+import type { McpEvidenceRecord } from './mcpEvidence';
 
 export interface SourceRecord {
   readonly citationId: string;
@@ -48,6 +48,10 @@ export interface PromptEvidenceItem {
   readonly documentTitle?: string | undefined;
   readonly sectionAnchor?: string | null | undefined;
   readonly modalities?: readonly ('fulltext' | 'vector' | 'graph')[] | undefined;
+  /** Atomic MCP record id (M* citations only); lets digests map back to records. */
+  readonly recordId?: string | undefined;
+  readonly serverName?: string | undefined;
+  readonly toolName?: string | undefined;
 }
 
 /** Seed entity carried alongside citations; never converted into a citation (D-02). */
@@ -82,22 +86,8 @@ export interface PackEvidenceInput {
   readonly authority: 'server' | 'local';
   readonly serverResponse?: FederatedRetrievalResponse;
   readonly localResult?: LocalGroundedResult;
-  readonly mcpItems?: readonly McpRetrievedItem[];
+  readonly mcpRecords?: readonly McpEvidenceRecord[];
 }
-
-export interface PackEvidenceOptions {
-  readonly maxEvidenceChars?: number;
-  readonly maxPromptEvidenceCount?: number;
-  readonly maxPerSnippetChars?: number;
-}
-
-export const OVERRIDE_TERMS = /(?:^|\P{L})(overrides?|supersed(e|es|ed|ing)|replaces?|thay thế|ghi đè)(?:\P{L}|$)/iu;
-
-export const ALLOWED_EVIDENCE_KINDS = new Set<string>([
-  'policy_change',
-  'release_note',
-  'migration_record',
-]);
 
 const CLASSIFICATION_ORDER: readonly string[] = [
   'LOCAL',
@@ -133,10 +123,6 @@ export function computeWeakestClassification(classifications: readonly string[])
   return weakest;
 }
 
-export function claimAssertsOverride(text: string): boolean {
-  return OVERRIDE_TERMS.test(text);
-}
-
 interface RawCandidateCitation {
   readonly dedupKey: string;
   readonly documentId: string;
@@ -164,17 +150,14 @@ interface RawCandidateCitation {
   readonly modalities?: readonly ('fulltext' | 'vector' | 'graph')[] | undefined;
 }
 
-export function packEvidence(
-  input: PackEvidenceInput,
-  options: PackEvidenceOptions = {}
-): EvidencePack {
+/**
+ * Packs every retrieved source into prompt evidence. Nothing is dropped for size or
+ * relevance: accuracy and completeness outrank token economy, and synthesis reduces
+ * the payload only through completeness-checked batches (see groundedSynthesis).
+ */
+export function packEvidence(input: PackEvidenceInput): EvidencePack {
   const authority = input.authority;
   const isServer = authority === 'server';
-  const defaultMaxChars = isServer ? 8000 : 6000;
-  const defaultMaxCount = isServer ? 20 : 5;
-  const maxEvidenceChars = options.maxEvidenceChars ?? defaultMaxChars;
-  const maxPromptEvidenceCount = options.maxPromptEvidenceCount ?? defaultMaxCount;
-  const maxPerSnippetChars = options.maxPerSnippetChars ?? 1200;
 
   const rawCandidates: RawCandidateCitation[] = [];
   const coverageWarnings: string[] = [];
@@ -234,10 +217,7 @@ export function packEvidence(
 
       if (chunk && chunk.type === 'chunk') {
         const dedupKey = `${chunk.sourceDocumentId}:${chunk.lineStart}:${chunk.lineEnd}:${chunk.publishedContentHash}`;
-        let excerpt = chunk.rawSnippet ?? '';
-        if (excerpt.length > maxPerSnippetChars) {
-          excerpt = excerpt.slice(0, maxPerSnippetChars);
-        }
+        const excerpt = chunk.rawSnippet ?? '';
 
         const isId =
           chunk.matchType === 'identifier' ||
@@ -273,10 +253,7 @@ export function packEvidence(
   } else if (!isServer && input.localResult) {
     for (const r of input.localResult.ranges) {
       const dedupKey = `${r.documentId}:${r.lineStart}:${r.lineEnd}:local`;
-      let excerpt = r.rawSnippet ?? '';
-      if (excerpt.length > maxPerSnippetChars) {
-        excerpt = excerpt.slice(0, maxPerSnippetChars);
-      }
+      const excerpt = r.rawSnippet ?? '';
       rawCandidates.push({
         dedupKey,
         documentId: r.documentId,
@@ -433,118 +410,59 @@ export function packEvidence(
     }
   }
 
-  // Packing order (AI-SPEC §4b):
-  // (a) every citation referenced by a conflict branch
-  // (b) exact identifier/title hits
-  // (c) citations supporting any complete ValidatedPath
-  // (d) remaining ranked items sorted by relevance score
-  const bucketA: PromptEvidenceItem[] = [];
-  const bucketB: PromptEvidenceItem[] = [];
-  const bucketC: PromptEvidenceItem[] = [];
-  const bucketD: PromptEvidenceItem[] = [];
+  // Every candidate is packed, in encounter order. No relevance sorting, no budget drop:
+  // the model sees all evidence from all sources and decides what matters.
+  const finalPromptEvidence: PromptEvidenceItem[] = [];
+  const contextTruncated = false;
 
   for (const { candidate, citationId } of dedupedMap.values()) {
-    const promptItem: PromptEvidenceItem = {
+    finalPromptEvidence.push({
       id: citationId,
       text: candidate.citedExcerpt,
       score: candidate.score ?? 0,
       documentTitle: candidate.documentTitle,
       sectionAnchor: candidate.sectionAnchor || undefined,
       ...(candidate.modalities ? { modalities: candidate.modalities } : {}),
-    };
-    if (conflictCitationIds.has(citationId)) {
-      bucketA.push(promptItem);
-    } else if (candidate.isIdentifierMatch) {
-      bucketB.push(promptItem);
-    } else if (pathCitationIds.has(citationId)) {
-      bucketC.push(promptItem);
-    } else {
-      bucketD.push(promptItem);
-    }
+    });
   }
 
-  // Sort remaining general chunks by relevance score descending so that top-ranking documents
-  // across any document set are not starved by the 20-chunk budget cap
-  bucketD.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-
-  const orderedPromptEvidence = [...bucketA, ...bucketB, ...bucketC, ...bucketD];
-
-  // Budget drop: whole units dropped when exceeding maxEvidenceChars or maxPromptEvidenceCount (D-03)
-  const finalPromptEvidence: PromptEvidenceItem[] = [];
-  let totalChars = 0;
-  let droppedCount = 0;
-  let contextTruncated = false;
-
-  for (const item of orderedPromptEvidence) {
-    if (finalPromptEvidence.length >= maxPromptEvidenceCount) {
-      droppedCount++;
-      contextTruncated = true;
-      continue;
-    }
-    if (totalChars + item.text.length > maxEvidenceChars) {
-      droppedCount++;
-      contextTruncated = true;
-      continue;
-    }
-    finalPromptEvidence.push(item);
-    totalChars += item.text.length;
-  }
-
-  if (contextTruncated && droppedCount > 0) {
-    coverageWarnings.push(`${droppedCount} lowest-ranked chunks omitted for budget`);
-  }
-
-  // Pack MCP retrieved items with M1, M2... citation IDs
-  if (input.mcpItems && input.mcpItems.length > 0) {
-    // Semantic-only document hits are candidates, not direct facts. When live MCP
-    // evidence exists, omit vector-only document snippets so source balancing cannot
-    // force irrelevant text into a fabricated conflict.
-    const vectorOnlyIds = new Set(
-      finalPromptEvidence
-        .filter((item) => item.id.startsWith('S') && item.modalities?.length === 1 && item.modalities[0] === 'vector')
-        .map((item) => item.id)
-    );
-    if (vectorOnlyIds.size > 0) {
-      for (let i = finalPromptEvidence.length - 1; i >= 0; i--) {
-        const item = finalPromptEvidence[i];
-        if (item && vectorOnlyIds.has(item.id)) finalPromptEvidence.splice(i, 1);
-      }
-      for (const id of vectorOnlyIds) delete citations[id];
-    }
-
+  // One citation per atomic MCP record: faithful text, full provenance, no char cap.
+  if (input.mcpRecords && input.mcpRecords.length > 0) {
     let mcpIndex = 1;
-    for (const item of input.mcpItems) {
+    for (const record of input.mcpRecords) {
       const cId = `M${mcpIndex++}`;
-      const docTitle = `[MCP] ${item.serverName} - ${item.toolName}`;
-      // Truncate at 2500 chars to match updated MCP excerpt budget
-      const citedExcerpt = item.rawResult.length > 2500 ? item.rawResult.slice(0, 2500) : item.rawResult;
+      const provenance = record.provenance[0]!;
+      const docTitle = `[MCP] ${provenance.serverName} - ${provenance.toolName}`;
       const mcpCitation: SourceRecord = {
         citationId: cId,
-        documentId: `mcp:${item.serverId}:${item.toolName}`,
+        documentId: `mcp:${provenance.serverId}:${provenance.toolName}:${record.recordId}`,
         documentTitle: docTitle,
-        sectionAnchor: JSON.stringify(item.args).slice(0, 200),
+        sectionAnchor: JSON.stringify(provenance.args).slice(0, 200),
         lineStart: 1,
         lineEnd: 1,
         authority: 'server',
         evidenceClass: 'OBSERVED',
         snapshotId: 'mcp_live',
         publishedContentHash: null,
-        citedExcerpt,
+        citedExcerpt: record.text,
         setMemberships: [],
         evidenceKind: 'mcp_tool',
         mcpMetadata: {
-          serverId: item.serverId,
-          serverName: item.serverName,
-          toolName: item.toolName,
+          serverId: provenance.serverId,
+          serverName: provenance.serverName,
+          toolName: provenance.toolName,
         },
       };
 
       citations[cId] = mcpCitation;
       finalPromptEvidence.push({
         id: cId,
-        text: citedExcerpt,
+        text: record.text,
         documentTitle: docTitle,
         sectionAnchor: mcpCitation.sectionAnchor,
+        recordId: record.recordId,
+        serverName: provenance.serverName,
+        toolName: provenance.toolName,
       });
     }
   }
@@ -578,52 +496,6 @@ export function validateGroundedAnswerClosure(
   pack: EvidencePack
 ): ClosureValidationResult {
   const issues: ClosureIssue[] = [];
-  const availableCitationIds = Object.keys(pack.citations);
-  const hasKnowledgeDocs = availableCitationIds.some((id) => id.startsWith('S'));
-  const hasMcp = availableCitationIds.some((id) => id.startsWith('M'));
-
-  if (hasKnowledgeDocs && hasMcp) {
-    const usedCitationIds = new Set(answer.claims.flatMap((claim) => claim.citationIds));
-    if (![...usedCitationIds].some((id) => id.startsWith('S'))) {
-      issues.push({
-        path: 'claims',
-        code: 'knowledge_source_omitted',
-        message: 'Answer omitted Knowledge Server evidence; represent both Knowledge Server and MCP sources.',
-      });
-    }
-    if (![...usedCitationIds].some((id) => id.startsWith('M'))) {
-      issues.push({
-        path: 'claims',
-        code: 'mcp_source_omitted',
-        message: 'Answer omitted MCP evidence; represent both Knowledge Server and MCP sources.',
-      });
-    }
-
-    const answerText = `${answer.conclusion}\n${answer.claims.map((claim) => claim.text).join('\n')}`;
-    const makesAbsoluteNegativeClaim =
-      /\b(?:no|none|only|does not exist|doesn't exist)\b|(?:không có|không tồn tại|duy nhất)/iu.test(answerText);
-    const disclosesConflict =
-      /\b(?:conflict|conflicting|inconsistent|disagree)\b|(?:xung đột|mâu thuẫn|không nhất quán|chưa nhất quán)/iu.test(answerText);
-    if (makesAbsoluteNegativeClaim && !disclosesConflict) {
-      issues.push({
-        path: 'conclusion',
-        code: 'cross_source_conflict_not_disclosed',
-        message: 'Mixed-source absolute claim must disclose possible source conflict and must not choose a winner.',
-      });
-    }
-    if (
-      disclosesConflict &&
-      answer.schemaVersion === 2 &&
-      answer.confidence !== 'low' &&
-      answer.confidence !== 'unknown'
-    ) {
-      issues.push({
-        path: 'confidence',
-        code: 'cross_source_conflict_confidence_too_high',
-        message: 'A disclosed cross-source conflict requires low or unknown confidence.',
-      });
-    }
-  }
 
   for (let i = 0; i < answer.claims.length; i++) {
     const claim = answer.claims[i]!;
@@ -732,57 +604,9 @@ export function validateGroundedAnswerClosure(
         }
       }
     }
-
-    // 5. D-26 override-language guard (server authority only; local authority has no server conflict metadata)
-    if (pack.authority !== 'local' && claimAssertsOverride(claim.text)) {
-      let allowed = false;
-
-      // Condition 1: SUPERSEDES metadata
-      for (const conflict of pack.conflicts) {
-        if (conflict.scopeProof?.overrideRelation === 'SUPERSEDES') {
-          const conflictCids = new Set<string>();
-          const untypedConflict = conflict as unknown as { branches?: readonly { citationIds: readonly string[] }[] };
-          if (untypedConflict.branches && Array.isArray(untypedConflict.branches)) {
-            for (const b of untypedConflict.branches) {
-              for (const cid of b.citationIds) conflictCids.add(cid);
-            }
-          }
-          for (const c of Object.values(pack.citations)) {
-            if (c.conflictGroupId === conflict.conflictGroupId) {
-              conflictCids.add(c.citationId);
-            }
-          }
-
-          if (claim.citationIds.some((cid: string) => conflictCids.has(cid))) {
-            allowed = true;
-            break;
-          }
-        }
-      }
-
-      // Condition 2: allowlisted evidenceKind
-      if (!allowed && claim.citationIds.length >= 1) {
-        const allKindsAllowed = claim.citationIds.every((cid: string) => {
-          const rec = pack.citations[cid];
-          return rec?.evidenceKind && ALLOWED_EVIDENCE_KINDS.has(rec.evidenceKind);
-        });
-        if (allKindsAllowed) {
-          allowed = true;
-        }
-      }
-
-      if (!allowed) {
-        issues.push({
-          path: `claims[${i}].text`,
-          code: 'override_language_without_proof',
-          message:
-            'Claim asserts override/supersede without SUPERSEDES metadata or cited policy_change/release_note/migration_record evidence',
-        });
-      }
-    }
   }
 
-  // 6. Hypotheses validation for Schema V2 (D-10)
+  // 5. Hypotheses validation for Schema V2 (D-10)
   if (answer.schemaVersion === 2 && answer.hypotheses) {
     for (let hIdx = 0; hIdx < answer.hypotheses.length; hIdx++) {
       const hyp = answer.hypotheses[hIdx]!;

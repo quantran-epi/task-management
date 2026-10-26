@@ -744,29 +744,14 @@ describe('groundedSynthesis', () => {
       expect(res.claims[0].citationIds).toEqual(['S1', 'S2']);
     });
 
-    it('34. attributes claims and adds inline citations when claims are empty but conclusion matches promptEvidence identifiers', () => {
+    it('34. never invents citations for an uncited conclusion', () => {
       const raw = {
-        conclusion: 'Tiến trình 60000004 xử lý chỉ thị MAIN1.OPR_OPERATION.\nMAIN1.CRD_PAYMENT_PKG.APPLY_PAYMENT cấn trừ nợ.',
+        conclusion: 'Tiến trình 60000004 xử lý chỉ thị MAIN1.OPR_OPERATION.',
         claims: [],
       };
-      const mockEvidence = [
-        {
-          id: 'S1',
-          documentTitle: '03 - Call chain',
-          text: 'Tiến trình 60000004 kích hoạt chỉ thị MAIN1.OPR_OPERATION OPST0100',
-        },
-        {
-          id: 'S2',
-          documentTitle: 'Credit payment allocation',
-          text: 'Thủ tục MAIN1.CRD_PAYMENT_PKG.APPLY_PAYMENT cấn trừ dư nợ',
-        },
-      ];
-      const res = normalizeRawGroundedOutput(raw, ['S1', 'S2'], [], mockEvidence) as any;
-      expect(res.claims).toHaveLength(2);
-      expect(res.claims[0].citationIds).toEqual(['S1']);
-      expect(res.claims[1].citationIds).toEqual(['S2']);
-      expect(res.conclusion).toContain('[S1]');
-      expect(res.conclusion).toContain('[S2]');
+      const res = normalizeRawGroundedOutput(raw, ['S1', 'S2'], []) as any;
+      expect(res.claims).toEqual([]);
+      expect(res.conclusion).toBe('Tiến trình 60000004 xử lý chỉ thị MAIN1.OPR_OPERATION.');
     });
 
     it('35. does NOT attribute citations or claims when confidence is unknown or response is no-evidence abstention', () => {
@@ -781,14 +766,7 @@ describe('groundedSynthesis', () => {
         hypotheses: [],
         unsupportedParts: ['Toàn bộ yêu cầu không có dữ liệu đối chiếu trong hệ thống'],
       };
-      const mockEvidence = [
-        {
-          id: 'S1',
-          documentTitle: '03 - Call chain',
-          text: 'Tiến trình 60000004 kích hoạt chỉ thị MAIN1.OPR_OPERATION OPST0100',
-        },
-      ];
-      const res = normalizeRawGroundedOutput(raw, ['S1'], [], mockEvidence) as any;
+      const res = normalizeRawGroundedOutput(raw, ['S1'], []) as any;
       expect(res.claims).toEqual([]);
       expect(res.conclusion).toBe('Không tìm thấy thông tin hoặc bằng chứng liên quan trong tài liệu và đồ thị tri thức hiện có.');
       expect(res.conclusion).not.toContain('[S1]');
@@ -852,6 +830,41 @@ describe('groundedSynthesis', () => {
       expect(promptVi).toContain('"citationReasons"');
       expect(promptVi).toContain('main subject/entity from the user query');
       expect(promptVi).toContain('Be strictly truthful and faithful to EVIDENCE');
+    });
+
+    it('31. reduces very large evidence with a completeness check, never dropping records', async () => {
+      const bigPack: EvidencePack = {
+        ...basePack,
+        promptEvidence: Array.from({ length: 420 }, (_, i) => ({
+          id: 'S1',
+          text: `fact-${i} ${'x'.repeat(200)}`,
+          recordId: `rec-${i}`,
+        })),
+      };
+      const digestClaims = Array.from({ length: 420 }, (_, i) => ({
+        text: `fact ${i}`,
+        quote: `fact-${i}`,
+        recordIds: [`rec-${i}`],
+      }));
+      completeJsonSpy.mockImplementation(async (req: any) => {
+        if (req.response_format?.type === 'json_object') return { claims: digestClaims };
+        return validAnswer;
+      });
+
+      await synthesizeGroundedAnswer(createInput({ pack: bigPack }));
+
+      const digestPayloads = completeJsonSpy.mock.calls
+        .map((call) => String(call[0]?.messages?.[1]?.content ?? ''))
+        .filter((content) => content.includes('entries'));
+      expect(digestPayloads.length).toBeGreaterThan(0);
+
+      // Every record reached a digest batch.
+      const sentIds = new Set(
+        digestPayloads.flatMap((content) =>
+          [...content.matchAll(/"id":"(rec-\d+)"/g)].map((match) => match[1])
+        )
+      );
+      expect(sentIds.size).toBe(420);
     });
 
     it('30. requires neutral disclosure when Knowledge Server and MCP evidence conflict', () => {

@@ -5,9 +5,9 @@ import {
   nextCitationId,
   nextPathId,
   computeWeakestClassification,
-  claimAssertsOverride,
   type EvidencePack,
 } from '../../src/services/ai/evidencePack';
+import type { McpEvidenceRecord } from '../../src/services/ai/mcpEvidence';
 import type {
   FederatedRetrievalResponse,
   ChunkItem,
@@ -68,10 +68,6 @@ describe('evidencePack', () => {
     expect(nextCitationId('server', 0)).toBe('S1');
     expect(nextCitationId('local', 2)).toBe('L3');
     expect(nextPathId(0)).toBe('P1');
-    expect(claimAssertsOverride('This overrides the old rule')).toBe(true);
-    expect(claimAssertsOverride('Chính sách mới ghi đè chính sách cũ')).toBe(true);
-    expect(claimAssertsOverride('Quy định thay thế hướng dẫn trước')).toBe(true);
-    expect(claimAssertsOverride('Normal factual claim')).toBe(false);
   });
 
   // 1. Server pack happy path: 3 items with 1 path -> citations: {S1, S2, S3}, paths: {P1}, contextTruncated: false
@@ -147,88 +143,44 @@ describe('evidencePack', () => {
   });
 
   // 3. Packing order (AI-SPEC §4b)
-  it('3. Packing order (AI-SPEC §4b)', () => {
-    // 4 items:
-    // item 1: plain RRF (remaining)
-    // item 2: complete path support
-    // item 3: exact identifier hit
-    // item 4: conflict branch item
-    const chunkPlain = makeMockChunk('cPlain', DOC_1, 'Doc 1', 1, 10, 'plain rrf', HASH_A);
-    const chunkPath = makeMockChunk('cPath', DOC_1, 'Doc 1', 11, 20, 'path support', HASH_A);
-    const chunkId = makeMockChunk('cId', DOC_2, 'Doc 2', 1, 10, 'id hit', HASH_B, {
-      matchType: 'identifier',
+  // 3. Packing keeps encounter order: every candidate is evidence, none re-ranked.
+  it('3. Packing keeps every candidate in encounter order', () => {
+    const offsets: Record<string, number> = { cPlain: 1, cPath: 101, cId: 201, cConf: 301 };
+    const make = (seed: string, excerpt: string) => makeMockChunk(seed, DOC_1, 'Doc 1', offsets[seed]!, offsets[seed]! + 9, excerpt, HASH_A, {
+      ...(seed === 'cId' ? { matchType: 'identifier' as const } : {}),
+      ...(seed === 'cConf' ? { conflictGroupId: 'conf_1' } : {}),
     });
-    const chunkConflict = makeMockChunk('cConf', DOC_2, 'Doc 2', 11, 20, 'conflict branch', HASH_B, {
-      conflictGroupId: 'conf_1',
-    });
-
     const mockResponse: FederatedRetrievalResponse = {
       outcome: 'READY',
       items: [
-        { setId: SET_1, snapshotId: 'gsnap_11111111', roleGroup: 'baseline', item: chunkPlain },
-        { setId: SET_1, snapshotId: 'gsnap_11111111', roleGroup: 'baseline', item: chunkPath },
-        { setId: SET_1, snapshotId: 'gsnap_11111111', roleGroup: 'baseline', item: chunkId },
-        { setId: SET_1, snapshotId: 'gsnap_11111111', roleGroup: 'baseline', item: chunkConflict },
+        { setId: SET_1, snapshotId: 'gsnap_11111111', roleGroup: 'baseline', item: make('cPlain', 'plain rrf') },
+        { setId: SET_1, snapshotId: 'gsnap_11111111', roleGroup: 'baseline', item: make('cPath', 'path support') },
+        { setId: SET_1, snapshotId: 'gsnap_11111111', roleGroup: 'baseline', item: make('cId', 'id hit') },
+        { setId: SET_1, snapshotId: 'gsnap_11111111', roleGroup: 'baseline', item: make('cConf', 'conflict branch') },
       ],
-      paths: [
-        {
-          setId: SET_1,
-          snapshotId: 'gsnap_11111111',
-          roleGroup: 'baseline',
-          path: {
-            pathId: 'P1',
-            snapshotId: 'gsnap_11111111',
-            nodeUrns: ['urn:plannermate:core:process:a', 'urn:plannermate:core:process:b'],
-            edgeFactKeys: ['1'.repeat(64)],
-            hopClassifications: ['OBSERVED'],
-            hopCitationIds: [['cPath']],
-            hasConflict: false,
-            classification: 'OBSERVED',
-          },
-        },
-      ],
-      conflictGroups: [
-        {
-          setId: SET_1,
-          snapshotId: 'gsnap_11111111',
-          roleGroup: 'baseline',
-          conflictGroup: { conflictGroupId: 'conf_1', dimension: 'Version', scopeProof: null },
-        },
-      ],
+      paths: [],
+      conflictGroups: [],
       modalityStatus: {
         fulltext: { status: 'ok', latencyMs: 10, itemCount: 4 },
         vector: { status: 'ok', latencyMs: 20, itemCount: 4 },
-        graph: { status: 'ok', latencyMs: 15, itemCount: 1 },
+        graph: { status: 'ok', latencyMs: 15, itemCount: 0 },
       },
       diagnostics: { degraded: false, coverageWarnings: [] },
     };
-
     const pack = packEvidence({ authority: 'server', serverResponse: mockResponse });
-    // Packing order expected:
-    // 0: conflict branch (S4 -> conflict)
-    // 1: identifier hit (S3 -> id)
-    // 2: path support (S2 -> path)
-    // 3: remaining RRF (S1 -> plain)
-    expect(pack.promptEvidence[0]?.text).toBe('conflict branch');
-    expect(pack.promptEvidence[1]?.text).toBe('id hit');
-    expect(pack.promptEvidence[2]?.text).toBe('path support');
-    expect(pack.promptEvidence[3]?.text).toBe('plain rrf');
+    expect(pack.promptEvidence.map((item) => item.text)).toEqual([
+      'plain rrf', 'path support', 'id hit', 'conflict branch',
+    ]);
   });
 
-  // 4. Budget drop
-  it('4. Budget drop', () => {
+  // 4. No budget: every candidate survives regardless of size or count.
+  it('4. keeps all candidates without budget truncation', () => {
     const items = [1, 2, 3, 4, 5].map((i) =>
       makeMockChunk(`c${i}`, DOC_1, `Doc ${i}`, i * 10, i * 10 + 5, 'x'.repeat(100), HASH_A)
     );
-
     const mockResponse: FederatedRetrievalResponse = {
       outcome: 'READY',
-      items: items.map((item) => ({
-        setId: SET_1,
-        snapshotId: 'gsnap_11111111',
-        roleGroup: 'baseline' as const,
-        item,
-      })),
+      items: items.map((item) => ({ setId: SET_1, snapshotId: 'gsnap_11111111', roleGroup: 'baseline' as const, item })),
       paths: [],
       conflictGroups: [],
       modalityStatus: {
@@ -238,17 +190,12 @@ describe('evidencePack', () => {
       },
       diagnostics: { degraded: false, coverageWarnings: [] },
     };
-
-    const pack = packEvidence(
-      { authority: 'server', serverResponse: mockResponse },
-      { maxEvidenceChars: 300 }
-    );
-    expect(pack.promptEvidence).toHaveLength(3);
-    expect(pack.contextTruncated).toBe(true);
-    expect(pack.coverageWarnings.some((w) => w.includes('omitted for budget'))).toBe(true);
+    const pack = packEvidence({ authority: 'server', serverResponse: mockResponse });
+    expect(pack.promptEvidence).toHaveLength(5);
+    expect(pack.contextTruncated).toBe(false);
+    expect(pack.coverageWarnings.some((w) => w.includes('omitted for budget'))).toBe(false);
   });
 
-  // 5. Path closure drops orphan path
   it('5. Path closure drops orphan path', () => {
     const chunk1 = makeMockChunk('c1', DOC_1, 'Doc 1', 1, 10, 'snippet', HASH_A);
     const mockResponse: FederatedRetrievalResponse = {
@@ -512,7 +459,7 @@ describe('evidencePack', () => {
     expect(result.issues.some((i) => i.code === 'conflict_branch_bias')).toBe(true);
   });
 
-  it('rejects mixed-source answers that omit one source or hide an absolute conflict', () => {
+  it('does not require both sources or check conflict wording in static code', () => {
     const pack: EvidencePack = {
       authority: 'server',
       citations: {
@@ -534,31 +481,15 @@ describe('evidencePack', () => {
       contextTruncated: false, coverageWarnings: [],
     };
 
-    const hiddenConflict: GroundedAnswer = {
+    // The model may cite one source; the multi-source rule lives in the prompt.
+    const answer: GroundedAnswer = {
       schemaVersion: 2, language: 'vi',
-      conclusion: 'Không có package nào; duy nhất trigger ghi bảng [M1].',
+      conclusion: 'Trigger ghi bảng [M1].',
       confidence: 'high', confidenceReason: 'MCP trả kết quả.',
-      claims: [{ id: 'C1', text: 'Duy nhất trigger ghi bảng.', classification: 'DIRECT', citationIds: ['M1'], pathId: null }],
+      claims: [{ id: 'C1', text: 'Trigger ghi bảng.', classification: 'DIRECT', citationIds: ['M1'], pathId: null }],
       hypotheses: [], unsupportedParts: [],
     };
-    const invalid = validateGroundedAnswerClosure(hiddenConflict, pack);
-    expect(invalid.valid).toBe(false);
-    expect(invalid.issues.map((issue) => issue.code)).toEqual(expect.arrayContaining([
-      'knowledge_source_omitted',
-      'cross_source_conflict_not_disclosed',
-    ]));
-
-    const disclosedConflict: GroundedAnswer = {
-      schemaVersion: 2, language: 'vi',
-      conclusion: 'Hai nguồn xung đột: tài liệu nói package ghi bảng [S1], MCP nói trigger ghi bảng [M1]. Chưa đủ căn cứ chọn nguồn đúng.',
-      confidence: 'low', confidenceReason: 'Hai nguồn chưa nhất quán.',
-      claims: [
-        { id: 'C1', text: 'Tài liệu nói package ghi bảng.', classification: 'DIRECT', citationIds: ['S1'], pathId: null },
-        { id: 'C2', text: 'MCP nói trigger ghi bảng.', classification: 'DIRECT', citationIds: ['M1'], pathId: null },
-      ],
-      hypotheses: [], unsupportedParts: [],
-    };
-    expect(validateGroundedAnswerClosure(disclosedConflict, pack).valid).toBe(true);
+    expect(validateGroundedAnswerClosure(answer, pack).valid).toBe(true);
   });
 
   // 10. Weakest classification (D-30)
@@ -657,218 +588,29 @@ describe('evidencePack', () => {
     expect(pack.coverageWarnings).toContain('Set 2 retrieval timed out; partial results only');
   });
 
-  // 13. D-26 override-language rejected without metadata or cited evidence
-  it('13. D-26 override-language rejected without metadata or cited evidence', () => {
+  // 13. Override/supersede wording is evidence, not a static-code gate: the model
+  // judges it from citations, so closure stays structural.
+  it('13. override wording does not fail structural closure', () => {
     const pack: EvidencePack = {
       authority: 'server',
       citations: {
         S1: {
-          citationId: 'S1',
-          documentId: DOC_1,
-          documentTitle: 'Doc 1',
-          sectionAnchor: null,
-          lineStart: 1,
-          lineEnd: 5,
-          authority: 'server',
-          evidenceClass: 'OBSERVED',
-          snapshotId: 'gsnap_11111111',
-          publishedContentHash: HASH_A,
-          citedExcerpt: 'evidence text',
-          setMemberships: [{ setId: SET_1, setName: 'Set 1' }],
-          evidenceKind: 'other',
+          citationId: 'S1', documentId: DOC_1, documentTitle: 'Doc 1', sectionAnchor: null,
+          lineStart: 1, lineEnd: 5, authority: 'server', evidenceClass: 'OBSERVED',
+          snapshotId: 'gsnap_11111111', publishedContentHash: HASH_A,
+          citedExcerpt: 'evidence text', setMemberships: [], evidenceKind: 'other',
         },
       },
-      paths: {},
-      conflicts: [],
+      paths: {}, conflicts: [],
       promptEvidence: [{ id: 'S1', text: 'evidence text' }],
-      contextTruncated: false,
-      coverageWarnings: [],
+      contextTruncated: false, coverageWarnings: [],
     };
-
     const answer: GroundedAnswer = {
-      schemaVersion: 1,
-      language: 'vi',
-      conclusion: 'Conclusion',
-      claims: [
-        {
-          id: 'C1',
-          text: 'Chính sách mới ghi đè chính sách cũ',
-          classification: 'DIRECT',
-          citationIds: ['S1'],
-          pathId: null,
-        },
-      ],
+      schemaVersion: 1, language: 'vi', conclusion: 'Conclusion',
+      claims: [{ id: 'C1', text: 'Chính sách mới ghi đè chính sách cũ', classification: 'DIRECT', citationIds: ['S1'], pathId: null }],
       unsupportedParts: [],
     };
-
-    const result = validateGroundedAnswerClosure(answer, pack);
-    expect(result.valid).toBe(false);
-    expect(result.issues.some((i) => i.code === 'override_language_without_proof')).toBe(true);
-    expect(result.issues[0]?.path).toBe('claims[0].text');
-  });
-
-  // 14. D-26 override-language accepted with SUPERSEDES metadata
-  it('14. D-26 override-language accepted with SUPERSEDES metadata', () => {
-    const pack: EvidencePack = {
-      authority: 'server',
-      citations: {
-        S1: {
-          citationId: 'S1',
-          documentId: DOC_1,
-          documentTitle: 'Doc 1',
-          sectionAnchor: null,
-          lineStart: 1,
-          lineEnd: 5,
-          authority: 'server',
-          evidenceClass: 'OBSERVED',
-          snapshotId: 'gsnap_11111111',
-          publishedContentHash: HASH_A,
-          citedExcerpt: 'evidence text',
-          setMemberships: [{ setId: SET_1, setName: 'Set 1' }],
-          evidenceKind: 'other',
-          conflictGroupId: 'cg_sup',
-        },
-      },
-      paths: {},
-      conflicts: [
-        {
-          conflictGroupId: 'cg_sup',
-          dimension: 'Version',
-          scopeProof: {
-            dimension: 'Version',
-            environment: null,
-            version: '2.0',
-            overrideRelation: 'SUPERSEDES',
-          },
-        },
-      ],
-      promptEvidence: [{ id: 'S1', text: 'evidence text' }],
-      contextTruncated: false,
-      coverageWarnings: [],
-    };
-
-    const answer: GroundedAnswer = {
-      schemaVersion: 1,
-      language: 'vi',
-      conclusion: 'Conclusion',
-      claims: [
-        {
-          id: 'C1',
-          text: 'Chính sách mới ghi đè chính sách cũ',
-          classification: 'DIRECT',
-          citationIds: ['S1'],
-          pathId: null,
-        },
-      ],
-      unsupportedParts: [],
-    };
-
-    const result = validateGroundedAnswerClosure(answer, pack);
-    expect(result.valid).toBe(true);
-    expect(result.issues).toHaveLength(0);
-  });
-
-  // 15. D-26 override-language accepted with cited-evidence allowlist
-  it('15. D-26 override-language accepted with cited-evidence allowlist', () => {
-    const pack: EvidencePack = {
-      authority: 'server',
-      citations: {
-        S1: {
-          citationId: 'S1',
-          documentId: DOC_1,
-          documentTitle: 'Release notes v2',
-          sectionAnchor: null,
-          lineStart: 1,
-          lineEnd: 5,
-          authority: 'server',
-          evidenceClass: 'OBSERVED',
-          snapshotId: 'gsnap_11111111',
-          publishedContentHash: HASH_A,
-          citedExcerpt: 'Version 2 release details',
-          setMemberships: [{ setId: SET_1, setName: 'Set 1' }],
-          evidenceKind: 'release_note',
-        },
-      },
-      paths: {},
-      conflicts: [],
-      promptEvidence: [{ id: 'S1', text: 'Version 2 release details' }],
-      contextTruncated: false,
-      coverageWarnings: [],
-    };
-
-    const answer: GroundedAnswer = {
-      schemaVersion: 1,
-      language: 'vi',
-      conclusion: 'Conclusion',
-      claims: [
-        {
-          id: 'C1',
-          text: 'Phiên bản 2 supersedes phiên bản 1',
-          classification: 'DIRECT',
-          citationIds: ['S1'],
-          pathId: null,
-        },
-      ],
-      unsupportedParts: [],
-    };
-
-    const result = validateGroundedAnswerClosure(answer, pack);
-    expect(result.valid).toBe(true);
-  });
-
-  // 16. D-26 Vietnamese tokens covered
-  it('16. D-26 Vietnamese tokens covered', () => {
-    expect(claimAssertsOverride('Tính năng này thay thế tính năng cũ')).toBe(true);
-    expect(claimAssertsOverride('Dữ liệu này ghi đè cấu hình mặc định')).toBe(true);
-    expect(claimAssertsOverride('Không có từ khóa liên quan')).toBe(false);
-  });
-
-  // 17. Local authority relaxes override language guard
-  it('17. Local authority relaxes override language guard', () => {
-    const localPack: EvidencePack = {
-      authority: 'local',
-      citations: {
-        L1: {
-          citationId: 'L1',
-          documentId: DOC_1,
-          documentTitle: 'Local Spec',
-          sectionAnchor: null,
-          lineStart: 1,
-          lineEnd: 5,
-          authority: 'local',
-          evidenceClass: 'LOCAL',
-          snapshotId: null,
-          publishedContentHash: null,
-          citedExcerpt: 'evidence text',
-          setMemberships: [{ setId: SET_1, setName: 'Set 1' }],
-          evidenceKind: 'other',
-        },
-      },
-      paths: {},
-      conflicts: [],
-      promptEvidence: [{ id: 'L1', text: 'evidence text' }],
-      contextTruncated: false,
-      coverageWarnings: [],
-    };
-
-    const answer: GroundedAnswer = {
-      schemaVersion: 1,
-      language: 'vi',
-      conclusion: 'Conclusion',
-      claims: [
-        {
-          id: 'C1',
-          text: 'Chức năng mới thay thế quy trình cũ',
-          classification: 'DIRECT',
-          citationIds: ['L1'],
-          pathId: null,
-        },
-      ],
-      unsupportedParts: [],
-    };
-
-    const result = validateGroundedAnswerClosure(answer, localPack);
-    expect(result.valid).toBe(true);
+    expect(validateGroundedAnswerClosure(answer, pack).valid).toBe(true);
   });
 
   // 18. Schema V2 parses valid v2 output with confidence and hypotheses
@@ -974,10 +716,9 @@ describe('evidencePack', () => {
     expect(badClosureResult.issues.some((i) => i.code === 'hypothesis_has_citations')).toBe(true);
   });
 
-  it('21. sorts general bucketD candidates by relevance score descending before budget drop', () => {
-    const lowScoreChunk = makeMockChunk('c_low', DOC_1, 'Low Doc', 1, 10, 'low score snippet', HASH_A, { score: 0.01 });
+  it('21. keeps encounter order instead of score ranking', () => {
+    const lowScoreChunk = makeMockChunk('c_low', DOC_1, 'Low Doc', 1, 10, 'low score snippet', HASH_A, { score: 0.1 });
     const highScoreChunk = makeMockChunk('c_high', DOC_2, 'High Doc', 1, 10, 'high score snippet', HASH_B, { score: 0.99 });
-
     const mockResponse: FederatedRetrievalResponse = {
       outcome: 'READY',
       items: [
@@ -994,15 +735,11 @@ describe('evidencePack', () => {
       diagnostics: { degraded: false, coverageWarnings: [] },
     };
 
-    const pack = packEvidence(
-      { authority: 'server', serverResponse: mockResponse },
-      { maxPromptEvidenceCount: 1 }
-    );
-
-    expect(pack.promptEvidence).toHaveLength(1);
-    // Highest score chunk should be packed first even though it appeared second in items list
-    expect(pack.promptEvidence[0]?.id).toBe('S2');
-    expect(pack.promptEvidence[0]?.text).toBe('high score snippet');
+    const pack = packEvidence({ authority: 'server', serverResponse: mockResponse });
+    expect(pack.promptEvidence.map((item) => item.text)).toEqual([
+      'low score snippet',
+      'high score snippet',
+    ]);
   });
 
   it('22. handles flat chunk items in resp.items and populates documentTitle in promptEvidence', () => {
@@ -1030,12 +767,12 @@ describe('evidencePack', () => {
     // Encounter order preserved in citations map (D-39)
     expect(pack.citations['S1']?.documentTitle).toBe('01 — DB wiring on main1');
     expect(pack.citations['S2']?.documentTitle).toBe('Credit payment allocation — FE/BO pay → debts');
-    // Score descending order in promptEvidence (chunkB 0.95 > chunkA 0.85)
-    expect(pack.promptEvidence[0]?.documentTitle).toBe('Credit payment allocation — FE/BO pay → debts');
-    expect(pack.promptEvidence[1]?.documentTitle).toBe('01 — DB wiring on main1');
+    // Encounter order preserved in promptEvidence.
+    expect(pack.promptEvidence[0]?.documentTitle).toBe('01 — DB wiring on main1');
+    expect(pack.promptEvidence[1]?.documentTitle).toBe('Credit payment allocation — FE/BO pay → debts');
   });
 
-  it('drops vector-only document noise when MCP evidence exists', () => {
+  it('keeps vector-only document evidence alongside MCP evidence', () => {
     const vectorOnlyChunk = makeMockChunk(
       'c_noise', DOC_1, 'Unrelated published doc', 1, 5,
       'MAIN1.EVT_EVENT package writes EVT_EVENT', HASH_A
@@ -1056,16 +793,22 @@ describe('evidencePack', () => {
       },
       diagnostics: { degraded: true, coverageWarnings: [] },
     };
-    const mcpItems = [{
-      serverId: 'graphiti-banking', serverName: 'Graphiti Banking MCP', toolName: 'search_nodes',
-      args: { query: 'card issue date' }, rawResult: 'ISS_CARD_INSTANCE.ISS_DATE stores issue date',
-      timestamp: '2026-10-26T00:00:00.000Z',
+    const mcpRecords: McpEvidenceRecord[] = [{
+      recordId: 'a'.repeat(64),
+      kind: 'fact',
+      text: 'ISS_CARD_INSTANCE.ISS_DATE stores issue date',
+      attributes: {},
+      provenance: [{
+        serverId: 'graphiti-banking', serverName: 'Graphiti Banking MCP', toolName: 'search_nodes',
+        args: { query: 'card issue date' }, page: 0,
+      }],
     }];
 
-    const pack = packEvidence({ authority: 'server', serverResponse: response, mcpItems });
+    const pack = packEvidence({ authority: 'server', serverResponse: response, mcpRecords });
 
-    expect(Object.keys(pack.citations)).toEqual(['M1']);
-    expect(pack.promptEvidence.map((item) => item.id)).toEqual(['M1']);
+    // Neither source is dropped: the vector-only document chunk stays beside MCP evidence.
+    expect(Object.keys(pack.citations)).toEqual(['S1', 'M1']);
+    expect(pack.promptEvidence.map((item) => item.id)).toEqual(['S1', 'M1']);
   });
 
   it('keeps direct document evidence alongside MCP evidence', () => {
@@ -1084,41 +827,45 @@ describe('evidencePack', () => {
       },
       diagnostics: { degraded: false, coverageWarnings: [] },
     };
-    const mcpItems = [{
-      serverId: 'graphiti-banking', serverName: 'Graphiti Banking MCP', toolName: 'search_nodes',
-      args: { query: 'writer' }, rawResult: 'Trigger writes table', timestamp: '2026-10-26T00:00:00.000Z',
+    const mcpRecords: McpEvidenceRecord[] = [{
+      recordId: 'c'.repeat(64),
+      kind: 'attribute',
+      text: 'Trigger writes table',
+      attributes: {},
+      provenance: [{
+        serverId: 'graphiti-banking', serverName: 'Graphiti Banking MCP', toolName: 'search_nodes',
+        args: { query: 'writer' }, page: 0,
+      }],
     }];
 
-    const pack = packEvidence({ authority: 'server', serverResponse: response, mcpItems });
+    const pack = packEvidence({ authority: 'server', serverResponse: response, mcpRecords });
 
     expect(Object.keys(pack.citations)).toEqual(['S1', 'M1']);
     expect(pack.promptEvidence.map((item) => item.id)).toEqual(['S1', 'M1']);
   });
 
-  it('23. packs MCP retrieved items into citations with M1, M2... IDs and validates closure', () => {
-    const mcpItems = [
+  it('23. packs each atomic MCP record into its own M1... citation', () => {
+    const provenance = (serverId: string, serverName: string, toolName: string, args: Record<string, unknown>) => ({
+      serverId, serverName, toolName, args, page: 0,
+    });
+    const mcpRecords: McpEvidenceRecord[] = [
       {
-        serverId: 'graphiti-banking',
-        serverName: 'Graphiti Banking MCP',
-        toolName: 'search_nodes',
-        args: { query: 'ACCOUNTS' },
-        rawResult: JSON.stringify([{ name: 'SVFE_SHB.ACCOUNTS', type: 'Table' }]),
-        timestamp: '2026-10-20T00:00:00.000Z',
+        recordId: 'a'.repeat(64),
+        kind: 'entity',
+        text: '[Table] SVFE_SHB.ACCOUNTS: Accounts table',
+        attributes: {},
+        provenance: [provenance('graphiti-banking', 'Graphiti Banking MCP', 'search_nodes', { query: 'ACCOUNTS' })],
       },
       {
-        serverId: 'oracle-db',
-        serverName: 'Oracle Database',
-        toolName: 'describe_table',
-        args: { table: 'SVFE_SHB.ACCOUNTS' },
-        rawResult: 'COLUMNS: ID, ACC_NUM, BALANCE',
-        timestamp: '2026-10-20T00:00:00.000Z',
+        recordId: 'b'.repeat(64),
+        kind: 'attribute',
+        text: 'COLUMNS: ID, ACC_NUM, BALANCE',
+        attributes: {},
+        provenance: [provenance('oracle-db', 'Oracle Database', 'describe_table', { table: 'SVFE_SHB.ACCOUNTS' })],
       },
     ];
 
-    const pack = packEvidence({
-      authority: 'server',
-      mcpItems,
-    });
+    const pack = packEvidence({ authority: 'server', mcpRecords });
 
     expect(pack.citations['M1']).toBeDefined();
     expect(pack.citations['M2']).toBeDefined();
@@ -1127,11 +874,12 @@ describe('evidencePack', () => {
     expect(pack.citations['M1']?.evidenceKind).toBe('mcp_tool');
     expect(pack.citations['M1']?.documentTitle).toBe('[MCP] Graphiti Banking MCP - search_nodes');
     expect(pack.citations['M2']?.documentTitle).toBe('[MCP] Oracle Database - describe_table');
+    expect(pack.citations['M1']?.citedExcerpt).toBe('[Table] SVFE_SHB.ACCOUNTS: Accounts table');
 
     expect(pack.promptEvidence).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id: 'M1', documentTitle: '[MCP] Graphiti Banking MCP - search_nodes' }),
-        expect.objectContaining({ id: 'M2', documentTitle: '[MCP] Oracle Database - describe_table' }),
+        expect.objectContaining({ id: 'M1', recordId: 'a'.repeat(64) }),
+        expect.objectContaining({ id: 'M2', recordId: 'b'.repeat(64) }),
       ])
     );
 
@@ -1375,24 +1123,25 @@ describe('evidencePack', () => {
     });
   });
 
-  it('24. truncates MCP rawResult at 2500 characters to match persistence limits', () => {
-    const longRawResult = 'A'.repeat(3000);
+  it('24. keeps full MCP record text without a character cap', () => {
+    const longText = 'A'.repeat(3000);
     const pack = packEvidence({
       authority: 'server',
-      mcpItems: [
+      mcpRecords: [
         {
-          serverId: 'graphiti-banking',
-          serverName: 'Graphiti Banking MCP',
-          toolName: 'search_nodes',
-          args: { query: 'LONG_EXCERPT' },
-          rawResult: longRawResult,
-          timestamp: '2026-10-20T00:00:00.000Z',
+          recordId: 'd'.repeat(64),
+          kind: 'attribute',
+          text: longText,
+          attributes: {},
+          provenance: [{
+            serverId: 'graphiti-banking', serverName: 'Graphiti Banking MCP',
+            toolName: 'search_nodes', args: { query: 'LONG_EXCERPT' }, page: 0,
+          }],
         },
       ],
     });
 
-    expect(pack.citations['M1']?.citedExcerpt.length).toBe(2500);
-    expect(pack.citations['M1']?.citedExcerpt).toBe('A'.repeat(2500));
+    expect(pack.citations['M1']?.citedExcerpt).toBe(longText);
   });
 });
 

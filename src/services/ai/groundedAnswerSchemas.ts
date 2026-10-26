@@ -148,7 +148,9 @@ export const PersistedCitationSchema = z
     evidenceClass: EvidenceClassificationSchema.or(z.literal('LOCAL')),
     snapshotId: SnapshotIdSchema.or(z.literal('mcp_live')).nullable(),
     publishedContentHash: HashSchema.nullable(),
-    citedExcerpt: z.string().min(1).max(2500),
+    // Full evidence text is persisted; one MCP fact/entity record is far smaller than
+    // this, and the old 2500 cap truncated exactly the facts answers depended on.
+    citedExcerpt: z.string().min(1).max(16000),
     relevanceReason: z.string().min(1).max(1000).optional(),
     evidenceKind: z
       .enum(['policy_change', 'release_note', 'migration_record', 'mcp_tool', 'other'])
@@ -324,7 +326,7 @@ export const ChatMessageGroundingSchema = z
     authority: z.enum(['server', 'local']),
     outcome: GroundingOutcomeSchema,
     answer: GroundedAnswerSchema.nullable(),
-    citations: z.array(PersistedCitationSchema).max(100),
+    citations: z.array(PersistedCitationSchema).max(500),
     paths: z.array(PersistedPathSchema).max(50).nullable(),
     conflicts: z.array(PersistedConflictGroupSchema).max(20).nullable(),
     scope: z
