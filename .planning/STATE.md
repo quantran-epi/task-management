@@ -37,7 +37,7 @@ Progress: [██████████] 100%
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
-| 261027-0kl | Normalize `docs/c06.zip` into `dist/c06-normalized.zip` per TaskMate doc contract | 2026-10-27 | — | complete | [261027-0kl-chu-n-h-a-b-t-i-li-u-docs-c06-zip-theo-c](./quick/261027-0kl-chu-n-h-a-b-t-i-li-u-docs-c06-zip-theo-c/) |
+| 261027-0kl | Normalize `docs/c06.zip` into `dist/c06-normalized.zip` per TaskMate doc contract | 2026-10-27 | be35ade | complete | [261027-0kl-chu-n-h-a-b-t-i-li-u-docs-c06-zip-theo-c](./quick/261027-0kl-chu-n-h-a-b-t-i-li-u-docs-c06-zip-theo-c/) |
 | fast-38c3095 | Raise AI JSON request timeout to 90s | 2026-10-24 | 38c3095 | complete | — |
 | 261024-kq4 | Fix intent router retry dropping MCP routing fields; require MCP keys in schema | 2026-10-24 | e213b63 | complete | [261024-kq4-fix-telegram-intent-router-retry-droppin](./quick/261024-kq4-fix-telegram-intent-router-retry-droppin/) |
 | 261022-djl | Share AI Chat Drawer and Telegram operational orchestration loop | 2026-10-22 | e861cb7 | complete | [261022-djl-refactor-ai-chat-drawer-and-telegram-cha](./quick/261022-djl-refactor-ai-chat-drawer-and-telegram-cha/) |

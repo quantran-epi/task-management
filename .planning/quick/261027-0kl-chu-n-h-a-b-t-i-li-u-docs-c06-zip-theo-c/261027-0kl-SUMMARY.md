@@ -25,6 +25,7 @@ decisions:
 metrics:
   duration: ~3h
   completed: 2026-10-27
+  commit: be35ade
 ---
 
 # Quick 261027-0kl: Chuẩn hóa `docs/c06.zip` cho TaskMate Summary
