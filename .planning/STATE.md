@@ -10,8 +10,8 @@ progress:
   total_phases: 8
   completed_phases: 7
   total_plans: 51
-  completed_plans: 43
-  percent: 84
+  completed_plans: 50
+  percent: 88
 ---
 
 # Project State
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 Phase: 24 (graph-retrieval-optimization) — EXECUTING
 Plan: 1 of 8
 Status: Executing Phase 24
-Last activity: 2026-10-27 - Completed quick task 261027-0kl: Normalize docs/c06.zip into dist/c06-normalized.zip per TaskMate doc contract
+Last activity: 2026-10-27 - Completed quick task 261027-fzh: Make MCP retrieval loop run until evidence is exhausted
 Stopped at: Phase 24 UI-SPEC approved
 
 Progress: [██████████] 100%
@@ -37,6 +37,7 @@ Progress: [██████████] 100%
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261027-fzh | Make MCP retrieval loop run until evidence is exhausted (novelty termination + cursor pagination) | 2026-10-27 | 7d4223b | complete | [261027-fzh-make-mcp-retrieval-loop-run-until-eviden](./quick/261027-fzh-make-mcp-retrieval-loop-run-until-eviden/) |
 | 261027-0kl | Normalize `docs/c06.zip` into `dist/c06-normalized.zip` per TaskMate doc contract | 2026-10-27 | be35ade | complete | [261027-0kl-chu-n-h-a-b-t-i-li-u-docs-c06-zip-theo-c](./quick/261027-0kl-chu-n-h-a-b-t-i-li-u-docs-c06-zip-theo-c/) |
 | fast-38c3095 | Raise AI JSON request timeout to 90s | 2026-10-24 | 38c3095 | complete | — |
 | 261024-kq4 | Fix intent router retry dropping MCP routing fields; require MCP keys in schema | 2026-10-24 | e213b63 | complete | [261024-kq4-fix-telegram-intent-router-retry-droppin](./quick/261024-kq4-fix-telegram-intent-router-retry-droppin/) |
