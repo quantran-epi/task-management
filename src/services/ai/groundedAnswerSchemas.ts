@@ -93,7 +93,7 @@ export const GroundedAnswerSchemaV2 = z
   .strictObject({
     schemaVersion: z.literal(2),
     language: z.string().min(2).max(16),
-    conclusion: z.string().min(1).max(2000),
+    conclusion: z.string().min(1).max(12000),
     confidence: ConfidenceLevelSchema,
     confidenceReason: z.string().min(1).max(500),
     claims: z.array(GroundedClaimSchemaV2).max(15),

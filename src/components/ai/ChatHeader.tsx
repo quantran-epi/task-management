@@ -17,6 +17,8 @@ import {
   ApiOutlined,
   SettingOutlined,
   ReloadOutlined,
+  ExperimentOutlined,
+  ExperimentFilled,
 } from '@ant-design/icons';
 import type { McpServerConfig } from '../../services/ai/mcpClient';
 
@@ -45,6 +47,8 @@ export interface ChatHeaderProps {
   isRefreshingModels?: boolean;
   autoApproveMutations?: boolean;
   onToggleAutoApproveMutations?: (() => void) | undefined;
+  analysisMode?: boolean;
+  onToggleAnalysisMode?: (() => void) | undefined;
   isPinned: boolean;
   onTogglePin: () => void;
   onClearContext: () => void;
@@ -67,6 +71,8 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   isRefreshingModels = false,
   autoApproveMutations = false,
   onToggleAutoApproveMutations,
+  analysisMode = false,
+  onToggleAnalysisMode,
   isPinned,
   onTogglePin,
   onClearContext,
@@ -108,6 +114,22 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               ? 'Tắt tự động duyệt thay đổi'
               : 'Bật tự động duyệt thay đổi',
             onClick: onToggleAutoApproveMutations,
+          },
+        ]
+      : []),
+    ...(onToggleAnalysisMode
+      ? [
+          {
+            key: 'analysis-mode',
+            icon: analysisMode ? (
+              <ExperimentFilled style={{ color: token.colorPrimary }} />
+            ) : (
+              <ExperimentOutlined />
+            ),
+            label: analysisMode
+              ? 'Tắt chế độ phân tích (Analysis mode)'
+              : 'Bật chế độ phân tích (Analysis mode)',
+            onClick: onToggleAnalysisMode,
           },
         ]
       : []),

@@ -1411,4 +1411,45 @@ describe('AIChatDrawer', () => {
     // Zero tools run
     expect(streamSpy).not.toHaveBeenCalled();
   });
+
+  it('analysis mode skips the grounded turn and runs the tool loop with trimmed history pruning', async () => {
+    localStorage.setItem('planner:ai_analysis_mode', 'true');
+    vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-api-key');
+    vi.spyOn(nineRouterTokenService, 'getNineRouterConfig').mockResolvedValue({
+      endpoint: 'http://localhost:20128',
+      defaultModel: 'gpt-4o',
+      charLimit: 12000,
+    });
+
+    const groundedMock = vi.fn();
+    setGroundedTurnTestHooks({ runGroundedTurn: groundedMock });
+
+    const payloads: any[] = [];
+    vi.spyOn(nineRouterClient, 'streamChatEvents').mockImplementation((options: any) => {
+      payloads.push(options.payload);
+      return (async function* () {
+        yield { type: 'text', delta: 'Phân tích xong.' };
+      })() as any;
+    });
+
+    render(
+      <AIChatDrawer open={true} onClose={vi.fn()} db={db} activeScope={{ type: 'global' }} />
+    );
+
+    fireEvent.change(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI'), {
+      target: { value: 'Phân tích yêu cầu này' },
+    });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Phân tích xong/i)).toBeInTheDocument();
+    });
+    expect(groundedMock).not.toHaveBeenCalled();
+    expect(payloads.length).toBeGreaterThan(0);
+    const systemContents = payloads[0].messages
+      .filter((m: any) => m.role === 'system')
+      .map((m: any) => m.content)
+      .join('\n');
+    expect(systemContents).toContain('[ANALYSIS MODE ACTIVE]');
+  });
 });

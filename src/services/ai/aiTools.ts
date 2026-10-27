@@ -71,6 +71,7 @@ import { exportContentAsFile, inferFormatFromFilename, type ExportFormat } from 
 import { exportPresentationAsFile, type SlideData } from '../../utils/pptxExport';
 import { executeDynamicFileScript } from '../../utils/dynamicFileSandbox';
 import { generateImage } from './imageGenerationClient';
+import { executeKnowledgeRetrievalTool } from './knowledgeRetrievalTool';
 import { getImageConfig, getImageApiKey } from './nineRouterTokenService';
 import { redactApiKey } from './nineRouterClient';
 import dayjs from 'dayjs';
@@ -1756,6 +1757,34 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           limit: {
             type: 'number',
             description: 'Maximum number of documents to return (default 5, max 10).',
+          },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'retrieve_knowledge',
+      description:
+        'Retrieve hybrid evidence (fulltext + vector + knowledge graph) from the published knowledge bundle. Returns excerpts with citation ids, entity names, graph paths, and warnings. Call repeatedly with short, focused queries (<=200 chars) as you investigate.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description:
+              'Short focused query (<=200 chars): an entity name, an identifier, or a narrow topic phrase.',
+          },
+          setIds: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional document set UUIDs. Omit to search every published set.',
+          },
+          limit: {
+            type: 'number',
+            description: 'Max evidence items to return (default 20, max 50).',
           },
         },
         required: ['query'],
@@ -4477,6 +4506,10 @@ export async function executeAiTool(
           returned: results.length,
           results,
         });
+      }
+
+      case 'retrieve_knowledge': {
+        return executeKnowledgeRetrievalTool(args, db);
       }
 
       case 'get_document_details': {

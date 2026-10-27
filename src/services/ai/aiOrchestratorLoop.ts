@@ -11,6 +11,21 @@ import {
 } from './aiTools';
 import { executeDynamicMcpTool } from './mcpClient';
 
+/** Default tool dispatch: local DB tools first, dynamic MCP tools otherwise. */
+export async function dispatchAiToolCall(
+  name: string,
+  args: Record<string, any>,
+  db: TaskPlannerDatabase
+): Promise<string> {
+  const normalized = normalizeToolName(name);
+  const isLocalDbTool = AI_DATABASE_TOOLS.some(
+    (t) => normalizeToolName(t.function.name) === normalized
+  );
+  return isLocalDbTool
+    ? executeAiTool(name, args, db)
+    : executeDynamicMcpTool(normalized, args, db);
+}
+
 export interface AiOrchestratorLoopOptions {
   endpoint: string;
   apiKey: string;
@@ -38,6 +53,10 @@ export interface AiOrchestratorLoopOptions {
   ) => Promise<{ proceed: boolean; cancellationResult?: string }>;
   onFileGenerated?: (file: ChatGeneratedFile) => void;
   executeToolFn?: (name: string, args: Record<string, any>, db: TaskPlannerDatabase) => Promise<string>;
+  /** Recent tool outputs kept intact when pruning; older ones truncate. */
+  keepRecentToolOutputs?: number;
+  /** Character cap applied to older tool outputs. */
+  maxOldToolChars?: number;
 }
 
 export interface AiOrchestratorLoopResult {
@@ -110,7 +129,12 @@ export async function runAiOrchestratorLoop(
     onMutationCheck,
     onFileGenerated,
     executeToolFn,
+    keepRecentToolOutputs = 2,
+    maxOldToolChars = 500,
   } = options;
+
+  const prune = (msgs: ChatCompletionMessage[]) =>
+    pruneToolOutputsInMessages(msgs, keepRecentToolOutputs, maxOldToolChars);
 
   const currentMessages: ChatCompletionMessage[] = [...messages];
   const generatedFiles: ChatGeneratedFile[] = [];
@@ -130,7 +154,7 @@ export async function runAiOrchestratorLoop(
     let hasToolCalls = false;
     let toolCallsToRun: ToolCall[] = [];
 
-    const messagesToSend = pruneToolOutputsInMessages(currentMessages);
+    const messagesToSend = prune(currentMessages);
     const payload: {
       model: string;
       messages: ChatCompletionMessage[];
@@ -229,11 +253,6 @@ export async function runAiOrchestratorLoop(
         args,
       });
 
-      const normalizedToolName = normalizeToolName(tc.function.name);
-      const isLocalDbTool = AI_DATABASE_TOOLS.some(
-        (t) => normalizeToolName(t.function.name) === normalizedToolName
-      );
-
       // Check mutation interception
       if (isMutationTool(tc.function.name, args)) {
         if (onMutationCheck) {
@@ -261,13 +280,9 @@ export async function runAiOrchestratorLoop(
       const toolStartTime = Date.now();
       let toolResult: string;
       try {
-        if (executeToolFn) {
-          toolResult = await executeToolFn(tc.function.name, args, db);
-        } else if (isLocalDbTool) {
-          toolResult = await executeAiTool(tc.function.name, args, db);
-        } else {
-          toolResult = await executeDynamicMcpTool(normalizedToolName, args, db);
-        }
+        toolResult = executeToolFn
+          ? await executeToolFn(tc.function.name, args, db)
+          : await dispatchAiToolCall(tc.function.name, args, db);
       } catch (toolErr: any) {
         toolResult = JSON.stringify({
           error: `Lỗi thực thi công cụ '${tc.function.name}': ${toolErr?.message || String(toolErr)}`,
@@ -315,7 +330,7 @@ export async function runAiOrchestratorLoop(
     fullResponse = '';
 
     const synthesisMessages: ChatCompletionMessage[] = [
-      ...pruneToolOutputsInMessages(currentMessages),
+      ...prune(currentMessages),
       {
         role: 'user',
         content: synthesisPrompt,

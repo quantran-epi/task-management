@@ -43,7 +43,7 @@ import {
   normalizeToolName,
   pruneToolsForContext,
 } from '../../services/ai/aiTools';
-import { runAiOrchestratorLoop } from '../../services/ai/aiOrchestratorLoop';
+import { runAiOrchestratorLoop, dispatchAiToolCall } from '../../services/ai/aiOrchestratorLoop';
 import {
   getMcpServers,
   discoverAllMcpTools,
@@ -95,6 +95,7 @@ import type { GroundedAnswerCardCallbacks } from './ChatMessageBubble';
 
 export const AI_CHAT_WIDTH_KEY = 'planner:ai_chat_width';
 export const AI_AUTO_APPROVE_MUTATIONS_KEY = 'planner:ai_auto_approve_mutations';
+export const AI_ANALYSIS_MODE_KEY = 'planner:ai_analysis_mode';
 export const DEFAULT_AI_CHAT_WIDTH = 380;
 export const MIN_AI_CHAT_WIDTH = 320;
 export const MAX_AI_CHAT_WIDTH = 650;
@@ -436,6 +437,30 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     });
   }, []);
 
+  // Analysis mode: bypass grounded synthesis and run the plain tool loop with retrieval tools.
+  const [analysisMode, setAnalysisMode] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(AI_ANALYSIS_MODE_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleToggleAnalysisMode = useCallback(() => {
+    const next = !analysisMode;
+    setAnalysisMode(next);
+    try {
+      localStorage.setItem(AI_ANALYSIS_MODE_KEY, String(next));
+    } catch {
+      // ignore storage error
+    }
+    message.info(
+      next
+        ? 'Đã bật chế độ phân tích. AI sẽ tra cứu tri thức bằng công cụ và tự tổng hợp câu trả lời.'
+        : 'Đã tắt chế độ phân tích. AI quay lại luồng trả lời có trích dẫn.'
+    );
+  }, [analysisMode]);
+
   const handleConfirmAction = useCallback((confirmed: boolean) => {
     if (pendingConfirmationRef.current) {
       pendingConfirmationRef.current.resolve(confirmed);
@@ -692,6 +717,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       .filter((m) => m.content.trim().length > 0);
 
     const turnOverallStartTime = Date.now();
+    // Analysis mode bypasses the grounded pipeline (intent router, scope routing,
+    // schema-validated synthesis) and falls straight through to the tool loop.
+    if (!analysisMode) {
     try {
       setGroundedLoadingStatus('Đang phân tích ý định câu hỏi...');
       const groundedResult = await runGroundedTurn(
@@ -924,6 +952,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       );
       return;
     }
+    }
 
     // 3. Operational tool loop (for operational / mixed / fallback turns)
     if (turnController.signal.aborted) {
@@ -1070,7 +1099,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     const rawToolsForTurn = [...AI_DATABASE_TOOLS, ...dynamicMcpTools];
     // Dynamic Tool Pruning: prune heavy mutation and task-ops tools for knowledge lookups
     const toolsForTurn = pruneToolsForContext(rawToolsForTurn, {
-      isKnowledgeContinuation: Boolean(groundedLoadingStatus?.includes('trợ lý') || effectiveScope.type === 'document'),
+      isKnowledgeContinuation: Boolean(
+        groundedLoadingStatus?.includes('trợ lý') || effectiveScope.type === 'document'
+      ),
       isTaskMateQuery: !autoApproveMutations,
       isMutationTurn: autoApproveMutations,
     });
@@ -1102,7 +1133,19 @@ Because mutations run automatically without manual confirmation, your final resp
 Never perform mutations silently without providing this full change summary in your final reply.`
         : ' The system will prompt the user to confirm the mutation before applying it.'
     }${dynamicMcpInstructions}
-${systemInstruction.trim() ? `\nBelow is the ground-truth context of the currently active item or workspace:\n${systemInstruction}\n` : ''}`;
+${systemInstruction.trim() ? `\nBelow is the ground-truth context of the currently active item or workspace:\n${systemInstruction}\n` : ''}${
+      analysisMode
+        ? `\n\n[ANALYSIS MODE ACTIVE]:
+You are in analysis mode. You may reason, compare, propose, and produce long-form documents (Markdown reports, specs, plans) without going through grounded citation synthesis.
+Rules:
+1. Use the \`retrieve_knowledge\` tool repeatedly to gather evidence. Keep each query short and focused (<= 200 characters): an entity name, an identifier, or a narrow topic phrase. Split broad questions into multiple focused queries instead of one long query.
+2. If a retrieval returns only entity names with no excerpts, retry using the entity name itself as the query.
+3. Read attached local files with \`read_file\` FIRST (offset/limit pagination) before answering about them.
+4. When the user asks for a deliverable file, produce it with \`generate_file\`.
+5. Ground every factual claim in retrieved excerpts or file content. Clearly mark your own reasoning, assumptions, and proposals as such.
+6. End the answer with a short "Nguồn" (Sources) list naming the documents/files you used.`
+        : ''
+    }`;
 
     console.log('[AI Harness] 📝 Injected Context Grounding:\n', systemPromptContent);
     recentMsgs.push({
@@ -1182,6 +1225,8 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
         maxLoops: MAX_TOOL_LOOPS,
         db,
         signal: controller.signal,
+        ...(analysisMode ? { keepRecentToolOutputs: 20, maxOldToolChars: 100_000 } : {}),
+        executeToolFn: dispatchAiToolCall,
         onTextChunk: (delta) => {
           fullResponse += delta;
           aiDebugService.appendStreamChunk(turnId, delta);
@@ -1645,6 +1690,8 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
         isRefreshingModels={isRefreshingModels}
         autoApproveMutations={autoApproveMutations}
         onToggleAutoApproveMutations={handleToggleAutoApproveMutations}
+        analysisMode={analysisMode}
+        onToggleAnalysisMode={handleToggleAnalysisMode}
         isPinned={isPinned}
         onTogglePin={() => onTogglePin?.()}
         onClearContext={handleClearContext}

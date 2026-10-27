@@ -757,6 +757,7 @@ export async function synthesizeGroundedAnswer(
           { role: 'user', content: userContent },
         ],
         response_format: responseFormat,
+        maxTokens: 8000,
         signal: callSignal,
         onUsage: (u) => {
           capturedUsage = u;
