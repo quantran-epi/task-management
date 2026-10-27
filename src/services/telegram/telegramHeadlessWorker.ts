@@ -45,10 +45,14 @@ import { routeIntent, type RouteIntentResult, type IntentLabel } from '../ai/int
 import { getTodayDateString } from '../../utils/date';
 import dayjs from 'dayjs';
 import { createDefaultGroundedTurnDeps } from '../ai/groundedTurnDeps';
-import { runGroundedTurn } from '../ai/groundedTurn';
+import { runGroundedTurn, type GroundedTurnResult } from '../ai/groundedTurn';
 import { fetchSetCatalog } from '../../db/repositories/documentSetRepo';
 import type { ChatMessageGrounding } from '../ai/groundedAnswerSchemas';
-import { getEnabledMcpCapabilitySummaries, executeDynamicMcpTool } from '../ai/mcpClient';
+import {
+  getEnabledMcpCapabilitySummaries,
+  executeDynamicMcpTool,
+  discoverAllMcpTools,
+} from '../ai/mcpClient';
 
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4000; // Telegram hard limit is 4096, buffer to 4000
 
@@ -464,19 +468,117 @@ export function formatGroundedAnswerForTelegram(grounding: ChatMessageGrounding)
 
     const uniqueDocs = Array.from(
       new Set(docCitations.map((c) => c.documentTitle).filter(Boolean))
-    ).slice(0, 5);
+    );
     if (uniqueDocs.length > 0) {
       parts.push(`📚 **Nguồn tài liệu:** ${uniqueDocs.join(', ')}`);
     }
 
     const uniqueMcp = Array.from(
       new Set(mcpCitations.map((c) => c.documentTitle).filter(Boolean))
-    ).slice(0, 5);
+    );
     if (uniqueMcp.length > 0) {
       parts.push(`🔌 **Dữ liệu thực tế từ MCP:** ${uniqueMcp.join(', ')}`);
     }
   }
   return parts.join('\n\n');
+}
+
+export interface TelegramGroundedTurnParams {
+  chatId: string;
+  query: string;
+  chatHistory: Array<{ role: 'user' | 'assistant'; content: string }>;
+  routedIntent: RouteIntentResult | null;
+  aiConfig: { endpoint: string; defaultModel: string };
+  apiKey: string;
+  db: TaskPlannerDatabase;
+}
+
+/**
+ * Shared grounded-turn setup for Telegram. The headless worker has no user-visible
+ * cancellation source, so a fresh never-aborted signal is used per turn.
+ */
+export async function runTelegramGroundedTurn(
+  params: TelegramGroundedTurnParams
+): Promise<GroundedTurnResult> {
+  const { chatId, query, chatHistory, routedIntent, aiConfig, apiKey, db } = params;
+
+  const [enabledRec, baseUrlRec, tokenRec] = await Promise.all([
+    db.settings.get('knowledge_server_enabled'),
+    db.settings.get('knowledge_server_base_url'),
+    db.settings.get('knowledge_server_token'),
+  ]);
+  const knowledgeConfig = {
+    enabled: enabledRec?.value === true,
+    baseUrl: typeof baseUrlRec?.value === 'string' ? baseUrlRec.value : '',
+    token: typeof tokenRec?.value === 'string' ? tokenRec.value : '',
+  };
+
+  const capabilities = {
+    serverEnabled: Boolean(knowledgeConfig.enabled && knowledgeConfig.baseUrl),
+    modelConfigured: Boolean(apiKey && aiConfig.endpoint && aiConfig.defaultModel),
+  };
+
+  const catalog = await fetchSetCatalog(db);
+  const deps = createDefaultGroundedTurnDeps({
+    knowledgeBaseUrl: knowledgeConfig.baseUrl,
+    knowledgeToken: knowledgeConfig.token,
+    db,
+  });
+
+  return runGroundedTurn(
+    {
+      query,
+      recentTurns: chatHistory,
+      signal: new AbortController().signal,
+      capabilities,
+      config: {
+        endpoint: aiConfig.endpoint,
+        apiKey,
+        model: aiConfig.defaultModel,
+        promptVersion: 'grounded-v1',
+        routerVersion: 'router-v1',
+      },
+      catalog,
+      recentSessionId: `telegram-${chatId}`,
+      ...(routedIntent ? { preRoutedIntent: routedIntent } : {}),
+    },
+    deps
+  );
+}
+
+/**
+ * Formats terminal non-answer grounded outcomes. Returning null means the caller
+ * should continue normal grounded/ungrounded handling.
+ */
+export function formatGroundedNonAnswer(result: GroundedTurnResult): string | null {
+  if (result.kind === 'clarify_intent') {
+    return (
+      result.clarifyQuestion?.trim() ||
+      'Bạn có thể nói rõ hơn yêu cầu cần tra cứu không?'
+    );
+  }
+
+  if (result.kind === 'clarify_entity') {
+    const names = result.candidates.map((c) => c.canonicalName).filter(Boolean).slice(0, 5);
+    return names.length > 0
+      ? `⚠️ Cần làm rõ thực thể: ${names.join(', ')}. Vui lòng nêu rõ tên hoặc mã bạn muốn tra cứu.`
+      : '⚠️ Cần làm rõ thực thể bạn muốn tra cứu. Vui lòng nêu rõ tên hoặc mã.';
+  }
+
+  if (result.kind === 'error') {
+    switch (result.code) {
+      case 'ERROR_AUTH':
+        return '⚠️ Không thể truy cập kho tri thức: xác thực thất bại. Vui lòng kiểm tra token máy chủ tri thức.';
+      case 'ERROR_CONFIG':
+        return '⚠️ Cấu hình kho tri thức chưa hợp lệ. Vui lòng kiểm tra địa chỉ máy chủ tri thức.';
+      case 'ERROR_INVALID_RESPONSE':
+        return '⚠️ Kho tri thức trả về dữ liệu không hợp lệ. Vui lòng thử lại sau.';
+      case 'INVALID_GROUNDED_OUTPUT':
+        return '⚠️ Không thể tổng hợp câu trả lời có căn cứ từ bằng chứng hiện có. Vui lòng thử lại hoặc làm rõ câu hỏi.';
+    }
+  }
+
+  return null;
 }
 
 // In-memory set of recently processed update_ids to prevent duplicate execution from double listener/HMR
@@ -1052,6 +1154,58 @@ export async function processTelegramInboundMessage(
     await refundQuota(chat_id, db);
 
     const scoped = await resolveScopedContext('full', trimmedText, db);
+    let contextText = scoped.contextText;
+
+    // Mixed requests retrieve grounded evidence first, then hand it to the mutation turn.
+    if (
+      routedIntent?.intent === 'mixed' &&
+      (dataScope === 'full' || dataScope === 'knowledge_only')
+    ) {
+      try {
+        const groundedResult = await runTelegramGroundedTurn({
+          chatId: chat_id,
+          query: trimmedText,
+          chatHistory,
+          routedIntent,
+          aiConfig: { endpoint: aiConfig.endpoint, defaultModel: aiConfig.defaultModel },
+          apiKey,
+          db,
+        });
+
+        const terminalReply = formatGroundedNonAnswer(groundedResult);
+        if (terminalReply) {
+          const htmlReply = markdownToTelegramHtml(terminalReply);
+          await sendReply(botToken, chat_id, htmlReply, message_id);
+          await logTelegramSession(
+            {
+              chatId: chat_id,
+              userName: from_name,
+              userMessage: text,
+              aiResponse: terminalReply,
+              dataScopeUsed: dataScope,
+              tokenCount: 0,
+            },
+            db
+          );
+          return;
+        }
+
+        if (groundedResult.kind === 'grounded_answer') {
+          const groundedText = formatGroundedAnswerForTelegram(groundedResult.grounding);
+          if (groundedText.trim()) {
+            contextText = [contextText, '## Grounded Knowledge Evidence:', groundedText]
+              .filter(Boolean)
+              .join('\n\n');
+          }
+        }
+      } catch (groundedErr) {
+        console.warn(
+          '[telegramWorker] Mixed grounded retrieval failed, continuing to mutation turn:',
+          groundedErr
+        );
+      }
+    }
+
     const mutationResult = await executeAdminMutationTurn({
       chatId: chat_id,
       userMessage: trimmedText,
@@ -1059,7 +1213,7 @@ export async function processTelegramInboundMessage(
       aiConfig: { endpoint: aiConfig.endpoint, defaultModel: aiConfig.defaultModel },
       apiKey,
       db,
-      contextText: scoped.contextText,
+      contextText,
     });
 
     const htmlMsg = markdownToTelegramHtml(mutationResult.replyMarkdown);
@@ -1091,48 +1245,33 @@ export async function processTelegramInboundMessage(
     (dataScope === 'full' || dataScope === 'knowledge_only')
   ) {
     try {
-      const [enabledRec, baseUrlRec, tokenRec] = await Promise.all([
-        db.settings.get('knowledge_server_enabled'),
-        db.settings.get('knowledge_server_base_url'),
-        db.settings.get('knowledge_server_token'),
-      ]);
-      const knowledgeConfig = {
-        enabled: enabledRec?.value === true,
-        baseUrl: typeof baseUrlRec?.value === 'string' ? baseUrlRec.value : '',
-        token: typeof tokenRec?.value === 'string' ? tokenRec.value : '',
-      };
-
-      const capabilities = {
-        serverEnabled: Boolean(knowledgeConfig.enabled && knowledgeConfig.baseUrl),
-        modelConfigured: Boolean(apiKey && aiConfig.endpoint && aiConfig.defaultModel),
-      };
-
-      const catalog = await fetchSetCatalog(db);
-      const deps = createDefaultGroundedTurnDeps({
-        knowledgeBaseUrl: knowledgeConfig.baseUrl,
-        knowledgeToken: knowledgeConfig.token,
+      const groundedResult = await runTelegramGroundedTurn({
+        chatId: chat_id,
+        query: trimmedText,
+        chatHistory,
+        routedIntent,
+        aiConfig: { endpoint: aiConfig.endpoint, defaultModel: aiConfig.defaultModel },
+        apiKey,
         db,
       });
 
-      const groundedResult = await runGroundedTurn(
-        {
-          query: trimmedText,
-          recentTurns: chatHistory,
-          signal: new AbortController().signal,
-          capabilities,
-          config: {
-            endpoint: aiConfig.endpoint,
-            apiKey,
-            model: aiConfig.defaultModel,
-            promptVersion: 'grounded-v1',
-            routerVersion: 'router-v1',
+      const terminalReply = formatGroundedNonAnswer(groundedResult);
+      if (terminalReply) {
+        const htmlReply = markdownToTelegramHtml(terminalReply);
+        await sendReply(botToken, chat_id, htmlReply, message_id);
+        await logTelegramSession(
+          {
+            chatId: chat_id,
+            userName: from_name,
+            userMessage: text,
+            aiResponse: terminalReply,
+            dataScopeUsed: dataScope,
+            tokenCount: 0,
           },
-          catalog,
-          recentSessionId: `telegram-${chat_id}`,
-          preRoutedIntent: routedIntent ?? undefined,
-        },
-        deps
-      );
+          db
+        );
+        return;
+      }
 
       if (groundedResult.kind === 'grounded_answer') {
         const rawAnswer = formatGroundedAnswerForTelegram(groundedResult.grounding);
@@ -1172,7 +1311,7 @@ export async function processTelegramInboundMessage(
           if (Array.isArray(citations) && citations.length > 0) {
             const titles = Array.from(
               new Set(citations.map((c) => c.documentTitle).filter(Boolean))
-            ).slice(0, 3);
+            );
             if (titles.length > 0) {
               noEvidenceMsg += `\n\n📚 **Tài liệu tham khảo:** ${titles.join(', ')}`;
             }
@@ -1233,6 +1372,16 @@ export async function processTelegramInboundMessage(
     );
   }
 
+  // AI-Chat parity: merge dynamically discovered MCP tools for knowledge-capable scopes.
+  if (dataScope === 'full' || dataScope === 'knowledge_only') {
+    try {
+      const dynamicMcpTools = await discoverAllMcpTools(db);
+      availableTools = [...availableTools, ...dynamicMcpTools];
+    } catch (err) {
+      console.warn('[telegramWorker] MCP discovery unavailable:', err);
+    }
+  }
+
   // Step 8: Invoke AI with AIChatDrawer-style Read-Tool Loop and Anti-Hallucination rules
   const todayStr = getTodayDateString();
   const now = dayjs();
@@ -1269,7 +1418,9 @@ export async function processTelegramInboundMessage(
       messages: currentMessages,
       ...(availableTools.length > 0 ? { tools: availableTools } : {}),
       temperature: 0.1,
-      maxLoops: 5,
+      // AI-Chat parity ceiling. There is no user-visible cancellation source in the
+      // headless worker, so the loop terminates only by model completion or cap.
+      maxLoops: 30,
       db,
       synthesisPrompt:
         'Dựa trên tất cả các kết quả công cụ và thông tin đã thu thập ở trên, hãy tổng hợp câu trả lời đầy đủ, chi tiết, chính xác và rõ ràng cho yêu cầu ban đầu.\n' +

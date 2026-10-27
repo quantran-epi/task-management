@@ -1986,4 +1986,397 @@ describe('Telegram Headless Worker', () => {
       expect(source).not.toContain('itemCount');
     });
   });
+
+  describe('AI Chat retrieval parity', () => {
+    function groundedAnswerWithCitations(
+      titles: string[],
+      claimText = 'Khách hàng phải xác thực mã OTP qua SMS.'
+    ): any {
+      const citations = titles.map((title, index) => ({
+        citationId: `S${index + 1}`,
+        documentId: `${index + 1}`.repeat(8),
+        documentTitle: title,
+        sectionAnchor: `section-${index + 1}`,
+        lineStart: 1,
+        lineEnd: 10,
+        authority: 'server',
+        evidenceClass: 'OBSERVED',
+        snapshotId: 'gsnap_00000001',
+        publishedContentHash: 'a'.repeat(64),
+        citedExcerpt: `Trích đoạn ${index + 1}`,
+      }));
+      return {
+        kind: 'grounded_answer',
+        grounding: {
+          schemaVersion: 1,
+          authority: 'server',
+          outcome: 'READY',
+          answer: {
+            schemaVersion: 2,
+            conclusion: claimText,
+            confidence: 'high',
+            confidenceReason: 'Trực tiếp trích xuất từ tài liệu.',
+            claims: [
+              {
+                id: 'C1',
+                text: claimText,
+                classification: 'DIRECT',
+                citationIds: titles.map((_t, i) => `S${i + 1}`),
+                pathId: null,
+              },
+            ],
+            hypotheses: [],
+            unsupportedParts: [],
+          },
+          citations,
+          paths: null,
+          conflicts: null,
+          scope: null,
+          modalityDiagnostics: null,
+          coverageWarnings: [],
+          fallbackReason: 'NONE',
+          routerVersion: 'router-v1',
+          promptVersion: 'grounded-v1',
+          modelId: 'gpt-4o',
+          createdAt: new Date().toISOString(),
+        },
+      };
+    }
+
+    it('runs grounded retrieval before the mixed admin mutation turn and sends one preview reply', async () => {
+      await setNineRouterApiKey('test-key', testDb);
+      mockStreamChatEvents.mockClear();
+      mockRunGroundedTurn.mockClear();
+
+      await upsertWhitelistUser(
+        {
+          chatId: 'mixed_admin',
+          name: 'Mixed Admin',
+          status: 'active',
+          isAdmin: true,
+          dataScope: 'full',
+        },
+        testDb
+      );
+
+      mockRouteIntent.mockResolvedValueOnce({
+        intent: 'mixed',
+        confidence: 0.9,
+        entities: ['Quy trình OTP'],
+        language: 'vi',
+        needs_clarification: false,
+        clarify_question: null,
+        speculation_requested: false,
+      });
+
+      mockRunGroundedTurn.mockResolvedValueOnce(
+        groundedAnswerWithCitations(['Đặc tả OTP'], 'Grounded claim: OTP dùng SMS.')
+      );
+
+      // Mutation turn proposes a task creation (preview only).
+      mockStreamChatEvents.mockImplementationOnce((async function* () {
+        yield {
+          type: 'tool_calls',
+          calls: [
+            {
+              id: 'call_mixed_1',
+              type: 'function',
+              function: {
+                name: 'create_task',
+                arguments: JSON.stringify({ name: 'Theo quy trình OTP' }),
+              },
+            },
+          ],
+        } as any;
+      }) as any);
+
+      const replies: string[] = [];
+      const mockSendReply = vi.fn(async (_t: string, _c: string, text: string) => {
+        replies.push(text);
+      });
+      const mockSendAction = vi.fn(async () => {});
+
+      await processTelegramInboundMessage(
+        {
+          update_id: 501,
+          message_id: 1301,
+          chat_id: 'mixed_admin',
+          from_name: 'Mixed Admin',
+          text: 'Tạo task theo quy trình OTP',
+          date: 1234901,
+        },
+        'test_token',
+        testDb,
+        mockSendReply,
+        mockSendAction
+      );
+
+      // Grounded runs before the mutation stream.
+      expect(mockRunGroundedTurn).toHaveBeenCalledTimes(1);
+      expect(mockRunGroundedTurn.mock.invocationCallOrder[0]!).toBeLessThan(
+        mockStreamChatEvents.mock.invocationCallOrder[0]!
+      );
+
+      // Evidence reached the mutation turn as system context.
+      const mutationCall = mockStreamChatEvents.mock.calls[0]?.[0];
+      const systemMsg = mutationCall?.payload?.messages?.find(
+        (m: any) => m.role === 'system'
+      );
+      expect(systemMsg?.content).toContain('Grounded claim: OTP dùng SMS.');
+
+      // Exactly one preview reply, grounded answer not sent separately.
+      expect(mockSendReply).toHaveBeenCalledTimes(1);
+      expect(replies[0]).toContain('Xác nhận thao tác TaskMate');
+      expect(replies[0]).not.toContain('Grounded claim: OTP dùng SMS.');
+
+      // Nothing written before confirmation.
+      const tasks = await testDb.tasks.toArray();
+      expect(tasks.some((t) => t.name === 'Theo quy trình OTP')).toBe(false);
+    });
+
+    it('sends one reply and never falls through to the tool loop for clarify_intent', async () => {
+      await setNineRouterApiKey('test-key', testDb);
+      mockStreamChatEvents.mockClear();
+      mockRunGroundedTurn.mockClear();
+
+      await upsertWhitelistUser(
+        { chatId: 'parity_clarify_intent', name: 'Parity User', status: 'active', dataScope: 'full' },
+        testDb
+      );
+
+      mockRouteIntent.mockResolvedValueOnce({
+        intent: 'query_knowledge',
+        confidence: 0.9,
+        entities: [],
+        language: 'vi',
+        needs_clarification: false,
+        clarify_question: null,
+        speculation_requested: false,
+      });
+      mockRunGroundedTurn.mockResolvedValueOnce({
+        kind: 'clarify_intent',
+        clarifyQuestion: 'Bạn muốn tra cứu quy trình nào?',
+      });
+
+      const replies: string[] = [];
+      const mockSendReply = vi.fn(async (_t: string, _c: string, text: string) => {
+        replies.push(text);
+      });
+
+      await processTelegramInboundMessage(
+        { update_id: 502, message_id: 1302, chat_id: 'parity_clarify_intent', from_name: 'Parity User', text: 'quy trình đó', date: 1234902 },
+        'test_token',
+        testDb,
+        mockSendReply,
+        vi.fn(async () => {})
+      );
+
+      expect(mockRunGroundedTurn).toHaveBeenCalledTimes(1);
+      expect(mockStreamChatEvents).not.toHaveBeenCalled();
+      expect(mockSendReply).toHaveBeenCalledTimes(1);
+      expect(replies[0]).toContain('Bạn muốn tra cứu quy trình nào?');
+    });
+
+    it('sends one reply and never falls through to the tool loop for clarify_entity', async () => {
+      await setNineRouterApiKey('test-key', testDb);
+      mockStreamChatEvents.mockClear();
+      mockRunGroundedTurn.mockClear();
+
+      await upsertWhitelistUser(
+        { chatId: 'parity_clarify_entity', name: 'Parity User', status: 'active', dataScope: 'full' },
+        testDb
+      );
+
+      mockRouteIntent.mockResolvedValueOnce({
+        intent: 'query_knowledge',
+        confidence: 0.9,
+        entities: ['CYTP'],
+        language: 'vi',
+        needs_clarification: false,
+        clarify_question: null,
+        speculation_requested: false,
+      });
+      mockRunGroundedTurn.mockResolvedValueOnce({
+        kind: 'clarify_entity',
+        outcome: 'NEEDS_CLARIFICATION',
+        candidates: [
+          { urn: 'urn:a', canonicalName: 'CYTP1002', kind: 'ScheduledProcess' },
+          { urn: 'urn:b', canonicalName: 'CYTP2001', kind: 'ScheduledProcess' },
+        ],
+      });
+
+      const replies: string[] = [];
+      const mockSendReply = vi.fn(async (_t: string, _c: string, text: string) => {
+        replies.push(text);
+      });
+
+      await processTelegramInboundMessage(
+        { update_id: 503, message_id: 1303, chat_id: 'parity_clarify_entity', from_name: 'Parity User', text: 'CYTP là gì', date: 1234903 },
+        'test_token',
+        testDb,
+        mockSendReply,
+        vi.fn(async () => {})
+      );
+
+      expect(mockRunGroundedTurn).toHaveBeenCalledTimes(1);
+      expect(mockStreamChatEvents).not.toHaveBeenCalled();
+      expect(mockSendReply).toHaveBeenCalledTimes(1);
+      expect(replies[0]).toContain('CYTP1002');
+      expect(replies[0]).toContain('CYTP2001');
+    });
+
+    it('sends one useful reply and never falls through for ERROR_AUTH', async () => {
+      await setNineRouterApiKey('test-key', testDb);
+      mockStreamChatEvents.mockClear();
+      mockRunGroundedTurn.mockClear();
+
+      await upsertWhitelistUser(
+        { chatId: 'parity_error', name: 'Parity User', status: 'active', dataScope: 'full' },
+        testDb
+      );
+
+      mockRouteIntent.mockResolvedValueOnce({
+        intent: 'query_knowledge',
+        confidence: 0.9,
+        entities: [],
+        language: 'vi',
+        needs_clarification: false,
+        clarify_question: null,
+        speculation_requested: false,
+      });
+      mockRunGroundedTurn.mockResolvedValueOnce({
+        kind: 'error',
+        code: 'ERROR_AUTH',
+        grounding: {},
+      });
+
+      const replies: string[] = [];
+      const mockSendReply = vi.fn(async (_t: string, _c: string, text: string) => {
+        replies.push(text);
+      });
+
+      await processTelegramInboundMessage(
+        { update_id: 504, message_id: 1304, chat_id: 'parity_error', from_name: 'Parity User', text: 'tra cứu tài liệu', date: 1234904 },
+        'test_token',
+        testDb,
+        mockSendReply,
+        vi.fn(async () => {})
+      );
+
+      expect(mockRunGroundedTurn).toHaveBeenCalledTimes(1);
+      expect(mockStreamChatEvents).not.toHaveBeenCalled();
+      expect(mockSendReply).toHaveBeenCalledTimes(1);
+      expect(replies[0]).toContain('xác thực thất bại');
+    });
+
+    it('runs more than 5 tool rounds and exposes dynamically discovered MCP tools', async () => {
+      await setNineRouterApiKey('test-key', testDb);
+      mockStreamChatEvents.mockClear();
+      mockRunGroundedTurn.mockClear();
+
+      await upsertWhitelistUser(
+        { chatId: 'parity_loops', name: 'Parity User', status: 'active', dataScope: 'full' },
+        testDb
+      );
+
+      mockRouteIntent.mockResolvedValueOnce({
+        intent: 'query_taskmate',
+        confidence: 0.95,
+        entities: [],
+        language: 'vi',
+        needs_clarification: false,
+        clarify_question: null,
+        speculation_requested: false,
+      });
+
+      const mcpClient = await import('../../src/services/ai/mcpClient');
+      const discoverSpy = vi.spyOn(mcpClient, 'discoverAllMcpTools').mockResolvedValueOnce([
+        {
+          type: 'function',
+          function: {
+            name: 'lookup_table',
+            description: '[Mock MCP] Tra cứu bảng',
+            parameters: { type: 'object', properties: {} },
+          },
+        } as any,
+      ]);
+
+      // Six tool rounds, then a terminal text round, then the synthesis pass.
+      for (let i = 1; i <= 6; i++) {
+        mockStreamChatEvents.mockImplementationOnce((async function* () {
+          yield {
+            type: 'tool_calls',
+            calls: [
+              {
+                id: `call_loop_${i}`,
+                type: 'function',
+                function: {
+                  name: 'query_tasks',
+                  arguments: JSON.stringify({ search: 'loop' }),
+                },
+              },
+            ],
+          } as any;
+        }) as any);
+      }
+      mockStreamChatEvents.mockImplementation((async function* () {
+        yield { type: 'text', delta: 'Đã tổng hợp sau nhiều vòng công cụ.' };
+        yield { type: 'usage', usage: { total_tokens: 20 } };
+      }) as any);
+
+      const replies: string[] = [];
+      const mockSendReply = vi.fn(async (_t: string, _c: string, text: string) => {
+        replies.push(text);
+      });
+
+      await processTelegramInboundMessage(
+        { update_id: 505, message_id: 1305, chat_id: 'parity_loops', from_name: 'Parity User', text: 'tra cứu qua nhiều bước', date: 1234905 },
+        'test_token',
+        testDb,
+        mockSendReply,
+        vi.fn(async () => {})
+      );
+
+      // 6 tool loops + at least one more model call proves the ceiling exceeds 5.
+      expect(mockStreamChatEvents.mock.calls.length).toBeGreaterThan(6);
+      const firstPayload = mockStreamChatEvents.mock.calls[0]?.[0];
+      expect(
+        firstPayload?.payload?.tools?.some((t: any) => t.function.name === 'lookup_table')
+      ).toBe(true);
+      expect(replies[0]).toContain('Đã tổng hợp sau nhiều vòng công cụ.');
+      discoverSpy.mockRestore();
+    });
+
+    it('keeps every cited document title through HTML conversion and lossless splitting', async () => {
+      const titles = [
+        'Đặc tả kỹ thuật CYTP1002',
+        'Quy trình xác thực OTP',
+        'Hướng dẫn vận hành SmartVista',
+        'Danh mục bảng dữ liệu CMS',
+        'Quy định bảo mật thẻ',
+        'Biểu mẫu tiếp nhận sự cố',
+      ];
+      const { formatGroundedAnswerForTelegram } = await import(
+        '../../src/services/telegram/telegramHeadlessWorker'
+      );
+      const { markdownToTelegramHtml } = await import(
+        '../../src/services/telegram/telegramHtml'
+      );
+
+      const formatted = formatGroundedAnswerForTelegram(
+        groundedAnswerWithCitations(titles).grounding
+      );
+      const html = markdownToTelegramHtml(formatted);
+      const chunks = splitTelegramMessage(html, 120);
+      const joined = chunks.join('');
+
+      expect(chunks.length).toBeGreaterThan(1);
+      for (const title of titles) {
+        expect(joined).toContain(title);
+      }
+      for (const chunk of chunks) {
+        expect(chunk.length).toBeLessThanOrEqual(120);
+      }
+    });
+  });
 });
