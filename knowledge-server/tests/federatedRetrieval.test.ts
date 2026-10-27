@@ -181,8 +181,8 @@ describe('Federated Retrieval Route and Orchestration (Task 2)', () => {
     const body = res.json() as FederatedRetrievalResponse;
     expect(body.outcome).toBe('READY');
     expect(body.items).toHaveLength(2);
-    expect(retrieveMock).toHaveBeenCalledWith(SET_ID_1, expect.anything());
-    expect(retrieveMock).toHaveBeenCalledWith(SET_ID_2, expect.anything());
+    expect(retrieveMock).toHaveBeenCalledWith(SET_ID_1, expect.anything(), expect.anything());
+    expect(retrieveMock).toHaveBeenCalledWith(SET_ID_2, expect.anything(), expect.anything());
   });
 
   // Test Case 3: Partial failure: 2 REQUIRED sets, 1 rejects, outcome DEGRADED, coverageWarnings[0].setId matches rejected set.
@@ -380,7 +380,7 @@ describe('Federated Retrieval Route and Orchestration (Task 2)', () => {
     expect(body.outcome).toBe('DEGRADED');
     expect(body.diagnostics.degraded).toBe(true);
     expect(retrieveMock).toHaveBeenCalledTimes(1);
-    expect(retrieveMock).toHaveBeenCalledWith(SET_ID_1, expect.anything());
+    expect(retrieveMock).toHaveBeenCalledWith(SET_ID_1, expect.anything(), expect.anything());
     expect(body.diagnostics.coverageWarnings.some((w) => w.code === 'BUDGET_SETS')).toBe(true);
   });
 
@@ -491,10 +491,11 @@ describe('Federated Retrieval Route and Orchestration (Task 2)', () => {
   });
 
   it('marks all modalities as timeout when every set times out', async () => {
+    // The route adapter forwards { signal }, so the abort handle is on the third arg's .signal.
     const retrieveMock = vi.fn().mockImplementation(
-      (_setId: string, _request: unknown, signal?: AbortSignal) =>
+      (_setId: string, _request: unknown, opts?: { signal?: AbortSignal }) =>
         new Promise((_resolve, reject) => {
-          signal?.addEventListener('abort', () => reject(new DOMException('Timed out', 'AbortError')));
+          opts?.signal?.addEventListener('abort', () => reject(new DOMException('Timed out', 'AbortError')));
         })
     );
     const app = buildKnowledgeServer({
