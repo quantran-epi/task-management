@@ -3,6 +3,7 @@ import type { ChatCompletionMessage, ToolCall } from './types';
 import type { ChatTokenUsage, ChatGeneratedFile } from '../../types/models';
 import { streamChatEvents, streamChatCompletion, stripThinkingBlocks } from './nineRouterClient';
 import { pruneToolOutputsInMessages } from './historyPruning';
+import { compactMessagesInLoop } from './inLoopCompaction';
 import {
   AI_DATABASE_TOOLS,
   executeAiTool,
@@ -57,6 +58,11 @@ export interface AiOrchestratorLoopOptions {
   keepRecentToolOutputs?: number;
   /** Character cap applied to older tool outputs. */
   maxOldToolChars?: number;
+  /**
+   * Prompt-token budget for in-loop compaction. Derived from the app's
+   * "safe character budget" setting (charLimit / 4). Omit to disable.
+   */
+  contextTokenBudget?: number;
 }
 
 export interface AiOrchestratorLoopResult {
@@ -131,6 +137,7 @@ export async function runAiOrchestratorLoop(
     executeToolFn,
     keepRecentToolOutputs = 2,
     maxOldToolChars = 500,
+    contextTokenBudget,
   } = options;
 
   const prune = (msgs: ChatCompletionMessage[]) =>
@@ -147,12 +154,40 @@ export async function runAiOrchestratorLoop(
   let fullResponse = '';
   let loopCount = 0;
   let lastHadToolCalls = false;
+  // Last reported prompt-token count for the CURRENT (possibly compacted) context.
+  // Reset after compaction so a shrunk history does not re-trigger every round.
+  let currentPromptTokens = 0;
 
   while (loopCount < maxLoops) {
     loopCount++;
     fullResponse = '';
     let hasToolCalls = false;
     let toolCallsToRun: ToolCall[] = [];
+
+    // In-loop compaction: the pre-turn compactor never runs mid-turn, and pruning
+    // bounds message count, not characters. Best-effort; never breaks the turn.
+    if (contextTokenBudget && contextTokenBudget > 0 && loopCount > 1) {
+      if (currentPromptTokens > contextTokenBudget) {
+        onStatusChange?.('Đang nén ngữ cảnh hội thoại để tiếp tục phân tích...');
+        const compacted = await compactMessagesInLoop({
+          messages: currentMessages,
+          promptTokens: currentPromptTokens,
+          tokenBudget: contextTokenBudget,
+          endpoint,
+          apiKey,
+          model,
+          ...(signal ? { signal } : {}),
+          keepRecentMessages: keepRecentToolOutputs + 4,
+        });
+        if (compacted.compacted) {
+          currentMessages.length = 0;
+          currentMessages.push(...compacted.messages);
+          // Reset the trigger baseline so a shrunk history does not compact every round.
+          // accumulatedTokenUsage stays intact: it is the turn's reported total.
+          currentPromptTokens = 0;
+        }
+      }
+    }
 
     const messagesToSend = prune(currentMessages);
     const payload: {
@@ -191,6 +226,8 @@ export async function runAiOrchestratorLoop(
           hasToolCalls = true;
           toolCallsToRun = chunk.calls;
         } else if (chunk.type === 'usage' && chunk.usage) {
+          // Latest round's prompt size — this is what the context window sees.
+          currentPromptTokens = chunk.usage.promptTokens || 0;
           accumulatedTokenUsage = {
             promptTokens: (accumulatedTokenUsage.promptTokens || 0) + (chunk.usage.promptTokens || 0),
             completionTokens: (accumulatedTokenUsage.completionTokens || 0) + (chunk.usage.completionTokens || 0),

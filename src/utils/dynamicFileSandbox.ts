@@ -27,6 +27,9 @@ export function sanitizeScript(script: string): string {
   return clean.trim();
 }
 
+/** Hard ceiling for AI-generated file scripts; prevents a hung runner freezing the app. */
+export const SCRIPT_TIMEOUT_MS = 60_000;
+
 /**
  * Runs a dynamic JavaScript script provided by AI inside a browser sandbox.
  * Returns the resulting binary Blob.
@@ -51,7 +54,24 @@ export async function executeDynamicFileScript(
     cleanScript
   );
 
-  const result = await runner(ExcelJS, docx, pptxgen, extractGridFromText);
+  // AI-generated scripts can loop forever; a hung runner would freeze the UI.
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(
+      () => reject(new Error('Script tạo tệp vượt quá thời gian cho phép (60 giây).')),
+      SCRIPT_TIMEOUT_MS
+    );
+  });
+
+  let result: any;
+  try {
+    result = await Promise.race([
+      runner(ExcelJS, docx, pptxgen, extractGridFromText),
+      timeoutPromise,
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
 
   if (!result) {
     throw new Error('Script did not return a document, workbook, presentation, or Blob');

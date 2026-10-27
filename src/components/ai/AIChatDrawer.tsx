@@ -1225,7 +1225,12 @@ Rules:
         maxLoops: MAX_TOOL_LOOPS,
         db,
         signal: controller.signal,
-        ...(analysisMode ? { keepRecentToolOutputs: 20, maxOldToolChars: 100_000 } : {}),
+        ...(analysisMode
+          ? { keepRecentToolOutputs: 20, maxOldToolChars: 100_000 }
+          : {}),
+        // In-loop compaction budget follows the app's "safe character budget" setting
+        // (Settings → 9router → Giới hạn ký tự ngữ cảnh, ~1 token ≈ 4 chars).
+        contextTokenBudget: Math.max(1000, Math.floor((config.charLimit || 12000) / 4)),
         executeToolFn: dispatchAiToolCall,
         onTextChunk: (delta) => {
           fullResponse += delta;

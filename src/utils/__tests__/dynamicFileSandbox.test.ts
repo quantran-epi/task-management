@@ -1,15 +1,28 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   executeDynamicFileScript,
   generateXlsxBlobWithExcelJS,
   generateDocxBlobWithDocx,
   sanitizeScript,
+  SCRIPT_TIMEOUT_MS,
 } from '../dynamicFileSandbox';
 
 describe('dynamicFileSandbox', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('sanitizes code fences from script', () => {
     const raw = '```javascript\nconst a = 1;\nreturn a;\n```';
     expect(sanitizeScript(raw)).toBe('const a = 1;\nreturn a;');
+  });
+
+  it('rejects a script that never resolves instead of hanging', async () => {
+    vi.useFakeTimers();
+    const pending = executeDynamicFileScript('await new Promise(() => {}); return new Blob([]);', 'txt');
+    const assertion = expect(pending).rejects.toThrow(/60 giây/);
+    await vi.advanceTimersByTimeAsync(SCRIPT_TIMEOUT_MS + 1000);
+    await assertion;
   });
 
   it('generates xlsx blob using ExcelJS', async () => {
