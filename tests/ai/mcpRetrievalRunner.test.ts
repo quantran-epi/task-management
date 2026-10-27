@@ -280,6 +280,49 @@ describe('mcpRetrievalRunner', () => {
     expect(capturedSystemPrompt).not.toContain('Untargeted instruction should not appear');
   });
 
+  it('instructs the planner to run a container-scoped search for where-is-stored questions', async () => {
+    const mockServers: mcpClient.McpServerConfig[] = [
+      {
+        id: 'srv-reverse',
+        name: 'Reverse Server',
+        url: 'http://localhost:3000/mcp',
+        enabled: true,
+        instruction: 'Reverse lookup test',
+      },
+    ];
+
+    vi.spyOn(mcpClient, 'getMcpServers').mockResolvedValue(mockServers);
+    vi.spyOn(mcpClient, 'fetchServerTools').mockResolvedValue([
+      {
+        type: 'function',
+        function: {
+          name: 'search_nodes',
+          description: 'Search entities',
+          parameters: { type: 'object', properties: { query: { type: 'string' } } },
+        },
+      },
+    ]);
+
+    let capturedSystemPrompt = '';
+    vi.spyOn(nineRouterClient, 'completeJson').mockImplementation(async (opts: any) => {
+      capturedSystemPrompt = opts.messages[0].content;
+      return { done: true, toolCalls: [] };
+    });
+
+    await runMcpRetrieval({
+      query: 'trường nào lưu số thẻ',
+      serverIds: ['srv-reverse'],
+      modelConfig: { endpoint: 'http://test-endpoint', apiKey: 'key', model: 'test-model' },
+    });
+
+    expect(capturedSystemPrompt).toContain('REVERSE LOOKUP');
+    expect(capturedSystemPrompt).toContain('entity_types: ["Table"]');
+    // Shortening the user's phrasing to a bare keyword favours detail entities.
+    expect(capturedSystemPrompt).toContain('do NOT shorten it to a bare keyword');
+    // Done is forbidden while only detail entities were retrieved.
+    expect(capturedSystemPrompt).toContain('while no container entity has been retrieved');
+  });
+
   it('coordinates multi-turn dependent tool execution generically', async () => {
     const mockServers: mcpClient.McpServerConfig[] = [
       {

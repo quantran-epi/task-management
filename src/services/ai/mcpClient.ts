@@ -28,6 +28,7 @@ export const DEFAULT_GRAPHITI_INSTRUCTION = `SMARTVISTA BANKING DOMAIN DICTIONAR
 3. Mandatory workflow for card / SQL / schema queries:
    - Step 1: Call 'list_advertised_groups' first to discover available group IDs.
    - Step 2: Call 'search_nodes' with entity_types ['Table', 'Column', 'View'] (and ['Preference', 'AgentProcedure', 'Requirement'] for conventions). ALWAYS pass explicit 'group_ids' (omitting group_ids causes validation error).
+   - Step 2b: If the question asks WHERE data is stored, ALSO run 'search_nodes' scoped to ['Table'] (and ['View'] if relevant) with the user's own phrasing. Columns outnumber tables and bury them in mixed-type results; a table-only pass is required before answering.
    - Step 3: Call 'search_memory_facts' with edge_types ['ForeignKeyTo'] for relations. ALWAYS pass 'group_ids'. Use time filter: 'current_only: true' OR 'as_of'. NEVER combine 'current_only' with 'as_of'.
    - Step 4: Call 'get_catalog_object_context' for deep column details and 1-hop joins.
 4. Anti-hallucination: Never invent or guess table/column names.

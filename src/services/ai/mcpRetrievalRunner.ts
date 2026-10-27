@@ -268,14 +268,20 @@ DYNAMIC MCP RETRIEVAL RULES:
    - If the user asks for fine-grained details (such as specific fields, columns, attributes, parameters, enum values, error codes, or formulas) but the data retrieved so far only contains high-level container objects (such as table/file/document/entity names without property-level details):
    - DO NOT set "done": true.
    - You MUST pick the next inspection/detail tool provided in the server's tool list to drill down into that container entity.
-4. COMPLETION CRITERIA:
+4. REVERSE LOOKUP (Where-Is-It-Stored Rule):
+   - When the user asks WHERE some data lives (e.g. "which field/table stores X", "where is X kept"), the answer is the owning container, not the detail objects that merely resemble the wording.
+   - Detail entities (columns/fields/attributes) far outnumber containers and dominate any mixed-type search, so a mixed search hides the owning container.
+   - If results so far are only detail entities, you MUST run one more search scoped to the container entity types ONLY (e.g. entity_types: ["Table"]). Reuse the user's own phrasing or the natural-language question words — do NOT shorten it to a bare keyword, which favours detail names.
+   - DO NOT set "done": true while no container entity has been retrieved.
+5. COMPLETION CRITERIA:
    - Set "done": true ONLY when:
      a) The specific attribute/field answering the query has been found in the tool results, OR
-     b) All available detail/inspection tools for the relevant entity have been exhausted.
+     b) All available detail/inspection tools for the relevant entity have been exhausted, AND
+     c) If the query asks where data is stored, at least one container entity has been retrieved.
 
 Return STRICT JSON adhering to this schema:
 {
-  "done": boolean, // set to true ONLY if sufficient fine-grained data has been retrieved or no further relevant inspection tool exists
+  "done": boolean, // set to true ONLY when the criteria in rule 5 are met
   "toolCalls": [
     {
       "toolName": string,
