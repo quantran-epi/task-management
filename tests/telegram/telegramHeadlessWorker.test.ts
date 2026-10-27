@@ -1369,7 +1369,7 @@ describe('Telegram Headless Worker', () => {
           schemaVersion: 2,
           conclusion: 'Bảng CMS_CARD chứa thông tin thẻ.',
           confidence: 'high',
-          claims: [{ id: 'C1', text: 'PAN được mã hóa trong bảng.', classification: 'DIRECT', citationIds: ['M1'] }],
+          claims: [{ id: 'C1', text: 'PAN được mã hóa trong bảng.', classification: 'DIRECT', citationIds: ['S1', 'M1'] }],
           hypotheses: [],
           unsupportedParts: [],
         },

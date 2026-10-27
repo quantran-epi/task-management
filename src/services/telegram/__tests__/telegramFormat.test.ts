@@ -173,9 +173,73 @@ describe('formatGroundedAnswerForTelegram', () => {
     // Each fact appears exactly once.
     expect(formatted.match(/ISS_DATE/g)).toHaveLength(1);
     expect(formatted.match(/REISSUE_DATE/g)).toHaveLength(1);
+    // Only the cited tool (M2) is listed; M1 was retrieved but never cited.
     expect(formatted).toContain(
-      '🔌 **Dữ liệu thực tế từ MCP:** [MCP] SmartVista FE & BO Database MCP - list_advertised_groups, [MCP] SmartVista FE & BO Database MCP - search_nodes'
+      '🔌 **Dữ liệu thực tế từ MCP:** [MCP] SmartVista FE & BO Database MCP - search_nodes'
     );
+    expect(formatted).not.toContain('list_advertised_groups');
+  });
+
+  it('lists only cited sources, not the whole retrieval pack (HAR tele-wrong-citation)', () => {
+    // Shape of docs/tauri.localhost_tele-wrong-citation.har: pack has unrelated docs,
+    // answer cites S10/S16/M16/M8 only.
+    const mkCitation = (citationId: string, documentTitle: string) => ({
+      citationId,
+      documentId: `doc-${citationId}`,
+      documentTitle,
+      sectionAnchor: 'x',
+      lineStart: 1,
+      lineEnd: 2,
+      authority: 'server' as const,
+      evidenceClass: 'OBSERVED' as const,
+      snapshotId: 'snap',
+      publishedContentHash: null,
+      citedExcerpt: 'x',
+    });
+    const grounding: ChatMessageGrounding = {
+      schemaVersion: 1,
+      authority: 'server',
+      outcome: 'READY',
+      answer: {
+        schemaVersion: 2,
+        language: 'vi',
+        conclusion: '',
+        confidence: 'high',
+        confidenceReason: 'ok',
+        hypotheses: [],
+        unsupportedParts: [],
+        claims: [
+          { id: 'C1', text: 'FE lưu tại ISSUE_DT.', citationIds: ['S10', 'S16'], classification: 'DIRECT', pathId: null },
+          { id: 'C2', text: 'BO lưu tại ISS_DATE.', citationIds: ['M16'], classification: 'DIRECT', pathId: null },
+          { id: 'C3', text: 'Bảng ISS_CARD có REG_DATE.', citationIds: ['M8'], classification: 'DIRECT', pathId: null },
+        ],
+      } as ChatMessageGrounding['answer'],
+      citations: [
+        mkCitation('S1', 'Phân bổ thanh toán dư nợ thẻ tín dụng'),
+        mkCitation('S6', 'live-graph-fixture-objects.md'),
+        mkCitation('S10', 'C06-03 — STH Thẻ Cá nhân (CN)'),
+        mkCitation('S16', 'C06-04 — STH Thẻ Doanh nghiệp (DN)'),
+        mkCitation('M1', '[MCP] SmartVista FE & BO Database MCP - list_advertised_groups'),
+        mkCitation('M8', '[MCP] SmartVista FE & BO Database MCP - search_nodes'),
+        mkCitation('M16', '[MCP] SmartVista FE & BO Database MCP - search_nodes'),
+      ],
+      paths: [],
+      conflicts: [],
+      scope: null,
+      modalityDiagnostics: null,
+      coverageWarnings: [],
+      fallbackReason: 'NONE',
+      routerVersion: null,
+      promptVersion: 'grounded-v1',
+      modelId: 'test-model',
+      createdAt: new Date().toISOString(),
+    } as ChatMessageGrounding;
+
+    const formatted = formatGroundedAnswerForTelegram(grounding);
+    expect(formatted).toContain('📚 **Nguồn tài liệu:** C06-03 — STH Thẻ Cá nhân (CN), C06-04 — STH Thẻ Doanh nghiệp (DN)');
+    expect(formatted).not.toContain('Phân bổ thanh toán dư nợ thẻ tín dụng');
+    expect(formatted).not.toContain('live-graph-fixture-objects.md');
+    expect(formatted).not.toContain('list_advertised_groups');
   });
 
   it('renders claims instead of conclusion, falling back to conclusion without claims', () => {

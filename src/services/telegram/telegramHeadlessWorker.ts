@@ -433,8 +433,34 @@ export function formatGroundedAnswerForTelegram(grounding: ChatMessageGrounding)
     parts.push(hypTexts.join('\n'));
   }
   if (grounding.citations && grounding.citations.length > 0) {
-    const docCitations = grounding.citations.filter((c) => !/^M\d+/i.test(c.citationId));
-    const mcpCitations = grounding.citations.filter((c) => /^M\d+/i.test(c.citationId));
+    // Only cite sources the answer actually references. `grounding.citations` is the
+    // whole retrieval pack; listing it unfiltered surfaces unrelated documents.
+    const citedIds = new Set<string>();
+    claims.forEach((c) =>
+      (c.citationIds || []).forEach((id) => citedIds.add(id.toUpperCase()))
+    );
+    const prose = `${conclusionText} ${claims.map((c) => c.text).join(' ')}`;
+    for (const m of prose.matchAll(/\[([SL]?\d+)\]/gi)) {
+      if (m[1]) citedIds.add(m[1].toUpperCase());
+    }
+    const answerReasons = (ans as { citationReasons?: Record<string, string> }).citationReasons;
+    if (answerReasons && typeof answerReasons === 'object') {
+      Object.keys(answerReasons).forEach((k) => citedIds.add(k.toUpperCase()));
+    }
+    const activeCitations = grounding.citations.filter((c) => {
+      if (citedIds.size === 0) return true;
+      const cleanId = c.citationId.toUpperCase();
+      const numOnly = cleanId.replace(/^[SL]/, '');
+      return (
+        citedIds.has(cleanId) ||
+        citedIds.has(`S${numOnly}`) ||
+        citedIds.has(`L${numOnly}`) ||
+        citedIds.has(numOnly)
+      );
+    });
+
+    const docCitations = activeCitations.filter((c) => !/^M\d+/i.test(c.citationId));
+    const mcpCitations = activeCitations.filter((c) => /^M\d+/i.test(c.citationId));
 
     const uniqueDocs = Array.from(
       new Set(docCitations.map((c) => c.documentTitle).filter(Boolean))
