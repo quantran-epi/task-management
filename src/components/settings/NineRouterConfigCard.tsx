@@ -42,6 +42,7 @@ import {
   DEFAULT_NINEROUTER_ENDPOINT,
   DEFAULT_NINEROUTER_MODEL,
   DEFAULT_NINEROUTER_CHAR_LIMIT,
+  DEFAULT_CONTEXT_WINDOW_TOKENS,
   DEFAULT_IMAGE_ENDPOINT,
   DEFAULT_IMAGE_MODEL,
 } from '../../services/ai/nineRouterTokenService';
@@ -67,6 +68,9 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
   const [endpoint, setEndpoint] = useState(DEFAULT_NINEROUTER_ENDPOINT);
   const [defaultModel, setDefaultModel] = useState(DEFAULT_NINEROUTER_MODEL);
   const [charLimit, setCharLimit] = useState<number>(DEFAULT_NINEROUTER_CHAR_LIMIT);
+  const [contextWindowTokens, setContextWindowTokens] = useState<number>(
+    DEFAULT_CONTEXT_WINDOW_TOKENS
+  );
   const [availableModels, setAvailableModels] = useState<string[]>([
     'gpt-4o',
     'gpt-4o-mini',
@@ -116,6 +120,7 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
       setEndpoint(config.endpoint);
       setDefaultModel(config.defaultModel);
       if (config.charLimit) setCharLimit(config.charLimit);
+      setContextWindowTokens(config.contextWindowTokens || DEFAULT_CONTEXT_WINDOW_TOKENS);
 
       setImageEndpoint(imgConfig.endpoint);
       setImageModel(imgConfig.defaultModel);
@@ -216,6 +221,7 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
           endpoint,
           defaultModel,
           charLimit,
+          contextWindowTokens,
         },
         db
       );
@@ -488,6 +494,59 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
             onChange={(val) => setCharLimit(val || DEFAULT_NINEROUTER_CHAR_LIMIT)}
             style={{ width: 240 }}
             addonAfter="ký tự"
+          />
+        </Form.Item>
+
+        <Form.Item
+          label="Context window của mô hình (tokens)"
+          extra={
+            <div style={{ marginTop: 6, fontSize: 12, color: '#8c8c8c', lineHeight: 1.5 }}>
+              Dùng để tự động nén ngữ cảnh giữa lượt (giống Claude Code). Khi prompt
+              vượt ngưỡng, phần hội thoại cũ được tóm tắt lại, giữ nguyên 20 kết quả
+              công cụ gần nhất. Chế độ tra cứu nén ở 75%, chế độ phân tích ở 90%.
+              <div style={{ marginTop: 6, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                <span>Gợi ý:</span>
+                <Tag.CheckableTag
+                  checked={contextWindowTokens === 32000}
+                  onChange={() => setContextWindowTokens(32000)}
+                >
+                  32k • Local nhỏ
+                </Tag.CheckableTag>
+                <Tag.CheckableTag
+                  checked={contextWindowTokens === 128000}
+                  onChange={() => setContextWindowTokens(128000)}
+                >
+                  128k • GPT-4o
+                </Tag.CheckableTag>
+                <Tag.CheckableTag
+                  checked={contextWindowTokens === 200000}
+                  onChange={() => setContextWindowTokens(200000)}
+                >
+                  200k • Claude / Mặc định
+                </Tag.CheckableTag>
+                <Tag.CheckableTag
+                  checked={contextWindowTokens === 1000000}
+                  onChange={() => setContextWindowTokens(1000000)}
+                >
+                  1M • Gemini
+                </Tag.CheckableTag>
+              </div>
+            </div>
+          }
+        >
+          <InputNumber
+            min={4000}
+            max={2000000}
+            step={1000}
+            formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+            parser={(value) => {
+              const parsed = value ? parseInt(value.replace(/,/g, ''), 10) : DEFAULT_CONTEXT_WINDOW_TOKENS;
+              return isNaN(parsed) ? DEFAULT_CONTEXT_WINDOW_TOKENS : parsed;
+            }}
+            value={contextWindowTokens}
+            onChange={(val) => setContextWindowTokens(val || DEFAULT_CONTEXT_WINDOW_TOKENS)}
+            style={{ width: 240 }}
+            addonAfter="tokens"
           />
         </Form.Item>
 

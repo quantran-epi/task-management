@@ -1228,9 +1228,11 @@ Rules:
         ...(analysisMode
           ? { keepRecentToolOutputs: 20, maxOldToolChars: 100_000 }
           : {}),
-        // In-loop compaction budget follows the app's "safe character budget" setting
-        // (Settings → 9router → Giới hạn ký tự ngữ cảnh, ~1 token ≈ 4 chars).
-        contextTokenBudget: Math.max(1000, Math.floor((config.charLimit || 12000) / 4)),
+        // Auto-compaction follows the configured model context window, like Claude
+        // Code: trigger at a fraction of the window using the provider-reported
+        // prompt token count.
+        contextWindowTokens: config.contextWindowTokens,
+        compactAtRatio: analysisMode ? 0.9 : 0.75,
         executeToolFn: dispatchAiToolCall,
         onTextChunk: (delta) => {
           fullResponse += delta;

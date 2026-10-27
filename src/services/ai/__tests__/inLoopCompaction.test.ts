@@ -81,4 +81,40 @@ describe('compactMessagesInLoop', () => {
     });
     expect(res.compacted).toBe(false);
   });
+
+  it('skips the LLM call when tool overhead alone busts the budget', async () => {
+    const messages = baseMessages(20);
+    const summarize = vi.fn(async () => ({ content: 'never called' }));
+    const onBeforeSummarize = vi.fn();
+    const res = await compactMessagesInLoop({
+      messages,
+      promptTokens: 200_000,
+      tokenBudget: 12_000,
+      fixedOverheadTokens: 187_133,
+      endpoint: 'http://x',
+      model: 'm',
+      summarize: summarize as any,
+      onBeforeSummarize,
+    });
+    expect(res.compacted).toBe(false);
+    expect(summarize).not.toHaveBeenCalled();
+    expect(onBeforeSummarize).not.toHaveBeenCalled();
+    expect(res.messages).toHaveLength(messages.length);
+  });
+
+  it('skips when there are too few collapsible messages to be worth a call', async () => {
+    const messages = baseMessages(2); // head + request + 2 pairs; tail eats most
+    const summarize = vi.fn(async () => ({ content: 'never called' }));
+    const res = await compactMessagesInLoop({
+      messages,
+      promptTokens: 9000,
+      tokenBudget: 3000,
+      keepRecentMessages: 4,
+      endpoint: 'http://x',
+      model: 'm',
+      summarize: summarize as any,
+    });
+    expect(res.compacted).toBe(false);
+    expect(summarize).not.toHaveBeenCalled();
+  });
 });

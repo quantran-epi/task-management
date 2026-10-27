@@ -12,6 +12,8 @@ import { testNineRouterConnection } from './nineRouterClient';
 export const DEFAULT_NINEROUTER_ENDPOINT = 'http://localhost:20128';
 export const DEFAULT_NINEROUTER_MODEL = 'gpt-4o';
 export const DEFAULT_NINEROUTER_CHAR_LIMIT = 12000;
+/** Assumed model context window when the user has not configured one. */
+export const DEFAULT_CONTEXT_WINDOW_TOKENS = 200000;
 
 export const DEFAULT_IMAGE_ENDPOINT = 'http://localhost:20128';
 export const DEFAULT_IMAGE_MODEL = 'dall-e-3';
@@ -100,10 +102,11 @@ export async function isNineRouterApiKeyStored(
 export async function getNineRouterConfig(
   db: TaskPlannerDatabase = defaultDb
 ): Promise<NineRouterConfig> {
-  const [endpointRec, modelRec, charLimitRec] = await Promise.all([
+  const [endpointRec, modelRec, charLimitRec, contextWindowRec] = await Promise.all([
     db.settings.get('ninerouter_endpoint'),
     db.settings.get('ninerouter_default_model'),
     db.settings.get('ninerouter_char_limit'),
+    db.settings.get('ninerouter_context_window_tokens'),
   ]);
 
   return {
@@ -119,6 +122,10 @@ export async function getNineRouterConfig(
       typeof charLimitRec?.value === 'number' && charLimitRec.value > 0
         ? charLimitRec.value
         : DEFAULT_NINEROUTER_CHAR_LIMIT,
+    contextWindowTokens:
+      typeof contextWindowRec?.value === 'number' && contextWindowRec.value > 0
+        ? contextWindowRec.value
+        : DEFAULT_CONTEXT_WINDOW_TOKENS,
   };
 }
 
@@ -140,6 +147,12 @@ export async function setNineRouterConfig(
     await db.settings.put({
       key: 'ninerouter_char_limit',
       value: config.charLimit,
+    });
+  }
+  if (config.contextWindowTokens !== undefined) {
+    await db.settings.put({
+      key: 'ninerouter_context_window_tokens',
+      value: config.contextWindowTokens,
     });
   }
 }

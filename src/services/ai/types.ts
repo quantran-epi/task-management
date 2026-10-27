@@ -2,6 +2,8 @@ export interface NineRouterConfig {
   endpoint: string;
   defaultModel: string;
   charLimit?: number;
+  /** Model context window in tokens; drives auto-compaction thresholds. */
+  contextWindowTokens?: number;
 }
 
 export interface ToolCall {

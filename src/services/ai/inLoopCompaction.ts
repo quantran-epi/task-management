@@ -13,12 +13,21 @@ import { completeJson as defaultCompleteJson } from './nineRouterClient';
  * user-configured budget.
  */
 
+/** Below this many collapsible messages, compaction costs more than it saves. */
+const MIN_MIDDLE_MESSAGES = 4;
+
 export interface InLoopCompactionInput {
   messages: readonly ChatCompletionMessage[];
   /** Prompt tokens reported by the model for the most recent round. */
   promptTokens: number;
-  /** Token budget derived from the app's "safe character budget" setting (chars / 4). */
+  /** Trigger threshold: contextWindowTokens × compactAtRatio. */
   tokenBudget: number;
+  /**
+   * Fixed per-round overhead in tokens that compaction cannot shrink
+   * (serialized tool definitions). When this alone busts the budget, compacting
+   * history cannot help, so we skip instead of burning an LLM call.
+   */
+  fixedOverheadTokens?: number;
   endpoint: string;
   apiKey?: string;
   model: string;
@@ -27,6 +36,8 @@ export interface InLoopCompactionInput {
   keepRecentMessages?: number;
   /** Injectable for tests. */
   summarize?: typeof defaultCompleteJson;
+  /** Called only when a summarization call is actually about to run. */
+  onBeforeSummarize?: () => void;
 }
 
 export interface InLoopCompactionResult {
@@ -74,13 +85,18 @@ export async function compactMessagesInLoop(
 
   if (input.tokenBudget <= 0) return unchanged;
   if (input.promptTokens <= input.tokenBudget) return unchanged;
+  // Overhead alone busts the budget: no amount of history compaction helps.
+  if ((input.fixedOverheadTokens ?? 0) >= input.tokenBudget) return unchanged;
 
   const keepRecent = Math.max(2, input.keepRecentMessages ?? 6);
   const desiredStart = input.messages.length - keepRecent;
   const tailStart = findSafeTailStart(input.messages, desiredStart);
 
   // Nothing meaningful to summarize: system prompt + original request + tail.
+  // A short middle means the overage comes from tool definitions, not history —
+  // compacting would cost an LLM call and free nothing, so bail out.
   if (tailStart <= 2) return unchanged;
+  if (tailStart - 1 < MIN_MIDDLE_MESSAGES) return unchanged;
 
   const head = input.messages[0];
   if (!head) return unchanged;
@@ -90,6 +106,7 @@ export async function compactMessagesInLoop(
   if (!transcript.trim()) return unchanged;
 
   const summarize = input.summarize ?? defaultCompleteJson;
+  input.onBeforeSummarize?.();
   try {
     const raw = await summarize({
       endpoint: input.endpoint,
