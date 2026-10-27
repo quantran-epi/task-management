@@ -455,6 +455,8 @@ export async function startKnowledgeServer(
         repo.queryFullText(snapshotId, criteria.keywords.join(' '), criteria.limit),
       queryVector: (snapshotId, criteria) =>
         repo.queryVector(snapshotId, criteria.vector, criteria.limit),
+      queryChunksByDocument: (snapshotId, documentIds, limit) =>
+        repo.queryChunksByDocument(snapshotId, documentIds, limit),
       validateVectorIndexMetadata: (snapshotId, metadata) =>
         repo.validateVectorIndexMetadata(snapshotId, metadata),
       // ponytail: repo ignores setId + gracePeriodMs and uses its global grace constant;

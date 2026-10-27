@@ -334,6 +334,23 @@ export const CYPHER_QUERIES = {
     LIMIT $limit
   `,
 
+  QUERY_CHUNKS_BY_DOCUMENT: `
+    MATCH (c:Chunk)
+    WHERE c.graphSnapshotId = $snapshotId
+      AND c.documentId IN $documentIds
+    RETURN c.chunkKey AS chunkKey,
+           c.documentId AS sourceDocumentId,
+           c.documentTitle AS sourceDocumentTitle,
+           c.publishedContentHash AS publishedContentHash,
+           c.headingPath AS headingPath,
+           c.startLine AS lineStart,
+           c.endLine AS lineEnd,
+           c.text AS rawSnippet,
+           1.0 AS score
+    ORDER BY c.documentId, c.startLine
+    LIMIT $limit
+  `,
+
   RECORD_LEASE: `
     MATCH (s:GraphSnapshot {graphSnapshotId: $graphSnapshotId})
     MERGE (l:RetrievalLease {leaseId: $leaseId})
@@ -1165,6 +1182,40 @@ export class Neo4jRepository implements GraphRepository {
         id: r.get('chunkKey'),
         score: r.get('score'),
         modalitiesContributed: ['vector'],
+        sourceDocumentId: r.get('sourceDocumentId'),
+        sourceDocumentTitle: r.get('sourceDocumentTitle'),
+        sectionAnchor: (r.get('headingPath') || []).join(' > '),
+        lineStart: r.get('lineStart')?.toNumber ? r.get('lineStart').toNumber() : r.get('lineStart'),
+        lineEnd: r.get('lineEnd')?.toNumber ? r.get('lineEnd').toNumber() : r.get('lineEnd'),
+        rawSnippet: r.get('rawSnippet'),
+        publishedContentHash: r.get('publishedContentHash'),
+        snapshotId,
+        hasConflict: false,
+      }));
+    } finally {
+      await session.close();
+    }
+  }
+
+  async queryChunksByDocument(
+    snapshotId: string,
+    documentIds: readonly string[],
+    limit: number
+  ): Promise<ChunkItem[]> {
+    if (documentIds.length === 0) return [];
+    const session = this.getSession();
+    try {
+      const res = await session.run(CYPHER_QUERIES.QUERY_CHUNKS_BY_DOCUMENT, {
+        snapshotId,
+        documentIds: [...documentIds],
+        limit: neo4j.int(limit),
+      });
+
+      return res.records.map((r) => ({
+        type: 'chunk',
+        id: r.get('chunkKey'),
+        score: r.get('score'),
+        modalitiesContributed: ['graph'],
         sourceDocumentId: r.get('sourceDocumentId'),
         sourceDocumentTitle: r.get('sourceDocumentTitle'),
         sectionAnchor: (r.get('headingPath') || []).join(' > '),

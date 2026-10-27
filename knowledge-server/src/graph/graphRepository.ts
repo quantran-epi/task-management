@@ -110,6 +110,11 @@ export interface GraphRepository {
   queryVector(snapshotId: string, queryVector: readonly number[], limit: number): Promise<ChunkItem[]>;
 
   /**
+   * Fetches chunks belonging to the given documents in the snapshot, in document order.
+   */
+  queryChunksByDocument(snapshotId: string, documentIds: readonly string[], limit: number): Promise<ChunkItem[]>;
+
+  /**
    * Cleans up superseded generation indexes/nodes where grace period elapsed and active lease count is zero.
    * Returns number of generations cleaned.
    */
@@ -444,6 +449,39 @@ export class InMemoryGraphRepository implements GraphRepository {
       snapshotId,
       hasConflict: false,
     }));
+  }
+
+  async queryChunksByDocument(
+    snapshotId: string,
+    documentIds: readonly string[],
+    limit: number
+  ): Promise<ChunkItem[]> {
+    const gen = this.generations.get(snapshotId);
+    if (!gen || documentIds.length === 0) return [];
+    const wanted = new Set(documentIds);
+
+    const hits: ChunkItem[] = [];
+    for (const c of gen.chunks) {
+      if (!wanted.has(c.documentId)) continue;
+      hits.push({
+        type: 'chunk',
+        id: c.chunkKey,
+        score: 1.0,
+        modalitiesContributed: ['graph'],
+        sourceDocumentId: c.documentId,
+        sourceDocumentTitle: c.documentTitle,
+        sectionAnchor: c.headingPath.join(' > '),
+        lineStart: c.startLine,
+        lineEnd: c.endLine,
+        rawSnippet: c.rawContent,
+        publishedContentHash: c.publishedContentHash,
+        snapshotId,
+        hasConflict: false,
+      });
+      if (hits.length >= limit) break;
+    }
+
+    return hits;
   }
 
   async cleanupSupersededGenerations(

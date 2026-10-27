@@ -1636,6 +1636,164 @@ describe('18-W0-03B: RetrievalService Pinned Parallel Orchestration & Timeouts',
       expect(response.diagnostics.graphAfterFusion).toEqual({ entity: 1, edge: 0, path: 0 });
     });
 
+    it('expands a seed-only SourceDocument entity into its document chunks', async () => {
+      const indexGateway = new DeterministicIndexGatewayStub();
+      indexGateway.activeSnapshotId = snapshotId;
+      const embedding = new DeterministicEmbeddingStub();
+      const planner = new DeterministicPlannerStub();
+      const graphGateway = new DeterministicGraphGatewayStub();
+
+      const fixtureChunk = PILOT_GOLD_SUPPORTING_CHUNKS[0]!;
+      const docId = '60000006-0000-4000-8000-000000000024';
+      const docUrn = `urn:plannermate:markdown:SourceDocument:${docId}`;
+      const docChunk: ChunkItem = {
+        type: 'chunk',
+        id: fixtureChunk.chunkId,
+        score: 1,
+        modalitiesContributed: ['graph'],
+        sourceDocumentId: docId,
+        sourceDocumentTitle: fixtureChunk.documentTitle,
+        sectionAnchor: 'Section 1',
+        lineStart: 1,
+        lineEnd: 5,
+        rawSnippet: 'EVT_EVENT stores event rows.',
+        publishedContentHash: fixtureChunk.publishedContentHash,
+        snapshotId,
+        hasConflict: false,
+      };
+      // Only the document-expansion path may surface this chunk: fulltext/vector stay empty.
+      indexGateway.queryChunksByDocument = async (_snap, documentIds) =>
+        documentIds.includes(docId) ? [docChunk] : [];
+
+      graphGateway.mockCandidates = [{
+        urn: docUrn,
+        canonicalName: 'EVT_EVENT data dictionary',
+        kind: 'SourceDocument',
+      }];
+      planner.scriptedResult = {
+        type: 'plan',
+        plan: {
+          planId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12',
+          queryIntent: 'LOOKUP',
+          seedUrns: [docUrn],
+          traversalSteps: [],
+          overallMaxDepth: 1,
+          includeInferred: false,
+          fulltextKeywords: ['EVT_EVENT'],
+          semanticQuery: 'EVT_EVENT',
+        },
+      };
+      graphGateway.mockSeedEntities = [{
+        type: 'entity',
+        id: docUrn,
+        score: 1,
+        modalitiesContributed: ['graph'],
+        urn: docUrn,
+        canonicalName: 'EVT_EVENT data dictionary',
+        kind: 'SourceDocument',
+        snapshotId,
+        hasConflict: false,
+      }];
+
+      const response = await new RetrievalService({
+        indexGateway,
+        embeddingProvider: embedding,
+        queryPlanner: planner,
+        graphGateway,
+      }).retrieve(setId, defaultRequest);
+
+      expect(response.outcome).not.toBe('SEED_ONLY');
+      const chunkItems = response.items.filter((item) => item.type === 'chunk');
+      expect(chunkItems).toHaveLength(1);
+      expect(chunkItems[0]?.sourceDocumentId).toBe(docId);
+      // Entity/edge counts stay untouched by the expansion.
+      expect(response.modalityStatus.graph.entityCount).toBe(1);
+      expect(response.modalityStatus.graph.edgeCount).toBe(0);
+    });
+
+    it('expands SourceDocument seeds even when unrelated fulltext chunks are present', async () => {
+      const indexGateway = new DeterministicIndexGatewayStub();
+      indexGateway.activeSnapshotId = snapshotId;
+      const embedding = new DeterministicEmbeddingStub();
+      const planner = new DeterministicPlannerStub();
+      const graphGateway = new DeterministicGraphGatewayStub();
+
+      const fixtureChunk = PILOT_GOLD_SUPPORTING_CHUNKS[0]!;
+      const docId = '60000006-0000-4000-8000-000000000024';
+      const docUrn = `urn:plannermate:markdown:SourceDocument:${docId}`;
+      const unrelatedDocId = '60000006-0000-4000-8000-000000000099';
+      const unrelatedChunk: ChunkItem = {
+        type: 'chunk',
+        id: 'f'.repeat(64),
+        score: 0.9,
+        modalitiesContributed: ['fulltext'],
+        sourceDocumentId: unrelatedDocId,
+        sourceDocumentTitle: 'Unrelated credit allocation doc',
+        sectionAnchor: 'Section 9',
+        lineStart: 1,
+        lineEnd: 2,
+        rawSnippet: 'EVT_EVENT unrelated credit allocation note.',
+        publishedContentHash: fixtureChunk.publishedContentHash,
+        snapshotId,
+        hasConflict: false,
+      };
+      const docChunk: ChunkItem = {
+        ...unrelatedChunk,
+        id: fixtureChunk.chunkId,
+        modalitiesContributed: ['graph'],
+        sourceDocumentId: docId,
+        sourceDocumentTitle: fixtureChunk.documentTitle,
+        rawSnippet: 'EVT_EVENT stores event rows.',
+      };
+      indexGateway.fulltextChunks = [unrelatedChunk];
+      indexGateway.queryChunksByDocument = async (_snap, documentIds) =>
+        documentIds.includes(docId) ? [docChunk] : [];
+
+      graphGateway.mockCandidates = [{
+        urn: docUrn,
+        canonicalName: 'EVT_EVENT data dictionary',
+        kind: 'SourceDocument',
+      }];
+      planner.scriptedResult = {
+        type: 'plan',
+        plan: {
+          planId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12',
+          queryIntent: 'LOOKUP',
+          seedUrns: [docUrn],
+          traversalSteps: [],
+          overallMaxDepth: 1,
+          includeInferred: false,
+          fulltextKeywords: ['EVT_EVENT'],
+          semanticQuery: 'EVT_EVENT',
+        },
+      };
+      graphGateway.mockSeedEntities = [{
+        type: 'entity',
+        id: docUrn,
+        score: 1,
+        modalitiesContributed: ['graph'],
+        urn: docUrn,
+        canonicalName: 'EVT_EVENT data dictionary',
+        kind: 'SourceDocument',
+        snapshotId,
+        hasConflict: false,
+      }];
+
+      const response = await new RetrievalService({
+        indexGateway,
+        embeddingProvider: embedding,
+        queryPlanner: planner,
+        graphGateway,
+      }).retrieve(setId, { ...defaultRequest, query: 'EVT_EVENT' });
+
+      const chunkIds = response.items
+        .filter((item) => item.type === 'chunk')
+        .map((item) => item.id);
+      expect(chunkIds).toContain(docChunk.id);
+      expect(response.modalityStatus.graph.entityCount).toBe(1);
+      expect(response.modalityStatus.graph.edgeCount).toBe(0);
+    });
+
     it('honors request.includeInferred over the planner default when crossing INFERRED edges', async () => {
       const indexGateway = new DeterministicIndexGatewayStub();
       indexGateway.activeSnapshotId = snapshotId;

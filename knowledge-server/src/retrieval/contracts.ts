@@ -135,6 +135,16 @@ export interface RetrievalIndexGateway {
   ): Promise<ChunkItem[]>;
 
   /**
+   * Fetches chunks belonging to specific documents in the pinned snapshot.
+   * Used to expand entity-only (seed) graph results into readable evidence.
+   */
+  queryChunksByDocument(
+    snapshotId: string,
+    documentIds: readonly string[],
+    limit: number
+  ): Promise<ChunkItem[]>;
+
+  /**
    * Verifies that the vector index for snapshotId matches the given provider metadata (D-09).
    */
   validateVectorIndexMetadata(

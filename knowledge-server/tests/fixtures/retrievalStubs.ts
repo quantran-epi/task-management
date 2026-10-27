@@ -197,6 +197,17 @@ export class DeterministicIndexGatewayStub implements RetrievalIndexGateway {
     return this.vectorChunks.slice(0, criteria.limit);
   }
 
+  async queryChunksByDocument(
+    snapshotId: string,
+    documentIds: readonly string[],
+    limit: number
+  ): Promise<ChunkItem[]> {
+    const wanted = new Set(documentIds);
+    return this.fulltextChunks
+      .filter((c) => wanted.has(c.sourceDocumentId))
+      .slice(0, limit);
+  }
+
   async validateVectorIndexMetadata(
     snapshotId: string,
     metadata: EmbeddingProviderMetadata

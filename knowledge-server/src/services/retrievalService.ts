@@ -55,6 +55,7 @@ export const DEFAULT_RETRIEVAL_TIMEOUTS: RetrievalTimeouts = Object.freeze({
   graphMs: 10000,
 });
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SEMANTIC_EVIDENCE_FLOOR = 0.7;
 const CROSS_LINGUAL_SEMANTIC_EVIDENCE_FLOOR = 0.5;
 const NON_ASCII_LETTER_RE = /[^\x00-\x7F]/;
@@ -549,7 +550,14 @@ export class RetrievalService {
       ],
     });
 
-    const finalItems = tagged.items;
+    const finalItems: RetrievalItem[] = [...tagged.items];
+    // Separate closure: keeps `finalItems` un-narrowed at the push site below.
+    const appendItems = (items: readonly RetrievalItem[]) => {
+      for (const item of items) {
+        if (finalItems.length >= request.limit) break;
+        finalItems.push(item);
+      }
+    };
     // Path ordering follows package rank order, never the gateway array index (D-18).
     const rankOrder = new Map<string, number>();
     rankedPackages.forEach((pkg, index) => {
@@ -563,6 +571,53 @@ export class RetrievalService {
     });
     const paths = closeOrderedPaths(orderedCandidates, finalItems);
     const conflictGroups = buildConflictGroups(finalItems);
+
+    // Seed-only SourceDocument expansion: a resolved SourceDocument entity with no
+    // edges reaches the client as a bare name, which the model cannot use. Gate on the
+    // graph modality itself — fulltext/vector may simultaneously return unrelated chunks,
+    // and those must not suppress the expansion (HAR 2026-10-27: 8 credit chunks masked
+    // the 4 correct SourceDocument seeds). Other seed kinds (e.g. SoftwareComponent) may
+    // coexist; they are left untouched.
+    const SOURCE_DOCUMENT_URN_PREFIX = 'urn:plannermate:markdown:SourceDocument:';
+    const graphSourceDocumentSeeds = relevantGraphItems.filter(
+      (item): item is EntityItem =>
+        item.type === 'entity' && item.urn.startsWith(SOURCE_DOCUMENT_URN_PREFIX)
+    );
+    const graphHasNoRelations =
+      (modalityStatus.graph.entityCount ?? 0) > 0 &&
+      (modalityStatus.graph.edgeCount ?? 0) === 0 &&
+      (modalityStatus.graph.pathCount ?? 0) === 0 &&
+      paths.length === 0 &&
+      conflictGroups.length === 0 &&
+      graphEdges.length === 0;
+
+    if (graphHasNoRelations && graphSourceDocumentSeeds.length > 0) {
+      const documentIds = [
+        ...new Set(
+          graphSourceDocumentSeeds
+            .map((item) => item.urn.slice(SOURCE_DOCUMENT_URN_PREFIX.length))
+            .filter((id) => UUID_RE.test(id))
+        ),
+      ];
+      if (documentIds.length > 0) {
+        try {
+          const expandedChunks = await this.deps.indexGateway.queryChunksByDocument(
+            pinnedSnapshotId,
+            documentIds,
+            request.limit
+          );
+          const alreadyPresent = new Set(
+            finalItems
+              .filter((item): item is ChunkItem => item.type === 'chunk')
+              .map((item) => item.id)
+          );
+          appendItems(expandedChunks.filter((chunk) => !alreadyPresent.has(chunk.id)));
+        } catch {
+          // Expansion is best-effort; keep the seed-only response on failure.
+        }
+      }
+    }
+
     const graphAfterFusion = {
       entity: finalItems.filter((item) => item.type === 'entity').length,
       edge: finalItems.filter((item) => item.type === 'edge').length,
@@ -613,6 +668,7 @@ export class RetrievalService {
       isClarification && (((planningOutcome as any).safeCandidates?.length ?? 0) > 0);
 
     const graphStatus = modalityStatus.graph.status;
+
     // SEED_ONLY means the whole response is seed identity: at least one entity
     // item, no edges, no paths, no conflicts, and no chunk evidence at all.
     const graphSeedOnly =
