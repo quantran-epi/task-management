@@ -748,12 +748,18 @@ describe('groundedTurn state machine', () => {
     );
   });
 
-  it('25. Uses a bounded 300-second federated retrieval budget', async () => {
+  it('25. Uses accuracy-first federated retrieval budgets below the synthesis reduce trigger', async () => {
     await runGroundedTurn(mockInput, mockDeps);
 
     expect(mockDeps.retrieveFederated).toHaveBeenCalledWith(
       expect.objectContaining({
-        budgets: expect.objectContaining({ elapsedMs: 300000 }),
+        budgets: expect.objectContaining({
+          elapsedMs: 300000,
+          maxItems: 200,
+          maxEvidenceChars: 56000,
+          maxSets: 10,
+          concurrency: 4,
+        }),
       }),
       mockInput.signal
     );

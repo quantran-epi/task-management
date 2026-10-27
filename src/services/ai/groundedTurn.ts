@@ -505,8 +505,11 @@ export async function runGroundedTurn(
             concurrency: 4,
             elapsedMs: 300000,
             maxSets: 10,
-            maxItems: 50,
-            maxEvidenceChars: 30000,
+            maxItems: 200,
+            // Federated chars count raw snippet + title, so they upper-bound the
+            // synthesis prompt text; 56000 < REDUCE_TRIGGER_CHARS (60000) keeps
+            // single-pass synthesis, with headroom for snippet-vs-excerpt drift.
+            maxEvidenceChars: 56000,
           },
           limit: 20,
           includeInferred: true,
