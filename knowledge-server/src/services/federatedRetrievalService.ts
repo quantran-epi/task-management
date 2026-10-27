@@ -155,6 +155,127 @@ function computeEvidenceChars(item: any): number {
   return 0;
 }
 
+type FederatedSetResult = {
+  assignment: FederatedRetrievalRequest['setTierAssignments'][number];
+  response?: RetrievalResponse;
+  failureReason?: 'TIMEOUT' | 'STALE' | 'ERROR';
+  latencyMs?: number;
+};
+
+type PackedFederatedEvidence = {
+  items: FederatedRetrievalResponse['items'];
+  paths: FederatedRetrievalResponse['paths'];
+  conflictGroups: FederatedRetrievalResponse['conflictGroups'];
+  retainedEntityIds: Set<string>;
+  retainedEdgeIds: Set<string>;
+  retainedPathIds: Set<string>;
+  totalCharsIncluded: number;
+  truncated: 'items' | 'evidence' | null;
+};
+
+/**
+ * Packs per-set evidence into one deduped, budget-bounded payload.
+ * Budgets apply to the packed post-dedupe population, so duplicate identities
+ * never consume the item budget (T-24-08).
+ */
+function packFederatedEvidence(
+  perSetResults: readonly FederatedSetResult[],
+  budgets: { maxItems: number; maxEvidenceChars: number }
+): PackedFederatedEvidence {
+  // Baseline roleGroup first, then scope_diff per D-22
+  const baselineResults = perSetResults.filter((r) => r.assignment.roleGroup === 'baseline' && r.response);
+  const scopeDiffResults = perSetResults.filter((r) => r.assignment.roleGroup === 'scope_diff' && r.response);
+
+  const orderedResults = [...baselineResults, ...scopeDiffResults];
+
+  const items: FederatedRetrievalResponse['items'] = [];
+  const paths: FederatedRetrievalResponse['paths'] = [];
+  const conflictGroups: FederatedRetrievalResponse['conflictGroups'] = [];
+
+  // Retained identities across sets: each identity is counted exactly once (T-24-08).
+  const retainedEntityIds = new Set<string>();
+  const retainedEdgeIds = new Set<string>();
+  const retainedPathIds = new Set<string>();
+  const retainedGraphIdentities = new Set<string>();
+  const retainedNonGraphKeys = new Set<string>();
+
+  let totalCharsIncluded = 0;
+  let truncated: 'items' | 'evidence' | null = null;
+
+  for (const setRes of orderedResults) {
+    const { assignment, response } = setRes;
+    if (!response) continue;
+
+    // Preserving paths per-set as-is; never concatenated across snapshots (D-14)
+    for (const p of response.paths) {
+      if (paths.length < 100) {
+        paths.push({
+          setId: assignment.setId,
+          snapshotId: response.snapshotId,
+          roleGroup: assignment.roleGroup,
+          path: p,
+        });
+        retainedPathIds.add(p.pathId);
+      }
+    }
+
+    // Conflict groups
+    for (const cg of response.conflictGroups) {
+      if (conflictGroups.length < 100) {
+        conflictGroups.push({
+          setId: assignment.setId,
+          snapshotId: response.snapshotId,
+          roleGroup: assignment.roleGroup,
+          conflictGroup: cg,
+        });
+      }
+    }
+
+    // Items within set are kept in internal rank order (D-22: fusionScore within snapshot, across groups roleGroup order)
+    for (const it of response.items) {
+      if (items.length >= budgets.maxItems) {
+        truncated = 'items';
+        break;
+      }
+      // Graph identities collapse across sets; non-graph items keep the set-aware key.
+      const graphIdentity = retainedGraphIdentity(it);
+      if (graphIdentity) {
+        if (retainedGraphIdentities.has(graphIdentity)) continue;
+        retainedGraphIdentities.add(graphIdentity);
+        if (it.type === 'entity') retainedEntityIds.add(it.id);
+        else if (it.type === 'edge') retainedEdgeIds.add(it.id);
+      } else {
+        const key = `${assignment.setId}:${it.type}:${it.id}`;
+        if (retainedNonGraphKeys.has(key)) continue;
+        retainedNonGraphKeys.add(key);
+      }
+      const itemChars = computeEvidenceChars(it);
+      if (totalCharsIncluded + itemChars > budgets.maxEvidenceChars && items.length > 0) {
+        truncated = 'evidence';
+        break;
+      }
+      totalCharsIncluded += itemChars;
+      items.push({
+        setId: assignment.setId,
+        snapshotId: response.snapshotId,
+        roleGroup: assignment.roleGroup,
+        item: it,
+      });
+    }
+  }
+
+  return {
+    items,
+    paths,
+    conflictGroups,
+    retainedEntityIds,
+    retainedEdgeIds,
+    retainedPathIds,
+    totalCharsIncluded,
+    truncated,
+  };
+}
+
 export async function runFederatedRetrieval(
   request: FederatedRetrievalRequest,
   deps: FederatedRetrievalDependencies,
@@ -173,15 +294,9 @@ export async function runFederatedRetrieval(
   const tierOrder: Array<'REQUIRED' | 'LIKELY' | 'OPTIONAL'> = ['REQUIRED', 'LIKELY', 'OPTIONAL'];
   const processedSetIds = new Set<string>();
 
-  const perSetResults: Array<{
-    assignment: (typeof request.setTierAssignments)[number];
-    response?: RetrievalResponse;
-    failureReason?: 'TIMEOUT' | 'STALE' | 'ERROR';
-    latencyMs?: number;
-  }> = [];
+  const perSetResults: FederatedSetResult[] = [];
 
-  let accumulatedItemsCount = 0;
-  let accumulatedEvidenceChars = 0;
+  let finalPack: PackedFederatedEvidence = packFederatedEvidence([], budgets);
   let hasSetRejection = false;
   let budgetStopCode: 'BUDGET_SETS' | 'BUDGET_ITEMS' | 'BUDGET_EVIDENCE' | 'BUDGET_ELAPSED' | null = null;
 
@@ -224,7 +339,7 @@ export async function runFederatedRetrieval(
         ((baselineRequiredAssignments.length > 0 && !hasBaselineSuccess) ||
           (scopeDiffRequiredAssignments.length > 0 && !hasScopeDiffSuccess));
 
-      const needsMoreItems = accumulatedItemsCount < coverageThreshold;
+      const needsMoreItems = finalPack.items.length < coverageThreshold;
 
       if (!needsMoreItems && !missingScope) {
         // Sufficient coverage already reached
@@ -303,20 +418,16 @@ export async function runFederatedRetrieval(
           setId: res.assignment.setId,
           message: `Set ${res.assignment.setId} failed with ${res.failureReason}`,
         });
-      } else if (res.response) {
-        for (const it of res.response.items) {
-          accumulatedItemsCount++;
-          accumulatedEvidenceChars += computeEvidenceChars(it);
-        }
       }
     }
 
-    // Check budget items and chars
-    if (accumulatedItemsCount >= budgets.maxItems) {
+    finalPack = packFederatedEvidence(perSetResults, budgets);
+
+    if (finalPack.truncated === 'items') {
       budgetStopCode = 'BUDGET_ITEMS';
       break;
     }
-    if (accumulatedEvidenceChars >= budgets.maxEvidenceChars) {
+    if (finalPack.truncated === 'evidence') {
       budgetStopCode = 'BUDGET_EVIDENCE';
       break;
     }
@@ -332,86 +443,6 @@ export async function runFederatedRetrieval(
       setId: null,
       message: `Retrieval stopped by budget limit: ${budgetStopCode}`,
     });
-  }
-
-  // Combine results
-  // Baseline roleGroup first, then scope_diff per D-22
-  const baselineResults = perSetResults.filter((r) => r.assignment.roleGroup === 'baseline' && r.response);
-  const scopeDiffResults = perSetResults.filter((r) => r.assignment.roleGroup === 'scope_diff' && r.response);
-
-  const orderedResults = [...baselineResults, ...scopeDiffResults];
-
-  const items: FederatedRetrievalResponse['items'] = [];
-  const paths: FederatedRetrievalResponse['paths'] = [];
-  const conflictGroups: FederatedRetrievalResponse['conflictGroups'] = [];
-
-  // Retained identities across sets: each identity is counted exactly once (T-24-08).
-  const retainedEntityIds = new Set<string>();
-  const retainedEdgeIds = new Set<string>();
-  const retainedPathIds = new Set<string>();
-  const retainedGraphIdentities = new Set<string>();
-  const retainedNonGraphKeys = new Set<string>();
-
-  let totalCharsIncluded = 0;
-
-  for (const setRes of orderedResults) {
-    const { assignment, response } = setRes;
-    if (!response) continue;
-
-    // Preserving paths per-set as-is; never concatenated across snapshots (D-14)
-    for (const p of response.paths) {
-      if (paths.length < 100) {
-        paths.push({
-          setId: assignment.setId,
-          snapshotId: response.snapshotId,
-          roleGroup: assignment.roleGroup,
-          path: p,
-        });
-        retainedPathIds.add(p.pathId);
-      }
-    }
-
-    // Conflict groups
-    for (const cg of response.conflictGroups) {
-      if (conflictGroups.length < 100) {
-        conflictGroups.push({
-          setId: assignment.setId,
-          snapshotId: response.snapshotId,
-          roleGroup: assignment.roleGroup,
-          conflictGroup: cg,
-        });
-      }
-    }
-
-    // Items within set are kept in internal rank order (D-22: fusionScore within snapshot, across groups roleGroup order)
-    for (const it of response.items) {
-      if (items.length >= budgets.maxItems || items.length >= 200) {
-        break;
-      }
-      // Graph identities collapse across sets; non-graph items keep the set-aware key.
-      const graphIdentity = retainedGraphIdentity(it);
-      if (graphIdentity) {
-        if (retainedGraphIdentities.has(graphIdentity)) continue;
-        retainedGraphIdentities.add(graphIdentity);
-        if (it.type === 'entity') retainedEntityIds.add(it.id);
-        else if (it.type === 'edge') retainedEdgeIds.add(it.id);
-      } else {
-        const key = `${assignment.setId}:${it.type}:${it.id}`;
-        if (retainedNonGraphKeys.has(key)) continue;
-        retainedNonGraphKeys.add(key);
-      }
-      const itemChars = computeEvidenceChars(it);
-      if (totalCharsIncluded + itemChars > budgets.maxEvidenceChars && items.length > 0) {
-        break;
-      }
-      totalCharsIncluded += itemChars;
-      items.push({
-        setId: assignment.setId,
-        snapshotId: response.snapshotId,
-        roleGroup: assignment.roleGroup,
-        item: it,
-      });
-    }
   }
 
   // Aggregate modality statuses across all successful responses
@@ -461,10 +492,10 @@ export async function runFederatedRetrieval(
   }
 
   // User-visible graph counts derive from retained identities, never per-set sums.
-  modalityStatus.graph.entityCount = retainedEntityIds.size;
-  modalityStatus.graph.edgeCount = retainedEdgeIds.size;
-  modalityStatus.graph.pathCount = retainedPathIds.size;
-  modalityStatus.graph.itemCount = items.length;
+  modalityStatus.graph.entityCount = finalPack.retainedEntityIds.size;
+  modalityStatus.graph.edgeCount = finalPack.retainedEdgeIds.size;
+  modalityStatus.graph.pathCount = finalPack.retainedPathIds.size;
+  modalityStatus.graph.itemCount = finalPack.items.length;
 
   // Aggregate content-free stage rows and dropped seeds across sets (D-13, D-19).
   const stageDiagnostics: StageDiagnostic[] = [];
@@ -514,15 +545,15 @@ export async function runFederatedRetrieval(
     outcome = 'DEGRADED';
   } else if (everySetSeedOnly) {
     outcome = 'SEED_ONLY';
-  } else if (items.length === 0 && paths.length === 0) {
+  } else if (finalPack.items.length === 0 && finalPack.paths.length === 0) {
     outcome = 'NO_EVIDENCE';
   }
 
   const responsePayload = {
     outcome,
-    items,
-    paths,
-    conflictGroups,
+    items: finalPack.items,
+    paths: finalPack.paths,
+    conflictGroups: finalPack.conflictGroups,
     modalityStatus,
     diagnostics: {
       degraded: outcome === 'DEGRADED',

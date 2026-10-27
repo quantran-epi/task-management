@@ -15,6 +15,7 @@ const TOKEN = 'server-test-token-very-secret';
 const SET_ID_1 = '00000000-0000-4000-8000-000000000001';
 const SET_ID_2 = '00000000-0000-4000-8000-000000000002';
 const SET_ID_3 = '00000000-0000-4000-8000-000000000003';
+const SET_ID_4 = '00000000-0000-4000-8000-000000000004';
 
 function mockSingleSetResponse(
   snapshotId: string,
@@ -60,6 +61,20 @@ function mockChunkItem(id: string, snapshotId: string, score: number = 0.9): any
     lineEnd: 5,
     rawSnippet: `Snippet content for ${id}`,
     publishedContentHash: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+    snapshotId,
+    hasConflict: false,
+  };
+}
+
+function mockEntityItem(id: string, snapshotId: string): any {
+  return {
+    type: 'entity',
+    id,
+    score: 1,
+    modalitiesContributed: ['graph'],
+    urn: id,
+    canonicalName: id,
+    kind: 'DatabaseObject',
     snapshotId,
     hasConflict: false,
   };
@@ -836,5 +851,120 @@ describe('Federated aggregation: counts, severity, stages, seeds (24-03)', () =>
     expect(stages.length).toBeLessThanOrEqual(20);
     const serialized = JSON.stringify(body.diagnostics);
     expect(serialized).not.toContain('"message"');
+  });
+});
+
+describe('Federated budget accounting (261027-htc)', () => {
+  const accountingBudgets = {
+    concurrency: 4,
+    elapsedMs: 2000,
+    maxSets: 10,
+    maxItems: 50,
+    maxEvidenceChars: 10000,
+  };
+
+  const injectFederation = async (
+    responses: Record<string, RetrievalResponse>,
+    assignments: FederatedRetrievalRequest['setTierAssignments'],
+    budgets = accountingBudgets
+  ) => {
+    const retrieveMock = vi.fn().mockImplementation((setId: string) => {
+      const response = responses[setId];
+      if (!response) return Promise.reject(new Error('Unknown setId'));
+      return Promise.resolve(response);
+    });
+    const app = buildKnowledgeServer({
+      token: TOKEN,
+      allowedOrigins: [ORIGIN],
+      retrievalService: { retrieve: retrieveMock },
+    }).app;
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/retrieve',
+      headers: { origin: ORIGIN, authorization: `Bearer ${TOKEN}` },
+      payload: {
+        query: 'budget accounting query',
+        setTierAssignments: assignments,
+        comparisonMode: 'single',
+        budgets,
+        limit: 20,
+        includeInferred: false,
+        recentTurns: [],
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    return { body: res.json() as FederatedRetrievalResponse, retrieveMock };
+  };
+
+  const sharedEntities = (snapshotId: string) =>
+    Array.from({ length: 20 }, (_, i) =>
+      mockEntityItem(`urn:plannermate:test:Entity:E${i}`, snapshotId)
+    );
+
+  it('does not charge duplicate graph identities to the item budget (no false BUDGET_ITEMS)', async () => {
+    const assignments: FederatedRetrievalRequest['setTierAssignments'] = [
+      { setId: SET_ID_1, tier: 'REQUIRED', roleGroup: 'baseline' },
+      { setId: SET_ID_2, tier: 'REQUIRED', roleGroup: 'baseline' },
+      { setId: SET_ID_3, tier: 'REQUIRED', roleGroup: 'baseline' },
+      { setId: SET_ID_4, tier: 'REQUIRED', roleGroup: 'baseline' },
+    ];
+    const snapId = 'gsnap_11111111';
+    const responses: Record<string, RetrievalResponse> = {
+      [SET_ID_1]: mockSingleSetResponse(snapId, [
+        ...sharedEntities(snapId),
+        mockChunkItem('c-set-1', snapId),
+      ]),
+      [SET_ID_2]: mockSingleSetResponse(snapId, [
+        ...sharedEntities(snapId),
+        mockChunkItem('c-set-2', snapId),
+      ]),
+      [SET_ID_3]: mockSingleSetResponse(snapId, [
+        ...sharedEntities(snapId),
+        mockChunkItem('c-set-3', snapId),
+      ]),
+      [SET_ID_4]: mockSingleSetResponse(snapId, [
+        ...sharedEntities(snapId),
+        mockChunkItem('c-set-4', snapId),
+      ]),
+    };
+
+    const { body, retrieveMock } = await injectFederation(responses, assignments);
+
+    expect(retrieveMock).toHaveBeenCalledTimes(4);
+    expect(body.items).toHaveLength(24);
+    expect(body.diagnostics.coverageWarnings).toHaveLength(0);
+    expect(body.outcome).toBe('READY');
+  });
+
+  it('admits distinct LIKELY evidence when packed survivors are below the coverage threshold', async () => {
+    const snapId = 'gsnap_11111111';
+    const distinctChunks = (prefix: string) =>
+      Array.from({ length: 20 }, (_, i) =>
+        mockChunkItem(`${prefix}-c${i}`, snapId)
+      );
+
+    const treatmentAssignments: FederatedRetrievalRequest['setTierAssignments'] = [
+      { setId: SET_ID_1, tier: 'REQUIRED', roleGroup: 'baseline' },
+      { setId: SET_ID_2, tier: 'REQUIRED', roleGroup: 'baseline' },
+      { setId: SET_ID_3, tier: 'LIKELY', roleGroup: 'baseline' },
+      { setId: SET_ID_4, tier: 'LIKELY', roleGroup: 'baseline' },
+    ];
+    const responses: Record<string, RetrievalResponse> = {
+      [SET_ID_1]: mockSingleSetResponse(snapId, sharedEntities(snapId)),
+      [SET_ID_2]: mockSingleSetResponse(snapId, sharedEntities(snapId)),
+      [SET_ID_3]: mockSingleSetResponse(snapId, distinctChunks('s3')),
+      [SET_ID_4]: mockSingleSetResponse(snapId, distinctChunks('s4')),
+    };
+
+    const treatment = await injectFederation(responses, treatmentAssignments);
+    const control = await injectFederation(responses, [
+      { setId: SET_ID_1, tier: 'REQUIRED', roleGroup: 'baseline' },
+    ]);
+
+    expect(control.body.items).toHaveLength(20);
+    expect(treatment.body.items).toHaveLength(50);
+    expect(treatment.body.items.length).toBeGreaterThan(control.body.items.length);
+    const retrievedSetIds = treatment.retrieveMock.mock.calls.map((call) => call[0]);
+    expect(retrievedSetIds).toEqual(expect.arrayContaining([SET_ID_3, SET_ID_4]));
   });
 });
