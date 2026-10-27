@@ -291,9 +291,12 @@ export function normalizeMcpEvidence(
 }
 
 export interface PaginationHint {
+  /** Request field to advance, for either offset or cursor style. */
   offsetField: string;
   limitField?: string;
-  nextOffset: number;
+  /** Exactly one of nextOffset / nextCursor is set. */
+  nextOffset?: number;
+  nextCursor?: string | number;
   total?: number;
   hasMore: boolean;
 }
@@ -302,10 +305,47 @@ function numberOrUndefined(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
+/** Continuation key -> request field to set. No semantics beyond the prefix strip. */
+const CURSOR_FIELDS: Record<string, string> = {
+  nextCursor: 'cursor',
+  next_cursor: 'cursor',
+  cursor: 'cursor',
+  nextPageToken: 'page_token',
+  next_page_token: 'page_token',
+  page_token: 'page_token',
+};
+
+const EXPLICIT_CURSOR_KEYS = ['nextCursor', 'next_cursor', 'nextPageToken', 'next_page_token'];
+
+function readCursorHint(node: unknown): PaginationHint | null {
+  if (!isPlainObject(node)) return null;
+
+  let key: string | undefined = EXPLICIT_CURSOR_KEYS.find((k) => node[k] !== undefined);
+  if (!key) {
+    const ambiguous = ['cursor', 'page_token'].find((k) => node[k] !== undefined);
+    // A bare cursor is likely the echo of the current request unless flagged as more.
+    if (ambiguous && (node.has_more === true || node.truncated === true)) key = ambiguous;
+  }
+  if (!key) return null;
+
+  const value = node[key];
+  const valid =
+    (typeof value === 'string' && value.length > 0) ||
+    (typeof value === 'number' && Number.isFinite(value));
+  if (!valid) return null;
+  return {
+    offsetField: CURSOR_FIELDS[key]!,
+    nextCursor: value as string | number,
+    hasMore: true,
+  };
+}
+
 /**
  * Detects a deterministic continuation from a full parsed page. Generic shapes:
- * `{offset, limit, total}` (catalog neighbors/evidence), `{has_more}`,
- * `{nextCursor}`. Nothing semantic — purely structural.
+ * `{offset, limit, total}` / `{has_more}` offset pagination, and cursor pagination
+ * via `nextCursor` / `next_cursor` / `nextPageToken` / `next_page_token`, or
+ * `cursor` / `page_token` when accompanied by `has_more`/`truncated` true.
+ * Nothing semantic — purely structural.
  */
 export function extractPaginationHint(payload: unknown): PaginationHint | null {
   if (!isPlainObject(payload)) return null;
@@ -336,14 +376,24 @@ export function extractPaginationHint(payload: unknown): PaginationHint | null {
   if (nextOffset !== undefined) {
     return { offsetField: 'offset', nextOffset, ...(numberOrUndefined(payload.total) !== undefined ? { total: numberOrUndefined(payload.total)! } : {}), hasMore: true };
   }
+
+  // Cursor check runs last so offset pagination is unchanged. Root first,
+  // then one level of plain-object children (neighbors/evidence/data/result).
+  const rootHint = readCursorHint(payload);
+  if (rootHint) return rootHint;
+  for (const child of Object.values(payload)) {
+    if (!isPlainObject(child)) continue;
+    const hint = readCursorHint(child);
+    if (hint) return hint;
+  }
   return null;
 }
 
-/** Applies an offset to flat args or to a single wrapper object (e.g. `request`). */
+/** Applies an offset/cursor to flat args or to a single wrapper object (e.g. `request`). */
 export function applyPaginationArg(
   args: Record<string, unknown>,
   offsetField: string,
-  nextOffset: number
+  nextOffset: string | number
 ): Record<string, unknown> {
   if (offsetField in args) return { ...args, [offsetField]: nextOffset };
   const wrapperKeys = Object.keys(args).filter((key) => isPlainObject(args[key]));

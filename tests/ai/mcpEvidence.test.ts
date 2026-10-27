@@ -83,12 +83,37 @@ describe('mcpEvidence normalization', () => {
     expect(hint).toMatchObject({ offsetField: 'neighbor_offset', nextOffset: 100, hasMore: true });
 
     const args = { request: { graph_key: 'TABLE::BO::SHB.MAIN1.EVT_EVENT' } };
-    expect(applyPaginationArg(args, hint!.offsetField, hint!.nextOffset)).toEqual({
+    expect(applyPaginationArg(args, hint!.offsetField, hint!.nextOffset!)).toEqual({
       request: { graph_key: 'TABLE::BO::SHB.MAIN1.EVT_EVENT', neighbor_offset: 100 },
     });
   });
 
   it('reports no further page when the catalog already returned everything', () => {
     expect(extractPaginationHint({ neighbors: { offset: 0, limit: 100, total: 49 } })).toBeNull();
+  });
+
+  it('extracts structural cursor continuations', () => {
+    expect(extractPaginationHint({ nextCursor: 'abc' })).toMatchObject({
+      offsetField: 'cursor',
+      nextCursor: 'abc',
+      hasMore: true,
+    });
+    expect(extractPaginationHint({ neighbors: { next_cursor: 'n2', has_more: true } })).toMatchObject({
+      offsetField: 'cursor',
+      nextCursor: 'n2',
+    });
+    expect(extractPaginationHint({ cursor: 'c', has_more: true })).toMatchObject({
+      offsetField: 'cursor',
+      nextCursor: 'c',
+    });
+    // Bare cursor is likely the echo of the current request.
+    expect(extractPaginationHint({ cursor: 'c' })).toBeNull();
+    expect(extractPaginationHint({ nextCursor: null })).toBeNull();
+  });
+
+  it('applies a string cursor inside the request wrapper', () => {
+    expect(
+      applyPaginationArg({ request: { graph_key: 'KEY' } }, 'cursor', 'abc')
+    ).toEqual({ request: { graph_key: 'KEY', cursor: 'abc' } });
   });
 });

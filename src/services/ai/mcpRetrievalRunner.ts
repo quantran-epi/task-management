@@ -382,6 +382,7 @@ Return STRICT JSON adhering to this schema:
 
         // Deterministic pagination: follow the tool's own continuation without an LLM turn.
         let pageArgs = effectiveArgs;
+        let lastApplied: string | number | undefined;
         for (let page = 0; page < MAX_PAGES_PER_CALL; page++) {
           // A batch already planned is still executed; the watchdog only stops extra pages.
           if (input.signal?.aborted || (watchdogFired && page > 0)) break;
@@ -420,7 +421,11 @@ Return STRICT JSON adhering to this schema:
               );
               break;
             }
-            pageArgs = applyPaginationArg(pageArgs, hint.offsetField, hint.nextOffset);
+            const next = hint.nextCursor ?? hint.nextOffset;
+            if (next === undefined) break;
+            if (next === lastApplied) break; // did not advance — stop instead of looping
+            lastApplied = next;
+            pageArgs = applyPaginationArg(pageArgs, hint.offsetField, next);
           } catch (err: any) {
             warnings.push(`Lỗi thực thi công cụ "${call.toolName}": ${err?.message || String(err)}`);
             conversationHistory.push(`Called ${call.toolName} failed: ${err?.message || String(err)}`);

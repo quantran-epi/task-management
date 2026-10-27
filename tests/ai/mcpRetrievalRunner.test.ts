@@ -260,6 +260,100 @@ describe('mcpRetrievalRunner', () => {
     expect(result.pagesCapped).toBe(false);
   });
 
+  it('paginates cursor-only tools by forwarding the cursor into page 2', async () => {
+    vi.spyOn(mcpClient, 'getMcpServers').mockResolvedValue([
+      {
+        id: 'srv-cursor',
+        name: 'Cursor Server',
+        url: 'http://localhost:3000/mcp',
+        enabled: true,
+        instruction: 'Cursor pagination',
+      },
+    ]);
+    vi.spyOn(mcpClient, 'fetchServerTools').mockResolvedValue([
+      {
+        type: 'function',
+        function: {
+          name: 'list_nodes',
+          description: 'List nodes',
+          parameters: { type: 'object', properties: { cursor: { type: 'string' } } },
+        },
+      },
+    ]);
+
+    const executeSpy = vi
+      .spyOn(mcpClient, 'executeDynamicMcpTool')
+      .mockImplementation(async (_toolName, args) =>
+        (args as { cursor?: string }).cursor === 'c1'
+          ? JSON.stringify({ nodes: [{ name: 'B' }], nextCursor: null })
+          : JSON.stringify({ nodes: [{ name: 'A' }], nextCursor: 'c1' })
+      );
+
+    let planTurn = 0;
+    vi.spyOn(nineRouterClient, 'completeJson').mockImplementation(async () => {
+      planTurn++;
+      return planTurn === 1
+        ? { done: false, toolCalls: [{ toolName: 'list_nodes', args: {} }] }
+        : { done: true, toolCalls: [] };
+    });
+
+    const result = await runMcpRetrieval({
+      query: 'List nodes',
+      serverIds: ['srv-cursor'],
+      modelConfig: { endpoint: 'http://test-endpoint', apiKey: 'key', model: 'test-model' },
+    });
+
+    expect(result.items).toHaveLength(2);
+    expect(result.items[1]!.args).toMatchObject({ cursor: 'c1' });
+    expect(result.pagesFetched).toBe(2);
+    expect(result.warnings).toHaveLength(0);
+    expect(result.completeness).toBe('complete');
+    expect(executeSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('stops pagination when the server echoes the same cursor', async () => {
+    vi.spyOn(mcpClient, 'getMcpServers').mockResolvedValue([
+      {
+        id: 'srv-repeat',
+        name: 'Repeat Server',
+        url: 'http://localhost:3000/mcp',
+        enabled: true,
+        instruction: 'Repeats cursor',
+      },
+    ]);
+    vi.spyOn(mcpClient, 'fetchServerTools').mockResolvedValue([
+      {
+        type: 'function',
+        function: {
+          name: 'list_nodes',
+          description: 'List nodes',
+          parameters: { type: 'object', properties: { cursor: { type: 'string' } } },
+        },
+      },
+    ]);
+
+    const executeSpy = vi
+      .spyOn(mcpClient, 'executeDynamicMcpTool')
+      .mockResolvedValue(JSON.stringify({ nodes: [{ name: 'X' }], cursor: 'same', has_more: true }));
+
+    let planTurn = 0;
+    vi.spyOn(nineRouterClient, 'completeJson').mockImplementation(async () => {
+      planTurn++;
+      return planTurn === 1
+        ? { done: false, toolCalls: [{ toolName: 'list_nodes', args: {} }] }
+        : { done: true, toolCalls: [] };
+    });
+
+    const result = await runMcpRetrieval({
+      query: 'Repeat cursor',
+      serverIds: ['srv-repeat'],
+      modelConfig: { endpoint: 'http://test-endpoint', apiKey: 'key', model: 'test-model' },
+    });
+
+    expect(executeSpy).toHaveBeenCalledTimes(2);
+    expect(result.pagesCapped).toBe(false);
+  });
+
   it('injects bounded instructions of target enabled servers without truncating ordinary instructions', async () => {
     const ordinaryInstruction = `Must query list_containers before inspection. ${'workflow '.repeat(200)}MANDATORY_WORKFLOW_END`;
     const oversizedInstruction = `BOUND_START_${'x'.repeat(4100)}BOUND_END`;
