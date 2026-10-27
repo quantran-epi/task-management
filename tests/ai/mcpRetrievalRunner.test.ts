@@ -158,7 +158,7 @@ describe('mcpRetrievalRunner', () => {
     );
   });
 
-  it('bounded loop halts after max turns or when model signals completion', async () => {
+  it('stops after 2 consecutive turns that add no new evidence', async () => {
     const mockServers: mcpClient.McpServerConfig[] = [
       {
         id: 'srv-1',
@@ -201,10 +201,63 @@ describe('mcpRetrievalRunner', () => {
       },
     });
 
-    // Should halt after max turns (4)
-    expect(callsCount).toBe(4);
-    expect(result.items).toHaveLength(4);
+    // Turn 1 adds evidence; turns 2 and 3 add none -> stop, no cap warning.
+    expect(callsCount).toBe(3);
+    expect(result.items).toHaveLength(3);
     expect(result.warnings).toHaveLength(0);
+    expect(result.completeness).toBe('complete');
+  });
+
+  it('runs up to the 12-turn safety valve while every turn adds new evidence', async () => {
+    const mockServers: mcpClient.McpServerConfig[] = [
+      {
+        id: 'srv-fresh',
+        name: 'Fresh Server',
+        url: 'http://localhost:3000/mcp',
+        enabled: true,
+        instruction: 'Always fresh',
+      },
+    ];
+
+    vi.spyOn(mcpClient, 'getMcpServers').mockResolvedValue(mockServers);
+    vi.spyOn(mcpClient, 'fetchServerTools').mockResolvedValue([
+      {
+        type: 'function',
+        function: {
+          name: 'step_tool',
+          description: 'Step tool',
+          parameters: { type: 'object', properties: { step: { type: 'number' } } },
+        },
+      },
+    ]);
+
+    let callsCount = 0;
+    vi.spyOn(mcpClient, 'executeDynamicMcpTool').mockImplementation(async (_toolName, args) =>
+      JSON.stringify({ nodes: [{ name: `Entity${(args as { step: number }).step}` }] })
+    );
+    vi.spyOn(nineRouterClient, 'completeJson').mockImplementation(async () => {
+      callsCount++;
+      return {
+        done: false,
+        toolCalls: [{ toolName: 'step_tool', args: { step: callsCount } }],
+      };
+    });
+
+    const result = await runMcpRetrieval({
+      query: 'Fresh query',
+      serverIds: ['srv-fresh'],
+      modelConfig: {
+        endpoint: 'http://test-endpoint',
+        apiKey: 'key',
+        model: 'test-model',
+      },
+    });
+
+    expect(callsCount).toBe(12);
+    expect(result.items).toHaveLength(12);
+    expect(result.warnings.some((w) => w.includes('giới hạn an toàn 12 lượt'))).toBe(true);
+    expect(result.completeness).toBe('partial');
+    expect(result.pagesCapped).toBe(false);
   });
 
   it('injects bounded instructions of target enabled servers without truncating ordinary instructions', async () => {

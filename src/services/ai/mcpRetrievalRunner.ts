@@ -53,7 +53,8 @@ export interface McpRetrievalResult {
 }
 
 const MCP_RETRIEVAL_TIMEOUT_MS = 300_000; // 5-minute safety watchdog
-const MAX_RETRIEVAL_TURNS = 4;
+/** Safety valve only: the loop normally ends when a turn adds no new evidence. */
+const MAX_RETRIEVAL_TURNS_SAFETY_VALVE = 12;
 const MAX_SERVER_INSTRUCTION_CHARS = 4000;
 /** Safety valve only: pagination stops here and completeness becomes 'partial'. */
 const MAX_PAGES_PER_CALL = 20;
@@ -109,8 +110,9 @@ export function adaptToolArguments(
 }
 
 /**
- * Runs a bounded dynamic tool-calling retrieval loop (max 4 turns, 5m safety watchdog)
- * targeting the specified MCP server IDs.
+ * Runs a dynamic tool-calling retrieval loop that stops when it stops learning:
+ * two consecutive turns with no new evidence end it, with a 12-turn safety valve
+ * and a 5m watchdog, targeting the specified MCP server IDs.
  */
 export async function runMcpRetrieval(
   input: RunMcpRetrievalInput
@@ -120,6 +122,16 @@ export async function runMcpRetrieval(
   const database = input.db ?? defaultDb;
   let pagesFetched = 0;
   let pagesCapped = false;
+  let stopReason:
+    | 'final'
+    | 'turn_cap'
+    | 'watchdog'
+    | 'abort'
+    | 'error'
+    | 'novelty_exhausted'
+    | null = null;
+  const knownRecordIds = new Set<string>();
+  let consecutiveZeroNoveltyTurns = 0;
 
   const finish = (): McpRetrievalResult => {
     const { records, stats } = normalizeMcpEvidence(
@@ -131,7 +143,10 @@ export async function runMcpRetrieval(
       warnings,
       records,
       normalization: stats,
-      completeness: pagesCapped ? 'partial' : 'complete',
+      completeness:
+        pagesCapped || stopReason === 'turn_cap' || stopReason === 'watchdog'
+          ? 'partial'
+          : 'complete',
       pagesFetched,
       pagesCapped,
     };
@@ -210,19 +225,21 @@ export async function runMcpRetrieval(
       return finish();
     }
 
-    // Dynamic bounded tool loop (max 4 turns)
+    // Dynamic tool loop: novelty-terminated, with a turn safety valve.
     const executedToolKeys = new Set<string>();
     const conversationHistory: string[] = [
       `User query: "${input.query}"`,
       `Target MCP servers: ${targetServers.map((s) => s.name).join(', ')}`,
     ];
 
-    for (let turn = 1; turn <= MAX_RETRIEVAL_TURNS; turn++) {
+    for (let turn = 1; turn <= MAX_RETRIEVAL_TURNS_SAFETY_VALVE; turn++) {
       if (input.signal?.aborted) {
+        stopReason = 'abort';
         warnings.push('Thao tác MCP bị hủy');
         break;
       }
       if (watchdogFired) {
+        stopReason = 'watchdog';
         warnings.push('Quá thời gian chờ phản hồi MCP (5m safety watchdog)');
         break;
       }
@@ -249,7 +266,7 @@ export async function runMcpRetrieval(
         .join('\n');
 
       const systemPrompt = `You are an intelligent, domain-agnostic dynamic tool-calling retriever. Select relevant read-only tools to fetch live data answering the user query.
-Turn ${turn} of max ${MAX_RETRIEVAL_TURNS}.
+Turn ${turn} of max ${MAX_RETRIEVAL_TURNS_SAFETY_VALVE}.
 
 Target Server Instructions:
 ${serverInstructions || 'None provided.'}
@@ -313,19 +330,23 @@ Return STRICT JSON adhering to this schema:
         plan = parsedPlan.success ? parsedPlan.data : null;
       } catch (err: any) {
         if (input.signal?.aborted) {
+          stopReason = 'abort';
           warnings.push('Thao tác MCP bị hủy');
           break;
         }
         if (watchdogFired) {
+          stopReason = 'watchdog';
           warnings.push('Quá thời gian chờ phản hồi MCP (5m safety watchdog)');
           break;
         }
+        stopReason = 'error';
         warnings.push(`Lỗi lập lịch công cụ MCP (turn ${turn}): ${err?.message || String(err)}`);
         break;
       }
 
       if (!plan || !plan.toolCalls || plan.toolCalls.length === 0) {
         // Model signaled completion with no calls
+        stopReason = 'final';
         break;
       }
 
@@ -333,6 +354,7 @@ Return STRICT JSON adhering to this schema:
       let attemptedAnyInTurn = false;
       for (const call of plan.toolCalls.slice(0, 2)) {
         if (input.signal?.aborted) {
+          stopReason = 'abort';
           warnings.push('Thao tác MCP bị hủy');
           break;
         }
@@ -413,9 +435,32 @@ Return STRICT JSON adhering to this schema:
         );
       }
 
+      // Novelty once per turn: only evidence never seen before counts as learning.
+      const turnRecords = normalizeMcpEvidence(items).records;
+      let novelThisTurn = 0;
+      for (const record of turnRecords) {
+        if (!knownRecordIds.has(record.recordId)) novelThisTurn += 1;
+        knownRecordIds.add(record.recordId);
+      }
+      consecutiveZeroNoveltyTurns =
+        novelThisTurn === 0 ? consecutiveZeroNoveltyTurns + 1 : 0;
+
       if (plan.done || !attemptedAnyInTurn) {
+        stopReason = 'final';
         break;
       }
+
+      if (consecutiveZeroNoveltyTurns >= 2) {
+        stopReason = 'novelty_exhausted';
+        break;
+      }
+    }
+
+    if (stopReason === null) {
+      stopReason = 'turn_cap';
+      warnings.push(
+        `Đã đạt giới hạn an toàn ${MAX_RETRIEVAL_TURNS_SAFETY_VALVE} lượt truy hồi MCP; bằng chứng có thể chưa đầy đủ`
+      );
     }
   } catch (err: any) {
     warnings.push(`Lỗi quy trình MCP retrieval: ${err?.message || String(err)}`);
