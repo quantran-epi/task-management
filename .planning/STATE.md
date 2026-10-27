@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 Phase: 24 (graph-retrieval-optimization) — EXECUTING
 Plan: 1 of 8
 Status: Executing Phase 24
-Last activity: 2026-10-27 - Completed quick task 261027-fzh: Make MCP retrieval loop run until evidence is exhausted
+Last activity: 2026-10-27 - Completed quick task 261027-htc: Fix federated retrieval budget accounting
 Stopped at: Phase 24 UI-SPEC approved
 
 Progress: [██████████] 100%
@@ -37,6 +37,7 @@ Progress: [██████████] 100%
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261027-htc | Fix federated retrieval budget accounting so multi-set evidence is not silently discarded | 2026-10-27 | 3fc728a | complete | [261027-htc-fix-federated-retrieval-budget-accountin](./quick/261027-htc-fix-federated-retrieval-budget-accountin/) |
 | 261027-fzh | Make MCP retrieval loop run until evidence is exhausted (novelty termination + cursor pagination) | 2026-10-27 | 7d4223b | complete | [261027-fzh-make-mcp-retrieval-loop-run-until-eviden](./quick/261027-fzh-make-mcp-retrieval-loop-run-until-eviden/) |
 | 261027-0kl | Normalize `docs/c06.zip` into `dist/c06-normalized.zip` per TaskMate doc contract | 2026-10-27 | be35ade | complete | [261027-0kl-chu-n-h-a-b-t-i-li-u-docs-c06-zip-theo-c](./quick/261027-0kl-chu-n-h-a-b-t-i-li-u-docs-c06-zip-theo-c/) |
 | fast-38c3095 | Raise AI JSON request timeout to 90s | 2026-10-24 | 38c3095 | complete | — |
