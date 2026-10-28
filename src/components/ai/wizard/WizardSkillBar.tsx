@@ -29,7 +29,7 @@ export const WizardSkillBar: React.FC<WizardSkillBarProps> = ({
   onActivate,
 }) => {
   const { token } = theme.useToken();
-  const buttonRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const buttonRefs = useRef<Array<HTMLButtonElement | HTMLAnchorElement | null>>([]);
   const [focusIndex, setFocusIndex] = useState(0);
   const gateTitle = activeSession
     ? 'Đang trong phiên wizard. Hãy hoàn tất hoặc hủy phiên hiện tại.'
@@ -81,8 +81,9 @@ export const WizardSkillBar: React.FC<WizardSkillBarProps> = ({
                 } else if (event.key === 'End') {
                   event.preventDefault();
                   moveFocus(ENTRIES.length - 1);
-                } else if ((event.key === 'Enter' || event.key === ' ') && gated) {
+                } else if (event.key === 'Enter' || event.key === ' ') {
                   event.preventDefault();
+                  if (!gated) onActivate(entry.skill);
                 }
               }}
               style={{
