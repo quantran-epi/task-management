@@ -1,13 +1,19 @@
 import JSZip from 'jszip';
 import { z } from 'zod';
 
-export const ChangePackLimits = Object.freeze({
+export interface ChangePackLimits {
+  maxCompressedBytes: number;
+  maxExpandedBytes: number;
+  maxEntryBytes: number;
+  maxEntries: number;
+}
+
+export const ChangePackLimits: Readonly<ChangePackLimits> = Object.freeze({
   maxCompressedBytes: 5_242_880,
   maxExpandedBytes: 26_214_400,
   maxEntryBytes: 2_097_152,
   maxEntries: 256,
 });
-export type ChangePackLimits = typeof ChangePackLimits;
 
 const boundedText = z.string().trim().min(1).max(500);
 const hexSha = z.string().trim().min(1).max(128);
@@ -109,7 +115,7 @@ function bytesContainNul(bytes: Uint8Array): boolean {
 }
 
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  const digest = await crypto.subtle.digest('SHA-256', new Uint8Array(bytes));
   return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('');
 }
 
@@ -176,7 +182,7 @@ export async function validateChangePack(
       sizeBytes: bytes.byteLength,
       status: coverage,
       coverage,
-      content: binary ? bytes : new TextDecoder('utf-8', { fatal: false }).decode(bytes),
+      content: binary ? new Uint8Array(bytes) : new TextDecoder('utf-8', { fatal: false }).decode(bytes),
     });
   }
 
