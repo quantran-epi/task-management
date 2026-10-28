@@ -22,6 +22,8 @@ const ids = {
 const baseInput = {
   ...ids,
   solution: {
+    projectId: ids.projectId,
+    threadId: ids.threadId,
     noteId: ids.solutionNoteId,
     version: ids.solutionVersion,
     hash: ids.solutionHash,
@@ -56,7 +58,7 @@ const baseInput = {
 describe('reconciliation schemas', () => {
   it('requires the four PL03 sections and explicit coverage states', () => {
     expect(CoverageLedgerSchema.parse({ path: 'src/a.ts', state: 'included', evidenceIds: ['h-1'] })).toEqual({ path: 'src/a.ts', state: 'included', evidenceIds: ['h-1'] });
-    expect(DriftTupleSchema.parse({ requirementId: 'REQ-1', category: 'missing', evidence: null })).toMatchObject({ category: 'missing' });
+    expect(DriftTupleSchema.parse({ requirementId: 'REQ-1', category: 'missing', evidence: null, baselineRequirement: 'missing rule' })).toMatchObject({ category: 'missing' });
   });
 });
 
