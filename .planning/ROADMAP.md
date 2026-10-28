@@ -153,3 +153,19 @@ Plans:
 **Wave 7** *(blocked on 24-06 and 24-07)*
 
 - [ ] 24-08-PLAN.md — Offline live-script self-check, gated live graph checks, offline BM25 proof, and human checkpoint
+
+### Phase 25: Interactive SDLC Document Wizards & Bank Template Generator
+
+**Goal:** Provide a closed-loop, interactive SDLC document workflow in AI Chat Drawer that carries a Dev from approved PL02 through versioned `SOLUTION.md`, external code execution, change-pack reconciliation, PL03/PL07 generation, and CAB summary — ending in verified client-side `.docx` output following bank templates.
+**Requirements**: WIZ-UI-01, WIZ-INTERACTIVE-01, WIZ-DOCX-01, WIZ-FLOW-01, WIZ-LOOP-01, WIZ-PACK-01
+**Depends on:** Phase 24
+**Success Criteria** (what must be TRUE):
+
+  1. Quick skill bar on AI Chat Drawer allows one-click activation of guided wizards: `PL02 (Phân tích NV)`, `PL03 (Thiết kế KT)`, `PL07 (Review Code)`, and `Tờ trình CAB`.
+  2. Wizard execution guides user interactively through input collection, automatic grounded retrieval against system knowledge/codebase, gap-filling clarification questions, and Markdown preview review before final generation.
+  3. Client-side `.docx` builder generates downloadable Word documents conforming strictly to bank standard templates (formatting, headers, metadata, section hierarchies, tables, sign-off blocks), and each generated document is persisted as a Project-linked Note.
+  4. `SOLUTION.md` is produced interactively with the Dev, versioned as a Project-linked Note, and re-openable from the same persistent project chat thread when implementation drifts from the approved solution.
+  5. Dev-generated `change-pack.zip` (diff, new files, SQL artifacts, metadata) can be dropped into the project chat thread, validated against size/artifact rules, and used to reconcile approved `SOLUTION.md` against actual implementation.
+  6. PL03 reports the reconciliation as four sections (as-approved design, actual implementation, drift matrix, DB changes + rollback); PL07 and the CAB summary are generated from the same thread context without re-supplying inputs.
+
+**Plans:** 0/18 plans executed
