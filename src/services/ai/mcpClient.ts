@@ -474,6 +474,14 @@ export function resolveMcpToolServerId(toolName: string): string | undefined {
   return toolToServerMap.get(toolName);
 }
 
+export function isReadOnlyMcpTool(toolName: string): boolean {
+  if (READ_ONLY_TOOL_ALLOWLIST.has(toolName)) return true;
+  const serverId = toolToServerMap.get(toolName);
+  return serverId
+    ? toolMetaCache.get(toolMetaKey(serverId, toolName))?.readOnly === true
+    : false;
+}
+
 export async function executeDynamicMcpTool(
   toolName: string,
   args: Record<string, unknown>,

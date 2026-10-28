@@ -48,6 +48,7 @@ import {
   getMcpServers,
   discoverAllMcpTools,
   getEnabledMcpInstructions,
+  isReadOnlyMcpTool,
   toggleMcpServer,
   type McpServerConfig,
 } from '../../services/ai/mcpClient';
@@ -653,50 +654,25 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
     const apiKey = await getNineRouterApiKey(db);
     const config = await getNineRouterConfig(db);
-    const catalog = await fetchSetCatalog(db);
-
-    const capabilities = {
-      serverEnabled: Boolean(knowledgeConfig.enabled && knowledgeConfig.baseUrl),
-      modelConfigured: Boolean(apiKey && config.endpoint && (selectedModel || config.defaultModel)),
-    };
-
-    const deps = createDefaultGroundedTurnDeps({
-      knowledgeBaseUrl: knowledgeConfig.baseUrl,
-      knowledgeToken: knowledgeConfig.token,
-      db,
-    });
-
-    const routeScope = deps.routeScope;
-    deps.routeScope = (input, routeDeps) => {
-      setGroundedLoadingStatus('Đang xác định phạm vi tài liệu...');
-      return routeScope(input, routeDeps);
-    };
-    const retrieveFederated = deps.retrieveFederated;
-    deps.retrieveFederated = (request, signal) => {
-      setGroundedLoadingStatus('Đang truy xuất tài liệu và đồ thị liên quan...');
-      return retrieveFederated(request, signal);
-    };
-    const runLocalBm25 = deps.runLocalBm25;
-    deps.runLocalBm25 = (input, localDeps) => {
-      setGroundedLoadingStatus('Đang tìm kiếm trong tài liệu cục bộ...');
-      return runLocalBm25(input, localDeps);
-    };
-    const synthesizeGroundedAnswer = deps.synthesizeGroundedAnswer;
-    deps.synthesizeGroundedAnswer = (input) => {
-      setGroundedLoadingStatus('Đang tổng hợp câu trả lời từ bằng chứng...');
-      return synthesizeGroundedAnswer(input);
-    };
-
     if (apiKey && config.endpoint) {
-      void compactThreadContext({
-        threadId: activeThread.id,
-        db,
-        endpoint: config.endpoint,
-        apiKey,
-        model: selectedModel || config.defaultModel,
-      }).catch((compErr) => {
-        console.warn('[AIChatDrawer] Auto context compaction check error:', compErr);
-      });
+      // Await so the boundary message exists before the history read below.
+      // Compaction stays best-effort and must never fail the turn.
+      try {
+        await compactThreadContext({
+          threadId: activeThread.id,
+          db,
+          endpoint: config.endpoint,
+          apiKey,
+          model: selectedModel || config.defaultModel,
+          ...(currentTurnAbortRef.current?.signal
+            ? { signal: currentTurnAbortRef.current.signal }
+            : {}),
+        });
+      } catch (compErr: any) {
+        if (compErr?.name !== 'AbortError') {
+          console.warn('[AIChatDrawer] Auto context compaction check error:', compErr);
+        }
+      }
     }
 
     const allThreadMsgs = await getMessagesByThreadId(activeThread.id, db);
@@ -720,6 +696,36 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     // Analysis mode bypasses the grounded pipeline (intent router, scope routing,
     // schema-validated synthesis) and falls straight through to the tool loop.
     if (!analysisMode) {
+    const catalog = await fetchSetCatalog(db);
+    const capabilities = {
+      serverEnabled: Boolean(knowledgeConfig.enabled && knowledgeConfig.baseUrl),
+      modelConfigured: Boolean(apiKey && config.endpoint && (selectedModel || config.defaultModel)),
+    };
+    const deps = createDefaultGroundedTurnDeps({
+      knowledgeBaseUrl: knowledgeConfig.baseUrl,
+      knowledgeToken: knowledgeConfig.token,
+      db,
+    });
+    const routeScope = deps.routeScope;
+    deps.routeScope = (input, routeDeps) => {
+      setGroundedLoadingStatus('Đang xác định phạm vi tài liệu...');
+      return routeScope(input, routeDeps);
+    };
+    const retrieveFederated = deps.retrieveFederated;
+    deps.retrieveFederated = (request, signal) => {
+      setGroundedLoadingStatus('Đang truy xuất tài liệu và đồ thị liên quan...');
+      return retrieveFederated(request, signal);
+    };
+    const runLocalBm25 = deps.runLocalBm25;
+    deps.runLocalBm25 = (input, localDeps) => {
+      setGroundedLoadingStatus('Đang tìm kiếm trong tài liệu cục bộ...');
+      return runLocalBm25(input, localDeps);
+    };
+    const synthesizeGroundedAnswer = deps.synthesizeGroundedAnswer;
+    deps.synthesizeGroundedAnswer = (input) => {
+      setGroundedLoadingStatus('Đang tổng hợp câu trả lời từ bằng chứng...');
+      return synthesizeGroundedAnswer(input);
+    };
     try {
       setGroundedLoadingStatus('Đang phân tích ý định câu hỏi...');
       const groundedResult = await runGroundedTurn(
@@ -1096,15 +1102,22 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     } catch (err) {
       console.warn('[AIChatDrawer] MCP discovery unavailable:', err);
     }
-    const rawToolsForTurn = [...AI_DATABASE_TOOLS, ...dynamicMcpTools];
-    // Dynamic Tool Pruning: prune heavy mutation and task-ops tools for knowledge lookups
-    const toolsForTurn = pruneToolsForContext(rawToolsForTurn, {
-      isKnowledgeContinuation: Boolean(
-        groundedLoadingStatus?.includes('trợ lý') || effectiveScope.type === 'document'
-      ),
-      isTaskMateQuery: !autoApproveMutations,
-      isMutationTurn: autoApproveMutations,
-    });
+    const toolsForTurn = analysisMode
+      ? [
+          ...AI_DATABASE_TOOLS.filter(
+            (tool) => !isMutationTool(normalizeToolName(tool.function.name))
+          ),
+          ...dynamicMcpTools.filter((tool) =>
+            isReadOnlyMcpTool(normalizeToolName(tool.function.name))
+          ),
+        ]
+      : pruneToolsForContext([...AI_DATABASE_TOOLS, ...dynamicMcpTools], {
+          isKnowledgeContinuation: Boolean(
+            groundedLoadingStatus?.includes('trợ lý') || effectiveScope.type === 'document'
+          ),
+          isTaskMateQuery: !autoApproveMutations,
+          isMutationTurn: autoApproveMutations,
+        });
     let dynamicMcpInstructions = '';
     try {
       dynamicMcpInstructions = await getEnabledMcpInstructions(db);
@@ -1136,12 +1149,13 @@ Never perform mutations silently without providing this full change summary in y
 ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the currently active item or workspace:\n${systemInstruction}\n` : ''}${
       analysisMode
         ? `\n\n[ANALYSIS MODE ACTIVE]:
-You are in analysis mode. You may reason, compare, propose, and produce long-form documents (Markdown reports, specs, plans) without going through grounded citation synthesis.
+READ ONLY:
+This turn is read-only. You may retrieve knowledge, read local files, reason, compare, propose, and generate artifacts with \`generate_file\`, \`generate_pptx\`, or \`generate_image\`.
 Rules:
-1. Use the \`retrieve_knowledge\` tool repeatedly to gather evidence. Keep each query short and focused (<= 200 characters): an entity name, an identifier, or a narrow topic phrase. Split broad questions into multiple focused queries instead of one long query.
-2. If a retrieval returns only entity names with no excerpts, retry using the entity name itself as the query.
-3. Read attached local files with \`read_file\` FIRST (offset/limit pagination) before answering about them.
-4. When the user asks for a deliverable file, produce it with \`generate_file\`.
+1. NEVER mutate tasks, projects, milestones, timers, notes, capacity, document links, or any MCP-backed data. For change requests, propose a plan instead of executing it.
+2. Use the \`retrieve_knowledge\` tool repeatedly to gather evidence. Keep each query short and focused (<= 200 characters): an entity name, an identifier, or a narrow topic phrase. Split broad questions into multiple focused queries instead of one long query.
+3. If a retrieval returns only entity names with no excerpts, retry using the entity name itself as the query.
+4. Read attached local files with \`read_file\` FIRST (offset/limit pagination) before answering about them.
 5. Ground every factual claim in retrieved excerpts or file content. Clearly mark your own reasoning, assumptions, and proposals as such.
 6. End the answer with a short "Nguồn" (Sources) list naming the documents/files you used.`
         : ''
@@ -1277,6 +1291,15 @@ Rules:
           aiDebugService.recordToolResult(turnId, callId, result, durationMs);
         },
         onMutationCheck: async (toolName, args) => {
+          if (analysisMode) {
+            return {
+              proceed: false,
+              cancellationResult: JSON.stringify({
+                cancelled: true,
+                message: 'Analysis Mode chỉ đọc; không có dữ liệu nào bị thay đổi.',
+              }),
+            };
+          }
           if (autoApproveMutations) {
             console.log(`[AI Harness] ⚡ Auto-approving mutation tool "${toolName}" (bypass active)`);
             return { proceed: true };
@@ -1342,8 +1365,9 @@ Rules:
       aiDebugService.finishTurn(turnId, { finalResponse: fullResponse });
     } catch (err: any) {
       if (err.name === 'AbortError') {
-        // User aborted — commit partial response if exists
-        if (fullResponse.trim()) {
+        // User aborted — commit clean partial response and generated artifacts.
+        const cleanPartial = stripThinkingBlocks(fullResponse).trim();
+        if (cleanPartial || turnGeneratedFiles.length > 0) {
           const durationMs = Date.now() - turnStartTime;
           synthesisLog.log({
             outcome: 'ok',
@@ -1359,7 +1383,7 @@ Rules:
             {
               threadId: activeThread.id,
               role: 'assistant',
-              content: fullResponse + ' [Đã dừng]',
+              content: cleanPartial + ' [Đã dừng]',
               durationMs,
               tokenUsage: accumulatedTokenUsage,
               generatedFiles: turnGeneratedFiles.length > 0 ? turnGeneratedFiles : undefined,
