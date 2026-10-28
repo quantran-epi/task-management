@@ -185,6 +185,32 @@ describe('ChatMessageBubble', () => {
     expect(saveBtns.length).toBeGreaterThanOrEqual(1);
   });
 
+  it('renders generated png with image preview and native download link', () => {
+    const fileMsg: ChatMessage = {
+      id: 'msg-image',
+      threadId: 'thread-1',
+      role: 'assistant',
+      content: 'Generated image',
+      generatedFiles: [{
+        id: 'image-1',
+        filename: 'ai-image.png',
+        sizeBytes: 12,
+        format: 'png',
+        content: 'data:image/png;base64,AAAA',
+      }],
+      createdAt: '2026-10-03T10:05:30Z',
+    };
+
+    render(<ChatMessageBubble message={fileMsg} />);
+    expect(screen.getByRole('img', { name: 'ai-image.png' })).toHaveAttribute(
+      'src',
+      'data:image/png;base64,AAAA'
+    );
+    const link = screen.getByRole('link');
+    expect(link).toHaveAttribute('href', 'data:image/png;base64,AAAA');
+    expect(link).toHaveAttribute('download', 'ai-image.png');
+  });
+
   it('downloads generated file using file.content and does not leak assistant conversation text', () => {
     const exportSpy = vi.spyOn(fileExportModule, 'exportContentAsFile');
     vi.spyOn(fileExportModule, 'downloadBlob').mockImplementation(() => {});

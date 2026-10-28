@@ -1062,6 +1062,37 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
           {msg.generatedFiles.map((file) => {
             const formatLower = file.format?.toLowerCase() || '';
+            const isImage =
+              formatLower === 'png' ||
+              file.content?.startsWith('data:image/') ||
+              (formatLower === 'png' && /^https?:\/\//.test(file.content || ''));
+            if (isImage && file.content) {
+              return (
+                <div
+                  key={file.id}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 8,
+                    border: `1px solid ${token.colorBorderSecondary}`,
+                    backgroundColor: token.colorFillAlter,
+                  }}
+                >
+                  <img
+                    src={file.content}
+                    alt={file.filename}
+                    style={{ maxWidth: '100%', maxHeight: 240, borderRadius: 6, display: 'block' }}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, gap: 12 }}>
+                    <Text strong ellipsis style={{ fontSize: 13 }}>{file.filename}</Text>
+                    <a href={file.content} download={file.filename}>
+                      <Button size="small" icon={<DownloadOutlined />} style={{ fontSize: 12, height: 26 }}>
+                        Tải về
+                      </Button>
+                    </a>
+                  </div>
+                </div>
+              );
+            }
             let fileIcon = <FileTextOutlined style={{ color: '#107c41', fontSize: 20 }} />;
             if (formatLower.includes('docx') || formatLower.includes('doc')) {
               fileIcon = <FileWordOutlined style={{ color: '#185abd', fontSize: 20 }} />;
