@@ -35,6 +35,7 @@ export interface ChatInputBarProps {
   onRemoveFile?: ((filePath: string) => void) | undefined;
   externalValue?: string | undefined;
   onExternalValueConsumed?: (() => void) | undefined;
+  leadingContent?: React.ReactNode;
 }
 
 const COMMANDS = [
@@ -116,6 +117,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   onRemoveFile,
   externalValue,
   onExternalValueConsumed,
+  leadingContent,
 }) => {
   const { token } = theme.useToken();
   const [value, setValue] = useState('');
@@ -643,6 +645,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
       }}
     >
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+        {leadingContent}
         {attachedFiles && attachedFiles.length > 0 && (
           <div
             style={{
