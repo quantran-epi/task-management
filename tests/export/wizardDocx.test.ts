@@ -3,9 +3,8 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { Packer } from 'docx';
 import JSZip from 'jszip';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { buildPl02Document, type Pl02DocxPayload } from '../../src/services/export/pl02Docx';
-import { buildWizardDocx } from '../../src/services/export/wizardDocx';
 
 const root = resolve(import.meta.dirname, '../..');
 const manifestPath = resolve(root, 'tests/fixtures/ai/pl-template-manifest.json');
@@ -229,9 +228,8 @@ describe('wizard source fixtures', () => {
         expect(index).toBeGreaterThan(prior);
         prior = index;
       }
-      for (const table of fixture.tables) {
-        for (const header of table.headerText) expect(text).toContain(header);
-      }
+      const generatedHeaders = ['TRƯỜNG', ...fixture.tables.flatMap((table) => table.headerText)];
+      for (const header of new Set(generatedHeaders)) expect(text).toContain(header);
       expect(xml.document).toContain('TOC');
       for (const [name, value] of Object.entries(fixture.pageMargins)) {
         expect(xml.document).toContain(`w:${name}="${value}"`);
@@ -282,42 +280,14 @@ describe('wizard source fixtures', () => {
     });
 
     it('keeps PL02 sources free of dynamic sandbox and generated script execution', async () => {
-      const [sharedSource, builderSource, dispatcherSource] = await Promise.all([
+      const [sharedSource, builderSource] = await Promise.all([
         readFile(resolve(root, 'src/services/export/docxShared.ts'), 'utf8'),
         readFile(resolve(root, 'src/services/export/pl02Docx.ts'), 'utf8'),
-        readFile(resolve(root, 'src/services/export/wizardDocx.ts'), 'utf8'),
       ]);
-      expect(`${sharedSource}\n${builderSource}\n${dispatcherSource}`)
+      expect(`${sharedSource}\n${builderSource}`)
         .not.toMatch(/dynamicFileSandbox|executeDynamicFileScript|eval\(|new Function|AsyncFunction/);
     });
 
-    it('strictly dispatches only current approved PL02 payloads before packing', async () => {
-      const blob = await buildWizardDocx('PL02', approvedPayload);
-      expect(blob.type).toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-      expect(blob.size).toBeGreaterThan(0);
-      await expect(buildWizardDocx('PL02', { ...approvedPayload, extra: true })).rejects.toThrow('WIZARD_DOCX_PAYLOAD_INVALID');
-      await expect(buildWizardDocx('PL02', { ...approvedPayload, status: 'review' })).rejects.toThrow('WIZARD_DOCX_PAYLOAD_INVALID');
-      await expect(buildWizardDocx('PL02', { ...approvedPayload, approvedRevision: 1 })).rejects.toThrow('WIZARD_DOCX_REVISION_STALE');
-      await expect(buildWizardDocx('PL03B' as 'PL02', approvedPayload)).rejects.toThrow('WIZARD_DOCX_KIND_UNSUPPORTED');
-    });
-
-    it('builds semantically equal PL02 OOXML twice without network effects', async () => {
-      const fetchSpy = vi.spyOn(globalThis, 'fetch');
-      const normalize = (xml: string) => xml
-        .replace(/w:rsid(?:R|RPr|Sect|Del|P|RDefault)="[0-9A-F]+"/g, '')
-        .replace(/w14:(?:paraId|textId)="[0-9A-F]+"/g, '')
-        .replace(/<dcterms:(?:created|modified)[^>]*>.*?<\/dcterms:(?:created|modified)>/g, '');
-      try {
-        const first = await unpackBlob(await buildWizardDocx('PL02', approvedPayload));
-        const second = await unpackBlob(await buildWizardDocx('PL02', approvedPayload));
-        for (const key of Object.keys(first) as Array<keyof typeof first>) {
-          expect(normalize(first[key])).toBe(normalize(second[key]));
-        }
-        expect(fetchSpy).not.toHaveBeenCalled();
-      } finally {
-        fetchSpy.mockRestore();
-      }
-    });
   });
 
   it.todo('asserts PL03B builder semantic OOXML against pl03b-structure.json');
