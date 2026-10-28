@@ -6,11 +6,17 @@ import { runLocalGroundedRetrieval, type LocalGroundedResult } from '../search/l
 import { createPhaseLogger } from './log';
 import {
   buildGapPrompt,
+  buildProposalPrompt,
   buildRepairPrompt,
   WIZARD_GAP_JSON_SCHEMA,
   WIZARD_PROMPT_VERSION,
   WIZARD_STABLE_SYSTEM_PREFIX,
+  WIZARD_STAGE_JSON_SCHEMAS,
+  WizardCabProposalSchema,
   WizardGapResultSchema,
+  WizardPl03ProposalSchema,
+  WizardPl07ProposalSchema,
+  WizardSolutionProposalSchema,
   type WizardGapResult,
 } from './wizardPrompts';
 import type { WizardSkill } from './wizardSchemas';
@@ -362,6 +368,51 @@ export interface WizardStageInput {
   payload: unknown;
 }
 
+interface ArtifactPin {
+  artifactId: string;
+  version: number;
+  hash: string;
+  projectId: string;
+  threadId: string;
+}
+
+function requirePin(pin: ArtifactPin, input: WizardStageInput): void {
+  if (pin.projectId !== input.projectId || pin.threadId !== input.threadId) {
+    throw new WizardStageError('INVALID_OUTPUT', 'ARTIFACT_IDENTITY_MISMATCH');
+  }
+  if (!/^[a-f0-9]{64}$/.test(pin.hash) || pin.version < 1) {
+    throw new WizardStageError('INVALID_OUTPUT', 'ARTIFACT_PIN_INVALID');
+  }
+}
+
+function validateCabSources(input: WizardStageInput, payload: {
+  sources: Array<ArtifactPin & { kind: 'PL02' | 'PL03B' | 'PL07'; approved: boolean }>;
+  expectedVersions: Record<'PL02' | 'PL03B' | 'PL07', number>;
+}): void {
+  const required = new Set(['PL02', 'PL03B', 'PL07']);
+  if (payload.sources.length !== 3 || payload.sources.some((source) => !required.delete(source.kind))) {
+    throw new WizardStageError('INVALID_OUTPUT', 'CAB_SOURCES_REQUIRED');
+  }
+  for (const source of payload.sources) {
+    requirePin(source, input);
+    if (!source.approved || payload.expectedVersions[source.kind] !== source.version) {
+      throw new WizardStageError('INVALID_OUTPUT', 'CAB_MIXED_OR_UNAPPROVED_REVISION');
+    }
+  }
+}
+
+function proposalContract(kind: Exclude<WizardSkill, 'PL02'>): {
+  schema: z.ZodType<unknown>;
+  maxTokens: number;
+} {
+  switch (kind) {
+    case 'SOLUTION': return { schema: WizardSolutionProposalSchema, maxTokens: 8000 };
+    case 'PL03': return { schema: WizardPl03ProposalSchema, maxTokens: 8000 };
+    case 'PL07': return { schema: WizardPl07ProposalSchema, maxTokens: 8000 };
+    case 'CAB': return { schema: WizardCabProposalSchema, maxTokens: 8000 };
+  }
+}
+
 export async function runWizardStage(input: WizardStageInput): Promise<unknown> {
   if (!input.isCurrent()) throw new WizardStageError('STALE_RESULT');
   if (input.kind === 'PL02') {
@@ -374,7 +425,39 @@ export async function runWizardStage(input: WizardStageInput): Promise<unknown> 
       skippedFieldIds: payload.skippedFieldIds ?? [],
     });
   }
-  throw new WizardStageError('UNSUPPORTED', `Stage ${input.kind} requires its strict proposal contract`);
+
+  const payload = input.payload as {
+    evidence: WizardEvidence;
+    pinnedSolution?: ArtifactPin;
+    sources?: Array<ArtifactPin & { kind: 'PL02' | 'PL03B' | 'PL07'; approved: boolean }>;
+    expectedVersions?: Record<'PL02' | 'PL03B' | 'PL07', number>;
+  };
+  if (!payload.evidence) throw new WizardStageError('INVALID_OUTPUT', 'EVIDENCE_REQUIRED');
+  if (input.kind === 'PL03') {
+    if (!payload.pinnedSolution) throw new WizardStageError('INVALID_OUTPUT', 'PINNED_SOLUTION_REQUIRED');
+    requirePin(payload.pinnedSolution, input);
+  }
+  if (input.kind === 'CAB') {
+    if (!payload.sources || !payload.expectedVersions) throw new WizardStageError('INVALID_OUTPUT', 'CAB_SOURCES_REQUIRED');
+    validateCabSources(input, { sources: payload.sources, expectedVersions: payload.expectedVersions });
+  }
+
+  const contract = proposalContract(input.kind);
+  const result = await runValidatedStage({
+    stage: input.kind,
+    schema: contract.schema,
+    jsonSchema: WIZARD_STAGE_JSON_SCHEMAS[input.kind] ?? { type: 'object' },
+    evidenceIds: payload.evidence.items.map((item) => item.id),
+    frozenPrompt: buildProposalPrompt({ kind: input.kind, payload: input.payload, evidence: payload.evidence.items }),
+    maxTokens: contract.maxTokens,
+    model: input.model,
+    ...(input.signal ? { signal: input.signal } : {}),
+    isCurrent: input.isCurrent,
+  });
+  if (input.kind === 'CAB') {
+    validateCabSources(input, { sources: payload.sources!, expectedVersions: payload.expectedVersions! });
+  }
+  return result;
 }
 
 export function createWizardGroundedDeps(options: {
