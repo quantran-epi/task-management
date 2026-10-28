@@ -257,3 +257,107 @@ describe('wizard service behavior producer contracts', () => {
     expect(evidence.degraded).toEqual(['REMOTE_UNAVAILABLE', 'MCP_UNAVAILABLE']);
   });
 });
+
+describe('wizard proposal stage contracts', () => {
+  const identity = {
+    projectId: '25000000-0000-4000-8000-000000000001',
+    threadId: '25000000-0000-4000-8000-000000000101',
+    sessionId: '25000000-0000-4000-8000-000000000201',
+    inputRevision: 2,
+  } as const;
+  const hash = 'ab'.repeat(32);
+  const evidence = {
+    items: [{
+      id: 'ev-1', source: 'local' as const, documentId: 'doc-1', contentHash: hash,
+      lineStart: 1, lineEnd: 2, startOffset: 0, endOffset: 10, excerpt: 'Known evidence.',
+    }],
+    coverage: 'COMPLETE' as const,
+    degraded: [],
+  };
+  const model = (output: unknown) => ({
+    endpoint: 'http://localhost:20128',
+    model: 'test',
+    probe: vi.fn().mockResolvedValue({ ok: true, strictJsonSchema: true }),
+    complete: vi.fn().mockResolvedValue(output),
+  });
+
+  it('F03 requires existing-system surfaces in SOLUTION proposals', async () => {
+    const complete = model({
+      schemaVersion: 1,
+      kind: 'SOLUTION',
+      featureMode: 'existing',
+      title: 'Limit change',
+      currentSystem: 'Current LIMIT_RULE.',
+      affectedScreens: ['Limit screen'],
+      affectedApis: ['/limits'],
+      affectedTables: ['SYN_LIMIT'],
+      proposedSolution: 'Apply confirmed rule.',
+      verbalAdditions: [{ text: 'Add batch channel', status: 'proposed' }],
+      regressionMatrix: [{ area: 'Limit screen', scenario: 'Existing limit', expected: 'Unchanged', citationIds: ['ev-1'] }],
+      flowSteps: [{ id: 'S1', actor: 'UI', action: 'Calls API', nextId: null }],
+      missingFields: [],
+      citationIds: ['ev-1'],
+    });
+    const { runWizardStage } = await import('../../src/services/ai/wizardService');
+    const result = await runWizardStage({
+      ...identity, kind: 'SOLUTION', model: complete, isCurrent: () => true,
+      payload: { evidence, featureMode: 'existing', title: 'Limit change' },
+    });
+    expect(result).toMatchObject({ kind: 'SOLUTION', featureMode: 'existing' });
+  });
+
+  it('F05/F06 requires all four PL03 reconciliation sections and regression coverage', async () => {
+    const complete = model({
+      schemaVersion: 1,
+      kind: 'PL03',
+      title: 'PL03B Limit',
+      approvedDesign: ['LIMIT_RULE'],
+      actualImplementation: ['SYN_LIMIT'],
+      drift: [{ requirementId: 'REQ-1', category: 'different', evidenceId: 'ev-1', detail: 'Column differs' }],
+      databaseAndRollback: [{ object: 'SYN_LIMIT', change: 'ADD STATUS', rollback: null, verified: false, citationIds: ['ev-1'] }],
+      regressionMatrix: [{ area: 'Limit', scenario: 'Old tier', expected: 'No regression', citationIds: ['ev-1'] }],
+      flowSteps: [{ id: 'S1', actor: 'API', action: 'Reads table', nextId: null }],
+      coverage: 'PARTIAL',
+      caveats: ['Rollback unverified'],
+      citationIds: ['ev-1'],
+    });
+    const { runWizardStage } = await import('../../src/services/ai/wizardService');
+    const result = await runWizardStage({
+      ...identity, kind: 'PL03', model: complete, isCurrent: () => true,
+      payload: {
+        evidence, featureMode: 'existing',
+        pinnedSolution: { artifactId: '25000000-0000-4000-8000-000000000301', version: 2, hash, projectId: identity.projectId, threadId: identity.threadId },
+        reconciliation: { coverage: 'PARTIAL', included: ['src/a.ts'], deferred: ['src/b.ts'] },
+      },
+    });
+    expect(result).toMatchObject({ coverage: 'PARTIAL', caveats: ['Rollback unverified'] });
+  });
+
+  it('F08 rejects PL07 baseline replacement and preserves unknown marks', async () => {
+    const complete = model({ schemaVersion: 1, kind: 'PL07', sectionsIToV: 'REPLACED', marks: [], sectionVI: [] });
+    const { runWizardStage } = await import('../../src/services/ai/wizardService');
+    await expect(runWizardStage({
+      ...identity, kind: 'PL07', model: complete, isCurrent: () => true,
+      payload: { evidence, reconciliation: { coverage: 'COMPLETE' } },
+    })).rejects.toMatchObject({ code: 'INVALID_OUTPUT' });
+    expect(complete.complete).toHaveBeenCalledTimes(3);
+  });
+
+  it('F09 rejects mixed CAB source revisions before model call', async () => {
+    const complete = model({});
+    const { runWizardStage } = await import('../../src/services/ai/wizardService');
+    await expect(runWizardStage({
+      ...identity, kind: 'CAB', model: complete, isCurrent: () => true,
+      payload: {
+        evidence,
+        sources: [
+          { kind: 'PL02', artifactId: '25000000-0000-4000-8000-000000000302', version: 2, hash, projectId: identity.projectId, threadId: identity.threadId, approved: true },
+          { kind: 'PL03B', artifactId: '25000000-0000-4000-8000-000000000303', version: 1, hash, projectId: identity.projectId, threadId: identity.threadId, approved: true },
+          { kind: 'PL07', artifactId: '25000000-0000-4000-8000-000000000304', version: 1, hash, projectId: identity.projectId, threadId: identity.threadId, approved: true },
+        ],
+        expectedVersions: { PL02: 1, PL03B: 1, PL07: 1 },
+      },
+    })).rejects.toMatchObject({ code: 'INVALID_OUTPUT' });
+    expect(complete.complete).not.toHaveBeenCalled();
+  });
+});
