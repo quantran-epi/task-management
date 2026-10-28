@@ -5,6 +5,7 @@ import { Packer } from 'docx';
 import JSZip from 'jszip';
 import { describe, expect, it, vi } from 'vitest';
 import { buildPl02Document, type Pl02DocxPayload } from '../../src/services/export/pl02Docx';
+import { buildPl03bDocument, type Pl03bDocxPayload } from '../../src/services/export/pl03bDocx';
 import { buildWizardDocx } from '../../src/services/export/wizardDocx';
 
 const root = resolve(import.meta.dirname, '../..');
@@ -331,6 +332,141 @@ describe('wizard source fixtures', () => {
     });
   });
 
-  it.todo('asserts PL03B builder semantic OOXML against pl03b-structure.json');
+  describe('PL03B dedicated builder', () => {
+    const payload: Pl03bDocxPayload = {
+      schemaVersion: 1,
+      kind: 'PL03B',
+      status: 'approved',
+      inputRevision: 4,
+      draftRevision: 3,
+      approvedRevision: 3,
+      metadata: {
+        crCode: 'CR-PL03B-01',
+        featureName: 'Tích hợp tokenization',
+        author: 'Nguyễn Văn Dev',
+        createdDate: '2026-10-28',
+        version: '1.0',
+      },
+      introduction: {
+        purpose: 'Thiết kế tích hợp dịch vụ tokenization.',
+        users: 'Ứng dụng thẻ doanh nghiệp',
+        databases: ['TOKEN_SCHEMA'],
+        k8sServices: ['token-api'],
+      },
+      technical: {
+        overview: 'Tích hợp API Gateway với Token Service.',
+        techStack: 'TypeScript, Oracle, Kubernetes',
+        flows: [{
+          name: 'Manual Provisioning',
+          steps: [{ actor: 'API Gateway', target: 'Token Service', action: 'Khởi tạo token' }],
+        }],
+        services: [{
+          name: 'Token Service',
+          sourceCode: 'https://git.example/token-service',
+          apis: [{
+            method: 'POST',
+            path: '/tokens',
+            description: 'Khởi tạo token',
+            request: [{ field: 'cardId', dataType: 'string', description: 'Mã thẻ' }],
+            response: [{ field: 'tokenId', dataType: 'string', description: 'Mã token' }],
+          }],
+        }],
+        databases: [{
+          name: 'TOKEN_TABLE',
+          description: 'Lưu token đã cấp',
+          columns: [{ column: 'TOKEN_ID', dataType: 'VARCHAR2(64)', description: 'Mã token' }],
+        }],
+        integrations: [{ name: 'Card Gateway', method: 'POST', path: '/provision', description: 'Gọi cấp token' }],
+        notifications: [{ code: 'NTF_TOKEN_OK', name: 'Cấp token thành công', channel: 'PUSH' }],
+      },
+      reconciliation: {
+        schemaVersion: 1,
+        identity: {
+          projectId: 'project-1', threadId: 'thread-1', solutionNoteId: 'note-1', solutionVersion: 2,
+          solutionHash: 'a'.repeat(64), packHash: 'b'.repeat(64), cr: 'CR-PL03B-01', base: 'origin/develop', head: 'abc123',
+        },
+        status: 'PARTIAL_COVERAGE',
+        approvedDesign: {
+          currentSystem: 'Gateway gọi Core trực tiếp.', affectedScreens: ['Màn hình cấp token'],
+          affectedApis: ['POST /tokens'], affectedTables: ['TOKEN_TABLE'],
+        },
+        actualImplementation: {
+          affectedFiles: ['src/token.ts', 'assets/token.bin'], affectedScreens: [],
+          affectedApis: ['POST /tokens'], affectedTables: ['TOKEN_TABLE'],
+        },
+        drift: [{
+          requirementId: 'REQ-01', category: 'different', baselineRequirement: null,
+          evidence: { evidenceId: 'ev-1', path: 'src/token.ts', startLine: 10, endLine: 15, text: 'uses retry' },
+        }],
+        dbChangesRollback: {
+          affectedTables: ['TOKEN_TABLE'],
+          changes: [{ path: 'sql/token.sql', evidenceIds: ['ev-sql'] }],
+          rollback: { status: 'unknown', evidenceIds: [] },
+        },
+        regressionMatrix: [{ scenario: 'Cấp token hiện hữu', expected: 'Không đổi kết quả' }],
+        coverage: [
+          { path: 'src/token.ts', hunkId: 'h1', state: 'included', evidenceIds: ['ev-1'] },
+          { path: 'assets/token.bin', state: 'binary', evidenceIds: [] },
+          { path: 'src/deferred.ts', hunkId: 'h2', state: 'deferred', evidenceIds: [] },
+        ],
+      },
+    };
+
+    it('matches source furniture and preserves reconciliation caveats', async () => {
+      const fixture = await readJson<{
+        sectionOrder: string[]; pageMargins: Record<string, number>; revisionTable: { present: boolean; columns: string[] };
+        signature: { present: boolean }; headers: Array<{ text: string }>;
+      }>(resolve(root, 'tests/fixtures/docx/pl03b-structure.json'));
+      const xml = await unpackBlob(await Packer.toBlob(buildPl03bDocument(payload)));
+      const text = xmlText(xml.document);
+      let prior = -1;
+      for (const sourceHeading of fixture.sectionOrder) {
+        const heading = sourceHeading.replace(/^\d+(?:\.\d+)*\.?\s+/, '');
+        const index = text.indexOf(heading);
+        expect(index).toBeGreaterThan(prior);
+        prior = index;
+      }
+      for (const column of fixture.revisionTable.columns) expect(text).toContain(column);
+      for (const [name, value] of Object.entries(fixture.pageMargins)) expect(xml.document).toContain(`w:${name}="${value}"`);
+      expect(text).toContain('THIẾT KẾ NHƯ ĐÃ DUYỆT');
+      expect(text).toContain('THỰC TẾ TRIỂN KHAI');
+      expect(text).toContain('BẢNG DRIFT');
+      expect(text).toContain('THAY ĐỔI DB VÀ ROLLBACK');
+      expect(text).toContain('MA TRẬN REGRESSION TEST');
+      expect(text).toContain('PARTIAL_COVERAGE');
+      expect(text).toContain('binary');
+      expect(text).toContain('deferred');
+      expect(text).toContain('Rollback: unknown');
+      expect(text).not.toContain('Không có drift');
+      expect(text).toContain('API Gateway → Token Service: Khởi tạo token');
+      expect(text).toContain('Source code: https://git.example/token-service');
+      expect(text).not.toContain('CÁN BỘ REVIEW');
+      expect(xmlText(xml.header)).toContain(fixture.headers[0]?.text);
+      expect(xml.styles).toContain('Times New Roman');
+      expect(fixture.revisionTable.present).toBe(true);
+      expect(fixture.signature.present).toBe(false);
+    });
+
+    it('omits absent source code and emits clean drift only with complete coverage', async () => {
+      const clean: Pl03bDocxPayload = {
+        ...payload,
+        technical: { ...payload.technical, services: [{ ...payload.technical.services[0]!, sourceCode: undefined }] },
+        reconciliation: {
+          ...payload.reconciliation,
+          status: 'NO_DRIFT_COMPLETE', drift: [],
+          coverage: [{ path: 'src/token.ts', hunkId: 'h1', state: 'included', evidenceIds: ['ev-1'] }],
+        },
+      };
+      const text = xmlText((await unpackBlob(await Packer.toBlob(buildPl03bDocument(clean)))).document);
+      expect(text).toContain('Không có drift');
+      expect(text).not.toContain('Source code:');
+      await expect(buildWizardDocx('PL03B', { ...payload, approvedRevision: 2 }))
+        .rejects.toThrow('WIZARD_DOCX_REVISION_STALE');
+      await expect(buildWizardDocx('PL03B', { ...payload, extra: true }))
+        .rejects.toThrow('WIZARD_DOCX_PAYLOAD_INVALID');
+      expect((await buildWizardDocx('PL03B', payload)).size).toBeGreaterThan(0);
+    });
+  });
+
   it.todo('asserts PL07 builder semantic OOXML against pl07-structure.json');
 });
