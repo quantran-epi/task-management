@@ -193,6 +193,8 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
   const projectIds = new Set(projects.map((p) => p.id));
   const milestoneIds = new Set(milestones.map((m) => m.id));
   const taskIds = new Set(tasks.map((t) => t.id));
+  const threadIds = new Set((chatThreads || []).map((thread) => thread.id));
+  const threadById = new Map((chatThreads || []).map((thread) => [thread.id, thread]));
 
   // Check milestones refer to existing project
   milestones.forEach((m) => {
@@ -364,8 +366,105 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     });
   }
 
+  // Check chatMessages refer to existing thread and wizard identity
+  if (chatMessages && chatThreads) {
+    chatMessages.forEach((cm) => {
+      if (!threadIds.has(cm.threadId)) {
+        errors.push({
+          table: 'chatMessages',
+          recordId: cm.id,
+          field: 'threadId',
+          message: `ChatMessage references threadId "${cm.threadId}" not found in chatThreads`,
+        });
+      }
+      if (cm.wizard) {
+        const thread = threadById.get(cm.threadId);
+        if (!thread || thread.scopeType !== 'project' || thread.entityId !== cm.wizard.projectId || thread.id !== cm.wizard.threadId) {
+          errors.push({
+            table: 'chatMessages',
+            recordId: cm.id,
+            field: 'wizard',
+            message: 'Wizard snapshot project/thread identity does not match chat thread',
+          });
+        }
+        if (!projectIds.has(cm.wizard.projectId)) {
+          errors.push({
+            table: 'chatMessages',
+            recordId: cm.id,
+            field: 'wizard.projectId',
+            message: `Wizard references projectId "${cm.wizard.projectId}" not found in projects`,
+          });
+        }
+        if (cm.wizard.artifactId && notes && !noteIds.has(cm.wizard.artifactId)) {
+          errors.push({
+            table: 'chatMessages',
+            recordId: cm.id,
+            field: 'wizard.artifactId',
+            message: `Wizard references artifactId "${cm.wizard.artifactId}" not found in notes`,
+          });
+        }
+      }
+    });
+  }
+
+  if (notes) {
+    notes.forEach((note) => {
+      if (note.sdlcArtifact && !projectIds.has(note.sdlcArtifact.projectId)) {
+        errors.push({
+          table: 'notes',
+          recordId: note.id,
+          field: 'sdlcArtifact.projectId',
+          message: `Artifact references projectId "${note.sdlcArtifact.projectId}" not found in projects`,
+        });
+      }
+      if (note.sdlcArtifact && !threadIds.has(note.sdlcArtifact.threadId)) {
+        errors.push({
+          table: 'notes',
+          recordId: note.id,
+          field: 'sdlcArtifact.threadId',
+          message: `Artifact references threadId "${note.sdlcArtifact.threadId}" not found in chatThreads`,
+        });
+      }
+      if (note.sdlcArtifact) {
+        note.sdlcArtifact.sourceArtifactIds.forEach((sourceId) => {
+          if (!noteIds.has(sourceId)) {
+            errors.push({
+              table: 'notes',
+              recordId: note.id,
+              field: 'sdlcArtifact.sourceArtifactIds',
+              message: `Artifact references sourceArtifactId "${sourceId}" not found in notes`,
+            });
+          }
+        });
+      }
+    });
+  }
+
+  if (documentSets) {
+    const sdlcProjects = new Set<string>();
+    documentSets.forEach((set) => {
+      if (!set.sdlc) return;
+      if (!projectIds.has(set.sdlc.projectId)) {
+        errors.push({
+          table: 'documentSets',
+          recordId: set.id,
+          field: 'sdlc.projectId',
+          message: `SDLC set references projectId "${set.sdlc.projectId}" not found in projects`,
+        });
+      }
+      if (sdlcProjects.has(set.sdlc.projectId)) {
+        errors.push({
+          table: 'documentSets',
+          recordId: set.id,
+          field: 'sdlc',
+          message: `Duplicate SDLC mapping for projectId "${set.sdlc.projectId}"`,
+        });
+      }
+      sdlcProjects.add(set.sdlc.projectId);
+    });
+  }
+
   // Check chatMessages refer to existing thread
-  const threadIds = new Set((chatThreads || []).map((t) => t.id));
   if (chatMessages && chatThreads) {
     chatMessages.forEach((cm) => {
       if (!threadIds.has(cm.threadId)) {

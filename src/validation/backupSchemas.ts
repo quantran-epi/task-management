@@ -6,6 +6,11 @@ import {
   type ChatMessageGrounding,
 } from '../services/ai/groundedAnswerSchemas';
 import {
+  SdlcArtifactMetadataSchema,
+  SdlcDocumentSetMetadataSchema,
+  WizardSnapshotSchema,
+} from '../services/ai/wizardSchemas';
+import {
   PROJECT_STATUSES,
   MILESTONE_STATUSES,
   TASK_STATUSES,
@@ -179,6 +184,7 @@ export const BackupNoteRecordSchema = z.object({
   title: z.string().trim().max(120, 'Title must be 120 characters or less').optional(),
   body: z.string().max(50000, 'Body must be 50000 characters or less'),
   isPinned: z.boolean(),
+  sdlcArtifact: SdlcArtifactMetadataSchema.optional(),
   deletedAt: z.string().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -282,6 +288,7 @@ export const BackupChatMessageRecordSchema = z
       )
       .optional(),
     grounding: z.unknown().optional() as z.ZodType<ChatMessageGrounding | undefined>,
+    wizard: WizardSnapshotSchema.optional(),
   })
   .superRefine((msg, ctx) => {
     if (msg.grounding === undefined || msg.grounding === null) return;
@@ -394,6 +401,8 @@ export const BackupDocumentSetRecordSchema = z.object({
     )
     .optional(),
   isBase: z.boolean().optional(),
+  presentationRevision: z.number().int().nonnegative().optional(),
+  sdlc: SdlcDocumentSetMetadataSchema.optional(),
   createdAt: isoDateTimeSchema,
   updatedAt: isoDateTimeSchema,
 });
