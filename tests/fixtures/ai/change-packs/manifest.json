@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "profile": {
+    "maxCompressedBytes": 5242880,
+    "maxExpandedBytes": 26214400,
+    "maxEntryBytes": 2097152,
+    "maxEntries": 256,
+    "requiredMetadata": {
+      "commits": "{sha:string,subject:string}[]",
+      "files": "{path:string,status:string}[]"
+    }
+  },
+  "archives": [
+    {"name": "valid-boundary.zip", "variant": "valid", "expectedCode": "VALID_AWAITING_CONFIRMATION", "writesBeforeConfirmation": 0},
+    {"name": "compressed-overflow.zip", "variant": "compressed-overflow", "expectedCode": "PACK_COMPRESSED_TOO_LARGE", "writesBeforeConfirmation": 0},
+    {"name": "expanded-overflow.zip", "variant": "expanded-overflow", "expectedCode": "PACK_EXPANDED_TOO_LARGE", "writesBeforeConfirmation": 0},
+    {"name": "entry-overflow.zip", "variant": "entry-overflow", "expectedCode": "PACK_ENTRY_TOO_LARGE", "writesBeforeConfirmation": 0},
+    {"name": "count-overflow.zip", "variant": "count-overflow", "expectedCode": "PACK_TOO_MANY_ENTRIES", "writesBeforeConfirmation": 0},
+    {"name": "corrupt.zip", "variant": "corrupt", "expectedCode": "PACK_CORRUPT", "writesBeforeConfirmation": 0},
+    {"name": "missing-meta.zip", "variant": "missing-meta", "expectedCode": "PACK_META_INVALID", "writesBeforeConfirmation": 0},
+    {"name": "invalid-meta.zip", "variant": "invalid-meta", "expectedCode": "PACK_META_INVALID", "writesBeforeConfirmation": 0},
+    {"name": "traversal.zip", "variant": "traversal", "expectedCode": "PACK_PATH_UNSAFE", "writesBeforeConfirmation": 0},
+    {"name": "absolute-path.zip", "variant": "absolute-path", "expectedCode": "PACK_PATH_UNSAFE", "writesBeforeConfirmation": 0},
+    {"name": "canonical-collision.zip", "variant": "canonical-collision", "expectedCode": "PACK_PATH_COLLISION", "writesBeforeConfirmation": 0},
+    {"name": "prohibited-node-modules.zip", "variant": "prohibited", "expectedCode": "PACK_ENTRY_PROHIBITED", "writesBeforeConfirmation": 0},
+    {"name": "prohibited-minified.zip", "variant": "prohibited", "expectedCode": "PACK_ENTRY_PROHIBITED", "writesBeforeConfirmation": 0},
+    {"name": "prohibited-lockfile.zip", "variant": "prohibited", "expectedCode": "PACK_ENTRY_PROHIBITED", "writesBeforeConfirmation": 0},
+    {"name": "unsupported-entry.zip", "variant": "unsupported", "expectedCode": "PACK_ENTRY_UNSUPPORTED", "writesBeforeConfirmation": 0},
+    {"name": "binary-entry.zip", "variant": "binary", "expectedCode": "PACK_BINARY_DEFERRED", "writesBeforeConfirmation": 0},
+    {"name": "partial-write-failure.zip", "variant": "transaction-failure", "expectedCode": "PACK_PERSISTENCE_FAILED", "writesBeforeConfirmation": 0, "writesAfterRollback": 0}
+  ]
+}
