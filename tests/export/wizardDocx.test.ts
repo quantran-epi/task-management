@@ -1,7 +1,11 @@
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { Packer } from 'docx';
+import JSZip from 'jszip';
+import { describe, expect, it, vi } from 'vitest';
+import { buildPl02Document, type Pl02DocxPayload } from '../../src/services/export/pl02Docx';
+import { buildWizardDocx } from '../../src/services/export/wizardDocx';
 
 const root = resolve(import.meta.dirname, '../..');
 const manifestPath = resolve(root, 'tests/fixtures/ai/pl-template-manifest.json');
@@ -113,7 +117,220 @@ describe('wizard source fixtures', () => {
     }
   });
 
-  it.todo('asserts PL02 builder semantic OOXML against pl02-structure.json');
+  describe('PL02 dedicated builder', () => {
+    const approvedPayload: Pl02DocxPayload = {
+      schemaVersion: 1,
+      kind: 'PL02',
+      status: 'approved',
+      inputRevision: 3,
+      draftRevision: 2,
+      approvedRevision: 2,
+      metadata: {
+        crCode: 'CR_ĐIỀU_CHỈNH_537962',
+        featureName: 'Quản lý spending limit thẻ TDDN',
+        requestingUnit: 'Khối Ngân hàng số',
+        author: 'Nguyễn Văn A',
+        createdDate: '2026-10-28',
+      },
+      introduction: {
+        purpose: 'Điều chỉnh MA_CTUD và TRANG_THAI_CT theo yêu cầu nghiệp vụ.',
+        users: 'User maker và User checker',
+        deploymentScope: 'Portal doanh nghiệp',
+        risks: [{
+          type: 'Rủi ro dữ liệu',
+          description: 'Sai hạn mức',
+          mitigation: 'Đối soát trước ghi nhận',
+          owner: 'Đơn vị vận hành',
+        }],
+        glossary: [{ abbreviation: 'TDDN', explanation: 'Thẻ doanh nghiệp' }],
+      },
+      features: [{
+        name: 'Upload spending limit',
+        description: 'Portal => Tiện ích => Quản lý thẻ => Thêm mới',
+        formName: 'Biểu mẫu hạn mức',
+        application: 'PORTAL_TDDN',
+        approvalRequirement: 'Maker-checker',
+        targetTable: 'SPENDING_LIMIT',
+        fileLayout: [{
+          column: 'MA_CTUD',
+          format: 'VARCHAR2(20)',
+          required: 'Có',
+          description: 'Mã chương trình ưu đãi',
+        }],
+        inputRules: [{ field: 'MA_CTUD', rule: 'Không được để trống' }],
+        processingRules: ['Hệ thống check MA_CTUD.', 'Chặn không cho upload khi dữ liệu sai.'],
+        flowSteps: [
+          { actor: 'User maker', target: 'Portal', action: 'Tải biểu mẫu' },
+          { actor: 'Portal', target: 'Core', action: 'Ghi nhận TRANG_THAI_CT' },
+        ],
+      }],
+      permissions: ['User maker', 'User checker'],
+      notifications: [{ content: 'Thông báo hoàn tất', push: 'Có', m4u: 'Không' }],
+      apiContracts: [{
+        field: 'TRANG_THAI_CT',
+        dataType: 'VARCHAR2',
+        description: 'Trạng thái chứng từ',
+      }],
+      staffing: [{
+        workItem: 'Phát triển và kiểm thử',
+        fromDate: '2026-10-29',
+        toDate: '2026-11-05',
+        businessOwner: 'Khối Ngân hàng số',
+        deliveryOwner: 'Trung tâm CNTT',
+      }],
+    };
+
+    async function unpackBlob(blob: Blob) {
+      const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+      const read = async (path: string) => {
+        const file = zip.file(path);
+        if (!file) throw new Error(`Missing OOXML part: ${path}`);
+        return file.async('string');
+      };
+      return {
+        document: await read('word/document.xml'),
+        styles: await read('word/styles.xml'),
+        numbering: await read('word/numbering.xml'),
+        settings: await read('word/settings.xml'),
+        header: await read('word/header1.xml'),
+        footer: await read('word/footer1.xml'),
+      };
+    }
+
+    async function unpackPl02(payload = approvedPayload) {
+      return unpackBlob(await Packer.toBlob(buildPl02Document(payload)));
+    }
+
+    const xmlText = (xml: string) => xml
+      .replace(/<w:tab\/?\s*>/g, '\t')
+      .replace(/<w:br\/?\s*>/g, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>');
+
+    it('matches source-derived PL02 sections, tables, fonts, numbering, margins, and furniture', async () => {
+      const fixture = await readJson<{
+        sectionOrder: string[];
+        tables: Array<{ headerText: string[] }>;
+        pageMargins: Record<string, number>;
+        headers: Array<{ text: string }>;
+        toc: { present: boolean };
+        revisionTable: { present: boolean };
+        signature: { present: boolean };
+      }>(resolve(root, 'tests/fixtures/docx/pl02-structure.json'));
+      const xml = await unpackPl02();
+      const text = xmlText(xml.document);
+
+      let prior = -1;
+      for (const sourceHeading of fixture.sectionOrder) {
+        const heading = sourceHeading.replace(/^(?:I|II|III)\.\s+/, '');
+        const index = text.indexOf(heading);
+        expect(index).toBeGreaterThan(prior);
+        prior = index;
+      }
+      const generatedHeaders = ['TRƯỜNG', ...fixture.tables.flatMap((table) => table.headerText)];
+      for (const header of new Set(generatedHeaders)) expect(text).toContain(header);
+      expect(xml.document).toContain('TOC');
+      for (const [name, value] of Object.entries(fixture.pageMargins)) {
+        expect(xml.document).toContain(`w:${name}="${value}"`);
+      }
+      expect(xml.styles).toContain('Times New Roman');
+      expect(xml.styles).toMatch(/w:eastAsia="Times New Roman"/);
+      expect(xml.numbering).toContain('upperRoman');
+      expect(xml.numbering).toContain('lowerLetter');
+      expect(xml.settings).toContain('w:updateFields');
+      expect(xmlText(xml.header)).toContain(fixture.headers[0]?.text);
+      expect(xmlText(xml.header)).toContain(approvedPayload.metadata.crCode);
+      expect(xmlText(xml.footer)).toContain('NỘI BỘ');
+      expect(text).toContain('CR_ĐIỀU_CHỈNH_537962');
+      expect(text).toContain('MA_CTUD');
+      expect(text).toContain('TRANG_THAI_CT');
+      expect(text).toContain('BẢNG CÁC BƯỚC THỰC HIỆN');
+      expect(text).not.toContain('undefined');
+      expect(text).not.toContain('example');
+      expect(fixture.toc.present).toBe(true);
+      expect(fixture.revisionTable.present).toBe(false);
+      expect(fixture.signature.present).toBe(false);
+      expect(text).not.toContain('BẢNG THEO DÕI THAY ĐỔI TÀI LIỆU');
+      expect(text).not.toContain('CÁN BỘ PHÊ DUYỆT');
+    });
+
+    it('omits optional image/source blocks and marks missing required content explicitly', async () => {
+      const sparse: Pl02DocxPayload = {
+        ...approvedPayload,
+        introduction: { purpose: '', users: '', deploymentScope: '', risks: [], glossary: [] },
+        features: [{
+          name: 'Tính năng tối thiểu',
+          description: '',
+          fileLayout: [],
+          inputRules: [],
+          processingRules: [],
+          flowSteps: [],
+        }],
+        permissions: [],
+        notifications: [],
+        apiContracts: [],
+        staffing: [],
+      };
+      const text = xmlText((await unpackPl02(sparse)).document);
+      expect(text).toContain('(chưa cung cấp)');
+      expect(text).not.toContain('Template upload');
+      expect(text).not.toContain('Source code:');
+      expect(text).not.toContain('undefined');
+    });
+
+    it('keeps PL02 sources free of dynamic sandbox and generated script execution', async () => {
+      const [sharedSource, builderSource, dispatcherSource] = await Promise.all([
+        readFile(resolve(root, 'src/services/export/docxShared.ts'), 'utf8'),
+        readFile(resolve(root, 'src/services/export/pl02Docx.ts'), 'utf8'),
+        readFile(resolve(root, 'src/services/export/wizardDocx.ts'), 'utf8'),
+      ]);
+      expect(`${sharedSource}\n${builderSource}\n${dispatcherSource}`)
+        .not.toMatch(/dynamicFileSandbox|executeDynamicFileScript|eval\(|new Function|AsyncFunction/);
+    });
+
+    it('strictly dispatches only current approved PL02 payloads before packing', async () => {
+      const blob = await buildWizardDocx('PL02', approvedPayload);
+      expect(blob.type).toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      expect(blob.size).toBeGreaterThan(0);
+      await expect(buildWizardDocx('PL02', { ...approvedPayload, extra: true }))
+        .rejects.toThrow('WIZARD_DOCX_PAYLOAD_INVALID');
+      await expect(buildWizardDocx('PL02', { ...approvedPayload, status: 'review' }))
+        .rejects.toThrow('WIZARD_DOCX_PAYLOAD_INVALID');
+      await expect(buildWizardDocx('PL02', { ...approvedPayload, approvedRevision: 1 }))
+        .rejects.toThrow('WIZARD_DOCX_REVISION_STALE');
+      await expect(buildWizardDocx('PL03B' as 'PL02', approvedPayload))
+        .rejects.toThrow('WIZARD_DOCX_KIND_UNSUPPORTED');
+    });
+
+    it('builds semantically equal PL02 OOXML twice without network effects', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch');
+      const normalize = (xml: string) => xml
+        .replace(/w:rsid(?:R|RPr|Sect|Del|P|RDefault)="[0-9A-F]+"/g, '')
+        .replace(/w14:(?:paraId|textId)="[0-9A-F]+"/g, '')
+        .replace(/w:(?:numId|abstractNumId)="\d+"/g, 'w:numId="ID"')
+        .replace(/w:(?:numId|abstractNumId) w:val="\d+"/g, 'w:numId w:val="ID"')
+        .replace(/<w:bookmark(?:Start|End)\b[^>]*\/>/g, '')
+        .replace(/PAGEREF _Toc\d+/g, 'PAGEREF _TocID')
+        .replace(/<dcterms:(?:created|modified)[^>]*>.*?<\/dcterms:(?:created|modified)>/g, '');
+      try {
+        const first = await unpackBlob(await buildWizardDocx('PL02', approvedPayload));
+        const second = await unpackBlob(await buildWizardDocx('PL02', approvedPayload));
+        expect(xmlText(first.document).replace(/_Toc\d+/g, '_TocID'))
+          .toBe(xmlText(second.document).replace(/_Toc\d+/g, '_TocID'));
+        expect(xmlText(first.header)).toBe(xmlText(second.header));
+        expect(xmlText(first.footer)).toBe(xmlText(second.footer));
+        expect(normalize(first.styles)).toBe(normalize(second.styles));
+        expect(normalize(first.settings)).toBe(normalize(second.settings));
+        expect(first.numbering.replace(/\d+/g, 'N')).toBe(second.numbering.replace(/\d+/g, 'N'));
+        expect(fetchSpy).not.toHaveBeenCalled();
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
+  });
+
   it.todo('asserts PL03B builder semantic OOXML against pl03b-structure.json');
   it.todo('asserts PL07 builder semantic OOXML against pl07-structure.json');
 });
