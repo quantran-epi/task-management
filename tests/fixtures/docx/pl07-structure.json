@@ -1,0 +1,375 @@
+{
+  "schemaVersion": 1,
+  "extractionVersion": "ooXML-1.0.0",
+  "sourcePath": "docs/pl-templates/PL07-tokenization-ctm.docx",
+  "sourceSha256": "9ccbc967884ccf8b1e1010566a37f9f554227fbdb208761728e8f3ad320f0b94",
+  "sectionOrder": [
+    "I. Kiểm soát đầu vào dữ liệu",
+    "II. Quản lý mật khẩu và xác thực",
+    "III. Quản lý phiên",
+    "IV. Hạn chế truy cập",
+    "V. Xử lý lỗi và lưu log",
+    "VI. Review code"
+  ],
+  "tables": [
+    {
+      "columnCount": 2,
+      "headerText": [
+        "Nội dung"
+      ],
+      "mergeSpans": []
+    },
+    {
+      "columnCount": 6,
+      "headerText": [
+        "STT",
+        "Nội dung",
+        "Đáp ứng",
+        "Áp dụng/ Không áp dụng",
+        "Ghi chú"
+      ],
+      "mergeSpans": [
+        2
+      ]
+    },
+    {
+      "columnCount": 2,
+      "headerText": [
+        "Hà Nội, ngày 22 tháng 09 năm 2026"
+      ],
+      "mergeSpans": []
+    }
+  ],
+  "numbering": {
+    "definitions": [
+      {
+        "id": "0",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      {
+        "id": "1",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      {
+        "id": "2",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      {
+        "id": "3",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      {
+        "id": "4",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      {
+        "id": "5",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      {
+        "id": "6",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      {
+        "id": "7",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      {
+        "id": "8",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      {
+        "id": "9",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      {
+        "id": "10",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      {
+        "id": "11",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      {
+        "id": "12",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      {
+        "id": "13",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      {
+        "id": "14",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      {
+        "id": "15",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      {
+        "id": "16",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      {
+        "id": "17",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      {
+        "id": "18",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      }
+    ],
+    "instances": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16",
+      "17",
+      "18",
+      "19"
+    ]
+  },
+  "pageMargins": {
+    "top": 1440,
+    "right": 1440,
+    "bottom": 1440,
+    "left": 1440,
+    "header": 720,
+    "footer": 720,
+    "gutter": 0
+  },
+  "headers": [
+    {
+      "part": "word/header1.xml",
+      "text": "QUY ĐỊNH QUẢN LÝ THAY ĐỔI DỊCH VỤ CNTT TRONG SHB Mã hiệu: QĐ ….../2021/QĐ-TGĐ Ngày hiệu lực:../../2021 Lần ban hành/sửa đổi: 05"
+    }
+  ],
+  "footers": [
+    {
+      "part": "word/footer1.xml",
+      "text": "Tài liệu này chứa các thông tin NỘI BỘ của SHB, cấm sao chép, in ấn dưới mọi thức nếu không được sự cho phép của SHB"
+    }
+  ],
+  "toc": {
+    "present": false,
+    "fieldCount": 0
+  },
+  "revisionTable": {
+    "present": false,
+    "columns": []
+  },
+  "signature": {
+    "present": true,
+    "observedText": [
+      "CÁN BỘ PHÁT TRIỂN",
+      "CÁN BỘ PHÊ DUYỆT"
+    ]
+  },
+  "resolvedFindings": [
+    "Observed checklist has a two-row header where Đáp ứng spans Có and Không, plus fixed applicability and notes columns.",
+    "Observed sections I–V are the static checklist baseline; section VI contains the source document review examples and is excluded from the PL07 AI baseline fixture.",
+    "Observed signature block is a three-row table with date row and two sign-off columns."
+  ]
+}

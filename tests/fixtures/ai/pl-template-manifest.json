@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "extractionVersion": "ooXML-1.0.0",
+  "templates": {
+    "pl02": {
+      "path": "docs/pl-templates/PL02.537962 Điều chỉnh logic và chức năng quản lý spending limit của the TDDN.docx",
+      "sha256": "913b36aac459b7a8483fd61d0f39f40f6ae1ad58b588790170bf9fd34034b488",
+      "sizeBytes": 303986
+    },
+    "pl03b": {
+      "path": "docs/pl-templates/PL03B-tokenization-CTM-TichHop.docx",
+      "sha256": "b93f67f9cecbd550f7b7c2ab7da6d5824b7ffd5d7e36cd8a4118d7668990bbf6",
+      "sizeBytes": 1913336
+    },
+    "pl07": {
+      "path": "docs/pl-templates/PL07-tokenization-ctm.docx",
+      "sha256": "9ccbc967884ccf8b1e1010566a37f9f554227fbdb208761728e8f3ad320f0b94",
+      "sizeBytes": 48244
+    }
+  }
+}

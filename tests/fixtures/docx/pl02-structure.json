@@ -1,0 +1,399 @@
+{
+  "schemaVersion": 1,
+  "extractionVersion": "ooXML-1.0.0",
+  "sourcePath": "docs/pl-templates/PL02.537962 Điều chỉnh logic và chức năng quản lý spending limit của the TDDN.docx",
+  "sourceSha256": "913b36aac459b7a8483fd61d0f39f40f6ae1ad58b588790170bf9fd34034b488",
+  "sectionOrder": [
+    "I. GIỚI THIỆU CHUNG",
+    "II. YÊU CẦU CHỨC NĂNG",
+    "III. KẾ HOẠCH VÀ NHÂN SỰ THAM GIA"
+  ],
+  "tables": [
+    {
+      "columnCount": 4,
+      "headerText": [
+        "Loại rủi ro",
+        "Mô tả",
+        "Biện pháp",
+        "Đơn vị thực hiện"
+      ],
+      "mergeSpans": []
+    },
+    {
+      "columnCount": 3,
+      "headerText": [
+        "STT",
+        "Từ viết tắt",
+        "Giải thích"
+      ],
+      "mergeSpans": []
+    },
+    {
+      "columnCount": 5,
+      "headerText": [
+        "STT",
+        "CỘT",
+        "ĐỊNH DẠNG",
+        "BẮT BUỘC",
+        "MÔ TẢ"
+      ],
+      "mergeSpans": []
+    },
+    {
+      "columnCount": 3,
+      "headerText": [
+        "STT",
+        "Trường",
+        "Quy tắc nhập liệu"
+      ],
+      "mergeSpans": []
+    },
+    {
+      "columnCount": 5,
+      "headerText": [
+        "STT",
+        "TRƯỜNG",
+        "ĐỊNH DẠNG",
+        "BẮT BUỘC",
+        "MÔ TẢ"
+      ],
+      "mergeSpans": []
+    },
+    {
+      "columnCount": 3,
+      "headerText": [
+        "STT",
+        "Trường",
+        "Quy tắc nhập liệu"
+      ],
+      "mergeSpans": []
+    },
+    {
+      "columnCount": 4,
+      "headerText": [
+        "STT",
+        "Nội dung cấu hình",
+        "PUSH",
+        "M4U"
+      ],
+      "mergeSpans": []
+    },
+    {
+      "columnCount": 3,
+      "headerText": [
+        "Trường dữ liệu",
+        "Kiểu dữ liệu",
+        "Mô tả"
+      ],
+      "mergeSpans": []
+    },
+    {
+      "columnCount": 4,
+      "headerText": [
+        "STT",
+        "Nội dung cấu hình",
+        "PUSH",
+        "M4U"
+      ],
+      "mergeSpans": []
+    },
+    {
+      "columnCount": 3,
+      "headerText": [
+        "Trường dữ liệu",
+        "Kiểu dữ liệu",
+        "Mô tả"
+      ],
+      "mergeSpans": []
+    },
+    {
+      "columnCount": 6,
+      "headerText": [
+        "STT",
+        "Hạng mục công việc",
+        "Từ ngày",
+        "Đến ngày",
+        "Đầu mối nghiệp vụ",
+        "Đầu mối ĐVTH"
+      ],
+      "mergeSpans": []
+    }
+  ],
+  "numbering": {
+    "definitions": [
+      {
+        "id": "0",
+        "levels": [
+          0
+        ]
+      },
+      {
+        "id": "1",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      {
+        "id": "2",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      {
+        "id": "3",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      {
+        "id": "4",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      {
+        "id": "5",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      {
+        "id": "6",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      {
+        "id": "7",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      {
+        "id": "8",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      {
+        "id": "9",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      {
+        "id": "10",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      {
+        "id": "11",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      {
+        "id": "12",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      {
+        "id": "13",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      {
+        "id": "14",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      },
+      {
+        "id": "15",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      }
+    ],
+    "instances": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16",
+      "17"
+    ]
+  },
+  "pageMargins": {
+    "top": 1134,
+    "right": 1134,
+    "bottom": 1134,
+    "left": 1418,
+    "header": 567,
+    "footer": 567,
+    "gutter": 0
+  },
+  "headers": [
+    {
+      "part": "word/header1.xml",
+      "text": "NGÂN HÀNG TMCP SÀI GÒN – HÀ NỘI"
+    }
+  ],
+  "footers": [
+    {
+      "part": "word/footer1.xml",
+      "text": "Tài liệu này chứa các thông tin NỘI BỘ của SHB, cấm sao chép, in ấn dưới mọi hình thức nếu không được sự cho phép của SHB.10"
+    }
+  ],
+  "toc": {
+    "present": true,
+    "fieldCount": 20
+  },
+  "revisionTable": {
+    "present": false,
+    "columns": []
+  },
+  "signature": {
+    "present": false,
+    "observedText": []
+  },
+  "resolvedFindings": [
+    "Observed OOXML has no revision/change-tracking table before the TOC; PL02 fixture does not invent one.",
+    "Observed PL02 has a TOC field and roman H1 numbering with numbered and lettered descendants.",
+    "Observed PL02 contains header/footer references and a continuous section with four unequal page margins."
+  ]
+}
