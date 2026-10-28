@@ -7,6 +7,7 @@ import type {
   ChatTokenUsage,
   ChatGeneratedFile,
 } from '../../types/models';
+import { WizardSnapshotSchema, type WizardSnapshot } from '../../services/ai/wizardSchemas';
 import {
   ChatMessageGroundingSchema,
   type ChatMessageGrounding,
@@ -28,6 +29,7 @@ export interface SaveMessageInput {
   tokenUsage?: ChatTokenUsage | undefined;
   generatedFiles?: ChatGeneratedFile[] | undefined;
   grounding?: ChatMessageGrounding | undefined;
+  wizard?: WizardSnapshot | undefined;
 }
 
 export function buildScopeKey(scopeType: ChatScopeType, entityId?: string): string {
@@ -82,6 +84,28 @@ export async function saveMessage(
     }
   }
 
+  let wizard: WizardSnapshot | undefined;
+  if (input.wizard !== undefined) {
+    const parsed = WizardSnapshotSchema.safeParse(input.wizard);
+    if (!parsed.success) {
+      const error = new Error(`Malformed wizard snapshot: ${parsed.error.message}`);
+      (error as Error & { code: string }).code = 'INVALID_WIZARD_SNAPSHOT';
+      throw error;
+    }
+    wizard = parsed.data;
+    const thread = await db.chatThreads.get(input.threadId);
+    if (!thread || thread.id !== wizard.threadId) {
+      const error = new Error('Wizard thread does not match persisted chat thread');
+      (error as Error & { code: string }).code = 'WIZARD_THREAD_MISMATCH';
+      throw error;
+    }
+    if (thread.scopeType !== 'project' || thread.entityId !== wizard.projectId) {
+      const error = new Error('Wizard project does not match persisted chat thread');
+      (error as Error & { code: string }).code = 'WIZARD_PROJECT_MISMATCH';
+      throw error;
+    }
+  }
+
   const now = new Date().toISOString();
   const message: ChatMessage = {
     id: generateId(),
@@ -96,6 +120,7 @@ export async function saveMessage(
       ? { generatedFiles: input.generatedFiles }
       : {}),
     ...(input.grounding ? { grounding: input.grounding } : {}),
+    ...(wizard ? { wizard } : {}),
   };
 
   await db.transaction('rw', [db.chatMessages, db.chatThreads], async () => {

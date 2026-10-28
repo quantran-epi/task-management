@@ -20,6 +20,7 @@ export interface CreateDocumentSetInput {
   isBase?: boolean | undefined;
   presentationRevision?: number | undefined;
   preset?: DocumentSetPreset | undefined;
+  sdlc?: DocumentSet['sdlc'];
 }
 
 export interface UpdateDocumentSetInput {
@@ -32,6 +33,7 @@ export interface UpdateDocumentSetInput {
   isBase?: boolean | undefined;
   presentationRevision?: number | undefined;
   preset?: DocumentSetPreset | undefined;
+  sdlc?: DocumentSet['sdlc'];
 }
 
 export interface DocumentSetMemberStatus {
@@ -111,6 +113,7 @@ export async function createDocumentSet(
     isBase: input.isBase ?? false,
     presentationRevision: input.presentationRevision ?? 0,
     preset: input.preset ?? 'TuyChinh',
+    ...(input.sdlc ? { sdlc: input.sdlc } : {}),
   };
 
   const validated = DocumentSetSchema.parse(candidate);
@@ -192,6 +195,7 @@ export async function updateDocumentSet(
         ? { presentationRevision: updates.presentationRevision }
         : {}),
       ...(updates.preset !== undefined ? { preset: updates.preset } : {}),
+      ...(updates.sdlc !== undefined ? { sdlc: updates.sdlc } : {}),
       updatedAt: now,
     };
 

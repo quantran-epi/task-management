@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { isValidUuid } from '../utils/uuid';
+import { SdlcDocumentSetMetadataSchema } from '../services/ai/wizardSchemas';
 
 /**
  * D-27: Primary set states remain exactly these six strings.
@@ -119,6 +120,7 @@ export const DocumentSetSchema = z
     isBase: z.boolean().default(false),
     presentationRevision: z.number().int().nonnegative().default(0),
     preset: DocumentSetPresetSchema.default('TuyChinh'),
+    sdlc: SdlcDocumentSetMetadataSchema.optional(),
   })
   .strict();
 

@@ -1,4 +1,9 @@
 import type { ChatMessageGrounding } from '../services/ai/groundedAnswerSchemas';
+import type {
+  SdlcArtifactMetadata,
+  SdlcDocumentSetMetadata,
+  WizardSnapshot,
+} from '../services/ai/wizardSchemas';
 
 export type ProjectStatus = 'Open' | 'Pending' | 'In Progress' | 'Done' | 'Cancelled';
 export type MilestoneStatus = 'Open' | 'Pending' | 'In Progress' | 'Done' | 'Cancelled';
@@ -182,6 +187,7 @@ export interface Note {
   title?: string | undefined;
   body: string; // Markdown text content
   isPinned: boolean;
+  sdlcArtifact?: SdlcArtifactMetadata | undefined;
   deletedAt?: string | undefined; // D-17: Soft delete timestamp
   createdAt: string; // ISO string metadata
   updatedAt: string; // ISO string metadata
@@ -239,6 +245,7 @@ export interface ChatMessage {
   tokenUsage?: ChatTokenUsage | undefined; // Model token usage metrics
   generatedFiles?: ChatGeneratedFile[] | undefined; // AI-generated downloadable files
   grounding?: ChatMessageGrounding | undefined; // Structured grounding (Plan 19-10 D-46)
+  wizard?: WizardSnapshot | undefined;
 }
 
 // Phase 16: Knowledge Server Foundation, DLP Checks & AST Ingestion models (D-01, D-08, D-18, D-27, D-29)
@@ -288,6 +295,7 @@ export interface DocumentSet {
   isBase?: boolean | undefined;
   presentationRevision?: number | undefined;
   preset?: DocumentSetPreset | undefined;
+  sdlc?: SdlcDocumentSetMetadata | undefined;
 }
 
 export interface PublishedDocumentMetadata {

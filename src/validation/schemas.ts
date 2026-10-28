@@ -7,6 +7,7 @@ import type {
   TaskStatus,
   TaskPriority,
 } from '../types/models';
+import { SdlcArtifactMetadataSchema } from '../services/ai/wizardSchemas';
 
 export const WORK_TYPES = [
   'code',
@@ -335,6 +336,7 @@ export const NoteSchema = z.object({
   title: z.string().trim().max(120, 'Tiêu đề tối đa 120 ký tự').optional(),
   body: z.string().max(50000, 'Nội dung ghi chú tối đa 50000 ký tự'),
   isPinned: z.boolean(),
+  sdlcArtifact: SdlcArtifactMetadataSchema.optional(),
   deletedAt: z.string().datetime({ message: 'deletedAt must be a valid ISO 8601 string' }).optional(),
   createdAt: z.string().datetime({ message: 'createdAt must be a valid ISO 8601 string' }),
   updatedAt: z.string().datetime({ message: 'updatedAt must be a valid ISO 8601 string' }),
@@ -350,6 +352,7 @@ export const NoteInputSchema = z.object({
   title: z.string().trim().max(120, 'Tiêu đề tối đa 120 ký tự').optional(),
   body: z.string().max(50000, 'Nội dung tối đa 50000 ký tự').default(''),
   isPinned: z.boolean().optional(),
+  sdlcArtifact: SdlcArtifactMetadataSchema.optional(),
 });
 
 export const NoteUpdateSchema = z.object({

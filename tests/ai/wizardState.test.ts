@@ -99,7 +99,7 @@ describe('wizard lifecycle contracts', () => {
 
   it('rejects render payloads above 524,288 UTF-8 bytes', () => {
     const result = WizardSnapshotSchema.safeParse(snapshot('review', {
-      renderPayload: { title: 'x'.repeat(524_289), featureMode: 'new' },
+      renderPayload: { title: 'x', markdown: 'x'.repeat(524_289), featureMode: 'new' },
     }));
     expect(result.success).toBe(false);
     if (!result.success) {
