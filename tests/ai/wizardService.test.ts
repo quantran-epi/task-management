@@ -254,6 +254,6 @@ describe('wizard service behavior producer contracts', () => {
     expect(evidence.items).toHaveLength(1);
     expect(evidence.items[0]?.source).toBe('local');
     expect(evidence.coverage).toBe('PARTIAL');
-    expect(evidence.degraded).toEqual(['REMOTE_UNAVAILABLE']);
+    expect(evidence.degraded).toEqual(['REMOTE_UNAVAILABLE', 'MCP_UNAVAILABLE']);
   });
 });
