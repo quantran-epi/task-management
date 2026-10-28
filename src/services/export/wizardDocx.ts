@@ -1,8 +1,10 @@
 import { Packer } from 'docx';
 import { z } from 'zod';
 import { buildPl02Document, type Pl02DocxPayload } from './pl02Docx';
+import { buildPl03bDocument, type Pl03bDocxPayload } from './pl03bDocx';
+import { ReconciliationResultSchema } from '../wizard/reconciliation';
 
-export type WizardDocxKind = 'PL02';
+export type WizardDocxKind = 'PL02' | 'PL03B';
 
 export class WizardDocxBuildError extends Error {
   constructor(code: string) {
@@ -44,13 +46,17 @@ const featureSchema = z.strictObject({
   flowSteps: z.array(flowStepSchema),
 });
 
-const pl02PayloadSchema = z.strictObject({
+const approvedEnvelopeSchema = {
   schemaVersion: z.literal(1),
-  kind: z.literal('PL02'),
   status: z.literal('approved'),
   inputRevision: z.number().int().nonnegative(),
   draftRevision: z.number().int().positive(),
   approvedRevision: z.number().int().positive(),
+};
+
+const pl02PayloadSchema = z.strictObject({
+  ...approvedEnvelopeSchema,
+  kind: z.literal('PL02'),
   metadata: metadataSchema,
   introduction: z.strictObject({
     purpose: z.string(),
@@ -88,13 +94,51 @@ const pl02PayloadSchema = z.strictObject({
   })),
 });
 
+const pl03bApiSchema = z.strictObject({
+  method: z.string(),
+  path: z.string(),
+  description: z.string(),
+  request: z.array(z.strictObject({ field: z.string(), dataType: z.string(), description: z.string() })),
+  response: z.array(z.strictObject({ field: z.string(), dataType: z.string(), description: z.string() })),
+});
+const pl03bPayloadSchema = z.strictObject({
+  ...approvedEnvelopeSchema,
+  kind: z.literal('PL03B'),
+  metadata: z.strictObject({
+    crCode: z.string().trim().min(1),
+    featureName: z.string().trim().min(1),
+    author: z.string().trim().min(1),
+    createdDate: z.string().trim().min(1),
+    version: z.string().trim().min(1),
+  }),
+  introduction: z.strictObject({
+    purpose: z.string(), users: z.string(), databases: z.array(z.string()), k8sServices: z.array(z.string()),
+  }),
+  technical: z.strictObject({
+    overview: z.string(),
+    techStack: z.string(),
+    flows: z.array(z.strictObject({ name: z.string(), steps: z.array(flowStepSchema) })),
+    services: z.array(z.strictObject({ name: z.string(), sourceCode: z.string().optional(), apis: z.array(pl03bApiSchema) })),
+    databases: z.array(z.strictObject({
+      name: z.string(), description: z.string(),
+      columns: z.array(z.strictObject({ column: z.string(), dataType: z.string(), description: z.string() })),
+    })),
+    integrations: z.array(z.strictObject({ name: z.string(), method: z.string(), path: z.string(), description: z.string() })),
+    notifications: z.array(z.strictObject({ code: z.string(), name: z.string(), channel: z.string() })),
+  }),
+  reconciliation: ReconciliationResultSchema,
+});
+
 export async function buildWizardDocx(kind: WizardDocxKind, raw: unknown): Promise<Blob> {
-  if (kind !== 'PL02') throw new WizardDocxBuildError('WIZARD_DOCX_KIND_UNSUPPORTED');
-  const parsed = pl02PayloadSchema.safeParse(raw);
+  const schemas = { PL02: pl02PayloadSchema, PL03B: pl03bPayloadSchema } as const;
+  const schema = schemas[kind];
+  if (!schema) throw new WizardDocxBuildError('WIZARD_DOCX_KIND_UNSUPPORTED');
+  const parsed = schema.safeParse(raw);
   if (!parsed.success) throw new WizardDocxBuildError('WIZARD_DOCX_PAYLOAD_INVALID');
-  const payload: Pl02DocxPayload = parsed.data;
+  const payload = parsed.data;
   if (payload.approvedRevision !== payload.draftRevision) {
     throw new WizardDocxBuildError('WIZARD_DOCX_REVISION_STALE');
   }
-  return Packer.toBlob(buildPl02Document(payload));
+  if (payload.kind === 'PL02') return Packer.toBlob(buildPl02Document(payload as Pl02DocxPayload));
+  return Packer.toBlob(buildPl03bDocument(payload as Pl03bDocxPayload));
 }

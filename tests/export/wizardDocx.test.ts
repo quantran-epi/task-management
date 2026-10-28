@@ -333,6 +333,30 @@ describe('wizard source fixtures', () => {
   });
 
   describe('PL03B dedicated builder', () => {
+    async function unpackBlob(blob: Blob) {
+      const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+      const read = async (path: string) => {
+        const file = zip.file(path);
+        if (!file) throw new Error(`Missing OOXML part: ${path}`);
+        return file.async('string');
+      };
+      return {
+        document: await read('word/document.xml'),
+        styles: await read('word/styles.xml'),
+        numbering: await read('word/numbering.xml'),
+        settings: await read('word/settings.xml'),
+        header: await read('word/header1.xml'),
+        footer: await read('word/footer1.xml'),
+      };
+    }
+    const xmlText = (xml: string) => xml
+      .replace(/<w:tab\/?\s*>/g, '\t')
+      .replace(/<w:br\/?\s*>/g, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>');
+
     const payload: Pl03bDocxPayload = {
       schemaVersion: 1,
       kind: 'PL03B',
