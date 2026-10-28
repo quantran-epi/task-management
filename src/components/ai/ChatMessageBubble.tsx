@@ -39,6 +39,7 @@ import { CandidateChipList } from './grounded/CandidateChipList';
 import { EvidenceOnlyCard } from './grounded/EvidenceOnlyCard';
 import { SeedEntityCard } from './grounded/SeedEntityCard';
 import type { PersistedEntityRef } from '../../services/ai/groundedAnswerSchemas';
+import { MermaidViewer } from './MermaidViewer';
 
 const { Text } = Typography;
 
@@ -202,6 +203,83 @@ export function renderUserMessageWithMentions(content: string): React.ReactNode 
   return parts;
 }
 
+export interface MarkdownSegment {
+  type: 'markdown' | 'mermaid';
+  content: string;
+}
+
+export function parseMarkdownSegments(text: string): MarkdownSegment[] {
+  if (!text) return [];
+  const segments: MarkdownSegment[] = [];
+  const regex = /```mermaid\s*\r?\n([\s\S]*?)```/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      const md = text.substring(lastIndex, match.index);
+      if (md.trim()) {
+        segments.push({ type: 'markdown', content: md });
+      }
+    }
+    const code = match[1]?.trim() || '';
+    if (code) {
+      segments.push({ type: 'mermaid', content: code });
+    }
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    const trailing = text.substring(lastIndex);
+    if (trailing.trim()) {
+      segments.push({ type: 'markdown', content: trailing });
+    }
+  }
+
+  return segments;
+}
+
+export const MarkdownContentRenderer: React.FC<{
+  content: string;
+  onMarkdownClick?: (e: React.MouseEvent<HTMLDivElement>) => void;
+  transformHtml?: (html: string) => string;
+}> = ({ content, onMarkdownClick, transformHtml }) => {
+  const segments = useMemo(() => parseMarkdownSegments(content), [content]);
+
+  // If no mermaid blocks, render straight markdown
+  if (segments.length === 0 || (segments.length === 1 && segments[0]?.type === 'markdown')) {
+    let html = renderSafeMarkdown(content);
+    if (transformHtml) html = transformHtml(html);
+    return (
+      <div
+        className="chat-markdown-body"
+        onClick={onMarkdownClick}
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    );
+  }
+
+  return (
+    <div>
+      {segments.map((seg, idx) => {
+        if (seg.type === 'mermaid') {
+          return <MermaidViewer key={`mermaid-${idx}`} code={seg.content} />;
+        }
+        let html = renderSafeMarkdown(seg.content);
+        if (transformHtml) html = transformHtml(html);
+        return (
+          <div
+            key={`md-${idx}`}
+            className="chat-markdown-body"
+            onClick={onMarkdownClick}
+            dangerouslySetInnerHTML={{ __html: html }}
+          />
+        );
+      })}
+    </div>
+  );
+};
+
 export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   message: msg,
   isStreaming = false,
@@ -351,20 +429,18 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
         return match;
       });
 
-      // Use formattedConclusion as the complete executive answer; fallback to formattedClaims if conclusion is absent
       const fullText = formattedConclusion || formattedClaims.join('\n\n');
-
-      // Inject interactive styling for inline citations like [1], [L1]
-      let renderedHtml = renderSafeMarkdown(fullText);
       const chipBg = token.colorPrimaryBg ?? '#e6f4ff';
       const chipBorder = token.colorPrimaryBorder ?? '#91caff';
       const chipColor = token.colorPrimary ?? '#1677ff';
-      if (activeCitations.length > 0) {
-        renderedHtml = renderedHtml.replace(
+
+      const applyCitationChips = (html: string) => {
+        if (activeCitations.length === 0) return html;
+        let res = html.replace(
           /\[\s*([SL]?[0-9]+(?:\s*,\s*[SL]?[0-9]+)+)\s*\]/gi,
           (_match, inner) => inner.split(/\s*,\s*/).map((tag: string) => `[${tag}]`).join(' ')
         );
-        renderedHtml = renderedHtml.replace(/\[(L?[0-9]+|S[0-9]+)\]/gi, (match, tag) => {
+        res = res.replace(/\[(L?[0-9]+|S[0-9]+)\]/gi, (match, tag) => {
           const cleanTag = tag.toUpperCase();
           const info = citationMap.get(cleanTag) || citationMap.get(tag);
           if (!info) return match;
@@ -374,7 +450,8 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
             : info.citation.documentTitle;
           return `<span class="grounded-inline-chip" data-citation-id="${info.citation.citationId}" style="cursor:pointer;margin:0 2px;padding:0 5px;border-radius:4px;font-weight:600;font-size:11px;line-height:16px;display:inline-flex;align-items:center;vertical-align:baseline;background:${chipBg};border:1px solid ${chipBorder};color:${chipColor};" title="${escapeAttr(tooltipText)}">[${label}]</span>`;
         });
-      }
+        return res;
+      };
 
       return (
         <div
@@ -402,10 +479,10 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
             }}
           >
-            <div
-              className="chat-markdown-body"
-              onClick={handleMarkdownClick}
-              dangerouslySetInnerHTML={{ __html: renderedHtml }}
+            <MarkdownContentRenderer
+              content={fullText}
+              onMarkdownClick={handleMarkdownClick}
+              transformHtml={applyCitationChips}
             />
 
             {activeCitations.length > 0 && (
@@ -1024,10 +1101,9 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
           </div>
         ) : (
           <div>
-            <div
-              className="chat-markdown-body"
-              onClick={handleMarkdownClick}
-              dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(msg.content) }}
+            <MarkdownContentRenderer
+              content={msg.content}
+              onMarkdownClick={handleMarkdownClick}
             />
             {isStreaming && (
               <span
