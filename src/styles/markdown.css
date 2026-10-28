@@ -305,3 +305,35 @@
   background-color: #e9d5ff;
   color: #6b21a8;
 }
+
+/* Mermaid inline render: natural size, horizontal scroll instead of shrinking text */
+.mermaid-svg-container {
+  width: 100%;
+  overflow-x: auto;
+  padding: 6px 0;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.mermaid-svg-container > div,
+.mermaid-svg-container > svg {
+  flex: none;
+}
+
+.mermaid-svg-container svg {
+  max-width: none !important;
+  height: auto !important;
+  display: block;
+}
+
+/* Fullscreen canvas: wrapper is sized in JS (viewBox x scale); SVG fills it */
+.mermaid-modal-canvas {
+  overflow: visible;
+}
+
+.mermaid-modal-canvas svg {
+  max-width: none !important;
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
