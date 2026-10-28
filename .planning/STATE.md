@@ -4,14 +4,14 @@ milestone: v1.2
 milestone_name: milestone
 status: executing
 stopped_at: Phase 25 UI-SPEC approved
-last_updated: "2026-10-28T13:34:01.510Z"
-last_activity: "2026-10-28 - Completed quick task 261028-gpk: Strengthen AI document normalization prompt against hallucination"
+last_updated: "2026-10-28T14:02:28.684Z"
+last_activity: 2026-10-28 -- Phase 25 execution started
 progress:
   total_phases: 9
   completed_phases: 7
-  total_plans: 51
-  completed_plans: 50
-  percent: 78
+  total_plans: 69
+  completed_plans: 51
+  percent: 74
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-07)
 
 **Core value:** Make planned work realistically fit available time while giving the personal user evidence-grounded access to their local banking IT knowledge.
-**Current focus:** Phase 24 — graph-retrieval-optimization
+**Current focus:** Phase 25 — interactive-sdlc-document-wizards
 
 ## Current Position
 
-Phase: 24 (graph-retrieval-optimization) — EXECUTING
-Plan: 1 of 8
+Phase: 25 (interactive-sdlc-document-wizards) — EXECUTING
+Plan: 2 of 18
 Status: Ready to execute
-Last activity: 2026-10-28 - Completed quick task 261028-gpk: Strengthen AI document normalization prompt against hallucination
+Last activity: 2026-10-28 -- Phase 25 execution started
 Stopped at: Phase 25 UI-SPEC approved
 
 Progress: [██████████] 100%
@@ -227,6 +227,7 @@ Progress: [██████████] 100%
 | Phase 19.2 P07 | 25m | 3 tasks | 17 files |
 | Phase 23 P01 | 15m | 2 tasks | 4 files |
 | Phase 23 P02 | 12m | 2 tasks | 3 files |
+| Phase 25 P01 | 12m | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -319,6 +320,8 @@ Recent decisions logged in PROJECT.md:
 - [Phase 19 Plan 11]: ClaimBlock enforces D-26 invalid-state gate: claims asserting override terms without backing SUPERSEDES or policy/release/migration evidence kinds suppress prose and render safe synthesis error alert.
 - [Phase 19]: Path citation IDs resolve only to returned chunk item IDs. — Makes citation closure deterministic at strict protocol boundary.
 - [Phase 19]: Conflict scope stays metadata-only through fixed dimension allowlist. — Prevents free-text or model-invented scope proof.
+- [Phase ?]: Confirmed bank source DOCX templates as internal authority without AI recreation
+- [Phase ?]: Pinned archive profile B ceilings (5MB/25MB/2MB/256 entries) and zero-migration SDLC persistence metadata
 
 ### Pending Todos
 
@@ -350,6 +353,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-28T07:45:06.005Z
+Last session: 2026-10-28T14:02:11.484Z
 Stopped at: Session resumed, proceeding with Plan 19.2-09 task 2 retrieval correctness fixes
 Resume file: .planning/phases/25-interactive-sdlc-document-wizards/25-UI-SPEC.md
