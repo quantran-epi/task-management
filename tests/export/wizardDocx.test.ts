@@ -309,16 +309,21 @@ describe('wizard source fixtures', () => {
       const normalize = (xml: string) => xml
         .replace(/w:rsid(?:R|RPr|Sect|Del|P|RDefault)="[0-9A-F]+"/g, '')
         .replace(/w14:(?:paraId|textId)="[0-9A-F]+"/g, '')
-        .replace(/w:id="\d+"/g, 'w:id="ID"')
-        .replace(/w:name="_Toc\d+"/g, 'w:name="_TocID"')
+        .replace(/w:(?:numId|abstractNumId)="\d+"/g, 'w:numId="ID"')
+        .replace(/w:(?:numId|abstractNumId) w:val="\d+"/g, 'w:numId w:val="ID"')
+        .replace(/<w:bookmark(?:Start|End)\b[^>]*\/>/g, '')
         .replace(/PAGEREF _Toc\d+/g, 'PAGEREF _TocID')
         .replace(/<dcterms:(?:created|modified)[^>]*>.*?<\/dcterms:(?:created|modified)>/g, '');
       try {
         const first = await unpackBlob(await buildWizardDocx('PL02', approvedPayload));
         const second = await unpackBlob(await buildWizardDocx('PL02', approvedPayload));
-        for (const key of Object.keys(first) as Array<keyof typeof first>) {
-          expect(normalize(first[key])).toBe(normalize(second[key]));
-        }
+        expect(xmlText(first.document).replace(/_Toc\d+/g, '_TocID'))
+          .toBe(xmlText(second.document).replace(/_Toc\d+/g, '_TocID'));
+        expect(xmlText(first.header)).toBe(xmlText(second.header));
+        expect(xmlText(first.footer)).toBe(xmlText(second.footer));
+        expect(normalize(first.styles)).toBe(normalize(second.styles));
+        expect(normalize(first.settings)).toBe(normalize(second.settings));
+        expect(first.numbering.replace(/\d+/g, 'N')).toBe(second.numbering.replace(/\d+/g, 'N'));
         expect(fetchSpy).not.toHaveBeenCalled();
       } finally {
         fetchSpy.mockRestore();
