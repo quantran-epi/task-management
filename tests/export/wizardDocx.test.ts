@@ -6,6 +6,8 @@ import JSZip from 'jszip';
 import { describe, expect, it, vi } from 'vitest';
 import { buildPl02Document, type Pl02DocxPayload } from '../../src/services/export/pl02Docx';
 import { buildPl03bDocument, type Pl03bDocxPayload } from '../../src/services/export/pl03bDocx';
+import { PL07_BASELINE, PL07_BASELINE_SOURCE_SHA256 } from '../../src/services/export/pl07Baseline';
+import { buildPl07Document, type Pl07DocxPayload } from '../../src/services/export/pl07Docx';
 import { buildWizardDocx } from '../../src/services/export/wizardDocx';
 
 const root = resolve(import.meta.dirname, '../..');
@@ -492,5 +494,101 @@ describe('wizard source fixtures', () => {
     });
   });
 
-  it.todo('asserts PL07 builder semantic OOXML against pl07-structure.json');
+  describe('PL07 immutable-baseline builder', () => {
+    async function unpack(blob: Blob) {
+      const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+      const read = async (path: string) => {
+        const file = zip.file(path);
+        if (!file) throw new Error(`Missing OOXML part: ${path}`);
+        return file.async('string');
+      };
+      return { document: await read('word/document.xml'), styles: await read('word/styles.xml'), header: await read('word/header1.xml'), footer: await read('word/footer1.xml') };
+    }
+    const xmlText = (xml: string) => xml.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+    const marks = PL07_BASELINE.sections.flatMap((section) => section.items.map((item) => ({
+      sectionId: section.id,
+      itemNumber: item.number,
+      status: 'unknown' as const,
+      evidenceIds: [],
+      note: '',
+    })));
+    const payload: Pl07DocxPayload = {
+      schemaVersion: 1,
+      kind: 'PL07',
+      status: 'approved',
+      inputRevision: 3,
+      draftRevision: 2,
+      approvedRevision: 2,
+      metadata: {
+        applicationName: 'Ứng dụng Tokenization',
+        applicationVersion: '1.2.0',
+        summary: 'Tích hợp cấp token',
+        reviewDate: '2026-09-22',
+        developer: 'Nguyễn Văn Dev',
+        approver: '',
+      },
+      marks: [
+        ...marks.filter((mark) => !(mark.sectionId === 'I' && ['1', '2', '3'].includes(mark.itemNumber))),
+        { sectionId: 'I', itemNumber: '1', status: 'pass', evidenceIds: ['ev-pass'], note: 'Đã kiểm tra server-side' },
+        { sectionId: 'I', itemNumber: '2', status: 'fail', evidenceIds: ['ev-fail'], note: 'Thiếu allowlist' },
+        { sectionId: 'I', itemNumber: '3', status: 'not_applicable', evidenceIds: ['ev-na'], note: 'Không nhận file' },
+      ],
+      findings: [{ number: '1', text: 'Bổ sung validate tại src/token.ts', evidenceIds: ['ev-hunk'], file: 'src/token.ts', hunk: 'hunk-1' }],
+    };
+
+    it('matches reviewed fixture exactly and renders fixed checklist merges and furniture', async () => {
+      const fixtureBaseline = await readJson<Baseline>(baselinePath);
+      const fixture = await readJson<{ pageMargins: Record<string, number>; headers: Array<{ text: string }>; signature: { present: boolean } }>(resolve(root, 'tests/fixtures/docx/pl07-structure.json'));
+      expect(PL07_BASELINE).toEqual(fixtureBaseline);
+      expect(PL07_BASELINE_SOURCE_SHA256).toBe(fixtureBaseline.sourceSha256);
+      expect(Object.isFrozen(PL07_BASELINE)).toBe(true);
+      const xml = await unpack(await Packer.toBlob(buildPl07Document(payload)));
+      const text = xmlText(xml.document);
+      let prior = -1;
+      for (const section of fixtureBaseline.sections) {
+        const headingIndex = text.indexOf(`${section.id}. ${section.title}`);
+        expect(headingIndex).toBeGreaterThan(prior);
+        prior = headingIndex;
+        for (const item of section.items) {
+          const itemIndex = text.indexOf(item.text, prior);
+          expect(itemIndex).toBeGreaterThanOrEqual(prior);
+          prior = itemIndex;
+          for (const subItem of item.subItems ?? []) {
+            const subItemIndex = text.indexOf(subItem.text, prior);
+            expect(subItemIndex).toBeGreaterThanOrEqual(prior);
+            prior = subItemIndex;
+          }
+        }
+      }
+      expect(text.indexOf('VI. Review code')).toBeGreaterThan(prior);
+      expect(xml.document).toMatch(/w:gridSpan w:val="2"/);
+      expect(text).toContain('Đáp ứng');
+      expect(text).toContain('Có');
+      expect(text).toContain('Không');
+      expect(text).toContain('Chưa xác định');
+      expect(text).toContain('Không áp dụng');
+      expect(text).toContain('Không đạt');
+      expect(text).toContain('Bổ sung validate tại src/token.ts');
+      expect(text).toContain('src/token.ts | hunk-1 | ev-hunk');
+      expect(text).toContain('CÁN BỘ PHÁT TRIỂN');
+      expect(text).toContain('CÁN BỘ PHÊ DUYỆT');
+      expect(text).not.toContain('Đã phê duyệt');
+      expect(xmlText(xml.header)).toContain(fixture.headers[0]?.text);
+      expect(xml.styles).toContain('Times New Roman');
+      for (const [name, value] of Object.entries(fixture.pageMargins)) expect(xml.document).toContain(`w:${name}="${value}"`);
+      expect(fixture.signature.present).toBe(true);
+    });
+
+    it('rejects baseline injection and unsupported positive or not-applicable marks', async () => {
+      await expect(buildWizardDocx('PL07', { ...payload, baseline: { sections: [] } }))
+        .rejects.toThrow('WIZARD_DOCX_PAYLOAD_INVALID');
+      await expect(buildWizardDocx('PL07', { ...payload, marks: [{ sectionId: 'I', itemNumber: '1', status: 'pass', evidenceIds: [], note: '' }] }))
+        .rejects.toThrow('WIZARD_DOCX_PAYLOAD_INVALID');
+      await expect(buildWizardDocx('PL07', { ...payload, marks: [{ sectionId: 'I', itemNumber: '1', status: 'not_applicable', evidenceIds: [], note: '' }] }))
+        .rejects.toThrow('WIZARD_DOCX_PAYLOAD_INVALID');
+      await expect(buildWizardDocx('PL07', { ...payload, approvedRevision: 1 }))
+        .rejects.toThrow('WIZARD_DOCX_REVISION_STALE');
+      expect((await buildWizardDocx('PL07', payload)).size).toBeGreaterThan(0);
+    });
+  });
 });
