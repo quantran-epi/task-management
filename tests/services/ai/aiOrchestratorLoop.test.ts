@@ -5,6 +5,11 @@ import type { ChatCompletionMessage } from '../../../src/services/ai/types';
 
 const mockStreamChatEvents = vi.fn();
 const mockStreamChatCompletion = vi.fn();
+const mockCompactMessagesInLoop = vi.fn();
+
+vi.mock('../../../src/services/ai/inLoopCompaction', () => ({
+  compactMessagesInLoop: (args: any) => mockCompactMessagesInLoop(args),
+}));
 
 vi.mock('../../../src/services/ai/nineRouterClient', () => ({
   streamChatEvents: (args: any) => mockStreamChatEvents(args),
@@ -21,6 +26,8 @@ describe('runAiOrchestratorLoop', () => {
     await testDb.open();
     mockStreamChatEvents.mockReset();
     mockStreamChatCompletion.mockReset();
+    mockCompactMessagesInLoop.mockReset();
+    mockCompactMessagesInLoop.mockResolvedValue({ compacted: false, messages: [] });
   });
 
   afterEach(async () => {
@@ -95,7 +102,7 @@ describe('runAiOrchestratorLoop', () => {
       onToolResult,
     });
 
-    expect(mockToolFn).toHaveBeenCalledWith('custom_lookup', { item: 'test' }, testDb);
+    expect(mockToolFn).toHaveBeenCalledWith('custom_lookup', { item: 'test' }, testDb, undefined);
     expect(onToolCall).toHaveBeenCalledWith({
       id: 'call_1',
       name: 'custom_lookup',
@@ -150,6 +157,59 @@ describe('runAiOrchestratorLoop', () => {
     expect(toolMsg?.content).toContain('User declined');
   });
 
+  it('forwards the signal to tool execution and rejects an abort during the tool call', async () => {
+    mockStreamChatEvents.mockImplementation(async function* () {
+      yield {
+        type: 'tool_calls',
+        calls: [{
+          id: 'call_abort',
+          type: 'function',
+          function: { name: 'custom_lookup', arguments: '{}' },
+        }],
+      };
+    });
+    const controller = new AbortController();
+    const mockToolFn = vi.fn(async () => {
+      controller.abort();
+      throw new DOMException('Aborted', 'AbortError');
+    });
+
+    await expect(runAiOrchestratorLoop({
+      endpoint: 'https://api.example.com', apiKey: 'test-key', model: 'test-model',
+      messages: [{ role: 'user', content: 'lookup' }], db: testDb,
+      signal: controller.signal, executeToolFn: mockToolFn,
+    })).rejects.toMatchObject({ name: 'AbortError' });
+    expect(mockToolFn).toHaveBeenCalledWith('custom_lookup', {}, testDb, controller.signal);
+  });
+
+  it('passes the same signal to in-loop compaction when prompt tokens exceed budget', async () => {
+    let callCount = 0;
+    mockStreamChatEvents.mockImplementation(async function* () {
+      callCount++;
+      if (callCount === 1) {
+        yield { type: 'usage', usage: { promptTokens: 1000 } };
+        yield {
+          type: 'tool_calls',
+          calls: [{ id: 'call_1', type: 'function', function: { name: 'custom_lookup', arguments: '{}' } }],
+        };
+      } else {
+        yield { type: 'text', delta: 'xong' };
+      }
+    });
+    const controller = new AbortController();
+
+    await runAiOrchestratorLoop({
+      endpoint: 'https://api.example.com', apiKey: 'test-key', model: 'test-model',
+      messages: [{ role: 'user', content: 'lookup' }], db: testDb,
+      signal: controller.signal, contextWindowTokens: 100,
+      executeToolFn: vi.fn().mockResolvedValue('{}'),
+    });
+
+    expect(mockCompactMessagesInLoop).toHaveBeenCalledWith(
+      expect.objectContaining({ signal: controller.signal })
+    );
+  });
+
   it('captures generated files from generate_file or generate_pptx tools', async () => {
     let callCount = 0;
     mockStreamChatEvents.mockImplementation(async function* () {
@@ -199,5 +259,37 @@ describe('runAiOrchestratorLoop', () => {
     expect(onFileGenerated).toHaveBeenCalledWith(
       expect.objectContaining({ filename: 'report.md', format: 'md' })
     );
+  });
+
+  it.each([
+    ['generate_file_ide', JSON.stringify({ success: true, filename: 'report.md', format: 'md', sizeBytes: 10 })],
+    ['generate_image_tool', JSON.stringify({ success: true, imageUrl: 'data:image/png;base64,AAAA', prompt: 'diagram' })],
+  ])('captures artifacts from normalized tool name %s', async (name, resultPayload) => {
+    let callCount = 0;
+    mockStreamChatEvents.mockImplementation(async function* () {
+      callCount++;
+      if (callCount === 1) {
+        yield {
+          type: 'tool_calls',
+          calls: [{ id: 'call_artifact_123', type: 'function', function: { name, arguments: JSON.stringify({ filename: 'report.md', content: '# report' }) } }],
+        };
+      } else {
+        yield { type: 'text', delta: 'done' };
+      }
+    });
+    const onFileGenerated = vi.fn();
+
+    const result = await runAiOrchestratorLoop({
+      endpoint: 'https://api.example.com', apiKey: 'test-key', model: 'test-model',
+      messages: [{ role: 'user', content: 'generate' }], db: testDb,
+      executeToolFn: vi.fn().mockResolvedValue(resultPayload), onFileGenerated,
+    });
+
+    expect(result.generatedFiles).toHaveLength(1);
+    expect(onFileGenerated).toHaveBeenCalledTimes(1);
+    if (name === 'generate_image_tool') {
+      expect(result.generatedFiles[0]).toMatchObject({ format: 'png', content: 'data:image/png;base64,AAAA' });
+      expect(result.generatedFiles[0]!.sizeBytes).toBeGreaterThan(0);
+    }
   });
 });

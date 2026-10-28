@@ -28,8 +28,10 @@ export function getKnowledgeServerConfigFromDb(db: TaskPlannerDatabase) {
  */
 export async function executeKnowledgeRetrievalTool(
   args: KnowledgeRetrievalArgs,
-  db: TaskPlannerDatabase
+  db: TaskPlannerDatabase,
+  signal?: AbortSignal
 ): Promise<string> {
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
   const query = typeof args.query === 'string' ? args.query.trim() : '';
   if (!query) return JSON.stringify({ error: 'query string parameter is required' });
 
@@ -75,7 +77,7 @@ export async function executeKnowledgeRetrievalTool(
       limit,
       includeInferred: true,
       recentTurns: [],
-    });
+    }, signal);
 
     const pack = packEvidence({ authority: 'server', serverResponse: response });
     return JSON.stringify({
@@ -99,6 +101,9 @@ export async function executeKnowledgeRetrievalTool(
       warnings: [...new Set(pack.coverageWarnings)],
     });
   } catch (err: any) {
+    if (err?.name === 'AbortError' || signal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
     return JSON.stringify({
       error: `Truy vấn tri thức thất bại: ${err?.message || String(err)}`,
     });

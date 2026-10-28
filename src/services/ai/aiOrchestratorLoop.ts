@@ -16,14 +16,15 @@ import { executeDynamicMcpTool } from './mcpClient';
 export async function dispatchAiToolCall(
   name: string,
   args: Record<string, any>,
-  db: TaskPlannerDatabase
+  db: TaskPlannerDatabase,
+  signal?: AbortSignal
 ): Promise<string> {
   const normalized = normalizeToolName(name);
   const isLocalDbTool = AI_DATABASE_TOOLS.some(
     (t) => normalizeToolName(t.function.name) === normalized
   );
   return isLocalDbTool
-    ? executeAiTool(name, args, db)
+    ? executeAiTool(name, args, db, signal)
     : executeDynamicMcpTool(normalized, args, db);
 }
 
@@ -53,7 +54,12 @@ export interface AiOrchestratorLoopOptions {
     args: Record<string, any>
   ) => Promise<{ proceed: boolean; cancellationResult?: string }>;
   onFileGenerated?: (file: ChatGeneratedFile) => void;
-  executeToolFn?: (name: string, args: Record<string, any>, db: TaskPlannerDatabase) => Promise<string>;
+  executeToolFn?: (
+    name: string,
+    args: Record<string, any>,
+    db: TaskPlannerDatabase,
+    signal?: AbortSignal
+  ) => Promise<string>;
   /** Recent tool outputs kept intact when pruning; older ones truncate. */
   keepRecentToolOutputs?: number;
   /** Character cap applied to older tool outputs. */
@@ -332,9 +338,10 @@ export async function runAiOrchestratorLoop(
       let toolResult: string;
       try {
         toolResult = executeToolFn
-          ? await executeToolFn(tc.function.name, args, db)
-          : await dispatchAiToolCall(tc.function.name, args, db);
+          ? await executeToolFn(tc.function.name, args, db, signal)
+          : await dispatchAiToolCall(tc.function.name, args, db, signal);
       } catch (toolErr: any) {
+        if (toolErr?.name === 'AbortError' || signal?.aborted) throw toolErr;
         toolResult = JSON.stringify({
           error: `Lỗi thực thi công cụ '${tc.function.name}': ${toolErr?.message || String(toolErr)}`,
         });
@@ -342,7 +349,8 @@ export async function runAiOrchestratorLoop(
       const toolDuration = Date.now() - toolStartTime;
       onToolResult?.(tc.id, toolResult, toolDuration);
 
-      if (tc.function.name === 'generate_file' || tc.function.name === 'generate_pptx') {
+      const normalizedToolName = normalizeToolName(tc.function.name);
+      if (normalizedToolName === 'generate_file' || normalizedToolName === 'generate_pptx') {
         try {
           const parsedRes = JSON.parse(toolResult);
           if (parsedRes.success && parsedRes.filename) {
@@ -357,6 +365,24 @@ export async function runAiOrchestratorLoop(
               sizeBytes: parsedRes.sizeBytes || 0,
               slideCount: parsedRes.slideCount,
               content: parsedRes.content || rawArgsContent,
+            };
+            generatedFiles.push(generated);
+            onFileGenerated?.(generated);
+          }
+        } catch {}
+      } else if (normalizedToolName === 'generate_image') {
+        try {
+          const parsedRes = JSON.parse(toolResult);
+          const imageUrl = typeof parsedRes.imageUrl === 'string' ? parsedRes.imageUrl : '';
+          if (parsedRes.success !== false && imageUrl) {
+            const generated: ChatGeneratedFile = {
+              id: tc.id,
+              filename: `ai-image-${tc.id.slice(0, 8)}.png`,
+              format: 'png',
+              sizeBytes: imageUrl.startsWith('data:')
+                ? Math.round((imageUrl.length * 3) / 4)
+                : 0,
+              content: imageUrl,
             };
             generatedFiles.push(generated);
             onFileGenerated?.(generated);

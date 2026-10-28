@@ -2001,7 +2001,8 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
 export async function executeAiTool(
   toolName: string,
   args: Record<string, any>,
-  db: TaskPlannerDatabase
+  db: TaskPlannerDatabase,
+  signal?: AbortSignal
 ): Promise<string> {
   const normalized = normalizeToolName(toolName);
   try {
@@ -4509,7 +4510,7 @@ export async function executeAiTool(
       }
 
       case 'retrieve_knowledge': {
-        return executeKnowledgeRetrievalTool(args, db);
+        return executeKnowledgeRetrievalTool(args, db, signal);
       }
 
       case 'get_document_details': {
@@ -4731,6 +4732,7 @@ export async function executeAiTool(
         return JSON.stringify({ error: `Unknown tool: ${toolName}` });
     }
   } catch (err: any) {
+    if (err?.name === 'AbortError' || signal?.aborted) throw err;
     let msg = err?.message || String(err);
     if (normalized === 'generate_image') {
       try {
