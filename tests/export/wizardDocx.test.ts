@@ -46,6 +46,8 @@ describe('wizard source fixtures', () => {
 
     for (const key of structureKeys) {
       const entry = manifest.templates[key];
+      expect(entry).toBeDefined();
+      if (!entry) throw new Error(`Missing manifest template: ${key}`);
       expect(entry.path).toMatch(/^docs\/pl-templates\/.+\.docx$/);
       expect(entry.sha256).toMatch(/^[0-9a-f]{64}$/);
       expect(entry.sizeBytes).toBeGreaterThan(0);
@@ -58,8 +60,11 @@ describe('wizard source fixtures', () => {
   it('keeps PL07 sections I-V and II.5 sub-items verbatim and excludes generated VI', async () => {
     const manifest = await readJson<Manifest>(manifestPath);
     const baseline = await readJson<Baseline>(baselinePath);
-    expect(baseline.sourcePath).toBe(manifest.templates.pl07.path);
-    expect(baseline.sourceSha256).toBe(manifest.templates.pl07.sha256);
+    const pl07 = manifest.templates.pl07;
+    expect(pl07).toBeDefined();
+    if (!pl07) throw new Error('Missing PL07 manifest template');
+    expect(baseline.sourcePath).toBe(pl07.path);
+    expect(baseline.sourceSha256).toBe(pl07.sha256);
     expect(baseline.extractionVersion).toBe(manifest.extractionVersion);
     expect(baseline.sections.map(section => section.id)).toEqual(['I', 'II', 'III', 'IV', 'V']);
     expect(baseline.sections.some(section => section.id === 'VI')).toBe(false);
@@ -92,8 +97,11 @@ describe('wizard source fixtures', () => {
         signature: { present: boolean };
         resolvedFindings: string[];
       }>(resolve(root, `tests/fixtures/docx/${key}-structure.json`));
-      expect(fixture.sourcePath).toBe(manifest.templates[key].path);
-      expect(fixture.sourceSha256).toBe(manifest.templates[key].sha256);
+      const entry = manifest.templates[key];
+      expect(entry).toBeDefined();
+      if (!entry) throw new Error(`Missing manifest template: ${key}`);
+      expect(fixture.sourcePath).toBe(entry.path);
+      expect(fixture.sourceSha256).toBe(entry.sha256);
       expect(fixture.sectionOrder.length).toBeGreaterThan(0);
       expect(fixture.tables.length).toBeGreaterThan(0);
       expect(fixture.tables.every(table => table.columnCount > 0)).toBe(true);

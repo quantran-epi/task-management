@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it } from 'vitest';
 import { TaskPlannerDatabase } from '../../src/db';
-import { createOrGetThread, saveMessage } from '../../src/db/repositories/chatRepo';
+import { saveMessage } from '../../src/db/repositories/chatRepo';
 import { exportBackupPayload } from '../../src/services/backup/exportBackup';
 import { restoreBackupPayload } from '../../src/services/backup/restoreBackup';
 import { validateBackupPayload } from '../../src/services/backup/validateBackup';
