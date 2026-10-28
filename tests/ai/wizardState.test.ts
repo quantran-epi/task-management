@@ -1,4 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { TaskPlannerDatabase } from '../../src/db';
+import {
+  loadCanonicalArtifactChain,
+  saveApprovedArtifact,
+  saveSolutionVersion,
+} from '../../src/services/wizard/artifactRepo';
 import {
   SdlcArtifactMetadataSchema,
   SdlcDocumentSetMetadataSchema,
@@ -47,6 +53,174 @@ function expectTransitionCode(previous: unknown, next: unknown, code: string) {
     expect.objectContaining<Partial<WizardTransitionError>>({ code }),
   );
 }
+
+function approvedSnapshot(overrides: Record<string, unknown> = {}) {
+  return snapshot('approved', {
+    artifactHash: HASH,
+    renderPayload: { title: 'SOLUTION', featureMode: 'new', markdown: '# Solution v1' },
+    ...overrides,
+  });
+}
+
+describe('wizard artifact persistence', () => {
+  let db: TaskPlannerDatabase;
+
+  beforeEach(async () => {
+    db = new TaskPlannerDatabase(`wizard-artifact-${Date.now()}-${Math.random()}`);
+    await db.open();
+    await db.projects.add({
+      id: PROJECT_ID,
+      name: 'Wizard project',
+      status: 'Open',
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+    await db.chatThreads.add({
+      id: THREAD_ID,
+      scopeKey: `project:${PROJECT_ID}`,
+      scopeType: 'project',
+      entityId: PROJECT_ID,
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+    await db.chatMessages.add({
+      id: '55555555-5555-4555-8555-555555555555',
+      threadId: THREAD_ID,
+      role: 'assistant',
+      content: 'Approved SOLUTION preview',
+      createdAt: NOW,
+      wizard: approvedSnapshot(),
+    });
+  });
+
+  afterEach(async () => {
+    await db.delete();
+  });
+
+  it('deduplicates concurrent SOLUTION saves and allocates changed drafts from metadata', async () => {
+    const input = {
+      projectId: PROJECT_ID,
+      threadId: THREAD_ID,
+      sessionId: SESSION_ID,
+      inputRevision: 1,
+      draftRevision: 1,
+      inputHash: HASH,
+      markdown: '# Solution v1',
+      exportPayload: { schemaVersion: 1, title: 'SOLUTION v1' },
+      approvedAt: NOW,
+    };
+
+    const [first, replay] = await Promise.all([
+      saveSolutionVersion(input, db),
+      saveSolutionVersion(input, db),
+    ]);
+    expect([first.created, replay.created].sort()).toEqual([false, true]);
+    expect(first.note.id).toBe(replay.note.id);
+    expect(await db.notes.count()).toBe(1);
+    expect(await db.chatMessages.where('threadId').equals(THREAD_ID).count()).toBe(2);
+
+    const original = JSON.stringify(first.note);
+    const nextHash = 'b'.repeat(64);
+    await db.chatMessages.add({
+      id: '66666666-6666-4666-8666-666666666666',
+      threadId: THREAD_ID,
+      role: 'assistant',
+      content: 'Approved SOLUTION v2 preview',
+      createdAt: '2026-10-28T12:01:00.000Z',
+      wizard: approvedSnapshot({
+        draftRevision: 2,
+        artifactHash: nextHash,
+        renderPayload: { title: 'SOLUTION', featureMode: 'new', markdown: '# Solution v2' },
+        updatedAt: '2026-10-28T12:01:00.000Z',
+      }),
+    });
+    const second = await saveSolutionVersion({
+      ...input,
+      draftRevision: 2,
+      inputHash: nextHash,
+      markdown: '# Solution v2',
+      exportPayload: { schemaVersion: 1, title: 'SOLUTION v2' },
+      approvedAt: '2026-10-28T12:01:00.000Z',
+    }, db);
+
+    expect(second.note.sdlcArtifact?.version).toBe(2);
+    expect(JSON.stringify(await db.notes.get(first.note.id))).toBe(original);
+    expect((await loadCanonicalArtifactChain(PROJECT_ID, THREAD_ID, db)).map((note) => note.sdlcArtifact?.version)).toEqual([1, 2]);
+  });
+
+  it('saves approved artifact, set membership, and event atomically without Blob data', async () => {
+    const source = await saveSolutionVersion({
+      projectId: PROJECT_ID,
+      threadId: THREAD_ID,
+      sessionId: SESSION_ID,
+      inputRevision: 1,
+      draftRevision: 1,
+      inputHash: HASH,
+      markdown: '# Solution v1',
+      exportPayload: { schemaVersion: 1, title: 'SOLUTION v1' },
+      approvedAt: NOW,
+    }, db);
+    const artifactHash = 'c'.repeat(64);
+    await db.chatMessages.add({
+      id: '77777777-7777-4777-8777-777777777777',
+      threadId: THREAD_ID,
+      role: 'assistant',
+      content: 'Approved PL02 preview',
+      createdAt: '2026-10-28T12:02:00.000Z',
+      wizard: {
+        ...approvedSnapshot(),
+        skill: 'PL02',
+        artifactHash,
+        renderPayload: { title: 'PL02', markdown: '# PL02' },
+        updatedAt: '2026-10-28T12:02:00.000Z',
+      },
+    });
+
+    const result = await saveApprovedArtifact({
+      kind: 'PL02',
+      projectId: PROJECT_ID,
+      threadId: THREAD_ID,
+      sessionId: SESSION_ID,
+      inputRevision: 1,
+      draftRevision: 1,
+      inputHash: artifactHash,
+      markdown: '# PL02',
+      exportPayload: { schemaVersion: 1, sections: ['I'] },
+      sourceArtifacts: [{ id: source.note.id, hash: HASH }],
+      approvedAt: '2026-10-28T12:02:00.000Z',
+    }, db);
+
+    const set = await db.documentSets.filter((candidate) => candidate.sdlc?.projectId === PROJECT_ID).first();
+    expect(set?.documentIds).toEqual([source.note.id, result.note.id]);
+    expect(result.note.entityType).toBe('project');
+    expect(JSON.stringify(result.note)).not.toContain('Blob');
+    expect((await db.chatMessages.where('threadId').equals(THREAD_ID).toArray()).at(-1)?.wizard?.artifactId).toBe(result.note.id);
+  });
+
+  it('rejects stale, cross-project, and hash-mismatched commits without mutation', async () => {
+    const counts = async () => ({
+      notes: await db.notes.count(),
+      sets: await db.documentSets.count(),
+      messages: await db.chatMessages.count(),
+    });
+    const before = await counts();
+    const base = {
+      projectId: PROJECT_ID,
+      threadId: THREAD_ID,
+      sessionId: SESSION_ID,
+      inputRevision: 1,
+      draftRevision: 1,
+      inputHash: HASH,
+      markdown: '# Solution v1',
+      exportPayload: { schemaVersion: 1 },
+      approvedAt: NOW,
+    };
+    await expect(saveSolutionVersion({ ...base, inputHash: 'd'.repeat(64) }, db)).rejects.toMatchObject({ code: 'WIZARD_HASH_MISMATCH' });
+    await expect(saveSolutionVersion({ ...base, projectId: NOTE_ID }, db)).rejects.toMatchObject({ code: 'WIZARD_PROJECT_MISMATCH' });
+    await expect(saveSolutionVersion({ ...base, draftRevision: 2 }, db)).rejects.toMatchObject({ code: 'WIZARD_DRAFT_REVISION_STALE' });
+    expect(await counts()).toEqual(before);
+  });
+});
 
 describe('wizard lifecycle contracts', () => {
   it('accepts legal lifecycle, review edits, and abandoned snapshots', () => {
