@@ -5,7 +5,7 @@ milestone_name: milestone
 status: executing
 stopped_at: Phase 24 UI-SPEC approved
 last_updated: "2026-10-27T00:00:00.000Z"
-last_activity: 2026-10-28 - Completed quick task 261028-e2z: Fix AI Chat Drawer Analysis Mode reliability and read-only behavior
+last_activity: 2026-10-28 - Completed quick task 261028-gpk: Strengthen AI document normalization prompt against hallucination
 progress:
   total_phases: 8
   completed_phases: 7
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 Phase: 24 (graph-retrieval-optimization) — EXECUTING
 Plan: 1 of 8
 Status: Executing Phase 24
-Last activity: 2026-10-28 - Completed quick task 261028-e2z: Fix AI Chat Drawer Analysis Mode reliability and read-only behavior
+Last activity: 2026-10-28 - Completed quick task 261028-gpk: Strengthen AI document normalization prompt against hallucination
 Stopped at: Phase 24 UI-SPEC approved
 
 Progress: [██████████] 100%
@@ -37,6 +37,7 @@ Progress: [██████████] 100%
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261028-gpk | Strengthen AI document normalization prompt against hallucination | 2026-10-28 | — | complete | [261028-gpk-strengthen-ai-document-normalization-pro](./quick/261028-gpk-strengthen-ai-document-normalization-pro/) |
 | 261028-e2z | Fix AI Chat Drawer Analysis Mode reliability and read-only behavior | 2026-10-28 | c764335 | complete | [261028-e2z-fix-ai-chat-drawer-analysis-mode-reliabi](./quick/261028-e2z-fix-ai-chat-drawer-analysis-mode-reliabi/) |
 | 261027-kcs | Optimize Telegram AI retrieval parity with AI Chat | 2026-10-27 | 942d4d6 | complete | [261027-kcs-optimize-telegram-ai-retrieval-parity-wi](./quick/261027-kcs-optimize-telegram-ai-retrieval-parity-wi/) |
 | 261027-htc | Fix federated retrieval budget accounting so multi-set evidence is not silently discarded | 2026-10-27 | 3fc728a | complete | [261027-htc-fix-federated-retrieval-budget-accountin](./quick/261027-htc-fix-federated-retrieval-budget-accountin/) |

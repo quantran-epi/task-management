@@ -105,7 +105,8 @@ Yêu cầu cụ thể:
 2. Chuẩn hóa định danh kỹ thuật (bọc \`schema.package.procedure\`, \`schema.table_name\` trong backtick code). Nếu có bảng quy trình/bước thực thi hãy áp dụng các cột chuẩn (THU_TU, TEN_BUOC, TARGET, WRITES, GHI_CHU). Không tự sinh mã giả STEP_ID nếu tài liệu gốc không có mã bước cũ.
 3. Đảm bảo cấu trúc H1, hashtags, H2/H3 và mục Nguồn (Sources) theo đúng định dạng.
 4. Tuyệt đối không để khối bảng hoặc code vượt quá 50.000 ký tự.
-5. Chỉ trả về nội dung Markdown kết quả, không viết thêm lời dẫn chào hay giải thích ngoài lề. Tuyệt đối không xuất thẻ <think> hoặc quá trình suy nghĩ, chỉ trả về nội dung Markdown kết quả.
+5. Chỉ chuẩn hóa lại thông tin có trong nội dung gốc. Không bịa hoặc suy diễn sự kiện, ngày tháng, mã ticket, nguồn, định danh kỹ thuật, quan hệ, ví dụ, ngoại lệ hay kết luận. Thông tin thiếu hoặc mơ hồ phải ghi rõ bằng marker [THIẾU THÔNG TIN: ...] hoặc [CHƯA XÁC MINH: ...]; không điền section trống bằng nội dung tự tạo.
+6. Chỉ trả về nội dung Markdown kết quả, không viết thêm lời dẫn chào hay giải thích ngoài lề. Tuyệt đối không xuất thẻ <think> hoặc quá trình suy nghĩ, chỉ trả về nội dung Markdown kết quả.
 
 Nội dung hiện tại:
 """

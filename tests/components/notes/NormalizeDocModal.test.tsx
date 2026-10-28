@@ -199,8 +199,22 @@ describe('NormalizeDocModal', () => {
     expect(systemMessage).toContain('WRITES / GHI / TARGET_TABLE');
     expect(systemMessage).toContain('TUYỆT ĐỐI KHÔNG tự bịa hoặc tự sinh mã giả như STEP_01, STEP_02');
 
+    // Verify source-fidelity guardrails and missing-information markers
+    expect(systemMessage).toContain('TRUNG THÀNH TUYỆT ĐỐI VỚI NGUỒN');
+    expect(systemMessage).toContain('TUYỆT ĐỐI KHÔNG tự tạo hoặc suy diễn');
+    expect(systemMessage).toContain('[THIẾU THÔNG TIN:');
+    expect(systemMessage).toContain('[CHƯA XÁC MINH:');
+    expect(systemMessage).toContain('KHÔNG bịa nội dung để lấp chỗ trống');
+
+    // Verify fabricated template seeds are gone
+    expect(systemMessage).not.toContain('SD-XXXXX');
+    expect(systemMessage).not.toContain('MAIN1.PKG_PAYMENT.EXECUTE_PAYMENT');
+    expect(systemMessage).not.toContain('CYTP1002');
+
     // Verify user prompt instructs not to fabricate STEP_ID and use standard columns
     expect(userMessage).toContain('THU_TU, TEN_BUOC, TARGET, WRITES, GHI_CHU');
     expect(userMessage).toContain('Không tự sinh mã giả STEP_ID nếu tài liệu gốc không có mã bước cũ');
+    expect(userMessage).toContain('Không bịa hoặc suy diễn');
+    expect(userMessage).toContain('[THIẾU THÔNG TIN:');
   });
 });
