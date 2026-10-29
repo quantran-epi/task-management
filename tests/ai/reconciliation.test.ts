@@ -177,9 +177,55 @@ describe('reconcileSolutionWithPack', () => {
   });
 });
 
-describe('reconciliation behavior producer contracts', () => {
-  it.todo('emits four sections and complete coverage before no-drift');
-  it.todo('matches normalized requirement/category/file-hunk tuples exactly');
-  it.todo('rejects wrong project, stale solution, wrong CR, and mixed artifact revisions');
-  it.todo('retains unresolved drift, missing tests, and unverified rollback in CAB input');
+describe('reconciliation behavior acceptance', () => {
+  it('emits all four PL03 sections and gates no-drift on complete coverage', () => {
+    const result = reconcileSolutionWithPack({ ...baseInput, proposedDrift: [] });
+    expect(result).toEqual(expect.objectContaining({
+      approvedDesign: expect.any(Object),
+      actualImplementation: expect.any(Object),
+      drift: expect.any(Array),
+      dbChangesRollback: expect.any(Object),
+    }));
+    expect(result.status).toBe('NO_DRIFT_COMPLETE');
+    expect(canClaimNoDrift(result)).toBe(true);
+  });
+
+  it('matches normalized requirement/category/file-hunk tuples exactly', () => {
+    const result = reconcileSolutionWithPack(baseInput);
+    expect(result.drift.map((tuple) => [
+      tuple.requirementId,
+      tuple.category,
+      tuple.evidence?.path ?? 'solution',
+      tuple.evidence ? `${tuple.evidence.startLine}-${tuple.evidence.endLine}` : null,
+    ])).toEqual([
+      ['REQ-OUT', 'outside_solution', 'src/extra.ts', '3-7'],
+      ['REQ-MISS', 'missing', 'solution', null],
+      ['REQ-DIFF', 'different', 'db/alter.sql', '1-3'],
+    ]);
+  });
+
+  it('rejects wrong project, stale solution, wrong CR, and mixed artifact revisions', () => {
+    for (const [field, code] of [
+      ['projectId', 'WRONG_PROJECT'],
+      ['solutionVersion', 'STALE_SOLUTION'],
+      ['packHash', 'PACK_HASH_MISMATCH'],
+      ['cr', 'CR_MISMATCH'],
+      ['base', 'BASE_MISMATCH'],
+      ['head', 'HEAD_MISMATCH'],
+    ] as const) {
+      const input = JSON.parse(JSON.stringify(baseInput)) as typeof baseInput;
+      if (field === 'solutionVersion') input.solution.version = 99;
+      else if (field === 'projectId') input.projectId = '25000000-0000-4000-8000-000000000099';
+      else if (field === 'packHash') input.pack.packHash = '9'.repeat(64);
+      else input.pack.identity[field] = 'wrong';
+      expect(() => reconcileSolutionWithPack(input)).toThrow(code);
+    }
+  });
+
+  it('retains unresolved drift, missing tests, and unverified rollback in CAB input', () => {
+    const result = reconcileSolutionWithPack({ ...baseInput, proposedDrift: [{ requirementId: 'REQ-MISS', category: 'missing', evidenceId: null }] });
+    expect(result.drift).toEqual([expect.objectContaining({ requirementId: 'REQ-MISS', category: 'missing' })]);
+    expect(result.dbChangesRollback.rollback).toMatchObject({ status: 'unknown' });
+    expect(canClaimNoDrift(result)).toBe(false);
+  });
 });

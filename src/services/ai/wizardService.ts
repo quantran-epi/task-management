@@ -416,11 +416,12 @@ function proposalContract(kind: Exclude<WizardSkill, 'PL02'>): {
 export async function runWizardStage(input: WizardStageInput): Promise<unknown> {
   if (!input.isCurrent()) throw new WizardStageError('STALE_RESULT');
   if (input.kind === 'PL02') {
-    const payload = input.payload as { evidence: WizardEvidence; knownFieldIds?: string[]; skippedFieldIds?: string[] };
+    const payload = input.payload as { evidence?: WizardEvidence; knownFieldIds?: string[]; skippedFieldIds?: string[] };
+    const evidence = payload.evidence ?? { items: [], coverage: 'EMPTY_SCOPE' as const, degraded: [] };
     return detectWizardGaps({
       ...input,
       skill: input.kind,
-      evidence: payload.evidence,
+      evidence,
       knownFieldIds: payload.knownFieldIds ?? [],
       skippedFieldIds: payload.skippedFieldIds ?? [],
     });

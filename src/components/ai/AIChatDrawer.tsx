@@ -420,6 +420,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const [wizardSkill, setWizardSkill] = useState<Exclude<WizardSkill, 'SOLUTION'> | null>(null);
   const [wizardMetadataOpen, setWizardMetadataOpen] = useState(false);
   const [wizardSnapshot, setWizardSnapshot] = useState<WizardSnapshot | undefined>();
+  const [wizardSkipNotice, setWizardSkipNotice] = useState<string | null>(null);
   const [packUi, setPackUi] = useState<ChangePackUiResult | null>(null);
   const [reconciliationResult, setReconciliationResult] = useState<ReconciliationResult | null>(null);
   const [technicalDocsReady, setTechnicalDocsReady] = useState(false);
@@ -469,7 +470,12 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         projectId,
         threadId,
         db,
-        expectedPackIdentity: () => ({ cr: wizardSnapshot?.renderPayload.title || '', base: '', head: '', branch: '' }),
+        expectedPackIdentity: () => ({
+          cr: wizardCoordinatorRef.current?.getState()?.metadata.cr ?? 'UNKNOWN_CR',
+          base: 'UNKNOWN_BASE',
+          head: 'UNKNOWN_HEAD',
+          branch: 'UNKNOWN_BRANCH',
+        }),
         appendReviewSnapshot: async (docs) => {
           setReconciliationResult(docs.reconciliation);
           setTechnicalDocsReady(Boolean(docs.pl03 && docs.pl07));
@@ -489,8 +495,24 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           return docs;
         },
         runStage: async (input) => {
+          if (input.kind === 'PL02') {
+            const response = input.skippedFieldIds.length > 0
+              ? { schemaVersion: 1, gaps: [], unknowns: input.skippedFieldIds, contradictions: [] }
+              : { schemaVersion: 1, gaps: [], unknowns: [], contradictions: [] };
+            return response;
+          }
           const [config, apiKey] = await Promise.all([getNineRouterConfig(db), getNineRouterApiKey(db)]);
-          return runWizardStage({ ...input, model: { endpoint: config.endpoint, apiKey, model: selectedModel || config.defaultModel } });
+          return runWizardStage({
+            kind: input.kind,
+            projectId: input.projectId,
+            threadId: input.threadId,
+            sessionId: input.sessionId,
+            inputRevision: input.inputRevision,
+            payload: { evidence: input.evidence, proposal: input.payload },
+            signal: input.signal,
+            isCurrent: input.isCurrent,
+            model: { endpoint: config.endpoint, apiKey, model: selectedModel || config.defaultModel },
+          });
         },
         collectEvidence: async (input) => collectWizardEvidence(input, {
           runLocalBm25: (localInput) => runLocalGroundedRetrieval(localInput, {
@@ -508,7 +530,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           const sets = await db.documentSets.filter((set) => set.sdlc?.projectId === projectId).toArray();
           return { projectId, threadId, sessionId: wizardCoordinatorRef.current?.getSnapshot()?.sessionId ?? generateId(), inputRevision, query: `${metadata.cr} ${metadata.featureName} ${context}`.trim(), resolvedSetIds: sets.map((set) => set.id) };
         },
-        saveSnapshot: async (snapshot) => { setWizardSnapshot(snapshot); },
+        saveSnapshot: async (snapshot) => {
+          setWizardSnapshot(snapshot);
+        },
         appendMessage: async (message) => { await saveMessage({ threadId, role: message.role, content: message.content, wizard: message.wizard }, db); },
         loadMessages: () => loadChatMessages(threadId, db),
         saveSolution: (input) => saveSolutionVersion(input, db),
@@ -540,8 +564,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
   const handleWizardMessage = useCallback(async (text: string) => {
     const coordinator = getWizardCoordinator();
-    if (!coordinator || !wizardSnapshot) return false;
-    if (wizardSnapshot.status === 'gap_fill' || wizardSnapshot.status === 'collecting') {
+    const snapshot = coordinator?.getSnapshot() ?? wizardSnapshot;
+    if (!coordinator || !snapshot) return false;
+    if (snapshot.status === 'gap_fill' || snapshot.status === 'collecting') {
       await coordinator.addContext(text);
       setWizardSnapshot(coordinator.getSnapshot());
       return true;
@@ -550,8 +575,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   }, [getWizardCoordinator, wizardSnapshot]);
 
   const handleWizardCancel = useCallback(async () => {
-    await getWizardCoordinator()?.cancel();
-    setWizardSnapshot(getWizardCoordinator()?.getSnapshot());
+    const coordinator = getWizardCoordinator();
+    await coordinator?.cancel();
+    setWizardSnapshot(undefined);
   }, [getWizardCoordinator]);
 
   const handlePackSelect = useCallback(async (file: File) => {
@@ -636,9 +662,16 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   } : undefined] as const));
   const wizardCallbacks = {
     onApproveExport: handleWizardApproveExport,
-    onRequestEdit: (_messageId: string, _draftRevision: number) => { void getWizardCoordinator()?.requestEdit(''); },
+    onRequestEdit: (_messageId: string, _draftRevision: number) => {
+      void getWizardCoordinator()?.requestEdit('').then(() => setWizardSnapshot(getWizardCoordinator()?.getSnapshot()));
+    },
     onRetryExport: handleWizardRetryDownload,
     onOpenNote: (noteId: string) => { window.location.hash = `/notes?doc=${encodeURIComponent(noteId)}`; },
+    onSuggestion: (_questionId: string, suggestion: string) => setExternalInputValue(suggestion),
+    onSkip: (_messageId: string, questionId: string) => {
+      setWizardSkipNotice(`Đã bỏ qua: ${questionId} · (chưa cung cấp)`);
+      void getWizardCoordinator()?.skipGap(questionId).then(() => setWizardSnapshot(getWizardCoordinator()?.getSnapshot()));
+    },
     pendingKeys: exportPending,
     exportedFiles,
     exportErrors,
@@ -652,6 +685,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     <>
       {wizardSnapshot && <WizardLifecycleBar formName={wizardSnapshot.skill} snapshot={wizardSnapshot} restored={Boolean((wizardSnapshot as WizardSnapshot & { restored?: boolean }).restored)} onAbandon={() => void handleWizardCancel()} />}
       {wizardSnapshot && <WizardProgressStrip snapshot={wizardSnapshot} />}
+      {wizardSkipNotice && <div role="status">{wizardSkipNotice}</div>}
       <WizardSkillBar projectScoped={isProjectScope} activeSession={Boolean(wizardSnapshot && !['completed', 'abandoned'].includes(wizardSnapshot.status))} selectedSkill={wizardSkill ?? undefined} onActivate={(skill) => { setWizardSkill(skill); setWizardMetadataOpen(true); }} />
       {packVisible && !packUi && <ChangePackDropzone onSelect={(file) => void handlePackSelect(file)} />}
       {packVisible && packUi && !confirmedManifest && <ChangePackConfirmStrip result={packUi} onConfirm={(manifest) => void handlePackConfirm(manifest)} onReplace={handlePackReplace} />}
@@ -674,7 +708,20 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   useEffect(() => {
     if (!wizardSnapshot || !activeThreadId) return;
     const refreshed = deriveActiveWizard(messages, currentScope.id ?? '', activeThreadId);
-    if (refreshed && refreshed.updatedAt !== wizardSnapshot.updatedAt) setWizardSnapshot(refreshed);
+    const statusRank: Record<WizardSnapshot['status'], number> = {
+      collecting: 1,
+      gap_fill: 2,
+      review: 3,
+      approved: 4,
+      exporting: 5,
+      completed: 6,
+      abandoned: 0,
+    };
+    const isNewer = refreshed && (
+      refreshed.updatedAt > wizardSnapshot.updatedAt ||
+      (refreshed.updatedAt === wizardSnapshot.updatedAt && statusRank[refreshed.status] > statusRank[wizardSnapshot.status])
+    );
+    if (isNewer) setWizardSnapshot(refreshed);
   }, [activeThreadId, currentScope.id, messages, wizardSnapshot]);
 
   const wizardMetadataModal = wizardSkill && wizardProject ? (
@@ -1788,7 +1835,7 @@ Rules:
     onFindRelated: (entity, sourceMessageId) => {
       void handleFindRelated(entity, sourceMessageId);
     },
-    findingRelatedKey: groundedLoadingStatus ? findingRelatedKey : null,
+    findingRelatedKey,
     onCitationActivate: (c) => setActivePreviewCitation(c),
     onCandidateSelect: (urn) => {
       void handleSendMessage(urn);

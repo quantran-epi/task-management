@@ -74,7 +74,7 @@ export const DocumentPreviewCard: React.FC<DocumentPreviewCardProps> = ({ previe
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
         <Text type="secondary" style={{ fontSize: 12, fontWeight: 600 }}>{metadata.join(' · ')}</Text>
         <div>
-          <Button type="link" size="small" aria-expanded="true" onClick={() => setExpanded((value) => !value)}>
+          <Button type="link" size="small" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
             {expanded ? 'Thu gọn' : 'Xem toàn bộ'}
           </Button>
           <MarkdownContentRenderer content={previewMarkdown} />

@@ -356,6 +356,26 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
     const snapshot = msg.wizard;
     const payload = snapshot.renderPayload;
     const wizardCard = (() => {
+      if (msg.content.startsWith('Đã bỏ qua:')) {
+        return (
+          <div style={GapFillQuestionCard.stackStyle}>
+            <GapFillQuestionCard
+              question={{
+                id: msg.id,
+                topic: payload.title,
+                description: msg.content,
+                templateSection: payload.title,
+                suggestions: [],
+                evidenceSources: [],
+                answer: msg.content.match(/^Đã bỏ qua:\s*(.+?)\s*·/)?.[1] ?? '(chưa cung cấp)',
+                outcome: 'omitted',
+              }}
+              onSuggestion={() => undefined}
+              onSkip={() => undefined}
+            />
+          </div>
+        );
+      }
       if (snapshot.status === 'gap_fill') {
         return (
           <div style={GapFillQuestionCard.stackStyle}>
@@ -368,11 +388,11 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
                 templateSection: payload.title,
                 suggestions: [],
                 evidenceSources: [],
-                answer: null,
-                outcome: 'open',
+                answer: msg.content.match(/^Đã bỏ qua:\s*(.+?)\s*·/)?.[1] ?? null,
+                outcome: msg.content.includes('Đã bỏ qua:') ? 'omitted' : 'open',
               }}
               onSuggestion={(questionId, suggestion) => wizardCallbacks.onSuggestion?.(msg.id, questionId, suggestion)}
-              onSkip={(questionId, outcome) => wizardCallbacks.onSkip?.(msg.id, questionId, outcome)}
+              onSkip={(questionId, outcome) => wizardCallbacks.onSkip?.(msg.id, (msg.content.match(/Cần làm rõ:\s*([^\n]+)/)?.[1] ?? questionId).trim(), outcome)}
             />
           </div>
         );

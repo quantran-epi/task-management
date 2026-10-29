@@ -226,14 +226,18 @@ export function deriveActiveWizard(
   threadId: string,
 ): ActiveWizardSelector | undefined {
   const candidates = messages
-    .map(messageSnapshot)
-    .filter((snapshot): snapshot is WizardSnapshot => Boolean(snapshot))
-    .filter((snapshot) => snapshot.projectId === projectId && snapshot.threadId === threadId)
-    .filter((snapshot) => snapshot.status !== 'completed')
-    .sort((left, right) => left.updatedAt.localeCompare(right.updatedAt));
-  const latest = candidates.at(-1);
+    .map((message, index) => ({ snapshot: messageSnapshot(message), index }))
+    .filter((candidate): candidate is { snapshot: WizardSnapshot; index: number } => Boolean(candidate.snapshot))
+    .filter((candidate) => candidate.snapshot.projectId === projectId && candidate.snapshot.threadId === threadId)
+    .filter((candidate) => candidate.snapshot.status !== 'completed')
+    .sort((left, right) => {
+      const leftTime = Date.parse(left.snapshot.updatedAt) || 0;
+      const rightTime = Date.parse(right.snapshot.updatedAt) || 0;
+      return leftTime - rightTime || left.index - right.index;
+    });
+  const latest = candidates.at(-1)?.snapshot;
   if (!latest) return undefined;
-  return { ...latest, restored: latest.status === 'abandoned' || latest.status === 'collecting' || latest.status === 'gap_fill' };
+  return { ...latest, restored: true };
 }
 
 async function defaultHashText(text: string): Promise<string> {
@@ -263,6 +267,53 @@ export function createWizardCoordinator(deps: WizardCoordinatorDeps) {
   });
 
   const buildExportKind = (skill: WizardSkill): WizardDocxKind => skill === 'PL03' ? 'PL03B' : skill as WizardDocxKind;
+
+  const normalizeApprovedExportPayload = (
+    snapshot: WizardSnapshot,
+    rawPayload: unknown,
+    metadata: WizardStartMetadata,
+  ): unknown => {
+    if (snapshot.skill !== 'PL02' || (rawPayload && typeof rawPayload === 'object' && (rawPayload as { kind?: unknown }).kind === 'PL02')) {
+      return rawPayload;
+    }
+    const markdown = 'markdown' in snapshot.renderPayload && snapshot.renderPayload.markdown
+      ? snapshot.renderPayload.markdown
+      : `# ${metadata.featureName}`;
+    return {
+      schemaVersion: 1,
+      kind: 'PL02',
+      status: 'approved',
+      inputRevision: snapshot.inputRevision,
+      draftRevision: snapshot.draftRevision ?? 1,
+      approvedRevision: snapshot.draftRevision ?? 1,
+      metadata: {
+        crCode: metadata.cr,
+        featureName: metadata.featureName,
+        requestingUnit: metadata.requestingUnit,
+        author: metadata.author,
+        createdDate: metadata.date,
+      },
+      introduction: {
+        purpose: markdown,
+        users: '(chưa cung cấp)',
+        deploymentScope: '(chưa cung cấp)',
+        risks: [],
+        glossary: [],
+      },
+      features: [{
+        name: metadata.featureName,
+        description: markdown,
+        fileLayout: [],
+        inputRules: [],
+        processingRules: [],
+        flowSteps: [],
+      }],
+      permissions: [],
+      notifications: [],
+      apiContracts: [],
+      staffing: [],
+    };
+  };
 
   const filenameFor = (skill: WizardSkill, title: string) => `${(title || skill).replace(/[^\p{L}\p{N}._-]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 80) || skill}.docx`;
   let packState: ChangePackState = { status: 'idle' };
@@ -393,7 +444,11 @@ export function createWizardCoordinator(deps: WizardCoordinatorDeps) {
   };
 
   const runStage = async (context: string) => {
-    if (!state || !deps.runStage) return;
+    if (!state) return;
+    if (!deps.runStage) {
+      await transition('gap_fill', {}, `Cần làm rõ: ${state.metadata.featureName}`);
+      return;
+    }
     stageController?.abort();
     const controller = new AbortController();
     stageController = controller;
@@ -428,6 +483,9 @@ export function createWizardCoordinator(deps: WizardCoordinatorDeps) {
       signal: controller.signal,
       isCurrent: () => isCurrent(sessionId, revision, controller),
     });
+    if (!result || typeof result !== 'object') {
+      throw new Error('WIZARD_STAGE_RESULT_INVALID');
+    }
     if (!isCurrent(sessionId, revision, controller)) return;
     const gaps = (result as Partial<WizardGapResult>).gaps ?? [];
     state = { ...state, gaps: gaps as WizardGap[] };
@@ -482,8 +540,12 @@ export function createWizardCoordinator(deps: WizardCoordinatorDeps) {
 
   const skipGap = async (fieldId: string) => {
     if (!state || state.snapshot.status !== 'gap_fill') return;
-    if (!state.skippedFieldIds.includes(fieldId)) state = { ...state, skippedFieldIds: [...state.skippedFieldIds, fieldId], gaps: state.gaps.filter((gap) => gap.fieldId !== fieldId) };
-    await addContext(`Bỏ qua mục ${fieldId}`);
+    const targetFieldId = state.gaps.find((gap) => gap.fieldId === fieldId)?.fieldId ?? state.gaps[0]?.fieldId ?? fieldId;
+    if (!state.skippedFieldIds.includes(targetFieldId)) {
+      state = { ...state, skippedFieldIds: [...state.skippedFieldIds, targetFieldId], gaps: state.gaps.filter((gap) => gap.fieldId !== targetFieldId) };
+    }
+    await persist(state.snapshot, `Đã bỏ qua: ${targetFieldId} · (chưa cung cấp)`);
+    await addContext(`Bỏ qua mục ${targetFieldId}`);
   };
 
   const addContext = async (context: string) => {
@@ -527,6 +589,7 @@ export function createWizardCoordinator(deps: WizardCoordinatorDeps) {
         const hash = await hashText(markdown);
         const approvedAt = now();
         approved = WizardSnapshotSchema.parse({ ...source, status: 'approved', artifactHash: hash, approvedAt, updatedAt: approvedAt });
+        await persist(approved, `Đã duyệt bản nháp ${approved.skill}.`);
         const key = `${approved.sessionId}:${approved.draftRevision}:${buildExportKind(approved.skill)}`;
         const filename = filenameFor(approved.skill, approved.renderPayload.title);
         if (retainedExport?.key === key && retainedExport.noteSaved) {
@@ -543,7 +606,7 @@ export function createWizardCoordinator(deps: WizardCoordinatorDeps) {
 
         let blob: Blob;
         try {
-          blob = await (deps.buildDocx ?? buildWizardDocx)(buildExportKind(approved.skill), exportPayload);
+          blob = await (deps.buildDocx ?? buildWizardDocx)(buildExportKind(approved.skill), normalizeApprovedExportPayload(approved, exportPayload, state?.metadata ?? { cr: '', featureName: approved.renderPayload.title, requestingUnit: '', author: '', date: approved.createdAt.slice(0, 10) }));
         } catch {
           return exportError('WIZARD_EXPORT_BUILD_FAILED');
         }
@@ -622,7 +685,8 @@ export function createWizardCoordinator(deps: WizardCoordinatorDeps) {
     generation += 1;
     stageController?.abort();
     if (!state || state.snapshot.status === 'completed' || state.snapshot.status === 'abandoned') return;
-    await transition('abandoned');
+    await transition('abandoned', {}, 'Wizard abandoned.');
+    state = undefined;
   };
 
   const restore = async () => {
@@ -630,8 +694,10 @@ export function createWizardCoordinator(deps: WizardCoordinatorDeps) {
     const messages = await deps.loadMessages();
     const active = deriveActiveWizard(messages, deps.projectId, deps.threadId);
     if (!active) return undefined;
-    const metadata = { cr: active.renderPayload.title, featureName: active.renderPayload.title, requestingUnit: '', author: '', date: active.createdAt.slice(0, 10) };
-    state = { snapshot: active, metadata, evidence: EMPTY_EVIDENCE, gaps: [], answers: {}, skippedFieldIds: [], restored: true };
+    const { restored: _restored, ...persistedSnapshot } = active;
+    const snapshot = WizardSnapshotSchema.parse(persistedSnapshot);
+    const metadata = { cr: snapshot.renderPayload.title, featureName: snapshot.renderPayload.title, requestingUnit: '', author: '', date: snapshot.createdAt.slice(0, 10) };
+    state = { snapshot, metadata, evidence: EMPTY_EVIDENCE, gaps: [], answers: {}, skippedFieldIds: [], restored: true };
     generation += 1;
     return active;
   };
