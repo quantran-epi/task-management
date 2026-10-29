@@ -356,6 +356,26 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
     const snapshot = msg.wizard;
     const payload = snapshot.renderPayload;
     const wizardCard = (() => {
+      if (msg.content.startsWith('Đã bỏ qua:')) {
+        return (
+          <div style={GapFillQuestionCard.stackStyle}>
+            <GapFillQuestionCard
+              question={{
+                id: msg.id,
+                topic: payload.title,
+                description: msg.content,
+                templateSection: payload.title,
+                suggestions: [],
+                evidenceSources: [],
+                answer: msg.content.match(/^Đã bỏ qua:\s*(.+?)\s*·/)?.[1] ?? '(chưa cung cấp)',
+                outcome: 'omitted',
+              }}
+              onSuggestion={() => undefined}
+              onSkip={() => undefined}
+            />
+          </div>
+        );
+      }
       if (snapshot.status === 'gap_fill') {
         return (
           <div style={GapFillQuestionCard.stackStyle}>
