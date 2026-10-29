@@ -541,6 +541,7 @@ export function createWizardCoordinator(deps: WizardCoordinatorDeps) {
   const skipGap = async (fieldId: string) => {
     if (!state || state.snapshot.status !== 'gap_fill') return;
     if (!state.skippedFieldIds.includes(fieldId)) state = { ...state, skippedFieldIds: [...state.skippedFieldIds, fieldId], gaps: state.gaps.filter((gap) => gap.fieldId !== fieldId) };
+    await persist(state.snapshot, `Đã bỏ qua: ${fieldId} · (chưa cung cấp)`);
     await addContext(`Bỏ qua mục ${fieldId}`);
   };
 
