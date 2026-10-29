@@ -1,5 +1,85 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
+import { ChatMessageBubble } from '../../ChatMessageBubble';
+import type { ChatMessage } from '../../../../types/models';
+import type { WizardSnapshot } from '../../../../services/ai/wizardSchemas';
+import * as sandbox from '../../../../utils/dynamicFileSandbox';
+
+const wizardSnapshot: WizardSnapshot = {
+  schemaVersion: 1,
+  sessionId: '10000000-0000-4000-8000-000000000001',
+  projectId: '10000000-0000-4000-8000-000000000002',
+  threadId: '10000000-0000-4000-8000-000000000003',
+  skill: 'PL03',
+  status: 'review',
+  inputRevision: 1,
+  draftRevision: 2,
+  approvedAt: null,
+  artifactId: null,
+  artifactHash: null,
+  renderPayload: { title: 'Bản thảo PL03', markdown: '# Draft PL03\n\nNội dung lịch sử.' },
+  createdAt: '2026-10-29T10:00:00.000Z',
+  updatedAt: '2026-10-29T10:00:00.000Z',
+};
+
+const wizardMessage: ChatMessage = {
+  id: 'wizard-message-1',
+  threadId: wizardSnapshot.threadId,
+  role: 'assistant',
+  content: 'Bản nháp PL03 đã sẵn sàng để soát xét.',
+  wizard: wizardSnapshot,
+  generatedFiles: [{ id: 'generated-1', filename: 'wrong-route.docx', format: 'docx', sizeBytes: 1, content: 'ExcelJS script' }],
+  createdAt: wizardSnapshot.createdAt,
+};
+
+const wizardCallbacks = {
+  onApproveExport: vi.fn(),
+  onRequestEdit: vi.fn(),
+  onSaveSolution: vi.fn(),
+  onOpenNote: vi.fn(),
+  onSuggestion: vi.fn(),
+  onSkip: vi.fn(),
+  onConfirmPack: vi.fn(),
+  onReplacePack: vi.fn(),
+};
+
+function resetWizardCallbacks() {
+  Object.values(wizardCallbacks).forEach((callback) => callback.mockReset());
+}
+
+import { describe as describeRouting, it as itRouting } from 'vitest';
+
+describeRouting('wizard message routing contracts', () => {
+  itRouting('routes wizard review before generated files and forwards typed approval pointer', () => {
+    resetWizardCallbacks();
+    const sandboxSpy = vi.spyOn(sandbox, 'executeDynamicFileScript');
+    render(<ChatMessageBubble message={wizardMessage} wizardCallbacks={wizardCallbacks} />);
+
+    expect(screen.getByText('Bản thảo PL03')).toBeInTheDocument();
+    expect(screen.queryByText('wrong-route.docx')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Duyệt & Tải .docx' }));
+    expect(wizardCallbacks.onApproveExport).toHaveBeenCalledWith('wizard-message-1', 2);
+    expect(sandboxSpy).not.toHaveBeenCalled();
+  });
+
+  itRouting('does not add wizard controls to temporary streaming messages', () => {
+    render(<ChatMessageBubble message={wizardMessage} isStreaming wizardCallbacks={wizardCallbacks} />);
+    expect(screen.queryByRole('button', { name: 'Duyệt & Tải .docx' })).not.toBeInTheDocument();
+  });
+});
+
+import { ChatMessageList } from '../../ChatMessageList';
+
+describeRouting('wizard message list seam', () => {
+  itRouting('forwards wizard callbacks to each persisted message but not temp stream', () => {
+    resetWizardCallbacks();
+    render(<ChatMessageList messages={[wizardMessage]} isStreaming streamingText="stream" wizardCallbacks={wizardCallbacks} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Duyệt & Tải .docx' }));
+    expect(wizardCallbacks.onApproveExport).toHaveBeenCalledWith('wizard-message-1', 2);
+    expect(screen.getAllByText('stream').length).toBeGreaterThan(0);
+  });
+});
+
 import { DocumentPreviewCard } from '../DocumentPreviewCard';
 import { SolutionReviewCard } from '../SolutionReviewCard';
 import { WizardSavedNoteBanner } from '../WizardSavedNoteBanner';
