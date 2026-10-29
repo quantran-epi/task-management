@@ -183,9 +183,10 @@ describe('wizard coordinator lifecycle', () => {
       appendReviewSnapshot,
     });
     const coordinator = createWizardCoordinator(deps);
+    await coordinator.start('PL03', { cr: identity.cr, featureName: 'Feature', requestingUnit: '', author: 'User', date: '2026-10-28' });
 
     const selected = await coordinator.selectChangePack(new File(['zip'], 'change-pack.zip'));
-    expect(selected).toMatchObject({ status: 'valid', manifest });
+    expect(selected).toMatchObject({ status: 'pending', manifest });
     expect(persistPack).not.toHaveBeenCalled();
     await expect(coordinator.confirmChangePack({ packHash: '7'.repeat(64), identity })).rejects.toThrow('PACK_CONFIRMATION_MISMATCH');
     expect(persistPack).not.toHaveBeenCalled();
@@ -230,6 +231,7 @@ describe('wizard coordinator lifecycle', () => {
       runTechnicalStage,
     });
     const coordinator = createWizardCoordinator(deps);
+    await coordinator.start('PL03', { cr: identity.cr, featureName: 'Feature', requestingUnit: '', author: 'User', date: '2026-10-28' });
     await coordinator.selectChangePack(new File(['zip'], 'change-pack.zip'));
     coordinator.replaceChangePack();
     expect(coordinator.getPackState()).toEqual({ status: 'idle' });
