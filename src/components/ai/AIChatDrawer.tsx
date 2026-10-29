@@ -496,7 +496,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         },
         runStage: async (input) => {
           if (input.kind === 'PL02') {
-            const response = { schemaVersion: 1, gaps: [], unknowns: [], contradictions: [] } as const;
+            const response = input.skippedFieldIds.length > 0
+              ? { schemaVersion: 1, gaps: [], unknowns: input.skippedFieldIds, contradictions: [] }
+              : { schemaVersion: 1, gaps: [], unknowns: [], contradictions: [] };
             return response;
           }
           const [config, apiKey] = await Promise.all([getNineRouterConfig(db), getNineRouterApiKey(db)]);
