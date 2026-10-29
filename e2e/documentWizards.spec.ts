@@ -66,7 +66,7 @@ async function startPl02(page: Page, projectName: string): Promise<void> {
 
 test('boots actual Vite app at GitHub Pages base and opens AI entry', async ({ page }) => {
   expect(source).not.toContain('page.' + 'setContent');
-  await page.goto('./');
+  await page.goto('./', { waitUntil: 'commit' });
   await expect(page).toHaveURL(/\/task-management\/$/);
   await expect(page.getByRole('button', { name: 'Trợ lý AI (Cmd+J / Ctrl+J)' })).toBeVisible();
   await page.getByRole('button', { name: 'Trợ lý AI (Cmd+J / Ctrl+J)' }).click();
@@ -76,7 +76,7 @@ test('boots actual Vite app at GitHub Pages base and opens AI entry', async ({ p
 test.describe('F16 actual-app lifecycle', () => {
   test('project chip opens metadata, focused gap question leads to immutable preview', async ({ page }) => {
     await mockWizardTransport(page);
-    await page.goto('./');
+    await page.goto('./', { waitUntil: 'commit' });
     const projectName = `F16 lifecycle ${Date.now()}`;
     await createProject(page, projectName);
     await selectProjectScope(page, projectName);
@@ -88,7 +88,7 @@ test.describe('F16 actual-app lifecycle', () => {
 
   test('skip stays unknown, edit invalidates approval, and later approval saves one linked Note', async ({ page }) => {
     await mockWizardTransport(page, { gaps: true });
-    await page.goto('./');
+    await page.goto('./', { waitUntil: 'commit' });
     const projectName = `F16 skip ${Date.now()}`;
     await createProject(page, projectName);
     await selectProjectScope(page, projectName);
@@ -110,7 +110,7 @@ test.describe('F16 actual-app lifecycle', () => {
 
   test('valid change-pack requires explicit confirmation and rejects a mismatched identity', async ({ page }) => {
     await mockWizardTransport(page, { gaps: false });
-    await page.goto('./');
+    await page.goto('./', { waitUntil: 'commit' });
     const projectName = `F16 pack ${Date.now()}`;
     await createProject(page, projectName);
     await selectProjectScope(page, projectName);
@@ -129,12 +129,12 @@ test.describe('F16 actual-app lifecycle', () => {
 
   test('reload restores draft and cancel keeps draft history', async ({ page }) => {
     await mockWizardTransport(page);
-    await page.goto('./');
+    await page.goto('./', { waitUntil: 'commit' });
     const projectName = `F16 reload ${Date.now()}`;
     await createProject(page, projectName);
     await selectProjectScope(page, projectName);
     await startPl02(page, projectName);
-    await page.reload();
+    await page.reload({ waitUntil: 'commit' });
     await expect(page.getByText(`Đang gắn ngữ cảnh: ${projectName}`, { exact: true })).toBeVisible();
     await expect(page.getByText(/Wizard đang tiếp tục từ bản nháp\./)).toBeVisible();
     await page.getByRole('button', { name: 'Hủy Wizard' }).click();
@@ -145,7 +145,7 @@ test.describe('F16 actual-app lifecycle', () => {
 
   test('daemon and MCP routes unavailable still leave local composer and approved export available', async ({ page, context }) => {
     await mockWizardTransport(page);
-    await page.goto('./');
+    await page.goto('./', { waitUntil: 'commit' });
     const projectName = `F16 offline ${Date.now()}`;
     await createProject(page, projectName);
     await selectProjectScope(page, projectName);
@@ -166,7 +166,7 @@ test.describe('F16 actual-app lifecycle', () => {
 
   test('builder, download, and Note-save controls expose split outcomes without duplicate approval', async ({ page }) => {
     await mockWizardTransport(page, { gaps: false });
-    await page.goto('./');
+    await page.goto('./', { waitUntil: 'commit' });
     const projectName = `F16 export ${Date.now()}`;
     await createProject(page, projectName);
     await selectProjectScope(page, projectName);
