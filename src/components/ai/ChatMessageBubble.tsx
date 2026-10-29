@@ -369,7 +369,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
                 suggestions: [],
                 evidenceSources: [],
                 answer: msg.content.match(/^Đã bỏ qua:\s*(.+?)\s*·/)?.[1] ?? null,
-                outcome: msg.content.startsWith('Đã bỏ qua:') ? 'omitted' : 'open',
+                outcome: msg.content.includes('Đã bỏ qua:') ? 'omitted' : 'open',
               }}
               onSuggestion={(questionId, suggestion) => wizardCallbacks.onSuggestion?.(msg.id, questionId, suggestion)}
               onSkip={(questionId, outcome) => wizardCallbacks.onSkip?.(msg.id, (msg.content.match(/Cần làm rõ:\s*([^\n]+)/)?.[1] ?? questionId).trim(), outcome)}
