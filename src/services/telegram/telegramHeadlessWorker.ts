@@ -759,11 +759,12 @@ export async function processTelegramInboundMessage(
       } catch {}
 
       const scoped = await resolveScopedContext('full', trimmedText, db);
+      const effectiveModel = callerUser?.preferredModel || aiConfig.defaultModel;
       const adjResult = await executeAdminMutationTurn({
         chatId: chat_id,
         userMessage: trimmedText,
         chatHistory: pendingMutation.chatHistory || [],
-        aiConfig: { endpoint: aiConfig.endpoint, defaultModel: aiConfig.defaultModel },
+        aiConfig: { endpoint: aiConfig.endpoint, defaultModel: effectiveModel },
         apiKey,
         db,
         existingPending: pendingMutation,

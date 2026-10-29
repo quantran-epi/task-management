@@ -142,18 +142,17 @@ export async function approvePendingUser(
   db: TaskPlannerDatabase = defaultDb
 ): Promise<TelegramWhitelistUser> {
   const existing = await db.telegramWhitelist.get(chatId);
-  let fallbackScope = existing?.dataScope;
-  if (!fallbackScope) {
-    const settings = await getTelegramSettings(db);
-    fallbackScope = settings.defaultScope || 'full';
-  }
+  const settings = await getTelegramSettings(db);
+  const resolvedScope =
+    overrides?.dataScope ??
+    (existing && existing.status !== 'pending' ? existing.dataScope : settings.defaultScope);
 
   return await upsertWhitelistUser(
     {
       chatId,
       status: 'active',
-      dataScope: overrides?.dataScope ?? fallbackScope,
       ...overrides,
+      dataScope: resolvedScope,
     },
     db
   );
