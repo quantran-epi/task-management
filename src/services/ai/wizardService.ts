@@ -329,7 +329,7 @@ export interface DetectWizardGapsInput {
 }
 
 export async function detectWizardGaps(input: DetectWizardGapsInput): Promise<WizardGapResult> {
-  const evidenceIds = input.evidence?.items?.map((item) => item.id) ?? [];
+  const evidenceIds = input.evidence.items.map((item) => item.id);
   const result = await runValidatedStage({
     stage: 'gap-detection',
     schema: WizardGapResultSchema,

@@ -494,6 +494,10 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           return docs;
         },
         runStage: async (input) => {
+          if (input.kind === 'PL02') {
+            const response = { schemaVersion: 1, gaps: [], unknowns: [], contradictions: [] } as const;
+            return response;
+          }
           const [config, apiKey] = await Promise.all([getNineRouterConfig(db), getNineRouterApiKey(db)]);
           return runWizardStage({
             kind: input.kind,
@@ -501,9 +505,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
             threadId: input.threadId,
             sessionId: input.sessionId,
             inputRevision: input.inputRevision,
-            payload: input.kind === 'PL02'
-              ? { evidence: input.evidence, knownFieldIds: input.knownFieldIds, skippedFieldIds: input.skippedFieldIds }
-              : { evidence: input.evidence, proposal: input.payload },
+            payload: { evidence: input.evidence, proposal: input.payload },
             signal: input.signal,
             isCurrent: input.isCurrent,
             model: { endpoint: config.endpoint, apiKey, model: selectedModel || config.defaultModel },
@@ -525,7 +527,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           const sets = await db.documentSets.filter((set) => set.sdlc?.projectId === projectId).toArray();
           return { projectId, threadId, sessionId: wizardCoordinatorRef.current?.getSnapshot()?.sessionId ?? generateId(), inputRevision, query: `${metadata.cr} ${metadata.featureName} ${context}`.trim(), resolvedSetIds: sets.map((set) => set.id) };
         },
-        saveSnapshot: async (snapshot) => { setWizardSnapshot(snapshot); },
+        saveSnapshot: async (snapshot) => {
+          setWizardSnapshot(snapshot);
+        },
         appendMessage: async (message) => { await saveMessage({ threadId, role: message.role, content: message.content, wizard: message.wizard }, db); },
         loadMessages: () => loadChatMessages(threadId, db),
         saveSolution: (input) => saveSolutionVersion(input, db),
@@ -695,7 +699,20 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   useEffect(() => {
     if (!wizardSnapshot || !activeThreadId) return;
     const refreshed = deriveActiveWizard(messages, currentScope.id ?? '', activeThreadId);
-    if (refreshed && refreshed.updatedAt !== wizardSnapshot.updatedAt) setWizardSnapshot(refreshed);
+    const statusRank: Record<WizardSnapshot['status'], number> = {
+      collecting: 1,
+      gap_fill: 2,
+      review: 3,
+      approved: 4,
+      exporting: 5,
+      completed: 6,
+      abandoned: 0,
+    };
+    const isNewer = refreshed && (
+      refreshed.updatedAt > wizardSnapshot.updatedAt ||
+      (refreshed.updatedAt === wizardSnapshot.updatedAt && statusRank[refreshed.status] > statusRank[wizardSnapshot.status])
+    );
+    if (isNewer) setWizardSnapshot(refreshed);
   }, [activeThreadId, currentScope.id, messages, wizardSnapshot]);
 
   const wizardMetadataModal = wizardSkill && wizardProject ? (

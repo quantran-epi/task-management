@@ -479,6 +479,9 @@ export function createWizardCoordinator(deps: WizardCoordinatorDeps) {
       signal: controller.signal,
       isCurrent: () => isCurrent(sessionId, revision, controller),
     });
+    if (!result || typeof result !== 'object') {
+      throw new Error('WIZARD_STAGE_RESULT_INVALID');
+    }
     if (!isCurrent(sessionId, revision, controller)) return;
     const gaps = (result as Partial<WizardGapResult>).gaps ?? [];
     state = { ...state, gaps: gaps as WizardGap[] };

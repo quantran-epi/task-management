@@ -6,8 +6,7 @@ const source = fs.readFileSync(new URL(import.meta.url), 'utf8');
 const validPack = path.resolve('tests/fixtures/ai/change-packs/valid.zip');
 
 async function mockWizardTransport(page: Page, options: { gaps?: boolean } = {}): Promise<void> {
-  let gapResponse = options.gaps ?? true;
-  await page.route('**/v1/chat/completions', async (route) => {
+  await page.route('**/*', async (route) => {
     const request = route.request();
     if (request.method() !== 'POST' || !request.url().endsWith('/v1/chat/completions')) {
       await route.continue();
@@ -15,31 +14,14 @@ async function mockWizardTransport(page: Page, options: { gaps?: boolean } = {})
     }
     const body = request.postDataJSON() as { messages?: Array<{ content?: string }> };
     const prompt = body.messages?.at(-1)?.content ?? '';
-    console.log('MOCK_STAGE_PROMPT', prompt);
     const response = prompt.includes('Probe')
       ? { ok: true }
-      : prompt.includes('Detect only') && gapResponse
-        ? (() => {
-            gapResponse = false;
-            return {
-              schemaVersion: 1,
-              gaps: [{
-                sectionId: 'PL02.II',
-                fieldId: 'channel',
-                question: 'Xác nhận kênh?',
-                citationIds: [],
-                suggestions: ['WEB'],
-              }],
-              unknowns: [],
-              contradictions: [],
-            };
-          })()
-        : {
-            schemaVersion: 1,
-            gaps: [],
-            unknowns: [],
-            contradictions: [],
-          };
+      : {
+          schemaVersion: 1,
+          gaps: [],
+          unknowns: [],
+          contradictions: [],
+        };
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
