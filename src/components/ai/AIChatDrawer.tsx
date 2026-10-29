@@ -100,7 +100,7 @@ import { WizardProgressStrip } from './wizard/WizardProgressStrip';
 import { ChangePackDropzone } from './wizard/ChangePackDropzone';
 import { ChangePackConfirmStrip, type ChangePackUiResult } from './wizard/ChangePackConfirmStrip';
 import { DriftMatrixView } from './wizard/DriftMatrixView';
-import { createWizardCoordinator, deriveActiveWizard, type WizardCoordinatorDeps } from '../../services/wizard/wizardCoordinator';
+import { createWizardCoordinator, deriveActiveWizard, type WizardCoordinatorDeps, type WizardExportResult } from '../../services/wizard/wizardCoordinator';
 import type { ChangePackManifest } from '../../services/wizard/changePack';
 import type { ReconciliationResult } from '../../services/wizard/reconciliation';
 import type { ChangePackValidationCode } from '../../services/wizard/changePack';
@@ -423,6 +423,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const [packUi, setPackUi] = useState<ChangePackUiResult | null>(null);
   const [reconciliationResult, setReconciliationResult] = useState<ReconciliationResult | null>(null);
   const [technicalDocsReady, setTechnicalDocsReady] = useState(false);
+  const [exportResults, setExportResults] = useState<Map<string, WizardExportResult>>(new Map());
+  const [exportPending, setExportPending] = useState<Set<string>>(new Set());
+  const [exportErrors, setExportErrors] = useState<Map<string, string>>(new Map());
   const wizardCoordinatorRef = useRef<ReturnType<typeof createWizardCoordinator> | null>(null);
   const packActionRef = useRef(false);
   const cabActionRef = useRef(false);
@@ -597,6 +600,49 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       cabActionRef.current = false;
     }
   }, [getWizardCoordinator]);
+
+  const handleWizardApproveExport = useCallback(async (messageId: string, draftRevision: number) => {
+    if (exportPending.has(messageId)) return;
+    const coordinator = getWizardCoordinator();
+    const messageRecord = messages.find((candidate) => candidate.id === messageId);
+    if (!coordinator || !messageRecord?.wizard) return;
+    setExportPending((previous) => new Set(previous).add(messageId));
+    setExportErrors((previous) => { const next = new Map(previous); next.delete(messageId); return next; });
+    try {
+      const result = await coordinator.approveAndExport(messageId, messageRecord.wizard.renderPayload);
+      setExportResults((previous) => new Map(previous).set(messageId, result));
+      if (result.errorCode) setExportErrors((previous) => new Map(previous).set(messageId, result.errorCode!));
+      if (result.noteSaved) setWizardSnapshot(coordinator.getSnapshot());
+      void draftRevision;
+    } finally {
+      setExportPending((previous) => { const next = new Set(previous); next.delete(messageId); return next; });
+    }
+  }, [exportPending, getWizardCoordinator, messages]);
+
+  const handleWizardRetryDownload = useCallback(async (messageId: string) => {
+    const result = await getWizardCoordinator()?.retryExportDownload(messageId);
+    if (!result) return;
+    setExportResults((previous) => new Map(previous).set(messageId, result));
+    setExportErrors((previous) => {
+      const next = new Map(previous);
+      if (result.errorCode) next.set(messageId, result.errorCode); else next.delete(messageId);
+      return next;
+    });
+  }, [getWizardCoordinator]);
+
+  const exportedFiles = new Map(Array.from(exportResults.entries()).map(([id, result]) => [id, result.noteSaved ? {
+    filename: result.filename ?? 'wizard.docx', sizeBytes: result.sizeBytes ?? 0, noteId: result.noteId,
+    noteSaved: result.noteSaved, downloadInitiated: result.downloadInitiated, savePickerSaved: result.savePickerSaved,
+  } : undefined] as const));
+  const wizardCallbacks = {
+    onApproveExport: handleWizardApproveExport,
+    onRequestEdit: (_messageId: string, _draftRevision: number) => { void getWizardCoordinator()?.requestEdit(''); },
+    onRetryExport: handleWizardRetryDownload,
+    onOpenNote: (noteId: string) => { window.location.hash = `/notes?doc=${encodeURIComponent(noteId)}`; },
+    pendingKeys: exportPending,
+    exportedFiles,
+    exportErrors,
+  };
 
   const packVisible = wizardSnapshot?.skill === 'PL03' || wizardSnapshot?.skill === 'PL07';
   const confirmedManifest = packUi?.status === 'valid' && reconciliationResult ? packUi.manifest : null;
@@ -2102,6 +2148,7 @@ Rules:
         pendingConfirmation={pendingConfirmation}
         onConfirmAction={handleConfirmAction}
         groundedCallbacks={groundedCallbacks}
+        wizardCallbacks={wizardCallbacks}
         transientClarifyMessage={transientClarifyMessage}
         onCancelClarify={() => setTransientClarifyMessage(null)}
       />
