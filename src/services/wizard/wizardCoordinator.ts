@@ -226,12 +226,12 @@ export function deriveActiveWizard(
   threadId: string,
 ): ActiveWizardSelector | undefined {
   const candidates = messages
-    .map(messageSnapshot)
-    .filter((snapshot): snapshot is WizardSnapshot => Boolean(snapshot))
-    .filter((snapshot) => snapshot.projectId === projectId && snapshot.threadId === threadId)
-    .filter((snapshot) => snapshot.status !== 'completed')
-    .sort((left, right) => left.updatedAt.localeCompare(right.updatedAt));
-  const latest = candidates.at(-1);
+    .map((message, index) => ({ snapshot: messageSnapshot(message), index }))
+    .filter((candidate): candidate is { snapshot: WizardSnapshot; index: number } => Boolean(candidate.snapshot))
+    .filter((candidate) => candidate.snapshot.projectId === projectId && candidate.snapshot.threadId === threadId)
+    .filter((candidate) => candidate.snapshot.status !== 'completed')
+    .sort((left, right) => left.snapshot.updatedAt.localeCompare(right.snapshot.updatedAt) || left.index - right.index);
+  const latest = candidates.at(-1)?.snapshot;
   if (!latest) return undefined;
   return { ...latest, restored: latest.status === 'abandoned' || latest.status === 'collecting' || latest.status === 'gap_fill' };
 }
