@@ -22,6 +22,7 @@ describe('AIChatDrawer wizard wiring', () => {
     db = new TaskPlannerDatabase(`drawer-wizard-${Date.now()}-${Math.random()}`);
     await db.open();
     await db.projects.add({ id: PROJECT_ID, name: 'Wizard Project', status: 'Open', createdAt: '2026-10-28T00:00:00.000Z', updatedAt: '2026-10-28T00:00:00.000Z' });
+    restore.mockResolvedValue(undefined);
     vi.spyOn(coordinatorModule, 'createWizardCoordinator').mockReturnValue({
       start, cancel, dispose, restore, addContext,
       answerGap: vi.fn(), skipGap: vi.fn(), requestEdit: vi.fn(), approveSolution: vi.fn(),
@@ -41,19 +42,27 @@ describe('AIChatDrawer wizard wiring', () => {
   });
 
   it('routes composer text to active gap wizard and disposes on close', async () => {
-    vi.spyOn(coordinatorModule, 'deriveActiveWizard').mockReturnValue({
-      schemaVersion: 1, sessionId: '22222222-2222-4222-8222-222222222222', projectId: PROJECT_ID,
-      threadId: '33333333-3333-4333-8333-333333333333', skill: 'PL02', status: 'gap_fill',
-      inputRevision: 1, draftRevision: null, approvedAt: null, artifactId: null, artifactHash: null,
-      renderPayload: { title: 'PL02' }, createdAt: '2026-10-28T00:00:00.000Z', updatedAt: '2026-10-28T00:00:00.000Z',
-    } as any);
+    const thread = await db.chatThreads.add({
+      id: '33333333-3333-4333-8333-333333333333', scopeKey: `project:${PROJECT_ID}`, scopeType: 'project', entityId: PROJECT_ID,
+      createdAt: '2026-10-28T00:00:00.000Z', updatedAt: '2026-10-28T00:00:00.000Z',
+    });
+    void thread;
+    await db.chatMessages.add({
+      id: '44444444-4444-4444-8444-444444444444', threadId: '33333333-3333-4333-8333-333333333333', role: 'assistant', content: 'gap',
+      createdAt: '2026-10-28T00:00:00.000Z', wizard: {
+        schemaVersion: 1, sessionId: '22222222-2222-4222-8222-222222222222', projectId: PROJECT_ID,
+        threadId: '33333333-3333-4333-8333-333333333333', skill: 'PL02', status: 'gap_fill',
+        inputRevision: 1, draftRevision: null, approvedAt: null, artifactId: null, artifactHash: null,
+        renderPayload: { title: 'PL02' }, createdAt: '2026-10-28T00:00:00.000Z', updatedAt: '2026-10-28T00:00:00.000Z',
+      },
+    });
     const { rerender } = render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={{ type: 'project', id: PROJECT_ID, title: 'Wizard Project' }} />);
     const input = await screen.findByLabelText('Nội dung tin nhắn trò chuyện AI');
-    expect(input).toHaveAttribute('placeholder', 'Trả lời câu hỏi hoặc bổ sung thông tin…');
+    await waitFor(() => expect(input).toHaveAttribute('placeholder', 'Trả lời câu hỏi hoặc bổ sung thông tin…'));
     fireEvent.change(input, { target: { value: 'Ngưỡng là 100' } });
     fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
     await waitFor(() => expect(addContext).toHaveBeenCalledWith('Ngưỡng là 100'));
     rerender(<AIChatDrawer open={false} onClose={() => {}} db={db} activeScope={{ type: 'project', id: PROJECT_ID, title: 'Wizard Project' }} />);
-    expect(dispose).toHaveBeenCalled();
+    await waitFor(() => expect(dispose).toHaveBeenCalled());
   });
 });

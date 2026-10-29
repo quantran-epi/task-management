@@ -93,6 +93,16 @@ import { IntentRouterUnavailableError } from '../../services/ai/intentRouter';
 import { QuickPreviewDrawer } from '../notes/QuickPreviewDrawer';
 import { ScopeChipsBar, hasMeaningfulRoutedScope } from './grounded/ScopeChipsBar';
 import type { GroundedAnswerCardCallbacks } from './ChatMessageBubble';
+import { WizardSkillBar } from './wizard/WizardSkillBar';
+import { WizardMetadataModal, type WizardStartMetadata } from './wizard/WizardMetadataModal';
+import { WizardLifecycleBar } from './wizard/WizardLifecycleBar';
+import { WizardProgressStrip } from './wizard/WizardProgressStrip';
+import { createWizardCoordinator, deriveActiveWizard, type WizardCoordinatorDeps } from '../../services/wizard/wizardCoordinator';
+import type { WizardSkill, WizardSnapshot } from '../../services/ai/wizardSchemas';
+import { collectWizardEvidence, runWizardStage } from '../../services/ai/wizardService';
+import { runLocalGroundedRetrieval } from '../../services/search/localGroundedRetrieval';
+import { saveSolutionVersion } from '../../services/wizard/artifactRepo';
+import { getMessagesByThreadId as loadChatMessages } from '../../db/repositories/chatRepo';
 
 export const AI_CHAT_WIDTH_KEY = 'planner:ai_chat_width';
 export const AI_AUTO_APPROVE_MUTATIONS_KEY = 'planner:ai_auto_approve_mutations';
@@ -120,6 +130,7 @@ export interface AIChatDrawerProps {
   isMobile?: boolean;
   onPopout?: () => void;
   isPopoutWindow?: boolean;
+  createWizardCoordinatorFn?: typeof createWizardCoordinator;
 }
 
 export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
@@ -135,6 +146,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   isMobile = false,
   onPopout,
   isPopoutWindow = false,
+  createWizardCoordinatorFn = createWizardCoordinator,
 }) => {
   const { token } = theme.useToken();
   const { pendingPrompt, clearPendingPrompt, pendingDraft, clearPendingDraft, setCustomScope } = useAIChat();
@@ -399,6 +411,141 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   } | null>(null);
 
   const [externalInputValue, setExternalInputValue] = useState<string | null>(null);
+  const [wizardSkill, setWizardSkill] = useState<Exclude<WizardSkill, 'SOLUTION'> | null>(null);
+  const [wizardMetadataOpen, setWizardMetadataOpen] = useState(false);
+  const [wizardSnapshot, setWizardSnapshot] = useState<WizardSnapshot | undefined>();
+  const wizardCoordinatorRef = useRef<ReturnType<typeof createWizardCoordinator> | null>(null);
+  const isProjectScope = currentScope.type === 'project' && Boolean(currentScope.id);
+
+  const activeThreadId = thread?.id;
+  useEffect(() => {
+    if (open && isProjectScope && currentScope.id && !thread) {
+      void createOrGetThread({ scopeType: 'project', entityId: currentScope.id, title: currentScope.title }, db);
+    }
+  }, [currentScope.id, currentScope.title, db, isProjectScope, open, thread]);
+
+  useEffect(() => {
+    if (!isProjectScope || !activeThreadId || !currentScope.id) {
+      wizardCoordinatorRef.current?.dispose();
+      wizardCoordinatorRef.current = null;
+      setWizardSnapshot(undefined);
+      return;
+    }
+    const controller = new AbortController();
+    const loadWizard = async () => {
+      const existing = await loadChatMessages(activeThreadId, db);
+      if (controller.signal.aborted) return;
+      const active = deriveActiveWizard(existing, currentScope.id!, activeThreadId);
+      if (active) setWizardSnapshot(active);
+    };
+    void loadWizard();
+    return () => {
+      controller.abort();
+      wizardCoordinatorRef.current?.dispose();
+      wizardCoordinatorRef.current = null;
+    };
+  }, [activeThreadId, currentScope.id, db, isProjectScope]);
+
+  const getWizardCoordinator = useCallback(() => {
+    if (!isProjectScope || !currentScope.id || !activeThreadId) return null;
+    if (!wizardCoordinatorRef.current) {
+      const projectId = currentScope.id;
+      const threadId = activeThreadId;
+      const deps: WizardCoordinatorDeps = {
+        projectId,
+        threadId,
+        collectEvidence: async (input) => collectWizardEvidence(input, {
+          runLocalBm25: (localInput) => runLocalGroundedRetrieval(localInput, {
+            loadSetMembers: async (setIds) => {
+              const sets = await db.documentSets.where('id').anyOf(setIds).toArray();
+              return sets.flatMap((set) => set.documentIds.map((documentId) => ({ setId: set.id, setName: set.name, documentId })));
+            },
+            loadNoteBody: async (documentId) => {
+              const note = await db.notes.get(documentId);
+              return note ? { title: note.title, body: note.body, updatedAt: note.updatedAt } : null;
+            },
+          }),
+        }),
+        runStage: async (input) => {
+          const [config, apiKey] = await Promise.all([getNineRouterConfig(db), getNineRouterApiKey(db)]);
+          return runWizardStage({ ...input, model: { endpoint: config.endpoint, apiKey, model: selectedModel || config.defaultModel } });
+        },
+        resolveEvidenceInput: async ({ metadata, inputRevision, context }) => {
+          const sets = await db.documentSets.filter((set) => set.sdlc?.projectId === projectId).toArray();
+          return { projectId, threadId, sessionId: wizardCoordinatorRef.current?.getSnapshot()?.sessionId ?? generateId(), inputRevision, query: `${metadata.cr} ${metadata.featureName} ${context}`.trim(), resolvedSetIds: sets.map((set) => set.id) };
+        },
+        saveSnapshot: async (snapshot) => { setWizardSnapshot(snapshot); },
+        appendMessage: async (message) => { await saveMessage({ threadId, role: message.role, content: message.content, wizard: message.wizard }, db); },
+        loadMessages: () => loadChatMessages(threadId, db),
+        saveSolution: (input) => saveSolutionVersion(input, db),
+      };
+      wizardCoordinatorRef.current = createWizardCoordinatorFn(deps);
+    }
+    return wizardCoordinatorRef.current;
+  }, [activeThreadId, createWizardCoordinatorFn, currentScope.id, db, isProjectScope]);
+
+  useEffect(() => {
+    const coordinator = getWizardCoordinator();
+    if (coordinator && !wizardSnapshot) {
+      const restored = coordinator.restore();
+      if (restored && typeof (restored as Promise<unknown>).then === 'function') {
+        void (restored as Promise<WizardSnapshot | undefined>).then((snapshot) => snapshot && setWizardSnapshot(snapshot));
+      }
+    }
+  }, [getWizardCoordinator, wizardSnapshot]);
+
+  const handleWizardStart = useCallback(async (metadata: WizardStartMetadata) => {
+    if (!wizardSkill) return;
+    const coordinator = getWizardCoordinator();
+    if (!coordinator) return;
+    setWizardMetadataOpen(false);
+    const snapshot = await coordinator.start(wizardSkill, metadata);
+    setWizardSnapshot(snapshot);
+    setWizardSkill(null);
+  }, [getWizardCoordinator, wizardSkill]);
+
+  const handleWizardMessage = useCallback(async (text: string) => {
+    const coordinator = getWizardCoordinator();
+    if (!coordinator || !wizardSnapshot) return false;
+    if (wizardSnapshot.status === 'gap_fill' || wizardSnapshot.status === 'collecting') {
+      await coordinator.addContext(text);
+      setWizardSnapshot(coordinator.getSnapshot());
+      return true;
+    }
+    return false;
+  }, [getWizardCoordinator, wizardSnapshot]);
+
+  const handleWizardCancel = useCallback(async () => {
+    await getWizardCoordinator()?.cancel();
+    setWizardSnapshot(getWizardCoordinator()?.getSnapshot());
+  }, [getWizardCoordinator]);
+
+  const wizardProject = currentScope.id ? { id: currentScope.id, name: currentScope.title || currentScope.id } : undefined;
+  const wizardLeadingContent = (
+    <>
+      {wizardSnapshot && <WizardLifecycleBar formName={wizardSnapshot.skill} snapshot={wizardSnapshot} restored={Boolean((wizardSnapshot as WizardSnapshot & { restored?: boolean }).restored)} onAbandon={() => void handleWizardCancel()} />}
+      {wizardSnapshot && <WizardProgressStrip snapshot={wizardSnapshot} />}
+      <WizardSkillBar projectScoped={isProjectScope} activeSession={Boolean(wizardSnapshot && !['completed', 'abandoned'].includes(wizardSnapshot.status))} selectedSkill={wizardSkill ?? undefined} onActivate={(skill) => { setWizardSkill(skill); setWizardMetadataOpen(true); }} />
+    </>
+  );
+  const wizardPlaceholder = wizardSnapshot && !['completed', 'abandoned'].includes(wizardSnapshot.status) ? 'Trả lời câu hỏi hoặc bổ sung thông tin…' : undefined;
+
+  useEffect(() => {
+    if (!open) wizardCoordinatorRef.current?.dispose();
+    return () => { wizardCoordinatorRef.current?.dispose(); };
+  }, [open]);
+
+  useEffect(() => {
+    if (!wizardSnapshot || !activeThreadId) return;
+    const refreshed = deriveActiveWizard(messages, currentScope.id ?? '', activeThreadId);
+    if (refreshed && refreshed.updatedAt !== wizardSnapshot.updatedAt) setWizardSnapshot(refreshed);
+  }, [activeThreadId, currentScope.id, messages, wizardSnapshot]);
+
+  const wizardMetadataModal = wizardSkill && wizardProject ? (
+    <WizardMetadataModal open={wizardMetadataOpen} skill={wizardSkill} project={wizardProject} onStart={(metadata) => void handleWizardStart(metadata)} onClose={() => setWizardMetadataOpen(false)} />
+  ) : null;
+
+  void wizardMetadataModal;
 
   // Consume pendingDraft from AIChatContext into input draft without auto-sending
   useEffect(() => {
@@ -538,6 +685,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   ) => {
     const trimmed = text.trim();
     if (!trimmed) return;
+
+    if (await handleWizardMessage(trimmed)) return;
 
     // Check if user is responding to an active confirmation prompt via chat input
     if (pendingConfirmationRef.current) {
@@ -1832,6 +1981,8 @@ Rules:
         onOpenSettings={onOpenSettings}
       />
 
+      {wizardMetadataModal}
+
       {/* ScopeChipsBar after routing per D-15 (only when routed scope has concrete facets) */}
       {latestRoutedScope && hasMeaningfulRoutedScope(latestRoutedScope.routedScope) && (
         <div style={{ padding: '0 14px' }}>
@@ -1896,8 +2047,9 @@ Rules:
         placeholder={
           pendingConfirmation
             ? 'Gõ "yes" để xác nhận hoặc "no" để từ chối...'
-            : undefined
+            : wizardPlaceholder
         }
+        leadingContent={wizardLeadingContent}
         db={db}
         attachedFiles={sessionAttachedFiles}
         onAttachFile={handleAttachFile}
