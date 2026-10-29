@@ -662,7 +662,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   } : undefined] as const));
   const wizardCallbacks = {
     onApproveExport: handleWizardApproveExport,
-    onRequestEdit: (_messageId: string, _draftRevision: number) => { void getWizardCoordinator()?.requestEdit(''); },
+    onRequestEdit: (_messageId: string, _draftRevision: number) => {
+      void getWizardCoordinator()?.requestEdit('').then(() => setWizardSnapshot(getWizardCoordinator()?.getSnapshot()));
+    },
     onRetryExport: handleWizardRetryDownload,
     onOpenNote: (noteId: string) => { window.location.hash = `/notes?doc=${encodeURIComponent(noteId)}`; },
     onSuggestion: (_questionId: string, suggestion: string) => setExternalInputValue(suggestion),
