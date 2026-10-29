@@ -1,4 +1,7 @@
 import type { TaskPlannerDatabase } from '../../db';
+import { buildWizardDocx, type WizardDocxKind } from '../export/wizardDocx';
+import { downloadBlob, type DownloadBlobResult } from '../../utils/fileExport';
+import { saveApprovedArtifact } from './artifactRepo';
 import type { ChatMessage, Note } from '../../types/models';
 import {
   assertWizardTransition,
@@ -42,6 +45,17 @@ export interface WizardPackTechnicalDocs {
   reconciliation: ReconciliationResult;
   pl03?: unknown;
   pl07?: unknown;
+}
+
+export interface WizardExportResult {
+  blobBuilt: boolean;
+  noteSaved: boolean;
+  downloadInitiated: boolean;
+  savePickerSaved: boolean;
+  noteId?: string | undefined;
+  filename?: string | undefined;
+  sizeBytes?: number | undefined;
+  errorCode: string | null;
 }
 
 export interface WizardPackDeps {
@@ -92,6 +106,10 @@ export interface WizardCoordinatorDeps extends WizardPackDeps {
     wizard: WizardSnapshot;
   }) => Promise<void>;
   loadMessages?: () => Promise<ChatMessage[]>;
+  buildDocx?: (kind: WizardDocxKind, payload: unknown) => Promise<Blob>;
+  saveArtifact?: (input: Parameters<typeof saveApprovedArtifact>[0]) => Promise<{ note: Note; created: boolean }>;
+  downloadFile?: (blob: Blob, filename: string) => Promise<DownloadBlobResult>;
+  appendExportResult?: (input: { messageId: string; result: WizardExportResult }) => Promise<void>;
   saveSolution?: (input: {
     projectId: string;
     threadId: string;
@@ -233,6 +251,20 @@ export function createWizardCoordinator(deps: WizardCoordinatorDeps) {
   let stageController: AbortController | undefined;
   let generation = 0;
   let approvalPromise: Promise<unknown> | undefined;
+  let exportPromise: Promise<WizardExportResult> | undefined;
+  let retainedExport: { key: string; blob: Blob; filename: string; noteId?: string; noteSaved: boolean } | undefined;
+
+  const exportError = (errorCode: WizardExportResult['errorCode']): WizardExportResult => ({
+    blobBuilt: false,
+    noteSaved: false,
+    downloadInitiated: false,
+    savePickerSaved: false,
+    errorCode,
+  });
+
+  const buildExportKind = (skill: WizardSkill): WizardDocxKind => skill === 'PL03' ? 'PL03B' : skill as WizardDocxKind;
+
+  const filenameFor = (skill: WizardSkill, title: string) => `${(title || skill).replace(/[^\p{L}\p{N}._-]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 80) || skill}.docx`;
   let packState: ChangePackState = { status: 'idle' };
   let packFile: File | undefined;
   let packConfirmationPromise: Promise<unknown> | undefined;
@@ -469,6 +501,103 @@ export function createWizardCoordinator(deps: WizardCoordinatorDeps) {
 
   const requestEdit = async (context = '') => addContext(context);
 
+  const loadCurrentExportSnapshot = async (messageId: string): Promise<WizardSnapshot> => {
+    const messages = deps.loadMessages ? await deps.loadMessages() : [];
+    const message = messages.find((candidate) => candidate.id === messageId);
+    if (!message?.wizard) throw new Error('WIZARD_EXPORT_MESSAGE_MISSING');
+    return WizardSnapshotSchema.parse(message.wizard);
+  };
+
+  const sameExportRevision = (expected: WizardSnapshot, actual: WizardSnapshot) =>
+    expected.projectId === actual.projectId && expected.threadId === actual.threadId &&
+    expected.sessionId === actual.sessionId && expected.inputRevision === actual.inputRevision &&
+    expected.draftRevision === actual.draftRevision &&
+    JSON.stringify(expected.renderPayload) === JSON.stringify(actual.renderPayload);
+
+  const approveAndExport = async (messageId: string, exportPayload: unknown): Promise<WizardExportResult> => {
+    if (exportPromise) return exportPromise;
+    exportPromise = (async () => {
+      let approved: WizardSnapshot;
+      try {
+        const source = await loadCurrentExportSnapshot(messageId);
+        if (source.projectId !== deps.projectId || source.threadId !== deps.threadId || source.status !== 'review' || source.draftRevision === null) {
+          return exportError('WIZARD_EXPORT_APPROVAL_REQUIRED');
+        }
+        const markdown = 'markdown' in source.renderPayload ? source.renderPayload.markdown ?? '' : '';
+        const hash = await hashText(markdown);
+        const approvedAt = now();
+        approved = WizardSnapshotSchema.parse({ ...source, status: 'approved', artifactHash: hash, approvedAt, updatedAt: approvedAt });
+        const key = `${approved.sessionId}:${approved.draftRevision}:${buildExportKind(approved.skill)}`;
+        const filename = filenameFor(approved.skill, approved.renderPayload.title);
+        if (retainedExport?.key === key && retainedExport.noteSaved) {
+          const download = await (deps.downloadFile ?? downloadBlob)(retainedExport.blob, retainedExport.filename);
+          const result: WizardExportResult = {
+            blobBuilt: true, noteSaved: true,
+            downloadInitiated: download.kind === 'download_initiated',
+            savePickerSaved: download.kind === 'save_picker_saved',
+            noteId: retainedExport.noteId, filename: retainedExport.filename, sizeBytes: retainedExport.blob.size,
+            errorCode: download.kind === 'cancelled' ? 'WIZARD_EXPORT_DOWNLOAD_CANCELLED' : download.kind === 'failed' ? download.errorCode : null,
+          };
+          return result;
+        }
+
+        let blob: Blob;
+        try {
+          blob = await (deps.buildDocx ?? buildWizardDocx)(buildExportKind(approved.skill), exportPayload);
+        } catch {
+          return exportError('WIZARD_EXPORT_BUILD_FAILED');
+        }
+        const currentAfterBuild = await loadCurrentExportSnapshot(messageId);
+        if (!sameExportRevision(source, currentAfterBuild)) {
+          return { ...exportError('WIZARD_EXPORT_STALE'), blobBuilt: true };
+        }
+        retainedExport = { key, blob, filename, noteSaved: false };
+
+        let note: Note;
+        try {
+          const sourceArtifacts = buildExportKind(approved.skill) === 'PL02' ? undefined : [];
+          const saved = await (deps.saveArtifact ?? ((input) => saveApprovedArtifact(input, deps.db)))({
+            projectId: deps.projectId, threadId: deps.threadId, sessionId: approved.sessionId,
+            inputRevision: approved.inputRevision, draftRevision: approved.draftRevision!, inputHash: hash,
+            markdown, exportPayload, approvedAt,
+            kind: buildExportKind(approved.skill),
+            ...(sourceArtifacts ? { sourceArtifacts } : {}),
+          });
+          note = saved.note;
+          retainedExport = { ...retainedExport, noteId: note.id, noteSaved: true };
+        } catch {
+          return { ...exportError('WIZARD_EXPORT_NOTE_SAVE_FAILED'), blobBuilt: true, filename, sizeBytes: blob.size };
+        }
+        const download = await (deps.downloadFile ?? downloadBlob)(blob, filename);
+        const result: WizardExportResult = {
+          blobBuilt: true, noteSaved: true,
+          downloadInitiated: download.kind === 'download_initiated',
+          savePickerSaved: download.kind === 'save_picker_saved',
+          noteId: note.id, filename, sizeBytes: blob.size,
+          errorCode: download.kind === 'cancelled' ? 'WIZARD_EXPORT_DOWNLOAD_CANCELLED' : download.kind === 'failed' ? download.errorCode : null,
+        };
+        await deps.appendExportResult?.({ messageId, result });
+        return result;
+      } catch {
+        return exportError('WIZARD_EXPORT_APPROVAL_REQUIRED');
+      }
+    })().finally(() => { exportPromise = undefined; });
+    return exportPromise;
+  };
+
+  const retryExportDownload = async (messageId: string): Promise<WizardExportResult> => {
+    if (!retainedExport?.noteSaved) return exportError('WIZARD_EXPORT_RETRY_UNAVAILABLE');
+    const download = await (deps.downloadFile ?? downloadBlob)(retainedExport.blob, retainedExport.filename);
+    const result: WizardExportResult = {
+      blobBuilt: true, noteSaved: true,
+      downloadInitiated: download.kind === 'download_initiated', savePickerSaved: download.kind === 'save_picker_saved',
+      noteId: retainedExport.noteId, filename: retainedExport.filename, sizeBytes: retainedExport.blob.size,
+      errorCode: download.kind === 'cancelled' ? 'WIZARD_EXPORT_DOWNLOAD_CANCELLED' : download.kind === 'failed' ? download.errorCode : null,
+    };
+    await deps.appendExportResult?.({ messageId, result });
+    return result;
+  };
+
   const approveSolution = async () => {
     if (approvalPromise) return approvalPromise;
     if (!state || state.snapshot.skill !== 'SOLUTION' || state.snapshot.status !== 'review' || !deps.saveSolution) return;
@@ -545,6 +674,8 @@ export function createWizardCoordinator(deps: WizardCoordinatorDeps) {
     addContext,
     requestEdit,
     approveSolution,
+    approveAndExport,
+    retryExportDownload,
     cancel,
     restore,
     dispose,
