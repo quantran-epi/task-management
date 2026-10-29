@@ -15,6 +15,7 @@ async function mockWizardTransport(page: Page, options: { gaps?: boolean } = {})
     }
     const body = request.postDataJSON() as { messages?: Array<{ content?: string }> };
     const prompt = body.messages?.at(-1)?.content ?? '';
+    console.log('MOCK_STAGE_PROMPT', prompt);
     const response = prompt.includes('Probe')
       ? { ok: true }
       : prompt.includes('Detect only') && gapResponse
