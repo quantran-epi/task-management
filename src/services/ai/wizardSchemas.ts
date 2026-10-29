@@ -179,7 +179,7 @@ export class WizardTransitionError extends Error {
 }
 
 const legalTransitions: Record<WizardStatus, readonly WizardStatus[]> = {
-  collecting: ['gap_fill', 'abandoned'],
+  collecting: ['gap_fill', 'review', 'abandoned'],
   gap_fill: ['gap_fill', 'review', 'abandoned'],
   review: ['approved', 'gap_fill', 'abandoned'],
   approved: ['exporting', 'abandoned'],

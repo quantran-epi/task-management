@@ -25,6 +25,7 @@ export interface AIChatContextValue {
 const AIChatContext = createContext<AIChatContextValue | null>(null);
 
 export const AI_CHAT_OPEN_KEY = 'planner:ai_chat_open';
+export const AI_CHAT_SCOPE_KEY = 'planner:ai_chat_scope';
 
 export interface AIChatProviderProps {
   children: ReactNode;
@@ -45,7 +46,17 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
   const [, setRegistrationTick] = useState(0);
 
   // User manually selected scope (overrides registered items if set)
-  const [customScope, setCustomScopeState] = useState<ActiveScope | null>(null);
+  const [customScope, setCustomScopeState] = useState<ActiveScope | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const value = localStorage.getItem(AI_CHAT_SCOPE_KEY);
+      if (!value) return null;
+      const parsed = JSON.parse(value) as ActiveScope;
+      return parsed && typeof parsed.type === 'string' ? parsed : null;
+    } catch {
+      return null;
+    }
+  });
   const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
   const [pendingDraft, setPendingDraft] = useState<string | null>(null);
 
@@ -56,25 +67,32 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
     } catch {}
   };
 
+  const persistScope = useCallback((scope: ActiveScope) => {
+    setCustomScopeState(scope);
+    try {
+      localStorage.setItem(AI_CHAT_SCOPE_KEY, JSON.stringify(scope));
+    } catch {}
+  }, []);
+
   const openChat = useCallback((scope?: ActiveScope, initialPrompt?: string) => {
     if (scope) {
-      setCustomScopeState(scope);
+      persistScope(scope);
     }
     if (initialPrompt && initialPrompt.trim()) {
       setPendingPrompt(initialPrompt.trim());
     }
     saveOpenState(true);
-  }, []);
+  }, [persistScope]);
 
   const openChatWithDraft = useCallback((scope?: ActiveScope, draftText?: string) => {
     if (scope) {
-      setCustomScopeState(scope);
+      persistScope(scope);
     }
     if (draftText && draftText.trim()) {
       setPendingDraft(draftText.trim());
     }
     saveOpenState(true);
-  }, []);
+  }, [persistScope]);
 
   const clearPendingPrompt = useCallback(() => {
     setPendingPrompt(null);
@@ -99,8 +117,8 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
   }, []);
 
   const setCustomScope = useCallback((scope: ActiveScope) => {
-    setCustomScopeState(scope);
-  }, []);
+    persistScope(scope);
+  }, [persistScope]);
 
   const registerActiveItem = useCallback((scope: ActiveScope | null) => {
     if (!scope) {

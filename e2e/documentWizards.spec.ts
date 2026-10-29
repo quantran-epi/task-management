@@ -126,10 +126,12 @@ test.describe('F16 actual-app lifecycle', () => {
     await selectProjectScope(page, projectName);
     await startPl02(page, projectName);
     await page.reload();
-    await expect(page.getByText('Wizard đang tiếp tục từ bản nháp.', { exact: true })).toBeVisible();
+    await expect(page.getByText(`Đang gắn ngữ cảnh: ${projectName}`, { exact: true })).toBeVisible();
+    await expect(page.getByText(/Wizard đang tiếp tục từ bản nháp\./)).toBeVisible();
     await page.getByRole('button', { name: 'Hủy Wizard' }).click();
     await page.getByRole('button', { name: 'Hủy phiên' }).click();
-    await expect(page.getByText('Bản nháp PL02', { exact: false })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Soạn PL02/ })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Hủy Wizard' })).toHaveCount(0);
   });
 
   test('daemon and MCP routes unavailable still leave local composer and approved export available', async ({ page, context }) => {

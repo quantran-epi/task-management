@@ -571,8 +571,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   }, [getWizardCoordinator, wizardSnapshot]);
 
   const handleWizardCancel = useCallback(async () => {
-    await getWizardCoordinator()?.cancel();
-    setWizardSnapshot(getWizardCoordinator()?.getSnapshot());
+    const coordinator = getWizardCoordinator();
+    await coordinator?.cancel();
+    setWizardSnapshot(undefined);
   }, [getWizardCoordinator]);
 
   const handlePackSelect = useCallback(async (file: File) => {

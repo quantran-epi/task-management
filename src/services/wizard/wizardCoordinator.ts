@@ -237,7 +237,7 @@ export function deriveActiveWizard(
     });
   const latest = candidates.at(-1)?.snapshot;
   if (!latest) return undefined;
-  return { ...latest, restored: latest.status === 'abandoned' || latest.status === 'collecting' || latest.status === 'gap_fill' };
+  return { ...latest, restored: true };
 }
 
 async function defaultHashText(text: string): Promise<string> {
@@ -586,6 +586,7 @@ export function createWizardCoordinator(deps: WizardCoordinatorDeps) {
         const hash = await hashText(markdown);
         const approvedAt = now();
         approved = WizardSnapshotSchema.parse({ ...source, status: 'approved', artifactHash: hash, approvedAt, updatedAt: approvedAt });
+        await persist(approved);
         const key = `${approved.sessionId}:${approved.draftRevision}:${buildExportKind(approved.skill)}`;
         const filename = filenameFor(approved.skill, approved.renderPayload.title);
         if (retainedExport?.key === key && retainedExport.noteSaved) {
@@ -681,7 +682,8 @@ export function createWizardCoordinator(deps: WizardCoordinatorDeps) {
     generation += 1;
     stageController?.abort();
     if (!state || state.snapshot.status === 'completed' || state.snapshot.status === 'abandoned') return;
-    await transition('abandoned');
+    await transition('abandoned', {}, 'Wizard abandoned.');
+    state = undefined;
   };
 
   const restore = async () => {
@@ -689,8 +691,10 @@ export function createWizardCoordinator(deps: WizardCoordinatorDeps) {
     const messages = await deps.loadMessages();
     const active = deriveActiveWizard(messages, deps.projectId, deps.threadId);
     if (!active) return undefined;
-    const metadata = { cr: active.renderPayload.title, featureName: active.renderPayload.title, requestingUnit: '', author: '', date: active.createdAt.slice(0, 10) };
-    state = { snapshot: active, metadata, evidence: EMPTY_EVIDENCE, gaps: [], answers: {}, skippedFieldIds: [], restored: true };
+    const { restored: _restored, ...persistedSnapshot } = active;
+    const snapshot = WizardSnapshotSchema.parse(persistedSnapshot);
+    const metadata = { cr: snapshot.renderPayload.title, featureName: snapshot.renderPayload.title, requestingUnit: '', author: '', date: snapshot.createdAt.slice(0, 10) };
+    state = { snapshot, metadata, evidence: EMPTY_EVIDENCE, gaps: [], answers: {}, skippedFieldIds: [], restored: true };
     generation += 1;
     return active;
   };
