@@ -83,7 +83,6 @@ describe('wizard coordinator lifecycle', () => {
     return {
       projectId,
       threadId,
-      db: new TaskPlannerDatabase(`wizard-coordinator-${Date.now()}-${Math.random()}`),
       now: () => NOW,
       createSessionId: () => sessionId,
       collectEvidence: vi.fn().mockResolvedValue({ items: [], coverage: 'COMPLETE', degraded: [] }),
@@ -117,7 +116,8 @@ describe('wizard coordinator lifecycle', () => {
     });
     const coordinator = createWizardCoordinator(deps);
     const pending = coordinator.start('PL02', { cr: 'CR-1', featureName: 'Feature', requestingUnit: '', author: 'User', date: '2026-10-28' });
-    coordinator.cancel();
+    await vi.waitFor(() => expect(resolveStage).toBeTypeOf('function'));
+    void coordinator.cancel();
     resolveStage?.({ schemaVersion: 1, gaps: [], unknowns: [], contradictions: [] });
     await pending;
     expect(deps.saveSnapshot).not.toHaveBeenCalledWith(expect.objectContaining({ status: 'gap_fill' }));
@@ -138,6 +138,7 @@ describe('wizard coordinator lifecycle', () => {
     await coordinator.addContext('API /limits');
     await Promise.all([coordinator.approveSolution(), coordinator.approveSolution()]);
     expect(deps.saveSolution).toHaveBeenCalledTimes(1);
+    expect(deps.saveSolution).toHaveBeenCalledWith(expect.objectContaining({ projectId, threadId, draftRevision: 1 }));
   });
 });
 
