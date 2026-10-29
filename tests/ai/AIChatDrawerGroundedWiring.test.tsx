@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { AIChatDrawer } from '../../src/components/ai/AIChatDrawer';
 import { TaskPlannerDatabase } from '../../src/db/index';
 import {
@@ -98,8 +98,12 @@ describe('AIChatDrawer Grounded Turn Wiring (Plan 19-14)', () => {
     vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-api-key');
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    cleanup();
     clearGroundedTurnTestHooks();
+    vi.restoreAllMocks();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    testDb.close();
   });
 
   it('1. Knowledge submit -> READY -> GroundedAnswerCard rendered inside drawer; abort not called', async () => {
@@ -803,8 +807,12 @@ describe('AIChatDrawer find-related wiring (Phase 24)', () => {
     vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-api-key');
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    cleanup();
     clearGroundedTurnTestHooks();
+    vi.restoreAllMocks();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    testDb.close();
   });
 
   const saveSeedOnlyMessage = async () => {
