@@ -67,7 +67,7 @@ export async function upsertWhitelistUser(
     name: user.name ?? existing?.name ?? `User_${user.chatId}`,
     status: user.status ?? existing?.status ?? 'active',
     dataScope: user.dataScope ?? existing?.dataScope ?? 'full',
-    dailyLimit: user.dailyLimit ?? existing?.dailyLimit ?? 30,
+    dailyLimit: user.dailyLimit ?? existing?.dailyLimit ?? 10,
     usedToday: user.usedToday ?? existing?.usedToday ?? 0,
     lastActiveDate: user.lastActiveDate ?? existing?.lastActiveDate ?? today,
     isAdmin: user.isAdmin !== undefined ? user.isAdmin : existing?.isAdmin,
@@ -75,6 +75,7 @@ export async function upsertWhitelistUser(
     sessionResetAt: user.sessionResetAt !== undefined ? user.sessionResetAt : existing?.sessionResetAt,
     overQuotaCommandsUsed: user.overQuotaCommandsUsed ?? existing?.overQuotaCommandsUsed ?? 0,
     overQuotaAttempts: user.overQuotaAttempts ?? existing?.overQuotaAttempts ?? 0,
+    aiModel: user.aiModel !== undefined ? user.aiModel : existing?.aiModel,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   };
@@ -100,6 +101,7 @@ export async function recordPendingTelegramUser(
   name?: string,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<{ user: TelegramWhitelistUser; isNew: boolean }> {
+  const settings = await getTelegramSettings(db);
   return await db.transaction('rw', db.telegramWhitelist, async () => {
     const existing = await db.telegramWhitelist.get(chatId);
     if (existing) {
@@ -112,8 +114,8 @@ export async function recordPendingTelegramUser(
       chatId,
       name: name?.trim() || `User_${chatId}`,
       status: 'pending',
-      dataScope: 'full',
-      dailyLimit: 30,
+      dataScope: settings.defaultScope || 'full',
+      dailyLimit: 10,
       usedToday: 0,
       lastActiveDate: today,
       maxHistoryTurns: 5,
@@ -139,10 +141,18 @@ export async function approvePendingUser(
   overrides?: Partial<TelegramWhitelistUser>,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<TelegramWhitelistUser> {
+  const existing = await db.telegramWhitelist.get(chatId);
+  let fallbackScope = existing?.dataScope;
+  if (!fallbackScope) {
+    const settings = await getTelegramSettings(db);
+    fallbackScope = settings.defaultScope || 'full';
+  }
+
   return await upsertWhitelistUser(
     {
       chatId,
       status: 'active',
+      dataScope: overrides?.dataScope ?? fallbackScope,
       ...overrides,
     },
     db

@@ -518,6 +518,7 @@ export const BackupTelegramWhitelistUserSchema = z.object({
   sessionResetAt: z.string().optional(),
   overQuotaCommandsUsed: z.number().int().nonnegative().optional(),
   overQuotaAttempts: z.number().int().nonnegative().optional(),
+  aiModel: z.string().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

@@ -293,11 +293,14 @@ describe('Telegram Settings Service (Dexie V12)', () => {
   });
 
   it('records pending users and handles approval and blocking', async () => {
-    // 1. First record -> isNew: true, status: 'pending'
+    // 1. First record -> isNew: true, status: 'pending', default dailyLimit: 10, defaultScope: settings.defaultScope
+    await saveTelegramSettings({ defaultScope: 'tasks_only' }, testDb);
     const res1 = await recordPendingTelegramUser('pending_chat_1', 'John Doe', testDb);
     expect(res1.isNew).toBe(true);
     expect(res1.user.status).toBe('pending');
     expect(res1.user.name).toBe('John Doe');
+    expect(res1.user.dailyLimit).toBe(10);
+    expect(res1.user.dataScope).toBe('tasks_only');
 
     // 2. Second record -> isNew: false
     const res2 = await recordPendingTelegramUser('pending_chat_1', 'John Doe', testDb);
@@ -318,10 +321,11 @@ describe('Telegram Settings Service (Dexie V12)', () => {
     expect(pendingList).toHaveLength(1);
     expect(pendingList[0]?.chatId).toBe('pending_chat_1');
 
-    // 5. approvePendingUser activates the user
+    // 5. approvePendingUser activates the user and preserves dataScope / overrides
     const approved = await approvePendingUser('pending_chat_1', { dailyLimit: 50 }, testDb);
     expect(approved.status).toBe('active');
     expect(approved.dailyLimit).toBe(50);
+    expect(approved.dataScope).toBe('tasks_only');
 
     const pendingAfterApproval = await getPendingTelegramUsers(testDb);
     expect(pendingAfterApproval).toHaveLength(0);
@@ -336,5 +340,21 @@ describe('Telegram Settings Service (Dexie V12)', () => {
     const quotaBlocked = await checkAndConsumeQuota('pending_chat_2', testDb);
     expect(quotaBlocked.allowed).toBe(false);
     expect(quotaBlocked.reason).toBe('blocked');
+  });
+
+  it('supports custom aiModel per user and default dailyLimit 10 on upsert', async () => {
+    const user = await upsertWhitelistUser(
+      {
+        chatId: 'model_user_1',
+        name: 'Model User',
+        aiModel: 'claude-3-7-sonnet-20250219',
+      },
+      testDb
+    );
+    expect(user.aiModel).toBe('claude-3-7-sonnet-20250219');
+    expect(user.dailyLimit).toBe(10);
+
+    const fetched = await testDb.telegramWhitelist.get('model_user_1');
+    expect(fetched?.aiModel).toBe('claude-3-7-sonnet-20250219');
   });
 });

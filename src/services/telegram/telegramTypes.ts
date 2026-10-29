@@ -25,6 +25,7 @@ export interface TelegramWhitelistUser {
   sessionResetAt?: string | undefined; // ISO timestamp to filter history
   overQuotaCommandsUsed?: number | undefined; // Count of /help or /reset used after reaching daily limit
   overQuotaAttempts?: number | undefined; // Count of chat message attempts after exhausting daily limit
+  aiModel?: string | undefined; // Model override per user; fallback to aiConfig.defaultModel if empty
   createdAt: string;
   updatedAt: string;
 }
