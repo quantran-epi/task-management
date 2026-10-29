@@ -7,7 +7,6 @@ import {
   FactAssertion,
   GraphEvidenceRecord,
   QuarantinedIdentifier,
-  RELATION_TYPES,
   RelationType,
   RuntimeRelationNameSchema,
   type EffectiveRelationType,
