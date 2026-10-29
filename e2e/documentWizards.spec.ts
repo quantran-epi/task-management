@@ -173,10 +173,9 @@ test.describe('F16 actual-app lifecycle', () => {
     await dialog.getByLabel('Tên tính năng').fill('Export outcome');
     await dialog.getByRole('button', { name: 'Bắt đầu soạn thảo' }).click();
     await expect(page.getByRole('button', { name: 'Duyệt & Tải .docx' })).toBeVisible();
-    const download = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Duyệt & Tải .docx' }).click();
-    await download;
-    await expect(page.getByText('Đã lưu', { exact: false })).toBeVisible();
+    await expect(page.getByText('Đã lưu thành tài liệu dự án.', { exact: true })).toBeVisible();
+    await expect(page.getByText('WIZARD_EXPORT_DOWNLOAD_CANCELLED', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Duyệt & Tải .docx' }).click();
     await expect(page.getByText('Đã lưu', { exact: false })).toHaveCount(1);
   });
