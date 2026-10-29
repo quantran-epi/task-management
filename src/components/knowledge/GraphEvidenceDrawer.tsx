@@ -28,6 +28,7 @@ import { useEffect, useState } from 'react';
 import type {
   FactEvidenceDetailResponse,
   FactSummary,
+  OntologyProposal,
   QuarantineItem,
 } from '../../services/knowledge/knowledgeClient';
 import type { KnowledgeClient } from '../../services/knowledge/knowledgeClient';
@@ -44,6 +45,9 @@ export interface GraphEvidenceDrawerProps {
   facts?: readonly FactSummary[] | undefined;
   evidenceDetailsByFactKey?: Readonly<Record<string, FactEvidenceDetailResponse>> | undefined;
   quarantines?: readonly QuarantineItem[] | undefined;
+  proposals?: readonly OntologyProposal[] | undefined;
+  onAcceptProposal?: ((proposalId: string) => Promise<void> | void) | undefined;
+  onRejectProposal?: ((proposalId: string) => Promise<void> | void) | undefined;
 }
 
 export function classificationTag(classification: 'OBSERVED' | 'INFERRED' | 'BUSINESS_APPROVED') {
@@ -86,39 +90,55 @@ export function extractionMethodLabel(method: string) {
 
 export function GraphEvidenceDrawer(props: GraphEvidenceDrawerProps) {
   const { token } = theme.useToken();
-  const [activeTab, setActiveTab] = useState<'facts' | 'quarantine'>('facts');
+  const [activeTab, setActiveTab] = useState<'facts' | 'quarantine' | 'proposals'>('facts');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
   const [facts, setFacts] = useState<FactSummary[]>(props.facts ? [...props.facts] : []);
   const [quarantines, setQuarantines] = useState<QuarantineItem[]>(
     props.quarantines ? [...props.quarantines] : []
   );
+  const [proposals, setProposals] = useState<OntologyProposal[]>(
+    props.proposals ? [...props.proposals] : []
+  );
+  const [processingProposalId, setProcessingProposalId] = useState<string | null>(null);
   const [evidenceCache, setEvidenceCache] = useState<Record<string, FactEvidenceDetailResponse>>(
     props.evidenceDetailsByFactKey ? { ...props.evidenceDetailsByFactKey } : {}
   );
   const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
   const [loadingEvidenceKeys, setLoadingEvidenceKeys] = useState<Set<string>>(new Set());
 
-  // Fetch facts and quarantines on open
+  // Fetch facts, quarantines, and ontology proposals on open
   useEffect(() => {
-    if (!props.open || !props.client || props.facts) return;
+    if (!props.open || !props.client) return;
+    if (props.facts && props.proposals) return;
+
     let active = true;
     setLoading(true);
     setError(undefined);
 
-    Promise.all([
-      props.client.getGraphFacts(props.setId).catch((err) => {
-        if (err?.serverCode === 'GRAPH_NOT_FOUND' || err?.status === 404) {
-          return { facts: [] };
-        }
-        throw err;
-      }),
-      props.client.getGraphQuarantines(props.setId).catch(() => ({ quarantines: [] })),
-    ])
-      .then(([factsRes, qRes]) => {
+    const factPromise = props.facts
+      ? Promise.resolve({ facts: [...props.facts] })
+      : props.client.getGraphFacts(props.setId).catch((err) => {
+          if (err?.serverCode === 'GRAPH_NOT_FOUND' || err?.status === 404) {
+            return { facts: [] };
+          }
+          throw err;
+        });
+
+    const quarantinePromise = props.quarantines
+      ? Promise.resolve({ quarantines: [...props.quarantines] })
+      : props.client.getGraphQuarantines(props.setId).catch(() => ({ quarantines: [] }));
+
+    const proposalPromise = props.proposals
+      ? Promise.resolve({ proposals: [...props.proposals] })
+      : props.client.getOntologyProposals({ setId: props.setId }).catch(() => ({ proposals: [] }));
+
+    Promise.all([factPromise, quarantinePromise, proposalPromise])
+      .then(([factsRes, qRes, pRes]) => {
         if (!active) return;
         setFacts(factsRes.facts || []);
         setQuarantines(qRes.quarantines || []);
+        setProposals(pRes.proposals || []);
       })
       .catch((err) => {
         if (!active) return;
@@ -131,7 +151,7 @@ export function GraphEvidenceDrawer(props: GraphEvidenceDrawerProps) {
     return () => {
       active = false;
     };
-  }, [props.open, props.setId, props.client, props.facts]);
+  }, [props.open, props.setId, props.client, props.facts, props.quarantines, props.proposals]);
 
   const handleExpand = async (expanded: boolean, record: FactSummary) => {
     if (!expanded) {
@@ -414,6 +434,115 @@ export function GraphEvidenceDrawer(props: GraphEvidenceDrawerProps) {
     },
   ];
 
+  const handleAcceptProposal = async (proposalId: string) => {
+    setProcessingProposalId(proposalId);
+    try {
+      if (props.onAcceptProposal) {
+        await props.onAcceptProposal(proposalId);
+      } else if (props.client) {
+        await props.client.acceptOntologyProposal(proposalId);
+      }
+      setProposals((prev) =>
+        prev.map((p) => (p.proposalId === proposalId ? { ...p, status: 'ACCEPTED' as const } : p))
+      );
+      message.success('Đã chấp thuận đề xuất ontology.');
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : 'Không thể chấp thuận đề xuất.');
+    } finally {
+      setProcessingProposalId(null);
+    }
+  };
+
+  const handleRejectProposal = async (proposalId: string) => {
+    setProcessingProposalId(proposalId);
+    try {
+      if (props.onRejectProposal) {
+        await props.onRejectProposal(proposalId);
+      } else if (props.client) {
+        await props.client.rejectOntologyProposal(proposalId);
+      }
+      setProposals((prev) =>
+        prev.map((p) => (p.proposalId === proposalId ? { ...p, status: 'REJECTED' as const } : p))
+      );
+      message.success('Đã từ chối đề xuất ontology.');
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : 'Không thể từ chối đề xuất.');
+    } finally {
+      setProcessingProposalId(null);
+    }
+  };
+
+  const proposalColumns: ColumnsType<OntologyProposal> = [
+    {
+      title: 'Quan hệ đề xuất',
+      key: 'relation',
+      render: (_, proposal) => (
+        <Space direction="vertical" size={2}>
+          <Text strong>{proposal.relationType}</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {proposal.sourceEntityName} → {proposal.targetEntityName}
+          </Text>
+        </Space>
+      ),
+    },
+    {
+      title: 'Loại thực thể',
+      key: 'kinds',
+      width: 180,
+      render: (_, proposal) => (
+        <Text type="secondary">
+          {proposal.sourceKind} → {proposal.targetKind}
+        </Text>
+      ),
+    },
+    {
+      title: 'Trạng thái',
+      dataIndex: 'status',
+      key: 'status',
+      width: 120,
+      render: (status: OntologyProposal['status']) => {
+        if (status === 'ACCEPTED' || status === 'APPLIED') {
+          return <Tag color="success">{status === 'APPLIED' ? 'Đã áp dụng' : 'Đã chấp thuận'}</Tag>;
+        }
+        if (status === 'REJECTED') return <Tag color="error">Đã từ chối</Tag>;
+        if (status === 'RETRYABLE') return <Tag color="warning">Có thể thử lại</Tag>;
+        if (status === 'APPLYING') return <Tag color="processing">Đang áp dụng</Tag>;
+        return <Tag color="warning">Chờ duyệt</Tag>;
+      },
+    },
+    {
+      title: 'Thao tác',
+      key: 'actions',
+      width: 170,
+      render: (_, proposal) => {
+        const isPending = proposal.status === 'PENDING';
+        const isBusy = processingProposalId === proposal.proposalId;
+        return (
+          <Space size="small">
+            <Button
+              size="small"
+              type="primary"
+              disabled={!isPending || isBusy}
+              loading={isBusy}
+              onClick={() => handleAcceptProposal(proposal.proposalId)}
+            >
+              Chấp thuận
+            </Button>
+            <Button
+              size="small"
+              danger
+              disabled={!isPending || isBusy}
+              loading={isBusy}
+              onClick={() => handleRejectProposal(proposal.proposalId)}
+            >
+              Từ chối
+            </Button>
+          </Space>
+        );
+      },
+    },
+  ];
+
   return (
     <Drawer
       open={props.open}
@@ -433,7 +562,7 @@ export function GraphEvidenceDrawer(props: GraphEvidenceDrawerProps) {
 
         <Tabs
           activeKey={activeTab}
-          onChange={(k) => setActiveTab(k as 'facts' | 'quarantine')}
+          onChange={(k) => setActiveTab(k as 'facts' | 'quarantine' | 'proposals')}
           items={[
             {
               key: 'facts',
@@ -484,6 +613,36 @@ export function GraphEvidenceDrawer(props: GraphEvidenceDrawerProps) {
                         dataSource={quarantines}
                         columns={quarantineColumns}
                         rowKey={(r) => `${r.rawIdentifier}:${r.startLine}`}
+                        scroll={{ x: 600 }}
+                        pagination={{ pageSize: 10, showSizeChanger: false }}
+                      />
+                    </>
+                  )}
+                </div>
+              ),
+            },
+            {
+              key: 'proposals',
+              label: `Đề xuất Ontology (${proposals.length})`,
+              children: (
+                <div style={{ marginTop: token.marginXS }}>
+                  {loading ? (
+                    <Skeleton active />
+                  ) : proposals.length === 0 ? (
+                    <Empty description="Không có đề xuất ontology nào." />
+                  ) : (
+                    <>
+                      <Alert
+                        type="info"
+                        showIcon
+                        message="Đề xuất mở rộng Ontology"
+                        description="Các quan hệ hoặc thực thể mới do AI hoặc quy tắc phân tích đề xuất bổ sung vào schema ontology của hệ thống."
+                        style={{ marginBottom: token.marginSM }}
+                      />
+                      <Table
+                        dataSource={proposals}
+                        columns={proposalColumns}
+                        rowKey="proposalId"
                         scroll={{ x: 600 }}
                         pagination={{ pageSize: 10, showSizeChanger: false }}
                       />

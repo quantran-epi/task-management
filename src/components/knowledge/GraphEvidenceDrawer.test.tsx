@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('antd', async () => {
+  const actual = await vi.importActual<typeof import('antd')>('antd');
+  return { ...actual, message: { success: vi.fn(), error: vi.fn() } };
+});
+
 import { GraphEvidenceDrawer } from './GraphEvidenceDrawer';
 import type {
   FactSummary,
@@ -254,5 +260,73 @@ describe('GraphEvidenceDrawer (GRAPH-05, D-17, D-18, UI Spec)', () => {
       ).toBeInTheDocument();
       expect(screen.getByText('MAIN1.UNQUALIFIED_TAB')).toBeInTheDocument();
     });
+  });
+
+  it('renders ontology proposals tab and triggers accept/reject callbacks', async () => {
+    const onAccept = vi.fn();
+    const onReject = vi.fn();
+    const mockProposals = [
+      {
+        proposalId: '11111111-1111-4111-8111-111111111111',
+        relationType: 'PRODUCES_REPORT',
+        sourceEntityName: 'Job A',
+        sourceKind: 'ScheduledProcess',
+        targetEntityName: 'Report B',
+        targetKind: 'SoftwareComponent',
+        evidenceQuote: 'Job A produces Report B',
+        setId,
+        sourceSnapshotId: 'snapshot-1',
+        documentId: '22222222-2222-4222-8222-222222222222',
+        documentTitle: 'Ontology notes',
+        chunkIds: ['chunk-1'],
+        status: 'PENDING' as const,
+        createdAt: '2026-10-29T00:00:00.000Z',
+        updatedAt: '2026-10-29T00:00:00.000Z',
+      },
+      {
+        proposalId: '33333333-3333-4333-8333-333333333333',
+        relationType: 'TRIGGERS_REPORT',
+        sourceEntityName: 'Job C',
+        sourceKind: 'ScheduledProcess',
+        targetEntityName: 'Report D',
+        targetKind: 'SoftwareComponent',
+        evidenceQuote: 'Job C triggers Report D',
+        setId,
+        sourceSnapshotId: 'snapshot-1',
+        documentId: '44444444-4444-4444-8444-444444444444',
+        documentTitle: 'Ontology notes',
+        chunkIds: ['chunk-2'],
+        status: 'PENDING' as const,
+        createdAt: '2026-10-29T00:00:00.000Z',
+        updatedAt: '2026-10-29T00:00:00.000Z',
+      },
+    ];
+
+    render(
+      <GraphEvidenceDrawer
+        open={true}
+        setId={setId}
+        onClose={vi.fn()}
+        facts={mockFacts}
+        proposals={mockProposals}
+        onAcceptProposal={onAccept}
+        onRejectProposal={onReject}
+      />
+    );
+
+    const proposalsTab = screen.getByRole('tab', { name: /Đề xuất Ontology/ });
+    expect(proposalsTab).toBeInTheDocument();
+
+    fireEvent.click(proposalsTab);
+
+    await waitFor(() => {
+      expect(screen.getByText('PRODUCES_REPORT')).toBeInTheDocument();
+      expect(screen.getByText('Job A → Report B')).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByRole('button', { name: /Chấp thuận/ })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: /Từ chối/ })).toHaveLength(2);
+    expect(onAccept).not.toHaveBeenCalled();
+    expect(onReject).not.toHaveBeenCalled();
   });
 });

@@ -911,5 +911,98 @@ describe('strict fixed-route knowledge client', () => {
       const quarantines = await client.getGraphQuarantines(setId);
       expect(quarantines.quarantines.length).toBe(1);
     });
+
+    it('queries ontology proposals and handles accept/reject actions', async () => {
+      const proposalId = generateId();
+      const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const urlStr = String(input);
+        if (urlStr.includes(`/ontology/proposals?setId=${setId}`)) {
+          return jsonResponse({
+            proposals: [
+              {
+                proposalId,
+                relationType: 'PRODUCES_REPORT',
+                sourceEntityName: 'Job A',
+                sourceKind: 'ScheduledProcess',
+                targetEntityName: 'Report B',
+                targetKind: 'SoftwareComponent',
+                evidenceQuote: 'Job A produces Report B',
+                setId,
+                sourceSnapshotId: 'snapshot-1',
+                documentId: generateId(),
+                documentTitle: 'Ontology notes',
+                chunkIds: ['chunk-1'],
+                status: 'PENDING',
+                createdAt: '2026-10-29T00:00:00.000Z',
+                updatedAt: '2026-10-29T00:00:00.000Z',
+              },
+            ],
+          });
+        }
+        if (urlStr.includes(`/ontology/proposals/${proposalId}/accept`)) {
+          expect(init?.method).toBe('POST');
+          return jsonResponse({
+            proposal: {
+              proposalId,
+              relationType: 'PRODUCES_REPORT',
+              sourceEntityName: 'Job A',
+              sourceKind: 'ScheduledProcess',
+              targetEntityName: 'Report B',
+              targetKind: 'SoftwareComponent',
+              evidenceQuote: 'Job A produces Report B',
+              setId,
+              sourceSnapshotId: 'snapshot-1',
+              documentId: generateId(),
+              documentTitle: 'Ontology notes',
+              chunkIds: ['chunk-1'],
+              status: 'ACCEPTED',
+              createdAt: '2026-10-29T00:00:00.000Z',
+              updatedAt: '2026-10-29T00:00:00.000Z',
+            },
+            affected: { setId, sourceSnapshotId: 'snapshot-1', chunkIds: ['chunk-1'] },
+          });
+        }
+        if (urlStr.includes(`/ontology/proposals/${proposalId}/reject`)) {
+          expect(init?.method).toBe('POST');
+          return jsonResponse({
+            proposal: {
+              proposalId,
+              relationType: 'PRODUCES_REPORT',
+              sourceEntityName: 'Job A',
+              sourceKind: 'ScheduledProcess',
+              targetEntityName: 'Report B',
+              targetKind: 'SoftwareComponent',
+              evidenceQuote: 'Job A produces Report B',
+              setId,
+              sourceSnapshotId: 'snapshot-1',
+              documentId: generateId(),
+              documentTitle: 'Ontology notes',
+              chunkIds: ['chunk-1'],
+              status: 'REJECTED',
+              createdAt: '2026-10-29T00:00:00.000Z',
+              updatedAt: '2026-10-29T00:00:00.000Z',
+            },
+          });
+        }
+        throw new Error(`Unexpected url: ${urlStr}`);
+      });
+
+      const client = createKnowledgeClient({
+        baseUrl: 'https://knowledge.example.com',
+        token: 'token',
+        fetcher,
+      });
+
+      const setId = generateId();
+      const list = await client.getOntologyProposals({ setId });
+      expect(list.proposals).toHaveLength(1);
+      expect(list.proposals[0]?.relationType).toBe('PRODUCES_REPORT');
+
+      const acceptRes = await client.acceptOntologyProposal(proposalId);
+      expect(acceptRes.proposal.proposalId).toBe(proposalId);
+
+      const rejectRes = await client.rejectOntologyProposal(proposalId);
+      expect(rejectRes.proposal.proposalId).toBe(proposalId);
+    });
   });
 });

@@ -305,6 +305,61 @@ export const ChunksListResponseSchema = z
   .strict();
 export type ChunksListResponse = z.infer<typeof ChunksListResponseSchema>;
 
+export const ProposalStatusSchema = z.enum([
+  'PENDING',
+  'ACCEPTED',
+  'REJECTED',
+  'APPLYING',
+  'APPLIED',
+  'RETRYABLE',
+]);
+export type ProposalStatus = z.infer<typeof ProposalStatusSchema>;
+
+export const OntologyProposalSchema = z
+  .object({
+    proposalId: uuid,
+    relationType: z.string().min(1),
+    sourceEntityName: z.string().min(1),
+    sourceKind: z.string().min(1),
+    targetEntityName: z.string().min(1),
+    targetKind: z.string().min(1),
+    evidenceQuote: z.string().min(1),
+    setId: uuid,
+    sourceSnapshotId: z.string().min(1),
+    documentId: uuid,
+    documentTitle: z.string().min(1),
+    chunkIds: z.array(z.string().min(1)).min(1),
+    status: ProposalStatusSchema,
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+    error: z.string().optional(),
+  })
+  .strict();
+export type OntologyProposal = z.infer<typeof OntologyProposalSchema>;
+
+export const ProposalsListResponseSchema = z
+  .object({
+    proposals: z.array(OntologyProposalSchema),
+  })
+  .strict();
+export type ProposalsListResponse = z.infer<typeof ProposalsListResponseSchema>;
+
+export const ProposalAffectedSchema = z
+  .object({
+    setId: uuid,
+    sourceSnapshotId: z.string().min(1),
+    chunkIds: z.array(z.string().min(1)),
+  })
+  .strict();
+
+export const ProposalActionResponseSchema = z
+  .object({
+    proposal: OntologyProposalSchema,
+    affected: ProposalAffectedSchema.optional(),
+  })
+  .strict();
+export type ProposalActionResponse = z.infer<typeof ProposalActionResponseSchema>;
+
 type AttemptResponse = z.infer<typeof AttemptResponseSchema>;
 
 export type KnowledgeClientErrorCode =
@@ -927,6 +982,48 @@ export function createKnowledgeClient(options: CreateKnowledgeClientOptions) {
         }
         throw error;
       }
+    },
+
+    async getOntologyProposals(
+      query?: { setId?: string },
+      signal?: AbortSignal
+    ): Promise<ProposalsListResponse> {
+      const qs = query?.setId ? `?setId=${encodeURIComponent(query.setId)}` : '';
+      return request(`/ontology/proposals${qs}`, ProposalsListResponseSchema, signal ? { signal } : {});
+    },
+
+    async acceptOntologyProposal(
+      proposalId: string,
+      body?: { reason?: string },
+      signal?: AbortSignal
+    ): Promise<ProposalActionResponse> {
+      return request(
+        `/ontology/proposals/${encodeURIComponent(proposalId)}/accept`,
+        ProposalActionResponseSchema,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body ?? {}),
+          ...(signal ? { signal } : {}),
+        }
+      );
+    },
+
+    async rejectOntologyProposal(
+      proposalId: string,
+      body?: { reason?: string },
+      signal?: AbortSignal
+    ): Promise<ProposalActionResponse> {
+      return request(
+        `/ontology/proposals/${encodeURIComponent(proposalId)}/reject`,
+        ProposalActionResponseSchema,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body ?? {}),
+          ...(signal ? { signal } : {}),
+        }
+      );
     },
   };
 }
