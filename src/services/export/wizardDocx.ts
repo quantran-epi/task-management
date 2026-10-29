@@ -2,9 +2,10 @@ import { Packer } from 'docx';
 import { z } from 'zod';
 import { buildPl02Document, type Pl02DocxPayload } from './pl02Docx';
 import { buildPl03bDocument, type Pl03bDocxPayload } from './pl03bDocx';
+import { buildPl07Document, type Pl07DocxPayload } from './pl07Docx';
 import { ReconciliationResultSchema } from '../wizard/reconciliation';
 
-export type WizardDocxKind = 'PL02' | 'PL03B';
+export type WizardDocxKind = 'PL02' | 'PL03B' | 'PL07';
 
 export class WizardDocxBuildError extends Error {
   constructor(code: string) {
@@ -129,8 +130,40 @@ const pl03bPayloadSchema = z.strictObject({
   reconciliation: ReconciliationResultSchema,
 });
 
+const pl07MarkSchema = z.strictObject({
+  sectionId: z.enum(['I', 'II', 'III', 'IV', 'V']),
+  itemNumber: z.string().trim().min(1),
+  status: z.enum(['pass', 'fail', 'not_applicable', 'unknown']),
+  evidenceIds: z.array(z.string().trim().min(1)),
+  note: z.string(),
+}).superRefine((mark, ctx) => {
+  if ((mark.status === 'pass' || mark.status === 'not_applicable') && mark.evidenceIds.length === 0) {
+    ctx.addIssue({ code: 'custom', path: ['evidenceIds'], message: 'PL07_POSITIVE_STATUS_REQUIRES_EVIDENCE' });
+  }
+});
+const pl07PayloadSchema = z.strictObject({
+  ...approvedEnvelopeSchema,
+  kind: z.literal('PL07'),
+  metadata: z.strictObject({
+    applicationName: z.string().trim().min(1),
+    applicationVersion: z.string(),
+    summary: z.string(),
+    reviewDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    developer: z.string(),
+    approver: z.string(),
+  }),
+  marks: z.array(pl07MarkSchema),
+  findings: z.array(z.strictObject({
+    number: z.string().trim().min(1),
+    text: z.string().trim().min(1),
+    evidenceIds: z.array(z.string().trim().min(1)).min(1),
+    file: z.string().trim().min(1),
+    hunk: z.string().trim().min(1),
+  })),
+});
+
 export async function buildWizardDocx(kind: WizardDocxKind, raw: unknown): Promise<Blob> {
-  const schemas = { PL02: pl02PayloadSchema, PL03B: pl03bPayloadSchema } as const;
+  const schemas = { PL02: pl02PayloadSchema, PL03B: pl03bPayloadSchema, PL07: pl07PayloadSchema } as const;
   const schema = schemas[kind];
   if (!schema) throw new WizardDocxBuildError('WIZARD_DOCX_KIND_UNSUPPORTED');
   const parsed = schema.safeParse(raw);
@@ -140,5 +173,6 @@ export async function buildWizardDocx(kind: WizardDocxKind, raw: unknown): Promi
     throw new WizardDocxBuildError('WIZARD_DOCX_REVISION_STALE');
   }
   if (payload.kind === 'PL02') return Packer.toBlob(buildPl02Document(payload as Pl02DocxPayload));
-  return Packer.toBlob(buildPl03bDocument(payload as Pl03bDocxPayload));
+  if (payload.kind === 'PL03B') return Packer.toBlob(buildPl03bDocument(payload as Pl03bDocxPayload));
+  return Packer.toBlob(buildPl07Document(payload as Pl07DocxPayload));
 }

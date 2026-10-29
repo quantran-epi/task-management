@@ -303,7 +303,7 @@ describe('wizard source fixtures', () => {
         .rejects.toThrow('WIZARD_DOCX_PAYLOAD_INVALID');
       await expect(buildWizardDocx('PL02', { ...approvedPayload, approvedRevision: 1 }))
         .rejects.toThrow('WIZARD_DOCX_REVISION_STALE');
-      await expect(buildWizardDocx('PL03B' as 'PL02', approvedPayload))
+      await expect(buildWizardDocx('CAB' as 'PL02', approvedPayload))
         .rejects.toThrow('WIZARD_DOCX_KIND_UNSUPPORTED');
     });
 

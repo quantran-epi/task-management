@@ -66,7 +66,7 @@ function heading(text: string, level: 1 | 2 | 3 | 4): Paragraph {
   const levels = [HeadingLevel.HEADING_1, HeadingLevel.HEADING_2, HeadingLevel.HEADING_3, HeadingLevel.HEADING_4] as const;
   return new Paragraph({
     children: [new TextRun({ text, font: DOCX_FONT, bold: true })],
-    heading: levels[level - 1],
+    heading: levels[level - 1]!,
     numbering: { reference: HEADINGS, level: level - 1 },
     spacing: { before: level === 1 ? 240 : 160, after: 100 },
   });
