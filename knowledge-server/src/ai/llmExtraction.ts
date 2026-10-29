@@ -9,6 +9,10 @@ import {
   QuarantinedIdentifier,
   RELATION_TYPES,
   RelationType,
+  RuntimeRelationNameSchema,
+  type EffectiveRelationType,
+  type OntologyRelationDefinition,
+  type RelationProposal,
   NODE_KINDS,
   NodeKind,
 } from '../types/graphProtocol.js';
@@ -59,11 +63,12 @@ export interface ChunkExtractionItem {
   documentTitle: string;
   chunkIndex: number;
   totalChunksInDoc: number;
-  status: 'PENDING' | 'EXTRACTING' | 'SUCCESS' | 'FAILED';
+  status: 'PENDING' | 'EXTRACTING' | 'SUCCESS' | 'PARTIAL' | 'FAILED';
   error?: string | undefined;
   updatedAt: string;
   nodesCount: number;
   factsCount: number;
+  proposalCount: number;
 }
 
 export interface ChunkCachedResult {
@@ -72,6 +77,8 @@ export interface ChunkCachedResult {
   facts: FactAssertion[];
   evidence: GraphEvidenceRecord[];
   quarantines: QuarantinedIdentifier[];
+  proposals?: RelationProposal[] | undefined;
+  ontologyVersion?: number | undefined;
 }
 
 export class ChunkExtractionStore {
@@ -147,7 +154,7 @@ export class ChunkExtractionStore {
       model,
       promptVersion: PROMPT_VERSION,
       cachedAt: new Date().toISOString(),
-      result,
+      result: { ...result, proposals: result.proposals ?? [] },
     };
 
     await fs.writeFile(tmpPath, JSON.stringify(payload, null, 2), 'utf-8');
@@ -174,6 +181,7 @@ export class ChunkExtractionStore {
           updatedAt: now,
           nodesCount: 0,
           factsCount: 0,
+          proposalCount: 0,
         });
       }
     }
@@ -185,7 +193,9 @@ export class ChunkExtractionStore {
     status: ChunkExtractionItem['status'],
     error?: string,
     nodesCount = 0,
-    factsCount = 0
+    factsCount = 0,
+    proposalCount = 0,
+    preserveCachedResult = false
   ): void {
     const itemMap = this.chunksBySet.get(setId);
     const item = itemMap?.get(chunkId);
@@ -193,12 +203,14 @@ export class ChunkExtractionStore {
       item.status = status;
       item.error = error;
       item.updatedAt = new Date().toISOString();
-      if (nodesCount) item.nodesCount = nodesCount;
-      if (factsCount) item.factsCount = factsCount;
-      if (status === 'FAILED') {
+      item.nodesCount = nodesCount;
+      item.factsCount = factsCount;
+      item.proposalCount = proposalCount;
+      if (status === 'FAILED' && !preserveCachedResult) {
         this.cachedResults.get(setId)?.delete(chunkId);
         item.nodesCount = 0;
         item.factsCount = 0;
+        item.proposalCount = 0;
       }
     }
   }
@@ -354,7 +366,7 @@ export const ExtractedEntitySchema = z.object({
 export const ExtractedRelationSchema = z.object({
   sourceEntityName: z.string().trim().min(1),
   sourceKind: z.enum(NODE_KINDS),
-  relation: z.enum(RELATION_TYPES),
+  relation: RuntimeRelationNameSchema,
   targetEntityName: z.string().trim().min(1),
   targetKind: z.enum(NODE_KINDS),
   operation: z.string().nullish().transform((v) => v ?? undefined),
@@ -365,10 +377,26 @@ export const ExtractedRelationSchema = z.object({
 
 export const LLMExtractionPayloadSchema = z.object({
   entities: z.array(ExtractedEntitySchema).default([]),
-  relations: z.array(ExtractedRelationSchema).default([]),
+  relations: z.array(z.unknown()).default([]),
 });
 
-export type LLMExtractionPayload = z.infer<typeof LLMExtractionPayloadSchema>;
+type ParsedExtractionPayload = {
+  entities: z.infer<typeof ExtractedEntitySchema>[];
+  relations: z.infer<typeof ExtractedRelationSchema>[];
+};
+
+export function parsePartialExtractionPayload(input: unknown): ParsedExtractionPayload {
+  const envelope = LLMExtractionPayloadSchema.parse(input);
+  return {
+    entities: envelope.entities,
+    relations: envelope.relations.flatMap((value) => {
+      const parsed = ExtractedRelationSchema.safeParse(value);
+      return parsed.success ? [parsed.data] : [];
+    }),
+  };
+}
+
+export type LLMExtractionPayload = ParsedExtractionPayload;
 
 export interface LLMExtractionProgress {
   processedChunks: number;
@@ -389,6 +417,22 @@ export interface LLMExtractorOptions {
   onProgress?: ProgressCallback | undefined;
   targetChunkIds?: string[] | undefined;
   store?: ChunkExtractionStore | undefined;
+  ontologyRegistry?: {
+    findRelation(relationType: string): Promise<OntologyRelationDefinition | undefined>;
+    recordProposal(input: {
+      relationType: string;
+      sourceEntityName: string;
+      sourceKind: NodeKind;
+      targetEntityName: string;
+      targetKind: NodeKind;
+      evidenceQuote: string;
+      setId: string;
+      sourceSnapshotId: string;
+      documentId: string;
+      documentTitle: string;
+      chunkId: string;
+    }): Promise<RelationProposal>;
+  };
 }
 
 export interface PureLLMExtractionResult {
@@ -396,6 +440,7 @@ export interface PureLLMExtractionResult {
   facts: FactAssertion[];
   evidence: GraphEvidenceRecord[];
   quarantines: QuarantinedIdentifier[];
+  proposals: RelationProposal[];
 }
 
 const SYSTEM_PROMPT = `You are an expert technical knowledge graph extractor.
@@ -534,7 +579,7 @@ async function callLLMWithRetry(
         }
       }
 
-      return LLMExtractionPayloadSchema.parse(parsed);
+      return parsePartialExtractionPayload(parsed);
     } catch (err: any) {
       lastError = err instanceof Error ? err : new Error(String(err));
       const isAbort = combinedSignal.aborted && !signal?.aborted;
@@ -577,6 +622,7 @@ export async function extractWithLLMPure(
   const factsMap = new Map<string, FactAssertion>();
   const evidenceList: GraphEvidenceRecord[] = [];
   const quarantinesList: QuarantinedIdentifier[] = [];
+  const proposalsList: RelationProposal[] = [];
 
   // 1. Add SourceDocument nodes directly (clean anchors)
   for (const doc of snapshot.documents) {
@@ -612,6 +658,7 @@ export async function extractWithLLMPure(
       facts: [],
       evidence: [],
       quarantines: [],
+      proposals: [],
     };
   }
 
@@ -624,6 +671,9 @@ export async function extractWithLLMPure(
   });
 
   let processedCount = 0;
+  const stagedTargetResults = new Map<string, ChunkCachedResult>();
+  const chunkById = new Map(allChunks.map((chunk) => [chunk.chunkId, chunk]));
+  let targetFailed = false;
 
   // 3. Process each chunk (skipping already cached ones if not targeted for retry)
   for (const chunk of allChunks) {
@@ -649,6 +699,7 @@ export async function extractWithLLMPure(
       for (const f of cached.facts) factsMap.set(f.factKey, f);
       evidenceList.push(...cached.evidence);
       quarantinesList.push(...cached.quarantines);
+      proposalsList.push(...(cached.proposals ?? []));
       processedCount++;
       continue;
     }
@@ -671,6 +722,7 @@ export async function extractWithLLMPure(
     const chunkFacts: FactAssertion[] = [];
     const chunkEvidence: GraphEvidenceRecord[] = [];
     const chunkQuarantines: QuarantinedIdentifier[] = [];
+    const chunkProposals: RelationProposal[] = [];
 
     try {
       const userPrompt = `Document: "${chunk.documentTitle}" (chunk ${chunk.chunkIndex + 1}/${chunk.totalChunksInDoc})\n\nContent:\n${chunk.text}`;
@@ -718,8 +770,33 @@ export async function extractWithLLMPure(
         const srcKey = rel.sourceEntityName.trim().toLowerCase();
         const tgtKey = rel.targetEntityName.trim().toLowerCase();
 
-        const ontologyEntry = RETRIEVAL_ONTOLOGY_REGISTRY[rel.relation];
-        if (!ontologyEntry) continue;
+        const staticEntry = RETRIEVAL_ONTOLOGY_REGISTRY[rel.relation as RelationType];
+        const ontologyEntry = staticEntry
+          ? {
+              ...staticEntry,
+              runtime: false,
+            }
+          : await options.ontologyRegistry?.findRelation(rel.relation);
+        if (!ontologyEntry) {
+          if (options.ontologyRegistry) {
+            const proposal = await options.ontologyRegistry.recordProposal({
+              relationType: rel.relation,
+              sourceEntityName: rel.sourceEntityName,
+              sourceKind: rel.sourceKind,
+              targetEntityName: rel.targetEntityName,
+              targetKind: rel.targetKind,
+              evidenceQuote: rel.evidenceQuote,
+              setId,
+              sourceSnapshotId: snapshot.snapshotId,
+              documentId: chunk.documentId,
+              documentTitle: chunk.documentTitle,
+              chunkId: chunk.chunkId,
+            });
+            chunkProposals.push(proposal);
+            proposalsList.push(proposal);
+          }
+          continue;
+        }
 
         if (
           !ontologyEntry.allowedSourceKinds.includes(rel.sourceKind) ||
@@ -793,7 +870,7 @@ export async function extractWithLLMPure(
           factKey,
           ontologyVersion: ONTOLOGY_VERSION,
           subjectUrn: sourceInfo.urn,
-          relation: rel.relation as RelationType,
+          relation: rel.relation as EffectiveRelationType,
           objectUrn: targetInfo.urn,
           qualifiers,
           classification: 'INFERRED',
@@ -838,13 +915,18 @@ export async function extractWithLLMPure(
         facts: chunkFacts,
         evidence: chunkEvidence,
         quarantines: chunkQuarantines,
+        proposals: chunkProposals,
       };
 
-      // Save chunk to in-memory store
-      store.saveChunkResult(setId, chunk.chunkId, chunkCachedResult);
+      // Target writes remain staged until every target succeeds.
+      if (targetChunkIds?.length) {
+        stagedTargetResults.set(chunk.chunkId, chunkCachedResult);
+      } else {
+        store.saveChunkResult(setId, chunk.chunkId, chunkCachedResult);
+      }
 
       // Save chunk to durable disk cache
-      if (chunk.chunkContentHash) {
+      if (chunk.chunkContentHash && !targetChunkIds?.length) {
         try {
           await store.saveDiskCache(
             setId,
@@ -861,7 +943,17 @@ export async function extractWithLLMPure(
         throw new Error('EXTRACTION_ABORTED_BY_USER');
       }
       const errMsg = err instanceof Error ? err.message : String(err);
-      store.setChunkStatus(setId, chunk.chunkId, 'FAILED', errMsg);
+      targetFailed = targetFailed || Boolean(targetChunkIds?.includes(chunk.chunkId));
+      store.setChunkStatus(
+        setId,
+        chunk.chunkId,
+        'FAILED',
+        errMsg,
+        0,
+        0,
+        0,
+        Boolean(targetChunkIds?.includes(chunk.chunkId))
+      );
       console.warn(
         `[CHUNK_EXTRACTION_FAILED] Document "${chunk.documentTitle}" chunk ${chunk.chunkIndex + 1}/${chunk.totalChunksInDoc} failed: ${errMsg}`
       );
@@ -876,11 +968,26 @@ export async function extractWithLLMPure(
     });
   }
 
+  if (targetChunkIds?.length) {
+    const missingTarget = targetChunkIds.some((chunkId) => !stagedTargetResults.has(chunkId));
+    if (targetFailed || missingTarget) {
+      throw new Error('TARGET_EXTRACTION_FAILED: Prior chunk cache remains active and retryable.');
+    }
+    for (const [chunkId, result] of stagedTargetResults) {
+      store.saveChunkResult(setId, chunkId, result);
+      const chunk = chunkById.get(chunkId);
+      if (chunk?.chunkContentHash) {
+        await store.saveDiskCache(setId, chunk.chunkContentHash, options.model, result);
+      }
+    }
+  }
+
   // Final merge of all cached results
   const allCached = store.getAllCachedResults(setId);
   for (const c of allCached) {
     for (const n of c.nodes) nodesMap.set(n.urn, n);
     for (const f of c.facts) factsMap.set(f.factKey, f);
+    proposalsList.push(...(c.proposals ?? []));
     for (const ev of c.evidence) {
       if (!evidenceList.some((e) => e.evidenceId === ev.evidenceId)) {
         evidenceList.push(ev);
@@ -893,5 +1000,6 @@ export async function extractWithLLMPure(
     facts: Array.from(factsMap.values()),
     evidence: evidenceList,
     quarantines: quarantinesList,
+    proposals: [...new Map(proposalsList.map((proposal) => [proposal.proposalId, proposal])).values()],
   };
 }

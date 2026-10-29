@@ -11,6 +11,7 @@ import {
   type ChunkExtractionItem,
 } from '../ai/llmExtraction.js';
 import type { EmbeddingProvider } from '../retrieval/contracts.js';
+import type { OntologyRegistryService } from './ontologyRegistryService.js';
 import type {
   GraphBuildStage,
   GraphState,
@@ -68,6 +69,7 @@ export interface GraphBuildServiceOptions {
   snapshotStore?: SnapshotStore | undefined;
   embeddingProvider?: EmbeddingProvider | undefined;
   proseExtraction?: ProseExtractionConfig | undefined;
+  ontologyRegistry?: OntologyRegistryService | undefined;
   productionMode?: boolean | undefined;
   rollbackGracePeriodMs?: number | undefined;
 }
@@ -85,6 +87,7 @@ export class GraphBuildService {
   readonly snapshotStore?: SnapshotStore | undefined;
   readonly embeddingProvider?: EmbeddingProvider | undefined;
   readonly proseExtraction?: ProseExtractionConfig | undefined;
+  readonly ontologyRegistry?: OntologyRegistryService | undefined;
   readonly rollbackGracePeriodMs: number;
 
   constructor(
@@ -97,6 +100,7 @@ export class GraphBuildService {
       this.snapshotStore = snapshotStore ?? options?.snapshotStore;
       this.embeddingProvider = options?.embeddingProvider;
       this.proseExtraction = options?.proseExtraction;
+      this.ontologyRegistry = options?.ontologyRegistry;
       this.rollbackGracePeriodMs = options?.rollbackGracePeriodMs ?? 600000;
     } else {
       const opts = (repositoryOrOptions as GraphBuildServiceOptions) || {};
@@ -112,6 +116,7 @@ export class GraphBuildService {
       this.snapshotStore = opts.snapshotStore;
       this.embeddingProvider = opts.embeddingProvider;
       this.proseExtraction = opts.proseExtraction;
+      this.ontologyRegistry = opts.ontologyRegistry;
       this.rollbackGracePeriodMs = opts.rollbackGracePeriodMs ?? 600000;
     }
   }
@@ -239,6 +244,7 @@ export class GraphBuildService {
           apiKey: this.proseExtraction.apiKey,
           fetchFn: this.proseExtraction.fetchFn,
           targetChunkIds: options?.targetChunkIds,
+          ontologyRegistry: this.ontologyRegistry,
           onProgress,
         }
       );

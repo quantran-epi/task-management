@@ -4,7 +4,7 @@ import {
   UrnSchema,
   FactKey,
   RelationType,
-  RelationTypeSchema,
+  RuntimeRelationNameSchema,
 } from '../types/graphProtocol.js';
 import { RELATION_QUALIFIER_ALLOWLIST, ONTOLOGY_VERSION } from './ontology.js';
 
@@ -202,11 +202,11 @@ export interface FactKeyInput {
 export function buildFactKey(input: FactKeyInput): FactKey {
   const version = input.ontologyVersion.trim() || ONTOLOGY_VERSION;
   const subject = input.subjectUrn.trim();
-  const rel = RelationTypeSchema.parse(input.relation.trim());
+  const rel = RuntimeRelationNameSchema.parse(input.relation.trim());
   const object = input.objectUrn.trim();
 
-  // Filter qualifiers through allow-list and normalize/sort
-  const allowList = RELATION_QUALIFIER_ALLOWLIST[rel] || [];
+  // Runtime relations have no semantic qualifiers until registry metadata supports them.
+  const allowList = RELATION_QUALIFIER_ALLOWLIST[rel as RelationType] || [];
   const rawQualifiers = input.qualifiers || {};
 
   const filteredEntries: [string, string][] = [];

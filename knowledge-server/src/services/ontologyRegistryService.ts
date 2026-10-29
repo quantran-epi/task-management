@@ -92,6 +92,12 @@ export class OntologyRegistryService {
     };
   }
 
+  async findRelation(relationType: string): Promise<OntologyRelationDefinition | undefined> {
+    const normalized = RuntimeRelationNameSchema.parse(relationType.trim().toUpperCase());
+    const effective = await this.getEffectiveOntology();
+    return effective.relations.find((relation) => relation.relationType === normalized);
+  }
+
   async listProposals(setId?: string): Promise<RelationProposal[]> {
     const state = await this.load();
     return state.proposals.filter((proposal) => !setId || proposal.setId === setId).map((proposal) => ({ ...proposal, chunkIds: [...proposal.chunkIds] }));
