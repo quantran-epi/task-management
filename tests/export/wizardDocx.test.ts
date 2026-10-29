@@ -8,6 +8,7 @@ import { buildPl02Document, type Pl02DocxPayload } from '../../src/services/expo
 import { buildPl03bDocument, type Pl03bDocxPayload } from '../../src/services/export/pl03bDocx';
 import { PL07_BASELINE, PL07_BASELINE_SOURCE_SHA256 } from '../../src/services/export/pl07Baseline';
 import { buildPl07Document, type Pl07DocxPayload } from '../../src/services/export/pl07Docx';
+import { buildCabDocument, type CabDocxPayload } from '../../src/services/export/cabDocx';
 import { buildWizardDocx } from '../../src/services/export/wizardDocx';
 
 const root = resolve(import.meta.dirname, '../..');
@@ -491,6 +492,110 @@ describe('wizard source fixtures', () => {
       await expect(buildWizardDocx('PL03B', { ...payload, extra: true }))
         .rejects.toThrow('WIZARD_DOCX_PAYLOAD_INVALID');
       expect((await buildWizardDocx('PL03B', payload)).size).toBeGreaterThan(0);
+    });
+  });
+
+  describe('CAB minimal builder', () => {
+    const sourceBase = {
+      projectId: '25000000-0000-4000-8000-000000000009',
+      threadId: '25000000-0000-4000-8000-000000000109',
+    };
+    const payload: CabDocxPayload = {
+      schemaVersion: 1,
+      kind: 'CAB',
+      status: 'approved',
+      inputRevision: 6,
+      draftRevision: 4,
+      approvedRevision: 4,
+      projectId: sourceBase.projectId,
+      threadId: sourceBase.threadId,
+      sourceArtifactIds: {
+        PL02: '25000000-0000-4000-8000-000000002009',
+        PL03B: '25000000-0000-4000-8000-000000003009',
+        PL07: '25000000-0000-4000-8000-000000007009',
+      },
+      sources: [
+        { ...sourceBase, kind: 'PL02', artifactId: '25000000-0000-4000-8000-000000002009', version: 2, hash: '2'.repeat(64), approved: true },
+        { ...sourceBase, kind: 'PL03B', artifactId: '25000000-0000-4000-8000-000000003009', version: 1, hash: '3'.repeat(64), approved: true },
+        { ...sourceBase, kind: 'PL07', artifactId: '25000000-0000-4000-8000-000000007009', version: 1, hash: '7'.repeat(64), approved: true },
+      ],
+      expectedVersions: { PL02: 2, PL03B: 1, PL07: 1 },
+      expectedHashes: { PL02: '2'.repeat(64), PL03B: '3'.repeat(64), PL07: '7'.repeat(64) },
+      title: 'TÓM TẮT TRÌNH CAB - CR TOKENIZATION',
+      contextObjective: 'Điều chỉnh cấp token theo luồng đã thống nhất.',
+      businessChanges: ['Bổ sung kênh cấp token cho thẻ doanh nghiệp.'],
+      technicalChanges: ['Thêm POST /tokens.', 'Thay đổi TOKEN_TABLE.'],
+      sit: null,
+      uat: null,
+      risks: ['REQ-DIFF còn chưa xử lý.'],
+      unresolvedDrift: ['REQ-DIFF'],
+      rollback: { summary: 'Chưa có bằng chứng rollback.', verified: false },
+      caveats: ['Coverage mã nguồn còn PARTIAL.'],
+    };
+
+    const xmlText = (xml: string) => xml.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+    async function unpack(blob: Blob) {
+      const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+      const file = zip.file('word/document.xml');
+      if (!file) throw new Error('Missing OOXML part: word/document.xml');
+      return file.async('string');
+    }
+
+    it('builds bounded CAB summary with explicit test, drift, rollback caveats and one sign-off table', async () => {
+      const document = await unpack(await Packer.toBlob(buildCabDocument(payload)));
+      const text = xmlText(document);
+      expect(text).toContain(payload.title);
+      expect(text).toContain('BỐI CẢNH VÀ MỤC TIÊU');
+      expect(text).toContain('THAY ĐỔI NGHIỆP VỤ CHÍNH');
+      expect(text).toContain('THAY ĐỔI KỸ THUẬT CHÍNH');
+      expect(text).toContain('SIT: chưa cung cấp');
+      expect(text).toContain('UAT: chưa cung cấp');
+      expect(text).toContain('REQ-DIFF');
+      expect(text).toContain('Rollback chưa được kiểm chứng');
+      expect(text).toContain('CÁN BỘ PHÁT TRIỂN');
+      expect(text).toContain('CÁN BỘ PHÊ DUYỆT');
+      expect((document.match(/<w:tbl>/g) ?? [])).toHaveLength(1);
+      expect((document.match(/<w:tc>/g) ?? [])).toHaveLength(4);
+      expect(document).not.toContain('TOC');
+      expect(text).not.toContain('BẢNG THEO DÕI THAY ĐỔI TÀI LIỆU');
+      expect(text).not.toContain('MỤC LỤC');
+      expect(text).not.toContain('Đã phê duyệt');
+      expect(text).not.toContain('Sẵn sàng triển khai');
+      expect(text.length).toBeLessThanOrEqual(12_000);
+      expect((document.match(/<w:p[ >]/g) ?? []).length).toBeLessThanOrEqual(60);
+    });
+
+    it('rejects missing, mixed, unapproved, stale, or hash-mismatched CAB sources before packing', async () => {
+      await expect(buildWizardDocx('CAB', { ...payload, sources: payload.sources.slice(0, 2) }))
+        .rejects.toThrow('WIZARD_DOCX_PAYLOAD_INVALID');
+      await expect(buildWizardDocx('CAB', {
+        ...payload,
+        sources: payload.sources.map((source) => source.kind === 'PL03B' ? { ...source, threadId: '25000000-0000-4000-8000-000000009999' } : source),
+      })).rejects.toThrow('WIZARD_DOCX_CAB_SOURCE_INVALID');
+      await expect(buildWizardDocx('CAB', {
+        ...payload,
+        sources: payload.sources.map((source) => source.kind === 'PL07' ? { ...source, approved: false } : source),
+      })).rejects.toThrow('WIZARD_DOCX_CAB_SOURCE_INVALID');
+      await expect(buildWizardDocx('CAB', { ...payload, expectedVersions: { ...payload.expectedVersions, PL02: 1 } }))
+        .rejects.toThrow('WIZARD_DOCX_CAB_SOURCE_INVALID');
+      await expect(buildWizardDocx('CAB', { ...payload, expectedHashes: { ...payload.expectedHashes, PL03B: '9'.repeat(64) } }))
+        .rejects.toThrow('WIZARD_DOCX_CAB_SOURCE_INVALID');
+      await expect(buildWizardDocx('CAB', { ...payload, approvedRevision: 3 }))
+        .rejects.toThrow('WIZARD_DOCX_REVISION_STALE');
+    });
+
+    it('dispatches CAB into semantic deterministic Word blobs without network effects', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch');
+      try {
+        const firstBlob = await buildWizardDocx('CAB', payload);
+        const secondBlob = await buildWizardDocx('CAB', payload);
+        expect(firstBlob.type).toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        expect(firstBlob.size).toBeGreaterThan(0);
+        expect(xmlText(await unpack(firstBlob))).toBe(xmlText(await unpack(secondBlob)));
+        expect(fetchSpy).not.toHaveBeenCalled();
+      } finally {
+        fetchSpy.mockRestore();
+      }
     });
   });
 
