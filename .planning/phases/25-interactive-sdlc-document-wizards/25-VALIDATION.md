@@ -1,11 +1,11 @@
 ---
 phase: 25
 slug: interactive-sdlc-document-wizards
-status: draft
+status: blocked
 nyquist_compliant: false
 wave_0_complete: false
 created: 2026-10-28
-updated: 2026-10-28
+updated: 2026-10-30
 ---
 
 # Phase 25 — Validation Strategy
@@ -129,3 +129,26 @@ Exact resolutions consumed by Wave 0 and later:
 - Set `nyquist_compliant: true` and `status: approved` only after 25-17 suites, Phase 24-08 preflight, 25-18 rendered fidelity, and opt-in live review pass.
 - `skip live review` leaves rollout unverified; never marks pass.
 - No result implies institutional, CAB, deployment, regulatory, or security approval.
+
+## Execution Status: BLOCKED / UNVERIFIED
+
+Updated 2026-10-30 after Plan 25-18 deterministic and offline preflight reruns.
+
+### Automated evidence
+
+- Phase 25 deterministic suite: PASS — 7 files, 121 tests passed, 0 failed, 4 existing todo tests.
+- Actual-app Playwright: PASS — 7 tests passed, 0 failed, 0 skipped, 0 flaky; real Vite app through `webServer`.
+- Source template ZIP signatures and SHA-256 manifest: PASS for PL02, PL03B, PL07.
+- Offline knowledge self-check: PASS — all injected fixtures pass; network calls 0.
+- Phase 24 live retrieval test command: exit 0 but suite reports 1 skipped file and 7 skipped tests; this is not live proof.
+
+### Blocking evidence gaps
+
+- `24-08-SUMMARY.md` is absent from current worktree; Phase 24-08 dependency sign-off is unavailable.
+- Phase 24 SC-8 live graph/knowledge-server verification is not proven; live test suite skipped because live infrastructure/configuration is unavailable.
+- Rendered DOCX human review is absent. No Word/LibreOffice viewer/version, OS, page comparison, or region-specific verdict recorded.
+- Opt-in live AI semantic review for synthetic F01/F02/F06/F08/F09/F11 is absent. No model/config identity, attempts, evidence/support/drift/injection practitioner verdict recorded.
+
+### Status rule
+
+Phase 25 remains blocked and unverified. Do not set `status: approved`, `nyquist_compliant: true`, or `wave_0_complete: true` until all listed evidence exists. Do not infer institutional, CAB, deployment, regulatory, or security approval from automated results.
