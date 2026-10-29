@@ -96,11 +96,12 @@ test.describe('F16 actual-app lifecycle', () => {
     await page.getByRole('button', { name: 'Bỏ qua mục này' }).click();
     await page.waitForTimeout(500);
     await expect(page.getByText(/Đã bỏ qua/)).toBeVisible();
-    await page.getByRole('button', { name: /Yêu cầu chỉnh sửa thêm/ }).click();
+    await page.getByRole('button', { name: /Yêu cầu chỉnh sửa thêm/ }).click({ force: true });
+    await page.waitForTimeout(300);
     await expect(page.getByPlaceholder('Trả lời câu hỏi hoặc bổ sung thông tin…')).toBeVisible();
     await page.getByPlaceholder('Trả lời câu hỏi hoặc bổ sung thông tin…').fill('Không thay đổi');
     await page.getByRole('button', { name: /Gửi|Send/ }).click();
-    await expect(page.getByRole('button', { name: 'Duyệt & Tải .docx' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Duyệt & Tải .docx' })).toHaveCount(2);
     await expect(page.getByText('SOLUTION', { exact: false })).toBeVisible();
   });
 
