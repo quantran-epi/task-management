@@ -8,6 +8,7 @@ import {
   GraphRelation,
   QuarantinedIdentifier,
   EvidenceClassification,
+  RelationType,
 } from '../types/graphProtocol.js';
 import { RELATION_SEMANTICS, ONTOLOGY_VERSION } from './ontology.js';
 import { sha256Hex } from '../indexing/chunkHashPolicy.js';
@@ -148,7 +149,7 @@ export function mergeFactsDeterministicFirst(input: MergeFactsInput): GraphCandi
   // A functional conflict occurs when the same subjectUrn has multiple distinct objectUrns for a FUNCTIONAL relation slot.
   const functionalSlotBuckets = new Map<string, FactAssertion[]>();
   for (const fact of factsByKey.values()) {
-    const semanticSlot = RELATION_SEMANTICS[fact.relation];
+    const semanticSlot = RELATION_SEMANTICS[fact.relation as RelationType];
     if (semanticSlot === 'FUNCTIONAL') {
       const bucketKey = `${fact.subjectUrn}:${fact.relation}`;
       const bucket = functionalSlotBuckets.get(bucketKey) || [];
@@ -215,7 +216,7 @@ export function mergeFactsDeterministicFirst(input: MergeFactsInput): GraphCandi
                 factKeyA: factA.factKey,
                 factKeyB: factB.factKey,
                 subjectUrn: factA.subjectUrn,
-                relation: factA.relation,
+                relation: factA.relation as RelationType,
                 conflictType: 'DIRECT_CONTRADICTION',
                 evidenceA: evA,
                 evidenceB: evB,

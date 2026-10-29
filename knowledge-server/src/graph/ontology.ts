@@ -3,6 +3,8 @@ import {
   NodeKind,
   RELATION_TYPES,
   RelationType,
+  type OntologyRelationDefinition,
+  type EffectiveRelationType,
   SOFTWARE_COMPONENT_KINDS,
   DATABASE_OBJECT_KINDS,
 } from '../types/graphProtocol.js';
@@ -13,7 +15,22 @@ export {
   SOFTWARE_COMPONENT_KINDS,
   DATABASE_OBJECT_KINDS,
 };
-export type { NodeKind, RelationType };
+export type { NodeKind, RelationType, EffectiveRelationType };
+
+export function staticOntologyDefinitions(): OntologyRelationDefinition[] {
+  return RELATION_TYPES.map((relationType) => {
+    const entry = RETRIEVAL_ONTOLOGY_REGISTRY[relationType];
+    return {
+      relationType,
+      allowedSourceKinds: [...entry.allowedSourceKinds],
+      allowedTargetKinds: [...entry.allowedTargetKinds],
+      defaultDirection: entry.defaultDirection,
+      maxHops: entry.maxHops,
+      semanticSlot: entry.semanticSlot,
+      runtime: false,
+    };
+  });
+}
 
 /**
  * Locked ontology version per plan Task 1.

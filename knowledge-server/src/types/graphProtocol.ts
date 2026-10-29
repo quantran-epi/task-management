@@ -40,6 +40,18 @@ export const NodeKindSchema = z.enum(NODE_KINDS);
 export type NodeKind = z.infer<typeof NodeKindSchema>;
 
 /**
+ * Runtime ontology relations stay bounded identifiers. Static relations retain their
+ * enum for existing writers; accepted runtime relations use this wider contract.
+ */
+export const RuntimeRelationNameSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(80)
+  .regex(/^[A-Z][A-Z0-9_]*$/, 'Relation must be an uppercase identifier');
+export type RuntimeRelationName = z.infer<typeof RuntimeRelationNameSchema>;
+
+/**
  * Controlled subkinds for SoftwareComponent and DatabaseObject (D-01).
  */
 export const SOFTWARE_COMPONENT_KINDS = ['PLSQL_PROCEDURE', 'JAVA_CLASS'] as const;
@@ -72,6 +84,53 @@ export const RELATION_TYPES = [
 
 export const RelationTypeSchema = z.enum(RELATION_TYPES);
 export type RelationType = z.infer<typeof RelationTypeSchema>;
+export const EffectiveRelationTypeSchema = RuntimeRelationNameSchema;
+export type EffectiveRelationType = z.infer<typeof EffectiveRelationTypeSchema>;
+
+export const RelationProposalStatusSchema = z.enum([
+  'PENDING',
+  'ACCEPTED',
+  'REJECTED',
+  'APPLYING',
+  'APPLIED',
+  'RETRYABLE',
+]);
+export type RelationProposalStatus = z.infer<typeof RelationProposalStatusSchema>;
+
+export const OntologyRelationDefinitionSchema = z
+  .object({
+    relationType: RuntimeRelationNameSchema,
+    allowedSourceKinds: z.array(NodeKindSchema).min(1),
+    allowedTargetKinds: z.array(NodeKindSchema).min(1),
+    defaultDirection: z.enum(['OUTGOING', 'INCOMING', 'BOTH']),
+    maxHops: z.number().int().min(1).max(3),
+    semanticSlot: z.enum(['ADDITIVE', 'FUNCTIONAL']),
+    runtime: z.boolean(),
+  })
+  .strict();
+export type OntologyRelationDefinition = z.infer<typeof OntologyRelationDefinitionSchema>;
+
+export const RelationProposalSchema = z
+  .object({
+    proposalId: z.string().uuid(),
+    relationType: RuntimeRelationNameSchema,
+    sourceEntityName: z.string().trim().min(1).max(200),
+    sourceKind: NodeKindSchema,
+    targetEntityName: z.string().trim().min(1).max(200),
+    targetKind: NodeKindSchema,
+    evidenceQuote: z.string().trim().min(1).max(4000),
+    setId: z.string().uuid(),
+    sourceSnapshotId: z.string().min(1),
+    documentId: z.string().uuid(),
+    documentTitle: z.string().min(1).max(400),
+    chunkIds: z.array(z.string().min(1)).min(1).max(100),
+    status: RelationProposalStatusSchema,
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+    error: z.string().max(400).optional(),
+  })
+  .strict();
+export type RelationProposal = z.infer<typeof RelationProposalSchema>;
 
 /**
  * D-17: Evidence classification schema.
@@ -206,7 +265,7 @@ export const GraphRelationSchema = z
     factKey: FactKeySchema,
     ontologyVersion: z.string().min(1),
     subjectUrn: UrnSchema,
-    relation: RelationTypeSchema,
+    relation: EffectiveRelationTypeSchema,
     objectUrn: UrnSchema,
     qualifiers: z.record(z.string(), z.string()).default({}),
     effectiveClassification: EvidenceClassificationSchema,
@@ -230,7 +289,7 @@ export const FactAssertionSchema = z
     factKey: FactKeySchema,
     ontologyVersion: z.string().min(1),
     subjectUrn: UrnSchema,
-    relation: RelationTypeSchema,
+    relation: EffectiveRelationTypeSchema,
     objectUrn: UrnSchema,
     qualifiers: z.record(z.string(), z.string()).default({}),
     classification: EvidenceClassificationSchema,

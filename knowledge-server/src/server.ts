@@ -7,6 +7,8 @@ import { registerAttemptRoutes } from './routes/attempts.js';
 import { registerSnapshotRoutes } from './routes/snapshots.js';
 import { registerGraphRoutes, GraphBuildService } from './routes/graph.js';
 import { registerRetrievalRoutes } from './routes/retrieval.js';
+import { registerOntologyRoutes } from './routes/ontology.js';
+import { OntologyRegistryService } from './services/ontologyRegistryService.js';
 import { GraphRepository } from './graph/graphRepository.js';
 import type { RetrievalService } from './services/retrievalService.js';
 import { DEFAULT_BODY_LIMIT_BYTES } from './types/protocol.js';
@@ -25,6 +27,7 @@ export interface KnowledgeServerOptions {
   attemptService?: AttemptService | undefined;
   graphRepository?: GraphRepository | undefined;
   graphBuildService?: GraphBuildService | undefined;
+  ontologyRegistry?: OntologyRegistryService | undefined;
   retrievalService?: Pick<RetrievalService, 'retrieve'> | undefined;
   readinessCheck?: (() => Promise<{ neo4j: boolean; vectorIndex: boolean; model: boolean }>) | undefined;
   onClose?: (() => Promise<void> | void) | undefined;
@@ -75,6 +78,7 @@ export function buildKnowledgeServer(options: KnowledgeServerOptions): Knowledge
   const graphBuildService =
     options.graphBuildService ??
     new GraphBuildService(options.graphRepository, attemptService.store);
+  const ontologyRegistry = options.ontologyRegistry ?? new OntologyRegistryService();
 
   void app.register(cors, {
     origin(origin, callback) {
@@ -141,6 +145,7 @@ export function buildKnowledgeServer(options: KnowledgeServerOptions): Knowledge
   registerAttemptRoutes(app, attemptService);
   registerSnapshotRoutes(app, attemptService, graphBuildService);
   registerGraphRoutes(app, graphBuildService);
+  registerOntologyRoutes(app, ontologyRegistry);
   if (options.retrievalService) {
     registerRetrievalRoutes(app, options.retrievalService);
   }
