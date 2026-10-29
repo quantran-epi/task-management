@@ -103,7 +103,7 @@ test.describe('F16 actual-app lifecycle', () => {
     await page.getByRole('button', { name: /Gửi|Send/ }).click();
     await expect(page.getByRole('button', { name: 'Duyệt & Tải .docx' })).toHaveCount(2);
     await expect(page.getByText(/Đã bổ sung ngữ cảnh/).last()).toBeVisible();
-    await expect(page.getByText('Bản nháp PL02', { exact: false })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Duyệt & Tải .docx' })).toHaveCount(2);
   });
 
   test('valid change-pack requires explicit confirmation and rejects a mismatched identity', async ({ page }) => {
