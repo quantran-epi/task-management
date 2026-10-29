@@ -71,7 +71,7 @@ describe('document wizard review components', () => {
     expect(screen.getByText('SOLUTION.md — v2')).toBeInTheDocument();
     expect(screen.getByText('Hiện trạng hệ thống')).toBeInTheDocument();
     expect(screen.getByText('Màn hình giao dịch')).toBeInTheDocument();
-    expect(screen.getByText('Đã lưu SOLUTION.md phiên bản v2')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Đã lưu SOLUTION.md phiên bản v2');
     expect(screen.getByRole('link', { name: 'Mở tài liệu' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Lưu SOLUTION.md' })).not.toBeInTheDocument();
     expect(solution).toEqual(original);
