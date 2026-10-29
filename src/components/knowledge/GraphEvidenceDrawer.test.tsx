@@ -325,11 +325,14 @@ describe('GraphEvidenceDrawer (GRAPH-05, D-17, D-18, UI Spec)', () => {
     const rejectButtons = screen.getAllByRole('button', { name: /Từ chối/ });
     expect(acceptButtons).toHaveLength(2);
     expect(rejectButtons).toHaveLength(2);
-    fireEvent.click(acceptButtons[0]);
-    fireEvent.click(rejectButtons[1]);
+    const firstAccept = acceptButtons[0];
+    const secondReject = rejectButtons[1];
+    if (!firstAccept || !secondReject) throw new Error('Proposal action buttons missing');
+    fireEvent.click(firstAccept);
+    fireEvent.click(secondReject);
     await waitFor(() => {
-      expect(onAccept).toHaveBeenCalledWith(mockProposals[0].proposalId);
-      expect(onReject).toHaveBeenCalledWith(mockProposals[1].proposalId);
+      expect(onAccept).toHaveBeenCalledWith(mockProposals[0]!.proposalId);
+      expect(onReject).toHaveBeenCalledWith(mockProposals[1]!.proposalId);
     });
   });
 });

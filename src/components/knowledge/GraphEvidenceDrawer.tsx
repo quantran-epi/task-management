@@ -562,6 +562,7 @@ export function GraphEvidenceDrawer(props: GraphEvidenceDrawerProps) {
 
         <Tabs
           activeKey={activeTab}
+          animated={false}
           onChange={(k) => setActiveTab(k as 'facts' | 'quarantine' | 'proposals')}
           items={[
             {
