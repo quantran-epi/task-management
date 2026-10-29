@@ -251,6 +251,7 @@ export const TelegramMonitorView: React.FC = () => {
         dailyLimit: values.dailyLimit,
         isAdmin: Boolean(values.isAdmin),
         maxHistoryTurns: turns,
+        aiModel: values.aiModel?.trim() ? values.aiModel.trim() : undefined,
       });
 
       // Send telegram notification to user ONLY on first-time approval/activation
@@ -281,6 +282,7 @@ export const TelegramMonitorView: React.FC = () => {
       dailyLimit: user.dailyLimit,
       isAdmin: Boolean(user.isAdmin),
       maxHistoryTurns: user.maxHistoryTurns ?? defaultMaxHistoryTurns,
+      aiModel: user.aiModel || '',
     });
     setUserModalOpen(true);
   };
@@ -695,8 +697,9 @@ export const TelegramMonitorView: React.FC = () => {
                         userForm.setFieldsValue({
                           status: 'active',
                           dataScope: defaultScope,
-                          dailyLimit: 30,
+                          dailyLimit: 10,
                           maxHistoryTurns: defaultMaxHistoryTurns,
+                          aiModel: '',
                         });
                         setUserModalOpen(true);
                       }}
@@ -780,8 +783,9 @@ export const TelegramMonitorView: React.FC = () => {
                                     name: p.name || `User_${p.chatId}`,
                                     status: 'active',
                                     dataScope: p.dataScope || defaultScope,
-                                    dailyLimit: p.dailyLimit || 30,
+                                    dailyLimit: p.dailyLimit || 10,
                                     maxHistoryTurns: p.maxHistoryTurns ?? defaultMaxHistoryTurns,
+                                    aiModel: p.aiModel || '',
                                   });
                                   setUserModalOpen(true);
                                 }}
@@ -911,6 +915,20 @@ export const TelegramMonitorView: React.FC = () => {
                             {r.maxHistoryTurns ?? 5} lượt
                           </Tag>
                         ),
+                      },
+                      {
+                        title: 'AI Model',
+                        dataIndex: 'aiModel',
+                        key: 'aiModel',
+                        width: 140,
+                        render: (model?: string) =>
+                          model ? (
+                            <Tag color="purple">{model}</Tag>
+                          ) : (
+                            <Text type="secondary" style={{ fontSize: 12 }}>
+                              Mặc định
+                            </Text>
+                          ),
                       },
                       {
                         title: 'Thao tác',
@@ -1121,6 +1139,14 @@ export const TelegramMonitorView: React.FC = () => {
             tooltip="0 = Single-turn không nhớ ngữ cảnh trước; 5 = nhớ 5 câu hỏi gần nhất"
           >
             <InputNumber min={0} max={20} style={{ width: '100%' }} placeholder="Mặc định: 5" />
+          </Form.Item>
+
+          <Form.Item
+            name="aiModel"
+            label="AI Model riêng cho người dùng"
+            tooltip="Tùy chọn ghi đè model cho riêng người dùng này. Để trống để sử dụng model AI mặc định của hệ thống."
+          >
+            <Input placeholder="Mặc định (theo cài đặt AI chung)" allowClear />
           </Form.Item>
         </Form>
       </Modal>
