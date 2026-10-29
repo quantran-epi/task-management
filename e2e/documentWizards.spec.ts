@@ -101,9 +101,11 @@ test.describe('F16 actual-app lifecycle', () => {
     await expect(page.getByPlaceholder('Trả lời câu hỏi hoặc bổ sung thông tin…')).toBeVisible();
     await page.getByPlaceholder('Trả lời câu hỏi hoặc bổ sung thông tin…').fill('Không thay đổi');
     await page.getByRole('button', { name: /Gửi|Send/ }).click();
-    await expect(page.getByRole('button', { name: 'Duyệt & Tải .docx' })).toHaveCount(2);
+    const reviewButtons = page.getByRole('button', { name: 'Duyệt & Tải .docx' });
+    await expect(reviewButtons).toHaveCount(2);
     await expect(page.getByText(/Đã bổ sung ngữ cảnh/).last()).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Duyệt & Tải .docx' })).toHaveCount(2);
+    await reviewButtons.last().click();
+    await expect(page.getByText('Đã lưu thành tài liệu dự án.', { exact: true })).toBeVisible();
   });
 
   test('valid change-pack requires explicit confirmation and rejects a mismatched identity', async ({ page }) => {
