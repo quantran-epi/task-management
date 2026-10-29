@@ -2,7 +2,7 @@
 phase: 25-interactive-sdlc-document-wizards
 plan: 17
 subsystem: acceptance
-status: blocked
+status: blocked-final-f16
 completed: 2026-10-29
 requires:
   - 25-15

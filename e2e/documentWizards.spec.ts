@@ -87,7 +87,7 @@ test.describe('F16 actual-app lifecycle', () => {
   });
 
   test('skip stays unknown, edit invalidates approval, and later approval saves one linked Note', async ({ page }) => {
-    await mockWizardTransport(page);
+    await mockWizardTransport(page, { gaps: false });
     await page.goto('./');
     const projectName = `F16 skip ${Date.now()}`;
     await createProject(page, projectName);
