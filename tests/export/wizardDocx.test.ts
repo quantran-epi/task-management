@@ -781,6 +781,7 @@ describe('wizard source fixtures', () => {
       const { instance, saveArtifact } = coordinator({ buildDocx });
       await instance.restore();
       const pending = instance.approveAndExport(messageId, payload);
+      await vi.waitFor(() => expect(buildDocx).toHaveBeenCalledTimes(1));
       (instance as any).__setCurrent({ ...snapshot, inputRevision: 2, updatedAt: '2026-10-29T02:00:01.000Z' });
       resolveBuild(new Blob(['docx']));
       expect(await pending).toMatchObject({ blobBuilt: true, noteSaved: false, downloadInitiated: false, errorCode: 'WIZARD_EXPORT_STALE' });

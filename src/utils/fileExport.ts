@@ -608,30 +608,60 @@ export function generateCsvBlob(content: string): Blob {
 /**
  * Triggers client-side browser file download from Blob.
  */
-export function downloadBlob(filename: string, blob: Blob): void {
+export type DownloadBlobResult =
+  | { kind: 'save_picker_saved'; filename: string }
+  | { kind: 'download_initiated'; filename: string }
+  | { kind: 'cancelled'; filename: string }
+  | { kind: 'failed'; filename: string; errorCode: 'DOWNLOAD_UNAVAILABLE' | 'DOWNLOAD_FAILED' };
+
+/** Saves through File System Access API or truthfully reports anchor initiation. */
+export function downloadBlob(blob: Blob, filename: string): Promise<DownloadBlobResult>;
+export function downloadBlob(filename: string, blob: Blob): Promise<DownloadBlobResult>;
+/** @deprecated Type-only compatibility for legacy void mocks; runtime always returns Promise. */
+export function downloadBlob(filename: string, blob: Blob): void;
+export async function downloadBlob(blobOrFilename: Blob | string, filenameOrBlob: string | Blob): Promise<DownloadBlobResult> {
+  const blob = blobOrFilename instanceof Blob ? blobOrFilename : filenameOrBlob as Blob;
+  const filename = typeof blobOrFilename === 'string' ? blobOrFilename : filenameOrBlob as string;
   const cleanFilename = sanitizeFilename(filename);
-  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return { kind: 'failed', filename: cleanFilename, errorCode: 'DOWNLOAD_UNAVAILABLE' };
+  }
+
+  const picker = (window as Window & { showSaveFilePicker?: (options: unknown) => Promise<{ createWritable(): Promise<{ write(value: Blob): Promise<void>; close(): Promise<void> }> }> }).showSaveFilePicker;
+  if (typeof picker === 'function') {
     try {
-      const url = typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function'
-        ? URL.createObjectURL(blob)
-        : '';
-      if (!url) return;
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = cleanFilename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => {
-        try {
-          URL.revokeObjectURL(url);
-        } catch {
-          // ignore cleanup errors in headless environments
-        }
-      }, 1000);
-    } catch {
-      // ignore jsdom / headless environments without Blob createObjectURL support
+      const ext = cleanFilename.split('.').pop() || '';
+      const handle = await picker({
+        suggestedName: cleanFilename,
+        types: ext ? [{ description: `${ext.toUpperCase()} File`, accept: { [blob.type || 'application/octet-stream']: [`.${ext}`] } }] : undefined,
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return { kind: 'save_picker_saved', filename: cleanFilename };
+    } catch (error) {
+      if ((error as { name?: unknown })?.name === 'AbortError') {
+        return { kind: 'cancelled', filename: cleanFilename };
+      }
+      return { kind: 'failed', filename: cleanFilename, errorCode: 'DOWNLOAD_FAILED' };
     }
+  }
+
+  try {
+    if (typeof URL.createObjectURL !== 'function') {
+      return { kind: 'failed', filename: cleanFilename, errorCode: 'DOWNLOAD_UNAVAILABLE' };
+    }
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = cleanFilename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return { kind: 'download_initiated', filename: cleanFilename };
+  } catch {
+    return { kind: 'failed', filename: cleanFilename, errorCode: 'DOWNLOAD_FAILED' };
   }
 }
 
