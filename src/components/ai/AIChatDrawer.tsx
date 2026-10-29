@@ -1652,7 +1652,7 @@ Rules:
     onFindRelated: (entity, sourceMessageId) => {
       void handleFindRelated(entity, sourceMessageId);
     },
-    findingRelatedKey,
+    findingRelatedKey: groundedLoadingStatus ? findingRelatedKey : null,
     onCitationActivate: (c) => setActivePreviewCitation(c),
     onCandidateSelect: (urn) => {
       void handleSendMessage(urn);
