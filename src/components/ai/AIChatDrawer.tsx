@@ -469,7 +469,12 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         projectId,
         threadId,
         db,
-        expectedPackIdentity: () => ({ cr: wizardSnapshot?.renderPayload.title || '', base: '', head: '', branch: '' }),
+        expectedPackIdentity: () => ({
+          cr: wizardCoordinatorRef.current?.getState()?.metadata.cr ?? 'UNKNOWN_CR',
+          base: 'UNKNOWN_BASE',
+          head: 'UNKNOWN_HEAD',
+          branch: 'UNKNOWN_BRANCH',
+        }),
         appendReviewSnapshot: async (docs) => {
           setReconciliationResult(docs.reconciliation);
           setTechnicalDocsReady(Boolean(docs.pl03 && docs.pl07));
@@ -490,7 +495,19 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         },
         runStage: async (input) => {
           const [config, apiKey] = await Promise.all([getNineRouterConfig(db), getNineRouterApiKey(db)]);
-          return runWizardStage({ ...input, model: { endpoint: config.endpoint, apiKey, model: selectedModel || config.defaultModel } });
+          return runWizardStage({
+            kind: input.kind,
+            projectId: input.projectId,
+            threadId: input.threadId,
+            sessionId: input.sessionId,
+            inputRevision: input.inputRevision,
+            payload: input.kind === 'PL02'
+              ? { evidence: input.evidence, knownFieldIds: input.knownFieldIds, skippedFieldIds: input.skippedFieldIds }
+              : { evidence: input.evidence, proposal: input.payload },
+            signal: input.signal,
+            isCurrent: input.isCurrent,
+            model: { endpoint: config.endpoint, apiKey, model: selectedModel || config.defaultModel },
+          });
         },
         collectEvidence: async (input) => collectWizardEvidence(input, {
           runLocalBm25: (localInput) => runLocalGroundedRetrieval(localInput, {

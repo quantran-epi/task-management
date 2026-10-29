@@ -264,6 +264,53 @@ export function createWizardCoordinator(deps: WizardCoordinatorDeps) {
 
   const buildExportKind = (skill: WizardSkill): WizardDocxKind => skill === 'PL03' ? 'PL03B' : skill as WizardDocxKind;
 
+  const normalizeApprovedExportPayload = (
+    snapshot: WizardSnapshot,
+    rawPayload: unknown,
+    metadata: WizardStartMetadata,
+  ): unknown => {
+    if (snapshot.skill !== 'PL02' || (rawPayload && typeof rawPayload === 'object' && (rawPayload as { kind?: unknown }).kind === 'PL02')) {
+      return rawPayload;
+    }
+    const markdown = 'markdown' in snapshot.renderPayload && snapshot.renderPayload.markdown
+      ? snapshot.renderPayload.markdown
+      : `# ${metadata.featureName}`;
+    return {
+      schemaVersion: 1,
+      kind: 'PL02',
+      status: 'approved',
+      inputRevision: snapshot.inputRevision,
+      draftRevision: snapshot.draftRevision ?? 1,
+      approvedRevision: snapshot.draftRevision ?? 1,
+      metadata: {
+        crCode: metadata.cr,
+        featureName: metadata.featureName,
+        requestingUnit: metadata.requestingUnit,
+        author: metadata.author,
+        createdDate: metadata.date,
+      },
+      introduction: {
+        purpose: markdown,
+        users: '(chưa cung cấp)',
+        deploymentScope: '(chưa cung cấp)',
+        risks: [],
+        glossary: [],
+      },
+      features: [{
+        name: metadata.featureName,
+        description: markdown,
+        fileLayout: [],
+        inputRules: [],
+        processingRules: [],
+        flowSteps: [],
+      }],
+      permissions: [],
+      notifications: [],
+      apiContracts: [],
+      staffing: [],
+    };
+  };
+
   const filenameFor = (skill: WizardSkill, title: string) => `${(title || skill).replace(/[^\p{L}\p{N}._-]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 80) || skill}.docx`;
   let packState: ChangePackState = { status: 'idle' };
   let packFile: File | undefined;
@@ -543,7 +590,7 @@ export function createWizardCoordinator(deps: WizardCoordinatorDeps) {
 
         let blob: Blob;
         try {
-          blob = await (deps.buildDocx ?? buildWizardDocx)(buildExportKind(approved.skill), exportPayload);
+          blob = await (deps.buildDocx ?? buildWizardDocx)(buildExportKind(approved.skill), normalizeApprovedExportPayload(approved, exportPayload, state?.metadata ?? { cr: '', featureName: approved.renderPayload.title, requestingUnit: '', author: '', date: approved.createdAt.slice(0, 10) }));
         } catch {
           return exportError('WIZARD_EXPORT_BUILD_FAILED');
         }
