@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Button, Card, Space, theme } from 'antd';
 
 export type GapQuestionOutcome = 'open' | 'answered' | 'omitted' | 'unknown';
@@ -31,6 +31,7 @@ export const GapFillQuestionCard: React.FC<GapFillQuestionCardProps> & {
   stackStyle: React.CSSProperties;
 } = ({ question, onSuggestion, onSkip }) => {
   const { token } = theme.useToken();
+  const [skipped, setSkipped] = useState(false);
 
   if (question.outcome !== 'open') {
     const summary = question.outcome === 'answered'
@@ -43,6 +44,10 @@ export const GapFillQuestionCard: React.FC<GapFillQuestionCardProps> & {
         </div>
       </Card>
     );
+  }
+
+  if (skipped) {
+    return <div role="status">Đã bỏ qua: {question.answer ?? '(chưa cung cấp)'}</div>;
   }
 
   const sourceNote = evidenceCopy(question.evidenceSources ?? []);
@@ -81,7 +86,7 @@ export const GapFillQuestionCard: React.FC<GapFillQuestionCardProps> & {
             {sourceNote}
           </span>
         )}
-        <Button type="text" size="small" onClick={() => onSkip(question.id, 'omitted')} style={{ alignSelf: 'flex-start', minHeight: 28 }}>
+        <Button type="text" size="small" onClick={() => { setSkipped(true); onSkip(question.id, 'omitted'); }} style={{ alignSelf: 'flex-start', minHeight: 28 }}>
           Bỏ qua mục này
         </Button>
       </Space>
