@@ -9,6 +9,9 @@ import { buildPl03bDocument, type Pl03bDocxPayload } from '../../src/services/ex
 import { PL07_BASELINE, PL07_BASELINE_SOURCE_SHA256 } from '../../src/services/export/pl07Baseline';
 import { buildPl07Document, type Pl07DocxPayload } from '../../src/services/export/pl07Docx';
 import { buildWizardDocx } from '../../src/services/export/wizardDocx';
+import { createWizardCoordinator } from '../../src/services/wizard/wizardCoordinator';
+import { downloadBlob } from '../../src/utils/fileExport';
+import type { ChatMessage, Note } from '../../src/types/models';
 
 const root = resolve(import.meta.dirname, '../..');
 const manifestPath = resolve(root, 'tests/fixtures/ai/pl-template-manifest.json');
@@ -494,6 +497,317 @@ describe('wizard source fixtures', () => {
     });
   });
 
+  describe('CAB minimal builder', () => {
+    const sourceBase = {
+      projectId: '25000000-0000-4000-8000-000000000009',
+      threadId: '25000000-0000-4000-8000-000000000109',
+    };
+    const payload: CabDocxPayload = {
+      schemaVersion: 1,
+      kind: 'CAB',
+      status: 'approved',
+      inputRevision: 6,
+      draftRevision: 4,
+      approvedRevision: 4,
+      projectId: sourceBase.projectId,
+      threadId: sourceBase.threadId,
+      sourceArtifactIds: {
+        PL02: '25000000-0000-4000-8000-000000002009',
+        PL03B: '25000000-0000-4000-8000-000000003009',
+        PL07: '25000000-0000-4000-8000-000000007009',
+      },
+      sources: [
+        { ...sourceBase, kind: 'PL02', artifactId: '25000000-0000-4000-8000-000000002009', version: 2, hash: '2'.repeat(64), approved: true },
+        { ...sourceBase, kind: 'PL03B', artifactId: '25000000-0000-4000-8000-000000003009', version: 1, hash: '3'.repeat(64), approved: true },
+        { ...sourceBase, kind: 'PL07', artifactId: '25000000-0000-4000-8000-000000007009', version: 1, hash: '7'.repeat(64), approved: true },
+      ],
+      expectedVersions: { PL02: 2, PL03B: 1, PL07: 1 },
+      expectedHashes: { PL02: '2'.repeat(64), PL03B: '3'.repeat(64), PL07: '7'.repeat(64) },
+      title: 'TÓM TẮT TRÌNH CAB - CR TOKENIZATION',
+      contextObjective: 'Điều chỉnh cấp token theo luồng đã thống nhất.',
+      businessChanges: ['Bổ sung kênh cấp token cho thẻ doanh nghiệp.'],
+      technicalChanges: ['Thêm POST /tokens.', 'Thay đổi TOKEN_TABLE.'],
+      sit: null,
+      uat: null,
+      risks: ['REQ-DIFF còn chưa xử lý.'],
+      unresolvedDrift: ['REQ-DIFF'],
+      rollback: { summary: 'Chưa có bằng chứng rollback.', verified: false },
+      caveats: ['Coverage mã nguồn còn PARTIAL.'],
+    };
+
+    const xmlText = (xml: string) => xml.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+    async function unpack(blob: Blob) {
+      const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+      const file = zip.file('word/document.xml');
+      if (!file) throw new Error('Missing OOXML part: word/document.xml');
+      return file.async('string');
+    }
+
+    it('builds bounded CAB summary with explicit test, drift, rollback caveats and one sign-off table', async () => {
+      const document = await unpack(await Packer.toBlob(buildCabDocument(payload)));
+      const text = xmlText(document);
+      expect(text).toContain(payload.title);
+      expect(text).toContain('BỐI CẢNH VÀ MỤC TIÊU');
+      expect(text).toContain('THAY ĐỔI NGHIỆP VỤ CHÍNH');
+      expect(text).toContain('THAY ĐỔI KỸ THUẬT CHÍNH');
+      expect(text).toContain('SIT: chưa cung cấp');
+      expect(text).toContain('UAT: chưa cung cấp');
+      expect(text).toContain('REQ-DIFF');
+      expect(text).toContain('Rollback chưa được kiểm chứng');
+      expect(text).toContain('CÁN BỘ PHÁT TRIỂN');
+      expect(text).toContain('CÁN BỘ PHÊ DUYỆT');
+      expect((document.match(/<w:tbl>/g) ?? [])).toHaveLength(1);
+      expect((document.match(/<w:tc>/g) ?? [])).toHaveLength(4);
+      expect(document).not.toContain('TOC');
+      expect(text).not.toContain('BẢNG THEO DÕI THAY ĐỔI TÀI LIỆU');
+      expect(text).not.toContain('MỤC LỤC');
+      expect(text).not.toContain('Đã phê duyệt');
+      expect(text).not.toContain('Sẵn sàng triển khai');
+      expect(text.length).toBeLessThanOrEqual(12_000);
+      expect((document.match(/<w:p[ >]/g) ?? []).length).toBeLessThanOrEqual(60);
+    });
+
+    it('rejects missing, mixed, unapproved, stale, or hash-mismatched CAB sources before packing', async () => {
+      await expect(buildWizardDocx('CAB', { ...payload, sources: payload.sources.slice(0, 2) }))
+        .rejects.toThrow('WIZARD_DOCX_PAYLOAD_INVALID');
+      await expect(buildWizardDocx('CAB', {
+        ...payload,
+        sources: payload.sources.map((source) => source.kind === 'PL03B' ? { ...source, threadId: '25000000-0000-4000-8000-000000009999' } : source),
+      })).rejects.toThrow('WIZARD_DOCX_CAB_SOURCE_INVALID');
+      await expect(buildWizardDocx('CAB', {
+        ...payload,
+        sources: payload.sources.map((source) => source.kind === 'PL07' ? { ...source, approved: false } : source),
+      })).rejects.toThrow('WIZARD_DOCX_CAB_SOURCE_INVALID');
+      await expect(buildWizardDocx('CAB', { ...payload, expectedVersions: { ...payload.expectedVersions, PL02: 1 } }))
+        .rejects.toThrow('WIZARD_DOCX_CAB_SOURCE_INVALID');
+      await expect(buildWizardDocx('CAB', { ...payload, expectedHashes: { ...payload.expectedHashes, PL03B: '9'.repeat(64) } }))
+        .rejects.toThrow('WIZARD_DOCX_CAB_SOURCE_INVALID');
+      await expect(buildWizardDocx('CAB', { ...payload, approvedRevision: 3 }))
+        .rejects.toThrow('WIZARD_DOCX_REVISION_STALE');
+    });
+
+    it('dispatches CAB into semantic deterministic Word blobs without network effects', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch');
+      try {
+        const firstBlob = await buildWizardDocx('CAB', payload);
+        const secondBlob = await buildWizardDocx('CAB', payload);
+        expect(firstBlob.type).toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        expect(firstBlob.size).toBeGreaterThan(0);
+        expect(xmlText(await unpack(firstBlob))).toBe(xmlText(await unpack(secondBlob)));
+        expect(fetchSpy).not.toHaveBeenCalled();
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
+  });
+
+  describe('four-kind DOCX dispatcher', () => {
+    const cabBase = {
+      schemaVersion: 1 as const,
+      kind: 'CAB' as const,
+      status: 'approved' as const,
+      inputRevision: 2,
+      draftRevision: 1,
+      approvedRevision: 1,
+      projectId: '25000000-0000-4000-8000-000000000015',
+      threadId: '25000000-0000-4000-8000-000000000115',
+      sourceArtifactIds: {
+        PL02: '25000000-0000-4000-8000-000000002015',
+        PL03B: '25000000-0000-4000-8000-000000003015',
+        PL07: '25000000-0000-4000-8000-000000007015',
+      },
+      expectedVersions: { PL02: 1, PL03B: 1, PL07: 1 },
+      expectedHashes: { PL02: '2'.repeat(64), PL03B: '3'.repeat(64), PL07: '7'.repeat(64) },
+      title: 'CAB F15',
+      contextObjective: 'Synthetic approved payload.',
+      businessChanges: [],
+      technicalChanges: [],
+      sit: null,
+      uat: null,
+      risks: [],
+      unresolvedDrift: [],
+      rollback: { summary: 'Chưa cung cấp.', verified: false },
+      caveats: [],
+    };
+    const cab: CabDocxPayload = {
+      ...cabBase,
+      sources: [
+        { kind: 'PL02', artifactId: cabBase.sourceArtifactIds.PL02, version: 1, hash: cabBase.expectedHashes.PL02, projectId: cabBase.projectId, threadId: cabBase.threadId, approved: true },
+        { kind: 'PL03B', artifactId: cabBase.sourceArtifactIds.PL03B, version: 1, hash: cabBase.expectedHashes.PL03B, projectId: cabBase.projectId, threadId: cabBase.threadId, approved: true },
+        { kind: 'PL07', artifactId: cabBase.sourceArtifactIds.PL07, version: 1, hash: cabBase.expectedHashes.PL07, projectId: cabBase.projectId, threadId: cabBase.threadId, approved: true },
+      ],
+    };
+
+    it('has no TODOs and rejects wrong kind, raw shape, and content without leaking it', async () => {
+      const dispatcherSource = await readFile(resolve(root, 'src/services/export/wizardDocx.ts'), 'utf8');
+      expect(dispatcherSource).not.toMatch(/TODO|it\.todo|dynamicFileSandbox|executeDynamicFileScript|eval\(|new Function|AsyncFunction/);
+      await expect(buildWizardDocx('PL02', { kind: 'PL03B', secret: 'RAW_CANARY_DO_NOT_LEAK' }))
+        .rejects.toMatchObject({ name: 'WizardDocxBuildError', message: 'WIZARD_DOCX_PAYLOAD_INVALID' });
+      try {
+        await buildWizardDocx('PL02', { kind: 'PL03B', secret: 'RAW_CANARY_DO_NOT_LEAK' });
+      } catch (error) {
+        expect(String(error)).not.toContain('RAW_CANARY_DO_NOT_LEAK');
+        expect((error as Error).stack).not.toContain('RAW_CANARY_DO_NOT_LEAK');
+      }
+      await expect(buildWizardDocx('UNKNOWN' as never, cab)).rejects.toThrow('WIZARD_DOCX_KIND_UNSUPPORTED');
+    });
+
+    it('builds all four kinds twice as nonempty deterministic semantic Word blobs without network or script paths', async () => {
+      const cases = [
+        ['PL02', {
+          schemaVersion: 1, kind: 'PL02', status: 'approved', inputRevision: 1, draftRevision: 1, approvedRevision: 1,
+          metadata: { crCode: 'F15', featureName: 'Fixture', requestingUnit: '', author: 'Dev', createdDate: '2026-10-29' },
+          introduction: { purpose: '', users: '', deploymentScope: '', risks: [], glossary: [] },
+          features: [], permissions: [], notifications: [], apiContracts: [], staffing: [],
+        }],
+        ['PL03B', {
+          schemaVersion: 1, kind: 'PL03B', status: 'approved', inputRevision: 1, draftRevision: 1, approvedRevision: 1,
+          metadata: { crCode: 'F15', featureName: 'Fixture', author: 'Dev', createdDate: '2026-10-29', version: '1.0' },
+          introduction: { purpose: '', users: '', databases: [], k8sServices: [] },
+          technical: { overview: '', techStack: '', flows: [], services: [], databases: [], integrations: [], notifications: [] },
+          reconciliation: {
+            schemaVersion: 1,
+            identity: { projectId: 'p', threadId: 't', solutionNoteId: 'n', solutionVersion: 1, solutionHash: 'a'.repeat(64), packHash: 'b'.repeat(64), cr: 'F15', base: 'a', head: 'b' },
+            status: 'PARTIAL_COVERAGE',
+            approvedDesign: { currentSystem: '', affectedScreens: [], affectedApis: [], affectedTables: [] },
+            actualImplementation: { affectedFiles: [], affectedScreens: [], affectedApis: [], affectedTables: [] },
+            drift: [], dbChangesRollback: { affectedTables: [], changes: [], rollback: { status: 'unknown', evidenceIds: [] } },
+            regressionMatrix: [], coverage: [{ path: 'optional.bin', state: 'binary', evidenceIds: [] }],
+          },
+        }],
+        ['PL07', {
+          schemaVersion: 1, kind: 'PL07', status: 'approved', inputRevision: 1, draftRevision: 1, approvedRevision: 1,
+          metadata: { applicationName: 'Fixture', applicationVersion: '', summary: '', reviewDate: '2026-10-29', developer: '', approver: '' },
+          marks: [], findings: [],
+        }],
+        ['CAB', cab],
+      ] as const;
+      const fetchSpy = vi.spyOn(globalThis, 'fetch');
+      try {
+        for (const [kind, raw] of cases) {
+          const first = await buildWizardDocx(kind, raw);
+          const second = await buildWizardDocx(kind, raw);
+          expect(first.type).toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+          expect(first.size).toBeGreaterThan(0);
+          const firstZip = await JSZip.loadAsync(await first.arrayBuffer());
+          const secondZip = await JSZip.loadAsync(await second.arrayBuffer());
+          const firstDocument = await firstZip.file('word/document.xml')!.async('string');
+          const secondDocument = await secondZip.file('word/document.xml')!.async('string');
+          const normalize = (xml: string) => xml
+            .replace(/_Toc\d+/g, '_TocID')
+            .replace(/w:(?:numId|abstractNumId)="?\d+"?/g, 'w:numId="ID"')
+            .replace(/w:id="\d+"/g, 'w:id="ID"')
+            .replace(/w14:(?:paraId|textId)="[0-9A-F]+"/g, '')
+            .replace(/w:rsid(?:R|RPr|Sect|Del|P|RDefault)="[0-9A-F]+"/g, '')
+            .replace(/<w:bookmark(?:Start|End)\b[^>]*\/>/g, '');
+          expect(normalize(firstDocument)).toBe(normalize(secondDocument));
+        }
+        expect(fetchSpy).not.toHaveBeenCalled();
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
+  });
+
+  describe('approved export orchestration', () => {
+    const projectId = '25000000-0000-4000-8000-000000000016';
+    const threadId = '25000000-0000-4000-8000-000000000116';
+    const sessionId = '25000000-0000-4000-8000-000000000216';
+    const messageId = '25000000-0000-4000-8000-000000000316';
+    const approvedAt = '2026-10-29T02:00:00.000Z';
+    const hash = 'a'.repeat(64);
+    const payload = {
+      schemaVersion: 1 as const, kind: 'PL02' as const, status: 'approved' as const,
+      inputRevision: 1, draftRevision: 1, approvedRevision: 1,
+      metadata: { crCode: 'CR-EXPORT', featureName: 'Export', requestingUnit: '', author: 'Dev', createdDate: '2026-10-29' },
+      introduction: { purpose: '', users: '', deploymentScope: '', risks: [], glossary: [] },
+      features: [], permissions: [], notifications: [], apiContracts: [], staffing: [],
+    };
+    const snapshot = {
+      schemaVersion: 1 as const, sessionId, projectId, threadId, skill: 'PL02' as const,
+      status: 'review' as const, inputRevision: 1, draftRevision: 1, approvedAt: null,
+      artifactId: null, artifactHash: null,
+      renderPayload: { title: 'PL02 Export', markdown: '# PL02 Export' },
+      createdAt: approvedAt, updatedAt: approvedAt,
+    };
+    const message: ChatMessage = { id: messageId, threadId, role: 'assistant', content: 'review', createdAt: approvedAt, wizard: snapshot };
+
+    function coordinator(overrides: Record<string, unknown> = {}) {
+      let current = snapshot;
+      const saveArtifact = vi.fn(async () => ({
+        created: true,
+        note: { id: '25000000-0000-4000-8000-000000000416' } as Note,
+      }));
+      const appendExportResult = vi.fn(async () => undefined);
+      const instance = createWizardCoordinator({
+        projectId, threadId,
+        now: () => approvedAt,
+        loadMessages: async () => [{ ...message, wizard: current }],
+        hashText: async () => hash,
+        buildDocx: vi.fn(async () => new Blob(['docx'], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })),
+        saveArtifact,
+        downloadFile: vi.fn(async () => ({ kind: 'download_initiated', filename: 'PL02-Export.docx' })),
+        appendExportResult,
+        ...overrides,
+      } as any);
+      (instance as any).__setCurrent = (value: typeof snapshot) => { current = value; };
+      return { instance, saveArtifact, appendExportResult };
+    }
+
+    it('builds, saves canonical Note, then reports truthful anchor initiation once', async () => {
+      const { instance, saveArtifact, appendExportResult } = coordinator();
+      await instance.restore();
+      const first = await instance.approveAndExport(messageId, payload);
+      const second = await instance.approveAndExport(messageId, payload);
+      expect(first).toMatchObject({ blobBuilt: true, noteSaved: true, downloadInitiated: true, savePickerSaved: false, errorCode: null });
+      expect(second).toEqual(first);
+      expect(saveArtifact).toHaveBeenCalledTimes(1);
+      expect(appendExportResult).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+      ['build', { buildDocx: vi.fn(async () => { throw new Error('BUILD'); }) }, { blobBuilt: false, noteSaved: false, errorCode: 'WIZARD_EXPORT_BUILD_FAILED' }],
+      ['note', { saveArtifact: vi.fn(async () => { throw new Error('SAVE'); }) }, { blobBuilt: true, noteSaved: false, errorCode: 'WIZARD_EXPORT_NOTE_SAVE_FAILED' }],
+      ['download', { downloadFile: vi.fn(async () => ({ kind: 'cancelled', filename: 'PL02-Export.docx' })) }, { blobBuilt: true, noteSaved: true, downloadInitiated: false, savePickerSaved: false, errorCode: 'WIZARD_EXPORT_DOWNLOAD_CANCELLED' }],
+    ])('separates %s failure flags', async (_name, overrides, expected) => {
+      const { instance } = coordinator(overrides);
+      await instance.restore();
+      expect(await instance.approveAndExport(messageId, payload)).toMatchObject(expected);
+    });
+
+    it('returns zero effects when approval becomes stale after build', async () => {
+      let resolveBuild!: (blob: Blob) => void;
+      const buildDocx = vi.fn(() => new Promise<Blob>((resolve) => { resolveBuild = resolve; }));
+      const { instance, saveArtifact } = coordinator({ buildDocx });
+      await instance.restore();
+      const pending = instance.approveAndExport(messageId, payload);
+      (instance as any).__setCurrent({ ...snapshot, inputRevision: 2, updatedAt: '2026-10-29T02:00:01.000Z' });
+      resolveBuild(new Blob(['docx']));
+      expect(await pending).toMatchObject({ blobBuilt: true, noteSaved: false, downloadInitiated: false, errorCode: 'WIZARD_EXPORT_STALE' });
+      expect(saveArtifact).not.toHaveBeenCalled();
+    });
+
+    it('distinguishes save picker success, cancellation, anchor initiation, and failure', async () => {
+      const blob = new Blob(['x']);
+      const originalPicker = (window as any).showSaveFilePicker;
+      const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test');
+      const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+      const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+      try {
+        (window as any).showSaveFilePicker = vi.fn(async () => ({ createWritable: async () => ({ write: vi.fn(), close: vi.fn() }) }));
+        await expect(downloadBlob(blob, 'safe.docx')).resolves.toEqual({ kind: 'save_picker_saved', filename: 'safe.docx' });
+        (window as any).showSaveFilePicker = vi.fn(async () => { throw new DOMException('cancel', 'AbortError'); });
+        await expect(downloadBlob(blob, 'safe.docx')).resolves.toEqual({ kind: 'cancelled', filename: 'safe.docx' });
+        delete (window as any).showSaveFilePicker;
+        await expect(downloadBlob(blob, 'safe.docx')).resolves.toEqual({ kind: 'download_initiated', filename: 'safe.docx' });
+        createObjectURL.mockImplementationOnce(() => { throw new Error('URL'); });
+        await expect(downloadBlob(blob, 'safe.docx')).resolves.toEqual({ kind: 'failed', filename: 'safe.docx', errorCode: 'DOWNLOAD_FAILED' });
+      } finally {
+        (window as any).showSaveFilePicker = originalPicker;
+        click.mockRestore(); createObjectURL.mockRestore(); revokeObjectURL.mockRestore();
+      }
+    });
+  });
   describe('PL07 immutable-baseline builder', () => {
     async function unpack(blob: Blob) {
       const zip = await JSZip.loadAsync(await blob.arrayBuffer());
