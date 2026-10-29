@@ -372,7 +372,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
                 outcome: 'open',
               }}
               onSuggestion={(questionId, suggestion) => wizardCallbacks.onSuggestion?.(msg.id, questionId, suggestion)}
-              onSkip={(questionId, outcome) => wizardCallbacks.onSkip?.(msg.id, questionId, outcome)}
+              onSkip={(questionId, outcome) => wizardCallbacks.onSkip?.(msg.id, (msg.content.match(/Cần làm rõ:\s*([^\n]+)/)?.[1] ?? questionId).trim(), outcome)}
             />
           </div>
         );
