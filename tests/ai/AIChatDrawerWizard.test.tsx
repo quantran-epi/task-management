@@ -38,6 +38,7 @@ describe('AIChatDrawer wizard wiring', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /Soạn PL02/ })).not.toHaveAttribute('aria-disabled'));
     fireEvent.click(screen.getByRole('button', { name: /Soạn PL02/ }));
     await screen.findByText('Thông tin tài liệu');
+    await waitFor(() => expect(screen.getByLabelText('Mã dự án/CR')).toHaveValue('Wizard Project'));
     fireEvent.click(screen.getByRole('button', { name: 'Bắt đầu soạn thảo' }));
     await waitFor(() => expect(start).toHaveBeenCalledTimes(1));
   });
