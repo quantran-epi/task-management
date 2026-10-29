@@ -40,6 +40,23 @@ import { EvidenceOnlyCard } from './grounded/EvidenceOnlyCard';
 import { SeedEntityCard } from './grounded/SeedEntityCard';
 import type { PersistedEntityRef } from '../../services/ai/groundedAnswerSchemas';
 import { MermaidViewer } from './MermaidViewer';
+import { DocumentPreviewCard, type DocumentPreviewPayload } from './wizard/DocumentPreviewCard';
+import { SolutionReviewCard, type SolutionReviewPayload } from './wizard/SolutionReviewCard';
+import { GapFillQuestionCard } from './wizard/GapFillQuestionCard';
+import { WizardProgressStrip } from './wizard/WizardProgressStrip';
+import type { ChangePackManifest } from '../../services/wizard/changePack';
+
+export interface WizardMessageCallbacks {
+  onSuggestion?: ((messageId: string, questionId: string, suggestion: string) => void) | undefined;
+  onSkip?: ((messageId: string, questionId: string, outcome: 'omitted' | 'unknown') => void) | undefined;
+  onRequestEdit?: ((messageId: string, draftRevision: number) => void) | undefined;
+  onSaveSolution?: ((messageId: string, draftRevision: number) => void | Promise<void>) | undefined;
+  onApproveExport?: ((messageId: string, draftRevision: number) => void | Promise<void>) | undefined;
+  onOpenNote?: ((noteId: string) => void) | undefined;
+  onConfirmPack?: ((messageId: string, manifest: Readonly<ChangePackManifest>) => void) | undefined;
+  onReplacePack?: ((messageId: string) => void) | undefined;
+  pendingKeys?: ReadonlySet<string> | undefined;
+}
 
 const { Text } = Typography;
 
@@ -79,6 +96,7 @@ export interface ChatMessageBubbleProps {
   onSaveStickyNote?: ((content: string) => Promise<void> | void) | undefined;
   onRunClaudeCode?: (() => Promise<void> | void) | undefined;
   groundedCallbacks?: GroundedAnswerCardCallbacks | undefined;
+  wizardCallbacks?: WizardMessageCallbacks | undefined;
 }
 
 /**
@@ -291,6 +309,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   onSaveStickyNote,
   onRunClaudeCode,
   groundedCallbacks,
+  wizardCallbacks,
 }) => {
   const { token } = theme.useToken();
   const [copied, setCopied] = useState(false);
@@ -329,6 +348,63 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
       }
     }
   };
+
+  if (!isUser && !isStreaming && msg.wizard && wizardCallbacks) {
+    const snapshot = msg.wizard;
+    const payload = snapshot.renderPayload;
+    const wizardCard = (() => {
+      if (snapshot.status === 'gap_fill') {
+        return (
+          <div style={GapFillQuestionCard.stackStyle}>
+            <WizardProgressStrip snapshot={snapshot} />
+            <GapFillQuestionCard
+              question={{
+                id: msg.id,
+                topic: payload.title,
+                description: msg.content,
+                templateSection: payload.title,
+                suggestions: [],
+                evidenceSources: [],
+                answer: null,
+                outcome: 'open',
+              }}
+              onSuggestion={(questionId, suggestion) => wizardCallbacks.onSuggestion?.(msg.id, questionId, suggestion)}
+              onSkip={(questionId, outcome) => wizardCallbacks.onSkip?.(msg.id, questionId, outcome)}
+            />
+          </div>
+        );
+      }
+      if (snapshot.skill === 'SOLUTION' && snapshot.status === 'review' && snapshot.draftRevision !== null) {
+        const solution: SolutionReviewPayload = {
+          messageId: msg.id,
+          version: snapshot.draftRevision,
+          title: payload.title,
+          featureMode: 'featureMode' in payload ? payload.featureMode : 'new',
+          currentSystem: 'currentSystem' in payload ? payload.currentSystem : undefined,
+          affectedSurfaces: 'affectedSurfaces' in payload ? payload.affectedSurfaces : undefined,
+          markdown: 'markdown' in payload && payload.markdown ? payload.markdown : msg.content,
+        };
+        return <SolutionReviewCard solution={solution} onSave={() => wizardCallbacks.onSaveSolution?.(msg.id, snapshot.draftRevision)} onRequestEdit={() => wizardCallbacks.onRequestEdit?.(msg.id, snapshot.draftRevision)} onOpenNote={(noteId) => wizardCallbacks.onOpenNote?.(noteId)} />;
+      }
+      if (snapshot.status === 'review' && snapshot.draftRevision !== null) {
+        const preview: DocumentPreviewPayload = {
+          messageId: msg.id,
+          draftRevision: snapshot.draftRevision,
+          skill: snapshot.skill === 'SOLUTION' ? 'PL03' : snapshot.skill,
+          title: payload.title,
+          metadata: { cr: payload.title, requestingUnit: '', author: '', date: snapshot.createdAt.slice(0, 10) },
+          markdown: 'markdown' in payload && payload.markdown ? payload.markdown : msg.content,
+          exportedFile: undefined,
+          exportError: undefined,
+        };
+        return <DocumentPreviewCard preview={preview} onApproveExport={() => wizardCallbacks.onApproveExport?.(msg.id, snapshot.draftRevision)} onRequestEdit={() => wizardCallbacks.onRequestEdit?.(msg.id, snapshot.draftRevision)} />;
+      }
+      return null;
+    })();
+    if (wizardCard) {
+      return <div data-role="assistant" data-testid="wizard-bubble" style={{ width: '100%', marginBottom: 12 }}>{wizardCard}</div>;
+    }
+  }
 
   // Branch assistant display on message.grounding payload
   if (!isUser && msg.grounding) {

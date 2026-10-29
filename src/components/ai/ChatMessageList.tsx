@@ -4,7 +4,7 @@ import { SyncOutlined, ExclamationCircleOutlined, ExpandAltOutlined } from '@ant
 import type { ChatMessage } from '../../types/models';
 import { APP_NAME } from '../../constants/app';
 import { renderSafeMarkdown } from '../../utils/markdown';
-import { ChatMessageBubble, type GroundedAnswerCardCallbacks } from './ChatMessageBubble';
+import { ChatMessageBubble, type GroundedAnswerCardCallbacks, type WizardMessageCallbacks } from './ChatMessageBubble';
 import { InlineApiErrorCard } from './InlineApiErrorCard';
 import { IntentRoutingPrompt } from './grounded/IntentRoutingPrompt';
 
@@ -39,6 +39,7 @@ export interface ChatMessageListProps {
   pendingConfirmation?: PendingConfirmationInfo | null;
   onConfirmAction?: (confirmed: boolean) => void;
   groundedCallbacks?: GroundedAnswerCardCallbacks | undefined;
+  wizardCallbacks?: WizardMessageCallbacks | undefined;
   transientClarifyMessage?: TransientClarifyState | null | undefined;
   onCancelClarify?: (() => void) | undefined;
 }
@@ -61,6 +62,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   pendingConfirmation,
   onConfirmAction,
   groundedCallbacks,
+  wizardCallbacks,
   transientClarifyMessage,
   onCancelClarify,
 }) => {
@@ -164,6 +166,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
               onSaveStickyNote={onSaveStickyNote}
               onRunClaudeCode={onRunClaudeCode}
               groundedCallbacks={groundedCallbacks}
+              wizardCallbacks={wizardCallbacks}
             />
             {transientClarifyMessage &&
               msg.role === 'user' &&
