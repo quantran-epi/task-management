@@ -16,7 +16,8 @@ A private, offline-first web application for one person to manage projects, mile
 - **Persistence**: IndexedDB is the working data store — the app must continue functioning offline.
 - **Synchronization**: GitHub Contents API stores only an encrypted backup artifact — secrets remain client-side.
 - **UI**: Ant Design — interactions must remain simple, fast, responsive, and accessible.
-- **PWA**: Installable and offline-capable — service worker updates must not cause data loss.
+- **PWA**: Out of scope for current work. Optimize runtime behavior for Tauri desktop only; do not add, debug, or validate PWA/GitHub Pages behavior unless explicitly requested.
+- **Runtime focus**: Tauri is primary and only supported app runtime for current work. Prefer Tauri APIs, native filesystem/keyring, desktop lifecycle, and local SQLite paths where already supported.
 - **Data safety**: Backup import must validate format and avoid replacing good local data without explicit confirmation.
 - **Identifiers**: Stable client-generated UUIDs — hierarchy changes must not alter IDs.
 

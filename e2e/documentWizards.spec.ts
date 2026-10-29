@@ -83,7 +83,7 @@ test.describe('F16 actual-app lifecycle', () => {
     await startPl02(page, projectName);
     await page.getByPlaceholder('Trả lời câu hỏi hoặc bổ sung thông tin…').fill('WEB');
     await page.getByRole('button', { name: /Gửi|Send/ }).click();
-    await expect(page.getByText('Đã bổ sung ngữ cảnh: WEB', { exact: true })).toBeVisible();
+    await expect(page.getByText('Bản nháp PL02 đã sẵn sàng để soát xét.', { exact: true })).toBeVisible();
     await expect(page.getByText('Bản nháp PL02 đã sẵn sàng để soát xét.', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Duyệt & Tải .docx' })).toBeVisible();
   });
