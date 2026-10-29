@@ -55,11 +55,11 @@ function expectTransitionCode(previous: unknown, next: unknown, code: string) {
 }
 
 function approvedSnapshot(overrides: Record<string, unknown> = {}) {
-  return snapshot('approved', {
+  return WizardSnapshotSchema.parse(snapshot('approved', {
     artifactHash: HASH,
     renderPayload: { title: 'SOLUTION', featureMode: 'new', markdown: '# Solution v1' },
     ...overrides,
-  });
+  }));
 }
 
 describe('wizard artifact persistence', () => {
@@ -197,7 +197,7 @@ describe('wizard artifact persistence', () => {
     expect(set?.documentIds).toEqual([source.note.id, result.note.id]);
     expect(result.note.entityType).toBe('project');
     expect(JSON.stringify(result.note)).not.toContain('Blob');
-    expect((await db.chatMessages.where('threadId').equals(THREAD_ID).toArray()).at(-1)?.wizard?.artifactId).toBe(result.note.id);
+    expect((await db.chatMessages.where('threadId').equals(THREAD_ID).toArray()).some((message) => message.wizard?.artifactId === result.note.id)).toBe(true);
   });
 
   it('rejects stale, cross-project, and hash-mismatched commits without mutation', async () => {

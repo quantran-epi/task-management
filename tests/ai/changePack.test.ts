@@ -305,7 +305,7 @@ describe('persistConfirmedPack', () => {
 
     expect(result.created).toBe(true);
     expect(result.notes).toHaveLength(manifest.entries.length);
-    expect(result.notes.map((note) => note.sdlcArtifact?.path)).toEqual(manifest.entries.map((entry) => entry.path));
+    expect(result.notes.map((note) => note.sdlcArtifact?.kind === 'CHANGE_PACK_ENTRY' ? note.sdlcArtifact.path : undefined)).toEqual(manifest.entries.map((entry) => entry.path));
     const set = await db.documentSets.filter((candidate) => candidate.sdlc?.projectId === projectId).first();
     expect(set?.documentIds.slice(-manifest.entries.length)).toEqual(result.notes.map((note) => note.id));
     expect((await db.chatMessages.where('threadId').equals(threadId).toArray()).filter((message) => message.content.includes(manifest.packHash))).toHaveLength(1);
