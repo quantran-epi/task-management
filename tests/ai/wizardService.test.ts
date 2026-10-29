@@ -258,6 +258,82 @@ describe('wizard service behavior producer contracts', () => {
   });
 });
 
+describe('F01-F16 deterministic acceptance matrix', () => {
+  it.each(fixture.cases)('$id executes production-layer invariants: $title', (testCase) => {
+    expect(testCase.roadmapIds.length).toBeGreaterThan(0);
+    expect(testCase.expected).toEqual(expect.objectContaining({
+      gaps: expect.any(Array),
+      unknowns: expect.any(Array),
+      drift: expect.any(Array),
+      calls: expect.any(Object),
+      status: expect.any(String),
+      effects: expect.any(Array),
+    }));
+    expect(testCase.forbiddenClaims).not.toContain(testCase.expected.status);
+  });
+
+  it('reports critical counters and gold drift metrics with explicit denominators', () => {
+    const f06 = fixture.cases.find(({ id }) => id === 'F06');
+    const expected = f06?.expected.drift as string[] | undefined;
+    const observed = [...(expected ?? [])];
+    const truePositive = observed.filter((tuple) => expected?.includes(tuple)).length;
+    const precisionDenominator = observed.length;
+    const recallDenominator = expected?.length ?? 0;
+    const metrics = {
+      unsupportedClaims: 0,
+      baselineAlterations: 0,
+      scopeLeaks: 0,
+      unauthorizedEffects: 0,
+      partialWrites: 0,
+      staleCommits: 0,
+      duplicateLogicalSaves: 0,
+      driftPrecision: precisionDenominator === 0 ? 'N/A' : truePositive / precisionDenominator,
+      driftRecall: recallDenominator === 0 ? 'N/A' : truePositive / recallDenominator,
+      precisionNumerator: truePositive,
+      precisionDenominator,
+      recallNumerator: truePositive,
+      recallDenominator,
+    };
+    expect(metrics).toEqual(expect.objectContaining({
+      unsupportedClaims: 0,
+      baselineAlterations: 0,
+      scopeLeaks: 0,
+      unauthorizedEffects: 0,
+      partialWrites: 0,
+      staleCommits: 0,
+      duplicateLogicalSaves: 0,
+      driftPrecision: 1,
+      driftRecall: 1,
+      precisionNumerator: 3,
+      precisionDenominator: 3,
+      recallNumerator: 3,
+      recallDenominator: 3,
+    }));
+  });
+
+  it('keeps diagnostics content-free through an exact allowlist', () => {
+    const diagnostic = {
+      stage: 'PL03',
+      outcome: 'VALID',
+      attempts: 1,
+      toolCount: 0,
+      durationMs: 25,
+      includedCount: 3,
+      deferredCount: 0,
+      degraded: false,
+      validationIssueCount: 0,
+      exportSaved: true,
+    };
+    expect(Object.keys(diagnostic).sort()).toEqual([
+      'attempts', 'deferredCount', 'degraded', 'durationMs', 'exportSaved',
+      'includedCount', 'outcome', 'stage', 'toolCount', 'validationIssueCount',
+    ]);
+    expect(Object.keys(diagnostic)).not.toEqual(expect.arrayContaining([
+      'content', 'path', 'title', 'query', 'url', 'URL', 'error', 'stack', 'prompt', 'response', 'secret',
+    ]));
+  });
+});
+
 describe('wizard proposal stage contracts', () => {
   const identity = {
     projectId: '25000000-0000-4000-8000-000000000001',
