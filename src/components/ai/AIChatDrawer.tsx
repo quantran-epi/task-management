@@ -561,8 +561,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
   const handleWizardMessage = useCallback(async (text: string) => {
     const coordinator = getWizardCoordinator();
-    if (!coordinator || !wizardSnapshot) return false;
-    if (wizardSnapshot.status === 'gap_fill' || wizardSnapshot.status === 'collecting') {
+    const snapshot = coordinator?.getSnapshot() ?? wizardSnapshot;
+    if (!coordinator || !snapshot) return false;
+    if (snapshot.status === 'gap_fill' || snapshot.status === 'collecting') {
       await coordinator.addContext(text);
       setWizardSnapshot(coordinator.getSnapshot());
       return true;
