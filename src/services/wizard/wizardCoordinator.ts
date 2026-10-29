@@ -67,6 +67,14 @@ export interface WizardPackDeps {
     packHash: string;
     reconciliation: ReconciliationResult;
   }) => Promise<unknown>;
+  runCabStage?: (input: {
+    kind: 'CAB';
+    projectId: string;
+    threadId: string;
+    sessionId: string;
+    inputRevision: number;
+    sources: Array<{ kind: 'PL02' | 'PL03B' | 'PL07'; noteId: string; version: number; hash: string }>;
+  }) => Promise<unknown>;
 }
 
 export interface WizardCoordinatorDeps extends WizardPackDeps {
@@ -296,9 +304,9 @@ export function createWizardCoordinator(deps: WizardCoordinatorDeps) {
     packState = { status: 'idle' };
   };
 
-  const confirmChangePack = async (confirmation: ChangePackConfirmation) => {
+  const confirmChangePack = async (confirmation: ChangePackConfirmation): Promise<{ persisted: PersistedPackResult; reconciliation: ReconciliationResult }> => {
     if (confirmedPackResult && packState.status === 'confirmed') return confirmedPackResult;
-    if (packConfirmationPromise) return packConfirmationPromise;
+    if (packConfirmationPromise) return packConfirmationPromise as Promise<{ persisted: PersistedPackResult; reconciliation: ReconciliationResult }>;
     if (packState.status !== 'pending' || !packFile) throw new Error('PACK_CONFIRMATION_REQUIRED');
     const manifest = packState.manifest;
     const expected = ChangePackIdentitySchema.parse(confirmation.identity);
@@ -315,7 +323,7 @@ export function createWizardCoordinator(deps: WizardCoordinatorDeps) {
       packFile = undefined;
       return confirmedPackResult;
     })().finally(() => { packConfirmationPromise = undefined; });
-    return packConfirmationPromise;
+    return packConfirmationPromise as Promise<{ persisted: PersistedPackResult; reconciliation: ReconciliationResult }>;
   };
 
   const generateTechnicalDocs = async (): Promise<WizardPackTechnicalDocs> => {
@@ -499,6 +507,35 @@ export function createWizardCoordinator(deps: WizardCoordinatorDeps) {
     return active;
   };
 
+  const generateCab = async (): Promise<unknown> => {
+    if (!deps.runCabStage) throw new Error('CAB_STAGE_UNAVAILABLE');
+    if (packState.status !== 'confirmed' || !technicalDocs) throw new Error('CAB_SOURCE_CHAIN_REQUIRED');
+    const current = packSession();
+    const chain = deps.loadCanonicalChain
+      ? await deps.loadCanonicalChain(deps.projectId, deps.threadId)
+      : deps.db
+        ? await loadCanonicalArtifactChain(deps.projectId, deps.threadId, deps.db)
+        : [];
+    const required = ['PL02', 'PL03B', 'PL07'] as const;
+    const sources = required.map((kind) => {
+      const note = chain
+        .filter((candidate) => candidate.sdlcArtifact?.kind === kind)
+        .sort((left, right) => (right.sdlcArtifact?.version ?? 0) - (left.sdlcArtifact?.version ?? 0))[0];
+      if (!note?.sdlcArtifact || note.sdlcArtifact.kind !== kind) throw new Error('CAB_SOURCE_CHAIN_REQUIRED');
+      return { kind, noteId: note.id, version: note.sdlcArtifact.version, hash: note.sdlcArtifact.inputHash };
+    });
+    return deps.runCabStage({ kind: 'CAB', projectId: deps.projectId, threadId: deps.threadId, sessionId: current.snapshot.sessionId, inputRevision: current.snapshot.inputRevision, sources });
+  };
+
+  const getCabState = () => ({ available: Boolean(deps.runCabStage && packState.status === 'confirmed' && technicalDocs) });
+  const getTechnicalDocs = () => technicalDocs;
+  const getLatestSolution = async () => findSolution(packState.status === 'confirmed' ? packState.manifest : ({} as Readonly<ChangePackManifest>));
+  const isBusy = () => Boolean(packConfirmationPromise || packState.status === 'validating');
+  const getPackState = () => packState;
+  const getState = () => state;
+  const getSnapshot = () => state?.snapshot;
+  const getPackResult = () => confirmedPackResult;
+
   const dispose = () => { disposed = true; generation += 1; stageController?.abort(); stageController = undefined; packFile = undefined; };
 
   return {
@@ -515,8 +552,14 @@ export function createWizardCoordinator(deps: WizardCoordinatorDeps) {
     replaceChangePack,
     confirmChangePack,
     generateTechnicalDocs,
-    getState: () => state,
-    getSnapshot: () => state?.snapshot,
-    getPackState: () => packState,
+    generateCab,
+    getState,
+    getSnapshot,
+    getPackState,
+    getCabState,
+    getTechnicalDocs,
+    getLatestSolution,
+    getPackResult,
+    isBusy,
   };
 }
