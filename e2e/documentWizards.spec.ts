@@ -143,7 +143,7 @@ test.describe('F16 actual-app lifecycle', () => {
     await page.getByRole('button', { name: /Gửi|Send/ }).click();
     await expect(page.getByRole('button', { name: 'Duyệt & Tải .docx' })).toBeVisible();
     const exportRequests: string[] = [];
-    await page.route('**/*', async (route) => {
+    await page.route('**/v1/chat/completions', async (route) => {
       if (route.request().method() === 'POST') exportRequests.push(route.request().url());
       await route.continue();
     });

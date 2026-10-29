@@ -52,6 +52,8 @@ metrics:
 4. `4933b67` — `feat(25-17): close wizard acceptance integration`
 5. `a5deb6d` — `fix(25-17): preserve wizard stage progress after local errors`
 6. `2d00632` — `fix(25-17): harden wizard stage and snapshot selection`
+7. `b51a9cd` — `fix(25-17): harden actual wizard stage integration`
+8. `b9e080d` — `fix(25-17): align F16 app stage contract`
 
 ## Accomplishments
 
@@ -130,7 +132,7 @@ Full TypeScript command remains blocked by pre-existing missing knowledge-server
 ## Known Stubs / Open Acceptance
 
 - Actual-app F16 lifecycle tests remain active and still fail after root-cause hardening; they must not be treated as verified.
-- Browser failure root cause narrowed to a real page exception in `detectWizardGaps`/stage integration; empty evidence guards and deterministic snapshot ordering are committed, but preview transition still lacks proof.
+- Browser failure root cause: page exception in `detectWizardGaps`/stage integration. Empty evidence guards and deterministic snapshot ordering are committed, but preview transition still lacks proof.
 - Valid-pack end-to-end confirmation needs fixture identity aligned with entered CR/base/head/branch; current test intentionally exercises mismatch rejection.
 
 ## Threat Flags

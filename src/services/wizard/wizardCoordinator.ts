@@ -230,7 +230,11 @@ export function deriveActiveWizard(
     .filter((candidate): candidate is { snapshot: WizardSnapshot; index: number } => Boolean(candidate.snapshot))
     .filter((candidate) => candidate.snapshot.projectId === projectId && candidate.snapshot.threadId === threadId)
     .filter((candidate) => candidate.snapshot.status !== 'completed')
-    .sort((left, right) => left.snapshot.updatedAt.localeCompare(right.snapshot.updatedAt) || left.index - right.index);
+    .sort((left, right) => {
+      const leftTime = Date.parse(left.snapshot.updatedAt) || 0;
+      const rightTime = Date.parse(right.snapshot.updatedAt) || 0;
+      return leftTime - rightTime || left.index - right.index;
+    });
   const latest = candidates.at(-1)?.snapshot;
   if (!latest) return undefined;
   return { ...latest, restored: latest.status === 'abandoned' || latest.status === 'collecting' || latest.status === 'gap_fill' };
