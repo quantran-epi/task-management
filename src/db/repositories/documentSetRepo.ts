@@ -48,6 +48,41 @@ export interface DocumentPublishStatus {
   containingSets: DocumentSetMemberStatus[];
 }
 
+/**
+ * Resolves one project SDLC set by structured metadata while an outer transaction owns atomicity.
+ * Set names are display-only and never participate in identity.
+ */
+export async function getOrCreateProjectSdlcSetInTransaction(
+  projectId: string,
+  now: string,
+  db: TaskPlannerDatabase = defaultDb,
+): Promise<DocumentSet> {
+  const matches = await db.documentSets
+    .filter((set) => set.sdlc?.projectId === projectId && set.sdlc.purpose === 'sdlc')
+    .toArray();
+  if (matches.length > 1) throw new Error('DUPLICATE_PROJECT_SDLC_SET');
+  const existing = matches[0];
+  if (existing) return existing;
+
+  const set = DocumentSetSchema.parse({
+    id: generateId(),
+    name: 'SDLC artifacts',
+    description: 'Canonical project SDLC artifacts',
+    documentIds: [],
+    createdAt: now,
+    updatedAt: now,
+    scope: { domain: 'SDLC', environment: null, version: null },
+    aliases: [],
+    relations: [],
+    isBase: false,
+    presentationRevision: 0,
+    preset: 'TuyChinh',
+    sdlc: { projectId, purpose: 'sdlc' },
+  });
+  await db.documentSets.add(set);
+  return set;
+}
+
 const PRIMARY_STATE_PRIORITY: Record<PublishPrimaryState, number> = {
   Failed: 1,
   Warning: 2,

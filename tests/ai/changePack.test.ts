@@ -1,7 +1,12 @@
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import 'fake-indexeddb/auto';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { TaskPlannerDatabase } from '../../src/db';
+import { persistConfirmedPack, saveSolutionVersion } from '../../src/services/wizard/artifactRepo';
+import type { Project } from '../../src/types/models';
+import { buildWizardIdempotencyKey } from '../../src/services/ai/wizardSchemas';
 import {
   ChangePackLimits,
   ChangePackValidationError,
@@ -198,9 +203,165 @@ describe('validateChangePack', () => {
   });
 });
 
-describe('change-pack behavior producer contracts', () => {
-  it.todo('rejects profile-B boundary +1 archives before any persistent write');
-  it.todo('rejects traversal, absolute, canonical collision, prohibited, unsupported, and corrupt entries');
-  it.todo('requires explicit confirmation and persists a valid archive atomically');
-  it.todo('deduplicates replayed confirmation and rolls transaction failures back to zero Notes');
+describe('persistConfirmedPack', () => {
+  let db: TaskPlannerDatabase;
+  const projectId = '11111111-1111-4111-8111-111111111111';
+  const threadId = '22222222-2222-4222-8222-222222222222';
+  const sessionId = '33333333-3333-4333-8333-333333333333';
+  const now = '2026-10-28T12:00:00.000Z';
+  const solutionHash = 'a'.repeat(64);
+
+  beforeEach(async () => {
+    db = new TaskPlannerDatabase(`confirmed-pack-${Date.now()}-${Math.random()}`);
+    await db.open();
+    const project: Project = { id: projectId, name: 'Pack project', status: 'Open', createdAt: now, updatedAt: now };
+    await db.projects.add(project);
+    await db.chatThreads.add({
+      id: threadId,
+      scopeKey: `project:${projectId}`,
+      scopeType: 'project',
+      entityId: projectId,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.chatMessages.add({
+      id: '44444444-4444-4444-8444-444444444444',
+      threadId,
+      role: 'assistant',
+      content: 'Approved solution preview',
+      createdAt: now,
+      wizard: {
+        schemaVersion: 1,
+        sessionId,
+        projectId,
+        threadId,
+        skill: 'SOLUTION',
+        status: 'approved',
+        inputRevision: 1,
+        draftRevision: 1,
+        approvedAt: now,
+        artifactId: null,
+        artifactHash: solutionHash,
+        renderPayload: { title: 'SOLUTION', featureMode: 'new', markdown: '# Solution' },
+        createdAt: now,
+        updatedAt: now,
+      },
+    });
+  });
+
+  async function preparePack() {
+    const solution = await saveSolutionVersion({
+      projectId,
+      threadId,
+      sessionId,
+      inputRevision: 1,
+      draftRevision: 1,
+      inputHash: solutionHash,
+      markdown: '# Solution',
+      exportPayload: { schemaVersion: 1 },
+      approvedAt: now,
+    }, db);
+    const manifest = await validateChangePack(await readFixture('valid.zip'), identity);
+    await db.chatMessages.add({
+      id: '55555555-5555-4555-8555-555555555555',
+      threadId,
+      role: 'assistant',
+      content: 'Confirm pack',
+      createdAt: '2026-10-28T12:01:00.000Z',
+      wizard: {
+        schemaVersion: 1,
+        sessionId,
+        projectId,
+        threadId,
+        skill: 'PL03',
+        status: 'approved',
+        inputRevision: 2,
+        draftRevision: 1,
+        approvedAt: '2026-10-28T12:01:00.000Z',
+        artifactId: null,
+        artifactHash: manifest.packHash,
+        renderPayload: { title: 'Confirmed change pack' },
+        createdAt: now,
+        updatedAt: '2026-10-28T12:01:00.000Z',
+      },
+    });
+    return { solution, manifest };
+  }
+
+  it('persists every validated entry, ordered membership, and one pinned event', async () => {
+    const { solution, manifest } = await preparePack();
+    const result = await persistConfirmedPack({
+      projectId,
+      threadId,
+      sessionId,
+      inputRevision: 2,
+      draftRevision: 1,
+      idempotencyKey: buildWizardIdempotencyKey({ sessionId, draftRevision: 1, artifactKind: 'CHANGE_PACK_ENTRY' }),
+      manifest,
+      confirmation: identity,
+      solution: { noteId: solution.note.id, version: 1, hash: solutionHash },
+      confirmedAt: '2026-10-28T12:01:00.000Z',
+    }, db);
+
+    expect(result.created).toBe(true);
+    expect(result.notes).toHaveLength(manifest.entries.length);
+    expect(result.notes.map((note) => note.sdlcArtifact?.kind === 'CHANGE_PACK_ENTRY' ? note.sdlcArtifact.path : undefined)).toEqual(manifest.entries.map((entry) => entry.path));
+    const set = await db.documentSets.filter((candidate) => candidate.sdlc?.projectId === projectId).first();
+    expect(set?.documentIds.slice(-manifest.entries.length)).toEqual(result.notes.map((note) => note.id));
+    expect((await db.chatMessages.where('threadId').equals(threadId).toArray()).filter((message) => message.content.includes(manifest.packHash))).toHaveLength(1);
+  });
+
+  it('deduplicates replay and rolls injected mid-transaction failure back fully', async () => {
+    const { solution, manifest } = await preparePack();
+    const input = {
+      projectId,
+      threadId,
+      sessionId,
+      inputRevision: 2,
+      draftRevision: 1,
+      idempotencyKey: `${sessionId}:1:PACK:${manifest.packHash}`,
+      manifest,
+      confirmation: identity,
+      solution: { noteId: solution.note.id, version: 1, hash: solutionHash },
+      confirmedAt: '2026-10-28T12:01:00.000Z',
+    };
+    const beforeFailure = {
+      notes: await db.notes.count(),
+      sets: JSON.stringify(await db.documentSets.toArray()),
+      messages: await db.chatMessages.count(),
+    };
+    await expect(persistConfirmedPack({ ...input, failAfterWrites: 2 }, db)).rejects.toThrow('INJECTED_PACK_WRITE_FAILURE');
+    expect({
+      notes: await db.notes.count(),
+      sets: JSON.stringify(await db.documentSets.toArray()),
+      messages: await db.chatMessages.count(),
+    }).toEqual(beforeFailure);
+
+    const first = await persistConfirmedPack(input, db);
+    const counts = { notes: await db.notes.count(), sets: await db.documentSets.count(), messages: await db.chatMessages.count() };
+    const replay = await persistConfirmedPack(input, db);
+    expect(replay.created).toBe(false);
+    expect(replay.notes.map((note) => note.id)).toEqual(first.notes.map((note) => note.id));
+    expect({ notes: await db.notes.count(), sets: await db.documentSets.count(), messages: await db.chatMessages.count() }).toEqual(counts);
+  });
+
+  it('rejects wrong confirmation and stale solution identity without mutation', async () => {
+    const { solution, manifest } = await preparePack();
+    const before = { notes: await db.notes.count(), sets: await db.documentSets.count(), messages: await db.chatMessages.count() };
+    const base = {
+      projectId,
+      threadId,
+      sessionId,
+      inputRevision: 2,
+      draftRevision: 1,
+      idempotencyKey: `${sessionId}:1:PACK:${manifest.packHash}`,
+      manifest,
+      confirmation: identity,
+      solution: { noteId: solution.note.id, version: 1, hash: solutionHash },
+      confirmedAt: '2026-10-28T12:01:00.000Z',
+    };
+    await expect(persistConfirmedPack({ ...base, confirmation: { ...identity, cr: 'WRONG' } }, db)).rejects.toMatchObject({ code: 'PACK_IDENTITY_MISMATCH' });
+    await expect(persistConfirmedPack({ ...base, solution: { ...base.solution, hash: 'b'.repeat(64) } }, db)).rejects.toMatchObject({ code: 'PACK_SOLUTION_MISMATCH' });
+    expect({ notes: await db.notes.count(), sets: await db.documentSets.count(), messages: await db.chatMessages.count() }).toEqual(before);
+  });
 });

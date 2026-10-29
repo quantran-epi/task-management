@@ -5,6 +5,7 @@ import { saveMessage } from '../../src/db/repositories/chatRepo';
 import { exportBackupPayload } from '../../src/services/backup/exportBackup';
 import { restoreBackupPayload } from '../../src/services/backup/restoreBackup';
 import { validateBackupPayload } from '../../src/services/backup/validateBackup';
+import { saveSolutionVersion } from '../../src/services/wizard/artifactRepo';
 import type { Note, Project } from '../../src/types/models';
 
 const projectId = '11111111-1111-4111-8111-111111111111';
@@ -111,6 +112,55 @@ describe('wizard backup parity and references', () => {
         sdlc: { projectId, purpose: 'sdlc' },
       });
       expect((await restored.chatMessages.get((await db.chatMessages.toArray())[0]!.id))?.wizard).toEqual(wizard);
+    } finally {
+      await restored.delete();
+    }
+  });
+
+  it('round-trips canonical Markdown and export payload created by atomic save', async () => {
+    await db.projects.add(project);
+    await db.chatThreads.add({
+      id: threadId,
+      scopeKey: `project:${projectId}`,
+      scopeType: 'project',
+      entityId: projectId,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.chatMessages.add({
+      id: '99999999-9999-4999-8999-999999999999',
+      threadId,
+      role: 'assistant',
+      content: 'Approved solution preview',
+      createdAt: now,
+      wizard: {
+        ...wizard,
+        status: 'approved',
+        artifactId: null,
+      },
+    });
+    const saved = await saveSolutionVersion({
+      projectId,
+      threadId,
+      sessionId,
+      inputRevision: 1,
+      draftRevision: 1,
+      inputHash: artifactHash,
+      markdown: '# Solution\n\nCanonical body',
+      exportPayload: { schemaVersion: 1, sections: [{ id: 'scope', text: 'Canonical body' }] },
+      approvedAt: now,
+    }, db);
+
+    const backup = await exportBackupPayload(db);
+    const restored = new TaskPlannerDatabase(`wizard-artifact-restore-${Date.now()}-${Math.random()}`);
+    await restored.open();
+    try {
+      await restoreBackupPayload(backup, restored);
+      expect(await restored.notes.get(saved.note.id)).toEqual(saved.note);
+      expect(JSON.parse((await restored.notes.get(saved.note.id))!.body)).toEqual({
+        markdown: '# Solution\n\nCanonical body',
+        exportPayload: { schemaVersion: 1, sections: [{ id: 'scope', text: 'Canonical body' }] },
+      });
     } finally {
       await restored.delete();
     }
