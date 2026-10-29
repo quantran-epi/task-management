@@ -10,6 +10,9 @@ import { PL07_BASELINE, PL07_BASELINE_SOURCE_SHA256 } from '../../src/services/e
 import { buildPl07Document, type Pl07DocxPayload } from '../../src/services/export/pl07Docx';
 import { buildCabDocument, type CabDocxPayload } from '../../src/services/export/cabDocx';
 import { buildWizardDocx } from '../../src/services/export/wizardDocx';
+import { createWizardCoordinator } from '../../src/services/wizard/wizardCoordinator';
+import { downloadBlob } from '../../src/utils/fileExport';
+import type { ChatMessage, Note } from '../../src/types/models';
 
 const root = resolve(import.meta.dirname, '../..');
 const manifestPath = resolve(root, 'tests/fixtures/ai/pl-template-manifest.json');
@@ -703,6 +706,106 @@ describe('wizard source fixtures', () => {
         expect(fetchSpy).not.toHaveBeenCalled();
       } finally {
         fetchSpy.mockRestore();
+      }
+    });
+  });
+
+  describe('approved export orchestration', () => {
+    const projectId = '25000000-0000-4000-8000-000000000016';
+    const threadId = '25000000-0000-4000-8000-000000000116';
+    const sessionId = '25000000-0000-4000-8000-000000000216';
+    const messageId = '25000000-0000-4000-8000-000000000316';
+    const approvedAt = '2026-10-29T02:00:00.000Z';
+    const hash = 'a'.repeat(64);
+    const payload = {
+      schemaVersion: 1 as const, kind: 'PL02' as const, status: 'approved' as const,
+      inputRevision: 1, draftRevision: 1, approvedRevision: 1,
+      metadata: { crCode: 'CR-EXPORT', featureName: 'Export', requestingUnit: '', author: 'Dev', createdDate: '2026-10-29' },
+      introduction: { purpose: '', users: '', deploymentScope: '', risks: [], glossary: [] },
+      features: [], permissions: [], notifications: [], apiContracts: [], staffing: [],
+    };
+    const snapshot = {
+      schemaVersion: 1 as const, sessionId, projectId, threadId, skill: 'PL02' as const,
+      status: 'review' as const, inputRevision: 1, draftRevision: 1, approvedAt: null,
+      artifactId: null, artifactHash: null,
+      renderPayload: { title: 'PL02 Export', markdown: '# PL02 Export' },
+      createdAt: approvedAt, updatedAt: approvedAt,
+    };
+    const message: ChatMessage = { id: messageId, threadId, role: 'assistant', content: 'review', createdAt: approvedAt, wizard: snapshot };
+
+    function coordinator(overrides: Record<string, unknown> = {}) {
+      let current = snapshot;
+      const saveArtifact = vi.fn(async () => ({
+        created: true,
+        note: { id: '25000000-0000-4000-8000-000000000416' } as Note,
+      }));
+      const appendExportResult = vi.fn(async () => undefined);
+      const instance = createWizardCoordinator({
+        projectId, threadId,
+        now: () => approvedAt,
+        loadMessages: async () => [{ ...message, wizard: current }],
+        hashText: async () => hash,
+        buildDocx: vi.fn(async () => new Blob(['docx'], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })),
+        saveArtifact,
+        downloadFile: vi.fn(async () => ({ kind: 'download_initiated', filename: 'PL02-Export.docx' })),
+        appendExportResult,
+        ...overrides,
+      } as any);
+      (instance as any).__setCurrent = (value: typeof snapshot) => { current = value; };
+      return { instance, saveArtifact, appendExportResult };
+    }
+
+    it('builds, saves canonical Note, then reports truthful anchor initiation once', async () => {
+      const { instance, saveArtifact, appendExportResult } = coordinator();
+      await instance.restore();
+      const first = await instance.approveAndExport(messageId, payload);
+      const second = await instance.approveAndExport(messageId, payload);
+      expect(first).toMatchObject({ blobBuilt: true, noteSaved: true, downloadInitiated: true, savePickerSaved: false, errorCode: null });
+      expect(second).toEqual(first);
+      expect(saveArtifact).toHaveBeenCalledTimes(1);
+      expect(appendExportResult).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+      ['build', { buildDocx: vi.fn(async () => { throw new Error('BUILD'); }) }, { blobBuilt: false, noteSaved: false, errorCode: 'WIZARD_EXPORT_BUILD_FAILED' }],
+      ['note', { saveArtifact: vi.fn(async () => { throw new Error('SAVE'); }) }, { blobBuilt: true, noteSaved: false, errorCode: 'WIZARD_EXPORT_NOTE_SAVE_FAILED' }],
+      ['download', { downloadFile: vi.fn(async () => ({ kind: 'cancelled', filename: 'PL02-Export.docx' })) }, { blobBuilt: true, noteSaved: true, downloadInitiated: false, savePickerSaved: false, errorCode: 'WIZARD_EXPORT_DOWNLOAD_CANCELLED' }],
+    ])('separates %s failure flags', async (_name, overrides, expected) => {
+      const { instance } = coordinator(overrides);
+      await instance.restore();
+      expect(await instance.approveAndExport(messageId, payload)).toMatchObject(expected);
+    });
+
+    it('returns zero effects when approval becomes stale after build', async () => {
+      let resolveBuild!: (blob: Blob) => void;
+      const buildDocx = vi.fn(() => new Promise<Blob>((resolve) => { resolveBuild = resolve; }));
+      const { instance, saveArtifact } = coordinator({ buildDocx });
+      await instance.restore();
+      const pending = instance.approveAndExport(messageId, payload);
+      (instance as any).__setCurrent({ ...snapshot, inputRevision: 2, updatedAt: '2026-10-29T02:00:01.000Z' });
+      resolveBuild(new Blob(['docx']));
+      expect(await pending).toMatchObject({ blobBuilt: true, noteSaved: false, downloadInitiated: false, errorCode: 'WIZARD_EXPORT_STALE' });
+      expect(saveArtifact).not.toHaveBeenCalled();
+    });
+
+    it('distinguishes save picker success, cancellation, anchor initiation, and failure', async () => {
+      const blob = new Blob(['x']);
+      const originalPicker = (window as any).showSaveFilePicker;
+      const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test');
+      const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+      const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+      try {
+        (window as any).showSaveFilePicker = vi.fn(async () => ({ createWritable: async () => ({ write: vi.fn(), close: vi.fn() }) }));
+        await expect(downloadBlob(blob, 'safe.docx')).resolves.toEqual({ kind: 'save_picker_saved', filename: 'safe.docx' });
+        (window as any).showSaveFilePicker = vi.fn(async () => { throw new DOMException('cancel', 'AbortError'); });
+        await expect(downloadBlob(blob, 'safe.docx')).resolves.toEqual({ kind: 'cancelled', filename: 'safe.docx' });
+        delete (window as any).showSaveFilePicker;
+        await expect(downloadBlob(blob, 'safe.docx')).resolves.toEqual({ kind: 'download_initiated', filename: 'safe.docx' });
+        createObjectURL.mockImplementationOnce(() => { throw new Error('URL'); });
+        await expect(downloadBlob(blob, 'safe.docx')).resolves.toEqual({ kind: 'failed', filename: 'safe.docx', errorCode: 'DOWNLOAD_FAILED' });
+      } finally {
+        (window as any).showSaveFilePicker = originalPicker;
+        click.mockRestore(); createObjectURL.mockRestore(); revokeObjectURL.mockRestore();
       }
     });
   });
