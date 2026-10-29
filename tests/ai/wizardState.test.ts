@@ -1,10 +1,15 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskPlannerDatabase } from '../../src/db';
 import {
   loadCanonicalArtifactChain,
   saveApprovedArtifact,
   saveSolutionVersion,
 } from '../../src/services/wizard/artifactRepo';
+import {
+  createWizardCoordinator,
+  deriveActiveWizard,
+  type WizardCoordinatorDeps,
+} from '../../src/services/wizard/wizardCoordinator';
 import {
   SdlcArtifactMetadataSchema,
   SdlcDocumentSetMetadataSchema,
@@ -61,6 +66,80 @@ function approvedSnapshot(overrides: Record<string, unknown> = {}) {
     ...overrides,
   }));
 }
+
+describe('wizard coordinator lifecycle', () => {
+  const projectId = PROJECT_ID;
+  const threadId = THREAD_ID;
+  const sessionId = SESSION_ID;
+  const collecting = WizardSnapshotSchema.parse(snapshot('collecting', {
+    sessionId,
+    projectId,
+    threadId,
+    skill: 'PL02',
+    renderPayload: { title: 'PL02', markdown: '# Draft' },
+  }));
+
+  function coordinatorDeps(overrides: Partial<WizardCoordinatorDeps> = {}): WizardCoordinatorDeps {
+    return {
+      projectId,
+      threadId,
+      db: new TaskPlannerDatabase(`wizard-coordinator-${Date.now()}-${Math.random()}`),
+      now: () => NOW,
+      createSessionId: () => sessionId,
+      collectEvidence: vi.fn().mockResolvedValue({ items: [], coverage: 'COMPLETE', degraded: [] }),
+      runStage: vi.fn().mockResolvedValue({
+        schemaVersion: 1,
+        gaps: [{ sectionId: 'PL02.II', fieldId: 'threshold', question: 'Ngưỡng áp dụng là bao nhiêu?', citationIds: [], suggestions: [] }],
+        unknowns: ['threshold'],
+        contradictions: [],
+      }),
+      saveSnapshot: vi.fn().mockResolvedValue(undefined),
+      appendMessage: vi.fn().mockResolvedValue(undefined),
+      saveSolution: vi.fn().mockResolvedValue({ created: true, note: { id: NOTE_ID } }),
+      ...overrides,
+    };
+  }
+
+  it('starts only in project scope, persists collecting, and asks gaps after grounded stage', async () => {
+    const deps = coordinatorDeps();
+    const coordinator = createWizardCoordinator(deps);
+    const started = await coordinator.start('PL02', { cr: 'CR-1', featureName: 'Feature', requestingUnit: '', author: 'User', date: '2026-10-28' });
+    expect(started.projectId).toBe(projectId);
+    expect(deps.collectEvidence).toHaveBeenCalledTimes(1);
+    expect(deps.runStage).toHaveBeenCalledTimes(1);
+    expect(deps.saveSnapshot).toHaveBeenCalled();
+  });
+
+  it('invalidates late stage results when cancelled and restores without rerun', async () => {
+    let resolveStage: ((value: unknown) => void) | undefined;
+    const deps = coordinatorDeps({
+      runStage: vi.fn().mockImplementation(() => new Promise((resolve) => { resolveStage = resolve; })),
+    });
+    const coordinator = createWizardCoordinator(deps);
+    const pending = coordinator.start('PL02', { cr: 'CR-1', featureName: 'Feature', requestingUnit: '', author: 'User', date: '2026-10-28' });
+    coordinator.cancel();
+    resolveStage?.({ schemaVersion: 1, gaps: [], unknowns: [], contradictions: [] });
+    await pending;
+    expect(deps.saveSnapshot).not.toHaveBeenCalledWith(expect.objectContaining({ status: 'gap_fill' }));
+
+    const restored = deriveActiveWizard([{ ...collecting, updatedAt: NOW } as any], projectId, threadId);
+    expect(restored?.status).toBe('collecting');
+    const restoreDeps = coordinatorDeps({ loadMessages: vi.fn().mockResolvedValue([{ ...collecting, updatedAt: NOW } as any]), runStage: vi.fn() });
+    await createWizardCoordinator(restoreDeps).restore();
+    expect(restoreDeps.runStage).not.toHaveBeenCalled();
+  });
+
+  it('retains answered input, invalidates approval on context, and deduplicates solution approval', async () => {
+    const deps = coordinatorDeps({
+      runStage: vi.fn().mockResolvedValue({ schemaVersion: 1, gaps: [], unknowns: [], contradictions: [] }),
+    });
+    const coordinator = createWizardCoordinator(deps);
+    await coordinator.start('SOLUTION', { cr: 'CR-1', featureName: 'Feature', requestingUnit: '', author: 'User', date: '2026-10-28' });
+    await coordinator.addContext('API /limits');
+    await Promise.all([coordinator.approveSolution(), coordinator.approveSolution()]);
+    expect(deps.saveSolution).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe('wizard artifact persistence', () => {
   let db: TaskPlannerDatabase;
