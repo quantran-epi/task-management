@@ -669,8 +669,10 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     onOpenNote: (noteId: string) => { window.location.hash = `/notes?doc=${encodeURIComponent(noteId)}`; },
     onSuggestion: (_questionId: string, suggestion: string) => setExternalInputValue(suggestion),
     onSkip: (_messageId: string, questionId: string) => {
-      setWizardSkipNotice(`Đã bỏ qua: ${questionId} · (chưa cung cấp)`);
-      void getWizardCoordinator()?.skipGap(questionId).then(() => setWizardSnapshot(getWizardCoordinator()?.getSnapshot()));
+      void getWizardCoordinator()?.skipGap(questionId).then(() => {
+        setWizardSkipNotice(`Đã bỏ qua: ${questionId} · (chưa cung cấp)`);
+        setWizardSnapshot(getWizardCoordinator()?.getSnapshot());
+      });
     },
     pendingKeys: exportPending,
     exportedFiles,
