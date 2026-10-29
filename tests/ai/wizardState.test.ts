@@ -131,6 +131,7 @@ describe('wizard artifact persistence', () => {
         draftRevision: 2,
         artifactHash: nextHash,
         renderPayload: { title: 'SOLUTION', featureMode: 'new', markdown: '# Solution v2' },
+        approvedAt: '2026-10-28T12:01:00.000Z',
         updatedAt: '2026-10-28T12:01:00.000Z',
       }),
     });
@@ -170,8 +171,10 @@ describe('wizard artifact persistence', () => {
       wizard: {
         ...approvedSnapshot(),
         skill: 'PL02',
+        artifactId: null,
         artifactHash,
         renderPayload: { title: 'PL02', markdown: '# PL02' },
+        approvedAt: '2026-10-28T12:02:00.000Z',
         updatedAt: '2026-10-28T12:02:00.000Z',
       },
     });
