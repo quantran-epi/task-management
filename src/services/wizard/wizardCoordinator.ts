@@ -440,7 +440,11 @@ export function createWizardCoordinator(deps: WizardCoordinatorDeps) {
   };
 
   const runStage = async (context: string) => {
-    if (!state || !deps.runStage) return;
+    if (!state) return;
+    if (!deps.runStage) {
+      await transition('gap_fill', {}, `Cần làm rõ: ${state.metadata.featureName}`);
+      return;
+    }
     stageController?.abort();
     const controller = new AbortController();
     stageController = controller;
