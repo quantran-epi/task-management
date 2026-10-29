@@ -45,9 +45,13 @@ const mockStreamChatEvents = vi.fn(async function* (args: any) {
   }
 });
 
-vi.mock('../../src/services/ai/nineRouterClient', () => ({
-  streamChatEvents: (args: any) => mockStreamChatEvents(args),
-}));
+vi.mock('../../src/services/ai/nineRouterClient', async (importOriginal) => {
+  const actual: any = await importOriginal();
+  return {
+    ...actual,
+    streamChatEvents: (args: any) => mockStreamChatEvents(args),
+  };
+});
 
 const mockRouteIntent = vi.fn();
 vi.mock('../../src/services/ai/intentRouter', () => ({
@@ -381,5 +385,64 @@ describe('Telegram Admin Mutation Flow', () => {
     expect(updatedPending).toBeDefined();
     expect(updatedPending?.args.estimateMinutes).toBe(120);
     expect(updatedPending?.args.deadline).toBe('2026-10-30');
+  });
+
+  it('uses user aiModel override when present, falls back to defaultModel when absent', async () => {
+    await setNineRouterApiKey('test-key', testDb);
+    await upsertWhitelistUser(
+      {
+        chatId: 'custom_model_user',
+        name: 'Custom Model User',
+        status: 'active',
+        isAdmin: false,
+        aiModel: 'custom-user-model-v1',
+      },
+      testDb
+    );
+
+    mockRouteIntent.mockResolvedValueOnce({
+      intent: 'general_chat',
+      confidence: 0.99,
+      entities: [],
+      language: 'vi',
+      needs_clarification: false,
+      clarify_question: null,
+      speculation_requested: false,
+    });
+
+    const mockSendReply = vi.fn(async () => {});
+
+    await processTelegramInboundMessage(
+      {
+        update_id: 301,
+        message_id: 10,
+        chat_id: 'custom_model_user',
+        from_name: 'Custom User',
+        text: 'Xin chào bot',
+        date: 123460,
+      },
+      'bot_token',
+      testDb,
+      mockSendReply
+    );
+
+    // Verify routeIntent was invoked with the user's custom aiModel
+    expect(mockRouteIntent).toHaveBeenCalledWith(
+      'Xin chào bot',
+      expect.objectContaining({
+        completeJsonArgs: expect.objectContaining({
+          model: 'custom-user-model-v1',
+        }),
+      })
+    );
+
+    // Verify streamChatEvents was called with the user's custom aiModel
+    expect(mockStreamChatEvents).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          model: 'custom-user-model-v1',
+        }),
+      })
+    );
   });
 });

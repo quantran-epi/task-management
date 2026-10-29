@@ -1038,6 +1038,8 @@ export async function processTelegramInboundMessage(
   // Step 4: Gather history & configuration
   const aiConfig = await getNineRouterConfig(db);
   const apiKey = await getNineRouterApiKey(db);
+  const effectiveModel =
+    user.aiModel && user.aiModel.trim() ? user.aiModel.trim() : aiConfig.defaultModel;
 
   const settings = await getTelegramSettings(db);
   const userTurns = user.maxHistoryTurns !== undefined ? user.maxHistoryTurns : settings.maxHistoryTurns ?? 5;
@@ -1059,7 +1061,7 @@ export async function processTelegramInboundMessage(
         completeJsonArgs: {
           endpoint: aiConfig.endpoint,
           apiKey,
-          model: aiConfig.defaultModel,
+          model: effectiveModel,
         },
         recentTurns: routerRecentTurns,
         mcpCapabilities,
@@ -1167,7 +1169,7 @@ export async function processTelegramInboundMessage(
           query: trimmedText,
           chatHistory,
           routedIntent,
-          aiConfig: { endpoint: aiConfig.endpoint, defaultModel: aiConfig.defaultModel },
+          aiConfig: { endpoint: aiConfig.endpoint, defaultModel: effectiveModel },
           apiKey,
           db,
         });
@@ -1210,7 +1212,7 @@ export async function processTelegramInboundMessage(
       chatId: chat_id,
       userMessage: trimmedText,
       chatHistory,
-      aiConfig: { endpoint: aiConfig.endpoint, defaultModel: aiConfig.defaultModel },
+      aiConfig: { endpoint: aiConfig.endpoint, defaultModel: effectiveModel },
       apiKey,
       db,
       contextText,
@@ -1250,7 +1252,7 @@ export async function processTelegramInboundMessage(
         query: trimmedText,
         chatHistory,
         routedIntent,
-        aiConfig: { endpoint: aiConfig.endpoint, defaultModel: aiConfig.defaultModel },
+        aiConfig: { endpoint: aiConfig.endpoint, defaultModel: effectiveModel },
         apiKey,
         db,
       });
@@ -1414,7 +1416,7 @@ export async function processTelegramInboundMessage(
     const loopResult = await runAiOrchestratorLoop({
       endpoint: aiConfig.endpoint,
       apiKey,
-      model: aiConfig.defaultModel,
+      model: effectiveModel,
       messages: currentMessages,
       ...(availableTools.length > 0 ? { tools: availableTools } : {}),
       temperature: 0.1,
