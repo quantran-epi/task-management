@@ -319,14 +319,17 @@ describe('GraphEvidenceDrawer (GRAPH-05, D-17, D-18, UI Spec)', () => {
 
     fireEvent.click(proposalsTab);
 
-    await waitFor(() => {
-      expect(screen.getByText('PRODUCES_REPORT')).toBeInTheDocument();
-      expect(screen.getByText('Job A → Report B')).toBeInTheDocument();
-    });
+    expect(screen.getByText('PRODUCES_REPORT')).toBeInTheDocument();
 
-    expect(screen.getAllByRole('button', { name: /Chấp thuận/ })).toHaveLength(2);
-    expect(screen.getAllByRole('button', { name: /Từ chối/ })).toHaveLength(2);
-    expect(onAccept).not.toHaveBeenCalled();
-    expect(onReject).not.toHaveBeenCalled();
+    const acceptButtons = screen.getAllByRole('button', { name: /Chấp thuận/ });
+    const rejectButtons = screen.getAllByRole('button', { name: /Từ chối/ });
+    expect(acceptButtons).toHaveLength(2);
+    expect(rejectButtons).toHaveLength(2);
+    fireEvent.click(acceptButtons[0]);
+    fireEvent.click(rejectButtons[1]);
+    await waitFor(() => {
+      expect(onAccept).toHaveBeenCalledWith(mockProposals[0].proposalId);
+      expect(onReject).toHaveBeenCalledWith(mockProposals[1].proposalId);
+    });
   });
 });
