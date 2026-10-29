@@ -6,7 +6,7 @@ const source = fs.readFileSync(new URL(import.meta.url), 'utf8');
 const validPack = path.resolve('tests/fixtures/ai/change-packs/valid.zip');
 
 async function mockWizardTransport(page: Page, options: { gaps?: boolean } = {}): Promise<void> {
-  await page.route('**/*', async (route) => {
+  await page.route('**/v1/chat/completions', async (route) => {
     const request = route.request();
     if (request.method() !== 'POST' || !request.url().endsWith('/v1/chat/completions')) {
       await route.continue();
