@@ -28,7 +28,7 @@ describe('AIChatDrawer wizard wiring', () => {
     getPackState.mockReturnValue({ status: 'idle' });
     selectChangePack.mockResolvedValue({ status: 'pending', manifest: { identity: { cr: 'CR-1', branch: 'feature/CR-1' }, commitCount: 1, fileCount: 1, packHash: '6'.repeat(64), entries: [], meta: {}, schemaVersion: 1, compressedBytes: 1, expandedBytes: 1, coverageStatus: 'complete' } });
     confirmChangePack.mockResolvedValue({ persisted: { created: true, notes: [] }, reconciliation: { status: 'NO_DRIFT_COMPLETE', drift: [], coverage: [] } });
-    generateTechnicalDocs.mockResolvedValue({ status: 'NO_DRIFT_COMPLETE', drift: [], coverage: [] });
+    generateTechnicalDocs.mockResolvedValue({ status: 'NO_DRIFT_COMPLETE', drift: [], coverage: [], pl03: {}, pl07: {} });
     generateCab.mockResolvedValue({ status: 'NO_DRIFT_COMPLETE', drift: [], coverage: [] });
     db = new TaskPlannerDatabase(`drawer-wizard-${Date.now()}-${Math.random()}`);
     await db.open();
