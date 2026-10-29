@@ -639,6 +639,10 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     onRequestEdit: (_messageId: string, _draftRevision: number) => { void getWizardCoordinator()?.requestEdit(''); },
     onRetryExport: handleWizardRetryDownload,
     onOpenNote: (noteId: string) => { window.location.hash = `/notes?doc=${encodeURIComponent(noteId)}`; },
+    onSuggestion: (_questionId: string, suggestion: string) => setExternalInputValue(suggestion),
+    onSkip: (_messageId: string, questionId: string) => {
+      void getWizardCoordinator()?.skipGap(questionId).then(() => setWizardSnapshot(getWizardCoordinator()?.getSnapshot()));
+    },
     pendingKeys: exportPending,
     exportedFiles,
     exportErrors,
