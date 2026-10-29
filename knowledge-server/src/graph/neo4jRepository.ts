@@ -629,7 +629,7 @@ export class Neo4jRepository implements GraphRepository {
         }
 
         // 4. Unwind insert domain relationships per relation type
-        const relationsByType = new Map<RelationType, typeof candidate.relations>();
+        const relationsByType = new Map<string, typeof candidate.relations>();
         for (const rel of candidate.relations) {
           const list = relationsByType.get(rel.relation) || [];
           list.push(rel);
@@ -637,7 +637,7 @@ export class Neo4jRepository implements GraphRepository {
         }
 
         for (const [relType, list] of relationsByType.entries()) {
-          const query = STATIC_RELATION_WRITERS[relType];
+          const query = STATIC_RELATION_WRITERS[relType as RelationType];
           if (!query) continue;
 
           const rows = list.map((r) => ({

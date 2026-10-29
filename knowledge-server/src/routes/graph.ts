@@ -200,7 +200,7 @@ export const ChunkStatusItemDTOSchema = z
     documentTitle: z.string(),
     chunkIndex: z.number().int().nonnegative(),
     totalChunksInDoc: z.number().int().nonnegative(),
-    status: z.enum(['PENDING', 'EXTRACTING', 'SUCCESS', 'FAILED']),
+    status: z.enum(['PENDING', 'EXTRACTING', 'SUCCESS', 'PARTIAL', 'FAILED']),
     error: z.string().optional(),
     updatedAt: z.string(),
     nodesCount: z.number().int().nonnegative(),

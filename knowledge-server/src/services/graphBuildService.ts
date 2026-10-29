@@ -241,10 +241,10 @@ export class GraphBuildService {
         {
           endpoint: this.proseExtraction.endpoint,
           model: this.proseExtraction.model,
-          apiKey: this.proseExtraction.apiKey,
-          fetchFn: this.proseExtraction.fetchFn,
-          targetChunkIds: options?.targetChunkIds,
-          ontologyRegistry: this.ontologyRegistry,
+          ...(this.proseExtraction.apiKey ? { apiKey: this.proseExtraction.apiKey } : {}),
+          ...(this.proseExtraction.fetchFn ? { fetchFn: this.proseExtraction.fetchFn } : {}),
+          ...(options?.targetChunkIds ? { targetChunkIds: options.targetChunkIds } : {}),
+          ...(this.ontologyRegistry ? { ontologyRegistry: this.ontologyRegistry } : {}),
           onProgress,
         }
       );
@@ -261,7 +261,7 @@ export class GraphBuildService {
 
       // Check chunk extraction completeness
       const chunkStats = this.getChunkStatusList(setId);
-      if (chunkStats.pending > 0) {
+      if (chunkStats.pending > 0 && !options?.targetChunkIds) {
         // There are still pending chunks that have not run yet.
         // We do not finalize candidate or build retrieval generation yet.
         this.currentStages.set(setId, 'Validation');

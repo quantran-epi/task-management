@@ -8,6 +8,7 @@ import {
   GraphBuildService,
   type ProseExtractionConfig,
 } from './services/graphBuildService.js';
+import { OntologyRegistryService } from './services/ontologyRegistryService.js';
 import { SnapshotStore } from './indexing/snapshotStore.js';
 import { AttemptService } from './services/attemptService.js';
 import {
@@ -399,6 +400,7 @@ export async function startKnowledgeServer(
     storageDir: env.SNAPSHOT_STORAGE_DIR,
   });
   const attemptService = new AttemptService(snapshotStore);
+  const ontologyRegistry = new OntologyRegistryService();
 
   if (options.neo4j.enabled && options.neo4j.uri) {
     graphRepository = new Neo4jRepository({
@@ -426,6 +428,7 @@ export async function startKnowledgeServer(
       snapshotStore,
       embeddingProvider,
       proseExtraction: proseConfig,
+      ontologyRegistry,
       productionMode: true,
       rollbackGracePeriodMs: options.rollbackGracePeriodMs,
     });
