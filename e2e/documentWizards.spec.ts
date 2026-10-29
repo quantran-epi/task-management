@@ -105,7 +105,7 @@ test.describe('F16 actual-app lifecycle', () => {
     await expect(reviewButtons).toHaveCount(2);
     await expect(page.getByText(/Đã bổ sung ngữ cảnh/).last()).toBeVisible();
     await reviewButtons.last().click();
-    await expect(page.getByText('Đã lưu thành tài liệu dự án.', { exact: true })).toBeVisible();
+    await expect(page.getByText(/Saved PL02 v/)).toBeVisible();
   });
 
   test('valid change-pack requires explicit confirmation and rejects a mismatched identity', async ({ page }) => {
