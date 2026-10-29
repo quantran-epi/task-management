@@ -420,6 +420,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const [wizardSkill, setWizardSkill] = useState<Exclude<WizardSkill, 'SOLUTION'> | null>(null);
   const [wizardMetadataOpen, setWizardMetadataOpen] = useState(false);
   const [wizardSnapshot, setWizardSnapshot] = useState<WizardSnapshot | undefined>();
+  const [wizardSkipNotice, setWizardSkipNotice] = useState<string | null>(null);
   const [packUi, setPackUi] = useState<ChangePackUiResult | null>(null);
   const [reconciliationResult, setReconciliationResult] = useState<ReconciliationResult | null>(null);
   const [technicalDocsReady, setTechnicalDocsReady] = useState(false);
@@ -664,6 +665,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     onOpenNote: (noteId: string) => { window.location.hash = `/notes?doc=${encodeURIComponent(noteId)}`; },
     onSuggestion: (_questionId: string, suggestion: string) => setExternalInputValue(suggestion),
     onSkip: (_messageId: string, questionId: string) => {
+      setWizardSkipNotice(`Đã bỏ qua: ${questionId} · (chưa cung cấp)`);
       void getWizardCoordinator()?.skipGap(questionId).then(() => setWizardSnapshot(getWizardCoordinator()?.getSnapshot()));
     },
     pendingKeys: exportPending,
@@ -679,6 +681,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     <>
       {wizardSnapshot && <WizardLifecycleBar formName={wizardSnapshot.skill} snapshot={wizardSnapshot} restored={Boolean((wizardSnapshot as WizardSnapshot & { restored?: boolean }).restored)} onAbandon={() => void handleWizardCancel()} />}
       {wizardSnapshot && <WizardProgressStrip snapshot={wizardSnapshot} />}
+      {wizardSkipNotice && <div role="status">{wizardSkipNotice}</div>}
       <WizardSkillBar projectScoped={isProjectScope} activeSession={Boolean(wizardSnapshot && !['completed', 'abandoned'].includes(wizardSnapshot.status))} selectedSkill={wizardSkill ?? undefined} onActivate={(skill) => { setWizardSkill(skill); setWizardMetadataOpen(true); }} />
       {packVisible && !packUi && <ChangePackDropzone onSelect={(file) => void handlePackSelect(file)} />}
       {packVisible && packUi && !confirmedManifest && <ChangePackConfirmStrip result={packUi} onConfirm={(manifest) => void handlePackConfirm(manifest)} onReplace={handlePackReplace} />}
