@@ -20,6 +20,8 @@ import {
 } from '../../src/services/ai/wizardSchemas';
 import { DocumentSetSchema } from '../../src/validation/knowledgeSchemas';
 import { NoteSchema } from '../../src/validation/schemas';
+import type { ChangePackIdentity, ChangePackManifest } from '../../src/services/wizard/changePack';
+import type { ReconciliationResult } from '../../src/services/wizard/reconciliation';
 
 const PROJECT_ID = '11111111-1111-4111-8111-111111111111';
 const THREAD_ID = '22222222-2222-4222-8222-222222222222';
@@ -139,6 +141,109 @@ describe('wizard coordinator lifecycle', () => {
     await Promise.all([coordinator.approveSolution(), coordinator.approveSolution()]);
     expect(deps.saveSolution).toHaveBeenCalledTimes(1);
     expect(deps.saveSolution).toHaveBeenCalledWith(expect.objectContaining({ projectId, threadId, draftRevision: 1 }));
+  });
+
+  it('validates without writes, requires exact explicit pack confirmation, then persists and reconciles once', async () => {
+    const identity: ChangePackIdentity = { cr: 'CR-1', base: 'base-1', head: 'head-1', branch: 'feature/CR-1' };
+    const manifest = {
+      schemaVersion: 1,
+      packHash: '6'.repeat(64),
+      identity,
+      meta: { ...identity, author: 'Dev', generatedAt: NOW, commits: [{ sha: 'head-1', subject: 'change' }], files: [{ path: 'src/feature.ts', status: 'M' }] },
+      entries: [{ path: 'diff.patch', sizeBytes: 8, status: 'included', coverage: 'included', content: 'patch' }],
+      compressedBytes: 8,
+      expandedBytes: 8,
+      commitCount: 1,
+      fileCount: 1,
+      coverageStatus: 'complete',
+    } satisfies ChangePackManifest;
+    const solution = { noteId: NOTE_ID, version: 2, hash: HASH };
+    const result = {
+      schemaVersion: 1,
+      identity: { projectId, threadId, solutionNoteId: solution.noteId, solutionVersion: solution.version, solutionHash: solution.hash, packHash: manifest.packHash, cr: identity.cr, base: identity.base, head: identity.head },
+      status: 'NO_DRIFT_COMPLETE',
+      approvedDesign: { currentSystem: 'Current', affectedScreens: [], affectedApis: [], affectedTables: [] },
+      actualImplementation: { affectedFiles: ['src/feature.ts'], affectedScreens: [], affectedApis: [], affectedTables: [] },
+      drift: [],
+      dbChangesRollback: { affectedTables: [], changes: [], rollback: { status: 'unknown', evidenceIds: [] } },
+      regressionMatrix: [{ scenario: 'existing flow', expected: 'unchanged' }],
+      coverage: [{ path: 'diff.patch', state: 'included', evidenceIds: [] }],
+    } satisfies ReconciliationResult;
+    const validatePack = vi.fn().mockResolvedValue(manifest);
+    const persistPack = vi.fn().mockResolvedValue({ notes: [{ id: '55555555-5555-4555-8555-555555555555' }], created: true });
+    const reconcilePack = vi.fn().mockReturnValue(result);
+    const appendReviewSnapshot = vi.fn().mockResolvedValue(undefined);
+    const deps = coordinatorDeps({
+      loadCanonicalChain: vi.fn().mockResolvedValue([{ id: NOTE_ID, sdlcArtifact: { kind: 'SOLUTION', projectId, threadId, version: 2, inputHash: HASH } }]),
+      expectedPackIdentity: () => identity,
+      validatePack,
+      persistPack,
+      reconcilePack,
+      buildReconciliationInput: vi.fn().mockReturnValue({ pinned: true }),
+      appendReviewSnapshot,
+    });
+    const coordinator = createWizardCoordinator(deps);
+    await coordinator.start('PL03', { cr: identity.cr, featureName: 'Feature', requestingUnit: '', author: 'User', date: '2026-10-28' });
+
+    const selected = await coordinator.selectChangePack(new File(['zip'], 'change-pack.zip'));
+    expect(selected).toMatchObject({ status: 'pending', manifest });
+    expect(persistPack).not.toHaveBeenCalled();
+    await expect(coordinator.confirmChangePack({ packHash: '7'.repeat(64), identity })).rejects.toThrow('PACK_CONFIRMATION_MISMATCH');
+    expect(persistPack).not.toHaveBeenCalled();
+
+    const confirmed = await coordinator.confirmChangePack({ packHash: manifest.packHash, identity });
+    expect(persistPack).toHaveBeenCalledTimes(1);
+    expect(reconcilePack).toHaveBeenCalledTimes(1);
+    expect(confirmed).toMatchObject({ persisted: { created: true }, reconciliation: result });
+    expect(appendReviewSnapshot).toHaveBeenCalledTimes(1);
+    expect(coordinator.getPackState()).toMatchObject({ status: 'confirmed', manifest });
+
+    const replay = await coordinator.confirmChangePack({ packHash: manifest.packHash, identity });
+    expect(replay).toEqual(confirmed);
+    expect(persistPack).toHaveBeenCalledTimes(1);
+  });
+
+  it('replace discards pending File/manifest and technical docs pin PL03 and PL07 to same solution/pack', async () => {
+    const identity: ChangePackIdentity = { cr: 'CR-1', base: 'base-1', head: 'head-1', branch: 'feature/CR-1' };
+    const manifest = {
+      schemaVersion: 1,
+      packHash: '6'.repeat(64),
+      identity,
+      meta: { ...identity, author: 'Dev', generatedAt: NOW, commits: [], files: [] },
+      entries: [{ path: 'diff.patch', sizeBytes: 8, status: 'deferred', coverage: 'deferred', content: 'patch' }],
+      compressedBytes: 8,
+      expandedBytes: 8,
+      commitCount: 0,
+      fileCount: 0,
+      coverageStatus: 'partial',
+    } satisfies ChangePackManifest;
+    const solution = { noteId: NOTE_ID, version: 2, hash: HASH };
+    const runTechnicalStage = vi.fn()
+      .mockResolvedValueOnce({ schemaVersion: 1, kind: 'PL03', coverage: 'PARTIAL', caveats: ['deferred'] })
+      .mockResolvedValueOnce({ schemaVersion: 1, kind: 'PL07', unknowns: ['deferred'] });
+    const deps = coordinatorDeps({
+      expectedPackIdentity: () => identity,
+      validatePack: vi.fn().mockResolvedValue(manifest),
+      persistPack: vi.fn().mockResolvedValue({ notes: [], created: true }),
+      loadCanonicalChain: vi.fn().mockResolvedValue([{ id: NOTE_ID, sdlcArtifact: { kind: 'SOLUTION', projectId, threadId, version: 2, inputHash: HASH } }]),
+      reconcilePack: vi.fn().mockReturnValue({ status: 'PARTIAL_COVERAGE', coverage: [{ path: 'diff.patch', state: 'deferred', evidenceIds: [] }], drift: [], identity: { projectId, threadId, solutionNoteId: NOTE_ID, solutionVersion: 2, solutionHash: HASH, packHash: manifest.packHash, cr: identity.cr, base: identity.base, head: identity.head } }),
+      buildReconciliationInput: vi.fn().mockReturnValue({}),
+      runTechnicalStage,
+    });
+    const coordinator = createWizardCoordinator(deps);
+    await coordinator.start('PL03', { cr: identity.cr, featureName: 'Feature', requestingUnit: '', author: 'User', date: '2026-10-28' });
+    await coordinator.selectChangePack(new File(['zip'], 'change-pack.zip'));
+    coordinator.replaceChangePack();
+    expect(coordinator.getPackState()).toEqual({ status: 'idle' });
+    await expect(coordinator.confirmChangePack({ packHash: manifest.packHash, identity })).rejects.toThrow('PACK_CONFIRMATION_REQUIRED');
+
+    await coordinator.selectChangePack(new File(['zip'], 'change-pack.zip'));
+    await coordinator.confirmChangePack({ packHash: manifest.packHash, identity });
+    const docs = await coordinator.generateTechnicalDocs();
+    expect(runTechnicalStage).toHaveBeenCalledTimes(2);
+    expect(runTechnicalStage.mock.calls[0]?.[0]).toMatchObject({ kind: 'PL03', solution, packHash: manifest.packHash });
+    expect(runTechnicalStage.mock.calls[1]?.[0]).toMatchObject({ kind: 'PL07', solution, packHash: manifest.packHash });
+    expect(docs).toMatchObject({ solution, packHash: manifest.packHash, coverageStatus: 'PARTIAL_COVERAGE' });
   });
 });
 

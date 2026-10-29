@@ -1,5 +1,5 @@
 import type { TaskPlannerDatabase } from '../../db';
-import type { ChatMessage } from '../../types/models';
+import type { ChatMessage, Note } from '../../types/models';
 import {
   assertWizardTransition,
   WizardSnapshotSchema,
@@ -10,6 +10,107 @@ import {
 import type { WizardEvidence, WizardEvidenceInput } from '../ai/wizardService';
 import type { WizardGapResult } from '../ai/wizardPrompts';
 import { generateId } from '../../utils/uuid';
+import {
+  ChangePackIdentitySchema,
+  type ChangePackIdentity,
+  type ChangePackManifest,
+  validateChangePack,
+} from './changePack';
+import { reconcileSolutionWithPack, type ReconciliationResult } from './reconciliation';
+import {
+  loadCanonicalArtifactChain,
+  persistConfirmedPack,
+  type PersistedPackResult,
+} from './artifactRepo';
+
+export interface ChangePackConfirmation {
+  packHash: string;
+  identity: ChangePackIdentity;
+}
+
+export type ChangePackState =
+  | { status: 'idle' }
+  | { status: 'validating' }
+  | { status: 'invalid'; code: string }
+  | { status: 'pending'; manifest: Readonly<ChangePackManifest> }
+  | { status: 'confirmed'; manifest: Readonly<ChangePackManifest>; persisted: PersistedPackResult; reconciliation: ReconciliationResult };
+
+export interface WizardPackTechnicalDocs {
+  solution: { noteId: string; version: number; hash: string };
+  packHash: string;
+  coverageStatus: ReconciliationResult['status'];
+  reconciliation: ReconciliationResult;
+  pl03?: unknown;
+  pl07?: unknown;
+}
+
+export interface WizardPackDeps {
+  expectedPackIdentity?: () => ChangePackIdentity;
+  validatePack?: (file: Blob, expectedIdentity: ChangePackIdentity) => Promise<Readonly<ChangePackManifest>>;
+  persistPack?: (input: Parameters<typeof persistConfirmedPack>[0]) => Promise<PersistedPackResult>;
+  loadCanonicalChain?: (projectId: string, threadId: string) => Promise<Note[]>;
+  buildReconciliationInput?: (input: {
+    manifest: Readonly<ChangePackManifest>;
+    solution: Note;
+    projectId: string;
+    threadId: string;
+  }) => unknown;
+  reconcilePack?: (input: unknown) => ReconciliationResult;
+  appendReviewSnapshot?: (input: WizardPackTechnicalDocs) => Promise<void>;
+  runTechnicalStage?: (input: {
+    kind: 'PL03' | 'PL07';
+    projectId: string;
+    threadId: string;
+    sessionId: string;
+    inputRevision: number;
+    solution: { noteId: string; version: number; hash: string };
+    packHash: string;
+    reconciliation: ReconciliationResult;
+  }) => Promise<unknown>;
+  runCabStage?: (input: {
+    kind: 'CAB';
+    projectId: string;
+    threadId: string;
+    sessionId: string;
+    inputRevision: number;
+    sources: Array<{ kind: 'PL02' | 'PL03B' | 'PL07'; noteId: string; version: number; hash: string }>;
+  }) => Promise<unknown>;
+}
+
+export interface WizardCoordinatorDeps extends WizardPackDeps {
+  projectId: string;
+  threadId: string;
+  db?: TaskPlannerDatabase;
+  now?: () => string;
+  createSessionId?: () => string;
+  collectEvidence?: (input: WizardEvidenceInput) => Promise<WizardEvidence>;
+  runStage?: (input: WizardStageInput) => Promise<unknown>;
+  saveSnapshot?: (snapshot: WizardSnapshot) => Promise<void>;
+  appendMessage?: (message: {
+    role: 'assistant' | 'user';
+    content: string;
+    wizard: WizardSnapshot;
+  }) => Promise<void>;
+  loadMessages?: () => Promise<ChatMessage[]>;
+  saveSolution?: (input: {
+    projectId: string;
+    threadId: string;
+    sessionId: string;
+    inputRevision: number;
+    draftRevision: number;
+    inputHash: string;
+    markdown: string;
+    exportPayload: unknown;
+    approvedAt: string;
+  }) => Promise<unknown>;
+  hashText?: (text: string) => Promise<string>;
+  resolveEvidenceInput?: (state: {
+    skill: WizardSkill;
+    metadata: WizardStartMetadata;
+    inputRevision: number;
+    context: string;
+  }) => Promise<WizardEvidenceInput>;
+}
 
 export interface WizardStartMetadata {
   cr: string;
@@ -49,41 +150,6 @@ export interface WizardStageInput {
   skippedFieldIds: readonly string[];
   signal: AbortSignal;
   isCurrent: () => boolean;
-}
-
-export interface WizardCoordinatorDeps {
-  projectId: string;
-  threadId: string;
-  db?: TaskPlannerDatabase;
-  now?: () => string;
-  createSessionId?: () => string;
-  collectEvidence?: (input: WizardEvidenceInput) => Promise<WizardEvidence>;
-  runStage?: (input: WizardStageInput) => Promise<unknown>;
-  saveSnapshot?: (snapshot: WizardSnapshot) => Promise<void>;
-  appendMessage?: (message: {
-    role: 'assistant' | 'user';
-    content: string;
-    wizard: WizardSnapshot;
-  }) => Promise<void>;
-  loadMessages?: () => Promise<ChatMessage[]>;
-  saveSolution?: (input: {
-    projectId: string;
-    threadId: string;
-    sessionId: string;
-    inputRevision: number;
-    draftRevision: number;
-    inputHash: string;
-    markdown: string;
-    exportPayload: unknown;
-    approvedAt: string;
-  }) => Promise<unknown>;
-  hashText?: (text: string) => Promise<string>;
-  resolveEvidenceInput?: (state: {
-    skill: WizardSkill;
-    metadata: WizardStartMetadata;
-    inputRevision: number;
-    context: string;
-  }) => Promise<WizardEvidenceInput>;
 }
 
 export type ActiveWizardSelector = WizardSnapshot & { restored?: boolean };
@@ -167,6 +233,113 @@ export function createWizardCoordinator(deps: WizardCoordinatorDeps) {
   let stageController: AbortController | undefined;
   let generation = 0;
   let approvalPromise: Promise<unknown> | undefined;
+  let packState: ChangePackState = { status: 'idle' };
+  let packFile: File | undefined;
+  let packConfirmationPromise: Promise<unknown> | undefined;
+  let confirmedPackResult: { persisted: PersistedPackResult; reconciliation: ReconciliationResult } | undefined;
+  let technicalDocs: WizardPackTechnicalDocs | undefined;
+
+  const packIdentity = () => ChangePackIdentitySchema.parse(deps.expectedPackIdentity?.() ?? {
+    cr: state?.metadata.cr ?? '',
+    base: '',
+    head: '',
+    branch: '',
+  });
+
+  const packSession = () => {
+    if (!state) throw new Error('PACK_WIZARD_SESSION_REQUIRED');
+    return state;
+  };
+
+  const findSolution = async (manifest: Readonly<ChangePackManifest>): Promise<{ note: Note; pin: WizardPackTechnicalDocs['solution'] }> => {
+    const chain = deps.loadCanonicalChain
+      ? await deps.loadCanonicalChain(deps.projectId, deps.threadId)
+      : deps.db
+        ? await loadCanonicalArtifactChain(deps.projectId, deps.threadId, deps.db)
+        : [];
+    const solution = chain
+      .filter((note) => note.sdlcArtifact?.kind === 'SOLUTION')
+      .sort((left, right) => (right.sdlcArtifact?.version ?? 0) - (left.sdlcArtifact?.version ?? 0))[0];
+    if (!solution?.sdlcArtifact || solution.sdlcArtifact.kind !== 'SOLUTION') throw new Error('PACK_SOLUTION_REQUIRED');
+    const pin = { noteId: solution.id, version: solution.sdlcArtifact.version, hash: solution.sdlcArtifact.inputHash };
+    if (solution.sdlcArtifact.projectId !== deps.projectId || solution.sdlcArtifact.threadId !== deps.threadId) throw new Error('PACK_SOLUTION_MISMATCH');
+    void manifest;
+    return { note: solution, pin };
+  };
+
+  const reconcileConfirmedPack = async (manifest: Readonly<ChangePackManifest>, persisted: PersistedPackResult): Promise<WizardPackTechnicalDocs> => {
+    const { note: solution, pin } = await findSolution(manifest);
+    const input = deps.buildReconciliationInput
+      ? deps.buildReconciliationInput({ manifest, solution, projectId: deps.projectId, threadId: deps.threadId })
+      : { projectId: deps.projectId, threadId: deps.threadId, solutionNoteId: pin.noteId, solutionVersion: pin.version, solutionHash: pin.hash, packHash: manifest.packHash, cr: manifest.identity.cr, base: manifest.identity.base, head: manifest.identity.head, solution: JSON.parse(solution.body), pack: { packHash: manifest.packHash, identity: manifest.identity, entries: manifest.entries.map((entry) => ({ path: entry.path, status: entry.status, coverage: entry.coverage, hunks: [] })) }, evidence: [], proposedDrift: [] };
+    const reconciliation = (deps.reconcilePack ?? reconcileSolutionWithPack)(input);
+    const docs: WizardPackTechnicalDocs = { solution: pin, packHash: manifest.packHash, coverageStatus: reconciliation.status, reconciliation };
+    technicalDocs = docs;
+    void persisted;
+    return docs;
+  };
+
+  const selectChangePack = async (file: File): Promise<ChangePackState> => {
+    if (!state) throw new Error('PACK_WIZARD_SESSION_REQUIRED');
+    packState = { status: 'validating' };
+    packFile = file;
+    try {
+      const manifest = await (deps.validatePack ?? ((input, expected) => validateChangePack(input, expected)))(file, packIdentity());
+      if (disposed) throw new Error('STALE_RESULT');
+      packState = { status: 'pending', manifest };
+      return packState;
+    } catch (error) {
+      packFile = undefined;
+      const code = (error as { code?: unknown })?.code;
+      packState = { status: 'invalid', code: typeof code === 'string' ? code : 'PACK_CORRUPT' };
+      return packState;
+    }
+  };
+
+  const replaceChangePack = (): void => {
+    packFile = undefined;
+    packConfirmationPromise = undefined;
+    confirmedPackResult = undefined;
+    technicalDocs = undefined;
+    packState = { status: 'idle' };
+  };
+
+  const confirmChangePack = async (confirmation: ChangePackConfirmation): Promise<{ persisted: PersistedPackResult; reconciliation: ReconciliationResult }> => {
+    if (confirmedPackResult && packState.status === 'confirmed') return confirmedPackResult;
+    if (packConfirmationPromise) return packConfirmationPromise as Promise<{ persisted: PersistedPackResult; reconciliation: ReconciliationResult }>;
+    if (packState.status !== 'pending' || !packFile) throw new Error('PACK_CONFIRMATION_REQUIRED');
+    const manifest = packState.manifest;
+    const expected = ChangePackIdentitySchema.parse(confirmation.identity);
+    if (confirmation.packHash !== manifest.packHash || JSON.stringify(expected) !== JSON.stringify(manifest.identity)) throw new Error('PACK_CONFIRMATION_MISMATCH');
+    const current = packSession();
+    packConfirmationPromise = (async () => {
+      const { pin } = await findSolution(manifest);
+      const input = { projectId: deps.projectId, threadId: deps.threadId, sessionId: current.snapshot.sessionId, inputRevision: current.snapshot.inputRevision, draftRevision: current.snapshot.draftRevision ?? 1, idempotencyKey: `${current.snapshot.sessionId}:${current.snapshot.draftRevision ?? 1}:PACK:${manifest.packHash}`, manifest, confirmation: expected, solution: pin, confirmedAt: now() };
+      const persisted = await (deps.persistPack ?? ((value) => persistConfirmedPack(value, deps.db)))(input);
+      const reconciliation = await reconcileConfirmedPack(manifest, persisted);
+      await deps.appendReviewSnapshot?.(reconciliation);
+      packState = { status: 'confirmed', manifest, persisted, reconciliation: reconciliation.reconciliation };
+      confirmedPackResult = { persisted, reconciliation: reconciliation.reconciliation };
+      packFile = undefined;
+      return confirmedPackResult;
+    })().finally(() => { packConfirmationPromise = undefined; });
+    return packConfirmationPromise as Promise<{ persisted: PersistedPackResult; reconciliation: ReconciliationResult }>;
+  };
+
+  const generateTechnicalDocs = async (): Promise<WizardPackTechnicalDocs> => {
+    if (packState.status !== 'confirmed' || !technicalDocs) throw new Error('PACK_RECONCILIATION_REQUIRED');
+    if (!deps.runTechnicalStage) return technicalDocs;
+    const current = packSession();
+    const input = { projectId: deps.projectId, threadId: deps.threadId, sessionId: current.snapshot.sessionId, inputRevision: current.snapshot.inputRevision, solution: technicalDocs.solution, packHash: technicalDocs.packHash, reconciliation: technicalDocs.reconciliation };
+    const [pl03, pl07] = await Promise.all([
+      deps.runTechnicalStage({ ...input, kind: 'PL03' }),
+      deps.runTechnicalStage({ ...input, kind: 'PL07' }),
+    ]);
+    const docs = { ...technicalDocs, pl03, pl07 };
+    technicalDocs = docs;
+    await deps.appendReviewSnapshot?.(docs);
+    return docs;
+  };
 
   const isCurrent = (sessionId: string, revision: number, controller: AbortController) =>
     !disposed && !controller.signal.aborted && generation > 0 && state?.snapshot.sessionId === sessionId && state.snapshot.inputRevision === revision;
@@ -334,7 +507,59 @@ export function createWizardCoordinator(deps: WizardCoordinatorDeps) {
     return active;
   };
 
-  const dispose = () => { disposed = true; generation += 1; stageController?.abort(); stageController = undefined; };
+  const generateCab = async (): Promise<unknown> => {
+    if (!deps.runCabStage) throw new Error('CAB_STAGE_UNAVAILABLE');
+    if (packState.status !== 'confirmed' || !technicalDocs) throw new Error('CAB_SOURCE_CHAIN_REQUIRED');
+    const current = packSession();
+    const chain = deps.loadCanonicalChain
+      ? await deps.loadCanonicalChain(deps.projectId, deps.threadId)
+      : deps.db
+        ? await loadCanonicalArtifactChain(deps.projectId, deps.threadId, deps.db)
+        : [];
+    const required = ['PL02', 'PL03B', 'PL07'] as const;
+    const sources = required.map((kind) => {
+      const note = chain
+        .filter((candidate) => candidate.sdlcArtifact?.kind === kind)
+        .sort((left, right) => (right.sdlcArtifact?.version ?? 0) - (left.sdlcArtifact?.version ?? 0))[0];
+      if (!note?.sdlcArtifact || note.sdlcArtifact.kind !== kind) throw new Error('CAB_SOURCE_CHAIN_REQUIRED');
+      return { kind, noteId: note.id, version: note.sdlcArtifact.version, hash: note.sdlcArtifact.inputHash };
+    });
+    return deps.runCabStage({ kind: 'CAB', projectId: deps.projectId, threadId: deps.threadId, sessionId: current.snapshot.sessionId, inputRevision: current.snapshot.inputRevision, sources });
+  };
 
-  return { start, answerGap, skipGap, addContext, requestEdit, approveSolution, cancel, restore, dispose, getState: () => state, getSnapshot: () => state?.snapshot };
+  const getCabState = () => ({ available: Boolean(deps.runCabStage && packState.status === 'confirmed' && technicalDocs) });
+  const getTechnicalDocs = () => technicalDocs;
+  const getLatestSolution = async () => findSolution(packState.status === 'confirmed' ? packState.manifest : ({} as Readonly<ChangePackManifest>));
+  const isBusy = () => Boolean(packConfirmationPromise || packState.status === 'validating');
+  const getPackState = () => packState;
+  const getState = () => state;
+  const getSnapshot = () => state?.snapshot;
+  const getPackResult = () => confirmedPackResult;
+
+  const dispose = () => { disposed = true; generation += 1; stageController?.abort(); stageController = undefined; packFile = undefined; };
+
+  return {
+    start,
+    answerGap,
+    skipGap,
+    addContext,
+    requestEdit,
+    approveSolution,
+    cancel,
+    restore,
+    dispose,
+    selectChangePack,
+    replaceChangePack,
+    confirmChangePack,
+    generateTechnicalDocs,
+    generateCab,
+    getState,
+    getSnapshot,
+    getPackState,
+    getCabState,
+    getTechnicalDocs,
+    getLatestSolution,
+    getPackResult,
+    isBusy,
+  };
 }

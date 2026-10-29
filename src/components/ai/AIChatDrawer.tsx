@@ -97,7 +97,13 @@ import { WizardSkillBar } from './wizard/WizardSkillBar';
 import { WizardMetadataModal, type WizardStartMetadata } from './wizard/WizardMetadataModal';
 import { WizardLifecycleBar } from './wizard/WizardLifecycleBar';
 import { WizardProgressStrip } from './wizard/WizardProgressStrip';
+import { ChangePackDropzone } from './wizard/ChangePackDropzone';
+import { ChangePackConfirmStrip, type ChangePackUiResult } from './wizard/ChangePackConfirmStrip';
+import { DriftMatrixView } from './wizard/DriftMatrixView';
 import { createWizardCoordinator, deriveActiveWizard, type WizardCoordinatorDeps } from '../../services/wizard/wizardCoordinator';
+import type { ChangePackManifest } from '../../services/wizard/changePack';
+import type { ReconciliationResult } from '../../services/wizard/reconciliation';
+import type { ChangePackValidationCode } from '../../services/wizard/changePack';
 import type { WizardSkill, WizardSnapshot } from '../../services/ai/wizardSchemas';
 import { collectWizardEvidence, runWizardStage } from '../../services/ai/wizardService';
 import { runLocalGroundedRetrieval } from '../../services/search/localGroundedRetrieval';
@@ -414,7 +420,12 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const [wizardSkill, setWizardSkill] = useState<Exclude<WizardSkill, 'SOLUTION'> | null>(null);
   const [wizardMetadataOpen, setWizardMetadataOpen] = useState(false);
   const [wizardSnapshot, setWizardSnapshot] = useState<WizardSnapshot | undefined>();
+  const [packUi, setPackUi] = useState<ChangePackUiResult | null>(null);
+  const [reconciliationResult, setReconciliationResult] = useState<ReconciliationResult | null>(null);
+  const [technicalDocsReady, setTechnicalDocsReady] = useState(false);
   const wizardCoordinatorRef = useRef<ReturnType<typeof createWizardCoordinator> | null>(null);
+  const packActionRef = useRef(false);
+  const cabActionRef = useRef(false);
   const isProjectScope = currentScope.type === 'project' && Boolean(currentScope.id);
 
   const activeThreadId = thread?.id;
@@ -454,6 +465,30 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       const deps: WizardCoordinatorDeps = {
         projectId,
         threadId,
+        db,
+        expectedPackIdentity: () => ({ cr: wizardSnapshot?.renderPayload.title || '', base: '', head: '', branch: '' }),
+        appendReviewSnapshot: async (docs) => {
+          setReconciliationResult(docs.reconciliation);
+          setTechnicalDocsReady(Boolean(docs.pl03 && docs.pl07));
+        },
+        runTechnicalStage: async (input) => runWizardStage({
+          kind: input.kind === 'PL03' ? 'PL03' : 'PL07',
+          projectId: input.projectId,
+          threadId: input.threadId,
+          sessionId: input.sessionId,
+          inputRevision: input.inputRevision,
+          payload: { evidence: { items: [], coverage: input.reconciliation.status === 'PARTIAL_COVERAGE' ? 'PARTIAL' : 'COMPLETE', degraded: [] }, pinnedSolution: { artifactId: input.solution.noteId, version: input.solution.version, hash: input.solution.hash, projectId: input.projectId, threadId: input.threadId } },
+          signal: new AbortController().signal, isCurrent: () => true,
+          model: { endpoint: '', model: '' },
+        }),
+        runCabStage: async () => {
+          const docs = wizardCoordinatorRef.current?.getTechnicalDocs?.();
+          return docs;
+        },
+        runStage: async (input) => {
+          const [config, apiKey] = await Promise.all([getNineRouterConfig(db), getNineRouterApiKey(db)]);
+          return runWizardStage({ ...input, model: { endpoint: config.endpoint, apiKey, model: selectedModel || config.defaultModel } });
+        },
         collectEvidence: async (input) => collectWizardEvidence(input, {
           runLocalBm25: (localInput) => runLocalGroundedRetrieval(localInput, {
             loadSetMembers: async (setIds) => {
@@ -466,10 +501,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
             },
           }),
         }),
-        runStage: async (input) => {
-          const [config, apiKey] = await Promise.all([getNineRouterConfig(db), getNineRouterApiKey(db)]);
-          return runWizardStage({ ...input, model: { endpoint: config.endpoint, apiKey, model: selectedModel || config.defaultModel } });
-        },
         resolveEvidenceInput: async ({ metadata, inputRevision, context }) => {
           const sets = await db.documentSets.filter((set) => set.sdlc?.projectId === projectId).toArray();
           return { projectId, threadId, sessionId: wizardCoordinatorRef.current?.getSnapshot()?.sessionId ?? generateId(), inputRevision, query: `${metadata.cr} ${metadata.featureName} ${context}`.trim(), resolvedSetIds: sets.map((set) => set.id) };
@@ -520,12 +551,71 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     setWizardSnapshot(getWizardCoordinator()?.getSnapshot());
   }, [getWizardCoordinator]);
 
+  const handlePackSelect = useCallback(async (file: File) => {
+    const coordinator = getWizardCoordinator();
+    if (!coordinator) return;
+    const result = await coordinator.selectChangePack(file);
+    if (result.status === 'pending') setPackUi({ status: 'valid', manifest: result.manifest });
+    else if (result.status === 'invalid') setPackUi({ status: 'invalid', code: result.code as ChangePackValidationCode });
+  }, [getWizardCoordinator]);
+
+  const handlePackReplace = useCallback(() => {
+    getWizardCoordinator()?.replaceChangePack();
+    setPackUi(null);
+    setReconciliationResult(null);
+    setTechnicalDocsReady(false);
+  }, [getWizardCoordinator]);
+
+  const handlePackConfirm = useCallback(async (manifest: Readonly<ChangePackManifest>) => {
+    if (packActionRef.current) return;
+    const coordinator = getWizardCoordinator();
+    if (!coordinator) return;
+    packActionRef.current = true;
+    try {
+      const confirmed = await coordinator.confirmChangePack({ packHash: manifest.packHash, identity: manifest.identity });
+      setReconciliationResult(confirmed.reconciliation);
+      setPackUi({ status: 'valid', manifest });
+      const docs = await coordinator.generateTechnicalDocs();
+      setTechnicalDocsReady(Boolean(docs.pl03 && docs.pl07));
+    } catch {
+      setApiError('Không thể xác nhận change-pack. Kiểm tra đúng dự án, phiên bản SOLUTION và pack rồi thử lại.');
+    } finally {
+      packActionRef.current = false;
+    }
+  }, [getWizardCoordinator]);
+
+  const handleCabGenerate = useCallback(async () => {
+    if (cabActionRef.current) return;
+    const coordinator = getWizardCoordinator();
+    if (!coordinator) return;
+    cabActionRef.current = true;
+    try {
+      await coordinator.generateCab();
+    } catch {
+      setApiError('Thiếu chuỗi PL02/PL03B/PL07 cùng dự án và thread; chưa thể tạo CAB.');
+    } finally {
+      cabActionRef.current = false;
+    }
+  }, [getWizardCoordinator]);
+
+  const packVisible = wizardSnapshot?.skill === 'PL03' || wizardSnapshot?.skill === 'PL07';
+  const confirmedManifest = packUi?.status === 'valid' && reconciliationResult ? packUi.manifest : null;
+
   const wizardProject = currentScope.id ? { id: currentScope.id, name: currentScope.title || currentScope.id } : undefined;
   const wizardLeadingContent = (
     <>
       {wizardSnapshot && <WizardLifecycleBar formName={wizardSnapshot.skill} snapshot={wizardSnapshot} restored={Boolean((wizardSnapshot as WizardSnapshot & { restored?: boolean }).restored)} onAbandon={() => void handleWizardCancel()} />}
       {wizardSnapshot && <WizardProgressStrip snapshot={wizardSnapshot} />}
       <WizardSkillBar projectScoped={isProjectScope} activeSession={Boolean(wizardSnapshot && !['completed', 'abandoned'].includes(wizardSnapshot.status))} selectedSkill={wizardSkill ?? undefined} onActivate={(skill) => { setWizardSkill(skill); setWizardMetadataOpen(true); }} />
+      {packVisible && !packUi && <ChangePackDropzone onSelect={(file) => void handlePackSelect(file)} />}
+      {packVisible && packUi && !confirmedManifest && <ChangePackConfirmStrip result={packUi} onConfirm={(manifest) => void handlePackConfirm(manifest)} onReplace={handlePackReplace} />}
+      {confirmedManifest && reconciliationResult && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div role="status" style={{ fontSize: 12 }}>Đã nạp change-pack {confirmedManifest.identity.cr}</div>
+          <DriftMatrixView result={reconciliationResult} />
+          <Button onClick={() => void handleCabGenerate()} disabled={!technicalDocsReady || cabActionRef.current}>Tạo tờ trình CAB</Button>
+        </div>
+      )}
     </>
   );
   const wizardPlaceholder = wizardSnapshot && !['completed', 'abandoned'].includes(wizardSnapshot.status) ? 'Trả lời câu hỏi hoặc bổ sung thông tin…' : undefined;
