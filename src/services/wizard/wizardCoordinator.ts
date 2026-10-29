@@ -91,7 +91,34 @@ export type ActiveWizardSelector = WizardSnapshot & { restored?: boolean };
 const EMPTY_EVIDENCE: WizardEvidence = { items: [], coverage: 'EMPTY_SCOPE', degraded: [] };
 
 function defaultPayload(skill: WizardSkill, metadata: WizardStartMetadata): WizardSnapshot['renderPayload'] {
-  return { title: `${skill} — ${metadata.featureName}` };
+  return {
+    title: `${skill} — ${metadata.featureName}`,
+    markdown: `# ${skill} — ${metadata.featureName}\n\n- Mã dự án/CR: ${metadata.cr}\n- Đơn vị yêu cầu: ${metadata.requestingUnit || '(chưa cung cấp)'}\n- Người lập: ${metadata.author || '(chưa cung cấp)'}\n- Ngày lập: ${metadata.date}`,
+  };
+}
+
+function renderStageResult(
+  skill: WizardSkill,
+  fallback: WizardSnapshot['renderPayload'],
+  result: unknown,
+): WizardSnapshot['renderPayload'] {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return fallback;
+  const proposal = result as Record<string, unknown>;
+  const title = typeof proposal.title === 'string' && proposal.title.trim()
+    ? proposal.title.trim()
+    : fallback.title;
+  const markdown = `# ${title}\n\n\`\`\`json\n${JSON.stringify(proposal, null, 2)}\n\`\`\``;
+  if (skill === 'SOLUTION' && proposal.featureMode === 'existing') {
+    const affectedSurfaces = [proposal.affectedScreens, proposal.affectedApis, proposal.affectedTables]
+      .flatMap((value) => Array.isArray(value) ? value : [])
+      .filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+    if (typeof proposal.currentSystem !== 'string' || !proposal.currentSystem.trim() || affectedSurfaces.length === 0) {
+      throw new Error('WIZARD_EXISTING_SOLUTION_DETAILS_REQUIRED');
+    }
+    return { title, featureMode: 'existing', currentSystem: proposal.currentSystem, affectedSurfaces, markdown };
+  }
+  if (skill === 'SOLUTION' && proposal.featureMode === 'new') return { title, featureMode: 'new', markdown };
+  return { title, markdown };
 }
 
 function stepContent(snapshot: WizardSnapshot, gaps: readonly WizardGap[]): string {
@@ -204,7 +231,7 @@ export function createWizardCoordinator(deps: WizardCoordinatorDeps) {
       return;
     }
     const draftRevision = Math.max(1, snapshot.draftRevision ?? 1);
-    const reviewPayload = snapshot.renderPayload;
+    const reviewPayload = renderStageResult(snapshot.skill, snapshot.renderPayload, result);
     if (snapshot.status === 'collecting') {
       await transition('gap_fill', {}, `Đã thu thập đủ dữ liệu cho ${snapshot.skill}.`);
     }
