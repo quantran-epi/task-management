@@ -55,6 +55,7 @@ metrics:
 7. `b51a9cd` — `fix(25-17): harden actual wizard stage integration`
 8. `b9e080d` — `fix(25-17): align F16 app stage contract`
 9. `bfacbaa` — `test(25-17): narrow F16 transport interception`
+10. `043778d` — `fix(25-17): route gap skip by field identity`
 
 ## Accomplishments
 
@@ -91,7 +92,7 @@ npm run test:e2e -- e2e/documentWizards.spec.ts --project=chromium
 
 ```text
 npm run test:e2e -- e2e/documentWizards.spec.ts --project=chromium --workers=1
-Boot smoke passes; six F16 lifecycle tests fail.
+Boot smoke and lifecycle preview now execute on clean server; four F16 tests still fail (skip summary, reload scope restore, and approved export persistence/download paths).
 ```
 
 Failure is real, not suppressed: actual app remains at `PL02 Bước 1/4` after the mocked answer, so preview/export assertions do not pass. Earlier runs also exposed a valid-pack identity error rendered as generic invalid-pack copy. No pass claim made.
