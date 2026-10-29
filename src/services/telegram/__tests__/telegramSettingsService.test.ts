@@ -26,7 +26,7 @@ describe('telegramSettingsService - approvePendingUser', () => {
 
     const { user: pendingUser } = await recordPendingTelegramUser('123456', 'Pending Person', db);
     expect(pendingUser.status).toBe('pending');
-    expect(pendingUser.dataScope).toBe('full'); // legacy initial value
+    expect(pendingUser.dataScope).toBe('knowledge_only');
 
     const approved = await approvePendingUser('123456', {}, db);
     expect(approved.status).toBe('active');
