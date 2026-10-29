@@ -8,6 +8,7 @@ import { buildPl02Document, type Pl02DocxPayload } from '../../src/services/expo
 import { buildPl03bDocument, type Pl03bDocxPayload } from '../../src/services/export/pl03bDocx';
 import { PL07_BASELINE, PL07_BASELINE_SOURCE_SHA256 } from '../../src/services/export/pl07Baseline';
 import { buildPl07Document, type Pl07DocxPayload } from '../../src/services/export/pl07Docx';
+import { buildCabDocument, type CabDocxPayload } from '../../src/services/export/cabDocx';
 import { buildWizardDocx } from '../../src/services/export/wizardDocx';
 import { createWizardCoordinator } from '../../src/services/wizard/wizardCoordinator';
 import { downloadBlob } from '../../src/utils/fileExport';
