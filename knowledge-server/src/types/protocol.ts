@@ -7,6 +7,7 @@ import { z } from 'zod';
 export const CHUNKING_POLICY_VERSION = '2026.10.1';
 export const TARGET_CHUNK_SIZE = 6000;
 export const HARD_ATOMIC_BLOCK_LIMIT = 50000;
+export const DEFAULT_BODY_LIMIT_BYTES = 10_485_760;
 
 /**
  * UUID v4 / RFC 4122 regex validator.

@@ -245,4 +245,78 @@ describe('buildChangePreview', () => {
       expect(source).not.toMatch(forbidden);
     }
   });
+
+  it('produces zero changed or removed chunks on identical preview for server-style >6000-char AST chunks and verifies roundtrip idempotency', async () => {
+    // Generate a markdown document with a single section containing multiple paragraphs exceeding TARGET_CHUNK_SIZE (6000 chars)
+    // Server-style AST chunker splits this into multiple sub-chunks between top-level AST node boundaries
+    const paragraphs: string[] = [];
+    for (let p = 0; p < 15; p++) {
+      paragraphs.push(
+        `Paragraph ${p}: ` +
+          'This is a structured paragraph with sufficient textual density to test AST boundary chunking idempotency. '.repeat(6)
+      );
+    }
+    const longSectionBody = '## Large Section\n\n' + paragraphs.join('\n\n') + '\n';
+    expect(longSectionBody.length).toBeGreaterThan(6000);
+
+    const doc = note(DOC_A, longSectionBody, 'Large Doc');
+    const manifest = await activeManifest([doc]);
+
+    // Verify the document was split into multiple chunks (>1) due to >6000 char section
+    expect(manifest.documents[0]?.chunks.length).toBeGreaterThan(1);
+
+    // Identical preview against active manifest must produce zero changed, removed, or added
+    const preview = await buildChangePreview({
+      documentSet: set([DOC_A]),
+      notes: [doc],
+      activeManifest: manifest,
+    });
+
+    expect(preview.documents[0]?.classification).toBe('unchanged');
+    expect(preview.chunks.every((chunk) => chunk.classification === 'unchanged')).toBe(true);
+    expect(preview.counts).toEqual({
+      documentsAdded: 0,
+      documentsChanged: 0,
+      documentsRemoved: 0,
+      documentsUnchanged: 1,
+      chunksAdded: 0,
+      chunksChanged: 0,
+      chunksRemoved: 0,
+      chunksUnchanged: manifest.documents[0]!.chunks.length,
+    });
+    expect(preview.hasRemovals).toBe(false);
+
+    // Roundtrip / Idempotency check: building manifest from this preview and comparing against another identical preview
+    const roundtripManifest: CachedActiveSnapshotManifest = {
+      snapshotId: 'snapshot-roundtrip',
+      setId: SET_ID,
+      chunkingPolicyVersion: preview.snapshot.chunkingPolicyVersion,
+      documents: preview.snapshot.documents.map((d) => ({
+        documentId: d.documentId,
+        title: d.title,
+        contentHash: d.contentHash,
+        chunks: d.chunks.map((c) => ({
+          occurrenceId: c.occurrenceId,
+          chunkKey: c.chunkKey,
+          contentHash: c.contentHash,
+          headingPath: [...c.headingPath],
+          chunkIndex: c.chunkIndex,
+          startLine: c.startLine,
+          endLine: c.endLine,
+          startOffset: c.startOffset,
+          endOffset: c.endOffset,
+        })),
+      })),
+    };
+
+    const secondPreview = await buildChangePreview({
+      documentSet: set([DOC_A]),
+      notes: [doc],
+      activeManifest: roundtripManifest,
+    });
+
+    expect(secondPreview.documents[0]?.classification).toBe('unchanged');
+    expect(secondPreview.counts.chunksUnchanged).toBe(preview.counts.chunksUnchanged);
+    expect(secondPreview.counts.chunksChanged).toBe(0);
+  });
 });

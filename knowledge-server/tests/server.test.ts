@@ -117,6 +117,24 @@ describe('knowledge server boundary', () => {
     await app.close();
   });
 
+  it('accepts payloads exceeding 1MB up to default 10MB limit when bodyLimit is unspecified', async () => {
+    const app = buildKnowledgeServer({
+      token: TOKEN,
+      allowedOrigins: [ORIGIN],
+    }).app;
+
+    // ~1.5MB body should succeed with 202 under 10MB default (previously would fail 413 with 1MB default)
+    const largeBody = '# Large Document\n\n' + 'a'.repeat(1_500_000);
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/sets/${SET_ID}/attempts`,
+      headers: requestHeaders(),
+      payload: payload(largeBody),
+    });
+    expect(response.statusCode).toBe(202);
+    await app.close();
+  });
+
   it('returns async resources, idempotent replay, conflict, and safe manifests', async () => {
     let release: (() => void) | undefined;
     const blocked = new Promise<void>((resolve) => {

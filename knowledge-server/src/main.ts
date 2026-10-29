@@ -27,6 +27,7 @@ import type {
   OperationOptions,
 } from './retrieval/contracts.js';
 import type { RetrievalRequest } from './types/retrievalProtocol.js';
+import { DEFAULT_BODY_LIMIT_BYTES } from './types/protocol.js';
 
 export interface RemoteEmbeddingConfig {
   enabled: boolean;
@@ -73,6 +74,7 @@ export interface ReadKnowledgeServerOptionsResult {
   proseExtraction: ProseExtractionServerConfig;
   rollbackGracePeriodMs: number;
   timeouts: RetrievalTimeouts;
+  bodyLimitBytes: number;
 }
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost', 'host.docker.internal']);
@@ -353,6 +355,19 @@ export function readKnowledgeServerOptions(
     throw new Error(`Invalid ROLLBACK_GRACE_PERIOD_MS: "${rawGrace}". Must be a positive integer.`);
   }
 
+  // Validate body limit bytes
+  const rawBodyLimit = (env.KNOWLEDGE_SERVER_BODY_LIMIT_BYTES ?? '').trim();
+  let bodyLimitBytes = DEFAULT_BODY_LIMIT_BYTES;
+  if (rawBodyLimit) {
+    const parsedLimit = Number(rawBodyLimit);
+    if (!Number.isInteger(parsedLimit) || parsedLimit <= 0 || String(parsedLimit) !== rawBodyLimit) {
+      throw new Error(
+        `Invalid KNOWLEDGE_SERVER_BODY_LIMIT_BYTES: "${rawBodyLimit}". Must be a positive integer.`
+      );
+    }
+    bodyLimitBytes = parsedLimit;
+  }
+
   const timeouts = readRetrievalTimeouts(env);
 
   return {
@@ -367,6 +382,7 @@ export function readKnowledgeServerOptions(
     proseExtraction,
     rollbackGracePeriodMs,
     timeouts,
+    bodyLimitBytes,
   };
 }
 
@@ -485,6 +501,7 @@ export async function startKnowledgeServer(
     host: options.host,
     port: options.port,
     httpsTerminated: options.httpsTerminated,
+    bodyLimit: options.bodyLimitBytes,
     logger: { level: env.LOG_LEVEL || 'info' },
     attemptService,
     graphRepository,

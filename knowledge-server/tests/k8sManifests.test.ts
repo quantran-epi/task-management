@@ -57,6 +57,9 @@ describe('Kubernetes Manifest Security and Syntax (D-01..D-05)', () => {
     // Probes check port 3001 readiness
     expect(content).toMatch(/port:\s*3001/);
 
+    // KNOWLEDGE_SERVER_BODY_LIMIT_BYTES configured in ConfigMap
+    expect(content).toContain('KNOWLEDGE_SERVER_BODY_LIMIT_BYTES: "10485760"');
+
     // Secret safety: uses secretKeyRef exclusively
     expect(content).toContain('name: knowledge-server-secrets');
     expect(content).toContain('name: neo4j-credentials');

@@ -6,6 +6,7 @@ data:
   HOST: "0.0.0.0"
   PORT: "3001"
   HTTPS_TERMINATED: "true"
+  KNOWLEDGE_SERVER_BODY_LIMIT_BYTES: "10485760"
   KNOWLEDGE_ALLOWED_ORIGINS: "https://taskmate.internal.shb.vn,http://tauri.localhost,https://tauri.localhost,http://localhost:5173,http://localhost:1420"
   NEO4J_URI: "bolt://neo4j:7687"
   NEO4J_ENABLED: "true"

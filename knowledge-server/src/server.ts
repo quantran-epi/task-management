@@ -9,6 +9,7 @@ import { registerGraphRoutes, GraphBuildService } from './routes/graph.js';
 import { registerRetrievalRoutes } from './routes/retrieval.js';
 import { GraphRepository } from './graph/graphRepository.js';
 import type { RetrievalService } from './services/retrievalService.js';
+import { DEFAULT_BODY_LIMIT_BYTES } from './types/protocol.js';
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
 const SAFE_ERROR = { error: { code: 'INTERNAL_ERROR', message: 'Request could not be processed.' } };
@@ -57,7 +58,7 @@ export function buildKnowledgeServer(options: KnowledgeServerOptions): Knowledge
   }
 
   const app = Fastify({
-    bodyLimit: options.bodyLimit ?? 1_048_576,
+    bodyLimit: options.bodyLimit ?? DEFAULT_BODY_LIMIT_BYTES,
     logger:
       options.logger === undefined
         ? false

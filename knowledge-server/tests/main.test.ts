@@ -38,6 +38,7 @@ describe('readKnowledgeServerOptions', () => {
     expect(opts.host).toBe('127.0.0.1');
     expect(opts.port).toBe(3001);
     expect(opts.httpsTerminated).toBe(false);
+    expect(opts.bodyLimitBytes).toBe(10_485_760);
     expect(opts.remoteEmbedding.enabled).toBe(false);
     expect(opts.remotePlanner.enabled).toBe(false);
     expect(opts.neo4j.enabled).toBe(false);
@@ -46,6 +47,25 @@ describe('readKnowledgeServerOptions', () => {
       vectorMs: 1500,
       graphMs: 2000,
     });
+  });
+
+  it('parses valid custom KNOWLEDGE_SERVER_BODY_LIMIT_BYTES and rejects non-positive or invalid integers', () => {
+    const opts = readKnowledgeServerOptions({
+      KNOWLEDGE_SERVER_TOKEN: 'valid-token',
+      KNOWLEDGE_ALLOWED_ORIGINS: VALID_ORIGIN,
+      KNOWLEDGE_SERVER_BODY_LIMIT_BYTES: '20971520',
+    });
+    expect(opts.bodyLimitBytes).toBe(20971520);
+
+    for (const invalid of ['0', '-1', '10.5', 'not-a-number', '10MB']) {
+      expect(() =>
+        readKnowledgeServerOptions({
+          KNOWLEDGE_SERVER_TOKEN: 'valid-token',
+          KNOWLEDGE_ALLOWED_ORIGINS: VALID_ORIGIN,
+          KNOWLEDGE_SERVER_BODY_LIMIT_BYTES: invalid,
+        })
+      ).toThrow(/KNOWLEDGE_SERVER_BODY_LIMIT_BYTES/);
+    }
   });
 
   it('parses multiple comma-separated trimmed origins', () => {
