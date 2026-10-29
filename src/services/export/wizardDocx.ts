@@ -3,9 +3,10 @@ import { z } from 'zod';
 import { buildPl02Document, type Pl02DocxPayload } from './pl02Docx';
 import { buildPl03bDocument, type Pl03bDocxPayload } from './pl03bDocx';
 import { buildPl07Document, type Pl07DocxPayload } from './pl07Docx';
+import { buildCabDocument, type CabDocxPayload } from './cabDocx';
 import { ReconciliationResultSchema } from '../wizard/reconciliation';
 
-export type WizardDocxKind = 'PL02' | 'PL03B' | 'PL07';
+export type WizardDocxKind = 'PL02' | 'PL03B' | 'PL07' | 'CAB';
 
 export class WizardDocxBuildError extends Error {
   constructor(code: string) {
@@ -162,8 +163,53 @@ const pl07PayloadSchema = z.strictObject({
   })),
 });
 
+const cabSourceSchema = z.strictObject({
+  kind: z.enum(['PL02', 'PL03B', 'PL07']),
+  artifactId: z.string().uuid(),
+  version: z.number().int().positive(),
+  hash: z.string().regex(/^[a-f0-9]{64}$/),
+  projectId: z.string().uuid(),
+  threadId: z.string().uuid(),
+  approved: z.boolean(),
+});
+const cabPayloadSchema = z.strictObject({
+  ...approvedEnvelopeSchema,
+  kind: z.literal('CAB'),
+  projectId: z.string().uuid(),
+  threadId: z.string().uuid(),
+  sourceArtifactIds: z.object({ PL02: z.string().uuid(), PL03B: z.string().uuid(), PL07: z.string().uuid() }),
+  sources: z.array(cabSourceSchema).length(3),
+  expectedVersions: z.object({ PL02: z.number().int().positive(), PL03B: z.number().int().positive(), PL07: z.number().int().positive() }),
+  expectedHashes: z.object({ PL02: z.string().regex(/^[a-f0-9]{64}$/), PL03B: z.string().regex(/^[a-f0-9]{64}$/), PL07: z.string().regex(/^[a-f0-9]{64}$/) }),
+  title: z.string().trim().min(1).max(200),
+  contextObjective: z.string().max(4000),
+  businessChanges: z.array(z.string().max(600)).max(12),
+  technicalChanges: z.array(z.string().max(600)).max(12),
+  sit: z.string().max(4000).nullable(),
+  uat: z.string().max(4000).nullable(),
+  risks: z.array(z.string().max(1000)).max(50),
+  unresolvedDrift: z.array(z.string().max(1000)).max(50),
+  rollback: z.strictObject({ summary: z.string().max(2000), verified: z.boolean() }),
+  caveats: z.array(z.string().max(1000)).max(50),
+});
+
+function validateCabSources(payload: z.infer<typeof cabPayloadSchema>): void {
+  const kinds = new Set(['PL02', 'PL03B', 'PL07']);
+  if (payload.sources.some((source) => {
+    if (!kinds.delete(source.kind)) return true;
+    return source.projectId !== payload.projectId
+      || source.threadId !== payload.threadId
+      || !source.approved
+      || source.artifactId !== payload.sourceArtifactIds[source.kind]
+      || source.version !== payload.expectedVersions[source.kind]
+      || source.hash !== payload.expectedHashes[source.kind];
+  }) || kinds.size !== 0) {
+    throw new WizardDocxBuildError('WIZARD_DOCX_CAB_SOURCE_INVALID');
+  }
+}
+
 export async function buildWizardDocx(kind: WizardDocxKind, raw: unknown): Promise<Blob> {
-  const schemas = { PL02: pl02PayloadSchema, PL03B: pl03bPayloadSchema, PL07: pl07PayloadSchema } as const;
+  const schemas = { PL02: pl02PayloadSchema, PL03B: pl03bPayloadSchema, PL07: pl07PayloadSchema, CAB: cabPayloadSchema } as const;
   const schema = schemas[kind];
   if (!schema) throw new WizardDocxBuildError('WIZARD_DOCX_KIND_UNSUPPORTED');
   const parsed = schema.safeParse(raw);
@@ -174,5 +220,7 @@ export async function buildWizardDocx(kind: WizardDocxKind, raw: unknown): Promi
   }
   if (payload.kind === 'PL02') return Packer.toBlob(buildPl02Document(payload as Pl02DocxPayload));
   if (payload.kind === 'PL03B') return Packer.toBlob(buildPl03bDocument(payload as Pl03bDocxPayload));
-  return Packer.toBlob(buildPl07Document(payload as Pl07DocxPayload));
+  if (payload.kind === 'PL07') return Packer.toBlob(buildPl07Document(payload as Pl07DocxPayload));
+  validateCabSources(payload);
+  return Packer.toBlob(buildCabDocument(payload as CabDocxPayload));
 }
