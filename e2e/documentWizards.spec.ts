@@ -93,7 +93,7 @@ test.describe('F16 actual-app lifecycle', () => {
     await createProject(page, projectName);
     await selectProjectScope(page, projectName);
     await startPl02(page, projectName);
-    await page.getByRole('button', { name: 'Bỏ qua mục này' }).click();
+    await page.getByRole('button', { name: 'Bỏ qua mục này' }).click({ force: true });
     await page.waitForTimeout(500);
     await expect(page.getByText(/Đã bỏ qua/)).toBeVisible();
     await page.getByRole('button', { name: /Yêu cầu chỉnh sửa thêm/ }).click({ force: true });
