@@ -56,6 +56,9 @@ export interface WizardMessageCallbacks {
   onConfirmPack?: ((messageId: string, manifest: Readonly<ChangePackManifest>) => void) | undefined;
   onReplacePack?: ((messageId: string) => void) | undefined;
   pendingKeys?: ReadonlySet<string> | undefined;
+  exportedFiles?: ReadonlyMap<string, DocumentPreviewPayload['exportedFile']> | undefined;
+  exportErrors?: ReadonlyMap<string, string> | undefined;
+  onRetryExport?: ((messageId: string) => void | Promise<void>) | undefined;
 }
 
 const { Text } = Typography;
@@ -394,10 +397,10 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
           title: payload.title,
           metadata: { cr: payload.title, requestingUnit: '', author: '', date: snapshot.createdAt.slice(0, 10) },
           markdown: 'markdown' in payload && payload.markdown ? payload.markdown : msg.content,
-          exportedFile: undefined,
-          exportError: undefined,
+          exportedFile: wizardCallbacks.exportedFiles?.get(msg.id),
+          exportError: wizardCallbacks.exportErrors?.get(msg.id),
         };
-        return <DocumentPreviewCard preview={preview} onApproveExport={() => wizardCallbacks.onApproveExport?.(msg.id, snapshot.draftRevision)} onRequestEdit={() => wizardCallbacks.onRequestEdit?.(msg.id, snapshot.draftRevision)} />;
+        return <DocumentPreviewCard preview={preview} pending={wizardCallbacks.pendingKeys?.has(msg.id)} onApproveExport={() => wizardCallbacks.onApproveExport?.(msg.id, snapshot.draftRevision)} onRequestEdit={() => wizardCallbacks.onRequestEdit?.(msg.id, snapshot.draftRevision)} onRetryDownload={() => wizardCallbacks.onRetryExport?.(msg.id)} />;
       }
       return null;
     })();

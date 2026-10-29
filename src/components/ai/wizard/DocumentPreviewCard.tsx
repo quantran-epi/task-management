@@ -40,8 +40,10 @@ export interface DocumentPreviewPayload {
 
 export interface DocumentPreviewCardProps {
   preview: Readonly<DocumentPreviewPayload>;
+  pending?: boolean | undefined;
   onApproveExport: (messageId?: string, draftRevision?: number) => void | Promise<void>;
   onRequestEdit: (pointer: { messageId?: string | undefined; draftRevision?: number | undefined }) => void;
+  onRetryDownload?: (() => void | Promise<void>) | undefined;
 }
 
 const PREVIEW_LINES = 40;
@@ -56,7 +58,7 @@ function formatSize(sizeBytes: number): string {
   return `${(sizeBytes / 1024).toFixed(1)} KB`;
 }
 
-export const DocumentPreviewCard: React.FC<DocumentPreviewCardProps> = ({ preview, onApproveExport, onRequestEdit }) => {
+export const DocumentPreviewCard: React.FC<DocumentPreviewCardProps> = ({ preview, pending = false, onApproveExport, onRequestEdit, onRetryDownload }) => {
   const { token } = theme.useToken();
   const [expanded, setExpanded] = useState(false);
   const previewMarkdown = useMemo(() => expanded ? preview.markdown : truncateMarkdown(preview.markdown), [expanded, preview.markdown]);
@@ -85,6 +87,9 @@ export const DocumentPreviewCard: React.FC<DocumentPreviewCardProps> = ({ previe
         )}
         {preview.driftMatrix && <DriftMatrixView result={preview.driftMatrix} />}
         {preview.exportError && <Alert type="error" showIcon role="alert" message={preview.exportError} />}
+        {preview.exportedFile?.noteSaved && !preview.exportedFile.downloadInitiated && !preview.exportedFile.savePickerSaved && onRetryDownload && (
+          <Button onClick={() => void onRetryDownload()}>Tải lại tệp</Button>
+        )}
         {preview.exportedFile ? (
           <Space direction="vertical" size={8} style={{ width: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
@@ -105,6 +110,8 @@ export const DocumentPreviewCard: React.FC<DocumentPreviewCardProps> = ({ previe
               aria-label="Duyệt & Tải .docx"
               icon={<DownloadOutlined />}
               onClick={() => onApproveExport(preview.messageId, preview.draftRevision)}
+              loading={pending}
+              disabled={pending}
             >
               Duyệt &amp; Tải .docx
             </Button>

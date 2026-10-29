@@ -21,10 +21,16 @@ describe('AIChatDrawer wizard wiring', () => {
   const generateTechnicalDocs = vi.fn();
   const generateCab = vi.fn();
   const getPackState = vi.fn();
+  const approveAndExport = vi.fn();
+  const retryExportDownload = vi.fn();
+  const requestEdit = vi.fn();
 
   beforeEach(async () => {
     vi.restoreAllMocks();
-    start.mockReset(); cancel.mockReset(); dispose.mockReset(); restore.mockReset(); addContext.mockReset(); selectChangePack.mockReset(); replaceChangePack.mockReset(); confirmChangePack.mockReset(); generateTechnicalDocs.mockReset(); generateCab.mockReset(); getPackState.mockReset();
+    start.mockReset(); cancel.mockReset(); dispose.mockReset(); restore.mockReset(); addContext.mockReset(); selectChangePack.mockReset(); replaceChangePack.mockReset(); confirmChangePack.mockReset(); generateTechnicalDocs.mockReset(); generateCab.mockReset(); getPackState.mockReset(); approveAndExport.mockReset(); retryExportDownload.mockReset(); requestEdit.mockReset();
+    approveAndExport.mockResolvedValue({ blobBuilt: true, noteSaved: true, downloadInitiated: true, savePickerSaved: false, filename: 'PL02.docx', sizeBytes: 4, noteId: '55555555-5555-4555-8555-555555555555', errorCode: null });
+    retryExportDownload.mockResolvedValue({ blobBuilt: true, noteSaved: true, downloadInitiated: true, savePickerSaved: false, filename: 'PL02.docx', sizeBytes: 4, noteId: '55555555-5555-4555-8555-555555555555', errorCode: null });
+    requestEdit.mockResolvedValue(undefined);
     getPackState.mockReturnValue({ status: 'idle' });
     selectChangePack.mockResolvedValue({ status: 'pending', manifest: { identity: { cr: 'CR-1', branch: 'feature/CR-1' }, commitCount: 1, fileCount: 1, packHash: '6'.repeat(64), entries: [], meta: {}, schemaVersion: 1, compressedBytes: 1, expandedBytes: 1, coverageStatus: 'complete' } });
     confirmChangePack.mockResolvedValue({ persisted: { created: true, notes: [] }, reconciliation: { status: 'NO_DRIFT_COMPLETE', drift: [], coverage: [] } });
@@ -36,7 +42,7 @@ describe('AIChatDrawer wizard wiring', () => {
     restore.mockResolvedValue(undefined);
     vi.spyOn(coordinatorModule, 'createWizardCoordinator').mockReturnValue({
       start, cancel, dispose, restore, addContext, selectChangePack, replaceChangePack, confirmChangePack, generateTechnicalDocs, generateCab, getPackState,
-      answerGap: vi.fn(), skipGap: vi.fn(), requestEdit: vi.fn(), approveSolution: vi.fn(),
+      answerGap: vi.fn(), skipGap: vi.fn(), requestEdit, approveSolution: vi.fn(), approveAndExport, retryExportDownload,
       getCabState: vi.fn(),
       getTechnicalDocs: vi.fn(),
       getLatestSolution: vi.fn(),
