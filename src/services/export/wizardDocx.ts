@@ -9,9 +9,12 @@ import { ReconciliationResultSchema } from '../wizard/reconciliation';
 export type WizardDocxKind = 'PL02' | 'PL03B' | 'PL07' | 'CAB';
 
 export class WizardDocxBuildError extends Error {
+  readonly code: string;
+
   constructor(code: string) {
     super(code);
     this.name = 'WizardDocxBuildError';
+    this.code = code;
   }
 }
 
@@ -208,19 +211,29 @@ function validateCabSources(payload: z.infer<typeof cabPayloadSchema>): void {
   }
 }
 
+function assertNever(value: never): never {
+  void value;
+  throw new WizardDocxBuildError('WIZARD_DOCX_KIND_UNSUPPORTED');
+}
+
 export async function buildWizardDocx(kind: WizardDocxKind, raw: unknown): Promise<Blob> {
+  if (!['PL02', 'PL03B', 'PL07', 'CAB'].includes(kind)) {
+    throw new WizardDocxBuildError('WIZARD_DOCX_KIND_UNSUPPORTED');
+  }
   const schemas = { PL02: pl02PayloadSchema, PL03B: pl03bPayloadSchema, PL07: pl07PayloadSchema, CAB: cabPayloadSchema } as const;
-  const schema = schemas[kind];
-  if (!schema) throw new WizardDocxBuildError('WIZARD_DOCX_KIND_UNSUPPORTED');
-  const parsed = schema.safeParse(raw);
+  const parsed = schemas[kind].safeParse(raw);
   if (!parsed.success) throw new WizardDocxBuildError('WIZARD_DOCX_PAYLOAD_INVALID');
   const payload = parsed.data;
   if (payload.approvedRevision !== payload.draftRevision) {
     throw new WizardDocxBuildError('WIZARD_DOCX_REVISION_STALE');
   }
-  if (payload.kind === 'PL02') return Packer.toBlob(buildPl02Document(payload as Pl02DocxPayload));
-  if (payload.kind === 'PL03B') return Packer.toBlob(buildPl03bDocument(payload as Pl03bDocxPayload));
-  if (payload.kind === 'PL07') return Packer.toBlob(buildPl07Document(payload as Pl07DocxPayload));
-  validateCabSources(payload);
-  return Packer.toBlob(buildCabDocument(payload as CabDocxPayload));
+  switch (payload.kind) {
+    case 'PL02': return Packer.toBlob(buildPl02Document(payload as Pl02DocxPayload));
+    case 'PL03B': return Packer.toBlob(buildPl03bDocument(payload as Pl03bDocxPayload));
+    case 'PL07': return Packer.toBlob(buildPl07Document(payload as Pl07DocxPayload));
+    case 'CAB':
+      validateCabSources(payload);
+      return Packer.toBlob(buildCabDocument(payload as CabDocxPayload));
+    default: return assertNever(payload);
+  }
 }
