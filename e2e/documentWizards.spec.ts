@@ -174,7 +174,7 @@ test.describe('F16 actual-app lifecycle', () => {
     await page.getByRole('button', { name: 'Duyệt & Tải .docx' }).click();
     await expect(page.getByText('Đã lưu thành tài liệu dự án.', { exact: true })).toBeVisible();
     await expect(page.getByText('WIZARD_EXPORT_DOWNLOAD_CANCELLED', { exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Duyệt & Tải .docx' }).click();
-    await expect(page.getByText('Đã lưu', { exact: false })).toHaveCount(1);
+    await page.getByRole('button', { name: 'Tải lại tệp' }).click();
+    await expect(page.getByText('Đã lưu thành tài liệu dự án.', { exact: true })).toHaveCount(1);
   });
 });
