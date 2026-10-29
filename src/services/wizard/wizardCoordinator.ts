@@ -589,7 +589,7 @@ export function createWizardCoordinator(deps: WizardCoordinatorDeps) {
         const hash = await hashText(markdown);
         const approvedAt = now();
         approved = WizardSnapshotSchema.parse({ ...source, status: 'approved', artifactHash: hash, approvedAt, updatedAt: approvedAt });
-        await persist(approved);
+        await persist(approved, `Đã duyệt bản nháp ${approved.skill}.`);
         const key = `${approved.sessionId}:${approved.draftRevision}:${buildExportKind(approved.skill)}`;
         const filename = filenameFor(approved.skill, approved.renderPayload.title);
         if (retainedExport?.key === key && retainedExport.noteSaved) {
