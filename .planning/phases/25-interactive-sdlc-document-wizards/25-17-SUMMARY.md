@@ -50,6 +50,8 @@ metrics:
 2. `3e7b047` — `fix(25-17): close wizard UI acceptance wiring`
 3. `fc82fd0` — `fix(25-17): restore CAB builder acceptance import`
 4. `4933b67` — `feat(25-17): close wizard acceptance integration`
+5. `a5deb6d` — `fix(25-17): preserve wizard stage progress after local errors`
+6. `2d00632` — `fix(25-17): harden wizard stage and snapshot selection`
 
 ## Accomplishments
 
@@ -127,8 +129,8 @@ Full TypeScript command remains blocked by pre-existing missing knowledge-server
 
 ## Known Stubs / Open Acceptance
 
-- Actual-app F16 lifecycle tests are active but failing; they must not be treated as verified.
-- Coordinator/service integration still needs a deterministic browser proof that mocked stage response reaches `gap_fill` and then `review`.
+- Actual-app F16 lifecycle tests remain active and still fail after root-cause hardening; they must not be treated as verified.
+- Browser failure root cause narrowed to a real page exception in `detectWizardGaps`/stage integration; empty evidence guards and deterministic snapshot ordering are committed, but preview transition still lacks proof.
 - Valid-pack end-to-end confirmation needs fixture identity aligned with entered CR/base/head/branch; current test intentionally exercises mismatch rejection.
 
 ## Threat Flags
