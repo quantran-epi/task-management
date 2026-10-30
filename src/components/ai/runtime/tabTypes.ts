@@ -45,6 +45,8 @@ export interface TabRuntime {
   knowledgeEnabled: boolean;
   promptOptions: Record<string, unknown>;
   tokenUsage: ChatTokenUsage | undefined;
+  requestController?: AbortController;
+  confirmationResolver?: ((confirmed: boolean) => void) | undefined;
   pendingConfirmation: {
     toolName: string;
     summary: string;
