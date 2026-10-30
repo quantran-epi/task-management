@@ -1,6 +1,7 @@
-import React from 'react';
-import { CloseOutlined, ExperimentFilled, MessageOutlined, PlusOutlined } from '@ant-design/icons';
+import React, { useRef } from 'react';
+import { CloseOutlined, ExperimentFilled, MessageOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import { Badge, Tooltip, theme } from 'antd';
+import type { TabRuntimeStatus } from './runtime/tabTypes';
 
 export type ChatTabType = 'sdlc' | 'chat';
 
@@ -19,8 +20,17 @@ export interface ChatTabBarProps {
   onAddTab: () => void;
   onCloseTab: (tabId: string) => void;
   sdlcStatus?: 'wait' | 'process' | 'stale' | 'finish';
+  tabStatuses?: Record<string, TabRuntimeStatus>;
   tabAnalysisModes?: Record<string, boolean>;
 }
+
+const STATUS_TEXT: Record<Exclude<TabRuntimeStatus, 'idle'>, string> = {
+  error: 'Lỗi',
+  interrupted: 'Bị gián đoạn',
+  processing: 'Đang xử lý',
+  stale: 'Cần cập nhật',
+  complete: 'Hoàn tất',
+};
 
 export const ChatTabBar: React.FC<ChatTabBarProps> = ({
   tabs,
@@ -29,9 +39,11 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
   onAddTab,
   onCloseTab,
   sdlcStatus = 'wait',
+  tabStatuses,
   tabAnalysisModes,
 }) => {
   const { token } = theme.useToken();
+  const tabElementsRef = useRef<(HTMLDivElement | null)[]>([]);
 
   return (
     <div
@@ -51,24 +63,89 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
         boxSizing: 'border-box',
       }}
     >
-      {tabs.map((tab) => {
+      {tabs.map((tab, index) => {
         const isActive = tab.id === activeTabId;
         const isSdlc = tab.type === 'sdlc';
         const isAnalysisActive = isSdlc || Boolean(tabAnalysisModes?.[tab.id]);
 
-        let badgeStatus: 'default' | 'processing' | 'warning' | 'success' = 'default';
-        if (isSdlc) {
-          if (sdlcStatus === 'process') badgeStatus = 'processing';
-          else if (sdlcStatus === 'stale') badgeStatus = 'warning';
-          else if (sdlcStatus === 'finish') badgeStatus = 'success';
+        let resolvedStatus: TabRuntimeStatus = tabStatuses?.[tab.id] ?? 'idle';
+        if (!tabStatuses?.[tab.id] && isSdlc) {
+          if (sdlcStatus === 'process') resolvedStatus = 'processing';
+          else if (sdlcStatus === 'stale') resolvedStatus = 'stale';
+          else if (sdlcStatus === 'finish') resolvedStatus = 'complete';
+          else resolvedStatus = 'idle';
         }
+
+        const statusText = resolvedStatus !== 'idle' ? STATUS_TEXT[resolvedStatus] : undefined;
+        const ariaLabel = statusText ? `${tab.title} — ${statusText}` : tab.title;
+
+        const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+          if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            const nextIndex = (index + 1) % tabs.length;
+            tabElementsRef.current[nextIndex]?.focus();
+          } else if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            const prevIndex = (index - 1 + tabs.length) % tabs.length;
+            tabElementsRef.current[prevIndex]?.focus();
+          } else if (e.key === 'Home') {
+            e.preventDefault();
+            tabElementsRef.current[0]?.focus();
+          } else if (e.key === 'End') {
+            e.preventDefault();
+            tabElementsRef.current[tabs.length - 1]?.focus();
+          } else if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onSelectTab(tab.id);
+          } else if (e.key === 'Delete' || e.key === 'Backspace') {
+            if (!isSdlc) {
+              e.preventDefault();
+              onCloseTab(tab.id);
+            }
+          }
+        };
+
+        const renderStatusIndicator = () => {
+          if (resolvedStatus === 'processing') {
+            return <Badge status="processing" style={{ flexShrink: 0 }} />;
+          }
+          if (resolvedStatus === 'error') {
+            return <Badge status="error" style={{ flexShrink: 0 }} />;
+          }
+          if (resolvedStatus === 'interrupted') {
+            return (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+                <Badge status="warning" />
+                <ReloadOutlined style={{ fontSize: 9, color: token.colorWarning }} />
+              </span>
+            );
+          }
+          if (resolvedStatus === 'stale') {
+            return <Badge status="warning" style={{ flexShrink: 0 }} />;
+          }
+          if (resolvedStatus === 'complete') {
+            return <Badge status="success" style={{ flexShrink: 0 }} />;
+          }
+          if (isSdlc) {
+            return <Badge status="default" style={{ flexShrink: 0 }} />;
+          }
+          return <MessageOutlined style={{ fontSize: 11, color: token.colorTextTertiary, flexShrink: 0 }} />;
+        };
 
         return (
           <div
             key={tab.id}
+            ref={(el) => {
+              tabElementsRef.current[index] = el;
+            }}
+            id={`chat-tab-${tab.id}`}
             role="tab"
             aria-selected={isActive}
+            aria-controls={`chat-tabpanel-${tab.id}`}
+            aria-label={ariaLabel}
+            tabIndex={isActive ? 0 : -1}
             onClick={() => onSelectTab(tab.id)}
+            onKeyDown={handleKeyDown}
             style={{
               height: 32,
               padding: '0 8px 0 10px',
@@ -85,6 +162,7 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
               border: isActive
                 ? `1px solid ${token.colorBorderSecondary}`
                 : '1px solid transparent',
+              borderTop: isActive ? `2px solid ${token.colorPrimary}` : '2px solid transparent',
               borderBottom: isActive ? `1px solid ${token.colorBgContainer}` : undefined,
               marginBottom: isActive ? -1 : 0,
               maxWidth: 175,
@@ -92,13 +170,10 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
               position: 'relative',
               transition: 'background-color 0.15s, color 0.15s',
               zIndex: isActive ? 2 : 1,
+              outline: 'none',
             }}
           >
-            {isSdlc ? (
-              <Badge status={badgeStatus} style={{ flexShrink: 0 }} />
-            ) : (
-              <MessageOutlined style={{ fontSize: 11, color: token.colorTextTertiary, flexShrink: 0 }} />
-            )}
+            {renderStatusIndicator()}
 
             <span
               style={{
@@ -111,6 +186,24 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
             >
               {tab.title}
             </span>
+
+            {/* Visually hidden status text for assistive technology */}
+            {statusText && (
+              <span
+                style={{
+                  position: 'absolute',
+                  width: 1,
+                  height: 1,
+                  padding: 0,
+                  margin: -1,
+                  overflow: 'hidden',
+                  clip: 'rect(0, 0, 0, 0)',
+                  border: 0,
+                }}
+              >
+                {statusText}
+              </span>
+            )}
 
             {/* Icon biểu thị Chế độ Phân tích (Analysis Mode) trên từng tab */}
             {isAnalysisActive && (
