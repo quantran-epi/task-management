@@ -200,12 +200,6 @@ export async function getOrCreateSdlcThread(
   }
 
   // Fallback kiểm tra thread project mặc định nếu đã có từ trước
-  const legacyScopeKey = `project:${projectId}`;
-  const legacyThread = await db.chatThreads.where('scopeKey').equals(legacyScopeKey).first();
-  if (legacyThread) {
-    return legacyThread;
-  }
-
   const now = new Date().toISOString();
   const thread: ChatThread = {
     id: generateId(),

@@ -13,6 +13,7 @@ import {
   SCHEMA_V11,
   SCHEMA_V12,
   SCHEMA_V13,
+  SCHEMA_V14,
 } from './schema';
 import type {
   Project,
@@ -29,6 +30,7 @@ import type {
   NoteAttachment,
   ChatThread,
   ChatMessage,
+  ChatTab,
   DocumentSet,
   PublishedDocumentMetadata,
   PublishAttemptCache,
@@ -54,6 +56,7 @@ export class TaskPlannerDatabase extends Dexie {
   noteAttachments!: Table<NoteAttachment, string>;
   chatThreads!: Table<ChatThread, string>;
   chatMessages!: Table<ChatMessage, string>;
+  chatTabs!: Table<ChatTab, string>;
   documentSets!: Table<DocumentSet, string>;
   publishedDocuments!: Table<PublishedDocumentMetadata, [string, string]>;
   publishAttempts!: Table<PublishAttemptCache, string>;
@@ -208,6 +211,57 @@ export class TaskPlannerDatabase extends Dexie {
               user.maxHistoryTurns = 5;
             }
           });
+      });
+
+    this.version(14)
+      .stores(SCHEMA_V14)
+      .upgrade(async (tx) => {
+        const threads = await tx.table('chatThreads').toCollection().toArray();
+        const tabs = tx.table('chatTabs');
+        const now = new Date().toISOString();
+        const nextOrder = new Map<string, number>();
+
+        for (const thread of threads as Array<Record<string, unknown>>) {
+          const scopeKey = typeof thread.scopeKey === 'string' ? thread.scopeKey : '';
+          const threadId = typeof thread.id === 'string' ? thread.id : '';
+          if (!scopeKey || !threadId) continue;
+          const existing = await tabs.where('threadId').equals(threadId).first();
+          if (existing) continue;
+
+          const isSdlc = scopeKey.endsWith(':sdlc') && scopeKey.startsWith('project:');
+          const baseScopeKey = isSdlc ? scopeKey.slice(0, -':sdlc'.length) : scopeKey;
+          const order = nextOrder.get(baseScopeKey) ?? 0;
+          nextOrder.set(baseScopeKey, order + 1);
+          const title = typeof thread.title === 'string' && thread.title.trim()
+            ? thread.title
+            : isSdlc
+              ? '⚙️ SDLC Workflow'
+              : `💬 Cuộc trò chuyện #${order + 1}`;
+          await tabs.add({
+            id: isSdlc ? `sdlc:${baseScopeKey}` : threadId,
+            threadId,
+            scopeKey: baseScopeKey,
+            type: isSdlc ? 'sdlc' : 'chat',
+            title,
+            order,
+            active: false,
+            createdAt: typeof thread.createdAt === 'string' ? thread.createdAt : now,
+            updatedAt: typeof thread.updatedAt === 'string' ? thread.updatedAt : now,
+          });
+        }
+
+        const scopeKeys = new Set<string>();
+        for (const tab of await tabs.toCollection().toArray()) {
+          scopeKeys.add(tab.scopeKey);
+        }
+        for (const scopeKey of scopeKeys) {
+          const scopeTabs = await tabs.where('scopeKey').equals(scopeKey).sortBy('order');
+          const active = scopeTabs.find((tab) => tab.active) ?? scopeTabs[0];
+          if (active) await tabs.update(active.id, { active: true });
+          for (const tab of scopeTabs) {
+            if (tab.id !== active?.id && tab.active) await tabs.update(tab.id, { active: false });
+          }
+        }
       });
 
     // Multi-tab concurrency handlers (DATA-04, D-09, D-10)

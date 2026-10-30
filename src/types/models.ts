@@ -217,6 +217,41 @@ export interface ChatThread {
   updatedAt: string; // ISO string metadata
 }
 
+export type ChatTabType = 'chat' | 'sdlc';
+export type ChatTabStatus = 'idle' | 'processing' | 'interrupted' | 'error' | 'stale' | 'complete';
+
+/** Per-tab settings only. Endpoint, API keys, tokens, and passphrases stay global/session-only. */
+export interface ChatTabConfig {
+  model?: string | undefined;
+  analysisMode?: boolean | undefined;
+  mcpEnabled?: boolean | undefined;
+  knowledgeEnabled?: boolean | undefined;
+  promptContextOptions?: Record<string, boolean | string | number> | undefined;
+}
+
+export interface ChatTabCheckpoint {
+  requestId: string;
+  step?: string | undefined;
+  startedAt: string;
+  status?: 'interrupted' | 'error' | undefined;
+}
+
+export interface ChatTab {
+  id: string;
+  threadId: string;
+  scopeKey: string;
+  type: ChatTabType;
+  title: string;
+  order: number;
+  active?: boolean | undefined;
+  status?: ChatTabStatus | undefined;
+  checkpoint?: ChatTabCheckpoint | undefined;
+  config?: ChatTabConfig | undefined;
+  workflowState?: Record<string, unknown> | undefined;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type ChatRole = 'user' | 'assistant' | 'system';
 
 export interface ChatTokenUsage {

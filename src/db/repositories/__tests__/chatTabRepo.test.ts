@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import 'fake-indexeddb/auto';
+import Dexie from 'dexie';
+import { SCHEMA_V13 } from '../../schema';
 import { TaskPlannerDatabase } from '../../index';
+import type { ChatThread } from '../../../types/models';
+
+const LEGACY_DB_NAME = `LegacyChatTabs_${Math.random()}`;
 import {
   createChatTab,
   deleteChatTab,
@@ -73,8 +78,8 @@ describe('chatTabRepo', () => {
     expect((await db.chatThreads.get(first.threadId))?.title).toBe('Planning chat');
 
     await deleteChatTab(first.id, db);
-    const replacement = await createChatTab({ scopeType: 'project', scopeKey: `project:${projectId}` }, db);
-    expect(replacement.title).toBe('💬 Cuộc trò chuyện #1');
+    const replacement = await getActiveTab(`project:${projectId}`, db);
+    expect(replacement?.title).toBe('💬 Cuộc trò chuyện #1');
   });
 
   it('persists active tab independently by scope', async () => {
@@ -107,8 +112,36 @@ describe('chatTabRepo', () => {
       entityId: projectId,
       title: 'Legacy SDLC',
     });
+    await db.close();
+    const legacy = new Dexie(LEGACY_DB_NAME);
+    legacy.version(13).stores(SCHEMA_V13);
+    await legacy.open();
+    await legacy.table<ChatThread>('chatThreads').bulkAdd([
+      {
+        id: legacyProjectThreadId,
+        scopeKey: `project:${projectId}`,
+        scopeType: 'project',
+        entityId: projectId,
+        title: 'Legacy project chat',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        id: legacySdlcThreadId,
+        scopeKey: `project:${projectId}:sdlc`,
+        scopeType: 'project',
+        entityId: projectId,
+        title: 'Legacy SDLC',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ]);
+    await legacy.close();
 
+    db = new TaskPlannerDatabase(LEGACY_DB_NAME);
     await db.open();
+
+
     const tabs = await listTabsByScope(`project:${projectId}`, db);
     expect(tabs.filter((tab) => tab.type === 'sdlc')).toHaveLength(1);
     expect(tabs.find((tab) => tab.threadId === legacyProjectThreadId)?.type).toBe('chat');

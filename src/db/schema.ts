@@ -94,6 +94,11 @@ export const SCHEMA_V13 = {
   ...SCHEMA_V12,
 } as const;
 
+export const SCHEMA_V14 = {
+  ...SCHEMA_V13,
+  chatTabs: 'id, &threadId, scopeKey, [scopeKey+active], createdAt',
+} as const;
+
 
 
 
