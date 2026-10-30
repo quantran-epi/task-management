@@ -404,7 +404,7 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
         const missingIds: string[] = [];
         for (const artifact of Object.values(workflow.artifacts)) {
           if (!artifact || !('noteId' in artifact) || !artifact.noteId) continue;
-          if (notes && !noteIds.has(artifact.noteId)) {
+          if (!noteIds.has(artifact.noteId)) {
             missingIds.push(artifact.noteId);
             if (!recovery.missingSources.some((source) => source.id === artifact.noteId)) {
               recovery.missingSources.push({
