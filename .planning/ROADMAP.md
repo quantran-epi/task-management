@@ -170,7 +170,6 @@ Plans:
 
 **Plans:** 16/18 plans executed
 
-
 ### Phase 25.1: SDLC Flow Hardening & Multi-Tab AI Chat Isolation (INSERTED)
 
 **Goal:** Harden existing Phase 25 AI Chat Drawer/SDLC workflow so every scope has durable fully isolated multi-tab execution, Project retains one fixed persistent SDLC tab, valid assistant turns commit atomically, interruptions/retries are recoverable, SDLC revisions use immutable cycles/versions with correct stale propagation, narrow-drawer UI remains accessible, and encrypted backup/import restores all canonical state without secrets or partial/error output.
@@ -187,29 +186,36 @@ Plans:
   7. Existing encrypted backup/local import and Tauri SQLite paths preserve canonical tabs, workflow/checkpoints, versions/cycles, artifact refs, and valid history while excluding secrets, partial buffers, errors, and raw diagnostics; corrupt imports fail before writes and missing sources restore a blocked recoverable checkpoint.
   8. Targeted unit/component/integration suites, actual-app Playwright acceptance, final source safety gates, and required manual Tauri checks pass with no skipped Phase 25.1 tests.
 
-**Plans:** 9 plans in 7 waves
+**Plans:** 1/9 plans executed
 
 Plans:
 
 **Wave 1**
-- [ ] 25.1-01-PLAN.md — Durable tab contracts, SCHEMA_V14 migration, deterministic editable titles, repository invariants, and SQLite parity
+
+- [x] 25.1-01-PLAN.md — Durable tab contracts, SCHEMA_V14 migration, deterministic editable titles, repository invariants, and SQLite parity
 
 **Wave 2** *(depends on 25.1-01)*
+
 - [ ] 25.1-02-PLAN.md — Per-tab runtime/request ownership and atomic assistant commit/retry behavior
 
 **Wave 3** *(depends on 25.1-01, 25.1-02)*
+
 - [ ] 25.1-03-PLAN.md — Workflow checkpoints, immutable versions, revision cycles, active pointers, and stale propagation
 
 **Wave 4** *(parallel after workflow/runtime contracts)*
+
 - [ ] 25.1-04-PLAN.md — Vertical timeline, revision impact gate, independent multi-source intake, and D-19 merge/citation/conflict contract
 - [ ] 25.1-05-PLAN.md — Durable accessible tab UI, isolated drawer state, and SDLC prompt/core routing
 - [ ] 25.1-06-PLAN.md — Backup types, safe export, strict validation, and missing-source normalization
 
 **Wave 5** *(depends on 25.1-06)*
+
 - [ ] 25.1-07-PLAN.md — Atomic restore, pre-25.1 backfill, and snapshot rollback
 
 **Wave 6** *(depends on 25.1-04, 25.1-05, 25.1-07)*
+
 - [ ] 25.1-08-PLAN.md — Actual-app multi-tab/SDLC/backup accessibility acceptance
 
 **Wave 7** *(depends on 25.1-08)*
+
 - [ ] 25.1-09-PLAN.md — Final targeted regression and phase-scoped source safety gates
