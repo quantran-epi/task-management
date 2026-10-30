@@ -2,9 +2,9 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { createTabRuntime, type TabRuntime, type TabRuntimePatch } from './tabTypes';
 
 export interface TabRuntimeRegistry {
-  get(tabId: string, threadId?: string): TabRuntime;
+  get(tabId: string, threadId?: string): TabRuntime | undefined;
   initialize(tabId: string, threadId: string): TabRuntime;
-  patch(tabId: string, patch: TabRuntimePatch, threadId?: string): TabRuntime;
+  patch(tabId: string, patch: TabRuntimePatch, threadId?: string): TabRuntime | undefined;
   reset(tabId: string, threadId: string): TabRuntime;
   discard(tabId: string): void;
   snapshot: Readonly<Record<string, TabRuntime>>;
@@ -33,16 +33,14 @@ export function useTabRuntimes(): TabRuntimeRegistry {
     return current;
   }, []);
 
-  const get = useCallback((tabId: string, threadId = '') => {
+  const get = useCallback((tabId: string, threadId?: string) => {
     const runtime = runtimesRef.current.get(tabId);
-    return runtime && (!threadId || runtime.threadId === threadId)
-      ? runtime
-      : createTabRuntime(tabId, threadId);
+    return runtime && (!threadId || runtime.threadId === threadId) ? runtime : undefined;
   }, []);
 
   const patch = useCallback((tabId: string, patchValue: TabRuntimePatch, threadId?: string) => {
-    const runtime = runtimesRef.current.get(tabId) ?? createTabRuntime(tabId, threadId ?? '');
-    if (threadId && runtime.threadId !== threadId) return runtime;
+    const runtime = runtimesRef.current.get(tabId);
+    if (!runtime || (threadId && runtime.threadId !== threadId)) return runtime;
     const next = { ...runtime, ...patchValue };
     runtimesRef.current.set(tabId, next);
     publish();
