@@ -486,6 +486,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
   // SDLC Workflow state
   const [sdlcWorkflowState, setSdlcWorkflowState] = useState<SdlcWorkflowState | undefined>();
+  const [missingSources, setMissingSources] = useState<Array<{ id: string; title: string }>>([]);
   const [sdlcInputModalOpen, setSdlcInputModalOpen] = useState(false);
   const sdlcCoordinatorRef = useRef<ReturnType<typeof createSdlcWorkflowCoordinator> | null>(null);
 
@@ -744,7 +745,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
             payload: { evidence: input.evidence, proposal: input.payload },
             signal: input.signal,
             isCurrent: input.isCurrent,
-            model: { endpoint: config.endpoint, apiKey, model: tabModel || config.defaultModel },
+            model: { endpoint: config.endpoint, apiKey, model: activeTab?.config?.model || selectedModel || config.defaultModel },
           });
         },
         collectEvidence: async (input) => collectWizardEvidence(input, {
@@ -933,6 +934,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     const coordinator = getSdlcCoordinator();
     if (!coordinator) return;
     void coordinator.restore();
+    setMissingSources([]);
   }, [activeTabId, activeThreadId, getSdlcCoordinator, isProjectScope]);
 
   const handleStartSdlcWorkflow = useCallback(async (
@@ -1346,7 +1348,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           db,
           endpoint: config.endpoint,
           apiKey,
-          model: tabModel || config.defaultModel,
+          model: activeTab?.config?.model || selectedModel || config.defaultModel,
           ...(currentTurnAbortRef.current?.signal
             ? { signal: currentTurnAbortRef.current.signal }
             : {}),
@@ -1378,8 +1380,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     const turnOverallStartTime = Date.now();
     const isSdlcActiveTurn = isSdlcActiveTab;
     const effectiveAnalysisMode = isSdlcActiveTurn ? true : currentTabAnalysisMode;
-    const tabModel = activeTab?.config?.model || selectedModel;
-
     if (isSdlcActiveTurn) {
       effectivePrompt = buildSdlcWrapperPrompt({
         userQuery: trimmed,
@@ -1395,7 +1395,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     const catalog = await fetchSetCatalog(db);
     const capabilities = {
       serverEnabled: Boolean(knowledgeConfig.enabled && knowledgeConfig.baseUrl),
-      modelConfigured: Boolean(apiKey && config.endpoint && (tabModel || config.defaultModel)),
+      modelConfigured: Boolean(apiKey && config.endpoint && (selectedModel || config.defaultModel)),
     };
     const deps = createDefaultGroundedTurnDeps({
       knowledgeBaseUrl: knowledgeConfig.baseUrl,
@@ -1433,7 +1433,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           config: {
             endpoint: config.endpoint,
             apiKey,
-            model: tabModel || config.defaultModel,
+            model: selectedModel || config.defaultModel,
             promptVersion: 'grounded-v1',
             routerVersion: 'router-v1',
           },
@@ -1522,7 +1522,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
               fallbackReason: 'NONE',
               routerVersion: 'router-v1',
               promptVersion: 'grounded-v1',
-              modelId: tabModel || config.defaultModel,
+              modelId: selectedModel || config.defaultModel,
               createdAt: new Date().toISOString(),
             },
           },
@@ -1559,7 +1559,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           fallbackReason: 'NONE',
           routerVersion: 'router-v1',
           promptVersion: 'grounded-v1',
-          modelId: tabModel || config.defaultModel,
+          modelId: selectedModel || config.defaultModel,
           createdAt: new Date().toISOString(),
         };
 
@@ -2110,7 +2110,7 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
 
     const apiKey = await getNineRouterApiKey(db);
     const config = await getNineRouterConfig(db);
-    const model = tabModel || config.defaultModel;
+    const model = selectedModel || config.defaultModel;
     if (!apiKey || !config.endpoint || !model) {
       setEvidenceSynthesisError({
         id: evidenceId,
@@ -2645,7 +2645,7 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
               onDiscard={() => setSdlcWorkflowState({ ...sdlcWorkflowState, checkpoint: undefined })}
             />
           )}
-          <RestoredSourceNotice missingSources={[]} />
+          <RestoredSourceNotice missingSources={missingSources} />
           <SdlcWorkflowHub
             projectScoped={isProjectScope}
             state={sdlcWorkflowState}
