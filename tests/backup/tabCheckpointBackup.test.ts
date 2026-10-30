@@ -1,10 +1,15 @@
 // @vitest-environment node
 import 'fake-indexeddb/auto';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskPlannerDatabase } from '../../src/db';
 import { exportBackupPayload } from '../../src/services/backup/exportBackup';
+import { restoreBackupPayload } from '../../src/services/backup/restoreBackup';
 import { validateBackupPayload } from '../../src/services/backup/validateBackup';
-import type { ChatTab, ChatThread, Note, Project } from '../../src/types/models';
+import type { BackupEnvelope } from '../../src/types/backup';
+import type { ChatTab, ChatMessage, ChatThread, Note, Project } from '../../src/types/models';
+
+const aiRunner = { run: vi.fn() };
+const noteCreator = { create: vi.fn() };
 
 const projectId = '11111111-1111-4111-8111-111111111111';
 const threadId = '22222222-2222-4222-8222-222222222222';
@@ -257,5 +262,55 @@ describe('Phase 25.1 backup tab/checkpoint contract', () => {
 
     expect(result.valid).toBe(true);
     expect(result.envelope?.tables.chatTabs).toBeUndefined();
+  });
+
+  it('backfills legacy threads into ordinary tabs plus one deterministic project SDLC singleton', async () => {
+    const legacy = basePayload();
+    delete (legacy.tables as Partial<typeof legacy.tables>).chatTabs;
+    delete (legacy.counts as Partial<typeof legacy.counts>).chatTabs;
+    legacy.tables.chatThreads = [
+      { ...thread, id: '88888888-8888-4888-8888-888888888888', scopeKey: `project:${projectId}`, title: 'Legacy chat' },
+      { ...thread, id: '99999999-9999-4999-8999-999999999999', scopeKey: `project:${projectId}:sdlc`, title: 'Legacy SDLC' },
+    ];
+    legacy.tables.chatMessages = [{
+      id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      threadId: legacy.tables.chatThreads[0]!.id,
+      role: 'user',
+      content: 'Keep this history',
+      createdAt: now,
+    } satisfies ChatMessage];
+    legacy.counts.chatThreads = 2;
+    legacy.counts.chatMessages = 1;
+
+    const validation = validateBackupPayload(legacy);
+    expect(validation.valid).toBe(true);
+    await restoreBackupPayload(validation.envelope as BackupEnvelope, db);
+
+    const tabs = await db.chatTabs.orderBy('scopeKey').toArray();
+    expect(tabs).toHaveLength(2);
+    expect(tabs.filter((tab) => tab.type === 'sdlc')).toHaveLength(1);
+    expect(tabs.filter((tab) => tab.type === 'chat')).toHaveLength(1);
+    expect((await db.chatMessages.toArray())[0]?.content).toBe('Keep this history');
+    expect(tabs.filter((tab) => tab.active)).toHaveLength(1);
+    expect(tabs.find((tab) => tab.type === 'sdlc')?.scopeKey).toBe(`project:${projectId}`);
+  });
+
+  it('restores missing-source checkpoint without AI or Note creation side effects', async () => {
+    const payload = basePayload();
+    payload.tables.notes = [];
+    const validation = validateBackupPayload(payload);
+    expect(validation.valid).toBe(true);
+    await restoreBackupPayload(validation.envelope as BackupEnvelope, db);
+
+    const restoredTab = await db.chatTabs.get(tabId);
+    expect(restoredTab?.workflowState).toMatchObject({
+      checkpoint: { status: 'interrupted', step: 'SOLUTION' },
+    });
+    expect(validation.recovery?.blockedTabs).toEqual([
+      expect.objectContaining({ tabId, threadId, missingSourceIds: [sourceNoteId] }),
+    ]);
+    expect(aiRunner.run).not.toHaveBeenCalled();
+    expect(noteCreator.create).not.toHaveBeenCalled();
+    expect(await db.notes.count()).toBe(0);
   });
 });
