@@ -1782,7 +1782,6 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
     const correlationId = crypto.randomUUID();
     const routeLog = createPhaseLogger('[ROUTE]', { correlationId });
     const toolLog = createPhaseLogger('[TOOL]', { correlationId });
-    const synthesisLog = createPhaseLogger('[SYNTHESIS]', { correlationId });
 
     const turnStartTime = Date.now();
     let accumulatedTokenUsage: ChatTokenUsage | undefined;
@@ -1791,7 +1790,6 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
     let fullResponse = '';
     const currentMessages: ChatCompletionMessage[] = [...recentMsgs];
     const MAX_TOOL_LOOPS = 30;
-    let lastHadToolCalls = false;
 
     const targetModel =
       selectedModel && (availableModels.length === 0 || availableModels.includes(selectedModel))
@@ -1854,7 +1852,6 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
           };
         },
         onToolCall: (call) => {
-          lastHadToolCalls = true;
           toolCallsById.set(call.id, { name: call.name, args: call.args });
           console.log(`[AI Harness] 🛠️ Model invoked tool "${call.name}":`, call.args);
           aiDebugService.recordToolCall(turnId, call);
@@ -1950,36 +1947,11 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
       aiDebugService.finishTurn(turnId, { finalResponse: fullResponse });
     } catch (err: any) {
       if (err.name === 'AbortError') {
-        // User aborted — commit clean partial response and generated artifacts.
-        const cleanPartial = stripThinkingBlocks(fullResponse).trim();
-        if (cleanPartial || turnGeneratedFiles.length > 0) {
-          const durationMs = Date.now() - turnStartTime;
-          synthesisLog.log({
-            outcome: 'ok',
-            latencyMs: durationMs,
-            safeIds: [activeThread.id],
-            counts: {
-              responseLength: fullResponse.length,
-              generatedFiles: turnGeneratedFiles.length,
-            },
-            metadata: { hasToolCalls: lastHadToolCalls },
-          });
-          await saveMessage(
-            {
-              threadId: activeThread.id,
-              role: 'assistant',
-              content: cleanPartial + ' [Đã dừng]',
-              durationMs,
-              tokenUsage: accumulatedTokenUsage,
-              generatedFiles: turnGeneratedFiles.length > 0 ? turnGeneratedFiles : undefined,
-            },
-            db
-          );
-        }
-        aiDebugService.finishTurn(turnId, { finalResponse: fullResponse, aborted: true });
+        // Abort invalidates the whole transient response; never persist partial output.
+        aiDebugService.finishTurn(turnId, { aborted: true });
       } else {
-        setApiError(err?.message || 'Lỗi không xác định khi kết nối AI');
-        aiDebugService.finishTurn(turnId, { error: err?.message || String(err) });
+        setApiError('Không thể hoàn tất phản hồi AI. Vui lòng thử lại.');
+        aiDebugService.finishTurn(turnId, { error: 'request_failed' });
       }
     } finally {
       setIsStreaming(false);
