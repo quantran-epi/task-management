@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Checkbox, Empty, Input, Modal, Segmented, Typography, theme } from 'antd';
 import dayjs from 'dayjs';
 import { db } from '../../../db';
@@ -51,6 +51,7 @@ export const NoteSourcePickerModal: React.FC<NoteSourcePickerModalProps> = ({
   const [focusedNoteId, setFocusedNoteId] = useState<string | null>(null);
   const [showFullPreview, setShowFullPreview] = useState(false);
   const [applying, setApplying] = useState(false);
+  const rowRefs = useRef(new Map<string, HTMLDivElement>());
 
   useEffect(() => {
     if (!open) return;
@@ -64,6 +65,7 @@ export const NoteSourcePickerModal: React.FC<NoteSourcePickerModalProps> = ({
       setAllNotes(nonDeleted);
       const firstSelected = nonDeleted.find((n) => initialSelectedIds.includes(n.id));
       setPreviewNoteId(firstSelected ? firstSelected.id : null);
+      setFocusedNoteId(firstSelected?.id ?? nonDeleted[0]?.id ?? null);
     });
   }, [initialSelectedIds, open, projectId]);
 
@@ -90,6 +92,23 @@ export const NoteSourcePickerModal: React.FC<NoteSourcePickerModalProps> = ({
   const activePreviewNote = useMemo(() => {
     return allNotes.find((n) => n.id === previewNoteId) ?? null;
   }, [allNotes, previewNoteId]);
+
+  useEffect(() => {
+    setFocusedNoteId((current) => filteredNotes.some((note) => note.id === current) ? current : filteredNotes[0]?.id ?? null);
+  }, [filteredNotes]);
+
+  const moveFocus = (currentId: string, direction: -1 | 1 | 'first' | 'last') => {
+    const currentIndex = filteredNotes.findIndex((note) => note.id === currentId);
+    const nextIndex = direction === 'first'
+      ? 0
+      : direction === 'last'
+        ? filteredNotes.length - 1
+        : Math.max(0, Math.min(filteredNotes.length - 1, currentIndex + direction));
+    const next = filteredNotes[nextIndex];
+    if (!next) return;
+    setFocusedNoteId(next.id);
+    rowRefs.current.get(next.id)?.focus();
+  };
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -226,6 +245,10 @@ export const NoteSourcePickerModal: React.FC<NoteSourcePickerModalProps> = ({
                 return (
                   <div
                     key={note.id}
+                    ref={(element) => {
+                      if (element) rowRefs.current.set(note.id, element);
+                      else rowRefs.current.delete(note.id);
+                    }}
                     role="option"
                     tabIndex={focusedNoteId === note.id ? 0 : -1}
                     aria-selected={isChecked}
@@ -233,7 +256,19 @@ export const NoteSourcePickerModal: React.FC<NoteSourcePickerModalProps> = ({
                     onFocus={() => setFocusedNoteId(note.id)}
                     onClick={() => setPreviewNoteId(note.id)}
                     onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
+                      if (event.key === 'ArrowDown') {
+                        event.preventDefault();
+                        moveFocus(note.id, 1);
+                      } else if (event.key === 'ArrowUp') {
+                        event.preventDefault();
+                        moveFocus(note.id, -1);
+                      } else if (event.key === 'Home') {
+                        event.preventDefault();
+                        moveFocus(note.id, 'first');
+                      } else if (event.key === 'End') {
+                        event.preventDefault();
+                        moveFocus(note.id, 'last');
+                      } else if (event.key === 'Enter') {
                         setPreviewNoteId(note.id);
                       } else if (event.key === ' ') {
                         event.preventDefault();
