@@ -34,9 +34,9 @@ Sanitized CR-08 AI diagnostics with bounded metadata and restored WR-03 Note pic
 
 ## Verification
 
-- `npm exec -- tsc --noEmit` passed.
+- `npm exec -- tsc --noEmit` passed in foreground with exit code `0`.
 - Diagnostics and backup targeted tests passed.
-- Full Phase 25.1 targeted regression passed.
+- Full Phase 25.1 targeted regression passed with exit code `0`: 10 test files, 76 tests, duration 73.28s.
 - `git diff --check` passed.
 
 ## Deviations from Plan
