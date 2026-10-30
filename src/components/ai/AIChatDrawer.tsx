@@ -1124,13 +1124,19 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     return modes;
   }, [durableTabs]);
 
+  useEffect(() => {
+    for (const tab of durableTabs) {
+      tabRuntimes.initialize(tab.id, tab.threadId);
+    }
+  }, [durableTabs, tabRuntimes]);
+
   const tabStatuses = useMemo(() => {
     const statuses: Record<string, TabRuntimeStatus> = {};
     for (const t of durableTabs) {
-      statuses[t.id] = tabRuntimes.get(t.id).status;
+      statuses[t.id] = tabRuntimes.snapshot[t.id]?.status ?? 'idle';
     }
     return statuses;
-  }, [durableTabs, tabRuntimes]);
+  }, [durableTabs, tabRuntimes.snapshot]);
 
   const displayTabs: ChatTabItem[] = useMemo(() => {
     return durableTabs.map((t) => ({

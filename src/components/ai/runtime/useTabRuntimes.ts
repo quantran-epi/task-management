@@ -1,8 +1,9 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createTabRuntime, type TabRuntime, type TabRuntimePatch } from './tabTypes';
 
 export interface TabRuntimeRegistry {
   get(tabId: string, threadId?: string): TabRuntime;
+  initialize(tabId: string, threadId: string): TabRuntime;
   patch(tabId: string, patch: TabRuntimePatch): TabRuntime;
   reset(tabId: string, threadId?: string): TabRuntime;
   discard(tabId: string): void;
@@ -17,27 +18,39 @@ export function useTabRuntimes(): TabRuntimeRegistry {
     setSnapshot(Object.fromEntries(runtimesRef.current));
   }, []);
 
-  const get = useCallback((tabId: string, threadId = '') => {
+  const ensure = useCallback((tabId: string, threadId = '') => {
     let runtime = runtimesRef.current.get(tabId);
     if (!runtime) {
       runtime = createTabRuntime(tabId, threadId);
       runtimesRef.current.set(tabId, runtime);
-      publish();
     } else if (threadId && runtime.threadId !== threadId) {
       runtime = { ...runtime, threadId };
       runtimesRef.current.set(tabId, runtime);
-      publish();
     }
     return runtime;
+  }, []);
+
+  useEffect(() => {
+    if (runtimesRef.current.size > 0) publish();
   }, [publish]);
 
+  const get = useCallback((tabId: string, threadId = '') => {
+    return runtimesRef.current.get(tabId) ?? createTabRuntime(tabId, threadId);
+  }, []);
+
   const patch = useCallback((tabId: string, patchValue: TabRuntimePatch) => {
-    const runtime = get(tabId);
+    const runtime = ensure(tabId);
     const next = { ...runtime, ...patchValue };
     runtimesRef.current.set(tabId, next);
     publish();
     return next;
-  }, [get, publish]);
+  }, [ensure, publish]);
+
+  const initialize = useCallback((tabId: string, threadId: string) => {
+    const runtime = ensure(tabId, threadId);
+    publish();
+    return runtime;
+  }, [ensure, publish]);
 
   const reset = useCallback((tabId: string, threadId = '') => {
     const next = createTabRuntime(tabId, threadId);
@@ -51,5 +64,5 @@ export function useTabRuntimes(): TabRuntimeRegistry {
     publish();
   }, [publish]);
 
-  return { get, patch, reset, discard, snapshot };
+  return { get, initialize, patch, reset, discard, snapshot };
 }
