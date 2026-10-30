@@ -374,6 +374,27 @@ export async function persistConfirmedPack(
   });
 }
 
+export async function listArtifactVersions(
+  projectId: string,
+  threadId: string,
+  kind: SdlcArtifactMetadata['kind'],
+  db: TaskPlannerDatabase = defaultDb,
+): Promise<Note[]> {
+  const notes = await loadCanonicalArtifactChain(projectId, threadId, db);
+  return notes.filter((note) => note.sdlcArtifact?.kind === kind);
+}
+
+export async function getActiveArtifact(
+  projectId: string,
+  threadId: string,
+  kind: SdlcArtifactMetadata['kind'],
+  activeVersion: number,
+  db: TaskPlannerDatabase = defaultDb,
+): Promise<Note | undefined> {
+  const versions = await listArtifactVersions(projectId, threadId, kind, db);
+  return versions.find((note) => note.sdlcArtifact?.version === activeVersion);
+}
+
 export async function loadCanonicalArtifactChain(
   projectId: string,
   threadId: string,

@@ -98,6 +98,8 @@ import { createRequestRegistry } from './runtime/requestRegistry';
 import { useTabRuntimes } from './runtime/useTabRuntimes';
 import { WizardMetadataModal, type WizardStartMetadata } from './wizard/WizardMetadataModal';
 import { WizardLifecycleBar } from './wizard/WizardLifecycleBar';
+import { InterruptedBanner } from './InterruptedBanner';
+import { RestoredSourceNotice } from './RestoredSourceNotice';
 import { WizardProgressStrip } from './wizard/WizardProgressStrip';
 import { ChangePackDropzone } from './wizard/ChangePackDropzone';
 import { ChangePackConfirmStrip, type ChangePackUiResult } from './wizard/ChangePackConfirmStrip';
@@ -825,6 +827,10 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       sdlcCoordinatorRef.current = createSdlcWorkflowCoordinator({
         projectId: currentScope.id,
         threadId: activeThreadId,
+        saveState: async (state) => {
+          setSdlcWorkflowState(state);
+        },
+        loadState: async () => sdlcWorkflowState,
         onStateChange: (state: SdlcWorkflowState) => setSdlcWorkflowState(state),
       });
     }
@@ -2493,12 +2499,21 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
       {/* SDLC Workflow Hub - Full Width above ChatInputBar (chỉ hiện khi đang ở tab SDLC) */}
       {isProjectScope && activeTabId === 'sdlc' && (
         <div style={{ width: '100%', padding: '0 12px 6px', boxSizing: 'border-box' }}>
+          {sdlcWorkflowState?.checkpoint?.status === 'interrupted' && (
+            <InterruptedBanner
+              checkpoint={sdlcWorkflowState.checkpoint}
+              onContinue={() => setSdlcWorkflowState({ ...sdlcWorkflowState, checkpoint: undefined })}
+              onDiscard={() => setSdlcWorkflowState({ ...sdlcWorkflowState, checkpoint: undefined })}
+            />
+          )}
+          <RestoredSourceNotice missingSources={[]} />
           <SdlcWorkflowHub
             projectScoped={isProjectScope}
             state={sdlcWorkflowState}
             onStartWorkflow={() => setSdlcInputModalOpen(true)}
-            onNavigateStep={(stepId: SdlcStepId) => {
-              void getSdlcCoordinator()?.navigateToStep(stepId).then((next: SdlcWorkflowState | undefined) => next && setSdlcWorkflowState(next));
+            onSelectStep={(stepId: SdlcStepId) => {
+              getSdlcCoordinator()?.selectStep(stepId);
+              setSdlcWorkflowState((state) => state ? { ...state, selectedStep: stepId } : state);
             }}
             onRerunStep={(stepId: SdlcStepId) => {
               if (stepId === 'INTAKE') {

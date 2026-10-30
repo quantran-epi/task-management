@@ -7,6 +7,10 @@ import {
   type SdlcWorkflowState,
   SdlcWorkflowStateSchema,
   type SdlcArtifactRef,
+  type SdlcArtifactKind,
+  type RevisionPreview,
+  RevisionPreviewSchema,
+  SdlcCheckpointSchema,
 } from './workflowSchemas';
 
 export interface WorkflowCoordinatorDeps {
@@ -52,6 +56,72 @@ export function createSdlcWorkflowCoordinator(deps: WorkflowCoordinatorDeps) {
   };
 
   const getState = (): SdlcWorkflowState | undefined => currentState;
+
+  const restore = async (): Promise<SdlcWorkflowState | undefined> => {
+    const loaded = await deps.loadState?.();
+    if (!loaded) return undefined;
+    const parsed = SdlcWorkflowStateSchema.parse(loaded);
+    const checkpoint = parsed.checkpoint?.status === 'running'
+      ? SdlcCheckpointSchema.parse({ ...parsed.checkpoint, status: 'interrupted' })
+      : parsed.checkpoint;
+    return emit({ ...parsed, checkpoint });
+  };
+
+  const selectStep = (stepId: SdlcStepId): SdlcStepId => {
+    if (currentState) currentState = SdlcWorkflowStateSchema.parse({ ...currentState, selectedStep: stepId });
+    return stepId;
+  };
+
+  const revisionImpact = (kind: SdlcArtifactKind): SdlcStepId[] => kind === 'PL01' || kind === 'PL02'
+    ? ['SOLUTION', 'CODE_GUIDE', 'CHANGE_PACK', 'TECH_DOCS', 'CAB']
+    : kind === 'SOLUTION'
+      ? ['CODE_GUIDE', 'CHANGE_PACK', 'TECH_DOCS', 'CAB']
+      : [];
+
+  const previewRevision = async (kind: SdlcArtifactKind, markdown: string): Promise<RevisionPreview> => {
+    if (!currentState) throw new Error('WORKFLOW_NOT_INITIALIZED');
+    const hash = await hashText(markdown.trim());
+    const current = currentState.artifacts[kind === 'PL01' ? 'pl01' : kind === 'PL02' ? 'pl02' : kind === 'SOLUTION' ? 'solution' : kind === 'CODE_GUIDE' ? 'codeGuide' : kind === 'CHANGE_PACK' ? 'changePack' : kind === 'PL03B' ? 'pl03b' : kind === 'PL07' ? 'pl07' : 'cab'];
+    return RevisionPreviewSchema.parse({
+      kind,
+      markdown: markdown.trim(),
+      hash,
+      diff: [`- ${current?.content ?? ''}`, `+ ${markdown.trim()}`],
+      sources: current ? [{ kind: current.kind, version: current.version, hash: current.hash, ...(current.noteId ? { noteId: current.noteId } : {}) }] : [],
+      impactSteps: revisionImpact(kind),
+      requiresConfirmation: true,
+      baseVersion: current?.version ?? 0,
+      ...(current ? { baseHash: current.hash } : {}),
+    });
+  };
+
+  const commitRevision = async (preview: RevisionPreview, confirmed: boolean): Promise<SdlcWorkflowState> => {
+    if (!confirmed) throw new Error('REVISION_CONFIRMATION_REQUIRED');
+    if (!currentState) throw new Error('WORKFLOW_NOT_INITIALIZED');
+    const key = preview.kind === 'PL01' ? 'pl01' : preview.kind === 'PL02' ? 'pl02' : preview.kind === 'SOLUTION' ? 'solution' : preview.kind === 'CODE_GUIDE' ? 'codeGuide' : preview.kind === 'CHANGE_PACK' ? 'changePack' : preview.kind === 'PL03B' ? 'pl03b' : preview.kind === 'PL07' ? 'pl07' : 'cab';
+    const previous = currentState.artifacts[key];
+    if ((previous?.version ?? 0) !== preview.baseVersion || (preview.baseHash && previous?.hash !== preview.baseHash)) throw new Error('REVISION_BASE_STALE');
+    const next: SdlcArtifactRef = { kind: preview.kind, version: preview.baseVersion + 1, hash: preview.hash, title: previous?.title ?? preview.kind, content: preview.markdown, sourceHashes: previous?.sourceHashes ?? [], updatedAt: now() };
+    const versions = { ...(currentState.versions ?? {}) } as NonNullable<SdlcWorkflowState['versions']>;
+    versions[preview.kind] = [...(versions[preview.kind] ?? []), ...(previous && (versions[preview.kind]?.length ?? 0) === 0 ? [previous] : []), next];
+    const activeVersions = { ...(currentState.activeVersions ?? {}) } as NonNullable<SdlcWorkflowState['activeVersions']>;
+    activeVersions[preview.kind] = next.version;
+    return emit({ ...currentState, artifacts: { ...currentState.artifacts, [key]: next }, versions, activeVersions });
+  };
+
+  const openCycle = async (): Promise<SdlcWorkflowState> => emit({ ...currentStateOrThrow(), cycles: [...(currentState?.cycles ?? []), { cycleId: createSessionId(), status: 'active', startedAt: now() }] });
+  const closeCycle = async (): Promise<SdlcWorkflowState> => {
+    const state = currentStateOrThrow();
+    const cycles = [...(state.cycles ?? [{ cycleId: createSessionId(), status: 'active' as const, startedAt: state.createdAt }])];
+    const active = cycles.findLast((cycle) => cycle.status === 'active');
+    if (active) active.status = 'completed';
+    if (active) active.closedAt = now();
+    return emit({ ...state, cycles });
+  };
+  const currentStateOrThrow = (): SdlcWorkflowState => {
+    if (!currentState) throw new Error('WORKFLOW_NOT_INITIALIZED');
+    return currentState;
+  };
 
   /**
    * Khởi tạo hoặc cập nhật bước 1: Nạp hồ sơ đầu vào PL01 và PL02
@@ -104,6 +174,8 @@ export function createSdlcWorkflowCoordinator(deps: WorkflowCoordinatorDeps) {
         pl02: pl02Artifact,
       },
       staleSteps: [],
+      versions: currentState?.versions ?? {},
+      activeVersions: currentState?.activeVersions ?? {},
       createdAt: currentState?.createdAt ?? timestamp,
       updatedAt: timestamp,
     };
@@ -149,6 +221,14 @@ export function createSdlcWorkflowCoordinator(deps: WorkflowCoordinatorDeps) {
       artifacts: {
         ...currentState.artifacts,
         solution: solutionArtifact,
+      },
+      versions: {
+        ...(currentState.versions ?? {}),
+        SOLUTION: [...(currentState.versions?.SOLUTION ?? []), solutionArtifact],
+      },
+      activeVersions: {
+        ...(currentState.activeVersions ?? {}),
+        SOLUTION: solutionArtifact.version,
       },
     };
 
@@ -303,5 +383,11 @@ export function createSdlcWorkflowCoordinator(deps: WorkflowCoordinatorDeps) {
     commitTechDoc,
     commitCab,
     navigateToStep,
+    restore,
+    selectStep,
+    previewRevision,
+    commitRevision,
+    openCycle,
+    closeCycle,
   };
 }

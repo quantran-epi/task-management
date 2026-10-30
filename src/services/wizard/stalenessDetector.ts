@@ -20,6 +20,7 @@ export function detectWorkflowStaleness(state: SdlcWorkflowState): WorkflowStale
   const pl01 = state.artifacts.pl01;
   const pl02 = state.artifacts.pl02;
   const solution = state.artifacts.solution;
+  const codeGuide = state.artifacts.codeGuide;
   const changePack = state.artifacts.changePack;
   const driftResult = state.artifacts.driftResult;
   const pl03b = state.artifacts.pl03b;
@@ -41,7 +42,20 @@ export function detectWorkflowStaleness(state: SdlcWorkflowState): WorkflowStale
     }
   }
 
-  // 2. Kiểm tra CHANGE_PACK / Drift: phụ thuộc vào SOLUTION và ChangePack
+  // 2. SOLUTION revision invalidates code guide and downstream artifacts.
+  if (solution) {
+    const solutionChanged = Boolean(codeGuide && currentSolutionHash && !codeGuide.sourceHashes.includes(currentSolutionHash));
+    if (solutionChanged) {
+      staleSteps.push('CODE_GUIDE');
+      reasons.CODE_GUIDE = 'SOLUTION.md đã thay đổi, cần cập nhật hướng dẫn code.';
+    }
+  }
+
+  // 3. Kiểm tra CHANGE_PACK / Drift: phụ thuộc vào SOLUTION và ChangePack
+  if (solution && changePack && currentSolutionHash && !changePack.sourceHashes.includes(currentSolutionHash)) {
+    staleSteps.push('CHANGE_PACK');
+    reasons.CHANGE_PACK = 'SOLUTION.md đã thay đổi, cần tái đối chiếu change-pack.';
+  }
   if (driftResult) {
     if (currentSolutionHash && driftResult.identity.solutionHash !== currentSolutionHash) {
       staleSteps.push('CHANGE_PACK');

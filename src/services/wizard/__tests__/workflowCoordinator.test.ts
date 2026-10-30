@@ -86,7 +86,7 @@ describe('createSdlcWorkflowCoordinator', () => {
     expect(restored?.currentStep).toBe('SOLUTION');
     expect(coordinator.selectStep('INTAKE')).toBe('INTAKE');
     expect(coordinator.getState()?.currentStep).toBe('SOLUTION');
-    expect(savedState?.checkpoint?.status).toBe('interrupted');
+    expect((savedState as { checkpoint?: { status?: string } } | undefined)?.checkpoint?.status).toBe('interrupted');
   });
 
   it('requires explicit revision confirmation and preserves old version in history', async () => {
@@ -97,7 +97,7 @@ describe('createSdlcWorkflowCoordinator', () => {
     expect(preview.impactSteps).toEqual(['CODE_GUIDE', 'CHANGE_PACK', 'TECH_DOCS', 'CAB']);
     expect(preview.requiresConfirmation).toBe(true);
     const cancelled = coordinator.getState();
-    expect(cancelled?.versions?.SOLUTION).toHaveLength(0);
+    expect(cancelled?.versions?.SOLUTION).toHaveLength(1);
     const committed = await coordinator.commitRevision(preview, true);
     expect(committed.versions?.SOLUTION).toHaveLength(2);
     expect(committed.activeVersions?.SOLUTION).toBe(2);

@@ -20,7 +20,7 @@ export interface SdlcWorkflowHubProps {
   projectScoped: boolean;
   state?: SdlcWorkflowState | undefined;
   onStartWorkflow: () => void;
-  onNavigateStep?: ((stepId: SdlcStepId) => void) | undefined;
+  onSelectStep?: ((stepId: SdlcStepId) => void) | undefined;
   onRerunStep?: ((stepId: SdlcStepId) => void) | undefined;
   onResetWorkflow?: (() => void) | undefined;
 }
@@ -82,7 +82,7 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = ({
   projectScoped,
   state,
   onStartWorkflow,
-  onNavigateStep,
+  onSelectStep,
   onRerunStep,
   onResetWorkflow,
 }) => {
@@ -174,56 +174,24 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = ({
         </div>
       }
     >
-      {/* Thanh 6 bước dạng Chips/Pills cuộn ngang - không bị đè chữ hay co dúm */}
-      <div
-        style={{
-          display: 'flex',
-          gap: 6,
-          overflowX: 'auto',
-          padding: '2px 0 8px',
-          scrollbarWidth: 'thin',
-          whiteSpace: 'nowrap',
-        }}
-      >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '2px 0 8px' }}>
         {STEP_CONFIGS.map((cfg, idx) => {
-          const isSelected = cfg.id === state.currentStep;
-          const isDone = idx < currentStepIndex;
+          const isSelected = cfg.id === (state.selectedStep ?? state.currentStep);
+          const isProcessing = cfg.id === state.currentStep;
+          const isDone = idx < currentStepIndex && !state.staleSteps.includes(cfg.id);
           const isStale = state.staleSteps.includes(cfg.id);
-
-          let icon = cfg.icon;
-
-          if (isStale) {
-            icon = <ReloadOutlined />;
-          } else if (isSelected) {
-            icon = <SyncOutlined spin />;
-          } else if (isDone) {
-            icon = <CheckCircleOutlined />;
-          } else {
-            icon = <ClockCircleOutlined />;
-          }
-
+          const icon = isStale ? <ReloadOutlined /> : isProcessing ? <SyncOutlined spin /> : isDone ? <CheckCircleOutlined /> : <ClockCircleOutlined />;
           return (
-            <Tag.CheckableTag
+            <button
               key={cfg.id}
-              checked={isSelected}
-              onChange={() => onNavigateStep?.(cfg.id)}
-              style={{
-                padding: '3px 8px',
-                fontSize: 12,
-                borderRadius: 4,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-                backgroundColor: isSelected ? token.colorPrimary : undefined,
-                color: isSelected ? '#fff' : undefined,
-                border: isStale ? `1px solid ${token.colorWarning}` : undefined,
-              }}
+              type="button"
+              aria-label={cfg.title}
+              onClick={() => onSelectStep?.(cfg.id)}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '5px 8px', border: isStale ? `1px solid ${token.colorWarning}` : `1px solid ${token.colorBorderSecondary}`, borderRadius: 4, background: isSelected ? token.colorPrimaryBg : token.colorBgContainer, color: token.colorText, textAlign: 'left', cursor: 'pointer' }}
             >
-              <span>{icon}</span>
-              <span>{cfg.shortTitle}</span>
-              {isStale && <Badge status="warning" />}
-            </Tag.CheckableTag>
+              <span>{icon}</span><span style={{ flex: 1 }}>{cfg.shortTitle}</span>
+              <Tag color={isStale ? 'warning' : isProcessing ? 'processing' : isDone ? 'success' : 'default'}>{isStale ? 'stale' : isProcessing ? 'processing' : isDone ? 'completed' : 'not yet'}</Tag>
+            </button>
           );
         })}
       </div>

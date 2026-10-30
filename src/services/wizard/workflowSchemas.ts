@@ -29,6 +29,7 @@ export const SdlcArtifactKindSchema = z.enum([
   'PL01',
   'PL02',
   'SOLUTION',
+  'CODE_GUIDE',
   'CHANGE_PACK',
   'PL03B',
   'PL07',
@@ -58,6 +59,43 @@ export const SdlcWorkflowMetadataSchema = z.strictObject({
 });
 export type SdlcWorkflowMetadata = z.infer<typeof SdlcWorkflowMetadataSchema>;
 
+export const SdlcCheckpointSchema = z.strictObject({
+  requestId: uuidSchema,
+  step: SdlcStepIdSchema.optional(),
+  status: z.enum(['running', 'interrupted']),
+  startedAt: isoTimestampSchema,
+});
+export type SdlcCheckpoint = z.infer<typeof SdlcCheckpointSchema>;
+
+export const RevisionCycleSchema = z.strictObject({
+  cycleId: uuidSchema,
+  status: z.enum(['active', 'completed']),
+  startedAt: isoTimestampSchema,
+  closedAt: isoTimestampSchema.optional(),
+});
+export type RevisionCycle = z.infer<typeof RevisionCycleSchema>;
+
+export const RevisionSourceSchema = z.strictObject({
+  kind: SdlcArtifactKindSchema,
+  version: z.number().int().positive(),
+  hash: hashSchema,
+  noteId: uuidSchema.optional(),
+});
+export type RevisionSource = z.infer<typeof RevisionSourceSchema>;
+
+export const RevisionPreviewSchema = z.strictObject({
+  kind: SdlcArtifactKindSchema,
+  markdown: z.string().min(1),
+  hash: hashSchema,
+  diff: z.array(z.string()),
+  sources: z.array(RevisionSourceSchema),
+  impactSteps: z.array(SdlcStepIdSchema),
+  requiresConfirmation: z.literal(true),
+  baseVersion: z.number().int().nonnegative(),
+  baseHash: hashSchema.optional(),
+});
+export type RevisionPreview = z.infer<typeof RevisionPreviewSchema>;
+
 export const SdlcWorkflowStateSchema = z.strictObject({
   schemaVersion: z.literal(1),
   sessionId: uuidSchema,
@@ -69,6 +107,7 @@ export const SdlcWorkflowStateSchema = z.strictObject({
     pl01: SdlcArtifactRefSchema.optional(),
     pl02: SdlcArtifactRefSchema.optional(),
     solution: SdlcArtifactRefSchema.optional(),
+    codeGuide: SdlcArtifactRefSchema.optional(),
     changePack: SdlcArtifactRefSchema.optional(),
     driftResult: ReconciliationResultSchema.optional(),
     pl03b: SdlcArtifactRefSchema.optional(),
@@ -76,6 +115,11 @@ export const SdlcWorkflowStateSchema = z.strictObject({
     cab: SdlcArtifactRefSchema.optional(),
   }),
   staleSteps: z.array(SdlcStepIdSchema).default([]),
+  selectedStep: SdlcStepIdSchema.optional(),
+  cycles: z.array(RevisionCycleSchema).optional(),
+  versions: z.record(z.string(), z.array(SdlcArtifactRefSchema)).optional(),
+  activeVersions: z.record(z.string(), z.number().int().positive()).optional(),
+  checkpoint: SdlcCheckpointSchema.optional(),
   createdAt: isoTimestampSchema,
   updatedAt: isoTimestampSchema,
 });
