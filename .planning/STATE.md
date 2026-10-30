@@ -37,6 +37,7 @@ Progress: [██████████] 100%
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261030-dvh | Fast desktop build on staging, full test on master, release guard | 2026-10-30 | — | complete | [261030-dvh-staging-fast-desktop-build](./quick/261030-dvh-staging-fast-desktop-build/) |
 | 261028-gpk | Strengthen AI document normalization prompt against hallucination | 2026-10-28 | — | complete | [261028-gpk-strengthen-ai-document-normalization-pro](./quick/261028-gpk-strengthen-ai-document-normalization-pro/) |
 | 261028-e2z | Fix AI Chat Drawer Analysis Mode reliability and read-only behavior | 2026-10-28 | c764335 | complete | [261028-e2z-fix-ai-chat-drawer-analysis-mode-reliabi](./quick/261028-e2z-fix-ai-chat-drawer-analysis-mode-reliabi/) |
 | 261027-kcs | Optimize Telegram AI retrieval parity with AI Chat | 2026-10-27 | 942d4d6 | complete | [261027-kcs-optimize-telegram-ai-retrieval-parity-wi](./quick/261027-kcs-optimize-telegram-ai-retrieval-parity-wi/) |
