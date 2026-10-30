@@ -517,8 +517,10 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
 
   // Ensure durable tabs are initialized in Dexie for the active scope
+  const tabInitializationRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!open) return;
+    if (!open || tabInitializationRef.current === scopeKey) return;
+    tabInitializationRef.current = scopeKey;
     let cancelled = false;
 
     const initTabs = async () => {
@@ -545,6 +547,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           }
         }
       } catch (err) {
+        tabInitializationRef.current = null;
         console.warn('[AIChatDrawer] Tab initialization error:', err);
       }
     };
@@ -771,14 +774,21 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   }, [getWizardCoordinator, wizardSnapshot]);
 
   const handleWizardStart = useCallback(async (metadata: WizardStartMetadata) => {
-    if (!wizardSkill) return;
+    if (!wizardSkill || !isProjectScope || !currentScope.id) return;
     let coordinator = getWizardCoordinator();
-    if (!coordinator && isProjectScope && currentScope.id) {
+    if (!coordinator) {
       const sdlcTab = durableTabs.find((tab) => tab.type === 'sdlc') ?? await getOrCreateSdlcTab(currentScope.id, db);
-      await setActiveTab(scopeKey, sdlcTab.id, db);
-      coordinator = getWizardCoordinator();
+      const deps: WizardCoordinatorDeps = {
+        projectId: currentScope.id,
+        threadId: sdlcTab.threadId,
+        db,
+        saveSnapshot: async (snapshot) => setWizardSnapshot(snapshot),
+        appendMessage: async (entry) => { await saveMessage({ threadId: sdlcTab.threadId, role: entry.role, content: entry.content, wizard: entry.wizard }, db); },
+        loadMessages: () => loadChatMessages(sdlcTab.threadId, db),
+      };
+      coordinator = createWizardCoordinatorFn(deps);
+      wizardCoordinatorRef.current = coordinator;
     }
-    if (!coordinator) return;
     setWizardMetadataOpen(false);
     const snapshot = await coordinator.start(wizardSkill, metadata);
     setWizardSnapshot(snapshot);

@@ -73,36 +73,42 @@ export async function getActiveTab(scopeKey: string, db: TaskPlannerDatabase = d
 
 export async function getOrCreateSdlcTab(projectId: string, db: TaskPlannerDatabase = defaultDb): Promise<ChatTab> {
   const scopeKey = `project:${projectId}`;
-  const existing = (await listTabsByScope(scopeKey, db)).find((tab) => tab.type === 'sdlc');
-  if (existing) return existing;
+  const tabId = `sdlc:${scopeKey}`;
 
-  const now = new Date().toISOString();
-  const threadId = generateId();
-  const thread: ChatThread = {
-    id: threadId,
-    scopeKey: `${scopeKey}:sdlc`,
-    scopeType: 'project',
-    entityId: projectId,
-    title: SDLC_TITLE,
-    createdAt: now,
-    updatedAt: now,
-  };
-  const tab: ChatTab = {
-    id: `sdlc:${scopeKey}`,
-    threadId,
-    scopeKey,
-    type: 'sdlc',
-    title: SDLC_TITLE,
-    order: 0,
-    active: (await listTabsByScope(scopeKey, db)).length === 0,
-    createdAt: now,
-    updatedAt: now,
-  };
-  await db.transaction('rw', [db.chatThreads, db.chatTabs], async () => {
-    await db.chatThreads.add(thread);
+  return db.transaction('rw', [db.chatThreads, db.chatTabs], async () => {
+    const existing = await db.chatTabs.get(tabId)
+      ?? (await db.chatTabs.where('scopeKey').equals(scopeKey).toArray()).find((tab) => tab.type === 'sdlc');
+    if (existing) return existing;
+
+    const scopeTabs = await db.chatTabs.where('scopeKey').equals(scopeKey).toArray();
+    const now = new Date().toISOString();
+    const existingProjectThreads = await db.chatThreads.where('entityId').equals(projectId).toArray();
+    const legacyThread = existingProjectThreads.find((thread) => thread.scopeKey === scopeKey)
+      ?? existingProjectThreads.find((thread) => thread.scopeKey === `${scopeKey}:sdlc`);
+    const thread: ChatThread = legacyThread ?? {
+      id: generateId(),
+      scopeKey: `${scopeKey}:sdlc`,
+      scopeType: 'project',
+      entityId: projectId,
+      title: SDLC_TITLE,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const tab: ChatTab = {
+      id: tabId,
+      threadId: thread.id,
+      scopeKey,
+      type: 'sdlc',
+      title: SDLC_TITLE,
+      order: 0,
+      active: scopeTabs.length === 0,
+      createdAt: thread.createdAt,
+      updatedAt: now,
+    };
+    if (!legacyThread) await db.chatThreads.add(thread);
     await db.chatTabs.add(tab);
+    return tab;
   });
-  return tab;
 }
 
 export async function createChatTab(input: CreateChatTabInput, db: TaskPlannerDatabase = defaultDb): Promise<ChatTab> {
