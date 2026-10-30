@@ -1175,24 +1175,11 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
   useEffect(() => {
     if (!open) {
-      if (pendingConfirmationRef.current) {
-        pendingConfirmationRef.current.resolve(false);
-        pendingConfirmationRef.current = null;
-        setPendingConfirmation(null);
-      }
-      abortControllerRef.current?.abort();
-      currentTurnAbortRef.current?.abort();
-      currentTurnAbortRef.current = null;
       setGroundedLoadingStatus(null);
     }
   }, [open]);
 
-  // Abort previous grounded turn on scope change (AI-SPEC §4b)
   useEffect(() => {
-    if (currentTurnAbortRef.current) {
-      currentTurnAbortRef.current.abort();
-      currentTurnAbortRef.current = null;
-    }
     setTransientClarifyMessage(null);
     setGroundedLoadingStatus(null);
   }, [currentScope.type, currentScope.id]);
@@ -1243,7 +1230,10 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       return;
     }
 
-    if (isStreaming || Boolean(groundedLoadingStatus)) return;
+    const activeReq = requestRegistryRef.current.begin(activeTabId);
+    if (!activeReq) return;
+    const turnController = activeReq.controller;
+    currentTurnAbortRef.current = turnController;
 
     setScrollTrigger((prev) => prev + 1);
     setApiError(null);
@@ -1330,13 +1320,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           },
           db
         );
-
-    // Cancel older turn before owning new one per AI-SPEC §4b
-    if (currentTurnAbortRef.current) {
-      currentTurnAbortRef.current.abort();
-    }
-    const turnController = new AbortController();
-    currentTurnAbortRef.current = turnController;
 
     const apiKey = await getNineRouterApiKey(db);
     const config = await getNineRouterConfig(db);
@@ -1491,6 +1474,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           });
 
         const groundedDurationMs = Date.now() - turnOverallStartTime;
+        if (!requestRegistryRef.current.isCurrent(activeReq.requestId, activeReq.tabId, activeReq.controller) || turnController.signal.aborted) return;
         await saveMessage(
           {
             threadId: activeThread.id,
@@ -1565,6 +1549,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         };
 
         const groundedDurationMs = Date.now() - turnOverallStartTime;
+        if (!requestRegistryRef.current.isCurrent(activeReq.requestId, activeReq.tabId, activeReq.controller) || turnController.signal.aborted) return;
         await saveMessage(
           {
             threadId: activeThread.id,
@@ -1584,7 +1569,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         groundedResult.kind === 'local_fallback_results' ||
         groundedResult.kind === 'evidence_only'
       ) {
-        if (!turnController.signal.aborted) {
+        if (requestRegistryRef.current.isCurrent(activeReq.requestId, activeReq.tabId, activeReq.controller) && !turnController.signal.aborted) {
           if (groundedResult.grounding.scope) {
             setLatestRoutedScope(groundedResult.grounding.scope);
           }
@@ -1611,7 +1596,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       }
 
         if (groundedResult.kind === 'error') {
-          if (!turnController.signal.aborted) {
+          if (requestRegistryRef.current.isCurrent(activeReq.requestId, activeReq.tabId, activeReq.controller) && !turnController.signal.aborted) {
             const groundedDurationMs = Date.now() - turnOverallStartTime;
             await saveMessage(
               {
@@ -1864,7 +1849,6 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
         : ''
     }`;
 
-    console.log('[AI Harness] 📝 Injected Context Grounding:\n', systemPromptContent);
     recentMsgs.push({
       role: 'system',
       content: systemPromptContent,
@@ -1891,8 +1875,7 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
 
     // 5. Start SSE Streaming with Tool Execution Harness
     setGroundedLoadingStatus(null);
-    const activeReq = requestRegistryRef.current.begin(activeTabId);
-    const controller = activeReq?.controller ?? new AbortController();
+    const controller = activeReq.controller;
     abortControllerRef.current = controller;
     tabRuntimes.patch(activeTabId, { status: 'processing', partialBuffer: '' });
     setIsStreaming(true);
@@ -1974,7 +1957,6 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
         },
         onToolCall: (call) => {
           toolCallsById.set(call.id, { name: call.name, args: call.args });
-          console.log(`[AI Harness] 🛠️ Model invoked tool "${call.name}":`, call.args);
           aiDebugService.recordToolCall(turnId, call);
         },
         onToolResult: (callId, result, durationMs) => {
@@ -1990,7 +1972,6 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
               isMutation: call ? isMutationTool(call.name, call.args) : false,
             },
           });
-          console.log(`[AI Harness] 📦 Tool result for "${call?.name || callId}":`, result);
           aiDebugService.recordToolResult(turnId, callId, result, durationMs);
         },
         onMutationCheck: async (toolName, args) => {
@@ -2039,6 +2020,9 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
       const cleanCommittedResponse = stripThinkingBlocks(fullResponse);
       if (cleanCommittedResponse.trim()) {
         const durationMs = Date.now() - turnStartTime;
+        if (!requestRegistryRef.current.isCurrent(activeReq.requestId, activeReq.tabId, activeReq.controller) || controller.signal.aborted) {
+          return;
+        }
         await saveMessage(
           {
             threadId: activeThread.id,
@@ -2080,21 +2064,21 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
           status: 'error',
           error: {
             code: 'request_failed',
-            message: err?.message || errorMsg,
-            requestId: activeReq?.requestId || generateId(),
+            message: errorMsg,
+            requestId: activeReq.requestId,
           },
         });
       }
     } finally {
-      setIsStreaming(false);
-      setStreamingStatus(null);
-      setStreamingText('');
-      setPendingConfirmation(null);
-      pendingConfirmationRef.current = null;
-      abortControllerRef.current = null;
-      if (activeReq) {
-        requestRegistryRef.current.finish(activeReq.requestId);
+      if (requestRegistryRef.current.isCurrent(activeReq.requestId, activeReq.tabId, activeReq.controller)) {
+        setIsStreaming(false);
+        setStreamingStatus(null);
+        setStreamingText('');
+        setPendingConfirmation(null);
+        pendingConfirmationRef.current = null;
+        abortControllerRef.current = null;
       }
+      requestRegistryRef.current.finish(activeReq.requestId);
     }
   };
 
