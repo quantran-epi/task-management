@@ -1259,7 +1259,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       return;
     }
 
-    const activeReq = requestRegistryRef.current.begin(activeTabId);
+    const activeReq = requestRegistryRef.current.begin(activeTabId, activeThreadId ?? '');
     if (!activeReq) return;
     const turnController = activeReq.controller;
     currentTurnAbortRef.current = turnController;
