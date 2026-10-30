@@ -68,7 +68,13 @@ export async function deleteProjectWithCascade(
           chatScopeKeysToPurge.push(`task:${tId}`);
         }
       }
-      const threadsToPurge = await db.chatThreads.where('scopeKey').anyOf(chatScopeKeysToPurge).toArray();
+      const threadsByScope = await db.chatThreads.where('scopeKey').anyOf(chatScopeKeysToPurge).toArray();
+      const projectMultiTabThreads = await db.chatThreads.where('entityId').equals(projectId).toArray();
+      const threadMap = new Map<string, typeof threadsByScope[0]>();
+      for (const t of [...threadsByScope, ...projectMultiTabThreads]) {
+        threadMap.set(t.id, t);
+      }
+      const threadsToPurge = Array.from(threadMap.values());
       if (threadsToPurge.length > 0) {
         const threadIds = threadsToPurge.map((t) => t.id);
         await db.chatMessages.where('threadId').anyOf(threadIds).delete();

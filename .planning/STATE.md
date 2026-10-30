@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: milestone
 status: executing
-stopped_at: Completed 25-04-PLAN.md
-last_updated: "2026-10-28T14:18:43.044Z"
-last_activity: 2026-10-28 -- Phase 25 execution started
+stopped_at: Phase 25.1 context updated with AI core reuse contract
+last_updated: "2026-10-30T12:36:56.566Z"
+last_activity: 2026-10-30 -- Phase 25.1 inserted for SDLC flow hardening
 progress:
-  total_phases: 9
+  total_phases: 10
   completed_phases: 6
   total_plans: 69
-  completed_plans: 46
-  percent: 67
+  completed_plans: 61
+  percent: 60
 ---
 
 # Project State
@@ -21,15 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-07)
 
 **Core value:** Make planned work realistically fit available time while giving the personal user evidence-grounded access to their local banking IT knowledge.
-**Current focus:** Phase 25 — interactive-sdlc-document-wizards
+**Current focus:** Phase 25.1 — sdlc-flow-hardening-multi-tab-ai-chat-isolation
 
 ## Current Position
 
-Phase: 25 (interactive-sdlc-document-wizards) — EXECUTING
-Plan: 3 of 18
+Phase: 25.1 (sdlc-flow-hardening-multi-tab-ai-chat-isolation) — NOT PLANNED
+Plan: 0 of 0
 Status: Ready to execute
-Last activity: 2026-10-28 -- Phase 25 execution started
-Stopped at: Completed 25-04-PLAN.md
+Last activity: 2026-10-30 -- Phase 25.1 inserted for SDLC flow hardening
+Stopped at: Phase 25.1 context updated with AI core reuse contract
 
 Progress: [██████████] 100%
 
@@ -340,6 +340,7 @@ None yet.
 
 ### Roadmap Evolution
 
+- Phase 25.1 inserted after Phase 25: SDLC Flow Hardening & Multi-Tab AI Chat Isolation (URGENT)
 - Phase 19.1 inserted after Phase 19: Production Neo4j Integration & Live Retrieval Validation (URGENT)
 - Phase 19.2 inserted after Phase 19.1: Production-Ready AI Assistant & Graph Integrity; Phase 19.1 partial UAT preserved and imported as blocking acceptance.
 - Phase 21 added: Knowledge Graph Entity Extraction & Semantic Retrieval Improvement (resolves dummy STEP_xxx, extracts TEN_BUOC & WRITES, improves Neo4j seed resolution, enables hybrid prose extraction per .planning/proposals/knowledge-graph-extraction-fix-plan.md)
@@ -359,6 +360,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-28T14:18:42.975Z
+Last session: 2026-10-30T10:12:46.399Z
 Stopped at: Session resumed, proceeding with Plan 19.2-09 task 2 retrieval correctness fixes
-Resume file: None
+Resume file: .planning/phases/25.1-sdlc-flow-hardening-multi-tab-ai-chat-isolation/25.1-CONTEXT.md

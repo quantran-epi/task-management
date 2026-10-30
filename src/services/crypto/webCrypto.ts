@@ -61,7 +61,7 @@ export async function compressGzip(bytes: Uint8Array): Promise<Uint8Array> {
     throw new Error('CompressionStream không khả dụng trong môi trường này');
   }
   const stream = bytesToStream(bytes).pipeThrough(new CS('gzip'));
-  return streamToBytes(stream);
+  return streamToBytes(stream as ReadableStream<Uint8Array>);
 }
 
 export async function decompressGzip(bytes: Uint8Array): Promise<Uint8Array> {
@@ -70,7 +70,7 @@ export async function decompressGzip(bytes: Uint8Array): Promise<Uint8Array> {
     throw new Error('DecompressionStream không khả dụng trong môi trường này');
   }
   const stream = bytesToStream(bytes).pipeThrough(new DS('gzip'));
-  return streamToBytes(stream, MAX_DECOMPRESSED_BYTES);
+  return streamToBytes(stream as ReadableStream<Uint8Array>, MAX_DECOMPRESSED_BYTES);
 }
 
 /**
