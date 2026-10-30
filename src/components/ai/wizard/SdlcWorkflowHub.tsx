@@ -1,14 +1,17 @@
 import React from 'react';
 import {
   AuditOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
   CodeOutlined,
   FileDoneOutlined,
   FileTextOutlined,
   InboxOutlined,
   ReloadOutlined,
   SafetyCertificateOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
-import { Badge, Button, Card, Popconfirm, Space, Steps, Tag, Typography, theme } from 'antd';
+import { Badge, Button, Card, Popconfirm, Space, Tag, Typography, theme } from 'antd';
 import type { SdlcStepId, SdlcWorkflowState } from '../../../services/wizard/workflowSchemas';
 
 const { Text } = Typography;
@@ -22,13 +25,57 @@ export interface SdlcWorkflowHubProps {
   onResetWorkflow?: (() => void) | undefined;
 }
 
-const STEP_CONFIGS: Array<{ id: SdlcStepId; title: string; icon: React.ReactNode }> = [
-  { id: 'INTAKE', title: 'Hồ sơ Đầu vào', icon: <FileTextOutlined /> },
-  { id: 'SOLUTION', title: 'Giải pháp SOLUTION.md', icon: <FileDoneOutlined /> },
-  { id: 'CODE_GUIDE', title: 'Triển khai Code', icon: <CodeOutlined /> },
-  { id: 'CHANGE_PACK', title: 'Change Pack & Drift', icon: <InboxOutlined /> },
-  { id: 'TECH_DOCS', title: 'Kỹ thuật PL03B / PL07', icon: <SafetyCertificateOutlined /> },
-  { id: 'CAB', title: 'Tờ trình CAB', icon: <AuditOutlined /> },
+interface StepConfig {
+  id: SdlcStepId;
+  title: string;
+  shortTitle: string;
+  icon: React.ReactNode;
+  hint: string;
+}
+
+const STEP_CONFIGS: StepConfig[] = [
+  {
+    id: 'INTAKE',
+    title: 'Hồ sơ Đầu vào (PL01 & PL02)',
+    shortTitle: '1. Đầu vào',
+    icon: <FileTextOutlined />,
+    hint: 'Đã nạp yêu cầu PL01 và đặc tả PL02 làm căn cứ đối soát.',
+  },
+  {
+    id: 'SOLUTION',
+    title: 'Giải pháp SOLUTION.md',
+    shortTitle: '2. Solution',
+    icon: <FileDoneOutlined />,
+    hint: 'AI đối chiếu tri thức và đề xuất giải pháp. Chat bên dưới để chỉnh sửa, sau đó bấm Lưu SOLUTION.md.',
+  },
+  {
+    id: 'CODE_GUIDE',
+    title: 'Triển khai Code ngoài',
+    shortTitle: '3. Coding',
+    icon: <CodeOutlined />,
+    hint: 'Coding ngoài theo SOLUTION đã chốt. Đóng gói bằng: node scripts/change-pack.mjs --cr <MÃ_CR>',
+  },
+  {
+    id: 'CHANGE_PACK',
+    title: 'Change Pack & Soi Drift',
+    shortTitle: '4. Change Pack',
+    icon: <InboxOutlined />,
+    hint: 'Kéo thả file change-pack.zip để đối chiếu lệch giữa Code thực tế và SOLUTION.',
+  },
+  {
+    id: 'TECH_DOCS',
+    title: 'Kỹ thuật (PL03B & PL07)',
+    shortTitle: '5. Kỹ thuật',
+    icon: <SafetyCertificateOutlined />,
+    hint: 'Soát xét và duyệt tài liệu triển khai PL03B và checklist review PL07.',
+  },
+  {
+    id: 'CAB',
+    title: 'Tờ trình phê duyệt CAB',
+    shortTitle: '6. Tờ trình CAB',
+    icon: <AuditOutlined />,
+    hint: 'Tổng kết tự động toàn bộ hồ sơ trình Hội đồng Phê duyệt Thay đổi (CAB).',
+  },
 ];
 
 export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = ({
@@ -43,7 +90,7 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = ({
 
   if (!projectScoped) {
     return (
-      <Card size="small" style={{ marginBottom: 8, borderColor: token.colorBorderSecondary }}>
+      <Card size="small" style={{ width: '100%', borderColor: token.colorBorderSecondary }}>
         <Text type="secondary">Chọn phạm vi Dự án để kích hoạt Quy trình SDLC Developer.</Text>
       </Card>
     );
@@ -51,57 +98,68 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = ({
 
   if (!state) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 12px', background: token.colorFillAlter, borderRadius: token.borderRadius, marginBottom: 8, border: `1px solid ${token.colorBorderSecondary}` }}>
-        <Space>
-          <Badge status="default" />
-          <span style={{ fontWeight: 600 }}>Quy trình SDLC Developer:</span>
-          <Text type="secondary" style={{ fontSize: 13 }}>
-            Chưa khởi tạo quy trình cho dự án này.
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 10,
+          padding: '8px 12px',
+          background: token.colorFillAlter,
+          borderRadius: token.borderRadius,
+          border: `1px solid ${token.colorBorderSecondary}`,
+          width: '100%',
+          boxSizing: 'border-box',
+        }}
+      >
+        <Space size={8} wrap style={{ flex: 1, minWidth: 200 }}>
+          <Badge status="processing" />
+          <span style={{ fontWeight: 600, fontSize: 13 }}>Quy trình SDLC Developer:</span>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            Chưa khởi tạo cho dự án này.
           </Text>
         </Space>
         <Button type="primary" size="small" icon={<FileTextOutlined />} onClick={onStartWorkflow}>
-          Khởi tạo SDLC Workflow (PL01 & PL02)
+          Khởi tạo SDLC (PL01 & PL02)
         </Button>
       </div>
     );
   }
 
   const currentStepIndex = STEP_CONFIGS.findIndex((s) => s.id === state.currentStep);
+  const currentConfig: StepConfig = STEP_CONFIGS[currentStepIndex] ?? (STEP_CONFIGS[0] as StepConfig);
   const hasStale = state.staleSteps.length > 0;
-
-  const getStepStatus = (stepId: SdlcStepId, index: number): 'wait' | 'process' | 'finish' | 'error' => {
-    if (state.staleSteps.includes(stepId)) return 'error'; // dùng error để hiện màu cam cảnh báo
-    if (index < currentStepIndex) return 'finish';
-    if (index === currentStepIndex) return 'process';
-    return 'wait';
-  };
+  const isCurrentStale = state.staleSteps.includes(state.currentStep);
 
   return (
     <Card
       size="small"
       style={{
-        marginBottom: 8,
+        width: '100%',
+        boxSizing: 'border-box',
         borderColor: hasStale ? token.colorWarning : token.colorBorderSecondary,
         backgroundColor: token.colorFillAlter,
       }}
+      styles={{ body: { padding: '8px 12px' } }}
       title={
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Space>
-            <span style={{ fontSize: 14, fontWeight: 600 }}>SDLC Workflow: {state.metadata.featureName}</span>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+          <Space size={6} wrap>
+            <span style={{ fontSize: 13, fontWeight: 600 }}>SDLC: {state.metadata.featureName}</span>
             <Tag color="blue">{state.metadata.cr}</Tag>
             {hasStale && (
               <Tag color="warning" icon={<ReloadOutlined />}>
-                Có {state.staleSteps.length} bước cần cập nhật lại
+                {state.staleSteps.length} bước cần cập nhật
               </Tag>
             )}
           </Space>
-          <Space>
+          <Space size={6}>
             <Button size="small" onClick={onStartWorkflow}>
-              Sửa Đầu vào PL01/PL02
+              Sửa PL01/PL02
             </Button>
             {onResetWorkflow && (
               <Popconfirm
-                title="Khởi tạo lại workflow?"
+                title="Làm mới workflow?"
                 description="Các tài liệu đã lưu trong Notes vẫn được giữ lại."
                 onConfirm={onResetWorkflow}
                 okText="Đồng ý"
@@ -116,37 +174,94 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = ({
         </div>
       }
     >
-      <Steps
-        size="small"
-        current={currentStepIndex}
-        onChange={(current) => {
-          const target = STEP_CONFIGS[current];
-          if (target && onNavigateStep) onNavigateStep(target.id);
+      {/* Thanh 6 bước dạng Chips/Pills cuộn ngang - không bị đè chữ hay co dúm */}
+      <div
+        style={{
+          display: 'flex',
+          gap: 6,
+          overflowX: 'auto',
+          padding: '2px 0 8px',
+          scrollbarWidth: 'thin',
+          whiteSpace: 'nowrap',
         }}
-        items={STEP_CONFIGS.map((cfg, idx) => {
+      >
+        {STEP_CONFIGS.map((cfg, idx) => {
+          const isSelected = cfg.id === state.currentStep;
+          const isDone = idx < currentStepIndex;
           const isStale = state.staleSteps.includes(cfg.id);
-          const status = getStepStatus(cfg.id, idx);
-          return {
-            key: cfg.id,
-            title: cfg.title,
-            icon: isStale ? <ReloadOutlined style={{ color: token.colorWarning }} /> : cfg.icon,
-            status: isStale ? 'error' : status,
-            description: isStale ? (
-              <Button
-                type="link"
-                size="small"
-                danger
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRerunStep?.(cfg.id);
-                }}
-              >
-                Cập nhật
-              </Button>
-            ) : undefined,
-          };
+
+          let icon = cfg.icon;
+
+          if (isStale) {
+            icon = <ReloadOutlined />;
+          } else if (isSelected) {
+            icon = <SyncOutlined spin />;
+          } else if (isDone) {
+            icon = <CheckCircleOutlined />;
+          } else {
+            icon = <ClockCircleOutlined />;
+          }
+
+          return (
+            <Tag.CheckableTag
+              key={cfg.id}
+              checked={isSelected}
+              onChange={() => onNavigateStep?.(cfg.id)}
+              style={{
+                padding: '3px 8px',
+                fontSize: 12,
+                borderRadius: 4,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                backgroundColor: isSelected ? token.colorPrimary : undefined,
+                color: isSelected ? '#fff' : undefined,
+                border: isStale ? `1px solid ${token.colorWarning}` : undefined,
+              }}
+            >
+              <span>{icon}</span>
+              <span>{cfg.shortTitle}</span>
+              {isStale && <Badge status="warning" />}
+            </Tag.CheckableTag>
+          );
         })}
-      />
+      </div>
+
+      {/* Dòng trạng thái mô tả bước hiện tại */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 8,
+          fontSize: 12,
+          color: token.colorTextSecondary,
+          borderTop: `1px solid ${token.colorBorderSecondary}`,
+          paddingTop: 6,
+          marginTop: 2,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+          <Text strong style={{ fontSize: 12, color: token.colorText }}>
+            Bước {currentStepIndex + 1}/6: {currentConfig.title}
+          </Text>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            — {currentConfig.hint}
+          </span>
+        </div>
+        {isCurrentStale && (
+          <Button
+            type="primary"
+            danger
+            size="small"
+            icon={<ReloadOutlined />}
+            onClick={() => onRerunStep?.(state.currentStep)}
+          >
+            Cập nhật lại
+          </Button>
+        )}
+      </div>
     </Card>
   );
 };

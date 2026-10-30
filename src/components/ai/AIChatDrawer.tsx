@@ -93,7 +93,7 @@ import { IntentRouterUnavailableError } from '../../services/ai/intentRouter';
 import { QuickPreviewDrawer } from '../notes/QuickPreviewDrawer';
 import { ScopeChipsBar, hasMeaningfulRoutedScope } from './grounded/ScopeChipsBar';
 import type { GroundedAnswerCardCallbacks } from './ChatMessageBubble';
-import { WizardSkillBar } from './wizard/WizardSkillBar';
+import { ChatTabBar, type ChatTabItem } from './ChatTabBar';
 import { WizardMetadataModal, type WizardStartMetadata } from './wizard/WizardMetadataModal';
 import { WizardLifecycleBar } from './wizard/WizardLifecycleBar';
 import { WizardProgressStrip } from './wizard/WizardProgressStrip';
@@ -112,7 +112,12 @@ import type { WizardSkill, WizardSnapshot } from '../../services/ai/wizardSchema
 import { collectWizardEvidence, runWizardStage } from '../../services/ai/wizardService';
 import { runLocalGroundedRetrieval } from '../../services/search/localGroundedRetrieval';
 import { saveSolutionVersion } from '../../services/wizard/artifactRepo';
-import { getMessagesByThreadId as loadChatMessages } from '../../db/repositories/chatRepo';
+import {
+  getOrCreateSdlcThread,
+  createChatTabThread,
+  deleteChatTabThread,
+  getMessagesByThreadId as loadChatMessages,
+} from '../../db/repositories/chatRepo';
 
 export const AI_CHAT_WIDTH_KEY = 'planner:ai_chat_width';
 export const AI_AUTO_APPROVE_MUTATIONS_KEY = 'planner:ai_auto_approve_mutations';
@@ -384,15 +389,169 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     await setNineRouterConfig({ defaultModel: model }, db);
   };
 
-  // Thread & message live query
+  const isProjectScope = currentScope.type === 'project' && Boolean(currentScope.id);
+
+  // SDLC Workflow state
+  const [sdlcWorkflowState, setSdlcWorkflowState] = useState<SdlcWorkflowState | undefined>();
+  const [sdlcInputModalOpen, setSdlcInputModalOpen] = useState(false);
+  const sdlcCoordinatorRef = useRef<ReturnType<typeof createSdlcWorkflowCoordinator> | null>(null);
+
+  // Multi-Tab state for project scope (Chrome-like tabs)
+  const [projectTabs, setProjectTabs] = useState<ChatTabItem[]>([]);
+  const [activeTabId, setActiveTabId] = useState<string>('sdlc');
+
+  const currentTab = isProjectScope ? projectTabs.find((t) => t.id === activeTabId) : undefined;
+  const activeTabThreadId = currentTab?.threadId;
+
+  // Thread & message live query: if in project scope with activeTabThreadId, query that thread. Otherwise fallback to scopeKey.
   const thread = useLiveQuery<ChatThread | undefined>(() => {
+    if (isProjectScope && activeTabThreadId) {
+      return db.chatThreads.get(activeTabThreadId);
+    }
     return db.chatThreads.where('scopeKey').equals(scopeKey).first();
-  }, [db, scopeKey]);
+  }, [db, isProjectScope, activeTabThreadId, scopeKey]);
 
   const messages = useLiveQuery<ChatMessage[]>(() => {
     if (!thread?.id) return [];
     return getMessagesByThreadId(thread.id, db);
   }, [db, thread?.id]) ?? [];
+
+  // Initialize and persist tabs when project scope changes
+  useEffect(() => {
+    if (!isProjectScope || !currentScope.id) {
+      setProjectTabs([]);
+      return;
+    }
+
+    const projectId = currentScope.id;
+    const storageKey = `planner:chat_tabs:${projectId}`;
+
+    const initTabs = async () => {
+      // 1. Ensure SDLC thread exists (max 1 per project)
+      const sdlcThread = await getOrCreateSdlcThread(projectId, `⚙️ SDLC: ${currentScope.title || projectId}`, db);
+
+      let savedTabs: ChatTabItem[] = [];
+      let savedActiveId = 'sdlc';
+      try {
+        const stored = localStorage.getItem(storageKey);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed.tabs) && parsed.tabs.length > 0) {
+            savedTabs = parsed.tabs;
+            savedActiveId = parsed.activeTabId || 'sdlc';
+          }
+        }
+      } catch {
+        // ignore parse error
+      }
+
+      // Ensure SDLC tab is always tab #0 with correct threadId
+      const sdlcTabItem: ChatTabItem = {
+        id: 'sdlc',
+        type: 'sdlc',
+        title: sdlcWorkflowState?.metadata?.cr
+          ? `⚙️ SDLC: ${sdlcWorkflowState.metadata.cr}`
+          : `⚙️ SDLC Workflow`,
+        threadId: sdlcThread.id,
+        createdAt: sdlcThread.createdAt,
+      };
+
+      // Filter out invalid/duplicate sdlc tabs from saved tabs, and check that threads actually exist in DB
+      const existingProjectThreads = await db.chatThreads.where('entityId').equals(projectId).toArray();
+      const existingThreadIdSet = new Set(existingProjectThreads.map((t) => t.id));
+
+      const otherChatTabs = savedTabs.filter((t) => t.type === 'chat' && t.id !== 'sdlc' && existingThreadIdSet.has(t.threadId));
+
+      // If no chat tabs existed, create one default chat tab
+      if (otherChatTabs.length === 0) {
+        const firstChatThread = await createChatTabThread(projectId, '💬 Tra cứu & Hỏi đáp', db);
+        otherChatTabs.push({
+          id: firstChatThread.id,
+          type: 'chat',
+          title: '💬 Tra cứu & Hỏi đáp',
+          threadId: firstChatThread.id,
+          createdAt: firstChatThread.createdAt,
+        });
+      }
+
+      const mergedTabs: ChatTabItem[] = [sdlcTabItem, ...otherChatTabs];
+      setProjectTabs(mergedTabs);
+
+      const isValidActive = mergedTabs.some((t) => t.id === savedActiveId);
+      const targetActiveId = isValidActive ? savedActiveId : 'sdlc';
+      setActiveTabId(targetActiveId);
+
+      try {
+        localStorage.setItem(storageKey, JSON.stringify({ activeTabId: targetActiveId, tabs: mergedTabs }));
+      } catch {}
+    };
+
+    void initTabs();
+  }, [currentScope.id, currentScope.title, db, isProjectScope, sdlcWorkflowState?.metadata?.cr]);
+
+  const handleSelectTab = useCallback((tabId: string) => {
+    setActiveTabId(tabId);
+    if (currentScope.id) {
+      try {
+        localStorage.setItem(`planner:chat_tabs:${currentScope.id}`, JSON.stringify({
+          activeTabId: tabId,
+          tabs: projectTabs,
+        }));
+      } catch {}
+    }
+  }, [currentScope.id, projectTabs]);
+
+  const handleAddTab = useCallback(async () => {
+    if (!isProjectScope || !currentScope.id) return;
+    const projectId = currentScope.id;
+    const nextTabNum = projectTabs.filter((t) => t.type === 'chat').length + 1;
+    const newThread = await createChatTabThread(projectId, `💬 Cuộc trò chuyện #${nextTabNum}`, db);
+
+    const newTabItem: ChatTabItem = {
+      id: newThread.id,
+      type: 'chat',
+      title: `💬 Cuộc trò chuyện #${nextTabNum}`,
+      threadId: newThread.id,
+      createdAt: newThread.createdAt,
+    };
+
+    const nextTabs = [...projectTabs, newTabItem];
+    setProjectTabs(nextTabs);
+    setActiveTabId(newTabItem.id);
+
+    try {
+      localStorage.setItem(`planner:chat_tabs:${projectId}`, JSON.stringify({
+        activeTabId: newTabItem.id,
+        tabs: nextTabs,
+      }));
+    } catch {}
+  }, [currentScope.id, db, isProjectScope, projectTabs]);
+
+  const handleCloseTab = useCallback(async (tabId: string) => {
+    if (!isProjectScope || !currentScope.id) return;
+    const targetTab = projectTabs.find((t) => t.id === tabId);
+    if (!targetTab || targetTab.type === 'sdlc') return; // SDLC tab can NEVER be closed
+
+    await deleteChatTabThread(targetTab.threadId, db);
+
+    const nextTabs = projectTabs.filter((t) => t.id !== tabId);
+    let nextActiveId = activeTabId;
+    if (activeTabId === tabId) {
+      const closedIndex = projectTabs.findIndex((t) => t.id === tabId);
+      const fallbackTab = nextTabs[Math.max(0, closedIndex - 1)];
+      nextActiveId = fallbackTab?.id || 'sdlc';
+    }
+
+    setProjectTabs(nextTabs);
+    setActiveTabId(nextActiveId);
+
+    try {
+      localStorage.setItem(`planner:chat_tabs:${currentScope.id}`, JSON.stringify({
+        activeTabId: nextActiveId,
+        tabs: nextTabs,
+      }));
+    } catch {}
+  }, [activeTabId, currentScope.id, db, isProjectScope, projectTabs]);
 
   // Streaming & error state
   const [isStreaming, setIsStreaming] = useState(false);
@@ -432,22 +591,13 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const [exportPending, setExportPending] = useState<Set<string>>(new Set());
   const [exportErrors, setExportErrors] = useState<Map<string, string>>(new Map());
   const wizardCoordinatorRef = useRef<ReturnType<typeof createWizardCoordinator> | null>(null);
-  const sdlcCoordinatorRef = useRef<ReturnType<typeof createSdlcWorkflowCoordinator> | null>(null);
-  const [sdlcWorkflowState, setSdlcWorkflowState] = useState<SdlcWorkflowState | undefined>();
-  const [sdlcInputModalOpen, setSdlcInputModalOpen] = useState(false);
   const packActionRef = useRef(false);
   const cabActionRef = useRef(false);
-  const isProjectScope = currentScope.type === 'project' && Boolean(currentScope.id);
 
   const activeThreadId = thread?.id;
-  useEffect(() => {
-    if (open && isProjectScope && currentScope.id && !thread) {
-      void createOrGetThread({ scopeType: 'project', entityId: currentScope.id, title: currentScope.title }, db);
-    }
-  }, [currentScope.id, currentScope.title, db, isProjectScope, open, thread]);
 
   useEffect(() => {
-    if (!isProjectScope || !activeThreadId || !currentScope.id) {
+    if (!isProjectScope || !activeThreadId || !currentScope.id || activeTabId !== 'sdlc') {
       wizardCoordinatorRef.current?.dispose();
       wizardCoordinatorRef.current = null;
       setWizardSnapshot(undefined);
@@ -677,6 +827,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     const newState = await coordinator.startOrUpdateIntake(metadata, pl01, pl02);
     setSdlcWorkflowState(newState);
     setSdlcInputModalOpen(false);
+    setWizardSnapshot(undefined);
+    setActiveTabId('sdlc');
 
     // Kích hoạt AI phân tích tri thức và tạo bản thảo SOLUTION.md đầu tiên
     const prompt = `[Quy trình SDLC - Khởi tạo SOLUTION cho CR: ${metadata.cr}]\nTính năng: ${metadata.featureName}\nĐơn vị yêu cầu: ${metadata.requestingUnit}\n\n1. YÊU CẦU NGHIỆP VỤ (PL01):\n${pl01}\n\n2. ĐẶC TẢ CHỨC NĂNG (PL02):\n${pl02}\n\nDựa vào ngữ cảnh tri thức của dự án và hai tài liệu trên, hãy phân tích hiện trạng hệ thống, các màn hình/API/bảng DB bị ảnh hưởng và đề xuất bản thảo giải pháp kỹ thuật SOLUTION.md chi tiết.`;
@@ -740,53 +892,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const wizardProject = currentScope.id ? { id: currentScope.id, name: currentScope.title || currentScope.id } : undefined;
   const wizardLeadingContent = (
     <>
-      <SdlcWorkflowHub
-        projectScoped={isProjectScope}
-        state={sdlcWorkflowState}
-        onStartWorkflow={() => setSdlcInputModalOpen(true)}
-        onNavigateStep={(stepId: SdlcStepId) => {
-          void getSdlcCoordinator()?.navigateToStep(stepId).then((next: SdlcWorkflowState | undefined) => next && setSdlcWorkflowState(next));
-        }}
-        onRerunStep={(stepId: SdlcStepId) => {
-          if (stepId === 'INTAKE') {
-            setSdlcInputModalOpen(true);
-          } else if (stepId === 'SOLUTION') {
-            void handleSendMessageRef.current('Cập nhật lại giải pháp SOLUTION.md theo yêu cầu PL01/PL02 mới nhất.');
-          } else if (stepId === 'CHANGE_PACK') {
-            message.info('Vui lòng kéo thả file change-pack.zip mới để đối chiếu lại.');
-          } else if (stepId === 'TECH_DOCS') {
-            void handleSendMessageRef.current('Tái tạo tài liệu kỹ thuật PL03B và PL07 dựa trên SOLUTION và code diff mới.');
-          } else if (stepId === 'CAB') {
-            void handleCabGenerate();
-          }
-        }}
-        onResetWorkflow={() => {
-          setSdlcWorkflowState(undefined);
-          message.success('Đã làm mới quy trình SDLC');
-        }}
-      />
-      {wizardProject && (
-        <StepInputDocsModal
-          open={sdlcInputModalOpen}
-          project={wizardProject}
-          currentUser="Developer"
-          initialValues={
-            sdlcWorkflowState
-              ? {
-                  metadata: sdlcWorkflowState.metadata,
-                  pl01: sdlcWorkflowState.artifacts.pl01?.content,
-                  pl02: sdlcWorkflowState.artifacts.pl02?.content,
-                }
-              : undefined
-          }
-          onSubmit={handleStartSdlcWorkflow}
-          onClose={() => setSdlcInputModalOpen(false)}
-        />
-      )}
       {wizardSnapshot && <WizardLifecycleBar formName={wizardSnapshot.skill} snapshot={wizardSnapshot} restored={Boolean((wizardSnapshot as WizardSnapshot & { restored?: boolean }).restored)} onAbandon={() => void handleWizardCancel()} />}
       {wizardSnapshot && <WizardProgressStrip snapshot={wizardSnapshot} />}
       {wizardSkipNotice && <div role="status">{wizardSkipNotice}</div>}
-      <WizardSkillBar projectScoped={isProjectScope} activeSession={Boolean(wizardSnapshot && !['completed', 'abandoned'].includes(wizardSnapshot.status))} selectedSkill={wizardSkill ?? undefined} onActivate={(skill) => { setWizardSkill(skill); setWizardMetadataOpen(true); }} />
       {packVisible && !packUi && <ChangePackDropzone onSelect={(file) => void handlePackSelect(file)} />}
       {packVisible && packUi && !confirmedManifest && <ChangePackConfirmStrip result={packUi} onConfirm={(manifest) => void handlePackConfirm(manifest)} onReplace={handlePackReplace} />}
       {confirmedManifest && reconciliationResult && (
@@ -970,7 +1078,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     const trimmed = text.trim();
     if (!trimmed) return;
 
-    if (await handleWizardMessage(trimmed)) return;
+    if (activeTabId === 'sdlc' && (await handleWizardMessage(trimmed))) return;
 
     // Check if user is responding to an active confirmation prompt via chat input
     if (pendingConfirmationRef.current) {
@@ -1840,6 +1948,10 @@ Rules:
     }
   };
 
+  useEffect(() => {
+    handleSendMessageRef.current = handleSendMessage;
+  });
+
   const handleEvidenceOnlySynthesize = async (prevGrounding: ChatMessageGrounding) => {
     const activeThread = thread;
     if (!activeThread || synthesizingEvidenceId) return;
@@ -2229,6 +2341,26 @@ Rules:
         </div>
       </div>
 
+      {/* Chrome-like Multi-Tab Bar for Project Scope */}
+      {isProjectScope && projectTabs.length > 0 && (
+        <ChatTabBar
+          tabs={projectTabs}
+          activeTabId={activeTabId}
+          onSelectTab={handleSelectTab}
+          onAddTab={handleAddTab}
+          onCloseTab={handleCloseTab}
+          sdlcStatus={
+            sdlcWorkflowState
+              ? sdlcWorkflowState.staleSteps.length > 0
+                ? 'stale'
+                : sdlcWorkflowState.currentStep === 'CAB'
+                ? 'finish'
+                : 'process'
+              : 'wait'
+          }
+        />
+      )}
+
       <ScopePickerModal
         open={scopeModalOpen}
         onClose={() => setScopeModalOpen(false)}
@@ -2321,6 +2453,56 @@ Rules:
         db={db}
       />
 
+      {/* SDLC Workflow Hub - Full Width above ChatInputBar (chỉ hiện khi đang ở tab SDLC) */}
+      {isProjectScope && activeTabId === 'sdlc' && (
+        <div style={{ width: '100%', padding: '0 12px 6px', boxSizing: 'border-box' }}>
+          <SdlcWorkflowHub
+            projectScoped={isProjectScope}
+            state={sdlcWorkflowState}
+            onStartWorkflow={() => setSdlcInputModalOpen(true)}
+            onNavigateStep={(stepId: SdlcStepId) => {
+              void getSdlcCoordinator()?.navigateToStep(stepId).then((next: SdlcWorkflowState | undefined) => next && setSdlcWorkflowState(next));
+            }}
+            onRerunStep={(stepId: SdlcStepId) => {
+              if (stepId === 'INTAKE') {
+                setSdlcInputModalOpen(true);
+              } else if (stepId === 'SOLUTION') {
+                void handleSendMessageRef.current('Cập nhật lại giải pháp SOLUTION.md theo yêu cầu PL01/PL02 mới nhất.');
+              } else if (stepId === 'CHANGE_PACK') {
+                message.info('Vui lòng kéo thả file change-pack.zip mới để đối chiếu lại.');
+              } else if (stepId === 'TECH_DOCS') {
+                void handleSendMessageRef.current('Tái tạo tài liệu kỹ thuật PL03B và PL07 dựa trên SOLUTION và code diff mới.');
+              } else if (stepId === 'CAB') {
+                void handleCabGenerate();
+              }
+            }}
+            onResetWorkflow={() => {
+              setSdlcWorkflowState(undefined);
+              message.success('Đã làm mới quy trình SDLC');
+            }}
+          />
+        </div>
+      )}
+
+      {wizardProject && (
+        <StepInputDocsModal
+          open={sdlcInputModalOpen}
+          project={wizardProject}
+          currentUser="Developer"
+          initialValues={
+            sdlcWorkflowState
+              ? {
+                  metadata: sdlcWorkflowState.metadata,
+                  pl01: sdlcWorkflowState.artifacts.pl01?.content,
+                  pl02: sdlcWorkflowState.artifacts.pl02?.content,
+                }
+              : undefined
+          }
+          onSubmit={handleStartSdlcWorkflow}
+          onClose={() => setSdlcInputModalOpen(false)}
+        />
+      )}
+
       {/* Chat Input Bar */}
       <ChatInputBar
         autoFocus={open}
@@ -2332,9 +2514,9 @@ Rules:
         placeholder={
           pendingConfirmation
             ? 'Gõ "yes" để xác nhận hoặc "no" để từ chối...'
-            : wizardPlaceholder
+            : (activeTabId === 'sdlc' ? wizardPlaceholder : undefined)
         }
-        leadingContent={wizardLeadingContent}
+        leadingContent={activeTabId === 'sdlc' ? wizardLeadingContent : undefined}
         db={db}
         attachedFiles={sessionAttachedFiles}
         onAttachFile={handleAttachFile}

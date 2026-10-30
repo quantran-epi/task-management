@@ -183,3 +183,90 @@ export async function clearAllChatHistory(
     await db.chatThreads.clear();
   });
 }
+
+/**
+ * Lấy hoặc tạo Thread duy nhất cho SDLC Workflow trong phạm vi Project.
+ * Đảm bảo mỗi Project chỉ có duy nhất 1 thread cho SDLC.
+ */
+export async function getOrCreateSdlcThread(
+  projectId: string,
+  title?: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<ChatThread> {
+  const sdlcScopeKey = `project:${projectId}:sdlc`;
+  const existingSdlc = await db.chatThreads.where('scopeKey').equals(sdlcScopeKey).first();
+  if (existingSdlc) {
+    return existingSdlc;
+  }
+
+  // Fallback kiểm tra thread project mặc định nếu đã có từ trước
+  const legacyScopeKey = `project:${projectId}`;
+  const legacyThread = await db.chatThreads.where('scopeKey').equals(legacyScopeKey).first();
+  if (legacyThread) {
+    return legacyThread;
+  }
+
+  const now = new Date().toISOString();
+  const thread: ChatThread = {
+    id: generateId(),
+    scopeKey: sdlcScopeKey,
+    scopeType: 'project',
+    entityId: projectId,
+    title: title?.trim() || '⚙️ SDLC Workflow',
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  await db.chatThreads.add(thread);
+  return thread;
+}
+
+/**
+ * Tạo thêm một Tab Chat thường trong Project (cho phép nhiều tab song song).
+ */
+export async function createChatTabThread(
+  projectId: string,
+  title?: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<ChatThread> {
+  const id = generateId();
+  const scopeKey = `project:${projectId}:chat:${id}`;
+  const now = new Date().toISOString();
+
+  const thread: ChatThread = {
+    id,
+    scopeKey,
+    scopeType: 'project',
+    entityId: projectId,
+    title: title?.trim() || '💬 Cuộc trò chuyện mới',
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  await db.chatThreads.add(thread);
+  return thread;
+}
+
+/**
+ * Lấy tất cả các thread thuộc về 1 project (cả SDLC lẫn chat thường).
+ */
+export async function getProjectThreads(
+  projectId: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<ChatThread[]> {
+  return db.chatThreads.where('entityId').equals(projectId).toArray();
+}
+
+/**
+ * Xóa một tab chat thường (xóa cả tin nhắn và thread trong Dexie).
+ */
+export async function deleteChatTabThread(
+  threadId: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<void> {
+  await db.transaction('rw', [db.chatThreads, db.chatMessages], async () => {
+    await db.chatMessages.where('threadId').equals(threadId).delete();
+    await db.chatThreads.delete(threadId);
+  });
+}
+

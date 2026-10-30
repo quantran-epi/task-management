@@ -31,7 +31,7 @@ describe('SdlcWorkflowHub', () => {
   it('hiển thị nút khởi tạo khi chưa có state', () => {
     const handleStart = vi.fn();
     render(<SdlcWorkflowHub projectScoped={true} onStartWorkflow={handleStart} />);
-    const startButton = screen.getByText(/Khởi tạo SDLC Workflow/i);
+    const startButton = screen.getByText(/Khởi tạo SDLC/i);
     expect(startButton).toBeInTheDocument();
 
     fireEvent.click(startButton);
@@ -44,13 +44,13 @@ describe('SdlcWorkflowHub', () => {
     expect(screen.getByText(/CR-TEST-99/i)).toBeInTheDocument();
     expect(screen.getByText(/Core Banking Payment/i)).toBeInTheDocument();
 
-    // 6 bước
-    expect(screen.getByText(/Hồ sơ Đầu vào/i)).toBeInTheDocument();
-    expect(screen.getByText(/Giải pháp SOLUTION.md/i)).toBeInTheDocument();
-    expect(screen.getByText(/Triển khai Code/i)).toBeInTheDocument();
-    expect(screen.getByText(/Change Pack & Drift/i)).toBeInTheDocument();
-    expect(screen.getByText(/Kỹ thuật PL03B \/ PL07/i)).toBeInTheDocument();
-    expect(screen.getByText(/Tờ trình CAB/i)).toBeInTheDocument();
+    // 6 bước chips
+    expect(screen.getByText(/1\. Đầu vào/i)).toBeInTheDocument();
+    expect(screen.getByText(/2\. Solution/i)).toBeInTheDocument();
+    expect(screen.getByText(/3\. Coding/i)).toBeInTheDocument();
+    expect(screen.getByText(/4\. Change Pack/i)).toBeInTheDocument();
+    expect(screen.getByText(/5\. Kỹ thuật/i)).toBeInTheDocument();
+    expect(screen.getByText(/6\. Tờ trình CAB/i)).toBeInTheDocument();
   });
 
   it('hiển thị cảnh báo stale khi có bước bị cũ', () => {
@@ -60,6 +60,6 @@ describe('SdlcWorkflowHub', () => {
     };
 
     render(<SdlcWorkflowHub projectScoped={true} state={staleState} onStartWorkflow={vi.fn()} />);
-    expect(screen.getByText(/Có 2 bước cần cập nhật lại/i)).toBeInTheDocument();
+    expect(screen.getByText(/2 bước cần cập nhật/i)).toBeInTheDocument();
   });
 });
