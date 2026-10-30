@@ -1,0 +1,62 @@
+import { describe, expect, it } from 'vitest';
+import { createSdlcWorkflowCoordinator } from '../workflowCoordinator';
+
+describe('createSdlcWorkflowCoordinator', () => {
+  const dummyUuid1 = '11111111-1111-4111-8111-111111111111';
+  const dummyUuid2 = '22222222-2222-4222-8222-222222222222';
+
+  const deps = {
+    projectId: dummyUuid1,
+    threadId: dummyUuid2,
+  };
+
+  it('từ chối khi PL01 hoặc PL02 rỗng', async () => {
+    const coordinator = createSdlcWorkflowCoordinator(deps);
+    const metadata = {
+      cr: 'CR-001',
+      featureName: 'Feature A',
+      author: 'Author',
+      requestingUnit: 'Unit',
+      date: '2026-10-30',
+    };
+
+    await expect(coordinator.startOrUpdateIntake(metadata, '', 'PL02 text')).rejects.toThrow('INTAKE_PL01_REQUIRED');
+    await expect(coordinator.startOrUpdateIntake(metadata, 'PL01 text', '')).rejects.toThrow('INTAKE_PL02_REQUIRED');
+  });
+
+  it('hoàn thành Intake và chuyển sang bước SOLUTION', async () => {
+    const coordinator = createSdlcWorkflowCoordinator(deps);
+    const metadata = {
+      cr: 'CR-001',
+      featureName: 'Feature A',
+      author: 'Author',
+      requestingUnit: 'Unit',
+      date: '2026-10-30',
+    };
+
+    const state = await coordinator.startOrUpdateIntake(metadata, 'Yêu cầu PL01', 'Đặc tả PL02');
+    expect(state.currentStep).toBe('SOLUTION');
+    expect(state.artifacts.pl01?.hash).toBeDefined();
+    expect(state.artifacts.pl02?.hash).toBeDefined();
+    expect(state.artifacts.pl02?.sourceHashes).toContain(state.artifacts.pl01?.hash);
+  });
+
+  it('lưu SOLUTION v1 và v2 cập nhật hash chuẩn xác', async () => {
+    const coordinator = createSdlcWorkflowCoordinator(deps);
+    const metadata = {
+      cr: 'CR-001',
+      featureName: 'Feature A',
+      author: 'Author',
+      requestingUnit: 'Unit',
+      date: '2026-10-30',
+    };
+
+    await coordinator.startOrUpdateIntake(metadata, 'Yêu cầu PL01', 'Đặc tả PL02');
+    const stateV1 = await coordinator.commitSolution('# Solution v1 Markdown');
+    expect(stateV1.artifacts.solution?.version).toBe(1);
+    expect(stateV1.currentStep).toBe('CODE_GUIDE');
+
+    const stateV2 = await coordinator.commitSolution('# Solution v2 Markdown');
+    expect(stateV2.artifacts.solution?.version).toBe(2);
+  });
+});
