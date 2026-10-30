@@ -230,6 +230,75 @@ export const BackupChatThreadRecordSchema = z
     }
   );
 
+const FORBIDDEN_BACKUP_KEYS = new Set([
+  'apiKey', 'apikey', 'bearerToken', 'token', 'accessToken', 'refreshToken',
+  'passphrase', 'password', 'secret', 'pat', 'endpointCredential', 'authorization',
+  'systemPrompt', 'prompt', 'rawModelResponse', 'rawToolResponse', 'partialBuffer',
+  'streamingText', 'error', 'stack', 'diagnostics', 'runtime', 'attachments',
+]);
+
+function findForbiddenBackupKey(obj: unknown): string | null {
+  if (!obj || typeof obj !== 'object') return null;
+  if (Array.isArray(obj)) {
+    for (const item of obj) {
+      const found = findForbiddenBackupKey(item);
+      if (found) return found;
+    }
+    return null;
+  }
+  for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+    const lower = key.toLowerCase();
+    if (FORBIDDEN_BACKUP_KEYS.has(key) || FORBIDDEN_BACKUP_KEYS.has(lower) || /(^|_)(api[_-]?key|bearer[_-]?token|access[_-]?token|refresh[_-]?token|passphrase|password|secret|pat|prompt|partial|raw.*response|stack|diagnostic|error)(_|$)/i.test(key)) {
+      return key;
+    }
+    const nested = findForbiddenBackupKey(value);
+    if (nested) return nested;
+  }
+  return null;
+}
+
+const backupConfigValueSchema = z.union([z.string().max(200), z.boolean(), z.number().finite()]);
+const backupTabConfigSchema = z.strictObject({
+  model: z.string().max(200).optional(),
+  analysisMode: z.boolean().optional(),
+  mcpEnabled: z.boolean().optional(),
+  knowledgeEnabled: z.boolean().optional(),
+  promptContextOptions: z.record(z.string(), backupConfigValueSchema).optional(),
+});
+
+export const BackupChatTabRecordSchema = z
+  .strictObject({
+    id: uuidSchema,
+    threadId: uuidSchema,
+    scopeKey: z.string().min(1),
+    type: z.enum(['chat', 'sdlc']),
+    title: z.string().trim().min(1).max(200),
+    order: z.number().int().nonnegative(),
+    active: z.boolean().optional(),
+    status: z.enum(['idle', 'processing', 'interrupted', 'error', 'stale', 'complete']).optional(),
+    checkpoint: z.strictObject({
+      requestId: uuidSchema,
+      step: z.string().min(1).optional(),
+      startedAt: z.string(),
+      status: z.enum(['interrupted', 'error']).optional(),
+    }).optional(),
+    config: backupTabConfigSchema.optional(),
+    workflowState: z.record(z.string(), z.unknown()).optional(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  })
+  .superRefine((tab, ctx) => {
+    const forbiddenKey = findForbiddenBackupKey(tab);
+    if (forbiddenKey) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [forbiddenKey],
+        message: `FORBIDDEN_FIELD: backup tab contains forbidden field '${forbiddenKey}'`,
+        params: { code: 'FORBIDDEN_FIELD' },
+      });
+    }
+  });
+
 const FORBIDDEN_GROUNDING_KEYS = [
   'apiKey',
   'bearerToken',

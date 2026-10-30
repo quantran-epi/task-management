@@ -115,6 +115,49 @@ export interface ExportBackupOptions {
   excludeAttachmentData?: boolean;
 }
 
+const FORBIDDEN_TAB_BACKUP_KEY = /(^|_)(api[_-]?key|bearer[_-]?token|access[_-]?token|refresh[_-]?token|passphrase|password|secret|pat|prompt|partial|raw.*response|stack|diagnostic|error|runtime)(_|$)/i;
+
+function projectSafeTabValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(projectSafeTabValue);
+  if (!value || typeof value !== 'object') return value;
+
+  const result: Record<string, unknown> = {};
+  for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+    if (FORBIDDEN_TAB_BACKUP_KEY.test(key)) continue;
+    const projected = projectSafeTabValue(nested);
+    if (projected !== undefined) result[key] = projected;
+  }
+  return result;
+}
+
+function projectSafeChatTab(tab: ChatTab): ChatTab {
+  const config = tab.config
+    ? {
+        ...(tab.config.model !== undefined ? { model: tab.config.model } : {}),
+        ...(tab.config.analysisMode !== undefined ? { analysisMode: tab.config.analysisMode } : {}),
+        ...(tab.config.mcpEnabled !== undefined ? { mcpEnabled: tab.config.mcpEnabled } : {}),
+        ...(tab.config.knowledgeEnabled !== undefined ? { knowledgeEnabled: tab.config.knowledgeEnabled } : {}),
+        ...(tab.config.promptContextOptions ? { promptContextOptions: projectSafeTabValue(tab.config.promptContextOptions) as Record<string, boolean | string | number> } : {}),
+      }
+    : undefined;
+
+  return {
+    id: tab.id,
+    threadId: tab.threadId,
+    scopeKey: tab.scopeKey,
+    type: tab.type,
+    title: tab.title,
+    order: tab.order,
+    ...(tab.active !== undefined ? { active: tab.active } : {}),
+    ...(tab.status !== undefined ? { status: tab.status } : {}),
+    ...(tab.checkpoint !== undefined ? { checkpoint: tab.checkpoint } : {}),
+    ...(config && Object.keys(config).length > 0 ? { config } : {}),
+    ...(tab.workflowState !== undefined ? { workflowState: projectSafeTabValue(tab.workflowState) as Record<string, unknown> } : {}),
+    createdAt: tab.createdAt,
+    updatedAt: tab.updatedAt,
+  };
+}
+
 export async function exportBackupPayload(
   targetDb: TaskPlannerDatabase = defaultDb,
   _options?: ExportBackupOptions
@@ -131,6 +174,7 @@ export async function exportBackupPayload(
     rawAttachments,
     chatThreads,
     chatMessages,
+    chatTabs,
     activeTimers,
     allSettings,
     documentSets,
@@ -152,6 +196,7 @@ export async function exportBackupPayload(
     targetDb.noteAttachments.toArray(),
     targetDb.chatThreads.toArray(),
     targetDb.chatMessages.toArray(),
+    targetDb.chatTabs.toArray(),
     targetDb.activeTimers.toArray(),
     targetDb.settings.toArray(),
     targetDb.documentSets.toArray(),
@@ -198,6 +243,7 @@ export async function exportBackupPayload(
     noteAttachments,
     chatThreads,
     chatMessages,
+    chatTabs: chatTabs.map(projectSafeChatTab),
     activeTimers,
     settings: safeSettings,
     documentSets,
@@ -221,6 +267,7 @@ export async function exportBackupPayload(
     noteAttachments: noteAttachments.length,
     chatThreads: chatThreads.length,
     chatMessages: chatMessages.length,
+    chatTabs: chatTabs.length,
     activeTimers: activeTimers.length,
     settings: safeSettings.length,
     documentSets: documentSets.length,

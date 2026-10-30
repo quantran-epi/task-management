@@ -17,6 +17,7 @@ import {
   BackupNoteAttachmentRecordSchema,
   BackupChatThreadRecordSchema,
   BackupChatMessageRecordSchema,
+  BackupChatTabRecordSchema,
   BackupActiveTimerRecordSchema,
   BackupSettingRecordSchema,
   BackupDocumentSetRecordSchema,
@@ -156,6 +157,9 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
   const chatMessages = rawTables.chatMessages !== undefined
     ? validateTable('chatMessages', BackupChatMessageRecordSchema, rawTables.chatMessages)
     : undefined;
+  const chatTabs = rawTables.chatTabs !== undefined
+    ? validateTable('chatTabs', BackupChatTabRecordSchema, rawTables.chatTabs)
+    : undefined;
   const activeTimers = rawTables.activeTimers !== undefined
     ? validateTable('activeTimers', BackupActiveTimerRecordSchema, rawTables.activeTimers)
     : undefined;
@@ -195,6 +199,8 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
   const taskIds = new Set(tasks.map((t) => t.id));
   const threadIds = new Set((chatThreads || []).map((thread) => thread.id));
   const threadById = new Map((chatThreads || []).map((thread) => [thread.id, thread]));
+  const tabIds = new Set((chatTabs || []).map((tab) => tab.id));
+  const recovery = { missingSources: [] as Array<{ id: string; title: string; version?: number; hash?: string }>, blockedTabs: [] as Array<{ tabId: string; threadId: string; step: string; missingSourceIds: string[] }> };
 
   // Check milestones refer to existing project
   milestones.forEach((m) => {
@@ -366,6 +372,54 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     });
   }
 
+  if (chatTabs && chatThreads) {
+    const activeByScope = new Map<string, string>();
+    const sdlcByScope = new Set<string>();
+    const tabIdsSeen = new Set<string>();
+    chatTabs.forEach((tab) => {
+      if (tabIdsSeen.has(tab.id)) errors.push({ table: 'chatTabs', recordId: tab.id, field: 'id', message: 'Duplicate ChatTab id' });
+      tabIdsSeen.add(tab.id);
+      const thread = threadById.get(tab.threadId);
+      if (!thread) {
+        errors.push({ table: 'chatTabs', recordId: tab.id, field: 'threadId', message: `ChatTab references threadId "${tab.threadId}" not found in chatThreads` });
+      } else {
+        const expectedScope = thread.scopeType === 'project' && thread.scopeKey.endsWith(':sdlc') ? thread.scopeKey.slice(0, -5) : thread.scopeKey;
+        if (tab.scopeKey !== expectedScope && tab.scopeKey !== thread.scopeKey) {
+          errors.push({ table: 'chatTabs', recordId: tab.id, field: 'scopeKey', message: 'ChatTab scope does not match chat thread' });
+        }
+        if (thread.scopeType === 'project' && thread.entityId && tab.scopeKey === `project:${thread.entityId}` && tab.type === 'sdlc') {
+          if (sdlcByScope.has(tab.scopeKey)) errors.push({ table: 'chatTabs', recordId: tab.id, field: 'type', message: 'Duplicate SDLC tab for project scope' });
+          sdlcByScope.add(tab.scopeKey);
+        }
+      }
+      if (tab.active) {
+        if (activeByScope.has(tab.scopeKey)) errors.push({ table: 'chatTabs', recordId: tab.id, field: 'active', message: 'Multiple active tabs for scope' });
+        activeByScope.set(tab.scopeKey, tab.id);
+      }
+      const workflow = tab.workflowState;
+      if (workflow && typeof workflow === 'object') {
+        const state = workflow as Record<string, unknown>;
+        const artifacts = state.artifacts && typeof state.artifacts === 'object' ? state.artifacts as Record<string, unknown> : {};
+        const missingIds: string[] = [];
+        for (const artifact of Object.values(artifacts)) {
+          if (!artifact || typeof artifact !== 'object') continue;
+          const ref = artifact as Record<string, unknown>;
+          const sourceId = typeof ref.noteId === 'string' ? ref.noteId : undefined;
+          if (sourceId && notes && !noteIds.has(sourceId)) {
+            missingIds.push(sourceId);
+            const title = typeof ref.title === 'string' ? ref.title : sourceId;
+            if (!recovery.missingSources.some((source) => source.id === sourceId)) recovery.missingSources.push({ id: sourceId, title, ...(typeof ref.version === 'number' ? { version: ref.version } : {}), ...(typeof ref.hash === 'string' ? { hash: ref.hash } : {}) });
+          }
+        }
+        if (missingIds.length > 0) {
+          const step = typeof state.currentStep === 'string' ? state.currentStep : 'INTAKE';
+          recovery.blockedTabs.push({ tabId: tab.id, threadId: tab.threadId, step, missingSourceIds: [...new Set(missingIds)] });
+          tab.workflowState = { ...state, checkpoint: { requestId: typeof (state.checkpoint as Record<string, unknown> | undefined)?.requestId === 'string' ? (state.checkpoint as Record<string, unknown>).requestId : tab.checkpoint?.requestId, step, status: 'interrupted', startedAt: typeof (state.checkpoint as Record<string, unknown> | undefined)?.startedAt === 'string' ? (state.checkpoint as Record<string, unknown>).startedAt : tab.updatedAt } };
+        }
+      }
+    });
+  }
+
   // Check chatMessages refer to existing thread and wizard identity
   if (chatMessages && chatThreads) {
     chatMessages.forEach((cm) => {
@@ -515,6 +569,7 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       ...(noteAttachments !== undefined ? { noteAttachments } : {}),
       ...(chatThreads !== undefined ? { chatThreads } : {}),
       ...(chatMessages !== undefined ? { chatMessages } : {}),
+      ...(chatTabs !== undefined ? { chatTabs } : {}),
       ...(activeTimers !== undefined ? { activeTimers } : {}),
       ...(settings !== undefined ? { settings } : {}),
       ...(documentSets !== undefined ? { documentSets } : {}),
@@ -537,6 +592,7 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       ...(noteAttachments !== undefined ? { noteAttachments: noteAttachments.length } : {}),
       ...(chatThreads !== undefined ? { chatThreads: chatThreads.length } : {}),
       ...(chatMessages !== undefined ? { chatMessages: chatMessages.length } : {}),
+      ...(chatTabs !== undefined ? { chatTabs: chatTabs.length } : {}),
       ...(activeTimers !== undefined ? { activeTimers: activeTimers.length } : {}),
       ...(settings !== undefined ? { settings: settings.length } : {}),
       ...(documentSets !== undefined ? { documentSets: documentSets.length } : {}),
@@ -554,5 +610,6 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     valid: true,
     envelope: validEnvelope,
     errors: [],
+    ...(recovery.missingSources.length > 0 ? { recovery } : {}),
   };
 }

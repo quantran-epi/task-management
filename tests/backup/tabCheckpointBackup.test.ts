@@ -222,7 +222,7 @@ describe('Phase 25.1 backup tab/checkpoint contract', () => {
     const result = validateBackupPayload(payload);
 
     expect(result.valid).toBe(true);
-    expect(result.recovery?.missingSources).toEqual([{ id: sourceNoteId, title: 'PL01 source' }]);
+    expect(result.recovery?.missingSources).toEqual([expect.objectContaining({ id: sourceNoteId, title: 'PL01 source', version: 2, hash })]);
     expect(result.recovery?.blockedTabs).toEqual([
       expect.objectContaining({ tabId, threadId, missingSourceIds: [sourceNoteId] }),
     ]);

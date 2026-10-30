@@ -9,6 +9,7 @@ import type {
   Note,
   ChatThread,
   ChatMessage,
+  ChatTab,
   ActiveTimer,
   Setting,
   DocumentSet,
@@ -19,6 +20,25 @@ import type {
   TelegramSettingsRecord,
   TelegramWhitelistUser,
 } from './models';
+
+export interface MissingBackupSource {
+  id: string;
+  title: string;
+  version?: number | undefined;
+  hash?: string | undefined;
+}
+
+export interface MissingSourceCheckpoint {
+  tabId: string;
+  threadId: string;
+  step: string;
+  missingSourceIds: string[];
+}
+
+export interface BackupRecoveryInfo {
+  missingSources: MissingBackupSource[];
+  blockedTabs: MissingSourceCheckpoint[];
+}
 
 export interface BackupAttachmentRecord {
   id: string;
@@ -44,6 +64,7 @@ export interface BackupTableData {
   noteAttachments?: BackupAttachmentRecord[];
   chatThreads?: ChatThread[];
   chatMessages?: ChatMessage[];
+  chatTabs?: ChatTab[];
   activeTimers?: ActiveTimer[];
   settings?: Setting[];
   documentSets?: DocumentSet[];
@@ -67,6 +88,7 @@ export interface BackupTableCounts {
   noteAttachments?: number;
   chatThreads?: number;
   chatMessages?: number;
+  chatTabs?: number;
   activeTimers?: number;
   settings?: number;
   documentSets?: number;
@@ -98,6 +120,7 @@ export interface BackupValidationResult {
   valid: boolean;
   envelope?: BackupEnvelope;
   errors: ValidationErrorDetail[];
+  recovery?: BackupRecoveryInfo;
 }
 
 export interface SnapshotData {
