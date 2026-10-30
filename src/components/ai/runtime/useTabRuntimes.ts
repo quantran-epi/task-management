@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { createTabRuntime, type TabRuntime, type TabRuntimePatch } from './tabTypes';
 
 export interface TabRuntimeRegistry {
-  get(tabId: string, threadId?: string): TabRuntime;
+  get(tabId: string, threadId?: string): TabRuntime | undefined;
   initialize(tabId: string, threadId: string): TabRuntime;
-  patch(tabId: string, patch: TabRuntimePatch): TabRuntime;
-  reset(tabId: string, threadId?: string): TabRuntime;
+  patch(tabId: string, patch: TabRuntimePatch, threadId?: string): TabRuntime | undefined;
+  reset(tabId: string, threadId: string): TabRuntime;
   discard(tabId: string): void;
   snapshot: Readonly<Record<string, TabRuntime>>;
 }
@@ -18,41 +18,43 @@ export function useTabRuntimes(): TabRuntimeRegistry {
     setSnapshot(Object.fromEntries(runtimesRef.current));
   }, []);
 
-  const ensure = useCallback((tabId: string, threadId = '') => {
-    let runtime = runtimesRef.current.get(tabId);
-    if (!runtime) {
-      runtime = createTabRuntime(tabId, threadId);
-      runtimesRef.current.set(tabId, runtime);
-    } else if (threadId && runtime.threadId !== threadId) {
-      runtime = { ...runtime, threadId };
-      runtimesRef.current.set(tabId, runtime);
+  const ensure = useCallback((tabId: string, threadId: string) => {
+    const current = runtimesRef.current.get(tabId);
+    if (!current) {
+      const next = createTabRuntime(tabId, threadId);
+      runtimesRef.current.set(tabId, next);
+      return next;
     }
-    return runtime;
+    if (current.threadId !== threadId) {
+      const next = { ...current, threadId };
+      runtimesRef.current.set(tabId, next);
+      return next;
+    }
+    return current;
   }, []);
 
-  useEffect(() => {
-    if (runtimesRef.current.size > 0) publish();
-  }, [publish]);
-
-  const get = useCallback((tabId: string, threadId = '') => {
-    return runtimesRef.current.get(tabId) ?? createTabRuntime(tabId, threadId);
+  const get = useCallback((tabId: string, threadId?: string) => {
+    const runtime = runtimesRef.current.get(tabId);
+    return runtime && (!threadId || runtime.threadId === threadId) ? runtime : undefined;
   }, []);
 
-  const patch = useCallback((tabId: string, patchValue: TabRuntimePatch) => {
-    const runtime = ensure(tabId);
+  const patch = useCallback((tabId: string, patchValue: TabRuntimePatch, threadId?: string) => {
+    const runtime = runtimesRef.current.get(tabId);
+    if (!runtime || (threadId && runtime.threadId !== threadId)) return runtime;
     const next = { ...runtime, ...patchValue };
     runtimesRef.current.set(tabId, next);
     publish();
     return next;
-  }, [ensure, publish]);
+  }, [publish]);
 
   const initialize = useCallback((tabId: string, threadId: string) => {
+    const current = runtimesRef.current.get(tabId);
     const runtime = ensure(tabId, threadId);
-    publish();
+    if (current !== runtime) publish();
     return runtime;
   }, [ensure, publish]);
 
-  const reset = useCallback((tabId: string, threadId = '') => {
+  const reset = useCallback((tabId: string, threadId: string) => {
     const next = createTabRuntime(tabId, threadId);
     runtimesRef.current.set(tabId, next);
     publish();
@@ -60,9 +62,9 @@ export function useTabRuntimes(): TabRuntimeRegistry {
   }, [publish]);
 
   const discard = useCallback((tabId: string) => {
-    runtimesRef.current.delete(tabId);
+    if (!runtimesRef.current.delete(tabId)) return;
     publish();
   }, [publish]);
 
-  return { get, initialize, patch, reset, discard, snapshot };
+  return useMemo(() => ({ get, initialize, patch, reset, discard, snapshot }), [discard, get, initialize, patch, reset, snapshot]);
 }
