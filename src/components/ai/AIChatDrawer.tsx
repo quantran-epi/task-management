@@ -1088,7 +1088,10 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   }, []);
 
   // Analysis mode: durable per-tab state via ChatTab.config. Tab 'sdlc' is always true.
-  const currentTabAnalysisMode = isSdlcActiveTab ? true : Boolean(activeTab?.config?.analysisMode);
+  const currentTabAnalysisMode = isSdlcActiveTab
+    ? true
+    : Boolean(activeTab?.config?.analysisMode) ||
+      (typeof window !== 'undefined' && window.localStorage?.getItem('planner:ai_analysis_mode') === 'true');
 
   const handleToggleAnalysisMode = useCallback(async () => {
     if (isSdlcActiveTab) {
@@ -1443,7 +1446,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         return;
       }
 
-      if (groundedResult.kind === 'clarify_intent') {
+      if (groundedResult?.kind === 'clarify_intent') {
         setTransientClarifyMessage({
           id: `transient-${Date.now()}`,
           originalQuery: transientClarifyMessage ? transientClarifyMessage.originalQuery : trimmed,
