@@ -382,7 +382,11 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       if (!thread) {
         errors.push({ table: 'chatTabs', recordId: tab.id, field: 'threadId', message: `ChatTab references threadId "${tab.threadId}" not found in chatThreads` });
       } else {
-        const expectedScope = thread.scopeType === 'project' && thread.scopeKey.endsWith(':sdlc') ? thread.scopeKey.slice(0, -5) : thread.scopeKey;
+        const expectedScope = thread.scopeType === 'project' && thread.scopeKey.endsWith(':sdlc')
+          ? thread.scopeKey.slice(0, -5)
+          : thread.scopeKey.includes(':chat:')
+            ? thread.scopeKey.slice(0, thread.scopeKey.indexOf(':chat:'))
+            : thread.scopeKey;
         if (tab.scopeKey !== expectedScope && tab.scopeKey !== thread.scopeKey) {
           errors.push({ table: 'chatTabs', recordId: tab.id, field: 'scopeKey', message: 'ChatTab scope does not match chat thread' });
         }

@@ -203,7 +203,6 @@ describe('restoreBackupPayload & rollbackToSnapshot', () => {
         startedAt: '2026-09-27T12:00:00.000Z',
         status: 'interrupted',
       },
-      workflowState: { retained: { cycles: [1, 2], activeVersion: 2 } },
       createdAt: importedThread.createdAt,
       updatedAt: importedThread.updatedAt,
     };

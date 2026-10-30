@@ -8,6 +8,7 @@ import type { ChatTab, ChatThread, NoteAttachment } from '../../types/models';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { generateId } from '../../utils/uuid';
 import { isSafeBackupSetting, blobToBase64, triggerDownload, APP_MARKER, CURRENT_SCHEMA_VERSION } from './exportBackup';
+import { validateBackupPayload } from './validateBackup';
 
 /** Converts a Base64 Data URL or raw base64 back into a browser Blob. */
 function base64ToBlob(base64Data: string, mimeType: string): Blob {
@@ -246,10 +247,13 @@ async function replaceTables(
 }
 
 export async function restoreBackupPayload(backup: BackupEnvelope, targetDb: TaskPlannerDatabase = defaultDb): Promise<{ totalRestored: number; snapshotTime: string }> {
+  const validation = validateBackupPayload(backup);
+  if (!validation.valid || !validation.envelope) throw new Error('Backup payload must pass validation before restore');
+  const validatedBackup = validation.envelope;
   const snapshotTime = new Date().toISOString();
-  const normalized = restoreRows(backup, snapshotTime);
+  const normalized = restoreRows(validatedBackup, snapshotTime);
   const snapshot = await captureSnapshot(targetDb, snapshotTime);
-  const totalRestored = Object.values(backup.counts).reduce((sum, count) => sum + count, 0);
+  const totalRestored = Object.values(validatedBackup.counts).reduce((sum, count) => sum + count, 0);
   await replaceTables(targetDb, normalized.tables, prepareAttachments(normalized.tables.noteAttachments), snapshot, totalRestored);
   return { totalRestored, snapshotTime };
 }
