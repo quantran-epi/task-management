@@ -75,6 +75,22 @@ if (typeof window !== 'undefined') {
     });
     (global as any).structuredClone = globalThis.structuredClone;
   }
+  if (typeof globalThis.CompressionStream !== 'undefined' && !window.CompressionStream) {
+    Object.defineProperty(window, 'CompressionStream', {
+      value: globalThis.CompressionStream,
+      writable: true,
+      configurable: true,
+    });
+    (global as any).CompressionStream = globalThis.CompressionStream;
+  }
+  if (typeof globalThis.DecompressionStream !== 'undefined' && !window.DecompressionStream) {
+    Object.defineProperty(window, 'DecompressionStream', {
+      value: globalThis.DecompressionStream,
+      writable: true,
+      configurable: true,
+    });
+    (global as any).DecompressionStream = globalThis.DecompressionStream;
+  }
 }
 
 

@@ -44,6 +44,7 @@ describe('Web Crypto Service', () => {
     expect(envelope.app).toBe('personal-task-planner');
     expect(envelope.format).toBe('encrypted-v1');
     expect(envelope.schemaVersion).toBe(1);
+    expect(envelope.compression).toBe('gzip');
     expect(typeof envelope.exportedAt).toBe('string');
     expect(envelope.crypto.algorithm).toBe('AES-GCM');
     expect(envelope.crypto.keyLength).toBe(256);
@@ -97,5 +98,70 @@ describe('Web Crypto Service', () => {
     const badFormatEnvelope = { ...envelope, format: 'unknown-format' as const };
     // @ts-expect-error test invalid envelope format
     await expect(decryptPayload(badFormatEnvelope, samplePassphrase)).rejects.toThrow(/Định dạng/);
+  });
+
+  it('compresses JSON plaintext before AES-GCM encryption reducing payload size', async () => {
+    // Generate a repetitive realistic JSON dataset
+    const largePayload = JSON.stringify({
+      app: 'personal-task-planner',
+      schemaVersion: 1,
+      exportedAt: new Date().toISOString(),
+      tasks: Array.from({ length: 100 }, (_, i) => ({
+        id: `task-${i}`,
+        title: `Task number ${i} with repetitive metadata and descriptions for testing gzip compression`,
+        notes: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
+        status: 'in_progress',
+      })),
+    });
+
+    const envelope = await encryptPayload(largePayload, samplePassphrase);
+    expect(envelope.compression).toBe('gzip');
+
+    // Compare base64 ciphertext length against raw JSON length
+    const rawLength = new TextEncoder().encode(largePayload).byteLength;
+    const ciphertextBytes = base64ToBytes(envelope.ciphertext);
+    // Gzip should reduce 100 repetitive tasks significantly (> 50% reduction)
+    expect(ciphertextBytes.byteLength).toBeLessThan(rawLength * 0.5);
+
+    const decrypted = await decryptPayload(envelope, samplePassphrase);
+    expect(decrypted).toBe(largePayload);
+  });
+
+  it('decrypts legacy uncompressed envelope without compression metadata or gzip header', async () => {
+    // Create an uncompressed envelope manually without compression field
+    const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTE_LENGTH));
+    const iv = crypto.getRandomValues(new Uint8Array(IV_BYTE_LENGTH));
+    const key = await deriveKey(samplePassphrase, salt);
+    const enc = new TextEncoder();
+    const ciphertextBuffer = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv },
+      key,
+      enc.encode(samplePayloadJson)
+    );
+
+    const legacyEnvelope: EncryptedEnvelope = {
+      app: 'personal-task-planner',
+      format: 'encrypted-v1',
+      schemaVersion: 1,
+      exportedAt: new Date().toISOString(),
+      // Intentionally omitting compression: 'gzip'
+      crypto: {
+        algorithm: 'AES-GCM',
+        keyLength: 256,
+        kdf: 'PBKDF2',
+        kdfParams: {
+          hash: 'SHA-256',
+          iterations: PBKDF2_ITERATIONS,
+          salt: btoa(String.fromCharCode(...salt)),
+        },
+        iv: btoa(String.fromCharCode(...iv)),
+      },
+      ciphertext: btoa(String.fromCharCode(...new Uint8Array(ciphertextBuffer))),
+    };
+
+    expect(legacyEnvelope.compression).toBeUndefined();
+
+    const decrypted = await decryptPayload(legacyEnvelope, samplePassphrase);
+    expect(decrypted).toBe(samplePayloadJson);
   });
 });

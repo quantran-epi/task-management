@@ -17,6 +17,7 @@ export interface EncryptedEnvelope {
   format: 'encrypted-v1';
   schemaVersion: number;
   exportedAt: string; // ISO 8601 timestamp
+  compression?: 'gzip';
   crypto: CryptoMetadata;
   ciphertext: string; // Base64 AES-GCM ciphertext + 128-bit auth tag
 }
