@@ -1885,7 +1885,7 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
 
     // 5. Start SSE Streaming with Tool Execution Harness
     setGroundedLoadingStatus(null);
-    const activeReq = requestRegistryRef.current.begin(activeTabId);
+    const activeReq = requestRegistryRef.current.begin(activeTabId, activeThread.id);
     const controller = activeReq?.controller ?? new AbortController();
     abortControllerRef.current = controller;
     tabRuntimes.patch(activeTabId, { status: 'processing', partialBuffer: '' });
