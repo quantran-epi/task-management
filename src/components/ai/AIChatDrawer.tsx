@@ -596,7 +596,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
       const isRunning =
         requestRegistryRef.current.hasActive(tabId) ||
-        tabRuntimes.get(tabId).status === 'processing';
+        tabRuntimes.get(tabId)?.status === 'processing';
 
       const doDelete = async () => {
         requestRegistryRef.current.abortTab(tabId);
@@ -1127,7 +1127,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const tabStatuses = useMemo(() => {
     const statuses: Record<string, TabRuntimeStatus> = {};
     for (const t of durableTabs) {
-      statuses[t.id] = tabRuntimes.get(t.id).status;
+      statuses[t.id] = tabRuntimes.get(t.id)?.status ?? 'idle';
     }
     return statuses;
   }, [durableTabs, tabRuntimes]);
@@ -1943,7 +1943,7 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
         // prompt token count.
         contextWindowTokens: config.contextWindowTokens,
         compactAtRatio: effectiveAnalysisMode ? 0.9 : 0.75,
-        executeToolFn: dispatchAiToolCall,
+        executeToolFn: (name, args, toolDb, signal) => dispatchAiToolCall(name, args, toolDb, signal),
         onTextChunk: (delta) => {
           fullResponse += delta;
           aiDebugService.appendStreamChunk(turnId, delta);
@@ -2689,35 +2689,37 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
         />
       )}
 
-      {/* Active Tab Interrupted Banner */}
-      {tabRuntimes.get(activeTabId).status === 'interrupted' && (
-        <div style={{ width: '100%', padding: '0 12px 6px', boxSizing: 'border-box' }}>
-          <InterruptedBanner
-            message="Yêu cầu trước bị gián đoạn khi ứng dụng đóng."
-            onContinue={() => {
-              const runtime = tabRuntimes.get(activeTabId);
-              tabRuntimes.patch(activeTabId, { status: 'idle' });
-              if (runtime.draft) {
-                void handleSendMessage(runtime.draft);
-              }
-            }}
-            onDiscard={() => {
-              tabRuntimes.patch(activeTabId, { status: 'idle', draft: '' });
-            }}
-          />
-        </div>
-      )}
-
-      {/* Active Tab Runtime Error Card */}
-      {tabRuntimes.get(activeTabId).status === 'error' && tabRuntimes.get(activeTabId).error && (
-        <div style={{ width: '100%', padding: '0 12px 6px', boxSizing: 'border-box' }}>
-          <InlineApiErrorCard
-            errorMessage={tabRuntimes.get(activeTabId).error!.message}
-            onRetry={handleRetry}
-            onOpenSettings={onOpenSettings}
-          />
-        </div>
-      )}
+      {/* Active Tab Runtime Status */}
+      {(() => {
+        const runtime = tabRuntimes.get(activeTabId);
+        if (!runtime) return null;
+        if (runtime.status === 'interrupted') {
+          return (
+            <div style={{ width: '100%', padding: '0 12px 6px', boxSizing: 'border-box' }}>
+              <InterruptedBanner
+                message="Yêu cầu trước bị gián đoạn khi ứng dụng đóng."
+                onContinue={() => {
+                  tabRuntimes.patch(activeTabId, { status: 'idle' });
+                  if (runtime.draft) void handleSendMessage(runtime.draft);
+                }}
+                onDiscard={() => tabRuntimes.patch(activeTabId, { status: 'idle', draft: '' })}
+              />
+            </div>
+          );
+        }
+        if (runtime.status === 'error' && runtime.error) {
+          return (
+            <div style={{ width: '100%', padding: '0 12px 6px', boxSizing: 'border-box' }}>
+              <InlineApiErrorCard
+                errorMessage={runtime.error.message}
+                onRetry={handleRetry}
+                onOpenSettings={onOpenSettings}
+              />
+            </div>
+          );
+        }
+        return null;
+      })()}
 
       {/* Chat Input Bar */}
       <ChatInputBar
