@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TaskPlannerDatabase } from '../../../src/db/index';
 import { restoreBackupPayload, rollbackToSnapshot, downloadSnapshotFile } from '../../../src/services/backup/restoreBackup';
 import type { BackupEnvelope, SnapshotData } from '../../../src/types/backup';
+import type { ChatMessage, ChatTab, ChatThread } from '../../../src/types/models';
 import * as exportBackupModule from '../../../src/services/backup/exportBackup';
 import { APP_MARKER, CURRENT_SCHEMA_VERSION } from '../../../src/services/backup/exportBackup';
 import { validateBackupPayload } from '../../../src/services/backup/validateBackup';
@@ -144,6 +145,131 @@ describe('restoreBackupPayload & rollbackToSnapshot', () => {
     const projects = await testDb.projects.toArray();
     expect(projects).toHaveLength(1);
     expect(projects[0]?.name).toBe('Restored Project');
+  });
+
+  it('restores chat tabs unchanged and rolls snapshot state back byte-for-byte', async () => {
+    const localThread: ChatThread = {
+      id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      scopeKey: 'global:chat:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      scopeType: 'global',
+      title: 'Local chat',
+      createdAt: '2026-09-26T10:00:00.000Z',
+      updatedAt: '2026-09-26T10:00:00.000Z',
+    };
+    const localTab: ChatTab = {
+      id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      threadId: localThread.id,
+      scopeKey: 'global',
+      type: 'chat',
+      title: 'Local chat',
+      order: 0,
+      active: true,
+      config: { analysisMode: true, mcpEnabled: false },
+      createdAt: localThread.createdAt,
+      updatedAt: localThread.updatedAt,
+    };
+    const localMessage: ChatMessage = {
+      id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      threadId: localThread.id,
+      role: 'user',
+      content: 'Local history body',
+      createdAt: localThread.createdAt,
+    };
+    await testDb.chatThreads.add(localThread);
+    await testDb.chatTabs.add(localTab);
+    await testDb.chatMessages.add(localMessage);
+
+    const importedThread: ChatThread = {
+      id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      scopeKey: 'global:chat:dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      scopeType: 'global',
+      title: 'Imported chat',
+      createdAt: '2026-09-27T12:00:00.000Z',
+      updatedAt: '2026-09-27T12:00:00.000Z',
+    };
+    const importedTab: ChatTab = {
+      id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+      threadId: importedThread.id,
+      scopeKey: 'global',
+      type: 'chat',
+      title: 'Imported chat',
+      order: 3,
+      active: true,
+      status: 'complete',
+      config: { model: 'model-restored', analysisMode: false, knowledgeEnabled: true },
+      checkpoint: {
+        requestId: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+        step: 'SOLUTION',
+        startedAt: '2026-09-27T12:00:00.000Z',
+        status: 'interrupted',
+      },
+      workflowState: { retained: { cycles: [1, 2], activeVersion: 2 } },
+      createdAt: importedThread.createdAt,
+      updatedAt: importedThread.updatedAt,
+    };
+    const backup: BackupEnvelope = {
+      ...sampleBackup,
+      tables: {
+        ...sampleBackup.tables,
+        chatThreads: [importedThread],
+        chatMessages: [],
+        chatTabs: [importedTab],
+      },
+      counts: { ...sampleBackup.counts, chatThreads: 1, chatMessages: 0, chatTabs: 1 },
+    };
+
+    await restoreBackupPayload(backup, testDb);
+    expect(await testDb.chatTabs.toArray()).toEqual([importedTab]);
+
+    const storedSnapshot = (await testDb.settings.get('last_pre_import_snapshot'))?.value as SnapshotData;
+    expect(storedSnapshot.tables.chatTabs).toEqual([localTab]);
+    expect(storedSnapshot.counts.chatTabs).toBe(1);
+
+    await rollbackToSnapshot(testDb);
+    expect(await testDb.chatThreads.toArray()).toEqual([localThread]);
+    expect(await testDb.chatTabs.toArray()).toEqual([localTab]);
+    expect(await testDb.chatMessages.toArray()).toEqual([localMessage]);
+  });
+
+  it('keeps chat tabs and snapshot unchanged when a replacement write fails', async () => {
+    const localThread: ChatThread = {
+      id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      scopeKey: 'global:chat:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      scopeType: 'global',
+      title: 'Safe local chat',
+      createdAt: '2026-09-26T10:00:00.000Z',
+      updatedAt: '2026-09-26T10:00:00.000Z',
+    };
+    const localTab: ChatTab = {
+      id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      threadId: localThread.id,
+      scopeKey: 'global',
+      type: 'chat',
+      title: 'Safe local chat',
+      order: 0,
+      active: true,
+      createdAt: localThread.createdAt,
+      updatedAt: localThread.updatedAt,
+    };
+    const previousSnapshot = { marker: 'keep-existing-snapshot' };
+    await testDb.chatThreads.add(localThread);
+    await testDb.chatTabs.add(localTab);
+    await testDb.settings.put({ key: 'last_pre_import_snapshot', value: previousSnapshot });
+
+    const duplicateId = '11111111-1111-4111-8111-111111111111';
+    const failingBackup: BackupEnvelope = {
+      ...sampleBackup,
+      tables: {
+        ...sampleBackup.tables,
+        projects: [sampleBackup.tables.projects[0]!, { ...sampleBackup.tables.projects[0]!, id: duplicateId }],
+      },
+      counts: { ...sampleBackup.counts, projects: 2 },
+    };
+
+    await expect(restoreBackupPayload(failingBackup, testDb)).rejects.toThrow();
+    expect(await testDb.chatThreads.toArray()).toEqual([localThread]);
+    expect(await testDb.chatTabs.toArray()).toEqual([localTab]);
+    expect((await testDb.settings.get('last_pre_import_snapshot'))?.value).toEqual(previousSnapshot);
   });
 
   it('restores telegramSettings and telegramWhitelist, preserving local logs', async () => {
