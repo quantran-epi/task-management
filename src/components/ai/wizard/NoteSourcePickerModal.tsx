@@ -218,7 +218,20 @@ export const NoteSourcePickerModal: React.FC<NoteSourcePickerModalProps> = ({
                 return (
                   <div
                     key={note.id}
+                    role="option"
+                    tabIndex={0}
+                    aria-selected={isChecked}
+                    aria-label={`${note.title || 'Untitled Note'}${isChecked ? ', đã chọn' : ', chưa chọn'}`}
+                    onFocus={() => setFocusedNoteId(note.id)}
                     onClick={() => setPreviewNoteId(note.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        setPreviewNoteId(note.id);
+                      } else if (event.key === ' ') {
+                        event.preventDefault();
+                        toggleSelect(note.id);
+                      }
+                    }}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
