@@ -487,7 +487,7 @@ describe('AIChatDrawer', () => {
     expect(payloads[1].messages).toContainEqual(
       expect.objectContaining({ role: 'tool', name: 'search_nodes_ide', content: 'graphiti result' })
     );
-    expect(aiDebugService.getTurns()[0]?.toolsSent).toContainEqual(graphitiDefinition);
+    expect(aiDebugService.getTurns()[0]?.toolCount).toBe(1);
   });
 
   it('falls back to local tools when Graphiti discovery fails', async () => {
@@ -556,7 +556,7 @@ describe('AIChatDrawer', () => {
       const turns = aiDebugService.getTurns();
       expect(turns.length).toBeGreaterThan(0);
       expect(turns[0]?.status).toBe('completed');
-      expect(turns[0]?.finalResponse).toContain('Câu trả lời mẫu');
+      expect(turns[0]?.finalResponseLength).toBe('Câu trả lời mẫu'.length);
     });
 
     fireEvent.click(screen.getByLabelText('Tùy chọn khác'));
