@@ -94,6 +94,8 @@ import { QuickPreviewDrawer } from '../notes/QuickPreviewDrawer';
 import { ScopeChipsBar, hasMeaningfulRoutedScope } from './grounded/ScopeChipsBar';
 import type { GroundedAnswerCardCallbacks } from './ChatMessageBubble';
 import { ChatTabBar, type ChatTabItem } from './ChatTabBar';
+import { createRequestRegistry } from './runtime/requestRegistry';
+import { useTabRuntimes } from './runtime/useTabRuntimes';
 import { WizardMetadataModal, type WizardStartMetadata } from './wizard/WizardMetadataModal';
 import { WizardLifecycleBar } from './wizard/WizardLifecycleBar';
 import { WizardProgressStrip } from './wizard/WizardProgressStrip';
@@ -596,6 +598,13 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const cabActionRef = useRef(false);
 
   const activeThreadId = thread?.id;
+
+  // Per-tab runtime/request ownership. Runtime state stays ephemeral; durable history stays in Dexie.
+  const tabRuntimes = useTabRuntimes();
+  const requestRegistryRef = useRef(createRequestRegistry());
+  void requestRegistryRef;
+  const currentRuntime = tabRuntimes.get(isProjectScope ? activeTabId : scopeKey, activeThreadId ?? "");
+  void currentRuntime;
 
   useEffect(() => {
     if (!isProjectScope || !activeThreadId || !currentScope.id || activeTabId !== 'sdlc') {
