@@ -1337,10 +1337,11 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     }
 
     // 2. Save user message unless this is the routed continuation of an existing turn.
+    const retryMessageId = tabRuntimes.get(activeTabId, activeThread.id)?.retryUserMessageId;
     const savedUserMsg = skipSavingUserMessage
-      ? [...(await getMessagesByThreadId(activeThread.id, db))]
-          .reverse()
-          .find((m) => m.role === 'user' && m.content === trimmed)
+      ? retryMessageId
+        ? (await getMessagesByThreadId(activeThread.id, db)).find((message) => message.id === retryMessageId)
+        : undefined
       : await saveMessage(
           {
             threadId: activeThread.id,
@@ -1349,6 +1350,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           },
           db
         );
+    if (skipSavingUserMessage && !savedUserMsg) return;
+    if (savedUserMsg) tabRuntimes.patch(activeTabId, { retryUserMessageId: savedUserMsg.id }, activeThread.id);
 
     const apiKey = await getNineRouterApiKey(db);
     const config = await getNineRouterConfig(db);
@@ -2298,8 +2301,9 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
   };
 
   const handleRetry = () => {
-    if (lastSubmittedText) {
-      handleSendMessage(lastSubmittedText);
+    const runtime = tabRuntimes.get(activeTabId, activeTabThreadId);
+    if (runtime?.retryUserMessageId && runtime.lastSubmittedText) {
+      void handleSendMessage(runtime.lastSubmittedText, undefined, true);
     }
   };
 
