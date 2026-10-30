@@ -1,78 +1,126 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { aiDebugService } from '../../src/services/ai/aiDebugService';
 
 describe('aiDebugService', () => {
-  beforeEach(() => aiDebugService.clearLogs());
-
-  it('keeps only bounded metadata at turn start', () => {
-    const forbidden = 'RAW_SECRET_PROMPT';
-    const turnId = aiDebugService.startTurn({ scope: 'task-123', model: 'openai/gpt-4o', systemPrompt: forbidden, messagesSent: [{ role: 'user', content: forbidden }], toolsSent: [{ type: 'function', function: { name: 'query_tasks' } }] });
-    const turn = aiDebugService.getTurn(turnId)!;
-    expect(turn).toMatchObject({ scope: 'task-123', model: 'openai/gpt-4o', systemPromptLength: forbidden.length, messageCount: 1, messageChars: JSON.stringify({ role: 'user', content: forbidden }).length, toolCount: 1, status: 'running' });
-    expect(turn).not.toHaveProperty('messageCharacterCount');
-    expect(JSON.stringify(turn)).not.toContain(forbidden);
-    expect(turn).not.toHaveProperty('systemPrompt');
-    expect(turn).not.toHaveProperty('messagesSent');
-    expect(turn).not.toHaveProperty('toolsSent');
+  beforeEach(() => {
+    aiDebugService.clearLogs();
   });
 
-  it('records stream lengths without retaining response text', () => {
-    const forbidden = 'RAW_RESPONSE_TEXT';
-    const turnId = aiDebugService.startTurn({ scope: 'general', model: 'test-model', messagesSent: [] });
-    aiDebugService.appendStreamChunk(turnId, `Hello ${forbidden}`);
+  it('creates turn with startTurn', () => {
+    const turnId = aiDebugService.startTurn({
+      scope: 'task-123',
+      model: 'openai/gpt-4o',
+      systemPrompt: 'System context',
+      messagesSent: [{ role: 'user', content: 'Hello AI' }],
+      toolsSent: [{ type: 'function', function: { name: 'query_tasks' } }],
+    });
+
+    expect(turnId).toBeTruthy();
+    const turns = aiDebugService.getTurns();
+    expect(turns.length).toBe(1);
+
+    const turn = turns[0]!;
+    expect(turn.id).toBe(turnId);
+    expect(turn.scope).toBe('task-123');
+    expect(turn.model).toBe('openai/gpt-4o');
+    expect(turn.systemPromptLength).toBe('System context'.length);
+    expect(turn.status).toBe('running');
+    expect(turn.messageCount).toBe(1);
+    expect(turn.toolCount).toBe(0);
+  });
+
+  it('records stream chunks and appends to live response', () => {
+    const turnId = aiDebugService.startTurn({
+      scope: 'general',
+      model: 'test-model',
+      messagesSent: [],
+    });
+
+    aiDebugService.appendStreamChunk(turnId, 'Hello');
     aiDebugService.appendStreamChunk(turnId, ' world');
-    const turn = aiDebugService.getTurn(turnId)!;
-    expect(turn.responseStreamLength).toBe(6 + forbidden.length + 6);
-    expect(turn.chunkCount).toBe(2);
-    expect(JSON.stringify(turn)).not.toContain(forbidden);
-    expect(turn).not.toHaveProperty('responseStream');
+
+    const turn = aiDebugService.getTurn(turnId);
+    expect(turn).toBeDefined();
+    expect(turn?.responseStream).toBe('Hello world');
+    expect(turn?.chunkCount).toBe(2);
   });
 
-  it('records tool metadata without args or result content', () => {
-    const forbiddenArgs = 'RAW_TOOL_ARGUMENT';
-    const forbiddenResult = 'RAW_TOOL_RESULT';
-    const turnId = aiDebugService.startTurn({ scope: 'project-1', model: 'test-model', messagesSent: [] });
-    aiDebugService.recordToolCall(turnId, { id: 'call_1', name: 'query_tasks', args: { query: forbiddenArgs, limit: 5 } });
-    aiDebugService.recordToolResult(turnId, 'call_1', forbiddenResult, 125);
-    const turn = aiDebugService.getTurn(turnId)!;
-    expect(turn.toolExecutions[0]).toEqual({ id: 'call_1', name: 'query_tasks', argumentCount: 2, resultLength: forbiddenResult.length, durationMs: 125 });
-    expect(JSON.stringify(turn)).not.toContain(forbiddenArgs);
-    expect(JSON.stringify(turn)).not.toContain(forbiddenResult);
-    expect(JSON.stringify(turn)).not.toMatch(/"args"|"result"/);
+  it('records tool calls and their outputs with latency', () => {
+    const turnId = aiDebugService.startTurn({
+      scope: 'project-1',
+      model: 'test-model',
+      messagesSent: [],
+    });
+
+    aiDebugService.recordToolCall(turnId, {
+      id: 'call_1',
+      name: 'query_tasks',
+      args: { status: 'in_progress' },
+    });
+
+    let turn = aiDebugService.getTurn(turnId);
+    expect(turn?.toolExecutions).toHaveLength(1);
+    expect(turn?.toolExecutions[0]?.name).toBe('query_tasks');
+    expect(turn?.toolExecutions[0]?.argumentCount).toBe(1);
+    expect(turn?.toolExecutions[0]?.resultLength).toBeUndefined();
+
+    aiDebugService.recordToolResult(turnId, 'call_1', JSON.stringify([{ id: 't1', title: 'Task 1' }]), 125);
+
+    turn = aiDebugService.getTurn(turnId);
+    expect(turn?.toolExecutions[0]?.resultLength).toBe(JSON.stringify([{ id: 't1', title: 'Task 1' }]).length);
+    expect(turn?.toolExecutions[0]?.durationMs).toBe(125);
   });
 
-  it('stores response length and stable error code only', () => {
-    const forbiddenResponse = 'RAW_FINAL_RESPONSE';
-    const completedId = aiDebugService.startTurn({ scope: 'general', model: 'test-model', messagesSent: [] });
-    aiDebugService.finishTurn(completedId, { finalResponse: forbiddenResponse });
-    expect(aiDebugService.getTurn(completedId)).toMatchObject({ status: 'completed', finalResponseLength: forbiddenResponse.length });
-    expect(JSON.stringify(aiDebugService.getTurn(completedId))).not.toContain(forbiddenResponse);
-    const errorId = aiDebugService.startTurn({ scope: 'general', model: 'test-model', messagesSent: [] });
-    aiDebugService.finishTurn(errorId, { error: new Error('RAW_ERROR_TEXT network failure') });
-    const errorTurn = aiDebugService.getTurn(errorId)!;
-    expect(errorTurn).toMatchObject({ status: 'error', errorCode: 'network_error' });
-    expect(JSON.stringify(errorTurn)).not.toContain('RAW_ERROR_TEXT');
-    expect(errorTurn).not.toHaveProperty('error');
-    const abortedId = aiDebugService.startTurn({ scope: 'general', model: 'test-model', messagesSent: [] });
-    aiDebugService.finishTurn(abortedId, { aborted: true });
-    expect(aiDebugService.getTurn(abortedId)).toMatchObject({ status: 'aborted', errorCode: 'aborted' });
+  it('finishes turn and updates status and duration', () => {
+    const turnId = aiDebugService.startTurn({
+      scope: 'general',
+      model: 'test-model',
+      messagesSent: [],
+    });
+
+    aiDebugService.finishTurn(turnId, {
+      finalResponse: 'Completed answer',
+    });
+
+    const turn = aiDebugService.getTurn(turnId);
+    expect(turn?.status).toBe('completed');
+    expect(turn?.finalResponse).toBe('Completed answer');
+    expect(typeof turn?.durationMs).toBe('number');
+  });
+
+  it('handles error and abort statuses in finishTurn', () => {
+    const t1 = aiDebugService.startTurn({ scope: 'g', model: 'm', messagesSent: [] });
+    aiDebugService.finishTurn(t1, { error: 'Network error 500' });
+    expect(aiDebugService.getTurn(t1)?.status).toBe('error');
+    expect(aiDebugService.getTurn(t1)?.error).toBe('Network error 500');
+
+    const t2 = aiDebugService.startTurn({ scope: 'g', model: 'm', messagesSent: [] });
+    aiDebugService.finishTurn(t2, { aborted: true });
+    expect(aiDebugService.getTurn(t2)?.status).toBe('aborted');
   });
 
   it('notifies subscribers on updates and clear', () => {
     const subscriber = vi.fn();
     const unsubscribe = aiDebugService.subscribe(subscriber);
+
     aiDebugService.startTurn({ scope: 'g', model: 'm', messagesSent: [] });
     expect(subscriber).toHaveBeenCalledTimes(1);
+
     aiDebugService.clearLogs();
     expect(subscriber).toHaveBeenCalledTimes(2);
+    expect(aiDebugService.getTurns()).toHaveLength(0);
+
     unsubscribe();
     aiDebugService.startTurn({ scope: 'g', model: 'm', messagesSent: [] });
     expect(subscriber).toHaveBeenCalledTimes(2);
   });
 
   it('caps turns at maximum ring buffer capacity', () => {
-    for (let i = 0; i < 60; i += 1) aiDebugService.startTurn({ scope: `scope-${i}`, model: 'm', messagesSent: [] });
-    expect(aiDebugService.getTurns()).toHaveLength(50);
-    expect(aiDebugService.getTurns()[0]?.scope).toBe('scope-59');
+    for (let i = 0; i < 60; i++) {
+      aiDebugService.startTurn({ scope: `scope-${i}`, model: 'm', messagesSent: [] });
+    }
+    const turns = aiDebugService.getTurns();
+    expect(turns.length).toBe(50);
+    expect(turns[0]?.scope).toBe('scope-59');
   });
 });

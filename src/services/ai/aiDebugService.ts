@@ -37,15 +37,21 @@ export interface AiDebugTurn {
   scope: string;
   model: string;
   systemPromptLength: number;
+  systemPrompt?: string | undefined;
   messageCount: number;
+  messagesSent?: unknown[] | undefined;
+  toolsSent?: unknown[] | undefined;
   messageChars: number;
   toolCount: number;
   status: TurnStatus;
   responseStreamLength: number;
+  responseStream?: string | undefined;
   chunkCount: number;
   toolExecutions: AiDebugToolExecution[];
   finalResponseLength?: number | undefined;
+  finalResponse?: string | undefined;
   errorCode?: AiDebugErrorCode | undefined;
+  error?: string | undefined;
   durationMs?: number | undefined;
   events: AiDebugEvent[];
 }
@@ -100,11 +106,16 @@ class AiDebugService {
       scope: params.scope,
       model: params.model,
       systemPromptLength: params.systemPrompt?.length ?? 0,
+      systemPrompt: params.systemPrompt,
       messageCount: params.messagesSent.length,
+      messagesSent: params.messagesSent,
+      toolsSent: params.toolsSent,
       messageChars: params.messagesSent.reduce<number>((total, message) => total + characterCount(message), 0),
-      toolCount: params.toolsSent?.length ?? 0,
+      // Count executed tools, not tool definitions sent to provider.
+      toolCount: 0,
       status: 'running',
       responseStreamLength: 0,
+      responseStream: '',
       chunkCount: 0,
       toolExecutions: [],
       events: [{ id: `ev_${now}_start`, timestamp: now, type: 'start', payload: { scope: params.scope } }],
@@ -119,6 +130,7 @@ class AiDebugService {
     const turn = this.turns.find((item) => item.id === turnId);
     if (!turn) return;
     turn.responseStreamLength += delta.length;
+    turn.responseStream = (turn.responseStream ?? '') + delta;
     turn.chunkCount += 1;
     turn.events.push({ id: `ev_${Date.now()}_chunk_${turn.chunkCount}`, timestamp: Date.now(), type: 'chunk', payload: { deltaLength: delta.length } });
     this.notify();
@@ -128,6 +140,7 @@ class AiDebugService {
     const turn = this.turns.find((item) => item.id === turnId);
     if (!turn) return;
     const argumentCount = Object.keys(toolCall.args).length;
+    turn.toolCount += 1;
     turn.toolExecutions.push({ id: toolCall.id, name: toolCall.name, argumentCount });
     turn.events.push({ id: `ev_${Date.now()}_tool_${toolCall.id}`, timestamp: Date.now(), type: 'tool_call', payload: { id: toolCall.id, argCount: argumentCount } });
     this.notify();
@@ -159,10 +172,14 @@ class AiDebugService {
     } else if (result.error !== undefined) {
       turn.status = 'error';
       turn.errorCode = errorCode(result.error);
+      turn.error = typeof result.error === 'string' ? result.error : String(result.error);
     } else {
       turn.status = 'completed';
     }
-    if (result.finalResponse !== undefined) turn.finalResponseLength = result.finalResponse.length;
+    if (result.finalResponse !== undefined) {
+      turn.finalResponseLength = result.finalResponse.length;
+      turn.finalResponse = result.finalResponse;
+    }
     if (turn.status === 'error') {
       turn.events.push({ id: `ev_${now}_error`, timestamp: now, type: 'error', payload: { status: 'error', errorCode: turn.errorCode ?? 'unknown_error' } });
     } else {
