@@ -5,7 +5,9 @@ import {
   enqueueLocalSqliteChange,
   flushLocalSqliteNow,
   SQLITE_SETTING_KEYS,
+  SQLITE_DOMAIN_TABLES,
 } from '../../src/services/localSqlitePersistence';
+import type { ChatTab } from '../../src/types/models';
 
 const invokeMock = vi.fn();
 
@@ -91,6 +93,42 @@ describe('localSqlitePersistence', () => {
     await expect(db.settings.get(SQLITE_SETTING_KEYS.missingPath)).resolves.toMatchObject({ value: true });
     await expect(db.settings.get(SQLITE_SETTING_KEYS.queue)).resolves.toMatchObject({
       value: [expect.objectContaining({ rowId: 'task-1' })],
+    });
+  });
+
+  it('mirrors durable chatTabs rows without secret fields', async () => {
+    expect(SQLITE_DOMAIN_TABLES).toContain('chatTabs');
+    await db.settings.bulkPut([
+      { key: SQLITE_SETTING_KEYS.path, value: 'tasks.sqlite' },
+      { key: SQLITE_SETTING_KEYS.enabled, value: true },
+    ]);
+    invokeMock.mockResolvedValueOnce(undefined);
+    const tab: ChatTab = {
+      id: 'tab-1',
+      threadId: 'thread-1',
+      scopeKey: 'project:project-1',
+      type: 'chat',
+      title: 'Chat',
+      order: 0,
+      active: true,
+      config: { model: 'model-1', analysisMode: false },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    enqueueLocalSqliteChange(db, 'chatTabs', tab.id, tab, false);
+    await flushLocalSqliteNow(db);
+
+    expect(invokeMock).toHaveBeenCalledWith('sqlite_apply_changes', {
+      path: 'tasks.sqlite',
+      changes: expect.arrayContaining([
+        expect.objectContaining({
+          tableName: 'chatTabs',
+          rowId: 'tab-1',
+          payloadJson: expect.not.stringContaining('token'),
+          deleted: false,
+        }),
+      ]),
     });
   });
 
