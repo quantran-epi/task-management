@@ -14,13 +14,13 @@ import {
 describe('AI tab runtime ownership gates', () => {
   it('keeps request controllers and transient buffers independent across tabs', () => {
     const registry = createRequestRegistry();
-    const first = registry.begin('tab-a');
-    const second = registry.begin('tab-b');
+    const first = registry.begin('tab-a', 'thread-a');
+    const second = registry.begin('tab-b', 'thread-b');
 
     expect(first).not.toBeNull();
     expect(second).not.toBeNull();
     expect(first?.controller).not.toBe(second?.controller);
-    expect(registry.begin('tab-a')).toBeNull();
+    expect(registry.begin('tab-a', 'thread-a')).toBeNull();
 
     const runtimeA = createTabRuntime('tab-a', 'thread-a', { partialBuffer: 'A', status: 'processing' });
     const runtimeB = createTabRuntime('tab-b', 'thread-b', { partialBuffer: 'B', status: 'processing' });
@@ -32,8 +32,8 @@ describe('AI tab runtime ownership gates', () => {
 
   it('aborts only owning tab and rejects stale completion', () => {
     const registry = createRequestRegistry();
-    const first = registry.begin('tab-a')!;
-    const second = registry.begin('tab-b')!;
+    const first = registry.begin('tab-a', 'thread-a')!;
+    const second = registry.begin('tab-b', 'thread-b')!;
 
     registry.abortTab('tab-a');
     expect(first.controller.signal.aborted).toBe(true);
