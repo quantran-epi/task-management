@@ -824,18 +824,34 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const getSdlcCoordinator = useCallback(() => {
     if (!isProjectScope || !currentScope.id || !activeThreadId) return null;
     if (!sdlcCoordinatorRef.current) {
+      const stateKey = `sdlc_workflow:${currentScope.id}:${activeThreadId}`;
       sdlcCoordinatorRef.current = createSdlcWorkflowCoordinator({
         projectId: currentScope.id,
         threadId: activeThreadId,
         saveState: async (state) => {
+          await db.settings.put({ key: stateKey, value: state });
           setSdlcWorkflowState(state);
         },
-        loadState: async () => sdlcWorkflowState,
+        loadState: async () => {
+          const setting = await db.settings.get(stateKey);
+          return setting?.value as SdlcWorkflowState | undefined;
+        },
         onStateChange: (state: SdlcWorkflowState) => setSdlcWorkflowState(state),
       });
     }
     return sdlcCoordinatorRef.current;
-  }, [activeThreadId, currentScope.id, isProjectScope]);
+  }, [activeThreadId, currentScope.id, db, isProjectScope]);
+
+  useEffect(() => {
+    if (!isProjectScope || activeTabId !== 'sdlc' || !activeThreadId) {
+      sdlcCoordinatorRef.current = null;
+      setSdlcWorkflowState(undefined);
+      return;
+    }
+    const coordinator = getSdlcCoordinator();
+    if (!coordinator) return;
+    void coordinator.restore();
+  }, [activeTabId, activeThreadId, getSdlcCoordinator, isProjectScope]);
 
   const handleStartSdlcWorkflow = useCallback(async (metadata: SdlcWorkflowMetadata, pl01: string, pl02: string) => {
     const coordinator = getSdlcCoordinator();
