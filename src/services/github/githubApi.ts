@@ -1,6 +1,7 @@
 import type { GitHubConfig, RemoteFileMetadata } from './types';
 
 export const BACKUP_FILE_PATH = '.task-management/backup.enc.json';
+export const GIT_DATA_API_THRESHOLD_BYTES = 1024 * 1024; // 1MB threshold for Git Data API upload
 
 /**
  * Sanitizes error messages by removing any accidental inclusion of bearer tokens.
@@ -8,6 +9,146 @@ export const BACKUP_FILE_PATH = '.task-management/backup.enc.json';
 function sanitizeErrorMessage(errorMsg: string, token: string): string {
   if (!token) return errorMsg;
   return errorMsg.replaceAll(token, '[REDACTED]');
+}
+
+/**
+ * Uploads large backup files via GitHub Git Data API (blob -> ref -> commit -> tree -> commit -> ref).
+ * Used when payload exceeds 1MB or when Contents API encounters 502/504 gateway errors.
+ */
+export async function uploadViaGitDataApi(
+  config: GitHubConfig,
+  token: string,
+  contentBase64: string,
+  message: string
+): Promise<{ sha: string; commitSha: string }> {
+  const baseUrl = `https://api.github.com/repos/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}`;
+  const jsonHeaders = {
+    Accept: 'application/vnd.github.v3+json',
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json',
+  };
+  const getHeaders = {
+    Accept: 'application/vnd.github.v3+json',
+    Authorization: `Bearer ${token}`,
+  };
+
+  try {
+    // Step A: POST /repos/{owner}/{repo}/git/blobs
+    const blobRes = await fetch(`${baseUrl}/git/blobs`, {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify({
+        content: contentBase64,
+        encoding: 'base64',
+      }),
+    });
+
+    if (!blobRes.ok) {
+      const errBody = (await blobRes.json().catch(() => ({}))) as { message?: string };
+      throw new Error(errBody.message || `Git Blobs API failed: HTTP ${blobRes.status}`);
+    }
+    const blobData = (await blobRes.json()) as { sha: string };
+    const blobSha = blobData.sha;
+
+    // Step B: GET /repos/{owner}/{repo}/git/ref/heads/{branch}
+    const refRes = await fetch(`${baseUrl}/git/ref/heads/${config.branch}`, {
+      headers: getHeaders,
+    });
+
+    if (!refRes.ok) {
+      const errBody = (await refRes.json().catch(() => ({}))) as { message?: string };
+      throw new Error(errBody.message || `Git Ref API failed: HTTP ${refRes.status}`);
+    }
+    const refData = (await refRes.json()) as { object: { sha: string } };
+    const parentCommitSha = refData.object.sha;
+
+    // Step C: GET /repos/{owner}/{repo}/git/commits/{parentCommitSha}
+    const commitRes = await fetch(`${baseUrl}/git/commits/${parentCommitSha}`, {
+      headers: getHeaders,
+    });
+
+    if (!commitRes.ok) {
+      const errBody = (await commitRes.json().catch(() => ({}))) as { message?: string };
+      throw new Error(errBody.message || `Git Commit API failed: HTTP ${commitRes.status}`);
+    }
+    const commitData = (await commitRes.json()) as { tree: { sha: string } };
+    const baseTreeSha = commitData.tree.sha;
+
+    // Step D: POST /repos/{owner}/{repo}/git/trees
+    const treeRes = await fetch(`${baseUrl}/git/trees`, {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify({
+        base_tree: baseTreeSha,
+        tree: [
+          {
+            path: BACKUP_FILE_PATH,
+            mode: '100644',
+            type: 'blob',
+            sha: blobSha,
+          },
+        ],
+      }),
+    });
+
+    if (!treeRes.ok) {
+      const errBody = (await treeRes.json().catch(() => ({}))) as { message?: string };
+      throw new Error(errBody.message || `Git Trees API failed: HTTP ${treeRes.status}`);
+    }
+    const treeData = (await treeRes.json()) as { sha: string };
+    const newTreeSha = treeData.sha;
+
+    // Step E: POST /repos/{owner}/{repo}/git/commits
+    const newCommitRes = await fetch(`${baseUrl}/git/commits`, {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify({
+        message,
+        tree: newTreeSha,
+        parents: [parentCommitSha],
+      }),
+    });
+
+    if (!newCommitRes.ok) {
+      const errBody = (await newCommitRes.json().catch(() => ({}))) as { message?: string };
+      throw new Error(errBody.message || `Git Create Commit API failed: HTTP ${newCommitRes.status}`);
+    }
+    const newCommitData = (await newCommitRes.json()) as { sha: string };
+    const newCommitSha = newCommitData.sha;
+
+    // Step F: PATCH /repos/{owner}/{repo}/git/refs/heads/{branch}
+    const patchRefRes = await fetch(`${baseUrl}/git/refs/heads/${config.branch}`, {
+      method: 'PATCH',
+      headers: jsonHeaders,
+      body: JSON.stringify({
+        sha: newCommitSha,
+        force: false,
+      }),
+    });
+
+    if (patchRefRes.status === 409 || patchRefRes.status === 422) {
+      throw new Error('CONFLICT_409');
+    }
+
+    if (!patchRefRes.ok) {
+      const errBody = (await patchRefRes.json().catch(() => ({}))) as { message?: string };
+      throw new Error(errBody.message || `Git Update Ref failed: HTTP ${patchRefRes.status}`);
+    }
+
+    return {
+      sha: blobSha,
+      commitSha: newCommitSha,
+    };
+  } catch (err: unknown) {
+    if (err instanceof Error) {
+      if (err.message === 'CONFLICT_409') {
+        throw err;
+      }
+      err.message = sanitizeErrorMessage(err.message, token);
+      throw err;
+    }
+    throw new Error('Lỗi không xác định khi tải lên qua Git Data API');
+  }
 }
 
 /**
@@ -132,6 +273,11 @@ export async function uploadEncryptedBackup(
   remoteSha?: string,
   message: string = 'chore: update encrypted task planner backup [skip ci]'
 ): Promise<{ sha: string; commitSha: string }> {
+  // Payloads exceeding 1MB threshold bypass Contents API to prevent gateway timeouts (BACKUP-GITDATA-03)
+  if (contentBase64.length > GIT_DATA_API_THRESHOLD_BYTES) {
+    return uploadViaGitDataApi(config, token, contentBase64, message);
+  }
+
   const url = `https://api.github.com/repos/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}/contents/${BACKUP_FILE_PATH}`;
 
   const body: Record<string, unknown> = {
@@ -157,6 +303,11 @@ export async function uploadEncryptedBackup(
 
     if (response.status === 409) {
       throw new Error('CONFLICT_409');
+    }
+
+    // Fallback to Git Data API on 500 Internal Server Error, 502 Bad Gateway, or 504 Gateway Timeout
+    if (response.status === 500 || response.status === 502 || response.status === 504) {
+      return await uploadViaGitDataApi(config, token, contentBase64, message);
     }
 
     if (!response.ok) {
