@@ -97,4 +97,20 @@ describe('ChatTabBar', () => {
     fireEvent.click(screen.getByLabelText('Đóng 💬 Tra cứu Oracle'));
     expect(handleClose).toHaveBeenCalledWith('chat-1');
   });
+
+  it('hiển thị indicator Analysis Mode cho tab SDLC và các tab chat được bật', () => {
+    render(
+      <ChatTabBar
+        tabs={dummyTabs}
+        activeTabId="sdlc"
+        tabAnalysisModes={{ 'chat-1': true }}
+        onSelectTab={vi.fn()}
+        onAddTab={vi.fn()}
+        onCloseTab={vi.fn()}
+      />
+    );
+
+    const icons = screen.getAllByLabelText('Analysis Mode');
+    expect(icons.length).toBe(2); // cả sdlc và chat-1 đều có
+  });
 });

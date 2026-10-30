@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { theme, Button, message, Modal } from 'antd';
-import { DisconnectOutlined } from '@ant-design/icons';
+import { theme, Button, message, Modal, Tag, Tooltip } from 'antd';
+import { DisconnectOutlined, ExperimentFilled } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type {
@@ -122,6 +122,7 @@ import {
 export const AI_CHAT_WIDTH_KEY = 'planner:ai_chat_width';
 export const AI_AUTO_APPROVE_MUTATIONS_KEY = 'planner:ai_auto_approve_mutations';
 export const AI_ANALYSIS_MODE_KEY = 'planner:ai_analysis_mode';
+export const AI_TAB_ANALYSIS_MODES_KEY = 'planner:ai_tab_analysis_modes';
 export const DEFAULT_AI_CHAT_WIDTH = 380;
 export const MIN_AI_CHAT_WIDTH = 320;
 export const MAX_AI_CHAT_WIDTH = 650;
@@ -976,29 +977,40 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     });
   }, []);
 
-  // Analysis mode: bypass grounded synthesis and run the plain tool loop with retrieval tools.
-  const [analysisMode, setAnalysisMode] = useState<boolean>(() => {
+  // Analysis mode: per-tab state. Tab 'sdlc' is always true; regular chat tabs are independent.
+  const [tabAnalysisModes, setTabAnalysisModes] = useState<Record<string, boolean>>(() => {
     try {
-      return localStorage.getItem(AI_ANALYSIS_MODE_KEY) === 'true';
+      const raw = localStorage.getItem(AI_TAB_ANALYSIS_MODES_KEY);
+      return raw ? JSON.parse(raw) : {};
     } catch {
-      return false;
+      return {};
     }
   });
 
+  const currentTabAnalysisMode = activeTabId === 'sdlc' ? true : Boolean(tabAnalysisModes[activeTabId]);
+
   const handleToggleAnalysisMode = useCallback(() => {
-    const next = !analysisMode;
-    setAnalysisMode(next);
-    try {
-      localStorage.setItem(AI_ANALYSIS_MODE_KEY, String(next));
-    } catch {
-      // ignore storage error
+    if (activeTabId === 'sdlc') {
+      message.info('Quy trình SDLC bắt buộc dùng chế độ Phân tích (Analysis mode) để tra cứu tri thức & CSDL an toàn.');
+      return;
     }
-    message.info(
-      next
-        ? 'Đã bật chế độ phân tích. AI sẽ tra cứu tri thức bằng công cụ và tự tổng hợp câu trả lời.'
-        : 'Đã tắt chế độ phân tích. AI quay lại luồng trả lời có trích dẫn.'
-    );
-  }, [analysisMode]);
+    setTabAnalysisModes((prev) => {
+      const currentVal = Boolean(prev[activeTabId]);
+      const nextVal = !currentVal;
+      const next = { ...prev, [activeTabId]: nextVal };
+      try {
+        localStorage.setItem(AI_TAB_ANALYSIS_MODES_KEY, JSON.stringify(next));
+      } catch {
+        // ignore storage error
+      }
+      message.info(
+        nextVal
+          ? 'Đã bật chế độ phân tích cho tab này. AI sẽ tra cứu tri thức và CSDL bằng công cụ.'
+          : 'Đã tắt chế độ phân tích cho tab này. Quay lại chế độ hội thoại thông thường.'
+      );
+      return next;
+    });
+  }, [activeTabId]);
 
   const handleConfirmAction = useCallback((confirmed: boolean) => {
     if (pendingConfirmationRef.current) {
@@ -1234,9 +1246,12 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       .filter((m) => m.content.trim().length > 0);
 
     const turnOverallStartTime = Date.now();
+    const isSdlcActiveTurn = activeTabId === 'sdlc';
+    const effectiveAnalysisMode = isSdlcActiveTurn ? true : Boolean(tabAnalysisModes[activeTabId]);
+
     // Analysis mode bypasses the grounded pipeline (intent router, scope routing,
     // schema-validated synthesis) and falls straight through to the tool loop.
-    if (!analysisMode) {
+    if (!effectiveAnalysisMode) {
     const catalog = await fetchSetCatalog(db);
     const capabilities = {
       serverEnabled: Boolean(knowledgeConfig.enabled && knowledgeConfig.baseUrl),
@@ -1643,7 +1658,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     } catch (err) {
       console.warn('[AIChatDrawer] MCP discovery unavailable:', err);
     }
-    const toolsForTurn = analysisMode
+    const toolsForTurn = effectiveAnalysisMode
       ? [
           ...AI_DATABASE_TOOLS.filter(
             (tool) => !isMutationTool(normalizeToolName(tool.function.name))
@@ -1689,7 +1704,7 @@ Never perform mutations silently without providing this full change summary in y
         : ' The system will prompt the user to confirm the mutation before applying it.'
     }${dynamicMcpInstructions}
 ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the currently active item or workspace:\n${systemInstruction}\n` : ''}${
-      analysisMode
+      effectiveAnalysisMode
         ? `\n\n[ANALYSIS MODE ACTIVE]:
 READ ONLY:
 This turn is read-only. You may retrieve knowledge, read local files, reason, compare, propose, and generate artifacts with \`generate_file\`, \`generate_pptx\`, or \`generate_image\`.
@@ -1700,6 +1715,25 @@ Rules:
 4. Read attached local files with \`read_file\` FIRST (offset/limit pagination) before answering about them.
 5. Ground every factual claim in retrieved excerpts or file content. Clearly mark your own reasoning, assumptions, and proposals as such.
 6. End the answer with a short "Nguồn" (Sources) list naming the documents/files you used.`
+        : ''
+    }${
+      isSdlcActiveTurn
+        ? `\n\n[SDLC DEVELOPER WORKFLOW ACTIVE]:
+Bạn đang hỗ trợ quy trình SDLC Developer (Khảo sát, thiết kế giải pháp SOLUTION.md và hồ sơ kỹ thuật).
+Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.md:
+1. Đóng vai trò Solution Architect & Tech Lead.
+2. Tra cứu hiện trạng mã nguồn, tài liệu và cấu trúc bảng CSDL (sử dụng công cụ MCP Oracle hoặc tri thức hệ thống nếu có).
+3. Đề xuất giải pháp SOLUTION.md hoàn chỉnh, rõ ràng:
+   # GIẢI PHÁP KỸ THUẬT: [Tên tính năng] (CR: [Mã CR])
+   ## 1. Mục tiêu & Phạm vi thay đổi
+   ## 2. Hiện trạng hệ thống & Kiến trúc mục tiêu (khuyến khích vẽ sơ đồ Mermaid: flowchart, sequenceDiagram...)
+   ## 3. Thiết kế chi tiết:
+      - API / Service Interface
+      - Thay đổi CSDL (Bảng, cột mới, Index, DDL/DML dự kiến)
+      - Logic xử lý nghiệp vụ
+   ## 4. Phân tích ảnh hưởng & Rủi ro hệ thống
+   ## 5. Kế hoạch kiểm thử & Kịch bản Rollback (khi có sự cố)
+4. Giữ định dạng Markdown chuẩn, sẵn sàng để người dùng bấm nút "Lưu SOLUTION.md" lưu vào hồ sơ dự án.`
         : ''
     }`;
 
@@ -1781,14 +1815,14 @@ Rules:
         maxLoops: MAX_TOOL_LOOPS,
         db,
         signal: controller.signal,
-        ...(analysisMode
+        ...(effectiveAnalysisMode
           ? { keepRecentToolOutputs: 20, maxOldToolChars: 100_000 }
           : {}),
         // Auto-compaction follows the configured model context window, like Claude
         // Code: trigger at a fraction of the window using the provider-reported
         // prompt token count.
         contextWindowTokens: config.contextWindowTokens,
-        compactAtRatio: analysisMode ? 0.9 : 0.75,
+        compactAtRatio: effectiveAnalysisMode ? 0.9 : 0.75,
         executeToolFn: dispatchAiToolCall,
         onTextChunk: (delta) => {
           fullResponse += delta;
@@ -1833,7 +1867,7 @@ Rules:
           aiDebugService.recordToolResult(turnId, callId, result, durationMs);
         },
         onMutationCheck: async (toolName, args) => {
-          if (analysisMode) {
+          if (effectiveAnalysisMode) {
             return {
               proceed: false,
               cancellationResult: JSON.stringify({
@@ -2267,7 +2301,7 @@ Rules:
         isRefreshingModels={isRefreshingModels}
         autoApproveMutations={autoApproveMutations}
         onToggleAutoApproveMutations={handleToggleAutoApproveMutations}
-        analysisMode={analysisMode}
+        analysisMode={currentTabAnalysisMode}
         onToggleAnalysisMode={handleToggleAnalysisMode}
         isPinned={isPinned}
         onTogglePin={() => onTogglePin?.()}
@@ -2312,7 +2346,28 @@ Rules:
               : `Đang gắn ngữ cảnh: ${currentScope.title || currentScope.id}`}
           </span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          {currentTabAnalysisMode && (
+            <Tooltip title="Tab này đang hoạt động ở Chế độ Phân tích: AI gọi công cụ MCP/DB chỉ đọc để tra cứu và không tự động thay đổi dữ liệu">
+              <Tag
+                color="warning"
+                icon={<ExperimentFilled />}
+                style={{
+                  margin: 0,
+                  fontSize: 11,
+                  padding: '0 6px',
+                  height: 20,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 3,
+                  cursor: 'default',
+                  border: `1px solid ${token.colorWarningBorder || '#ffe7ba'}`,
+                }}
+              >
+                Analysis
+              </Tag>
+            </Tooltip>
+          )}
           <Button
             type="link"
             size="small"
@@ -2349,6 +2404,7 @@ Rules:
           onSelectTab={handleSelectTab}
           onAddTab={handleAddTab}
           onCloseTab={handleCloseTab}
+          tabAnalysisModes={tabAnalysisModes}
           sdlcStatus={
             sdlcWorkflowState
               ? sdlcWorkflowState.staleSteps.length > 0

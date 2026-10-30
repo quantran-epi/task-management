@@ -1,5 +1,5 @@
 import React from 'react';
-import { CloseOutlined, MessageOutlined, PlusOutlined } from '@ant-design/icons';
+import { CloseOutlined, ExperimentFilled, MessageOutlined, PlusOutlined } from '@ant-design/icons';
 import { Badge, Tooltip, theme } from 'antd';
 
 export type ChatTabType = 'sdlc' | 'chat';
@@ -19,6 +19,7 @@ export interface ChatTabBarProps {
   onAddTab: () => void;
   onCloseTab: (tabId: string) => void;
   sdlcStatus?: 'wait' | 'process' | 'stale' | 'finish';
+  tabAnalysisModes?: Record<string, boolean>;
 }
 
 export const ChatTabBar: React.FC<ChatTabBarProps> = ({
@@ -28,6 +29,7 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
   onAddTab,
   onCloseTab,
   sdlcStatus = 'wait',
+  tabAnalysisModes,
 }) => {
   const { token } = theme.useToken();
 
@@ -52,6 +54,7 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
       {tabs.map((tab) => {
         const isActive = tab.id === activeTabId;
         const isSdlc = tab.type === 'sdlc';
+        const isAnalysisActive = isSdlc || Boolean(tabAnalysisModes?.[tab.id]);
 
         let badgeStatus: 'default' | 'processing' | 'warning' | 'success' = 'default';
         if (isSdlc) {
@@ -68,14 +71,14 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
             onClick={() => onSelectTab(tab.id)}
             style={{
               height: 32,
-              padding: '0 10px 0 12px',
+              padding: '0 8px 0 10px',
               backgroundColor: isActive ? token.colorBgContainer : 'transparent',
               color: isActive ? token.colorText : token.colorTextSecondary,
               fontWeight: isActive ? 600 : 500,
               fontSize: 12,
               display: 'flex',
               alignItems: 'center',
-              gap: 6,
+              gap: 5,
               cursor: 'pointer',
               borderTopLeftRadius: 8,
               borderTopRightRadius: 8,
@@ -84,7 +87,7 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
                 : '1px solid transparent',
               borderBottom: isActive ? `1px solid ${token.colorBgContainer}` : undefined,
               marginBottom: isActive ? -1 : 0,
-              maxWidth: 170,
+              maxWidth: 175,
               minWidth: 105,
               position: 'relative',
               transition: 'background-color 0.15s, color 0.15s',
@@ -108,6 +111,20 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
             >
               {tab.title}
             </span>
+
+            {/* Icon biểu thị Chế độ Phân tích (Analysis Mode) trên từng tab */}
+            {isAnalysisActive && (
+              <Tooltip title={isSdlc ? 'Quy trình SDLC: Bắt buộc Analysis Mode' : 'Tab này đang bật Analysis Mode'}>
+                <ExperimentFilled
+                  aria-label="Analysis Mode"
+                  style={{
+                    fontSize: 10,
+                    color: token.colorWarningActive || '#fa8c16',
+                    flexShrink: 0,
+                  }}
+                />
+              </Tooltip>
+            )}
 
             {/* Chỉ tab chat thường mới có nút đóng tab */}
             {!isSdlc && (
