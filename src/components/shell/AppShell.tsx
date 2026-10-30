@@ -407,7 +407,7 @@ const AppShellInner: React.FC<AppShellProps> = ({
   };
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
+    <Layout style={{ minHeight: '100vh', maxWidth: '100vw', overflowX: 'hidden' }}>
       {!isMobile ? (
         <Sider
           collapsible
