@@ -933,8 +933,12 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     }
     const coordinator = getSdlcCoordinator();
     if (!coordinator) return;
-    void coordinator.restore();
-    setMissingSources([]);
+    void coordinator.restore().then((state) => {
+      const recovery = state?.checkpoint?.status === 'interrupted'
+        ? state.checkpoint
+        : undefined;
+      setMissingSources(recovery ? [{ id: recovery.requestId, title: `Checkpoint ${recovery.step ?? 'SDLC'}` }] : []);
+    });
   }, [activeTabId, activeThreadId, getSdlcCoordinator, isProjectScope]);
 
   const handleStartSdlcWorkflow = useCallback(async (
