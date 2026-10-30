@@ -306,7 +306,7 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
 
   // Validate knowledge-table references only when both sides are present.
   const documentSetIds = new Set((documentSets || []).map((set) => set.id));
-  if (documentSets && notes) {
+  if (documentSets) {
     documentSets.forEach((set) => {
       set.documentIds.forEach((documentId) => {
         if (!noteIds.has(documentId)) {
@@ -320,7 +320,7 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       });
     });
   }
-  if (publishedDocuments && documentSets) {
+  if (publishedDocuments) {
     publishedDocuments.forEach((published) => {
       if (!documentSetIds.has(published.setId)) {
         errors.push({
@@ -332,7 +332,7 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       }
     });
   }
-  if (publishAttempts && documentSets) {
+  if (publishAttempts) {
     publishAttempts.forEach((attempt) => {
       if (!documentSetIds.has(attempt.setId)) {
         errors.push({
@@ -344,7 +344,7 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       }
     });
   }
-  if (dlpAudits && documentSets) {
+  if (dlpAudits) {
     dlpAudits.forEach((audit) => {
       if (!documentSetIds.has(audit.setId)) {
         errors.push({
@@ -358,7 +358,7 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
   }
 
   // Check document-scoped chatThreads refer to existing note
-  if (chatThreads && notes) {
+  if (chatThreads) {
     chatThreads.forEach((ct) => {
       if (ct.scopeType === 'document' && ct.entityId && !noteIds.has(ct.entityId)) {
         errors.push({
@@ -466,7 +466,7 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
             message: `Wizard references projectId "${cm.wizard.projectId}" not found in projects`,
           });
         }
-        if (cm.wizard.artifactId && notes && !noteIds.has(cm.wizard.artifactId)) {
+        if (cm.wizard.artifactId && !noteIds.has(cm.wizard.artifactId)) {
           errors.push({
             table: 'chatMessages',
             recordId: cm.id,
