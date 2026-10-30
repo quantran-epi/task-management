@@ -719,12 +719,24 @@ export async function extractWithLLMPure(
       quarantinesList.push(...cached.quarantines);
       proposalsList.push(...(cached.proposals ?? []));
       processedCount++;
+      options.onProgress?.({
+        processedChunks: processedCount,
+        totalChunks,
+        currentDocumentTitle: chunk.documentTitle,
+        stageMessage: `Đã tải từ cache: "${chunk.documentTitle}" (${processedCount}/${totalChunks})...`,
+      });
       continue;
     }
 
     // If targetChunkIds was provided, only process chunks in targetChunkIds
     if (targetChunkIds && targetChunkIds.length > 0 && !targetChunkIds.includes(chunk.chunkId)) {
       processedCount++;
+      options.onProgress?.({
+        processedChunks: processedCount,
+        totalChunks,
+        currentDocumentTitle: chunk.documentTitle,
+        stageMessage: `Bỏ qua phần ngoài mục tiêu (${processedCount}/${totalChunks})...`,
+      });
       continue;
     }
 
