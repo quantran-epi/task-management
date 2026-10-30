@@ -1254,18 +1254,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       .filter((m) => m.content.trim().length > 0);
 
     const turnOverallStartTime = Date.now();
-    const isSdlcActiveTurn = activeTabId === 'sdlc';
-    const effectiveAnalysisMode = isSdlcActiveTurn
-      ? true
-      : isProjectScope
-        ? Boolean(tabAnalysisModes[activeTabId])
-        : (() => {
-            try {
-              return localStorage.getItem(AI_ANALYSIS_MODE_KEY) === 'true';
-            } catch {
-              return false;
-            }
-          })();
+    const isSdlcActiveTurn = isProjectScope && activeTabId === 'sdlc';
+    const effectiveAnalysisMode = isSdlcActiveTurn ? true : currentTabAnalysisMode;
 
     // Analysis mode bypasses the grounded pipeline (intent router, scope routing,
     // schema-validated synthesis) and falls straight through to the tool loop.
@@ -1959,33 +1949,9 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
       aiDebugService.finishTurn(turnId, { finalResponse: fullResponse });
     } catch (err: any) {
       if (err.name === 'AbortError') {
-        // User aborted — commit clean partial response and generated artifacts.
-        const cleanPartial = stripThinkingBlocks(fullResponse).trim();
-        if (cleanPartial || turnGeneratedFiles.length > 0) {
-          const durationMs = Date.now() - turnStartTime;
-          synthesisLog.log({
-            outcome: 'ok',
-            latencyMs: durationMs,
-            safeIds: [activeThread.id],
-            counts: {
-              responseLength: fullResponse.length,
-              generatedFiles: turnGeneratedFiles.length,
-            },
-            metadata: { hasToolCalls: lastHadToolCalls },
-          });
-          await saveMessage(
-            {
-              threadId: activeThread.id,
-              role: 'assistant',
-              content: cleanPartial + ' [Đã dừng]',
-              durationMs,
-              tokenUsage: accumulatedTokenUsage,
-              generatedFiles: turnGeneratedFiles.length > 0 ? turnGeneratedFiles : undefined,
-            },
-            db
-          );
-        }
+        // User aborted — discard incomplete assistant output.
         aiDebugService.finishTurn(turnId, { finalResponse: fullResponse, aborted: true });
+        return;
       } else {
         setApiError(err?.message || 'Lỗi không xác định khi kết nối AI');
         aiDebugService.finishTurn(turnId, { error: err?.message || String(err) });
