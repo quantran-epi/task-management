@@ -227,6 +227,7 @@ export interface ChatTabConfig {
   mcpEnabled?: boolean | undefined;
   knowledgeEnabled?: boolean | undefined;
   promptContextOptions?: Record<string, boolean | string | number> | undefined;
+  attachments?: string[] | undefined;
 }
 
 export interface ChatTabCheckpoint {
