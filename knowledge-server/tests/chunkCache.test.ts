@@ -5,9 +5,12 @@ import * as os from 'node:os';
 import {
   ChunkExtractionStore,
   computeChunkCacheKey,
+  globalChunkStore,
   PROMPT_VERSION,
   type ChunkCachedResult,
 } from '../src/ai/llmExtraction.js';
+import { ONTOLOGY_VERSION } from '../src/graph/ontology.js';
+import { GraphBuildService } from '../src/services/graphBuildService.js';
 
 describe('ChunkExtractionStore disk caching (BUILD-CACHE-01)', () => {
   let tempDir: string;
@@ -37,6 +40,10 @@ describe('ChunkExtractionStore disk caching (BUILD-CACHE-01)', () => {
     // Changes when promptVersion changes
     const keyDiffVersion = computeChunkCacheKey(chunkHash, model, '2099.99.99');
     expect(keyDiffVersion).not.toBe(key1);
+
+    // Changes when ontologyVersion changes
+    const keyDiffOntology = computeChunkCacheKey(chunkHash, model, PROMPT_VERSION, '2026.11.1');
+    expect(keyDiffOntology).not.toBe(key1);
   });
 
   it('miss on fresh chunk returns undefined, saveDiskCache creates valid JSON file on disk', async () => {
@@ -244,5 +251,163 @@ describe('ChunkExtractionStore disk caching (BUILD-CACHE-01)', () => {
 
     expect(mockFetch).toHaveBeenCalledTimes(1); // Still 1, 0 new calls!
     expect(res2.nodes.some((n) => n.canonicalName === 'PRC_BATCH_CARD')).toBe(true);
+  });
+
+  it('invalidates cache when ontologyVersion does not match file', async () => {
+    const store = new ChunkExtractionStore(tempDir);
+    const setId = '00000000-0000-0000-0000-000000000001';
+    const chunkContentHash = 'e'.repeat(64);
+    const model = 'test-model';
+
+    const sampleResult: ChunkCachedResult = {
+      chunkId: 'doc1:1',
+      nodes: [],
+      facts: [],
+      evidence: [],
+      quarantines: [],
+      ontologyVersion: '2026.10.1',
+    };
+
+    await store.saveDiskCache(setId, chunkContentHash, model, sampleResult, '2026.10.1');
+
+    // Querying with matching ontologyVersion hits
+    const hit = await store.loadDiskCache(setId, chunkContentHash, model, '2026.10.1');
+    expect(hit).toBeDefined();
+
+    // Querying with different ontologyVersion misses
+    const miss = await store.loadDiskCache(setId, chunkContentHash, model, '2026.11.1');
+    expect(miss).toBeUndefined();
+  });
+
+  it('extractWithLLMPure re-extracts when ontologyVersion changes', async () => {
+    const setId = '00000000-0000-0000-0000-000000000004';
+    const model = 'mock-llm-model';
+
+    const testDoc = {
+      documentId: 'doc-ontology-test',
+      title: 'Doc Ontology Test',
+      contentHash: 'mock-hash-4',
+      chunks: [
+        {
+          occurrenceId: 'occ-4',
+          representationId: 'rep-4',
+          contentHash: 'mock-chunk-hash-4',
+          chunkIndex: 0,
+          headingPath: [],
+          startLine: 1,
+          endLine: 1,
+          startOffset: 0,
+          endOffset: 45,
+          rawContent: 'SHB process performs batch card operations.\n\nProse description for testing ontology version.',
+        },
+      ],
+    };
+
+    const snapshot = {
+      snapshotId: 'snap-4',
+      setId,
+      documents: [testDoc],
+    } as any;
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () =>
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  entities: [
+                    {
+                      name: 'PRC_BATCH_CARD',
+                      kind: 'ScheduledProcess',
+                      sourceSystem: 'system',
+                      nativeType: 'PRC_PROCESS',
+                    },
+                  ],
+                  relations: [],
+                }),
+              },
+            },
+          ],
+        }),
+    });
+
+    const testStore = new ChunkExtractionStore(tempDir);
+    const { extractWithLLMPure } = await import('../src/ai/llmExtraction.js');
+
+    // Run 1: first run caches result with default ONTOLOGY_VERSION
+    const res1 = await extractWithLLMPure(snapshot, {
+      endpoint: 'http://mock-llm:1234',
+      model,
+      fetchFn: mockFetch as any,
+      store: testStore,
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(res1.nodes.some((n) => n.canonicalName === 'PRC_BATCH_CARD')).toBe(true);
+
+    // Run 2: second run with same ONTOLOGY_VERSION hits disk cache (0 new LLM calls)
+    const restartedStore = new ChunkExtractionStore(tempDir);
+    const res2 = await extractWithLLMPure(snapshot, {
+      endpoint: 'http://mock-llm:1234',
+      model,
+      fetchFn: mockFetch as any,
+      store: restartedStore,
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(res2.nodes.some((n) => n.canonicalName === 'PRC_BATCH_CARD')).toBe(true);
+
+    // Run 3: third run with updated options.ontologyVersion = '2099.01.1' invalidates cache and triggers new LLM call
+    const bumpedStore = new ChunkExtractionStore(tempDir);
+    const res3 = await extractWithLLMPure(snapshot, {
+      endpoint: 'http://mock-llm:1234',
+      model,
+      ontologyVersion: '2099.01.1',
+      fetchFn: mockFetch as any,
+      store: bumpedStore,
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(res3.nodes.some((n) => n.canonicalName === 'PRC_BATCH_CARD')).toBe(true);
+  });
+
+  it('purges globalChunkStore memory state on rebuild trigger and sync', async () => {
+    const setIdTrigger = '00000000-0000-0000-0000-000000000005';
+    const setIdSync = '00000000-0000-0000-0000-000000000006';
+    const sampleResult: ChunkCachedResult = {
+      chunkId: 'chunk-x',
+      nodes: [],
+      facts: [],
+      evidence: [],
+      quarantines: [],
+      ontologyVersion: ONTOLOGY_VERSION,
+    };
+
+    globalChunkStore.saveChunkResult(setIdTrigger, 'chunk-x', sampleResult);
+    expect(globalChunkStore.getChunkResult(setIdTrigger, 'chunk-x')).toBeDefined();
+
+    const service = new GraphBuildService();
+    // Stub background executeRebuild to avoid unhandled NO_SNAPSHOT_STORE log
+    vi.spyOn(service, 'executeRebuild').mockResolvedValue('cand-1');
+
+    // Trigger rebuild purges in-memory chunk store
+    await service.triggerRebuild(setIdTrigger, 'rebuild-test-key');
+    expect(globalChunkStore.getChunkResult(setIdTrigger, 'chunk-x')).toBeUndefined();
+
+    // Re-seed memory cache on setIdSync
+    globalChunkStore.saveChunkResult(setIdSync, 'chunk-y', {
+      ...sampleResult,
+      chunkId: 'chunk-y',
+    });
+    expect(globalChunkStore.getChunkResult(setIdSync, 'chunk-y')).toBeDefined();
+
+    // Stub prepareCandidate and activateCandidate
+    vi.spyOn(service, 'prepareCandidate').mockResolvedValue('cand-2');
+    vi.spyOn(service, 'activateCandidate' as any).mockResolvedValue(undefined);
+
+    await service.executeRebuildSync(setIdSync);
+    expect(globalChunkStore.getChunkResult(setIdSync, 'chunk-y')).toBeUndefined();
   });
 });
