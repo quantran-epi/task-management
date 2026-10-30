@@ -108,6 +108,7 @@ import { SdlcWorkflowHub } from './wizard/SdlcWorkflowHub';
 import { StepInputDocsModal } from './wizard/StepInputDocsModal';
 import { createSdlcWorkflowCoordinator, defaultSha256 } from '../../services/wizard/workflowCoordinator';
 import type { SdlcWorkflowState, SdlcWorkflowMetadata, SdlcStepId } from '../../services/wizard/workflowSchemas';
+import type { SdlcSourceRef } from '../../services/wizard/sourceMerge';
 import { createWizardCoordinator, deriveActiveWizard, type WizardCoordinatorDeps, type WizardExportResult } from '../../services/wizard/wizardCoordinator';
 import type { ChangePackManifest } from '../../services/wizard/changePack';
 import type { ReconciliationResult } from '../../services/wizard/reconciliation';
@@ -853,10 +854,16 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     void coordinator.restore();
   }, [activeTabId, activeThreadId, getSdlcCoordinator, isProjectScope]);
 
-  const handleStartSdlcWorkflow = useCallback(async (metadata: SdlcWorkflowMetadata, pl01: string, pl02: string) => {
+  const handleStartSdlcWorkflow = useCallback(async (
+    metadata: SdlcWorkflowMetadata,
+    pl01: string,
+    pl02: string,
+    pl01Sources?: SdlcSourceRef[],
+    pl02Sources?: SdlcSourceRef[]
+  ) => {
     const coordinator = getSdlcCoordinator();
     if (!coordinator) return;
-    const newState = await coordinator.startOrUpdateIntake(metadata, pl01, pl02);
+    const newState = await coordinator.startOrUpdateIntake(metadata, pl01, pl02, { pl01Sources, pl02Sources });
     setSdlcWorkflowState(newState);
     setSdlcInputModalOpen(false);
     setWizardSnapshot(undefined);

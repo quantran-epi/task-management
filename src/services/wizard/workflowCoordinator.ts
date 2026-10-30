@@ -12,6 +12,7 @@ import {
   RevisionPreviewSchema,
   SdlcCheckpointSchema,
 } from './workflowSchemas';
+import type { SdlcSourceRef } from './sourceMerge';
 
 export interface WorkflowCoordinatorDeps {
   projectId: string;
@@ -140,6 +141,10 @@ export function createSdlcWorkflowCoordinator(deps: WorkflowCoordinatorDeps) {
     metadata: SdlcWorkflowMetadata,
     pl01Content: string,
     pl02Content: string,
+    sourceOptions?: {
+      pl01Sources?: SdlcSourceRef[] | undefined;
+      pl02Sources?: SdlcSourceRef[] | undefined;
+    } | undefined
   ): Promise<SdlcWorkflowState> => {
     const trimmedPl01 = pl01Content.trim();
     const trimmedPl02 = pl02Content.trim();
@@ -151,23 +156,28 @@ export function createSdlcWorkflowCoordinator(deps: WorkflowCoordinatorDeps) {
     const timestamp = now();
     const sessionId = currentState?.sessionId ?? createSessionId();
 
+    const pl01ExtraHashes = (sourceOptions?.pl01Sources ?? []).map((s) => s.hash);
+    const pl02ExtraHashes = (sourceOptions?.pl02Sources ?? []).map((s) => s.hash);
+
     const pl01Artifact: SdlcArtifactRef = {
+      noteId: sourceOptions?.pl01Sources?.[0]?.id,
       kind: 'PL01',
       version: currentState?.artifacts.pl01 ? currentState.artifacts.pl01.version + 1 : 1,
       hash: pl01Hash,
       title: `PL01 — Yêu cầu nghiệp vụ (${metadata.featureName})`,
       content: trimmedPl01,
-      sourceHashes: [],
+      sourceHashes: pl01ExtraHashes,
       updatedAt: timestamp,
     };
 
     const pl02Artifact: SdlcArtifactRef = {
+      noteId: sourceOptions?.pl02Sources?.[0]?.id,
       kind: 'PL02',
       version: currentState?.artifacts.pl02 ? currentState.artifacts.pl02.version + 1 : 1,
       hash: pl02Hash,
       title: `PL02 — Đặc tả chức năng (${metadata.featureName})`,
       content: trimmedPl02,
-      sourceHashes: [pl01Hash],
+      sourceHashes: [pl01Hash, ...pl02ExtraHashes],
       updatedAt: timestamp,
     };
 
