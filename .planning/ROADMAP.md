@@ -186,7 +186,7 @@ Plans:
   7. Existing encrypted backup/local import and Tauri SQLite paths preserve canonical tabs, workflow/checkpoints, versions/cycles, artifact refs, and valid history while excluding secrets, partial buffers, errors, and raw diagnostics; corrupt imports fail before writes and missing sources restore a blocked recoverable checkpoint.
   8. Targeted unit/component/integration suites, actual-app Playwright acceptance, final source safety gates, and required manual Tauri checks pass with no skipped Phase 25.1 tests.
 
-**Plans:** 1/9 plans executed
+**Plans:** 2/9 plans executed
 
 Plans:
 
@@ -196,7 +196,7 @@ Plans:
 
 **Wave 2** *(depends on 25.1-01)*
 
-- [ ] 25.1-02-PLAN.md — Per-tab runtime/request ownership and atomic assistant commit/retry behavior
+- [x] 25.1-02-PLAN.md — Per-tab runtime/request ownership and atomic assistant commit/retry behavior
 
 **Wave 3** *(depends on 25.1-01, 25.1-02)*
 
