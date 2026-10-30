@@ -4,7 +4,7 @@ import {
   getToolsForTurn,
   type SdlcWrapperPromptInput,
 } from '../../src/components/ai/AIChatDrawer';
-import { AI_DATABASE_TOOLS, isMutationTool, normalizeToolName } from '../../src/services/ai/aiTools';
+import { isMutationTool, normalizeToolName } from '../../src/services/ai/aiTools';
 
 describe('SDLC prompt isolation and analysis mode enforcement (D-31, D-33, D-35)', () => {
   it('builds a request-local SDLC wrapper prompt with step, source refs, read-only policy, and user confirmation', () => {

@@ -7,7 +7,6 @@ import {
   createChatTab,
   getActiveTab,
   getOrCreateSdlcTab,
-  listTabsByScope,
   setActiveTab,
   updateChatTab,
 } from '../../src/db/repositories/chatTabRepo';

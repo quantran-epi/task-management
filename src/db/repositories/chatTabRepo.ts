@@ -55,7 +55,7 @@ async function ensureOrdinaryThread(
     type: 'chat',
     title,
     order,
-    active: tabs.length === 0 || input.scopeType !== 'project' ? true : false,
+    active: tabs.length === 0,
     ...(input.config ? { config: input.config } : {}),
     createdAt: now,
     updatedAt: now,
@@ -132,7 +132,7 @@ export async function setActiveTab(scopeKey: string, tabId: string, db: TaskPlan
 
 export async function updateChatTab(
   tabId: string,
-  patch: Pick<ChatTab, 'title' | 'config' | 'checkpoint' | 'status' | 'workflowState'>,
+  patch: Partial<Pick<ChatTab, 'title' | 'config' | 'checkpoint' | 'status' | 'workflowState'>>,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<ChatTab> {
   const tab = await db.chatTabs.get(tabId);
