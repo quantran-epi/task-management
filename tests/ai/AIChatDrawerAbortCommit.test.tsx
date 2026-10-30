@@ -4,7 +4,7 @@ import { createRequestRegistry } from '../../src/components/ai/runtime/requestRe
 describe('AI assistant commit boundary', () => {
   it('invalidates aborted request before any commit can be current', () => {
     const registry = createRequestRegistry();
-    const request = registry.begin('tab-a')!;
+    const request = registry.begin('tab-a', 'thread-a')!;
     registry.abortTab('tab-a');
 
     expect(registry.isCurrent(request.requestId, 'tab-a', request.controller)).toBe(false);
@@ -15,8 +15,8 @@ describe('AI assistant commit boundary', () => {
 
   it('finishes one request without affecting another tab', () => {
     const registry = createRequestRegistry();
-    const first = registry.begin('tab-a')!;
-    const second = registry.begin('tab-b')!;
+    const first = registry.begin('tab-a', 'thread-a')!;
+    const second = registry.begin('tab-b', 'thread-b')!;
 
     registry.finish(first.requestId);
     expect(registry.isCurrent(first.requestId, 'tab-a', first.controller)).toBe(false);
