@@ -108,7 +108,7 @@ import { DriftMatrixView } from './wizard/DriftMatrixView';
 import { SdlcWorkflowHub } from './wizard/SdlcWorkflowHub';
 import { StepInputDocsModal } from './wizard/StepInputDocsModal';
 import { createSdlcWorkflowCoordinator, defaultSha256 } from '../../services/wizard/workflowCoordinator';
-import type { SdlcWorkflowState, SdlcWorkflowMetadata, SdlcStepId } from '../../services/wizard/workflowSchemas';
+import type { SdlcWorkflowState, SdlcWorkflowMetadata, SdlcStepId, RevisionPreview } from '../../services/wizard/workflowSchemas';
 import { buildMergedSdlcInput, parseMergedSdlcInput, type SdlcSourceRef } from '../../services/wizard/sourceMerge';
 import { createWizardCoordinator, deriveActiveWizard, type WizardCoordinatorDeps, type WizardExportResult } from '../../services/wizard/wizardCoordinator';
 import type { ChangePackManifest } from '../../services/wizard/changePack';
@@ -311,7 +311,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const [isInstructionsOpen, setIsInstructionsOpen] = useState(false);
   const [isMcpModalOpen, setIsMcpModalOpen] = useState(false);
   const [mcpServers, setMcpServers] = useState<McpServerConfig[]>([]);
-  const [sessionAttachedFiles, setSessionAttachedFiles] = useState<string[]>([]);
   const knowledgeConfig = useOptionalKnowledgeConfig();
 
   // Grounded turn state & abort controller per turn (AI-SPEC §4b)
@@ -354,19 +353,15 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   };
 
   const handleAttachFile = (filePath: string) => {
-    setSessionAttachedFiles((prev) => {
-      const next = prev.includes(filePath) ? prev : [...prev, filePath];
-      if (activeTab) void updateChatTab(activeTab.id, { config: { ...activeTab.config, attachments: next } }, db);
-      return next;
-    });
+    if (!activeTab) return;
+    const next = Array.from(new Set([...(activeTab.config?.attachments ?? []), filePath]));
+    void updateChatTab(activeTab.id, { config: { ...activeTab.config, attachments: next } }, db);
   };
 
   const handleRemoveFile = (filePath: string) => {
-    setSessionAttachedFiles((prev) => {
-      const next = prev.filter((p) => p !== filePath);
-      if (activeTab) void updateChatTab(activeTab.id, { config: { ...activeTab.config, attachments: next } }, db);
-      return next;
-    });
+    if (!activeTab) return;
+    const next = (activeTab.config?.attachments ?? []).filter((path) => path !== filePath);
+    void updateChatTab(activeTab.id, { config: { ...activeTab.config, attachments: next } }, db);
   };
 
   // Sync propScope when it changes (unless user explicitly picked or detached)
@@ -487,6 +482,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   // SDLC Workflow state
   const [sdlcWorkflowState, setSdlcWorkflowState] = useState<SdlcWorkflowState | undefined>();
   const [missingSources, setMissingSources] = useState<Array<{ id: string; title: string }>>([]);
+  const [revisionPreview, setRevisionPreview] = useState<RevisionPreview | undefined>();
+  const [revisionLoading, setRevisionLoading] = useState(false);
   const [sdlcInputModalOpen, setSdlcInputModalOpen] = useState(false);
   const sdlcCoordinatorRef = useRef<ReturnType<typeof createSdlcWorkflowCoordinator> | null>(null);
 
@@ -941,6 +938,30 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     });
   }, [activeTabId, activeThreadId, getSdlcCoordinator, isProjectScope]);
 
+  const handlePreviewRevision = useCallback(async (type: 'requirement' | 'solution', draft: string) => {
+    const coordinator = getSdlcCoordinator();
+    if (!coordinator || !draft.trim()) return;
+    setRevisionLoading(true);
+    try {
+      const kind = type === 'requirement' ? 'PL01' : 'SOLUTION';
+      setRevisionPreview(await coordinator.previewRevision(kind, draft));
+    } finally {
+      setRevisionLoading(false);
+    }
+  }, [getSdlcCoordinator]);
+
+  const handleCommitRevision = useCallback(async () => {
+    const coordinator = getSdlcCoordinator();
+    if (!coordinator || !revisionPreview) return;
+    const committed = await coordinator.commitRevision(revisionPreview, true);
+    setSdlcWorkflowState(committed);
+    setRevisionPreview(undefined);
+    if (revisionPreview.kind === 'PL01' || revisionPreview.kind === 'PL02') {
+      await coordinator.closeCycle();
+      await coordinator.openCycle();
+    }
+  }, [getSdlcCoordinator, revisionPreview]);
+
   const handleStartSdlcWorkflow = useCallback(async (
     metadata: SdlcWorkflowMetadata,
     pl01: string,
@@ -1117,7 +1138,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   // Analysis mode: durable per-tab state via ChatTab.config. Tab 'sdlc' is always true.
   const currentTabAnalysisMode = isSdlcActiveTab ? true : Boolean(activeTab?.config?.analysisMode);
   const activeRuntime = tabRuntimes.snapshot[activeTabId];
-  const activeTabAttachments = activeTab?.config?.attachments ?? sessionAttachedFiles;
 
   const handleToggleAnalysisMode = useCallback(async () => {
     if (isSdlcActiveTab) {
@@ -1185,7 +1205,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     setPendingConfirmation(null);
   }, []);
 
-  // Abort stream on unmount or drawer close
+  // Abort only when component unmounts. Drawer close must preserve tab requests.
   useEffect(() => {
     return () => {
       requestRegistryRef.current.abortTab(activeTabId);
@@ -1268,6 +1288,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         setApiError(
           'Chưa thể xác định rõ ý định sau 2 lần hỏi. Vui lòng đặt câu hỏi cụ thể hơn hoặc chọn tác vụ cụ thể trong giao diện.'
         );
+        requestRegistryRef.current.finish(activeReq.requestId);
         return;
       }
       effectiveQuery = `${transientClarifyMessage.originalQuery}\n[Thông tin bổ sung]: ${trimmed}`;
@@ -1729,10 +1750,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     const { taskIds, projectIds, filePaths } = extractMentionedEntityIds(trimmed);
     const mentionedContexts: string[] = [];
 
-    if (filePaths && filePaths.length > 0) {
-      setSessionAttachedFiles((prev) => Array.from(new Set([...prev, ...filePaths])));
-    }
-    const allFiles = Array.from(new Set([...sessionAttachedFiles, ...(filePaths || [])]));
+    const allFiles = Array.from(new Set([...(activeTab?.config?.attachments ?? []), ...(filePaths || [])]));
 
     for (const tid of taskIds) {
       if (effectiveScope.type === 'task' && effectiveScope.id === tid) continue;
@@ -2253,7 +2271,7 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
       );
     }
     await clearThreadContext(activeThread.id, db);
-    setSessionAttachedFiles([]);
+    if (activeTab) await updateChatTab(activeTab.id, { config: { ...activeTab.config, attachments: [] } }, db);
     message.success('Đã đặt lại ngữ cảnh hội thoại');
   };
 
@@ -2268,7 +2286,7 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
         if (thread) {
           await clearThreadMessages(thread.id, db);
         }
-        setSessionAttachedFiles([]);
+        if (activeTab) await updateChatTab(activeTab.id, { config: { ...activeTab.config, attachments: [] } }, db);
         message.success('Đã xóa tin nhắn cuộc trò chuyện');
       },
     });
@@ -2284,7 +2302,7 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
       cancelText: 'Hủy',
       onOk: async () => {
         await clearAllChatHistory(db);
-        setSessionAttachedFiles([]);
+        if (activeTab) await updateChatTab(activeTab.id, { config: { ...activeTab.config, attachments: [] } }, db);
         message.success('Đã xóa sạch toàn bộ lịch sử trò chuyện AI');
       },
     });
@@ -2645,8 +2663,18 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
           {sdlcWorkflowState?.checkpoint?.status === 'interrupted' && (
             <InterruptedBanner
               checkpoint={sdlcWorkflowState.checkpoint}
-              onContinue={() => setSdlcWorkflowState({ ...sdlcWorkflowState, checkpoint: undefined })}
-              onDiscard={() => setSdlcWorkflowState({ ...sdlcWorkflowState, checkpoint: undefined })}
+              onContinue={() => {
+                void getSdlcCoordinator()?.resumeCheckpoint().then((state) => {
+                  setSdlcWorkflowState(state);
+                  setMissingSources([]);
+                });
+              }}
+              onDiscard={() => {
+                void getSdlcCoordinator()?.clearCheckpoint().then((state) => {
+                  setSdlcWorkflowState(state);
+                  setMissingSources([]);
+                });
+              }}
             />
           )}
           <RestoredSourceNotice missingSources={missingSources} />
@@ -2658,6 +2686,23 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
               getSdlcCoordinator()?.selectStep(stepId);
               setSdlcWorkflowState((state) => state ? { ...state, selectedStep: stepId } : state);
             }}
+            onRequestRequirementRevision={() => setRevisionPreview(undefined)}
+            onRequestSolutionRevision={() => setRevisionPreview(undefined)}
+            revisionPreview={revisionPreview ? {
+              diff: {
+                before: sdlcWorkflowState?.artifacts[revisionPreview.kind === 'PL01' ? 'pl01' : 'solution']?.content ?? '',
+                after: revisionPreview.markdown,
+              },
+              sources: revisionPreview.sources.map((source) => ({
+                title: source.kind,
+                shortHash: source.hash.slice(0, 8),
+                version: source.version,
+              })),
+              impactSteps: revisionPreview.impactSteps,
+            } : undefined}
+            revisionLoading={revisionLoading}
+            onPreviewRevision={handlePreviewRevision}
+            onCommitRevision={() => void handleCommitRevision()}
             onRerunStep={(stepId: SdlcStepId) => {
               if (stepId === 'INTAKE') {
                 setSdlcInputModalOpen(true);
@@ -2743,7 +2788,7 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
         }
         leadingContent={isSdlcActiveTab ? wizardLeadingContent : undefined}
         db={db}
-        attachedFiles={activeTabAttachments}
+        attachedFiles={activeTab?.config?.attachments ?? []}
         onAttachFile={handleAttachFile}
         onRemoveFile={handleRemoveFile}
         externalValue={externalInputValue ?? undefined}

@@ -160,6 +160,23 @@ describe('SdlcWorkflowHub', () => {
 });
 
 describe('RevisionImpactModal', () => {
+  const revisionState: SdlcWorkflowState = {
+    schemaVersion: 1,
+    sessionId: '11111111-1111-4111-8111-111111111111',
+    projectId: '22222222-2222-4222-8222-222222222222',
+    threadId: '33333333-3333-4333-8333-333333333333',
+    currentStep: 'SOLUTION',
+    metadata: { cr: 'CR-TEST-99', featureName: 'Feature', author: 'Dev', requestingUnit: 'Unit', date: '2026-10-30' },
+    artifacts: {
+      pl01: { kind: 'PL01', version: 1, hash: '01'.repeat(32), title: 'PL01', content: 'old', sourceHashes: [], updatedAt: '2026-10-30T00:00:00.000Z' },
+      pl02: { kind: 'PL02', version: 1, hash: '02'.repeat(32), title: 'PL02', content: 'old', sourceHashes: [], updatedAt: '2026-10-30T00:00:00.000Z' },
+      solution: { kind: 'SOLUTION', version: 1, hash: '03'.repeat(32), title: 'SOLUTION', content: 'old', sourceHashes: [], updatedAt: '2026-10-30T00:00:00.000Z' },
+    },
+    staleSteps: [],
+    createdAt: '2026-10-30T00:00:00.000Z',
+    updatedAt: '2026-10-30T00:00:00.000Z',
+  };
+
   it('hiển thị diff (+/-), nguồn, chuỗi tác động stale, và chỉ gọi onConfirm khi người dùng xác nhận', async () => {
     const handleConfirm = vi.fn();
     const handleClose = vi.fn();
@@ -206,6 +223,29 @@ describe('RevisionImpactModal', () => {
     const confirmBtn = screen.getByRole('button', { name: /Xác nhận cập nhật/i });
     fireEvent.click(confirmBtn);
     expect(handleConfirm).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses coordinator preview data and commits only after explicit confirmation', () => {
+    const onPreview = vi.fn();
+    const onCommit = vi.fn();
+    render(
+      <SdlcWorkflowHub
+        projectScoped={true}
+        state={revisionState}
+        onStartWorkflow={vi.fn()}
+        onRequestSolutionRevision={() => {}}
+        revisionPreview={{
+          diff: { before: 'old', after: 'new' },
+          sources: [{ title: 'PL01 source', shortHash: 'abcd1234' }],
+          impactSteps: ['CODE_GUIDE', 'CHANGE_PACK'],
+        }}
+        onPreviewRevision={onPreview}
+        onCommitRevision={onCommit}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Cập nhật solution/i }));
+    expect(onCommit).not.toHaveBeenCalled();
   });
 
   it('hiển thị thông báo khi diff trống', () => {

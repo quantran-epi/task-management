@@ -87,6 +87,10 @@ describe('createSdlcWorkflowCoordinator', () => {
     expect(coordinator.selectStep('INTAKE')).toBe('INTAKE');
     expect(coordinator.getState()?.currentStep).toBe('SOLUTION');
     expect((savedState as { checkpoint?: { status?: string } } | undefined)?.checkpoint?.status).toBe('interrupted');
+
+    const resumed = await coordinator.resumeCheckpoint();
+    expect(resumed.checkpoint?.status).toBe('running');
+    expect(resumed.checkpoint?.requestId).not.toBe(dummyUuid1);
   });
 
   it('requires explicit revision confirmation and preserves old version in history', async () => {

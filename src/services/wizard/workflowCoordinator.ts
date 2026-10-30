@@ -83,6 +83,23 @@ export function createSdlcWorkflowCoordinator(deps: WorkflowCoordinatorDeps) {
     return emit({ ...state, checkpoint: undefined });
   };
 
+  const resumeCheckpoint = async (): Promise<SdlcWorkflowState> => {
+    const state = currentStateOrThrow();
+    const checkpoint = state.checkpoint;
+    if (!checkpoint || checkpoint.status !== 'interrupted' || !checkpoint.step) {
+      throw new Error('NO_INTERRUPTED_CHECKPOINT');
+    }
+    return emit({
+      ...state,
+      checkpoint: {
+        requestId: createSessionId(),
+        step: checkpoint.step,
+        status: 'running',
+        startedAt: now(),
+      },
+    });
+  };
+
   const revisionImpact = (kind: SdlcArtifactKind): SdlcStepId[] => kind === 'PL01' || kind === 'PL02'
     ? ['SOLUTION', 'CODE_GUIDE', 'CHANGE_PACK', 'TECH_DOCS', 'CAB']
     : kind === 'SOLUTION'
@@ -411,5 +428,6 @@ export function createSdlcWorkflowCoordinator(deps: WorkflowCoordinatorDeps) {
     closeCycle,
     setCheckpoint,
     clearCheckpoint,
+    resumeCheckpoint,
   };
 }

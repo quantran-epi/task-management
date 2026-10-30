@@ -28,7 +28,15 @@ export interface SdlcWorkflowHubProps {
   onRequestRequirementRevision?: (() => void) | undefined;
   onRequestSolutionRevision?: (() => void) | undefined;
   revisionDraft?: string | undefined;
+  revisionPreview?: {
+    diff: { before: string; after: string };
+    sources: { title: string; shortHash?: string | undefined; version?: number | undefined }[];
+    impactSteps: SdlcStepId[];
+  } | undefined;
+  revisionLoading?: boolean | undefined;
   onRevisionDraftChange?: ((value: string) => void) | undefined;
+  onPreviewRevision?: ((type: 'requirement' | 'solution', draft: string) => void | Promise<void>) | undefined;
+  onCommitRevision?: (() => void | Promise<void>) | undefined;
 }
 
 interface StepConfig {
@@ -102,7 +110,11 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = ({
   onRequestRequirementRevision,
   onRequestSolutionRevision,
   revisionDraft: controlledRevisionDraft,
+  revisionPreview,
+  revisionLoading = false,
   onRevisionDraftChange,
+  onPreviewRevision,
+  onCommitRevision,
 }) => {
   const { token } = theme.useToken();
   const [localSelectedStep, setLocalSelectedStep] = useState<SdlcStepId | null>(null);
@@ -496,25 +508,33 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = ({
         <RevisionImpactModal
           open={Boolean(revisionModalType)}
           revisionType={revisionModalType}
-          diff={{
+          diff={revisionPreview?.diff ?? {
             before:
               revisionModalType === 'requirement'
                 ? state.artifacts.pl01?.content ?? 'Yêu cầu hiện tại'
                 : state.artifacts.solution?.content ?? 'Solution hiện tại',
             after: effectiveRevisionDraft,
           }}
-          description={<Input.TextArea value={effectiveRevisionDraft} onChange={(event) => updateRevisionDraft(event.target.value)} rows={6} placeholder="Nhập bản nội dung mới để xem trước và xác nhận." />}
-          sources={
-            revisionModalType === 'requirement' && state.artifacts.pl01
-              ? [{ title: state.artifacts.pl01.title, shortHash: state.artifacts.pl01.hash.slice(0, 8) }]
-              : revisionModalType === 'solution' && state.artifacts.solution
-                ? [{ title: state.artifacts.solution.title, shortHash: state.artifacts.solution.hash.slice(0, 8) }]
-                : []
+          description={
+            <Input.TextArea
+              value={effectiveRevisionDraft}
+              onChange={(event) => updateRevisionDraft(event.target.value)}
+              onBlur={() => {
+                if (effectiveRevisionDraft.trim()) void onPreviewRevision?.(revisionModalType!, effectiveRevisionDraft);
+              }}
+              rows={6}
+              placeholder="Nhập bản nội dung mới để xem trước và xác nhận."
+            />
           }
-          staleStepIds={revisionModalType === 'requirement' ? requirementStaleImpact : solutionStaleImpact}
+          sources={revisionPreview?.sources ?? []}
+          staleStepIds={revisionPreview?.impactSteps ?? (revisionModalType === 'requirement' ? requirementStaleImpact : solutionStaleImpact)}
+          loading={revisionLoading}
           onConfirm={() => {
-            const stepToRerun = revisionModalType === 'requirement' ? 'INTAKE' : 'SOLUTION';
-            onRerunStep?.(stepToRerun);
+            if (!revisionPreview || !onCommitRevision) {
+              void onPreviewRevision?.(revisionModalType!, effectiveRevisionDraft);
+              return;
+            }
+            void onCommitRevision();
             setRevisionModalType(null);
           }}
           onClose={() => setRevisionModalType(null)}
