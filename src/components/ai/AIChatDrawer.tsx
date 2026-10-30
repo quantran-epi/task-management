@@ -1101,6 +1101,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
   // Analysis mode: durable per-tab state via ChatTab.config. Tab 'sdlc' is always true.
   const currentTabAnalysisMode = isSdlcActiveTab ? true : Boolean(activeTab?.config?.analysisMode);
+  const activeRuntime = tabRuntimes.snapshot[activeTabId];
+  const activeTabAttachments = activeTab?.config?.attachments ?? sessionAttachedFiles;
 
   const handleToggleAnalysisMode = useCallback(async () => {
     if (isSdlcActiveTab) {
@@ -2407,7 +2409,7 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
 
       {/* Chat Header */}
       <ChatHeader
-        selectedModel={selectedModel}
+        selectedModel={activeTab?.config?.model ?? selectedModel}
         availableModels={availableModels}
         onModelChange={handleModelChange}
         onRefreshModels={handleRefreshModels}
@@ -2582,10 +2584,10 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
       {/* Message List */}
       <ChatMessageList
         messages={messages}
-        streamingText={streamingText}
-        isStreaming={isStreaming || Boolean(groundedLoadingStatus)}
+        streamingText={activeRuntime?.partialBuffer ?? streamingText}
+        isStreaming={activeRuntime?.status === 'processing' || Boolean(groundedLoadingStatus)}
         streamingStatus={groundedLoadingStatus || streamingStatus}
-        error={apiError}
+        error={activeRuntime?.error?.message ?? apiError}
         scrollTrigger={scrollTrigger}
         onRetry={handleRetry}
         onOpenSettings={onOpenSettings}
@@ -2737,7 +2739,7 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
         }
         leadingContent={isSdlcActiveTab ? wizardLeadingContent : undefined}
         db={db}
-        attachedFiles={sessionAttachedFiles}
+        attachedFiles={activeTabAttachments}
         onAttachFile={handleAttachFile}
         onRemoveFile={handleRemoveFile}
         externalValue={externalInputValue ?? undefined}
