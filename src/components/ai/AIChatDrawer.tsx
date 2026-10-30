@@ -1355,7 +1355,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         });
       } catch (compErr: any) {
         if (compErr?.name !== 'AbortError') {
-          console.warn('[AIChatDrawer] Auto context compaction check error:', compErr);
+          console.warn('[AIChatDrawer] Auto context compaction failed: AI_CONTEXT_COMPACTION_ERROR');
         }
       }
     }
@@ -1633,10 +1633,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         return;
       }
 
-      console.error('[AIChatDrawer] Grounded pipeline or persistence error:', groundedErr);
-      if (groundedErr?.name === 'ZodError' || groundedErr?.issues) {
-        console.error('[AIChatDrawer] Zod validation details:', JSON.stringify(groundedErr.issues, null, 2));
-      }
+      console.warn('[AIChatDrawer] Grounded pipeline failed: AI_GROUNDED_PIPELINE_ERROR');
       setGroundedLoadingStatus(null);
 
       // Fail-closed gate per D-04: If intent router is unavailable, stop immediately.
@@ -1711,14 +1708,14 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
             systemInstruction = serializeDocumentContext(note);
           }
         }
-      } catch (err) {
-        console.warn('[AIChatDrawer] Context grounding resolution error:', err);
+      } catch {
+        console.warn('[AIChatDrawer] Context grounding failed: AI_CONTEXT_GROUNDING_ERROR');
       }
     } else if (effectiveScope.type === 'global') {
       try {
         systemInstruction = await buildGlobalContextPrompt(db);
-      } catch (err) {
-        console.warn('[AIChatDrawer] Global context prompt resolution error:', err);
+      } catch {
+        console.warn('[AIChatDrawer] Global context prompt failed: AI_GLOBAL_CONTEXT_ERROR');
       }
     }
 
