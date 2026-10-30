@@ -134,6 +134,22 @@ describe('detectWorkflowStaleness', () => {
     expect(report.staleSteps).toContain('CHANGE_PACK');
   });
 
+  it('báo CODE_GUIDE, CHANGE_PACK, TECH_DOCS và CAB stale khi SOLUTION đổi', () => {
+    const state: SdlcWorkflowState = {
+      ...baseState,
+      artifacts: {
+        solution: { kind: 'SOLUTION', version: 2, hash: hashNew, title: 'Solution', sourceHashes: [hash1, hash2], updatedAt: baseState.updatedAt },
+        codeGuide: { kind: 'CODE_GUIDE', version: 1, hash: hash1, title: 'Guide', sourceHashes: [hash1], updatedAt: baseState.updatedAt },
+        changePack: { kind: 'CHANGE_PACK', version: 1, hash: hash2, title: 'Pack', sourceHashes: [hash1], updatedAt: baseState.updatedAt },
+        pl03b: { kind: 'PL03B', version: 1, hash: hash3, title: 'PL03B', sourceHashes: [hash1], updatedAt: baseState.updatedAt },
+        pl07: { kind: 'PL07', version: 1, hash: hash3, title: 'PL07', sourceHashes: [hash1], updatedAt: baseState.updatedAt },
+        cab: { kind: 'CAB', version: 1, hash: hash3, title: 'CAB', sourceHashes: [hash1], updatedAt: baseState.updatedAt },
+      },
+    };
+    const report = detectWorkflowStaleness(state);
+    expect(report.staleSteps).toEqual(expect.arrayContaining(['CODE_GUIDE', 'CHANGE_PACK', 'TECH_DOCS', 'CAB']));
+  });
+
   it('báo TECH_DOCS và CAB stale khi dependency đổi', () => {
     const state: SdlcWorkflowState = {
       ...baseState,
