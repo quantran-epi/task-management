@@ -140,6 +140,8 @@ export class GraphBuildService {
       throw new GraphBuildInProgressError(setId);
     }
 
+    globalChunkStore.purgeSet(setId);
+
     const candidateSnapshotId = randomUUID();
     const dto: RebuildAcceptedDTO = {
       setId,
@@ -172,6 +174,8 @@ export class GraphBuildService {
     this.inProgressSets.add(setId);
     this.currentStages.set(setId, 'Preparing');
     this.buildErrors.delete(setId);
+
+    globalChunkStore.purgeSet(setId);
 
     try {
       await this.prepareCandidate(setId, candidateSnapshotId);
@@ -241,6 +245,7 @@ export class GraphBuildService {
         {
           endpoint: this.proseExtraction.endpoint,
           model: this.proseExtraction.model,
+          ontologyVersion: ONTOLOGY_VERSION,
           ...(this.proseExtraction.apiKey ? { apiKey: this.proseExtraction.apiKey } : {}),
           ...(this.proseExtraction.fetchFn ? { fetchFn: this.proseExtraction.fetchFn } : {}),
           ...(options?.targetChunkIds ? { targetChunkIds: options.targetChunkIds } : {}),
