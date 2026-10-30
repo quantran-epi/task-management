@@ -24,9 +24,10 @@ export const PROMPT_VERSION = '2026.10.1';
 export function computeChunkCacheKey(
   chunkContentHash: string,
   model: string,
-  promptVersion = PROMPT_VERSION
+  promptVersion = PROMPT_VERSION,
+  ontologyVersion: string = ONTOLOGY_VERSION
 ): string {
-  return sha256Hex(`${chunkContentHash}:${model}:${promptVersion}`);
+  return sha256Hex(`${chunkContentHash}:${model}:${promptVersion}:${ontologyVersion}`);
 }
 
 export const CHUNK_TARGET_CHARS = 2_500;
@@ -77,7 +78,7 @@ export interface ChunkCachedResult {
   evidence: GraphEvidenceRecord[];
   quarantines: QuarantinedIdentifier[];
   proposals?: RelationProposal[] | undefined;
-  ontologyVersion?: number | undefined;
+  ontologyVersion?: string | undefined;
 }
 
 export class ChunkExtractionStore {
@@ -105,10 +106,11 @@ export class ChunkExtractionStore {
   async loadDiskCache(
     setId: string,
     chunkContentHash: string,
-    model: string
+    model: string,
+    ontologyVersion: string = ONTOLOGY_VERSION
   ): Promise<ChunkCachedResult | undefined> {
     this.validateSetId(setId);
-    const cacheKey = computeChunkCacheKey(chunkContentHash, model, PROMPT_VERSION);
+    const cacheKey = computeChunkCacheKey(chunkContentHash, model, PROMPT_VERSION, ontologyVersion);
     if (!/^[0-9a-f]{64}$/.test(cacheKey)) {
       throw new Error(`INVALID_CACHE_KEY: Key must be 64-char hex string.`);
     }
@@ -122,6 +124,7 @@ export class ChunkExtractionStore {
         parsed?.chunkContentHash === chunkContentHash &&
         parsed?.model === model &&
         parsed?.promptVersion === PROMPT_VERSION &&
+        parsed?.ontologyVersion === ontologyVersion &&
         parsed?.result
       ) {
         return parsed.result as ChunkCachedResult;
@@ -136,10 +139,11 @@ export class ChunkExtractionStore {
     setId: string,
     chunkContentHash: string,
     model: string,
-    result: ChunkCachedResult
+    result: ChunkCachedResult,
+    ontologyVersion: string = ONTOLOGY_VERSION
   ): Promise<void> {
     const dir = await this.ensureSetCacheDir(setId);
-    const cacheKey = computeChunkCacheKey(chunkContentHash, model, PROMPT_VERSION);
+    const cacheKey = computeChunkCacheKey(chunkContentHash, model, PROMPT_VERSION, ontologyVersion);
     if (!/^[0-9a-f]{64}$/.test(cacheKey)) {
       throw new Error(`INVALID_CACHE_KEY: Key must be 64-char hex string.`);
     }
@@ -152,8 +156,13 @@ export class ChunkExtractionStore {
       chunkContentHash,
       model,
       promptVersion: PROMPT_VERSION,
+      ontologyVersion,
       cachedAt: new Date().toISOString(),
-      result: { ...result, proposals: result.proposals ?? [] },
+      result: {
+        ...result,
+        ontologyVersion,
+        proposals: result.proposals ?? [],
+      },
     };
 
     await fs.writeFile(tmpPath, JSON.stringify(payload, null, 2), 'utf-8');
@@ -416,6 +425,7 @@ export interface LLMExtractorOptions {
   onProgress?: ProgressCallback | undefined;
   targetChunkIds?: string[] | undefined;
   store?: ChunkExtractionStore | undefined;
+  ontologyVersion?: string | undefined;
   ontologyRegistry?: {
     findRelation(relationType: string): Promise<OntologyRelationDefinition | undefined>;
     recordProposal(input: {
@@ -616,6 +626,7 @@ export async function extractWithLLMPure(
   signal?: AbortSignal
 ): Promise<PureLLMExtractionResult> {
   const store = options.store || globalChunkStore;
+  const effectiveOntologyVersion = options.ontologyVersion ?? ONTOLOGY_VERSION;
   const setId = snapshot.setId;
   const nodesMap = new Map<string, ResolvedNode>();
   const factsMap = new Map<string, FactAssertion>();
@@ -682,10 +693,18 @@ export async function extractWithLLMPure(
 
     const isExplicitlyTargeted = Boolean(targetChunkIds && targetChunkIds.includes(chunk.chunkId));
     let cached = store.getChunkResult(setId, chunk.chunkId);
+    if (cached?.ontologyVersion && cached.ontologyVersion !== effectiveOntologyVersion) {
+      cached = undefined;
+    }
 
     // If not in memory and not explicitly targeted for retry, check durable disk cache
     if (!cached && !isExplicitlyTargeted && chunk.chunkContentHash) {
-      const diskCached = await store.loadDiskCache(setId, chunk.chunkContentHash, options.model);
+      const diskCached = await store.loadDiskCache(
+        setId,
+        chunk.chunkContentHash,
+        options.model,
+        effectiveOntologyVersion
+      );
       if (diskCached) {
         cached = diskCached;
         store.saveChunkResult(setId, chunk.chunkId, diskCached);
@@ -858,7 +877,7 @@ export async function extractWithLLMPure(
         if (rel.condition) qualifiers.condition = rel.condition;
 
         const factKey = buildFactKey({
-          ontologyVersion: ONTOLOGY_VERSION,
+          ontologyVersion: effectiveOntologyVersion,
           subjectUrn: sourceInfo.urn,
           relation: rel.relation,
           objectUrn: targetInfo.urn,
@@ -867,7 +886,7 @@ export async function extractWithLLMPure(
 
         const factObj: FactAssertion = {
           factKey,
-          ontologyVersion: ONTOLOGY_VERSION,
+          ontologyVersion: effectiveOntologyVersion,
           subjectUrn: sourceInfo.urn,
           relation: rel.relation as EffectiveRelationType,
           objectUrn: targetInfo.urn,
@@ -915,6 +934,7 @@ export async function extractWithLLMPure(
         evidence: chunkEvidence,
         quarantines: chunkQuarantines,
         proposals: chunkProposals,
+        ontologyVersion: effectiveOntologyVersion,
       };
 
       // Target writes remain staged until every target succeeds.
@@ -931,7 +951,8 @@ export async function extractWithLLMPure(
             setId,
             chunk.chunkContentHash,
             options.model,
-            chunkCachedResult
+            chunkCachedResult,
+            effectiveOntologyVersion
           );
         } catch (saveErr) {
           console.warn(`[CHUNK_CACHE_SAVE_FAILED] Failed to persist cache for chunk ${chunk.chunkId}:`, saveErr);
@@ -976,7 +997,13 @@ export async function extractWithLLMPure(
       store.saveChunkResult(setId, chunkId, result);
       const chunk = chunkById.get(chunkId);
       if (chunk?.chunkContentHash) {
-        await store.saveDiskCache(setId, chunk.chunkContentHash, options.model, result);
+        await store.saveDiskCache(
+          setId,
+          chunk.chunkContentHash,
+          options.model,
+          result,
+          effectiveOntologyVersion
+        );
       }
     }
   }
