@@ -1,5 +1,6 @@
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { BackupEnvelope } from '../../types/backup';
+import type { ChatTab } from '../../types/models';
 import { generateId } from '../../utils/uuid';
 
 export const APP_MARKER = 'personal-task-planner' as const;

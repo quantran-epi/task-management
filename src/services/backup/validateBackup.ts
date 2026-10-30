@@ -199,7 +199,6 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
   const taskIds = new Set(tasks.map((t) => t.id));
   const threadIds = new Set((chatThreads || []).map((thread) => thread.id));
   const threadById = new Map((chatThreads || []).map((thread) => [thread.id, thread]));
-  const tabIds = new Set((chatTabs || []).map((tab) => tab.id));
   const recovery = { missingSources: [] as Array<{ id: string; title: string; version?: number; hash?: string }>, blockedTabs: [] as Array<{ tabId: string; threadId: string; step: string; missingSourceIds: string[] }> };
 
   // Check milestones refer to existing project
