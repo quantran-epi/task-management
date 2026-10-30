@@ -1,8 +1,7 @@
-import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { SdlcWorkflowHub } from '../SdlcWorkflowHub';
-import type { SdlcWorkflowState } from '../../../services/wizard/workflowSchemas';
+import type { SdlcWorkflowState } from '../../../../services/wizard/workflowSchemas';
 
 describe('SdlcWorkflowHub', () => {
   const dummyState: SdlcWorkflowState = {
