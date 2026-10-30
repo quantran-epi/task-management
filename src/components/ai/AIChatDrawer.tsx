@@ -609,7 +609,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
       const isRunning =
         requestRegistryRef.current.hasActive(tabId) ||
-        tabRuntimes.get(tabId).status === 'processing';
+        tabRuntimes.get(tabId, targetTab.threadId)?.status === 'processing';
 
       const doDelete = async () => {
         requestRegistryRef.current.abortTab(tabId);
@@ -2699,29 +2699,29 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
       )}
 
       {/* Active Tab Interrupted Banner */}
-      {tabRuntimes.get(activeTabId).status === 'interrupted' && (
+      {tabRuntimes.get(activeTabId, activeTabThreadId)?.status === 'interrupted' && (
         <div style={{ width: '100%', padding: '0 12px 6px', boxSizing: 'border-box' }}>
           <InterruptedBanner
             message="Yêu cầu trước bị gián đoạn khi ứng dụng đóng."
             onContinue={() => {
-              const runtime = tabRuntimes.get(activeTabId);
-              tabRuntimes.patch(activeTabId, { status: 'idle' });
-              if (runtime.draft) {
+              const runtime = tabRuntimes.get(activeTabId, activeTabThreadId);
+              tabRuntimes.patch(activeTabId, { status: 'idle' }, activeTabThreadId);
+              if (runtime?.draft) {
                 void handleSendMessage(runtime.draft);
               }
             }}
             onDiscard={() => {
-              tabRuntimes.patch(activeTabId, { status: 'idle', draft: '' });
+              tabRuntimes.patch(activeTabId, { status: 'idle', draft: '' }, activeTabThreadId);
             }}
           />
         </div>
       )}
 
       {/* Active Tab Runtime Error Card */}
-      {tabRuntimes.get(activeTabId).status === 'error' && tabRuntimes.get(activeTabId).error && (
+      {tabRuntimes.get(activeTabId, activeTabThreadId)?.status === 'error' && tabRuntimes.get(activeTabId, activeTabThreadId)?.error && (
         <div style={{ width: '100%', padding: '0 12px 6px', boxSizing: 'border-box' }}>
           <InlineApiErrorCard
-            errorMessage={tabRuntimes.get(activeTabId).error!.message}
+            errorMessage={tabRuntimes.get(activeTabId, activeTabThreadId)?.error?.message ?? ''}
             onRetry={handleRetry}
             onOpenSettings={onOpenSettings}
           />
