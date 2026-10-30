@@ -3,17 +3,17 @@ export type TurnStatus = 'running' | 'completed' | 'error' | 'aborted';
 export interface AiDebugToolExecution {
   id: string;
   name: string;
-  args: Record<string, any>;
-  result?: string | undefined;
+  argCount: number;
+  resultLength?: number | undefined;
   durationMs?: number | undefined;
-  error?: string | undefined;
+  errorCode?: string | undefined;
 }
 
 export interface AiDebugEvent {
   id: string;
   timestamp: number;
   type: 'start' | 'chunk' | 'tool_call' | 'tool_result' | 'finish' | 'error';
-  payload?: any;
+  payload?: { deltaLength?: number; id?: string; durationMs?: number; resultLength?: number; status?: TurnStatus } | undefined;
 }
 
 export interface AiDebugTurn {
@@ -21,15 +21,16 @@ export interface AiDebugTurn {
   timestamp: number;
   scope: string;
   model: string;
-  systemPrompt?: string | undefined;
-  messagesSent: any[];
-  toolsSent?: any[] | undefined;
+  systemPromptLength: number;
+  messageCount: number;
+  messageChars: number;
+  toolCount: number;
   status: TurnStatus;
-  responseStream: string;
+  responseStreamLength: number;
   chunkCount: number;
   toolExecutions: AiDebugToolExecution[];
-  finalResponse?: string | undefined;
-  error?: string | undefined;
+  finalResponseLength?: number | undefined;
+  errorCode?: string | undefined;
   durationMs?: number | undefined;
   events: AiDebugEvent[];
 }
@@ -38,8 +39,8 @@ export interface StartTurnParams {
   scope: string;
   model: string;
   systemPrompt?: string | undefined;
-  messagesSent: any[];
-  toolsSent?: any[] | undefined;
+  messagesSent: Array<{ role?: string; content?: unknown }>;
+  toolsSent?: unknown[] | undefined;
 }
 
 export interface FinishTurnParams {
@@ -62,11 +63,12 @@ class AiDebugService {
       timestamp: now,
       scope: params.scope,
       model: params.model,
-      systemPrompt: params.systemPrompt,
-      messagesSent: params.messagesSent,
-      toolsSent: params.toolsSent,
+      systemPromptLength: params.systemPrompt?.length ?? 0,
+      messageCount: params.messagesSent.length,
+      messageChars: params.messagesSent.reduce((sum, message) => sum + (typeof message.content === 'string' ? message.content.length : 0), 0),
+      toolCount: params.toolsSent?.length ?? 0,
       status: 'running',
-      responseStream: '',
+      responseStreamLength: 0,
       chunkCount: 0,
       toolExecutions: [],
       events: [
@@ -92,7 +94,7 @@ class AiDebugService {
     const turn = this.turns.find((t) => t.id === turnId);
     if (!turn) return;
 
-    turn.responseStream += delta;
+    turn.responseStreamLength += delta.length;
     turn.chunkCount += 1;
     turn.events.push({
       id: `ev_${Date.now()}_chunk_${turn.chunkCount}`,
@@ -111,7 +113,7 @@ class AiDebugService {
     turn.toolExecutions.push({
       id: toolCall.id,
       name: toolCall.name,
-      args: toolCall.args,
+      argCount: Object.keys(toolCall.args).length,
     });
 
     turn.events.push({
@@ -130,7 +132,7 @@ class AiDebugService {
 
     const tool = turn.toolExecutions.find((te) => te.id === toolCallId);
     if (tool) {
-      tool.result = result;
+      tool.resultLength = result.length;
       tool.durationMs = durationMs;
     }
 
@@ -155,13 +157,13 @@ class AiDebugService {
       turn.status = 'aborted';
     } else if (result.error) {
       turn.status = 'error';
-      turn.error = result.error;
+      turn.errorCode = result.error;
     } else {
       turn.status = 'completed';
     }
 
     if (result.finalResponse !== undefined) {
-      turn.finalResponse = result.finalResponse;
+      turn.finalResponseLength = result.finalResponse.length;
     }
 
     turn.events.push({
