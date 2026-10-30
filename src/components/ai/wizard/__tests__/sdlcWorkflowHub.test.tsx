@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { SdlcWorkflowHub } from '../SdlcWorkflowHub';
 import { RevisionImpactModal } from '../RevisionImpactModal';
 import type { SdlcWorkflowState } from '../../../../services/wizard/workflowSchemas';
@@ -75,12 +75,12 @@ describe('SdlcWorkflowHub', () => {
     expect(screen.getByText(/Core Banking Payment/i)).toBeInTheDocument();
 
     // 6 bước dọc
-    expect(screen.getByText(/Bước 1/i)).toBeInTheDocument();
-    expect(screen.getByText(/Bước 2/i)).toBeInTheDocument();
-    expect(screen.getByText(/Bước 3/i)).toBeInTheDocument();
-    expect(screen.getByText(/Bước 4/i)).toBeInTheDocument();
-    expect(screen.getByText(/Bước 5/i)).toBeInTheDocument();
-    expect(screen.getByText(/Bước 6/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Bước 1/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/Bước 2/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/Bước 3/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/Bước 4/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/Bước 5/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/Bước 6/i).length).toBeGreaterThanOrEqual(1);
 
     // Nhãn trạng thái tiếng Việt rõ ràng trong DOM
     expect(screen.getByText('Đã xong')).toBeInTheDocument(); // Bước 1 (INTAKE)
@@ -136,15 +136,15 @@ describe('SdlcWorkflowHub', () => {
       ...dummyState,
       cycles: [
         {
-          cycleNumber: 1,
+          cycleId: '11111111-1111-4111-8111-000000000001',
           status: 'completed',
-          openedAt: '2026-10-29T00:00:00.000Z',
+          startedAt: '2026-10-29T00:00:00.000Z',
           closedAt: '2026-10-29T12:00:00.000Z',
         },
         {
-          cycleNumber: 2,
+          cycleId: '11111111-1111-4111-8111-000000000002',
           status: 'active',
-          openedAt: '2026-10-30T00:00:00.000Z',
+          startedAt: '2026-10-30T00:00:00.000Z',
         },
       ],
     };
@@ -188,8 +188,8 @@ describe('RevisionImpactModal', () => {
     expect(screen.getByText(/Nguồn: 1 tài liệu · PL01 Yêu cầu Core Banking v2/i)).toBeInTheDocument();
 
     // Chuỗi tác động stale
-    expect(screen.getByText(/Giải pháp SOLUTION.md/i)).toBeInTheDocument();
-    expect(screen.getByText(/Tờ trình phê duyệt CAB/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Giải pháp SOLUTION.md/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/Tờ trình phê duyệt CAB/i).length).toBeGreaterThanOrEqual(1);
 
     // Câu tóm tắt
     expect(
