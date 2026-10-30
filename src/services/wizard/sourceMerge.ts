@@ -50,6 +50,10 @@ export interface BuildMergedSdlcInputOptions {
   pl02Sources: SdlcSourceRef[];
 }
 
+export function parseMergedSdlcInput(input: unknown): MergedSdlcInput {
+  return MergedSdlcInputSchema.parse(input);
+}
+
 export async function buildMergedSdlcInput(
   options: BuildMergedSdlcInputOptions
 ): Promise<MergedSdlcInput> {

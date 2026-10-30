@@ -109,7 +109,7 @@ import { SdlcWorkflowHub } from './wizard/SdlcWorkflowHub';
 import { StepInputDocsModal } from './wizard/StepInputDocsModal';
 import { createSdlcWorkflowCoordinator, defaultSha256 } from '../../services/wizard/workflowCoordinator';
 import type { SdlcWorkflowState, SdlcWorkflowMetadata, SdlcStepId } from '../../services/wizard/workflowSchemas';
-import type { SdlcSourceRef } from '../../services/wizard/sourceMerge';
+import { buildMergedSdlcInput, parseMergedSdlcInput, type SdlcSourceRef } from '../../services/wizard/sourceMerge';
 import { createWizardCoordinator, deriveActiveWizard, type WizardCoordinatorDeps, type WizardExportResult } from '../../services/wizard/wizardCoordinator';
 import type { ChangePackManifest } from '../../services/wizard/changePack';
 import type { ReconciliationResult } from '../../services/wizard/reconciliation';
@@ -946,7 +946,16 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   ) => {
     const coordinator = getSdlcCoordinator();
     if (!coordinator) return;
-    const newState = await coordinator.startOrUpdateIntake(metadata, pl01, pl02, { pl01Sources, pl02Sources });
+    const mergedInput = parseMergedSdlcInput(await buildMergedSdlcInput({
+      pl01Text: pl01,
+      pl02Text: pl02,
+      pl01Sources: pl01Sources ?? [],
+      pl02Sources: pl02Sources ?? [],
+    }));
+    const newState = await coordinator.startOrUpdateIntake(metadata, mergedInput.pl01Text, mergedInput.pl02Text, {
+      pl01Sources: mergedInput.pl01Sources,
+      pl02Sources: mergedInput.pl02Sources,
+    });
     setSdlcWorkflowState(newState);
     setSdlcInputModalOpen(false);
     setWizardSnapshot(undefined);
@@ -956,7 +965,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     }
 
     // Kích hoạt AI phân tích tri thức và tạo bản thảo SOLUTION.md đầu tiên
-    const prompt = `[Quy trình SDLC - Khởi tạo SOLUTION cho CR: ${metadata.cr}]\nTính năng: ${metadata.featureName}\nĐơn vị yêu cầu: ${metadata.requestingUnit}\n\n1. YÊU CẦU NGHIỆP VỤ (PL01):\n${pl01}\n\n2. ĐẶC TẢ CHỨC NĂNG (PL02):\n${pl02}\n\nDựa vào ngữ cảnh tri thức của dự án và hai tài liệu trên, hãy phân tích hiện trạng hệ thống, các màn hình/API/bảng DB bị ảnh hưởng và đề xuất bản thảo giải pháp kỹ thuật SOLUTION.md chi tiết.`;
+    const prompt = `[Quy trình SDLC - Khởi tạo SOLUTION cho CR: ${metadata.cr}]\nTính năng: ${metadata.featureName}\nĐơn vị yêu cầu: ${metadata.requestingUnit}\n\n${mergedInput.mergedContent}\n\nDựa vào ngữ cảnh tri thức của dự án và hai tài liệu trên, hãy phân tích hiện trạng hệ thống, các màn hình/API/bảng DB bị ảnh hưởng và đề xuất bản thảo giải pháp kỹ thuật SOLUTION.md chi tiết.`;
     void handleSendMessageRef.current(prompt);
   }, [currentScope.id, db, durableTabs, getSdlcCoordinator, scopeKey]);
 
