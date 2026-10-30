@@ -1,12 +1,13 @@
 export interface ActiveRequest {
   requestId: string;
   tabId: string;
+  threadId: string;
   controller: AbortController;
   startedAt: number;
 }
 
 export interface RequestRegistry {
-  begin(tabId: string, controller?: AbortController): ActiveRequest | null;
+  begin(tabId: string, threadId: string, controller?: AbortController): ActiveRequest | null;
   get(requestId: string): ActiveRequest | undefined;
   isCurrent(requestId: string, tabId: string, controller?: AbortController): boolean;
   abortTab(tabId: string): ActiveRequest | undefined;
@@ -20,11 +21,12 @@ export function createRequestRegistry(): RequestRegistry {
   const currentByTab = new Map<string, string>();
 
   return {
-    begin(tabId, controller = new AbortController()) {
+    begin(tabId, threadId, controller = new AbortController()) {
       if (currentByTab.has(tabId)) return null;
       const request: ActiveRequest = {
         requestId: crypto.randomUUID(),
         tabId,
+        threadId,
         controller,
         startedAt: Date.now(),
       };
