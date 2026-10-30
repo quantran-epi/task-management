@@ -1101,6 +1101,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     overrideScope?: ActiveScope,
     skipSavingUserMessage = false
   ) => {
+    if (activeTabId === 'sdlc' && sdlcWorkflowState?.checkpoint?.status === 'interrupted') return;
     handleSendMessageRef.current = handleSendMessage;
     const trimmed = text.trim();
     if (!trimmed) return;

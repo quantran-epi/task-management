@@ -72,6 +72,16 @@ export function createSdlcWorkflowCoordinator(deps: WorkflowCoordinatorDeps) {
     return stepId;
   };
 
+  const setCheckpoint = async (requestId: string, step: SdlcStepId): Promise<SdlcWorkflowState> => {
+    const state = currentStateOrThrow();
+    return emit({ ...state, checkpoint: { requestId, step, status: 'running', startedAt: now() } });
+  };
+
+  const clearCheckpoint = async (): Promise<SdlcWorkflowState> => {
+    const state = currentStateOrThrow();
+    return emit({ ...state, checkpoint: undefined });
+  };
+
   const revisionImpact = (kind: SdlcArtifactKind): SdlcStepId[] => kind === 'PL01' || kind === 'PL02'
     ? ['SOLUTION', 'CODE_GUIDE', 'CHANGE_PACK', 'TECH_DOCS', 'CAB']
     : kind === 'SOLUTION'
@@ -389,5 +399,7 @@ export function createSdlcWorkflowCoordinator(deps: WorkflowCoordinatorDeps) {
     commitRevision,
     openCycle,
     closeCycle,
+    setCheckpoint,
+    clearCheckpoint,
   };
 }
