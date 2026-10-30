@@ -272,13 +272,14 @@ describe('Phase 25.1 backup tab/checkpoint contract', () => {
       { ...thread, id: '88888888-8888-4888-8888-888888888888', scopeKey: `project:${projectId}`, title: 'Legacy chat' },
       { ...thread, id: '99999999-9999-4999-8999-999999999999', scopeKey: `project:${projectId}:sdlc`, title: 'Legacy SDLC' },
     ];
-    legacy.tables.chatMessages = [{
+    const legacyMessages: ChatMessage[] = [{
       id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
       threadId: legacy.tables.chatThreads[0]!.id,
       role: 'user',
       content: 'Keep this history',
       createdAt: now,
-    } satisfies ChatMessage];
+    }];
+    (legacy.tables as unknown as { chatMessages: ChatMessage[] }).chatMessages = legacyMessages;
     legacy.counts.chatThreads = 2;
     legacy.counts.chatMessages = 1;
 
