@@ -11,7 +11,7 @@ import {
   SafetyCertificateOutlined,
   SyncOutlined,
 } from '@ant-design/icons';
-import { Alert, Badge, Button, Card, Popconfirm, Space, Tag, Typography, theme } from 'antd';
+import { Alert, Badge, Button, Card, Input, Popconfirm, Space, Tag, Typography, theme } from 'antd';
 import type { SdlcStepId, SdlcWorkflowState } from '../../../services/wizard/workflowSchemas';
 import { RevisionImpactModal } from './RevisionImpactModal';
 
@@ -27,6 +27,8 @@ export interface SdlcWorkflowHubProps {
   onResetWorkflow?: (() => void) | undefined;
   onRequestRequirementRevision?: (() => void) | undefined;
   onRequestSolutionRevision?: (() => void) | undefined;
+  revisionDraft?: string | undefined;
+  onRevisionDraftChange?: ((value: string) => void) | undefined;
 }
 
 interface StepConfig {
@@ -99,10 +101,18 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = ({
   onResetWorkflow,
   onRequestRequirementRevision,
   onRequestSolutionRevision,
+  revisionDraft: controlledRevisionDraft,
+  onRevisionDraftChange,
 }) => {
   const { token } = theme.useToken();
   const [localSelectedStep, setLocalSelectedStep] = useState<SdlcStepId | null>(null);
   const [revisionModalType, setRevisionModalType] = useState<'requirement' | 'solution' | null>(null);
+  const [revisionDraft, setRevisionDraft] = useState('');
+  const effectiveRevisionDraft = controlledRevisionDraft ?? revisionDraft;
+  const updateRevisionDraft = (value: string) => {
+    setRevisionDraft(value);
+    onRevisionDraftChange?.(value);
+  };
 
   if (!projectScoped) {
     return (
@@ -491,11 +501,9 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = ({
               revisionModalType === 'requirement'
                 ? state.artifacts.pl01?.content ?? 'Yêu cầu hiện tại'
                 : state.artifacts.solution?.content ?? 'Solution hiện tại',
-            after:
-              revisionModalType === 'requirement'
-                ? state.artifacts.pl01?.content ?? 'Yêu cầu mới'
-                : state.artifacts.solution?.content ?? 'Solution mới',
+            after: effectiveRevisionDraft,
           }}
+          description={<Input.TextArea value={effectiveRevisionDraft} onChange={(event) => updateRevisionDraft(event.target.value)} rows={6} placeholder="Nhập bản nội dung mới để xem trước và xác nhận." />}
           sources={
             revisionModalType === 'requirement' && state.artifacts.pl01
               ? [{ title: state.artifacts.pl01.title, shortHash: state.artifacts.pl01.hash.slice(0, 8) }]

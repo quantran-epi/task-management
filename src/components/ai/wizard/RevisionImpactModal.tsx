@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import type { ReactNode } from 'react';
 import { Button, Card, Modal, Tag, Typography, theme } from 'antd';
 import type { SdlcStepId } from '../../../services/wizard/workflowSchemas';
 
@@ -16,7 +17,9 @@ export interface RevisionImpactModalProps {
   diff?: { before: string; after: string } | undefined;
   sources?: RevisionSourceItem[] | undefined;
   staleStepIds?: SdlcStepId[] | undefined;
+  description?: ReactNode;
   loading?: boolean | undefined;
+
   onConfirm: () => void | Promise<void>;
   onClose: () => void;
 }
@@ -85,6 +88,7 @@ export const RevisionImpactModal: React.FC<RevisionImpactModalProps> = ({
   diff,
   sources = [],
   staleStepIds = [],
+  description,
   loading = false,
   onConfirm,
   onClose,
@@ -141,6 +145,7 @@ export const RevisionImpactModal: React.FC<RevisionImpactModalProps> = ({
       ]}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 8 }}>
+        {description}
         {/* Section 1: Diff preview */}
         <div>
           <Text strong style={{ fontSize: 14 }}>
