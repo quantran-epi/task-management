@@ -31,7 +31,7 @@ function bytesToStream(bytes: Uint8Array): ReadableStream<Uint8Array> {
   });
 }
 
-async function streamToBytes(stream: ReadableStream<Uint8Array>, maxBytes?: number): Promise<Uint8Array> {
+async function streamToBytes(stream: ReadableStream<any>, maxBytes?: number): Promise<Uint8Array> {
   const reader = stream.getReader();
   const chunks: Uint8Array[] = [];
   let totalLength = 0;
