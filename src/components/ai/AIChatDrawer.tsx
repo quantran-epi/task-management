@@ -1188,17 +1188,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   // Abort stream on unmount or drawer close
   useEffect(() => {
     return () => {
-      if (pendingConfirmationRef.current) {
-        pendingConfirmationRef.current.resolve(false);
-        pendingConfirmationRef.current = null;
-      }
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-      if (currentTurnAbortRef.current) {
-        currentTurnAbortRef.current.abort();
-        currentTurnAbortRef.current = null;
-      }
+      requestRegistryRef.current.abortTab(activeTabId);
     };
   }, []);
 
