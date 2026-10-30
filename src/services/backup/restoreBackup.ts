@@ -93,7 +93,7 @@ function legacyTabRows(
     const hasSdlc = scopedThreads.some((thread) => thread.scopeKey === `${scopeKey}:sdlc` && thread.scopeType === 'project');
     const projectId = scopeKey.startsWith('project:') ? scopeKey.slice('project:'.length) : undefined;
     if (projectId && !hasSdlc) {
-      const threadId = `sdlc:${scopeKey}`;
+      const threadId = generateId();
       const sdlcThread: ChatThread = {
         id: threadId,
         scopeKey: `${scopeKey}:sdlc`,
@@ -107,7 +107,7 @@ function legacyTabRows(
       scopedThreads.push(sdlcThread);
       threadByScope.set(scopeKey, scopedThreads);
       tabs.push({
-        id: threadId,
+        id: generateId(),
         threadId,
         scopeKey,
         type: 'sdlc',
@@ -214,9 +214,8 @@ async function replaceTables(
   await targetDb.transaction('rw', RESTORE_TABLES(targetDb), async () => {
     if (snapshot) await targetDb.settings.put({ key: 'last_pre_import_snapshot', value: snapshot });
     await Promise.all([
-      targetDb.projects.clear(), targetDb.milestones.clear(), targetDb.tasks.clear(), targetDb.capacityRules.clear(), targetDb.capacityOverrides.clear(), targetDb.plannedAllocations.clear(), targetDb.workSessions.clear(), targetDb.activeTimers.clear(), targetDb.notes.clear(), targetDb.noteAttachments.clear(), targetDb.chatThreads.clear(), targetDb.chatMessages.clear(), targetDb.chatTabs.clear(), targetDb.telegramSettings.clear(), targetDb.telegramWhitelist.clear(),
+      targetDb.projects.clear(), targetDb.milestones.clear(), targetDb.tasks.clear(), targetDb.capacityRules.clear(), targetDb.capacityOverrides.clear(), targetDb.plannedAllocations.clear(), targetDb.workSessions.clear(), targetDb.activeTimers.clear(), targetDb.notes.clear(), targetDb.noteAttachments.clear(), targetDb.chatThreads.clear(), targetDb.chatMessages.clear(), targetDb.chatTabs.clear(), targetDb.telegramSettings.clear(), targetDb.telegramWhitelist.clear(), targetDb.documentSets.clear(), targetDb.publishedDocuments.clear(), targetDb.publishAttempts.clear(), targetDb.dlpAudits.clear(), targetDb.knowledgeLinks.clear(), targetDb.settings.clear(),
     ]);
-    if (tables.documentSets !== undefined) await Promise.all([targetDb.documentSets.clear(), targetDb.publishedDocuments.clear(), targetDb.publishAttempts.clear(), targetDb.dlpAudits.clear(), targetDb.knowledgeLinks.clear()]);
 
     const add = async <T>(table: { bulkAdd: (rows: T[]) => Promise<unknown> }, rows: T[] | undefined) => {
       if (rows?.length) await table.bulkAdd(rows);

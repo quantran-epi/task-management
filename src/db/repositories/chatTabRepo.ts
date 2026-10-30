@@ -73,19 +73,16 @@ export async function getActiveTab(scopeKey: string, db: TaskPlannerDatabase = d
 
 export async function getOrCreateSdlcTab(projectId: string, db: TaskPlannerDatabase = defaultDb): Promise<ChatTab> {
   const scopeKey = `project:${projectId}`;
-  const tabId = `sdlc:${scopeKey}`;
 
   return db.transaction('rw', [db.chatThreads, db.chatTabs], async () => {
-    const existing = await db.chatTabs.get(tabId)
-      ?? (await db.chatTabs.where('scopeKey').equals(scopeKey).toArray()).find((tab) => tab.type === 'sdlc');
+    const scopeTabs = await db.chatTabs.where('scopeKey').equals(scopeKey).toArray();
+    const existing = scopeTabs.find((tab) => tab.type === 'sdlc');
     if (existing) return existing;
 
-    const scopeTabs = await db.chatTabs.where('scopeKey').equals(scopeKey).toArray();
     const now = new Date().toISOString();
     const existingProjectThreads = await db.chatThreads.where('entityId').equals(projectId).toArray();
-    const legacyThread = existingProjectThreads.find((thread) => thread.scopeKey === scopeKey)
-      ?? existingProjectThreads.find((thread) => thread.scopeKey === `${scopeKey}:sdlc`);
-    const thread: ChatThread = legacyThread ?? {
+    const sdlcThread = existingProjectThreads.find((thread) => thread.scopeKey === `${scopeKey}:sdlc`);
+    const thread: ChatThread = sdlcThread ?? {
       id: generateId(),
       scopeKey: `${scopeKey}:sdlc`,
       scopeType: 'project',
@@ -95,7 +92,7 @@ export async function getOrCreateSdlcTab(projectId: string, db: TaskPlannerDatab
       updatedAt: now,
     };
     const tab: ChatTab = {
-      id: tabId,
+      id: generateId(),
       threadId: thread.id,
       scopeKey,
       type: 'sdlc',
@@ -105,7 +102,7 @@ export async function getOrCreateSdlcTab(projectId: string, db: TaskPlannerDatab
       createdAt: thread.createdAt,
       updatedAt: now,
     };
-    if (!legacyThread) await db.chatThreads.add(thread);
+    if (!sdlcThread) await db.chatThreads.add(thread);
     await db.chatTabs.add(tab);
     return tab;
   });

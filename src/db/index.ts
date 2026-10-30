@@ -238,7 +238,7 @@ export class TaskPlannerDatabase extends Dexie {
               ? '⚙️ SDLC Workflow'
               : `💬 Cuộc trò chuyện #${order + 1}`;
           await tabs.add({
-            id: isSdlc ? `sdlc:${baseScopeKey}` : threadId,
+            id: crypto.randomUUID(),
             threadId,
             scopeKey: baseScopeKey,
             type: isSdlc ? 'sdlc' : 'chat',
