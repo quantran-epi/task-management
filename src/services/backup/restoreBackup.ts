@@ -74,7 +74,7 @@ function legacyTabRows(
     scoped.push(thread);
     threadByScope.set(scopeKey, scoped);
     tabs.push({
-      id: thread.scopeKey === `${scopeKey}:sdlc` && thread.scopeType === 'project' ? `sdlc:${scopeKey}` : thread.id,
+      id: thread.scopeKey === `${scopeKey}:sdlc` && thread.scopeType === 'project' ? generateId() : thread.id,
       threadId: thread.id,
       scopeKey,
       type: thread.scopeKey === `${scopeKey}:sdlc` && thread.scopeType === 'project' ? 'sdlc' : 'chat',
