@@ -10,6 +10,7 @@ import {
   SdlcDocumentSetMetadataSchema,
   WizardSnapshotSchema,
 } from '../services/ai/wizardSchemas';
+import { SdlcWorkflowStateSchema } from '../services/wizard/workflowSchemas';
 import {
   PROJECT_STATUSES,
   MILESTONE_STATUSES,
@@ -283,7 +284,7 @@ export const BackupChatTabRecordSchema = z
       status: z.enum(['interrupted', 'error']).optional(),
     }).optional(),
     config: backupTabConfigSchema.optional(),
-    workflowState: z.record(z.string(), z.unknown()).optional(),
+    workflowState: SdlcWorkflowStateSchema.optional(),
     createdAt: z.string(),
     updatedAt: z.string(),
   })

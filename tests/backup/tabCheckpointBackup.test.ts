@@ -245,7 +245,7 @@ describe('Phase 25.1 backup tab/checkpoint contract', () => {
     forbidden.tables.chatTabs = [makeTab({ workflowState: { ...workflowState, nested: { bearerToken: 'x' } } })];
     const forbiddenResult = validateBackupPayload(forbidden);
     expect(forbiddenResult.valid).toBe(false);
-    expect(forbiddenResult.errors.some((error) => error.message.includes('FORBIDDEN_FIELD'))).toBe(true);
+    expect(forbiddenResult.errors.some((error) => error.table === 'chatTabs' && (error.message.includes('FORBIDDEN_FIELD') || error.field.includes('workflowState')))).toBe(true);
   });
 
   it('accepts pre-25.1 payloads without chatTabs or new workflow fields', () => {
