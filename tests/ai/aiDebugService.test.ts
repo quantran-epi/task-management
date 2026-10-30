@@ -8,7 +8,8 @@ describe('aiDebugService', () => {
     const forbidden = 'RAW_SECRET_PROMPT';
     const turnId = aiDebugService.startTurn({ scope: 'task-123', model: 'openai/gpt-4o', systemPrompt: forbidden, messagesSent: [{ role: 'user', content: forbidden }], toolsSent: [{ type: 'function', function: { name: 'query_tasks' } }] });
     const turn = aiDebugService.getTurn(turnId)!;
-    expect(turn).toMatchObject({ scope: 'task-123', model: 'openai/gpt-4o', systemPromptLength: forbidden.length, messageCount: 1, messageCharacterCount: JSON.stringify({ role: 'user', content: forbidden }).length, toolCount: 1, status: 'running' });
+    expect(turn).toMatchObject({ scope: 'task-123', model: 'openai/gpt-4o', systemPromptLength: forbidden.length, messageCount: 1, messageChars: JSON.stringify({ role: 'user', content: forbidden }).length, toolCount: 1, status: 'running' });
+    expect(turn).not.toHaveProperty('messageCharacterCount');
     expect(JSON.stringify(turn)).not.toContain(forbidden);
     expect(turn).not.toHaveProperty('systemPrompt');
     expect(turn).not.toHaveProperty('messagesSent');

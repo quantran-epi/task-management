@@ -4,7 +4,14 @@ import dayjs from 'dayjs';
 import { db } from '../../../db';
 import type { Note } from '../../../types/models';
 import { renderSafeMarkdown } from '../../../utils/markdown';
-import type { SdlcSourceRef } from '../../../services/wizard/sourceMerge';
+interface SdlcSourceRef {
+  id: string;
+  title: string;
+  body?: string;
+  version: number;
+  hash: string;
+  updatedAt: string;
+}
 
 const { Text, Title } = Typography;
 
@@ -41,6 +48,7 @@ export const NoteSourcePickerModal: React.FC<NoteSourcePickerModalProps> = ({
   const [allNotes, setAllNotes] = useState<Note[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(initialSelectedIds));
   const [previewNoteId, setPreviewNoteId] = useState<string | null>(null);
+  const [focusedNoteId, setFocusedNoteId] = useState<string | null>(null);
   const [showFullPreview, setShowFullPreview] = useState(false);
   const [applying, setApplying] = useState(false);
 
@@ -219,7 +227,7 @@ export const NoteSourcePickerModal: React.FC<NoteSourcePickerModalProps> = ({
                   <div
                     key={note.id}
                     role="option"
-                    tabIndex={0}
+                    tabIndex={focusedNoteId === note.id ? 0 : -1}
                     aria-selected={isChecked}
                     aria-label={`${note.title || 'Untitled Note'}${isChecked ? ', đã chọn' : ', chưa chọn'}`}
                     onFocus={() => setFocusedNoteId(note.id)}
