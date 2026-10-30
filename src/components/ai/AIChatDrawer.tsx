@@ -1805,7 +1805,6 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
     const correlationId = crypto.randomUUID();
     const routeLog = createPhaseLogger('[ROUTE]', { correlationId });
     const toolLog = createPhaseLogger('[TOOL]', { correlationId });
-
     const turnStartTime = Date.now();
     let accumulatedTokenUsage: ChatTokenUsage | undefined;
     const turnGeneratedFiles: ChatGeneratedFile[] = [];
