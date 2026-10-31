@@ -110,6 +110,38 @@ describe('restoreBackupPayload & rollbackToSnapshot', () => {
     expect(projects[0]?.name).toBe('Pre-Restore Project');
   });
 
+  it('rolls back the running timer through the pre-import snapshot', async () => {
+    await testDb.tasks.add({
+      id: '22222222-2222-4222-8222-222222222222',
+      projectId: '00000000-0000-4000-8000-000000000000',
+      milestoneId: null,
+      name: 'Timed task',
+      status: 'Open',
+      priority: 'Medium',
+      progress: 0,
+      estimateMinutes: 60,
+      workType: 'code',
+      createdAt: '2026-09-26T10:00:00.000Z',
+      updatedAt: '2026-09-26T10:00:00.000Z',
+    } as never);
+    await testDb.activeTimers.add({
+      taskId: '22222222-2222-4222-8222-222222222222',
+      startedAt: '2026-09-26T10:05:00.000Z',
+      accumulatedMinutes: 0,
+      segments: [],
+    } as never);
+
+    await restoreBackupPayload(sampleBackup, testDb);
+    // The import replaces the timer table; only the snapshot can bring it back.
+    expect(await testDb.activeTimers.count()).toBe(0);
+
+    const snapshot = (await testDb.settings.get('last_pre_import_snapshot'))?.value as SnapshotData;
+    expect(snapshot.tables.activeTimers).toHaveLength(1);
+
+    await rollbackToSnapshot(testDb);
+    expect(await testDb.activeTimers.count()).toBe(1);
+  });
+
   it('restores successfully when local DB contains note attachments with Blob data (no transaction auto-commit)', async () => {
     // Add existing note and attachment with Blob data
     await testDb.notes.add({
