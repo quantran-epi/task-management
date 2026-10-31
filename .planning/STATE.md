@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: milestone
 status: executing
-stopped_at: "25.1.1-01 complete — next: plan 25.1.1-02 (hub shell)"
-last_updated: "2026-10-31T19:27:28Z"
-last_activity: 2026-11-01 -- Plan 25.1.1-01 complete (content-addressed artifact persistence)
+stopped_at: "25.1.1-02 complete — next: plan 25.1.1-03 (hub SOLUTION writer)"
+last_updated: "2026-11-01T02:40:00Z"
+last_activity: 2026-11-01 -- Plan 25.1.1-02 complete (hub shell, collapsible timeline, step panels)
 progress:
   total_phases: 11
   completed_phases: 7
   total_plans: 84
-  completed_plans: 77
-  percent: 65
+  completed_plans: 78
+  percent: 66
 ---
 
 # Project State
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 ## Current Position
 
 Phase: 25.1.1 (unify-sdlc-workflow-move-change-pack-pl03b-pl07-generation-c) — IN PROGRESS
-Plan: 1 of 11 complete (25.1.1-01)
-Status: Plan 25.1.1-01 complete; wave 1 done, next is 25.1.1-02 (hub shell)
-Last activity: 2026-11-01 -- Plan 25.1.1-01 complete (content-addressed artifact persistence)
-Stopped at: 25.1.1-01 complete — next: plan 25.1.1-02 (hub shell)
+Plan: 2 of 11 complete (25.1.1-01, 25.1.1-02)
+Status: Plan 25.1.1-02 complete; wave 2 done, next is 25.1.1-03 (hub SOLUTION writer)
+Last activity: 2026-11-01 -- Plan 25.1.1-02 complete (hub shell, collapsible timeline, step panels)
+Stopped at: 25.1.1-02 complete — next: plan 25.1.1-03 (hub SOLUTION writer)
 
 Progress: [██████████] 100%
 

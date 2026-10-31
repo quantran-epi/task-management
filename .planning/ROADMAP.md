@@ -268,7 +268,7 @@ Plans: 11 plans in 11 sequential waves (every plan edits `AIChatDrawer.tsx` or i
 
 **Wave 2** *(depends on 25.1.1-01)*
 
-- [ ] 25.1.1-02-PLAN.md — Hub shell: collapsible timeline, per-step panel contract (incl. INTAKE), stacked drift layout, focus rings, modal z-index, 11px retired directory-wide
+- [x] 25.1.1-02-PLAN.md — Hub shell: collapsible timeline, per-step panel contract (incl. INTAKE), stacked drift layout, focus rings, modal z-index, 11px retired directory-wide
 
 **Wave 3** *(depends on 25.1.1-02)*
 
