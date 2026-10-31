@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { SdlcWorkflowHub } from '../SdlcWorkflowHub';
-import { StepChangePackPanel, StepSolutionPanel, type HubChangePackDraft } from '../HubStepPanels';
+import { StepChangePackPanel, StepSolutionPanel, StepTechDocsPanel, type HubChangePackDraft } from '../HubStepPanels';
 import { ERROR_COPY } from '../ChangePackConfirmStrip';
 import { RevisionImpactModal } from '../RevisionImpactModal';
 import type { SdlcWorkflowState } from '../../../../services/wizard/workflowSchemas';
@@ -379,8 +379,95 @@ describe('StepChangePackPanel', () => {
   });
 });
 
-describe('StepSolutionPanel', () => {
-  const saveButton = () => screen.getByRole('button', { name: /Lưu SOLUTION\.md/ });
+describe('StepTechDocsPanel', () => {
+  const artifact = (kind: 'PL03B' | 'PL07', version: number) => ({
+    kind,
+    version,
+    hash: '07'.repeat(32),
+    title: `${kind} — v${version} (Core Banking Payment)`,
+    approvedAt: '2026-11-01T05:00:00.000Z',
+    updatedAt: '2026-11-01T05:00:00.000Z',
+  });
+
+  const generateButton = () => screen.getByRole('button', { name: /Tạo (lại )?PL03B & PL07/ });
+
+  it('blocked shows the prerequisite hint and a disabled generate button', () => {
+    render(<StepTechDocsPanel stale={false} state="blocked" />);
+    expect(screen.getByText('Cần SOLUTION.md và change-pack đã xác nhận trước khi sinh PL03B & PL07.')).toBeInTheDocument();
+    expect(generateButton()).toBeDisabled();
+  });
+
+  it('ready enables the generate button', () => {
+    render(<StepTechDocsPanel stale={false} state="ready" onGenerate={vi.fn()} />);
+    expect(generateButton()).toBeEnabled();
+    expect(screen.queryByText('Cần SOLUTION.md và change-pack đã xác nhận trước khi sinh PL03B & PL07.')).not.toBeInTheDocument();
+  });
+
+  it('generating announces the status line and keeps the rest of the panel rendered', () => {
+    render(<StepTechDocsPanel stale={false} state="generating" onGenerate={vi.fn()} />);
+    expect(screen.getByRole('status')).toHaveTextContent('Đang sinh PL03B & PL07…');
+    expect(generateButton()).toBeDisabled();
+    expect(screen.getByTestId('export-slot-PL03B')).toBeInTheDocument();
+    expect(screen.getByTestId('export-slot-PL07')).toBeInTheDocument();
+  });
+
+  it('error shows the enumerated copy and Thử lại calls onRetry', () => {
+    const onRetry = vi.fn();
+    render(<StepTechDocsPanel stale={false} state="error" onGenerate={vi.fn()} onRetry={onRetry} />);
+    expect(screen.getByText('Không sinh được PL03B & PL07. Kiểm tra SOLUTION.md và change-pack rồi thử lại.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders artifact rows with kind label, version tag and approved date', () => {
+    render(
+      <StepTechDocsPanel
+        stale={false}
+        state="ready"
+        pl03b={artifact('PL03B', 2)}
+        pl07={artifact('PL07', 1)}
+      />
+    );
+    expect(screen.getByText('PL03B — Tài liệu triển khai')).toBeInTheDocument();
+    expect(screen.getByText('PL07 — Checklist review')).toBeInTheDocument();
+    expect(screen.getByText('v2')).toBeInTheDocument();
+    expect(screen.getByText('v1')).toBeInTheDocument();
+    expect(screen.getAllByText('2026-11-01')).toHaveLength(2);
+  });
+
+  it('shows the missing-doc copy when an artifact is absent', () => {
+    render(<StepTechDocsPanel stale={false} state="ready" pl03b={artifact('PL03B', 1)} />);
+    expect(screen.getByText('Chưa có — bấm Tạo PL03B & PL07.')).toBeInTheDocument();
+  });
+
+  it('switches to the rerun label when stale or when a document already exists', () => {
+    const { rerender } = render(<StepTechDocsPanel stale={false} state="ready" />);
+    expect(screen.getByRole('button', { name: 'Tạo PL03B & PL07' })).toBeInTheDocument();
+
+    rerender(<StepTechDocsPanel stale state="ready" />);
+    expect(screen.getByRole('button', { name: 'Tạo lại PL03B & PL07' })).toBeInTheDocument();
+
+    rerender(<StepTechDocsPanel stale={false} state="ready" pl03b={artifact('PL03B', 1)} />);
+    expect(screen.getByRole('button', { name: 'Tạo lại PL03B & PL07' })).toBeInTheDocument();
+  });
+
+  it('renders the export rows when provided and omits them otherwise', () => {
+    const { rerender } = render(<StepTechDocsPanel stale={false} state="ready" />);
+    expect(screen.queryByTestId('export-row-PL03B')).not.toBeInTheDocument();
+
+    rerender(
+      <StepTechDocsPanel
+        stale={false}
+        state="ready"
+        renderExportRow={(kind) => <span data-testid={`export-row-${kind}`}>Xuất {kind}</span>}
+      />
+    );
+    expect(screen.getByTestId('export-row-PL03B')).toBeInTheDocument();
+    expect(screen.getByTestId('export-row-PL07')).toBeInTheDocument();
+  });
+});
+
+describe('StepSolutionPanel', () => {  const saveButton = () => screen.getByRole('button', { name: /Lưu SOLUTION\.md/ });
 
   it('disables the save button when canSave is false', () => {
     render(<StepSolutionPanel stale={false} canSave={false} onSave={vi.fn()} />);
