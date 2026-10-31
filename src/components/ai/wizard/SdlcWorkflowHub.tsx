@@ -380,7 +380,8 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = ({
         aria-label="Quy trình 6 bước SDLC"
         hidden={!timelineExpanded}
         style={{
-          display: 'flex',
+          // `hidden` alone loses to inline `display`, so the rows would stay on screen.
+          display: timelineExpanded ? 'flex' : 'none',
           flexDirection: 'column',
           gap: 4,
           padding: '2px 0 8px',
