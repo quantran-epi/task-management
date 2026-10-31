@@ -385,6 +385,7 @@ describe('StepTechDocsPanel', () => {
     version,
     hash: '07'.repeat(32),
     title: `${kind} — v${version} (Core Banking Payment)`,
+    sourceHashes: ['03'.repeat(32)],
     approvedAt: '2026-11-01T05:00:00.000Z',
     updatedAt: '2026-11-01T05:00:00.000Z',
   });
