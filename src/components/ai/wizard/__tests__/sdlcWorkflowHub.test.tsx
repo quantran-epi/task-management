@@ -1,9 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { SdlcWorkflowHub } from '../SdlcWorkflowHub';
-import { StepSolutionPanel } from '../HubStepPanels';
+import { StepChangePackPanel, StepSolutionPanel, type HubChangePackDraft } from '../HubStepPanels';
+import { ERROR_COPY } from '../ChangePackConfirmStrip';
 import { RevisionImpactModal } from '../RevisionImpactModal';
 import type { SdlcWorkflowState } from '../../../../services/wizard/workflowSchemas';
+import type { ChangePackManifest } from '../../../../services/wizard/changePack';
+import type { ReconciliationResult } from '../../../../services/wizard/reconciliation';
 
 describe('SdlcWorkflowHub', () => {
   const dummyState: SdlcWorkflowState = {
@@ -249,6 +252,130 @@ describe('SdlcWorkflowHub', () => {
 
     expect(screen.getByTestId('wired-solution')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Lưu SOLUTION.md' })).not.toBeInTheDocument();
+  });
+});
+
+describe('StepChangePackPanel', () => {
+  const manifest: Readonly<ChangePackManifest> = {
+    schemaVersion: 1,
+    packHash: 'ab'.repeat(32),
+    identity: { cr: 'CR-25001', base: 'base-1', head: 'head-2', branch: 'feature/CR-25001' },
+    meta: {
+      cr: 'CR-25001',
+      base: 'base-1',
+      head: 'head-2',
+      branch: 'feature/CR-25001',
+      author: 'tester',
+      generatedAt: '2026-10-30T00:00:00.000Z',
+      commits: [{ sha: 'head-2', subject: 'one commit' }],
+      files: [{ path: 'src/feature.ts', status: 'modified' }],
+    },
+    entries: [{ path: 'src/feature.ts', sizeBytes: 10, status: 'included', coverage: 'included', content: 'x' }],
+    compressedBytes: 100,
+    expandedBytes: 200,
+    commitCount: 1,
+    fileCount: 1,
+    coverageStatus: 'complete',
+  };
+
+  const artifact = {
+    kind: 'CHANGE_PACK' as const,
+    version: 1,
+    hash: manifest.packHash,
+    title: 'Change pack CR-25001 (1 tệp)',
+    sourceHashes: ['03'.repeat(32)],
+    updatedAt: '2026-10-30T00:00:00.000Z',
+  };
+
+  const drift: ReconciliationResult = {
+    schemaVersion: 1,
+    identity: {
+      projectId: '22222222-2222-4222-8222-222222222222',
+      threadId: '33333333-3333-4333-8333-333333333333',
+      solutionNoteId: '44444444-4444-4444-8444-444444444444',
+      solutionVersion: 1,
+      solutionHash: '03'.repeat(32),
+      packHash: manifest.packHash,
+      cr: 'CR-25001',
+      base: 'base-1',
+      head: 'head-2',
+    },
+    status: 'PARTIAL_COVERAGE',
+    approvedDesign: { currentSystem: 'x', affectedScreens: [], affectedApis: [], affectedTables: [] },
+    actualImplementation: { affectedFiles: [], affectedScreens: [], affectedApis: [], affectedTables: [] },
+    drift: [],
+    dbChangesRollback: { affectedTables: [], changes: [], rollback: { status: 'unknown', evidenceIds: [] } },
+    regressionMatrix: [],
+    coverage: [{ path: 'src/feature.ts', state: 'included', evidenceIds: [] }],
+  };
+
+  const renderPanel = (draft: HubChangePackDraft, extra: Record<string, unknown> = {}) =>
+    render(
+      <StepChangePackPanel
+        stale={false}
+        cr="CR-25001"
+        draft={draft}
+        onSelectFile={vi.fn()}
+        onConfirm={vi.fn()}
+        onReplace={vi.fn()}
+        {...extra}
+      />
+    );
+
+  it('idle renders the dropzone with its exact copy', () => {
+    renderPanel({ status: 'idle' });
+    expect(screen.getByRole('button', { name: 'Khu vực nạp change-pack' })).toBeInTheDocument();
+    expect(screen.getByText('Kéo thả change-pack.zip vào đây hoặc bấm để chọn tệp.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Xác nhận pack' })).not.toBeInTheDocument();
+  });
+
+  it('validating renders the status line and no buttons', () => {
+    renderPanel({ status: 'validating' });
+    expect(screen.getByRole('status')).toHaveTextContent('Đang kiểm tra change-pack…');
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Khu vực nạp change-pack' })).not.toBeInTheDocument();
+  });
+
+  it('invalid renders the enumerated error copy and Chọn pack khác', () => {
+    renderPanel({ status: 'invalid', code: 'PACK_IDENTITY_MISMATCH' });
+    expect(screen.getByText(ERROR_COPY.PACK_IDENTITY_MISMATCH)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Chọn pack khác' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Xác nhận pack' })).not.toBeInTheDocument();
+  });
+
+  it('pending renders the identity line and both buttons', () => {
+    renderPanel({ status: 'pending', manifest });
+    expect(screen.getByText('CR CR-25001 · Nhánh feature/CR-25001 · 1 commit · 1 tệp')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Xác nhận pack' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Chọn pack khác' })).toBeEnabled();
+  });
+
+  it('moves focus to Xác nhận pack after the pending transition removes the dropzone', () => {
+    const { rerender } = renderPanel({ status: 'validating' });
+    rerender(
+      <StepChangePackPanel stale={false} cr="CR-25001" draft={{ status: 'pending', manifest }} onReplace={vi.fn()} />
+    );
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Xác nhận pack' }));
+  });
+
+  it('confirming disables both buttons and announces the reconciliation', () => {
+    renderPanel({ status: 'confirming', manifest });
+    expect(screen.getByRole('button', { name: /Xác nhận pack/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Chọn pack khác' })).toBeDisabled();
+    expect(screen.getByText('Đang đối chiếu với SOLUTION.md…')).toBeInTheDocument();
+  });
+
+  it('committed renders Đã nạp change-pack and the stacked matrix', () => {
+    renderPanel({ status: 'idle' }, { artifact, driftResult: drift });
+    expect(screen.getByText('Đã nạp change-pack CR-25001')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Bảng drift so với SOLUTION.md' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Chọn pack khác' })).toBeInTheDocument();
+  });
+
+  it('omits the matrix when no drift result exists', () => {
+    renderPanel({ status: 'idle' }, { artifact });
+    expect(screen.getByText('Đã nạp change-pack CR-25001')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Bảng drift so với SOLUTION.md' })).not.toBeInTheDocument();
   });
 });
 
