@@ -253,6 +253,7 @@ export const ScopePickerModal: React.FC<ScopePickerModalProps> = ({
                 const selected = isCurrent(item);
                 return (
                   <List.Item
+                    key={`${item.type}:${item.id ?? 'global'}`}
                     onClick={() => handleSelect(item)}
                     style={{
                       padding: '10px 14px',

@@ -35,6 +35,9 @@ export interface ChatInputBarProps {
   onRemoveFile?: ((filePath: string) => void) | undefined;
   externalValue?: string | undefined;
   onExternalValueConsumed?: (() => void) | undefined;
+  /** Controlled value owned by the tab runtime. Omit for uncontrolled mode. */
+  value?: string | undefined;
+  onValueChange?: ((next: string) => void) | undefined;
   leadingContent?: React.ReactNode;
 }
 
@@ -117,19 +120,36 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   onRemoveFile,
   externalValue,
   onExternalValueConsumed,
+  value,
+  onValueChange,
   leadingContent,
 }) => {
   const { token } = theme.useToken();
-  const [value, setValue] = useState('');
+  const [internalValue, setInternalValue] = useState('');
+  const effectiveValue = value ?? internalValue;
+  const update = (next: string) => {
+    // Mirror locally so uncontrolled/remounted callers keep working; the runtime owns the canonical draft.
+    setInternalValue(next);
+    onValueChange?.(next);
+  };
   const [isFullscreenModalOpen, setIsFullscreenModalOpen] = useState(false);
+  // Transient modal scratchpad, not a second draft store: switching tabs unmounts this component
+  // (key={activeTabId}) and discards text typed here but never applied.
   const [fullscreenDraft, setFullscreenDraft] = useState('');
 
   useEffect(() => {
     if (typeof externalValue === 'string') {
-      setValue(externalValue);
+      update(externalValue);
       onExternalValueConsumed?.();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalValue, onExternalValueConsumed]);
+
+  // The controlled value is authoritative; keep the local mirror in step after remounts.
+  useEffect(() => {
+    if (typeof value === 'string' && value !== internalValue) setInternalValue(value);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
   const [searchInfo, setSearchInfo] = useState<{ text: string; prefix: string }>({
     text: '',
     prefix: '',
@@ -169,7 +189,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   }, [autoFocus, disabled, isStreaming]);
 
   const clearInput = (el?: HTMLTextAreaElement | null) => {
-    setValue('');
+    update('');
     if (el && 'value' in el) {
       el.value = '';
     }
@@ -192,7 +212,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
           } else {
             const fileName = selected.split(/[/\\]/).pop() || selected;
             const ref = `[${fileName}](file:${selected}) `;
-            setValue((prev) => (prev ? `${prev.trimEnd()} ${ref}` : ref));
+            update(effectiveValue ? `${effectiveValue.trimEnd()} ${ref}` : ref);
           }
           setTimeout(() => {
             mentionsRef.current?.focus();
@@ -208,7 +228,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
               onAttachFile(file.name);
             } else {
               const ref = `[${file.name}](file:${file.name}) `;
-              setValue((prev) => (prev ? `${prev.trimEnd()} ${ref}` : ref));
+              update(effectiveValue ? `${effectiveValue.trimEnd()} ${ref}` : ref);
             }
           }
         };
@@ -220,7 +240,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   };
 
   const handleSend = (targetEl?: HTMLTextAreaElement) => {
-    const rawVal = value || targetEl?.value || '';
+    const rawVal = effectiveValue || targetEl?.value || '';
     const trimmed = rawVal.trim();
     if (!trimmed) return;
 
@@ -245,12 +265,12 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   };
 
   const handleOpenFullscreen = () => {
-    setFullscreenDraft(value);
+    setFullscreenDraft(effectiveValue);
     setIsFullscreenModalOpen(true);
   };
 
   const handleApplyFullscreen = () => {
-    setValue(fullscreenDraft);
+    update(fullscreenDraft);
     setIsFullscreenModalOpen(false);
     setTimeout(() => {
       mentionsRef.current?.focus();
@@ -283,7 +303,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
       e.preventDefault();
       e.stopPropagation();
       const el = e.currentTarget;
-      const rawText = value.trim() || el?.value?.trim() || '';
+      const rawText = effectiveValue.trim() || el?.value?.trim() || '';
       if (!rawText) return;
 
       isSubmittingRef.current = true;
@@ -313,16 +333,18 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
 
   const handleSelect = (option: any) => {
     if (option.key === 'cmd-file') {
-      setValue((prev) => prev.replace(/\/file\s*$/, '').trimEnd());
+      update(effectiveValue.replace(/\/file\s*$/, '').trimEnd());
       handlePickFile();
       return;
     }
 
     if (option.key === 'cmd-doc' || option.key === 'mention-doc-entry') {
-      setValue((prev) => {
-        const clean = prev.replace(/\/doc\s*$/, '').trimEnd();
-        return clean ? `${clean} @doc:` : '@doc:';
-      });
+      update(
+        (() => {
+          const clean = effectiveValue.replace(/\/doc\s*$/, '').trimEnd();
+          return clean ? `${clean} @doc:` : '@doc:';
+        })()
+      );
       setSearchInfo({ text: 'doc:', prefix: '@' });
       setTimeout(() => {
         const textarea =
@@ -342,8 +364,8 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
     const textarea =
       mentionsRef.current?.textarea ||
       (mentionsRef.current as any)?.nativeElement?.querySelector?.('textarea');
-    const cursorPos = textarea ? textarea.selectionStart : value.length;
-    const textBeforeCursor = value.slice(0, cursorPos);
+    const cursorPos = textarea ? textarea.selectionStart : effectiveValue.length;
+    const textBeforeCursor = effectiveValue.slice(0, cursorPos);
     const lastSpace = Math.max(textBeforeCursor.lastIndexOf(' '), textBeforeCursor.lastIndexOf('\n'));
     const currentToken = lastSpace === -1 ? textBeforeCursor : textBeforeCursor.slice(lastSpace + 1);
 
@@ -351,7 +373,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
       return ['@', '#'];
     }
     return ['@', '#', '/'];
-  }, [value]);
+  }, [effectiveValue]);
 
   const handleSearch = (text: string, prefix: string) => {
     setSearchInfo({ text, prefix });
@@ -693,13 +715,13 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
         )}
         <Mentions
           ref={mentionsRef}
-          value={value}
+          value={effectiveValue}
           onChange={(newVal) => {
             if (isSubmittingRef.current) {
               clearInput();
               return;
             }
-            setValue(newVal);
+            update(newVal);
           }}
           onInput={(e: React.FormEvent<HTMLTextAreaElement>) => {
             if (isSubmittingRef.current) {
@@ -787,7 +809,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
               type="primary"
               icon={<SendOutlined />}
               onClick={() => handleSend()}
-              disabled={disabled || !value.trim()}
+              disabled={disabled || !effectiveValue.trim()}
               aria-label="Gửi tin nhắn"
               style={{ height: 32 }}
             >
