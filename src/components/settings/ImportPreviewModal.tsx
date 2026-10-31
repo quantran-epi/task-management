@@ -130,8 +130,21 @@ export const ImportPreviewModal: React.FC<ImportPreviewModalProps> = ({
     });
   }, [validationResult, currentCounts]);
 
-  const handleConfirmRestore = async () => {
-    if (confirmText !== 'RESTORE' || !validationResult.valid || !validationResult.envelope) {
+  // The user must learn about blocked SDLC tabs before confirming, not after the restore.
+  const recoveryNotice = useMemo(() => {
+    const recovery = validationResult.recovery;
+    if (!recovery) return null;
+    const parts: string[] = [];
+    if (recovery.missingSources.length > 0) {
+      parts.push(`${recovery.missingSources.length} tài liệu nguồn không còn tồn tại`);
+    }
+    if (recovery.blockedTabs.length > 0) {
+      parts.push(`${recovery.blockedTabs.length} tab workflow cần bổ sung nguồn trước khi chạy tiếp`);
+    }
+    return parts.length > 0 ? `${parts.join(' và ')}.` : null;
+  }, [validationResult]);
+
+  const handleConfirmRestore = async () => {    if (confirmText !== 'RESTORE' || !validationResult.valid || !validationResult.envelope) {
       return;
     }
 
@@ -284,6 +297,16 @@ export const ImportPreviewModal: React.FC<ImportPreviewModalProps> = ({
               description="Quá trình này sẽ xóa dữ liệu hiện tại trong 6 bảng và thay thế bằng nội dung tệp sao lưu. Hệ thống sẽ tự động tạo một bản snapshot an toàn để bạn có thể hoàn tác nếu cần."
               style={{ marginBottom: 16 }}
             />
+
+            {recoveryNotice && (
+              <Alert
+                type="info"
+                showIcon
+                message="Workflow SDLC sẽ được khôi phục ở trạng thái gián đoạn"
+                description={recoveryNotice}
+                style={{ marginBottom: 16 }}
+              />
+            )}
 
             <Table
               size="small"

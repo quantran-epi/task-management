@@ -179,6 +179,74 @@ describe('restoreBackupPayload & rollbackToSnapshot', () => {
     expect(projects[0]?.name).toBe('Restored Project');
   });
 
+  it('mirrors a restored SDLC tab workflow state into the settings key the drawer reads', async () => {
+    const projectId = '11111111-1111-4111-8111-111111111111';
+    const threadId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+    const tabId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+    const missingNoteId = '99999999-9999-4999-8999-999999999999';
+    const workflowState = {
+      schemaVersion: 1 as const,
+      sessionId: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+      projectId,
+      threadId,
+      currentStep: 'SOLUTION' as const,
+      metadata: { cr: 'CR-1', featureName: 'F', author: 'A', requestingUnit: 'U', date: '2026-10-30' },
+      artifacts: {
+        pl01: {
+          noteId: missingNoteId,
+          kind: 'PL01' as const,
+          version: 1,
+          hash: '01'.repeat(32),
+          title: 'PL01',
+          sourceHashes: [],
+          updatedAt: '2026-09-27T12:00:00.000Z',
+        },
+      },
+      staleSteps: [],
+      createdAt: '2026-09-27T12:00:00.000Z',
+      updatedAt: '2026-09-27T12:00:00.000Z',
+    };
+    const payload: BackupEnvelope = {
+      ...sampleBackup,
+      tables: {
+        ...sampleBackup.tables,
+        projects: [{ ...sampleBackup.tables.projects[0]!, id: projectId }],
+        chatThreads: [{
+          id: threadId,
+          scopeKey: `project:${projectId}:sdlc`,
+          scopeType: 'project',
+          entityId: projectId,
+          title: 'SDLC',
+          createdAt: '2026-09-27T12:00:00.000Z',
+          updatedAt: '2026-09-27T12:00:00.000Z',
+        }],
+        chatTabs: [{
+          id: tabId,
+          threadId,
+          scopeKey: `project:${projectId}`,
+          type: 'sdlc',
+          title: 'SDLC',
+          order: 0,
+          active: true,
+          workflowState,
+          createdAt: '2026-09-27T12:00:00.000Z',
+          updatedAt: '2026-09-27T12:00:00.000Z',
+        }],
+      },
+      counts: { ...sampleBackup.counts, chatThreads: 1, chatTabs: 1 },
+    };
+
+    await restoreBackupPayload(payload, testDb);
+
+    // The tab row alone is inert; the drawer reads this settings key.
+    const stored = (await testDb.settings.get(`sdlc_workflow:${projectId}:${threadId}`))?.value as
+      | { checkpoint?: { status?: string } }
+      | undefined;
+    expect(stored).toBeDefined();
+    // The validator's blocked-tab `interrupted` checkpoint must win over a stale `running` one.
+    expect(stored?.checkpoint?.status).toBe('interrupted');
+  });
+
   it('restores chat tabs unchanged and rolls snapshot state back byte-for-byte', async () => {
     const localThread: ChatThread = {
       id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',

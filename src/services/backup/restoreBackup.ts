@@ -249,6 +249,17 @@ async function replaceTables(
     await add(targetDb.telegramWhitelist, tables.telegramWhitelist);
     await add(targetDb.activeTimers, tables.activeTimers);
     for (const setting of tables.settings ?? []) if (isSafeBackupSetting(setting.key)) await targetDb.settings.put(setting);
+    // The drawer restores SDLC workflow state from settings, not from the tab row. Mirror the tab's
+    // exported workflowState into that key (and let the validator's `interrupted` checkpoint win),
+    // so the two stores cannot disagree about a restored, blocked workflow.
+    for (const tab of tables.chatTabs ?? []) {
+      if (!tab.workflowState || !tab.scopeKey.startsWith('project:')) continue;
+      const key = `sdlc_workflow:${tab.scopeKey.slice('project:'.length)}:${tab.threadId}`;
+      const existing = await targetDb.settings.get(key);
+      const base = (existing?.value ?? tab.workflowState) as Record<string, unknown>;
+      const checkpoint = tab.workflowState.checkpoint ?? base.checkpoint;
+      await targetDb.settings.put({ key, value: { ...base, ...(checkpoint ? { checkpoint } : {}) } });
+    }
     if (snapshot) await targetDb.settings.put({ key: 'last_pre_import_snapshot', value: snapshot });
     await targetDb.backupMetadata.add({ id: generateId(), timestamp: new Date().toISOString(), appVersion: '0.1.0', recordCount });
   });
