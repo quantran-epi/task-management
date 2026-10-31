@@ -1692,6 +1692,10 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       return;
     }
 
+    // The claim covers persistence and compaction too: a throw there must not strand the tab.
+    // finish() is idempotent, so the streaming finally below may release it a second time.
+    try {
+
     // 2. Retry reuses the original user row; every other send persists a fresh one (D-14).
     let savedUserMsg: ChatMessage | undefined;
     const retryUserMessageId = options?.retryUserMessageId ?? null;
@@ -2581,6 +2585,18 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
       // One clear for every post-setCheckpoint exit: success, abort, error, or early return.
       if (isSdlcActiveTurn) {
         await getSdlcCoordinator()?.clearCheckpoint().catch(() => undefined);
+      }
+    }
+    } finally {
+      // Release the claim opened above every other exit, including throws before streaming starts.
+      if (activeReq) requestRegistryRef.current.finish(activeReq.requestId);
+      // A throw between the claim and the streaming try leaves the tab on `processing` forever.
+      if (tabRuntimes.get(turnTabId)?.requestController === activeReq.controller) {
+        tabRuntimes.patch(turnTabId, {
+          status: 'idle',
+          requestController: undefined,
+          partialBuffer: '',
+        });
       }
     }
   };
