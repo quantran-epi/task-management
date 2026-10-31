@@ -68,6 +68,7 @@ import { AITaskPlannerInstructionsModal } from './AITaskPlannerInstructionsModal
 import { McpSettingsModal } from './McpSettingsModal';
 import { aiDebugService } from '../../services/ai/aiDebugService';
 import { createPhaseLogger } from '../../services/ai/phaseLogger';
+import { logAiChatError } from './aiChatDiagnostics';
 import { APP_NAME } from '../../constants/app';
 import { useAIChat } from '../../context/AIChatContext';
 import { openAiPopout } from '../../utils/aiPopout';
@@ -331,7 +332,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       const list = await getMcpServers(db);
       setMcpServers(list);
     } catch (err) {
-      console.warn('[AIChatDrawer] Failed to load MCP servers:', err);
+      logAiChatError('Failed to load MCP servers', err);
     }
   }, [db]);
 
@@ -550,7 +551,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         }
       } catch (err) {
         tabInitializationRef.current = null;
-        console.warn('[AIChatDrawer] Tab initialization error:', err);
+        logAiChatError('Tab initialization error', err);
       }
     };
 
@@ -565,7 +566,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       try {
         await setActiveTab(scopeKey, tabId, db);
       } catch (err) {
-        console.warn('[AIChatDrawer] Failed to set active tab:', err);
+        logAiChatError('Failed to set active tab', err);
       }
     },
     [db, scopeKey]
@@ -586,7 +587,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       );
       await setActiveTab(scopeKey, newTab.id, db);
     } catch (err) {
-      console.error('[AIChatDrawer] Failed to add tab:', err);
+      logAiChatError('Failed to add tab', err);
       message.error('Không thể tạo tab mới');
     }
   }, [currentScope.id, currentScope.type, db, durableTabs, scopeKey]);
@@ -606,7 +607,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         try {
           await deleteChatTab(tabId, db);
         } catch (err) {
-          console.error('[AIChatDrawer] Failed to delete tab:', err);
+          logAiChatError('Failed to delete tab', err);
           message.error('Không thể đóng tab');
         }
       };
@@ -1112,7 +1113,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         db
       );
     } catch (err) {
-      console.warn('[AIChatDrawer] Failed to update tab analysis mode:', err);
+      logAiChatError('Failed to update tab analysis mode', err);
     }
     message.info(
       nextVal
@@ -1355,7 +1356,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         });
       } catch (compErr: any) {
         if (compErr?.name !== 'AbortError') {
-          console.warn('[AIChatDrawer] Auto context compaction check error:', compErr);
+          logAiChatError('Auto context compaction check error', compErr);
         }
       }
     }
@@ -1632,10 +1633,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         return;
       }
 
-      console.error('[AIChatDrawer] Grounded pipeline or persistence error:', groundedErr);
-      if (groundedErr?.name === 'ZodError' || groundedErr?.issues) {
-        console.error('[AIChatDrawer] Zod validation details:', JSON.stringify(groundedErr.issues, null, 2));
-      }
+      logAiChatError('Grounded pipeline or persistence error', groundedErr);
       setGroundedLoadingStatus(null);
 
       // Fail-closed gate per D-04: If intent router is unavailable, stop immediately.
@@ -1711,13 +1709,13 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           }
         }
       } catch (err) {
-        console.warn('[AIChatDrawer] Context grounding resolution error:', err);
+        logAiChatError('Context grounding resolution error', err);
       }
     } else if (effectiveScope.type === 'global') {
       try {
         systemInstruction = await buildGlobalContextPrompt(db);
       } catch (err) {
-        console.warn('[AIChatDrawer] Global context prompt resolution error:', err);
+        logAiChatError('Global context prompt resolution error', err);
       }
     }
 
@@ -1744,7 +1742,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           mentionedContexts.push(serialized);
         }
       } catch (err) {
-        console.warn(`[AIChatDrawer] Grounding error for task ${tid}:`, err);
+        logAiChatError(`Grounding error for task ${tid}`, err);
       }
     }
 
@@ -1762,7 +1760,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           mentionedContexts.push(serialized);
         }
       } catch (err) {
-        console.warn(`[AIChatDrawer] Grounding error for project ${pid}:`, err);
+        logAiChatError(`Grounding error for project ${pid}`, err);
       }
     }
 
@@ -1797,14 +1795,14 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     try {
       dynamicMcpTools = await discoverAllMcpTools(db);
     } catch (err) {
-      console.warn('[AIChatDrawer] MCP discovery unavailable:', err);
+      logAiChatError('MCP discovery unavailable', err);
     }
     const toolsForTurn = getToolsForTurn(effectiveAnalysisMode, dynamicMcpTools);
     let dynamicMcpInstructions = '';
     try {
       dynamicMcpInstructions = await getEnabledMcpInstructions(db);
     } catch (err) {
-      console.warn('[AIChatDrawer] MCP instruction resolution error:', err);
+      logAiChatError('MCP instruction resolution error', err);
     }
 
     const systemPromptContent = `You are an expert AI assistant embedded inside ${APP_NAME}.
@@ -1863,7 +1861,9 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
         : ''
     }`;
 
-    console.log('[AI Harness] 📝 Injected Context Grounding:\n', systemPromptContent);
+    if (import.meta.env.DEV) {
+      console.log('[AI Harness] 📝 Injected Context Grounding:\n', systemPromptContent);
+    }
     recentMsgs.push({
       role: 'system',
       content: systemPromptContent,
@@ -1973,7 +1973,9 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
         },
         onToolCall: (call) => {
           toolCallsById.set(call.id, { name: call.name, args: call.args });
-          console.log(`[AI Harness] 🛠️ Model invoked tool "${call.name}":`, call.args);
+          if (import.meta.env.DEV) {
+            console.log(`[AI Harness] 🛠️ Model invoked tool "${call.name}":`, call.args);
+          }
           aiDebugService.recordToolCall(turnId, call);
         },
         onToolResult: (callId, result, durationMs) => {
@@ -1989,7 +1991,9 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
               isMutation: call ? isMutationTool(call.name, call.args) : false,
             },
           });
-          console.log(`[AI Harness] 📦 Tool result for "${call?.name || callId}":`, result);
+          if (import.meta.env.DEV) {
+            console.log(`[AI Harness] 📦 Tool result for "${call?.name || callId}":`, result);
+          }
           aiDebugService.recordToolResult(turnId, callId, result, durationMs);
         },
         onMutationCheck: async (toolName, args) => {
@@ -2003,7 +2007,9 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
             };
           }
           if (autoApproveMutations) {
-            console.log(`[AI Harness] ⚡ Auto-approving mutation tool "${toolName}" (bypass active)`);
+            if (import.meta.env.DEV) {
+              console.log(`[AI Harness] ⚡ Auto-approving mutation tool "${toolName}" (bypass active)`);
+            }
             return { proceed: true };
           }
 
