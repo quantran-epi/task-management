@@ -288,7 +288,7 @@ Plans: 11 plans in 11 sequential waves (every plan edits `AIChatDrawer.tsx` or i
 
 **Wave 7** *(depends on 25.1.1-06)*
 
-- [ ] 25.1.1-07-PLAN.md — Hub export rows on steps 1/5/6 and CAB generation wired to `commitCab`, with the resolved PL02 pin recorded back into workflow state
+- [x] 25.1.1-07-PLAN.md — Hub export rows on steps 1/5/6 and CAB generation wired to `commitCab`; the PL02 pin stays internal to `generateHubCab` and is re-derived from the content hash, never written back into workflow state
 
 **Wave 8** *(depends on 25.1.1-07)*
 

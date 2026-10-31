@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: milestone
 status: executing
-stopped_at: "25.1.1-06 complete — next: plan 25.1.1-07 (hub export rows and commitCab caller)"
-last_updated: "2026-11-01T03:05:00Z"
-last_activity: 2026-11-01 -- Plan 25.1.1-06 complete (export and CAB services)
+stopped_at: "25.1.1-07 complete — next: plan 25.1.1-08 (remove the wizard surface)"
+last_updated: "2026-11-01T03:20:00Z"
+last_activity: 2026-11-01 -- Plan 25.1.1-07 complete (hub export rows and commitCab caller)
 progress:
   total_phases: 11
   completed_phases: 7
   total_plans: 84
-  completed_plans: 80
+  completed_plans: 81
   percent: 66
 ---
 
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 ## Current Position
 
 Phase: 25.1.1 (unify-sdlc-workflow-move-change-pack-pl03b-pl07-generation-c) — IN PROGRESS
-Plan: 6 of 11 complete (25.1.1-01, 25.1.1-02, 25.1.1-03, 25.1.1-04, 25.1.1-05, 25.1.1-06)
-Status: Plan 25.1.1-06 complete; wave 6 done, next is 25.1.1-07 (hub export rows and commitCab caller)
-Last activity: 2026-11-01 -- Plan 25.1.1-06 complete (export and CAB services)
-Stopped at: 25.1.1-06 complete — next: plan 25.1.1-07 (hub export rows and commitCab caller)
+Plan: 7 of 11 complete (25.1.1-01, 25.1.1-02, 25.1.1-03, 25.1.1-04, 25.1.1-05, 25.1.1-06, 25.1.1-07)
+Status: Plan 25.1.1-07 complete; wave 7 done, next is 25.1.1-08 (remove the wizard surface)
+Last activity: 2026-11-01 -- Plan 25.1.1-07 complete (hub export rows and commitCab caller)
+Stopped at: 25.1.1-07 complete — next: plan 25.1.1-08 (remove the wizard surface)
 
 Progress: [██████████] 100%
 
