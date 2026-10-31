@@ -4,6 +4,7 @@ import {
   configureSqlitePath,
   enqueueLocalSqliteChange,
   flushLocalSqliteNow,
+  hydrateDexieFromSqlite,
   SQLITE_SETTING_KEYS,
   SQLITE_DOMAIN_TABLES,
 } from '../../src/services/localSqlitePersistence';
@@ -168,5 +169,27 @@ describe('localSqlitePersistence', () => {
         },
       ]),
     });
+  });
+
+  it('never copies AI or knowledge credentials into the local SQLite queue', async () => {
+    for (const key of ['ninerouter_api_key', 'knowledge_server_token', 'image_api_key', 'github_token']) {
+      enqueueLocalSqliteChange(db, 'settings', key, { key, value: 'secret-value' }, false);
+    }
+
+    const queue = (await db.settings.get(SQLITE_SETTING_KEYS.queue))?.value;
+    expect(queue ?? []).toEqual([]);
+  });
+
+  it('skips a malformed SQLite row instead of aborting hydration', async () => {
+    await db.settings.bulkPut([{ key: SQLITE_SETTING_KEYS.path, value: 'tasks.sqlite' }]);
+    invokeMock.mockResolvedValueOnce([
+      { tableName: 'tasks', rowId: 'good-1', payloadJson: JSON.stringify({ id: 'good-1' }), updatedAt: 'now' },
+      { tableName: 'tasks', rowId: 'bad-1', payloadJson: '{not json', updatedAt: 'now' },
+    ]);
+
+    const hydrated = await hydrateDexieFromSqlite(db);
+
+    expect(hydrated).toBe(1);
+    await expect(db.tasks.get('good-1')).resolves.toBeDefined();
   });
 });

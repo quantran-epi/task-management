@@ -1,6 +1,7 @@
 import Dexie, { type Table } from 'dexie';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import type { Setting } from '../types/models';
+import { UNSAFE_OR_EPHEMERAL_SETTING_KEYS } from './backup/exportBackup';
 
 export const SQLITE_SETTING_KEYS = {
   path: 'tauri_sqlite_path',
@@ -63,16 +64,9 @@ const INTERNAL_SETTING_KEYS = new Set<string>([
   SQLITE_SETTING_KEYS.lastFlushAt,
   SQLITE_SETTING_KEYS.missingPath,
 ]);
-export const EXCLUDED_SETTING_KEYS = new Set<string>([
-  'jira_api_token',
-  'github_pat',
-  'github_token',
-  'github_passphrase',
-  'backup_passphrase',
-  'tauri_keyring_migrated',
-]);
-
-const SECRET_SETTING_KEYS = EXCLUDED_SETTING_KEYS;
+// One deny-list for both boundaries: a key the backup refuses to persist must not be copied into
+// the local SQLite file in plaintext either (ninerouter_api_key, knowledge_server_token, ...).
+const SECRET_SETTING_KEYS = UNSAFE_OR_EPHEMERAL_SETTING_KEYS;
 
 function coalesceQueue(queue: QueuedSqliteChange[], change: QueuedSqliteChange): QueuedSqliteChange[] {
   return [...queue.filter((item) => item.tableName !== change.tableName || item.rowId !== change.rowId), change];
@@ -247,17 +241,27 @@ export async function hydrateDexieFromSqlite(db: TaskPlannerDatabase = defaultDb
     throw err;
   }
 
+  let hydrated = 0;
+  let skipped = 0;
   for (const row of rows) {
     if (!isSqliteTableName(row.tableName)) continue;
-    const parsed = JSON.parse(row.payloadJson);
-    if (row.tableName === 'noteAttachments' && parsed && typeof parsed === 'object') {
-      if (!parsed.data) {
-        parsed.data = new Blob([], { type: parsed.mimeType || 'application/octet-stream' });
+    try {
+      const parsed = JSON.parse(row.payloadJson);
+      if (row.tableName === 'noteAttachments' && parsed && typeof parsed === 'object') {
+        if (!parsed.data) {
+          parsed.data = new Blob([], { type: parsed.mimeType || 'application/octet-stream' });
+        }
       }
+      await db.table(row.tableName).put(parsed);
+      hydrated += 1;
+    } catch (err) {
+      // One malformed row must not abort the batch after partial writes.
+      skipped += 1;
+      console.warn(`Skipped malformed local SQLite row ${row.tableName}/${row.rowId}:`, normalizeErrorCode(err));
     }
-    await db.table(row.tableName).put(parsed);
   }
-  return rows.length;
+  if (skipped > 0) console.warn(`Local SQLite hydration skipped ${skipped} of ${rows.length} rows.`);
+  return hydrated;
 }
 
 export function attachSqliteTableHooks(db: TaskPlannerDatabase = defaultDb): () => void {
