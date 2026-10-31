@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: milestone
 status: executing
-stopped_at: Completed 25.1-12-PLAN.md (SDLC checkpoint/resume, revision preview+commit, stale baseline, cycle open/close); next 25.1-13
-last_updated: "2026-10-31T09:15:00.000Z"
-last_activity: 2026-10-31 -- Completed plan 25.1-12
+stopped_at: Completed 25.1-13-PLAN.md (merged cited SDLC intake, picker listbox semantics, editable tab titles); next 25.1-14
+last_updated: "2026-10-31T09:10:00.000Z"
+last_activity: 2026-10-31 -- Completed plan 25.1-13
 progress:
   total_phases: 10
   completed_phases: 6
   total_plans: 84
-  completed_plans: 73
+  completed_plans: 74
   percent: 61
 ---
 
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 ## Current Position
 
 Phase: 25.1 (sdlc-flow-hardening-multi-tab-ai-chat-isolation) — EXECUTING
-Plan: 12 of 15
+Plan: 13 of 15
 Status: Executing Phase 25.1
-Last activity: 2026-10-31 -- Completed plan 25.1-12
-Stopped at: 25.1-12 complete; next is 25.1-13 (merged cited SDLC intake, picker semantics, editable tab titles)
+Last activity: 2026-10-31 -- Completed plan 25.1-13
+Stopped at: 25.1-13 complete; next is 25.1-14 (retry identity, restore missing-source surfacing, durable-only analysis mode)
 
 Progress: [██████████] 100%
 
@@ -196,6 +196,7 @@ Progress: [██████████] 100%
 | 16 | 01 | 8m | 2 | 5 |
 | 18 | 02 | 18m | 2 | 7 |
 | 25.1 | 11 | 3h 30m | 3 | 8 |
+| 25.1 | 13 | 40m | 3 | 6 |
 
 *Updated after each plan completion*
 | Phase 16 P06 | 15min | 1 tasks | 2 files |
@@ -248,6 +249,10 @@ Recent decisions logged in PROJECT.md:
 - [Phase 25.1 Plan 12]: The interrupted guard is bypassed only by the call argument `{ resumeFromCheckpoint: true }`, never by state, so stale send closures cannot block the resume dispatch.
 - [Phase 25.1 Plan 12]: The hub's own revision modal is used (`onRequest*Revision` stays unset); the drawer previews via `previewRevision` and commits via `commitRevision`, opening a new cycle only when the last one is completed.
 - [Phase 25.1 Plan 12]: `stripStaleArtifacts` is applied once at the `buildSdlcWrapperPrompt` artifacts argument so a stale artifact can never be a new step's baseline; CAB success closes the active cycle.
+- [Phase 25.1 Plan 13]: SDLC intake is built from `buildMergedSdlcInput` at the production call site, and citation identity (kind/title/version/hash) is resolved by `citation.sourceId` lookup because `SdlcCitation` carries none of those fields.
+- [Phase 25.1 Plan 13]: Resolved source ids live in `sdlcSourceReferencesRef` keyed by `scopeKey`; the wrapper prompt reads them only on an exact scopeKey match, so a stale entry is ignored rather than cleared and ids never leak across projects.
+- [Phase 25.1 Plan 13]: The Note picker resets its selection on the joined contents of `initialSelectedIds`, not the array identity, because `StepInputDocsModal` passes a fresh array every render and the old dependency wiped picks mid-interaction.
+- [Phase 25.1 Plan 13]: Roving tabindex moved to the listbox container so focus stays on the composite widget and `aria-activedescendant` tracks the active row; ordinary tab rename commits on Enter/blur and cancels on Escape via a cancel flag (Escape unmounts the input, which also fires blur).
 
 - [Phase 19.2 Plan 07]: Dexie upgrades to SCHEMA_V11 adding knowledgeLinks table with unique compound linkKey (`${taskMateEntityType}:${taskMateEntityId}:${setId}:${urn || docId}`) preserving full data integrity from V10.
 - [Phase 19.2 Plan 07]: Deleting Task, Project, or Milestone cascades to purge all corresponding KnowledgeLinks atomically inside Dexie transactions.
@@ -370,6 +375,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-31T08:30:00.000Z
-Stopped at: Completed 25.1-11-PLAN.md; next 25.1-12-PLAN.md
+Last session: 2026-10-31T09:10:00.000Z
+Stopped at: Completed 25.1-13-PLAN.md; next 25.1-14-PLAN.md
 Resume file: .planning/phases/25.1-sdlc-flow-hardening-multi-tab-ai-chat-isolation/25.1-CONTEXT.md
