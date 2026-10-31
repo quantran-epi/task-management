@@ -1,19 +1,28 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   AuditOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
   CodeOutlined,
+  DownOutlined,
   FileDoneOutlined,
   FileTextOutlined,
   InboxOutlined,
   ReloadOutlined,
   SafetyCertificateOutlined,
   SyncOutlined,
+  UpOutlined,
 } from '@ant-design/icons';
 import { Alert, Badge, Button, Card, Input, Popconfirm, Space, Tag, Typography, theme } from 'antd';
 import type { SdlcStepId, SdlcWorkflowState } from '../../../services/wizard/workflowSchemas';
 import { RevisionImpactModal } from './RevisionImpactModal';
+import {
+  StepCabPanel,
+  StepChangePackPanel,
+  StepIntakePanel,
+  StepSolutionPanel,
+  StepTechDocsPanel,
+} from './HubStepPanels';
 
 const { Text } = Typography;
 
@@ -27,6 +36,14 @@ export interface SdlcWorkflowHubProps {
   onResetWorkflow?: (() => void) | undefined;
   onRequestRequirementRevision?: (() => void) | undefined;
   onRequestSolutionRevision?: (() => void) | undefined;
+  /** Wired panels injected by the drawer; a missing slot falls back to the panel fed from `state`. */
+  stepPanels?: {
+    intake?: React.ReactNode;
+    solution?: React.ReactNode;
+    changePack?: React.ReactNode;
+    techDocs?: React.ReactNode;
+    cab?: React.ReactNode;
+  } | undefined;
   revisionDraft?: string | undefined;
   revisionPreview?: {
     diff: { before: string; after: string };
@@ -109,6 +126,7 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = ({
   onResetWorkflow,
   onRequestRequirementRevision,
   onRequestSolutionRevision,
+  stepPanels,
   revisionDraft: controlledRevisionDraft,
   revisionPreview,
   revisionLoading = false,
@@ -118,6 +136,10 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = ({
 }) => {
   const { token } = theme.useToken();
   const [localSelectedStep, setLocalSelectedStep] = useState<SdlcStepId | null>(null);
+  const [timelineExpanded, setTimelineExpanded] = useState(true);
+  const [focusedStep, setFocusedStep] = useState<SdlcStepId | null>(null);
+  const timelineToggleRef = useRef<HTMLButtonElement | HTMLAnchorElement>(null);
+  const timelineListRef = useRef<HTMLDivElement>(null);
   const [revisionModalType, setRevisionModalType] = useState<'requirement' | 'solution' | null>(null);
   const [revisionDraft, setRevisionDraft] = useState('');
   const effectiveRevisionDraft = controlledRevisionDraft ?? revisionDraft;
@@ -183,6 +205,17 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = ({
   const handleStepClick = (stepId: SdlcStepId) => {
     setLocalSelectedStep(stepId);
     onSelectStep?.(stepId);
+  };
+
+  // Collapse never hides focus: move it to the toggle before the rows go away.
+  const toggleTimeline = () => {
+    const focusInsideList = Boolean(
+      timelineListRef.current && document.activeElement && timelineListRef.current.contains(document.activeElement),
+    );
+    if (timelineExpanded && focusInsideList) {
+      timelineToggleRef.current?.focus();
+    }
+    setTimelineExpanded((prev) => !prev);
   };
 
   // Cycles calculation
@@ -261,6 +294,16 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = ({
                 </Button>
               </Popconfirm>
             )}
+            <Button
+              ref={timelineToggleRef}
+              type="text"
+              size="small"
+              icon={timelineExpanded ? <UpOutlined /> : <DownOutlined />}
+              aria-expanded={timelineExpanded}
+              aria-controls="sdlc-step-list"
+              aria-label={timelineExpanded ? 'Thu gọn quy trình' : 'Mở rộng quy trình'}
+              onClick={toggleTimeline}
+            />
           </Space>
         </div>
       }
@@ -283,7 +326,7 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = ({
             Chu kỳ {currentCycleNumber} — {currentCycleStatus === 'completed' ? 'Hoàn tất' : 'Đang thực hiện'}
           </span>
           {pastCycles.length > 0 && (
-            <span style={{ fontSize: 11, color: token.colorTextSecondary }}>
+            <span style={{ fontSize: 12, color: token.colorTextSecondary }}>
               ({pastCycles.length} chu kỳ cũ)
             </span>
           )}
@@ -301,7 +344,7 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = ({
                   padding: '2px 8px',
                   borderRadius: token.borderRadiusSM,
                   backgroundColor: token.colorBgContainer,
-                  fontSize: 11,
+                  fontSize: 12,
                   color: token.colorTextSecondary,
                 }}
               >
@@ -313,10 +356,29 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = ({
         )}
       </div>
 
+      {/* Collapsed summary replaces the rows visually; the list itself stays in the DOM. */}
+      {!timelineExpanded && (
+        <div
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            lineHeight: 1.4,
+            color: token.colorTextSecondary,
+            padding: '2px 0 8px',
+          }}
+        >
+          Bước {selectedStepIndex + 1}/6 — {selectedConfig.shortTitle}
+          {hasStale ? ` · ${state.staleSteps.length} bước cần cập nhật` : ''}
+        </div>
+      )}
+
       {/* D-16 Vertical 6-step timeline in 1 column (no horizontal overflow, wraps at 320px) */}
       <div
+        ref={timelineListRef}
+        id="sdlc-step-list"
         role="list"
         aria-label="Quy trình 6 bước SDLC"
+        hidden={!timelineExpanded}
         style={{
           display: 'flex',
           flexDirection: 'column',
@@ -375,6 +437,8 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = ({
                 aria-current={isProcessing && isSelected ? 'step' : undefined}
                 aria-selected={isSelected}
                 onClick={() => handleStepClick(cfg.id)}
+                onFocus={() => setFocusedStep(cfg.id)}
+                onBlur={() => setFocusedStep((prev) => (prev === cfg.id ? null : prev))}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -390,7 +454,8 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = ({
                   textAlign: 'left',
                   cursor: 'pointer',
                   boxSizing: 'border-box',
-                  outline: 'none',
+                  outline: focusedStep === cfg.id ? `2px solid ${token.colorPrimary}` : 'none',
+                  outlineOffset: 2,
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
@@ -409,7 +474,7 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = ({
                     {icon}
                   </span>
                   <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: token.colorTextSecondary }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
                       Bước {cfg.stepNumber}
                     </span>
                     <span
@@ -474,18 +539,19 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = ({
         <div
           style={{
             display: 'flex',
+            flexWrap: 'wrap',
             alignItems: 'center',
-            justifyContent: 'space-between',
             gap: 8,
-            fontSize: 12,
             color: token.colorTextSecondary,
           }}
         >
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <Text strong style={{ fontSize: 12, color: token.colorText }}>
+          <div style={{ flex: '1 1 200px', minWidth: 0 }}>
+            <div style={{ fontSize: 16, fontWeight: 600, lineHeight: 1.3, color: token.colorText }}>
               Bước {selectedStepIndex + 1}/6: {selectedConfig.title}
-            </Text>
-            <span style={{ marginLeft: 6 }}>— {selectedConfig.hint}</span>
+            </div>
+            <div style={{ fontSize: 14, fontWeight: 400, lineHeight: 1.5, wordBreak: 'break-word' }}>
+              — {selectedConfig.hint}
+            </div>
           </div>
 
           {/* Cập nhật lại is allowed only for the current processing step when stale */}
@@ -500,6 +566,58 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = ({
               Cập nhật lại
             </Button>
           )}
+        </div>
+
+        <div
+          data-testid={`hub-panel-${selectedStep}`}
+          style={{ borderTop: `1px solid ${token.colorBorderSecondary}`, paddingTop: 8 }}
+        >
+          {selectedStep === 'INTAKE' &&
+            (stepPanels?.intake ?? (
+              <StepIntakePanel
+                pl01={state.artifacts.pl01}
+                pl02={state.artifacts.pl02}
+                onEditIntake={onStartWorkflow}
+              />
+            ))}
+          {selectedStep === 'SOLUTION' &&
+            (stepPanels?.solution ?? (
+              <StepSolutionPanel artifact={state.artifacts.solution} stale={isSelectedStale} canSave={false} />
+            ))}
+          {/* Step 3 carries no artifact, no action and no export — hint body only, by design. */}
+          {selectedStep === 'CODE_GUIDE' && (
+            <div style={{ fontSize: 14, fontWeight: 400, lineHeight: 1.5, color: token.colorTextSecondary, wordBreak: 'break-word' }}>
+              {selectedConfig.hint}
+            </div>
+          )}
+          {selectedStep === 'CHANGE_PACK' &&
+            (stepPanels?.changePack ?? (
+              <StepChangePackPanel
+                artifact={state.artifacts.changePack}
+                driftResult={state.artifacts.driftResult}
+                stale={isSelectedStale}
+                cr={state.metadata.cr}
+              />
+            ))}
+          {selectedStep === 'TECH_DOCS' &&
+            (stepPanels?.techDocs ?? (
+              <StepTechDocsPanel
+                pl03b={state.artifacts.pl03b}
+                pl07={state.artifacts.pl07}
+                stale={isSelectedStale}
+              />
+            ))}
+          {selectedStep === 'CAB' &&
+            (stepPanels?.cab ?? (
+              <StepCabPanel
+                cab={state.artifacts.cab}
+                prerequisites={{
+                  pl02: Boolean(state.artifacts.pl02),
+                  pl03b: Boolean(state.artifacts.pl03b),
+                  pl07: Boolean(state.artifacts.pl07),
+                }}
+              />
+            ))}
         </div>
       </div>
 

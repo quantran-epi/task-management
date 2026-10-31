@@ -365,7 +365,7 @@ export const NoteSourcePickerModal: React.FC<NoteSourcePickerModalProps> = ({
                     <span style={{ fontSize: 16, fontWeight: 600, color: token.colorText }}>
                       {activePreviewNote.title || 'Untitled Note'}
                     </span>
-                    <div style={{ fontSize: 11, color: token.colorTextSecondary }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
                       Phiên bản: {activePreviewNote.sdlcArtifact?.version ?? 1} · ID: {activePreviewNote.id.slice(0, 8)}...
                     </div>
                   </div>
