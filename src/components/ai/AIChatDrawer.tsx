@@ -2722,7 +2722,33 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
       onOk: async () => {
         await clearAllChatHistory(db);
         for (const runtime of Object.values(tabRuntimesRef.current.getSnapshot())) {
-          tabRuntimesRef.current.patch(runtime.tabId, { references: [] });
+          tabRuntimesRef.current.discard(runtime.tabId);
+        }
+        setTransientClarifyMessage(null);
+        setLatestRoutedScope(null);
+        sdlcCoordinatorRef.current = null;
+        sdlcCoordinatorThreadRef.current = null;
+        setSdlcWorkflowState(undefined);
+        // The reset deleted every tab row, so rebuild the scope's bootstrap tabs here; the initTabs
+        // effect will not re-run because its dependencies did not change.
+        try {
+          if (isProjectScope && currentScope.id) {
+            const sdlcTab = await getOrCreateSdlcTab(currentScope.id, db);
+            await createChatTab(
+              {
+                scopeType: currentScope.type,
+                scopeKey,
+                entityId: currentScope.id,
+                title: '💬 Tra cứu & Hỏi đáp',
+              },
+              db
+            );
+            await setActiveTab(scopeKey, sdlcTab.id, db);
+          } else {
+            await ensureTurnTab();
+          }
+        } catch (err) {
+          logAiChatError('Failed to rebuild chat tabs after history reset', err);
         }
         message.success('Đã xóa sạch toàn bộ lịch sử trò chuyện AI');
       },

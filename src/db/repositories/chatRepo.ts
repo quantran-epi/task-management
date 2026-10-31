@@ -175,12 +175,21 @@ export async function clearThreadMessages(
   });
 }
 
+/**
+ * Wipes every conversation and keeps the tab/thread invariant intact.
+ * Tabs must die with their threads: a surviving tab with a deleted threadId makes the app's own
+ * backup fail validation (`ChatTab references threadId ... not found`), and the next send writes
+ * into a thread no tab can display. SDLC workflow settings are scoped by threadId, so they go too.
+ * The first tab (and the SDLC tab) is recreated lazily by the normal bootstrap paths.
+ */
 export async function clearAllChatHistory(
   db: TaskPlannerDatabase = defaultDb
 ): Promise<void> {
-  await db.transaction('rw', [db.chatThreads, db.chatMessages], async () => {
+  await db.transaction('rw', [db.chatThreads, db.chatMessages, db.chatTabs, db.settings], async () => {
     await db.chatMessages.clear();
     await db.chatThreads.clear();
+    await db.chatTabs.clear();
+    await db.settings.filter((row) => String(row.key).startsWith('sdlc_workflow:')).delete();
   });
 }
 

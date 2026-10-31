@@ -82,18 +82,25 @@ describe('AI File Reference & Grounding', () => {
       expect(deleteMock).toHaveBeenCalled();
     });
 
-    it('clearAllChatHistory clears both chatMessages and chatThreads tables', async () => {
+    it('clearAllChatHistory clears messages, threads, tabs, and SDLC workflow settings', async () => {
       const clearMsgsMock = vi.fn().mockResolvedValue(undefined);
       const clearThreadsMock = vi.fn().mockResolvedValue(undefined);
+      const clearTabsMock = vi.fn().mockResolvedValue(undefined);
+      const deleteSdlcSettingsMock = vi.fn().mockResolvedValue(2);
       const mockDb = {
         chatMessages: { clear: clearMsgsMock },
         chatThreads: { clear: clearThreadsMock },
+        chatTabs: { clear: clearTabsMock },
+        settings: { filter: vi.fn().mockReturnValue({ delete: deleteSdlcSettingsMock }) },
         transaction: vi.fn().mockImplementation((_mode, _tables, cb) => cb()),
       } as unknown as TaskPlannerDatabase;
 
       await clearAllChatHistory(mockDb);
       expect(clearMsgsMock).toHaveBeenCalled();
       expect(clearThreadsMock).toHaveBeenCalled();
+      // Tabs must not outlive their threads: a stale tab row fails the app's own backup validation.
+      expect(clearTabsMock).toHaveBeenCalled();
+      expect(deleteSdlcSettingsMock).toHaveBeenCalled();
     });
   });
 
