@@ -1658,6 +1658,23 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       );
     }
 
+    // Claim the tab BEFORE persisting the user row. `begin` fails closed when the tab already has
+    // a current request (the pre-guard happens several awaits earlier), and a detached turn would
+    // leave a user bubble with no answer and no error.
+    tabRuntimes.initialize(turnTabId, activeThread.id);
+    const activeReq = requestRegistryRef.current.begin(turnTabId, activeThread.id);
+    if (!activeReq) {
+      tabRuntimes.patch(turnTabId, {
+        status: 'error',
+        error: {
+          code: 'request_failed',
+          message: 'Tab này đang xử lý một yêu cầu khác. Vui lòng đợi yêu cầu đó hoàn tất.',
+          requestId: generateId(),
+        },
+      });
+      return;
+    }
+
     // 2. Retry reuses the original user row; every other send persists a fresh one (D-14).
     let savedUserMsg: ChatMessage | undefined;
     const retryUserMessageId = options?.retryUserMessageId ?? null;
@@ -1689,9 +1706,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     });
 
     // Own a fresh turn controller for THIS tab. Never abort another tab's request (D-06/D-10).
-    tabRuntimes.initialize(turnTabId, activeThread.id);
-    const activeReq = requestRegistryRef.current.begin(turnTabId, activeThread.id);
-    const controller = activeReq?.controller ?? new AbortController();
+    const controller = activeReq.controller;
     // Single owner of requestController: stop/close/unmount read it from here (SC-2).
     tabRuntimes.patch(turnTabId, {
       requestController: controller,
@@ -1823,28 +1838,30 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       knowledgeToken: knowledgeConfig.token,
       db,
     });
+    // Every transient write in this turn names its owner explicitly: turnTabId is captured above,
+    // so a concurrent turn in another tab cannot overwrite turnTabIdRef and steal the status.
     const routeScope = deps.routeScope;
     deps.routeScope = (input, routeDeps) => {
-      patchGroundedLoading('Đang xác định phạm vi tài liệu...');
+      patchGroundedLoading('Đang xác định phạm vi tài liệu...', turnTabId);
       return routeScope(input, routeDeps);
     };
     const retrieveFederated = deps.retrieveFederated;
     deps.retrieveFederated = (request, signal) => {
-      patchGroundedLoading('Đang truy xuất tài liệu và đồ thị liên quan...');
+      patchGroundedLoading('Đang truy xuất tài liệu và đồ thị liên quan...', turnTabId);
       return retrieveFederated(request, signal);
     };
     const runLocalBm25 = deps.runLocalBm25;
     deps.runLocalBm25 = (input, localDeps) => {
-      patchGroundedLoading('Đang tìm kiếm trong tài liệu cục bộ...');
+      patchGroundedLoading('Đang tìm kiếm trong tài liệu cục bộ...', turnTabId);
       return runLocalBm25(input, localDeps);
     };
     const synthesizeGroundedAnswer = deps.synthesizeGroundedAnswer;
     deps.synthesizeGroundedAnswer = (input) => {
-      patchGroundedLoading('Đang tổng hợp câu trả lời từ bằng chứng...');
+      patchGroundedLoading('Đang tổng hợp câu trả lời từ bằng chứng...', turnTabId);
       return synthesizeGroundedAnswer(input);
     };
     try {
-      patchGroundedLoading('Đang phân tích ý định câu hỏi...');
+      patchGroundedLoading('Đang phân tích ý định câu hỏi...', turnTabId);
       const groundedResult = await runGroundedTurn(
         {
           query: effectiveQuery,
@@ -1886,9 +1903,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       setTransientClarifyMessage(turnTabId, null);
 
       if (groundedResult.kind === 'operational') {
-        patchGroundedLoading('Đang chuẩn bị ngữ cảnh TaskMate...');
+        patchGroundedLoading('Đang chuẩn bị ngữ cảnh TaskMate...', turnTabId);
       } else {
-        patchGroundedLoading('Đang xử lý kết quả tra cứu...');
+        patchGroundedLoading('Đang xử lý kết quả tra cứu...', turnTabId);
       }
 
         if (groundedResult.kind === 'clarify_entity') {
@@ -2054,7 +2071,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       }
 
       logAiChatError('Grounded pipeline or persistence error', groundedErr);
-      patchGroundedLoading(null);
+      patchGroundedLoading(null, turnTabId);
 
       // Fail-closed gate per D-04: If intent router is unavailable, stop immediately.
       if (
@@ -2064,7 +2081,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       ) {
         patchTurnError(
           'request_failed',
-          'Trợ lý AI tạm thời không khả dụng. Vui lòng kiểm tra lại cấu hình kết nối AI.'
+          'Trợ lý AI tạm thời không khả dụng. Vui lòng kiểm tra lại cấu hình kết nối AI.',
+          turnTabId
         );
         if (activeReq) requestRegistryRef.current.finish(activeReq.requestId);
         return;
@@ -2072,7 +2090,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
       patchTurnError(
         'invalid_response',
-        'Không thể lưu câu trả lời hoặc dữ liệu tri thức không hợp lệ. Vui lòng thử lại.'
+        'Không thể lưu câu trả lời hoặc dữ liệu tri thức không hợp lệ. Vui lòng thử lại.',
+        turnTabId
       );
       if (activeReq) requestRegistryRef.current.finish(activeReq.requestId);
       return;
@@ -2086,7 +2105,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     }
 
     if (!apiKey) {
-      patchTurnError('request_failed', 'Chưa cấu hình API Key 9router. Vui lòng mở Cài đặt AI để thiết lập.');
+      patchTurnError('request_failed', 'Chưa cấu hình API Key 9router. Vui lòng mở Cài đặt AI để thiết lập.', turnTabId);
       if (activeReq) requestRegistryRef.current.finish(activeReq.requestId);
       return;
     }
@@ -2315,7 +2334,7 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
     }
 
     // 5. Start SSE Streaming with Tool Execution Harness
-    patchGroundedLoading(null);
+    patchGroundedLoading(null, turnTabId);
     tabRuntimes.patch(turnTabId, {
       streamingText: '',
       streamingStatus: 'Đang kết nối 9router...',
@@ -2506,7 +2525,8 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
         // Empty output is an error turn: keep the runtime error card, do not reset it to idle below.
         patchTurnError(
           'invalid_response',
-          'Mô hình AI không trả về nội dung (phản hồi rỗng). Vui lòng thử lại hoặc chọn mô hình khác.'
+          'Mô hình AI không trả về nội dung (phản hồi rỗng). Vui lòng thử lại hoặc chọn mô hình khác.',
+          turnTabId
         );
       }
       aiDebugService.finishTurn(turnId, { finalResponse: fullResponse });

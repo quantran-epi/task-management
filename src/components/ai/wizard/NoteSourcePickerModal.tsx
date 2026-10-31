@@ -53,11 +53,18 @@ export const NoteSourcePickerModal: React.FC<NoteSourcePickerModalProps> = ({
   const [applying, setApplying] = useState(false);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
 
-  // Parents pass a fresh array on every render; keying the reset on contents keeps selection stable.
-  const initialSelectedKey = [...initialSelectedIds].sort().join(',');
+  // Reset on the closed→open transition only. Parents pass a fresh `initialSelectedIds` array on
+  // every render, so keying the reset on its contents discarded checkboxes the user had just
+  // ticked and made "select + apply" a retry loop.
+  const wasOpen = useRef(false);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      wasOpen.current = false;
+      return;
+    }
+    if (wasOpen.current) return;
+    wasOpen.current = true;
     setSelectedIds(new Set(initialSelectedIds));
     setSearchQuery('');
     setScope('project');
@@ -70,7 +77,9 @@ export const NoteSourcePickerModal: React.FC<NoteSourcePickerModalProps> = ({
       setPreviewNoteId(firstSelected ? firstSelected.id : null);
       setFocusedNoteId(firstSelected?.id ?? nonDeleted[0]?.id ?? null);
     });
-  }, [initialSelectedKey, open, projectId]);
+    // initialSelectedIds is intentionally read only on open; its identity changes every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, projectId]);
 
   const modalTitle =
     title ?? (kind === 'PL01' ? 'Chọn nguồn yêu cầu nghiệp vụ (PL01)' : 'Chọn nguồn đặc tả chức năng (PL02)');
