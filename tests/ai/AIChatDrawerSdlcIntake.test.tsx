@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { AIChatDrawer } from '../../src/components/ai/AIChatDrawer';
 // The Note picker reads the app-wide db singleton, so the drawer is mounted on the same instance.
 import { db } from '../../src/db';
+import type { Note } from '../../src/types/models';
 import * as nineRouterTokenService from '../../src/services/ai/nineRouterTokenService';
 import * as nineRouterClient from '../../src/services/ai/nineRouterClient';
 
@@ -29,11 +30,11 @@ function note(id: string, entityId: string, title: string, body: string, version
     id,
     title,
     body,
-    entityType: 'project',
+    entityType: 'project' as const,
     entityId,
     isPinned: false,
     sdlcArtifact: {
-      kind: 'PL01' as const,
+      kind: 'PL02' as const,
       projectId: entityId,
       threadId: '33333333-3333-4333-8333-333333333333',
       sessionId: '44444444-4444-4444-8444-444444444444',
@@ -46,7 +47,7 @@ function note(id: string, entityId: string, title: string, body: string, version
     },
     createdAt: TS,
     updatedAt: TS,
-  };
+  } as Note;
 }
 
 const AGREE_PL01 = '# PL01\n\nKênh phân phối: Mobile banking.';
