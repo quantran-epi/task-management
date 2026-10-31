@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: milestone
 status: executing
-stopped_at: "25.1.1-10 complete — next: plan 25.1.1-11 (regression sweep)"
-last_updated: "2026-11-01T04:00:00Z"
-last_activity: 2026-11-01 -- Plan 25.1.1-10 complete (wizard coordinator deleted, hub acceptance spec added)
+stopped_at: "25.1.1-11 complete — phase 25.1.1 ready for verification"
+last_updated: "2026-11-01T05:20:00Z"
+last_activity: 2026-11-01 -- Plan 25.1.1-11 complete (regression sweep, guarantee evidence, missing-source race fixed)
 progress:
   total_phases: 11
   completed_phases: 7
@@ -25,11 +25,11 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 
 ## Current Position
 
-Phase: 25.1.1 (unify-sdlc-workflow-move-change-pack-pl03b-pl07-generation-c) — IN PROGRESS
-Plan: 10 of 11 complete (25.1.1-01 … 25.1.1-10)
-Status: Plan 25.1.1-10 complete; wave 10 done, next is 25.1.1-11 (regression sweep)
-Last activity: 2026-11-01 -- Plan 25.1.1-10 complete (wizard coordinator deleted, hub acceptance spec added)
-Stopped at: 25.1.1-10 complete — next: plan 25.1.1-11 (regression sweep)
+Phase: 25.1.1 (unify-sdlc-workflow-move-change-pack-pl03b-pl07-generation-c) — ALL PLANS COMPLETE, awaiting verification
+Plan: 11 of 11 complete (25.1.1-01 … 25.1.1-11)
+Status: Plan 25.1.1-11 complete; every Phase 25.1 D-U7 guarantee re-proven scoped, evidence in `25.1.1-VERIFICATION-NOTES.md`
+Last activity: 2026-11-01 -- Plan 25.1.1-11 complete (regression sweep, guarantee evidence, missing-source race fixed)
+Stopped at: 25.1.1-11 complete — phase 25.1.1 ready for verification
 
 Progress: [██████████] 100%
 
