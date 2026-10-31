@@ -147,7 +147,7 @@ test.describe('Phase 25.1 SDLC Flow Hardening & Multi-Tab Isolation Acceptance',
     await expect(firstChatTab).toHaveAttribute('aria-selected', 'true');
     await expect(secondChatTab).toHaveAttribute('aria-selected', 'false');
 
-    const closeSecondTabBtn = secondChatTab.locator('[role="button"][aria-label*="Đóng"]');
+    const closeSecondTabBtn = secondChatTab.getByRole('button', { name: /Đóng/ });
     await expect(closeSecondTabBtn).toBeVisible();
     await closeSecondTabBtn.click();
 
