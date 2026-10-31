@@ -260,6 +260,40 @@ Plans:
   5. The existing SDLC guarantees still hold after the move: per-tab runtime isolation, checkpoint/resume, revision preview with stale propagation, immutable cycles, missing-source recovery, and the 320px accessible timeline.
   6. Focused suites for the hub, coordinator, change-pack, DOCX builders, and the Playwright SDLC acceptance spec pass with no skipped Phase 25.1.1 tests.
 
-Plans:
+Plans: 9 plans in 9 sequential waves (every plan edits `AIChatDrawer.tsx` or its own service layer; `workflow.use_worktrees: false`)
 
-- [ ] TBD (run /gsd-plan-phase 25.1.1 to break down)
+**Wave 1** *(no dependencies)*
+
+- [ ] 25.1.1-01-PLAN.md — Wizard-free artifact persistence: identity assertions replace the wizard-snapshot gate
+
+**Wave 2** *(depends on 25.1.1-01)*
+
+- [ ] 25.1.1-02-PLAN.md — Hub shell: collapsible timeline, per-step panel contract, stacked drift layout, focus rings, modal z-index
+
+**Wave 3** *(depends on 25.1.1-02)*
+
+- [ ] 25.1.1-03-PLAN.md — Hub step 4: change-pack validate/confirm/drift wired to `commitChangePackAndDrift`
+
+**Wave 4** *(depends on 25.1.1-03)*
+
+- [ ] 25.1.1-04-PLAN.md — Hub step 5: PL03B/PL07 generation wired to `commitTechDoc`
+
+**Wave 5** *(depends on 25.1.1-04)*
+
+- [ ] 25.1.1-05-PLAN.md — Export and CAB services: payload adapters, Note resolution, docx build/download, pinned CAB persistence
+
+**Wave 6** *(depends on 25.1.1-05)*
+
+- [ ] 25.1.1-06-PLAN.md — Hub export rows on steps 1/5/6 and CAB generation wired to `commitCab`
+
+**Wave 7** *(depends on 25.1.1-06)*
+
+- [ ] 25.1.1-07-PLAN.md — Remove the wizard UI: preview-only historic cards, drawer state retired, four modules deleted
+
+**Wave 8** *(depends on 25.1.1-07)*
+
+- [ ] 25.1.1-08-PLAN.md — Delete `wizardCoordinator.ts` and its suites; replace the wizard Playwright spec with a hub-only spec
+
+**Wave 9** *(depends on 25.1.1-08)*
+
+- [ ] 25.1.1-09-PLAN.md — Regressions sweep: every Phase 25.1 guarantee re-run scoped, evidence recorded
