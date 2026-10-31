@@ -95,17 +95,10 @@ import type { GroundedAnswerCardCallbacks } from './ChatMessageBubble';
 import { ChatTabBar, type ChatTabItem } from './ChatTabBar';
 import { createRequestRegistry } from './runtime/requestRegistry';
 import { useTabRuntimes } from './runtime/useTabRuntimes';
-import { WizardMetadataModal, type WizardStartMetadata } from './wizard/WizardMetadataModal';
-import { WizardSkillBar } from './wizard/WizardSkillBar';
-import { WizardLifecycleBar } from './wizard/WizardLifecycleBar';
 import { InterruptedBanner } from './InterruptedBanner';
 import { InlineApiErrorCard } from './InlineApiErrorCard';
 import { RestoredSourceNotice } from './RestoredSourceNotice';
 import { deriveMissingSources } from './wizard/restoreRecovery';
-import { WizardProgressStrip } from './wizard/WizardProgressStrip';
-import { ChangePackDropzone } from './wizard/ChangePackDropzone';
-import { ChangePackConfirmStrip, type ChangePackUiResult } from './wizard/ChangePackConfirmStrip';
-import { DriftMatrixView } from './wizard/DriftMatrixView';
 import { SdlcWorkflowHub } from './wizard/SdlcWorkflowHub';
 import { StepSolutionPanel, StepChangePackPanel, StepTechDocsPanel, StepCabPanel, StepIntakePanel, type HubChangePackDraft, type StepTechDocsState, type StepCabState, type RenderExportRow } from './wizard/HubStepPanels';
 import { HubExportRow } from './wizard/HubExportRow';
@@ -116,19 +109,13 @@ import { generateHubTechDocs } from '../../services/wizard/hubTechDocs';
 import { exportHubArtifact, type HubExportKind, type HubExportResult } from '../../services/wizard/hubExport';
 import { generateHubCab } from '../../services/wizard/hubCab';
 import { ChangePackValidationError } from '../../services/wizard/changePack';
-import { createSdlcWorkflowCoordinator, defaultSha256 } from '../../services/wizard/workflowCoordinator';
+import { createSdlcWorkflowCoordinator } from '../../services/wizard/workflowCoordinator';
 import { previousArtifactContent, stripStaleArtifacts, toRevisionModalPreview } from './wizard/revisionView';
 import type { SdlcWorkflowState, SdlcWorkflowMetadata, SdlcStepId, RevisionPreview } from '../../services/wizard/workflowSchemas';
 import { buildMergedSdlcInput, type SdlcSourceRef } from '../../services/wizard/sourceMerge';
-import { createWizardCoordinator, deriveActiveWizard, type WizardCoordinatorDeps, type WizardExportResult } from '../../services/wizard/wizardCoordinator';
 import type { ChangePackManifest } from '../../services/wizard/changePack';
-import type { ReconciliationResult } from '../../services/wizard/reconciliation';
-import type { ChangePackValidationCode } from '../../services/wizard/changePack';
-import type { WizardSkill, WizardSnapshot } from '../../services/ai/wizardSchemas';
-import { collectWizardEvidence, runWizardStage, type WizardEvidenceInput } from '../../services/ai/wizardService';
+import { collectWizardEvidence, type WizardEvidenceInput } from '../../services/ai/wizardService';
 import { runLocalGroundedRetrieval } from '../../services/search/localGroundedRetrieval';
-import { saveSolutionVersion } from '../../services/wizard/artifactRepo';
-import { getMessagesByThreadId as loadChatMessages } from '../../db/repositories/chatRepo';
 import {
   listTabsByScope,
   getOrCreateActiveChatTab,
@@ -258,7 +245,6 @@ export interface AIChatDrawerProps {
   isMobile?: boolean;
   onPopout?: () => void;
   isPopoutWindow?: boolean;
-  createWizardCoordinatorFn?: typeof createWizardCoordinator;
 }
 
 export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
@@ -274,7 +260,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   isMobile = false,
   onPopout,
   isPopoutWindow = false,
-  createWizardCoordinatorFn = createWizardCoordinator,
 }) => {
   const { token } = theme.useToken();
   const { pendingPrompt, clearPendingPrompt, pendingDraft, clearPendingDraft, setCustomScope } = useAIChat();
@@ -823,229 +808,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const [scrollTrigger, setScrollTrigger] = useState(0);
 
   const [externalInputValue, setExternalInputValue] = useState<string | null>(null);
-  const [wizardSkill, setWizardSkill] = useState<Exclude<WizardSkill, 'SOLUTION'> | null>(null);
-  const [wizardMetadataOpen, setWizardMetadataOpen] = useState(false);
-  const [wizardSnapshot, setWizardSnapshot] = useState<WizardSnapshot | undefined>();
-  const [wizardSkipNotice, setWizardSkipNotice] = useState<string | null>(null);
-  const [packUi, setPackUi] = useState<ChangePackUiResult | null>(null);
-  const [reconciliationResult, setReconciliationResult] = useState<ReconciliationResult | null>(null);
-  const [technicalDocsReady, setTechnicalDocsReady] = useState(false);
-  const [exportResults, setExportResults] = useState<Map<string, WizardExportResult>>(new Map());
-  const [exportPending, setExportPending] = useState<Set<string>>(new Set());
-  const [exportErrors, setExportErrors] = useState<Map<string, string>>(new Map());
-  const wizardCoordinatorRef = useRef<ReturnType<typeof createWizardCoordinator> | null>(null);
-  const packActionRef = useRef(false);
   const cabActionRef = useRef(false);
-
-  useEffect(() => {
-    if (!isProjectScope || !activeThreadId || !currentScope.id || !isSdlcActiveTab) {
-      wizardCoordinatorRef.current?.dispose();
-      wizardCoordinatorRef.current = null;
-      setWizardSnapshot(undefined);
-      return;
-    }
-    const controller = new AbortController();
-    const loadWizard = async () => {
-      const existing = await loadChatMessages(activeThreadId, db);
-      if (controller.signal.aborted) return;
-      const active = deriveActiveWizard(existing, currentScope.id!, activeThreadId);
-      if (active) setWizardSnapshot(active);
-    };
-    void loadWizard();
-    return () => {
-      controller.abort();
-      wizardCoordinatorRef.current?.dispose();
-      wizardCoordinatorRef.current = null;
-    };
-  }, [activeThreadId, currentScope.id, db, isProjectScope]);
-
-  const getWizardCoordinator = useCallback(() => {
-    if (!isProjectScope || !currentScope.id || !activeThreadId) return null;
-    if (!wizardCoordinatorRef.current) {
-      const projectId = currentScope.id;
-      const threadId = activeThreadId;
-      const deps: WizardCoordinatorDeps = {
-        projectId,
-        threadId,
-        db,
-        // No expectedPackIdentity: the pack's own meta.json supplies the identity and the
-        // coordinator gates on the hub CR, so no placeholder identity can be fabricated here.
-        appendReviewSnapshot: async (docs) => {
-          setReconciliationResult(docs.reconciliation);
-          setTechnicalDocsReady(Boolean(docs.pl03 && docs.pl07));
-        },
-        runTechnicalStage: async (input) => runWizardStage({
-          kind: input.kind === 'PL03' ? 'PL03' : 'PL07',
-          projectId: input.projectId,
-          threadId: input.threadId,
-          sessionId: input.sessionId,
-          inputRevision: input.inputRevision,
-          payload: { evidence: { items: [], coverage: input.reconciliation.status === 'PARTIAL_COVERAGE' ? 'PARTIAL' : 'COMPLETE', degraded: [] }, pinnedSolution: { artifactId: input.solution.noteId, version: input.solution.version, hash: input.solution.hash, projectId: input.projectId, threadId: input.threadId } },
-          signal: new AbortController().signal, isCurrent: () => true,
-          model: { endpoint: '', model: '' },
-        }),
-        runCabStage: async () => {
-          const docs = wizardCoordinatorRef.current?.getTechnicalDocs?.();
-          return docs;
-        },
-        runStage: async (input) => {
-          const [config, apiKey] = await Promise.all([getNineRouterConfig(db), getNineRouterApiKey(db)]);
-          return runWizardStage({
-            kind: input.kind,
-            projectId: input.projectId,
-            threadId: input.threadId,
-            sessionId: input.sessionId,
-            inputRevision: input.inputRevision,
-            payload: { evidence: input.evidence, proposal: input.payload },
-            signal: input.signal,
-            isCurrent: input.isCurrent,
-            model: { endpoint: config.endpoint, apiKey, model: resolveActiveModel() },
-          });
-        },
-        collectEvidence: async (input) => collectWizardEvidence(input, {
-          runLocalBm25: (localInput) => runLocalGroundedRetrieval(localInput, {
-            loadSetMembers: async (setIds) => {
-              const sets = await db.documentSets.where('id').anyOf(setIds).toArray();
-              return sets.flatMap((set) => set.documentIds.map((documentId) => ({ setId: set.id, setName: set.name, documentId })));
-            },
-            loadNoteBody: async (documentId) => {
-              const note = await db.notes.get(documentId);
-              return note ? { title: note.title, body: note.body, updatedAt: note.updatedAt } : null;
-            },
-          }),
-        }),
-        resolveEvidenceInput: async ({ metadata, inputRevision, context }) => {
-          const sets = await db.documentSets.filter((set) => set.sdlc?.projectId === projectId).toArray();
-          return { projectId, threadId, sessionId: wizardCoordinatorRef.current?.getSnapshot()?.sessionId ?? generateId(), inputRevision, query: `${metadata.cr} ${metadata.featureName} ${context}`.trim(), resolvedSetIds: sets.map((set) => set.id) };
-        },
-        saveSnapshot: async (snapshot) => {
-          setWizardSnapshot(snapshot);
-        },
-        appendMessage: async (message) => { await saveMessage({ threadId, role: message.role, content: message.content, wizard: message.wizard }, db); },
-        loadMessages: () => loadChatMessages(threadId, db),
-        saveSolution: (input) => saveSolutionVersion(input, db),
-      };
-      wizardCoordinatorRef.current = createWizardCoordinatorFn(deps);
-    }
-    return wizardCoordinatorRef.current;
-  }, [activeThreadId, createWizardCoordinatorFn, currentScope.id, db, isProjectScope]);
-
-  useEffect(() => {
-    const coordinator = getWizardCoordinator();
-    if (coordinator && !wizardSnapshot) {
-      const restored = coordinator.restore();
-      if (restored && typeof (restored as Promise<unknown>).then === 'function') {
-        void (restored as Promise<WizardSnapshot | undefined>).then((snapshot) => snapshot && setWizardSnapshot(snapshot));
-      }
-    }
-  }, [getWizardCoordinator, wizardSnapshot]);
-
-  const handleWizardStart = useCallback(async (metadata: WizardStartMetadata) => {
-    if (!wizardSkill || !isProjectScope || !currentScope.id) return;
-    let coordinator = getWizardCoordinator();
-    if (!coordinator) {
-      const sdlcTab = durableTabs.find((tab) => tab.type === 'sdlc') ?? await getOrCreateSdlcTab(currentScope.id, db);
-      const deps: WizardCoordinatorDeps = {
-        projectId: currentScope.id,
-        threadId: sdlcTab.threadId,
-        db,
-        saveSnapshot: async (snapshot) => setWizardSnapshot(snapshot),
-        appendMessage: async (entry) => { await saveMessage({ threadId: sdlcTab.threadId, role: entry.role, content: entry.content, wizard: entry.wizard }, db); },
-        loadMessages: () => loadChatMessages(sdlcTab.threadId, db),
-      };
-      coordinator = createWizardCoordinatorFn(deps);
-      wizardCoordinatorRef.current = coordinator;
-    }
-    setWizardMetadataOpen(false);
-    const snapshot = await coordinator.start(wizardSkill, metadata);
-    setWizardSnapshot(snapshot);
-    setWizardSkill(null);
-  }, [currentScope.id, db, durableTabs, getWizardCoordinator, isProjectScope, scopeKey, wizardSkill]);
-
-  const handleWizardMessage = useCallback(async (text: string) => {
-    const coordinator = getWizardCoordinator();
-    const snapshot = coordinator?.getSnapshot() ?? wizardSnapshot;
-    if (!coordinator || !snapshot) return false;
-    if (snapshot.status === 'gap_fill' || snapshot.status === 'collecting') {
-      await coordinator.addContext(text);
-      setWizardSnapshot(coordinator.getSnapshot());
-      return true;
-    }
-    return false;
-  }, [getWizardCoordinator, wizardSnapshot]);
-
-  const handleWizardCancel = useCallback(async () => {
-    const coordinator = getWizardCoordinator();
-    await coordinator?.cancel();
-    setWizardSnapshot(undefined);
-  }, [getWizardCoordinator]);
-
-  const handlePackSelect = useCallback(async (file: File) => {
-    const coordinator = getWizardCoordinator();
-    if (!coordinator) return;
-    const result = await coordinator.selectChangePack(file);
-    if (result.status === 'pending') setPackUi({ status: 'valid', manifest: result.manifest });
-    else if (result.status === 'invalid') setPackUi({ status: 'invalid', code: result.code as ChangePackValidationCode });
-  }, [getWizardCoordinator]);
-
-  const handlePackReplace = useCallback(() => {
-    getWizardCoordinator()?.replaceChangePack();
-    setPackUi(null);
-    setReconciliationResult(null);
-    setTechnicalDocsReady(false);
-  }, [getWizardCoordinator]);
-
-  const handlePackConfirm = useCallback(async (manifest: Readonly<ChangePackManifest>) => {
-    if (packActionRef.current) return;
-    const coordinator = getWizardCoordinator();
-    if (!coordinator) return;
-    packActionRef.current = true;
-    try {
-      const confirmed = await coordinator.confirmChangePack({ packHash: manifest.packHash, identity: manifest.identity });
-      setReconciliationResult(confirmed.reconciliation);
-      setPackUi({ status: 'valid', manifest });
-      const docs = await coordinator.generateTechnicalDocs();
-      setTechnicalDocsReady(Boolean(docs.pl03 && docs.pl07));
-    } catch {
-      patchTurnError(
-        'request_failed',
-        'Không thể xác nhận change-pack. Kiểm tra đúng dự án, phiên bản SOLUTION và pack rồi thử lại.',
-        activeTabId
-      );
-    } finally {
-      packActionRef.current = false;
-    }
-  }, [activeTabId, getWizardCoordinator]);
-
-
-  const handleWizardApproveExport = useCallback(async (messageId: string, draftRevision: number) => {
-    if (exportPending.has(messageId)) return;
-    const coordinator = getWizardCoordinator();
-    const messageRecord = messages.find((candidate) => candidate.id === messageId);
-    if (!coordinator || !messageRecord?.wizard) return;
-    setExportPending((previous) => new Set(previous).add(messageId));
-    setExportErrors((previous) => { const next = new Map(previous); next.delete(messageId); return next; });
-    try {
-      const result = await coordinator.approveAndExport(messageId, messageRecord.wizard.renderPayload);
-      setExportResults((previous) => new Map(previous).set(messageId, result));
-      if (result.errorCode) setExportErrors((previous) => new Map(previous).set(messageId, result.errorCode!));
-      if (result.noteSaved) setWizardSnapshot(coordinator.getSnapshot());
-      void draftRevision;
-    } finally {
-      setExportPending((previous) => { const next = new Set(previous); next.delete(messageId); return next; });
-    }
-  }, [exportPending, getWizardCoordinator, messages]);
-
-  const handleWizardRetryDownload = useCallback(async (messageId: string) => {
-    const result = await getWizardCoordinator()?.retryExportDownload(messageId);
-    if (!result) return;
-    setExportResults((previous) => new Map(previous).set(messageId, result));
-    setExportErrors((previous) => {
-      const next = new Map(previous);
-      if (result.errorCode) next.set(messageId, result.errorCode); else next.delete(messageId);
-      return next;
-    });
-  }, [getWizardCoordinator]);
 
   const handleSendMessageRef = useRef<
     (
@@ -1092,6 +855,10 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     }
     const coordinator = getSdlcCoordinator();
     if (!coordinator) return;
+    // Re-restoring an already-live coordinator would reload the persisted row and overwrite the
+    // in-memory state — after a turn's `clearCheckpoint` that resurrects a stale `interrupted`
+    // checkpoint and blocks the next send. This coordinator is the only writer of that row.
+    if (coordinator.getState()) return;
     void coordinator.restore();
   }, [activeTabId, activeThreadId, getSdlcCoordinator, isProjectScope]);
 
@@ -1201,7 +968,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     const newState = await coordinator.startOrUpdateIntake(metadata, pl01, pl02, { pl01Sources, pl02Sources });
     setSdlcWorkflowState(newState);
     setSdlcInputModalOpen(false);
-    setWizardSnapshot(undefined);
     if (currentScope.id) {
       const sdlcTab = durableTabs.find((tab) => tab.type === 'sdlc') ?? await getOrCreateSdlcTab(currentScope.id, db);
       await setActiveTab(scopeKey, sdlcTab.id, db);
@@ -1591,61 +1357,14 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     );
   }, [exportStates, handleHubExport, handleHubExportRetry]);
 
-  const exportedFiles = new Map(Array.from(exportResults.entries()).map(([id, result]) => [id, result.noteSaved ? {
-    filename: result.filename ?? 'wizard.docx', sizeBytes: result.sizeBytes ?? 0, noteId: result.noteId,
-    noteSaved: result.noteSaved, downloadInitiated: result.downloadInitiated, savePickerSaved: result.savePickerSaved,
-  } : undefined] as const));
+  // Historic rows only: the hub owns export state now (HubExportState), so no wizard export
+  // result can reach a read-only card.
   const wizardCallbacks = {
-    onApproveExport: handleWizardApproveExport,
-    onRequestEdit: (_messageId: string, _draftRevision: number) => {
-      void getWizardCoordinator()?.requestEdit('').then(() => setWizardSnapshot(getWizardCoordinator()?.getSnapshot()));
-    },
-    onRetryExport: handleWizardRetryDownload,
+    exportedFiles: new Map(),
     onOpenNote: (noteId: string) => { window.location.hash = `/notes?doc=${encodeURIComponent(noteId)}`; },
-    onSuggestion: (_questionId: string, suggestion: string) => setExternalInputValue(suggestion),
-    onSkip: (_messageId: string, questionId: string) => {
-      void getWizardCoordinator()?.skipGap(questionId).then(() => {
-        setWizardSkipNotice(`Đã bỏ qua: ${questionId} · (chưa cung cấp)`);
-        setWizardSnapshot(getWizardCoordinator()?.getSnapshot());
-      });
-    },
-    onSaveSolution: async (messageId: string, _draftRevision?: number | null) => {
-      try {
-        if (!activeThreadId || !currentScope.id) return;
-        const threadMsgs = await loadChatMessages(activeThreadId, db);
-        const targetMsg = threadMsgs.find((m) => m.id === messageId);
-        const snapshot = targetMsg?.wizard;
-        const markdown = snapshot && 'markdown' in snapshot.renderPayload && snapshot.renderPayload.markdown
-          ? snapshot.renderPayload.markdown
-          : targetMsg?.content || '';
-
-        const noteRes = await saveSolutionVersion({
-          projectId: currentScope.id,
-          threadId: activeThreadId,
-          sessionId: snapshot?.sessionId ?? crypto.randomUUID(),
-          inputRevision: snapshot?.inputRevision ?? 0,
-          draftRevision: snapshot?.draftRevision ?? 1,
-          inputHash: snapshot?.artifactHash ?? (await defaultSha256(markdown)),
-          markdown,
-          exportPayload: snapshot?.renderPayload ?? {},
-          approvedAt: new Date().toISOString(),
-        }, db);
-
-        await getSdlcCoordinator()?.commitSolution(markdown, noteRes.note.id);
-        message.success('Đã lưu SOLUTION.md vào tài liệu dự án');
-      } catch (err: any) {
-        message.error(`Không thể lưu SOLUTION.md: ${err?.message || err}`);
-      }
-    },
-    pendingKeys: exportPending,
-    exportedFiles,
-    exportErrors,
   };
 
-  const packVisible = wizardSnapshot?.skill === 'PL03' || wizardSnapshot?.skill === 'PL07';
-  const confirmedManifest = packUi?.status === 'valid' && reconciliationResult ? packUi.manifest : null;
-
-  const wizardProject = currentScope.id ? { id: currentScope.id, name: currentScope.title || currentScope.id } : undefined;
+  const projectSummary = currentScope.id ? { id: currentScope.id, name: currentScope.title || currentScope.id } : undefined;
   // Hub panel slots; later steps merge their keys into this object rather than replacing it.
   const stepPanels = sdlcWorkflowState ? {
     intake: (
@@ -1705,54 +1424,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       />
     ),
   } : undefined;
-  const wizardLeadingContent = (
-    <>
-      {wizardSnapshot && <WizardLifecycleBar formName={wizardSnapshot.skill} snapshot={wizardSnapshot} restored={Boolean((wizardSnapshot as WizardSnapshot & { restored?: boolean }).restored)} onAbandon={() => void handleWizardCancel()} />}
-      {wizardSnapshot && <WizardProgressStrip snapshot={wizardSnapshot} />}
-      {wizardSkipNotice && <div role="status">{wizardSkipNotice}</div>}
-      {packVisible && !packUi && <ChangePackDropzone onSelect={(file) => void handlePackSelect(file)} />}
-      {packVisible && packUi && !confirmedManifest && <ChangePackConfirmStrip result={packUi} onConfirm={(manifest) => void handlePackConfirm(manifest)} onReplace={handlePackReplace} />}
-      {confirmedManifest && reconciliationResult && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div role="status" style={{ fontSize: 12 }}>Đã nạp change-pack {confirmedManifest.identity.cr}</div>
-          <DriftMatrixView result={reconciliationResult} />
-          <Button onClick={() => void handleCabGenerate()} disabled={!technicalDocsReady || cabActionRef.current}>Tạo tờ trình CAB</Button>
-        </div>
-      )}
-    </>
-  );
-  const wizardPlaceholder = wizardSnapshot && !['completed', 'abandoned'].includes(wizardSnapshot.status) ? 'Trả lời câu hỏi hoặc bổ sung thông tin…' : undefined;
-
-  // Deliberate scope: dispose() aborts only the wizard stageController, never a chat/SDLC turn (D-09 scopes chat/SDLC requests only).
-  useEffect(() => {
-    if (!open) wizardCoordinatorRef.current?.dispose();
-    return () => { wizardCoordinatorRef.current?.dispose(); };
-  }, [open]);
-
-  useEffect(() => {
-    if (!wizardSnapshot || !activeThreadId) return;
-    const refreshed = deriveActiveWizard(messages, currentScope.id ?? '', activeThreadId);
-    const statusRank: Record<WizardSnapshot['status'], number> = {
-      collecting: 1,
-      gap_fill: 2,
-      review: 3,
-      approved: 4,
-      exporting: 5,
-      completed: 6,
-      abandoned: 0,
-    };
-    const isNewer = refreshed && (
-      refreshed.updatedAt > wizardSnapshot.updatedAt ||
-      (refreshed.updatedAt === wizardSnapshot.updatedAt && statusRank[refreshed.status] > statusRank[wizardSnapshot.status])
-    );
-    if (isNewer) setWizardSnapshot(refreshed);
-  }, [activeThreadId, currentScope.id, messages, wizardSnapshot]);
-
-  const wizardMetadataModal = wizardSkill && wizardProject ? (
-    <WizardMetadataModal open={wizardMetadataOpen} skill={wizardSkill} project={wizardProject} onStart={(metadata) => void handleWizardStart(metadata)} onClose={() => setWizardMetadataOpen(false)} />
-  ) : null;
-
-  void wizardMetadataModal;
 
   // Consume pendingDraft from AIChatContext into input draft without auto-sending
   useEffect(() => {
@@ -2002,8 +1673,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     handleSendMessageRef.current = handleSendMessage;
     const trimmed = text.trim();
     if (!trimmed) return;
-
-    if (isSdlcActiveTab && (await handleWizardMessage(trimmed))) return;
 
     // Check if ANY tab is awaiting a mutation confirmation; answer on that tab's behalf.
     const pendingRuntime = Object.values(tabRuntimesRef.current.getSnapshot()).find(
@@ -3592,8 +3261,6 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
         onOpenSettings={onOpenSettings}
       />
 
-      {wizardMetadataModal}
-
       {/* ScopeChipsBar after routing per D-15 (only when routed scope has concrete facets) */}
       {activeRoutedScope && hasMeaningfulRoutedScope(activeRoutedScope.routedScope) && (
         <div style={{ padding: '0 14px' }}>
@@ -3645,17 +3312,6 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
         citationAuthority={activePreviewCitation?.authority ?? undefined}
         snapshotAvailable={true}
         db={db}
-      />
-
-      {/* SDLC Workflow Hub - Full Width above ChatInputBar (chỉ hiện khi đang ở tab SDLC) */}
-      <WizardSkillBar
-        projectScoped={isProjectScope}
-        activeSession={Boolean(wizardSnapshot && !['completed', 'abandoned'].includes(wizardSnapshot.status))}
-        selectedSkill={wizardSkill ?? undefined}
-        onActivate={(skill) => {
-          setWizardSkill(skill);
-          setWizardMetadataOpen(true);
-        }}
       />
 
       {isProjectScope && isSdlcActiveTab && (
@@ -3711,10 +3367,10 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
         </div>
       )}
 
-      {wizardProject && (
+      {projectSummary && (
         <StepInputDocsModal
           open={sdlcInputModalOpen}
-          project={wizardProject}
+          project={projectSummary}
           currentUser="Developer"
           initialValues={
             sdlcWorkflowState
@@ -3774,9 +3430,8 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
         placeholder={
           activeRuntime?.pendingConfirmation
             ? 'Gõ "yes" để xác nhận hoặc "no" để từ chối...'
-            : (isSdlcActiveTab ? wizardPlaceholder : undefined)
+            : undefined
         }
-        leadingContent={isSdlcActiveTab ? wizardLeadingContent : undefined}
         db={db}
         attachedFiles={activeRuntime?.references ?? []}
         onAttachFile={handleAttachFile}
