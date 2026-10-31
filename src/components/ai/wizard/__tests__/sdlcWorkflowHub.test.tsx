@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { SdlcWorkflowHub } from '../SdlcWorkflowHub';
+import { StepSolutionPanel } from '../HubStepPanels';
 import { RevisionImpactModal } from '../RevisionImpactModal';
 import type { SdlcWorkflowState } from '../../../../services/wizard/workflowSchemas';
 
@@ -248,6 +249,45 @@ describe('SdlcWorkflowHub', () => {
 
     expect(screen.getByTestId('wired-solution')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Lưu SOLUTION.md' })).not.toBeInTheDocument();
+  });
+});
+
+describe('StepSolutionPanel', () => {
+  const saveButton = () => screen.getByRole('button', { name: /Lưu SOLUTION\.md/ });
+
+  it('disables the save button when canSave is false', () => {
+    render(<StepSolutionPanel stale={false} canSave={false} onSave={vi.fn()} />);
+    expect(saveButton()).toBeDisabled();
+  });
+
+  it('enables the save button when canSave is true', () => {
+    render(<StepSolutionPanel stale={false} canSave={true} onSave={vi.fn()} />);
+    expect(saveButton()).toBeEnabled();
+  });
+
+  it('shows the button loading while saving and does not fire onSave', () => {
+    const onSave = vi.fn();
+    render(<StepSolutionPanel stale={false} canSave={true} onSave={onSave} saving={true} />);
+
+    expect(saveButton()).toBeDisabled();
+    fireEvent.click(saveButton());
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('fires onSave once per click', () => {
+    const onSave = vi.fn();
+    render(<StepSolutionPanel stale={false} canSave={true} onSave={onSave} />);
+
+    fireEvent.click(saveButton());
+    expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the saved confirmation when savedNoteId is set', () => {
+    const { rerender } = render(<StepSolutionPanel stale={false} canSave={true} onSave={vi.fn()} />);
+    expect(screen.queryByText('Đã lưu vào tài liệu dự án')).not.toBeInTheDocument();
+
+    rerender(<StepSolutionPanel stale={false} canSave={true} onSave={vi.fn()} savedNoteId="note-1" />);
+    expect(screen.getByText('Đã lưu vào tài liệu dự án')).toBeInTheDocument();
   });
 });
 

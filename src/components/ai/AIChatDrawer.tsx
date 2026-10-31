@@ -107,7 +107,9 @@ import { ChangePackDropzone } from './wizard/ChangePackDropzone';
 import { ChangePackConfirmStrip, type ChangePackUiResult } from './wizard/ChangePackConfirmStrip';
 import { DriftMatrixView } from './wizard/DriftMatrixView';
 import { SdlcWorkflowHub } from './wizard/SdlcWorkflowHub';
+import { StepSolutionPanel } from './wizard/HubStepPanels';
 import { StepInputDocsModal } from './wizard/StepInputDocsModal';
+import { saveHubSolution } from '../../services/wizard/hubSolution';
 import { createSdlcWorkflowCoordinator, defaultSha256 } from '../../services/wizard/workflowCoordinator';
 import { previousArtifactContent, stripStaleArtifacts, toRevisionModalPreview } from './wizard/revisionView';
 import type { SdlcWorkflowState, SdlcWorkflowMetadata, SdlcStepId, RevisionPreview } from '../../services/wizard/workflowSchemas';
@@ -427,6 +429,10 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   // SDLC Workflow state
   const [sdlcWorkflowState, setSdlcWorkflowState] = useState<SdlcWorkflowState | undefined>();
   const [sdlcInputModalOpen, setSdlcInputModalOpen] = useState(false);
+  // Hub step-2 save state; reset per tab so a save never leaks across tabs.
+  const [solutionSaving, setSolutionSaving] = useState(false);
+  const [solutionSavedNoteId, setSolutionSavedNoteId] = useState<string | undefined>(undefined);
+  const solutionSaveBusyRef = useRef(false);
   const [revisionDraft, setRevisionDraft] = useState('');
   const [revisionPreview, setRevisionPreview] = useState<RevisionPreview | null>(null);
   const [revisionLoading, setRevisionLoading] = useState(false);
@@ -585,6 +591,24 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     if (!activeThreadId) return [];
     return getMessagesByThreadId(activeThreadId, db);
   }, [db, activeThreadId]) ?? [];
+
+  // Hub step-2 draft source: the newest plain assistant message in the SDLC thread.
+  // Wizard-payload rows and the two persistence events are never eligible (T-25.1.1-43).
+  const solutionDraftMarkdown = useMemo(() => {
+    const candidate = messages
+      .filter((msg) =>
+        !msg.wizard &&
+        msg.role === 'assistant' &&
+        msg.content.trim().length > 0 &&
+        !msg.content.startsWith('Saved ') &&
+        !msg.content.startsWith('Confirmed change pack ')
+      )
+      .reduce<ChatMessage | undefined>(
+        (newest, msg) => (!newest || msg.createdAt > newest.createdAt ? msg : newest),
+        undefined
+      );
+    return candidate?.content ?? '';
+  }, [messages]);
 
   const ensureTurnTabRef = useRef<() => Promise<ChatTab>>(() =>
     Promise.reject(new Error('tab bootstrap not ready'))
@@ -1215,6 +1239,54 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     void handleSendMessageRef.current(prompt);
   }, [currentScope.id, db, durableTabs, getSdlcCoordinator, scopeKey]);
 
+  // Hub step-2 writer: Note first, then commit state only when the content actually changed.
+  const handleHubSaveSolution = useCallback(async () => {
+    if (solutionSaveBusyRef.current) return;
+    if (!sdlcWorkflowState || !currentScope.id) return;
+    const sdlcThreadId = durableTabs.find((tab) => tab.type === 'sdlc')?.threadId;
+    if (!sdlcThreadId) return;
+    if (!solutionDraftMarkdown.trim()) {
+      message.warning('Chưa có bản nháp SOLUTION.md trong khung chat.');
+      return;
+    }
+
+    solutionSaveBusyRef.current = true;
+    setSolutionSaving(true);
+    try {
+      const saved = await saveHubSolution({
+        db,
+        projectId: currentScope.id,
+        threadId: sdlcThreadId,
+        sessionId: sdlcWorkflowState.sessionId,
+        markdown: solutionDraftMarkdown,
+        draftRevision: (sdlcWorkflowState.artifacts.solution?.version ?? 0) + 1,
+      });
+
+      // commitSolution always bumps the workflow version, but the Note version only advances
+      // with new content. Committing a replay would desync the two and fail step 4 with
+      // PACK_SOLUTION_MISMATCH, so skip it unless the Note is new or changed.
+      if (saved.created || sdlcWorkflowState.artifacts.solution?.noteId !== saved.noteId) {
+        const next = await getSdlcCoordinator()?.commitSolution(solutionDraftMarkdown.trim(), saved.noteId);
+        if (next) setSdlcWorkflowState(next);
+      }
+
+      setSolutionSavedNoteId(saved.noteId);
+      message.success('Đã lưu SOLUTION.md vào tài liệu dự án');
+    } catch {
+      message.error('Không thể lưu SOLUTION.md: kiểm tra PL01/PL02 đã nạp rồi thử lại.');
+    } finally {
+      solutionSaveBusyRef.current = false;
+      setSolutionSaving(false);
+    }
+  }, [
+    currentScope.id,
+    db,
+    durableTabs,
+    getSdlcCoordinator,
+    sdlcWorkflowState,
+    solutionDraftMarkdown,
+  ]);
+
   const exportedFiles = new Map(Array.from(exportResults.entries()).map(([id, result]) => [id, result.noteSaved ? {
     filename: result.filename ?? 'wizard.docx', sizeBytes: result.sizeBytes ?? 0, noteId: result.noteId,
     noteSaved: result.noteSaved, downloadInitiated: result.downloadInitiated, savePickerSaved: result.savePickerSaved,
@@ -1270,6 +1342,19 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const confirmedManifest = packUi?.status === 'valid' && reconciliationResult ? packUi.manifest : null;
 
   const wizardProject = currentScope.id ? { id: currentScope.id, name: currentScope.title || currentScope.id } : undefined;
+  // Hub panel slots; later steps merge their keys into this object rather than replacing it.
+  const stepPanels = sdlcWorkflowState ? {
+    solution: (
+      <StepSolutionPanel
+        artifact={sdlcWorkflowState.artifacts.solution}
+        stale={sdlcWorkflowState.staleSteps.includes('SOLUTION')}
+        canSave={solutionDraftMarkdown.trim().length > 0 && !solutionSaving}
+        onSave={() => void handleHubSaveSolution()}
+        saving={solutionSaving}
+        savedNoteId={solutionSavedNoteId}
+      />
+    ),
+  } : undefined;
   const wizardLeadingContent = (
     <>
       {wizardSnapshot && <WizardLifecycleBar formName={wizardSnapshot.skill} snapshot={wizardSnapshot} restored={Boolean((wizardSnapshot as WizardSnapshot & { restored?: boolean }).restored)} onAbandon={() => void handleWizardCancel()} />}
@@ -1420,6 +1505,13 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       pendingConfirmation: null,
       confirmationResolver: undefined,
     });
+  }, [activeTabId]);
+
+  // Per-tab save state must not survive a tab switch.
+  useEffect(() => {
+    setSolutionSaving(false);
+    setSolutionSavedNoteId(undefined);
+    solutionSaveBusyRef.current = false;
   }, [activeTabId]);
 
   // Every render and every callback reads one owner: the active tab's runtime. Only while the
@@ -3198,6 +3290,7 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
           <SdlcWorkflowHub
             projectScoped={isProjectScope}
             state={sdlcWorkflowState}
+            stepPanels={stepPanels}
             onStartWorkflow={() => setSdlcInputModalOpen(true)}
             onSelectStep={(stepId: SdlcStepId) => {
               getSdlcCoordinator()?.selectStep(stepId);
