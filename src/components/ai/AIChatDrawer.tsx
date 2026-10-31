@@ -318,7 +318,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
   // Grounded turn state & abort controller per turn (AI-SPEC §4b)
   const [activePreviewCitation, setActivePreviewCitation] = useState<PersistedCitation | null>(null);
-  const [latestRoutedScope, setLatestRoutedScope] = useState<ChatMessageGrounding['scope']>(null);
+  // Routed scope is per-tab like every other transient turn result: it is rendered above the
+  // transcript, so a drawer-global value would show tab A's chips under tab B.
+  const [routedScopeByTab, setRoutedScopeByTab] = useState<Record<string, ChatMessageGrounding['scope']>>({});
   // Keyed by the owning tab: one tab's pending clarification must never be consumed by another
   // tab's send (D-06/D-10) or rendered under another tab's transcript.
   const [clarifyByTab, setClarifyByTab] = useState<Record<string, {
@@ -1429,6 +1431,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     : activeTabId;
   const activeRuntime = tabRuntimes.get(activeRuntimeTabId);
   const runtimeTabId = activeRuntimeTabId;
+  const activeRoutedScope = routedScopeByTab[activeRuntimeTabId] ?? null;
 
   // Abort every tab's request on unmount only. Drawer close must not abort an in-flight turn (D-09).
   useEffect(() => {
@@ -2037,7 +2040,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       ) {
         if (!turnController.signal.aborted) {
           if (groundedResult.grounding.scope) {
-            setLatestRoutedScope(groundedResult.grounding.scope);
+            const routed = groundedResult.grounding.scope;
+            setRoutedScopeByTab((prev) => ({ ...prev, [turnTabId]: routed }));
           }
           const groundedDurationMs = Date.now() - turnOverallStartTime;
           await saveMessage(
@@ -2778,7 +2782,7 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
           tabRuntimesRef.current.discard(runtime.tabId);
         }
         setClarifyByTab({});
-        setLatestRoutedScope(null);
+        setRoutedScopeByTab({});
         sdlcCoordinatorRef.current = null;
         sdlcCoordinatorThreadRef.current = null;
         setSdlcWorkflowState(undefined);
@@ -3098,10 +3102,10 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
       {wizardMetadataModal}
 
       {/* ScopeChipsBar after routing per D-15 (only when routed scope has concrete facets) */}
-      {latestRoutedScope && hasMeaningfulRoutedScope(latestRoutedScope.routedScope) && (
+      {activeRoutedScope && hasMeaningfulRoutedScope(activeRoutedScope.routedScope) && (
         <div style={{ padding: '0 14px' }}>
           <ScopeChipsBar
-            routedScope={latestRoutedScope.routedScope!}
+            routedScope={activeRoutedScope.routedScope!}
             onEditScope={() => setScopeModalOpen(true)}
           />
         </div>
