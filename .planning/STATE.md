@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: milestone
 status: executing
-stopped_at: Completed 25.1-13-PLAN.md (merged cited SDLC intake, picker listbox semantics, editable tab titles); next 25.1-14
-last_updated: "2026-10-31T09:10:00.000Z"
-last_activity: 2026-10-31 -- Completed plan 25.1-13
+stopped_at: 25.1-15 Tasks 1-4 committed (acceptance spec depth); Task 5 blocking human-verify (G1/G2/G3 Tauri sign-off) awaits tester
+last_updated: "2026-10-31T18:35:00.000Z"
+last_activity: 2026-10-31 -- Plan 25.1-15 Tasks 1-4 complete; paused at Task 5 checkpoint
 progress:
   total_phases: 10
   completed_phases: 6
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 ## Current Position
 
 Phase: 25.1 (sdlc-flow-hardening-multi-tab-ai-chat-isolation) — EXECUTING
-Plan: 14 of 15
-Status: Executing Phase 25.1
-Last activity: 2026-10-31 -- Completed plan 25.1-14
-Stopped at: 25.1-14 complete; next is 25.1-15 (actual-app acceptance depth: concurrency, retry, revision/cycles, restore, backup round-trip)
+Plan: 15 of 15
+Status: Plan 25.1-15 Tasks 1-4 complete; Task 5 (manual Tauri gates G1/G2/G3) is a blocking human-verify checkpoint
+Last activity: 2026-10-31 -- Plan 25.1-15 Tasks 1-4 committed
+Stopped at: 25.1-15 Task 5 pending — tester must run `npm run tauri:dev` and fill the `## Sign-off` rows in 25.1-UAT.md
 
 Progress: [██████████] 100%
 
@@ -376,6 +376,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-31T09:25:00.000Z
-Stopped at: Completed 25.1-13-PLAN.md; next 25.1-14-PLAN.md
+Last session: 2026-10-31T18:35:00.000Z
+Stopped at: 25.1-15 Tasks 1-4 complete (commits 62afe4f, c683592, cbea9ef, 860a241, 98b9718). Task 5 is a blocking human-verify checkpoint: run `npm run tauri:dev`, execute G1/G2/G3, fill the `## Sign-off` table in 25.1-UAT.md.
 Resume file: .planning/phases/25.1-sdlc-flow-hardening-multi-tab-ai-chat-isolation/25.1-CONTEXT.md
