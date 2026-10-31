@@ -272,7 +272,7 @@ Plans: 11 plans in 11 sequential waves (every plan edits `AIChatDrawer.tsx` or i
 
 **Wave 3** *(depends on 25.1.1-02)*
 
-- [ ] 25.1.1-03-PLAN.md — Hub step 2: SOLUTION writer (`saveHubSolution` → `commitSolution`) so `artifacts.solution` has a noteId before the wizard callbacks are deleted
+- [x] 25.1.1-03-PLAN.md — Hub step 2: SOLUTION writer (`saveHubSolution` → `commitSolution`) so `artifacts.solution` has a noteId before the wizard callbacks are deleted
 
 **Wave 4** *(depends on 25.1.1-03)*
 
