@@ -962,7 +962,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     (
       text: string,
       overrideScope?: ActiveScope,
-      options?: { resumeFromCheckpoint?: boolean }
+      options?: { resumeFromCheckpoint?: boolean; retryUserMessageId?: string | null }
     ) => Promise<void>
   >(async () => {});
 
@@ -1434,7 +1434,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const handleSendMessage = async (
     text: string,
     overrideScope?: ActiveScope,
-    options?: { resumeFromCheckpoint?: boolean }
+    options?: { resumeFromCheckpoint?: boolean; retryUserMessageId?: string | null }
   ) => {
     // A plain send while an SDLC checkpoint is interrupted must not run; only the explicit resume
     // path (which calls resumeCheckpoint first) bypasses this guard.
@@ -1576,15 +1576,35 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       );
     }
 
-    // 2. Always persist the user message; plan 14 turns this into a retry-by-id option.
-    const savedUserMsg = await saveMessage(
-      {
-        threadId: activeThread.id,
-        role: 'user',
-        content: trimmed,
-      },
-      db
-    );
+    // 2. Retry reuses the original user row; every other send persists a fresh one (D-14).
+    let savedUserMsg: ChatMessage | undefined;
+    const retryUserMessageId = options?.retryUserMessageId ?? null;
+    if (retryUserMessageId) {
+      const candidate = await db.chatMessages.get(retryUserMessageId);
+      if (
+        candidate &&
+        candidate.role === 'user' &&
+        candidate.threadId === activeThread.id &&
+        candidate.content === trimmed
+      ) {
+        savedUserMsg = candidate;
+      }
+    }
+    if (!savedUserMsg) {
+      savedUserMsg = await saveMessage(
+        {
+          threadId: activeThread.id,
+          role: 'user',
+          content: trimmed,
+        },
+        db
+      );
+    }
+    // Anchor the retry identity on the owning tab so a later retry never guesses by content.
+    tabRuntimes.patch(turnTabId, {
+      retryUserMessageId: savedUserMsg?.id ?? null,
+      lastSubmittedText: trimmed,
+    });
 
     // Own a fresh turn controller for THIS tab. Never abort another tab's request (D-06/D-10).
     tabRuntimes.initialize(turnTabId, activeThread.id);
@@ -2399,7 +2419,7 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
             tag: 'ai-turn-finished',
           });
         }
-        tabRuntimes.patch(turnTabId, { status: 'idle', partialBuffer: '', error: null });
+        tabRuntimes.patch(turnTabId, { status: 'idle', partialBuffer: '', error: null, retryUserMessageId: null });
       } else {
         // Empty output is an error turn: keep the runtime error card, do not reset it to idle below.
         patchTurnError(
@@ -2548,7 +2568,9 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
     findingRelatedKey,
     onCitationActivate: (c) => setActivePreviewCitation(c),
     onCandidateSelect: (urn) => {
-      void handleSendMessage(urn);
+      void handleSendMessage(urn, undefined, {
+        retryUserMessageId: tabRuntimesRef.current.get(runtimeTabId)?.retryUserMessageId ?? null,
+      });
     },
     onRefinementSelect: (label) => {
       // Populates input without auto-send (UI-SPEC Interaction Contracts)
@@ -2561,9 +2583,12 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
       }
     },
     onInvalidRetry: () => {
-      const lastSubmittedText = tabRuntimesRef.current.get(runtimeTabId)?.lastSubmittedText;
+      const runtime = tabRuntimesRef.current.get(runtimeTabId);
+      const lastSubmittedText = runtime?.lastSubmittedText;
       if (lastSubmittedText) {
-        void handleSendMessage(lastSubmittedText);
+        void handleSendMessage(lastSubmittedText, undefined, {
+          retryUserMessageId: runtime?.retryUserMessageId ?? null,
+        });
       }
     },
     onAuthRepair: () => {
@@ -2573,9 +2598,12 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
       onOpenSettings?.();
     },
     onFreshLookup: () => {
-      const lastSubmittedText = tabRuntimesRef.current.get(runtimeTabId)?.lastSubmittedText;
+      const runtime = tabRuntimesRef.current.get(runtimeTabId);
+      const lastSubmittedText = runtime?.lastSubmittedText;
       if (lastSubmittedText) {
-        void handleSendMessage(lastSubmittedText);
+        void handleSendMessage(lastSubmittedText, undefined, {
+          retryUserMessageId: runtime?.retryUserMessageId ?? null,
+        });
       }
     },
     synthesizingEvidenceId,
@@ -2639,10 +2667,12 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
   };
 
   const handleRetry = () => {
-    const lastSubmittedText = tabRuntimesRef.current.get(runtimeTabId)?.lastSubmittedText;
-    if (lastSubmittedText) {
-      handleSendMessage(lastSubmittedText);
-    }
+    const runtime = tabRuntimesRef.current.get(runtimeTabId);
+    const retryId = runtime?.retryUserMessageId ?? null;
+    const text = runtime?.lastSubmittedText ?? '';
+    if (!text) return;
+    // Same user row, new request id: retry never duplicates the input bubble (D-14).
+    void handleSendMessage(text, undefined, { retryUserMessageId: retryId });
   };
 
   // Auto-send prompt when opened from Command Palette with pendingPrompt
