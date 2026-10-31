@@ -7,6 +7,8 @@ export interface TabRuntimeRegistry {
   patch(tabId: string, patch: TabRuntimePatch, threadId?: string): TabRuntime | undefined;
   reset(tabId: string, threadId: string): TabRuntime;
   discard(tabId: string): void;
+  /** Live read of every runtime, for cleanup paths that must not depend on render state. */
+  getSnapshot(): Readonly<Record<string, TabRuntime>>;
   snapshot: Readonly<Record<string, TabRuntime>>;
 }
 
@@ -66,5 +68,10 @@ export function useTabRuntimes(): TabRuntimeRegistry {
     publish();
   }, [publish]);
 
-  return useMemo(() => ({ get, initialize, patch, reset, discard, snapshot }), [discard, get, initialize, patch, reset, snapshot]);
+  const getSnapshot = useCallback(() => Object.fromEntries(runtimesRef.current), []);
+
+  return useMemo(
+    () => ({ get, initialize, patch, reset, discard, getSnapshot, snapshot }),
+    [discard, get, getSnapshot, initialize, patch, reset, snapshot]
+  );
 }

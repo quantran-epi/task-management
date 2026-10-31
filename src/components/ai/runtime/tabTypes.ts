@@ -45,7 +45,7 @@ export interface TabRuntime {
   knowledgeEnabled: boolean;
   promptOptions: Record<string, unknown>;
   tokenUsage: ChatTokenUsage | undefined;
-  requestController?: AbortController;
+  requestController?: AbortController | undefined;
   confirmationResolver?: ((confirmed: boolean) => void) | undefined;
   pendingConfirmation: {
     toolName: string;
@@ -79,7 +79,7 @@ export function createTabRuntime(
     retryUserMessageId: null,
     wizardState: null,
     exportState: null,
-    model: 'gpt-4o',
+    model: '',
     analysisMode: false,
     mcpEnabled: true,
     knowledgeEnabled: false,
