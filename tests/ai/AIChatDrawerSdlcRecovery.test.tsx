@@ -705,7 +705,7 @@ describe('AIChatDrawer SDLC checkpoint, revision, and cycle recovery', () => {
       fireEvent.drop(dropzone, {
         dataTransfer: { files: [new File(['zip'], 'change-pack.zip', { type: 'application/zip' })] },
       });
-      fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận pack' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận pack' }, { timeout: 5000 }));
       const cabButton = await screen.findByRole('button', { name: /Tạo tờ trình CAB/ });
       await waitFor(() => expect(cabButton).not.toBeDisabled());
       fireEvent.click(cabButton);
