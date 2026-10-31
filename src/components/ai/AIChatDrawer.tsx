@@ -110,7 +110,7 @@ import { StepInputDocsModal } from './wizard/StepInputDocsModal';
 import { createSdlcWorkflowCoordinator, defaultSha256 } from '../../services/wizard/workflowCoordinator';
 import { previousArtifactContent, stripStaleArtifacts, toRevisionModalPreview } from './wizard/revisionView';
 import type { SdlcWorkflowState, SdlcWorkflowMetadata, SdlcStepId, RevisionPreview } from '../../services/wizard/workflowSchemas';
-import type { SdlcSourceRef } from '../../services/wizard/sourceMerge';
+import { buildMergedSdlcInput, type SdlcSourceRef } from '../../services/wizard/sourceMerge';
 import { createWizardCoordinator, deriveActiveWizard, type WizardCoordinatorDeps, type WizardExportResult } from '../../services/wizard/wizardCoordinator';
 import type { ChangePackManifest } from '../../services/wizard/changePack';
 import type { ReconciliationResult } from '../../services/wizard/reconciliation';
@@ -412,6 +412,13 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const [revisionPreview, setRevisionPreview] = useState<RevisionPreview | null>(null);
   const [revisionLoading, setRevisionLoading] = useState(false);
   const sdlcCoordinatorRef = useRef<ReturnType<typeof createSdlcWorkflowCoordinator> | null>(null);
+  // Citation identity resolved for the last intake, keyed by the scope it was resolved under.
+  // A later scope's turn reads it only on an exact scopeKey match, so ids never leak across projects (D-35).
+  const sdlcSourceReferencesRef = useRef<{ scopeKey: string; pl01: string[]; pl02: string[] }>({
+    scopeKey: '',
+    pl01: [],
+    pl02: [],
+  });
 
   // Durable multi-tab state for all scopes from Dexie chatTabs table
   const durableTabs = useLiveQuery<ChatTab[]>(async () => {
@@ -1066,7 +1073,53 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     }
 
     // Kích hoạt AI phân tích tri thức và tạo bản thảo SOLUTION.md đầu tiên
-    const prompt = `[Quy trình SDLC - Khởi tạo SOLUTION cho CR: ${metadata.cr}]\nTính năng: ${metadata.featureName}\nĐơn vị yêu cầu: ${metadata.requestingUnit}\n\n1. YÊU CẦU NGHIỆP VỤ (PL01):\n${pl01}\n\n2. ĐẶC TẢ CHỨC NĂNG (PL02):\n${pl02}\n\nDựa vào ngữ cảnh tri thức của dự án và hai tài liệu trên, hãy phân tích hiện trạng hệ thống, các màn hình/API/bảng DB bị ảnh hưởng và đề xuất bản thảo giải pháp kỹ thuật SOLUTION.md chi tiết.`;
+    const merged = await buildMergedSdlcInput({
+      pl01Text: pl01,
+      pl02Text: pl02,
+      pl01Sources: pl01Sources ?? [],
+      pl02Sources: pl02Sources ?? [],
+    });
+    sdlcSourceReferencesRef.current = {
+      scopeKey,
+      pl01: merged.pl01Sources.map((s) => s.id),
+      pl02: merged.pl02Sources.map((s) => s.id),
+    };
+
+    const sourceById = new Map<string, { kind: 'PL01' | 'PL02'; source: SdlcSourceRef }>([
+      ...merged.pl01Sources.map((s) => ['PL01', s] as const),
+      ...merged.pl02Sources.map((s) => ['PL02', s] as const),
+    ].map(([kind, source]) => [source.id, { kind, source }] as const));
+
+    const citationLines: string[] = [];
+    const seenSourceIds = new Set<string>();
+    for (const citation of merged.citations) {
+      if (seenSourceIds.has(citation.sourceId)) continue;
+      seenSourceIds.add(citation.sourceId);
+      const entry = sourceById.get(citation.sourceId);
+      if (!entry) continue;
+      citationLines.push(
+        `- ${entry.kind} · ${entry.source.title} · id=${citation.sourceId} · v${entry.source.version} · hash=${entry.source.hash.slice(0, 8)} · ${citation.section}`
+      );
+    }
+
+    const conflictLines = merged.conflicts.map((conflict) => {
+      const values = conflict.sources.map((s) => `${s.title}: ${s.value}`).join(' | ');
+      return `- ${conflict.topic}: ${values} (${conflict.warning})`;
+    });
+
+    const prompt = [
+      `[Quy trình SDLC - Khởi tạo SOLUTION cho CR: ${metadata.cr}]`,
+      `- Tính năng: ${metadata.featureName}`,
+      `- Đơn vị yêu cầu: ${metadata.requestingUnit}`,
+      '',
+      merged.mergedContent,
+      '',
+      '[NGUỒN PL01/PL02]',
+      ...(citationLines.length ? citationLines : ['(không có tài liệu nguồn đính kèm)']),
+      ...(conflictLines.length ? ['', '[CẢNH BÁO MÂU THUẪN]', ...conflictLines] : []),
+      '',
+      'Dựa vào ngữ cảnh tri thức của dự án và hai tài liệu trên, hãy phân tích hiện trạng hệ thống, các màn hình/API/bảng DB bị ảnh hưởng và đề xuất bản thảo giải pháp kỹ thuật SOLUTION.md chi tiết.',
+    ].join('\n');
     void handleSendMessageRef.current(prompt);
   }, [currentScope.id, db, durableTabs, getSdlcCoordinator, scopeKey]);
 
@@ -1603,11 +1656,45 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     try {
 
     if (isSdlcActiveTurn) {
+      const scopedRefs = sdlcSourceReferencesRef.current.scopeKey === scopeKey
+        ? sdlcSourceReferencesRef.current
+        : { pl01: [] as string[], pl02: [] as string[] };
+      const baseArtifacts = stripStaleArtifacts(sdlcWorkflowState);
       effectivePrompt = buildSdlcWrapperPrompt({
         userQuery: trimmed,
         step: sdlcWorkflowState?.currentStep || 'SOLUTION',
         metadata: sdlcWorkflowState?.metadata,
-        artifacts: stripStaleArtifacts(sdlcWorkflowState),
+        artifacts: {
+          ...baseArtifacts,
+          ...(scopedRefs.pl01.length
+            ? {
+                pl01: {
+                  ...(baseArtifacts?.pl01 ?? {
+                    kind: 'PL01' as const,
+                    version: 1,
+                    hash: '',
+                    title: 'PL01',
+                    updatedAt: '',
+                  }),
+                  sourceReferences: scopedRefs.pl01,
+                },
+              }
+            : {}),
+          ...(scopedRefs.pl02.length
+            ? {
+                pl02: {
+                  ...(baseArtifacts?.pl02 ?? {
+                    kind: 'PL02' as const,
+                    version: 1,
+                    hash: '',
+                    title: 'PL02',
+                    updatedAt: '',
+                  }),
+                  sourceReferences: scopedRefs.pl02,
+                },
+              }
+            : {}),
+        },
       });
     }
 
