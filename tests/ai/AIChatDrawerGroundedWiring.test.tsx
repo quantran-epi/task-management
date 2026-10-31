@@ -129,7 +129,7 @@ describe('AIChatDrawer Grounded Turn Wiring (Plan 19-14)', () => {
     });
   });
 
-  it('2. Drawer close mid-turn -> abort fires; stale response discarded', async () => {
+  it('2. D-09: drawer close mid-turn does NOT abort; unmount still aborts', async () => {
     let capturedSignal: AbortSignal | null = null;
     let resolveTurn: ((res: any) => void) | null = null;
     const runMock = vi.fn().mockImplementation((inp: GroundedTurnInput) => {
@@ -141,7 +141,7 @@ describe('AIChatDrawer Grounded Turn Wiring (Plan 19-14)', () => {
 
     setGroundedTurnTestHooks({ runGroundedTurn: runMock });
 
-    const { rerender } = render(<AIChatDrawer open={true} onClose={() => {}} db={testDb} />);
+    const { rerender, unmount } = render(<AIChatDrawer open={true} onClose={() => {}} db={testDb} />);
 
     submitMessage('CYTP1002 là gì?');
 
@@ -149,8 +149,13 @@ describe('AIChatDrawer Grounded Turn Wiring (Plan 19-14)', () => {
       expect(runMock).toHaveBeenCalled();
     });
 
-    // Close drawer mid-turn
+    // Closing the drawer while the app runs must leave the turn alive (D-09).
     rerender(<AIChatDrawer open={false} onClose={() => {}} db={testDb} />);
+
+    expect((capturedSignal as AbortSignal | null)?.aborted).toBe(false);
+
+    // Unmounting the drawer is still an abort trigger.
+    unmount();
 
     expect((capturedSignal as AbortSignal | null)?.aborted).toBe(true);
     if (typeof resolveTurn === 'function') {

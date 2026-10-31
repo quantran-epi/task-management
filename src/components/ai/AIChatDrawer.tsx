@@ -1022,6 +1022,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   );
   const wizardPlaceholder = wizardSnapshot && !['completed', 'abandoned'].includes(wizardSnapshot.status) ? 'Trả lời câu hỏi hoặc bổ sung thông tin…' : undefined;
 
+  // Deliberate scope: dispose() aborts only the wizard stageController, never a chat/SDLC turn (D-09 scopes chat/SDLC requests only).
   useEffect(() => {
     if (!open) wizardCoordinatorRef.current?.dispose();
     return () => { wizardCoordinatorRef.current?.dispose(); };
@@ -1156,7 +1157,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     setPendingConfirmation(null);
   }, []);
 
-  // Abort stream on unmount or drawer close
+  // Abort stream on unmount only. Drawer close must not abort an in-flight turn (D-09).
   useEffect(() => {
     return () => {
       if (pendingConfirmationRef.current) {
@@ -1172,20 +1173,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       }
     };
   }, []);
-
-  useEffect(() => {
-    if (!open) {
-      if (pendingConfirmationRef.current) {
-        pendingConfirmationRef.current.resolve(false);
-        pendingConfirmationRef.current = null;
-        setPendingConfirmation(null);
-      }
-      abortControllerRef.current?.abort();
-      currentTurnAbortRef.current?.abort();
-      currentTurnAbortRef.current = null;
-      setGroundedLoadingStatus(null);
-    }
-  }, [open]);
 
   // Abort previous grounded turn on scope change (AI-SPEC §4b)
   useEffect(() => {
