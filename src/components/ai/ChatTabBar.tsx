@@ -177,8 +177,8 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
             id={`chat-tab-${tab.id}`}
             role="tab"
             aria-selected={isActive}
-            aria-controls={`chat-tabpanel-${tab.id}`}
             aria-label={ariaLabel}
+            aria-description="Dùng phím Delete hoặc Backspace để đóng tab"
             tabIndex={isActive ? 0 : -1}
             onClick={() => onSelectTab(tab.id)}
             onDoubleClick={() => {
@@ -282,8 +282,9 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
 
             {/* Chỉ tab chat thường mới có nút đóng tab */}
             {!isSdlc && (
-              <span
-                role="button"
+              <button
+                type="button"
+                tabIndex={-1}
                 aria-label={`Đóng ${tab.title}`}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -292,12 +293,15 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
                 style={{
                   width: 16,
                   height: 16,
+                  padding: 0,
+                  border: 'none',
                   borderRadius: '50%',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   fontSize: 10,
                   color: token.colorTextQuaternary,
+                  backgroundColor: 'transparent',
                   flexShrink: 0,
                   transition: 'background-color 0.15s, color 0.15s',
                 }}
@@ -311,7 +315,7 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
                 }}
               >
                 <CloseOutlined style={{ fontSize: 9 }} />
-              </span>
+              </button>
             )}
           </div>
         );
