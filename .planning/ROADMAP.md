@@ -292,7 +292,7 @@ Plans: 11 plans in 11 sequential waves (every plan edits `AIChatDrawer.tsx` or i
 
 **Wave 8** *(depends on 25.1.1-07)*
 
-- [ ] 25.1.1-08-PLAN.md — Remove the wizard surface: preview-only historic cards, drawer state retired, routing tests rewritten to assert the approval path is absent
+- [x] 25.1.1-08-PLAN.md — Remove the wizard surface: preview-only historic cards, drawer state retired, routing tests rewritten to assert the approval path is absent
 
 **Wave 9** *(depends on 25.1.1-08)*
 
