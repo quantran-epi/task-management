@@ -107,10 +107,11 @@ import { ChangePackDropzone } from './wizard/ChangePackDropzone';
 import { ChangePackConfirmStrip, type ChangePackUiResult } from './wizard/ChangePackConfirmStrip';
 import { DriftMatrixView } from './wizard/DriftMatrixView';
 import { SdlcWorkflowHub } from './wizard/SdlcWorkflowHub';
-import { StepSolutionPanel, StepChangePackPanel, type HubChangePackDraft } from './wizard/HubStepPanels';
+import { StepSolutionPanel, StepChangePackPanel, StepTechDocsPanel, type HubChangePackDraft, type StepTechDocsState } from './wizard/HubStepPanels';
 import { StepInputDocsModal } from './wizard/StepInputDocsModal';
 import { saveHubSolution } from '../../services/wizard/hubSolution';
 import { confirmHubChangePack, validateHubChangePack } from '../../services/wizard/hubChangePack';
+import { generateHubTechDocs } from '../../services/wizard/hubTechDocs';
 import { ChangePackValidationError } from '../../services/wizard/changePack';
 import { createSdlcWorkflowCoordinator, defaultSha256 } from '../../services/wizard/workflowCoordinator';
 import { previousArtifactContent, stripStaleArtifacts, toRevisionModalPreview } from './wizard/revisionView';
@@ -121,7 +122,7 @@ import type { ChangePackManifest } from '../../services/wizard/changePack';
 import type { ReconciliationResult } from '../../services/wizard/reconciliation';
 import type { ChangePackValidationCode } from '../../services/wizard/changePack';
 import type { WizardSkill, WizardSnapshot } from '../../services/ai/wizardSchemas';
-import { collectWizardEvidence, runWizardStage } from '../../services/ai/wizardService';
+import { collectWizardEvidence, runWizardStage, type WizardEvidenceInput } from '../../services/ai/wizardService';
 import { runLocalGroundedRetrieval } from '../../services/search/localGroundedRetrieval';
 import { saveSolutionVersion } from '../../services/wizard/artifactRepo';
 import { getMessagesByThreadId as loadChatMessages } from '../../db/repositories/chatRepo';
@@ -438,6 +439,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   // Hub step-4 draft: validation/confirm state only. Never persisted, reset per tab.
   const [hubPackDraft, setHubPackDraft] = useState<HubChangePackDraft>({ status: 'idle' });
   const hubPackBusyRef = useRef(false);
+  // Hub step-5 generation state; derived from the workflow artifacts, never persisted.
+  const [techDocsState, setTechDocsState] = useState<StepTechDocsState>('blocked');
+  const techDocsBusyRef = useRef(false);
   const [revisionDraft, setRevisionDraft] = useState('');
   const [revisionPreview, setRevisionPreview] = useState<RevisionPreview | null>(null);
   const [revisionLoading, setRevisionLoading] = useState(false);
@@ -1361,6 +1365,99 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     setHubPackDraft({ status: 'idle' });
   }, []);
 
+  // Evidence scope for step 5: exactly the sets published for this project (the lookup the wizard's
+  // `resolveEvidenceInput` used). An empty list would strip every PL07 citation to `unknown`.
+  const resolveSdlcSetIds = useCallback(async (projectId: string) => {
+    const sets = await db.documentSets.filter((set) => set.sdlc?.projectId === projectId).toArray();
+    return sets.map((set) => set.id);
+  }, [db]);
+
+  const collectSdlcEvidence = useCallback((input: WizardEvidenceInput) => collectWizardEvidence(input, {
+    runLocalBm25: (localInput) => runLocalGroundedRetrieval(localInput, {
+      loadSetMembers: async (setIds) => {
+        const sets = await db.documentSets.where('id').anyOf(setIds).toArray();
+        return sets.flatMap((set) => set.documentIds.map((documentId) => ({ setId: set.id, setName: set.name, documentId })));
+      },
+      loadNoteBody: async (documentId) => {
+        const note = await db.notes.get(documentId);
+        return note ? { title: note.title, body: note.body, updatedAt: note.updatedAt } : null;
+      },
+    }),
+  }), [db]);
+
+  /** Hub step 5: generate PL03B & PL07 from the committed SOLUTION + confirmed pack, then commit both. */
+  const handleHubGenerateTechDocs = useCallback(async () => {
+    if (techDocsBusyRef.current) return;
+    const solution = sdlcWorkflowState?.artifacts.solution;
+    const reconciliation = sdlcWorkflowState?.artifacts.driftResult;
+    const sdlcThreadId = durableTabs.find((tab) => tab.type === 'sdlc')?.threadId;
+    if (!sdlcWorkflowState || !currentScope.id || !sdlcThreadId || !solution?.noteId || !reconciliation) {
+      setTechDocsState('blocked');
+      return;
+    }
+
+    const [config, apiKey] = await Promise.all([getNineRouterConfig(db), getNineRouterApiKey(db)]);
+    const model = resolveActiveModel();
+    if (!config.endpoint || !apiKey || !model) {
+      message.error('Chưa cấu hình mô hình AI. Mở Cài đặt để cấu hình endpoint và API key.');
+      return;
+    }
+
+    const tabAtStart = activeTabId;
+    techDocsBusyRef.current = true;
+    setTechDocsState('generating');
+    try {
+      const pl03bVersion = sdlcWorkflowState.artifacts.pl03b?.version ?? 0;
+      const pl07Version = sdlcWorkflowState.artifacts.pl07?.version ?? 0;
+      // The pair generates together, so one draft revision (max of the two chains + 1) is shared;
+      // the idempotency keys stay distinct by kind, and the body hash decides replay vs. new version.
+      const draftRevision = Math.max(pl03bVersion, pl07Version) + 1;
+      const result = await generateHubTechDocs({
+        db,
+        projectId: currentScope.id,
+        threadId: sdlcThreadId,
+        sessionId: sdlcWorkflowState.sessionId,
+        inputRevision: pl03bVersion + pl07Version + 1,
+        draftRevision,
+        metadata: sdlcWorkflowState.metadata,
+        solution: { noteId: solution.noteId, version: solution.version, hash: solution.hash },
+        reconciliation,
+        model: { endpoint: config.endpoint, apiKey, model },
+        collectEvidence: collectSdlcEvidence,
+        resolveSetIds: resolveSdlcSetIds,
+      });
+      if (activeTabIdRef.current !== tabAtStart) return;
+
+      const coordinator = getSdlcCoordinator();
+      // `commitTechDoc` is the production writer for step 5 (D-U3): each Note is persisted first and
+      // only its id reaches workflow state, so a failed commit leaves a valid orphan note, never a
+      // dangling workflow ref.
+      await coordinator?.commitTechDoc('PL03B', result.pl03b.markdown, result.pl03b.noteId);
+      const latest = await coordinator?.commitTechDoc('PL07', result.pl07.markdown, result.pl07.noteId);
+      if (latest) setSdlcWorkflowState(latest);
+      setTechDocsState('ready');
+      message.success(
+        `Đã lưu PL03B v${latest?.artifacts.pl03b?.version ?? draftRevision} và PL07 v${latest?.artifacts.pl07?.version ?? draftRevision} vào tài liệu dự án.`
+      );
+    } catch {
+      if (activeTabIdRef.current !== tabAtStart) return;
+      setTechDocsState('error');
+      message.error('Không sinh được PL03B & PL07. Kiểm tra SOLUTION.md và change-pack rồi thử lại.');
+    } finally {
+      techDocsBusyRef.current = false;
+    }
+  }, [
+    activeTabId,
+    collectSdlcEvidence,
+    currentScope.id,
+    db,
+    durableTabs,
+    getSdlcCoordinator,
+    resolveActiveModel,
+    resolveSdlcSetIds,
+    sdlcWorkflowState,
+  ]);
+
   const exportedFiles = new Map(Array.from(exportResults.entries()).map(([id, result]) => [id, result.noteSaved ? {
     filename: result.filename ?? 'wizard.docx', sizeBytes: result.sizeBytes ?? 0, noteId: result.noteId,
     noteSaved: result.noteSaved, downloadInitiated: result.downloadInitiated, savePickerSaved: result.savePickerSaved,
@@ -1439,6 +1536,16 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         onSelectFile={(file) => void handleHubPackSelect(file)}
         onConfirm={(manifest) => void handleHubPackConfirm(manifest)}
         onReplace={handleHubPackReplace}
+      />
+    ),
+    techDocs: (
+      <StepTechDocsPanel
+        pl03b={sdlcWorkflowState.artifacts.pl03b}
+        pl07={sdlcWorkflowState.artifacts.pl07}
+        stale={sdlcWorkflowState.staleSteps.includes('TECH_DOCS')}
+        state={techDocsState}
+        onGenerate={() => void handleHubGenerateTechDocs()}
+        onRetry={() => void handleHubGenerateTechDocs()}
       />
     ),
   } : undefined;
@@ -1601,7 +1708,19 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     solutionSaveBusyRef.current = false;
     setHubPackDraft({ status: 'idle' });
     hubPackBusyRef.current = false;
+    setTechDocsState('blocked');
+    techDocsBusyRef.current = false;
   }, [activeTabId]);
+
+  // Step 5 prerequisites come from the workflow artifacts; never overwrite an in-flight generation.
+  useEffect(() => {
+    setTechDocsState((current) => {
+      if (current === 'generating') return current;
+      const ready = Boolean(sdlcWorkflowState?.artifacts.solution?.noteId && sdlcWorkflowState?.artifacts.changePack);
+      if (!ready) return 'blocked';
+      return current === 'error' ? current : 'ready';
+    });
+  }, [sdlcWorkflowState]);
 
   // Every render and every callback reads one owner: the active tab's runtime. Only while the
   // durable tab list is hydrating does the in-flight turn's runtime stand in, because the

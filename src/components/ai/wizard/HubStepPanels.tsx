@@ -259,22 +259,93 @@ export const StepChangePackPanel: React.FC<StepChangePackPanelProps> = ({
   );
 };
 
+export type StepTechDocsState = 'blocked' | 'ready' | 'generating' | 'error';
+
 export interface StepTechDocsPanelProps {
   pl03b?: SdlcArtifactRef | undefined;
   pl07?: SdlcArtifactRef | undefined;
   stale: boolean;
+  state?: StepTechDocsState | undefined;
+  errorMessage?: string | undefined;
+  onGenerate?: (() => void) | undefined;
+  onRetry?: (() => void) | undefined;
   renderExportRow?: ((kind: 'PL03B' | 'PL07') => React.ReactNode) | undefined;
 }
 
-export const StepTechDocsPanel: React.FC<StepTechDocsPanelProps> = ({ pl03b, pl07, renderExportRow }) => {
+export const StepTechDocsPanel: React.FC<StepTechDocsPanelProps> = ({
+  pl03b,
+  pl07,
+  stale,
+  state = 'blocked',
+  errorMessage,
+  onGenerate,
+  onRetry,
+  renderExportRow,
+}) => {
+  const { token } = theme.useToken();
+  const pl03bRowRef = useRef<HTMLDivElement>(null);
+  const previousState = useRef<StepTechDocsState>(state);
+
+  // The status line replaces the button's label, so focus is re-homed onto the artifact export.
+  useEffect(() => {
+    const from = previousState.current;
+    previousState.current = state;
+    if (from !== 'generating' || state !== 'ready') return;
+    const row = pl03bRowRef.current;
+    (row?.querySelector('button') ?? row)?.focus();
+  }, [state]);
+
   const rows: Array<{ kind: 'PL03B' | 'PL07'; label: string; artifact: SdlcArtifactRef | undefined }> = [
     { kind: 'PL03B', label: 'PL03B — Tài liệu triển khai', artifact: pl03b },
     { kind: 'PL07', label: 'PL07 — Checklist review', artifact: pl07 },
   ];
+  const rerun = stale || Boolean(pl03b) || Boolean(pl07);
+  const generateLabel = rerun ? 'Tạo lại PL03B & PL07' : 'Tạo PL03B & PL07';
+
   return (
     <PanelBlock>
+      {state === 'blocked' && (
+        <span style={bodyStyle(token.colorTextSecondary)}>
+          Cần SOLUTION.md và change-pack đã xác nhận trước khi sinh PL03B & PL07.
+        </span>
+      )}
+      {state === 'generating' && (
+        <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 4, ...bodyStyle(token.colorTextSecondary) }}>
+          <SyncOutlined spin aria-hidden style={{ color: token.colorPrimary }} />
+          <span>Đang sinh PL03B & PL07…</span>
+        </div>
+      )}
+      {state === 'error' && (
+        <Alert
+          type="error"
+          showIcon
+          message={errorMessage ?? 'Không sinh được PL03B & PL07. Kiểm tra SOLUTION.md và change-pack rồi thử lại.'}
+        />
+      )}
+      {state === 'error' ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'stretch' }}>
+          <Button onClick={onRetry}>Thử lại</Button>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'stretch' }}>
+          <Button
+            type="primary"
+            disabled={state === 'blocked' || state === 'generating'}
+            loading={state === 'generating'}
+            onClick={onGenerate}
+          >
+            {generateLabel}
+          </Button>
+        </div>
+      )}
       {rows.map((row) => (
-        <div key={row.kind} style={{ display: 'flex', flexDirection: 'column', gap: 4 }} data-testid={`export-slot-${row.kind}`}>
+        <div
+          key={row.kind}
+          ref={row.kind === 'PL03B' ? pl03bRowRef : undefined}
+          tabIndex={row.kind === 'PL03B' ? -1 : undefined}
+          style={{ display: 'flex', flexDirection: 'column', gap: 4 }}
+          data-testid={`export-slot-${row.kind}`}
+        >
           <ArtifactRow
             label={row.label}
             artifact={row.artifact}
