@@ -280,7 +280,7 @@ Plans: 11 plans in 11 sequential waves (every plan edits `AIChatDrawer.tsx` or i
 
 **Wave 5** *(depends on 25.1.1-04)*
 
-- [ ] 25.1.1-05-PLAN.md — Hub step 5: PL03B/PL07 generation wired to `commitTechDoc`, stage call proven against the real `runWizardStage`, evidence scoped to the project's SDLC sets
+- [x] 25.1.1-05-PLAN.md — Hub step 5: PL03B/PL07 generation wired to `commitTechDoc`, stage call proven against the real `runWizardStage`, evidence scoped to the project's SDLC sets
 
 **Wave 6** *(depends on 25.1.1-05)*
 
