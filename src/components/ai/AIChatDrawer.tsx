@@ -594,6 +594,30 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         if (cancelled) return;
 
         if (isProjectScope && currentScope.id) {
+          // One-shot migration: a legacy global analysis-mode flag seeds durable per-tab config,
+          // then the key is removed so it can never override per-tab state again (D-07).
+          let legacyAnalysisMode = false;
+          try {
+            legacyAnalysisMode = localStorage.getItem(AI_ANALYSIS_MODE_KEY) === 'true';
+          } catch {
+            legacyAnalysisMode = false;
+          }
+          if (legacyAnalysisMode) {
+            for (const tab of existing) {
+              if (tab.type !== 'chat' || tab.config?.analysisMode !== undefined) continue;
+              try {
+                await updateChatTab(tab.id, { config: { ...(tab.config ?? {}), analysisMode: true } }, db);
+              } catch (err) {
+                logAiChatError('Failed to migrate tab analysis mode', err);
+              }
+            }
+            try {
+              localStorage.removeItem(AI_ANALYSIS_MODE_KEY);
+            } catch {
+              // ignore storage error
+            }
+          }
+
           const sdlcTab = existing.find((t) => t.type === 'sdlc') ?? await getOrCreateSdlcTab(currentScope.id, db);
           const ordinary = existing.filter((t) => t.type === 'chat');
           if (ordinary.length === 0) {
@@ -1277,10 +1301,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   }, []);
 
   // Analysis mode: durable per-tab state via ChatTab.config. Tab 'sdlc' is always true.
-  const currentTabAnalysisMode = isSdlcActiveTab
-    ? true
-    : Boolean(activeTab?.config?.analysisMode) ||
-      (typeof window !== 'undefined' && window.localStorage?.getItem('planner:ai_analysis_mode') === 'true');
+  // The legacy global key never feeds this expression; it only seeds durable config once (D-07).
+  const currentTabAnalysisMode = isSdlcActiveTab ? true : Boolean(activeTab?.config?.analysisMode);
 
   const handleToggleAnalysisMode = useCallback(async () => {
     if (isSdlcActiveTab) {
@@ -2880,6 +2902,7 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
               <Tag
                 color="warning"
                 icon={<ExperimentFilled />}
+                data-testid="analysis-mode-header-tag"
                 style={{
                   margin: 0,
                   fontSize: 11,

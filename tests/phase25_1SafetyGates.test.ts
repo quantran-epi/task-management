@@ -215,9 +215,12 @@ describe('Phase 25.1 static safety gates', () => {
     const localStorageKeys = [...drawer.matchAll(/localStorage\.(?:getItem|setItem)\(\s*([A-Z0-9_]+)/g)].map(
       (match) => match[1]
     );
+    // AI_ANALYSIS_MODE_KEY is a one-shot migration read plus removal; it is never a runtime
+    // source of truth, because currentTabAnalysisMode reads only durable ChatTab.config (D-07).
     expect(new Set(localStorageKeys)).toEqual(
-      new Set(['AI_CHAT_WIDTH_KEY', 'AI_AUTO_APPROVE_MUTATIONS_KEY'])
+      new Set(['AI_CHAT_WIDTH_KEY', 'AI_AUTO_APPROVE_MUTATIONS_KEY', 'AI_ANALYSIS_MODE_KEY'])
     );
+    expect(drawer).not.toContain('Boolean(activeTab?.config?.analysisMode) ||');
   });
 
   it('contains no hidden skip, todo, or fixme markers in targeted phase suites', () => {
