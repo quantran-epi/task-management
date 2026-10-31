@@ -535,6 +535,12 @@ describe('AIChatDrawer SDLC checkpoint, revision, and cycle recovery', () => {
       await waitFor(() =>
         expect(screen.getByText(/Nguồn: 1 tài liệu · SOLUTION/i)).toBeInTheDocument()
       );
+      // The preview resolved, but antd's Button mirrors `loading` through a delayed layout effect:
+      // clicking while the stale `ant-btn-loading` class is still applied is swallowed by
+      // `handleClick`. Wait for the delivered state, not just the preview text.
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: /Xác nhận cập nhật/ })).not.toHaveClass('ant-btn-loading')
+      );
     };
 
     it('previews from the hub modal and commits exactly one new version on confirm', async () => {
@@ -610,7 +616,61 @@ describe('AIChatDrawer SDLC checkpoint, revision, and cycle recovery', () => {
         expect(next?.cycles).toHaveLength(2);
         expect(next?.cycles?.[1]?.status).toBe('active');
         expect(next?.artifacts.solution?.version).toBe(2);
+      }, { timeout: 5000, interval: 50 });
+    });
+
+    it('releases the CAB in-flight guard when the model is not configured', async () => {
+      const { sdlc } = await seedTabs();
+      await db.settings.put({
+        key: stateKey,
+        value: makeState(sdlc.threadId, {
+          currentStep: 'CAB',
+          artifacts: {
+            pl02: {
+              kind: 'PL02',
+              version: 1,
+              hash: '02'.repeat(32),
+              title: 'PL02',
+              content: 'PL02 content',
+              sourceHashes: [],
+              updatedAt: TS,
+            },
+            pl03b: {
+              kind: 'PL03B',
+              version: 1,
+              hash: '04'.repeat(32),
+              title: 'PL03B',
+              content: 'PL03B content',
+              sourceHashes: ['02'.repeat(32)],
+              updatedAt: TS,
+            },
+            pl07: {
+              kind: 'PL07',
+              version: 1,
+              hash: '05'.repeat(32),
+              title: 'PL07',
+              content: 'PL07 content',
+              sourceHashes: ['04'.repeat(32)],
+              updatedAt: TS,
+            },
+          },
+        }),
       });
+      const apiKeySpy = vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('');
+      const generateCab = vi.spyOn(hubCabModule, 'generateHubCab');
+
+      render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
+      const cabButton = await screen.findByRole('button', { name: /Tạo tờ trình CAB/ });
+      await waitFor(() => expect(cabButton).not.toBeDisabled());
+      const before = apiKeySpy.mock.calls.length;
+
+      fireEvent.click(cabButton);
+      await waitFor(() => expect(apiKeySpy.mock.calls.length).toBe(before + 1));
+
+      // A leaked `cabActionRef` would return at the top of the second click and never re-read config.
+      fireEvent.click(cabButton);
+      await waitFor(() => expect(apiKeySpy.mock.calls.length).toBe(before + 2));
+      expect(generateCab).not.toHaveBeenCalled();
     });
 
     it('closes the active cycle when CAB generation succeeds', async () => {

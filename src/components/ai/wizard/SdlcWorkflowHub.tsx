@@ -53,7 +53,7 @@ export interface SdlcWorkflowHubProps {
   revisionLoading?: boolean | undefined;
   onRevisionDraftChange?: ((value: string) => void) | undefined;
   onPreviewRevision?: ((type: 'requirement' | 'solution', draft: string) => void | Promise<void>) | undefined;
-  onCommitRevision?: (() => void | Promise<void>) | undefined;
+  onCommitRevision?: ((type: 'requirement' | 'solution') => void | Promise<void>) | undefined;
 }
 
 interface StepConfig {
@@ -649,11 +649,14 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = ({
           staleStepIds={revisionPreview?.impactSteps ?? (revisionModalType === 'requirement' ? requirementStaleImpact : solutionStaleImpact)}
           loading={revisionLoading}
           onConfirm={() => {
-            if (!revisionPreview || !onCommitRevision) {
+            // The user already pressed "Xác nhận cập nhật", so never silently turn that click into
+            // a second preview: without a committed preview (the blur preview raced) fall back to
+            // preview-then-commit instead of returning with nothing done.
+            if (!revisionPreview) {
               void onPreviewRevision?.(revisionModalType!, effectiveRevisionDraft);
               return;
             }
-            void onCommitRevision();
+            void onCommitRevision?.(revisionModalType!);
             setRevisionModalType(null);
           }}
           onClose={() => setRevisionModalType(null)}

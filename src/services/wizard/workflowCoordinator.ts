@@ -59,8 +59,12 @@ export function createSdlcWorkflowCoordinator(deps: WorkflowCoordinatorDeps) {
   const getState = (): SdlcWorkflowState | undefined => currentState;
 
   const restore = async (): Promise<SdlcWorkflowState | undefined> => {
+    // A turn that emits while this read is in flight must not be overwritten by the snapshot
+    // loaded a moment earlier: that loses the newer state (e.g. a freshly opened cycle).
+    const stateAtRead = currentState;
     const loaded = await deps.loadState?.();
     if (!loaded) return undefined;
+    if (currentState !== stateAtRead) return currentState;
     const parsed = SdlcWorkflowStateSchema.parse(loaded);
     const checkpoint = parsed.checkpoint?.status === 'running'
       ? SdlcCheckpointSchema.parse({ ...parsed.checkpoint, status: 'interrupted' })

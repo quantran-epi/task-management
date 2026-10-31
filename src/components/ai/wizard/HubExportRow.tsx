@@ -12,6 +12,7 @@ export interface HubExportRowProps {
   filename?: string | undefined;
   sizeBytes?: number | undefined;
   noteId?: string | undefined;
+  errorCode?: string | undefined;
   onExport: () => void;
   onRetry: () => void;
 }
@@ -38,6 +39,7 @@ export const HubExportRow: React.FC<HubExportRowProps> = ({
   filename,
   sizeBytes,
   noteId,
+  errorCode,
   onExport,
   onRetry,
 }) => {
@@ -128,7 +130,13 @@ export const HubExportRow: React.FC<HubExportRowProps> = ({
 
       {phase === 'failed' && (
         <>
-          <Alert type="error" showIcon role="alert" message={FAILURE_COPY} />
+          <Alert
+            type="error"
+            showIcon
+            role="alert"
+            message={FAILURE_COPY}
+            description={errorCode}
+          />
           <Button size="small" onClick={onRetry} style={{ alignSelf: 'flex-start' }}>
             Thử lại
           </Button>

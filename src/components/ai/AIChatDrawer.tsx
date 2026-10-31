@@ -148,6 +148,7 @@ export type HubExportState = {
   filename?: string;
   sizeBytes?: number;
   noteId?: string;
+  errorCode?: string;
 };
 
 const EMPTY_EXPORT_STATES: Record<HubExportKind, HubExportState> = {
@@ -158,7 +159,10 @@ const EMPTY_EXPORT_STATES: Record<HubExportKind, HubExportState> = {
 };
 
 function toExportState(result: HubExportResult): HubExportState {
-  if (result.status === 'failed') return { phase: 'failed' };
+  // Keep the failure cause: without it a failed export renders no reason at all.
+  if (result.status === 'failed') {
+    return { phase: 'failed', ...(result.errorCode !== undefined ? { errorCode: result.errorCode } : {}) };
+  }
   return {
     phase: result.status,
     ...(result.filename !== undefined ? { filename: result.filename } : {}),
@@ -938,18 +942,28 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     }
   }, [getSdlcCoordinator]);
 
-  const handleCommitRevision = useCallback(async () => {
-    if (!revisionPreview) {
-      message.error('Chưa có bản xem trước để xác nhận');
-      return;
-    }
+  const handleCommitRevision = useCallback(async (type: 'requirement' | 'solution') => {
     const coordinator = getSdlcCoordinator();
     if (!coordinator) return;
     try {
-      const cycles = sdlcWorkflowState?.cycles ?? [];
+      // The blur preview is async, so a fast confirm can arrive before `revisionPreview` is set.
+      // Build it here from the current draft instead of dropping the user's confirmation.
+      let preview = revisionPreview;
+      if (!preview) {
+        if (!revisionDraft.trim()) {
+          message.error('Chưa có bản xem trước để xác nhận');
+          return;
+        }
+        preview = await coordinator.previewRevision(type === 'requirement' ? 'PL01' : 'SOLUTION', revisionDraft);
+      }
+      // The persisted state may still be loading when the user confirms: openCycle/commitRevision
+      // throw WORKFLOW_NOT_INITIALIZED on an empty coordinator, and the catch would swallow it.
+      const current = coordinator.getState() ?? (await coordinator.restore());
+      if (!current) return;
+      const cycles = current.cycles ?? [];
       const lastCycle = cycles[cycles.length - 1];
       if (!lastCycle || lastCycle.status === 'completed') await coordinator.openCycle();
-      const next = await coordinator.commitRevision(revisionPreview, true);
+      const next = await coordinator.commitRevision(preview, true);
       setSdlcWorkflowState(next);
       setRevisionPreview(null);
       setRevisionDraft('');
@@ -957,7 +971,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     } catch {
       message.error('Không thể cập nhật tài liệu. Bản đang active có thể đã thay đổi.');
     }
-  }, [getSdlcCoordinator, revisionPreview, sdlcWorkflowState]);
+  }, [getSdlcCoordinator, revisionPreview, revisionDraft]);
 
   const handleSdlcCheckpointDiscard = useCallback(async () => {
     const coordinator = getSdlcCoordinator();
@@ -1251,7 +1265,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
   const handleCabGenerate = useCallback(async () => {
     if (cabActionRef.current) return;
-    cabActionRef.current = true;
     const sdlcThreadId = durableTabs.find((tab) => tab.type === 'sdlc')?.threadId;
     if (!sdlcWorkflowState || !currentScope.id || !sdlcThreadId) {
       setCabState('blocked');
@@ -1265,6 +1278,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       return;
     }
 
+    // Claimed only after every early return above: the guard is cleared in the finally below,
+    // so setting it earlier would strand the CAB button forever on an unconfigured model.
+    cabActionRef.current = true;
     const tabAtStart = activeTabId;
     // Kept for plan 08's cleanup: the in-flight guard the old wizard CAB body used.
     setCabState('generating');
@@ -1365,6 +1381,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         filename={state.filename}
         sizeBytes={state.sizeBytes}
         noteId={state.noteId}
+        errorCode={state.errorCode}
         onExport={() => void handleHubExport(kind)}
         onRetry={() => handleHubExportRetry(kind)}
       />
@@ -3372,7 +3389,7 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
             revisionLoading={revisionLoading}
             onRevisionDraftChange={setRevisionDraft}
             onPreviewRevision={(type, draft) => void handlePreviewRevision(type, draft)}
-            onCommitRevision={() => void handleCommitRevision()}
+            onCommitRevision={(type) => void handleCommitRevision(type)}
             onResetWorkflow={() => {
               setSdlcWorkflowState(undefined);
               message.success('Đã làm mới quy trình SDLC');

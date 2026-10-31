@@ -79,6 +79,19 @@ describe('HubExportRow', () => {
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 
+  it('failed surfaces the error code so the cause is not silent', () => {
+    render(
+      <HubExportRow
+        {...baseProps}
+        kind="PL07"
+        label="PL07"
+        phase="failed"
+        errorCode="ARTIFACT_NOT_READY"
+      />
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent('ARTIFACT_NOT_READY');
+  });
+
   it('never renders Đã lưu when noteId is undefined', () => {
     render(
       <HubExportRow
