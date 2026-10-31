@@ -1164,9 +1164,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         pendingConfirmationRef.current.resolve(false);
         pendingConfirmationRef.current = null;
       }
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
+      abortControllerRef.current?.abort();
       if (currentTurnAbortRef.current) {
         currentTurnAbortRef.current.abort();
         currentTurnAbortRef.current = null;
@@ -1190,9 +1188,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       pendingConfirmationRef.current = null;
       setPendingConfirmation(null);
     }
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
+    abortControllerRef.current?.abort();
     if (currentTurnAbortRef.current) {
       currentTurnAbortRef.current.abort();
       currentTurnAbortRef.current = null;
