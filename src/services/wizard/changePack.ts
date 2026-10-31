@@ -131,7 +131,7 @@ function freezeManifest(manifest: ChangePackManifest): Readonly<ChangePackManife
 
 export async function validateChangePack(
   file: Blob,
-  expectedIdentity: ChangePackIdentity,
+  expectedIdentity?: ChangePackIdentity,
   limits: ChangePackLimits = ChangePackLimits,
   onPersistentWrite?: () => void,
 ): Promise<Readonly<ChangePackManifest>> {
@@ -195,7 +195,11 @@ export async function validateChangePack(
     reject('PACK_META_INVALID');
   }
 
-  const expected = ChangePackIdentitySchema.parse(expectedIdentity);
+  // With no caller-supplied identity the pack's own meta.json is authoritative and the
+  // comparison is a no-op; the CR gate belongs to the caller (see validateHubChangePack).
+  const expected = expectedIdentity
+    ? ChangePackIdentitySchema.parse(expectedIdentity)
+    : ChangePackIdentitySchema.parse({ cr: meta.cr, base: meta.base, head: meta.head, branch: meta.branch });
   if (Object.keys(expected).some((key) => meta[key as keyof ChangePackIdentity] !== expected[key as keyof ChangePackIdentity])) {
     reject('PACK_IDENTITY_MISMATCH');
   }
