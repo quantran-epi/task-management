@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: milestone
-status: verifying
-stopped_at: "25.1-15 Task 5 pending — tester must run `npm run tauri:dev` and fill the `## Sign-off` rows in 25.1-UAT.md"
-last_updated: "2026-10-31T16:17:17.992Z"
-last_activity: 2026-10-31 -- Plan 25.1-15 Tasks 1-4 committed
+status: executing
+stopped_at: "25.1.1-01 complete — next: plan 25.1.1-02 (hub shell)"
+last_updated: "2026-10-31T19:27:28Z"
+last_activity: 2026-11-01 -- Plan 25.1.1-01 complete (content-addressed artifact persistence)
 progress:
   total_phases: 11
   completed_phases: 7
   total_plans: 84
-  completed_plans: 76
-  percent: 64
+  completed_plans: 77
+  percent: 65
 ---
 
 # Project State
@@ -21,15 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-07)
 
 **Core value:** Make planned work realistically fit available time while giving the personal user evidence-grounded access to their local banking IT knowledge.
-**Current focus:** Phase 25.1 — sdlc-flow-hardening-multi-tab-ai-chat-isolation
+**Current focus:** Phase 25.1.1 — unify-sdlc-workflow-move-change-pack-pl03b-pl07-generation-c
 
 ## Current Position
 
-Phase: 25.1.1 (unify-sdlc-workflow-move-change-pack-pl03b-pl07-generation-c) — NOT STARTED
-Plan: 15 of 15
-Status: Plan 25.1-15 Tasks 1-4 complete; Task 5 (manual Tauri gates G1/G2/G3) is a blocking human-verify checkpoint
-Last activity: 2026-10-31 -- Plan 25.1-15 Tasks 1-4 committed
-Stopped at: 25.1-15 Task 5 pending — tester must run `npm run tauri:dev` and fill the `## Sign-off` rows in 25.1-UAT.md
+Phase: 25.1.1 (unify-sdlc-workflow-move-change-pack-pl03b-pl07-generation-c) — IN PROGRESS
+Plan: 1 of 11 complete (25.1.1-01)
+Status: Plan 25.1.1-01 complete; wave 1 done, next is 25.1.1-02 (hub shell)
+Last activity: 2026-11-01 -- Plan 25.1.1-01 complete (content-addressed artifact persistence)
+Stopped at: 25.1.1-01 complete — next: plan 25.1.1-02 (hub shell)
 
 Progress: [██████████] 100%
 

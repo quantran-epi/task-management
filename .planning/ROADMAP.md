@@ -264,7 +264,7 @@ Plans: 11 plans in 11 sequential waves (every plan edits `AIChatDrawer.tsx` or i
 
 **Wave 1** *(no dependencies)*
 
-- [ ] 25.1.1-01-PLAN.md — Wizard-free, content-addressed artifact persistence: identity assertions replace the wizard-snapshot gate; the key is addressed by `inputHash`, not `draftRevision`
+- [x] 25.1.1-01-PLAN.md — Wizard-free, content-addressed artifact persistence: identity assertions replace the wizard-snapshot gate; the key is addressed by `inputHash`, not `draftRevision`
 
 **Wave 2** *(depends on 25.1.1-01)*
 
