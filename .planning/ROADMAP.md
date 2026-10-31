@@ -300,7 +300,7 @@ Plans: 11 plans in 11 sequential waves (every plan edits `AIChatDrawer.tsx` or i
 
 **Wave 10** *(depends on 25.1.1-09)*
 
-- [ ] 25.1.1-10-PLAN.md — Delete `wizardCoordinator.ts` and its suites; replace the wizard Playwright spec with a hub-only spec
+- [x] 25.1.1-10-PLAN.md — Delete `wizardCoordinator.ts` and its suites; replace the wizard Playwright spec with a hub-only spec
 
 **Wave 11** *(depends on 25.1.1-10)*
 
