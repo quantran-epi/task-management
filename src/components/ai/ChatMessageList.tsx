@@ -168,26 +168,12 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
               groundedCallbacks={groundedCallbacks}
               wizardCallbacks={wizardCallbacks}
             />
-            {transientClarifyMessage &&
-              msg.role === 'user' &&
-              msg.content === transientClarifyMessage.originalQuery && (
-                <div style={{ marginTop: -4, marginBottom: 12, display: 'flex', width: '100%' }}>
-                  <IntentRoutingPrompt
-                    question={transientClarifyMessage.clarifyQuestion}
-                    originalQuery={transientClarifyMessage.originalQuery}
-                    onCancel={onCancelClarify}
-                  />
-                </div>
-              )}
           </React.Fragment>
         );
       })}
 
-      {/* Fallback IntentRoutingPrompt if user query message not found in list */}
-      {transientClarifyMessage &&
-        !messages.some(
-          (m) => m.role === 'user' && m.content === transientClarifyMessage.originalQuery
-        ) && (
+      {/* Clarify state is owned by the tab that produced it, so it renders once, after the transcript. */}
+      {transientClarifyMessage && (
           <div style={{ marginBottom: 12, display: 'flex', width: '100%' }}>
             <IntentRoutingPrompt
               question={transientClarifyMessage.clarifyQuestion}

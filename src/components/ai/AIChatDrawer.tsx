@@ -319,12 +319,28 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   // Grounded turn state & abort controller per turn (AI-SPEC §4b)
   const [activePreviewCitation, setActivePreviewCitation] = useState<PersistedCitation | null>(null);
   const [latestRoutedScope, setLatestRoutedScope] = useState<ChatMessageGrounding['scope']>(null);
-  const [transientClarifyMessage, setTransientClarifyMessage] = useState<{
+  // Keyed by the owning tab: one tab's pending clarification must never be consumed by another
+  // tab's send (D-06/D-10) or rendered under another tab's transcript.
+  const [clarifyByTab, setClarifyByTab] = useState<Record<string, {
     id: string;
     originalQuery: string;
     clarifyQuestion: string;
     turnCount: number;
-  } | null>(null);
+  }>>({});
+  const setTransientClarifyMessage = useCallback((
+    tabId: string,
+    value: { id: string; originalQuery: string; clarifyQuestion: string; turnCount: number } | null
+  ) => {
+    setClarifyByTab((prev) => {
+      if (!value) {
+        if (!(tabId in prev)) return prev;
+        const next = { ...prev };
+        delete next[tabId];
+        return next;
+      }
+      return { ...prev, [tabId]: value };
+    });
+  }, []);
 
   // Reload MCP servers on open or change
   const reloadMcpServers = useCallback(async () => {
@@ -702,6 +718,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       const doDelete = async () => {
         requestRegistryRef.current.abortTab(tabId);
         tabRuntimes.discard(tabId);
+        setTransientClarifyMessage(tabId, null);
         try {
           await deleteChatTab(tabId, db);
         } catch (err) {
@@ -723,7 +740,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         void doDelete();
       }
     },
-    [db, durableTabs, tabRuntimes]
+    [db, durableTabs, setTransientClarifyMessage, tabRuntimes]
   );
 
   // Evidence synthesis state (not part of a chat turn)
@@ -1406,7 +1423,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       runtime.requestController.abort();
       tabRuntimesRef.current.patch(runtime.tabId, { groundedLoadingStatus: null });
     }
-    setTransientClarifyMessage(null);
+    setClarifyByTab({});
   }, [currentScope.type, currentScope.id]);
 
   const handleStopGeneration = () => {
@@ -1564,13 +1581,15 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       return;
     }
 
-    // Clarification transcript continuation handling per D-06
+    // Clarification transcript continuation handling per D-06. Only the owning tab's pending
+    // clarification counts: another tab's send must never inherit this tab's original query.
+    const clarifyState = clarifyByTab[turnTabId];
     let effectiveQuery = trimmed;
     let nextClarifyTurnCount = 1;
-    if (transientClarifyMessage) {
-      nextClarifyTurnCount = transientClarifyMessage.turnCount + 1;
+    if (clarifyState) {
+      nextClarifyTurnCount = clarifyState.turnCount + 1;
       if (nextClarifyTurnCount > 2) {
-        setTransientClarifyMessage(null);
+        setTransientClarifyMessage(turnTabId, null);
         tabRuntimes.patch(turnTabId, {
           status: 'error',
           error: {
@@ -1582,7 +1601,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         });
         return;
       }
-      effectiveQuery = `${transientClarifyMessage.originalQuery}\n[Thông tin bổ sung]: ${trimmed}`;
+      effectiveQuery = `${clarifyState.originalQuery}\n[Thông tin bổ sung]: ${trimmed}`;
     }
 
     // Gracefully request notification permission upon user interaction if not yet granted
@@ -1851,9 +1870,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       }
 
       if (groundedResult?.kind === 'clarify_intent') {
-        setTransientClarifyMessage({
+        setTransientClarifyMessage(turnTabId, {
           id: `transient-${Date.now()}`,
-          originalQuery: transientClarifyMessage ? transientClarifyMessage.originalQuery : trimmed,
+          originalQuery: clarifyState ? clarifyState.originalQuery : trimmed,
           clarifyQuestion:
             groundedResult.clarifyQuestion ||
             'Bạn có thể cung cấp thêm chi tiết để tôi hỗ trợ chính xác hơn không?',
@@ -1863,8 +1882,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         return;
       }
 
-      // Clarification succeeded or normal turn: clear transient clarify state
-      setTransientClarifyMessage(null);
+      // Clarification succeeded or normal turn: clear this tab's transient clarify state
+      setTransientClarifyMessage(turnTabId, null);
 
       if (groundedResult.kind === 'operational') {
         patchGroundedLoading('Đang chuẩn bị ngữ cảnh TaskMate...');
@@ -2724,7 +2743,7 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
         for (const runtime of Object.values(tabRuntimesRef.current.getSnapshot())) {
           tabRuntimesRef.current.discard(runtime.tabId);
         }
-        setTransientClarifyMessage(null);
+        setClarifyByTab({});
         setLatestRoutedScope(null);
         sdlcCoordinatorRef.current = null;
         sdlcCoordinatorThreadRef.current = null;
@@ -3073,8 +3092,8 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
         onConfirmAction={handleConfirmAction}
         groundedCallbacks={groundedCallbacks}
         wizardCallbacks={wizardCallbacks}
-        transientClarifyMessage={transientClarifyMessage}
-        onCancelClarify={() => setTransientClarifyMessage(null)}
+        transientClarifyMessage={clarifyByTab[activeTabId] ?? null}
+        onCancelClarify={() => setTransientClarifyMessage(activeTabId, null)}
       />
 
       {/* QuickPreviewDrawer on citation activation per ANSWER-07, D-10 */}

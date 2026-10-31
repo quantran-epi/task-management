@@ -212,6 +212,9 @@ export async function deleteChatTab(tabId: string, db: TaskPlannerDatabase = def
       const now = new Date().toISOString();
       const id = generateId();
       const title = `${DEFAULT_CHAT_TITLE} #1`;
+      // Closing the last ordinary tab must not produce a second active tab: the SDLC tab is often
+      // the active one, and two `active: true` rows in a scope fail the app's own backup validator.
+      const stillActive = (await listTabsByScope(tab.scopeKey, db)).some((row) => row.active);
       await db.chatThreads.add({
         id,
         scopeKey: `${tab.scopeKey}:chat:${id}`,
@@ -227,7 +230,7 @@ export async function deleteChatTab(tabId: string, db: TaskPlannerDatabase = def
         type: 'chat',
         title,
         order: 0,
-        active: true,
+        active: !stillActive,
         createdAt: now,
         updatedAt: now,
       });
