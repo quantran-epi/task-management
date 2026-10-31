@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: milestone
 status: executing
-stopped_at: "25.1.1-05 complete — next: plan 25.1.1-06 (export and CAB services)"
-last_updated: "2026-11-01T02:58:00Z"
-last_activity: 2026-11-01 -- Plan 25.1.1-05 complete (hub PL03B/PL07 generation, commitTechDoc callers)
+stopped_at: "25.1.1-06 complete — next: plan 25.1.1-07 (hub export rows and commitCab caller)"
+last_updated: "2026-11-01T03:05:00Z"
+last_activity: 2026-11-01 -- Plan 25.1.1-06 complete (export and CAB services)
 progress:
   total_phases: 11
   completed_phases: 7
   total_plans: 84
-  completed_plans: 79
+  completed_plans: 80
   percent: 66
 ---
 
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 ## Current Position
 
 Phase: 25.1.1 (unify-sdlc-workflow-move-change-pack-pl03b-pl07-generation-c) — IN PROGRESS
-Plan: 5 of 11 complete (25.1.1-01, 25.1.1-02, 25.1.1-03, 25.1.1-04, 25.1.1-05)
-Status: Plan 25.1.1-05 complete; wave 5 done, next is 25.1.1-06 (export and CAB services)
-Last activity: 2026-11-01 -- Plan 25.1.1-05 complete (hub PL03B/PL07 generation, commitTechDoc callers)
-Stopped at: 25.1.1-05 complete — next: plan 25.1.1-06 (export and CAB services)
+Plan: 6 of 11 complete (25.1.1-01, 25.1.1-02, 25.1.1-03, 25.1.1-04, 25.1.1-05, 25.1.1-06)
+Status: Plan 25.1.1-06 complete; wave 6 done, next is 25.1.1-07 (hub export rows and commitCab caller)
+Last activity: 2026-11-01 -- Plan 25.1.1-06 complete (export and CAB services)
+Stopped at: 25.1.1-06 complete — next: plan 25.1.1-07 (hub export rows and commitCab caller)
 
 Progress: [██████████] 100%
 

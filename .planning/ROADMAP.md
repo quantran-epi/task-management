@@ -284,7 +284,7 @@ Plans: 11 plans in 11 sequential waves (every plan edits `AIChatDrawer.tsx` or i
 
 **Wave 6** *(depends on 25.1.1-05)*
 
-- [ ] 25.1.1-06-PLAN.md — Export and CAB services: payload adapters, Note resolution, docx build/download, CAB that resolves its own PL02 pin and persists three pinned sources
+- [x] 25.1.1-06-PLAN.md — Export and CAB services: payload adapters, Note resolution, docx build/download, CAB that resolves its own PL02 pin and persists three pinned sources
 
 **Wave 7** *(depends on 25.1.1-06)*
 
