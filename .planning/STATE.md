@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: milestone
-status: executing
-stopped_at: "25.1.1-11 complete — phase 25.1.1 ready for verification"
-last_updated: "2026-11-01T05:20:00Z"
-last_activity: 2026-11-01 -- Plan 25.1.1-11 complete (regression sweep, guarantee evidence, missing-source race fixed)
+status: verifying
+stopped_at: "Phase 25.1.1 verified passed 7/7 — committed, awaiting push"
+last_updated: "2026-11-01T05:45:00Z"
+last_activity: 2026-11-01 -- Phase 25.1.1 verified passed 7/7; hub is the single SDLC flow, wizard removed
 progress:
   total_phases: 11
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 84
   completed_plans: 84
   percent: 66
@@ -25,11 +25,11 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 
 ## Current Position
 
-Phase: 25.1.1 (unify-sdlc-workflow-move-change-pack-pl03b-pl07-generation-c) — ALL PLANS COMPLETE, awaiting verification
+Phase: 25.1.1 (unify-sdlc-workflow-move-change-pack-pl03b-pl07-generation-c) — ✅ COMPLETE, verified passed
 Plan: 11 of 11 complete (25.1.1-01 … 25.1.1-11)
-Status: Plan 25.1.1-11 complete; every Phase 25.1 D-U7 guarantee re-proven scoped, evidence in `25.1.1-VERIFICATION-NOTES.md`
-Last activity: 2026-11-01 -- Plan 25.1.1-11 complete (regression sweep, guarantee evidence, missing-source race fixed)
-Stopped at: 25.1.1-11 complete — phase 25.1.1 ready for verification
+Status: Verifier passed 7/7 (6 ROADMAP criteria + user directive) at commit `3ddbd6bd`; residual info-level notes only, no gaps
+Last activity: 2026-11-01 -- Phase 25.1.1 verified passed; hub owns INTAKE→CAB end to end, wizard UI and coordinator deleted
+Stopped at: Phase 25.1.1 verified passed 7/7 — committed, awaiting push
 
 Progress: [██████████] 100%
 

@@ -2,7 +2,7 @@
 
 ## Active Phase
 
-- Phase 25.1: SDLC Flow Hardening & Multi-Tab AI Chat Isolation
+- Phase 25.1.1: Unify SDLC workflow into the hub, retire the wizard (COMPLETE — verified 2026-11-01)
 
 ## Milestone: Knowledge System Implementation
 
@@ -249,6 +249,7 @@ Plans:
 ### Phase 25.1.1: Unify SDLC workflow: move change-pack, PL03B/PL07 generation, CAB, and DOCX export into the hub and retire the wizard entry points (INSERTED)
 
 **Goal:** Make the SDLC Hub the single executable path from INTAKE to CAB. Steps 4–6 must run from the hub itself — change-pack upload/validate/reconcile, PL03B/PL07 generation, CAB generation, and bank-template `.docx` export — with one metadata source, no parallel wizard state machine, and no toolbar detour.
+**Status:** ✅ COMPLETE — verifier passed 7/7 on 2026-11-01 (commit `3ddbd6bd`); report `25.1.1-VERIFICATION.md`
 **Requirements**: WIZ-UI-01, WIZ-INTERACTIVE-01, WIZ-DOCX-01, WIZ-FLOW-01, WIZ-LOOP-01, WIZ-PACK-01 (re-homed), D-16, D-17
 **Depends on:** Phase 25.1
 **Success Criteria** (what must be TRUE):
