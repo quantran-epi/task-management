@@ -500,7 +500,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   }, [db, activeThreadId]) ?? [];
 
   useEffect(() => {
-    if (durableTabs.length === 0 && thread?.id) {
+    // Project scopes are bootstrapped by the initTabs effect below, which lets getOrCreateSdlcTab
+    // adopt a legacy `project:<id>` thread. Backfilling here would claim it as an ordinary tab first.
+    if (!isProjectScope && durableTabs.length === 0 && thread?.id) {
       void db.chatTabs.add({
         id: generateId(),
         threadId: thread.id,
@@ -513,7 +515,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         updatedAt: thread.updatedAt,
       });
     }
-  }, [db, durableTabs.length, scopeKey, thread]);
+  }, [db, durableTabs.length, isProjectScope, scopeKey, thread]);
 
 
   // Ensure durable tabs are initialized in Dexie for the active scope

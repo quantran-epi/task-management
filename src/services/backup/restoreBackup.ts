@@ -212,8 +212,15 @@ async function replaceTables(
   recordCount = Object.values(countsFor(tables)).reduce((sum, count) => sum + count, 0),
 ): Promise<void> {
   await targetDb.transaction('rw', RESTORE_TABLES(targetDb), async () => {
+    // Legacy/older payloads omit the knowledge tables; absent means "payload predates them", not "delete the catalog".
+    const clearKnowledge = tables.documentSets !== undefined
+      ? [
+          targetDb.documentSets.clear(), targetDb.publishedDocuments.clear(), targetDb.publishAttempts.clear(),
+          targetDb.dlpAudits.clear(), targetDb.knowledgeLinks.clear(),
+        ]
+      : [];
     await Promise.all([
-      targetDb.projects.clear(), targetDb.milestones.clear(), targetDb.tasks.clear(), targetDb.capacityRules.clear(), targetDb.capacityOverrides.clear(), targetDb.plannedAllocations.clear(), targetDb.workSessions.clear(), targetDb.activeTimers.clear(), targetDb.notes.clear(), targetDb.noteAttachments.clear(), targetDb.chatThreads.clear(), targetDb.chatMessages.clear(), targetDb.chatTabs.clear(), targetDb.telegramSettings.clear(), targetDb.telegramWhitelist.clear(), targetDb.documentSets.clear(), targetDb.publishedDocuments.clear(), targetDb.publishAttempts.clear(), targetDb.dlpAudits.clear(), targetDb.knowledgeLinks.clear(), targetDb.settings.clear(), targetDb.backupMetadata.clear(),
+      targetDb.projects.clear(), targetDb.milestones.clear(), targetDb.tasks.clear(), targetDb.capacityRules.clear(), targetDb.capacityOverrides.clear(), targetDb.plannedAllocations.clear(), targetDb.workSessions.clear(), targetDb.activeTimers.clear(), targetDb.notes.clear(), targetDb.noteAttachments.clear(), targetDb.chatThreads.clear(), targetDb.chatMessages.clear(), targetDb.chatTabs.clear(), targetDb.telegramSettings.clear(), targetDb.telegramWhitelist.clear(), ...clearKnowledge, targetDb.settings.clear(), targetDb.backupMetadata.clear(),
     ]);
 
     const add = async <T>(table: { bulkAdd: (rows: T[]) => Promise<unknown> }, rows: T[] | undefined) => {

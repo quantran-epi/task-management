@@ -72,6 +72,24 @@ describe('chatTabRepo', () => {
     await expect(deleteChatTab(first.id, db)).rejects.toThrow(/SDLC/);
   });
 
+  it('adopts the legacy project thread for the SDLC tab instead of orphaning it', async () => {
+    await addThread(db, { id: 'legacy-thread', scopeKey: `project:${projectId}`, scopeType: 'project', entityId: projectId });
+
+    const sdlcTab = await getOrCreateSdlcTab(projectId, db);
+
+    expect(sdlcTab.threadId).toBe('legacy-thread');
+    expect(await db.chatThreads.count()).toBe(1);
+  });
+
+  it('seeds a default chat tab for a legacy project thread already claimed by an ordinary tab', async () => {
+    await addThread(db, { id: 'claimed-thread', scopeKey: `project:${projectId}`, scopeType: 'project', entityId: projectId });
+    await db.chatTabs.add({ id: 'existing', threadId: 'claimed-thread', scopeKey: `project:${projectId}`, type: 'chat', title: 'Chat', order: 0, active: true, createdAt: 'now', updatedAt: 'now' });
+
+    const sdlcTab = await getOrCreateSdlcTab(projectId, db);
+
+    expect(sdlcTab.threadId).not.toBe('claimed-thread');
+  });
+
   it('replaces final ordinary tab and persists editable title', async () => {
     const first = await createChatTab({ scopeType: 'project', scopeKey: `project:${projectId}` }, db);
     await updateChatTab(first.id, { title: 'Planning chat' }, db);

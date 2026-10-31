@@ -81,7 +81,10 @@ export async function getOrCreateSdlcTab(projectId: string, db: TaskPlannerDatab
 
     const now = new Date().toISOString();
     const existingProjectThreads = await db.chatThreads.where('entityId').equals(projectId).toArray();
-    const sdlcThread = existingProjectThreads.find((thread) => thread.scopeKey === `${scopeKey}:sdlc`);
+    const claimedThreadIds = new Set((await db.chatTabs.toArray()).map((tab) => tab.threadId));
+    const sdlcThread = existingProjectThreads.find((thread) => thread.scopeKey === `${scopeKey}:sdlc`)
+      // Pre-tab legacy threads used `project:<id>` for the single project conversation; adopt one only if unclaimed.
+      ?? existingProjectThreads.find((thread) => thread.scopeKey === scopeKey && !claimedThreadIds.has(thread.id));
     const thread: ChatThread = sdlcThread ?? {
       id: generateId(),
       scopeKey: `${scopeKey}:sdlc`,
