@@ -382,10 +382,19 @@ describe('wizard artifact persistence', () => {
     expect(set?.documentIds).toEqual([source.note.id, result.note.id]);
     expect(result.note.entityType).toBe('project');
     expect(JSON.stringify(result.note)).not.toContain('Blob');
-    expect((await db.chatMessages.where('threadId').equals(THREAD_ID).toArray()).some((message) => message.wizard?.artifactId === result.note.id)).toBe(true);
+    expect(result.note.sdlcArtifact).toMatchObject({
+      kind: 'PL02',
+      version: 1,
+      inputHash: artifactHash,
+      sourceArtifactIds: [source.note.id],
+    });
+    const events = (await db.chatMessages.where('threadId').equals(THREAD_ID).toArray())
+      .filter((message) => message.content === `Saved PL02 v1: note:${result.note.id}`);
+    expect(events).toHaveLength(1);
+    expect(events[0]?.wizard).toBeUndefined();
   });
 
-  it('rejects stale, cross-project, and hash-mismatched commits without mutation', async () => {
+  it('rejects cross-project and malformed hash commits without mutation', async () => {
     const counts = async () => ({
       notes: await db.notes.count(),
       sets: await db.documentSets.count(),
@@ -403,10 +412,31 @@ describe('wizard artifact persistence', () => {
       exportPayload: { schemaVersion: 1 },
       approvedAt: NOW,
     };
-    await expect(saveSolutionVersion({ ...base, inputHash: 'd'.repeat(64) }, db)).rejects.toMatchObject({ code: 'WIZARD_HASH_MISMATCH' });
+    await expect(saveSolutionVersion({ ...base, inputHash: 'd' }, db)).rejects.toMatchObject({ code: 'ARTIFACT_HASH_INVALID' });
     await expect(saveSolutionVersion({ ...base, projectId: NOTE_ID }, db)).rejects.toMatchObject({ code: 'WIZARD_PROJECT_MISMATCH' });
-    await expect(saveSolutionVersion({ ...base, draftRevision: 2 }, db)).rejects.toMatchObject({ code: 'WIZARD_DRAFT_REVISION_STALE' });
     expect(await counts()).toEqual(before);
+  });
+
+  it('treats a changed content hash as a new version and replays under a bumped revision', async () => {
+    const base = {
+      projectId: PROJECT_ID,
+      threadId: THREAD_ID,
+      sessionId: SESSION_ID,
+      inputRevision: 1,
+      draftRevision: 1,
+      inputHash: HASH,
+      markdown: '# Solution v1',
+      exportPayload: { schemaVersion: 1 },
+      approvedAt: NOW,
+    };
+    const first = await saveSolutionVersion(base, db);
+    const replay = await saveSolutionVersion({ ...base, draftRevision: 2 }, db);
+    expect(replay.created).toBe(false);
+    expect(replay.note.id).toBe(first.note.id);
+
+    const changed = await saveSolutionVersion({ ...base, draftRevision: 2, inputHash: 'e'.repeat(64) }, db);
+    expect(changed.created).toBe(true);
+    expect(changed.note.sdlcArtifact?.version).toBe(2);
   });
 });
 
