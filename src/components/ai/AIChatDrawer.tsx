@@ -413,6 +413,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const [revisionPreview, setRevisionPreview] = useState<RevisionPreview | null>(null);
   const [revisionLoading, setRevisionLoading] = useState(false);
   const sdlcCoordinatorRef = useRef<ReturnType<typeof createSdlcWorkflowCoordinator> | null>(null);
+  // Thread id the cached coordinator was built for; a change rebuilds it so the state key follows.
+  const sdlcCoordinatorThreadRef = useRef<string | null>(null);
   // Citation identity resolved for the last intake, keyed by the scope it was resolved under.
   // A later scope's turn reads it only on an exact scopeKey match, so ids never leak across projects (D-35).
   const sdlcSourceReferencesRef = useRef<{ scopeKey: string; pl01: string[]; pl02: string[] }>({
@@ -992,29 +994,37 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   >(async () => {});
 
   const getSdlcCoordinator = useCallback(() => {
-    if (!isProjectScope || !currentScope.id || !activeThreadId) return null;
-    if (!sdlcCoordinatorRef.current) {
-      const stateKey = `sdlc_workflow:${currentScope.id}:${activeThreadId}`;
-      sdlcCoordinatorRef.current = createSdlcWorkflowCoordinator({
-        projectId: currentScope.id,
-        threadId: activeThreadId,
-        saveState: async (state) => {
-          await db.settings.put({ key: stateKey, value: state });
-          setSdlcWorkflowState(state);
-        },
-        loadState: async () => {
-          const setting = await db.settings.get(stateKey);
-          return setting?.value as SdlcWorkflowState | undefined;
-        },
-        onStateChange: (state: SdlcWorkflowState) => setSdlcWorkflowState(state),
-      });
+    if (!isProjectScope || !currentScope.id) return null;
+    // The workflow belongs to the SDLC tab's own thread. Keying it by the active thread wrote the
+    // state under an ordinary tab during the first render (before the durable tab list resolved),
+    // and it stayed unrestorable once the SDLC tab became active. Wait for the durable SDLC tab.
+    const sdlcThreadId = durableTabs.find((tab) => tab.type === 'sdlc')?.threadId;
+    if (!sdlcThreadId) return null;
+    if (sdlcCoordinatorRef.current && sdlcCoordinatorThreadRef.current === sdlcThreadId) {
+      return sdlcCoordinatorRef.current;
     }
+    const stateKey = `sdlc_workflow:${currentScope.id}:${sdlcThreadId}`;
+    sdlcCoordinatorThreadRef.current = sdlcThreadId;
+    sdlcCoordinatorRef.current = createSdlcWorkflowCoordinator({
+      projectId: currentScope.id,
+      threadId: sdlcThreadId,
+      saveState: async (state) => {
+        await db.settings.put({ key: stateKey, value: state });
+        setSdlcWorkflowState(state);
+      },
+      loadState: async () => {
+        const setting = await db.settings.get(stateKey);
+        return setting?.value as SdlcWorkflowState | undefined;
+      },
+      onStateChange: (state: SdlcWorkflowState) => setSdlcWorkflowState(state),
+    });
     return sdlcCoordinatorRef.current;
-  }, [activeThreadId, currentScope.id, db, isProjectScope]);
+  }, [currentScope.id, db, durableTabs, isProjectScope]);
 
   useEffect(() => {
     if (!isProjectScope || !isSdlcActiveTab || !activeThreadId) {
       sdlcCoordinatorRef.current = null;
+      sdlcCoordinatorThreadRef.current = null;
       setSdlcWorkflowState(undefined);
       return;
     }

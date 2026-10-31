@@ -134,36 +134,43 @@ export async function getOrCreateActiveChatTab(
   input: CreateChatTabInput,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<ChatTab> {
-  const tabs = await listTabsByScope(input.scopeKey, db);
-  const existing = tabs.find((tab) => tab.active) ?? tabs[0];
-  if (existing) return existing;
+  // Single transaction: reading the tab list and inserting the first tab outside one races the
+  // drawer bootstrap against `createChatTab`, which leaves a scope with two active tabs (and two
+  // concurrent writers for the first user message).
+  return db.transaction('rw', [db.chatThreads, db.chatTabs], async () => {
+    const tabs = await listTabsByScope(input.scopeKey, db);
+    const existing = tabs.find((tab) => tab.active) ?? tabs[0];
+    if (existing) return existing;
 
-  const now = new Date().toISOString();
-  // Adopt a legacy scope thread (the pre-tab conversation) instead of orphaning its history.
-  const legacy = await db.chatThreads.where('scopeKey').equals(input.scopeKey).first();
-  const thread: ChatThread = legacy ?? {
-    id: generateId(),
-    scopeKey: input.scopeKey,
-    ...threadScopeParts(input.scopeKey, input),
-    title: input.title?.trim() || `${DEFAULT_CHAT_TITLE} #1`,
-    createdAt: now,
-    updatedAt: now,
-  };
-  if (!legacy) await db.chatThreads.add(thread);
+    const now = new Date().toISOString();
+    // Adopt a legacy scope thread (the pre-tab conversation) instead of orphaning its history.
+    const legacy = await db.chatThreads.where('scopeKey').equals(input.scopeKey).first();
+    const thread: ChatThread = legacy ?? {
+      id: generateId(),
+      scopeKey: input.scopeKey,
+      ...threadScopeParts(input.scopeKey, input),
+      title: input.title?.trim() || `${DEFAULT_CHAT_TITLE} #1`,
+      createdAt: now,
+      updatedAt: now,
+    };
+    if (!legacy) await db.chatThreads.add(thread);
 
-  const tab: ChatTab = {
-    id: generateId(),
-    threadId: thread.id,
-    scopeKey: input.scopeKey,
-    type: 'chat',
-    title: thread.title || `${DEFAULT_CHAT_TITLE} #1`,
-    order: 0,
-    active: true,
-    createdAt: thread.createdAt,
-    updatedAt: now,
-  };
-  await db.chatTabs.add(tab);
-  return tab;
+    const tab: ChatTab = {
+      id: generateId(),
+      threadId: thread.id,
+      scopeKey: input.scopeKey,
+      type: 'chat',
+      title: thread.title || `${DEFAULT_CHAT_TITLE} #1`,
+      order: 0,
+      active: true,
+      createdAt: thread.createdAt,
+      updatedAt: now,
+    };
+    // Clearing the siblings is what keeps one active tab per scope.
+    await db.chatTabs.where('scopeKey').equals(input.scopeKey).modify({ active: false });
+    await db.chatTabs.add(tab);
+    return tab;
+  });
 }
 
 export async function setActiveTab(scopeKey: string, tabId: string, db: TaskPlannerDatabase = defaultDb): Promise<ChatTab> {
