@@ -10,6 +10,7 @@ export const ChangePackDropzone: React.FC<ChangePackDropzoneProps> = ({ onSelect
   const { token } = theme.useToken();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
+  const [focused, setFocused] = useState(false);
   const openPicker = () => inputRef.current?.click();
 
   return (
@@ -31,6 +32,8 @@ export const ChangePackDropzone: React.FC<ChangePackDropzoneProps> = ({ onSelect
         aria-label="Khu vực nạp change-pack"
         aria-pressed={dragging}
         onClick={openPicker}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
         onKeyDown={(event) => {
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
@@ -69,6 +72,8 @@ export const ChangePackDropzone: React.FC<ChangePackDropzoneProps> = ({ onSelect
           minHeight: 112,
           padding: 16,
           textAlign: 'center',
+          outline: focused ? `2px solid ${token.colorPrimary}` : 'none',
+          outlineOffset: 2,
         }}
       >
         <InboxOutlined aria-hidden style={{ color: dragging ? token.colorPrimary : token.colorTextSecondary, fontSize: 24 }} />
