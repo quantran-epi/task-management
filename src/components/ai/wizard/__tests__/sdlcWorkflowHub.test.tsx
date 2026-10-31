@@ -248,6 +248,82 @@ describe('RevisionImpactModal', () => {
     expect(onCommit).not.toHaveBeenCalled();
   });
 
+  it('opens its own revision modal and commits once after an explicit confirm', () => {
+    const onPreview = vi.fn();
+    const onCommit = vi.fn();
+    const onDraftChange = vi.fn();
+    render(
+      <SdlcWorkflowHub
+        projectScoped={true}
+        state={revisionState}
+        onStartWorkflow={vi.fn()}
+        revisionPreview={{
+          diff: { before: 'old', after: 'SOLUTION v2' },
+          sources: [{ title: 'SOLUTION', shortHash: 'abcd1234' }],
+          impactSteps: ['CODE_GUIDE'],
+        }}
+        onRevisionDraftChange={onDraftChange}
+        onPreviewRevision={onPreview}
+        onCommitRevision={onCommit}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Cập nhật solution/i }));
+    const textarea = screen.getByPlaceholderText('Nhập bản nội dung mới để xem trước và xác nhận.');
+    fireEvent.change(textarea, { target: { value: 'SOLUTION v3' } });
+    fireEvent.blur(textarea);
+
+    expect(onDraftChange).toHaveBeenLastCalledWith('SOLUTION v3');
+    expect(onPreview).toHaveBeenCalledWith('solution', 'SOLUTION v3');
+    expect(onCommit).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /Xác nhận cập nhật/i }));
+    expect(onCommit).toHaveBeenCalledTimes(1);
+  });
+
+  it('previews instead of committing when the modal has no preview yet', () => {
+    const onPreview = vi.fn();
+    const onCommit = vi.fn();
+    render(
+      <SdlcWorkflowHub
+        projectScoped={true}
+        state={revisionState}
+        onStartWorkflow={vi.fn()}
+        revisionDraft="SOLUTION draft"
+        onPreviewRevision={onPreview}
+        onCommitRevision={onCommit}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Cập nhật solution/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Xác nhận cập nhật/i }));
+
+    expect(onPreview).toHaveBeenCalledWith('solution', 'SOLUTION draft');
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it('commits nothing when the revision modal is dismissed', () => {
+    const onCommit = vi.fn();
+    render(
+      <SdlcWorkflowHub
+        projectScoped={true}
+        state={revisionState}
+        onStartWorkflow={vi.fn()}
+        revisionPreview={{
+          diff: { before: 'old', after: 'SOLUTION v2' },
+          sources: [],
+          impactSteps: [],
+        }}
+        onCommitRevision={onCommit}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Cập nhật solution/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Tiếp tục thảo luận/i }));
+
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
   it('hiển thị thông báo khi diff trống', () => {
     render(
       <RevisionImpactModal

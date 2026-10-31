@@ -108,8 +108,8 @@ import { DriftMatrixView } from './wizard/DriftMatrixView';
 import { SdlcWorkflowHub } from './wizard/SdlcWorkflowHub';
 import { StepInputDocsModal } from './wizard/StepInputDocsModal';
 import { createSdlcWorkflowCoordinator, defaultSha256 } from '../../services/wizard/workflowCoordinator';
-import { stripStaleArtifacts } from './wizard/revisionView';
-import type { SdlcWorkflowState, SdlcWorkflowMetadata, SdlcStepId } from '../../services/wizard/workflowSchemas';
+import { previousArtifactContent, stripStaleArtifacts, toRevisionModalPreview } from './wizard/revisionView';
+import type { SdlcWorkflowState, SdlcWorkflowMetadata, SdlcStepId, RevisionPreview } from '../../services/wizard/workflowSchemas';
 import type { SdlcSourceRef } from '../../services/wizard/sourceMerge';
 import { createWizardCoordinator, deriveActiveWizard, type WizardCoordinatorDeps, type WizardExportResult } from '../../services/wizard/wizardCoordinator';
 import type { ChangePackManifest } from '../../services/wizard/changePack';
@@ -408,6 +408,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   // SDLC Workflow state
   const [sdlcWorkflowState, setSdlcWorkflowState] = useState<SdlcWorkflowState | undefined>();
   const [sdlcInputModalOpen, setSdlcInputModalOpen] = useState(false);
+  const [revisionDraft, setRevisionDraft] = useState('');
+  const [revisionPreview, setRevisionPreview] = useState<RevisionPreview | null>(null);
+  const [revisionLoading, setRevisionLoading] = useState(false);
   const sdlcCoordinatorRef = useRef<ReturnType<typeof createSdlcWorkflowCoordinator> | null>(null);
 
   // Durable multi-tab state for all scopes from Dexie chatTabs table
@@ -894,6 +897,10 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     cabActionRef.current = true;
     try {
       await coordinator.generateCab();
+      // ponytail: the wizard coordinator's CAB path does not populate the SDLC artifact chain
+      // (pl03b/pl07), so commitCab is unreachable here. Upgrade to commitCab once runCabStage
+      // returns CAB markdown and the SDLC chain is populated.
+      await getSdlcCoordinator()?.closeCycle().catch(() => undefined);
     } catch {
       patchTurnError(
         'request_failed',
@@ -992,6 +999,42 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       message.error('Không thể phục hồi checkpoint SDLC');
     }
   }, [getSdlcCoordinator]);
+
+  // The hub passes the revision kind explicitly, so no local draft-kind state is needed (D-22/D-23).
+  const handlePreviewRevision = useCallback(async (type: 'requirement' | 'solution', draft: string) => {
+    const coordinator = getSdlcCoordinator();
+    if (!coordinator) return;
+    setRevisionLoading(true);
+    try {
+      const preview = await coordinator.previewRevision(type === 'requirement' ? 'PL01' : 'SOLUTION', draft);
+      setRevisionPreview(preview);
+    } catch {
+      message.error('Không thể xem trước bản cập nhật');
+    } finally {
+      setRevisionLoading(false);
+    }
+  }, [getSdlcCoordinator]);
+
+  const handleCommitRevision = useCallback(async () => {
+    if (!revisionPreview) {
+      message.error('Chưa có bản xem trước để xác nhận');
+      return;
+    }
+    const coordinator = getSdlcCoordinator();
+    if (!coordinator) return;
+    try {
+      const cycles = sdlcWorkflowState?.cycles ?? [];
+      const lastCycle = cycles[cycles.length - 1];
+      if (!lastCycle || lastCycle.status === 'completed') await coordinator.openCycle();
+      const next = await coordinator.commitRevision(revisionPreview, true);
+      setSdlcWorkflowState(next);
+      setRevisionPreview(null);
+      setRevisionDraft('');
+      message.success('Đã cập nhật tài liệu và đánh dấu các bước cần làm lại');
+    } catch {
+      message.error('Không thể cập nhật tài liệu. Bản đang active có thể đã thay đổi.');
+    }
+  }, [getSdlcCoordinator, revisionPreview, sdlcWorkflowState]);
 
   const handleSdlcCheckpointDiscard = useCallback(async () => {
     const coordinator = getSdlcCoordinator();
@@ -2878,6 +2921,19 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
                 void handleCabGenerate();
               }
             }}
+            revisionDraft={revisionDraft}
+            revisionPreview={
+              revisionPreview
+                ? toRevisionModalPreview(
+                    revisionPreview,
+                    previousArtifactContent(sdlcWorkflowState, revisionPreview.kind)
+                  )
+                : undefined
+            }
+            revisionLoading={revisionLoading}
+            onRevisionDraftChange={setRevisionDraft}
+            onPreviewRevision={(type, draft) => void handlePreviewRevision(type, draft)}
+            onCommitRevision={() => void handleCommitRevision()}
             onResetWorkflow={() => {
               setSdlcWorkflowState(undefined);
               message.success('Đã làm mới quy trình SDLC');

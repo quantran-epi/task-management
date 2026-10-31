@@ -11,7 +11,14 @@ import {
 } from '../../src/db/repositories/chatTabRepo';
 import * as nineRouterTokenService from '../../src/services/ai/nineRouterTokenService';
 import * as nineRouterClient from '../../src/services/ai/nineRouterClient';
+import * as coordinatorModule from '../../src/services/wizard/wizardCoordinator';
 import type { SdlcWorkflowState } from '../../src/services/wizard/workflowSchemas';
+import {
+  previousArtifactContent,
+  stripStaleArtifacts,
+  toRevisionModalPreview,
+} from '../../src/components/ai/wizard/revisionView';
+import type { RevisionPreview } from '../../src/services/wizard/workflowSchemas';
 
 vi.mock('../../src/utils/pptxExport', () => ({ exportPresentationAsFile: vi.fn() }));
 
@@ -394,6 +401,321 @@ describe('AIChatDrawer SDLC checkpoint, revision, and cycle recovery', () => {
       await new Promise<void>((resolve) => setTimeout(resolve, 80));
       expect(dispatches).toHaveLength(0);
       expect((await stored())?.checkpoint?.status).toBe('interrupted');
+    });
+  });
+
+  describe('Task 3: revision helpers', () => {
+    it('maps a coordinator preview to the hub modal shape', () => {
+      const preview: RevisionPreview = {
+        kind: 'SOLUTION',
+        markdown: '  new content  ',
+        hash: 'ab'.repeat(32),
+        diff: ['- old', '+ new'],
+        sources: [{ kind: 'SOLUTION', version: 2, hash: 'cd'.repeat(32) }],
+        impactSteps: ['CODE_GUIDE', 'CHANGE_PACK'],
+        requiresConfirmation: true,
+        baseVersion: 1,
+        baseHash: 'cd'.repeat(32),
+      };
+      expect(preview.markdown).not.toBe('new content');
+      expect(toRevisionModalPreview(preview, 'previous solution')).toEqual({
+        diff: { before: 'previous solution', after: preview.markdown },
+        sources: [{ title: 'SOLUTION', shortHash: 'cdcdcdcd', version: 2 }],
+        impactSteps: ['CODE_GUIDE', 'CHANGE_PACK'],
+      });
+    });
+
+    it('strips every artifact named by staleSteps and leaves the rest untouched', () => {
+      const state = makeState('33333333-3333-4333-8333-333333333333', {
+        staleSteps: ['SOLUTION', 'TECH_DOCS', 'CAB'],
+        artifacts: {
+          pl01: {
+            kind: 'PL01',
+            version: 1,
+            hash: '01'.repeat(32),
+            title: 'PL01',
+            content: 'keep',
+            sourceHashes: [],
+            updatedAt: TS,
+          },
+          solution: {
+            kind: 'SOLUTION',
+            version: 1,
+            hash: '03'.repeat(32),
+            title: 'SOLUTION',
+            content: 'drop',
+            sourceHashes: [],
+            updatedAt: TS,
+          },
+          pl03b: {
+            kind: 'PL03B',
+            version: 1,
+            hash: '04'.repeat(32),
+            title: 'PL03B',
+            content: 'drop',
+            sourceHashes: [],
+            updatedAt: TS,
+          },
+          pl07: {
+            kind: 'PL07',
+            version: 1,
+            hash: '05'.repeat(32),
+            title: 'PL07',
+            content: 'drop',
+            sourceHashes: [],
+            updatedAt: TS,
+          },
+          cab: {
+            kind: 'CAB',
+            version: 1,
+            hash: '06'.repeat(32),
+            title: 'CAB',
+            content: 'drop',
+            sourceHashes: [],
+            updatedAt: TS,
+          },
+        },
+      });
+      const before = structuredClone(state.artifacts);
+
+      const stripped = stripStaleArtifacts(state);
+
+      expect(Object.keys(stripped ?? {})).toEqual(['pl01']);
+      expect(state.artifacts).toEqual(before);
+      expect(previousArtifactContent(state, 'SOLUTION')).toBe('drop');
+      expect(previousArtifactContent(state, 'PL01')).toBe('keep');
+      expect(previousArtifactContent(undefined, 'SOLUTION')).toBe('');
+    });
+
+    it('maps INTAKE staleness to both intake artifacts', () => {
+      const state = makeState('33333333-3333-4333-8333-333333333333', {
+        staleSteps: ['INTAKE', 'CODE_GUIDE', 'CHANGE_PACK'],
+        artifacts: {
+          pl01: {
+            kind: 'PL01',
+            version: 1,
+            hash: '01'.repeat(32),
+            title: 'PL01',
+            content: 'drop',
+            sourceHashes: [],
+            updatedAt: TS,
+          },
+          pl02: {
+            kind: 'PL02',
+            version: 1,
+            hash: '02'.repeat(32),
+            title: 'PL02',
+            content: 'drop',
+            sourceHashes: [],
+            updatedAt: TS,
+          },
+        },
+      });
+
+      expect(Object.keys(stripStaleArtifacts(state) ?? {})).toEqual([]);
+    });
+  });
+
+  describe('Task 3: revision commit and cycle open/close', () => {
+    const seedRevisionState = async (overrides: Partial<SdlcWorkflowState> = {}) => {
+      const { sdlc } = await seedTabs();
+      const state = makeState(sdlc.threadId, overrides);
+      await db.settings.put({ key: stateKey, value: state });
+      answerStream([]);
+      render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
+      await screen.findByText(/SDLC: Recovery/);
+      return state;
+    };
+
+    const openRevisionModal = async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Cập nhật solution' }));
+      const textarea = await screen.findByPlaceholderText('Nhập bản nội dung mới để xem trước và xác nhận.');
+      fireEvent.change(textarea, { target: { value: 'SOLUTION v2 content' } });
+      fireEvent.blur(textarea);
+      await waitFor(() =>
+        expect(screen.getByText(/Nguồn: 1 tài liệu · SOLUTION/i)).toBeInTheDocument()
+      );
+    };
+
+    it('previews from the hub modal and commits exactly one new version on confirm', async () => {
+      const base = makeState('placeholder');
+      const state = await seedRevisionState({
+        artifacts: {
+          ...base.artifacts,
+          codeGuide: {
+            kind: 'CODE_GUIDE',
+            version: 1,
+            hash: '07'.repeat(32),
+            title: 'Code guide',
+            content: 'guide',
+            sourceHashes: [base.artifacts.solution!.hash],
+            updatedAt: TS,
+          },
+          changePack: {
+            kind: 'CHANGE_PACK',
+            version: 1,
+            hash: '08'.repeat(32),
+            title: 'Change pack',
+            content: 'pack',
+            sourceHashes: [base.artifacts.solution!.hash],
+            updatedAt: TS,
+          },
+        },
+      });
+      await openRevisionModal();
+
+      fireEvent.click(screen.getByRole('button', { name: /Xác nhận cập nhật/ }));
+
+      await waitFor(async () => {
+        const next = await stored();
+        expect(next?.artifacts.solution?.version).toBe(2);
+        expect(next?.artifacts.solution?.content).toBe('SOLUTION v2 content');
+        expect(next?.activeVersions?.SOLUTION).toBe(2);
+        expect(next?.versions?.SOLUTION).toHaveLength(2);
+        expect(next?.versions?.SOLUTION?.[0]?.content).toBe(state.artifacts.solution?.content);
+        expect(next?.staleSteps).toEqual(expect.arrayContaining(['CODE_GUIDE', 'CHANGE_PACK']));
+        expect(next?.cycles).toHaveLength(1);
+      });
+    });
+
+    it('commits nothing when the modal is dismissed', async () => {
+      const state = await seedRevisionState();
+      await openRevisionModal();
+
+      fireEvent.click(screen.getByRole('button', { name: /Tiếp tục thảo luận/ }));
+
+      await new Promise<void>((resolve) => setTimeout(resolve, 60));
+      const next = await stored();
+      expect(next?.artifacts.solution?.version).toBe(state.artifacts.solution?.version);
+      expect(next?.cycles).toBeUndefined();
+    });
+
+    it('opens a new cycle when the last cycle is completed', async () => {
+      await seedRevisionState({
+        cycles: [
+          {
+            cycleId: '11111111-1111-4111-8111-000000000001',
+            status: 'completed',
+            startedAt: TS,
+            closedAt: TS,
+          },
+        ],
+      });
+      await openRevisionModal();
+
+      fireEvent.click(screen.getByRole('button', { name: /Xác nhận cập nhật/ }));
+
+      await waitFor(async () => {
+        const next = await stored();
+        expect(next?.cycles).toHaveLength(2);
+        expect(next?.cycles?.[1]?.status).toBe('active');
+        expect(next?.artifacts.solution?.version).toBe(2);
+      });
+    });
+
+    it('closes the active cycle when CAB generation succeeds', async () => {
+      const legacyThreadId = '33333333-3333-4333-8333-333333333333';
+      await db.chatThreads.add({
+        id: legacyThreadId,
+        scopeKey: SCOPE_KEY,
+        scopeType: 'project',
+        entityId: PROJECT_ID,
+        title: 'Recovery Project',
+        createdAt: TS,
+        updatedAt: TS,
+      });
+      await db.chatMessages.add({
+        id: '44444444-4444-4444-8444-444444444444',
+        threadId: legacyThreadId,
+        role: 'assistant',
+        content: 'PL03 review',
+        createdAt: TS,
+        wizard: {
+          schemaVersion: 1,
+          sessionId: SESSION_ID,
+          projectId: PROJECT_ID,
+          threadId: legacyThreadId,
+          skill: 'PL03',
+          status: 'review',
+          inputRevision: 2,
+          draftRevision: 1,
+          approvedAt: null,
+          artifactId: null,
+          artifactHash: null,
+          renderPayload: { title: 'PL03' },
+          createdAt: TS,
+          updatedAt: TS,
+        },
+      });
+      stateKey = `sdlc_workflow:${PROJECT_ID}:${legacyThreadId}`;
+      await db.settings.put({ key: stateKey, value: makeState(legacyThreadId) });
+
+      const generateCab = vi.fn().mockResolvedValue({ status: 'NO_DRIFT_COMPLETE', drift: [], coverage: [] });
+      vi.spyOn(coordinatorModule, 'createWizardCoordinator').mockReturnValue({
+        start: vi.fn(),
+        cancel: vi.fn(),
+        dispose: vi.fn(),
+        restore: vi.fn().mockResolvedValue(undefined),
+        addContext: vi.fn(),
+        selectChangePack: vi.fn().mockResolvedValue({
+          status: 'pending',
+          manifest: {
+            identity: { cr: 'CR-12', branch: 'feature/CR-12' },
+            commitCount: 1,
+            fileCount: 1,
+            packHash: '6'.repeat(64),
+            entries: [],
+            meta: {},
+            schemaVersion: 1,
+            compressedBytes: 1,
+            expandedBytes: 1,
+            coverageStatus: 'complete',
+          },
+        }),
+        replaceChangePack: vi.fn(),
+        confirmChangePack: vi.fn().mockResolvedValue({
+          persisted: { created: true, notes: [] },
+          reconciliation: { status: 'NO_DRIFT_COMPLETE', drift: [], coverage: [] },
+        }),
+        generateTechnicalDocs: vi.fn().mockResolvedValue({
+          status: 'NO_DRIFT_COMPLETE',
+          drift: [],
+          coverage: [],
+          pl03: {},
+          pl07: {},
+        }),
+        generateCab,
+        getPackState: vi.fn().mockReturnValue({ status: 'idle' }),
+        answerGap: vi.fn(),
+        skipGap: vi.fn(),
+        requestEdit: vi.fn(),
+        approveSolution: vi.fn(),
+        approveAndExport: vi.fn(),
+        retryExportDownload: vi.fn(),
+        getCabState: vi.fn(),
+        getTechnicalDocs: vi.fn(),
+        getLatestSolution: vi.fn(),
+        isBusy: vi.fn(),
+        getState: vi.fn(),
+        getSnapshot: vi.fn(),
+      } as any);
+
+      render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
+      const dropzone = await screen.findByLabelText('Khu vực nạp change-pack');
+      fireEvent.drop(dropzone, {
+        dataTransfer: { files: [new File(['zip'], 'change-pack.zip', { type: 'application/zip' })] },
+      });
+      fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận pack' }));
+      const cabButton = await screen.findByRole('button', { name: /Tạo tờ trình CAB/ });
+      await waitFor(() => expect(cabButton).not.toBeDisabled());
+      fireEvent.click(cabButton);
+
+      await waitFor(() => expect(generateCab).toHaveBeenCalledTimes(1));
+      await waitFor(async () => {
+        const next = await stored();
+        expect(next?.cycles).toHaveLength(1);
+        expect(next?.cycles?.[0]?.status).toBe('completed');
+      });
     });
   });
 });
