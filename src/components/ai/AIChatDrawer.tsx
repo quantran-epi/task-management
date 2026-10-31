@@ -1050,24 +1050,52 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     void coordinator.restore();
   }, [activeTabId, activeThreadId, getSdlcCoordinator, isProjectScope]);
 
+  // Live missing-source set for a restored workflow (D-30). Derived from Dexie on every change,
+  // so a deleted or re-created Note shows up without extra persistence.
+  const restoredMissingSources = useLiveQuery(async () => {
+    if (!isSdlcActiveTab || !sdlcWorkflowState) return [];
+    const ids = Object.values(sdlcWorkflowState.artifacts)
+      .map((artifact) => (artifact && typeof artifact === 'object' && 'noteId' in artifact ? artifact.noteId : undefined))
+      .filter((id): id is string => typeof id === 'string');
+    const found = await db.notes.bulkGet(ids);
+    return deriveMissingSources(
+      sdlcWorkflowState,
+      new Set(found.filter((note) => Boolean(note)).map((note) => note!.id))
+    );
+  }, [db, isSdlcActiveTab, sdlcWorkflowState]) ?? [];
+
   // Resumes with a fresh request id, then issues exactly one fresh turn. The draft typed in the
   // composer is intentionally not forwarded: resume means "re-run the interrupted step".
   const handleSdlcCheckpointContinue = useCallback(async () => {
     const coordinator = getSdlcCoordinator();
     if (!coordinator) return;
+    // Missing restored sources block the next AI step. Refuse before resumeCheckpoint: resuming
+    // first would have already replaced the `interrupted` checkpoint the banner renders.
+    if (restoredMissingSources.length > 0) {
+      message.error(
+        'Thiếu tài liệu nguồn của workflow đã khôi phục. Bổ sung hoặc thay thế nguồn trước khi tiếp tục.'
+      );
+      return;
+    }
     try {
       const resumed = await coordinator.resumeCheckpoint();
       setSdlcWorkflowState(resumed);
       const step = resumed.checkpoint?.step ?? resumed.currentStep;
-      void handleSendMessageRef.current(
+      await handleSendMessageRef.current(
         `Tiếp tục bước ${step} sau khi bị gián đoạn.`,
         undefined,
         { resumeFromCheckpoint: true }
       );
+      // An early return inside the send skips the turn's finally; a stranded `running` checkpoint
+      // hides the Continue/Discard banner until the next reload.
+      if (coordinator.getState()?.checkpoint?.status === 'running') {
+        setSdlcWorkflowState(await coordinator.clearCheckpoint());
+      }
     } catch {
+      await coordinator.clearCheckpoint().then(setSdlcWorkflowState).catch(() => undefined);
       message.error('Không thể phục hồi checkpoint SDLC');
     }
-  }, [getSdlcCoordinator]);
+  }, [getSdlcCoordinator, restoredMissingSources]);
 
   // The hub passes the revision kind explicitly, so no local draft-kind state is needed (D-22/D-23).
   const handlePreviewRevision = useCallback(async (type: 'requirement' | 'solution', draft: string) => {
@@ -1480,20 +1508,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       streamingStatus: null,
     });
   };
-
-  // Live missing-source set for a restored workflow (D-30). Derived from Dexie on every change,
-  // so a deleted or re-created Note shows up without extra persistence.
-  const restoredMissingSources = useLiveQuery(async () => {
-    if (!isSdlcActiveTab || !sdlcWorkflowState) return [];
-    const ids = Object.values(sdlcWorkflowState.artifacts)
-      .map((artifact) => (artifact && typeof artifact === 'object' && 'noteId' in artifact ? artifact.noteId : undefined))
-      .filter((id): id is string => typeof id === 'string');
-    const found = await db.notes.bulkGet(ids);
-    return deriveMissingSources(
-      sdlcWorkflowState,
-      new Set(found.filter((note) => Boolean(note)).map((note) => note!.id))
-    );
-  }, [db, isSdlcActiveTab, sdlcWorkflowState]) ?? [];
 
   const handleSendMessage = async (
     text: string,

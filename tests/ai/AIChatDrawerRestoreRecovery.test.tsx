@@ -173,4 +173,27 @@ describe('AIChatDrawer restored-source recovery (D-30)', () => {
     submit('Chạy bước tiếp theo');
     await waitFor(() => expect(dispatches).toHaveLength(1));
   });
+
+  it('refuses Continue while sources are missing and never strands a running checkpoint', async () => {
+    const sdlcThreadId = stateKey.split(':').pop()!;
+    await db.settings.put({
+      key: stateKey,
+      value: {
+        ...makeState(sdlcThreadId, { pl01: artifact(MISSING_NOTE, 'PL01 nguồn đã xoá') }),
+        checkpoint: {
+          requestId: '44444444-4444-4444-8444-444444444444',
+          step: 'SOLUTION',
+          status: 'interrupted',
+          startedAt: TS,
+        },
+      },
+    });
+    render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Tiếp tục/i }));
+
+    await waitFor(() => expect(dispatches).toHaveLength(0));
+    // Pre-resume refusal: the checkpoint stays `interrupted`, so Continue/Discard remain available.
+    expect((await stored())?.checkpoint?.status).toBe('interrupted');
+  });
 });
