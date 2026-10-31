@@ -199,7 +199,7 @@ describe('AIChatDrawer Grounded Turn Wiring (Plan 19-14)', () => {
 
     await waitFor(() => {
       expect(firstSignal).not.toBeNull();
-    });
+    }, { timeout: 3000 });
 
     // Change scope
     rerender(

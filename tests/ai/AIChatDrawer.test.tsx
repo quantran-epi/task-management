@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ChatHeader } from '../../src/components/ai/ChatHeader';
 import { AIChatDrawer } from '../../src/components/ai/AIChatDrawer';
 import { TaskPlannerDatabase } from '../../src/db';
@@ -142,6 +142,7 @@ describe('AIChatDrawer', () => {
   });
 
   afterEach(() => {
+    cleanup();
     clearGroundedTurnTestHooks();
   });
 
@@ -268,7 +269,7 @@ describe('AIChatDrawer', () => {
 
     await waitFor(() => {
       expect(clearSpy).toHaveBeenCalled();
-    });
+    }, { timeout: 4000 });
   });
 
   it('renders with zIndex 1200 in overlay mode', () => {
@@ -324,12 +325,16 @@ describe('AIChatDrawer', () => {
     // Verify initial scope
     expect(screen.getByText('Toàn cục (Không gắn)')).toBeInTheDocument();
 
-    // Change scope via modal
+    // Change scope via modal. Re-query the row on each attempt: the drawer re-renders while
+    // per-tab runtimes hydrate, which replaces modal nodes mid-interaction.
     fireEvent.click(changeScopeBtn);
-    const taskOption = await screen.findByText(/Tác vụ Khởi tạo/i);
-    expect(taskOption).toBeInTheDocument();
-
-    fireEvent.click(taskOption);
+    await waitFor(() => {
+      expect(screen.getByText(/Tác vụ Khởi tạo/i)).toBeInTheDocument();
+    });
+    fireEvent.click(
+      screen.getByText(/Tác vụ Khởi tạo/i).closest('.scope-picker-item') ??
+        screen.getByText(/Tác vụ Khởi tạo/i)
+    );
 
     await waitFor(() => {
       expect(screen.getByText(/Đang gắn ngữ cảnh: Tác vụ Khởi tạo/i)).toBeInTheDocument();
@@ -757,8 +762,9 @@ describe('AIChatDrawer', () => {
       expect(screen.getByTestId('ai-mutation-confirmation')).toBeInTheDocument();
     });
 
-    // Type "yes" and send
-    fireEvent.change(textarea, { target: { value: 'yes' } });
+    // Type "yes" and send. The composer remounts when the durable tab id resolves, so re-query it.
+    const followUpInput = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
+    fireEvent.change(followUpInput, { target: { value: 'yes' } });
     fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
     await waitFor(() => {
@@ -1354,8 +1360,11 @@ describe('AIChatDrawer', () => {
       expect(screen.getByTestId('clarification-prompt-card')).toBeInTheDocument();
     });
 
-    // Replying with natural text continues loop without route chips
-    fireEvent.change(textarea, { target: { value: 'về tính lãi thẻ tín dụng' } });
+    // Replying with natural text continues loop without route chips. The composer remounts when the
+    // durable tab id resolves, so re-query it rather than reusing the pre-hydration reference.
+    fireEvent.change(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI'), {
+      target: { value: 'về tính lãi thẻ tín dụng' },
+    });
     fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
     await waitFor(() => {

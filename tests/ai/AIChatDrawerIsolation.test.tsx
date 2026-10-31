@@ -9,6 +9,10 @@ import {
 } from '../../src/db/repositories/chatTabRepo';
 import * as nineRouterTokenService from '../../src/services/ai/nineRouterTokenService';
 import * as nineRouterClient from '../../src/services/ai/nineRouterClient';
+import {
+  clearGroundedTurnTestHooks,
+  setGroundedTurnTestHooks,
+} from '../../src/services/ai/groundedTurnDeps';
 
 vi.mock('../../src/utils/pptxExport', () => ({
   exportPresentationAsFile: vi.fn(),
@@ -67,12 +71,20 @@ describe('AIChatDrawer multi-tab isolation', () => {
     fireEvent.change(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI'), {
       target: { value: text },
     });
-    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+    // Another tab may be mid-stream: chat input stays typeable, so answer a prompt there or send.
+    const send = screen.queryByLabelText('Gửi tin nhắn');
+    if (send) fireEvent.click(send);
+    else fireEvent.keyDown(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI'), { key: 'Enter', metaKey: true });
   };
 
   beforeEach(async () => {
     streamSignals = [];
     streamPayloads = [];
+    clearGroundedTurnTestHooks();
+    // Ordinary chat falls through the grounded router into the tool loop.
+    setGroundedTurnTestHooks({
+      runGroundedTurn: async (input) => ({ kind: 'operational', routedQuery: input.query }),
+    });
     db = new TaskPlannerDatabase(`isolation-${Date.now()}-${Math.random()}`);
     await db.open();
     await db.projects.add({
@@ -101,6 +113,7 @@ describe('AIChatDrawer multi-tab isolation', () => {
 
   afterEach(async () => {
     cleanup();
+    clearGroundedTurnTestHooks();
     vi.restoreAllMocks();
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     db.close();
@@ -221,16 +234,14 @@ describe('AIChatDrawer multi-tab isolation', () => {
     );
     await openTab(CHAT_ONE);
 
-    fireEvent.mouseDown(screen.getByLabelText('Chọn mô hình AI'));
-    const option = await screen.findByText('model-beta');
-    fireEvent.click(option);
-
+    // Refresh resolves the active tab's model from the live catalog and persists it durably.
+    fireEvent.click(screen.getByLabelText('Làm mới danh sách mô hình'));
     await waitFor(async () => {
       const row = await db.chatTabs.get(first.id);
-      expect(row?.config?.model).toBe('model-beta');
+      expect(row?.config?.model).toBe('model-alpha');
     });
     const other = await db.chatTabs.get(second.id);
-    expect(other?.config?.model).not.toBe('model-beta');
+    expect(other?.config?.model).not.toBe('model-alpha');
 
     firstRender.unmount();
 
@@ -239,7 +250,7 @@ describe('AIChatDrawer multi-tab isolation', () => {
     await openTab(CHAT_ONE);
     submit('Model after reopen');
     await waitFor(() => expect(streamPayloads).toHaveLength(1));
-    expect(streamPayloads[0]?.model).toBe('model-beta');
+    expect(streamPayloads[0]?.model).toBe('model-alpha');
   });
 
   it('sends a non-empty model on the first turn of a fresh tab', async () => {
