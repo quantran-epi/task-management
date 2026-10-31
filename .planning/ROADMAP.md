@@ -220,28 +220,28 @@ Plans:
 
 - [x] 25.1-09-PLAN.md — Final targeted regression and phase-scoped source safety gates
 
-**Gap Closure** *(from 25.1-VERIFICATION.md gaps_found)*
+**Gap-Closure waves 1-6** *(from 25.1-VERIFICATION.md gaps_found; these are full-phase waves 8-13, strictly sequential 10 → 11 → 12 → 13 → 14 → 15, no parallel plans — every gap-closure plan edits `AIChatDrawer.tsx`)*
 
-**Wave 1**
+**Gap-Closure Wave 1 / full-phase Wave 8** *(no dependencies)*
 
 - [ ] 25.1-10-PLAN.md — Sanitized error diagnostics and structural D-09 safety gate (blockers)
 
-**Wave 2** *(depends on 25.1-10)*
+**Gap-Closure Wave 2 / full-phase Wave 9** *(depends on 25.1-10)*
 
-- [ ] 25.1-11-PLAN.md — Real per-tab runtime seeding, transient-state isolation, and concurrent send guard
+- [ ] 25.1-11-PLAN.md — Real per-tab runtime seeding, durable per-tab model, transient-state isolation, and concurrent send guard
 
-**Wave 3** *(depends on 25.1-11)*
+**Gap-Closure Wave 3 / full-phase Wave 10** *(depends on 25.1-11)*
 
 - [ ] 25.1-12-PLAN.md — SDLC checkpoint/resume, revision preview+commit, and cycle open/close wiring
 
-**Wave 4** *(depends on 25.1-12; parallel with 25.1-14)*
+**Gap-Closure Wave 4 / full-phase Wave 11** *(depends on 25.1-12)*
 
 - [ ] 25.1-13-PLAN.md — Merged cited SDLC intake, picker listbox semantics, and editable tab titles
 
-**Wave 5** *(depends on 25.1-11, 25.1-13)*
+**Gap-Closure Wave 5 / full-phase Wave 12** *(depends on 25.1-11, 25.1-13)*
 
 - [ ] 25.1-14-PLAN.md — Retry identity, restore missing-source surfacing, and durable-only analysis mode
 
-**Wave 6** *(depends on 25.1-12, 25.1-13, 25.1-14)*
+**Gap-Closure Wave 6 / full-phase Wave 13** *(depends on 25.1-12, 25.1-13, 25.1-14)*
 
 - [ ] 25.1-15-PLAN.md — Actual-app acceptance depth: concurrency, retry, revision/cycles, restore, backup round-trip
