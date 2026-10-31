@@ -1,118 +1,13 @@
 import fs from 'node:fs';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+import {
+  configureAiKey,
+  createProject,
+  openAiDrawerWithProjectScope,
+  setupMockTransport,
+} from './helpers/sdlcFixtures';
 
 const source = fs.readFileSync(new URL(import.meta.url), 'utf8');
-
-interface MockTransportOptions {
-  capturedRequests?: Array<{
-    url: string;
-    body: any;
-    prompt: string;
-  }>;
-  aiResponseText?: string;
-}
-
-async function setupMockTransport(page: Page, options: MockTransportOptions = {}): Promise<void> {
-  const captured = options.capturedRequests ?? [];
-  const replyText = options.aiResponseText ?? 'Phản hồi thử nghiệm từ hệ thống AI.';
-
-  await page.route('**/v1/chat/completions', async (route) => {
-    const request = route.request();
-    if (request.method() !== 'POST') {
-      await route.continue();
-      return;
-    }
-
-    let body: any = null;
-    let prompt = '';
-    try {
-      body = request.postDataJSON();
-      const messages = body?.messages;
-      if (Array.isArray(messages)) {
-        prompt = messages.map((m: any) => m?.content || '').join('\n');
-      }
-    } catch {
-      // ignore parse error
-    }
-
-    captured.push({
-      url: request.url(),
-      body,
-      prompt,
-    });
-
-    const isStream = body?.stream ?? true;
-    if (isStream) {
-      const sseBody = [
-        `data: ${JSON.stringify({ choices: [{ delta: { content: replyText } }] })}`,
-        '',
-        'data: [DONE]',
-        '',
-        '',
-      ].join('\n\n');
-
-      await route.fulfill({
-        status: 200,
-        contentType: 'text/event-stream; charset=utf-8',
-        body: sseBody,
-      });
-    } else {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          choices: [{ message: { content: replyText } }],
-        }),
-      });
-    }
-  });
-}
-
-async function configureAiKey(page: Page): Promise<void> {
-  const settingsMenuItem = page.getByRole('menuitem', { name: 'Cài đặt' });
-  if (!(await settingsMenuItem.isVisible())) {
-    const openMenuBtn = page.getByRole('button', { name: 'Mở menu' });
-    if (await openMenuBtn.isVisible()) {
-      await openMenuBtn.click();
-    }
-  }
-  await page.getByRole('menuitem', { name: 'Cài đặt' }).click();
-  await page.getByRole('tab', { name: /Trợ lý AI & Ghost Dev/ }).click();
-
-  const keyInput = page.getByPlaceholder('Nhập 9router API Key (sk-...)');
-  if (await keyInput.isVisible()) {
-    await keyInput.fill('sk-mock-taskmate-key');
-    await page.getByRole('button', { name: 'Lưu tất cả cấu hình' }).click();
-    await expect(page.getByText('Lưu cấu hình thành công')).toBeVisible();
-  }
-}
-
-async function createProject(page: Page, name: string): Promise<void> {
-  const projectMenuItem = page.getByRole('menuitem', { name: 'Dự án' });
-  if (!(await projectMenuItem.isVisible())) {
-    const openMenuBtn = page.getByRole('button', { name: 'Mở menu' });
-    if (await openMenuBtn.isVisible()) {
-      await openMenuBtn.click();
-    }
-  }
-  await page.getByRole('menuitem', { name: 'Dự án' }).click();
-  await page.getByRole('button', { name: 'Dự án mới' }).click();
-  await page.getByLabel('Tên dự án').fill(name);
-  await page.getByRole('button', { name: 'Tạo dự án' }).click();
-  await expect(page.getByText(name, { exact: true })).toBeVisible();
-}
-
-async function openAiDrawerWithProjectScope(page: Page, projectName: string): Promise<void> {
-  const aiButton = page.getByRole('button', { name: 'Trợ lý AI (Cmd+J / Ctrl+J)' });
-  await expect(aiButton).toBeVisible();
-  await aiButton.click();
-  await expect(page.getByText('Trợ lý AI', { exact: true }).first()).toBeVisible();
-
-  await page.getByRole('button', { name: 'Đổi phạm vi ngữ cảnh' }).click();
-  const scopeDialog = page.getByRole('dialog');
-  await scopeDialog.getByText(projectName, { exact: true }).click();
-  await expect(page.getByText(`Đang gắn ngữ cảnh: ${projectName}`, { exact: true })).toBeVisible();
-}
 
 test.describe('Phase 25.1 SDLC Flow Hardening & Multi-Tab Isolation Acceptance', () => {
   test.beforeEach(async () => {
