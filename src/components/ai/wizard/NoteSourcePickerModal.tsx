@@ -53,6 +53,9 @@ export const NoteSourcePickerModal: React.FC<NoteSourcePickerModalProps> = ({
   const [applying, setApplying] = useState(false);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
 
+  // Parents pass a fresh array on every render; keying the reset on contents keeps selection stable.
+  const initialSelectedKey = [...initialSelectedIds].sort().join(',');
+
   useEffect(() => {
     if (!open) return;
     setSelectedIds(new Set(initialSelectedIds));
@@ -67,7 +70,7 @@ export const NoteSourcePickerModal: React.FC<NoteSourcePickerModalProps> = ({
       setPreviewNoteId(firstSelected ? firstSelected.id : null);
       setFocusedNoteId(firstSelected?.id ?? nonDeleted[0]?.id ?? null);
     });
-  }, [initialSelectedIds, open, projectId]);
+  }, [initialSelectedKey, open, projectId]);
 
   const modalTitle =
     title ?? (kind === 'PL01' ? 'Chọn nguồn yêu cầu nghiệp vụ (PL01)' : 'Chọn nguồn đặc tả chức năng (PL02)');
@@ -97,6 +100,8 @@ export const NoteSourcePickerModal: React.FC<NoteSourcePickerModalProps> = ({
     setFocusedNoteId((current) => filteredNotes.some((note) => note.id === current) ? current : filteredNotes[0]?.id ?? null);
   }, [filteredNotes]);
 
+  const listboxRef = useRef<HTMLDivElement | null>(null);
+
   const moveFocus = (currentId: string, direction: -1 | 1 | 'first' | 'last') => {
     const currentIndex = filteredNotes.findIndex((note) => note.id === currentId);
     const nextIndex = direction === 'first'
@@ -107,7 +112,31 @@ export const NoteSourcePickerModal: React.FC<NoteSourcePickerModalProps> = ({
     const next = filteredNotes[nextIndex];
     if (!next) return;
     setFocusedNoteId(next.id);
-    rowRefs.current.get(next.id)?.focus();
+    rowRefs.current.get(next.id)?.scrollIntoView({ block: 'nearest' });
+  };
+
+  // Focus stays on the listbox container; aria-activedescendant announces the active row.
+  const handleListboxKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const activeId = focusedNoteId ?? filteredNotes[0]?.id;
+    if (!activeId) return;
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      moveFocus(activeId, 1);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      moveFocus(activeId, -1);
+    } else if (event.key === 'Home') {
+      event.preventDefault();
+      moveFocus(activeId, 'first');
+    } else if (event.key === 'End') {
+      event.preventDefault();
+      moveFocus(activeId, 'last');
+    } else if (event.key === 'Enter') {
+      setPreviewNoteId(activeId);
+    } else if (event.key === ' ') {
+      event.preventDefault();
+      toggleSelect(activeId);
+    }
   };
 
   const toggleSelect = (id: string) => {
@@ -214,6 +243,13 @@ export const NoteSourcePickerModal: React.FC<NoteSourcePickerModalProps> = ({
         >
           {/* Note List */}
           <div
+            ref={listboxRef}
+            role="listbox"
+            aria-label={`Danh sách tài liệu nguồn ${kind}`}
+            aria-multiselectable="true"
+            aria-activedescendant={focusedNoteId ? `note-option-${focusedNoteId}` : undefined}
+            tabIndex={0}
+            onKeyDown={handleListboxKeyDown}
             style={{
               overflowY: 'auto',
               border: `1px solid ${token.colorBorderSecondary}`,
@@ -250,31 +286,11 @@ export const NoteSourcePickerModal: React.FC<NoteSourcePickerModalProps> = ({
                       else rowRefs.current.delete(note.id);
                     }}
                     role="option"
-                    tabIndex={focusedNoteId === note.id ? 0 : -1}
+                    id={`note-option-${note.id}`}
                     aria-selected={isChecked}
                     aria-label={`${note.title || 'Untitled Note'}${isChecked ? ', đã chọn' : ', chưa chọn'}`}
                     onFocus={() => setFocusedNoteId(note.id)}
                     onClick={() => setPreviewNoteId(note.id)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'ArrowDown') {
-                        event.preventDefault();
-                        moveFocus(note.id, 1);
-                      } else if (event.key === 'ArrowUp') {
-                        event.preventDefault();
-                        moveFocus(note.id, -1);
-                      } else if (event.key === 'Home') {
-                        event.preventDefault();
-                        moveFocus(note.id, 'first');
-                      } else if (event.key === 'End') {
-                        event.preventDefault();
-                        moveFocus(note.id, 'last');
-                      } else if (event.key === 'Enter') {
-                        setPreviewNoteId(note.id);
-                      } else if (event.key === ' ') {
-                        event.preventDefault();
-                        toggleSelect(note.id);
-                      }
-                    }}
                     style={{
                       display: 'flex',
                       alignItems: 'center',

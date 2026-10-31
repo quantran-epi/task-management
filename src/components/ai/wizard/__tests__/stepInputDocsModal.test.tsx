@@ -181,6 +181,37 @@ describe('StepInputDocsModal and NoteSourcePickerModal', () => {
       expect(applied[0]?.hash).toMatch(/^[a-f0-9]{64}$/);
       expect(applied[0]?.title).toBe('PL01 Yêu cầu Core Banking');
     });
+
+    it('exposes listbox semantics and tracks the active row with aria-activedescendant', async () => {
+      render(
+        <NoteSourcePickerModal
+          open={true}
+          title="Chọn nguồn yêu cầu nghiệp vụ (PL01)"
+          projectId={projectId}
+          initialSelectedIds={[]}
+          onApply={vi.fn()}
+          onClose={vi.fn()}
+        />
+      );
+
+      const listbox = await screen.findByRole('listbox');
+      expect(listbox).toHaveAttribute('aria-multiselectable', 'true');
+
+      const options = await screen.findAllByRole('option');
+      expect(options).toHaveLength(2);
+      const firstId = options[0]!.id;
+      const secondId = options[1]!.id;
+      expect(firstId).toMatch(/^note-option-/);
+      expect(listbox).toHaveAttribute('aria-activedescendant', firstId);
+
+      listbox.focus();
+      fireEvent.keyDown(listbox, { key: 'ArrowDown' });
+      expect(listbox).toHaveAttribute('aria-activedescendant', secondId);
+
+      expect(options[1]).toHaveAttribute('aria-selected', 'false');
+      fireEvent.keyDown(listbox, { key: ' ' });
+      expect(options[1]).toHaveAttribute('aria-selected', 'true');
+    });
   });
 
   describe('StepInputDocsModal tính độc lập PL01/PL02 và tính bất biến của Note', () => {
