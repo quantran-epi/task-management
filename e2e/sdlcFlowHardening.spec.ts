@@ -4,6 +4,7 @@ import {
   configureAiKey,
   createProject,
   openAiDrawerWithProjectScope,
+  readDexieRows,
   setupMockTransport,
 } from './helpers/sdlcFixtures';
 
@@ -247,5 +248,165 @@ test.describe('Phase 25.1 SDLC Flow Hardening & Multi-Tab Isolation Acceptance',
     await expect(previewModal).not.toBeVisible();
 
     await expect(page.getByText('Khôi phục dữ liệu thành công')).toBeVisible();
+  });
+
+  test('D-06/D-10: hai tab chạy request đồng thời', async ({ page }) => {
+    const controller = await setupMockTransport(page, { holdRequests: true });
+    await page.goto('./', { waitUntil: 'commit' });
+    await configureAiKey(page);
+
+    const projectName = `SDLC-Concurrent-${Date.now()}`;
+    await createProject(page, projectName);
+    await openAiDrawerWithProjectScope(page, projectName);
+
+    const tabList = page.getByRole('tablist', { name: 'Thanh tab hội thoại AI' });
+    const sdlcTab = tabList.getByRole('tab').filter({ hasText: /SDLC/ }).first();
+    const firstTab = tabList.getByRole('tab').filter({ hasText: '💬 Tra cứu & Hỏi đáp' }).first();
+    const secondTab = tabList.getByRole('tab').filter({ hasText: /💬 Cuộc trò chuyện #2/ }).first();
+
+    // Analysis mode on every participating ordinary tab: the grounded pipeline (intent router,
+    // scope router, synthesis) would otherwise add schema-invalid calls on the same route and
+    // break the 1 turn -> 1 captured request mapping these tests rely on.
+    await firstTab.click();
+    await page.getByTestId('chat-header-more-btn').click();
+    await page.getByText('Bật chế độ phân tích (Analysis mode)').click();
+    await page.getByTestId('chat-header-more-btn').click();
+    await expect(page.getByText('Tắt chế độ phân tích (Analysis mode)')).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    await page.getByRole('button', { name: 'Mở tab chat AI mới' }).click();
+    await expect(secondTab).toHaveAttribute('aria-selected', 'true');
+    await page.getByTestId('chat-header-more-btn').click();
+    await page.getByText('Bật chế độ phân tích (Analysis mode)').click();
+    await page.getByTestId('chat-header-more-btn').click();
+    await expect(page.getByText('Tắt chế độ phân tích (Analysis mode)')).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    const chatInput = page.getByLabel('Nội dung tin nhắn trò chuyện AI');
+    await chatInput.fill('Yêu cầu của tab thứ hai: liệt kê dự án đang hoạt động');
+    await page.getByLabel('Gửi tin nhắn').click();
+
+    // Requests are held, so the first turn is still in flight when the second tab sends.
+    await expect.poll(() => controller.captured.length).toBe(1);
+
+    await firstTab.click();
+    await expect(firstTab).toHaveAttribute('aria-selected', 'true');
+    // The tab that owns the in-flight turn reports its own status while a sibling is selected.
+    await expect(secondTab).toHaveAttribute('aria-label', /Đang xử lý/);
+
+    await chatInput.fill('Yêu cầu của tab thứ nhất: đếm số tác vụ hôm nay');
+    await page.getByLabel('Gửi tin nhắn').click();
+
+    await expect.poll(() => controller.captured.length).toBe(2);
+
+    // Ownership is asserted from the request bodies, not from arrival order alone.
+    expect(controller.captured[0]!.prompt).toContain('Yêu cầu của tab thứ hai');
+    expect(controller.captured[0]!.prompt).not.toContain('Yêu cầu của tab thứ nhất');
+    expect(controller.captured[1]!.prompt).toContain('Yêu cầu của tab thứ nhất');
+    expect(controller.captured[1]!.prompt).not.toContain('Yêu cầu của tab thứ hai');
+
+    controller.releaseAll();
+
+    await expect(page.getByText('Phản hồi thử nghiệm từ hệ thống AI.').first()).toBeVisible();
+    await secondTab.click();
+    await expect(page.getByText('Phản hồi thử nghiệm từ hệ thống AI.').first()).toBeVisible();
+    expect(controller.captured.length).toBe(2);
+  });
+
+  test('D-15: lỗi tab này không đụng tab kia', async ({ page }) => {
+    // failCount 2: after the stream fails the orchestrator issues one tool-less fallback on the
+    // same route, so a single-request window would silently succeed and never surface the error.
+    const controller = await setupMockTransport(page, {
+      failStatus: { status: 500, requestIndex: 0, failCount: 2 },
+    });
+    await page.goto('./', { waitUntil: 'commit' });
+    await configureAiKey(page);
+
+    const projectName = `SDLC-ErrorIsolation-${Date.now()}`;
+    await createProject(page, projectName);
+    await openAiDrawerWithProjectScope(page, projectName);
+
+    const tabList = page.getByRole('tablist', { name: 'Thanh tab hội thoại AI' });
+    const firstTab = tabList.getByRole('tab').filter({ hasText: '💬 Tra cứu & Hỏi đáp' }).first();
+    const secondTab = tabList.getByRole('tab').filter({ hasText: /💬 Cuộc trò chuyện #2/ }).first();
+
+    await firstTab.click();
+    await page.getByTestId('chat-header-more-btn').click();
+    await page.getByText('Bật chế độ phân tích (Analysis mode)').click();
+    await page.getByTestId('chat-header-more-btn').click();
+    await expect(page.getByText('Tắt chế độ phân tích (Analysis mode)')).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    await page.getByRole('button', { name: 'Mở tab chat AI mới' }).click();
+    await expect(secondTab).toHaveAttribute('aria-selected', 'true');
+    await page.getByTestId('chat-header-more-btn').click();
+    await page.getByText('Bật chế độ phân tích (Analysis mode)').click();
+    await page.getByTestId('chat-header-more-btn').click();
+    await expect(page.getByText('Tắt chế độ phân tích (Analysis mode)')).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    await firstTab.click();
+    await expect(firstTab).toHaveAttribute('aria-selected', 'true');
+    const chatInput = page.getByLabel('Nội dung tin nhắn trò chuyện AI');
+    await chatInput.fill('Truy vấn sẽ thất bại ở tab thứ nhất');
+    await page.getByLabel('Gửi tin nhắn').click();
+
+    // Exactly one owner: the active tab renders the single inline error card (D-13).
+    const errorCard = page.locator('[data-testid="inline-api-error-card"]');
+    await expect(errorCard).toHaveCount(1);
+    await expect(firstTab).toHaveAttribute('aria-label', /Lỗi/);
+
+    await secondTab.click();
+    await expect(secondTab).toHaveAttribute('aria-selected', 'true');
+    await expect(errorCard).toHaveCount(0);
+    await expect(secondTab).not.toHaveAttribute('aria-label', /Lỗi|Đang xử lý/);
+    // The failed turn stays owned by the first tab after switching away and back.
+    await firstTab.click();
+    await expect(errorCard).toHaveCount(1);
+  });
+
+  test('D-14: retry không nhân bản tin nhắn người dùng', async ({ page }) => {
+    const prompt = 'Câu hỏi cần thử lại, chỉ một bong bóng người dùng';
+    // Same fallback reasoning as the isolation test: the error must actually reach the UI.
+    const controller = await setupMockTransport(page, {
+      failStatus: { status: 500, requestIndex: 0, failCount: 2 },
+    });
+    await page.goto('./', { waitUntil: 'commit' });
+    await configureAiKey(page);
+
+    const projectName = `SDLC-RetryIdentity-${Date.now()}`;
+    await createProject(page, projectName);
+    await openAiDrawerWithProjectScope(page, projectName);
+
+    const tabList = page.getByRole('tablist', { name: 'Thanh tab hội thoại AI' });
+    const chatTab = tabList.getByRole('tab').filter({ hasText: '💬 Tra cứu & Hỏi đáp' }).first();
+    await chatTab.click();
+    await page.getByTestId('chat-header-more-btn').click();
+    await page.getByText('Bật chế độ phân tích (Analysis mode)').click();
+    await page.getByTestId('chat-header-more-btn').click();
+    await expect(page.getByText('Tắt chế độ phân tích (Analysis mode)')).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    const chatInput = page.getByLabel('Nội dung tin nhắn trò chuyện AI');
+    await chatInput.fill(prompt);
+    await page.getByLabel('Gửi tin nhắn').click();
+
+    await expect(page.locator('[data-testid="inline-api-error-card"]')).toHaveCount(1);
+    const failedRequests = controller.captured.length;
+
+    // The failed turn persisted the user row and nothing else.
+    const afterFailure = await readDexieRows(page, 'chatMessages');
+    expect(afterFailure.filter((row) => row.role === 'user')).toHaveLength(1);
+    expect(afterFailure.filter((row) => row.role === 'assistant')).toHaveLength(0);
+
+    await page.getByRole('button', { name: 'Thử lại' }).click();
+    await expect.poll(() => controller.captured.length).toBeGreaterThan(failedRequests);
+    await expect(page.getByText('Phản hồi thử nghiệm từ hệ thống AI.').first()).toBeVisible();
+
+    const rows = await readDexieRows(page, 'chatMessages');
+    const userRows = rows.filter((row) => row.role === 'user');
+    // Retry reused the original user row instead of inserting a second bubble (D-14).
+    expect(userRows).toHaveLength(1);
+    expect(userRows[0]!.content).toBe(prompt);
   });
 });
