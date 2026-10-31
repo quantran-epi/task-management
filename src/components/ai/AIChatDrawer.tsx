@@ -101,6 +101,7 @@ import { WizardLifecycleBar } from './wizard/WizardLifecycleBar';
 import { InterruptedBanner } from './InterruptedBanner';
 import { InlineApiErrorCard } from './InlineApiErrorCard';
 import { RestoredSourceNotice } from './RestoredSourceNotice';
+import { deriveMissingSources } from './wizard/restoreRecovery';
 import { WizardProgressStrip } from './wizard/WizardProgressStrip';
 import { ChangePackDropzone } from './wizard/ChangePackDropzone';
 import { ChangePackConfirmStrip, type ChangePackUiResult } from './wizard/ChangePackConfirmStrip';
@@ -1431,6 +1432,20 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     });
   };
 
+  // Live missing-source set for a restored workflow (D-30). Derived from Dexie on every change,
+  // so a deleted or re-created Note shows up without extra persistence.
+  const restoredMissingSources = useLiveQuery(async () => {
+    if (!isSdlcActiveTab || !sdlcWorkflowState) return [];
+    const ids = Object.values(sdlcWorkflowState.artifacts)
+      .map((artifact) => (artifact && typeof artifact === 'object' && 'noteId' in artifact ? artifact.noteId : undefined))
+      .filter((id): id is string => typeof id === 'string');
+    const found = await db.notes.bulkGet(ids);
+    return deriveMissingSources(
+      sdlcWorkflowState,
+      new Set(found.filter((note) => Boolean(note)).map((note) => note!.id))
+    );
+  }, [db, isSdlcActiveTab, sdlcWorkflowState]) ?? [];
+
   const handleSendMessage = async (
     text: string,
     overrideScope?: ActiveScope,
@@ -1500,6 +1515,22 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       status: 'idle',
       lastSubmittedText: trimmed,
     });
+
+    // Missing restored sources block the next AI step. This guard MUST stay before setCheckpoint:
+    // returning after it would skip the finally's clearCheckpoint and strand a `running`
+    // checkpoint that restore() flips to `interrupted`, permanently blocking the tab (D-30).
+    if (isSdlcActiveTab && restoredMissingSources.length > 0) {
+      tabRuntimes.patch(turnTabId, {
+        status: 'error',
+        error: {
+          code: 'request_failed',
+          message:
+            'Thiếu tài liệu nguồn của workflow đã khôi phục. Bổ sung hoặc thay thế nguồn trước khi chạy bước tiếp theo.',
+          requestId: crypto.randomUUID(),
+        },
+      });
+      return;
+    }
 
     // Clarification transcript continuation handling per D-06
     let effectiveQuery = trimmed;
@@ -3027,7 +3058,7 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
               onDiscard={() => void handleSdlcCheckpointDiscard()}
             />
           )}
-          <RestoredSourceNotice missingSources={[]} />
+          <RestoredSourceNotice missingSources={restoredMissingSources} />
           <SdlcWorkflowHub
             projectScoped={isProjectScope}
             state={sdlcWorkflowState}
