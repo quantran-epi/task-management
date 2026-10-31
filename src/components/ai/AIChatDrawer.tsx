@@ -2591,7 +2591,11 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
       // Release the claim opened above every other exit, including throws before streaming starts.
       if (activeReq) requestRegistryRef.current.finish(activeReq.requestId);
       // A throw between the claim and the streaming try leaves the tab on `processing` forever.
-      if (tabRuntimes.get(turnTabId)?.requestController === activeReq.controller) {
+      // Error paths below already set their own status, so only a still-processing tab is reset.
+      if (
+        tabRuntimes.get(turnTabId)?.status === 'processing' &&
+        tabRuntimes.get(turnTabId)?.requestController === activeReq.controller
+      ) {
         tabRuntimes.patch(turnTabId, {
           status: 'idle',
           requestController: undefined,
