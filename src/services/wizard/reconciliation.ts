@@ -156,7 +156,7 @@ export function reconcileSolutionWithPack(raw: unknown): ReconciliationResult {
   const drift = input.proposedDrift.map((proposal): DriftTuple => {
     if (proposal.category === 'missing') {
       const baseline = requirements.get(proposal.requirementId);
-      if (!baseline) throw new Error('UNKNOWN_BASELINE_REQUIREMENT');
+      if (!baseline) throw new Error('MISSING_BASELINE_REQUIREMENT');
       return DriftTupleSchema.parse({
         requirementId: proposal.requirementId,
         category: proposal.category,

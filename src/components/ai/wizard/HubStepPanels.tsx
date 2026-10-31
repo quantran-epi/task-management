@@ -1,8 +1,11 @@
-import React from 'react';
-import { Button, Tag, theme } from 'antd';
-import { CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import React, { useEffect, useRef } from 'react';
+import { Alert, Button, Tag, theme } from 'antd';
+import { CheckCircleOutlined, ClockCircleOutlined, ReloadOutlined, SyncOutlined } from '@ant-design/icons';
 import type { SdlcArtifactRef } from '../../../services/wizard/workflowSchemas';
+import type { ChangePackManifest, ChangePackValidationCode } from '../../../services/wizard/changePack';
 import type { ReconciliationResult } from '../../../services/wizard/reconciliation';
+import { ChangePackConfirmStrip, ERROR_COPY } from './ChangePackConfirmStrip';
+import { ChangePackDropzone } from './ChangePackDropzone';
 import { DriftMatrixView } from './DriftMatrixView';
 
 /**
@@ -115,26 +118,143 @@ export const StepSolutionPanel: React.FC<StepSolutionPanelProps> = ({
   );
 };
 
+/** Step-4 draft state. Ephemeral: it never reaches Dexie and resets on tab change. */
+export type HubChangePackDraft =
+  | { status: 'idle' }
+  | { status: 'validating' }
+  | { status: 'invalid'; code: ChangePackValidationCode }
+  | { status: 'pending'; manifest: Readonly<ChangePackManifest> }
+  | { status: 'confirming'; manifest: Readonly<ChangePackManifest> };
+
 export interface StepChangePackPanelProps {
   artifact?: SdlcArtifactRef | undefined;
   driftResult?: ReconciliationResult | undefined;
   stale: boolean;
   cr?: string | undefined;
+  draft?: HubChangePackDraft | undefined;
+  disabled?: boolean | undefined;
+  onSelectFile?: ((file: File) => void) | undefined;
+  onConfirm?: ((manifest: Readonly<ChangePackManifest>) => void) | undefined;
+  onReplace?: (() => void) | undefined;
+  onRerun?: (() => void) | undefined;
 }
 
-export const StepChangePackPanel: React.FC<StepChangePackPanelProps> = ({ artifact, driftResult, cr }) => {
+export const StepChangePackPanel: React.FC<StepChangePackPanelProps> = ({
+  artifact,
+  driftResult,
+  stale,
+  cr,
+  draft = { status: 'idle' },
+  disabled = false,
+  onSelectFile,
+  onConfirm,
+  onReplace,
+  onRerun,
+}) => {
   const { token } = theme.useToken();
-  // ponytail: step-4 upload/confirm states land in 25.1.1-04
+  const confirmRef = useRef<HTMLButtonElement>(null);
+  const replaceRef = useRef<HTMLButtonElement>(null);
+  const matrixHeadingRef = useRef<HTMLHeadingElement>(null);
+  const previousStatus = useRef<HubChangePackDraft['status']>(draft.status);
+
+  // The dropzone leaves the DOM as soon as a result exists, so focus has to be re-homed.
+  useEffect(() => {
+    const from = previousStatus.current;
+    previousStatus.current = draft.status;
+    if (from === draft.status) return;
+    if (draft.status === 'pending') confirmRef.current?.focus();
+    else if (draft.status === 'invalid') replaceRef.current?.focus();
+    else if (draft.status === 'idle' && (from === 'confirming' || from === 'pending')) {
+      // A successful confirm renders the committed matrix; a cancel returns to the dropzone.
+      (artifact ? matrixHeadingRef.current : null)?.focus();
+    }
+  }, [draft.status, artifact]);
+
+  const statusRow = (copy: string) => (
+    <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 4, ...bodyStyle(token.colorTextSecondary) }}>
+      <SyncOutlined spin aria-hidden style={{ color: token.colorPrimary }} />
+      <span>{copy}</span>
+    </div>
+  );
+
+  const committed = Boolean(artifact) && draft.status !== 'pending' && draft.status !== 'confirming';
+
   return (
     <PanelBlock>
-      {artifact ? (
-        <span role="status" style={{ fontSize: 12, fontWeight: 400, color: token.colorTextSecondary }}>
-          Đã nạp change-pack {cr ?? artifact.title}
-        </span>
-      ) : (
-        <span style={bodyStyle(token.colorTextSecondary)}>Chưa nạp change-pack — kéo thả change-pack.zip để đối chiếu.</span>
+      {stale && (
+        <Alert
+          type="warning"
+          showIcon
+          message="Tài liệu cũ (stale) — chỉ đọc để đối chiếu, không dùng làm căn cứ cho bước mới."
+        />
       )}
-      {driftResult && <DriftMatrixView result={driftResult} layout="stacked" />}
+
+      {draft.status === 'validating' && statusRow('Đang kiểm tra change-pack…')}
+
+      {draft.status === 'invalid' && (
+        <>
+          <Alert type="error" showIcon message={ERROR_COPY[draft.code]} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'stretch' }}>
+            <Button ref={replaceRef} onClick={onReplace}>
+              Chọn pack khác
+            </Button>
+          </div>
+        </>
+      )}
+
+      {draft.status === 'pending' && (
+        <ChangePackConfirmStrip
+          result={{ status: 'valid', manifest: draft.manifest }}
+          disabled={disabled}
+          confirmButtonRef={confirmRef}
+          replaceButtonRef={replaceRef}
+          onConfirm={(manifest) => onConfirm?.(manifest)}
+          onReplace={() => onReplace?.()}
+        />
+      )}
+
+      {draft.status === 'confirming' && (
+        <>
+          <ChangePackConfirmStrip
+            result={{ status: 'valid', manifest: draft.manifest }}
+            confirming
+            disabled={disabled}
+            confirmButtonRef={confirmRef}
+            replaceButtonRef={replaceRef}
+            onConfirm={(manifest) => onConfirm?.(manifest)}
+            onReplace={() => onReplace?.()}
+          />
+          {statusRow('Đang đối chiếu với SOLUTION.md…')}
+        </>
+      )}
+
+      {committed && (
+        <span role="status" style={{ fontSize: 12, fontWeight: 400, lineHeight: 1.4, color: token.colorTextSecondary }}>
+          Đã nạp change-pack {cr ?? artifact?.title}
+        </span>
+      )}
+
+      {committed && driftResult && (
+        <DriftMatrixView
+          result={driftResult}
+          layout="stacked"
+          headingRef={matrixHeadingRef}
+          headingTabIndex={-1}
+        />
+      )}
+
+      {committed && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'stretch' }}>
+          <Button onClick={onReplace}>Chọn pack khác</Button>
+          {stale && onRerun && (
+            <Button danger icon={<ReloadOutlined aria-hidden />} onClick={onRerun}>
+              Cập nhật lại
+            </Button>
+          )}
+        </div>
+      )}
+
+      {draft.status === 'idle' && !artifact && <ChangePackDropzone onSelect={(file) => onSelectFile?.(file)} />}
     </PanelBlock>
   );
 };

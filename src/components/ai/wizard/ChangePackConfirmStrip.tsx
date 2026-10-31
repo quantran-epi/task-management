@@ -12,6 +12,9 @@ export interface ChangePackConfirmStripProps {
   onReplace: () => void;
   confirming?: boolean;
   disabled?: boolean;
+  /** Focus target after the dropzone leaves the DOM. */
+  confirmButtonRef?: React.Ref<HTMLButtonElement>;
+  replaceButtonRef?: React.Ref<HTMLButtonElement>;
 }
 
 export const ERROR_COPY: Readonly<Record<ChangePackValidationCode, string>> = {
@@ -35,6 +38,8 @@ export const ChangePackConfirmStrip: React.FC<ChangePackConfirmStripProps> = ({
   onReplace,
   confirming = false,
   disabled = false,
+  confirmButtonRef,
+  replaceButtonRef,
 }) => {
   const { token } = theme.useToken();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -58,7 +63,7 @@ export const ChangePackConfirmStrip: React.FC<ChangePackConfirmStripProps> = ({
     return (
       <div ref={rootRef} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <Alert type="error" showIcon message={ERROR_COPY[result.code]} />
-        <Button onClick={onReplace} disabled={disabled} style={{ alignSelf: narrow ? 'stretch' : 'flex-start' }}>Chọn pack khác</Button>
+        <Button onClick={onReplace} ref={replaceButtonRef} disabled={disabled} style={{ alignSelf: narrow ? 'stretch' : 'flex-start' }}>Chọn pack khác</Button>
       </div>
     );
   }
@@ -67,6 +72,7 @@ export const ChangePackConfirmStrip: React.FC<ChangePackConfirmStripProps> = ({
   const actions = (
     <>
       <Button
+        ref={confirmButtonRef}
         type="primary"
         loading={confirming}
         disabled={confirming || disabled}

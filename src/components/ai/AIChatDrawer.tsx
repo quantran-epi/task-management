@@ -107,9 +107,11 @@ import { ChangePackDropzone } from './wizard/ChangePackDropzone';
 import { ChangePackConfirmStrip, type ChangePackUiResult } from './wizard/ChangePackConfirmStrip';
 import { DriftMatrixView } from './wizard/DriftMatrixView';
 import { SdlcWorkflowHub } from './wizard/SdlcWorkflowHub';
-import { StepSolutionPanel } from './wizard/HubStepPanels';
+import { StepSolutionPanel, StepChangePackPanel, type HubChangePackDraft } from './wizard/HubStepPanels';
 import { StepInputDocsModal } from './wizard/StepInputDocsModal';
 import { saveHubSolution } from '../../services/wizard/hubSolution';
+import { confirmHubChangePack, validateHubChangePack } from '../../services/wizard/hubChangePack';
+import { ChangePackValidationError } from '../../services/wizard/changePack';
 import { createSdlcWorkflowCoordinator, defaultSha256 } from '../../services/wizard/workflowCoordinator';
 import { previousArtifactContent, stripStaleArtifacts, toRevisionModalPreview } from './wizard/revisionView';
 import type { SdlcWorkflowState, SdlcWorkflowMetadata, SdlcStepId, RevisionPreview } from '../../services/wizard/workflowSchemas';
@@ -433,6 +435,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const [solutionSaving, setSolutionSaving] = useState(false);
   const [solutionSavedNoteId, setSolutionSavedNoteId] = useState<string | undefined>(undefined);
   const solutionSaveBusyRef = useRef(false);
+  // Hub step-4 draft: validation/confirm state only. Never persisted, reset per tab.
+  const [hubPackDraft, setHubPackDraft] = useState<HubChangePackDraft>({ status: 'idle' });
+  const hubPackBusyRef = useRef(false);
   const [revisionDraft, setRevisionDraft] = useState('');
   const [revisionPreview, setRevisionPreview] = useState<RevisionPreview | null>(null);
   const [revisionLoading, setRevisionLoading] = useState(false);
@@ -456,6 +461,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const activeTabId = activeTab?.id ?? 'sdlc';
   const activeTabThreadId = activeTab?.threadId;
   const isSdlcActiveTab = isProjectScope && (activeTab?.type === 'sdlc' || activeTabId === 'sdlc' || activeTabId.startsWith('sdlc:'));
+  // Async hub handlers compare against the live tab id, not the one closed over at call time.
+  const activeTabIdRef = useRef(activeTabId);
+  activeTabIdRef.current = activeTabId;
 
   // Use durable tab ownership when available, but preserve legacy thread reads while tabs initialize.
   const thread = useLiveQuery<ChatThread | undefined>(() => {
@@ -824,12 +832,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         projectId,
         threadId,
         db,
-        expectedPackIdentity: () => ({
-          cr: wizardCoordinatorRef.current?.getState()?.metadata.cr ?? 'UNKNOWN_CR',
-          base: 'UNKNOWN_BASE',
-          head: 'UNKNOWN_HEAD',
-          branch: 'UNKNOWN_BRANCH',
-        }),
+        // No expectedPackIdentity: the pack's own meta.json supplies the identity and the
+        // coordinator gates on the hub CR, so no placeholder identity can be fabricated here.
         appendReviewSnapshot: async (docs) => {
           setReconciliationResult(docs.reconciliation);
           setTechnicalDocsReady(Boolean(docs.pl03 && docs.pl07));
@@ -1287,6 +1291,76 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     solutionDraftMarkdown,
   ]);
 
+  // Hub step-4: validate against the hub's CR, then commit through the SDLC coordinator.
+  const handleHubPackSelect = useCallback(async (file: File) => {
+    const cr = sdlcWorkflowState?.metadata.cr;
+    if (!cr) return;
+    const tabAtStart = activeTabId;
+    setHubPackDraft({ status: 'validating' });
+    try {
+      const manifest = await validateHubChangePack(file, cr);
+      if (activeTabIdRef.current !== tabAtStart) return;
+      setHubPackDraft({ status: 'pending', manifest });
+    } catch (error) {
+      if (activeTabIdRef.current !== tabAtStart) return;
+      const code = error instanceof ChangePackValidationError ? error.code : 'PACK_CORRUPT';
+      setHubPackDraft({ status: 'invalid', code });
+    }
+  }, [activeTabId, sdlcWorkflowState]);
+
+  const handleHubPackConfirm = useCallback(async (manifest: Readonly<ChangePackManifest>) => {
+    if (hubPackBusyRef.current) return;
+    const solution = sdlcWorkflowState?.artifacts.solution;
+    if (!solution?.noteId || !currentScope.id) {
+      message.warning('Chưa lưu SOLUTION.md vào tài liệu dự án. Mở bước 2 và bấm Lưu SOLUTION.md trước.');
+      setHubPackDraft({ status: 'pending', manifest });
+      return;
+    }
+    const sdlcThreadId = durableTabs.find((tab) => tab.type === 'sdlc')?.threadId;
+    if (!sdlcThreadId || !sdlcWorkflowState) return;
+
+    hubPackBusyRef.current = true;
+    setHubPackDraft({ status: 'confirming', manifest });
+    try {
+      // No revision counter is passed: the entry idempotency key is content-addressed by `manifest.packHash`,
+      // so replaying the same zip reuses its rows and a different pack opens a fresh set.
+      const inputRevision = (sdlcWorkflowState.artifacts.changePack?.version ?? 0) + 1;
+      const result = await confirmHubChangePack({
+        db,
+        projectId: currentScope.id,
+        threadId: sdlcThreadId,
+        sessionId: sdlcWorkflowState.sessionId,
+        inputRevision,
+        manifest,
+        solution: { noteId: solution.noteId, version: solution.version, hash: solution.hash },
+        confirmedAt: new Date().toISOString(),
+      });
+      // `commitChangePackAndDrift` is the production writer for step 4 (D-U3): it stores the
+      // drift result and advances `currentStep` to TECH_DOCS.
+      const next = await getSdlcCoordinator()?.commitChangePackAndDrift(
+        manifest.packHash,
+        `Change pack ${manifest.identity.cr} (${manifest.fileCount} tệp)`,
+        result.reconciliation
+      );
+      if (next) setSdlcWorkflowState(next);
+      setHubPackDraft({ status: 'idle' });
+    } catch (error) {
+      if (error instanceof ChangePackValidationError) {
+        setHubPackDraft({ status: 'invalid', code: error.code });
+      } else {
+        setHubPackDraft({ status: 'pending', manifest });
+        message.error('Không thể xác nhận change-pack. Kiểm tra đúng dự án, phiên bản SOLUTION và pack rồi thử lại.');
+      }
+    } finally {
+      hubPackBusyRef.current = false;
+    }
+  }, [currentScope.id, db, durableTabs, getSdlcCoordinator, sdlcWorkflowState]);
+
+  // Data safety: only the draft clears; a committed pack artifact survives until a new confirm.
+  const handleHubPackReplace = useCallback(() => {
+    setHubPackDraft({ status: 'idle' });
+  }, []);
+
   const exportedFiles = new Map(Array.from(exportResults.entries()).map(([id, result]) => [id, result.noteSaved ? {
     filename: result.filename ?? 'wizard.docx', sizeBytes: result.sizeBytes ?? 0, noteId: result.noteId,
     noteSaved: result.noteSaved, downloadInitiated: result.downloadInitiated, savePickerSaved: result.savePickerSaved,
@@ -1352,6 +1426,19 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         onSave={() => void handleHubSaveSolution()}
         saving={solutionSaving}
         savedNoteId={solutionSavedNoteId}
+      />
+    ),
+    changePack: (
+      <StepChangePackPanel
+        artifact={sdlcWorkflowState.artifacts.changePack}
+        driftResult={sdlcWorkflowState.artifacts.driftResult}
+        stale={sdlcWorkflowState.staleSteps.includes('CHANGE_PACK')}
+        cr={sdlcWorkflowState.metadata.cr}
+        draft={hubPackDraft}
+        disabled={hubPackDraft.status === 'confirming'}
+        onSelectFile={(file) => void handleHubPackSelect(file)}
+        onConfirm={(manifest) => void handleHubPackConfirm(manifest)}
+        onReplace={handleHubPackReplace}
       />
     ),
   } : undefined;
@@ -1507,11 +1594,13 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     });
   }, [activeTabId]);
 
-  // Per-tab save state must not survive a tab switch.
+  // Per-tab save state must not survive a tab switch; the step-4 pack draft resets with it.
   useEffect(() => {
     setSolutionSaving(false);
     setSolutionSavedNoteId(undefined);
     solutionSaveBusyRef.current = false;
+    setHubPackDraft({ status: 'idle' });
+    hubPackBusyRef.current = false;
   }, [activeTabId]);
 
   // Every render and every callback reads one owner: the active tab's runtime. Only while the

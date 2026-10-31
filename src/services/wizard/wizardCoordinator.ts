@@ -15,6 +15,7 @@ import type { WizardGapResult } from '../ai/wizardPrompts';
 import { generateId } from '../../utils/uuid';
 import {
   ChangePackIdentitySchema,
+  ChangePackValidationError,
   type ChangePackIdentity,
   type ChangePackManifest,
   validateChangePack,
@@ -367,7 +368,10 @@ export function createWizardCoordinator(deps: WizardCoordinatorDeps) {
     packState = { status: 'validating' };
     packFile = file;
     try {
-      const manifest = await (deps.validatePack ?? ((input, expected) => validateChangePack(input, expected)))(file, packIdentity());
+      // Default path reads the identity from the pack's own meta.json; the CR gate below is
+      // what decides whether that pack belongs to this workflow.
+      const manifest = deps.validatePack ? await deps.validatePack(file, packIdentity()) : await validateChangePack(file);
+      if (manifest.identity.cr !== packSession().metadata.cr) throw new ChangePackValidationError('PACK_IDENTITY_MISMATCH');
       if (disposed) throw new Error('STALE_RESULT');
       packState = { status: 'pending', manifest };
       return packState;

@@ -7,6 +7,9 @@ export type DriftMatrixLayout = 'table' | 'stacked';
 export interface DriftMatrixViewProps {
   result: ReconciliationResult;
   layout?: DriftMatrixLayout;
+  /** Focus target after a hub confirm removes the confirm strip from the DOM. */
+  headingRef?: React.Ref<HTMLHeadingElement>;
+  headingTabIndex?: number;
 }
 
 type Group = {
@@ -41,7 +44,7 @@ function toRow(tuple: DriftTuple, group: Group) {
   };
 }
 
-export const DriftMatrixView: React.FC<DriftMatrixViewProps> = ({ result, layout = 'table' }) => {
+export const DriftMatrixView: React.FC<DriftMatrixViewProps> = ({ result, layout = 'table', headingRef, headingTabIndex }) => {
   const { token } = theme.useToken();
   const headingId = useId();
   const completeCoverage = result.coverage.length > 0 && result.coverage.every((entry) => entry.state === 'included');
@@ -55,7 +58,12 @@ export const DriftMatrixView: React.FC<DriftMatrixViewProps> = ({ result, layout
 
   return (
     <section aria-labelledby={headingId} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <h2 id={headingId} style={{ margin: 0, color: token.colorText, fontSize: 16, fontWeight: 600, lineHeight: 1.3 }}>
+      <h2
+        id={headingId}
+        ref={headingRef}
+        tabIndex={headingTabIndex}
+        style={{ margin: 0, color: token.colorText, fontSize: 16, fontWeight: 600, lineHeight: 1.3 }}
+      >
         Bảng drift so với SOLUTION.md
       </h2>
       {!completeCoverage && (
