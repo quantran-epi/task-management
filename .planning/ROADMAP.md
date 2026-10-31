@@ -186,7 +186,7 @@ Plans:
   7. Existing encrypted backup/local import and Tauri SQLite paths preserve canonical tabs, workflow/checkpoints, versions/cycles, artifact refs, and valid history while excluding secrets, partial buffers, errors, and raw diagnostics; corrupt imports fail before writes and missing sources restore a blocked recoverable checkpoint.
   8. Targeted unit/component/integration suites, actual-app Playwright acceptance, final source safety gates, and required manual Tauri checks pass with no skipped Phase 25.1 tests.
 
-**Plans:** 9/9 plans complete
+**Plans:** 9/9 plans complete; 6 gap-closure plans pending
 
 Plans:
 
@@ -219,3 +219,29 @@ Plans:
 **Wave 7** *(depends on 25.1-08)*
 
 - [x] 25.1-09-PLAN.md — Final targeted regression and phase-scoped source safety gates
+
+**Gap Closure** *(from 25.1-VERIFICATION.md gaps_found)*
+
+**Wave 1**
+
+- [ ] 25.1-10-PLAN.md — Sanitized error diagnostics and structural D-09 safety gate (blockers)
+
+**Wave 2** *(depends on 25.1-10)*
+
+- [ ] 25.1-11-PLAN.md — Real per-tab runtime seeding, transient-state isolation, and concurrent send guard
+
+**Wave 3** *(depends on 25.1-11)*
+
+- [ ] 25.1-12-PLAN.md — SDLC checkpoint/resume, revision preview+commit, and cycle open/close wiring
+
+**Wave 4** *(depends on 25.1-12; parallel with 25.1-14)*
+
+- [ ] 25.1-13-PLAN.md — Merged cited SDLC intake, picker listbox semantics, and editable tab titles
+
+**Wave 5** *(depends on 25.1-11, 25.1-13)*
+
+- [ ] 25.1-14-PLAN.md — Retry identity, restore missing-source surfacing, and durable-only analysis mode
+
+**Wave 6** *(depends on 25.1-12, 25.1-13, 25.1-14)*
+
+- [ ] 25.1-15-PLAN.md — Actual-app acceptance depth: concurrency, retry, revision/cycles, restore, backup round-trip
