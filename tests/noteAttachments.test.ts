@@ -179,9 +179,10 @@ describe('Note Attachments & Backup Serialization', () => {
       const backup = await exportBackupPayload();
 
       // Simulate legacy backup payload containing base64 data
+      // (restore now validates ids at the trust boundary, so the fixture uses a UUID)
       (backup.tables as any).noteAttachments = [
         {
-          id: 'legacy-att-1',
+          id: '0b5bd7d1-3f1e-4f5f-8c3a-9d2e6b7a4c10',
           noteId: note.id,
           fileName: 'legacy.png',
           mimeType: 'image/png',
