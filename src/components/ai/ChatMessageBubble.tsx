@@ -43,22 +43,11 @@ import { MermaidViewer } from './MermaidViewer';
 import { DocumentPreviewCard, type DocumentPreviewPayload } from './wizard/DocumentPreviewCard';
 import { SolutionReviewCard, type SolutionReviewPayload } from './wizard/SolutionReviewCard';
 import { GapFillQuestionCard } from './wizard/GapFillQuestionCard';
-import { WizardProgressStrip } from './wizard/WizardProgressStrip';
-import type { ChangePackManifest } from '../../services/wizard/changePack';
 
+/** Historic `wizard` rows render read-only: no callback can reach a removed coordinator. */
 export interface WizardMessageCallbacks {
-  onSuggestion?: ((messageId: string, questionId: string, suggestion: string) => void) | undefined;
-  onSkip?: ((messageId: string, questionId: string, outcome: 'omitted' | 'unknown') => void) | undefined;
-  onRequestEdit?: ((messageId: string, draftRevision: number) => void) | undefined;
-  onSaveSolution?: ((messageId: string, draftRevision: number) => void | Promise<void>) | undefined;
-  onApproveExport?: ((messageId: string, draftRevision: number) => void | Promise<void>) | undefined;
-  onOpenNote?: ((noteId: string) => void) | undefined;
-  onConfirmPack?: ((messageId: string, manifest: Readonly<ChangePackManifest>) => void) | undefined;
-  onReplacePack?: ((messageId: string) => void) | undefined;
-  pendingKeys?: ReadonlySet<string> | undefined;
   exportedFiles?: ReadonlyMap<string, DocumentPreviewPayload['exportedFile']> | undefined;
-  exportErrors?: ReadonlyMap<string, string> | undefined;
-  onRetryExport?: ((messageId: string) => void | Promise<void>) | undefined;
+  onOpenNote?: ((noteId: string) => void) | undefined;
 }
 
 const { Text } = Typography;
@@ -379,7 +368,9 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
       if (snapshot.status === 'gap_fill') {
         return (
           <div style={GapFillQuestionCard.stackStyle}>
-            <WizardProgressStrip snapshot={snapshot} />
+            <span style={{ fontSize: 12, fontWeight: 400, color: token.colorTextSecondary }}>
+              Bản nháp lịch sử đang chờ làm rõ.
+            </span>
             <GapFillQuestionCard
               question={{
                 id: msg.id,
@@ -391,8 +382,8 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
                 answer: msg.content.match(/^Đã bỏ qua:\s*(.+?)\s*·/)?.[1] ?? null,
                 outcome: msg.content.includes('Đã bỏ qua:') ? 'omitted' : 'open',
               }}
-              onSuggestion={(questionId, suggestion) => wizardCallbacks.onSuggestion?.(msg.id, questionId, suggestion)}
-              onSkip={(questionId, outcome) => wizardCallbacks.onSkip?.(msg.id, (msg.content.match(/Cần làm rõ:\s*([^\n]+)/)?.[1] ?? questionId).trim(), outcome)}
+              onSuggestion={() => undefined}
+              onSkip={() => undefined}
             />
           </div>
         );
@@ -407,7 +398,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
           affectedSurfaces: 'affectedSurfaces' in payload ? payload.affectedSurfaces : undefined,
           markdown: 'markdown' in payload && payload.markdown ? payload.markdown : msg.content,
         };
-        return <SolutionReviewCard solution={solution} onSave={() => wizardCallbacks.onSaveSolution?.(msg.id, snapshot.draftRevision)} onRequestEdit={() => wizardCallbacks.onRequestEdit?.(msg.id, snapshot.draftRevision)} onOpenNote={(noteId) => wizardCallbacks.onOpenNote?.(noteId)} />;
+        return <SolutionReviewCard solution={solution} onOpenNote={(noteId) => wizardCallbacks.onOpenNote?.(noteId)} />;
       }
       if (snapshot.status === 'review' && snapshot.draftRevision !== null) {
         const preview: DocumentPreviewPayload = {
@@ -418,9 +409,8 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
           metadata: { cr: payload.title, requestingUnit: '', author: '', date: snapshot.createdAt.slice(0, 10) },
           markdown: 'markdown' in payload && payload.markdown ? payload.markdown : msg.content,
           exportedFile: wizardCallbacks.exportedFiles?.get(msg.id),
-          exportError: wizardCallbacks.exportErrors?.get(msg.id),
         };
-        return <DocumentPreviewCard preview={preview} pending={wizardCallbacks.pendingKeys?.has(msg.id)} onApproveExport={() => wizardCallbacks.onApproveExport?.(msg.id, snapshot.draftRevision)} onRequestEdit={() => wizardCallbacks.onRequestEdit?.(msg.id, snapshot.draftRevision)} onRetryDownload={() => wizardCallbacks.onRetryExport?.(msg.id)} />;
+        return <DocumentPreviewCard preview={preview} />;
       }
       return null;
     })();

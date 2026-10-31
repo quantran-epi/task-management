@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Button, Card, Space, Tag, theme, Typography } from 'antd';
-import { EditOutlined, SaveOutlined } from '@ant-design/icons';
 import { MarkdownContentRenderer } from '../ChatMessageBubble';
 
 const { Text } = Typography;
@@ -18,12 +17,10 @@ export interface SolutionReviewPayload {
 
 export interface SolutionReviewCardProps {
   solution: Readonly<SolutionReviewPayload>;
-  onSave: (messageId: string, version: number) => void | Promise<void>;
-  onRequestEdit: (messageId: string, version: number) => void;
   onOpenNote: (noteId: string) => void;
 }
 
-export const SolutionReviewCard: React.FC<SolutionReviewCardProps> = ({ solution, onSave, onRequestEdit, onOpenNote }) => {
+export const SolutionReviewCard: React.FC<SolutionReviewCardProps> = ({ solution, onOpenNote }) => {
   const { token } = theme.useToken();
   const [expanded, setExpanded] = useState(false);
 
@@ -59,10 +56,9 @@ export const SolutionReviewCard: React.FC<SolutionReviewCardProps> = ({ solution
             <a href={`#/notes?doc=${encodeURIComponent(solution.saved.noteId)}`} onClick={(event) => { event.preventDefault(); onOpenNote(solution.saved!.noteId); }}>Mở tài liệu</a>
           </div>
         ) : (
-          <Space wrap>
-            <Button type="primary" aria-label="Lưu SOLUTION.md" icon={<SaveOutlined />} onClick={() => onSave(solution.messageId, solution.version)}>Lưu SOLUTION.md</Button>
-            <Button aria-label="Yêu cầu chỉnh sửa thêm" icon={<EditOutlined />} onClick={() => onRequestEdit(solution.messageId, solution.version)}>Yêu cầu chỉnh sửa thêm</Button>
-          </Space>
+          <Text type="secondary" style={{ fontSize: 12, fontWeight: 400 }}>
+            Tài liệu lịch sử — xuất .docx từ bước tương ứng trong SDLC.
+          </Text>
         )}
       </Space>
     </Card>

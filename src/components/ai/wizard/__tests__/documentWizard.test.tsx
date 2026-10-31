@@ -1,9 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { ChatMessageBubble } from '../../ChatMessageBubble';
+import { ChatMessageList } from '../../ChatMessageList';
 import type { ChatMessage } from '../../../../types/models';
 import type { WizardSnapshot } from '../../../../services/ai/wizardSchemas';
 import * as sandbox from '../../../../utils/dynamicFileSandbox';
+import { DocumentPreviewCard } from '../DocumentPreviewCard';
+import { SolutionReviewCard } from '../SolutionReviewCard';
+import { WizardSavedNoteBanner } from '../WizardSavedNoteBanner';
+
+const HISTORICAL_LINE = 'Tài liệu lịch sử — xuất .docx từ bước tương ứng trong SDLC.';
 
 const wizardSnapshot: WizardSnapshot = {
   schemaVersion: 1,
@@ -32,57 +38,62 @@ const wizardMessage: ChatMessage = {
   createdAt: wizardSnapshot.createdAt,
 };
 
-const wizardCallbacks = {
-  onApproveExport: vi.fn(),
-  onRequestEdit: vi.fn(),
-  onSaveSolution: vi.fn(),
-  onOpenNote: vi.fn(),
-  onSuggestion: vi.fn(),
-  onSkip: vi.fn(),
-  onConfirmPack: vi.fn(),
-  onReplacePack: vi.fn(),
+const gapFillMessage: ChatMessage = {
+  ...wizardMessage,
+  id: 'wizard-message-gap',
+  content: 'Cần làm rõ: luồng phê duyệt của đơn vị yêu cầu',
+  wizard: {
+    ...wizardSnapshot,
+    status: 'gap_fill',
+    draftRevision: null,
+  },
 };
 
-function resetWizardCallbacks() {
-  Object.values(wizardCallbacks).forEach((callback) => callback.mockReset());
-}
+// Only the two survivors of the narrowed contract: an over-wide literal fails `tsc`.
+const wizardCallbacks = {
+  exportedFiles: new Map(),
+  onOpenNote: vi.fn(),
+};
 
-import { describe as describeRouting, it as itRouting } from 'vitest';
-
-describeRouting('wizard message routing contracts', () => {
-  itRouting('routes wizard review before generated files and forwards typed approval pointer', () => {
-    resetWizardCallbacks();
+describe('wizard message routing contracts', () => {
+  it('renders the historic review card and never exposes an approval path', () => {
     const sandboxSpy = vi.spyOn(sandbox, 'executeDynamicFileScript');
     render(<ChatMessageBubble message={wizardMessage} wizardCallbacks={wizardCallbacks} />);
 
     expect(screen.getByText('Bản thảo PL03')).toBeInTheDocument();
     expect(screen.queryByText('wrong-route.docx')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Duyệt & Tải .docx' }));
-    expect(wizardCallbacks.onApproveExport).toHaveBeenCalledWith('wizard-message-1', 2);
+    expect(screen.getByText(HISTORICAL_LINE)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Duyệt & Tải .docx' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Yêu cầu chỉnh sửa thêm' })).not.toBeInTheDocument();
     expect(sandboxSpy).not.toHaveBeenCalled();
   });
 
-  itRouting('does not add wizard controls to temporary streaming messages', () => {
+  it('renders the historic gap-fill line with inert actions', () => {
+    render(<ChatMessageBubble message={gapFillMessage} wizardCallbacks={wizardCallbacks} />);
+
+    expect(screen.getByText('Bản nháp lịch sử đang chờ làm rõ.')).toBeInTheDocument();
+    expect(screen.getByText(/Cần làm rõ: Bản thảo PL03/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Duyệt & Tải .docx' })).not.toBeInTheDocument();
+    expect(wizardCallbacks.onOpenNote).not.toHaveBeenCalled();
+  });
+
+  it('does not add wizard controls to temporary streaming messages', () => {
     render(<ChatMessageBubble message={wizardMessage} isStreaming wizardCallbacks={wizardCallbacks} />);
     expect(screen.queryByRole('button', { name: 'Duyệt & Tải .docx' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Bản thảo PL03')).not.toBeInTheDocument();
   });
 });
 
-import { ChatMessageList } from '../../ChatMessageList';
-
-describeRouting('wizard message list seam', () => {
-  itRouting('forwards wizard callbacks to each persisted message but not temp stream', () => {
-    resetWizardCallbacks();
+describe('wizard message list seam', () => {
+  it('renders the historic review card and stream text without an approval path', () => {
+    const sandboxSpy = vi.spyOn(sandbox, 'executeDynamicFileScript');
     render(<ChatMessageList messages={[wizardMessage]} isStreaming streamingText="stream" wizardCallbacks={wizardCallbacks} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Duyệt & Tải .docx' }));
-    expect(wizardCallbacks.onApproveExport).toHaveBeenCalledWith('wizard-message-1', 2);
+    expect(screen.getByText(HISTORICAL_LINE)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Duyệt & Tải .docx' })).not.toBeInTheDocument();
     expect(screen.getAllByText('stream').length).toBeGreaterThan(0);
+    expect(sandboxSpy).not.toHaveBeenCalled();
   });
 });
-
-import { DocumentPreviewCard } from '../DocumentPreviewCard';
-import { SolutionReviewCard } from '../SolutionReviewCard';
-import { WizardSavedNoteBanner } from '../WizardSavedNoteBanner';
 
 const preview = {
   skill: 'PL03' as const,
@@ -101,40 +112,39 @@ const preview = {
 };
 
 describe('document wizard review components', () => {
-  it('renders safe preview, exact actions, disclosure, and immutable edit payload', () => {
-    const onEdit = vi.fn();
+  it('renders a preview-only historical card with no approval actions', () => {
     const original = structuredClone(preview);
-    render(<DocumentPreviewCard preview={preview} onApproveExport={vi.fn()} onRequestEdit={onEdit} />);
+    render(<DocumentPreviewCard preview={preview} />);
 
     expect(screen.getByText('Bản thảo PL03')).toBeInTheDocument();
     expect(screen.getByText(/CR-42 · Vận hành · Người dùng · 29\/10\/2026/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Duyệt & Tải .docx' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Yêu cầu chỉnh sửa thêm' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Xem toàn bộ' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Duyệt & Tải .docx' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Yêu cầu chỉnh sửa thêm' })).not.toBeInTheDocument();
     expect(screen.getByText('Sơ đồ sẽ được chuyển thành bảng bước khi xuất Word.')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Yêu cầu chỉnh sửa thêm' }));
-    expect(onEdit).toHaveBeenCalledWith({ messageId: undefined, draftRevision: undefined });
+    expect(screen.getAllByText(HISTORICAL_LINE)).toHaveLength(1);
     expect(preview).toEqual(original);
   });
 
-  it('keeps Markdown and retry action after export failure', () => {
-    const onApproveExport = vi.fn();
+  it('renders the already-exported file row and keeps the export error visible', () => {
     render(
       <DocumentPreviewCard
-        preview={{ ...preview, exportError: 'Không tạo được tệp .docx. Nội dung Markdown vẫn được giữ trong phiên; thử lại hoặc yêu cầu chỉnh sửa.' }}
-        onApproveExport={onApproveExport}
-        onRequestEdit={vi.fn()}
+        preview={{
+          ...preview,
+          exportError: 'Không tạo được tệp .docx. Nội dung Markdown vẫn được giữ trong phiên; thử lại hoặc yêu cầu chỉnh sửa.',
+          exportedFile: { filename: 'PL03.docx', sizeBytes: 2048, noteId: 'note-9', noteSaved: true, downloadInitiated: true },
+        }}
       />
     );
 
     expect(screen.getByRole('alert')).toHaveTextContent('Không tạo được tệp .docx');
-    expect(screen.getByText('Nội dung đã duyệt.')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Duyệt & Tải .docx' }));
-    expect(onApproveExport).toHaveBeenCalledOnce();
+    expect(screen.getByText(/PL03\.docx · 2\.0 KB/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Mở tài liệu' })).toBeInTheDocument();
+    expect(screen.queryByText(HISTORICAL_LINE)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Duyệt & Tải .docx' })).not.toBeInTheDocument();
   });
 
-  it('renders solution version, affected surfaces, and saved row without mutating old draft', () => {
-    const onSave = vi.fn();
+  it('renders a historic solution card with no save or edit actions', () => {
     const solution = {
       messageId: 'solution-msg-1',
       version: 2,
@@ -143,18 +153,34 @@ describe('document wizard review components', () => {
       currentSystem: 'Hệ thống hiện tại',
       affectedSurfaces: ['Màn hình giao dịch', 'POST /payments', 'MAIN1.PAYMENT'],
       markdown: '# SOLUTION\n\nBản v2',
-      saved: { savedAt: '29/10/2026 10:30', noteId: 'note-2' },
     };
     const original = structuredClone(solution);
-    render(<SolutionReviewCard solution={solution} onSave={onSave} onRequestEdit={vi.fn()} onOpenNote={vi.fn()} />);
+    render(<SolutionReviewCard solution={solution} onOpenNote={vi.fn()} />);
 
     expect(screen.getByText('SOLUTION.md — v2')).toBeInTheDocument();
     expect(screen.getByText('Hiện trạng hệ thống')).toBeInTheDocument();
     expect(screen.getByText('Màn hình giao dịch')).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent('Đã lưu SOLUTION.md phiên bản v2');
-    expect(screen.getByRole('link', { name: 'Mở tài liệu' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Xem toàn bộ' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Lưu SOLUTION.md' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Yêu cầu chỉnh sửa thêm' })).not.toBeInTheDocument();
+    expect(screen.getAllByText(HISTORICAL_LINE)).toHaveLength(1);
     expect(solution).toEqual(original);
+  });
+
+  it('renders a saved solution version row without mutating the old draft', () => {
+    const solution = {
+      messageId: 'solution-msg-2',
+      version: 3,
+      title: 'SOLUTION.md',
+      featureMode: 'new' as const,
+      markdown: '# SOLUTION\n\nBản v3',
+      saved: { savedAt: '29/10/2026 10:30', noteId: 'note-2' },
+    };
+    render(<SolutionReviewCard solution={solution} onOpenNote={vi.fn()} />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('Đã lưu SOLUTION.md phiên bản v3');
+    expect(screen.getByRole('link', { name: 'Mở tài liệu' })).toHaveAttribute('href', '#/notes?doc=note-2');
+    expect(screen.queryByText(HISTORICAL_LINE)).not.toBeInTheDocument();
   });
 
   it('reports note and download outcomes separately without overclaiming disk success', () => {
