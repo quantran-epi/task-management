@@ -232,8 +232,8 @@ test.describe('Phase 25.1 SDLC Flow Hardening & Multi-Tab Isolation Acceptance',
     const intakeModal = page.getByRole('dialog').filter({ hasText: 'Nạp Hồ sơ Đầu vào (PL01 & PL02)' });
     await expect(intakeModal).toBeVisible();
 
-    await intakeModal.getByPlaceholder('Dán nội dung Yêu cầu nghiệp vụ PL01 tại đây...').fill('Nghiệp vụ: Quản lý tác vụ đa tab.');
-    await intakeModal.getByPlaceholder('Dán nội dung Đặc tả chức năng PL02 tại đây...').fill('Đặc tả: Giao diện tab Chrome độc lập.');
+    await intakeModal.getByPlaceholder(/Dán nội dung Yêu cầu nghiệp vụ PL01/).fill('Nghiệp vụ: Quản lý tác vụ đa tab.');
+    await intakeModal.getByPlaceholder(/Dán nội dung Đặc tả chức năng PL02/).fill('Đặc tả: Giao diện tab Chrome độc lập.');
 
     await intakeModal.getByRole('button', { name: 'Bắt đầu Phân tích Solution' }).click();
 
@@ -244,7 +244,7 @@ test.describe('Phase 25.1 SDLC Flow Hardening & Multi-Tab Isolation Acceptance',
     expect(sdlcRequest.prompt).toContain('[Quy trình SDLC - Khởi tạo SOLUTION cho CR:');
 
     await expect(page.getByText('SDLC:', { exact: false }).first()).toBeVisible();
-    await expect(page.getByText('1. Đầu vào').first()).toBeVisible();
+    await expect(page.getByRole('button', { name: /Bước 1: Hồ sơ Đầu vào/ }).first()).toBeVisible();
     expect(sdlcRequest.prompt).toContain('Nghiệp vụ: Quản lý tác vụ đa tab.');
     expect(sdlcRequest.prompt).toContain('Đặc tả: Giao diện tab Chrome độc lập.');
 
@@ -261,13 +261,13 @@ test.describe('Phase 25.1 SDLC Flow Hardening & Multi-Tab Isolation Acceptance',
     expect(ordinaryRequest.prompt).toContain('Chào AI, cho hỏi thông tin tác vụ thông thường');
 
     await sdlcTab.click();
-    const resetWorkflowBtn = page.getByRole('button', { name: 'Làm mới', exact: true });
+    const resetWorkflowBtn = page.getByRole('button', { name: 'Làm mới workflow' });
     await expect(resetWorkflowBtn).toBeVisible();
     await resetWorkflowBtn.click();
 
     const popconfirm = page.locator('.ant-popconfirm');
     await expect(popconfirm.getByText('Làm mới workflow?')).toBeVisible();
-    await popconfirm.getByRole('button', { name: 'Đồng ý' }).dispatchEvent('click');
+    await popconfirm.getByRole('button', { name: 'Làm mới workflow' }).dispatchEvent('click');
 
     await expect(page.getByText('Đã làm mới quy trình SDLC')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Khởi tạo SDLC (PL01 & PL02)' })).toBeVisible();

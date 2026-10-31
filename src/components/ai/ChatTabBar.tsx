@@ -61,6 +61,8 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
         userSelect: 'none',
         width: '100%',
         boxSizing: 'border-box',
+        // Drawer is a flex column; without this the 32px tabs get clipped to a ~24px scroll box.
+        flexShrink: 0,
       }}
     >
       {tabs.map((tab, index) => {
