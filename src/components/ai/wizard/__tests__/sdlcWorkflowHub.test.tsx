@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { SdlcWorkflowHub } from '../SdlcWorkflowHub';
-import { StepChangePackPanel, StepSolutionPanel, StepTechDocsPanel, type HubChangePackDraft } from '../HubStepPanels';
+import { StepCabPanel, StepChangePackPanel, StepIntakePanel, StepSolutionPanel, StepTechDocsPanel, type HubChangePackDraft } from '../HubStepPanels';
 import { ERROR_COPY } from '../ChangePackConfirmStrip';
 import { RevisionImpactModal } from '../RevisionImpactModal';
 import type { SdlcWorkflowState } from '../../../../services/wizard/workflowSchemas';
@@ -465,6 +465,122 @@ describe('StepTechDocsPanel', () => {
     );
     expect(screen.getByTestId('export-row-PL03B')).toBeInTheDocument();
     expect(screen.getByTestId('export-row-PL07')).toBeInTheDocument();
+  });
+});
+
+describe('StepCabPanel', () => {
+  const cab = {
+    kind: 'CAB' as const,
+    version: 2,
+    hash: '0c'.repeat(32),
+    title: 'Tờ trình CAB — Core Banking Payment',
+    sourceHashes: ['02'.repeat(32), '07'.repeat(32)],
+    approvedAt: '2026-11-01T06:00:00.000Z',
+    updatedAt: '2026-11-01T06:00:00.000Z',
+  };
+  const allPresent = { pl02: true, pl03b: true, pl07: true };
+  const someMissing = { pl02: true, pl03b: false, pl07: true };
+
+  const generateButton = () => screen.getByRole('button', { name: /Tạo (lại )?tờ trình CAB/ });
+
+  it('blocked lists the three prerequisites with mixed states, a disabled primary and the hint', () => {
+    render(<StepCabPanel prerequisites={someMissing} state="blocked" />);
+
+    expect(screen.getByText('Điều kiện tạo CAB')).toBeInTheDocument();
+    expect(screen.getByText('PL02')).toBeInTheDocument();
+    expect(screen.getByText('PL03B')).toBeInTheDocument();
+    expect(screen.getByText('PL07')).toBeInTheDocument();
+    expect(screen.getAllByText('Đã có')).toHaveLength(2);
+    expect(screen.getByText('Chưa có')).toBeInTheDocument();
+    expect(
+      screen.getByText('Cần PL02, PL03B và PL07 cùng dự án trước khi tạo tờ trình CAB.')
+    ).toBeInTheDocument();
+    expect(generateButton()).toBeDisabled();
+  });
+
+  it('ready enables the primary and drops the blocked hint', () => {
+    render(<StepCabPanel prerequisites={allPresent} state="ready" onGenerate={vi.fn()} />);
+
+    expect(screen.getAllByText('Đã có')).toHaveLength(3);
+    expect(generateButton()).toBeEnabled();
+    expect(
+      screen.queryByText('Cần PL02, PL03B và PL07 cùng dự án trước khi tạo tờ trình CAB.')
+    ).not.toBeInTheDocument();
+  });
+
+  it('generating announces the status line and keeps the button disabled', () => {
+    render(<StepCabPanel prerequisites={allPresent} state="generating" onGenerate={vi.fn()} />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('Đang tổng kết hồ sơ CAB…');
+    expect(generateButton()).toBeDisabled();
+  });
+
+  it('error shows the missing-chain copy and Thử lại fires onRetry', () => {
+    const onRetry = vi.fn();
+    render(<StepCabPanel prerequisites={allPresent} state="error" onGenerate={vi.fn()} onRetry={onRetry} />);
+
+    expect(
+      screen.getByText('Thiếu chuỗi PL02/PL03B/PL07 cùng dự án và thread; chưa thể tạo CAB.')
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it('generated renders the CAB artifact row, version tag, date and the export slot', () => {
+    render(
+      <StepCabPanel
+        prerequisites={allPresent}
+        state="ready"
+        cab={cab}
+        onGenerate={vi.fn()}
+        renderExportRow={(kind) => <span data-testid={`export-row-${kind}`}>Xuất {kind}</span>}
+      />
+    );
+
+    expect(screen.getByText('Tờ trình CAB')).toBeInTheDocument();
+    expect(screen.getByText('v2')).toBeInTheDocument();
+    expect(screen.getByText('2026-11-01')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Tạo lại tờ trình CAB' })).toBeInTheDocument();
+    expect(screen.getByTestId('export-slot-CAB')).toContainElement(screen.getByTestId('export-row-CAB'));
+  });
+
+  it('omits the export slot while no CAB exists', () => {
+    render(
+      <StepCabPanel
+        prerequisites={allPresent}
+        state="ready"
+        renderExportRow={(kind) => <span data-testid={`export-row-${kind}`}>Xuất {kind}</span>}
+      />
+    );
+    expect(screen.getByTestId('export-slot-CAB')).toBeInTheDocument();
+    expect(screen.queryByTestId('export-row-CAB')).not.toBeInTheDocument();
+  });
+});
+
+describe('PL02 export placement', () => {
+  const pl02 = {
+    kind: 'PL02' as const,
+    version: 1,
+    hash: '02'.repeat(32),
+    title: 'PL02 — Đặc tả chức năng',
+    content: 'Đặc tả',
+    sourceHashes: [],
+    updatedAt: '2026-10-30T00:00:00.000Z',
+  };
+  const renderExportRow = (kind: 'PL02' | 'PL03B' | 'PL07' | 'CAB') => (
+    <span data-testid={`export-row-${kind}`}>Xuất {kind}</span>
+  );
+
+  it('hosts the PL02 export slot on the INTAKE panel (UI-SPEC DOCX Export Contract)', () => {
+    render(<StepIntakePanel pl02={pl02} renderExportRow={renderExportRow} onEditIntake={vi.fn()} />);
+    expect(screen.getByText('PL02 — Đặc tả chức năng')).toBeInTheDocument();
+    expect(screen.getByTestId('export-slot-PL02')).toContainElement(screen.getByTestId('export-row-PL02'));
+  });
+
+  it('gives the SOLUTION panel no export slot', () => {
+    const { container } = render(<StepSolutionPanel stale={false} canSave={false} onSave={vi.fn()} />);
+    expect(container.querySelector('[data-testid^="export-slot-"]')).toBeNull();
+    expect(screen.queryByTestId('export-row-PL02')).not.toBeInTheDocument();
   });
 });
 
