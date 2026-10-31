@@ -6,6 +6,7 @@ import {
   configureAiKey,
   createProject,
   downloadBackupJson,
+  exportBackupFile,
   importBackupFile,
   openAiDrawerWithProjectScope,
   readDexieRows,
@@ -193,19 +194,30 @@ test.describe('Phase 25.1 SDLC Flow Hardening & Multi-Tab Isolation Acceptance',
 
     await page.setViewportSize({ width: 320, height: 800 });
 
-    const scrollMetrics = await page.evaluate(() => ({
-      scrollWidth: document.documentElement.scrollWidth,
-      clientWidth: document.documentElement.clientWidth,
-      bodyScrollWidth: document.body.scrollWidth,
-      bodyClientWidth: document.body.clientWidth,
-    }));
-
-    expect(scrollMetrics.scrollWidth).toBeLessThanOrEqual(scrollMetrics.clientWidth + 2);
-    expect(scrollMetrics.bodyScrollWidth).toBeLessThanOrEqual(scrollMetrics.bodyClientWidth + 2);
-
     const tabList = page.getByRole('tablist', { name: 'Thanh tab hội thoại AI' });
     await expect(tabList).toBeVisible();
     await expect(tabList.getByRole('tab').first()).toBeVisible();
+
+    const readScrollMetrics = () =>
+      page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+        bodyScrollWidth: document.body.scrollWidth,
+        bodyClientWidth: document.body.clientWidth,
+      }));
+
+    // The drawer is flex-sized from the previous viewport width and only reflows when the
+    // breakpoint effect runs, so poll until it has settled at 320px instead of sampling once.
+    await expect
+      .poll(async () => {
+        const m = await readScrollMetrics();
+        return m.scrollWidth <= m.clientWidth + 2 && m.bodyScrollWidth <= m.bodyClientWidth + 2;
+      })
+      .toBe(true);
+
+    const scrollMetrics = await readScrollMetrics();
+    expect(scrollMetrics.scrollWidth).toBeLessThanOrEqual(scrollMetrics.clientWidth + 2);
+    expect(scrollMetrics.bodyScrollWidth).toBeLessThanOrEqual(scrollMetrics.bodyClientWidth + 2);
   });
 
   test('D-20..D-27 & D-31..D-35: SDLC intake modal, prompt isolation, and workflow reset', async ({ page }) => {
@@ -247,6 +259,9 @@ test.describe('Phase 25.1 SDLC Flow Hardening & Multi-Tab Isolation Acceptance',
 
     const chatTab = tabList.getByRole('tab').filter({ hasText: '💬 Tra cứu & Hỏi đáp' }).first();
     await chatTab.click();
+    // The composer remounts per tab and is controlled by that tab's runtime draft, so typing
+    // before the switch settles loses the draft and leaves Send disabled.
+    await expect(chatTab).toHaveAttribute('aria-selected', 'true');
 
     const chatInput = page.getByLabel('Nội dung tin nhắn trò chuyện AI');
     await chatInput.fill('Chào AI, cho hỏi thông tin tác vụ thông thường');
@@ -720,5 +735,98 @@ test.describe('Phase 25.1 SDLC Flow Hardening & Multi-Tab Isolation Acceptance',
     await expect
       .poll(() => controller.captured.length, { timeout: 15_000 })
       .toBeGreaterThan(capturedBeforeSend);
+  });
+
+  test('D-28/D-29: backup round-trip giữ tab, active pointer, checkpoint và history', async ({ page }) => {
+    await setupMockTransport(page);
+    await page.goto('./', { waitUntil: 'commit' });
+    await configureAiKey(page);
+
+    const projectName = `SDLC-BackupRoundTrip-${Date.now()}`;
+    const messageText = 'Tin nhắn được giữ nguyên qua bản sao lưu';
+    const renamedTitle = 'Tab đã đổi tên';
+    await createProject(page, projectName);
+    await openAiDrawerWithProjectScope(page, projectName);
+
+    const tabList = page.getByRole('tablist', { name: 'Thanh tab hội thoại AI' });
+    const firstTab = tabList.getByRole('tab').filter({ hasText: '💬 Tra cứu & Hỏi đáp' }).first();
+    const secondTab = tabList.getByRole('tab').filter({ hasText: /💬 Cuộc trò chuyện #2/ }).first();
+
+    await page.getByRole('button', { name: 'Mở tab chat AI mới' }).click();
+    await expect(secondTab).toHaveAttribute('aria-selected', 'true');
+
+    await firstTab.click();
+    await expect(firstTab).toHaveAttribute('aria-selected', 'true');
+    // Analysis mode on: the grounded pipeline would otherwise add schema-invalid intent/scope
+    // calls on the same route and the turn would end in an error card instead of a reply.
+    await page.getByTestId('chat-header-more-btn').click();
+    await page.getByText('Bật chế độ phân tích (Analysis mode)').click();
+    await page.getByTestId('chat-header-more-btn').click();
+    await expect(page.getByText('Tắt chế độ phân tích (Analysis mode)')).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    const chatInput = page.getByLabel('Nội dung tin nhắn trò chuyện AI');
+    await chatInput.fill(messageText);
+    await page.getByLabel('Gửi tin nhắn').click();
+    await expect(page.getByText('Phản hồi thử nghiệm từ hệ thống AI.').first()).toBeVisible();
+
+    // Rename through the real affordance (F2) so the exported title is the durable one.
+    await firstTab.focus();
+    await page.keyboard.press('F2');
+    const renameInput = tabList.getByLabel('Đổi tên tab');
+    await expect(renameInput).toBeVisible();
+    await renameInput.fill(renamedTitle);
+    await renameInput.press('Enter');
+    await expect(
+      tabList.getByRole('tab').filter({ hasText: renamedTitle }).first()
+    ).toBeVisible();
+
+    const tabsBefore = await readDexieRows(page, 'chatTabs');
+    const messagesBefore = await readDexieRows(page, 'chatMessages');
+    expect(tabsBefore.length).toBeGreaterThanOrEqual(3);
+    expect(messagesBefore.some((row) => row.content === messageText)).toBe(true);
+
+    const backupPath = await exportBackupFile(page);
+    const exported = JSON.parse(fs.readFileSync(backupPath, 'utf8')) as Record<string, any>;
+    expect(JSON.stringify(exported)).not.toMatch(
+      /api[_-]?key|passphrase|partialBuffer|streamingText|rawModelResponse/i
+    );
+
+    await importBackupFile(page, backupPath);
+    await page.reload({ waitUntil: 'commit' });
+
+    const tabsAfter = await readDexieRows(page, 'chatTabs');
+    const messagesAfter = await readDexieRows(page, 'chatMessages');
+
+    const identity = (rows: Array<Record<string, unknown>>) =>
+      rows
+        .map((row) => ({
+          id: row.id,
+          type: row.type,
+          title: row.title,
+          active: Boolean(row.active),
+        }))
+        .sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    expect(identity(tabsAfter)).toEqual(identity(tabsBefore));
+
+    const messageIdentity = (rows: Array<Record<string, unknown>>) =>
+      rows
+        .map((row) => ({ id: row.id, role: row.role, content: row.content }))
+        .sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    expect(messageIdentity(messagesAfter)).toEqual(messageIdentity(messagesBefore));
+
+    // Exactly one active tab per scope survives the round-trip (the active pointer is durable).
+    const activePerScope = new Map<string, number>();
+    for (const tab of tabsAfter) {
+      if (!tab.active) continue;
+      const scope = String(tab.scopeKey);
+      activePerScope.set(scope, (activePerScope.get(scope) ?? 0) + 1);
+    }
+    for (const [, count] of activePerScope) expect(count).toBe(1);
+
+    // The restored drawer renders the renamed tab and its history.
+    await ensureDrawerWithProjectScope(page, projectName);
+    await tabList.getByRole('tab').filter({ hasText: renamedTitle }).first().click();
+    await expect(page.getByText(messageText).first()).toBeVisible();
   });
 });
