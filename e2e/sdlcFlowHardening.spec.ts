@@ -1,14 +1,115 @@
 import fs from 'node:fs';
-import { expect, test } from '@playwright/test';
+import os from 'node:os';
+import path from 'node:path';
+import { expect, test, type Page } from '@playwright/test';
 import {
   configureAiKey,
   createProject,
+  downloadBackupJson,
+  importBackupFile,
   openAiDrawerWithProjectScope,
   readDexieRows,
   setupMockTransport,
+  writeDexieRow,
 } from './helpers/sdlcFixtures';
 
 const source = fs.readFileSync(new URL(import.meta.url), 'utf8');
+
+/**
+ * The AI drawer keeps its open flag and scope in localStorage, so a reload usually reopens it
+ * with the same project scope. Read the durable flag instead of guessing from a raced
+ * `isVisible()` check — clicking the header button while the drawer is already open closes it.
+ */
+async function ensureDrawerWithProjectScope(page: Page, projectName: string): Promise<void> {
+  const aiButton = page.getByRole('button', { name: 'Trợ lý AI (Cmd+J / Ctrl+J)' });
+  await expect(aiButton).toBeVisible();
+
+  const chatInput = page.getByLabel('Nội dung tin nhắn trò chuyện AI');
+  const drawerOpen = await page.evaluate(
+    () => localStorage.getItem('planner:ai_chat_open') === 'true'
+  );
+  if (!drawerOpen) {
+    await aiButton.click();
+  }
+  await expect(chatInput).toBeVisible();
+
+  const scopeLabel = page.getByText(`Đang gắn ngữ cảnh: ${projectName}`, { exact: true });
+  if (!(await scopeLabel.isVisible())) {
+    await page.getByRole('button', { name: 'Đổi phạm vi ngữ cảnh' }).click();
+    await page.getByRole('dialog').getByText(projectName, { exact: true }).click();
+  }
+  await expect(scopeLabel).toBeVisible();
+}
+
+async function runSdlcIntake(
+  page: Page,
+  controller: { captured: Array<unknown> },
+  featureName?: string
+): Promise<void> {
+  const tabList = page.getByRole('tablist', { name: 'Thanh tab hội thoại AI' });
+  await tabList.getByRole('tab').filter({ hasText: /SDLC/ }).first().click();
+
+  await page.getByRole('button', { name: 'Khởi tạo SDLC (PL01 & PL02)' }).click();
+  const intakeModal = page
+    .getByRole('dialog')
+    .filter({ hasText: 'Nạp Hồ sơ Đầu vào (PL01 & PL02)' });
+  await expect(intakeModal).toBeVisible();
+  if (featureName) {
+    await intakeModal.getByLabel('Tên Tính năng').fill(featureName);
+  }
+  await intakeModal
+    .getByPlaceholder(/Dán nội dung Yêu cầu nghiệp vụ PL01/)
+    .fill('Nghiệp vụ: Quản lý tác vụ đa tab.');
+  await intakeModal
+    .getByPlaceholder(/Dán nội dung Đặc tả chức năng PL02/)
+    .fill('Đặc tả: Giao diện tab Chrome độc lập.');
+  await intakeModal.getByRole('button', { name: 'Bắt đầu Phân tích Solution' }).click();
+  await expect(intakeModal).not.toBeVisible();
+  await expect.poll(() => controller.captured.length, { timeout: 15_000 }).toBeGreaterThan(0);
+}
+
+/**
+ * Seeds a workflow state for the project.
+ *
+ * The durable key is `sdlc_workflow:<projectId>:<threadId>`, and the drawer resolves it from the
+ * active tab's thread id — not always the SDLC tab's, because intake can write under whichever
+ * tab owned the turn. Writing the same mutated state to every existing key for the project (plus
+ * the SDLC tab's own key) makes the post-reload restore deterministic instead of depending on
+ * which thread id the drawer happens to resolve.
+ */
+async function seedSdlcWorkflow(
+  page: Page,
+  projectName: string,
+  mutate: (state: Record<string, any>) => Record<string, any>
+): Promise<string> {
+  const projectRow = (await readDexieRows(page, 'projects')).find(
+    (row) => row.name === projectName
+  );
+  expect(projectRow?.id).toBeTruthy();
+  const projectId = String(projectRow!.id);
+
+  const sdlcTab = (await readDexieRows(page, 'chatTabs')).find((tab) => tab.type === 'sdlc');
+  expect(sdlcTab?.threadId).toBeTruthy();
+
+  const prefix = `sdlc_workflow:${projectId}:`;
+  const settings = await readDexieRows(page, 'settings');
+  const existing = settings.filter(
+    (row) => typeof row.key === 'string' && row.key.startsWith(prefix)
+  );
+  expect(existing.length).toBeGreaterThan(0);
+  const base = existing[0]!.value as Record<string, any>;
+  expect(base).toBeTruthy();
+
+  const keys = new Set(existing.map((row) => String(row.key)));
+  keys.add(`${prefix}${String(sdlcTab!.threadId)}`);
+  for (const key of keys) {
+    const prior = settings.find((row) => row.key === key)?.value as
+      | Record<string, any>
+      | undefined;
+    await writeDexieRow(page, 'settings', { key, value: mutate(prior ?? base) });
+  }
+  return `${prefix}${String(sdlcTab!.threadId)}`;
+}
 
 test.describe('Phase 25.1 SDLC Flow Hardening & Multi-Tab Isolation Acceptance', () => {
   test.beforeEach(async () => {
@@ -408,5 +509,216 @@ test.describe('Phase 25.1 SDLC Flow Hardening & Multi-Tab Isolation Acceptance',
     // Retry reused the original user row instead of inserting a second bubble (D-14).
     expect(userRows).toHaveLength(1);
     expect(userRows[0]!.content).toBe(prompt);
+  });
+
+  test('D-20..D-27: revision preview, commit, và giữ chu kỳ cũ', async ({ page }) => {
+    const controller = await setupMockTransport(page);
+    await page.goto('./', { waitUntil: 'commit' });
+    await configureAiKey(page);
+
+    const projectName = `SDLC-Revision-${Date.now()}`;
+    await createProject(page, projectName);
+    await openAiDrawerWithProjectScope(page, projectName);
+    await runSdlcIntake(page, controller);
+
+    const tabs = await readDexieRows(page, 'chatTabs');
+    const sdlcTab = tabs.find((tab) => tab.type === 'sdlc');
+    expect(sdlcTab).toBeTruthy();
+
+    const now = new Date().toISOString();
+    // Seeded on purpose: a completed cycle can only be produced by CAB generation, which needs a
+    // confirmed change pack plus the PL02/PL03B/PL07 chain. Seeding `settings` reaches the state
+    // plan 12's component test already covers through the real closeCycle path.
+    await seedSdlcWorkflow(page, projectName, (state) => ({
+      ...state,
+      threadId: String(sdlcTab!.threadId),
+      artifacts: {
+        ...state.artifacts,
+        solution: {
+          kind: 'SOLUTION',
+          version: 1,
+          hash: 'a'.repeat(64),
+          title: 'SOLUTION.md — v1',
+          content: 'Bản solution gốc dùng để đối chiếu.',
+          sourceHashes: [],
+          updatedAt: now,
+        },
+      },
+      cycles: [
+        {
+          cycleId: crypto.randomUUID(),
+          status: 'completed',
+          startedAt: now,
+          closedAt: now,
+        },
+      ],
+    }));
+
+    // A reload mounts the hub with the seeded state; the drawer reopens from its localStorage flag.
+    await page.reload({ waitUntil: 'commit' });
+    await ensureDrawerWithProjectScope(page, projectName);
+
+    const tabList = page.getByRole('tablist', { name: 'Thanh tab hội thoại AI' });
+    await expect(
+      tabList.getByRole('tab').filter({ hasText: /SDLC/ }).first()
+    ).toHaveAttribute('aria-selected', 'true');
+
+    // D-27 retention is visible before the revision: cycle 1 is already closed.
+    await expect(page.getByText('Chu kỳ 1 — Hoàn tất')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Cập nhật solution' }).click();
+    const revisionModal = page
+      .getByRole('dialog')
+      .filter({ hasText: 'Xác nhận cập nhật solution' });
+    await expect(revisionModal).toBeVisible();
+
+    const draftArea = revisionModal.getByPlaceholder(
+      'Nhập bản nội dung mới để xem trước và xác nhận.'
+    );
+    await draftArea.fill('Bản solution cập nhật sau khi rà soát yêu cầu mới.');
+    await draftArea.blur();
+
+    // Preview renders the diff before anything is committed (the draft also appears in the textarea).
+    await expect(revisionModal.getByText('1. So sánh thay đổi (Diff)')).toBeVisible();
+    await expect(
+      revisionModal.getByText('Bản solution cập nhật sau khi rà soát yêu cầu mới.').first()
+    ).toBeVisible();
+    await expect(
+      revisionModal.getByText('3. Chuỗi tác động (Impact Chain)')
+    ).toBeVisible();
+
+    // The drawer (zIndex 1200) sits above the modal mask, so a pointer click is intercepted.
+    // Dispatching the click still runs the real handler, same as the existing popconfirm step.
+    await revisionModal
+      .getByRole('button', { name: 'Xác nhận cập nhật' })
+      .dispatchEvent('click');
+    await expect(revisionModal).not.toBeVisible();
+    await expect(page.getByRole('button', { name: 'Xác nhận cập nhật' })).toHaveCount(0);
+
+    await expect(page.getByText('Chu kỳ 2 — Đang thực hiện')).toBeVisible();
+    await expect(page.getByText('Chu kỳ 1 — Hoàn tất')).toBeVisible();
+    // The past cycle renders as a read-only row (D-27 retention), not just a counter bump.
+    await expect(
+      page.locator('.ant-tag').filter({ hasText: 'Chỉ đọc' })
+    ).toHaveCount(1);
+  });
+
+  test('D-30: restore cảnh báo nguồn thiếu', async ({ page }) => {
+    const controller = await setupMockTransport(page);
+    await page.goto('./', { waitUntil: 'commit' });
+    await configureAiKey(page);
+
+    const projectName = `SDLC-MissingSourceProject-${Date.now()}`;
+    const featureName = `SDLC-MissingSource-${Date.now()}`;
+    const missingNoteId = crypto.randomUUID();
+    await createProject(page, projectName);
+    await openAiDrawerWithProjectScope(page, projectName);
+    await runSdlcIntake(page, controller, featureName);
+
+    // SDLC artifacts only get a noteId from a selected Note source, so the workflow must be
+    // repointed at a real Note row before that Note can go missing.
+    const now = new Date().toISOString();
+    await writeDexieRow(page, 'notes', {
+      id: missingNoteId,
+      title: 'Nguồn PL01 bị thiếu',
+      body: 'Nội dung nguồn PL01 sẽ bị xoá khỏi bản sao lưu.',
+      isPinned: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const tabs = await readDexieRows(page, 'chatTabs');
+    const sdlcTab = tabs.find((tab) => tab.type === 'sdlc');
+    expect(sdlcTab).toBeTruthy();
+    const sdlcThreadId = String(sdlcTab!.threadId);
+    await seedSdlcWorkflow(page, projectName, (state) => ({
+      ...state,
+      threadId: sdlcThreadId,
+      artifacts: {
+        ...state.artifacts,
+        pl01: { ...state.artifacts.pl01, noteId: missingNoteId },
+      },
+    }));
+
+    // Remove the Note from the EXPORTED payload, never from live Dexie: restore bulk-adds the
+    // payload's `notes`, so deleting locally then re-importing would bring it right back.
+    const payload = await downloadBackupJson(page);
+    const tables = payload.tables as Record<string, any>;
+    tables.notes = (tables.notes as Array<Record<string, unknown>>).filter(
+      (note) => note.id !== missingNoteId
+    );
+    (payload.counts as Record<string, number>).notes = tables.notes.length;
+    const mutatedPath = path.join(os.tmpdir(), `taskmate-missing-source-${Date.now()}.json`);
+    fs.writeFileSync(mutatedPath, JSON.stringify(payload));
+
+    await importBackupFile(page, mutatedPath);
+    // Restore replaces tables behind the mounted drawer; reload so the SDLC coordinator restores
+    // from the imported settings instead of keeping the pre-import in-memory state.
+    await page.reload({ waitUntil: 'commit' });
+    // Restore drops the API key (it is on the export deny-list), so re-enter it before the
+    // positive-control send; the blocked send below needs no key and is asserted separately.
+    await configureAiKey(page);
+    await ensureDrawerWithProjectScope(page, projectName);
+    const tabList = page.getByRole('tablist', { name: 'Thanh tab hội thoại AI' });
+    await tabList.getByRole('tab').filter({ hasText: /SDLC/ }).first().click();
+
+    const notice = page.getByRole('status').filter({
+      hasText: 'Không tìm thấy nguồn của workflow đã khôi phục.',
+    });
+    // The notice shows the ARTIFACT title: deriveMissingSources cannot read a title from a Note
+    // row that no longer exists. The artifact title is pinned by the unique featureName.
+    await expect(notice).toBeVisible();
+    await expect(
+      notice.getByText(`PL01 — Yêu cầu nghiệp vụ (${featureName})`)
+    ).toBeVisible();
+    const restoredNotes = await readDexieRows(page, 'notes');
+    expect(restoredNotes.some((note) => note.id === missingNoteId)).toBe(false);
+    expect(restoredNotes.some((note) => note.title === 'Nguồn PL01 bị thiếu')).toBe(false);
+
+    // No automatic AI call is issued while a source is missing.
+    const capturedBeforeRecovery = controller.captured.length;
+    // Wait for the tab switch to settle before typing: the composer remounts per tab and would
+    // otherwise drop the draft that was just filled.
+    await expect(
+      tabList.getByRole('tab').filter({ hasText: /SDLC/ }).first()
+    ).toHaveAttribute('aria-selected', 'true');
+    const chatInput = page.getByLabel('Nội dung tin nhắn trò chuyện AI');
+    await chatInput.fill('Chạy tiếp bước phân tích solution.');
+    // The tall SDLC hub pushes the composer below the drawer viewport; Cmd/Ctrl+Enter is the
+    // product's own send path and does not depend on pointer hit-testing.
+    await chatInput.press('Control+Enter');
+    await expect(page.locator('[data-testid="inline-api-error-card"]')).toHaveCount(1);
+    expect(controller.captured.length).toBe(capturedBeforeRecovery);
+
+    // Positive control (đối chứng dương): without it the zero-growth assertion above could pass
+    // simply because the harness never sends. Re-create the Note under the SAME id and prove a
+    // turn does fire.
+    const recoveryTime = new Date().toISOString();
+    await writeDexieRow(page, 'notes', {
+      id: missingNoteId,
+      title: 'Nguồn PL01 bị thiếu',
+      body: 'Nội dung nguồn PL01 đã được bổ sung lại.',
+      isPinned: false,
+      createdAt: recoveryTime,
+      updatedAt: recoveryTime,
+    });
+    await page.reload({ waitUntil: 'commit' });
+    await ensureDrawerWithProjectScope(page, projectName);
+    await page.getByRole('tablist', { name: 'Thanh tab hội thoại AI' })
+      .getByRole('tab').filter({ hasText: /SDLC/ }).first().click();
+
+    await expect(page.getByRole('status').filter({
+      hasText: 'Không tìm thấy nguồn của workflow đã khôi phục.',
+    })).toHaveCount(0);
+
+    // Clear the error card left by the blocked turn first: the retry button and the composer are
+    // both valid next actions, and the send asserts the card count separately.
+    const capturedBeforeSend = controller.captured.length;
+    const recoveryInput = page.getByLabel('Nội dung tin nhắn trò chuyện AI');
+    await recoveryInput.fill('Nguồn đã bổ sung, chạy tiếp.');
+    await recoveryInput.press('Control+Enter');
+    await expect
+      .poll(() => controller.captured.length, { timeout: 15_000 })
+      .toBeGreaterThan(capturedBeforeSend);
   });
 });
