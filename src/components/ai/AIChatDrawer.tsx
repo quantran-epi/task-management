@@ -882,8 +882,22 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     const coordinator = getSdlcCoordinator();
     if (!coordinator) return;
     // Missing restored sources block the next AI step. Refuse before resumeCheckpoint: resuming
-    // first would have already replaced the `interrupted` checkpoint the banner renders.
-    if (restoredMissingSources.length > 0) {
+    // first would have already replaced the `interrupted` checkpoint the banner renders. Read the
+    // persisted state rather than `restoredMissingSources`: that live query resolves asynchronously,
+    // so its first render after a restore is `[]` and a fast Continue would resume past the guard.
+    const current = coordinator.getState() ?? (await coordinator.restore());
+    if (!current) return;
+    const noteIds = Object.values(current.artifacts)
+      .map((artifact) =>
+        artifact && typeof artifact === 'object' && 'noteId' in artifact ? artifact.noteId : undefined
+      )
+      .filter((id): id is string => typeof id === 'string');
+    const existing = await db.notes.bulkGet(noteIds);
+    const missingNow = deriveMissingSources(
+      current,
+      new Set(existing.filter((note) => Boolean(note)).map((note) => note!.id))
+    );
+    if (missingNow.length > 0) {
       message.error(
         'Thiếu tài liệu nguồn của workflow đã khôi phục. Bổ sung hoặc thay thế nguồn trước khi tiếp tục.'
       );
@@ -907,7 +921,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       await coordinator.clearCheckpoint().then(setSdlcWorkflowState).catch(() => undefined);
       message.error('Không thể phục hồi checkpoint SDLC');
     }
-  }, [getSdlcCoordinator, restoredMissingSources]);
+  }, [db, getSdlcCoordinator]);
 
   // The hub passes the revision kind explicitly, so no local draft-kind state is needed (D-22/D-23).
   const handlePreviewRevision = useCallback(async (type: 'requirement' | 'solution', draft: string) => {
