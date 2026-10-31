@@ -108,6 +108,7 @@ import { DriftMatrixView } from './wizard/DriftMatrixView';
 import { SdlcWorkflowHub } from './wizard/SdlcWorkflowHub';
 import { StepInputDocsModal } from './wizard/StepInputDocsModal';
 import { createSdlcWorkflowCoordinator, defaultSha256 } from '../../services/wizard/workflowCoordinator';
+import { stripStaleArtifacts } from './wizard/revisionView';
 import type { SdlcWorkflowState, SdlcWorkflowMetadata, SdlcStepId } from '../../services/wizard/workflowSchemas';
 import type { SdlcSourceRef } from '../../services/wizard/sourceMerge';
 import { createWizardCoordinator, deriveActiveWizard, type WizardCoordinatorDeps, type WizardExportResult } from '../../services/wizard/wizardCoordinator';
@@ -1506,12 +1507,24 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     const isSdlcActiveTurn = isSdlcActiveTab;
     const effectiveAnalysisMode = isSdlcActiveTurn ? true : currentTabAnalysisMode;
 
+    if (isSdlcActiveTurn && sdlcWorkflowState) {
+      // Written after the user message is saved and before any transport call. A checkpoint that
+      // cannot be written must not abort the turn, so the write is best-effort.
+      await getSdlcCoordinator()
+        ?.setCheckpoint(crypto.randomUUID(), sdlcWorkflowState.currentStep ?? 'SOLUTION')
+        .catch(() => undefined);
+    }
+
+    // Every post-checkpoint exit path is enclosed here so the single finally below clears the
+    // checkpoint. A surviving `running` checkpoint is restored as `interrupted` and blocks the tab.
+    try {
+
     if (isSdlcActiveTurn) {
       effectivePrompt = buildSdlcWrapperPrompt({
         userQuery: trimmed,
         step: sdlcWorkflowState?.currentStep || 'SOLUTION',
         metadata: sdlcWorkflowState?.metadata,
-        artifacts: sdlcWorkflowState?.artifacts,
+        artifacts: stripStaleArtifacts(sdlcWorkflowState),
       });
     }
 
@@ -2242,6 +2255,12 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
       });
       if (activeReq) {
         requestRegistryRef.current.finish(activeReq.requestId);
+      }
+    }
+    } finally {
+      // One clear for every post-setCheckpoint exit: success, abort, error, or early return.
+      if (isSdlcActiveTurn) {
+        await getSdlcCoordinator()?.clearCheckpoint().catch(() => undefined);
       }
     }
   };
