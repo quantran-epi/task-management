@@ -117,6 +117,9 @@ export const RevisionImpactModal: React.FC<RevisionImpactModalProps> = ({
   return (
     <Modal
       open={open}
+      // The hub renders inside the AI drawer (zIndex 1200); antd's default 1000 puts this
+      // confirmation under it, so the confirm button is not clickable with a mouse.
+      zIndex={1300}
       title={
         <Title
           level={4}
