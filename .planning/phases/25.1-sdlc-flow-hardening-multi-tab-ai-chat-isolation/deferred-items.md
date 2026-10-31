@@ -12,6 +12,6 @@ Out-of-scope findings recorded during plan execution. Not fixed here.
 
 ## Plan 25.1-15 (2026-10-31)
 
-- **UX (belongs to G1 review):** the revision confirm button (`Xác nhận cập nhật`) sits under the AI drawer's zIndex 1200 layer, so a real pointer click is intercepted by the drawer subtree. The acceptance test dispatches the click. Not a regression introduced here, but a mouse user cannot press that button without moving the drawer — verify in G1 and file separately if confirmed.
+- **UX (belongs to G1 review):** the revision confirm button (`Xác nhận cập nhật`) sat under the AI drawer's zIndex 1200 layer, so a real pointer click was intercepted by the drawer subtree. **Fixed after the round-4 review in `54f0650`:** `RevisionImpactModal` now sets `zIndex={1300}`. G1 should re-check keyboard reachability and the focus ring only.
 - **Fixed, no longer deferred:** the `D-16..D-19` 320px horizontal-scroll assertion was order-dependent (sampled scroll metrics before the drawer reflowed). The spec now polls until the layout settles; 4/4 green on repeat.
-- `tests/ai/AIChatDrawerSdlcRecovery.test.tsx` CAB-cycle flake did not reproduce during plan 25.1-15 (16/16 in three full-suite runs). Entry kept above.
+- `tests/ai/AIChatDrawerSdlcRecovery.test.tsx` CAB-cycle flake did not reproduce during plan 25.1-15 (16/16 in three full-suite runs). Entry kept above. Re-characterised after the round-4 review: when the file runs alongside `AIChatDrawerGroundedWiring` and `AIChatDrawerSdlcIntake`, 2–3 tests can fail; identical failures reproduce at `79b3ba6`, so it is pre-existing ordering sensitivity, not a round-4 regression. Each test passes alone and the file is green 16/16 on repeated solo runs.
