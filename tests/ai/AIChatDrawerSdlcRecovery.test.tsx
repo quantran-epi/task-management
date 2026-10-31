@@ -11,7 +11,7 @@ import {
 } from '../../src/db/repositories/chatTabRepo';
 import * as nineRouterTokenService from '../../src/services/ai/nineRouterTokenService';
 import * as nineRouterClient from '../../src/services/ai/nineRouterClient';
-import * as coordinatorModule from '../../src/services/wizard/wizardCoordinator';
+import * as hubCabModule from '../../src/services/wizard/hubCab';
 import type { SdlcWorkflowState } from '../../src/services/wizard/workflowSchemas';
 import {
   previousArtifactContent,
@@ -614,98 +614,51 @@ describe('AIChatDrawer SDLC checkpoint, revision, and cycle recovery', () => {
     });
 
     it('closes the active cycle when CAB generation succeeds', async () => {
-      const legacyThreadId = '33333333-3333-4333-8333-333333333333';
-      await db.chatThreads.add({
-        id: legacyThreadId,
-        scopeKey: SCOPE_KEY,
-        scopeType: 'project',
-        entityId: PROJECT_ID,
-        title: 'Recovery Project',
-        createdAt: TS,
-        updatedAt: TS,
-      });
-      await db.chatMessages.add({
-        id: '44444444-4444-4444-8444-444444444444',
-        threadId: legacyThreadId,
-        role: 'assistant',
-        content: 'PL03 review',
-        createdAt: TS,
-        wizard: {
-          schemaVersion: 1,
-          sessionId: SESSION_ID,
-          projectId: PROJECT_ID,
-          threadId: legacyThreadId,
-          skill: 'PL03',
-          status: 'review',
-          inputRevision: 2,
-          draftRevision: 1,
-          approvedAt: null,
-          artifactId: null,
-          artifactHash: null,
-          renderPayload: { title: 'PL03' },
-          createdAt: TS,
-          updatedAt: TS,
+      const { sdlc } = await seedTabs();
+      const base = makeState(sdlc.threadId, {
+        currentStep: 'CAB',
+        artifacts: {
+          pl02: {
+            kind: 'PL02',
+            version: 1,
+            hash: '02'.repeat(32),
+            title: 'PL02',
+            content: 'PL02 content',
+            sourceHashes: [],
+            updatedAt: TS,
+          },
+          pl03b: {
+            kind: 'PL03B',
+            version: 1,
+            hash: '04'.repeat(32),
+            title: 'PL03B',
+            content: 'PL03B content',
+            sourceHashes: ['02'.repeat(32)],
+            updatedAt: TS,
+          },
+          pl07: {
+            kind: 'PL07',
+            version: 1,
+            hash: '05'.repeat(32),
+            title: 'PL07',
+            content: 'PL07 content',
+            sourceHashes: ['04'.repeat(32)],
+            updatedAt: TS,
+          },
         },
       });
-      stateKey = `sdlc_workflow:${PROJECT_ID}:${legacyThreadId}`;
-      await db.settings.put({ key: stateKey, value: makeState(legacyThreadId) });
+      await db.settings.put({ key: stateKey, value: base });
 
-      const generateCab = vi.fn().mockResolvedValue({ status: 'NO_DRIFT_COMPLETE', drift: [], coverage: [] });
-      vi.spyOn(coordinatorModule, 'createWizardCoordinator').mockReturnValue({
-        start: vi.fn(),
-        cancel: vi.fn(),
-        dispose: vi.fn(),
-        restore: vi.fn().mockResolvedValue(undefined),
-        addContext: vi.fn(),
-        selectChangePack: vi.fn().mockResolvedValue({
-          status: 'pending',
-          manifest: {
-            identity: { cr: 'CR-12', branch: 'feature/CR-12' },
-            commitCount: 1,
-            fileCount: 1,
-            packHash: '6'.repeat(64),
-            entries: [],
-            meta: {},
-            schemaVersion: 1,
-            compressedBytes: 1,
-            expandedBytes: 1,
-            coverageStatus: 'complete',
-          },
-        }),
-        replaceChangePack: vi.fn(),
-        confirmChangePack: vi.fn().mockResolvedValue({
-          persisted: { created: true, notes: [] },
-          reconciliation: { status: 'NO_DRIFT_COMPLETE', drift: [], coverage: [] },
-        }),
-        generateTechnicalDocs: vi.fn().mockResolvedValue({
-          status: 'NO_DRIFT_COMPLETE',
-          drift: [],
-          coverage: [],
-          pl03: {},
-          pl07: {},
-        }),
-        generateCab,
-        getPackState: vi.fn().mockReturnValue({ status: 'idle' }),
-        answerGap: vi.fn(),
-        skipGap: vi.fn(),
-        requestEdit: vi.fn(),
-        approveSolution: vi.fn(),
-        approveAndExport: vi.fn(),
-        retryExportDownload: vi.fn(),
-        getCabState: vi.fn(),
-        getTechnicalDocs: vi.fn(),
-        getLatestSolution: vi.fn(),
-        isBusy: vi.fn(),
-        getState: vi.fn(),
-        getSnapshot: vi.fn(),
-      } as any);
+      // `generateHubCab` is the only upstream dependency of the CAB action; the hub coordinator
+      // (not the deleted wizard one) owns `commitCab`/`closeCycle` and is exercised for real.
+      const generateCab = vi.spyOn(hubCabModule, 'generateHubCab').mockResolvedValue({
+        markdown: '# Tờ trình CAB',
+        payload: {} as never,
+        noteId: '99999999-9999-4999-8999-000000000001',
+        pl02: { noteId: '88888888-8888-4888-8888-000000000001', version: 1, hash: '02'.repeat(32) },
+      });
 
       render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
-      const dropzone = await screen.findByLabelText('Khu vực nạp change-pack');
-      fireEvent.drop(dropzone, {
-        dataTransfer: { files: [new File(['zip'], 'change-pack.zip', { type: 'application/zip' })] },
-      });
-      fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận pack' }, { timeout: 5000 }));
       const cabButton = await screen.findByRole('button', { name: /Tạo tờ trình CAB/ });
       await waitFor(() => expect(cabButton).not.toBeDisabled());
       fireEvent.click(cabButton);
