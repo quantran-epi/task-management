@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: milestone
 status: executing
-stopped_at: "25.1.1-08 complete — next: plan 25.1.1-09 (delete the four wizard UI modules)"
-last_updated: "2026-11-01T03:40:00Z"
-last_activity: 2026-11-01 -- Plan 25.1.1-08 complete (wizard surface removed, historic rows read-only)
+stopped_at: "25.1.1-09 complete — next: plan 25.1.1-10 (delete wizardCoordinator.ts and its suites)"
+last_updated: "2026-11-01T03:45:00Z"
+last_activity: 2026-11-01 -- Plan 25.1.1-09 complete (four wizard UI modules deleted)
 progress:
   total_phases: 11
   completed_phases: 7
   total_plans: 84
-  completed_plans: 82
+  completed_plans: 83
   percent: 66
 ---
 
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 ## Current Position
 
 Phase: 25.1.1 (unify-sdlc-workflow-move-change-pack-pl03b-pl07-generation-c) — IN PROGRESS
-Plan: 8 of 11 complete (25.1.1-01 … 25.1.1-08)
-Status: Plan 25.1.1-08 complete; wave 8 done, next is 25.1.1-09 (delete the four wizard UI modules)
-Last activity: 2026-11-01 -- Plan 25.1.1-07 complete (hub export rows and commitCab caller)
-Stopped at: 25.1.1-08 complete — next: plan 25.1.1-09 (delete the four wizard UI modules)
+Plan: 9 of 11 complete (25.1.1-01 … 25.1.1-09)
+Status: Plan 25.1.1-09 complete; wave 9 done, next is 25.1.1-10 (delete wizardCoordinator.ts and its suites)
+Last activity: 2026-11-01 -- Plan 25.1.1-09 complete (four wizard UI modules deleted)
+Stopped at: 25.1.1-09 complete — next: plan 25.1.1-10 (delete wizardCoordinator.ts and its suites)
 
 Progress: [██████████] 100%
 

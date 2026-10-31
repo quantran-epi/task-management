@@ -296,7 +296,7 @@ Plans: 11 plans in 11 sequential waves (every plan edits `AIChatDrawer.tsx` or i
 
 **Wave 9** *(depends on 25.1.1-08)*
 
-- [ ] 25.1.1-09-PLAN.md — Delete the four wizard UI modules and their lifecycle suite; prove nothing imports them
+- [x] 25.1.1-09-PLAN.md — Delete the four wizard UI modules and their lifecycle suite; prove nothing imports them
 
 **Wave 10** *(depends on 25.1.1-09)*
 
