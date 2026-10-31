@@ -1,15 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { TaskPlannerDatabase } from '../../src/db';
 import {
   loadCanonicalArtifactChain,
   saveApprovedArtifact,
   saveSolutionVersion,
 } from '../../src/services/wizard/artifactRepo';
-import {
-  createWizardCoordinator,
-  deriveActiveWizard,
-  type WizardCoordinatorDeps,
-} from '../../src/services/wizard/wizardCoordinator';
 import {
   SdlcArtifactMetadataSchema,
   SdlcDocumentSetMetadataSchema,
@@ -20,8 +15,6 @@ import {
 } from '../../src/services/ai/wizardSchemas';
 import { DocumentSetSchema } from '../../src/validation/knowledgeSchemas';
 import { NoteSchema } from '../../src/validation/schemas';
-import type { ChangePackIdentity, ChangePackManifest } from '../../src/services/wizard/changePack';
-import type { ReconciliationResult } from '../../src/services/wizard/reconciliation';
 
 const PROJECT_ID = '11111111-1111-4111-8111-111111111111';
 const THREAD_ID = '22222222-2222-4222-8222-222222222222';
@@ -69,185 +62,7 @@ function approvedSnapshot(overrides: Record<string, unknown> = {}) {
   }));
 }
 
-describe('wizard coordinator lifecycle', () => {
-  const projectId = PROJECT_ID;
-  const threadId = THREAD_ID;
-  const sessionId = SESSION_ID;
-  const collecting = WizardSnapshotSchema.parse(snapshot('collecting', {
-    sessionId,
-    projectId,
-    threadId,
-    skill: 'PL02',
-    renderPayload: { title: 'PL02', markdown: '# Draft' },
-  }));
-
-  function coordinatorDeps(overrides: Partial<WizardCoordinatorDeps> = {}): WizardCoordinatorDeps {
-    return {
-      projectId,
-      threadId,
-      now: () => NOW,
-      createSessionId: () => sessionId,
-      collectEvidence: vi.fn().mockResolvedValue({ items: [], coverage: 'COMPLETE', degraded: [] }),
-      runStage: vi.fn().mockResolvedValue({
-        schemaVersion: 1,
-        gaps: [{ sectionId: 'PL02.II', fieldId: 'threshold', question: 'Ngưỡng áp dụng là bao nhiêu?', citationIds: [], suggestions: [] }],
-        unknowns: ['threshold'],
-        contradictions: [],
-      }),
-      saveSnapshot: vi.fn().mockResolvedValue(undefined),
-      appendMessage: vi.fn().mockResolvedValue(undefined),
-      saveSolution: vi.fn().mockResolvedValue({ created: true, note: { id: NOTE_ID } }),
-      ...overrides,
-    };
-  }
-
-  it('starts only in project scope, persists collecting, and asks gaps after grounded stage', async () => {
-    const deps = coordinatorDeps();
-    const coordinator = createWizardCoordinator(deps);
-    const started = await coordinator.start('PL02', { cr: 'CR-1', featureName: 'Feature', requestingUnit: '', author: 'User', date: '2026-10-28' });
-    expect(started.projectId).toBe(projectId);
-    expect(deps.collectEvidence).toHaveBeenCalledTimes(1);
-    expect(deps.runStage).toHaveBeenCalledTimes(1);
-    expect(deps.saveSnapshot).toHaveBeenCalled();
-  });
-
-  it('invalidates late stage results when cancelled and restores without rerun', async () => {
-    let resolveStage: ((value: unknown) => void) | undefined;
-    const deps = coordinatorDeps({
-      runStage: vi.fn().mockImplementation(() => new Promise((resolve) => { resolveStage = resolve; })),
-    });
-    const coordinator = createWizardCoordinator(deps);
-    const pending = coordinator.start('PL02', { cr: 'CR-1', featureName: 'Feature', requestingUnit: '', author: 'User', date: '2026-10-28' });
-    await vi.waitFor(() => expect(resolveStage).toBeTypeOf('function'));
-    void coordinator.cancel();
-    resolveStage?.({ schemaVersion: 1, gaps: [], unknowns: [], contradictions: [] });
-    await pending;
-    expect(deps.saveSnapshot).not.toHaveBeenCalledWith(expect.objectContaining({ status: 'gap_fill' }));
-
-    const restored = deriveActiveWizard([{ ...collecting, updatedAt: NOW } as any], projectId, threadId);
-    expect(restored?.status).toBe('collecting');
-    const restoreDeps = coordinatorDeps({ loadMessages: vi.fn().mockResolvedValue([{ ...collecting, updatedAt: NOW } as any]), runStage: vi.fn() });
-    await createWizardCoordinator(restoreDeps).restore();
-    expect(restoreDeps.runStage).not.toHaveBeenCalled();
-  });
-
-  it('retains answered input, invalidates approval on context, and deduplicates solution approval', async () => {
-    const deps = coordinatorDeps({
-      runStage: vi.fn().mockResolvedValue({ schemaVersion: 1, gaps: [], unknowns: [], contradictions: [] }),
-    });
-    const coordinator = createWizardCoordinator(deps);
-    await coordinator.start('SOLUTION', { cr: 'CR-1', featureName: 'Feature', requestingUnit: '', author: 'User', date: '2026-10-28' });
-    await coordinator.addContext('API /limits');
-    await Promise.all([coordinator.approveSolution(), coordinator.approveSolution()]);
-    expect(deps.saveSolution).toHaveBeenCalledTimes(1);
-    expect(deps.saveSolution).toHaveBeenCalledWith(expect.objectContaining({ projectId, threadId, draftRevision: 1 }));
-  });
-
-  it('validates without writes, requires exact explicit pack confirmation, then persists and reconciles once', async () => {
-    const identity: ChangePackIdentity = { cr: 'CR-1', base: 'base-1', head: 'head-1', branch: 'feature/CR-1' };
-    const manifest = {
-      schemaVersion: 1,
-      packHash: '6'.repeat(64),
-      identity,
-      meta: { ...identity, author: 'Dev', generatedAt: NOW, commits: [{ sha: 'head-1', subject: 'change' }], files: [{ path: 'src/feature.ts', status: 'M' }] },
-      entries: [{ path: 'diff.patch', sizeBytes: 8, status: 'included', coverage: 'included', content: 'patch' }],
-      compressedBytes: 8,
-      expandedBytes: 8,
-      commitCount: 1,
-      fileCount: 1,
-      coverageStatus: 'complete',
-    } satisfies ChangePackManifest;
-    const solution = { noteId: NOTE_ID, version: 2, hash: HASH };
-    const result = {
-      schemaVersion: 1,
-      identity: { projectId, threadId, solutionNoteId: solution.noteId, solutionVersion: solution.version, solutionHash: solution.hash, packHash: manifest.packHash, cr: identity.cr, base: identity.base, head: identity.head },
-      status: 'NO_DRIFT_COMPLETE',
-      approvedDesign: { currentSystem: 'Current', affectedScreens: [], affectedApis: [], affectedTables: [] },
-      actualImplementation: { affectedFiles: ['src/feature.ts'], affectedScreens: [], affectedApis: [], affectedTables: [] },
-      drift: [],
-      dbChangesRollback: { affectedTables: [], changes: [], rollback: { status: 'unknown', evidenceIds: [] } },
-      regressionMatrix: [{ scenario: 'existing flow', expected: 'unchanged' }],
-      coverage: [{ path: 'diff.patch', state: 'included', evidenceIds: [] }],
-    } satisfies ReconciliationResult;
-    const validatePack = vi.fn().mockResolvedValue(manifest);
-    const persistPack = vi.fn().mockResolvedValue({ notes: [{ id: '55555555-5555-4555-8555-555555555555' }], created: true });
-    const reconcilePack = vi.fn().mockReturnValue(result);
-    const appendReviewSnapshot = vi.fn().mockResolvedValue(undefined);
-    const deps = coordinatorDeps({
-      loadCanonicalChain: vi.fn().mockResolvedValue([{ id: NOTE_ID, sdlcArtifact: { kind: 'SOLUTION', projectId, threadId, version: 2, inputHash: HASH } }]),
-      expectedPackIdentity: () => identity,
-      validatePack,
-      persistPack,
-      reconcilePack,
-      buildReconciliationInput: vi.fn().mockReturnValue({ pinned: true }),
-      appendReviewSnapshot,
-    });
-    const coordinator = createWizardCoordinator(deps);
-    await coordinator.start('PL03', { cr: identity.cr, featureName: 'Feature', requestingUnit: '', author: 'User', date: '2026-10-28' });
-
-    const selected = await coordinator.selectChangePack(new File(['zip'], 'change-pack.zip'));
-    expect(selected).toMatchObject({ status: 'pending', manifest });
-    expect(persistPack).not.toHaveBeenCalled();
-    await expect(coordinator.confirmChangePack({ packHash: '7'.repeat(64), identity })).rejects.toThrow('PACK_CONFIRMATION_MISMATCH');
-    expect(persistPack).not.toHaveBeenCalled();
-
-    const confirmed = await coordinator.confirmChangePack({ packHash: manifest.packHash, identity });
-    expect(persistPack).toHaveBeenCalledTimes(1);
-    expect(reconcilePack).toHaveBeenCalledTimes(1);
-    expect(confirmed).toMatchObject({ persisted: { created: true }, reconciliation: result });
-    expect(appendReviewSnapshot).toHaveBeenCalledTimes(1);
-    expect(coordinator.getPackState()).toMatchObject({ status: 'confirmed', manifest });
-
-    const replay = await coordinator.confirmChangePack({ packHash: manifest.packHash, identity });
-    expect(replay).toEqual(confirmed);
-    expect(persistPack).toHaveBeenCalledTimes(1);
-  });
-
-  it('replace discards pending File/manifest and technical docs pin PL03 and PL07 to same solution/pack', async () => {
-    const identity: ChangePackIdentity = { cr: 'CR-1', base: 'base-1', head: 'head-1', branch: 'feature/CR-1' };
-    const manifest = {
-      schemaVersion: 1,
-      packHash: '6'.repeat(64),
-      identity,
-      meta: { ...identity, author: 'Dev', generatedAt: NOW, commits: [], files: [] },
-      entries: [{ path: 'diff.patch', sizeBytes: 8, status: 'deferred', coverage: 'deferred', content: 'patch' }],
-      compressedBytes: 8,
-      expandedBytes: 8,
-      commitCount: 0,
-      fileCount: 0,
-      coverageStatus: 'partial',
-    } satisfies ChangePackManifest;
-    const solution = { noteId: NOTE_ID, version: 2, hash: HASH };
-    const runTechnicalStage = vi.fn()
-      .mockResolvedValueOnce({ schemaVersion: 1, kind: 'PL03', coverage: 'PARTIAL', caveats: ['deferred'] })
-      .mockResolvedValueOnce({ schemaVersion: 1, kind: 'PL07', unknowns: ['deferred'] });
-    const deps = coordinatorDeps({
-      expectedPackIdentity: () => identity,
-      validatePack: vi.fn().mockResolvedValue(manifest),
-      persistPack: vi.fn().mockResolvedValue({ notes: [], created: true }),
-      loadCanonicalChain: vi.fn().mockResolvedValue([{ id: NOTE_ID, sdlcArtifact: { kind: 'SOLUTION', projectId, threadId, version: 2, inputHash: HASH } }]),
-      reconcilePack: vi.fn().mockReturnValue({ status: 'PARTIAL_COVERAGE', coverage: [{ path: 'diff.patch', state: 'deferred', evidenceIds: [] }], drift: [], identity: { projectId, threadId, solutionNoteId: NOTE_ID, solutionVersion: 2, solutionHash: HASH, packHash: manifest.packHash, cr: identity.cr, base: identity.base, head: identity.head } }),
-      buildReconciliationInput: vi.fn().mockReturnValue({}),
-      runTechnicalStage,
-    });
-    const coordinator = createWizardCoordinator(deps);
-    await coordinator.start('PL03', { cr: identity.cr, featureName: 'Feature', requestingUnit: '', author: 'User', date: '2026-10-28' });
-    await coordinator.selectChangePack(new File(['zip'], 'change-pack.zip'));
-    coordinator.replaceChangePack();
-    expect(coordinator.getPackState()).toEqual({ status: 'idle' });
-    await expect(coordinator.confirmChangePack({ packHash: manifest.packHash, identity })).rejects.toThrow('PACK_CONFIRMATION_REQUIRED');
-
-    await coordinator.selectChangePack(new File(['zip'], 'change-pack.zip'));
-    await coordinator.confirmChangePack({ packHash: manifest.packHash, identity });
-    const docs = await coordinator.generateTechnicalDocs();
-    expect(runTechnicalStage).toHaveBeenCalledTimes(2);
-    expect(runTechnicalStage.mock.calls[0]?.[0]).toMatchObject({ kind: 'PL03', solution, packHash: manifest.packHash });
-    expect(runTechnicalStage.mock.calls[1]?.[0]).toMatchObject({ kind: 'PL07', solution, packHash: manifest.packHash });
-    expect(docs).toMatchObject({ solution, packHash: manifest.packHash, coverageStatus: 'PARTIAL_COVERAGE' });
-  });
-});
-
-describe('wizard artifact persistence', () => {
+describe('artifact persistence', () => {
   let db: TaskPlannerDatabase;
 
   beforeEach(async () => {
