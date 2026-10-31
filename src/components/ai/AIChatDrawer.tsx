@@ -934,7 +934,13 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     });
   }, [getWizardCoordinator]);
 
-  const handleSendMessageRef = useRef<(text: string) => Promise<void>>(async () => {});
+  const handleSendMessageRef = useRef<
+    (
+      text: string,
+      overrideScope?: ActiveScope,
+      options?: { resumeFromCheckpoint?: boolean }
+    ) => Promise<void>
+  >(async () => {});
 
   const getSdlcCoordinator = useCallback(() => {
     if (!isProjectScope || !currentScope.id || !activeThreadId) return null;
@@ -967,6 +973,36 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     if (!coordinator) return;
     void coordinator.restore();
   }, [activeTabId, activeThreadId, getSdlcCoordinator, isProjectScope]);
+
+  // Resumes with a fresh request id, then issues exactly one fresh turn. The draft typed in the
+  // composer is intentionally not forwarded: resume means "re-run the interrupted step".
+  const handleSdlcCheckpointContinue = useCallback(async () => {
+    const coordinator = getSdlcCoordinator();
+    if (!coordinator) return;
+    try {
+      const resumed = await coordinator.resumeCheckpoint();
+      setSdlcWorkflowState(resumed);
+      const step = resumed.checkpoint?.step ?? resumed.currentStep;
+      void handleSendMessageRef.current(
+        `Tiếp tục bước ${step} sau khi bị gián đoạn.`,
+        undefined,
+        { resumeFromCheckpoint: true }
+      );
+    } catch {
+      message.error('Không thể phục hồi checkpoint SDLC');
+    }
+  }, [getSdlcCoordinator]);
+
+  const handleSdlcCheckpointDiscard = useCallback(async () => {
+    const coordinator = getSdlcCoordinator();
+    if (!coordinator) return;
+    try {
+      const cleared = await coordinator.clearCheckpoint();
+      setSdlcWorkflowState(cleared);
+    } catch {
+      message.error('Không thể phục hồi checkpoint SDLC');
+    }
+  }, [getSdlcCoordinator]);
 
   const handleStartSdlcWorkflow = useCallback(async (
     metadata: SdlcWorkflowMetadata,
@@ -1292,9 +1328,17 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const handleSendMessage = async (
     text: string,
     overrideScope?: ActiveScope,
-    skipSavingUserMessage = false
+    options?: { resumeFromCheckpoint?: boolean }
   ) => {
-    if (isSdlcActiveTab && sdlcWorkflowState?.checkpoint?.status === 'interrupted') return;
+    // A plain send while an SDLC checkpoint is interrupted must not run; only the explicit resume
+    // path (which calls resumeCheckpoint first) bypasses this guard.
+    if (
+      isSdlcActiveTab &&
+      sdlcWorkflowState?.checkpoint?.status === 'interrupted' &&
+      !options?.resumeFromCheckpoint
+    ) {
+      return;
+    }
     handleSendMessageRef.current = handleSendMessage;
     const trimmed = text.trim();
     if (!trimmed) return;
@@ -1426,19 +1470,15 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       );
     }
 
-    // 2. Save user message unless this is the routed continuation of an existing turn.
-    const savedUserMsg = skipSavingUserMessage
-      ? [...(await getMessagesByThreadId(activeThread.id, db))]
-          .reverse()
-          .find((m) => m.role === 'user' && m.content === trimmed)
-      : await saveMessage(
-          {
-            threadId: activeThread.id,
-            role: 'user',
-            content: trimmed,
-          },
-          db
-        );
+    // 2. Always persist the user message; plan 14 turns this into a retry-by-id option.
+    const savedUserMsg = await saveMessage(
+      {
+        threadId: activeThread.id,
+        role: 'user',
+        content: trimmed,
+      },
+      db
+    );
 
     // Own a fresh turn controller for THIS tab. Never abort another tab's request (D-06/D-10).
     tabRuntimes.initialize(turnTabId, activeThread.id);
@@ -2812,8 +2852,8 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
           {sdlcWorkflowState?.checkpoint?.status === 'interrupted' && (
             <InterruptedBanner
               checkpoint={sdlcWorkflowState.checkpoint}
-              onContinue={() => setSdlcWorkflowState({ ...sdlcWorkflowState, checkpoint: undefined })}
-              onDiscard={() => setSdlcWorkflowState({ ...sdlcWorkflowState, checkpoint: undefined })}
+              onContinue={() => void handleSdlcCheckpointContinue()}
+              onDiscard={() => void handleSdlcCheckpointDiscard()}
             />
           )}
           <RestoredSourceNotice missingSources={[]} />

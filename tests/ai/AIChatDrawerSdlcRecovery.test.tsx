@@ -20,6 +20,7 @@ const SCOPE = { type: 'project' as const, id: PROJECT_ID, title: 'Recovery Proje
 const SCOPE_KEY = `project:${PROJECT_ID}`;
 const TS = '2026-10-30T00:00:00.000Z';
 const SESSION_ID = '22222222-2222-4222-8222-222222222222';
+const ORIGINAL_CHECKPOINT_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 
 const DRAWER_PATH = path.resolve(process.cwd(), 'src/components/ai/AIChatDrawer.tsx');
 const CLOSERS: Record<string, string> = { '(': ')', '{': '}', '[': ']' };
@@ -77,7 +78,7 @@ function extractSendBody(source: string): string {
   return clean.slice(bodyOpen, bodyClose + 1);
 }
 
-const makeState = (
+  const makeState = (
   threadId: string,
   overrides: Partial<SdlcWorkflowState> = {}
 ): SdlcWorkflowState => ({
@@ -307,6 +308,92 @@ describe('AIChatDrawer SDLC checkpoint, revision, and cycle recovery', () => {
       const sdlcSettings = await db.settings.toArray();
       expect(sdlcSettings.filter((row) => String(row.key).startsWith('sdlc_workflow:'))).toEqual([]);
       expect(dispatches[0].payload.messages[0].content).not.toContain('[Quy trình SDLC');
+    });
+  });
+
+  describe('Task 2: resume and discard the interrupted checkpoint', () => {
+    const interruptedState = (threadId: string) =>
+      makeState(threadId, {
+        checkpoint: {
+          requestId: ORIGINAL_CHECKPOINT_ID,
+          step: 'SOLUTION',
+          status: 'interrupted',
+          startedAt: TS,
+        },
+      });
+
+    const renderInterrupted = async (threadId: string) => {
+      await db.settings.put({ key: stateKey, value: interruptedState(threadId) });
+      render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
+      return screen.findByRole('button', { name: 'Tiếp tục' });
+    };
+
+    it('resumes with a fresh request id and dispatches exactly one request', async () => {
+      const { sdlc } = await seedTabs();
+      const dispatches: any[] = [];
+      answerStream(dispatches);
+
+      fireEvent.click(await renderInterrupted(sdlc.threadId));
+
+      await waitFor(() => expect(dispatches).toHaveLength(1));
+      const afterResume = await stored();
+      expect(afterResume?.checkpoint?.requestId).not.toBe(ORIGINAL_CHECKPOINT_ID);
+
+      await waitFor(async () => expect((await stored())?.checkpoint).toBeUndefined());
+      expect(dispatches).toHaveLength(1);
+      expect(dispatches[0].payload.messages.at(-1).content).toContain('sau khi bị gián đoạn');
+    });
+
+    it('still blocks a plain send while the checkpoint is interrupted', async () => {
+      const { sdlc } = await seedTabs();
+      const dispatches: any[] = [];
+      answerStream(dispatches);
+
+      await renderInterrupted(sdlc.threadId);
+      submit('Gửi thường khi đang gián đoạn');
+
+      await new Promise<void>((resolve) => setTimeout(resolve, 60));
+      expect(dispatches).toHaveLength(0);
+      expect((await stored())?.checkpoint?.status).toBe('interrupted');
+    });
+
+    it('discards the checkpoint without calling the transport', async () => {
+      const { sdlc } = await seedTabs();
+      const dispatches: any[] = [];
+      answerStream(dispatches);
+
+      await renderInterrupted(sdlc.threadId);
+      fireEvent.click(screen.getByRole('button', { name: 'Bỏ qua' }));
+
+      await waitFor(async () => expect((await stored())?.checkpoint).toBeUndefined());
+      expect(dispatches).toHaveLength(0);
+      const messages = await db.chatMessages.toArray();
+      expect(messages.filter((msg) => msg.role === 'user')).toHaveLength(0);
+    });
+
+    it('never auto-runs a restored checkpoint on mount', async () => {
+      const { sdlc } = await seedTabs();
+      const dispatches: any[] = [];
+      answerStream(dispatches);
+
+      await db.settings.put({
+        key: stateKey,
+        value: makeState(sdlc.threadId, {
+          checkpoint: {
+            requestId: ORIGINAL_CHECKPOINT_ID,
+            step: 'SOLUTION',
+            status: 'running',
+            startedAt: TS,
+          },
+        }),
+      });
+      render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
+
+      await screen.findByRole('button', { name: 'Tiếp tục' });
+      expect(screen.getByText(/bị gián đoạn tại SOLUTION/i)).toBeInTheDocument();
+      await new Promise<void>((resolve) => setTimeout(resolve, 80));
+      expect(dispatches).toHaveLength(0);
+      expect((await stored())?.checkpoint?.status).toBe('interrupted');
     });
   });
 });
