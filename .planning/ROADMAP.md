@@ -240,7 +240,7 @@ Plans:
 
 **Gap-Closure Wave 5 / full-phase Wave 12** *(depends on 25.1-11, 25.1-13)*
 
-- [ ] 25.1-14-PLAN.md — Retry identity, restore missing-source surfacing, and durable-only analysis mode
+- [x] 25.1-14-PLAN.md — Retry identity, restore missing-source surfacing, and durable-only analysis mode
 
 **Gap-Closure Wave 6 / full-phase Wave 13** *(depends on 25.1-12, 25.1-13, 25.1-14)*
 

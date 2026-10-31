@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 ## Current Position
 
 Phase: 25.1 (sdlc-flow-hardening-multi-tab-ai-chat-isolation) — EXECUTING
-Plan: 13 of 15
+Plan: 14 of 15
 Status: Executing Phase 25.1
-Last activity: 2026-10-31 -- Completed plan 25.1-13
-Stopped at: 25.1-13 complete; next is 25.1-14 (retry identity, restore missing-source surfacing, durable-only analysis mode)
+Last activity: 2026-10-31 -- Completed plan 25.1-14
+Stopped at: 25.1-14 complete; next is 25.1-15 (actual-app acceptance depth: concurrency, retry, revision/cycles, restore, backup round-trip)
 
 Progress: [██████████] 100%
 
@@ -197,6 +197,7 @@ Progress: [██████████] 100%
 | 18 | 02 | 18m | 2 | 7 |
 | 25.1 | 11 | 3h 30m | 3 | 8 |
 | 25.1 | 13 | 40m | 3 | 6 |
+| 25.1 | 14 | 55m | 3 | 6 |
 
 *Updated after each plan completion*
 | Phase 16 P06 | 15min | 1 tasks | 2 files |
@@ -375,6 +376,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-31T09:10:00.000Z
+Last session: 2026-10-31T09:25:00.000Z
 Stopped at: Completed 25.1-13-PLAN.md; next 25.1-14-PLAN.md
 Resume file: .planning/phases/25.1-sdlc-flow-hardening-multi-tab-ai-chat-isolation/25.1-CONTEXT.md
