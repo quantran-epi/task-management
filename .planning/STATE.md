@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: milestone
 status: executing
-stopped_at: Completed 25.1-11-PLAN.md (real per-tab runtimes, per-tab send guard/stop, durable per-tab model, draft isolation); next 25.1-12
-last_updated: "2026-10-31T08:30:00.000Z"
-last_activity: 2026-10-31 -- Completed plan 25.1-11
+stopped_at: Completed 25.1-12-PLAN.md (SDLC checkpoint/resume, revision preview+commit, stale baseline, cycle open/close); next 25.1-13
+last_updated: "2026-10-31T09:15:00.000Z"
+last_activity: 2026-10-31 -- Completed plan 25.1-12
 progress:
   total_phases: 10
   completed_phases: 6
   total_plans: 84
-  completed_plans: 72
+  completed_plans: 73
   percent: 61
 ---
 
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 ## Current Position
 
 Phase: 25.1 (sdlc-flow-hardening-multi-tab-ai-chat-isolation) — EXECUTING
-Plan: 11 of 15
+Plan: 12 of 15
 Status: Executing Phase 25.1
-Last activity: 2026-10-31 -- Completed plan 25.1-11
-Stopped at: 25.1-11 complete; next is 25.1-12 (SDLC checkpoint/resume, revision preview+commit, cycle wiring)
+Last activity: 2026-10-31 -- Completed plan 25.1-12
+Stopped at: 25.1-12 complete; next is 25.1-13 (merged cited SDLC intake, picker semantics, editable tab titles)
 
 Progress: [██████████] 100%
 
@@ -187,7 +187,7 @@ Progress: [██████████] 100%
 
 **Velocity:**
 
-- Total plans completed: 78 (v1.2)
+- Total plans completed: 79 (v1.2)
 - Average duration: 11 min
 - Total execution time: 3.63 hours
 
@@ -244,6 +244,10 @@ Recent decisions logged in PROJECT.md:
 - [Phase 25.1 Plan 10]: AIChatDrawer error logging goes through `describeAiError`/`logAiChatError`, which whitelist only error name, short string code, and Zod issue paths (D-13); `[AI Harness]` prompt/tool-arg logs are DEV-only.
 - [Phase 25.1 Plan 10]: Closing the AI Chat drawer no longer aborts chat/SDLC turns (D-09); abort triggers are unmount, scope change, stop button, and tab close. Wizard `dispose()` on close stays and aborts only the stage controller.
 - [Phase 25.1 Plan 10]: The D-09 safety gate is a single structural predicate over brace-matched `useEffect` bodies; the old `[^}]*` regex survives only as a subject under test and is proven weaker by `OLD_D09_REGEX.test(fixture) === false`.
+- [Phase 25.1 Plan 12]: Every SDLC turn writes one `running` checkpoint before dispatch and releases it in exactly one `finally`, because a surviving checkpoint is restored as `interrupted` and blocks the tab until the user resumes.
+- [Phase 25.1 Plan 12]: The interrupted guard is bypassed only by the call argument `{ resumeFromCheckpoint: true }`, never by state, so stale send closures cannot block the resume dispatch.
+- [Phase 25.1 Plan 12]: The hub's own revision modal is used (`onRequest*Revision` stays unset); the drawer previews via `previewRevision` and commits via `commitRevision`, opening a new cycle only when the last one is completed.
+- [Phase 25.1 Plan 12]: `stripStaleArtifacts` is applied once at the `buildSdlcWrapperPrompt` artifacts argument so a stale artifact can never be a new step's baseline; CAB success closes the active cycle.
 
 - [Phase 19.2 Plan 07]: Dexie upgrades to SCHEMA_V11 adding knowledgeLinks table with unique compound linkKey (`${taskMateEntityType}:${taskMateEntityId}:${setId}:${urn || docId}`) preserving full data integrity from V10.
 - [Phase 19.2 Plan 07]: Deleting Task, Project, or Milestone cascades to purge all corresponding KnowledgeLinks atomically inside Dexie transactions.

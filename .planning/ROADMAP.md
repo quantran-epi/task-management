@@ -232,7 +232,7 @@ Plans:
 
 **Gap-Closure Wave 3 / full-phase Wave 10** *(depends on 25.1-11)*
 
-- [ ] 25.1-12-PLAN.md — SDLC checkpoint/resume, revision preview+commit, and cycle open/close wiring
+- [x] 25.1-12-PLAN.md — SDLC checkpoint/resume, revision preview+commit, and cycle open/close wiring
 
 **Gap-Closure Wave 4 / full-phase Wave 11** *(depends on 25.1-12)*
 
