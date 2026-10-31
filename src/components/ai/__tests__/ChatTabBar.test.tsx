@@ -215,8 +215,7 @@ describe('ChatTabBar', () => {
     expect(handleSelect).toHaveBeenCalledWith('chat-2');
   });
 
-  it('hỗ trợ Delete và Backspace để đóng tab chat thường, không đóng tab SDLC', () => {
-    const handleClose = vi.fn();
+  it('hỗ trợ Delete và Backspace để đóng tab chat thường, không đóng tab SDLC', () => {    const handleClose = vi.fn();
     render(
       <ChatTabBar
         tabs={dummyTabs}
@@ -239,5 +238,77 @@ describe('ChatTabBar', () => {
     // Tab chat thường: Backspace gọi onCloseTab
     fireEvent.keyDown(tabs[2]!, { key: 'Backspace' });
     expect(handleClose).toHaveBeenCalledWith('chat-2');
+  });
+
+  describe('inline rename (D-03/SC-1)', () => {
+    const renderBar = (onRenameTab = vi.fn()) => {
+      render(
+        <ChatTabBar
+          tabs={dummyTabs}
+          activeTabId="chat-1"
+          onSelectTab={vi.fn()}
+          onAddTab={vi.fn()}
+          onCloseTab={vi.fn()}
+          onRenameTab={onRenameTab}
+        />
+      );
+      return onRenameTab;
+    };
+
+    it('mở editor khi nhấn F2 và lưu bằng Enter', () => {
+      const onRenameTab = renderBar();
+      const tabs = screen.getAllByRole('tab');
+
+      fireEvent.keyDown(tabs[1]!, { key: 'F2' });
+      const input = screen.getByLabelText('Đổi tên tab');
+      expect(input).toHaveValue('💬 Tra cứu Oracle');
+
+      fireEvent.change(input, { target: { value: 'Tên mới' } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+
+      expect(onRenameTab).toHaveBeenCalledWith('chat-1', 'Tên mới');
+      expect(screen.queryByLabelText('Đổi tên tab')).not.toBeInTheDocument();
+    });
+
+    it('mở editor bằng double-click và hủy bằng Escape', () => {
+      const onRenameTab = renderBar();
+      fireEvent.doubleClick(screen.getByText('💬 Tra cứu Oracle'));
+
+      const input = screen.getByLabelText('Đổi tên tab');
+      fireEvent.change(input, { target: { value: 'Không lưu' } });
+      fireEvent.keyDown(input, { key: 'Escape' });
+
+      expect(onRenameTab).not.toHaveBeenCalled();
+      expect(screen.queryByLabelText('Đổi tên tab')).not.toBeInTheDocument();
+    });
+
+    it('không cho đổi tên tab SDLC', () => {
+      const onRenameTab = renderBar();
+      const tabs = screen.getAllByRole('tab');
+
+      fireEvent.keyDown(tabs[0]!, { key: 'F2' });
+      expect(screen.queryByLabelText('Đổi tên tab')).not.toBeInTheDocument();
+
+      fireEvent.doubleClick(screen.getByText('⚙️ SDLC: CR-001'));
+      expect(screen.queryByLabelText('Đổi tên tab')).not.toBeInTheDocument();
+      expect(onRenameTab).not.toHaveBeenCalled();
+    });
+
+    it('không gọi onRenameTab khi tiêu đề rỗng hoặc không đổi', () => {
+      const onRenameTab = renderBar();
+      const tabs = screen.getAllByRole('tab');
+
+      fireEvent.keyDown(tabs[1]!, { key: 'F2' });
+      fireEvent.change(screen.getByLabelText('Đổi tên tab'), { target: { value: '   ' } });
+      fireEvent.keyDown(screen.getByLabelText('Đổi tên tab'), { key: 'Enter' });
+      expect(onRenameTab).not.toHaveBeenCalled();
+
+      fireEvent.keyDown(tabs[1]!, { key: 'F2' });
+      fireEvent.change(screen.getByLabelText('Đổi tên tab'), {
+        target: { value: '💬 Tra cứu Oracle' },
+      });
+      fireEvent.keyDown(screen.getByLabelText('Đổi tên tab'), { key: 'Enter' });
+      expect(onRenameTab).not.toHaveBeenCalled();
+    });
   });
 });

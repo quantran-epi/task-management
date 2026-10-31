@@ -1,6 +1,6 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { CloseOutlined, ExperimentFilled, MessageOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
-import { Badge, Tooltip, theme } from 'antd';
+import { Badge, Input, Tooltip, theme } from 'antd';
 import type { TabRuntimeStatus } from './runtime/tabTypes';
 
 export type ChatTabType = 'sdlc' | 'chat';
@@ -19,6 +19,7 @@ export interface ChatTabBarProps {
   onSelectTab: (tabId: string) => void;
   onAddTab: () => void;
   onCloseTab: (tabId: string) => void;
+  onRenameTab?: (tabId: string, title: string) => void;
   sdlcStatus?: 'wait' | 'process' | 'stale' | 'finish';
   tabStatuses?: Record<string, TabRuntimeStatus>;
   tabAnalysisModes?: Record<string, boolean>;
@@ -38,12 +39,39 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
   onSelectTab,
   onAddTab,
   onCloseTab,
+  onRenameTab,
   sdlcStatus = 'wait',
   tabStatuses,
   tabAnalysisModes,
 }) => {
   const { token } = theme.useToken();
   const tabElementsRef = useRef<(HTMLDivElement | null)[]>([]);
+  const [editingTabId, setEditingTabId] = useState<string | null>(null);
+  const [editingValue, setEditingValue] = useState('');
+  // Escape unmounts the input, which also fires blur; the flag stops blur from committing.
+  const cancelRef = useRef(false);
+
+  const startEditing = (tab: ChatTabItem) => {
+    cancelRef.current = false;
+    setEditingTabId(tab.id);
+    setEditingValue(tab.title);
+  };
+
+  const cancelEditing = () => {
+    cancelRef.current = true;
+    setEditingTabId(null);
+    setEditingValue('');
+  };
+
+  const commitEditing = (tab: ChatTabItem) => {
+    if (cancelRef.current) return;
+    cancelRef.current = true;
+    const next = editingValue.trim();
+    setEditingTabId(null);
+    setEditingValue('');
+    if (!next || next === tab.title) return;
+    onRenameTab?.(tab.id, next);
+  };
 
   return (
     <div
@@ -82,7 +110,13 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
         const ariaLabel = statusText ? `${tab.title} — ${statusText}` : tab.title;
 
         const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-          if (e.key === 'ArrowRight') {
+          if (editingTabId === tab.id) return;
+          if (e.key === 'F2') {
+            if (!isSdlc && onRenameTab) {
+              e.preventDefault();
+              startEditing(tab);
+            }
+          } else if (e.key === 'ArrowRight') {
             e.preventDefault();
             const nextIndex = (index + 1) % tabs.length;
             tabElementsRef.current[nextIndex]?.focus();
@@ -147,6 +181,9 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
             aria-label={ariaLabel}
             tabIndex={isActive ? 0 : -1}
             onClick={() => onSelectTab(tab.id)}
+            onDoubleClick={() => {
+              if (!isSdlc && onRenameTab) startEditing(tab);
+            }}
             onKeyDown={handleKeyDown}
             style={{
               height: 32,
@@ -177,17 +214,39 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
           >
             {renderStatusIndicator()}
 
-            <span
-              style={{
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                flex: 1,
-              }}
-              title={tab.title}
-            >
-              {tab.title}
-            </span>
+            {editingTabId === tab.id ? (
+              <Input
+                size="small"
+                autoFocus
+                aria-label="Đổi tên tab"
+                value={editingValue}
+                onClick={(e) => e.stopPropagation()}
+                onDoubleClick={(e) => e.stopPropagation()}
+                onChange={(e) => setEditingValue(e.target.value)}
+                onPressEnter={() => commitEditing(tab)}
+                onBlur={() => commitEditing(tab)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    cancelEditing();
+                  }
+                }}
+                style={{ flex: 1, minWidth: 70, height: 22, fontSize: 12 }}
+              />
+            ) : (
+              <span
+                style={{
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  flex: 1,
+                }}
+                title={tab.title}
+              >
+                {tab.title}
+              </span>
+            )}
 
             {/* Visually hidden status text for assistive technology */}
             {statusText && (

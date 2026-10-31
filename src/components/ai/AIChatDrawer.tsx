@@ -633,8 +633,18 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     [db, scopeKey]
   );
 
-  const handleAddTab = useCallback(async () => {
-    try {
+  const handleRenameTab = useCallback(
+    async (tabId: string, title: string) => {
+      try {
+        await updateChatTab(tabId, { title }, db);
+      } catch {
+        message.error('Không thể đổi tên tab');
+      }
+    },
+    [db]
+  );
+
+  const handleAddTab = useCallback(async () => {    try {
       const ordinaryCount = durableTabs.filter((t) => t.type === 'chat').length;
       const title = `💬 Cuộc trò chuyện #${ordinaryCount + 1}`;
       const newTab = await createChatTab(
@@ -2861,6 +2871,7 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
           onSelectTab={handleSelectTab}
           onAddTab={handleAddTab}
           onCloseTab={handleCloseTab}
+          onRenameTab={handleRenameTab}
           tabAnalysisModes={tabAnalysisModes}
           tabStatuses={tabStatuses}
           sdlcStatus={
