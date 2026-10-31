@@ -245,3 +245,21 @@ Plans:
 **Gap-Closure Wave 6 / full-phase Wave 13** *(depends on 25.1-12, 25.1-13, 25.1-14)*
 
 - [ ] 25.1-15-PLAN.md — Actual-app acceptance depth: concurrency, retry, revision/cycles, restore, backup round-trip
+
+### Phase 25.1.1: Unify SDLC workflow: move change-pack, PL03B/PL07 generation, CAB, and DOCX export into the hub and retire the wizard entry points (INSERTED)
+
+**Goal:** Make the SDLC Hub the single executable path from INTAKE to CAB. Steps 4–6 must run from the hub itself — change-pack upload/validate/reconcile, PL03B/PL07 generation, CAB generation, and bank-template `.docx` export — with one metadata source, no parallel wizard state machine, and no toolbar detour.
+**Requirements**: WIZ-UI-01, WIZ-INTERACTIVE-01, WIZ-DOCX-01, WIZ-FLOW-01, WIZ-LOOP-01, WIZ-PACK-01 (re-homed), D-16, D-17
+**Depends on:** Phase 25.1
+**Success Criteria** (what must be TRUE):
+
+  1. `commitChangePackAndDrift`, `commitTechDoc`, and `commitCab` each have a production caller in the hub path, so the SDLC artifact chain reaches `pl03b`, `pl07`, and `cab` without the wizard coordinator.
+  2. Hub step 4 renders a change-pack dropzone in its own step panel; step 5 exposes a "generate PL03B & PL07" action; step 6 exposes CAB generation. No step instructs the user to use a separate toolbar.
+  3. Every generated document (PL02, PL03B, PL07, CAB) can be exported as a bank-template `.docx` from the hub, and each export is persisted as a Project-linked Note.
+  4. `WizardSkillBar`, `WizardMetadataModal`, and the drawer-global wizard session state are removed from production render; hub `StepInputDocsModal` metadata is the only metadata input for the flow.
+  5. The existing SDLC guarantees still hold after the move: per-tab runtime isolation, checkpoint/resume, revision preview with stale propagation, immutable cycles, missing-source recovery, and the 320px accessible timeline.
+  6. Focused suites for the hub, coordinator, change-pack, DOCX builders, and the Playwright SDLC acceptance spec pass with no skipped Phase 25.1.1 tests.
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 25.1.1 to break down)
