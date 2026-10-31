@@ -276,7 +276,7 @@ Plans: 11 plans in 11 sequential waves (every plan edits `AIChatDrawer.tsx` or i
 
 **Wave 4** *(depends on 25.1.1-03)*
 
-- [ ] 25.1.1-04-PLAN.md — Hub step 4: change-pack validate/confirm/drift wired to `commitChangePackAndDrift`
+- [x] 25.1.1-04-PLAN.md — Hub step 4: change-pack validate/confirm/drift wired to `commitChangePackAndDrift`
 
 **Wave 5** *(depends on 25.1.1-04)*
 
