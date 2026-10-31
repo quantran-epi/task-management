@@ -3,6 +3,7 @@ import { Alert, Button, Tag, theme } from 'antd';
 import { CheckCircleOutlined, ClockCircleOutlined, ReloadOutlined, SyncOutlined } from '@ant-design/icons';
 import type { SdlcArtifactRef } from '../../../services/wizard/workflowSchemas';
 import type { ChangePackManifest, ChangePackValidationCode } from '../../../services/wizard/changePack';
+import type { HubExportKind } from '../../../services/wizard/hubExport';
 import type { ReconciliationResult } from '../../../services/wizard/reconciliation';
 import { ChangePackConfirmStrip, ERROR_COPY } from './ChangePackConfirmStrip';
 import { ChangePackDropzone } from './ChangePackDropzone';
@@ -55,10 +56,13 @@ const PanelBlock: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{children}</div>
 );
 
+/** One shared signature for every step panel's export slot (UI-SPEC "DOCX Export Contract"). */
+export type RenderExportRow = (kind: HubExportKind) => React.ReactNode;
+
 export interface StepIntakePanelProps {
   pl01?: SdlcArtifactRef | undefined;
   pl02?: SdlcArtifactRef | undefined;
-  renderExportRow?: ((kind: 'PL02') => React.ReactNode) | undefined;
+  renderExportRow?: RenderExportRow | undefined;
   onEditIntake?: (() => void) | undefined;
 }
 
@@ -269,7 +273,7 @@ export interface StepTechDocsPanelProps {
   errorMessage?: string | undefined;
   onGenerate?: (() => void) | undefined;
   onRetry?: (() => void) | undefined;
-  renderExportRow?: ((kind: 'PL03B' | 'PL07') => React.ReactNode) | undefined;
+  renderExportRow?: RenderExportRow | undefined;
 }
 
 export const StepTechDocsPanel: React.FC<StepTechDocsPanelProps> = ({
@@ -358,19 +362,45 @@ export const StepTechDocsPanel: React.FC<StepTechDocsPanelProps> = ({
   );
 };
 
+export type StepCabState = 'blocked' | 'ready' | 'generating' | 'error';
+
 export interface StepCabPanelProps {
   cab?: SdlcArtifactRef | undefined;
   prerequisites: { pl02: boolean; pl03b: boolean; pl07: boolean };
-  renderExportRow?: ((kind: 'CAB') => React.ReactNode) | undefined;
+  state?: StepCabState | undefined;
+  onGenerate?: (() => void) | undefined;
+  onRetry?: (() => void) | undefined;
+  renderExportRow?: RenderExportRow | undefined;
 }
 
-export const StepCabPanel: React.FC<StepCabPanelProps> = ({ cab, prerequisites, renderExportRow }) => {
+export const StepCabPanel: React.FC<StepCabPanelProps> = ({
+  cab,
+  prerequisites,
+  state = 'blocked',
+  onGenerate,
+  onRetry,
+  renderExportRow,
+}) => {
   const { token } = theme.useToken();
+  const cabRowRef = useRef<HTMLDivElement>(null);
+  const previousState = useRef<StepCabState>(state);
+
+  // The status line replaces the button's label, so focus is re-homed onto the CAB export.
+  useEffect(() => {
+    const from = previousState.current;
+    previousState.current = state;
+    if (from !== 'generating' || state !== 'ready') return;
+    const row = cabRowRef.current;
+    (row?.querySelector('button') ?? row)?.focus();
+  }, [state]);
+
   const rows: Array<{ label: string; present: boolean }> = [
     { label: 'PL02', present: prerequisites.pl02 },
     { label: 'PL03B', present: prerequisites.pl03b },
     { label: 'PL07', present: prerequisites.pl07 },
   ];
+  const generateLabel = cab ? 'Tạo lại tờ trình CAB' : 'Tạo tờ trình CAB';
+
   return (
     <PanelBlock>
       <span style={labelStyle(token.colorText)}>Điều kiện tạo CAB</span>
@@ -385,12 +415,52 @@ export const StepCabPanel: React.FC<StepCabPanelProps> = ({ cab, prerequisites, 
           <span style={bodyStyle(token.colorTextSecondary)}>{row.present ? 'Đã có' : 'Chưa có'}</span>
         </div>
       ))}
-      {cab ? (
-        <ArtifactRow label="Tờ trình CAB" artifact={cab} missingCopy="Chưa có — bấm Tạo tờ trình CAB." />
-      ) : (
-        <span style={bodyStyle(token.colorTextSecondary)}>Chưa có — bấm Tạo tờ trình CAB.</span>
+
+      {state === 'blocked' && (
+        <span style={bodyStyle(token.colorTextSecondary)}>
+          Cần PL02, PL03B và PL07 cùng dự án trước khi tạo tờ trình CAB.
+        </span>
       )}
-      <div data-testid="export-slot-CAB">{renderExportRow?.('CAB')}</div>
+      {state === 'generating' && (
+        <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 4, ...bodyStyle(token.colorTextSecondary) }}>
+          <SyncOutlined spin aria-hidden style={{ color: token.colorPrimary }} />
+          <span>Đang tổng kết hồ sơ CAB…</span>
+        </div>
+      )}
+      {state === 'error' && (
+        <Alert
+          type="error"
+          showIcon
+          message="Thiếu chuỗi PL02/PL03B/PL07 cùng dự án và thread; chưa thể tạo CAB."
+        />
+      )}
+
+      {state === 'error' ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'stretch' }}>
+          <Button onClick={onRetry}>Thử lại</Button>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'stretch' }}>
+          <Button
+            type="primary"
+            disabled={state === 'blocked' || state === 'generating'}
+            loading={state === 'generating'}
+            onClick={onGenerate}
+          >
+            {generateLabel}
+          </Button>
+        </div>
+      )}
+
+      <div
+        ref={cabRowRef}
+        tabIndex={-1}
+        style={{ display: 'flex', flexDirection: 'column', gap: 4 }}
+        data-testid="export-slot-CAB"
+      >
+        <ArtifactRow label="Tờ trình CAB" artifact={cab} missingCopy="Chưa có — bấm Tạo tờ trình CAB." />
+        {cab ? renderExportRow?.('CAB') : null}
+      </div>
     </PanelBlock>
   );
 };

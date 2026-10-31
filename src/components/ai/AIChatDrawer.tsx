@@ -107,11 +107,14 @@ import { ChangePackDropzone } from './wizard/ChangePackDropzone';
 import { ChangePackConfirmStrip, type ChangePackUiResult } from './wizard/ChangePackConfirmStrip';
 import { DriftMatrixView } from './wizard/DriftMatrixView';
 import { SdlcWorkflowHub } from './wizard/SdlcWorkflowHub';
-import { StepSolutionPanel, StepChangePackPanel, StepTechDocsPanel, type HubChangePackDraft, type StepTechDocsState } from './wizard/HubStepPanels';
+import { StepSolutionPanel, StepChangePackPanel, StepTechDocsPanel, StepCabPanel, StepIntakePanel, type HubChangePackDraft, type StepTechDocsState, type StepCabState, type RenderExportRow } from './wizard/HubStepPanels';
+import { HubExportRow } from './wizard/HubExportRow';
 import { StepInputDocsModal } from './wizard/StepInputDocsModal';
 import { saveHubSolution } from '../../services/wizard/hubSolution';
 import { confirmHubChangePack, validateHubChangePack } from '../../services/wizard/hubChangePack';
 import { generateHubTechDocs } from '../../services/wizard/hubTechDocs';
+import { exportHubArtifact, type HubExportKind, type HubExportResult } from '../../services/wizard/hubExport';
+import { generateHubCab } from '../../services/wizard/hubCab';
 import { ChangePackValidationError } from '../../services/wizard/changePack';
 import { createSdlcWorkflowCoordinator, defaultSha256 } from '../../services/wizard/workflowCoordinator';
 import { previousArtifactContent, stripStaleArtifacts, toRevisionModalPreview } from './wizard/revisionView';
@@ -151,6 +154,31 @@ type SdlcPromptArtifact = {
   sourceReferences?: string[] | undefined;
   version?: number | undefined;
 };
+
+/** Hub DOCX export row state. Exported so it survives the wizard removal (plan 08). */
+export type HubExportState = {
+  phase: 'idle' | 'building' | 'saved' | 'saved_download_failed' | 'failed';
+  filename?: string;
+  sizeBytes?: number;
+  noteId?: string;
+};
+
+const EMPTY_EXPORT_STATES: Record<HubExportKind, HubExportState> = {
+  PL02: { phase: 'idle' },
+  PL03B: { phase: 'idle' },
+  PL07: { phase: 'idle' },
+  CAB: { phase: 'idle' },
+};
+
+function toExportState(result: HubExportResult): HubExportState {
+  if (result.status === 'failed') return { phase: 'failed' };
+  return {
+    phase: result.status,
+    ...(result.filename !== undefined ? { filename: result.filename } : {}),
+    ...(result.sizeBytes !== undefined ? { sizeBytes: result.sizeBytes } : {}),
+    ...(result.noteId !== undefined ? { noteId: result.noteId } : {}),
+  };
+}
 
 export interface SdlcWrapperPromptInput {
   userQuery: string;
@@ -442,6 +470,10 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   // Hub step-5 generation state; derived from the workflow artifacts, never persisted.
   const [techDocsState, setTechDocsState] = useState<StepTechDocsState>('blocked');
   const techDocsBusyRef = useRef(false);
+  // Hub DOCX export state, keyed by `SdlcArtifactKind` — never by chat message id.
+  const [exportStates, setExportStates] = useState<Record<HubExportKind, HubExportState>>(EMPTY_EXPORT_STATES);
+  const exportBusyRef = useRef<Set<HubExportKind>>(new Set());
+  const [cabState, setCabState] = useState<StepCabState>('blocked');
   const [revisionDraft, setRevisionDraft] = useState('');
   const [revisionPreview, setRevisionPreview] = useState<RevisionPreview | null>(null);
   const [revisionLoading, setRevisionLoading] = useState(false);
@@ -985,27 +1017,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     }
   }, [activeTabId, getWizardCoordinator]);
 
-  const handleCabGenerate = useCallback(async () => {
-    if (cabActionRef.current) return;
-    const coordinator = getWizardCoordinator();
-    if (!coordinator) return;
-    cabActionRef.current = true;
-    try {
-      await coordinator.generateCab();
-      // ponytail: the wizard coordinator's CAB path does not populate the SDLC artifact chain
-      // (pl03b/pl07), so commitCab is unreachable here. Upgrade to commitCab once runCabStage
-      // returns CAB markdown and the SDLC chain is populated.
-      await getSdlcCoordinator()?.closeCycle().catch(() => undefined);
-    } catch {
-      patchTurnError(
-        'request_failed',
-        'Thiếu chuỗi PL02/PL03B/PL07 cùng dự án và thread; chưa thể tạo CAB.',
-        activeTabId
-      );
-    } finally {
-      cabActionRef.current = false;
-    }
-  }, [activeTabId, getWizardCoordinator]);
 
   const handleWizardApproveExport = useCallback(async (messageId: string, draftRevision: number) => {
     if (exportPending.has(messageId)) return;
@@ -1458,6 +1469,128 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     sdlcWorkflowState,
   ]);
 
+  const handleCabGenerate = useCallback(async () => {
+    if (cabActionRef.current) return;
+    cabActionRef.current = true;
+    const sdlcThreadId = durableTabs.find((tab) => tab.type === 'sdlc')?.threadId;
+    if (!sdlcWorkflowState || !currentScope.id || !sdlcThreadId) {
+      setCabState('blocked');
+      return;
+    }
+
+    const [config, apiKey] = await Promise.all([getNineRouterConfig(db), getNineRouterApiKey(db)]);
+    const model = resolveActiveModel();
+    if (!config.endpoint || !apiKey || !model) {
+      message.error('Chưa cấu hình mô hình AI. Mở Cài đặt để cấu hình endpoint và API key.');
+      return;
+    }
+
+    const tabAtStart = activeTabId;
+    // Kept for plan 08's cleanup: the in-flight guard the old wizard CAB body used.
+    setCabState('generating');
+    try {
+      const result = await generateHubCab({
+        db,
+        projectId: currentScope.id,
+        threadId: sdlcThreadId,
+        sessionId: sdlcWorkflowState.sessionId,
+        draftRevision: (sdlcWorkflowState.artifacts.cab?.version ?? 0) + 1,
+        metadata: sdlcWorkflowState.metadata,
+        state: sdlcWorkflowState,
+        model: { endpoint: config.endpoint, apiKey, model },
+        collectEvidence: collectSdlcEvidence,
+        resolveSetIds: resolveSdlcSetIds,
+      });
+      if (activeTabIdRef.current !== tabAtStart) return;
+
+      // `commitCab(markdown, noteId?)` reads the PL02/PL03B/PL07 hashes from the coordinator's own
+      // artifacts; the PL02 ref `generateHubCab` resolved stays internal to its stage pins.
+      const coordinator = getSdlcCoordinator();
+      const committed = await coordinator?.commitCab(result.markdown, result.noteId);
+      await coordinator?.closeCycle();
+      setSdlcWorkflowState((await coordinator?.getState()) ?? committed);
+      setCabState('ready');
+      message.success('Đã lưu tờ trình CAB vào tài liệu dự án.');
+    } catch {
+      if (activeTabIdRef.current !== tabAtStart) return;
+      setCabState('error');
+      message.error('Thiếu chuỗi PL02/PL03B/PL07 cùng dự án và thread; chưa thể tạo CAB.');
+    } finally {
+      cabActionRef.current = false;
+    }
+  }, [
+    activeTabId,
+    collectSdlcEvidence,
+    currentScope.id,
+    db,
+    durableTabs,
+    getSdlcCoordinator,
+    resolveActiveModel,
+    resolveSdlcSetIds,
+    sdlcWorkflowState,
+  ]);
+
+  /**
+   * Hub export: one artifact at a time. `exportHubArtifact` derives every revision from
+   * `state.artifacts`, so no revision argument is passed and nothing is persisted back into the
+   * workflow — a PL02 pin is re-derived on demand by `ensurePl02ArtifactNote`.
+   */
+  const handleHubExport = useCallback(async (kind: HubExportKind) => {
+    if (!sdlcWorkflowState || !currentScope.id) return;
+    const sdlcThreadId = durableTabs.find((tab) => tab.type === 'sdlc')?.threadId;
+    if (!sdlcThreadId) return;
+    if (exportBusyRef.current.has(kind)) return;
+    exportBusyRef.current.add(kind);
+    setExportStates((previous) => ({ ...previous, [kind]: { phase: 'building' } }));
+
+    const tabAtStart = activeTabId;
+    try {
+      const result = await exportHubArtifact({
+        db,
+        kind,
+        projectId: currentScope.id,
+        threadId: sdlcThreadId,
+        sessionId: sdlcWorkflowState.sessionId,
+        metadata: sdlcWorkflowState.metadata,
+        state: sdlcWorkflowState,
+      });
+      if (activeTabIdRef.current !== tabAtStart) return;
+      setExportStates((previous) => ({ ...previous, [kind]: toExportState(result) }));
+    } catch {
+      if (activeTabIdRef.current !== tabAtStart) return;
+      setExportStates((previous) => ({ ...previous, [kind]: { phase: 'failed' } }));
+    } finally {
+      exportBusyRef.current.delete(kind);
+    }
+  }, [activeTabId, currentScope.id, db, durableTabs, sdlcWorkflowState]);
+
+  // Re-resolves the same stored Note; never saves a duplicate.
+  const handleHubExportRetry = useCallback((kind: HubExportKind) => {
+    void handleHubExport(kind);
+  }, [handleHubExport]);
+
+  const renderExportRow: RenderExportRow = useCallback((kind) => {
+    const labels: Record<HubExportKind, string> = {
+      PL02: 'PL02 — Đặc tả chức năng',
+      PL03B: 'PL03B — Tài liệu triển khai',
+      PL07: 'PL07 — Checklist review',
+      CAB: 'Tờ trình CAB',
+    };
+    const state = exportStates[kind];
+    return (
+      <HubExportRow
+        kind={kind}
+        label={labels[kind]}
+        phase={state.phase}
+        filename={state.filename}
+        sizeBytes={state.sizeBytes}
+        noteId={state.noteId}
+        onExport={() => void handleHubExport(kind)}
+        onRetry={() => handleHubExportRetry(kind)}
+      />
+    );
+  }, [exportStates, handleHubExport, handleHubExportRetry]);
+
   const exportedFiles = new Map(Array.from(exportResults.entries()).map(([id, result]) => [id, result.noteSaved ? {
     filename: result.filename ?? 'wizard.docx', sizeBytes: result.sizeBytes ?? 0, noteId: result.noteId,
     noteSaved: result.noteSaved, downloadInitiated: result.downloadInitiated, savePickerSaved: result.savePickerSaved,
@@ -1515,6 +1648,14 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const wizardProject = currentScope.id ? { id: currentScope.id, name: currentScope.title || currentScope.id } : undefined;
   // Hub panel slots; later steps merge their keys into this object rather than replacing it.
   const stepPanels = sdlcWorkflowState ? {
+    intake: (
+      <StepIntakePanel
+        pl01={sdlcWorkflowState.artifacts.pl01}
+        pl02={sdlcWorkflowState.artifacts.pl02}
+        onEditIntake={() => setSdlcInputModalOpen(true)}
+        renderExportRow={sdlcWorkflowState.artifacts.pl02 ? renderExportRow : undefined}
+      />
+    ),
     solution: (
       <StepSolutionPanel
         artifact={sdlcWorkflowState.artifacts.solution}
@@ -1546,6 +1687,21 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         state={techDocsState}
         onGenerate={() => void handleHubGenerateTechDocs()}
         onRetry={() => void handleHubGenerateTechDocs()}
+        renderExportRow={renderExportRow}
+      />
+    ),
+    cab: (
+      <StepCabPanel
+        cab={sdlcWorkflowState.artifacts.cab}
+        prerequisites={{
+          pl02: Boolean(sdlcWorkflowState.artifacts.pl02),
+          pl03b: Boolean(sdlcWorkflowState.artifacts.pl03b),
+          pl07: Boolean(sdlcWorkflowState.artifacts.pl07),
+        }}
+        state={cabState}
+        onGenerate={() => void handleCabGenerate()}
+        onRetry={() => void handleCabGenerate()}
+        renderExportRow={renderExportRow}
       />
     ),
   } : undefined;
@@ -1710,6 +1866,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     hubPackBusyRef.current = false;
     setTechDocsState('blocked');
     techDocsBusyRef.current = false;
+    setExportStates(EMPTY_EXPORT_STATES);
+    exportBusyRef.current.clear();
+    setCabState('blocked');
   }, [activeTabId]);
 
   // Step 5 prerequisites come from the workflow artifacts; never overwrite an in-flight generation.
@@ -1717,6 +1876,20 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     setTechDocsState((current) => {
       if (current === 'generating') return current;
       const ready = Boolean(sdlcWorkflowState?.artifacts.solution?.noteId && sdlcWorkflowState?.artifacts.changePack);
+      if (!ready) return 'blocked';
+      return current === 'error' ? current : 'ready';
+    });
+  }, [sdlcWorkflowState]);
+
+  // Step 6 prerequisites come from the workflow artifacts; never overwrite an in-flight generation.
+  useEffect(() => {
+    setCabState((current) => {
+      if (current === 'generating') return current;
+      const ready = Boolean(
+        sdlcWorkflowState?.artifacts.pl02 &&
+        sdlcWorkflowState?.artifacts.pl03b &&
+        sdlcWorkflowState?.artifacts.pl07
+      );
       if (!ready) return 'blocked';
       return current === 'error' ? current : 'ready';
     });
