@@ -145,6 +145,18 @@ describe('ChangePackDropzone', () => {
     fireEvent.dragLeave(dropzone);
     expect(dropzone).toHaveTextContent('Kéo thả change-pack.zip vào đây hoặc bấm để chọn tệp.');
   });
+
+  it('shows a 2px focus ring on keyboard focus', () => {
+    render(<ChangePackDropzone onSelect={vi.fn()} />);
+    const dropzone = screen.getByRole('button', { name: 'Khu vực nạp change-pack' });
+
+    expect(dropzone.style.outline).toBe('none');
+    fireEvent.focus(dropzone);
+    expect(dropzone.style.outline).toContain('2px');
+    expect(dropzone.style.outlineOffset).toBe('2px');
+    fireEvent.blur(dropzone);
+    expect(dropzone.style.outline).toBe('none');
+  });
 });
 
 describe('ChangePackConfirmStrip', () => {
@@ -171,6 +183,38 @@ describe('ChangePackConfirmStrip', () => {
     expect(screen.queryByRole('button', { name: 'Xác nhận pack' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Chọn pack khác' })).toBeInTheDocument();
   });
+
+  it('disables both actions and shows loading on the primary while confirming', () => {
+    const { container } = render(
+      <ChangePackConfirmStrip
+        result={{ status: 'valid', manifest: manifest() }}
+        onConfirm={vi.fn()}
+        onReplace={vi.fn()}
+        confirming
+      />,
+    );
+
+    const confirmButton = screen.getByRole('button', { name: /Xác nhận pack/ });
+    const replaceButton = screen.getByRole('button', { name: 'Chọn pack khác' });
+    expect(confirmButton).toBeDisabled();
+    expect(replaceButton).toBeDisabled();
+    expect(confirmButton.className).toContain('ant-btn-loading');
+    expect(container.querySelector('.anticon-loading')).not.toBeNull();
+  });
+
+  it('honours the disabled prop without the confirming loading state', () => {
+    render(
+      <ChangePackConfirmStrip
+        result={{ status: 'valid', manifest: manifest() }}
+        onConfirm={vi.fn()}
+        onReplace={vi.fn()}
+        disabled
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Xác nhận pack' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Chọn pack khác' })).toBeDisabled();
+  });
 });
 
 describe('DriftMatrixView', () => {
@@ -195,5 +239,54 @@ describe('DriftMatrixView', () => {
   it('shows clean state only for complete coverage with all groups empty', () => {
     render(<DriftMatrixView result={{ ...reconciliation('NO_DRIFT_COMPLETE'), drift: [] }} />);
     expect(screen.getAllByText('Không phát hiện drift: triển khai khớp với solution đã duyệt.')).toHaveLength(3);
+  });
+
+  it('renders the stacked layout with no table and three label/value rows per tuple', () => {
+    const { container } = render(<DriftMatrixView result={reconciliation('DRIFT_DETECTED')} layout="stacked" />);
+
+    expect(container.querySelector('table')).toBeNull();
+    expect(screen.queryByRole('columnheader')).not.toBeInTheDocument();
+
+    for (const label of ['Mục', 'SOLUTION.md', 'Thực tế']) {
+      expect(screen.getAllByText(label)).toHaveLength(3);
+    }
+    // Group tags repeat once per tuple in stacked mode.
+    expect(screen.getAllByText('Ngoài solution', { selector: '.ant-tag' })).toHaveLength(1);
+    expect(screen.getByText('REQ-MISS')).toBeInTheDocument();
+    expect(screen.getByText('Must validate limit')).toBeInTheDocument();
+    expect(screen.getByText('src/diff.ts:3-4')).toBeInTheDocument();
+  });
+
+  it('keeps stacked empty-group copy readable for a clean complete-coverage result', () => {
+    const { container } = render(
+      <DriftMatrixView result={{ ...reconciliation('NO_DRIFT_COMPLETE'), drift: [] }} layout="stacked" />,
+    );
+    expect(container.querySelector('table')).toBeNull();
+    expect(screen.getAllByText('Không phát hiện drift: triển khai khớp với solution đã duyệt.')).toHaveLength(3);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('assigns instance-unique heading ids across two mounts', () => {
+    render(
+      <div>
+        <DriftMatrixView result={reconciliation('DRIFT_DETECTED')} />
+        <DriftMatrixView result={reconciliation('DRIFT_DETECTED')} />
+      </div>,
+    );
+
+    const headings = screen.getAllByRole('heading', { name: 'Bảng drift so với SOLUTION.md' });
+    expect(headings).toHaveLength(2);
+    const ids = headings.map((heading) => heading.id);
+    expect(ids[0]).toBeTruthy();
+    expect(ids[0]).not.toBe(ids[1]);
+    expect(document.querySelectorAll('#drift-matrix-heading')).toHaveLength(0);
+    expect(document.querySelectorAll('#drift-missing')).toHaveLength(0);
+  });
+
+  it('drops group headings to 14px while the matrix heading stays 16px', () => {
+    render(<DriftMatrixView result={reconciliation('DRIFT_DETECTED')} />);
+
+    expect(screen.getByRole('heading', { name: 'Bảng drift so với SOLUTION.md' })).toHaveStyle({ fontSize: '16px' });
+    expect(screen.getByRole('heading', { name: 'Chưa làm' })).toHaveStyle({ fontSize: '14px', fontWeight: '600' });
   });
 });

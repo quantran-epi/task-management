@@ -157,6 +157,98 @@ describe('SdlcWorkflowHub', () => {
     expect(screen.getByText(/Chu kỳ 1 — Hoàn tất/i)).toBeInTheDocument();
     expect(screen.getByText('Chỉ đọc')).toBeInTheDocument();
   });
+
+  it('collapses and expands the six-row timeline while keeping the detail panel visible', () => {
+    render(<SdlcWorkflowHub projectScoped={true} state={dummyState} onStartWorkflow={vi.fn()} />);
+
+    const list = document.getElementById('sdlc-step-list');
+    expect(list).not.toBeNull();
+    expect(list).not.toHaveAttribute('hidden');
+
+    const toggle = screen.getByRole('button', { name: 'Thu gọn quy trình' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(toggle).toHaveAttribute('aria-controls', 'sdlc-step-list');
+
+    fireEvent.click(toggle);
+
+    const collapsedToggle = screen.getByRole('button', { name: 'Mở rộng quy trình' });
+    expect(collapsedToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(document.getElementById('sdlc-step-list')).toHaveAttribute('hidden');
+    expect(screen.getByText('Bước 2/6 — 2. Solution')).toBeInTheDocument();
+    // Detail panel stays visible: only the six rows collapse.
+    expect(screen.getByText(/Bước 2\/6: Giải pháp SOLUTION\.md/)).toBeInTheDocument();
+
+    fireEvent.click(collapsedToggle);
+    expect(screen.getByRole('button', { name: 'Thu gọn quy trình' })).toHaveAttribute('aria-expanded', 'true');
+    expect(document.getElementById('sdlc-step-list')).not.toHaveAttribute('hidden');
+    expect(screen.queryByText('Bước 2/6 — 2. Solution')).not.toBeInTheDocument();
+  });
+
+  it('moves focus to the toggle before hiding the rows', () => {
+    render(<SdlcWorkflowHub projectScoped={true} state={dummyState} onStartWorkflow={vi.fn()} />);
+
+    const stepRow = screen.getByRole('button', { name: /Hồ sơ Đầu vào/i });
+    stepRow.focus();
+    expect(stepRow).toHaveFocus();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Thu gọn quy trình' }));
+
+    expect(screen.getByRole('button', { name: 'Mở rộng quy trình' })).toHaveFocus();
+  });
+
+  it('appends the stale count to the collapsed summary', () => {
+    const staleState: SdlcWorkflowState = {
+      ...dummyState,
+      currentStep: 'CHANGE_PACK',
+      selectedStep: 'CHANGE_PACK',
+      staleSteps: ['CHANGE_PACK'],
+    };
+
+    render(<SdlcWorkflowHub projectScoped={true} state={staleState} onStartWorkflow={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Thu gọn quy trình' }));
+
+    expect(screen.getByText('Bước 4/6 — 4. Change Pack · 1 bước cần cập nhật')).toBeInTheDocument();
+  });
+
+  it('renders a per-step panel body and keeps step 3 on the hint body', () => {
+    render(<SdlcWorkflowHub projectScoped={true} state={dummyState} onStartWorkflow={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Change Pack & Soi Drift/i }));
+    expect(screen.getByText('Bước 4/6: Change Pack & Soi Drift')).toBeInTheDocument();
+    expect(screen.getByTestId('hub-panel-CHANGE_PACK')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Triển khai Code ngoài/i }));
+    const codeGuidePanel = screen.getByTestId('hub-panel-CODE_GUIDE');
+    expect(codeGuidePanel).toHaveTextContent('node scripts/change-pack.mjs --cr <MÃ_CR>');
+  });
+
+  it('hosts the PL02 export slot on the INTAKE panel without touching currentStep', () => {
+    render(<SdlcWorkflowHub projectScoped={true} state={dummyState} onStartWorkflow={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Hồ sơ Đầu vào/i }));
+
+    const intakePanel = screen.getByTestId('hub-panel-INTAKE');
+    expect(intakePanel).toHaveTextContent('PL02 — Đặc tả chức năng');
+    expect(intakePanel).toContainElement(screen.getByTestId('export-slot-PL02'));
+    // D-17: selecting a row is view-only; the processing row is still step 2.
+    expect(screen.getByText('Đang xử lý')).toBeInTheDocument();
+    expect(screen.getByText(/Đang xem bước 1 — chỉ đọc\. Bước đang xử lý: Giải pháp SOLUTION\.md\./)).toBeInTheDocument();
+    expect(screen.getByText('Bước 1/6: Hồ sơ Đầu vào (PL01 & PL02)')).toBeInTheDocument();
+  });
+
+  it('renders injected panels when the drawer supplies them', () => {
+    render(
+      <SdlcWorkflowHub
+        projectScoped={true}
+        state={dummyState}
+        onStartWorkflow={vi.fn()}
+        stepPanels={{ solution: <div data-testid="wired-solution">wired panel</div> }}
+      />
+    );
+
+    expect(screen.getByTestId('wired-solution')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Lưu SOLUTION.md' })).not.toBeInTheDocument();
+  });
 });
 
 describe('RevisionImpactModal', () => {
