@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: milestone
 status: executing
-stopped_at: Completed 25.1-10-PLAN.md (D-09 drawer-close abort, D-13 sanitized diagnostics, structural gate); next 25.1-11
-last_updated: "2026-10-31T06:35:00.000Z"
-last_activity: 2026-10-31 -- Completed plan 25.1-10
+stopped_at: Completed 25.1-11-PLAN.md (real per-tab runtimes, per-tab send guard/stop, durable per-tab model, draft isolation); next 25.1-12
+last_updated: "2026-10-31T08:30:00.000Z"
+last_activity: 2026-10-31 -- Completed plan 25.1-11
 progress:
   total_phases: 10
   completed_phases: 6
   total_plans: 84
-  completed_plans: 71
-  percent: 60
+  completed_plans: 72
+  percent: 61
 ---
 
 # Project State
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 ## Current Position
 
 Phase: 25.1 (sdlc-flow-hardening-multi-tab-ai-chat-isolation) — EXECUTING
-Plan: 10 of 15
+Plan: 11 of 15
 Status: Executing Phase 25.1
-Last activity: 2026-10-31 -- Completed plan 25.1-10
-Stopped at: 25.1-10 complete; next is 25.1-11 (per-tab runtime seeding, durable per-tab model, transient isolation)
+Last activity: 2026-10-31 -- Completed plan 25.1-11
+Stopped at: 25.1-11 complete; next is 25.1-12 (SDLC checkpoint/resume, revision preview+commit, cycle wiring)
 
 Progress: [██████████] 100%
 
@@ -187,14 +187,15 @@ Progress: [██████████] 100%
 
 **Velocity:**
 
-- Total plans completed: 77 (v1.2)
-- Average duration: 8 min
-- Total execution time: 0.13 hours
+- Total plans completed: 78 (v1.2)
+- Average duration: 11 min
+- Total execution time: 3.63 hours
 
 | Phase | Plan | Duration | Tasks | Files |
 |-------|------|----------|-------|-------|
 | 16 | 01 | 8m | 2 | 5 |
 | 18 | 02 | 18m | 2 | 7 |
+| 25.1 | 11 | 3h 30m | 3 | 8 |
 
 *Updated after each plan completion*
 | Phase 16 P06 | 15min | 1 tasks | 2 files |
@@ -365,6 +366,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-10-31T06:35:00.000Z
-Stopped at: Completed 25.1-10-PLAN.md; next 25.1-11-PLAN.md
+Last session: 2026-10-31T08:30:00.000Z
+Stopped at: Completed 25.1-11-PLAN.md; next 25.1-12-PLAN.md
 Resume file: .planning/phases/25.1-sdlc-flow-hardening-multi-tab-ai-chat-isolation/25.1-CONTEXT.md
