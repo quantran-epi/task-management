@@ -35,7 +35,7 @@ export function staticOntologyDefinitions(): OntologyRelationDefinition[] {
 /**
  * Locked ontology version per plan Task 1.
  */
-export const ONTOLOGY_VERSION = '2026.10.1';
+export const ONTOLOGY_VERSION = '2026.10.2';
 
 /**
  * Relation semantic qualifier allow-lists per D-15.
@@ -122,7 +122,7 @@ export interface RetrievalOntologyEntry {
 export const RETRIEVAL_ONTOLOGY_REGISTRY: Readonly<Record<RelationType, RetrievalOntologyEntry>> = Object.freeze({
   CONTAINS_STEP: Object.freeze({
     relationType: 'CONTAINS_STEP',
-    allowedSourceKinds: Object.freeze(['ScheduledProcess'] as const),
+    allowedSourceKinds: Object.freeze(['ScheduledProcess', 'SoftwareComponent'] as const),
     allowedTargetKinds: Object.freeze(['ProcessStep'] as const),
     defaultDirection: 'OUTGOING',
     maxHops: 1,
@@ -140,7 +140,7 @@ export const RETRIEVAL_ONTOLOGY_REGISTRY: Readonly<Record<RelationType, Retrieva
   }),
   CALLS: Object.freeze({
     relationType: 'CALLS',
-    allowedSourceKinds: Object.freeze(['SoftwareComponent'] as const),
+    allowedSourceKinds: Object.freeze(['SoftwareComponent', 'ScheduledProcess'] as const),
     allowedTargetKinds: Object.freeze(['SoftwareComponent'] as const),
     defaultDirection: 'OUTGOING',
     maxHops: 3,
@@ -149,7 +149,7 @@ export const RETRIEVAL_ONTOLOGY_REGISTRY: Readonly<Record<RelationType, Retrieva
   }),
   INVOKES: Object.freeze({
     relationType: 'INVOKES',
-    allowedSourceKinds: Object.freeze(['ProcessStep'] as const),
+    allowedSourceKinds: Object.freeze(['ProcessStep', 'ScheduledProcess'] as const),
     allowedTargetKinds: Object.freeze(['SoftwareComponent'] as const),
     defaultDirection: 'OUTGOING',
     maxHops: 2,
@@ -158,7 +158,7 @@ export const RETRIEVAL_ONTOLOGY_REGISTRY: Readonly<Record<RelationType, Retrieva
   }),
   READS_FROM: Object.freeze({
     relationType: 'READS_FROM',
-    allowedSourceKinds: Object.freeze(['SoftwareComponent'] as const),
+    allowedSourceKinds: Object.freeze(['SoftwareComponent', 'ProcessStep', 'ScheduledProcess'] as const),
     allowedTargetKinds: Object.freeze(['DatabaseObject'] as const),
     defaultDirection: 'OUTGOING',
     maxHops: 3,
@@ -167,7 +167,7 @@ export const RETRIEVAL_ONTOLOGY_REGISTRY: Readonly<Record<RelationType, Retrieva
   }),
   WRITES_TO: Object.freeze({
     relationType: 'WRITES_TO',
-    allowedSourceKinds: Object.freeze(['SoftwareComponent'] as const),
+    allowedSourceKinds: Object.freeze(['SoftwareComponent', 'ProcessStep', 'ScheduledProcess'] as const),
     allowedTargetKinds: Object.freeze(['DatabaseObject'] as const),
     defaultDirection: 'OUTGOING',
     maxHops: 3,
@@ -194,7 +194,7 @@ export const RETRIEVAL_ONTOLOGY_REGISTRY: Readonly<Record<RelationType, Retrieva
   }),
   USES_TYPE: Object.freeze({
     relationType: 'USES_TYPE',
-    allowedSourceKinds: Object.freeze(['SoftwareComponent', 'ProcessStep'] as const),
+    allowedSourceKinds: Object.freeze(['SoftwareComponent', 'ProcessStep', 'ScheduledProcess'] as const),
     allowedTargetKinds: Object.freeze(['CycleType'] as const),
     defaultDirection: 'OUTGOING',
     maxHops: 2,
@@ -203,7 +203,7 @@ export const RETRIEVAL_ONTOLOGY_REGISTRY: Readonly<Record<RelationType, Retrieva
   }),
   HAS_STATUS: Object.freeze({
     relationType: 'HAS_STATUS',
-    allowedSourceKinds: Object.freeze(['ProcessStep', 'SoftwareComponent'] as const),
+    allowedSourceKinds: Object.freeze(['ProcessStep', 'SoftwareComponent', 'ScheduledProcess'] as const),
     allowedTargetKinds: Object.freeze(['Status'] as const),
     defaultDirection: 'OUTGOING',
     maxHops: 1,

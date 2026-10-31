@@ -832,6 +832,23 @@ export async function extractWithLLMPure(
           !ontologyEntry.allowedSourceKinds.includes(rel.sourceKind) ||
           !ontologyEntry.allowedTargetKinds.includes(rel.targetKind)
         ) {
+          if (options.ontologyRegistry) {
+            const proposal = await options.ontologyRegistry.recordProposal({
+              relationType: rel.relation,
+              sourceEntityName: rel.sourceEntityName,
+              sourceKind: rel.sourceKind,
+              targetEntityName: rel.targetEntityName,
+              targetKind: rel.targetKind,
+              evidenceQuote: rel.evidenceQuote,
+              setId,
+              sourceSnapshotId: snapshot.snapshotId,
+              documentId: chunk.documentId,
+              documentTitle: chunk.documentTitle,
+              chunkId: chunk.chunkId,
+            });
+            chunkProposals.push(proposal);
+            proposalsList.push(proposal);
+          }
           chunkQuarantines.push({
             rawIdentifier: `${rel.sourceEntityName}(${rel.sourceKind})-[${rel.relation}]->${rel.targetEntityName}(${rel.targetKind})`,
             reason: `Relation ${rel.relation} does not allow sourceKind ${rel.sourceKind} or targetKind ${rel.targetKind}`,
