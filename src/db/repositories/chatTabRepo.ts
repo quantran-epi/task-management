@@ -143,11 +143,17 @@ export async function getOrCreateActiveChatTab(
     if (existing) return existing;
 
     const now = new Date().toISOString();
-    // Adopt a legacy scope thread (the pre-tab conversation) instead of orphaning its history.
-    const legacy = await db.chatThreads.where('scopeKey').equals(input.scopeKey).first();
+    // Adopt a legacy scope thread (the pre-tab conversation) instead of orphaning its history, but
+    // only when no tab already owns it: chatTabs.threadId is unique, so the SDLC bootstrap may
+    // have claimed the same legacy `project:<id>` thread first, and a second add would throw.
+    const claimedThreadIds = new Set((await db.chatTabs.toArray()).map((tab) => tab.threadId));
+    const scopedThreads = await db.chatThreads.where('scopeKey').equals(input.scopeKey).toArray();
+    const legacy = scopedThreads.find((candidate) => !claimedThreadIds.has(candidate.id));
+    const newId = generateId();
     const thread: ChatThread = legacy ?? {
-      id: generateId(),
-      scopeKey: input.scopeKey,
+      id: newId,
+      // chatThreads.scopeKey is unique too: a claimed legacy thread means this key is taken.
+      scopeKey: scopedThreads.length > 0 ? `${input.scopeKey}:chat:${newId}` : input.scopeKey,
       ...threadScopeParts(input.scopeKey, input),
       title: input.title?.trim() || `${DEFAULT_CHAT_TITLE} #1`,
       createdAt: now,

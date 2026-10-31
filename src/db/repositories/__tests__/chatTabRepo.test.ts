@@ -10,6 +10,7 @@ import {
   createChatTab,
   deleteChatTab,
   getActiveTab,
+  getOrCreateActiveChatTab,
   getOrCreateSdlcTab,
   listTabsByScope,
   setActiveTab,
@@ -98,6 +99,43 @@ describe('chatTabRepo', () => {
     await deleteChatTab(first.id, db);
     const replacement = await getActiveTab(`project:${projectId}`, db);
     expect(replacement?.title).toBe('💬 Cuộc trò chuyện #1');
+  });
+
+  it('keeps exactly one active tab per scope when the last ordinary tab is closed under an active SDLC tab', async () => {
+    const sdlcTab = await getOrCreateSdlcTab(projectId, db);
+    const ordinary = await createChatTab({ scopeType: 'project', scopeKey: `project:${projectId}` }, db);
+    // The normal post-intake state: the SDLC tab is active, the ordinary tab is not.
+    await setActiveTab(`project:${projectId}`, sdlcTab.id, db);
+
+    await deleteChatTab(ordinary.id, db);
+
+    const tabs = await listTabsByScope(`project:${projectId}`, db);
+    expect(tabs.filter((tab) => tab.active)).toHaveLength(1);
+    expect(tabs.find((tab) => tab.active)?.id).toBe(sdlcTab.id);
+  });
+
+  it('does not adopt a legacy scope thread another tab already claims', async () => {
+    await addThread(db, { id: 'claimed-thread', scopeKey: `project:${projectId}`, scopeType: 'project', entityId: projectId });
+    // The claim lives on a tab in another scope, so this scope's own tab list is still empty.
+    await db.chatTabs.add({
+      id: 'other-scope-owner',
+      threadId: 'claimed-thread',
+      scopeKey: 'task:elsewhere',
+      type: 'chat',
+      title: 'Owner elsewhere',
+      order: 0,
+      active: true,
+      createdAt: 'now',
+      updatedAt: 'now',
+    });
+
+    const tab = await getOrCreateActiveChatTab(
+      { scopeType: 'project', scopeKey: `project:${projectId}` },
+      db
+    );
+
+    // Adopting the claimed row would raise a ConstraintError on the unique threadId index.
+    expect(tab.threadId).not.toBe('claimed-thread');
   });
 
   it('persists active tab independently by scope', async () => {
