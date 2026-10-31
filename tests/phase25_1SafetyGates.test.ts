@@ -13,6 +13,116 @@ function stripComments(source: string): string {
     .replace(/^\s*\/\/.*$/gm, '');
 }
 
+const CLOSERS: Record<string, string> = { '(': ')', '{': '}', '[': ']' };
+
+/** Balanced-delimiter scan that ignores delimiters inside string and template literals. */
+function matchBalanced(source: string, start: number): number {
+  const opener = source[start];
+  const closer = opener ? CLOSERS[opener] : undefined;
+  if (!closer) return -1;
+
+  let depth = 0;
+  let quote: string | null = null;
+  for (let i = start; i < source.length; i += 1) {
+    const char = source[i];
+    if (quote) {
+      if (char === '\\') i += 1;
+      else if (char === quote) quote = null;
+      continue;
+    }
+    if (char === "'" || char === '"' || char === '`') {
+      quote = char;
+      continue;
+    }
+    if (char === opener) depth += 1;
+    else if (char === closer) {
+      depth -= 1;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+const USE_EFFECT_MARKER = 'useEffect(() => {';
+
+/**
+ * Returns each `useEffect(() => { ... }, [deps])` call source (body plus dependency array),
+ * located by brace matching so nested `if` blocks cannot truncate the match.
+ */
+export function extractUseEffectBodies(source: string): string[] {
+  const effects: string[] = [];
+  let index = source.indexOf(USE_EFFECT_MARKER);
+  while (index !== -1) {
+    const bodyStart = index + USE_EFFECT_MARKER.length - 1;
+    const bodyEnd = matchBalanced(source, bodyStart);
+    if (bodyEnd === -1) break;
+    const callEnd = matchBalanced(source, index + 'useEffect'.length);
+    if (callEnd === -1) break;
+    effects.push(source.slice(index, callEnd + 1));
+    index = source.indexOf(USE_EFFECT_MARKER, callEnd + 1);
+  }
+  return effects;
+}
+
+/** Sole D-09 gate: an `[open]`-dependent effect must never abort a request. */
+export function findOpenEffectAborts(source: string): string[] {
+  return extractUseEffectBodies(source).filter((effect) => {
+    const deps = effect.match(/,\s*(\[[^\]]*\])\s*\)\s*$/)?.[1] ?? '';
+    if (!/\bopen\b/.test(deps)) return false;
+    if (!/!\s*open/.test(effect)) return false;
+    return effect.includes('.abort(');
+  });
+}
+
+/** Superseded regex, imported only as a subject under test — never as a pass/fail gate. */
+const OLD_D09_REGEX = /if\s*\(\s*!open\s*\)\s*\{[^}]*abortControllerRef\.current\?\.abort\s*\(/;
+
+/** Production shape that shipped before this plan: abort after the inner `if` closes. */
+const REMOVED_SHAPE_FIXTURE = `
+useEffect(() => {
+  if (!open) {
+    if (pendingConfirmationRef.current) {
+      pendingConfirmationRef.current.resolve(false);
+      pendingConfirmationRef.current = null;
+      setPendingConfirmation(null);
+    }
+    abortControllerRef.current?.abort();
+    currentTurnAbortRef.current?.abort();
+  }
+}, [open]);
+`;
+
+/** Abort nested inside the inner `if`, before the block closes. */
+const NESTED_ABORT_FIXTURE = `
+useEffect(() => {
+  if (!open) {
+    if (pendingConfirmationRef.current) {
+      abortControllerRef.current?.abort();
+    }
+  }
+}, [open]);
+`;
+
+function extractConsoleCallArgs(source: string): string[] {
+  const argLists: string[] = [];
+  const callPattern = /console\.(?:error|warn)\s*\(/g;
+  let match: RegExpExecArray | null;
+  while ((match = callPattern.exec(source)) !== null) {
+    const open = match.index + match[0].length - 1;
+    const close = matchBalanced(source, open);
+    if (close === -1) break;
+    argLists.push(source.slice(open + 1, close));
+    callPattern.lastIndex = close + 1;
+  }
+  return argLists;
+}
+
+function rawErrorConsoleArgs(source: string): string[] {
+  return extractConsoleCallArgs(source)
+    .map((args) => args.replace(/'[^'\n]*'|"[^"\n]*"|`[^`]*`/g, '""'))
+    .filter((args) => /\b(?:err|groundedErr|compErr)\b/.test(args));
+}
+
 const phaseTestFiles = [
   'src/db/repositories/__tests__/chatTabRepo.test.ts',
   'tests/ai/AIChatDrawerTabs.test.tsx',
@@ -44,13 +154,62 @@ const sourceFixture = (overrides: Partial<SdlcSourceRef>): SdlcSourceRef => ({
   ...overrides,
 });
 
+describe('Phase 25.1 D-09 structural gate', () => {
+  it('extracts every useEffect call by brace matching', () => {
+    const drawer = stripComments(read('src/components/ai/AIChatDrawer.tsx'));
+    const markerCount = drawer.split(USE_EFFECT_MARKER).length - 1;
+
+    expect(markerCount).toBeGreaterThan(10);
+    expect(extractUseEffectBodies(drawer)).toHaveLength(markerCount);
+  });
+
+  it('reports no [open]-dependent effect that aborts a request', () => {
+    const drawer = stripComments(read('src/components/ai/AIChatDrawer.tsx'));
+
+    expect(findOpenEffectAborts(drawer)).toEqual([]);
+  });
+
+  it('detects both drawer-close abort shapes, including one the superseded regex misses', () => {
+    expect(findOpenEffectAborts(REMOVED_SHAPE_FIXTURE)).toHaveLength(1);
+    expect(findOpenEffectAborts(NESTED_ABORT_FIXTURE)).toHaveLength(1);
+
+    // Proof the fixture is stronger than the regex it replaced: the old pattern cannot
+    // cross the inner `if` block that closes before the abort call.
+    expect(OLD_D09_REGEX.test(REMOVED_SHAPE_FIXTURE)).toBe(false);
+  });
+
+  it('leaves unrelated effects alone', () => {
+    const unmountOnly = `
+useEffect(() => {
+  return () => {
+    abortControllerRef.current?.abort();
+  };
+}, []);
+`;
+    expect(findOpenEffectAborts(unmountOnly)).toEqual([]);
+  });
+});
+
+describe('Phase 25.1 D-13 console gate', () => {
+  it('never passes a raw error identifier to console.error/console.warn', () => {
+    const drawer = stripComments(read('src/components/ai/AIChatDrawer.tsx'));
+
+    expect(rawErrorConsoleArgs(drawer)).toEqual([]);
+  });
+
+  it('flags a raw error argument when one is present', () => {
+    const fixture = "console.warn('[AIChatDrawer] boom:', err);";
+
+    expect(rawErrorConsoleArgs(fixture)).toHaveLength(1);
+  });
+});
+
 describe('Phase 25.1 static safety gates', () => {
   it('rejects abort commits, drawer-close aborts, and canonical tab/config localStorage state', () => {
     const drawer = stripComments(read('src/components/ai/AIChatDrawer.tsx'));
 
     expect(drawer).not.toContain('[Đã dừng]');
-    expect(drawer).not.toMatch(/if\s*\(\s*!open\s*\)\s*\{[^}]*abortControllerRef\.current\?\.abort\s*\(/);
-    expect(drawer).not.toMatch(/if\s*\(\s*!open\s*\)\s*\{[^}]*currentTurnAbortRef\.current\?\.abort\s*\(/);
+    expect(findOpenEffectAborts(drawer)).toEqual([]);
     expect(drawer).not.toMatch(/localStorage\.(?:getItem|setItem)\([^\n]*(?:chat_tabs|tab_analysis|analysis_modes)/i);
 
     const localStorageKeys = [...drawer.matchAll(/localStorage\.(?:getItem|setItem)\(\s*([A-Z0-9_]+)/g)].map(
