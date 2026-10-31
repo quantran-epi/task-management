@@ -209,8 +209,15 @@ export function assertWizardTransition(previous: unknown, next: unknown): void {
 
 export function buildWizardIdempotencyKey(input: {
   sessionId: string;
-  draftRevision: number;
+  draftRevision?: number;
   artifactKind: SdlcArtifactMetadata['kind'];
+  inputHash?: string;
 }): string {
-  return `${input.sessionId}:${input.draftRevision}:${input.artifactKind}`;
+  // Content-addressed key: an identical body replays to the same Note, a changed body
+  // yields a new key (new version). `draftRevision` deliberately drops out here because
+  // callers derive it from the version the first save advanced, which would otherwise
+  // turn every second click into a new key.
+  if (input.inputHash) return `${input.sessionId}:${input.artifactKind}:${input.inputHash}`;
+  // Legacy revision-addressed format, kept for persisted keys and existing call sites.
+  return `${input.sessionId}:${input.draftRevision ?? 0}:${input.artifactKind}`;
 }

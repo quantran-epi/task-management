@@ -10,10 +10,8 @@ import {
 } from './changePack';
 import {
   SdlcArtifactMetadataSchema,
-  WizardSnapshotSchema,
   buildWizardIdempotencyKey,
   type SdlcArtifactMetadata,
-  type WizardSnapshot,
 } from '../ai/wizardSchemas';
 
 export interface ArtifactCommitResult {
@@ -89,44 +87,32 @@ function artifactTitle(kind: SdlcArtifactMetadata['kind'], version: number): str
   return kind === 'SOLUTION' ? `SOLUTION v${version}` : `${kind} v${version}`;
 }
 
-async function currentWizardSnapshot(
-  input: ArtifactCommitInput,
-  kind: SaveApprovedArtifactInput['kind'] | 'SOLUTION',
+/**
+ * Binds every artifact write to a project-scoped thread. Replaces the removed wizard
+ * snapshot gate: the thread itself is the identity anchor for a Note.
+ */
+async function assertProjectThread(
+  projectId: string,
+  threadId: string,
   db: TaskPlannerDatabase,
-): Promise<WizardSnapshot> {
-  const thread = await db.chatThreads.get(input.threadId);
-  if (!thread) fail('WIZARD_THREAD_MISMATCH');
-  if (thread.scopeType !== 'project' || thread.entityId !== input.projectId) fail('WIZARD_PROJECT_MISMATCH');
+): Promise<void> {
+  const thread = await db.chatThreads.get(threadId);
+  if (!thread || thread.scopeType !== 'project') fail('WIZARD_THREAD_MISMATCH');
+  if (thread.entityId !== projectId) fail('WIZARD_PROJECT_MISMATCH');
+}
 
-  const messages = await db.chatMessages.where('threadId').equals(input.threadId).toArray();
-  const snapshots = messages
-    .map((message) => message.wizard)
-    .filter((wizard): wizard is WizardSnapshot => wizard?.sessionId === input.sessionId);
-  const sessionSnapshots = snapshots
-    .filter((snapshot) => snapshot.skill === kind || (kind === 'PL03B' && snapshot.skill === 'PL03'))
-    .sort((left, right) => left.updatedAt.localeCompare(right.updatedAt));
-  if (sessionSnapshots.length === 0) fail('WIZARD_SESSION_MISMATCH');
-  if (!sessionSnapshots.some((snapshot) => snapshot.inputRevision === input.inputRevision)) {
-    fail('WIZARD_INPUT_REVISION_STALE');
-  }
-  const current = sessionSnapshots
-    .filter((snapshot) =>
-      snapshot.inputRevision === input.inputRevision &&
-      snapshot.draftRevision === input.draftRevision
-    )
-    .at(-1);
-  if (!current) fail('WIZARD_DRAFT_REVISION_STALE');
-  const parsed = WizardSnapshotSchema.parse(current);
-  if (parsed.projectId !== input.projectId) fail('WIZARD_PROJECT_MISMATCH');
-  if (parsed.threadId !== input.threadId) fail('WIZARD_THREAD_MISMATCH');
-  if (parsed.inputRevision !== input.inputRevision) fail('WIZARD_INPUT_REVISION_STALE');
-  if (parsed.draftRevision !== input.draftRevision) fail('WIZARD_DRAFT_REVISION_STALE');
-  if (!['approved', 'exporting', 'completed'].includes(parsed.status)) fail('WIZARD_APPROVAL_REQUIRED');
-  if (parsed.artifactHash !== input.inputHash) fail('WIZARD_HASH_MISMATCH');
-  const renderedMarkdown = 'markdown' in parsed.renderPayload ? parsed.renderPayload.markdown : undefined;
-  if (renderedMarkdown !== undefined && renderedMarkdown !== input.markdown) fail('WIZARD_DRAFT_MISMATCH');
-  if (parsed.approvedAt !== input.approvedAt) fail('WIZARD_APPROVAL_MISMATCH');
-  return parsed;
+function assertCommitIdentity(input: {
+  sessionId: string;
+  inputRevision: number;
+  draftRevision: number;
+  inputHash: string;
+  approvedAt: string;
+}): void {
+  if (typeof input.sessionId !== 'string' || !input.sessionId.trim()) fail('ARTIFACT_SESSION_REQUIRED');
+  if (!Number.isInteger(input.inputRevision) || input.inputRevision < 0) fail('ARTIFACT_REVISION_INVALID');
+  if (!Number.isInteger(input.draftRevision) || input.draftRevision < 0) fail('ARTIFACT_REVISION_INVALID');
+  if (!/^[a-f0-9]{64}$/.test(input.inputHash)) fail('ARTIFACT_HASH_INVALID');
+  if (typeof input.approvedAt !== 'string' || !input.approvedAt.trim()) fail('ARTIFACT_APPROVAL_REQUIRED');
 }
 
 async function validatedSources(
@@ -158,10 +144,12 @@ async function commitArtifact(
     sessionId: input.sessionId,
     draftRevision: input.draftRevision,
     artifactKind: kind,
+    inputHash: input.inputHash,
   });
 
   return db.transaction('rw', [db.notes, db.documentSets, db.chatMessages, db.chatThreads], async () => {
-    await currentWizardSnapshot(input, kind, db);
+    await assertProjectThread(input.projectId, input.threadId, db);
+    assertCommitIdentity(input);
     const projectArtifacts = await db.notes
       .where('entityId')
       .equals(input.projectId)
@@ -215,21 +203,12 @@ async function commitArtifact(
       updatedAt: now,
     });
 
-    const current = await currentWizardSnapshot(input, kind, db);
-    const completed = WizardSnapshotSchema.parse({
-      ...current,
-      status: 'completed',
-      artifactId: note.id,
-      artifactHash: input.inputHash,
-      updatedAt: now,
-    });
     const event: ChatMessage = {
       id: generateId(),
       threadId: input.threadId,
       role: 'assistant',
       content: `Saved ${kind} v${version}: note:${note.id}`,
       createdAt: now,
-      wizard: completed,
     };
     await db.chatMessages.add(event);
     await db.chatThreads.update(input.threadId, { updatedAt: now });
@@ -275,18 +254,14 @@ export async function persistConfirmedPack(
   if (!input.idempotencyKey.trim()) fail('PACK_IDEMPOTENCY_KEY_REQUIRED');
 
   return db.transaction('rw', [db.notes, db.documentSets, db.chatMessages, db.chatThreads], async () => {
-    const wizardInput: ArtifactCommitInput = {
-      projectId: input.projectId,
-      threadId: input.threadId,
+    await assertProjectThread(input.projectId, input.threadId, db);
+    assertCommitIdentity({
       sessionId: input.sessionId,
       inputRevision: input.inputRevision,
       draftRevision: input.draftRevision,
       inputHash: manifest.packHash,
-      markdown: '',
-      exportPayload: null,
       approvedAt: input.confirmedAt,
-    };
-    await currentWizardSnapshot(wizardInput, 'PL03B', db);
+    });
 
     const solution = await db.notes.get(input.solution.noteId);
     if (
