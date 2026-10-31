@@ -85,10 +85,42 @@ export class OntologyRegistryService {
 
   async getEffectiveOntology(): Promise<{ ontologyVersion: string; registryVersion: number; relations: OntologyRelationDefinition[] }> {
     const state = await this.load();
+    const relationMap = new Map<string, OntologyRelationDefinition>();
+
+    // 1. Load static definitions
+    for (const def of staticOntologyDefinitions()) {
+      relationMap.set(def.relationType, {
+        ...def,
+        allowedSourceKinds: [...def.allowedSourceKinds],
+        allowedTargetKinds: [...def.allowedTargetKinds],
+      });
+    }
+
+    // 2. Merge accepted runtime proposals/definitions
+    for (const def of state.accepted) {
+      const existing = relationMap.get(def.relationType);
+      if (existing) {
+        // Union allowed source & target kinds
+        existing.allowedSourceKinds = Array.from(
+          new Set([...existing.allowedSourceKinds, ...def.allowedSourceKinds])
+        );
+        existing.allowedTargetKinds = Array.from(
+          new Set([...existing.allowedTargetKinds, ...def.allowedTargetKinds])
+        );
+        existing.runtime = true;
+      } else {
+        relationMap.set(def.relationType, {
+          ...def,
+          allowedSourceKinds: [...def.allowedSourceKinds],
+          allowedTargetKinds: [...def.allowedTargetKinds],
+        });
+      }
+    }
+
     return {
       ontologyVersion: ONTOLOGY_VERSION,
       registryVersion: state.version,
-      relations: [...staticOntologyDefinitions(), ...state.accepted],
+      relations: Array.from(relationMap.values()),
     };
   }
 
@@ -156,16 +188,38 @@ export class OntologyRegistryService {
       if (!proposal) throw new Error('PROPOSAL_NOT_FOUND');
       if (proposal.status === 'REJECTED') throw new Error('PROPOSAL_ALREADY_REJECTED');
 
-      if (!state.accepted.some((item) => item.relationType === proposal.relationType)) {
-        state.accepted.push({
+      let acceptedDef = state.accepted.find((item) => item.relationType === proposal.relationType);
+      let changed = false;
+
+      if (acceptedDef) {
+        if (!acceptedDef.allowedSourceKinds.includes(proposal.sourceKind)) {
+          acceptedDef.allowedSourceKinds.push(proposal.sourceKind);
+          changed = true;
+        }
+        if (!acceptedDef.allowedTargetKinds.includes(proposal.targetKind)) {
+          acceptedDef.allowedTargetKinds.push(proposal.targetKind);
+          changed = true;
+        }
+      } else {
+        const staticDef = staticOntologyDefinitions().find((item) => item.relationType === proposal.relationType);
+        acceptedDef = {
           relationType: proposal.relationType,
-          allowedSourceKinds: [proposal.sourceKind],
-          allowedTargetKinds: [proposal.targetKind],
-          defaultDirection: 'OUTGOING',
-          maxHops: 1,
-          semanticSlot: 'ADDITIVE',
+          allowedSourceKinds: staticDef
+            ? Array.from(new Set([...staticDef.allowedSourceKinds, proposal.sourceKind]))
+            : [proposal.sourceKind],
+          allowedTargetKinds: staticDef
+            ? Array.from(new Set([...staticDef.allowedTargetKinds, proposal.targetKind]))
+            : [proposal.targetKind],
+          defaultDirection: staticDef ? staticDef.defaultDirection : 'OUTGOING',
+          maxHops: staticDef ? staticDef.maxHops : 1,
+          semanticSlot: staticDef ? staticDef.semanticSlot : 'ADDITIVE',
           runtime: true,
-        });
+        };
+        state.accepted.push(acceptedDef);
+        changed = true;
+      }
+
+      if (changed) {
         state.version += 1;
       }
       proposal.status = 'ACCEPTED';

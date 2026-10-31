@@ -35,7 +35,7 @@ export function staticOntologyDefinitions(): OntologyRelationDefinition[] {
 /**
  * Locked ontology version per plan Task 1.
  */
-export const ONTOLOGY_VERSION = '2026.10.1';
+export const ONTOLOGY_VERSION = '2026.10.2';
 
 /**
  * Relation semantic qualifier allow-lists per D-15.
