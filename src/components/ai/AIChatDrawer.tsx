@@ -23,7 +23,6 @@ import {
 import {
   getNineRouterApiKey,
   getNineRouterConfig,
-  setNineRouterConfig,
   fetchAvailableModels,
 } from '../../services/ai/nineRouterTokenService';
 import { stripThinkingBlocks } from '../../services/ai/nineRouterClient';
@@ -122,6 +121,7 @@ import { saveSolutionVersion } from '../../services/wizard/artifactRepo';
 import { getMessagesByThreadId as loadChatMessages } from '../../db/repositories/chatRepo';
 import {
   listTabsByScope,
+  getOrCreateActiveChatTab,
   getOrCreateSdlcTab,
   createChatTab,
   setActiveTab,
@@ -312,11 +312,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const [isInstructionsOpen, setIsInstructionsOpen] = useState(false);
   const [isMcpModalOpen, setIsMcpModalOpen] = useState(false);
   const [mcpServers, setMcpServers] = useState<McpServerConfig[]>([]);
-  const [sessionAttachedFiles, setSessionAttachedFiles] = useState<string[]>([]);
   const knowledgeConfig = useOptionalKnowledgeConfig();
 
   // Grounded turn state & abort controller per turn (AI-SPEC §4b)
-  const currentTurnAbortRef = useRef<AbortController | null>(null);
   const [activePreviewCitation, setActivePreviewCitation] = useState<PersistedCitation | null>(null);
   const [latestRoutedScope, setLatestRoutedScope] = useState<ChatMessageGrounding['scope']>(null);
   const [transientClarifyMessage, setTransientClarifyMessage] = useState<{
@@ -355,11 +353,14 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   };
 
   const handleAttachFile = (filePath: string) => {
-    setSessionAttachedFiles((prev) => (prev.includes(filePath) ? prev : [...prev, filePath]));
+    const current = tabRuntimesRef.current.get(activeTabId)?.references ?? [];
+    if (current.includes(filePath)) return;
+    tabRuntimesRef.current.patch(activeTabId, { references: [...current, filePath] });
   };
 
   const handleRemoveFile = (filePath: string) => {
-    setSessionAttachedFiles((prev) => prev.filter((p) => p !== filePath));
+    const current = tabRuntimesRef.current.get(activeTabId)?.references ?? [];
+    tabRuntimesRef.current.patch(activeTabId, { references: current.filter((p) => p !== filePath) });
   };
 
   // Sync propScope when it changes (unless user explicitly picked or detached)
@@ -392,86 +393,16 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
   const scopeKey = buildScopeKey(currentScope.type, currentScope.id);
 
-  // Model & Token settings
-  const [selectedModel, setSelectedModel] = useState<string>('gpt-4o');
-  const [availableModels, setAvailableModels] = useState<string[]>([]);
-  const [isRefreshingModels, setIsRefreshingModels] = useState(false);
-
-  const handleRefreshModels = useCallback(async () => {
-    setIsRefreshingModels(true);
-    try {
-      const liveModels = await fetchAvailableModels(db);
-      if (liveModels.length > 0) {
-        setAvailableModels(liveModels);
-        setSelectedModel((prev) => {
-          if (liveModels.includes(prev)) return prev;
-          return liveModels[0] ?? prev;
-        });
-        message.success(`Đã cập nhật ${liveModels.length} mô hình từ 9router`);
-      } else {
-        message.warning('Không tìm thấy mô hình nào từ 9router');
-      }
-    } catch (err: any) {
-      message.error(`Không thể tải danh sách mô hình: ${err?.message || err}`);
-    } finally {
-      setIsRefreshingModels(false);
-    }
-  }, [db]);
-
-  useEffect(() => {
-    let mounted = true;
-
-    async function loadModels() {
-      const cfg = await getNineRouterConfig(db);
-      const rec = await db.settings.get('ninerouter_cached_models');
-      const cached = Array.isArray(rec?.value) ? (rec.value as string[]) : [];
-
-      if (!mounted) return;
-
-      if (cached.length > 0) {
-        setAvailableModels(cached);
-        if (cfg.defaultModel && cached.includes(cfg.defaultModel)) {
-          setSelectedModel(cfg.defaultModel);
-        } else if (cached[0]) {
-          setSelectedModel(cached[0]);
-        }
-      } else if (cfg.defaultModel) {
-        setSelectedModel(cfg.defaultModel);
-      }
-
-      if (open) {
-        try {
-          const liveModels = await fetchAvailableModels(db);
-          if (mounted && liveModels.length > 0) {
-            setAvailableModels(liveModels);
-            setSelectedModel((prev) => {
-              if (liveModels.includes(prev)) return prev;
-              if (cfg.defaultModel && liveModels.includes(cfg.defaultModel)) return cfg.defaultModel;
-              return liveModels[0] ?? prev;
-            });
-          }
-        } catch {
-          // ignore background fetch error
-        }
-      }
-    }
-
-    loadModels();
-    return () => {
-      mounted = false;
-    };
-  }, [db, open]);
-
-  const handleModelChange = async (model: string) => {
-    setSelectedModel(model);
-    await setNineRouterConfig({ defaultModel: model }, db);
-  };
-
   const isProjectScope = currentScope.type === 'project' && Boolean(currentScope.id);
 
   // Per-tab runtime/request ownership. Runtime state stays ephemeral; durable history stays in Dexie.
   const tabRuntimes = useTabRuntimes();
+  // Cleanup paths (unmount, scope change) must not re-run when the registry identity changes on publish.
+  const tabRuntimesRef = useRef(tabRuntimes);
+  tabRuntimesRef.current = tabRuntimes;
   const requestRegistryRef = useRef(createRequestRegistry());
+  // Tab that owns the in-flight turn; every transient write inside the send path targets it.
+  const turnTabIdRef = useRef('');
 
   // SDLC Workflow state
   const [sdlcWorkflowState, setSdlcWorkflowState] = useState<SdlcWorkflowState | undefined>();
@@ -495,29 +426,148 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   }, [db, activeTabThreadId, scopeKey]);
 
   const activeThreadId = activeTabThreadId ?? thread?.id;
+
+  // Draft typed before the durable tab resolved must not be dropped by the per-tab remount.
+  const draftCarryRef = useRef<{ tabId: string; text: string }>({ tabId: '', text: '' });
+
+  // Seed a runtime for the active tab before any patch, so tab badges reflect real status (SC-2).
+  useEffect(() => {
+    if (!activeTabId || !activeThreadId) return;
+    const registry = tabRuntimesRef.current;
+    // Before the durable tab list resolves, the placeholder id owns the first turn's state.
+    // Its runtime is kept until that turn ends (see activeRuntimeTabId), so nothing is re-keyed mid-flight.
+    const runtime = registry.initialize(activeTabId, activeThreadId);
+    const carry = draftCarryRef.current;
+    if (carry.tabId !== activeTabId) {
+      draftCarryRef.current = { tabId: activeTabId, text: runtime.draft };
+    } else if (carry.text && !runtime.draft) {
+      registry.patch(activeTabId, { draft: carry.text });
+    }
+  }, [activeTabId, activeThreadId]);
+
+  // Model & Token settings. Model is per-tab and durable in ChatTab.config.model (D-07).
+  const [persistedDefaultModel, setPersistedDefaultModel] = useState<string>('');
+  // Ref mirror so the resolver is never empty inside an async send that outruns the model effect.
+  const persistedDefaultModelRef = useRef<string>('');
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [isRefreshingModels, setIsRefreshingModels] = useState(false);
+
+  // Runtime mirror first (patched synchronously), then durable config, then the persisted global default.
+  const resolveActiveModel = () =>
+    tabRuntimes.get(activeTabId)?.model ||
+    tabRuntimes.get(turnTabIdRef.current)?.model ||
+    activeTab?.config?.model ||
+    persistedDefaultModel ||
+    persistedDefaultModelRef.current;
+
+  const writeTabModel = useCallback(
+    async (tab: ChatTab | undefined, model: string) => {
+      if (!tab) return;
+      try {
+        await updateChatTab(tab.id, { config: { ...(tab.config ?? {}), model } }, db);
+      } catch (err) {
+        logAiChatError('Failed to update tab model', err);
+        return;
+      }
+      tabRuntimesRef.current.patch(tab.id, { model });
+    },
+    [db]
+  );
+
+  const handleRefreshModels = useCallback(async () => {
+    setIsRefreshingModels(true);
+    try {
+      const liveModels = await fetchAvailableModels(db);
+      if (liveModels.length > 0) {
+        setAvailableModels(liveModels);
+        const current = resolveActiveModel();
+        const next = liveModels.includes(current) ? current : liveModels[0];
+        if (next) await writeTabModel(activeTab, next);
+        message.success(`Đã cập nhật ${liveModels.length} mô hình từ 9router`);
+      } else {
+        message.warning('Không tìm thấy mô hình nào từ 9router');
+      }
+    } catch (err: any) {
+      message.error(`Không thể tải danh sách mô hình: ${err?.message || err}`);
+    } finally {
+      setIsRefreshingModels(false);
+    }
+  }, [activeTab, db, writeTabModel]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadModels() {
+      const cfg = await getNineRouterConfig(db);
+      if (!mounted) return;
+      persistedDefaultModelRef.current = cfg.defaultModel;
+      setPersistedDefaultModel(cfg.defaultModel);
+
+      // Seed a MISSING durable per-tab model once; never rewrite a model the user already chose.
+      const durable = await listTabsByScope(scopeKey, db);
+      if (!mounted) return;
+      for (const tab of durable) {
+        if (tab.type !== 'chat' || tab.config?.model) continue;
+        try {
+          // Conditional write inside one transaction: a model picked while this ran is never clobbered.
+          const seeded = await db.transaction('rw', [db.chatTabs], async () => {
+            const latest = await db.chatTabs.get(tab.id);
+            if (!latest || latest.config?.model) return false;
+            await db.chatTabs.update(tab.id, {
+              config: { ...(latest.config ?? {}), model: cfg.defaultModel },
+              updatedAt: new Date().toISOString(),
+            });
+            return true;
+          });
+          if (seeded) tabRuntimesRef.current.patch(tab.id, { model: cfg.defaultModel });
+        } catch (err) {
+          logAiChatError('Failed to seed tab model', err);
+        }
+      }
+
+      const rec = await db.settings.get('ninerouter_cached_models');
+      const cached = Array.isArray(rec?.value) ? (rec.value as string[]) : [];
+      if (cached.length > 0) setAvailableModels(cached);
+
+      if (open) {
+        try {
+          const liveModels = await fetchAvailableModels(db);
+          if (mounted && liveModels.length > 0) setAvailableModels(liveModels);
+        } catch {
+          // ignore background fetch error
+        }
+      }
+    }
+
+    loadModels();
+    return () => {
+      mounted = false;
+    };
+  }, [db, open, scopeKey]);
+
+  const handleModelChange = async (model: string) => {
+    await writeTabModel(activeTab, model);
+  };
+
   const messages = useLiveQuery<ChatMessage[]>(() => {
     if (!activeThreadId) return [];
     return getMessagesByThreadId(activeThreadId, db);
   }, [db, activeThreadId]) ?? [];
 
+  const ensureTurnTabRef = useRef<() => Promise<ChatTab>>(() =>
+    Promise.reject(new Error('tab bootstrap not ready'))
+  );
+
   useEffect(() => {
     // Project scopes are bootstrapped by the initTabs effect below, which lets getOrCreateSdlcTab
-    // adopt a legacy `project:<id>` thread. Backfilling here would claim it as an ordinary tab first.
-    if (!isProjectScope && durableTabs.length === 0 && thread?.id) {
-      void db.chatTabs.add({
-        id: generateId(),
-        threadId: thread.id,
-        scopeKey,
-        type: 'chat',
-        title: thread.title || '💬 Cuộc trò chuyện #1',
-        order: 0,
-        active: true,
-        createdAt: thread.createdAt,
-        updatedAt: thread.updatedAt,
-      });
-    }
-  }, [db, durableTabs.length, isProjectScope, scopeKey, thread]);
-
+    // adopt a legacy `project:<id>` thread. Non-project scopes adopt their legacy thread through
+    // getOrCreateActiveChatTab, which is transactional and therefore safe against a concurrent
+    // send creating the same first tab.
+    if (isProjectScope || durableTabs.length > 0) return;
+    void ensureTurnTabRef.current().catch((err) =>
+      logAiChatError('Failed to bootstrap first chat tab', err)
+    );
+  }, [currentScope.id, currentScope.type, db, durableTabs.length, isProjectScope, scopeKey]);
 
   // Ensure durable tabs are initialized in Dexie for the active scope
   const tabInitializationRef = useRef<string | null>(null);
@@ -628,31 +678,14 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     [db, durableTabs, tabRuntimes]
   );
 
-  // Streaming & error state
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [streamingText, setStreamingText] = useState('');
-  const [streamingStatus, setStreamingStatus] = useState<string | null>(null);
-  const [groundedLoadingStatus, setGroundedLoadingStatus] = useState<string | null>(null);
+  // Evidence synthesis state (not part of a chat turn)
   const [synthesizingEvidenceId, setSynthesizingEvidenceId] = useState<string | null>(null);
   const [evidenceSynthesisError, setEvidenceSynthesisError] = useState<{
     id: string;
     message: string;
     requiresConfig: boolean;
   } | null>(null);
-  const [apiError, setApiError] = useState<string | null>(null);
-  const [lastSubmittedText, setLastSubmittedText] = useState('');
   const [scrollTrigger, setScrollTrigger] = useState(0);
-  const abortControllerRef = useRef<AbortController | null>(null);
-
-  // Mutation action confirmation state & ref
-  const [pendingConfirmation, setPendingConfirmation] = useState<{
-    toolName: string;
-    summary: string;
-    args?: Record<string, any>;
-  } | null>(null);
-  const pendingConfirmationRef = useRef<{
-    resolve: (confirmed: boolean) => void;
-  } | null>(null);
 
   const [externalInputValue, setExternalInputValue] = useState<string | null>(null);
   const [wizardSkill, setWizardSkill] = useState<Exclude<WizardSkill, 'SOLUTION'> | null>(null);
@@ -735,7 +768,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
             payload: { evidence: input.evidence, proposal: input.payload },
             signal: input.signal,
             isCurrent: input.isCurrent,
-            model: { endpoint: config.endpoint, apiKey, model: selectedModel || config.defaultModel },
+            model: { endpoint: config.endpoint, apiKey, model: resolveActiveModel() },
           });
         },
         collectEvidence: async (input) => collectWizardEvidence(input, {
@@ -843,11 +876,15 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       const docs = await coordinator.generateTechnicalDocs();
       setTechnicalDocsReady(Boolean(docs.pl03 && docs.pl07));
     } catch {
-      setApiError('Không thể xác nhận change-pack. Kiểm tra đúng dự án, phiên bản SOLUTION và pack rồi thử lại.');
+      patchTurnError(
+        'request_failed',
+        'Không thể xác nhận change-pack. Kiểm tra đúng dự án, phiên bản SOLUTION và pack rồi thử lại.',
+        activeTabId
+      );
     } finally {
       packActionRef.current = false;
     }
-  }, [getWizardCoordinator]);
+  }, [activeTabId, getWizardCoordinator]);
 
   const handleCabGenerate = useCallback(async () => {
     if (cabActionRef.current) return;
@@ -857,11 +894,15 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     try {
       await coordinator.generateCab();
     } catch {
-      setApiError('Thiếu chuỗi PL02/PL03B/PL07 cùng dự án và thread; chưa thể tạo CAB.');
+      patchTurnError(
+        'request_failed',
+        'Thiếu chuỗi PL02/PL03B/PL07 cùng dự án và thread; chưa thể tạo CAB.',
+        activeTabId
+      );
     } finally {
       cabActionRef.current = false;
     }
-  }, [getWizardCoordinator]);
+  }, [activeTabId, getWizardCoordinator]);
 
   const handleWizardApproveExport = useCallback(async (messageId: string, draftRevision: number) => {
     if (exportPending.has(messageId)) return;
@@ -1150,50 +1191,101 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   }, [durableTabs]);
 
   const handleConfirmAction = useCallback((confirmed: boolean) => {
-    if (pendingConfirmationRef.current) {
-      pendingConfirmationRef.current.resolve(confirmed);
-      pendingConfirmationRef.current = null;
-    }
-    setPendingConfirmation(null);
-  }, []);
+    const runtime = tabRuntimesRef.current.get(activeTabId);
+    runtime?.confirmationResolver?.(confirmed);
+    tabRuntimesRef.current.patch(activeTabId, {
+      pendingConfirmation: null,
+      confirmationResolver: undefined,
+    });
+  }, [activeTabId]);
 
-  // Abort stream on unmount only. Drawer close must not abort an in-flight turn (D-09).
+  // Every render and every callback reads one owner: the active tab's runtime. Only while the
+  // durable tab list is hydrating does the in-flight turn's runtime stand in, because the
+  // placeholder id owns that turn.
+  const activeRuntimeIsProvisional = !durableTabs.some((tab) => tab.id === activeTabId);
+  const activeRuntimeTabId = activeRuntimeIsProvisional
+    ? turnTabIdRef.current || activeTabId
+    : activeTabId;
+  const activeRuntime = tabRuntimes.get(activeRuntimeTabId);
+  const runtimeTabId = activeRuntimeTabId;
+
+  // Abort every tab's request on unmount only. Drawer close must not abort an in-flight turn (D-09).
   useEffect(() => {
     return () => {
-      if (pendingConfirmationRef.current) {
-        pendingConfirmationRef.current.resolve(false);
-        pendingConfirmationRef.current = null;
-      }
-      abortControllerRef.current?.abort();
-      if (currentTurnAbortRef.current) {
-        currentTurnAbortRef.current.abort();
-        currentTurnAbortRef.current = null;
+      for (const runtime of Object.values(tabRuntimesRef.current.getSnapshot())) {
+        runtime.confirmationResolver?.(false);
+        runtime.requestController?.abort();
+        requestRegistryRef.current.abortTab(runtime.tabId);
       }
     };
   }, []);
 
-  // Abort previous grounded turn on scope change (AI-SPEC §4b)
+  // Abort every outgoing-scope request on scope change (AI-SPEC §4b).
+  // Chat tab ids are scope-scoped, so every runtime present here belongs to the outgoing scope;
+  // the new scope's runtimes are created later by the initialize effect.
   useEffect(() => {
-    if (currentTurnAbortRef.current) {
-      currentTurnAbortRef.current.abort();
-      currentTurnAbortRef.current = null;
+    for (const runtime of Object.values(tabRuntimesRef.current.getSnapshot())) {
+      if (!runtime.requestController) continue;
+      requestRegistryRef.current.abortTab(runtime.tabId);
+      runtime.requestController.abort();
+      tabRuntimesRef.current.patch(runtime.tabId, { groundedLoadingStatus: null });
     }
     setTransientClarifyMessage(null);
-    setGroundedLoadingStatus(null);
   }, [currentScope.type, currentScope.id]);
 
   const handleStopGeneration = () => {
-    if (pendingConfirmationRef.current) {
-      pendingConfirmationRef.current.resolve(false);
-      pendingConfirmationRef.current = null;
-      setPendingConfirmation(null);
-    }
-    abortControllerRef.current?.abort();
-    if (currentTurnAbortRef.current) {
-      currentTurnAbortRef.current.abort();
-      currentTurnAbortRef.current = null;
-    }
-    setGroundedLoadingStatus(null);
+    const runtime = tabRuntimesRef.current.get(activeRuntimeTabId);
+    requestRegistryRef.current.abortTab(activeRuntimeTabId);
+    runtime?.requestController?.abort();
+    runtime?.confirmationResolver?.(false);
+    tabRuntimesRef.current.patch(activeRuntimeTabId, {
+      status: 'idle',
+      pendingConfirmation: null,
+      confirmationResolver: undefined,
+      requestController: undefined,
+      groundedLoadingStatus: null,
+      streamingStatus: null,
+      partialBuffer: '',
+    });
+  };
+
+  // Single-flight only while a creation is in flight: the bootstrap effect and a send path must not
+  // each create a first tab, but a resolved result must never be cached across tab switches.
+  const ensureTabPromiseRef = useRef<{ scopeKey: string; promise: Promise<ChatTab> } | null>(null);
+  const ensureTurnTab = () => {
+    const inFlight = ensureTabPromiseRef.current;
+    if (inFlight && inFlight.scopeKey === scopeKey) return inFlight.promise;
+    const promise = getOrCreateActiveChatTab(
+      {
+        scopeType: currentScope.type,
+        scopeKey,
+        entityId: currentScope.id,
+        title: currentScope.title,
+      },
+      db
+    ).finally(() => {
+      if (ensureTabPromiseRef.current?.promise === promise) ensureTabPromiseRef.current = null;
+    });
+    ensureTabPromiseRef.current = { scopeKey, promise };
+    return promise;
+  };
+  ensureTurnTabRef.current = ensureTurnTab;
+
+  // Every transient write is keyed by the tab that owns the turn, never by whichever tab is visible.
+  const patchGroundedLoading = (value: string | null, ownerTabId = turnTabIdRef.current) => {
+    tabRuntimes.patch(ownerTabId, { groundedLoadingStatus: value });
+  };
+  const patchTurnError = (
+    code: 'request_failed' | 'invalid_response' | 'timeout',
+    message: string,
+    ownerTabId = turnTabIdRef.current
+  ) => {
+    tabRuntimes.patch(ownerTabId, {
+      status: 'error',
+      error: { code, message, requestId: generateId() },
+      groundedLoadingStatus: null,
+      streamingStatus: null,
+    });
   };
 
   const handleSendMessage = async (
@@ -1208,15 +1300,26 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
     if (isSdlcActiveTab && (await handleWizardMessage(trimmed))) return;
 
-    // Check if user is responding to an active confirmation prompt via chat input
-    if (pendingConfirmationRef.current) {
+    // Check if ANY tab is awaiting a mutation confirmation; answer on that tab's behalf.
+    const pendingRuntime = Object.values(tabRuntimesRef.current.getSnapshot()).find(
+      (runtime) => runtime.confirmationResolver
+    );
+    if (pendingRuntime) {
       const lower = trimmed.toLowerCase();
       if (/^(yes|y|có|co|ok|được|duoc|đồng ý|dong y|xác nhận|xac nhan)$/i.test(lower)) {
-        handleConfirmAction(true);
+        pendingRuntime.confirmationResolver?.(true);
+        tabRuntimesRef.current.patch(pendingRuntime.tabId, {
+          pendingConfirmation: null,
+          confirmationResolver: undefined,
+        });
         return;
       }
       if (/^(no|n|không|khong|cancel|hủy|huy|từ chối|tu choi)$/i.test(lower)) {
-        handleConfirmAction(false);
+        pendingRuntime.confirmationResolver?.(false);
+        tabRuntimesRef.current.patch(pendingRuntime.tabId, {
+          pendingConfirmation: null,
+          confirmationResolver: undefined,
+        });
         return;
       }
     }
@@ -1226,11 +1329,26 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       return;
     }
 
-    if (isStreaming || Boolean(groundedLoadingStatus)) return;
+    // Per-tab guard (D-06/D-10): one tab's in-flight turn never blocks or aborts another tab.
+    // Resolve the durable active tab at send time; the live query may still hold a provisional id.
+    const turnTab = await ensureTurnTab();
+    const turnTabId = turnTab.id;
+    turnTabIdRef.current = turnTabId;
+    if (
+      requestRegistryRef.current.hasActive(turnTabId) ||
+      tabRuntimes.get(turnTabId)?.status === 'processing'
+    ) {
+      return;
+    }
 
     setScrollTrigger((prev) => prev + 1);
-    setApiError(null);
-    setLastSubmittedText(trimmed);
+    // Seed the owner runtime before the first patch: patch() no-ops on an unseeded tab.
+    tabRuntimes.initialize(turnTabId, turnTab.threadId ?? activeThreadId ?? '');
+    tabRuntimes.patch(turnTabId, {
+      error: null,
+      status: 'idle',
+      lastSubmittedText: trimmed,
+    });
 
     // Clarification transcript continuation handling per D-06
     let effectiveQuery = trimmed;
@@ -1239,9 +1357,15 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       nextClarifyTurnCount = transientClarifyMessage.turnCount + 1;
       if (nextClarifyTurnCount > 2) {
         setTransientClarifyMessage(null);
-        setApiError(
-          'Chưa thể xác định rõ ý định sau 2 lần hỏi. Vui lòng đặt câu hỏi cụ thể hơn hoặc chọn tác vụ cụ thể trong giao diện.'
-        );
+        tabRuntimes.patch(turnTabId, {
+          status: 'error',
+          error: {
+            code: 'request_failed',
+            message:
+              'Chưa thể xác định rõ ý định sau 2 lần hỏi. Vui lòng đặt câu hỏi cụ thể hơn hoặc chọn tác vụ cụ thể trong giao diện.',
+            requestId: generateId(),
+          },
+        });
         return;
       }
       effectiveQuery = `${transientClarifyMessage.originalQuery}\n[Thông tin bổ sung]: ${trimmed}`;
@@ -1277,7 +1401,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
     const effectiveScope = overrideScope ?? currentScope;
 
-    // 1. Ensure thread exists for effective scope
+    // 1. Ensure thread exists for effective scope. Resolve the durable tab's thread at send time
+    // instead of trusting a live-query value captured before the tab query resolved.
     let activeThread = overrideScope
       ? await createOrGetThread(
           {
@@ -1287,7 +1412,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           },
           db
         )
-      : thread;
+      : (await db.chatThreads.get(turnTab.threadId ?? '')) ?? thread;
 
     if (!activeThread) {
       activeThread = await createOrGetThread(
@@ -1314,15 +1439,33 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           db
         );
 
-    // Cancel older turn before owning new one per AI-SPEC §4b
-    if (currentTurnAbortRef.current) {
-      currentTurnAbortRef.current.abort();
-    }
-    const turnController = new AbortController();
-    currentTurnAbortRef.current = turnController;
+    // Own a fresh turn controller for THIS tab. Never abort another tab's request (D-06/D-10).
+    tabRuntimes.initialize(turnTabId, activeThread.id);
+    const activeReq = requestRegistryRef.current.begin(turnTabId, activeThread.id);
+    const controller = activeReq?.controller ?? new AbortController();
+    // Single owner of requestController: stop/close/unmount read it from here (SC-2).
+    tabRuntimes.patch(turnTabId, {
+      requestController: controller,
+      status: 'processing',
+      partialBuffer: '',
+    });
+    const turnController = controller;
+
+    // A turn that finishes before streaming must release its per-tab claim, or the tab stays "processing".
+    const endTurnWithoutStream = () => {
+      tabRuntimes.patch(turnTabId, {
+        status: 'idle',
+        groundedLoadingStatus: null,
+        streamingStatus: null,
+        requestController: undefined,
+        partialBuffer: '',
+      });
+      if (activeReq) requestRegistryRef.current.finish(activeReq.requestId);
+    };
 
     const apiKey = await getNineRouterApiKey(db);
     const config = await getNineRouterConfig(db);
+    if (config.defaultModel) persistedDefaultModelRef.current = config.defaultModel;
     if (apiKey && config.endpoint) {
       // Await so the boundary message exists before the history read below.
       // Compaction stays best-effort and must never fail the turn.
@@ -1332,10 +1475,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           db,
           endpoint: config.endpoint,
           apiKey,
-          model: selectedModel || config.defaultModel,
-          ...(currentTurnAbortRef.current?.signal
-            ? { signal: currentTurnAbortRef.current.signal }
-            : {}),
+          model: resolveActiveModel(),
+          signal: turnController.signal,
         });
       } catch (compErr: any) {
         if (compErr?.name !== 'AbortError') {
@@ -1380,7 +1521,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     const catalog = await fetchSetCatalog(db);
     const capabilities = {
       serverEnabled: Boolean(knowledgeConfig.enabled && knowledgeConfig.baseUrl),
-      modelConfigured: Boolean(apiKey && config.endpoint && (selectedModel || config.defaultModel)),
+      modelConfigured: Boolean(apiKey && config.endpoint && resolveActiveModel()),
     };
     const deps = createDefaultGroundedTurnDeps({
       knowledgeBaseUrl: knowledgeConfig.baseUrl,
@@ -1389,26 +1530,26 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     });
     const routeScope = deps.routeScope;
     deps.routeScope = (input, routeDeps) => {
-      setGroundedLoadingStatus('Đang xác định phạm vi tài liệu...');
+      patchGroundedLoading('Đang xác định phạm vi tài liệu...');
       return routeScope(input, routeDeps);
     };
     const retrieveFederated = deps.retrieveFederated;
     deps.retrieveFederated = (request, signal) => {
-      setGroundedLoadingStatus('Đang truy xuất tài liệu và đồ thị liên quan...');
+      patchGroundedLoading('Đang truy xuất tài liệu và đồ thị liên quan...');
       return retrieveFederated(request, signal);
     };
     const runLocalBm25 = deps.runLocalBm25;
     deps.runLocalBm25 = (input, localDeps) => {
-      setGroundedLoadingStatus('Đang tìm kiếm trong tài liệu cục bộ...');
+      patchGroundedLoading('Đang tìm kiếm trong tài liệu cục bộ...');
       return runLocalBm25(input, localDeps);
     };
     const synthesizeGroundedAnswer = deps.synthesizeGroundedAnswer;
     deps.synthesizeGroundedAnswer = (input) => {
-      setGroundedLoadingStatus('Đang tổng hợp câu trả lời từ bằng chứng...');
+      patchGroundedLoading('Đang tổng hợp câu trả lời từ bằng chứng...');
       return synthesizeGroundedAnswer(input);
     };
     try {
-      setGroundedLoadingStatus('Đang phân tích ý định câu hỏi...');
+      patchGroundedLoading('Đang phân tích ý định câu hỏi...');
       const groundedResult = await runGroundedTurn(
         {
           query: effectiveQuery,
@@ -1418,7 +1559,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           config: {
             endpoint: config.endpoint,
             apiKey,
-            model: selectedModel || config.defaultModel,
+            model: resolveActiveModel(),
             promptVersion: 'grounded-v1',
             routerVersion: 'router-v1',
           },
@@ -1429,6 +1570,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       );
 
       if (turnController.signal.aborted) {
+        endTurnWithoutStream();
         return;
       }
 
@@ -1441,7 +1583,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
             'Bạn có thể cung cấp thêm chi tiết để tôi hỗ trợ chính xác hơn không?',
           turnCount: nextClarifyTurnCount,
         });
-        setGroundedLoadingStatus(null);
+        endTurnWithoutStream();
         return;
       }
 
@@ -1449,9 +1591,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       setTransientClarifyMessage(null);
 
       if (groundedResult.kind === 'operational') {
-        setGroundedLoadingStatus('Đang chuẩn bị ngữ cảnh TaskMate...');
+        patchGroundedLoading('Đang chuẩn bị ngữ cảnh TaskMate...');
       } else {
-        setGroundedLoadingStatus('Đang xử lý kết quả tra cứu...');
+        patchGroundedLoading('Đang xử lý kết quả tra cứu...');
       }
 
         if (groundedResult.kind === 'clarify_entity') {
@@ -1506,13 +1648,13 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
               fallbackReason: 'NONE',
               routerVersion: 'router-v1',
               promptVersion: 'grounded-v1',
-              modelId: selectedModel || config.defaultModel,
+              modelId: resolveActiveModel(),
               createdAt: new Date().toISOString(),
             },
           },
           db
         );
-        setGroundedLoadingStatus(null);
+        endTurnWithoutStream();
         return;
       }
 
@@ -1543,7 +1685,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           fallbackReason: 'NONE',
           routerVersion: 'router-v1',
           promptVersion: 'grounded-v1',
-          modelId: selectedModel || config.defaultModel,
+          modelId: resolveActiveModel(),
           createdAt: new Date().toISOString(),
         };
 
@@ -1558,7 +1700,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           },
           db
         );
-        setGroundedLoadingStatus(null);
+        endTurnWithoutStream();
         return;
       }
 
@@ -1588,7 +1730,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           groundedResult.kind !== 'grounded_answer' ||
           !groundedResult.requiresOperationalContinuation
         ) {
-          setGroundedLoadingStatus(null);
+          endTurnWithoutStream();
           return;
         }
       }
@@ -1607,17 +1749,17 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
               db
             );
           }
-          setGroundedLoadingStatus(null);
+          endTurnWithoutStream();
           return;
         }
     } catch (groundedErr: any) {
       if (turnController.signal.aborted) {
-        setGroundedLoadingStatus(null);
+        endTurnWithoutStream();
         return;
       }
 
       logAiChatError('Grounded pipeline or persistence error', groundedErr);
-      setGroundedLoadingStatus(null);
+      patchGroundedLoading(null);
 
       // Fail-closed gate per D-04: If intent router is unavailable, stop immediately.
       if (
@@ -1625,28 +1767,32 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         groundedErr?.name === 'IntentRouterUnavailableError' ||
         groundedErr?.message?.includes('intent routing is unavailable')
       ) {
-        setApiError(
+        patchTurnError(
+          'request_failed',
           'Trợ lý AI tạm thời không khả dụng. Vui lòng kiểm tra lại cấu hình kết nối AI.'
         );
+        if (activeReq) requestRegistryRef.current.finish(activeReq.requestId);
         return;
       }
 
-      setApiError(
+      patchTurnError(
+        'invalid_response',
         'Không thể lưu câu trả lời hoặc dữ liệu tri thức không hợp lệ. Vui lòng thử lại.'
       );
+      if (activeReq) requestRegistryRef.current.finish(activeReq.requestId);
       return;
     }
     }
 
     // 3. Operational tool loop (for operational / mixed / fallback turns)
     if (turnController.signal.aborted) {
-      setGroundedLoadingStatus(null);
+      endTurnWithoutStream();
       return;
     }
 
     if (!apiKey) {
-      setGroundedLoadingStatus(null);
-      setApiError('Chưa cấu hình API Key 9router. Vui lòng mở Cài đặt AI để thiết lập.');
+      patchTurnError('request_failed', 'Chưa cấu hình API Key 9router. Vui lòng mở Cài đặt AI để thiết lập.');
+      if (activeReq) requestRegistryRef.current.finish(activeReq.requestId);
       return;
     }
 
@@ -1706,10 +1852,12 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     const { taskIds, projectIds, filePaths } = extractMentionedEntityIds(trimmed);
     const mentionedContexts: string[] = [];
 
-    if (filePaths && filePaths.length > 0) {
-      setSessionAttachedFiles((prev) => Array.from(new Set([...prev, ...filePaths])));
+    const turnReferences = tabRuntimes.get(turnTabId)?.references ?? [];
+    const allFiles = Array.from(new Set([...turnReferences, ...(filePaths || [])]));
+    if (allFiles.length !== turnReferences.length) {
+      // One-shot append computed from the owning tab, so a mid-send tab switch cannot merge another tab's attachments.
+      tabRuntimes.patch(turnTabId, { references: allFiles });
     }
-    const allFiles = Array.from(new Set([...sessionAttachedFiles, ...(filePaths || [])]));
 
     for (const tid of taskIds) {
       if (effectiveScope.type === 'task' && effectiveScope.id === tid) continue;
@@ -1872,14 +2020,11 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
     }
 
     // 5. Start SSE Streaming with Tool Execution Harness
-    setGroundedLoadingStatus(null);
-    const activeReq = requestRegistryRef.current.begin(activeTabId, activeThread.id);
-    const controller = activeReq?.controller ?? new AbortController();
-    abortControllerRef.current = controller;
-    tabRuntimes.patch(activeTabId, { status: 'processing', partialBuffer: '' });
-    setIsStreaming(true);
-    setStreamingText('');
-    setStreamingStatus('Đang kết nối 9router...');
+    patchGroundedLoading(null);
+    tabRuntimes.patch(turnTabId, {
+      streamingText: '',
+      streamingStatus: 'Đang kết nối 9router...',
+    });
 
     const correlationId = crypto.randomUUID();
     const routeLog = createPhaseLogger('[ROUTE]', { correlationId });
@@ -1892,9 +2037,10 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
     const currentMessages: ChatCompletionMessage[] = [...recentMsgs];
     const MAX_TOOL_LOOPS = 30;
 
+    const resolvedModel = resolveActiveModel();
     const targetModel =
-      selectedModel && (availableModels.length === 0 || availableModels.includes(selectedModel))
-        ? selectedModel
+      resolvedModel && (availableModels.length === 0 || availableModels.includes(resolvedModel))
+        ? resolvedModel
         : availableModels[0] || config.defaultModel;
 
     routeLog.log({
@@ -1936,16 +2082,14 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
           fullResponse += delta;
           aiDebugService.appendStreamChunk(turnId, delta);
           const stripped = stripThinkingBlocks(fullResponse);
-          setStreamingText(stripped);
-          tabRuntimes.patch(activeTabId, { partialBuffer: stripped });
-          setStreamingStatus(null);
+          tabRuntimes.patch(turnTabId, { streamingText: stripped, streamingStatus: null, partialBuffer: stripped });
         },
         onStatusChange: (status) => {
           if (status === 'Đang tổng hợp câu trả lời hoàn chỉnh...') {
             fullResponse = '';
-            setStreamingText('');
+            tabRuntimes.patch(turnTabId, { streamingText: '' });
           }
-          setStreamingStatus(status);
+          tabRuntimes.patch(turnTabId, { streamingStatus: status });
         },
         onUsage: (usage) => {
           accumulatedTokenUsage = {
@@ -1953,6 +2097,7 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
             completionTokens: (accumulatedTokenUsage?.completionTokens || 0) + (usage.completionTokens || 0),
             totalTokens: (accumulatedTokenUsage?.totalTokens || 0) + (usage.totalTokens || 0),
           };
+          tabRuntimes.patch(turnTabId, { tokenUsage: accumulatedTokenUsage });
         },
         onToolCall: (call) => {
           toolCallsById.set(call.id, { name: call.name, args: call.args });
@@ -1997,13 +2142,18 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
           }
 
           const summary = await describeToolMutationWithContext(toolName, args, db);
-          setStreamingStatus('Chờ xác nhận hành động...');
+          tabRuntimes.patch(turnTabId, { streamingStatus: 'Chờ xác nhận hành động...' });
           const confirmed = await new Promise<boolean>((resolve) => {
-            pendingConfirmationRef.current = { resolve };
-            setPendingConfirmation({ toolName, summary, args });
+            const settled = (value: boolean) => resolve(value);
+            tabRuntimes.patch(turnTabId, {
+              pendingConfirmation: { toolName, summary, args },
+              confirmationResolver: settled,
+            });
           });
-          setPendingConfirmation(null);
-          pendingConfirmationRef.current = null;
+          tabRuntimes.patch(turnTabId, {
+            pendingConfirmation: null,
+            confirmationResolver: undefined,
+          });
 
           return confirmed
             ? { proceed: true }
@@ -2022,6 +2172,12 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
 
       fullResponse = loopResult.fullResponse;
       accumulatedTokenUsage = loopResult.tokenUsage;
+
+      // Superseded or aborted request never writes assistant output (D-11/D-12).
+      if (!requestRegistryRef.current.isCurrent(activeReq?.requestId ?? '', turnTabId, controller)) {
+        aiDebugService.finishTurn(turnId, { aborted: true });
+        return;
+      }
 
       // 6. Commit assistant response to DB
       const cleanCommittedResponse = stripThinkingBlocks(fullResponse);
@@ -2050,21 +2206,23 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
             tag: 'ai-turn-finished',
           });
         }
+        tabRuntimes.patch(turnTabId, { status: 'idle', partialBuffer: '', error: null });
       } else {
-        setApiError('Mô hình AI không trả về nội dung (phản hồi rỗng). Vui lòng thử lại hoặc chọn mô hình khác.');
+        // Empty output is an error turn: keep the runtime error card, do not reset it to idle below.
+        patchTurnError(
+          'invalid_response',
+          'Mô hình AI không trả về nội dung (phản hồi rỗng). Vui lòng thử lại hoặc chọn mô hình khác.'
+        );
       }
-      tabRuntimes.patch(activeTabId, { status: 'idle', partialBuffer: '', error: null });
       aiDebugService.finishTurn(turnId, { finalResponse: fullResponse });
     } catch (err: any) {
       if (err.name === 'AbortError') {
         // Abort invalidates the whole transient response; never persist partial output.
         aiDebugService.finishTurn(turnId, { aborted: true });
-        tabRuntimes.patch(activeTabId, { status: 'idle', partialBuffer: '' });
       } else {
         const errorMsg = 'Không thể hoàn tất phản hồi AI. Vui lòng thử lại.';
-        setApiError(errorMsg);
         aiDebugService.finishTurn(turnId, { error: 'request_failed' });
-        tabRuntimes.patch(activeTabId, {
+        tabRuntimes.patch(turnTabId, {
           status: 'error',
           error: {
             code: 'request_failed',
@@ -2074,12 +2232,14 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
         });
       }
     } finally {
-      setIsStreaming(false);
-      setStreamingStatus(null);
-      setStreamingText('');
-      setPendingConfirmation(null);
-      pendingConfirmationRef.current = null;
-      abortControllerRef.current = null;
+      // Reset transient turn state on the owning tab, never the currently visible one.
+      tabRuntimes.patch(turnTabId, {
+        streamingText: '',
+        streamingStatus: null,
+        groundedLoadingStatus: null,
+        requestController: undefined,
+        partialBuffer: '',
+      });
       if (activeReq) {
         requestRegistryRef.current.finish(activeReq.requestId);
       }
@@ -2099,7 +2259,7 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
 
     const apiKey = await getNineRouterApiKey(db);
     const config = await getNineRouterConfig(db);
-    const model = selectedModel || config.defaultModel;
+    const model = resolveActiveModel();
     if (!apiKey || !config.endpoint || !model) {
       setEvidenceSynthesisError({
         id: evidenceId,
@@ -2202,6 +2362,7 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
       }
     },
     onInvalidRetry: () => {
+      const lastSubmittedText = tabRuntimesRef.current.get(runtimeTabId)?.lastSubmittedText;
       if (lastSubmittedText) {
         void handleSendMessage(lastSubmittedText);
       }
@@ -2213,6 +2374,7 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
       onOpenSettings?.();
     },
     onFreshLookup: () => {
+      const lastSubmittedText = tabRuntimesRef.current.get(runtimeTabId)?.lastSubmittedText;
       if (lastSubmittedText) {
         void handleSendMessage(lastSubmittedText);
       }
@@ -2222,24 +2384,23 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
   };
 
   const handleClearContext = async () => {
-    if (pendingConfirmationRef.current) {
-      pendingConfirmationRef.current.resolve(false);
-      pendingConfirmationRef.current = null;
-      setPendingConfirmation(null);
-    }
-    let activeThread = thread;
-    if (!activeThread) {
-      activeThread = await createOrGetThread(
-        {
-          scopeType: currentScope.type,
-          entityId: currentScope.id,
-          title: currentScope.title,
-        },
-        db
-      );
-    }
+    const runtime = tabRuntimesRef.current.get(runtimeTabId);
+    runtime?.confirmationResolver?.(false);
+    tabRuntimesRef.current.patch(runtimeTabId, {
+      pendingConfirmation: null,
+      confirmationResolver: undefined,
+    });
+    // Clear the scope's durable thread, creating it when the scope has no conversation yet.
+    const activeThread = thread ?? (await createOrGetThread(
+      {
+        scopeType: currentScope.type,
+        entityId: currentScope.id,
+        title: currentScope.title,
+      },
+      db
+    ));
     await clearThreadContext(activeThread.id, db);
-    setSessionAttachedFiles([]);
+    tabRuntimes.patch(activeTabId, { references: [] });
     message.success('Đã đặt lại ngữ cảnh hội thoại');
   };
 
@@ -2254,7 +2415,7 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
         if (thread) {
           await clearThreadMessages(thread.id, db);
         }
-        setSessionAttachedFiles([]);
+        tabRuntimes.patch(activeTabId, { references: [] });
         message.success('Đã xóa tin nhắn cuộc trò chuyện');
       },
     });
@@ -2270,13 +2431,16 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
       cancelText: 'Hủy',
       onOk: async () => {
         await clearAllChatHistory(db);
-        setSessionAttachedFiles([]);
+        for (const runtime of Object.values(tabRuntimesRef.current.getSnapshot())) {
+          tabRuntimesRef.current.patch(runtime.tabId, { references: [] });
+        }
         message.success('Đã xóa sạch toàn bộ lịch sử trò chuyện AI');
       },
     });
   };
 
   const handleRetry = () => {
+    const lastSubmittedText = tabRuntimesRef.current.get(runtimeTabId)?.lastSubmittedText;
     if (lastSubmittedText) {
       handleSendMessage(lastSubmittedText);
     }
@@ -2398,7 +2562,7 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
 
       {/* Chat Header */}
       <ChatHeader
-        selectedModel={selectedModel}
+        selectedModel={resolveActiveModel()}
         availableModels={availableModels}
         onModelChange={handleModelChange}
         onRefreshModels={handleRefreshModels}
@@ -2573,10 +2737,9 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
       {/* Message List */}
       <ChatMessageList
         messages={messages}
-        streamingText={streamingText}
-        isStreaming={isStreaming || Boolean(groundedLoadingStatus)}
-        streamingStatus={groundedLoadingStatus || streamingStatus}
-        error={apiError}
+        streamingText={activeRuntime?.streamingText ?? ''}
+        isStreaming={activeRuntime?.status === 'processing'}
+        streamingStatus={activeRuntime?.groundedLoadingStatus ?? activeRuntime?.streamingStatus ?? null}
         scrollTrigger={scrollTrigger}
         onRetry={handleRetry}
         onOpenSettings={onOpenSettings}
@@ -2586,7 +2749,7 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
         onAddToChecklist={handleAddToChecklist}
         onSaveStickyNote={handleSaveStickyNote}
         onRunClaudeCode={handleRunClaudeCode}
-        pendingConfirmation={pendingConfirmation}
+        pendingConfirmation={activeRuntime?.pendingConfirmation ?? null}
         onConfirmAction={handleConfirmAction}
         groundedCallbacks={groundedCallbacks}
         wizardCallbacks={wizardCallbacks}
@@ -2683,9 +2846,9 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
         />
       )}
 
-      {/* Active Tab Runtime Status */}
+      {/* Active Tab Runtime Status: the single error-card owner (D-13). */}
       {(() => {
-        const runtime = tabRuntimes.get(activeTabId);
+        const runtime = activeRuntime;
         if (!runtime) return null;
         if (runtime.status === 'interrupted') {
           return (
@@ -2715,24 +2878,31 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
         return null;
       })()}
 
-      {/* Chat Input Bar */}
+      {/* Chat Input Bar. Remounted per tab and driven by that tab's runtime draft. */}
       <ChatInputBar
+        key={activeTabId}
         autoFocus={open}
         onSubmit={handleSendMessage}
         onClear={handleClearContext}
         onClearAll={handleClearAllHistory}
         onStop={handleStopGeneration}
-        isStreaming={(isStreaming || Boolean(groundedLoadingStatus)) && !pendingConfirmation}
+        isStreaming={(activeRuntime?.status === 'processing') && !activeRuntime?.pendingConfirmation}
         placeholder={
-          pendingConfirmation
+          activeRuntime?.pendingConfirmation
             ? 'Gõ "yes" để xác nhận hoặc "no" để từ chối...'
             : (isSdlcActiveTab ? wizardPlaceholder : undefined)
         }
         leadingContent={isSdlcActiveTab ? wizardLeadingContent : undefined}
         db={db}
-        attachedFiles={sessionAttachedFiles}
+        attachedFiles={activeRuntime?.references ?? []}
         onAttachFile={handleAttachFile}
         onRemoveFile={handleRemoveFile}
+        // Controlled only once the tab has a runtime, so pre-hydration typing is never clobbered.
+        value={activeRuntime ? activeRuntime.draft : undefined}
+        onValueChange={(next) => {
+          draftCarryRef.current = { tabId: activeTabId, text: next };
+          tabRuntimes.patch(activeTabId, { draft: next });
+        }}
         externalValue={externalInputValue ?? undefined}
         onExternalValueConsumed={() => setExternalInputValue(null)}
       />
