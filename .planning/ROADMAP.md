@@ -260,40 +260,48 @@ Plans:
   5. The existing SDLC guarantees still hold after the move: per-tab runtime isolation, checkpoint/resume, revision preview with stale propagation, immutable cycles, missing-source recovery, and the 320px accessible timeline.
   6. Focused suites for the hub, coordinator, change-pack, DOCX builders, and the Playwright SDLC acceptance spec pass with no skipped Phase 25.1.1 tests.
 
-Plans: 9 plans in 9 sequential waves (every plan edits `AIChatDrawer.tsx` or its own service layer; `workflow.use_worktrees: false`)
+Plans: 11 plans in 11 sequential waves (every plan edits `AIChatDrawer.tsx` or its own service layer; `workflow.use_worktrees: false`)
 
 **Wave 1** *(no dependencies)*
 
-- [ ] 25.1.1-01-PLAN.md — Wizard-free artifact persistence: identity assertions replace the wizard-snapshot gate
+- [ ] 25.1.1-01-PLAN.md — Wizard-free, content-addressed artifact persistence: identity assertions replace the wizard-snapshot gate; the key is addressed by `inputHash`, not `draftRevision`
 
 **Wave 2** *(depends on 25.1.1-01)*
 
-- [ ] 25.1.1-02-PLAN.md — Hub shell: collapsible timeline, per-step panel contract, stacked drift layout, focus rings, modal z-index
+- [ ] 25.1.1-02-PLAN.md — Hub shell: collapsible timeline, per-step panel contract (incl. INTAKE), stacked drift layout, focus rings, modal z-index, 11px retired directory-wide
 
 **Wave 3** *(depends on 25.1.1-02)*
 
-- [ ] 25.1.1-03-PLAN.md — Hub step 4: change-pack validate/confirm/drift wired to `commitChangePackAndDrift`
+- [ ] 25.1.1-03-PLAN.md — Hub step 2: SOLUTION writer (`saveHubSolution` → `commitSolution`) so `artifacts.solution` has a noteId before the wizard callbacks are deleted
 
 **Wave 4** *(depends on 25.1.1-03)*
 
-- [ ] 25.1.1-04-PLAN.md — Hub step 5: PL03B/PL07 generation wired to `commitTechDoc`
+- [ ] 25.1.1-04-PLAN.md — Hub step 4: change-pack validate/confirm/drift wired to `commitChangePackAndDrift`
 
 **Wave 5** *(depends on 25.1.1-04)*
 
-- [ ] 25.1.1-05-PLAN.md — Export and CAB services: payload adapters, Note resolution, docx build/download, pinned CAB persistence
+- [ ] 25.1.1-05-PLAN.md — Hub step 5: PL03B/PL07 generation wired to `commitTechDoc`, stage call proven against the real `runWizardStage`, evidence scoped to the project's SDLC sets
 
 **Wave 6** *(depends on 25.1.1-05)*
 
-- [ ] 25.1.1-06-PLAN.md — Hub export rows on steps 1/5/6 and CAB generation wired to `commitCab`
+- [ ] 25.1.1-06-PLAN.md — Export and CAB services: payload adapters, Note resolution, docx build/download, CAB that resolves its own PL02 pin and persists three pinned sources
 
 **Wave 7** *(depends on 25.1.1-06)*
 
-- [ ] 25.1.1-07-PLAN.md — Remove the wizard UI: preview-only historic cards, drawer state retired, four modules deleted
+- [ ] 25.1.1-07-PLAN.md — Hub export rows on steps 1/5/6 and CAB generation wired to `commitCab`, with the resolved PL02 pin recorded back into workflow state
 
 **Wave 8** *(depends on 25.1.1-07)*
 
-- [ ] 25.1.1-08-PLAN.md — Delete `wizardCoordinator.ts` and its suites; replace the wizard Playwright spec with a hub-only spec
+- [ ] 25.1.1-08-PLAN.md — Remove the wizard surface: preview-only historic cards, drawer state retired, routing tests rewritten to assert the approval path is absent
 
 **Wave 9** *(depends on 25.1.1-08)*
 
-- [ ] 25.1.1-09-PLAN.md — Regressions sweep: every Phase 25.1 guarantee re-run scoped, evidence recorded
+- [ ] 25.1.1-09-PLAN.md — Delete the four wizard UI modules and their lifecycle suite; prove nothing imports them
+
+**Wave 10** *(depends on 25.1.1-09)*
+
+- [ ] 25.1.1-10-PLAN.md — Delete `wizardCoordinator.ts` and its suites; replace the wizard Playwright spec with a hub-only spec
+
+**Wave 11** *(depends on 25.1.1-10)*
+
+- [ ] 25.1.1-11-PLAN.md — Regressions sweep: safety-gate list repaired, every Phase 25.1 guarantee re-run scoped, real-function proofs recorded, evidence written up
