@@ -1,5 +1,6 @@
 import React from 'react';
-import { Select, Button, Tooltip, Popover, Badge, Switch, Typography, theme } from 'antd';
+import { Select, Button, Tooltip, Popover, Badge, Switch, Typography, Dropdown, theme } from 'antd';
+import type { MenuProps } from 'antd';
 import {
   ReloadOutlined,
   ExperimentFilled,
@@ -9,12 +10,16 @@ import {
   ClearOutlined,
   ApiOutlined,
   SettingOutlined,
+  MoreOutlined,
 } from '@ant-design/icons';
 import type { McpServerConfig } from '../../services/ai/mcpClient';
 
 export interface ChatTabToolboxProps {
   // Tab ID
   activeTabId: string;
+
+  // Compact layout (e.g. for SDLC StepChatPanel or narrow sidebars)
+  compact?: boolean;
 
   // Model (tab-isolated)
   selectedModel: string;
@@ -44,6 +49,7 @@ export interface ChatTabToolboxProps {
 
 export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
   activeTabId,
+  compact = false,
   selectedModel,
   availableModels,
   onModelChange,
@@ -62,6 +68,30 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
 }) => {
   const { token } = theme.useToken();
   const enabledMcpCount = mcpServers.filter((s) => s.enabled).length;
+  // MCP is considered active if tab-level mcpEnabled is true AND at least one server is enabled
+  const isMcpActive = mcpEnabled && enabledMcpCount > 0;
+
+  // Master toggle handler: toggles tab mcpEnabled and if turning on with 0 servers, turns on first server
+  const handleMasterMcpToggle = (checked: boolean) => {
+    if (onToggleMcpEnabled) {
+      if (checked !== mcpEnabled) {
+        onToggleMcpEnabled(activeTabId);
+      }
+    }
+    // If turning on and no server is enabled, enable all available servers
+    if (checked && enabledMcpCount === 0 && mcpServers.length > 0 && onToggleMcpServer) {
+      for (const server of mcpServers) {
+        onToggleMcpServer(server.id, true);
+      }
+    } else if (!checked && onToggleMcpServer) {
+      // If user explicitly turns off master switch in popover, disable all servers
+      for (const server of mcpServers) {
+        if (server.enabled) {
+          onToggleMcpServer(server.id, false);
+        }
+      }
+    }
+  };
 
   const mcpPopoverContent = (
     <div style={{ width: 260 }}>
@@ -75,9 +105,17 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
           borderBottom: `1px solid ${token.colorBorderSecondary}`,
         }}
       >
-        <Typography.Text strong style={{ fontSize: 12 }}>
-          Máy chủ MCP
-        </Typography.Text>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Typography.Text strong style={{ fontSize: 12 }}>
+            Máy chủ MCP
+          </Typography.Text>
+          <Switch
+            size="small"
+            checked={isMcpActive}
+            onChange={handleMasterMcpToggle}
+            aria-label="Bật/tắt toàn bộ MCP"
+          />
+        </div>
         {onOpenMcpSettings && (
           <Button
             type="link"
@@ -136,7 +174,13 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
               <Switch
                 size="small"
                 checked={server.enabled}
-                onChange={(checked) => onToggleMcpServer?.(server.id, checked)}
+                onChange={(checked) => {
+                  onToggleMcpServer?.(server.id, checked);
+                  // Auto-enable tab-level mcpEnabled if enabling a server
+                  if (checked && !mcpEnabled && onToggleMcpEnabled) {
+                    onToggleMcpEnabled(activeTabId);
+                  }
+                }}
                 aria-label={`Bật/tắt ${server.name}`}
               />
             </div>
@@ -145,6 +189,59 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
       )}
     </div>
   );
+
+  // Compact dropdown menu items when compact={true}
+  const compactMenuItems: MenuProps['items'] = [
+    ...(onToggleAnalysisMode
+      ? [
+          {
+            key: 'analysis-mode',
+            label: (
+              <div
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleAnalysisMode(activeTabId);
+                }}
+              >
+                <span>Chế độ phân tích (chỉ đọc)</span>
+                <Switch size="small" checked={analysisMode} />
+              </div>
+            ),
+            icon: analysisMode ? <ExperimentFilled style={{ color: token.colorPrimary }} /> : <ExperimentOutlined />,
+          },
+        ]
+      : []),
+    ...(onToggleAutoApproveMutations
+      ? [
+          {
+            key: 'auto-approve',
+            label: (
+              <div
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleAutoApproveMutations(activeTabId);
+                }}
+              >
+                <span>Tự động duyệt thay đổi</span>
+                <Switch size="small" checked={autoApproveMutations} />
+              </div>
+            ),
+            icon: autoApproveMutations ? <ThunderboltFilled style={{ color: token.colorError }} /> : <ThunderboltOutlined />,
+          },
+        ]
+      : []),
+    {
+      type: 'divider',
+    },
+    {
+      key: 'clear-context',
+      label: 'Đặt lại hội thoại (/clear)',
+      icon: <ClearOutlined />,
+      onClick: onClearContext,
+    },
+  ];
 
   return (
     <div
@@ -162,8 +259,8 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
       }}
     >
       {/* Left controls: Tab Model selection */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-        <span style={{ fontSize: 11, color: token.colorTextSecondary }}>Mô hình:</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
+        <span style={{ fontSize: 11, color: token.colorTextSecondary, flexShrink: 0 }}>Mô hình:</span>
         <Select
           size="small"
           value={selectedModel}
@@ -172,7 +269,7 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
           filterOption={(input, option) =>
             ((option?.label as string) ?? '').toLowerCase().includes(input.toLowerCase())
           }
-          style={{ width: 145 }}
+          style={{ minWidth: 110, maxWidth: 170, flex: 1 }}
           popupMatchSelectWidth={false}
           getPopupContainer={(node) => node.parentElement || document.body}
           popupStyle={{ zIndex: 1300 }}
@@ -195,7 +292,7 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
               icon={<ReloadOutlined spin={isRefreshingModels} />}
               onClick={onRefreshModels}
               loading={isRefreshingModels}
-              style={{ width: 22, height: 22, padding: 0 }}
+              style={{ width: 22, height: 22, padding: 0, flexShrink: 0 }}
             />
           </Tooltip>
         )}
@@ -203,123 +300,164 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
 
       {/* Right controls: Tab Toggles (Analysis mode, Auto-approve, MCP, Clear context) */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-        {/* Analysis Mode Toggle */}
-        {onToggleAnalysisMode && (
-          <Tooltip title={analysisMode ? "Chế độ phân tích: ĐANG BẬT (AI chỉ đọc dữ liệu & tra cứu tri thức)" : "Chế độ phân tích: ĐANG TẮT (Bật để AI ưu tiên tra cứu tri thức/DB)"}>
-            <Button
-              size="small"
-              type={analysisMode ? 'primary' : 'default'}
-              icon={analysisMode ? <ExperimentFilled data-testid="analysis-mode-header-tag" /> : <ExperimentOutlined />}
-              onClick={() => onToggleAnalysisMode(activeTabId)}
-              style={{
-                fontSize: 11,
-                padding: '0 6px',
-                height: 22,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-              }}
+        {compact ? (
+          <>
+            {/* Unified MCP Popover Button in compact mode */}
+            <Popover
+              content={mcpPopoverContent}
+              title={null}
+              trigger="click"
+              placement="bottomRight"
+              getPopupContainer={(node) => node.parentElement || document.body}
             >
-              Phân tích
-            </Button>
-          </Tooltip>
-        )}
+              <Tooltip title={isMcpActive ? `MCP: ĐANG BẬT (${enabledMcpCount} máy chủ)` : "MCP: ĐANG TẮT"}>
+                <Badge
+                  count={enabledMcpCount}
+                  size="small"
+                  offset={[-2, 2]}
+                  style={{ backgroundColor: isMcpActive ? '#10b981' : token.colorTextQuaternary }}
+                >
+                  <Button
+                    size="small"
+                    type={isMcpActive ? 'primary' : 'default'}
+                    icon={<ApiOutlined />}
+                    aria-label="Quản lý máy chủ MCP"
+                    data-testid="tab-mcp-manage-btn"
+                    onClick={() => {
+                      if (onToggleMcpEnabled) {
+                        onToggleMcpEnabled(activeTabId);
+                      }
+                    }}
+                    style={{
+                      fontSize: 11,
+                      padding: '0 6px',
+                      height: 22,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    MCP
+                  </Button>
+                </Badge>
+              </Tooltip>
+            </Popover>
 
-        {/* MCP Tab Toggle & Server List Management */}
-        <div style={{ display: 'inline-flex', alignItems: 'center' }}>
-          {onToggleMcpEnabled && (
-            <Tooltip title={mcpEnabled ? "Công cụ MCP tab này: ĐANG BẬT" : "Công cụ MCP tab này: ĐANG TẮT"}>
+            {/* Dropdown menu for auxiliary options in compact mode */}
+            <Dropdown menu={{ items: compactMenuItems }} trigger={['click']} placement="bottomRight">
               <Button
                 size="small"
-                data-testid="tab-mcp-btn"
-                aria-label={mcpEnabled ? "Tắt công cụ MCP tab này" : "Bật công cụ MCP tab này"}
-                type={mcpEnabled ? 'primary' : 'default'}
-                icon={<ApiOutlined />}
-                onClick={() => onToggleMcpEnabled(activeTabId)}
-                style={{
-                  fontSize: 11,
-                  padding: '0 6px',
-                  height: 22,
-                  borderTopRightRadius: 0,
-                  borderBottomRightRadius: 0,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 4,
-                }}
-              >
-                MCP
-              </Button>
-            </Tooltip>
-          )}
-
-          <Popover
-            content={mcpPopoverContent}
-            title={null}
-            trigger="click"
-            placement="bottomRight"
-            getPopupContainer={(node) => node.parentElement || document.body}
-          >
-            <Tooltip title={`Danh sách máy chủ MCP (${enabledMcpCount} máy chủ đang bật)`}>
-              <Badge
-                count={enabledMcpCount}
-                size="small"
-                offset={[-2, 2]}
-                style={{ backgroundColor: enabledMcpCount > 0 ? '#10b981' : token.colorTextQuaternary }}
-              >
+                type="text"
+                icon={<MoreOutlined />}
+                aria-label="Tùy chọn bổ sung"
+                data-testid="tab-compact-more-btn"
+                style={{ width: 22, height: 22, padding: 0, color: token.colorTextSecondary }}
+              />
+            </Dropdown>
+          </>
+        ) : (
+          <>
+            {/* Analysis Mode Toggle */}
+            {onToggleAnalysisMode && (
+              <Tooltip title={analysisMode ? "Chế độ phân tích: ĐANG BẬT (AI chỉ đọc dữ liệu & tra cứu tri thức)" : "Chế độ phân tích: ĐANG TẮT (Bật để AI ưu tiên tra cứu tri thức/DB)"}>
                 <Button
                   size="small"
-                  type={mcpEnabled ? 'primary' : 'default'}
-                  icon={<SettingOutlined style={{ fontSize: 10 }} />}
-                  aria-label="Quản lý danh sách máy chủ MCP"
-                  data-testid="tab-mcp-manage-btn"
+                  type={analysisMode ? 'primary' : 'default'}
+                  icon={analysisMode ? <ExperimentFilled data-testid="analysis-mode-header-tag" /> : <ExperimentOutlined />}
+                  onClick={() => onToggleAnalysisMode(activeTabId)}
                   style={{
+                    fontSize: 11,
+                    padding: '0 6px',
                     height: 22,
-                    padding: '0 4px',
-                    borderTopLeftRadius: onToggleMcpEnabled ? 0 : undefined,
-                    borderBottomLeftRadius: onToggleMcpEnabled ? 0 : undefined,
-                    borderLeft: onToggleMcpEnabled ? 0 : undefined,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
                   }}
-                />
-              </Badge>
-            </Tooltip>
-          </Popover>
-        </div>
+                >
+                  Phân tích
+                </Button>
+              </Tooltip>
+            )}
 
-        {/* Auto Approve Toggle */}
-        {onToggleAutoApproveMutations && (
-          <Tooltip title={autoApproveMutations ? "Tự động duyệt thay đổi: ĐANG BẬT (AI tự động ghi DB)" : "Tự động duyệt thay đổi: ĐANG TẮT (Hỏi xác nhận trước khi sửa DB)"}>
-            <Button
-              size="small"
-              data-testid="tab-auto-approve-btn"
-              type={autoApproveMutations ? 'primary' : 'default'}
-              danger={autoApproveMutations}
-              icon={autoApproveMutations ? <ThunderboltFilled /> : <ThunderboltOutlined />}
-              onClick={() => onToggleAutoApproveMutations(activeTabId)}
-              style={{
-                fontSize: 11,
-                padding: '0 6px',
-                height: 22,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-              }}
+            {/* Unified Single MCP Popover Toggle Button */}
+            <Popover
+              content={mcpPopoverContent}
+              title={null}
+              trigger="click"
+              placement="bottomRight"
+              getPopupContainer={(node) => node.parentElement || document.body}
             >
-              Tự duyệt
-            </Button>
-          </Tooltip>
-        )}
+              <Tooltip title={isMcpActive ? `MCP: ĐANG BẬT (${enabledMcpCount} máy chủ)` : "MCP: ĐANG TẮT (Bấm để bật và chọn máy chủ)"}>
+                <Badge
+                  count={enabledMcpCount}
+                  size="small"
+                  offset={[-2, 2]}
+                  style={{ backgroundColor: isMcpActive ? '#10b981' : token.colorTextQuaternary }}
+                >
+                  <Button
+                    size="small"
+                    type={isMcpActive ? 'primary' : 'default'}
+                    icon={<ApiOutlined />}
+                    aria-label="Quản lý và bật/tắt MCP"
+                    data-testid="tab-mcp-btn"
+                    data-manage-testid="tab-mcp-manage-btn"
+                    onClick={() => {
+                      if (onToggleMcpEnabled) {
+                        onToggleMcpEnabled(activeTabId);
+                      }
+                    }}
+                    style={{
+                      fontSize: 11,
+                      padding: '0 6px',
+                      height: 22,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    MCP
+                  </Button>
+                </Badge>
+              </Tooltip>
+            </Popover>
 
-        {/* Clear Context Button */}
-        <Tooltip title="Đặt lại ngữ cảnh hội thoại (/clear)">
-          <Button
-            type="text"
-            size="small"
-            icon={<ClearOutlined />}
-            onClick={onClearContext}
-            aria-label="Đặt lại ngữ cảnh (/clear)"
-            style={{ width: 22, height: 22, padding: 0, color: token.colorTextSecondary }}
-          />
-        </Tooltip>
+            {/* Auto Approve Toggle */}
+            {onToggleAutoApproveMutations && (
+              <Tooltip title={autoApproveMutations ? "Tự động duyệt thay đổi: ĐANG BẬT (AI tự động ghi DB)" : "Tự động duyệt thay đổi: ĐANG TẮT (Hỏi xác nhận trước khi sửa DB)"}>
+                <Button
+                  size="small"
+                  data-testid="tab-auto-approve-btn"
+                  type={autoApproveMutations ? 'primary' : 'default'}
+                  danger={autoApproveMutations}
+                  icon={autoApproveMutations ? <ThunderboltFilled /> : <ThunderboltOutlined />}
+                  onClick={() => onToggleAutoApproveMutations(activeTabId)}
+                  style={{
+                    fontSize: 11,
+                    padding: '0 6px',
+                    height: 22,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                >
+                  Tự duyệt
+                </Button>
+              </Tooltip>
+            )}
+
+            {/* Clear Context Button */}
+            <Tooltip title="Đặt lại ngữ cảnh hội thoại (/clear)">
+              <Button
+                type="text"
+                size="small"
+                icon={<ClearOutlined />}
+                onClick={onClearContext}
+                aria-label="Đặt lại ngữ cảnh (/clear)"
+                style={{ width: 22, height: 22, padding: 0, color: token.colorTextSecondary }}
+              />
+            </Tooltip>
+          </>
+        )}
       </div>
     </div>
   );

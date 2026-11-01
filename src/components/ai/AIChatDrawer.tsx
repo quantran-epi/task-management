@@ -337,6 +337,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     try {
       const next = await toggleMcpServer(id, enabled, db);
       setMcpServers(next);
+      if (enabled && !currentTabMcpEnabled) {
+        await handleToggleMcpEnabled();
+      }
       message.success(
         enabled ? 'Đã bật máy chủ MCP' : 'Đã tắt máy chủ MCP'
       );

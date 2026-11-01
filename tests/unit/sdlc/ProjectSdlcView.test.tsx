@@ -162,4 +162,31 @@ describe('ProjectSdlcView and IDE Layout', () => {
       expect(reloadedTextarea.value).toContain('Persisted across navigation.');
     });
   });
+
+  it('Test 6: StepChatPanel renders compact toolbox with Model selector and unified MCP button without header overflow', async () => {
+    render(
+      <StepChatPanel
+        projectId={projectId}
+        crId="cr-test-01"
+        stepId="INTAKE"
+        stepGroundingContext="Grounding for INTAKE"
+        db={db}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('chat-tab-toolbox')).toBeInTheDocument();
+    });
+
+    // Model selector is present
+    expect(screen.getByLabelText(/Chọn mô hình AI cho tab này/i)).toBeInTheDocument();
+
+    // Unified MCP button is present
+    const mcpBtn = screen.getByTestId('tab-mcp-manage-btn');
+    expect(mcpBtn).toBeInTheDocument();
+
+    // Compact options menu button is present
+    const compactMoreBtn = screen.getByTestId('tab-compact-more-btn');
+    expect(compactMoreBtn).toBeInTheDocument();
+  });
 });

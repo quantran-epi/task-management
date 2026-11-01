@@ -189,6 +189,9 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
     const updated = mcpServers.map((s) => (s.id === id ? { ...s, enabled } : s));
     setMcpServers(updated);
     await saveMcpServers(updated, db);
+    if (enabled && !mcpEnabled) {
+      setMcpEnabled(true);
+    }
   };
 
   // Read messages strictly bound to this isolated step threadId
@@ -441,9 +444,10 @@ Hãy trả lời súc tích, đi thẳng vào giải pháp kỹ thuật, phân t
           )}
         </div>
 
-        {/* Parity ChatTabToolbox */}
+        {/* Compact Parity ChatTabToolbox */}
         <ChatTabToolbox
           activeTabId={threadId || 'sdlc-step-tab'}
+          compact
           selectedModel={selectedModel}
           availableModels={availableModels}
           onModelChange={(m) => {
