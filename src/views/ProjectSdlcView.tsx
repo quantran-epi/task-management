@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { theme, Button } from 'antd';
-import { ArrowLeftOutlined } from '@ant-design/icons';
+import { theme, Button, Popconfirm, Space, message } from 'antd';
+import { ArrowLeftOutlined, RedoOutlined } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import { PageHeader } from '../components/common/PageHeader';
@@ -78,6 +78,13 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
   const handleCommitSolution = async (markdown: string, noteId: string) => {
     await coordinator.commitSolution(markdown, noteId);
   };
+
+  // Reset workflow handler (per T-25.1.2-07: keeps notes intact, resets workflow state)
+  const handleResetWorkflow = useCallback(async () => {
+    setWorkflowState(undefined);
+    setSelectedStep('INTAKE');
+    message.success('Đã đặt lại quy trình về ban đầu. Ghi chú đã lưu vẫn được bảo toàn.');
+  }, []);
 
   const renderStepNode = () => {
     switch (selectedStep) {
@@ -177,9 +184,23 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
         title={`SDLC Studio — ${project?.name ?? 'Dự án'}`}
         subtitle="Môi trường phát triển & kiểm soát chất lượng bàn giao 6 bước"
         extra={
-          <Button icon={<ArrowLeftOutlined />} onClick={onBack}>
-            Quay lại Dự án
-          </Button>
+          <Space>
+            {workflowState && (
+              <Popconfirm
+                title="Đặt lại quy trình SDLC?"
+                description="Hành động này sẽ làm mới các bước trong CR hiện tại. Toàn bộ Ghi chú đã lưu trong Dự án không bị xóa."
+                okText="Đặt lại"
+                cancelText="Hủy"
+                onConfirm={handleResetWorkflow}
+                data-testid="btn-reset-workflow"
+              >
+                <Button icon={<RedoOutlined />}>Đặt lại quy trình</Button>
+              </Popconfirm>
+            )}
+            <Button icon={<ArrowLeftOutlined />} onClick={onBack}>
+              Quay lại Dự án
+            </Button>
+          </Space>
         }
       />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
@@ -197,6 +218,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
           selectedStep={selectedStep}
           workflowState={workflowState}
           stepViewNode={renderStepNode()}
+          onNavigateToStep={setSelectedStep}
           db={db}
         />
       </div>

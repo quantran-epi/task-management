@@ -1,10 +1,7 @@
 import React, { useState } from 'react';
-import { Button, Select, Space, Typography, Progress, Tag, theme, Modal, Form, Input, DatePicker, message } from 'antd';
+import { Button, Select, Space, Typography, Progress, Tag, theme } from 'antd';
 import {
   PlusOutlined,
-  CheckCircleFilled,
-  ClockCircleOutlined,
-  WarningFilled,
   FileTextOutlined,
   CodeOutlined,
   DeploymentUnitOutlined,
@@ -13,9 +10,9 @@ import {
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
-import { listCrs, createNewCr, type SdlcCrRecord } from '../../services/wizard/sdlcCrManager';
+import { listCrs, type SdlcCrRecord } from '../../services/wizard/sdlcCrManager';
 import type { SdlcStepId } from '../../services/wizard/workflowSchemas';
-import dayjs from 'dayjs';
+import { CrCreateModal } from './common/CrCreateModal';
 
 export interface SdlcSidebarProps {
   projectId: string;
@@ -50,7 +47,6 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
 }) => {
   const { token } = theme.useToken();
   const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [form] = Form.useForm();
 
   const crs = useLiveQuery(() => listCrs(projectId, db), [projectId, db]) ?? [];
   const currentCr = crs.find((c) => (activeCrId ? c.id === activeCrId : c.status === 'active')) ?? crs[0];
@@ -58,27 +54,8 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
   const currentStepIndex = SDLC_STEPS_CONFIG.findIndex((s) => s.id === selectedStep);
   const progressPercent = Math.round(((currentStepIndex + 1) / SDLC_STEPS_CONFIG.length) * 100);
 
-  const handleCreateNewCr = async () => {
-    try {
-      const values = await form.validateFields();
-      await createNewCr(
-        projectId,
-        {
-          cr: values.cr,
-          featureName: values.featureName,
-          author: values.author,
-          requestingUnit: values.requestingUnit,
-          date: values.date.format('YYYY-MM-DD'),
-        },
-        false,
-        db
-      );
-      message.success('Đã tạo CR mới thành công');
-      setCreateModalOpen(false);
-      form.resetFields();
-    } catch {
-      // Form validation error
-    }
+  const handleCrCreated = (newCr: SdlcCrRecord) => {
+    onSelectCr?.(newCr.id);
   };
 
   return (
@@ -108,6 +85,7 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
             icon={<PlusOutlined />}
             style={{ padding: 0 }}
             onClick={() => setCreateModalOpen(true)}
+            data-testid="sidebar-btn-create-cr"
           >
             Tạo CR mới
           </Button>
@@ -118,6 +96,7 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
             style={{ width: '100%' }}
             value={currentCr?.id}
             onChange={(val) => onSelectCr?.(val)}
+            data-testid="sidebar-cr-select"
             options={crs.map((c) => ({
               value: c.id,
               label: (
@@ -136,6 +115,7 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
             type="dashed"
             icon={<PlusOutlined />}
             onClick={() => setCreateModalOpen(true)}
+            data-testid="sidebar-btn-first-cr"
           >
             Khởi tạo CR đầu tiên
           </Button>
@@ -155,12 +135,13 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
 
       {/* Stepper Vertical List */}
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {SDLC_STEPS_CONFIG.map((step, idx) => {
+        {SDLC_STEPS_CONFIG.map((step) => {
           const isSelected = step.id === selectedStep;
           return (
             <div
               key={step.id}
               onClick={() => onSelectStep(step.id)}
+              data-testid={`sidebar-step-${step.id}`}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -214,33 +195,13 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
       </div>
 
       {/* New CR Modal */}
-      <Modal
-        title="Tạo Change Request (CR) mới"
+      <CrCreateModal
+        projectId={projectId}
         open={createModalOpen}
-        onCancel={() => setCreateModalOpen(false)}
-        onOk={handleCreateNewCr}
-        okText="Tạo CR"
-        cancelText="Hủy"
-        destroyOnClose
-      >
-        <Form form={form} layout="vertical" initialValues={{ date: dayjs() }}>
-          <Form.Item name="cr" label="Mã CR" rules={[{ required: true, message: 'Vui lòng nhập mã CR' }]}>
-            <Input placeholder="Ví dụ: CR-2026-001" />
-          </Form.Item>
-          <Form.Item name="featureName" label="Tên tính năng" rules={[{ required: true, message: 'Vui lòng nhập tên tính năng' }]}>
-            <Input placeholder="Ví dụ: Nâng cấp luồng chuyển tiền Napas 247" />
-          </Form.Item>
-          <Form.Item name="author" label="Người lập" rules={[{ required: true, message: 'Vui lòng nhập tên người lập' }]}>
-            <Input placeholder="Ví dụ: Nguyễn Văn A" />
-          </Form.Item>
-          <Form.Item name="requestingUnit" label="Đơn vị yêu cầu" rules={[{ required: true, message: 'Vui lòng nhập đơn vị' }]}>
-            <Input placeholder="Ví dụ: Khối Ngân hàng số" />
-          </Form.Item>
-          <Form.Item name="date" label="Ngày lập" rules={[{ required: true, message: 'Vui lòng chọn ngày lập' }]}>
-            <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
-          </Form.Item>
-        </Form>
-      </Modal>
+        onClose={() => setCreateModalOpen(false)}
+        onCrCreated={handleCrCreated}
+        db={db}
+      />
     </div>
   );
 };

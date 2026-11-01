@@ -3,6 +3,7 @@ import { theme } from 'antd';
 import type { TaskPlannerDatabase } from '../../db';
 import type { SdlcStepId, SdlcWorkflowState } from '../../services/wizard/workflowSchemas';
 import { StepChatPanel } from './chat/StepChatPanel';
+import { SdlcStaleBanner } from './common/SdlcStaleBanner';
 
 export interface SdlcWorkspaceProps {
   projectId: string;
@@ -11,6 +12,7 @@ export interface SdlcWorkspaceProps {
   workflowState?: SdlcWorkflowState;
   stepViewNode?: React.ReactNode;
   stepGroundingContext?: string;
+  onNavigateToStep?: (step: SdlcStepId) => void;
   db?: TaskPlannerDatabase;
 }
 
@@ -21,6 +23,7 @@ export const SdlcWorkspace: React.FC<SdlcWorkspaceProps> = ({
   workflowState,
   stepViewNode,
   stepGroundingContext = '',
+  onNavigateToStep,
   db,
 }) => {
   const { token } = theme.useToken();
@@ -47,6 +50,13 @@ export const SdlcWorkspace: React.FC<SdlcWorkspaceProps> = ({
           background: token.colorBgContainer,
         }}
       >
+        {onNavigateToStep && (
+          <SdlcStaleBanner
+            currentStep={selectedStep}
+            workflowState={workflowState}
+            onNavigateToStep={onNavigateToStep}
+          />
+        )}
         {stepViewNode || (
           <div style={{ color: token.colorTextSecondary, padding: 24, textAlign: 'center' }}>
             Nội dung hiển thị của bước {selectedStep}
