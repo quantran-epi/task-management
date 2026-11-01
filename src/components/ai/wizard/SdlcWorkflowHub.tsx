@@ -320,7 +320,6 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = (props) => {
 
   // Shared by both variants: the drawer shows the current step's panel, the modal shows the selected one.
   const renderStepBody = (stepId: SdlcStepId, stale: boolean, inModal = false) => {
-    const cfg = STEP_CONFIGS.find((s) => s.id === stepId) ?? (STEP_CONFIGS[0] as StepConfig);
     return (
       <div
         // The modal can show the same step as the drawer card, so its copy is namespaced:
@@ -334,11 +333,25 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = (props) => {
           ))}
         {stepId === 'SOLUTION' &&
           (stepPanels?.solution ?? <StepSolutionPanel artifact={state.artifacts.solution} stale={stale} canSave={false} />)}
-        {/* Step 3 carries no artifact, no action and no export — hint body only, by design. */}
+        {/* Step 3 carries no artifact, no action and no export. The hint sentence is already in the
+            header above, so this panel carries only the command it tells you to run. */}
         {stepId === 'CODE_GUIDE' && (
-          <div style={{ fontSize: 14, fontWeight: 400, lineHeight: 1.5, color: token.colorTextSecondary, wordBreak: 'break-word' }}>
-            {cfg.hint}
-          </div>
+          <code
+            style={{
+              display: 'block',
+              fontSize: 12,
+              lineHeight: 1.5,
+              padding: '6px 8px',
+              borderRadius: token.borderRadiusSM,
+              backgroundColor: token.colorFillTertiary,
+              color: token.colorText,
+              fontFamily: 'monospace',
+              overflowX: 'auto',
+              whiteSpace: 'pre',
+            }}
+          >
+            node scripts/change-pack.mjs --cr &lt;MÃ_CR&gt;
+          </code>
         )}
         {stepId === 'CHANGE_PACK' &&
           (stepPanels?.changePack ?? (
@@ -416,7 +429,7 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = (props) => {
               whiteSpace: 'nowrap',
             }}
           >
-            SDLC: {state.metadata.featureName} · {state.metadata.cr} · Chu kỳ {currentCycleNumber}
+            SDLC: {state.metadata.featureName} · Chu kỳ {currentCycleNumber}
             {currentCycleStatus === 'completed' ? ' (hoàn tất)' : ''}
           </span>
         </div>
@@ -462,8 +475,14 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = (props) => {
       title={
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
           <Space size={6} wrap>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>SDLC: {state.metadata.featureName}</span>
-            <Tag color="blue">{state.metadata.cr}</Tag>
+            {/* Inside the detail modal the dialog title already names the feature, and the drawer
+                card above it repeats the CR — only the stale count adds anything here. */}
+            {!inDetailModal && (
+              <>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>SDLC: {state.metadata.featureName}</span>
+                <Tag color="blue">{state.metadata.cr}</Tag>
+              </>
+            )}
             {hasStale && (
               <Tag color="warning" icon={<ReloadOutlined />}>
                 {state.staleSteps.length} bước cần cập nhật
