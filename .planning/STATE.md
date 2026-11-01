@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: milestone
-status: in_progress
-stopped_at: Completed 25.2-06-PLAN.md
-last_updated: "2026-11-01T16:40:00.000Z"
-last_activity: 2026-11-01 -- Completed 25.2-06-PLAN.md
+status: planning
+stopped_at: Phase 25.3 context gathered
+last_updated: "2026-11-01T11:32:21.287Z"
+last_activity: 2026-11-01 -- Initialized Phase 25.3
 progress:
-  total_phases: 13
+  total_phases: 14
   completed_phases: 10
   total_plans: 105
   completed_plans: 97
-  percent: 80
+  percent: 71
 ---
 
 # Project State
@@ -21,15 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-07)
 
 **Core value:** Make planned work realistically fit available time while giving the personal user evidence-grounded access to their local banking IT knowledge.
-**Current focus:** Phase 25.2 — fix-taskmate-mutation-flow-standardize-ai-core-engine-for-sdlc-studio
+**Current focus:** Phase 25.3 — sdlc-workflow-hardening-common-ai-chat-widget
 
 ## Current Position
 
-Phase: 25.2 (fix-taskmate-mutation-flow-standardize-ai-core-engine-for-sdlc-studio) — GAP CLOSURE
-Plan: 6 of 6 (Plan 06 complete)
-Status: Phase 25.2 completed
-Last activity: 2026-11-01 -- Completed 25.2-06-PLAN.md
-Stopped at: Completed 25.2-06-PLAN.md
+Phase: 25.3 (sdlc-workflow-hardening-common-ai-chat-widget)
+Plan: 0 of TBD
+Status: In planning & architectural discussion
+Last activity: 2026-11-01 -- Initialized Phase 25.3
+Stopped at: Phase 25.3 context gathered
 
 Progress: [██████████] 100%
 
