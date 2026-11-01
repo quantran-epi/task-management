@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Tag, theme } from 'antd';
 import { CheckCircleOutlined, ClockCircleOutlined, ReloadOutlined, SyncOutlined } from '@ant-design/icons';
 import type { SdlcArtifactRef } from '../../../services/wizard/workflowSchemas';
@@ -69,9 +69,9 @@ export interface StepIntakePanelProps {
 export const StepIntakePanel: React.FC<StepIntakePanelProps> = ({ pl01, pl02, renderExportRow, onEditIntake }) => {
   return (
     <PanelBlock>
-      <ArtifactRow label="PL01 — Yêu cầu nghiệp vụ" artifact={pl01} missingCopy="Chưa có — bấm Sửa PL01/PL02." />
+      <ArtifactRow label="PL01 — Yêu cầu nghiệp vụ" artifact={pl01} missingCopy="Chưa có — bấm Nạp lại hồ sơ." />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }} data-testid="export-slot-PL02">
-        <ArtifactRow label="PL02 — Đặc tả chức năng" artifact={pl02} missingCopy="Chưa có — bấm Sửa PL01/PL02." />
+        <ArtifactRow label="PL02 — Đặc tả chức năng" artifact={pl02} missingCopy="Chưa có — bấm Nạp lại hồ sơ." />
         {renderExportRow?.('PL02')}
       </div>
       <Button size="small" onClick={onEditIntake} style={{ alignSelf: 'flex-start' }}>
@@ -83,21 +83,31 @@ export const StepIntakePanel: React.FC<StepIntakePanelProps> = ({ pl01, pl02, re
 
 export interface StepSolutionPanelProps {
   artifact?: SdlcArtifactRef | undefined;
+  /** Live draft from the chat; shown when the artifact has no content or the draft is newer. */
+  draft?: string | undefined;
   stale: boolean;
   canSave: boolean;
   onSave?: (() => void) | undefined;
   saving?: boolean | undefined;
   savedNoteId?: string | undefined;
+  onOpenNote?: ((noteId: string) => void) | undefined;
 }
 
 export const StepSolutionPanel: React.FC<StepSolutionPanelProps> = ({
   artifact,
+  draft,
   canSave,
   onSave,
   saving = false,
   savedNoteId,
+  onOpenNote,
 }) => {
   const { token } = theme.useToken();
+  const [expanded, setExpanded] = useState(false);
+  const content = artifact?.content?.trim() || draft?.trim() || '';
+  // Not `artifact.title`: it embeds the feature name, which the hub header already shows.
+  const heading = artifact ? `Bản đang dùng — v${artifact.version}` : 'Bản nháp trong chat';
+
   return (
     <PanelBlock>
       <ArtifactRow
@@ -105,19 +115,55 @@ export const StepSolutionPanel: React.FC<StepSolutionPanelProps> = ({
         artifact={artifact}
         missingCopy="Chưa có — hỏi AI soạn SOLUTION.md trong khung chat."
       />
-      <Button
-        type="primary"
-        size="small"
-        disabled={!canSave || saving}
-        loading={saving}
-        onClick={onSave}
-        style={{ alignSelf: 'flex-start' }}
-      >
-        Lưu SOLUTION.md
-      </Button>
-      {savedNoteId && !saving && (
-        <span style={{ fontSize: 12, fontWeight: 400, color: token.colorSuccess }}>Đã lưu vào tài liệu dự án</span>
+
+      {/* Reading the solution is the whole point of step 2; without this the panel only offered Save. */}
+      {content && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+            <span style={labelStyle(token.colorText)}>{heading}</span>
+            <Button type="link" size="small" style={{ padding: 0 }} onClick={() => setExpanded((prev) => !prev)}>
+              {expanded ? 'Thu gọn' : 'Xem nội dung'}
+            </Button>
+          </div>
+          {expanded && (
+            <div
+              data-testid="solution-preview"
+              style={{
+                maxHeight: 260,
+                overflowY: 'auto',
+                padding: '8px 10px',
+                border: `1px solid ${token.colorBorderSecondary}`,
+                borderRadius: token.borderRadiusSM,
+                backgroundColor: token.colorBgContainer,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                fontSize: 12,
+                lineHeight: 1.5,
+                fontFamily: 'monospace',
+              }}
+            >
+              {content}
+            </div>
+          )}
+        </div>
       )}
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+        <Button
+          type="primary"
+          size="small"
+          disabled={!canSave || saving}
+          loading={saving}
+          onClick={onSave}
+        >
+          Lưu SOLUTION.md
+        </Button>
+        {savedNoteId && !saving && (
+          <Button type="link" size="small" style={{ padding: 0 }} onClick={() => onOpenNote?.(savedNoteId)}>
+            Mở tài liệu đã lưu
+          </Button>
+        )}
+      </div>
     </PanelBlock>
   );
 };

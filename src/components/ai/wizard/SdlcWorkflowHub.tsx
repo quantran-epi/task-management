@@ -191,7 +191,7 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = (props) => {
     state,
     onStartWorkflow,
     onSelectStep,
-    onNavigateStep: _onNavigateStep,
+    onNavigateStep,
     onRerunStep,
     onResetWorkflow,
     onRequestRequirementRevision,
@@ -340,13 +340,9 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = (props) => {
       staleStepIds={revisionPreview?.impactSteps ?? REVISION_STALE_IMPACT[revisionModalType]}
       loading={revisionLoading}
       onConfirm={() => {
-        // The user already pressed "Xác nhận cập nhật", so never silently turn that click into
-        // a second preview: without a committed preview (the blur preview raced) fall back to
-        // preview-then-commit instead of returning with nothing done.
-        if (!revisionPreview) {
-          void onPreviewRevision?.(revisionModalType!, effectiveRevisionDraft);
-          return;
-        }
+        // The draft opens prefilled, so a user who edits nothing never fires `onBlur` and the
+        // preview stays null. Treating that as "show the preview instead" made the first click
+        // do nothing at all; the drawer's commit builds the missing preview itself.
         void onCommitRevision?.(revisionModalType!);
         setRevisionModalType(null);
       }}
@@ -369,25 +365,38 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = (props) => {
           ))}
         {stepId === 'SOLUTION' &&
           (stepPanels?.solution ?? <StepSolutionPanel artifact={state.artifacts.solution} stale={stale} canSave={false} />)}
-        {/* Step 3 carries no artifact, no action and no export. The hint sentence is already in the
-            header above, so this panel carries only the command it tells you to run. */}
+        {/* Step 3 produces no artifact of its own: the code lands outside the app and arrives as
+            the change pack in step 4. It still needs a way out, otherwise the flow dead-ends here. */}
         {stepId === 'CODE_GUIDE' && (
-          <code
-            style={{
-              display: 'block',
-              fontSize: 12,
-              lineHeight: 1.5,
-              padding: '6px 8px',
-              borderRadius: token.borderRadiusSM,
-              backgroundColor: token.colorFillTertiary,
-              color: token.colorText,
-              fontFamily: 'monospace',
-              overflowX: 'auto',
-              whiteSpace: 'pre',
-            }}
-          >
-            node scripts/change-pack.mjs --cr &lt;MÃ_CR&gt;
-          </code>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <span style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.4, color: token.colorText }}>
+              Đóng gói phần code đã sửa
+            </span>
+            <code
+              style={{
+                display: 'block',
+                fontSize: 12,
+                lineHeight: 1.5,
+                padding: '6px 8px',
+                borderRadius: token.borderRadiusSM,
+                backgroundColor: token.colorFillTertiary,
+                color: token.colorText,
+                fontFamily: 'monospace',
+                overflowX: 'auto',
+                whiteSpace: 'pre',
+              }}
+            >
+              node scripts/change-pack.mjs --cr {state.metadata.cr}
+            </code>
+            <Button
+              size="small"
+              style={{ alignSelf: 'flex-start' }}
+              disabled={!onNavigateStep}
+              onClick={() => onNavigateStep?.('CHANGE_PACK')}
+            >
+              Đã code xong — sang bước 4
+            </Button>
+          </div>
         )}
         {stepId === 'CHANGE_PACK' &&
           (stepPanels?.changePack ?? (
@@ -554,14 +563,20 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = (props) => {
             </Button>
             {onResetWorkflow && (
               <Popconfirm
-                title="Làm mới workflow?"
-                description="Các tài liệu đã lưu trong Notes vẫn được giữ lại."
+                title="Tạo CR mới cho dự án này?"
+                description={
+                  <span style={{ display: 'block', maxWidth: 320 }}>
+                    Quy trình hiện tại (PL01/PL02, SOLUTION, change pack, PL03B/PL07, CAB và lịch sử
+                    chu kỳ) sẽ bị xoá khỏi hub. Các tài liệu đã lưu trong Notes vẫn được giữ lại và
+                    có thể chọn làm nguồn cho CR mới.
+                  </span>
+                }
                 onConfirm={onResetWorkflow}
-                okText="Làm mới workflow"
-                cancelText="Giữ workflow hiện tại"
+                okText="Tạo CR mới"
+                cancelText="Giữ CR hiện tại"
               >
                 <Button size="small" danger>
-                  Làm mới workflow
+                  Tạo CR mới
                 </Button>
               </Popconfirm>
             )}
@@ -782,8 +797,22 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = (props) => {
           <Alert
             type="warning"
             showIcon
-            message="Tài liệu cũ (stale) — chỉ đọc để đối chiếu, không dùng làm căn cứ cho bước mới."
-            style={{ fontSize: 12, padding: '4px 8px' }}
+            message="Tài liệu này đã cũ"
+            description={
+              <span style={{ display: 'block', maxWidth: 480 }}>
+                Một tài liệu phía trước đã thay đổi, nên bản này không còn dùng làm căn cứ cho bước
+                tiếp theo. Cách xử lý: xem lại bước đang xử lý ở trên, cập nhật tài liệu nguồn nếu
+                cần, rồi chạy lại bước này — bản cũ vẫn được giữ để đối chiếu.
+              </span>
+            }
+            action={
+              selectedStep === currentProcessingStep && onRerunStep ? (
+                <Button size="small" icon={<ReloadOutlined />} onClick={() => onRerunStep(currentProcessingStep)}>
+                  Chạy lại bước này
+                </Button>
+              ) : undefined
+            }
+            style={{ fontSize: 12 }}
           />
         )}
 

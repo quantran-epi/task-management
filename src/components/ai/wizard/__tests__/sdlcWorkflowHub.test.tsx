@@ -123,9 +123,10 @@ describe('SdlcWorkflowHub', () => {
 
     render(<SdlcWorkflowHub projectScoped={true} state={staleState} onStartWorkflow={vi.fn()} />);
 
-    expect(
-      screen.getByText(/Tài liệu cũ \(stale\) — chỉ đọc để đối chiếu, không dùng làm căn cứ cho bước mới\./i)
-    ).toBeInTheDocument();
+    expect(screen.getByText('Tài liệu này đã cũ')).toBeInTheDocument();
+    expect(screen.getByText(/Một tài liệu phía trước đã thay đổi/)).toBeInTheDocument();
+    // Viewed from a step that is not the one processing, so no downstream action is offered here.
+    expect(screen.queryByRole('button', { name: 'Chạy lại bước này' })).not.toBeInTheDocument();
   });
 
   it('D-20/D-21: hiển thị nút cập nhật PL01, PL02 và solution khi đủ điều kiện', () => {
@@ -244,7 +245,23 @@ describe('SdlcWorkflowHub', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Triển khai Code ngoài/i }));
     const codeGuidePanel = screen.getByTestId('hub-panel-CODE_GUIDE');
-    expect(codeGuidePanel).toHaveTextContent('node scripts/change-pack.mjs --cr <MÃ_CR>');
+    // The command now carries the real CR, so it can be pasted instead of edited.
+    expect(codeGuidePanel).toHaveTextContent('node scripts/change-pack.mjs --cr CR-TEST-99');
+  });
+
+  it('step 3 offers the only way forward: mark coding done', () => {
+    const onNavigateStep = vi.fn();
+    render(
+      <SdlcWorkflowHub
+        projectScoped={true}
+        state={{ ...dummyState, currentStep: 'CODE_GUIDE', selectedStep: 'CODE_GUIDE' }}
+        onStartWorkflow={vi.fn()}
+        onNavigateStep={onNavigateStep}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Đã code xong — sang bước 4' }));
+    expect(onNavigateStep).toHaveBeenCalledWith('CHANGE_PACK');
   });
 
   it('hosts the PL02 export slot on the INTAKE panel without touching currentStep', () => {
@@ -660,7 +677,18 @@ describe('StepSolutionPanel', () => {  const saveButton = () => screen.getByRole
     expect(screen.queryByText('Đã lưu vào tài liệu dự án')).not.toBeInTheDocument();
 
     rerender(<StepSolutionPanel stale={false} canSave={true} onSave={vi.fn()} savedNoteId="note-1" />);
-    expect(screen.getByText('Đã lưu vào tài liệu dự án')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mở tài liệu đã lưu' })).toBeInTheDocument();
+  });
+
+  it('shows the solution content in step 2 so it can be read, not only saved', () => {
+    render(<StepSolutionPanel artifact={{
+      kind: 'SOLUTION', version: 2, hash: '0a'.repeat(32), title: 'SOLUTION.md — v2',
+      content: '# Giải pháp\n\nNội dung đã duyệt', sourceHashes: [], updatedAt: '2026-10-30T00:00:00.000Z',
+    }} stale={false} canSave={true} onSave={vi.fn()} />);
+
+    expect(screen.queryByTestId('solution-preview')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Xem nội dung' }));
+    expect(screen.getByTestId('solution-preview')).toHaveTextContent('Nội dung đã duyệt');
   });
 });
 
@@ -786,7 +814,7 @@ describe('RevisionImpactModal', () => {
     expect(onCommit).toHaveBeenCalledTimes(1);
   });
 
-  it('previews instead of committing when the modal has no preview yet', () => {
+  it('commits on the first confirm even when the blur preview never ran', () => {
     const onPreview = vi.fn();
     const onCommit = vi.fn();
     render(
@@ -803,8 +831,10 @@ describe('RevisionImpactModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /Cập nhật solution/i }));
     fireEvent.click(screen.getByRole('button', { name: /Xác nhận cập nhật/i }));
 
-    expect(onPreview).toHaveBeenCalledWith('solution', 'SOLUTION draft');
-    expect(onCommit).not.toHaveBeenCalled();
+    // The draft opens prefilled, so a user who edits nothing never fires onBlur. Turning their
+    // confirm into "show the preview" made the first click appear to do nothing at all.
+    expect(onCommit).toHaveBeenCalledWith('solution');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('commits nothing when the revision modal is dismissed', () => {

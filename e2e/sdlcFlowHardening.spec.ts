@@ -279,13 +279,13 @@ test.describe('Phase 25.1 SDLC Flow Hardening & Multi-Tab Isolation Acceptance',
     await page.getByRole('button', { name: 'Chi tiết' }).click();
     const detailDialog = page.getByRole('dialog').filter({ hasText: 'Chi tiết quy trình' });
     await expect(detailDialog).toBeVisible();
-    const resetWorkflowBtn = detailDialog.getByRole('button', { name: 'Làm mới workflow' });
+    const resetWorkflowBtn = detailDialog.getByRole('button', { name: 'Tạo CR mới' });
     await expect(resetWorkflowBtn).toBeVisible();
     await resetWorkflowBtn.click();
 
     const popconfirm = page.locator('.ant-popconfirm');
-    await expect(popconfirm.getByText('Làm mới workflow?')).toBeVisible();
-    await popconfirm.getByRole('button', { name: 'Làm mới workflow' }).dispatchEvent('click');
+    await expect(popconfirm.getByText('Tạo CR mới cho dự án này?')).toBeVisible();
+    await popconfirm.getByRole('button', { name: 'Tạo CR mới' }).dispatchEvent('click');
 
     await expect(page.getByText('Đã làm mới quy trình SDLC')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Khởi tạo SDLC (PL01 & PL02)' })).toBeVisible();

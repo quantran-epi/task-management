@@ -1440,11 +1440,13 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     solution: (
       <StepSolutionPanel
         artifact={sdlcWorkflowState.artifacts.solution}
+        draft={solutionDraftMarkdown}
         stale={sdlcWorkflowState.staleSteps.includes('SOLUTION')}
         canSave={solutionDraftMarkdown.trim().length > 0 && !solutionSaving}
         onSave={() => void handleHubSaveSolution()}
         saving={solutionSaving}
-        savedNoteId={solutionSavedNoteId}
+        savedNoteId={solutionSavedNoteId ?? sdlcWorkflowState.artifacts.solution?.noteId}
+        onOpenNote={wizardCallbacks.onOpenNote}
       />
     ),
     changePack: (
@@ -3395,6 +3397,15 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
             onSelectStep={(stepId: SdlcStepId) => {
               getSdlcCoordinator()?.selectStep(stepId);
               setSdlcWorkflowState((state) => state ? { ...state, selectedStep: stepId } : state);
+            }}
+            onNavigateStep={(stepId: SdlcStepId) => {
+              // Moving the flow forward, not just the view: step 3 has no artifact to commit, so
+              // this is the only thing that advances past it.
+              void (async () => {
+                const coordinator = getSdlcCoordinator();
+                if (!coordinator) return;
+                setSdlcWorkflowState(await coordinator.navigateToStep(stepId));
+              })();
             }}
             onRerunStep={(stepId: SdlcStepId) => {
               if (stepId === 'INTAKE') {
