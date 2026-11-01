@@ -319,12 +319,12 @@ Plans: 11 plans in 11 sequential waves (every plan edits `AIChatDrawer.tsx` or i
 **Depends on:** Phase 25.1.1
 **Success Criteria** (what must be TRUE):
 
-1. The canonical flow is written down as an explicit state machine: for every step, what the user sees, what actions exist, what each action commits, and what state it leaves behind.
-2. Every step has at least one forward action that a user can find without leaving the hub, and step 3 (external coding) has an explicit completion that advances the flow.
-3. Every destructive or reset action states exactly what it destroys and what survives, and does exactly that — verified by a test that reloads and checks persistence.
-4. Every confirm dialog commits on the first activation; no interaction requires a second click to have an effect.
-5. Every artifact the flow produces can be read back inside the hub, not only written.
-6. A single Playwright walk-through drives intake → SOLUTION → code → change pack → PL03B/PL07 → CAB → export in one session with no manual DB seeding beyond the initial intake.
+  1. The canonical flow is written down as an explicit state machine: for every step, what the user sees, what actions exist, what each action commits, and what state it leaves behind.
+  2. Every step has at least one forward action that a user can find without leaving the hub, and step 3 (external coding) has an explicit completion that advances the flow.
+  3. Every destructive or reset action states exactly what it destroys and what survives, and does exactly that — verified by a test that reloads and checks persistence.
+  4. Every confirm dialog commits on the first activation; no interaction requires a second click to have an effect.
+  5. Every artifact the flow produces can be read back inside the hub, not only written.
+  6. A single Playwright walk-through drives intake → SOLUTION → code → change pack → PL03B/PL07 → CAB → export in one session with no manual DB seeding beyond the initial intake.
 
 **Plans:** 4 plans in 4 waves
 
@@ -359,7 +359,7 @@ Plans:
 4. SDLC Studio `Step2SolutionView` executes automated architectural analysis via `runAiOrchestratorLoop`, leveraging project context and tools to draft `SOLUTION.md` without hallucinations.
 5. All SDLC and AI chat tests pass with zero regressions.
 
-**Plans:** 4 plans (2 executed, 2 gap-closure plans)
+**Plans:** 6 plans (4 executed, 2 gap-closure plans)
 
 Plans:
 
@@ -373,8 +373,16 @@ Plans:
 
 **Wave 3 (Gap Closure)** *(no dependencies)*
 
-- [ ] 25.2-03-PLAN.md — Compact StepChatPanel header layout and unify MCP controls in ChatTabToolbox
+- [x] 25.2-03-PLAN.md — Compact StepChatPanel header layout and unify MCP controls in ChatTabToolbox
 
 **Wave 4 (Gap Closure)** *(depends on 25.2-03)*
 
-- [ ] 25.2-04-PLAN.md — Harden stalenessDetector and isolate draft artifact state against white screen crash
+- [x] 25.2-04-PLAN.md — Harden stalenessDetector and isolate draft artifact state against white screen crash
+
+**Wave 5 (Gap Closure)** *(no dependencies)*
+
+- [ ] 25.2-05-PLAN.md — Fix MCP button click in ChatTabToolbox: open popover without toggling active status
+
+**Wave 6 (Gap Closure)** *(depends on 25.2-05)*
+
+- [ ] 25.2-06-PLAN.md — Immediate loading feedback, concise chat summary format, and message collapsing in StepChatPanel
