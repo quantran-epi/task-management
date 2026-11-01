@@ -245,14 +245,16 @@ describe('SdlcWorkflowHub', () => {
 
     expect(screen.getByText('Bước 2/6: Giải pháp SOLUTION.md')).toBeInTheDocument();
     expect(screen.getByText('Đang xử lý')).toBeInTheDocument();
+    // The timeline lives only in the detail modal; the current step's own panel stays in the drawer.
     expect(document.getElementById('sdlc-step-list')).toBeNull();
-    expect(screen.queryByTestId('hub-panel-SOLUTION')).toBeNull();
+    expect(screen.getByTestId('hub-panel-SOLUTION')).toBeInTheDocument();
+    expect(screen.queryByTestId('hub-panel-CHANGE_PACK')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Chi tiết' }));
 
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByRole('list', { name: 'Quy trình 6 bước SDLC' })).toBeInTheDocument();
-    expect(within(dialog).getByTestId('hub-panel-SOLUTION')).toBeInTheDocument();
+    expect(within(dialog).getByTestId('hub-panel-modal-SOLUTION')).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: /Sửa PL01\/PL02/i })).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: /Cập nhật yêu cầu/i })).toBeInTheDocument();
   });

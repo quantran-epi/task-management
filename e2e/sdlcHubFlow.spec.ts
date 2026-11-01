@@ -172,6 +172,14 @@ const selectStep = (page: Page, stepNumber: number) =>
   page.getByRole('button', { name: new RegExp(`^Bước ${stepNumber}:`) }).click();
 const hubPanel = (page: Page, step: string) => page.getByTestId(`hub-panel-${step}`);
 
+/** The drawer keeps only the current step; the six-step timeline lives in the detail modal. */
+const openHubDetail = async (page: Page) => {
+  await page.getByRole('button', { name: 'Chi tiết' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('list', { name: 'Quy trình 6 bước SDLC' })).toBeVisible();
+  return dialog;
+};
+
 test.describe('Phase 25.1.1 SDLC hub acceptance', () => {
   test.beforeEach(() => {
     expect(source).not.toContain('page.' + 'setContent');
@@ -259,16 +267,18 @@ test.describe('Phase 25.1.1 SDLC hub acceptance', () => {
       artifacts: { pl01, pl02, solution, changePack, pl03b, pl07, cab },
     }));
 
+    const dialog = await openHubDetail(page);
+
     // PL02 exports from step 1 (INTAKE); PL03B/PL07 from step 5; CAB from step 6.
     await selectStep(page, 1);
-    await expect(page.getByRole('button', { name: 'Xuất PL02 (.docx)' })).toHaveCount(1);
+    await expect(dialog.getByRole('button', { name: 'Xuất PL02 (.docx)' })).toHaveCount(1);
 
     await selectStep(page, 5);
-    await expect(page.getByRole('button', { name: 'Xuất PL03B (.docx)' })).toHaveCount(1);
-    await expect(page.getByRole('button', { name: 'Xuất PL07 (.docx)' })).toHaveCount(1);
+    await expect(dialog.getByRole('button', { name: 'Xuất PL03B (.docx)' })).toHaveCount(1);
+    await expect(dialog.getByRole('button', { name: 'Xuất PL07 (.docx)' })).toHaveCount(1);
 
     await selectStep(page, 6);
-    await expect(page.getByRole('button', { name: 'Xuất CAB (.docx)' })).toHaveCount(1);
+    await expect(dialog.getByRole('button', { name: 'Xuất CAB (.docx)' })).toHaveCount(1);
   });
 
   test('no wizard surface on either an ordinary tab or the SDLC tab', async ({ page }) => {
@@ -300,18 +310,23 @@ test.describe('Phase 25.1.1 SDLC hub acceptance', () => {
       artifacts: { pl01, pl02, solution },
     }));
 
-    const stepRows = page.getByRole('button', { name: /^Bước \d:/ });
-    const toggle = page.getByRole('button', { name: 'Thu gọn quy trình' });
+    // The drawer shows the current step's panel without any timeline nav.
+    await expect(page.getByRole('button', { name: /^Bước \d:/ })).toHaveCount(0);
+    await expect(hubPanel(page, 'CHANGE_PACK')).toBeVisible();
+
+    const dialog = await openHubDetail(page);
+    const stepRows = dialog.getByRole('button', { name: /^Bước \d:/ });
+    const toggle = dialog.getByRole('button', { name: 'Thu gọn quy trình' });
     await expect(toggle).toHaveAttribute('aria-expanded', 'true');
     await expect(stepRows).toHaveCount(6);
 
     await toggle.click();
-    await expect(page.getByRole('button', { name: 'Mở rộng quy trình' })).toHaveAttribute('aria-expanded', 'false');
+    await expect(dialog.getByRole('button', { name: 'Mở rộng quy trình' })).toHaveAttribute('aria-expanded', 'false');
     await expect(stepRows).toHaveCount(0);
     await expect(hubPanel(page, 'CHANGE_PACK')).toBeVisible();
 
-    await page.getByRole('button', { name: 'Mở rộng quy trình' }).click();
-    await expect(page.getByRole('button', { name: 'Thu gọn quy trình' })).toHaveAttribute('aria-expanded', 'true');
+    await dialog.getByRole('button', { name: 'Mở rộng quy trình' }).click();
+    await expect(dialog.getByRole('button', { name: 'Thu gọn quy trình' })).toHaveAttribute('aria-expanded', 'true');
     await expect(stepRows).toHaveCount(6);
   });
 

@@ -30,6 +30,8 @@ export interface SdlcWorkflowHubProps {
   projectScoped: boolean;
   /** `drawer` shows only the current step card plus a "Chi tiết" modal holding the full hub. */
   variant?: 'full' | 'drawer' | undefined;
+  /** Set on the instance rendered inside the drawer's detail modal, so its panels get their own testids. */
+  inDetailModal?: boolean | undefined;
   state?: SdlcWorkflowState | undefined;
   onStartWorkflow: () => void;
   onSelectStep?: ((stepId: SdlcStepId) => void) | undefined;
@@ -163,6 +165,7 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = (props) => {
   const {
     projectScoped,
     variant = 'full',
+    inDetailModal = false,
     state,
     onStartWorkflow,
     onSelectStep,
@@ -315,6 +318,56 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = (props) => {
     />
   ) : null;
 
+  // Shared by both variants: the drawer shows the current step's panel, the modal shows the selected one.
+  const renderStepBody = (stepId: SdlcStepId, stale: boolean, inModal = false) => {
+    const cfg = STEP_CONFIGS.find((s) => s.id === stepId) ?? (STEP_CONFIGS[0] as StepConfig);
+    return (
+      <div
+        // The modal can show the same step as the drawer card, so its copy is namespaced:
+        // a duplicate testid makes both the id and any DOM lookup ambiguous.
+        data-testid={inModal ? `hub-panel-modal-${stepId}` : `hub-panel-${stepId}`}
+        style={{ borderTop: `1px solid ${token.colorBorderSecondary}`, paddingTop: 8 }}
+      >
+        {stepId === 'INTAKE' &&
+          (stepPanels?.intake ?? (
+            <StepIntakePanel pl01={state.artifacts.pl01} pl02={state.artifacts.pl02} onEditIntake={onStartWorkflow} />
+          ))}
+        {stepId === 'SOLUTION' &&
+          (stepPanels?.solution ?? <StepSolutionPanel artifact={state.artifacts.solution} stale={stale} canSave={false} />)}
+        {/* Step 3 carries no artifact, no action and no export — hint body only, by design. */}
+        {stepId === 'CODE_GUIDE' && (
+          <div style={{ fontSize: 14, fontWeight: 400, lineHeight: 1.5, color: token.colorTextSecondary, wordBreak: 'break-word' }}>
+            {cfg.hint}
+          </div>
+        )}
+        {stepId === 'CHANGE_PACK' &&
+          (stepPanels?.changePack ?? (
+            <StepChangePackPanel
+              artifact={state.artifacts.changePack}
+              driftResult={state.artifacts.driftResult}
+              stale={stale}
+              cr={state.metadata.cr}
+            />
+          ))}
+        {stepId === 'TECH_DOCS' &&
+          (stepPanels?.techDocs ?? (
+            <StepTechDocsPanel pl03b={state.artifacts.pl03b} pl07={state.artifacts.pl07} stale={stale} />
+          ))}
+        {stepId === 'CAB' &&
+          (stepPanels?.cab ?? (
+            <StepCabPanel
+              cab={state.artifacts.cab}
+              prerequisites={{
+                pl02: Boolean(state.artifacts.pl02),
+                pl03b: Boolean(state.artifacts.pl03b),
+                pl07: Boolean(state.artifacts.pl07),
+              }}
+            />
+          ))}
+      </div>
+    );
+  };
+
   if (variant === 'drawer') {
     // The card always describes the step being processed, so only stale can outrank "processing".
     const stepState = resolveStepState({ isStale: isCurrentProcessingStale, isProcessing: true, isDone: false }, token);
@@ -332,6 +385,35 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = (props) => {
         }}
         styles={{ body: { padding: '10px 12px' } }}
       >
+        {/* The compact card still names the feature: the drawer hides the full hub title. */}
+        <div style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary, marginBottom: 4 }}>
+          SDLC: {state.metadata.featureName}
+        </div>
+
+        {/* Cycle state lives here too: without it the drawer shows no cycle at all. */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '2px 8px',
+            marginBottom: 6,
+            borderRadius: token.borderRadiusSM,
+            backgroundColor: token.colorFillTertiary,
+            fontSize: 12,
+            fontWeight: 600,
+          }}
+        >
+          <span>
+            Chu kỳ {currentCycleNumber} — {currentCycleStatus === 'completed' ? 'Hoàn tất' : 'Đang thực hiện'}
+          </span>
+          {pastCycles.length > 0 && (
+            <span style={{ fontSize: 12, fontWeight: 400, color: token.colorTextSecondary }}>
+              ({pastCycles.length} chu kỳ cũ)
+            </span>
+          )}
+        </div>
+
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 6 }}>
           <span style={{ fontSize: 16, fontWeight: 600, lineHeight: 1.3, color: token.colorText }}>
             Bước {currentStepIndex + 1}/6: {currentConfig.title}
@@ -407,6 +489,12 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = (props) => {
           </Button>
         </Space>
 
+        {/* The drawer runs the flow: the current step's own panel stays here, only the
+            timeline and the other steps move into the detail modal. */}
+        <div style={{ marginTop: 10 }}>
+          {renderStepBody(currentProcessingStep, isCurrentProcessingStale)}
+        </div>
+
         <Modal
           open={detailOpen}
           onCancel={() => setDetailOpen(false)}
@@ -417,7 +505,7 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = (props) => {
           zIndex={1400}
           styles={{ body: { maxHeight: 'calc(100vh - 200px)', overflowY: 'auto', paddingTop: 8 } }}
         >
-          <SdlcWorkflowHub {...props} variant="full" />
+          <SdlcWorkflowHub {...props} variant="full" inDetailModal />
         </Modal>
 
         {revisionModal}
@@ -746,57 +834,7 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = (props) => {
           )}
         </div>
 
-        <div
-          data-testid={`hub-panel-${selectedStep}`}
-          style={{ borderTop: `1px solid ${token.colorBorderSecondary}`, paddingTop: 8 }}
-        >
-          {selectedStep === 'INTAKE' &&
-            (stepPanels?.intake ?? (
-              <StepIntakePanel
-                pl01={state.artifacts.pl01}
-                pl02={state.artifacts.pl02}
-                onEditIntake={onStartWorkflow}
-              />
-            ))}
-          {selectedStep === 'SOLUTION' &&
-            (stepPanels?.solution ?? (
-              <StepSolutionPanel artifact={state.artifacts.solution} stale={isSelectedStale} canSave={false} />
-            ))}
-          {/* Step 3 carries no artifact, no action and no export — hint body only, by design. */}
-          {selectedStep === 'CODE_GUIDE' && (
-            <div style={{ fontSize: 14, fontWeight: 400, lineHeight: 1.5, color: token.colorTextSecondary, wordBreak: 'break-word' }}>
-              {selectedConfig.hint}
-            </div>
-          )}
-          {selectedStep === 'CHANGE_PACK' &&
-            (stepPanels?.changePack ?? (
-              <StepChangePackPanel
-                artifact={state.artifacts.changePack}
-                driftResult={state.artifacts.driftResult}
-                stale={isSelectedStale}
-                cr={state.metadata.cr}
-              />
-            ))}
-          {selectedStep === 'TECH_DOCS' &&
-            (stepPanels?.techDocs ?? (
-              <StepTechDocsPanel
-                pl03b={state.artifacts.pl03b}
-                pl07={state.artifacts.pl07}
-                stale={isSelectedStale}
-              />
-            ))}
-          {selectedStep === 'CAB' &&
-            (stepPanels?.cab ?? (
-              <StepCabPanel
-                cab={state.artifacts.cab}
-                prerequisites={{
-                  pl02: Boolean(state.artifacts.pl02),
-                  pl03b: Boolean(state.artifacts.pl03b),
-                  pl07: Boolean(state.artifacts.pl07),
-                }}
-              />
-            ))}
-        </div>
+        {renderStepBody(selectedStep, isSelectedStale, inDetailModal === true)}
       </div>
 
       {/* Revision impact confirmation modal */}
