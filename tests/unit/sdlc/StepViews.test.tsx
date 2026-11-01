@@ -5,6 +5,8 @@ import 'fake-indexeddb/auto';
 import { TaskPlannerDatabase } from '../../../src/db';
 import { Step1IntakeView } from '../../../src/components/sdlc/steps/Step1IntakeView';
 import { Step2SolutionView } from '../../../src/components/sdlc/steps/Step2SolutionView';
+import { Step3CodeGuideView } from '../../../src/components/sdlc/steps/Step3CodeGuideView';
+import { Step4ChangePackView } from '../../../src/components/sdlc/steps/Step4ChangePackView';
 
 describe('Step 1 Intake & Step 2 Solution Views', () => {
   let db: TaskPlannerDatabase;
@@ -117,4 +119,44 @@ describe('Step 1 Intake & Step 2 Solution Views', () => {
       });
     });
   });
+
+  describe('Step3CodeGuideView', () => {
+    it('displays packaging command pre-filled with crCode and advances on click', () => {
+      const handleProceed = vi.fn();
+      render(
+        <Step3CodeGuideView
+          crCode="CR-2026-999"
+          onProceedToStep4={handleProceed}
+        />
+      );
+
+      expect(screen.getByTestId('cli-command')).toHaveTextContent('node scripts/change-pack.mjs --cr CR-2026-999');
+
+      const advanceBtn = screen.getByRole('button', { name: /Đã code xong — Chuyển sang Nạp Change Pack/i });
+      fireEvent.click(advanceBtn);
+      expect(handleProceed).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('Step4ChangePackView', () => {
+    it('renders dropzone, shows requirement error if solutionArtifact is missing, and allows progression when drift exists', async () => {
+      const handleCommitPack = vi.fn().mockResolvedValue(undefined);
+      const handleProceedToStep5 = vi.fn();
+
+      render(
+        <Step4ChangePackView
+          projectId={projectId}
+          crId="cr-001"
+          crCode="CR-2026-999"
+          onCommitChangePackAndDrift={handleCommitPack}
+          onProceedToStep5={handleProceedToStep5}
+          db={db}
+        />
+      );
+
+      expect(screen.getByText(/Chưa có SOLUTION.md đã duyệt/i)).toBeInTheDocument();
+      expect(screen.getByText(/Tải lên bản đóng gói mới/i)).toBeInTheDocument();
+    });
+  });
 });
+

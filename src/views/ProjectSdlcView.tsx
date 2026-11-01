@@ -8,6 +8,8 @@ import { SdlcSidebar } from '../components/sdlc/SdlcSidebar';
 import { SdlcWorkspace } from '../components/sdlc/SdlcWorkspace';
 import { Step1IntakeView } from '../components/sdlc/steps/Step1IntakeView';
 import { Step2SolutionView } from '../components/sdlc/steps/Step2SolutionView';
+import { Step3CodeGuideView } from '../components/sdlc/steps/Step3CodeGuideView';
+import { Step4ChangePackView } from '../components/sdlc/steps/Step4ChangePackView';
 import { listCrs, getActiveCr } from '../services/wizard/sdlcCrManager';
 import { createSdlcWorkflowCoordinator } from '../services/wizard/workflowCoordinator';
 import type { SdlcStepId, SdlcWorkflowState } from '../services/wizard/workflowSchemas';
@@ -97,6 +99,28 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
             initialContent={workflowState?.artifacts.solution?.content}
             onCommitSolution={handleCommitSolution}
             onProceedToStep3={() => setSelectedStep('CODE_GUIDE')}
+            db={db}
+          />
+        );
+      case 'CODE_GUIDE':
+        return (
+          <Step3CodeGuideView
+            crCode={workflowState?.metadata.cr}
+            onProceedToStep4={() => setSelectedStep('CHANGE_PACK')}
+          />
+        );
+      case 'CHANGE_PACK':
+        return (
+          <Step4ChangePackView
+            projectId={projectId}
+            crId={activeCrId}
+            crCode={workflowState?.metadata.cr ?? ''}
+            solutionArtifact={workflowState?.artifacts.solution}
+            initialDriftResult={workflowState?.artifacts.driftResult}
+            onCommitChangePackAndDrift={async (packHash, packTitle, driftResult) => {
+              await coordinator.commitChangePackAndDrift(packHash, packTitle, driftResult);
+            }}
+            onProceedToStep5={() => setSelectedStep('TECH_DOCS')}
             db={db}
           />
         );
