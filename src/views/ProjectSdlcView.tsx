@@ -156,7 +156,8 @@ ${pl01 || '(Chưa có nội dung PL01)'}
 ĐẶC TẢ CHỨC NĂNG (PL02):
 ${pl02 || '(Chưa có nội dung PL02)'}
 
-Vui lòng rà soát cơ sở dữ liệu hiện có bằng công cụ tra cứu, bóc tách API & bảng dữ liệu cần tạo/sửa, và trả về tài liệu Markdown bắt đầu bằng:
+Vui lòng rà soát cơ sở dữ liệu hiện có bằng công cụ tra cứu, bóc tách API & bảng dữ liệu cần tạo/sửa.
+Đồng thời, hãy viết một đoạn tóm tắt ngắn gọn thân thiện (2-4 câu) giải thích những điểm chính đã thiết kế/chỉnh sửa và thông báo cho người dùng xem chi tiết tại trình soạn thảo bên trái. Đặt toàn bộ nội dung SOLUTION.md hoàn chỉnh trong khối \`\`\`markdown bắt đầu bằng:
 # SOLUTION — ${meta?.featureName || 'Thiết kế giải pháp'}`;
 
     setTimeout(() => {
@@ -225,7 +226,8 @@ ${pl01}
 ĐẶC TẢ CHỨC NĂNG (PL02):
 ${pl02}
 
-Vui lòng rà soát cơ sở dữ liệu hiện có bằng công cụ tra cứu, bóc tách API & bảng dữ liệu cần tạo/sửa, và trả về tài liệu Markdown bắt đầu bằng:
+Vui lòng rà soát cơ sở dữ liệu hiện có bằng công cụ tra cứu, bóc tách API & bảng dữ liệu cần tạo/sửa.
+Đồng thời, hãy viết một đoạn tóm tắt ngắn gọn thân thiện (2-4 câu) giải thích những điểm chính đã thiết kế/chỉnh sửa và thông báo cho người dùng xem chi tiết tại trình soạn thảo bên trái. Đặt toàn bộ nội dung SOLUTION.md hoàn chỉnh trong khối \`\`\`markdown bắt đầu bằng:
 # SOLUTION — ${metadata.featureName}`;
 
     setTimeout(() => {

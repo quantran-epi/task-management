@@ -5,6 +5,8 @@ import {
   RobotFilled,
   ClearOutlined,
   SyncOutlined,
+  DownOutlined,
+  UpOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../../db';
@@ -34,7 +36,7 @@ import {
 } from '../../../services/ai/mcpClient';
 import { describeToolMutationWithContext } from '../../../services/ai/aiTools';
 import { ChatTabToolbox } from '../../ai/ChatTabToolbox';
-import { extractSolutionMarkdown } from '../../../utils/sdlcSolutionParser';
+import { extractSolutionMarkdown, extractChatSummary } from '../../../utils/sdlcSolutionParser';
 
 export interface StepChatPanelProps {
   projectId: string;
@@ -91,6 +93,66 @@ const STEP_QUICK_PROMPTS: Record<SdlcStepId, string[]> = {
     'Soát lại hồ sơ đóng CR',
   ],
 };
+
+interface CollapsibleMessageContentProps {
+  content: string;
+  isUser: boolean;
+}
+
+function CollapsibleMessageContent({ content, isUser }: CollapsibleMessageContentProps) {
+  const [expanded, setExpanded] = useState(false);
+  const isLong = content.length > 300 || content.split('\n').length > 6;
+
+  return (
+    <div>
+      <div
+        style={{
+          maxHeight: isLong && !expanded ? 140 : 'none',
+          overflow: isLong && !expanded ? 'hidden' : 'visible',
+          position: 'relative',
+        }}
+      >
+        {isUser ? (
+          <div style={{ whiteSpace: 'pre-wrap' }}>{content}</div>
+        ) : (
+          <div
+            dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(content) }}
+            style={{ overflowWrap: 'break-word' }}
+          />
+        )}
+      </div>
+
+      {isLong && (
+        <div style={{ marginTop: 6, display: 'flex', justifyContent: 'flex-start' }}>
+          <Button
+            type="link"
+            size="small"
+            onClick={() => setExpanded((prev) => !prev)}
+            style={{
+              padding: 0,
+              height: 'auto',
+              fontSize: 12,
+              color: isUser ? '#e0e7ff' : undefined,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+            }}
+          >
+            {expanded ? (
+              <>
+                <UpOutlined style={{ fontSize: 10 }} /> Thu gọn
+              </>
+            ) : (
+              <>
+                <DownOutlined style={{ fontSize: 10 }} /> Xem thêm
+              </>
+            )}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanelProps>(({
   projectId,
@@ -218,17 +280,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
     const text = (customText ?? inputText).trim();
     if (!text || !threadId || isStreaming) return;
 
-    if (!customText) setInputText('');
-    await saveMessage(
-      {
-        threadId,
-        role: 'user',
-        content: text,
-      },
-      db
-    );
-
-    // Call AI orchestrator loop
+    // Immediately activate loading indicators before any async storage or network work
     setIsStreaming(true);
     setStreamingText('');
     setStreamingStatus('Khởi động AI...');
@@ -236,7 +288,18 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
+    if (!customText) setInputText('');
+
     try {
+      await saveMessage(
+        {
+          threadId,
+          role: 'user',
+          content: text,
+        },
+        db
+      );
+
       const config = await getNineRouterConfig(db);
       const apiKey = await getNineRouterApiKey(db);
       const targetModel = selectedModel || config.defaultModel || 'gpt-4o';
@@ -247,7 +310,10 @@ Mã CR: ${crId}
 Ngữ cảnh kỹ thuật bước hiện tại:
 ${stepGroundingContext}
 
-Hãy trả lời súc tích, đi thẳng vào giải pháp kỹ thuật, phân tích kiến trúc chính xác và hỗ trợ người dùng đạt chuẩn bàn giao. Khi được yêu cầu phân tích kiến trúc SOLUTION.md, hãy xuất văn bản Markdown hoàn chỉnh có tiêu đề "# SOLUTION".`;
+Hãy trả lời súc tích, đi thẳng vào giải pháp kỹ thuật, phân tích kiến trúc chính xác và hỗ trợ người dùng đạt chuẩn bàn giao.
+Khi được yêu cầu phân tích kiến trúc hoặc chỉnh sửa SOLUTION.md, hãy luôn cấu trúc phản hồi gồm 2 phần:
+1) Đoạn tóm tắt ngắn gọn thân thiện (2-4 câu) ở trên cùng giải thích những điểm chính đã thiết kế/chỉnh sửa và thông báo cho người dùng xem chi tiết tại trình soạn thảo bên trái.
+2) Toàn bộ nội dung văn bản Markdown SOLUTION.md hoàn chỉnh được bao bọc trong khối code \`\`\`markdown có tiêu đề "# SOLUTION".`;
 
       const historyMsgs = messages.map((m) => ({
         role: m.role as 'user' | 'assistant',
@@ -323,22 +389,27 @@ Hãy trả lời súc tích, đi thẳng vào giải pháp kỹ thuật, phân t
       const cleanCommittedResponse = stripThinkingBlocks(loopResult.fullResponse || fullResponse).trim();
 
       if (cleanCommittedResponse) {
-        await saveMessage(
-          {
-            threadId,
-            role: 'assistant',
-            content: cleanCommittedResponse,
-          },
-          db
-        );
+        let messageToSave = cleanCommittedResponse;
 
         // Auto-extract solution if in SOLUTION step
         if (stepId === 'SOLUTION' && onSolutionExtracted) {
           const solutionMarkdown = extractSolutionMarkdown(cleanCommittedResponse);
           if (solutionMarkdown) {
             onSolutionExtracted(solutionMarkdown);
+            // In chat thread, save clean conversational summary + guidance instead of massive markdown dump
+            const chatSummary = extractChatSummary(cleanCommittedResponse);
+            messageToSave = `${chatSummary}\n\n*(Toàn bộ tài liệu kiến trúc đã được cập nhật trực tiếp vào trình soạn thảo bên trái)*`;
           }
         }
+
+        await saveMessage(
+          {
+            threadId,
+            role: 'assistant',
+            content: messageToSave,
+          },
+          db
+        );
       }
     } catch (err: any) {
       if (controller.signal.aborted) {
@@ -565,14 +636,7 @@ Hãy trả lời súc tích, đi thẳng vào giải pháp kỹ thuật, phân t
                   boxShadow: isUser ? '0 1px 3px rgba(79, 70, 229, 0.2)' : 'none',
                 }}
               >
-                {isUser ? (
-                  <div style={{ whiteSpace: 'pre-wrap' }}>{m.content}</div>
-                ) : (
-                  <div
-                    dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(m.content) }}
-                    style={{ overflowWrap: 'break-word' }}
-                  />
-                )}
+                <CollapsibleMessageContent content={m.content} isUser={isUser} />
               </div>
             </div>
           );

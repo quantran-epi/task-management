@@ -276,4 +276,68 @@ describe('ProjectSdlcView and IDE Layout', () => {
     expect(textarea.value).toContain('API FaceID');
     expect(screen.getByTestId('sdlc-workspace')).toBeInTheDocument();
   });
+
+  it('Test 8: StepChatPanel collapses long messages and toggles expansion on click', async () => {
+    // Seed a thread with a long user message and a long assistant message
+    const thread = await db.chatThreads.add({
+      id: 'thread-test-collapse',
+      title: 'Step Thread',
+      scopeKey: `sdlc:${projectId}:cr-test-01:SOLUTION`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    const longUserMessage = 'Dòng yêu cầu phân tích kiến trúc:\n'.repeat(10);
+    const longAssistantMessage = 'Chi tiết phân tích kỹ thuật của AI:\n' + 'Nội dung rất dài về các module hệ thống.\n'.repeat(10);
+
+    await db.chatMessages.bulkAdd([
+      {
+        id: 'msg-user-1',
+        threadId: thread,
+        role: 'user',
+        content: longUserMessage,
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: 'msg-assistant-1',
+        threadId: thread,
+        role: 'assistant',
+        content: longAssistantMessage,
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+
+    render(
+      <StepChatPanel
+        projectId={projectId}
+        crId="cr-test-01"
+        stepId="SOLUTION"
+        stepGroundingContext="Grounding context"
+        db={db}
+      />
+    );
+
+    // Both long messages should have "Xem thêm" button
+    await waitFor(() => {
+      const expandButtons = screen.getAllByRole('button', { name: /Xem thêm/i });
+      expect(expandButtons.length).toBeGreaterThanOrEqual(2);
+    });
+
+    // Click "Xem thêm" on first message -> changes to "Thu gọn"
+    const expandButtons = screen.getAllByRole('button', { name: /Xem thêm/i });
+    fireEvent.click(expandButtons[0]!);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Thu gọn/i })).toBeInTheDocument();
+    });
+
+    // Click "Thu gọn" -> returns to "Xem thêm"
+    const collapseButton = screen.getByRole('button', { name: /Thu gọn/i });
+    fireEvent.click(collapseButton);
+
+    await waitFor(() => {
+      const revertedButtons = screen.getAllByRole('button', { name: /Xem thêm/i });
+      expect(revertedButtons.length).toBeGreaterThanOrEqual(2);
+    });
+  });
 });
