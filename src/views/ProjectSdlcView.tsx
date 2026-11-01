@@ -311,6 +311,7 @@ Vui lòng rà soát cơ sở dữ liệu hiện có bằng công cụ tra cứu,
             onCommitChangePackAndDrift={async (packHash, packTitle, driftResult) => {
               await coordinator.commitChangePackAndDrift(packHash, packTitle, driftResult);
             }}
+            onNavigateToStep={(step) => setSelectedStep(step)}
             onProceedToStep5={() => setSelectedStep('TECH_DOCS')}
             db={db}
           />

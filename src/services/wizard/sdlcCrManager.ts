@@ -2,6 +2,7 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { ChatThread } from '../../types/models';
 import { generateId } from '../../utils/uuid';
 import type { SdlcStepId, SdlcWorkflowMetadata } from './workflowSchemas';
+import type { ChangePackManifest } from './changePack';
 
 export interface SdlcCrRecord {
   id: string;
@@ -21,6 +22,12 @@ export interface ChangePackHistoryItem {
   filename: string;
   uploadedAt: string;
   fileSize: number;
+  /**
+   * Validated manifest persisted at upload (entry bytes stripped) so activation can
+   * reconcile without the original zip. Rows written before this field existed have none;
+   * they are re-uploaded rather than guessed.
+   */
+  manifest?: ChangePackManifest;
   driftSummary?: {
     outsideSolution: number;
     missingImplementation: number;

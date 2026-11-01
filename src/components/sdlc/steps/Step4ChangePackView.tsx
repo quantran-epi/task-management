@@ -5,19 +5,17 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../../../db';
 import { ChangePackDropzone } from '../../ai/wizard/ChangePackDropzone';
 import { DriftMatrixView } from '../../ai/wizard/DriftMatrixView';
 import { MultiPackTable } from '../pack/MultiPackTable';
-import { validateHubChangePack } from '../../../services/wizard/hubChangePack';
-import {
-  reconcileSolutionWithPack,
-  type ReconciliationResult,
-  type ReconciliationInput,
-} from '../../../services/wizard/reconciliation';
+import { buildHubReconciliation, validateHubChangePack } from '../../../services/wizard/hubChangePack';
+import type { ReconciliationResult } from '../../../services/wizard/reconciliation';
+import type { ChangePackManifest } from '../../../services/wizard/changePack';
+import { formatGuardMessage } from '../../../services/wizard/workflowGuards';
 import {
   getMultiPackState,
   saveMultiPackState,
   type ChangePackHistoryItem,
   type MultiPackState,
 } from '../../../services/wizard/sdlcCrManager';
-import type { SdlcArtifactRef } from '../../../services/wizard/workflowSchemas';
+import type { SdlcArtifactRef, SdlcStepId } from '../../../services/wizard/workflowSchemas';
 
 export interface Step4ChangePackViewProps {
   projectId: string;
@@ -30,8 +28,23 @@ export interface Step4ChangePackViewProps {
     packTitle: string,
     driftResult: ReconciliationResult
   ) => Promise<void>;
+  /** Navigates to the step that supplies the missing prerequisite (D-20). */
+  onNavigateToStep?: ((step: SdlcStepId) => void) | undefined;
   onProceedToStep5?: (() => void) | undefined;
   db?: TaskPlannerDatabase | undefined;
+}
+
+/** The SOLUTION Note pins against the SOLUTION thread, not the CHANGE_PACK thread. */
+function solutionThreadId(projectId: string, crId: string): string {
+  return `sdlc:${projectId}:${crId}:SOLUTION`;
+}
+
+/** Manifest minus raw entry bytes: only identity + path/status/coverage are needed to reconcile. */
+function persistableManifest(manifest: Readonly<ChangePackManifest>): ChangePackManifest {
+  return {
+    ...manifest,
+    entries: manifest.entries.map((entry) => ({ ...entry, content: '' })),
+  };
 }
 
 export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
@@ -41,12 +54,14 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
   solutionArtifact,
   initialDriftResult,
   onCommitChangePackAndDrift,
+  onNavigateToStep,
   onProceedToStep5,
   db = defaultDb,
 }) => {
   const { token } = theme.useToken();
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [needsReupload, setNeedsReupload] = useState(false);
   const [multiPackState, setMultiPackState] = useState<MultiPackState>({ packs: [] });
   const [driftResult, setDriftResult] = useState<ReconciliationResult | undefined>(initialDriftResult);
 
@@ -65,70 +80,37 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
     };
   }, [projectId, crId, db]);
 
-  const buildReconciliation = (packHash: string, manifestIdentity: { cr: string; base: string; head: string; branch?: string }, entries: Array<{ path: string; status: any; coverage: any }>) => {
-    const threadId = `sdlc:${projectId}:${crId}:CHANGE_PACK`;
-    const solutionNoteId = solutionArtifact?.noteId ?? '25000000-0000-4000-8000-000000000002';
-    const recInput: ReconciliationInput = {
+  const reconcile = (manifest: ChangePackManifest): Promise<ReconciliationResult> => {
+    if (!solutionArtifact?.noteId) {
+      return Promise.reject(new Error('SOLUTION_REQUIRED_FOR_CHANGE_PACK'));
+    }
+    return buildHubReconciliation({
+      db,
       projectId,
-      threadId,
-      solutionNoteId,
-      solutionVersion: solutionArtifact?.version ?? 1,
-      solutionHash: solutionArtifact?.hash ?? 'c'.repeat(64),
-      packHash,
-      cr: crCode,
-      base: manifestIdentity.base,
-      head: manifestIdentity.head,
-      solution: {
-        projectId,
-        threadId,
-        noteId: solutionNoteId,
-        version: solutionArtifact?.version ?? 1,
-        hash: solutionArtifact?.hash ?? 'c'.repeat(64),
-        requirements: [],
-        approvedDesign: {
-          currentSystem: solutionArtifact?.content ?? '',
-          affectedScreens: [],
-          affectedApis: [],
-          affectedTables: [],
-          regressionMatrix: [],
-        },
-      },
-      pack: {
-        packHash,
-        identity: {
-          cr: crCode,
-          base: manifestIdentity.base,
-          head: manifestIdentity.head,
-          branch: manifestIdentity.branch ?? `feature/${crCode}`,
-        },
-        entries: entries.map((e) => ({
-          path: e.path,
-          status: e.status,
-          coverage: e.coverage,
-          hunks: [],
-        })),
-      },
-      evidence: [],
-      proposedDrift: [],
-    };
-    return reconcileSolutionWithPack(recInput);
+      threadId: solutionThreadId(projectId, crId),
+      manifest,
+      solutionNoteId: solutionArtifact.noteId,
+      solutionVersion: solutionArtifact.version,
+      solutionHash: solutionArtifact.hash,
+    });
   };
 
   const handleSelectFile = async (file: File) => {
     if (!solutionArtifact) {
-      setErrorMsg('Chưa có SOLUTION.md đã phê duyệt. Vui lòng hoàn thành Bước 2 trước.');
+      setErrorMsg(formatGuardMessage('SOLUTION_REQUIRED_FOR_CHANGE_PACK'));
       return;
     }
 
     try {
       setLoading(true);
       setErrorMsg(null);
+      setNeedsReupload(false);
 
       // 1. Validate change-pack identity & size against expected CR
       const manifest = await validateHubChangePack(file, crCode);
 
-      // 2. Perform reconciliation with solution
-      const reconciliation = buildReconciliation(manifest.packHash, manifest.identity, manifest.entries as any);
+      // 2. Reconcile against the real pinned SOLUTION Note
+      const reconciliation = await reconcile(persistableManifest(manifest));
 
       // 3. Summarize drift counts
       const outsideSolution = reconciliation.drift.filter((d) => d.category === 'outside_solution').length;
@@ -140,6 +122,7 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
         filename: file.name,
         uploadedAt: new Date().toISOString(),
         fileSize: file.size,
+        manifest: persistableManifest(manifest),
         driftSummary: {
           outsideSolution,
           missingImplementation,
@@ -181,12 +164,27 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
     await saveMultiPackState(projectId, crId, nextState, db);
     setMultiPackState(nextState);
 
-    // Reconcile with the newly activated pack
-    const reconciliation = buildReconciliation(packHash, { cr: crCode, base: 'base-commit', head: 'head-commit' }, []);
+    // Rows written before manifests were persisted carry no identity to reconcile from.
+    // Fabricating base/head to fill the gap would fake evidence pins, so ask for re-upload.
+    if (!pack.manifest) {
+      setNeedsReupload(true);
+      return;
+    }
 
-    setDriftResult(reconciliation);
-    await onCommitChangePackAndDrift(packHash, pack.filename, reconciliation);
-    message.info(`Đã chuyển active pack sang: ${pack.filename}`);
+    try {
+      setLoading(true);
+      setErrorMsg(null);
+      setNeedsReupload(false);
+      const reconciliation = await reconcile(pack.manifest);
+      setDriftResult(reconciliation);
+      await onCommitChangePackAndDrift(packHash, pack.filename, reconciliation);
+      message.info(`Đã chuyển active pack sang: ${pack.filename}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Đối soát thất bại';
+      setErrorMsg(`Lỗi xác thực change pack: ${msg}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDeletePack = async (packHash: string) => {
@@ -215,8 +213,17 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
         <Alert
           type="error"
           showIcon
-          message="Chưa có SOLUTION.md đã duyệt"
-          description="Bạn cần hoàn tất và duyệt tài liệu SOLUTION.md ở Bước 2 trước khi nạp change pack để đối chiếu."
+          message={formatGuardMessage('SOLUTION_REQUIRED_FOR_CHANGE_PACK')}
+          description="Tài liệu bắt buộc: SOLUTION.md đã được phê duyệt ở Bước 2. Chưa có tài liệu này thì change pack không thể đối chiếu."
+          action={
+            <Button
+              type="primary"
+              disabled={!onNavigateToStep}
+              onClick={() => onNavigateToStep?.('SOLUTION')}
+            >
+              Chuyển đến Bước 2: Thiết kế giải pháp
+            </Button>
+          }
         />
       )}
 
@@ -230,12 +237,21 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
         />
       )}
 
+      {needsReupload && (
+        <Alert
+          type="warning"
+          showIcon
+          message="Tải lại tệp pack để đối soát"
+          description={`Pack đang chọn được nạp trước khi lưu manifest nên không còn dữ liệu đối chiếu. Kết quả drift cũ được giữ nguyên cho tới khi bạn nạp lại tệp .zip của ${crCode}.`}
+        />
+      )}
+
       {/* Upload Dropzone */}
       <div style={{ background: token.colorBgContainer, padding: 16, borderRadius: token.borderRadiusSM, border: `1px dashed ${token.colorBorder}` }}>
         <Typography.Text strong style={{ display: 'block', marginBottom: 12 }}>
           <UploadOutlined /> Tải lên bản đóng gói mới (.zip) cho CR {crCode}:
         </Typography.Text>
-        <ChangePackDropzone onSelect={handleSelectFile} />
+        <ChangePackDropzone onSelect={handleSelectFile} disabled={!solutionArtifact} />
       </div>
 
       {loading && (

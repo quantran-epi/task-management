@@ -167,8 +167,83 @@ describe('Step 1 Intake & Step 2 Solution Views', () => {
         />
       );
 
-      expect(screen.getByText(/Chưa có SOLUTION.md đã duyệt/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(/Chưa đủ điều kiện: Thiếu SOLUTION\.md từ Bước 2/i)
+      ).toBeInTheDocument();
       expect(screen.getByText(/Tải lên bản đóng gói mới/i)).toBeInTheDocument();
+    });
+
+    it('disables the dropzone before SOLUTION approval and offers direct navigation to Step 2', () => {
+      const handleCommitPack = vi.fn().mockResolvedValue(undefined);
+      const handleNavigate = vi.fn();
+
+      render(
+        <Step4ChangePackView
+          projectId={projectId}
+          crId="cr-001"
+          crCode="CR-2026-999"
+          onCommitChangePackAndDrift={handleCommitPack}
+          onNavigateToStep={handleNavigate}
+          db={db}
+        />
+      );
+
+      const dropzone = screen.getByRole('button', { name: 'Khu vực nạp change-pack' });
+      expect(dropzone).toHaveAttribute('aria-disabled', 'true');
+
+      const navButton = screen.getByRole('button', { name: 'Chuyển đến Bước 2: Thiết kế giải pháp' });
+      fireEvent.click(navButton);
+      expect(handleNavigate).toHaveBeenCalledWith('SOLUTION');
+
+      const file = new File(['PK'], 'pack.zip', { type: 'application/zip' });
+      fireEvent.drop(dropzone, { dataTransfer: { files: [file] } });
+      expect(handleCommitPack).not.toHaveBeenCalled();
+    });
+
+    it('renders the re-upload prompt for a legacy history row without a manifest and keeps driftResult', async () => {
+      const handleCommitPack = vi.fn().mockResolvedValue(undefined);
+      const legacyHash = 'd'.repeat(64);
+
+      await db.settings.put({
+        key: `sdlc_packs:${projectId}:cr-legacy`,
+        value: JSON.stringify({
+          packs: [
+            {
+              hash: legacyHash,
+              filename: 'legacy-pack.zip',
+              uploadedAt: '2026-01-01T00:00:00.000Z',
+              fileSize: 128,
+            },
+          ],
+        }),
+      });
+
+      render(
+        <Step4ChangePackView
+          projectId={projectId}
+          crId="cr-legacy"
+          crCode="CR-2026-999"
+          solutionArtifact={{
+            noteId: '11111111-1111-4111-8111-111111111111',
+            kind: 'SOLUTION',
+            version: 1,
+            hash: 'a'.repeat(64),
+            title: 'SOLUTION.md',
+            content: '# Solution',
+            sourceHashes: [],
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          }}
+          onCommitChangePackAndDrift={handleCommitPack}
+          db={db}
+        />
+      );
+
+      const selectButton = await screen.findByRole('button', { name: /Chọn làm Active/i });
+      fireEvent.click(selectButton);
+
+      expect(await screen.findByText(/Tải lại tệp pack để đối soát/i)).toBeInTheDocument();
+      expect(handleCommitPack).not.toHaveBeenCalled();
+      expect(screen.queryByText(/Bảng drift so với SOLUTION.md/i)).toBeNull();
     });
   });
 
