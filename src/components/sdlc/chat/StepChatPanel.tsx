@@ -1,36 +1,131 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { theme, Button, Input, Space, Typography } from 'antd';
-import { SendOutlined, RobotOutlined, ClearOutlined } from '@ant-design/icons';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { theme, Button, Input, Typography, Tooltip, Popconfirm, message } from 'antd';
+import {
+  SendOutlined,
+  RobotFilled,
+  ClearOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../../db';
 import { getStepThread } from '../../../services/wizard/sdlcCrManager';
-import { saveMessage } from '../../../db/repositories/chatRepo';
-import { streamChatEvents } from '../../../services/ai/nineRouterClient';
-import { getNineRouterConfig, getNineRouterApiKey } from '../../../services/ai/nineRouterTokenService';
+import { saveMessage, clearThreadMessages } from '../../../db/repositories/chatRepo';
+import {
+  getNineRouterConfig,
+  getNineRouterApiKey,
+  fetchAvailableModels,
+  setNineRouterConfig,
+} from '../../../services/ai/nineRouterTokenService';
 import type { SdlcStepId } from '../../../services/wizard/workflowSchemas';
 import { renderSafeMarkdown } from '../../../utils/markdown';
+import { stripThinkingBlocks } from '../../../services/ai/nineRouterClient';
+import {
+  runAiOrchestratorLoop,
+  dispatchAiToolCall,
+} from '../../../services/ai/aiOrchestratorLoop';
+import {
+  getToolsForTurn,
+} from '../../ai/AIChatDrawer';
+import {
+  getMcpServers,
+  saveMcpServers,
+  discoverAllMcpTools,
+  type McpServerConfig,
+} from '../../../services/ai/mcpClient';
+import { describeToolMutationWithContext } from '../../../services/ai/aiTools';
+import { ChatTabToolbox } from '../../ai/ChatTabToolbox';
+import { extractSolutionMarkdown } from '../../../utils/sdlcSolutionParser';
 
 export interface StepChatPanelProps {
   projectId: string;
   crId: string;
   stepId: SdlcStepId;
   stepGroundingContext?: string;
-  db?: TaskPlannerDatabase;
+  onSolutionExtracted?: (solutionMarkdown: string) => void;
+  onRequestAiAnalysis?: () => void;
+  db?: TaskPlannerDatabase | undefined;
 }
 
-export const StepChatPanel: React.FC<StepChatPanelProps> = ({
+export interface StepChatPanelHandle {
+  sendMessage: (text: string) => Promise<void>;
+}
+
+const STEP_LABELS: Record<SdlcStepId, string> = {
+  INTAKE: '1. Hồ sơ đầu vào',
+  SOLUTION: '2. Thiết kế giải pháp',
+  CODE_GUIDE: '3. Coding ngoài',
+  CHANGE_PACK: '4. Kiểm soát Change Pack',
+  TECH_DOCS: '5. Tài liệu kỹ thuật',
+  CAB: '6. Tờ trình CAB',
+};
+
+const STEP_QUICK_PROMPTS: Record<SdlcStepId, string[]> = {
+  INTAKE: [
+    'Thẩm định tính đầy đủ của PL01 & PL02',
+    'Chỉ ra các trường nghiệp vụ còn thiếu',
+    'Tóm tắt yêu cầu chính của tính năng',
+  ],
+  SOLUTION: [
+    'Đề xuất cấu trúc cơ sở dữ liệu cho giải pháp',
+    'Phân tích rủi ro và các kịch bản kiểm thử',
+    'Gợi ý thiết kế API và màn hình liên quan',
+  ],
+  CODE_GUIDE: [
+    'Hướng dẫn cấu trúc thư mục change-pack',
+    'Lệnh đóng gói zip và các cờ tham số',
+    'Quy tắc đối soát file modified/added',
+  ],
+  CHANGE_PACK: [
+    'Giải thích các lỗi trong ma trận drift',
+    'Hướng dẫn khắc phục mục outside-solution',
+    'Kiểm tra tính an toàn của các tệp thay đổi',
+  ],
+  TECH_DOCS: [
+    'Kiểm tra tính khớp giữa PL03B và SOLUTION',
+    'Soát các điều kiện kiểm thử trong PL07',
+    'Tóm tắt tài liệu bàn giao',
+  ],
+  CAB: [
+    'Đánh giá rủi ro triển khai production',
+    'Kế hoạch rollback khẩn cấp nếu gặp sự cố',
+    'Soát lại hồ sơ đóng CR',
+  ],
+};
+
+export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanelProps>(({
   projectId,
   crId,
   stepId,
   stepGroundingContext = '',
+  onSolutionExtracted,
+  onRequestAiAnalysis,
   db = defaultDb,
-}) => {
+}, ref) => {
   const { token } = theme.useToken();
   const [threadId, setThreadId] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingText, setStreamingText] = useState('');
+  const [streamingStatus, setStreamingStatus] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Toolbox state per D-04
+  const [analysisMode, setAnalysisMode] = useState<boolean>(true); // default true for SDLC step inspection
+  const [autoApproveMutations, setAutoApproveMutations] = useState<boolean>(false);
+  const [mcpEnabled, setMcpEnabled] = useState<boolean>(true);
+  const [selectedModel, setSelectedModel] = useState<string>('');
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [isRefreshingModels, setIsRefreshingModels] = useState(false);
+  const [mcpServers, setMcpServers] = useState<McpServerConfig[]>([]);
+
+  // Pending mutation confirmation state
+  const [pendingConfirmation, setPendingConfirmation] = useState<{
+    toolName: string;
+    summary: string;
+    args: Record<string, any>;
+    resolve: (proceed: boolean) => void;
+  } | null>(null);
 
   // Initialize or fetch isolated thread for this step
   useEffect(() => {
@@ -52,6 +147,50 @@ export const StepChatPanel: React.FC<StepChatPanelProps> = ({
     };
   }, [projectId, crId, stepId, db]);
 
+  // Load models and MCP servers configuration
+  const loadModelsAndServers = useCallback(async () => {
+    try {
+      const config = await getNineRouterConfig(db);
+      if (config.defaultModel) {
+        setSelectedModel(config.defaultModel);
+      }
+      const [models, servers] = await Promise.all([
+        fetchAvailableModels(db).catch(() => []),
+        getMcpServers(db).catch(() => []),
+      ]);
+      setAvailableModels(models);
+      setMcpServers(servers);
+      if (!config.defaultModel && models.length > 0 && models[0]) {
+        setSelectedModel(models[0]);
+      }
+    } catch {
+      // Ignored
+    }
+  }, [db]);
+
+  useEffect(() => {
+    void loadModelsAndServers();
+  }, [loadModelsAndServers]);
+
+  const handleRefreshModels = async () => {
+    setIsRefreshingModels(true);
+    try {
+      const models = await fetchAvailableModels(db);
+      setAvailableModels(models);
+      message.success('Đã làm mới danh sách mô hình');
+    } catch {
+      message.error('Không thể tải danh sách mô hình');
+    } finally {
+      setIsRefreshingModels(false);
+    }
+  };
+
+  const handleToggleMcpServer = async (id: string, enabled: boolean) => {
+    const updated = mcpServers.map((s) => (s.id === id ? { ...s, enabled } : s));
+    setMcpServers(updated);
+    await saveMcpServers(updated, db);
+  };
+
   // Read messages strictly bound to this isolated step threadId
   const messages = useLiveQuery(
     () => (threadId ? db.chatMessages.where('threadId').equals(threadId).sortBy('createdAt') : []),
@@ -62,11 +201,21 @@ export const StepChatPanel: React.FC<StepChatPanelProps> = ({
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length, streamingText]);
 
-  const handleSendMessage = async () => {
-    const text = inputText.trim();
+  const handleClearHistory = async () => {
+    if (!threadId) return;
+    try {
+      await clearThreadMessages(threadId, db);
+      message.success('Đã xóa hội thoại của bước này');
+    } catch {
+      message.error('Không thể xóa hội thoại');
+    }
+  };
+
+  const handleSendMessage = async (customText?: string) => {
+    const text = (customText ?? inputText).trim();
     if (!text || !threadId || isStreaming) return;
 
-    setInputText('');
+    if (!customText) setInputText('');
     await saveMessage(
       {
         threadId,
@@ -76,69 +225,144 @@ export const StepChatPanel: React.FC<StepChatPanelProps> = ({
       db
     );
 
-    // Call AI stream
+    // Call AI orchestrator loop
     setIsStreaming(true);
     setStreamingText('');
+    setStreamingStatus('Khởi động AI...');
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     try {
       const config = await getNineRouterConfig(db);
       const apiKey = await getNineRouterApiKey(db);
-      const systemPrompt = `Bạn là trợ lý AI chuyên gia hỗ trợ quy trình SDLC tại bước [${stepId}].
+      const targetModel = selectedModel || config.defaultModel || 'gpt-4o';
+
+      const systemPrompt = `Bạn là trợ lý AI chuyên gia hỗ trợ quy trình SDLC tại bước [${stepId} - ${STEP_LABELS[stepId] || ''}].
+Dự án ID: ${projectId}
+Mã CR: ${crId}
 Ngữ cảnh kỹ thuật bước hiện tại:
 ${stepGroundingContext}
 
-Hãy trả lời ngắn gọn, tập trung vào nhiệm vụ của bước [${stepId}], phân tích logic kỹ thuật và hỗ trợ người dùng đạt chuẩn bàn giao.`;
+Hãy trả lời súc tích, đi thẳng vào giải pháp kỹ thuật, phân tích kiến trúc chính xác và hỗ trợ người dùng đạt chuẩn bàn giao. Khi được yêu cầu phân tích kiến trúc SOLUTION.md, hãy xuất văn bản Markdown hoàn chỉnh có tiêu đề "# SOLUTION".`;
 
       const historyMsgs = messages.map((m) => ({
         role: m.role as 'user' | 'assistant',
         content: m.content,
       }));
 
-      const stream = streamChatEvents({
+      const dynamicMcpTools = mcpEnabled ? await discoverAllMcpTools(db).catch(() => []) : [];
+      const toolsForTurn = getToolsForTurn(analysisMode, dynamicMcpTools);
+
+      let fullResponse = '';
+
+      const loopResult = await runAiOrchestratorLoop({
         endpoint: config.endpoint,
         apiKey: apiKey ?? '',
-        payload: {
-          model: config.model || 'gpt-4o',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            ...historyMsgs,
-            { role: 'user', content: text },
-          ],
+        model: targetModel,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          ...historyMsgs,
+          { role: 'user', content: text },
+        ],
+        tools: toolsForTurn,
+        maxLoops: 30,
+        db,
+        signal: controller.signal,
+        ...(analysisMode ? { keepRecentToolOutputs: 20, maxOldToolChars: 100_000 } : {}),
+        compactAtRatio: analysisMode ? 0.9 : 0.75,
+        executeToolFn: (name, args, toolDb, signal) =>
+          dispatchAiToolCall(name, args, toolDb, signal, { allowMutation: autoApproveMutations }),
+        onTextChunk: (delta) => {
+          fullResponse += delta;
+          const stripped = stripThinkingBlocks(fullResponse);
+          setStreamingText(stripped);
+        },
+        onStatusChange: (status) => {
+          setStreamingStatus(status);
+        },
+        onMutationCheck: async (toolName, args) => {
+          if (analysisMode) {
+            return {
+              proceed: false,
+              cancellationResult: JSON.stringify({
+                cancelled: true,
+                message: 'Analysis Mode chỉ đọc; không có dữ liệu nào bị thay đổi.',
+              }),
+            };
+          }
+          if (autoApproveMutations) {
+            return { proceed: true };
+          }
+          const summary = await describeToolMutationWithContext(toolName, args, db);
+          setStreamingStatus('Chờ xác nhận hành động...');
+          const confirmed = await new Promise<boolean>((resolve) => {
+            setPendingConfirmation({
+              toolName,
+              summary,
+              args,
+              resolve,
+            });
+          });
+          setPendingConfirmation(null);
+          return confirmed
+            ? { proceed: true }
+            : {
+                proceed: false,
+                cancellationResult: JSON.stringify({
+                  cancelled: true,
+                  message: 'Người dùng đã từ chối thao tác này. Không có dữ liệu nào bị thay đổi.',
+                }),
+              };
         },
       });
 
-      let accumulated = '';
-      for await (const chunk of stream) {
-        if (chunk.type === 'text') {
-          accumulated += chunk.delta;
-          setStreamingText(accumulated);
-        }
-      }
+      const cleanCommittedResponse = stripThinkingBlocks(loopResult.fullResponse || fullResponse).trim();
 
-      if (accumulated.trim()) {
+      if (cleanCommittedResponse) {
         await saveMessage(
           {
             threadId,
             role: 'assistant',
-            content: accumulated,
+            content: cleanCommittedResponse,
+          },
+          db
+        );
+
+        // Auto-extract solution if in SOLUTION step
+        if (stepId === 'SOLUTION' && onSolutionExtracted) {
+          const solutionMarkdown = extractSolutionMarkdown(cleanCommittedResponse);
+          if (solutionMarkdown) {
+            onSolutionExtracted(solutionMarkdown);
+          }
+        }
+      }
+    } catch (err: any) {
+      if (controller.signal.aborted) {
+        // User aborted
+      } else {
+        await saveMessage(
+          {
+            threadId,
+            role: 'assistant',
+            content: `Lỗi kết nối AI: ${err?.message || 'Không thể tạo phản hồi'}`,
           },
           db
         );
       }
-    } catch (err: any) {
-      await saveMessage(
-        {
-          threadId,
-          role: 'assistant',
-          content: `Lỗi kết nối AI: ${err?.message || 'Không thể tạo phản hồi'}`,
-        },
-        db
-      );
     } finally {
       setIsStreaming(false);
       setStreamingText('');
+      setStreamingStatus(null);
+      abortControllerRef.current = null;
     }
   };
+
+  React.useImperativeHandle(ref, () => ({
+    sendMessage: (text: string) => handleSendMessage(text),
+  }));
+
+  const quickPrompts = STEP_QUICK_PROMPTS[stepId] ?? [];
 
   return (
     <div
@@ -153,19 +377,91 @@ Hãy trả lời ngắn gọn, tập trung vào nhiệm vụ của bước [${st
       {/* Header */}
       <div
         style={{
-          padding: '12px 16px',
+          padding: '8px 12px',
           borderBottom: `1px solid ${token.colorBorderSecondary}`,
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
+          flexDirection: 'column',
+          gap: 6,
+          background: token.colorFillAlter,
         }}
       >
-        <Space size={8}>
-          <RobotOutlined style={{ color: token.colorPrimary, fontSize: 16 }} />
-          <Typography.Text strong style={{ fontSize: 13 }}>
-            Trợ lý AI ({stepId})
-          </Typography.Text>
-        </Space>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            <div
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: 6,
+                background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#ffffff',
+                flexShrink: 0,
+                boxShadow: '0 2px 4px rgba(79, 70, 229, 0.2)',
+              }}
+            >
+              <RobotFilled style={{ fontSize: 13 }} />
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <Typography.Text
+                strong
+                style={{
+                  fontSize: 12,
+                  display: 'block',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                Trợ lý AI • {STEP_LABELS[stepId] || stepId}
+              </Typography.Text>
+              <Typography.Text type="secondary" style={{ fontSize: 10, display: 'block' }}>
+                Ngữ cảnh cô lập ({stepId})
+              </Typography.Text>
+            </div>
+          </div>
+
+          {messages.length > 0 && (
+            <Popconfirm
+              title="Xóa hội thoại bước này?"
+              okText="Xóa"
+              cancelText="Hủy"
+              onConfirm={handleClearHistory}
+            >
+              <Tooltip title="Làm sạch hội thoại bước này">
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<ClearOutlined />}
+                  style={{ color: token.colorTextSecondary }}
+                />
+              </Tooltip>
+            </Popconfirm>
+          )}
+        </div>
+
+        {/* Parity ChatTabToolbox */}
+        <ChatTabToolbox
+          activeTabId={threadId || 'sdlc-step-tab'}
+          selectedModel={selectedModel}
+          availableModels={availableModels}
+          onModelChange={(m) => {
+            setSelectedModel(m);
+            void setNineRouterConfig({ defaultModel: m }, db);
+          }}
+          onRefreshModels={handleRefreshModels}
+          isRefreshingModels={isRefreshingModels}
+          analysisMode={analysisMode}
+          onToggleAnalysisMode={() => setAnalysisMode((prev) => !prev)}
+          autoApproveMutations={autoApproveMutations}
+          onToggleAutoApproveMutations={() => setAutoApproveMutations((prev) => !prev)}
+          mcpEnabled={mcpEnabled}
+          onToggleMcpEnabled={() => setMcpEnabled((prev) => !prev)}
+          mcpServers={mcpServers}
+          onToggleMcpServer={handleToggleMcpServer}
+          onClearContext={handleClearHistory}
+        />
       </div>
 
       {/* Messages Transcript */}
@@ -173,15 +469,69 @@ Hãy trả lời ngắn gọn, tập trung vào nhiệm vụ của bước [${st
         style={{
           flex: 1,
           overflowY: 'auto',
-          padding: '16px',
+          padding: '14px',
           display: 'flex',
           flexDirection: 'column',
           gap: 12,
+          background: token.colorBgContainer,
         }}
       >
         {messages.length === 0 && !streamingText && (
-          <div style={{ textAlign: 'center', margin: 'auto', color: token.colorTextSecondary, fontSize: 13 }}>
-            Chưa có tin nhắn nào cho bước {stepId}. Hãy đặt câu hỏi hoặc yêu cầu AI hỗ trợ.
+          <div
+            style={{
+              textAlign: 'center',
+              margin: 'auto 0',
+              padding: '16px 8px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 12,
+            }}
+          >
+            <div
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: '50%',
+                background: token.colorFillAlter,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: token.colorPrimary,
+                fontSize: 20,
+              }}
+            >
+              <RobotFilled />
+            </div>
+            <div>
+              <Typography.Text strong style={{ fontSize: 13, display: 'block' }}>
+                Hỗ trợ chuyên môn cho {STEP_LABELS[stepId] || stepId}
+              </Typography.Text>
+              <Typography.Text type="secondary" style={{ fontSize: 12, marginTop: 4, display: 'block' }}>
+                Đặt câu hỏi kỹ thuật hoặc chọn nhanh các câu hỏi gợi ý bên dưới:
+              </Typography.Text>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%', marginTop: 8 }}>
+              {quickPrompts.map((prompt, idx) => (
+                <Button
+                  key={idx}
+                  size="small"
+                  type="dashed"
+                  onClick={() => void handleSendMessage(prompt)}
+                  style={{
+                    fontSize: 12,
+                    textAlign: 'left',
+                    height: 'auto',
+                    padding: '6px 10px',
+                    whiteSpace: 'normal',
+                    lineHeight: 1.4,
+                  }}
+                >
+                  💡 {prompt}
+                </Button>
+              ))}
+            </div>
           </div>
         )}
 
@@ -192,23 +542,34 @@ Hãy trả lời ngắn gọn, tập trung vào nhiệm vụ của bước [${st
               key={m.id}
               style={{
                 alignSelf: isUser ? 'flex-end' : 'flex-start',
-                maxWidth: '85%',
-                padding: '10px 14px',
-                borderRadius: token.borderRadiusLG,
-                background: isUser ? token.colorPrimary : token.colorFillAlter,
-                color: isUser ? '#fff' : token.colorText,
-                fontSize: 13,
-                lineHeight: 1.5,
+                maxWidth: '92%',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 2,
               }}
             >
-              {isUser ? (
-                <div style={{ whiteSpace: 'pre-wrap' }}>{m.content}</div>
-              ) : (
-                <div
-                  dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(m.content) }}
-                  style={{ overflowWrap: 'break-word' }}
-                />
-              )}
+              <div
+                style={{
+                  padding: '9px 13px',
+                  borderRadius: token.borderRadiusLG,
+                  background: isUser ? token.colorPrimary : token.colorFillAlter,
+                  border: isUser ? 'none' : `1px solid ${token.colorBorderSecondary}`,
+                  color: isUser ? '#ffffff' : token.colorText,
+                  fontSize: 13,
+                  lineHeight: 1.55,
+                  wordBreak: 'break-word',
+                  boxShadow: isUser ? '0 1px 3px rgba(79, 70, 229, 0.2)' : 'none',
+                }}
+              >
+                {isUser ? (
+                  <div style={{ whiteSpace: 'pre-wrap' }}>{m.content}</div>
+                ) : (
+                  <div
+                    dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(m.content) }}
+                    style={{ overflowWrap: 'break-word' }}
+                  />
+                )}
+              </div>
             </div>
           );
         })}
@@ -217,18 +578,53 @@ Hãy trả lời ngắn gọn, tập trung vào nhiệm vụ của bước [${st
           <div
             style={{
               alignSelf: 'flex-start',
-              maxWidth: '85%',
-              padding: '10px 14px',
+              maxWidth: '92%',
+              padding: '9px 13px',
               borderRadius: token.borderRadiusLG,
               background: token.colorFillAlter,
+              border: `1px solid ${token.colorBorderSecondary}`,
               fontSize: 13,
-              lineHeight: 1.5,
+              lineHeight: 1.55,
             }}
           >
             <div
               dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(streamingText) }}
               style={{ overflowWrap: 'break-word' }}
             />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, color: token.colorPrimary }}>
+              <SyncOutlined spin style={{ fontSize: 12 }} />
+              <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+                {streamingStatus || 'AI đang xử lý...'}
+              </Typography.Text>
+            </div>
+          </div>
+        )}
+
+        {/* Pending Mutation Confirmation Card */}
+        {pendingConfirmation && (
+          <div
+            style={{
+              padding: 12,
+              background: token.colorWarningBg,
+              border: `1px solid ${token.colorWarningBorder}`,
+              borderRadius: token.borderRadiusLG,
+              marginTop: 8,
+            }}
+          >
+            <Typography.Text strong style={{ display: 'block', color: token.colorWarningText }}>
+              Xác nhận thay đổi dữ liệu:
+            </Typography.Text>
+            <Typography.Text style={{ fontSize: 12, display: 'block', margin: '4px 0' }}>
+              {pendingConfirmation.summary}
+            </Typography.Text>
+            <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-end' }}>
+              <Button size="small" onClick={() => pendingConfirmation.resolve(false)}>
+                Từ chối
+              </Button>
+              <Button type="primary" size="small" onClick={() => pendingConfirmation.resolve(true)}>
+                Đồng ý
+              </Button>
+            </div>
           </div>
         )}
 
@@ -236,8 +632,17 @@ Hãy trả lời ngắn gọn, tập trung vào nhiệm vụ của bước [${st
       </div>
 
       {/* Input */}
-      <div style={{ padding: 12, borderTop: `1px solid ${token.colorBorderSecondary}` }}>
-        <Space orientation="horizontal" style={{ width: '100%' }}>
+      <div
+        style={{
+          padding: '10px 12px',
+          borderTop: `1px solid ${token.colorBorderSecondary}`,
+          background: token.colorBgContainer,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 6,
+        }}
+      >
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', width: '100%' }}>
           <Input.TextArea
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
@@ -248,17 +653,39 @@ Hãy trả lời ngắn gọn, tập trung vào nhiệm vụ của bước [${st
               }
             }}
             placeholder={`Hỏi AI trợ giúp bước này (${stepId})...`}
-            autoSize={{ minRows: 1, maxRows: 4 }}
+            autoSize={{ minRows: 1, maxRows: 5 }}
             disabled={isStreaming}
+            style={{
+              flex: 1,
+              width: '100%',
+              borderRadius: token.borderRadiusSM,
+              fontSize: 13,
+            }}
           />
           <Button
             type="primary"
             icon={<SendOutlined />}
             loading={isStreaming}
+            disabled={!inputText.trim() && !isStreaming}
             onClick={() => void handleSendMessage()}
+            style={{
+              height: 32,
+              minWidth: 38,
+              borderRadius: token.borderRadiusSM,
+            }}
           />
-        </Space>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 2px' }}>
+          <Typography.Text type="secondary" style={{ fontSize: 10 }}>
+            Enter gửi • Shift+Enter xuống dòng
+          </Typography.Text>
+          <Typography.Text type="secondary" style={{ fontSize: 10 }}>
+            Ngữ cảnh: {stepId}
+          </Typography.Text>
+        </div>
       </div>
     </div>
   );
-};
+});
+
+StepChatPanel.displayName = 'StepChatPanel';
