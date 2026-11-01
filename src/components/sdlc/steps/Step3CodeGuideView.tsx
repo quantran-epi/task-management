@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
-import { Typography, Button, Space, Card, theme, message } from 'antd';
+import { Typography, Button, Space, Card, Alert, theme, message } from 'antd';
 import { CopyOutlined, CheckOutlined, ArrowRightOutlined, CodeOutlined } from '@ant-design/icons';
+import { formatGuardMessage } from '../../../services/wizard/workflowGuards';
+import type { SdlcStepId } from '../../../services/wizard/workflowSchemas';
 
 export interface Step3CodeGuideViewProps {
   crCode?: string;
   /** Approved SOLUTION.md body — supplies the scope/acceptance part of the handoff contract. */
   approvedSolutionMarkdown?: string | undefined;
   onProceedToStep4: () => void;
+  /** D-20: a navigation CTA back to the step that supplies the missing artifact. */
+  onNavigateToStep?: ((step: SdlcStepId) => void) | undefined;
 }
 
 const HANDOFF_ITEMS = [
@@ -20,7 +24,10 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
   crCode = 'CR-UNKNOWN',
   approvedSolutionMarkdown,
   onProceedToStep4,
+  onNavigateToStep,
 }) => {
+  // D-20: the handoff is only meaningful against an approved SOLUTION.
+  const hasApprovedSolution = Boolean(approvedSolutionMarkdown?.trim());
   const { token } = theme.useToken();
   const [copied, setCopied] = useState(false);
 
@@ -120,11 +127,31 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
         </Space>
       </Card>
 
+      {!hasApprovedSolution && (
+        <Alert
+          type="error"
+          showIcon
+          data-testid="step3-prerequisite-guard"
+          message={formatGuardMessage('SOLUTION_REQUIRED_FOR_CHANGE_PACK')}
+          description="Tài liệu bắt buộc: SOLUTION.md đã được phê duyệt ở Bước 2. Chưa có tài liệu này thì hợp đồng bàn giao và Change Pack không có phạm vi đối chiếu."
+          action={
+            <Button
+              type="primary"
+              disabled={!onNavigateToStep}
+              onClick={() => onNavigateToStep?.('SOLUTION')}
+            >
+              Chuyển đến Bước 2: Thiết kế giải pháp
+            </Button>
+          }
+        />
+      )}
+
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
         <Button
           type="primary"
           size="large"
           icon={<ArrowRightOutlined />}
+          disabled={!hasApprovedSolution}
           onClick={onProceedToStep4}
         >
           Đã code xong — Chuyển sang Nạp Change Pack

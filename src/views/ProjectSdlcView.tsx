@@ -433,6 +433,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
             crCode={workflowState?.metadata.cr ?? ''}
             approvedSolutionMarkdown={workflowState?.artifacts.solution?.content}
             onProceedToStep4={() => handleNavigateToStep('CHANGE_PACK')}
+            onNavigateToStep={handleNavigateToStep}
           />
         );
       case 'CHANGE_PACK':

@@ -151,6 +151,7 @@ describe('Step 1 Intake & Step 2 Solution Views', () => {
       const { container } = render(
         <Step3CodeGuideView
           crCode="CR-2026-999"
+          approvedSolutionMarkdown="# SOLUTION đã duyệt"
           onProceedToStep4={handleProceed}
         />
       );
@@ -158,6 +159,7 @@ describe('Step 1 Intake & Step 2 Solution Views', () => {
       expect(screen.getByTestId('cli-command')).toHaveTextContent('node scripts/change-pack.mjs --cr CR-2026-999');
 
       const advanceBtn = screen.getByRole('button', { name: /Đã code xong — Chuyển sang Nạp Change Pack/i });
+      expect(advanceBtn).not.toBeDisabled();
       fireEvent.click(advanceBtn);
       expect(handleProceed).toHaveBeenCalledTimes(1);
 
@@ -167,6 +169,29 @@ describe('Step 1 Intake & Step 2 Solution Views', () => {
       expect(screen.getByText(/Hợp đồng bàn giao Coding & Change Pack/i)).toBeInTheDocument();
       expect(screen.queryByText(/Checklist kiểm tra trước khi nạp pack/i)).toBeNull();
       expect(screen.getByText(/repository nguồn đích/i)).toBeInTheDocument();
+    });
+
+    it('D-20: blocks the handoff when no approved SOLUTION exists', () => {
+      const handleProceed = vi.fn();
+      const handleNavigate = vi.fn();
+      render(
+        <Step3CodeGuideView
+          crCode="CR-2026-999"
+          onProceedToStep4={handleProceed}
+          onNavigateToStep={handleNavigate}
+        />
+      );
+
+      expect(
+        screen.getByRole('button', { name: /Đã code xong — Chuyển sang Nạp Change Pack/i })
+      ).toBeDisabled();
+      expect(screen.getByTestId('step3-prerequisite-guard')).toHaveTextContent(
+        /Chưa đủ điều kiện: Thiếu SOLUTION\.md từ Bước 2\./i
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /Chuyển đến Bước 2: Thiết kế giải pháp/i }));
+      expect(handleNavigate).toHaveBeenCalledWith('SOLUTION');
+      expect(handleProceed).not.toHaveBeenCalled();
     });
 
     it('falls back to (chưa cung cấp) when the approved solution body is absent', () => {

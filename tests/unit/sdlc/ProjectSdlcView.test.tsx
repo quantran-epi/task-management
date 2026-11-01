@@ -147,15 +147,21 @@ describe('ProjectSdlcView and IDE Layout', () => {
     // Type a draft
     fireEvent.change(textarea, { target: { value: '# Draft Architecture v1\nPersisted across navigation.' } });
 
-    // Navigate to Step 3
+    // Navigate to Step 3 — the handoff is gated because no SOLUTION is approved yet (D-20).
     fireEvent.click(screen.getByText(/Bước 3: Coding ngoài/i));
 
     await waitFor(() => {
       expect(screen.getByText(/Lệnh đóng gói Change Pack/i)).toBeInTheDocument();
     });
+    expect(screen.getByTestId('step3-prerequisite-guard')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Đã code xong — Chuyển sang Nạp Change Pack/i })
+    ).toBeDisabled();
 
-    // Navigate back to Step 2 -> draft must still be there without auto-running AI
-    fireEvent.click(screen.getByText(/Bước 2: Thiết kế giải pháp/i));
+    // Navigate back to Step 2 -> draft must still be there without auto-running AI.
+    // The sidebar and the Step 3 guard CTA both name Step 2; click the sidebar entry.
+    const step2Labels = screen.getAllByText(/Bước 2: Thiết kế giải pháp/i);
+    fireEvent.click(step2Labels[0]!);
 
     await waitFor(() => {
       const reloadedTextarea = screen.getByPlaceholderText(/Nội dung kiến trúc giải pháp SOLUTION.md/i) as HTMLTextAreaElement;
