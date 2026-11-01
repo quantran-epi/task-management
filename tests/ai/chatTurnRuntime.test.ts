@@ -83,10 +83,13 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
   });
 
   it('publishes preparing before the injected saveMessage resolves', async () => {
-    let releaseSave: (() => void) | null = null;
-    const blockedSave = ((input: never) => {
-      return new Promise((resolve) => {
-        releaseSave = () => resolve(saveMessage(input, db));
+    let resolveUserRow: ((message: ChatMessage) => void) | undefined;
+    let calls = 0;
+    const blockedSave = ((input: Parameters<ChatTurnRuntimeDeps['saveMessage']>[0], target: TaskPlannerDatabase) => {
+      calls += 1;
+      if (calls > 1) return saveMessage(input, target);
+      return new Promise<ChatMessage>((resolve) => {
+        resolveUserRow = resolve;
       });
     }) as unknown as ChatTurnRuntimeDeps['saveMessage'];
 
@@ -99,9 +102,15 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
     expect(statuses).toEqual(['preparing']);
     expect(runtime.getStatus()).toBe('preparing');
 
-    await Promise.resolve();
-    releaseSave?.();
+    resolveUserRow?.({
+      id: 'user-row-1',
+      threadId,
+      role: 'user',
+      content: 'Xin chào',
+      createdAt: new Date().toISOString(),
+    });
     await pending;
+    expect(statuses).toEqual(['preparing', 'complete']);
   });
 
   it('moves through preparing, streaming, tool, synthesizing, complete', async () => {
@@ -248,11 +257,11 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
   });
 
   it('rejects a second concurrent start with TURN_IN_PROGRESS and writes no message', async () => {
-    let release: (() => void) | null = null;
+    const gate: { release?: () => void } = {};
     const runtime = runtimeWith(async (options) => {
       options.onTextChunk?.('x');
       await new Promise<void>((resolve) => {
-        release = resolve;
+        gate.release = resolve;
       });
       return { fullResponse: 'x', tokenUsage: {} };
     });
@@ -266,7 +275,7 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
     );
     expect(await messageRows()).toHaveLength(rowsBeforeSecond.length);
 
-    release?.();
+    gate.release?.();
     await first;
   });
 
