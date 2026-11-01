@@ -5,7 +5,13 @@ import {
   type AiChatWidgetProps,
   type AiChatToolboxProps,
 } from '../../src/components/ai/AiChatWidget';
-import type { ChatMessage } from '../../src/types/models';
+import type { ChatArtifactEvent, ChatMessage } from '../../src/types/models';
+import { TaskPlannerDatabase } from '../../src/db';
+import {
+  createOrGetThread,
+  getMessagesByThreadId,
+  saveMessage,
+} from '../../src/db/repositories/chatRepo';
 
 function makeToolbox(overrides: Partial<AiChatToolboxProps> = {}): AiChatToolboxProps {
   return {
@@ -273,5 +279,120 @@ describe('AiChatWidget lifecycle and host extension points (D-01..D-06, D-19, D-
     expect(screen.getAllByTestId('ai-chat-widget')).toHaveLength(2);
     expect(onSubmitA).not.toHaveBeenCalled();
     expect(onSubmitB).not.toHaveBeenCalled();
+  });
+});
+
+describe('chatRepo artifactEvent persistence (D-22, T-25.3-43)', () => {
+  let db: TaskPlannerDatabase;
+  let threadId: string;
+
+  const SHA = 'a'.repeat(64);
+
+  const event = (overrides: Partial<ChatArtifactEvent> = {}): ChatArtifactEvent => ({
+    kind: 'SOLUTION',
+    title: 'SOLUTION',
+    version: 1,
+    hash: SHA,
+    status: 'draft',
+    ...overrides,
+  });
+
+  beforeEach(async () => {
+    db = new TaskPlannerDatabase(`test-artifact-event-${Date.now()}-${Math.random()}`);
+    const thread = await createOrGetThread({ scopeType: 'project', entityId: 'p-1' }, db);
+    threadId = thread.id;
+  });
+
+  afterEach(async () => {
+    await db.delete();
+  });
+
+  it('round-trips an artifact event through db.chatMessages.get', async () => {
+    const saved = await saveMessage(
+      { threadId, role: 'assistant', content: 'Đã tạo SOLUTION', artifactEvent: event() },
+      db
+    );
+    const row = (await db.chatMessages.get(saved.id)) as ChatMessage;
+    expect(row.artifactEvent).toEqual(event());
+  });
+
+  it('stores one distinct row per artifact version', async () => {
+    const v1 = await saveMessage(
+      { threadId, role: 'assistant', content: 'v1', artifactEvent: event({ version: 1 }) },
+      db
+    );
+    const v2 = await saveMessage(
+      {
+        threadId,
+        role: 'assistant',
+        content: 'v2',
+        artifactEvent: event({ version: 2, status: 'approved' }),
+      },
+      db
+    );
+
+    expect(v1.id).not.toBe(v2.id);
+    const rows = await getMessagesByThreadId(threadId, db);
+    expect(rows.map((r) => r.artifactEvent?.version)).toEqual([1, 2]);
+    expect(rows[1]?.artifactEvent?.status).toBe('approved');
+  });
+
+  it('leaves messages without an artifact event unchanged', async () => {
+    const saved = await saveMessage({ threadId, role: 'user', content: 'Xin chào' }, db);
+    const row = (await db.chatMessages.get(saved.id)) as ChatMessage;
+    expect(row.artifactEvent).toBeUndefined();
+    expect(row.content).toBe('Xin chào');
+  });
+
+  it('rejects invalid events and never persists the artifact body', async () => {
+    await expect(
+      saveMessage(
+        { threadId, role: 'assistant', content: 'x', artifactEvent: event({ hash: 'short' }) },
+        db
+      )
+    ).rejects.toMatchObject({ code: 'INVALID_ARTIFACT_EVENT' });
+
+    await expect(
+      saveMessage(
+        { threadId, role: 'assistant', content: 'x', artifactEvent: event({ version: 0 }) },
+        db
+      )
+    ).rejects.toMatchObject({ code: 'INVALID_ARTIFACT_EVENT' });
+
+    const saved = await saveMessage(
+      {
+        threadId,
+        role: 'assistant',
+        content: 'Đã tạo SOLUTION',
+        artifactEvent: event({ ctaLabel: 'Mở tài liệu' }),
+      },
+      db
+    );
+    const row = (await db.chatMessages.get(saved.id)) as ChatMessage;
+    expect(Object.keys(row.artifactEvent ?? {}).sort()).toEqual(
+      ['ctaLabel', 'hash', 'kind', 'status', 'title', 'version']
+    );
+  });
+
+  it('returns both cards in createdAt order after a reload', async () => {
+    await saveMessage(
+      { threadId, role: 'assistant', content: 'v1', artifactEvent: event({ version: 1 }) },
+      db
+    );
+    // createdAt has millisecond resolution; separate the two writes so the
+    // ordering assertion tests the sort, not a same-millisecond tie.
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    await saveMessage(
+      { threadId, role: 'assistant', content: 'v2', artifactEvent: event({ version: 2 }) },
+      db
+    );
+
+    // Simulated reload: fresh database handle over the same name is not portable,
+    // so re-read through the repository the way a remounted host does.
+    const reloaded = await getMessagesByThreadId(threadId, db);
+    expect(reloaded).toHaveLength(2);
+    expect(reloaded[0]!.artifactEvent?.version).toBe(1);
+    expect(reloaded[1]!.artifactEvent?.version).toBe(2);
+    expect(reloaded[0]!.createdAt <= reloaded[1]!.createdAt).toBe(true);
   });
 });

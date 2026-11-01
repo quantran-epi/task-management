@@ -4,6 +4,7 @@ import type {
   SdlcDocumentSetMetadata,
   WizardSnapshot,
 } from '../services/ai/wizardSchemas';
+import type { SdlcArtifactKind } from '../services/wizard/workflowSchemas';
 
 export type ProjectStatus = 'Open' | 'Pending' | 'In Progress' | 'Done' | 'Cancelled';
 export type MilestoneStatus = 'Open' | 'Pending' | 'In Progress' | 'Done' | 'Cancelled';
@@ -271,6 +272,19 @@ export interface ChatGeneratedFile {
   content?: string | undefined;
 }
 
+/**
+ * Durable per-version artifact event carried by a chat row (`artifactEvent`).
+ * Metadata only: the artifact body never enters the transcript.
+ */
+export interface ChatArtifactEvent {
+  kind: SdlcArtifactKind;
+  title: string;
+  version: number;
+  hash: string;
+  status: 'draft' | 'approved';
+  ctaLabel?: string | undefined;
+}
+
 export interface ChatMessage {
   id: string; // RFC 4122 v4 UUID
   threadId: string; // Reference to ChatThread.id
@@ -283,6 +297,7 @@ export interface ChatMessage {
   generatedFiles?: ChatGeneratedFile[] | undefined; // AI-generated downloadable files
   grounding?: ChatMessageGrounding | undefined; // Structured grounding (Plan 19-10 D-46)
   wizard?: WizardSnapshot | undefined;
+  artifactEvent?: ChatArtifactEvent | undefined;
 }
 
 // Phase 16: Knowledge Server Foundation, DLP Checks & AST Ingestion models (D-01, D-08, D-18, D-27, D-29)

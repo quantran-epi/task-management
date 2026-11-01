@@ -2,6 +2,7 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../index';
 import type {
   ChatThread,
   ChatMessage,
+  ChatArtifactEvent,
   ChatScopeType,
   ChatRole,
   ChatTokenUsage,
@@ -12,6 +13,7 @@ import {
   ChatMessageGroundingSchema,
   type ChatMessageGrounding,
 } from '../../services/ai/groundedAnswerSchemas';
+import { SdlcArtifactKindSchema } from '../../services/wizard/workflowSchemas';
 import { generateId } from '../../utils/uuid';
 
 export interface CreateOrGetThreadInput {
@@ -30,6 +32,7 @@ export interface SaveMessageInput {
   generatedFiles?: ChatGeneratedFile[] | undefined;
   grounding?: ChatMessageGrounding | undefined;
   wizard?: WizardSnapshot | undefined;
+  artifactEvent?: ChatArtifactEvent | undefined;
 }
 
 export function buildScopeKey(scopeType: ChatScopeType, entityId?: string): string {
@@ -84,6 +87,37 @@ export async function saveMessage(
     }
   }
 
+  // Artifact cards are durable per version but carry metadata only (T-25.3-43):
+  // the artifact body stays in the editor, never in a chat row.
+  let artifactEvent: ChatArtifactEvent | undefined;
+  if (input.artifactEvent !== undefined) {
+    const { kind, title, version, hash, status, ctaLabel } = input.artifactEvent;
+    if (
+      !SdlcArtifactKindSchema.safeParse(kind).success ||
+      !title?.trim() ||
+      !/^[a-f0-9]{64}$/.test(hash ?? '') ||
+      !Number.isInteger(version) ||
+      version < 1
+    ) {
+      const error = new Error('Malformed artifact event: kind, title, hash (sha256) and version >= 1 are required');
+      (error as Error & { code: string }).code = 'INVALID_ARTIFACT_EVENT';
+      throw error;
+    }
+    if (status !== 'draft' && status !== 'approved') {
+      const error = new Error('Malformed artifact event: status must be draft or approved');
+      (error as Error & { code: string }).code = 'INVALID_ARTIFACT_EVENT';
+      throw error;
+    }
+    artifactEvent = {
+      kind,
+      title: title.trim(),
+      version,
+      hash,
+      status,
+      ...(ctaLabel ? { ctaLabel } : {}),
+    };
+  }
+
   let wizard: WizardSnapshot | undefined;
   if (input.wizard !== undefined) {
     const parsed = WizardSnapshotSchema.safeParse(input.wizard);
@@ -121,6 +155,7 @@ export async function saveMessage(
       : {}),
     ...(input.grounding ? { grounding: input.grounding } : {}),
     ...(wizard ? { wizard } : {}),
+    ...(artifactEvent ? { artifactEvent } : {}),
   };
 
   await db.transaction('rw', [db.chatMessages, db.chatThreads], async () => {
