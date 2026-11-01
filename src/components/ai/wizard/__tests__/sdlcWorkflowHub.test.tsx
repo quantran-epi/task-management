@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { SdlcWorkflowHub } from '../SdlcWorkflowHub';
 import { StepCabPanel, StepChangePackPanel, StepIntakePanel, StepSolutionPanel, StepTechDocsPanel, type HubChangePackDraft } from '../HubStepPanels';
 import { ERROR_COPY } from '../ChangePackConfirmStrip';
@@ -238,6 +238,23 @@ describe('SdlcWorkflowHub', () => {
     expect(screen.getByText('Đang xử lý')).toBeInTheDocument();
     expect(screen.getByText(/Đang xem bước 1 — chỉ đọc\. Bước đang xử lý: Giải pháp SOLUTION\.md\./)).toBeInTheDocument();
     expect(screen.getByText('Bước 1/6: Hồ sơ Đầu vào (PL01 & PL02)')).toBeInTheDocument();
+  });
+
+  it('drawer variant shows only the current step card until Chi tiết opens the full hub', () => {
+    render(<SdlcWorkflowHub projectScoped variant="drawer" state={dummyState} onStartWorkflow={vi.fn()} />);
+
+    expect(screen.getByText('Bước 2/6: Giải pháp SOLUTION.md')).toBeInTheDocument();
+    expect(screen.getByText('Đang xử lý')).toBeInTheDocument();
+    expect(document.getElementById('sdlc-step-list')).toBeNull();
+    expect(screen.queryByTestId('hub-panel-SOLUTION')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Chi tiết' }));
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('list', { name: 'Quy trình 6 bước SDLC' })).toBeInTheDocument();
+    expect(within(dialog).getByTestId('hub-panel-SOLUTION')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: /Sửa PL01\/PL02/i })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: /Cập nhật yêu cầu/i })).toBeInTheDocument();
   });
 
   it('renders injected panels when the drawer supplies them', () => {
