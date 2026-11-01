@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createSdlcWorkflowCoordinator } from '../workflowCoordinator';
+import type { SdlcWorkflowState } from '../workflowSchemas';
 
 describe('createSdlcWorkflowCoordinator', () => {
   const dummyUuid1 = '11111111-1111-4111-8111-111111111111';
@@ -114,5 +115,119 @@ describe('createSdlcWorkflowCoordinator', () => {
     expect(closed.cycles?.at(-1)?.status).toBe('completed');
     const opened = await coordinator.openCycle();
     expect(opened.cycles?.at(-1)?.status).toBe('active');
+  });
+});
+
+const restoreProjectId = '11111111-1111-4111-8111-111111111111';
+const restoreThreadId = '22222222-2222-4222-8222-222222222222';
+const hashA = 'a'.repeat(64);
+const hashB = 'b'.repeat(64);
+
+const restoreMetadata = { cr: 'CR-001', featureName: 'Feature A', author: 'Author', requestingUnit: 'Unit', date: '2026-10-30' };
+
+function persistedState(overrides: Partial<SdlcWorkflowState> = {}): SdlcWorkflowState {
+  return {
+    schemaVersion: 1,
+    sessionId: restoreProjectId,
+    projectId: restoreProjectId,
+    threadId: restoreThreadId,
+    currentStep: 'SOLUTION',
+    metadata: restoreMetadata,
+    artifacts: {
+      pl01: { kind: 'PL01', version: 1, hash: hashA, title: 'PL01', sourceHashes: [], updatedAt: '2026-10-30T00:00:00.000Z' },
+      pl02: { kind: 'PL02', version: 1, hash: hashB, title: 'PL02', sourceHashes: [], updatedAt: '2026-10-30T00:00:00.000Z' },
+      solution: { kind: 'SOLUTION', version: 1, hash: hashA, title: 'SOLUTION', sourceHashes: [], updatedAt: '2026-10-30T00:00:00.000Z' },
+    },
+    staleSteps: [],
+    createdAt: '2026-10-30T00:00:00.000Z',
+    updatedAt: '2026-10-30T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+describe('createSdlcWorkflowCoordinator restore-before-action', () => {
+  it('restores persisted state before an action inspects artifacts', async () => {
+    const coordinator = createSdlcWorkflowCoordinator({
+      projectId: restoreProjectId,
+      threadId: restoreThreadId,
+      hashText: async (text) => (text === 'new body' ? hashB : hashA),
+      loadState: async () => persistedState(),
+    });
+
+    const state = await coordinator.commitSolution('new body');
+    expect(state.artifacts.solution?.version).toBe(2);
+    expect(coordinator.getState()?.artifacts.solution?.version).toBe(2);
+  });
+
+  it('fails with WORKFLOW_NOT_INITIALIZED when nothing is persisted', async () => {
+    const coordinator = createSdlcWorkflowCoordinator({ projectId: restoreProjectId, threadId: restoreThreadId, loadState: async () => undefined });
+    await expect(coordinator.navigateToStep('CAB')).rejects.toThrow('WORKFLOW_NOT_INITIALIZED');
+  });
+
+  it('de-duplicates concurrent restores into one loadState call', async () => {
+    let loadCalls = 0;
+    const coordinator = createSdlcWorkflowCoordinator({
+      projectId: restoreProjectId,
+      threadId: restoreThreadId,
+      loadState: async () => {
+        loadCalls += 1;
+        await Promise.resolve();
+        return undefined;
+      },
+    });
+
+    const results = await Promise.allSettled([
+      coordinator.navigateToStep('SOLUTION'),
+      coordinator.navigateToStep('CAB'),
+    ]);
+
+    expect(results.every((result) => result.status === 'rejected')).toBe(true);
+    expect(loadCalls).toBe(1);
+  });
+
+  it('rejects malformed persisted state instead of adopting it', async () => {
+    const coordinator = createSdlcWorkflowCoordinator({
+      projectId: restoreProjectId,
+      threadId: restoreThreadId,
+      loadState: async () => ({ sessionId: restoreProjectId }) as unknown as SdlcWorkflowState,
+    });
+
+    await expect(coordinator.restore()).rejects.toThrow();
+    expect(coordinator.getState()).toBeUndefined();
+  });
+
+  it('does not let an in-flight load overwrite a newer in-memory state', async () => {
+    const pending: Array<(state: SdlcWorkflowState) => void> = [];
+    const coordinator = createSdlcWorkflowCoordinator({
+      projectId: restoreProjectId,
+      threadId: restoreThreadId,
+      loadState: () => new Promise<SdlcWorkflowState>((resolve) => { pending.push(resolve); }),
+    });
+
+    const first = coordinator.restore();
+    const second = coordinator.restore();
+    expect(pending).toHaveLength(2);
+
+    pending[0]?.(persistedState({ currentStep: 'CAB' }));
+    await first;
+    pending[1]?.(persistedState({ currentStep: 'TECH_DOCS' }));
+    const restored = await second;
+
+    expect(restored?.currentStep).toBe('CAB');
+    expect(coordinator.getState()?.currentStep).toBe('CAB');
+  });
+
+  it('adopts persisted state in startOrUpdateIntake instead of starting a new session', async () => {
+    const coordinator = createSdlcWorkflowCoordinator({
+      projectId: restoreProjectId,
+      threadId: restoreThreadId,
+      hashText: async () => hashA,
+      createSessionId: () => restoreThreadId,
+      loadState: async () => persistedState(),
+    });
+
+    const state = await coordinator.startOrUpdateIntake(restoreMetadata, 'PL01', 'PL02');
+    expect(state.sessionId).toBe(restoreProjectId);
+    expect(state.artifacts.pl01?.version).toBe(2);
   });
 });
