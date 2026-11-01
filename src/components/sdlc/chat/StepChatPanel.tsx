@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { message, Modal, theme } from 'antd';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../../db';
@@ -92,6 +92,9 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
   );
 
   const [preludePending, setPreludePending] = useState(false);
+  // Stop is reachable while the prelude paints 'preparing', but the runtime is still idle —
+  // aborting it is a no-op. Record the cancel so the staged turn never starts.
+  const preludeAbortRef = useRef(false);
 
   const turn = useChatTurn({
     scopeKey,
@@ -134,6 +137,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
       setToolEvents([]);
       // D-19/SC5: paint the loading state before any await. Config, key and MCP discovery
       // can take a visible moment; the composer must never look dead in that window.
+      preludeAbortRef.current = false;
       setPreludePending(true);
 
       try {
@@ -169,6 +173,8 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
           .map((msg) => ({ role: msg.role, content: msg.content }));
 
         setPreludePending(false);
+        // Cancelled while staging: the runtime never started, so nothing may be committed.
+        if (preludeAbortRef.current) return;
         const outcome = await turn.start({
           threadId,
           scopeKey,
@@ -260,7 +266,11 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
         onSubmit={(text) => {
           void submit(text, 'qa');
         }}
-        onStop={turn.abort}
+        onStop={() => {
+          // A stop during the prelude cancels the staged turn; otherwise it aborts the runtime.
+          if (preludePending) preludeAbortRef.current = true;
+          turn.abort();
+        }}
         onResolveApproval={turn.resolveApproval}
         onRetry={() => {
           void turn.retry();

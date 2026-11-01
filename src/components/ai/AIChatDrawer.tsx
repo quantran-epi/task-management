@@ -1080,6 +1080,11 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
   const handleStopGeneration = () => {
     const runtime = tabRuntimesRef.current.get(activeRuntimeTabId);
+    // Stop is reachable during the prelude now that it paints as 'preparing'. The runtime has not
+    // started yet, so aborting it cannot cancel anything — record the cancel and never start.
+    if (!turnRegistryRef.current?.peek(activeRuntimeTabId)?.isRunning()) {
+      preludeAbortRef.current.add(activeRuntimeTabId);
+    }
     abortHostTurn(activeRuntimeTabId);
     turnRegistryRef.current?.abortTab(activeRuntimeTabId);
     runtime?.requestController?.abort();
@@ -1160,6 +1165,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       prev[tabId] === active ? prev : { ...prev, [tabId]: active }
     );
   }, []);
+  // Stop is reachable during the prelude now that it paints as 'preparing'. The runtime has not
+  // started yet, so aborting it cannot cancel anything — record the cancel and never start.
+  const preludeAbortRef = useRef(new Set<string>());
 
   const handleSendTurn = async (
     text: string,
@@ -1209,6 +1217,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
     const runtime = turnRegistryRef.current!.get(turnTabId, turnTab.threadId ?? activeThreadId ?? '');
     tabRuntimes.initialize(turnTabId, turnTab.threadId ?? activeThreadId ?? '');
+    preludeAbortRef.current.delete(turnTabId);
     markPrelude(turnTabId, true);
     tabRuntimes.patch(turnTabId, {
       error: null,
@@ -1745,6 +1754,16 @@ Rules:
         })
       );
 
+      // Stopped while staging: nothing was started, so nothing may be committed.
+      if (preludeAbortRef.current.delete(turnTabId)) {
+        markPrelude(turnTabId, false);
+        tabRuntimes.patch(turnTabId, {
+          status: 'idle',
+          groundedLoadingStatus: null,
+          streamingStatus: null,
+        });
+        return;
+      }
       markPrelude(turnTabId, false);
       const outcome = await runtime.start({
         threadId,
@@ -1784,6 +1803,7 @@ Rules:
       patchTurnError('request_failed', 'Không thể hoàn tất phản hồi AI. Vui lòng thử lại.', turnTabId);
     } finally {
       // The prelude window must never outlive the send, on any exit path (D-19).
+      preludeAbortRef.current.delete(turnTabId);
       markPrelude(turnTabId, false);
     }
   };

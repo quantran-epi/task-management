@@ -367,4 +367,30 @@ describe('AIChatDrawer multi-tab isolation', () => {
     expect(messages.filter((msg) => msg.role === 'assistant')).toHaveLength(0);
     expect(messages.filter((msg) => msg.role === 'user')).toHaveLength(1);
   });
+
+  it('cancels a turn stopped inside the send prelude and never starts the loop', async () => {
+    await seedTabs();
+    const streamSpy = vi.spyOn(nineRouterClient, 'streamChatEvents');
+    streamSpy.mockImplementation(((() => {
+      return (async function* () {
+        yield { type: 'text' as const, delta: 'must never appear' };
+      })();
+    }) as never));
+
+    render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
+    await openTab(CHAT_ONE);
+    submit('Stop while staging');
+
+    // The prelude paints the staged state (and therefore the Stop control) before the runtime
+    // starts; stopping here must cancel the staged turn, not start it and discard the output.
+    await waitFor(() => expect(screen.getByLabelText('Dừng sinh phản hồi')).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText('Dừng sinh phản hồi'));
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 200));
+
+    expect(streamSpy).not.toHaveBeenCalled();
+    const tab = (await listTabsByScope(SCOPE_KEY, db)).find((row) => row.title === CHAT_ONE);
+    const messages = await db.chatMessages.where('threadId').equals(tab!.threadId).toArray();
+    expect(messages.filter((msg) => msg.role === 'assistant')).toHaveLength(0);
+  });
 });
