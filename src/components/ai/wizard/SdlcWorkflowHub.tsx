@@ -13,7 +13,7 @@ import {
   SyncOutlined,
   UpOutlined,
 } from '@ant-design/icons';
-import { Alert, Badge, Button, Card, Input, Popconfirm, Space, Tag, Typography, theme } from 'antd';
+import { Alert, Badge, Button, Card, Input, Modal, Popconfirm, Space, Tag, Typography, theme } from 'antd';
 import type { SdlcStepId, SdlcWorkflowState } from '../../../services/wizard/workflowSchemas';
 import { RevisionImpactModal } from './RevisionImpactModal';
 import {
@@ -28,6 +28,8 @@ const { Text } = Typography;
 
 export interface SdlcWorkflowHubProps {
   projectScoped: boolean;
+  /** `drawer` shows only the current step card plus a "Chi tiết" modal holding the full hub. */
+  variant?: 'full' | 'drawer' | undefined;
   state?: SdlcWorkflowState | undefined;
   onStartWorkflow: () => void;
   onSelectStep?: ((stepId: SdlcStepId) => void) | undefined;
@@ -116,24 +118,67 @@ const STEP_CONFIGS: StepConfig[] = [
   },
 ];
 
-export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = ({
-  projectScoped,
-  state,
-  onStartWorkflow,
-  onSelectStep,
-  onNavigateStep: _onNavigateStep,
-  onRerunStep,
-  onResetWorkflow,
-  onRequestRequirementRevision,
-  onRequestSolutionRevision,
-  stepPanels,
-  revisionDraft: controlledRevisionDraft,
-  revisionPreview,
-  revisionLoading = false,
-  onRevisionDraftChange,
-  onPreviewRevision,
-  onCommitRevision,
-}) => {
+type Token = ReturnType<typeof theme.useToken>['token'];
+
+interface StepStateView {
+  icon: React.ReactNode;
+  stateLabel: 'Cần cập nhật' | 'Đang xử lý' | 'Đã xong' | 'Chưa bắt đầu';
+  stateColor: string;
+}
+
+/** Single source of the step-state priority: stale → processing → done → not started. */
+function resolveStepState(
+  flags: { isStale: boolean; isProcessing: boolean; isDone: boolean },
+  token: Token,
+): StepStateView {
+  if (flags.isStale) {
+    return {
+      icon: <ReloadOutlined style={{ color: token.colorWarning }} />,
+      stateLabel: 'Cần cập nhật',
+      stateColor: token.colorWarning,
+    };
+  }
+  if (flags.isProcessing) {
+    return {
+      icon: <SyncOutlined spin style={{ color: token.colorPrimary }} />,
+      stateLabel: 'Đang xử lý',
+      stateColor: token.colorPrimary,
+    };
+  }
+  if (flags.isDone) {
+    return {
+      icon: <CheckCircleOutlined style={{ color: token.colorSuccess }} />,
+      stateLabel: 'Đã xong',
+      stateColor: token.colorSuccess,
+    };
+  }
+  return {
+    icon: <ClockCircleOutlined style={{ color: token.colorTextQuaternary }} />,
+    stateLabel: 'Chưa bắt đầu',
+    stateColor: token.colorTextQuaternary,
+  };
+}
+
+export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = (props) => {
+  const {
+    projectScoped,
+    variant = 'full',
+    state,
+    onStartWorkflow,
+    onSelectStep,
+    onNavigateStep: _onNavigateStep,
+    onRerunStep,
+    onResetWorkflow,
+    onRequestRequirementRevision,
+    onRequestSolutionRevision,
+    stepPanels,
+    revisionDraft: controlledRevisionDraft,
+    revisionPreview,
+    revisionLoading = false,
+    onRevisionDraftChange,
+    onPreviewRevision,
+    onCommitRevision,
+  } = props;
   const { token } = theme.useToken();
   const [localSelectedStep, setLocalSelectedStep] = useState<SdlcStepId | null>(null);
   const [timelineExpanded, setTimelineExpanded] = useState(true);
@@ -142,6 +187,7 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = ({
   const timelineListRef = useRef<HTMLDivElement>(null);
   const [revisionModalType, setRevisionModalType] = useState<'requirement' | 'solution' | null>(null);
   const [revisionDraft, setRevisionDraft] = useState('');
+  const [detailOpen, setDetailOpen] = useState(false);
   const effectiveRevisionDraft = controlledRevisionDraft ?? revisionDraft;
   const updateRevisionDraft = (value: string) => {
     setRevisionDraft(value);
@@ -227,6 +273,157 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = ({
   // Stale impact for revision preview
   const requirementStaleImpact: SdlcStepId[] = ['SOLUTION', 'CODE_GUIDE', 'CHANGE_PACK', 'TECH_DOCS', 'CAB'];
   const solutionStaleImpact: SdlcStepId[] = ['CODE_GUIDE', 'CHANGE_PACK', 'TECH_DOCS', 'CAB'];
+
+  // Shared by both variants: the drawer card offers "Cập nhật yêu cầu/solution" too.
+  const revisionModal = revisionModalType ? (
+    <RevisionImpactModal
+      open={Boolean(revisionModalType)}
+      revisionType={revisionModalType}
+      diff={revisionPreview?.diff ?? {
+        before:
+          revisionModalType === 'requirement'
+            ? state.artifacts.pl01?.content ?? 'Yêu cầu hiện tại'
+            : state.artifacts.solution?.content ?? 'Solution hiện tại',
+        after: effectiveRevisionDraft,
+      }}
+      description={
+        <Input.TextArea
+          value={effectiveRevisionDraft}
+          onChange={(event) => updateRevisionDraft(event.target.value)}
+          onBlur={() => {
+            if (effectiveRevisionDraft.trim()) void onPreviewRevision?.(revisionModalType!, effectiveRevisionDraft);
+          }}
+          rows={6}
+          placeholder="Nhập bản nội dung mới để xem trước và xác nhận."
+        />
+      }
+      sources={revisionPreview?.sources ?? []}
+      staleStepIds={revisionPreview?.impactSteps ?? (revisionModalType === 'requirement' ? requirementStaleImpact : solutionStaleImpact)}
+      loading={revisionLoading}
+      onConfirm={() => {
+        // The user already pressed "Xác nhận cập nhật", so never silently turn that click into
+        // a second preview: without a committed preview (the blur preview raced) fall back to
+        // preview-then-commit instead of returning with nothing done.
+        if (!revisionPreview) {
+          void onPreviewRevision?.(revisionModalType!, effectiveRevisionDraft);
+          return;
+        }
+        void onCommitRevision?.(revisionModalType!);
+        setRevisionModalType(null);
+      }}
+      onClose={() => setRevisionModalType(null)}
+    />
+  ) : null;
+
+  if (variant === 'drawer') {
+    // The card always describes the step being processed, so only stale can outrank "processing".
+    const stepState = resolveStepState({ isStale: isCurrentProcessingStale, isProcessing: true, isDone: false }, token);
+    const tagColor = { 'Cần cập nhật': 'warning', 'Đang xử lý': 'processing', 'Đã xong': 'success', 'Chưa bắt đầu': 'default' }[
+      stepState.stateLabel
+    ];
+
+    return (
+      <Card
+        size="small"
+        style={{
+          width: '100%',
+          boxSizing: 'border-box',
+          borderColor: hasStale ? token.colorWarning : token.colorBorderSecondary,
+        }}
+        styles={{ body: { padding: '10px 12px' } }}
+      >
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+          <span style={{ fontSize: 16, fontWeight: 600, lineHeight: 1.3, color: token.colorText }}>
+            Bước {currentStepIndex + 1}/6: {currentConfig.title}
+          </span>
+          <Tag icon={stepState.icon} color={tagColor}>
+            {stepState.stateLabel}
+          </Tag>
+          <Tag color="blue">{state.metadata.cr}</Tag>
+        </div>
+
+        <div
+          style={{
+            fontSize: 14,
+            lineHeight: 1.5,
+            color: token.colorTextSecondary,
+            marginBottom: 10,
+            wordBreak: 'break-word',
+          }}
+        >
+          {currentConfig.hint}
+        </div>
+
+        <Space size={8} wrap>
+          {isCurrentProcessingStale && (
+            <Button
+              type="primary"
+              danger
+              size="small"
+              icon={<ReloadOutlined />}
+              onClick={() => onRerunStep?.(currentProcessingStep)}
+            >
+              Cập nhật lại
+            </Button>
+          )}
+          <Button size="small" onClick={onStartWorkflow}>
+            Sửa PL01/PL02
+          </Button>
+          {isIntakeCompleted && (
+            <Button
+              size="small"
+              onClick={() => {
+                if (onRequestRequirementRevision) {
+                  onRequestRequirementRevision();
+                } else {
+                  setRevisionModalType('requirement');
+                }
+              }}
+            >
+              Cập nhật yêu cầu
+            </Button>
+          )}
+          {isSolutionCompleted && (
+            <Button
+              size="small"
+              onClick={() => {
+                if (onRequestSolutionRevision) {
+                  onRequestSolutionRevision();
+                } else {
+                  setRevisionModalType('solution');
+                }
+              }}
+            >
+              Cập nhật solution
+            </Button>
+          )}
+          <Button
+            type="primary"
+            size="small"
+            aria-haspopup="dialog"
+            onClick={() => setDetailOpen(true)}
+          >
+            Chi tiết
+          </Button>
+        </Space>
+
+        <Modal
+          open={detailOpen}
+          onCancel={() => setDetailOpen(false)}
+          footer={null}
+          destroyOnHidden
+          title={`SDLC: ${state.metadata.featureName} — Chi tiết quy trình`}
+          width="min(1100px, calc(100vw - 32px))"
+          zIndex={1400}
+          styles={{ body: { maxHeight: 'calc(100vh - 200px)', overflowY: 'auto', paddingTop: 8 } }}
+        >
+          <SdlcWorkflowHub {...props} variant="full" />
+        </Modal>
+
+        {revisionModal}
+      </Card>
+    );
+  }
 
   return (
     <Card
@@ -398,27 +595,7 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = ({
               (cfg.id === 'INTAKE' && isIntakeCompleted) ||
               (cfg.id === 'SOLUTION' && isSolutionCompleted));
 
-          let icon = cfg.icon;
-          let stateLabel = 'Chưa bắt đầu';
-          let stateColor = token.colorTextQuaternary;
-
-          if (isStale) {
-            icon = <ReloadOutlined style={{ color: token.colorWarning }} />;
-            stateLabel = 'Cần cập nhật';
-            stateColor = token.colorWarning;
-          } else if (isProcessing) {
-            icon = <SyncOutlined spin style={{ color: token.colorPrimary }} />;
-            stateLabel = 'Đang xử lý';
-            stateColor = token.colorPrimary;
-          } else if (isDone) {
-            icon = <CheckCircleOutlined style={{ color: token.colorSuccess }} />;
-            stateLabel = 'Đã xong';
-            stateColor = token.colorSuccess;
-          } else {
-            icon = <ClockCircleOutlined style={{ color: token.colorTextQuaternary }} />;
-            stateLabel = 'Chưa bắt đầu';
-            stateColor = token.colorTextQuaternary;
-          }
+          const { icon, stateLabel, stateColor } = resolveStepState({ isStale, isProcessing, isDone }, token);
 
           const borderStyle = isSelected
             ? `1px solid ${token.colorPrimary}`
@@ -623,45 +800,7 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = ({
       </div>
 
       {/* Revision impact confirmation modal */}
-      {revisionModalType && (
-        <RevisionImpactModal
-          open={Boolean(revisionModalType)}
-          revisionType={revisionModalType}
-          diff={revisionPreview?.diff ?? {
-            before:
-              revisionModalType === 'requirement'
-                ? state.artifacts.pl01?.content ?? 'Yêu cầu hiện tại'
-                : state.artifacts.solution?.content ?? 'Solution hiện tại',
-            after: effectiveRevisionDraft,
-          }}
-          description={
-            <Input.TextArea
-              value={effectiveRevisionDraft}
-              onChange={(event) => updateRevisionDraft(event.target.value)}
-              onBlur={() => {
-                if (effectiveRevisionDraft.trim()) void onPreviewRevision?.(revisionModalType!, effectiveRevisionDraft);
-              }}
-              rows={6}
-              placeholder="Nhập bản nội dung mới để xem trước và xác nhận."
-            />
-          }
-          sources={revisionPreview?.sources ?? []}
-          staleStepIds={revisionPreview?.impactSteps ?? (revisionModalType === 'requirement' ? requirementStaleImpact : solutionStaleImpact)}
-          loading={revisionLoading}
-          onConfirm={() => {
-            // The user already pressed "Xác nhận cập nhật", so never silently turn that click into
-            // a second preview: without a committed preview (the blur preview raced) fall back to
-            // preview-then-commit instead of returning with nothing done.
-            if (!revisionPreview) {
-              void onPreviewRevision?.(revisionModalType!, effectiveRevisionDraft);
-              return;
-            }
-            void onCommitRevision?.(revisionModalType!);
-            setRevisionModalType(null);
-          }}
-          onClose={() => setRevisionModalType(null)}
-        />
-      )}
+      {revisionModal}
     </Card>
   );
 };
