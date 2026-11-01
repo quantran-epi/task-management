@@ -201,7 +201,9 @@ export const NoteSourcePickerModal: React.FC<NoteSourcePickerModalProps> = ({
         </Title>
       }
       onCancel={onClose}
-      width="min(720px, calc(100vw - 32px))"
+      // Parent StepInputDocsModal sits at 1300; antd's default 1000 would bury this picker under it.
+      zIndex={1310}
+      width="min(1000px, calc(100vw - 32px))"
       footer={[
         <span key="summary" style={{ float: 'left', lineHeight: '32px', fontSize: 13, color: token.colorTextSecondary }}>
           Đã chọn {selectedIds.size} tài liệu cho {kind}
@@ -245,9 +247,13 @@ export const NoteSourcePickerModal: React.FC<NoteSourcePickerModalProps> = ({
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+            // A single row that owns the height: without it the grid rows grow to their content and
+            // the Markdown preview pushes past the modal footer instead of scrolling inside.
+            gridTemplateRows: 'minmax(0, 1fr)',
             gap: 12,
             minHeight: 320,
-            maxHeight: 'calc(100vh - 320px)',
+            maxHeight: 'calc(100vh - 260px)',
+            overflow: 'hidden',
           }}
         >
           {/* Note List */}
@@ -261,6 +267,8 @@ export const NoteSourcePickerModal: React.FC<NoteSourcePickerModalProps> = ({
             onKeyDown={handleListboxKeyDown}
             style={{
               overflowY: 'auto',
+              minWidth: 0,
+              minHeight: 0,
               border: `1px solid ${token.colorBorderSecondary}`,
               borderRadius: token.borderRadiusSM,
               padding: 4,
@@ -349,7 +357,9 @@ export const NoteSourcePickerModal: React.FC<NoteSourcePickerModalProps> = ({
           <div
             aria-live="polite"
             style={{
-              overflowY: 'auto',
+              overflow: 'hidden',
+              minWidth: 0,
+              minHeight: 0,
               border: `1px solid ${token.colorBorderSecondary}`,
               borderRadius: token.borderRadiusSM,
               padding: 12,
@@ -383,6 +393,9 @@ export const NoteSourcePickerModal: React.FC<NoteSourcePickerModalProps> = ({
                 <div
                   style={{
                     flex: 1,
+                    // Without this the flex child refuses to shrink below its content and the
+                    // Markdown body spills out of the preview pane instead of scrolling.
+                    minHeight: 0,
                     fontSize: 13,
                     lineHeight: 1.5,
                     overflowY: 'auto',

@@ -124,7 +124,7 @@ export const StepInputDocsModal: React.FC<StepInputDocsModalProps> = ({
         }
         onCancel={onClose}
         zIndex={1300}
-        width="min(720px, calc(100vw - 32px))"
+        width="min(1000px, calc(100vw - 32px))"
         footer={[
           <Button key="cancel" onClick={onClose} disabled={loading}>
             Hủy bỏ

@@ -3357,6 +3357,7 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
           <RestoredSourceNotice missingSources={restoredMissingSources} />
           <SdlcWorkflowHub
             projectScoped={isProjectScope}
+            variant="drawer"
             state={sdlcWorkflowState}
             stepPanels={stepPanels}
             onStartWorkflow={() => setSdlcInputModalOpen(true)}
