@@ -54,7 +54,7 @@ describe('SDLC step contracts (D-10 through D-15)', () => {
     const contract = SDLCS_STEP_CONTRACTS.CAB;
     expect(contract).toContain('đã triển khai thực tế');
     expect(contract).toContain('rollback đã được kiểm chứng');
-    expect(contract).toContain('loại trừ');
+    expect(contract).toContain('Loại trừ các hạng mục SOLUTION đã lên kế hoạch nhưng chưa triển khai');
   });
 
   it('moves quick prompts away from PL03B-vs-SOLUTION comparison and production risk assertions', () => {
