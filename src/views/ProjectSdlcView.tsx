@@ -296,6 +296,7 @@ Vui lòng rà soát cơ sở dữ liệu hiện có bằng công cụ tra cứu,
         return (
           <Step3CodeGuideView
             crCode={workflowState?.metadata.cr ?? ''}
+            approvedSolutionMarkdown={workflowState?.artifacts.solution?.content}
             onProceedToStep4={() => setSelectedStep('CHANGE_PACK')}
           />
         );

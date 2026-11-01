@@ -1,23 +1,28 @@
 import React, { useState } from 'react';
-import { Typography, Button, Space, Card, Checkbox, theme, message } from 'antd';
+import { Typography, Button, Space, Card, theme, message } from 'antd';
 import { CopyOutlined, CheckOutlined, ArrowRightOutlined, CodeOutlined } from '@ant-design/icons';
 
 export interface Step3CodeGuideViewProps {
   crCode?: string;
+  /** Approved SOLUTION.md body — supplies the scope/acceptance part of the handoff contract. */
+  approvedSolutionMarkdown?: string | undefined;
   onProceedToStep4: () => void;
 }
 
+const HANDOFF_ITEMS = [
+  { key: 'scope', label: 'Phạm vi & tiêu chí nghiệm thu' },
+  { key: 'tests', label: 'Kiểm thử bắt buộc' },
+  { key: 'migration', label: 'Migration & rollback' },
+  { key: 'pack', label: 'Yêu cầu đối với Change Pack' },
+] as const;
+
 export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
   crCode = 'CR-UNKNOWN',
+  approvedSolutionMarkdown,
   onProceedToStep4,
 }) => {
   const { token } = theme.useToken();
   const [copied, setCopied] = useState(false);
-  const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({
-    diff: false,
-    tests: false,
-    migration: false,
-  });
 
   const cliCommand = `node scripts/change-pack.mjs --cr ${crCode}`;
 
@@ -32,8 +37,13 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
     }
   };
 
-  const handleCheckChange = (key: string, checked: boolean) => {
-    setCheckedItems((prev) => ({ ...prev, [key]: checked }));
+  const contractBody: Record<(typeof HANDOFF_ITEMS)[number]['key'], string> = {
+    scope: approvedSolutionMarkdown?.trim() || '(chưa cung cấp)',
+    tests:
+      'Chạy unit test và kiểm thử hồi quy cho mọi hành vi trong phạm vi đã duyệt; ghi lại kết quả vào Change Pack.',
+    migration:
+      'Nếu thay đổi schema/DB, kèm script migration và kịch bản rollback tương ứng. Không có thay đổi DB thì ghi rõ "không áp dụng".',
+    pack: `Gói .zip phải chứa diff.patch và meta.json; trường cr trong meta.json phải trùng ${crCode}.`,
   };
 
   return (
@@ -86,32 +96,27 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
         <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
           * Script sẽ tự động scan git diff, tạo file meta.json và nén thành file zip tương ứng với mã CR <code>{crCode}</code>.
         </Typography.Text>
+        <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
+          Lệnh này do lập trình viên chạy trong repository nguồn đích. TaskMate không thực thi lệnh và không truy cập mã nguồn; TaskMate chỉ đọc tệp .zip sau khi bạn nạp lên.
+        </Typography.Text>
       </Card>
 
       <Card
-        title="Checklist kiểm tra trước khi nạp pack"
+        title="Hợp đồng bàn giao Coding & Change Pack"
         size="small"
         style={{ border: `1px solid ${token.colorBorderSecondary}` }}
       >
         <Space direction="vertical" size={12} style={{ width: '100%' }}>
-          <Checkbox
-            checked={Boolean(checkedItems.diff)}
-            onChange={(e) => handleCheckChange('diff', e.target.checked)}
-          >
-            Đã kiểm tra <code>git diff</code> — các thay đổi nằm trong phạm vi giải pháp đã duyệt
-          </Checkbox>
-          <Checkbox
-            checked={Boolean(checkedItems.tests)}
-            onChange={(e) => handleCheckChange('tests', e.target.checked)}
-          >
-            Đã chạy unit test / integration test kiểm tra regression
-          </Checkbox>
-          <Checkbox
-            checked={Boolean(checkedItems.migration)}
-            onChange={(e) => handleCheckChange('migration', e.target.checked)}
-          >
-            Đã chuẩn bị script migration DB và kịch bản rollback (nếu có thay đổi DB)
-          </Checkbox>
+          {HANDOFF_ITEMS.map((item) => (
+            <div key={item.key}>
+              <Typography.Text strong style={{ display: 'block', fontSize: 13 }}>
+                {item.label}
+              </Typography.Text>
+              <Typography.Paragraph style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: 13 }}>
+                {contractBody[item.key]}
+              </Typography.Paragraph>
+            </div>
+          ))}
         </Space>
       </Card>
 

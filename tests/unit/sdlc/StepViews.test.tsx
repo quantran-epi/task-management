@@ -124,7 +124,7 @@ describe('Step 1 Intake & Step 2 Solution Views', () => {
   describe('Step3CodeGuideView', () => {
     it('displays packaging command pre-filled with crCode and advances on click', () => {
       const handleProceed = vi.fn();
-      render(
+      const { container } = render(
         <Step3CodeGuideView
           crCode="CR-2026-999"
           onProceedToStep4={handleProceed}
@@ -136,6 +136,18 @@ describe('Step 1 Intake & Step 2 Solution Views', () => {
       const advanceBtn = screen.getByRole('button', { name: /Đã code xong — Chuyển sang Nạp Change Pack/i });
       fireEvent.click(advanceBtn);
       expect(handleProceed).toHaveBeenCalledTimes(1);
+
+      // D-12: coding handoff contract, no independent implementation-status tracker.
+      expect(container.querySelectorAll('input[type="checkbox"]')).toHaveLength(0);
+      expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
+      expect(screen.getByText(/Hợp đồng bàn giao Coding & Change Pack/i)).toBeInTheDocument();
+      expect(screen.queryByText(/Checklist kiểm tra trước khi nạp pack/i)).toBeNull();
+      expect(screen.getByText(/repository nguồn đích/i)).toBeInTheDocument();
+    });
+
+    it('falls back to (chưa cung cấp) when the approved solution body is absent', () => {
+      render(<Step3CodeGuideView crCode="CR-2026-999" onProceedToStep4={vi.fn()} />);
+      expect(screen.getByText('(chưa cung cấp)')).toBeInTheDocument();
     });
   });
 
