@@ -108,9 +108,18 @@ describe('ChatTabToolbox and Tab Isolation', () => {
       expect(refreshedA?.config?.autoApproveMutations).toBe(true);
     });
 
-    // Toggle mcp on active Tab 1
+    // Clicking MCP button opens popover without toggling mcpEnabled
     const mcpBtn = await screen.findByTestId('tab-mcp-btn');
     fireEvent.click(mcpBtn);
+
+    // Verify mcpEnabled is NOT flipped by clicking the button
+    const tabBeforePopoverToggle = await db.chatTabs.get(first.id);
+    expect(tabBeforePopoverToggle?.config?.mcpEnabled).toBe(true);
+
+    // Toggle master MCP switch inside the popover
+    const masterSwitch = await screen.findByRole('switch', { name: /Bật\/tắt toàn bộ MCP/i });
+    expect(masterSwitch).toBeInTheDocument();
+    fireEvent.click(masterSwitch);
 
     await waitFor(async () => {
       const refreshedA = await db.chatTabs.get(first.id);

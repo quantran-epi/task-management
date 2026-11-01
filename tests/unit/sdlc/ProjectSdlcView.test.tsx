@@ -181,9 +181,10 @@ describe('ProjectSdlcView and IDE Layout', () => {
     // Model selector is present
     expect(screen.getByLabelText(/Chọn mô hình AI cho tab này/i)).toBeInTheDocument();
 
-    // Unified MCP button is present
+    // Unified MCP button is present and clicking it does not toggle or throw
     const mcpBtn = screen.getByTestId('tab-mcp-manage-btn');
     expect(mcpBtn).toBeInTheDocument();
+    fireEvent.click(mcpBtn);
 
     // Compact options menu button is present
     const compactMoreBtn = screen.getByTestId('tab-compact-more-btn');

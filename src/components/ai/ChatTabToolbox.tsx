@@ -323,11 +323,6 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
                     icon={<ApiOutlined />}
                     aria-label="Quản lý máy chủ MCP"
                     data-testid="tab-mcp-manage-btn"
-                    onClick={() => {
-                      if (onToggleMcpEnabled) {
-                        onToggleMcpEnabled(activeTabId);
-                      }
-                    }}
                     style={{
                       fontSize: 11,
                       padding: '0 6px',
@@ -401,11 +396,6 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
                     aria-label="Quản lý và bật/tắt MCP"
                     data-testid="tab-mcp-btn"
                     data-manage-testid="tab-mcp-manage-btn"
-                    onClick={() => {
-                      if (onToggleMcpEnabled) {
-                        onToggleMcpEnabled(activeTabId);
-                      }
-                    }}
                     style={{
                       fontSize: 11,
                       padding: '0 6px',
