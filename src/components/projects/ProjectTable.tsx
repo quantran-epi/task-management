@@ -23,6 +23,7 @@ import {
   RobotOutlined,
   MoreOutlined,
   BellOutlined,
+  SettingOutlined,
 } from '@ant-design/icons';
 import type { Project, Milestone, Task } from '../../types/models';
 import { EmptyState } from '../common/EmptyState';
@@ -47,6 +48,7 @@ export interface ProjectTableProps {
   onEditMilestone: (milestone: Milestone) => void;
   onDeleteMilestone: (milestone: Milestone) => void;
   onEditTask: (taskId: string) => void;
+  onOpenSdlcStudio?: (projectId: string) => void;
   loading?: boolean;
   db?: TaskPlannerDatabase;
 }
@@ -82,6 +84,7 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
   onEditMilestone,
   onDeleteMilestone,
   onEditTask,
+  onOpenSdlcStudio,
   loading = false,
   db = defaultDb,
 }) => {
@@ -105,6 +108,14 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
       label: 'Hỏi Trợ lý AI',
       onClick: () => {
         openChat({ type: 'project', id: record.id, title: record.name });
+      },
+    },
+    {
+      key: 'sdlc-studio',
+      icon: <SettingOutlined style={{ color: token.colorPrimary }} />,
+      label: '⚙️ SDLC Studio',
+      onClick: () => {
+        onOpenSdlcStudio?.(record.id);
       },
     },
     {
@@ -813,9 +824,18 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
     {
       title: 'Thao tác',
       key: 'actions',
-      width: 140,
+      width: 220,
       render: (_, record) => (
         <Space orientation="horizontal" size="small">
+          {onOpenSdlcStudio && (
+            <Button
+              size="small"
+              icon={<SettingOutlined />}
+              onClick={() => onOpenSdlcStudio(record.id)}
+            >
+              SDLC Studio
+            </Button>
+          )}
           <Button
             size="small"
             icon={<PlusOutlined />}

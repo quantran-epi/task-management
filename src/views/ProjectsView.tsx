@@ -13,6 +13,7 @@ import { TaskDrawer } from '../components/tasks/TaskDrawer';
 import { PageHeader } from '../components/common/PageHeader';
 import { createTask } from '../db/repositories/taskRepo';
 import { deleteProjectWithCascade, deleteMilestoneWithCascade } from '../db/repositories/cascadeRepo';
+import { ProjectSdlcView } from './ProjectSdlcView';
 import type { Project, Milestone, ProjectStatus, MilestoneStatus } from '../types/models';
 import type { TaskPlannerDatabase } from '../db';
 
@@ -39,6 +40,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ db = defaultDb }) =>
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
+  const [activeSdlcProjectId, setActiveSdlcProjectId] = useState<string | null>(null);
 
   // Live queries
   const projects = useLiveQuery(() => getAllProjects(db), [db]) ?? [];
@@ -192,6 +194,16 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ db = defaultDb }) =>
     setDrawerOpen(true);
   };
 
+  if (activeSdlcProjectId) {
+    return (
+      <ProjectSdlcView
+        projectId={activeSdlcProjectId}
+        onBack={() => setActiveSdlcProjectId(null)}
+        db={db}
+      />
+    );
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <PageHeader
@@ -219,6 +231,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ db = defaultDb }) =>
         onEditMilestone={handleOpenEditMilestone}
         onDeleteMilestone={handleDeleteMilestonePrompt}
         onEditTask={handleEditTask}
+        onOpenSdlcStudio={(projectId) => setActiveSdlcProjectId(projectId)}
       />
 
       <ProjectModal
