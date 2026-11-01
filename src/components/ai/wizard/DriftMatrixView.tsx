@@ -1,6 +1,11 @@
 import React, { useId } from 'react';
 import { Alert, Table, Tag, theme } from 'antd';
-import type { DriftTuple, ReconciliationResult } from '../../../services/wizard/reconciliation';
+import {
+  canClaimNoDrift,
+  type CoverageLedger,
+  type DriftTuple,
+  type ReconciliationResult,
+} from '../../../services/wizard/reconciliation';
 
 export type DriftMatrixLayout = 'table' | 'stacked';
 
@@ -24,6 +29,9 @@ const GROUPS: readonly Group[] = [
   { category: 'different', title: 'Làm khác', color: 'processing' },
 ];
 
+const INCOMPLETE_COVERAGE_TITLE = 'Thiếu bằng chứng bao phủ';
+const INCOMPLETE_COVERAGE_ACTION = 'Bổ sung tệp hoặc hunk còn thiếu vào Change Pack rồi nạp lại';
+
 function solutionText(tuple: DriftTuple): string {
   return tuple.baselineRequirement ?? (tuple.category === 'outside_solution' ? '(ngoài phạm vi)' : tuple.requirementId);
 }
@@ -34,21 +42,79 @@ function actualText(tuple: DriftTuple): string {
     : '(chưa cung cấp)';
 }
 
+/** D-13 impact/risk rating per finding category. */
+function impactText(tuple: DriftTuple): string {
+  switch (tuple.category) {
+    case 'outside_solution':
+      return 'Ảnh hưởng: Cao — thay đổi ngoài phạm vi đã duyệt';
+    case 'missing':
+      return 'Ảnh hưởng: Cao — phạm vi đã duyệt chưa được triển khai';
+    case 'different': {
+      const span = tuple.evidence ? `${tuple.evidence.startLine}-${tuple.evidence.endLine}` : 'chưa rõ phạm vi';
+      return `Ảnh hưởng: Trung bình — hành vi khác thiết kế (${span})`;
+    }
+  }
+}
+
+/** D-13 next action per finding category. */
+function nextAction(tuple: DriftTuple): string {
+  switch (tuple.category) {
+    case 'outside_solution':
+      return 'Loại bỏ thay đổi ngoài phạm vi hoặc cập nhật SOLUTION.md có kiểm soát';
+    case 'missing':
+      return 'Triển khai hoặc giải trình mục còn thiếu trong Change Pack';
+    case 'different':
+      return 'Đối chiếu lại với SOLUTION.md và ghi nhận sai lệch';
+  }
+}
+
+function FindingNotes({ tuple }: { tuple: DriftTuple }) {
+  const { token } = theme.useToken();
+  const style: React.CSSProperties = { fontSize: 12, lineHeight: 1.4, color: token.colorTextSecondary };
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <span style={style}>{impactText(tuple)}</span>
+      <span style={style}>{nextAction(tuple)}</span>
+      {tuple.category === 'missing' && <span style={style}>Chưa có bằng chứng triển khai</span>}
+    </div>
+  );
+}
+
 function toRow(tuple: DriftTuple, group: Group) {
   return {
     key: `${tuple.category}:${tuple.requirementId}`,
     item: tuple.requirementId,
     solution: solutionText(tuple),
     actual: actualText(tuple),
-    note: <Tag color={group.color} style={{ fontWeight: 600 }}>{group.title}</Tag>,
+    note: (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <Tag color={group.color} style={{ fontWeight: 600, alignSelf: 'flex-start', margin: 0 }}>{group.title}</Tag>
+        <FindingNotes tuple={tuple} />
+      </div>
+    ),
   };
+}
+
+function coverageImpact(entry: CoverageLedger): string {
+  switch (entry.state) {
+    case 'deferred':
+      return 'Ảnh hưởng: Trung bình — tệp bị hoãn nên chưa được đối chiếu';
+    case 'unreadable':
+      return 'Ảnh hưởng: Cao — tệp không đọc được';
+    case 'binary':
+      return 'Ảnh hưởng: Trung bình — tệp nhị phân không đối chiếu được';
+    default:
+      return 'Ảnh hưởng: Cao — chưa đủ bằng chứng để kết luận';
+  }
 }
 
 export const DriftMatrixView: React.FC<DriftMatrixViewProps> = ({ result, layout = 'table', headingRef, headingTabIndex }) => {
   const { token } = theme.useToken();
   const headingId = useId();
   const completeCoverage = result.coverage.length > 0 && result.coverage.every((entry) => entry.state === 'included');
-  const clean = completeCoverage && result.drift.length === 0 && result.status === 'NO_DRIFT_COMPLETE';
+  // `canClaimNoDrift` alone has no status check; both are required to claim a clean run.
+  const clean = canClaimNoDrift(result) && result.status === 'NO_DRIFT_COMPLETE';
+  const incompleteCoverage = result.coverage.filter((entry) => entry.state !== 'included');
   const columns = [
     { title: 'Mục', dataIndex: 'item', key: 'item' },
     { title: 'SOLUTION.md', dataIndex: 'solution', key: 'solution' },
@@ -101,6 +167,37 @@ export const DriftMatrixView: React.FC<DriftMatrixViewProps> = ({ result, layout
           </section>
         );
       })}
+      {incompleteCoverage.length > 0 && (
+        <section
+          aria-labelledby={`${headingId}-incomplete_coverage`}
+          style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
+        >
+          <h3
+            id={`${headingId}-incomplete_coverage`}
+            style={{ margin: 0, color: token.colorText, fontSize: 14, fontWeight: 600, lineHeight: 1.3 }}
+          >
+            {INCOMPLETE_COVERAGE_TITLE}
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {incompleteCoverage.map((entry) => (
+              <div
+                key={`${entry.path}:${entry.hunkId ?? ''}`}
+                style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 13, lineHeight: 1.5 }}
+              >
+                <span>
+                  <Tag color="warning" style={{ fontWeight: 600 }}>
+                    {entry.state}
+                  </Tag>
+                  <code>{entry.path}</code>
+                  {entry.hunkId ? <span>: {entry.hunkId}</span> : null}
+                </span>
+                <span style={{ fontSize: 12, color: token.colorTextSecondary }}>{coverageImpact(entry)}</span>
+                <span style={{ fontSize: 12, color: token.colorTextSecondary }}>{INCOMPLETE_COVERAGE_ACTION}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </section>
   );
 };
@@ -149,6 +246,7 @@ const StackedTuples: React.FC<{ tuples: DriftTuple[]; group: Group }> = ({ tuple
             <span style={labelStyle}>Thực tế</span>
             <span style={valueStyle}>{actualText(tuple)}</span>
           </div>
+          <FindingNotes tuple={tuple} />
         </div>
       ))}
     </div>

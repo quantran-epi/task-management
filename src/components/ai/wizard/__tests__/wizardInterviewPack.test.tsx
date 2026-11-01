@@ -236,6 +236,13 @@ describe('DriftMatrixView', () => {
     expect(screen.queryByText('Không phát hiện drift: triển khai khớp với solution đã duyệt.')).not.toBeInTheDocument();
   });
 
+  it('renders the incomplete-coverage group for a deferred coverage entry', () => {
+    render(<DriftMatrixView result={reconciliation('PARTIAL_COVERAGE')} />);
+    expect(screen.getByRole('heading', { name: 'Thiếu bằng chứng bao phủ' })).toBeInTheDocument();
+    expect(screen.getByText('diff.patch')).toBeInTheDocument();
+    expect(screen.getByText('Bổ sung tệp hoặc hunk còn thiếu vào Change Pack rồi nạp lại')).toBeInTheDocument();
+  });
+
   it('shows clean state only for complete coverage with all groups empty', () => {
     render(<DriftMatrixView result={{ ...reconciliation('NO_DRIFT_COMPLETE'), drift: [] }} />);
     expect(screen.getAllByText('Không phát hiện drift: triển khai khớp với solution đã duyệt.')).toHaveLength(3);
