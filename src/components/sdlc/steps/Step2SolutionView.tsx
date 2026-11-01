@@ -37,6 +37,8 @@ export interface Step2SolutionViewProps {
   hasIntakeBaseline?: boolean | undefined;
   /** Navigates to the step that supplies the missing prerequisite (D-20). */
   onNavigateToStep?: ((step: SdlcStepId) => void) | undefined;
+  /** T-25.3-46: a historical or non-active-CR version opens in preview with controls disabled. */
+  readOnly?: boolean | undefined;
   onCommitSolution: (markdown: string, noteId: string) => Promise<void>;
   onDraftChange?: (draftMarkdown: string) => void;
   onRequestAiAnalysis?: () => void;
@@ -55,6 +57,7 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
   metadata,
   hasIntakeBaseline,
   onNavigateToStep,
+  readOnly = false,
   onCommitSolution,
   onDraftChange,
   onRequestAiAnalysis,
@@ -104,6 +107,7 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
   };
 
   const handleApproveAndSave = async () => {
+    if (readOnly) return;
     const trimmed = content.trim();
     if (!trimmed) {
       message.error('Nội dung SOLUTION.md không được để trống');
@@ -169,6 +173,7 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
           <Button
             icon={<RobotOutlined />}
             onClick={handleRunAnalysis}
+            disabled={readOnly}
           >
             Phân tích lại bằng AI
           </Button>
@@ -185,7 +190,7 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
             type="primary"
             icon={<CheckOutlined />}
             loading={saving}
-            disabled={!content.trim() || !baselineReady}
+            disabled={readOnly || !content.trim() || !baselineReady}
             onClick={handleApproveAndSave}
           >
             Duyệt & Lưu SOLUTION.md
@@ -220,6 +225,16 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
         </div>
       )}
 
+      {/* T-25.3-46: historical / non-active-CR version is a read-only snapshot */}
+      {readOnly && (
+        <Alert
+          type="info"
+          showIcon
+          message="Đang xem phiên bản đã đóng hoặc không còn hiệu lực"
+          description="Phiên bản này chỉ để tham chiếu. Mọi thao tác sửa và phê duyệt đã bị khóa."
+        />
+      )}
+
       {/* D-20: pre-emptive intake-baseline guard, disabled control + inline guidance */}
       {!baselineReady && (
         <Alert
@@ -244,6 +259,7 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
         {(mode === 'write' || mode === 'split') && (
           <Input.TextArea
             value={content}
+            readOnly={readOnly}
             onChange={(e) => handleContentChange(e.target.value)}
             style={{
               flex: 1,

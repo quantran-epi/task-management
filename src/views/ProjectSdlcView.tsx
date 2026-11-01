@@ -13,8 +13,24 @@ import { Step4ChangePackView } from '../components/sdlc/steps/Step4ChangePackVie
 import { Step5TechDocsView } from '../components/sdlc/steps/Step5TechDocsView';
 import { Step6CabView } from '../components/sdlc/steps/Step6CabView';
 import { listCrs, getActiveCr, createNewCr, getStepThread } from '../services/wizard/sdlcCrManager';
-import { createSdlcWorkflowCoordinator } from '../services/wizard/workflowCoordinator';
-import type { SdlcStepId, SdlcWorkflowState } from '../services/wizard/workflowSchemas';
+import {
+  createSdlcWorkflowCoordinator,
+  defaultSha256,
+  workflowStorageKey,
+} from '../services/wizard/workflowCoordinator';
+import { saveMessage } from '../db/repositories/chatRepo';
+import { formatGuardMessage, WORKFLOW_GUARD_MESSAGES } from '../services/wizard/workflowGuards';
+import {
+  createSdlcWizardRuntime,
+  type SdlcWizardRuntime,
+} from '../services/wizard/sdlcWizardRuntime';
+import { useOptionalKnowledgeConfig } from '../services/knowledge/knowledgeConfig';
+import type {
+  SdlcArtifactKind,
+  SdlcStepId,
+  SdlcWorkflowState,
+} from '../services/wizard/workflowSchemas';
+import type { AiChatArtifactEvent } from '../components/ai/AiChatWidget';
 import type { StepChatPanelHandle } from '../components/sdlc/chat/StepChatPanel';
 import { generateId } from '../utils/uuid';
 
@@ -24,21 +40,123 @@ export interface ProjectSdlcViewProps {
   db?: TaskPlannerDatabase;
 }
 
+function draftSettingKey(projectId: string, crId: string): string {
+  return `sdlc_draft_solution:${projectId}:${crId}`;
+}
+
+function isGuardCode(code: unknown): code is keyof typeof WORKFLOW_GUARD_MESSAGES {
+  return typeof code === 'string' && code in WORKFLOW_GUARD_MESSAGES;
+}
+
 export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
   projectId,
   onBack,
   db = defaultDb,
 }) => {
   const { token } = theme.useToken();
+  const knowledgeConfig = useOptionalKnowledgeConfig();
   const [selectedStep, setSelectedStep] = useState<SdlcStepId>('INTAKE');
   const [activeCrId, setActiveCrId] = useState<string>('');
   const [threadId, setThreadId] = useState<string>(() => generateId());
   const [workflowState, setWorkflowState] = useState<SdlcWorkflowState | undefined>(undefined);
   const [incomingSolutionDraft, setIncomingSolutionDraft] = useState<string | undefined>(undefined);
+  const [draftPl03b, setDraftPl03b] = useState<string | undefined>(undefined);
+  const [draftPl07, setDraftPl07] = useState<string | undefined>(undefined);
+  const [wizardRuntime, setWizardRuntime] = useState<SdlcWizardRuntime | undefined>(undefined);
   const chatPanelRef = useRef<StepChatPanelHandle>(null);
+  // `saveState`/`loadState` must see the CR selected in this same tick, not the next render's.
+  const activeCrRef = useRef<string>('');
 
   const project = useLiveQuery(() => db.projects.get(projectId), [projectId, db]);
   const crList = useLiveQuery(() => listCrs(projectId, db), [projectId, db]) ?? [];
+  const [readOnlySolution, setReadOnlySolution] = useState(false);
+
+  // Cards for the step thread currently on screen (D-06: metadata only, body stays in the editor).
+  const stepMessages =
+    useLiveQuery(
+      () => (threadId ? db.chatMessages.where('threadId').equals(threadId).toArray() : []),
+      [threadId, db]
+    ) ?? [];
+  const crStatus = crList.find((cr) => cr.id === activeCrId)?.status ?? 'active';
+  const activeVersions = workflowState?.activeVersions ?? {};
+  const artifactEvents: AiChatArtifactEvent[] = useMemo(
+    () =>
+      stepMessages
+        .filter((m) => m.artifactEvent)
+        .map((m) => {
+          const event = m.artifactEvent!;
+          const active = activeVersions[event.kind] ?? event.version;
+          return {
+            id: m.id,
+            kind: event.kind,
+            title: event.title,
+            version: event.version,
+            hash: event.hash,
+            status: event.status,
+            ...(event.ctaLabel ? { ctaLabel: event.ctaLabel } : {}),
+            readOnly: event.version !== active || crStatus !== 'active',
+          };
+        }),
+    [stepMessages, activeVersions, crStatus]
+  );
+
+  const STEP_FOR_KIND: Partial<Record<SdlcArtifactKind, SdlcStepId>> = {
+    SOLUTION: 'SOLUTION',
+    PL03B: 'TECH_DOCS',
+    PL07: 'TECH_DOCS',
+    CAB: 'CAB',
+  };
+
+  /** One durable card per artifact version; cards are never rewritten (T-25.3-47). */
+  const appendArtifactEvent = useCallback(
+    async (
+      stepId: SdlcStepId,
+      kind: SdlcArtifactKind,
+      ref: { title: string; version: number; hash: string },
+      status: 'draft' | 'approved'
+    ) => {
+      const crId = activeCrRef.current;
+      if (!crId) return;
+      const thread = await getStepThread(projectId, crId, stepId, db);
+      await saveMessage(
+        {
+          threadId: thread.id,
+          role: 'assistant',
+          content:
+            status === 'draft'
+              ? `Bản nháp ${kind} v${ref.version} — ${ref.title}`
+              : `Đã phê duyệt ${kind} v${ref.version} — ${ref.title}`,
+          artifactEvent: {
+            kind,
+            title: ref.title,
+            version: ref.version,
+            hash: ref.hash,
+            status,
+            ...(status === 'draft' ? { ctaLabel: 'Mở trình soạn thảo' } : {}),
+          },
+        },
+        db
+      );
+    },
+    [projectId, db]
+  );
+
+  /** Historical opens target the owning step and render read-only when inactive (D-06). */
+  const handleArtifactOpen = useCallback(
+    (eventId: string, readOnly: boolean) => {
+      const event = stepMessages.find((m) => m.id === eventId)?.artifactEvent;
+      if (!event) return;
+      const step = STEP_FOR_KIND[event.kind];
+      if (step) setSelectedStep(step);
+      setReadOnlySolution(event.kind === 'SOLUTION' ? readOnly : false);
+    },
+    [stepMessages]
+  );
+
+  const selectCr = useCallback((crId: string) => {
+    activeCrRef.current = crId;
+    setActiveCrId(crId);
+  }, []);
 
   // Initialize active CR
   useEffect(() => {
@@ -47,17 +165,17 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
       const active = await getActiveCr(projectId, db);
       if (!cancelled) {
         if (active) {
-          setActiveCrId(active.id);
+          selectCr(active.id);
         } else if (crList.length > 0 && crList[0]) {
-          setActiveCrId(crList[0].id);
+          selectCr(crList[0].id);
         }
       }
     }
-    loadActiveCr();
+    void loadActiveCr();
     return () => {
       cancelled = true;
     };
-  }, [projectId, crList.length, db]);
+  }, [projectId, crList.length, db, selectCr]);
 
   // Sync isolated thread for current CR and step
   useEffect(() => {
@@ -70,196 +188,206 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
         }
       }
     }
-    syncThread();
+    void syncThread();
     return () => {
       cancelled = true;
     };
   }, [projectId, activeCrId, selectedStep, db]);
 
-  // Load persistent workflow state and draft when activeCrId changes
+  // Editor draft persistence (D-08). This is editor state, not workflow state.
   useEffect(() => {
     let cancelled = false;
-    async function loadWorkflowState() {
+    async function loadDraft() {
       const crKey = activeCrId || 'default-cr';
       try {
-        const row = await db.settings.get(`sdlc_workflow:${projectId}:${crKey}`);
-        const draftRow = await db.settings.get(`sdlc_draft_solution:${projectId}:${crKey}`);
+        const draftRow = await db.settings.get(draftSettingKey(projectId, crKey));
         if (!cancelled) {
-          if (row?.value) {
-            setWorkflowState(JSON.parse(String(row.value)));
-          } else {
-            setWorkflowState(undefined);
-          }
-          if (draftRow?.value) {
-            setIncomingSolutionDraft(String(draftRow.value));
-          } else {
-            setIncomingSolutionDraft(undefined);
-          }
+          setIncomingSolutionDraft(draftRow?.value ? String(draftRow.value) : undefined);
         }
       } catch {
-        if (!cancelled) {
-          setWorkflowState(undefined);
-          setIncomingSolutionDraft(undefined);
-        }
+        if (!cancelled) setIncomingSolutionDraft(undefined);
       }
     }
-    loadWorkflowState();
+    void loadDraft();
     return () => {
       cancelled = true;
     };
   }, [projectId, activeCrId, db]);
 
-  // Coordinator setup with durable state persistence
-  const coordinator = useMemo(() => {
-    return createSdlcWorkflowCoordinator({
-      projectId,
-      threadId,
-      saveState: async (state) => {
-        if (activeCrId) {
+  // The coordinator is the only writer of persisted workflow rows (D-23).
+  const coordinator = useMemo(
+    () =>
+      createSdlcWorkflowCoordinator({
+        projectId,
+        threadId,
+        saveState: async (state) => {
+          const crId = activeCrRef.current;
+          if (!crId) return;
           await db.settings.put({
-            key: `sdlc_workflow:${projectId}:${activeCrId}`,
+            key: workflowStorageKey(projectId, crId),
             value: JSON.stringify(state),
           });
-        }
-      },
-      loadState: async () => {
-        if (!activeCrId) return undefined;
-        const row = await db.settings.get(`sdlc_workflow:${projectId}:${activeCrId}`);
-        if (!row?.value) return undefined;
-        try {
-          return JSON.parse(String(row.value));
-        } catch {
-          return undefined;
-        }
-      },
-      onStateChange: (newState) => {
-        setWorkflowState(newState);
-      },
-    });
-  }, [projectId, threadId, activeCrId, db]);
+        },
+        loadState: async () => {
+          const crId = activeCrRef.current;
+          if (!crId) return undefined;
+          const row = await db.settings.get(workflowStorageKey(projectId, crId));
+          if (!row?.value) return undefined;
+          try {
+            return JSON.parse(String(row.value)) as SdlcWorkflowState;
+          } catch {
+            return undefined;
+          }
+        },
+        deleteState: async () => {
+          const crId = activeCrRef.current;
+          if (!crId) return;
+          await db.settings.delete(workflowStorageKey(projectId, crId));
+        },
+        onStateChange: (newState) => setWorkflowState(newState),
+      }),
+    [projectId, threadId, db]
+  );
 
-  // Solution analysis trigger via Chat (D-06)
-  const handleTriggerSolutionAnalysis = useCallback(async () => {
+  // Restore before any step action can render as enabled (T-25.3-34).
+  useEffect(() => {
+    let cancelled = false;
+    if (!activeCrId) {
+      setWorkflowState(undefined);
+      return undefined;
+    }
+    void (async () => {
+      try {
+        const restored = await coordinator.restore();
+        if (!cancelled) setWorkflowState(restored);
+      } catch {
+        // A failed restore leaves prerequisites unproven, so step views render their guards.
+        if (!cancelled) setWorkflowState(undefined);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [coordinator, activeCrId]);
+
+  // Wizard runtime is built once per DB. A missing model is a configuration guard, not a crash.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const runtime = await createSdlcWizardRuntime({
+          db,
+          ...(knowledgeConfig.enabled && knowledgeConfig.baseUrl
+            ? { knowledgeBaseUrl: knowledgeConfig.baseUrl, knowledgeToken: knowledgeConfig.token }
+            : {}),
+        });
+        if (!cancelled) setWizardRuntime(runtime);
+      } catch {
+        if (!cancelled) setWizardRuntime(undefined);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [db, knowledgeConfig.enabled, knowledgeConfig.baseUrl, knowledgeConfig.token]);
+
+  /** Surfaces a guard code as actionable Vietnamese copy; raw internal detail never escapes. */
+  const reportGuardError = useCallback((err: unknown) => {
+    const code = (err as { code?: unknown } | null)?.code;
+    if (isGuardCode(code)) {
+      message.error(formatGuardMessage(code));
+      return;
+    }
+    message.error('Không thể hoàn tất thao tác. Vui lòng kiểm tra lại hồ sơ của bước trước.');
+  }, []);
+
+  const handleTriggerSolutionAnalysis = useCallback(() => {
     setSelectedStep('SOLUTION');
-    const pl01 = workflowState?.artifacts.pl01?.content || '';
-    const pl02 = workflowState?.artifacts.pl02?.content || '';
-    const meta = workflowState?.metadata;
+    // Explicit user action only (D-16): never fired on mount or step change.
+    setTimeout(() => chatPanelRef.current?.requestArtifactAnalysis(), 150);
+  }, []);
 
-    const analysisPrompt = `Hãy phân tích kiến trúc và viết văn bản SOLUTION.md hoàn chỉnh cho Change Request sau:
-- Mã CR: ${meta?.cr || activeCrId}
-- Tính năng: ${meta?.featureName || 'Chưa đặt tên'}
-- Đơn vị yêu cầu: ${meta?.requestingUnit || 'Chưa cung cấp'}
+  const saveDraft = useCallback(
+    async (markdown: string) => {
+      const crKey = activeCrRef.current || 'default-cr';
+      setIncomingSolutionDraft(markdown);
+      await db.settings.put({ key: draftSettingKey(projectId, crKey), value: markdown });
+    },
+    [projectId, db]
+  );
 
-YÊU CẦU NGHIỆP VỤ (PL01):
-${pl01 || '(Chưa có nội dung PL01)'}
-
-ĐẶC TẢ CHỨC NĂNG (PL02):
-${pl02 || '(Chưa có nội dung PL02)'}
-
-Vui lòng rà soát cơ sở dữ liệu hiện có bằng công cụ tra cứu, bóc tách API & bảng dữ liệu cần tạo/sửa.
-Đồng thời, hãy viết một đoạn tóm tắt ngắn gọn thân thiện (2-4 câu) giải thích những điểm chính đã thiết kế/chỉnh sửa và thông báo cho người dùng xem chi tiết tại trình soạn thảo bên trái. Đặt toàn bộ nội dung SOLUTION.md hoàn chỉnh trong khối \`\`\`markdown bắt đầu bằng:
-# SOLUTION — ${meta?.featureName || 'Thiết kế giải pháp'}`;
-
-    setTimeout(() => {
-      chatPanelRef.current?.sendMessage(analysisPrompt);
-    }, 150);
-  }, [workflowState, activeCrId]);
-
-  // Auto-extraction and durable draft persistence (D-07, D-08)
+  // D-16: a chat-produced SOLUTION only updates the editor draft.
   const handleSolutionExtracted = useCallback(
     async (draftMarkdown: string) => {
-      setIncomingSolutionDraft(draftMarkdown);
-      const crKey = activeCrId || 'default-cr';
-      await db.settings.put({
-        key: `sdlc_draft_solution:${projectId}:${crKey}`,
-        value: draftMarkdown,
-      });
+      await saveDraft(draftMarkdown);
+      await appendArtifactEvent(
+        'SOLUTION',
+        'SOLUTION',
+        {
+          title: 'SOLUTION.md',
+          version: (activeVersions.SOLUTION ?? workflowState?.artifacts.solution?.version ?? 0) + 1,
+          hash: await defaultSha256(draftMarkdown),
+        },
+        'draft'
+      );
       message.success('Đã tự động trích xuất SOLUTION.md vào trình soạn thảo');
     },
-    [activeCrId, projectId, db]
+    [saveDraft, appendArtifactEvent, activeVersions.SOLUTION, workflowState?.artifacts.solution?.version]
   );
 
-  // Editor keystroke draft persistence (D-08)
-  const handleDraftChange = useCallback(
-    async (draftMarkdown: string) => {
-      const crKey = activeCrId || 'default-cr';
-      setIncomingSolutionDraft(draftMarkdown);
-      await db.settings.put({
-        key: `sdlc_draft_solution:${projectId}:${crKey}`,
-        value: draftMarkdown,
-      });
-    },
-    [activeCrId, projectId, db]
-  );
-
-  // Handlers for Step 1 & Step 2
   const handleStartIntake = async (
     metadata: Parameters<typeof coordinator.startOrUpdateIntake>[0],
     pl01: string,
     pl02: string
   ) => {
-    let currentCr = activeCrId;
-    if (!currentCr) {
-      const created = await createNewCr(projectId, metadata, false, db);
-      currentCr = created.id;
-      setActiveCrId(created.id);
+    try {
+      if (!activeCrRef.current) {
+        const created = await createNewCr(projectId, metadata, false, db);
+        selectCr(created.id);
+      }
+      const nextState = await coordinator.startOrUpdateIntake(metadata, pl01, pl02);
+      setWorkflowState(nextState);
+      setSelectedStep('SOLUTION');
+    } catch (err) {
+      reportGuardError(err);
     }
-    const nextState = await coordinator.startOrUpdateIntake(metadata, pl01, pl02);
-    if (currentCr) {
-      await db.settings.put({
-        key: `sdlc_workflow:${projectId}:${currentCr}`,
-        value: JSON.stringify(nextState),
-      });
-    }
-    setWorkflowState(nextState);
-    setSelectedStep('SOLUTION');
-
-    // Trigger explicit solution analysis in chat per D-06
-    const analysisPrompt = `Hãy phân tích kiến trúc và viết văn bản SOLUTION.md hoàn chỉnh cho Change Request sau:
-- Mã CR: ${metadata.cr}
-- Tính năng: ${metadata.featureName}
-- Đơn vị yêu cầu: ${metadata.requestingUnit}
-
-YÊU CẦU NGHIỆP VỤ (PL01):
-${pl01}
-
-ĐẶC TẢ CHỨC NĂNG (PL02):
-${pl02}
-
-Vui lòng rà soát cơ sở dữ liệu hiện có bằng công cụ tra cứu, bóc tách API & bảng dữ liệu cần tạo/sửa.
-Đồng thời, hãy viết một đoạn tóm tắt ngắn gọn thân thiện (2-4 câu) giải thích những điểm chính đã thiết kế/chỉnh sửa và thông báo cho người dùng xem chi tiết tại trình soạn thảo bên trái. Đặt toàn bộ nội dung SOLUTION.md hoàn chỉnh trong khối \`\`\`markdown bắt đầu bằng:
-# SOLUTION — ${metadata.featureName}`;
-
-    setTimeout(() => {
-      chatPanelRef.current?.sendMessage(analysisPrompt);
-    }, 150);
   };
 
   const handleCommitSolution = async (markdown: string, noteId: string) => {
-    const nextState = await coordinator.commitSolution(markdown, noteId);
-    const crKey = activeCrId || 'default-cr';
-    if (activeCrId) {
-      await db.settings.put({
-        key: `sdlc_workflow:${projectId}:${activeCrId}`,
-        value: JSON.stringify(nextState),
-      });
+    try {
+      const nextState = await coordinator.commitSolution(markdown, noteId);
+      await db.settings.delete(draftSettingKey(projectId, activeCrRef.current || 'default-cr'));
+      setWorkflowState(nextState);
+      if (nextState.artifacts.solution) {
+        await appendArtifactEvent('SOLUTION', 'SOLUTION', nextState.artifacts.solution, 'approved');
+      }
+      setReadOnlySolution(false);
+    } catch (err) {
+      reportGuardError(err);
     }
-    await db.settings.delete(`sdlc_draft_solution:${projectId}:${crKey}`);
-    setWorkflowState(nextState);
   };
 
-  // Reset workflow handler (per T-25.1.2-07: keeps notes intact, resets workflow state)
+  // Reset through the coordinator so no view writes the workflow key behind its back.
   const handleResetWorkflow = useCallback(async () => {
-    const crKey = activeCrId || 'default-cr';
-    if (activeCrId) {
-      await db.settings.delete(`sdlc_workflow:${projectId}:${activeCrId}`);
+    try {
+      await coordinator.reset();
+      await db.settings.delete(draftSettingKey(projectId, activeCrRef.current || 'default-cr'));
+      setWorkflowState(undefined);
+      setIncomingSolutionDraft(undefined);
+      setSelectedStep('INTAKE');
+      message.success('Đã đặt lại quy trình về ban đầu. Ghi chú đã lưu vẫn được bảo toàn.');
+    } catch (err) {
+      reportGuardError(err);
     }
-    await db.settings.delete(`sdlc_draft_solution:${projectId}:${crKey}`);
-    setWorkflowState(undefined);
-    setIncomingSolutionDraft(undefined);
-    setSelectedStep('INTAKE');
-    message.success('Đã đặt lại quy trình về ban đầu. Ghi chú đã lưu vẫn được bảo toàn.');
-  }, [activeCrId, projectId, db]);
+  }, [coordinator, projectId, db, reportGuardError]);
+
+  const handleNavigateToStep = useCallback(
+    (step: SdlcStepId) => {
+      void coordinator.navigateToStep(step).catch(reportGuardError);
+      setSelectedStep(step);
+    },
+    [coordinator, reportGuardError]
+  );
 
   const renderStepNode = () => {
     switch (selectedStep) {
@@ -285,10 +413,17 @@ Vui lòng rà soát cơ sở dữ liệu hiện có bằng công cụ tra cứu,
             pl01Content={workflowState?.artifacts.pl01?.content}
             pl02Content={workflowState?.artifacts.pl02?.content}
             metadata={workflowState?.metadata}
+            hasIntakeBaseline={Boolean(
+              workflowState?.artifacts.pl01 && workflowState?.artifacts.pl02
+            )}
+            readOnly={readOnlySolution}
+            onNavigateToStep={handleNavigateToStep}
             onCommitSolution={handleCommitSolution}
-            onDraftChange={handleDraftChange}
+            onDraftChange={(markdown) => {
+              void saveDraft(markdown);
+            }}
             onRequestAiAnalysis={handleTriggerSolutionAnalysis}
-            onProceedToStep3={() => setSelectedStep('CODE_GUIDE')}
+            onProceedToStep3={() => handleNavigateToStep('CODE_GUIDE')}
             db={db}
           />
         );
@@ -297,7 +432,7 @@ Vui lòng rà soát cơ sở dữ liệu hiện có bằng công cụ tra cứu,
           <Step3CodeGuideView
             crCode={workflowState?.metadata.cr ?? ''}
             approvedSolutionMarkdown={workflowState?.artifacts.solution?.content}
-            onProceedToStep4={() => setSelectedStep('CHANGE_PACK')}
+            onProceedToStep4={() => handleNavigateToStep('CHANGE_PACK')}
           />
         );
       case 'CHANGE_PACK':
@@ -309,10 +444,19 @@ Vui lòng rà soát cơ sở dữ liệu hiện có bằng công cụ tra cứu,
             solutionArtifact={workflowState?.artifacts.solution}
             initialDriftResult={workflowState?.artifacts.driftResult}
             onCommitChangePackAndDrift={async (packHash, packTitle, driftResult) => {
-              await coordinator.commitChangePackAndDrift(packHash, packTitle, driftResult);
+              try {
+                const nextState = await coordinator.commitChangePackAndDrift(
+                  packHash,
+                  packTitle,
+                  driftResult
+                );
+                setWorkflowState(nextState);
+              } catch (err) {
+                reportGuardError(err);
+              }
             }}
-            onNavigateToStep={(step) => setSelectedStep(step)}
-            onProceedToStep5={() => setSelectedStep('TECH_DOCS')}
+            onNavigateToStep={handleNavigateToStep}
+            onProceedToStep5={() => handleNavigateToStep('TECH_DOCS')}
             db={db}
           />
         );
@@ -322,10 +466,25 @@ Vui lòng rà soát cơ sở dữ liệu hiện có bằng công cụ tra cứu,
             projectId={projectId}
             crId={activeCrId}
             workflowState={workflowState}
-            onCommitTechDoc={async (kind, markdown, noteId) => {
-              await coordinator.commitTechDoc(kind, markdown, noteId);
+            draftPl03b={draftPl03b}
+            draftPl07={draftPl07}
+            onDraftChange={(kind, markdown) => {
+              if (kind === 'PL03B') setDraftPl03b(markdown);
+              else setDraftPl07(markdown);
             }}
-            onProceedToStep6={() => setSelectedStep('CAB')}
+            onCommitTechDoc={async (kind, markdown, noteId) => {
+              try {
+                const nextState = await coordinator.commitTechDoc(kind, markdown, noteId);
+                setWorkflowState(nextState);
+                const ref = kind === 'PL03B' ? nextState.artifacts.pl03b : nextState.artifacts.pl07;
+                if (ref) await appendArtifactEvent('TECH_DOCS', kind, ref, 'approved');
+              } catch (err) {
+                reportGuardError(err);
+              }
+            }}
+            wizardRuntime={wizardRuntime}
+            onNavigateToStep={handleNavigateToStep}
+            onProceedToStep6={() => handleNavigateToStep('CAB')}
             db={db}
           />
         );
@@ -336,8 +495,18 @@ Vui lòng rà soát cơ sở dữ liệu hiện có bằng công cụ tra cứu,
             crId={activeCrId}
             workflowState={workflowState}
             onCommitCab={async (markdown, noteId) => {
-              await coordinator.commitCab(markdown, noteId);
+              try {
+                const nextState = await coordinator.commitCab(markdown, noteId);
+                setWorkflowState(nextState);
+                if (nextState.artifacts.cab) {
+                  await appendArtifactEvent('CAB', 'CAB', nextState.artifacts.cab, 'approved');
+                }
+              } catch (err) {
+                reportGuardError(err);
+              }
             }}
+            wizardRuntime={wizardRuntime}
+            onNavigateToStep={handleNavigateToStep}
             db={db}
           />
         );
@@ -403,7 +572,7 @@ Vui lòng rà soát cơ sở dữ liệu hiện có bằng công cụ tra cứu,
           selectedStep={selectedStep}
           onSelectStep={setSelectedStep}
           activeCrId={activeCrId}
-          onSelectCr={setActiveCrId}
+          onSelectCr={selectCr}
           workflowState={workflowState}
           db={db}
         />
@@ -414,9 +583,14 @@ Vui lòng rà soát cơ sở dữ liệu hiện có bằng công cụ tra cứu,
           selectedStep={selectedStep}
           workflowState={workflowState}
           stepViewNode={renderStepNode()}
-          onNavigateToStep={setSelectedStep}
+          onNavigateToStep={handleNavigateToStep}
           onSolutionExtracted={handleSolutionExtracted}
-          onRequestAiAnalysis={handleTriggerSolutionAnalysis}
+          artifactEvents={artifactEvents}
+          onArtifactOpen={handleArtifactOpen}
+          onArtifactCta={(eventId) => {
+            const event = stepMessages.find((m) => m.id === eventId);
+            handleArtifactOpen(eventId, event?.artifactEvent?.status === 'approved' ? false : true);
+          }}
           db={db}
         />
       </div>

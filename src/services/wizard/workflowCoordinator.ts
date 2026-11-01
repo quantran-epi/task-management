@@ -23,8 +23,18 @@ export interface WorkflowCoordinatorDeps {
   hashText?: (text: string) => Promise<string>;
   saveState?: (state: SdlcWorkflowState) => Promise<void>;
   loadState?: () => Promise<SdlcWorkflowState | undefined>;
+  deleteState?: () => Promise<void>;
   onStateChange?: (state: SdlcWorkflowState) => void;
 }
+
+/**
+ * The coordinator module owns the persistence key format. Views must never re-type the
+ * `sdlc_workflow:` literal (D-23).
+ */
+export function workflowStorageKey(projectId: string, crId: string): string {
+  return `sdlc_workflow:${projectId}:${crId}`;
+}
+
 
 export async function defaultSha256(text: string): Promise<string> {
   const bytes = new TextEncoder().encode(text);
@@ -74,8 +84,7 @@ export function createSdlcWorkflowCoordinator(deps: WorkflowCoordinatorDeps) {
     return emit({ ...parsed, checkpoint });
   };
 
-  const ensureState = async (): Promise<SdlcWorkflowState> => {
-    if (currentState) return currentState;
+  const ensureState = async (): Promise<SdlcWorkflowState> => {    if (currentState) return currentState;
     if (!deps.loadState) throw guardError('WORKFLOW_NOT_INITIALIZED');
     restoreInFlight ??= restore().finally(() => { restoreInFlight = undefined; });
     const restored = await restoreInFlight;
@@ -428,6 +437,15 @@ export function createSdlcWorkflowCoordinator(deps: WorkflowCoordinatorDeps) {
     return emit(nextState);
   };
 
+  /**
+   * Resets the workflow through the coordinator so the in-memory copy can never disagree
+   * with what is persisted (the `WORKFLOW_NOT_INITIALIZED` class of bugs). Notes are untouched.
+   */
+  const reset = async (): Promise<void> => {
+    currentState = undefined;
+    await deps.deleteState?.();
+  };
+
   return {
     getState,
     startOrUpdateIntake,
@@ -437,6 +455,7 @@ export function createSdlcWorkflowCoordinator(deps: WorkflowCoordinatorDeps) {
     commitCab,
     navigateToStep,
     restore,
+    reset,
     selectStep,
     previewRevision,
     commitRevision,

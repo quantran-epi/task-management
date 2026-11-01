@@ -277,6 +277,199 @@ describe('ProjectSdlcView and IDE Layout', () => {
     expect(screen.getByTestId('sdlc-workspace')).toBeInTheDocument();
   });
 
+  it('Test 9: approving SOLUTION persists a durable artifact card for that version', async () => {
+    const proj9Id = crypto.randomUUID();
+    const db9 = new TaskPlannerDatabase(`test-sdlc-9-${Math.random()}`);
+    await db9.projects.add({
+      id: proj9Id,
+      name: 'Dự án thẻ tài liệu',
+      status: 'In Progress',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    const metadata: SdlcWorkflowMetadata = {
+      cr: 'CR-09',
+      featureName: 'Thẻ tài liệu',
+      author: 'Tester',
+      requestingUnit: 'Khối CNTT',
+      date: '2026-11-01',
+    };
+    const cr = await createNewCr(proj9Id, metadata, true, db9);
+    await db9.settings.put({
+      key: `sdlc_workflow:${proj9Id}:${cr.id}`,
+      value: JSON.stringify({
+        schemaVersion: 1,
+        sessionId: crypto.randomUUID(),
+        projectId: proj9Id,
+        threadId: crypto.randomUUID(),
+        currentStep: 'SOLUTION',
+        metadata,
+        artifacts: {
+          pl01: {
+            kind: 'PL01',
+            version: 1,
+            hash: 'a'.repeat(64),
+            title: 'PL01',
+            content: 'Yêu cầu nghiệp vụ',
+            sourceHashes: [],
+            updatedAt: new Date().toISOString(),
+          },
+          pl02: {
+            kind: 'PL02',
+            version: 1,
+            hash: 'b'.repeat(64),
+            title: 'PL02',
+            content: 'Đặc tả chức năng',
+            sourceHashes: [],
+            updatedAt: new Date().toISOString(),
+          },
+        },
+        staleSteps: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }),
+    });
+
+    render(<ProjectSdlcView projectId={proj9Id} onBack={() => {}} db={db9} />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Bước 2: Thiết kế giải pháp/i)).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText(/Bước 2: Thiết kế giải pháp/i));
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/Nội dung kiến trúc giải pháp SOLUTION.md/i)).toBeInTheDocument();
+    });
+
+    const textarea = screen.getByPlaceholderText(
+      /Nội dung kiến trúc giải pháp SOLUTION.md/i
+    ) as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: '# SOLUTION\nKiến trúc xác thực.' } });
+
+    await waitFor(() => {
+      expect((screen.getByRole('button', { name: /Duyệt & Lưu SOLUTION.md/i }) as HTMLButtonElement).disabled).toBe(false);
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Duyệt & Lưu SOLUTION.md/i }));
+
+    await waitFor(async () => {
+      const cards = (await db9.chatMessages.toArray()).filter((m) => m.artifactEvent);
+      expect(cards.length).toBe(1);
+      expect(cards[0]!.artifactEvent).toMatchObject({
+        kind: 'SOLUTION',
+        status: 'approved',
+        version: 1,
+      });
+      expect(cards[0]!.artifactEvent!.hash).toMatch(/^[a-f0-9]{64}$/);
+    });
+
+    // The card lives in the SOLUTION step thread, not in whichever step is on screen.
+    const solutionThread = await db9.chatThreads
+      .where('scopeKey')
+      .equals(`sdlc:${proj9Id}:${cr.id}:SOLUTION`)
+      .first();
+    expect(solutionThread).toBeTruthy();
+    const inThread = (await db9.chatMessages.toArray()).filter(
+      (m) => m.threadId === solutionThread!.id && m.artifactEvent
+    );
+    expect(inThread.length).toBe(1);
+  });
+
+  it('Test 10: re-approving a superseded SOLUTION does not rewrite the earlier card', async () => {
+    const proj10Id = crypto.randomUUID();
+    const db10 = new TaskPlannerDatabase(`test-sdlc-10-${Math.random()}`);
+    await db10.projects.add({
+      id: proj10Id,
+      name: 'Dự án nhiều phiên bản',
+      status: 'In Progress',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    const metadata: SdlcWorkflowMetadata = {
+      cr: 'CR-10',
+      featureName: 'Nhiều phiên bản',
+      author: 'Tester',
+      requestingUnit: 'Khối CNTT',
+      date: '2026-11-01',
+    };
+    const cr10 = await createNewCr(proj10Id, metadata, true, db10);
+    await db10.settings.put({
+      key: `sdlc_workflow:${proj10Id}:${cr10.id}`,
+      value: JSON.stringify({
+        schemaVersion: 1,
+        sessionId: crypto.randomUUID(),
+        projectId: proj10Id,
+        threadId: crypto.randomUUID(),
+        currentStep: 'SOLUTION',
+        metadata,
+        artifacts: {
+          pl01: {
+            kind: 'PL01',
+            version: 1,
+            hash: 'a'.repeat(64),
+            title: 'PL01',
+            content: 'Yêu cầu nghiệp vụ',
+            sourceHashes: [],
+            updatedAt: new Date().toISOString(),
+          },
+          pl02: {
+            kind: 'PL02',
+            version: 1,
+            hash: 'b'.repeat(64),
+            title: 'PL02',
+            content: 'Đặc tả chức năng',
+            sourceHashes: [],
+            updatedAt: new Date().toISOString(),
+          },
+        },
+        staleSteps: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }),
+    });
+
+    render(<ProjectSdlcView projectId={proj10Id} onBack={() => {}} db={db10} />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Bước 2: Thiết kế giải pháp/i)).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText(/Bước 2: Thiết kế giải pháp/i));
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/Nội dung kiến trúc giải pháp SOLUTION.md/i)).toBeInTheDocument();
+    });
+
+    const textarea = screen.getByPlaceholderText(
+      /Nội dung kiến trúc giải pháp SOLUTION.md/i
+    ) as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: '# SOLUTION v1' } });
+    await waitFor(() => {
+      expect((screen.getByRole('button', { name: /Duyệt & Lưu SOLUTION.md/i }) as HTMLButtonElement).disabled).toBe(false);
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Duyệt & Lưu SOLUTION.md/i }));
+
+    await waitFor(async () => {
+      expect((await db10.chatMessages.toArray()).filter((m) => m.artifactEvent).length).toBe(1);
+    });
+    const firstCard = (await db10.chatMessages.toArray()).find((m) => m.artifactEvent)!;
+    const firstSnapshot = JSON.stringify(firstCard.artifactEvent);
+
+    fireEvent.change(textarea, { target: { value: '# SOLUTION v2' } });
+    await waitFor(() => {
+      expect(textarea.value).toContain('v2');
+      expect((screen.getByRole('button', { name: /Duyệt & Lưu SOLUTION.md/i }) as HTMLButtonElement).disabled).toBe(false);
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Duyệt & Lưu SOLUTION.md/i }));
+
+    await waitFor(async () => {
+      const cards = (await db10.chatMessages.toArray()).filter((m) => m.artifactEvent);
+      expect(cards.length).toBe(2);
+      expect(cards.map((c) => c.artifactEvent!.version).sort()).toEqual([1, 2]);
+    });
+
+    const cards = (await db10.chatMessages.toArray()).filter((m) => m.artifactEvent);
+    expect(JSON.stringify(cards.find((c) => c.id === firstCard.id)!.artifactEvent)).toBe(firstSnapshot);
+  });
+
   it('Test 8: StepChatPanel renders thread history through the shared AiChatWidget', async () => {
     // Seed a thread with a long user message and a long assistant message
     const thread = await db.chatThreads.add({

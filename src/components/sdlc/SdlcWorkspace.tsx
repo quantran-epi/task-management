@@ -2,6 +2,7 @@ import React from 'react';
 import { theme } from 'antd';
 import type { TaskPlannerDatabase } from '../../db';
 import type { SdlcStepId, SdlcWorkflowState } from '../../services/wizard/workflowSchemas';
+import type { AiChatArtifactEvent } from '../ai/AiChatWidget';
 import { StepChatPanel, type StepChatPanelHandle } from './chat/StepChatPanel';
 import { SdlcStaleBanner } from './common/SdlcStaleBanner';
 
@@ -14,6 +15,9 @@ export interface SdlcWorkspaceProps {
   stepGroundingContext?: string;
   onNavigateToStep?: (step: SdlcStepId) => void;
   onSolutionExtracted?: ((solutionMarkdown: string) => void) | undefined;
+  artifactEvents?: AiChatArtifactEvent[] | undefined;
+  onArtifactOpen?: ((eventId: string, readOnly: boolean) => void) | undefined;
+  onArtifactCta?: ((eventId: string) => void) | undefined;
   chatPanelRef?: React.Ref<StepChatPanelHandle>;
   db?: TaskPlannerDatabase | undefined;
 }
@@ -27,6 +31,9 @@ export const SdlcWorkspace: React.FC<SdlcWorkspaceProps> = ({
   stepGroundingContext = '',
   onNavigateToStep,
   onSolutionExtracted,
+  artifactEvents,
+  onArtifactOpen,
+  onArtifactCta,
   chatPanelRef,
   db,
 }) => {
@@ -86,6 +93,9 @@ export const SdlcWorkspace: React.FC<SdlcWorkspaceProps> = ({
           stepId={selectedStep}
           stepGroundingContext={stepGroundingContext}
           {...(onSolutionExtracted ? { onSolutionExtracted } : {})}
+          {...(artifactEvents ? { artifactEvents } : {})}
+          {...(onArtifactOpen ? { onArtifactOpen } : {})}
+          {...(onArtifactCta ? { onArtifactCta } : {})}
           db={db}
         />
       </div>
