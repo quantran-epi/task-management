@@ -277,12 +277,14 @@ describe('ProjectSdlcView and IDE Layout', () => {
     expect(screen.getByTestId('sdlc-workspace')).toBeInTheDocument();
   });
 
-  it('Test 8: StepChatPanel collapses long messages and toggles expansion on click', async () => {
+  it('Test 8: StepChatPanel renders thread history through the shared AiChatWidget', async () => {
     // Seed a thread with a long user message and a long assistant message
     const thread = await db.chatThreads.add({
       id: 'thread-test-collapse',
       title: 'Step Thread',
       scopeKey: `sdlc:${projectId}:cr-test-01:SOLUTION`,
+      scopeType: 'project',
+      entityId: projectId,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
@@ -303,7 +305,7 @@ describe('ProjectSdlcView and IDE Layout', () => {
         threadId: thread,
         role: 'assistant',
         content: longAssistantMessage,
-        createdAt: new Date().toISOString(),
+        createdAt: new Date(Date.now() + 2).toISOString(),
       },
     ]);
 
@@ -317,27 +319,17 @@ describe('ProjectSdlcView and IDE Layout', () => {
       />
     );
 
-    // Both long messages should have "Xem thêm" button
+    // D-25: the step chat is the shared widget, slotted into the step scope.
     await waitFor(() => {
-      const expandButtons = screen.getAllByRole('button', { name: /Xem thêm/i });
-      expect(expandButtons.length).toBeGreaterThanOrEqual(2);
+      const widget = screen.getByTestId('ai-chat-widget');
+      expect(widget).toHaveAttribute('data-scope-key', `sdlc:${projectId}:cr-test-01:SOLUTION`);
     });
 
-    // Click "Xem thêm" on first message -> changes to "Thu gọn"
-    const expandButtons = screen.getAllByRole('button', { name: /Xem thêm/i });
-    fireEvent.click(expandButtons[0]!);
-
+    // Both persisted messages render, and the widget does not re-implement a collapse control.
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Thu gọn/i })).toBeInTheDocument();
+      expect(screen.getByText(/Dòng yêu cầu phân tích kiến trúc/)).toBeInTheDocument();
     });
-
-    // Click "Thu gọn" -> returns to "Xem thêm"
-    const collapseButton = screen.getByRole('button', { name: /Thu gọn/i });
-    fireEvent.click(collapseButton);
-
-    await waitFor(() => {
-      const revertedButtons = screen.getAllByRole('button', { name: /Xem thêm/i });
-      expect(revertedButtons.length).toBeGreaterThanOrEqual(2);
-    });
+    expect(screen.getByText(/Chi tiết phân tích kỹ thuật của AI/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Xem thêm/i })).not.toBeInTheDocument();
   });
 });

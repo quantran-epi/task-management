@@ -86,6 +86,21 @@ export interface ChatTurnRuntime {
   isRunning(): boolean;
 }
 
+/**
+ * Production deps for a host that wires the standard orchestrator and chat persistence.
+ * Keeps those imports out of every host component so exactly one wiring point exists.
+ */
+export function createDefaultChatTurnDeps(
+  db: TaskPlannerDatabase
+): Pick<ChatTurnRuntimeDeps, 'runLoop' | 'saveMessage' | 'describeMutation' | 'db'> {
+  return {
+    runLoop: runAiOrchestratorLoop,
+    saveMessage,
+    describeMutation: describeToolMutationWithContext,
+    db,
+  };
+}
+
 /** UI-SPEC AI-turn-failure copy with every provider detail stripped (T-25.3-23). */
 export const SANITIZED_TURN_ERROR =
   "Không thể xử lý yêu cầu: lỗi kết nối nhà cung cấp AI. Bấm 'Thử lại' để gửi lại lượt này mà không mất ngữ cảnh.";

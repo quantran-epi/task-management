@@ -13,8 +13,7 @@ export interface SdlcWorkspaceProps {
   stepViewNode?: React.ReactNode;
   stepGroundingContext?: string;
   onNavigateToStep?: (step: SdlcStepId) => void;
-  onSolutionExtracted?: (solutionMarkdown: string) => void;
-  onRequestAiAnalysis?: () => void;
+  onSolutionExtracted?: ((solutionMarkdown: string) => void) | undefined;
   chatPanelRef?: React.Ref<StepChatPanelHandle>;
   db?: TaskPlannerDatabase | undefined;
 }
@@ -28,7 +27,6 @@ export const SdlcWorkspace: React.FC<SdlcWorkspaceProps> = ({
   stepGroundingContext = '',
   onNavigateToStep,
   onSolutionExtracted,
-  onRequestAiAnalysis,
   chatPanelRef,
   db,
 }) => {
@@ -87,8 +85,7 @@ export const SdlcWorkspace: React.FC<SdlcWorkspaceProps> = ({
           crId={crId}
           stepId={selectedStep}
           stepGroundingContext={stepGroundingContext}
-          onSolutionExtracted={onSolutionExtracted}
-          onRequestAiAnalysis={onRequestAiAnalysis}
+          {...(onSolutionExtracted ? { onSolutionExtracted } : {})}
           db={db}
         />
       </div>
