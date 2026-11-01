@@ -359,7 +359,7 @@ Plans:
 4. SDLC Studio `Step2SolutionView` executes automated architectural analysis via `runAiOrchestratorLoop`, leveraging project context and tools to draft `SOLUTION.md` without hallucinations.
 5. All SDLC and AI chat tests pass with zero regressions.
 
-**Plans:** 2/2 plans complete
+**Plans:** 4 plans (2 executed, 2 gap-closure plans)
 
 Plans:
 
@@ -370,3 +370,11 @@ Plans:
 **Wave 2** *(depends on 25.2-01)*
 
 - [x] 25.2-02-PLAN.md — Standardize StepChatPanel on runAiOrchestratorLoop and fix Step 2 Solution remount pipeline
+
+**Wave 3 (Gap Closure)** *(no dependencies)*
+
+- [ ] 25.2-03-PLAN.md — Compact StepChatPanel header layout and unify MCP controls in ChatTabToolbox
+
+**Wave 4 (Gap Closure)** *(depends on 25.2-03)*
+
+- [ ] 25.2-04-PLAN.md — Harden stalenessDetector and isolate draft artifact state against white screen crash
