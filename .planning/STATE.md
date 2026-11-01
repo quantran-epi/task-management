@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 ## Current Position
 
 Phase: 25.1.2 (fix-sdlc-hub-user-flow-end-to-end) — IN PROGRESS
-Plan: 2 of 4 — Plan 25.1.2-02 completed
-Status: Plan 25.1.2-02 completed: built ProjectSdlcView 2-column IDE layout, Step 1 Intake view, and Step 2 Solution document editor
-Last activity: 2026-11-01 -- Plan 25.1.2-02 completed
-Stopped at: Completed 25.1.2-02-PLAN.md
+Plan: 3 of 4 — Plan 25.1.2-03 completed
+Status: Plan 25.1.2-03 completed: implemented Steps 3-6 (Code Guide, MultiPackTable & Drift, Tech Docs PL03B/PL07, CAB export)
+Last activity: 2026-11-01 -- Plan 25.1.2-03 completed
+Stopped at: Completed 25.1.2-03-PLAN.md
 
 Progress: [██████████] 100%
 
