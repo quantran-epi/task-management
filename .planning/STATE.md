@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: milestone
-status: completed
-stopped_at: Completed 25.1.2-04-PLAN.md
-last_updated: "2026-11-01T05:12:34.957Z"
-last_activity: 2026-11-01 -- Plan 25.1.2-04 completed
+status: in_progress
+stopped_at: Completed 25.2 planning
+last_updated: "2026-11-01T07:00:00.000Z"
+last_activity: 2026-11-01 -- Phase 25.2 planned (2 plans in 2 waves)
 progress:
-  total_phases: 12
+  total_phases: 13
   completed_phases: 9
-  total_plans: 99
+  total_plans: 101
   completed_plans: 91
   percent: 75
 ---
@@ -21,15 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-07)
 
 **Core value:** Make planned work realistically fit available time while giving the personal user evidence-grounded access to their local banking IT knowledge.
-**Current focus:** Phase 25.1.2 — fix the SDLC hub user flow end to end
+**Current focus:** Phase 25.2 — Fix TaskMate mutation flow & standardize AI Core Engine for SDLC Studio
 
 ## Current Position
 
-Phase: 25.1.2 (fix-sdlc-hub-user-flow-end-to-end) — COMPLETED
-Plan: 4 of 4 — Plan 25.1.2-04 completed
-Status: Plan 25.1.2-04 completed: actionable Stale handling, first-click guarantees, new CR creation with context inheritance, and full Playwright walk-through (SC-6) passing
-Last activity: 2026-11-01 -- Plan 25.1.2-04 completed
-Stopped at: Completed 25.1.2-04-PLAN.md
+Phase: 25.2 (fix-taskmate-mutation-flow-standardize-ai-core-engine-for-sdlc-studio) — IN_PROGRESS
+Plan: 0 of 2 plans created across 2 waves
+Status: Ready for execution
+Last activity: 2026-11-01 -- Phase 25.2 planned (2 plans in 2 waves)
+Stopped at: Completed 25.2 planning
 
 Progress: [██████████] 100%
 

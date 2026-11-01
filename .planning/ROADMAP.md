@@ -3,7 +3,8 @@
 ## Active Phase
 
 - Phase 25.1.1: Unify SDLC workflow into the hub, retire the wizard (COMPLETE — verified 2026-11-01)
-- Phase 25.1.2: Fix the SDLC hub user flow end to end (ACTIVE — discuss first)
+- Phase 25.1.2: Fix the SDLC hub user flow end to end (COMPLETE — verified 2026-11-01)
+- Phase 25.2: Fix TaskMate mutation flow & standardize AI Core Engine for SDLC Studio (ACTIVE)
 
 ## Milestone: Knowledge System Implementation
 
@@ -344,3 +345,28 @@ Plans:
 **Wave 4** *(depends on 25.1.2-03)*
 
 - [x] 25.1.2-04-PLAN.md — Actionable Stale handling, first-click guarantees, new CR creation with context inheritance, and end-to-end integration verification
+
+### Phase 25.2: Fix TaskMate mutation flow & standardize AI Core Engine for SDLC Studio
+
+**Goal:** Fix TaskMate database mutations so AI can reliably create/update/delete tasks and projects with clear user confirmation/auto-approve, and unify SDLC Studio (StepChatPanel and Solution analysis) onto the shared `runAiOrchestratorLoop` engine with scoped project/CR context.
+
+**Depends on:** Phase 25.1.2
+**Success Criteria** (what must be TRUE):
+
+1. In ordinary chat (Analysis Mode OFF), user requests to mutate tasks/projects/milestones (e.g. `create_task`, `update_task`) are correctly classified as `operate_taskmate`, pass mutation check, and execute either via confirmation popup or auto-approve mode without "không được phép" error.
+2. In Analysis Mode, read-only guard is clear and consistent across tools and prompts, while allowing authorized operations when explicitly requested or switched out of analysis mode.
+3. SDLC Studio `StepChatPanel` uses `runAiOrchestratorLoop` (with analysis mode active and step-isolated context), enabling real-time tool execution (`query_notes`, `query_tasks`, Graphiti facts, MCP tools) and live streaming.
+4. SDLC Studio `Step2SolutionView` executes automated architectural analysis via `runAiOrchestratorLoop`, leveraging project context and tools to draft `SOLUTION.md` without hallucinations.
+5. All SDLC and AI chat tests pass with zero regressions.
+
+**Plans:** 2 plans in 2 waves
+
+Plans:
+
+**Wave 1**
+
+- [ ] 25.2-01-PLAN.md — TaskMate mutation authorization & auto-approve hardening
+
+**Wave 2** *(depends on 25.2-01)*
+
+- [ ] 25.2-02-PLAN.md — Standardize StepChatPanel on runAiOrchestratorLoop and fix Step 2 Solution remount pipeline
