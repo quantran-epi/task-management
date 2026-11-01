@@ -189,4 +189,90 @@ describe('ProjectSdlcView and IDE Layout', () => {
     const compactMoreBtn = screen.getByTestId('tab-compact-more-btn');
     expect(compactMoreBtn).toBeInTheDocument();
   });
+
+  it('Test 7: Regression UAT-2: Auto-extracted SOLUTION.md does not crash DAG staleness detector with TypeError', async () => {
+    const dbTest7 = new TaskPlannerDatabase(`test-sdlc-7-${Math.random()}`);
+    const proj7Id = 'proj-sdlc-test-07';
+    await dbTest7.projects.add({
+      id: proj7Id,
+      name: 'Ngân hàng số Mobile App',
+      status: 'In Progress',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    // Setup initial CR and Intake state with PL01 and PL02
+    const metadata: SdlcWorkflowMetadata = {
+      cr: 'CR-2026-REGRESSION',
+      featureName: 'Xác thực sinh trắc học',
+      author: 'Nguyen Van A',
+      requestingUnit: 'Trung tâm CNTT',
+      date: '2026-11-01',
+    };
+    const cr = await createNewCr(proj7Id, metadata, true, dbTest7);
+
+    // Seed workflow state with PL01 and PL02
+    const initialState = {
+      schemaVersion: 1,
+      sessionId: 'sess-01',
+      projectId: proj7Id,
+      threadId: 'thread-01',
+      currentStep: 'SOLUTION',
+      metadata,
+      artifacts: {
+        pl01: {
+          kind: 'PL01',
+          version: 1,
+          hash: 'a'.repeat(64),
+          title: 'PL01 Title',
+          content: 'Yêu cầu nghiệp vụ PL01',
+          sourceHashes: [],
+          updatedAt: new Date().toISOString(),
+        },
+        pl02: {
+          kind: 'PL02',
+          version: 1,
+          hash: 'b'.repeat(64),
+          title: 'PL02 Title',
+          content: 'Đặc tả chức năng PL02',
+          sourceHashes: ['a'.repeat(64)],
+          updatedAt: new Date().toISOString(),
+        },
+      },
+      staleSteps: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    await dbTest7.settings.put({
+      key: `sdlc_workflow:${proj7Id}:${cr.id}`,
+      value: JSON.stringify(initialState),
+    });
+
+    render(<ProjectSdlcView projectId={proj7Id} onBack={vi.fn()} db={dbTest7} />);
+
+    // Go to Step 2
+    await waitFor(() => {
+      expect(screen.getByText(/Bước 2: Thiết kế giải pháp/i)).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText(/Bước 2: Thiết kế giải pháp/i));
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/Nội dung kiến trúc giải pháp SOLUTION.md/i)).toBeInTheDocument();
+    });
+
+    // Simulate StepChatPanel emitting onSolutionExtracted (or editor keystrokes)
+    const textarea = screen.getByPlaceholderText(/Nội dung kiến trúc giải pháp SOLUTION.md/i) as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: '# SOLUTION — Xác thực sinh trắc học\n## 1. Kiến trúc hệ thống\nAPI FaceID.' } });
+
+    // Ensure no crash occurs and SdlcStaleBanner renders without throwing TypeError
+    await waitFor(async () => {
+      const draftRow = await dbTest7.settings.get(`sdlc_draft_solution:${proj7Id}:${cr.id}`);
+      expect(draftRow?.value).toContain('Kiến trúc hệ thống');
+    });
+
+    // Textarea still has the updated content and UI did not crash into white screen
+    expect(textarea.value).toContain('API FaceID');
+    expect(screen.getByTestId('sdlc-workspace')).toBeInTheDocument();
+  });
 });

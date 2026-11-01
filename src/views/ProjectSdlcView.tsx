@@ -76,22 +76,31 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
     };
   }, [projectId, activeCrId, selectedStep, db]);
 
-  // Load persistent workflow state when activeCrId changes
+  // Load persistent workflow state and draft when activeCrId changes
   useEffect(() => {
     let cancelled = false;
     async function loadWorkflowState() {
       const crKey = activeCrId || 'default-cr';
       try {
         const row = await db.settings.get(`sdlc_workflow:${projectId}:${crKey}`);
+        const draftRow = await db.settings.get(`sdlc_draft_solution:${projectId}:${crKey}`);
         if (!cancelled) {
           if (row?.value) {
             setWorkflowState(JSON.parse(String(row.value)));
           } else {
             setWorkflowState(undefined);
           }
+          if (draftRow?.value) {
+            setIncomingSolutionDraft(String(draftRow.value));
+          } else {
+            setIncomingSolutionDraft(undefined);
+          }
         }
       } catch {
-        if (!cancelled) setWorkflowState(undefined);
+        if (!cancelled) {
+          setWorkflowState(undefined);
+          setIncomingSolutionDraft(undefined);
+        }
       }
     }
     loadWorkflowState();
@@ -159,74 +168,27 @@ Vui lòng rà soát cơ sở dữ liệu hiện có bằng công cụ tra cứu,
   const handleSolutionExtracted = useCallback(
     async (draftMarkdown: string) => {
       setIncomingSolutionDraft(draftMarkdown);
-      if (!activeCrId || !workflowState) return;
-
-      const nextState: SdlcWorkflowState = {
-        ...workflowState,
-        artifacts: {
-          ...workflowState.artifacts,
-          solution: {
-            ...(workflowState.artifacts.solution ?? {
-              type: 'solution',
-              version: 1,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-              stale: false,
-            }),
-            content: draftMarkdown,
-            updatedAt: new Date().toISOString(),
-          },
-        },
-      };
-
+      const crKey = activeCrId || 'default-cr';
       await db.settings.put({
-        key: `sdlc_workflow:${projectId}:${activeCrId}`,
-        value: JSON.stringify(nextState),
+        key: `sdlc_draft_solution:${projectId}:${crKey}`,
+        value: draftMarkdown,
       });
-      setWorkflowState(nextState);
       message.success('Đã tự động trích xuất SOLUTION.md vào trình soạn thảo');
     },
-    [activeCrId, projectId, workflowState, db]
+    [activeCrId, projectId, db]
   );
 
   // Editor keystroke draft persistence (D-08)
   const handleDraftChange = useCallback(
     async (draftMarkdown: string) => {
       const crKey = activeCrId || 'default-cr';
-      const baseState: SdlcWorkflowState = workflowState ?? {
-        metadata: {
-          cr: crKey,
-          featureName: 'CR',
-          author: 'User',
-          requestingUnit: 'IT',
-          date: new Date().toISOString().slice(0, 10),
-        },
-        artifacts: {},
-      };
-      const nextState: SdlcWorkflowState = {
-        ...baseState,
-        artifacts: {
-          ...baseState.artifacts,
-          solution: {
-            ...(baseState.artifacts.solution ?? {
-              type: 'solution',
-              version: 1,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-              stale: false,
-            }),
-            content: draftMarkdown,
-            updatedAt: new Date().toISOString(),
-          },
-        },
-      };
+      setIncomingSolutionDraft(draftMarkdown);
       await db.settings.put({
-        key: `sdlc_workflow:${projectId}:${crKey}`,
-        value: JSON.stringify(nextState),
+        key: `sdlc_draft_solution:${projectId}:${crKey}`,
+        value: draftMarkdown,
       });
-      setWorkflowState(nextState);
     },
-    [activeCrId, projectId, workflowState, db]
+    [activeCrId, projectId, db]
   );
 
   // Handlers for Step 1 & Step 2
@@ -273,21 +235,26 @@ Vui lòng rà soát cơ sở dữ liệu hiện có bằng công cụ tra cứu,
 
   const handleCommitSolution = async (markdown: string, noteId: string) => {
     const nextState = await coordinator.commitSolution(markdown, noteId);
+    const crKey = activeCrId || 'default-cr';
     if (activeCrId) {
       await db.settings.put({
         key: `sdlc_workflow:${projectId}:${activeCrId}`,
         value: JSON.stringify(nextState),
       });
     }
+    await db.settings.delete(`sdlc_draft_solution:${projectId}:${crKey}`);
     setWorkflowState(nextState);
   };
 
   // Reset workflow handler (per T-25.1.2-07: keeps notes intact, resets workflow state)
   const handleResetWorkflow = useCallback(async () => {
+    const crKey = activeCrId || 'default-cr';
     if (activeCrId) {
       await db.settings.delete(`sdlc_workflow:${projectId}:${activeCrId}`);
     }
+    await db.settings.delete(`sdlc_draft_solution:${projectId}:${crKey}`);
     setWorkflowState(undefined);
+    setIncomingSolutionDraft(undefined);
     setSelectedStep('INTAKE');
     message.success('Đã đặt lại quy trình về ban đầu. Ghi chú đã lưu vẫn được bảo toàn.');
   }, [activeCrId, projectId, db]);

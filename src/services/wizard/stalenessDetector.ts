@@ -34,8 +34,8 @@ export function detectWorkflowStaleness(state: SdlcWorkflowState): WorkflowStale
 
   // 1. Kiểm tra SOLUTION.md: phụ thuộc vào PL01 và PL02
   if (solution) {
-    const isPl01MissingInSource = currentPl01Hash ? !solution.sourceHashes.includes(currentPl01Hash) : false;
-    const isPl02MissingInSource = currentPl02Hash ? !solution.sourceHashes.includes(currentPl02Hash) : false;
+    const isPl01MissingInSource = currentPl01Hash ? !(solution.sourceHashes ?? []).includes(currentPl01Hash) : false;
+    const isPl02MissingInSource = currentPl02Hash ? !(solution.sourceHashes ?? []).includes(currentPl02Hash) : false;
     if (isPl01MissingInSource || isPl02MissingInSource) {
       staleSteps.push('SOLUTION');
       reasons.SOLUTION = 'Hồ sơ đầu vào PL01 hoặc PL02 đã cập nhật bản mới.';
@@ -44,7 +44,7 @@ export function detectWorkflowStaleness(state: SdlcWorkflowState): WorkflowStale
 
   // 2. SOLUTION revision invalidates code guide and downstream artifacts.
   if (solution) {
-    const solutionChanged = Boolean(codeGuide && currentSolutionHash && !codeGuide.sourceHashes.includes(currentSolutionHash));
+    const solutionChanged = Boolean(codeGuide && currentSolutionHash && !(codeGuide.sourceHashes ?? []).includes(currentSolutionHash));
     if (solutionChanged) {
       staleSteps.push('CODE_GUIDE');
       reasons.CODE_GUIDE = 'SOLUTION.md đã thay đổi, cần cập nhật hướng dẫn code.';
@@ -52,15 +52,15 @@ export function detectWorkflowStaleness(state: SdlcWorkflowState): WorkflowStale
   }
 
   // 3. Kiểm tra CHANGE_PACK / Drift: phụ thuộc vào SOLUTION và ChangePack
-  if (solution && changePack && currentSolutionHash && !changePack.sourceHashes.includes(currentSolutionHash)) {
+  if (solution && changePack && currentSolutionHash && !(changePack.sourceHashes ?? []).includes(currentSolutionHash)) {
     staleSteps.push('CHANGE_PACK');
     reasons.CHANGE_PACK = 'SOLUTION.md đã thay đổi, cần tái đối chiếu change-pack.';
   }
   if (driftResult) {
-    if (currentSolutionHash && driftResult.identity.solutionHash !== currentSolutionHash) {
+    if (currentSolutionHash && driftResult.identity?.solutionHash !== currentSolutionHash) {
       staleSteps.push('CHANGE_PACK');
       reasons.CHANGE_PACK = 'SOLUTION.md đã có phiên bản mới, cần tái đối chiếu ma trận drift.';
-    } else if (currentPackHash && driftResult.identity.packHash !== currentPackHash) {
+    } else if (currentPackHash && driftResult.identity?.packHash !== currentPackHash) {
       staleSteps.push('CHANGE_PACK');
       reasons.CHANGE_PACK = 'Đã nạp file change-pack.zip mới, cần tái đối chiếu ma trận drift.';
     }
@@ -72,12 +72,12 @@ export function detectWorkflowStaleness(state: SdlcWorkflowState): WorkflowStale
 
   for (const doc of [pl03b, pl07]) {
     if (doc) {
-      if (currentSolutionHash && !doc.sourceHashes.includes(currentSolutionHash)) {
+      if (currentSolutionHash && !(doc.sourceHashes ?? []).includes(currentSolutionHash)) {
         techDocsStale = true;
         techDocsReason = 'SOLUTION.md đã thay đổi so với bản dùng để lập tài liệu kỹ thuật.';
         break;
       }
-      if (currentPackHash && !doc.sourceHashes.includes(currentPackHash)) {
+      if (currentPackHash && !(doc.sourceHashes ?? []).includes(currentPackHash)) {
         techDocsStale = true;
         techDocsReason = 'Change-pack mới đã nạp, tài liệu kỹ thuật cần cập nhật theo code diff mới.';
         break;
@@ -97,7 +97,7 @@ export function detectWorkflowStaleness(state: SdlcWorkflowState): WorkflowStale
     if (pl03b?.hash) requiredHashes.push(pl03b.hash);
     if (pl07?.hash) requiredHashes.push(pl07.hash);
 
-    const isCabStale = requiredHashes.some((h) => !cab.sourceHashes.includes(h));
+    const isCabStale = requiredHashes.some((h) => !(cab.sourceHashes ?? []).includes(h));
     if (isCabStale) {
       staleSteps.push('CAB');
       reasons.CAB = 'Một hoặc nhiều tài liệu thành phần (PL02, PL03B, PL07) đã thay đổi.';

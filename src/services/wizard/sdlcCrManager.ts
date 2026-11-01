@@ -143,24 +143,32 @@ export async function getStepThread(
   db: TaskPlannerDatabase = defaultDb
 ): Promise<ChatThread> {
   const scopeKey = `sdlc:${projectId}:${crId}:${stepId}`;
-  const existing = await db.chatThreads.where('scopeKey').equals(scopeKey).first();
-  if (existing) {
-    return existing;
-  }
+  return db.transaction('rw', db.chatThreads, async () => {
+    const existing = await db.chatThreads.where('scopeKey').equals(scopeKey).first();
+    if (existing) {
+      return existing;
+    }
 
-  const now = new Date().toISOString();
-  const thread: ChatThread = {
-    id: generateId(),
-    scopeKey,
-    scopeType: 'project',
-    entityId: projectId,
-    title: `[SDLC] ${stepId}`,
-    createdAt: now,
-    updatedAt: now,
-  };
+    const now = new Date().toISOString();
+    const thread: ChatThread = {
+      id: generateId(),
+      scopeKey,
+      scopeType: 'project',
+      entityId: projectId,
+      title: `[SDLC] ${stepId}`,
+      createdAt: now,
+      updatedAt: now,
+    };
 
-  await db.chatThreads.add(thread);
-  return thread;
+    try {
+      await db.chatThreads.add(thread);
+      return thread;
+    } catch {
+      const raceExisting = await db.chatThreads.where('scopeKey').equals(scopeKey).first();
+      if (raceExisting) return raceExisting;
+      throw new Error(`Failed to create or retrieve step thread for ${scopeKey}`);
+    }
+  });
 }
 
 export async function getMultiPackState(
