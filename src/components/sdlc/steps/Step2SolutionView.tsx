@@ -39,6 +39,8 @@ export interface Step2SolutionViewProps {
   onNavigateToStep?: ((step: SdlcStepId) => void) | undefined;
   /** T-25.3-46: a historical or non-active-CR version opens in preview with controls disabled. */
   readOnly?: boolean | undefined;
+  /** D-06: a historical card pins the editor to that exact approved version. */
+  viewedVersion?: { version: number; content: string; title: string } | undefined;
   onCommitSolution: (markdown: string, noteId: string) => Promise<void>;
   onDraftChange?: (draftMarkdown: string) => void;
   onRequestAiAnalysis?: () => void;
@@ -58,6 +60,7 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
   hasIntakeBaseline,
   onNavigateToStep,
   readOnly = false,
+  viewedVersion,
   onCommitSolution,
   onDraftChange,
   onRequestAiAnalysis,
@@ -66,7 +69,7 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
 }) => {
   const { token } = theme.useToken();
   const [content, setContent] = useState<string>(
-    incomingDraft ?? solutionArtifact?.content ?? initialContent ?? ''
+    viewedVersion?.content ?? incomingDraft ?? solutionArtifact?.content ?? initialContent ?? ''
   );
   const [mode, setMode] = useState<'write' | 'preview' | 'split'>('write');
   const [saving, setSaving] = useState(false);
@@ -83,6 +86,11 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
       setContent(parentContent);
     }
   }, [solutionArtifact?.content, initialContent]);
+
+  // D-06: pinning a historical version shows exactly that body, never the live draft.
+  useEffect(() => {
+    if (viewedVersion) setContent(viewedVersion.content);
+  }, [viewedVersion]);
 
   // Sync when incomingDraft from chat turn completion updates (D-07)
   useEffect(() => {

@@ -21,6 +21,8 @@ import type { SdlcWizardRuntime } from '../../../services/wizard/sdlcWizardRunti
 import type { SdlcStepId, SdlcWorkflowState } from '../../../services/wizard/workflowSchemas';
 
 export interface Step6CabViewProps {
+  /** D-06: a historical card pins the CAB preview to that exact approved version, read-only. */
+  viewedVersion?: { version: number; content: string; title: string } | undefined;
   projectId: string;
   crId: string;
   workflowState?: SdlcWorkflowState | undefined;
@@ -38,6 +40,7 @@ export const Step6CabView: React.FC<Step6CabViewProps> = ({
   projectId,
   crId,
   workflowState,
+  viewedVersion,
   onCommitCab,
   db = defaultDb,
   onNavigateToStep,
@@ -195,7 +198,8 @@ export const Step6CabView: React.FC<Step6CabViewProps> = ({
     message.success('Đã hoàn tất quy trình SDLC và đóng CR thành công!');
   };
 
-  const previewMarkdown = draftMarkdown ?? cab?.content;
+  // A pinned historical version wins over the live draft/approved pair (D-06).
+  const previewMarkdown = viewedVersion ? viewedVersion.content : draftMarkdown ?? cab?.content;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 1000 }}>
@@ -289,7 +293,7 @@ export const Step6CabView: React.FC<Step6CabViewProps> = ({
           <Button
             type="primary"
             loading={approving}
-            disabled={!draftMarkdown?.trim()}
+            disabled={Boolean(viewedVersion) || !draftMarkdown?.trim()}
             onClick={handleApprove}
           >
             Lưu & Phê duyệt

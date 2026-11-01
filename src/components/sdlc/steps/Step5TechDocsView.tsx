@@ -18,6 +18,8 @@ import type { SdlcStepId, SdlcWorkflowState } from '../../../services/wizard/wor
 type TechDocKind = 'PL03B' | 'PL07';
 
 export interface Step5TechDocsViewProps {
+  /** D-06: a historical card pins the view to that exact approved version, read-only. */
+  viewedVersion?: { kind: TechDocKind; version: number; content: string; title: string } | undefined;
   projectId: string;
   crId: string;
   workflowState?: SdlcWorkflowState | undefined;
@@ -37,6 +39,7 @@ export const Step5TechDocsView: React.FC<Step5TechDocsViewProps> = ({
   projectId,
   crId,
   workflowState,
+  viewedVersion,
   onCommitTechDoc,
   onProceedToStep6,
   db = defaultDb,
@@ -150,8 +153,11 @@ export const Step5TechDocsView: React.FC<Step5TechDocsViewProps> = ({
     }
   };
 
-  const activeDraft = activeTab === 'PL03B' ? pl03bMarkdown : pl07Markdown;
+  // A pinned historical version wins over the live draft/approved pair (D-06).
+  const pinned = viewedVersion && viewedVersion.kind === activeTab ? viewedVersion : undefined;
+  const activeDraft = pinned ? undefined : activeTab === 'PL03B' ? pl03bMarkdown : pl07Markdown;
   const activeApproved = activeTab === 'PL03B' ? pl03b : pl07;
+  const pinnedContent = pinned?.content;
 
   const tabTag = (approved: typeof pl03b, draft: string | undefined) => {
     if (approved) return <Tag color="success">Đã duyệt (v{approved.version})</Tag>;
@@ -254,6 +260,11 @@ export const Step5TechDocsView: React.FC<Step5TechDocsViewProps> = ({
             <div style={{ textAlign: 'center', padding: 48 }}>
               <Spin indicator={<SyncOutlined spin style={{ fontSize: 28 }} />} tip="AI đang tổng hợp dữ liệu và tạo bản nháp..." />
             </div>
+          ) : pinnedContent ? (
+            <div
+              style={{ lineHeight: 1.6 }}
+              dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(pinnedContent) }}
+            />
           ) : activeDraft ? (
             <div
               style={{ lineHeight: 1.6 }}
@@ -273,7 +284,7 @@ export const Step5TechDocsView: React.FC<Step5TechDocsViewProps> = ({
         <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 12 }}>
           <Button
             type="primary"
-            disabled={!isReadyForGen || !activeDraft || !activeDraft.trim()}
+            disabled={Boolean(pinned) || !isReadyForGen || !activeDraft || !activeDraft.trim()}
             onClick={() => activeDraft && handleApprove(activeTab, activeDraft)}
           >
             Lưu & Phê duyệt

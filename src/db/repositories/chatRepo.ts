@@ -78,6 +78,13 @@ export async function saveMessage(
   input: SaveMessageInput,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<ChatMessage> {
+  // Stamp the persisted id into the card so a host can reopen that exact version later (D-06).
+  if (input.artifactEvent) {
+    input = {
+      ...input,
+      artifactEvent: { ...input.artifactEvent, eventId: input.artifactEvent.eventId ?? crypto.randomUUID() },
+    };
+  }
   if (input.grounding !== undefined) {
     const parseResult = ChatMessageGroundingSchema.safeParse(input.grounding);
     if (!parseResult.success) {

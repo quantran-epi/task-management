@@ -277,6 +277,8 @@ export interface ChatGeneratedFile {
  * Metadata only: the artifact body never enters the transcript.
  */
 export interface ChatArtifactEvent {
+  /** Id of the persisted card message; lets a host reopen that exact version. */
+  eventId?: string | undefined;
   kind: SdlcArtifactKind;
   title: string;
   version: number;

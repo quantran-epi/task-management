@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import 'fake-indexeddb/auto';
 import { TaskPlannerDatabase } from '../../../src/db';
 import { ProjectsView } from '../../../src/views/ProjectsView';
@@ -530,5 +530,113 @@ describe('ProjectSdlcView and IDE Layout', () => {
     });
     expect(screen.getByText(/Chi tiết phân tích kỹ thuật của AI/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Xem thêm/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('D-06: opening a historical artifact card', () => {
+  it('pins the owning step to that exact version and blocks approval', async () => {
+    const pid = crypto.randomUUID();
+    const dbX = new TaskPlannerDatabase(`test-d06-${Math.random()}`);
+    await dbX.projects.add({
+      id: pid,
+      name: 'Dự án lịch sử phiên bản',
+      status: 'In Progress',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    const metadata = {
+      cr: 'CR-D06',
+      featureName: 'Lịch sử',
+      author: 'Tester',
+      requestingUnit: 'Khối CNTT',
+      date: '2026-11-01',
+    };
+    const cr = await createNewCr(pid, metadata, true, dbX);
+
+    const ref = (version: number, content: string) => ({
+      kind: 'SOLUTION' as const,
+      version,
+      hash: String(version).repeat(64),
+      title: `SOLUTION.md — v${version}`,
+      content,
+      sourceHashes: [],
+      updatedAt: new Date().toISOString(),
+    });
+
+    await dbX.settings.put({
+      key: `sdlc_workflow:${pid}:${cr.id}`,
+      value: JSON.stringify({
+        schemaVersion: 1,
+        sessionId: crypto.randomUUID(),
+        projectId: pid,
+        threadId: crypto.randomUUID(),
+        currentStep: 'SOLUTION',
+        metadata,
+        artifacts: {
+          pl01: { ...ref(1, 'PL01'), kind: 'PL01' },
+          pl02: { ...ref(1, 'PL02'), kind: 'PL02' },
+          solution: ref(2, '# SOLUTION v2 hiện hành'),
+        },
+        activeVersions: { SOLUTION: 2 },
+        versions: { SOLUTION: [ref(1, '# SOLUTION v1 lịch sử'), ref(2, '# SOLUTION v2 hiện hành')] },
+        staleSteps: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }),
+    });
+
+    // One persisted card for the superseded v1.
+    const threadId = crypto.randomUUID();
+    await dbX.chatThreads.add({
+      id: threadId,
+      title: '[SDLC] SOLUTION',
+      scopeKey: `sdlc:${pid}:${cr.id}:SOLUTION`,
+      scopeType: 'project',
+      entityId: pid,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    await dbX.chatMessages.add({
+      id: crypto.randomUUID(),
+      threadId,
+      role: 'assistant',
+      content: 'Đã phê duyệt SOLUTION v1',
+      createdAt: new Date().toISOString(),
+      artifactEvent: {
+        eventId: crypto.randomUUID(),
+        kind: 'SOLUTION',
+        title: 'SOLUTION.md — v1',
+        version: 1,
+        hash: '1'.repeat(64),
+        status: 'approved',
+      },
+    });
+
+    render(<ProjectSdlcView projectId={pid} onBack={vi.fn()} db={dbX} />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Bước 2: Thiết kế giải pháp/i)).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getAllByText(/Bước 2: Thiết kế giải pháp/i)[0]!);
+
+    // Open the v1 card from the transcript ("Xem chi tiết" on the persisted card).
+    const card = await screen.findByTestId('ai-artifact-event-card');
+    expect(card).toHaveTextContent('SOLUTION.md — v1');
+    fireEvent.click(within(card).getByRole('button', { name: /Xem chi tiết/i }));
+
+    // The editor shows the historical body, not the active v2.
+    const textarea = await screen.findByPlaceholderText(
+      /Nội dung kiến trúc giải pháp SOLUTION\.md/i
+    ) as HTMLTextAreaElement;
+    await waitFor(() => {
+      expect(textarea.value).toContain('v1 lịch sử');
+      expect(textarea.value).not.toContain('v2 hiện hành');
+    });
+
+    // Read-only: approval is blocked and the editor is not editable.
+    expect(textarea).toHaveAttribute('readonly');
+    expect(
+      screen.getByRole('button', { name: /Duyệt & Lưu SOLUTION\.md/i })
+    ).toBeDisabled();
   });
 });

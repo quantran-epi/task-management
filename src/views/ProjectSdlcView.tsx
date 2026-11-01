@@ -70,6 +70,10 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
   const project = useLiveQuery(() => db.projects.get(projectId), [projectId, db]);
   const crList = useLiveQuery(() => listCrs(projectId, db), [projectId, db]) ?? [];
   const [readOnlySolution, setReadOnlySolution] = useState(false);
+  // D-06: a historical card pins the owning step view to that exact approved version.
+  const [viewedVersion, setViewedVersion] = useState<
+    { kind: SdlcArtifactKind; version: number; content: string; title: string } | undefined
+  >(undefined);
 
   // Cards for the step thread currently on screen (D-06: metadata only, body stays in the editor).
   const stepMessages =
@@ -144,14 +148,31 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
   /** Historical opens target the owning step and render read-only when inactive (D-06). */
   const handleArtifactOpen = useCallback(
     (eventId: string, readOnly: boolean) => {
-      const event = stepMessages.find((m) => m.id === eventId)?.artifactEvent;
+      const event = stepMessages.find(
+        (m) => m.id === eventId || m.artifactEvent?.eventId === eventId
+      )?.artifactEvent;
       if (!event) return;
       const step = STEP_FOR_KIND[event.kind];
       if (step) setSelectedStep(step);
+
+      // The exact body comes from the version history, never from the active artifact.
+      const history = workflowState?.versions?.[event.kind] ?? [];
+      const pinned = history.find((ref) => ref.version === event.version && ref.content?.trim());
+      if (pinned?.content) {
+        setViewedVersion({
+          kind: event.kind,
+          version: pinned.version,
+          content: pinned.content,
+          title: pinned.title,
+        });
+      } else {
+        setViewedVersion(undefined);
+      }
       setReadOnlySolution(event.kind === 'SOLUTION' ? readOnly : false);
     },
-    [stepMessages]
+    [stepMessages, workflowState?.versions]
   );
+
 
   const selectCr = useCallback((crId: string) => {
     activeCrRef.current = crId;
@@ -385,6 +406,9 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
     (step: SdlcStepId) => {
       void coordinator.navigateToStep(step).catch(reportGuardError);
       setSelectedStep(step);
+      // Any explicit navigation returns the step to its live artifact.
+      setViewedVersion(undefined);
+      setReadOnlySolution(false);
     },
     [coordinator, reportGuardError]
   );
@@ -417,6 +441,11 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
               workflowState?.artifacts.pl01 && workflowState?.artifacts.pl02
             )}
             readOnly={readOnlySolution}
+            viewedVersion={
+              viewedVersion?.kind === 'SOLUTION'
+                ? { version: viewedVersion.version, content: viewedVersion.content, title: viewedVersion.title }
+                : undefined
+            }
             onNavigateToStep={handleNavigateToStep}
             onCommitSolution={handleCommitSolution}
             onDraftChange={(markdown) => {
@@ -484,6 +513,16 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
               }
             }}
             wizardRuntime={wizardRuntime}
+            viewedVersion={
+              viewedVersion?.kind === 'PL03B' || viewedVersion?.kind === 'PL07'
+                ? {
+                    kind: viewedVersion.kind,
+                    version: viewedVersion.version,
+                    content: viewedVersion.content,
+                    title: viewedVersion.title,
+                  }
+                : undefined
+            }
             onNavigateToStep={handleNavigateToStep}
             onProceedToStep6={() => handleNavigateToStep('CAB')}
             db={db}
@@ -507,6 +546,11 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
               }
             }}
             wizardRuntime={wizardRuntime}
+            viewedVersion={
+              viewedVersion?.kind === 'CAB'
+                ? { version: viewedVersion.version, content: viewedVersion.content, title: viewedVersion.title }
+                : undefined
+            }
             onNavigateToStep={handleNavigateToStep}
             db={db}
           />
