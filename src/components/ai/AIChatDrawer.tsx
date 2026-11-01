@@ -34,18 +34,17 @@ import {
 import { selectMessagesWithinBudget } from '../../services/ai/historyPruning';
 import { compactThreadContext, extractMessageText } from '../../services/ai/contextCompaction';
 import {
-  AI_DATABASE_TOOLS,
   type AiToolDefinition,
   isMutationTool,
   describeToolMutationWithContext,
   normalizeToolName,
 } from '../../services/ai/aiTools';
 import { runAiOrchestratorLoop, dispatchAiToolCall } from '../../services/ai/aiOrchestratorLoop';
+import { getToolsForTurn } from '../../services/ai/chatTurnTools';
 import {
   getMcpServers,
   discoverAllMcpTools,
   getEnabledMcpInstructions,
-  isReadOnlyMcpTool,
   toggleMcpServer,
   type McpServerConfig,
 } from '../../services/ai/mcpClient';
@@ -168,18 +167,8 @@ export function buildSdlcWrapperPrompt(input: SdlcWrapperPromptInput): string {
   return parts.join('\n');
 }
 
-export function getToolsForTurn(
-  effectiveAnalysisMode: boolean,
-  dynamicMcpTools: AiToolDefinition[] = []
-): AiToolDefinition[] {
-  if (effectiveAnalysisMode) {
-    return [
-      ...AI_DATABASE_TOOLS.filter((tool) => !isMutationTool(normalizeToolName(tool.function.name))),
-      ...dynamicMcpTools.filter((tool) => isReadOnlyMcpTool(normalizeToolName(tool.function.name))),
-    ];
-  }
-  return [...AI_DATABASE_TOOLS, ...dynamicMcpTools];
-}
+// Moved to a service module so non-Drawer hosts stop importing from a component.
+export { getToolsForTurn } from '../../services/ai/chatTurnTools';
 
 export interface ActiveScope {
   type: ChatScopeType;
