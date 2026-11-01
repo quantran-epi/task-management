@@ -113,6 +113,14 @@ export const SdlcWorkflowStateSchema = z.strictObject({
     pl03b: SdlcArtifactRefSchema.optional(),
     pl07: SdlcArtifactRefSchema.optional(),
     cab: SdlcArtifactRefSchema.optional(),
+    /**
+     * D-15: an approved snapshot of the TaskMate-internal CR summary. Derived state normally;
+     * persisted here only when the user explicitly saves it with the workflow.
+     */
+    crSummary: z.strictObject({
+      markdown: z.string().max(20000),
+      updatedAt: isoTimestampSchema,
+    }).optional(),
   }),
   staleSteps: z.array(SdlcStepIdSchema).default([]),
   selectedStep: SdlcStepIdSchema.optional(),
