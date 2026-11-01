@@ -168,7 +168,7 @@ Plans:
   3. Client-side `.docx` builder generates downloadable Word documents conforming strictly to bank standard templates (formatting, headers, metadata, section hierarchies, tables, sign-off blocks), and each generated document is persisted as a Project-linked Note.
   4. `SOLUTION.md` is produced interactively with the Dev, versioned as a Project-linked Note, and re-openable from the same persistent project chat thread when implementation drifts from the approved solution.
   5. Dev-generated `change-pack.zip` (diff, new files, SQL artifacts, metadata) can be dropped into the project chat thread, validated against size/artifact rules, and used to reconcile approved `SOLUTION.md` against actual implementation.
-  6. PL03 reports the reconciliation as four sections (as-approved design, actual implementation, drift matrix, DB changes + rollback); PL07 and the CAB summary are generated from the same thread context without re-supplying inputs.
+  6. PL03B/PL03 documents only the actual implementation, supported by validated Change Pack evidence; the SOLUTION-to-implementation drift matrix remains in TaskMate and is not included in PL03B/PL03. PL07 and the CAB summary are generated from the same thread context without re-supplying inputs.
 
 **Plans:** 17/18 plans executed
 
@@ -386,3 +386,49 @@ Plans:
 **Wave 6 (Gap Closure)** *(depends on 25.2-05)*
 
 - [x] 25.2-06-PLAN.md — Immediate loading feedback, concise chat summary format, and message collapsing in StepChatPanel
+
+### Phase 25.3: SDLC Workflow Engine Hardening, Unified Common AI Chat Widget & SDLC Prompt Architecture
+
+**Goal:** Eliminate SDLC workflow coordinator initialization and persistence defects (`WORKFLOW_NOT_INITIALIZED`), enforce strict prerequisite action guards across all steps, remove obsolete step 3 checklists, architect a reusable `AiChatWidget` with instant loading feedback, and standardize the SDLC AI prompt architecture across all 6 steps for deterministic, bank-standard artifact generation.
+
+**Depends on:** Phase 25.2
+**Success Criteria** (what must be TRUE):
+
+1. `workflowCoordinator` auto-restores its state from IndexedDB if `currentState` is undefined during any lifecycle or action call, surviving step transitions, re-renders, and page reloads.
+2. Step 3 checklist card is completely removed; Step 3 code command and step transition are clean and purposeful.
+3. Every SDLC step enforces strict prerequisite gates: actions (buttons, inputs, dropzones) are fully disabled with clear guidance when prerequisite artifacts are missing.
+4. A single, unified `AiChatWidget` component encapsulates the AI orchestrator loop, MCP controls, model selection, live streaming transcript, and tool mutation approvals.
+5. `AiChatWidget` displays immediate, visible loading feedback from the instant a turn starts until completion, eliminating perceived freezing.
+6. A standardized SDLC Prompt Architecture defines structured system prompts, grounding rules, and few-shot templates across all 6 steps (Intake validation, Solution architecture, Coding guide, Drift interpretation, Bank PL03B/PL07 tech docs, and CAB defense).
+7. SDLC Studio `StepChatPanel` and `AIChatDrawer` are refactored to consume `AiChatWidget` with custom prompts, contexts, and handlers via clean props.
+
+**Plans:** 10 plans
+
+**Wave 1** *(parallel, no dependencies)*
+
+- [ ] 25.3-01-PLAN.md — Coordinator restore-before-action, `ensureState()`, and stable guard-code registry
+- [ ] 25.3-03-PLAN.md — Layered SDLC prompt composer with shared policy, six step contracts, and few-shot exemplars
+
+**Wave 2** *(depends on Wave 1)*
+
+- [ ] 25.3-02-PLAN.md — Step 3 checklist removal, Step 4 pre-emptive gates, and four-finding drift matrix
+- [ ] 25.3-05-PLAN.md — PL03B actual-implementation-only (no SOLUTION/drift), blank PL07, draft-only tech docs
+- [ ] 25.3-07-PLAN.md — Framework-free chat turn runtime plus `useChatTurn` hook
+
+**Wave 3** *(depends on Wave 2)*
+
+- [ ] 25.3-06-PLAN.md — Evidence-constrained CAB, TaskMate-only CR summary, explicit approval gate
+- [ ] 25.3-08-PLAN.md — `AiChatWidget`, staged loading, approval card, durable artifact event cards
+
+**Wave 4** *(depends on Waves 2-3)*
+
+- [ ] 25.3-09-PLAN.md — StepChatPanel as thin host adapter; coordinator restore in the SDLC view
+
+**Wave 5** *(depends on Wave 4)*
+
+- [ ] 25.3-10-PLAN.md — AIChatDrawer consumes the shared widget and runtime
+
+**Wave 6** *(depends on Wave 5)*
+
+- [ ] 25.3-11-PLAN.md — Cross-host lifecycle parity suite and removal of component-to-service re-export
+
