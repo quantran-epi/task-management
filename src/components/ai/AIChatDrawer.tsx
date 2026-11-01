@@ -93,6 +93,7 @@ import { QuickPreviewDrawer } from '../notes/QuickPreviewDrawer';
 import { ScopeChipsBar, hasMeaningfulRoutedScope } from './grounded/ScopeChipsBar';
 import type { GroundedAnswerCardCallbacks } from './ChatMessageBubble';
 import { ChatTabBar, type ChatTabItem } from './ChatTabBar';
+import { ChatTabToolbox } from './ChatTabToolbox';
 import { createRequestRegistry } from './runtime/requestRegistry';
 import { useTabRuntimes } from './runtime/useTabRuntimes';
 import { InterruptedBanner } from './InterruptedBanner';
@@ -718,35 +719,34 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     }
   }, [open, pendingDraft, clearPendingDraft]);
 
-  // Auto-approve mutation toggle (bypasses confirmation modal if explicitly enabled by user)
-  const [autoApproveMutations, setAutoApproveMutations] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem(AI_AUTO_APPROVE_MUTATIONS_KEY) === 'true';
-    } catch {
-      return false;
-    }
-  });
+  // Auto-approve mutation toggle: isolated per-tab in activeTab.config.autoApproveMutations
+  const autoApproveMutations = Boolean(activeTab?.config?.autoApproveMutations);
 
-  const handleToggleAutoApproveMutations = useCallback(() => {
-    setAutoApproveMutations((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem(AI_AUTO_APPROVE_MUTATIONS_KEY, String(next));
-      } catch {
-        // ignore storage error
-      }
-      if (next) {
-        message.warning(
-          'Đã bật tự động duyệt thay đổi dữ liệu (Auto-approve mutations). AI sẽ tự động thực thi và báo cáo chi tiết.'
-        );
-      } else {
-        message.info(
-          'Đã tắt tự động duyệt. AI sẽ hỏi xác nhận trước khi thực hiện thay đổi dữ liệu.'
-        );
-      }
-      return next;
-    });
-  }, []);
+  const handleToggleAutoApproveMutations = useCallback(async () => {
+    if (!activeTab) return;
+    const currentVal = Boolean(activeTab.config?.autoApproveMutations);
+    const nextVal = !currentVal;
+    try {
+      await updateChatTab(
+        activeTab.id,
+        {
+          config: { ...(activeTab.config || {}), autoApproveMutations: nextVal },
+        },
+        db
+      );
+    } catch (err) {
+      logAiChatError('Failed to update tab autoApproveMutations', err);
+    }
+    if (nextVal) {
+      message.warning(
+        'Đã bật tự động duyệt thay đổi dữ liệu cho tab này. AI sẽ tự động thực thi và báo cáo chi tiết.'
+      );
+    } else {
+      message.info(
+        'Đã tắt tự động duyệt cho tab này. AI sẽ hỏi xác nhận trước khi thực hiện thay đổi dữ liệu.'
+      );
+    }
+  }, [activeTab, db]);
 
   // Analysis mode: durable per-tab state via ChatTab.config. Tab 'sdlc' is always true.
   // The legacy global key never feeds this expression; it only seeds durable config once (D-07).
@@ -2244,18 +2244,8 @@ Rules:
 
       {/* Chat Header */}
       <ChatHeader
-        selectedModel={resolveActiveModel()}
-        availableModels={availableModels}
-        onModelChange={handleModelChange}
-        onRefreshModels={handleRefreshModels}
-        isRefreshingModels={isRefreshingModels}
-        autoApproveMutations={autoApproveMutations}
-        onToggleAutoApproveMutations={handleToggleAutoApproveMutations}
-        analysisMode={currentTabAnalysisMode}
-        onToggleAnalysisMode={handleToggleAnalysisMode}
         isPinned={isPinned}
         onTogglePin={() => onTogglePin?.()}
-        onClearContext={handleClearContext}
         onClearAllHistory={handleClearAllHistory}
         onDeleteCurrentThread={handleDeleteCurrentThread}
         onOpenDebug={() => setIsDebugModalOpen(true)}
@@ -2266,86 +2256,6 @@ Rules:
         mcpServers={mcpServers}
         onToggleMcpServer={handleToggleMcpServer}
       />
-
-      {/* Scope sub-bar showing current active context and change/detach controls */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '4px 14px',
-          backgroundColor: token.colorFillAlter,
-          borderBottom: `1px solid ${token.colorBorderSecondary}`,
-          fontSize: 12,
-          gap: 8,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
-          <span style={{ color: token.colorTextSecondary, fontSize: 11, flexShrink: 0 }}>Ngữ cảnh:</span>
-          <span
-            style={{
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              fontWeight: 500,
-              color: currentScope.type === 'global' ? token.colorTextSecondary : token.colorPrimary,
-            }}
-          >
-            {currentScope.type === 'global'
-              ? 'Toàn cục (Không gắn)'
-              : `Đang gắn ngữ cảnh: ${currentScope.title || currentScope.id}`}
-          </span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-          {currentTabAnalysisMode && (
-            <Tooltip title="Tab này đang hoạt động ở Chế độ Phân tích: AI gọi công cụ MCP/DB chỉ đọc để tra cứu và không tự động thay đổi dữ liệu">
-              <Tag
-                color="warning"
-                icon={<ExperimentFilled />}
-                data-testid="analysis-mode-header-tag"
-                style={{
-                  margin: 0,
-                  fontSize: 11,
-                  padding: '0 6px',
-                  height: 20,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 3,
-                  cursor: 'default',
-                  border: `1px solid ${token.colorWarningBorder || '#ffe7ba'}`,
-                }}
-              >
-                Analysis
-              </Tag>
-            </Tooltip>
-          )}
-          <Button
-            type="link"
-            size="small"
-            onClick={() => setScopeModalOpen(true)}
-            aria-label="Đổi phạm vi ngữ cảnh"
-            style={{ padding: '0 4px', height: 22, fontSize: 12 }}
-          >
-            Đổi
-          </Button>
-          {currentScope.type !== 'global' && (
-            <Button
-              type="text"
-              size="small"
-              icon={<DisconnectOutlined />}
-              onClick={() => {
-                setIsDetached(true);
-                setInternalScope({ type: 'global' });
-                setCustomScope({ type: 'global' });
-              }}
-              aria-label="Gỡ gắn ngữ cảnh"
-              style={{ padding: '0 4px', height: 22, fontSize: 12, color: token.colorTextSecondary }}
-            >
-              Gỡ
-            </Button>
-          )}
-        </div>
-      </div>
 
       {/* Chrome-like Multi-Tab Bar for All Scopes */}
       {displayTabs.length > 0 && (
@@ -2360,6 +2270,27 @@ Rules:
           tabStatuses={tabStatuses}
         />
       )}
+
+      {/* Tab Toolbox: Model, Scope, Analysis Mode, Auto-Approve, Clear Context */}
+      <ChatTabToolbox
+        selectedModel={resolveActiveModel()}
+        availableModels={availableModels}
+        onModelChange={handleModelChange}
+        onRefreshModels={handleRefreshModels}
+        isRefreshingModels={isRefreshingModels}
+        analysisMode={currentTabAnalysisMode}
+        onToggleAnalysisMode={handleToggleAnalysisMode}
+        autoApproveMutations={autoApproveMutations}
+        onToggleAutoApproveMutations={handleToggleAutoApproveMutations}
+        currentScope={currentScope}
+        onOpenScopePicker={() => setScopeModalOpen(true)}
+        onDetachScope={() => {
+          setIsDetached(true);
+          setInternalScope({ type: 'global' });
+          setCustomScope({ type: 'global' });
+        }}
+        onClearContext={handleClearContext}
+      />
 
       <ScopePickerModal
         open={scopeModalOpen}

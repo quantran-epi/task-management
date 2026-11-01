@@ -224,6 +224,7 @@ export type ChatTabStatus = 'idle' | 'processing' | 'interrupted' | 'error' | 's
 export interface ChatTabConfig {
   model?: string | undefined;
   analysisMode?: boolean | undefined;
+  autoApproveMutations?: boolean | undefined;
   mcpEnabled?: boolean | undefined;
   knowledgeEnabled?: boolean | undefined;
   promptContextOptions?: Record<string, boolean | string | number> | undefined;
