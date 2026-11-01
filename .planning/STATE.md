@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: milestone
 status: planning
-stopped_at: Phase 25.3 context gathered
-last_updated: "2026-11-01T11:32:21.287Z"
+stopped_at: Phase 25.3 UI-SPEC approved
+last_updated: "2026-11-01T12:30:51.469Z"
 last_activity: 2026-11-01 -- Initialized Phase 25.3
 progress:
   total_phases: 14
@@ -29,7 +29,13 @@ Phase: 25.3 (sdlc-workflow-hardening-common-ai-chat-widget)
 Plan: 0 of TBD
 Status: In planning & architectural discussion
 Last activity: 2026-11-01 -- Initialized Phase 25.3
-Stopped at: Phase 25.3 context gathered
+Stopped at: Phase 25.3 UI-SPEC approved
+
+## Session Continuity
+
+Last session: 2026-11-01T12:30:51.462Z
+Stopped at: Session resumed, ready to plan Phase 25.3
+Resume file: .planning/phases/25.3-sdlc-workflow-hardening-common-ai-chat-widget/25.3-UI-SPEC.md
 
 Progress: [██████████] 100%
 
