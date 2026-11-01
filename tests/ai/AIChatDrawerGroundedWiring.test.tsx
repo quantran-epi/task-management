@@ -957,4 +957,36 @@ describe('AIChatDrawer find-related wiring (Phase 24)', () => {
       'MAIN1.EVT_EVENT được dùng ở đâu?'
     );
   });
+
+  it('a turn stopped mid-grounding commits no evidence row and paints no error', async () => {
+    let resolveGrounding: ((res: GroundedTurnResult) => void) | null = null;
+    const runMock = vi.fn().mockImplementation(
+      () =>
+        new Promise<GroundedTurnResult>((resolve) => {
+          resolveGrounding = resolve;
+        })
+    );
+    setGroundedTurnTestHooks({ runGroundedTurn: runMock });
+
+    render(<AIChatDrawer open={true} onClose={() => {}} db={testDb} />);
+    const input = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
+    fireEvent.change(input, { target: { value: 'CYTP1002 là gì?' } });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+    await waitFor(() => expect(runMock).toHaveBeenCalledTimes(1));
+
+    // The grounded pipeline keeps awaiting after Stop; its result must be discarded.
+    fireEvent.click(screen.getByLabelText('Dừng sinh phản hồi'));
+    (resolveGrounding as ((res: GroundedTurnResult) => void) | null)?.({
+      kind: 'grounded_answer',
+      grounding: readyGrounding,
+    } as GroundedTurnResult);
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 150));
+
+    expect(screen.queryByTestId('inline-api-error-card')).toBeNull();
+    expect(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI')).not.toBeDisabled();
+    const thread = await testDb.chatThreads.toArray();
+    const rows = thread[0] ? await getMessagesByThreadId(thread[0].id, testDb) : [];
+    expect(rows.filter((row) => row.role === 'assistant')).toHaveLength(0);
+  });
 });

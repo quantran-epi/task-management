@@ -1287,6 +1287,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
     // Each send gets its own prelude token; the stale one may not touch the tab afterwards.
     const preludeToken = (preludeSeqRef.current += 1);
+    // Grounding awaits for a long time after the token gate; every write past this point must
+    // ask whether the send still owns the tab before it commits or paints anything.
+    const preludeIsStale = () => preludeTokenRef.current.get(turnTabId) !== preludeToken;
     try {
       // D-19/SC5: publish the staged label before any await. Config, key, compaction and
       // grounding can each take a visible moment; the composer must never look dead.
@@ -1424,6 +1427,12 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           },
           groundedDeps
         );
+
+        // A cancelled prompt must not persist clarify state, evidence rows or routed scope.
+        if (preludeIsStale()) {
+          patchGroundedLoading(null, turnTabId);
+          return;
+        }
 
         if (groundedResult.kind === 'clarify_intent') {
           setTransientClarifyMessage(turnTabId, {
@@ -1566,6 +1575,12 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           return;
         }
         } catch (groundedErr) {
+          // `hostSignal` mints a fresh controller after Stop deletes the old one, so its abort
+          // flag is useless here — the token is the only reliable cancel record.
+          if (preludeIsStale()) {
+            patchGroundedLoading(null, turnTabId);
+            return;
+          }
           if (hostSignal(turnTabId).aborted) {
             patchGroundedLoading(null, turnTabId);
             return;
@@ -1758,7 +1773,7 @@ Rules:
       // Cancelled (Stop) or superseded (a newer send) while staging: nothing may be committed,
       // and nothing may be patched either. Stop already released the staged UI; a newer send
       // owns the tab's status now, so writing it here would clear that turn's live indicators.
-      if (preludeTokenRef.current.get(turnTabId) !== preludeToken) return;
+      if (preludeIsStale()) return;
 
       debugTurnRef.current.set(
         turnTabId,
