@@ -440,4 +440,54 @@ describe('AIChatDrawer multi-tab isolation', () => {
     const userTurns = sent.filter((msg) => msg.role === 'user');
     expect(userTurns[userTurns.length - 1]!.content).toBe('Lượt thay thế');
   });
+
+  it('keeps the replacement turn visible when the cancelled prelude returns late', async () => {
+    await seedTabs();
+
+    let releaseFirstKey: () => void = () => {};
+    const firstKeyHeld = new Promise<void>((resolve) => {
+      releaseFirstKey = resolve;
+    });
+    let keyCalls = 0;
+    vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockImplementation(async () => {
+      keyCalls += 1;
+      if (keyCalls === 1) await firstKeyHeld;
+      return 'test-api-key';
+    });
+
+    let releaseStream: () => void = () => {};
+    const streamHeld = new Promise<void>((resolve) => {
+      releaseStream = resolve;
+    });
+    vi.spyOn(nineRouterClient, 'streamChatEvents').mockImplementation(((options: any) => {
+      streamPayloads.push(options.payload);
+      return (async function* () {
+        await streamHeld;
+        yield { type: 'text' as const, delta: 'Đang trả lời thay thế' };
+      })();
+    }) as never);
+
+    render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
+    await openTab(CHAT_ONE);
+    submit('Lượt bị hủy');
+    await waitFor(() => expect(screen.getByLabelText('Dừng sinh phản hồi')).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText('Dừng sinh phản hồi'));
+    await waitFor(() => expect(screen.getByLabelText('Gửi tin nhắn')).toBeInTheDocument());
+
+    submit('Lượt thay thế');
+    // The replacement reaches the transport while the cancelled prelude is still parked.
+    await waitFor(() => expect(streamPayloads).toHaveLength(1));
+
+    // Now let the stale prelude unwind. It must not touch the live turn's indicators.
+    releaseFirstKey();
+    await new Promise<void>((resolve) => setTimeout(resolve, 100));
+    expect(screen.getByLabelText('Dừng sinh phản hồi')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Lượt|Đang xử lý/ })).toBeInTheDocument();
+    expect(screen.queryByTestId('inline-api-error-card')).toBeNull();
+
+    releaseStream();
+    await waitFor(() =>
+      expect(screen.getByText('Đang trả lời thay thế')).toBeInTheDocument()
+    );
+  });
 });

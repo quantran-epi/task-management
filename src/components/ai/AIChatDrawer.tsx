@@ -1755,15 +1755,10 @@ Rules:
           : ''
       }`;
 
-      // Cancelled (Stop) or superseded (a newer send) while staging: nothing may be committed.
-      if (preludeTokenRef.current.get(turnTabId) !== preludeToken) {
-        tabRuntimes.patch(turnTabId, {
-          status: 'idle',
-          groundedLoadingStatus: null,
-          streamingStatus: null,
-        });
-        return;
-      }
+      // Cancelled (Stop) or superseded (a newer send) while staging: nothing may be committed,
+      // and nothing may be patched either. Stop already released the staged UI; a newer send
+      // owns the tab's status now, so writing it here would clear that turn's live indicators.
+      if (preludeTokenRef.current.get(turnTabId) !== preludeToken) return;
 
       debugTurnRef.current.set(
         turnTabId,
