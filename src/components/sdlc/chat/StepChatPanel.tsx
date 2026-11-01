@@ -91,6 +91,8 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
     [threadId, db]
   );
 
+  const [preludePending, setPreludePending] = useState(false);
+
   const turn = useChatTurn({
     scopeKey,
     deps: {
@@ -130,6 +132,9 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
       setDraft('');
       setError(null);
       setToolEvents([]);
+      // D-19/SC5: paint the loading state before any await. Config, key and MCP discovery
+      // can take a visible moment; the composer must never look dead in that window.
+      setPreludePending(true);
 
       try {
         const history = (messages ?? [])
@@ -163,6 +168,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
           .slice(0, -1)
           .map((msg) => ({ role: msg.role, content: msg.content }));
 
+        setPreludePending(false);
         const outcome = await turn.start({
           threadId,
           scopeKey,
@@ -182,6 +188,8 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
         }
       } catch {
         // TURN_IN_PROGRESS or a composition failure: the widget's own status already shows it.
+      } finally {
+        setPreludePending(false);
       }
     },
     [threadId, messages, db, stepId, crId, stepGroundingContext, turn, scopeKey, toolbox, extractSolutionDraft]
@@ -244,7 +252,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
         }}
         messages={messages ?? []}
         turn={{
-          status: turn.status,
+          status: preludePending && turn.status === 'idle' ? 'preparing' : turn.status,
           streamingText: turn.streamingText,
           streamingStatusLabel: turn.streamingStatusLabel,
           pendingApproval: turn.pendingApproval,

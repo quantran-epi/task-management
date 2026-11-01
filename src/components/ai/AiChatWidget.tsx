@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Tag, Typography, theme } from 'antd';
 import { SyncOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import type { ChatMessage } from '../../types/models';
@@ -252,6 +252,25 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
 }) => {
   const { token } = theme.useToken();
   const isTurnActive = ACTIVE_STAGES.has(turn.status);
+  // D-03: derive compact from the space the host actually gives us, so narrow hosts
+  // (drawer at 320px, a squeezed step panel) collapse instead of overflowing. An explicit
+  // `compact` prop still wins — it lets a host state the answer without measuring.
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const [measuredNarrow, setMeasuredNarrow] = useState(false);
+  const resolvedCompact = compact ?? measuredNarrow;
+
+  useEffect(() => {
+    const node = hostRef.current;
+    if (!node || typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? 0;
+      // Below 420px the full control bar cannot fit without clipping (UI-SPEC §1).
+      setMeasuredNarrow(width > 0 && width < 420);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
   const stagedStage = stagedStageFor(turn.status);
   const showQuickPrompts = messages.length === 0 && !error && !isTurnActive;
   const mergedToolEvents = useMemo(() => mergeToolEvents(toolEvents ?? []), [toolEvents]);
@@ -261,8 +280,10 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
 
   return (
     <div
+      ref={hostRef}
       data-testid="ai-chat-widget"
       data-scope-key={scope.scopeKey}
+      data-compact={resolvedCompact ? 'true' : 'false'}
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -310,7 +331,7 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
 
       <ChatTabToolbox
         activeTabId={scope.scopeKey}
-        {...(compact !== undefined ? { compact } : {})}
+        compact={resolvedCompact}
         selectedModel={toolbox.selectedModel}
         availableModels={toolbox.availableModels}
         onModelChange={toolbox.onModelChange}

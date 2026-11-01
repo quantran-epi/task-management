@@ -184,6 +184,42 @@ describe('AiChatWidget lifecycle and host extension points (D-01..D-06, D-19, D-
     expect(screen.queryByRole('button', { name: 'Tóm tắt tiến độ' })).not.toBeInTheDocument();
   });
 
+  it('D-03: collapses the toolbox when the host gives it a narrow width', async () => {
+    // jsdom has no layout, so drive the observer directly with a 320px content box.
+    const observers: Array<(entries: Array<{ contentRect: { width: number } }>) => void> = [];
+    const Original = global.ResizeObserver;
+    global.ResizeObserver = class {
+      constructor(cb: (entries: Array<{ contentRect: { width: number } }>) => void) {
+        observers.push(cb);
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+
+    try {
+      render(<AiChatWidget {...makeProps()} />);
+      expect(screen.getByTestId('ai-chat-widget')).toHaveAttribute('data-compact', 'false');
+
+      fireEvent(window, new Event('resize'));
+      observers.forEach((cb) => cb([{ contentRect: { width: 320 } }]));
+
+      // The narrowed host now renders the collapsed control presentation.
+      await vi.waitFor(() => {
+        expect(screen.getByTestId('ai-chat-widget')).toHaveAttribute('data-compact', 'true');
+      });
+      expect(screen.getByTestId('tab-compact-more-btn')).toBeInTheDocument();
+    } finally {
+      global.ResizeObserver = Original;
+    }
+  });
+
+  it('D-03: an explicit compact prop wins over the measured width', () => {
+    render(<AiChatWidget {...makeProps({ compact: true })} />);
+    expect(screen.getByTestId('ai-chat-widget')).toHaveAttribute('data-compact', 'true');
+    expect(screen.getByTestId('tab-compact-more-btn')).toBeInTheDocument();
+  });
+
   it('forwards compact to the toolbox and routes clear-context to onClearThread', () => {
     const onClearThread = vi.fn();
     render(
@@ -313,7 +349,9 @@ describe('chatRepo artifactEvent persistence (D-22, T-25.3-43)', () => {
       db
     );
     const row = (await db.chatMessages.get(saved.id)) as ChatMessage;
-    expect(row.artifactEvent).toEqual(event());
+    // The repo stamps a stable eventId so a host can reopen that exact version (D-06).
+    expect(row.artifactEvent).toEqual({ ...event(), eventId: expect.any(String) });
+    expect(row.artifactEvent?.eventId).toBeTruthy();
   });
 
   it('stores one distinct row per artifact version', async () => {
@@ -321,6 +359,9 @@ describe('chatRepo artifactEvent persistence (D-22, T-25.3-43)', () => {
       { threadId, role: 'assistant', content: 'v1', artifactEvent: event({ version: 1 }) },
       db
     );
+    // createdAt has millisecond resolution; separate the writes so this asserts
+    // version ordering rather than a same-millisecond tie.
+    await new Promise((resolve) => setTimeout(resolve, 2));
     const v2 = await saveMessage(
       {
         threadId,
@@ -370,7 +411,7 @@ describe('chatRepo artifactEvent persistence (D-22, T-25.3-43)', () => {
     );
     const row = (await db.chatMessages.get(saved.id)) as ChatMessage;
     expect(Object.keys(row.artifactEvent ?? {}).sort()).toEqual(
-      ['ctaLabel', 'hash', 'kind', 'status', 'title', 'version']
+      ['ctaLabel', 'eventId', 'hash', 'kind', 'status', 'title', 'version']
     );
   });
 

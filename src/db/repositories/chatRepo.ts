@@ -116,6 +116,7 @@ export async function saveMessage(
       throw error;
     }
     artifactEvent = {
+      ...(input.artifactEvent.eventId ? { eventId: input.artifactEvent.eventId } : {}),
       kind,
       title: title.trim(),
       version,
@@ -177,7 +178,11 @@ export async function getMessagesByThreadId(
   threadId: string,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<ChatMessage[]> {
-  return db.chatMessages.where('threadId').equals(threadId).sortBy('createdAt');
+  const rows = await db.chatMessages.where('threadId').equals(threadId).sortBy('createdAt');
+  // Two messages can share a millisecond; fall back to the id so order is deterministic.
+  return rows.sort((a, b) =>
+    a.createdAt === b.createdAt ? a.id.localeCompare(b.id) : 0
+  );
 }
 
 export async function clearThreadContext(
