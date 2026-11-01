@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Button, Select, Space, Typography, Progress, Tag, theme } from 'antd';
+import { Button, Select, Typography, Progress, Tag, theme } from 'antd';
 import {
   PlusOutlined,
   FileTextOutlined,
@@ -7,20 +7,22 @@ import {
   DeploymentUnitOutlined,
   SafetyCertificateOutlined,
   AuditOutlined,
+  CheckCircleFilled,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { listCrs, type SdlcCrRecord } from '../../services/wizard/sdlcCrManager';
-import type { SdlcStepId } from '../../services/wizard/workflowSchemas';
+import type { SdlcStepId, SdlcWorkflowState } from '../../services/wizard/workflowSchemas';
 import { CrCreateModal } from './common/CrCreateModal';
 
 export interface SdlcSidebarProps {
   projectId: string;
   selectedStep: SdlcStepId;
   onSelectStep: (step: SdlcStepId) => void;
-  activeCrId?: string;
-  onSelectCr?: (crId: string) => void;
-  db?: TaskPlannerDatabase;
+  activeCrId?: string | undefined;
+  onSelectCr?: ((crId: string) => void) | undefined;
+  workflowState?: SdlcWorkflowState | undefined;
+  db?: TaskPlannerDatabase | undefined;
 }
 
 export const SDLC_STEPS_CONFIG: Array<{
@@ -43,6 +45,7 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
   onSelectStep,
   activeCrId,
   onSelectCr,
+  workflowState,
   db = defaultDb,
 }) => {
   const { token } = theme.useToken();
@@ -51,8 +54,31 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
   const crs = useLiveQuery(() => listCrs(projectId, db), [projectId, db]) ?? [];
   const currentCr = crs.find((c) => (activeCrId ? c.id === activeCrId : c.status === 'active')) ?? crs[0];
 
+  const isStepCompleted = (stepId: SdlcStepId): boolean => {
+    if (!workflowState) return false;
+    switch (stepId) {
+      case 'INTAKE':
+        return Boolean(workflowState.artifacts?.pl01 && workflowState.artifacts?.pl02);
+      case 'SOLUTION':
+        return Boolean(workflowState.artifacts?.solution);
+      case 'CODE_GUIDE':
+        return Boolean(workflowState.artifacts?.solution);
+      case 'CHANGE_PACK':
+        return Boolean(workflowState.artifacts?.changePack);
+      case 'TECH_DOCS':
+        return Boolean(workflowState.artifacts?.pl03b && workflowState.artifacts?.pl07);
+      case 'CAB':
+        return Boolean(workflowState.artifacts?.cab);
+      default:
+        return false;
+    }
+  };
+
+  const completedCount = SDLC_STEPS_CONFIG.filter((s) => isStepCompleted(s.id)).length;
   const currentStepIndex = SDLC_STEPS_CONFIG.findIndex((s) => s.id === selectedStep);
-  const progressPercent = Math.round(((currentStepIndex + 1) / SDLC_STEPS_CONFIG.length) * 100);
+  const progressPercent = Math.round(
+    Math.max((completedCount / SDLC_STEPS_CONFIG.length) * 100, ((currentStepIndex + 1) / SDLC_STEPS_CONFIG.length) * 100)
+  );
 
   const handleCrCreated = (newCr: SdlcCrRecord) => {
     onSelectCr?.(newCr.id);
@@ -95,7 +121,9 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
           <Select
             style={{ width: '100%' }}
             value={currentCr?.id}
-            onChange={(val) => onSelectCr?.(val)}
+            onChange={(val) => {
+              if (val) onSelectCr?.(val);
+            }}
             data-testid="sidebar-cr-select"
             options={crs.map((c) => ({
               value: c.id,
@@ -156,13 +184,17 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
             >
               <div
                 style={{
-                  color: isSelected ? token.colorPrimary : token.colorTextSecondary,
+                  color: isStepCompleted(step.id)
+                    ? '#52c41a'
+                    : isSelected
+                      ? token.colorPrimary
+                      : token.colorTextSecondary,
                   fontSize: 16,
                   display: 'flex',
                   alignItems: 'center',
                 }}
               >
-                {step.icon}
+                {isStepCompleted(step.id) ? <CheckCircleFilled /> : step.icon}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div
@@ -189,6 +221,11 @@ export const SdlcSidebar: React.FC<SdlcSidebarProps> = ({
                   {step.description}
                 </div>
               </div>
+              {isStepCompleted(step.id) && (
+                <Tag color="success" style={{ margin: 0, fontSize: 10, padding: '0 4px', lineHeight: '18px' }}>
+                  Xong
+                </Tag>
+              )}
             </div>
           );
         })}

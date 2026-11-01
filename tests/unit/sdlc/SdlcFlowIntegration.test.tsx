@@ -1,4 +1,3 @@
-import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import 'fake-indexeddb/auto';
@@ -6,7 +5,6 @@ import { TaskPlannerDatabase } from '../../../src/db';
 import { ProjectSdlcView } from '../../../src/views/ProjectSdlcView';
 import { SdlcStaleBanner } from '../../../src/components/sdlc/common/SdlcStaleBanner';
 import { CrCreateModal } from '../../../src/components/sdlc/common/CrCreateModal';
-import { listCrs, createNewCr } from '../../../src/services/wizard/sdlcCrManager';
 import { createSdlcWorkflowCoordinator } from '../../../src/services/wizard/workflowCoordinator';
 import { detectWorkflowStaleness } from '../../../src/services/wizard/stalenessDetector';
 import type { SdlcWorkflowState } from '../../../src/services/wizard/workflowSchemas';
@@ -225,7 +223,7 @@ describe('SDLC Flow Integration & Components', () => {
 
       // Step 4: Commit Change Pack & Drift
       const mockDriftResult = {
-        schemaVersion: 1,
+        schemaVersion: 1 as const,
         identity: {
           projectId,
           threadId,

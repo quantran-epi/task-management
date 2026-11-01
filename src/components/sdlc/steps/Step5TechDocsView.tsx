@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Typography, Alert, Button, Space, Tabs, Spin, Tag, Card, theme, message } from 'antd';
 import {
-  FileWordOutlined,
   DownloadOutlined,
   CheckCircleOutlined,
   SyncOutlined,
@@ -11,17 +10,17 @@ import {
 import { db as defaultDb, type TaskPlannerDatabase } from '../../../db';
 import { renderSafeMarkdown } from '../../../utils/markdown';
 import { exportHubArtifact } from '../../../services/wizard/hubExport';
-import { generateHubTechDocs, toPl03bDocxPayload, toPl07DocxPayload } from '../../../services/wizard/hubTechDocs';
+import { toPl03bDocxPayload } from '../../../services/wizard/hubTechDocs';
 import { PL07_BASELINE } from '../../../services/export/pl07Baseline';
-import type { SdlcArtifactRef, SdlcWorkflowState } from '../../../services/wizard/workflowSchemas';
+import type { SdlcWorkflowState } from '../../../services/wizard/workflowSchemas';
 
 export interface Step5TechDocsViewProps {
   projectId: string;
   crId: string;
-  workflowState?: SdlcWorkflowState;
-  onCommitTechDoc: (kind: 'PL03B' | 'PL07', markdown: string, noteId?: string) => Promise<void>;
-  onProceedToStep6?: () => void;
-  db?: TaskPlannerDatabase;
+  workflowState?: SdlcWorkflowState | undefined;
+  onCommitTechDoc: (kind: 'PL03B' | 'PL07', markdown: string, noteId?: string | undefined) => Promise<void>;
+  onProceedToStep6?: (() => void) | undefined;
+  db?: TaskPlannerDatabase | undefined;
 }
 
 export const Step5TechDocsView: React.FC<Step5TechDocsViewProps> = ({
@@ -97,32 +96,6 @@ export const Step5TechDocsView: React.FC<Step5TechDocsViewProps> = ({
         }))
       );
 
-      const pl07Docx = toPl07DocxPayload(
-        {
-          schemaVersion: 1,
-          kind: 'PL07',
-          marks: [
-            { itemId: 'I.1', status: 'PASS', note: 'Kiểm soát an toàn đầu vào', evidenceIds: ['ev-verified-pack'] },
-            { itemId: 'II.1', status: 'PASS', note: 'Xác thực phân quyền', evidenceIds: ['ev-verified-pack'] },
-          ],
-          sectionVI: [
-            {
-              title: 'Review An toàn',
-              findings: ['Đã kiểm soát đầu vào an toàn trên server.'],
-              evidenceIds: ['ev-verified-pack'],
-            },
-          ],
-          unknowns: [],
-          citationIds: [],
-        },
-        {
-          metadata: workflowState.metadata,
-          inputRevision: (pl07?.version ?? 0) + 1,
-          draftRevision: (pl07?.version ?? 0) + 1,
-          reconciliation: driftResult,
-        }
-      );
-
       const pl07Md = `# PL07 — Checklist An toàn Thông tin & Review Code\n\n**Mã CR:** ${workflowState.metadata.cr}\n**Tính năng:** ${workflowState.metadata.featureName}\n\n## Kết quả Đánh giá Checklist:\n- Tổng số mục kiểm tra: ${pl07Marks.length}\n- Trạng thái: Đạt chuẩn yêu cầu an toàn theo checklist ngân hàng.\n`;
 
       // Commit both PL03B and PL07 to coordinator
@@ -138,12 +111,16 @@ export const Step5TechDocsView: React.FC<Step5TechDocsViewProps> = ({
   };
 
   const handleExportDocx = async (kind: 'PL03B' | 'PL07') => {
+    if (!workflowState) return;
     try {
       setExportingKind(kind);
       await exportHubArtifact({
         db,
         projectId,
         threadId: `sdlc:${projectId}:${crId}:TECH_DOCS`,
+        sessionId: workflowState.sessionId,
+        metadata: workflowState.metadata,
+        state: workflowState,
         kind,
       });
       message.success(`Đã xuất file ${kind}.docx thành công`);

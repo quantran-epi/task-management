@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Typography, Alert, Button, Space, message, Spin, theme } from 'antd';
+import { Typography, Alert, Button, message, Spin, theme } from 'antd';
 import { ArrowRightOutlined, UploadOutlined, SyncOutlined } from '@ant-design/icons';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../../db';
 import { ChangePackDropzone } from '../../ai/wizard/ChangePackDropzone';
@@ -23,15 +23,15 @@ export interface Step4ChangePackViewProps {
   projectId: string;
   crId: string;
   crCode: string;
-  solutionArtifact?: SdlcArtifactRef;
-  initialDriftResult?: ReconciliationResult;
+  solutionArtifact?: SdlcArtifactRef | undefined;
+  initialDriftResult?: ReconciliationResult | undefined;
   onCommitChangePackAndDrift: (
     packHash: string,
     packTitle: string,
     driftResult: ReconciliationResult
   ) => Promise<void>;
-  onProceedToStep5?: () => void;
-  db?: TaskPlannerDatabase;
+  onProceedToStep5?: (() => void) | undefined;
+  db?: TaskPlannerDatabase | undefined;
 }
 
 export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({

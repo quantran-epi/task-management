@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, Button, Space, Typography } from 'antd';
+import { Alert, Button, Typography } from 'antd';
 import { WarningOutlined, ArrowRightOutlined } from '@ant-design/icons';
 import type { SdlcStepId } from '../../../services/wizard/workflowSchemas';
 import { detectWorkflowStaleness } from '../../../services/wizard/stalenessDetector';
@@ -7,7 +7,7 @@ import type { SdlcWorkflowState } from '../../../services/wizard/workflowSchemas
 
 export interface SdlcStaleBannerProps {
   currentStep: SdlcStepId;
-  workflowState?: SdlcWorkflowState;
+  workflowState?: SdlcWorkflowState | undefined;
   onNavigateToStep: (step: SdlcStepId) => void;
 }
 

@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { Typography, Alert, Button, Space, Card, Tag, Table, Spin, theme, message } from 'antd';
+import { Typography, Button, Space, Card, Tag, theme, message } from 'antd';
 import {
   FileWordOutlined,
-  DownloadOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
   RobotOutlined,
@@ -21,9 +20,9 @@ import type { SdlcWorkflowState } from '../../../services/wizard/workflowSchemas
 export interface Step6CabViewProps {
   projectId: string;
   crId: string;
-  workflowState?: SdlcWorkflowState;
-  onCommitCab: (markdown: string, noteId?: string) => Promise<void>;
-  db?: TaskPlannerDatabase;
+  workflowState?: SdlcWorkflowState | undefined;
+  onCommitCab: (markdown: string, noteId?: string | undefined) => Promise<void>;
+  db?: TaskPlannerDatabase | undefined;
 }
 
 export const Step6CabView: React.FC<Step6CabViewProps> = ({

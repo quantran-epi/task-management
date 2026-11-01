@@ -95,19 +95,19 @@ export const Step3CodeGuideView: React.FC<Step3CodeGuideViewProps> = ({
       >
         <Space direction="vertical" size={12} style={{ width: '100%' }}>
           <Checkbox
-            checked={checkedItems.diff}
+            checked={Boolean(checkedItems.diff)}
             onChange={(e) => handleCheckChange('diff', e.target.checked)}
           >
             Đã kiểm tra <code>git diff</code> — các thay đổi nằm trong phạm vi giải pháp đã duyệt
           </Checkbox>
           <Checkbox
-            checked={checkedItems.tests}
+            checked={Boolean(checkedItems.tests)}
             onChange={(e) => handleCheckChange('tests', e.target.checked)}
           >
             Đã chạy unit test / integration test kiểm tra regression
           </Checkbox>
           <Checkbox
-            checked={checkedItems.migration}
+            checked={Boolean(checkedItems.migration)}
             onChange={(e) => handleCheckChange('migration', e.target.checked)}
           >
             Đã chuẩn bị script migration DB và kịch bản rollback (nếu có thay đổi DB)

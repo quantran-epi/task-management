@@ -1,96 +1,126 @@
-import React from 'react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { AIChatDrawer } from '../../src/components/ai/AIChatDrawer';
 import { TaskPlannerDatabase } from '../../src/db';
 import { createChatTab, setActiveTab } from '../../src/db/repositories/chatTabRepo';
 import 'fake-indexeddb/auto';
 
+const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const PROJECT_ID = '11111111-1111-4111-8111-111111111111';
+const SCOPE = { type: 'project' as const, id: PROJECT_ID, title: 'Toolbox Project' };
+const SCOPE_KEY = `project:${PROJECT_ID}`;
+const CHAT_ONE = '💬 Cuộc trò chuyện #1';
+const CHAT_TWO = '💬 Cuộc trò chuyện #2';
+
 describe('ChatTabToolbox and Tab Isolation', () => {
   let db: TaskPlannerDatabase;
-  const PROJECT_ID = 'test-proj-toolbox-1';
-  const SCOPE = { type: 'project' as const, id: PROJECT_ID, title: 'Test Project Toolbox' };
-  const SCOPE_KEY = `project:${PROJECT_ID}`;
 
   beforeEach(async () => {
     db = new TaskPlannerDatabase(`TestToolboxDb_${Date.now()}`);
     await db.projects.add({
       id: PROJECT_ID,
-      name: 'Test Project Toolbox',
+      name: 'Toolbox Project',
       status: 'Open',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
   });
 
+  afterEach(async () => {
+    cleanup();
+    await db.delete();
+  });
+
+  const seedTabs = async (configA?: Record<string, unknown>, configB?: Record<string, unknown>) => {
+    const first = await createChatTab(
+      {
+        scopeType: 'project',
+        scopeKey: SCOPE_KEY,
+        entityId: PROJECT_ID,
+        title: CHAT_ONE,
+        ...(configA ? { config: configA as never } : {}),
+      },
+      db
+    );
+    const second = await createChatTab(
+      {
+        scopeType: 'project',
+        scopeKey: SCOPE_KEY,
+        entityId: PROJECT_ID,
+        title: CHAT_TWO,
+        ...(configB ? { config: configB as never } : {}),
+      },
+      db
+    );
+    await setActiveTab(SCOPE_KEY, first.id, db);
+    return { first, second };
+  };
+
+  const openTab = async (title: string) => {
+    const tab = await screen.findByRole('tab', { name: new RegExp(escape(title)) });
+    fireEvent.click(tab);
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: new RegExp(escape(title)) })).toHaveAttribute(
+        'aria-selected',
+        'true'
+      )
+    );
+  };
+
   it('renders ChatTabToolbox with tab-isolated controls', async () => {
-    const tab1 = await createChatTab({
-      scopeType: 'project',
-      scopeKey: SCOPE_KEY,
-      entityId: PROJECT_ID,
-      title: 'Tab One',
-      config: { analysisMode: false, autoApproveMutations: false, model: 'model-x' },
-    }, db);
-    await setActiveTab(SCOPE_KEY, tab1.id, db);
+    await seedTabs({ analysisMode: false, autoApproveMutations: false, mcpEnabled: true, model: 'model-x' });
 
     render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
 
-    // Check toolbox container exists
     const toolbox = await screen.findByTestId('chat-tab-toolbox');
     expect(toolbox).toBeInTheDocument();
 
-    // Check scope pill
-    expect(screen.getByText('Test Project Toolbox')).toBeInTheDocument();
+    expect(screen.getByText('Toolbox Project')).toBeInTheDocument();
 
-    // Check analysis mode button
     const analysisBtn = screen.getByRole('button', { name: /Phân tích/i });
     expect(analysisBtn).toBeInTheDocument();
 
-    // Check auto-approve button
     const autoApproveBtn = screen.getByRole('button', { name: /Tự duyệt/i });
     expect(autoApproveBtn).toBeInTheDocument();
+
+    const mcpBtn = screen.getByTestId('tab-mcp-btn');
+    expect(mcpBtn).toBeInTheDocument();
   });
 
-  it('toggles analysis mode and auto-approve independently per tab', async () => {
-    const tabA = await createChatTab({
-      scopeType: 'project',
-      scopeKey: SCOPE_KEY,
-      entityId: PROJECT_ID,
-      title: 'Tab A',
-      config: { analysisMode: false, autoApproveMutations: false },
-    }, db);
-
-    const tabB = await createChatTab({
-      scopeType: 'project',
-      scopeKey: SCOPE_KEY,
-      entityId: PROJECT_ID,
-      title: 'Tab B',
-      config: { analysisMode: true, autoApproveMutations: true },
-    }, db);
-
-    await setActiveTab(SCOPE_KEY, tabA.id, db);
+  it('toggles analysis mode, auto-approve, and mcp independently per tab in storage', async () => {
+    const { first, second } = await seedTabs(
+      { analysisMode: false, autoApproveMutations: false, mcpEnabled: true },
+      { analysisMode: true, autoApproveMutations: true, mcpEnabled: false }
+    );
 
     render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
 
     await screen.findByTestId('chat-tab-toolbox');
-    const tabElement = await screen.findByRole('tab', { name: /Tab A/ });
-    fireEvent.click(tabElement);
-    await waitFor(() =>
-      expect(screen.getByRole('tab', { name: /Tab A/ })).toHaveAttribute('aria-selected', 'true')
-    );
+    await openTab(CHAT_ONE);
 
-    // Tab A: click toggle auto-approve
-    const autoApproveBtn = screen.getByRole('button', { name: /Tự duyệt/i });
+    // Toggle auto-approve on active Tab 1
+    const autoApproveBtn = await screen.findByTestId('tab-auto-approve-btn');
     fireEvent.click(autoApproveBtn);
 
     await waitFor(async () => {
-      const refreshedA = await db.chatTabs.get(tabA.id);
+      const refreshedA = await db.chatTabs.get(first.id);
       expect(refreshedA?.config?.autoApproveMutations).toBe(true);
     });
 
-    // Verify Tab B still has its own config intact in db
-    const currentB = await db.chatTabs.get(tabB.id);
+    // Toggle mcp on active Tab 1
+    const mcpBtn = await screen.findByTestId('tab-mcp-btn');
+    fireEvent.click(mcpBtn);
+
+    await waitFor(async () => {
+      const refreshedA = await db.chatTabs.get(first.id);
+      expect(refreshedA?.config?.mcpEnabled).toBe(false);
+    });
+
+    // Verify Tab 2 configuration remains strictly isolated and unchanged
+    const currentB = await db.chatTabs.get(second.id);
     expect(currentB?.config?.autoApproveMutations).toBe(true);
     expect(currentB?.config?.analysisMode).toBe(true);
+    expect(currentB?.config?.mcpEnabled).toBe(false);
   });
 });

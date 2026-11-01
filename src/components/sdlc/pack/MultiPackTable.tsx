@@ -6,9 +6,9 @@ import dayjs from 'dayjs';
 
 export interface MultiPackTableProps {
   packs: ChangePackHistoryItem[];
-  activePackHash?: string;
+  activePackHash?: string | undefined;
   onSelectActive: (packHash: string) => void;
-  onDeletePack?: (packHash: string) => void;
+  onDeletePack?: ((packHash: string) => void) | undefined;
 }
 
 export const MultiPackTable: React.FC<MultiPackTableProps> = ({

@@ -12,8 +12,8 @@ export interface SdlcCrRecord {
   date: string;
   status: 'active' | 'completed' | 'archived';
   createdAt: string;
-  completedAt?: string;
-  inheritedContext?: boolean;
+  completedAt?: string | undefined;
+  inheritedContext?: boolean | undefined;
 }
 
 export interface ChangePackHistoryItem {
@@ -53,7 +53,7 @@ export async function listCrs(
     return [];
   }
   try {
-    const list = JSON.parse(row.value);
+    const list = JSON.parse(String(row.value));
     return Array.isArray(list) ? (list as SdlcCrRecord[]) : [];
   } catch {
     return [];
@@ -173,7 +173,7 @@ export async function getMultiPackState(
     return { packs: [] };
   }
   try {
-    const parsed = JSON.parse(row.value);
+    const parsed = JSON.parse(String(row.value));
     return {
       activePackHash: parsed.activePackHash,
       packs: Array.isArray(parsed.packs) ? parsed.packs : [],
