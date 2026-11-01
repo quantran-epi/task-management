@@ -5,6 +5,7 @@ import { buildWizardDocx } from '../../src/services/export/wizardDocx';
 import { runWizardStage, type WizardEvidence, type WizardModel, type WizardModelRequest } from '../../src/services/ai/wizardService';
 import {
   generateHubTechDocs,
+  generateHubTechDocDraft,
   toPl03bDocxPayload,
   toPl07DocxPayload,
   type HubTechDocsPayloadContext,
@@ -158,8 +159,19 @@ describe('toPl03bDocxPayload', () => {
 
     await expect(buildWizardDocx('PL03B', payload)).resolves.toBeInstanceOf(Blob);
     expect(payload.introduction.databases).toEqual(['TRANSFER']);
-    expect(payload.reconciliation).toEqual(reconciliation);
+    expect(payload.reconciliationEvidence.coverage).toEqual(reconciliation.coverage);
+    expect(payload.reconciliationEvidence.dbChangesRollback).toEqual(reconciliation.dbChangesRollback);
+    expect(payload.reconciliationEvidence.actualImplementation).toEqual(reconciliation.actualImplementation);
     expect(payload.metadata.version).toBe('2');
+  });
+
+  it('describes only the implemented system: no approved design and no drift in the payload', () => {
+    const payload = toPl03bDocxPayload(pl03Proposal, payloadContext);
+
+    expect(payload).not.toHaveProperty('reconciliation');
+    expect(payload.technical.overview).toBe('Đã triển khai API /transfer.');
+    expect(payload.technical.overview).not.toContain('Thiết kế đã duyệt');
+    expect(payload.introduction.purpose).toBe('Đã triển khai API /transfer.');
   });
 
   it('throws rather than inventing a payload from an invalid proposal', () => {
@@ -173,12 +185,38 @@ describe('toPl07DocxPayload', () => {
 
     await expect(buildWizardDocx('PL07', payload)).resolves.toBeInstanceOf(Blob);
     expect(payload.marks).toEqual([
-      { sectionId: 'I', itemNumber: '1', status: 'pass', evidenceIds: ['ev-1'], note: 'Kiểm tra server-side' },
+      { sectionId: 'I', itemNumber: '1', status: 'unknown', evidenceIds: ['ev-1'], note: 'Kiểm tra server-side' },
       { sectionId: 'II', itemNumber: '5', status: 'unknown', evidenceIds: [], note: '' },
     ]);
     expect(payload.findings).toEqual([
       { number: '1', text: 'Bổ sung validate', evidenceIds: ['ev-2'], file: '(chưa cung cấp)', hunk: '(chưa cung cấp)' },
     ]);
+  });
+
+  it('never assigns a verdict, even when every mark claims PASS with citations (D-14)', () => {
+    const payload = toPl07DocxPayload({
+      ...pl07Proposal,
+      marks: [
+        { itemId: 'I.1', status: 'PASS', note: '', evidenceIds: ['ev-1'] },
+        { itemId: 'II.5', status: 'FAIL', note: '', evidenceIds: ['ev-1'] },
+        { itemId: 'III.2', status: 'NOT_APPLICABLE', note: '', evidenceIds: [] },
+      ],
+    }, payloadContext);
+
+    expect(payload.marks.map((mark) => mark.status)).toEqual(['unknown', 'unknown', 'unknown']);
+    expect(payload.marks.filter((mark) => mark.status !== 'unknown')).toHaveLength(0);
+  });
+
+  it('returns unknown marks for a proposal whose marks are all UNKNOWN with empty evidenceIds', () => {
+    const payload = toPl07DocxPayload({
+      ...pl07Proposal,
+      marks: [
+        { itemId: 'I.2', status: 'UNKNOWN', note: '', evidenceIds: [] },
+        { itemId: 'IV.1', status: 'UNKNOWN', note: '', evidenceIds: [] },
+      ],
+    }, payloadContext);
+
+    expect(payload.marks.map((mark) => mark.status)).toEqual(['unknown', 'unknown']);
   });
 
   it('downgrades an evidence-less PASS to unknown instead of rendering it as a pass', () => {
@@ -218,6 +256,40 @@ describe('toPl07DocxPayload', () => {
 
     expect(payload.marks.map((mark) => `${mark.sectionId}.${mark.itemNumber}`)).toEqual(['IV.3']);
     await expect(buildWizardDocx('PL07', payload)).resolves.toBeInstanceOf(Blob);
+  });
+});
+
+describe('generateHubTechDocDraft', () => {
+  it('returns both documents as drafts and writes no Note (D-17)', async () => {
+    const solution = await seedSolution();
+    const before = await db.notes.count();
+
+    const draft = await generateHubTechDocDraft(baseInput(solution, { runStage: stubStage() }));
+
+    expect(await db.notes.count()).toBe(before);
+    await expect(buildWizardDocx('PL03B', draft.pl03b.payload)).resolves.toBeInstanceOf(Blob);
+    await expect(buildWizardDocx('PL07', draft.pl07.payload)).resolves.toBeInstanceOf(Blob);
+  });
+
+  it('emits PL03B markdown with no drift, no approved design, and no SOLUTION comparison', async () => {
+    const solution = await seedSolution();
+    const draft = await generateHubTechDocDraft(baseInput(solution, { runStage: stubStage() }));
+
+    expect(draft.pl03b.markdown).not.toMatch(/Drift/i);
+    expect(draft.pl03b.markdown).not.toMatch(/approvedDesign/i);
+    expect(draft.pl03b.markdown).not.toMatch(/THIẾT KẾ NHƯ ĐÃ DUYỆT/);
+    expect(draft.pl03b.markdown).not.toMatch(/THIẾT KẾ/);
+    expect(draft.pl03b.markdown).toContain('Đã triển khai API /transfer.');
+  });
+
+  it('emits PL07 markdown as baseline questions with no verdict word', async () => {
+    const solution = await seedSolution();
+    const draft = await generateHubTechDocDraft(baseInput(solution, { runStage: stubStage() }));
+
+    expect(draft.pl07.markdown).toContain('I.1.');
+    expect(draft.pl07.markdown).not.toMatch(/\bpass\b/i);
+    expect(draft.pl07.markdown).not.toMatch(/\bunknown\b/i);
+    expect(draft.pl07.markdown).not.toMatch(/\bnot_applicable\b/);
   });
 });
 
@@ -267,8 +339,8 @@ describe('generateHubTechDocs', () => {
     const first = await generateHubTechDocs(baseInput(solution, { runStage: stubStage() }));
     const second = await generateHubTechDocs(baseInput(solution, {
       runStage: stubStage({
-        pl03: { ...pl03Proposal, approvedDesign: ['Thiết kế đã duyệt: bản cập nhật.'] },
-        pl07: { ...pl07Proposal, marks: [{ itemId: 'I.1', status: 'FAIL', note: 'thiếu validate', evidenceIds: ['ev-1'] }] },
+        pl03: { ...pl03Proposal, actualImplementation: ['Đã triển khai API /transfer bản cập nhật.'] },
+        pl07: { ...pl07Proposal, sectionVI: [{ title: 'Review code', findings: ['Bổ sung validate bản cập nhật'], evidenceIds: ['ev-2'] }] },
       }),
     }));
 

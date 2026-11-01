@@ -52,30 +52,15 @@ const pl03bPayload: Pl03bDocxPayload = {
     integrations: [],
     notifications: [],
   },
-  reconciliation: {
-    schemaVersion: 1,
-    identity: {
-      projectId: PROJECT_ID,
-      threadId: THREAD_ID,
-      solutionNoteId: '55555555-5555-4555-8555-555555555555',
-      solutionVersion: 1,
-      solutionHash: '03'.repeat(32),
-      packHash: '04'.repeat(32),
-      cr: metadata.cr,
-      base: 'base-1',
-      head: 'head-2',
-    },
-    status: 'PARTIAL_COVERAGE',
-    approvedDesign: { currentSystem: 'Core banking', affectedScreens: [], affectedApis: [], affectedTables: [] },
+  reconciliationEvidence: {
     actualImplementation: { affectedFiles: [], affectedScreens: [], affectedApis: [], affectedTables: [] },
-    drift: [],
+    coverage: [{ path: 'src/transfer.ts', state: 'included', evidenceIds: [] }],
     dbChangesRollback: {
       affectedTables: ['TRANSFER'],
       changes: [],
       rollback: { status: 'unknown', evidenceIds: [] },
     },
     regressionMatrix: [],
-    coverage: [{ path: 'src/transfer.ts', state: 'included', evidenceIds: [] }],
   },
 };
 

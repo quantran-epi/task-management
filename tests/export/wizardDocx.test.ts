@@ -406,25 +406,11 @@ describe('wizard source fixtures', () => {
         integrations: [{ name: 'Card Gateway', method: 'POST', path: '/provision', description: 'Gọi cấp token' }],
         notifications: [{ code: 'NTF_TOKEN_OK', name: 'Cấp token thành công', channel: 'PUSH' }],
       },
-      reconciliation: {
-        schemaVersion: 1,
-        identity: {
-          projectId: 'project-1', threadId: 'thread-1', solutionNoteId: 'note-1', solutionVersion: 2,
-          solutionHash: 'a'.repeat(64), packHash: 'b'.repeat(64), cr: 'CR-PL03B-01', base: 'origin/develop', head: 'abc123',
-        },
-        status: 'PARTIAL_COVERAGE',
-        approvedDesign: {
-          currentSystem: 'Gateway gọi Core trực tiếp.', affectedScreens: ['Màn hình cấp token'],
-          affectedApis: ['POST /tokens'], affectedTables: ['TOKEN_TABLE'],
-        },
+      reconciliationEvidence: {
         actualImplementation: {
           affectedFiles: ['src/token.ts', 'assets/token.bin'], affectedScreens: [],
           affectedApis: ['POST /tokens'], affectedTables: ['TOKEN_TABLE'],
         },
-        drift: [{
-          requirementId: 'REQ-01', category: 'different', baselineRequirement: null,
-          evidence: { evidenceId: 'ev-1', path: 'src/token.ts', startLine: 10, endLine: 15, text: 'uses retry' },
-        }],
         dbChangesRollback: {
           affectedTables: ['TOKEN_TABLE'],
           changes: [{ path: 'sql/token.sql', evidenceIds: ['ev-sql'] }],
@@ -439,7 +425,7 @@ describe('wizard source fixtures', () => {
       },
     };
 
-    it('matches source furniture and preserves reconciliation caveats', async () => {
+    it('matches source furniture and preserves implementation evidence caveats', async () => {
       const fixture = await readJson<{
         sectionOrder: string[]; pageMargins: Record<string, number>; revisionTable: { present: boolean; columns: string[] };
         signature: { present: boolean }; headers: Array<{ text: string }>;
@@ -455,16 +441,17 @@ describe('wizard source fixtures', () => {
       }
       for (const column of fixture.revisionTable.columns) expect(text).toContain(column);
       for (const [name, value] of Object.entries(fixture.pageMargins)) expect(xml.document).toContain(`w:${name}="${value}"`);
-      expect(text).toContain('THIẾT KẾ NHƯ ĐÃ DUYỆT');
+      // D-14: the exported document never carries the approved design, the drift matrix, or a
+      // reconciliation-status line — that comparison stays inside the app (DriftMatrixView).
+      expect(text).not.toContain('THIẾT KẾ NHƯ ĐÃ DUYỆT');
+      expect(text).not.toContain('BẢNG DRIFT');
+      expect(text).not.toContain('Trạng thái đối soát');
       expect(text).toContain('THỰC TẾ TRIỂN KHAI');
-      expect(text).toContain('BẢNG DRIFT');
       expect(text).toContain('THAY ĐỔI DB VÀ ROLLBACK');
       expect(text).toContain('MA TRẬN REGRESSION TEST');
-      expect(text).toContain('PARTIAL_COVERAGE');
       expect(text).toContain('binary');
       expect(text).toContain('deferred');
       expect(text).toContain('Rollback: unknown');
-      expect(text).not.toContain('Không có drift');
       expect(text).toContain('API Gateway → Token Service: Khởi tạo token');
       expect(text).toContain('Source code: https://git.example/token-service');
       expect(text).not.toContain('CÁN BỘ REVIEW');
@@ -474,18 +461,17 @@ describe('wizard source fixtures', () => {
       expect(fixture.signature.present).toBe(false);
     });
 
-    it('omits absent source code and emits clean drift only with complete coverage', async () => {
+    it('omits absent source code and still renders complete coverage', async () => {
       const clean: Pl03bDocxPayload = {
         ...payload,
         technical: { ...payload.technical, services: [{ ...payload.technical.services[0]!, sourceCode: undefined }] },
-        reconciliation: {
-          ...payload.reconciliation,
-          status: 'NO_DRIFT_COMPLETE', drift: [],
+        reconciliationEvidence: {
+          ...payload.reconciliationEvidence,
           coverage: [{ path: 'src/token.ts', hunkId: 'h1', state: 'included', evidenceIds: ['ev-1'] }],
         },
       };
       const text = xmlText((await unpackBlob(await Packer.toBlob(buildPl03bDocument(clean)))).document);
-      expect(text).toContain('Không có drift');
+      expect(text).toContain('src/token.ts');
       expect(text).not.toContain('Source code:');
       await expect(buildWizardDocx('PL03B', { ...payload, approvedRevision: 2 }))
         .rejects.toThrow('WIZARD_DOCX_REVISION_STALE');
@@ -664,13 +650,9 @@ describe('wizard source fixtures', () => {
           metadata: { crCode: 'F15', featureName: 'Fixture', author: 'Dev', createdDate: '2026-10-29', version: '1.0' },
           introduction: { purpose: '', users: '', databases: [], k8sServices: [] },
           technical: { overview: '', techStack: '', flows: [], services: [], databases: [], integrations: [], notifications: [] },
-          reconciliation: {
-            schemaVersion: 1,
-            identity: { projectId: 'p', threadId: 't', solutionNoteId: 'n', solutionVersion: 1, solutionHash: 'a'.repeat(64), packHash: 'b'.repeat(64), cr: 'F15', base: 'a', head: 'b' },
-            status: 'PARTIAL_COVERAGE',
-            approvedDesign: { currentSystem: '', affectedScreens: [], affectedApis: [], affectedTables: [] },
+          reconciliationEvidence: {
             actualImplementation: { affectedFiles: [], affectedScreens: [], affectedApis: [], affectedTables: [] },
-            drift: [], dbChangesRollback: { affectedTables: [], changes: [], rollback: { status: 'unknown', evidenceIds: [] } },
+            dbChangesRollback: { affectedTables: [], changes: [], rollback: { status: 'unknown', evidenceIds: [] } },
             regressionMatrix: [], coverage: [{ path: 'optional.bin', state: 'binary', evidenceIds: [] }],
           },
         }],

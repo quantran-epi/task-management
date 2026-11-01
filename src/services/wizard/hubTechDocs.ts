@@ -1,6 +1,7 @@
 import type { TaskPlannerDatabase } from '../../db';
-import type { Pl03bDocxPayload } from '../export/pl03bDocx';
+import type { Pl03bDocxPayload, Pl03bReconciliationEvidence } from '../export/pl03bDocx';
 import type { Pl07DocxPayload } from '../export/pl07Docx';
+import { PL07_BASELINE } from '../export/pl07Baseline';
 import {
   runWizardStage,
   type WizardEvidence,
@@ -18,12 +19,7 @@ const MISSING = '(chưa cung cấp)';
 /** Sections the PL07 bank template ships. `pl07MarkSchema.sectionId` is the same five-value enum. */
 const PL07_SECTION_ITEM = /^(I|II|III|IV|V)\.(\d+)$/;
 
-const PL07_STATUS = {
-  PASS: 'pass',
-  FAIL: 'fail',
-  NOT_APPLICABLE: 'not_applicable',
-  UNKNOWN: 'unknown',
-} as const;
+
 
 export interface HubTechDocsInput {
   db: TaskPlannerDatabase;
@@ -50,6 +46,12 @@ export interface HubTechDocsResult {
   pl07: { markdown: string; payload: Pl07DocxPayload; noteId: string };
 }
 
+/** D-16/D-17: a reviewable draft. Nothing here has been persisted or approved. */
+export interface HubTechDocsDraft {
+  pl03b: { markdown: string; payload: Pl03bDocxPayload };
+  pl07: { markdown: string; payload: Pl07DocxPayload };
+}
+
 export interface HubTechDocsPayloadContext {
   metadata: SdlcWorkflowMetadata;
   inputRevision: number;
@@ -71,6 +73,9 @@ export function toPl03bDocxPayload(proposal: unknown, ctx: HubTechDocsPayloadCon
   const parsed = WizardPl03ProposalSchema.safeParse(proposal);
   if (!parsed.success) throw new Error('PL03B_PROPOSAL_INVALID');
   const proposalData = parsed.data;
+  // D-14: the document describes the implemented system only. The proposal's approved-design,
+  // drift and status fields are deliberately not read here — the comparison lives in DriftMatrixView.
+  const implementationLines = proposalData.actualImplementation;
   return {
     ...approvedEnvelope(ctx),
     kind: 'PL03B',
@@ -82,13 +87,13 @@ export function toPl03bDocxPayload(proposal: unknown, ctx: HubTechDocsPayloadCon
       version: String(ctx.draftRevision),
     },
     introduction: {
-      purpose: proposalData.approvedDesign[0] ?? MISSING,
+      purpose: implementationLines[0] ?? MISSING,
       users: MISSING,
       databases: [...ctx.reconciliation.dbChangesRollback.affectedTables],
       k8sServices: [],
     },
     technical: {
-      overview: proposalData.approvedDesign.join('\n'),
+      overview: implementationLines.join('\n'),
       techStack: MISSING,
       flows: [],
       services: [],
@@ -96,7 +101,17 @@ export function toPl03bDocxPayload(proposal: unknown, ctx: HubTechDocsPayloadCon
       integrations: [],
       notifications: [],
     },
-    reconciliation: ctx.reconciliation,
+    reconciliationEvidence: toPl03bReconciliationEvidence(ctx.reconciliation),
+  };
+}
+
+/** Narrow the full reconciliation result down to the implemented-system evidence the document may carry. */
+export function toPl03bReconciliationEvidence(reconciliation: ReconciliationResult): Pl03bReconciliationEvidence {
+  return {
+    actualImplementation: { ...reconciliation.actualImplementation },
+    coverage: reconciliation.coverage,
+    dbChangesRollback: reconciliation.dbChangesRollback,
+    regressionMatrix: reconciliation.regressionMatrix,
   };
 }
 
@@ -115,20 +130,19 @@ export function toPl07DocxPayload(proposal: unknown, ctx: HubTechDocsPayloadCont
 
   const sanitizedMarks = rawMarks.flatMap((entry): unknown[] => {
     if (!entry || typeof entry !== 'object') return [];
-    const mark = entry as { itemId?: unknown; status?: unknown; note?: unknown; evidenceIds?: unknown };
+    const mark = entry as { itemId?: unknown; note?: unknown; evidenceIds?: unknown };
     if (typeof mark.itemId !== 'string') return [];
     // `pl07MarkSchema.sectionId` is z.enum(['I','II','III','IV','V']), so an over-permissive
     // character class admits 'VI.1'/'VII.1' and the dispatcher then rejects the whole payload.
     // Exact allowlist: anything else is dropped.
     if (!PL07_SECTION_ITEM.test(mark.itemId)) return [];
     const evidenceIds = stringIds(mark.evidenceIds);
-    const declared = typeof mark.status === 'string' ? mark.status : 'UNKNOWN';
-    // Both schemas require evidence for a positive status; an evidence-less claim is downgraded to
-    // `unknown` rather than rendered as a pass (T-25.1.1-15).
-    const status = evidenceIds.length > 0 ? declared : 'UNKNOWN';
+    // D-14: the AI never answers the checklist it generates. Whatever verdict the model claims is
+    // discarded and the reviewer answers; only the item id, the model's note, and its citations
+    // survive so the reviewer has something to start from.
     return [{
       itemId: mark.itemId,
-      status,
+      status: 'UNKNOWN',
       note: typeof mark.note === 'string' ? mark.note : '',
       evidenceIds,
     }];
@@ -142,7 +156,7 @@ export function toPl07DocxPayload(proposal: unknown, ctx: HubTechDocsPayloadCont
     return {
       sectionId: match[1] as Pl07DocxPayload['marks'][number]['sectionId'],
       itemNumber: match[2] as string,
-      status: PL07_STATUS[mark.status],
+      status: 'unknown',
       evidenceIds: mark.evidenceIds,
       note: mark.note,
     };
@@ -182,31 +196,31 @@ export function toPl07DocxPayload(proposal: unknown, ctx: HubTechDocsPayloadCont
 }
 
 function pl03bMarkdown(payload: Pl03bDocxPayload): string {
+  // D-14: implementation statements and changed tables only — no drift status, no comparison.
   const bullets = [
     ...payload.technical.overview.split('\n').filter((line) => line.trim()).map((line) => `- ${line.trim()}`),
-    `- Drift: ${payload.reconciliation.status}`,
     `- Bảng thay đổi: ${payload.introduction.databases.join(', ') || MISSING}`,
   ];
   return `# PL03B v${payload.draftRevision} — ${payload.metadata.featureName}\n\n${bullets.join('\n')}\n`;
 }
 
+/**
+ * D-14: a blank reviewer checklist. Baseline question text only — no verdict word, because the
+ * AI must not answer the questions it is asking the reviewer to answer. Section-VI findings are
+ * carried as review prompts, never as conclusions.
+ */
 function pl07Markdown(payload: Pl07DocxPayload): string {
-  const bullets = [
-    ...payload.marks.map((mark) => `- ${mark.sectionId}.${mark.itemNumber}: ${mark.status}`),
-    `- Review code: ${payload.findings.length} mục`,
-  ];
-  return `# PL07 v${payload.draftRevision} — ${payload.metadata.applicationName}\n\n${bullets.join('\n')}\n`;
+  const questions = PL07_BASELINE.sections.flatMap((section) =>
+    section.items.map((item) => `- ${section.id}.${item.number}. ${item.text}`));
+  const findings = payload.findings.map((finding) => `- Cần review: ${finding.text}`);
+  return `# PL07 v${payload.draftRevision} — ${payload.metadata.applicationName}\n\n${[...questions, ...findings].join('\n')}\n`;
 }
 
 /**
- * Generates PL03B and PL07 from hub state alone and persists each as a Project-linked artifact
- * Note carrying its approved DOCX payload.
- *
- * The idempotency key is `${sessionId}:${kind}:${inputHash}` (content-addressed), so
- * `draftRevision` is bookkeeping only: the body hash decides replay vs. new version, which is why
- * a regeneration with changed inputs lands at a new version instead of ARTIFACT_IDEMPOTENCY_CONFLICT.
+ * Generates both documents as reviewable drafts (D-16/D-17): same stage runs and payload mapping
+ * as `generateHubTechDocs`, but writes no Note and performs no approval. The caller decides.
  */
-export async function generateHubTechDocs(input: HubTechDocsInput): Promise<HubTechDocsResult> {
+export async function generateHubTechDocDraft(input: HubTechDocsInput): Promise<HubTechDocsDraft> {
   const runStage = input.runStage ?? runWizardStage;
   // Resolve once: `WizardStageInput.isCurrent` is required (`exactOptionalPropertyTypes` is on).
   const isCurrent = input.isCurrent ?? (() => true);
@@ -253,8 +267,26 @@ export async function generateHubTechDocs(input: HubTechDocsInput): Promise<HubT
   };
   const pl03bPayload = toPl03bDocxPayload(pl03Proposal, ctx);
   const pl07Payload = toPl07DocxPayload(pl07Proposal, ctx);
-  const pl03bBody = pl03bMarkdown(pl03bPayload);
-  const pl07Body = pl07Markdown(pl07Payload);
+  return {
+    pl03b: { markdown: pl03bMarkdown(pl03bPayload), payload: pl03bPayload },
+    pl07: { markdown: pl07Markdown(pl07Payload), payload: pl07Payload },
+  };
+}
+
+/**
+ * Generates PL03B and PL07 from hub state alone and persists each as a Project-linked artifact
+ * Note carrying its approved DOCX payload.
+ *
+ * The idempotency key is `${sessionId}:${kind}:${inputHash}` (content-addressed), so
+ * `draftRevision` is bookkeeping only: the body hash decides replay vs. new version, which is why
+ * a regeneration with changed inputs lands at a new version instead of ARTIFACT_IDEMPOTENCY_CONFLICT.
+ */
+export async function generateHubTechDocs(input: HubTechDocsInput): Promise<HubTechDocsResult> {
+  const draft = await generateHubTechDocDraft(input);
+  const pl03bPayload = draft.pl03b.payload;
+  const pl07Payload = draft.pl07.payload;
+  const pl03bBody = draft.pl03b.markdown;
+  const pl07Body = draft.pl07.markdown;
 
   const approvedAt = new Date().toISOString();
   const sourceArtifacts = [{ id: input.solution.noteId, hash: input.solution.hash }];

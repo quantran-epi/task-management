@@ -46,11 +46,15 @@ const ActualImplementationSchema = z.strictObject({
   affectedApis: z.array(nonEmpty).max(500),
   affectedTables: z.array(nonEmpty).max(500),
 });
-const DbChangesRollbackSchema = z.strictObject({
+export const DbChangesRollbackSchema = z.strictObject({
   affectedTables: z.array(nonEmpty).max(500),
   changes: z.array(z.strictObject({ path: nonEmpty, evidenceIds: z.array(nonEmpty).max(512) })).max(512),
   rollback: z.strictObject({ status: z.enum(['verified', 'unknown']), evidenceIds: z.array(nonEmpty).max(512) }),
 });
+export type DbChangesRollback = z.infer<typeof DbChangesRollbackSchema>;
+
+export const RegressionMatrixRowSchema = z.strictObject({ scenario: nonEmpty, expected: nonEmpty });
+export type RegressionMatrixRow = z.infer<typeof RegressionMatrixRowSchema>;
 
 export const ReconciliationResultSchema = z.strictObject({
   schemaVersion: z.literal(1),
@@ -70,7 +74,7 @@ export const ReconciliationResultSchema = z.strictObject({
   actualImplementation: ActualImplementationSchema,
   drift: z.array(DriftTupleSchema).max(1_024),
   dbChangesRollback: DbChangesRollbackSchema,
-  regressionMatrix: z.array(z.strictObject({ scenario: nonEmpty, expected: nonEmpty })).max(500),
+  regressionMatrix: z.array(RegressionMatrixRowSchema).max(500),
   coverage: z.array(CoverageLedgerSchema).max(2_048),
 });
 export type ReconciliationResult = z.infer<typeof ReconciliationResultSchema>;

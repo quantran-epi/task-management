@@ -4,7 +4,11 @@ import { buildPl02Document, type Pl02DocxPayload } from './pl02Docx';
 import { buildPl03bDocument, type Pl03bDocxPayload } from './pl03bDocx';
 import { buildPl07Document, type Pl07DocxPayload } from './pl07Docx';
 import { buildCabDocument, type CabDocxPayload } from './cabDocx';
-import { ReconciliationResultSchema } from '../wizard/reconciliation';
+import {
+  CoverageLedgerSchema,
+  DbChangesRollbackSchema,
+  RegressionMatrixRowSchema,
+} from '../wizard/reconciliation';
 
 export type WizardDocxKind = 'PL02' | 'PL03B' | 'PL07' | 'CAB';
 
@@ -131,7 +135,19 @@ const pl03bPayloadSchema = z.strictObject({
     integrations: z.array(z.strictObject({ name: z.string(), method: z.string(), path: z.string(), description: z.string() })),
     notifications: z.array(z.strictObject({ code: z.string(), name: z.string(), channel: z.string() })),
   }),
-  reconciliation: ReconciliationResultSchema,
+  // D-14: no `reconciliation`/drift member — the exported document describes the implemented
+  // system only; the SOLUTION-vs-implementation comparison stays in the in-app DriftMatrixView.
+  reconciliationEvidence: z.strictObject({
+    actualImplementation: z.strictObject({
+      affectedFiles: z.array(z.string()),
+      affectedScreens: z.array(z.string()),
+      affectedApis: z.array(z.string()),
+      affectedTables: z.array(z.string()),
+    }),
+    coverage: z.array(CoverageLedgerSchema),
+    dbChangesRollback: DbChangesRollbackSchema,
+    regressionMatrix: z.array(RegressionMatrixRowSchema),
+  }),
 });
 
 const pl07MarkSchema = z.strictObject({

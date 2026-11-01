@@ -14,7 +14,11 @@ import {
   TextRun,
   WidthType,
 } from 'docx';
-import type { ReconciliationResult } from '../wizard/reconciliation';
+import type {
+  CoverageLedger,
+  DbChangesRollback,
+  RegressionMatrixRow,
+} from '../wizard/reconciliation';
 import {
   apiTable,
   dbColumnsTable,
@@ -27,6 +31,23 @@ import {
   type DbColumnRow,
   type ExecutionMatrixRow,
 } from './docxShared';
+
+/**
+ * D-14: PL03B documents only the actually-implemented system. There is deliberately no
+ * approved-design, drift, or reconciliation-status member — the SOLUTION-vs-implementation
+ * comparison lives in TaskMate's `DriftMatrixView`, never in the exported document.
+ */
+export interface Pl03bReconciliationEvidence {
+  actualImplementation: {
+    affectedFiles: string[];
+    affectedScreens: string[];
+    affectedApis: string[];
+    affectedTables: string[];
+  };
+  coverage: CoverageLedger[];
+  dbChangesRollback: DbChangesRollback;
+  regressionMatrix: RegressionMatrixRow[];
+}
 
 export interface Pl03bDocxPayload {
   schemaVersion: 1;
@@ -56,7 +77,7 @@ export interface Pl03bDocxPayload {
     integrations: Array<{ name: string; method: string; path: string; description: string }>;
     notifications: Array<{ code: string; name: string; channel: string }>;
   };
-  reconciliation: ReconciliationResult;
+  reconciliationEvidence: Pl03bReconciliationEvidence;
 }
 
 const HEADINGS = 'pl03b-headings';
@@ -94,40 +115,23 @@ function simpleTable(headers: readonly string[], rows: readonly (readonly string
   });
 }
 
-function reconciliationChildren(result: ReconciliationResult): Array<Paragraph | Table> {
-  const approved = result.approvedDesign;
-  const actual = result.actualImplementation;
-  const coverageRows = result.coverage.map((item) => [item.path, item.hunkId ?? '', item.state, item.evidenceIds.join(', ')]);
-  const driftRows = result.drift.map((item) => [
-    item.requirementId,
-    item.category,
-    item.evidence ? `${item.evidence.path}:${item.evidence.startLine}-${item.evidence.endLine}` : supplied(item.baselineRequirement),
-  ]);
-  const clean = result.status === 'NO_DRIFT_COMPLETE'
-    && result.drift.length === 0
-    && result.coverage.length > 0
-    && result.coverage.every((item) => item.state === 'included');
+function reconciliationChildren(evidence: Pl03bReconciliationEvidence): Array<Paragraph | Table> {
+  const actual = evidence.actualImplementation;
+  const coverageRows = evidence.coverage.map((item) => [item.path, item.hunkId ?? '', item.state, item.evidenceIds.join(', ')]);
   return [
-    heading('THIẾT KẾ NHƯ ĐÃ DUYỆT', 2),
-    docxParagraph(approved.currentSystem),
-    ...list('Màn hình ảnh hưởng', approved.affectedScreens),
-    ...list('API ảnh hưởng', approved.affectedApis),
-    ...list('Bảng ảnh hưởng', approved.affectedTables),
     heading('THỰC TẾ TRIỂN KHAI', 2),
     ...list('File thay đổi', actual.affectedFiles),
     ...list('Màn hình thực tế', actual.affectedScreens),
     ...list('API thực tế', actual.affectedApis),
     ...list('Bảng thực tế', actual.affectedTables),
-    docxParagraph(`Trạng thái đối soát: ${result.status}`, true),
+    docxParagraph('Bảng coverage của Change Pack', true),
     simpleTable(['Đường dẫn', 'Hunk', 'Coverage', 'Evidence'], coverageRows),
-    heading('BẢNG DRIFT', 2),
-    ...(clean ? [docxParagraph('Không có drift')] : [simpleTable(['Yêu cầu', 'Phân loại', 'Bằng chứng/Baseline'], driftRows)]),
     heading('THAY ĐỔI DB VÀ ROLLBACK', 2),
-    ...list('Bảng thay đổi', result.dbChangesRollback.affectedTables),
-    simpleTable(['Đường dẫn', 'Evidence'], result.dbChangesRollback.changes.map((change) => [change.path, change.evidenceIds.join(', ')])),
-    docxParagraph(`Rollback: ${result.dbChangesRollback.rollback.status}; evidence: ${result.dbChangesRollback.rollback.evidenceIds.join(', ') || '(không có)'}`),
+    ...list('Bảng thay đổi', evidence.dbChangesRollback.affectedTables),
+    simpleTable(['Đường dẫn', 'Evidence'], evidence.dbChangesRollback.changes.map((change) => [change.path, change.evidenceIds.join(', ')])),
+    docxParagraph(`Rollback: ${evidence.dbChangesRollback.rollback.status}; evidence: ${evidence.dbChangesRollback.rollback.evidenceIds.join(', ') || '(không có)'}`),
     heading('MA TRẬN REGRESSION TEST', 2),
-    simpleTable(['Kịch bản', 'Kết quả mong đợi'], result.regressionMatrix.map((row) => [row.scenario, row.expected])),
+    simpleTable(['Kịch bản', 'Kết quả mong đợi'], evidence.regressionMatrix.map((row) => [row.scenario, row.expected])),
   ];
 }
 
@@ -204,7 +208,7 @@ export function buildPl03bDocument(payload: Pl03bDocxPayload): Document {
       ['STT', 'MÃ THÔNG BÁO', 'TÊN THÔNG BÁO', 'KÊNH GỬI'],
       payload.technical.notifications.map((row, index) => [String(index + 1), row.code, row.name, row.channel]),
     ),
-    ...reconciliationChildren(payload.reconciliation),
+    ...reconciliationChildren(payload.reconciliationEvidence),
   );
 
   return new Document({
