@@ -147,8 +147,14 @@ function send(text: string) {
 }
 
 async function submitUntilLoopStarts(text: string, pending: PendingLoop[]) {
+  let sent = false;
   for (let attempt = 0; attempt < 20 && pending.length === 0; attempt += 1) {
-    send(text);
+    // Once the turn is staging, the composer swaps Send for Stop, so a retry is neither
+    // possible nor needed — wait for the loop instead of clicking again.
+    if (!sent && screen.queryByLabelText('Gửi tin nhắn')) {
+      send(text);
+      sent = true;
+    }
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   expect(pending).toHaveLength(1);

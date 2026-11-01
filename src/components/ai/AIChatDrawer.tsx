@@ -1151,6 +1151,16 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
    * One Drawer turn. Prompt composition, grounding, clarify routing and host
    * callbacks stay here; the turn state machine itself lives in the shared runtime.
    */
+  // D-19/SC5: the send prelude (config, key, compaction, grounding) runs before
+  // `runtime.start()`, so the runtime is still 'idle' while it happens. Track that window
+  // explicitly, keyed by tab, and surface it as a staged status the widget can paint.
+  const [preludeTabs, setPreludeTabs] = useState<Record<string, boolean>>({});
+  const markPrelude = useCallback((tabId: string, active: boolean) => {
+    setPreludeTabs((prev) =>
+      prev[tabId] === active ? prev : { ...prev, [tabId]: active }
+    );
+  }, []);
+
   const handleSendTurn = async (
     text: string,
     overrideScope?: ActiveScope,
@@ -1199,6 +1209,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
     const runtime = turnRegistryRef.current!.get(turnTabId, turnTab.threadId ?? activeThreadId ?? '');
     tabRuntimes.initialize(turnTabId, turnTab.threadId ?? activeThreadId ?? '');
+    markPrelude(turnTabId, true);
     tabRuntimes.patch(turnTabId, {
       error: null,
       pendingConfirmation: null,
@@ -1734,6 +1745,7 @@ Rules:
         })
       );
 
+      markPrelude(turnTabId, false);
       const outcome = await runtime.start({
         threadId,
         scopeKey,
@@ -1770,6 +1782,9 @@ Rules:
     } catch (err) {
       logAiChatError('Send message error', err);
       patchTurnError('request_failed', 'Không thể hoàn tất phản hồi AI. Vui lòng thử lại.', turnTabId);
+    } finally {
+      // The prelude window must never outlive the send, on any exit path (D-19).
+      markPrelude(turnTabId, false);
     }
   };
 
@@ -2215,7 +2230,10 @@ Rules:
           }}
           messages={messages}
           turn={{
-            status: activeTurnRuntime?.getStatus() ?? 'idle',
+            status:
+              preludeTabs[activeTabId] && (activeTurnRuntime?.getStatus() ?? 'idle') === 'idle'
+                ? 'preparing'
+                : activeTurnRuntime?.getStatus() ?? 'idle',
             streamingText: activeRuntime?.streamingText ?? '',
             streamingStatusLabel: activeRuntime?.streamingStatus ?? null,
             pendingApproval: activeRuntime?.pendingConfirmation

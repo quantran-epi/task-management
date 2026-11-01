@@ -624,7 +624,9 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
         <SdlcSidebar
           projectId={projectId}
           selectedStep={selectedStep}
-          onSelectStep={setSelectedStep}
+          // Sidebar navigation goes through the same path as every other step change, so a
+          // pinned historical version is cleared and currentStep is persisted (D-06, D-23).
+          onSelectStep={handleNavigateToStep}
           activeCrId={activeCrId}
           onSelectCr={selectCr}
           workflowState={workflowState}
