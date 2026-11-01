@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 ## Current Position
 
 Phase: 25.1.2 (fix-sdlc-hub-user-flow-end-to-end) — IN PROGRESS
-Plan: 1 of 4 — Plan 25.1.2-01 completed
-Status: Plan 25.1.2-01 completed: decoupled SDLC from AIChatDrawer and established sdlcCrManager data layer
-Last activity: 2026-11-01 -- Plan 25.1.2-01 completed
-Stopped at: Completed 25.1.2-01-PLAN.md
+Plan: 2 of 4 — Plan 25.1.2-02 completed
+Status: Plan 25.1.2-02 completed: built ProjectSdlcView 2-column IDE layout, Step 1 Intake view, and Step 2 Solution document editor
+Last activity: 2026-11-01 -- Plan 25.1.2-02 completed
+Stopped at: Completed 25.1.2-02-PLAN.md
 
 Progress: [██████████] 100%
 

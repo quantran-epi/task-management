@@ -335,7 +335,7 @@ Plans:
 
 **Wave 2** *(depends on 25.1.2-01)*
 
-- [ ] 25.1.2-02-PLAN.md — Dedicated ProjectSdlcView with 2-column IDE layout, StepChatPanel, Step 1 Intake view, and Step 2 Solution two-way Document Editor
+- [x] 25.1.2-02-PLAN.md — Dedicated ProjectSdlcView with 2-column IDE layout, StepChatPanel, Step 1 Intake view, and Step 2 Solution two-way Document Editor
 
 **Wave 3** *(depends on 25.1.2-02)*
 
