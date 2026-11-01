@@ -331,7 +331,7 @@ Plans:
 
 **Wave 1**
 
-- [ ] 25.1.2-01-PLAN.md — Decouple SDLC from AIChatDrawer, establish Multi-CR management and isolated step thread data layer
+- [x] 25.1.2-01-PLAN.md — Decouple SDLC from AIChatDrawer, establish Multi-CR management and isolated step thread data layer
 
 **Wave 2** *(depends on 25.1.2-01)*
 

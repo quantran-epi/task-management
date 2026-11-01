@@ -25,11 +25,11 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 
 ## Current Position
 
-Phase: 25.1.2 (fix-sdlc-hub-user-flow-end-to-end) — READY TO EXECUTE
-Plan: 0 of 4 — Plans 25.1.2-01 to 25.1.2-04 generated and validated
-Status: Canonical SDLC flow specified into 4 executable plans: decouple drawer, build dedicated 2-column view, implement steps 3-6 with multi-pack & bank exports, and wire actionable staleness & full flow integration
-Last activity: 2026-11-01 -- Phase 25.1.2 planning completed
-Stopped at: Phase 25.1.2 plans ready for execution
+Phase: 25.1.2 (fix-sdlc-hub-user-flow-end-to-end) — IN PROGRESS
+Plan: 1 of 4 — Plan 25.1.2-01 completed
+Status: Plan 25.1.2-01 completed: decoupled SDLC from AIChatDrawer and established sdlcCrManager data layer
+Last activity: 2026-11-01 -- Plan 25.1.2-01 completed
+Stopped at: Completed 25.1.2-01-PLAN.md
 
 Progress: [██████████] 100%
 
