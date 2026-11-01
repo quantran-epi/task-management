@@ -385,4 +385,4 @@ Plans:
 
 **Wave 6 (Gap Closure)** *(depends on 25.2-05)*
 
-- [ ] 25.2-06-PLAN.md — Immediate loading feedback, concise chat summary format, and message collapsing in StepChatPanel
+- [x] 25.2-06-PLAN.md — Immediate loading feedback, concise chat summary format, and message collapsing in StepChatPanel
