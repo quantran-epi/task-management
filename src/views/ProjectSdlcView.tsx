@@ -6,6 +6,8 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import { PageHeader } from '../components/common/PageHeader';
 import { SdlcSidebar } from '../components/sdlc/SdlcSidebar';
 import { SdlcWorkspace } from '../components/sdlc/SdlcWorkspace';
+import { Step1IntakeView } from '../components/sdlc/steps/Step1IntakeView';
+import { Step2SolutionView } from '../components/sdlc/steps/Step2SolutionView';
 import { listCrs, getActiveCr } from '../services/wizard/sdlcCrManager';
 import { createSdlcWorkflowCoordinator } from '../services/wizard/workflowCoordinator';
 import type { SdlcStepId, SdlcWorkflowState } from '../services/wizard/workflowSchemas';
@@ -59,6 +61,54 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
     });
   }, [projectId, activeCrId, selectedStep]);
 
+  // Handlers for Step 1 & Step 2
+  const handleStartIntake = async (
+    metadata: Parameters<typeof coordinator.startOrUpdateIntake>[0],
+    pl01: string,
+    pl02: string
+  ) => {
+    await coordinator.startOrUpdateIntake(metadata, pl01, pl02);
+    setSelectedStep('SOLUTION');
+  };
+
+  const handleCommitSolution = async (markdown: string, noteId: string) => {
+    await coordinator.commitSolution(markdown, noteId);
+  };
+
+  const renderStepNode = () => {
+    switch (selectedStep) {
+      case 'INTAKE':
+        return (
+          <Step1IntakeView
+            projectId={projectId}
+            initialMetadata={workflowState?.metadata}
+            initialPl01={workflowState?.artifacts.pl01?.content}
+            initialPl02={workflowState?.artifacts.pl02?.content}
+            onStartIntake={handleStartIntake}
+            db={db}
+          />
+        );
+      case 'SOLUTION':
+        return (
+          <Step2SolutionView
+            projectId={projectId}
+            crId={activeCrId}
+            solutionArtifact={workflowState?.artifacts.solution}
+            initialContent={workflowState?.artifacts.solution?.content}
+            onCommitSolution={handleCommitSolution}
+            onProceedToStep3={() => setSelectedStep('CODE_GUIDE')}
+            db={db}
+          />
+        );
+      default:
+        return (
+          <div style={{ color: token.colorTextSecondary, padding: 32, textAlign: 'center' }}>
+            Nội dung hiển thị của bước {selectedStep}
+          </div>
+        );
+    }
+  };
+
   return (
     <div
       style={{
@@ -95,6 +145,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
           crId={activeCrId}
           selectedStep={selectedStep}
           workflowState={workflowState}
+          stepViewNode={renderStepNode()}
           db={db}
         />
       </div>
