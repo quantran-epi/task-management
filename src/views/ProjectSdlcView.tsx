@@ -10,6 +10,8 @@ import { Step1IntakeView } from '../components/sdlc/steps/Step1IntakeView';
 import { Step2SolutionView } from '../components/sdlc/steps/Step2SolutionView';
 import { Step3CodeGuideView } from '../components/sdlc/steps/Step3CodeGuideView';
 import { Step4ChangePackView } from '../components/sdlc/steps/Step4ChangePackView';
+import { Step5TechDocsView } from '../components/sdlc/steps/Step5TechDocsView';
+import { Step6CabView } from '../components/sdlc/steps/Step6CabView';
 import { listCrs, getActiveCr } from '../services/wizard/sdlcCrManager';
 import { createSdlcWorkflowCoordinator } from '../services/wizard/workflowCoordinator';
 import type { SdlcStepId, SdlcWorkflowState } from '../services/wizard/workflowSchemas';
@@ -121,6 +123,31 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
               await coordinator.commitChangePackAndDrift(packHash, packTitle, driftResult);
             }}
             onProceedToStep5={() => setSelectedStep('TECH_DOCS')}
+            db={db}
+          />
+        );
+      case 'TECH_DOCS':
+        return (
+          <Step5TechDocsView
+            projectId={projectId}
+            crId={activeCrId}
+            workflowState={workflowState}
+            onCommitTechDoc={async (kind, markdown, noteId) => {
+              await coordinator.commitTechDoc(kind, markdown, noteId);
+            }}
+            onProceedToStep6={() => setSelectedStep('CAB')}
+            db={db}
+          />
+        );
+      case 'CAB':
+        return (
+          <Step6CabView
+            projectId={projectId}
+            crId={activeCrId}
+            workflowState={workflowState}
+            onCommitCab={async (markdown, noteId) => {
+              await coordinator.commitCab(markdown, noteId);
+            }}
             db={db}
           />
         );

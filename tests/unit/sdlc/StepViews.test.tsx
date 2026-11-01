@@ -7,6 +7,8 @@ import { Step1IntakeView } from '../../../src/components/sdlc/steps/Step1IntakeV
 import { Step2SolutionView } from '../../../src/components/sdlc/steps/Step2SolutionView';
 import { Step3CodeGuideView } from '../../../src/components/sdlc/steps/Step3CodeGuideView';
 import { Step4ChangePackView } from '../../../src/components/sdlc/steps/Step4ChangePackView';
+import { Step5TechDocsView } from '../../../src/components/sdlc/steps/Step5TechDocsView';
+import { Step6CabView } from '../../../src/components/sdlc/steps/Step6CabView';
 
 describe('Step 1 Intake & Step 2 Solution Views', () => {
   let db: TaskPlannerDatabase;
@@ -158,5 +160,45 @@ describe('Step 1 Intake & Step 2 Solution Views', () => {
       expect(screen.getByText(/Tải lên bản đóng gói mới/i)).toBeInTheDocument();
     });
   });
+
+  describe('Step5TechDocsView', () => {
+    it('renders PL03B and PL07 review tabs and AI generation button', () => {
+      const handleCommitTechDoc = vi.fn().mockResolvedValue(undefined);
+
+      render(
+        <Step5TechDocsView
+          projectId={projectId}
+          crId="cr-001"
+          onCommitTechDoc={handleCommitTechDoc}
+          db={db}
+        />
+      );
+
+      expect(screen.getByText(/PL03B — Thiết kế & Triển khai/i)).toBeInTheDocument();
+      expect(screen.getByText(/PL07 — Checklist An toàn Review/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Tạo PL03B & PL07 bằng AI/i })).toBeInTheDocument();
+    });
+  });
+
+  describe('Step6CabView', () => {
+    it('checks prerequisites, shows CAB AI generate button, and export options', () => {
+      const handleCommitCab = vi.fn().mockResolvedValue(undefined);
+
+      render(
+        <Step6CabView
+          projectId={projectId}
+          crId="cr-001"
+          onCommitCab={handleCommitCab}
+          db={db}
+        />
+      );
+
+      expect(screen.getByText(/Kiểm tra điều kiện tiên quyết tạo CAB/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Tạo Tờ trình CAB bằng AI/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Tải PL02.docx/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Tải toàn bộ bộ hồ sơ \(\.zip\)/i })).toBeInTheDocument();
+    });
+  });
 });
+
 

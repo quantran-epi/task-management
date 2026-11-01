@@ -34,7 +34,7 @@ function computeCrc32(data: Uint8Array): number {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
-interface ZipEntry {
+export interface ZipEntry {
   path: string;
   data: Uint8Array;
 }
@@ -44,7 +44,7 @@ interface ZipEntry {
  * Standard OpenXML consumers (Microsoft Office, Google Docs/Sheets, LibreOffice)
  * officially accept store-mode ZIP containers.
  */
-function createStoreZip(entries: ZipEntry[]): Blob {
+export function createStoreZip(entries: ZipEntry[]): Blob {
   const encoder = new TextEncoder();
   const fileRecords: Array<{
     pathBytes: Uint8Array;
