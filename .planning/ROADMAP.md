@@ -3,6 +3,7 @@
 ## Active Phase
 
 - Phase 25.1.1: Unify SDLC workflow into the hub, retire the wizard (COMPLETE — verified 2026-11-01)
+- Phase 25.1.2: Fix the SDLC hub user flow end to end (ACTIVE — discuss first)
 
 ## Milestone: Knowledge System Implementation
 
@@ -306,3 +307,22 @@ Plans: 11 plans in 11 sequential waves (every plan edits `AIChatDrawer.tsx` or i
 **Wave 11** *(depends on 25.1.1-10)*
 
 - [x] 25.1.1-11-PLAN.md — Regressions sweep: safety-gate list repaired, every Phase 25.1 guarantee re-run scoped, real-function proofs recorded, evidence written up
+
+### Phase 25.1.2: Fix the SDLC hub user flow end to end (INSERTED)
+
+**Goal:** Everyone who touches the hub — the user, the AI turn, and the coordinator — acts on one agreed flow. After a deep discussion locks the canonical end-user journey from CR intake to CAB, every step must be reachable, actionable, and reversible: no dead ends, no step whose only exit is a hidden path, no button whose first press does nothing, and no action that silently resets work the user believes is kept.
+
+**Why inserted:** Phase 25.1.1 moved every capability into the hub and deleted the wizard, but walking the flow with real data exposed defects that are structural rather than typos — a step with no forward action, a confirm dialog that swallowed the first click, a reset that did not reset, artifacts saved but unreadable. Patching these one at a time produced regressions; the flow itself has to be discussed and specified before more code moves.
+
+**Requirements:** TBD (locked by `/gsd-discuss-phase 25.1.2`)
+**Depends on:** Phase 25.1.1
+**Success Criteria** (what must be TRUE):
+
+1. The canonical flow is written down as an explicit state machine: for every step, what the user sees, what actions exist, what each action commits, and what state it leaves behind.
+2. Every step has at least one forward action that a user can find without leaving the hub, and step 3 (external coding) has an explicit completion that advances the flow.
+3. Every destructive or reset action states exactly what it destroys and what survives, and does exactly that — verified by a test that reloads and checks persistence.
+4. Every confirm dialog commits on the first activation; no interaction requires a second click to have an effect.
+5. Every artifact the flow produces can be read back inside the hub, not only written.
+6. A single Playwright walk-through drives intake → SOLUTION → code → change pack → PL03B/PL07 → CAB → export in one session with no manual DB seeding beyond the initial intake.
+
+Plans: TBD (`/gsd-plan-phase 25.1.2` after `/gsd-discuss-phase 25.1.2`)

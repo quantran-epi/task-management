@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: milestone
 status: verifying
-stopped_at: "Phase 25.1.1 verified passed 7/7 — committed, awaiting push"
-last_updated: "2026-11-01T05:45:00Z"
+stopped_at: "Phase 25.1.2 created — needs /gsd-discuss-phase 25.1.2"
+last_updated: "2026-11-01T10:00:00Z"
 last_activity: 2026-11-01 -- Phase 25.1.1 verified passed 7/7; hub is the single SDLC flow, wizard removed
 progress:
   total_phases: 11
@@ -21,15 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-07)
 
 **Core value:** Make planned work realistically fit available time while giving the personal user evidence-grounded access to their local banking IT knowledge.
-**Current focus:** Phase 25.1.1 — unify-sdlc-workflow-move-change-pack-pl03b-pl07-generation-c
+**Current focus:** Phase 25.1.2 — fix the SDLC hub user flow end to end
 
 ## Current Position
 
-Phase: 25.1.1 (unify-sdlc-workflow-move-change-pack-pl03b-pl07-generation-c) — ✅ COMPLETE, verified passed
-Plan: 11 of 11 complete (25.1.1-01 … 25.1.1-11)
-Status: Verifier passed 7/7 (6 ROADMAP criteria + user directive) at commit `3ddbd6bd`; residual info-level notes only, no gaps
-Last activity: 2026-11-01 -- Phase 25.1.1 verified passed; hub owns INTAKE→CAB end to end, wizard UI and coordinator deleted
-Stopped at: Phase 25.1.1 verified passed 7/7 — committed, awaiting push
+Phase: 25.1.2 (fix-sdlc-hub-user-flow-end-to-end) — DISCUSS PENDING
+Plan: 0 of TBD — the flow has to be specified before more code moves
+Status: Phase 25.1.1 is complete and verified; walking its flow with real data exposed structural defects (dead-end step 3, swallowed first confirm, reset that did not reset, artifacts saved but unreadable)
+Last activity: 2026-11-01 -- Phase 25.1.2 inserted; canonical flow discussion is the next step
+Stopped at: Phase 25.1.2 created — needs /gsd-discuss-phase 25.1.2
 
 Progress: [██████████] 100%
 
