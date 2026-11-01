@@ -1070,6 +1070,12 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   useEffect(() => {
     for (const tabId of hostAbortRef.current.keys()) abortHostTurn(tabId);
     turnRegistryRef.current?.abortAll();
+    // The prelude token is the only cancel record a parked ground turn respects: aborting
+    // controllers is not enough, because the pipeline may resolve instead of throwing.
+    for (const tabId of preludeTokenRef.current.keys()) {
+      preludeTokenRef.current.delete(tabId);
+    }
+    setPreludeTabs({});
     for (const runtime of Object.values(tabRuntimesRef.current.getSnapshot())) {
       if (!runtime.requestController) continue;
       runtime.requestController.abort();

@@ -220,6 +220,50 @@ describe('AIChatDrawer Grounded Turn Wiring (Plan 19-14)', () => {
     }
   });
 
+  it('3b. a scope change discards a pipeline that resolves instead of throwing', async () => {
+    let resolveFirst: ((res: any) => void) | null = null;
+    let callCount = 0;
+    const runMock = vi.fn().mockImplementation(() => {
+      callCount += 1;
+      if (callCount === 1) {
+        return new Promise((resolve) => {
+          resolveFirst = resolve;
+        });
+      }
+      return Promise.resolve({ kind: 'operational' } as GroundedTurnResult);
+    });
+    setGroundedTurnTestHooks({ runGroundedTurn: runMock });
+
+    const { rerender } = render(
+      <AIChatDrawer
+        open={true}
+        onClose={() => {}}
+        db={testDb}
+        activeScope={{ type: 'task', id: 'task-1' }}
+      />
+    );
+    submitMessage('CYTP1002 là gì?');
+    await waitFor(() => expect(runMock).toHaveBeenCalledTimes(1));
+
+    rerender(
+      <AIChatDrawer
+        open={true}
+        onClose={() => {}}
+        db={testDb}
+        activeScope={{ type: 'project', id: 'proj-1' }}
+      />
+    );
+    // Aborting a signal does not stop a pipeline that resolves anyway; the token must.
+    (resolveFirst as ((res: any) => void) | null)?.({
+      kind: 'grounded_answer',
+      grounding: validGroundedAnswer,
+    });
+    await new Promise<void>((resolve) => setTimeout(resolve, 150));
+
+    const rows = await testDb.chatMessages.toArray();
+    expect(rows.filter((row) => row.role === 'assistant' && row.grounding)).toHaveLength(0);
+  });
+
   it('4. Candidate chip click re-sends with resolved URN', async () => {
     let turnCount = 0;
     const runMock = vi.fn().mockImplementation((_inp: GroundedTurnInput) => {
