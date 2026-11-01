@@ -1203,6 +1203,10 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       error: null,
       pendingConfirmation: null,
       streamingText: '',
+      // D-19/SC5: publish the staged label before any await. Config, key, compaction and
+      // grounding can each take a visible moment; the composer must never look dead.
+      streamingStatus: 'preparing',
+      groundedLoadingStatus: 'preparing',
       toolEvents: [],
       lastSubmittedText: trimmed,
       retryUserMessageId: options.retryUserMessageId ?? null,

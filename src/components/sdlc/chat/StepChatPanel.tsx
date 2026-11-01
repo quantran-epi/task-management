@@ -277,6 +277,8 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
           body: 'Chọn gợi ý bên dưới hoặc đặt câu hỏi để hoàn thiện hồ sơ cho bước này.',
         }}
         toolEvents={toolEvents}
+        // D-03: the SDLC panel is a fixed 380px lane, so name it explicitly. Hosts with a
+        // variable width (the drawer) omit this and let the widget measure its host.
         compact
         placeholder={`Hỏi AI trợ giúp bước này (${stepId})...`}
         draft={draft}

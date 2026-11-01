@@ -235,12 +235,21 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
     };
   }, [projectId, activeCrId, db]);
 
+  // The coordinator's in-memory state is the version chain's source of truth. It must
+  // survive step switches: `threadId` changes on every step navigation, so reading it from
+  // the render scope would recreate the coordinator and silently discard the loaded
+  // `versions`/`activeVersions` (a second approval would then re-commit v1).
+  const threadIdRef = useRef(threadId);
+  threadIdRef.current = threadId;
+
   // The coordinator is the only writer of persisted workflow rows (D-23).
   const coordinator = useMemo(
     () =>
       createSdlcWorkflowCoordinator({
         projectId,
-        threadId,
+        get threadId() {
+          return threadIdRef.current;
+        },
         saveState: async (state) => {
           const crId = activeCrRef.current;
           if (!crId) return;
@@ -267,7 +276,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
         },
         onStateChange: (newState) => setWorkflowState(newState),
       }),
-    [projectId, threadId, db]
+    [projectId, db]
   );
 
   // Restore before any step action can render as enabled (T-25.3-34).
