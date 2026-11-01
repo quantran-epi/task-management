@@ -381,7 +381,7 @@ Plans:
 
 **Wave 5 (Gap Closure)** *(no dependencies)*
 
-- [ ] 25.2-05-PLAN.md — Fix MCP button click in ChatTabToolbox: open popover without toggling active status
+- [x] 25.2-05-PLAN.md — Fix MCP button click in ChatTabToolbox: open popover without toggling active status
 
 **Wave 6 (Gap Closure)** *(depends on 25.2-05)*
 
