@@ -10,17 +10,27 @@ import {
 import { db as defaultDb, type TaskPlannerDatabase } from '../../../db';
 import { renderSafeMarkdown } from '../../../utils/markdown';
 import { exportHubArtifact } from '../../../services/wizard/hubExport';
-import { toPl03bDocxPayload } from '../../../services/wizard/hubTechDocs';
-import { PL07_BASELINE } from '../../../services/export/pl07Baseline';
-import type { SdlcWorkflowState } from '../../../services/wizard/workflowSchemas';
+import { generateHubTechDocDraft } from '../../../services/wizard/hubTechDocs';
+import { formatGuardMessage } from '../../../services/wizard/workflowGuards';
+import type { SdlcWizardRuntime } from '../../../services/wizard/sdlcWizardRuntime';
+import type { SdlcStepId, SdlcWorkflowState } from '../../../services/wizard/workflowSchemas';
+
+type TechDocKind = 'PL03B' | 'PL07';
 
 export interface Step5TechDocsViewProps {
   projectId: string;
   crId: string;
   workflowState?: SdlcWorkflowState | undefined;
-  onCommitTechDoc: (kind: 'PL03B' | 'PL07', markdown: string, noteId?: string | undefined) => Promise<void>;
+  /** D-17: only ever called from the explicit approve action — never from generation. */
+  onCommitTechDoc: (kind: TechDocKind, markdown: string, noteId?: string | undefined) => Promise<void>;
   onProceedToStep6?: (() => void) | undefined;
   db?: TaskPlannerDatabase | undefined;
+  onNavigateToStep?: ((step: SdlcStepId) => void) | undefined;
+  draftPl03b?: string | undefined;
+  draftPl07?: string | undefined;
+  onDraftChange?: ((kind: TechDocKind, markdown: string) => void) | undefined;
+  wizardRuntime?: SdlcWizardRuntime | undefined;
+  generateDrafts?: ((input: { signal: AbortSignal }) => Promise<{ pl03b: string; pl07: string }>) | undefined;
 }
 
 export const Step5TechDocsView: React.FC<Step5TechDocsViewProps> = ({
@@ -30,11 +40,19 @@ export const Step5TechDocsView: React.FC<Step5TechDocsViewProps> = ({
   onCommitTechDoc,
   onProceedToStep6,
   db = defaultDb,
+  onNavigateToStep,
+  draftPl03b,
+  draftPl07,
+  onDraftChange,
+  wizardRuntime,
+  generateDrafts,
 }) => {
   const { token } = theme.useToken();
-  const [activeTab, setActiveTab] = useState<'PL03B' | 'PL07'>('PL03B');
+  const [activeTab, setActiveTab] = useState<TechDocKind>('PL03B');
   const [generating, setGenerating] = useState(false);
   const [exportingKind, setExportingKind] = useState<string | null>(null);
+  const [localPl03b, setLocalPl03b] = useState<string | undefined>(undefined);
+  const [localPl07, setLocalPl07] = useState<string | undefined>(undefined);
 
   const pl03b = workflowState?.artifacts.pl03b;
   const pl07 = workflowState?.artifacts.pl07;
@@ -42,75 +60,76 @@ export const Step5TechDocsView: React.FC<Step5TechDocsViewProps> = ({
   const changePack = workflowState?.artifacts.changePack;
   const driftResult = workflowState?.artifacts.driftResult;
 
-  const isReadyForGen = Boolean(solution && changePack && driftResult);
+  const isConfigured = Boolean(generateDrafts || wizardRuntime);
+  const isReadyForGen = Boolean(solution && changePack && (generateDrafts || driftResult));
   const isBothApproved = Boolean(pl03b && pl07);
 
-  // AI Generator for PL03B & PL07
-  const handleGenerateTechDocs = async () => {
-    if (!workflowState || !solution || !changePack || !driftResult) {
-      message.error('Thiếu SOLUTION.md hoặc Change Pack đã xác nhận để sinh tài liệu kỹ thuật.');
-      return;
-    }
+  const pl03bMarkdown = draftPl03b ?? localPl03b;
+  const pl07Markdown = draftPl07 ?? localPl07;
+  const hasDraft = Boolean(pl03bMarkdown || pl07Markdown);
 
+  const setDraft = (kind: TechDocKind, markdown: string) => {
+    if (kind === 'PL03B') setLocalPl03b(markdown);
+    else setLocalPl07(markdown);
+    onDraftChange?.(kind, markdown);
+  };
+
+  /** D-16/D-17: produces drafts only. Writes nothing, approves nothing, advances nothing. */
+  const handleGenerateDraft = async () => {
+    if (!workflowState || !solution || !changePack) return;
     try {
       setGenerating(true);
-
-      const affectedTables = driftResult.dbChangesRollback?.affectedTables ?? [];
-      const tablesList = affectedTables.length > 0 ? affectedTables.join(', ') : 'Không có';
-
-      const pl03bDocx = toPl03bDocxPayload(
-        {
-          schemaVersion: 1,
-          kind: 'PL03',
-          title: `Thiết kế kỹ thuật ${workflowState.metadata.featureName}`,
-          approvedDesign: [
-            `Mục tiêu: Triển khai tính năng ${workflowState.metadata.featureName} (${workflowState.metadata.cr})`,
-            `Kiến trúc & giải pháp kỹ thuật dựa trên SOLUTION.md đã phê duyệt.`,
-            `Bảng dữ liệu ảnh hưởng: ${tablesList}`,
-          ],
-          actualImplementation: ['Đã triển khai code trong change pack.'],
-          drift: [],
-          databaseAndRollback: [],
-          regressionMatrix: [{ area: 'Core', scenario: 'Kiểm tra hồi quy', expected: 'Bình thường', citationIds: [] }],
-          flowSteps: [],
-          coverage: 'PARTIAL',
-          caveats: [],
-          citationIds: [],
-        },
-        {
-          metadata: workflowState.metadata,
-          inputRevision: (pl03b?.version ?? 0) + 1,
-          draftRevision: (pl03b?.version ?? 0) + 1,
-          reconciliation: driftResult,
+      if (generateDrafts) {
+        const controller = new AbortController();
+        const result = await generateDrafts({ signal: controller.signal });
+        setDraft('PL03B', result.pl03b);
+        setDraft('PL07', result.pl07);
+      } else {
+        if (!wizardRuntime) return;
+        if (!driftResult) {
+          message.error('Chưa có kết quả đối chiếu Change Pack. Vui lòng nạp lại Change Pack ở Bước 4.');
+          return;
         }
-      );
-
-      const pl03bMd = `# PL03B — Thiết kế & Triển khai Kỹ thuật\n\n**Mã CR:** ${workflowState.metadata.cr}\n**Tính năng:** ${workflowState.metadata.featureName}\n**Tác giả:** ${workflowState.metadata.author}\n\n## 1. Giới thiệu & Mục tiêu\n${pl03bDocx.introduction.purpose}\n\n## 2. Thay đổi Cơ sở dữ liệu\n- Danh sách bảng: ${tablesList}\n\n## 3. Kết quả đối chiếu với Change Pack\n- Trạng thái Drift: ${driftResult.status}\n- Số mục ngoài solution: ${driftResult.drift.filter(d => d.category === 'outside_solution').length}\n- Số mục chưa làm: ${driftResult.drift.filter(d => d.category === 'missing').length}\n`;
-
-      const pl07Marks = PL07_BASELINE.sections.flatMap((sec) =>
-        sec.items.map((it) => ({
-          itemId: `${sec.id}.${it.number}`,
-          status: 'pass',
-          note: `Đã đối chiếu với code change-pack: ${it.text.slice(0, 80)}`,
-          evidenceIds: ['ev-verified-pack'],
-        }))
-      );
-
-      const pl07Md = `# PL07 — Checklist An toàn Thông tin & Review Code\n\n**Mã CR:** ${workflowState.metadata.cr}\n**Tính năng:** ${workflowState.metadata.featureName}\n\n## Kết quả Đánh giá Checklist:\n- Tổng số mục kiểm tra: ${pl07Marks.length}\n- Trạng thái: Đạt chuẩn yêu cầu an toàn theo checklist ngân hàng.\n`;
-
-      // Commit both PL03B and PL07 to coordinator
-      await onCommitTechDoc('PL03B', pl03bMd);
-      await onCommitTechDoc('PL07', pl07Md);
-
-      message.success('Đã sinh và phê duyệt tài liệu PL03B & PL07 thành công');
+        if (!solution.noteId) {
+          message.error('SOLUTION.md chưa được lưu thành phiên bản. Vui lòng phê duyệt lại ở Bước 2.');
+          return;
+        }
+        const draft = await generateHubTechDocDraft({
+          db,
+          projectId,
+          threadId: workflowState.threadId,
+          sessionId: workflowState.sessionId,
+          inputRevision: workflowState.artifacts.pl03b?.version ?? 0,
+          draftRevision: (workflowState.artifacts.pl03b?.version ?? 0) + 1,
+          metadata: workflowState.metadata,
+          solution: { noteId: solution.noteId, version: solution.version, hash: solution.hash },
+          reconciliation: driftResult,
+          model: wizardRuntime.model,
+          collectEvidence: wizardRuntime.collectEvidence,
+          resolveSetIds: wizardRuntime.resolveSetIds,
+        });
+        setDraft('PL03B', draft.pl03b.markdown);
+        setDraft('PL07', draft.pl07.markdown);
+      }
+      message.success('Đã tạo bản nháp PL03B & PL07. Vui lòng review trước khi lưu và phê duyệt.');
     } catch (err: unknown) {
-      message.error('Lỗi sinh tài liệu: ' + (err instanceof Error ? err.message : String(err)));
+      message.error('Lỗi tạo bản nháp: ' + (err instanceof Error ? err.message : String(err)));
     } finally {
       setGenerating(false);
     }
   };
 
-  const handleExportDocx = async (kind: 'PL03B' | 'PL07') => {
+  /** The only path to approval (D-17): explicit, per-document, complete markdown. */
+  const handleApprove = async (kind: TechDocKind, markdown: string) => {
+    try {
+      await onCommitTechDoc(kind, markdown);
+      message.success(`Đã lưu & phê duyệt ${kind}.`);
+    } catch (err: unknown) {
+      message.error(`Không thể lưu ${kind}: ` + (err instanceof Error ? err.message : String(err)));
+    }
+  };
+
+  const handleExportDocx = async (kind: TechDocKind) => {
     if (!workflowState) return;
     try {
       setExportingKind(kind);
@@ -131,6 +150,15 @@ export const Step5TechDocsView: React.FC<Step5TechDocsViewProps> = ({
     }
   };
 
+  const activeDraft = activeTab === 'PL03B' ? pl03bMarkdown : pl07Markdown;
+  const activeApproved = activeTab === 'PL03B' ? pl03b : pl07;
+
+  const tabTag = (approved: typeof pl03b, draft: string | undefined) => {
+    if (approved) return <Tag color="success">Đã duyệt (v{approved.version})</Tag>;
+    if (draft) return <Tag color="warning">Bản nháp</Tag>;
+    return <Tag color="default">Chưa có</Tag>;
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1000 }}>
       {/* Header Toolbar */}
@@ -140,7 +168,7 @@ export const Step5TechDocsView: React.FC<Step5TechDocsViewProps> = ({
             Bước 5: Tài liệu Kỹ thuật (PL03B & PL07)
           </Typography.Title>
           <Typography.Paragraph type="secondary" style={{ marginTop: 4 }}>
-            Sinh và kiểm tra 2 tài liệu chuẩn ngân hàng: PL03B (Thiết kế & Triển khai) và PL07 (Checklist An toàn & Review).
+            Sinh bản nháp 2 tài liệu chuẩn ngân hàng: PL03B (Thiết kế & Triển khai) và PL07 (Checklist An toàn & Review). Bản nháp chỉ được lưu khi bạn bấm Lưu & Phê duyệt.
           </Typography.Paragraph>
         </div>
         <Space>
@@ -148,10 +176,10 @@ export const Step5TechDocsView: React.FC<Step5TechDocsViewProps> = ({
             type="primary"
             icon={<RobotOutlined />}
             loading={generating}
-            disabled={!isReadyForGen}
-            onClick={handleGenerateTechDocs}
+            disabled={!isReadyForGen || !isConfigured}
+            onClick={handleGenerateDraft}
           >
-            {isBothApproved ? 'Tạo lại PL03B & PL07 bằng AI' : 'Tạo PL03B & PL07 bằng AI'}
+            {hasDraft ? 'Tạo lại bản nháp' : 'Tạo bản nháp'}
           </Button>
         </Space>
       </div>
@@ -160,7 +188,21 @@ export const Step5TechDocsView: React.FC<Step5TechDocsViewProps> = ({
         <Alert
           type="warning"
           showIcon
-          message="Cần hoàn thành Bước 2 (SOLUTION.md) và Bước 4 (Change Pack) trước khi sinh tài liệu kỹ thuật."
+          message={formatGuardMessage('SOLUTION_AND_PACK_REQUIRED_FOR_TECH_DOCS')}
+          description="Cần SOLUTION.md đã phê duyệt (Bước 2) và Change Pack đã xác thực (Bước 4) trước khi tạo tài liệu kỹ thuật."
+          action={
+            <Button size="small" onClick={() => onNavigateToStep?.('CHANGE_PACK')}>
+              Chuyển đến Bước 4: Kiểm soát Change Pack
+            </Button>
+          }
+        />
+      )}
+
+      {!isConfigured && (
+        <Alert
+          type="info"
+          showIcon
+          message="Chưa cấu hình mô hình AI. Vui lòng thiết lập endpoint và API key trong Cài đặt."
         />
       )}
 
@@ -171,7 +213,7 @@ export const Step5TechDocsView: React.FC<Step5TechDocsViewProps> = ({
         title={
           <Tabs
             activeKey={activeTab}
-            onChange={(k) => setActiveTab(k as 'PL03B' | 'PL07')}
+            onChange={(k) => setActiveTab(k as TechDocKind)}
             style={{ marginBottom: -16 }}
             items={[
               {
@@ -179,7 +221,7 @@ export const Step5TechDocsView: React.FC<Step5TechDocsViewProps> = ({
                 label: (
                   <Space>
                     <span>PL03B — Thiết kế & Triển khai</span>
-                    {pl03b ? <Tag color="success">Đã duyệt (v{pl03b.version})</Tag> : <Tag color="default">Chưa có</Tag>}
+                    {tabTag(pl03b, pl03bMarkdown)}
                   </Space>
                 ),
               },
@@ -188,7 +230,7 @@ export const Step5TechDocsView: React.FC<Step5TechDocsViewProps> = ({
                 label: (
                   <Space>
                     <span>PL07 — Checklist An toàn Review</span>
-                    {pl07 ? <Tag color="success">Đã duyệt (v{pl07.version})</Tag> : <Tag color="default">Chưa có</Tag>}
+                    {tabTag(pl07, pl07Markdown)}
                   </Space>
                 ),
               },
@@ -200,7 +242,7 @@ export const Step5TechDocsView: React.FC<Step5TechDocsViewProps> = ({
             size="small"
             icon={<DownloadOutlined />}
             loading={exportingKind === activeTab}
-            disabled={activeTab === 'PL03B' ? !pl03b : !pl07}
+            disabled={!activeApproved}
             onClick={() => handleExportDocx(activeTab)}
           >
             Tải {activeTab}.docx
@@ -210,29 +252,32 @@ export const Step5TechDocsView: React.FC<Step5TechDocsViewProps> = ({
         <div style={{ minHeight: 350, maxHeight: 500, overflowY: 'auto', padding: '12px 4px' }}>
           {generating ? (
             <div style={{ textAlign: 'center', padding: 48 }}>
-              <Spin indicator={<SyncOutlined spin style={{ fontSize: 28 }} />} tip="AI đang tổng hợp dữ liệu và sinh tài liệu kỹ thuật..." />
+              <Spin indicator={<SyncOutlined spin style={{ fontSize: 28 }} />} tip="AI đang tổng hợp dữ liệu và tạo bản nháp..." />
             </div>
-          ) : activeTab === 'PL03B' ? (
-            pl03b?.content ? (
-              <div
-                style={{ lineHeight: 1.6 }}
-                dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(pl03b.content) }}
-              />
-            ) : (
-              <Typography.Text type="secondary" style={{ display: 'block', textAlign: 'center', padding: 48 }}>
-                Chưa có nội dung PL03B. Bấm nút "Tạo PL03B & PL07 bằng AI" ở góc phải trên.
-              </Typography.Text>
-            )
-          ) : pl07?.content ? (
+          ) : activeDraft ? (
             <div
               style={{ lineHeight: 1.6 }}
-              dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(pl07.content) }}
+              dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(activeDraft) }}
+            />
+          ) : activeApproved?.content ? (
+            <div
+              style={{ lineHeight: 1.6 }}
+              dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(activeApproved.content) }}
             />
           ) : (
             <Typography.Text type="secondary" style={{ display: 'block', textAlign: 'center', padding: 48 }}>
-              Chưa có nội dung PL07. Bấm nút "Tạo PL03B & PL07 bằng AI" ở góc phải trên.
+              Chưa có nội dung {activeTab}. Bấm nút "Tạo bản nháp" ở góc phải trên.
             </Typography.Text>
           )}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 12 }}>
+          <Button
+            type="primary"
+            disabled={!isReadyForGen || !activeDraft || !activeDraft.trim()}
+            onClick={() => activeDraft && handleApprove(activeTab, activeDraft)}
+          >
+            Lưu & Phê duyệt
+          </Button>
         </div>
       </Card>
 

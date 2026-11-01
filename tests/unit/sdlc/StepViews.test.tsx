@@ -271,7 +271,7 @@ describe('Step 1 Intake & Step 2 Solution Views', () => {
   });
 
   describe('Step5TechDocsView', () => {
-    it('renders PL03B and PL07 review tabs and AI generation button', () => {
+    it('renders PL03B and PL07 review tabs and the draft generation button', () => {
       const handleCommitTechDoc = vi.fn().mockResolvedValue(undefined);
 
       render(
@@ -285,7 +285,8 @@ describe('Step 1 Intake & Step 2 Solution Views', () => {
 
       expect(screen.getByText(/PL03B — Thiết kế & Triển khai/i)).toBeInTheDocument();
       expect(screen.getByText(/PL07 — Checklist An toàn Review/i)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Tạo PL03B & PL07 bằng AI/i })).toBeInTheDocument();
+      // D-16/D-17: generation produces a draft; approval is a separate explicit action.
+      expect(screen.getByRole('button', { name: /Tạo bản nháp$/i })).toBeInTheDocument();
     });
   });
 
