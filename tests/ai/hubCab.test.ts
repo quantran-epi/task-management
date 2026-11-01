@@ -8,7 +8,7 @@ import {
   type WizardModel,
   type WizardModelRequest,
 } from '../../src/services/ai/wizardService';
-import { generateHubCab, toCabDocxPayload, type CabPayloadContext, type CabSourcePin } from '../../src/services/wizard/hubCab';
+import { generateHubCab, generateHubCabDraft, toCabDocxPayload, type CabPayloadContext, type CabSourcePin } from '../../src/services/wizard/hubCab';
 import { defaultSha256 } from '../../src/services/wizard/workflowCoordinator';
 import {
   SdlcWorkflowStateSchema,
@@ -23,6 +23,7 @@ const SESSION_ID = '33333333-3333-4333-8333-333333333333';
 const SET_ID = '44444444-4444-4444-8444-444444444444';
 const PL03B_NOTE_ID = '55555555-5555-4555-8555-555555555555';
 const PL07_NOTE_ID = '66666666-6666-4666-8666-666666666666';
+const PL02_NOTE_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const NOW = '2026-11-01T12:00:00.000Z';
 const PL02_MARKDOWN = '# PL02\nĐặc tả chức năng chuyển tiền nhanh.';
 const PL03B_HASH = '07'.repeat(32);
@@ -92,7 +93,7 @@ afterEach(async () => {
 
 async function seedArtifactNote(input: {
   id: string;
-  kind: 'PL03B' | 'PL07';
+  kind: 'PL02' | 'PL03B' | 'PL07';
   version: number;
   hash: string;
   sourceIds: string[];
@@ -125,7 +126,7 @@ async function seedArtifactNote(input: {
 }
 
 /** The typed-text path: `artifacts.pl02` has content + hash but **no** `noteId`. */
-async function seedState(overrides: { pl02Content?: string | undefined; pl02Hash?: string | undefined; withPl02?: boolean | undefined; withPl07?: boolean | undefined; cabVersion?: number | undefined } = {}): Promise<SdlcWorkflowState> {
+async function seedState(overrides: { pl02Content?: string | undefined; pl02Hash?: string | undefined; pl02NoteId?: string | undefined; withPl02?: boolean | undefined; withPl07?: boolean | undefined; withDrift?: boolean | undefined; cabVersion?: number | undefined } = {}): Promise<SdlcWorkflowState> {
   const content = overrides.pl02Content ?? PL02_MARKDOWN;
   const includePl02 = overrides.withPl02 ?? true;
   return SdlcWorkflowStateSchema.parse({
@@ -138,6 +139,7 @@ async function seedState(overrides: { pl02Content?: string | undefined; pl02Hash
     artifacts: {
       ...(includePl02 ? {
         pl02: {
+          ...(overrides.pl02NoteId ? { noteId: overrides.pl02NoteId } : {}),
           kind: 'PL02',
           version: 1,
           hash: overrides.pl02Hash ?? await defaultSha256(content.trim()),
@@ -180,6 +182,15 @@ async function seedChain(): Promise<SdlcWorkflowState> {
   await seedArtifactNote({ id: PL03B_NOTE_ID, kind: 'PL03B', version: 1, hash: PL03B_HASH, sourceIds: ['88888888-8888-4888-8888-888888888888'] });
   await seedArtifactNote({ id: PL07_NOTE_ID, kind: 'PL07', version: 1, hash: PL07_HASH, sourceIds: ['88888888-8888-4888-8888-888888888888'] });
   return seedState();
+}
+
+/** Draft path needs an existing approved PL02 Note: it must never mint one. */
+async function seedDraftChain(): Promise<SdlcWorkflowState> {
+  const pl02Hash = await defaultSha256(PL02_MARKDOWN.trim());
+  await seedArtifactNote({ id: PL02_NOTE_ID, kind: 'PL02', version: 1, hash: pl02Hash, sourceIds: [] });
+  await seedArtifactNote({ id: PL03B_NOTE_ID, kind: 'PL03B', version: 1, hash: PL03B_HASH, sourceIds: [] });
+  await seedArtifactNote({ id: PL07_NOTE_ID, kind: 'PL07', version: 1, hash: PL07_HASH, sourceIds: [] });
+  return seedState({ pl02NoteId: PL02_NOTE_ID, pl02Hash });
 }
 
 function baseInput(state: SdlcWorkflowState, overrides: Record<string, unknown> = {}) {
@@ -330,5 +341,72 @@ describe('generateHubCab', () => {
         expectedHashes: { PL02: '02'.repeat(32), PL03B: PL03B_HASH, PL07: PL07_HASH },
       },
     })).rejects.toMatchObject({ code: 'INVALID_OUTPUT', message: 'ARTIFACT_IDENTITY_MISMATCH' });
+  });
+});
+
+describe('generateHubCabDraft', () => {
+  it('resolves a draft with zero Note writes and no approval side effects (T-25.3-18)', async () => {
+    const state = await seedDraftChain();
+    const before = await db.notes.count();
+    const input = baseInput(state);
+
+    const draft = await generateHubCabDraft(input);
+
+    expect(await db.notes.count()).toBe(before);
+    expect(draft.markdown).toContain('Tờ trình CAB');
+    expect(draft.pl02).toEqual({ noteId: PL02_NOTE_ID, version: 1, hash: state.artifacts.pl02!.hash });
+    expect(draft.sources.map((pin) => pin.artifactId)).toEqual([PL02_NOTE_ID, PL03B_NOTE_ID, PL07_NOTE_ID]);
+    // Nothing in the return value claims an approval timestamp.
+    expect(JSON.stringify(draft.payload)).not.toMatch(/approvedAt/);
+  });
+
+  it('refuses to mint a PL02 pin and throws CAB_SOURCE_CHAIN_REQUIRED instead', async () => {
+    const state = await seedState(); // typed-text path: PL02 content + hash, no noteId
+    const before = await db.notes.count();
+
+    await expect(generateHubCabDraft(baseInput(state))).rejects.toThrow('CAB_SOURCE_CHAIN_REQUIRED');
+    expect(await db.notes.count()).toBe(before);
+  });
+
+  it('never fabricates rollback verification, risk-control claims, or source pins', async () => {
+    const state = await seedDraftChain();
+
+    // Proposal claims verified:true, but no reconciliation evidence backs it.
+    const draft = await generateHubCabDraft(baseInput(state));
+
+    expect(draft.markdown).not.toMatch(/đã được kiểm soát/);
+    expect(draft.markdown).not.toMatch(/Verified:/);
+    expect(draft.markdown).not.toMatch(/pl02-note-id|pl03b-note-id|pl07-note-id/);
+    expect(draft.markdown).toContain('chưa kiểm chứng');
+  });
+
+  it('renders the verified rollback claim as unproven when no evidence ids exist', async () => {
+    const state = await seedDraftChain();
+
+    const draft = await generateHubCabDraft(baseInput(state, {
+      runStage: vi.fn(async () => ({ ...cabProposal, rollback: { summary: 'Tắt cờ tính năng.', verified: true } })),
+    }));
+
+    expect(draft.markdown).toContain('chưa có bằng chứng kiểm chứng');
+    expect(draft.markdown).not.toMatch(/đã kiểm chứng(?!\s)/);
+  });
+
+  it('discloses a missing reconciliation result as an explicit gap (T-25.3-16)', async () => {
+    const state = await seedDraftChain();
+    expect(state.artifacts.driftResult).toBeUndefined();
+
+    const draft = await generateHubCabDraft(baseInput(state));
+
+    expect(draft.markdown).toContain('Khoảng trống bằng chứng');
+    expect(draft.markdown).toContain('Chưa có kết quả đối chiếu Change Pack.');
+  });
+
+  it('shares its generation body with generateHubCab, which still persists', async () => {
+    const state = await seedDraftChain();
+    const draft = await generateHubCabDraft(baseInput(state));
+    const persisted = await generateHubCab(baseInput(state));
+
+    expect(persisted.markdown).toBe(draft.markdown);
+    expect(await db.notes.get(persisted.noteId)).toBeTruthy();
   });
 });

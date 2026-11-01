@@ -8,6 +8,7 @@ import { Step3CodeGuideView } from '../../../src/components/sdlc/steps/Step3Code
 import { Step4ChangePackView } from '../../../src/components/sdlc/steps/Step4ChangePackView';
 import { Step5TechDocsView } from '../../../src/components/sdlc/steps/Step5TechDocsView';
 import { Step6CabView } from '../../../src/components/sdlc/steps/Step6CabView';
+import { formatGuardMessage } from '../../../src/services/wizard/workflowGuards';
 
 describe('Step 1 Intake & Step 2 Solution Views', () => {
   let db: TaskPlannerDatabase;
@@ -191,8 +192,15 @@ describe('Step 1 Intake & Step 2 Solution Views', () => {
       );
 
       expect(
-        screen.getByText(/Chưa đủ điều kiện: Thiếu SOLUTION\.md từ Bước 2/i)
+        screen.getByText(formatGuardMessage('SOLUTION_REQUIRED_FOR_CHANGE_PACK'))
       ).toBeInTheDocument();
+      // Behavioural: the guard region names the missing artifact and the step that supplies it.
+      const guard = screen
+        .getByText(formatGuardMessage('SOLUTION_REQUIRED_FOR_CHANGE_PACK'))
+        .closest('[role="alert"]');
+      expect(guard).not.toBeNull();
+      expect(guard).toHaveTextContent('SOLUTION.md');
+      expect(guard).toHaveTextContent('Bước 2');
       expect(screen.getByText(/Tải lên bản đóng gói mới/i)).toBeInTheDocument();
     });
 
@@ -304,7 +312,8 @@ describe('Step 1 Intake & Step 2 Solution Views', () => {
       );
 
       expect(screen.getByText(/Kiểm tra điều kiện tiên quyết tạo CAB/i)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Tạo Tờ trình CAB bằng AI/i })).toBeInTheDocument();
+      // D-17: generation yields a draft; approval is a separate explicit action.
+      expect(screen.getByRole('button', { name: /Tạo bản nháp CAB/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Tải PL02.docx/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Tải toàn bộ bộ hồ sơ \(\.zip\)/i })).toBeInTheDocument();
     });

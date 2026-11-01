@@ -50,6 +50,15 @@ export interface HubCabResult {
   pl02: { noteId: string; version: number; hash: string };
 }
 
+/** D-17: reviewable draft. Nothing here has been persisted or approved. */
+export interface HubCabDraftResult {
+  markdown: string;
+  payload: CabDocxPayload;
+  pl02: { noteId: string; version: number; hash: string };
+  /** The three real, approved source pins the draft was generated against. */
+  sources: CabSourcePin[];
+}
+
 export interface CabPayloadContext {
   metadata: SdlcWorkflowMetadata;
   projectId: string;
@@ -103,38 +112,76 @@ export function toCabDocxPayload(proposal: unknown, ctx: CabPayloadContext): Cab
   };
 }
 
-function cabMarkdown(payload: CabDocxPayload, sources: readonly CabSourcePin[]): string {
-  const bullets = [
-    `- Nguồn: ${sources.map((pin) => `${pin.kind} v${pin.version}`).join(', ')}`,
-    ...payload.technicalChanges.map((change) => `- ${change}`),
-    `- Rollback: ${payload.rollback.verified ? 'đã kiểm chứng' : 'chưa kiểm chứng'}`,
-  ];
-  return `# Tờ trình CAB v${payload.draftRevision} — ${payload.title}\n\n${bullets.join('\n')}\n`;
+interface CabMarkdownContext {
+  /** Rollback evidence recorded by the reconciliation. Empty means the claim is unsupported. */
+  rollbackEvidenceIds: readonly string[];
+  /** Explicit gaps derived from the reconciliation result and the proposal's own caveats. */
+  gaps: readonly string[];
 }
 
 /**
- * Generates the CAB from hub state alone and persists it with three pinned sources.
- *
- * PL02 is resolved through `ensurePl02ArtifactNote`, never from `state.artifacts.pl02.noteId`: that
- * field is `undefined` on the typed-text path (`startOrUpdateIntake` only copies the picked note id),
- * which is why CAB used to be unreachable. `ensurePl02ArtifactNote` hashes with
- * `defaultSha256(markdown.trim())` — the value `validatedSources` compares — so the pin validates.
+ * D-15: a `verified` rollback claim with zero recorded evidence is not evidence. Say so rather
+ * than printing a bare "đã kiểm chứng".
  */
-export async function generateHubCab(input: HubCabInput): Promise<HubCabResult> {
+function rollbackLine(payload: CabDocxPayload, evidenceIds: readonly string[]): string {
+  if (!payload.rollback.verified) return 'chưa kiểm chứng';
+  return evidenceIds.length > 0 ? 'đã kiểm chứng' : 'chưa có bằng chứng kiểm chứng';
+}
+
+function cabMarkdown(payload: CabDocxPayload, sources: readonly CabSourcePin[], ctx: CabMarkdownContext): string {
+  const bullets = [
+    `- Nguồn: ${sources.map((pin) => `${pin.kind} v${pin.version}`).join(', ')}`,
+    ...payload.technicalChanges.map((change) => `- ${change}`),
+    `- Rollback: ${rollbackLine(payload, ctx.rollbackEvidenceIds)}${payload.rollback.summary ? ` — ${payload.rollback.summary}` : ''}`,
+  ];
+  const gaps = ctx.gaps.length > 0
+    ? `\n## Khoảng trống bằng chứng\n${ctx.gaps.map((gap) => `- ${gap}`).join('\n')}\n`
+    : '\n## Khoảng trống bằng chứng\n- Không có khoảng trống được ghi nhận từ kết quả đối chiếu.\n';
+  return `# Tờ trình CAB v${payload.draftRevision} — ${payload.title}\n\n${bullets.join('\n')}\n${gaps}`;
+}
+
+/** D-15: gaps come from recorded evidence only — never a "risk is controlled" assertion. */
+function evidenceGaps(state: SdlcWorkflowState, payload: CabDocxPayload): string[] {
+  const drift = state.artifacts.driftResult;
+  const gaps: string[] = [];
+  if (!drift) {
+    gaps.push('Chưa có kết quả đối chiếu Change Pack.');
+  } else {
+    if (drift.status !== 'NO_DRIFT_COMPLETE') gaps.push(`Kết quả đối chiếu: ${drift.status}.`);
+    const uncovered = drift.coverage.filter((entry) => entry.state !== 'included');
+    if (uncovered.length > 0) gaps.push(`Coverage chưa đầy đủ ở ${uncovered.length} mục.`);
+    gaps.push(...drift.drift.map((tuple) => `Drift chưa xử lý: ${tuple.requirementId} (${tuple.category})`));
+  }
+  gaps.push(...payload.unresolvedDrift, ...payload.caveats);
+  return [...new Set(gaps)];
+}
+
+/**
+ * Read-only PL02 resolution for the draft path. `ensurePl02ArtifactNote` writes an approved Note,
+ * which generation must never do (D-17) — so when no approved PL02 Note exists yet the draft
+ * refuses with the same code the persisting path uses.
+ */
+function resolvePl02ReadOnly(state: SdlcWorkflowState): { noteId: string; version: number; hash: string } {
+  const pl02 = state.artifacts.pl02;
+  if (!pl02?.noteId || !pl02.content?.trim()) throw new Error('CAB_SOURCE_CHAIN_REQUIRED');
+  return { noteId: pl02.noteId, version: pl02.version, hash: pl02.hash };
+}
+
+interface GeneratedCab {
+  markdown: string;
+  payload: CabDocxPayload;
+  sources: CabSourcePin[];
+  inputRevision: number;
+}
+
+/** Shared generation body: evidence + stage + payload mapping. Writes nothing, approves nothing. */
+async function generateCabBody(
+  input: HubCabInput,
+  pl02: { noteId: string; version: number; hash: string },
+): Promise<GeneratedCab> {
   const pl03b = input.state.artifacts.pl03b;
   const pl07 = input.state.artifacts.pl07;
   if (!pl03b?.noteId || !pl07?.noteId) throw new Error('CAB_SOURCE_CHAIN_REQUIRED');
-  if (!input.state.artifacts.pl02) throw new Error('CAB_SOURCE_CHAIN_REQUIRED');
-
-  const pl02 = await ensurePl02ArtifactNote({
-    db: input.db,
-    projectId: input.projectId,
-    threadId: input.threadId,
-    sessionId: input.sessionId,
-    markdown: input.state.artifacts.pl02.content ?? '',
-    metadata: input.metadata,
-    state: input.state,
-  });
 
   const pins: CabSourcePin[] = [
     { artifactId: pl02.noteId, kind: 'PL02', projectId: input.projectId, threadId: input.threadId, version: pl02.version, hash: pl02.hash, approved: true },
@@ -179,22 +226,64 @@ export async function generateHubCab(input: HubCabInput): Promise<HubCabResult> 
     draftRevision: input.draftRevision,
     sources: pins,
   });
-  const markdown = cabMarkdown(payload, pins);
+  const markdown = cabMarkdown(payload, pins, {
+    rollbackEvidenceIds: input.state.artifacts.driftResult?.dbChangesRollback.rollback.evidenceIds ?? [],
+    gaps: evidenceGaps(input.state, payload),
+  });
+
+  return { markdown, payload, sources: pins, inputRevision };
+}
+
+/**
+ * D-17: produces a reviewable CAB draft. Writes no Note, records no `approvedAt`, and touches no
+ * PL02 artifact — the PL02 pin is resolved read-only from workflow state.
+ */
+export async function generateHubCabDraft(input: HubCabInput): Promise<HubCabDraftResult> {
+  const pl02 = resolvePl02ReadOnly(input.state);
+  const generated = await generateCabBody(input, pl02);
+  return { markdown: generated.markdown, payload: generated.payload, pl02, sources: generated.sources };
+}
+
+/**
+ * Generates the CAB from hub state alone and persists it with three pinned sources.
+ *
+ * PL02 is resolved through `ensurePl02ArtifactNote`, never from `state.artifacts.pl02.noteId`: that
+ * field is `undefined` on the typed-text path (`startOrUpdateIntake` only copies the picked note id),
+ * which is why CAB used to be unreachable. `ensurePl02ArtifactNote` hashes with
+ * `defaultSha256(markdown.trim())` — the value `validatedSources` compares — so the pin validates.
+ *
+ * The write lives here and only here: the shared body above is reusable by the draft path.
+ */
+export async function generateHubCab(input: HubCabInput): Promise<HubCabResult> {
+  if (!input.state.artifacts.pl03b?.noteId || !input.state.artifacts.pl07?.noteId) throw new Error('CAB_SOURCE_CHAIN_REQUIRED');
+  if (!input.state.artifacts.pl02) throw new Error('CAB_SOURCE_CHAIN_REQUIRED');
+
+  const pl02 = await ensurePl02ArtifactNote({
+    db: input.db,
+    projectId: input.projectId,
+    threadId: input.threadId,
+    sessionId: input.sessionId,
+    markdown: input.state.artifacts.pl02.content ?? '',
+    metadata: input.metadata,
+    state: input.state,
+  });
+
+  const generated = await generateCabBody(input, pl02);
 
   const saved = await saveApprovedArtifact({
     kind: 'CAB',
     projectId: input.projectId,
     threadId: input.threadId,
     sessionId: input.sessionId,
-    inputRevision,
+    inputRevision: generated.inputRevision,
     draftRevision: input.draftRevision,
-    inputHash: await defaultSha256(markdown),
-    markdown,
-    exportPayload: payload,
+    inputHash: await defaultSha256(generated.markdown),
+    markdown: generated.markdown,
+    exportPayload: generated.payload,
     approvedAt: new Date().toISOString(),
     // `artifactId` is the Note id, so `validatedSources` can load each source and re-compare hashes.
-    sourceArtifacts: pins.map((pin) => ({ id: pin.artifactId, hash: pin.hash })),
+    sourceArtifacts: generated.sources.map((pin) => ({ id: pin.artifactId, hash: pin.hash })),
   }, input.db);
 
-  return { markdown, payload, noteId: saved.note.id, pl02 };
+  return { markdown: generated.markdown, payload: generated.payload, noteId: saved.note.id, pl02 };
 }

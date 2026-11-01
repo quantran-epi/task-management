@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Typography, Button, Space, Card, Tag, theme, message } from 'antd';
+import React, { useMemo, useState } from 'react';
+import { Typography, Alert, Button, Space, Card, Tag, theme, message } from 'antd';
 import {
   FileWordOutlined,
   CheckCircleOutlined,
@@ -11,18 +11,27 @@ import {
 import { db as defaultDb, type TaskPlannerDatabase } from '../../../db';
 import { renderSafeMarkdown } from '../../../utils/markdown';
 import { exportHubArtifact } from '../../../services/wizard/hubExport';
-import { toCabDocxPayload } from '../../../services/wizard/hubCab';
+import { generateHubCabDraft } from '../../../services/wizard/hubCab';
+import { buildHubCrSummary } from '../../../services/wizard/hubCrSummary';
+import { formatGuardMessage } from '../../../services/wizard/workflowGuards';
 import { buildWizardDocx } from '../../../services/export/wizardDocx';
 import { createStoreZip, downloadBlob } from '../../../utils/fileExport';
 import { completeCr } from '../../../services/wizard/sdlcCrManager';
-import type { SdlcWorkflowState } from '../../../services/wizard/workflowSchemas';
+import type { SdlcWizardRuntime } from '../../../services/wizard/sdlcWizardRuntime';
+import type { SdlcStepId, SdlcWorkflowState } from '../../../services/wizard/workflowSchemas';
 
 export interface Step6CabViewProps {
   projectId: string;
   crId: string;
   workflowState?: SdlcWorkflowState | undefined;
+  /** D-17: only ever called from the explicit `Lưu & Phê duyệt` action — never from generation. */
   onCommitCab: (markdown: string, noteId?: string | undefined) => Promise<void>;
   db?: TaskPlannerDatabase | undefined;
+  onNavigateToStep?: ((step: SdlcStepId) => void) | undefined;
+  onDraftChange?: ((markdown: string) => void) | undefined;
+  /** Test/injection seam, mirroring Step 5's `generateDrafts`. Must never persist. */
+  generateCabDraft?: ((input: { signal: AbortSignal }) => Promise<{ markdown: string }>) | undefined;
+  wizardRuntime?: SdlcWizardRuntime | undefined;
 }
 
 export const Step6CabView: React.FC<Step6CabViewProps> = ({
@@ -31,12 +40,18 @@ export const Step6CabView: React.FC<Step6CabViewProps> = ({
   workflowState,
   onCommitCab,
   db = defaultDb,
+  onNavigateToStep,
+  onDraftChange,
+  generateCabDraft,
+  wizardRuntime,
 }) => {
   const { token } = theme.useToken();
   const [generating, setGenerating] = useState(false);
+  const [approving, setApproving] = useState(false);
   const [downloadingZip, setDownloadingZip] = useState(false);
   const [exportingKind, setExportingKind] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
+  const [draftMarkdown, setDraftMarkdown] = useState<string | undefined>(undefined);
 
   const pl02 = workflowState?.artifacts.pl02;
   const pl03b = workflowState?.artifacts.pl03b;
@@ -44,98 +59,69 @@ export const Step6CabView: React.FC<Step6CabViewProps> = ({
   const cab = workflowState?.artifacts.cab;
 
   const prerequisites = [
-    { label: 'PL02 — Đặc tả chức năng', present: Boolean(pl02?.content) },
-    { label: 'PL03B — Thiết kế & Triển khai', present: Boolean(pl03b?.content) },
-    { label: 'PL07 — Checklist Review', present: Boolean(pl07?.content) },
+    { label: 'PL02 — Đặc tả chức năng (Bước 1)', present: Boolean(pl02?.content) },
+    { label: 'PL03B — Thiết kế & Triển khai (Bước 5)', present: Boolean(pl03b?.content) },
+    { label: 'PL07 — Checklist Review (Bước 5)', present: Boolean(pl07?.content) },
   ];
 
   const canGenerateCab = prerequisites.every((p) => p.present);
+  const isConfigured = Boolean(generateCabDraft || wizardRuntime);
 
-  // Generate CAB Proposal
+  const crSummary = useMemo(
+    () => (workflowState ? buildHubCrSummary({ state: workflowState }) : undefined),
+    [workflowState],
+  );
+
+  /** D-17: produces a draft only. Writes no Note, records no approval, calls no commit. */
   const handleGenerateCab = async () => {
-    if (!workflowState || !canGenerateCab) {
-      message.error('Chưa đủ điều kiện (cần đủ PL02, PL03B, PL07) để sinh tờ trình CAB.');
-      return;
-    }
-
+    if (!workflowState || !canGenerateCab) return;
     try {
       setGenerating(true);
-
-      const sources = [
-        {
-          kind: 'PL02' as const,
-          artifactId: pl02?.noteId ?? 'pl02-note-id',
-          version: pl02?.version ?? 1,
-          hash: pl02?.hash ?? '02'.repeat(32),
-          projectId,
-          threadId: `sdlc:${projectId}:${crId}:CAB`,
-          approved: true as const,
-        },
-        {
-          kind: 'PL03B' as const,
-          artifactId: pl03b?.noteId ?? 'pl03b-note-id',
-          version: pl03b?.version ?? 1,
-          hash: pl03b?.hash ?? '03'.repeat(32),
-          projectId,
-          threadId: `sdlc:${projectId}:${crId}:CAB`,
-          approved: true as const,
-        },
-        {
-          kind: 'PL07' as const,
-          artifactId: pl07?.noteId ?? 'pl07-note-id',
-          version: pl07?.version ?? 1,
-          hash: pl07?.hash ?? '07'.repeat(32),
-          projectId,
-          threadId: `sdlc:${projectId}:${crId}:CAB`,
-          approved: true as const,
-        },
-      ];
-
-      const cabDocx = toCabDocxPayload(
-        {
-          schemaVersion: 1,
-          kind: 'CAB',
-          title: `Tờ trình CAB — ${workflowState.metadata.featureName} (${workflowState.metadata.cr})`,
-          sections: [
-            {
-              heading: 'Bối cảnh & Mục tiêu',
-              body: `Đề xuất phê duyệt triển khai cho ${workflowState.metadata.featureName}. Đơn vị yêu cầu: ${workflowState.metadata.requestingUnit}.`,
-            },
-            {
-              heading: 'Giải pháp Kỹ thuật',
-              body: `Hệ thống đã hoàn tất đối chiếu change pack, kiểm tra checklist an toàn PL07 và cập nhật thiết kế PL03B.`,
-            },
-          ],
-          risks: ['Rủi ro hệ thống đã được kiểm soát và ghi nhận trong checklist PL07.'],
-          missingTests: [],
-          unresolvedDrift: [],
-          rollback: { summary: 'Kịch bản rollback sẵn sàng trong trường hợp có sự cố.', verified: true },
-          caveats: [],
-          citationIds: [],
-        },
-        {
-          metadata: workflowState.metadata,
-          projectId,
-          threadId: `sdlc:${projectId}:${crId}:CAB`,
-          inputRevision: (cab?.version ?? 0) + 1,
-          draftRevision: (cab?.version ?? 0) + 1,
-          sources,
-        }
-      );
-
-      const cabMd = `# Tờ trình CAB — ${workflowState.metadata.featureName}\n\n**Mã CR:** ${workflowState.metadata.cr}\n**Người đề xuất:** ${workflowState.metadata.author}\n**Ngày lập:** ${workflowState.metadata.date}\n\n## 1. Bối cảnh & Mục tiêu\n${cabDocx.contextObjective}\n\n## 2. Các thay đổi Kỹ thuật\n${cabDocx.technicalChanges.map((t) => `- ${t}`).join('\n')}\n\n## 3. Rủi ro & Kế hoạch Rollback\n- Rollback: ${cabDocx.rollback.summary} (Verified: ${cabDocx.rollback.verified ? 'Có' : 'Chưa'})\n- Rủi ro ghi nhận: ${cabDocx.risks.join(', ') || 'Không có'}\n`;
-
-      await onCommitCab(cabMd);
-      message.success('Đã sinh và phê duyệt Tờ trình CAB thành công!');
+      const base = {
+        db,
+        projectId,
+        threadId: workflowState.threadId,
+        sessionId: workflowState.sessionId,
+        draftRevision: (cab?.version ?? 0) + 1,
+        metadata: workflowState.metadata,
+        state: workflowState,
+      };
+      let markdown: string;
+      if (generateCabDraft) {
+        markdown = (await generateCabDraft({ signal: new AbortController().signal })).markdown;
+      } else {
+        if (!wizardRuntime) return;
+        markdown = (await generateHubCabDraft({
+          ...base,
+          model: wizardRuntime.model,
+          collectEvidence: wizardRuntime.collectEvidence,
+          resolveSetIds: wizardRuntime.resolveSetIds,
+        })).markdown;
+      }
+      setDraftMarkdown(markdown);
+      onDraftChange?.(markdown);
+      message.success('Đã tạo bản nháp Tờ trình CAB. Vui lòng review trước khi lưu và phê duyệt.');
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Sinh CAB thất bại';
-      message.error(`Lỗi sinh CAB: ${msg}`);
+      message.error('Lỗi tạo bản nháp CAB: ' + (err instanceof Error ? err.message : String(err)));
     } finally {
       setGenerating(false);
     }
   };
 
-  // Export single .docx
+  /** The only path to an approved CAB artifact (D-17). */
+  const handleApprove = async () => {
+    if (!draftMarkdown?.trim()) return;
+    try {
+      setApproving(true);
+      await onCommitCab(draftMarkdown);
+      message.success('Đã lưu & phê duyệt Tờ trình CAB.');
+    } catch (err: unknown) {
+      message.error('Không thể lưu CAB: ' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setApproving(false);
+    }
+  };
+
   const handleExportDocx = async (kind: 'PL02' | 'PL03B' | 'PL07' | 'CAB') => {
     if (!workflowState) return;
     try {
@@ -145,7 +131,7 @@ export const Step6CabView: React.FC<Step6CabViewProps> = ({
         kind,
         projectId,
         threadId: `sdlc:${projectId}:${crId}:CAB`,
-        sessionId: 'session-cab-export',
+        sessionId: workflowState.sessionId,
         metadata: workflowState.metadata,
         state: workflowState,
       });
@@ -156,68 +142,37 @@ export const Step6CabView: React.FC<Step6CabViewProps> = ({
         message.error(`Không thể xuất file: ${res.errorCode ?? 'Lỗi không xác định'}`);
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Xuất file thất bại';
-      message.error(`Lỗi: ${msg}`);
+      message.error('Lỗi: ' + (err instanceof Error ? err.message : String(err)));
     } finally {
       setExportingKind(null);
     }
   };
 
-  // Export all documents bundled in a .zip archive
   const handleExportAllZip = async () => {
     if (!workflowState) return;
     try {
       setDownloadingZip(true);
-
       const kinds: Array<'PL02' | 'PL03B' | 'PL07' | 'CAB'> = ['PL02', 'PL03B', 'PL07', 'CAB'];
       const entries: Array<{ path: string; data: Uint8Array }> = [];
 
       for (const kind of kinds) {
-        let payload: any;
-        const ref = workflowState.artifacts[kind === 'PL02' ? 'pl02' : kind === 'PL03B' ? 'pl03b' : kind === 'PL07' ? 'pl07' : 'cab'];
-        if (!ref?.content) continue;
-
-        if (kind === 'PL02') {
-          payload = {
-            schemaVersion: 1,
-            kind: 'PL02',
-            status: 'approved',
-            inputRevision: 1,
-            draftRevision: 1,
-            approvedRevision: 1,
-            metadata: {
-              crCode: workflowState.metadata.cr,
-              featureName: workflowState.metadata.featureName,
-              requestingUnit: workflowState.metadata.requestingUnit,
-              author: workflowState.metadata.author,
-              createdDate: workflowState.metadata.date,
-            },
-            introduction: { purpose: ref.content, users: '(chưa cung cấp)', deploymentScope: '(chưa cung cấp)', risks: [], glossary: [] },
-            features: [{ name: workflowState.metadata.featureName, description: ref.content, fileLayout: [], inputRules: [], processingRules: [], flowSteps: [] }],
-            permissions: [],
-            notifications: [],
-            apiContracts: [],
-            staffing: [],
-          };
-        } else if (ref.noteId) {
-          const note = await db.notes.get(ref.noteId);
-          if (note?.body) {
-            try {
-              payload = JSON.parse(note.body).exportPayload;
-            } catch {
-              payload = undefined;
-            }
-          }
+        let payload: unknown;
+        const noteId = workflowState.artifacts[kind === 'PL02' ? 'pl02' : kind === 'PL03B' ? 'pl03b' : kind === 'PL07' ? 'pl07' : 'cab']?.noteId;
+        if (!noteId) continue;
+        const note = await db.notes.get(noteId);
+        if (!note?.body) continue;
+        try {
+          payload = (JSON.parse(note.body) as { exportPayload?: unknown }).exportPayload;
+        } catch {
+          payload = undefined;
         }
+        if (payload === undefined) continue;
 
-        if (payload) {
-          const blob = await buildWizardDocx(kind, payload);
-          const buf = new Uint8Array(await blob.arrayBuffer());
-          entries.push({
-            path: `${kind}-${workflowState.metadata.cr}.docx`,
-            data: buf,
-          });
-        }
+        const blob = await buildWizardDocx(kind, payload);
+        entries.push({
+          path: `${kind}-${workflowState.metadata.cr}.docx`,
+          data: new Uint8Array(await blob.arrayBuffer()),
+        });
       }
 
       if (entries.length === 0) {
@@ -225,12 +180,10 @@ export const Step6CabView: React.FC<Step6CabViewProps> = ({
         return;
       }
 
-      const zipBlob = createStoreZip(entries);
-      await downloadBlob(zipBlob, `SDLC-HO-SO-CAB-${workflowState.metadata.cr}.zip`);
+      await downloadBlob(createStoreZip(entries), `SDLC-HO-SO-CAB-${workflowState.metadata.cr}.zip`);
       message.success('Đã tải xuống toàn bộ bộ hồ sơ CAB (.zip)!');
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Đóng gói zip thất bại';
-      message.error(`Lỗi: ${msg}`);
+      message.error('Lỗi: ' + (err instanceof Error ? err.message : String(err)));
     } finally {
       setDownloadingZip(false);
     }
@@ -242,6 +195,8 @@ export const Step6CabView: React.FC<Step6CabViewProps> = ({
     message.success('Đã hoàn tất quy trình SDLC và đóng CR thành công!');
   };
 
+  const previewMarkdown = draftMarkdown ?? cab?.content;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 1000 }}>
       <div>
@@ -249,11 +204,32 @@ export const Step6CabView: React.FC<Step6CabViewProps> = ({
           Bước 6: Tổng kết & Hồ sơ CAB (Change Advisory Board)
         </Typography.Title>
         <Typography.Paragraph type="secondary" style={{ marginTop: 4 }}>
-          Tổng kết các tài liệu đã duyệt, sinh Tờ trình CAB chuẩn ngân hàng và tải về toàn bộ bộ hồ sơ bàn giao.
+          Tổng kết các tài liệu đã duyệt và tạo bản nháp Tờ trình CAB. Bản nháp chỉ được lưu khi bạn bấm Lưu & Phê duyệt.
         </Typography.Paragraph>
       </div>
 
-      {/* Prerequisites Card */}
+      {!canGenerateCab && (
+        <Alert
+          type="warning"
+          showIcon
+          message={formatGuardMessage('ALL_DOCS_REQUIRED_FOR_CAB')}
+          description="Cần PL02 đã duyệt (Bước 1), PL03B và PL07 đã duyệt (Bước 5) trước khi tạo Tờ trình CAB."
+          action={
+            <Button size="small" onClick={() => onNavigateToStep?.('TECH_DOCS')}>
+              Chuyển đến Bước 5: Tài liệu kỹ thuật
+            </Button>
+          }
+        />
+      )}
+
+      {!isConfigured && (
+        <Alert
+          type="info"
+          showIcon
+          message="Chưa cấu hình mô hình AI. Vui lòng thiết lập endpoint và API key trong Cài đặt."
+        />
+      )}
+
       <Card
         size="small"
         title="Kiểm tra điều kiện tiên quyết tạo CAB"
@@ -270,99 +246,143 @@ export const Step6CabView: React.FC<Step6CabViewProps> = ({
               <Typography.Text strong={p.present} style={{ fontSize: 13 }}>
                 {p.label}
               </Typography.Text>
-              <Tag color={p.present ? 'success' : 'default'}>
-                {p.present ? 'Đã sẵn sàng' : 'Chưa có'}
-              </Tag>
+              <Tag color={p.present ? 'success' : 'default'}>{p.present ? 'Đã sẵn sàng' : 'Chưa có'}</Tag>
             </div>
           ))}
         </Space>
       </Card>
 
-      {/* CAB Proposal Card */}
       <Card
         size="small"
-        title="Tờ trình CAB"
-        style={{ border: `1px solid ${token.colorBorderSecondary}` }}
-        extra={
+        title={
           <Space>
-            <Button
-              type="primary"
-              icon={<RobotOutlined />}
-              loading={generating}
-              disabled={!canGenerateCab}
-              onClick={handleGenerateCab}
-            >
-              {cab ? 'Tạo lại Tờ trình CAB bằng AI' : 'Tạo Tờ trình CAB bằng AI'}
-            </Button>
+            <span>Tờ trình CAB</span>
+            {cab ? <Tag color="success">Đã duyệt (v{cab.version})</Tag> : draftMarkdown ? <Tag color="warning">Bản nháp</Tag> : null}
           </Space>
         }
+        style={{ border: `1px solid ${token.colorBorderSecondary}` }}
+        extra={
+          <Button
+            type="primary"
+            icon={<RobotOutlined />}
+            loading={generating}
+            disabled={!canGenerateCab || !isConfigured}
+            onClick={handleGenerateCab}
+          >
+            {draftMarkdown || cab ? 'Tạo lại bản nháp CAB' : 'Tạo bản nháp CAB'}
+          </Button>
+        }
       >
-        {cab?.content ? (
+        {previewMarkdown ? (
           <div
             style={{ maxHeight: 350, overflowY: 'auto', padding: 8, lineHeight: 1.6 }}
-            dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(cab.content) }}
+            dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(previewMarkdown) }}
           />
         ) : (
           <Typography.Text type="secondary" style={{ display: 'block', textAlign: 'center', padding: 32 }}>
             {canGenerateCab
-              ? 'Tất cả điều kiện đã đáp ứng. Bấm "Tạo Tờ trình CAB bằng AI" để sinh tờ trình.'
+              ? 'Tất cả điều kiện đã đáp ứng. Bấm "Tạo bản nháp CAB" để sinh bản nháp tờ trình.'
               : 'Cần hoàn tất các bước trước để có đủ PL02, PL03B và PL07.'}
           </Typography.Text>
         )}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 12 }}>
+          <Button
+            type="primary"
+            loading={approving}
+            disabled={!draftMarkdown?.trim()}
+            onClick={handleApprove}
+          >
+            Lưu & Phê duyệt
+          </Button>
+        </div>
       </Card>
 
-      {/* Bank Standard Export Suite */}
+      {crSummary && (
+        <Card
+          size="small"
+          title="Tóm tắt CR nội bộ (chỉ trong TaskMate)"
+          style={{ border: `1px solid ${token.colorBorderSecondary}` }}
+        >
+          <Space direction="vertical" size={12} style={{ width: '100%' }}>
+            <div>
+              <Typography.Text strong>Phạm vi & mục tiêu</Typography.Text>
+              <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', marginBottom: 0, fontSize: 13 }}>
+                {crSummary.scope}
+              </Typography.Paragraph>
+            </div>
+            <div>
+              <Typography.Text strong>Thay đổi thực tế</Typography.Text>
+              {crSummary.actualChanges.length > 0 ? (
+                <ul style={{ margin: '4px 0 0', paddingLeft: 20, fontSize: 13 }}>
+                  {crSummary.actualChanges.map((item) => <li key={item}>{item}</li>)}
+                </ul>
+              ) : (
+                <Typography.Paragraph type="secondary" style={{ marginBottom: 0, fontSize: 13 }}>
+                  Chưa có bằng chứng triển khai.
+                </Typography.Paragraph>
+              )}
+            </div>
+            <div>
+              <Typography.Text strong>Quyết định chính</Typography.Text>
+              <ul style={{ margin: '4px 0 0', paddingLeft: 20, fontSize: 13 }}>
+                {crSummary.keyDecisions.length > 0
+                  ? crSummary.keyDecisions.map((item) => <li key={item}>{item}</li>)
+                  : <li>Chưa ghi nhận quyết định thiết kế.</li>}
+              </ul>
+            </div>
+            <div>
+              <Space>
+                <Typography.Text strong>Rủi ro & rollback</Typography.Text>
+                {crSummary.risksRollback.rollbackVerified
+                  ? <Tag color="success">Đã kiểm chứng</Tag>
+                  : <Tag color="warning">Chưa kiểm chứng</Tag>}
+              </Space>
+              <Typography.Paragraph style={{ marginBottom: 0, fontSize: 13 }}>
+                {crSummary.risksRollback.rollbackSummary}
+              </Typography.Paragraph>
+            </div>
+            <div>
+              <Typography.Text strong>Khoảng trống bằng chứng</Typography.Text>
+              <ul style={{ margin: '4px 0 0', paddingLeft: 20, fontSize: 13 }}>
+                {crSummary.openGaps.map((item) => <li key={item}>{item}</li>)}
+              </ul>
+            </div>
+            <div>
+              <Typography.Text strong>Liên kết bằng chứng</Typography.Text>
+              <ul style={{ margin: '4px 0 0', paddingLeft: 20, fontSize: 13 }}>
+                {crSummary.evidenceLinks.map((link) => (
+                  <li key={`${link.kind}-${link.version}`}>{link.kind} v{link.version} — {link.hash.slice(0, 12)}…</li>
+                ))}
+              </ul>
+            </div>
+          </Space>
+        </Card>
+      )}
+
       <Card
         size="small"
         title="Bộ hồ sơ xuất chuẩn Ngân hàng (.docx / .zip)"
         style={{ border: `1px solid ${token.colorBorderSecondary}` }}
       >
         <Space wrap size={12}>
-          <Button
-            icon={<FileWordOutlined />}
-            loading={exportingKind === 'PL02'}
-            disabled={!pl02?.content}
-            onClick={() => handleExportDocx('PL02')}
-          >
+          <Button icon={<FileWordOutlined />} loading={exportingKind === 'PL02'} disabled={!pl02?.content} onClick={() => handleExportDocx('PL02')}>
             Tải PL02.docx
           </Button>
-          <Button
-            icon={<FileWordOutlined />}
-            loading={exportingKind === 'PL03B'}
-            disabled={!pl03b?.content}
-            onClick={() => handleExportDocx('PL03B')}
-          >
+          <Button icon={<FileWordOutlined />} loading={exportingKind === 'PL03B'} disabled={!pl03b?.content} onClick={() => handleExportDocx('PL03B')}>
             Tải PL03B.docx
           </Button>
-          <Button
-            icon={<FileWordOutlined />}
-            loading={exportingKind === 'PL07'}
-            disabled={!pl07?.content}
-            onClick={() => handleExportDocx('PL07')}
-          >
+          <Button icon={<FileWordOutlined />} loading={exportingKind === 'PL07'} disabled={!pl07?.content} onClick={() => handleExportDocx('PL07')}>
             Tải PL07.docx
           </Button>
-          <Button
-            icon={<FileWordOutlined />}
-            loading={exportingKind === 'CAB'}
-            disabled={!cab?.content}
-            onClick={() => handleExportDocx('CAB')}
-          >
+          <Button icon={<FileWordOutlined />} loading={exportingKind === 'CAB'} disabled={!cab?.content} onClick={() => handleExportDocx('CAB')}>
             Tải CAB.docx
           </Button>
-          <Button
-            type="primary"
-            icon={<FileZipOutlined />}
-            loading={downloadingZip}
-            disabled={!cab?.content}
-            onClick={handleExportAllZip}
-          >
+          <Button type="primary" icon={<FileZipOutlined />} loading={downloadingZip} disabled={!cab?.content} onClick={handleExportAllZip}>
             Tải toàn bộ bộ hồ sơ (.zip)
           </Button>
         </Space>
       </Card>
 
-      {/* Complete & Close CR Button */}
       {cab && (
         <div
           style={{
@@ -380,12 +400,7 @@ export const Step6CabView: React.FC<Step6CabViewProps> = ({
               ? 'Yêu cầu thay đổi (CR) này đã được hoàn tất và đóng.'
               : 'Hồ sơ CAB đã hoàn chỉnh. Xác nhận hoàn tất và đóng CR để lưu trữ lịch sử.'}
           </Typography.Text>
-          <Button
-            type="primary"
-            disabled={completed}
-            icon={<CheckOutlined />}
-            onClick={handleCompleteCr}
-          >
+          <Button type="primary" disabled={completed} icon={<CheckOutlined />} onClick={handleCompleteCr}>
             {completed ? 'Đã đóng CR' : 'Hoàn tất & Đóng CR'}
           </Button>
         </div>
