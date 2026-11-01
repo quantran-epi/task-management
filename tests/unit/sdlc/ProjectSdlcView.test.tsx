@@ -1,5 +1,4 @@
 import { describe, it, expect, vi } from 'vitest';
-import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import 'fake-indexeddb/auto';
 import { TaskPlannerDatabase } from '../../../src/db';
@@ -127,5 +126,40 @@ describe('ProjectSdlcView and IDE Layout', () => {
       .first();
     expect(thread).toBeDefined();
     expect(thread?.scopeKey).toBe(`sdlc:${projectId}:cr-test-01:INTAKE`);
+  });
+
+  it('Test 5: Explicit solution analysis and editor draft persistence across step switches', async () => {
+    render(<ProjectSdlcView projectId={projectId} onBack={vi.fn()} db={db} />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/SDLC Studio — Ngân hàng số Mobile App/i)).toBeInTheDocument();
+    });
+
+    // Advance to Step 2
+    fireEvent.click(screen.getByText(/Bước 2: Thiết kế giải pháp/i));
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/Nội dung kiến trúc giải pháp SOLUTION.md/i)).toBeInTheDocument();
+    });
+
+    const textarea = screen.getByPlaceholderText(/Nội dung kiến trúc giải pháp SOLUTION.md/i) as HTMLTextAreaElement;
+
+    // Type a draft
+    fireEvent.change(textarea, { target: { value: '# Draft Architecture v1\nPersisted across navigation.' } });
+
+    // Navigate to Step 3
+    fireEvent.click(screen.getByText(/Bước 3: Coding ngoài/i));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Lệnh đóng gói Change Pack/i)).toBeInTheDocument();
+    });
+
+    // Navigate back to Step 2 -> draft must still be there without auto-running AI
+    fireEvent.click(screen.getByText(/Bước 2: Thiết kế giải pháp/i));
+
+    await waitFor(() => {
+      const reloadedTextarea = screen.getByPlaceholderText(/Nội dung kiến trúc giải pháp SOLUTION.md/i) as HTMLTextAreaElement;
+      expect(reloadedTextarea.value).toContain('Persisted across navigation.');
+    });
   });
 });

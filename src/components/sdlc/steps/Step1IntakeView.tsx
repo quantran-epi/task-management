@@ -1,6 +1,26 @@
-import React, { useState } from 'react';
-import { Form, Input, Button, DatePicker, Space, Typography, theme, Modal, List, message } from 'antd';
-import { FileTextOutlined, ArrowRightOutlined, FolderOpenOutlined } from '@ant-design/icons';
+import React, { useState, useMemo } from 'react';
+import {
+  Form,
+  Input,
+  Button,
+  DatePicker,
+  Space,
+  Typography,
+  theme,
+  Modal,
+  List,
+  Select,
+  Tag,
+  Alert,
+  message,
+} from 'antd';
+import {
+  FileTextOutlined,
+  ArrowRightOutlined,
+  FolderOpenOutlined,
+  SearchOutlined,
+  CheckCircleFilled,
+} from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../../db';
 import type { SdlcWorkflowMetadata } from '../../../services/wizard/workflowSchemas';
@@ -9,15 +29,15 @@ import dayjs from 'dayjs';
 
 export interface Step1IntakeViewProps {
   projectId: string;
-  initialMetadata?: Partial<SdlcWorkflowMetadata>;
-  initialPl01?: string;
-  initialPl02?: string;
+  initialMetadata?: Partial<SdlcWorkflowMetadata> | undefined;
+  initialPl01?: string | undefined;
+  initialPl02?: string | undefined;
   onStartIntake: (
     metadata: SdlcWorkflowMetadata,
     pl01Content: string,
     pl02Content: string
   ) => Promise<void>;
-  db?: TaskPlannerDatabase;
+  db?: TaskPlannerDatabase | undefined;
 }
 
 export const Step1IntakeView: React.FC<Step1IntakeViewProps> = ({
@@ -35,20 +55,45 @@ export const Step1IntakeView: React.FC<Step1IntakeViewProps> = ({
   // Note picker state
   const [notePickerOpen, setNotePickerOpen] = useState(false);
   const [noteTargetField, setNoteTargetField] = useState<'pl01' | 'pl02'>('pl01');
+  const [projectFilter, setProjectFilter] = useState<string>(projectId);
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // Load project notes for picker
-  const notes = useLiveQuery(
-    () => db.notes.where('entityId').equals(projectId).toArray(),
-    [projectId, db]
-  ) ?? [];
+  // Load all notes & all projects in system
+  const allNotes = useLiveQuery(() => db.notes.toArray(), [db]) ?? [];
+  const allProjects = useLiveQuery(() => db.projects.toArray(), [db]) ?? [];
+
+  const projectMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const p of allProjects) {
+      map.set(p.id, p.name);
+    }
+    return map;
+  }, [allProjects]);
+
+  const filteredNotes = useMemo(() => {
+    return allNotes.filter((note) => {
+      if (projectFilter !== 'ALL') {
+        if (note.entityId !== projectFilter) return false;
+      }
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchTitle = (note.title || '').toLowerCase().includes(q);
+        const matchContent = (note.body || '').toLowerCase().includes(q);
+        if (!matchTitle && !matchContent) return false;
+      }
+      return true;
+    });
+  }, [allNotes, projectFilter, searchQuery]);
 
   const handleOpenNotePicker = (field: 'pl01' | 'pl02') => {
     setNoteTargetField(field);
+    setProjectFilter(projectId);
+    setSearchQuery('');
     setNotePickerOpen(true);
   };
 
   const handleSelectNote = (note: Note) => {
-    const text = note.content ?? '';
+    const text = note.body ?? '';
     if (noteTargetField === 'pl01') {
       form.setFieldsValue({ pl01: text });
     } else {
@@ -57,6 +102,8 @@ export const Step1IntakeView: React.FC<Step1IntakeViewProps> = ({
     setNotePickerOpen(false);
     message.success(`Đã lấy nội dung từ ghi chú "${note.title || 'Không tiêu đề'}"`);
   };
+
+  const isIntakeCompleted = Boolean(initialPl01 && initialPl02);
 
   const handleSubmit = async () => {
     try {
@@ -80,13 +127,35 @@ export const Step1IntakeView: React.FC<Step1IntakeViewProps> = ({
   return (
     <div style={{ maxWidth: 880, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div>
-        <Typography.Title level={4} style={{ margin: 0 }}>
-          Bước 1: Nạp hồ sơ yêu cầu đầu vào (PL01 & PL02)
-        </Typography.Title>
-        <Typography.Paragraph type="secondary" style={{ marginTop: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Typography.Title level={4} style={{ margin: 0 }}>
+            Bước 1: Nạp hồ sơ yêu cầu đầu vào (PL01 & PL02)
+          </Typography.Title>
+          {isIntakeCompleted && (
+            <Tag icon={<CheckCircleFilled />} color="success" style={{ fontSize: 13, padding: '3px 10px' }}>
+              Bước 1 hoàn thành
+            </Tag>
+          )}
+        </div>
+        <Typography.Paragraph type="secondary" style={{ marginTop: 4, marginBottom: 0 }}>
           Cung cấp thông tin nghiệp vụ và đặc tả tính năng để AI phân tích kiến trúc giải pháp SOLUTION.md.
         </Typography.Paragraph>
       </div>
+
+      {isIntakeCompleted && (
+        <Alert
+          type="success"
+          showIcon
+          message={`Hồ sơ yêu cầu CR ${initialMetadata?.cr || ''} đã sẵn sàng`}
+          description={
+            <div style={{ fontSize: 13, lineHeight: 1.6 }}>
+              Tính năng: <strong>{initialMetadata?.featureName || 'Chưa đặt tên'}</strong> • Người lập:{' '}
+              {initialMetadata?.author || 'N/A'} • Đơn vị: {initialMetadata?.requestingUnit || 'N/A'}. Bạn có thể
+              chỉnh sửa thông tin bên dưới hoặc bấm phân tích lại bất cứ lúc nào.
+            </div>
+          }
+        />
+      )}
 
       <Form
         form={form}
@@ -192,36 +261,87 @@ export const Step1IntakeView: React.FC<Step1IntakeViewProps> = ({
         </div>
       </Form>
 
-      {/* Note Picker Modal */}
+      {/* Note Picker Modal with Project Filter and Search */}
       <Modal
         title={`Chọn ghi chú nạp vào ${noteTargetField === 'pl01' ? 'PL01' : 'PL02'}`}
         open={notePickerOpen}
         onCancel={() => setNotePickerOpen(false)}
         footer={null}
+        width={720}
         destroyOnClose
       >
-        <List
-          dataSource={notes}
-          locale={{ emptyText: 'Dự án này chưa có ghi chú nào' }}
-          renderItem={(item) => (
-            <List.Item
-              actions={[
-                <Button key="select" type="link" onClick={() => handleSelectNote(item)}>
-                  Chọn
-                </Button>,
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Select
+              style={{ width: 220 }}
+              value={projectFilter}
+              onChange={setProjectFilter}
+              aria-label="Lọc theo dự án"
+              options={[
+                { label: 'Tất cả dự án', value: 'ALL' },
+                ...allProjects.map((p) => ({
+                  label: p.id === projectId ? `${p.name} (Hiện tại)` : p.name,
+                  value: p.id,
+                })),
               ]}
-            >
-              <List.Item.Meta
-                avatar={<FileTextOutlined style={{ fontSize: 20, color: token.colorPrimary }} />}
-                title={item.title || 'Ghi chú không tiêu đề'}
-                description={
-                  <div style={{ maxHeight: 40, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {item.content || '(trống)'}
-                  </div>
-                }
-              />
-            </List.Item>
-          )}
+            />
+            <Input
+              prefix={<SearchOutlined style={{ color: token.colorTextTertiary }} />}
+              placeholder="Tìm theo tiêu đề hoặc nội dung ghi chú..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              allowClear
+              style={{ flex: 1 }}
+            />
+          </div>
+        </div>
+
+        <List
+          dataSource={filteredNotes}
+          locale={{ emptyText: 'Không tìm thấy ghi chú nào phù hợp bộ lọc' }}
+          style={{ maxHeight: 420, overflowY: 'auto' }}
+          renderItem={(item) => {
+            const projName = item.entityId ? projectMap.get(item.entityId) : undefined;
+            return (
+              <List.Item
+                actions={[
+                  <Button key="select" type="primary" size="small" onClick={() => handleSelectNote(item)}>
+                    Chọn
+                  </Button>,
+                ]}
+              >
+                <List.Item.Meta
+                  avatar={<FileTextOutlined style={{ fontSize: 22, color: token.colorPrimary }} />}
+                  title={
+                    <Space size={8}>
+                      <span style={{ fontWeight: 600 }}>{item.title || 'Ghi chú không tiêu đề'}</span>
+                      {projName ? (
+                        <Tag color={item.entityId === projectId ? 'blue' : 'default'} style={{ margin: 0 }}>
+                          {projName}
+                        </Tag>
+                      ) : (
+                        <Tag style={{ margin: 0 }}>Chung</Tag>
+                      )}
+                    </Space>
+                  }
+                  description={
+                    <div
+                      style={{
+                        maxHeight: 40,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        fontSize: 12,
+                        color: token.colorTextSecondary,
+                        marginTop: 4,
+                      }}
+                    >
+                      {item.body || '(trống)'}
+                    </div>
+                  }
+                />
+              </List.Item>
+            );
+          }}
         />
       </Modal>
     </div>

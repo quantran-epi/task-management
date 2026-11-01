@@ -1,19 +1,41 @@
-import React, { useState } from 'react';
-import { Input, Button, Segmented, Space, Typography, Tag, message, theme } from 'antd';
-import { CheckOutlined, EditOutlined, EyeOutlined, SplitCellsOutlined, ArrowRightOutlined } from '@ant-design/icons';
+import React, { useState, useEffect } from 'react';
+import {
+  Input,
+  Button,
+  Segmented,
+  Space,
+  Typography,
+  Tag,
+  message,
+  theme,
+} from 'antd';
+import {
+  CheckOutlined,
+  EditOutlined,
+  EyeOutlined,
+  SplitCellsOutlined,
+  ArrowRightOutlined,
+  RobotOutlined,
+} from '@ant-design/icons';
 import { renderSafeMarkdown } from '../../../utils/markdown';
 import { saveHubSolution } from '../../../services/wizard/hubSolution';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../../db';
-import type { SdlcArtifactRef } from '../../../services/wizard/workflowSchemas';
+import type { SdlcArtifactRef, SdlcWorkflowMetadata } from '../../../services/wizard/workflowSchemas';
 
 export interface Step2SolutionViewProps {
   projectId: string;
-  crId?: string;
-  solutionArtifact?: SdlcArtifactRef;
-  initialContent?: string;
+  crId?: string | undefined;
+  solutionArtifact?: SdlcArtifactRef | undefined;
+  initialContent?: string | undefined;
+  incomingDraft?: string | undefined;
+  pl01Content?: string | undefined;
+  pl02Content?: string | undefined;
+  metadata?: SdlcWorkflowMetadata | undefined;
   onCommitSolution: (markdown: string, noteId: string) => Promise<void>;
-  onProceedToStep3?: () => void;
-  db?: TaskPlannerDatabase;
+  onDraftChange?: (draftMarkdown: string) => void;
+  onRequestAiAnalysis?: () => void;
+  onProceedToStep3?: (() => void) | undefined;
+  db?: TaskPlannerDatabase | undefined;
 }
 
 export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
@@ -21,15 +43,53 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
   crId,
   solutionArtifact,
   initialContent = '',
+  incomingDraft,
+  pl01Content = '',
+  pl02Content = '',
+  metadata,
   onCommitSolution,
+  onDraftChange,
+  onRequestAiAnalysis,
   onProceedToStep3,
   db = defaultDb,
 }) => {
   const { token } = theme.useToken();
-  const [content, setContent] = useState<string>(solutionArtifact?.content ?? initialContent ?? '');
+  const [content, setContent] = useState<string>(
+    incomingDraft ?? solutionArtifact?.content ?? initialContent ?? ''
+  );
   const [mode, setMode] = useState<'write' | 'preview' | 'split'>('write');
   const [saving, setSaving] = useState(false);
   const [isApproved, setIsApproved] = useState(Boolean(solutionArtifact?.approvedAt));
+
+  // Sync when initialContent changes on remount/parent update
+  useEffect(() => {
+    const parentContent = solutionArtifact?.content ?? initialContent;
+    if (parentContent && parentContent !== content) {
+      setContent(parentContent);
+    }
+  }, [solutionArtifact?.content, initialContent]);
+
+  // Sync when incomingDraft from chat turn completion updates (D-07)
+  useEffect(() => {
+    if (incomingDraft !== undefined && incomingDraft !== content) {
+      setContent(incomingDraft);
+      onDraftChange?.(incomingDraft);
+    }
+  }, [incomingDraft]);
+
+  // Handle local text changes with draft propagation (D-08)
+  const handleContentChange = (val: string) => {
+    setContent(val);
+    onDraftChange?.(val);
+  };
+
+  const handleRunAnalysis = () => {
+    if (onRequestAiAnalysis) {
+      onRequestAiAnalysis();
+    } else {
+      message.info('Vui lòng sử dụng khung chat bên phải để phân tích giải pháp');
+    }
+  };
 
   const handleApproveAndSave = async () => {
     const trimmed = content.trim();
@@ -90,7 +150,13 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
           )}
         </Space>
 
-        <Space size={12}>
+        <Space size={10}>
+          <Button
+            icon={<RobotOutlined />}
+            onClick={handleRunAnalysis}
+          >
+            Phân tích lại bằng AI
+          </Button>
           <Segmented
             value={mode}
             onChange={(val) => setMode(val as 'write' | 'preview' | 'split')}
@@ -104,6 +170,7 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
             type="primary"
             icon={<CheckOutlined />}
             loading={saving}
+            disabled={!content.trim()}
             onClick={handleApproveAndSave}
           >
             Duyệt & Lưu SOLUTION.md
@@ -143,7 +210,7 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
         {(mode === 'write' || mode === 'split') && (
           <Input.TextArea
             value={content}
-            onChange={(e) => setContent(e.target.value)}
+            onChange={(e) => handleContentChange(e.target.value)}
             style={{
               flex: 1,
               resize: 'none',
