@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { message, theme } from 'antd';
+import { message, Modal, theme } from 'antd';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../../db';
 import { clearThreadMessages } from '../../../db/repositories/chatRepo';
@@ -187,15 +187,25 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
     [threadId, messages, db, stepId, crId, stepGroundingContext, turn, scopeKey, toolbox, extractSolutionDraft]
   );
 
-  const handleClearThread = useCallback(async () => {
+  const handleClearThread = useCallback(() => {
     if (!threadId) return;
-    try {
-      // D-05: clear is thread-scoped — never workflow state, drafts or other step threads.
-      await clearThreadMessages(threadId, db);
-      message.success('Đã xóa hội thoại của bước này');
-    } catch {
-      message.error('Không thể xóa hội thoại');
-    }
+    // D-05: clear is thread-scoped — never workflow state, drafts or other step threads.
+    // Confirmation is part of the shared clear contract, so both hosts ask before deleting.
+    Modal.confirm({
+      title: 'Xóa tin nhắn cuộc trò chuyện này?',
+      content: 'Toàn bộ nội dung trao đổi trong bước này sẽ bị xóa khỏi lịch sử.',
+      okText: 'Xóa tin nhắn',
+      okType: 'danger',
+      cancelText: 'Hủy',
+      onOk: async () => {
+        try {
+          await clearThreadMessages(threadId, db);
+          message.success('Đã xóa hội thoại của bước này');
+        } catch {
+          message.error('Không thể xóa hội thoại');
+        }
+      },
+    });
   }, [threadId, db]);
 
   React.useImperativeHandle(ref, () => ({
@@ -253,9 +263,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
         {...(artifactEvents ? { artifactEvents } : {})}
         {...(onArtifactOpen ? { onArtifactOpen } : {})}
         {...(onArtifactCta ? { onArtifactCta } : {})}
-        onClearThread={() => {
-          void handleClearThread();
-        }}
+        onClearThread={handleClearThread}
         emptyState={{
           heading: `Trợ lý SDLC — ${STEP_LABELS[stepId]}`,
           body: 'Chọn gợi ý bên dưới hoặc đặt câu hỏi để hoàn thiện hồ sơ cho bước này.',

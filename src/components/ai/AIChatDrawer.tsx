@@ -14,7 +14,6 @@ import {
   createOrGetThread,
   saveMessage,
   getMessagesByThreadId,
-  clearThreadContext,
   clearThreadMessages,
   clearAllChatHistory,
 } from '../../db/repositories/chatRepo';
@@ -93,7 +92,6 @@ import {
 import type {
   ChatTurnRuntimeDeps,
   ChatTurnStatus,
-  ChatTurnToolEvent,
 } from './runtime/chatTurnRuntime';
 import { AiChatWidget } from './AiChatWidget';
 import { InterruptedBanner } from './InterruptedBanner';
@@ -121,6 +119,17 @@ const TURN_STATUS_TO_TAB: Record<ChatTurnStatus, TabRuntimeStatus> = {
   error: 'error',
   aborted: 'idle',
 };
+
+/** Debug log wants the parsed arguments; a malformed payload must not break the turn. */
+function tryParseToolArgs(raw: string | undefined): Record<string, unknown> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
 
 export const AI_CHAT_WIDTH_KEY = 'planner:ai_chat_width';
 export const AI_AUTO_APPROVE_MUTATIONS_KEY = 'planner:ai_auto_approve_mutations';
@@ -188,9 +197,6 @@ export function buildSdlcWrapperPrompt(input: SdlcWrapperPromptInput): string {
   parts.push(`\n[YÊU CẦU CỦA NGƯỜI DÙNG]:\n${input.userQuery}`);
   return parts.join('\n');
 }
-
-// Moved to a service module so non-Drawer hosts stop importing from a component.
-export { getToolsForTurn } from '../../services/ai/chatTurnTools';
 
 export interface ActiveScope {
   type: ChatScopeType;
@@ -476,11 +482,18 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         },
         onToolEvent: (event) => {
           const existing = tabRuntimesRef.current.get(tabId)?.toolProgress;
-          patch({ toolProgress: existing === event.name ? null : event.name });
+          patch({
+            toolProgress: existing === event.name ? null : event.name,
+            toolEvents: [...(tabRuntimesRef.current.get(tabId)?.toolEvents ?? []), event],
+          });
           const debugTurnId = debugTurnRef.current.get(tabId);
           if (!debugTurnId) return;
           if (event.phase === 'call') {
-            aiDebugService.recordToolCall(debugTurnId, { id: event.id, name: event.name, args: {} });
+            aiDebugService.recordToolCall(debugTurnId, {
+              id: event.id,
+              name: event.name,
+              args: tryParseToolArgs(event.args),
+            });
           } else {
             aiDebugService.recordToolResult(debugTurnId, event.id, event.result ?? '', event.durationMs);
           }
@@ -1036,10 +1049,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     () => turnRegistryRef.current?.peek(activeRuntimeTabId),
     [activeRuntimeTabId, turnRevision, tabRuntimes.snapshot]
   );
-  const activeToolEvents = useMemo<ChatTurnToolEvent[]>(() => {
-    const name = activeRuntime?.toolProgress;
-    return name ? [{ id: `${activeRuntimeTabId}:${name}`, name, phase: 'call' }] : [];
-  }, [activeRuntime?.toolProgress, activeRuntimeTabId]);
+  const activeToolEvents = activeRuntime?.toolEvents ?? [];
   const activeRoutedScope = routedScopeByTab[activeRuntimeTabId] ?? null;
 
   // Abort every tab's request on unmount only. Drawer close must not abort an in-flight turn (D-09).
@@ -1193,6 +1203,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       error: null,
       pendingConfirmation: null,
       streamingText: '',
+      toolEvents: [],
       lastSubmittedText: trimmed,
       retryUserMessageId: options.retryUserMessageId ?? null,
     });
@@ -1903,6 +1914,10 @@ Rules:
     evidenceSynthesisError,
   };
 
+  /**
+   * D-05: clear removes only the active thread's messages. It must not append a context
+   * boundary row instead — that would leave the transcript (and other threads) untouched.
+   */
   const handleClearContext = async () => {
     const runtime = tabRuntimesRef.current.get(runtimeTabId);
     runtime?.confirmationResolver?.(false);
@@ -1930,25 +1945,22 @@ Rules:
     }
 
     if (targetThreadId) {
-      await clearThreadContext(targetThreadId, db);
+      await clearThreadMessages(targetThreadId, db);
     }
     tabRuntimes.patch(activeTabId, { references: [] });
-    message.success('Đã đặt lại ngữ cảnh hội thoại');
+    message.success('Đã xóa hội thoại của tab này');
   };
 
+  /** D-05 single clear path: the composer and the toolbox delegate here (thread-scoped only). */
   const handleDeleteCurrentThread = () => {
     Modal.confirm({
       title: 'Xóa tin nhắn cuộc trò chuyện này?',
-      content: 'Toàn bộ nội dung trao đổi trong phạm vi này sẽ bị xóa khỏi lịch sử.',
+      content: 'Toàn bộ nội dung trao đổi trong tab đang mở sẽ bị xóa khỏi lịch sử.',
       okText: 'Xóa tin nhắn',
       okType: 'danger',
       cancelText: 'Hủy',
       onOk: async () => {
-        if (thread) {
-          await clearThreadMessages(thread.id, db);
-        }
-        tabRuntimes.patch(activeTabId, { references: [] });
-        message.success('Đã xóa tin nhắn cuộc trò chuyện');
+        await handleClearContext();
       },
     });
   };
@@ -2235,9 +2247,7 @@ Rules:
             onOpenMcpSettings: () => setIsMcpModalOpen(true),
           }}
           quickPrompts={DRAWER_QUICK_PROMPTS}
-          onClearThread={() => {
-            void handleClearContext();
-          }}
+          onClearThread={handleDeleteCurrentThread}
           onClearAllHistory={handleClearAllHistory}
           emptyState={{
             heading: `Trợ lý AI ${APP_NAME}`,

@@ -27,6 +27,8 @@ export interface ChatTurnToolEvent {
   name: string;
   phase: 'call' | 'result';
   durationMs?: number;
+  /** Serialized tool arguments (D-04: expandable details, never auto-expanded). */
+  args?: string;
   result?: string;
 }
 
@@ -212,6 +214,8 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
       let fullResponse = '';
       let tokenUsage: ChatTokenUsage = {};
       let cancellationResult: string | undefined;
+      // Tool badges must name the tool on the result event too; the loop only reports the call id.
+      const toolNames = new Map<string, string>();
       // Thinking blocks are never shown; the host receives only the newly visible remainder.
       let displayed = '';
       const generatedFiles: ChatGeneratedFile[] = [];
@@ -263,13 +267,19 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
         },
         onToolCall: (call) => {
           publish('tool');
-          deps.onToolEvent?.({ id: call.id, name: call.name, phase: 'call' });
+          toolNames.set(call.id, call.name);
+          deps.onToolEvent?.({
+            id: call.id,
+            name: call.name,
+            phase: 'call',
+            args: JSON.stringify(call.args ?? {}),
+          });
         },
         onToolResult: (callId, toolResult, durationMs) => {
           publish('tool');
           deps.onToolEvent?.({
             id: callId,
-            name: callId,
+            name: toolNames.get(callId) ?? callId,
             phase: 'result',
             durationMs,
             result: toolResult,

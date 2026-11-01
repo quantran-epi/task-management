@@ -1,4 +1,5 @@
 import type { ChatGeneratedFile, ChatTokenUsage } from '../../../types/models';
+import type { ChatTurnToolEvent } from './chatTurnRuntime';
 
 export type TabRuntimeStatus =
   | 'idle'
@@ -32,6 +33,8 @@ export interface TabRuntime {
   streamingStatus: string | null;
   groundedLoadingStatus: string | null;
   toolProgress: string | null;
+  /** Tool badges for this tab's turn; details stay collapsed in the widget (D-04). */
+  toolEvents: ChatTurnToolEvent[];
   partialBuffer: string;
   generatedFiles: ChatGeneratedFile[];
   error: TabRuntimeError | null;
@@ -72,6 +75,7 @@ export function createTabRuntime(
     streamingStatus: null,
     groundedLoadingStatus: null,
     toolProgress: null,
+    toolEvents: [],
     partialBuffer: '',
     generatedFiles: [],
     error: null,

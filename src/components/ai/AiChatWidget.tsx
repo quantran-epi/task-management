@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Tag, Typography, theme } from 'antd';
 import { SyncOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import type { ChatMessage } from '../../types/models';
@@ -102,6 +102,10 @@ export interface AiChatWidgetProps {
   onDraftChange: (next: string) => void;
 }
 
+/**
+ * Statuses that mean "the model is producing output". `awaiting-approval` is deliberately
+ * excluded: D-22 makes the approval card the wait state, so no spinner/streaming bubble renders.
+ */
 const ACTIVE_STAGES = new Set<ChatTurnStatus>([
   'preparing',
   'tool',
@@ -119,23 +123,37 @@ function stagedStageFor(status: ChatTurnStatus): StagedLoadingStage | null {
       return 'streaming';
     case 'synthesizing':
       return 'synthesizing';
-    case 'awaiting-approval':
-      return 'awaiting-approval';
+    // D-22: the approval card IS the wait state; a staged loader here would read as a spinner.
     default:
       return null;
   }
+}
+
+/**
+ * One badge per tool call: the loop publishes `call` (with args) and then `result` (with output)
+ * under the same id, so hosts may forward both without rendering two badges.
+ */
+function mergeToolEvents(events: ChatTurnToolEvent[]): ChatTurnToolEvent[] {
+  const byId = new Map<string, ChatTurnToolEvent>();
+  for (const event of events) {
+    const previous = byId.get(event.id);
+    byId.set(event.id, { ...previous, ...event });
+  }
+  return [...byId.values()];
 }
 
 /** Collapsed-by-default tool badge. Raw arguments/output never auto-expand (D-04). */
 const ToolEventBadge: React.FC<{ event: ChatTurnToolEvent }> = ({ event }) => {
   const { token } = theme.useToken();
   const [expanded, setExpanded] = useState(false);
+  const detailsId = `tool-event-${event.id.replace(/[^A-Za-z0-9_-]/g, '-')}`;
 
   return (
     <div style={{ marginBottom: 8 }}>
       <button
         type="button"
         aria-expanded={expanded}
+        aria-controls={detailsId}
         onClick={() => setExpanded((prev) => !prev)}
         style={{
           display: 'inline-flex',
@@ -160,6 +178,7 @@ const ToolEventBadge: React.FC<{ event: ChatTurnToolEvent }> = ({ event }) => {
 
       {expanded && (
         <div
+          id={detailsId}
           className="chat-markdown-body"
           style={{
             marginTop: 4,
@@ -172,10 +191,21 @@ const ToolEventBadge: React.FC<{ event: ChatTurnToolEvent }> = ({ event }) => {
             maxHeight: 240,
             overflowY: 'auto',
           }}
-          dangerouslySetInnerHTML={{
-            __html: renderSafeMarkdown(event.result ?? 'Chưa có kết quả công cụ.'),
-          }}
-        />
+        >
+          {event.args && (
+            <div>
+              <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+                Tham số
+              </Typography.Text>
+              <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: 11 }}>{event.args}</pre>
+            </div>
+          )}
+          <div
+            dangerouslySetInnerHTML={{
+              __html: renderSafeMarkdown(event.result ?? 'Chưa có kết quả công cụ.'),
+            }}
+          />
+        </div>
       )}
     </div>
   );
@@ -224,6 +254,10 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
   const isTurnActive = ACTIVE_STAGES.has(turn.status);
   const stagedStage = stagedStageFor(turn.status);
   const showQuickPrompts = messages.length === 0 && !error && !isTurnActive;
+  const mergedToolEvents = useMemo(() => mergeToolEvents(toolEvents ?? []), [toolEvents]);
+  // The in-flight tool name comes from the newest tool event; approval's own copy wins while parked.
+  const activeToolName =
+    turn.pendingApproval?.toolName ?? mergedToolEvents[mergedToolEvents.length - 1]?.name ?? null;
 
   return (
     <div
@@ -314,9 +348,9 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
 
       {transcriptExtensions}
 
-      {toolEvents && toolEvents.length > 0 && (
+      {mergedToolEvents.length > 0 && (
         <div style={{ padding: '0 16px' }}>
-          {toolEvents.map((event) => (
+          {mergedToolEvents.map((event) => (
             <ToolEventBadge key={event.id} event={event} />
           ))}
         </div>
@@ -326,9 +360,7 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
         <div style={{ padding: '0 16px' }}>
           <StagedLoadingIndicator
             stage={stagedStage}
-            {...(turn.pendingApproval?.toolName
-              ? { toolName: turn.pendingApproval.toolName }
-              : {})}
+            {...(activeToolName ? { toolName: activeToolName } : {})}
             toolPhase="call"
           />
         </div>
@@ -396,7 +428,7 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
         onClear={onClearThread}
         {...(onClearAllHistory ? { onClearAll: onClearAllHistory } : {})}
         onStop={onStop}
-        isStreaming={isTurnActive && !turn.pendingApproval}
+        isStreaming={isTurnActive}
         {...(placeholder !== undefined ? { placeholder } : {})}
         {...(autoFocus !== undefined ? { autoFocus } : {})}
         {...(disabled !== undefined ? { disabled } : {})}
