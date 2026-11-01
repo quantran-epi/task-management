@@ -42,6 +42,8 @@ export interface ChatMessageListProps {
   wizardCallbacks?: WizardMessageCallbacks | undefined;
   transientClarifyMessage?: TransientClarifyState | null | undefined;
   onCancelClarify?: (() => void) | undefined;
+  /** Host-supplied empty state. Falls back to the app default when omitted. */
+  emptyState?: { heading: string; body: string } | undefined;
 }
 
 export const ChatMessageList: React.FC<ChatMessageListProps> = ({
@@ -65,6 +67,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   wizardCallbacks,
   transientClarifyMessage,
   onCancelClarify,
+  emptyState,
 }) => {
   const { token } = theme.useToken();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -124,10 +127,11 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
           }}
         >
           <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: token.colorText }}>
-            Trợ lý AI {APP_NAME}
+            {emptyState?.heading ?? `Trợ lý AI ${APP_NAME}`}
           </div>
           <div style={{ fontSize: 13, lineHeight: 1.6, maxWidth: 360, margin: '0 auto' }}>
-            Đặt câu hỏi về tác vụ hiện tại, phân tích tiến độ, gợi ý checklist hoặc tra cứu tài liệu đính kèm. Nhập câu hỏi bên dưới để bắt đầu.
+            {emptyState?.body ??
+              'Đặt câu hỏi về tác vụ hiện tại, phân tích tiến độ, gợi ý checklist hoặc tra cứu tài liệu đính kèm. Nhập câu hỏi bên dưới để bắt đầu.'}
           </div>
         </div>
       )}
