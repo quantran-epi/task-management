@@ -81,10 +81,13 @@ describe('Step 1 Intake & Step 2 Solution Views', () => {
     it('supports two-way editing, displays sanitized preview, and calls onCommitSolution on Approve', async () => {
       const handleCommitSolution = vi.fn().mockResolvedValue(undefined);
 
-      render(
+      const { unmount } = render(
         <Step2SolutionView
           projectId={projectId}
           initialContent="# Kiến trúc Loyalty v1\n\nSử dụng Redis cache cho hạn mức điểm."
+          pl01Content="PL01 text"
+          pl02Content="PL02 text"
+          hasIntakeBaseline
           onCommitSolution={handleCommitSolution}
           db={db}
         />
@@ -118,6 +121,26 @@ describe('Step 1 Intake & Step 2 Solution Views', () => {
           expect.any(String) // noteId
         );
       });
+
+      // D-20: without the intake baseline the approve control is disabled, not toast-after-the-fact.
+      unmount();
+      render(
+        <Step2SolutionView
+          projectId={projectId}
+          initialContent="# Kiến trúc Loyalty v2"
+          onCommitSolution={handleCommitSolution}
+          db={db}
+        />
+      );
+
+      expect(screen.getByRole('button', { name: /Duyệt & Lưu SOLUTION.md/i })).toBeDisabled();
+      expect(
+        screen.getByText(/Chưa đủ điều kiện: Thiếu PL01 — Yêu cầu nghiệp vụ từ Bước 1/i)
+      ).toBeInTheDocument();
+      expect(screen.getByText(/PL02 — Đặc tả chức năng/i)).toBeInTheDocument();
+      handleCommitSolution.mockClear();
+      fireEvent.click(screen.getByRole('button', { name: /Duyệt & Lưu SOLUTION.md/i }));
+      expect(handleCommitSolution).not.toHaveBeenCalled();
     });
   });
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
+  Alert,
   Input,
   Button,
   Segmented,
@@ -20,7 +21,8 @@ import {
 import { renderSafeMarkdown } from '../../../utils/markdown';
 import { saveHubSolution } from '../../../services/wizard/hubSolution';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../../db';
-import type { SdlcArtifactRef, SdlcWorkflowMetadata } from '../../../services/wizard/workflowSchemas';
+import type { SdlcArtifactRef, SdlcStepId, SdlcWorkflowMetadata } from '../../../services/wizard/workflowSchemas';
+import { formatGuardMessage } from '../../../services/wizard/workflowGuards';
 
 export interface Step2SolutionViewProps {
   projectId: string;
@@ -31,6 +33,10 @@ export interface Step2SolutionViewProps {
   pl01Content?: string | undefined;
   pl02Content?: string | undefined;
   metadata?: SdlcWorkflowMetadata | undefined;
+  /** Authoritative workflow-state answer; falls back to PL01/PL02 text when absent. */
+  hasIntakeBaseline?: boolean | undefined;
+  /** Navigates to the step that supplies the missing prerequisite (D-20). */
+  onNavigateToStep?: ((step: SdlcStepId) => void) | undefined;
   onCommitSolution: (markdown: string, noteId: string) => Promise<void>;
   onDraftChange?: (draftMarkdown: string) => void;
   onRequestAiAnalysis?: () => void;
@@ -47,6 +53,8 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
   pl01Content = '',
   pl02Content = '',
   metadata,
+  hasIntakeBaseline,
+  onNavigateToStep,
   onCommitSolution,
   onDraftChange,
   onRequestAiAnalysis,
@@ -60,6 +68,10 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
   const [mode, setMode] = useState<'write' | 'preview' | 'split'>('write');
   const [saving, setSaving] = useState(false);
   const [isApproved, setIsApproved] = useState(Boolean(solutionArtifact?.approvedAt));
+
+  // T-25.3-45: host supplies the authoritative workflow-state answer; the fallback
+  // only reads PL01/PL02 text, never the SOLUTION draft itself.
+  const baselineReady = hasIntakeBaseline ?? Boolean(pl01Content.trim() && pl02Content.trim());
 
   // Sync when initialContent changes on remount/parent update
   useEffect(() => {
@@ -145,6 +157,9 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
           {solutionArtifact?.version && (
             <Tag color="blue">v{solutionArtifact.version}</Tag>
           )}
+          {metadata?.cr && (
+            <Tag>{metadata.cr}</Tag>
+          )}
           {isApproved && (
             <Tag color="success">Đã phê duyệt</Tag>
           )}
@@ -170,7 +185,7 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
             type="primary"
             icon={<CheckOutlined />}
             loading={saving}
-            disabled={!content.trim()}
+            disabled={!content.trim() || !baselineReady}
             onClick={handleApproveAndSave}
           >
             Duyệt & Lưu SOLUTION.md
@@ -203,6 +218,25 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
             Tiếp tục sang Bước 3
           </Button>
         </div>
+      )}
+
+      {/* D-20: pre-emptive intake-baseline guard, disabled control + inline guidance */}
+      {!baselineReady && (
+        <Alert
+          type="warning"
+          showIcon
+          message={formatGuardMessage('INTAKE_BASELINE_MISSING')}
+          description={`Tài liệu bắt buộc: PL01 — Yêu cầu nghiệp vụ và PL02 — Đặc tả chức năng do Bước 1: Hồ sơ đầu vào cung cấp. Thiếu baseline thì SOLUTION.md không có căn cứ để phê duyệt.`}
+          action={
+            <Button
+              type="primary"
+              disabled={!onNavigateToStep}
+              onClick={() => onNavigateToStep?.('INTAKE')}
+            >
+              Chuyển đến Bước 1: Hồ sơ đầu vào
+            </Button>
+          }
+        />
       )}
 
       {/* Two-Way Document Editor Pane */}
