@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: milestone
-status: ready_to_execute
-stopped_at: "Phase 25.1.2 plans created — ready for execution"
-last_updated: "2026-11-01T12:00:00Z"
-last_activity: 2026-11-01 -- Phase 25.1.2 plans 01-04 created; canonical SDLC flow specified
+status: "Canonical SDLC flow specified into 4 executable plans: decouple drawer, build dedicated 2-column view, implement steps 3-6 with multi-pack & bank exports, and wire actionable staleness & full flow integration"
+stopped_at: Phase 25.1.2 plans ready for execution
+last_updated: "2026-11-01T03:57:07.048Z"
+last_activity: 2026-11-01 -- Phase 25.1.2 planning completed
 progress:
   total_phases: 11
   completed_phases: 8
