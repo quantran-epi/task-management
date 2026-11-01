@@ -93,8 +93,10 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
 
   const [preludePending, setPreludePending] = useState(false);
   // Stop is reachable while the prelude paints 'preparing', but the runtime is still idle —
-  // aborting it is a no-op. Record the cancel so the staged turn never starts.
-  const preludeAbortRef = useRef(false);
+  // aborting it is a no-op. Each send takes a token; Stop or a newer send drops the panel's
+  // token, and only the send still holding it may reach `turn.start()`.
+  const preludeTokenRef = useRef<number>(0);
+  const preludeSeqRef = useRef(0);
 
   const turn = useChatTurn({
     scopeKey,
@@ -131,13 +133,17 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
     async (rawText: string, intent: SdlcTurnIntent) => {
       const text = rawText.trim();
       if (!text || !threadId) return;
+      // A prelude in flight owns the step: a second send would supersede a prompt already
+      // assembled and about to start.
+      if (preludeTokenRef.current !== 0) return;
 
       setDraft('');
       setError(null);
       setToolEvents([]);
       // D-19/SC5: paint the loading state before any await. Config, key and MCP discovery
       // can take a visible moment; the composer must never look dead in that window.
-      preludeAbortRef.current = false;
+      const preludeToken = (preludeSeqRef.current += 1);
+      preludeTokenRef.current = preludeToken;
       setPreludePending(true);
 
       try {
@@ -172,9 +178,11 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
           .slice(0, -1)
           .map((msg) => ({ role: msg.role, content: msg.content }));
 
+        // Cancelled (Stop) or superseded (a newer send) while staging: nothing may start.
+        if (preludeTokenRef.current !== preludeToken) return;
+        // The prelude is over and the runtime owns the turn from here.
+        preludeTokenRef.current = 0;
         setPreludePending(false);
-        // Cancelled while staging: the runtime never started, so nothing may be committed.
-        if (preludeAbortRef.current) return;
         const outcome = await turn.start({
           threadId,
           scopeKey,
@@ -195,7 +203,12 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
       } catch {
         // TURN_IN_PROGRESS or a composition failure: the widget's own status already shows it.
       } finally {
-        setPreludePending(false);
+        // Only the send that still owns the token may release; a stale one must not clear the
+        // staged state of the turn that superseded it.
+        if (preludeTokenRef.current === preludeToken) {
+          preludeTokenRef.current = 0;
+          setPreludePending(false);
+        }
       }
     },
     [threadId, messages, db, stepId, crId, stepGroundingContext, turn, scopeKey, toolbox, extractSolutionDraft]
@@ -270,7 +283,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
           // A stop during the prelude cancels the staged turn; otherwise it aborts the runtime.
           // Release the staged UI now — the awaited prelude may still be running.
           if (preludePending) {
-            preludeAbortRef.current = true;
+            preludeTokenRef.current = 0;
             setPreludePending(false);
           }
           turn.abort();

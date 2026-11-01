@@ -1081,10 +1081,11 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const handleStopGeneration = () => {
     const runtime = tabRuntimesRef.current.get(activeRuntimeTabId);
     // Stop is reachable during the prelude now that it paints as 'preparing'. The runtime has not
-    // started yet, so aborting it cannot cancel anything — record the cancel and release the
-    // staged UI now rather than when the awaited prelude finally returns.
+    // started yet, so aborting it cannot cancel anything — drop the tab's prelude token so the
+    // staged turn can never start, and release the staged UI now rather than when the awaited
+    // prelude finally returns.
     if (!turnRegistryRef.current?.peek(activeRuntimeTabId)?.isRunning()) {
-      preludeAbortRef.current.add(activeRuntimeTabId);
+      preludeTokenRef.current.delete(activeRuntimeTabId);
       markPrelude(activeRuntimeTabId, false);
     }
     abortHostTurn(activeRuntimeTabId);
@@ -1167,9 +1168,12 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       prev[tabId] === active ? prev : { ...prev, [tabId]: active }
     );
   }, []);
-  // Stop is reachable during the prelude now that it paints as 'preparing'. The runtime has not
-  // started yet, so aborting it cannot cancel anything — record the cancel and never start.
-  const preludeAbortRef = useRef(new Set<string>());
+  // Stop is reachable during the prelude now that it paints as 'preparing', and the runtime is
+  // still idle then. Each send takes a token; a prelude may only reach `runtime.start()` while it
+  // still holds the tab's current token. Stop, or a newer send, drops the token and the stale
+  // prelude bails instead of transmitting a cancelled prompt.
+  const preludeTokenRef = useRef(new Map<string, number>());
+  const preludeSeqRef = useRef(0);
 
   const handleSendTurn = async (
     text: string,
@@ -1215,7 +1219,14 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     turnTabIdRef.current = turnTabId;
 
     // Per-tab guard (D-06/D-10): one tab's in-flight turn never blocks or aborts another tab.
-    if (turnRegistryRef.current?.peek(turnTabId)?.isRunning()) return;
+    // A prelude in flight counts as in-flight: the runtime is still idle, so without this a second
+    // send would supersede a turn whose prompt was already assembled and about to start.
+    if (
+      turnRegistryRef.current?.peek(turnTabId)?.isRunning() ||
+      preludeTabs[turnTabId]
+    ) {
+      return;
+    }
 
     const runtime = turnRegistryRef.current!.get(turnTabId, turnTab.threadId ?? activeThreadId ?? '');
     tabRuntimes.initialize(turnTabId, turnTab.threadId ?? activeThreadId ?? '');
@@ -1274,11 +1285,13 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       return;
     }
 
+    // Each send gets its own prelude token; the stale one may not touch the tab afterwards.
+    const preludeToken = (preludeSeqRef.current += 1);
     try {
       // D-19/SC5: publish the staged label before any await. Config, key, compaction and
       // grounding can each take a visible moment; the composer must never look dead.
       // Set inside the try so every refusal path below still releases it in `finally`.
-      preludeAbortRef.current.delete(turnTabId);
+      preludeTokenRef.current.set(turnTabId, preludeToken);
       markPrelude(turnTabId, true);
       tabRuntimes.patch(turnTabId, {
         streamingStatus: 'preparing',
@@ -1742,6 +1755,16 @@ Rules:
           : ''
       }`;
 
+      // Cancelled (Stop) or superseded (a newer send) while staging: nothing may be committed.
+      if (preludeTokenRef.current.get(turnTabId) !== preludeToken) {
+        tabRuntimes.patch(turnTabId, {
+          status: 'idle',
+          groundedLoadingStatus: null,
+          streamingStatus: null,
+        });
+        return;
+      }
+
       debugTurnRef.current.set(
         turnTabId,
         aiDebugService.startTurn({
@@ -1759,16 +1782,6 @@ Rules:
         })
       );
 
-      // Stopped while staging: nothing was started, so nothing may be committed.
-      if (preludeAbortRef.current.delete(turnTabId)) {
-        markPrelude(turnTabId, false);
-        tabRuntimes.patch(turnTabId, {
-          status: 'idle',
-          groundedLoadingStatus: null,
-          streamingStatus: null,
-        });
-        return;
-      }
       markPrelude(turnTabId, false);
       const outcome = await runtime.start({
         threadId,
@@ -1804,12 +1817,18 @@ Rules:
       }
       setTurnRevision((prev) => prev + 1);
     } catch (err) {
-      logAiChatError('Send message error', err);
-      patchTurnError('request_failed', 'Không thể hoàn tất phản hồi AI. Vui lòng thử lại.', turnTabId);
+      // A superseded prelude must not paint its failure over the turn that replaced it.
+      if (preludeTokenRef.current.get(turnTabId) === preludeToken) {
+        logAiChatError('Send message error', err);
+        patchTurnError('request_failed', 'Không thể hoàn tất phản hồi AI. Vui lòng thử lại.', turnTabId);
+      }
     } finally {
-      // The prelude window must never outlive the send, on any exit path (D-19).
-      preludeAbortRef.current.delete(turnTabId);
-      markPrelude(turnTabId, false);
+      // The prelude window must never outlive the send, on any exit path (D-19). Only the send
+      // that still owns the tab's token may clear it; a stale one must not touch the newer turn.
+      if (preludeTokenRef.current.get(turnTabId) === preludeToken) {
+        preludeTokenRef.current.delete(turnTabId);
+        markPrelude(turnTabId, false);
+      }
     }
   };
 

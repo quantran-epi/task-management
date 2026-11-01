@@ -398,4 +398,46 @@ describe('AIChatDrawer multi-tab isolation', () => {
     const messages = await db.chatMessages.where('threadId').equals(tab!.threadId).toArray();
     expect(messages.filter((msg) => msg.role === 'assistant')).toHaveLength(0);
   });
+
+  it('never transmits a cancelled prelude when a newer send supersedes it', async () => {
+    await seedTabs();
+
+    // Hold the first send inside its prelude until the test says otherwise.
+    let releaseFirstKey: () => void = () => {};
+    const firstKeyHeld = new Promise<void>((resolve) => {
+      releaseFirstKey = resolve;
+    });
+    let keyCalls = 0;
+    vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockImplementation(async () => {
+      keyCalls += 1;
+      if (keyCalls === 1) await firstKeyHeld;
+      return 'test-api-key';
+    });
+
+    const payloads: any[] = [];
+    vi.spyOn(nineRouterClient, 'streamChatEvents').mockImplementation(((options: any) => {
+      payloads.push(options.payload);
+      return (async function* () {
+        yield { type: 'text' as const, delta: 'Xong' };
+      })();
+    }) as never);
+
+    render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
+    await openTab(CHAT_ONE);
+    submit('Lượt bị hủy');
+
+    await waitFor(() => expect(screen.getByLabelText('Dừng sinh phản hồi')).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText('Dừng sinh phản hồi'));
+    await waitFor(() => expect(screen.getByLabelText('Gửi tin nhắn')).toBeInTheDocument());
+
+    // A second send must not revive the cancelled prelude: its token is already gone.
+    submit('Lượt thay thế');
+    releaseFirstKey();
+
+    await waitFor(() => expect(payloads).toHaveLength(1));
+    // The cancelled send never reaches the transport; the replacement is the turn that runs.
+    const sent = payloads[0].messages as Array<{ role: string; content: string }>;
+    const userTurns = sent.filter((msg) => msg.role === 'user');
+    expect(userTurns[userTurns.length - 1]!.content).toBe('Lượt thay thế');
+  });
 });
