@@ -596,18 +596,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           }
 
           const ordinary = existing.filter((t) => t.type === 'chat');
-          if (ordinary.length === 0) {
-            const firstTab = await createChatTab(
-              {
-                scopeType: currentScope.type,
-                scopeKey,
-                entityId: currentScope.id,
-                title: '💬 Tra cứu & Hỏi đáp',
-              },
-              db
-            );
-            await setActiveTab(scopeKey, firstTab.id, db);
-          } else if (!existing.some((tab) => tab.active) && ordinary[0]) {
+          if (!existing.some((tab) => tab.active) && ordinary[0]) {
             await setActiveTab(scopeKey, ordinary[0].id, db);
           }
         }
