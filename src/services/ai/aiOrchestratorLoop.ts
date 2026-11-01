@@ -10,14 +10,17 @@ import {
   isMutationTool,
   normalizeToolName,
 } from './aiTools';
-import { executeDynamicMcpTool } from './mcpClient';
+import { executeDynamicMcpTool, type ExecuteMcpToolOptions } from './mcpClient';
+
+export interface DispatchAiToolCallOptions extends ExecuteMcpToolOptions {}
 
 /** Default tool dispatch: local DB tools first, dynamic MCP tools otherwise. */
 export async function dispatchAiToolCall(
   name: string,
   args: Record<string, any>,
   db: TaskPlannerDatabase,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options?: DispatchAiToolCallOptions
 ): Promise<string> {
   const normalized = normalizeToolName(name);
   const isLocalDbTool = AI_DATABASE_TOOLS.some(
@@ -25,7 +28,7 @@ export async function dispatchAiToolCall(
   );
   return isLocalDbTool
     ? executeAiTool(name, args, db, signal)
-    : executeDynamicMcpTool(normalized, args, db);
+    : executeDynamicMcpTool(normalized, args, db, options);
 }
 
 export interface AiOrchestratorLoopOptions {
@@ -58,7 +61,8 @@ export interface AiOrchestratorLoopOptions {
     name: string,
     args: Record<string, any>,
     db: TaskPlannerDatabase,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    options?: DispatchAiToolCallOptions
   ) => Promise<string>;
   /** Recent tool outputs kept intact when pruning; older ones truncate. */
   keepRecentToolOutputs?: number;
