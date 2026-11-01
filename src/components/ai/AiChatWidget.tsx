@@ -78,6 +78,19 @@ export interface AiChatWidgetProps {
   onArtifactCta?: ((eventId: string) => void) | undefined;
   /** Thread-scoped clear only: never workflow state, drafts or other threads. */
   onClearThread: () => void;
+  /** Optional "clear everything" affordance; hosts that own global history pass it. */
+  onClearAllHistory?: (() => void) | undefined;
+  onOpenSettings?: (() => void) | undefined;
+  /** Host-business render slots. The widget never knows what they mean (D-25). */
+  messageListExtensions?: Record<string, unknown> | undefined;
+  transcriptExtensions?: React.ReactNode;
+  statusExtensions?: React.ReactNode;
+  headerSlot?: React.ReactNode;
+  attachedFiles?: string[] | undefined;
+  onAttachFile?: ((filePath: string) => void) | undefined;
+  onRemoveFile?: ((filePath: string) => void) | undefined;
+  autoFocus?: boolean | undefined;
+  disabled?: boolean | undefined;
   emptyState: { heading: string; body: string };
   /** Tool badges published by the host runtime; details stay collapsed. */
   toolEvents?: ChatTurnToolEvent[] | undefined;
@@ -187,6 +200,17 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
   onArtifactOpen,
   onArtifactCta,
   onClearThread,
+  onClearAllHistory,
+  onOpenSettings,
+  messageListExtensions,
+  transcriptExtensions,
+  statusExtensions,
+  headerSlot,
+  attachedFiles,
+  onAttachFile,
+  onRemoveFile,
+  autoFocus,
+  disabled,
   emptyState,
   toolEvents,
   compact,
@@ -272,6 +296,8 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
         onClearContext={onClearThread}
       />
 
+      {headerSlot}
+
       <ChatMessageList
         messages={messages}
         streamingText={turn.streamingText}
@@ -279,10 +305,14 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
         streamingStatus={turn.streamingStatusLabel}
         error={error?.message ?? null}
         onRetry={onRetry}
+        {...(onOpenSettings ? { onOpenSettings } : {})}
         // MutationApprovalCard below is the sole approval renderer (T-25.3-27):
-        // pendingConfirmation/onConfirmAction are deliberately not passed.
+        // pendingConfirmation/onConfirmAction are deliberately not passed here.
         emptyState={emptyState}
+        {...(messageListExtensions ?? {})}
       />
+
+      {transcriptExtensions}
 
       {toolEvents && toolEvents.length > 0 && (
         <div style={{ padding: '0 16px' }}>
@@ -359,14 +389,22 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
         </div>
       )}
 
+      {statusExtensions}
+
       <ChatInputBar
         onSubmit={onSubmit}
         onClear={onClearThread}
+        {...(onClearAllHistory ? { onClearAll: onClearAllHistory } : {})}
         onStop={onStop}
-        isStreaming={isTurnActive}
-        placeholder={placeholder}
-        externalValue={externalValue}
-        onExternalValueConsumed={onExternalValueConsumed}
+        isStreaming={isTurnActive && !turn.pendingApproval}
+        {...(placeholder !== undefined ? { placeholder } : {})}
+        {...(autoFocus !== undefined ? { autoFocus } : {})}
+        {...(disabled !== undefined ? { disabled } : {})}
+        {...(attachedFiles ? { attachedFiles } : {})}
+        {...(onAttachFile ? { onAttachFile } : {})}
+        {...(onRemoveFile ? { onRemoveFile } : {})}
+        {...(externalValue !== undefined ? { externalValue } : {})}
+        {...(onExternalValueConsumed ? { onExternalValueConsumed } : {})}
         value={draft}
         onValueChange={onDraftChange}
       />

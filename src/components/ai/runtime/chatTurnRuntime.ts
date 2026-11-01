@@ -1,5 +1,5 @@
 import type { TaskPlannerDatabase } from '../../../db';
-import type { ChatMessage, ChatTokenUsage } from '../../../types/models';
+import type { ChatGeneratedFile, ChatMessage, ChatTokenUsage } from '../../../types/models';
 import {
   runAiOrchestratorLoop,
   dispatchAiToolCall,
@@ -53,6 +53,8 @@ export interface ChatTurnRequest {
   systemMessages: Array<{ role: 'system'; content: string }>;
   history: Array<{ role: 'user' | 'assistant'; content: string }>;
   tools: unknown[];
+  /** Provider context window, when the host resolves one (auto-compaction threshold). */
+  contextWindowTokens?: number;
 }
 
 export interface ChatTurnOutcome {
@@ -75,6 +77,8 @@ export interface ChatTurnRuntimeDeps {
   onAwaitingApproval?: (info: ChatTurnApprovalInfo) => void;
   onCompleted?: (message: { content: string; tokenUsage: ChatTokenUsage }) => void;
   onError?: (error: ChatTurnErrorInfo) => void;
+  /** Tool-produced files, forwarded to the host so it can keep rendering them. */
+  onFileGenerated?: (file: ChatGeneratedFile) => void;
 }
 
 export interface ChatTurnRuntime {
@@ -208,6 +212,10 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
       let fullResponse = '';
       let tokenUsage: ChatTokenUsage = {};
       let cancellationResult: string | undefined;
+      // Thinking blocks are never shown; the host receives only the newly visible remainder.
+      let displayed = '';
+      const generatedFiles: ChatGeneratedFile[] = [];
+      const startedAt = Date.now();
 
       const result: AiOrchestratorLoopResult = await deps.runLoop({
         endpoint: request.endpoint,
@@ -226,14 +234,20 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
           ? { keepRecentToolOutputs: 20, maxOldToolChars: 100_000 }
           : {}),
         compactAtRatio: request.analysisMode ? 0.9 : 0.75,
+        ...(request.contextWindowTokens ? { contextWindowTokens: request.contextWindowTokens } : {}),
         executeToolFn: (name, args, toolDb, signal) =>
           dispatchAiToolCall(name, args, toolDb, signal, {
             allowMutation: request.autoApprove,
           }),
         onTextChunk: (delta) => {
           fullResponse += delta;
-          publish('streaming');
-          deps.onDelta?.(delta);
+          const stripped = stripThinkingBlocks(fullResponse);
+          if (stripped.length > displayed.length) {
+            const visibleDelta = stripped.slice(displayed.length);
+            displayed = stripped;
+            publish('streaming');
+            deps.onDelta?.(visibleDelta);
+          }
         },
         onStatusChange: (loopStatus) => {
           if (loopStatus && loopStatus.includes(SYNTHESIS_STATUS_MARKER)) {
@@ -260,6 +274,10 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
             durationMs,
             result: toolResult,
           });
+        },
+        onFileGenerated: (file) => {
+          generatedFiles.push(file);
+          deps.onFileGenerated?.(file);
         },
         onMutationCheck: async (toolName, args) => {
           // Fixed guard order (T-25.3-21): read-only cancel, auto-approve, explicit wait.
@@ -319,6 +337,8 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
           role: 'assistant',
           content: clean,
           tokenUsage,
+          durationMs: Date.now() - startedAt,
+          ...(generatedFiles.length > 0 ? { generatedFiles } : {}),
         },
         deps.db
       );

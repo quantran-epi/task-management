@@ -7,7 +7,6 @@ import type {
   ChatThread,
   ChatMessage,
   ChatTokenUsage,
-  ChatGeneratedFile,
 } from '../../types/models';
 import { generateId, isValidUuid } from '../../utils/uuid';
 import {
@@ -24,22 +23,18 @@ import {
   getNineRouterConfig,
   fetchAvailableModels,
 } from '../../services/ai/nineRouterTokenService';
-import { stripThinkingBlocks } from '../../services/ai/nineRouterClient';
 import {
   buildItemContextPrompt,
   buildGlobalContextPrompt,
   serializeDocumentContext,
   extractMentionedEntityIds,
 } from '../../services/ai/contextGrounding';
-import { selectMessagesWithinBudget } from '../../services/ai/historyPruning';
 import { compactThreadContext, extractMessageText } from '../../services/ai/contextCompaction';
 import {
   type AiToolDefinition,
-  isMutationTool,
   describeToolMutationWithContext,
-  normalizeToolName,
 } from '../../services/ai/aiTools';
-import { runAiOrchestratorLoop, dispatchAiToolCall } from '../../services/ai/aiOrchestratorLoop';
+import { runAiOrchestratorLoop } from '../../services/ai/aiOrchestratorLoop';
 import { getToolsForTurn } from '../../services/ai/chatTurnTools';
 import {
   getMcpServers,
@@ -48,7 +43,6 @@ import {
   toggleMcpServer,
   type McpServerConfig,
 } from '../../services/ai/mcpClient';
-import type { ChatCompletionMessage } from '../../services/ai/types';
 import { launchClaudeTerminal } from '../../services/ai/claudeCliService';
 import { updateTask, getTask } from '../../db/repositories/taskRepo';
 import { createNote } from '../../db/repositories/noteRepo';
@@ -57,15 +51,16 @@ import { getMilestone } from '../../db/repositories/milestoneRepo';
 import { getTodayDateString } from '../../utils/date';
 import dayjs from 'dayjs';
 import { ChatHeader } from './ChatHeader';
-import { ChatMessageList } from './ChatMessageList';
-import { ChatInputBar } from './ChatInputBar';
 import { ScopePickerModal } from './ScopePickerModal';
+import { QuickPreviewDrawer } from '../notes/QuickPreviewDrawer';
 import { AIDebugModal } from './AIDebugModal';
 import { AITaskPlannerInstructionsModal } from './AITaskPlannerInstructionsModal';
 import { McpSettingsModal } from './McpSettingsModal';
-import { aiDebugService } from '../../services/ai/aiDebugService';
-import { createPhaseLogger } from '../../services/ai/phaseLogger';
 import { logAiChatError } from './aiChatDiagnostics';
+import { RestoredSourceNotice } from './RestoredSourceNotice';
+import { deriveMissingSources } from './wizard/restoreRecovery';
+import { aiDebugService } from '../../services/ai/aiDebugService';
+import { IntentRouterUnavailableError } from '../../services/ai/intentRouter';
 import { APP_NAME } from '../../constants/app';
 import { useAIChat } from '../../context/AIChatContext';
 import { openAiPopout } from '../../utils/aiPopout';
@@ -86,16 +81,22 @@ import type {
   PersistedCitation,
   PersistedEntityRef,
 } from '../../services/ai/groundedAnswerSchemas';
-import { IntentRouterUnavailableError } from '../../services/ai/intentRouter';
-import { QuickPreviewDrawer } from '../notes/QuickPreviewDrawer';
 import { ScopeChipsBar, hasMeaningfulRoutedScope } from './grounded/ScopeChipsBar';
 import type { GroundedAnswerCardCallbacks } from './ChatMessageBubble';
 import { ChatTabBar, type ChatTabItem } from './ChatTabBar';
-import { ChatTabToolbox } from './ChatTabToolbox';
-import { createRequestRegistry } from './runtime/requestRegistry';
 import { useTabRuntimes } from './runtime/useTabRuntimes';
+import {
+  createHostAbortController,
+  createTabTurnRegistry,
+  type TabTurnRegistry,
+} from './runtime/tabRuntimes';
+import type {
+  ChatTurnRuntimeDeps,
+  ChatTurnStatus,
+  ChatTurnToolEvent,
+} from './runtime/chatTurnRuntime';
+import { AiChatWidget } from './AiChatWidget';
 import { InterruptedBanner } from './InterruptedBanner';
-import { InlineApiErrorCard } from './InlineApiErrorCard';
 import {
   listTabsByScope,
   getOrCreateActiveChatTab,
@@ -105,12 +106,33 @@ import {
   deleteChatTab,
 } from '../../db/repositories/chatTabRepo';
 import type { ChatTab } from '../../types/models';
-import type { TabRuntimeStatus } from './runtime/tabTypes';
+import type { TabRuntimePatch, TabRuntimeStatus } from './runtime/tabTypes';
+import { stageLabelFor } from './runtime/useChatTurn';
+
+/** Runtime turn status → drawer tab badge status. */
+const TURN_STATUS_TO_TAB: Record<ChatTurnStatus, TabRuntimeStatus> = {
+  idle: 'idle',
+  preparing: 'processing',
+  streaming: 'processing',
+  tool: 'processing',
+  synthesizing: 'processing',
+  'awaiting-approval': 'processing',
+  complete: 'idle',
+  error: 'error',
+  aborted: 'idle',
+};
 
 export const AI_CHAT_WIDTH_KEY = 'planner:ai_chat_width';
 export const AI_AUTO_APPROVE_MUTATIONS_KEY = 'planner:ai_auto_approve_mutations';
 export const AI_ANALYSIS_MODE_KEY = 'planner:ai_analysis_mode';
 export const AI_TAB_ANALYSIS_MODES_KEY = 'planner:ai_tab_analysis_modes';
+const DRAWER_QUICK_PROMPTS = [
+  { id: 'plan-today', label: 'Lập kế hoạch hôm nay', prompt: 'Lập kế hoạch công việc hôm nay' },
+  { id: 'status', label: 'Báo cáo tiến độ', prompt: 'Báo cáo tiến độ hiện tại' },
+  { id: 'overdue', label: 'Tác vụ quá hạn', prompt: 'Kiểm tra các tác vụ quá hạn' },
+  { id: 'help', label: 'Hướng dẫn sử dụng', prompt: 'Hướng dẫn sử dụng trợ lý AI và các lệnh' },
+];
+
 export const DEFAULT_AI_CHAT_WIDTH = 380;
 export const MIN_AI_CHAT_WIDTH = 320;
 export const MAX_AI_CHAT_WIDTH = 650;
@@ -385,9 +407,101 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   // Cleanup paths (unmount, scope change) must not re-run when the registry identity changes on publish.
   const tabRuntimesRef = useRef(tabRuntimes);
   tabRuntimesRef.current = tabRuntimes;
-  const requestRegistryRef = useRef(createRequestRegistry());
   // Tab that owns the in-flight turn; every transient write inside the send path targets it.
   const turnTabIdRef = useRef('');
+
+  // ---------------------------------------------------------------------------
+  // Shared turn runtime (D-01). One `createChatTurnRuntime` per tab, held in a
+  // ref-backed registry so a turn in tab B never aborts tab A's request
+  // (T-25.3-35). No `useChatTurn` here: a hook keyed on the active tab would
+  // abort the previous runtime on every tab switch and kill background turns.
+  // ---------------------------------------------------------------------------
+  const turnRegistryRef = useRef<TabTurnRegistry | null>(null);
+  const configRef = useRef<{ endpoint: string; contextWindowTokens?: number } | null>(null);
+  // Host-side prelude (grounded routing, prompt assembly) is abortable per tab; the tool loop
+  // itself is aborted by the runtime's own controller.
+  const hostAbortRef = useRef(new Map<string, AbortController>());
+  // Debug-log turn ids per tab, so the drawer's own debug console keeps tracking turns.
+  const debugTurnRef = useRef(new Map<string, string>());
+  const hostSignal = (tabId: string) => {
+    let controller = hostAbortRef.current.get(tabId);
+    if (!controller || controller.signal.aborted) {
+      controller = createHostAbortController();
+      hostAbortRef.current.set(tabId, controller);
+    }
+    return controller.signal;
+  };
+  const abortHostTurn = (tabId: string) => {
+    hostAbortRef.current.get(tabId)?.abort();
+    hostAbortRef.current.delete(tabId);
+  };
+
+  // Host-owned single call site: the runtime receives this loop as an injected dep.
+  // Keeping the literal here is deliberate — `tests/phase25_1SafetyGates.test.ts` pins it.
+  const runDrawerTurnLoop = useCallback<typeof runAiOrchestratorLoop>(
+    (options) =>
+      runAiOrchestratorLoop({
+        ...options,
+        ...(options.contextWindowTokens ?? configRef.current?.contextWindowTokens
+          ? { contextWindowTokens: options.contextWindowTokens ?? configRef.current?.contextWindowTokens }
+          : {}),
+      }),
+    []
+  );
+
+  if (!turnRegistryRef.current) {
+    turnRegistryRef.current = createTabTurnRegistry((tabId) => {
+      const patch = (value: TabRuntimePatch) => tabRuntimesRef.current.patch(tabId, value);
+      return {
+        runLoop: runDrawerTurnLoop,
+        saveMessage,
+        describeMutation: describeToolMutationWithContext,
+        db,
+        onStatus: (status) => {
+          patch({
+            status: TURN_STATUS_TO_TAB[status],
+            streamingStatus: stageLabelFor(status),
+            ...(status === 'streaming' || status === 'tool' || status === 'synthesizing'
+              ? { groundedLoadingStatus: null }
+              : {}),
+            ...(status === 'complete' || status === 'aborted' ? { streamingText: '' } : {}),
+          });
+          setTurnRevision((prev) => prev + 1);
+        },
+        onDelta: (delta) => {
+          const current = tabRuntimesRef.current.get(tabId)?.streamingText ?? '';
+          patch({ streamingText: current + delta, partialBuffer: current + delta });
+          const debugTurnId = debugTurnRef.current.get(tabId);
+          if (debugTurnId) aiDebugService.appendStreamChunk(debugTurnId, delta);
+        },
+        onToolEvent: (event) => {
+          const existing = tabRuntimesRef.current.get(tabId)?.toolProgress;
+          patch({ toolProgress: existing === event.name ? null : event.name });
+          const debugTurnId = debugTurnRef.current.get(tabId);
+          if (!debugTurnId) return;
+          if (event.phase === 'call') {
+            aiDebugService.recordToolCall(debugTurnId, { id: event.id, name: event.name, args: {} });
+          } else {
+            aiDebugService.recordToolResult(debugTurnId, event.id, event.result ?? '', event.durationMs);
+          }
+        },
+        onAwaitingApproval: ({ toolName, summary }) => {
+          patch({ pendingConfirmation: { toolName, summary }, streamingStatus: 'Chờ xác nhận hành động...' });
+          setTurnRevision((prev) => prev + 1);
+        },
+        onError: (info) => {
+          patch({
+            status: 'error',
+            error: { code: info.code as never, message: info.message, requestId: generateId() },
+            streamingText: '',
+            partialBuffer: '',
+            groundedLoadingStatus: null,
+          });
+          setTurnRevision((prev) => prev + 1);
+        },
+      } satisfies ChatTurnRuntimeDeps;
+    });
+  }
 
   // Durable multi-tab state for all scopes from Dexie chatTabs table
   const durableTabs = useLiveQuery<ChatTab[]>(async () => {
@@ -415,6 +529,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
   // Draft typed before the durable tab resolved must not be dropped by the per-tab remount.
   const draftCarryRef = useRef<{ tabId: string; text: string }>({ tabId: '', text: '' });
+  // Controlled composer needs a value even before the active tab's runtime is seeded.
+  const [unseededDraft, setUnseededDraft] = useState('');
 
   // Seed a runtime for the active tab before any patch, so tab badges reflect real status (SC-2).
   useEffect(() => {
@@ -656,11 +772,12 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       if (!targetTab) return;
 
       const isRunning =
-        requestRegistryRef.current.hasActive(tabId) ||
+        turnRegistryRef.current?.peek(tabId)?.isRunning() ||
         tabRuntimes.get(tabId)?.status === 'processing';
 
       const doDelete = async () => {
-        requestRegistryRef.current.abortTab(tabId);
+        // Close-aborts-before-delete: a running turn never survives its tab.
+        turnRegistryRef.current?.discard(tabId);
         tabRuntimes.discard(tabId);
         setTransientClarifyMessage(tabId, null);
         try {
@@ -687,6 +804,77 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     [db, durableTabs, setTransientClarifyMessage, tabRuntimes]
   );
 
+  // D-30: a restored workflow whose source Notes vanished blocks the next AI step.
+  const restoredMissingSourcesRef = useRef<Array<{ id: string; title: string }>>([]);
+  const restoredMissingSources = useLiveQuery(async () => {
+    // The workflow row is keyed by the SDLC tab's durable thread, not by the project alone.
+    const sdlcTabs = durableTabs.filter((tab) => tab.type === 'sdlc' && tab.threadId);
+    if (sdlcTabs.length === 0) return [];
+    const notes = await db.notes.toArray();
+    const missing = new Map<string, { id: string; title: string }>();
+    for (const tab of sdlcTabs) {
+      const row = await db.settings.get(`sdlc_workflow:${currentScope.id}:${tab.threadId}`);
+      for (const source of deriveMissingSources(
+        row?.value as Parameters<typeof deriveMissingSources>[0],
+        new Set(notes.map((note) => note.id))
+      )) {
+        missing.set(source.id, source);
+      }
+    }
+    return [...missing.values()];
+  }, [db, currentScope.id, durableTabs, messages.length]) ?? [];
+  restoredMissingSourcesRef.current = restoredMissingSources;
+
+  // D-30 / checkpoint recovery: a persisted `interrupted` checkpoint renders a Continue/Discard banner.
+  const sdlcCheckpoints = useLiveQuery(async () => {
+    const sdlcTabs = durableTabs.filter((tab) => tab.type === 'sdlc' && tab.threadId);
+    const found: Array<{ tabId: string; requestId: string; step?: string }> = [];
+    for (const tab of sdlcTabs) {
+      const row = await db.settings.get(`sdlc_workflow:${currentScope.id}:${tab.threadId}`);
+      const checkpoint = (row?.value as { checkpoint?: { status?: string; step?: string; requestId?: string } })
+        ?.checkpoint;
+      // A checkpoint still marked `running` belongs to a previous app session: restore() reads
+      // it as interrupted, and the banner must offer the same recovery (D-30).
+      if (
+        (checkpoint?.status === 'interrupted' || checkpoint?.status === 'running') &&
+        checkpoint.requestId
+      ) {
+        found.push({ tabId: tab.id, requestId: checkpoint.requestId, ...(checkpoint.step ? { step: checkpoint.step } : {}) });
+      }
+    }
+    return found;
+  }, [db, currentScope.id, durableTabs, messages.length]) ?? [];
+  const [discardedCheckpoints, setDiscardedCheckpoints] = useState<Record<string, true>>({});
+  const activeCheckpoint =
+    sdlcCheckpoints.find((checkpoint) => !discardedCheckpoints[checkpoint.requestId]) ?? null;
+
+  /** Continue/Discard persist their decision through the SDLC coordinator before any transport call. */
+  const resolveCheckpoint = async (decision: 'continue' | 'discard') => {
+    const checkpoint = activeCheckpoint;
+    if (!checkpoint) return;
+    const tab = durableTabs.find((entry) => entry.id === checkpoint.tabId);
+    if (!tab?.threadId) return;
+    const key = `sdlc_workflow:${currentScope.id}:${tab.threadId}`;
+    const row = await db.settings.get(key);
+    if (!row) return;
+    setDiscardedCheckpoints((prev) => ({ ...prev, [checkpoint.requestId]: true }));
+    if (decision === 'discard') {
+      const next = { ...(row.value as Record<string, unknown>) };
+      delete next.checkpoint;
+      await db.settings.put({ key, value: next });
+      return;
+    }
+    if (restoredMissingSources.length > 0) return;
+    await db.settings.put({
+      key,
+      value: {
+        ...(row.value as Record<string, unknown>),
+        checkpoint: { requestId: generateId(), step: checkpoint.step, status: 'running', startedAt: new Date().toISOString() },
+      },
+    });
+    void handleSendTurn('Tiếp tục công việc đang dở dang sau khi bị gián đoạn.');
+  };
+
   // Evidence synthesis state (not part of a chat turn)
   const [synthesizingEvidenceId, setSynthesizingEvidenceId] = useState<string | null>(null);
   const [evidenceSynthesisError, setEvidenceSynthesisError] = useState<{
@@ -695,16 +883,10 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     requiresConfig: boolean;
   } | null>(null);
   const [scrollTrigger, setScrollTrigger] = useState(0);
+  // Registry publishes are not React state; this bumps so the widget re-reads the runtime.
+  const [turnRevision, setTurnRevision] = useState(0);
 
   const [externalInputValue, setExternalInputValue] = useState<string | null>(null);
-
-  const handleSendMessageRef = useRef<
-    (
-      text: string,
-      overrideScope?: ActiveScope,
-      options?: { resumeFromCheckpoint?: boolean; retryUserMessageId?: string | null }
-    ) => Promise<void>
-  >(async () => {});
 
   // Consume pendingDraft from AIChatContext into input draft without auto-sending
   useEffect(() => {
@@ -836,6 +1018,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       pendingConfirmation: null,
       confirmationResolver: undefined,
     });
+    turnRegistryRef.current?.peek(activeTabId)?.resolveApproval(confirmed);
+    setTurnRevision((prev) => prev + 1);
   }, [activeTabId]);
 
   // Every render and every callback reads one owner: the active tab's runtime. Only while the
@@ -847,15 +1031,25 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     : activeTabId;
   const activeRuntime = tabRuntimes.get(activeRuntimeTabId);
   const runtimeTabId = activeRuntimeTabId;
+  // `turnRevision` forces a re-read of the registry after every runtime publish.
+  const activeTurnRuntime = useMemo(
+    () => turnRegistryRef.current?.peek(activeRuntimeTabId),
+    [activeRuntimeTabId, turnRevision, tabRuntimes.snapshot]
+  );
+  const activeToolEvents = useMemo<ChatTurnToolEvent[]>(() => {
+    const name = activeRuntime?.toolProgress;
+    return name ? [{ id: `${activeRuntimeTabId}:${name}`, name, phase: 'call' }] : [];
+  }, [activeRuntime?.toolProgress, activeRuntimeTabId]);
   const activeRoutedScope = routedScopeByTab[activeRuntimeTabId] ?? null;
 
   // Abort every tab's request on unmount only. Drawer close must not abort an in-flight turn (D-09).
   useEffect(() => {
     return () => {
+      for (const tabId of hostAbortRef.current.keys()) abortHostTurn(tabId);
+      turnRegistryRef.current?.abortAll();
       for (const runtime of Object.values(tabRuntimesRef.current.getSnapshot())) {
         runtime.confirmationResolver?.(false);
         runtime.requestController?.abort();
-        requestRegistryRef.current.abortTab(runtime.tabId);
       }
     };
   }, []);
@@ -864,9 +1058,10 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   // Chat tab ids are scope-scoped, so every runtime present here belongs to the outgoing scope;
   // the new scope's runtimes are created later by the initialize effect.
   useEffect(() => {
+    for (const tabId of hostAbortRef.current.keys()) abortHostTurn(tabId);
+    turnRegistryRef.current?.abortAll();
     for (const runtime of Object.values(tabRuntimesRef.current.getSnapshot())) {
       if (!runtime.requestController) continue;
-      requestRegistryRef.current.abortTab(runtime.tabId);
       runtime.requestController.abort();
       tabRuntimesRef.current.patch(runtime.tabId, { groundedLoadingStatus: null });
     }
@@ -875,7 +1070,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
   const handleStopGeneration = () => {
     const runtime = tabRuntimesRef.current.get(activeRuntimeTabId);
-    requestRegistryRef.current.abortTab(activeRuntimeTabId);
+    abortHostTurn(activeRuntimeTabId);
+    turnRegistryRef.current?.abortTab(activeRuntimeTabId);
     runtime?.requestController?.abort();
     runtime?.confirmationResolver?.(false);
     tabRuntimesRef.current.patch(activeRuntimeTabId, {
@@ -887,6 +1083,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       streamingStatus: null,
       partialBuffer: '',
     });
+    setTurnRevision((prev) => prev + 1);
   };
 
   // Single-flight only while a creation is in flight: the bootstrap effect and a send path must not
@@ -911,6 +1108,17 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   };
   ensureTurnTabRef.current = ensureTurnTab;
 
+  const notifyIfBlurred = (content: string) => {
+    const isBlurred = typeof document !== 'undefined' && (document.hidden || !document.hasFocus?.());
+    if (!isBlurred) return;
+    const snippet = content.trim().slice(0, 120);
+    void sendDesktopNotification({
+      title: `${APP_NAME} AI`,
+      body: snippet + (content.trim().length > 120 ? '...' : ''),
+      tag: 'ai-turn-finished',
+    });
+  };
+
   // Every transient write is keyed by the tab that owns the turn, never by whichever tab is visible.
   const patchGroundedLoading = (value: string | null, ownerTabId = turnTabIdRef.current) => {
     tabRuntimes.patch(ownerTabId, { groundedLoadingStatus: value });
@@ -926,69 +1134,71 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       groundedLoadingStatus: null,
       streamingStatus: null,
     });
+    setTurnRevision((prev) => prev + 1);
   };
 
-  const handleSendMessage = async (
+  /**
+   * One Drawer turn. Prompt composition, grounding, clarify routing and host
+   * callbacks stay here; the turn state machine itself lives in the shared runtime.
+   */
+  const handleSendTurn = async (
     text: string,
     overrideScope?: ActiveScope,
-    options?: { resumeFromCheckpoint?: boolean; retryUserMessageId?: string | null }
+    options: { retryUserMessageId?: string | null } = {}
   ) => {
-    handleSendMessageRef.current = handleSendMessage;
     const trimmed = text.trim();
     if (!trimmed) return;
 
-    // Check if ANY tab is awaiting a mutation confirmation; answer on that tab's behalf.
-    const pendingRuntime = Object.values(tabRuntimesRef.current.getSnapshot()).find(
-      (runtime) => runtime.confirmationResolver
+    // A yes/no answer belongs to the tab that is waiting on a mutation, not the visible one.
+    const approvalOwner = Object.entries(turnRegistryRef.current?.getSnapshot() ?? {}).find(
+      ([, runtime]) => runtime.getStatus() === 'awaiting-approval'
     );
-    if (pendingRuntime) {
+    if (approvalOwner) {
       const lower = trimmed.toLowerCase();
-      if (/^(yes|y|có|co|ok|được|duoc|đồng ý|dong y|xác nhận|xac nhan)$/i.test(lower)) {
-        pendingRuntime.confirmationResolver?.(true);
-        tabRuntimesRef.current.patch(pendingRuntime.tabId, {
+      const approve = /^(yes|y|có|co|ok|được|duoc|đồng ý|dong y|xác nhận|xac nhan)$/i.test(lower);
+      const reject = /^(no|n|không|khong|cancel|hủy|huy|từ chối|tu choi)$/i.test(lower);
+      if (approve || reject) {
+        approvalOwner[1].resolveApproval(approve);
+        turnRegistryRef.current?.peek(approvalOwner[0]);
+        tabRuntimesRef.current.patch(approvalOwner[0], {
           pendingConfirmation: null,
           confirmationResolver: undefined,
         });
-        return;
-      }
-      if (/^(no|n|không|khong|cancel|hủy|huy|từ chối|tu choi)$/i.test(lower)) {
-        pendingRuntime.confirmationResolver?.(false);
-        tabRuntimesRef.current.patch(pendingRuntime.tabId, {
-          pendingConfirmation: null,
-          confirmationResolver: undefined,
-        });
+        setTurnRevision((prev) => prev + 1);
         return;
       }
     }
 
     if (trimmed === '/clear') {
-      handleClearContext();
+      await handleClearContext();
       return;
     }
 
-    // Per-tab guard (D-06/D-10): one tab's in-flight turn never blocks or aborts another tab.
-    // Resolve the durable active tab at send time; the live query may still hold a provisional id.
-    const turnTab = await ensureTurnTab();
+    const effectiveScope = overrideScope ?? currentScope;
+    // The tab the user is looking at owns the turn. Reading the live ref avoids a send landing on
+    // the previous tab while its durable active pointer is still being written.
+    const visibleTab =
+      durableTabs.find((tab) => tab.id === activeTabIdRef.current) ??
+      durableTabs.find((tab) => tab.id === activeTabId);
+    const turnTab = visibleTab ?? (await ensureTurnTab());
     const turnTabId = turnTab.id;
     turnTabIdRef.current = turnTabId;
-    if (
-      requestRegistryRef.current.hasActive(turnTabId) ||
-      tabRuntimes.get(turnTabId)?.status === 'processing'
-    ) {
-      return;
-    }
 
-    setScrollTrigger((prev) => prev + 1);
-    // Seed the owner runtime before the first patch: patch() no-ops on an unseeded tab.
+    // Per-tab guard (D-06/D-10): one tab's in-flight turn never blocks or aborts another tab.
+    if (turnRegistryRef.current?.peek(turnTabId)?.isRunning()) return;
+
+    const runtime = turnRegistryRef.current!.get(turnTabId, turnTab.threadId ?? activeThreadId ?? '');
     tabRuntimes.initialize(turnTabId, turnTab.threadId ?? activeThreadId ?? '');
     tabRuntimes.patch(turnTabId, {
       error: null,
-      status: 'idle',
+      pendingConfirmation: null,
+      streamingText: '',
       lastSubmittedText: trimmed,
+      retryUserMessageId: options.retryUserMessageId ?? null,
     });
+    setScrollTrigger((prev) => prev + 1);
 
-    // Clarification transcript continuation handling per D-06. Only the owning tab's pending
-    // clarification counts: another tab's send must never inherit this tab's original query.
+    // Clarification continuation (D-06): only the owning tab's pending clarify counts.
     const clarifyState = clarifyByTab[turnTabId];
     let effectiveQuery = trimmed;
     let nextClarifyTurnCount = 1;
@@ -996,33 +1206,17 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       nextClarifyTurnCount = clarifyState.turnCount + 1;
       if (nextClarifyTurnCount > 2) {
         setTransientClarifyMessage(turnTabId, null);
-        tabRuntimes.patch(turnTabId, {
-          status: 'error',
-          error: {
-            code: 'request_failed',
-            message:
-              'Chưa thể xác định rõ ý định sau 2 lần hỏi. Vui lòng đặt câu hỏi cụ thể hơn hoặc chọn tác vụ cụ thể trong giao diện.',
-            requestId: generateId(),
-          },
-        });
+        patchTurnError(
+          'request_failed',
+          'Chưa thể xác định rõ ý định sau 2 lần hỏi. Vui lòng đặt câu hỏi cụ thể hơn hoặc chọn tác vụ cụ thể trong giao diện.',
+          turnTabId
+        );
         return;
       }
       effectiveQuery = `${clarifyState.originalQuery}\n[Thông tin bổ sung]: ${trimmed}`;
     }
 
-    // Gracefully request notification permission upon user interaction if not yet granted
-    void (async () => {
-      try {
-        const granted = await isNotificationPermissionGranted();
-        if (!granted) {
-          await requestNotificationPermission();
-        }
-      } catch {
-        // ignore notification permission error
-      }
-    })();
-
-    // Lightweight prompt handling for slash commands allowing user to describe freely
+    // Slash command aliases stay a Drawer affordance.
     let effectivePrompt = trimmed;
     if (trimmed.startsWith('/plan')) {
       const extra = trimmed.replace(/^\/plan\s*/, '').trim();
@@ -1038,595 +1232,441 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       effectivePrompt = extra ? `Hướng dẫn: ${extra}` : 'Hướng dẫn sử dụng trợ lý AI và các lệnh';
     }
 
-    const effectiveScope = overrideScope ?? currentScope;
-
-    // 1. Ensure thread exists for effective scope. Resolve the durable tab's thread at send time
-    // instead of trusting a live-query value captured before the tab query resolved.
-    let activeThread = overrideScope
-      ? await createOrGetThread(
-          {
-            scopeType: effectiveScope.type,
-            entityId: effectiveScope.id,
-            title: effectiveScope.title,
-          },
-          db
-        )
-      : (await db.chatThreads.get(turnTab.threadId ?? '')) ?? thread;
-
-    if (!activeThread) {
-      activeThread = await createOrGetThread(
-        {
-          scopeType: effectiveScope.type,
-          entityId: effectiveScope.id,
-          title: effectiveScope.title,
-        },
-        db
+    if (restoredMissingSourcesRef.current.length > 0) {
+      patchTurnError(
+        'request_failed',
+        `Thiếu tài liệu nguồn của workflow đã khôi phục: ${restoredMissingSourcesRef.current
+          .map((source) => source.title)
+          .join(', ')}.`,
+        turnTabId
       );
-    }
-
-    // Claim the tab BEFORE persisting the user row. `begin` fails closed when the tab already has
-    // a current request (the pre-guard happens several awaits earlier), and a detached turn would
-    // leave a user bubble with no answer and no error.
-    tabRuntimes.initialize(turnTabId, activeThread.id);
-    const activeReq = requestRegistryRef.current.begin(turnTabId, activeThread.id);
-    if (!activeReq) {
-      tabRuntimes.patch(turnTabId, {
-        status: 'error',
-        error: {
-          code: 'request_failed',
-          message: 'Tab này đang xử lý một yêu cầu khác. Vui lòng đợi yêu cầu đó hoàn tất.',
-          requestId: generateId(),
-        },
-      });
       return;
     }
 
-    // The claim covers persistence and compaction too: a throw there must not strand the tab.
-    // finish() is idempotent, so the streaming finally below may release it a second time.
     try {
+      const threadId = turnTab.threadId ?? activeThreadId;
+      if (!threadId) return;
 
-    // 2. Retry reuses the original user row; every other send persists a fresh one (D-14).
-    let savedUserMsg: ChatMessage | undefined;
-    const retryUserMessageId = options?.retryUserMessageId ?? null;
-    if (retryUserMessageId) {
-      const candidate = await db.chatMessages.get(retryUserMessageId);
+      // The user row is persisted before routing, so a clarify/refine answer still has its
+      // question in the transcript. The runtime reuses this exact row (retry identity).
+      const promptText = effectivePrompt === trimmed ? trimmed : effectivePrompt;
+      let userMessageId = options.retryUserMessageId ?? null;
+      const existingUserRow = userMessageId ? await db.chatMessages.get(userMessageId) : undefined;
       if (
-        candidate &&
-        candidate.role === 'user' &&
-        candidate.threadId === activeThread.id &&
-        candidate.content === trimmed
+        !existingUserRow ||
+        existingUserRow.role !== 'user' ||
+        existingUserRow.threadId !== threadId ||
+        existingUserRow.content !== promptText
       ) {
-        savedUserMsg = candidate;
+        const saved = await saveMessage({ threadId, role: 'user', content: promptText }, db);
+        userMessageId = saved.id;
       }
-    }
-    if (!savedUserMsg) {
-      savedUserMsg = await saveMessage(
-        {
-          threadId: activeThread.id,
-          role: 'user',
-          content: trimmed,
-        },
-        db
-      );
-    }
-    // Anchor the retry identity on the owning tab so a later retry never guesses by content.
-    tabRuntimes.patch(turnTabId, {
-      retryUserMessageId: savedUserMsg?.id ?? null,
-      lastSubmittedText: trimmed,
-    });
+      tabRuntimes.patch(turnTabId, { retryUserMessageId: userMessageId });
 
-    // Own a fresh turn controller for THIS tab. Never abort another tab's request (D-06/D-10).
-    const controller = activeReq.controller;
-    // Single owner of requestController: stop/close/unmount read it from here (SC-2).
-    tabRuntimes.patch(turnTabId, {
-      requestController: controller,
-      status: 'processing',
-      partialBuffer: '',
-    });
-    const turnController = controller;
+      const apiKey = await getNineRouterApiKey(db);
+      const config = await getNineRouterConfig(db);
+      configRef.current = {
+        endpoint: config.endpoint,
+        ...(config.contextWindowTokens ? { contextWindowTokens: config.contextWindowTokens } : {}),
+      };
+      if (config.defaultModel) persistedDefaultModelRef.current = config.defaultModel;
 
-    // A turn that finishes before streaming must release its per-tab claim, or the tab stays "processing".
-    const endTurnWithoutStream = () => {
-      tabRuntimes.patch(turnTabId, {
-        status: 'idle',
-        groundedLoadingStatus: null,
-        streamingStatus: null,
-        requestController: undefined,
-        partialBuffer: '',
-      });
-      if (activeReq) requestRegistryRef.current.finish(activeReq.requestId);
-    };
-
-    const apiKey = await getNineRouterApiKey(db);
-    const config = await getNineRouterConfig(db);
-    if (config.defaultModel) persistedDefaultModelRef.current = config.defaultModel;
-    if (apiKey && config.endpoint) {
-      // Await so the boundary message exists before the history read below.
-      // Compaction stays best-effort and must never fail the turn.
-      try {
-        await compactThreadContext({
-          threadId: activeThread.id,
-          db,
-          endpoint: config.endpoint,
-          apiKey,
-          model: resolveActiveModel(),
-          signal: turnController.signal,
-        });
-      } catch (compErr: any) {
-        if (compErr?.name !== 'AbortError') {
-          logAiChatError('Auto context compaction check error', compErr);
-        }
-      }
-    }
-
-    const allThreadMsgs = await getMessagesByThreadId(activeThread.id, db);
-    let boundaryIndex = -1;
-    for (let i = allThreadMsgs.length - 1; i >= 0; i--) {
-      if (allThreadMsgs[i]?.isContextBoundary) {
-        boundaryIndex = i;
-        break;
-      }
-    }
-    const threadMsgsToSend = boundaryIndex >= 0 ? allThreadMsgs.slice(boundaryIndex + 1) : allThreadMsgs;
-    const allHistoryTurns = threadMsgsToSend
-      .filter((m) => (m.role === 'user' || m.role === 'assistant') && m.id !== savedUserMsg?.id)
-      .map((m) => ({
-        role: m.role as 'user' | 'assistant',
-        content: extractMessageText(m),
-      }))
-      .filter((m) => m.content.trim().length > 0);
-
-    const turnOverallStartTime = Date.now();
-    // Strictly isolate turn execution settings from the owning tab's durable config
-    let turnAnalysisMode = Boolean(turnTab.config?.analysisMode);
-    if (!turnAnalysisMode) {
-      try {
-        turnAnalysisMode = localStorage.getItem(AI_ANALYSIS_MODE_KEY) === 'true';
-      } catch {
-        turnAnalysisMode = false;
-      }
-    }
-    let turnAutoApprove = Boolean(turnTab.config?.autoApproveMutations);
-    if (!turnAutoApprove) {
-      try {
-        turnAutoApprove = localStorage.getItem(AI_AUTO_APPROVE_MUTATIONS_KEY) === 'true';
-      } catch {
-        turnAutoApprove = false;
-      }
-    }
-    const turnMcpEnabled = turnTab.config?.mcpEnabled !== false;
-    const effectiveAnalysisMode = turnAnalysisMode;
-
-    // Analysis mode bypasses the grounded pipeline (intent router, scope routing,
-    // schema-validated synthesis) and falls straight through to the tool loop.
-    if (!effectiveAnalysisMode) {
-    const catalog = await fetchSetCatalog(db);
-    const capabilities = {
-      serverEnabled: Boolean(knowledgeConfig.enabled && knowledgeConfig.baseUrl),
-      modelConfigured: Boolean(apiKey && config.endpoint && resolveActiveModel()),
-    };
-    const deps = createDefaultGroundedTurnDeps({
-      knowledgeBaseUrl: knowledgeConfig.baseUrl,
-      knowledgeToken: knowledgeConfig.token,
-      db,
-    });
-    // Every transient write in this turn names its owner explicitly: turnTabId is captured above,
-    // so a concurrent turn in another tab cannot overwrite turnTabIdRef and steal the status.
-    const routeScope = deps.routeScope;
-    deps.routeScope = (input, routeDeps) => {
-      patchGroundedLoading('Đang xác định phạm vi tài liệu...', turnTabId);
-      return routeScope(input, routeDeps);
-    };
-    const retrieveFederated = deps.retrieveFederated;
-    deps.retrieveFederated = (request, signal) => {
-      patchGroundedLoading('Đang truy xuất tài liệu và đồ thị liên quan...', turnTabId);
-      return retrieveFederated(request, signal);
-    };
-    const runLocalBm25 = deps.runLocalBm25;
-    deps.runLocalBm25 = (input, localDeps) => {
-      patchGroundedLoading('Đang tìm kiếm trong tài liệu cục bộ...', turnTabId);
-      return runLocalBm25(input, localDeps);
-    };
-    const synthesizeGroundedAnswer = deps.synthesizeGroundedAnswer;
-    deps.synthesizeGroundedAnswer = (input) => {
-      patchGroundedLoading('Đang tổng hợp câu trả lời từ bằng chứng...', turnTabId);
-      return synthesizeGroundedAnswer(input);
-    };
-    try {
-      patchGroundedLoading('Đang phân tích ý định câu hỏi...', turnTabId);
-      const groundedResult = await runGroundedTurn(
-        {
-          query: effectiveQuery,
-          recentTurns: allHistoryTurns,
-          signal: turnController.signal,
-          capabilities,
-          config: {
+      // Best-effort boundary compaction before the history read.
+      if (apiKey && config.endpoint) {
+        try {
+          await compactThreadContext({
+            threadId,
+            db,
             endpoint: config.endpoint,
             apiKey,
             model: resolveActiveModel(),
-            promptVersion: 'grounded-v1',
-            routerVersion: 'router-v1',
-          },
-          catalog,
-          recentSessionId: activeThread.id,
-        },
-        deps
-      );
-
-      if (turnController.signal.aborted) {
-        endTurnWithoutStream();
-        return;
+            signal: hostSignal(turnTabId),
+          });
+        } catch (compErr) {
+          logAiChatError('Auto context compaction check error', compErr);
+        }
       }
 
-      if (groundedResult?.kind === 'clarify_intent') {
-        setTransientClarifyMessage(turnTabId, {
-          id: `transient-${Date.now()}`,
-          originalQuery: clarifyState ? clarifyState.originalQuery : trimmed,
-          clarifyQuestion:
-            groundedResult.clarifyQuestion ||
-            'Bạn có thể cung cấp thêm chi tiết để tôi hỗ trợ chính xác hơn không?',
-          turnCount: nextClarifyTurnCount,
+      const allThreadMsgs = await getMessagesByThreadId(threadId, db);
+      let boundaryIndex = -1;
+      for (let i = allThreadMsgs.length - 1; i >= 0; i--) {
+        if (allThreadMsgs[i]?.isContextBoundary) {
+          boundaryIndex = i;
+          break;
+        }
+      }
+      const historyMsgs = boundaryIndex >= 0 ? allThreadMsgs.slice(boundaryIndex + 1) : allThreadMsgs;
+      const historyTurns = historyMsgs
+        .filter((m) => (m.role === 'user' || m.role === 'assistant') && m.content !== trimmed)
+        .map((m) => ({ role: m.role as 'user' | 'assistant', content: extractMessageText(m) }))
+        .filter((m) => m.content.trim().length > 0);
+
+      let turnAnalysisMode = Boolean(turnTab.config?.analysisMode);
+      if (!turnAnalysisMode) {
+        try {
+          turnAnalysisMode = localStorage.getItem(AI_ANALYSIS_MODE_KEY) === 'true';
+        } catch {
+          turnAnalysisMode = false;
+        }
+      }
+      let turnAutoApprove = Boolean(turnTab.config?.autoApproveMutations);
+      if (!turnAutoApprove) {
+        try {
+          turnAutoApprove = localStorage.getItem(AI_AUTO_APPROVE_MUTATIONS_KEY) === 'true';
+        } catch {
+          turnAutoApprove = false;
+        }
+      }
+      const turnMcpEnabled = turnTab.config?.mcpEnabled !== false;
+
+      // Analysis Mode bypasses grounded routing and goes straight to the tool loop.
+      if (!turnAnalysisMode) {
+        try {
+        const catalog = await fetchSetCatalog(db);
+        const groundedDeps = createDefaultGroundedTurnDeps({
+          knowledgeBaseUrl: knowledgeConfig.baseUrl,
+          knowledgeToken: knowledgeConfig.token,
+          db,
         });
-        endTurnWithoutStream();
-        return;
-      }
+        const baseRouteScope = groundedDeps.routeScope;
+        groundedDeps.routeScope = (input, routeDeps) => {
+          patchGroundedLoading('Đang xác định phạm vi tài liệu...', turnTabId);
+          return baseRouteScope(input, routeDeps);
+        };
+        const baseRetrieve = groundedDeps.retrieveFederated;
+        groundedDeps.retrieveFederated = (request, signal) => {
+          patchGroundedLoading('Đang truy xuất tài liệu và đồ thị liên quan...', turnTabId);
+          return baseRetrieve(request, signal);
+        };
+        const baseBm25 = groundedDeps.runLocalBm25;
+        groundedDeps.runLocalBm25 = (input, localDeps) => {
+          patchGroundedLoading('Đang tìm kiếm trong tài liệu cục bộ...', turnTabId);
+          return baseBm25(input, localDeps);
+        };
+        const baseSynthesize = groundedDeps.synthesizeGroundedAnswer;
+        groundedDeps.synthesizeGroundedAnswer = (input) => {
+          patchGroundedLoading('Đang tổng hợp câu trả lời từ bằng chứng...', turnTabId);
+          return baseSynthesize(input);
+        };
 
-      // Clarification succeeded or normal turn: clear this tab's transient clarify state
-      setTransientClarifyMessage(turnTabId, null);
+        patchGroundedLoading('Đang phân tích ý định câu hỏi...', turnTabId);
+        const groundedResult = await runGroundedTurn(
+          {
+            query: effectiveQuery,
+            recentTurns: historyTurns,
+            signal: hostSignal(turnTabId),
+            capabilities: {
+              serverEnabled: Boolean(knowledgeConfig.enabled && knowledgeConfig.baseUrl),
+              modelConfigured: Boolean(apiKey && config.endpoint && resolveActiveModel()),
+            },
+            config: {
+              endpoint: config.endpoint,
+              apiKey: apiKey ?? '',
+              model: resolveActiveModel(),
+              promptVersion: 'grounded-v1',
+              routerVersion: 'router-v1',
+            },
+            catalog,
+            recentSessionId: threadId,
+          },
+          groundedDeps
+        );
 
-      if (groundedResult.kind === 'operational') {
-        patchGroundedLoading('Đang chuẩn bị ngữ cảnh TaskMate...', turnTabId);
-      } else {
-        patchGroundedLoading('Đang xử lý kết quả tra cứu...', turnTabId);
-      }
+        if (groundedResult.kind === 'clarify_intent') {
+          setTransientClarifyMessage(turnTabId, {
+            id: `transient-${Date.now()}`,
+            originalQuery: clarifyState ? clarifyState.originalQuery : trimmed,
+            clarifyQuestion:
+              groundedResult.clarifyQuestion ||
+              'Bạn có thể cung cấp thêm chi tiết để tôi hỗ trợ chính xác hơn không?',
+            turnCount: nextClarifyTurnCount,
+          });
+          patchGroundedLoading(null, turnTabId);
+          return;
+        }
+        setTransientClarifyMessage(turnTabId, null);
+        patchGroundedLoading(null, turnTabId);
 
         if (groundedResult.kind === 'clarify_entity') {
-          const entityCitations: PersistedCitation[] = groundedResult.candidates.map((c, idx) => {
-            const rawId = c.urn.split(':').pop() || '';
-            const docId = isValidUuid(rawId) ? rawId : generateId();
+          const entityCitations: PersistedCitation[] = groundedResult.candidates.map((candidate, index) => {
+            const rawId = candidate.urn.split(':').pop() || '';
             return {
-              citationId: `S${idx + 1}`,
-              documentId: docId,
-              documentTitle: c.canonicalName,
-              sectionAnchor: c.urn,
+              citationId: `S${index + 1}`,
+              documentId: isValidUuid(rawId) ? rawId : generateId(),
+              documentTitle: candidate.canonicalName,
+              sectionAnchor: candidate.urn,
               lineStart: 1,
               lineEnd: 1,
               authority: 'server' as const,
               evidenceClass: 'OBSERVED' as const,
               snapshotId: 'gsnap_00000000',
               publishedContentHash: '0'.repeat(64),
-              citedExcerpt: c.urn,
+              citedExcerpt: candidate.urn,
             };
           });
-
-        const groundedDurationMs = Date.now() - turnOverallStartTime;
-        await saveMessage(
-          {
-            threadId: activeThread.id,
-            role: 'assistant',
-            content: '',
-            durationMs: groundedDurationMs,
-            grounding: {
-              schemaVersion: 1,
-              authority: 'server',
-              outcome: 'NEEDS_CLARIFICATION',
-              answer: null,
-              citations: entityCitations,
-              paths: [],
-              conflicts: [],
-              scope: {
-                setIds: catalog.map((s) => s.setId).filter(isValidUuid),
-                routedScope: {
-                  domain: null,
-                  environment: null,
-                  version: null,
-                  comparisonMode: null,
-                },
-              },
-              modalityDiagnostics: {
-                fulltext: { status: 'ok', latencyMs: 0, itemCount: 0 },
-                vector: { status: 'ok', latencyMs: 0, itemCount: 0 },
-                graph: { status: 'ok', latencyMs: 0, itemCount: 0 },
-              },
-              coverageWarnings: ['Cần xác định rõ đối tượng tra cứu'],
-              fallbackReason: 'NONE',
-              routerVersion: 'router-v1',
-              promptVersion: 'grounded-v1',
-              modelId: resolveActiveModel(),
-              createdAt: new Date().toISOString(),
-            },
-          },
-          db
-        );
-        endTurnWithoutStream();
-        return;
-      }
-
-      if (groundedResult.kind === 'refine') {
-        const refineGrounding: ChatMessageGrounding = {
-          schemaVersion: 1,
-          authority: 'server',
-          outcome: groundedResult.outcome,
-          answer: null,
-          citations: [],
-          paths: [],
-          conflicts: [],
-          scope: {
-            setIds: catalog.map((s) => s.setId).filter(isValidUuid),
-            routedScope: {
-              domain: null,
-              environment: null,
-              version: null,
-              comparisonMode: null,
-            },
-          },
-          modalityDiagnostics: {
-            fulltext: { status: 'ok', latencyMs: 0, itemCount: 0 },
-            vector: { status: 'ok', latencyMs: 0, itemCount: 0 },
-            graph: { status: 'ok', latencyMs: 0, itemCount: 0 },
-          },
-          coverageWarnings: [...groundedResult.refinementChips],
-          fallbackReason: 'NONE',
-          routerVersion: 'router-v1',
-          promptVersion: 'grounded-v1',
-          modelId: resolveActiveModel(),
-          createdAt: new Date().toISOString(),
-        };
-
-        const groundedDurationMs = Date.now() - turnOverallStartTime;
-        await saveMessage(
-          {
-            threadId: activeThread.id,
-            role: 'assistant',
-            content: '',
-            durationMs: groundedDurationMs,
-            grounding: refineGrounding,
-          },
-          db
-        );
-        endTurnWithoutStream();
-        return;
-      }
-
-      if (
-        groundedResult.kind === 'grounded_answer' ||
-        groundedResult.kind === 'local_fallback_results' ||
-        groundedResult.kind === 'evidence_only'
-      ) {
-        if (!turnController.signal.aborted) {
-          if (groundedResult.grounding.scope) {
-            const routed = groundedResult.grounding.scope;
-            setRoutedScopeByTab((prev) => ({ ...prev, [turnTabId]: routed }));
-          }
-          const groundedDurationMs = Date.now() - turnOverallStartTime;
           await saveMessage(
             {
-              threadId: activeThread.id,
+              threadId,
               role: 'assistant',
               content: '',
-              durationMs: groundedDurationMs,
-              tokenUsage: (groundedResult as any).tokenUsage,
+              grounding: {
+                schemaVersion: 1,
+                authority: 'server',
+                outcome: 'NEEDS_CLARIFICATION',
+                answer: null,
+                citations: entityCitations,
+                paths: [],
+                conflicts: [],
+                scope: {
+                  setIds: catalog.map((entry) => entry.setId).filter(isValidUuid),
+                  routedScope: { domain: null, environment: null, version: null, comparisonMode: null },
+                },
+                modalityDiagnostics: {
+                  fulltext: { status: 'ok', latencyMs: 0, itemCount: 0 },
+                  vector: { status: 'ok', latencyMs: 0, itemCount: 0 },
+                  graph: { status: 'ok', latencyMs: 0, itemCount: 0 },
+                },
+                coverageWarnings: ['Cần xác định rõ đối tượng tra cứu'],
+                fallbackReason: 'NONE',
+                routerVersion: 'router-v1',
+                promptVersion: 'grounded-v1',
+                modelId: resolveActiveModel(),
+                createdAt: new Date().toISOString(),
+              },
+            },
+            db
+          );
+          return;
+        }
+
+        if (groundedResult.kind === 'refine') {
+          await saveMessage(
+            {
+              threadId,
+              role: 'assistant',
+              content: '',
+              grounding: {
+                schemaVersion: 1,
+                authority: 'server',
+                outcome: groundedResult.outcome,
+                answer: null,
+                citations: [],
+                paths: [],
+                conflicts: [],
+                scope: {
+                  setIds: catalog.map((entry) => entry.setId).filter(isValidUuid),
+                  routedScope: { domain: null, environment: null, version: null, comparisonMode: null },
+                },
+                modalityDiagnostics: {
+                  fulltext: { status: 'ok', latencyMs: 0, itemCount: 0 },
+                  vector: { status: 'ok', latencyMs: 0, itemCount: 0 },
+                  graph: { status: 'ok', latencyMs: 0, itemCount: 0 },
+                },
+                coverageWarnings: [...groundedResult.refinementChips],
+                fallbackReason: 'NONE',
+                routerVersion: 'router-v1',
+                promptVersion: 'grounded-v1',
+                modelId: resolveActiveModel(),
+                createdAt: new Date().toISOString(),
+              },
+            },
+            db
+          );
+          return;
+        }
+
+        if (
+          groundedResult.kind === 'grounded_answer' ||
+          groundedResult.kind === 'local_fallback_results' ||
+          groundedResult.kind === 'evidence_only'
+        ) {
+          if (groundedResult.grounding.scope) {
+            setRoutedScopeByTab((prev) => ({ ...prev, [turnTabId]: groundedResult.grounding.scope }));
+          }
+          await saveMessage(
+            {
+              threadId,
+              role: 'assistant',
+              content: '',
+              tokenUsage: (groundedResult as { tokenUsage?: ChatTokenUsage }).tokenUsage,
               grounding: groundedResult.grounding,
             },
             db
           );
+          if (
+            groundedResult.kind !== 'grounded_answer' ||
+            !groundedResult.requiresOperationalContinuation
+          ) {
+            return;
+          }
         }
-        if (
-          groundedResult.kind !== 'grounded_answer' ||
-          !groundedResult.requiresOperationalContinuation
-        ) {
-          endTurnWithoutStream();
-          return;
-        }
-      }
 
         if (groundedResult.kind === 'error') {
-          if (!turnController.signal.aborted) {
-            const groundedDurationMs = Date.now() - turnOverallStartTime;
-            await saveMessage(
-              {
-                threadId: activeThread.id,
-                role: 'assistant',
-                content: '',
-                durationMs: groundedDurationMs,
-                grounding: groundedResult.grounding,
-              },
-              db
-            );
-          }
-          endTurnWithoutStream();
+          await saveMessage(
+            { threadId, role: 'assistant', content: '', grounding: groundedResult.grounding },
+            db
+          );
           return;
         }
-    } catch (groundedErr: any) {
-      if (turnController.signal.aborted) {
-        endTurnWithoutStream();
-        return;
+
+        if (groundedResult.kind !== 'operational') {
+          return;
+        }
+        } catch (groundedErr) {
+          if (hostSignal(turnTabId).aborted) {
+            patchGroundedLoading(null, turnTabId);
+            return;
+          }
+          logAiChatError('Grounded pipeline or persistence error', groundedErr);
+          patchGroundedLoading(null, turnTabId);
+          // Fail-closed gate per D-04: an unavailable intent router stops the turn immediately.
+          if (
+            groundedErr instanceof IntentRouterUnavailableError ||
+            (groundedErr as { name?: string })?.name === 'IntentRouterUnavailableError' ||
+            (groundedErr as { message?: string })?.message?.includes('intent routing is unavailable')
+          ) {
+            patchTurnError(
+              'request_failed',
+              'Trợ lý AI tạm thời không khả dụng. Vui lòng kiểm tra lại cấu hình kết nối AI.',
+              turnTabId
+            );
+            return;
+          }
+          patchTurnError(
+            'invalid_response',
+            'Không thể lưu câu trả lời hoặc dữ liệu tri thức không hợp lệ. Vui lòng thử lại.',
+            turnTabId
+          );
+          return;
+        }
       }
 
-      logAiChatError('Grounded pipeline or persistence error', groundedErr);
-      patchGroundedLoading(null, turnTabId);
-
-      // Fail-closed gate per D-04: If intent router is unavailable, stop immediately.
-      if (
-        groundedErr instanceof IntentRouterUnavailableError ||
-        groundedErr?.name === 'IntentRouterUnavailableError' ||
-        groundedErr?.message?.includes('intent routing is unavailable')
-      ) {
+      if (!apiKey) {
         patchTurnError(
           'request_failed',
-          'Trợ lý AI tạm thời không khả dụng. Vui lòng kiểm tra lại cấu hình kết nối AI.',
+          'Chưa cấu hình API Key 9router. Vui lòng mở Cài đặt AI để thiết lập.',
           turnTabId
         );
-        if (activeReq) requestRegistryRef.current.finish(activeReq.requestId);
         return;
       }
 
-      patchTurnError(
-        'invalid_response',
-        'Không thể lưu câu trả lời hoặc dữ liệu tri thức không hợp lệ. Vui lòng thử lại.',
-        turnTabId
-      );
-      if (activeReq) requestRegistryRef.current.finish(activeReq.requestId);
-      return;
-    }
-    }
-
-    // 3. Operational tool loop (for operational / mixed / fallback turns)
-    if (turnController.signal.aborted) {
-      endTurnWithoutStream();
-      return;
-    }
-
-    if (!apiKey) {
-      patchTurnError('request_failed', 'Chưa cấu hình API Key 9router. Vui lòng mở Cài đặt AI để thiết lập.', turnTabId);
-      if (activeReq) requestRegistryRef.current.finish(activeReq.requestId);
-      return;
-    }
-
-    // 4. Assemble context payload (messages after last context boundary, capped at 20)
-    // If scoped item exists, inject system context prompt with grounding
-    let systemInstruction = '';
-    if (effectiveScope.type !== 'global' && effectiveScope.id) {
-      try {
-        if (effectiveScope.type === 'task') {
-          const t = await getTask(effectiveScope.id, db);
-          if (t) {
-            systemInstruction = await buildItemContextPrompt({
-              entityType: 'task',
-              item: t,
-              db,
-              charLimit: config.charLimit,
-            });
+      // Scoped / global grounding context.
+      let systemInstruction = '';
+      if (effectiveScope.type !== 'global' && effectiveScope.id) {
+        try {
+          if (effectiveScope.type === 'task') {
+            const task = await getTask(effectiveScope.id, db);
+            if (task) {
+              systemInstruction = await buildItemContextPrompt({
+                entityType: 'task',
+                item: task,
+                db,
+                charLimit: config.charLimit,
+              });
+            }
+          } else if (effectiveScope.type === 'project') {
+            const project = await getProject(effectiveScope.id, db);
+            if (project) {
+              systemInstruction = await buildItemContextPrompt({
+                entityType: 'project',
+                item: project,
+                db,
+                charLimit: config.charLimit,
+              });
+            }
+          } else if (effectiveScope.type === 'milestone') {
+            const milestone = await getMilestone(effectiveScope.id, db);
+            if (milestone) {
+              systemInstruction = await buildItemContextPrompt({
+                entityType: 'milestone',
+                item: milestone,
+                db,
+                charLimit: config.charLimit,
+              });
+            }
+          } else if (effectiveScope.type === 'document') {
+            const note = db.notes ? await db.notes.get(effectiveScope.id) : null;
+            if (note) systemInstruction = serializeDocumentContext(note);
           }
-        } else if (effectiveScope.type === 'project') {
-          const p = await getProject(effectiveScope.id, db);
-          if (p) {
-            systemInstruction = await buildItemContextPrompt({
-              entityType: 'project',
-              item: p,
-              db,
-              charLimit: config.charLimit,
-            });
-          }
-        } else if (effectiveScope.type === 'milestone') {
-          const m = await getMilestone(effectiveScope.id, db);
-          if (m) {
-            systemInstruction = await buildItemContextPrompt({
-              entityType: 'milestone',
-              item: m,
-              db,
-              charLimit: config.charLimit,
-            });
-          }
-        } else if (effectiveScope.type === 'document') {
-          const note = db.notes ? await db.notes.get(effectiveScope.id) : null;
-          if (note) {
-            systemInstruction = serializeDocumentContext(note);
-          }
+        } catch (err) {
+          logAiChatError('Context grounding resolution error', err);
         }
-      } catch (err) {
-        logAiChatError('Context grounding resolution error', err);
-      }
-    } else if (effectiveScope.type === 'global') {
-      try {
-        systemInstruction = await buildGlobalContextPrompt(db);
-      } catch (err) {
-        logAiChatError('Global context prompt resolution error', err);
-      }
-    }
-
-    // 4b. Extract mentioned tasks, projects, and local files from prompt and inject grounding
-    const { taskIds, projectIds, filePaths } = extractMentionedEntityIds(trimmed);
-    const mentionedContexts: string[] = [];
-
-    const turnReferences = tabRuntimes.get(turnTabId)?.references ?? [];
-    const allFiles = Array.from(new Set([...turnReferences, ...(filePaths || [])]));
-    if (allFiles.length !== turnReferences.length) {
-      // One-shot append computed from the owning tab, so a mid-send tab switch cannot merge another tab's attachments.
-      tabRuntimes.patch(turnTabId, { references: allFiles });
-    }
-
-    for (const tid of taskIds) {
-      if (effectiveScope.type === 'task' && effectiveScope.id === tid) continue;
-      try {
-        const t = await getTask(tid, db);
-        if (t) {
-          const serialized = await buildItemContextPrompt({
-            entityType: 'task',
-            item: t,
-            db,
-            charLimit: config.charLimit,
-          });
-          mentionedContexts.push(serialized);
+      } else {
+        try {
+          systemInstruction = await buildGlobalContextPrompt(db);
+        } catch (err) {
+          logAiChatError('Global context prompt resolution error', err);
         }
-      } catch (err) {
-        logAiChatError(`Grounding error for task ${tid}`, err);
       }
-    }
 
-    for (const pid of projectIds) {
-      if (effectiveScope.type === 'project' && effectiveScope.id === pid) continue;
-      try {
-        const p = await getProject(pid, db);
-        if (p) {
-          const serialized = await buildItemContextPrompt({
-            entityType: 'project',
-            item: p,
-            db,
-            charLimit: config.charLimit,
-          });
-          mentionedContexts.push(serialized);
+      const { taskIds, projectIds, filePaths } = extractMentionedEntityIds(trimmed);
+      const mentionedContexts: string[] = [];
+      const turnReferences = tabRuntimes.get(turnTabId)?.references ?? [];
+      const allFiles = Array.from(new Set([...turnReferences, ...(filePaths || [])]));
+      if (allFiles.length !== turnReferences.length) {
+        tabRuntimes.patch(turnTabId, { references: allFiles });
+      }
+      for (const taskId of taskIds) {
+        if (effectiveScope.type === 'task' && effectiveScope.id === taskId) continue;
+        try {
+          const task = await getTask(taskId, db);
+          if (task) {
+            mentionedContexts.push(
+              await buildItemContextPrompt({ entityType: 'task', item: task, db, charLimit: config.charLimit })
+            );
+          }
+        } catch (err) {
+          logAiChatError(`Grounding error for task ${taskId}`, err);
         }
-      } catch (err) {
-        logAiChatError(`Grounding error for project ${pid}`, err);
       }
-    }
-
-    if (mentionedContexts.length > 0) {
-      const mentionsBlock = `<mentioned_entities>\n[User Referenced Items Grounding]:\nThe user explicitly referenced the following items using mentions in their request. Their detailed database state is provided below for exact grounding:\n${mentionedContexts.join('\n\n')}\n</mentioned_entities>`;
-      systemInstruction = systemInstruction ? `${systemInstruction}\n\n${mentionsBlock}` : mentionsBlock;
-    }
-
-    if (allFiles.length > 0) {
-      const filesList = allFiles.map((fp) => `- \`${fp}\``).join('\n');
-      const filesPrompt = `<referenced_files>\n[User Attached & Referenced Local Files]:\nThe following local files are attached to this chat session:\n${filesList}\nTo inspect their contents or specific lines, you have access to the \`read_file\` tool. Call \`read_file(filePath: "...", offset: 1, limit: 500)\` as needed to fulfill the request.\n</referenced_files>`;
-      systemInstruction = systemInstruction ? `${systemInstruction}\n\n${filesPrompt}` : filesPrompt;
-    }
-
-    const allMsgs = await getMessagesByThreadId(activeThread.id, db);
-    let boundaryIdx = -1;
-    for (let i = allMsgs.length - 1; i >= 0; i--) {
-      if (allMsgs[i]?.isContextBoundary) {
-        boundaryIdx = i;
-        break;
+      for (const projectId of projectIds) {
+        if (effectiveScope.type === 'project' && effectiveScope.id === projectId) continue;
+        try {
+          const project = await getProject(projectId, db);
+          if (project) {
+            mentionedContexts.push(
+              await buildItemContextPrompt({
+                entityType: 'project',
+                item: project,
+                db,
+                charLimit: config.charLimit,
+              })
+            );
+          }
+        } catch (err) {
+          logAiChatError(`Grounding error for project ${projectId}`, err);
+        }
       }
-    }
-    const msgsToSend = boundaryIdx >= 0 ? allMsgs.slice(boundaryIdx + 1) : allMsgs;
-    const recentMsgs: ChatCompletionMessage[] = [];
-
-    const todayStr = getTodayDateString();
-    const now = dayjs();
-    const dayName = now.format('dddd');
-    const timeStr = now.format('HH:mm');
-
-    let dynamicMcpTools: AiToolDefinition[] = [];
-    let dynamicMcpInstructions = '';
-    if (turnMcpEnabled) {
-      try {
-        dynamicMcpTools = await discoverAllMcpTools(db);
-      } catch (err) {
-        logAiChatError('MCP discovery unavailable', err);
+      if (mentionedContexts.length > 0) {
+        const mentionsBlock = `<mentioned_entities>\n[User Referenced Items Grounding]:\nThe user explicitly referenced the following items using mentions in their request. Their detailed database state is provided below for exact grounding:\n${mentionedContexts.join('\n\n')}\n</mentioned_entities>`;
+        systemInstruction = systemInstruction ? `${systemInstruction}\n\n${mentionsBlock}` : mentionsBlock;
       }
-      try {
-        dynamicMcpInstructions = await getEnabledMcpInstructions(db);
-      } catch (err) {
-        logAiChatError('MCP instruction resolution error', err);
+      if (allFiles.length > 0) {
+        const filesList = allFiles.map((filePath) => `- \`${filePath}\``).join('\n');
+        const filesPrompt = `<referenced_files>\n[User Attached & Referenced Local Files]:\nThe following local files are attached to this chat session:\n${filesList}\nTo inspect their contents or specific lines, you have access to the \`read_file\` tool. Call \`read_file(filePath: "...", offset: 1, limit: 500)\` as needed to fulfill the request.\n</referenced_files>`;
+        systemInstruction = systemInstruction ? `${systemInstruction}\n\n${filesPrompt}` : filesPrompt;
       }
-    }
-    const toolsForTurn = getToolsForTurn(effectiveAnalysisMode, dynamicMcpTools);
 
-    const systemPromptContent = `You are an expert AI assistant embedded inside ${APP_NAME}.
-Current Date: ${todayStr} (${dayName}). Time: ${timeStr}.
+      let dynamicMcpTools: AiToolDefinition[] = [];
+      let dynamicMcpInstructions = '';
+      if (turnMcpEnabled) {
+        try {
+          dynamicMcpTools = await discoverAllMcpTools(db);
+        } catch (err) {
+          logAiChatError('MCP discovery unavailable', err);
+        }
+        try {
+          dynamicMcpInstructions = await getEnabledMcpInstructions(db);
+        } catch (err) {
+          logAiChatError('MCP instruction resolution error', err);
+        }
+      }
+      const toolsForTurn = getToolsForTurn(turnAnalysisMode, dynamicMcpTools);
+
+      const todayStr = getTodayDateString();
+      const now = dayjs();
+      const systemPromptContent = `You are an expert AI assistant embedded inside ${APP_NAME}.
+Current Date: ${todayStr} (${now.format('dddd')}). Time: ${now.format('HH:mm')}.
 
 CRITICAL ANTI-HALLUCINATION RULES:
 1. NEVER GUESS, ASSUME, OR INVENT DATA.
@@ -1635,9 +1675,9 @@ CRITICAL ANTI-HALLUCINATION RULES:
 4. If a requested item or detail is missing, null, empty, or not recorded in the database, EXPLICITLY STATE THAT IT IS NOT RECORDED. Never extrapolate, approximate, or pretend data exists.
 5. When breaking down goals or proposing steps, output clear actionable bullet points that can be converted into checklist items.
 6. DIAGRAMS & FLOWCHARTS: When the user asks for a flowchart, workflow diagram, sequence diagram, architecture chart, or visual representation, or when visualizing processes/hierarchies, you CAN and SHOULD generate Mermaid.js code blocks using \`\`\`mermaid syntax (e.g. flowchart TD, sequenceDiagram, classDiagram, graph LR, etc.). TaskMate will automatically render interactive diagrams from these blocks.
-7. YOU HAVE FULL DATABASE MUTATION CAPABILITIES: You can create, update, reparent, or delete tasks, projects, milestones, planned allocations, work sessions, active timers, capacity rules/overrides, and notes using mutation tools (create_task, update_task, update_task_checklist, reparent_task, delete_task, create_project, update_project, delete_project, create_milestone, update_milestone, delete_milestone, plan_allocation, delete_allocation, log_work_session, update_work_session, delete_work_session, start_timer, pause_timer, stop_and_log_timer, discard_timer, update_capacity_rule, set_capacity_override, remove_capacity_override, create_note, update_note, delete_note). When the user asks you to perform an action or change anything in the app, call the appropriate action tool.${
-      turnAutoApprove
-        ? `\n\n[AUTO-EXECUTION & REPORTING MODE ACTIVE]:
+7. YOU HAVE FULL DATABASE MUTATION CAPABILITIES: You can create, update, reparent, or delete tasks, projects, milestones, planned allocations, work sessions, active timers, capacity rules/overrides, and notes using mutation tools. When the user asks you to perform an action or change anything in the app, call the appropriate action tool.${
+        turnAutoApprove
+          ? `\n\n[AUTO-EXECUTION & REPORTING MODE ACTIVE]:
 The user has EXPLICITLY authorized automatic execution of mutations without confirmation prompts.
 MANDATORY REPORTING REQUIREMENT:
 Because mutations run automatically without manual confirmation, your final response MUST provide a clear, comprehensive, and itemized report of EVERY SINGLE MUTATION you performed:
@@ -1645,11 +1685,11 @@ Because mutations run automatically without manual confirmation, your final resp
 - Specify exact field changes (e.g. status, priority, estimate, progress, deadline, allocated minutes).
 - Highlight the outcome of each action clearly.
 Never perform mutations silently without providing this full change summary in your final reply.`
-        : ' The system will prompt the user to confirm the mutation before applying it.'
-    }${dynamicMcpInstructions}
+          : ' The system will prompt the user to confirm the mutation before applying it.'
+      }${dynamicMcpInstructions}
 ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the currently active item or workspace:\n${systemInstruction}\n` : ''}${
-      effectiveAnalysisMode
-        ? `\n\n[ANALYSIS MODE ACTIVE]:
+        turnAnalysisMode
+          ? `\n\n[ANALYSIS MODE ACTIVE]:
 READ ONLY:
 This turn is read-only. You may retrieve knowledge, read local files, reason, compare, propose, and generate artifacts with \`generate_file\`, \`generate_pptx\`, or \`generate_image\`.
 Rules:
@@ -1659,283 +1699,68 @@ Rules:
 4. Read attached local files with \`read_file\` FIRST (offset/limit pagination) before answering about them.
 5. Ground every factual claim in retrieved excerpts or file content. Clearly mark your own reasoning, assumptions, and proposals as such.
 6. End the answer with a short "Nguồn" (Sources) list naming the documents/files you used.`
-        : ''
-    }`;
+          : ''
+      }`;
 
-    if (import.meta.env.DEV) {
-      console.log('[AI Harness] 📝 Injected Context Grounding:\n', systemPromptContent);
-    }
-    recentMsgs.push({
-      role: 'system',
-      content: systemPromptContent,
-    });
+      debugTurnRef.current.set(
+        turnTabId,
+        aiDebugService.startTurn({
+          scope:
+            effectiveScope.title ||
+            `${effectiveScope.type}${effectiveScope.id ? `:${effectiveScope.id}` : ''}`,
+          model: resolveActiveModel(),
+          systemPrompt: systemPromptContent,
+          messagesSent: [
+            { role: 'system', content: systemPromptContent },
+            ...historyTurns,
+            { role: 'user', content: promptText },
+          ],
+          toolsSent: toolsForTurn,
+        })
+      );
 
-    const historyBudget = (config.charLimit || 12000) * 2.5;
-    const budgetedMsgs = selectMessagesWithinBudget(
-      msgsToSend.map((m) => ({
-        ...m,
-        content: extractMessageText(m),
-      })),
-      {
-        maxMessages: 20,
-        maxTotalChars: historyBudget,
-      }
-    );
-
-    for (const m of budgetedMsgs) {
-      recentMsgs.push({
-        role: m.role,
-        content: m.id === savedUserMsg?.id && effectivePrompt !== trimmed ? effectivePrompt : (m.content || ''),
-      });
-    }
-
-    // 5. Start SSE Streaming with Tool Execution Harness
-    patchGroundedLoading(null, turnTabId);
-    tabRuntimes.patch(turnTabId, {
-      streamingText: '',
-      streamingStatus: 'Đang kết nối 9router...',
-    });
-
-    const correlationId = crypto.randomUUID();
-    const routeLog = createPhaseLogger('[ROUTE]', { correlationId });
-    const toolLog = createPhaseLogger('[TOOL]', { correlationId });
-    const turnStartTime = Date.now();
-    let accumulatedTokenUsage: ChatTokenUsage | undefined;
-    const turnGeneratedFiles: ChatGeneratedFile[] = [];
-
-    let fullResponse = '';
-    const currentMessages: ChatCompletionMessage[] = [...recentMsgs];
-    const MAX_TOOL_LOOPS = 30;
-
-    const resolvedModel = resolveActiveModel();
-    const targetModel =
-      resolvedModel && (availableModels.length === 0 || availableModels.includes(resolvedModel))
-        ? resolvedModel
-        : availableModels[0] || config.defaultModel;
-
-    routeLog.log({
-      outcome: 'ok',
-      safeIds: [savedUserMsg?.id || 'unknown', activeThread.id],
-      counts: { queryLength: effectivePrompt.length },
-      metadata: { model: targetModel, scopeType: effectiveScope.type },
-    });
-
-    const turnId = aiDebugService.startTurn({
-      scope: effectiveScope.title || `${effectiveScope.type}${effectiveScope.id ? `:${effectiveScope.id}` : ''}`,
-      model: targetModel,
-      systemPrompt: systemPromptContent,
-      messagesSent: currentMessages,
-      toolsSent: toolsForTurn,
-    });
-
-    try {
-      const toolCallsById = new Map<string, { name: string; args: Record<string, any> }>();
-      const loopResult = await runAiOrchestratorLoop({
+      const outcome = await runtime.start({
+        threadId,
+        scopeKey,
+        text: promptText,
+        ...(userMessageId ? { retryUserMessageId: userMessageId } : {}),
+        analysisMode: turnAnalysisMode,
+        autoApprove: turnAutoApprove,
+        model: resolveActiveModel(),
         endpoint: config.endpoint,
         apiKey,
-        model: targetModel,
-        messages: currentMessages,
+        systemMessages: [{ role: 'system', content: systemPromptContent }],
+        history: historyTurns,
         tools: toolsForTurn,
-        maxLoops: MAX_TOOL_LOOPS,
-        db,
-        signal: controller.signal,
-        ...(effectiveAnalysisMode
-          ? { keepRecentToolOutputs: 20, maxOldToolChars: 100_000 }
-          : {}),
-        // Auto-compaction follows the configured model context window, like Claude
-        // Code: trigger at a fraction of the window using the provider-reported
-        // prompt token count.
-        contextWindowTokens: config.contextWindowTokens,
-        compactAtRatio: effectiveAnalysisMode ? 0.9 : 0.75,
-        executeToolFn: (name, args, toolDb, signal) =>
-          dispatchAiToolCall(name, args, toolDb, signal, { allowMutation: turnAutoApprove }),
-        onTextChunk: (delta) => {
-          fullResponse += delta;
-          aiDebugService.appendStreamChunk(turnId, delta);
-          const stripped = stripThinkingBlocks(fullResponse);
-          tabRuntimes.patch(turnTabId, { streamingText: stripped, streamingStatus: null, partialBuffer: stripped });
-        },
-        onStatusChange: (status) => {
-          if (status === 'Đang tổng hợp câu trả lời hoàn chỉnh...') {
-            fullResponse = '';
-            tabRuntimes.patch(turnTabId, { streamingText: '' });
-          }
-          tabRuntimes.patch(turnTabId, { streamingStatus: status });
-        },
-        onUsage: (usage) => {
-          accumulatedTokenUsage = {
-            promptTokens: (accumulatedTokenUsage?.promptTokens || 0) + (usage.promptTokens || 0),
-            completionTokens: (accumulatedTokenUsage?.completionTokens || 0) + (usage.completionTokens || 0),
-            totalTokens: (accumulatedTokenUsage?.totalTokens || 0) + (usage.totalTokens || 0),
-          };
-          tabRuntimes.patch(turnTabId, { tokenUsage: accumulatedTokenUsage });
-        },
-        onToolCall: (call) => {
-          toolCallsById.set(call.id, { name: call.name, args: call.args });
-          if (import.meta.env.DEV) {
-            console.log(`[AI Harness] 🛠️ Model invoked tool "${call.name}":`, call.args);
-          }
-          aiDebugService.recordToolCall(turnId, call);
-        },
-        onToolResult: (callId, result, durationMs) => {
-          const call = toolCallsById.get(callId);
-          const normalizedToolName = normalizeToolName(call?.name || '');
-          toolLog.log({
-            outcome: result.includes('"error"') ? 'error' : 'ok',
-            latencyMs: durationMs,
-            safeIds: [callId],
-            counts: { args: Object.keys(call?.args || {}).length },
-            metadata: {
-              toolName: normalizedToolName,
-              isMutation: call ? isMutationTool(call.name, call.args) : false,
-            },
-          });
-          if (import.meta.env.DEV) {
-            console.log(`[AI Harness] 📦 Tool result for "${call?.name || callId}":`, result);
-          }
-          aiDebugService.recordToolResult(turnId, callId, result, durationMs);
-        },
-        onMutationCheck: async (toolName, args) => {
-          if (effectiveAnalysisMode) {
-            return {
-              proceed: false,
-              cancellationResult: JSON.stringify({
-                cancelled: true,
-                message: 'Analysis Mode chỉ đọc; không có dữ liệu nào bị thay đổi.',
-              }),
-            };
-          }
-          if (turnAutoApprove) {
-            if (import.meta.env.DEV) {
-              console.log(`[AI Harness] ⚡ Auto-approving mutation tool "${toolName}" (bypass active)`);
-            }
-            return { proceed: true };
-          }
-
-          const summary = await describeToolMutationWithContext(toolName, args, db);
-          tabRuntimes.patch(turnTabId, { streamingStatus: 'Chờ xác nhận hành động...' });
-          const confirmed = await new Promise<boolean>((resolve) => {
-            const settled = (value: boolean) => resolve(value);
-            tabRuntimes.patch(turnTabId, {
-              pendingConfirmation: { toolName, summary, args },
-              confirmationResolver: settled,
-            });
-          });
-          tabRuntimes.patch(turnTabId, {
-            pendingConfirmation: null,
-            confirmationResolver: undefined,
-          });
-
-          return confirmed
-            ? { proceed: true }
-            : {
-                proceed: false,
-                cancellationResult: JSON.stringify({
-                  cancelled: true,
-                  message: 'Người dùng đã từ chối thao tác này (User declined confirmation). Không có dữ liệu nào bị thay đổi.',
-                }),
-              };
-        },
-        onFileGenerated: (file) => {
-          turnGeneratedFiles.push(file);
-        },
+        ...(config.contextWindowTokens ? { contextWindowTokens: config.contextWindowTokens } : {}),
       });
 
-      fullResponse = loopResult.fullResponse;
-      accumulatedTokenUsage = loopResult.tokenUsage;
-
-      // Superseded or aborted request never writes assistant output (D-11/D-12).
-      if (!requestRegistryRef.current.isCurrent(activeReq?.requestId ?? '', turnTabId, controller)) {
-        aiDebugService.finishTurn(turnId, { aborted: true });
-        return;
+      const debugTurnId = debugTurnRef.current.get(turnTabId);
+      debugTurnRef.current.delete(turnTabId);
+      if (debugTurnId) {
+        if (outcome.phase === 'aborted') aiDebugService.finishTurn(debugTurnId, { aborted: true });
+        else if (outcome.phase === 'error') aiDebugService.finishTurn(debugTurnId, { error: 'request_failed' });
+        else aiDebugService.finishTurn(debugTurnId, { finalResponse: outcome.content ?? '' });
       }
 
-      // 6. Commit assistant response to DB
-      const cleanCommittedResponse = stripThinkingBlocks(fullResponse);
-      if (cleanCommittedResponse.trim()) {
-        const durationMs = Date.now() - turnStartTime;
-        await saveMessage(
-          {
-            threadId: activeThread.id,
-            role: 'assistant',
-            content: cleanCommittedResponse,
-            durationMs,
-            tokenUsage: accumulatedTokenUsage,
-            generatedFiles: turnGeneratedFiles.length > 0 ? turnGeneratedFiles : undefined,
-          },
-          db
-        );
-
-        // Check if document is blurred or hidden to notify user
-        const isBlurred = typeof document !== 'undefined' && (document.hidden || !document.hasFocus?.());
-        if (isBlurred) {
-          const trimmed = fullResponse.trim();
-          const snippet = trimmed.slice(0, 120);
-          void sendDesktopNotification({
-            title: `${APP_NAME} AI`,
-            body: snippet + (trimmed.length > 120 ? '...' : ''),
-            tag: 'ai-turn-finished',
-          });
-        }
-        tabRuntimes.patch(turnTabId, { status: 'idle', partialBuffer: '', error: null, retryUserMessageId: null });
-      } else {
-        // Empty output is an error turn: keep the runtime error card, do not reset it to idle below.
-        patchTurnError(
-          'invalid_response',
-          'Mô hình AI không trả về nội dung (phản hồi rỗng). Vui lòng thử lại hoặc chọn mô hình khác.',
-          turnTabId
-        );
+      if (outcome.phase === 'complete' && outcome.content) {
+        notifyIfBlurred(outcome.content);
+        tabRuntimes.patch(turnTabId, { retryUserMessageId: null, status: 'idle' });
+      } else if (outcome.phase === 'error') {
+        tabRuntimes.patch(turnTabId, { status: 'error' });
+      } else if (outcome.phase === 'aborted' || outcome.phase === 'cancelled') {
+        tabRuntimes.patch(turnTabId, { status: 'idle' });
       }
-      aiDebugService.finishTurn(turnId, { finalResponse: fullResponse });
-    } catch (err: any) {
-      if (err.name === 'AbortError') {
-        // Abort invalidates the whole transient response; never persist partial output.
-        aiDebugService.finishTurn(turnId, { aborted: true });
-      } else {
-        const errorMsg = 'Không thể hoàn tất phản hồi AI. Vui lòng thử lại.';
-        aiDebugService.finishTurn(turnId, { error: 'request_failed' });
-        tabRuntimes.patch(turnTabId, {
-          status: 'error',
-          error: {
-            code: 'request_failed',
-            message: err?.message || errorMsg,
-            requestId: activeReq?.requestId || generateId(),
-          },
-        });
-      }
-    } finally {
-      // Reset transient turn state on the owning tab, never the currently visible one.
-      tabRuntimes.patch(turnTabId, {
-        streamingText: '',
-        streamingStatus: null,
-        groundedLoadingStatus: null,
-        requestController: undefined,
-        partialBuffer: '',
-      });
-      if (activeReq) {
-        requestRegistryRef.current.finish(activeReq.requestId);
-      }
-      // A throw between the claim and the streaming try leaves the tab on `processing` forever.
-      // Error paths below already set their own status, so only a still-processing tab is reset.
-      if (
-        tabRuntimes.get(turnTabId)?.status === 'processing' &&
-        tabRuntimes.get(turnTabId)?.requestController === activeReq.controller
-      ) {
-        tabRuntimes.patch(turnTabId, {
-          status: 'idle',
-          requestController: undefined,
-          partialBuffer: '',
-        });
-      }
-    }
-    } catch (err: any) {
+      setTurnRevision((prev) => prev + 1);
+    } catch (err) {
       logAiChatError('Send message error', err);
+      patchTurnError('request_failed', 'Không thể hoàn tất phản hồi AI. Vui lòng thử lại.', turnTabId);
     }
   };
 
-  useEffect(() => {
-    handleSendMessageRef.current = handleSendMessage;
-  });
+  // Async host callbacks compare against the live handler, not the one closed over at render time.
+  const handleSendTurnRef = useRef(handleSendTurn);
+  handleSendTurnRef.current = handleSendTurn;
 
   const handleEvidenceOnlySynthesize = async (prevGrounding: ChatMessageGrounding) => {
     const activeThread = thread;
@@ -2022,7 +1847,7 @@ Rules:
     findingRelatedRef.current = key;
     setFindingRelatedKey(key);
     try {
-      await handleSendMessage(`Tìm mọi quan hệ liên quan đến ${entity.canonicalName}`);
+      await handleSendTurn(`Tìm mọi quan hệ liên quan đến ${entity.canonicalName}`);
     } finally {
       findingRelatedRef.current = null;
       setFindingRelatedKey(null);
@@ -2036,7 +1861,7 @@ Rules:
     findingRelatedKey,
     onCitationActivate: (c) => setActivePreviewCitation(c),
     onCandidateSelect: (urn) => {
-      void handleSendMessage(urn, undefined, {
+      void handleSendTurn(urn, undefined, {
         retryUserMessageId: tabRuntimesRef.current.get(runtimeTabId)?.retryUserMessageId ?? null,
       });
     },
@@ -2054,7 +1879,7 @@ Rules:
       const runtime = tabRuntimesRef.current.get(runtimeTabId);
       const lastSubmittedText = runtime?.lastSubmittedText;
       if (lastSubmittedText) {
-        void handleSendMessage(lastSubmittedText, undefined, {
+        void handleSendTurn(lastSubmittedText, undefined, {
           retryUserMessageId: runtime?.retryUserMessageId ?? null,
         });
       }
@@ -2069,7 +1894,7 @@ Rules:
       const runtime = tabRuntimesRef.current.get(runtimeTabId);
       const lastSubmittedText = runtime?.lastSubmittedText;
       if (lastSubmittedText) {
-        void handleSendMessage(lastSubmittedText, undefined, {
+        void handleSendTurn(lastSubmittedText, undefined, {
           retryUserMessageId: runtime?.retryUserMessageId ?? null,
         });
       }
@@ -2154,12 +1979,19 @@ Rules:
   };
 
   const handleRetry = () => {
-    const runtime = tabRuntimesRef.current.get(runtimeTabId);
-    const retryId = runtime?.retryUserMessageId ?? null;
-    const text = runtime?.lastSubmittedText ?? '';
-    if (!text) return;
-    // Same user row, new request id: retry never duplicates the input bubble (D-14).
-    void handleSendMessage(text, undefined, { retryUserMessageId: retryId });
+    const tabRuntime = tabRuntimesRef.current.get(runtimeTabId);
+    const turnRuntime = turnRegistryRef.current?.peek(runtimeTabId);
+    const text = tabRuntime?.lastSubmittedText ?? '';
+    if (!text || !turnRuntime) return;
+    tabRuntimesRef.current.patch(runtimeTabId, { status: 'processing', error: null });
+    // The runtime re-sends its last request anchored on the persisted user row, so a retry
+    // never inserts a second user message (D-14, T-25.3-36).
+    void turnRuntime.retry().then((outcome) => {
+      if (outcome.phase === 'complete') {
+        tabRuntimesRef.current.patch(runtimeTabId, { status: 'idle', retryUserMessageId: null });
+      }
+      setTurnRevision((prev) => prev + 1);
+    });
   };
 
   // Auto-send prompt when opened from Command Palette with pendingPrompt
@@ -2170,7 +2002,7 @@ Rules:
       setInternalScope({ type: 'global' });
       setCustomScope({ type: 'global' });
       setIsDetached(false);
-      handleSendMessage(promptToSend, { type: 'global' });
+      void handleSendTurn(promptToSend, { type: 'global' });
     }
   }, [open, pendingPrompt]);
 
@@ -2309,26 +2141,6 @@ Rules:
         />
       )}
 
-      {/* Tab Toolbox: Pure Tab-Isolated Controls (Model, Analysis Mode, Auto-Approve, MCP, Clear Context) */}
-      <ChatTabToolbox
-        activeTabId={activeTabId}
-        selectedModel={resolveActiveModel()}
-        availableModels={availableModels}
-        onModelChange={handleModelChange}
-        onRefreshModels={handleRefreshModels}
-        isRefreshingModels={isRefreshingModels}
-        analysisMode={currentTabAnalysisMode}
-        onToggleAnalysisMode={handleToggleAnalysisMode}
-        autoApproveMutations={autoApproveMutations}
-        onToggleAutoApproveMutations={handleToggleAutoApproveMutations}
-        mcpEnabled={currentTabMcpEnabled}
-        onToggleMcpEnabled={handleToggleMcpEnabled}
-        mcpServers={mcpServers}
-        onToggleMcpServer={handleToggleMcpServer}
-        onOpenMcpSettings={() => setIsMcpModalOpen(true)}
-        onClearContext={handleClearContext}
-      />
-
       <ScopePickerModal
         open={scopeModalOpen}
         onClose={() => setScopeModalOpen(false)}
@@ -2365,7 +2177,8 @@ Rules:
         onOpenSettings={onOpenSettings}
       />
 
-      {/* ScopeChipsBar after routing per D-15 (only when routed scope has concrete facets) */}
+      <RestoredSourceNotice missingSources={restoredMissingSources} />
+
       {activeRoutedScope && hasMeaningfulRoutedScope(activeRoutedScope.routedScope) && (
         <div style={{ padding: '0 14px' }}>
           <ScopeChipsBar
@@ -2375,29 +2188,134 @@ Rules:
         </div>
       )}
 
-      {/* Message List */}
-      <ChatMessageList
-        messages={messages}
-        streamingText={activeRuntime?.streamingText ?? ''}
-        isStreaming={activeRuntime?.status === 'processing'}
-        streamingStatus={activeRuntime?.groundedLoadingStatus ?? activeRuntime?.streamingStatus ?? null}
-        scrollTrigger={scrollTrigger}
-        onRetry={handleRetry}
-        onOpenSettings={onOpenSettings}
-        canAddToChecklist={currentScope.type === 'task'}
-        canSaveStickyNote={true}
-        canRunClaudeCode={currentScope.type === 'task'}
-        onAddToChecklist={handleAddToChecklist}
-        onSaveStickyNote={handleSaveStickyNote}
-        onRunClaudeCode={handleRunClaudeCode}
-        pendingConfirmation={activeRuntime?.pendingConfirmation ?? null}
-        onConfirmAction={handleConfirmAction}
-        groundedCallbacks={groundedCallbacks}
-        transientClarifyMessage={clarifyByTab[activeTabId] ?? null}
-        onCancelClarify={() => setTransientClarifyMessage(activeTabId, null)}
-      />
+      {/* One shared renderer (D-01/D-02). Only scope, prompts and host callbacks differ. */}
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        <AiChatWidget
+          scope={{
+            kind: 'chat',
+            threadId: activeThreadId ?? '',
+            scopeKey: activeTabId,
+            label: `${currentScope.type} · ${currentScope.title ?? activeTab?.title ?? ''}`,
+          }}
+          messages={messages}
+          turn={{
+            status: activeTurnRuntime?.getStatus() ?? 'idle',
+            streamingText: activeRuntime?.streamingText ?? '',
+            streamingStatusLabel: activeRuntime?.streamingStatus ?? null,
+            pendingApproval: activeRuntime?.pendingConfirmation
+              ? {
+                  toolName: activeRuntime.pendingConfirmation.toolName,
+                  summary: activeRuntime.pendingConfirmation.summary,
+                }
+              : null,
+          }}
+          onSubmit={(text) => {
+            void handleSendTurn(text);
+          }}
+          onStop={handleStopGeneration}
+          onResolveApproval={handleConfirmAction}
+          onRetry={handleRetry}
+          error={activeRuntime?.error ? { code: activeRuntime.error.code, message: activeRuntime.error.message } : null}
+          toolbox={{
+            selectedModel: resolveActiveModel(),
+            availableModels,
+            onModelChange: handleModelChange,
+            onRefreshModels: handleRefreshModels,
+            isRefreshingModels,
+            analysisMode: currentTabAnalysisMode,
+            onToggleAnalysisMode: (tabId) => { void handleToggleAnalysisMode(tabId); },
+            autoApproveMutations,
+            onToggleAutoApproveMutations: (tabId) => { void handleToggleAutoApproveMutations(tabId); },
+            mcpEnabled: currentTabMcpEnabled,
+            onToggleMcpEnabled: (tabId) => { void handleToggleMcpEnabled(tabId); },
+            mcpServers,
+            onToggleMcpServer: (id, enabled) => {
+              void handleToggleMcpServer(id, enabled);
+            },
+            onOpenMcpSettings: () => setIsMcpModalOpen(true),
+          }}
+          quickPrompts={DRAWER_QUICK_PROMPTS}
+          onClearThread={() => {
+            void handleClearContext();
+          }}
+          onClearAllHistory={handleClearAllHistory}
+          emptyState={{
+            heading: `Trợ lý AI ${APP_NAME}`,
+            body: 'Đặt câu hỏi về tác vụ hiện tại, phân tích tiến độ, gợi ý checklist hoặc tra cứu tài liệu đính kèm. Nhập câu hỏi bên dưới để bắt đầu.',
+          }}
+          toolEvents={activeToolEvents}
+          placeholder={
+            activeRuntime?.pendingConfirmation
+              ? 'Gõ "yes" để xác nhận hoặc "no" để từ chối...'
+              : 'Nhập câu hỏi cho trợ lý AI...'
+          }
+          {...(onOpenSettings ? { onOpenSettings } : {})}
+          {...(activeRuntime?.references ? { attachedFiles: activeRuntime.references } : {})}
+          onAttachFile={handleAttachFile}
+          onRemoveFile={handleRemoveFile}
+          autoFocus={open}
+          externalValue={externalInputValue ?? undefined}
+          onExternalValueConsumed={() => setExternalInputValue(null)}
+          draft={activeRuntime ? activeRuntime.draft : unseededDraft}
+          onDraftChange={(next) => {
+            draftCarryRef.current = { tabId: activeTabId, text: next };
+            if (tabRuntimesRef.current.get(activeTabId)) {
+              tabRuntimesRef.current.patch(activeTabId, { draft: next });
+            } else {
+              setUnseededDraft(next);
+            }
+          }}
+          // Drawer business, rendered by the shared surface but owned here.
+          messageListExtensions={{
+            scrollTrigger,
+            ...(groundedCallbacks ? { groundedCallbacks } : {}),
+            transientClarifyMessage: clarifyByTab[activeTabId] ?? null,
+            onCancelClarify: () => setTransientClarifyMessage(activeTabId, null),
+            canAddToChecklist: currentScope.type === 'task',
+            canSaveStickyNote: true,
+            canRunClaudeCode: currentScope.type === 'task',
+            onAddToChecklist: handleAddToChecklist,
+            onSaveStickyNote: handleSaveStickyNote,
+            onRunClaudeCode: handleRunClaudeCode,
+          }}
+          statusExtensions={
+            <>
+              {activeCheckpoint && (
+                <div style={{ width: '100%', padding: '0 12px 6px', boxSizing: 'border-box' }}>
+                  <InterruptedBanner
+                    {...(activeCheckpoint.step ? { checkpoint: { step: activeCheckpoint.step } } : {})}
+                    message={
+                      activeCheckpoint.step
+                        ? `Công việc SDLC bị gián đoạn tại ${activeCheckpoint.step}.`
+                        : 'Yêu cầu trước bị gián đoạn khi ứng dụng đóng.'
+                    }
+                    onContinue={() => {
+                      void resolveCheckpoint('continue');
+                    }}
+                    onDiscard={() => {
+                      void resolveCheckpoint('discard');
+                    }}
+                  />
+                </div>
+              )}
+              {activeRuntime?.status === 'interrupted' && (
+                <div style={{ width: '100%', padding: '0 12px 6px', boxSizing: 'border-box' }}>
+                  <InterruptedBanner
+                    message="Yêu cầu trước bị gián đoạn khi ứng dụng đóng."
+                    onContinue={() => {
+                      tabRuntimes.patch(activeTabId, { status: 'idle' });
+                      if (activeRuntime.draft) void handleSendTurn(activeRuntime.draft);
+                    }}
+                    onDiscard={() => tabRuntimes.patch(activeTabId, { status: 'idle', draft: '' })}
+                  />
+                </div>
+              )}
+            </>
+          }
+        />
+      </div>
 
-      {/* QuickPreviewDrawer on citation activation per ANSWER-07, D-10 */}
+      {/* Citation preview stays Drawer-owned (ANSWER-07, D-10). */}
       <QuickPreviewDrawer
         open={Boolean(activePreviewCitation)}
         docId={activePreviewCitation?.documentId ?? null}
@@ -2415,66 +2333,6 @@ Rules:
         citationAuthority={activePreviewCitation?.authority ?? undefined}
         snapshotAvailable={true}
         db={db}
-      />
-
-      {/* Active Tab Runtime Status: the single error-card owner (D-13). */}
-      {(() => {
-        const runtime = activeRuntime;
-        if (!runtime) return null;
-        if (runtime.status === 'interrupted') {
-          return (
-            <div style={{ width: '100%', padding: '0 12px 6px', boxSizing: 'border-box' }}>
-              <InterruptedBanner
-                message="Yêu cầu trước bị gián đoạn khi ứng dụng đóng."
-                onContinue={() => {
-                  tabRuntimes.patch(activeTabId, { status: 'idle' });
-                  if (runtime.draft) void handleSendMessage(runtime.draft);
-                }}
-                onDiscard={() => tabRuntimes.patch(activeTabId, { status: 'idle', draft: '' })}
-              />
-            </div>
-          );
-        }
-        if (runtime.status === 'error' && runtime.error) {
-          return (
-            <div style={{ width: '100%', padding: '0 12px 6px', boxSizing: 'border-box' }}>
-              <InlineApiErrorCard
-                errorMessage={runtime.error.message}
-                onRetry={handleRetry}
-                onOpenSettings={onOpenSettings}
-              />
-            </div>
-          );
-        }
-        return null;
-      })()}
-
-      {/* Chat Input Bar. Remounted per tab and driven by that tab's runtime draft. */}
-      <ChatInputBar
-        key={activeTabId}
-        autoFocus={open}
-        onSubmit={handleSendMessage}
-        onClear={handleClearContext}
-        onClearAll={handleClearAllHistory}
-        onStop={handleStopGeneration}
-        isStreaming={(activeRuntime?.status === 'processing') && !activeRuntime?.pendingConfirmation}
-        placeholder={
-          activeRuntime?.pendingConfirmation
-            ? 'Gõ "yes" để xác nhận hoặc "no" để từ chối...'
-            : undefined
-        }
-        db={db}
-        attachedFiles={activeRuntime?.references ?? []}
-        onAttachFile={handleAttachFile}
-        onRemoveFile={handleRemoveFile}
-        // Controlled only once the tab has a runtime, so pre-hydration typing is never clobbered.
-        value={activeRuntime ? activeRuntime.draft : undefined}
-        onValueChange={(next) => {
-          draftCarryRef.current = { tabId: activeTabId, text: next };
-          tabRuntimes.patch(activeTabId, { draft: next });
-        }}
-        externalValue={externalInputValue ?? undefined}
-        onExternalValueConsumed={() => setExternalInputValue(null)}
       />
     </div>
   );

@@ -326,18 +326,18 @@ describe('AIChatDrawer multi-tab isolation', () => {
     submit('Tạo task');
 
     await waitFor(() =>
-      expect(screen.getByTestId('ai-mutation-confirmation')).toBeInTheDocument()
+      expect(screen.getByTestId('ai-mutation-approval')).toBeInTheDocument()
     );
 
     await openTab(CHAT_TWO);
-    expect(screen.queryByTestId('ai-mutation-confirmation')).toBeNull();
+    expect(screen.queryByTestId('ai-mutation-approval')).toBeNull();
 
     await openTab(CHAT_ONE);
     await waitFor(() =>
-      expect(screen.getByTestId('ai-mutation-confirmation')).toBeInTheDocument()
+      expect(screen.getByTestId('ai-mutation-approval')).toBeInTheDocument()
     );
 
-    fireEvent.click(screen.getByLabelText('Xác nhận thao tác'));
+    fireEvent.click(screen.getByRole('button', { name: 'Chấp thuận' }));
     await waitFor(() =>
       expect(screen.getByText(/Đã tạo tác vụ cách ly/i)).toBeInTheDocument()
     );
