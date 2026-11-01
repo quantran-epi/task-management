@@ -25,11 +25,11 @@ See: .planning/PROJECT.md (updated 2026-10-07)
 
 ## Current Position
 
-Phase: 25.1.2 (fix-sdlc-hub-user-flow-end-to-end) — IN PROGRESS
-Plan: 3 of 4 — Plan 25.1.2-03 completed
-Status: Plan 25.1.2-03 completed: implemented Steps 3-6 (Code Guide, MultiPackTable & Drift, Tech Docs PL03B/PL07, CAB export)
-Last activity: 2026-11-01 -- Plan 25.1.2-03 completed
-Stopped at: Completed 25.1.2-03-PLAN.md
+Phase: 25.1.2 (fix-sdlc-hub-user-flow-end-to-end) — COMPLETED
+Plan: 4 of 4 — Plan 25.1.2-04 completed
+Status: Plan 25.1.2-04 completed: actionable Stale handling, first-click guarantees, new CR creation with context inheritance, and full Playwright walk-through (SC-6) passing
+Last activity: 2026-11-01 -- Plan 25.1.2-04 completed
+Stopped at: Completed 25.1.2-04-PLAN.md
 
 Progress: [██████████] 100%
 

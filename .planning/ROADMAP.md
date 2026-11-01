@@ -339,8 +339,8 @@ Plans:
 
 **Wave 3** *(depends on 25.1.2-02)*
 
-- [ ] 25.1.2-03-PLAN.md — Steps 3-6: Code guide, Multi-pack change-pack management with drift reconciliation, Tech Docs (PL03B/PL07), and CAB export
+- [x] 25.1.2-03-PLAN.md — Steps 3-6: Code guide, Multi-pack change-pack management with drift reconciliation, Tech Docs (PL03B/PL07), and CAB export
 
 **Wave 4** *(depends on 25.1.2-03)*
 
-- [ ] 25.1.2-04-PLAN.md — Actionable Stale handling, first-click guarantees, new CR creation with context inheritance, and end-to-end integration verification
+- [x] 25.1.2-04-PLAN.md — Actionable Stale handling, first-click guarantees, new CR creation with context inheritance, and end-to-end integration verification
