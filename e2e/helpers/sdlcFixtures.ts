@@ -12,13 +12,7 @@ export interface CapturedRequest {
 export interface MockTransportOptions {
   capturedRequests?: CapturedRequest[];
   aiResponseText?: string;
-  /** Holds every streaming request until the test releases it, so concurrency is observable. */
   holdRequests?: boolean;
-  /**
-   * Fails the request marked by its 0-based arrival index (never by prompt text, which differs
-   * per test). `failCount` widens the window: after the first failure `runAiOrchestratorLoop`
-   * issues one tool-less fallback request, which consumes the next index too.
-   */
   failStatus?: { status: number; requestIndex: number; failCount?: number };
 }
 
@@ -178,10 +172,6 @@ export async function openAiDrawerWithProjectScope(page: Page, projectName: stri
   await expect(page.getByText(`Đang gắn ngữ cảnh: ${projectName}`, { exact: true })).toBeVisible();
 }
 
-// ---- Raw IndexedDB access -------------------------------------------------
-// Reads/writes go through a separate connection so a test can seed rows the UI cannot reach
-// cheaply. Writes are invisible to Dexie liveQuery until the page reloads, so callers reload.
-
 type DexieRow = Record<string, unknown>;
 
 export async function readDexieRows(page: Page, storeName: string): Promise<DexieRow[]> {
@@ -285,109 +275,4 @@ export async function writeDexieRow(
     },
     { name: storeName, record: row }
   );
-}
-
-export async function deleteDexieRows(
-  page: Page,
-  storeName: string,
-  predicateSource: string
-): Promise<void> {
-  await page.evaluate(
-    async ({ name, source }) => {
-      const openDb = (dbName: string) =>
-        new Promise<IDBDatabase>((resolve, reject) => {
-          const req = indexedDB.open(dbName);
-          req.onsuccess = () => resolve(req.result);
-          req.onerror = () => reject(req.error);
-        });
-
-      const matches = new Function('row', `return (${source});`) as (row: unknown) => boolean;
-      const databases = await indexedDB.databases();
-      for (const info of databases) {
-        if (!info.name) continue;
-        const handle = await openDb(info.name);
-        if (!handle.objectStoreNames.contains(name)) {
-          handle.close();
-          continue;
-        }
-        await new Promise<void>((resolve, reject) => {
-          const tx = handle.transaction(name, 'readwrite');
-          const store = tx.objectStore(name);
-          const req = store.openCursor();
-          req.onsuccess = () => {
-            const cursor = req.result;
-            if (!cursor) return;
-            if (matches(cursor.value)) cursor.delete();
-            cursor.continue();
-          };
-          tx.oncomplete = () => resolve();
-          tx.onerror = () => reject(tx.error);
-          tx.onabort = () => reject(tx.error);
-        });
-        handle.close();
-        return;
-      }
-      throw new Error(`IndexedDB store not found: ${name}`);
-    },
-    { name: storeName, source: predicateSource }
-  );
-}
-
-// ---- Backup export/import -------------------------------------------------
-
-async function openBackupSettings(page: Page): Promise<void> {
-  const closeDrawerBtn = page.getByRole('button', { name: 'Đóng ngăn trò chuyện' });
-  if (await closeDrawerBtn.isVisible()) {
-    await closeDrawerBtn.click();
-  }
-
-  const settingsMenuItem = page.getByRole('menuitem', { name: 'Cài đặt' });
-  if (!(await settingsMenuItem.isVisible())) {
-    const openMenuBtn = page.getByRole('button', { name: 'Mở menu' });
-    if (await openMenuBtn.isVisible()) {
-      await openMenuBtn.click();
-    }
-  }
-  await page.getByRole('menuitem', { name: 'Cài đặt' }).click();
-  await page.getByRole('tab', { name: /Sao lưu & Dữ liệu/ }).click();
-}
-
-export async function exportBackupFile(page: Page): Promise<string> {
-  await openBackupSettings(page);
-
-  const [download] = await Promise.all([
-    page.waitForEvent('download'),
-    page.getByRole('button', { name: 'Xuất bản sao lưu (JSON)' }).click(),
-  ]);
-
-  const target = path.join(
-    os.tmpdir(),
-    `taskmate-backup-${Date.now()}-${Math.random().toString(16).slice(2)}.json`
-  );
-  await download.saveAs(target);
-  return target;
-}
-
-export async function downloadBackupJson(page: Page): Promise<Record<string, any>> {
-  const filePath = await exportBackupFile(page);
-  return JSON.parse(fs.readFileSync(filePath, 'utf8')) as Record<string, any>;
-}
-
-export async function importBackupFile(page: Page, filePath: string): Promise<void> {
-  const fileInput = page.locator('input[type="file"][accept*=".json"]').first();
-  await expect(fileInput).toBeAttached();
-  await fileInput.setInputFiles(filePath);
-
-  const previewModal = page
-    .getByRole('dialog')
-    .filter({ hasText: 'Xem trước & Xác nhận Khôi phục' });
-  await expect(previewModal).toBeVisible();
-
-  await previewModal.getByPlaceholder('RESTORE').fill('RESTORE');
-  const confirmRestoreBtn = previewModal.getByRole('button', { name: 'Xác nhận khôi phục' });
-  await expect(confirmRestoreBtn).toBeEnabled();
-  await confirmRestoreBtn.click();
-
-  await expect(previewModal).not.toBeVisible();
-  await expect(page.getByText('Khôi phục dữ liệu thành công')).toBeVisible();
 }

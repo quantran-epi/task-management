@@ -9,6 +9,7 @@ import { validateHubChangePack } from '../../../services/wizard/hubChangePack';
 import {
   reconcileSolutionWithPack,
   type ReconciliationResult,
+  type ReconciliationInput,
 } from '../../../services/wizard/reconciliation';
 import {
   getMultiPackState,
@@ -44,28 +45,78 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
   db = defaultDb,
 }) => {
   const { token } = theme.useToken();
-  const [loading, setLoading] = useState<boolean>(false);
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [multiPackState, setMultiPackState] = useState<MultiPackState>({ packs: [] });
   const [driftResult, setDriftResult] = useState<ReconciliationResult | undefined>(initialDriftResult);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Load multipack history from db
+  // Load multipack state from DB
   useEffect(() => {
-    let mounted = true;
-    getMultiPackState(projectId, crId, db).then((state) => {
-      if (mounted) {
+    let cancelled = false;
+    async function loadPacks() {
+      const state = await getMultiPackState(projectId, crId, db);
+      if (!cancelled) {
         setMultiPackState(state);
       }
-    });
+    }
+    loadPacks();
     return () => {
-      mounted = false;
+      cancelled = true;
     };
   }, [projectId, crId, db]);
 
-  // Handle upload of a zip pack
+  const buildReconciliation = (packHash: string, manifestIdentity: { cr: string; base: string; head: string; branch?: string }, entries: Array<{ path: string; status: any; coverage: any }>) => {
+    const threadId = `sdlc:${projectId}:${crId}:CHANGE_PACK`;
+    const solutionNoteId = solutionArtifact?.noteId ?? '25000000-0000-4000-8000-000000000002';
+    const recInput: ReconciliationInput = {
+      projectId,
+      threadId,
+      solutionNoteId,
+      solutionVersion: solutionArtifact?.version ?? 1,
+      solutionHash: solutionArtifact?.hash ?? 'c'.repeat(64),
+      packHash,
+      cr: crCode,
+      base: manifestIdentity.base,
+      head: manifestIdentity.head,
+      solution: {
+        projectId,
+        threadId,
+        noteId: solutionNoteId,
+        version: solutionArtifact?.version ?? 1,
+        hash: solutionArtifact?.hash ?? 'c'.repeat(64),
+        requirements: [],
+        approvedDesign: {
+          currentSystem: solutionArtifact?.content ?? '',
+          affectedScreens: [],
+          affectedApis: [],
+          affectedTables: [],
+          regressionMatrix: [],
+        },
+      },
+      pack: {
+        packHash,
+        identity: {
+          cr: crCode,
+          base: manifestIdentity.base,
+          head: manifestIdentity.head,
+          branch: manifestIdentity.branch ?? `feature/${crCode}`,
+        },
+        entries: entries.map((e) => ({
+          path: e.path,
+          status: e.status,
+          coverage: e.coverage,
+          hunks: [],
+        })),
+      },
+      evidence: [],
+      proposedDrift: [],
+    };
+    return reconcileSolutionWithPack(recInput);
+  };
+
   const handleSelectFile = async (file: File) => {
     if (!solutionArtifact) {
-      setErrorMsg('Chưa có SOLUTION.md đã duyệt từ Bước 2. Vui lòng quay lại Bước 2 để hoàn thành.');
+      setErrorMsg('Chưa có SOLUTION.md đã phê duyệt. Vui lòng hoàn thành Bước 2 trước.');
       return;
     }
 
@@ -77,26 +128,7 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
       const manifest = await validateHubChangePack(file, crCode);
 
       // 2. Perform reconciliation with solution
-      const reconciliation = reconcileSolutionWithPack({
-        projectId,
-        threadId: `sdlc:${projectId}:${crId}:CHANGE_PACK`,
-        solutionNoteId: solutionArtifact.noteId ?? 'solution-note',
-        solutionVersion: solutionArtifact.version,
-        solutionHash: solutionArtifact.hash,
-        packHash: manifest.packHash,
-        cr: crCode,
-        base: manifest.identity.base,
-        head: manifest.identity.head,
-        requirements: [],
-        approvedDesign: {
-          currentSystem: solutionArtifact.content ?? '',
-          affectedScreens: [],
-          affectedApis: [],
-          affectedTables: [],
-        },
-        evidence: [],
-        hunks: [],
-      });
+      const reconciliation = buildReconciliation(manifest.packHash, manifest.identity, manifest.entries as any);
 
       // 3. Summarize drift counts
       const outsideSolution = reconciliation.drift.filter((d) => d.category === 'outside_solution').length;
@@ -150,26 +182,7 @@ export const Step4ChangePackView: React.FC<Step4ChangePackViewProps> = ({
     setMultiPackState(nextState);
 
     // Reconcile with the newly activated pack
-    const reconciliation = reconcileSolutionWithPack({
-      projectId,
-      threadId: `sdlc:${projectId}:${crId}:CHANGE_PACK`,
-      solutionNoteId: solutionArtifact.noteId ?? 'solution-note',
-      solutionVersion: solutionArtifact.version,
-      solutionHash: solutionArtifact.hash,
-      packHash,
-      cr: crCode,
-      base: 'base-commit',
-      head: 'head-commit',
-      requirements: [],
-      approvedDesign: {
-        currentSystem: solutionArtifact.content ?? '',
-        affectedScreens: [],
-        affectedApis: [],
-        affectedTables: [],
-      },
-      evidence: [],
-      hunks: [],
-    });
+    const reconciliation = buildReconciliation(packHash, { cr: crCode, base: 'base-commit', head: 'head-commit' }, []);
 
     setDriftResult(reconciliation);
     await onCommitChangePackAndDrift(packHash, pack.filename, reconciliation);

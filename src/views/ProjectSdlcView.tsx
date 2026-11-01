@@ -12,9 +12,10 @@ import { Step3CodeGuideView } from '../components/sdlc/steps/Step3CodeGuideView'
 import { Step4ChangePackView } from '../components/sdlc/steps/Step4ChangePackView';
 import { Step5TechDocsView } from '../components/sdlc/steps/Step5TechDocsView';
 import { Step6CabView } from '../components/sdlc/steps/Step6CabView';
-import { listCrs, getActiveCr } from '../services/wizard/sdlcCrManager';
+import { listCrs, getActiveCr, createNewCr, getStepThread } from '../services/wizard/sdlcCrManager';
 import { createSdlcWorkflowCoordinator } from '../services/wizard/workflowCoordinator';
 import type { SdlcStepId, SdlcWorkflowState } from '../services/wizard/workflowSchemas';
+import { generateId } from '../utils/uuid';
 
 export interface ProjectSdlcViewProps {
   projectId: string;
@@ -30,6 +31,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
   const { token } = theme.useToken();
   const [selectedStep, setSelectedStep] = useState<SdlcStepId>('INTAKE');
   const [activeCrId, setActiveCrId] = useState<string>('');
+  const [threadId, setThreadId] = useState<string>(() => generateId());
   const [workflowState, setWorkflowState] = useState<SdlcWorkflowState | undefined>(undefined);
 
   const project = useLiveQuery(() => db.projects.get(projectId), [projectId, db]);
@@ -54,16 +56,33 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
     };
   }, [projectId, crList.length, db]);
 
+  // Sync isolated thread for current CR and step
+  useEffect(() => {
+    let cancelled = false;
+    async function syncThread() {
+      if (activeCrId) {
+        const t = await getStepThread(projectId, activeCrId, selectedStep, db);
+        if (!cancelled && t) {
+          setThreadId(t.id);
+        }
+      }
+    }
+    syncThread();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, activeCrId, selectedStep, db]);
+
   // Coordinator setup
   const coordinator = useMemo(() => {
     return createSdlcWorkflowCoordinator({
       projectId,
-      threadId: activeCrId ? `sdlc:${projectId}:${activeCrId}:${selectedStep}` : `sdlc:${projectId}:${selectedStep}`,
+      threadId,
       onStateChange: (newState) => {
         setWorkflowState(newState);
       },
     });
-  }, [projectId, activeCrId, selectedStep]);
+  }, [projectId, threadId]);
 
   // Handlers for Step 1 & Step 2
   const handleStartIntake = async (
@@ -71,6 +90,13 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
     pl01: string,
     pl02: string
   ) => {
+    // If no active CR exists yet, create one for this CR
+    let currentCr = activeCrId;
+    if (!currentCr) {
+      const created = await createNewCr(projectId, metadata, false, db);
+      currentCr = created.id;
+      setActiveCrId(created.id);
+    }
     await coordinator.startOrUpdateIntake(metadata, pl01, pl02);
     setSelectedStep('SOLUTION');
   };
