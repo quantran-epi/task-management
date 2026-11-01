@@ -314,7 +314,7 @@ Plans: 11 plans in 11 sequential waves (every plan edits `AIChatDrawer.tsx` or i
 
 **Why inserted:** Phase 25.1.1 moved every capability into the hub and deleted the wizard, but walking the flow with real data exposed defects that are structural rather than typos — a step with no forward action, a confirm dialog that swallowed the first click, a reset that did not reset, artifacts saved but unreadable. Patching these one at a time produced regressions; the flow itself has to be discussed and specified before more code moves.
 
-**Requirements:** TBD (locked by `/gsd-discuss-phase 25.1.2`)
+**Requirements:** SC-1, SC-2, SC-3, SC-4, SC-5, SC-6, D-01, D-02, D-03, D-04, D-05
 **Depends on:** Phase 25.1.1
 **Success Criteria** (what must be TRUE):
 
@@ -325,4 +325,22 @@ Plans: 11 plans in 11 sequential waves (every plan edits `AIChatDrawer.tsx` or i
 5. Every artifact the flow produces can be read back inside the hub, not only written.
 6. A single Playwright walk-through drives intake → SOLUTION → code → change pack → PL03B/PL07 → CAB → export in one session with no manual DB seeding beyond the initial intake.
 
-Plans: TBD (`/gsd-plan-phase 25.1.2` after `/gsd-discuss-phase 25.1.2`)
+**Plans:** 4 plans in 4 waves
+
+Plans:
+
+**Wave 1**
+
+- [ ] 25.1.2-01-PLAN.md — Decouple SDLC from AIChatDrawer, establish Multi-CR management and isolated step thread data layer
+
+**Wave 2** *(depends on 25.1.2-01)*
+
+- [ ] 25.1.2-02-PLAN.md — Dedicated ProjectSdlcView with 2-column IDE layout, StepChatPanel, Step 1 Intake view, and Step 2 Solution two-way Document Editor
+
+**Wave 3** *(depends on 25.1.2-02)*
+
+- [ ] 25.1.2-03-PLAN.md — Steps 3-6: Code guide, Multi-pack change-pack management with drift reconciliation, Tech Docs (PL03B/PL07), and CAB export
+
+**Wave 4** *(depends on 25.1.2-03)*
+
+- [ ] 25.1.2-04-PLAN.md — Actionable Stale handling, first-click guarantees, new CR creation with context inheritance, and end-to-end integration verification
