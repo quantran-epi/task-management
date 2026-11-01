@@ -253,8 +253,8 @@ test.describe('Phase 25.1 SDLC Flow Hardening & Multi-Tab Isolation Acceptance',
     expect(sdlcRequest.prompt).toContain('[Quy trình SDLC - Khởi tạo SOLUTION cho CR:');
 
     await expect(page.getByText('SDLC:', { exact: false }).first()).toBeVisible();
-    // The drawer now carries only the current step; the six-step timeline lives behind "Chi tiết".
-    await expect(page.getByText(/Bước 2\/6: Giải pháp SOLUTION\.md/).first()).toBeVisible();
+    // The drawer now carries only a compact current-step summary.
+    await expect(page.getByText(/Bước 2\/6 · 2\. Solution/).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Chi tiết' }).first()).toBeVisible();
     expect(sdlcRequest.prompt).toContain('Nghiệp vụ: Quản lý tác vụ đa tab.');
     expect(sdlcRequest.prompt).toContain('Đặc tả: Giao diện tab Chrome độc lập.');
@@ -584,10 +584,13 @@ test.describe('Phase 25.1 SDLC Flow Hardening & Multi-Tab Isolation Acceptance',
       tabList.getByRole('tab').filter({ hasText: /SDLC/ }).first()
     ).toHaveAttribute('aria-selected', 'true');
 
+    await page.getByRole('button', { name: 'Chi tiết' }).click();
+    const detailDialog = page.getByRole('dialog').filter({ hasText: 'Chi tiết quy trình' });
+    await expect(detailDialog).toBeVisible();
     // D-27 retention is visible before the revision: cycle 1 is already closed.
-    await expect(page.getByText('Chu kỳ 1 — Hoàn tất')).toBeVisible();
+    await expect(detailDialog.getByText('Chu kỳ 1 — Hoàn tất')).toBeVisible();
 
-    await page.getByRole('button', { name: 'Cập nhật solution' }).click();
+    await detailDialog.getByRole('button', { name: 'Cập nhật solution' }).click();
     const revisionModal = page
       .getByRole('dialog')
       .filter({ hasText: 'Xác nhận cập nhật solution' });
@@ -616,11 +619,7 @@ test.describe('Phase 25.1 SDLC Flow Hardening & Multi-Tab Isolation Acceptance',
     await expect(revisionModal).not.toBeVisible();
     await expect(page.getByRole('button', { name: 'Xác nhận cập nhật' })).toHaveCount(0);
 
-    await expect(page.getByText('Chu kỳ 2 — Đang thực hiện')).toBeVisible();
-    // Past-cycle rows belong to the six-step timeline, which now lives in the detail modal.
-    await page.getByRole('button', { name: 'Chi tiết' }).click();
-    const detailDialog = page.getByRole('dialog').filter({ hasText: 'Chi tiết quy trình' });
-    await expect(detailDialog).toBeVisible();
+    await expect(detailDialog.getByText('Chu kỳ 2 — Đang thực hiện')).toBeVisible();
     await expect(detailDialog.getByText('Chu kỳ 1 — Hoàn tất')).toBeVisible();
     // The past cycle renders as a read-only row (D-27 retention), not just a counter bump.
     await expect(

@@ -123,7 +123,8 @@ export const StepInputDocsModal: React.FC<StepInputDocsModalProps> = ({
           </div>
         }
         onCancel={onClose}
-        zIndex={1300}
+        // Also reachable from the hub detail modal (1400), so it must stack above it.
+        zIndex={1500}
         width="min(1000px, calc(100vw - 32px))"
         footer={[
           <Button key="cancel" onClick={onClose} disabled={loading}>

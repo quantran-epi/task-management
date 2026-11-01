@@ -240,15 +240,16 @@ describe('SdlcWorkflowHub', () => {
     expect(screen.getByText('Bước 1/6: Hồ sơ Đầu vào (PL01 & PL02)')).toBeInTheDocument();
   });
 
-  it('drawer variant shows only the current step card until Chi tiết opens the full hub', () => {
+  it('drawer variant shows only a compact current-step summary until Chi tiết opens the full hub', () => {
     render(<SdlcWorkflowHub projectScoped variant="drawer" state={dummyState} onStartWorkflow={vi.fn()} />);
 
-    expect(screen.getByText('Bước 2/6: Giải pháp SOLUTION.md')).toBeInTheDocument();
+    expect(screen.getByText('Bước 2/6 · 2. Solution')).toBeInTheDocument();
     expect(screen.getByText('Đang xử lý')).toBeInTheDocument();
-    // The timeline lives only in the detail modal; the current step's own panel stays in the drawer.
+    // The drawer card is a summary: no timeline, no step panel, no per-step actions.
     expect(document.getElementById('sdlc-step-list')).toBeNull();
-    expect(screen.getByTestId('hub-panel-SOLUTION')).toBeInTheDocument();
-    expect(screen.queryByTestId('hub-panel-CHANGE_PACK')).toBeNull();
+    expect(screen.queryByTestId('hub-panel-SOLUTION')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Sửa PL01/PL02' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Cập nhật solution' })).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Chi tiết' }));
 

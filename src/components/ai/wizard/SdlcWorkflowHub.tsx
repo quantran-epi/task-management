@@ -374,126 +374,62 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = (props) => {
     const tagColor = { 'Cần cập nhật': 'warning', 'Đang xử lý': 'processing', 'Đã xong': 'success', 'Chưa bắt đầu': 'default' }[
       stepState.stateLabel
     ];
+    const accent = isCurrentProcessingStale ? token.colorWarning : token.colorPrimary;
 
     return (
-      <Card
-        size="small"
+      <div
         style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
           width: '100%',
           boxSizing: 'border-box',
-          borderColor: hasStale ? token.colorWarning : token.colorBorderSecondary,
+          padding: '8px 10px',
+          // A solid surface and a coloured rail so the summary reads as one block against the
+          // drawer background instead of dissolving into it.
+          background: token.colorBgContainer,
+          border: `1px solid ${token.colorBorder}`,
+          borderLeft: `3px solid ${accent}`,
+          borderRadius: token.borderRadius,
         }}
-        styles={{ body: { padding: '10px 12px' } }}
       >
-        {/* The compact card still names the feature: the drawer hides the full hub title. */}
-        <div style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary, marginBottom: 4 }}>
-          SDLC: {state.metadata.featureName}
-        </div>
+        <span style={{ display: 'inline-flex', fontSize: 16, color: accent, flexShrink: 0 }} aria-hidden="true">
+          {stepState.icon}
+        </span>
 
-        {/* Cycle state lives here too: without it the drawer shows no cycle at all. */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '2px 8px',
-            marginBottom: 6,
-            borderRadius: token.borderRadiusSM,
-            backgroundColor: token.colorFillTertiary,
-            fontSize: 12,
-            fontWeight: 600,
-          }}
-        >
-          <span>
-            Chu kỳ {currentCycleNumber} — {currentCycleStatus === 'completed' ? 'Hoàn tất' : 'Đang thực hiện'}
-          </span>
-          {pastCycles.length > 0 && (
-            <span style={{ fontSize: 12, fontWeight: 400, color: token.colorTextSecondary }}>
-              ({pastCycles.length} chu kỳ cũ)
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3, color: token.colorText }}>
+              Bước {currentStepIndex + 1}/6 · {currentConfig.shortTitle}
             </span>
-          )}
-        </div>
-
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-          <span style={{ fontSize: 16, fontWeight: 600, lineHeight: 1.3, color: token.colorText }}>
-            Bước {currentStepIndex + 1}/6: {currentConfig.title}
-          </span>
-          <Tag icon={stepState.icon} color={tagColor}>
-            {stepState.stateLabel}
-          </Tag>
-          <Tag color="blue">{state.metadata.cr}</Tag>
-        </div>
-
-        <div
-          style={{
-            fontSize: 14,
-            lineHeight: 1.5,
-            color: token.colorTextSecondary,
-            marginBottom: 10,
-            wordBreak: 'break-word',
-          }}
-        >
-          {currentConfig.hint}
-        </div>
-
-        <Space size={8} wrap>
-          {isCurrentProcessingStale && (
-            <Button
-              type="primary"
-              danger
-              size="small"
-              icon={<ReloadOutlined />}
-              onClick={() => onRerunStep?.(currentProcessingStep)}
-            >
-              Cập nhật lại
-            </Button>
-          )}
-          <Button size="small" onClick={onStartWorkflow}>
-            Sửa PL01/PL02
-          </Button>
-          {isIntakeCompleted && (
-            <Button
-              size="small"
-              onClick={() => {
-                if (onRequestRequirementRevision) {
-                  onRequestRequirementRevision();
-                } else {
-                  setRevisionModalType('requirement');
-                }
-              }}
-            >
-              Cập nhật yêu cầu
-            </Button>
-          )}
-          {isSolutionCompleted && (
-            <Button
-              size="small"
-              onClick={() => {
-                if (onRequestSolutionRevision) {
-                  onRequestSolutionRevision();
-                } else {
-                  setRevisionModalType('solution');
-                }
-              }}
-            >
-              Cập nhật solution
-            </Button>
-          )}
-          <Button
-            type="primary"
-            size="small"
-            aria-haspopup="dialog"
-            onClick={() => setDetailOpen(true)}
+            <Tag icon={stepState.icon} color={tagColor} style={{ marginInlineEnd: 0 }}>
+              {stepState.stateLabel}
+            </Tag>
+          </div>
+          <span
+            style={{
+              fontSize: 12,
+              lineHeight: 1.4,
+              color: token.colorTextSecondary,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
           >
-            Chi tiết
-          </Button>
-        </Space>
-
-        {/* The drawer runs the flow: the current step's own panel stays here, only the
-            timeline and the other steps move into the detail modal. */}
-        <div style={{ marginTop: 10 }}>
-          {renderStepBody(currentProcessingStep, isCurrentProcessingStale)}
+            SDLC: {state.metadata.featureName} · {state.metadata.cr} · Chu kỳ {currentCycleNumber}
+            {currentCycleStatus === 'completed' ? ' (hoàn tất)' : ''}
+          </span>
         </div>
+
+        <Button
+          type="primary"
+          size="small"
+          aria-haspopup="dialog"
+          onClick={() => setDetailOpen(true)}
+          style={{ flexShrink: 0 }}
+        >
+          Chi tiết
+        </Button>
 
         <Modal
           open={detailOpen}
@@ -509,7 +445,7 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = (props) => {
         </Modal>
 
         {revisionModal}
-      </Card>
+      </div>
     );
   }
 

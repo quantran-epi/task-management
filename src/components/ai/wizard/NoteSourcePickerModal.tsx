@@ -202,7 +202,8 @@ export const NoteSourcePickerModal: React.FC<NoteSourcePickerModalProps> = ({
       }
       onCancel={onClose}
       // Parent StepInputDocsModal sits at 1300; antd's default 1000 would bury this picker under it.
-      zIndex={1310}
+      // Nested inside StepInputDocsModal (1500): antd's default 1000 put the picker behind it.
+      zIndex={1510}
       width="min(1000px, calc(100vw - 32px))"
       footer={[
         <span key="summary" style={{ float: 'left', lineHeight: '32px', fontSize: 13, color: token.colorTextSecondary }}>

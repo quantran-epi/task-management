@@ -170,15 +170,19 @@ async function seedHubWorkflow(
 
 const selectStep = (page: Page, stepNumber: number) =>
   page.getByRole('button', { name: new RegExp(`^Bước ${stepNumber}:`) }).click();
-const hubPanel = (page: Page, step: string) => page.getByTestId(`hub-panel-${step}`);
 
-/** The drawer keeps only the current step; the six-step timeline lives in the detail modal. */
+/**
+ * The drawer shows only a compact current-step summary. The timeline and every step panel live
+ * in the detail modal, so `hubPanel` lookups must be scoped to its dialog.
+ */
 const openHubDetail = async (page: Page) => {
   await page.getByRole('button', { name: 'Chi tiết' }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByRole('list', { name: 'Quy trình 6 bước SDLC' })).toBeVisible();
   return dialog;
 };
+const detailPanel = async (page: Page, step: string) =>
+  (await openHubDetail(page)).getByTestId(`hub-panel-modal-${step}`);
 
 test.describe('Phase 25.1.1 SDLC hub acceptance', () => {
   test.beforeEach(() => {
@@ -192,15 +196,10 @@ test.describe('Phase 25.1.1 SDLC hub acceptance', () => {
       artifacts: { pl01, pl02, solution },
     }));
 
-    const dropzone = hubPanel(page, 'CHANGE_PACK').getByText(
-      'Kéo thả change-pack.zip vào đây hoặc bấm để chọn tệp.',
-      { exact: true }
-    );
-    await expect(dropzone).toBeVisible();
-
-    const dropzoneBox = await dropzone.boundingBox();
-    const composerBox = await page.getByLabel('Nội dung tin nhắn trò chuyện AI').boundingBox();
-    expect(dropzoneBox!.y).toBeLessThan(composerBox!.y);
+    const panel = await detailPanel(page, 'CHANGE_PACK');
+    await expect(
+      panel.getByText('Kéo thả change-pack.zip vào đây hoặc bấm để chọn tệp.', { exact: true })
+    ).toBeVisible();
 
     // The composer's leading slot no longer carries a wizard bar.
     await expect(page.getByText('Thanh chọn wizard tài liệu')).toHaveCount(0);
@@ -214,7 +213,7 @@ test.describe('Phase 25.1.1 SDLC hub acceptance', () => {
       artifacts: { pl01, pl02, solution, changePack, driftResult: driftResult(ids) },
     }));
 
-    const panel = hubPanel(page, 'CHANGE_PACK');
+    const panel = await detailPanel(page, 'CHANGE_PACK');
     await expect(panel.getByText('Đã nạp change-pack CR-HUB')).toBeVisible();
     for (const heading of ['Ngoài solution', 'Chưa làm', 'Làm khác']) {
       await expect(panel.getByRole('heading', { name: heading })).toBeVisible();
@@ -229,14 +228,14 @@ test.describe('Phase 25.1.1 SDLC hub acceptance', () => {
       artifacts: { pl01, pl02, solution, changePack },
     }));
     await expect(
-      hubPanel(page, 'TECH_DOCS').getByRole('button', { name: 'Tạo PL03B & PL07' })
+      (await detailPanel(page, 'TECH_DOCS')).getByRole('button', { name: 'Tạo PL03B & PL07' })
     ).toBeEnabled();
 
     await seedHubWorkflow(page, projectName, () => ({
       currentStep: 'TECH_DOCS',
       artifacts: { pl01, pl02, solution },
     }));
-    const blocked = hubPanel(page, 'TECH_DOCS');
+    const blocked = await detailPanel(page, 'TECH_DOCS');
     await expect(
       blocked.getByText('Cần SOLUTION.md và change-pack đã xác nhận trước khi sinh PL03B & PL07.')
     ).toBeVisible();
@@ -249,13 +248,13 @@ test.describe('Phase 25.1.1 SDLC hub acceptance', () => {
       currentStep: 'CAB',
       artifacts: { pl01, pl02, solution, changePack, pl03b, pl07 },
     }));
-    await expect(hubPanel(page, 'CAB').getByRole('button', { name: 'Tạo tờ trình CAB' })).toBeEnabled();
+    await expect((await detailPanel(page, 'CAB')).getByRole('button', { name: 'Tạo tờ trình CAB' })).toBeEnabled();
 
     await seedHubWorkflow(page, projectName, () => ({
       currentStep: 'CAB',
       artifacts: { pl01, pl02, solution, changePack, pl03b },
     }));
-    const blocked = hubPanel(page, 'CAB');
+    const blocked = await detailPanel(page, 'CAB');
     await expect(blocked.getByText('Chưa có', { exact: true })).toHaveCount(1);
     await expect(blocked.getByRole('button', { name: 'Tạo tờ trình CAB' })).toBeDisabled();
   });
@@ -310,9 +309,9 @@ test.describe('Phase 25.1.1 SDLC hub acceptance', () => {
       artifacts: { pl01, pl02, solution },
     }));
 
-    // The drawer shows the current step's panel without any timeline nav.
+    // The drawer is a one-line summary: no timeline rows, no step panel.
     await expect(page.getByRole('button', { name: /^Bước \d:/ })).toHaveCount(0);
-    await expect(hubPanel(page, 'CHANGE_PACK')).toBeVisible();
+    await expect(page.getByText(/Bước 4\/6 · 4\. Change Pack/)).toBeVisible();
 
     const dialog = await openHubDetail(page);
     const stepRows = dialog.getByRole('button', { name: /^Bước \d:/ });
@@ -323,7 +322,7 @@ test.describe('Phase 25.1.1 SDLC hub acceptance', () => {
     await toggle.click();
     await expect(dialog.getByRole('button', { name: 'Mở rộng quy trình' })).toHaveAttribute('aria-expanded', 'false');
     await expect(stepRows).toHaveCount(0);
-    await expect(hubPanel(page, 'CHANGE_PACK')).toBeVisible();
+    await expect(dialog.getByTestId('hub-panel-modal-CHANGE_PACK')).toBeVisible();
 
     await dialog.getByRole('button', { name: 'Mở rộng quy trình' }).click();
     await expect(dialog.getByRole('button', { name: 'Thu gọn quy trình' })).toHaveAttribute('aria-expanded', 'true');
@@ -338,11 +337,12 @@ test.describe('Phase 25.1.1 SDLC hub acceptance', () => {
     }));
 
     await page.setViewportSize({ width: 320, height: 800 });
-    await expect(hubPanel(page, 'CHANGE_PACK').getByText('Đã nạp change-pack CR-HUB')).toBeVisible();
+    const panel = await detailPanel(page, 'CHANGE_PACK');
+    await expect(panel.getByText('Đã nạp change-pack CR-HUB')).toBeVisible();
 
     const metrics = () =>
       page.evaluate(() => {
-        const panel = document.querySelector('[data-testid="hub-panel-CHANGE_PACK"]') as HTMLElement | null;
+        const panel = document.querySelector('[data-testid="hub-panel-modal-CHANGE_PACK"]') as HTMLElement | null;
         return {
           page: document.documentElement.scrollWidth - document.documentElement.clientWidth,
           body: document.body.scrollWidth - document.body.clientWidth,
