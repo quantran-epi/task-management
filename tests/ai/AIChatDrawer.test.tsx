@@ -19,31 +19,32 @@ vi.mock('../../src/utils/pptxExport', () => ({
 }));
 
 describe('ChatHeader', () => {
-  it('displays title, model selector, and action buttons', () => {
-    const handleClear = vi.fn();
+  it('displays title, popout button, pin toggle, and more options', () => {
     const handleTogglePin = vi.fn();
     const handleClose = vi.fn();
-    const handleModelChange = vi.fn();
     const handlePopout = vi.fn();
+    const handleOpenDebug = vi.fn();
+    const handleOpenInstructions = vi.fn();
 
     render(
       <ChatHeader
-        selectedModel="gpt-4o"
-        availableModels={['gpt-4o', 'claude-3-5-sonnet']}
-        onModelChange={handleModelChange}
         isPinned={false}
         onTogglePin={handleTogglePin}
-        onClearContext={handleClear}
         onPopout={handlePopout}
+        onOpenDebug={handleOpenDebug}
+        onOpenInstructions={handleOpenInstructions}
         onClose={handleClose}
       />
     );
 
     expect(screen.getByText('Trợ lý AI')).toBeInTheDocument();
     expect(screen.getByLabelText('Mở cửa sổ riêng (Popout)')).toBeInTheDocument();
-    expect(screen.getByLabelText('Đặt lại ngữ cảnh (/clear)')).toBeInTheDocument();
     expect(screen.getByLabelText('Tùy chọn khác')).toBeInTheDocument();
     expect(screen.getByLabelText('Đóng ngăn trò chuyện')).toBeInTheDocument();
+
+    // Click popout
+    fireEvent.click(screen.getByLabelText('Mở cửa sổ riêng (Popout)'));
+    expect(handlePopout).toHaveBeenCalledTimes(1);
 
     // Click more options dropdown to toggle pin
     fireEvent.click(screen.getByLabelText('Tùy chọn khác'));
@@ -52,74 +53,36 @@ describe('ChatHeader', () => {
     fireEvent.click(pinOption);
     expect(handleTogglePin).toHaveBeenCalled();
 
-    fireEvent.click(screen.getByLabelText('Đặt lại ngữ cảnh (/clear)'));
-    expect(handleClear).toHaveBeenCalled();
-
+    // Close button
     fireEvent.click(screen.getByLabelText('Đóng ngăn trò chuyện'));
     expect(handleClose).toHaveBeenCalled();
   });
 
-  it('renders and toggles auto-approve mutations button in dropdown', () => {
-    const handleToggleAutoApprove = vi.fn();
+  it('renders instructions and debug options in dropdown', () => {
+    const handleOpenDebug = vi.fn();
+    const handleOpenInstructions = vi.fn();
 
-    const { rerender } = render(
-      <ChatHeader
-        selectedModel="gpt-4o"
-        availableModels={['gpt-4o']}
-        onModelChange={vi.fn()}
-        autoApproveMutations={false}
-        onToggleAutoApproveMutations={handleToggleAutoApprove}
-        isPinned={false}
-        onTogglePin={vi.fn()}
-        onClearContext={vi.fn()}
-        onClose={vi.fn()}
-      />
-    );
-
-    fireEvent.click(screen.getByLabelText('Tùy chọn khác'));
-    const toggleBtn = screen.getByText('Bật tự động duyệt thay đổi');
-    expect(toggleBtn).toBeInTheDocument();
-    fireEvent.click(toggleBtn);
-    expect(handleToggleAutoApprove).toHaveBeenCalledTimes(1);
-
-    // Rerender with autoApproveMutations=true
-    rerender(
-      <ChatHeader
-        selectedModel="gpt-4o"
-        availableModels={['gpt-4o']}
-        onModelChange={vi.fn()}
-        autoApproveMutations={true}
-        onToggleAutoApproveMutations={handleToggleAutoApprove}
-        isPinned={false}
-        onTogglePin={vi.fn()}
-        onClearContext={vi.fn()}
-        onClose={vi.fn()}
-      />
-    );
-
-    fireEvent.click(screen.getByLabelText('Tùy chọn khác'));
-    expect(screen.getByText('Tắt tự động duyệt thay đổi')).toBeInTheDocument();
-  });
-
-  it('calls onOpenMcpSettings when clicked in dropdown', () => {
-    const handleOpenMcp = vi.fn();
     render(
       <ChatHeader
-        selectedModel="gpt-4o"
-        availableModels={['gpt-4o']}
-        onModelChange={vi.fn()}
-        onOpenMcpSettings={handleOpenMcp}
-        isPinned={false}
+        isPinned={true}
         onTogglePin={vi.fn()}
-        onClearContext={vi.fn()}
+        onOpenDebug={handleOpenDebug}
+        onOpenInstructions={handleOpenInstructions}
         onClose={vi.fn()}
       />
     );
+
     fireEvent.click(screen.getByLabelText('Tùy chọn khác'));
-    const mcpOption = screen.getByText('Quản lý máy chủ MCP');
-    expect(mcpOption).toBeInTheDocument();
-    fireEvent.click(mcpOption);
-    expect(handleOpenMcp).toHaveBeenCalledTimes(1);
+    const instructionsOption = screen.getByText('Hướng dẫn lập kế hoạch AI');
+    expect(instructionsOption).toBeInTheDocument();
+    fireEvent.click(instructionsOption);
+    expect(handleOpenInstructions).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByLabelText('Tùy chọn khác'));
+    const debugOption = screen.getByText('Nhật ký gỡ lỗi AI');
+    expect(debugOption).toBeInTheDocument();
+    fireEvent.click(debugOption);
+    expect(handleOpenDebug).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -337,7 +300,7 @@ describe('AIChatDrawer', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/Đang gắn ngữ cảnh: Tác vụ Khởi tạo/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/Tác vụ Khởi tạo/i).length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -477,9 +440,14 @@ describe('AIChatDrawer', () => {
 
     await waitFor(() => expect(screen.getByText(/Đã tổng hợp Graphiti/i)).toBeInTheDocument());
     expect(mcpClient.discoverAllMcpTools).toHaveBeenCalledTimes(1);
-    expect(mcpClient.executeDynamicMcpTool).toHaveBeenCalledWith('search_nodes', {
-      query: 'alpha',
-    }, expect.anything());
+    expect(mcpClient.executeDynamicMcpTool).toHaveBeenCalledWith(
+      'search_nodes',
+      {
+        query: 'alpha',
+      },
+      expect.anything(),
+      expect.objectContaining({ allowMutation: expect.any(Boolean) })
+    );
     expect(payloads).toHaveLength(2);
     expect(payloads[0].messages).toContainEqual(
       expect.objectContaining({
@@ -922,11 +890,8 @@ describe('AIChatDrawer', () => {
       />
     );
 
-    // Verify toggle option in header dropdown shows enabled state
-    fireEvent.click(screen.getByLabelText('Tùy chọn khác'));
-    expect(screen.getByText('Tắt tự động duyệt thay đổi')).toBeInTheDocument();
-    // Close dropdown
-    fireEvent.click(screen.getByLabelText('Tùy chọn khác'));
+    // Verify auto-approve button in tab toolbox shows enabled state
+    expect(await screen.findByTestId('tab-auto-approve-btn')).toBeInTheDocument();
 
     const textarea = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
     fireEvent.change(textarea, { target: { value: 'Tạo task tự động' } });
@@ -1070,7 +1035,7 @@ describe('AIChatDrawer', () => {
     });
   });
 
-  it('opens McpSettingsModal from dropdown menu and renders server list', async () => {
+  it('opens McpSettingsModal from tab toolbox and renders server list', async () => {
     render(
       <AIChatDrawer
         open={true}
@@ -1080,10 +1045,10 @@ describe('AIChatDrawer', () => {
       />
     );
 
-    fireEvent.click(screen.getByLabelText('Tùy chọn khác'));
-    const mcpOption = screen.getByText('Quản lý máy chủ MCP');
-    expect(mcpOption).toBeInTheDocument();
-    fireEvent.click(mcpOption);
+    const mcpManageBtn = await screen.findByTestId('tab-mcp-manage-btn');
+    fireEvent.click(mcpManageBtn);
+    const settingsBtn = await screen.findByRole('button', { name: /Cài đặt/i });
+    fireEvent.click(settingsBtn);
 
     await waitFor(() => {
       expect(screen.getByText('Graphiti Banking MCP')).toBeInTheDocument();
@@ -1460,5 +1425,67 @@ describe('AIChatDrawer', () => {
       .map((m: any) => m.content)
       .join('\n');
     expect(systemContents).toContain('[ANALYSIS MODE ACTIVE]');
+  });
+
+  it('strictly blocks database mutation in analysis mode and returns Vietnamese read-only message', async () => {
+    localStorage.setItem('planner:ai_analysis_mode', 'true');
+    vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-api-key');
+    vi.spyOn(nineRouterTokenService, 'getNineRouterConfig').mockResolvedValue({
+      endpoint: 'http://localhost:20128',
+      defaultModel: 'gpt-4o',
+      charLimit: 12000,
+    });
+
+    let callCount = 0;
+    const payloads: any[] = [];
+    vi.spyOn(nineRouterClient, 'streamChatEvents').mockImplementation((options: any) => {
+      payloads.push(options.payload);
+      return (async function* () {
+        callCount++;
+        if (callCount === 1) {
+          yield {
+            type: 'tool_calls',
+            calls: [
+              {
+                id: 'call_blocked_create_task',
+                type: 'function',
+                function: {
+                  name: 'create_task',
+                  arguments: JSON.stringify({ name: 'Task khong duoc tao trong analysis mode' }),
+                },
+              },
+            ],
+          };
+        } else {
+          yield { type: 'text', delta: 'Đã nhận kết quả chặn phân tích.' };
+        }
+      })() as any;
+    });
+
+    render(
+      <AIChatDrawer open={true} onClose={vi.fn()} db={db} activeScope={{ type: 'global' }} />
+    );
+
+    fireEvent.change(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI'), {
+      target: { value: 'Tạo task trong analysis mode' },
+    });
+    fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Đã nhận kết quả chặn phân tích/i)).toBeInTheDocument();
+    });
+
+    expect(screen.queryByTestId('ai-mutation-confirmation')).not.toBeInTheDocument();
+
+    expect(payloads[1].messages).toContainEqual(
+      expect.objectContaining({
+        role: 'tool',
+        name: 'create_task',
+        content: expect.stringContaining('Analysis Mode chỉ đọc; không có dữ liệu nào bị thay đổi.'),
+      })
+    );
+
+    const tasksInDb = await db.tasks.toArray();
+    expect(tasksInDb.some((t) => t.name === 'Task khong duoc tao trong analysis mode')).toBe(false);
   });
 });

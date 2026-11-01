@@ -1,5 +1,5 @@
 import React from 'react';
-import { Typography, Button, Tooltip, Dropdown, Popover, Badge, Switch, theme } from 'antd';
+import { Typography, Button, Tooltip, Dropdown, theme } from 'antd';
 import type { MenuProps } from 'antd';
 import {
   RobotFilled,
@@ -11,43 +11,40 @@ import {
   MoreOutlined,
   BookOutlined,
   DeleteOutlined,
-  ApiOutlined,
-  SettingOutlined,
+  DisconnectOutlined,
 } from '@ant-design/icons';
-import type { McpServerConfig } from '../../services/ai/mcpClient';
+import type { ActiveScope } from '../../context/AIChatContext';
 
 const { Text } = Typography;
 
 export interface ChatHeaderProps {
+  currentScope?: ActiveScope | undefined;
+  onOpenScopePicker?: (() => void) | undefined;
+  onDetachScope?: (() => void) | undefined;
   isPinned: boolean;
   onTogglePin: () => void;
-  onClearAllHistory?: () => void;
-  onDeleteCurrentThread?: () => void;
-  onOpenDebug?: () => void;
-  onOpenMcpSettings?: () => void;
-  onPopout?: () => void;
-  onOpenInstructions?: () => void;
+  onClearAllHistory?: (() => void) | undefined;
+  onDeleteCurrentThread?: (() => void) | undefined;
+  onOpenDebug?: (() => void) | undefined;
+  onPopout?: (() => void) | undefined;
+  onOpenInstructions?: (() => void) | undefined;
   onClose: () => void;
-  mcpServers?: McpServerConfig[];
-  onToggleMcpServer?: (id: string, enabled: boolean) => void;
 }
 
 export const ChatHeader: React.FC<ChatHeaderProps> = ({
+  currentScope,
+  onOpenScopePicker,
+  onDetachScope,
   isPinned,
   onTogglePin,
   onClearAllHistory,
   onDeleteCurrentThread,
   onOpenDebug,
-  onOpenMcpSettings,
   onPopout,
   onOpenInstructions,
   onClose,
-  mcpServers = [],
-  onToggleMcpServer,
 }) => {
   const { token } = theme.useToken();
-
-  const enabledMcpCount = mcpServers.filter((s) => s.enabled).length;
 
   const menuItems: MenuProps['items'] = [
     ...(onOpenInstructions
@@ -70,16 +67,6 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       label: isPinned ? 'Bỏ ghim ngăn trò chuyện' : 'Ghim ngăn trò chuyện bên phải',
       onClick: onTogglePin,
     },
-    ...(onOpenMcpSettings
-      ? [
-          {
-            key: 'mcp-settings',
-            icon: <ApiOutlined />,
-            label: 'Quản lý máy chủ MCP',
-            onClick: onOpenMcpSettings,
-          },
-        ]
-      : []),
     ...(onOpenDebug
       ? [
           {
@@ -116,110 +103,27 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       : []),
   ];
 
-  const mcpPopoverContent = (
-    <div style={{ width: 260 }}>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: 8,
-          paddingBottom: 6,
-          borderBottom: `1px solid ${token.colorBorderSecondary}`,
-        }}
-      >
-        <Text strong style={{ fontSize: 12 }}>
-          Máy chủ MCP
-        </Text>
-        {onOpenMcpSettings && (
-          <Button
-            type="link"
-            size="small"
-            icon={<SettingOutlined />}
-            onClick={onOpenMcpSettings}
-            style={{ padding: 0, fontSize: 11 }}
-          >
-            Cài đặt
-          </Button>
-        )}
-      </div>
-
-      {mcpServers.length === 0 ? (
-        <Text type="secondary" style={{ fontSize: 12, display: 'block', padding: '8px 0' }}>
-          Chưa có máy chủ MCP nào. Thêm trong Cài đặt.
-        </Text>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 200, overflowY: 'auto' }}>
-          {mcpServers.map((server) => (
-            <div
-              key={server.id}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '4px 0',
-              }}
-            >
-              <div style={{ minWidth: 0, flex: 1, marginRight: 8 }}>
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 500,
-                    display: 'block',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {server.name}
-                </Text>
-                <Text
-                  type="secondary"
-                  style={{
-                    fontSize: 10,
-                    display: 'block',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {server.url}
-                </Text>
-              </div>
-              <Switch
-                size="small"
-                checked={server.enabled}
-                onChange={(checked) => onToggleMcpServer?.(server.id, checked)}
-                aria-label={`Bật/tắt ${server.name}`}
-              />
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-
   return (
     <div
       style={{
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '10px 16px',
+        padding: '8px 14px',
         borderBottom: `1px solid rgba(79, 70, 229, 0.12)`,
         background: `linear-gradient(to right, rgba(79, 70, 229, 0.07) 0%, rgba(124, 58, 237, 0.04) 50%, ${token.colorBgContainer} 100%)`,
         gap: 8,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
         <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
           <div
             style={{
-              width: 32,
-              height: 32,
-              borderRadius: 8,
+              width: 28,
+              height: 28,
+              borderRadius: 7,
               background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-              boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)',
+              boxShadow: '0 2px 6px rgba(79, 70, 229, 0.25)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -227,15 +131,15 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               flexShrink: 0,
             }}
           >
-            <RobotFilled style={{ fontSize: 18 }} />
+            <RobotFilled style={{ fontSize: 16 }} />
           </div>
           <span
             style={{
               position: 'absolute',
               bottom: -1,
               right: -1,
-              width: 8,
-              height: 8,
+              width: 7,
+              height: 7,
               borderRadius: '50%',
               backgroundColor: '#10b981',
               border: '1.5px solid #ffffff',
@@ -244,40 +148,66 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           />
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
-          <Text strong style={{ fontSize: 14, whiteSpace: 'nowrap', color: token.colorText }}>
-            Trợ lý AI
-          </Text>
-        </div>
-      </div>
+        <Text strong style={{ fontSize: 13, whiteSpace: 'nowrap', color: token.colorText, flexShrink: 0 }}>
+          Trợ lý AI
+        </Text>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-        {/* Quick MCP Toggle Popover */}
-        <Popover
-          content={mcpPopoverContent}
-          title={null}
-          trigger="click"
-          placement="bottomRight"
-          getPopupContainer={(node) => node.parentElement || document.body}
-        >
-          <Tooltip title={`Máy chủ MCP (${enabledMcpCount} đang bật)`}>
-            <Badge
-              count={enabledMcpCount}
-              size="small"
-              offset={[-2, 4]}
-              style={{ backgroundColor: enabledMcpCount > 0 ? '#10b981' : token.colorTextQuaternary }}
+        {/* Scope Pill at Header Level */}
+        {currentScope && (
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: '2px 8px',
+              background: token.colorBgContainer,
+              border: `1px solid ${token.colorBorderSecondary}`,
+              borderRadius: token.borderRadiusSM,
+              maxWidth: 180,
+              minWidth: 0,
+            }}
+          >
+            <span
+              style={{
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                fontSize: 11,
+                fontWeight: 500,
+                color: currentScope.type === 'global' ? token.colorTextSecondary : token.colorPrimary,
+              }}
+              title={currentScope.title || currentScope.type}
             >
+              {currentScope.type === 'global'
+                ? 'Toàn cục (Không gắn)'
+                : currentScope.title || currentScope.id}
+            </span>
+            {onOpenScopePicker && (
+              <Button
+                type="link"
+                size="small"
+                onClick={onOpenScopePicker}
+                aria-label="Đổi phạm vi ngữ cảnh"
+                style={{ padding: 0, height: 'auto', fontSize: 11 }}
+              >
+                Đổi
+              </Button>
+            )}
+            {currentScope.type !== 'global' && onDetachScope && (
               <Button
                 type="text"
                 size="small"
-                icon={<ApiOutlined style={{ color: enabledMcpCount > 0 ? token.colorPrimary : undefined }} />}
-                aria-label="Bật/tắt nhanh máy chủ MCP"
-                style={{ minWidth: 28, minHeight: 28 }}
+                icon={<DisconnectOutlined style={{ fontSize: 10 }} />}
+                onClick={onDetachScope}
+                title="Gỡ gắn ngữ cảnh"
+                style={{ padding: 0, height: 'auto', width: 14, color: token.colorTextSecondary }}
               />
-            </Badge>
-          </Tooltip>
-        </Popover>
+            )}
+          </div>
+        )}
+      </div>
 
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
         {onPopout && (
           <Tooltip title="Mở cửa sổ riêng (Popout)">
             <Button

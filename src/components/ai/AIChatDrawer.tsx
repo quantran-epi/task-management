@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { theme, Button, message, Modal, Tag, Tooltip } from 'antd';
-import { DisconnectOutlined, ExperimentFilled } from '@ant-design/icons';
+import { theme, message, Modal } from 'antd';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type {
@@ -281,7 +280,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   };
 
   // Scope management: internal state, detachment, or picker selection
-  const [internalScope, setInternalScope] = useState<ActiveScope | null>(null);
+  const [internalScope, setInternalScope] = useState<ActiveScope | null>(() => propScope ?? null);
   const [isDetached, setIsDetached] = useState(false);
   const [scopeModalOpen, setScopeModalOpen] = useState(false);
   const [isDebugModalOpen, setIsDebugModalOpen] = useState(false);
@@ -403,7 +402,10 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     return listTabsByScope(scopeKey, db);
   }, [db, scopeKey]) ?? [];
 
-  const activeTab = durableTabs.find((t) => t.active) ?? durableTabs[0];
+  const [selectedTabId, setSelectedTabId] = useState<string | null>(null);
+  const activeTab = (selectedTabId ? durableTabs.find((t) => t.id === selectedTabId) : undefined)
+    ?? durableTabs.find((t) => t.active)
+    ?? durableTabs[0];
   const activeTabId = activeTab?.id ?? 'default';
   const activeTabThreadId = activeTab?.threadId;
   const isSdlcActiveTab = false;
@@ -615,6 +617,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
   const handleSelectTab = useCallback(
     async (tabId: string) => {
+      setSelectedTabId(tabId);
+      activeTabIdRef.current = tabId;
       try {
         await setActiveTab(scopeKey, tabId, db);
       } catch (err) {
@@ -701,7 +705,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const [scrollTrigger, setScrollTrigger] = useState(0);
 
   const [externalInputValue, setExternalInputValue] = useState<string | null>(null);
-  const cabActionRef = useRef(false);
 
   const handleSendMessageRef = useRef<
     (
@@ -722,15 +725,18 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   // Auto-approve mutation toggle: isolated per-tab in activeTab.config.autoApproveMutations
   const autoApproveMutations = Boolean(activeTab?.config?.autoApproveMutations);
 
-  const handleToggleAutoApproveMutations = useCallback(async () => {
-    if (!activeTab) return;
-    const currentVal = Boolean(activeTab.config?.autoApproveMutations);
+  const handleToggleAutoApproveMutations = useCallback(async (tabId?: string) => {
+    const targetId = tabId || activeTabIdRef.current;
+    if (!targetId || targetId === 'default') return;
+    const tab = await db.chatTabs.get(targetId);
+    if (!tab) return;
+    const currentVal = Boolean(tab.config?.autoApproveMutations);
     const nextVal = !currentVal;
     try {
       await updateChatTab(
-        activeTab.id,
+        targetId,
         {
-          config: { ...(activeTab.config || {}), autoApproveMutations: nextVal },
+          config: { ...(tab.config || {}), autoApproveMutations: nextVal },
         },
         db
       );
@@ -746,21 +752,24 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         'Đã tắt tự động duyệt cho tab này. AI sẽ hỏi xác nhận trước khi thực hiện thay đổi dữ liệu.'
       );
     }
-  }, [activeTab, db]);
+  }, [db]);
 
   // Analysis mode: durable per-tab state via ChatTab.config. Tab 'sdlc' is always true.
   // The legacy global key never feeds this expression; it only seeds durable config once (D-07).
   const currentTabAnalysisMode = isSdlcActiveTab ? true : Boolean(activeTab?.config?.analysisMode);
 
-  const handleToggleAnalysisMode = useCallback(async () => {
-    if (!activeTab) return;
-    const currentVal = Boolean(activeTab.config?.analysisMode);
+  const handleToggleAnalysisMode = useCallback(async (tabId?: string) => {
+    const targetId = tabId || activeTabIdRef.current;
+    if (!targetId || targetId === 'default') return;
+    const tab = await db.chatTabs.get(targetId);
+    if (!tab) return;
+    const currentVal = Boolean(tab.config?.analysisMode);
     const nextVal = !currentVal;
     try {
       await updateChatTab(
-        activeTab.id,
+        targetId,
         {
-          config: { ...(activeTab.config || {}), analysisMode: nextVal },
+          config: { ...(tab.config || {}), analysisMode: nextVal },
         },
         db
       );
@@ -772,7 +781,35 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         ? 'Đã bật chế độ phân tích cho tab này. AI sẽ tra cứu tri thức và CSDL bằng công cụ.'
         : 'Đã tắt chế độ phân tích cho tab này. Quay lại chế độ hội thoại thông thường.'
     );
-  }, [activeTab, db]);
+  }, [db]);
+
+  // MCP toggle: isolated per-tab in activeTab.config.mcpEnabled (defaults to true)
+  const currentTabMcpEnabled = activeTab?.config?.mcpEnabled !== false;
+
+  const handleToggleMcpEnabled = useCallback(async (tabId?: string) => {
+    const targetId = tabId || activeTabIdRef.current;
+    if (!targetId || targetId === 'default') return;
+    const tab = await db.chatTabs.get(targetId);
+    if (!tab) return;
+    const currentVal = tab.config?.mcpEnabled !== false;
+    const nextVal = !currentVal;
+    try {
+      await updateChatTab(
+        targetId,
+        {
+          config: { ...(tab.config || {}), mcpEnabled: nextVal },
+        },
+        db
+      );
+    } catch (err) {
+      logAiChatError('Failed to update tab mcpEnabled', err);
+    }
+    message.info(
+      nextVal
+        ? 'Đã bật công cụ MCP cho tab này.'
+        : 'Đã tắt công cụ MCP cho tab này. AI chỉ sử dụng công cụ nội bộ.'
+    );
+  }, [db]);
 
   const tabAnalysisModes = useMemo(() => {
     const modes: Record<string, boolean> = {};
@@ -904,15 +941,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     overrideScope?: ActiveScope,
     options?: { resumeFromCheckpoint?: boolean; retryUserMessageId?: string | null }
   ) => {
-    // A plain send while an SDLC checkpoint is interrupted must not run; only the explicit resume
-    // path (which calls resumeCheckpoint first) bypasses this guard.
-    if (
-      isSdlcActiveTab &&
-      sdlcWorkflowState?.checkpoint?.status === 'interrupted' &&
-      !options?.resumeFromCheckpoint
-    ) {
-      return;
-    }
     handleSendMessageRef.current = handleSendMessage;
     const trimmed = text.trim();
     if (!trimmed) return;
@@ -1157,7 +1185,25 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       .filter((m) => m.content.trim().length > 0);
 
     const turnOverallStartTime = Date.now();
-    const effectiveAnalysisMode = currentTabAnalysisMode;
+    // Strictly isolate turn execution settings from the owning tab's durable config
+    let turnAnalysisMode = Boolean(turnTab.config?.analysisMode);
+    if (!turnAnalysisMode) {
+      try {
+        turnAnalysisMode = localStorage.getItem(AI_ANALYSIS_MODE_KEY) === 'true';
+      } catch {
+        turnAnalysisMode = false;
+      }
+    }
+    let turnAutoApprove = Boolean(turnTab.config?.autoApproveMutations);
+    if (!turnAutoApprove) {
+      try {
+        turnAutoApprove = localStorage.getItem(AI_AUTO_APPROVE_MUTATIONS_KEY) === 'true';
+      } catch {
+        turnAutoApprove = false;
+      }
+    }
+    const turnMcpEnabled = turnTab.config?.mcpEnabled !== false;
+    const effectiveAnalysisMode = turnAnalysisMode;
 
     // Analysis mode bypasses the grounded pipeline (intent router, scope routing,
     // schema-validated synthesis) and falls straight through to the tool loop.
@@ -1572,18 +1618,20 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     const timeStr = now.format('HH:mm');
 
     let dynamicMcpTools: AiToolDefinition[] = [];
-    try {
-      dynamicMcpTools = await discoverAllMcpTools(db);
-    } catch (err) {
-      logAiChatError('MCP discovery unavailable', err);
+    let dynamicMcpInstructions = '';
+    if (turnMcpEnabled) {
+      try {
+        dynamicMcpTools = await discoverAllMcpTools(db);
+      } catch (err) {
+        logAiChatError('MCP discovery unavailable', err);
+      }
+      try {
+        dynamicMcpInstructions = await getEnabledMcpInstructions(db);
+      } catch (err) {
+        logAiChatError('MCP instruction resolution error', err);
+      }
     }
     const toolsForTurn = getToolsForTurn(effectiveAnalysisMode, dynamicMcpTools);
-    let dynamicMcpInstructions = '';
-    try {
-      dynamicMcpInstructions = await getEnabledMcpInstructions(db);
-    } catch (err) {
-      logAiChatError('MCP instruction resolution error', err);
-    }
 
     const systemPromptContent = `You are an expert AI assistant embedded inside ${APP_NAME}.
 Current Date: ${todayStr} (${dayName}). Time: ${timeStr}.
@@ -1596,7 +1644,7 @@ CRITICAL ANTI-HALLUCINATION RULES:
 5. When breaking down goals or proposing steps, output clear actionable bullet points that can be converted into checklist items.
 6. DIAGRAMS & FLOWCHARTS: When the user asks for a flowchart, workflow diagram, sequence diagram, architecture chart, or visual representation, or when visualizing processes/hierarchies, you CAN and SHOULD generate Mermaid.js code blocks using \`\`\`mermaid syntax (e.g. flowchart TD, sequenceDiagram, classDiagram, graph LR, etc.). TaskMate will automatically render interactive diagrams from these blocks.
 7. YOU HAVE FULL DATABASE MUTATION CAPABILITIES: You can create, update, reparent, or delete tasks, projects, milestones, planned allocations, work sessions, active timers, capacity rules/overrides, and notes using mutation tools (create_task, update_task, update_task_checklist, reparent_task, delete_task, create_project, update_project, delete_project, create_milestone, update_milestone, delete_milestone, plan_allocation, delete_allocation, log_work_session, update_work_session, delete_work_session, start_timer, pause_timer, stop_and_log_timer, discard_timer, update_capacity_rule, set_capacity_override, remove_capacity_override, create_note, update_note, delete_note). When the user asks you to perform an action or change anything in the app, call the appropriate action tool.${
-      autoApproveMutations
+      turnAutoApprove
         ? `\n\n[AUTO-EXECUTION & REPORTING MODE ACTIVE]:
 The user has EXPLICITLY authorized automatic execution of mutations without confirmation prompts.
 MANDATORY REPORTING REQUIREMENT:
@@ -1707,7 +1755,8 @@ Rules:
         // prompt token count.
         contextWindowTokens: config.contextWindowTokens,
         compactAtRatio: effectiveAnalysisMode ? 0.9 : 0.75,
-        executeToolFn: (name, args, toolDb, signal) => dispatchAiToolCall(name, args, toolDb, signal),
+        executeToolFn: (name, args, toolDb, signal) =>
+          dispatchAiToolCall(name, args, toolDb, signal, { allowMutation: turnAutoApprove }),
         onTextChunk: (delta) => {
           fullResponse += delta;
           aiDebugService.appendStreamChunk(turnId, delta);
@@ -1764,7 +1813,7 @@ Rules:
               }),
             };
           }
-          if (autoApproveMutations) {
+          if (turnAutoApprove) {
             if (import.meta.env.DEV) {
               console.log(`[AI Harness] ⚡ Auto-approving mutation tool "${toolName}" (bypass active)`);
             }
@@ -2044,16 +2093,28 @@ Rules:
       pendingConfirmation: null,
       confirmationResolver: undefined,
     });
-    // Clear the scope's durable thread, creating it when the scope has no conversation yet.
-    const activeThread = thread ?? (await createOrGetThread(
-      {
-        scopeType: currentScope.type,
-        entityId: currentScope.id,
-        title: currentScope.title,
-      },
-      db
-    ));
-    await clearThreadContext(activeThread.id, db);
+
+    let targetThreadId = activeTab?.threadId || activeTabThreadId || thread?.id;
+    if (!targetThreadId) {
+      try {
+        const tab = await ensureTurnTab();
+        targetThreadId = tab.threadId;
+      } catch {
+        const activeThread = await createOrGetThread(
+          {
+            scopeType: currentScope.type,
+            entityId: currentScope.id,
+            title: currentScope.title,
+          },
+          db
+        );
+        targetThreadId = activeThread.id;
+      }
+    }
+
+    if (targetThreadId) {
+      await clearThreadContext(targetThreadId, db);
+    }
     tabRuntimes.patch(activeTabId, { references: [] });
     message.success('Đã đặt lại ngữ cảnh hội thoại');
   };
@@ -2090,27 +2151,8 @@ Rules:
         }
         setClarifyByTab({});
         setRoutedScopeByTab({});
-        sdlcCoordinatorRef.current = null;
-        sdlcCoordinatorThreadRef.current = null;
-        setSdlcWorkflowState(undefined);
-        // The reset deleted every tab row, so rebuild the scope's bootstrap tabs here; the initTabs
-        // effect will not re-run because its dependencies did not change.
         try {
-          if (isProjectScope && currentScope.id) {
-            const sdlcTab = await getOrCreateSdlcTab(currentScope.id, db);
-            await createChatTab(
-              {
-                scopeType: currentScope.type,
-                scopeKey,
-                entityId: currentScope.id,
-                title: '💬 Tra cứu & Hỏi đáp',
-              },
-              db
-            );
-            await setActiveTab(scopeKey, sdlcTab.id, db);
-          } else {
-            await ensureTurnTab();
-          }
+          await ensureTurnTab();
         } catch (err) {
           logAiChatError('Failed to rebuild chat tabs after history reset', err);
         }
@@ -2242,19 +2284,23 @@ Rules:
         />
       )}
 
-      {/* Chat Header */}
+      {/* Chat Header with Drawer-level Scope */}
       <ChatHeader
+        currentScope={currentScope}
+        onOpenScopePicker={() => setScopeModalOpen(true)}
+        onDetachScope={() => {
+          setIsDetached(true);
+          setInternalScope({ type: 'global' });
+          setCustomScope({ type: 'global' });
+        }}
         isPinned={isPinned}
         onTogglePin={() => onTogglePin?.()}
         onClearAllHistory={handleClearAllHistory}
         onDeleteCurrentThread={handleDeleteCurrentThread}
         onOpenDebug={() => setIsDebugModalOpen(true)}
-        onOpenMcpSettings={() => setIsMcpModalOpen(true)}
         onPopout={!isPopoutWindow ? handlePopoutAction : undefined}
         onOpenInstructions={() => setIsInstructionsOpen(true)}
         onClose={onClose}
-        mcpServers={mcpServers}
-        onToggleMcpServer={handleToggleMcpServer}
       />
 
       {/* Chrome-like Multi-Tab Bar for All Scopes */}
@@ -2271,8 +2317,9 @@ Rules:
         />
       )}
 
-      {/* Tab Toolbox: Model, Scope, Analysis Mode, Auto-Approve, Clear Context */}
+      {/* Tab Toolbox: Pure Tab-Isolated Controls (Model, Analysis Mode, Auto-Approve, MCP, Clear Context) */}
       <ChatTabToolbox
+        activeTabId={activeTabId}
         selectedModel={resolveActiveModel()}
         availableModels={availableModels}
         onModelChange={handleModelChange}
@@ -2282,13 +2329,11 @@ Rules:
         onToggleAnalysisMode={handleToggleAnalysisMode}
         autoApproveMutations={autoApproveMutations}
         onToggleAutoApproveMutations={handleToggleAutoApproveMutations}
-        currentScope={currentScope}
-        onOpenScopePicker={() => setScopeModalOpen(true)}
-        onDetachScope={() => {
-          setIsDetached(true);
-          setInternalScope({ type: 'global' });
-          setCustomScope({ type: 'global' });
-        }}
+        mcpEnabled={currentTabMcpEnabled}
+        onToggleMcpEnabled={handleToggleMcpEnabled}
+        mcpServers={mcpServers}
+        onToggleMcpServer={handleToggleMcpServer}
+        onOpenMcpSettings={() => setIsMcpModalOpen(true)}
         onClearContext={handleClearContext}
       />
 
