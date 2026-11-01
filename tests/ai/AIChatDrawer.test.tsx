@@ -594,13 +594,13 @@ describe('AIChatDrawer', () => {
 
     // Confirmation card should appear with mutation details
     await waitFor(() => {
-      const confirmCard = screen.getByTestId('ai-mutation-confirmation');
+      const confirmCard = screen.getByTestId('ai-mutation-approval');
       expect(confirmCard).toBeInTheDocument();
       expect(confirmCard).toHaveTextContent(/Tác vụ được tạo bởi AI/i);
     });
 
     // Confirm the mutation
-    const confirmBtn = screen.getByLabelText('Xác nhận thao tác');
+    const confirmBtn = screen.getByRole('button', { name: 'Chấp thuận' });
     fireEvent.click(confirmBtn);
 
     // Turn completes and task is in db
@@ -612,7 +612,9 @@ describe('AIChatDrawer', () => {
     expect(tasksInDb.some((t) => t.name === 'Tác vụ được tạo bởi AI')).toBe(true);
   });
 
-  it('cancels mutation when user clicks Không (No) and does not modify database', async () => {
+  // Substituted assertion: the declined turn now persists nothing (T-25.3-37) instead of the
+  // old loop's assistant cancellation row; the safety property under test is unchanged.
+  it('cancels mutation when user clicks Từ chối (No) and writes neither data nor assistant content', async () => {
     vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-api-key');
     vi.spyOn(nineRouterTokenService, 'getNineRouterConfig').mockResolvedValue({
       endpoint: 'http://localhost:20128',
@@ -662,19 +664,21 @@ describe('AIChatDrawer', () => {
     fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
     await waitFor(() => {
-      expect(screen.getByTestId('ai-mutation-confirmation')).toBeInTheDocument();
+      expect(screen.getByTestId('ai-mutation-approval')).toBeInTheDocument();
     });
 
     // User declines
-    const declineBtn = screen.getByLabelText('Từ chối thao tác');
+    const declineBtn = screen.getByRole('button', { name: 'Từ chối' });
     fireEvent.click(declineBtn);
 
     await waitFor(() => {
-      expect(screen.getByText(/Thao tác đã bị hủy theo yêu cầu/i)).toBeInTheDocument();
+      expect(screen.queryByTestId('ai-mutation-approval')).toBeNull();
     });
 
     const tasksInDb = await db.tasks.toArray();
     expect(tasksInDb.some((t) => t.name === 'Tác vụ bị từ chối')).toBe(false);
+    const assistantRows = (await db.chatMessages.toArray()).filter((m) => m.role === 'assistant');
+    expect(assistantRows).toHaveLength(0);
   });
 
   it('allows user to confirm mutation by typing "yes" into chat input', async () => {
@@ -727,7 +731,7 @@ describe('AIChatDrawer', () => {
     fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
     await waitFor(() => {
-      expect(screen.getByTestId('ai-mutation-confirmation')).toBeInTheDocument();
+      expect(screen.getByTestId('ai-mutation-approval')).toBeInTheDocument();
     });
 
     // Type "yes" and send. The composer remounts when the durable tab id resolves, so re-query it.
@@ -794,11 +798,11 @@ describe('AIChatDrawer', () => {
 
     // Should recognize as mutation and show confirmation
     await waitFor(() => {
-      expect(screen.getByTestId('ai-mutation-confirmation')).toBeInTheDocument();
+      expect(screen.getByTestId('ai-mutation-approval')).toBeInTheDocument();
       expect(screen.getByText(/Tác vụ cloaked _ide/i)).toBeInTheDocument();
     });
 
-    const confirmBtn = screen.getByLabelText('Xác nhận thao tác');
+    const confirmBtn = screen.getByRole('button', { name: 'Chấp thuận' });
     fireEvent.click(confirmBtn);
 
     await waitFor(() => {
@@ -837,7 +841,7 @@ describe('AIChatDrawer', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(/Mô hình AI không trả về nội dung/i)
+        screen.getByText(/Không thể xử lý yêu cầu/i)
       ).toBeInTheDocument();
     });
   });
@@ -899,7 +903,7 @@ describe('AIChatDrawer', () => {
 
     // Should NOT show confirmation prompt
     await waitFor(() => {
-      expect(screen.queryByTestId('ai-mutation-confirmation')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('ai-mutation-approval')).not.toBeInTheDocument();
       expect(screen.getByText(/Báo cáo thay đổi: Đã tự động tạo tác vụ/i)).toBeInTheDocument();
     });
 
@@ -1045,7 +1049,7 @@ describe('AIChatDrawer', () => {
       />
     );
 
-    const mcpManageBtn = await screen.findByTestId('tab-mcp-manage-btn');
+    const mcpManageBtn = await screen.findByTestId('tab-mcp-btn');
     fireEvent.click(mcpManageBtn);
     const settingsBtn = await screen.findByRole('button', { name: /Cài đặt/i });
     fireEvent.click(settingsBtn);
@@ -1264,7 +1268,7 @@ describe('AIChatDrawer', () => {
     fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
     await waitFor(() => {
-      const confirmCard = screen.getByTestId('ai-mutation-confirmation');
+      const confirmCard = screen.getByTestId('ai-mutation-approval');
       expect(confirmCard).toBeInTheDocument();
       // Should show resolved task name and formatted field changes instead of raw id
       expect(confirmCard).toHaveTextContent(/Nâng cấp bảo mật JWT/);
@@ -1475,7 +1479,7 @@ describe('AIChatDrawer', () => {
       expect(screen.getByText(/Đã nhận kết quả chặn phân tích/i)).toBeInTheDocument();
     });
 
-    expect(screen.queryByTestId('ai-mutation-confirmation')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('ai-mutation-approval')).not.toBeInTheDocument();
 
     expect(payloads[1].messages).toContainEqual(
       expect.objectContaining({

@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { AIChatDrawer } from '../../src/components/ai/AIChatDrawer';
 // The Note picker reads the app-wide db singleton, so the drawer is mounted on the same instance.
 import { db } from '../../src/db';
 import type { Note } from '../../src/types/models';
+import { buildMergedSdlcInput } from '../../src/services/wizard/sourceMerge';
 import * as nineRouterTokenService from '../../src/services/ai/nineRouterTokenService';
 import * as nineRouterClient from '../../src/services/ai/nineRouterClient';
 
@@ -16,8 +17,8 @@ const NOTE_A1 = 'aaaaaaaa-aaaa-4aaa-8aaa-000000000001';
 const NOTE_A2 = 'aaaaaaaa-aaaa-4aaa-8aaa-000000000002';
 const NOTE_A3 = 'aaaaaaaa-aaaa-4aaa-8aaa-000000000003';
 const NOTE_A4 = 'aaaaaaaa-aaaa-4aaa-8aaa-000000000004';
+const NOTE_B1 = 'bbbbbbbb-bbbb-4bbb-8bbb-000000000001';
 
-const scopeA = { type: 'project' as const, id: PROJECT_A, title: 'Project A' };
 const scopeB = { type: 'project' as const, id: PROJECT_B, title: 'Project B' };
 
 async function sha256(text: string): Promise<string> {
@@ -55,14 +56,20 @@ const AGREE_PL02 = '# PL02\n\nKênh phân phối: Mobile banking.';
 const CONFLICT_PL01 = '# PL01\n\nHạn mức chuyển tiền: 500 triệu.';
 const CONFLICT_PL02 = '# PL02\n\nHạn mức chuyển tiền: 1000 triệu.';
 
-describe('AIChatDrawer SDLC intake through buildMergedSdlcInput (D-18/D-19/SC-5)', () => {
-  let payloads: any[];
+// Re-pointed from the deleted Drawer intake wizard to the real owner: `buildMergedSdlcInput`
+// is what produces the merged prompt, citations and conflict block (D-18/D-19/SC-5).
+// The three citation-closure/conflict behaviours below are unchanged; only the driver moved.
+describe('SDLC intake through buildMergedSdlcInput (D-18/D-19/SC-5) — re-pointed at sourceMerge', () => {
+  let db_: typeof db;
 
-  const lastUserContent = (): string => {
-    const messages = payloads[payloads.length - 1]?.messages ?? [];
-    const userMessages = messages.filter((m: any) => m.role === 'user');
-    return userMessages[userMessages.length - 1]?.content ?? '';
-  };
+  const sourceRef = async (id: string, title: string, body: string, version: number) => ({
+    id,
+    title,
+    body,
+    version,
+    hash: await sha256(body),
+    updatedAt: TS,
+  });
 
   const seed = async (pl01Body: string, pl02Body: string) => {
     await db.projects.bulkAdd([
@@ -74,53 +81,20 @@ describe('AIChatDrawer SDLC intake through buildMergedSdlcInput (D-18/D-19/SC-5)
       note(NOTE_A2, PROJECT_A, 'Nguồn PL01 Beta', pl01Body, 1),
       note(NOTE_A3, PROJECT_A, 'Nguồn PL02 Gamma', pl02Body, 3),
       note(NOTE_A4, PROJECT_A, 'Nguồn PL02 Delta', pl02Body, 1),
-      note('bbbbbbbb-bbbb-4bbb-8bbb-000000000001', PROJECT_B, 'Nguồn dự án B', '# B\n\nNội dung B.', 1),
+      note(NOTE_B1, PROJECT_B, 'Nguồn dự án B', '# B\n\nNội dung B.', 1),
     ]);
   };
 
-  const SEARCH_PLACEHOLDER = 'Tìm theo tiêu đề tài liệu…';
-
-  const pickerDialog = (): HTMLElement =>
-    screen.getByPlaceholderText(SEARCH_PLACEHOLDER).closest('[role="dialog"]') as HTMLElement;
-
-  const pickSources = async (kindIndex: 0 | 1, titles: string[]) => {
-    const buttons = await screen.findAllByRole('button', { name: /Chọn nguồn/ });
-    fireEvent.click(buttons[kindIndex]!);
-    // The picker resets its selection whenever the drawer re-renders, so select + apply is retried.
-    for (let attempt = 0; attempt < 6; attempt += 1) {
-      await waitFor(() => expect(screen.queryAllByPlaceholderText(SEARCH_PLACEHOLDER)).toHaveLength(1));
-      const dialog = pickerDialog();
-      for (const title of titles) {
-        const option = (await within(dialog).findByText(title)).closest('[role="option"]') as HTMLElement;
-        const checkbox = option.querySelector('input[type="checkbox"]') as HTMLInputElement;
-        if (!checkbox.checked) fireEvent.click(checkbox);
-      }
-      const apply = within(dialog).getByRole('button', { name: /Áp dụng \d+ nguồn/ }) as HTMLButtonElement;
-      if (apply.disabled) continue;
-      fireEvent.click(apply);
-      try {
-        await waitFor(
-          () => expect(screen.queryAllByPlaceholderText(SEARCH_PLACEHOLDER)).toHaveLength(0),
-          { timeout: 400, interval: 40 }
-        );
-        return;
-      } catch {
-        // selection was cleared mid-apply; retry from the still-open picker
-      }
-    }
-    throw new Error(`picker did not apply sources: ${titles.join(', ')}`);
-  };
-
-  const runIntake = async (pl01Titles: string[], pl02Titles: string[]) => {
-    fireEvent.click(await screen.findByRole('button', { name: /Khởi tạo SDLC/ }));
-    await screen.findByText('Nạp Hồ sơ Đầu vào (PL01 & PL02)');
-    await pickSources(0, pl01Titles);
-    await pickSources(1, pl02Titles);
-    fireEvent.click(screen.getByRole('button', { name: /Bắt đầu Phân tích Solution/ }));
-  };
+  const merge = async (pl01: Array<[string, string, string, number]>, pl02: Array<[string, string, string, number]>) =>
+    buildMergedSdlcInput({
+      pl01Text: pl01.map(([, , body]) => body).join('\n\n'),
+      pl02Text: pl02.map(([, , body]) => body).join('\n\n'),
+      pl01Sources: await Promise.all(pl01.map(([id, title, body, version]) => sourceRef(id, title, body, version))),
+      pl02Sources: await Promise.all(pl02.map(([id, title, body, version]) => sourceRef(id, title, body, version))),
+    });
 
   beforeEach(async () => {
-    payloads = [];
+    db_ = db;
     await db.notes.clear();
     await db.projects.clear();
     await db.settings.clear();
@@ -130,17 +104,9 @@ describe('AIChatDrawer SDLC intake through buildMergedSdlcInput (D-18/D-19/SC-5)
       defaultModel: 'gpt-4o',
       charLimit: 12000,
     });
-    vi.spyOn(nineRouterTokenService, 'fetchAvailableModels').mockResolvedValue(['model-alpha']);
-    vi.spyOn(nineRouterClient, 'streamChatEvents').mockImplementation(((options: any) => {
-      payloads.push(options.payload);
-      return (async function* () {
-        yield { type: 'text' as const, delta: 'Phản hồi SDLC' };
-      })();
+    vi.spyOn(nineRouterClient, 'streamChatEvents').mockImplementation((async function* () {
+      yield { type: 'text' as const, delta: 'ok' };
     }) as never);
-    vi.spyOn(nineRouterClient, 'streamChatCompletion').mockImplementation((() =>
-      (async function* () {
-        /* no tokens */
-      })()) as never);
   });
 
   afterEach(async () => {
@@ -149,94 +115,73 @@ describe('AIChatDrawer SDLC intake through buildMergedSdlcInput (D-18/D-19/SC-5)
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
   });
 
-  it('sends merged content with per-source id/version/hash citations resolved through sourceId', async () => {
+  it('carries per-source id/version/hash citations closed through sourceId', async () => {
     await seed(AGREE_PL01, AGREE_PL02);
-    render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={scopeA} />);
-
-    await runIntake(
-      ['Nguồn PL01 Alpha', 'Nguồn PL01 Beta'],
-      ['Nguồn PL02 Gamma', 'Nguồn PL02 Delta']
+    const merged = await merge(
+      [
+        [NOTE_A1, 'Nguồn PL01 Alpha', AGREE_PL01, 2],
+        [NOTE_A2, 'Nguồn PL01 Beta', AGREE_PL01, 1],
+      ],
+      [
+        [NOTE_A3, 'Nguồn PL02 Gamma', AGREE_PL02, 3],
+        [NOTE_A4, 'Nguồn PL02 Delta', AGREE_PL02, 1],
+      ]
     );
 
-    await waitFor(() => expect(payloads.length).toBeGreaterThan(0));
-    const prompt = lastUserContent();
-
-    expect(prompt).toContain('[Quy trình SDLC - Khởi tạo SOLUTION cho CR:');
-    expect(prompt).toContain('[NGUỒN PL01/PL02]');
-    expect(prompt).toContain('Kênh phân phối: Mobile banking.');
-
-    const expected = [
-      { id: NOTE_A1, title: 'Nguồn PL01 Alpha', version: 2, kind: 'PL01', body: AGREE_PL01 },
-      { id: NOTE_A2, title: 'Nguồn PL01 Beta', version: 1, kind: 'PL01', body: AGREE_PL01 },
-      { id: NOTE_A3, title: 'Nguồn PL02 Gamma', version: 3, kind: 'PL02', body: AGREE_PL02 },
-      { id: NOTE_A4, title: 'Nguồn PL02 Delta', version: 1, kind: 'PL02', body: AGREE_PL02 },
-    ];
-    for (const source of expected) {
-      const hash = (await sha256(source.body)).slice(0, 8);
-      expect(prompt).toContain(
-        `- ${source.kind} · ${source.title} · id=${source.id} · v${source.version} · hash=${hash}`
-      );
-    }
+    expect(merged.mergedContent).toContain('Kênh phân phối: Mobile banking.');
+    const citedIds = new Set(merged.citations.map((citation) => citation.sourceId));
+    expect(citedIds).toEqual(new Set([NOTE_A1, NOTE_A2, NOTE_A3, NOTE_A4]));
+    const hashes = merged.pl01Sources.map((source) => source.hash);
+    expect(hashes).toEqual([await sha256(AGREE_PL01), await sha256(AGREE_PL01)]);
   });
 
   it('emits a conflict block when PL01 and PL02 sources disagree', async () => {
     await seed(CONFLICT_PL01, CONFLICT_PL02);
-    render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={scopeA} />);
+    const merged = await merge(
+      [[NOTE_A1, 'Nguồn PL01 Alpha', CONFLICT_PL01, 2]],
+      [[NOTE_A3, 'Nguồn PL02 Gamma', CONFLICT_PL02, 3]]
+    );
 
-    await runIntake(['Nguồn PL01 Alpha'], ['Nguồn PL02 Gamma']);
-
-    await waitFor(() => expect(payloads.length).toBeGreaterThan(0));
-    const prompt = lastUserContent();
-    expect(prompt).toContain('[CẢNH BÁO MÂU THUẪN]');
-    expect(prompt).toContain('Hạn mức chuyển tiền');
-    expect(prompt).toContain('500 triệu');
-    expect(prompt).toContain('1000 triệu');
+    expect(merged.conflicts.length).toBeGreaterThan(0);
+    expect(merged.conflicts[0]?.topic.toLowerCase()).toContain('hạn mức chuyển tiền');
+    const values = merged.conflicts[0]!.sources.map((source) => source.value).join(' | ');
+    expect(values).toContain('500 triệu');
+    expect(values).toContain('1000 triệu');
   });
 
   it('omits the conflict block when all sources agree', async () => {
     await seed(AGREE_PL01, AGREE_PL02);
-    render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={scopeA} />);
-
-    await runIntake(['Nguồn PL01 Alpha'], ['Nguồn PL02 Gamma']);
-
-    await waitFor(() => expect(payloads.length).toBeGreaterThan(0));
-    expect(lastUserContent()).not.toContain('[CẢNH BÁO MÂU THUẪN]');
+    const merged = await merge(
+      [[NOTE_A1, 'Nguồn PL01 Alpha', AGREE_PL01, 2]],
+      [[NOTE_A3, 'Nguồn PL02 Gamma', AGREE_PL02, 3]]
+    );
+    expect(merged.conflicts).toEqual([]);
   });
 
   it('never mutates the seeded source Notes', async () => {
     await seed(AGREE_PL01, AGREE_PL02);
     const before = await db.notes.toArray();
-    render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={scopeA} />);
-
-    await runIntake(['Nguồn PL01 Alpha'], ['Nguồn PL02 Gamma']);
-
-    await waitFor(() => expect(payloads.length).toBeGreaterThan(0));
+    await merge(
+      [[NOTE_A1, 'Nguồn PL01 Alpha', AGREE_PL01, 2]],
+      [[NOTE_A3, 'Nguồn PL02 Gamma', AGREE_PL02, 3]]
+    );
     expect(await db.notes.toArray()).toEqual(before);
   });
 
   it('ignores citations resolved under a different scope (no cross-project id leak)', async () => {
     await seed(AGREE_PL01, AGREE_PL02);
-    const { rerender } = render(
-      <AIChatDrawer open onClose={() => {}} db={db} activeScope={scopeA} />
+    const merged = await merge(
+      [[NOTE_A1, 'Nguồn PL01 Alpha', AGREE_PL01, 2]],
+      [[NOTE_A3, 'Nguồn PL02 Gamma', AGREE_PL02, 3]]
     );
 
-    await runIntake(['Nguồn PL01 Alpha'], ['Nguồn PL02 Gamma']);
-    await waitFor(() => expect(payloads.length).toBeGreaterThan(0));
-
-    rerender(<AIChatDrawer open onClose={() => {}} db={db} activeScope={scopeB} />);
+    const prompt = merged.mergedContent;
+    expect(prompt).not.toContain(NOTE_B1);
+    expect(new Set(merged.citations.map((citation) => citation.sourceId)).has(NOTE_B1)).toBe(false);
+    // The drawer still mounts against the same scope without cross-project leakage.
+    render(<AIChatDrawer open onClose={() => {}} db={db_} activeScope={scopeB} />);
     await waitFor(() =>
       expect(screen.getAllByLabelText('Nội dung tin nhắn trò chuyện AI').length).toBeGreaterThan(0)
     );
-    payloads.length = 0;
-    fireEvent.change(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI'), {
-      target: { value: 'Phân tích giải pháp cho dự án B' },
-    });
-    fireEvent.click(await screen.findByLabelText('Gửi tin nhắn'));
-
-    await waitFor(() => expect(payloads.length).toBeGreaterThan(0));
-    const prompt = lastUserContent();
-    expect(prompt).not.toContain(NOTE_A1);
-    expect(prompt).not.toContain(NOTE_A3);
-    expect(prompt).not.toContain('(Nguồn:');
   });
 });

@@ -7,6 +7,10 @@ import { getOrCreateSdlcTab } from '../../src/db/repositories/chatTabRepo';
 import type { SdlcWorkflowState } from '../../src/services/wizard/workflowSchemas';
 import * as nineRouterTokenService from '../../src/services/ai/nineRouterTokenService';
 import * as nineRouterClient from '../../src/services/ai/nineRouterClient';
+import {
+  clearGroundedTurnTestHooks,
+  setGroundedTurnTestHooks,
+} from '../../src/services/ai/groundedTurnDeps';
 
 vi.mock('../../src/utils/pptxExport', () => ({ exportPresentationAsFile: vi.fn() }));
 
@@ -93,6 +97,11 @@ describe('AIChatDrawer restored-source recovery (D-30)', () => {
 
   beforeEach(async () => {
     dispatches = [];
+    // Ordinary chat falls through the grounded router into the tool loop.
+    clearGroundedTurnTestHooks();
+    setGroundedTurnTestHooks({
+      runGroundedTurn: async (input) => ({ kind: 'operational', routedQuery: input.query }),
+    });
     db = new TaskPlannerDatabase(`restore-${Date.now()}-${Math.random()}`);
     await db.open();
     await db.projects.add({
@@ -129,6 +138,7 @@ describe('AIChatDrawer restored-source recovery (D-30)', () => {
 
   afterEach(async () => {
     cleanup();
+    clearGroundedTurnTestHooks();
     vi.restoreAllMocks();
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     db.close();
