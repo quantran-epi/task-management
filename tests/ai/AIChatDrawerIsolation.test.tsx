@@ -115,7 +115,9 @@ describe('AIChatDrawer multi-tab isolation', () => {
     cleanup();
     clearGroundedTurnTestHooks();
     vi.restoreAllMocks();
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    // Turn tails and tab writes land asynchronously; closing first surfaces them as a
+    // post-teardown Dexie DatabaseClosedError instead of a clean run.
+    await new Promise<void>((resolve) => setTimeout(resolve, 25));
     db.close();
   });
 
@@ -386,7 +388,10 @@ describe('AIChatDrawer multi-tab isolation', () => {
     await waitFor(() => expect(screen.getByLabelText('Dừng sinh phản hồi')).toBeInTheDocument());
     fireEvent.click(screen.getByLabelText('Dừng sinh phản hồi'));
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 200));
+    // Let the cancelled prelude settle before teardown; an unawaited write after db.close()
+    // surfaces as an unhandled DatabaseClosedError rather than a test failure.
+    await waitFor(() => expect(screen.queryByLabelText('Dừng sinh phản hồi')).toBeNull());
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
 
     expect(streamSpy).not.toHaveBeenCalled();
     const tab = (await listTabsByScope(SCOPE_KEY, db)).find((row) => row.title === CHAT_ONE);
