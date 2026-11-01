@@ -97,30 +97,9 @@ import { createRequestRegistry } from './runtime/requestRegistry';
 import { useTabRuntimes } from './runtime/useTabRuntimes';
 import { InterruptedBanner } from './InterruptedBanner';
 import { InlineApiErrorCard } from './InlineApiErrorCard';
-import { RestoredSourceNotice } from './RestoredSourceNotice';
-import { deriveMissingSources } from './wizard/restoreRecovery';
-import { REVISION_ARTIFACT_KIND, SdlcWorkflowHub } from './wizard/SdlcWorkflowHub';
-import type { RevisionKind } from './wizard/SdlcWorkflowHub';
-import { StepSolutionPanel, StepChangePackPanel, StepTechDocsPanel, StepCabPanel, StepIntakePanel, type HubChangePackDraft, type StepTechDocsState, type StepCabState, type RenderExportRow } from './wizard/HubStepPanels';
-import { HubExportRow } from './wizard/HubExportRow';
-import { StepInputDocsModal } from './wizard/StepInputDocsModal';
-import { saveHubSolution } from '../../services/wizard/hubSolution';
-import { confirmHubChangePack, validateHubChangePack } from '../../services/wizard/hubChangePack';
-import { generateHubTechDocs } from '../../services/wizard/hubTechDocs';
-import { exportHubArtifact, type HubExportKind, type HubExportResult } from '../../services/wizard/hubExport';
-import { generateHubCab } from '../../services/wizard/hubCab';
-import { ChangePackValidationError } from '../../services/wizard/changePack';
-import { createSdlcWorkflowCoordinator } from '../../services/wizard/workflowCoordinator';
-import { previousArtifactContent, stripStaleArtifacts, toRevisionModalPreview } from './wizard/revisionView';
-import type { SdlcWorkflowState, SdlcWorkflowMetadata, SdlcStepId, RevisionPreview } from '../../services/wizard/workflowSchemas';
-import { buildMergedSdlcInput, type SdlcSourceRef } from '../../services/wizard/sourceMerge';
-import type { ChangePackManifest } from '../../services/wizard/changePack';
-import { collectWizardEvidence, type WizardEvidenceInput } from '../../services/ai/wizardService';
-import { runLocalGroundedRetrieval } from '../../services/search/localGroundedRetrieval';
 import {
   listTabsByScope,
   getOrCreateActiveChatTab,
-  getOrCreateSdlcTab,
   createChatTab,
   setActiveTab,
   updateChatTab,
@@ -142,35 +121,6 @@ type SdlcPromptArtifact = {
   sourceReferences?: string[] | undefined;
   version?: number | undefined;
 };
-
-/** Hub DOCX export row state. Exported so it survives the wizard removal (plan 08). */
-export type HubExportState = {
-  phase: 'idle' | 'building' | 'saved' | 'saved_download_failed' | 'failed';
-  filename?: string;
-  sizeBytes?: number;
-  noteId?: string;
-  errorCode?: string;
-};
-
-const EMPTY_EXPORT_STATES: Record<HubExportKind, HubExportState> = {
-  PL02: { phase: 'idle' },
-  PL03B: { phase: 'idle' },
-  PL07: { phase: 'idle' },
-  CAB: { phase: 'idle' },
-};
-
-function toExportState(result: HubExportResult): HubExportState {
-  // Keep the failure cause: without it a failed export renders no reason at all.
-  if (result.status === 'failed') {
-    return { phase: 'failed', ...(result.errorCode !== undefined ? { errorCode: result.errorCode } : {}) };
-  }
-  return {
-    phase: result.status,
-    ...(result.filename !== undefined ? { filename: result.filename } : {}),
-    ...(result.sizeBytes !== undefined ? { sizeBytes: result.sizeBytes } : {}),
-    ...(result.noteId !== undefined ? { noteId: result.noteId } : {}),
-  };
-}
 
 export interface SdlcWrapperPromptInput {
   userQuery: string;
@@ -447,46 +397,15 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   // Tab that owns the in-flight turn; every transient write inside the send path targets it.
   const turnTabIdRef = useRef('');
 
-  // SDLC Workflow state
-  const [sdlcWorkflowState, setSdlcWorkflowState] = useState<SdlcWorkflowState | undefined>();
-  const [sdlcInputModalOpen, setSdlcInputModalOpen] = useState(false);
-  // Hub step-2 save state; reset per tab so a save never leaks across tabs.
-  const [solutionSaving, setSolutionSaving] = useState(false);
-  const [solutionSavedNoteId, setSolutionSavedNoteId] = useState<string | undefined>(undefined);
-  const solutionSaveBusyRef = useRef(false);
-  // Hub step-4 draft: validation/confirm state only. Never persisted, reset per tab.
-  const [hubPackDraft, setHubPackDraft] = useState<HubChangePackDraft>({ status: 'idle' });
-  const hubPackBusyRef = useRef(false);
-  // Hub step-5 generation state; derived from the workflow artifacts, never persisted.
-  const [techDocsState, setTechDocsState] = useState<StepTechDocsState>('blocked');
-  const techDocsBusyRef = useRef(false);
-  // Hub DOCX export state, keyed by `SdlcArtifactKind` — never by chat message id.
-  const [exportStates, setExportStates] = useState<Record<HubExportKind, HubExportState>>(EMPTY_EXPORT_STATES);
-  const exportBusyRef = useRef<Set<HubExportKind>>(new Set());
-  const [cabState, setCabState] = useState<StepCabState>('blocked');
-  const [revisionDraft, setRevisionDraft] = useState('');
-  const [revisionPreview, setRevisionPreview] = useState<RevisionPreview | null>(null);
-  const [revisionLoading, setRevisionLoading] = useState(false);
-  const sdlcCoordinatorRef = useRef<ReturnType<typeof createSdlcWorkflowCoordinator> | null>(null);
-  // Thread id the cached coordinator was built for; a change rebuilds it so the state key follows.
-  const sdlcCoordinatorThreadRef = useRef<string | null>(null);
-  // Citation identity resolved for the last intake, keyed by the scope it was resolved under.
-  // A later scope's turn reads it only on an exact scopeKey match, so ids never leak across projects (D-35).
-  const sdlcSourceReferencesRef = useRef<{ scopeKey: string; pl01: string[]; pl02: string[] }>({
-    scopeKey: '',
-    pl01: [],
-    pl02: [],
-  });
-
   // Durable multi-tab state for all scopes from Dexie chatTabs table
   const durableTabs = useLiveQuery<ChatTab[]>(async () => {
     return listTabsByScope(scopeKey, db);
   }, [db, scopeKey]) ?? [];
 
   const activeTab = durableTabs.find((t) => t.active) ?? durableTabs[0];
-  const activeTabId = activeTab?.id ?? 'sdlc';
+  const activeTabId = activeTab?.id ?? 'default';
   const activeTabThreadId = activeTab?.threadId;
-  const isSdlcActiveTab = isProjectScope && (activeTab?.type === 'sdlc' || activeTabId === 'sdlc' || activeTabId.startsWith('sdlc:'));
+  const isSdlcActiveTab = false;
   // Async hub handlers compare against the live tab id, not the one closed over at call time.
   const activeTabIdRef = useRef(activeTabId);
   activeTabIdRef.current = activeTabId;
@@ -626,38 +545,18 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     return getMessagesByThreadId(activeThreadId, db);
   }, [db, activeThreadId]) ?? [];
 
-  // Hub step-2 draft source: the newest plain assistant message in the SDLC thread.
-  // Wizard-payload rows and the two persistence events are never eligible (T-25.1.1-43).
-  const solutionDraftMarkdown = useMemo(() => {
-    const candidate = messages
-      .filter((msg) =>
-        !msg.wizard &&
-        msg.role === 'assistant' &&
-        msg.content.trim().length > 0 &&
-        !msg.content.startsWith('Saved ') &&
-        !msg.content.startsWith('Confirmed change pack ')
-      )
-      .reduce<ChatMessage | undefined>(
-        (newest, msg) => (!newest || msg.createdAt > newest.createdAt ? msg : newest),
-        undefined
-      );
-    return candidate?.content ?? '';
-  }, [messages]);
-
   const ensureTurnTabRef = useRef<() => Promise<ChatTab>>(() =>
     Promise.reject(new Error('tab bootstrap not ready'))
   );
 
   useEffect(() => {
-    // Project scopes are bootstrapped by the initTabs effect below, which lets getOrCreateSdlcTab
-    // adopt a legacy `project:<id>` thread. Non-project scopes adopt their legacy thread through
-    // getOrCreateActiveChatTab, which is transactional and therefore safe against a concurrent
-    // send creating the same first tab.
-    if (isProjectScope || durableTabs.length > 0) return;
+    // Non-project and project scopes adopt their legacy thread through getOrCreateActiveChatTab,
+    // which is transactional and therefore safe against a concurrent send creating the same first tab.
+    if (durableTabs.length > 0) return;
     void ensureTurnTabRef.current().catch((err) =>
       logAiChatError('Failed to bootstrap first chat tab', err)
     );
-  }, [currentScope.id, currentScope.type, db, durableTabs.length, isProjectScope, scopeKey]);
+  }, [currentScope.id, currentScope.type, db, durableTabs.length, scopeKey]);
 
   // Ensure durable tabs are initialized in Dexie for the active scope
   const tabInitializationRef = useRef<string | null>(null);
@@ -696,10 +595,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
             }
           }
 
-          const sdlcTab = existing.find((t) => t.type === 'sdlc') ?? await getOrCreateSdlcTab(currentScope.id, db);
           const ordinary = existing.filter((t) => t.type === 'chat');
           if (ordinary.length === 0) {
-            await createChatTab(
+            const firstTab = await createChatTab(
               {
                 scopeType: currentScope.type,
                 scopeKey,
@@ -708,9 +606,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
               },
               db
             );
-          }
-          if (!existing.some((tab) => tab.active)) {
-            await setActiveTab(scopeKey, sdlcTab.id, db);
+            await setActiveTab(scopeKey, firstTab.id, db);
+          } else if (!existing.some((tab) => tab.active) && ordinary[0]) {
+            await setActiveTab(scopeKey, ordinary[0].id, db);
           }
         }
       } catch (err) {
@@ -769,7 +667,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const handleCloseTab = useCallback(
     (tabId: string) => {
       const targetTab = durableTabs.find((t) => t.id === tabId);
-      if (!targetTab || targetTab.type === 'sdlc') return; // SDLC tab can NEVER be closed
+      if (!targetTab) return;
 
       const isRunning =
         requestRegistryRef.current.hasActive(tabId) ||
@@ -823,672 +721,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     ) => Promise<void>
   >(async () => {});
 
-  // `durableTabs` is a `useLiveQuery` result: its array identity changes on every emit, so
-  // depending on the array rebuilt the coordinator (and dropped its in-memory state) whenever an
-  // unrelated tab row changed — a save then threw WORKFLOW_NOT_INITIALIZED after the Note write.
-  const sdlcThreadId = useMemo(
-    () => durableTabs.find((tab) => tab.type === 'sdlc')?.threadId,
-    [durableTabs]
-  );
-
-  const getSdlcCoordinator = useCallback(() => {
-    if (!isProjectScope || !currentScope.id) return null;
-    // The workflow belongs to the SDLC tab's own thread. Keying it by the active thread wrote the
-    // state under an ordinary tab during the first render (before the durable tab list resolved),
-    // and it stayed unrestorable once the SDLC tab became active. Wait for the durable SDLC tab.
-    if (!sdlcThreadId) return null;
-    if (sdlcCoordinatorRef.current && sdlcCoordinatorThreadRef.current === sdlcThreadId) {
-      return sdlcCoordinatorRef.current;
-    }
-    const stateKey = `sdlc_workflow:${currentScope.id}:${sdlcThreadId}`;
-    sdlcCoordinatorThreadRef.current = sdlcThreadId;
-    sdlcCoordinatorRef.current = createSdlcWorkflowCoordinator({
-      projectId: currentScope.id,
-      threadId: sdlcThreadId,
-      saveState: async (state) => {
-        await db.settings.put({ key: stateKey, value: state });
-        setSdlcWorkflowState(state);
-      },
-      loadState: async () => {
-        const setting = await db.settings.get(stateKey);
-        return setting?.value as SdlcWorkflowState | undefined;
-      },
-      onStateChange: (state: SdlcWorkflowState) => setSdlcWorkflowState(state),
-    });
-    return sdlcCoordinatorRef.current;
-  }, [currentScope.id, db, sdlcThreadId, isProjectScope]);
-
-  useEffect(() => {
-    if (!isProjectScope || !isSdlcActiveTab || !activeThreadId) {
-      sdlcCoordinatorRef.current = null;
-      sdlcCoordinatorThreadRef.current = null;
-      setSdlcWorkflowState(undefined);
-      return;
-    }
-    const coordinator = getSdlcCoordinator();
-    if (!coordinator) return;
-    // Re-restoring an already-live coordinator would reload the persisted row and overwrite the
-    // in-memory state — after a turn's `clearCheckpoint` that resurrects a stale `interrupted`
-    // checkpoint and blocks the next send. This coordinator is the only writer of that row.
-    if (coordinator.getState()) return;
-    void coordinator.restore();
-  }, [activeTabId, activeThreadId, getSdlcCoordinator, isProjectScope]);
-
-  // Live missing-source set for a restored workflow (D-30). Derived from Dexie on every change,
-  // so a deleted or re-created Note shows up without extra persistence.
-  const restoredMissingSources = useLiveQuery(async () => {
-    if (!isSdlcActiveTab || !sdlcWorkflowState) return [];
-    const ids = Object.values(sdlcWorkflowState.artifacts)
-      .map((artifact) => (artifact && typeof artifact === 'object' && 'noteId' in artifact ? artifact.noteId : undefined))
-      .filter((id): id is string => typeof id === 'string');
-    const found = await db.notes.bulkGet(ids);
-    return deriveMissingSources(
-      sdlcWorkflowState,
-      new Set(found.filter((note) => Boolean(note)).map((note) => note!.id))
-    );
-  }, [db, isSdlcActiveTab, sdlcWorkflowState]) ?? [];
-
-  // Resumes with a fresh request id, then issues exactly one fresh turn. The draft typed in the
-  // composer is intentionally not forwarded: resume means "re-run the interrupted step".
-  const handleSdlcCheckpointContinue = useCallback(async () => {
-    const coordinator = getSdlcCoordinator();
-    if (!coordinator) return;
-    // Missing restored sources block the next AI step. Refuse before resumeCheckpoint: resuming
-    // first would have already replaced the `interrupted` checkpoint the banner renders. Read the
-    // persisted state rather than `restoredMissingSources`: that live query resolves asynchronously,
-    // so its first render after a restore is `[]` and a fast Continue would resume past the guard.
-    const current = coordinator.getState() ?? (await coordinator.restore());
-    if (!current) return;
-    const noteIds = Object.values(current.artifacts)
-      .map((artifact) =>
-        artifact && typeof artifact === 'object' && 'noteId' in artifact ? artifact.noteId : undefined
-      )
-      .filter((id): id is string => typeof id === 'string');
-    const existing = await db.notes.bulkGet(noteIds);
-    const missingNow = deriveMissingSources(
-      current,
-      new Set(existing.filter((note) => Boolean(note)).map((note) => note!.id))
-    );
-    if (missingNow.length > 0) {
-      message.error(
-        'Thiếu tài liệu nguồn của workflow đã khôi phục. Bổ sung hoặc thay thế nguồn trước khi tiếp tục.'
-      );
-      return;
-    }
-    try {
-      const resumed = await coordinator.resumeCheckpoint();
-      setSdlcWorkflowState(resumed);
-      const step = resumed.checkpoint?.step ?? resumed.currentStep;
-      await handleSendMessageRef.current(
-        `Tiếp tục bước ${step} sau khi bị gián đoạn.`,
-        undefined,
-        { resumeFromCheckpoint: true }
-      );
-      // An early return inside the send skips the turn's finally; a stranded `running` checkpoint
-      // hides the Continue/Discard banner until the next reload.
-      if (coordinator.getState()?.checkpoint?.status === 'running') {
-        setSdlcWorkflowState(await coordinator.clearCheckpoint());
-      }
-    } catch {
-      await coordinator.clearCheckpoint().then(setSdlcWorkflowState).catch(() => undefined);
-      message.error('Không thể phục hồi checkpoint SDLC');
-    }
-  }, [db, getSdlcCoordinator]);
-
-  /**
-   * Starts a new SDLC flow for the same project. Clears the persisted workflow row and the cached
-   * coordinator, and drops the thread's turns — the Popconfirm's promise is that the *documents*
-   * survive, and they do: every artifact was written to a Project Note, which this never touches.
-   */
-  const handleResetSdlcWorkflow = useCallback(async () => {
-    const sdlcTab = durableTabs.find((tab) => tab.type === 'sdlc');
-    if (!currentScope.id || !sdlcTab) return;
-    try {
-      await db.settings.delete(`sdlc_workflow:${currentScope.id}:${sdlcTab.threadId}`);
-      await clearThreadMessages(sdlcTab.threadId, db);
-      // The cached coordinator holds `currentState` in memory; without dropping it the next
-      // `getSdlcCoordinator()` returns the old instance and the workflow never actually ends.
-      sdlcCoordinatorRef.current = null;
-      sdlcCoordinatorThreadRef.current = null;
-      setSdlcWorkflowState(undefined);
-      setRevisionPreview(null);
-      setRevisionDraft('');
-      setSolutionSavedNoteId(undefined);
-      message.success('Đã làm mới quy trình SDLC. Tài liệu đã lưu vẫn còn trong Notes.');
-    } catch {
-      message.error('Không thể làm mới quy trình SDLC.');
-    }
-  }, [currentScope.id, db, durableTabs]);
-
-  // The hub passes the revision kind explicitly, so no local draft-kind state is needed (D-22/D-23).
-  const handlePreviewRevision = useCallback(async (kind: RevisionKind, draft: string) => {
-    const coordinator = getSdlcCoordinator();
-    if (!coordinator) return;
-    setRevisionLoading(true);
-    try {
-      const preview = await coordinator.previewRevision(REVISION_ARTIFACT_KIND[kind], draft);
-      setRevisionPreview(preview);
-    } catch {
-      message.error('Không thể xem trước bản cập nhật');
-    } finally {
-      setRevisionLoading(false);
-    }
-  }, [getSdlcCoordinator]);
-
-  const handleCommitRevision = useCallback(async (kind: RevisionKind) => {
-    const coordinator = getSdlcCoordinator();
-    if (!coordinator) return;
-    try {
-      // The blur preview is async, so a fast confirm can arrive before `revisionPreview` is set.
-      // Build it here from the current draft instead of dropping the user's confirmation.
-      let preview = revisionPreview;
-      if (!preview) {
-        if (!revisionDraft.trim()) {
-          message.error('Chưa có bản xem trước để xác nhận');
-          return;
-        }
-        preview = await coordinator.previewRevision(REVISION_ARTIFACT_KIND[kind], revisionDraft);
-      }
-      // The persisted state may still be loading when the user confirms: openCycle/commitRevision
-      // throw WORKFLOW_NOT_INITIALIZED on an empty coordinator, and the catch would swallow it.
-      const current = coordinator.getState() ?? (await coordinator.restore());
-      if (!current) return;
-      const cycles = current.cycles ?? [];
-      const lastCycle = cycles[cycles.length - 1];
-      if (!lastCycle || lastCycle.status === 'completed') await coordinator.openCycle();
-      const next = await coordinator.commitRevision(preview, true);
-      setSdlcWorkflowState(next);
-      setRevisionPreview(null);
-      setRevisionDraft('');
-      message.success('Đã cập nhật tài liệu và đánh dấu các bước cần làm lại');
-    } catch {
-      message.error('Không thể cập nhật tài liệu. Bản đang active có thể đã thay đổi.');
-    }
-  }, [getSdlcCoordinator, revisionPreview, revisionDraft]);
-
-  const handleSdlcCheckpointDiscard = useCallback(async () => {
-    const coordinator = getSdlcCoordinator();
-    if (!coordinator) return;
-    try {
-      const cleared = await coordinator.clearCheckpoint();
-      setSdlcWorkflowState(cleared);
-    } catch {
-      message.error('Không thể phục hồi checkpoint SDLC');
-    }
-  }, [getSdlcCoordinator]);
-
-  const handleStartSdlcWorkflow = useCallback(async (
-    metadata: SdlcWorkflowMetadata,
-    pl01: string,
-    pl02: string,
-    pl01Sources?: SdlcSourceRef[],
-    pl02Sources?: SdlcSourceRef[]
-  ) => {
-    const coordinator = getSdlcCoordinator();
-    if (!coordinator) return;
-    const newState = await coordinator.startOrUpdateIntake(metadata, pl01, pl02, { pl01Sources, pl02Sources });
-    setSdlcWorkflowState(newState);
-    setSdlcInputModalOpen(false);
-    if (currentScope.id) {
-      const sdlcTab = durableTabs.find((tab) => tab.type === 'sdlc') ?? await getOrCreateSdlcTab(currentScope.id, db);
-      await setActiveTab(scopeKey, sdlcTab.id, db);
-    }
-
-    // Kích hoạt AI phân tích tri thức và tạo bản thảo SOLUTION.md đầu tiên
-    const merged = await buildMergedSdlcInput({
-      pl01Text: pl01,
-      pl02Text: pl02,
-      pl01Sources: pl01Sources ?? [],
-      pl02Sources: pl02Sources ?? [],
-    });
-    sdlcSourceReferencesRef.current = {
-      scopeKey,
-      pl01: merged.pl01Sources.map((s) => s.id),
-      pl02: merged.pl02Sources.map((s) => s.id),
-    };
-
-    const sourceById = new Map<string, { kind: 'PL01' | 'PL02'; source: SdlcSourceRef }>([
-      ...merged.pl01Sources.map((s) => ['PL01', s] as const),
-      ...merged.pl02Sources.map((s) => ['PL02', s] as const),
-    ].map(([kind, source]) => [source.id, { kind, source }] as const));
-
-    const citationLines: string[] = [];
-    const seenSourceIds = new Set<string>();
-    for (const citation of merged.citations) {
-      if (seenSourceIds.has(citation.sourceId)) continue;
-      seenSourceIds.add(citation.sourceId);
-      const entry = sourceById.get(citation.sourceId);
-      if (!entry) continue;
-      citationLines.push(
-        `- ${entry.kind} · ${entry.source.title} · id=${citation.sourceId} · v${entry.source.version} · hash=${entry.source.hash.slice(0, 8)} · ${citation.section}`
-      );
-    }
-
-    const conflictLines = merged.conflicts.map((conflict) => {
-      const values = conflict.sources.map((s) => `${s.title}: ${s.value}`).join(' | ');
-      return `- ${conflict.topic}: ${values} (${conflict.warning})`;
-    });
-
-    const prompt = [
-      `[Quy trình SDLC - Khởi tạo SOLUTION cho CR: ${metadata.cr}]`,
-      `- Tính năng: ${metadata.featureName}`,
-      `- Đơn vị yêu cầu: ${metadata.requestingUnit}`,
-      '',
-      merged.mergedContent,
-      '',
-      '[NGUỒN PL01/PL02]',
-      ...(citationLines.length ? citationLines : ['(không có tài liệu nguồn đính kèm)']),
-      ...(conflictLines.length ? ['', '[CẢNH BÁO MÂU THUẪN]', ...conflictLines] : []),
-      '',
-      'Dựa vào ngữ cảnh tri thức của dự án và hai tài liệu trên, hãy phân tích hiện trạng hệ thống, các màn hình/API/bảng DB bị ảnh hưởng và đề xuất bản thảo giải pháp kỹ thuật SOLUTION.md chi tiết.',
-    ].join('\n');
-    void handleSendMessageRef.current(prompt);
-  }, [currentScope.id, db, durableTabs, getSdlcCoordinator, scopeKey]);
-
-  // Hub step-2 writer: Note first, then commit state only when the content actually changed.
-  const handleHubSaveSolution = useCallback(async () => {
-    if (solutionSaveBusyRef.current) return;
-    if (!sdlcWorkflowState || !currentScope.id) return;
-    if (!sdlcThreadId) return;
-    if (!solutionDraftMarkdown.trim()) {
-      message.warning('Chưa có bản nháp SOLUTION.md trong khung chat.');
-      return;
-    }
-
-    solutionSaveBusyRef.current = true;
-    setSolutionSaving(true);
-    try {
-      const saved = await saveHubSolution({
-        db,
-        projectId: currentScope.id,
-        threadId: sdlcThreadId,
-        sessionId: sdlcWorkflowState.sessionId,
-        markdown: solutionDraftMarkdown,
-        draftRevision: (sdlcWorkflowState.artifacts.solution?.version ?? 0) + 1,
-      });
-
-      // commitSolution always bumps the workflow version, but the Note version only advances
-      // with new content. Committing a replay would desync the two and fail step 4 with
-      // PACK_SOLUTION_MISMATCH, so skip it unless the Note is new or changed.
-      if (saved.created || sdlcWorkflowState.artifacts.solution?.noteId !== saved.noteId) {
-        const next = await getSdlcCoordinator()?.commitSolution(solutionDraftMarkdown.trim(), saved.noteId);
-        if (next) setSdlcWorkflowState(next);
-      }
-
-      setSolutionSavedNoteId(saved.noteId);
-      message.success('Đã lưu SOLUTION.md vào tài liệu dự án');
-    } catch (error) {
-      // Distinct causes (stale intake baseline, Note write conflict, idempotency mismatch) all
-      // used to collapse into one misleading hint. Report the real code.
-      const code = (error as { code?: string; message?: string }).code ?? (error as Error)?.message ?? 'UNKNOWN';
-      message.error(`Không thể lưu SOLUTION.md (${code}).`);
-    } finally {
-      solutionSaveBusyRef.current = false;
-      setSolutionSaving(false);
-    }
-  }, [
-    currentScope.id,
-    db,
-    durableTabs,
-    getSdlcCoordinator,
-    sdlcWorkflowState,
-    solutionDraftMarkdown,
-  ]);
-
-  // Hub step-4: validate against the hub's CR, then commit through the SDLC coordinator.
-  const handleHubPackSelect = useCallback(async (file: File) => {
-    const cr = sdlcWorkflowState?.metadata.cr;
-    if (!cr) return;
-    const tabAtStart = activeTabId;
-    setHubPackDraft({ status: 'validating' });
-    try {
-      const manifest = await validateHubChangePack(file, cr);
-      if (activeTabIdRef.current !== tabAtStart) return;
-      setHubPackDraft({ status: 'pending', manifest });
-    } catch (error) {
-      if (activeTabIdRef.current !== tabAtStart) return;
-      const code = error instanceof ChangePackValidationError ? error.code : 'PACK_CORRUPT';
-      setHubPackDraft({ status: 'invalid', code });
-    }
-  }, [activeTabId, sdlcWorkflowState]);
-
-  const handleHubPackConfirm = useCallback(async (manifest: Readonly<ChangePackManifest>) => {
-    if (hubPackBusyRef.current) return;
-    const solution = sdlcWorkflowState?.artifacts.solution;
-    if (!solution?.noteId || !currentScope.id) {
-      message.warning('Chưa lưu SOLUTION.md vào tài liệu dự án. Mở bước 2 và bấm Lưu SOLUTION.md trước.');
-      setHubPackDraft({ status: 'pending', manifest });
-      return;
-    }
-    if (!sdlcThreadId || !sdlcWorkflowState) return;
-
-    hubPackBusyRef.current = true;
-    setHubPackDraft({ status: 'confirming', manifest });
-    try {
-      // No revision counter is passed: the entry idempotency key is content-addressed by `manifest.packHash`,
-      // so replaying the same zip reuses its rows and a different pack opens a fresh set.
-      const inputRevision = (sdlcWorkflowState.artifacts.changePack?.version ?? 0) + 1;
-      const result = await confirmHubChangePack({
-        db,
-        projectId: currentScope.id,
-        threadId: sdlcThreadId,
-        sessionId: sdlcWorkflowState.sessionId,
-        inputRevision,
-        manifest,
-        solution: { noteId: solution.noteId, version: solution.version, hash: solution.hash },
-        confirmedAt: new Date().toISOString(),
-      });
-      // `commitChangePackAndDrift` is the production writer for step 4 (D-U3): it stores the
-      // drift result and advances `currentStep` to TECH_DOCS.
-      const next = await getSdlcCoordinator()?.commitChangePackAndDrift(
-        manifest.packHash,
-        `Change pack ${manifest.identity.cr} (${manifest.fileCount} tệp)`,
-        result.reconciliation
-      );
-      if (next) setSdlcWorkflowState(next);
-      setHubPackDraft({ status: 'idle' });
-    } catch (error) {
-      if (error instanceof ChangePackValidationError) {
-        setHubPackDraft({ status: 'invalid', code: error.code });
-      } else {
-        setHubPackDraft({ status: 'pending', manifest });
-        message.error('Không thể xác nhận change-pack. Kiểm tra đúng dự án, phiên bản SOLUTION và pack rồi thử lại.');
-      }
-    } finally {
-      hubPackBusyRef.current = false;
-    }
-  }, [currentScope.id, db, durableTabs, getSdlcCoordinator, sdlcWorkflowState]);
-
-  // Data safety: only the draft clears; a committed pack artifact survives until a new confirm.
-  const handleHubPackReplace = useCallback(() => {
-    setHubPackDraft({ status: 'idle' });
-  }, []);
-
-  // Evidence scope for step 5: exactly the sets published for this project (the lookup the wizard's
-  // `resolveEvidenceInput` used). An empty list would strip every PL07 citation to `unknown`.
-  const resolveSdlcSetIds = useCallback(async (projectId: string) => {
-    const sets = await db.documentSets.filter((set) => set.sdlc?.projectId === projectId).toArray();
-    return sets.map((set) => set.id);
-  }, [db]);
-
-  const collectSdlcEvidence = useCallback((input: WizardEvidenceInput) => collectWizardEvidence(input, {
-    runLocalBm25: (localInput) => runLocalGroundedRetrieval(localInput, {
-      loadSetMembers: async (setIds) => {
-        const sets = await db.documentSets.where('id').anyOf(setIds).toArray();
-        return sets.flatMap((set) => set.documentIds.map((documentId) => ({ setId: set.id, setName: set.name, documentId })));
-      },
-      loadNoteBody: async (documentId) => {
-        const note = await db.notes.get(documentId);
-        return note ? { title: note.title, body: note.body, updatedAt: note.updatedAt } : null;
-      },
-    }),
-  }), [db]);
-
-  /** Hub step 5: generate PL03B & PL07 from the committed SOLUTION + confirmed pack, then commit both. */
-  const handleHubGenerateTechDocs = useCallback(async () => {
-    if (techDocsBusyRef.current) return;
-    const solution = sdlcWorkflowState?.artifacts.solution;
-    const reconciliation = sdlcWorkflowState?.artifacts.driftResult;
-    if (!sdlcWorkflowState || !currentScope.id || !sdlcThreadId || !solution?.noteId || !reconciliation) {
-      setTechDocsState('blocked');
-      return;
-    }
-
-    const [config, apiKey] = await Promise.all([getNineRouterConfig(db), getNineRouterApiKey(db)]);
-    const model = resolveActiveModel();
-    if (!config.endpoint || !apiKey || !model) {
-      message.error('Chưa cấu hình mô hình AI. Mở Cài đặt để cấu hình endpoint và API key.');
-      return;
-    }
-
-    const tabAtStart = activeTabId;
-    techDocsBusyRef.current = true;
-    setTechDocsState('generating');
-    try {
-      const pl03bVersion = sdlcWorkflowState.artifacts.pl03b?.version ?? 0;
-      const pl07Version = sdlcWorkflowState.artifacts.pl07?.version ?? 0;
-      // The pair generates together, so one draft revision (max of the two chains + 1) is shared;
-      // the idempotency keys stay distinct by kind, and the body hash decides replay vs. new version.
-      const draftRevision = Math.max(pl03bVersion, pl07Version) + 1;
-      const result = await generateHubTechDocs({
-        db,
-        projectId: currentScope.id,
-        threadId: sdlcThreadId,
-        sessionId: sdlcWorkflowState.sessionId,
-        inputRevision: pl03bVersion + pl07Version + 1,
-        draftRevision,
-        metadata: sdlcWorkflowState.metadata,
-        solution: { noteId: solution.noteId, version: solution.version, hash: solution.hash },
-        reconciliation,
-        model: { endpoint: config.endpoint, apiKey, model },
-        collectEvidence: collectSdlcEvidence,
-        resolveSetIds: resolveSdlcSetIds,
-      });
-      if (activeTabIdRef.current !== tabAtStart) return;
-
-      const coordinator = getSdlcCoordinator();
-      // `commitTechDoc` is the production writer for step 5 (D-U3): each Note is persisted first and
-      // only its id reaches workflow state, so a failed commit leaves a valid orphan note, never a
-      // dangling workflow ref.
-      await coordinator?.commitTechDoc('PL03B', result.pl03b.markdown, result.pl03b.noteId);
-      const latest = await coordinator?.commitTechDoc('PL07', result.pl07.markdown, result.pl07.noteId);
-      if (latest) setSdlcWorkflowState(latest);
-      setTechDocsState('ready');
-      message.success(
-        `Đã lưu PL03B v${latest?.artifacts.pl03b?.version ?? draftRevision} và PL07 v${latest?.artifacts.pl07?.version ?? draftRevision} vào tài liệu dự án.`
-      );
-    } catch {
-      if (activeTabIdRef.current !== tabAtStart) return;
-      setTechDocsState('error');
-      message.error('Không sinh được PL03B & PL07. Kiểm tra SOLUTION.md và change-pack rồi thử lại.');
-    } finally {
-      techDocsBusyRef.current = false;
-    }
-  }, [
-    activeTabId,
-    collectSdlcEvidence,
-    currentScope.id,
-    db,
-    durableTabs,
-    getSdlcCoordinator,
-    resolveActiveModel,
-    resolveSdlcSetIds,
-    sdlcWorkflowState,
-  ]);
-
-  const handleCabGenerate = useCallback(async () => {
-    if (cabActionRef.current) return;
-    if (!sdlcWorkflowState || !currentScope.id || !sdlcThreadId) {
-      setCabState('blocked');
-      return;
-    }
-
-    const [config, apiKey] = await Promise.all([getNineRouterConfig(db), getNineRouterApiKey(db)]);
-    const model = resolveActiveModel();
-    if (!config.endpoint || !apiKey || !model) {
-      message.error('Chưa cấu hình mô hình AI. Mở Cài đặt để cấu hình endpoint và API key.');
-      return;
-    }
-
-    // Claimed only after every early return above: the guard is cleared in the finally below,
-    // so setting it earlier would strand the CAB button forever on an unconfigured model.
-    cabActionRef.current = true;
-    const tabAtStart = activeTabId;
-    // Kept for plan 08's cleanup: the in-flight guard the old wizard CAB body used.
-    setCabState('generating');
-    try {
-      const result = await generateHubCab({
-        db,
-        projectId: currentScope.id,
-        threadId: sdlcThreadId,
-        sessionId: sdlcWorkflowState.sessionId,
-        draftRevision: (sdlcWorkflowState.artifacts.cab?.version ?? 0) + 1,
-        metadata: sdlcWorkflowState.metadata,
-        state: sdlcWorkflowState,
-        model: { endpoint: config.endpoint, apiKey, model },
-        collectEvidence: collectSdlcEvidence,
-        resolveSetIds: resolveSdlcSetIds,
-      });
-      if (activeTabIdRef.current !== tabAtStart) return;
-
-      // `commitCab(markdown, noteId?)` reads the PL02/PL03B/PL07 hashes from the coordinator's own
-      // artifacts; the PL02 ref `generateHubCab` resolved stays internal to its stage pins.
-      const coordinator = getSdlcCoordinator();
-      const committed = await coordinator?.commitCab(result.markdown, result.noteId);
-      await coordinator?.closeCycle();
-      setSdlcWorkflowState((await coordinator?.getState()) ?? committed);
-      setCabState('ready');
-      message.success('Đã lưu tờ trình CAB vào tài liệu dự án.');
-    } catch {
-      if (activeTabIdRef.current !== tabAtStart) return;
-      setCabState('error');
-      message.error('Thiếu chuỗi PL02/PL03B/PL07 cùng dự án và thread; chưa thể tạo CAB.');
-    } finally {
-      cabActionRef.current = false;
-    }
-  }, [
-    activeTabId,
-    collectSdlcEvidence,
-    currentScope.id,
-    db,
-    durableTabs,
-    getSdlcCoordinator,
-    resolveActiveModel,
-    resolveSdlcSetIds,
-    sdlcWorkflowState,
-  ]);
-
-  /**
-   * Hub export: one artifact at a time. `exportHubArtifact` derives every revision from
-   * `state.artifacts`, so no revision argument is passed and nothing is persisted back into the
-   * workflow — a PL02 pin is re-derived on demand by `ensurePl02ArtifactNote`.
-   */
-  const handleHubExport = useCallback(async (kind: HubExportKind) => {
-    if (!sdlcWorkflowState || !currentScope.id) return;
-    if (!sdlcThreadId) return;
-    if (exportBusyRef.current.has(kind)) return;
-    exportBusyRef.current.add(kind);
-    setExportStates((previous) => ({ ...previous, [kind]: { phase: 'building' } }));
-
-    const tabAtStart = activeTabId;
-    try {
-      const result = await exportHubArtifact({
-        db,
-        kind,
-        projectId: currentScope.id,
-        threadId: sdlcThreadId,
-        sessionId: sdlcWorkflowState.sessionId,
-        metadata: sdlcWorkflowState.metadata,
-        state: sdlcWorkflowState,
-      });
-      if (activeTabIdRef.current !== tabAtStart) return;
-      setExportStates((previous) => ({ ...previous, [kind]: toExportState(result) }));
-    } catch {
-      if (activeTabIdRef.current !== tabAtStart) return;
-      setExportStates((previous) => ({ ...previous, [kind]: { phase: 'failed' } }));
-    } finally {
-      exportBusyRef.current.delete(kind);
-    }
-  }, [activeTabId, currentScope.id, db, durableTabs, sdlcWorkflowState]);
-
-  // Re-resolves the same stored Note; never saves a duplicate.
-  const handleHubExportRetry = useCallback((kind: HubExportKind) => {
-    void handleHubExport(kind);
-  }, [handleHubExport]);
-
-  const renderExportRow: RenderExportRow = useCallback((kind) => {
-    const labels: Record<HubExportKind, string> = {
-      PL02: 'PL02 — Đặc tả chức năng',
-      PL03B: 'PL03B — Tài liệu triển khai',
-      PL07: 'PL07 — Checklist review',
-      CAB: 'Tờ trình CAB',
-    };
-    const state = exportStates[kind];
-    return (
-      <HubExportRow
-        kind={kind}
-        label={labels[kind]}
-        phase={state.phase}
-        filename={state.filename}
-        sizeBytes={state.sizeBytes}
-        noteId={state.noteId}
-        errorCode={state.errorCode}
-        onExport={() => void handleHubExport(kind)}
-        onRetry={() => handleHubExportRetry(kind)}
-      />
-    );
-  }, [exportStates, handleHubExport, handleHubExportRetry]);
-
-  // Historic rows only: the hub owns export state now (HubExportState), so no wizard export
-  // result can reach a read-only card.
-  const wizardCallbacks = {
-    exportedFiles: new Map(),
-    onOpenNote: (noteId: string) => { window.location.hash = `/notes?doc=${encodeURIComponent(noteId)}`; },
-  };
-
-  const projectSummary = currentScope.id ? { id: currentScope.id, name: currentScope.title || currentScope.id } : undefined;
-  // Hub panel slots; later steps merge their keys into this object rather than replacing it.
-  const stepPanels = sdlcWorkflowState ? {
-    intake: (
-      <StepIntakePanel
-        pl01={sdlcWorkflowState.artifacts.pl01}
-        pl02={sdlcWorkflowState.artifacts.pl02}
-        onEditIntake={() => setSdlcInputModalOpen(true)}
-        renderExportRow={sdlcWorkflowState.artifacts.pl02 ? renderExportRow : undefined}
-      />
-    ),
-    solution: (
-      <StepSolutionPanel
-        artifact={sdlcWorkflowState.artifacts.solution}
-        draft={solutionDraftMarkdown}
-        stale={sdlcWorkflowState.staleSteps.includes('SOLUTION')}
-        canSave={solutionDraftMarkdown.trim().length > 0 && !solutionSaving}
-        onSave={() => void handleHubSaveSolution()}
-        saving={solutionSaving}
-        savedNoteId={solutionSavedNoteId ?? sdlcWorkflowState.artifacts.solution?.noteId}
-        onOpenNote={wizardCallbacks.onOpenNote}
-      />
-    ),
-    changePack: (
-      <StepChangePackPanel
-        artifact={sdlcWorkflowState.artifacts.changePack}
-        driftResult={sdlcWorkflowState.artifacts.driftResult}
-        stale={sdlcWorkflowState.staleSteps.includes('CHANGE_PACK')}
-        cr={sdlcWorkflowState.metadata.cr}
-        draft={hubPackDraft}
-        disabled={hubPackDraft.status === 'confirming'}
-        onSelectFile={(file) => void handleHubPackSelect(file)}
-        onConfirm={(manifest) => void handleHubPackConfirm(manifest)}
-        onReplace={handleHubPackReplace}
-      />
-    ),
-    techDocs: (
-      <StepTechDocsPanel
-        pl03b={sdlcWorkflowState.artifacts.pl03b}
-        pl07={sdlcWorkflowState.artifacts.pl07}
-        stale={sdlcWorkflowState.staleSteps.includes('TECH_DOCS')}
-        state={techDocsState}
-        onGenerate={() => void handleHubGenerateTechDocs()}
-        onRetry={() => void handleHubGenerateTechDocs()}
-        renderExportRow={renderExportRow}
-      />
-    ),
-    cab: (
-      <StepCabPanel
-        cab={sdlcWorkflowState.artifacts.cab}
-        prerequisites={{
-          pl02: Boolean(sdlcWorkflowState.artifacts.pl02),
-          pl03b: Boolean(sdlcWorkflowState.artifacts.pl03b),
-          pl07: Boolean(sdlcWorkflowState.artifacts.pl07),
-        }}
-        state={cabState}
-        onGenerate={() => void handleCabGenerate()}
-        onRetry={() => void handleCabGenerate()}
-        renderExportRow={renderExportRow}
-      />
-    ),
-  } : undefined;
-
   // Consume pendingDraft from AIChatContext into input draft without auto-sending
   useEffect(() => {
     if (open && pendingDraft) {
@@ -1532,10 +764,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const currentTabAnalysisMode = isSdlcActiveTab ? true : Boolean(activeTab?.config?.analysisMode);
 
   const handleToggleAnalysisMode = useCallback(async () => {
-    if (isSdlcActiveTab) {
-      message.info('Quy trình SDLC bắt buộc dùng chế độ Phân tích (Analysis mode) để tra cứu tri thức & CSDL an toàn.');
-      return;
-    }
     if (!activeTab) return;
     const currentVal = Boolean(activeTab.config?.analysisMode);
     const nextVal = !currentVal;
@@ -1555,12 +783,12 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         ? 'Đã bật chế độ phân tích cho tab này. AI sẽ tra cứu tri thức và CSDL bằng công cụ.'
         : 'Đã tắt chế độ phân tích cho tab này. Quay lại chế độ hội thoại thông thường.'
     );
-  }, [activeTab, db, isSdlcActiveTab]);
+  }, [activeTab, db]);
 
   const tabAnalysisModes = useMemo(() => {
     const modes: Record<string, boolean> = {};
     for (const t of durableTabs) {
-      modes[t.id] = t.type === 'sdlc' ? true : Boolean(t.config?.analysisMode);
+      modes[t.id] = Boolean(t.config?.analysisMode);
     }
     return modes;
   }, [durableTabs]);
@@ -1591,44 +819,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       confirmationResolver: undefined,
     });
   }, [activeTabId]);
-
-  // Per-tab save state must not survive a tab switch; the step-4 pack draft resets with it.
-  useEffect(() => {
-    setSolutionSaving(false);
-    setSolutionSavedNoteId(undefined);
-    solutionSaveBusyRef.current = false;
-    setHubPackDraft({ status: 'idle' });
-    hubPackBusyRef.current = false;
-    setTechDocsState('blocked');
-    techDocsBusyRef.current = false;
-    setExportStates(EMPTY_EXPORT_STATES);
-    exportBusyRef.current.clear();
-    setCabState('blocked');
-  }, [activeTabId]);
-
-  // Step 5 prerequisites come from the workflow artifacts; never overwrite an in-flight generation.
-  useEffect(() => {
-    setTechDocsState((current) => {
-      if (current === 'generating') return current;
-      const ready = Boolean(sdlcWorkflowState?.artifacts.solution?.noteId && sdlcWorkflowState?.artifacts.changePack);
-      if (!ready) return 'blocked';
-      return current === 'error' ? current : 'ready';
-    });
-  }, [sdlcWorkflowState]);
-
-  // Step 6 prerequisites come from the workflow artifacts; never overwrite an in-flight generation.
-  useEffect(() => {
-    setCabState((current) => {
-      if (current === 'generating') return current;
-      const ready = Boolean(
-        sdlcWorkflowState?.artifacts.pl02 &&
-        sdlcWorkflowState?.artifacts.pl03b &&
-        sdlcWorkflowState?.artifacts.pl07
-      );
-      if (!ready) return 'blocked';
-      return current === 'error' ? current : 'ready';
-    });
-  }, [sdlcWorkflowState]);
 
   // Every render and every callback reads one owner: the active tab's runtime. Only while the
   // durable tab list is hydrating does the in-flight turn's runtime stand in, because the
@@ -1787,22 +977,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       status: 'idle',
       lastSubmittedText: trimmed,
     });
-
-    // Missing restored sources block the next AI step. This guard MUST stay before setCheckpoint:
-    // returning after it would skip the finally's clearCheckpoint and strand a `running`
-    // checkpoint that restore() flips to `interrupted`, permanently blocking the tab (D-30).
-    if (isSdlcActiveTab && restoredMissingSources.length > 0) {
-      tabRuntimes.patch(turnTabId, {
-        status: 'error',
-        error: {
-          code: 'request_failed',
-          message:
-            'Thiếu tài liệu nguồn của workflow đã khôi phục. Bổ sung hoặc thay thế nguồn trước khi chạy bước tiếp theo.',
-          requestId: crypto.randomUUID(),
-        },
-      });
-      return;
-    }
 
     // Clarification transcript continuation handling per D-06. Only the owning tab's pending
     // clarification counts: another tab's send must never inherit this tab's original query.
@@ -1994,63 +1168,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       .filter((m) => m.content.trim().length > 0);
 
     const turnOverallStartTime = Date.now();
-    const isSdlcActiveTurn = isSdlcActiveTab;
-    const effectiveAnalysisMode = isSdlcActiveTurn ? true : currentTabAnalysisMode;
-
-    if (isSdlcActiveTurn && sdlcWorkflowState) {
-      // Written after the user message is saved and before any transport call. A checkpoint that
-      // cannot be written must not abort the turn, so the write is best-effort.
-      await getSdlcCoordinator()
-        ?.setCheckpoint(crypto.randomUUID(), sdlcWorkflowState.currentStep ?? 'SOLUTION')
-        .catch(() => undefined);
-    }
-
-    // Every post-checkpoint exit path is enclosed here so the single finally below clears the
-    // checkpoint. A surviving `running` checkpoint is restored as `interrupted` and blocks the tab.
-    try {
-
-    if (isSdlcActiveTurn) {
-      const scopedRefs = sdlcSourceReferencesRef.current.scopeKey === scopeKey
-        ? sdlcSourceReferencesRef.current
-        : { pl01: [] as string[], pl02: [] as string[] };
-      const baseArtifacts = stripStaleArtifacts(sdlcWorkflowState);
-      effectivePrompt = buildSdlcWrapperPrompt({
-        userQuery: trimmed,
-        step: sdlcWorkflowState?.currentStep || 'SOLUTION',
-        metadata: sdlcWorkflowState?.metadata,
-        artifacts: {
-          ...baseArtifacts,
-          ...(scopedRefs.pl01.length
-            ? {
-                pl01: {
-                  ...(baseArtifacts?.pl01 ?? {
-                    kind: 'PL01' as const,
-                    version: 1,
-                    hash: '',
-                    title: 'PL01',
-                    updatedAt: '',
-                  }),
-                  sourceReferences: scopedRefs.pl01,
-                },
-              }
-            : {}),
-          ...(scopedRefs.pl02.length
-            ? {
-                pl02: {
-                  ...(baseArtifacts?.pl02 ?? {
-                    kind: 'PL02' as const,
-                    version: 1,
-                    hash: '',
-                    title: 'PL02',
-                    updatedAt: '',
-                  }),
-                  sourceReferences: scopedRefs.pl02,
-                },
-              }
-            : {}),
-        },
-      });
-    }
+    const effectiveAnalysisMode = currentTabAnalysisMode;
 
     // Analysis mode bypasses the grounded pipeline (intent router, scope routing,
     // schema-validated synthesis) and falls straight through to the tool loop.
@@ -2513,25 +1631,6 @@ Rules:
 5. Ground every factual claim in retrieved excerpts or file content. Clearly mark your own reasoning, assumptions, and proposals as such.
 6. End the answer with a short "Nguồn" (Sources) list naming the documents/files you used.`
         : ''
-    }${
-      isSdlcActiveTurn
-        ? `\n\n[SDLC DEVELOPER WORKFLOW ACTIVE]:
-Bạn đang hỗ trợ quy trình SDLC Developer (Khảo sát, thiết kế giải pháp SOLUTION.md và hồ sơ kỹ thuật).
-Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.md:
-1. Đóng vai trò Solution Architect & Tech Lead.
-2. Tra cứu hiện trạng mã nguồn, tài liệu và cấu trúc bảng CSDL (sử dụng công cụ MCP Oracle hoặc tri thức hệ thống nếu có).
-3. Đề xuất giải pháp SOLUTION.md hoàn chỉnh, rõ ràng:
-   # GIẢI PHÁP KỸ THUẬT: [Tên tính năng] (CR: [Mã CR])
-   ## 1. Mục tiêu & Phạm vi thay đổi
-   ## 2. Hiện trạng hệ thống & Kiến trúc mục tiêu (khuyến khích vẽ sơ đồ Mermaid: flowchart, sequenceDiagram...)
-   ## 3. Thiết kế chi tiết:
-      - API / Service Interface
-      - Thay đổi CSDL (Bảng, cột mới, Index, DDL/DML dự kiến)
-      - Logic xử lý nghiệp vụ
-   ## 4. Phân tích ảnh hưởng & Rủi ro hệ thống
-   ## 5. Kế hoạch kiểm thử & Kịch bản Rollback (khi có sự cố)
-4. Giữ định dạng Markdown chuẩn, sẵn sàng để người dùng bấm nút "Lưu SOLUTION.md" lưu vào hồ sơ dự án.`
-        : ''
     }`;
 
     if (import.meta.env.DEV) {
@@ -2786,16 +1885,6 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
       if (activeReq) {
         requestRegistryRef.current.finish(activeReq.requestId);
       }
-    }
-    } finally {
-      // One clear for every post-setCheckpoint exit: success, abort, error, or early return.
-      if (isSdlcActiveTurn) {
-        await getSdlcCoordinator()?.clearCheckpoint().catch(() => undefined);
-      }
-    }
-    } finally {
-      // Release the claim opened above every other exit, including throws before streaming starts.
-      if (activeReq) requestRegistryRef.current.finish(activeReq.requestId);
       // A throw between the claim and the streaming try leaves the tab on `processing` forever.
       // Error paths below already set their own status, so only a still-processing tab is reset.
       if (
@@ -2808,6 +1897,9 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
           partialBuffer: '',
         });
       }
+    }
+    } catch (err: any) {
+      logAiChatError('Send message error', err);
     }
   };
 
@@ -3277,15 +2369,6 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
           onRenameTab={handleRenameTab}
           tabAnalysisModes={tabAnalysisModes}
           tabStatuses={tabStatuses}
-          sdlcStatus={
-            sdlcWorkflowState
-              ? sdlcWorkflowState.staleSteps.length > 0
-                ? 'stale'
-                : sdlcWorkflowState.currentStep === 'CAB'
-                ? 'finish'
-                : 'process'
-              : 'wait'
-          }
         />
       )}
 
@@ -3353,7 +2436,6 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
         pendingConfirmation={activeRuntime?.pendingConfirmation ?? null}
         onConfirmAction={handleConfirmAction}
         groundedCallbacks={groundedCallbacks}
-        wizardCallbacks={wizardCallbacks}
         transientClarifyMessage={clarifyByTab[activeTabId] ?? null}
         onCancelClarify={() => setTransientClarifyMessage(activeTabId, null)}
       />
@@ -3377,93 +2459,6 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
         snapshotAvailable={true}
         db={db}
       />
-
-      {isProjectScope && isSdlcActiveTab && (
-        <div style={{ width: '100%', padding: '0 12px 6px', boxSizing: 'border-box' }}>
-          {sdlcWorkflowState?.checkpoint?.status === 'interrupted' && (
-            <InterruptedBanner
-              checkpoint={sdlcWorkflowState.checkpoint}
-              onContinue={() => void handleSdlcCheckpointContinue()}
-              onDiscard={() => void handleSdlcCheckpointDiscard()}
-            />
-          )}
-          <RestoredSourceNotice missingSources={restoredMissingSources} />
-          <SdlcWorkflowHub
-            projectScoped={isProjectScope}
-            variant="drawer"
-            state={sdlcWorkflowState}
-            stepPanels={stepPanels}
-            onStartWorkflow={() => setSdlcInputModalOpen(true)}
-            onSelectStep={(stepId: SdlcStepId) => {
-              getSdlcCoordinator()?.selectStep(stepId);
-              setSdlcWorkflowState((state) => state ? { ...state, selectedStep: stepId } : state);
-            }}
-            onNavigateStep={(stepId: SdlcStepId) => {
-              // Moving the flow forward, not just the view: step 3 has no artifact to commit, so
-              // this is the only thing that advances past it.
-              void (async () => {
-                const coordinator = getSdlcCoordinator();
-                if (!coordinator) return;
-                setSdlcWorkflowState(await coordinator.navigateToStep(stepId));
-              })();
-            }}
-            onRerunStep={(stepId: SdlcStepId) => {
-              if (stepId === 'INTAKE') {
-                setSdlcInputModalOpen(true);
-              } else if (stepId === 'SOLUTION') {
-                void handleSendMessageRef.current('Cập nhật lại giải pháp SOLUTION.md theo yêu cầu PL01/PL02 mới nhất.');
-              } else if (stepId === 'CHANGE_PACK') {
-                message.info('Vui lòng kéo thả file change-pack.zip mới để đối chiếu lại.');
-              } else if (stepId === 'TECH_DOCS') {
-                void handleSendMessageRef.current('Tái tạo tài liệu kỹ thuật PL03B và PL07 dựa trên SOLUTION và code diff mới.');
-              } else if (stepId === 'CAB') {
-                void handleCabGenerate();
-              }
-            }}
-            revisionDraft={revisionDraft}
-            onClearRevisionPreview={() => setRevisionPreview(null)}
-            onOpenRevision={(kind) => {
-              // Starting from the artifact's current text is what makes the diff meaningful:
-              // an empty draft previews as "this update deletes the whole document".
-              const current = previousArtifactContent(sdlcWorkflowState, REVISION_ARTIFACT_KIND[kind]);
-              setRevisionDraft(current);
-              setRevisionPreview(null);
-            }}
-            revisionPreview={
-              revisionPreview
-                ? toRevisionModalPreview(
-                    revisionPreview,
-                    previousArtifactContent(sdlcWorkflowState, revisionPreview.kind)
-                  )
-                : undefined
-            }
-            revisionLoading={revisionLoading}
-            onRevisionDraftChange={setRevisionDraft}
-            onPreviewRevision={(type, draft) => void handlePreviewRevision(type, draft)}
-            onCommitRevision={(type) => void handleCommitRevision(type)}
-            onResetWorkflow={() => void handleResetSdlcWorkflow()}
-          />
-        </div>
-      )}
-
-      {projectSummary && (
-        <StepInputDocsModal
-          open={sdlcInputModalOpen}
-          project={projectSummary}
-          currentUser="Developer"
-          initialValues={
-            sdlcWorkflowState
-              ? {
-                  metadata: sdlcWorkflowState.metadata,
-                  pl01: sdlcWorkflowState.artifacts.pl01?.content,
-                  pl02: sdlcWorkflowState.artifacts.pl02?.content,
-                }
-              : undefined
-          }
-          onSubmit={handleStartSdlcWorkflow}
-          onClose={() => setSdlcInputModalOpen(false)}
-        />
-      )}
 
       {/* Active Tab Runtime Status: the single error-card owner (D-13). */}
       {(() => {

@@ -101,7 +101,7 @@ export async function getOrCreateSdlcTab(projectId: string, db: TaskPlannerDatab
       type: 'sdlc',
       title: SDLC_TITLE,
       order: 0,
-      active: scopeTabs.length === 0,
+      active: false,
       createdAt: thread.createdAt,
       updatedAt: now,
     };
