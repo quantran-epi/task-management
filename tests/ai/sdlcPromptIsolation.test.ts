@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildSdlcWrapperPrompt,
-  getToolsForTurn,
   type SdlcWrapperPromptInput,
 } from '../../src/components/ai/AIChatDrawer';
+import { getToolsForTurn } from '../../src/services/ai/chatTurnTools';
 import { isMutationTool, normalizeToolName } from '../../src/services/ai/aiTools';
 
 describe('SDLC prompt isolation and analysis mode enforcement (D-31, D-33, D-35)', () => {

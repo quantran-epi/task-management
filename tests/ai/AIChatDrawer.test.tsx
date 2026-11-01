@@ -215,8 +215,8 @@ describe('AIChatDrawer', () => {
     expect(callArgs?.systemPrompt).toContain('id="task-test-mention"');
   });
 
-  it('clicking clear context calls clearThreadContext and shows divider', async () => {
-    const clearSpy = vi.spyOn(chatRepo, 'clearThreadContext');
+  it('clearing context confirms, then removes only the active thread messages (D-05)', async () => {
+    const clearSpy = vi.spyOn(chatRepo, 'clearThreadMessages');
 
     render(
       <AIChatDrawer
@@ -227,12 +227,17 @@ describe('AIChatDrawer', () => {
       />
     );
 
+    await screen.findByTestId('chat-tab-toolbox');
     const clearBtn = screen.getByLabelText('Đặt lại ngữ cảnh (/clear)');
     fireEvent.click(clearBtn);
+
+    // D-05: clear is thread-scoped and asks first; it must not append a boundary marker instead.
+    fireEvent.click(await screen.findByRole('button', { name: 'Xóa tin nhắn' }));
 
     await waitFor(() => {
       expect(clearSpy).toHaveBeenCalled();
     }, { timeout: 4000 });
+    expect(clearSpy.mock.calls[0]?.[0]).toEqual(expect.any(String));
   });
 
   it('renders with zIndex 1200 in overlay mode', () => {
