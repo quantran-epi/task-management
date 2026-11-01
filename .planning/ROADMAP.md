@@ -402,7 +402,7 @@ Plans:
 6. A standardized SDLC Prompt Architecture defines structured system prompts, grounding rules, and few-shot templates across all 6 steps (Intake validation, Solution architecture, Coding guide, Drift interpretation, Bank PL03B/PL07 tech docs, and CAB defense).
 7. SDLC Studio `StepChatPanel` and `AIChatDrawer` are refactored to consume `AiChatWidget` with custom prompts, contexts, and handlers via clean props.
 
-**Plans:** 10 plans
+**Plans:** 11 plans
 
 **Wave 1** *(parallel, no dependencies)*
 
@@ -412,21 +412,22 @@ Plans:
 **Wave 2** *(depends on Wave 1)*
 
 - [ ] 25.3-02-PLAN.md — Step 3 checklist removal, Step 4 pre-emptive gates, and four-finding drift matrix
-- [ ] 25.3-05-PLAN.md — PL03B actual-implementation-only (no SOLUTION/drift), blank PL07, draft-only tech docs
+- [ ] 25.3-04-PLAN.md — Step 2 approval gated on the INTAKE baseline
+- [ ] 25.3-05-PLAN.md — PL03B actual-implementation-only, blank PL07, draft-only tech docs, wizard runtime wiring
 - [ ] 25.3-07-PLAN.md — Framework-free chat turn runtime plus `useChatTurn` hook
 
 **Wave 3** *(depends on Wave 2)*
 
-- [ ] 25.3-06-PLAN.md — Evidence-constrained CAB, TaskMate-only CR summary, explicit approval gate
+- [ ] 25.3-06-PLAN.md — Draft-only CAB generator, evidence-constrained CAB, TaskMate-only CR summary
 - [ ] 25.3-08-PLAN.md — `AiChatWidget`, staged loading, approval card, durable artifact event cards
 
 **Wave 4** *(depends on Waves 2-3)*
 
-- [ ] 25.3-09-PLAN.md — StepChatPanel as thin host adapter; coordinator restore in the SDLC view
+- [ ] 25.3-09-PLAN.md — StepChatPanel host adapter; coordinator restore and artifact event persistence in the SDLC view
 
 **Wave 5** *(depends on Wave 4)*
 
-- [ ] 25.3-10-PLAN.md — AIChatDrawer consumes the shared widget and runtime
+- [ ] 25.3-10-PLAN.md — AIChatDrawer consumes the shared widget and per-tab runtime registry
 
 **Wave 6** *(depends on Wave 5)*
 
