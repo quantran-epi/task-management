@@ -166,6 +166,22 @@ describe('AIChatDrawer restored-source recovery (D-30)', () => {
     expect((await stored())?.checkpoint).toBeUndefined();
   });
 
+  it('releases the staged composer after a prelude refusal instead of pinning it', async () => {
+    render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
+    await screen.findByText(/PL01 nguồn đã xoá/);
+
+    submit('Chạy bước tiếp theo');
+
+    await waitFor(() =>
+      expect(screen.getByTestId('inline-api-error-card')).toBeInTheDocument()
+    );
+    // The refusal returns before `runtime.start()`, so the staged state must be released by the
+    // same `finally` that every other exit path uses — otherwise the composer stays dead.
+    await waitFor(() => expect(screen.queryByTestId('ai-staged-loading')).toBeNull());
+    expect(screen.queryByLabelText('Dừng sinh phản hồi')).toBeNull();
+    expect(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI')).not.toBeDisabled();
+  });
+
   it('unblocks once the source Note exists again', async () => {
     render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
     await screen.findByText(/PL01 nguồn đã xoá/);

@@ -1081,9 +1081,11 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const handleStopGeneration = () => {
     const runtime = tabRuntimesRef.current.get(activeRuntimeTabId);
     // Stop is reachable during the prelude now that it paints as 'preparing'. The runtime has not
-    // started yet, so aborting it cannot cancel anything — record the cancel and never start.
+    // started yet, so aborting it cannot cancel anything — record the cancel and release the
+    // staged UI now rather than when the awaited prelude finally returns.
     if (!turnRegistryRef.current?.peek(activeRuntimeTabId)?.isRunning()) {
       preludeAbortRef.current.add(activeRuntimeTabId);
+      markPrelude(activeRuntimeTabId, false);
     }
     abortHostTurn(activeRuntimeTabId);
     turnRegistryRef.current?.abortTab(activeRuntimeTabId);
@@ -1217,16 +1219,10 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
     const runtime = turnRegistryRef.current!.get(turnTabId, turnTab.threadId ?? activeThreadId ?? '');
     tabRuntimes.initialize(turnTabId, turnTab.threadId ?? activeThreadId ?? '');
-    preludeAbortRef.current.delete(turnTabId);
-    markPrelude(turnTabId, true);
     tabRuntimes.patch(turnTabId, {
       error: null,
       pendingConfirmation: null,
       streamingText: '',
-      // D-19/SC5: publish the staged label before any await. Config, key, compaction and
-      // grounding can each take a visible moment; the composer must never look dead.
-      streamingStatus: 'preparing',
-      groundedLoadingStatus: 'preparing',
       toolEvents: [],
       lastSubmittedText: trimmed,
       retryUserMessageId: options.retryUserMessageId ?? null,
@@ -1279,6 +1275,15 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     }
 
     try {
+      // D-19/SC5: publish the staged label before any await. Config, key, compaction and
+      // grounding can each take a visible moment; the composer must never look dead.
+      // Set inside the try so every refusal path below still releases it in `finally`.
+      preludeAbortRef.current.delete(turnTabId);
+      markPrelude(turnTabId, true);
+      tabRuntimes.patch(turnTabId, {
+        streamingStatus: 'preparing',
+        groundedLoadingStatus: 'preparing',
+      });
       const threadId = turnTab.threadId ?? activeThreadId;
       if (!threadId) return;
 

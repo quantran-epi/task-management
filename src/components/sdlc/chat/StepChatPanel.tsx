@@ -268,7 +268,11 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
         }}
         onStop={() => {
           // A stop during the prelude cancels the staged turn; otherwise it aborts the runtime.
-          if (preludePending) preludeAbortRef.current = true;
+          // Release the staged UI now — the awaited prelude may still be running.
+          if (preludePending) {
+            preludeAbortRef.current = true;
+            setPreludePending(false);
+          }
           turn.abort();
         }}
         onResolveApproval={turn.resolveApproval}
