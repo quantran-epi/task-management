@@ -28,6 +28,7 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import type { Note, NoteEntityType } from '../types/models';
 import { deleteNote, updateNote } from '../db/repositories/noteRepo';
 import { renderSafeMarkdown } from '../utils/markdown';
+import { readNoteMarkdown } from '../utils/noteBody';
 import { NoteEditor } from '../components/notes/NoteEditor';
 import { NoteDetailModal } from '../components/notes/NoteDetailModal';
 import { QuickNoteEntry } from '../components/notes/QuickNoteEntry';
@@ -511,7 +512,7 @@ export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb
                     whiteSpace: 'pre-wrap',
                     lineHeight: '1.5',
                   }}
-                  dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(note.body) }}
+                  dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(readNoteMarkdown(note.body)) }}
                 />
               </Card>
             );

@@ -128,11 +128,32 @@ describe('SdlcWorkflowHub', () => {
     ).toBeInTheDocument();
   });
 
-  it('D-20/D-21: hiển thị nút cập nhật yêu cầu và solution khi đủ điều kiện', () => {
+  it('D-20/D-21: hiển thị nút cập nhật PL01, PL02 và solution khi đủ điều kiện', () => {
     render(<SdlcWorkflowHub projectScoped={true} state={dummyState} onStartWorkflow={vi.fn()} />);
 
-    expect(screen.getByRole('button', { name: /Cập nhật yêu cầu/i })).toBeInTheDocument();
+    // PL01 and PL02 are separate artifacts, so each gets its own named revision entry point.
+    expect(screen.getByRole('button', { name: 'Cập nhật PL01' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cập nhật PL02' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Cập nhật solution/i })).toBeInTheDocument();
+  });
+
+  it('opens each revision prefilled with that artifact, never with an empty draft', () => {
+    render(<SdlcWorkflowHub projectScoped={true} state={dummyState} onStartWorkflow={vi.fn()} />);
+
+    // An empty draft previews as "this update deletes the whole document", so the box must start
+    // from the live content of the artifact that button names.
+    fireEvent.click(screen.getByRole('button', { name: 'Cập nhật PL01' }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('Xác nhận cập nhật yêu cầu PL01');
+    expect(screen.getByPlaceholderText('Nhập bản nội dung mới để xem trước và xác nhận.'))
+      .toHaveValue(dummyState.artifacts.pl01!.content);
+    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục thảo luận' }));
+
+    // PL02 is its own artifact with its own revision: the old single "requirement" kind only
+    // ever wrote PL01, so editing PL02 forced a full re-intake through the AI.
+    fireEvent.click(screen.getByRole('button', { name: 'Cập nhật PL02' }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('Xác nhận cập nhật đặc tả PL02');
+    expect(screen.getByPlaceholderText('Nhập bản nội dung mới để xem trước và xác nhận.'))
+      .toHaveValue(dummyState.artifacts.pl02!.content);
   });
 
   it('D-26/D-27: hiển thị chu kỳ hiện tại và danh sách chu kỳ trước chỉ đọc', () => {
@@ -248,7 +269,7 @@ describe('SdlcWorkflowHub', () => {
     // The drawer card is a summary: no timeline, no step panel, no per-step actions.
     expect(document.getElementById('sdlc-step-list')).toBeNull();
     expect(screen.queryByTestId('hub-panel-SOLUTION')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Sửa PL01/PL02' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Nạp lại hồ sơ' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Cập nhật solution' })).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Chi tiết' }));
@@ -256,8 +277,9 @@ describe('SdlcWorkflowHub', () => {
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByRole('list', { name: 'Quy trình 6 bước SDLC' })).toBeInTheDocument();
     expect(within(dialog).getByTestId('hub-panel-modal-SOLUTION')).toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: /Sửa PL01\/PL02/i })).toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: /Cập nhật yêu cầu/i })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Nạp lại hồ sơ' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Cập nhật PL01' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Cập nhật PL02' })).toBeInTheDocument();
   });
 
   it('renders injected panels when the drawer supplies them', () => {
@@ -667,7 +689,7 @@ describe('RevisionImpactModal', () => {
     render(
       <RevisionImpactModal
         open={true}
-        revisionType="requirement"
+        revisionType="pl01"
         diff={{
           before: 'Hạn mức chuyển tiền: 100 triệu.',
           after: 'Hạn mức chuyển tiền: 500 triệu.\nBổ sung ưu đãi VIP.',
@@ -682,7 +704,7 @@ describe('RevisionImpactModal', () => {
     );
 
     // Tiêu đề modal
-    expect(screen.getByText('Xác nhận cập nhật yêu cầu')).toBeInTheDocument();
+    expect(screen.getByText('Xác nhận cập nhật yêu cầu PL01')).toBeInTheDocument();
 
     // Nguồn
     expect(screen.getByText(/Nguồn: 1 tài liệu · PL01 Yêu cầu Core Banking v2/i)).toBeInTheDocument();

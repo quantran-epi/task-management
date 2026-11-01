@@ -4,6 +4,7 @@ import dayjs from 'dayjs';
 import { db } from '../../../db';
 import type { Note } from '../../../types/models';
 import { renderSafeMarkdown } from '../../../utils/markdown';
+import { readNoteMarkdown } from '../../../utils/noteBody';
 interface SdlcSourceRef {
   id: string;
   title: string;
@@ -167,11 +168,14 @@ export const NoteSourcePickerModal: React.FC<NoteSourcePickerModalProps> = ({
       const sourceRefs: SdlcSourceRef[] = [];
 
       for (const note of selectedNotes) {
-        const hash = await computeSha256(note.body);
+        // SDLC artifact Notes store a `{ markdown, exportPayload }` envelope. Hash and carry the
+        // Markdown: the envelope would reach the merged prompt and the citation hash as raw JSON.
+        const markdown = readNoteMarkdown(note.body);
+        const hash = await computeSha256(markdown);
         sourceRefs.push({
           id: note.id,
           title: note.title || 'Untitled Note',
-          body: note.body,
+          body: markdown,
           version: note.sdlcArtifact?.version ?? 1,
           hash,
           updatedAt: note.updatedAt,
@@ -185,7 +189,7 @@ export const NoteSourcePickerModal: React.FC<NoteSourcePickerModalProps> = ({
     }
   };
 
-  const previewBody = activePreviewNote?.body ?? '';
+  const previewBody = readNoteMarkdown(activePreviewNote?.body);
   const previewLines = previewBody.split(/\r?\n/);
   const truncatedPreview =
     !showFullPreview && previewLines.length > 40

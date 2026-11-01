@@ -2,6 +2,7 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { Task, Project, Milestone, Note, NoteAttachment } from '../../types/models';
 import { isLocalPath, normalizeLocalPath } from '../../utils/documentLinks';
 import { isTauriApp } from '../../utils/timerPopout';
+import { readNoteMarkdown } from '../../utils/noteBody';
 
 export const MAX_CONTEXT_CHAR_LIMIT = 12000;
 export const MAX_FILE_LINES_LIMIT = 2000;
@@ -291,7 +292,7 @@ export async function buildItemContextPrompt(options: BuildItemContextPromptOpti
     if (notes.length > 0) {
       sections.push('\n### Sticky Notes');
       for (const note of notes) {
-        let noteStr = `#### ${note.title || 'Untitled Note'}${note.isPinned ? ' (Pinned)' : ''}\n${note.body}`;
+        let noteStr = `#### ${note.title || 'Untitled Note'}${note.isPinned ? ' (Pinned)' : ''}\n${readNoteMarkdown(note.body)}`;
         // Query attachments
         const attachments: NoteAttachment[] = await db.noteAttachments
           .where('noteId')

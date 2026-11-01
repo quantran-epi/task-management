@@ -4,6 +4,7 @@ import { ExportOutlined } from '@ant-design/icons';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { Note, NoteAttachment } from '../../types/models';
 import { renderSafeMarkdown } from '../../utils/markdown';
+import { readNoteMarkdown } from '../../utils/noteBody';
 import { NoteAttachmentsPanel } from './NoteAttachmentsPanel';
 
 export interface NoteDetailModalProps {
@@ -119,7 +120,7 @@ export const NoteDetailModal: React.FC<NoteDetailModalProps> = ({
               <Tag>{getEntityDisplayText()}</Tag>
             )}
           </div>
-          <div dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(note.body) }} />
+          <div dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(readNoteMarkdown(note.body)) }} />
           <Typography.Text type="secondary">
             Cập nhật: {new Date(note.updatedAt).toLocaleString('vi-VN')}
           </Typography.Text>

@@ -527,8 +527,15 @@ describe('AIChatDrawer SDLC checkpoint, revision, and cycle recovery', () => {
       return state;
     };
 
+    // The drawer card is a summary: every hub action lives in the detail modal.
+    const openHubDetail = async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'Chi tiết' }));
+      await screen.findByRole('dialog');
+    };
+
     const openRevisionModal = async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Cập nhật solution' }));
+      await openHubDetail();
+      fireEvent.click(await screen.findByRole('button', { name: 'Cập nhật solution' }));
       const textarea = await screen.findByPlaceholderText('Nhập bản nội dung mới để xem trước và xác nhận.');
       fireEvent.change(textarea, { target: { value: 'SOLUTION v2 content' } });
       fireEvent.blur(textarea);
@@ -660,6 +667,7 @@ describe('AIChatDrawer SDLC checkpoint, revision, and cycle recovery', () => {
       const generateCab = vi.spyOn(hubCabModule, 'generateHubCab');
 
       render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
+      await openHubDetail();
       const cabButton = await screen.findByRole('button', { name: /Tạo tờ trình CAB/ });
       await waitFor(() => expect(cabButton).not.toBeDisabled());
       const before = apiKeySpy.mock.calls.length;
@@ -719,6 +727,7 @@ describe('AIChatDrawer SDLC checkpoint, revision, and cycle recovery', () => {
       });
 
       render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
+      await openHubDetail();
       const cabButton = await screen.findByRole('button', { name: /Tạo tờ trình CAB/ });
       await waitFor(() => expect(cabButton).not.toBeDisabled());
       fireEvent.click(cabButton);

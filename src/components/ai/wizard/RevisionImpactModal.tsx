@@ -2,6 +2,13 @@ import React, { useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { Button, Card, Modal, Tag, Typography, theme } from 'antd';
 import type { SdlcStepId } from '../../../services/wizard/workflowSchemas';
+import type { RevisionKind } from './SdlcWorkflowHub';
+
+const REVISION_LABEL: Record<RevisionKind, string> = {
+  pl01: 'yêu cầu PL01',
+  pl02: 'đặc tả PL02',
+  solution: 'solution',
+};
 
 const { Text, Title } = Typography;
 
@@ -13,7 +20,7 @@ export interface RevisionSourceItem {
 
 export interface RevisionImpactModalProps {
   open: boolean;
-  revisionType: 'requirement' | 'solution';
+  revisionType: RevisionKind;
   diff?: { before: string; after: string } | undefined;
   sources?: RevisionSourceItem[] | undefined;
   staleStepIds?: SdlcStepId[] | undefined;
@@ -102,7 +109,7 @@ export const RevisionImpactModal: React.FC<RevisionImpactModalProps> = ({
     }
   }, [open]);
 
-  const modalTitle = `Xác nhận cập nhật ${revisionType === 'requirement' ? 'yêu cầu' : 'solution'}`;
+  const modalTitle = `Xác nhận cập nhật ${REVISION_LABEL[revisionType]}`;
 
   const isDiffEmpty =
     !diff ||

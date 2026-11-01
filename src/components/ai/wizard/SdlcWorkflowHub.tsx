@@ -14,7 +14,7 @@ import {
   UpOutlined,
 } from '@ant-design/icons';
 import { Alert, Badge, Button, Card, Input, Modal, Popconfirm, Space, Tag, Typography, theme } from 'antd';
-import type { SdlcStepId, SdlcWorkflowState } from '../../../services/wizard/workflowSchemas';
+import type { SdlcArtifactKind, SdlcStepId, SdlcWorkflowState } from '../../../services/wizard/workflowSchemas';
 import { RevisionImpactModal } from './RevisionImpactModal';
 import {
   StepCabPanel,
@@ -40,6 +40,10 @@ export interface SdlcWorkflowHubProps {
   onResetWorkflow?: (() => void) | undefined;
   onRequestRequirementRevision?: (() => void) | undefined;
   onRequestSolutionRevision?: (() => void) | undefined;
+  /** Opens the revision modal prefilled with the artifact's current content. */
+  onOpenRevision?: ((kind: RevisionKind) => void) | undefined;
+  /** Drops a preview left over from a previous revision, so the modal never diffs the wrong base. */
+  onClearRevisionPreview?: (() => void) | undefined;
   /** Wired panels injected by the drawer; a missing slot falls back to the panel fed from `state`. */
   stepPanels?: {
     intake?: React.ReactNode;
@@ -56,9 +60,27 @@ export interface SdlcWorkflowHubProps {
   } | undefined;
   revisionLoading?: boolean | undefined;
   onRevisionDraftChange?: ((value: string) => void) | undefined;
-  onPreviewRevision?: ((type: 'requirement' | 'solution', draft: string) => void | Promise<void>) | undefined;
-  onCommitRevision?: ((type: 'requirement' | 'solution') => void | Promise<void>) | undefined;
+  onPreviewRevision?: ((kind: RevisionKind, draft: string) => void | Promise<void>) | undefined;
+  onCommitRevision?: ((kind: RevisionKind) => void | Promise<void>) | undefined;
 }
+
+/**
+ * PL01 and PL02 are separate artifacts with separate hashes and separate stale impact, so they
+ * get separate revisions. The old single "requirement" kind silently only ever wrote PL01.
+ */
+export type RevisionKind = 'pl01' | 'pl02' | 'solution';
+
+export const REVISION_ARTIFACT_KIND: Record<RevisionKind, SdlcArtifactKind> = {
+  pl01: 'PL01',
+  pl02: 'PL02',
+  solution: 'SOLUTION',
+};
+
+const REVISION_STALE_IMPACT: Record<RevisionKind, SdlcStepId[]> = {
+  pl01: ['SOLUTION', 'CODE_GUIDE', 'CHANGE_PACK', 'TECH_DOCS', 'CAB'],
+  pl02: ['SOLUTION', 'CODE_GUIDE', 'CHANGE_PACK', 'TECH_DOCS', 'CAB'],
+  solution: ['CODE_GUIDE', 'CHANGE_PACK', 'TECH_DOCS', 'CAB'],
+};
 
 interface StepConfig {
   id: SdlcStepId;
@@ -174,6 +196,8 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = (props) => {
     onResetWorkflow,
     onRequestRequirementRevision,
     onRequestSolutionRevision,
+    onOpenRevision,
+    onClearRevisionPreview,
     stepPanels,
     revisionDraft: controlledRevisionDraft,
     revisionPreview,
@@ -188,7 +212,7 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = (props) => {
   const [focusedStep, setFocusedStep] = useState<SdlcStepId | null>(null);
   const timelineToggleRef = useRef<HTMLButtonElement | HTMLAnchorElement>(null);
   const timelineListRef = useRef<HTMLDivElement>(null);
-  const [revisionModalType, setRevisionModalType] = useState<'requirement' | 'solution' | null>(null);
+  const [revisionModalType, setRevisionModalType] = useState<RevisionKind | null>(null);
   const [revisionDraft, setRevisionDraft] = useState('');
   const [detailOpen, setDetailOpen] = useState(false);
   const effectiveRevisionDraft = controlledRevisionDraft ?? revisionDraft;
@@ -273,20 +297,32 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = (props) => {
   const currentCycleStatus = cycles.length > 0 ? cycles[cycles.length - 1]?.status : 'active';
   const pastCycles = cycles.slice(0, -1);
 
-  // Stale impact for revision preview
-  const requirementStaleImpact: SdlcStepId[] = ['SOLUTION', 'CODE_GUIDE', 'CHANGE_PACK', 'TECH_DOCS', 'CAB'];
-  const solutionStaleImpact: SdlcStepId[] = ['CODE_GUIDE', 'CHANGE_PACK', 'TECH_DOCS', 'CAB'];
+  /** The artifact's live content, so a revision starts from the current text instead of empty. */
+  const currentRevisionContent = (kind: RevisionKind): string => {
+    const artifact =
+      kind === 'pl01' ? state.artifacts.pl01
+        : kind === 'pl02' ? state.artifacts.pl02
+          : state.artifacts.solution;
+    return artifact?.content ?? '';
+  };
 
-  // Shared by both variants: the drawer card offers "Cập nhật yêu cầu/solution" too.
+  const openRevision = (kind: RevisionKind) => {
+    // Prefill first: the drawer may own the draft, but this component still owns the modal.
+    if (onOpenRevision) onOpenRevision(kind);
+    onClearRevisionPreview?.();
+    const current = currentRevisionContent(kind);
+    setRevisionDraft(current);
+    onRevisionDraftChange?.(current);
+    setRevisionModalType(kind);
+  };
+
+  // Shared by both variants: the drawer card opens revisions too.
   const revisionModal = revisionModalType ? (
     <RevisionImpactModal
       open={Boolean(revisionModalType)}
       revisionType={revisionModalType}
       diff={revisionPreview?.diff ?? {
-        before:
-          revisionModalType === 'requirement'
-            ? state.artifacts.pl01?.content ?? 'Yêu cầu hiện tại'
-            : state.artifacts.solution?.content ?? 'Solution hiện tại',
+        before: currentRevisionContent(revisionModalType),
         after: effectiveRevisionDraft,
       }}
       description={
@@ -301,7 +337,7 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = (props) => {
         />
       }
       sources={revisionPreview?.sources ?? []}
-      staleStepIds={revisionPreview?.impactSteps ?? (revisionModalType === 'requirement' ? requirementStaleImpact : solutionStaleImpact)}
+      staleStepIds={revisionPreview?.impactSteps ?? REVISION_STALE_IMPACT[revisionModalType]}
       loading={revisionLoading}
       onConfirm={() => {
         // The user already pressed "Xác nhận cập nhật", so never silently turn that click into
@@ -490,36 +526,31 @@ export const SdlcWorkflowHub: React.FC<SdlcWorkflowHubProps> = (props) => {
             )}
           </Space>
           <Space size={6} wrap>
+            {/* PL01 and PL02 are separate artifacts with separate hashes, so they get separate
+                revisions. Each button names exactly the document it rewrites. */}
             {isIntakeCompleted && (
-              <Button
-                size="small"
-                onClick={() => {
-                  if (onRequestRequirementRevision) {
-                    onRequestRequirementRevision();
-                  } else {
-                    setRevisionModalType('requirement');
-                  }
-                }}
-              >
-                Cập nhật yêu cầu
-              </Button>
+              <>
+                <Button
+                  size="small"
+                  onClick={() => (onRequestRequirementRevision ? onRequestRequirementRevision() : openRevision('pl01'))}
+                >
+                  Cập nhật PL01
+                </Button>
+                <Button size="small" onClick={() => openRevision('pl02')}>
+                  Cập nhật PL02
+                </Button>
+              </>
             )}
             {isSolutionCompleted && (
               <Button
                 size="small"
-                onClick={() => {
-                  if (onRequestSolutionRevision) {
-                    onRequestSolutionRevision();
-                  } else {
-                    setRevisionModalType('solution');
-                  }
-                }}
+                onClick={() => (onRequestSolutionRevision ? onRequestSolutionRevision() : openRevision('solution'))}
               >
                 Cập nhật solution
               </Button>
             )}
             <Button size="small" onClick={onStartWorkflow}>
-              Sửa PL01/PL02
+              Nạp lại hồ sơ
             </Button>
             {onResetWorkflow && (
               <Popconfirm

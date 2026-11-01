@@ -99,7 +99,8 @@ import { InterruptedBanner } from './InterruptedBanner';
 import { InlineApiErrorCard } from './InlineApiErrorCard';
 import { RestoredSourceNotice } from './RestoredSourceNotice';
 import { deriveMissingSources } from './wizard/restoreRecovery';
-import { SdlcWorkflowHub } from './wizard/SdlcWorkflowHub';
+import { REVISION_ARTIFACT_KIND, SdlcWorkflowHub } from './wizard/SdlcWorkflowHub';
+import type { RevisionKind } from './wizard/SdlcWorkflowHub';
 import { StepSolutionPanel, StepChangePackPanel, StepTechDocsPanel, StepCabPanel, StepIntakePanel, type HubChangePackDraft, type StepTechDocsState, type StepCabState, type RenderExportRow } from './wizard/HubStepPanels';
 import { HubExportRow } from './wizard/HubExportRow';
 import { StepInputDocsModal } from './wizard/StepInputDocsModal';
@@ -822,12 +823,19 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     ) => Promise<void>
   >(async () => {});
 
+  // `durableTabs` is a `useLiveQuery` result: its array identity changes on every emit, so
+  // depending on the array rebuilt the coordinator (and dropped its in-memory state) whenever an
+  // unrelated tab row changed — a save then threw WORKFLOW_NOT_INITIALIZED after the Note write.
+  const sdlcThreadId = useMemo(
+    () => durableTabs.find((tab) => tab.type === 'sdlc')?.threadId,
+    [durableTabs]
+  );
+
   const getSdlcCoordinator = useCallback(() => {
     if (!isProjectScope || !currentScope.id) return null;
     // The workflow belongs to the SDLC tab's own thread. Keying it by the active thread wrote the
     // state under an ordinary tab during the first render (before the durable tab list resolved),
     // and it stayed unrestorable once the SDLC tab became active. Wait for the durable SDLC tab.
-    const sdlcThreadId = durableTabs.find((tab) => tab.type === 'sdlc')?.threadId;
     if (!sdlcThreadId) return null;
     if (sdlcCoordinatorRef.current && sdlcCoordinatorThreadRef.current === sdlcThreadId) {
       return sdlcCoordinatorRef.current;
@@ -848,7 +856,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       onStateChange: (state: SdlcWorkflowState) => setSdlcWorkflowState(state),
     });
     return sdlcCoordinatorRef.current;
-  }, [currentScope.id, db, durableTabs, isProjectScope]);
+  }, [currentScope.id, db, sdlcThreadId, isProjectScope]);
 
   useEffect(() => {
     if (!isProjectScope || !isSdlcActiveTab || !activeThreadId) {
@@ -927,13 +935,38 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     }
   }, [db, getSdlcCoordinator]);
 
+  /**
+   * Starts a new SDLC flow for the same project. Clears the persisted workflow row and the cached
+   * coordinator, and drops the thread's turns — the Popconfirm's promise is that the *documents*
+   * survive, and they do: every artifact was written to a Project Note, which this never touches.
+   */
+  const handleResetSdlcWorkflow = useCallback(async () => {
+    const sdlcTab = durableTabs.find((tab) => tab.type === 'sdlc');
+    if (!currentScope.id || !sdlcTab) return;
+    try {
+      await db.settings.delete(`sdlc_workflow:${currentScope.id}:${sdlcTab.threadId}`);
+      await clearThreadMessages(sdlcTab.threadId, db);
+      // The cached coordinator holds `currentState` in memory; without dropping it the next
+      // `getSdlcCoordinator()` returns the old instance and the workflow never actually ends.
+      sdlcCoordinatorRef.current = null;
+      sdlcCoordinatorThreadRef.current = null;
+      setSdlcWorkflowState(undefined);
+      setRevisionPreview(null);
+      setRevisionDraft('');
+      setSolutionSavedNoteId(undefined);
+      message.success('Đã làm mới quy trình SDLC. Tài liệu đã lưu vẫn còn trong Notes.');
+    } catch {
+      message.error('Không thể làm mới quy trình SDLC.');
+    }
+  }, [currentScope.id, db, durableTabs]);
+
   // The hub passes the revision kind explicitly, so no local draft-kind state is needed (D-22/D-23).
-  const handlePreviewRevision = useCallback(async (type: 'requirement' | 'solution', draft: string) => {
+  const handlePreviewRevision = useCallback(async (kind: RevisionKind, draft: string) => {
     const coordinator = getSdlcCoordinator();
     if (!coordinator) return;
     setRevisionLoading(true);
     try {
-      const preview = await coordinator.previewRevision(type === 'requirement' ? 'PL01' : 'SOLUTION', draft);
+      const preview = await coordinator.previewRevision(REVISION_ARTIFACT_KIND[kind], draft);
       setRevisionPreview(preview);
     } catch {
       message.error('Không thể xem trước bản cập nhật');
@@ -942,7 +975,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     }
   }, [getSdlcCoordinator]);
 
-  const handleCommitRevision = useCallback(async (type: 'requirement' | 'solution') => {
+  const handleCommitRevision = useCallback(async (kind: RevisionKind) => {
     const coordinator = getSdlcCoordinator();
     if (!coordinator) return;
     try {
@@ -954,7 +987,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           message.error('Chưa có bản xem trước để xác nhận');
           return;
         }
-        preview = await coordinator.previewRevision(type === 'requirement' ? 'PL01' : 'SOLUTION', revisionDraft);
+        preview = await coordinator.previewRevision(REVISION_ARTIFACT_KIND[kind], revisionDraft);
       }
       // The persisted state may still be loading when the user confirms: openCycle/commitRevision
       // throw WORKFLOW_NOT_INITIALIZED on an empty coordinator, and the catch would swallow it.
@@ -1056,7 +1089,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const handleHubSaveSolution = useCallback(async () => {
     if (solutionSaveBusyRef.current) return;
     if (!sdlcWorkflowState || !currentScope.id) return;
-    const sdlcThreadId = durableTabs.find((tab) => tab.type === 'sdlc')?.threadId;
     if (!sdlcThreadId) return;
     if (!solutionDraftMarkdown.trim()) {
       message.warning('Chưa có bản nháp SOLUTION.md trong khung chat.');
@@ -1085,8 +1117,11 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
       setSolutionSavedNoteId(saved.noteId);
       message.success('Đã lưu SOLUTION.md vào tài liệu dự án');
-    } catch {
-      message.error('Không thể lưu SOLUTION.md: kiểm tra PL01/PL02 đã nạp rồi thử lại.');
+    } catch (error) {
+      // Distinct causes (stale intake baseline, Note write conflict, idempotency mismatch) all
+      // used to collapse into one misleading hint. Report the real code.
+      const code = (error as { code?: string; message?: string }).code ?? (error as Error)?.message ?? 'UNKNOWN';
+      message.error(`Không thể lưu SOLUTION.md (${code}).`);
     } finally {
       solutionSaveBusyRef.current = false;
       setSolutionSaving(false);
@@ -1125,7 +1160,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       setHubPackDraft({ status: 'pending', manifest });
       return;
     }
-    const sdlcThreadId = durableTabs.find((tab) => tab.type === 'sdlc')?.threadId;
     if (!sdlcThreadId || !sdlcWorkflowState) return;
 
     hubPackBusyRef.current = true;
@@ -1195,7 +1229,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     if (techDocsBusyRef.current) return;
     const solution = sdlcWorkflowState?.artifacts.solution;
     const reconciliation = sdlcWorkflowState?.artifacts.driftResult;
-    const sdlcThreadId = durableTabs.find((tab) => tab.type === 'sdlc')?.threadId;
     if (!sdlcWorkflowState || !currentScope.id || !sdlcThreadId || !solution?.noteId || !reconciliation) {
       setTechDocsState('blocked');
       return;
@@ -1265,7 +1298,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
   const handleCabGenerate = useCallback(async () => {
     if (cabActionRef.current) return;
-    const sdlcThreadId = durableTabs.find((tab) => tab.type === 'sdlc')?.threadId;
     if (!sdlcWorkflowState || !currentScope.id || !sdlcThreadId) {
       setCabState('blocked');
       return;
@@ -1333,7 +1365,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
    */
   const handleHubExport = useCallback(async (kind: HubExportKind) => {
     if (!sdlcWorkflowState || !currentScope.id) return;
-    const sdlcThreadId = durableTabs.find((tab) => tab.type === 'sdlc')?.threadId;
     if (!sdlcThreadId) return;
     if (exportBusyRef.current.has(kind)) return;
     exportBusyRef.current.add(kind);
@@ -3379,6 +3410,14 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
               }
             }}
             revisionDraft={revisionDraft}
+            onClearRevisionPreview={() => setRevisionPreview(null)}
+            onOpenRevision={(kind) => {
+              // Starting from the artifact's current text is what makes the diff meaningful:
+              // an empty draft previews as "this update deletes the whole document".
+              const current = previousArtifactContent(sdlcWorkflowState, REVISION_ARTIFACT_KIND[kind]);
+              setRevisionDraft(current);
+              setRevisionPreview(null);
+            }}
             revisionPreview={
               revisionPreview
                 ? toRevisionModalPreview(
@@ -3391,10 +3430,7 @@ Nguyên tắc khi tạo hoặc tinh chỉnh bản thảo giải pháp SOLUTION.m
             onRevisionDraftChange={setRevisionDraft}
             onPreviewRevision={(type, draft) => void handlePreviewRevision(type, draft)}
             onCommitRevision={(type) => void handleCommitRevision(type)}
-            onResetWorkflow={() => {
-              setSdlcWorkflowState(undefined);
-              message.success('Đã làm mới quy trình SDLC');
-            }}
+            onResetWorkflow={() => void handleResetSdlcWorkflow()}
           />
         </div>
       )}
