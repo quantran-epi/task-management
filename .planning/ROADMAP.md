@@ -402,7 +402,7 @@ Plans:
 6. A standardized SDLC Prompt Architecture defines structured system prompts, grounding rules, and few-shot templates across all 6 steps (Intake validation, Solution architecture, Coding guide, Drift interpretation, Bank PL03B/PL07 tech docs, and CAB defense).
 7. SDLC Studio `StepChatPanel` and `AIChatDrawer` are refactored to consume `AiChatWidget` with custom prompts, contexts, and handlers via clean props.
 
-**Plans:** 13/18 plans executed
+**Plans:** 14/18 plans executed
 
 **Wave 1** *(parallel, no dependencies)*
 
@@ -440,7 +440,7 @@ Plans:
 **Wave 8 (Gap Closure)** *(no dependencies)*
 
 - [x] 25.3-13-PLAN.md — Revision commit preserves `approvedAt`, analysis timer lifecycle, Step 2 approval sync
-- [ ] 25.3-16-PLAN.md — Bounded collapsible tool-activity list above the composer
+- [x] 25.3-16-PLAN.md — Bounded collapsible tool-activity list above the composer
 - [ ] 25.3-17-PLAN.md — Resizable 320/380/480 SDLC chat lane with keyboard and persisted width (`SDLC_CHAT_WIDTH_KEY = 'planner:sdlc_chat_width'`)
 
 **Wave 9 (Gap Closure)** *(depends on 25.3-13)*
