@@ -356,6 +356,18 @@ export async function* streamChatEvents(
               }
             }
           }
+
+          for (const completedChoice of parsed.choices ?? []) {
+            if (completedChoice.finish_reason === 'content_filter') {
+              throw new Error(
+                'Nội dung bị chặn bởi bộ lọc an toàn của nhà cung cấp AI (content_filter)'
+              );
+            }
+            if (typeof completedChoice.finish_reason === 'string') {
+              yield { type: 'finish', finish_reason: completedChoice.finish_reason };
+              yieldedAny = true;
+            }
+          }
         }
       }
     }
@@ -379,6 +391,12 @@ export async function* streamChatEvents(
           throw new Error(redactApiKey(errMsg, options.apiKey));
         }
 
+        if (parsed.choices?.some((choice: { finish_reason?: string }) => choice.finish_reason === 'content_filter')) {
+          throw new Error(
+            'Nội dung bị chặn bởi bộ lọc an toàn của nhà cung cấp AI (content_filter)'
+          );
+        }
+
         const message = parsed.choices?.[0]?.message;
         if (typeof message?.reasoning_content === 'string' && message.reasoning_content.length > 0) {
           yield { type: 'reasoning', delta: message.reasoning_content };
@@ -391,6 +409,13 @@ export async function* streamChatEvents(
         if (Array.isArray(message?.tool_calls) && message.tool_calls.length > 0) {
           yield { type: 'tool_calls', calls: message.tool_calls };
           yieldedAny = true;
+        }
+
+        for (const choice of parsed.choices ?? []) {
+          if (typeof choice.finish_reason === 'string') {
+            yield { type: 'finish', finish_reason: choice.finish_reason };
+            yieldedAny = true;
+          }
         }
 
         if (parsed?.usage) {

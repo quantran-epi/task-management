@@ -55,6 +55,7 @@ export interface ChatTurnRequest {
   systemMessages: Array<{ role: 'system'; content: string }>;
   history: Array<{ role: 'user' | 'assistant'; content: string }>;
   tools: unknown[];
+  maxTokens?: number;
   /** Provider context window, when the host resolves one (auto-compaction threshold). */
   contextWindowTokens?: number;
 }
@@ -232,6 +233,9 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
         ],
         tools: request.tools as any[],
         maxLoops: 30,
+        ...(typeof request.maxTokens === 'number' && Number.isFinite(request.maxTokens) && request.maxTokens > 0
+          ? { maxTokens: request.maxTokens }
+          : {}),
         db: deps.db,
         signal: turnController.signal,
         ...(request.analysisMode
@@ -327,6 +331,16 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
           userMessageId,
           ...(cancellationResult ? { cancellationResult } : {}),
         };
+      }
+
+      if (result.truncated) {
+        const error: ChatTurnErrorInfo = {
+          code: 'truncated',
+          message: "Phản hồi của nhà cung cấp AI đã chạm giới hạn độ dài; nội dung chưa hoàn chỉnh không được lưu. Bấm 'Thử lại' hoặc điều chỉnh giới hạn đầu ra rồi gửi lại.",
+        };
+        publish('error');
+        deps.onError?.(error);
+        return { phase: 'error', requestId: turnId, userMessageId, error };
       }
 
       const clean = stripThinkingBlocks(fullResponse);

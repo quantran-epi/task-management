@@ -8,6 +8,7 @@ import {
   probeStructuredOutputCapability,
   clearCapabilityProbeCache,
 } from '../../src/services/ai/nineRouterClient';
+import type { StreamChatChunk } from '../../src/services/ai/types';
 
 const invokeMock = vi.hoisted(() => vi.fn());
 
@@ -337,6 +338,83 @@ describe('nineRouterClient', () => {
     expect(chunks).toEqual([
       { type: 'text', delta: 'Direct JSON response' },
     ]);
+  });
+
+  it.each(['stop', 'length', 'tool_calls'])('emits SSE finish %s after content', async (reason) => {
+    const body = [
+      `data: ${JSON.stringify({ choices: [{ delta: { content: 'Retained text' }, finish_reason: reason }] })}\n\n`,
+      'data: [DONE]\n\n',
+    ].join('');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(body)));
+
+    const chunks: StreamChatChunk[] = [];
+    for await (const chunk of streamChatEvents({
+      endpoint: 'http://localhost:20128',
+      apiKey: 'test-key',
+      payload: { model: 'gpt-4o', messages: [{ role: 'user', content: 'test' }] },
+    })) chunks.push(chunk);
+
+    expect(chunks).toEqual([
+      { type: 'text', delta: 'Retained text' },
+      { type: 'finish', finish_reason: reason },
+    ]);
+  });
+
+  it.each(['stop', 'length'])('emits non-stream JSON finish %s after content in desktop', async (reason) => {
+    (window as any).__TAURI_INTERNALS__ = {};
+    invokeMock.mockResolvedValue({
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ choices: [{ message: { content: 'Retained text' }, finish_reason: reason }] }),
+    });
+
+    const chunks: StreamChatChunk[] = [];
+    for await (const chunk of streamChatEvents({
+      endpoint: 'http://localhost:20128',
+      apiKey: 'test-key',
+      payload: { model: 'gpt-4o', messages: [{ role: 'user', content: 'test' }] },
+    })) chunks.push(chunk);
+
+    expect(chunks).toEqual([
+      { type: 'text', delta: 'Retained text' },
+      { type: 'finish', finish_reason: reason },
+    ]);
+  });
+
+  it('emits finish events for every completed choice without inventing reasons', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+      `data: ${JSON.stringify({ choices: [
+        { delta: { content: 'Text' }, finish_reason: null },
+        { delta: {}, finish_reason: 'stop' },
+        { delta: {}, finish_reason: 'length' },
+      ] })}\n\ndata: [DONE]\n\n`,
+    )));
+    const chunks: StreamChatChunk[] = [];
+    for await (const chunk of streamChatEvents({
+      endpoint: 'http://localhost:20128', apiKey: 'test-key',
+      payload: { model: 'gpt-4o', messages: [] },
+    })) chunks.push(chunk);
+    expect(chunks).toEqual([
+      { type: 'text', delta: 'Text' },
+      { type: 'finish', finish_reason: 'stop' },
+      { type: 'finish', finish_reason: 'length' },
+    ]);
+  });
+
+  it.each(['sse', 'json'])('rejects content_filter for %s without emitting a completion', async (format) => {
+    const choice = { delta: {}, message: { content: 'Blocked' }, finish_reason: 'content_filter' };
+    const body = format === 'sse'
+      ? `data: ${JSON.stringify({ choices: [choice] })}\n\ndata: [DONE]\n\n`
+      : JSON.stringify({ choices: [choice] });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(body)));
+    const chunks: StreamChatChunk[] = [];
+    await expect(async () => {
+      for await (const chunk of streamChatEvents({
+        endpoint: 'http://localhost:20128', apiKey: 'test-key',
+        payload: { model: 'gpt-4o', messages: [] },
+      })) chunks.push(chunk);
+    }).rejects.toThrow('content_filter');
+    expect(chunks).toEqual([]);
   });
 
   it('streamChatEvents redacts sensitive API key on error in desktop', async () => {

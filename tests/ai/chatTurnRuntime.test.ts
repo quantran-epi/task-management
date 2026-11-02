@@ -30,7 +30,11 @@ function makeRequest(overrides: Partial<ChatTurnRequest> = {}): ChatTurnRequest 
 }
 
 interface LoopScript {
-  (options: AiOrchestratorLoopOptions): Promise<{ fullResponse: string; tokenUsage: ChatTokenUsage }>;
+  (options: AiOrchestratorLoopOptions): Promise<{
+    fullResponse: string;
+    tokenUsage: ChatTokenUsage;
+    truncated?: boolean;
+  }>;
 }
 
 describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
@@ -254,6 +258,101 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
     expect(second.phase).toBe('complete');
     expect(second.userMessageId).toBe(first.userMessageId);
     expect(await userRows()).toHaveLength(1);
+  });
+
+  it('forwards maxTokens unchanged through start and retry', async () => {
+    const limits: number[] = [];
+    const runtime = runtimeWith(async (options) => {
+      limits.push(options.maxTokens!);
+      return { fullResponse: 'partial', tokenUsage: {}, truncated: true };
+    });
+    const first = await runtime.start(makeRequest({ threadId, maxTokens: 2048 }));
+    const retry = await runtime.retry();
+    expect(limits).toEqual([2048, 2048]);
+    expect(retry.userMessageId).toBe(first.userMessageId);
+    expect(await userRows()).toHaveLength(1);
+    expect(await assistantRows()).toHaveLength(0);
+  });
+
+  it('omits own maxTokens key when unset on start and retry', async () => {
+    const seen: AiOrchestratorLoopOptions[] = [];
+    const runtime = runtimeWith(async (options) => {
+      seen.push(options);
+      return { fullResponse: 'partial', tokenUsage: {}, truncated: true };
+    });
+    await runtime.start(makeRequest({ threadId }));
+    await runtime.retry();
+    expect(seen).toHaveLength(2);
+    for (const options of seen) expect(Object.hasOwn(options, 'maxTokens')).toBe(false);
+  });
+
+  it.each([0, -1, NaN, Infinity, -Infinity])('does not forward invalid maxTokens %s', async (maxTokens) => {
+    const runtime = runtimeWith(async (options) => {
+      expect(Object.hasOwn(options, 'maxTokens')).toBe(false);
+      return { fullResponse: 'ok', tokenUsage: {} };
+    });
+    expect((await runtime.start(makeRequest({ threadId, maxTokens }))).phase).toBe('complete');
+  });
+
+  it('rejects truncated output before persistence and retries original user identity', async () => {
+    const existing = await saveMessage({ threadId, role: 'assistant', content: 'Approved content' }, db);
+    let calls = 0;
+    const runtime = runtimeWith(async (options) => {
+      calls += 1;
+      if (calls === 1) {
+        options.onTextChunk?.('partial Authorization: Bearer sk-secret-key');
+        return {
+          fullResponse: 'partial Authorization: Bearer sk-secret-key\n    at provider.ts:1',
+          tokenUsage: { totalTokens: 12 },
+          truncated: true,
+        };
+      }
+      return { fullResponse: 'Complete answer', tokenUsage: {}, truncated: false };
+    });
+
+    const first = await runtime.start(makeRequest({ threadId }));
+    expect(first.phase).toBe('error');
+    expect(first.content).toBeUndefined();
+    expect(first.error?.code).toBe('truncated');
+    expect(runtime.getStatus()).toBe('error');
+    expect(runtime.isRunning()).toBe(false);
+    expect(errors).toEqual([first.error]);
+    expect(first.error?.message).toContain('giới hạn độ dài');
+    expect(first.error?.message).toContain('không được lưu');
+    expect(first.error?.message).toContain('Thử lại');
+    expect(first.error?.message).not.toMatch(/sk-secret-key|Authorization|provider\.ts/);
+    expect(await assistantRows()).toEqual([existing]);
+    expect(completed).toHaveLength(0);
+
+    const retry = await runtime.retry();
+    expect(retry.phase).toBe('complete');
+    expect(retry.userMessageId).toBe(first.userMessageId);
+    expect(await userRows()).toHaveLength(1);
+    expect((await assistantRows()).map((row) => row.content)).toEqual(['Approved content', 'Complete answer']);
+    expect(completed).toHaveLength(1);
+  });
+
+  it('keeps abort precedence over a truncated result', async () => {
+    const runtime = runtimeWith(async () => {
+      runtime.abort();
+      return { fullResponse: 'partial', tokenUsage: {}, truncated: true };
+    });
+    expect((await runtime.start(makeRequest({ threadId }))).phase).toBe('aborted');
+    expect(errors).toHaveLength(0);
+    expect(await assistantRows()).toHaveLength(0);
+  });
+
+  it('keeps mutation-decline precedence over a truncated result', async () => {
+    const runtime = runtimeWith(async (options) => {
+      await options.onMutationCheck?.('update_task', { id: 't-1' });
+      return { fullResponse: 'partial', tokenUsage: {}, truncated: true };
+    });
+    const pending = runtime.start(makeRequest({ threadId }));
+    await waitForStatus(() => statuses.includes('awaiting-approval'));
+    runtime.resolveApproval(false);
+    expect((await pending).phase).toBe('cancelled');
+    expect(errors).toHaveLength(0);
+    expect(await assistantRows()).toHaveLength(0);
   });
 
   it('rejects a second concurrent start with TURN_IN_PROGRESS and writes no message', async () => {

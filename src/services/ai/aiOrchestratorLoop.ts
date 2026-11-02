@@ -1,7 +1,7 @@
 import type { TaskPlannerDatabase } from '../../db';
 import type { ChatCompletionMessage, ToolCall } from './types';
 import type { ChatTokenUsage, ChatGeneratedFile } from '../../types/models';
-import { streamChatEvents, streamChatCompletion, stripThinkingBlocks } from './nineRouterClient';
+import { streamChatEvents, stripThinkingBlocks } from './nineRouterClient';
 import { pruneToolOutputsInMessages } from './historyPruning';
 import { compactMessagesInLoop } from './inLoopCompaction';
 import {
@@ -38,6 +38,7 @@ export interface AiOrchestratorLoopOptions {
   messages: ChatCompletionMessage[];
   tools?: any[];
   temperature?: number;
+  maxTokens?: number;
   maxLoops?: number;
   db: TaskPlannerDatabase;
   signal?: AbortSignal;
@@ -83,6 +84,8 @@ export interface AiOrchestratorLoopResult {
   messages: ChatCompletionMessage[];
   tokenUsage: ChatTokenUsage;
   generatedFiles: ChatGeneratedFile[];
+  truncated: boolean;
+  finishReason?: string;
 }
 
 function getFriendlyToolLabel(toolName: string): string {
@@ -134,6 +137,7 @@ export async function runAiOrchestratorLoop(
     messages,
     tools,
     temperature = 0.1,
+    maxTokens,
     maxLoops = 30,
     db,
     signal,
@@ -164,6 +168,10 @@ export async function runAiOrchestratorLoop(
     totalTokens: 0,
   };
 
+  const outputLimit = typeof maxTokens === 'number' && Number.isFinite(maxTokens) && maxTokens > 0
+    ? { max_tokens: maxTokens }
+    : {};
+  let finishReason: string | undefined;
   let fullResponse = '';
   let loopCount = 0;
   let lastHadToolCalls = false;
@@ -218,11 +226,13 @@ export async function runAiOrchestratorLoop(
       model: string;
       messages: ChatCompletionMessage[];
       temperature: number;
+      max_tokens?: number;
       tools?: any[];
     } = {
       model,
       messages: messagesToSend,
       temperature,
+      ...outputLimit,
     };
     if (tools && tools.length > 0) {
       payload.tools = tools;
@@ -249,6 +259,8 @@ export async function runAiOrchestratorLoop(
         } else if (chunk.type === 'tool_calls') {
           hasToolCalls = true;
           toolCallsToRun = chunk.calls;
+        } else if (chunk.type === 'finish') {
+          finishReason = chunk.finish_reason;
         } else if (chunk.type === 'usage' && chunk.usage) {
           // Latest round's prompt size — what the context window actually sees.
           currentPromptTokens = chunk.usage.promptTokens || 0;
@@ -265,24 +277,38 @@ export async function runAiOrchestratorLoop(
       // If model rejected tools payload on first loop, fallback to completion without tools
       if (loopCount === 1 && !fullResponse && tools && tools.length > 0) {
         console.warn('[runAiOrchestratorLoop] Tools stream error, retrying without tools:', streamErr);
-        const fallbackStream = streamChatCompletion({
+        const fallbackStream = streamChatEvents({
           endpoint,
           apiKey,
           payload: {
             model,
             messages: messagesToSend,
             temperature,
+            ...outputLimit,
           },
           ...(signal ? { signal } : {}),
         });
-        for await (const delta of fallbackStream) {
-          fullResponse += delta;
-          onTextChunk?.(delta);
+        for await (const chunk of fallbackStream) {
+          if (chunk.type === 'text') {
+            fullResponse += chunk.delta;
+            onTextChunk?.(chunk.delta);
+          } else if (chunk.type === 'finish') {
+            finishReason = chunk.finish_reason;
+          } else if (chunk.type === 'usage') {
+            accumulatedTokenUsage = {
+              promptTokens: (accumulatedTokenUsage.promptTokens || 0) + (chunk.usage.promptTokens || 0),
+              completionTokens: (accumulatedTokenUsage.completionTokens || 0) + (chunk.usage.completionTokens || 0),
+              totalTokens: (accumulatedTokenUsage.totalTokens || 0) + (chunk.usage.totalTokens || 0),
+            };
+            onUsage?.(chunk.usage);
+          }
         }
         break;
       }
       throw streamErr;
     }
+
+    if (finishReason === 'length') break;
 
     lastHadToolCalls = hasToolCalls && toolCallsToRun.length > 0;
     if (!hasToolCalls || toolCallsToRun.length === 0) {
@@ -406,7 +432,7 @@ export async function runAiOrchestratorLoop(
   }
 
   // Final synthesis pass if tools were called, or response is empty after tools ran
-  if (lastHadToolCalls || (!fullResponse.trim() && loopCount > 1)) {
+  if (finishReason !== 'length' && (lastHadToolCalls || (!fullResponse.trim() && loopCount > 1))) {
     onStatusChange?.('Đang tổng hợp câu trả lời hoàn chỉnh...');
     fullResponse = '';
 
@@ -425,6 +451,7 @@ export async function runAiOrchestratorLoop(
         model,
         messages: synthesisMessages,
         temperature,
+        ...outputLimit,
       },
       ...(signal ? { signal } : {}),
     });
@@ -433,6 +460,8 @@ export async function runAiOrchestratorLoop(
       if (chunk.type === 'text') {
         fullResponse += chunk.delta;
         onTextChunk?.(chunk.delta);
+      } else if (chunk.type === 'finish') {
+        finishReason = chunk.finish_reason;
       } else if (chunk.type === 'usage' && chunk.usage) {
         accumulatedTokenUsage = {
           promptTokens: (accumulatedTokenUsage.promptTokens || 0) + (chunk.usage.promptTokens || 0),
@@ -452,5 +481,7 @@ export async function runAiOrchestratorLoop(
     messages: currentMessages,
     tokenUsage: accumulatedTokenUsage,
     generatedFiles,
+    truncated: finishReason === 'length',
+    ...(finishReason !== undefined ? { finishReason } : {}),
   };
 }

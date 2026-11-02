@@ -59,6 +59,104 @@ describe('runAiOrchestratorLoop', () => {
     expect(mockStreamChatCompletion).not.toHaveBeenCalled();
   });
 
+  function setupProviderPath(path: 'main' | 'fallback' | 'synthesis', reason = 'stop') {
+    mockStreamChatEvents.mockImplementationOnce(async function* () {
+      if (path === 'fallback') throw new Error('Tools unsupported');
+      if (path === 'synthesis') {
+        yield { type: 'finish', finish_reason: 'tool_calls' };
+        yield { type: 'tool_calls', calls: [{
+          id: 'call_1', type: 'function',
+          function: { name: 'custom_lookup', arguments: '{}' },
+        }] };
+      } else {
+        yield { type: 'text', delta: 'Main output' };
+        yield { type: 'finish', finish_reason: reason };
+      }
+    });
+    if (path !== 'main') {
+      mockStreamChatEvents.mockImplementationOnce(async function* () {
+        yield { type: 'text', delta: `${path} output` };
+        yield { type: 'finish', finish_reason: reason };
+        yield { type: 'usage', usage: { totalTokens: 7 } };
+      });
+    }
+    return {
+      endpoint: 'https://api.example.com', apiKey: 'test-key', model: 'test-model',
+      messages: [{ role: 'user' as const, content: 'test' }], db: testDb,
+      tools: [{ type: 'function', function: { name: 'custom_lookup', parameters: {} } }],
+      maxLoops: 1,
+      executeToolFn: vi.fn().mockResolvedValue('{}'),
+    };
+  }
+
+  it.each(['main', 'fallback', 'synthesis'] as const)(
+    'forwards exact caller maxTokens on %s payloads', async (path) => {
+      const result = await runAiOrchestratorLoop({ ...setupProviderPath(path), maxTokens: 2048 });
+      expect(mockStreamChatEvents).toHaveBeenCalledTimes(path === 'main' ? 1 : 2);
+      for (const [request] of mockStreamChatEvents.mock.calls) {
+        expect(request.payload.max_tokens).toBe(2048);
+      }
+      if (path !== 'main') {
+        expect(mockStreamChatEvents.mock.calls[1]![0].payload).not.toHaveProperty('tools');
+        expect(result.tokenUsage.totalTokens).toBe(7);
+      }
+      expect(result.finishReason).toBe('stop');
+      expect(result.truncated).toBe(false);
+      expect(mockStreamChatCompletion).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['main', 'fallback', 'synthesis'] as const)(
+    'omits own max_tokens when unset on %s payload', async (path) => {
+      await runAiOrchestratorLoop(setupProviderPath(path));
+      expect(mockStreamChatEvents).toHaveBeenCalledTimes(path === 'main' ? 1 : 2);
+      const request = mockStreamChatEvents.mock.calls[path === 'main' ? 0 : 1]![0];
+      expect(Object.hasOwn(request.payload, 'max_tokens')).toBe(false);
+    },
+  );
+
+  it.each(['main', 'fallback', 'synthesis'] as const)(
+    'marks length-truncated %s output and retains text', async (path) => {
+      const options = setupProviderPath(path, 'length');
+      const result = await runAiOrchestratorLoop(options);
+      expect(result.truncated).toBe(true);
+      expect(result.finishReason).toBe('length');
+      expect(result.fullResponse).toBe(path === 'main' ? 'Main output' : `${path} output`);
+      expect(mockStreamChatEvents).toHaveBeenCalledTimes(path === 'main' ? 1 : 2);
+      if (path === 'main') expect(options.executeToolFn).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([0, -1, NaN, Infinity, -Infinity])('omits invalid maxTokens %s on every payload', async (maxTokens) => {
+    await runAiOrchestratorLoop({ ...setupProviderPath('synthesis'), maxTokens });
+    for (const [request] of mockStreamChatEvents.mock.calls) {
+      expect(Object.hasOwn(request.payload, 'max_tokens')).toBe(false);
+    }
+  });
+
+  it('uses final response finish reason rather than earlier tool-call reason', async () => {
+    const options = setupProviderPath('synthesis');
+    const result = await runAiOrchestratorLoop({ ...options, maxLoops: 2 });
+    expect(result.finishReason).toBe('stop');
+    expect(result.truncated).toBe(false);
+    expect(mockStreamChatEvents).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([0.5, 1_000_000])('never clamps valid caller limit %s', async (maxTokens) => {
+    await runAiOrchestratorLoop({ ...setupProviderPath('synthesis'), maxTokens });
+    for (const [request] of mockStreamChatEvents.mock.calls) {
+      expect(request.payload.max_tokens).toBe(maxTokens);
+    }
+  });
+
+  it('does not synthesize over a main-round length finish after tools ran', async () => {
+    const options = setupProviderPath('synthesis', 'length');
+    const result = await runAiOrchestratorLoop({ ...options, maxLoops: 3 });
+    expect(result.truncated).toBe(true);
+    expect(mockStreamChatEvents).toHaveBeenCalledTimes(2);
+    expect(options.executeToolFn).toHaveBeenCalledTimes(1);
+  });
+
   it('executes tool call and runs synthesis pass after tool execution', async () => {
     let callCount = 0;
     mockStreamChatEvents.mockImplementation(async function* () {
