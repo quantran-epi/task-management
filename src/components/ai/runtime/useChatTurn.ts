@@ -97,6 +97,12 @@ export function useChatTurn({ scopeKey, deps }: UseChatTurnOptions): UseChatTurn
     [runtime]
   );
 
+  const retry = useCallback(async () => {
+    setStreamingText('');
+    setPendingApproval(null);
+    return runtime.retry();
+  }, [runtime]);
+
   const resolveApproval = useCallback(
     (approved: boolean) => {
       setPendingApproval(null);
@@ -111,7 +117,7 @@ export function useChatTurn({ scopeKey, deps }: UseChatTurnOptions): UseChatTurn
     streamingStatusLabel: stageLabelFor(status),
     pendingApproval,
     start,
-    retry: runtime.retry,
+    retry,
     abort: runtime.abort,
     resolveApproval,
     runtime,

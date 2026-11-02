@@ -107,6 +107,32 @@ describe('useChatTurn binding', () => {
     expect(result.current.streamingText).toBe('Xin chào');
   });
 
+  it('retry xóa partial và approval trước delta mới', async () => {
+    let attempts = 0;
+    let release!: () => void;
+    const deps = baseDeps(async (options) => {
+      attempts += 1;
+      if (attempts === 1) {
+        options.onTextChunk?.('Dở dang');
+        throw new Error('Lỗi');
+      }
+      await new Promise<void>((resolve) => { release = resolve; });
+      options.onTextChunk?.('Trả lời mới');
+      return { fullResponse: 'Trả lời mới', tokenUsage: {} };
+    });
+    deps.db = { chatMessages: { get: async () => ({ id: 'user', role: 'user', threadId: 'thread-1', content: 'Xin chào' }) } } as unknown as TaskPlannerDatabase;
+    const { result } = renderHook(() => useChatTurn({ scopeKey: SCOPE_KEY, deps }));
+    await act(async () => { await result.current.start(makeRequest()); });
+    expect(result.current.streamingText).toBe('Dở dang');
+    let pending!: ReturnType<typeof result.current.retry>;
+    await act(async () => { pending = result.current.retry(); });
+    expect(result.current.streamingText).toBe('');
+    expect(result.current.pendingApproval).toBeNull();
+    await act(async () => { release(); await pending; });
+    expect(result.current.streamingText).toBe('Trả lời mới');
+    expect(result.current.status).toBe('complete');
+  });
+
   it('sets pendingApproval from onAwaitingApproval and clears it on resolveApproval', async () => {
     const deps = baseDeps(async (options) => {
       await options.onMutationCheck?.('update_task', { id: 't-1' });
