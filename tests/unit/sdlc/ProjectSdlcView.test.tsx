@@ -534,7 +534,7 @@ describe('ProjectSdlcView and IDE Layout', () => {
 });
 
 describe('D-06: opening a historical artifact card', () => {
-  it('pins the owning step to that exact version and blocks approval', async () => {
+  it.each(['active', 'archived'] as const)('keeps history read-only and opens a draft for an %s CR', async (status) => {
     const pid = crypto.randomUUID();
     const dbX = new TaskPlannerDatabase(`test-d06-${Math.random()}`);
     await dbX.projects.add({
@@ -552,6 +552,8 @@ describe('D-06: opening a historical artifact card', () => {
       date: '2026-11-01',
     };
     const cr = await createNewCr(pid, metadata, true, dbX);
+    await dbX.settings.put({ key: `sdlc_crs:${pid}`, value: JSON.stringify([{ ...cr, status }]) });
+    await dbX.settings.put({ key: `sdlc_draft_solution:${pid}:${cr.id}`, value: '# SOLUTION v3 bản nháp' });
 
     const ref = (version: number, content: string) => ({
       kind: 'SOLUTION' as const,
@@ -612,6 +614,23 @@ describe('D-06: opening a historical artifact card', () => {
       },
     });
 
+    await dbX.chatMessages.add({
+      id: crypto.randomUUID(),
+      threadId,
+      role: 'assistant',
+      content: 'Bản nháp SOLUTION v3',
+      createdAt: new Date().toISOString(),
+      artifactEvent: {
+        eventId: crypto.randomUUID(),
+        kind: 'SOLUTION',
+        title: 'SOLUTION.md — v3 draft',
+        version: 3,
+        hash: '3'.repeat(64),
+        status: 'draft',
+        ctaLabel: 'Mở trình soạn thảo',
+      },
+    });
+
     render(<ProjectSdlcView projectId={pid} onBack={vi.fn()} db={dbX} />);
 
     await waitFor(() => {
@@ -620,8 +639,9 @@ describe('D-06: opening a historical artifact card', () => {
     fireEvent.click(screen.getAllByText(/Bước 2: Thiết kế giải pháp/i)[0]!);
 
     // Open the v1 card from the transcript ("Xem chi tiết" on the persisted card).
-    const card = await screen.findByTestId('ai-artifact-event-card');
-    expect(card).toHaveTextContent('SOLUTION.md — v1');
+    await waitFor(() => expect(screen.getAllByTestId('ai-artifact-event-card')).toHaveLength(2));
+    const card = screen.getAllByTestId('ai-artifact-event-card').find((card) => card.textContent?.includes('SOLUTION.md — v1'))!;
+    expect(within(card).getByRole('button', { name: 'Mở tài liệu' })).toBeDisabled();
     fireEvent.click(within(card).getByRole('button', { name: /Xem chi tiết/i }));
 
     // The editor shows the historical body, not the active v2.
@@ -638,5 +658,28 @@ describe('D-06: opening a historical artifact card', () => {
     expect(
       screen.getByRole('button', { name: /Duyệt & Lưu SOLUTION\.md/i })
     ).toBeDisabled();
+
+    const draftCard = screen.getAllByTestId('ai-artifact-event-card').find((card) => card.textContent?.includes('v3 draft'))!;
+    const openEditor = within(draftCard).getByRole('button', { name: 'Mở trình soạn thảo' });
+    if (status === 'archived') {
+      expect(openEditor).toBeDisabled();
+      fireEvent.click(within(draftCard).getByRole('button', { name: 'Xem chi tiết' }));
+    } else {
+      expect(openEditor).toBeEnabled();
+      fireEvent.click(openEditor);
+    }
+    const draftEditor = screen.getByPlaceholderText(/Nội dung kiến trúc giải pháp SOLUTION\.md/i);
+    await waitFor(() => expect(draftEditor).toHaveValue('# SOLUTION v3 bản nháp'));
+    if (status === 'archived') {
+      expect(draftEditor).toHaveAttribute('readonly');
+      expect(screen.getByRole('button', { name: /Duyệt & Lưu SOLUTION\.md/i })).toBeDisabled();
+    } else {
+      expect(draftEditor).not.toHaveAttribute('readonly');
+      expect(screen.getByRole('button', { name: /Duyệt & Lưu SOLUTION\.md/i })).toBeEnabled();
+      fireEvent.change(draftEditor, { target: { value: '# SOLUTION v3 đã sửa' } });
+      await waitFor(async () => {
+        expect((await dbX.settings.get(`sdlc_draft_solution:${pid}:${cr.id}`))?.value).toBe('# SOLUTION v3 đã sửa');
+      });
+    }
   });
 });
