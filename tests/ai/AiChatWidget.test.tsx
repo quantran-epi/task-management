@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { cleanup, render, screen, fireEvent } from '@testing-library/react';
+import { cleanup, render, screen, fireEvent, within } from '@testing-library/react';
 import {
   AiChatWidget,
   type AiChatWidgetProps,
@@ -117,6 +117,116 @@ describe('AiChatWidget lifecycle and host extension points (D-01..D-06, D-19, D-
     expect(screen.getByText('{"items":[]}')).toBeInTheDocument();
 
     expect(document.body.textContent).not.toContain(reasoning);
+  });
+
+  it('renders no tool activity when there are no events', () => {
+    render(<AiChatWidget {...makeProps()} />);
+
+    expect(screen.queryByRole('button', { name: /công cụ đã gọi/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /\[Công cụ\]/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Hoạt động công cụ' })).not.toBeInTheDocument();
+  });
+
+  it('keeps one tool badge without a summary and reveals only its opt-in details', () => {
+    render(
+      <AiChatWidget
+        {...makeProps({
+          toolEvents: [
+            { id: 'call-1', name: 'query_tasks', phase: 'call', args: '{"projectId":"p-1"}' },
+            { id: 'call-1', name: 'query_tasks', phase: 'result', result: '{"items":[]}' },
+          ],
+        })}
+      />
+    );
+
+    expect(screen.queryByRole('button', { name: /công cụ đã gọi/ })).not.toBeInTheDocument();
+    const badges = screen.getAllByRole('button', { name: /\[Công cụ\] query_tasks/ });
+    expect(badges).toHaveLength(1);
+    expect(badges[0]).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('{"projectId":"p-1"}')).not.toBeInTheDocument();
+    expect(screen.queryByText('{"items":[]}')).not.toBeInTheDocument();
+
+    fireEvent.click(badges[0]!);
+    expect(screen.getByText('{"projectId":"p-1"}')).toBeInTheDocument();
+    expect(screen.getByText('{"items":[]}')).toBeInTheDocument();
+    fireEvent.click(badges[0]!);
+    expect(badges[0]).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('{"items":[]}')).not.toBeInTheDocument();
+  });
+
+  it('bounds six merged tools and toggles between the newest badge and the full list', () => {
+    render(
+      <AiChatWidget
+        {...makeProps({
+          messages: [makeMessage('m1', 'Hội thoại vẫn hiển thị')],
+          toolEvents: Array.from({ length: 6 }, (_, index) => [
+            { id: `call-${index}`, name: `query_${index}`, phase: 'call' as const, args: '{"limit":1}' },
+            { id: `call-${index}`, name: `query_${index}`, phase: 'result' as const, result: `Kết quả ${index}` },
+          ]).flat(),
+        })}
+      />
+    );
+
+    const summary = screen.getByRole('button', { name: /6 công cụ đã gọi.*Xem chi tiết/ });
+    expect(summary).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getAllByRole('button', { name: /\[Công cụ\]/ })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: /\[Công cụ\] query_5/ })).toBeInTheDocument();
+    expect(screen.getByText('Hội thoại vẫn hiển thị')).toBeInTheDocument();
+    expect(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI')).toBeInTheDocument();
+
+    fireEvent.click(summary);
+    expect(summary).toHaveAttribute('aria-expanded', 'true');
+    expect(summary).toHaveTextContent('Thu gọn');
+    const group = screen.getByRole('group', { name: 'Hoạt động công cụ' });
+    expect(group.id).toBe(summary.getAttribute('aria-controls'));
+    expect(group).toHaveStyle({ maxHeight: '160px', overflowY: 'auto', overscrollBehavior: 'contain' });
+    expect(within(group).getAllByRole('button', { name: /\[Công cụ\]/ })).toHaveLength(6);
+    for (const badge of within(group).getAllByRole('button')) {
+      expect(badge).toHaveAttribute('aria-expanded', 'false');
+    }
+    expect(screen.queryByText('{"limit":1}')).not.toBeInTheDocument();
+    expect(screen.queryByText('Kết quả 5')).not.toBeInTheDocument();
+
+    fireEvent.click(within(group).getByRole('button', { name: /\[Công cụ\] query_0/ }));
+    expect(screen.getByText('Kết quả 0')).toBeInTheDocument();
+    expect(screen.queryByText('Kết quả 5')).not.toBeInTheDocument();
+    fireEvent.click(summary);
+    expect(summary).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getAllByRole('button', { name: /\[Công cụ\]/ })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: /\[Công cụ\] query_5/ })).toBeInTheDocument();
+    expect(screen.queryByText('Kết quả 0')).not.toBeInTheDocument();
+  });
+
+  it('uses a native summary button with a scope-specific controlled group', () => {
+    const toolEvents = [
+      { id: 'one', name: 'query_one', phase: 'call' as const },
+      { id: 'two', name: 'query_two', phase: 'call' as const },
+    ];
+    render(
+      <>
+        <AiChatWidget {...makeProps({ toolEvents })} />
+        <AiChatWidget
+          {...makeProps({
+            scope: { kind: 'sdlc', threadId: 'thread-2', scopeKey: 'sdlc:p:cr:INTAKE', label: 'SDLC' },
+            toolEvents,
+          })}
+        />
+      </>
+    );
+
+    const [first, second] = screen.getAllByRole('button', { name: /2 công cụ đã gọi/ });
+    expect(first).toBeInstanceOf(HTMLButtonElement);
+    expect(first).toHaveAttribute('type', 'button');
+    expect(first).toHaveAttribute('aria-controls', 'tool-activity-global');
+    expect(second).toHaveAttribute('aria-controls', 'tool-activity-sdlc-p-cr-INTAKE');
+    expect(first!.parentElement?.closest('button')).toBeNull();
+    expect(document.getElementById(first!.getAttribute('aria-controls')!)).toHaveAttribute('role', 'group');
+    // jsdom verifies click wiring, not native Enter/Space activation; check those in a real browser.
+    fireEvent.click(first!);
+    expect(first).toHaveAttribute('aria-expanded', 'true');
+    expect(second).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(first!);
+    expect(first).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('renders exactly one approval control set and wires approve/reject', () => {
