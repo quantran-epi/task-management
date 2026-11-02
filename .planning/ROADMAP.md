@@ -402,7 +402,7 @@ Plans:
 6. A standardized SDLC Prompt Architecture defines structured system prompts, grounding rules, and few-shot templates across all 6 steps (Intake validation, Solution architecture, Coding guide, Drift interpretation, Bank PL03B/PL07 tech docs, and CAB defense).
 7. SDLC Studio `StepChatPanel` and `AIChatDrawer` are refactored to consume `AiChatWidget` with custom prompts, contexts, and handlers via clean props.
 
-**Plans:** 12 plans
+**Plans:** 18 plans in 11 waves; gap-closure plans 13-18 pending
 
 **Wave 1** *(parallel, no dependencies)*
 
@@ -436,4 +436,22 @@ Plans:
 **Wave 7** *(depends on Waves 5-6)*
 
 - [ ] 25.3-11-PLAN.md — Cross-host lifecycle parity suite and removal of component-to-service re-export
+
+**Wave 8 (Gap Closure)** *(no dependencies)*
+
+- [ ] 25.3-13-PLAN.md — Revision commit preserves `approvedAt`, analysis timer lifecycle, Step 2 approval sync
+- [ ] 25.3-16-PLAN.md — Bounded collapsible tool-activity list above the composer
+- [ ] 25.3-17-PLAN.md — Resizable 320/380/480 SDLC chat lane with keyboard and persisted width (`SDLC_CHAT_WIDTH_KEY = 'planner:sdlc_chat_width'`)
+
+**Wave 9 (Gap Closure)** *(depends on 25.3-13)*
+
+- [ ] 25.3-14-PLAN.md — Step 1 activation starts the SOLUTION analysis exactly once, with synchronous `selectedStepRef` cancellation
+
+**Wave 10 (Gap Closure)** *(depends on 25.3-14)*
+
+- [ ] 25.3-15-PLAN.md — Provider finish-reason guard, caller-supplied `maxTokens` forwarding on main/fallback/synthesis payloads, truncated-turn rejection before persistence
+
+**Wave 11 (Gap Closure)** *(depends on 25.3-15)*
+
+- [ ] 25.3-18-PLAN.md — SOLUTION extraction and truncation safety: fence-aware parser, transcript summary removal, four-backtick output contract, context-window forwarding and rejection of length-truncated artifacts (no host completion cap)
 
