@@ -64,6 +64,13 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
   const [draftPl07, setDraftPl07] = useState<string | undefined>(undefined);
   const [wizardRuntime, setWizardRuntime] = useState<SdlcWizardRuntime | undefined>(undefined);
   const chatPanelRef = useRef<StepChatPanelHandle>(null);
+  const analysisTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearAnalysisTimer = useCallback(() => {
+    if (analysisTimerRef.current !== null) clearTimeout(analysisTimerRef.current);
+    analysisTimerRef.current = null;
+  }, []);
+
+  useEffect(() => clearAnalysisTimer, [clearAnalysisTimer]);
   // `saveState`/`loadState` must see the CR selected in this same tick, not the next render's.
   const activeCrRef = useRef<string>('');
 
@@ -334,8 +341,12 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
   const handleTriggerSolutionAnalysis = useCallback(() => {
     setSelectedStep('SOLUTION');
     // Explicit user action only (D-16): never fired on mount or step change.
-    setTimeout(() => chatPanelRef.current?.requestArtifactAnalysis(), 150);
-  }, []);
+    clearAnalysisTimer();
+    analysisTimerRef.current = setTimeout(() => {
+      analysisTimerRef.current = null;
+      chatPanelRef.current?.requestArtifactAnalysis();
+    }, 150);
+  }, [clearAnalysisTimer]);
 
   const saveDraft = useCallback(
     async (markdown: string) => {
