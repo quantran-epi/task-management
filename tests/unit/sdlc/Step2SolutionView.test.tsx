@@ -59,6 +59,41 @@ describe('Step2SolutionView intake-baseline gate (D-20)', () => {
     expect(screen.queryByText(/Chưa đủ điều kiện/i)).toBeNull();
   });
 
+  it('syncs approval badge and continue banner when approvedAt changes in both directions', () => {
+    const onProceedToStep3 = vi.fn();
+    const solutionArtifact = {
+      kind: 'SOLUTION' as const,
+      version: 1,
+      hash: 'a'.repeat(64),
+      title: 'SOLUTION.md',
+      content: '# SOLUTION draft',
+      sourceHashes: [],
+      updatedAt: '2026-11-02T00:00:00.000Z',
+    };
+    const props = {
+      projectId,
+      db,
+      hasIntakeBaseline: true,
+      onCommitSolution: vi.fn().mockResolvedValue(undefined),
+      onProceedToStep3,
+    };
+    const { rerender } = renderView({ ...props, solutionArtifact });
+    expect(screen.queryByText('Đã phê duyệt')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Giải pháp đã được phê duyệt/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Tiếp tục sang Bước 3/i })).not.toBeInTheDocument();
+
+    rerender(<Step2SolutionView {...props} solutionArtifact={{ ...solutionArtifact, approvedAt: '2026-11-02T01:00:00.000Z' }} />);
+    expect(screen.getByText('Đã phê duyệt')).toBeInTheDocument();
+    expect(screen.getByText(/Giải pháp đã được phê duyệt/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Tiếp tục sang Bước 3/i }));
+    expect(onProceedToStep3).toHaveBeenCalledTimes(1);
+
+    rerender(<Step2SolutionView {...props} solutionArtifact={solutionArtifact} />);
+    expect(screen.queryByText('Đã phê duyệt')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Giải pháp đã được phê duyệt/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Tiếp tục sang Bước 3/i })).not.toBeInTheDocument();
+  });
+
   it('treats hasIntakeBaseline as authoritative over the text fallback', () => {
     renderView({ hasIntakeBaseline: true });
 

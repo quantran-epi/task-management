@@ -87,6 +87,10 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
     }
   }, [solutionArtifact?.content, initialContent]);
 
+  useEffect(() => {
+    setIsApproved(Boolean(solutionArtifact?.approvedAt));
+  }, [solutionArtifact?.approvedAt]);
+
   // D-06: pinning a historical version shows exactly that body, never the live draft.
   useEffect(() => {
     if (viewedVersion) setContent(viewedVersion.content);
