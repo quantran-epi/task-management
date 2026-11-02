@@ -90,6 +90,32 @@ describe('StepChatPanel artifact bootstrap queue', () => {
     expect(mocks.start).not.toHaveBeenCalled();
   });
 
+  it('waits for the new scope thread instead of sending into the previous step thread', async () => {
+    const { ref, props, rerender } = mount();
+    await act(async () => { resolveThread({ id: 'solution-thread' }); });
+    mocks.getStepThread.mockReturnValue(new Promise<{ id: string }>((resolve) => { resolveThread = resolve; }));
+    rerender(<StepChatPanel {...props} crId="next-cr" />);
+    act(() => { ref.current!.requestArtifactAnalysis(); });
+    expect(mocks.start).not.toHaveBeenCalled();
+    await act(async () => { resolveThread({ id: 'next-thread' }); });
+    await waitFor(() => expect(mocks.start).toHaveBeenCalledTimes(1));
+    expect(mocks.start.mock.calls[0]![0]).toMatchObject({ threadId: 'next-thread', scopeKey: 'sdlc:project:next-cr:SOLUTION' });
+  });
+
+  it('cancels queued intent when leaving its scope before bootstrap completes', async () => {
+    const { ref, props, rerender } = mount();
+    act(() => { ref.current!.requestArtifactAnalysis(); });
+    const resolveOldThread = resolveThread;
+    mocks.getStepThread.mockReturnValue(new Promise<{ id: string }>((resolve) => { resolveThread = resolve; }));
+    rerender(<StepChatPanel {...props} stepId="INTAKE" />);
+    await act(async () => {
+      resolveOldThread({ id: 'old-solution-thread' });
+      resolveThread({ id: 'intake-thread' });
+    });
+    expect(screen.getByTestId('thread')).toHaveTextContent('intake-thread');
+    expect(mocks.start).not.toHaveBeenCalled();
+  });
+
   it('drops pending intent on unmount rather than leaking into another panel', async () => {
     const { ref, unmount } = mount();
     act(() => { ref.current!.requestArtifactAnalysis(); });

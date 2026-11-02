@@ -64,7 +64,8 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
   const scopeKey = `sdlc:${projectId}:${crId}:${stepId}`;
   const toolbox = useStepChatToolbox(db);
 
-  const [threadId, setThreadId] = useState<string | null>(null);
+  const [thread, setThread] = useState<{ scopeKey: string; id: string } | null>(null);
+  const threadId = thread?.scopeKey === scopeKey ? thread.id : null;
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<{ code: string; message: string } | null>(null);
   const [toolEvents, setToolEvents] = useState<ChatTurnToolEvent[]>([]);
@@ -76,7 +77,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
       if (!projectId || !crId || !stepId) return;
       try {
         const thread = await getStepThread(projectId, crId, stepId, db);
-        if (!cancelled) setThreadId(thread.id);
+        if (!cancelled) setThread({ scopeKey, id: thread.id });
       } catch {
         // A missing thread only disables sending; it must not break the step view.
       }
@@ -84,7 +85,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
     return () => {
       cancelled = true;
     };
-  }, [projectId, crId, stepId, db]);
+  }, [projectId, crId, stepId, scopeKey, db]);
 
   const messages = useLiveQuery(
     () => (threadId ? db.chatMessages.where('threadId').equals(threadId).sortBy('createdAt') : []),
@@ -98,6 +99,16 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
   const preludeTokenRef = useRef<number>(0);
   const preludeSeqRef = useRef(0);
   const pendingArtifactRef = useRef(false);
+  const pendingArtifactScopeRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    setPreludePending(false);
+    return () => {
+      pendingArtifactRef.current = false;
+      pendingArtifactScopeRef.current = null;
+      preludeTokenRef.current = 0;
+    };
+  }, [scopeKey]);
 
   const turn = useChatTurn({
     scopeKey,
@@ -219,10 +230,11 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
   submitRef.current = submit;
 
   useEffect(() => {
-    if (!threadId || !pendingArtifactRef.current) return;
+    if (!threadId || !pendingArtifactRef.current || pendingArtifactScopeRef.current !== scopeKey) return;
     pendingArtifactRef.current = false;
+    pendingArtifactScopeRef.current = null;
     void submitRef.current(ARTIFACT_ANALYSIS_PROMPT, 'artifact');
-  }, [threadId]);
+  }, [threadId, scopeKey]);
 
   const handleClearThread = useCallback(() => {
     if (!threadId) return;
@@ -250,6 +262,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
     requestArtifactAnalysis: () => {
       if (!threadId) {
         pendingArtifactRef.current = true;
+        pendingArtifactScopeRef.current = scopeKey;
         return;
       }
       void submit(ARTIFACT_ANALYSIS_PROMPT, 'artifact');
