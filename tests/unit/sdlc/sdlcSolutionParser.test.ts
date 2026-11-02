@@ -15,6 +15,10 @@ const nestedDocument = [
 const wrappedResponse = `Giới thiệu giải pháp.\n\`\`\`\`markdown\n${nestedDocument}\n\`\`\`\`\nXin xem bản thảo.`;
 
 describe('extractSolutionMarkdown', () => {
+  it('ưu tiên heading thật ngoài fence sau ví dụ SOLUTION', () => {
+    const sample = 'Ví dụ cũ:\n```markdown\n# SOLUTION — sample\nKhông phải tài liệu\n```';
+    expect(extractSolutionMarkdown(`${sample}\n${nestedDocument}`)).toBe(nestedDocument);
+  });
   it('preserves the entire outer-fenced document across nested samples and later sections', () => {
     expect(extractSolutionMarkdown(wrappedResponse)).toBe(nestedDocument);
     expect(extractChatSummary(wrappedResponse)).toBe('Giới thiệu giải pháp.\n\nXin xem bản thảo.');

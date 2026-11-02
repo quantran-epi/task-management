@@ -12,7 +12,7 @@ export function extractSolutionMarkdown(rawResponse: string): string {
   let offset = 0;
 
   for (const line of clean.split('\n')) {
-    if (!heading && /^#\s+SOLUTION\b/i.test(line)) {
+    if (!heading && !fence && /^#\s+SOLUTION\b/i.test(line)) {
       heading = { start: offset, fence };
     }
     const marker = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
