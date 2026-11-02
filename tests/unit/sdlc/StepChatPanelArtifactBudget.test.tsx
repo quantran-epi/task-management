@@ -81,6 +81,15 @@ describe('StepChatPanel artifact context and completion safety', () => {
     return ref;
   }
 
+  it('giữ draft khi runtime từ chối lượt gửi', async () => {
+    mocks.start.mockRejectedValue(new Error('TURN_IN_PROGRESS'));
+    await mount();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Question' }), { target: { value: 'Giữ câu hỏi' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Question' })).toHaveValue('Giữ câu hỏi'));
+    expect(await db.chatMessages.count()).toBe(0);
+  });
+
   it.each([2000, 30000])('forwards configured context %i with no artifact completion cap', async (window) => {
     mocks.contextWindowTokens = window;
     const ref = await mount();

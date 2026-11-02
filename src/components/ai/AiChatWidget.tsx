@@ -274,7 +274,8 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
   }, []);
 
   const stagedStage = stagedStageFor(turn.status);
-  const showQuickPrompts = messages.length === 0 && !error && !isTurnActive;
+  const awaitingApproval = turn.status === 'awaiting-approval';
+  const showQuickPrompts = messages.length === 0 && !error && !isTurnActive && !awaitingApproval;
   const mergedToolEvents = useMemo(() => mergeToolEvents(toolEvents ?? []), [toolEvents]);
   // The in-flight tool name comes from the newest tool event; approval's own copy wins while parked.
   const activeToolName =
@@ -490,7 +491,7 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
         isStreaming={isTurnActive}
         {...(placeholder !== undefined ? { placeholder } : {})}
         {...(autoFocus !== undefined ? { autoFocus } : {})}
-        {...(disabled !== undefined ? { disabled } : {})}
+        disabled={disabled || awaitingApproval}
         {...(attachedFiles ? { attachedFiles } : {})}
         {...(onAttachFile ? { onAttachFile } : {})}
         {...(onRemoveFile ? { onRemoveFile } : {})}

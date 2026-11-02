@@ -235,6 +235,8 @@ describe('AiChatWidget lifecycle and host extension points (D-01..D-06, D-19, D-
       <AiChatWidget
         {...makeProps({
           onResolveApproval,
+          draft: 'Giữ bản nháp',
+          quickPrompts: [{ id: 'next', label: 'Gửi tiếp', prompt: 'Gửi tiếp' }],
           turn: {
             status: 'awaiting-approval',
             streamingText: '',
@@ -245,6 +247,13 @@ describe('AiChatWidget lifecycle and host extension points (D-01..D-06, D-19, D-
       />
     );
 
+    const input = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
+    expect(input).toBeDisabled();
+    fireEvent.keyDown(input, { key: 'Enter', ctrlKey: true });
+    expect(input).toHaveValue('Giữ bản nháp');
+    expect(screen.getByRole('button', { name: 'Gửi tin nhắn' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Gửi tiếp' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('ai-staged-loading')).not.toBeInTheDocument();
     expect(screen.getByText('Yêu cầu xác nhận thay đổi dữ liệu')).toBeInTheDocument();
     const approve = screen.getAllByRole('button', { name: 'Chấp thuận' });
     expect(approve).toHaveLength(1);

@@ -147,7 +147,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
       if (!text || !threadId) return;
       // A prelude in flight owns the step: a second send would supersede a prompt already
       // assembled and about to start.
-      if (preludeTokenRef.current !== 0) return;
+      if (preludeTokenRef.current !== 0 || turn.runtime?.isRunning() || turn.status === 'awaiting-approval') return;
 
       setDraft('');
       setError(null);
@@ -218,7 +218,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
           await extractSolutionDraft(outcome.content);
         }
       } catch {
-        // TURN_IN_PROGRESS or a composition failure: the widget's own status already shows it.
+        setDraft((current) => current || rawText);
       } finally {
         // Only the send that still owns the token may release; a stale one must not clear the
         // staged state of the turn that superseded it.

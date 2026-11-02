@@ -240,6 +240,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   };
 
   const handleSend = (targetEl?: HTMLTextAreaElement) => {
+    if (disabled || isStreaming) return;
     const rawVal = effectiveValue || targetEl?.value || '';
     const trimmed = rawVal.trim();
     if (!trimmed) return;
@@ -278,6 +279,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   };
 
   const handleSendFromFullscreen = () => {
+    if (disabled || isStreaming) return;
     const trimmed = fullscreenDraft.trim();
     if (!trimmed) return;
     clearInput();
@@ -302,6 +304,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault();
       e.stopPropagation();
+      if (disabled || isStreaming) return;
       const el = e.currentTarget;
       const rawText = effectiveValue.trim() || el?.value?.trim() || '';
       if (!rawText) return;
@@ -854,7 +857,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
                 type="primary"
                 icon={<SendOutlined />}
                 onClick={handleSendFromFullscreen}
-                disabled={!fullscreenDraft.trim()}
+                disabled={disabled || isStreaming || !fullscreenDraft.trim()}
               >
                 Gửi ngay
               </Button>
