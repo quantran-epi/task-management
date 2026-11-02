@@ -61,7 +61,10 @@ export type SdlcArtifactKindForTurn = 'SOLUTION' | 'PL03B' | 'PL07' | 'CAB';
 export const SDLC_ARTIFACT_CONTRACTS: Record<SdlcArtifactKindForTurn, string> = {
   SOLUTION: [
     '[HỢP ĐỒNG ĐẦU RA — SOLUTION.md]',
-    'Trả về toàn bộ nội dung SOLUTION.md đầy đủ trong một khối ```markdown, không trả về bản vá từng phần.',
+    'Trả về toàn bộ nội dung SOLUTION.md đầy đủ dưới dạng Markdown thuần, bắt đầu bằng tiêu đề # SOLUTION, không trả về bản vá từng phần.',
+    'Không bọc toàn bộ tài liệu trong code fence bên ngoài.',
+    'Dùng code fence bốn backtick (````) cho mọi ví dụ nhúng để fence ba backtick bên trong không kết thúc tài liệu.',
+    'Bao gồm đầy đủ mọi mục bắt buộc: bối cảnh/phạm vi, ## Kiến trúc giải pháp mục tiêu và luồng dữ liệu, dữ liệu/API, bảo mật, lỗi và rollback, kiểm thử/nghiệm thu, giả định, câu hỏi mở. Mục không áp dụng ghi N/A; phần thiếu bằng chứng để chưa giải quyết.',
     'Kết quả là bản nháp để người dùng rà soát; không tuyên bố đã được phê duyệt hay đã lưu.',
   ].join('\n'),
   PL03B: [

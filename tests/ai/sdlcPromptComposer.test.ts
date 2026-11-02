@@ -90,6 +90,37 @@ describe('SDLC few-shot exemplars and artifact contracts (D-08, D-09, D-16)', ()
     }
   });
 
+  it('requires raw SOLUTION Markdown, no outer fence, and four-backtick samples', () => {
+    const contract = SDLC_ARTIFACT_CONTRACTS.SOLUTION;
+    expect(contract).toContain('Markdown thuần, bắt đầu bằng tiêu đề # SOLUTION');
+    expect(contract).toContain('Không bọc toàn bộ tài liệu trong code fence bên ngoài.');
+    expect(contract).toContain('bốn backtick (````)');
+    expect(contract).toContain('## Kiến trúc giải pháp mục tiêu');
+    expect(composeSdlcTurn({ step: 'SOLUTION', intent: 'artifact', artifact: 'SOLUTION', userTurn: 'Soạn giải pháp' })
+      .segments.outputContract).toBe(contract);
+  });
+
+  it('preserves every other artifact output contract byte-for-byte', () => {
+    const { SOLUTION: _solution, ...others } = SDLC_ARTIFACT_CONTRACTS;
+    expect(others).toEqual({
+      PL03B: [
+        '[HỢP ĐỒNG ĐẦU RA — PL03B]',
+        'Trả về toàn bộ tài liệu PL03B đầy đủ, chỉ mô tả hệ thống đã triển khai thực tế, trích dẫn bằng chứng Change Pack cho từng mục.',
+        'Kết quả là bản nháp để người dùng rà soát; không tuyên bố đã được phê duyệt hay đã lưu.',
+      ].join('\n'),
+      PL07: [
+        '[HỢP ĐỒNG ĐẦU RA — PL07]',
+        'Trả về toàn bộ checklist PL07 đầy đủ gồm các câu hỏi review, mỗi câu để trống cột kết luận.',
+        'Kết quả là bản nháp để người dùng rà soát; không tuyên bố đã được phê duyệt hay đã lưu.',
+      ].join('\n'),
+      CAB: [
+        '[HỢP ĐỒNG ĐẦU RA — TỜ TRÌNH CAB]',
+        'Trả về toàn bộ nội dung tờ trình đầy đủ: danh sách thay đổi kỹ thuật đã triển khai cho GoLive, và phần tóm tắt CR chi tiết chỉ dùng trong TaskMate.',
+        'Kết quả là bản nháp để người dùng rà soát; không tuyên bố đã được phê duyệt hay đã lưu.',
+      ].join('\n'),
+    });
+  });
+
   it('defines the four artifact output contracts as complete drafts', () => {
     expect(Object.keys(SDLC_ARTIFACT_CONTRACTS).sort()).toEqual([
       'CAB',
