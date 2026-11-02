@@ -76,7 +76,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
   }, []);
 
   useEffect(() => clearAnalysisTimer, [clearAnalysisTimer]);
-  // `saveState`/`loadState` must see the CR selected in this same tick, not the next render's.
+  // Guards late callbacks from a coordinator belonging to a previously selected CR.
   const activeCrRef = useRef<string>('');
 
   const project = useLiveQuery(() => db.projects.get(projectId), [projectId, db]);
@@ -131,9 +131,8 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
       ref: { title: string; version: number; hash: string },
       status: 'draft' | 'approved'
     ) => {
-      const crId = activeCrRef.current;
-      if (!crId) return;
-      const thread = await getStepThread(projectId, crId, stepId, db);
+      if (!activeCrId) return;
+      const thread = await getStepThread(projectId, activeCrId, stepId, db);
       await saveMessage(
         {
           threadId: thread.id,
@@ -154,7 +153,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
         db
       );
     },
-    [projectId, db]
+    [projectId, db, activeCrId]
   );
 
   /** Historical opens target the owning step and render read-only when inactive (D-06). */
@@ -187,7 +186,15 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
 
 
   const selectCr = useCallback((crId: string) => {
-    if (activeCrRef.current !== crId) clearAnalysisTimer();
+    if (activeCrRef.current !== crId) {
+      clearAnalysisTimer();
+      setWorkflowState(undefined);
+      setViewedVersion(undefined);
+      setReadOnlySolution(false);
+      setIncomingSolutionDraft(undefined);
+      setDraftPl03b(undefined);
+      setDraftPl07(undefined);
+    }
     activeCrRef.current = crId;
     setActiveCrId(crId);
   }, [clearAnalysisTimer]);
@@ -255,16 +262,14 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
   const threadIdRef = useRef(threadId);
   threadIdRef.current = threadId;
 
-  // The coordinator is the only writer of persisted workflow rows (D-23).
-  const coordinator = useMemo(
-    () =>
-      createSdlcWorkflowCoordinator({
+  // Each CR owns its coordinator memory and fixed persistence key (D-23).
+  const createCoordinator = useCallback(
+    (crId: string) => createSdlcWorkflowCoordinator({
         projectId,
         get threadId() {
           return threadIdRef.current;
         },
         saveState: async (state) => {
-          const crId = activeCrRef.current;
           if (!crId) return;
           await db.settings.put({
             key: workflowStorageKey(projectId, crId),
@@ -272,7 +277,6 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
           });
         },
         loadState: async () => {
-          const crId = activeCrRef.current;
           if (!crId) return undefined;
           const row = await db.settings.get(workflowStorageKey(projectId, crId));
           if (!row?.value) return undefined;
@@ -283,14 +287,16 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
           }
         },
         deleteState: async () => {
-          const crId = activeCrRef.current;
           if (!crId) return;
           await db.settings.delete(workflowStorageKey(projectId, crId));
         },
-        onStateChange: (newState) => setWorkflowState(newState),
+        onStateChange: (newState) => {
+          if (activeCrRef.current === crId) setWorkflowState(newState);
+        },
       }),
     [projectId, db]
   );
+  const coordinator = useMemo(() => createCoordinator(activeCrId), [createCoordinator, activeCrId]);
 
   // Restore before any step action can render as enabled (T-25.3-34).
   useEffect(() => {
@@ -362,11 +368,11 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
 
   const saveDraft = useCallback(
     async (markdown: string) => {
-      const crKey = activeCrRef.current || 'default-cr';
-      setIncomingSolutionDraft(markdown);
+      const crKey = activeCrId || 'default-cr';
+      if (activeCrRef.current === activeCrId) setIncomingSolutionDraft(markdown);
       await db.settings.put({ key: draftSettingKey(projectId, crKey), value: markdown });
     },
-    [projectId, db]
+    [projectId, db, activeCrId]
   );
 
   // D-16: a chat-produced SOLUTION only updates the editor draft.
@@ -394,12 +400,16 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
     pl02: string
   ) => {
     try {
-      if (!activeCrRef.current) {
+      let crId = activeCrId;
+      let intakeCoordinator = coordinator;
+      if (!crId) {
         const created = await createNewCr(projectId, metadata, false, db);
-        selectCr(created.id);
+        crId = created.id;
+        selectCr(crId);
+        intakeCoordinator = createCoordinator(crId);
       }
-      const nextState = await coordinator.startOrUpdateIntake(metadata, pl01, pl02);
-      setWorkflowState(nextState);
+      await intakeCoordinator.startOrUpdateIntake(metadata, pl01, pl02);
+      if (activeCrRef.current !== crId) return;
       setSelectedStepTracked('SOLUTION');
       scheduleSolutionAnalysis();
     } catch (err) {
@@ -410,12 +420,11 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
   const handleCommitSolution = async (markdown: string, noteId: string) => {
     try {
       const nextState = await coordinator.commitSolution(markdown, noteId);
-      await db.settings.delete(draftSettingKey(projectId, activeCrRef.current || 'default-cr'));
-      setWorkflowState(nextState);
+      await db.settings.delete(draftSettingKey(projectId, activeCrId || 'default-cr'));
       if (nextState.artifacts.solution) {
         await appendArtifactEvent('SOLUTION', 'SOLUTION', nextState.artifacts.solution, 'approved');
       }
-      setReadOnlySolution(false);
+      if (activeCrRef.current === activeCrId) setReadOnlySolution(false);
     } catch (err) {
       reportGuardError(err);
     }
@@ -425,7 +434,8 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
   const handleResetWorkflow = useCallback(async () => {
     try {
       await coordinator.reset();
-      await db.settings.delete(draftSettingKey(projectId, activeCrRef.current || 'default-cr'));
+      await db.settings.delete(draftSettingKey(projectId, activeCrId || 'default-cr'));
+      if (activeCrRef.current !== activeCrId) return;
       setWorkflowState(undefined);
       setIncomingSolutionDraft(undefined);
       clearAnalysisTimer();
@@ -434,7 +444,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
     } catch (err) {
       reportGuardError(err);
     }
-  }, [coordinator, projectId, db, reportGuardError, clearAnalysisTimer, setSelectedStepTracked]);
+  }, [coordinator, projectId, db, activeCrId, reportGuardError, clearAnalysisTimer, setSelectedStepTracked]);
 
   const handleNavigateToStep = useCallback(
     (step: SdlcStepId) => {
@@ -464,6 +474,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
       case 'SOLUTION':
         return (
           <Step2SolutionView
+            key={activeCrId}
             projectId={projectId}
             crId={activeCrId}
             solutionArtifact={workflowState?.artifacts.solution}
@@ -510,12 +521,11 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
             initialDriftResult={workflowState?.artifacts.driftResult}
             onCommitChangePackAndDrift={async (packHash, packTitle, driftResult) => {
               try {
-                const nextState = await coordinator.commitChangePackAndDrift(
+                await coordinator.commitChangePackAndDrift(
                   packHash,
                   packTitle,
                   driftResult
                 );
-                setWorkflowState(nextState);
               } catch (err) {
                 reportGuardError(err);
               }
@@ -540,7 +550,6 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
             onCommitTechDoc={async (kind, markdown, noteId) => {
               try {
                 const nextState = await coordinator.commitTechDoc(kind, markdown, noteId);
-                setWorkflowState(nextState);
                 const ref = kind === 'PL03B' ? nextState.artifacts.pl03b : nextState.artifacts.pl07;
                 if (ref) await appendArtifactEvent('TECH_DOCS', kind, ref, 'approved');
               } catch (err) {
@@ -572,7 +581,6 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
             onCommitCab={async (markdown, noteId) => {
               try {
                 const nextState = await coordinator.commitCab(markdown, noteId);
-                setWorkflowState(nextState);
                 if (nextState.artifacts.cab) {
                   await appendArtifactEvent('CAB', 'CAB', nextState.artifacts.cab, 'approved');
                 }
