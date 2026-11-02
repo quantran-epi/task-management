@@ -402,44 +402,44 @@ Plans:
 6. A standardized SDLC Prompt Architecture defines structured system prompts, grounding rules, and few-shot templates across all 6 steps (Intake validation, Solution architecture, Coding guide, Drift interpretation, Bank PL03B/PL07 tech docs, and CAB defense).
 7. SDLC Studio `StepChatPanel` and `AIChatDrawer` are refactored to consume `AiChatWidget` with custom prompts, contexts, and handlers via clean props.
 
-**Plans:** 18 plans in 11 waves; gap-closure plans 13-18 pending
+**Plans:** 13/18 plans executed
 
 **Wave 1** *(parallel, no dependencies)*
 
-- [ ] 25.3-01-PLAN.md — Coordinator restore-before-action, `ensureState()`, and stable guard-code registry
-- [ ] 25.3-03-PLAN.md — Layered SDLC prompt composer with shared policy, six step contracts, and few-shot exemplars
-- [ ] 25.3-07-PLAN.md — Framework-free chat turn runtime plus `useChatTurn` hook
-- [ ] 25.3-12-PLAN.md — Production wizard runtime wiring (`WizardModel`, evidence collection, published set ids)
+- [x] 25.3-01-PLAN.md — Coordinator restore-before-action, `ensureState()`, and stable guard-code registry
+- [x] 25.3-03-PLAN.md — Layered SDLC prompt composer with shared policy, six step contracts, and few-shot exemplars
+- [x] 25.3-07-PLAN.md — Framework-free chat turn runtime plus `useChatTurn` hook
+- [x] 25.3-12-PLAN.md — Production wizard runtime wiring (`WizardModel`, evidence collection, published set ids)
 
 **Wave 2** *(depends on Wave 1)*
 
-- [ ] 25.3-02-PLAN.md — Step 3 checklist removal, Step 4 pre-emptive gates, and four-finding drift matrix
+- [x] 25.3-02-PLAN.md — Step 3 checklist removal, Step 4 pre-emptive gates, and four-finding drift matrix
 
 **Wave 3** *(depends on Waves 1-2)*
 
-- [ ] 25.3-04-PLAN.md — Step 2 approval gated on the INTAKE baseline
-- [ ] 25.3-08-PLAN.md — `AiChatWidget`, staged loading, approval card, durable artifact event cards
+- [x] 25.3-04-PLAN.md — Step 2 approval gated on the INTAKE baseline
+- [x] 25.3-08-PLAN.md — `AiChatWidget`, staged loading, approval card, durable artifact event cards
 
 **Wave 4** *(depends on Waves 1-3)*
 
-- [ ] 25.3-05-PLAN.md — PL03B actual-implementation-only, blank PL07, draft-only tech docs
+- [x] 25.3-05-PLAN.md — PL03B actual-implementation-only, blank PL07, draft-only tech docs
 
 **Wave 5** *(depends on Waves 1-4)*
 
-- [ ] 25.3-06-PLAN.md — Draft-only CAB generator, evidence-constrained CAB, TaskMate-only CR summary
-- [ ] 25.3-09-PLAN.md — StepChatPanel host adapter; coordinator restore and artifact event persistence in the SDLC view
+- [x] 25.3-06-PLAN.md — Draft-only CAB generator, evidence-constrained CAB, TaskMate-only CR summary
+- [x] 25.3-09-PLAN.md — StepChatPanel host adapter; coordinator restore and artifact event persistence in the SDLC view
 
 **Wave 6** *(depends on Waves 3-5)*
 
-- [ ] 25.3-10-PLAN.md — AIChatDrawer consumes the shared widget and per-tab runtime registry
+- [x] 25.3-10-PLAN.md — AIChatDrawer consumes the shared widget and per-tab runtime registry
 
 **Wave 7** *(depends on Waves 5-6)*
 
-- [ ] 25.3-11-PLAN.md — Cross-host lifecycle parity suite and removal of component-to-service re-export
+- [x] 25.3-11-PLAN.md — Cross-host lifecycle parity suite and removal of component-to-service re-export
 
 **Wave 8 (Gap Closure)** *(no dependencies)*
 
-- [ ] 25.3-13-PLAN.md — Revision commit preserves `approvedAt`, analysis timer lifecycle, Step 2 approval sync
+- [x] 25.3-13-PLAN.md — Revision commit preserves `approvedAt`, analysis timer lifecycle, Step 2 approval sync
 - [ ] 25.3-16-PLAN.md — Bounded collapsible tool-activity list above the composer
 - [ ] 25.3-17-PLAN.md — Resizable 320/380/480 SDLC chat lane with keyboard and persisted width (`SDLC_CHAT_WIDTH_KEY = 'planner:sdlc_chat_width'`)
 
@@ -454,4 +454,3 @@ Plans:
 **Wave 11 (Gap Closure)** *(depends on 25.3-15)*
 
 - [ ] 25.3-18-PLAN.md — SOLUTION extraction and truncation safety: fence-aware parser, transcript summary removal, four-backtick output contract, context-window forwarding and rejection of length-truncated artifacts (no host completion cap)
-
