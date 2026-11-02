@@ -1,61 +1,57 @@
 import { stripThinkingBlocks } from '../services/ai/nineRouterClient';
 
-/**
- * Extracts clean SOLUTION.md markdown from an AI assistant response stream or text.
- * Strips `<think>...</think>` tags and handles fenced markdown blocks or direct `# SOLUTION` content.
- */
+/** Extract the complete SOLUTION, preserving embedded code and later sections. */
 export function extractSolutionMarkdown(rawResponse: string): string {
   if (!rawResponse) return '';
   const clean = stripThinkingBlocks(rawResponse).trim();
+  let fence: { character: string; length: number; start: number } | undefined;
+  let heading: { start: number; fence: typeof fence } | undefined;
+  let end: number | undefined;
+  let lastClose: number | undefined;
+  let fallback: string | undefined;
+  let offset = 0;
 
-  // 1. Look for fenced markdown code block containing SOLUTION heading or section 1
-  const fencedMatch = clean.match(/```(?:markdown|md)?\s*([\s\S]*?)```/i);
-  if (
-    fencedMatch &&
-    (fencedMatch[1]?.includes('# SOLUTION') || fencedMatch[1]?.includes('## 1.'))
-  ) {
-    return fencedMatch[1].trim();
+  for (const line of clean.split('\n')) {
+    if (!heading && /^#\s+SOLUTION\b/i.test(line)) {
+      heading = { start: offset, fence };
+    }
+    const marker = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    if (marker) {
+      const run = marker[1]!;
+      if (!fence) {
+        fence = { character: run[0]!, length: run.length, start: offset + line.length + 1 };
+      } else if (run[0] === fence.character && run.length >= fence.length && !marker[2]!.trim()) {
+        const body = clean.slice(fence.start, offset);
+        if (!fallback && /^(?:#\s+SOLUTION\b|## 1\.)/im.test(body)) fallback = body.trim();
+        if (heading?.fence === fence) end = offset;
+        if (heading && end === undefined) lastClose = offset + line.length;
+        fence = undefined;
+      }
+    }
+    offset += line.length + 1;
   }
 
-  // 2. Look for explicit # SOLUTION heading starting point
-  const solutionIdx = clean.indexOf('# SOLUTION');
-  if (solutionIdx !== -1) {
-    return clean.slice(solutionIdx).trim();
+  if (!heading) return fallback ?? clean;
+  // ponytail: only short, unstructured text after the final fence is conversational.
+  // Longer or structured tails stay in the document until an explicit delimiter exists.
+  if (!heading.fence && lastClose !== undefined) {
+    const tail = clean.slice(lastClose).trim();
+    if (tail && tail.length <= 500 && tail.split('\n').length <= 3 &&
+        !/^\s*(?:#{1,6}\s|\||[-+*]\s|\d+[.)]\s|>)/m.test(tail)) {
+      end = lastClose;
+    }
   }
-
-  // 3. Fallback: return clean stripped response
-  return clean;
+  return clean.slice(heading.start, end).trim();
 }
 
-/**
- * Extracts a concise conversational chat summary from an AI assistant response that contains SOLUTION markdown.
- * Strips out the large solution code block or solution body, preserving friendly intro/outro notes.
- */
+/** Keep conversation outside the exact artifact handed to the editor. */
 export function extractChatSummary(rawResponse: string): string {
   if (!rawResponse) return '';
   const clean = stripThinkingBlocks(rawResponse).trim();
+  const artifact = extractSolutionMarkdown(rawResponse);
+  const summary = (artifact ? clean.replace(artifact, '') : clean)
+    .replace(/^ {0,3}(?:`{3,}|~{3,})[^\n]*$/gm, '')
+    .replace(/\n{3,}/g, '\n\n').trim();
 
-  // 1. Remove fenced markdown code block if it contains SOLUTION heading or section 1
-  let summary = clean.replace(/```(?:markdown|md)?\s*[\s\S]*?```/gi, (match) => {
-    if (match.includes('# SOLUTION') || match.includes('## 1.')) {
-      return '';
-    }
-    return match;
-  }).trim();
-
-  // 2. If # SOLUTION heading exists directly without code block, slice before it
-  const solutionIdx = summary.indexOf('# SOLUTION');
-  if (solutionIdx !== -1) {
-    summary = summary.slice(0, solutionIdx).trim();
-  }
-
-  // 3. Clean up extra whitespace/newlines
-  summary = summary.replace(/\n{3,}/g, '\n\n').trim();
-
-  // 4. If no conversational summary left, provide standard friendly notice
-  if (!summary) {
-    return 'Đã hoàn thành phân tích và cập nhật nội dung kiến trúc vào trình soạn thảo bên trái.';
-  }
-
-  return summary;
+  return summary || 'Đã hoàn thành phân tích và cập nhật nội dung kiến trúc vào trình soạn thảo bên trái.';
 }

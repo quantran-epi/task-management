@@ -1,7 +1,54 @@
 import { describe, it, expect } from 'vitest';
 import { extractSolutionMarkdown, extractChatSummary } from '../../../src/utils/sdlcSolutionParser';
 
+const nestedDocument = [
+  '# SOLUTION — CR-2026-18',
+  '## Kiến trúc giải pháp mục tiêu',
+  '```typescript',
+  'const architecture = "complete";',
+  '```',
+  '## Kiểm thử',
+  '- Xác nhận mọi phần được giữ nguyên.',
+  '## Rollback',
+  'Khôi phục phiên bản đã phê duyệt.',
+].join('\n');
+const wrappedResponse = `Giới thiệu giải pháp.\n\`\`\`\`markdown\n${nestedDocument}\n\`\`\`\`\nXin xem bản thảo.`;
+
 describe('extractSolutionMarkdown', () => {
+  it('preserves the entire outer-fenced document across nested samples and later sections', () => {
+    expect(extractSolutionMarkdown(wrappedResponse)).toBe(nestedDocument);
+    expect(extractChatSummary(wrappedResponse)).toBe('Giới thiệu giải pháp.\n\nXin xem bản thảo.');
+  });
+
+  it('drops only a short unstructured tail after the final sample fence', () => {
+    const document = `${nestedDocument}\n\n\`\`\`\`text\nFinal sample\n\`\`\`\``;
+    const raw = `${document}\n\nXin xem bản thảo.`;
+    expect(extractSolutionMarkdown(raw)).toBe(document);
+    expect(extractChatSummary(raw)).toBe('Xin xem bản thảo.');
+  });
+
+  it.each(['## Later section\nComplete tail', '| Field | Value |', '- Keep this item', '> Keep quote', '1. Keep numbered item', 'x'.repeat(501)])(
+    'preserves structured or long content after a sample: %s', (tail) => {
+      const raw = `${nestedDocument}\n${tail}`;
+      expect(extractSolutionMarkdown(raw)).toBe(raw);
+    },
+  );
+
+  it('matches outer fence character and minimum length, not the first sample close', () => {
+    const raw = `~~~~markdown\n${nestedDocument}\n~~~\n## Final section\nComplete tail\n~~~~~\nOutro`;
+    expect(extractSolutionMarkdown(raw)).toBe(`${nestedDocument}\n~~~\n## Final section\nComplete tail`);
+    expect(extractChatSummary(raw)).toBe('Outro');
+  });
+
+  it('keeps all sections when heading is outside fences and no short tail follows the final fence', () => {
+    expect(extractSolutionMarkdown(nestedDocument)).toBe(nestedDocument);
+    expect(extractChatSummary(nestedDocument)).toContain('trình soạn thảo bên trái');
+  });
+
+  it('retains legacy complete numbered fenced block fallback', () => {
+    expect(extractSolutionMarkdown('Intro\n```md\n## 1. Overview\nBody\n```\nOutro'))
+      .toBe('## 1. Overview\nBody');
+  });
   it('returns empty string for falsy input', () => {
     expect(extractSolutionMarkdown('')).toBe('');
     expect(extractSolutionMarkdown(undefined as any)).toBe('');

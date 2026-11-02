@@ -203,12 +203,17 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
           autoApprove: toolbox.autoApproveMutations,
           model: toolbox.selectedModel || config.defaultModel,
           endpoint: config.endpoint,
+          ...(config.contextWindowTokens !== undefined ? { contextWindowTokens: config.contextWindowTokens } : {}),
           apiKey: apiKey ?? '',
           systemMessages,
           history: composedHistory,
           tools,
         });
 
+        if (outcome.phase === 'error') {
+          if (outcome.error) setError(outcome.error);
+          return;
+        }
         if (outcome.phase === 'complete' && outcome.content) {
           await extractSolutionDraft(outcome.content);
         }
