@@ -97,6 +97,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
   // token, and only the send still holding it may reach `turn.start()`.
   const preludeTokenRef = useRef<number>(0);
   const preludeSeqRef = useRef(0);
+  const pendingArtifactRef = useRef(false);
 
   const turn = useChatTurn({
     scopeKey,
@@ -214,6 +215,15 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
     [threadId, messages, db, stepId, crId, stepGroundingContext, turn, scopeKey, toolbox, extractSolutionDraft]
   );
 
+  const submitRef = useRef(submit);
+  submitRef.current = submit;
+
+  useEffect(() => {
+    if (!threadId || !pendingArtifactRef.current) return;
+    pendingArtifactRef.current = false;
+    void submitRef.current(ARTIFACT_ANALYSIS_PROMPT, 'artifact');
+  }, [threadId]);
+
   const handleClearThread = useCallback(() => {
     if (!threadId) return;
     // D-05: clear is thread-scoped — never workflow state, drafts or other step threads.
@@ -238,6 +248,10 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
   React.useImperativeHandle(ref, () => ({
     sendMessage: (text: string) => submit(text, 'qa'),
     requestArtifactAnalysis: () => {
+      if (!threadId) {
+        pendingArtifactRef.current = true;
+        return;
+      }
       void submit(ARTIFACT_ANALYSIS_PROMPT, 'artifact');
     },
   }));
