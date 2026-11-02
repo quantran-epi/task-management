@@ -270,8 +270,9 @@ export async function* streamChatEvents(
       const { done, value } = readResult;
       if (done) break;
 
-      lineBuffer += decoder.decode(value, { stream: true });
-      fullRawBody += lineBuffer;
+      const decoded = decoder.decode(value, { stream: true });
+      lineBuffer += decoded;
+      fullRawBody += decoded;
       const lines = lineBuffer.split(/\r?\n/);
       // Keep trailing incomplete fragment in the buffer
       lineBuffer = lines.pop() ?? '';

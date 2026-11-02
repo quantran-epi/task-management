@@ -305,6 +305,28 @@ describe('nineRouterClient', () => {
     ]);
   });
 
+  it('JSON fallback giữ chính xác body chia nhiều chunk và byte UTF-8', async () => {
+    const bytes = new TextEncoder().encode(JSON.stringify({
+      choices: [{ message: { content: 'Tiếng Việt nguyên vẹn' }, finish_reason: 'stop' }],
+    }, null, 2));
+    const stream = new ReadableStream({
+      start(controller) {
+        for (let index = 0; index < bytes.length; index += 3) controller.enqueue(bytes.slice(index, index + 3));
+        controller.close();
+      },
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(stream)));
+    const chunks: StreamChatChunk[] = [];
+    for await (const chunk of streamChatEvents({
+      endpoint: 'http://localhost:20128', apiKey: 'test-key',
+      payload: { model: 'model', messages: [] },
+    })) chunks.push(chunk);
+    expect(chunks).toEqual([
+      { type: 'text', delta: 'Tiếng Việt nguyên vẹn' },
+      { type: 'finish', finish_reason: 'stop' },
+    ]);
+  });
+
   it('streamChatEvents supports non-SSE JSON response from Tauri AI proxy', async () => {
     (window as any).__TAURI_INTERNALS__ = {};
     const jsonBody = JSON.stringify({
