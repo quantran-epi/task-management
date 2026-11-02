@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TaskPlannerDatabase } from '../../src/db';
-import { createOrGetThread, saveMessage, getMessagesByThreadId } from '../../src/db/repositories/chatRepo';
+import { clearThreadMessages, createOrGetThread, saveMessage, getMessagesByThreadId } from '../../src/db/repositories/chatRepo';
 import type { ChatMessage, ChatTokenUsage } from '../../src/types/models';
 import {
   createChatTurnRuntime,
@@ -219,6 +219,53 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
     const after = await messageRows();
     expect(after.find((m) => m.id === existing.id)?.content).toBe('tin nhắn cũ');
     expect(after).toHaveLength(before.length + 1); // only the new user row
+  });
+
+  it.each(['user', 'assistant'] as const)('clear chờ save %s đang chạy trước khi xóa', async (role) => {
+    let release!: () => void;
+    let started = false;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const runtime = runtimeWith(async () => ({ fullResponse: 'Cũ', tokenUsage: {} }), {
+      saveMessage: async (input, target) => {
+        if (input.role === role) { started = true; await gate; }
+        return saveMessage(input, target);
+      },
+    });
+    const pending = runtime.start(makeRequest({ threadId }));
+    await waitForStatus(() => started);
+    runtime.abort();
+    let cleared = false;
+    const clear = runtime.drainPersistence().then(async () => {
+      await clearThreadMessages(threadId, db);
+      cleared = true;
+    });
+    await Promise.resolve();
+    expect(cleared).toBe(false);
+    release();
+    await clear;
+    expect((await pending).phase).toBe('aborted');
+    expect(await messageRows()).toEqual([]);
+    expect(completed).toEqual([]);
+  });
+
+  it('clear không chờ provider và bỏ reply đến muộn', async () => {
+    let release!: () => void;
+    let started = false;
+    const runtime = runtimeWith(async (options) => {
+      started = true;
+      await new Promise<void>((resolve) => { release = resolve; });
+      options.onTextChunk?.('Muộn');
+      return { fullResponse: 'Muộn', tokenUsage: {} };
+    });
+    const pending = runtime.start(makeRequest({ threadId }));
+    await waitForStatus(() => started);
+    runtime.abort();
+    await runtime.drainPersistence();
+    await clearThreadMessages(threadId, db);
+    release();
+    expect((await pending).phase).toBe('aborted');
+    expect(await messageRows()).toEqual([]);
+    expect(deltas).toEqual([]);
   });
 
   it('sanitizes provider errors into a fixed message with no key, auth header or stack', async () => {

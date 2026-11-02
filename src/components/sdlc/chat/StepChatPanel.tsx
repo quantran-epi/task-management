@@ -252,7 +252,13 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
       okType: 'danger',
       cancelText: 'Hủy',
       onOk: async () => {
+        preludeTokenRef.current = 0;
+        pendingArtifactRef.current = false;
+        pendingArtifactScopeRef.current = null;
+        setPreludePending(false);
+        turn.abort();
         try {
+          await turn.runtime?.drainPersistence();
           await clearThreadMessages(threadId, db);
           message.success('Đã xóa hội thoại của bước này');
         } catch {
@@ -260,7 +266,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
         }
       },
     });
-  }, [threadId, db]);
+  }, [threadId, db, turn.abort, turn.runtime]);
 
   React.useImperativeHandle(ref, () => ({
     sendMessage: (text: string) => submit(text, 'qa'),

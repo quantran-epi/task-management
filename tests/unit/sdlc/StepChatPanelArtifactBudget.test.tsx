@@ -1,4 +1,5 @@
 import React from 'react';
+import { message, Modal } from 'antd';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import 'fake-indexeddb/auto';
@@ -7,19 +8,20 @@ import { StepChatPanel, type StepChatPanelHandle } from '../../../src/components
 import type { ChatTurnRequest } from '../../../src/components/ai/runtime/chatTurnRuntime';
 import * as solutionParser from '../../../src/utils/sdlcSolutionParser';
 
-const mocks = vi.hoisted(() => ({ start: vi.fn(), getStepThread: vi.fn(), contextWindowTokens: 2000 }));
+const mocks = vi.hoisted(() => ({ start: vi.fn(), getStepThread: vi.fn(), config: vi.fn(), abort: vi.fn(), drain: vi.fn(), contextWindowTokens: 2000 }));
 vi.mock('../../../src/services/wizard/sdlcCrManager', () => ({ getStepThread: mocks.getStepThread }));
 vi.mock('../../../src/components/ai/runtime/useChatTurn', () => ({
   useChatTurn: () => ({
     status: 'idle', streamingText: '', streamingStatusLabel: null, pendingApproval: null,
-    start: mocks.start, abort: vi.fn(), retry: vi.fn(), resolveApproval: vi.fn(),
+    start: mocks.start, abort: mocks.abort, retry: vi.fn(), resolveApproval: vi.fn(),
+    runtime: { isRunning: () => false, drainPersistence: mocks.drain },
   }),
 }));
 vi.mock('../../../src/components/ai/runtime/chatTurnRuntime', () => ({ createDefaultChatTurnDeps: () => ({}) }));
 vi.mock('../../../src/components/ai/AiChatWidget', () => ({
-  AiChatWidget: ({ scope, draft, onDraftChange, onSubmit, error, messages }: {
+  AiChatWidget: ({ scope, draft, onDraftChange, onSubmit, onClearThread, error, messages }: {
     scope: { threadId: string }; draft: string; onDraftChange: (text: string) => void;
-    onSubmit: (text: string) => void; error: { message: string } | null;
+    onSubmit: (text: string) => void; onClearThread: () => void; error: { message: string } | null;
     messages: Array<{ id: string; content: string }>;
   }) => <div>
     <span data-testid="thread">{scope.threadId}</span>
@@ -27,13 +29,14 @@ vi.mock('../../../src/components/ai/AiChatWidget', () => ({
     {error && <p role="alert">{error.message}</p>}
     <textarea aria-label="Question" value={draft} onChange={(event) => onDraftChange(event.target.value)} />
     <button onClick={() => onSubmit(draft)}>Send</button>
+    <button onClick={onClearThread}>Clear</button>
   </div>,
 }));
 vi.mock('../../../src/components/sdlc/chat/useStepChatToolbox', () => ({
   useStepChatToolbox: () => ({ toolsForTurn: async () => [], analysisMode: false, autoApproveMutations: false, selectedModel: 'test-model' }),
 }));
 vi.mock('../../../src/services/ai/nineRouterTokenService', () => ({
-  getNineRouterConfig: async () => ({ defaultModel: 'test-model', endpoint: 'http://localhost', contextWindowTokens: mocks.contextWindowTokens }),
+  getNineRouterConfig: mocks.config,
   getNineRouterApiKey: async () => 'test-key',
 }));
 
@@ -60,6 +63,8 @@ describe('StepChatPanel artifact context and completion safety', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mocks.contextWindowTokens = 2000;
+    mocks.config.mockImplementation(async () => ({ defaultModel: 'test-model', endpoint: 'http://localhost', contextWindowTokens: mocks.contextWindowTokens }));
+    mocks.drain.mockResolvedValue(undefined);
     mocks.getStepThread.mockResolvedValue({ id: 'solution-thread' });
     mocks.start.mockResolvedValue({ phase: 'complete', content: '' });
     db = new TaskPlannerDatabase(`artifact-budget-${crypto.randomUUID()}`);
@@ -69,6 +74,7 @@ describe('StepChatPanel artifact context and completion safety', () => {
 
   afterEach(async () => {
     cleanup();
+    act(() => message.destroy());
     vi.restoreAllMocks();
     await db.delete();
   });
@@ -80,6 +86,22 @@ describe('StepChatPanel artifact context and completion safety', () => {
     await waitFor(() => expect(screen.getByTestId('thread')).toHaveTextContent('solution-thread'));
     return ref;
   }
+
+  it('clear hủy prelude trước khi provider bắt đầu', async () => {
+    vi.spyOn(message, 'success').mockImplementation(() => undefined as never);
+    let release!: (config: unknown) => void;
+    mocks.config.mockReturnValue(new Promise((resolve) => { release = resolve; }));
+    const confirm = vi.spyOn(Modal, 'confirm').mockReturnValue({ destroy: vi.fn(), update: vi.fn() });
+    const ref = await mount();
+    await act(async () => { ref.current!.requestArtifactAnalysis(); });
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    await act(async () => { await confirm.mock.calls[0]![0].onOk!(); });
+    expect(mocks.abort).toHaveBeenCalledOnce();
+    expect(mocks.drain).toHaveBeenCalledOnce();
+    await act(async () => { release({ defaultModel: 'test', endpoint: 'http://localhost' }); });
+    expect(mocks.start).not.toHaveBeenCalled();
+    expect(await db.chatMessages.count()).toBe(0);
+  });
 
   it('giữ draft khi runtime từ chối lượt gửi', async () => {
     mocks.start.mockRejectedValue(new Error('TURN_IN_PROGRESS'));

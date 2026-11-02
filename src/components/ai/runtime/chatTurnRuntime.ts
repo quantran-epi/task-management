@@ -91,6 +91,7 @@ export interface ChatTurnRuntime {
   resolveApproval(approved: boolean): void;
   getStatus(): ChatTurnStatus;
   isRunning(): boolean;
+  drainPersistence(): Promise<void>;
 }
 
 /**
@@ -141,6 +142,7 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
   let declined = false;
   let lastRequest: ChatTurnRequest | null = null;
   let lastUserMessageId: string | null = null;
+  let pendingSave: Promise<ChatMessage> | null = null;
 
   const publish = (next: ChatTurnStatus) => {
     if (status === next) return;
@@ -198,11 +200,14 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
           userMessageId = candidate.id;
         }
       }
+      if (!isCurrent(turnId, turnController)) {
+        return { phase: 'aborted', requestId: turnId, userMessageId };
+      }
       if (!userMessageId) {
-        const saved = await deps.saveMessage(
+        const saved = await (pendingSave = deps.saveMessage(
           { threadId: request.threadId, role: 'user', content: request.text },
           deps.db
-        );
+        ));
         userMessageId = saved.id;
       }
       lastUserMessageId = userMessageId;
@@ -248,6 +253,7 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
             allowMutation: request.autoApprove,
           }),
         onTextChunk: (delta) => {
+          if (!isCurrent(turnId, turnController)) return;
           fullResponse += delta;
           const stripped = stripThinkingBlocks(fullResponse);
           if (stripped.length > displayed.length) {
@@ -303,6 +309,7 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
             return { proceed: true };
           }
           const summary = await deps.describeMutation(toolName, args, deps.db);
+          if (!isCurrent(turnId, turnController)) return { proceed: false, cancellationResult: DECLINED_CANCELLATION };
           publish('awaiting-approval');
           deps.onAwaitingApproval?.({ toolName, summary });
           const approved = await new Promise<boolean>((resolve) => {
@@ -355,7 +362,7 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
       }
 
       // Only a validated complete turn reaches IndexedDB (T-25.3-22).
-      await deps.saveMessage(
+      await (pendingSave = deps.saveMessage(
         {
           threadId: request.threadId,
           role: 'assistant',
@@ -365,7 +372,10 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
           ...(generatedFiles.length > 0 ? { generatedFiles } : {}),
         },
         deps.db
-      );
+      ));
+      if (!isCurrent(turnId, turnController)) {
+        return { phase: 'aborted', requestId: turnId, userMessageId };
+      }
 
       publish('complete');
       deps.onCompleted?.({ content: clean, tokenUsage });
@@ -406,5 +416,7 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
     resolveApproval,
     getStatus: () => status,
     isRunning: () => running,
+    // Chỉ chờ write đã bắt đầu, không chờ provider có thể bỏ qua abort.
+    drainPersistence: async () => { await pendingSave?.catch(() => {}); },
   };
 }
