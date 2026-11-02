@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 export interface ResizeSplitterProps {
   /** Direction of the resizing pane relative to the splitter.
@@ -33,6 +33,8 @@ export const ResizeSplitter: React.FC<ResizeSplitterProps> = ({
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
+  const dragCleanupRef = useRef<(() => void) | null>(null);
+  useEffect(() => () => dragCleanupRef.current?.(), []);
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
@@ -42,6 +44,8 @@ export const ResizeSplitter: React.FC<ResizeSplitterProps> = ({
       e.preventDefault();
       e.stopPropagation();
 
+      dragCleanupRef.current?.();
+      const pointerId = e.pointerId;
       const startX = e.clientX;
       const startWidth = currentWidth;
       setIsDragging(true);
@@ -50,6 +54,7 @@ export const ResizeSplitter: React.FC<ResizeSplitterProps> = ({
       target.setPointerCapture(e.pointerId);
 
       const handlePointerMove = (moveEvent: PointerEvent) => {
+        if (moveEvent.pointerId !== pointerId) return;
         const delta = moveEvent.clientX - startX;
         const newWidth = side === 'left' ? startWidth + delta : startWidth - delta;
         const clamped = Math.max(minWidth, Math.min(maxWidth, newWidth));
@@ -57,16 +62,21 @@ export const ResizeSplitter: React.FC<ResizeSplitterProps> = ({
       };
 
       const handlePointerUp = (upEvent: PointerEvent) => {
-        try {
-          if (target.hasPointerCapture(upEvent.pointerId)) {
-            target.releasePointerCapture(upEvent.pointerId);
-          }
-        } catch {}
-
+        if (upEvent.pointerId !== pointerId) return;
+        dragCleanupRef.current?.();
         setIsDragging(false);
+      };
+      let cleaned = false;
+      dragCleanupRef.current = () => {
+        if (cleaned) return;
+        cleaned = true;
         window.removeEventListener('pointermove', handlePointerMove);
         window.removeEventListener('pointerup', handlePointerUp);
         window.removeEventListener('pointercancel', handlePointerUp);
+        try {
+          if (target.hasPointerCapture(pointerId)) target.releasePointerCapture(pointerId);
+        } catch {}
+        dragCleanupRef.current = null;
       };
 
       window.addEventListener('pointermove', handlePointerMove);
