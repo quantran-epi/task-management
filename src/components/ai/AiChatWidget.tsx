@@ -257,6 +257,8 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
   // `compact` prop still wins — it lets a host state the answer without measuring.
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [measuredNarrow, setMeasuredNarrow] = useState(false);
+  const [toolActivityExpanded, setToolActivityExpanded] = useState(false);
+  const toolActivityId = `tool-activity-${scope.scopeKey.replace(/[^A-Za-z0-9]/g, '-')}`;
   const resolvedCompact = compact ?? measuredNarrow;
 
   useEffect(() => {
@@ -371,9 +373,45 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
 
       {mergedToolEvents.length > 0 && (
         <div style={{ padding: '0 16px' }}>
-          {mergedToolEvents.map((event) => (
-            <ToolEventBadge key={event.id} event={event} />
-          ))}
+          {mergedToolEvents.length > 1 ? (
+            <>
+              <button
+                type="button"
+                aria-expanded={toolActivityExpanded}
+                aria-controls={toolActivityId}
+                onClick={() => setToolActivityExpanded((prev) => !prev)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  minHeight: 32,
+                  marginBottom: 4,
+                  padding: '4px 8px',
+                  fontSize: 12,
+                  color: token.colorTextSecondary,
+                  background: token.colorFillAlter,
+                  border: `1px solid ${token.colorBorderSecondary}`,
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                }}
+              >
+                <span>{mergedToolEvents.length} công cụ đã gọi</span>
+                <span>{toolActivityExpanded ? 'Thu gọn' : 'Xem chi tiết'}</span>
+              </button>
+              <div
+                id={toolActivityId}
+                role="group"
+                aria-label="Hoạt động công cụ"
+                style={{ maxHeight: 160, overflowY: 'auto', overscrollBehavior: 'contain' }}
+              >
+                {(toolActivityExpanded ? mergedToolEvents : mergedToolEvents.slice(-1)).map((event) => (
+                  <ToolEventBadge key={event.id} event={event} />
+                ))}
+              </div>
+            </>
+          ) : (
+            mergedToolEvents.map((event) => <ToolEventBadge key={event.id} event={event} />)
+          )}
         </div>
       )}
 
