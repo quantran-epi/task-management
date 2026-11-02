@@ -56,6 +56,11 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
   const { token } = theme.useToken();
   const knowledgeConfig = useOptionalKnowledgeConfig();
   const [selectedStep, setSelectedStep] = useState<SdlcStepId>('INTAKE');
+  const selectedStepRef = useRef<SdlcStepId>('INTAKE');
+  const setSelectedStepTracked = useCallback((step: SdlcStepId) => {
+    selectedStepRef.current = step;
+    setSelectedStep(step);
+  }, []);
   const [activeCrId, setActiveCrId] = useState<string>('');
   const [threadId, setThreadId] = useState<string>(() => generateId());
   const [workflowState, setWorkflowState] = useState<SdlcWorkflowState | undefined>(undefined);
@@ -160,7 +165,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
       )?.artifactEvent;
       if (!event) return;
       const step = STEP_FOR_KIND[event.kind];
-      if (step) setSelectedStep(step);
+      if (step) setSelectedStepTracked(step);
 
       // The exact body comes from the version history, never from the active artifact.
       const history = workflowState?.versions?.[event.kind] ?? [];
@@ -177,14 +182,15 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
       }
       setReadOnlySolution(event.kind === 'SOLUTION' ? readOnly : false);
     },
-    [stepMessages, workflowState?.versions]
+    [stepMessages, workflowState?.versions, setSelectedStepTracked]
   );
 
 
   const selectCr = useCallback((crId: string) => {
+    if (activeCrRef.current !== crId) clearAnalysisTimer();
     activeCrRef.current = crId;
     setActiveCrId(crId);
-  }, []);
+  }, [clearAnalysisTimer]);
 
   // Initialize active CR
   useEffect(() => {
@@ -338,15 +344,21 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
     message.error('Không thể hoàn tất thao tác. Vui lòng kiểm tra lại hồ sơ của bước trước.');
   }, []);
 
-  const handleTriggerSolutionAnalysis = useCallback(() => {
-    setSelectedStep('SOLUTION');
-    // Explicit user action only (D-16): never fired on mount or step change.
+  const scheduleSolutionAnalysis = useCallback(() => {
+    const crId = activeCrRef.current;
     clearAnalysisTimer();
+    setSelectedStepTracked('SOLUTION');
+    // Only explicit intake activation or re-analysis may schedule a turn, never mounting.
     analysisTimerRef.current = setTimeout(() => {
       analysisTimerRef.current = null;
+      if (selectedStepRef.current !== 'SOLUTION' || activeCrRef.current !== crId) return;
       chatPanelRef.current?.requestArtifactAnalysis();
     }, 150);
-  }, [clearAnalysisTimer]);
+  }, [clearAnalysisTimer, setSelectedStepTracked]);
+
+  const handleTriggerSolutionAnalysis = useCallback(() => {
+    scheduleSolutionAnalysis();
+  }, [scheduleSolutionAnalysis]);
 
   const saveDraft = useCallback(
     async (markdown: string) => {
@@ -388,7 +400,8 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
       }
       const nextState = await coordinator.startOrUpdateIntake(metadata, pl01, pl02);
       setWorkflowState(nextState);
-      setSelectedStep('SOLUTION');
+      setSelectedStepTracked('SOLUTION');
+      scheduleSolutionAnalysis();
     } catch (err) {
       reportGuardError(err);
     }
@@ -415,22 +428,24 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
       await db.settings.delete(draftSettingKey(projectId, activeCrRef.current || 'default-cr'));
       setWorkflowState(undefined);
       setIncomingSolutionDraft(undefined);
-      setSelectedStep('INTAKE');
+      clearAnalysisTimer();
+      setSelectedStepTracked('INTAKE');
       message.success('Đã đặt lại quy trình về ban đầu. Ghi chú đã lưu vẫn được bảo toàn.');
     } catch (err) {
       reportGuardError(err);
     }
-  }, [coordinator, projectId, db, reportGuardError]);
+  }, [coordinator, projectId, db, reportGuardError, clearAnalysisTimer, setSelectedStepTracked]);
 
   const handleNavigateToStep = useCallback(
     (step: SdlcStepId) => {
+      clearAnalysisTimer();
+      setSelectedStepTracked(step);
       void coordinator.navigateToStep(step).catch(reportGuardError);
-      setSelectedStep(step);
       // Any explicit navigation returns the step to its live artifact.
       setViewedVersion(undefined);
       setReadOnlySolution(false);
     },
-    [coordinator, reportGuardError]
+    [coordinator, reportGuardError, clearAnalysisTimer, setSelectedStepTracked]
   );
 
   const renderStepNode = () => {
