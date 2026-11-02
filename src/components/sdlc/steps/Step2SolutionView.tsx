@@ -81,7 +81,7 @@ export const Step2SolutionView: React.FC<Step2SolutionViewProps> = ({
 
   // Sync when initialContent changes on remount/parent update
   useEffect(() => {
-    const parentContent = solutionArtifact?.content ?? initialContent;
+    const parentContent = viewedVersion?.content ?? incomingDraft ?? solutionArtifact?.content ?? initialContent;
     if (parentContent && parentContent !== content) {
       setContent(parentContent);
     }

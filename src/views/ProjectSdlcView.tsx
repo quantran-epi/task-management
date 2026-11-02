@@ -90,8 +90,12 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
   // Cards for the step thread currently on screen (D-06: metadata only, body stays in the editor).
   const stepMessages =
     useLiveQuery(
-      () => (threadId ? db.chatMessages.where('threadId').equals(threadId).toArray() : []),
-      [threadId, db]
+      async () => {
+        const thread = await db.chatThreads.get(threadId);
+        if (thread?.scopeKey !== `sdlc:${projectId}:${activeCrId}:${selectedStep}`) return [];
+        return db.chatMessages.where('threadId').equals(threadId).toArray();
+      },
+      [threadId, projectId, activeCrId, selectedStep, db]
     ) ?? [];
   const crStatus = crList.find((cr) => cr.id === activeCrId)?.status ?? 'active';
   const activeVersions = workflowState?.activeVersions ?? {};
@@ -110,7 +114,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
             hash: event.hash,
             status: event.status,
             ...(event.ctaLabel ? { ctaLabel: event.ctaLabel } : {}),
-            readOnly: event.version !== active || crStatus !== 'active',
+            readOnly: (event.status === 'approved' && event.version !== active) || crStatus !== 'active',
           };
         }),
     [stepMessages, activeVersions, crStatus]
@@ -168,7 +172,9 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
 
       // The exact body comes from the version history, never from the active artifact.
       const history = workflowState?.versions?.[event.kind] ?? [];
-      const pinned = history.find((ref) => ref.version === event.version && ref.content?.trim());
+      const pinned = event.status === 'approved'
+        ? history.find((ref) => ref.version === event.version && ref.content?.trim())
+        : undefined;
       if (pinned?.content) {
         setViewedVersion({
           kind: event.kind,
@@ -474,12 +480,12 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
       case 'SOLUTION':
         return (
           <Step2SolutionView
-            key={activeCrId}
+            key={`${activeCrId}:${viewedVersion?.kind === 'SOLUTION' ? viewedVersion.version : 'live'}`}
             projectId={projectId}
             crId={activeCrId}
             solutionArtifact={workflowState?.artifacts.solution}
             initialContent={workflowState?.artifacts.solution?.content}
-            incomingDraft={incomingSolutionDraft}
+            incomingDraft={viewedVersion?.kind === 'SOLUTION' ? undefined : incomingSolutionDraft}
             pl01Content={workflowState?.artifacts.pl01?.content}
             pl02Content={workflowState?.artifacts.pl02?.content}
             metadata={workflowState?.metadata}
@@ -678,8 +684,8 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
           artifactEvents={artifactEvents}
           onArtifactOpen={handleArtifactOpen}
           onArtifactCta={(eventId) => {
-            const event = stepMessages.find((m) => m.id === eventId);
-            handleArtifactOpen(eventId, event?.artifactEvent?.status === 'approved' ? false : true);
+            const event = artifactEvents.find((event) => event.id === eventId);
+            if (event) handleArtifactOpen(eventId, event.readOnly === true);
           }}
           db={db}
         />
