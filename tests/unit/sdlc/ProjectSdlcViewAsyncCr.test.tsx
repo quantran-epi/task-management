@@ -1,0 +1,152 @@
+import React from 'react';
+import Dexie from 'dexie';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { message } from 'antd';
+import { TaskPlannerDatabase } from '../../../src/db';
+import { ProjectSdlcView } from '../../../src/views/ProjectSdlcView';
+import { createSdlcWorkflowCoordinator, workflowStorageKey } from '../../../src/services/wizard/workflowCoordinator';
+import type { SdlcWorkflowState } from '../../../src/services/wizard/workflowSchemas';
+
+const mocks = vi.hoisted(() => ({ hashGate: null as Promise<void> | null }));
+vi.mock('../../../src/services/wizard/workflowCoordinator', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../src/services/wizard/workflowCoordinator')>();
+  return { ...actual, defaultSha256: async (text: string) => {
+    await mocks.hashGate;
+    return actual.defaultSha256(text);
+  } };
+});
+vi.mock('../../../src/components/sdlc/SdlcSidebar', () => ({
+  SdlcSidebar: ({ activeCrId, onSelectCr, onSelectStep, workflowState }: {
+    activeCrId: string; onSelectCr: (id: string) => void; onSelectStep: (step: 'SOLUTION') => void;
+    workflowState?: SdlcWorkflowState;
+  }) => <div>
+    <span data-testid="cr">{activeCrId}</span>
+    <span data-testid="version">{workflowState?.activeVersions?.SOLUTION}</span>
+    <button onClick={() => onSelectCr('B')}>CR-B</button>
+    <button onClick={() => onSelectStep('SOLUTION')}>SOLUTION</button>
+  </div>,
+}));
+vi.mock('../../../src/components/sdlc/SdlcWorkspace', () => ({
+  SdlcWorkspace: ({ stepViewNode, onSolutionExtracted }: {
+    stepViewNode: React.ReactNode; onSolutionExtracted: (text: string) => Promise<void>;
+  }) => <div>{stepViewNode}<button onClick={() => void onSolutionExtracted('# SOLUTION draft A')}>Trích xuất</button></div>,
+}));
+vi.mock('../../../src/components/sdlc/steps/Step2SolutionView', () => ({
+  Step2SolutionView: ({ onCommitSolution }: { onCommitSolution: (text: string, noteId: string) => Promise<void> }) =>
+    <button onClick={() => void onCommitSolution('# SOLUTION approved A', crypto.randomUUID())}>Duyệt</button>,
+}));
+
+function deferred() {
+  let release!: () => void;
+  const promise = new Promise<void>((resolve) => { release = resolve; });
+  return { promise, release };
+}
+
+const pid = crypto.randomUUID();
+const draftKey = (cr: string) => `sdlc_draft_solution:${pid}:${cr}`;
+let db: TaskPlannerDatabase;
+afterEach(async () => {
+  cleanup();
+  mocks.hashGate = null;
+  vi.restoreAllMocks();
+  await db?.delete();
+});
+
+async function mount() {
+  vi.spyOn(message, 'success').mockImplementation(() => undefined as never);
+  db = new TaskPlannerDatabase(`async-cr-${crypto.randomUUID()}`);
+  const metadata = { cr: 'CR-A', featureName: 'A', author: 'Tester', requestingUnit: 'CNTT', date: '2026-11-02' };
+  await db.settings.put({ key: `sdlc_crs:${pid}`, value: JSON.stringify([
+    { id: 'A', status: 'active', ...metadata }, { id: 'B', status: 'archived', ...metadata, cr: 'CR-B' },
+  ]) });
+  for (const [cr, versions] of [['A', 2], ['B', 7]] as const) {
+    const coordinator = createSdlcWorkflowCoordinator({
+      projectId: pid, threadId: crypto.randomUUID(),
+      saveState: async (state) => { await db.settings.put({ key: workflowStorageKey(pid, cr), value: JSON.stringify(state) }); },
+    });
+    await coordinator.startOrUpdateIntake({ ...metadata, cr: `CR-${cr}` }, 'PL01', 'PL02');
+    for (let version = 1; version <= versions; version += 1) await coordinator.commitSolution(`# SOLUTION ${cr} v${version}`);
+    await db.settings.put({ key: draftKey(cr), value: `Draft ${cr}` });
+  }
+  render(<ProjectSdlcView projectId={pid} db={db} onBack={() => {}} />);
+  await waitFor(() => expect(screen.getByTestId('version')).toHaveTextContent('2'));
+  return (await db.settings.get(workflowStorageKey(pid, 'B')))!.value;
+}
+
+async function switchCr() {
+  fireEvent.click(screen.getByRole('button', { name: 'CR-B' }));
+  await waitFor(() => expect(screen.getByTestId('cr')).toHaveTextContent('B'));
+  await waitFor(() => expect(screen.getByTestId('version')).toHaveTextContent('7'));
+}
+
+async function expectBUnchanged(snapshot: unknown) {
+  const { updatedAt: restoredAt, ...actual } = JSON.parse(String((await db.settings.get(workflowStorageKey(pid, 'B')))!.value));
+  const { updatedAt: savedAt, ...expected } = JSON.parse(String(snapshot));
+  expect(restoredAt).toBeTruthy();
+  expect(savedAt).toBeTruthy();
+  expect(actual).toEqual(expected);
+  expect((await db.settings.get(draftKey('B')))!.value).toBe('Draft B');
+  const threadsB = (await db.chatThreads.toArray()).filter((thread) => thread.scopeKey.startsWith(`sdlc:${pid}:B:`));
+  const cards = (await db.chatMessages.toArray()).filter((row) => row.artifactEvent);
+  expect(cards).toHaveLength(1);
+  expect(threadsB.map((thread) => thread.id)).not.toContain(cards[0]!.threadId);
+  expect((await db.chatThreads.get(cards[0]!.threadId))!.scopeKey).toBe(`sdlc:${pid}:A:SOLUTION`);
+  expect(cards[0]!.artifactEvent!.version).toBe(3);
+  expect(screen.getByTestId('version')).toHaveTextContent('7');
+}
+
+describe('WR-05: controller giữ CR qua async boundary', () => {
+  it.each(['write', 'hash'] as const)('draft/card giữ CR-A khi %s chờ rồi đổi CR-B', async (boundary) => {
+    const snapshot = await mount();
+    const gate = deferred();
+    let blocked = false;
+    if (boundary === 'hash') mocks.hashGate = gate.promise;
+    else {
+      const put = db.settings.put.bind(db.settings);
+      vi.spyOn(db.settings, 'put').mockImplementation((row, ...args) => {
+        if (row.key === draftKey('A')) {
+          blocked = true;
+          return Dexie.Promise.resolve(gate.promise).then(() => put(row, ...args));
+        }
+        return put(row, ...args);
+      });
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Trích xuất' }));
+    await waitFor(async () => {
+      if (boundary === 'write') expect(blocked).toBe(true);
+      else expect((await db.settings.get(draftKey('A')))!.value).toBe('# SOLUTION draft A');
+    });
+    await switchCr();
+    await act(async () => { gate.release(); });
+    await waitFor(async () => expect(await db.chatMessages.count()).toBe(1));
+    expect((await db.settings.get(draftKey('A')))!.value).toBe('# SOLUTION draft A');
+    await expectBUnchanged(snapshot);
+  });
+
+  it('commit/delete/card/version giữ CR-A khi persistence resolve sau đổi CR-B', async () => {
+    const snapshot = await mount();
+    fireEvent.click(screen.getByRole('button', { name: 'SOLUTION' }));
+    await screen.findByRole('button', { name: 'Duyệt' });
+    const gate = deferred();
+    let blocked = false;
+    const put = db.settings.put.bind(db.settings);
+    vi.spyOn(db.settings, 'put').mockImplementation((row, ...args) => {
+      if (row.key === workflowStorageKey(pid, 'A') && JSON.parse(String(row.value)).activeVersions.SOLUTION === 3) {
+        blocked = true;
+        return Dexie.Promise.resolve(gate.promise).then(() => put(row, ...args));
+      }
+      return put(row, ...args);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Duyệt' }));
+    await waitFor(() => expect(blocked).toBe(true));
+    await switchCr();
+    await act(async () => { gate.release(); });
+    await waitFor(async () => expect(await db.chatMessages.count()).toBe(1));
+    expect(await db.settings.get(draftKey('A'))).toBeUndefined();
+    const stateA = JSON.parse(String((await db.settings.get(workflowStorageKey(pid, 'A')))!.value));
+    expect(stateA.versions.SOLUTION.map((ref: { version: number }) => ref.version)).toEqual([1, 2, 3]);
+    expect(stateA.artifacts.solution.content).toBe('# SOLUTION approved A');
+    await expectBUnchanged(snapshot);
+  });
+});
