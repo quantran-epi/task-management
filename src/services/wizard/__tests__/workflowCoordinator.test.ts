@@ -102,12 +102,26 @@ describe('createSdlcWorkflowCoordinator', () => {
     expect(preview.impactSteps).toEqual(['CODE_GUIDE', 'CHANGE_PACK', 'TECH_DOCS', 'CAB']);
     expect(preview.requiresConfirmation).toBe(true);
     const cancelled = coordinator.getState();
+    const beforeRevision = structuredClone(cancelled);
+    await expect(coordinator.commitRevision(preview, false)).rejects.toThrow('REVISION_CONFIRMATION_REQUIRED');
+    expect(coordinator.getState()).toEqual(beforeRevision);
     expect(cancelled?.versions?.SOLUTION).toHaveLength(1);
+    for (const stalePreview of [
+      { ...preview, baseVersion: 0 },
+      { ...preview, baseHash: 'c'.repeat(64) },
+    ]) {
+      await expect(coordinator.commitRevision(stalePreview, true)).rejects.toThrow('REVISION_BASE_STALE');
+      expect(coordinator.getState()).toEqual(beforeRevision);
+    }
     const committed = await coordinator.commitRevision(preview, true);
     expect(committed.versions?.SOLUTION).toHaveLength(2);
     expect(committed.activeVersions?.SOLUTION).toBe(2);
-    expect(committed.artifacts.solution?.approvedAt).toBeTruthy();
-    expect(committed.versions?.SOLUTION?.at(-1)?.approvedAt).toBeTruthy();
+    const approvedAt = committed.artifacts.solution?.approvedAt;
+    expect(approvedAt).toBeTruthy();
+    expect(new Date(approvedAt!).toISOString()).toBe(approvedAt);
+    expect(committed.versions?.SOLUTION?.at(-1)?.approvedAt).toBe(approvedAt);
+    expect(committed.versions?.SOLUTION?.[0]).toEqual(beforeRevision?.versions?.SOLUTION?.[0]);
+    expect(cancelled).toEqual(beforeRevision);
   });
 
   it('closes CAB cycle and opens new cycle for later revision', async () => {
