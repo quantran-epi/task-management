@@ -154,7 +154,7 @@ export function createSdlcWorkflowCoordinator(deps: WorkflowCoordinatorDeps) {
     const key = preview.kind === 'PL01' ? 'pl01' : preview.kind === 'PL02' ? 'pl02' : preview.kind === 'SOLUTION' ? 'solution' : preview.kind === 'CODE_GUIDE' ? 'codeGuide' : preview.kind === 'CHANGE_PACK' ? 'changePack' : preview.kind === 'PL03B' ? 'pl03b' : preview.kind === 'PL07' ? 'pl07' : 'cab';
     const previous = state.artifacts[key];
     if ((previous?.version ?? 0) !== preview.baseVersion || (preview.baseHash && previous?.hash !== preview.baseHash)) throw guardError('REVISION_BASE_STALE');
-    const next: SdlcArtifactRef = { kind: preview.kind, version: preview.baseVersion + 1, hash: preview.hash, title: previous?.title ?? preview.kind, content: preview.markdown, sourceHashes: previous?.sourceHashes ?? [], updatedAt: now() };
+    const next: SdlcArtifactRef = { kind: preview.kind, version: preview.baseVersion + 1, hash: preview.hash, title: previous?.title ?? preview.kind, content: preview.markdown, sourceHashes: previous?.sourceHashes ?? [], updatedAt: now(), approvedAt: now() };
     const versions = { ...(state.versions ?? {}) } as NonNullable<SdlcWorkflowState['versions']>;
     versions[preview.kind] = [...(versions[preview.kind] ?? []), ...(previous && (versions[preview.kind]?.length ?? 0) === 0 ? [previous] : []), next];
     const activeVersions = { ...(state.activeVersions ?? {}) } as NonNullable<SdlcWorkflowState['activeVersions']>;

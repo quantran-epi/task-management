@@ -106,6 +106,8 @@ describe('createSdlcWorkflowCoordinator', () => {
     const committed = await coordinator.commitRevision(preview, true);
     expect(committed.versions?.SOLUTION).toHaveLength(2);
     expect(committed.activeVersions?.SOLUTION).toBe(2);
+    expect(committed.artifacts.solution?.approvedAt).toBeTruthy();
+    expect(committed.versions?.SOLUTION?.at(-1)?.approvedAt).toBeTruthy();
   });
 
   it('closes CAB cycle and opens new cycle for later revision', async () => {
