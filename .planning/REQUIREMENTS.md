@@ -10,10 +10,10 @@
 ### SDLC Prompt Architecture (SDLC-PR)
 
 - [x] **SDLC-PR-01**: Every SDLC turn carries real grounding — the project SDLC view supplies `stepGroundingContext` built from the step's own artifacts (PL01/PL02, pinned SOLUTION, change-pack manifest, prior tech docs, CR metadata) plus bounded retrieved evidence; an empty-grounding turn is impossible from the production view.
-- [ ] **SDLC-PR-02**: The composer emits a per-step tool-use policy layer naming which tools are available in that step and when to call them (`query_notes`, `search_knowledge_base`, `retrieve_knowledge`, `read_file`, read-only MCP tools, artifact tools), including "call again with a narrower query when evidence is thin" and "do not answer from memory when a tool could resolve it".
+- [x] **SDLC-PR-02**: The composer emits a per-step tool-use policy layer naming which tools are available in that step and when to call them (`query_notes`, `search_knowledge_base`, `retrieve_knowledge`, `read_file`, read-only MCP tools, artifact tools), including "call again with a narrower query when evidence is thin" and "do not answer from memory when a tool could resolve it".
 - [ ] **SDLC-PR-03**: Artifact output contracts are selected from the turn's real intent — SOLUTION, PL03B, PL07, and CAB each reach their own contract — and `StepChatPanel` no longer hardcodes `artifact: 'SOLUTION'`.
-- [ ] **SDLC-PR-04**: Few-shot exemplars cover, per step, at least one tool-calling turn and one evidence-insufficient turn, so the model sees how to combine retrieval with an answer.
-- [ ] **SDLC-PR-05**: The composed system prompt stays layered and ordered (policy → step contract → tool policy → few-shot → grounding → output contract → language rule); an existing test asserts no step or grounding text can precede the policy layer.
+- [x] **SDLC-PR-04**: Few-shot exemplars cover, per step, at least one tool-calling turn and one evidence-insufficient turn, so the model sees how to combine retrieval with an answer.
+- [x] **SDLC-PR-05**: The composed system prompt stays layered and ordered (policy → step contract → tool policy → few-shot → grounding → output contract → language rule); an existing test asserts no step or grounding text can precede the policy layer.
 - [ ] **SDLC-PR-06**: The tool loop is bounded and observable: multi-round tool calls run up to an explicit per-turn limit, every call shows in the widget's tool-activity list, and hitting the limit ends the turn with a visible "evidence gathering stopped" status instead of silently truncating.
 
 ### Studio Artifact Tools (SDLC-ART)
@@ -88,10 +88,10 @@
 | Requirement | Phase | Status |
 |---|---|---|
 | SDLC-PR-01 | Phase 26 | Complete |
-| SDLC-PR-02 | Phase 26 | Pending |
+| SDLC-PR-02 | Phase 26 | Complete |
 | SDLC-PR-03 | Phase 26 | Pending |
-| SDLC-PR-04 | Phase 26 | Pending |
-| SDLC-PR-05 | Phase 26 | Pending |
+| SDLC-PR-04 | Phase 26 | Complete |
+| SDLC-PR-05 | Phase 26 | Complete |
 | SDLC-PR-06 | Phase 26 | Pending |
 | SDLC-ART-01 | Phase 27 | Pending |
 | SDLC-ART-02 | Phase 27 | Pending |
