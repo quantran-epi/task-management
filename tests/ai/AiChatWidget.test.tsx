@@ -72,6 +72,40 @@ describe('AiChatWidget lifecycle and host extension points (D-01..D-06, D-19, D-
     cleanup();
   });
 
+  it('renders neutral tool-limit with warning, retry, retained tools and 12px details', () => {
+    const onRetry = vi.fn();
+    render(<AiChatWidget {...makeProps({ onRetry,
+      messages: [makeMessage('user', 'Narrow question')],
+      turn: { status: 'tool-limit', streamingText: 'PARTIAL-NOT-AN-ANSWER',
+        streamingStatusLabel: null, pendingApproval: null, toolLimitRounds: 7 },
+      toolEvents: [
+        { id: 'one', name: 'query_notes', phase: 'call', args: '{"query":"one"}' },
+        { id: 'one', name: 'query_notes', phase: 'result', result: 'Audit result' },
+        { id: 'two', name: 'retrieve_knowledge', phase: 'result', result: 'More evidence' },
+      ],
+    })} />);
+    const tag = screen.getByText('Đã dừng thu thập bằng chứng').closest('.ant-tag');
+    expect(tag).toHaveClass('ant-tag-default');
+    expect(tag).not.toHaveClass('ant-tag-warning', 'ant-tag-error');
+    expect(tag?.querySelector('[aria-label="stop"]')).toBeInTheDocument();
+    expect(tag).toHaveStyle({ fontSize: '12px' });
+    expect(screen.getByRole('alert')).toHaveClass('ant-alert-warning');
+    expect(screen.getByRole('alert')).toHaveTextContent('Đã dừng thu thập bằng chứng sau 7 vòng.');
+    expect(screen.queryByText('PARTIAL-NOT-AN-ANSWER')).not.toBeInTheDocument();
+    expect(document.querySelector('.chat-message-assistant')).toBeNull();
+    expect(screen.queryByTestId('ai-staged-loading')).not.toBeInTheDocument();
+    expect(screen.queryByText('Chờ phê duyệt')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI')).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: /2 công cụ đã gọi/ }));
+    expect(screen.getAllByRole('button', { name: /\[Công cụ\]/ })).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: /\[Công cụ\] query_notes/ }));
+    expect(screen.getByText('Tham số')).toHaveStyle({ fontSize: '12px' });
+    expect(screen.getByText('{"query":"one"}')).toHaveStyle({ fontSize: '12px' });
+    expect(screen.getByText('Audit result')).toBeInTheDocument();
+  });
+
   it('renders the staged indicator immediately while the turn is preparing', () => {
     render(
       <AiChatWidget

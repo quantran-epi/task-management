@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Tag, Typography, theme } from 'antd';
-import { SyncOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { Alert, Button, Tag, Typography, theme } from 'antd';
+import { SyncOutlined, CheckCircleOutlined, StopOutlined } from '@ant-design/icons';
 import type { ChatMessage } from '../../types/models';
-import type { ChatTurnStatus, ChatTurnToolEvent } from './runtime/chatTurnRuntime';
+import { formatToolLimitMessage, type ChatTurnStatus, type ChatTurnToolEvent } from './runtime/chatTurnRuntime';
 import type { McpServerConfig } from '../../services/ai/mcpClient';
 import { renderSafeMarkdown } from '../../utils/markdown';
 import { ChatTabToolbox } from './ChatTabToolbox';
@@ -58,6 +58,7 @@ export interface AiChatTurnSnapshot {
   streamingText: string;
   streamingStatusLabel: string | null;
   pendingApproval: { toolName: string; summary: string } | null;
+  toolLimitRounds?: number | null;
 }
 
 export interface AiChatWidgetProps {
@@ -194,10 +195,10 @@ const ToolEventBadge: React.FC<{ event: ChatTurnToolEvent }> = ({ event }) => {
         >
           {event.args && (
             <div>
-              <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                 Tham số
               </Typography.Text>
-              <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: 11 }}>{event.args}</pre>
+              <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: 12 }}>{event.args}</pre>
             </div>
           )}
           <div
@@ -314,6 +315,11 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
           {scope.label}
         </Typography.Text>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          {turn.status === 'tool-limit' && (
+            <Tag color="default" icon={<StopOutlined />} style={{ margin: 0, fontSize: 12 }}>
+              Đã dừng thu thập bằng chứng
+            </Tag>
+          )}
           {turn.pendingApproval && (
             <Tag color="warning" style={{ margin: 0, fontSize: 12 }}>
               Chờ phê duyệt
@@ -358,7 +364,7 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
 
       <ChatMessageList
         messages={messages}
-        streamingText={turn.streamingText}
+        streamingText={turn.status === 'tool-limit' ? '' : turn.streamingText}
         isStreaming={isTurnActive}
         streamingStatus={turn.streamingStatusLabel}
         error={error?.message ?? null}
@@ -413,6 +419,17 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
           ) : (
             mergedToolEvents.map((event) => <ToolEventBadge key={event.id} event={event} />)
           )}
+        </div>
+      )}
+
+      {turn.status === 'tool-limit' && turn.toolLimitRounds != null && (
+        <div style={{ padding: '0 16px' }}>
+          <Alert
+            type="warning"
+            showIcon
+            title={formatToolLimitMessage(turn.toolLimitRounds)}
+            action={<Button size="small" onClick={onRetry}>Thử lại</Button>}
+          />
         </div>
       )}
 

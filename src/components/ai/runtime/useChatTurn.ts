@@ -38,6 +38,8 @@ export function stageLabelFor(status: ChatTurnStatus): string | null {
       return 'Đang phản hồi';
     case 'awaiting-approval':
       return 'Chờ phê duyệt';
+    case 'tool-limit':
+      return null;
     default:
       return null;
   }
@@ -65,6 +67,7 @@ export function useChatTurn({ scopeKey, deps }: UseChatTurnOptions): UseChatTurn
         db: depsRef.current.db,
         onStatus: (next) => {
           setStatus(next);
+          if (next === 'tool-limit') setStreamingText('');
           if (next !== 'awaiting-approval') setPendingApproval(null);
         },
         onDelta: (text) => setStreamingText((prev) => prev + text),

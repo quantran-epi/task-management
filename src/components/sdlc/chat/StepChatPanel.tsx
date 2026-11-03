@@ -395,6 +395,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
           streamingText: turn.streamingText,
           streamingStatusLabel: turn.streamingStatusLabel,
           pendingApproval: turn.pendingApproval,
+          toolLimitRounds: turn.runtime?.getToolLimitRounds?.() ?? null,
         }}
         onSubmit={(text) => {
           void sendMessage(text);

@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ChatHeader } from '../../src/components/ai/ChatHeader';
-import { AIChatDrawer } from '../../src/components/ai/AIChatDrawer';
+import { AIChatDrawer, TURN_STATUS_TO_TAB } from '../../src/components/ai/AIChatDrawer';
+import * as orchestrator from '../../src/services/ai/aiOrchestratorLoop';
 import { TaskPlannerDatabase } from '../../src/db';
 import * as chatRepo from '../../src/db/repositories/chatRepo';
+import { getOrCreateActiveChatTab } from '../../src/db/repositories/chatTabRepo';
 import * as nineRouterClient from '../../src/services/ai/nineRouterClient';
 import * as nineRouterTokenService from '../../src/services/ai/nineRouterTokenService';
 import * as graphitiMcpClient from '../../src/services/ai/graphitiMcpClient';
@@ -107,6 +109,41 @@ describe('AIChatDrawer', () => {
   afterEach(() => {
     cleanup();
     clearGroundedTurnTestHooks();
+  });
+
+  it('maps tool-limit to idle with debug-only metadata and no persisted partial answer', async () => {
+    expect(TURN_STATUS_TO_TAB['tool-limit']).toBe('idle');
+    vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-key');
+    vi.spyOn(nineRouterTokenService, 'getNineRouterConfig').mockResolvedValue({
+      endpoint: 'https://example.invalid', defaultModel: 'model-x', charLimit: 12000,
+    });
+    const loop = vi.spyOn(orchestrator, 'runAiOrchestratorLoop').mockImplementation(async (options) => {
+      options.onTextChunk?.('PARTIAL-NOT-AN-ANSWER');
+      options.onToolCall?.({ id: 'audit', name: 'query_notes', args: {} });
+      options.onToolResult?.('audit', 'Audit evidence', 2);
+      return { fullResponse: 'PARTIAL-NOT-AN-ANSWER', cleanResponse: 'PARTIAL-NOT-AN-ANSWER',
+        messages: [], tokenUsage: {}, generatedFiles: [], truncated: false, loopLimitReached: true };
+    });
+    const finish = vi.spyOn(aiDebugService, 'finishTurn');
+    try {
+      await getOrCreateActiveChatTab({ scopeKey: 'global', scopeType: 'global' }, db);
+      render(<AIChatDrawer open onClose={vi.fn()} db={db} activeScope={{ type: 'global' }} />);
+      await waitFor(() => expect(screen.getByTestId('ai-chat-widget').getAttribute('data-scope-key')).not.toBe('default'));
+      fireEvent.change(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI'), { target: { value: 'Gather evidence' } });
+      fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
+      await waitFor(() => expect(finish).toHaveBeenCalledWith(expect.any(String), { error: 'tool_limit' }));
+      expect(await screen.findByText('Đã dừng thu thập bằng chứng')).toBeInTheDocument();
+      expect(screen.queryByText('PARTIAL-NOT-AN-ANSWER')).not.toBeInTheDocument();
+      expect(document.querySelector('.ant-alert-error')).toBeNull();
+      expect(document.querySelector('[role="tab"][aria-selected="true"] .ant-badge-status-error')).toBeNull();
+      expect(document.querySelector('[role="tab"][aria-selected="true"] .ant-badge-status-processing')).toBeNull();
+      expect(screen.queryByTestId('ai-staged-loading')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI')).toBeEnabled();
+      expect(screen.getByRole('button', { name: /\[Công cụ\] query_notes/ })).toBeInTheDocument();
+      const rows = await db.chatMessages.toArray();
+      expect(rows.filter((row) => row.role === 'assistant')).toHaveLength(0);
+      expect(rows.filter((row) => row.role === 'user')).toHaveLength(1);
+    } finally { loop.mockRestore(); finish.mockRestore(); }
   });
 
   it('renders drawer when open is true, handles drag resize and clamp', () => {

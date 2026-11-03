@@ -83,6 +83,28 @@ describe('useChatTurn binding', () => {
     expect(stageLabelFor('awaiting-approval')).toBe('Chờ phê duyệt');
     expect(stageLabelFor('idle')).toBeNull();
     expect(stageLabelFor('complete')).toBeNull();
+    expect(stageLabelFor('tool-limit')).toBeNull();
+  });
+
+  it('clears limited partial text and exposes terminal rounds without error callbacks', async () => {
+    const onError = vi.fn();
+    const onCompleted = vi.fn();
+    const onToolEvent = vi.fn();
+    const deps = { ...baseDeps(async (options) => {
+      options.onTextChunk?.('partial');
+      options.onToolCall?.({ id: 'one', name: 'query_notes', args: {} });
+      return { fullResponse: 'partial', tokenUsage: {}, loopLimitReached: true };
+    }), onError, onCompleted, onToolEvent };
+    const { result } = renderHook(() => useChatTurn({ scopeKey: SCOPE_KEY, deps }));
+    await act(async () => { await result.current.start(makeRequest({ maxToolRounds: 7 })); });
+    expect(result.current.status).toBe('tool-limit');
+    expect(result.current.streamingText).toBe('');
+    expect(result.current.streamingStatusLabel).toBeNull();
+    expect(result.current.runtime.getToolLimitRounds()).toBe(7);
+    expect(result.current.runtime.isRunning()).toBe(false);
+    expect(onToolEvent).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
+    expect(onCompleted).not.toHaveBeenCalled();
   });
 
   it('accumulates streamingText across onDelta and resets on a new turn', async () => {

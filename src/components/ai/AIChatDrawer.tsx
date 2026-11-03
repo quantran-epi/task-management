@@ -108,7 +108,7 @@ import type { TabRuntimePatch, TabRuntimeStatus } from './runtime/tabTypes';
 import { stageLabelFor } from './runtime/useChatTurn';
 
 /** Runtime turn status → drawer tab badge status. */
-const TURN_STATUS_TO_TAB: Record<ChatTurnStatus, TabRuntimeStatus> = {
+export const TURN_STATUS_TO_TAB: Record<ChatTurnStatus, TabRuntimeStatus> = {
   idle: 'idle',
   preparing: 'processing',
   streaming: 'processing',
@@ -116,6 +116,7 @@ const TURN_STATUS_TO_TAB: Record<ChatTurnStatus, TabRuntimeStatus> = {
   synthesizing: 'processing',
   'awaiting-approval': 'processing',
   complete: 'idle',
+  'tool-limit': 'idle',
   error: 'error',
   aborted: 'idle',
 };
@@ -471,6 +472,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
               ? { groundedLoadingStatus: null }
               : {}),
             ...(status === 'complete' || status === 'aborted' ? { streamingText: '' } : {}),
+            ...(status === 'tool-limit' ? { streamingText: '', partialBuffer: '', toolProgress: null, groundedLoadingStatus: null } : {}),
           });
           setTurnRevision((prev) => prev + 1);
         },
@@ -1820,6 +1822,7 @@ Rules:
       if (debugTurnId) {
         if (outcome.phase === 'aborted') aiDebugService.finishTurn(debugTurnId, { aborted: true });
         else if (outcome.phase === 'error') aiDebugService.finishTurn(debugTurnId, { error: 'request_failed' });
+        else if (outcome.phase === 'tool-limit') aiDebugService.finishTurn(debugTurnId, { error: 'tool_limit' });
         else aiDebugService.finishTurn(debugTurnId, { finalResponse: outcome.content ?? '' });
       }
 
@@ -1828,7 +1831,7 @@ Rules:
         tabRuntimes.patch(turnTabId, { retryUserMessageId: null, status: 'idle' });
       } else if (outcome.phase === 'error') {
         tabRuntimes.patch(turnTabId, { status: 'error' });
-      } else if (outcome.phase === 'aborted' || outcome.phase === 'cancelled') {
+      } else if (outcome.phase === 'aborted' || outcome.phase === 'cancelled' || outcome.phase === 'tool-limit') {
         tabRuntimes.patch(turnTabId, { status: 'idle' });
       }
       setTurnRevision((prev) => prev + 1);
@@ -2296,6 +2299,7 @@ Rules:
                 : activeTurnRuntime?.getStatus() ?? 'idle',
             streamingText: activeRuntime?.streamingText ?? '',
             streamingStatusLabel: activeRuntime?.streamingStatus ?? null,
+            toolLimitRounds: activeTurnRuntime?.getToolLimitRounds() ?? null,
             pendingApproval: activeRuntime?.pendingConfirmation
               ? {
                   toolName: activeRuntime.pendingConfirmation.toolName,
