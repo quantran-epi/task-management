@@ -1,4 +1,5 @@
 import type { SdlcStepId } from '../wizard/workflowSchemas';
+import { normalizeToolName } from './aiTools';
 
 /**
  * Layer 1 — shared evidence and safety policy.
@@ -55,6 +56,58 @@ export const SDLCS_STEP_CONTRACTS: Record<SdlcStepId, string> = {
   ].join('\n'),
 };
 
+export const SDLC_READ_TOOL_NAMES = [
+  'query_notes', 'read_file', 'search_knowledge_base', 'retrieve_knowledge', 'get_document_details',
+] as const;
+
+export const SDLC_STEP_ALLOWED_TOOLS: Record<SdlcStepId, readonly string[]> = {
+  INTAKE: ['query_notes', 'read_file', 'search_knowledge_base', 'retrieve_knowledge', 'get_document_details'],
+  SOLUTION: ['query_notes', 'read_file', 'search_knowledge_base', 'retrieve_knowledge', 'get_document_details'],
+  CODE_GUIDE: ['query_notes', 'read_file', 'search_knowledge_base', 'retrieve_knowledge', 'get_document_details'],
+  CHANGE_PACK: ['query_notes', 'read_file', 'search_knowledge_base', 'retrieve_knowledge', 'get_document_details'],
+  TECH_DOCS: ['query_notes', 'read_file', 'search_knowledge_base', 'retrieve_knowledge', 'get_document_details'],
+  CAB: ['query_notes', 'read_file', 'search_knowledge_base', 'retrieve_knowledge', 'get_document_details'],
+};
+
+/** Only the host's discovered read-only catalog may supply these capability names. */
+export function normalizeDynamicToolNames(names: readonly string[]): string[] {
+  return [...new Set(names.map(normalizeToolName).filter((name) => /^[A-Za-z0-9_-]+$/.test(name)))];
+}
+
+const STEP_TOOL_CALL_CONDITIONS: Record<SdlcStepId, string> = {
+  INTAKE: 'Tra cứu PL01, PL02 và metadata CR khi rà phạm vi, khoảng trống hoặc mâu thuẫn đầu vào.',
+  SOLUTION: 'Tra cứu PL01, PL02 và SOLUTION được ghim trước khi đề xuất dữ liệu/API hoặc kiến trúc.',
+  CODE_GUIDE: 'Tra cứu SOLUTION và tiêu chí nghiệm thu PL02 trước khi hướng dẫn coding hoặc đóng Change Pack.',
+  CHANGE_PACK: 'Tra cứu manifest, diff và SOLUTION trước khi diễn giải phát hiện hoặc mức bao phủ Change Pack.',
+  TECH_DOCS: 'Tra cứu bằng chứng Change Pack và PL03B/PL07 liên quan trước khi mô tả triển khai hoặc soạn câu hỏi review.',
+  CAB: 'Tra cứu PL03B, Change Pack và metadata CR trước khi tóm tắt thay đổi kỹ thuật cho GoLive.',
+};
+
+/** Layer 3 — the static baseline plus this turn's explicit dynamic capabilities. */
+export function buildToolPolicy(step: SdlcStepId, dynamicNames: readonly string[] = []): string {
+  const dynamic = normalizeDynamicToolNames(dynamicNames)
+    .filter((name) => !SDLC_STEP_ALLOWED_TOOLS[step].includes(name));
+  return [
+    `[CHÍNH SÁCH CÔNG CỤ — BƯỚC ${step}]`,
+    `Công cụ đọc cục bộ: ${SDLC_STEP_ALLOWED_TOOLS[step].join(', ')}`,
+    `MCP đọc-only động: ${dynamic.length ? dynamic.join(', ') : 'không có trong payload của turn này'}`,
+    'Chỉ gọi công cụ trong payload của turn này. Không có công cụ ghi hoặc tạo tài liệu.',
+    'Không trả lời từ trí nhớ khi công cụ có thể giải quyết câu hỏi; gọi công cụ để lấy bằng chứng.',
+    'Khi bằng chứng mỏng hoặc thiếu, truy vấn lại hẹp hơn (narrower re-query).',
+    'Nếu truy vấn hẹp hơn vẫn không đủ, từ chối kết luận; nêu rõ bằng chứng còn thiếu hoặc mâu thuẫn.',
+    STEP_TOOL_CALL_CONDITIONS[step],
+  ].join('\n');
+}
+
+export const SDLC_STEP_TOOL_POLICY: Record<SdlcStepId, string> = {
+  INTAKE: buildToolPolicy('INTAKE'),
+  SOLUTION: buildToolPolicy('SOLUTION'),
+  CODE_GUIDE: buildToolPolicy('CODE_GUIDE'),
+  CHANGE_PACK: buildToolPolicy('CHANGE_PACK'),
+  TECH_DOCS: buildToolPolicy('TECH_DOCS'),
+  CAB: buildToolPolicy('CAB'),
+};
+
 export type SdlcArtifactKindForTurn = 'SOLUTION' | 'PL03B' | 'PL07' | 'CAB';
 
 /** Layer 4 — artifact output contracts, injected only on explicit artifact intent (D-16). */
@@ -84,7 +137,7 @@ export const SDLC_ARTIFACT_CONTRACTS: Record<SdlcArtifactKindForTurn, string> = 
   ].join('\n'),
 };
 
-/** Layer 3 — few-shot exemplars showing the correct answer shape per step. */
+/** Layer 4 — illustrative tool/results, never evidence for the current CR. */
 export const SDLC_FEW_SHOT_EXAMPLES: Record<
   SdlcStepId,
   ReadonlyArray<{ user: string; assistant: string }>
@@ -93,42 +146,72 @@ export const SDLC_FEW_SHOT_EXAMPLES: Record<
     {
       user: 'Thẩm định tính đầy đủ của PL01 & PL02',
       assistant:
-        'Bằng chứng: PL01 mục 2, PL02 mục 4.\nPhạm vi đã có bằng chứng: luồng tạo yêu cầu, quyền duyệt.\nKhoảng trống: chưa có quy tắc làm tròn số giờ.\nMâu thuẫn: PL01 ghi hạn 24h, PL02 ghi 48h.\nCần bổ sung: (1) quy tắc làm tròn; (2) hạn xử lý đúng là bao nhiêu.',
+        'Gọi công cụ: query_notes({"query":"PL01 PL02 phạm vi hạn xử lý"}).\nKết quả: PL01 mục 2 ghi 24h, PL02 mục 4 ghi 48h; có luồng tạo yêu cầu và quyền duyệt.\nBằng chứng: PL01 mục 2, PL02 mục 4.\nPhạm vi đã có bằng chứng: luồng tạo yêu cầu, quyền duyệt.\nKhoảng trống: chưa có quy tắc làm tròn số giờ.\nMâu thuẫn: PL01 ghi hạn 24h, PL02 ghi 48h.\nCần bổ sung: quy tắc làm tròn và hạn xử lý thống nhất.',
+    },
+    {
+      user: 'Hồ sơ đầu vào đã đủ chưa?',
+      assistant:
+        'Gọi công cụ: query_notes({"query":"PL02 quy tắc làm tròn"}).\nKết quả: không có quy tắc.\nGọi lại hẹp hơn: search_knowledge_base({"query":"CR hiện tại PL02 làm tròn số giờ"}).\nKết quả: vẫn thiếu bằng chứng.\nChưa thể kết luận hồ sơ đầy đủ; cần bổ sung quy tắc làm tròn trong PL02.',
     },
   ],
   SOLUTION: [
     {
       user: 'Đề xuất cấu trúc dữ liệu cho giải pháp',
       assistant:
-        '## Bối cảnh/phạm vi\n...\n## Kiến trúc và luồng dữ liệu\n...\n## Dữ liệu/API\n...\n## Bảo mật\nN/A\n## Lỗi và rollback\n...\n## Kiểm thử/nghiệm thu\n...\n## Giả định\n- Chưa có bằng chứng về hạn mức API.\n## Câu hỏi mở\n- Chưa chốt đơn vị thời gian.',
+        'Gọi công cụ: query_notes({"query":"PL02 dữ liệu số giờ SOLUTION"}).\nKết quả: PL02 mục 3 yêu cầu số giờ theo tác vụ, SOLUTION v1 dùng taskId.\nTheo PL02 mục 3 và SOLUTION v1, bản nháp đề xuất giữ taskId và trường số giờ. Chưa có bằng chứng về đơn vị thời gian; cần xác nhận trước khi chốt kiểu dữ liệu.',
+    },
+    {
+      user: 'Chốt hạn mức API trong SOLUTION',
+      assistant:
+        'Gọi công cụ: search_knowledge_base({"query":"hạn mức API SOLUTION"}).\nKết quả: không thấy hạn mức.\nGọi lại hẹp hơn: retrieve_knowledge({"query":"CR hiện tại PL02 hạn mức API"}).\nKết quả: vẫn thiếu đặc tả.\nChưa thể chốt hạn mức API; cần đặc tả API có phiên bản, không suy đoán từ trí nhớ.',
     },
   ],
   CODE_GUIDE: [
     {
       user: 'Lệnh đóng gói change pack',
       assistant:
-        'Bàn giao coding: phạm vi đã duyệt theo SOLUTION.md; tiêu chí nghiệm thu theo PL02.\nChạy trong repository nguồn đích: `node scripts/change-pack.mjs --cr <CR>`.\nKỳ vọng pack: manifest + diff modified/added. Chưa có bằng chứng mã đã được viết.',
+        'Gọi công cụ: query_notes({"query":"SOLUTION PL02 hợp đồng Change Pack"}).\nKết quả: hợp đồng bàn giao yêu cầu manifest và diff modified/added.\nBàn giao coding theo SOLUTION và tiêu chí nghiệm thu PL02: chạy trong repository nguồn đích `node scripts/change-pack.mjs --cr <CR>`. Kỳ vọng pack: manifest + diff modified/added. Chưa có bằng chứng mã đã được viết.',
+    },
+    {
+      user: 'Coding cần migration nào?',
+      assistant:
+        'Gọi công cụ: query_notes({"query":"SOLUTION migration"}).\nKết quả: chưa có kế hoạch migration.\nGọi lại hẹp hơn: search_knowledge_base({"query":"CR hiện tại SOLUTION thay đổi schema migration"}).\nKết quả: vẫn thiếu bằng chứng.\nChưa thể hướng dẫn migration cụ thể; cần bổ sung thay đổi schema vào SOLUTION trước khi bàn giao coding.',
     },
   ],
   CHANGE_PACK: [
     {
       user: 'Giải thích các phát hiện trong change pack',
       assistant:
-        '| Nhóm | Đường dẫn | Tác động | Hành động |\n| outside-solution | src/x.ts | Trung bình | Xác nhận phạm vi |\n| not-implemented | src/y.ts | Cao | Bổ sung |\n| implemented-differently | src/z.ts | Thấp | Ghi nhận |\n| incomplete-coverage | chưa có bằng chứng | Cao | Cần pack lại |',
+        'Gọi công cụ: query_notes({"query":"Change Pack manifest diff SOLUTION phạm vi"}).\nKết quả: diff src/x.ts không có mục tương ứng trong SOLUTION; thiếu diff src/y.ts được liệt kê trong manifest.\n| Nhóm | Bằng chứng | Tác động | Hành động |\n| outside-solution | diff src/x.ts và SOLUTION | Cần xác nhận phạm vi | Rà lại yêu cầu |\n| incomplete-coverage | manifest src/y.ts thiếu diff | Chưa đủ bằng chứng | Cần pack lại |',
+    },
+    {
+      user: 'Pack đã triển khai đủ giải pháp chưa?',
+      assistant:
+        'Gọi công cụ: query_notes({"query":"Change Pack bao phủ SOLUTION"}).\nKết quả: thiếu diff cho module Y.\nGọi lại hẹp hơn: retrieve_knowledge({"query":"CR hiện tại Change Pack diff module Y"}).\nKết quả: vẫn không có diff.\nChưa thể kết luận bao phủ đầy đủ; cần pack lại bằng chứng module Y, không coi thiếu diff là đã triển khai.',
     },
   ],
   TECH_DOCS: [
     {
       user: 'Rà soát PL03B theo bằng chứng Change Pack',
       assistant:
-        'PL03B (bản nháp): mô tả hệ thống đã triển khai thực tế. Bằng chứng: change-pack/CR-1/manifest.json.\nPL07 (bản nháp): Câu hỏi — Module X đã xử lý trường hợp rỗng chưa? Kết luận: (để trống).',
+        'Gọi công cụ: query_notes({"query":"Change Pack module X PL03B PL07"}).\nKết quả: manifest và diff xác nhận module X kiểm tra đầu vào rỗng, không có kết quả kiểm thử.\nPL03B (bản nháp): module X kiểm tra đầu vào rỗng theo diff trong Change Pack.\nPL07 (bản nháp): Câu hỏi — Module X có bằng chứng kiểm thử đầu vào rỗng chưa? Kết luận: (để trống).',
+    },
+    {
+      user: 'Ghi kết quả kiểm thử vào PL07',
+      assistant:
+        'Gọi công cụ: query_notes({"query":"Change Pack kết quả kiểm thử"}).\nKết quả: không có log kiểm thử.\nGọi lại hẹp hơn: retrieve_knowledge({"query":"CR hiện tại module X log kiểm thử"}).\nKết quả: vẫn thiếu log.\nChưa thể kết luận kết quả kiểm thử; cần log tương ứng. PL07 giữ cột kết luận trống cho người review.',
     },
   ],
   CAB: [
     {
       user: 'Tóm tắt thay đổi kỹ thuật đã triển khai cho CAB',
       assistant:
-        'Thay đổi đã triển khai: cập nhật src/x.ts (bằng chứng: change-pack/CR-1/manifest.json).\nKhoảng trống bằng chứng: chưa có kết quả kiểm thử tự động.',
+        'Gọi công cụ: query_notes({"query":"PL03B Change Pack thay đổi GoLive CR"}).\nKết quả: PL03B mục 2 và Change Pack manifest xác nhận cập nhật src/x.ts; không có log kiểm thử.\nThay đổi đã triển khai: cập nhật src/x.ts (bằng chứng: PL03B mục 2 và Change Pack manifest).\nKhoảng trống bằng chứng: chưa có kết quả kiểm thử tự động.',
+    },
+    {
+      user: 'CAB có thể khẳng định rollback an toàn không?',
+      assistant:
+        'Gọi công cụ: query_notes({"query":"CR bằng chứng rollback"}).\nKết quả: chỉ có kế hoạch.\nGọi lại hẹp hơn: search_knowledge_base({"query":"CR hiện tại log diễn tập rollback Change Pack"}).\nKết quả: vẫn thiếu log.\nChưa thể khẳng định rollback an toàn; cần log diễn tập và kết quả tương ứng. CAB phải công bố khoảng trống này.',
     },
   ],
 };
@@ -184,6 +267,7 @@ export interface ComposeSdlcTurnInput {
   intent: SdlcTurnIntent;
   artifact?: SdlcArtifactKindForTurn;
   grounding?: string;
+  dynamicReadOnlyToolNames?: readonly string[];
   metadata?: {
     cr?: string;
     featureName?: string;
@@ -197,6 +281,7 @@ export interface ComposedSdlcTurn {
   segments: {
     policy: string;
     stepContract: string;
+    toolPolicy: string;
     fewShot: string;
     grounding: string;
     outputContract: string;
@@ -243,6 +328,7 @@ export function composeSdlcTurn(input: ComposeSdlcTurnInput): ComposedSdlcTurn {
   const segments = {
     policy: SHARED_EVIDENCE_POLICY,
     stepContract: SDLCS_STEP_CONTRACTS[input.step],
+    toolPolicy: buildToolPolicy(input.step, input.dynamicReadOnlyToolNames),
     fewShot: buildFewShot(input.step),
     grounding: buildGrounding(input.grounding),
     outputContract: isArtifact ? SDLC_ARTIFACT_CONTRACTS[input.artifact as SdlcArtifactKindForTurn] : '',
@@ -252,6 +338,7 @@ export function composeSdlcTurn(input: ComposeSdlcTurnInput): ComposedSdlcTurn {
   const systemContent = [
     segments.policy,
     segments.stepContract,
+    segments.toolPolicy,
     segments.fewShot,
     segments.grounding,
     segments.outputContract,
