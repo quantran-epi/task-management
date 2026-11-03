@@ -4,7 +4,16 @@
 
 - Phase 25.1.1: Unify SDLC workflow into the hub, retire the wizard (COMPLETE — verified 2026-11-01)
 - Phase 25.1.2: Fix the SDLC hub user flow end to end (COMPLETE — verified 2026-11-01)
-- Phase 25.2: Fix TaskMate mutation flow & standardize AI Core Engine for SDLC Studio (ACTIVE)
+- Phase 25.2: Fix TaskMate mutation flow & standardize AI Core Engine for SDLC Studio (COMPLETE)
+- Phase 25.3: SDLC Workflow Engine Hardening, Unified AI Chat Widget & Prompt Architecture (COMPLETE)
+- Phase 26: SDLC Prompt Grounding & Tool-Use Policy (NOT STARTED — v1.3)
+- Phase 27: Studio Artifact Tools & Diff Approval (v1.3)
+- Phase 28: Query-Only Knowledge Retrieval (v1.3, parallel-capable)
+- Phase 29: fs-gw Client & Headless Repository Runs (v1.3)
+- Phase 30: Automatic Change Packs, Fallback & Run Reliability (v1.3)
+- Phase 31: Organization Conventions in the Solution Pipeline (v1.3)
+- Phase 32: External Research via Claude Code Headless (v1.3)
+- Phase 33: Prompt Transparency & Contract Documentation (v1.3)
 
 ## Milestone: Knowledge System Implementation
 
@@ -454,3 +463,269 @@ Plans:
 **Wave 11 (Gap Closure)** *(depends on 25.3-15)*
 
 - [x] 25.3-18-PLAN.md — SOLUTION extraction and truncation safety: fence-aware parser, transcript summary removal, four-backtick output contract, context-window forwarding and rejection of length-truncated artifacts (no host completion cap)
+
+## Milestone: v1.3 SDLC Closed-Loop Engine & Repository Autonomy
+
+### Phase 26: SDLC Prompt Grounding & Tool-Use Policy
+
+**Goal:** Every SDLC chat turn runs on real project evidence with a per-step tool-use policy, an intent-correct output contract, tool-calling exemplars, and a bounded, visible tool loop.
+**Requirements**: SDLC-PR-01, SDLC-PR-02, SDLC-PR-03, SDLC-PR-04, SDLC-PR-05, SDLC-PR-06
+**Depends on:** Phase 25.3
+**Success Criteria** (what must be TRUE):
+
+1. A turn sent from the production SDLC view always carries grounding built from that step's own artifacts (PL01/PL02, pinned SOLUTION, change-pack manifest, prior tech docs, CR metadata) plus bounded retrieved evidence; an empty-grounding turn from the production view is impossible.
+2. The composed system prompt names the tools offered in that step and when to call them, including "re-query narrower when evidence is thin" and "do not answer from memory when a tool could resolve it", and each step's exemplars include one tool-calling turn and one evidence-insufficient turn.
+3. Artifact-intent turns for SOLUTION, PL03B, PL07, and CAB each receive their own output contract, and no step can send a mismatched contract from `StepChatPanel`.
+4. The prompt stays layered in order (policy → step contract → tool policy → few-shot → grounding → output contract → language rule), and a test fails if any step or grounding text precedes the policy layer.
+5. Multi-round tool calls stop at an explicit per-turn limit; every call appears in the widget's tool-activity list, and hitting the limit ends with a visible "evidence gathering stopped" status rather than a silent truncation.
+
+**Plans:** 4 plans in 4 waves
+**UI hint**: yes
+
+Plans:
+
+**Wave 1** *(no dependencies; edits `ProjectSdlcView.tsx`)*
+
+- [ ] 26-01-PLAN.md — Step grounding builder and production view supply: per-step artifacts, CR metadata, bounded retrieved evidence; no empty-grounding path
+
+**Wave 2** *(depends on 26-01; edits `sdlcPromptComposer.ts`)*
+
+- [ ] 26-02-PLAN.md — Tool-use policy layer, tool-calling/evidence-insufficient few-shots, and the layer-order assertion
+
+**Wave 3** *(depends on 26-02; edits `StepChatPanel.tsx`)*
+
+- [ ] 26-03-PLAN.md — Intent-driven artifact contract selection; remove the hardcoded `artifact: 'SOLUTION'`
+
+**Wave 4** *(depends on 26-02; edits turn runtime and `AiChatWidget`)*
+
+- [ ] 26-04-PLAN.md — Bounded multi-round tool loop, visible tool activity, and explicit "evidence gathering stopped" terminal status
+
+### Phase 27: Studio Artifact Tools & Diff Approval
+
+**Goal:** Studio chat can inspect the current artifact and propose edits as unified diffs that the user explicitly approves before the editor changes; approval updates the draft and marks staleness without committing a version.
+**Requirements**: SDLC-ART-01, SDLC-ART-02, SDLC-ART-03, SDLC-ART-04, SDLC-ART-05, SDLC-ART-06
+**Depends on:** Phase 26
+**Success Criteria** (what must be TRUE):
+
+1. `get_artifact` returns the current artifact's kind, version, approval state, full Markdown, and stable section index, so the model can inspect before proposing.
+2. `patch_artifact_section` returns a unified diff plus the resulting Markdown and does not write the editor.
+3. Every patch result renders an approval card with added/removed lines; approve writes the editor draft and marks the step stale, reject leaves the editor untouched, and the decision is recorded in the transcript.
+4. Approving never commits a version and never claims the document was approved or saved.
+5. "Add this content to the solution" resolves to `get_artifact` + `patch_artifact_section` with a bounded diff, and artifact tools are refused in preview/historical versions and when the prerequisite artifact is missing.
+**UI hint**: yes
+
+**Plans:** 5 plans in 5 waves
+
+Plans:
+
+**Wave 1** *(depends on Phase 26; edits tool registry and artifact repository reads)*
+
+- [ ] 27-01-PLAN.md — `get_artifact` read tool with section index and `patch_artifact_section` diff tool (no editor write)
+
+**Wave 2** *(depends on 27-01; edits `AiChatWidget` and `StepChatPanel`)*
+
+- [ ] 27-02-PLAN.md — Artifact-diff approval card: added/removed rendering, approve/reject, transcript decision record
+
+**Wave 3** *(depends on 27-02; edits SDLC host handlers)*
+
+- [ ] 27-03-PLAN.md — Approve writes editor draft, marks step stale via existing revision rules, and never commits a version
+
+**Wave 4** *(depends on 27-03)*
+
+- [ ] 27-04-PLAN.md — Intent routing regression: small "add this content" request produces get + patch and a bounded diff
+
+**Wave 5** *(depends on 27-01)*
+
+- [ ] 27-05-PLAN.md — Read-only and prerequisite guards: refused in preview/historical, allowed in active CR, blocked without prerequisite artifact
+
+### Phase 28: Query-Only Knowledge Retrieval
+
+**Goal:** Retrieval works from a device that has no local documents: the client sends `{query, limit}` and the server chooses joined published sets, while trust guarantees and cross-surface messaging stay intact.
+**Requirements**: SDLC-RET-01, SDLC-RET-02, SDLC-RET-03, SDLC-RET-04, SDLC-RET-05
+**Depends on:** Phase 25.3 (independent of Phases 26–27; server work can start immediately)
+**Success Criteria** (what must be TRUE):
+
+1. `retrieve_knowledge` succeeds with `query` and `limit` only on a profile with no local document sets; the default path no longer calls `fetchSetCatalog`.
+2. The server federates a query-only request across every published set and returns which sets and snapshots answered alongside evidence, entities, paths, and warnings.
+3. Bounded budgets, single-snapshot path closure, citation IDs, and truthful degraded/unavailable outcomes still hold for query-only requests.
+4. When no published set exists, the response is a clear actionable message, not a generic exception, and AI Chat, SDLC step chat, and Telegram surface it identically.
+5. An explicit set restriction still works for callers that know their sets, is optional, and is never the default.
+
+**Plans:** 4 plans in 4 waves
+
+Plans:
+
+**Wave 1** *(no dependencies; edits knowledge-server retrieval service)*
+
+- [ ] 28-01-PLAN.md — Query-only federated retrieval across all published sets with set/snapshot attribution
+
+**Wave 2** *(depends on 28-01; edits client retrieval service and tool)*
+
+- [ ] 28-02-PLAN.md — Client query-only request path, `fetchSetCatalog` removal, and optional explicit set restriction
+
+**Wave 3** *(depends on 28-01)*
+
+- [ ] 28-03-PLAN.md — Trust-guarantee regression: budgets, single-snapshot closure, citations, degraded/unavailable truthfulness
+
+**Wave 4** *(depends on 28-02)*
+
+- [ ] 28-04-PLAN.md — Empty-set actionable outcome normalized across AI Chat, SDLC chat, and Telegram
+
+### Phase 29: fs-gw Client & Headless Repository Runs
+
+**Goal:** TaskMate can drive a real repository through fs-gw — health, process execution and streaming, opt-in per project, and a dedicated git worktree — without ever spawning repo processes itself.
+**Requirements**: SDLC-REPO-01, SDLC-REPO-02, SDLC-REPO-03, SDLC-REPO-06
+**Depends on:** Phase 26
+**Success Criteria** (what must be TRUE):
+
+1. A gateway that is down reports "unavailable" and never throws an unhandled error; health, `exec/run`, and `exec/stream` are typed and support timeouts and cancellation.
+2. Repository operations are opt-in per project with a configured path; TaskMate performs no repository write before the user starts a coding run.
+3. A coding run builds its prompt from the approved SOLUTION and step context, streams stdout/stderr/exit into the UI, and can stop the process tree.
+4. Before a run, a dedicated worktree is created or reused and its path, branch, and base commit are reported; after the run, `git status` and `git diff` are visible for review.
+**UI hint**: yes
+
+**Plans:** 4 plans in 4 waves
+
+Plans:
+
+**Wave 1** *(no dependencies; new `src/services/fsGateway/`)*
+
+- [ ] 29-01-PLAN.md — Typed fs-gw client: health, `exec/run`, `exec/stream` SSE, timeout, cancellation, unavailable status
+
+**Wave 2** *(depends on 29-01; edits project settings and SDLC step 3 host)*
+
+- [ ] 29-02-PLAN.md — Per-project opt-in repository path and write boundary; no write before run start
+
+**Wave 3** *(depends on 29-02)*
+
+- [ ] 29-03-PLAN.md — Worktree create/reuse through fs-gw, reported path/branch/base commit, post-run status and diff
+
+**Wave 4** *(depends on 29-03)*
+
+- [ ] 29-04-PLAN.md — Claude Code headless run from approved SOLUTION, streamed output, process-tree stop
+
+### Phase 30: Automatic Change Packs, Fallback & Run Reliability
+
+**Goal:** A completed coding run produces a change pack from the real repository diff in the existing format, the manual script remains an explicit fallback, and failure paths leave no orphans or half-written artifacts.
+**Requirements**: SDLC-REPO-04, SDLC-REPO-05, SDLC-REPO-07
+**Depends on:** Phase 29
+**Success Criteria** (what must be TRUE):
+
+1. After a run, a change pack is generated from the real diff (modified/added/deleted paths, git hunks, SQL artifacts) in the existing format, and step 4 validation/drift consumes it unchanged.
+2. The manual `generate-change-pack.mjs` script is presented as a labelled fallback used only when fs-gw is unavailable or the run produced no diff — never as a silent default.
+3. Stream disconnect, gateway crash mid-run, process kill, worktree cleanup failure, and a stale re-run all end without orphaned processes or half-written artifacts, and the failure state is visible.
+4. An end-to-end walkthrough goes approved SOLUTION → coding run → automatic pack → step 4 drift without a manually built zip.
+**UI hint**: yes
+
+**Plans:** 4 plans in 4 waves
+
+Plans:
+
+**Wave 1** *(depends on Phase 29; edits change-pack services)*
+
+- [ ] 30-01-PLAN.md — Change-pack generator from real diff, preserving the existing manifest/entry format
+
+**Wave 2** *(depends on 30-01; edits SDLC step 3/4 host)*
+
+- [ ] 30-02-PLAN.md — Explicitly labelled manual-script fallback and its trigger conditions
+
+**Wave 3** *(depends on 30-01)*
+
+- [ ] 30-03-PLAN.md — Failure/recovery hardening: disconnect, crash, kill, cleanup, stale re-run without orphans
+
+**Wave 4** *(depends on 30-02 and 30-03)*
+
+- [ ] 30-04-PLAN.md — End-to-end acceptance: SOLUTION → run → auto pack → step 4 drift with no manual zip
+
+### Phase 31: Organization Conventions in the Solution Pipeline
+
+**Goal:** Generated solutions follow the organization's real development standards: one global convention document lives in TaskMate, each repository contributes its own `CONVENTIONS.md` through fs-gw, both reach every SDLC solution prompt, and conflicts between them are surfaced instead of silently resolved.
+**Requirements**: SDLC-CONV-01, SDLC-CONV-02, SDLC-CONV-03, SDLC-CONV-04, SDLC-CONV-05, SDLC-CONV-06
+**Depends on:** Phases 26 and 29 (needs the tool-aware composer and the fs-gw client)
+**Success Criteria** (what must be TRUE):
+
+1. User can create and edit one global convention document in Settings; it persists with canonical app data and survives reload and backup.
+2. A project bound to a repository reads that repository's `CONVENTIONS.md` through fs-gw; a project without a repository or without the file still generates solutions using the global document alone.
+3. Every SDLC solution/artifact turn carries both convention sources in the composed prompt — global first, repository last — inside a delimited, data-not-instructions segment that cannot override the safety policy.
+4. When a global rule and a repository rule conflict, the AI names both sources and the conflict; it does not pick one silently, and the witness case is covered by a test.
+5. The intake step shows which conventions are in effect (global present/absent, repository present/absent, last-read time) before the solution is generated.
+6. A generated SOLUTION observably follows an in-effect convention the user never restated — proven by an exemplar test that asserts the mandated rule appears in the output.
+
+**Plans:** 4 plans in 4 waves
+**UI hint**: yes
+
+Plans:
+
+**Wave 1** *(depends on Phase 29; edits Settings and Dexie/SQLite settings)*
+
+- [ ] 31-01-PLAN.md — Global convention document: schema, Settings editor, persistence, backup inclusion
+
+**Wave 2** *(depends on 31-01; depends on Phase 29 fs-gw client)*
+
+- [ ] 31-02-PLAN.md — Repository `CONVENTIONS.md` read through fs-gw, per-project binding, absence-tolerant loading
+
+**Wave 3** *(depends on 31-02 and Phase 26 composer; edits `sdlcPromptComposer.ts` and `ProjectSdlcView.tsx`)*
+
+- [ ] 31-03-PLAN.md — Convention prompt segment (global → repo → conflict rule), intake visibility of in-effect sources
+
+**Wave 4** *(depends on 31-03)*
+
+- [ ] 31-04-PLAN.md — Conflict-surfacing + convention-following exemplar tests and an intake-status regression
+
+### Phase 32: External Research via Claude Code Headless
+
+**Goal:** When internal evidence is insufficient the AI proposes research instead of guessing; after explicit confirmation it runs Claude Code headless through fs-gw over both the web and the repository, stores a sourced EXTERNAL-marked report, and combines it with internal evidence in the resulting solution.
+**Requirements**: SDLC-RES-01, SDLC-RES-02, SDLC-RES-03, SDLC-RES-04, SDLC-RES-05, SDLC-RES-06
+**Depends on:** Phases 26, 29, 31 (needs the tool-aware composer, fs-gw execution, and convention context)
+**Success Criteria** (what must be TRUE):
+
+1. When internal evidence cannot answer a solution question, the AI proposes research naming the specific questions it would research, and performs none until the user explicitly confirms.
+2. A confirmed research run executes Claude Code headless through fs-gw over web and repository, streams its progress into the UI, and can be stopped without orphaned processes.
+3. The report is stored as a project/CR-scoped artifact with findings, per-claim sources, and a scope marker distinguishing web findings from repository findings.
+4. Research findings enter the composed prompt as an explicitly EXTERNAL-marked evidence class that never outranks internal evidence without saying so, and external claims stay attributable in the generated solution.
+5. When fs-gw is not running, the AI states research is unavailable and offers to continue on internal evidence alone; it never substitutes unmarked model knowledge.
+6. Research artifacts appear in the step where they were produced, persist with the CR, and can be reopened and reused in later steps without re-running.
+
+**Plans:** 4 plans in 4 waves
+**UI hint**: yes
+
+Plans:
+
+**Wave 1** *(depends on Phase 29 fs-gw client; edits research service and artifact repo)*
+
+- [ ] 32-01-PLAN.md — Research proposal gate (explicit confirmation), Claude Code headless research run over web + repo, stop handling
+
+**Wave 2** *(depends on 32-01; edits artifact persistence and step chat)*
+
+- [ ] 32-02-PLAN.md — Sourced research artifact (findings, sources, web/repo scope marker) persisted per CR and rendered in its step
+
+**Wave 3** *(depends on 32-02 and Phase 26 composer; edits `sdlcPromptComposer.ts`)*
+
+- [ ] 32-03-PLAN.md — EXTERNAL evidence class in the prompt with rank disclosure and attribution; fs-gw-unavailable message path
+
+**Wave 4** *(depends on 32-03)*
+
+- [ ] 32-04-PLAN.md — Reuse-in-later-steps, proposal-gate, and unavailable-gateway regression tests
+
+### Phase 33: Prompt Transparency & Contract Documentation
+
+**Goal:** What the composer emitted for the current step is inspectable in the app, and one written contract matches the composer with a drift test guarding it.
+**Requirements**: SDLC-OBS-01, SDLC-OBS-02
+**Depends on:** Phases 26, 27, 31, 32 (documents the final composer shape including conventions and research evidence)
+**Success Criteria** (what must be TRUE):
+
+1. A developer-facing view shows the current step's emitted segments, each segment's length, which tools were offered, and which convention sources were included — without reading source.
+2. One documented prompt contract covers every SDLC step, every artifact intent, the convention segment, and the EXTERNAL research evidence segment; it matches what the composer emits, and a test fails when the two drift apart.
+
+**Plans:** 2 plans in 2 waves
+**UI hint**: yes
+
+Plans:
+
+**Wave 1** *(depends on Phases 26–27, 31–32)*
+
+- [ ] 33-01-PLAN.md — Composer inspection view: segments, lengths, offered tools, and convention sources for the current step
+
+**Wave 2** *(depends on 33-01)*
+
+- [ ] 33-02-PLAN.md — Prompt contract document for all steps, artifact intents, convention segment, and EXTERNAL evidence, plus drift-detection test

@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: SDLC Closed-Loop Engine & Repository Autonomy
-status: planning
-last_updated: "2026-11-03T02:25:02.036Z"
+status: ready_to_plan
+last_updated: "2026-11-03T02:35:38.289Z"
 last_activity: 2026-11-03
 progress:
-  total_phases: 0
+  total_phases: 8
   completed_phases: 0
-  total_plans: 0
+  total_plans: 31
   completed_plans: 0
   percent: 0
 ---
@@ -17,25 +17,41 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-10-07)
+See: .planning/PROJECT.md (updated 2026-11-03)
 
 **Core value:** Make planned work realistically fit available time while giving the personal user evidence-grounded access to their local banking IT knowledge.
-**Current focus:** Phase 25.3 — sdlc-workflow-hardening-common-ai-chat-widget
+**Current focus:** Phase 26 — SDLC Prompt Grounding & Tool-Use Policy
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 26 (SDLC Prompt Grounding & Tool-Use Policy) — not started
 Plan: —
-Status: Defining requirements
-Last activity: 2026-11-03 — Milestone v1.3 started
+Status: Roadmap created; ready to plan Phase 26
+Last activity: 2026-11-03 — Milestone v1.3 roadmap created (Phases 26–31)
+
+Phase sequence: 26 → 27 → 28 → 29 → 30 → 31
+(28 is independent of 26/27; 31 depends on 26 and 27.)
 
 ## Session Continuity
 
-Last session: 2026-11-02T21:20:00Z
-Stopped at: Phase 25.3 complete — verification report and UAT passed
+Last session: 2026-11-03T02:35:38Z
+Stopped at: v1.3 roadmap written — Phases 26–33, 31 plans, 38/38 requirements mapped
 Resume file: None
 
-Progress: [██████████] 100%
+Progress: [░░░░░░░░░░] 0%
+
+## Milestone v1.3 Map
+
+| Phase | Name | Requirements | Plans |
+|-------|------|--------------|-------|
+| 26 | SDLC Prompt Grounding & Tool-Use Policy | SDLC-PR-01..06 | 4 |
+| 27 | Studio Artifact Tools & Diff Approval | SDLC-ART-01..06 | 5 |
+| 28 | Query-Only Knowledge Retrieval | SDLC-RET-01..05 | 4 |
+| 29 | fs-gw Client & Headless Repository Runs | SDLC-REPO-01..03, 06 | 4 |
+| 30 | Automatic Change Packs, Fallback & Run Reliability | SDLC-REPO-04, 05, 07 | 4 |
+| 31 | Organization Conventions in the Solution Pipeline | SDLC-CONV-01..06 | 4 |
+| 32 | External Research via Claude Code Headless | SDLC-RES-01..06 | 4 |
+| 33 | Prompt Transparency & Contract Documentation | SDLC-OBS-01..02 | 2 |
 
 ### Quick Tasks Completed
 
@@ -59,8 +75,20 @@ Progress: [██████████] 100%
 | Phase 25.3 P13 | 30 min | 3 tasks | 6 files |
 | Phase 25.3 P16 | 15 min | 2 tasks | 2 files |
 
-## Decisions
+## Accumulated Context
+
+### Decisions
 
 - [Phase 25.3]: Keep solution analysis explicit-only at 150ms in 25.3-13; automatic intake transition remains in 25.3-14.
 - [Phase 25.3]: Keep local isApproved for immediate save feedback; synchronize from approvedAt changes only.
 - [Phase 25.3]: Keep multi-tool activity mounted and capped at 160px in both states; zero/single-tool behavior unchanged.
+- [v1.3 roadmap]: Phase 28 (query-only retrieval) is placed between SDLC phases but has no dependencies on them; it may execute in parallel with 26/27 as long as shared-file plans stay sequential.
+- [v1.3 roadmap]: Shared-file plans must be sequenced, not parallel: `sdlcPromptComposer.ts` (26-02), `StepChatPanel.tsx` (26-03), `AiChatWidget` (26-04, 27-02), `ProjectSdlcView.tsx` (26-01).
+- [v1.3 roadmap]: `workflow.use_worktrees: false` — no plan may assume an isolated worktree checkout.
+- [v1.3 roadmap]: Phase 31 (conventions) depends on Phase 29's fs-gw client to read repo `CONVENTIONS.md`; global document alone must work when no repo is bound.
+- [v1.3 roadmap]: Phase 32 (research) reuses the Phase 29 fs-gw execution path — no separate search API, no new dependency.
+- [v1.3 roadmap]: Convention conflicts (global vs repo) are surfaced, never silently resolved; EXTERNAL research evidence never outranks internal evidence without saying so.
+
+### Todos / Blockers
+
+- None.

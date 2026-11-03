@@ -43,9 +43,27 @@
 - [ ] **SDLC-REPO-06**: Repository operations are opt-in per project with a configured repository path; TaskMate performs no repository write before the user starts a coding run, and every run's prompts, streams, and artifacts stay local.
 - [ ] **SDLC-REPO-07**: Reliability checks cover stream disconnect, gateway crash mid-run, process kill, worktree cleanup on failure, and re-running a step after a stale check, without leaving orphaned processes or half-written artifacts.
 
+### Organization Conventions (SDLC-CONV)
+
+- [ ] **SDLC-CONV-01**: User can maintain one global convention document in TaskMate carrying the rules every system must follow (org standards, unwritten conventions, internal process rules), editable in Settings and stored locally with the app's canonical data.
+- [ ] **SDLC-CONV-02**: Each project can bind a repository, and its `CONVENTIONS.md` is read through fs-gw and treated as that repository's own rules; a project without a repository or without the file still works with the global document alone.
+- [ ] **SDLC-CONV-03**: Every SDLC solution/artifact turn carries both convention sources in the composed prompt — global first, repository last — in a clearly delimited, untrusted-data-framed segment that cannot be mistaken for instructions overriding the safety policy.
+- [ ] **SDLC-CONV-04**: When a global rule and a repository rule conflict, the AI names the conflict with both sources and does not silently pick one; the composed prompt states this rule explicitly.
+- [ ] **SDLC-CONV-05**: The intake step shows which conventions are in effect (global file present/absent, repository file present/absent, last-read time), so the user knows the basis before the solution is generated.
+- [ ] **SDLC-CONV-06**: Generated solutions follow the in-effect conventions observably — an exemplar test proves a convention (for example a mandated layering or logging rule) appears in a generated SOLUTION without the user restating it.
+
+### External Research (SDLC-RES)
+
+- [ ] **SDLC-RES-01**: When internal evidence cannot answer a solution question, the AI proposes research with the specific questions it would research, and performs none until the user explicitly confirms.
+- [ ] **SDLC-RES-02**: A confirmed research run executes Claude Code headless through fs-gw over both the web and the repository, streams its progress into the UI, and can be stopped without leaving orphaned processes.
+- [ ] **SDLC-RES-03**: The research result is stored as a project/CR-scoped artifact containing findings, per-claim sources, and a scope marker showing which part came from the web and which from the repository.
+- [ ] **SDLC-RES-04**: Research findings enter the composed prompt as an explicitly EXTERNAL-marked evidence class that never outranks internal evidence without saying so, and every external claim remains attributable to its source in the generated solution.
+- [ ] **SDLC-RES-05**: Research is unavailable when fs-gw is not running; the AI says so and offers to continue on internal evidence alone instead of silently substituting model knowledge.
+- [ ] **SDLC-RES-06**: Research artifacts persist with the CR, appear in the step where they were produced, and can be reopened and re-used in later steps without re-running the research.
+
 ### SDLC Prompt & Tool Transparency (SDLC-OBS)
 
-- [ ] **SDLC-OBS-01**: A developer-facing view shows exactly what the SDLC composer emitted for the current step (which segments, how long each is, which tools were offered), so prompt changes are inspectable without reading source.
+- [ ] **SDLC-OBS-01**: A developer-facing view shows exactly what the SDLC composer emitted for the current step (which segments, how long each is, which tools were offered, which convention sources were included), so prompt changes are inspectable without reading source.
 - [ ] **SDLC-OBS-02**: The current prompt contract for every SDLC step and artifact intent is documented in one file that matches what the composer emits, with a test that fails when they drift.
 
 ## Future Requirements (Deferred)
@@ -91,16 +109,40 @@
 | SDLC-REPO-03 | Phase 29 | Pending |
 | SDLC-REPO-04 | Phase 30 | Pending |
 | SDLC-REPO-05 | Phase 30 | Pending |
-| SDLC-REPO-06 | Phase 30 | Pending |
+| SDLC-REPO-06 | Phase 29 | Pending |
 | SDLC-REPO-07 | Phase 30 | Pending |
-| SDLC-OBS-01 | Phase 31 | Pending |
-| SDLC-OBS-02 | Phase 31 | Pending |
+| SDLC-CONV-01 | Phase 31 | Pending |
+| SDLC-CONV-02 | Phase 31 | Pending |
+| SDLC-CONV-03 | Phase 31 | Pending |
+| SDLC-CONV-04 | Phase 31 | Pending |
+| SDLC-CONV-05 | Phase 31 | Pending |
+| SDLC-CONV-06 | Phase 31 | Pending |
+| SDLC-RES-01 | Phase 32 | Pending |
+| SDLC-RES-02 | Phase 32 | Pending |
+| SDLC-RES-03 | Phase 32 | Pending |
+| SDLC-RES-04 | Phase 32 | Pending |
+| SDLC-RES-05 | Phase 32 | Pending |
+| SDLC-RES-06 | Phase 32 | Pending |
+| SDLC-OBS-01 | Phase 33 | Pending |
+| SDLC-OBS-02 | Phase 33 | Pending |
 
 **Coverage:**
-- v1 requirements: 26 total
-- Mapped to phases: 26
+- v1 requirements: 38 total
+- Mapped to phases: 38
 - Unmapped: 0 ✓
+
+**Phase totals:**
+- Phase 26 (SDLC Prompt Grounding & Tool-Use Policy): 6 requirements, 4 plans
+- Phase 27 (Studio Artifact Tools & Diff Approval): 6 requirements, 5 plans
+- Phase 28 (Query-Only Knowledge Retrieval): 5 requirements, 4 plans
+- Phase 29 (fs-gw Client & Headless Repository Runs): 4 requirements, 4 plans
+- Phase 30 (Automatic Change Packs, Fallback & Run Reliability): 3 requirements, 4 plans
+- Phase 31 (Org Conventions in the Solution Pipeline): 6 requirements, ~4 plans
+- Phase 32 (External Research via Claude Code): 6 requirements, ~4 plans
+- Phase 33 (Prompt Transparency & Contract Documentation): 2 requirements, 2 plans
+
+**Mapping changes vs initial proposal:** SDLC-REPO-06 moved from Phase 30 to Phase 29 so per-project opt-in and the repository path exist before any run or change-pack work relies on them. SDLC-CONV and SDLC-RES were added after the initial roadmap and occupy Phases 31–32; SDLC-OBS moved from Phase 31 to Phase 33 so it documents the final composer shape after conventions and research exist.
 
 ---
 *Requirements defined: 2026-11-03*
-*Last updated: 2026-11-03 after initial v1.3 definition*
+*Last updated: 2026-11-03 — added SDLC-CONV (6) and SDLC-RES (6); total 38 requirements across Phases 26–33*

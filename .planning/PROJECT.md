@@ -20,6 +20,8 @@ Shipped **v1.0 MVP** on 2026-09-27 with all 8 foundational phases complete. Ship
 - **Trụ 1 — SDLC prompt + tool loop + artifact tools:** layered composer gains real grounding, a per-step tool-use policy, and true per-intent artifact contracts; new studio tools (`get_artifact`, `patch_artifact_section`) return diff patches that the user reviews before the editor is written; multi-round tool loop with visible, bounded tool activity.
 - **Trụ 2 — Query-only knowledge retrieval:** client posts `{query, limit}` and the server chooses published sets itself, so a fresh install without local documents still retrieves; removes the local `fetchSetCatalog` dependency and normalizes responses across AI Chat, SDLC, and Telegram.
 - **Trụ 3 — Repository autonomy through fs-gw:** a TaskMate fs-gw client (health, `exec/run`, `exec/stream` SSE, git worktree/diff) lets SDLC steps 3–4 run Claude Code headless inside a real repo worktree, stream progress into the UI, and produce change packs automatically from the real repo diff; the manual `generate-change-pack.mjs` script degrades to an explicit fallback.
+- **Trụ 4 — Org conventions:** a single global convention file in TaskMate carries rules every system must follow, and each repository supplies its own `CONVENTIONS.md` through fs-gw; the SDLC composer injects both so generated solutions reflect the organization's real development standards instead of generic advice, and any conflict between global and repo rules is surfaced rather than silently resolved.
+- **Trụ 5 — External research via Claude Code:** when internal knowledge is insufficient, the AI proposes research instead of guessing; after explicit user confirmation it runs Claude Code headless through fs-gw against both the web and the repository, stores the sourced report as an EXTERNAL-marked artifact, and combines it with internal evidence to produce a grounded solution.
 
 ## Requirements
 
@@ -55,6 +57,8 @@ Shipped **v1.0 MVP** on 2026-09-27 with all 8 foundational phases complete. Ship
 - [ ] v1.3: Knowledge retrieval accepts a query alone and works on a machine with no local document set.
 - [ ] v1.3: SDLC steps 3–4 run Claude Code headless in a real repo worktree through fs-gw and produce change packs automatically.
 - [ ] v1.3: fs-gw unavailability degrades to the manual change-pack script without blocking the flow.
+- [ ] v1.3: Global org conventions plus a repository `CONVENTIONS.md` reach every SDLC solution prompt, and conflicts between them are surfaced.
+- [ ] v1.3: When internal evidence is insufficient the AI proposes research, and after confirmation produces an EXTERNAL-marked sourced report covering web and repository.
 
 ### Out of Scope
 
