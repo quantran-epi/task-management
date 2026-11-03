@@ -323,5 +323,20 @@ describe('StepChatPanel artifact bootstrap queue', () => {
     expect(mocks.start).not.toHaveBeenCalled();
   });
 
+  // WR-02: a clarify prompt with no target would dead-end and drop the question.
+  it.each(['INTAKE', 'CODE_GUIDE', 'CHANGE_PACK'] as const)('sends artifact-shaped text as Q&A at %s', async (step) => {
+    mount(grd('', []), step);
+    await ready();
+    typeAndSend('Tạo tài liệu');
+    await waitFor(() => expect(mocks.start).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
 
+  it('sends artifact-shaped text as Q&A instead of dropping it in read-only view', async () => {
+    mount(solutionGrounding, 'SOLUTION', true);
+    await ready();
+    typeAndSend('Tạo tài liệu SOLUTION');
+    await waitFor(() => expect(mocks.start).toHaveBeenCalledTimes(1));
+    expect(mocks.start.mock.calls[0]![0].text).toBe('Tạo tài liệu SOLUTION');
+  });
 });

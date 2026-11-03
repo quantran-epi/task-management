@@ -329,7 +329,9 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
   }, [threadId, scopeKey]);
 
   const sendMessage = async (text: string) => {
-    if (looksLikeArtifactRequest(text)) {
+    // A clarify prompt needs somewhere to go: without targets (no artifact action at this
+    // step) or in read-only history view it would dead-end, so the turn stays ordinary Q&A.
+    if (!readOnly && artifactActions.length > 0 && looksLikeArtifactRequest(text)) {
       const exact = artifactActions.filter((kind) => artifactTerm(kind.toLowerCase()).test(normalizeArtifactText(text)));
       setArtifactNotice({ type: 'info', targets: exact.length ? exact : artifactActions });
       return;
