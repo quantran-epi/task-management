@@ -24,7 +24,8 @@ import {
   createSdlcWizardRuntime,
   type SdlcWizardRuntime,
 } from '../services/wizard/sdlcWizardRuntime';
-import { buildSdlcStepGrounding } from '../services/sdlc/groundingBuilder';
+import { buildSdlcStepGroundingResult } from '../services/sdlc/groundingBuilder';
+import type { SdlcArtifactKindForTurn } from '../services/ai/sdlcPromptComposer';
 import type { WizardEvidence } from '../services/ai/wizardService';
 import { useOptionalKnowledgeConfig } from '../services/knowledge/knowledgeConfig';
 import type {
@@ -70,6 +71,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
   const [incomingSolutionDraft, setIncomingSolutionDraft] = useState<string | undefined>(undefined);
   const [draftPl03b, setDraftPl03b] = useState<string | undefined>(undefined);
   const [draftPl07, setDraftPl07] = useState<string | undefined>(undefined);
+  const [draftCab, setDraftCab] = useState<string | undefined>(undefined);
   const [wizardRuntime, setWizardRuntime] = useState<SdlcWizardRuntime | undefined>(undefined);
   const chatPanelRef = useRef<StepChatPanelHandle>(null);
   const analysisTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -203,6 +205,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
       setIncomingSolutionDraft(undefined);
       setDraftPl03b(undefined);
       setDraftPl07(undefined);
+      setDraftCab(undefined);
     }
     activeCrRef.current = crId;
     setActiveCrId(crId);
@@ -389,8 +392,9 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
     };
   }, [wizardRuntime, activeCrId, projectId, threadId, selectedStep, evidenceSessionId, evidenceUpdatedAt, evidenceCr, evidenceFeature]);
 
+  // The chat gate reads the builder's real marker set, never the rendered text.
   const stepGroundingContext = useMemo(
-    () => buildSdlcStepGrounding({
+    () => buildSdlcStepGroundingResult({
       step: selectedStep,
       metadata: workflowState?.metadata,
       crStatus,
@@ -454,6 +458,20 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
       message.success('Đã tự động trích xuất SOLUTION.md vào trình soạn thảo');
     },
     [saveDraft, appendArtifactEvent, activeVersions.SOLUTION, workflowState?.artifacts.solution?.version]
+  );
+
+  /**
+   * D-16/D-17: a chat-produced PL03B/PL07/CAB lands in its step editor as a draft. It never
+   * commits, approves, or appends an artifact card — approval stays the editor's explicit action.
+   */
+  const handleChatArtifactDraft = useCallback(
+    (kind: SdlcArtifactKindForTurn, markdown: string) => {
+      if (kind === 'PL03B') setDraftPl03b(markdown);
+      else if (kind === 'PL07') setDraftPl07(markdown);
+      else if (kind === 'CAB') setDraftCab(markdown);
+      message.success(`Đã chuyển bản nháp ${kind} vào trình soạn thảo`);
+    },
+    []
   );
 
   const handleStartIntake = async (
@@ -640,6 +658,8 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
             projectId={projectId}
             crId={activeCrId}
             workflowState={workflowState}
+            incomingDraft={draftCab}
+            onDraftChange={(markdown) => setDraftCab(markdown)}
             onCommitCab={async (markdown, noteId) => {
               try {
                 const nextState = await coordinator.commitCab(markdown, noteId);
@@ -739,6 +759,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
           stepViewNode={renderStepNode()}
           onNavigateToStep={handleNavigateToStep}
           onSolutionExtracted={handleSolutionExtracted}
+          onArtifactDraft={handleChatArtifactDraft}
           artifactEvents={artifactEvents}
           onArtifactOpen={handleArtifactOpen}
           onArtifactCta={(eventId) => {

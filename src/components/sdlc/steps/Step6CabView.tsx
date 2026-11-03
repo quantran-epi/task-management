@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Typography, Alert, Button, Space, Card, Tag, theme, message } from 'antd';
 import {
   FileWordOutlined,
@@ -31,6 +31,8 @@ export interface Step6CabViewProps {
   db?: TaskPlannerDatabase | undefined;
   onNavigateToStep?: ((step: SdlcStepId) => void) | undefined;
   onDraftChange?: ((markdown: string) => void) | undefined;
+  /** A chat-produced CAB draft; replaces the local draft without a remount. */
+  incomingDraft?: string | undefined;
   /** Test/injection seam, mirroring Step 5's `generateDrafts`. Must never persist. */
   generateCabDraft?: ((input: { signal: AbortSignal }) => Promise<{ markdown: string }>) | undefined;
   wizardRuntime?: SdlcWizardRuntime | undefined;
@@ -45,6 +47,7 @@ export const Step6CabView: React.FC<Step6CabViewProps> = ({
   db = defaultDb,
   onNavigateToStep,
   onDraftChange,
+  incomingDraft,
   generateCabDraft,
   wizardRuntime,
 }) => {
@@ -55,6 +58,11 @@ export const Step6CabView: React.FC<Step6CabViewProps> = ({
   const [exportingKind, setExportingKind] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
   const [draftMarkdown, setDraftMarkdown] = useState<string | undefined>(undefined);
+
+  // A chat draft arrives after mount, so it must seed the local draft without a remount.
+  useEffect(() => {
+    if (incomingDraft !== undefined) setDraftMarkdown(incomingDraft);
+  }, [incomingDraft]);
 
   const pl02 = workflowState?.artifacts.pl02;
   const pl03b = workflowState?.artifacts.pl03b;

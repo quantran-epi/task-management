@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Typography, Alert, Button, Space, Tabs, Spin, Tag, Card, theme, message } from 'antd';
 import {
   DownloadOutlined,
@@ -66,6 +66,14 @@ export const Step5TechDocsView: React.FC<Step5TechDocsViewProps> = ({
   const isConfigured = Boolean(generateDrafts || wizardRuntime);
   const isReadyForGen = Boolean(solution && changePack && (generateDrafts || driftResult));
   const isBothApproved = Boolean(pl03b && pl07);
+
+  // A chat draft arrives after mount, so it must win over the local copy without a remount.
+  useEffect(() => {
+    if (draftPl03b !== undefined) setLocalPl03b(draftPl03b);
+  }, [draftPl03b]);
+  useEffect(() => {
+    if (draftPl07 !== undefined) setLocalPl07(draftPl07);
+  }, [draftPl07]);
 
   const pl03bMarkdown = draftPl03b ?? localPl03b;
   const pl07Markdown = draftPl07 ?? localPl07;

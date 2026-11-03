@@ -3,6 +3,10 @@ import { theme } from 'antd';
 import type { TaskPlannerDatabase } from '../../db';
 import type { SdlcStepId, SdlcWorkflowState } from '../../services/wizard/workflowSchemas';
 import type { AiChatArtifactEvent } from '../ai/AiChatWidget';
+import type { SdlcArtifactKindForTurn } from '../../services/ai/sdlcPromptComposer';
+import type { SdlcGroundingResult } from '../../services/sdlc/groundingBuilder';
+
+const EMPTY_GROUNDING: SdlcGroundingResult = { text: '', present: new Set() };
 import { StepChatPanel, type StepChatPanelHandle } from './chat/StepChatPanel';
 import { ResizeSplitter } from "../common/ResizeSplitter";
 import { SdlcStaleBanner } from './common/SdlcStaleBanner';
@@ -23,10 +27,11 @@ export interface SdlcWorkspaceProps {
   selectedStep: SdlcStepId;
   workflowState?: SdlcWorkflowState | undefined;
   stepViewNode?: React.ReactNode;
-  stepGroundingContext?: string;
+  stepGroundingContext?: SdlcGroundingResult;
   readOnly?: boolean;
   onNavigateToStep?: (step: SdlcStepId) => void;
   onSolutionExtracted?: ((solutionMarkdown: string) => void) | undefined;
+  onArtifactDraft?: ((kind: SdlcArtifactKindForTurn, markdown: string) => void) | undefined;
   artifactEvents?: AiChatArtifactEvent[] | undefined;
   onArtifactOpen?: ((eventId: string, readOnly: boolean) => void) | undefined;
   onArtifactCta?: ((eventId: string) => void) | undefined;
@@ -40,10 +45,11 @@ export const SdlcWorkspace: React.FC<SdlcWorkspaceProps> = ({
   selectedStep,
   workflowState,
   stepViewNode,
-  stepGroundingContext = '',
+  stepGroundingContext = EMPTY_GROUNDING,
   readOnly = false,
   onNavigateToStep,
   onSolutionExtracted,
+  onArtifactDraft,
   artifactEvents,
   onArtifactOpen,
   onArtifactCta,
@@ -138,6 +144,7 @@ export const SdlcWorkspace: React.FC<SdlcWorkspaceProps> = ({
           readOnly={readOnly}
           onNavigateToStep={onNavigateToStep}
           {...(onSolutionExtracted ? { onSolutionExtracted } : {})}
+          {...(onArtifactDraft ? { onArtifactDraft } : {})}
           {...(artifactEvents ? { artifactEvents } : {})}
           {...(onArtifactOpen ? { onArtifactOpen } : {})}
           {...(onArtifactCta ? { onArtifactCta } : {})}

@@ -38,7 +38,7 @@ export interface StepChatPanelProps {
   onSolutionExtracted?: ((solutionMarkdown: string) => void) | undefined;
   db?: TaskPlannerDatabase | undefined;
   /** D-16: a chat-produced artifact is a DRAFT for the editor. It never commits a version. */
-  onArtifactDraft?: ((kind: 'SOLUTION', markdown: string) => void) | undefined;
+  onArtifactDraft?: ((kind: SdlcArtifactKindForTurn, markdown: string) => void) | undefined;
   /** Durable artifact cards already persisted in this step's thread. */
   artifactEvents?: AiChatArtifactEvent[] | undefined;
   onArtifactOpen?: ((eventId: string, readOnly: boolean) => void) | undefined;
@@ -176,14 +176,21 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
     },
   });
 
-  /** D-07: an extracted SOLUTION is a draft for the editor, never a committed version. */
-  const extractSolutionDraft = useCallback(
-    async (content: string) => {
-      if (stepId !== 'SOLUTION' || !content.includes('# SOLUTION')) return;
-      const solutionMarkdown = extractSolutionMarkdown(content);
-      if (!solutionMarkdown) return;
-      if (onSolutionExtracted) onSolutionExtracted(solutionMarkdown);
-      else onArtifactDraft?.('SOLUTION', solutionMarkdown);
+  /**
+   * D-07/D-16: a chat-produced artifact is a draft for the editor, never a committed version.
+   * SOLUTION keeps its `# SOLUTION` heading detector; PL03B/PL07/CAB keep the full body (their
+   * output contract is the document itself) so the handoff never depends on a heading guess.
+   */
+  const extractArtifactDraft = useCallback(
+    async (content: string, kind: SdlcArtifactKindForTurn) => {
+      const solution = kind === 'SOLUTION';
+      if (solution && !content.includes('# SOLUTION')) return;
+      const markdown = solution
+        ? extractSolutionMarkdown(content)
+        : content.replace(/^ {0,3}(?:`{3,}|~{3,})[^\n]*$/gm, '').trim();
+      if (!markdown) return;
+      if (solution && onSolutionExtracted) onSolutionExtracted(markdown);
+      else onArtifactDraft?.(kind, markdown);
 
       if (!threadId) return;
       const rows = await db.chatMessages.where('threadId').equals(threadId).sortBy('createdAt');
@@ -191,11 +198,11 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
       if (latest?.role === 'assistant' && latest.content === content) {
         // D-06: the artifact body lives in the editor, not in the transcript.
         await db.chatMessages.update(latest.id, {
-          content: `${extractChatSummary(content)}\n\n*(Toàn bộ tài liệu kiến trúc đã được cập nhật trực tiếp vào trình soạn thảo bên trái)*`,
+          content: `${extractChatSummary(content)}\n\n*(Toàn bộ tài liệu đã được chuyển trực tiếp vào trình soạn thảo bên trái)*`,
         });
       }
     },
-    [stepId, threadId, db, onSolutionExtracted, onArtifactDraft]
+    [threadId, db, onSolutionExtracted, onArtifactDraft]
   );
 
   const submit = useCallback(
@@ -273,7 +280,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
           return;
         }
         if (outcome.phase === 'complete' && outcome.content) {
-          await extractSolutionDraft(outcome.content);
+          await extractArtifactDraft(outcome.content, artifact ?? 'SOLUTION');
         }
       } catch {
         setDraft((current) => current || rawText);
@@ -286,7 +293,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
         }
       }
     },
-    [threadId, messages, db, stepId, crId, groundingText, turn, scopeKey, toolbox, extractSolutionDraft]
+    [threadId, messages, db, stepId, crId, groundingText, turn, scopeKey, toolbox, extractArtifactDraft]
   );
 
   const launchArtifact = (kind: SdlcArtifactKindForTurn) => {
