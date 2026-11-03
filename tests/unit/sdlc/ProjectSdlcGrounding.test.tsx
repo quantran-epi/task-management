@@ -5,12 +5,13 @@ import { TaskPlannerDatabase } from '../../../src/db';
 import { createNewCr } from '../../../src/services/wizard/sdlcCrManager';
 import type { SdlcWorkflowMetadata } from '../../../src/services/wizard/workflowSchemas';
 
-const captured = vi.hoisted(() => ({ grounding: '' }));
+const captured = vi.hoisted(() => ({ grounding: '', present: new Set<string>() }));
 
 vi.mock('../../../src/components/sdlc/SdlcWorkspace', () => ({
-  SdlcWorkspace: (props: { selectedStep: string; stepGroundingContext?: string }) => {
-    captured.grounding = props.stepGroundingContext ?? '';
-    return <pre data-testid="grounding-capture" data-step={props.selectedStep}>{props.stepGroundingContext}</pre>;
+  SdlcWorkspace: (props: { selectedStep: string; stepGroundingContext?: { text: string; present: ReadonlySet<string> } }) => {
+    captured.grounding = props.stepGroundingContext?.text ?? '';
+    captured.present = props.stepGroundingContext?.present ?? new Set<string>();
+    return <pre data-testid="grounding-capture" data-step={props.selectedStep}>{captured.grounding}</pre>;
   },
 }));
 
@@ -67,6 +68,10 @@ describe('ProjectSdlcView grounding supply', () => {
     expect(captured.grounding).toContain('[EVIDENCE_STATUS]');
     expect(captured.grounding).not.toContain('[DỮ LIỆU NGỮ CẢNH');
     expect(captured.grounding).not.toContain('[HẾT DỮ LIỆU NGỮ CẢNH]');
+    // CR-01: the gate consumes the real marker set, not the rendered text.
+    expect(captured.present.has('PL01')).toBe(true);
+    expect(captured.present.has('PL02')).toBe(true);
+    expect(captured.present.has('SOLUTION')).toBe(false);
 
     expect(screen.getByTestId('grounding-capture')).toHaveAttribute('data-step', 'SOLUTION');
   });

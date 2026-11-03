@@ -7,6 +7,7 @@ import { StepChatPanel, type StepChatPanelHandle } from '../../../src/components
 import { useStepChatToolbox } from '../../../src/components/sdlc/chat/useStepChatToolbox';
 import { SDLC_STEP_ALLOWED_TOOLS } from '../../../src/services/ai/sdlcPromptComposer';
 import { normalizeToolName, type AiToolDefinition } from '../../../src/services/ai/aiTools';
+import type { SdlcGroundingResult } from '../../../src/services/sdlc/groundingBuilder';
 import type { ChatTurnRequest } from '../../../src/components/ai/runtime/chatTurnRuntime';
 
 const mocks = vi.hoisted(() => ({ start: vi.fn(), discover: vi.fn() }));
@@ -41,6 +42,7 @@ const dynamicTools: AiToolDefinition[] = ['search_nodes', 'write_record'].map((n
   type: 'function', function: { name, description: name, parameters: { type: 'object', properties: {} } },
 }));
 const steps = Object.keys(SDLC_STEP_ALLOWED_TOOLS) as Array<keyof typeof SDLC_STEP_ALLOWED_TOOLS>;
+const grounding: SdlcGroundingResult = { text: 'PL02 evidence', present: new Set(['PL01', 'PL02']) };
 
 describe('StepChatPanel tool-policy/payload parity', () => {
   let db: TaskPlannerDatabase;
@@ -57,7 +59,7 @@ describe('StepChatPanel tool-policy/payload parity', () => {
 
   async function send(stepId: typeof steps[number] = 'SOLUTION') {
     const ref = React.createRef<StepChatPanelHandle>();
-    render(<StepChatPanel ref={ref} projectId="project" crId="cr" stepId={stepId} db={db} stepGroundingContext="PL02 evidence" />);
+    render(<StepChatPanel ref={ref} projectId="project" crId="cr" stepId={stepId} db={db} stepGroundingContext={grounding} />);
     await waitFor(() => expect(screen.getByTestId('thread')).toHaveTextContent('step-thread'));
     await act(async () => { await ref.current!.sendMessage('Giải thích bằng chứng'); });
     expect(mocks.start).toHaveBeenCalledOnce();

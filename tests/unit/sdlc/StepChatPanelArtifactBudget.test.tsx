@@ -7,6 +7,8 @@ import { TaskPlannerDatabase } from '../../../src/db';
 import { StepChatPanel, type StepChatPanelHandle } from '../../../src/components/sdlc/chat/StepChatPanel';
 import type { ChatTurnRequest } from '../../../src/components/ai/runtime/chatTurnRuntime';
 import * as solutionParser from '../../../src/utils/sdlcSolutionParser';
+import { buildSdlcStepGroundingResult } from '../../../src/services/sdlc/groundingBuilder';
+import type { SdlcArtifactKindForTurn } from '../../../src/services/ai/sdlcPromptComposer';
 
 const mocks = vi.hoisted(() => ({ start: vi.fn(), getStepThread: vi.fn(), config: vi.fn(), abort: vi.fn(), drain: vi.fn(), contextWindowTokens: 2000 }));
 vi.mock('../../../src/services/wizard/sdlcCrManager', () => ({ getStepThread: mocks.getStepThread }));
@@ -58,7 +60,7 @@ const response = `Giới thiệu giải pháp.\n\`\`\`\`markdown\n${document}\n\
 describe('StepChatPanel artifact context and completion safety', () => {
   let db: TaskPlannerDatabase;
   let onSolutionExtracted = vi.fn<(markdown: string) => void>();
-  let onArtifactDraft = vi.fn<(kind: 'SOLUTION', markdown: string) => void>();
+  let onArtifactDraft = vi.fn<(kind: SdlcArtifactKindForTurn, markdown: string) => void>();
 
   beforeEach(() => {
     vi.resetAllMocks();
@@ -69,7 +71,7 @@ describe('StepChatPanel artifact context and completion safety', () => {
     mocks.start.mockResolvedValue({ phase: 'complete', content: '' });
     db = new TaskPlannerDatabase(`artifact-budget-${crypto.randomUUID()}`);
     onSolutionExtracted = vi.fn<(markdown: string) => void>();
-    onArtifactDraft = vi.fn<(kind: 'SOLUTION', markdown: string) => void>();
+    onArtifactDraft = vi.fn<(kind: SdlcArtifactKindForTurn, markdown: string) => void>();
   });
 
   afterEach(async () => {
@@ -79,9 +81,19 @@ describe('StepChatPanel artifact context and completion safety', () => {
     await db.delete();
   });
 
-  async function mount(useFallback = false) {
+  // STEP Solution requires PL01/PL02, and the gate trusts only the builder's real marker set.
+  const solutionGrounding = buildSdlcStepGroundingResult({
+    step: 'SOLUTION',
+    artifacts: {
+      pl01: { kind: 'PL01', version: 1, hash: 'a'.repeat(64), title: 'PL01', content: 'Baseline', sourceHashes: [], updatedAt: '2026-11-03T00:00:00Z' },
+      pl02: { kind: 'PL02', version: 1, hash: 'a'.repeat(64), title: 'PL02', content: 'Acceptance', sourceHashes: [], updatedAt: '2026-11-03T00:00:00Z' },
+    },
+  });
+
+  async function mount(useFallback = false, grounding = solutionGrounding) {
     const ref = React.createRef<StepChatPanelHandle>();
     render(<StepChatPanel ref={ref} projectId="project" crId="cr" stepId="SOLUTION" db={db}
+      stepGroundingContext={grounding}
       {...(!useFallback ? { onSolutionExtracted } : {})} onArtifactDraft={onArtifactDraft} />);
     await waitFor(() => expect(screen.getByTestId('thread')).toHaveTextContent('solution-thread'));
     return ref;

@@ -111,7 +111,7 @@ describe('ProjectSdlcView and IDE Layout', () => {
         projectId={projectId}
         crId="cr-test-01"
         stepId="INTAKE"
-        stepGroundingContext="Grounding for INTAKE"
+        stepGroundingContext={{ text: 'Grounding for INTAKE', present: new Set() }}
         db={db}
       />
     );
@@ -175,7 +175,7 @@ describe('ProjectSdlcView and IDE Layout', () => {
         projectId={projectId}
         crId="cr-test-01"
         stepId="INTAKE"
-        stepGroundingContext="Grounding for INTAKE"
+        stepGroundingContext={{ text: 'Grounding for INTAKE', present: new Set() }}
         db={db}
       />
     );
@@ -513,7 +513,7 @@ describe('ProjectSdlcView and IDE Layout', () => {
         projectId={projectId}
         crId="cr-test-01"
         stepId="SOLUTION"
-        stepGroundingContext="Grounding context"
+        stepGroundingContext={{ text: 'Grounding context', present: new Set() }}
         db={db}
       />
     );

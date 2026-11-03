@@ -7,7 +7,7 @@ import { StepChatPanel, type StepChatPanelHandle } from '../../../src/components
 import { SDLC_ARTIFACT_CONTRACTS, type SdlcArtifactKindForTurn } from '../../../src/services/ai/sdlcPromptComposer';
 import type { SdlcStepId } from '../../../src/services/wizard/workflowSchemas';
 import { formatGuardMessage } from '../../../src/services/wizard/workflowGuards';
-import { buildSdlcStepGrounding } from '../../../src/services/sdlc/groundingBuilder';
+import { buildSdlcStepGroundingResult, type SdlcGroundingMarker, type SdlcGroundingResult } from '../../../src/services/sdlc/groundingBuilder';
 
 const mocks = vi.hoisted(() => ({ start: vi.fn(), getStepThread: vi.fn(), status: 'idle', running: false, toolsForTurn: vi.fn() }));
 vi.mock('../../../src/services/wizard/sdlcCrManager', () => ({ getStepThread: mocks.getStepThread }));
@@ -42,6 +42,9 @@ vi.mock('../../../src/services/ai/nineRouterTokenService', () => ({
 
 const prompt = 'Hãy phân tích hồ sơ hiện tại và tạo SOLUTION.md hoàn chỉnh cho Change Request này.';
 const intakeGrounding = '[PL01]\nIntake baseline\n\n[PL02]\nFunctional baseline';
+/** The gate trusts only the real marker set, so text fixtures state their markers explicitly. */
+const grd = (text: string, present: readonly SdlcGroundingMarker[]): SdlcGroundingResult => ({ text, present: new Set(present) });
+const solutionGrounding = grd(intakeGrounding, ['CR_METADATA', 'PL01', 'PL02']);
 
 describe('StepChatPanel artifact bootstrap queue', () => {
   let db: TaskPlannerDatabase;
@@ -62,7 +65,7 @@ describe('StepChatPanel artifact bootstrap queue', () => {
     await db.delete();
   });
 
-  function mount(grounding = intakeGrounding, stepId: SdlcStepId = 'SOLUTION', readOnly = false) {
+  function mount(grounding: SdlcGroundingResult = solutionGrounding, stepId: SdlcStepId = 'SOLUTION', readOnly = false) {
     const ref = React.createRef<StepChatPanelHandle>();
     const props = { ref, projectId: 'project', crId: 'cr', stepId, db, stepGroundingContext: grounding, readOnly, onNavigateToStep: vi.fn() };
     const view = render(<StepChatPanel {...props} />);
@@ -95,14 +98,14 @@ describe('StepChatPanel artifact bootstrap queue', () => {
       ref.current!.requestArtifactAnalysis();
     });
     expect(mocks.start).not.toHaveBeenCalled();
-    rerender(<StepChatPanel {...props} stepGroundingContext={`${intakeGrounding}\n\nLatest evidence`} />);
+    rerender(<StepChatPanel {...props} stepGroundingContext={grd(`${intakeGrounding}\n\nLatest evidence`, ['PL01', 'PL02'])} />);
     await act(async () => { resolveThread({ id: 'solution-thread' }); });
     await waitFor(() => expect(mocks.start).toHaveBeenCalledTimes(1));
     const request = mocks.start.mock.calls[0]![0];
     expect(request).toMatchObject({ threadId: 'solution-thread', scopeKey: 'sdlc:project:cr:SOLUTION', text: prompt });
     expect(request.systemMessages[0].content).toContain(SDLC_ARTIFACT_CONTRACTS.SOLUTION);
     expect(request.systemMessages[0].content).toContain('Latest evidence');
-    rerender(<StepChatPanel {...props} stepGroundingContext="Later evidence" />);
+    rerender(<StepChatPanel {...props} stepGroundingContext={grd('Later evidence', ['PL01', 'PL02'])} />);
     await act(async () => {});
     expect(mocks.start).toHaveBeenCalledTimes(1);
   });
@@ -115,7 +118,7 @@ describe('StepChatPanel artifact bootstrap queue', () => {
     await act(async () => { ref.current!.requestArtifactAnalysis(); });
     expect(mocks.start).toHaveBeenCalledTimes(1);
     expect(mocks.start.mock.calls[0]![0].text).toBe(prompt);
-    rerender(<StepChatPanel {...props} stepGroundingContext="Changed evidence" />);
+    rerender(<StepChatPanel {...props} stepGroundingContext={grd('Changed evidence', ['PL01', 'PL02'])} />);
     await act(async () => {});
     expect(mocks.start).toHaveBeenCalledTimes(1);
   });
@@ -154,10 +157,10 @@ describe('StepChatPanel artifact bootstrap queue', () => {
   });
 
   it.each([
-    ['SOLUTION', 'SOLUTION', intakeGrounding],
-    ['TECH_DOCS', 'PL03B', '[SOLUTION v2]\nApproved solution\n\n[CHANGE_PACK]\nValidated pack'],
-    ['TECH_DOCS', 'PL07', '[SOLUTION v2]\nApproved solution\n\n[CHANGE_PACK]\nValidated pack'],
-    ['CAB', 'CAB', '[PL03B]\nImplementation\n\n[PL07]\nReview questions'],
+    ['SOLUTION', 'SOLUTION', grd(intakeGrounding, ['PL01', 'PL02'])],
+    ['TECH_DOCS', 'PL03B', grd('[SOLUTION v2]\nApproved solution\n\n[CHANGE_PACK]\nValidated pack', ['SOLUTION', 'CHANGE_PACK'])],
+    ['TECH_DOCS', 'PL07', grd('[SOLUTION v2]\nApproved solution\n\n[CHANGE_PACK]\nValidated pack', ['SOLUTION', 'CHANGE_PACK'])],
+    ['CAB', 'CAB', grd('[PL03B]\nImplementation\n\n[PL07]\nReview questions', ['PL03B', 'PL07'])],
   ] as const)('%s action %s selects only its own output contract', async (step, kind, grounding) => {
     mount(grounding, step);
     await ready();
@@ -169,7 +172,7 @@ describe('StepChatPanel artifact bootstrap queue', () => {
     ['INTAKE', []], ['SOLUTION', ['SOLUTION']], ['CODE_GUIDE', []],
     ['CHANGE_PACK', []], ['TECH_DOCS', ['PL03B', 'PL07']], ['CAB', ['CAB']],
   ] as const)('%s renders exactly its valid artifact labels', (step, targets) => {
-    mount('', step);
+    mount(grd('', []), step);
     for (const kind of ['SOLUTION', 'PL03B', 'PL07', 'CAB']) {
       const button = screen.queryByRole('button', { name: `Soạn ${kind} bằng AI` });
       expect(Boolean(button)).toBe((targets as readonly string[]).includes(kind));
@@ -178,7 +181,7 @@ describe('StepChatPanel artifact bootstrap queue', () => {
   });
 
   it('hides historical artifact actions and refuses imperative artifact requests', async () => {
-    const { ref } = mount(intakeGrounding, 'SOLUTION', true);
+    const { ref } = mount(grd(intakeGrounding, ['PL01', 'PL02']), 'SOLUTION', true);
     await ready();
     expect(screen.queryByRole('button', { name: 'Soạn SOLUTION bằng AI' })).not.toBeInTheDocument();
     act(() => ref.current!.requestArtifact('SOLUTION'));
@@ -197,7 +200,7 @@ describe('StepChatPanel artifact bootstrap queue', () => {
   });
 
   it('refuses missing TECH_DOCS prerequisites before composing and navigates to CHANGE_PACK', async () => {
-    const { props } = mount('', 'TECH_DOCS');
+    const { props } = mount(grd('', []), 'TECH_DOCS');
     await ready();
     fireEvent.click(screen.getByRole('button', { name: 'Soạn PL03B bằng AI' }));
     expect(screen.getByRole('alert')).toHaveTextContent(formatGuardMessage('SOLUTION_AND_PACK_REQUIRED_FOR_TECH_DOCS'));
@@ -208,29 +211,30 @@ describe('StepChatPanel artifact bootstrap queue', () => {
   });
 
   it.each([
-    ['SOLUTION', 'SOLUTION', intakeGrounding, 'INTAKE_PL01_REQUIRED'],
-    ['TECH_DOCS', 'PL03B', '[SOLUTION v1]\nDesign\n\n[CHANGE_PACK]\nPack', 'SOLUTION_AND_PACK_REQUIRED_FOR_TECH_DOCS'],
-    ['CAB', 'CAB', '[PL03B]\nImplementation\n\n[PL07]\nQuestions', 'ALL_DOCS_REQUIRED_FOR_CAB'],
-  ] as const)('%s derived markers never substitute required sources', async (step, kind, required, code) => {
+    ['SOLUTION', 'SOLUTION', ['PL01'], 'INTAKE_PL01_REQUIRED'],
+    ['TECH_DOCS', 'PL03B', ['SOLUTION'], 'SOLUTION_AND_PACK_REQUIRED_FOR_TECH_DOCS'],
+    ['CAB', 'CAB', ['PL03B'], 'ALL_DOCS_REQUIRED_FOR_CAB'],
+  ] as const)('%s derived markers never substitute required sources', async (step, kind, _required, code) => {
     const derived = '[ACCEPTANCE_CONTEXT]\nPL01 PL02 acceptance\n\n[TECH_DOCS]\nSOLUTION PL03B PL07\n\n[IMPLEMENTATION_EVIDENCE]\nCHANGE_PACK evidence';
-    const { props, rerender } = mount(derived, step);
+    const all: SdlcGroundingMarker[] = ['CR_METADATA', 'PL01', 'PL02', 'SOLUTION', 'CHANGE_PACK', 'ACCEPTANCE_CONTEXT', 'IMPLEMENTATION_EVIDENCE', 'TECH_DOCS', 'PL03B', 'PL07'];
+    const { props, rerender } = mount(grd(derived, ['ACCEPTANCE_CONTEXT', 'TECH_DOCS', 'IMPLEMENTATION_EVIDENCE']), step);
     await ready();
     fireEvent.click(screen.getByRole('button', { name: `Soạn ${kind} bằng AI` }));
     expect(screen.getByRole('alert')).toHaveTextContent(formatGuardMessage(code));
     expect(mocks.start).not.toHaveBeenCalled();
-    rerender(<StepChatPanel {...props} stepGroundingContext={`${derived}\n\n${required}`} />);
+    rerender(<StepChatPanel {...props} stepGroundingContext={grd(derived, all)} />);
     fireEvent.click(screen.getByRole('button', { name: `Soạn ${kind} bằng AI` }));
     await waitFor(() => expectOnlyContract(kind));
   });
 
   it.each([
-    ['SOLUTION', 'SOLUTION', '[PL01]\nBaseline', 'INTAKE_PL02_REQUIRED'],
-    ['TECH_DOCS', 'PL07', '[SOLUTION v1]\nDesign', 'SOLUTION_AND_PACK_REQUIRED_FOR_TECH_DOCS'],
-    ['TECH_DOCS', 'PL03B', '[CHANGE_PACK]\nPack', 'SOLUTION_AND_PACK_REQUIRED_FOR_TECH_DOCS'],
-    ['CAB', 'CAB', '[PL03B]\nImplementation', 'ALL_DOCS_REQUIRED_FOR_CAB'],
-    ['CAB', 'CAB', '[PL07]\nQuestions', 'ALL_DOCS_REQUIRED_FOR_CAB'],
-  ] as const)('%s requires every source for %s', async (step, kind, grounding, code) => {
-    mount(grounding, step);
+    ['SOLUTION', 'SOLUTION', ['PL01'], 'INTAKE_PL02_REQUIRED'],
+    ['TECH_DOCS', 'PL07', ['SOLUTION'], 'SOLUTION_AND_PACK_REQUIRED_FOR_TECH_DOCS'],
+    ['TECH_DOCS', 'PL03B', ['CHANGE_PACK'], 'SOLUTION_AND_PACK_REQUIRED_FOR_TECH_DOCS'],
+    ['CAB', 'CAB', ['PL03B'], 'ALL_DOCS_REQUIRED_FOR_CAB'],
+    ['CAB', 'CAB', ['PL07'], 'ALL_DOCS_REQUIRED_FOR_CAB'],
+  ] as const)('%s requires every source for %s', async (step, kind, present, code) => {
+    mount(grd('Evidence text only', present), step);
     await ready();
     fireEvent.click(screen.getByRole('button', { name: `Soạn ${kind} bằng AI` }));
     expect(screen.getByRole('alert')).toHaveTextContent(formatGuardMessage(code));
@@ -239,14 +243,14 @@ describe('StepChatPanel artifact bootstrap queue', () => {
 
   it('accepts production-built TECH_DOCS grounding with exact prerequisite markers', async () => {
     const artifact = (kind: 'SOLUTION' | 'CHANGE_PACK') => ({ kind, title: kind, version: 1, hash: 'a'.repeat(64), content: 'Evidence', sourceHashes: [], updatedAt: '2026-11-03T00:00:00Z' });
-    mount(buildSdlcStepGrounding({ step: 'TECH_DOCS', artifacts: { solution: artifact('SOLUTION'), changePack: artifact('CHANGE_PACK') } }), 'TECH_DOCS');
+    mount(buildSdlcStepGroundingResult({ step: 'TECH_DOCS', artifacts: { solution: artifact('SOLUTION'), changePack: artifact('CHANGE_PACK') } }), 'TECH_DOCS');
     await ready();
     fireEvent.click(screen.getByRole('button', { name: 'Soạn PL07 bằng AI' }));
     await waitFor(() => expectOnlyContract('PL07'));
   });
 
   it.each(['TẠO TÀI LIỆU', 'Tạo tài liệu', 'Soạn-pl07', 'VIẾT tài liệu'])('clarifies %s without any model or discovery call', async (text) => {
-    mount('[SOLUTION v1]\nDesign\n\n[CHANGE_PACK]\nPack', 'TECH_DOCS');
+    mount(grd('[SOLUTION v1]\nDesign\n\n[CHANGE_PACK]\nPack', ['SOLUTION', 'CHANGE_PACK']), 'TECH_DOCS');
     await ready();
     typeAndSend(text);
     const alert = screen.getByRole('alert');
@@ -259,7 +263,7 @@ describe('StepChatPanel artifact bootstrap queue', () => {
   });
 
   it('clarification starts only the target explicitly clicked', async () => {
-    mount('[SOLUTION v1]\nDesign\n\n[CHANGE_PACK]\nPack', 'TECH_DOCS');
+    mount(grd('[SOLUTION v1]\nDesign\n\n[CHANGE_PACK]\nPack', ['SOLUTION', 'CHANGE_PACK']), 'TECH_DOCS');
     await ready();
     typeAndSend('Tạo tài liệu');
     expect(mocks.start).not.toHaveBeenCalled();
@@ -269,7 +273,7 @@ describe('StepChatPanel artifact bootstrap queue', () => {
   });
 
   it.each(['Hãy đọc PL07 hiện tại', 'Tạo-pl07x', 'biênsoạn PL07'])('keeps ordinary text %s as Q&A', async (text) => {
-    mount('', 'TECH_DOCS');
+    mount(grd('', []), 'TECH_DOCS');
     await ready();
     typeAndSend(text);
     await waitFor(() => expect(mocks.start).toHaveBeenCalledTimes(1));
@@ -280,7 +284,7 @@ describe('StepChatPanel artifact bootstrap queue', () => {
   });
 
   it('clears notices on scope changes and keeps them out of persisted history', async () => {
-    const { props, rerender } = mount('', 'TECH_DOCS');
+    const { props, rerender } = mount(grd('', []), 'TECH_DOCS');
     await ready();
     typeAndSend('Tạo tài liệu');
     expect(screen.getByRole('alert')).toBeInTheDocument();
@@ -318,4 +322,6 @@ describe('StepChatPanel artifact bootstrap queue', () => {
     await act(async () => {});
     expect(mocks.start).not.toHaveBeenCalled();
   });
+
+
 });
