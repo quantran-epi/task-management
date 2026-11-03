@@ -24,6 +24,8 @@ import {
   createSdlcWizardRuntime,
   type SdlcWizardRuntime,
 } from '../services/wizard/sdlcWizardRuntime';
+import { buildSdlcStepGrounding } from '../services/sdlc/groundingBuilder';
+import type { WizardEvidence } from '../services/ai/wizardService';
 import { useOptionalKnowledgeConfig } from '../services/knowledge/knowledgeConfig';
 import type {
   SdlcArtifactKind,
@@ -64,6 +66,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
   const [activeCrId, setActiveCrId] = useState<string>('');
   const [threadId, setThreadId] = useState<string>(() => generateId());
   const [workflowState, setWorkflowState] = useState<SdlcWorkflowState | undefined>(undefined);
+  const [stepEvidence, setStepEvidence] = useState<WizardEvidence | undefined>(undefined);
   const [incomingSolutionDraft, setIncomingSolutionDraft] = useState<string | undefined>(undefined);
   const [draftPl03b, setDraftPl03b] = useState<string | undefined>(undefined);
   const [draftPl07, setDraftPl07] = useState<string | undefined>(undefined);
@@ -345,6 +348,59 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
       cancelled = true;
     };
   }, [db, knowledgeConfig.enabled, knowledgeConfig.baseUrl, knowledgeConfig.token]);
+
+  const evidenceSessionId = workflowState?.sessionId;
+  const evidenceUpdatedAt = workflowState?.updatedAt;
+  const evidenceCr = workflowState?.metadata.cr;
+  const evidenceFeature = workflowState?.metadata.featureName;
+
+  // Retrieval is bounded to the active CR and step. Cleanup prevents stale evidence leaking across navigation.
+  useEffect(() => {
+    const controller = new AbortController();
+    let cancelled = false;
+    setStepEvidence(undefined);
+    if (!wizardRuntime || !evidenceSessionId || !evidenceUpdatedAt || !activeCrId) {
+      return () => controller.abort();
+    }
+
+    const query = [evidenceCr, evidenceFeature, selectedStep].join(' ');
+    void (async () => {
+      try {
+        const resolvedSetIds = await wizardRuntime.resolveSetIds(projectId);
+        if (cancelled || controller.signal.aborted) return;
+        const evidence = await wizardRuntime.collectEvidence({
+          projectId,
+          threadId,
+          sessionId: evidenceSessionId,
+          inputRevision: Date.parse(evidenceUpdatedAt) || 0,
+          query,
+          resolvedSetIds,
+          signal: controller.signal,
+        });
+        if (!cancelled && !controller.signal.aborted) setStepEvidence(evidence);
+      } catch {
+        if (!cancelled) setStepEvidence(undefined);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [wizardRuntime, activeCrId, projectId, threadId, selectedStep, evidenceSessionId, evidenceUpdatedAt, evidenceCr, evidenceFeature]);
+
+  const stepGroundingContext = useMemo(
+    () => buildSdlcStepGrounding({
+      step: selectedStep,
+      metadata: workflowState?.metadata,
+      crStatus,
+      artifacts: workflowState?.artifacts ?? {},
+      activeVersions: workflowState?.activeVersions,
+      versions: workflowState?.versions,
+      evidence: stepEvidence,
+    }),
+    [selectedStep, workflowState, crStatus, stepEvidence]
+  );
 
   /** Surfaces a guard code as actionable Vietnamese copy; raw internal detail never escapes. */
   const reportGuardError = useCallback((err: unknown) => {
@@ -677,6 +733,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
           projectId={projectId}
           crId={activeCrId}
           selectedStep={selectedStep}
+          stepGroundingContext={stepGroundingContext}
           workflowState={workflowState}
           stepViewNode={renderStepNode()}
           onNavigateToStep={handleNavigateToStep}
