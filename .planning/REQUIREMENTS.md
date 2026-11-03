@@ -9,7 +9,7 @@
 
 ### SDLC Prompt Architecture (SDLC-PR)
 
-- [ ] **SDLC-PR-01**: Every SDLC turn carries real grounding — the project SDLC view supplies `stepGroundingContext` built from the step's own artifacts (PL01/PL02, pinned SOLUTION, change-pack manifest, prior tech docs, CR metadata) plus bounded retrieved evidence; an empty-grounding turn is impossible from the production view.
+- [x] **SDLC-PR-01**: Every SDLC turn carries real grounding — the project SDLC view supplies `stepGroundingContext` built from the step's own artifacts (PL01/PL02, pinned SOLUTION, change-pack manifest, prior tech docs, CR metadata) plus bounded retrieved evidence; an empty-grounding turn is impossible from the production view.
 - [ ] **SDLC-PR-02**: The composer emits a per-step tool-use policy layer naming which tools are available in that step and when to call them (`query_notes`, `search_knowledge_base`, `retrieve_knowledge`, `read_file`, read-only MCP tools, artifact tools), including "call again with a narrower query when evidence is thin" and "do not answer from memory when a tool could resolve it".
 - [ ] **SDLC-PR-03**: Artifact output contracts are selected from the turn's real intent — SOLUTION, PL03B, PL07, and CAB each reach their own contract — and `StepChatPanel` no longer hardcodes `artifact: 'SOLUTION'`.
 - [ ] **SDLC-PR-04**: Few-shot exemplars cover, per step, at least one tool-calling turn and one evidence-insufficient turn, so the model sees how to combine retrieval with an answer.
@@ -87,7 +87,7 @@
 
 | Requirement | Phase | Status |
 |---|---|---|
-| SDLC-PR-01 | Phase 26 | Pending |
+| SDLC-PR-01 | Phase 26 | Complete |
 | SDLC-PR-02 | Phase 26 | Pending |
 | SDLC-PR-03 | Phase 26 | Pending |
 | SDLC-PR-04 | Phase 26 | Pending |
@@ -127,11 +127,13 @@
 | SDLC-OBS-02 | Phase 33 | Pending |
 
 **Coverage:**
+
 - v1 requirements: 38 total
 - Mapped to phases: 38
 - Unmapped: 0 ✓
 
 **Phase totals:**
+
 - Phase 26 (SDLC Prompt Grounding & Tool-Use Policy): 6 requirements, 4 plans
 - Phase 27 (Studio Artifact Tools & Diff Approval): 6 requirements, 5 plans
 - Phase 28 (Query-Only Knowledge Retrieval): 5 requirements, 4 plans
