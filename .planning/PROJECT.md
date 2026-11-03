@@ -12,16 +12,14 @@ Make planned work realistically fit available time by exposing overload early an
 
 Shipped **v1.0 MVP** on 2026-09-27 with all 8 foundational phases complete. Shipped v1.1 Banking IT Enhancements. Phase 16 knowledge server foundation and Phase 17 pilot ontology & Neo4j graph projection complete (all 5 plans in Phase 17 executed, GRAPH-01..GRAPH-06 satisfied). Codebase features closed ontology contracts, deterministic AST extraction, bounded LLM prose fallback, factKey deduplication, parameterized Neo4j adapter, Fastify inspection endpoints, and DocumentSetDrawer graph controls with PlannerMate offline isolation.
 
-## Current Milestone: v1.2 Hybrid GraphRAG Knowledge Assistant MVP
+## Current Milestone: v1.3 SDLC Closed-Loop Engine & Repository Autonomy
 
-**Goal:** Query normalized local Markdown for scheduled process `60000006`, returning evidence-grounded answers, citations, and multi-hop dependency paths.
+**Goal:** Turn SDLC Studio into a real AI-agent loop — a prompt architecture with a tool-use policy that actually runs the available tools, chat turns that edit studio artifacts through reviewable diff patches, a knowledge retrieve API that no longer depends on locally stored set IDs, and TaskMate coding directly into a real repository through fs-gw + Claude Code headless.
 
 **Target features:**
-- Publish and incrementally index PlannerMate Markdown through an optional knowledge server.
-- Combine keyword, vector, and Neo4j graph retrieval over the scheduled-process pilot corpus.
-- Extract evidence-backed process steps, call chains, database objects, cycles, statuses, and diagnostic relationships.
-- Answer through the existing AI assistant with citations, graph paths, conflicts, and missing-evidence handling.
-- Verify quality with a benchmark corpus covering retrieval, flow, and impact queries of at least three hops.
+- **Trụ 1 — SDLC prompt + tool loop + artifact tools:** layered composer gains real grounding, a per-step tool-use policy, and true per-intent artifact contracts; new studio tools (`get_artifact`, `patch_artifact_section`) return diff patches that the user reviews before the editor is written; multi-round tool loop with visible, bounded tool activity.
+- **Trụ 2 — Query-only knowledge retrieval:** client posts `{query, limit}` and the server chooses published sets itself, so a fresh install without local documents still retrieves; removes the local `fetchSetCatalog` dependency and normalizes responses across AI Chat, SDLC, and Telegram.
+- **Trụ 3 — Repository autonomy through fs-gw:** a TaskMate fs-gw client (health, `exec/run`, `exec/stream` SSE, git worktree/diff) lets SDLC steps 3–4 run Claude Code headless inside a real repo worktree, stream progress into the UI, and produce change packs automatically from the real repo diff; the manual `generate-change-pack.mjs` script degrades to an explicit fallback.
 
 ## Requirements
 
@@ -52,6 +50,11 @@ Shipped **v1.0 MVP** on 2026-09-27 with all 8 foundational phases complete. Ship
 
 - [ ] Verify retrieval and multi-hop answer quality against a 30-50 question benchmark corpus.
 - [ ] Harden index rebuild performance and enforce server-side secret isolation.
+- [ ] v1.3: SDLC composer emits grounding and a per-step tool-use policy; every step's artifact intent reaches its own output contract.
+- [ ] v1.3: Studio chat can read and patch artifacts through reviewable diffs before the editor is written.
+- [ ] v1.3: Knowledge retrieval accepts a query alone and works on a machine with no local document set.
+- [ ] v1.3: SDLC steps 3–4 run Claude Code headless in a real repo worktree through fs-gw and produce change packs automatically.
+- [ ] v1.3: fs-gw unavailability degrades to the manual change-pack script without blocking the flow.
 
 ### Out of Scope
 
@@ -88,6 +91,9 @@ GitHub synchronization is backup synchronization, not collaborative live sync. B
 - **Evidence integrity**: Every extracted relationship must retain document, section, and source-range provenance plus evidence classification.
 - **Pilot scope**: MVP targets only `docs/sample-markdown-flow/60000006-SHB-Credit-calculations/`; broader card-system ingestion is deferred.
 - **Sensitive data**: Every publish attempt must scan for PAN, CVV, PIN/PIN block, HSM keys, credentials, and customer PII before content leaves PlannerMate. Findings require masked details and fresh explicit confirmation; no trust bypass persists.
+- **Studio artifact writes**: Chat-driven artifact edits are proposals. The editor changes only after explicit user approval of a diff; no tool may commit a version or claim approval.
+- **Repository autonomy**: Every filesystem/process operation on a real repository runs through the external fs-gw gateway — TaskMate never spawns repo processes itself. Missing fs-gw degrades to the manual change-pack fallback, never to a silent failure.
+- **Retrieve coupling**: Retrieval requests carry a query, not a locally-derived set ID list. A device with no published documents locally must still retrieve from the server.
 
 ## Key Decisions
 
@@ -108,6 +114,10 @@ GitHub synchronization is backup synchronization, not collaborative live sync. B
 | Start with scheduled process `60000006` as pilot corpus | Small enough to validate, rich enough for scheduler, call-chain, data, and diagnostic multi-hop queries | ✓ Validated — Phase 17 |
 | Synthesize grounded answers with closure validation | Prevents hallucination, enforces exact source ranges and graph paths | ✓ Validated — Phase 19 |
 | Automatic local BM25 fallback on daemon unavailability | Guarantees zero downtime and zero egress for local Markdown searches | ✓ Validated — Phase 19 |
+| Artifact edits from chat return a diff the user approves before the editor changes (v1.3) | Keeps "never claim a document was approved or saved" true; AI never overwrites work in progress | Planned — v1.3 |
+| Knowledge retrieve is query-only; the server owns set selection (v1.3) | A fresh install has no local document set to send, so client-side `setId` coupling breaks retrieval | Planned — v1.3 |
+| Repository autonomy goes through Claude Code headless via fs-gw (v1.3) | TaskMate must not re-implement an agent harness; Claude Code already owns file/tool orchestration inside the repo | Planned — v1.3 |
+| Manual change-pack script remains as explicit fallback (v1.3) | Repo autonomy must degrade safely when fs-gw is not running | Planned — v1.3 |
 
 
 ## Evolution
@@ -128,4 +138,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-10 after completing Phase 17 pilot ontology and Neo4j graph*
+*Last updated: 2026-11-03 at the start of milestone v1.3*
