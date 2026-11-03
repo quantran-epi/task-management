@@ -734,6 +734,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
           crId={activeCrId}
           selectedStep={selectedStep}
           stepGroundingContext={stepGroundingContext}
+          readOnly={Boolean(viewedVersion)}
           workflowState={workflowState}
           stepViewNode={renderStepNode()}
           onNavigateToStep={handleNavigateToStep}

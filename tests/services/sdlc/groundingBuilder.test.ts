@@ -39,7 +39,7 @@ describe('buildSdlcStepGrounding', () => {
       SOLUTION: ['CR_METADATA', 'PL01', 'PL02', 'SOLUTION'],
       CODE_GUIDE: ['CR_METADATA', 'SOLUTION', 'PL02', 'ACCEPTANCE_CONTEXT'],
       CHANGE_PACK: ['CR_METADATA', 'SOLUTION', 'CHANGE_PACK', 'IMPLEMENTATION_EVIDENCE'],
-      TECH_DOCS: ['CR_METADATA', 'CHANGE_PACK', 'IMPLEMENTATION_EVIDENCE', 'TECH_DOCS', 'PL03B', 'PL07'],
+      TECH_DOCS: ['CR_METADATA', 'SOLUTION', 'CHANGE_PACK', 'IMPLEMENTATION_EVIDENCE', 'TECH_DOCS', 'PL03B', 'PL07'],
       CAB: ['CR_METADATA', 'TECH_DOCS', 'IMPLEMENTATION_EVIDENCE', 'PL03B', 'PL07'],
     });
     for (const step of Object.keys(SDLC_STEP_GROUNDING_SOURCES) as SdlcGroundingInput['step'][]) {
@@ -145,7 +145,9 @@ describe('buildSdlcStepGrounding', () => {
       },
     }));
     expect(output.length).toBeLessThanOrEqual(4_000);
-    for (const marker of SDLC_STEP_GROUNDING_SOURCES.TECH_DOCS) expect(output).toContain(`[${marker}]`);
+    for (const marker of SDLC_STEP_GROUNDING_SOURCES.TECH_DOCS) {
+      expect(output).toContain(marker === 'SOLUTION' ? '[SOLUTION v1]' : `[${marker}]`);
+    }
     expect(output.split('[EVIDENCE_STATUS]')[1]).toContain('Đã giới hạn bằng chứng theo ngân sách');
   });
 

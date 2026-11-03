@@ -24,6 +24,7 @@ export interface SdlcWorkspaceProps {
   workflowState?: SdlcWorkflowState | undefined;
   stepViewNode?: React.ReactNode;
   stepGroundingContext?: string;
+  readOnly?: boolean;
   onNavigateToStep?: (step: SdlcStepId) => void;
   onSolutionExtracted?: ((solutionMarkdown: string) => void) | undefined;
   artifactEvents?: AiChatArtifactEvent[] | undefined;
@@ -40,6 +41,7 @@ export const SdlcWorkspace: React.FC<SdlcWorkspaceProps> = ({
   workflowState,
   stepViewNode,
   stepGroundingContext = '',
+  readOnly = false,
   onNavigateToStep,
   onSolutionExtracted,
   artifactEvents,
@@ -133,6 +135,8 @@ export const SdlcWorkspace: React.FC<SdlcWorkspaceProps> = ({
           crId={crId}
           stepId={selectedStep}
           stepGroundingContext={stepGroundingContext}
+          readOnly={readOnly}
+          onNavigateToStep={onNavigateToStep}
           {...(onSolutionExtracted ? { onSolutionExtracted } : {})}
           {...(artifactEvents ? { artifactEvents } : {})}
           {...(onArtifactOpen ? { onArtifactOpen } : {})}

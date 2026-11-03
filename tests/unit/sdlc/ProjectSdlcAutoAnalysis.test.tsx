@@ -10,7 +10,7 @@ import type { StepChatPanelHandle, StepChatPanelProps } from '../../../src/compo
 const { requestArtifactAnalysis } = vi.hoisted(() => ({ requestArtifactAnalysis: vi.fn() }));
 vi.mock('../../../src/components/sdlc/chat/StepChatPanel', () => ({
   StepChatPanel: forwardRef<StepChatPanelHandle, StepChatPanelProps>(({ stepId, crId }, ref) => {
-    useImperativeHandle(ref, () => ({ sendMessage: vi.fn(), requestArtifactAnalysis }));
+    useImperativeHandle(ref, () => ({ sendMessage: vi.fn(), requestArtifactAnalysis, requestArtifact: vi.fn() }));
     return <div data-testid="analysis-panel" data-step={stepId} data-cr={crId} />;
   }),
 }));

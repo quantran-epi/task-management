@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { message, Modal, theme } from 'antd';
+import { Alert, Button, message, Modal, Space, theme } from 'antd';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../../db';
 import { clearThreadMessages } from '../../../db/repositories/chatRepo';
@@ -12,8 +12,10 @@ import {
   composeSdlcTurn,
   STEP_LABELS,
   STEP_QUICK_PROMPTS,
-  type SdlcTurnIntent,
+  type SdlcArtifactKindForTurn,
 } from '../../../services/ai/sdlcPromptComposer';
+import { hasGroundingSource, type SdlcGroundingMarker } from '../../../services/sdlc/groundingBuilder';
+import { formatGuardMessage, WORKFLOW_GUARD_MESSAGES, WORKFLOW_GUARD_STEP_NUMBER, type WorkflowGuardCode } from '../../../services/wizard/workflowGuards';
 import { extractChatSummary, extractSolutionMarkdown } from '../../../utils/sdlcSolutionParser';
 import type { SdlcStepId } from '../../../services/wizard/workflowSchemas';
 import { useStepChatToolbox } from './useStepChatToolbox';
@@ -23,6 +25,8 @@ export interface StepChatPanelProps {
   crId: string;
   stepId: SdlcStepId;
   stepGroundingContext?: string | undefined;
+  onNavigateToStep?: ((step: SdlcStepId) => void) | undefined;
+  readOnly?: boolean | undefined;
   onSolutionExtracted?: ((solutionMarkdown: string) => void) | undefined;
   db?: TaskPlannerDatabase | undefined;
   /** D-16: a chat-produced artifact is a DRAFT for the editor. It never commits a version. */
@@ -38,10 +42,48 @@ export interface StepChatPanelHandle {
   sendMessage: (text: string) => Promise<void>;
   /** Submits an explicit artifact-intent turn (D-16) — the editor's "analyse again" path. */
   requestArtifactAnalysis: () => void;
+  requestArtifact: (kind: SdlcArtifactKindForTurn) => void;
 }
 
 const ARTIFACT_ANALYSIS_PROMPT =
   'Hãy phân tích hồ sơ hiện tại và tạo SOLUTION.md hoàn chỉnh cho Change Request này.';
+
+const ARTIFACT_PROMPTS: Record<SdlcArtifactKindForTurn, string> = {
+  SOLUTION: ARTIFACT_ANALYSIS_PROMPT,
+  PL03B: 'Hãy soạn PL03B đầy đủ theo bằng chứng triển khai trong Change Pack hiện tại.',
+  PL07: 'Hãy soạn checklist PL07 đầy đủ với các câu hỏi review và để trống cột kết luận.',
+  CAB: 'Hãy soạn tờ trình CAB đầy đủ theo PL03B, PL07 và bằng chứng triển khai hiện tại.',
+};
+
+export const STEP_ARTIFACT_ACTIONS: Partial<Record<SdlcStepId, readonly SdlcArtifactKindForTurn[]>> = {
+  SOLUTION: ['SOLUTION'],
+  TECH_DOCS: ['PL03B', 'PL07'],
+  CAB: ['CAB'],
+};
+
+const ARTIFACT_LABELS: Record<SdlcArtifactKindForTurn, string> = {
+  SOLUTION: 'Soạn SOLUTION bằng AI', PL03B: 'Soạn PL03B bằng AI',
+  PL07: 'Soạn PL07 bằng AI', CAB: 'Soạn CAB bằng AI',
+};
+
+const ARTIFACT_PREREQUISITES: Partial<Record<SdlcStepId, readonly [SdlcGroundingMarker, WorkflowGuardCode][]>> = {
+  SOLUTION: [['PL01', 'INTAKE_PL01_REQUIRED'], ['PL02', 'INTAKE_PL02_REQUIRED']],
+  TECH_DOCS: [['SOLUTION', 'SOLUTION_AND_PACK_REQUIRED_FOR_TECH_DOCS'], ['CHANGE_PACK', 'SOLUTION_AND_PACK_REQUIRED_FOR_TECH_DOCS']],
+  CAB: [['PL03B', 'ALL_DOCS_REQUIRED_FOR_CAB'], ['PL07', 'ALL_DOCS_REQUIRED_FOR_CAB']],
+};
+
+const normalizeArtifactText = (text: string) => text.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('vi-VN');
+const artifactTerm = (term: string) => new RegExp(`(?:^|[^\\p{L}\\p{N}])(?:${term})(?=$|[^\\p{L}\\p{N}])`, 'u');
+
+export function looksLikeArtifactRequest(text: string): boolean {
+  const normalized = normalizeArtifactText(text);
+  return artifactTerm('tao|soan|sinh|viet|cap\\s+nhat|sua').test(normalized)
+    && artifactTerm('tai\\s+lieu|solution|pl03b|pl07|cab').test(normalized);
+}
+
+type ArtifactNotice =
+  | { type: 'warning'; message: string; step?: SdlcStepId }
+  | { type: 'info'; targets: readonly SdlcArtifactKindForTurn[] };
 
 /**
  * Thin host adapter (D-25). Owns exactly one turn (`useChatTurn`) for one step scope,
@@ -53,6 +95,8 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
   crId,
   stepId,
   stepGroundingContext = '',
+  onNavigateToStep,
+  readOnly = false,
   onSolutionExtracted,
   onArtifactDraft,
   artifactEvents,
@@ -69,6 +113,10 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<{ code: string; message: string } | null>(null);
   const [toolEvents, setToolEvents] = useState<ChatTurnToolEvent[]>([]);
+  const [artifactNotice, setArtifactNotice] = useState<ArtifactNotice | null>(null);
+  const artifactActions = STEP_ARTIFACT_ACTIONS[stepId] ?? [];
+
+  useEffect(() => { setArtifactNotice(null); }, [scopeKey, threadId, readOnly]);
 
   // Isolated thread for this step: sdlc:{projectId}:{crId}:{stepId}
   useEffect(() => {
@@ -98,13 +146,13 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
   // token, and only the send still holding it may reach `turn.start()`.
   const preludeTokenRef = useRef<number>(0);
   const preludeSeqRef = useRef(0);
-  const pendingArtifactRef = useRef(false);
+  const pendingArtifactRef = useRef<SdlcArtifactKindForTurn | null>(null);
   const pendingArtifactScopeRef = useRef<string | null>(null);
 
   useEffect(() => {
     setPreludePending(false);
     return () => {
-      pendingArtifactRef.current = false;
+      pendingArtifactRef.current = null;
       pendingArtifactScopeRef.current = null;
       preludeTokenRef.current = 0;
     };
@@ -142,7 +190,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
   );
 
   const submit = useCallback(
-    async (rawText: string, intent: SdlcTurnIntent) => {
+    async (rawText: string, artifact?: SdlcArtifactKindForTurn) => {
       const text = rawText.trim();
       if (!text || !threadId) return;
       // A prelude in flight owns the step: a second send would supersede a prompt already
@@ -174,8 +222,8 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
 
         const composed = composeSdlcTurn({
           step: stepId,
-          intent,
-          ...(intent === 'artifact' ? { artifact: 'SOLUTION' as const } : {}),
+          intent: artifact ? 'artifact' : 'qa',
+          ...(artifact ? { artifact } : {}),
           grounding: stepGroundingContext,
           dynamicReadOnlyToolNames,
           metadata: { cr: crId },
@@ -232,15 +280,53 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
     [threadId, messages, db, stepId, crId, stepGroundingContext, turn, scopeKey, toolbox, extractSolutionDraft]
   );
 
-  const submitRef = useRef(submit);
-  submitRef.current = submit;
+  const launchArtifact = (kind: SdlcArtifactKindForTurn) => {
+    if (readOnly || preludeTokenRef.current !== 0 || turn.runtime?.isRunning() || turn.status === 'awaiting-approval') return;
+    setArtifactNotice(null);
+    const targets = STEP_ARTIFACT_ACTIONS[stepId] ?? [];
+    if (!targets.includes(kind)) {
+      const step = (Object.keys(STEP_ARTIFACT_ACTIONS) as SdlcStepId[])
+        .find((candidate) => STEP_ARTIFACT_ACTIONS[candidate]?.includes(kind));
+      setArtifactNotice({
+        type: 'warning',
+        message: `Tài liệu ${kind} không thuộc bước này. Bạn có thể tạo: ${targets.join(' / ') || 'không có tài liệu tại bước này'}.`,
+        ...(step ? { step } : {}),
+      });
+      return;
+    }
+    // Keep one explicit target until bootstrap completes; validate against latest grounding then.
+    if (!threadId) {
+      pendingArtifactRef.current = kind;
+      pendingArtifactScopeRef.current = scopeKey;
+      return;
+    }
+    const missing = ARTIFACT_PREREQUISITES[stepId]?.find(([marker]) => !hasGroundingSource(stepGroundingContext, marker));
+    if (missing) {
+      const code = missing[1];
+      setArtifactNotice({ type: 'warning', message: formatGuardMessage(code), step: WORKFLOW_GUARD_MESSAGES[code].supplyingStep });
+      return;
+    }
+    void submit(ARTIFACT_PROMPTS[kind], kind);
+  };
+  const launchArtifactRef = useRef(launchArtifact);
+  launchArtifactRef.current = launchArtifact;
 
   useEffect(() => {
     if (!threadId || !pendingArtifactRef.current || pendingArtifactScopeRef.current !== scopeKey) return;
-    pendingArtifactRef.current = false;
+    const kind = pendingArtifactRef.current;
+    pendingArtifactRef.current = null;
     pendingArtifactScopeRef.current = null;
-    void submitRef.current(ARTIFACT_ANALYSIS_PROMPT, 'artifact');
+    launchArtifactRef.current(kind);
   }, [threadId, scopeKey]);
+
+  const sendMessage = async (text: string) => {
+    if (looksLikeArtifactRequest(text)) {
+      const exact = artifactActions.filter((kind) => artifactTerm(kind.toLowerCase()).test(normalizeArtifactText(text)));
+      setArtifactNotice({ type: 'info', targets: exact.length ? exact : artifactActions });
+      return;
+    }
+    await submit(text);
+  };
 
   const handleClearThread = useCallback(() => {
     if (!threadId) return;
@@ -254,9 +340,10 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
       cancelText: 'Hủy',
       onOk: async () => {
         preludeTokenRef.current = 0;
-        pendingArtifactRef.current = false;
+        pendingArtifactRef.current = null;
         pendingArtifactScopeRef.current = null;
         setPreludePending(false);
+        setArtifactNotice(null);
         turn.abort();
         try {
           await turn.runtime?.drainPersistence();
@@ -270,15 +357,9 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
   }, [threadId, db, turn.abort, turn.runtime]);
 
   React.useImperativeHandle(ref, () => ({
-    sendMessage: (text: string) => submit(text, 'qa'),
-    requestArtifactAnalysis: () => {
-      if (!threadId) {
-        pendingArtifactRef.current = true;
-        pendingArtifactScopeRef.current = scopeKey;
-        return;
-      }
-      void submit(ARTIFACT_ANALYSIS_PROMPT, 'artifact');
-    },
+    sendMessage,
+    requestArtifactAnalysis: () => launchArtifact('SOLUTION'),
+    requestArtifact: launchArtifact,
   }));
 
   const quickPrompts = useMemo<AiChatQuickPrompt[]>(
@@ -316,7 +397,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
           pendingApproval: turn.pendingApproval,
         }}
         onSubmit={(text) => {
-          void submit(text, 'qa');
+          void sendMessage(text);
         }}
         onStop={() => {
           // A stop during the prelude cancels the staged turn; otherwise it aborts the runtime.
@@ -331,6 +412,41 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
         onRetry={() => {
           void turn.retry();
         }}
+        statusExtensions={!readOnly && (artifactNotice || artifactActions.length > 0) ? (
+          <div style={{ padding: '8px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {artifactNotice && (
+              <Alert
+                type={artifactNotice.type}
+                showIcon
+                closable={{ onClose: () => setArtifactNotice(null) }}
+                title={artifactNotice.type === 'warning' ? artifactNotice.message :
+                  `Yêu cầu này cần tạo hoặc sửa tài liệu nhưng chưa rõ loại. Chọn tài liệu bạn muốn: ${artifactNotice.targets.join(' / ')}.`}
+                action={artifactNotice.type === 'warning' ? (
+                  artifactNotice.step && onNavigateToStep ? (
+                    <Button size="small" style={{ minHeight: 32, fontSize: 12 }} onClick={() => onNavigateToStep(artifactNotice.step!)}>
+                      Chuyển đến Bước {WORKFLOW_GUARD_STEP_NUMBER[artifactNotice.step]}: {STEP_LABELS[artifactNotice.step].replace(/^\d+\.\s*/, '')}
+                    </Button>
+                  ) : null
+                ) : (
+                  <Space size={8} wrap>
+                    {artifactNotice.targets.map((kind) => (
+                      <Button key={kind} size="small" style={{ minHeight: 32, fontSize: 12 }} disabled={preludePending || turn.runtime?.isRunning() || turn.status === 'awaiting-approval'} onClick={() => launchArtifact(kind)}>
+                        {ARTIFACT_LABELS[kind]}
+                      </Button>
+                    ))}
+                  </Space>
+                )}
+              />
+            )}
+            <Space size={8} wrap aria-label="Soạn tài liệu bằng AI">
+              {artifactActions.map((kind) => (
+                <Button key={kind} size="small" style={{ minHeight: 32, fontSize: 12 }} disabled={preludePending || turn.runtime?.isRunning() || turn.status === 'awaiting-approval'} onClick={() => launchArtifact(kind)}>
+                  {ARTIFACT_LABELS[kind]}
+                </Button>
+              ))}
+            </Space>
+          </div>
+        ) : undefined}
         error={error}
         toolbox={toolbox}
         quickPrompts={quickPrompts}

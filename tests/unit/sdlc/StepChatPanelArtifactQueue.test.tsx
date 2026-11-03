@@ -27,6 +27,7 @@ vi.mock('../../../src/services/ai/nineRouterTokenService', () => ({
 }));
 
 const prompt = 'Hãy phân tích hồ sơ hiện tại và tạo SOLUTION.md hoàn chỉnh cho Change Request này.';
+const intakeGrounding = '[PL01]\nIntake baseline\n\n[PL02]\nFunctional baseline';
 
 describe('StepChatPanel artifact bootstrap queue', () => {
   let db: TaskPlannerDatabase;
@@ -46,8 +47,8 @@ describe('StepChatPanel artifact bootstrap queue', () => {
 
   function mount(grounding = 'Initial evidence') {
     const ref = React.createRef<StepChatPanelHandle>();
-    const props = { ref, projectId: 'project', crId: 'cr', stepId: 'SOLUTION' as const, db };
-    const view = render(<StepChatPanel {...props} stepGroundingContext={grounding} />);
+    const props = { ref, projectId: 'project', crId: 'cr', stepId: 'SOLUTION' as const, db, stepGroundingContext: intakeGrounding };
+    const view = render(<StepChatPanel {...props} stepGroundingContext={`${intakeGrounding}\n\n${grounding}`} />);
     return { ref, props, ...view };
   }
 
@@ -58,7 +59,7 @@ describe('StepChatPanel artifact bootstrap queue', () => {
       ref.current!.requestArtifactAnalysis();
     });
     expect(mocks.start).not.toHaveBeenCalled();
-    rerender(<StepChatPanel {...props} stepGroundingContext="Latest evidence" />);
+    rerender(<StepChatPanel {...props} stepGroundingContext={`${intakeGrounding}\n\nLatest evidence`} />);
     await act(async () => { resolveThread({ id: 'solution-thread' }); });
     await waitFor(() => expect(mocks.start).toHaveBeenCalledTimes(1));
     const request = mocks.start.mock.calls[0]![0];
