@@ -4,7 +4,48 @@ import {
   type SdlcWrapperPromptInput,
 } from '../../src/components/ai/AIChatDrawer';
 import { getToolsForTurn } from '../../src/services/ai/chatTurnTools';
-import { isMutationTool, normalizeToolName } from '../../src/services/ai/aiTools';
+import { AI_DATABASE_TOOLS, isMutationTool, normalizeToolName, type AiToolDefinition } from '../../src/services/ai/aiTools';
+import { isReadOnlyMcpTool } from '../../src/services/ai/mcpClient';
+import { composeSdlcTurn, SDLC_STEP_ALLOWED_TOOLS } from '../../src/services/ai/sdlcPromptComposer';
+
+const dynamicTools: AiToolDefinition[] = ['search_nodes', 'write_record', 'get_group_stats'].map((name) => ({
+  type: 'function', function: { name, description: name, parameters: { type: 'object', properties: {} } },
+}));
+
+describe('SDLC explicit tool allowlist', () => {
+  it('filters local tools by normalized names and honors an empty allowlist', () => {
+    expect(getToolsForTurn(true, [], [' proxy_query_notes_cc ']).map((tool) => tool.function.name)).toEqual(['query_notes']);
+    expect(getToolsForTurn(false, dynamicTools, [])).toEqual([]);
+  });
+
+  it.each([true, false])('keeps only explicitly allowed read-only dynamic tools (analysis %s)', (analysisMode) => {
+    const tools = getToolsForTurn(analysisMode, dynamicTools, ['search_nodes', 'write_record']);
+    expect(isReadOnlyMcpTool('search_nodes')).toBe(true);
+    expect(tools).toEqual([dynamicTools[0]]);
+    expect(tools.map((tool) => tool.function.name)).not.toContain('get_group_stats');
+  });
+
+  it('preserves legacy two-argument behavior with and without Analysis Mode', () => {
+    expect(getToolsForTurn(false, dynamicTools)).toEqual([...AI_DATABASE_TOOLS, ...dynamicTools]);
+    expect(getToolsForTurn(true, dynamicTools)).toEqual([
+      ...AI_DATABASE_TOOLS.filter((tool) => !isMutationTool(normalizeToolName(tool.function.name))),
+      ...dynamicTools.filter((tool) => isReadOnlyMcpTool(normalizeToolName(tool.function.name))),
+    ]);
+  });
+
+  it('uses exactly the same static and dynamic names in policy and payload for every step', () => {
+    for (const step of Object.keys(SDLC_STEP_ALLOWED_TOOLS) as Array<keyof typeof SDLC_STEP_ALLOWED_TOOLS>) {
+      const dynamicReadOnlyToolNames = ['search_nodes'];
+      const tools = getToolsForTurn(true, dynamicTools, [...SDLC_STEP_ALLOWED_TOOLS[step], ...dynamicReadOnlyToolNames]);
+      const { segments } = composeSdlcTurn({ step, intent: 'qa', userTurn: 'hỏi', dynamicReadOnlyToolNames });
+      const policyNames = segments.toolPolicy.split('\n').slice(1, 3)
+        .flatMap((line) => line.slice(line.indexOf(': ') + 2).split(', '));
+      expect(new Set(policyNames)).toEqual(new Set(tools.map((tool) => normalizeToolName(tool.function.name))));
+      expect(segments.toolPolicy).not.toContain('write_record');
+      expect(segments.toolPolicy).not.toContain('get_group_stats');
+    }
+  });
+});
 
 describe('SDLC prompt isolation and analysis mode enforcement (D-31, D-33, D-35)', () => {
   it('builds a request-local SDLC wrapper prompt with step, source refs, read-only policy, and user confirmation', () => {

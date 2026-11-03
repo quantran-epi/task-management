@@ -9,22 +9,29 @@ import {
 import {
   discoverAllMcpTools,
   getMcpServers,
+  isReadOnlyMcpTool,
   saveMcpServers,
   type McpServerConfig,
 } from '../../../services/ai/mcpClient';
 import { getToolsForTurn } from '../../../services/ai/chatTurnTools';
 import type { AiChatToolboxProps } from '../../ai/AiChatWidget';
+import type { SdlcStepId } from '../../../services/wizard/workflowSchemas';
+import { normalizeToolName, type AiToolDefinition } from '../../../services/ai/aiTools';
+import { normalizeDynamicToolNames, SDLC_STEP_ALLOWED_TOOLS } from '../../../services/ai/sdlcPromptComposer';
 
 export interface StepChatToolbox extends AiChatToolboxProps {
-  /** Tool set for one turn: DB tools plus read-only/any MCP tools per Analysis Mode. */
-  toolsForTurn: () => Promise<unknown[]>;
+  /** One immutable discovery snapshot supplies both policy names and tool payload. */
+  toolsForTurn: () => Promise<{
+    tools: AiToolDefinition[];
+    dynamicReadOnlyToolNames: string[];
+  }>;
 }
 
 /**
  * D-03/D-04 toolbox state for one step panel. Analysis Mode defaults to `true`:
  * a step chat inspects the record, it does not mutate it.
  */
-export function useStepChatToolbox(db: TaskPlannerDatabase): StepChatToolbox {
+export function useStepChatToolbox(db: TaskPlannerDatabase, stepId?: SdlcStepId): StepChatToolbox {
   const [analysisMode, setAnalysisMode] = useState(true);
   const [autoApproveMutations, setAutoApproveMutations] = useState(false);
   const [mcpEnabled, setMcpEnabled] = useState(true);
@@ -83,7 +90,15 @@ export function useStepChatToolbox(db: TaskPlannerDatabase): StepChatToolbox {
     selectedModel,
     toolsForTurn: async () => {
       const dynamicMcpTools = mcpEnabled ? await discoverAllMcpTools(db).catch(() => []) : [];
-      return getToolsForTurn(analysisMode, dynamicMcpTools);
+      const dynamicReadOnlyToolNames = normalizeDynamicToolNames(dynamicMcpTools
+        .filter((tool) => isReadOnlyMcpTool(normalizeToolName(tool.function.name)))
+        .map((tool) => tool.function.name))
+        .filter((name) => !stepId || !SDLC_STEP_ALLOWED_TOOLS[stepId].includes(name));
+      const allowedToolNames = stepId
+        ? [...SDLC_STEP_ALLOWED_TOOLS[stepId], ...dynamicReadOnlyToolNames]
+        : undefined;
+      const tools = getToolsForTurn(analysisMode, dynamicMcpTools, allowedToolNames);
+      return { tools, dynamicReadOnlyToolNames };
     },
     availableModels,
     onModelChange: (model) => {

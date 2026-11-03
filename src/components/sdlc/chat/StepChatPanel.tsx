@@ -62,7 +62,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
 }, ref) => {
   const { token } = theme.useToken();
   const scopeKey = `sdlc:${projectId}:${crId}:${stepId}`;
-  const toolbox = useStepChatToolbox(db);
+  const toolbox = useStepChatToolbox(db, stepId);
 
   const [thread, setThread] = useState<{ scopeKey: string; id: string } | null>(null);
   const threadId = thread?.scopeKey === scopeKey ? thread.id : null;
@@ -166,7 +166,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
             role: row.role === 'user' ? ('user' as const) : ('assistant' as const),
             content: row.content,
           }));
-        const [config, apiKey, tools] = await Promise.all([
+        const [config, apiKey, { tools, dynamicReadOnlyToolNames }] = await Promise.all([
           getNineRouterConfig(db),
           getNineRouterApiKey(db),
           toolbox.toolsForTurn(),
@@ -177,6 +177,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
           intent,
           ...(intent === 'artifact' ? { artifact: 'SOLUTION' as const } : {}),
           grounding: stepGroundingContext,
+          dynamicReadOnlyToolNames,
           metadata: { cr: crId },
           history,
           userTurn: text,

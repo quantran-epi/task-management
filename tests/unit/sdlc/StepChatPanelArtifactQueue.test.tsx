@@ -19,7 +19,7 @@ vi.mock('../../../src/components/ai/AiChatWidget', () => ({
   AiChatWidget: ({ scope }: { scope: { threadId: string } }) => <div data-testid="thread">{scope.threadId}</div>,
 }));
 vi.mock('../../../src/components/sdlc/chat/useStepChatToolbox', () => ({
-  useStepChatToolbox: () => ({ toolsForTurn: async () => [], analysisMode: false, autoApproveMutations: false, selectedModel: 'test-model' }),
+  useStepChatToolbox: () => ({ toolsForTurn: async () => ({ tools: [], dynamicReadOnlyToolNames: [] }), analysisMode: false, autoApproveMutations: false, selectedModel: 'test-model' }),
 }));
 vi.mock('../../../src/services/ai/nineRouterTokenService', () => ({
   getNineRouterConfig: async () => ({ defaultModel: 'test-model', endpoint: 'http://localhost' }),

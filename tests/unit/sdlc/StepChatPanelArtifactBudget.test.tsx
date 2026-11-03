@@ -33,7 +33,7 @@ vi.mock('../../../src/components/ai/AiChatWidget', () => ({
   </div>,
 }));
 vi.mock('../../../src/components/sdlc/chat/useStepChatToolbox', () => ({
-  useStepChatToolbox: () => ({ toolsForTurn: async () => [], analysisMode: false, autoApproveMutations: false, selectedModel: 'test-model' }),
+  useStepChatToolbox: () => ({ toolsForTurn: async () => ({ tools: [], dynamicReadOnlyToolNames: [] }), analysisMode: false, autoApproveMutations: false, selectedModel: 'test-model' }),
 }));
 vi.mock('../../../src/services/ai/nineRouterTokenService', () => ({
   getNineRouterConfig: mocks.config,
