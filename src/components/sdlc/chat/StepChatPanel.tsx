@@ -14,17 +14,25 @@ import {
   STEP_QUICK_PROMPTS,
   type SdlcArtifactKindForTurn,
 } from '../../../services/ai/sdlcPromptComposer';
-import { hasGroundingSource, type SdlcGroundingMarker } from '../../../services/sdlc/groundingBuilder';
+import { hasGroundingSource, type SdlcGroundingMarker, type SdlcGroundingResult } from '../../../services/sdlc/groundingBuilder';
 import { formatGuardMessage, WORKFLOW_GUARD_MESSAGES, WORKFLOW_GUARD_STEP_NUMBER, type WorkflowGuardCode } from '../../../services/wizard/workflowGuards';
 import { extractChatSummary, extractSolutionMarkdown } from '../../../utils/sdlcSolutionParser';
 import type { SdlcStepId } from '../../../services/wizard/workflowSchemas';
 import { useStepChatToolbox } from './useStepChatToolbox';
 
+export type SdlcGroundingSource = SdlcGroundingResult;
+
+const EMPTY_GROUNDING: SdlcGroundingSource = { text: '', present: new Set() };
+
 export interface StepChatPanelProps {
   projectId: string;
   crId: string;
   stepId: SdlcStepId;
-  stepGroundingContext?: string | undefined;
+  /**
+   * Builder result: `text` feeds the prompt, `present` is the real marker set the artifact
+   * prerequisite gate trusts. A rendered string can never prove a source (CR-01).
+   */
+  stepGroundingContext?: SdlcGroundingSource | undefined;
   onNavigateToStep?: ((step: SdlcStepId) => void) | undefined;
   readOnly?: boolean | undefined;
   onSolutionExtracted?: ((solutionMarkdown: string) => void) | undefined;
@@ -94,7 +102,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
   projectId,
   crId,
   stepId,
-  stepGroundingContext = '',
+  stepGroundingContext = EMPTY_GROUNDING,
   onNavigateToStep,
   readOnly = false,
   onSolutionExtracted,
@@ -107,6 +115,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
   const { token } = theme.useToken();
   const scopeKey = `sdlc:${projectId}:${crId}:${stepId}`;
   const toolbox = useStepChatToolbox(db, stepId);
+  const groundingText = stepGroundingContext.text;
 
   const [thread, setThread] = useState<{ scopeKey: string; id: string } | null>(null);
   const threadId = thread?.scopeKey === scopeKey ? thread.id : null;
@@ -224,7 +233,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
           step: stepId,
           intent: artifact ? 'artifact' : 'qa',
           ...(artifact ? { artifact } : {}),
-          grounding: stepGroundingContext,
+          grounding: groundingText,
           dynamicReadOnlyToolNames,
           metadata: { cr: crId },
           history,
@@ -277,7 +286,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
         }
       }
     },
-    [threadId, messages, db, stepId, crId, stepGroundingContext, turn, scopeKey, toolbox, extractSolutionDraft]
+    [threadId, messages, db, stepId, crId, groundingText, turn, scopeKey, toolbox, extractSolutionDraft]
   );
 
   const launchArtifact = (kind: SdlcArtifactKindForTurn) => {
