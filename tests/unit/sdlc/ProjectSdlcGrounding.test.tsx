@@ -5,7 +5,7 @@ import { TaskPlannerDatabase } from '../../../src/db';
 import { createNewCr } from '../../../src/services/wizard/sdlcCrManager';
 import type { SdlcWorkflowMetadata } from '../../../src/services/wizard/workflowSchemas';
 
-const captured = vi.hoisted(() => ({ grounding: '', present: new Set<string>() }));
+const captured = vi.hoisted(() => ({ grounding: '', present: new Set<string>() as ReadonlySet<string> }));
 
 vi.mock('../../../src/components/sdlc/SdlcWorkspace', () => ({
   SdlcWorkspace: (props: { selectedStep: string; stepGroundingContext?: { text: string; present: ReadonlySet<string> } }) => {
