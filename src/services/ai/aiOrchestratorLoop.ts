@@ -31,6 +31,8 @@ export async function dispatchAiToolCall(
     : executeDynamicMcpTool(normalized, args, db, options);
 }
 
+export const DEFAULT_MAX_TOOL_ROUNDS = 50;
+
 export interface AiOrchestratorLoopOptions {
   endpoint: string;
   apiKey: string;
@@ -85,6 +87,7 @@ export interface AiOrchestratorLoopResult {
   tokenUsage: ChatTokenUsage;
   generatedFiles: ChatGeneratedFile[];
   truncated: boolean;
+  loopLimitReached: boolean;
   finishReason?: string;
 }
 
@@ -138,7 +141,7 @@ export async function runAiOrchestratorLoop(
     tools,
     temperature = 0.1,
     maxTokens,
-    maxLoops = 30,
+    maxLoops: requestedMaxLoops = DEFAULT_MAX_TOOL_ROUNDS,
     db,
     signal,
     synthesisPrompt = DEFAULT_SYNTHESIS_PROMPT,
@@ -156,6 +159,11 @@ export async function runAiOrchestratorLoop(
     contextWindowTokens,
     compactAtRatio = 0.8,
   } = options;
+
+  const maxLoops = Number.isFinite(requestedMaxLoops) && requestedMaxLoops > 0
+    ? Math.max(1, Math.floor(requestedMaxLoops))
+    : DEFAULT_MAX_TOOL_ROUNDS;
+  let loopLimitReached = false;
 
   const prune = (msgs: ChatCompletionMessage[]) =>
     pruneToolOutputsInMessages(msgs, keepRecentToolOutputs, maxOldToolChars);
@@ -314,6 +322,10 @@ export async function runAiOrchestratorLoop(
     if (!hasToolCalls || toolCallsToRun.length === 0) {
       break;
     }
+    if (lastHadToolCalls && loopCount >= maxLoops) {
+      loopLimitReached = true;
+      break;
+    }
 
     if (onStatusChange) {
       const toolLabels = toolCallsToRun
@@ -432,7 +444,7 @@ export async function runAiOrchestratorLoop(
   }
 
   // Final synthesis pass if tools were called, or response is empty after tools ran
-  if (finishReason !== 'length' && (lastHadToolCalls || (!fullResponse.trim() && loopCount > 1))) {
+  if (!loopLimitReached && finishReason !== 'length' && (lastHadToolCalls || (!fullResponse.trim() && loopCount > 1))) {
     onStatusChange?.('Đang tổng hợp câu trả lời hoàn chỉnh...');
     fullResponse = '';
 
@@ -482,6 +494,7 @@ export async function runAiOrchestratorLoop(
     tokenUsage: accumulatedTokenUsage,
     generatedFiles,
     truncated: finishReason === 'length',
+    loopLimitReached,
     ...(finishReason !== undefined ? { finishReason } : {}),
   };
 }

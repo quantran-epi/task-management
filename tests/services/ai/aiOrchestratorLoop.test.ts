@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { TaskPlannerDatabase } from '../../../src/db';
-import { runAiOrchestratorLoop } from '../../../src/services/ai/aiOrchestratorLoop';
+import { DEFAULT_MAX_TOOL_ROUNDS, runAiOrchestratorLoop } from '../../../src/services/ai/aiOrchestratorLoop';
 import type { ChatCompletionMessage } from '../../../src/services/ai/types';
 
 const mockStreamChatEvents = vi.fn();
@@ -59,6 +59,49 @@ describe('runAiOrchestratorLoop', () => {
     expect(mockStreamChatCompletion).not.toHaveBeenCalled();
   });
 
+  it.each([undefined, 2, 0, -1, NaN, Infinity, 2.9, 0.5])(
+    'bounds tool rounds before pending dispatch (override %s)', async (maxLoops) => {
+      expect(DEFAULT_MAX_TOOL_ROUNDS).toBe(50);
+      mockStreamChatEvents.mockImplementation(async function* () {
+        yield { type: 'text', delta: 'partial' };
+        yield { type: 'tool_calls', calls: [{ id: crypto.randomUUID(), type: 'function',
+          function: { name: 'custom_lookup', arguments: '{}' } }] };
+      });
+      const executeToolFn = vi.fn().mockResolvedValue('{}');
+      const onToolCall = vi.fn();
+      const onToolResult = vi.fn();
+      const rounds = maxLoops !== undefined && Number.isFinite(maxLoops) && maxLoops > 0
+        ? Math.max(1, Math.floor(maxLoops)) : 50;
+      const result = await runAiOrchestratorLoop({
+        endpoint: 'https://api.example.com', apiKey: 'test-key', model: 'test-model',
+        messages: [], db: testDb, executeToolFn, onToolCall, onToolResult,
+        ...(maxLoops !== undefined ? { maxLoops } : {}),
+      });
+      expect(result.loopLimitReached).toBe(true);
+      expect(result.truncated).toBe(false);
+      expect(mockStreamChatEvents).toHaveBeenCalledTimes(rounds);
+      expect(executeToolFn).toHaveBeenCalledTimes(rounds - 1);
+      expect(onToolCall).toHaveBeenCalledTimes(rounds - 1);
+      expect(onToolResult).toHaveBeenCalledTimes(rounds - 1);
+    },
+  );
+
+  it('allows a text answer on the final round without marking a limit', async () => {
+    mockStreamChatEvents.mockImplementationOnce(async function* () {
+      yield { type: 'tool_calls', calls: [{ id: 'one', type: 'function',
+        function: { name: 'custom_lookup', arguments: '{}' } }] };
+    }).mockImplementationOnce(async function* () {
+      yield { type: 'text', delta: 'complete answer' };
+    });
+    const result = await runAiOrchestratorLoop({
+      endpoint: 'https://api.example.com', apiKey: 'test-key', model: 'test-model',
+      messages: [], db: testDb, maxLoops: 2, executeToolFn: vi.fn().mockResolvedValue('{}'),
+    });
+    expect(result.loopLimitReached).toBe(false);
+    expect(result.cleanResponse).toBe('complete answer');
+    expect(mockStreamChatEvents).toHaveBeenCalledTimes(2);
+  });
+
   function setupProviderPath(path: 'main' | 'fallback' | 'synthesis', reason = 'stop') {
     mockStreamChatEvents.mockImplementationOnce(async function* () {
       if (path === 'fallback') throw new Error('Tools unsupported');
@@ -73,6 +116,11 @@ describe('runAiOrchestratorLoop', () => {
         yield { type: 'finish', finish_reason: reason };
       }
     });
+    if (path === 'synthesis') {
+      mockStreamChatEvents.mockImplementationOnce(async function* () {
+        yield { type: 'text', delta: '' };
+      });
+    }
     if (path !== 'main') {
       mockStreamChatEvents.mockImplementationOnce(async function* () {
         yield { type: 'text', delta: `${path} output` };
@@ -84,7 +132,7 @@ describe('runAiOrchestratorLoop', () => {
       endpoint: 'https://api.example.com', apiKey: 'test-key', model: 'test-model',
       messages: [{ role: 'user' as const, content: 'test' }], db: testDb,
       tools: [{ type: 'function', function: { name: 'custom_lookup', parameters: {} } }],
-      maxLoops: 1,
+      maxLoops: 2,
       executeToolFn: vi.fn().mockResolvedValue('{}'),
     };
   }
@@ -92,12 +140,12 @@ describe('runAiOrchestratorLoop', () => {
   it.each(['main', 'fallback', 'synthesis'] as const)(
     'forwards exact caller maxTokens on %s payloads', async (path) => {
       const result = await runAiOrchestratorLoop({ ...setupProviderPath(path), maxTokens: 2048 });
-      expect(mockStreamChatEvents).toHaveBeenCalledTimes(path === 'main' ? 1 : 2);
+      expect(mockStreamChatEvents).toHaveBeenCalledTimes(path === 'main' ? 1 : path === 'fallback' ? 2 : 3);
       for (const [request] of mockStreamChatEvents.mock.calls) {
         expect(request.payload.max_tokens).toBe(2048);
       }
       if (path !== 'main') {
-        expect(mockStreamChatEvents.mock.calls[1]![0].payload).not.toHaveProperty('tools');
+        expect(mockStreamChatEvents.mock.calls.at(-1)![0].payload).not.toHaveProperty('tools');
         expect(result.tokenUsage.totalTokens).toBe(7);
       }
       expect(result.finishReason).toBe('stop');
@@ -109,8 +157,8 @@ describe('runAiOrchestratorLoop', () => {
   it.each(['main', 'fallback', 'synthesis'] as const)(
     'omits own max_tokens when unset on %s payload', async (path) => {
       await runAiOrchestratorLoop(setupProviderPath(path));
-      expect(mockStreamChatEvents).toHaveBeenCalledTimes(path === 'main' ? 1 : 2);
-      const request = mockStreamChatEvents.mock.calls[path === 'main' ? 0 : 1]![0];
+      expect(mockStreamChatEvents).toHaveBeenCalledTimes(path === 'main' ? 1 : path === 'fallback' ? 2 : 3);
+      const request = mockStreamChatEvents.mock.calls.at(-1)![0];
       expect(Object.hasOwn(request.payload, 'max_tokens')).toBe(false);
     },
   );
@@ -122,7 +170,7 @@ describe('runAiOrchestratorLoop', () => {
       expect(result.truncated).toBe(true);
       expect(result.finishReason).toBe('length');
       expect(result.fullResponse).toBe(path === 'main' ? 'Main output' : `${path} output`);
-      expect(mockStreamChatEvents).toHaveBeenCalledTimes(path === 'main' ? 1 : 2);
+      expect(mockStreamChatEvents).toHaveBeenCalledTimes(path === 'main' ? 1 : path === 'fallback' ? 2 : 3);
       if (path === 'main') expect(options.executeToolFn).not.toHaveBeenCalled();
     },
   );
@@ -139,7 +187,7 @@ describe('runAiOrchestratorLoop', () => {
     const result = await runAiOrchestratorLoop({ ...options, maxLoops: 2 });
     expect(result.finishReason).toBe('stop');
     expect(result.truncated).toBe(false);
-    expect(mockStreamChatEvents).toHaveBeenCalledTimes(2);
+    expect(mockStreamChatEvents).toHaveBeenCalledTimes(3);
   });
 
   it.each([0.5, 1_000_000])('never clamps valid caller limit %s', async (maxTokens) => {
@@ -153,7 +201,7 @@ describe('runAiOrchestratorLoop', () => {
     const options = setupProviderPath('synthesis', 'length');
     const result = await runAiOrchestratorLoop({ ...options, maxLoops: 3 });
     expect(result.truncated).toBe(true);
-    expect(mockStreamChatEvents).toHaveBeenCalledTimes(2);
+    expect(mockStreamChatEvents).toHaveBeenCalledTimes(3);
     expect(options.executeToolFn).toHaveBeenCalledTimes(1);
   });
 

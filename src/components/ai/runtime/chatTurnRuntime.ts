@@ -3,6 +3,7 @@ import type { ChatGeneratedFile, ChatMessage, ChatTokenUsage } from '../../../ty
 import {
   runAiOrchestratorLoop,
   dispatchAiToolCall,
+  DEFAULT_MAX_TOOL_ROUNDS,
   type AiOrchestratorLoopResult,
 } from '../../../services/ai/aiOrchestratorLoop';
 import { saveMessage } from '../../../db/repositories/chatRepo';
@@ -17,10 +18,11 @@ export type ChatTurnStatus =
   | 'synthesizing'
   | 'awaiting-approval'
   | 'complete'
+  | 'tool-limit'
   | 'error'
   | 'aborted';
 
-export type ChatTurnPhase = 'complete' | 'cancelled' | 'aborted' | 'error';
+export type ChatTurnPhase = 'complete' | 'cancelled' | 'aborted' | 'error' | 'tool-limit';
 
 export interface ChatTurnToolEvent {
   id: string;
@@ -56,6 +58,7 @@ export interface ChatTurnRequest {
   history: Array<{ role: 'user' | 'assistant'; content: string }>;
   tools: unknown[];
   maxTokens?: number;
+  maxToolRounds?: number;
   /** Provider context window, when the host resolves one (auto-compaction threshold). */
   contextWindowTokens?: number;
 }
@@ -90,6 +93,7 @@ export interface ChatTurnRuntime {
   abort(): void;
   resolveApproval(approved: boolean): void;
   getStatus(): ChatTurnStatus;
+  getToolLimitRounds(): number | null;
   isRunning(): boolean;
   drainPersistence(): Promise<void>;
 }
@@ -112,6 +116,9 @@ export function createDefaultChatTurnDeps(
 /** UI-SPEC AI-turn-failure copy with every provider detail stripped (T-25.3-23). */
 export const SANITIZED_TURN_ERROR =
   "Không thể xử lý yêu cầu: lỗi kết nối nhà cung cấp AI. Bấm 'Thử lại' để gửi lại lượt này mà không mất ngữ cảnh.";
+
+export const formatToolLimitMessage = (rounds: number): string =>
+  `Đã dừng thu thập bằng chứng sau ${rounds} vòng. Câu trả lời có thể chưa đầy đủ — xem danh sách công cụ bên trên hoặc thử lại với câu hỏi hẹp hơn.`;
 
 const ANALYSIS_MODE_CANCELLATION = JSON.stringify({
   cancelled: true,
@@ -136,6 +143,7 @@ function isAbortError(err: unknown): boolean {
 export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntime {
   let status: ChatTurnStatus = 'idle';
   let running = false;
+  let toolLimitRounds: number | null = null;
   let requestId: string | null = null;
   let controller: AbortController | null = null;
   let approvalResolver: ((approved: boolean) => void) | null = null;
@@ -173,6 +181,11 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
     if (running) throw new Error('TURN_IN_PROGRESS');
 
     running = true;
+    toolLimitRounds = null;
+    const requestedRounds = request.maxToolRounds ?? DEFAULT_MAX_TOOL_ROUNDS;
+    const maxToolRounds = Number.isFinite(requestedRounds) && requestedRounds > 0
+      ? Math.max(1, Math.floor(requestedRounds))
+      : DEFAULT_MAX_TOOL_ROUNDS;
     declined = false;
     approvalResolver = null;
     lastRequest = request;
@@ -237,7 +250,7 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
           { role: 'user', content: request.text },
         ],
         tools: request.tools as any[],
-        maxLoops: 30,
+        maxLoops: maxToolRounds,
         ...(typeof request.maxTokens === 'number' && Number.isFinite(request.maxTokens) && request.maxTokens > 0
           ? { maxTokens: request.maxTokens }
           : {}),
@@ -340,6 +353,15 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
         };
       }
 
+      if (result.loopLimitReached) {
+        toolLimitRounds = maxToolRounds;
+        publish('tool-limit');
+        return {
+          phase: 'tool-limit', requestId: turnId, userMessageId,
+          error: { code: 'tool_limit', message: formatToolLimitMessage(maxToolRounds) },
+        };
+      }
+
       if (result.truncated) {
         const error: ChatTurnErrorInfo = {
           code: 'truncated',
@@ -415,6 +437,7 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
     abort,
     resolveApproval,
     getStatus: () => status,
+    getToolLimitRounds: () => toolLimitRounds,
     isRunning: () => running,
     // Chỉ chờ write đã bắt đầu, không chờ provider có thể bỏ qua abort.
     drainPersistence: async () => { await pendingSave?.catch(() => {}); },

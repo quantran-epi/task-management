@@ -34,6 +34,7 @@ interface LoopScript {
     fullResponse: string;
     tokenUsage: ChatTokenUsage;
     truncated?: boolean;
+    loopLimitReached?: boolean;
   }>;
 }
 
@@ -85,6 +86,46 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
   afterEach(async () => {
     await db.delete();
   });
+
+  it.each([undefined, 3, 0, NaN, Infinity, 3.9, 0.5])(
+    'keeps tool-limit runtime-only, retains audit, and retries (override %s)', async (maxToolRounds) => {
+      const events: unknown[] = [];
+      let calls = 0;
+      const rounds = maxToolRounds !== undefined && Number.isFinite(maxToolRounds) && maxToolRounds > 0
+        ? Math.max(1, Math.floor(maxToolRounds)) : 50;
+      const runtime = runtimeWith(async (options) => {
+        expect(options.maxLoops).toBe(rounds);
+        calls++;
+        if (calls > 1) return { fullResponse: 'Complete', tokenUsage: {} };
+        options.onTextChunk?.('partial secret-provider-detail');
+        options.onToolCall?.({ id: 'audit', name: 'query_notes', args: {} });
+        options.onToolResult?.('audit', '{"found":true}', 4);
+        return { fullResponse: 'partial secret-provider-detail', tokenUsage: {}, loopLimitReached: true };
+      }, { onToolEvent: (event) => events.push(event) });
+      expect(runtime.getToolLimitRounds()).toBeNull();
+      const first = await runtime.start(makeRequest({ threadId,
+        ...(maxToolRounds !== undefined ? { maxToolRounds } : {}) }));
+      expect(first.phase).toBe('tool-limit');
+      expect(first.error?.code).toBe('tool_limit');
+      expect(first.error?.message).toContain(`sau ${rounds} vòng`);
+      expect(first.error?.message).not.toContain('secret-provider-detail');
+      expect(first.content).toBeUndefined();
+      expect(runtime.getStatus()).toBe('tool-limit');
+      expect(runtime.getToolLimitRounds()).toBe(rounds);
+      expect(runtime.isRunning()).toBe(false);
+      expect(events).toHaveLength(2);
+      expect(errors).toEqual([]);
+      expect(completed).toEqual([]);
+      expect(await assistantRows()).toHaveLength(0);
+      expect(await userRows()).toHaveLength(1);
+      const second = await runtime.retry();
+      expect(second.phase).toBe('complete');
+      expect(second.userMessageId).toBe(first.userMessageId);
+      expect(runtime.getToolLimitRounds()).toBeNull();
+      expect(await userRows()).toHaveLength(1);
+      expect(await assistantRows()).toHaveLength(1);
+    },
+  );
 
   it('publishes preparing before the injected saveMessage resolves', async () => {
     let resolveUserRow: ((message: ChatMessage) => void) | undefined;
