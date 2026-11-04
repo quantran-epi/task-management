@@ -33,6 +33,25 @@ export function VirtualizedList<T>({
     overscan,
   });
 
+  let virtualItems = virtualizer.getVirtualItems();
+
+  // In jsdom / headless test environments without DOM layout engine, getBoundingClientRect() returns 0s.
+  // Fallback: render window of items so DOM queries in unit tests and initial frames resolve.
+  if (virtualItems.length === 0 && items.length > 0) {
+    const fallbackCount = Math.min(items.length, 25);
+    virtualItems = Array.from({ length: fallbackCount }, (_, index) => {
+      const size = estimateSize(index);
+      return {
+        key: index,
+        index,
+        start: index * size,
+        end: (index + 1) * size,
+        size,
+        lane: 0,
+      };
+    });
+  }
+
   return (
     <div
       ref={parentRef}
@@ -49,12 +68,12 @@ export function VirtualizedList<T>({
     >
       <div
         style={{
-          height: `${virtualizer.getTotalSize()}px`,
+          height: `${virtualizer.getTotalSize() || items.length * 36}px`,
           width: '100%',
           position: 'relative',
         }}
       >
-        {virtualizer.getVirtualItems().map((virtualRow) => {
+        {virtualItems.map((virtualRow) => {
           const item = items[virtualRow.index];
           if (item === undefined) return null;
           return (
