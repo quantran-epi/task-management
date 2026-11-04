@@ -3,17 +3,17 @@ gsd_state_version: "1.0"
 milestone: v1.3
 current_phase: 27
 current_phase_name: Studio Artifact Tools & Diff Approval
-status: ready_to_execute
-stopped_at: Phase 27 plans verified
-last_updated: "2026-11-04T14:15:36.108Z"
+status: executing
+stopped_at: Completed 27-01-PLAN.md
+last_updated: "2026-11-04T15:37:15.573Z"
 last_activity: 2026-11-04
-last_activity_desc: Phase 27 planning complete — 5 plans verified
-state_head: 3acd02f08107b5243235ed0452476cc96dfa2dab
+last_activity_desc: Phase 27 execution started
+state_head: 834dda17006f1f94d6327ef986d415ec947d12b6
 progress:
   total_phases: 8
   completed_phases: 0
   total_plans: 9
-  completed_plans: 4
+  completed_plans: 5
   percent: 0
 milestone_name: SDLC Closed-Loop Engine & Repository Autonomy
 ---
@@ -29,19 +29,19 @@ See: .planning/PROJECT.md (updated 2026-11-03)
 
 ## Current Position
 
-Phase: 27 (Studio Artifact Tools & Diff Approval) — READY TO EXECUTE
-Plan: 0 of 5
+Phase: 27 (Studio Artifact Tools & Diff Approval) — EXECUTING
+Plan: 2 of 5
 Status: Ready to execute
-Last activity: 2026-11-04 — Phase 27 planning complete; checker passed, 6/6 requirements and 10/10 decisions covered
+Last activity: 2026-11-04 — Phase 27 execution started
 
 Phase sequence: 26 → 27 → 28 → 29 → 30 → 31
 (28 is independent of 26/27; 31 depends on 26 and 27.)
 
 ## Session Continuity
 
-Last session: 2026-11-04T11:50:55.658Z
-Stopped at: Phase 27 plans verified
-Resume file: .planning/phases/27-studio-artifact-tools-diff-approval/27-01-PLAN.md
+Last session: 2026-11-04T15:37:15.376Z
+Stopped at: Completed 27-01-PLAN.md
+Resume file: None
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -79,6 +79,11 @@ Progress: [░░░░░░░░░░] 0%
 |-------|------|----------|-------|
 | Phase 25.3 P13 | 30 min | 3 tasks | 6 files |
 | Phase 25.3 P16 | 15 min | 2 tasks | 2 files |
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 27 P01 | 38 min | 3 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -93,6 +98,7 @@ Progress: [░░░░░░░░░░] 0%
 - [v1.3 roadmap]: Phase 31 (conventions) depends on Phase 29's fs-gw client to read repo `CONVENTIONS.md`; global document alone must work when no repo is bound.
 - [v1.3 roadmap]: Phase 32 (research) reuses the Phase 29 fs-gw execution path — no separate search API, no new dependency.
 - [v1.3 roadmap]: Convention conflicts (global vs repo) are surfaced, never silently resolved; EXTERNAL research evidence never outranks internal evidence without saying so.
+- [Phase 27]: Artifact tools use a trusted request-bound context and prepare-then-park approval; section ids number by heading order and patches are capped at 120 changed lines. — A model argument can never select project/CR/scope, and the approved result is the cached proposal rather than a recompute.
 
 ### Todos / Blockers
 

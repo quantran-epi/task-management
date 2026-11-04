@@ -7,7 +7,7 @@
 - Phase 25.2: Fix TaskMate mutation flow & standardize AI Core Engine for SDLC Studio (COMPLETE)
 - Phase 25.3: SDLC Workflow Engine Hardening, Unified AI Chat Widget & Prompt Architecture (COMPLETE)
 - Phase 26: SDLC Prompt Grounding & Tool-Use Policy (NOT STARTED — v1.3)
-- Phase 27: Studio Artifact Tools & Diff Approval (v1.3)
+- Phase 27: Studio Artifact Tools & Diff Approval (v1.3 — IN PROGRESS, 1/5 plans)
 - Phase 28: Query-Only Knowledge Retrieval (v1.3, parallel-capable)
 - Phase 29: fs-gw Client & Headless Repository Runs (v1.3)
 - Phase 30: Automatic Change Packs, Fallback & Run Reliability (v1.3)
@@ -520,7 +520,7 @@ Plans:
 
 **Wave 1** *(depends on Phase 26; edits tool registry and artifact repository reads)*
 
-- [ ] 27-01-PLAN.md — `get_artifact` read tool with section index and `patch_artifact_section` diff tool (no editor write)
+- [x] 27-01-PLAN.md — `get_artifact` read tool with section index and `patch_artifact_section` diff tool (no editor write)
 
 **Wave 2** *(depends on 27-01; edits `AiChatWidget` and `StepChatPanel`)*
 
