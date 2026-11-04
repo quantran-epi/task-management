@@ -11,6 +11,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { getAllActions, executeAction, type ActionDefinition } from '../actions/actionRegistry';
 import { useLayoutStore, type EditorViewType } from '../store/layoutStore';
+import { VirtualizedList } from '../virtual/VirtualizedList';
 
 export type SearchTabType = 'all' | 'tasks' | 'projects' | 'docs' | 'actions';
 
@@ -36,7 +37,6 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   const inputRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
 
   const openTab = useLayoutStore((s) => s.openTab);
 
@@ -241,16 +241,6 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
     }
   };
 
-  // Scroll active item into view
-  useEffect(() => {
-    if (listRef.current) {
-      const activeEl = listRef.current.querySelector('[data-selected="true"]');
-      if (activeEl) {
-        activeEl.scrollIntoView({ block: 'nearest' });
-      }
-    }
-  }, [selectedIndex]);
-
   if (!open) return null;
 
   const TABS_CONFIG: { key: SearchTabType; label: string }[] = [
@@ -400,29 +390,27 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
         </div>
 
         {/* Search Results List */}
-        <div
-          ref={listRef}
-          role="listbox"
-          style={{
-            flex: 1,
-            overflowY: 'auto',
-            maxHeight: 380,
-            padding: '4px 0',
-          }}
-        >
-          {filteredItems.length === 0 ? (
-            <div
-              style={{
-                padding: '24px 16px',
-                textAlign: 'center',
-                color: 'var(--fg-muted, #6c707e)',
-                fontSize: 12,
-              }}
-            >
-              No results found
-            </div>
-          ) : (
-            filteredItems.map((item, index) => {
+        {filteredItems.length === 0 ? (
+          <div
+            role="listbox"
+            style={{
+              padding: '24px 16px',
+              textAlign: 'center',
+              color: 'var(--fg-muted, #6c707e)',
+              fontSize: 12,
+              height: 120,
+            }}
+          >
+            No results found
+          </div>
+        ) : (
+          <VirtualizedList
+            items={filteredItems}
+            height={360}
+            estimateSize={() => 34}
+            role="listbox"
+            aria-label="Search results"
+            renderItem={(item, index) => {
               const isSelected = index === selectedIndex;
               return (
                 <div
@@ -437,6 +425,8 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     padding: '6px 12px',
+                    height: 34,
+                    boxSizing: 'border-box',
                     cursor: 'pointer',
                     background: isSelected ? 'var(--bg-selected, #d0dffe)' : 'transparent',
                     color: 'var(--fg, #000000)',
@@ -486,9 +476,9 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
                   )}
                 </div>
               );
-            })
-          )}
-        </div>
+            }}
+          />
+        )}
 
         {/* Footer shortcuts hint */}
         <div
