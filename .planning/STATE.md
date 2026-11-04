@@ -72,6 +72,7 @@ Progress: [░░░░░░░░░░] 0%
 
 | Phase | Plan | Duration | Notes |
 |-------|------|----------|-------|
+| Phase 25.4 P04 | 10 min | 2 tasks | 8 files |
 | Phase 25.4 P03 | 10 min | 2 tasks | 7 files |
 | Phase 25.4 P02 | 15 min | 2 tasks | 7 files |
 | Phase 25.4 P01 | 15 min | 3 tasks | 7 files |
@@ -82,6 +83,8 @@ Progress: [░░░░░░░░░░] 0%
 
 ### Decisions
 
+- [Phase 25.4 P04]: VirtualizedList uses headless @tanstack/react-virtual with jsdom initial rect / window fallback for seamless testing and 60fps search modal scrolling.
+- [Phase 25.4 P04]: Dual-boot entrypoint in main.tsx safely mounts AppIntelliJ on ?ui=intellij query param or localStorage taskmate_ui_shell flag without touching App.tsx.
 - [Phase 25.4 P03]: Implemented singleton Action & Shortcut Registry with pre-registered standard actions and custom event dispatch.
 - [Phase 25.4 P03]: Implemented useDoubleShift hook (<350ms window) with e.repeat guard and input/textarea suppression to prevent event flooding.
 - [Phase 25.4 P03]: Search Everywhere modal supports entity search (tasks, projects, docs) + action execution with `>` prefix and tab navigation.
