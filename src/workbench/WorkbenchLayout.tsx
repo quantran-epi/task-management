@@ -4,7 +4,12 @@ import { AntdThemeAdapter } from './AntdThemeAdapter';
 import { TitleBar } from './TitleBar';
 import { Stripe, type ToolWindowItem } from './toolwindows/Stripe';
 import { StatusBar } from './StatusBar';
+import { EditorArea } from './EditorArea';
+import { LeftToolWindow } from './toolwindows/LeftToolWindow';
+import { BottomToolWindow } from './toolwindows/BottomToolWindow';
+import { RightToolWindow } from './toolwindows/RightToolWindow';
 import { useLayoutStore } from './store/layoutStore';
+import type { TaskPlannerDatabase } from '../db';
 import {
   ProjectOutlined,
   CheckSquareOutlined,
@@ -23,6 +28,8 @@ export interface WorkbenchLayoutProps {
   selectedProjectId?: string | null;
   onSelectProject?: (projectId: string | null) => void;
   onOpenSearch?: () => void;
+  onOpenSettings?: () => void;
+  db?: TaskPlannerDatabase;
 }
 
 const DEFAULT_LEFT_ITEMS: ToolWindowItem[] = [
@@ -48,6 +55,8 @@ export function WorkbenchLayout({
   selectedProjectId,
   onSelectProject,
   onOpenSearch,
+  onOpenSettings,
+  db,
 }: WorkbenchLayoutProps) {
   const leftActiveId = useLayoutStore((s) => s.leftActiveId);
   const rightActiveId = useLayoutStore((s) => s.rightActiveId);
@@ -105,14 +114,17 @@ export function WorkbenchLayout({
                     onResize={(size) => setPanelSize('left', size)}
                     style={{
                       background: 'var(--bg-island, #f7f8f9)',
-                      overflow: 'auto',
+                      overflow: 'hidden',
+                      display: 'flex',
+                      flexDirection: 'column',
                     }}
                   >
                     {leftPanelContent || (
-                      <div style={{ padding: 12, color: 'var(--fg-secondary, #5f6269)' }}>
-                        <div style={{ fontWeight: 600, marginBottom: 8 }}>{leftActiveId.toUpperCase()}</div>
-                        <div>Tool window content placeholder</div>
-                      </div>
+                      <LeftToolWindow
+                        db={db}
+                        onSelectProject={onSelectProject}
+                        onOpenSettings={onOpenSettings}
+                      />
                     )}
                   </Panel>
                   <PanelResizeHandle
@@ -133,13 +145,17 @@ export function WorkbenchLayout({
                   autoSaveId="taskmate_workbench_vgroup"
                   style={{ width: '100%', height: '100%' }}
                 >
-                  <Panel id="editor-area" minSize={30} style={{ overflow: 'auto', background: 'var(--bg-app, #ffffff)' }}>
-                    {children || (
-                      <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-muted, #6c707e)' }}>
-                        <h3>No Tool Window Open</h3>
-                        <p>Press Double Shift to search everywhere, or press Alt+1 through Alt+5 to open tool windows.</p>
-                      </div>
-                    )}
+                  <Panel
+                    id="editor-area"
+                    minSize={30}
+                    style={{
+                      overflow: 'hidden',
+                      background: 'var(--bg-app, #ffffff)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                    }}
+                  >
+                    {children || <EditorArea db={db} />}
                   </Panel>
 
                   {bottomActiveId && (
@@ -160,15 +176,12 @@ export function WorkbenchLayout({
                         onResize={(size) => setPanelSize('bottom', size)}
                         style={{
                           background: 'var(--bg-island, #f7f8f9)',
-                          overflow: 'auto',
+                          overflow: 'hidden',
+                          display: 'flex',
+                          flexDirection: 'column',
                         }}
                       >
-                        {bottomPanelContent || (
-                          <div style={{ padding: 12, color: 'var(--fg-secondary, #5f6269)' }}>
-                            <div style={{ fontWeight: 600, marginBottom: 8 }}>{bottomActiveId.toUpperCase()}</div>
-                            <div>Bottom tool window content placeholder</div>
-                          </div>
-                        )}
+                        {bottomPanelContent || <BottomToolWindow db={db} />}
                       </Panel>
                     </>
                   )}
@@ -194,15 +207,12 @@ export function WorkbenchLayout({
                     onResize={(size) => setPanelSize('right', size)}
                     style={{
                       background: 'var(--bg-island, #f7f8f9)',
-                      overflow: 'auto',
+                      overflow: 'hidden',
+                      display: 'flex',
+                      flexDirection: 'column',
                     }}
                   >
-                    {rightPanelContent || (
-                      <div style={{ padding: 12, color: 'var(--fg-secondary, #5f6269)' }}>
-                        <div style={{ fontWeight: 600, marginBottom: 8 }}>{rightActiveId.toUpperCase()}</div>
-                        <div>Right tool window content placeholder</div>
-                      </div>
-                    )}
+                    {rightPanelContent || <RightToolWindow title={rightActiveId.toUpperCase()} />}
                   </Panel>
                 </>
               )}

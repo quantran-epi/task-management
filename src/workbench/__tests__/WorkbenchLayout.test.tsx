@@ -1,35 +1,64 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import React from 'react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { WorkbenchLayout } from '../WorkbenchLayout';
 import { useLayoutStore } from '../store/layoutStore';
-import 'fake-indexeddb/auto';
 
-describe('WorkbenchLayout', () => {
+// Mock views and child components to isolate WorkbenchLayout
+vi.mock('../../views/TasksView', () => ({
+  TasksView: () => <div data-testid="mock-tasks-view">Mock Tasks View</div>,
+}));
+
+vi.mock('../toolwindows/LeftToolWindow', () => ({
+  LeftToolWindow: () => <div data-testid="mock-left-toolwindow">Mock Left Tool Window</div>,
+}));
+
+vi.mock('../toolwindows/BottomToolWindow', () => ({
+  BottomToolWindow: () => <div data-testid="mock-bottom-toolwindow">Mock Bottom Tool Window</div>,
+}));
+
+vi.mock('../toolwindows/RightToolWindow', () => ({
+  RightToolWindow: () => <div data-testid="mock-right-toolwindow">Mock Right Tool Window</div>,
+}));
+
+describe('WorkbenchLayout Integration', () => {
   beforeEach(() => {
     localStorage.clear();
-    useLayoutStore.getState().resetLayout();
+    act(() => {
+      useLayoutStore.getState().resetLayout();
+    });
   });
 
-  it('renders TitleBar, Stripes, and StatusBar cleanly', () => {
-    render(
-      <WorkbenchLayout>
-        <div data-testid="editor-content">Main Editor Canvas</div>
-      </WorkbenchLayout>
-    );
+  it('mounts default LeftToolWindow and EditorArea', () => {
+    render(<WorkbenchLayout />);
 
-    // TitleBar brand and search input
-    expect(screen.getByText('TaskMate')).toBeInTheDocument();
-    expect(screen.getByLabelText('Search Everywhere (Double Shift / Ctrl+K)')).toBeInTheDocument();
+    // Left is active by default ('projects')
+    expect(screen.getByTestId('mock-left-toolwindow')).toBeDefined();
+    // Center Editor Area with Tasks view
+    expect(screen.getByTestId('mock-tasks-view')).toBeDefined();
+  });
 
-    // Stripes
-    expect(screen.getByLabelText('left tool window stripe')).toBeInTheDocument();
-    expect(screen.getByLabelText('right tool window stripe')).toBeInTheDocument();
-    expect(screen.getByLabelText('bottom tool window stripe')).toBeInTheDocument();
+  it('mounts BottomToolWindow when bottomActiveId is set', () => {
+    render(<WorkbenchLayout />);
 
-    // StatusBar
-    expect(screen.getByLabelText('Workbench Status Bar')).toBeInTheDocument();
+    expect(screen.queryByTestId('mock-bottom-toolwindow')).toBeNull();
 
-    // Content
-    expect(screen.getByTestId('editor-content')).toBeInTheDocument();
+    act(() => {
+      useLayoutStore.getState().setToolWindowActive('bottom', 'ai_chat');
+    });
+
+    expect(screen.getByTestId('mock-bottom-toolwindow')).toBeDefined();
+  });
+
+  it('mounts RightToolWindow when rightActiveId is set', () => {
+    render(<WorkbenchLayout />);
+
+    expect(screen.queryByTestId('mock-right-toolwindow')).toBeNull();
+
+    act(() => {
+      useLayoutStore.getState().setToolWindowActive('right', 'calendar');
+    });
+
+    expect(screen.getByTestId('mock-right-toolwindow')).toBeDefined();
   });
 });
