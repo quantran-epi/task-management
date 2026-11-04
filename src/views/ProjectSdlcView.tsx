@@ -65,7 +65,9 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
     setSelectedStep(step);
   }, []);
   const [activeCrId, setActiveCrId] = useState<string>('');
-  const [threadId, setThreadId] = useState<string>(() => generateId());
+  const [stepThread, setStepThread] = useState(() => ({ id: generateId(), scopeKey: '' }));
+  const threadId = stepThread.id;
+  const threadReady = stepThread.scopeKey === `sdlc:${projectId}:${activeCrId}:${selectedStep}`;
   const [workflowState, setWorkflowState] = useState<SdlcWorkflowState | undefined>(undefined);
   const [stepEvidence, setStepEvidence] = useState<WizardEvidence | undefined>(undefined);
   const [incomingSolutionDraft, setIncomingSolutionDraft] = useState<string | undefined>(undefined);
@@ -237,7 +239,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
       if (activeCrId) {
         const t = await getStepThread(projectId, activeCrId, selectedStep, db);
         if (!cancelled && t) {
-          setThreadId(t.id);
+          setStepThread({ id: t.id, scopeKey: t.scopeKey });
         }
       }
     }
@@ -362,7 +364,9 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
     const controller = new AbortController();
     let cancelled = false;
     setStepEvidence(undefined);
-    if (!wizardRuntime || !evidenceSessionId || !evidenceUpdatedAt || !activeCrId) {
+    // Navigation changes selectedStep before its thread resolves. Aborting a started BM25
+    // scan cannot undo its local work, so wait rather than retrieving against the old thread.
+    if (!threadReady || !wizardRuntime || !evidenceSessionId || !evidenceUpdatedAt || !activeCrId) {
       return () => controller.abort();
     }
 
@@ -390,7 +394,7 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
       cancelled = true;
       controller.abort();
     };
-  }, [wizardRuntime, activeCrId, projectId, threadId, selectedStep, evidenceSessionId, evidenceUpdatedAt, evidenceCr, evidenceFeature]);
+  }, [threadReady, wizardRuntime, activeCrId, projectId, threadId, selectedStep, evidenceSessionId, evidenceUpdatedAt, evidenceCr, evidenceFeature]);
 
   // The chat gate reads the builder's real marker set, never the rendered text.
   const stepGroundingContext = useMemo(

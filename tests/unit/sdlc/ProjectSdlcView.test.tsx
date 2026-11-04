@@ -434,6 +434,8 @@ describe('ProjectSdlcView and IDE Layout', () => {
     });
 
     render(<ProjectSdlcView projectId={proj10Id} onBack={() => {}} db={db10} />);
+    // Sidebar renders before CR restore; wait for the owning workflow before editing.
+    await screen.findByRole('button', { name: /Đặt lại quy trình/i }, { timeout: 5000 });
 
     await waitFor(() => {
       expect(screen.getByText(/Bước 2: Thiết kế giải pháp/i)).toBeInTheDocument();
@@ -449,6 +451,7 @@ describe('ProjectSdlcView and IDE Layout', () => {
     ) as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: '# SOLUTION v1' } });
     await waitFor(() => {
+      expect(textarea.isConnected).toBe(true);
       expect((screen.getByRole('button', { name: /Duyệt & Lưu SOLUTION.md/i }) as HTMLButtonElement).disabled).toBe(false);
     });
     fireEvent.click(screen.getByRole('button', { name: /Duyệt & Lưu SOLUTION.md/i }));

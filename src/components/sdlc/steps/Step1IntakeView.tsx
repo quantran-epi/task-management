@@ -58,9 +58,9 @@ export const Step1IntakeView: React.FC<Step1IntakeViewProps> = ({
   const [projectFilter, setProjectFilter] = useState<string>(projectId);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // Load all notes & all projects in system
-  const allNotes = useLiveQuery(() => db.notes.toArray(), [db]) ?? [];
-  const allProjects = useLiveQuery(() => db.projects.toArray(), [db]) ?? [];
+  // The picker is optional; do not load every note body on Studio entry.
+  const allNotes = useLiveQuery(() => notePickerOpen ? db.notes.toArray() : [], [db, notePickerOpen]) ?? [];
+  const allProjects = useLiveQuery(() => notePickerOpen ? db.projects.toArray() : [], [db, notePickerOpen]) ?? [];
 
   const projectMap = useMemo(() => {
     const map = new Map<string, string>();
