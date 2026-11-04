@@ -490,16 +490,16 @@ Plans:
 Plans:
 
 **Wave 1**
-- [ ] 25.4-01-PLAN.md — Khung Workbench & Light Theme (`tokens.css`, `TitleBar`, `Stripe`, `StatusBar`, `layoutStore.ts` Zustand)
+- [x] 25.4-01-PLAN.md — Khung Workbench & Light Theme (`tokens.css`, `TitleBar`, `Stripe`, `StatusBar`, `layoutStore.ts` Zustand)
 
 **Wave 2** *(depends on 25.4-01)*
-- [ ] 25.4-02-PLAN.md — Tích hợp Views hiện có vào các Slots (`AntdThemeAdapter`, Left slot, Center Editor Area, Bottom slot)
+- [x] 25.4-02-PLAN.md — Tích hợp Views hiện có vào các Slots (`AntdThemeAdapter`, Left slot, Center Editor Area, Bottom slot)
 
 **Wave 3** *(depends on 25.4-02)*
 - [x] 25.4-03-PLAN.md — Search Everywhere (`Double Shift` / `Ctrl+K`) & Centralized Keymaps Registry
 
 **Wave 4** *(depends on 25.4-03)*
-- [ ] 25.4-04-PLAN.md — Tối ưu hiệu năng ảo hóa (@tanstack/react-virtual) & Switchover test (`AppIntelliJ.tsx`)
+- [x] 25.4-04-PLAN.md — Tối ưu hiệu năng ảo hóa (@tanstack/react-virtual) & Switchover test (`AppIntelliJ.tsx`)
 
 ---
 
