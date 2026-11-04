@@ -1,0 +1,50 @@
+/* ==========================================================================
+   OpenIDEA Islands Light Theme Tokens - IntelliJ ExpUI
+   Phase 25.4 Workbench Migration
+   ========================================================================== */
+
+:root,
+:root[data-theme="light"] {
+  /* Surfaces */
+  --bg-app: #ffffff;
+  --bg-island: #f7f8f9;
+  --bg-elev: #f7f8f9;
+  --bg-popup: #ffffff;
+  --bg-floating-toolbar: #ffffff;
+  --bg-hover: #ededed;
+  --bg-selected: #d0dffe;
+  --bg-selected-strong: #bdd3ff;
+  --bg-current-line: #f5f8fe;
+  --bg-backdrop: #e9eaee;
+  --bg-input: #ffffff;
+
+  /* Borders & Dividers */
+  --border: #e9eaee;
+  --border-strong: #d1d3d9;
+  --border-window: #d1d3d9;
+  --control-off: #c3c5cb;
+
+  /* Typography */
+  --fg: #000000;
+  --fg-strong: #000000;
+  --fg-secondary: #5f6269;
+  --fg-muted: #6c707e;
+  --fg-subtle: #73767c;
+  --fg-icon: #6c707e;
+
+  /* Accent & Status */
+  --accent: #3871e1;
+  --link: #2f5eb9;
+  --danger: #c54e58;
+  --warning: #a56906;
+  --success: #338555;
+  --info: #3871e1;
+
+  /* Metrics */
+  --stripe-width: 32px;
+  --titlebar-height: 34px;
+  --statusbar-height: 24px;
+  --tabbar-height: 32px;
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter Variable", sans-serif;
+  --font-size-ui: 12.5px;
+}
