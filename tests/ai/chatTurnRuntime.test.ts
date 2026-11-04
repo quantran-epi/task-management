@@ -1,16 +1,27 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TaskPlannerDatabase } from '../../src/db';
 import { clearThreadMessages, createOrGetThread, saveMessage, getMessagesByThreadId } from '../../src/db/repositories/chatRepo';
 import type { ChatMessage, ChatTokenUsage } from '../../src/types/models';
 import {
   createChatTurnRuntime,
+  type ChatTurnApprovalInfo,
   type ChatTurnRequest,
   type ChatTurnRuntimeDeps,
   type ChatTurnStatus,
 } from '../../src/components/ai/runtime/chatTurnRuntime';
 import type { AiOrchestratorLoopOptions } from '../../src/services/ai/aiOrchestratorLoop';
+import type { ArtifactToolContext } from '../../src/services/ai/sdlcArtifactTools';
 
 const SCOPE_KEY = 'project:11111111-1111-4111-8111-111111111111';
+
+const ARTIFACT_CONTEXT: ArtifactToolContext = {
+  scopeKey: 'sdlc:project:cr:SOLUTION',
+  projectId: 'p-1',
+  crId: 'cr-active',
+  stepId: 'SOLUTION',
+  getAccess: () => ({ readOnly: false, crActive: true, scopeValid: true }),
+  getDraft: () => '# SOLUTION',
+};
 
 function makeRequest(overrides: Partial<ChatTurnRequest> = {}): ChatTurnRequest {
   return {
@@ -44,7 +55,7 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
   let statuses: ChatTurnStatus[];
   let deltas: string[];
   let errors: { code: string; message: string }[];
-  let approvals: { toolName: string; summary: string }[];
+  let approvals: ChatTurnApprovalInfo[];
   let completed: { content: string; tokenUsage: ChatTokenUsage }[];
 
   const runtimeWith = (
@@ -59,7 +70,7 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
       onStatus: (s: ChatTurnStatus) => statuses.push(s),
       onDelta: (t: string) => deltas.push(t),
       onError: (e: { code: string; message: string }) => errors.push(e),
-      onAwaitingApproval: (i: { toolName: string; summary: string }) => approvals.push(i),
+      onAwaitingApproval: (i: ChatTurnApprovalInfo) => approvals.push(i),
       onCompleted: (m: { content: string; tokenUsage: ChatTokenUsage }) => completed.push(m),
       ...extra,
     } as ChatTurnRuntimeDeps;
@@ -441,6 +452,232 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
     expect((await pending).phase).toBe('cancelled');
     expect(errors).toHaveLength(0);
     expect(await assistantRows()).toHaveLength(0);
+  });
+
+  it('prepares the artifact patch before awaiting approval and forwards the real diff payload', async () => {
+    const proposal = {
+      proposalId: 'proposal-1',
+      scopeKey: SCOPE_KEY,
+      projectId: 'p-1',
+      crId: 'cr-active',
+      kind: 'SOLUTION' as const,
+      version: 3,
+      sectionId: '1.2',
+      sectionTitle: 'Ki\xe1\xba\xbfn tr\xc3\xbac',
+      baseHash: 'a'.repeat(64),
+      baseMarkdown: '# SOLUTION',
+      diffText: '@@ -1,1 +1,2 @@\n N\xe1\xbb\x99i dung\n+D\xc3\xb2ng m\xe1\xbb\x9bi',
+      addedLines: 1,
+      removedLines: 0,
+      patchedMarkdown: '# SOLUTION\nD\xc3\xb2ng m\xe1\xbb\x9bi',
+    };
+    const preparePatch = vi.fn().mockResolvedValue(proposal);
+    const approveRuntime = runtimeWith(
+      async (options) => {
+        await options.onMutationCheck?.('patch_artifact_section', { sectionId: '1.2' });
+        return { fullResponse: 'ok', tokenUsage: {} };
+      },
+      { preparePatch }
+    );
+    const turn = approveRuntime.start(makeRequest({ artifactContext: ARTIFACT_CONTEXT, threadId }));
+    await waitForStatus(() => statuses.includes('awaiting-approval'));
+    expect(preparePatch).toHaveBeenCalledTimes(1);
+    expect(approvals[0]?.patch).toEqual(proposal);
+    approveRuntime.resolveApproval(true);
+    expect((await turn).phase).toBe('complete');
+  });
+
+  it('never lets autoApprove bypass an artifact patch decision', async () => {
+    const preparePatch = vi.fn().mockResolvedValue({
+      proposalId: 'proposal-2',
+      scopeKey: SCOPE_KEY,
+      projectId: 'p-1',
+      crId: 'cr-active',
+      kind: 'SOLUTION' as const,
+      version: 1,
+      sectionId: '1',
+      sectionTitle: 'SOLUTION',
+      baseHash: 'b'.repeat(64),
+      baseMarkdown: '# SOLUTION',
+      diffText: '@@ -1,1 +1,2 @@\n # SOLUTION\n+x',
+      addedLines: 1,
+      removedLines: 0,
+      patchedMarkdown: '# SOLUTION\nx',
+    });
+    const runtime = runtimeWith(
+      async (options) => {
+        await options.onMutationCheck?.('patch_artifact_section', { sectionId: '1' });
+        return { fullResponse: 'ok', tokenUsage: {} };
+      },
+      { preparePatch }
+    );
+    const turn = runtime.start(makeRequest({ artifactContext: ARTIFACT_CONTEXT, threadId, autoApprove: true }));
+    await waitForStatus(() => statuses.includes('awaiting-approval'));
+    runtime.resolveApproval(true);
+    expect((await turn).phase).toBe('complete');
+  });
+
+  it('keeps ordinary mutation auto-approve unchanged while artifact patches still wait', async () => {
+    let checked: { proceed: boolean } | undefined;
+    const runtime = runtimeWith(
+      async (options) => {
+        checked = await options.onMutationCheck?.('update_task', { id: 't-1' });
+        return { fullResponse: 'ok', tokenUsage: {} };
+      },
+      { preparePatch: vi.fn() }
+    );
+    await runtime.start(makeRequest({ threadId, autoApprove: true }));
+    expect(checked?.proceed).toBe(true);
+    expect(statuses).not.toContain('awaiting-approval');
+  });
+
+  it('returns a prepared refusal immediately as the tool result without parking', async () => {
+    const refusal = { refused: true as const, code: 'SECTION_DRIFT' as const, message: 'da thay doi' };
+    let checked: { proceed: boolean; cancellationResult?: string } | undefined;
+    const runtime = runtimeWith(
+      async (options) => {
+        checked = await options.onMutationCheck?.('patch_artifact_section', { sectionId: '1.2' });
+        return { fullResponse: 'ok', tokenUsage: {} };
+      },
+      { preparePatch: vi.fn().mockResolvedValue(refusal) }
+    );
+    await runtime.start(makeRequest({ threadId, artifactContext: ARTIFACT_CONTEXT }));
+    expect(checked?.proceed).toBe(false);
+    expect(JSON.parse(checked?.cancellationResult ?? '{}')).toEqual(refusal);
+    expect(statuses).not.toContain('awaiting-approval');
+  });
+
+  it('parks two patch calls in order and keeps a rejected patch from cancelling later artifacts', async () => {
+    const proposals = [1, 2].map((index) => ({
+      proposalId: `proposal-${index}`,
+      scopeKey: SCOPE_KEY,
+      projectId: 'p-1',
+      crId: 'cr-active',
+      kind: 'SOLUTION' as const,
+      version: 1,
+      sectionId: `1.${index}`,
+      sectionTitle: `Muc ${index}`,
+      baseHash: String(index).repeat(64),
+      baseMarkdown: '# SOLUTION',
+      diffText: `@@ -1,1 +1,2 @@\n # SOLUTION\n+x${index}`,
+      addedLines: 1,
+      removedLines: 0,
+      patchedMarkdown: `# SOLUTION\nx${index}`,
+    }));
+    const preparePatch = vi.fn()
+      .mockResolvedValueOnce(proposals[0])
+      .mockResolvedValueOnce(proposals[1]);
+    const seen: string[] = [];
+    const runtime = runtimeWith(
+      async (options) => {
+        for (const sectionId of ['1.1', '1.2']) {
+          const result = await options.onMutationCheck?.('patch_artifact_section', { sectionId });
+          seen.push(result?.proceed ? 'proceed' : 'cancel');
+        }
+        return { fullResponse: 'sau khi xu ly', tokenUsage: {} };
+      },
+      {
+        preparePatch,
+        onAwaitingApproval: (info: ChatTurnApprovalInfo) => approvals.push(info),
+      }
+    );
+    const turn = runtime.start(makeRequest({ threadId, artifactContext: ARTIFACT_CONTEXT }));
+    await waitForStatus(() => approvals.length === 1);
+    runtime.resolveApproval(false);
+    await waitForStatus(() => approvals.length === 2);
+    runtime.resolveApproval(true);
+    const outcome = await turn;
+
+    expect(seen).toEqual(['cancel', 'proceed']);
+    expect(approvals.map((entry) => entry.patch?.proposalId)).toEqual(['proposal-1', 'proposal-2']);
+    expect(outcome.phase).toBe('complete');
+    expect(await assistantRows()).toHaveLength(1);
+  });
+
+  it('abort releases a parked patch turn', async () => {
+    const runtime = runtimeWith(
+      async (options) => {
+        await options.onMutationCheck?.('patch_artifact_section', { sectionId: '1.2' });
+        return { fullResponse: 'never', tokenUsage: {} };
+      },
+      {
+        preparePatch: vi.fn().mockResolvedValue({
+          proposalId: 'proposal-abort',
+          scopeKey: SCOPE_KEY,
+          projectId: 'p-1',
+          crId: 'cr-active',
+          kind: 'SOLUTION' as const,
+          version: 1,
+          sectionId: '1.2',
+          sectionTitle: 'Muc',
+          baseHash: 'c'.repeat(64),
+          baseMarkdown: '# SOLUTION',
+          diffText: '@@ -1,1 +1,2 @@\n # SOLUTION\n+x',
+          addedLines: 1,
+          removedLines: 0,
+          patchedMarkdown: '# SOLUTION\nx',
+        }),
+      }
+    );
+    const turn = runtime.start(makeRequest({ threadId, artifactContext: ARTIFACT_CONTEXT }));
+    await waitForStatus(() => statuses.includes('awaiting-approval'));
+    runtime.abort();
+    expect((await turn).phase).toBe('aborted');
+    expect(await assistantRows()).toHaveLength(0);
+  });
+
+  it('describes an approved patch and returns the cached proposal instead of recomputing', async () => {
+    const proposal = {
+      proposalId: 'proposal-cached',
+      scopeKey: SCOPE_KEY,
+      projectId: 'p-1',
+      crId: 'cr-active',
+      kind: 'SOLUTION' as const,
+      version: 2,
+      sectionId: '1.1',
+      sectionTitle: 'Muc tieu',
+      baseHash: 'd'.repeat(64),
+      baseMarkdown: '# SOLUTION',
+      diffText: '@@ -1,1 +1,2 @@\n # SOLUTION\n+x',
+      addedLines: 1,
+      removedLines: 0,
+      patchedMarkdown: '# SOLUTION\nx',
+    };
+    const returned: string[] = [];
+    const runtime = runtimeWith(
+      async (options) => {
+        options.onToolCall?.({ id: 'call-patch-1', name: 'patch_artifact_section', args: { sectionId: '1.1' } });
+        const check = await options.onMutationCheck?.('patch_artifact_section', { sectionId: '1.1' });
+        expect(check?.proceed).toBe(true);
+        const raw = await options.executeToolFn?.('patch_artifact_section', { sectionId: '1.1' }, db, undefined, undefined);
+        returned.push(raw ?? '');
+        return { fullResponse: 'done', tokenUsage: {} };
+      },
+      { preparePatch: vi.fn().mockResolvedValue(proposal) }
+    );
+    const turn = runtime.start(makeRequest({ threadId, artifactContext: ARTIFACT_CONTEXT }));
+    await waitForStatus(() => statuses.includes('awaiting-approval'));
+    runtime.resolveApproval(true);
+    await turn;
+    expect(returned).toHaveLength(1);
+    expect(JSON.parse(returned[0]!)).toEqual(proposal);
+  });
+
+  it('still cancels unsolicited patch calls in Analysis Mode with the existing read-only result', async () => {
+    let checked: { proceed: boolean; cancellationResult?: string } | undefined;
+    const preparePatch = vi.fn();
+    const runtime = runtimeWith(
+      async (options) => {
+        checked = await options.onMutationCheck?.('patch_artifact_section', { sectionId: '1.1' });
+        return { fullResponse: 'read only', tokenUsage: {} };
+      },
+      { preparePatch }
+    );
+    await runtime.start(makeRequest({ threadId, analysisMode: true, artifactContext: ARTIFACT_CONTEXT }));
+    expect(checked?.proceed).toBe(false);
+    expect(checked?.cancellationResult).toContain('Analysis Mode');
+    expect(preparePatch).not.toHaveBeenCalled();
+    expect(statuses).not.toContain('awaiting-approval');
   });
 
   it('rejects a second concurrent start with TURN_IN_PROGRESS and writes no message', async () => {

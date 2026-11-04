@@ -7,8 +7,16 @@ import {
   type AiOrchestratorLoopResult,
 } from '../../../services/ai/aiOrchestratorLoop';
 import { saveMessage } from '../../../db/repositories/chatRepo';
-import { describeToolMutationWithContext } from '../../../services/ai/aiTools';
+import { describeToolMutationWithContext, normalizeToolName } from '../../../services/ai/aiTools';
 import { stripThinkingBlocks } from '../../../services/ai/nineRouterClient';
+import {
+  executeSdlcArtifactTool,
+  prepareArtifactPatch,
+  type ArtifactPatchProposal,
+  type ArtifactToolContext,
+  type ArtifactToolRefusal,
+  type ArtifactToolResult,
+} from '../../../services/ai/sdlcArtifactTools';
 
 export type ChatTurnStatus =
   | 'idle'
@@ -37,6 +45,8 @@ export interface ChatTurnToolEvent {
 export interface ChatTurnApprovalInfo {
   toolName: string;
   summary: string;
+  /** Prepared, immutable artifact patch shown in the diff card (SDLC-ART-03). */
+  patch?: ArtifactPatchProposal;
 }
 
 export interface ChatTurnErrorInfo {
@@ -61,6 +71,8 @@ export interface ChatTurnRequest {
   maxToolRounds?: number;
   /** Provider context window, when the host resolves one (auto-compaction threshold). */
   contextWindowTokens?: number;
+  /** Trusted, request-bound SDLC artifact scope. Never read from a global registry. */
+  artifactContext?: ArtifactToolContext;
 }
 
 export interface ChatTurnOutcome {
@@ -76,6 +88,8 @@ export interface ChatTurnRuntimeDeps {
   runLoop: typeof runAiOrchestratorLoop;
   saveMessage: typeof saveMessage;
   describeMutation: typeof describeToolMutationWithContext;
+  /** Prepares the artifact patch shown before approval; injectable for tests. */
+  preparePatch?: typeof prepareArtifactPatch;
   db: TaskPlannerDatabase;
   onStatus?: (status: ChatTurnStatus) => void;
   onDelta?: (text: string) => void;
@@ -104,11 +118,12 @@ export interface ChatTurnRuntime {
  */
 export function createDefaultChatTurnDeps(
   db: TaskPlannerDatabase
-): Pick<ChatTurnRuntimeDeps, 'runLoop' | 'saveMessage' | 'describeMutation' | 'db'> {
+): Pick<ChatTurnRuntimeDeps, 'runLoop' | 'saveMessage' | 'describeMutation' | 'preparePatch' | 'db'> {
   return {
     runLoop: runAiOrchestratorLoop,
     saveMessage,
     describeMutation: describeToolMutationWithContext,
+    preparePatch: prepareArtifactPatch,
     db,
   };
 }
@@ -130,6 +145,8 @@ const DECLINED_CANCELLATION = JSON.stringify({
   message: 'Người dùng đã từ chối thao tác này. Không có dữ liệu nào bị thay đổi.',
 });
 
+const PATCH_TOOL_NAME = 'patch_artifact_section';
+
 const SYNTHESIS_STATUS_MARKER = 'tổng hợp';
 
 function isAbortError(err: unknown): boolean {
@@ -148,6 +165,7 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
   let controller: AbortController | null = null;
   let approvalResolver: ((approved: boolean) => void) | null = null;
   let declined = false;
+  let parkedArtifactPatch = false;
   let lastRequest: ChatTurnRequest | null = null;
   let lastUserMessageId: string | null = null;
   let pendingSave: Promise<ChatMessage> | null = null;
@@ -164,7 +182,10 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
   const resolveApproval = (approved: boolean) => {
     const resolver = approvalResolver;
     approvalResolver = null;
-    if (!approved) declined = true;
+    // An artifact patch rejection records only its own decision (D-04); it must not
+    // discard later successful cards in the same turn.
+    if (!approved && !parkedArtifactPatch) declined = true;
+    parkedArtifactPatch = false;
     resolver?.(approved);
   };
 
@@ -239,6 +260,11 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
       let displayed = '';
       const generatedFiles: ChatGeneratedFile[] = [];
       const startedAt = Date.now();
+      // Request-local caches: the serialized loop reports each call's id before it is
+      // checked and dispatched, so a prepared proposal is keyed by that exact call.
+      let currentCallId: string | null = null;
+      const preparedPatches = new Map<string, ArtifactPatchProposal>();
+      const preparePatch = deps.preparePatch ?? prepareArtifactPatch;
 
       const result: AiOrchestratorLoopResult = await deps.runLoop({
         endpoint: request.endpoint,
@@ -261,10 +287,18 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
           : {}),
         compactAtRatio: request.analysisMode ? 0.9 : 0.75,
         ...(request.contextWindowTokens ? { contextWindowTokens: request.contextWindowTokens } : {}),
-        executeToolFn: (name, args, toolDb, signal) =>
-          dispatchAiToolCall(name, args, toolDb, signal, {
+        ...(request.artifactContext ? { artifactContext: request.artifactContext } : {}),
+        executeToolFn: (name, args, toolDb, signal) => {
+          // Post-approve execution returns the exact prepared proposal, never a recompute
+          // against an editor that may have moved on (T-27-02).
+          const callId = currentCallId;
+          const prepared = callId ? preparedPatches.get(callId) : undefined;
+          if (prepared) return Promise.resolve(JSON.stringify(prepared));
+          return dispatchAiToolCall(name, args, toolDb, signal, {
             allowMutation: request.autoApprove,
-          }),
+            ...(request.artifactContext ? { artifactContext: request.artifactContext } : {}),
+          });
+        },
         onTextChunk: (delta) => {
           if (!isCurrent(turnId, turnController)) return;
           fullResponse += delta;
@@ -290,6 +324,7 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
         },
         onToolCall: (call) => {
           publish('tool');
+          currentCallId = call.id;
           toolNames.set(call.id, call.name);
           deps.onToolEvent?.({
             id: call.id,
@@ -313,11 +348,51 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
           deps.onFileGenerated?.(file);
         },
         onMutationCheck: async (toolName, args) => {
-          // Fixed guard order (T-25.3-21): read-only cancel, auto-approve, explicit wait.
+          // Fixed guard order (T-25.3-21): read-only cancel, artifact patch, auto-approve,
+          // explicit wait. Analysis Mode stays first so patches keep its read-only contract.
           if (request.analysisMode) {
             cancellationResult = ANALYSIS_MODE_CANCELLATION;
             return { proceed: false, cancellationResult: ANALYSIS_MODE_CANCELLATION };
           }
+
+          if (normalizeToolName(toolName) === PATCH_TOOL_NAME) {
+            const callId = currentCallId;
+            const context = request.artifactContext;
+            const prepared: ArtifactToolResult = context
+              ? await preparePatch(deps.db, context, args)
+              : await executeSdlcArtifactTool(PATCH_TOOL_NAME, args, deps.db, undefined);
+            if (!isCurrent(turnId, turnController)) {
+              return { proceed: false, cancellationResult: DECLINED_CANCELLATION };
+            }
+            if ((prepared as ArtifactToolRefusal).refused === true) {
+              // Structured refusals surface immediately; nothing to approve (D-10).
+              return { proceed: false, cancellationResult: JSON.stringify(prepared) };
+            }
+            const proposal = prepared as ArtifactPatchProposal;
+            if (callId) preparedPatches.set(callId, proposal);
+
+            const summary = await deps.describeMutation(toolName, args, deps.db);
+            if (!isCurrent(turnId, turnController)) {
+              return { proceed: false, cancellationResult: DECLINED_CANCELLATION };
+            }
+            parkedArtifactPatch = true;
+            // Resolver is installed before publishing so a synchronous subscriber
+            // cannot lose the click.
+            const approved = await new Promise<boolean>((resolve) => {
+              approvalResolver = resolve;
+              publish('awaiting-approval');
+              deps.onAwaitingApproval?.({ toolName, summary, patch: proposal });
+            });
+            parkedArtifactPatch = false;
+            if (approved) return { proceed: true };
+            const rejectedJson = JSON.stringify({
+              cancelled: true,
+              message: 'Người dùng đã từ chối đề xuất chỉnh sửa này. Trình soạn thảo không thay đổi.',
+            });
+            if (callId) preparedPatches.delete(callId);
+            return { proceed: false, cancellationResult: rejectedJson };
+          }
+
           if (request.autoApprove) {
             return { proceed: true };
           }
