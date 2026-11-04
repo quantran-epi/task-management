@@ -155,20 +155,24 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
     prefix: '',
   });
 
+  const taskMentionSearchActive = searchInfo.prefix === '@' && !searchInfo.text.toLowerCase().startsWith('doc');
+  const projectMentionSearchActive = searchInfo.prefix === '#';
+  const documentMentionSearchActive = searchInfo.prefix === '@' && searchInfo.text.toLowerCase().startsWith('doc');
+
   const mentionsRef = useRef<MentionsRef>(null);
   const isSubmittingRef = useRef(false);
   const submitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const tasks = useLiveQuery<Task[]>(() => db.tasks?.toArray() ?? [], [db]) ?? [];
-  const projects = useLiveQuery<Project[]>(() => db.projects?.toArray() ?? [], [db]) ?? [];
+  const tasks = useLiveQuery<Task[]>(() => taskMentionSearchActive ? (db.tasks?.toArray() ?? []) : [], [db, taskMentionSearchActive]) ?? [];
+  const projects = useLiveQuery<Project[]>(() => projectMentionSearchActive ? (db.projects?.toArray() ?? []) : [], [db, projectMentionSearchActive]) ?? [];
   const documents = useLiveQuery<Note[]>(
     async () => {
-      if (!db.notes) return [];
+      if (!documentMentionSearchActive || !db.notes) return [];
       return await db.notes
         .filter((n: Note) => !n.deletedAt && (n.type === 'document' || !n.type))
         .toArray();
     },
-    [db]
+    [db, documentMentionSearchActive]
   ) ?? [];
 
   useEffect(() => {

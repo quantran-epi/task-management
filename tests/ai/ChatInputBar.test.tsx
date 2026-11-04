@@ -63,6 +63,19 @@ describe('ChatInputBar - Mentions & Command Palette', () => {
     ]);
   });
 
+  it('does not scan task, project, or document corpora before mention search starts', async () => {
+    const taskRead = vi.spyOn(db.tasks, 'toArray');
+    const projectRead = vi.spyOn(db.projects, 'toArray');
+    const noteRead = vi.spyOn(db.notes, 'toArray');
+
+    render(<ChatInputBar onSubmit={vi.fn()} db={db} />);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    expect(taskRead).not.toHaveBeenCalled();
+    expect(projectRead).not.toHaveBeenCalled();
+    expect(noteRead).not.toHaveBeenCalled();
+  });
+
   it('renders mentions textarea and submit button', () => {
     render(<ChatInputBar onSubmit={vi.fn()} db={db} />);
 

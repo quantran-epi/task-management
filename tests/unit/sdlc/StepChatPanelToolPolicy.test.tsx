@@ -35,7 +35,7 @@ vi.mock('../../../src/services/ai/mcpClient', async (importOriginal) => ({
 vi.mock('../../../src/services/ai/nineRouterTokenService', () => ({
   getNineRouterConfig: async () => ({ defaultModel: 'test-model', endpoint: 'http://localhost' }),
   getNineRouterApiKey: async () => 'test-key',
-  fetchAvailableModels: async () => ['test-model'],
+  fetchAvailableModels: vi.fn(async () => ['test-model']),
 }));
 
 const dynamicTools: AiToolDefinition[] = ['search_nodes', 'write_record'].map((name) => ({
@@ -81,6 +81,14 @@ describe('StepChatPanel tool-policy/payload parity', () => {
     expect(new Set(policyNames)).toEqual(new Set(tools.map((tool) => normalizeToolName(tool.function.name))));
     expect(mocks.discover).toHaveBeenCalledOnce();
     expect(request.analysisMode).toBe(true);
+  });
+
+  it('does not run model discovery network call on step mount', async () => {
+    const ref = React.createRef<StepChatPanelHandle>();
+    render(<StepChatPanel ref={ref} projectId="project" crId="cr" stepId="SOLUTION" db={db} stepGroundingContext={grounding} />);
+    await waitFor(() => expect(screen.getByTestId('thread')).toHaveTextContent('step-thread'));
+    const { fetchAvailableModels } = await import('../../../src/services/ai/nineRouterTokenService');
+    expect(fetchAvailableModels).not.toHaveBeenCalled();
   });
 
   it('discovery failure advertises no dynamic tools and preserves local reads', async () => {

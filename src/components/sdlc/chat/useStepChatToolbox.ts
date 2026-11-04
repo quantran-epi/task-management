@@ -45,13 +45,9 @@ export function useStepChatToolbox(db: TaskPlannerDatabase, stepId?: SdlcStepId)
     void (async () => {
       try {
         const config = await getNineRouterConfig(db);
-        const [models, servers] = await Promise.all([
-          fetchAvailableModels(db).catch(() => []),
-          getMcpServers(db).catch(() => []),
-        ]);
+        const servers = await getMcpServers(db).catch(() => []);
         if (cancelled) return;
-        setSelectedModel(config.defaultModel || models[0] || '');
-        setAvailableModels(models);
+        setSelectedModel(config.defaultModel);
         setMcpServers(servers);
       } catch {
         // Model discovery is optional; the turn still runs with the persisted config.
