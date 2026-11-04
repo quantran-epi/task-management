@@ -276,43 +276,106 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
         position: 'fixed',
         inset: 0,
         zIndex: 1000,
-        background: 'rgba(0, 0, 0, 0.25)',
+        background: 'rgba(0, 0, 0, 0.28)',
         display: 'flex',
         alignItems: 'flex-start',
         justifyContent: 'center',
-        paddingTop: '12vh',
+        paddingTop: '10vh',
       }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: 600,
-          maxWidth: '90vw',
-          maxHeight: '65vh',
+          width: 620,
+          maxWidth: '92vw',
+          maxHeight: '70vh',
           background: 'var(--bg-popup, #ffffff)',
           border: '1px solid var(--border-strong, #d1d3d9)',
-          borderRadius: 3,
-          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.16)',
+          borderRadius: 'var(--radius-popup, 8px)',
+          boxShadow: '0 12px 32px rgba(0, 0, 0, 0.18)',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
           fontFamily: 'var(--font-ui)',
-          fontSize: 'var(--font-size-ui, 12.5px)',
-          color: 'var(--fg, #000000)',
+          fontSize: 'var(--font-size-ui, 13px)',
+          color: 'var(--fg, #191b1f)',
         }}
       >
-        {/* Top Input Bar */}
+        {/* Top Header: Categories Tabs */}
+        <div
+          role="tablist"
+          aria-label="Search categories"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            height: 38,
+            padding: '0 10px',
+            background: 'var(--bg-frame, #e9eaee)',
+            borderBottom: '1px solid var(--border-strong, #d1d3d9)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            {TABS_CONFIG.map((tab) => {
+              const isActive = activeTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  onClick={() => setActiveTab(tab.key)}
+                  style={{
+                    height: 24,
+                    padding: '0 10px',
+                    border: isActive ? '1px solid var(--border-strong, #d1d3d9)' : '1px solid transparent',
+                    borderRadius: 'var(--radius-small, 4px)',
+                    background: isActive ? 'var(--bg-popup, #ffffff)' : 'transparent',
+                    color: isActive ? 'var(--fg-strong, #000000)' : 'var(--fg-secondary, #5f6269)',
+                    fontWeight: isActive ? 600 : 400,
+                    fontSize: 12,
+                    cursor: 'pointer',
+                    boxShadow: isActive ? '0 1px 2px rgba(0, 0, 0, 0.05)' : 'none',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close modal"
+            style={{
+              border: 'none',
+              background: 'transparent',
+              cursor: 'pointer',
+              padding: '4px',
+              borderRadius: 3,
+              color: 'var(--fg-muted, #6c707e)',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+          >
+            <CloseOutlined style={{ fontSize: 12 }} />
+          </button>
+        </div>
+
+        {/* Search Input Bar */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
-            padding: '8px 12px',
+            padding: '10px 14px',
             borderBottom: '1px solid var(--border, #e9eaee)',
-            background: 'var(--bg-app, #ffffff)',
-            gap: 8,
+            background: 'var(--bg-popup, #ffffff)',
+            gap: 10,
           }}
         >
-          <SearchOutlined style={{ fontSize: 14, color: 'var(--fg-icon, #6c707e)' }} />
+          <SearchOutlined style={{ fontSize: 15, color: 'var(--fg-icon, #6c707e)' }} />
           <input
             ref={inputRef}
             type="text"
@@ -325,9 +388,9 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
               flex: 1,
               border: 'none',
               outline: 'none',
-              fontSize: 13,
+              fontSize: 13.5,
               fontFamily: 'inherit',
-              color: 'var(--fg, #000000)',
+              color: 'var(--fg-strong, #000000)',
               background: 'transparent',
             }}
           />
@@ -340,55 +403,13 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
                 border: 'none',
                 background: 'transparent',
                 cursor: 'pointer',
-                padding: '2px 4px',
+                padding: '2px 6px',
                 color: 'var(--fg-muted, #6c707e)',
               }}
             >
-              <CloseOutlined style={{ fontSize: 11 }} />
+              <CloseOutlined style={{ fontSize: 12 }} />
             </button>
           )}
-        </div>
-
-        {/* Filter Tabs */}
-        <div
-          role="tablist"
-          aria-label="Search categories"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            height: 28,
-            padding: '0 8px',
-            background: 'var(--bg-elev, #f7f8f9)',
-            borderBottom: '1px solid var(--border, #e9eaee)',
-            gap: 4,
-          }}
-        >
-          {TABS_CONFIG.map((tab) => {
-            const isActive = activeTab === tab.key;
-            return (
-              <button
-                key={tab.key}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                onClick={() => setActiveTab(tab.key)}
-                style={{
-                  height: 22,
-                  padding: '0 8px',
-                  border: 'none',
-                  borderRadius: 2,
-                  background: isActive ? 'var(--bg-app, #ffffff)' : 'transparent',
-                  color: isActive ? 'var(--accent, #3871e1)' : 'var(--fg-secondary, #5f6269)',
-                  fontWeight: isActive ? 600 : 400,
-                  fontSize: 11.5,
-                  cursor: 'pointer',
-                  boxShadow: isActive ? '0 1px 2px rgba(0, 0, 0, 0.05)' : 'none',
-                }}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
         </div>
 
         {/* Search Results List */}
@@ -430,8 +451,10 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
                     height: 34,
                     boxSizing: 'border-box',
                     cursor: 'pointer',
+                    borderRadius: 'var(--radius-small, 4px)',
+                    margin: '1px 6px',
                     background: isSelected ? 'var(--bg-selected, #d0dffe)' : 'transparent',
-                    color: 'var(--fg, #000000)',
+                    color: 'var(--fg-strong, #000000)',
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>

@@ -60,14 +60,16 @@ export function EditorArea({ db }: EditorAreaProps) {
         aria-label="Editor tabs"
         style={{
           display: 'flex',
-          alignItems: 'stretch',
-          height: 'var(--tabbar-height, 32px)',
-          minHeight: 'var(--tabbar-height, 32px)',
-          background: 'var(--bg-elev, #f7f8f9)',
-          borderBottom: '1px solid var(--border, #e9eaee)',
+          alignItems: 'flex-end',
+          height: 'var(--tabbar-height, 34px)',
+          minHeight: 'var(--tabbar-height, 34px)',
+          background: 'var(--bg-elev, #f7f8fa)',
+          borderBottom: '1px solid var(--border-strong, #d1d3d9)',
+          padding: '0 6px',
           overflowX: 'auto',
           overflowY: 'hidden',
           scrollbarWidth: 'none',
+          gap: 2,
         }}
       >
         {openTabs.map((tab) => {
@@ -88,20 +90,24 @@ export function EditorArea({ db }: EditorAreaProps) {
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                padding: '0 10px',
-                height: '100%',
-                background: isActive ? 'var(--bg-app, #ffffff)' : 'transparent',
-                borderRight: '1px solid var(--border, #e9eaee)',
-                borderBottom: isActive ? '2px solid var(--accent, #3871e1)' : '2px solid transparent',
-                color: isActive ? 'var(--fg, #000000)' : 'var(--fg-secondary, #5f6269)',
-                fontWeight: isActive ? 600 : 400,
+                padding: '0 12px',
+                height: 30,
+                background: isActive ? 'var(--bg-island, #ffffff)' : 'transparent',
+                borderRadius: '6px 6px 0 0',
+                borderTop: isActive ? '1px solid var(--border-strong, #d1d3d9)' : '1px solid transparent',
+                borderLeft: isActive ? '1px solid var(--border-strong, #d1d3d9)' : '1px solid transparent',
+                borderRight: isActive ? '1px solid var(--border-strong, #d1d3d9)' : '1px solid transparent',
+                borderBottom: isActive ? '1px solid var(--bg-island, #ffffff)' : '1px solid transparent',
+                marginBottom: isActive ? -1 : 0,
+                color: isActive ? 'var(--fg-strong, #000000)' : 'var(--fg-secondary, #5f6269)',
+                fontWeight: isActive ? 500 : 400,
                 fontSize: 'var(--font-size-ui, 12.5px)',
                 cursor: 'pointer',
                 userSelect: 'none',
                 position: 'relative',
                 boxSizing: 'border-box',
                 whiteSpace: 'nowrap',
-                transition: 'background 0.1s ease',
+                transition: 'all 0.15s ease',
               }}
             >
               <span style={{ marginRight: tab.closable !== false ? 6 : 0 }}>{tab.title}</span>
@@ -121,7 +127,7 @@ export function EditorArea({ db }: EditorAreaProps) {
                     background: 'transparent',
                     border: 'none',
                     padding: 2,
-                    borderRadius: 2,
+                    borderRadius: 3,
                     cursor: 'pointer',
                     color: 'var(--fg-muted, #6c707e)',
                     lineHeight: 1,

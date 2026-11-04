@@ -17,9 +17,7 @@ import {
   ProjectOutlined,
   CheckSquareOutlined,
   CommentOutlined,
-  FileTextOutlined,
   CalendarOutlined,
-  CodeOutlined,
 } from '@ant-design/icons';
 import '../styles/workbench-tokens.css';
 
@@ -45,9 +43,7 @@ const DEFAULT_RIGHT_ITEMS: ToolWindowItem[] = [
 ];
 
 const DEFAULT_BOTTOM_ITEMS: ToolWindowItem[] = [
-  { id: 'ai_chat', name: 'AI Chat', icon: <CommentOutlined />, shortcut: 'Alt+3' },
-  { id: 'docs', name: 'Docs', icon: <FileTextOutlined />, shortcut: 'Alt+4' },
-  { id: 'logs', name: 'Logs', icon: <CodeOutlined /> },
+  { id: 'ai_chat', name: 'AI Assistant', icon: <CommentOutlined />, shortcut: 'Alt+3' },
 ];
 
 export function WorkbenchLayout({
@@ -99,17 +95,13 @@ export function WorkbenchLayout({
   return (
     <AntdThemeAdapter>
       <div
-        className="workbench-root"
+        className="workbench-root workbench-islands-frame"
         style={{
           display: 'flex',
           flexDirection: 'column',
           width: '100vw',
           height: '100vh',
           overflow: 'hidden',
-          background: 'var(--bg-app, #ffffff)',
-          color: 'var(--fg, #000000)',
-          fontFamily: 'var(--font-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif)',
-          fontSize: 'var(--font-size-ui, 12.5px)',
         }}
       >
         {/* Top Title Bar */}
@@ -125,7 +117,7 @@ export function WorkbenchLayout({
           <Stripe slot="left" items={DEFAULT_LEFT_ITEMS} />
 
           {/* Master Resizable Panel Group (Horizontal: Left Panel | Center Column | Right Panel) */}
-          <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+          <div style={{ flex: 1, display: 'flex', overflow: 'hidden', padding: '0 6px 6px 0' }}>
             <PanelGroup
               direction="horizontal"
               autoSaveId="taskmate_workbench_hgroup"
@@ -141,26 +133,27 @@ export function WorkbenchLayout({
                     maxSize={40}
                     onResize={(size) => setPanelSize('left', size)}
                     style={{
-                      background: 'var(--bg-island, #f7f8f9)',
                       overflow: 'hidden',
                       display: 'flex',
                       flexDirection: 'column',
+                      paddingRight: 3,
                     }}
                   >
-                    {leftPanelContent || (
-                      <LeftToolWindow
-                        {...(db ? { db } : {})}
-                        {...(onSelectProject ? { onSelectProject } : {})}
-                        {...(onOpenSettings ? { onOpenSettings } : {})}
-                      />
-                    )}
+                    <div className="workbench-island-card" style={{ height: '100%', width: '100%' }}>
+                      {leftPanelContent || (
+                        <LeftToolWindow
+                          {...(db ? { db } : {})}
+                          {...(onSelectProject ? { onSelectProject } : {})}
+                          {...(onOpenSettings ? { onOpenSettings } : {})}
+                        />
+                      )}
+                    </div>
                   </Panel>
                   <PanelResizeHandle
                     style={{
-                      width: 3,
-                      background: 'var(--border, #e9eaee)',
+                      width: 6,
+                      background: 'transparent',
                       cursor: 'col-resize',
-                      transition: 'background 0.15s ease',
                     }}
                   />
                 </>
@@ -178,22 +171,23 @@ export function WorkbenchLayout({
                     minSize={30}
                     style={{
                       overflow: 'hidden',
-                      background: 'var(--bg-app, #ffffff)',
                       display: 'flex',
                       flexDirection: 'column',
+                      paddingBottom: bottomActiveId ? 3 : 0,
                     }}
                   >
-                    {children || <EditorArea {...(db ? { db } : {})} />}
+                    <div className="workbench-island-card" style={{ height: '100%', width: '100%' }}>
+                      {children || <EditorArea {...(db ? { db } : {})} />}
+                    </div>
                   </Panel>
 
                   {bottomActiveId && (
                     <>
                       <PanelResizeHandle
                         style={{
-                          height: 3,
-                          background: 'var(--border, #e9eaee)',
+                          height: 6,
+                          background: 'transparent',
                           cursor: 'row-resize',
-                          transition: 'background 0.15s ease',
                         }}
                       />
                       <Panel
@@ -203,13 +197,15 @@ export function WorkbenchLayout({
                         maxSize={60}
                         onResize={(size) => setPanelSize('bottom', size)}
                         style={{
-                          background: 'var(--bg-island, #f7f8f9)',
                           overflow: 'hidden',
                           display: 'flex',
                           flexDirection: 'column',
+                          paddingTop: 3,
                         }}
                       >
-                        {bottomPanelContent || <BottomToolWindow {...(db ? { db } : {})} />}
+                        <div className="workbench-island-card" style={{ height: '100%', width: '100%' }}>
+                          {bottomPanelContent || <BottomToolWindow {...(db ? { db } : {})} />}
+                        </div>
                       </Panel>
                     </>
                   )}
@@ -221,10 +217,9 @@ export function WorkbenchLayout({
                 <>
                   <PanelResizeHandle
                     style={{
-                      width: 3,
-                      background: 'var(--border, #e9eaee)',
+                      width: 6,
+                      background: 'transparent',
                       cursor: 'col-resize',
-                      transition: 'background 0.15s ease',
                     }}
                   />
                   <Panel
@@ -234,13 +229,15 @@ export function WorkbenchLayout({
                     maxSize={40}
                     onResize={(size) => setPanelSize('right', size)}
                     style={{
-                      background: 'var(--bg-island, #f7f8f9)',
                       overflow: 'hidden',
                       display: 'flex',
                       flexDirection: 'column',
+                      paddingLeft: 3,
                     }}
                   >
-                    {rightPanelContent || <RightToolWindow title={rightActiveId.toUpperCase()} />}
+                    <div className="workbench-island-card" style={{ height: '100%', width: '100%' }}>
+                      {rightPanelContent || <RightToolWindow title={rightActiveId.toUpperCase()} />}
+                    </div>
                   </Panel>
                 </>
               )}

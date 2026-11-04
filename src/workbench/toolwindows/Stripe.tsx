@@ -29,22 +29,20 @@ export function Stripe({ slot, items }: StripeProps) {
     <aside
       aria-label={`${slot} tool window stripe`}
       style={{
-        width: isHorizontal ? '100%' : 'var(--stripe-width, 32px)',
-        minWidth: isHorizontal ? 'auto' : 'var(--stripe-width, 32px)',
-        height: isHorizontal ? 'var(--stripe-width, 32px)' : '100%',
-        minHeight: isHorizontal ? 'var(--stripe-width, 32px)' : 'auto',
-        background: 'var(--bg-island, #f7f8f9)',
-        borderRight: slot === 'left' ? '1px solid var(--border, #e9eaee)' : undefined,
-        borderLeft: slot === 'right' ? '1px solid var(--border, #e9eaee)' : undefined,
-        borderTop: slot === 'bottom' ? '1px solid var(--border, #e9eaee)' : undefined,
+        width: isHorizontal ? '100%' : 'var(--stripe-width, 34px)',
+        minWidth: isHorizontal ? 'auto' : 'var(--stripe-width, 34px)',
+        height: isHorizontal ? 'var(--stripe-width, 34px)' : '100%',
+        minHeight: isHorizontal ? 'var(--stripe-width, 34px)' : 'auto',
+        background: 'transparent',
         display: 'flex',
         flexDirection: isHorizontal ? 'row' : 'column',
         alignItems: 'center',
-        padding: isHorizontal ? '0 4px' : '4px 0',
-        gap: 2,
+        padding: isHorizontal ? '0 6px' : '6px 0',
+        gap: 3,
         userSelect: 'none',
         boxSizing: 'border-box',
         zIndex: 5,
+        flexShrink: 0,
       }}
     >
       {items.map((item) => {
@@ -63,28 +61,31 @@ export function Stripe({ slot, items }: StripeProps) {
                 height: 28,
                 padding: 0,
                 border: 'none',
-                background: isActive ? 'var(--bg-hover, #ededed)' : 'transparent',
-                borderRadius: 3,
+                background: isActive ? 'var(--bg-island, #ffffff)' : 'transparent',
+                borderRadius: 'var(--radius-control, 4px)',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 position: 'relative',
-                color: isActive ? 'var(--fg, #000000)' : 'var(--fg-icon, #6c707e)',
+                color: isActive ? 'var(--fg-strong, #000000)' : 'var(--fg-muted, #6c707e)',
+                boxShadow: isActive ? '0 1px 2px rgba(0, 0, 0, 0.08)' : 'none',
                 outline: 'none',
+                transition: 'all 0.15s ease',
               }}
             >
-              {/* Active 2px blue indicator bar */}
+              {/* Active blue indicator bar */}
               {isActive && (
                 <span
                   style={{
                     position: 'absolute',
                     background: 'var(--accent, #3871e1)',
+                    borderRadius: 1,
                     ...(slot === 'left'
-                      ? { left: 0, top: 2, bottom: 2, width: 2 }
+                      ? { left: 0, top: 4, bottom: 4, width: 2 }
                       : slot === 'right'
-                      ? { right: 0, top: 2, bottom: 2, width: 2 }
-                      : { bottom: 0, left: 2, right: 2, height: 2 }),
+                      ? { right: 0, top: 4, bottom: 4, width: 2 }
+                      : { bottom: 0, left: 4, right: 4, height: 2 }),
                   }}
                 />
               )}

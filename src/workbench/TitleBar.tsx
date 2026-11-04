@@ -1,7 +1,6 @@
 import { useMemo, type CSSProperties } from 'react';
 import { Dropdown, Button, Tooltip, Typography, type MenuProps } from 'antd';
 import {
-  FolderOutlined,
   DownOutlined,
   SearchOutlined,
   MinusOutlined,
@@ -118,15 +117,15 @@ export function TitleBar({
   };
 
   const dragStyle: CSSProperties = {
-    height: 'var(--titlebar-height, 34px)',
-    minHeight: 'var(--titlebar-height, 34px)',
-    background: 'var(--bg-elev, #f7f8f9)',
-    borderBottom: '1px solid var(--border, #e9eaee)',
+    height: 'var(--titlebar-height, 38px)',
+    minHeight: 'var(--titlebar-height, 38px)',
+    background: 'transparent',
+    borderBottom: '1px solid var(--border-strong, #d1d3d9)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingLeft: 8,
-    paddingRight: 4,
+    paddingLeft: 10,
+    paddingRight: 6,
     userSelect: 'none',
     position: 'relative',
     zIndex: 10,
@@ -142,54 +141,57 @@ export function TitleBar({
 
   return (
     <header data-tauri-drag-region style={dragStyle}>
-      {/* Left: App Logo & Project Switcher Dropdown */}
+      {/* Left: App Project Avatar & Project Switcher Dropdown */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 6,
+          gap: 8,
           ...noDragStyle,
         }}
       >
-        <span
+        {/* Project Avatar with OpenIDEA Gradient */}
+        <div
           style={{
-            fontWeight: 600,
-            fontSize: 12,
-            letterSpacing: 0.3,
-            color: 'var(--fg, #000000)',
+            width: 22,
+            height: 22,
+            borderRadius: 4,
+            background: 'linear-gradient(135deg, var(--project-color, #3574f0), var(--project-color-end, #7a64f0))',
+            color: '#ffffff',
             display: 'flex',
             alignItems: 'center',
-            gap: 4,
+            justifyContent: 'center',
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: '0.02em',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+            flexShrink: 0,
           }}
         >
-          <span style={{ color: 'var(--accent, #3871e1)', fontWeight: 700 }}>TM</span>
-          {title}
-        </span>
-
-        <span style={{ color: 'var(--border-strong, #d1d3d9)', margin: '0 2px' }}>/</span>
+          {currentProject ? currentProject.name.charAt(0).toUpperCase() : 'T'}
+        </div>
 
         <Dropdown menu={{ items: projectMenuItems }} trigger={['click']} placement="bottomLeft">
           <Button
             type="text"
             size="small"
             style={{
-              height: 24,
-              padding: '0 6px',
-              fontSize: 12,
+              height: 26,
+              padding: '0 8px',
+              fontSize: 12.5,
+              fontWeight: 500,
               display: 'flex',
               alignItems: 'center',
-              gap: 4,
-              color: 'var(--fg-secondary, #5f6269)',
-              border: '1px solid transparent',
-              borderRadius: 3,
+              gap: 5,
+              color: 'var(--fg-strong, #000000)',
+              borderRadius: 'var(--radius-control, 4px)',
             }}
             aria-label="Switch project"
           >
-            <FolderOutlined style={{ fontSize: 12 }} />
-            <span style={{ maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {currentProject ? currentProject.name : 'All Projects'}
+            <span style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {currentProject ? currentProject.name : title}
             </span>
-            <DownOutlined style={{ fontSize: 9, opacity: 0.7 }} />
+            <DownOutlined style={{ fontSize: 9, opacity: 0.6 }} />
           </Button>
         </Dropdown>
       </div>
@@ -198,8 +200,8 @@ export function TitleBar({
       <div
         style={{
           flex: 1,
-          maxWidth: 380,
-          margin: '0 12px',
+          maxWidth: 360,
+          margin: '0 16px',
           ...noDragStyle,
         }}
       >
@@ -210,18 +212,20 @@ export function TitleBar({
           title="Search Everywhere (Double Shift or Ctrl+K)"
           style={{
             width: '100%',
-            height: 24,
-            background: 'var(--bg-app, #ffffff)',
-            border: '1px solid var(--border, #e9eaee)',
-            borderRadius: 3,
+            height: 26,
+            background: 'var(--bg-island, #ffffff)',
+            border: '1px solid var(--border-strong, #d1d3d9)',
+            borderRadius: 'var(--radius-control, 4px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: '0 8px',
-            fontSize: 11.5,
+            padding: '0 10px',
+            fontSize: 12,
             color: 'var(--fg-muted, #6c707e)',
             cursor: 'pointer',
             outline: 'none',
+            boxShadow: '0 1px 2px rgba(0, 0, 0, 0.02)',
+            transition: 'border-color 0.15s ease',
           }}
         >
           <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -232,14 +236,14 @@ export function TitleBar({
             style={{
               fontSize: 10,
               fontFamily: 'inherit',
-              padding: '1px 4px',
-              borderRadius: 2,
-              background: 'var(--bg-island, #f7f8f9)',
-              border: '1px solid var(--border, #e9eaee)',
+              padding: '1px 5px',
+              borderRadius: 3,
+              background: 'var(--bg-frame, #e9eaee)',
+              border: '1px solid var(--border-strong, #d1d3d9)',
               color: 'var(--fg-secondary, #5f6269)',
             }}
           >
-            Double ⇧ / ⌘K
+            Double ⇧
           </kbd>
         </button>
       </div>

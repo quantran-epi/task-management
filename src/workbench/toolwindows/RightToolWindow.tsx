@@ -29,7 +29,7 @@ export function RightToolWindow({
         flexDirection: 'column',
         height: '100%',
         width: '100%',
-        background: 'var(--bg-island, #f7f8f9)',
+        background: 'var(--bg-island, #ffffff)',
         overflow: 'hidden',
       }}
     >
@@ -39,20 +39,18 @@ export function RightToolWindow({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          height: 28,
-          padding: '0 8px',
+          height: 30,
+          padding: '0 10px',
           borderBottom: '1px solid var(--border, #e9eaee)',
-          background: 'var(--bg-elev, #f7f8f9)',
+          background: 'var(--bg-elev, #f7f8fa)',
           userSelect: 'none',
         }}
       >
         <span
           style={{
-            fontWeight: 600,
-            fontSize: 11,
-            letterSpacing: 0.5,
-            color: 'var(--fg-secondary, #5f6269)',
-            textTransform: 'uppercase',
+            fontWeight: 500,
+            fontSize: 12,
+            color: 'var(--fg-strong, #000000)',
           }}
         >
           {title}

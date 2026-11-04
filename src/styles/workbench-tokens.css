@@ -1,14 +1,14 @@
 /* ==========================================================================
    OpenIDEA Islands Light Theme Tokens - IntelliJ ExpUI
-   Phase 25.4 Workbench Migration
    ========================================================================== */
 
 :root,
 :root[data-theme="light"] {
   /* Surfaces */
+  --bg-frame: #e9eaee;
   --bg-app: #ffffff;
-  --bg-island: #f7f8f9;
-  --bg-elev: #f7f8f9;
+  --bg-island: #ffffff;
+  --bg-elev: #f7f8fa;
   --bg-popup: #ffffff;
   --bg-floating-toolbar: #ffffff;
   --bg-hover: #ededed;
@@ -21,30 +21,114 @@
   /* Borders & Dividers */
   --border: #e9eaee;
   --border-strong: #d1d3d9;
+  --border-popup: #d1d3d9;
   --border-window: #d1d3d9;
   --control-off: #c3c5cb;
 
   /* Typography */
-  --fg: #000000;
+  --fg: #191b1f;
   --fg-strong: #000000;
   --fg-secondary: #5f6269;
   --fg-muted: #6c707e;
   --fg-subtle: #73767c;
+  --fg-faint: #9fa2a8;
   --fg-icon: #6c707e;
 
   /* Accent & Status */
   --accent: #3871e1;
+  --accent-soft: #edf3ff;
   --link: #2f5eb9;
+  --link-hover: #2e4d89;
   --danger: #c54e58;
   --warning: #a56906;
   --success: #338555;
   --info: #3871e1;
 
-  /* Metrics */
-  --stripe-width: 32px;
-  --titlebar-height: 34px;
+  /* Project Theme Gradients */
+  --project-color: #3574f0;
+  --project-color-end: #7a64f0;
+  --project-gradient-strength: 18%;
+
+  /* Metrics & Radii */
+  --island-gap: 6px;
+  --island-radius: 8px;
+  --radius-small: 4px;
+  --radius-control: 4px;
+  --radius-popup: 8px;
+  --radius-tab: 6px;
+
+  --stripe-width: 34px;
+  --titlebar-height: 38px;
   --statusbar-height: 24px;
-  --tabbar-height: 32px;
-  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter Variable", sans-serif;
-  --font-size-ui: 12.5px;
+  --tabbar-height: 34px;
+
+  --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-size-ui: 13px;
+  --font-size-small: 11.5px;
+}
+
+/* Islands Frame Container */
+.workbench-islands-frame {
+  background:
+    radial-gradient(
+      600px 300px at 0 0,
+      color-mix(in srgb, var(--project-color) var(--project-gradient-strength, 18%), transparent),
+      transparent
+    ),
+    var(--bg-frame);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-ui);
+}
+
+/* Individual Island Surface */
+.workbench-island-card {
+  background: var(--bg-island);
+  border-radius: var(--island-radius);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ExpUI Tab in Editor Area */
+.workbench-expui-tab {
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--fg-secondary);
+  border-radius: var(--radius-tab) var(--radius-tab) 0 0;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+  position: relative;
+  background: transparent;
+}
+
+.workbench-expui-tab:hover {
+  background: var(--bg-hover);
+  color: var(--fg-strong);
+}
+
+.workbench-expui-tab.active {
+  background: var(--bg-island);
+  color: var(--fg-strong);
+  font-weight: 500;
+  box-shadow: 0 -1px 0 var(--border-strong) inset;
+}
+
+.workbench-expui-tab.active::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 2px 2px 0 0;
 }
