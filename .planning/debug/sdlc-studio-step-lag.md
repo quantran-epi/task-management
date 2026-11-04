@@ -7,10 +7,10 @@ updated: 2026-11-04T03:49:00Z
 
 ## Current Focus
 
-hypothesis: Rapid navigation leaves aborted local BM25 scans running; overlapping stale work reproduced with real collector/retrieval. Native impact still unverified.
-test: Rapid versus settled three-step fixture; old scans abort while first read is pending, final evidence equals settled evidence.
-expecting: Obsolete scans stop after pending read instead of reading/ranking remaining corpus; latest step stays correct.
-next_action: Native retest of rapid versus 2-second-settled navigation after next explicitly requested staging push/build; if unchanged obtain native Performance trace.
+hypothesis: Native CPU trace identifies synchronous rankBM25 as dominant blocking task; document frequency is recomputed with full corpus scan for each document (quadratic corpus factor).
+test: Trace CPU sample aggregation, before/after synthetic corpus benchmark, exact score parity, operation-budget regression.
+expecting: Move query-term document frequencies outside document scoring loop; preserve all scores/ranks/evidence while removing repeated scans.
+next_action: After explicitly requested commit/push, native retest same Step 3 to Step 4 transition; trace proves bottleneck, not yet verified responsiveness after fix.
 
 ## Symptoms
 
@@ -21,6 +21,15 @@ reproduction: Open SDLC Studio, switch steps in Tauri desktop during Phase 26 UA
 timeline: Reported during Phase 26 UAT after Test 5 pass; onset and earlier performance unknown.
 
 ## Evidence
+
+- timestamp: 2026-11-04 (native trace diagnosis)
+  checked: /home/quantd/workspace/personal/task-management/docs/Trace-sdlc.json supplied by user for Step 3 to Step 4; 24594 trace events. Analyzed locally with python3 -I; trace not copied or published.
+  found: Renderer main thread PID 22352/TID 30496 runs 2344.750ms task at ts 86269966652 (~1.300s after CPU profile start). Samples attribute 2329.3ms inclusive to minified IM at bundle index-CKBzgHml.js line 457 col 17282, called by k7e/local retrieval. Exact trace bundle absent locally, but neighboring function offsets map structurally to normalizeVietnamese/tokenize/rankBM25 in local dist bundle (symbols shifted by one); source confirms rankBM25 recalculates document frequency per scored document by rescanning all docs and tokens.
+  implication: Actual native stall dominated by synchronous BM25 ranking; prior cancellation cannot interrupt an already running synchronous task.
+- timestamp: 2026-11-04 (ranking fix validation)
+  checked: Same synthetic 10KB/document corpus before/after hoisting document-frequency calculation once per query term; no worker/cache/dependency added.
+  found: 200 docs 777ms to 106ms; 400 docs 3278ms to 142ms; 800 docs 14891ms to 311ms (local Node measurements, not native). Regression counts corpus includes scans 3200 to 80 for 40 docs/two query terms. Exact ranking/score parity passes 10 varied query/options cases against HEAD baseline. 63/63 tests in five suites and npx tsc --noEmit pass.
+  implication: Minimal algorithm fix removes quadratic repeated scans without changing result formula. Native responsiveness still needs retest after new build; no commit/push requested yet.
 
 - timestamp: 2026-11-04T07:59:03Z
   checked: Three-step rapid-vs-settled fixture using real collectWizardEvidence and runLocalGroundedRetrieval; agent reproduction and integrated main-checkout tests.

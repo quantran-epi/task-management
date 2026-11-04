@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   normalizeVietnamese,
   tokenize,
@@ -88,6 +88,25 @@ describe('BM25 Lexical Ranking & Vietnamese Normalization (REQ-14.2, D-10, D-11)
       const results = rankBM25('bao cao', docs);
       expect(results.some((r) => r.doc.id === 'doc-body')).toBe(true);
       expect(results[0]?.doc.id).toBe('doc-body');
+    });
+
+    it('scans corpus document frequency once per query term, preserving exact scores', () => {
+      const corpus: BM25Document[] = Array.from({ length: 40 }, (_, i) => ({
+        id: String(i), title: '', tags: [], body: i < 20 ? 'navigation navigation' : 'unrelated unrelated',
+      }));
+      const includes = vi.spyOn(Array.prototype, 'includes');
+      let results: ReturnType<typeof rankBM25>;
+      let scans: number;
+      try {
+        results = rankBM25('navigation missing', corpus);
+        scans = includes.mock.calls.filter(([term]) => term === 'navigation' || term === 'missing').length;
+      } finally {
+        includes.mockRestore();
+      }
+      expect(scans).toBeLessThanOrEqual(corpus.length * 2);
+      expect(results.map(({ doc }) => doc.id)).toEqual(corpus.slice(0, 20).map(({ id }) => id));
+      const expectedScore = Math.log(2) * ((2 * (1.2 + 1)) / (2 + 1.2));
+      expect(results.every(({ score, matchedTerms }) => score === expectedScore && matchedTerms.join() === 'navigation')).toBe(true);
     });
 
     it('excludes documents with score 0', () => {
