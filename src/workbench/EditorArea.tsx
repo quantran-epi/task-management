@@ -7,6 +7,9 @@ import { PlannerView } from '../views/PlannerView';
 import { AnalyticsView } from '../views/AnalyticsView';
 import { SettingsView } from '../views/SettingsView';
 import { ProjectsView } from '../views/ProjectsView';
+import { DashboardView } from '../views/DashboardView';
+import { AgentControlView } from '../views/AgentControlView';
+import { TelegramMonitorView } from '../views/TelegramMonitorView';
 import type { TaskPlannerDatabase } from '../db';
 
 export interface EditorAreaProps {
@@ -18,6 +21,7 @@ export function EditorArea({ db }: EditorAreaProps) {
   const activeTabId = useLayoutStore((state) => state.activeTabId);
   const setActiveTabId = useLayoutStore((state) => state.setActiveTabId);
   const closeTab = useLayoutStore((state) => state.closeTab);
+  const openTab = useLayoutStore((state) => state.openTab);
 
   const activeTab = openTabs.find((tab) => tab.id === activeTabId) || openTabs[0];
 
@@ -37,6 +41,12 @@ export function EditorArea({ db }: EditorAreaProps) {
         return <SettingsView {...dbProp} />;
       case 'projects':
         return <ProjectsView {...dbProp} />;
+      case 'dashboard':
+        return <DashboardView onNavigate={(route) => openTab({ id: route, title: route.toUpperCase(), viewType: route as any })} />;
+      case 'agents':
+        return <AgentControlView />;
+      case 'telegram':
+        return <TelegramMonitorView />;
       default:
         return <TasksView {...dbProp} />;
     }
@@ -148,6 +158,7 @@ export function EditorArea({ db }: EditorAreaProps) {
           flex: 1,
           overflow: 'auto',
           position: 'relative',
+          padding: '16px 20px',
         }}
       >
         <AntdThemeAdapter>

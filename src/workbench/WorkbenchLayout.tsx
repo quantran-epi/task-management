@@ -85,12 +85,24 @@ export function WorkbenchLayout({
   const leftActiveId = useLayoutStore((s) => s.leftActiveId);
   const rightActiveId = useLayoutStore((s) => s.rightActiveId);
   const bottomActiveId = useLayoutStore((s) => s.bottomActiveId);
+  const toggleToolWindow = useLayoutStore((s) => s.toggleToolWindow);
+  const openTab = useLayoutStore((s) => s.openTab);
 
   const leftPanelSize = useLayoutStore((s) => s.leftPanelSize);
   const rightPanelSize = useLayoutStore((s) => s.rightPanelSize);
   const bottomPanelSize = useLayoutStore((s) => s.bottomPanelSize);
 
   const setPanelSize = useLayoutStore((s) => s.setPanelSize);
+
+  const handleOpenSettingsTab = useCallback(() => {
+    openTab({
+      id: 'settings',
+      title: 'Settings',
+      viewType: 'settings',
+      closable: true,
+    });
+    onOpenSettings?.();
+  }, [openTab, onOpenSettings]);
 
   return (
     <AntdThemeAdapter>
@@ -109,6 +121,8 @@ export function WorkbenchLayout({
           selectedProjectId={selectedProjectId}
           onSelectProject={onSelectProject}
           onOpenSearch={handleOpenSearchUnified}
+          onOpenSettings={handleOpenSettingsTab}
+          onToggleAiChat={() => toggleToolWindow('bottom', 'ai_chat')}
         />
 
         {/* Middle Body with Stripes and Splitters */}
@@ -144,7 +158,7 @@ export function WorkbenchLayout({
                         <LeftToolWindow
                           {...(db ? { db } : {})}
                           {...(onSelectProject ? { onSelectProject } : {})}
-                          {...(onOpenSettings ? { onOpenSettings } : {})}
+                          onOpenSettings={handleOpenSettingsTab}
                         />
                       )}
                     </div>

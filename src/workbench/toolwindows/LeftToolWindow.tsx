@@ -5,12 +5,18 @@ import {
   FlagOutlined,
   MinusOutlined,
   SettingOutlined,
+  CheckSquareOutlined,
+  CalendarOutlined,
+  ProjectOutlined,
+  FileTextOutlined,
+  DashboardOutlined,
+  LineChartOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { getAllProjects } from '../../db/repositories/projectRepo';
 import { getAllMilestones } from '../../db/repositories/milestoneRepo';
-import { useLayoutStore } from '../store/layoutStore';
+import { useLayoutStore, type EditorViewType } from '../store/layoutStore';
 import type { DataNode } from 'antd/es/tree';
 
 export interface LeftToolWindowProps {
@@ -19,6 +25,21 @@ export interface LeftToolWindowProps {
   onOpenSettings?: (() => void) | undefined;
 }
 
+interface NavItem {
+  key: EditorViewType;
+  label: string;
+  icon: React.ReactNode;
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { key: 'tasks', label: 'Tasks', icon: <CheckSquareOutlined /> },
+  { key: 'planner', label: 'Capacity Planner', icon: <CalendarOutlined /> },
+  { key: 'projects', label: 'Projects', icon: <ProjectOutlined /> },
+  { key: 'notes', label: 'Docs', icon: <FileTextOutlined /> },
+  { key: 'dashboard', label: 'Dashboard', icon: <DashboardOutlined /> },
+  { key: 'analytics', label: 'Analytics', icon: <LineChartOutlined /> },
+];
+
 export function LeftToolWindow({
   db = defaultDb,
   onSelectProject,
@@ -26,8 +47,12 @@ export function LeftToolWindow({
 }: LeftToolWindowProps) {
   const toggleToolWindow = useLayoutStore((s) => s.toggleToolWindow);
   const openTab = useLayoutStore((s) => s.openTab);
+  const activeTabId = useLayoutStore((s) => s.activeTabId);
+  const openTabs = useLayoutStore((s) => s.openTabs);
 
-  // T-25.4-04: Read-only tree rendering for navigation; all data mutations route through existing db repositories
+  const activeTab = openTabs.find((t) => t.id === activeTabId);
+
+  // Read-only tree rendering for navigation
   const projects = useLiveQuery(() => getAllProjects(db), [db]) ?? [];
   const milestones = useLiveQuery(() => getAllMilestones(db), [db]) ?? [];
 
@@ -68,8 +93,24 @@ export function LeftToolWindow({
       const milestone = milestones.find((m) => m.id === milestoneId);
       if (milestone) {
         onSelectProject?.(milestone.projectId);
+        openTab({
+          id: `tasks-m-${milestoneId}`,
+          title: `Tasks: ${milestone.name}`,
+          viewType: 'tasks',
+          closable: true,
+          params: { projectId: milestone.projectId, milestoneId },
+        });
       }
     }
+  };
+
+  const handleNavClick = (item: NavItem) => {
+    openTab({
+      id: item.key,
+      title: item.label,
+      viewType: item.key,
+      closable: item.key !== 'tasks',
+    });
   };
 
   return (
@@ -90,7 +131,7 @@ export function LeftToolWindow({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          height: 30,
+          height: 32,
           padding: '0 10px',
           borderBottom: '1px solid var(--border, #e9eaee)',
           background: 'var(--bg-elev, #f7f8fa)',
@@ -99,12 +140,13 @@ export function LeftToolWindow({
       >
         <span
           style={{
-            fontWeight: 500,
+            fontWeight: 600,
             fontSize: 12,
+            letterSpacing: '0.02em',
             color: 'var(--fg-strong, #000000)',
           }}
         >
-          Projects
+          Explorer
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           {onOpenSettings && (
@@ -116,8 +158,8 @@ export function LeftToolWindow({
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  padding: 2,
-                  borderRadius: 2,
+                  padding: 3,
+                  borderRadius: 3,
                   cursor: 'pointer',
                   color: 'var(--fg-muted, #6c707e)',
                 }}
@@ -126,7 +168,7 @@ export function LeftToolWindow({
               </button>
             </Tooltip>
           )}
-          <Tooltip title="Collapse">
+          <Tooltip title="Hide Explorer">
             <button
               type="button"
               onClick={() => toggleToolWindow('left', 'projects')}
@@ -134,8 +176,8 @@ export function LeftToolWindow({
               style={{
                 background: 'transparent',
                 border: 'none',
-                padding: 2,
-                borderRadius: 2,
+                padding: 3,
+                borderRadius: 3,
                 cursor: 'pointer',
                 color: 'var(--fg-muted, #6c707e)',
               }}
@@ -146,32 +188,98 @@ export function LeftToolWindow({
         </div>
       </div>
 
-      {/* Tree Content Area */}
+      {/* Explorer Body */}
       <div
         style={{
           flex: 1,
-          padding: '6px 4px',
-          overflow: 'auto',
+          padding: '8px 6px',
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 10,
         }}
       >
-        {treeData.length > 0 ? (
-          <Tree
-            showIcon
-            blockNode
-            treeData={treeData}
-            onSelect={handleSelect}
+        {/* Quick Views Navigation */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          {NAV_ITEMS.map((item) => {
+            const isSelected = activeTab?.viewType === item.key;
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => handleNavClick(item)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  height: 28,
+                  padding: '0 8px',
+                  borderRadius: 'var(--radius-control, 4px)',
+                  border: 'none',
+                  background: isSelected ? 'var(--bg-selected, #d0dffe)' : 'transparent',
+                  color: isSelected ? 'var(--fg-strong, #000000)' : 'var(--fg, #191b1f)',
+                  fontWeight: isSelected ? 600 : 400,
+                  fontSize: 12.5,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'background 0.12s ease',
+                  width: '100%',
+                }}
+              >
+                <span style={{ fontSize: 13, color: isSelected ? 'var(--accent, #3871e1)' : 'var(--fg-icon, #6c707e)' }}>
+                  {item.icon}
+                </span>
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Section Divider */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '4px 6px 0',
+            borderTop: '1px solid var(--border, #e9eaee)',
+          }}
+        >
+          <span
             style={{
-              background: 'transparent',
-              fontSize: 'var(--font-size-ui, 12.5px)',
+              fontSize: 10.5,
+              fontWeight: 600,
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+              color: 'var(--fg-muted, #6c707e)',
             }}
-          />
-        ) : (
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description="No projects found"
-            style={{ marginTop: 24 }}
-          />
-        )}
+          >
+            Projects & Milestones
+          </span>
+        </div>
+
+        {/* Projects & Milestones Tree */}
+        <div style={{ flex: 1, minHeight: 0 }}>
+          {treeData.length > 0 ? (
+            <Tree
+              showIcon
+              blockNode
+              treeData={treeData}
+              onSelect={handleSelect}
+              style={{
+                background: 'transparent',
+                fontSize: 12.5,
+              }}
+            />
+          ) : (
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description="No projects"
+              style={{ marginTop: 16 }}
+            />
+          )}
+        </div>
       </div>
     </div>
   );

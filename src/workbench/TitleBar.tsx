@@ -7,6 +7,8 @@ import {
   BorderOutlined,
   CloseOutlined,
   CheckOutlined,
+  RobotOutlined,
+  SettingOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
@@ -16,6 +18,8 @@ export interface TitleBarProps {
   selectedProjectId?: string | null | undefined;
   onSelectProject?: ((projectId: string | null) => void) | undefined;
   onOpenSearch?: (() => void) | undefined;
+  onOpenSettings?: (() => void) | undefined;
+  onToggleAiChat?: (() => void) | undefined;
   title?: string | undefined;
 }
 
@@ -23,6 +27,8 @@ export function TitleBar({
   selectedProjectId,
   onSelectProject,
   onOpenSearch,
+  onOpenSettings,
+  onToggleAiChat,
   title = 'TaskMate',
 }: TitleBarProps) {
   const projects = useLiveQuery(
@@ -260,6 +266,32 @@ export function TitleBar({
         <div style={{ display: 'flex', alignItems: 'center' }}>
           <ActiveTimerWidget />
         </div>
+
+        {onToggleAiChat && (
+          <Tooltip title="AI Assistant (Alt+3)">
+            <Button
+              type="text"
+              size="small"
+              icon={<RobotOutlined style={{ fontSize: 13, color: 'var(--accent, #3871e1)' }} />}
+              onClick={onToggleAiChat}
+              aria-label="Toggle AI Assistant"
+              style={{ width: 26, height: 26, minWidth: 26, padding: 0, borderRadius: 3 }}
+            />
+          </Tooltip>
+        )}
+
+        {onOpenSettings && (
+          <Tooltip title="Settings">
+            <Button
+              type="text"
+              size="small"
+              icon={<SettingOutlined style={{ fontSize: 13, color: 'var(--fg-secondary, #5f6269)' }} />}
+              onClick={onOpenSettings}
+              aria-label="Settings"
+              style={{ width: 26, height: 26, minWidth: 26, padding: 0, borderRadius: 3 }}
+            />
+          </Tooltip>
+        )}
 
         {/* Window action buttons (Minimize, Maximize, Close) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 1, marginLeft: 4 }}>

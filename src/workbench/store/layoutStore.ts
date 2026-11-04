@@ -3,7 +3,16 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 
 export type ToolWindowSlot = 'left' | 'right' | 'bottom';
 
-export type EditorViewType = 'tasks' | 'notes' | 'planner' | 'analytics' | 'settings' | 'projects';
+export type EditorViewType =
+  | 'tasks'
+  | 'notes'
+  | 'planner'
+  | 'analytics'
+  | 'settings'
+  | 'projects'
+  | 'dashboard'
+  | 'agents'
+  | 'telegram';
 
 export interface EditorTab {
   id: string;
