@@ -1,5 +1,4 @@
-import React from 'react';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { SearchEverywhereModal } from '../SearchEverywhereModal';
 import { useLayoutStore } from '../../store/layoutStore';
@@ -9,8 +8,8 @@ describe('SearchEverywhereModal', () => {
   const mockDb = {
     tasks: {
       toArray: vi.fn().mockResolvedValue([
-        { id: 't1', title: 'Implement Auth Flow', status: 'in_progress' },
-        { id: 't2', title: 'Write Unit Tests', status: 'todo' },
+        { id: 't1', name: 'Implement Auth Flow', title: 'Implement Auth Flow', status: 'in_progress' },
+        { id: 't2', name: 'Write Unit Tests', title: 'Write Unit Tests', status: 'todo' },
       ]),
     },
     projects: {

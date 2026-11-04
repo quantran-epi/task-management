@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
-import React from 'react';
+import { render, screen } from '@testing-library/react';
 import { VirtualizedList } from '../virtual/VirtualizedList';
 
 describe('VirtualizedList', () => {

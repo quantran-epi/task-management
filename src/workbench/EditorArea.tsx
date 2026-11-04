@@ -1,4 +1,3 @@
-import React from 'react';
 import { CloseOutlined, InboxOutlined } from '@ant-design/icons';
 import { AntdThemeAdapter } from './AntdThemeAdapter';
 import { useLayoutStore, type EditorTab } from './store/layoutStore';
@@ -11,7 +10,7 @@ import { ProjectsView } from '../views/ProjectsView';
 import type { TaskPlannerDatabase } from '../db';
 
 export interface EditorAreaProps {
-  db?: TaskPlannerDatabase;
+  db?: TaskPlannerDatabase | undefined;
 }
 
 export function EditorArea({ db }: EditorAreaProps) {
@@ -22,22 +21,24 @@ export function EditorArea({ db }: EditorAreaProps) {
 
   const activeTab = openTabs.find((tab) => tab.id === activeTabId) || openTabs[0];
 
+  const dbProp = db ? { db } : {};
+
   const renderViewContent = (tab: EditorTab) => {
     switch (tab.viewType) {
       case 'tasks':
-        return <TasksView db={db} />;
+        return <TasksView {...dbProp} />;
       case 'notes':
-        return <NotesView db={db} initialDocId={tab.params?.doc} />;
+        return <NotesView {...dbProp} initialDocId={tab.params?.doc} />;
       case 'planner':
-        return <PlannerView db={db} targetDate={tab.params?.date} />;
+        return <PlannerView {...dbProp} targetDate={tab.params?.date} />;
       case 'analytics':
-        return <AnalyticsView db={db} />;
+        return <AnalyticsView {...dbProp} />;
       case 'settings':
-        return <SettingsView db={db} />;
+        return <SettingsView {...dbProp} />;
       case 'projects':
-        return <ProjectsView db={db} />;
+        return <ProjectsView {...dbProp} />;
       default:
-        return <TasksView db={db} />;
+        return <TasksView {...dbProp} />;
     }
   };
 

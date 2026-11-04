@@ -1,18 +1,16 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Tabs, Tooltip } from 'antd';
 import {
   CommentOutlined,
   CodeOutlined,
   MinusOutlined,
-  CloseOutlined,
-  DeleteOutlined,
 } from '@ant-design/icons';
 import { AIChatDrawer } from '../../components/ai/AIChatDrawer';
 import { useLayoutStore } from '../store/layoutStore';
 import type { TaskPlannerDatabase } from '../../db';
 
 export interface BottomToolWindowProps {
-  db?: TaskPlannerDatabase;
+  db?: TaskPlannerDatabase | undefined;
 }
 
 export function BottomToolWindow({ db }: BottomToolWindowProps) {
@@ -124,7 +122,7 @@ export function BottomToolWindow({ db }: BottomToolWindowProps) {
               open={true}
               onClose={handleCollapse}
               isPinned={true}
-              db={db}
+              {...(db ? { db } : {})}
             />
           </div>
         ) : (

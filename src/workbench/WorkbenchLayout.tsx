@@ -28,11 +28,11 @@ export interface WorkbenchLayoutProps {
   leftPanelContent?: React.ReactNode;
   rightPanelContent?: React.ReactNode;
   bottomPanelContent?: React.ReactNode;
-  selectedProjectId?: string | null;
-  onSelectProject?: (projectId: string | null) => void;
-  onOpenSearch?: () => void;
-  onOpenSettings?: () => void;
-  db?: TaskPlannerDatabase;
+  selectedProjectId?: string | null | undefined;
+  onSelectProject?: ((projectId: string | null) => void) | undefined;
+  onOpenSearch?: (() => void) | undefined;
+  onOpenSettings?: (() => void) | undefined;
+  db?: TaskPlannerDatabase | undefined;
 }
 
 const DEFAULT_LEFT_ITEMS: ToolWindowItem[] = [
@@ -149,9 +149,9 @@ export function WorkbenchLayout({
                   >
                     {leftPanelContent || (
                       <LeftToolWindow
-                        db={db}
-                        onSelectProject={onSelectProject}
-                        onOpenSettings={onOpenSettings}
+                        {...(db ? { db } : {})}
+                        {...(onSelectProject ? { onSelectProject } : {})}
+                        {...(onOpenSettings ? { onOpenSettings } : {})}
                       />
                     )}
                   </Panel>
@@ -183,7 +183,7 @@ export function WorkbenchLayout({
                       flexDirection: 'column',
                     }}
                   >
-                    {children || <EditorArea db={db} />}
+                    {children || <EditorArea {...(db ? { db } : {})} />}
                   </Panel>
 
                   {bottomActiveId && (
@@ -209,7 +209,7 @@ export function WorkbenchLayout({
                           flexDirection: 'column',
                         }}
                       >
-                        {bottomPanelContent || <BottomToolWindow db={db} />}
+                        {bottomPanelContent || <BottomToolWindow {...(db ? { db } : {})} />}
                       </Panel>
                     </>
                   )}
@@ -261,7 +261,7 @@ export function WorkbenchLayout({
         <SearchEverywhereModal
           open={searchModalOpen}
           onClose={() => setSearchModalOpen(false)}
-          db={db}
+          {...(db ? { db } : {})}
         />
       </div>
     </AntdThemeAdapter>

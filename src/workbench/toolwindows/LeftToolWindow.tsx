@@ -1,11 +1,10 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { Tree, Tooltip, Empty } from 'antd';
 import {
   FolderOutlined,
   FlagOutlined,
   MinusOutlined,
   SettingOutlined,
-  ReloadOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
@@ -15,9 +14,9 @@ import { useLayoutStore } from '../store/layoutStore';
 import type { DataNode } from 'antd/es/tree';
 
 export interface LeftToolWindowProps {
-  db?: TaskPlannerDatabase;
-  onSelectProject?: (projectId: string | null) => void;
-  onOpenSettings?: () => void;
+  db?: TaskPlannerDatabase | undefined;
+  onSelectProject?: ((projectId: string | null) => void) | undefined;
+  onOpenSettings?: (() => void) | undefined;
 }
 
 export function LeftToolWindow({
@@ -38,7 +37,7 @@ export function LeftToolWindow({
       return {
         key: `project:${p.id}`,
         title: p.name,
-        icon: <FolderOutlined style={{ color: p.color || 'var(--accent, #3871e1)' }} />,
+        icon: <FolderOutlined style={{ color: (p as any).color || 'var(--accent, #3871e1)' }} />,
         children: pMilestones.map((m) => ({
           key: `milestone:${m.id}`,
           title: m.name,

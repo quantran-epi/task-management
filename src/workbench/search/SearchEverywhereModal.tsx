@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, type CSSProperties } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   SearchOutlined,
   CheckSquareOutlined,
@@ -9,8 +9,8 @@ import {
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
-import { getAllActions, executeAction, type ActionDefinition } from '../actions/actionRegistry';
-import { useLayoutStore, type EditorViewType } from '../store/layoutStore';
+import { getAllActions, executeAction } from '../actions/actionRegistry';
+import { useLayoutStore } from '../store/layoutStore';
 import { VirtualizedList } from '../virtual/VirtualizedList';
 
 export type SearchTabType = 'all' | 'tasks' | 'projects' | 'docs' | 'actions';
@@ -18,15 +18,15 @@ export type SearchTabType = 'all' | 'tasks' | 'projects' | 'docs' | 'actions';
 export interface SearchEverywhereModalProps {
   open: boolean;
   onClose: () => void;
-  db?: TaskPlannerDatabase;
+  db?: TaskPlannerDatabase | undefined;
 }
 
 interface SearchResultItem {
   id: string;
   category: 'task' | 'project' | 'doc' | 'action';
   title: string;
-  subtitle?: string;
-  shortcut?: string;
+  subtitle?: string | undefined;
+  shortcut?: string | undefined;
   onSelect: () => void;
 }
 
@@ -45,7 +45,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
     async () => {
       if (!open) return [];
       const list = await activeDb.tasks.toArray();
-      return list.filter((t) => !t.deletedAt);
+      return list.filter((t) => !(t as any).deletedAt);
     },
     [open],
     []
@@ -55,7 +55,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
     async () => {
       if (!open) return [];
       const list = await activeDb.projects.toArray();
-      return list.filter((p) => !p.deletedAt);
+      return list.filter((p) => !(p as any).deletedAt);
     },
     [open],
     []
@@ -65,7 +65,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
     async () => {
       if (!open) return [];
       const list = await activeDb.notes.toArray();
-      return list.filter((n) => !n.deletedAt);
+      return list.filter((n) => !(n as any).deletedAt);
     },
     [open],
     []
@@ -107,11 +107,12 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
     // 2. Tasks
     if (activeTab === 'all' || activeTab === 'tasks') {
       for (const task of tasks) {
-        if (!searchKeyword || task.title.toLowerCase().includes(searchKeyword)) {
+        const taskTitle = task.name || 'Untitled Task';
+        if (!searchKeyword || taskTitle.toLowerCase().includes(searchKeyword)) {
           items.push({
             id: `task:${task.id}`,
             category: 'task',
-            title: task.title,
+            title: taskTitle,
             subtitle: task.status ? `Status: ${task.status}` : 'Task',
             onSelect: () => {
               openTab({
@@ -155,16 +156,17 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
     // 4. Docs
     if (activeTab === 'all' || activeTab === 'docs') {
       for (const note of notes) {
-        if (!searchKeyword || note.title.toLowerCase().includes(searchKeyword)) {
+        const noteTitle = note.title || 'Untitled Doc';
+        if (!searchKeyword || noteTitle.toLowerCase().includes(searchKeyword)) {
           items.push({
             id: `doc:${note.id}`,
             category: 'doc',
-            title: note.title || 'Untitled Doc',
+            title: noteTitle,
             subtitle: 'Doc',
             onSelect: () => {
               openTab({
                 id: `note-${note.id}`,
-                title: note.title || 'Doc',
+                title: noteTitle,
                 viewType: 'notes',
                 closable: true,
                 params: { doc: note.id },
