@@ -72,7 +72,7 @@
 - [ ] **EXPUI-02**: System renders OpenIDEA Islands Light palette and tokens with compact light Ant Design adapters (`#3871e1` accent, compact controls).
 - [ ] **EXPUI-03**: User can resize and collapse docking slots (left, right, bottom) and stripes (32px) with persistent layout state surviving reloads.
 - [ ] **EXPUI-04**: User can navigate and manage tabbed views in the center Editor Area (Tasks, Docs, Planner) and access docked tool windows (Project Tree, AI Chat).
-- [ ] **EXPUI-05**: User can invoke Search Everywhere modal via `Double Shift` or `Ctrl+K` to search entities and dispatch actions at 60fps virtualized performance.
+- [x] **EXPUI-05**: User can invoke Search Everywhere modal via `Double Shift` or `Ctrl+K` to search entities and dispatch actions at 60fps virtualized performance.
 
 ## Future Requirements (Deferred)
 
