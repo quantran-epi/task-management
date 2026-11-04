@@ -464,6 +464,45 @@ Plans:
 
 - [x] 25.3-18-PLAN.md — SOLUTION extraction and truncation safety: fence-aware parser, transcript summary removal, four-backtick output contract, context-window forwarding and rejection of length-truncated artifacts (no host completion cap)
 
+
+### Phase 25.4: IntelliJ ExpUI (Light Theme) Workbench Migration (INSERTED)
+
+**Goal:** Chuyển đổi giao diện TaskMate sang phong cách IntelliJ IDEA (ExpUI Islands Light) tương tự OpenIDEA theo mô hình Isolated Shell trên branch riêng `feature/intellij-workbench`. Đạt 60fps, low latency, fast docking/switching; giữ nguyên 100% logic nghiệp vụ, Dexie DB, các services và views hiện có.
+
+**Architecture & Isolation:**
+1. Giữ nguyên business logic: không can thiệp `src/db/*`, `src/services/*`, `src/domain/*`. Các views hiện tại đóng vai trò Plug-in Components cắm vào các slot của Workbench.
+2. Shell mới cách ly: `src/workbench/`, `src/styles/workbench-tokens.css`, entry riêng `src/AppIntelliJ.tsx` (không ghi đè `src/App.tsx`).
+3. Thư viện bổ sung: `react-resizable-panels`, `zustand`, `@tanstack/react-virtual`.
+
+**Requirements:** EXPUI-01, EXPUI-02, EXPUI-03, EXPUI-04, EXPUI-05
+**Depends on:** Isolated shell on branch `feature/intellij-workbench`
+**Success Criteria** (what must be TRUE):
+1. TitleBar tích hợp window controls, quick project switcher, Search Everywhere, mini timer widget.
+2. Tool Window Stripes hẹp 32px ở trái, phải, đáy với badge và phím tắt `Alt+1`..`Alt+5`.
+3. Docking slots / islands (left, right, bottom) resize mượt mà và lưu layout vào `localStorage`.
+4. Editor Area tabbed hiển thị views hiện có (Tasks, Docs, Capacity Planner) bọc bởi `AntdThemeAdapter`.
+5. Search Everywhere popup modal (`Double Shift` / `Ctrl+K`) hỗ trợ tabs All / Tasks / Projects / Docs / Actions.
+6. Centralized Action & Keymap Registry (`src/workbench/actions/`) điều khiển toàn bộ app qua keyboard.
+7. Danh sách dài được ảo hóa bằng `@tanstack/react-virtual`, đạt render 60fps.
+
+**Plans:** 4 plans in 4 waves
+
+Plans:
+
+**Wave 1**
+- [ ] 25.4-01-PLAN.md — Khung Workbench & Light Theme (`tokens.css`, `TitleBar`, `Stripe`, `StatusBar`, `layoutStore.ts` Zustand)
+
+**Wave 2** *(depends on 25.4-01)*
+- [ ] 25.4-02-PLAN.md — Tích hợp Views hiện có vào các Slots (`AntdThemeAdapter`, Left slot, Center Editor Area, Bottom slot)
+
+**Wave 3** *(depends on 25.4-02)*
+- [ ] 25.4-03-PLAN.md — Search Everywhere (`Double Shift` / `Ctrl+K`) & Centralized Keymaps Registry
+
+**Wave 4** *(depends on 25.4-03)*
+- [ ] 25.4-04-PLAN.md — Tối ưu hiệu năng ảo hóa (@tanstack/react-virtual) & Switchover test (`AppIntelliJ.tsx`)
+
+---
+
 ## Milestone: v1.3 SDLC Closed-Loop Engine & Repository Autonomy
 
 ### Phase 26: SDLC Prompt Grounding & Tool-Use Policy

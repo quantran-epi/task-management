@@ -66,6 +66,14 @@
 - [ ] **SDLC-OBS-01**: A developer-facing view shows exactly what the SDLC composer emitted for the current step (which segments, how long each is, which tools were offered, which convention sources were included), so prompt changes are inspectable without reading source.
 - [ ] **SDLC-OBS-02**: The current prompt contract for every SDLC step and artifact intent is documented in one file that matches what the composer emits, with a test that fails when they drift.
 
+### IntelliJ ExpUI Workbench Migration (Phase 25.4 INSERTED)
+
+- [ ] **EXPUI-01**: User can boot TaskMate in IntelliJ ExpUI Islands Light workbench via `src/AppIntelliJ.tsx` side-by-side with zero changes to `src/db/*`, `src/services/*`, or `src/domain/*`.
+- [ ] **EXPUI-02**: System renders OpenIDEA Islands Light palette and tokens with compact light Ant Design adapters (`#3871e1` accent, compact controls).
+- [ ] **EXPUI-03**: User can resize and collapse docking slots (left, right, bottom) and stripes (32px) with persistent layout state surviving reloads.
+- [ ] **EXPUI-04**: User can navigate and manage tabbed views in the center Editor Area (Tasks, Docs, Planner) and access docked tool windows (Project Tree, AI Chat).
+- [ ] **EXPUI-05**: User can invoke Search Everywhere modal via `Double Shift` or `Ctrl+K` to search entities and dispatch actions at 60fps virtualized performance.
+
 ## Future Requirements (Deferred)
 
 - **FUTR-SDLC-01**: Multi-agent coding runs (several worktrees in parallel) — needs reliability evidence from single-run first.
@@ -125,6 +133,12 @@
 | SDLC-RES-06 | Phase 32 | Pending |
 | SDLC-OBS-01 | Phase 33 | Pending |
 | SDLC-OBS-02 | Phase 33 | Pending |
+
+| EXPUI-01 | Phase 25.4 | Pending |
+| EXPUI-02 | Phase 25.4 | Pending |
+| EXPUI-03 | Phase 25.4 | Pending |
+| EXPUI-04 | Phase 25.4 | Pending |
+| EXPUI-05 | Phase 25.4 | Pending |
 
 **Coverage:**
 
