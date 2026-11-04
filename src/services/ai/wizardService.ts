@@ -58,6 +58,7 @@ export interface WizardEvidenceDeps {
     query: string;
     resolvedSetIds: readonly string[];
     prioritizedDocIds?: readonly string[];
+    signal?: AbortSignal;
   }) => Promise<LocalGroundedResult>;
   retrieveRemote?: (input: WizardEvidenceInput, signal: AbortSignal) => Promise<WizardEvidenceItem[]>;
   retrieveMcp?: (input: WizardEvidenceInput, signal: AbortSignal) => Promise<WizardEvidenceItem[]>;
@@ -167,11 +168,18 @@ export async function collectWizardEvidence(
     return { items: [], coverage: 'EMPTY_SCOPE', degraded: [] };
   }
 
-  const local = await deps.runLocalBm25({
-    query: input.query,
-    resolvedSetIds: input.resolvedSetIds,
-    ...(input.prioritizedDocIds ? { prioritizedDocIds: input.prioritizedDocIds } : {}),
-  });
+  let local: LocalGroundedResult;
+  try {
+    local = await deps.runLocalBm25({
+      query: input.query,
+      resolvedSetIds: input.resolvedSetIds,
+      ...(input.prioritizedDocIds ? { prioritizedDocIds: input.prioritizedDocIds } : {}),
+      signal,
+    });
+  } catch (error) {
+    throwIfCancelled(signal);
+    throw error;
+  }
   throwIfCancelled(signal);
   const items = toLocalEvidence(local);
   const degraded: WizardDegradedCode[] = [];
