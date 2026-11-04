@@ -61,4 +61,15 @@ describe('WorkbenchLayout Integration', () => {
 
     expect(screen.getByTestId('mock-right-toolwindow')).toBeDefined();
   });
+
+  it('opens SearchEverywhereModal when search button in TitleBar is clicked', () => {
+    render(<WorkbenchLayout />);
+
+    expect(screen.queryByRole('dialog', { name: 'Search Everywhere' })).toBeNull();
+
+    const searchBtn = screen.getByRole('button', { name: /Search Everywhere/i });
+    fireEvent.click(searchBtn);
+
+    expect(screen.getByRole('dialog', { name: 'Search Everywhere' })).toBeDefined();
+  });
 });

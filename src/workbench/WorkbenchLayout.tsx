@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels';
 import { AntdThemeAdapter } from './AntdThemeAdapter';
 import { TitleBar } from './TitleBar';
@@ -9,6 +9,9 @@ import { LeftToolWindow } from './toolwindows/LeftToolWindow';
 import { BottomToolWindow } from './toolwindows/BottomToolWindow';
 import { RightToolWindow } from './toolwindows/RightToolWindow';
 import { useLayoutStore } from './store/layoutStore';
+import { useGlobalKeymap } from './hooks/useGlobalKeymap';
+import { useDoubleShift } from './hooks/useDoubleShift';
+import { SearchEverywhereModal } from './search/SearchEverywhereModal';
 import type { TaskPlannerDatabase } from '../db';
 import {
   ProjectOutlined,
@@ -58,6 +61,31 @@ export function WorkbenchLayout({
   onOpenSettings,
   db,
 }: WorkbenchLayoutProps) {
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
+
+  // Mount global keymap listener
+  useGlobalKeymap();
+
+  // Mount double-shift detector
+  const handleDoubleShift = useCallback(() => {
+    setSearchModalOpen(true);
+  }, []);
+  useDoubleShift(handleDoubleShift);
+
+  // Listen to custom events from actionRegistry
+  useEffect(() => {
+    const handleOpenSearch = () => setSearchModalOpen(true);
+    window.addEventListener('taskmate:open-search-everywhere', handleOpenSearch);
+    return () => {
+      window.removeEventListener('taskmate:open-search-everywhere', handleOpenSearch);
+    };
+  }, []);
+
+  const handleOpenSearchUnified = useCallback(() => {
+    setSearchModalOpen(true);
+    onOpenSearch?.();
+  }, [onOpenSearch]);
+
   const leftActiveId = useLayoutStore((s) => s.leftActiveId);
   const rightActiveId = useLayoutStore((s) => s.rightActiveId);
   const bottomActiveId = useLayoutStore((s) => s.bottomActiveId);
@@ -88,7 +116,7 @@ export function WorkbenchLayout({
         <TitleBar
           selectedProjectId={selectedProjectId}
           onSelectProject={onSelectProject}
-          onOpenSearch={onOpenSearch}
+          onOpenSearch={handleOpenSearchUnified}
         />
 
         {/* Middle Body with Stripes and Splitters */}
@@ -228,6 +256,13 @@ export function WorkbenchLayout({
 
         {/* Bottom Status Bar */}
         <StatusBar />
+
+        {/* Search Everywhere Floating Modal */}
+        <SearchEverywhereModal
+          open={searchModalOpen}
+          onClose={() => setSearchModalOpen(false)}
+          db={db}
+        />
       </div>
     </AntdThemeAdapter>
   );
