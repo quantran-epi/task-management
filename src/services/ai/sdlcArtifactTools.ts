@@ -125,7 +125,9 @@ function isRefusal(result: ArtifactToolResult): result is ArtifactToolRefusal {
 const kindSchema = z.enum(ARTIFACT_TOOL_KINDS);
 
 const getArtifactArgsSchema = z.object({
-  kind: kindSchema,
+  // Kept loose so an unsupported-but-present kind yields the actionable
+  // UNSUPPORTED_KIND refusal rather than a generic argument error.
+  kind: z.string({ message: 'kind phải là chuỗi' }),
 });
 
 const patchArgsSchema = z.object({

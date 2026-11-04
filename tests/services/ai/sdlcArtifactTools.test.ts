@@ -294,4 +294,175 @@ describe('sdlc artifact tools (SDLC-ART-01, SDLC-ART-02)', () => {
     expect(refusal.refused).toBe(true);
     expect(refusal.code).toBe('ARTIFACT_SCOPE_REQUIRED');
   });
+
+  it('allows exactly 120 supplied lines and refuses 121 with the actual count and cap', async () => {
+    const baseHash = await defaultSha256(DRAFT.trim());
+    const patchArgs = (lines: number) => ({
+      kind: 'SOLUTION',
+      sectionId: '1.2',
+      expectedHeading: 'Kiến trúc',
+      baseHash,
+      operation: 'append',
+      newContent: Array.from({ length: lines }, (_, index) => `dòng thêm ${index}`).join('\n'),
+    });
+
+    const allowed = await callTool(db, 'patch_artifact_section', patchArgs(120), makeContext());
+    expect(allowed.refused).toBeUndefined();
+    expect(allowed.addedLines).toBe(120);
+
+    const refused = await callTool(db, 'patch_artifact_section', patchArgs(121), makeContext());
+    expect(refused.refused).toBe(true);
+    expect(refused.code).toBe('PATCH_TOO_LARGE');
+    expect(refused.cap).toBe(120);
+    expect(refused.message).toContain('121');
+  });
+
+  it('allows a nonempty body to be replaced by empty content (valid deletion)', async () => {
+    const proposal = await callTool(
+      db,
+      'patch_artifact_section',
+      {
+        kind: 'SOLUTION',
+        sectionId: '1.2',
+        expectedHeading: 'Kiến trúc',
+        baseHash: await defaultSha256(DRAFT.trim()),
+        operation: 'replace',
+        newContent: '',
+      },
+      makeContext()
+    );
+    expect(proposal.refused).toBeUndefined();
+    expect(proposal.removedLines).toBe(1);
+    expect(proposal.addedLines).toBe(0);
+    expect(proposal.patchedMarkdown).not.toContain('Nội dung kiến trúc.');
+  });
+
+  it('preserves unaffected text, Unicode and final content across an append', async () => {
+    const unicodeDraft = ['# SOLUTION', '', '## Kiến trúc', '', 'Nội dung tiếng Việt 🚀.'].join('\n');
+    await seedWorkflow(db, { committed: unicodeDraft });
+    const context = makeContext({ getDraft: () => unicodeDraft });
+
+    const proposal = await callTool(
+      db,
+      'patch_artifact_section',
+      {
+        kind: 'SOLUTION',
+        sectionId: '1.1',
+        expectedHeading: 'Kiến trúc',
+        baseHash: await defaultSha256(unicodeDraft.trim()),
+        operation: 'append',
+        newContent: 'Bổ sung: dấu tiếng Việt ắ ộ ữ và emoji 🎯.',
+      },
+      context
+    );
+
+    expect(proposal.refused).toBeUndefined();
+    expect(proposal.patchedMarkdown.startsWith(unicodeDraft)).toBe(true);
+    expect(proposal.patchedMarkdown).toContain('Nội dung tiếng Việt 🚀.');
+    expect(proposal.patchedMarkdown).toContain('Bổ sung: dấu tiếng Việt ắ ộ ữ và emoji 🎯.');
+  });
+
+  it('returns typed refusals with the current index for renamed, shifted, missing and empty targets', async () => {
+    const baseHash = await defaultSha256(DRAFT.trim());
+    const renamed = await callTool(
+      db,
+      'patch_artifact_section',
+      { kind: 'SOLUTION', sectionId: '1.2', expectedHeading: 'Kiến trúc cũ', baseHash, operation: 'append', newContent: 'x' },
+      makeContext()
+    );
+    expect(renamed.code).toBe('SECTION_DRIFT');
+    expect(renamed.sectionIndex.map((section: any) => section.id)).toEqual(['1', '1.1', '1.2']);
+
+    const shifted = await callTool(
+      db,
+      'patch_artifact_section',
+      { kind: 'SOLUTION', sectionId: '9.9', expectedHeading: 'Kiến trúc', baseHash, operation: 'append', newContent: 'x' },
+      makeContext()
+    );
+    expect(shifted.code).toBe('SECTION_NOT_FOUND');
+    expect(shifted.sectionIndex).toHaveLength(3);
+
+    const emptyBodyDraft = ['# SOLUTION', '', '## Kiến trúc', '', '## Ghi chú', '', 'nội dung'].join('\n');
+    await seedWorkflow(db, { committed: emptyBodyDraft });
+    const empty = await callTool(
+      db,
+      'patch_artifact_section',
+      {
+        kind: 'SOLUTION',
+        sectionId: '1.1',
+        expectedHeading: 'Kiến trúc',
+        baseHash: await defaultSha256(emptyBodyDraft.trim()),
+        operation: 'append',
+        newContent: 'x',
+      },
+      makeContext({ getDraft: () => emptyBodyDraft })
+    );
+    expect(empty.code).toBe('SECTION_EMPTY');
+    expect(empty.sectionIndex.map((section: any) => section.id)).toEqual(['1', '1.1', '1.2']);
+  });
+
+  it('refuses stale baseHash, missing arguments and unsupported kinds without throwing', async () => {
+    const stale = await callTool(
+      db,
+      'patch_artifact_section',
+      {
+        kind: 'SOLUTION',
+        sectionId: '1.2',
+        expectedHeading: 'Kiến trúc',
+        baseHash: 'a'.repeat(64),
+        operation: 'append',
+        newContent: 'x',
+      },
+      makeContext()
+    );
+    expect(stale.code).toBe('SECTION_DRIFT');
+
+    const missing = await callTool(
+      db,
+      'patch_artifact_section',
+      { kind: 'SOLUTION', sectionId: '1.2', expectedHeading: 'Kiến trúc' },
+      makeContext()
+    );
+    expect(missing.code).toBe('INVALID_ARGUMENTS');
+
+    const unsupported = await callTool(db, 'get_artifact', { kind: 'PL01' }, makeContext());
+    expect(unsupported.code).toBe('UNSUPPORTED_KIND');
+  });
+
+  it('refuses an unchanged append with NO_CHANGES instead of an empty approval card', async () => {
+    const unchanged = await callTool(
+      db,
+      'patch_artifact_section',
+      {
+        kind: 'SOLUTION',
+        sectionId: '1.2',
+        expectedHeading: 'Kiến trúc',
+        baseHash: await defaultSha256(DRAFT.trim()),
+        operation: 'replace',
+        newContent: 'Nội dung kiến trúc.',
+      },
+      makeContext()
+    );
+    expect(unchanged.code).toBe('NO_CHANGES');
+  });
+
+  it('preserves CRLF documents when appending a section line', async () => {
+    const crlfDraft = '# SOLUTION\r\n\r\n## Kiến trúc\r\n\r\nNội dung.';
+    await seedWorkflow(db, { committed: crlfDraft });
+    const proposal = await callTool(
+      db,
+      'patch_artifact_section',
+      {
+        kind: 'SOLUTION',
+        sectionId: '1.1',
+        expectedHeading: 'Kiến trúc',
+        baseHash: await defaultSha256(crlfDraft.trim()),
+        operation: 'append',
+        newContent: 'Dòng CRLF mới.',
+      },
+      makeContext({ getDraft: () => crlfDraft })
+    );
+    expect(proposal.diffText).toContain('\r\n');
+    expect(proposal.patchedMarkdown).not.toContain('\n\n\n');
+  });
 });
