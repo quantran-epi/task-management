@@ -72,6 +72,7 @@ Progress: [░░░░░░░░░░] 0%
 
 | Phase | Plan | Duration | Notes |
 |-------|------|----------|-------|
+| Phase 25.4 P01 | 15 min | 3 tasks | 7 files |
 | Phase 25.3 P13 | 30 min | 3 tasks | 6 files |
 | Phase 25.3 P16 | 15 min | 2 tasks | 2 files |
 
@@ -79,6 +80,8 @@ Progress: [░░░░░░░░░░] 0%
 
 ### Decisions
 
+- [Phase 25.4 P01]: Adopted OpenIDEA Islands Light design tokens with compact Ant Design 6 config (accent `#3871e1`, border radius 3px, controlHeight 26px).
+- [Phase 25.4 P01]: Persisted layout store using localStorage key `taskmate_workbench_layout_v1` with validation fallback on corrupted shape.
 - [Phase 25.3]: Keep solution analysis explicit-only at 150ms in 25.3-13; automatic intake transition remains in 25.3-14.
 - [Phase 25.3]: Keep local isApproved for immediate save feedback; synchronize from approvedAt changes only.
 - [Phase 25.3]: Keep multi-tool activity mounted and capped at 160px in both states; zero/single-tool behavior unchanged.
