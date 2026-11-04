@@ -14,7 +14,7 @@ Two findings dominate the plan:
 
 2. **Tools cannot reach the artifacts they operate on without a scope bridge.** Tool execution inside `chatTurnRuntime` is hardwired to `dispatchAiToolCall(name, args, db, signal, { allowMutation })` [VERIFIED: src/components/ai/runtime/chatTurnRuntime.ts:265-270]; `executeAiTool` only receives `(name, args, db, signal)` — no host context. Meanwhile the committed artifact content lives in `db.settings` under `workflowStorageKey(projectId, crId)` [VERIFIED: src/services/wizard/workflowCoordinator.ts:34], the SOLUTION *draft* lives in `db.settings` under `draftSettingKey(projectId, crId)` [VERIFIED: src/views/ProjectSdlcView.tsx:46, 439-446], but the **PL03B/PL07/CAB drafts live only in React state** in `ProjectSdlcView` (`setDraftPl03b` etc., [VERIFIED: src/views/ProjectSdlcView.tsx:471-479]) and are never persisted. A tool that reads only `db` will see stale or empty PL03B/PL07/CAB text. The plan needs a small per-scope artifact-tool context (set by the host when a turn starts, carrying `projectId/crId/stepId` and draft getters) — or, equivalently, persisting those drafts like SOLUTION's.
 
-Third finding (gap to resolve in planning): **the existing staleness detector cannot mark a step stale from a draft-only edit.** `detectWorkflowStaleness` compares committed artifact hashes in `sourceHashes` [VERIFIED: src/services/wizard/stalenessDetector.ts:19-97]; approving a patch updates the draft and never commits (D-04/UI-27-03), so `state.artifacts[kind].hash` is unchanged and nothing trips. SDLC-ART-04's "marks the step stale via the existing revision/staleness rules" therefore needs an explicit, small mechanism — options in Open Questions (Q1).
+Third finding (RESOLVED by authorized planning defaults): **the existing staleness detector cannot mark a step stale from a draft-only edit.** `detectWorkflowStaleness` compares committed artifact hashes in `sourceHashes` [VERIFIED: src/services/wizard/stalenessDetector.ts:19-97]; approving a patch changes no committed hash. SDLC-ART-04 uses a pure, read-only draft-hash divergence report beside that detector, merged into the existing stale banner without workflow-state mutation. Hash inputs use `markdown.trim()` consistently with coordinator call sites; editor source text remains unchanged by normalization. See resolved Q1.
 
 **Primary recommendation:** Register `get_artifact` (read-only) and `patch_artifact_section` (in `MUTATION_TOOLS`) in `aiTools.ts`; compute the section diff inside a new async `describeToolMutationWithContext` case fed by a per-scope tool context; render the diff card via an extended `ChatTurnApprovalInfo` snapshot; on approve, the host applies the cached patched Markdown through the existing `saveDraft`/`setDraftPl03b`-family handlers and a draft-hash divergence check provides the staleness marker. Generate diffs with a small hand-rolled LCS line-diff utility emitting unified-diff-shaped text — no new npm dependency.
 
@@ -58,8 +58,8 @@ None — discussion stayed within phase scope. Query-only retrieval, fs-gw, conv
 |----|-------------|------------------|
 | SDLC-ART-01 | `get_artifact` returns kind, version, approval state, full Markdown, stable section index | New tool in `AI_DATABASE_TOOLS` + `executeAiTool` case; section index from new Markdown-heading util (D-05); data from per-scope tool context + `db.settings` workflow/draft keys; approval state from `SdlcArtifactRef.approvedAt` [VERIFIED: src/services/wizard/workflowSchemas.ts:48] |
 | SDLC-ART-02 | `patch_artifact_section` takes target section + text, returns unified diff + resulting Markdown, no editor write | Diff computed in `describeToolMutationWithContext` case (pre-execution approval model); hand-rolled LCS diff generator; tool never writes editor — approve path in host applies draft |
-| SDLC-ART-03 | Approval card per patch result; approve/reject; decision recorded in transcript | Extend `ChatTurnApprovalInfo`/`pendingApproval` snapshot with patch payload; new `ArtifactDiffApprovalCard` (UI-SPEC §1); decision record kept in host runtime state (survives re-render per CONTEXT discretion) |
-| SDLC-ART-04 | Approve writes editor draft, marks step stale via existing rules, never commits | Approve interception in `StepChatPanel` wraps `turn.resolveApproval` and calls existing handlers (`saveDraft` [VERIFIED: src/views/ProjectSdlcView.tsx:439-446], `setDraftPl03b/Pl07/Cab` [VERIFIED: src/views/ProjectSdlcView.tsx:471-479]); staleness needs a draft-hash divergence mechanism (Open Question Q1) — never `commitRevision`/`commitSolution` |
+| SDLC-ART-03 | Approval card per patch result; approve/reject; decision recorded in transcript | Extend `ChatTurnApprovalInfo`/`pendingApproval` snapshot with patch payload; new `ArtifactDiffApprovalCard` (UI-SPEC §1); pending proposal kept in host runtime state; explicit approve/reject decision persisted as metadata-only transcript row, excluded from LLM history (resolved Q3) |
+| SDLC-ART-04 | Approve writes editor draft, marks step stale via existing rules, never commits | Approve interception in `StepChatPanel` wraps `turn.resolveApproval` and calls existing handlers (`saveDraft` [VERIFIED: src/views/ProjectSdlcView.tsx:439-446], `setDraftPl03b/Pl07/Cab` [VERIFIED: src/views/ProjectSdlcView.tsx:471-479]); staleness uses the authorized pure draft-hash divergence report beside the existing detector (resolved Q1) — never `commitRevision`/`commitSolution` |
 | SDLC-ART-05 | "Add this content" routes to get + patch with bounded diff | `looksLikeArtifactRequest` interception in `sendMessage` [VERIFIED: src/components/sdlc/chat/StepChatPanel.tsx:338-347] must distinguish add/patch requests from full-generation requests; composer tool policy advertises artifact tools; D-09 line cap enforced in tool; regression test with scripted tool calls |
 | SDLC-ART-06 | Refused in preview/historical, allowed in active CR, blocked without prerequisite | `readOnly` prop already flows ProjectSdlcView → SdlcWorkspace → StepChatPanel [VERIFIED: src/views/ProjectSdlcView.tsx:761]; tool-level structured refusals per D-10; prerequisite markers via existing `ARTIFACT_PREREQUISITES` + `hasGroundingSource` pattern [VERIFIED: src/components/sdlc/chat/StepChatPanel.tsx:77-81, 319-324] |
 </phase_requirements>
@@ -238,12 +238,12 @@ src/
 ### Pitfall 3: Analysis Mode (default ON) hides the patch tool
 **What goes wrong:** `useStepChatToolbox` defaults `analysisMode` to `true` [VERIFIED: src/components/sdlc/chat/useStepChatToolbox.ts:35], and `getToolsForTurn` filters mutation tools out of the payload in analysis mode [VERIFIED: src/services/ai/chatTurnTools.ts:14-31]. With `patch_artifact_section` in `MUTATION_TOOLS`, the model never sees it in a default step chat.
 **Why it happens:** Analysis mode is a deliberate read-only default for step chats.
-**How to avoid:** Decide explicitly (planner decision, user confirm if needed): (a) keep the mutation classification and let analysis mode refuse via the existing structured `ANALYSIS_MODE_CANCELLATION` [VERIFIED: src/components/ai/runtime/chatTurnRuntime.ts:126-129, 317-320] — D-10-compliant refusal, but patch is unusable until the user toggles analysis mode off; or (b) exempt the artifact patch tool from the analysis filter and rely on the tool's own readOnly/prerequisite guards. Option (a) preserves the read-only contract exactly; recommend (a) plus prompt/tool-policy copy telling the model to ask the user to disable Analysis Mode. `get_artifact` is read-only and unaffected.
+**How to avoid (RESOLVED Q2):** Keep mutation classification and existing structured `ANALYSIS_MODE_CANCELLATION` [VERIFIED: src/components/ai/runtime/chatTurnRuntime.ts:126-129, 317-320]. Analysis Mode ON filters patch_artifact_section from payload; unsolicited patch calls are cancelled. Prompt/refusal copy tells the user to disable Analysis Mode for edits. User authorized this choice; do not exempt the patch tool or request confirmation again. `get_artifact` remains read-only.
 **Warning signs:** "Tool not found in payload" behavior; model apologizing it cannot edit.
 
 ### Pitfall 4: Draft-only edit does not trip the existing staleness detector
 **What goes wrong:** SDLC-ART-04 expects "marks the step stale", but `detectWorkflowStaleness` only compares *committed* artifact hashes in `sourceHashes` [VERIFIED: src/services/wizard/stalenessDetector.ts:19-97]; a draft edit changes no committed hash, so no step goes stale and the banner never shows.
-**How to avoid:** See Open Question Q1 — needs an explicit mechanism (draft-hash divergence indicator, or a coordinator hook) rather than assuming the detector fires.
+**How to avoid (RESOLVED Q1):** Compute a pure draft-hash divergence report beside detectWorkflowStaleness and merge it into the existing stale banner. Preserve all committed workflow state; do not add a coordinator write hook or assume draft-only changes trigger committed-hash detection.
 **Warning signs:** Approve works but no stale indication anywhere; requirement 4 of the phase success criteria fails UAT.
 
 ### Pitfall 5: `#` inside code fences counted as a heading
@@ -366,31 +366,27 @@ if (added + removed > PATCH_LINE_CAP) {
 
 ## Runtime State Inventory
 
-Omitted — this is a feature phase, not a rename/refactor/migration. No stored-name changes. (Runtime state the phase *creates*: pending patch cards and decision records live in host runtime state per CONTEXT discretion; nothing persists to IndexedDB beyond what existing draft/artifact-event paths already write.)
+No stored-name changes or new persisted schema. Pending patch cards, diff bodies, and proposal state live only in scoped host runtime state. Explicit approve/reject decisions are durable metadata-only transcript rows using existing ChatMessage shape; they survive completed turns and remount and are excluded from LLM history. Existing draft persistence stays unchanged except atomic SOLUTION draft-plus-decision application. This supersedes the earlier runtime-only decision recommendation.
 
 ## Assumptions Log
 
 | # | Claim | Section | Risk if Wrong |
 |---|-------|---------|---------------|
 | A1 | `diff` (jsdiff) is the well-known package but is unverified in this environment (seam lookup failed); recommended path avoids it entirely | Standard Stack / Package Audit | If planner chooses jsdiff and it installs fine, no harm — but the checkpoint must run first |
-| A2 | Runtime-state decision records (not persisted chat rows) satisfy UI-27-09 "survive re-render" | Architecture / SDLC-ART-03 | If the user expects decisions to survive app reload, records must persist (e.g., extend `ChatMessage.artifactEvent`-style metadata) — planner should confirm; persisted rows would also need exclusion from turn history (StepChatPanel filters `artifactEvent` rows at line 227 [VERIFIED]) |
+| A2 — RESOLVED | Pending proposals remain runtime-only; approve/reject decisions are durable metadata-only transcript rows, not pending state | Architecture / SDLC-ART-03 | Earlier runtime-only decision recommendation is superseded. Existing ChatMessage system rows retain decisions through completed turns and remount; filter these records from LLM history and ordinary assistant rendering. No pending diff bodies persist. |
 | A3 | `PATCH_LINE_CAP = 120` is "well inside" for a small addition | Code Examples / D-09 | Purely discretionary; too low frustrates legitimate section rewrites |
 | A4 | Model-under-test reliably emits `get_artifact` then `patch_artifact_section` for add-requests given the tool-policy + few-shot layers (SDLC-ART-05) | Intent routing | If routing is unreliable, the 27-04 regression test needs a scripted-model harness rather than a live-model assertion — plan the test as scripted tool calls, not live model behavior |
 | A5 | Extending `ChatTurnApprovalInfo` / `AiChatTurnSnapshot.pendingApproval` with an optional patch payload is a compatible, additive change to both hosts (drawer host ignores it) | Architecture Patterns | If the drawer host type-checks against the exact shape, additive optional fields are safe; verify with `tests/ai/AIChatDrawer.test.tsx` |
 
-## Open Questions
+## Open Questions — RESOLVED
 
-1. **How exactly does approve "mark the step stale" without committing (SDLC-ART-04)?**
-   - What we know: `detectWorkflowStaleness` only fires on committed-hash divergence [VERIFIED: src/services/wizard/stalenessDetector.ts:19-97]; `commitRevision`/`commitSolution` are forbidden on the approve path; SOLUTION draft is persisted in `db.settings` separate from `workflowState`.
-   - What's unclear: which mechanism the user intends — (a) a draft-divergence indicator (draft hash ≠ committed `artifacts[kind].hash` → step shows stale banner/flag, reusing `detectWorkflowStaleness`'s report shape), or (b) extending the coordinator with a non-committing `applyDraftRevision(kind, markdown)` that updates `artifacts[kind].content/hash` while preserving `version` (changes hash semantics; affects `sourceHashes` checks downstream — riskier), or (c) something else.
-   - Recommendation: option (a) — read-only divergence check computed where the banner renders (or a tiny helper beside `detectWorkflowStaleness`); no workflow-state mutation, no version ambiguity, fully testable. Confirm with user during planning.
+User authorized the chosen defaults; no further confirmation required. No unresolved questions remain.
 
-2. **Analysis Mode vs patch tool availability (Pitfall 3).**
-   - What we know: default analysis mode filters mutation tools; both refusal paths are D-10-compliant.
-   - Recommendation: option (a) — keep mutation classification; analysis mode refuses with the existing structured cancellation; tool policy copy tells the model to ask the user to disable Analysis Mode for edits. Confirm in planning.
+1. **RESOLVED — Draft-only staleness (SDLC-ART-04).** Add a pure draft-hash divergence check beside `detectWorkflowStaleness`, returning its report shape and merged into the existing banner. Hash with `defaultSha256(markdown.trim())`, matching coordinator call-site normalization. Mark the owning step without changing workflow state, committed content/hash, versions, sourceHashes, or approvedAt. Do not call commitRevision/commitSolution to create a stale signal. Planned in 27-03.
 
-3. **Persist decision records or runtime-only?** (A2)
-   - Recommendation: runtime-only first (matches toolEvents pattern, zero schema change); revisit if the user wants decisions across reloads.
+2. **RESOLVED — Analysis Mode and patch availability.** Keep `patch_artifact_section` classified as mutation. Analysis Mode ON filters it from the payload; unsolicited calls retain the existing structured read-only cancellation. Prompt/refusal copy explains that the user must disable Analysis Mode to request edits. Do not exempt artifact patches from the guard. Planned in 27-01 runtime guard, 27-04 payload-aware policy, and 27-05 payload filtering tests.
+
+3. **RESOLVED — Pending proposals versus decisions (corrects A2).** Pending proposals, diff bodies, and per-card runtime state remain runtime-only and are never persisted. Explicit approve/reject decisions MUST be durable transcript records that survive completed turns, re-render, and remount. Use existing ChatMessage system rows with stable decision identity and metadata-only content; exclude them from assistant output and LLM history. SOLUTION draft and approved decision are written atomically; reject records only its decision. No new persisted schema or pending-body storage. Planned in 27-02 and 27-03.
 
 ## Environment Availability
 
@@ -496,7 +492,7 @@ Omitted — this is a feature phase, not a rename/refactor/migration. No stored-
 - Standard stack / no-new-deps: HIGH — every seam verified by direct file read; diff generation is a new pure util
 - Architecture (describe-time approval + scope bridge): HIGH for mechanics (verified code paths); the *choice* of bridge is a recommendation, flagged for planner
 - Pitfalls: HIGH — each is grounded in a specific verified code constraint
-- ART-04 staleness mechanism: MEDIUM — gap identified; needs planner/user decision (Q1)
+- ART-04 staleness mechanism: HIGH for selected contract — user authorized pure read-only draft divergence (resolved Q1); implementation remains subject to owning-step banner and unchanged-workflow tests.
 
 **Research date:** 2026-11-04
 **Valid until:** 2026-12-04 (stable — internal code seams; re-verify if `chatTurnRuntime.ts`/`aiTools.ts` are refactored before planning)
