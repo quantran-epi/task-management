@@ -30,11 +30,12 @@ const OTHER_DRAFT = [
 
 async function seedWorkflow(
   db: TaskPlannerDatabase,
-  options: { projectId?: string; crId?: string; markdown?: string } = {}
+  options: { projectId?: string; crId?: string; markdown?: string; committed?: string } = {}
 ): Promise<void> {
   const projectId = options.projectId ?? PROJECT_ID;
   const crId = options.crId ?? 'cr-active';
   const markdown = options.markdown ?? DRAFT;
+  const committed = options.committed ?? markdown;
   const timestamp = '2026-11-04T00:00:00.000Z';
   const state: SdlcWorkflowState = {
     schemaVersion: 1,
@@ -53,9 +54,9 @@ async function seedWorkflow(
       solution: {
         kind: 'SOLUTION',
         version: 3,
-        hash: await defaultSha256(markdown.trim()),
+        hash: await defaultSha256(committed.trim()),
         title: 'SOLUTION.md — v3',
-        content: markdown,
+        content: committed,
         sourceHashes: [],
         approvedAt: timestamp,
         updatedAt: timestamp,
@@ -123,7 +124,7 @@ describe('sdlc artifact tools (SDLC-ART-01, SDLC-ART-02)', () => {
       kind: 'SOLUTION',
       version: 3,
       approvedAt: '2026-11-04T00:00:00.000Z',
-      approvalState: 'unapproved',
+      approvalState: 'approved',
       markdown: DRAFT,
     });
     expect(snapshot.baseHash).toBe(await defaultSha256(DRAFT.trim()));
@@ -205,6 +206,87 @@ describe('sdlc artifact tools (SDLC-ART-01, SDLC-ART-02)', () => {
     expect(a.markdown).toBe(DRAFT);
     expect(b.markdown).toBe(OTHER_DRAFT);
     expect(a.baseHash).not.toBe(b.baseHash);
+  });
+
+  it('marks a diverging draft unapproved while keeping committed version metadata truthful', async () => {
+    const changedDraft = `${DRAFT}\n\nDòng nháp chưa duyệt.`;
+    const snapshot = await callTool(
+      db,
+      'get_artifact',
+      { kind: 'SOLUTION' },
+      makeContext({ getDraft: () => changedDraft })
+    );
+
+    expect(snapshot.markdown).toBe(changedDraft);
+    expect(snapshot.version).toBe(3);
+    expect(snapshot.approvedAt).toBe('2026-11-04T00:00:00.000Z');
+    expect(snapshot.approvalState).toBe('unapproved');
+    expect(snapshot.baseHash).toBe(await defaultSha256(changedDraft.trim()));
+  });
+
+  it('falls back to committed content for an undefined draft and never invents a version bump', async () => {
+    await seedWorkflow(db, { committed: DRAFT });
+    const snapshot = await callTool(
+      db,
+      'get_artifact',
+      { kind: 'SOLUTION' },
+      makeContext({ getDraft: () => undefined })
+    );
+
+    expect(snapshot.markdown).toBe(DRAFT);
+    expect(snapshot.version).toBe(3);
+    expect(snapshot.approvalState).toBe('approved');
+  });
+
+  it('treats an empty-string draft as a real draft, not a fallback to committed content', async () => {
+    const snapshot = await callTool(
+      db,
+      'get_artifact',
+      { kind: 'SOLUTION' },
+      makeContext({ getDraft: () => '' })
+    );
+
+    expect(snapshot.markdown).toBe('');
+    expect(snapshot.baseHash).toBe(await defaultSha256(''));
+    expect(snapshot.sectionIndex).toEqual([]);
+    expect(snapshot.approvalState).toBe('unapproved');
+  });
+
+  it('refuses with ARTIFACT_NOT_FOUND when no committed artifact and no draft exist', async () => {
+    const refusal = await callTool(
+      db,
+      'get_artifact',
+      { kind: 'CAB' },
+      makeContext({ getDraft: () => undefined })
+    );
+
+    expect(refusal.refused).toBe(true);
+    expect(refusal.code).toBe('ARTIFACT_NOT_FOUND');
+  });
+
+  it('refuses read-only and inactive scopes before touching the artifact', async () => {
+    const readOnly = await callTool(
+      db,
+      'get_artifact',
+      { kind: 'SOLUTION' },
+      makeContext({ getAccess: () => ({ readOnly: true, crActive: true, scopeValid: true }) })
+    );
+    expect(readOnly.code).toBe('READ_ONLY');
+
+    const inactive = await callTool(
+      db,
+      'patch_artifact_section',
+      {
+        kind: 'SOLUTION',
+        sectionId: '1.2',
+        expectedHeading: 'Kiến trúc',
+        baseHash: await defaultSha256(DRAFT.trim()),
+        operation: 'append',
+        newContent: 'x',
+      },
+      makeContext({ getAccess: () => ({ readOnly: false, crActive: false, scopeValid: true }) })
+    );
+    expect(inactive.code).toBe('CR_NOT_ACTIVE');
   });
 
   it('refuses without trusted context instead of reading a singleton scope', async () => {

@@ -71,6 +71,7 @@ import { exportContentAsFile, inferFormatFromFilename, type ExportFormat } from 
 import { exportPresentationAsFile, type SlideData } from '../../utils/pptxExport';
 import { executeDynamicFileScript } from '../../utils/dynamicFileSandbox';
 import { generateImage } from './imageGenerationClient';
+import { executeSdlcArtifactTool, type ArtifactToolContext } from './sdlcArtifactTools';
 import { executeKnowledgeRetrievalTool } from './knowledgeRetrievalTool';
 import { getImageConfig, getImageApiKey } from './nineRouterTokenService';
 import { redactApiKey } from './nineRouterClient';
@@ -1996,17 +1997,88 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'get_artifact',
+      description:
+        'Read the current SDLC artifact of the open Change Request: kind, committed version, approval state, full current draft Markdown, base hash, and the stable section index. Read-only; call it before proposing any edit.',
+      parameters: {
+        type: 'object',
+        properties: {
+          kind: {
+            type: 'string',
+            enum: ['SOLUTION', 'PL03B', 'PL07', 'CAB'],
+            description: 'Artifact to read in the currently open CR.',
+          },
+        },
+        required: ['kind'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'patch_artifact_section',
+      description:
+        'Propose an append or replace edit to one section of the current SDLC artifact. Returns a unified diff and the resulting Markdown; it never writes the editor — the user must approve the change. Requires the sectionId, exact expectedHeading, and baseHash returned by get_artifact.',
+      parameters: {
+        type: 'object',
+        properties: {
+          kind: {
+            type: 'string',
+            enum: ['SOLUTION', 'PL03B', 'PL07', 'CAB'],
+            description: 'Artifact to patch in the currently open CR.',
+          },
+          sectionId: {
+            type: 'string',
+            description: 'Dotted section id from get_artifact sectionIndex (e.g. "2.1").',
+          },
+          expectedHeading: {
+            type: 'string',
+            description: 'Exact heading text of that section, used to refuse drift.',
+          },
+          baseHash: {
+            type: 'string',
+            description: 'baseHash returned by the get_artifact call this edit is based on.',
+          },
+          operation: {
+            type: 'string',
+            enum: ['append', 'replace'],
+            description: 'append adds lines at the end of the section body; replace swaps the body.',
+          },
+          newContent: {
+            type: 'string',
+            description: 'Markdown text to append or use as the replacement body (max 120 lines).',
+          },
+        },
+        required: ['kind', 'sectionId', 'expectedHeading', 'baseHash', 'operation', 'newContent'],
+      },
+    },
+  },
 ];
+
+export interface ExecuteAiToolOptions {
+  /** Trusted, request-bound SDLC artifact context. Never sourced from model arguments (T-27-01). */
+  artifactContext?: ArtifactToolContext;
+}
 
 export async function executeAiTool(
   toolName: string,
   args: Record<string, any>,
   db: TaskPlannerDatabase,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options?: ExecuteAiToolOptions
 ): Promise<string> {
   const normalized = normalizeToolName(toolName);
   try {
     switch (normalized) {
+      case 'get_artifact':
+      case 'patch_artifact_section': {
+        const result = await executeSdlcArtifactTool(normalized, args, db, options?.artifactContext);
+        return JSON.stringify(result);
+      }
+
       case 'query_tasks': {
         if (!db.tasks) return JSON.stringify({ error: 'Tasks table unavailable' });
         let tasks = await db.tasks.toArray();
@@ -4789,6 +4861,7 @@ const MUTATION_TOOLS = new Set([
   'link_taskmate_to_knowledge',
   'unlink_taskmate_knowledge',
   'dismiss_notification',
+  'patch_artifact_section',
 ]);
 
 /**
