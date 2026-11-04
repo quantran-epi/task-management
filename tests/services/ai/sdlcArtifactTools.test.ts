@@ -4,6 +4,8 @@ import { dispatchAiToolCall } from '../../../src/services/ai/aiOrchestratorLoop'
 import { defaultSha256, workflowStorageKey } from '../../../src/services/wizard/workflowCoordinator';
 import type { SdlcWorkflowState } from '../../../src/services/wizard/workflowSchemas';
 import type { ArtifactToolContext } from '../../../src/services/ai/sdlcArtifactTools';
+import { getToolsForTurn } from '../../../src/services/ai/chatTurnTools';
+import { isMutationTool, normalizeToolName } from '../../../src/services/ai/aiTools';
 
 const PROJECT_ID = '11111111-1111-4111-8111-111111111111';
 const OTHER_PROJECT_ID = '22222222-2222-4222-8222-222222222222';
@@ -464,5 +466,17 @@ describe('sdlc artifact tools (SDLC-ART-01, SDLC-ART-02)', () => {
     );
     expect(proposal.diffText).toContain('\r\n');
     expect(proposal.patchedMarkdown).not.toContain('\n\n\n');
+  });
+
+  it('classifies only the patch tool as a mutation so Analysis Mode filters it, not get_artifact', () => {
+    expect(isMutationTool('patch_artifact_section')).toBe(true);
+    expect(isMutationTool('get_artifact')).toBe(false);
+
+    const analysisNames = getToolsForTurn(true).map((tool) => normalizeToolName(tool.function.name));
+    expect(analysisNames).toContain('get_artifact');
+    expect(analysisNames).not.toContain('patch_artifact_section');
+
+    const normalNames = getToolsForTurn(false).map((tool) => normalizeToolName(tool.function.name));
+    expect(normalNames).toContain('patch_artifact_section');
   });
 });
