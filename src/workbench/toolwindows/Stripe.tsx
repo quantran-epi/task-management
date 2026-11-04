@@ -29,16 +29,16 @@ export function Stripe({ slot, items }: StripeProps) {
     <aside
       aria-label={`${slot} tool window stripe`}
       style={{
-        width: isHorizontal ? '100%' : 'var(--stripe-width, 34px)',
-        minWidth: isHorizontal ? 'auto' : 'var(--stripe-width, 34px)',
-        height: isHorizontal ? 'var(--stripe-width, 34px)' : '100%',
-        minHeight: isHorizontal ? 'var(--stripe-width, 34px)' : 'auto',
+        width: isHorizontal ? '100%' : 'var(--stripe-width, 36px)',
+        minWidth: isHorizontal ? 'auto' : 'var(--stripe-width, 36px)',
+        height: isHorizontal ? 'var(--stripe-width, 36px)' : '100%',
+        minHeight: isHorizontal ? 'var(--stripe-width, 36px)' : 'auto',
         background: 'transparent',
         display: 'flex',
         flexDirection: isHorizontal ? 'row' : 'column',
         alignItems: 'center',
-        padding: isHorizontal ? '0 6px' : '6px 0',
-        gap: 3,
+        padding: isHorizontal ? '0 8px' : '8px 0',
+        gap: 4,
         userSelect: 'none',
         boxSizing: 'border-box',
         zIndex: 5,
@@ -57,8 +57,8 @@ export function Stripe({ slot, items }: StripeProps) {
               aria-label={tooltipTitle}
               aria-pressed={isActive}
               style={{
-                width: 28,
-                height: 28,
+                width: 30,
+                height: 30,
                 padding: 0,
                 border: 'none',
                 background: isActive ? 'var(--bg-island, #ffffff)' : 'transparent',
@@ -82,10 +82,10 @@ export function Stripe({ slot, items }: StripeProps) {
                     background: 'var(--accent, #3871e1)',
                     borderRadius: 1,
                     ...(slot === 'left'
-                      ? { left: 0, top: 4, bottom: 4, width: 2 }
+                      ? { left: 0, top: 4, bottom: 4, width: 2.5 }
                       : slot === 'right'
-                      ? { right: 0, top: 4, bottom: 4, width: 2 }
-                      : { bottom: 0, left: 4, right: 4, height: 2 }),
+                      ? { right: 0, top: 4, bottom: 4, width: 2.5 }
+                      : { bottom: 0, left: 4, right: 4, height: 2.5 }),
                   }}
                 />
               )}
@@ -95,9 +95,9 @@ export function Stripe({ slot, items }: StripeProps) {
                 overflowCount={99}
                 size="small"
                 offset={[4, -4]}
-                styles={{ indicator: { fontSize: 9, padding: '0 3px', minWidth: 14, height: 14, lineHeight: '14px' } }}
+                styles={{ indicator: { fontSize: 9.5, padding: '0 3px', minWidth: 14, height: 14, lineHeight: '14px' } }}
               >
-                <span style={{ fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   {item.icon}
                 </span>
               </Badge>

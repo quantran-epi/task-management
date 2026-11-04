@@ -211,6 +211,7 @@ Các trường hợp đặc biệt không áp dụng luồng tiêu chuẩn.
 export interface NotesViewProps {
   db?: TaskPlannerDatabase | undefined;
   initialDocId?: string | undefined;
+  hideFolderTree?: boolean | undefined;
 }
 
 const FOLDER_PREF_KEY = 'planner:docs_active_folder';
@@ -219,7 +220,11 @@ const DEFAULT_TREE_WIDTH = 320;
 const MIN_TREE_WIDTH = 220;
 const MAX_TREE_WIDTH = 600;
 
-export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb, initialDocId }) => {
+export const NotesView: React.FC<NotesViewProps> = ({
+  db = defaultDb,
+  initialDocId,
+  hideFolderTree = false,
+}) => {
   const knowledgeConfig = useOptionalKnowledgeConfig();
   const isConfigured = Boolean(knowledgeConfig.enabled && knowledgeConfig.baseUrl);
 
@@ -1005,84 +1010,99 @@ export const NotesView: React.FC<NotesViewProps> = ({ db = defaultDb, initialDoc
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 84px)', overflow: 'hidden' }}>
-      {/* 1. Page Header */}
-      <PageHeader
-        title="Ghi chú & Tài liệu"
-        subtitle="Hệ thống quản lý tri thức, tài liệu Markdown và ghi chú nhanh cá nhân"
-        extra={
-          <Space>
-            <Button icon={<DatabaseOutlined />} onClick={() => setDocumentSetDrawerOpen(true)}>
-              Bộ tài liệu
-            </Button>
-            <Tooltip title="Xem prompt chuẩn để dán vào AI ngoài tạo tài liệu Markdown phù hợp tìm kiếm">
-              <Button icon={<RobotOutlined />} onClick={() => setAiPromptModalOpen(true)}>
-                Prompt AI cho tài liệu
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: hideFolderTree ? '100%' : 'calc(100vh - 84px)',
+        overflow: 'hidden',
+      }}
+    >
+      {/* 1. Page Header (Hidden when embedded in workbench editor where tree is moved to left explorer) */}
+      {!hideFolderTree && (
+        <PageHeader
+          title="Ghi chú & Tài liệu"
+          subtitle="Hệ thống quản lý tri thức, tài liệu Markdown và ghi chú nhanh cá nhân"
+          extra={
+            <Space>
+              <Button icon={<DatabaseOutlined />} onClick={() => setDocumentSetDrawerOpen(true)}>
+                Bộ tài liệu
               </Button>
-            </Tooltip>
-            <Tooltip title="Mở danh sách ghi chú trong cửa sổ nổi riêng biệt (Always on Top)">
-              <Button icon={<ExportOutlined />} onClick={handleOpenPopout}>
-                Cửa sổ nổi
-              </Button>
-            </Tooltip>
-          </Space>
-        }
-      />
+              <Tooltip title="Xem prompt chuẩn để dán vào AI ngoài tạo tài liệu Markdown phù hợp tìm kiếm">
+                <Button icon={<RobotOutlined />} onClick={() => setAiPromptModalOpen(true)}>
+                  Prompt AI cho tài liệu
+                </Button>
+              </Tooltip>
+              <Tooltip title="Mở danh sách ghi chú trong cửa sổ nổi riêng biệt (Always on Top)">
+                <Button icon={<ExportOutlined />} onClick={handleOpenPopout}>
+                  Cửa sổ nổi
+                </Button>
+              </Tooltip>
+            </Space>
+          }
+        />
+      )}
 
-      {/* 2. Fixed 2-Column Main Workspace */}
+      {/* 2. Main Workspace */}
       <div
         className="docs-2column-layout"
         style={{
           flex: 1,
           minHeight: 0,
+          height: hideFolderTree ? '100%' : undefined,
           display: 'flex',
-          border: '1px solid #f0f0f0',
-          borderRadius: 8,
+          border: hideFolderTree ? 'none' : '1px solid #f0f0f0',
+          borderRadius: hideFolderTree ? 0 : 8,
           overflow: 'hidden',
           backgroundColor: '#ffffff',
+          width: '100%',
         }}
       >
-        {/* Column 1: Searchable Tree Panel (resizable) */}
-        <DocFolderTree
-          notes={treeNotes}
-          loadSearchNotes={loadSearchNotes}
-          selectedDocId={activeDocument?.id ?? null}
-          activeFilter={activeFilter}
-          onSelectFilter={handleFilterChange}
-          onSelectDoc={(doc) => setSelectedDocId(doc.id)}
-          onCreateDoc={handleCreateDocument}
-          onCreateFolder={async (name, parentId) => {
-            await handleCreateFolder(name, parentId);
-          }}
-          onRenameFolder={handleRenameFolder}
-          onMoveFolder={handleOpenMoveFolderModal}
-          onDeleteFolder={handleDeleteFolder}
-          onDeleteFolderRecursive={handleDeleteFolderRecursive}
-          onEmptyTrash={handleEmptyTrash}
-          onClearSpecialFolder={handleClearSpecialFolder}
-          onUnpinAll={handleUnpinAll}
-          onOpenZipImport={handleOpenZipImport}
-          onDownloadFolder={handleDownloadFolder}
-          activeTag={activeTag}
-          onSelectTag={setActiveTag}
-          publishStatuses={publishStatuses}
-          onTogglePin={(doc) => handleUpdateDocument(doc.id, { isPinned: !doc.isPinned })}
-          onDeleteDoc={handleDeleteDocument}
-          onRestoreDoc={handleRestoreDocument}
-          onMoveDocToFolder={handleOpenMoveDocModal}
-          width={treeWidth}
-        />
+        {/* Column 1: Searchable Tree Panel (resizable, hidden when docked in workbench) */}
+        {!hideFolderTree && (
+          <>
+            <DocFolderTree
+              notes={treeNotes}
+              loadSearchNotes={loadSearchNotes}
+              selectedDocId={activeDocument?.id ?? null}
+              activeFilter={activeFilter}
+              onSelectFilter={handleFilterChange}
+              onSelectDoc={(doc) => setSelectedDocId(doc.id)}
+              onCreateDoc={handleCreateDocument}
+              onCreateFolder={async (name, parentId) => {
+                await handleCreateFolder(name, parentId);
+              }}
+              onRenameFolder={handleRenameFolder}
+              onMoveFolder={handleOpenMoveFolderModal}
+              onDeleteFolder={handleDeleteFolder}
+              onDeleteFolderRecursive={handleDeleteFolderRecursive}
+              onEmptyTrash={handleEmptyTrash}
+              onClearSpecialFolder={handleClearSpecialFolder}
+              onUnpinAll={handleUnpinAll}
+              onOpenZipImport={handleOpenZipImport}
+              onDownloadFolder={handleDownloadFolder}
+              activeTag={activeTag}
+              onSelectTag={setActiveTag}
+              publishStatuses={publishStatuses}
+              onTogglePin={(doc) => handleUpdateDocument(doc.id, { isPinned: !doc.isPinned })}
+              onDeleteDoc={handleDeleteDocument}
+              onRestoreDoc={handleRestoreDocument}
+              onMoveDocToFolder={handleOpenMoveDocModal}
+              width={treeWidth}
+            />
 
-        {/* Resizable Divider between Tree and Editor Pane */}
-        <ResizeSplitter
-          side="left"
-          currentWidth={treeWidth}
-          minWidth={MIN_TREE_WIDTH}
-          maxWidth={MAX_TREE_WIDTH}
-          defaultWidth={DEFAULT_TREE_WIDTH}
-          onResize={handleTreeResize}
-          onReset={handleTreeReset}
-        />
+            {/* Resizable Divider between Tree and Editor Pane */}
+            <ResizeSplitter
+              side="left"
+              currentWidth={treeWidth}
+              minWidth={MIN_TREE_WIDTH}
+              maxWidth={MAX_TREE_WIDTH}
+              defaultWidth={DEFAULT_TREE_WIDTH}
+              onResize={handleTreeResize}
+              onReset={handleTreeReset}
+            />
+          </>
+        )}
 
         {/* Column 2: Document Editor Pane or Empty State */}
         <div style={{ flex: 1, minWidth: 0, height: '100%', display: 'flex', flexDirection: 'column' }}>

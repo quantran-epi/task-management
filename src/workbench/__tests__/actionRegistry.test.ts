@@ -47,10 +47,9 @@ describe('actionRegistry', () => {
     const ids = all.map((a) => a.id);
 
     expect(ids).toContain('view.toggle-projects');
-    expect(ids).toContain('view.toggle-tasks');
-    expect(ids).toContain('view.toggle-ai-chat');
     expect(ids).toContain('view.toggle-docs');
-    expect(ids).toContain('view.toggle-calendar');
+    expect(ids).toContain('view.toggle-ai-chat');
+    expect(ids).toContain('view.toggle-notifications');
     expect(ids).toContain('search.everywhere');
     expect(ids).toContain('task.create');
     expect(ids).toContain('timer.toggle');
@@ -66,13 +65,13 @@ describe('actionRegistry', () => {
     executeAction('view.toggle-projects'); // toggles back on
     expect(useLayoutStore.getState().leftActiveId).toBe('projects');
 
-    executeAction('view.toggle-tasks'); // toggles left to tasks
-    expect(useLayoutStore.getState().leftActiveId).toBe('tasks');
+    executeAction('view.toggle-docs'); // toggles left to docs
+    expect(useLayoutStore.getState().leftActiveId).toBe('docs');
 
-    executeAction('view.toggle-ai-chat'); // toggles bottom to ai_chat
-    expect(useLayoutStore.getState().bottomActiveId).toBe('ai_chat');
+    executeAction('view.toggle-ai-chat'); // toggles right to ai_chat
+    expect(useLayoutStore.getState().rightActiveId).toBe('ai_chat');
 
-    executeAction('view.toggle-calendar'); // toggles right to calendar
-    expect(useLayoutStore.getState().rightActiveId).toBe('calendar');
+    executeAction('view.toggle-notifications'); // toggles right to notifications
+    expect(useLayoutStore.getState().rightActiveId).toBe('notifications');
   });
 });

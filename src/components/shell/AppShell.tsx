@@ -9,6 +9,7 @@ import {
   CheckCircleOutlined,
   RobotOutlined,
   QuestionCircleOutlined,
+  CodeOutlined,
 } from '@ant-design/icons';
 import { APP_NAME } from '../../constants/app';
 import { Navigation } from './Navigation';
@@ -622,6 +623,31 @@ const AppShellInner: React.FC<AppShellProps> = ({
                 />
               </Tooltip>
             )}
+
+            <Tooltip title="Chuyển sang giao diện IntelliJ ExpUI Workbench (Thử nghiệm desktop)">
+              <Button
+                type="primary"
+                ghost
+                icon={<CodeOutlined style={{ fontSize: 15 }} />}
+                onClick={() => {
+                  try {
+                    localStorage.setItem('taskmate_ui_shell', 'intellij');
+                  } catch {}
+                  window.location.reload();
+                }}
+                aria-label="Chuyển sang IntelliJ Workbench"
+                style={{
+                  height: 32,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  borderColor: '#3871e1',
+                  color: '#3871e1',
+                  borderRadius: 6,
+                }}
+              >
+                {!isMobile && <span>IntelliJ UI</span>}
+              </Button>
+            </Tooltip>
 
             <Tooltip title="Tổng quan & Đánh giá ngày (Briefing & Debriefing)">
               <Button

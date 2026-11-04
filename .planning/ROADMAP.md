@@ -6,6 +6,8 @@
 - Phase 25.1.2: Fix the SDLC hub user flow end to end (COMPLETE — verified 2026-11-01)
 - Phase 25.2: Fix TaskMate mutation flow & standardize AI Core Engine for SDLC Studio (COMPLETE)
 - Phase 25.3: SDLC Workflow Engine Hardening, Unified AI Chat Widget & Prompt Architecture (COMPLETE)
+- Phase 25.4: IntelliJ ExpUI (Light Theme) Workbench Migration (COMPLETE)
+- Phase 25.5: TaskMate Workbench UI/UX Comprehensive Restructure & Precision Layout (COMPLETE — verified 2026-11-04)
 - Phase 26: SDLC Prompt Grounding & Tool-Use Policy (NOT STARTED — v1.3)
 - Phase 27: Studio Artifact Tools & Diff Approval (v1.3)
 - Phase 28: Query-Only Knowledge Retrieval (v1.3, parallel-capable)
@@ -500,6 +502,47 @@ Plans:
 
 **Wave 4** *(depends on 25.4-03)*
 - [x] 25.4-04-PLAN.md — Tối ưu hiệu năng ảo hóa (@tanstack/react-virtual) & Switchover test (`AppIntelliJ.tsx`)
+
+### Phase 25.5: TaskMate Workbench UI/UX Comprehensive Restructure & Precision Layout (INSERTED)
+
+**Goal:** Tái cấu trúc toàn diện layout, UI và UX của TaskMate Workbench theo phong cách JetBrains ExpUI chuẩn mực: sửa triệt để cơ chế resize handles (`react-resizable-panels`) cho mượt mà và trực quan; tăng font-size/typography và padding dễ đọc; tái cơ cấu TopBar (loại bỏ controls vô nghĩa, đưa quick views & actions chuẩn lên toolbar); phân bổ đúng chức năng cho Left Explorer (tách Projects Tree và Docs Tree với action click mở tab chi tiết ở Center); chuyển AI Chat sang Right Dockable Tool Window; tích hợp Active Timer và system status vào StatusBar 26px; đảm bảo 100% tính năng của TaskMate được tiếp cận tự nhiên, không gượng ép.
+
+**Architecture & Alignment:**
+1. Layout Resizing: Sửa tận gốc `PanelResizeHandle` để thanh phân cách hiển thị rõ ràng, hover highlight xanh dương (`var(--accent)`), hit-box 6-8px, con trỏ `col-resize`/`row-resize` mượt mà, không bị kẹt hay giật lag.
+2. Typography & Hierarchy: Chuẩn hóa scale chữ (`--font-size-ui: 13.5px`, body 14px, headers 15-16px, monospace 12.5px), khoảng cách giữa các island panel hài hòa, loại bỏ chữ li ti khó nhìn.
+3. TopBar Refinement: Bỏ hoàn toàn 3 nút minimize/maximize/close vô nghĩa; bố trí lại Project Switcher, Search Everywhere (`Double Shift`), Quick Views (Dashboard, Planner, Analytics), Settings và AI Assistant trigger.
+4. Left Explorer Specialization: Tách biệt rõ 2 panels dockable:
+   - `Projects Explorer`: Cây Project → Milestone → Task (click mở chi tiết tab ở Center).
+   - `Docs Explorer`: Cây danh mục Markdown Notes (click mở view soạn thảo ở Center).
+5. Right Dockable Window: Đưa AI Assistant và Item Inspector về Right Tool Window (`Alt+3`, `Alt+4`), giải phóng hoàn toàn chiều dọc bằng cách thu hồi Bottom Tool Window.
+6. StatusBar Integration: Giữ chân trang 26px siêu gọn, hiển thị trạng thái DB, Knowledge daemon, Active Timer thực tế có nút điều khiển nhanh.
+
+**Requirements:** WB-RESIZE-01, WB-TYPO-01, WB-TOPBAR-01, WB-LEFT-EXPLORER-01, WB-RIGHT-DOCK-01, WB-STATUSBAR-01, WB-CENTER-TABS-01
+**Depends on:** Phase 25.4
+**Success Criteria** (what must be TRUE):
+1. Thanh phân cách giữa các panels (Left/Center, Center/Right) hiển thị rõ đường kẻ chia, có hover/active effect xanh dương, kéo thả resize mượt mà không vỡ layout.
+2. Cỡ chữ trên toàn bộ Workbench tăng lên 13.5px–14px, các chữ nhỏ 10px được nâng lên tối thiểu 11.5px–12px, độ tương phản và line-height đạt chuẩn JetBrains ExpUI.
+3. TopBar không còn nút minimize/maximize/close; có đầy đủ Project Switcher, Search Everywhere button, Quick View navigation, nút Settings và AI Assistant.
+4. Left Tool Window hỗ trợ chuyển đổi giữa Project Explorer (cây Project/Milestone/Task) và Docs Explorer (cây tài liệu); click vào bất kỳ item nào lập tức mở tab tương ứng ở Center Area.
+5. AI Assistant hoạt động trơn tru trong Right Tool Window (dock/undock mượt mà); Bottom Tool Window được dọn sạch giúp Center Editor Area có không gian dọc tối đa.
+6. StatusBar hiển thị gọn gàng: Ready status, Storage, Knowledge status ở bên trái; Active Timer Widget kèm nút Play/Pause và Sync status ở bên phải.
+7. Toàn bộ các view hiện hữu của TaskMate (Tasks, Notes, Planner, Dashboard, Projects, Analytics, Settings, SDLC) mở và điều hướng trơn tru qua Center Tabs.
+
+**Plans:** 4/4 plans complete
+
+Plans:
+
+**Wave 1**
+- [x] 25.5-01-PLAN.md — Resizable Panels Fix & Theme/Typography Scale Overhaul (`workbench-tokens.css`, `WorkbenchLayout.tsx`, `layoutStore.ts`)
+
+**Wave 2** *(depends on 25.5-01)*
+- [x] 25.5-02-PLAN.md — TopBar & StatusBar Streamlining (`TitleBar.tsx`, `StatusBar.tsx`, loại bỏ window controls, tích hợp Quick Nav & Timer)
+
+**Wave 3** *(depends on 25.5-02)*
+- [x] 25.5-03-PLAN.md — Left Tool Windows Restructure: Dual Explorer for Projects & Docs (`LeftToolWindow.tsx`, `DocsTree.tsx`, `ProjectTree.tsx`, `Stripe.tsx`)
+
+**Wave 4** *(depends on 25.5-03)*
+- [x] 25.5-04-PLAN.md — Right Tool Window Integration (AI Assistant & Inspector), Bottom Window Retirement & Full Navigation Verification (`RightToolWindow.tsx`, `EditorArea.tsx`)
 
 ---
 

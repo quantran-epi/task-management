@@ -218,6 +218,7 @@ export interface AIChatDrawerProps {
   isMobile?: boolean;
   onPopout?: () => void;
   isPopoutWindow?: boolean;
+  isDockedPanel?: boolean;
 }
 
 export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
@@ -233,6 +234,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   isMobile = false,
   onPopout,
   isPopoutWindow = false,
+  isDockedPanel = false,
 }) => {
   const { token } = theme.useToken();
   const { pendingPrompt, clearPendingPrompt, pendingDraft, clearPendingDraft, setCustomScope } = useAIChat();
@@ -2170,23 +2172,23 @@ Rules:
   return (
     <div
       style={{
-        position: isPopoutWindow ? 'relative' : 'fixed',
+        position: isDockedPanel || isPopoutWindow ? 'relative' : 'fixed',
         top: 0,
         right: 0,
         bottom: 0,
-        left: isPopoutWindow ? 0 : undefined,
-        width: isPopoutWindow ? '100%' : isMobile ? '100vw' : width,
-        height: isPopoutWindow ? '100%' : undefined,
-        zIndex: isPopoutWindow ? 1 : isPinned && !isMobile ? 100 : 1200,
+        left: isDockedPanel || isPopoutWindow ? 0 : undefined,
+        width: isDockedPanel || isPopoutWindow ? '100%' : isMobile ? '100vw' : width,
+        height: isDockedPanel || isPopoutWindow ? '100%' : undefined,
+        zIndex: isDockedPanel || isPopoutWindow ? 1 : isPinned && !isMobile ? 100 : 1200,
         backgroundColor: token.colorBgContainer,
-        borderLeft: isPopoutWindow ? 'none' : `1px solid ${token.colorBorderSecondary}`,
-        boxShadow: isPopoutWindow || (isPinned && !isMobile) ? 'none' : '-2px 0 8px rgba(0,0,0,0.15)',
+        borderLeft: isDockedPanel || isPopoutWindow ? 'none' : `1px solid ${token.colorBorderSecondary}`,
+        boxShadow: isDockedPanel || isPopoutWindow || (isPinned && !isMobile) ? 'none' : '-2px 0 8px rgba(0,0,0,0.15)',
         display: 'flex',
         flexDirection: 'column',
       }}
     >
-      {/* Left border drag handle (desktop drawer only) */}
-      {!isMobile && !isPopoutWindow && (
+      {/* Left border drag handle (desktop drawer only, not when docked in panel) */}
+      {!isMobile && !isPopoutWindow && !isDockedPanel && (
         <div
           data-testid="ai-chat-resizer"
           onMouseDown={handleMouseDown}

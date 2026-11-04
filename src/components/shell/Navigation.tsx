@@ -10,6 +10,7 @@ import {
   SettingOutlined,
   RobotOutlined,
   SendOutlined,
+  CodeOutlined,
 } from '@ant-design/icons';
 import type { AppRoute } from '../../types/navigation';
 import { useGhostDevSessions } from '../../hooks/useGhostDevSessions';
@@ -100,13 +101,27 @@ export const Navigation: React.FC<NavigationProps> = ({ currentRoute, onNavigate
       icon: <SettingOutlined style={{ fontSize: 16 }} />,
       label: 'Cài đặt',
     },
+    {
+      key: '__switch_intellij__',
+      icon: <CodeOutlined style={{ fontSize: 16, color: '#3871e1' }} />,
+      label: <span style={{ color: '#3871e1', fontWeight: 600 }}>Giao diện IntelliJ</span>,
+      onClick: () => {
+        try {
+          localStorage.setItem('taskmate_ui_shell', 'intellij');
+        } catch {}
+        window.location.reload();
+      },
+    },
   ];
 
   return (
     <Menu
       mode="inline"
       selectedKeys={[currentRoute]}
-      onClick={({ key }) => onNavigate(key as AppRoute)}
+      onClick={({ key }) => {
+        if (key === '__switch_intellij__') return;
+        onNavigate(key as AppRoute);
+      }}
       items={items}
       style={{
         borderRight: 0,

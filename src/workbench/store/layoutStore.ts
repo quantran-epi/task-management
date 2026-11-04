@@ -12,7 +12,9 @@ export type EditorViewType =
   | 'projects'
   | 'dashboard'
   | 'agents'
-  | 'telegram';
+  | 'telegram'
+  | 'insight'
+  | 'sdlc';
 
 export interface EditorTab {
   id: string;

@@ -21,32 +21,43 @@ export function AntdThemeAdapter({ children }: AntdThemeAdapterProps) {
           colorTextSecondary: '#5f6269',
           colorTextTertiary: '#6c707e',
           borderRadius: 4,
-          fontSize: 13,
+          fontSize: 13.5,
           fontFamily: 'var(--font-ui, "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif)',
-          controlHeight: 28,
+          controlHeight: 30,
         },
         components: {
           Button: {
-            controlHeight: 28,
+            controlHeight: 30,
             paddingInline: 12,
             borderRadius: 4,
           },
           Input: {
-            controlHeight: 28,
+            controlHeight: 30,
             borderRadius: 4,
           },
           Select: {
-            controlHeight: 28,
+            controlHeight: 30,
             borderRadius: 4,
           },
           Table: {
-            padding: 6,
-            fontSize: 12.5,
+            padding: 8,
+            fontSize: 13,
           },
         },
       }}
     >
-      <div className="taskmate-workbench-theme" data-theme="light">
+      <div
+        className="taskmate-workbench-theme"
+        data-theme="light"
+        style={{
+          height: '100%',
+          width: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          flex: 1,
+          minHeight: 0,
+        }}
+      >
         {children}
       </div>
     </ConfigProvider>

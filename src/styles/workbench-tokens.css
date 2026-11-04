@@ -57,14 +57,99 @@
   --radius-popup: 8px;
   --radius-tab: 6px;
 
-  --stripe-width: 34px;
-  --titlebar-height: 38px;
-  --statusbar-height: 24px;
-  --tabbar-height: 34px;
+  --stripe-width: 36px;
+  --titlebar-height: 40px;
+  --statusbar-height: 26px;
+  --tabbar-height: 36px;
 
   --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
-  --font-size-ui: 13px;
-  --font-size-small: 11.5px;
+  --font-size-ui: 13.5px;
+  --font-size-base: 14px;
+  --font-size-small: 12px;
+  --font-size-xs: 11px;
+
+  /* Resizer handle tokens */
+  --handle-line-color: var(--border-strong);
+  --handle-line-color-hover: var(--accent);
+}
+
+/* Resizable divider styles */
+.workbench-resize-handle {
+  position: relative;
+  transition: background 0.15s ease;
+  user-select: none;
+  touch-action: none;
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+.workbench-resize-handle[data-direction="horizontal"] {
+  width: 8px;
+  margin: 0 -2px;
+  cursor: col-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.workbench-resize-handle[data-direction="horizontal"]::before {
+  content: "";
+  width: 1px;
+  height: 100%;
+  background: var(--handle-line-color);
+  transition: all 0.15s ease;
+}
+
+.workbench-resize-handle[data-direction="horizontal"]:hover::before,
+.workbench-resize-handle[data-direction="horizontal"][data-resize-handle-state="drag"]::before {
+  background: var(--handle-line-color-hover);
+  width: 2px;
+  box-shadow: 0 0 4px rgba(56, 113, 225, 0.4);
+}
+
+.workbench-resize-handle[data-direction="vertical"] {
+  height: 8px;
+  margin: -2px 0;
+  cursor: row-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.workbench-resize-handle[data-direction="vertical"]::before {
+  content: "";
+  height: 1px;
+  width: 100%;
+  background: var(--handle-line-color);
+  transition: all 0.15s ease;
+}
+
+.workbench-resize-handle[data-direction="vertical"]:hover::before,
+.workbench-resize-handle[data-direction="vertical"][data-resize-handle-state="drag"]::before {
+  background: var(--handle-line-color-hover);
+  height: 2px;
+  box-shadow: 0 0 4px rgba(56, 113, 225, 0.4);
+}
+
+/* Viewport locking - prevent window-level scrollbars */
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden !important;
+  box-sizing: border-box;
+}
+
+.workbench-root {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  overflow: hidden !important;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
 }
 
 /* Islands Frame Container */
@@ -90,6 +175,71 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+/* Ant Design Tree Explorer Fixes - Single row alignment without break lines */
+.workbench-toolwindow-left .ant-tree .ant-tree-treenode {
+  width: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  white-space: nowrap !important;
+  padding: 1px 0 !important;
+  min-width: 0 !important;
+}
+
+.workbench-toolwindow-left .ant-tree .ant-tree-switcher {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 28px !important;
+  line-height: 28px !important;
+  flex-shrink: 0 !important;
+  width: 20px !important;
+  margin: 0 !important;
+  align-self: center !important;
+}
+
+.workbench-toolwindow-left .ant-tree .ant-tree-switcher .ant-tree-switcher-icon {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  vertical-align: middle !important;
+  line-height: 1 !important;
+  margin-top: 1px !important;
+}
+
+.workbench-toolwindow-left .ant-tree .ant-tree-node-content-wrapper {
+  display: flex !important;
+  align-items: center !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  height: 28px !important;
+  line-height: 28px !important;
+  padding: 0 4px !important;
+  border-radius: 4px !important;
+}
+
+.workbench-toolwindow-left .ant-tree .ant-tree-iconEle {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin-right: 6px !important;
+  line-height: 1 !important;
+  flex-shrink: 0 !important;
+  width: 16px !important;
+}
+
+.workbench-toolwindow-left .ant-tree .ant-tree-title {
+  display: flex !important;
+  align-items: center !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  line-height: 1.2 !important;
 }
 
 /* ExpUI Tab in Editor Area */

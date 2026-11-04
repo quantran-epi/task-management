@@ -10,6 +10,8 @@ import { ProjectsView } from '../views/ProjectsView';
 import { DashboardView } from '../views/DashboardView';
 import { AgentControlView } from '../views/AgentControlView';
 import { TelegramMonitorView } from '../views/TelegramMonitorView';
+import { ItemInsightView } from '../views/ItemInsightView';
+import { ProjectSdlcView } from '../views/ProjectSdlcView';
 import type { TaskPlannerDatabase } from '../db';
 
 export interface EditorAreaProps {
@@ -32,7 +34,7 @@ export function EditorArea({ db }: EditorAreaProps) {
       case 'tasks':
         return <TasksView {...dbProp} />;
       case 'notes':
-        return <NotesView {...dbProp} initialDocId={tab.params?.doc} />;
+        return <NotesView {...dbProp} initialDocId={tab.params?.doc} hideFolderTree={true} />;
       case 'planner':
         return <PlannerView {...dbProp} targetDate={tab.params?.date} />;
       case 'analytics':
@@ -47,6 +49,46 @@ export function EditorArea({ db }: EditorAreaProps) {
         return <AgentControlView />;
       case 'telegram':
         return <TelegramMonitorView />;
+      case 'sdlc':
+        return (
+          <ProjectSdlcView
+            projectId={tab.params?.projectId || ''}
+            onBack={() => closeTab(tab.id)}
+            {...dbProp}
+          />
+        );
+      case 'insight':
+        return (
+          <ItemInsightView
+            itemType={tab.params?.itemType || 'task'}
+            itemId={tab.params?.itemId || ''}
+            onNavigate={(route, params) => {
+              const titles: Record<string, string> = {
+                dashboard: 'Dashboard',
+                tasks: 'Tasks',
+                projects: 'Projects',
+                planner: 'Planner',
+                analytics: 'Analytics',
+                notes: 'Docs',
+                settings: 'Settings',
+                agents: 'Ghost Dev',
+                telegram: 'Telegram',
+              };
+              const tabId = params?.doc
+                ? `doc-${params.doc}`
+                : params?.project
+                ? `project-${params.project}`
+                : route;
+              openTab({
+                id: tabId,
+                title: titles[route] || route,
+                viewType: route as any,
+                ...(params ? { params } : {}),
+              });
+            }}
+            {...dbProp}
+          />
+        );
       default:
         return <TasksView {...dbProp} />;
     }
@@ -71,15 +113,15 @@ export function EditorArea({ db }: EditorAreaProps) {
         style={{
           display: 'flex',
           alignItems: 'flex-end',
-          height: 'var(--tabbar-height, 34px)',
-          minHeight: 'var(--tabbar-height, 34px)',
+          height: 'var(--tabbar-height, 36px)',
+          minHeight: 'var(--tabbar-height, 36px)',
           background: 'var(--bg-elev, #f7f8fa)',
           borderBottom: '1px solid var(--border-strong, #d1d3d9)',
-          padding: '0 6px',
+          padding: '0 8px',
           overflowX: 'auto',
           overflowY: 'hidden',
           scrollbarWidth: 'none',
-          gap: 2,
+          gap: 3,
         }}
       >
         {openTabs.map((tab) => {
@@ -100,8 +142,8 @@ export function EditorArea({ db }: EditorAreaProps) {
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                padding: '0 12px',
-                height: 30,
+                padding: '0 14px',
+                height: 32,
                 background: isActive ? 'var(--bg-island, #ffffff)' : 'transparent',
                 borderRadius: '6px 6px 0 0',
                 borderTop: isActive ? '1px solid var(--border-strong, #d1d3d9)' : '1px solid transparent',
@@ -110,8 +152,8 @@ export function EditorArea({ db }: EditorAreaProps) {
                 borderBottom: isActive ? '1px solid var(--bg-island, #ffffff)' : '1px solid transparent',
                 marginBottom: isActive ? -1 : 0,
                 color: isActive ? 'var(--fg-strong, #000000)' : 'var(--fg-secondary, #5f6269)',
-                fontWeight: isActive ? 500 : 400,
-                fontSize: 'var(--font-size-ui, 12.5px)',
+                fontWeight: isActive ? 600 : 400,
+                fontSize: 'var(--font-size-ui, 13.5px)',
                 cursor: 'pointer',
                 userSelect: 'none',
                 position: 'relative',
@@ -120,7 +162,7 @@ export function EditorArea({ db }: EditorAreaProps) {
                 transition: 'all 0.15s ease',
               }}
             >
-              <span style={{ marginRight: tab.closable !== false ? 6 : 0 }}>{tab.title}</span>
+              <span style={{ marginRight: tab.closable !== false ? 8 : 0 }}>{tab.title}</span>
 
               {tab.closable !== false && (
                 <button
@@ -143,7 +185,7 @@ export function EditorArea({ db }: EditorAreaProps) {
                     lineHeight: 1,
                   }}
                 >
-                  <CloseOutlined style={{ fontSize: 10 }} />
+                  <CloseOutlined style={{ fontSize: 11 }} />
                 </button>
               )}
             </div>
@@ -156,9 +198,13 @@ export function EditorArea({ db }: EditorAreaProps) {
         className="workbench-editor-body"
         style={{
           flex: 1,
-          overflow: 'auto',
+          minHeight: 0,
+          height: '100%',
+          overflow: activeTab?.viewType === 'notes' ? 'hidden' : 'auto',
           position: 'relative',
-          padding: '16px 20px',
+          padding: activeTab?.viewType === 'notes' ? 0 : '16px 20px',
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
         <AntdThemeAdapter>

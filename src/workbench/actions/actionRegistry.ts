@@ -83,12 +83,12 @@ export function initStandardActions(): void {
       },
     },
     {
-      id: 'view.toggle-tasks',
-      title: 'Tool Windows: Toggle Tasks',
+      id: 'view.toggle-docs',
+      title: 'Tool Windows: Toggle Docs',
       category: 'View',
       shortcut: 'Alt+2',
       perform: () => {
-        useLayoutStore.getState().toggleToolWindow('left', 'tasks');
+        useLayoutStore.getState().toggleToolWindow('left', 'docs');
       },
     },
     {
@@ -97,25 +97,16 @@ export function initStandardActions(): void {
       category: 'View',
       shortcut: 'Alt+3',
       perform: () => {
-        useLayoutStore.getState().toggleToolWindow('bottom', 'ai_chat');
+        useLayoutStore.getState().toggleToolWindow('right', 'ai_chat');
       },
     },
     {
-      id: 'view.toggle-docs',
-      title: 'Tool Windows: Toggle Docs',
+      id: 'view.toggle-notifications',
+      title: 'Tool Windows: Toggle Notifications',
       category: 'View',
       shortcut: 'Alt+4',
       perform: () => {
-        useLayoutStore.getState().toggleToolWindow('bottom', 'docs');
-      },
-    },
-    {
-      id: 'view.toggle-calendar',
-      title: 'Tool Windows: Toggle Calendar',
-      category: 'View',
-      shortcut: 'Alt+5',
-      perform: () => {
-        useLayoutStore.getState().toggleToolWindow('right', 'calendar');
+        useLayoutStore.getState().toggleToolWindow('right', 'notifications');
       },
     },
     {

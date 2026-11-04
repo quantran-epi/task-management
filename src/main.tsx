@@ -14,6 +14,9 @@ export function shouldBootIntelliJ(search: string = window.location.search): boo
       } catch {
         // Ignore storage access errors in restricted environments
       }
+      if (typeof window !== 'undefined' && window.history && window.location.search) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+      }
       return true;
     }
     if (queryUi === 'default') {
@@ -21,6 +24,9 @@ export function shouldBootIntelliJ(search: string = window.location.search): boo
         localStorage.removeItem('taskmate_ui_shell');
       } catch {
         // Ignore storage access errors
+      }
+      if (typeof window !== 'undefined' && window.history && window.location.search) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.hash);
       }
       return false;
     }

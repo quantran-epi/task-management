@@ -72,7 +72,7 @@ export interface DocFolderTreeProps {
   onRestoreDoc?: ((doc: Note) => void) | undefined;
   onMoveDocToFolder?: ((doc: Note) => void) | undefined;
   /** Custom panel width when resizable */
-  width?: number | undefined;
+  width?: number | string | undefined;
 }
 
 const PAGE_SIZE = 20;
@@ -982,17 +982,18 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
     <div
       className="doc-folder-tree"
       style={{
-        width: width ?? 320,
-        minWidth: width !== undefined ? width : 280,
-        maxWidth: width !== undefined ? width : 380,
-        flexShrink: 0,
+        width: width ?? '100%',
+        minWidth: typeof width === 'number' ? width : 0,
+        maxWidth: typeof width === 'number' ? width : 'none',
+        flexShrink: typeof width === 'number' ? 0 : 1,
+        flex: typeof width === 'string' || width === undefined ? 1 : undefined,
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
         gap: 10,
         padding: '12px 8px',
         backgroundColor: '#fafafa',
-        borderRight: '1px solid #f0f0f0',
+        borderRight: typeof width === 'number' ? '1px solid #f0f0f0' : 'none',
         overflowY: 'auto',
       }}
     >

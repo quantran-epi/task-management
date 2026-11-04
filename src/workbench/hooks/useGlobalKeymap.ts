@@ -40,7 +40,7 @@ export function useGlobalKeymap(): void {
         }
         if (e.key === '2') {
           e.preventDefault();
-          executeAction('view.toggle-tasks');
+          executeAction('view.toggle-docs');
           return;
         }
         if (e.key === '3') {
@@ -50,12 +50,7 @@ export function useGlobalKeymap(): void {
         }
         if (e.key === '4') {
           e.preventDefault();
-          executeAction('view.toggle-docs');
-          return;
-        }
-        if (e.key === '5') {
-          e.preventDefault();
-          executeAction('view.toggle-calendar');
+          executeAction('view.toggle-notifications');
           return;
         }
         if (e.key === 't' || e.key === 'T') {

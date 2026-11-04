@@ -12,10 +12,6 @@ vi.mock('../toolwindows/LeftToolWindow', () => ({
   LeftToolWindow: () => <div data-testid="mock-left-toolwindow">Mock Left Tool Window</div>,
 }));
 
-vi.mock('../toolwindows/BottomToolWindow', () => ({
-  BottomToolWindow: () => <div data-testid="mock-bottom-toolwindow">Mock Bottom Tool Window</div>,
-}));
-
 vi.mock('../toolwindows/RightToolWindow', () => ({
   RightToolWindow: () => <div data-testid="mock-right-toolwindow">Mock Right Tool Window</div>,
 }));
@@ -37,25 +33,13 @@ describe('WorkbenchLayout Integration', () => {
     expect(screen.getByTestId('mock-tasks-view')).toBeDefined();
   });
 
-  it('mounts BottomToolWindow when bottomActiveId is set', () => {
-    render(<WorkbenchLayout />);
-
-    expect(screen.queryByTestId('mock-bottom-toolwindow')).toBeNull();
-
-    act(() => {
-      useLayoutStore.getState().setToolWindowActive('bottom', 'ai_chat');
-    });
-
-    expect(screen.getByTestId('mock-bottom-toolwindow')).toBeDefined();
-  });
-
-  it('mounts RightToolWindow when rightActiveId is set', () => {
+  it('mounts RightToolWindow when rightActiveId is set to ai_chat', () => {
     render(<WorkbenchLayout />);
 
     expect(screen.queryByTestId('mock-right-toolwindow')).toBeNull();
 
     act(() => {
-      useLayoutStore.getState().setToolWindowActive('right', 'calendar');
+      useLayoutStore.getState().setToolWindowActive('right', 'ai_chat');
     });
 
     expect(screen.getByTestId('mock-right-toolwindow')).toBeDefined();
@@ -70,5 +54,15 @@ describe('WorkbenchLayout Integration', () => {
     fireEvent.click(searchBtn);
 
     expect(screen.getByRole('dialog', { name: 'Search Everywhere' })).toBeDefined();
+  });
+
+  it('opens quick view tabs when clicked in TitleBar', () => {
+    render(<WorkbenchLayout />);
+
+    const plannerBtn = screen.getByRole('button', { name: /Open Capacity Planner/i });
+    fireEvent.click(plannerBtn);
+
+    const openTabs = useLayoutStore.getState().openTabs;
+    expect(openTabs.some((t) => t.id === 'planner')).toBe(true);
   });
 });
