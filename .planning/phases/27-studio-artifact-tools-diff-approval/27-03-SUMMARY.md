@@ -222,3 +222,6 @@ None.
 - Targeted suites and TypeScript pass as listed above.
 - No version-commit call is reachable from the patch path; workflow rows are compared byte-for-byte in tests.
 - Existing dirty entries preserved (1936 before, 1935 after one file normalized to its committed blob).
+- Close-out SDK result: `roadmap.update-plan-progress 27` exited 0 but returned `updated: false`, `reason: missing_phase_details`; treated as a decline, not a write. Manually checked only the existing 27-03 checklist item and changed the Active Phase line to 4/5.
+- STATE pointer advanced to plan 4 with 27-04 as the resume file; metric and decision recorded; only SDLC-ART-03/ART-04 (returned `ready`) were marked complete. SDLC-ART-01/05 remain blocked by unfinished siblings.
+- Follow-up metadata commit `a470b15e` touches only planning files. Remaining entries under the touched source paths are EOL-only and were verified blob-identical after CRLF normalization.
