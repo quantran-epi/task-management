@@ -12,6 +12,7 @@ const EMPTY_GROUNDING: SdlcGroundingResult = { text: '', present: new Set() };
 import { StepChatPanel, type StepChatPanelHandle } from './chat/StepChatPanel';
 import { ResizeSplitter } from "../common/ResizeSplitter";
 import { SdlcStaleBanner } from './common/SdlcStaleBanner';
+import { detectDraftHashDivergence } from '../../services/wizard/stalenessDetector';
 
 export const SDLC_CHAT_WIDTH_MIN = 320;
 export const SDLC_CHAT_WIDTH_DEFAULT = 380;
@@ -62,6 +63,7 @@ export const SdlcWorkspace: React.FC<SdlcWorkspaceProps> = ({
   db,
   artifactToolContext,
   onApplyArtifactPatch,
+  draftHashes,
 }) => {
   const { token } = theme.useToken();
   const chatPaneId = React.useId();
@@ -72,6 +74,10 @@ export const SdlcWorkspace: React.FC<SdlcWorkspaceProps> = ({
       return SDLC_CHAT_WIDTH_DEFAULT;
     }
   });
+  const draftStaleness = React.useMemo(
+    () => (workflowState ? detectDraftHashDivergence(workflowState, draftHashes ?? {}) : undefined),
+    [workflowState, draftHashes]
+  );
   const updateChatWidth = (width: number) => {
     const clamped = clampChatWidth(width);
     setChatWidth(clamped);
@@ -107,6 +113,7 @@ export const SdlcWorkspace: React.FC<SdlcWorkspaceProps> = ({
           <SdlcStaleBanner
             currentStep={selectedStep}
             workflowState={workflowState}
+            {...(draftStaleness ? { draftStaleness } : {})}
             onNavigateToStep={onNavigateToStep}
           />
         )}
