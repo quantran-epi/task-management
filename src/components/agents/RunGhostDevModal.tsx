@@ -21,6 +21,7 @@ import {
   EyeInvisibleOutlined,
   ReloadOutlined,
   FileTextOutlined,
+  CloudServerOutlined,
 } from '@ant-design/icons';
 import type { Task } from '../../types/models';
 import type { AppRoute } from '../../types/navigation';
@@ -34,6 +35,8 @@ import {
   MODEL_ID_REGEX,
 } from '../../services/agents/ghostDevConfig';
 import { agentSessionHistoryRepo } from '../../services/agents/agentSessionHistoryRepo';
+import { getSshConfigs, getSshSecret } from '../../services/sshService';
+import type { SshConfig } from '../../types/ssh';
 
 const { Paragraph } = Typography;
 
@@ -61,6 +64,8 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [detectedPaths, setDetectedPaths] = useState<string[]>([]);
   const [selectedPathMode, setSelectedPathMode] = useState<'detected' | 'custom'>('detected');
+  const [sshConfigs, setSshConfigs] = useState<SshConfig[]>([]);
+  const [execTarget, setExecTarget] = useState<string>('local');
 
   const [promptMode, setPromptMode] = useState<'default' | 'custom'>('default');
   const [customPromptText, setCustomPromptText] = useState<string>('');
@@ -86,6 +91,8 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
       setExtraInstructionsText('');
       setIsCustomEdited(false);
       setShowPromptPreview(false);
+      setExecTarget('local');
+      getSshConfigs().then(setSshConfigs).catch(() => {});
     }
   }, [visible]);
 
@@ -157,6 +164,18 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
       const initialPrompt = resolvedFinalPrompt;
       const config = getGhostDevConfig();
 
+      let sshConfigToUse: SshConfig | undefined = undefined;
+      let sshSecretToUse: string | undefined = undefined;
+
+      if (execTarget !== 'local') {
+        const found = sshConfigs.find((c) => c.id === execTarget);
+        if (found) {
+          sshConfigToUse = found;
+          const sec = await getSshSecret(found.id);
+          sshSecretToUse = sec || undefined;
+        }
+      }
+
       setSubmitting(true);
 
       if (isTauriApp()) {
@@ -170,6 +189,8 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
             initialPrompt,
             concurrencyCap: config.concurrencyCap,
             claudePath: config.claudePath?.trim() || undefined,
+            sshConfig: sshConfigToUse,
+            sshSecret: sshSecretToUse,
           },
         });
       } else {
@@ -264,6 +285,49 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
       </Paragraph>
 
       <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+        {sshConfigs.length > 0 && (
+          <Form.Item label="Môi trường thực thi (Execution Target)">
+            <Select
+              value={execTarget}
+              onChange={(val) => {
+                setExecTarget(val);
+                if (val !== 'local') {
+                  const cfg = sshConfigs.find((c) => c.id === val);
+                  if (cfg?.defaultRemotePath) {
+                    form.setFieldValue('repoPath', cfg.defaultRemotePath);
+                    setSelectedPathMode('custom');
+                  }
+                }
+              }}
+              options={[
+                {
+                  value: 'local',
+                  label: (
+                    <Space>
+                      <FolderOutlined />
+                      <span>Máy cục bộ (Local Host)</span>
+                    </Space>
+                  ),
+                },
+                ...sshConfigs.map((cfg) => ({
+                  value: cfg.id,
+                  label: (
+                    <Space>
+                      <CloudServerOutlined style={{ color: '#1677ff' }} />
+                      <span>Remote SSH: {cfg.name} ({cfg.username}@{cfg.host}:{cfg.port})</span>
+                    </Space>
+                  ),
+                })),
+              ]}
+            />
+            {execTarget !== 'local' && (
+              <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 4, marginBottom: 0 }}>
+                Claude Code sẽ chạy bên trong WSL/Server từ xa qua SSH — an toàn, không bị quét process bởi Trellix trên máy host.
+              </Paragraph>
+            )}
+          </Form.Item>
+        )}
+
         {detectedPaths.length > 0 ? (
           <Form.Item label="Thư mục làm việc (Repository)" required>
             <Radio.Group

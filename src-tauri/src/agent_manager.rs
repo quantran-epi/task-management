@@ -124,6 +124,8 @@ pub struct StartSessionPayload {
     pub initial_prompt: String,
     pub concurrency_cap: Option<usize>,
     pub claude_path: Option<String>,
+    pub ssh_config: Option<crate::ssh_service::SshConfig>,
+    pub ssh_secret: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -182,6 +184,7 @@ struct ActiveSessionHandle {
     master_pid: u32,
     stdin_tx: Option<tokio::sync::mpsc::Sender<String>>,
     worker_pids: Vec<u32>,
+    cancel_tx: Option<tokio::sync::oneshot::Sender<()>>,
 }
 
 pub struct GlobalAgentPool {
@@ -363,11 +366,166 @@ pub fn cleanup_on_exit() {
 
 // ==================== TAURI COMMANDS ====================
 
+pub async fn start_ssh_ghost_dev_session(
+    app: AppHandle,
+    payload: StartSessionPayload,
+    ssh_cfg: crate::ssh_service::SshConfig,
+) -> Result<AgentSessionState, String> {
+    let session = crate::ssh_service::connect_and_auth(&ssh_cfg, payload.ssh_secret.as_deref())?;
+
+    let remote_dir = if !payload.repo_path.trim().is_empty() {
+        payload.repo_path.trim().to_string()
+    } else if let Some(ref p) = ssh_cfg.default_remote_path {
+        p.trim().to_string()
+    } else {
+        ".".to_string()
+    };
+
+    let claude_binary = payload
+        .claude_path
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or("claude");
+
+    let master_cmd = format!(
+        "cd \"{}\" && {} -p --verbose --output-format stream-json --input-format stream-json --permission-mode bypassPermissions --dangerously-skip-permissions --model \"{}\"",
+        remote_dir, claude_binary, payload.master_model
+    );
+
+    let mut channel = session
+        .channel_session()
+        .map_err(|e| format!("Không thể mở SSH channel: {}", e))?;
+
+    channel
+        .exec(&master_cmd)
+        .map_err(|e| format!("Khởi chạy Claude Code từ xa thất bại: {}", e))?;
+
+    let (stdin_tx, mut stdin_rx) = tokio::sync::mpsc::channel::<String>(32);
+    let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel::<()>();
+
+    let started_at = chrono_iso_now();
+    let initial_state = AgentSessionState {
+        task_id: payload.task_id.clone(),
+        task_title: payload.task_title.clone(),
+        repo_path: remote_dir.clone(),
+        worktree_path: format!("ssh://{}/{}", ssh_cfg.name, remote_dir),
+        branch_name: format!("remote-ssh:{}", ssh_cfg.name),
+        master_pid: 0,
+        master_model: payload.master_model.clone(),
+        worker_model: payload.worker_model.clone(),
+        status: "running".to_string(),
+        started_at,
+        finished_at: None,
+        active_workers: Vec::new(),
+    };
+
+    let _ = stdin_tx.send(format_user_text_envelope(&payload.initial_prompt).to_string()).await;
+
+    {
+        let mut pool = AGENT_POOL.lock().await;
+        pool.sessions.insert(
+            payload.task_id.clone(),
+            ActiveSessionHandle {
+                state: initial_state.clone(),
+                master_pid: 0,
+                stdin_tx: Some(stdin_tx),
+                worker_pids: Vec::new(),
+                cancel_tx: Some(cancel_tx),
+            },
+        );
+    }
+
+    let task_id_clone = payload.task_id.clone();
+    let app_clone = app.clone();
+
+    tokio::task::spawn_blocking(move || {
+        let mut channel_writer = channel.clone();
+        let mut channel_closer = channel.clone();
+
+        // Stdin writer thread
+        let _writer_handle = std::thread::spawn(move || {
+            use std::io::Write;
+            while let Some(msg) = stdin_rx.blocking_recv() {
+                if channel_writer.write_all(msg.as_bytes()).is_err() {
+                    break;
+                }
+                if !msg.ends_with('\n') {
+                    let _ = channel_writer.write_all(b"\n");
+                }
+                let _ = channel_writer.flush();
+            }
+        });
+
+        // Cancel watcher thread
+        let _cancel_handle = std::thread::spawn(move || {
+            if cancel_rx.blocking_recv().is_ok() {
+                let _ = channel_closer.close();
+            }
+        });
+
+        // Reader loop
+        use std::io::{BufRead, BufReader};
+        let reader = BufReader::new(channel);
+        for line_res in reader.lines() {
+            if let Ok(line) = line_res {
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+                let chunk = StreamEventChunk {
+                    task_id: task_id_clone.clone(),
+                    worker_id: None,
+                    source: "master".to_string(),
+                    timestamp: chrono_iso_now(),
+                    chunk_type: "log".to_string(),
+                    content: trimmed.to_string(),
+                };
+                let _ = app_clone.emit("ghost-dev:stream-chunk", chunk);
+            } else {
+                break;
+            }
+        }
+
+        // Finish state
+        {
+            if let Ok(mut pool) = AGENT_POOL.try_lock() {
+                if let Some(session) = pool.sessions.get_mut(&task_id_clone) {
+                    if session.state.status != "interrupted" {
+                        session.state.status = "done".to_string();
+                        session.state.finished_at = Some(chrono_iso_now());
+                    }
+                }
+            }
+        }
+
+        let _ = app_clone.emit("ghost-dev:session-updated", ());
+        let _ = app_clone.emit("ghost-dev:session-finished", ());
+        let _ = app_clone.emit(
+            "ghost-dev:stream-chunk",
+            StreamEventChunk {
+                task_id: task_id_clone.clone(),
+                worker_id: None,
+                source: "master".to_string(),
+                timestamp: chrono_iso_now(),
+                chunk_type: "status_change".to_string(),
+                content: "Remote SSH session finished".to_string(),
+            },
+        );
+    });
+
+    Ok(initial_state)
+}
+
 #[tauri::command]
 pub async fn start_ghost_dev_session(
     app: AppHandle,
     payload: StartSessionPayload,
 ) -> Result<AgentSessionState, String> {
+    if let Some(ssh_cfg) = payload.ssh_config.clone() {
+        return start_ssh_ghost_dev_session(app, payload, ssh_cfg).await;
+    }
+
     // Check concurrency cap (respect user setting, clamp 1..=12)
     let max_processes = payload.concurrency_cap.unwrap_or(MAX_GLOBAL_PROCESSES).clamp(1, 12);
     let current_running = RUNNING_PROCESS_COUNT.load(Ordering::SeqCst);
@@ -482,6 +640,7 @@ pub async fn start_ghost_dev_session(
                 master_pid,
                 stdin_tx: Some(stdin_tx),
                 worker_pids: Vec::new(),
+                cancel_tx: None,
             },
         );
     }
@@ -988,9 +1147,14 @@ pub async fn start_ghost_dev_session(
 pub async fn stop_ghost_dev_session(app: AppHandle, task_id: String) -> Result<(), String> {
     let mut pool = AGENT_POOL.lock().await;
     if let Some(mut session) = pool.sessions.remove(&task_id) {
-        kill_process_tree(session.master_pid);
-        for worker_pid in session.worker_pids.drain(..) {
-            kill_process_tree(worker_pid);
+        if let Some(cancel) = session.cancel_tx.take() {
+            let _ = cancel.send(());
+        }
+        if session.master_pid > 0 {
+            kill_process_tree(session.master_pid);
+            for worker_pid in session.worker_pids.drain(..) {
+                kill_process_tree(worker_pid);
+            }
         }
         if session.state.status != "error" && session.state.status != "done" {
             session.state.status = "interrupted".to_string();

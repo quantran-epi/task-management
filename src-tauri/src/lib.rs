@@ -5,6 +5,7 @@ mod ai_proxy;
 mod jira_proxy;
 mod keyring_store;
 mod sqlite_persistence;
+mod ssh_service;
 mod telegram_gateway;
 
 #[tauri::command]
@@ -61,6 +62,15 @@ pub fn run() {
             telegram_gateway::get_telegram_status,
             telegram_gateway::send_telegram_reply,
             telegram_gateway::send_telegram_action,
+            ssh_service::ssh_test_connection,
+            ssh_service::ssh_list_dir,
+            ssh_service::ssh_read_file,
+            ssh_service::ssh_read_file_slice,
+            ssh_service::ssh_write_file,
+            ssh_service::ssh_create_dir,
+            ssh_service::ssh_delete_entry,
+            ssh_service::ssh_rename,
+            ssh_service::ssh_exec_command,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

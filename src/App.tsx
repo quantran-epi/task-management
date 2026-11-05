@@ -64,9 +64,9 @@ export const App: React.FC = () => {
       case 'notes':
         return <NotesView initialDocId={params.doc} />;
       case 'settings': {
-        const validTabs = ['capacity', 'data', 'jira', 'notifications', 'ai'] as const;
+        const validTabs = ['capacity', 'data', 'jira', 'notifications', 'ai', 'ssh'] as const;
         const selectedTab = validTabs.includes(params.tab as any)
-          ? (params.tab as 'capacity' | 'data' | 'jira' | 'notifications' | 'ai')
+          ? (params.tab as 'capacity' | 'data' | 'jira' | 'notifications' | 'ai' | 'ssh')
           : undefined;
         return <SettingsView onNavigate={navigate} defaultActiveTab={selectedTab} />;
       }

@@ -1,0 +1,379 @@
+use serde::{Deserialize, Serialize};
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::TcpStream;
+use std::path::Path;
+use std::time::Duration;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SshConfig {
+    pub id: String,
+    pub name: String,
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub auth_type: String, // "password" | "key_file" | "agent"
+    pub key_path: Option<String>,
+    pub default_remote_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteFileInfo {
+    pub name: String,
+    pub path: String,
+    pub is_dir: bool,
+    pub is_symlink: bool,
+    pub size: u64,
+    pub modified: u64,
+    pub permissions: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteFileSliceResult {
+    pub lines: Vec<String>,
+    pub total_lines: usize,
+    pub offset: usize,
+    pub limit: usize,
+    pub has_more: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommandOutput {
+    pub stdout: String,
+    pub stderr: String,
+    pub exit_status: i32,
+}
+
+pub fn connect_and_auth(config: &SshConfig, secret: Option<&str>) -> Result<ssh2::Session, String> {
+    let host = config.host.trim();
+    if host.is_empty() {
+        return Err("SSH Host không được để trống".to_string());
+    }
+    let username = config.username.trim();
+    if username.is_empty() {
+        return Err("SSH Username không được để trống".to_string());
+    }
+
+    let addr = format!("{}:{}", host, config.port);
+    let socket_addrs: Vec<_> = std::net::ToSocketAddrs::to_socket_addrs(&addr)
+        .map_err(|e| format!("Không thể phân giải địa chỉ {}: {}", addr, e))?
+        .collect();
+
+    if socket_addrs.is_empty() {
+        return Err(format!("Không tìm thấy địa chỉ IP cho host: {}", host));
+    }
+
+    let mut tcp_opt = None;
+    let timeout = Duration::from_secs(10);
+    for sa in socket_addrs {
+        if let Ok(stream) = TcpStream::connect_timeout(&sa, timeout) {
+            tcp_opt = Some(stream);
+            break;
+        }
+    }
+
+    let tcp = tcp_opt.ok_or_else(|| format!("Kết nối TCP tới {}:{} thất bại (timeout 10s)", host, config.port))?;
+    let _ = tcp.set_read_timeout(Some(Duration::from_secs(30)));
+    let _ = tcp.set_write_timeout(Some(Duration::from_secs(30)));
+
+    let mut session = ssh2::Session::new().map_err(|e| format!("Khởi tạo SSH session thất bại: {}", e))?;
+    session.set_tcp_stream(tcp);
+    session.handshake().map_err(|e| format!("SSH handshake thất bại: {}", e))?;
+
+    match config.auth_type.as_str() {
+        "password" => {
+            let pass = secret.unwrap_or("");
+            session
+                .userauth_password(username, pass)
+                .map_err(|e| format!("Xác thực mật khẩu thất bại: {}", e))?;
+        }
+        "key_file" => {
+            let key_path_str = config
+                .key_path
+                .as_deref()
+                .filter(|s| !s.trim().is_empty())
+                .ok_or_else(|| "Chưa cung cấp đường dẫn khóa riêng tư (private key)".to_string())?;
+
+            let key_path = Path::new(key_path_str);
+            if !key_path.exists() {
+                return Err(format!("Tệp khóa riêng tư không tồn tại: {}", key_path_str));
+            }
+
+            session
+                .userauth_pubkey_file(username, None, key_path, secret)
+                .map_err(|e| format!("Xác thực khóa riêng tư thất bại: {}", e))?;
+        }
+        "agent" => {
+            let mut agent = session.agent().map_err(|e| format!("Không thể kết nối SSH Agent: {}", e))?;
+            agent.connect().map_err(|e| format!("SSH Agent connect thất bại: {}", e))?;
+            agent.list_identities().map_err(|e| format!("SSH Agent list identities thất bại: {}", e))?;
+            let identities = agent.identities().map_err(|e| format!("SSH Agent read identities thất bại: {}", e))?;
+
+            let mut authed = false;
+            for id in identities {
+                if agent.userauth(username, &id).is_ok() && session.authenticated() {
+                    authed = true;
+                    break;
+                }
+            }
+            if !authed {
+                return Err("Xác thực qua SSH Agent thất bại: Không tìm thấy key hợp lệ".to_string());
+            }
+        }
+        other => {
+            return Err(format!("Phương thức xác thực không hỗ trợ: {}", other));
+        }
+    }
+
+    if !session.authenticated() {
+        return Err("Xác thực SSH không thành công".to_string());
+    }
+
+    Ok(session)
+}
+
+#[tauri::command]
+pub fn ssh_test_connection(config: SshConfig, secret: Option<String>) -> Result<String, String> {
+    let session = connect_and_auth(&config, secret.as_deref())?;
+    let banner = session.banner().unwrap_or("SSH-2.0");
+    Ok(format!("Kết nối thành công! Server banner: {}", banner))
+}
+
+#[tauri::command]
+pub fn ssh_list_dir(
+    config: SshConfig,
+    secret: Option<String>,
+    remote_path: Option<String>,
+) -> Result<Vec<RemoteFileInfo>, String> {
+    let session = connect_and_auth(&config, secret.as_deref())?;
+    let sftp = session.sftp().map_err(|e| format!("Khởi tạo SFTP subsystem thất bại: {}", e))?;
+
+    let path_str = remote_path
+        .filter(|p| !p.trim().is_empty())
+        .or_else(|| config.default_remote_path.clone())
+        .unwrap_or_else(|| ".".to_string());
+
+    let target_path = Path::new(&path_str);
+    let entries = sftp
+        .readdir(target_path)
+        .map_err(|e| format!("Không thể đọc thư mục '{}': {}", path_str, e))?;
+
+    let mut result = Vec::new();
+    for (pb, stat) in entries {
+        let file_name = pb
+            .file_name()
+            .map(|f| f.to_string_lossy().to_string())
+            .unwrap_or_else(|| pb.to_string_lossy().to_string());
+
+        // Skip . and ..
+        if file_name == "." || file_name == ".." {
+            continue;
+        }
+
+        let full_path_str = pb.to_string_lossy().to_string();
+        let is_dir = stat.is_dir();
+        let is_symlink = stat.file_type() == ssh2::FileType::Symlink;
+        let size = stat.size.unwrap_or(0);
+        let modified = stat.mtime.unwrap_or(0);
+        let permissions = stat.perm;
+
+        result.push(RemoteFileInfo {
+            name: file_name,
+            path: full_path_str,
+            is_dir,
+            is_symlink,
+            size,
+            modified,
+            permissions,
+        });
+    }
+
+    // Sort: directories first, then alphabetically by name
+    result.sort_by(|a, b| {
+        if a.is_dir != b.is_dir {
+            b.is_dir.cmp(&a.is_dir)
+        } else {
+            a.name.to_lowercase().cmp(&b.name.to_lowercase())
+        }
+    });
+
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn ssh_read_file(
+    config: SshConfig,
+    secret: Option<String>,
+    remote_path: String,
+) -> Result<String, String> {
+    let session = connect_and_auth(&config, secret.as_deref())?;
+    let sftp = session.sftp().map_err(|e| format!("Khởi tạo SFTP subsystem thất bại: {}", e))?;
+
+    let mut file = sftp
+        .open(Path::new(&remote_path))
+        .map_err(|e| format!("Không thể mở tệp '{}': {}", remote_path, e))?;
+
+    let mut content_bytes = Vec::new();
+    file.read_to_end(&mut content_bytes)
+        .map_err(|e| format!("Không thể đọc nội dung tệp: {}", e))?;
+
+    String::from_utf8(content_bytes)
+        .map_err(|_| "Tệp chứa dữ liệu nhị phân hoặc không phải UTF-8 hợp lệ".to_string())
+}
+
+#[tauri::command]
+pub fn ssh_read_file_slice(
+    config: SshConfig,
+    secret: Option<String>,
+    remote_path: String,
+    offset: Option<usize>,
+    limit: Option<usize>,
+) -> Result<RemoteFileSliceResult, String> {
+    let session = connect_and_auth(&config, secret.as_deref())?;
+    let sftp = session.sftp().map_err(|e| format!("Khởi tạo SFTP subsystem thất bại: {}", e))?;
+
+    let file = sftp
+        .open(Path::new(&remote_path))
+        .map_err(|e| format!("Không thể mở tệp '{}': {}", remote_path, e))?;
+
+    let reader = BufReader::new(file);
+    let start_offset = offset.unwrap_or(1).max(1);
+    let max_lines = limit.unwrap_or(200).min(2000);
+
+    let mut lines = Vec::new();
+    let mut total_lines = 0;
+    let mut current_line_num = 0;
+
+    for line_res in reader.lines() {
+        let line = line_res.map_err(|e| format!("Lỗi đọc dòng tệp: {}", e))?;
+        current_line_num += 1;
+        total_lines += 1;
+
+        if current_line_num >= start_offset && lines.len() < max_lines {
+            lines.push(line);
+        }
+    }
+
+    let has_more = total_lines >= (start_offset + lines.len());
+
+    Ok(RemoteFileSliceResult {
+        lines,
+        total_lines,
+        offset: start_offset,
+        limit: max_lines,
+        has_more,
+    })
+}
+
+#[tauri::command]
+pub fn ssh_write_file(
+    config: SshConfig,
+    secret: Option<String>,
+    remote_path: String,
+    content: String,
+) -> Result<(), String> {
+    let session = connect_and_auth(&config, secret.as_deref())?;
+    let sftp = session.sftp().map_err(|e| format!("Khởi tạo SFTP subsystem thất bại: {}", e))?;
+
+    let mut file = sftp
+        .create(Path::new(&remote_path))
+        .map_err(|e| format!("Không thể tạo/ghi tệp '{}': {}", remote_path, e))?;
+
+    file.write_all(content.as_bytes())
+        .map_err(|e| format!("Không thể ghi dữ liệu vào tệp: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn ssh_create_dir(
+    config: SshConfig,
+    secret: Option<String>,
+    remote_path: String,
+) -> Result<(), String> {
+    let session = connect_and_auth(&config, secret.as_deref())?;
+    let sftp = session.sftp().map_err(|e| format!("Khởi tạo SFTP subsystem thất bại: {}", e))?;
+
+    sftp.mkdir(Path::new(&remote_path), 0o755)
+        .map_err(|e| format!("Không thể tạo thư mục '{}': {}", remote_path, e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn ssh_delete_entry(
+    config: SshConfig,
+    secret: Option<String>,
+    remote_path: String,
+    is_dir: bool,
+) -> Result<(), String> {
+    let session = connect_and_auth(&config, secret.as_deref())?;
+    let sftp = session.sftp().map_err(|e| format!("Khởi tạo SFTP subsystem thất bại: {}", e))?;
+
+    let p = Path::new(&remote_path);
+    if is_dir {
+        sftp.rmdir(p)
+            .map_err(|e| format!("Không thể xóa thư mục '{}': {}", remote_path, e))?;
+    } else {
+        sftp.unlink(p)
+            .map_err(|e| format!("Không thể xóa tệp '{}': {}", remote_path, e))?;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn ssh_rename(
+    config: SshConfig,
+    secret: Option<String>,
+    old_path: String,
+    new_path: String,
+) -> Result<(), String> {
+    let session = connect_and_auth(&config, secret.as_deref())?;
+    let sftp = session.sftp().map_err(|e| format!("Khởi tạo SFTP subsystem thất bại: {}", e))?;
+
+    sftp.rename(Path::new(&old_path), Path::new(&new_path), None)
+        .map_err(|e| format!("Không thể đổi tên từ '{}' sang '{}': {}", old_path, new_path, e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn ssh_exec_command(
+    config: SshConfig,
+    secret: Option<String>,
+    command: String,
+) -> Result<CommandOutput, String> {
+    let session = connect_and_auth(&config, secret.as_deref())?;
+    let mut channel = session
+        .channel_session()
+        .map_err(|e| format!("Không thể mở channel session: {}", e))?;
+
+    channel
+        .exec(&command)
+        .map_err(|e| format!("Thực thi lệnh '{}' thất bại: {}", command, e))?;
+
+    let mut stdout_buf = Vec::new();
+    let mut stderr_buf = Vec::new();
+
+    channel
+        .read_to_end(&mut stdout_buf)
+        .map_err(|e| format!("Lỗi đọc stdout: {}", e))?;
+
+    channel
+        .stderr()
+        .read_to_end(&mut stderr_buf)
+        .map_err(|e| format!("Lỗi đọc stderr: {}", e))?;
+
+    let _ = channel.wait_close();
+    let exit_status = channel.exit_status().unwrap_or(0);
+
+    Ok(CommandOutput {
+        stdout: String::from_utf8_lossy(&stdout_buf).to_string(),
+        stderr: String::from_utf8_lossy(&stderr_buf).to_string(),
+        exit_status,
+    })
+}

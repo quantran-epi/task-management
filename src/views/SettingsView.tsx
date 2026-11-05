@@ -9,6 +9,7 @@ import {
   ExclamationCircleOutlined,
   BellOutlined,
   RobotOutlined,
+  CloudServerOutlined,
 } from '@ant-design/icons';
 import { WeeklyCapacityForm } from '../components/settings/WeeklyCapacityForm';
 import { OverridesTable } from '../components/settings/OverridesTable';
@@ -27,6 +28,7 @@ import { PwaStatusCard } from '../components/settings/PwaStatusCard';
 import { StoragePersistenceCard } from '../components/settings/StoragePersistenceCard';
 import { LocalSqlitePersistenceCard } from '../components/settings/LocalSqlitePersistenceCard';
 import { NotificationSettingsCard } from '../components/settings/NotificationSettingsCard';
+import { SshConfigCard } from '../components/settings/SshConfigCard';
 import { PostRestoreBanner } from '../components/settings/PostRestoreBanner';
 import { ResetDbModal } from '../components/common/ResetDbModal';
 import { PageHeader } from '../components/common/PageHeader';
@@ -42,7 +44,7 @@ const { Paragraph } = Typography;
 export interface SettingsViewProps {
   db?: TaskPlannerDatabase;
   onNavigate?: (route: AppRoute) => void;
-  defaultActiveTab?: 'capacity' | 'data' | 'jira' | 'notifications' | 'ai' | undefined;
+  defaultActiveTab?: 'capacity' | 'data' | 'jira' | 'notifications' | 'ai' | 'ssh' | undefined;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -50,7 +52,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onNavigate,
   defaultActiveTab = 'capacity',
 }) => {
-  const [activeTab, setActiveTab] = useState<'capacity' | 'data' | 'jira' | 'notifications' | 'ai'>(defaultActiveTab);
+  const [activeTab, setActiveTab] = useState<'capacity' | 'data' | 'jira' | 'notifications' | 'ai' | 'ssh'>(defaultActiveTab);
   const [resetModalOpen, setResetModalOpen] = useState(false);
 
   React.useEffect(() => {
@@ -232,6 +234,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </Space>
       ),
     },
+    {
+      key: 'ssh',
+      label: (
+        <span>
+          <CloudServerOutlined style={{ marginRight: 8 }} />
+          Remote SSH
+        </span>
+      ),
+      children: (
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <SshConfigCard db={db} />
+        </Space>
+      ),
+    },
   ];
 
   return (
@@ -254,7 +270,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       <Tabs
         activeKey={activeTab}
-        onChange={(k) => setActiveTab(k as 'capacity' | 'data' | 'jira' | 'notifications' | 'ai')}
+        onChange={(k) => setActiveTab(k as 'capacity' | 'data' | 'jira' | 'notifications' | 'ai' | 'ssh')}
         items={items}
       />
 
