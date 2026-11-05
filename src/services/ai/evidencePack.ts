@@ -426,10 +426,11 @@ export function packEvidence(input: PackEvidenceInput): EvidencePack {
     });
   }
 
-  // One citation per atomic MCP record: faithful text, full provenance, no char cap.
+  // One citation per atomic MCP record: faithful text, full provenance, capped to max 60 to protect token budget.
   if (input.mcpRecords && input.mcpRecords.length > 0) {
+    const cappedMcpRecords = input.mcpRecords.slice(0, 60);
     let mcpIndex = 1;
-    for (const record of input.mcpRecords) {
+    for (const record of cappedMcpRecords) {
       const cId = `M${mcpIndex++}`;
       const provenance = record.provenance[0]!;
       const docTitle = `[MCP] ${provenance.serverName} - ${provenance.toolName}`;

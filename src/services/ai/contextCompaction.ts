@@ -196,3 +196,51 @@ export async function compactThreadContext(
     return { compacted: false };
   }
 }
+
+/**
+ * Sanitizes conversation history turns by removing orphaned, unanswered, or trailing user messages.
+ * Only complete user-assistant dialogue pairs or valid assistant outputs are retained to prevent
+ * LLM confusion from failed previous turns.
+ */
+export function sanitizeHistoryTurns(
+  messages: readonly ChatMessage[],
+  excludeMessageId?: string
+): Array<{ role: 'user' | 'assistant'; content: string }> {
+  // Step 1: filter out current message and non-dialogue roles, extract text
+  const cleaned: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+  for (const m of messages) {
+    if (excludeMessageId && m.id === excludeMessageId) continue;
+    if (m.role !== 'user' && m.role !== 'assistant') continue;
+    const text = extractMessageText(m).trim();
+    if (!text) continue;
+    cleaned.push({ role: m.role, content: text });
+  }
+
+  // Step 2: drop any user message that is not followed by an assistant message
+  // (e.g. consecutive user questions from failed retries, or trailing unanswered prompts)
+  const result: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+  for (let i = 0; i < cleaned.length; i++) {
+    const item = cleaned[i]!;
+    if (item.role === 'user') {
+      // Look ahead for an assistant answer before the next user message or end of list
+      let hasAssistantAnswer = false;
+      for (let j = i + 1; j < cleaned.length; j++) {
+        if (cleaned[j]!.role === 'assistant') {
+          hasAssistantAnswer = true;
+          break;
+        }
+        if (cleaned[j]!.role === 'user') {
+          break;
+        }
+      }
+      if (hasAssistantAnswer) {
+        result.push(item);
+      }
+    } else {
+      result.push(item);
+    }
+  }
+
+  return result;
+}
+

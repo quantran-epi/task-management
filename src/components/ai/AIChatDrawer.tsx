@@ -28,7 +28,7 @@ import {
   serializeDocumentContext,
   extractMentionedEntityIds,
 } from '../../services/ai/contextGrounding';
-import { compactThreadContext, extractMessageText } from '../../services/ai/contextCompaction';
+import { compactThreadContext, sanitizeHistoryTurns } from '../../services/ai/contextCompaction';
 import {
   type AiToolDefinition,
   describeToolMutationWithContext,
@@ -1411,10 +1411,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         }
       }
       const historyMsgs = boundaryIndex >= 0 ? allThreadMsgs.slice(boundaryIndex + 1) : allThreadMsgs;
-      const historyTurns = historyMsgs
-        .filter((m) => (m.role === 'user' || m.role === 'assistant') && m.content !== trimmed)
-        .map((m) => ({ role: m.role as 'user' | 'assistant', content: extractMessageText(m) }))
-        .filter((m) => m.content.trim().length > 0);
+      const historyTurns = sanitizeHistoryTurns(historyMsgs, userMessageId ?? undefined);
 
       let turnAnalysisMode = Boolean(turnTab.config?.analysisMode);
       if (!turnAnalysisMode) {
@@ -1646,24 +1643,30 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           }
           logAiChatError('Grounded pipeline or persistence error', groundedErr);
           patchGroundedLoading(null, turnTabId);
-          // Fail-closed gate per D-04: an unavailable intent router stops the turn immediately.
-          if (
+
+          const isRouterUnavailable =
             groundedErr instanceof IntentRouterUnavailableError ||
             (groundedErr as { name?: string })?.name === 'IntentRouterUnavailableError' ||
-            (groundedErr as { message?: string })?.message?.includes('intent routing is unavailable')
-          ) {
-            patchTurnError(
-              'request_failed',
-              'Trợ lý AI tạm thời không khả dụng. Vui lòng kiểm tra lại cấu hình kết nối AI.',
-              turnTabId
-            );
+            (groundedErr as { message?: string })?.message?.includes('intent routing is unavailable');
+
+          const errorContent = isRouterUnavailable
+            ? 'Trợ lý AI tạm thời không khả dụng. Vui lòng kiểm tra lại cấu hình kết nối AI.'
+            : 'Đã xảy ra lỗi khi truy xuất hoặc kết nối 9router. Vui lòng thử lại.';
+
+          if (userMessageId) {
+            try {
+              await saveMessage({ threadId, role: 'assistant', content: errorContent }, db);
+            } catch {
+              // Best effort error recording to prevent orphan user turns
+            }
+          }
+
+          // Fail-closed gate per D-04: an unavailable intent router stops the turn immediately.
+          if (isRouterUnavailable) {
+            patchTurnError('request_failed', errorContent, turnTabId);
             return;
           }
-          patchTurnError(
-            'invalid_response',
-            'Không thể lưu câu trả lời hoặc dữ liệu tri thức không hợp lệ. Vui lòng thử lại.',
-            turnTabId
-          );
+          patchTurnError('invalid_response', errorContent, turnTabId);
           return;
         }
       }
