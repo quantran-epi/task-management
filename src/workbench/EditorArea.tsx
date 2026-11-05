@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { CloseOutlined, InboxOutlined } from '@ant-design/icons';
 import { AntdThemeAdapter } from './AntdThemeAdapter';
 import { useLayoutStore, type EditorTab } from './store/layoutStore';
@@ -65,7 +65,7 @@ export function EditorArea({ db }: EditorAreaProps) {
   const renderViewContent = (tab: EditorTab) => {
     switch (tab.viewType) {
       case 'tasks':
-        return <TasksView {...dbProp} />;
+        return <TasksView {...dbProp} initialProjectId={tab.params?.projectId} />;
       case 'notes':
         return <NotesView {...dbProp} initialDocId={tab.params?.doc} hideFolderTree={true} />;
       case 'planner':

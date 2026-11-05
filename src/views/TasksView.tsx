@@ -27,9 +27,10 @@ const { Text } = Typography;
 export interface TasksViewProps {
   db?: TaskPlannerDatabase;
   onNavigate?: (route: AppRoute) => void;
+  initialProjectId?: string | null | undefined;
 }
 
-export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, onNavigate }) => {
+export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, onNavigate, initialProjectId }) => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -122,6 +123,13 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, onNavigate
     globalSort,
     setGlobalSort,
   } = useTaskFilters({ tasks, projects, milestones, db });
+
+  // Sync initialProjectId prop from editor tab or caller
+  React.useEffect(() => {
+    if (initialProjectId !== undefined) {
+      setFilter('projectId', initialProjectId);
+    }
+  }, [initialProjectId]);
 
   const { getTimerForTask, startTimer, pauseTimer } = useTimer();
 

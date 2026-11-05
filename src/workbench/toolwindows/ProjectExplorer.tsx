@@ -368,8 +368,9 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
             onSelectProject?.(project.id);
             openTab({
               id: 'tasks',
-              title: 'Tasks',
+              title: `Tasks: ${project.name}`,
               viewType: 'tasks',
+              params: { projectId: project.id },
             });
           },
         },

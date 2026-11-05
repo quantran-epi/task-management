@@ -433,6 +433,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
             items={filteredItems}
             height={360}
             estimateSize={() => 34}
+            scrollToIndex={selectedIndex}
             role="listbox"
             aria-label="Search results"
             renderItem={(item, index) => {

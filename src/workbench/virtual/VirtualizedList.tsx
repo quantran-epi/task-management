@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
 export interface VirtualizedListProps<T> {
@@ -11,6 +11,7 @@ export interface VirtualizedListProps<T> {
   style?: React.CSSProperties;
   role?: string;
   'aria-label'?: string;
+  scrollToIndex?: number | undefined;
 }
 
 export function VirtualizedList<T>({
@@ -23,6 +24,7 @@ export function VirtualizedList<T>({
   style,
   role = 'listbox',
   'aria-label': ariaLabel,
+  scrollToIndex,
 }: VirtualizedListProps<T>) {
   const parentRef = useRef<HTMLDivElement>(null);
 
@@ -32,6 +34,12 @@ export function VirtualizedList<T>({
     estimateSize,
     overscan,
   });
+
+  useEffect(() => {
+    if (typeof scrollToIndex === 'number' && scrollToIndex >= 0 && scrollToIndex < items.length) {
+      virtualizer.scrollToIndex(scrollToIndex, { align: 'auto' });
+    }
+  }, [scrollToIndex, items.length, virtualizer]);
 
   let virtualItems = virtualizer.getVirtualItems();
 

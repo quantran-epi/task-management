@@ -14,6 +14,7 @@ import { useDoubleShift } from './hooks/useDoubleShift';
 import { SearchEverywhereModal } from './search/SearchEverywhereModal';
 import { useNotifications } from '../hooks/useNotifications';
 import { useAIChat } from '../context/AIChatContext';
+import { InlineAISelectionBar } from '../components/ai/InlineAISelectionBar';
 import type { TaskPlannerDatabase } from '../db';
 import {
   JetBrainsProjectIcon,
@@ -253,6 +254,9 @@ export function WorkbenchLayout({
           onClose={() => setSearchModalOpen(false)}
           {...(db ? { db } : {})}
         />
+
+        {/* Global Inline AI Selection Bar for document text selection */}
+        <InlineAISelectionBar {...(db ? { db } : {})} />
       </div>
     </AntdThemeAdapter>
   );

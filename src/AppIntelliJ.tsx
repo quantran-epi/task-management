@@ -11,9 +11,15 @@ import { FormGuardProvider } from './context/FormGuardContext';
 import { GitHubAuthProvider } from './context/GitHubAuthContext';
 import { ServiceWorkerProvider } from './context/ServiceWorkerContext';
 import { AppSplashScreen } from './components/AppSplashScreen';
+import { useHashRoute } from './hooks/useHashRoute';
+import { TimerPopoutView } from './views/TimerPopoutView';
+import { NotesPopoutView } from './views/NotesPopoutView';
+import { AIPopoutView } from './views/AIPopoutView';
 
 export const AppIntelliJ: React.FC = () => {
-  const [showSplash, setShowSplash] = useState(true);
+  const { route } = useHashRoute();
+  const isPopout = route === 'timer-popout' || route === 'notes-popout' || route === 'ai-popout';
+  const [showSplash, setShowSplash] = useState(!isPopout);
 
   useEffect(() => {
     initializeDatabaseDefaults().catch((err) => {
@@ -23,6 +29,34 @@ export const AppIntelliJ: React.FC = () => {
       console.warn('Storage persistence auto-request failed on boot:', err);
     });
   }, []);
+
+  if (route === 'timer-popout') {
+    return (
+      <AntdThemeAdapter>
+        <TimerProvider>
+          <TimerPopoutView />
+        </TimerProvider>
+      </AntdThemeAdapter>
+    );
+  }
+
+  if (route === 'notes-popout') {
+    return (
+      <AntdThemeAdapter>
+        <NotesPopoutView />
+      </AntdThemeAdapter>
+    );
+  }
+
+  if (route === 'ai-popout') {
+    return (
+      <AntdThemeAdapter>
+        <AIChatProvider>
+          <AIPopoutView />
+        </AIChatProvider>
+      </AntdThemeAdapter>
+    );
+  }
 
   return (
     <AntdThemeAdapter>
