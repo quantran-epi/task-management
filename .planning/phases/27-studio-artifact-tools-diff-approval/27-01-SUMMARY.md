@@ -243,3 +243,71 @@ None - no external service configuration required.
 - Created files verified on disk: `src/services/ai/sdlcArtifactTools.ts`, `src/utils/markdownSections.ts`, `src/utils/lineDiff.ts`, and the three Wave-0 suites.
 - Commits verified as ancestors of HEAD: `543e0ba9`, `dddc97b9`, `3f6f73df`, `2a32cb1d`, `67f001a2`.
 - `check evaluation-scope --plan 27-01 --commits-only` returned `status: resolved` with 5 plan commits.
+
+## Regression Follow-up — 2026-11-05
+
+**Disposition: no confirmed Phase 27 regression among the four current-only failures. No production or permanent test changes. The full-suite gate remains failed; this investigation does not turn a red suite green.**
+
+### Scope and baseline validity
+
+The coordinator supplied a current full-suite run of **35 failed / 2930 passed** (`/tmp/gsd-vitest.log`) and a baseline rerun of the same ten failing files of **32 failed / 76 passed** (`/tmp/gsd-base-vitest.log`), with 31 shared failures, four current-only failures, and one baseline-only notification failure. These are different test scopes, not directly comparable suite totals. No full-suite rerun was performed in this follow-up.
+
+Used only the existing diagnostic checkout `/tmp/gsd-base-27`, HEAD `0cd17c90f632951a3c7192d802e06509f41b7476`; no new worktree was created. Its copied `package.json` differs from the committed file only in line endings. After CRLF normalization, `package.json`, `vite.config.ts`, `tests/setup.ts`, all three affected test files, `AIChatDrawer.tsx`, and `ProjectSdlcView.tsx` match both baseline commit and current checkout. Both checkouts use the same installed dependencies through the existing node_modules symlink. No dependency install or config change occurred.
+
+### Original, unmodified focused runs
+
+Ran the following command from **each checkout**, three times, with unique report paths `/tmp/gsd27-follow-{current|base}-{1|2|3}.json` (console logs at matching `.log` paths):
+
+```sh
+npx vitest run tests/ai/AIChatDrawer.test.tsx tests/components/ai/AIChatDrawerNotification.test.ts tests/unit/sdlc/ProjectSdlcAutoAnalysis.test.tsx -t 'renders debug button in header and opens AIDebugModal with tracked turn|dispatches desktop notification when AI finishes while document is hidden|does NOT dispatch desktop notification when document is visible and focused|dispatches desktop notification with truncated body if response exceeds 120 chars when blurred|switching CR cancels pending activation and rejects stale callback' --reporter=json --outputFile=<unique-report-path>
+```
+
+Each run selected five tests; 36 other tests were intentionally filtered out, not newly skipped in source.
+
+| Run | Current | Baseline |
+|-----|---------|----------|
+| 1 | 3 passed / 2 failed | 2 passed / 3 failed |
+| 2 | 2 passed / 3 failed | 3 passed / 2 failed |
+| 3 | 2 passed / 3 failed | 2 passed / 3 failed |
+
+| Case | Current failures / runs | Baseline failures / runs | Observed failure |
+|------|-------------------------|--------------------------|------------------|
+| Debug modal with tracked turn | 3/3 | 3/3 | No debug turn (`expected 0 to be greater than 0`) |
+| Notification while document hidden | 3/3 | 3/3 | Notification spy has zero calls |
+| Visible/focused notification suppression | 2/3 | 1/3 | Reply text never appears; negative notification assertion is not reached |
+| CR switch cancels pending analysis | 0/3 | 1/3 | Intake setup remains `INTAKE` instead of reaching `SOLUTION` |
+| Truncated blurred notification (baseline-only control) | 0/3 | 0/3 | Passes in these focused original runs |
+
+Then ran the **whole auto-analysis file**, unmodified, from both checkouts:
+
+```sh
+npx vitest run tests/unit/sdlc/ProjectSdlcAutoAnalysis.test.tsx --reporter=json --outputFile=<report-path>
+```
+
+Both results were **4 passed / 1 failed**, with the same failing CR-switch case and the same `Found multiple elements with the text: CR-OTHER` error. Reports: `/tmp/gsd27-auto-current.json`, `/tmp/gsd27-auto-base.json`.
+
+### Diagnostic controls and causal evidence
+
+Temporary test-only probes were applied identically to both checkouts, with exact original bytes captured before modification and restored in `finally`. These probes were not shipped, and their passing results do not count as passing unmodified acceptance tests.
+
+1. **Bootstrap control:** waiting only for `ai-chat-widget[data-scope-key]` to stop being `default` still failed in the debug and hidden-notification cases on both checkouts. Waiting for controlled input value and enabled Send did not remove that shared bootstrap failure. This locates the failure before the plan's operational runtime path, rather than in notification dispatch or diff preparation.
+2. **Seeded-tab control:** create the durable global tab with the existing `getOrCreateActiveChatTab({ scopeKey: 'global', scopeType: 'global' }, db)` before rendering, wait for its non-default widget scope and controlled composer state, then perform the original assertions. Combined with the selector control below, **all five cases passed in two rounds on each checkout**: current 10/10, baseline 10/10. The debug service completed a tracked turn, hidden/blurred notification contents matched, and visible/focused suppression passed. Reports: `/tmp/gsd27-seeded-probe-{current|base}-{1|2}.json`.
+3. **CR selector control:** replace the document-wide `findByText('CR-OTHER')` diagnostic query with the matching element inside `.ant-select-item-option`. This avoids confusing the selected label with the dropdown option. The stale-callback assertions then passed on both checkouts, including the seeded control runs above. Production selection/cancellation code and original test are identical to baseline.
+
+The seeded-tab probe used a 50ms diagnostic settling interval in addition to explicit readiness assertions; it was not retained as a test fix. The whole-file selector failure on both branches is independently reproduced without that diagnostic timing aid.
+
+**Cause classification:** existing chat-tab bootstrap/composer test setup race and existing CR dropdown query ambiguity, plus an observed baseline intake-setup race. No evidence supports a Phase 27 code fix for these four cases. All unrelated baseline defects remain unchanged. Further work on those defects needs its own scope; the full-suite gate is still red.
+
+### Final unchanged-plan verification
+
+After restoring all six original test files (three in each checkout), byte comparisons matched the captured originals, baseline git status matched its pre-probe snapshot, and current checkout retained exactly **1936 pre-existing dirty entries** with no staged code changes.
+
+```sh
+npx vitest run tests/services/ai/sdlcArtifactTools.test.ts tests/services/sdlc/markdownSections.test.ts tests/utils/lineDiff.test.ts tests/ai/chatTurnRuntime.test.ts tests/services/ai/aiOrchestratorLoop.test.ts
+npx tsc --noEmit
+```
+
+- Plan verification: **5 files passed / 109 tests passed**, exit 0 (`/tmp/gsd27-follow-plan-verify.log`).
+- TypeScript: **exit 0** (`/tmp/gsd27-follow-tsc.log`).
+- Follow-up diff: this SUMMARY only. No source, dependency, configuration, STATE/ROADMAP advancement, or permanent test delta.
+- Follow-up self-check: original test bytes restored, existing baseline checkout preserved, root/branch pinned to the authorized sequential checkout.
