@@ -148,6 +148,9 @@ function mergeToolEvents(events: ChatTurnToolEvent[]): ChatTurnToolEvent[] {
   return [...byId.values()];
 }
 
+const ARTIFACT_DETAIL_CAP = 2000;
+const isArtifactToolName = (name: string) => name === 'get_artifact' || name === 'patch_artifact_section';
+
 /** Collapsed-by-default tool badge. Raw arguments/output never auto-expand (D-04). */
 const ToolEventBadge: React.FC<{ event: ChatTurnToolEvent; extension?: React.ReactNode }> = ({ event, extension }) => {
   const { token } = theme.useToken();
@@ -208,7 +211,13 @@ const ToolEventBadge: React.FC<{ event: ChatTurnToolEvent; extension?: React.Rea
           )}
           <div
             dangerouslySetInnerHTML={{
-              __html: renderSafeMarkdown(event.result ?? 'Chưa có kết quả công cụ.'),
+              // T-27-08: an artifact read can be a whole document; the badge shows a bounded
+              // preview while the model still receives the untouched tool result.
+              __html: renderSafeMarkdown(
+                isArtifactToolName(event.name) && (event.result ?? '').length > ARTIFACT_DETAIL_CAP
+                  ? `${(event.result ?? '').slice(0, ARTIFACT_DETAIL_CAP)}\n\n… (đã rút gọn hiển thị, kết quả đầy đủ vẫn được gửi cho mô hình)`
+                  : event.result ?? 'Chưa có kết quả công cụ.'
+              ),
             }}
           />
         </div>

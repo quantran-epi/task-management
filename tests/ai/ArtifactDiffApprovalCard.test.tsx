@@ -80,4 +80,33 @@ describe('ArtifactDiffApprovalCard through shared widget', () => {
     expect(screen.queryByTestId('artifact-diff-approval')).not.toBeInTheDocument();
     expect(within(screen.getByTestId('ai-mutation-approval')).getByText('Cập nhật A')).toBeInTheDocument();
   });
+
+  it('bounds long titles and stats, stays at 12px, and exposes palette and focus semantics', () => {
+    const longTitle = 'T'.repeat(400);
+    const huge = { ...proposal, sectionTitle: longTitle, addedLines: 500, removedLines: 500 };
+    render(<AiChatWidget {...widgetProps(huge)} />);
+    const title = screen.getByText(`Đề xuất chỉnh sửa: ${longTitle}`);
+    expect(title).toHaveStyle({ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' });
+    expect(screen.getByText('+500 dòng thêm')).toHaveStyle({ fontSize: '12px', whiteSpace: 'nowrap' });
+    const region = screen.getByRole('region', { name: 'Diff đề xuất chỉnh sửa' });
+    expect(region).toHaveAttribute('tabIndex', '0');
+    const added = Array.from(region.querySelectorAll('span')).find((span) => span.textContent?.startsWith('+Dòng'));
+    expect(added).not.toBeNull();
+    expect(region.textContent).toContain('+++ b/SOLUTION');
+    expect(region.textContent).toContain('@@');
+    // Assert the explicit font sizes this card authors, not inherited defaults on wrappers.
+    for (const element of [title, screen.getByText('+500 dòng thêm'), region]) {
+      expect(Number.parseFloat((element as HTMLElement).style.fontSize)).toBeGreaterThanOrEqual(12);
+    }
+  });
+
+  it('renders resolved decisions without buttons and announces write errors', () => {
+    const props = widgetProps(proposal);
+    const view = render(<AiChatWidget {...props} artifactDecision="rejected" />);
+    expect(screen.getByRole('status')).toHaveTextContent('Đã từ chối đề xuất — tài liệu không thay đổi.');
+    expect(screen.queryByRole('button', { name: 'Chấp thuận' })).not.toBeInTheDocument();
+    view.rerender(<AiChatWidget {...props} artifactApprovalState={{ error: 'Không thể cập nhật bản nháp: lỗi. Bản nháp hiện tại vẫn nguyên vẹn.' }} />);
+    expect(screen.getByRole('alert')).toHaveTextContent('Bản nháp hiện tại vẫn nguyên vẹn');
+    expect(screen.getByRole('button', { name: 'Chấp thuận' })).toBeEnabled();
+  });
 });

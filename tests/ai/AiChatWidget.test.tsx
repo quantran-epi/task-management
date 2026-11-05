@@ -589,4 +589,17 @@ describe('chatRepo artifactEvent persistence (D-22, T-25.3-43)', () => {
     expect(reloaded[1]!.artifactEvent?.version).toBe(2);
     expect(reloaded[0]!.createdAt <= reloaded[1]!.createdAt).toBe(true);
   });
+
+  it('bounds expanded artifact detail without mutating the tool result', () => {
+    const longArtifact = `# SOLUTION\n${'x'.repeat(5000)}`;
+    render(<AiChatWidget {...makeProps({ toolEvents: [
+      { id: 'get-1', name: 'get_artifact', phase: 'result', result: JSON.stringify({ markdown: longArtifact }) },
+    ] })} />);
+    fireEvent.click(screen.getByRole('button', { name: /\[Công cụ\] get_artifact/ }));
+    const detail = document.getElementById(
+      screen.getByRole('button', { name: /\[Công cụ\] get_artifact/ }).getAttribute('aria-controls')!,
+    )!;
+    expect(detail.textContent!.length).toBeLessThanOrEqual(2100);
+    expect(detail.textContent).toContain('…');
+  });
 });

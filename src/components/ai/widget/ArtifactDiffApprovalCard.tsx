@@ -29,7 +29,7 @@ export const ArtifactDiffApprovalCard: React.FC<ArtifactDiffApprovalCardProps> =
         border: `1px solid ${stale ? token.colorWarningBorder : token.colorBorderSecondary}` }}>
       <div style={{ display: 'flex', gap: 8, minWidth: 0, alignItems: 'center', fontSize: 14, fontWeight: 600 }}>
         <DiffOutlined style={{ color: token.colorPrimary, flexShrink: 0 }} />
-        <span title={patch.sectionTitle} style={{ minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <span title={patch.sectionTitle} style={{ minWidth: 0, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           Đề xuất chỉnh sửa: {patch.sectionTitle}
         </span>
       </div>
@@ -37,9 +37,10 @@ export const ArtifactDiffApprovalCard: React.FC<ArtifactDiffApprovalCardProps> =
         style={{ fontSize: 12, color: token.colorTextSecondary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {patch.kind} · phiên bản {patch.version} · mục {patch.sectionId}
       </div>
-      <div style={{ display: 'flex', gap: 8, fontSize: 12, whiteSpace: 'nowrap' }}>
-        <span style={{ backgroundColor: addBg, padding: '2px 8px', borderRadius: 8 }}>+{patch.addedLines} dòng thêm</span>
-        <span style={{ backgroundColor: delBg, padding: '2px 8px', borderRadius: 8 }}>−{patch.removedLines} dòng xóa</span>
+      <div style={{ display: 'flex', gap: 8 }}>
+        {/* non-color signals: explicit +/− prefixes and text counts */}
+        <span style={{ backgroundColor: addBg, padding: '2px 8px', borderRadius: 8, fontSize: 12, whiteSpace: 'nowrap' }}>+{patch.addedLines} dòng thêm</span>
+        <span style={{ backgroundColor: delBg, padding: '2px 8px', borderRadius: 8, fontSize: 12, whiteSpace: 'nowrap' }}>−{patch.removedLines} dòng xóa</span>
       </div>
       {stale && <Alert type="warning" showIcon role="alert" style={{ fontSize: 12 }}
         title="Tài liệu đã thay đổi sau khi đề xuất này. Bản diff bên dưới chỉ để tham khảo — yêu cầu AI đề xuất lại trong khung chat." />}
