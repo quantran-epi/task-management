@@ -1,0 +1,83 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { TaskPlannerDatabase } from '../../src/db';
+import { AiChatWidget, type AiChatWidgetProps } from '../../src/components/ai/AiChatWidget';
+import { prepareArtifactPatch, type ArtifactPatchProposal } from '../../src/services/ai/sdlcArtifactTools';
+import { createSdlcWorkflowCoordinator, defaultSha256 } from '../../src/services/wizard/workflowCoordinator';
+
+export const proposal: ArtifactPatchProposal = {
+  proposalId: '11111111-1111-4111-8111-111111111111', scopeKey: 'sdlc:p:cr:SOLUTION',
+  projectId: 'p', crId: 'cr', kind: 'SOLUTION', version: 1, sectionId: '1.1',
+  sectionTitle: 'Mục tiêu', baseHash: 'a'.repeat(64), baseMarkdown: '# SOLUTION\n## Mục tiêu\nCũ',
+  diffText: '--- a/SOLUTION\n+++ b/SOLUTION\n@@ -1,1 +1,1 @@\n-Cũ\n+<img src=x onerror=alert(1)>',
+  addedLines: 1, removedLines: 1, patchedMarkdown: '# SOLUTION\n## Mục tiêu\nMới',
+};
+
+function widgetProps(patch: ArtifactPatchProposal): AiChatWidgetProps {
+  return {
+    scope: { kind: 'sdlc', threadId: 't', scopeKey: patch.scopeKey, label: 'SDLC' }, messages: [],
+    turn: { status: 'awaiting-approval', streamingText: '', streamingStatusLabel: null,
+      pendingApproval: { toolName: 'patch_artifact_section', summary: 'Đề xuất', patch } },
+    onSubmit: vi.fn(), onStop: vi.fn(), onResolveApproval: vi.fn(), onRetry: vi.fn(), error: null,
+    toolbox: { selectedModel: 'test', availableModels: ['test'], onModelChange: vi.fn(),
+      analysisMode: false, onToggleAnalysisMode: vi.fn(), autoApproveMutations: true,
+      onToggleAutoApproveMutations: vi.fn(), mcpEnabled: false, onToggleMcpEnabled: vi.fn() },
+    quickPrompts: [], onClearThread: vi.fn(), emptyState: { heading: 'SDLC', body: '' },
+    draft: '', onDraftChange: vi.fn(),
+  };
+}
+
+afterEach(cleanup);
+
+describe('ArtifactDiffApprovalCard through shared widget', () => {
+  it('renders a real prepared patch as verbatim diff instead of generic mutation approval', async () => {
+    const db = new TaskPlannerDatabase(`patch-card-${crypto.randomUUID()}`);
+    try {
+      const coordinator = createSdlcWorkflowCoordinator({
+        projectId: crypto.randomUUID(), threadId: crypto.randomUUID(),
+      });
+      await coordinator.startOrUpdateIntake({ cr: 'CR', featureName: 'Test', author: 'Tester',
+        requestingUnit: 'IT', date: '2026-11-05' }, 'PL01', 'PL02');
+      const markdown = '# SOLUTION\n## Mục tiêu\nCũ';
+      const state = await coordinator.commitSolution(markdown);
+      const result = await prepareArtifactPatch(db, {
+        projectId: state.projectId, crId: 'cr', scopeKey: 'sdlc:p:cr:SOLUTION', stepId: 'SOLUTION',
+        getAccess: () => ({ readOnly: false, crActive: true, scopeValid: true }),
+        getDraft: () => markdown, getWorkflowState: () => state,
+      }, { kind: 'SOLUTION', sectionId: '1.1', expectedHeading: 'Mục tiêu',
+        baseHash: await defaultSha256(markdown.trim()), operation: 'append', newContent: '<img src=x onerror=alert(1)>' });
+      expect('proposalId' in result).toBe(true);
+      const patch = result as ArtifactPatchProposal;
+      const props = widgetProps(patch);
+      const view = render(<AiChatWidget {...props} />);
+      expect(screen.getByText('Đề xuất chỉnh sửa: Mục tiêu')).toBeInTheDocument();
+      const region = screen.getByRole('region', { name: 'Diff đề xuất chỉnh sửa' });
+      expect(region.textContent).toBe(patch.diffText);
+      expect(region).toHaveStyle({ maxHeight: '240px', overflowX: 'auto', overflowY: 'auto', fontSize: '12px' });
+      expect(region.querySelector('img')).toBeNull();
+      expect(screen.getByText('SOLUTION · phiên bản 1 · mục 1.1')).toBeInTheDocument();
+      expect(screen.getByText('+1 dòng thêm')).toBeInTheDocument();
+      expect(screen.getByText('−0 dòng xóa')).toBeInTheDocument();
+      expect(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI')).toBeDisabled();
+      expect(screen.queryByTestId('ai-staged-loading')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Chấp thuận' }));
+      expect(props.onResolveApproval).toHaveBeenCalledExactlyOnceWith(true);
+      view.unmount();
+    } finally { await db.delete(); }
+  });
+
+  it('keeps stale diff visible, disables approve only, and leaves ordinary mutation UI unchanged', () => {
+    const props = widgetProps(proposal);
+    const view = render(<AiChatWidget {...props} artifactApprovalState={{ stale: true }} />);
+    expect(screen.getByRole('alert')).toHaveTextContent('Tài liệu đã thay đổi sau khi đề xuất này.');
+    expect(screen.getByRole('button', { name: 'Chấp thuận' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Từ chối' }));
+    expect(props.onResolveApproval).toHaveBeenCalledExactlyOnceWith(false);
+    expect(screen.getByRole('region', { name: 'Diff đề xuất chỉnh sửa' }).textContent).toBe(proposal.diffText);
+    view.rerender(<AiChatWidget {...props} turn={{ ...props.turn,
+      pendingApproval: { toolName: 'update_task', summary: 'Cập nhật A' } }} />);
+    expect(screen.getByText('Yêu cầu xác nhận thay đổi dữ liệu')).toBeInTheDocument();
+    expect(screen.queryByTestId('artifact-diff-approval')).not.toBeInTheDocument();
+    expect(within(screen.getByTestId('ai-mutation-approval')).getByText('Cập nhật A')).toBeInTheDocument();
+  });
+});
