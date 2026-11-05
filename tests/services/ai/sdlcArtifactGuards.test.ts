@@ -25,6 +25,10 @@ async function seed(db: TaskPlannerDatabase, refs: Refs, options: { crId?: strin
       ...(key === 'changePack' ? {} : { approvedAt: AT }),
     };
   }
+  if (artifacts.changePack && artifacts.solution) {
+    (artifacts.changePack as { sourceHashes: string[] }).sourceHashes =
+      [(artifacts.solution as { hash: string }).hash];
+  }
   const state: SdlcWorkflowState = {
     schemaVersion: 1, sessionId: '33333333-3333-4333-8333-333333333333', projectId: PROJECT,
     threadId: '44444444-4444-4444-8444-444444444444', currentStep: 'SOLUTION',

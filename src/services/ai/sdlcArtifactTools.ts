@@ -7,6 +7,7 @@ import {
   SdlcWorkflowStateSchema,
 } from '../wizard/workflowSchemas';
 import { defaultSha256, workflowStorageKey } from '../wizard/workflowCoordinator';
+import { formatGuardMessage, WORKFLOW_GUARD_MESSAGES, WORKFLOW_GUARD_STEP_NUMBER, type WorkflowGuardCode } from '../wizard/workflowGuards';
 import { buildSectionIndex, splitLines, type ArtifactSection } from '../../utils/markdownSections';
 import {
   createUnifiedLineDiff,
@@ -26,8 +27,10 @@ export { MAX_DIFF_CELLS };
 export type ArtifactToolRefusalCode =
   | 'ARTIFACT_SCOPE_REQUIRED'
   | 'ARTIFACT_SCOPE_INVALID'
+  | 'ARTIFACT_STEP_UNSUPPORTED'
   | 'CR_NOT_ACTIVE'
-  | 'READ_ONLY'
+  | 'ARTIFACT_READ_ONLY'
+  | 'ARTIFACT_REQUIRED'
   | 'UNSUPPORTED_KIND'
   | 'WORKFLOW_UNAVAILABLE'
   | 'ARTIFACT_NOT_FOUND'
@@ -37,7 +40,8 @@ export type ArtifactToolRefusalCode =
   | 'SECTION_EMPTY'
   | 'PATCH_TOO_LARGE'
   | 'NO_CHANGES'
-  | 'DIFF_BUDGET_EXCEEDED';
+  | 'DIFF_BUDGET_EXCEEDED'
+  | WorkflowGuardCode;
 
 export interface ArtifactToolRefusal {
   refused: true;
@@ -49,6 +53,10 @@ export interface ArtifactToolRefusal {
   removedLines?: number;
   cap?: number;
   sectionId?: string;
+  /** Supplying step for a missing prerequisite, so the host can offer navigation. */
+  supplyingStep?: SdlcStepId;
+  stepNumber?: number;
+  missingArtifact?: string;
 }
 
 export interface ArtifactToolSnapshot {
@@ -142,15 +150,70 @@ const patchArgsSchema = z.object({
 export type ArtifactPatchArgs = z.infer<typeof patchArgsSchema>;
 export type GetArtifactArgs = z.infer<typeof getArtifactArgsSchema>;
 
+/** A document kind is only editable from the step that owns it (SDLC-ART-06). */
+const KIND_OWNING_STEP: Record<ArtifactToolKind, SdlcStepId> = {
+  SOLUTION: 'SOLUTION',
+  PL03B: 'TECH_DOCS',
+  PL07: 'TECH_DOCS',
+  CAB: 'CAB',
+};
+
+type PrerequisiteGuard = {
+  guard: WorkflowGuardCode;
+  present: (state: SdlcWorkflowState) => boolean;
+};
+
+/** Prerequisites come from validated workflow references, never grounded text or model flags. */
+const KIND_PREREQUISITES: Record<ArtifactToolKind, readonly PrerequisiteGuard[]> = {
+  SOLUTION: [
+    { guard: 'INTAKE_PL01_REQUIRED', present: (state) => Boolean(state.artifacts.pl01?.content?.trim()) },
+    { guard: 'INTAKE_PL02_REQUIRED', present: (state) => Boolean(state.artifacts.pl02?.content?.trim()) },
+  ],
+  PL03B: [
+    { guard: 'SOLUTION_AND_PACK_REQUIRED_FOR_TECH_DOCS', present: (state) => Boolean(state.artifacts.solution?.content?.trim()) },
+    { guard: 'SOLUTION_AND_PACK_REQUIRED_FOR_TECH_DOCS', present: (state) => Boolean(state.artifacts.changePack?.hash && state.artifacts.solution && state.artifacts.changePack.sourceHashes.includes(state.artifacts.solution.hash)) },
+  ],
+  PL07: [
+    { guard: 'SOLUTION_AND_PACK_REQUIRED_FOR_TECH_DOCS', present: (state) => Boolean(state.artifacts.solution?.content?.trim()) },
+    { guard: 'SOLUTION_AND_PACK_REQUIRED_FOR_TECH_DOCS', present: (state) => Boolean(state.artifacts.changePack?.hash && state.artifacts.solution && state.artifacts.changePack.sourceHashes.includes(state.artifacts.solution.hash)) },
+  ],
+  CAB: [
+    { guard: 'ALL_DOCS_REQUIRED_FOR_CAB', present: (state) => Boolean(state.artifacts.pl03b?.content?.trim()) },
+    { guard: 'ALL_DOCS_REQUIRED_FOR_CAB', present: (state) => Boolean(state.artifacts.pl07?.content?.trim()) },
+  ],
+};
+
+function stepOwnershipRefusal(stepId: SdlcStepId, kind: ArtifactToolKind): ArtifactToolRefusal | undefined {
+  const owner = KIND_OWNING_STEP[kind];
+  if (owner === stepId) return undefined;
+  return refuse(
+    'ARTIFACT_STEP_UNSUPPORTED',
+    `Tài liệu ${kind} thuộc bước ${owner}. Công cụ tài liệu không thể đọc hoặc sửa ${kind} từ bước ${stepId}.`,
+    { missingArtifact: KIND_LABEL[kind] }
+  );
+}
+
+/** Actionable guard copy plus the supplying step and its 1-based number for navigation. */
+function prerequisiteRefusal(state: SdlcWorkflowState, kind: ArtifactToolKind): ArtifactToolRefusal | undefined {
+  const missing = KIND_PREREQUISITES[kind].find((entry) => !entry.present(state));
+  if (!missing) return undefined;
+  const message = WORKFLOW_GUARD_MESSAGES[missing.guard];
+  return refuse(missing.guard, formatGuardMessage(missing.guard), {
+    supplyingStep: message.supplyingStep,
+    stepNumber: WORKFLOW_GUARD_STEP_NUMBER[message.supplyingStep],
+    missingArtifact: message.missingArtifact,
+  });
+}
+
 function accessRefusal(context: ArtifactToolContext): ArtifactToolRefusal | undefined {
   const access = context.getAccess();
-  if (!access.scopeValid) {
+  if (!access.scopeValid || !context.projectId || !context.crId || !context.scopeKey) {
     return refuse('ARTIFACT_SCOPE_INVALID', 'Phạm vi quy trình không còn hợp lệ. Hãy mở lại CR đang làm việc.');
   }
   if (access.readOnly) {
     return refuse(
-      'READ_ONLY',
-      'Đang xem phiên bản xem trước/lịch sử nên chỉ đọc. Hãy chuyển về CR đang hoạt động để xem hoặc đề xuất chỉnh sửa.'
+      'ARTIFACT_READ_ONLY',
+      'Chỉ được phép chỉnh sửa ở phiên bản đang hoạt động. Đang xem phiên bản xem trước/lịch sử — hãy quay về phiên bản hiện tại để đề xuất chỉnh sửa.'
     );
   }
   if (!access.crActive) {
@@ -163,22 +226,16 @@ async function loadWorkflowState(
   db: TaskPlannerDatabase,
   context: ArtifactToolContext
 ): Promise<SdlcWorkflowState | ArtifactToolRefusal> {
-  if (context.getWorkflowState) {
-    const live = context.getWorkflowState();
-    if (!live) {
-      // An explicitly supplied but unavailable host state is unavailable — never a
-      // licence to read another snapshot (T-27-01).
-      return refuse('WORKFLOW_UNAVAILABLE', 'Chưa có trạng thái quy trình SDLC cho CR này.');
-    }
-    return live;
-  }
   try {
-    const row = await db.settings.get(workflowStorageKey(context.projectId, context.crId));
-    if (!row?.value) {
+    // A supplied but unavailable live state is unavailable, never a fallback to a stale DB snapshot.
+    const value: unknown = context.getWorkflowState
+      ? context.getWorkflowState()
+      : (await db.settings.get(workflowStorageKey(context.projectId, context.crId)))?.value;
+    if (value === undefined) {
       return refuse('WORKFLOW_UNAVAILABLE', 'Chưa có trạng thái quy trình SDLC cho CR này.');
     }
     const parsed = SdlcWorkflowStateSchema.safeParse(
-      typeof row.value === 'string' ? JSON.parse(row.value) : row.value
+      typeof value === 'string' ? JSON.parse(value) : value
     );
     if (!parsed.success) {
       return refuse('WORKFLOW_UNAVAILABLE', 'Trạng thái quy trình SDLC không hợp lệ hoặc đã hỏng.');
@@ -193,6 +250,19 @@ function committedArtifact(state: SdlcWorkflowState, kind: ArtifactToolKind): Sd
   return state.artifacts[ARTIFACT_KEY[kind]];
 }
 
+/** The same live guard serves direct reads and patch preparation; model args never select scope. */
+export function validateArtifactToolAccess(
+  context: ArtifactToolContext,
+  state: SdlcWorkflowState,
+  kind: ArtifactToolKind
+): ArtifactToolRefusal | undefined {
+  return accessRefusal(context) ??
+    (state.projectId !== context.projectId
+      ? refuse('ARTIFACT_SCOPE_INVALID', 'Trạng thái quy trình không thuộc dự án đang mở. Hãy mở lại CR đang làm việc.')
+      : undefined) ??
+    stepOwnershipRefusal(context.stepId, kind) ?? prerequisiteRefusal(state, kind);
+}
+
 export async function readArtifactSnapshot(
   db: TaskPlannerDatabase,
   context: ArtifactToolContext,
@@ -205,22 +275,35 @@ export async function readArtifactSnapshot(
 
   const denied = accessRefusal(context);
   if (denied) return denied;
+  const unsupportedStep = stepOwnershipRefusal(context.stepId, parsedKind.data);
+  if (unsupportedStep) return unsupportedStep;
 
   const state = await loadWorkflowState(db, context);
   if (isRefusal(state as ArtifactToolResult)) return state as ArtifactToolRefusal;
 
   const workflowState = state as SdlcWorkflowState;
+  const missingPrerequisite = validateArtifactToolAccess(context, workflowState, parsedKind.data);
+  if (missingPrerequisite) return missingPrerequisite;
+  // Access is re-checked AFTER the awaited workflow read (T-27-15): a scope revoked while
+  // the read was in flight must not leak content.
+  const revokedMidRead = accessRefusal(context);
+  if (revokedMidRead) return revokedMidRead;
+
   const committed = committedArtifact(workflowState, parsedKind.data);
   const draft = context.getDraft(parsedKind.data);
   const markdown = draft !== undefined ? draft : committed?.content;
   if (markdown === undefined) {
     return refuse(
-      'ARTIFACT_NOT_FOUND',
-      `Chưa có ${KIND_LABEL[parsedKind.data]} cho CR này. Hãy tạo tài liệu trước khi xem hoặc đề xuất chỉnh sửa.`
+      'ARTIFACT_REQUIRED',
+      `Chưa đủ điều kiện: Thiếu ${KIND_LABEL[parsedKind.data]} từ Bước ${WORKFLOW_GUARD_STEP_NUMBER[KIND_OWNING_STEP[parsedKind.data]]}. Vui lòng tạo tài liệu trước khi xem hoặc đề xuất chỉnh sửa.`,
+      { missingArtifact: KIND_LABEL[parsedKind.data], supplyingStep: KIND_OWNING_STEP[parsedKind.data],
+        stepNumber: WORKFLOW_GUARD_STEP_NUMBER[KIND_OWNING_STEP[parsedKind.data]] }
     );
   }
 
   const baseHash = await defaultSha256(markdown.trim());
+  const revokedAfterHash = accessRefusal(context);
+  if (revokedAfterHash) return revokedAfterHash;
   const matchesCommitted = committed?.hash === baseHash;
 
   return {

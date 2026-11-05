@@ -53,6 +53,8 @@ async function seedWorkflow(
       date: '2026-11-04',
     },
     artifacts: {
+      pl01: { kind: 'PL01', version: 1, hash: '1'.repeat(64), title: 'PL01', content: 'PL01', sourceHashes: [], updatedAt: timestamp },
+      pl02: { kind: 'PL02', version: 1, hash: '2'.repeat(64), title: 'PL02', content: 'PL02', sourceHashes: [], updatedAt: timestamp },
       solution: {
         kind: 'SOLUTION',
         version: 3,
@@ -254,16 +256,15 @@ describe('sdlc artifact tools (SDLC-ART-01, SDLC-ART-02)', () => {
     expect(snapshot.approvalState).toBe('unapproved');
   });
 
-  it('refuses with ARTIFACT_NOT_FOUND when no committed artifact and no draft exist', async () => {
-    const refusal = await callTool(
-      db,
-      'get_artifact',
-      { kind: 'CAB' },
-      makeContext({ getDraft: () => undefined })
-    );
-
+  it('refuses with ARTIFACT_REQUIRED when no current artifact or draft exists', async () => {
+    const row = await db.settings.get(workflowStorageKey(PROJECT_ID, 'cr-active'));
+    const state = JSON.parse(String(row!.value));
+    delete state.artifacts.solution;
+    await db.settings.put({ ...row!, value: JSON.stringify(state) });
+    const refusal = await callTool(db, 'get_artifact', { kind: 'SOLUTION' }, makeContext({ getDraft: () => undefined }));
     expect(refusal.refused).toBe(true);
-    expect(refusal.code).toBe('ARTIFACT_NOT_FOUND');
+    expect(refusal.code).toBe('ARTIFACT_REQUIRED');
+    expect(refusal.supplyingStep).toBe('SOLUTION');
   });
 
   it('refuses read-only and inactive scopes before touching the artifact', async () => {
@@ -273,7 +274,7 @@ describe('sdlc artifact tools (SDLC-ART-01, SDLC-ART-02)', () => {
       { kind: 'SOLUTION' },
       makeContext({ getAccess: () => ({ readOnly: true, crActive: true, scopeValid: true }) })
     );
-    expect(readOnly.code).toBe('READ_ONLY');
+    expect(readOnly.code).toBe('ARTIFACT_READ_ONLY');
 
     const inactive = await callTool(
       db,
