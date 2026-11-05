@@ -16,11 +16,11 @@ import { useNotifications } from '../hooks/useNotifications';
 import { useAIChat } from '../context/AIChatContext';
 import type { TaskPlannerDatabase } from '../db';
 import {
-  ProjectOutlined,
-  FileTextOutlined,
-  RobotOutlined,
-  BellOutlined,
-} from '@ant-design/icons';
+  JetBrainsProjectIcon,
+  JetBrainsDocsIcon,
+  JetBrainsAIIcon,
+  JetBrainsNotificationIcon,
+} from '../components/icons/JetBrainsIcons';
 import '../styles/workbench-tokens.css';
 
 export interface WorkbenchLayoutProps {
@@ -35,8 +35,8 @@ export interface WorkbenchLayoutProps {
 }
 
 const DEFAULT_LEFT_ITEMS: ToolWindowItem[] = [
-  { id: 'projects', name: 'Project Explorer', icon: <ProjectOutlined />, shortcut: 'Alt+1' },
-  { id: 'docs', name: 'Docs Explorer', icon: <FileTextOutlined />, shortcut: 'Alt+2' },
+  { id: 'projects', name: 'Project Explorer', icon: <JetBrainsProjectIcon size={16} />, shortcut: 'Alt+1' },
+  { id: 'docs', name: 'Docs Explorer', icon: <JetBrainsDocsIcon size={16} />, shortcut: 'Alt+2' },
 ];
 
 export function WorkbenchLayout({
@@ -53,11 +53,11 @@ export function WorkbenchLayout({
 
   const rightItems = useMemo<ToolWindowItem[]>(() => {
     return [
-      { id: 'ai_chat', name: 'AI Assistant', icon: <RobotOutlined />, shortcut: 'Alt+3' },
+      { id: 'ai_chat', name: 'AI Assistant', icon: <JetBrainsAIIcon size={16} />, shortcut: 'Alt+3' },
       {
         id: 'notifications',
         name: 'Notifications',
-        icon: <BellOutlined />,
+        icon: <JetBrainsNotificationIcon size={16} />,
         shortcut: 'Alt+4',
         badge: notifications.activeCount,
       },

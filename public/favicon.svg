@@ -1,48 +1,92 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
   <defs>
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#6366f1" />
-      <stop offset="100%" stop-color="#4338ca" />
+    <!-- Dark glass outer square matching JetBrains / modern desktop -->
+    <linearGradient id="bodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e1f22" />
+      <stop offset="100%" stop-color="#0e1015" />
     </linearGradient>
-    <linearGradient id="glowGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.25" />
-      <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+
+    <!-- Vibrant JetBrains / Modern AI overlapping color layers -->
+    <!-- Ribbon 1: Cyan to Electric Blue -->
+    <linearGradient id="cyanBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f2fe" />
+      <stop offset="100%" stop-color="#4facfe" />
     </linearGradient>
-    <linearGradient id="checkGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#4f46e5" />
-      <stop offset="100%" stop-color="#4338ca" />
+
+    <!-- Ribbon 2: Violet Indigo to Purple -->
+    <linearGradient id="purpleViolet" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#7f00ff" />
+      <stop offset="100%" stop-color="#e100ff" />
     </linearGradient>
-    <filter id="cardShadow" x="-10%" y="-10%" width="120%" height="125%" filterUnits="userSpaceOnUse">
-      <feDropShadow dx="0" dy="16" stdDeviation="16" flood-color="#1e1b4b" flood-opacity="0.3" />
+
+    <!-- Ribbon 3: Warm Coral / Amber / Sunset -->
+    <linearGradient id="sunsetGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff0844" />
+      <stop offset="100%" stop-color="#ffb199" />
+    </linearGradient>
+
+    <!-- Ribbon 4: Neon Emerald Lime (Task Check & Agility) -->
+    <linearGradient id="limeEmerald" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f5a0" />
+      <stop offset="100%" stop-color="#00d9f5" />
+    </linearGradient>
+
+    <!-- Amber Glow Ribbon -->
+    <linearGradient id="amberGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f6d365" />
+      <stop offset="100%" stop-color="#fda085" />
+    </linearGradient>
+
+    <!-- Border highlight -->
+    <linearGradient id="borderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f2fe" stop-opacity="0.7" />
+      <stop offset="50%" stop-color="#e100ff" stop-opacity="0.5" />
+      <stop offset="100%" stop-color="#ffb199" stop-opacity="0.4" />
+    </linearGradient>
+
+    <!-- Drop Shadows for 3D JetBrains ribbon layering -->
+    <filter id="ribbonShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="-2" dy="8" stdDeviation="10" flood-color="#000000" flood-opacity="0.45" />
+    </filter>
+
+    <filter id="outerGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
     </filter>
   </defs>
 
-  <!-- Background Squircle -->
-  <rect width="512" height="512" rx="120" fill="url(#bgGrad)"/>
+  <!-- 1. JetBrains ExpUI Rounded Square Base Container -->
+  <rect width="512" height="512" rx="116" fill="url(#bodyGrad)" />
+  <rect x="2" y="2" width="508" height="508" rx="114" fill="none" stroke="url(#borderGrad)" stroke-width="3" />
 
-  <!-- Subtle Top Inner Highlight -->
-  <rect width="512" height="256" rx="120" fill="url(#glowGrad)"/>
+  <!-- 2. Dynamic Geometric JetBrains-style Polyhedral Ribbons -->
+  <!-- Layer 1: Coral / Sunset Fold (Bottom-Right) -->
+  <polygon points="260,250 430,340 370,440 210,380" fill="url(#sunsetGrad)" filter="url(#ribbonShadow)" opacity="0.95" />
 
-  <!-- Planner Card with Shadow -->
-  <g filter="url(#cardShadow)">
-    <!-- Card Backing Plate -->
-    <rect x="100" y="116" width="312" height="312" rx="36" fill="#ffffff" fill-opacity="0.16"/>
-    <!-- Main Card Body -->
-    <rect x="108" y="124" width="296" height="296" rx="32" fill="#ffffff"/>
-  </g>
+  <!-- Layer 2: Violet / Magenta Fold (Top-Right to Center) -->
+  <polygon points="230,110 430,130 430,290 280,270" fill="url(#purpleViolet)" filter="url(#ribbonShadow)" opacity="0.95" />
 
-  <!-- Planner Header Bar -->
-  <rect x="108" y="124" width="296" height="68" rx="32" fill="#eef2ff"/>
-  <rect x="108" y="160" width="296" height="32" fill="#eef2ff"/>
+  <!-- Layer 3: Cyan / Electric Blue Fold (Top-Left to Bottom-Left) -->
+  <polygon points="100,100 270,90 220,310 90,260" fill="url(#cyanBlue)" filter="url(#ribbonShadow)" opacity="0.95" />
 
-  <!-- Clip Rings / Calendar Pegs -->
-  <rect x="180" y="96" width="24" height="44" rx="12" fill="#4338ca"/>
-  <rect x="308" y="96" width="24" height="44" rx="12" fill="#4338ca"/>
+  <!-- Layer 4: Amber / Gold Fold (Center-Right Bridge) -->
+  <polygon points="290,190 400,210 350,330 250,300" fill="url(#amberGold)" filter="url(#ribbonShadow)" opacity="0.9" />
 
-  <!-- Decorative Planner Lines -->
-  <rect x="148" y="224" width="72" height="12" rx="6" fill="#cbd5e1"/>
-  <rect x="148" y="254" width="48" height="12" rx="6" fill="#e2e8f0"/>
+  <!-- Layer 5: Neon Emerald / Cyan Forward Slash (Checkmark / Velocity Mark) -->
+  <polygon points="120,350 240,430 400,210 340,170 220,330 160,290" fill="url(#limeEmerald)" filter="url(#ribbonShadow)" />
 
-  <!-- Modern Dynamic Checkmark -->
-  <path d="M 224 300 L 272 348 L 368 236" fill="none" stroke="url(#checkGrad)" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- 3. JetBrains Code/Task Plate (Center-Left Dark Badge) -->
+  <rect x="130" y="150" width="150" height="150" rx="20" fill="#0c0d10" opacity="0.92" filter="url(#ribbonShadow)" />
+  <rect x="130" y="150" width="150" height="150" rx="20" fill="none" stroke="#2b2d30" stroke-width="2" />
+
+  <!-- Code / Task Underscore & Prompt (JetBrains CLI & Task Symbol) -->
+  <!-- 'T' & 'M' Geometric Monogram / Check in Center Plate -->
+  <path d="M 154 186 L 254 186" stroke="#ffffff" stroke-width="12" stroke-linecap="round" />
+  <path d="M 204 186 L 204 266" stroke="#ffffff" stroke-width="12" stroke-linecap="round" />
+
+  <!-- Terminal Prompt Caret / Cursor in JetBrains Style -->
+  <rect x="220" y="244" width="34" height="7" rx="3.5" fill="url(#limeEmerald)" filter="url(#outerGlow)" />
 </svg>

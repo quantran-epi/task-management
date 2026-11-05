@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   SearchOutlined,
-  CheckSquareOutlined,
-  ProjectOutlined,
-  FileTextOutlined,
   ThunderboltOutlined,
   CloseOutlined,
 } from '@ant-design/icons';
+import {
+  JetBrainsTasksIcon,
+  JetBrainsProjectIcon,
+  JetBrainsDocsIcon,
+} from '../../components/icons/JetBrainsIcons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { getAllActions, executeAction } from '../actions/actionRegistry';
@@ -258,11 +260,11 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
       case 'action':
         return <ThunderboltOutlined style={{ color: 'var(--accent, #3871e1)', fontSize: 13 }} />;
       case 'task':
-        return <CheckSquareOutlined style={{ color: 'var(--success, #338555)', fontSize: 13 }} />;
+        return <JetBrainsTasksIcon size={14} />;
       case 'project':
-        return <ProjectOutlined style={{ color: 'var(--accent, #3871e1)', fontSize: 13 }} />;
+        return <JetBrainsProjectIcon size={14} />;
       case 'doc':
-        return <FileTextOutlined style={{ color: 'var(--fg-secondary, #5f6269)', fontSize: 13 }} />;
+        return <JetBrainsDocsIcon size={14} />;
     }
   };
 

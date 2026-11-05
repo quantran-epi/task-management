@@ -1,0 +1,89 @@
+import React from 'react';
+
+export interface TaskMateLogoProps {
+  size?: number | string;
+  className?: string;
+  style?: React.CSSProperties;
+}
+
+export const TaskMateLogo: React.FC<TaskMateLogoProps> = ({
+  size = 24,
+  className,
+  style,
+}) => {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 512 512"
+      width={size}
+      height={size}
+      className={className}
+      style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0, ...style }}
+    >
+      <defs>
+        <linearGradient id="tmBgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#0f172a" />
+          <stop offset="50%" stopColor="#1e1b4b" />
+          <stop offset="100%" stopColor="#31104b" />
+        </linearGradient>
+
+        <linearGradient id="tmGemLeft" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#38bdf8" />
+          <stop offset="50%" stopColor="#6366f1" />
+          <stop offset="100%" stopColor="#8b5cf6" />
+        </linearGradient>
+
+        <linearGradient id="tmGemRight" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#ec4899" />
+          <stop offset="50%" stopColor="#f43f5e" />
+          <stop offset="100%" stopColor="#f59e0b" />
+        </linearGradient>
+
+        <linearGradient id="tmCheckGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#22d3ee" />
+          <stop offset="50%" stopColor="#10b981" />
+          <stop offset="100%" stopColor="#a3e635" />
+        </linearGradient>
+
+        <linearGradient id="tmAccentCyanPink" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#06b6d4" />
+          <stop offset="50%" stopColor="#a855f7" />
+          <stop offset="100%" stopColor="#f43f5e" />
+        </linearGradient>
+
+        <linearGradient id="tmSparkleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#fef08a" />
+          <stop offset="100%" stopColor="#f59e0b" />
+        </linearGradient>
+
+        <radialGradient id="tmCenterGlow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#6366f1" stopOpacity="0.4" />
+          <stop offset="60%" stopColor="#a855f7" stopOpacity="0.15" />
+          <stop offset="100%" stopColor="#000000" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+
+      {/* Squircle base */}
+      <rect width="512" height="512" rx="124" fill="url(#tmBgGrad)" />
+      <circle cx="256" cy="256" r="210" fill="url(#tmCenterGlow)" />
+      <rect x="3" y="3" width="506" height="506" rx="121" fill="none" stroke="url(#tmAccentCyanPink)" strokeWidth="3" strokeOpacity="0.5" />
+
+      {/* Central Glass Plate */}
+      <rect x="92" y="92" width="328" height="328" rx="44" fill="#0f172a" fillOpacity="0.8" />
+      <rect x="92" y="92" width="328" height="328" rx="44" fill="none" stroke="url(#tmAccentCyanPink)" strokeWidth="3" strokeOpacity="0.7" />
+
+      {/* Shapes: T-M Pillars */}
+      <path d="M 148 184 C 148 168 160 156 176 156 L 212 156 C 228 156 240 168 240 184 L 240 336 C 240 352 228 364 212 364 L 176 364 C 160 364 148 352 148 336 Z" fill="url(#tmGemLeft)" />
+      <path d="M 272 184 C 272 168 284 156 300 156 L 336 156 C 352 156 364 168 364 184 L 364 336 C 364 352 352 364 336 364 L 300 364 C 284 364 272 352 272 336 Z" fill="url(#tmGemRight)" />
+      <path d="M 152 168 C 152 156 162 146 174 146 L 338 146 C 350 146 360 156 360 168 L 360 200 C 360 212 350 222 338 222 L 174 222 C 162 222 152 212 152 200 Z" fill="url(#tmAccentCyanPink)" opacity="0.9" />
+
+      {/* High-contrast neon checkmark */}
+      <path d="M 196 272 L 252 328 L 388 188" fill="none" stroke="url(#tmCheckGrad)" strokeWidth="38" strokeLinecap="round" strokeLinejoin="round" />
+
+      {/* Sparkles */}
+      <path d="M 390 120 C 390 136 404 146 416 146 C 404 146 390 156 390 172 C 390 156 376 146 364 146 C 376 146 390 136 390 120 Z" fill="url(#tmSparkleGrad)" />
+      <path d="M 124 356 C 124 366 133 372 142 372 C 133 372 124 378 124 388 C 124 378 115 372 106 372 C 115 372 124 366 124 356 Z" fill="#38bdf8" />
+    </svg>
+  );
+};
+export default TaskMateLogo;

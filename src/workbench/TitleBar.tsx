@@ -3,16 +3,19 @@ import { Button, Tooltip, Modal, Typography, Tag, Badge, message } from 'antd';
 import {
   SearchOutlined,
   SettingOutlined,
-  DashboardOutlined,
-  CalendarOutlined,
-  LineChartOutlined,
-  CheckSquareOutlined,
   DesktopOutlined,
   CodeOutlined,
   SwapOutlined,
-  ThunderboltOutlined,
-  SendOutlined,
 } from '@ant-design/icons';
+import { TaskMateLogo } from '../components/TaskMateLogo';
+import {
+  JetBrainsDashboardIcon,
+  JetBrainsTasksIcon,
+  JetBrainsPlannerIcon,
+  JetBrainsAgentsIcon,
+  JetBrainsTelegramIcon,
+  JetBrainsAnalyticsIcon,
+} from '../components/icons/JetBrainsIcons';
 import { isTauriApp } from '../utils/timerPopout';
 import { useGhostDevSessions } from '../hooks/useGhostDevSessions';
 import { useTelegramPendingUsers } from '../hooks/useTelegramPendingUsers';
@@ -102,26 +105,8 @@ export function TitleBar({
             ...noDragStyle,
           }}
         >
-          {/* Logo badge with gradient */}
-          <div
-            style={{
-              width: 24,
-              height: 24,
-              borderRadius: 5,
-              background: 'linear-gradient(135deg, var(--project-color, #3574f0), var(--project-color-end, #7a64f0))',
-              color: '#ffffff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 12,
-              fontWeight: 700,
-              letterSpacing: '0.02em',
-              boxShadow: '0 1px 2px rgba(0,0,0,0.12)',
-              flexShrink: 0,
-            }}
-          >
-            T
-          </div>
+          {/* Logo badge with colorful multi-color SVG icon */}
+          <TaskMateLogo size={22} style={{ borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.18)' }} />
 
           <span
             style={{
@@ -212,7 +197,7 @@ export function TitleBar({
               <Button
                 type="text"
                 size="small"
-                icon={<DashboardOutlined style={{ fontSize: 12.5 }} />}
+                icon={<JetBrainsDashboardIcon size={14} />}
                 onClick={() => onOpenView?.('dashboard')}
                 aria-label="Open Dashboard"
                 style={{
@@ -233,7 +218,7 @@ export function TitleBar({
               <Button
                 type="text"
                 size="small"
-                icon={<CheckSquareOutlined style={{ fontSize: 12.5 }} />}
+                icon={<JetBrainsTasksIcon size={14} />}
                 onClick={() => onOpenView?.('tasks')}
                 aria-label="Open Tasks"
                 style={{
@@ -254,7 +239,7 @@ export function TitleBar({
               <Button
                 type="text"
                 size="small"
-                icon={<CalendarOutlined style={{ fontSize: 12.5 }} />}
+                icon={<JetBrainsPlannerIcon size={14} />}
                 onClick={() => onOpenView?.('planner')}
                 aria-label="Open Capacity Planner"
                 style={{
@@ -275,7 +260,7 @@ export function TitleBar({
               <Button
                 type="text"
                 size="small"
-                icon={<ThunderboltOutlined style={{ fontSize: 12.5 }} />}
+                icon={<JetBrainsAgentsIcon size={14} />}
                 onClick={() => onOpenView?.('agents')}
                 aria-label="Open Ghost Dev Agents"
                 style={{
@@ -302,7 +287,7 @@ export function TitleBar({
               <Button
                 type="text"
                 size="small"
-                icon={<SendOutlined style={{ fontSize: 12.5 }} />}
+                icon={<JetBrainsTelegramIcon size={14} />}
                 onClick={() => onOpenView?.('telegram')}
                 aria-label="Open Telegram Bot"
                 style={{
@@ -329,7 +314,7 @@ export function TitleBar({
               <Button
                 type="text"
                 size="small"
-                icon={<LineChartOutlined style={{ fontSize: 12.5 }} />}
+                icon={<JetBrainsAnalyticsIcon size={14} />}
                 onClick={() => onOpenView?.('analytics')}
                 aria-label="Open Analytics"
                 style={{
