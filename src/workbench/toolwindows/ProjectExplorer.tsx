@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { Tree, Input, Empty, Tag, Typography, Dropdown, Modal, message, type MenuProps } from 'antd';
 import {
   FolderOutlined,
@@ -45,6 +45,22 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
     y: number;
     key: string;
   } | null>(null);
+
+  const treeContainerRef = useRef<HTMLDivElement>(null);
+  const [treeHeight, setTreeHeight] = useState<number>(450);
+
+  useEffect(() => {
+    const el = treeContainerRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const h = Math.floor(entry.contentRect.height);
+        if (h > 40) setTreeHeight(h);
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   // Modals state
   const [projectModalOpen, setProjectModalOpen] = useState(false);
@@ -629,10 +645,15 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
       </div>
 
       {/* Tree Content */}
-      <div style={{ flex: 1, padding: '8px 6px', overflowY: 'auto', overflowX: 'hidden' }}>
+      <div
+        ref={treeContainerRef}
+        style={{ flex: 1, minHeight: 0, padding: '8px 6px', overflow: 'hidden' }}
+      >
         {treeData.length > 0 ? (
           <>
             <Tree
+              virtual
+              height={treeHeight}
               showIcon
               blockNode
               defaultExpandAll={projects.length <= 4}
