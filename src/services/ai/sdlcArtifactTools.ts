@@ -132,11 +132,7 @@ function isRefusal(result: ArtifactToolResult): result is ArtifactToolRefusal {
 
 const kindSchema = z.enum(ARTIFACT_TOOL_KINDS);
 
-const getArtifactArgsSchema = z.object({
-  // Kept loose so an unsupported-but-present kind yields the actionable
-  // UNSUPPORTED_KIND refusal rather than a generic argument error.
-  kind: z.string({ message: 'kind phải là chuỗi' }),
-});
+const getArtifactArgsSchema = z.object({ kind: kindSchema });
 
 const patchArgsSchema = z.object({
   kind: kindSchema,
@@ -270,7 +266,7 @@ export async function readArtifactSnapshot(
 ): Promise<ArtifactToolResult> {
   const parsedKind = kindSchema.safeParse(kind);
   if (!parsedKind.success) {
-    return refuse('UNSUPPORTED_KIND', `Công cụ chỉ hỗ trợ các tài liệu: ${ARTIFACT_TOOL_KINDS.join(', ')}.`);
+    return refuse('INVALID_ARGUMENTS', `Loại tài liệu không hợp lệ. Chỉ hỗ trợ: ${ARTIFACT_TOOL_KINDS.join(', ')}.`);
   }
 
   const denied = accessRefusal(context);
@@ -399,6 +395,8 @@ export async function prepareArtifactPatch(
   const snapshot = await readArtifactSnapshot(db, context, args.kind);
   if (isRefusal(snapshot)) return snapshot;
   const current = snapshot as ArtifactToolSnapshot;
+  const revokedBeforeDiff = accessRefusal(context);
+  if (revokedBeforeDiff) return revokedBeforeDiff;
 
   if (current.baseHash !== args.baseHash) {
     return refuse(
@@ -434,7 +432,7 @@ export async function prepareArtifactPatch(
     return refuse(
       'PATCH_TOO_LARGE',
       `Đề xuất quá lớn (${suppliedLines} dòng, giới hạn ${PATCH_LINE_CAP}). Hãy chia nhỏ thành nhiều chỉnh sửa theo từng mục.`,
-      { cap: PATCH_LINE_CAP, sectionId: args.sectionId }
+      { cap: PATCH_LINE_CAP, addedLines: suppliedLines, removedLines: 0, sectionId: args.sectionId }
     );
   }
 

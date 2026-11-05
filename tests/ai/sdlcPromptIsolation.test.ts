@@ -25,10 +25,12 @@ describe('SDLC explicit tool allowlist', () => {
     expect(tools.map((tool) => tool.function.name)).not.toContain('get_group_stats');
   });
 
-  it('preserves legacy two-argument behavior with and without Analysis Mode', () => {
-    expect(getToolsForTurn(false, dynamicTools)).toEqual([...AI_DATABASE_TOOLS, ...dynamicTools]);
+  it('preserves ordinary two-argument tools while reserving artifact tools for studio allowlists', () => {
+    const ordinaryTools = AI_DATABASE_TOOLS.filter((tool) =>
+      !['get_artifact', 'patch_artifact_section'].includes(normalizeToolName(tool.function.name)));
+    expect(getToolsForTurn(false, dynamicTools)).toEqual([...ordinaryTools, ...dynamicTools]);
     expect(getToolsForTurn(true, dynamicTools)).toEqual([
-      ...AI_DATABASE_TOOLS.filter((tool) => !isMutationTool(normalizeToolName(tool.function.name))),
+      ...ordinaryTools.filter((tool) => !isMutationTool(normalizeToolName(tool.function.name))),
       ...dynamicTools.filter((tool) => isReadOnlyMcpTool(normalizeToolName(tool.function.name))),
     ]);
   });

@@ -429,7 +429,7 @@ describe('sdlc artifact tools (SDLC-ART-01, SDLC-ART-02)', () => {
     expect(missing.code).toBe('INVALID_ARGUMENTS');
 
     const unsupported = await callTool(db, 'get_artifact', { kind: 'PL01' }, makeContext());
-    expect(unsupported.code).toBe('UNSUPPORTED_KIND');
+    expect(unsupported.code).toBe('INVALID_ARGUMENTS');
   });
 
   it('refuses an unchanged append with NO_CHANGES instead of an empty approval card', async () => {
@@ -473,11 +473,11 @@ describe('sdlc artifact tools (SDLC-ART-01, SDLC-ART-02)', () => {
     expect(isMutationTool('patch_artifact_section')).toBe(true);
     expect(isMutationTool('get_artifact')).toBe(false);
 
-    const analysisNames = getToolsForTurn(true).map((tool) => normalizeToolName(tool.function.name));
+    const analysisNames = getToolsForTurn(true, [], ['get_artifact', 'patch_artifact_section']).map((tool) => normalizeToolName(tool.function.name));
     expect(analysisNames).toContain('get_artifact');
     expect(analysisNames).not.toContain('patch_artifact_section');
 
-    const normalNames = getToolsForTurn(false).map((tool) => normalizeToolName(tool.function.name));
+    const normalNames = getToolsForTurn(false, [], ['get_artifact', 'patch_artifact_section']).map((tool) => normalizeToolName(tool.function.name));
     expect(normalNames).toContain('patch_artifact_section');
   });
 });
