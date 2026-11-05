@@ -582,7 +582,8 @@ describe('production artifact patch adapter (27-03)', () => {
 
   async function openStep(step: 'SOLUTION' | 'TECH_DOCS' | 'CAB' = 'SOLUTION') {
     const view = render(<ProjectSdlcView projectId={projectId} onBack={vi.fn()} db={db} />);
-    await screen.findByRole('button', { name: /Đặt lại quy trình/i });
+    await screen.findByText('Bước 2: Thiết kế giải pháp');
+    await waitFor(() => expect(screen.getByTestId('sidebar-cr-select')).toBeInTheDocument());
     fireEvent.click(screen.getByTestId(`sidebar-step-${step}`));
     await waitFor(() => expect(patchHost.workspace?.selectedStep).toBe(step));
     await waitFor(() => expect(patchHost.workspace?.workflowState?.artifacts.solution).toBeDefined());

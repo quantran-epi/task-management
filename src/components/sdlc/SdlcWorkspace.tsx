@@ -5,6 +5,8 @@ import type { SdlcStepId, SdlcWorkflowState } from '../../services/wizard/workfl
 import type { AiChatArtifactEvent } from '../ai/AiChatWidget';
 import type { SdlcArtifactKindForTurn } from '../../services/ai/sdlcPromptComposer';
 import type { SdlcGroundingResult } from '../../services/sdlc/groundingBuilder';
+import type { ChatMessage } from '../../types/models';
+import type { ArtifactPatchProposal, ArtifactToolContext, ArtifactToolKind } from '../../services/ai/sdlcArtifactTools';
 
 const EMPTY_GROUNDING: SdlcGroundingResult = { text: '', present: new Set() };
 import { StepChatPanel, type StepChatPanelHandle } from './chat/StepChatPanel';
@@ -37,6 +39,9 @@ export interface SdlcWorkspaceProps {
   onArtifactCta?: ((eventId: string) => void) | undefined;
   chatPanelRef?: React.Ref<StepChatPanelHandle>;
   db?: TaskPlannerDatabase | undefined;
+  artifactToolContext?: ArtifactToolContext | undefined;
+  onApplyArtifactPatch?: ((proposal: ArtifactPatchProposal, decision: ChatMessage) => Promise<void>) | undefined;
+  draftHashes?: Partial<Record<ArtifactToolKind, string>> | undefined;
 }
 
 export const SdlcWorkspace: React.FC<SdlcWorkspaceProps> = ({
@@ -55,6 +60,8 @@ export const SdlcWorkspace: React.FC<SdlcWorkspaceProps> = ({
   onArtifactCta,
   chatPanelRef,
   db,
+  artifactToolContext,
+  onApplyArtifactPatch,
 }) => {
   const { token } = theme.useToken();
   const chatPaneId = React.useId();
@@ -148,6 +155,8 @@ export const SdlcWorkspace: React.FC<SdlcWorkspaceProps> = ({
           {...(artifactEvents ? { artifactEvents } : {})}
           {...(onArtifactOpen ? { onArtifactOpen } : {})}
           {...(onArtifactCta ? { onArtifactCta } : {})}
+          {...(artifactToolContext ? { artifactToolContext } : {})}
+          {...(onApplyArtifactPatch ? { onApplyArtifactPatch } : {})}
           db={db}
         />
       </div>
