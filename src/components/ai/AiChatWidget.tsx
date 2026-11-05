@@ -11,6 +11,8 @@ import { ChatInputBar } from './ChatInputBar';
 import { ArtifactEventCard, type ArtifactEvent } from './artifacts/ArtifactEventCard';
 import { StagedLoadingIndicator, type StagedLoadingStage } from './widget/StagedLoadingIndicator';
 import { MutationApprovalCard } from './widget/MutationApprovalCard';
+import { ArtifactDiffApprovalCard } from './widget/ArtifactDiffApprovalCard';
+import type { ChatTurnApprovalInfo } from './runtime/chatTurnRuntime';
 
 export type AiChatScopeKind = 'chat' | 'sdlc';
 
@@ -57,7 +59,7 @@ export interface AiChatTurnSnapshot {
   status: ChatTurnStatus;
   streamingText: string;
   streamingStatusLabel: string | null;
-  pendingApproval: { toolName: string; summary: string } | null;
+  pendingApproval: ChatTurnApprovalInfo | null;
   toolLimitRounds?: number | null;
 }
 
@@ -70,6 +72,7 @@ export interface AiChatWidgetProps {
   onSubmit: (text: string) => void;
   onStop: () => void;
   onResolveApproval: (approved: boolean) => void;
+  artifactApprovalState?: { stale?: boolean; applying?: boolean; error?: string } | undefined;
   onRetry: () => void;
   error: { code: string; message: string } | null;
   toolbox: AiChatToolboxProps;
@@ -223,6 +226,7 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
   onSubmit,
   onStop,
   onResolveApproval,
+  artifactApprovalState,
   onRetry,
   error,
   toolbox,
@@ -445,12 +449,17 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
 
       {turn.pendingApproval && (
         <div style={{ padding: '0 16px' }}>
-          <MutationApprovalCard
-            toolName={turn.pendingApproval.toolName}
-            summary={turn.pendingApproval.summary}
-            onApprove={() => onResolveApproval(true)}
-            onReject={() => onResolveApproval(false)}
-          />
+          {turn.pendingApproval.patch ? (
+            <ArtifactDiffApprovalCard patch={turn.pendingApproval.patch} {...artifactApprovalState}
+              onApprove={() => onResolveApproval(true)} onReject={() => onResolveApproval(false)} />
+          ) : (
+            <MutationApprovalCard
+              toolName={turn.pendingApproval.toolName}
+              summary={turn.pendingApproval.summary}
+              onApprove={() => onResolveApproval(true)}
+              onReject={() => onResolveApproval(false)}
+            />
+          )}
         </div>
       )}
 
