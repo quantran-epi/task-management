@@ -215,7 +215,8 @@ describe('ChatTabBar', () => {
     expect(handleSelect).toHaveBeenCalledWith('chat-2');
   });
 
-  it('hỗ trợ Delete và Backspace để đóng tab chat thường, không đóng tab SDLC', () => {    const handleClose = vi.fn();
+  it('hỗ trợ Delete và Backspace để đóng tab chat thường, không đóng tab SDLC', () => {
+    const handleClose = vi.fn();
     render(
       <ChatTabBar
         tabs={dummyTabs}
@@ -309,6 +310,116 @@ describe('ChatTabBar', () => {
       });
       fireEvent.keyDown(screen.getByLabelText('Đổi tên tab'), { key: 'Enter' });
       expect(onRenameTab).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('drag-and-drop & scrollable tabs', () => {
+    it('tab SDLC không draggable, các tab chat thường draggable=true', () => {
+      render(
+        <ChatTabBar
+          tabs={dummyTabs}
+          activeTabId="chat-1"
+          onSelectTab={vi.fn()}
+          onAddTab={vi.fn()}
+          onCloseTab={vi.fn()}
+        />
+      );
+
+      const tabs = screen.getAllByRole('tab');
+      expect(tabs[0]).not.toHaveAttribute('draggable', 'true');
+      expect(tabs[1]).toHaveAttribute('draggable', 'true');
+      expect(tabs[2]).toHaveAttribute('draggable', 'true');
+    });
+
+    it('kéo thả tab thường kích hoạt onReorderTabs(fromIndex, toIndex)', () => {
+      const handleReorder = vi.fn();
+      render(
+        <ChatTabBar
+          tabs={dummyTabs}
+          activeTabId="chat-1"
+          onSelectTab={vi.fn()}
+          onAddTab={vi.fn()}
+          onCloseTab={vi.fn()}
+          onReorderTabs={handleReorder}
+        />
+      );
+
+      const tabs = screen.getAllByRole('tab');
+      // Drag tab index 1 (chat-1)
+      fireEvent.dragStart(tabs[1]!, {
+        dataTransfer: {
+          setData: vi.fn(),
+          effectAllowed: 'move',
+        },
+      });
+
+      // Dragover tab index 2 (chat-2)
+      fireEvent.dragOver(tabs[2]!);
+
+      // Drop on tab index 2
+      fireEvent.drop(tabs[2]!);
+
+      expect(handleReorder).toHaveBeenCalledWith(1, 2);
+    });
+
+    it('không kích hoạt onReorderTabs khi drop vào tab SDLC', () => {
+      const handleReorder = vi.fn();
+      render(
+        <ChatTabBar
+          tabs={dummyTabs}
+          activeTabId="chat-1"
+          onSelectTab={vi.fn()}
+          onAddTab={vi.fn()}
+          onCloseTab={vi.fn()}
+          onReorderTabs={handleReorder}
+        />
+      );
+
+      const tabs = screen.getAllByRole('tab');
+      fireEvent.dragStart(tabs[1]!, {
+        dataTransfer: {
+          setData: vi.fn(),
+          effectAllowed: 'move',
+        },
+      });
+
+      // Drop onto SDLC tab (index 0)
+      fireEvent.drop(tabs[0]!);
+      expect(handleReorder).not.toHaveBeenCalled();
+    });
+
+    it('hỗ trợ cuộn chuột ngang onWheel trên container', () => {
+      render(
+        <ChatTabBar
+          tabs={dummyTabs}
+          activeTabId="chat-1"
+          onSelectTab={vi.fn()}
+          onAddTab={vi.fn()}
+          onCloseTab={vi.fn()}
+        />
+      );
+
+      const tablist = screen.getByRole('tablist');
+      // Ban đầu scrollLeft = 0
+      expect(tablist.scrollLeft).toBe(0);
+
+      fireEvent.wheel(tablist, { deltaY: 50 });
+      expect(tablist.scrollLeft).toBe(50);
+    });
+
+    it('nút đóng tab có flexShrink 0', () => {
+      render(
+        <ChatTabBar
+          tabs={dummyTabs}
+          activeTabId="chat-1"
+          onSelectTab={vi.fn()}
+          onAddTab={vi.fn()}
+          onCloseTab={vi.fn()}
+        />
+      );
+
+      const closeBtn = screen.getByLabelText('Đóng 💬 Tra cứu Oracle');
+      expect(closeBtn).toHaveStyle({ flexShrink: 0 });
     });
   });
 });

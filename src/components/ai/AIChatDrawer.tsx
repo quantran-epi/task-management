@@ -102,6 +102,7 @@ import {
   setActiveTab,
   updateChatTab,
   deleteChatTab,
+  reorderChatTabs,
 } from '../../db/repositories/chatTabRepo';
 import type { ChatTab } from '../../types/models';
 import type { TabRuntimePatch, TabRuntimeStatus } from './runtime/tabTypes';
@@ -760,6 +761,35 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       }
     },
     [db]
+  );
+
+  const handleReorderTabs = useCallback(
+    async (fromIndex: number, toIndex: number) => {
+      if (
+        fromIndex < 0 ||
+        toIndex < 0 ||
+        fromIndex >= durableTabs.length ||
+        toIndex >= durableTabs.length ||
+        fromIndex === toIndex
+      ) {
+        return;
+      }
+      const newTabs = [...durableTabs];
+      const [moved] = newTabs.splice(fromIndex, 1);
+      if (!moved) return;
+      newTabs.splice(toIndex, 0, moved);
+
+      try {
+        await reorderChatTabs(
+          scopeKey,
+          newTabs.map((t) => t.id),
+          db
+        );
+      } catch (err) {
+        logAiChatError('Failed to reorder tabs', err);
+      }
+    },
+    [db, durableTabs, scopeKey]
   );
 
   const handleAddTab = useCallback(async () => {    try {
@@ -2230,6 +2260,7 @@ Rules:
           onAddTab={handleAddTab}
           onCloseTab={handleCloseTab}
           onRenameTab={handleRenameTab}
+          onReorderTabs={handleReorderTabs}
           tabAnalysisModes={tabAnalysisModes}
           tabStatuses={tabStatuses}
         />
