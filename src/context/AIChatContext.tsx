@@ -103,6 +103,8 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
   }, []);
 
   const closeChat = useCallback(() => {
+    setPendingPrompt(null);
+    setPendingDraft(null);
     saveOpenState(false);
   }, []);
 

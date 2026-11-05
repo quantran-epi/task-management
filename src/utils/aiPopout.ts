@@ -49,10 +49,11 @@ export async function openAiPopout(scope?: AIScopeParams): Promise<void> {
       const webview = new WebviewWindow(AI_POPOUT_LABEL, {
         url: buildAiPopoutUrl('', scope),
         title: 'Trợ lý AI',
-        width: 480,
-        height: 720,
+        width: 440,
+        height: 680,
         minWidth: 360,
         minHeight: 480,
+        maximized: false,
         resizable: true,
         alwaysOnTop: true,
         decorations: true,

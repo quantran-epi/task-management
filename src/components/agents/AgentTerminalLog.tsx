@@ -25,6 +25,8 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   CloseOutlined,
+  LeftOutlined,
+  RightOutlined,
   ToolOutlined,
   SafetyCertificateOutlined,
   CommentOutlined,
@@ -444,6 +446,13 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
   const [viewMode, setViewMode] = useState<'human' | 'raw'>('human');
   const [selectedAgent, setSelectedAgent] = useState<string>('all');
   const [dismissedWorkerIds, setDismissedWorkerIds] = useState<string[]>([]);
+  const [customWorkerOrder, setCustomWorkerOrder] = useState<string[]>([]);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  const [draggedWorkerIndex, setDraggedWorkerIndex] = useState<number | null>(null);
+  const [dragOverWorkerIndex, setDragOverWorkerIndex] = useState<number | null>(null);
+  const tabsScrollRef = useRef<HTMLDivElement>(null);
+  const tabElementsRef = useRef<Record<string, HTMLDivElement | null>>({});
   const [clearedInternally, setClearedInternally] = useState<boolean>(false);
   const [liveElapsedSec, setLiveElapsedSec] = useState<number>(0);
   const logContainerRef = useRef<HTMLDivElement>(null);
@@ -505,6 +514,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
   useEffect(() => {
     setSelectedAgent('all');
     setDismissedWorkerIds([]);
+    setCustomWorkerOrder([]);
     setClearedInternally(false);
   }, [taskTitle]);
 
@@ -824,10 +834,18 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
     return Array.from(map.values());
   }, [activeWorkers, logs]);
 
-  // Exclude dismissed subagents from UI
+  // Exclude dismissed subagents from UI and sort by customWorkerOrder
   const visibleWorkers = useMemo(() => {
-    return allWorkers.filter((w) => !dismissedWorkerIds.includes(w.workerId));
-  }, [allWorkers, dismissedWorkerIds]);
+    const remaining = allWorkers.filter((w) => !dismissedWorkerIds.includes(w.workerId));
+    if (customWorkerOrder.length === 0) return remaining;
+
+    const orderMap = new Map(customWorkerOrder.map((id, index) => [id, index]));
+    return [...remaining].sort((a, b) => {
+      const orderA = orderMap.has(a.workerId) ? orderMap.get(a.workerId)! : 9999;
+      const orderB = orderMap.has(b.workerId) ? orderMap.get(b.workerId)! : 9999;
+      return orderA - orderB;
+    });
+  }, [allWorkers, dismissedWorkerIds, customWorkerOrder]);
 
   // Parse logs for human view, filtering out internal system hooks and deduplicating return display
   const parsedLogs = useMemo(() => {
@@ -954,6 +972,94 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
     const rawText = filteredLogs.map((l) => l.content).join('\n');
     void navigator.clipboard?.writeText(rawText);
     message.success(`Đã sao chép ${filteredLogs.length} dòng log!`);
+  };
+
+  // Scroll overflow check for subagent tabs
+  const checkTabsScrollOverflow = () => {
+    const el = tabsScrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 1);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+  };
+
+  useEffect(() => {
+    const el = tabsScrollRef.current;
+    if (!el) return;
+    checkTabsScrollOverflow();
+    const onScroll = () => checkTabsScrollOverflow();
+    el.addEventListener('scroll', onScroll, { passive: true });
+
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(() => checkTabsScrollOverflow());
+      ro.observe(el);
+    }
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      ro?.disconnect();
+    };
+  }, [visibleWorkers.length]);
+
+  // Auto-scroll selectedAgent into view
+  useEffect(() => {
+    const el = tabElementsRef.current[selectedAgent];
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+    }
+  }, [selectedAgent]);
+
+  const handleTabsScrollLeft = () => {
+    tabsScrollRef.current?.scrollBy({ left: -140, behavior: 'smooth' });
+  };
+
+  const handleTabsScrollRight = () => {
+    tabsScrollRef.current?.scrollBy({ left: 140, behavior: 'smooth' });
+  };
+
+  const handleTabsWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (tabsScrollRef.current && e.deltaY !== 0) {
+      tabsScrollRef.current.scrollLeft += e.deltaY;
+    }
+  };
+
+  const handleWorkerDragStart = (e: React.DragEvent<HTMLDivElement>, index: number) => {
+    setDraggedWorkerIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(index));
+  };
+
+  const handleWorkerDragOver = (e: React.DragEvent<HTMLDivElement>, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (draggedWorkerIndex !== null && draggedWorkerIndex !== index) {
+      setDragOverWorkerIndex(index);
+    }
+  };
+
+  const handleWorkerDragLeave = (e: React.DragEvent<HTMLDivElement>, index: number) => {
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    if (dragOverWorkerIndex === index) {
+      setDragOverWorkerIndex(null);
+    }
+  };
+
+  const handleWorkerDrop = (e: React.DragEvent<HTMLDivElement>, targetIndex: number) => {
+    e.preventDefault();
+    if (draggedWorkerIndex !== null && draggedWorkerIndex !== targetIndex) {
+      const currentIds = visibleWorkers.map((w) => w.workerId);
+      const [moved] = currentIds.splice(draggedWorkerIndex, 1);
+      if (moved) {
+        currentIds.splice(targetIndex, 0, moved);
+        setCustomWorkerOrder(currentIds);
+      }
+    }
+    setDraggedWorkerIndex(null);
+    setDragOverWorkerIndex(null);
+  };
+
+  const handleWorkerDragEnd = () => {
+    setDraggedWorkerIndex(null);
+    setDragOverWorkerIndex(null);
   };
 
   return (
@@ -1116,110 +1222,281 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
             </Space>
           </div>
 
-          {/* Subagent & Master Switcher Tabs */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflowX: 'auto', paddingTop: 2 }}>
+          {/* Subagent & Master Switcher Draggable-Scrollable Tabs */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              paddingTop: 2,
+              position: 'relative',
+              width: '100%',
+              boxSizing: 'border-box',
+            }}
+          >
             <Text style={{ color: '#d4d4d8', fontSize: 11, fontWeight: 600, flexShrink: 0 }}>
               Tiến trình:
             </Text>
-            <Segmented
-              size="small"
-              value={selectedAgent}
-              onChange={(val) => setSelectedAgent(val as string)}
-              options={[
-                {
-                  label: <span style={{ fontWeight: 600 }}>Tất cả</span>,
-                  value: 'all',
-                },
-                {
-                  label: (
+
+            {canScrollLeft && (
+              <button
+                type="button"
+                aria-label="Cuộn tab sang trái"
+                onClick={handleTabsScrollLeft}
+                style={{
+                  height: 24,
+                  width: 18,
+                  padding: 0,
+                  border: '1px solid #3f3f46',
+                  borderRadius: 3,
+                  background: '#18181b',
+                  color: '#a1a1aa',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                  zIndex: 2,
+                }}
+              >
+                <LeftOutlined style={{ fontSize: 9 }} />
+              </button>
+            )}
+
+            <div
+              ref={tabsScrollRef}
+              role="tablist"
+              aria-label="Danh sách tiến trình subagent"
+              onWheel={handleTabsWheel}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                overflowX: 'auto',
+                scrollbarWidth: 'none',
+                flex: 1,
+                padding: '2px 0',
+                boxSizing: 'border-box',
+              }}
+            >
+              {/* Fixed Tab: Tất cả */}
+              <div
+                ref={(el) => {
+                  tabElementsRef.current['all'] = el;
+                }}
+                role="tab"
+                aria-selected={selectedAgent === 'all'}
+                onClick={() => setSelectedAgent('all')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  height: 24,
+                  padding: '0 8px',
+                  borderRadius: 4,
+                  fontSize: 11,
+                  fontWeight: selectedAgent === 'all' ? 700 : 500,
+                  backgroundColor: selectedAgent === 'all' ? '#27272a' : '#09090b',
+                  color: selectedAgent === 'all' ? '#ffffff' : '#cbd5e1',
+                  border: selectedAgent === 'all' ? '1px solid #52525b' : '1px solid #27272a',
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                  flexShrink: 0,
+                  transition: 'background-color 0.15s, color 0.15s, border-color 0.15s',
+                }}
+              >
+                Tất cả
+              </div>
+
+              {/* Fixed Tab: Master */}
+              <div
+                ref={(el) => {
+                  tabElementsRef.current['master'] = el;
+                }}
+                role="tab"
+                aria-selected={selectedAgent === 'master'}
+                onClick={() => setSelectedAgent('master')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  height: 24,
+                  padding: '0 8px',
+                  borderRadius: 4,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  backgroundColor: selectedAgent === 'master' ? '#27272a' : '#09090b',
+                  color: selectedAgent === 'master' ? '#f3e8ff' : '#c084fc',
+                  border: selectedAgent === 'master' ? '1px solid #7e22ce' : '1px solid #27272a',
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                  flexShrink: 0,
+                  transition: 'background-color 0.15s, color 0.15s, border-color 0.15s',
+                }}
+              >
+                <span>👑 Master</span>
+              </div>
+
+              {/* Draggable Worker Subagent Tabs */}
+              {visibleWorkers.map((w, index) => {
+                const isSelected = selectedAgent === w.workerId;
+                const isExited =
+                  w.status === 'done' ||
+                  w.status === 'error' ||
+                  w.status === 'interrupted';
+                const isError = w.status === 'error';
+                const isBeingDragged = draggedWorkerIndex === index;
+                const isDragTarget = dragOverWorkerIndex === index;
+
+                return (
+                  <div
+                    key={w.workerId}
+                    ref={(el) => {
+                      tabElementsRef.current[w.workerId] = el;
+                    }}
+                    role="tab"
+                    aria-selected={isSelected}
+                    draggable
+                    onDragStart={(e) => handleWorkerDragStart(e, index)}
+                    onDragOver={(e) => handleWorkerDragOver(e, index)}
+                    onDragLeave={(e) => handleWorkerDragLeave(e, index)}
+                    onDrop={(e) => handleWorkerDrop(e, index)}
+                    onDragEnd={handleWorkerDragEnd}
+                    onClick={() => setSelectedAgent(w.workerId)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 5,
+                      height: 24,
+                      padding: '0 6px 0 8px',
+                      borderRadius: 4,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      backgroundColor: isSelected ? '#1e293b' : '#09090b',
+                      color: isSelected
+                        ? isExited
+                          ? '#e4e4e7'
+                          : '#e0f2fe'
+                        : isExited
+                        ? '#a1a1aa'
+                        : '#60a5fa',
+                      border: isSelected
+                        ? '1px solid #38bdf8'
+                        : isDragTarget
+                        ? '1px dashed #60a5fa'
+                        : '1px solid #27272a',
+                      cursor: 'pointer',
+                      userSelect: 'none',
+                      flex: '1 1 140px',
+                      opacity: isBeingDragged ? 0.4 : 1,
+                      maxWidth: 200,
+                      minWidth: 60,
+                      boxSizing: 'border-box',
+                      transition: 'background-color 0.15s, color 0.15s, opacity 0.15s',
+                    }}
+                  >
+                    {isExited ? (
+                      isError ? (
+                        <CloseCircleOutlined style={{ color: '#ef4444', fontSize: 11, flexShrink: 0 }} />
+                      ) : (
+                        <CheckCircleOutlined style={{ color: '#10b981', fontSize: 11, flexShrink: 0 }} />
+                      )
+                    ) : (
+                      <span style={{ fontSize: 10, flexShrink: 0 }}>⚡</span>
+                    )}
+
                     <span
                       style={{
-                        color: selectedAgent === 'master' ? '#f3e8ff' : '#c084fc',
-                        fontWeight: 700,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        flex: 1,
+                        minWidth: 0,
                       }}
+                      title={`${w.role || 'Worker'} (${w.workerId})`}
                     >
-                      👑 Master
+                      {w.role || 'Worker'} ({w.workerId.slice(0, 6)})
                     </span>
-                  ),
-                  value: 'master',
-                },
-                ...visibleWorkers.map((w) => {
-                  const isExited =
-                    w.status === 'done' ||
-                    w.status === 'error' ||
-                    w.status === 'interrupted';
-                  const isError = w.status === 'error';
 
-                  return {
-                    label: (
-                      <span
+                    {isExited && (
+                      <Tag
+                        bordered={false}
                         style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 4,
-                          color:
-                            selectedAgent === w.workerId
-                              ? (isExited ? '#e4e4e7' : '#e0f2fe')
-                              : (isExited ? '#a1a1aa' : '#60a5fa'),
-                          fontWeight: 700,
+                          fontSize: 9,
+                          lineHeight: '14px',
+                          padding: '0 4px',
+                          margin: 0,
+                          background: isError ? '#450a0a' : '#14532d',
+                          color: isError ? '#fca5a5' : '#86efac',
+                          flexShrink: 0,
                         }}
                       >
-                        {isExited ? (
-                          <>
-                            {isError ? (
-                              <CloseCircleOutlined style={{ color: '#ef4444', fontSize: 11 }} />
-                            ) : (
-                              <CheckCircleOutlined style={{ color: '#10b981', fontSize: 11 }} />
-                            )}
-                            <span>{w.role || 'Worker'} ({w.workerId.slice(0, 6)})</span>
-                            <Tag
-                              bordered={false}
-                              style={{
-                                fontSize: 9,
-                                lineHeight: '14px',
-                                padding: '0 4px',
-                                margin: 0,
-                                background: isError ? '#450a0a' : '#14532d',
-                                color: isError ? '#fca5a5' : '#86efac',
-                              }}
-                            >
-                              {isError ? 'Lỗi' : 'Đã thoát'}
-                            </Tag>
-                            <Tooltip title="Xóa subagent khỏi terminal">
-                              <CloseOutlined
-                                style={{
-                                  fontSize: 10,
-                                  color: '#71717a',
-                                  cursor: 'pointer',
-                                  padding: '2px',
-                                  marginLeft: 2,
-                                }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  e.preventDefault();
-                                  handleRemoveWorker(w.workerId);
-                                }}
-                                role="button"
-                                aria-label={`Xóa subagent ${w.workerId}`}
-                              />
-                            </Tooltip>
-                          </>
-                        ) : (
-                          <span>⚡ {w.role || 'Worker'} ({w.workerId.slice(0, 6)})</span>
-                        )}
-                      </span>
-                    ),
-                    value: w.workerId,
-                  };
-                }),
-              ]}
-              style={{
-                backgroundColor: '#09090b',
-                border: '1px solid #52525b',
-                padding: 2,
-                fontSize: 11,
-              }}
-            />
+                        {isError ? 'Lỗi' : 'Đã thoát'}
+                      </Tag>
+                    )}
+
+                    <Tooltip title="Đóng tab này">
+                      <button
+                        type="button"
+                        aria-label={`Đóng tab ${w.workerId}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          handleRemoveWorker(w.workerId);
+                        }}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          padding: 0,
+                          margin: 0,
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#71717a',
+                          flexShrink: 0,
+                          width: 14,
+                          height: 14,
+                          borderRadius: '50%',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.color = '#ef4444';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.color = '#71717a';
+                        }}
+                      >
+                        <CloseOutlined style={{ fontSize: 9 }} />
+                      </button>
+                    </Tooltip>
+                  </div>
+                );
+              })}
+            </div>
+
+            {canScrollRight && (
+              <button
+                type="button"
+                aria-label="Cuộn tab sang phải"
+                onClick={handleTabsScrollRight}
+                style={{
+                  height: 24,
+                  width: 18,
+                  padding: 0,
+                  border: '1px solid #3f3f46',
+                  borderRadius: 3,
+                  background: '#18181b',
+                  color: '#a1a1aa',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                  zIndex: 2,
+                }}
+              >
+                <RightOutlined style={{ fontSize: 9 }} />
+              </button>
+            )}
           </div>
         </div>
 

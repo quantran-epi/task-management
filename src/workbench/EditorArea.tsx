@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { CloseOutlined, InboxOutlined } from '@ant-design/icons';
 import { AntdThemeAdapter } from './AntdThemeAdapter';
 import { useLayoutStore, type EditorTab } from './store/layoutStore';
@@ -25,8 +25,66 @@ export function EditorArea({ db }: EditorAreaProps) {
   const setActiveTabId = useLayoutStore((state) => state.setActiveTabId);
   const closeTab = useLayoutStore((state) => state.closeTab);
   const openTab = useLayoutStore((state) => state.openTab);
+  const reorderTabs = useLayoutStore((state) => state.reorderTabs);
+
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const tabElementsRef = useRef<Record<string, HTMLDivElement | null>>({});
 
   const activeTab = openTabs.find((tab) => tab.id === activeTabId) || openTabs[0];
+
+  // Auto-scroll active tab into view
+  useEffect(() => {
+    if (activeTab?.id && tabElementsRef.current[activeTab.id]) {
+      tabElementsRef.current[activeTab.id]?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'nearest',
+      });
+    }
+  }, [activeTab?.id]);
+
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, index: number) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(index));
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (draggedIndex !== null && draggedIndex !== index) {
+      setDragOverIndex(index);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>, index: number) => {
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    if (dragOverIndex === index) {
+      setDragOverIndex(null);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>, targetIndex: number) => {
+    e.preventDefault();
+    if (draggedIndex !== null && draggedIndex !== targetIndex) {
+      reorderTabs(draggedIndex, targetIndex);
+    }
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (scrollContainerRef.current && e.deltaY !== 0) {
+      scrollContainerRef.current.scrollLeft += e.deltaY;
+    }
+  };
 
   const dbProp = db ? { db } : {};
 
@@ -154,8 +212,10 @@ export function EditorArea({ db }: EditorAreaProps) {
     >
       {/* Editor Tab Bar */}
       <div
+        ref={scrollContainerRef}
         role="tablist"
         aria-label="Editor tabs"
+        onWheel={handleWheel}
         style={{
           display: 'flex',
           alignItems: 'flex-end',
@@ -170,15 +230,26 @@ export function EditorArea({ db }: EditorAreaProps) {
           gap: 3,
         }}
       >
-        {openTabs.map((tab) => {
+        {openTabs.map((tab, index) => {
           const isActive = tab.id === activeTab?.id;
+          const isBeingDragged = draggedIndex === index;
+          const isDragTarget = dragOverIndex === index;
 
           return (
             <div
               key={tab.id}
+              ref={(el) => {
+                tabElementsRef.current[tab.id] = el;
+              }}
               role="tab"
               aria-selected={isActive}
               tabIndex={0}
+              draggable
+              onDragStart={(e) => handleDragStart(e, index)}
+              onDragOver={(e) => handleDragOver(e, index)}
+              onDragLeave={(e) => handleDragLeave(e, index)}
+              onDrop={(e) => handleDrop(e, index)}
+              onDragEnd={handleDragEnd}
               onClick={() => setActiveTabId(tab.id)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
@@ -188,11 +259,18 @@ export function EditorArea({ db }: EditorAreaProps) {
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                padding: '0 14px',
+                padding: '0 10px',
                 height: 32,
+                flex: '1 1 140px',
+                minWidth: 60,
+                maxWidth: 200,
                 background: isActive ? 'var(--bg-island, #ffffff)' : 'transparent',
                 borderRadius: '6px 6px 0 0',
-                borderTop: isActive ? '1px solid var(--border-strong, #d1d3d9)' : '1px solid transparent',
+                borderTop: isActive
+                  ? '1px solid var(--border-strong, #d1d3d9)'
+                  : isDragTarget
+                  ? '1px dashed var(--color-primary, #4f46e5)'
+                  : '1px solid transparent',
                 borderLeft: isActive ? '1px solid var(--border-strong, #d1d3d9)' : '1px solid transparent',
                 borderRight: isActive ? '1px solid var(--border-strong, #d1d3d9)' : '1px solid transparent',
                 borderBottom: isActive ? '1px solid var(--bg-island, #ffffff)' : '1px solid transparent',
@@ -204,11 +282,23 @@ export function EditorArea({ db }: EditorAreaProps) {
                 userSelect: 'none',
                 position: 'relative',
                 boxSizing: 'border-box',
-                whiteSpace: 'nowrap',
-                transition: 'all 0.15s ease',
+                opacity: isBeingDragged ? 0.4 : 1,
+                transition: 'background-color 0.15s, color 0.15s, opacity 0.15s',
               }}
             >
-              <span style={{ marginRight: tab.closable !== false ? 8 : 0 }}>{tab.title}</span>
+              <span
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  marginRight: tab.closable !== false ? 6 : 0,
+                }}
+                title={tab.title}
+              >
+                {tab.title}
+              </span>
 
               {tab.closable !== false && (
                 <button
@@ -229,6 +319,7 @@ export function EditorArea({ db }: EditorAreaProps) {
                     cursor: 'pointer',
                     color: 'var(--fg-muted, #6c707e)',
                     lineHeight: 1,
+                    flexShrink: 0,
                   }}
                 >
                   <CloseOutlined style={{ fontSize: 11 }} />

@@ -41,6 +41,7 @@ export interface LayoutActions {
   setPanelSize: (slot: ToolWindowSlot, size: number) => void;
   openTab: (tab: EditorTab) => void;
   closeTab: (tabId: string) => void;
+  reorderTabs: (fromIndex: number, toIndex: number) => void;
   setActiveTabId: (tabId: string) => void;
   resetLayout: () => void;
 }
@@ -48,7 +49,7 @@ export interface LayoutActions {
 export type LayoutState = LayoutStateValues & LayoutActions;
 
 export const DEFAULT_TABS: EditorTab[] = [
-  { id: 'tasks', title: 'Tasks', viewType: 'tasks', closable: false },
+  { id: 'tasks', title: 'Tasks', viewType: 'tasks', closable: true },
   { id: 'notes', title: 'Docs', viewType: 'notes', closable: true },
   { id: 'planner', title: 'Capacity Planner', viewType: 'planner', closable: true },
 ];
@@ -164,6 +165,25 @@ export const useLayoutStore = create<LayoutState>()(
             openTabs: newTabs,
             activeTabId: newActiveId,
           };
+        });
+      },
+
+      reorderTabs: (fromIndex: number, toIndex: number) => {
+        set((state) => {
+          if (
+            fromIndex < 0 ||
+            toIndex < 0 ||
+            fromIndex >= state.openTabs.length ||
+            toIndex >= state.openTabs.length ||
+            fromIndex === toIndex
+          ) {
+            return state;
+          }
+          const updated = [...state.openTabs];
+          const [moved] = updated.splice(fromIndex, 1);
+          if (!moved) return state;
+          updated.splice(toIndex, 0, moved);
+          return { openTabs: updated };
         });
       },
 
