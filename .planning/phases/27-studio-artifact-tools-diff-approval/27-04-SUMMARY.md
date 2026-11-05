@@ -242,3 +242,27 @@ None.
 - Targeted clusters and TypeScript pass after the commits (109 and 88 tests).
 - Tool order `get_artifact` then `patch_artifact_section` is asserted from real dispatched results, with +1/−0 stats and untouched neighbouring sections.
 - No full-document extraction path remains for patch or Q&A turns.
+
+## Post-Gate Regression Fix (2026-11-05)
+
+Wave-4 focused gate reported two confirmed regressions. Both were fixed in production code; no test expectation in the two gate files was changed.
+
+1. **`tests/ai/sdlcPromptIsolation.test.ts` parity.**
+   - Root cause: for non-artifact steps `buildToolPolicy` emitted "Không có công cụ ghi hoặc tạo tài liệu." as its own line. The test parses policy lines `slice(1, 3)` and treats them as the capability name list, so the stray prose entered that list.
+   - Fix: non-owning steps now keep the exact Phase 26 joined line `Chỉ gọi công cụ trong payload của turn này. Không có công cụ ghi hoặc tạo tài liệu.` The artifact proposal line is emitted by owning steps only, and `patch_artifact_section` is named only in the patch-guidance line, never in the read-capability list (it is a proposal tool).
+   - The single test edit is in `tests/unit/sdlc/ArtifactPatchIntent.test.tsx`, an assertion about the Analysis-Mode policy copy written by 27-04 itself — updated to the still-present `Analysis Mode đang bật` sentence, not a loosening of the gate files.
+
+2. **`tests/unit/sdlc/ProjectSdlcView.test.tsx > Test 9` disabled approve.**
+   - Root cause: the SOLUTION editor mounted while this CR's `coordinator.restore()` was still in flight. `workflowState` was transiently `undefined`, so `hasIntakeBaseline` was `false` and `baselineReady` blocked the approve button; a click or assertion in that window stayed blocked. The error banner in the failing DOM was `Chưa đủ điều kiện: Thiếu Hồ sơ quy trình SDLC từ Bước 1` (`WORKFLOW_NOT_INITIALIZED`).
+   - Fix: `ProjectSdlcView` tracks `workflowRestored` per coordinator/CR and renders a neutral loading node instead of a step editor until restore settles, including the failure path (which still renders the existing guards). No assertion was modified.
+   - Evidence: file passes 19/19 in five consecutive full-file runs after the fix; the gate command passes 27/27.
+
+Focused verification after the fix commit (`4e36bfb3`):
+
+- `npx vitest run tests/ai/sdlcPromptIsolation.test.ts tests/unit/sdlc/ProjectSdlcView.test.tsx` → 2 files, 27 tests passed, exit 0.
+- `npx vitest run tests/ai/sdlcPromptComposer.test.ts tests/ai/AiChatWidget.test.tsx tests/unit/sdlc/StepChatPanelToolPolicy.test.tsx tests/unit/sdlc/ArtifactPatchApproval.test.tsx` → 4 files, 59 tests passed, exit 0.
+- `npx tsc --noEmit` → exit 0.
+
+TDD note: no genuine RED was produced for these two fixes. The policy regression was visible only after a first wrong repair (separate line), and the editor race is timing-dependent; neither was captured as an intentional failing target before the production edit. No INVALID_RED claim is made.
+
+Unrelated note: three quick-task commits (`fa9f87a2`, `d22446ce`, `100c9c7a`, quick `261105-g84`) landed on this branch during the fix window from outside this executor. This fix commit touches only the three intended paths; pre-existing dirty entries remain untouched (count changed only because that quick task committed its own files).
