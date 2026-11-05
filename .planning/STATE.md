@@ -62,6 +62,7 @@ Progress: [░░░░░░░░░░] 0%
 
 | # | Description | Date | Commit | Status | Directory |
 | --- | ------------- | ------ | -------- | -------- | ----------- |
+| 261105-g84 | Draggable and scrollable tabs for Agent Terminal and AI Chat with Chrome/VSCode horizontal overflow | 2026-11-05 | d22446ce | complete | [261105-g84-draggable-scrollable-tabs-for-agent-term](./quick/261105-g84-draggable-scrollable-tabs-for-agent-term/) |
 | 261101-a9d | SDLC hub UI in the AI chat drawer: current-step card, detail modal, nested picker zIndex, preview overflow | 2026-11-01 | 32ff0934 | complete | [261101-a9d-improve-sdlc-hub-ui-in-the-ai-chat-drawe](./quick/261101-a9d-improve-sdlc-hub-ui-in-the-ai-chat-drawe/) |
 | 261030-jdu | Fix knowledge-server chunk cache invalidation on ontology version changes and rebuilds | 2026-10-30 | fdc6132 | complete | [261030-jdu-fix-knowledge-server-chunk-cache-invalid](./quick/261030-jdu-fix-knowledge-server-chunk-cache-invalid/) |
 | 261030-gj5 | Fix GitHub backup 502 Bad Gateway using gzip compression and Git Data API fallback | 2026-10-30 | e442800 | complete | [261030-gj5-fix-github-backup-502-bad-gateway-using-](./quick/261030-gj5-fix-github-backup-502-bad-gateway-using-/) |
