@@ -4,16 +4,16 @@ milestone: v1.3
 current_phase: 27
 current_phase_name: Studio Artifact Tools & Diff Approval
 status: executing
-stopped_at: Completed 27-03-PLAN.md; 27-04 pending
-last_updated: "2026-11-05T04:00:29.911Z"
+stopped_at: Completed 27-04-PLAN.md; Phase 27 plans complete, verification pending
+last_updated: "2026-11-05T04:26:38.278Z"
 last_activity: 2026-11-04
 last_activity_desc: Phase 27 execution started
-state_head: ca5b36b1360631c7fae6c628aa90c22a92d484d0
+state_head: 76a602b5f76dc92f5b9a87f0ed5b7925c47b9c6c
 progress:
   total_phases: 8
   completed_phases: 0
   total_plans: 9
-  completed_plans: 8
+  completed_plans: 9
   percent: 0
 milestone_name: SDLC Closed-Loop Engine & Repository Autonomy
 ---
@@ -39,9 +39,9 @@ Phase sequence: 26 → 27 → 28 → 29 → 30 → 31
 
 ## Session Continuity
 
-Last session: 2026-11-05T04:00:29.656Z
-Stopped at: Completed 27-03-PLAN.md; 27-04 pending
-Resume file: .planning/phases/27-studio-artifact-tools-diff-approval/27-04-PLAN.md
+Last session: 2026-11-05T04:26:38.052Z
+Stopped at: Completed 27-04-PLAN.md; Phase 27 plans complete, verification pending
+Resume file: None
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -87,6 +87,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 27 P02 | 33 min | 3 tasks | 8 files |
 | Phase 27 P05 | 16 min | 2 tasks | 6 files |
 | Phase 27 P03 | 46 min | 2 tasks | 6 files |
+| Phase 27 P04 | 24 min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -105,6 +106,7 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 27]: Diff card is separate and neutral; approval applies through the host adapter only, staleness uses normalized hash plus exact base bytes, and decisions persist as metadata-only system rows. — Keeps semantic color in the diff body, blocks implicit draft writes, and preserves decision history without persisting pending diff payloads.
 - [Phase 27]: Artifact tools require real workflow prerequisites, post-await live access checks and an explicit studio allowlist; no-allowlist ordinary chat excludes both tools.
 - [Phase 27]: Patch approval applies only the exact reviewed proposal: SOLUTION draft+decision in one transaction, other kinds after durable decision, version commits never invoked; draft divergence marks only the owning step.
+- [Phase 27]: Bounded edit verbs route to get then patch with explicit targets only; generation verbs keep full-document contracts; prompt policy names the actual payload and patch/Q&A never extract into the editor.
 
 ### Todos / Blockers
 

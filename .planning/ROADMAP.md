@@ -7,7 +7,7 @@
 - Phase 25.2: Fix TaskMate mutation flow & standardize AI Core Engine for SDLC Studio (COMPLETE)
 - Phase 25.3: SDLC Workflow Engine Hardening, Unified AI Chat Widget & Prompt Architecture (COMPLETE)
 - Phase 26: SDLC Prompt Grounding & Tool-Use Policy (NOT STARTED — v1.3)
-- Phase 27: Studio Artifact Tools & Diff Approval (v1.3 — IN PROGRESS, 4/5 plans)
+- Phase 27: Studio Artifact Tools & Diff Approval (v1.3 — IN PROGRESS, 5/5 plans)
 - Phase 28: Query-Only Knowledge Retrieval (v1.3, parallel-capable)
 - Phase 29: fs-gw Client & Headless Repository Runs (v1.3)
 - Phase 30: Automatic Change Packs, Fallback & Run Reliability (v1.3)
@@ -532,7 +532,7 @@ Plans:
 
 **Wave 4** *(depends on 27-03)*
 
-- [ ] 27-04-PLAN.md — Intent routing regression: small "add this content" request produces get + patch and a bounded diff
+- [x] 27-04-PLAN.md — Intent routing regression: small "add this content" request produces get + patch and a bounded diff
 
 **Wave 5** *(depends on 27-01)*
 
