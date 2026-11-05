@@ -76,6 +76,62 @@ describe('Step 1 Intake & Step 2 Solution Views', () => {
         );
       });
     });
+
+    it('renders note picker with VirtualizedList and filters notes via search', async () => {
+      const timestamp = new Date().toISOString();
+      await db.notes.bulkAdd([
+        {
+          id: 'note-1',
+          entityId: projectId,
+          entityType: 'project',
+          title: 'Khảo sát nghiệp vụ CRM',
+          body: 'Nội dung khảo sát chi tiết',
+          isPinned: false,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        },
+        {
+          id: 'note-2',
+          entityId: projectId,
+          entityType: 'project',
+          title: 'Đặc tả API Gateway',
+          body: 'Mô tả endpoints REST',
+          isPinned: false,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        },
+      ]);
+
+      render(
+        <Step1IntakeView
+          projectId={projectId}
+          onStartIntake={vi.fn()}
+          db={db}
+        />
+      );
+
+      // Open note picker for PL01
+      fireEvent.click(screen.getAllByRole('button', { name: /Chọn từ Notes/ })[0]!);
+
+      // VirtualizedList is mounted
+      const list = await screen.findByRole('list', { name: 'Danh sách ghi chú' });
+      expect(list).toBeInTheDocument();
+      expect(await screen.findByText('Khảo sát nghiệp vụ CRM')).toBeInTheDocument();
+      expect(await screen.findByText('Đặc tả API Gateway')).toBeInTheDocument();
+
+      // Search filters items
+      const searchInput = screen.getByPlaceholderText(/Tìm theo tiêu đề hoặc nội dung/);
+      fireEvent.change(searchInput, { target: { value: 'Gateway' } });
+
+      await waitFor(() => {
+        expect(screen.getByText('Đặc tả API Gateway')).toBeInTheDocument();
+        expect(screen.queryByText('Khảo sát nghiệp vụ CRM')).not.toBeInTheDocument();
+      });
+
+      // Select note populates PL01
+      fireEvent.click(screen.getByRole('button', { name: 'Chọn' }));
+      expect(screen.getByPlaceholderText(/Nội dung Yêu cầu nghiệp vụ \(PL01\)/)).toHaveValue('Mô tả endpoints REST');
+    });
   });
 
   describe('Step2SolutionView', () => {

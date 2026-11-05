@@ -139,6 +139,15 @@ export function initStandardActions(): void {
         window.dispatchEvent(event);
       },
     },
+    {
+      id: 'view.open-mermaid-studio',
+      title: 'Open Mermaid Diagram Studio',
+      category: 'View',
+      shortcut: 'Alt+M',
+      perform: () => {
+        window.dispatchEvent(new CustomEvent('taskmate:open-mermaid-studio'));
+      },
+    },
   ];
 
   for (const action of standardActions) {

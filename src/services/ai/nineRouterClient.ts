@@ -654,6 +654,142 @@ export async function completeJson(req: CompleteJsonRequest): Promise<unknown> {
   }
 }
 
+export interface CompleteTextRequest {
+  endpoint: string;
+  apiKey?: string | undefined;
+  model: string;
+  temperature?: number | undefined;
+  maxTokens?: number | undefined;
+  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+  signal?: AbortSignal | undefined;
+  onUsage?: ((usage: ChatTokenUsage) => void) | undefined;
+}
+
+/**
+ * Non-streaming chat completion returning raw text content directly without JSON parsing.
+ */
+export async function completeChatText(req: CompleteTextRequest): Promise<string> {
+  const baseEndpoint = sanitizeEndpoint(req.endpoint);
+  const targetUrl = `${baseEndpoint}/v1/chat/completions`;
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  };
+  if (req.apiKey && req.apiKey.trim()) {
+    headers.Authorization = `Bearer ${req.apiKey.trim()}`;
+  }
+
+  const timeoutSignal = AbortSignal.timeout(90_000);
+  const combinedSignal = (AbortSignal as any).any
+    ? (AbortSignal as any).any([req.signal || new AbortController().signal, timeoutSignal])
+    : req.signal || timeoutSignal;
+
+  const requestBody = {
+    model: req.model,
+    temperature: req.temperature ?? 0,
+    max_tokens: req.maxTokens ?? 3000,
+    stream: false,
+    messages: req.messages,
+  };
+
+  let response: Response;
+  try {
+    if (isTauriApp()) {
+      const proxyResponse = await tauriInvoke<TauriProxyResponse>('ai_proxy_request', {
+        method: 'POST',
+        url: targetUrl,
+        headers,
+        body: JSON.stringify(requestBody),
+      });
+
+      if (combinedSignal.aborted) {
+        const reason = combinedSignal.reason;
+        const timedOut =
+          timeoutSignal.aborted ||
+          (reason instanceof DOMException && reason.name === 'TimeoutError');
+        throw new NineRouterClientError(
+          timedOut ? 'TIMEOUT' : 'ABORTED',
+          timedOut ? 'Request timed out' : 'Request was aborted'
+        );
+      }
+
+      response = new Response(proxyResponse.body, {
+        status: proxyResponse.status,
+        headers: proxyResponse.headers,
+      });
+    } else {
+      response = await fetch(targetUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(requestBody),
+        signal: combinedSignal,
+      });
+    }
+  } catch (error: unknown) {
+    if (error instanceof NineRouterClientError) throw error;
+    const message = redactApiKey(
+      error instanceof Error ? error.message : 'Network request failed',
+      req.apiKey
+    ).slice(0, 240);
+    throw new NineRouterClientError('NETWORK_ERROR', message);
+  }
+
+  let json: any;
+  try {
+    json = await response.json();
+  } catch {
+    throw new NineRouterClientError(
+      'INVALID_RESPONSE',
+      'Model provider returned invalid HTTP response',
+      response.status
+    );
+  }
+
+  if (!response.ok) {
+    const rawError = typeof json?.error?.message === 'string'
+      ? json.error.message
+      : JSON.stringify(json);
+    const safeMsg = redactApiKey(
+      rawError || response.statusText || 'Model API error',
+      req.apiKey
+    );
+    throw new NineRouterClientError('REMOTE_ERROR', safeMsg, response.status);
+  }
+
+  const choice = json?.choices?.[0];
+  if (!choice || choice.message?.refusal) {
+    const refusalMsg = redactApiKey(
+      choice?.message?.refusal || 'Model refused or returned empty choice',
+      req.apiKey
+    );
+    throw new NineRouterClientError('INVALID_RESPONSE', refusalMsg, response.status);
+  }
+
+  const content = choice.message?.content;
+  if (typeof content !== 'string' || !content.trim()) {
+    throw new NineRouterClientError(
+      'INVALID_RESPONSE',
+      'Model returned empty content',
+      response.status
+    );
+  }
+
+  if (json?.usage && req.onUsage) {
+    try {
+      req.onUsage({
+        promptTokens: json.usage.prompt_tokens ?? json.usage.promptTokens,
+        completionTokens: json.usage.completion_tokens ?? json.usage.completionTokens,
+        totalTokens: json.usage.total_tokens ?? json.usage.totalTokens,
+      });
+    } catch {
+      // Ignore usage callback error
+    }
+  }
+
+  return content;
+}
+
 interface CapabilityCacheEntry {
   result: { ok: true; strictJsonSchema: boolean } | { ok: false; reason: string };
   expiresAt: number;

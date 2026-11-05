@@ -70,6 +70,40 @@ export const JetBrainsDocsIcon: React.FC<JetBrainsIconProps> = ({ size = 16, sty
   </svg>
 );
 
+// 2b. Diagram Explorer (Emerald Teal + Vivid Violet + Flowchart Nodes)
+export const JetBrainsDiagramIcon: React.FC<JetBrainsIconProps> = ({ size = 16, style, className }) => (
+  <svg
+    viewBox="0 0 24 24"
+    width={size}
+    height={size}
+    className={className}
+    style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0, ...style }}
+  >
+    <defs>
+      <linearGradient id="jbDiagNode1" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#10b981" />
+        <stop offset="100%" stopColor="#059669" />
+      </linearGradient>
+      <linearGradient id="jbDiagNode2" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#8b5cf6" />
+        <stop offset="100%" stopColor="#6d28d9" />
+      </linearGradient>
+      <linearGradient id="jbDiagNode3" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#06b6d4" />
+        <stop offset="100%" stopColor="#0284c7" />
+      </linearGradient>
+    </defs>
+    {/* Connecting lines */}
+    <path d="M 12 7 L 12 11 M 12 11 L 6.5 11 L 6.5 14 M 12 11 L 17.5 11 L 17.5 14" stroke="#64748b" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    {/* Root node */}
+    <rect x="8.5" y="2.5" width="7" height="5" rx="1.5" fill="url(#jbDiagNode1)" />
+    {/* Left leaf node */}
+    <rect x="3" y="14" width="7" height="5" rx="1.5" fill="url(#jbDiagNode2)" />
+    {/* Right leaf node */}
+    <rect x="14" y="14" width="7" height="5" rx="1.5" fill="url(#jbDiagNode3)" />
+  </svg>
+);
+
 // 3. AI Assistant (Electric Violet + Pink + Sparkle)
 export const JetBrainsAIIcon: React.FC<JetBrainsIconProps> = ({ size = 16, style, className }) => (
   <svg

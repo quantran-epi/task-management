@@ -36,7 +36,9 @@ export function DocsExplorer({ db = defaultDb }: DocsExplorerProps) {
   const allNotes = useLiveQuery(
     async () => {
       const records = await db.notes.toArray();
-      return records;
+      return records.filter(
+        (n) => n.type !== 'diagram' && !(n.type === 'folder' && n.tags?.includes('diagram'))
+      );
     },
     [db],
     []
@@ -67,7 +69,10 @@ export function DocsExplorer({ db = defaultDb }: DocsExplorerProps) {
   }, [db, allNotes]);
 
   const loadSearchNotes = useCallback(async () => {
-    return await db.notes.toArray();
+    const records = await db.notes.toArray();
+    return records.filter(
+      (n) => n.type !== 'diagram' && !(n.type === 'folder' && n.tags?.includes('diagram'))
+    );
   }, [db]);
 
   const handleSelectDoc = useCallback(

@@ -27,6 +27,7 @@ import { AgentControlView } from '../views/AgentControlView';
 import { TelegramMonitorView } from '../views/TelegramMonitorView';
 import { ItemInsightView } from '../views/ItemInsightView';
 import { ProjectSdlcView } from '../views/ProjectSdlcView';
+import { MermaidAssistantView } from '../views/MermaidAssistantView';
 import type { TaskPlannerDatabase } from '../db';
 
 export interface EditorAreaProps {
@@ -268,6 +269,8 @@ export function EditorArea({ db }: EditorAreaProps) {
         return <AgentControlView />;
       case 'telegram':
         return <TelegramMonitorView />;
+      case 'mermaid':
+        return <MermaidAssistantView initialCode={tab.params?.code} noteId={tab.params?.noteId} db={db} />;
       case 'sdlc':
         return (
           <ProjectSdlcView

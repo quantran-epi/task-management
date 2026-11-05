@@ -40,6 +40,7 @@ import { TaskDrawerPlanning } from './TaskDrawerPlanning';
 import { TaskJiraSection } from './TaskJiraSection';
 import { WorkSessionsTab } from './WorkSessionsTab';
 import { EntityNotesSection } from '../notes/EntityNotesSection';
+import { EntityDiagramsSection } from '../diagrams/EntityDiagramsSection';
 import { TagSelect } from '../common/TagSelect';
 import { RemindersFormList, formatRemindersForForm, formatRemindersForSave } from '../common/RemindersFormList';
 import { TaskChecklistSection } from './TaskChecklistSection';
@@ -155,7 +156,22 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
       return await targetDb.notes
         .where('entityId')
         .equals(taskId)
-        .filter((n) => n.entityType === 'task')
+        .filter((n) => n.entityType === 'task' && n.type !== 'diagram' && !n.deletedAt)
+        .count();
+    },
+    [taskId, db]
+  );
+
+  // Live count of diagrams attached to this task
+  const taskDiagramsCount = useLiveQuery(
+    async () => {
+      if (!taskId) return 0;
+      const targetDb = db || (await import('../../db')).db;
+      if (!targetDb?.notes) return 0;
+      return await targetDb.notes
+        .where('entityId')
+        .equals(taskId)
+        .filter((n) => n.entityType === 'task' && n.type === 'diagram' && !n.deletedAt)
         .count();
     },
     [taskId, db]
@@ -889,6 +905,23 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
       ),
       children: currentTask ? (
         <EntityNotesSection entityType="task" entityId={currentTask.id} db={db} />
+      ) : null,
+    },
+    {
+      key: 'diagrams',
+      label: (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <span>Biểu đồ</span>
+          <Badge
+            count={taskDiagramsCount || 0}
+            overflowCount={99}
+            size="small"
+            style={{ backgroundColor: taskDiagramsCount ? '#10b981' : '#d9d9d9' }}
+          />
+        </span>
+      ),
+      children: currentTask ? (
+        <EntityDiagramsSection entityType="task" entityId={currentTask.id} db={db} />
       ) : null,
     },
   ];

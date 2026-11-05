@@ -321,12 +321,14 @@ export const NotesView: React.FC<NotesViewProps> = ({
   const allNotes = useLiveQuery(
     async () => {
       const records = await db.notes.toArray();
-      return records.sort((a, b) => {
-        if (a.isPinned !== b.isPinned) {
-          return a.isPinned ? -1 : 1;
-        }
-        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-      });
+      return records
+        .filter((n) => n.type !== 'diagram' && !(n.type === 'folder' && n.tags?.includes('diagram')))
+        .sort((a, b) => {
+          if (a.isPinned !== b.isPinned) {
+            return a.isPinned ? -1 : 1;
+          }
+          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        });
     },
     [db]
   );
@@ -351,7 +353,15 @@ export const NotesView: React.FC<NotesViewProps> = ({
     () => (allNotes ?? []).map((note) => ({ ...note, body: '' })),
     [allNotes]
   );
-  const loadSearchNotes = React.useCallback(() => db.notes.toArray(), [db]);
+  const loadSearchNotes = React.useCallback(
+    async () => {
+      const records = await db.notes.toArray();
+      return records.filter(
+        (n) => n.type !== 'diagram' && !(n.type === 'folder' && n.tags?.includes('diagram'))
+      );
+    },
+    [db]
+  );
 
   // Selected document instance for editor pane
   const activeDocument = useMemo(() => {

@@ -15,10 +15,12 @@ import { SearchEverywhereModal } from './search/SearchEverywhereModal';
 import { useNotifications } from '../hooks/useNotifications';
 import { useAIChat } from '../context/AIChatContext';
 import { InlineAISelectionBar } from '../components/ai/InlineAISelectionBar';
+import { GlobalDiagramViewer } from '../components/common/GlobalDiagramViewer';
 import type { TaskPlannerDatabase } from '../db';
 import {
   JetBrainsProjectIcon,
   JetBrainsDocsIcon,
+  JetBrainsDiagramIcon,
   JetBrainsAIIcon,
   JetBrainsNotificationIcon,
 } from '../components/icons/JetBrainsIcons';
@@ -38,6 +40,7 @@ export interface WorkbenchLayoutProps {
 const DEFAULT_LEFT_ITEMS: ToolWindowItem[] = [
   { id: 'projects', name: 'Project Explorer', icon: <JetBrainsProjectIcon size={16} />, shortcut: 'Alt+1' },
   { id: 'docs', name: 'Docs Explorer', icon: <JetBrainsDocsIcon size={16} />, shortcut: 'Alt+2' },
+  { id: 'diagrams', name: 'Diagram Explorer', icon: <JetBrainsDiagramIcon size={16} />, shortcut: 'Alt+5' },
 ];
 
 export function WorkbenchLayout({
@@ -97,6 +100,23 @@ export function WorkbenchLayout({
 
   const { isOpen: isAIChatOpen } = useAIChat();
 
+  useEffect(() => {
+    const handleOpenMermaidStudio = (e: Event) => {
+      const customEvent = e as CustomEvent<{ code?: string }>;
+      openTab({
+        id: 'mermaid',
+        title: 'Diagram Studio',
+        viewType: 'mermaid',
+        closable: true,
+        ...(customEvent.detail?.code ? { params: { code: customEvent.detail.code } } : {}),
+      });
+    };
+    window.addEventListener('taskmate:open-mermaid-studio', handleOpenMermaidStudio);
+    return () => {
+      window.removeEventListener('taskmate:open-mermaid-studio', handleOpenMermaidStudio);
+    };
+  }, [openTab]);
+
   // Sync AIChatContext.isOpen with layoutStore rightActiveId
   useEffect(() => {
     if (isAIChatOpen && rightActiveId !== 'ai_chat') {
@@ -131,6 +151,7 @@ export function WorkbenchLayout({
         projects: 'Projects',
         agents: 'Ghost Dev Agents',
         telegram: 'Telegram Bot',
+        mermaid: 'Diagram Studio',
       };
       openTab({
         id: viewKey,
@@ -257,6 +278,7 @@ export function WorkbenchLayout({
 
         {/* Global Inline AI Selection Bar for document text selection */}
         <InlineAISelectionBar {...(db ? { db } : {})} />
+        <GlobalDiagramViewer />
       </div>
     </AntdThemeAdapter>
   );

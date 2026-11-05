@@ -258,8 +258,12 @@ export function renderSafeMarkdown(source: string, options?: MarkdownRenderOptio
         const escapedCode = codeBlockLines.map((l) => escapeHtml(l)).join('\n');
         const langAttr = codeBlockLang ? ` class="language-${codeBlockLang}"` : '';
         const langLabel = codeBlockLang || 'code';
+        const isMermaidBlock = codeBlockLang.toLowerCase() === 'mermaid';
+        const diagramActionBtn = isMermaidBlock
+          ? '<button class="code-diagram-btn" type="button">📊 Xem Diagram</button>'
+          : '';
         output.push(
-          `<div class="code-block-wrapper"${lineAttr(codeBlockStartLine, codeBlockEndLine)}><div class="code-block-header"><span class="code-block-lang">${langLabel}</span><button class="code-copy-btn" type="button">Copy</button></div><pre class="code-block"><code${langAttr}>${escapedCode}</code></pre></div>`
+          `<div class="code-block-wrapper"${lineAttr(codeBlockStartLine, codeBlockEndLine)}><div class="code-block-header"><span class="code-block-lang">${langLabel}</span><div>${diagramActionBtn}<button class="code-copy-btn" type="button">Copy</button></div></div><pre class="code-block"><code${langAttr}>${escapedCode}</code></pre></div>`
         );
         inCodeBlock = false;
         codeBlockLang = '';
@@ -426,8 +430,12 @@ export function renderSafeMarkdown(source: string, options?: MarkdownRenderOptio
     const escapedCode = codeBlockLines.map((l) => escapeHtml(l)).join('\n');
     const langAttr = codeBlockLang ? ` class="language-${codeBlockLang}"` : '';
     const langLabel = codeBlockLang || 'code';
+    const isMermaidBlock = codeBlockLang.toLowerCase() === 'mermaid';
+    const diagramActionBtn = isMermaidBlock
+      ? '<button class="code-diagram-btn" type="button">📊 Xem Diagram</button>'
+      : '';
     output.push(
-      `<div class="code-block-wrapper"${lineAttr(codeBlockStartLine, lines.length)}><div class="code-block-header"><span class="code-block-lang">${langLabel}</span><button class="code-copy-btn" type="button">Copy</button></div><pre class="code-block"><code${langAttr}>${escapedCode}</code></pre></div>`
+      `<div class="code-block-wrapper"${lineAttr(codeBlockStartLine, lines.length)}><div class="code-block-header"><span class="code-block-lang">${langLabel}</span><div>${diagramActionBtn}<button class="code-copy-btn" type="button">Copy</button></div></div><pre class="code-block"><code${langAttr}>${escapedCode}</code></pre></div>`
     );
   }
 

@@ -14,7 +14,8 @@ export type EditorViewType =
   | 'agents'
   | 'telegram'
   | 'insight'
-  | 'sdlc';
+  | 'sdlc'
+  | 'mermaid';
 
 export interface EditorTab {
   id: string;
@@ -110,16 +111,18 @@ export const useLayoutStore = create<LayoutState>()(
         set((state) => {
           const existing = state.openTabs.find((t) => t.id === tab.id);
           if (existing) {
-            const hasNewTitle = Boolean(tab.title && tab.title !== existing.title);
-            if (hasNewTitle) {
-              return {
-                activeTabId: tab.id,
-                openTabs: state.openTabs.map((t) =>
-                  t.id === tab.id ? { ...t, title: tab.title, params: { ...t.params, ...tab.params } } : t
-                ),
-              };
-            }
-            return { activeTabId: tab.id };
+            return {
+              activeTabId: tab.id,
+              openTabs: state.openTabs.map((t) =>
+                t.id === tab.id
+                  ? {
+                      ...t,
+                      title: tab.title || t.title,
+                      params: { ...t.params, ...tab.params },
+                    }
+                  : t
+              ),
+            };
           }
           // T-25.4-03: Cap maximum open tabs (20) to prevent DOM bloat and memory leaks
           let updatedTabs = [...state.openTabs, tab];

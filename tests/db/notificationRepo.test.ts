@@ -172,5 +172,33 @@ describe('Notification Repository (D-14, D-15, D-16)', () => {
       const updated = await testDb.projects.get(projId);
       expect(updated?.reminders).toHaveLength(0);
     });
+
+    it('clears reminderDate when last reminder in reminders array is completed (prevents 2-click bug)', async () => {
+      const taskId = 'task-2click-bug';
+      const remId = '00000000-0000-4000-8000-000000000099';
+      await testDb.tasks.add({
+        id: taskId,
+        name: 'Task with synced reminderDate and reminders',
+        status: 'Open',
+        priority: 'High',
+        progress: 0,
+        estimateMinutes: 30,
+        workType: 'code',
+        reminderDate: '2026-09-28',
+        reminderNote: 'Synced note',
+        reminders: [{ id: remId, date: '2026-09-28', note: 'Synced note' }],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+
+      // User clicks complete
+      await completeReminderAlert(`reminder:task:${taskId}:${remId}`, testDb);
+
+      const updated = await testDb.tasks.get(taskId);
+      expect(updated?.reminders).toEqual([]);
+      // Crucial: reminderDate and reminderNote MUST be cleared so legacy alert is not triggered
+      expect(updated?.reminderDate).toBeUndefined();
+      expect(updated?.reminderNote).toBeUndefined();
+    });
   });
 });

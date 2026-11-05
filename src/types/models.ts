@@ -175,7 +175,7 @@ export interface ActiveTimer {
 }
 
 export type NoteEntityType = 'task' | 'project' | 'milestone';
-export type NoteType = 'quick_note' | 'document' | 'folder';
+export type NoteType = 'quick_note' | 'document' | 'folder' | 'diagram';
 
 export interface Note {
   id: string; // RFC 4122 v4 UUID

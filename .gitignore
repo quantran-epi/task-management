@@ -17,3 +17,6 @@ src-tauri/target/
 .env.*
 !.env.example
 .benchmark-reports/
+test-results/
+.openidea/
+*.har

@@ -22,6 +22,7 @@ const VALID_ROUTES: readonly AppRoute[] = [
   'insight',
   'agents',
   'telegram',
+  'mermaid',
 ] as const;
 
 /**

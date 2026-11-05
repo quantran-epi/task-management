@@ -21,6 +21,7 @@ import { AIPopoutView } from './views/AIPopoutView';
 import { ItemInsightView } from './views/ItemInsightView';
 import { AgentControlView } from './views/AgentControlView';
 import { TelegramMonitorView } from './views/TelegramMonitorView';
+import { MermaidAssistantView } from './views/MermaidAssistantView';
 import { TimerProvider } from './context/TimerContext';
 import { KnowledgeConfigProvider } from './services/knowledge/knowledgeConfig';
 
@@ -73,6 +74,8 @@ export const App: React.FC = () => {
         return <AgentControlView />;
       case 'telegram':
         return <TelegramMonitorView />;
+      case 'mermaid':
+        return <MermaidAssistantView initialCode={params.code} />;
       case 'insight': {
         const validTypes = ['task', 'project', 'milestone'] as const;
         const itemType = validTypes.includes(params.type as any)

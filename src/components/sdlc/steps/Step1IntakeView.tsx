@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useDeferredValue } from 'react';
 import {
   Form,
   Input,
@@ -8,7 +8,6 @@ import {
   Typography,
   theme,
   Modal,
-  List,
   Select,
   Tag,
   Alert,
@@ -25,6 +24,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../../db';
 import type { SdlcWorkflowMetadata } from '../../../services/wizard/workflowSchemas';
 import type { Note } from '../../../types/models';
+import { VirtualizedList } from '../../../workbench/virtual/VirtualizedList';
 import dayjs from 'dayjs';
 
 export interface Step1IntakeViewProps {
@@ -70,20 +70,23 @@ export const Step1IntakeView: React.FC<Step1IntakeViewProps> = ({
     return map;
   }, [allProjects]);
 
+  const deferredSearch = useDeferredValue(searchQuery);
+
   const filteredNotes = useMemo(() => {
+    const q = deferredSearch.trim().toLowerCase();
     return allNotes.filter((note) => {
-      if (projectFilter !== 'ALL') {
-        if (note.entityId !== projectFilter) return false;
+      if (projectFilter !== 'ALL' && note.entityId !== projectFilter) {
+        return false;
       }
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
+      if (q) {
         const matchTitle = (note.title || '').toLowerCase().includes(q);
+        if (matchTitle) return true;
         const matchContent = (note.body || '').toLowerCase().includes(q);
-        if (!matchTitle && !matchContent) return false;
+        return matchContent;
       }
       return true;
     });
-  }, [allNotes, projectFilter, searchQuery]);
+  }, [allNotes, projectFilter, deferredSearch]);
 
   const handleOpenNotePicker = (field: 'pl01' | 'pl02') => {
     setNoteTargetField(field);
@@ -296,53 +299,94 @@ export const Step1IntakeView: React.FC<Step1IntakeViewProps> = ({
           </div>
         </div>
 
-        <List
-          dataSource={filteredNotes}
-          locale={{ emptyText: 'Không tìm thấy ghi chú nào phù hợp bộ lọc' }}
-          style={{ maxHeight: 420, overflowY: 'auto' }}
-          renderItem={(item) => {
-            const projName = item.entityId ? projectMap.get(item.entityId) : undefined;
-            return (
-              <List.Item
-                actions={[
-                  <Button key="select" type="primary" size="small" onClick={() => handleSelectNote(item)}>
-                    Chọn
-                  </Button>,
-                ]}
-              >
-                <List.Item.Meta
-                  avatar={<FileTextOutlined style={{ fontSize: 22, color: token.colorPrimary }} />}
-                  title={
-                    <Space size={8}>
-                      <span style={{ fontWeight: 600 }}>{item.title || 'Ghi chú không tiêu đề'}</span>
-                      {projName ? (
-                        <Tag color={item.entityId === projectId ? 'blue' : 'default'} style={{ margin: 0 }}>
-                          {projName}
-                        </Tag>
-                      ) : (
-                        <Tag style={{ margin: 0 }}>Chung</Tag>
-                      )}
-                    </Space>
-                  }
-                  description={
-                    <div
-                      style={{
-                        maxHeight: 40,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        fontSize: 12,
-                        color: token.colorTextSecondary,
-                        marginTop: 4,
-                      }}
-                    >
-                      {item.body || '(trống)'}
+        {filteredNotes.length === 0 ? (
+          <div
+            style={{
+              padding: '36px 0',
+              textAlign: 'center',
+              color: token.colorTextTertiary,
+              fontSize: 14,
+            }}
+          >
+            Không tìm thấy ghi chú nào phù hợp bộ lọc
+          </div>
+        ) : (
+          <VirtualizedList
+            items={filteredNotes}
+            height={420}
+            estimateSize={() => 76}
+            role="list"
+            aria-label="Danh sách ghi chú"
+            renderItem={(item) => {
+              const projName = item.entityId ? projectMap.get(item.entityId) : undefined;
+              return (
+                <div
+                  key={item.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '12px 14px',
+                    borderBottom: `1px solid ${token.colorBorderSecondary}`,
+                    boxSizing: 'border-box',
+                    gap: 12,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flex: 1, minWidth: 0 }}>
+                    <FileTextOutlined
+                      style={{ fontSize: 22, color: token.colorPrimary, marginTop: 2, flexShrink: 0 }}
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <Space size={8} wrap={false} style={{ maxWidth: '100%', overflow: 'hidden' }}>
+                        <span
+                          style={{
+                            fontWeight: 600,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {item.title || 'Ghi chú không tiêu đề'}
+                        </span>
+                        {projName ? (
+                          <Tag
+                            color={item.entityId === projectId ? 'blue' : 'default'}
+                            style={{ margin: 0, flexShrink: 0 }}
+                          >
+                            {projName}
+                          </Tag>
+                        ) : (
+                          <Tag style={{ margin: 0, flexShrink: 0 }}>Chung</Tag>
+                        )}
+                      </Space>
+                      <div
+                        style={{
+                          maxHeight: 38,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          fontSize: 12,
+                          color: token.colorTextSecondary,
+                          marginTop: 4,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {item.body || '(trống)'}
+                      </div>
                     </div>
-                  }
-                />
-              </List.Item>
-            );
-          }}
-        />
+                  </div>
+                  <Button
+                    type="primary"
+                    size="small"
+                    onClick={() => handleSelectNote(item)}
+                    style={{ flexShrink: 0 }}
+                  >
+                    Chọn
+                  </Button>
+                </div>
+              );
+            }}
+          />
+        )}
       </Modal>
     </div>
   );

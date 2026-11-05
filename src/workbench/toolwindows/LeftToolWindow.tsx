@@ -3,11 +3,13 @@ import {
   MinusOutlined,
   ProjectOutlined,
   FileTextOutlined,
+  ApartmentOutlined,
 } from '@ant-design/icons';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { useLayoutStore } from '../store/layoutStore';
 import { ProjectExplorer } from './ProjectExplorer';
 import { DocsExplorer } from './DocsExplorer';
+import { DiagramExplorer } from './DiagramExplorer';
 
 export interface LeftToolWindowProps {
   db?: TaskPlannerDatabase | undefined;
@@ -22,8 +24,11 @@ export function LeftToolWindow({
   const toggleToolWindow = useLayoutStore((s) => s.toggleToolWindow);
 
   const isDocs = leftActiveId === 'docs';
-  const title = isDocs ? 'Docs Explorer' : 'Project Explorer';
-  const icon = isDocs ? (
+  const isDiagrams = leftActiveId === 'diagrams';
+  const title = isDiagrams ? 'Diagram Explorer' : isDocs ? 'Docs Explorer' : 'Project Explorer';
+  const icon = isDiagrams ? (
+    <ApartmentOutlined style={{ fontSize: 13, color: '#10b981' }} />
+  ) : isDocs ? (
     <FileTextOutlined style={{ fontSize: 13, color: 'var(--accent, #3871e1)' }} />
   ) : (
     <ProjectOutlined style={{ fontSize: 13, color: 'var(--accent, #3871e1)' }} />
@@ -91,7 +96,9 @@ export function LeftToolWindow({
 
       {/* Explorer Content Body */}
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-        {isDocs ? (
+        {isDiagrams ? (
+          <DiagramExplorer db={db} />
+        ) : isDocs ? (
           <DocsExplorer db={db} />
         ) : (
           <ProjectExplorer db={db} onSelectProject={onSelectProject} />

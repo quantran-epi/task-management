@@ -142,10 +142,10 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
   const trashNotes = useMemo(() => notes.filter((n) => Boolean(n.deletedAt)), [notes]);
 
   // Counts for special folders
-  const pinnedDocs = useMemo(() => activeNotes.filter((n) => n.isPinned && n.type !== 'folder'), [activeNotes]);
+  const pinnedDocs = useMemo(() => activeNotes.filter((n) => n.isPinned && n.type !== 'folder' && n.type !== 'diagram'), [activeNotes]);
   const quickNotes = useMemo(() => activeNotes.filter((n) => n.type === 'quick_note'), [activeNotes]);
   const rootDirectDocs = useMemo(() => activeNotes.filter((n) => !n.parentId && n.type === 'document'), [activeNotes]);
-  const deletedDocs = useMemo(() => trashNotes.filter((n) => n.type !== 'folder'), [trashNotes]);
+  const deletedDocs = useMemo(() => trashNotes.filter((n) => n.type !== 'folder' && n.type !== 'diagram'), [trashNotes]);
 
   // Active folder / scope info
   const activeScopeInfo = useMemo(() => {
@@ -213,7 +213,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
         return Boolean(doc.isPinned) && doc.type !== 'folder' && !doc.deletedAt;
       }
       if (activeFilter === 'trash') {
-        return Boolean(doc.deletedAt) && doc.type !== 'folder';
+        return Boolean(doc.deletedAt) && doc.type !== 'folder' && doc.type !== 'diagram';
       }
       return false;
     });
@@ -236,11 +236,11 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
 
   // User Folder Tree
   const folderTree = useMemo(() => {
-    const folders = activeNotes.filter((n) => n.type === 'folder');
+    const folders = activeNotes.filter((n) => n.type === 'folder' && !n.tags?.includes('diagram'));
     const folderMap = new Map<string, FolderTreeNode>();
 
     for (const f of folders) {
-      const directDocs = activeNotes.filter((n) => n.parentId === f.id && n.type !== 'folder');
+      const directDocs = activeNotes.filter((n) => n.parentId === f.id && n.type !== 'folder' && n.type !== 'diagram');
       folderMap.set(f.id, {
         id: f.id,
         folder: f,

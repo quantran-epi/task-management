@@ -11,7 +11,8 @@ export type AppRoute =
   | 'ai-popout'
   | 'insight'
   | 'agents'
-  | 'telegram';
+  | 'telegram'
+  | 'mermaid';
 
 export type NavigateFunction = (route: AppRoute, params?: Record<string, string>) => void;
 

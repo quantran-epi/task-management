@@ -34,11 +34,13 @@ import {
   LineChartOutlined,
   FileTextOutlined,
   RobotOutlined,
+  ApartmentOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import type { Note } from '../types/models';
 import type { NavigateFunction } from '../types/navigation';
+import { EntityDiagramsSection } from '../components/diagrams/EntityDiagramsSection';
 import {
   analyzeTaskInsight,
   analyzeProjectInsight,
@@ -186,7 +188,21 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
   }, [itemType, allMilestones, itemId]);
 
   const relatedNotes = useMemo(() => {
-    return allNotes.filter((n) => n.entityId === itemId || (n.entityType === itemType && n.entityId === itemId));
+    return allNotes.filter(
+      (n) =>
+        (n.entityId === itemId || (n.entityType === itemType && n.entityId === itemId)) &&
+        n.type !== 'diagram' &&
+        !n.deletedAt
+    );
+  }, [allNotes, itemType, itemId]);
+
+  const relatedDiagrams = useMemo(() => {
+    return allNotes.filter(
+      (n) =>
+        (n.entityId === itemId || (n.entityType === itemType && n.entityId === itemId)) &&
+        n.type === 'diagram' &&
+        !n.deletedAt
+    );
   }, [allNotes, itemType, itemId]);
 
   // Insight analysis
@@ -939,6 +955,19 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
             )}
           />
         )}
+      </Card>
+
+      {/* Linked Diagrams Section */}
+      <Card
+        title={
+          <Space>
+            <ApartmentOutlined style={{ color: '#10b981' }} />
+            <span>Biểu đồ liên quan ({relatedDiagrams.length})</span>
+          </Space>
+        }
+        style={{ marginBottom: 16 }}
+      >
+        <EntityDiagramsSection entityType={itemType} entityId={itemId} db={db} embedded={true} />
       </Card>
 
       {/* Modals & Drawers */}
