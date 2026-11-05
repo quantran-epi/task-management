@@ -4,16 +4,16 @@ milestone: v1.3
 current_phase: 27
 current_phase_name: Studio Artifact Tools & Diff Approval
 status: executing
-stopped_at: Completed 27-01-PLAN.md
-last_updated: "2026-11-04T15:37:15.573Z"
+stopped_at: Completed 27-02-PLAN.md
+last_updated: "2026-11-05T02:32:10.230Z"
 last_activity: 2026-11-04
 last_activity_desc: Phase 27 execution started
-state_head: 834dda17006f1f94d6327ef986d415ec947d12b6
+state_head: b0c87677af3535c1719c3a4ed73e5c84f459b342
 progress:
   total_phases: 8
   completed_phases: 0
   total_plans: 9
-  completed_plans: 5
+  completed_plans: 6
   percent: 0
 milestone_name: SDLC Closed-Loop Engine & Repository Autonomy
 ---
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-03)
 ## Current Position
 
 Phase: 27 (Studio Artifact Tools & Diff Approval) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-11-04 — Phase 27 execution started
 
@@ -39,9 +39,9 @@ Phase sequence: 26 → 27 → 28 → 29 → 30 → 31
 
 ## Session Continuity
 
-Last session: 2026-11-04T15:37:15.376Z
-Stopped at: Completed 27-01-PLAN.md
-Resume file: None
+Last session: 2026-11-05T02:32:09.873Z
+Stopped at: Completed 27-02-PLAN.md
+Resume file: .planning/phases/27-studio-artifact-tools-diff-approval/27-03-PLAN.md
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -84,6 +84,7 @@ Progress: [░░░░░░░░░░] 0%
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 27 P01 | 38 min | 3 tasks | 11 files |
+| Phase 27 P02 | 33 min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -99,6 +100,7 @@ Progress: [░░░░░░░░░░] 0%
 - [v1.3 roadmap]: Phase 32 (research) reuses the Phase 29 fs-gw execution path — no separate search API, no new dependency.
 - [v1.3 roadmap]: Convention conflicts (global vs repo) are surfaced, never silently resolved; EXTERNAL research evidence never outranks internal evidence without saying so.
 - [Phase 27]: Artifact tools use a trusted request-bound context and prepare-then-park approval; section ids number by heading order and patches are capped at 120 changed lines. — A model argument can never select project/CR/scope, and the approved result is the cached proposal rather than a recompute.
+- [Phase 27]: Diff card is separate and neutral; approval applies through the host adapter only, staleness uses normalized hash plus exact base bytes, and decisions persist as metadata-only system rows. — Keeps semantic color in the diff body, blocks implicit draft writes, and preserves decision history without persisting pending diff payloads.
 
 ### Todos / Blockers
 
