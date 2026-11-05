@@ -204,6 +204,61 @@ describe('real scripted get → patch → approve path', () => {
     expect(markdown).not.toContain('Bị ghi đè.');
   });
 
+  it('re-reads after a prior approval invalidated the second call base, instead of applying it', async () => {
+    let round = 0;
+    let readAgain = 0;
+    stream.mockReset();
+    stream.mockImplementation(async function* (input: { payload: { messages: Array<{ role: string; name?: string; content?: string }> } }) {
+      if (round++ === 0) { yield { type: 'tool_calls', calls: [callOf('g1', 'get_artifact', { kind: 'SOLUTION' })] }; return; }
+      const read = [...input.payload.messages].reverse().find((m) => m.role === 'tool' && m.name === 'get_artifact');
+      const snapshot = JSON.parse(read?.content ?? '{}');
+      const section = snapshot.sectionIndex.find((s: { title: string }) => s.title === 'Kiểm tra đầu vào');
+      if (round === 2) { yield { type: 'tool_calls', calls: [callOf('p1', 'patch_artifact_section', { kind: 'SOLUTION', sectionId: section.id,
+        expectedHeading: section.title, baseHash: snapshot.baseHash, operation: 'append', newContent: 'Dòng thứ nhất.' })] }; return; }
+      if (round === 3) { readAgain += 1; yield { type: 'tool_calls', calls: [callOf('g2', 'get_artifact', { kind: 'SOLUTION' })] }; return; }
+      if (round === 4) {
+        const fresh = JSON.parse([...input.payload.messages].reverse().find((m) => m.role === 'tool' && m.name === 'get_artifact')?.content ?? '{}');
+        yield { type: 'tool_calls', calls: [callOf('p2', 'patch_artifact_section', { kind: 'SOLUTION', sectionId: section.id,
+          expectedHeading: section.title, baseHash: fresh.baseHash, operation: 'append', newContent: 'Dòng thứ hai.' })] };
+        return;
+      }
+      yield { type: 'text', delta: 'Đã đề xuất chỉnh sửa tiếp theo.' };
+    });
+    await startTurn('Thêm nội dung kiểm tra đầu vào vào SOLUTION');
+    await screen.findByRole('region', { name: 'Diff đề xuất chỉnh sửa' });
+    fireEvent.click(screen.getByRole('button', { name: 'Chấp thuận' }));
+    await screen.findByText('Đã chấp thuận — bản nháp bước này đã được cập nhật.');
+    await waitFor(() => expect(markdown).toBe(`${BASE}\nDòng thứ nhất.`));
+    // A second proposal must be computed against the fresh base, never the pre-approval one.
+    expect(readAgain).toBeGreaterThan(0);
+    expect(markdown).toBe(`${BASE}\nDòng thứ nhất.`);
+  });
+
+  it('keeps an independent second patch fresh after rejecting the first', async () => {
+    let round = 0;
+    stream.mockReset();
+    stream.mockImplementation(async function* (input: { payload: { messages: Array<{ role: string; name?: string; content?: string }> } }) {
+      if (round++ === 0) { yield { type: 'tool_calls', calls: [callOf('g1', 'get_artifact', { kind: 'SOLUTION' })] }; return; }
+      const read = [...input.payload.messages].reverse().find((m) => m.role === 'tool' && m.name === 'get_artifact');
+      const snapshot = JSON.parse(read?.content ?? '{}');
+      const section = snapshot.sectionIndex.find((s: { title: string }) => s.title === 'Kiểm tra đầu vào');
+      if (round === 2) { yield { type: 'tool_calls', calls: [callOf('p1', 'patch_artifact_section', { kind: 'SOLUTION', sectionId: section.id,
+        expectedHeading: section.title, baseHash: snapshot.baseHash, operation: 'append', newContent: 'Đề xuất một.' }),
+        callOf('p2', 'patch_artifact_section', { kind: 'SOLUTION', sectionId: section.id,
+          expectedHeading: section.title, baseHash: snapshot.baseHash, operation: 'append', newContent: 'Đề xuất hai.' })] };
+        return; }
+      yield { type: 'text', delta: 'Đã xử lý hai đề xuất.' };
+    });
+    await startTurn('Thêm nội dung kiểm tra đầu vào vào SOLUTION');
+    fireEvent.click(await screen.findByRole('button', { name: 'Từ chối' }));
+    await screen.findByText('Đã từ chối đề xuất — tài liệu không thay đổi.');
+    const approve = await screen.findByRole('button', { name: 'Chấp thuận' });
+    await waitFor(() => expect(approve).toBeEnabled());
+    expect(markdown).toBe(BASE);
+    fireEvent.click(approve);
+    await waitFor(() => expect(markdown).toBe(`${BASE}\nĐề xuất hai.`));
+  });
+
   it('omits patch from the payload in Analysis Mode and keeps get_artifact', async () => {
     render(<StepChatPanel projectId={projectId} crId="cr" stepId="SOLUTION" db={db}
       stepGroundingContext={GROUNDING} artifactToolContext={context} onApplyArtifactPatch={onApply} />);

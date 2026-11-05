@@ -522,6 +522,21 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
   }, [threadId, scopeKey]);
 
   const sendMessage = async (text: string) => {
+    // T-27-13: a bounded edit naming a document this step does not own is refused, never
+    // silently downgraded to Q&A or retargeted at another step's artifact.
+    if (!readOnly && artifactActions.length > 0 && looksLikeArtifactPatchRequest(text) &&
+      !explicitPatchKind(text, artifactActions)) {
+      const foreign = (['SOLUTION', 'PL03B', 'PL07', 'CAB'] as const).find((kind) =>
+        !artifactActions.includes(kind) && artifactTerm(kind.toLowerCase()).test(normalizeArtifactText(text)));
+      if (foreign) {
+        const step = (Object.keys(STEP_ARTIFACT_ACTIONS) as SdlcStepId[])
+          .find((candidate) => STEP_ARTIFACT_ACTIONS[candidate]?.includes(foreign));
+        setArtifactNotice({ type: 'warning',
+          message: `Tài liệu ${foreign} không thuộc bước này. Hãy chuyển sang bước sở hữu tài liệu đó để đề xuất chỉnh sửa.`,
+          ...(step ? { step } : {}) });
+        return;
+      }
+    }
     // D-05/D-09: a concrete add/edit request with an explicit target becomes a bounded patch turn.
     if (!readOnly && artifactToolContext && artifactActions.length > 0 && looksLikeArtifactPatchRequest(text)) {
       const kind = explicitPatchKind(text, artifactActions);

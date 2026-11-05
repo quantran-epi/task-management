@@ -313,6 +313,84 @@ describe('StepChatPanel artifact bootstrap queue', () => {
     }
   });
 
+  it('asks which TECH_DOCS document before dispatching an ambiguous edit, then keeps the original text', async () => {
+    const context = { projectId: 'project', crId: 'cr', stepId: 'TECH_DOCS' as const,
+      scopeKey: 'sdlc:project:cr:TECH_DOCS', getDraft: () => '# PL03B\nNội dung.',
+      getAccess: () => ({ readOnly: false, crActive: true, scopeValid: true }) };
+    const ref = React.createRef<StepChatPanelHandle>();
+    const props = { ref, projectId: 'project', crId: 'cr', stepId: 'TECH_DOCS' as const, db,
+      stepGroundingContext: grd('[SOLUTION v2]\nSolution\n\n[CHANGE_PACK]\nPack', ['SOLUTION', 'CHANGE_PACK']),
+      artifactToolContext: context };
+    render(<StepChatPanel {...props} />);
+    await act(async () => { resolveThread({ id: 'step-thread' }); });
+    typeAndSend('Thêm quy tắc kiểm tra đầu vào vào tài liệu');
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('áp dụng cho tài liệu nào');
+    expect(within(alert).getByRole('button', { name: 'Chỉnh sửa PL03B' })).toBeInTheDocument();
+    expect(within(alert).getByRole('button', { name: 'Chỉnh sửa PL07' })).toBeInTheDocument();
+    expect(mocks.start).not.toHaveBeenCalled();
+    await act(async () => { fireEvent.click(within(alert).getByRole('button', { name: 'Chỉnh sửa PL07' })); });
+    await waitFor(() => expect(mocks.start).toHaveBeenCalledTimes(1));
+    const request = mocks.start.mock.calls[0]![0];
+    expect(request.text).toBe('Thêm quy tắc kiểm tra đầu vào vào tài liệu');
+    expect(request.systemMessages[0].content).toContain('[CHÍNH SÁCH CHỈNH SỬA NHỎ');
+    expect(request.systemMessages[0].content).not.toContain(SDLC_ARTIFACT_CONTRACTS.PL07);
+  });
+
+  it('refuses a cross-step explicit edit target with navigation instead of sending Q&A', async () => {
+    const { props } = mount(grd('[PL01]\nA\n\n[PL02]\nB', ['PL01', 'PL02']), 'SOLUTION');
+    await ready();
+    typeAndSend('Thêm nội dung vào PL07');
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('Tài liệu PL07 không thuộc bước này');
+    expect(mocks.start).not.toHaveBeenCalled();
+    fireEvent.click(within(alert).getByRole('button', { name: 'Chuyển đến Bước 5: Tài liệu kỹ thuật' }));
+    expect(props.onNavigateToStep).toHaveBeenCalledWith('TECH_DOCS');
+  });
+
+  it.each(['Thêm nội dung kiểm tra đầu vào vào SOLUTION', 'Add this content to the solution'])(
+    'routes %s as a bounded patch policy, never the full-document contract', async (text) => {
+      const context = { projectId: 'project', crId: 'cr', stepId: 'SOLUTION' as const,
+        scopeKey: 'sdlc:project:cr:SOLUTION', getDraft: () => '# SOLUTION\nNội dung.',
+        getAccess: () => ({ readOnly: false, crActive: true, scopeValid: true }) };
+      const { props, rerender } = mount(solutionGrounding, 'SOLUTION');
+      rerender(<StepChatPanel {...props} artifactToolContext={context} />);
+      await act(async () => { resolveThread({ id: 'solution-thread' }); });
+      await waitFor(() => expect(screen.getByTestId('thread')).toHaveTextContent('solution-thread'));
+      typeAndSend(text);
+      await waitFor(() => expect(mocks.start).toHaveBeenCalledTimes(1));
+      const request = mocks.start.mock.calls[0]![0];
+      expect(request.text).toBe(text);
+      const system = request.systemMessages[0].content;
+      expect(system).toContain('[CHÍNH SÁCH CHỈNH SỬA NHỎ');
+      expect(system).not.toContain(SDLC_ARTIFACT_CONTRACTS.SOLUTION);
+      expect(system).toContain('get_artifact');
+      expect(system).toContain('patch_artifact_section');
+    }
+  );
+
+  it.each(['Soạn SOLUTION đầy đủ', 'Tạo tài liệu SOLUTION hoàn chỉnh'])(
+    'keeps explicit full generation %s on the complete-document contract', async (text) => {
+      const context = { projectId: 'project', crId: 'cr', stepId: 'SOLUTION' as const,
+        scopeKey: 'sdlc:project:cr:SOLUTION', getDraft: () => '# SOLUTION\nNội dung.',
+        getAccess: () => ({ readOnly: false, crActive: true, scopeValid: true }) };
+      const { props, rerender } = mount(solutionGrounding, 'SOLUTION');
+      rerender(<StepChatPanel {...props} artifactToolContext={context} />);
+      await act(async () => { resolveThread({ id: 'solution-thread' }); });
+      await waitFor(() => expect(screen.getByTestId('thread')).toHaveTextContent('solution-thread'));
+      typeAndSend(text);
+      // Explicit generation keeps its own clarification/CTA path, never the bounded-edit policy.
+      const alert = screen.getByRole('alert');
+      expect(alert).toHaveTextContent('Chọn tài liệu bạn muốn');
+      expect(screen.queryByText(/CHÍNH SÁCH CHỈNH SỬA NHỎ/)).not.toBeInTheDocument();
+      await act(async () => { fireEvent.click(within(alert).getByRole('button', { name: 'Soạn SOLUTION bằng AI' })); });
+      await waitFor(() => expect(mocks.start).toHaveBeenCalledTimes(1));
+      const system = mocks.start.mock.calls[0]![0].systemMessages[0].content;
+      expect(system).toContain(SDLC_ARTIFACT_CONTRACTS.SOLUTION);
+      expect(system).not.toContain('[CHÍNH SÁCH CHỈNH SỬA NHỎ');
+    }
+  );
+
   it('drops pending intent on unmount rather than leaking into another panel', async () => {
     const { ref, unmount } = mount();
     act(() => { ref.current!.requestArtifactAnalysis(); });
