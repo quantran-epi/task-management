@@ -64,6 +64,7 @@ export function useChatTurn({ scopeKey, deps }: UseChatTurnOptions): UseChatTurn
         runLoop: depsRef.current.runLoop,
         saveMessage: depsRef.current.saveMessage,
         describeMutation: depsRef.current.describeMutation,
+        ...(depsRef.current.preparePatch ? { preparePatch: depsRef.current.preparePatch } : {}),
         db: depsRef.current.db,
         onStatus: (next) => {
           setStatus(next);

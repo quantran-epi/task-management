@@ -73,6 +73,8 @@ export interface AiChatWidgetProps {
   onStop: () => void;
   onResolveApproval: (approved: boolean) => void;
   artifactApprovalState?: { stale?: boolean; applying?: boolean; error?: string } | undefined;
+  artifactDecision?: 'approved' | 'rejected' | undefined;
+  toolEventExtensions?: Record<string, React.ReactNode> | undefined;
   onRetry: () => void;
   error: { code: string; message: string } | null;
   toolbox: AiChatToolboxProps;
@@ -147,13 +149,13 @@ function mergeToolEvents(events: ChatTurnToolEvent[]): ChatTurnToolEvent[] {
 }
 
 /** Collapsed-by-default tool badge. Raw arguments/output never auto-expand (D-04). */
-const ToolEventBadge: React.FC<{ event: ChatTurnToolEvent }> = ({ event }) => {
+const ToolEventBadge: React.FC<{ event: ChatTurnToolEvent; extension?: React.ReactNode }> = ({ event, extension }) => {
   const { token } = theme.useToken();
   const [expanded, setExpanded] = useState(false);
   const detailsId = `tool-event-${event.id.replace(/[^A-Za-z0-9_-]/g, '-')}`;
 
   return (
-    <div style={{ marginBottom: 8 }}>
+    <div style={{ marginBottom: 8 }} data-tool-call-id={event.id}>
       <button
         type="button"
         aria-expanded={expanded}
@@ -211,6 +213,7 @@ const ToolEventBadge: React.FC<{ event: ChatTurnToolEvent }> = ({ event }) => {
           />
         </div>
       )}
+      {extension}
     </div>
   );
 };
@@ -227,6 +230,8 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
   onStop,
   onResolveApproval,
   artifactApprovalState,
+  artifactDecision,
+  toolEventExtensions,
   onRetry,
   error,
   toolbox,
@@ -416,12 +421,14 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
                 style={{ maxHeight: 160, overflowY: 'auto', overscrollBehavior: 'contain' }}
               >
                 {(toolActivityExpanded ? mergedToolEvents : mergedToolEvents.slice(-1)).map((event) => (
-                  <ToolEventBadge key={event.id} event={event} />
+                  <ToolEventBadge key={event.id} event={event} {...(toolEventExtensions?.[event.id] ? { extension: toolEventExtensions[event.id] } : {})} />
                 ))}
               </div>
             </>
           ) : (
-            mergedToolEvents.map((event) => <ToolEventBadge key={event.id} event={event} />)
+            mergedToolEvents.map((event) => (
+              <ToolEventBadge key={event.id} event={event} {...(toolEventExtensions?.[event.id] ? { extension: toolEventExtensions[event.id] } : {})} />
+            ))
           )}
         </div>
       )}
@@ -451,6 +458,7 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
         <div style={{ padding: '0 16px' }}>
           {turn.pendingApproval.patch ? (
             <ArtifactDiffApprovalCard patch={turn.pendingApproval.patch} {...artifactApprovalState}
+              {...(artifactDecision ? { decision: artifactDecision } : {})}
               onApprove={() => onResolveApproval(true)} onReject={() => onResolveApproval(false)} />
           ) : (
             <MutationApprovalCard
