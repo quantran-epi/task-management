@@ -95,6 +95,7 @@ import type {
 } from './runtime/chatTurnRuntime';
 import { AiChatWidget } from './AiChatWidget';
 import { InterruptedBanner } from './InterruptedBanner';
+import { subscribeAIChatSync } from '../../services/ai/aiSyncChannel';
 import {
   listTabsByScope,
   getOrCreateActiveChatTab,
@@ -520,10 +521,12 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     });
   }
 
+  const [syncTrigger, setSyncTrigger] = useState(0);
+
   // Durable multi-tab state for all scopes from Dexie chatTabs table
   const durableTabs = useLiveQuery<ChatTab[]>(async () => {
     return listTabsByScope(scopeKey, db);
-  }, [db, scopeKey]) ?? [];
+  }, [db, scopeKey, syncTrigger]) ?? [];
 
   const [selectedTabId, setSelectedTabId] = useState<string | null>(null);
   const activeTab = (selectedTabId ? durableTabs.find((t) => t.id === selectedTabId) : undefined)
@@ -543,6 +546,20 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   }, [db, activeTabThreadId, scopeKey]);
 
   const activeThreadId = activeTabThreadId ?? thread?.id;
+
+  useEffect(() => {
+    return subscribeAIChatSync((payload) => {
+      if (payload.type === 'message_saved') {
+        if (!payload.threadId || payload.threadId === activeThreadId) {
+          setSyncTrigger((prev) => prev + 1);
+        }
+      } else if (payload.type === 'tab_updated') {
+        if (!payload.scopeKey || payload.scopeKey === scopeKey) {
+          setSyncTrigger((prev) => prev + 1);
+        }
+      }
+    });
+  }, [activeThreadId, scopeKey]);
 
   // Draft typed before the durable tab resolved must not be dropped by the per-tab remount.
   const draftCarryRef = useRef<{ tabId: string; text: string }>({ tabId: '', text: '' });
@@ -671,7 +688,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const messages = useLiveQuery<ChatMessage[]>(() => {
     if (!activeThreadId) return [];
     return getMessagesByThreadId(activeThreadId, db);
-  }, [db, activeThreadId]) ?? [];
+  }, [db, activeThreadId, syncTrigger]) ?? [];
 
   const ensureTurnTabRef = useRef<() => Promise<ChatTab>>(() =>
     Promise.reject(new Error('tab bootstrap not ready'))
@@ -819,6 +836,38 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       }
     },
     [db, durableTabs, setTransientClarifyMessage, tabRuntimes]
+  );
+
+  const handleReorderTabs = useCallback(
+    async (fromIndex: number, toIndex: number) => {
+      if (
+        fromIndex < 0 ||
+        toIndex < 0 ||
+        fromIndex >= durableTabs.length ||
+        toIndex >= durableTabs.length ||
+        fromIndex === toIndex
+      ) {
+        return;
+      }
+      const reordered = [...durableTabs];
+      const [moved] = reordered.splice(fromIndex, 1);
+      if (!moved) return;
+      reordered.splice(toIndex, 0, moved);
+
+      try {
+        await db.transaction('rw', [db.chatTabs], async () => {
+          for (let i = 0; i < reordered.length; i++) {
+            const item = reordered[i];
+            if (item && item.order !== i) {
+              await db.chatTabs.update(item.id, { order: i, updatedAt: new Date().toISOString() });
+            }
+          }
+        });
+      } catch (err) {
+        logAiChatError('Failed to reorder tabs', err);
+      }
+    },
+    [db, durableTabs]
   );
 
   // D-30: a restored workflow whose source Notes vanished blocks the next AI step.
@@ -2232,6 +2281,7 @@ Rules:
           onAddTab={handleAddTab}
           onCloseTab={handleCloseTab}
           onRenameTab={handleRenameTab}
+          onReorderTabs={handleReorderTabs}
           tabAnalysisModes={tabAnalysisModes}
           tabStatuses={tabStatuses}
         />

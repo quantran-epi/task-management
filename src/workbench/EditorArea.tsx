@@ -294,6 +294,7 @@ export function EditorArea({ db }: EditorAreaProps) {
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
                   marginRight: tab.closable !== false ? 6 : 0,
+                  pointerEvents: 'none',
                 }}
                 title={tab.title}
               >
@@ -322,7 +323,7 @@ export function EditorArea({ db }: EditorAreaProps) {
                     flexShrink: 0,
                   }}
                 >
-                  <CloseOutlined style={{ fontSize: 11 }} />
+                  <CloseOutlined style={{ fontSize: 11, pointerEvents: 'none' }} />
                 </button>
               )}
             </div>

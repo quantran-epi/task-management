@@ -15,6 +15,7 @@ import {
 } from '../../services/ai/groundedAnswerSchemas';
 import { SdlcArtifactKindSchema } from '../../services/wizard/workflowSchemas';
 import { generateId } from '../../utils/uuid';
+import { notifyAIChatSync } from '../../services/ai/aiSyncChannel';
 
 export interface CreateOrGetThreadInput {
   scopeType: ChatScopeType;
@@ -169,6 +170,11 @@ export async function saveMessage(
   await db.transaction('rw', [db.chatMessages, db.chatThreads], async () => {
     await db.chatMessages.add(message);
     await db.chatThreads.update(input.threadId, { updatedAt: now });
+  });
+
+  notifyAIChatSync({
+    type: 'message_saved',
+    threadId: input.threadId,
   });
 
   return message;

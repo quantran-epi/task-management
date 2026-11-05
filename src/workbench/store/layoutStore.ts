@@ -144,11 +144,6 @@ export const useLayoutStore = create<LayoutState>()(
           const index = state.openTabs.findIndex((t) => t.id === tabId);
           if (index === -1) return state;
 
-          const tabToClose = state.openTabs[index];
-          if (tabToClose && tabToClose.closable === false) {
-            return state; // Cannot close non-closable tab
-          }
-
           const newTabs = state.openTabs.filter((t) => t.id !== tabId);
           let newActiveId = state.activeTabId;
 
@@ -208,7 +203,9 @@ export const useLayoutStore = create<LayoutState>()(
         leftPanelSize: typeof state.leftPanelSize === 'number' && state.leftPanelSize > 0 ? state.leftPanelSize : DEFAULT_LAYOUT_STATE.leftPanelSize,
         rightPanelSize: typeof state.rightPanelSize === 'number' && state.rightPanelSize > 0 ? state.rightPanelSize : DEFAULT_LAYOUT_STATE.rightPanelSize,
         bottomPanelSize: typeof state.bottomPanelSize === 'number' && state.bottomPanelSize > 0 ? state.bottomPanelSize : DEFAULT_LAYOUT_STATE.bottomPanelSize,
-        openTabs: Array.isArray(state.openTabs) && state.openTabs.length > 0 ? state.openTabs.slice(0, MAX_OPEN_TABS) : DEFAULT_LAYOUT_STATE.openTabs,
+        openTabs: Array.isArray(state.openTabs) && state.openTabs.length > 0
+          ? state.openTabs.slice(0, MAX_OPEN_TABS).map((tab) => ({ ...tab, closable: true }))
+          : DEFAULT_LAYOUT_STATE.openTabs,
         activeTabId: typeof state.activeTabId === 'string' ? state.activeTabId : DEFAULT_LAYOUT_STATE.activeTabId,
       }),
     }

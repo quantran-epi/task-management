@@ -417,6 +417,7 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
                     whiteSpace: 'nowrap',
                     flex: 1,
                     minWidth: 0,
+                    pointerEvents: 'none',
                   }}
                   title={tab.title}
                 >

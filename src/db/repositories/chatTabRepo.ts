@@ -1,6 +1,7 @@
 import { db as defaultDb, type TaskPlannerDatabase } from '../index';
 import type { ChatScopeType, ChatTab, ChatThread } from '../../types/models';
 import { generateId } from '../../utils/uuid';
+import { notifyAIChatSync } from '../../services/ai/aiSyncChannel';
 
 const SDLC_TITLE = '⚙️ SDLC Workflow';
 const DEFAULT_CHAT_TITLE = '💬 Cuộc trò chuyện';
@@ -186,6 +187,7 @@ export async function setActiveTab(scopeKey: string, tabId: string, db: TaskPlan
     await db.chatTabs.where('scopeKey').equals(scopeKey).modify({ active: false });
     await db.chatTabs.update(tabId, { active: true, updatedAt: new Date().toISOString() });
   });
+  notifyAIChatSync({ type: 'tab_updated', tabId, scopeKey });
   return (await db.chatTabs.get(tabId)) as ChatTab;
 }
 
@@ -202,6 +204,7 @@ export async function updateChatTab(
     await db.chatTabs.update(tabId, { ...patch, title, updatedAt: now });
     await db.chatThreads.update(tab.threadId, { title, updatedAt: now });
   });
+  notifyAIChatSync({ type: 'tab_updated', tabId, threadId: tab.threadId, scopeKey: tab.scopeKey });
   return (await db.chatTabs.get(tabId)) as ChatTab;
 }
 

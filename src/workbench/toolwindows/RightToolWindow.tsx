@@ -6,6 +6,7 @@ import {
   CommentOutlined,
 } from '@ant-design/icons';
 import { useLayoutStore } from '../store/layoutStore';
+import { useAIChat } from '../../context/AIChatContext';
 import { AIChatDrawer } from '../../components/ai/AIChatDrawer';
 import { NotificationPanel } from './NotificationPanel';
 import type { TaskPlannerDatabase } from '../../db';
@@ -21,9 +22,13 @@ export function RightToolWindow({
 }: RightToolWindowProps) {
   const rightActiveId = useLayoutStore((s) => s.rightActiveId);
   const toggleToolWindow = useLayoutStore((s) => s.toggleToolWindow);
+  const { closeChat } = useAIChat();
 
   const handleCollapse = () => {
     if (rightActiveId) {
+      if (rightActiveId === 'ai_chat') {
+        closeChat();
+      }
       toggleToolWindow('right', rightActiveId);
     }
   };
