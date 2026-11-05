@@ -374,7 +374,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
                 ? [
                     {
                       title: (
-                        <a onClick={() => onNavigate('insight', { type: 'project', id: parentProject.id })}>
+                        <a onClick={() => onNavigate('insight', { type: 'project', id: parentProject.id, name: parentProject.name })}>
                           {parentProject.name}
                         </a>
                       ),
@@ -385,7 +385,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
                 ? [
                     {
                       title: (
-                        <a onClick={() => onNavigate('insight', { type: 'milestone', id: parentMilestone.id })}>
+                        <a onClick={() => onNavigate('insight', { type: 'milestone', id: parentMilestone.id, name: parentMilestone.name })}>
                           {parentMilestone.name}
                         </a>
                       ),
@@ -536,7 +536,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
                         { name: 'Tác vụ mới', projectId: currentProject.id, status: 'Open', priority: 'Medium', estimateMinutes: 0 },
                         db
                       );
-                      onNavigate('insight', { type: 'task', id: t.id });
+                      onNavigate('insight', { type: 'task', id: t.id, name: t.name });
                     } catch {
                       message.error('Không thể tạo tác vụ');
                     }
@@ -583,7 +583,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
                         },
                         db
                       );
-                      onNavigate('insight', { type: 'task', id: t.id });
+                      onNavigate('insight', { type: 'task', id: t.id, name: t.name });
                     } catch {
                       message.error('Không thể tạo tác vụ');
                     }
@@ -838,7 +838,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
                     <Button
                       key="insight"
                       type="link"
-                      onClick={() => onNavigate('insight', { type: 'task', id: t.id })}
+                      onClick={() => onNavigate('insight', { type: 'task', id: t.id, name: t.name })}
                     >
                       Xem chi tiết
                     </Button>,
@@ -853,7 +853,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
                         <Tag color={PRIORITY_TAG_COLORS[t.priority] ?? 'default'}>
                           {t.priority}
                         </Tag>
-                        <a onClick={() => onNavigate('insight', { type: 'task', id: t.id })}>
+                        <a onClick={() => onNavigate('insight', { type: 'task', id: t.id, name: t.name })}>
                           {t.name}
                         </a>
                       </Space>

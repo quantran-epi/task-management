@@ -1,3 +1,4 @@
+import React, { useEffect } from 'react';
 import { CloseOutlined, InboxOutlined } from '@ant-design/icons';
 import { AntdThemeAdapter } from './AntdThemeAdapter';
 import { useLayoutStore, type EditorTab } from './store/layoutStore';
@@ -28,6 +29,38 @@ export function EditorArea({ db }: EditorAreaProps) {
   const activeTab = openTabs.find((tab) => tab.id === activeTabId) || openTabs[0];
 
   const dbProp = db ? { db } : {};
+
+  // Resolve friendly title for insight tabs that only have ID
+  useEffect(() => {
+    if (!db) return;
+    openTabs.forEach(async (t) => {
+      if (t.viewType === 'insight' && t.params?.itemId) {
+        const itemId = t.params.itemId;
+        const itemType = (t.params.itemType || t.params.type || 'task') as string;
+        const isPlaceholder = !t.title || t.title.startsWith(`${itemType.toUpperCase()}: `) || t.title.includes(itemId.slice(0, 8));
+        if (isPlaceholder) {
+          let realName: string | undefined;
+          if (itemType === 'task') {
+            const item = await db.tasks.get(itemId);
+            realName = item?.name;
+          } else if (itemType === 'project') {
+            const item = await db.projects.get(itemId);
+            realName = item?.name;
+          } else if (itemType === 'milestone') {
+            const item = await db.milestones.get(itemId);
+            realName = item?.name;
+          }
+          if (realName) {
+            openTab({
+              ...t,
+              title: realName,
+              params: { ...t.params, name: realName },
+            });
+          }
+        }
+      }
+    });
+  }, [openTabs, db, openTab]);
 
   const renderViewContent = (tab: EditorTab) => {
     switch (tab.viewType) {
@@ -66,12 +99,13 @@ export function EditorArea({ db }: EditorAreaProps) {
               if (route === 'insight') {
                 const targetType = (params?.itemType || params?.type || 'task') as string;
                 const targetId = (params?.itemId || params?.id || '') as string;
+                const explicitTitle = (params?.name || params?.title) as string | undefined;
                 openTab({
                   id: `${targetType}-${targetId}`,
-                  title: `${targetType.toUpperCase()}: ${targetId.slice(0, 8)}`,
+                  title: explicitTitle || `${targetType.toUpperCase()}: ${targetId.slice(0, 8)}`,
                   viewType: 'insight',
                   closable: true,
-                  params: { itemType: targetType as any, itemId: targetId },
+                  params: { itemType: targetType as any, itemId: targetId, ...(explicitTitle ? { name: explicitTitle } : {}) },
                 });
                 return;
               }
