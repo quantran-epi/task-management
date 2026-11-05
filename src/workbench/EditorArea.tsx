@@ -60,9 +60,21 @@ export function EditorArea({ db }: EditorAreaProps) {
       case 'insight':
         return (
           <ItemInsightView
-            itemType={tab.params?.itemType || 'task'}
-            itemId={tab.params?.itemId || ''}
+            itemType={(tab.params?.itemType || tab.params?.type || 'task') as any}
+            itemId={tab.params?.itemId || tab.params?.id || ''}
             onNavigate={(route, params) => {
+              if (route === 'insight') {
+                const targetType = (params?.itemType || params?.type || 'task') as string;
+                const targetId = (params?.itemId || params?.id || '') as string;
+                openTab({
+                  id: `${targetType}-${targetId}`,
+                  title: `${targetType.toUpperCase()}: ${targetId.slice(0, 8)}`,
+                  viewType: 'insight',
+                  closable: true,
+                  params: { itemType: targetType as any, itemId: targetId },
+                });
+                return;
+              }
               const titles: Record<string, string> = {
                 dashboard: 'Dashboard',
                 tasks: 'Tasks',

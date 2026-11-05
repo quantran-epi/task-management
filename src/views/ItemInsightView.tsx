@@ -57,7 +57,7 @@ import { NoteDetailModal } from '../components/notes/NoteDetailModal';
 import { NoteEditor } from '../components/notes/NoteEditor';
 import { updateTask, createTask } from '../db/repositories/taskRepo';
 import { updateProject } from '../db/repositories/projectRepo';
-import { updateMilestone } from '../db/repositories/milestoneRepo';
+import { updateMilestone, createMilestone } from '../db/repositories/milestoneRepo';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -948,16 +948,21 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
         />
       )}
 
-      {currentMilestone && (
+      {(currentMilestone || currentProject) && (
         <MilestoneModal
           open={milestoneModalOpen}
-          projectId={currentMilestone.projectId}
-          milestone={currentMilestone}
+          projectId={currentMilestone ? currentMilestone.projectId : currentProject!.id}
+          milestone={currentMilestone || null}
           onClose={() => setMilestoneModalOpen(false)}
           onSave={async (values) => {
-            await updateMilestone(currentMilestone.id, values, db);
+            if (currentMilestone) {
+              await updateMilestone(currentMilestone.id, values, db);
+              message.success('Đã cập nhật mốc');
+            } else if (currentProject) {
+              await createMilestone({ ...values, projectId: currentProject.id }, db);
+              message.success('Đã thêm cột mốc mới');
+            }
             setMilestoneModalOpen(false);
-            message.success('Đã cập nhật mốc');
           }}
         />
       )}

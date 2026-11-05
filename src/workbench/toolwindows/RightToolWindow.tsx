@@ -58,53 +58,55 @@ export function RightToolWindow({
         overflow: 'hidden',
       }}
     >
-      {/* Header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          height: 34,
-          padding: '0 12px',
-          borderBottom: '1px solid var(--border, #e9eaee)',
-          background: 'var(--bg-elev, #f7f8fa)',
-          userSelect: 'none',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-          {icon}
-          <span
-            style={{
-              fontWeight: 600,
-              fontSize: 'var(--font-size-ui, 13px)',
-              letterSpacing: '0.01em',
-              color: 'var(--fg-strong, #000000)',
-            }}
-          >
-            {title}
-          </span>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <Tooltip title={`Collapse ${title}`}>
-            <button
-              type="button"
-              onClick={handleCollapse}
-              aria-label="Collapse tool window"
+      {/* Header - rendered for notifications/custom slots, ai_chat has its own native tool window header */}
+      {rightActiveId !== 'ai_chat' && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            height: 34,
+            padding: '0 12px',
+            borderBottom: '1px solid var(--border, #e9eaee)',
+            background: 'var(--bg-elev, #f7f8fa)',
+            userSelect: 'none',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            {icon}
+            <span
               style={{
-                background: 'transparent',
-                border: 'none',
-                padding: 3,
-                borderRadius: 3,
-                cursor: 'pointer',
-                color: 'var(--fg-muted, #6c707e)',
+                fontWeight: 600,
+                fontSize: 'var(--font-size-ui, 13px)',
+                letterSpacing: '0.01em',
+                color: 'var(--fg-strong, #000000)',
               }}
             >
-              <MinusOutlined style={{ fontSize: 12 }} />
-            </button>
-          </Tooltip>
+              {title}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Tooltip title={`Collapse ${title}`}>
+              <button
+                type="button"
+                onClick={handleCollapse}
+                aria-label="Collapse tool window"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  padding: 3,
+                  borderRadius: 3,
+                  cursor: 'pointer',
+                  color: 'var(--fg-muted, #6c707e)',
+                }}
+              >
+                <MinusOutlined style={{ fontSize: 12 }} />
+              </button>
+            </Tooltip>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Body */}
       <div

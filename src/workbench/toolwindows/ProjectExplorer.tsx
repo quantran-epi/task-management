@@ -12,14 +12,24 @@ import {
   PauseCircleOutlined,
   RocketOutlined,
   CheckSquareOutlined,
+  RobotOutlined,
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
-import { getAllProjects } from '../../db/repositories/projectRepo';
-import { getAllMilestones } from '../../db/repositories/milestoneRepo';
-import { updateTask } from '../../db/repositories/taskRepo';
+import { getAllProjects, updateProject, createProject } from '../../db/repositories/projectRepo';
+import { getAllMilestones, updateMilestone, createMilestone } from '../../db/repositories/milestoneRepo';
+import { updateTask, createTask } from '../../db/repositories/taskRepo';
+import { deleteProjectWithCascade, deleteMilestoneWithCascade } from '../../db/repositories/cascadeRepo';
 import { useLayoutStore } from '../store/layoutStore';
 import { useTimer } from '../../hooks/useTimer';
+import { useAIChat } from '../../context/AIChatContext';
+import { ProjectModal } from '../../components/projects/ProjectModal';
+import { MilestoneModal } from '../../components/projects/MilestoneModal';
+import { CascadeDeleteModal } from '../../components/projects/CascadeDeleteModal';
+import { TaskDrawer } from '../../components/tasks/TaskDrawer';
 import type { DataNode } from 'antd/es/tree';
 import type { Project, Milestone, Task } from '../../types/models';
 
@@ -36,8 +46,29 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
     key: string;
   } | null>(null);
 
+  // Modals state
+  const [projectModalOpen, setProjectModalOpen] = useState(false);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
+
+  const [milestoneModalOpen, setMilestoneModalOpen] = useState(false);
+  const [activeProjectIdForMilestone, setActiveProjectIdForMilestone] = useState<string>('');
+  const [editingMilestone, setEditingMilestone] = useState<Milestone | null>(null);
+
+  const [cascadeModalOpen, setCascadeModalOpen] = useState(false);
+  const [cascadeTarget, setCascadeTarget] = useState<{
+    type: 'project' | 'milestone';
+    id: string;
+    name: string;
+    childMilestoneCount: number;
+    childTaskCount: number;
+  } | null>(null);
+
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
+
   const openTab = useLayoutStore((s) => s.openTab);
   const { activeTimers, startTimer, pauseTimer } = useTimer();
+  const { openChat } = useAIChat();
 
   const projects = useLiveQuery(() => getAllProjects(db), [db]) ?? [];
   const milestones = useLiveQuery(() => getAllMilestones(db), [db]) ?? [];
@@ -62,6 +93,15 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
       const running = isTimerRunning(task.id);
       return [
         {
+          key: 'ai-chat',
+          icon: <RobotOutlined style={{ color: 'var(--accent, #3871e1)' }} />,
+          label: 'Hỏi Trợ lý AI',
+          onClick: () => {
+            setContextMenu(null);
+            openChat({ type: 'task', id: task.id, title: task.name });
+          },
+        },
+        {
           key: 'insight',
           icon: <EyeOutlined />,
           label: 'Chi tiết Insight',
@@ -76,6 +116,19 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
               params: { itemType: 'task', itemId: task.id },
             });
           },
+        },
+        {
+          key: 'edit',
+          icon: <EditOutlined />,
+          label: 'Sửa tác vụ',
+          onClick: () => {
+            setContextMenu(null);
+            setDrawerTaskId(task.id);
+            setDrawerOpen(true);
+          },
+        },
+        {
+          type: 'divider',
         },
         {
           key: 'timer',
@@ -118,12 +171,22 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
         },
       ];
     },
-    [db, isTimerRunning, onSelectProject, openTab, pauseTimer, startTimer]
+    [db, isTimerRunning, onSelectProject, openChat, openTab, pauseTimer, startTimer]
   );
 
   const getMilestoneContextMenu = useCallback(
     (milestone: Milestone): Required<MenuProps>['items'] => {
+      const pTasks = tasks.filter((t) => t.milestoneId === milestone.id);
       return [
+        {
+          key: 'ai-chat',
+          icon: <RobotOutlined style={{ color: 'var(--accent, #3871e1)' }} />,
+          label: 'Hỏi Trợ lý AI',
+          onClick: () => {
+            setContextMenu(null);
+            openChat({ type: 'milestone', id: milestone.id, title: milestone.name });
+          },
+        },
         {
           key: 'insight',
           icon: <EyeOutlined />,
@@ -140,14 +203,82 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
             });
           },
         },
+        {
+          key: 'add-task',
+          icon: <PlusOutlined />,
+          label: 'Thêm tác vụ',
+          onClick: async () => {
+            setContextMenu(null);
+            try {
+              const t = await createTask(
+                {
+                  name: 'Tác vụ mới',
+                  projectId: milestone.projectId,
+                  milestoneId: milestone.id,
+                  status: 'Open',
+                  priority: 'Medium',
+                  estimateMinutes: 0,
+                },
+                db
+              );
+              setDrawerTaskId(t.id);
+              setDrawerOpen(true);
+            } catch {
+              message.error('Không thể tạo tác vụ');
+            }
+          },
+        },
+        {
+          key: 'edit',
+          icon: <EditOutlined />,
+          label: 'Sửa cột mốc',
+          onClick: () => {
+            setContextMenu(null);
+            setActiveProjectIdForMilestone(milestone.projectId);
+            setEditingMilestone(milestone);
+            setMilestoneModalOpen(true);
+          },
+        },
+        {
+          type: 'divider',
+        },
+        {
+          key: 'delete',
+          icon: <DeleteOutlined style={{ color: 'var(--danger, #c54e58)' }} />,
+          danger: true,
+          label: 'Xóa cột mốc',
+          onClick: () => {
+            setContextMenu(null);
+            setCascadeTarget({
+              type: 'milestone',
+              id: milestone.id,
+              name: milestone.name,
+              childMilestoneCount: 0,
+              childTaskCount: pTasks.length,
+            });
+            setCascadeModalOpen(true);
+          },
+        },
       ];
     },
-    [onSelectProject, openTab]
+    [db, onSelectProject, openChat, openTab, tasks]
   );
 
   const getProjectContextMenu = useCallback(
     (project: Project): Required<MenuProps>['items'] => {
+      const projMilestones = milestones.filter((m) => m.projectId === project.id);
+      const projTasks = tasks.filter((t) => t.projectId === project.id);
+
       return [
+        {
+          key: 'ai-chat',
+          icon: <RobotOutlined style={{ color: 'var(--accent, #3871e1)' }} />,
+          label: 'Hỏi Trợ lý AI',
+          onClick: () => {
+            setContextMenu(null);
+            openChat({ type: 'project', id: project.id, title: project.name });
+          },
+        },
         {
           key: 'sdlc',
           icon: <RocketOutlined style={{ color: '#3871e1' }} />,
@@ -163,9 +294,6 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
               params: { projectId: project.id },
             });
           },
-        },
-        {
-          type: 'divider',
         },
         {
           key: 'insight',
@@ -184,6 +312,54 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
           },
         },
         {
+          type: 'divider',
+        },
+        {
+          key: 'add-task',
+          icon: <PlusOutlined />,
+          label: 'Thêm tác vụ',
+          onClick: async () => {
+            setContextMenu(null);
+            try {
+              const t = await createTask(
+                {
+                  name: 'Tác vụ mới',
+                  projectId: project.id,
+                  status: 'Open',
+                  priority: 'Medium',
+                  estimateMinutes: 0,
+                },
+                db
+              );
+              setDrawerTaskId(t.id);
+              setDrawerOpen(true);
+            } catch {
+              message.error('Không thể tạo tác vụ');
+            }
+          },
+        },
+        {
+          key: 'add-milestone',
+          icon: <PlusOutlined />,
+          label: 'Thêm cột mốc',
+          onClick: () => {
+            setContextMenu(null);
+            setActiveProjectIdForMilestone(project.id);
+            setEditingMilestone(null);
+            setMilestoneModalOpen(true);
+          },
+        },
+        {
+          key: 'edit',
+          icon: <EditOutlined />,
+          label: 'Sửa dự án',
+          onClick: () => {
+            setContextMenu(null);
+            setEditingProject(project);
+            setProjectModalOpen(true);
+          },
+        },
+        {
           key: 'tasks',
           icon: <CheckSquareOutlined />,
           label: 'Xem trên bảng Tác vụ',
@@ -197,9 +373,29 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
             });
           },
         },
+        {
+          type: 'divider',
+        },
+        {
+          key: 'delete',
+          icon: <DeleteOutlined style={{ color: 'var(--danger, #c54e58)' }} />,
+          danger: true,
+          label: 'Xóa dự án',
+          onClick: () => {
+            setContextMenu(null);
+            setCascadeTarget({
+              type: 'project',
+              id: project.id,
+              name: project.name,
+              childMilestoneCount: projMilestones.length,
+              childTaskCount: projTasks.length,
+            });
+            setCascadeModalOpen(true);
+          },
+        },
       ];
     },
-    [onSelectProject, openTab]
+    [db, milestones, onSelectProject, openChat, openTab, tasks]
   );
 
   const contextMenuItems = useMemo<Required<MenuProps>['items']>(() => {
@@ -452,6 +648,83 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
           />
         )}
       </div>
+
+      {/* CRUD Modals and Drawers */}
+      <ProjectModal
+        open={projectModalOpen}
+        project={editingProject}
+        onClose={() => setProjectModalOpen(false)}
+        onSave={async (values) => {
+          try {
+            if (editingProject) {
+              await updateProject(editingProject.id, values, db);
+              message.success('Đã cập nhật dự án');
+            } else {
+              await createProject(values, db);
+              message.success('Đã tạo dự án mới');
+            }
+            setProjectModalOpen(false);
+          } catch {
+            message.error('Không thể lưu dự án');
+          }
+        }}
+        db={db}
+      />
+
+      <MilestoneModal
+        open={milestoneModalOpen}
+        projectId={activeProjectIdForMilestone}
+        milestone={editingMilestone}
+        onClose={() => setMilestoneModalOpen(false)}
+        onSave={async (values) => {
+          try {
+            if (editingMilestone) {
+              await updateMilestone(editingMilestone.id, values, db);
+              message.success('Đã cập nhật cột mốc');
+            } else {
+              await createMilestone({ ...values, projectId: activeProjectIdForMilestone }, db);
+              message.success('Đã tạo cột mốc mới');
+            }
+            setMilestoneModalOpen(false);
+          } catch {
+            message.error('Không thể lưu cột mốc');
+          }
+        }}
+      />
+
+      <CascadeDeleteModal
+        open={cascadeModalOpen}
+        targetType={cascadeTarget?.type ?? 'project'}
+        targetName={cascadeTarget?.name ?? ''}
+        childMilestoneCount={cascadeTarget?.childMilestoneCount ?? 0}
+        childTaskCount={cascadeTarget?.childTaskCount ?? 0}
+        onClose={() => setCascadeModalOpen(false)}
+        onConfirm={async (mode) => {
+          if (!cascadeTarget) return;
+          try {
+            if (cascadeTarget.type === 'project') {
+              await deleteProjectWithCascade(cascadeTarget.id, mode, db);
+              message.success('Đã xóa dự án');
+            } else {
+              await deleteMilestoneWithCascade(cascadeTarget.id, mode, db);
+              message.success('Đã xóa cột mốc');
+            }
+            setCascadeModalOpen(false);
+          } catch {
+            message.error('Không thể xóa');
+          }
+        }}
+      />
+
+      <TaskDrawer
+        taskId={drawerTaskId}
+        open={drawerOpen}
+        onClose={() => {
+          setDrawerOpen(false);
+          setDrawerTaskId(null);
+        }}
+        db={db}
+      />
     </div>
   );
 }

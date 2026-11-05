@@ -116,11 +116,11 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
             subtitle: task.status ? `Status: ${task.status}` : 'Task',
             onSelect: () => {
               openTab({
-                id: 'tasks',
-                title: 'Tasks',
-                viewType: 'tasks',
-                closable: false,
-                params: { selectedTaskId: task.id },
+                id: `task-${task.id}`,
+                title: taskTitle,
+                viewType: 'insight',
+                closable: true,
+                params: { itemType: 'task', itemId: task.id },
               });
               onClose();
             },
@@ -140,11 +140,11 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
             subtitle: proj.status ? `Status: ${proj.status}` : 'Project',
             onSelect: () => {
               openTab({
-                id: 'projects',
-                title: 'Projects',
-                viewType: 'projects',
+                id: `project-${proj.id}`,
+                title: proj.name,
+                viewType: 'insight',
                 closable: true,
-                params: { projectId: proj.id },
+                params: { itemType: 'project', itemId: proj.id },
               });
               onClose();
             },
@@ -165,7 +165,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
             subtitle: 'Doc',
             onSelect: () => {
               openTab({
-                id: `note-${note.id}`,
+                id: `doc-${note.id}`,
                 title: noteTitle,
                 viewType: 'notes',
                 closable: true,

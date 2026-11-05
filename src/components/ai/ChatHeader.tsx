@@ -1,5 +1,5 @@
 import React from 'react';
-import { Typography, Button, Tooltip, Dropdown, theme } from 'antd';
+import { Button, Tooltip, Dropdown, theme } from 'antd';
 import type { MenuProps } from 'antd';
 import {
   RobotFilled,
@@ -14,8 +14,6 @@ import {
   DisconnectOutlined,
 } from '@ant-design/icons';
 import type { ActiveScope } from '../../context/AIChatContext';
-
-const { Text } = Typography;
 
 export interface ChatHeaderProps {
   currentScope?: ActiveScope | undefined;
@@ -109,48 +107,20 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '8px 14px',
-        borderBottom: `1px solid rgba(79, 70, 229, 0.12)`,
-        background: `linear-gradient(to right, rgba(79, 70, 229, 0.07) 0%, rgba(124, 58, 237, 0.04) 50%, ${token.colorBgContainer} 100%)`,
-        gap: 8,
+        height: 34,
+        padding: '0 10px',
+        borderBottom: `1px solid var(--border, #e9eaee)`,
+        background: `var(--bg-elev, #f7f8fa)`,
+        gap: 6,
+        userSelect: 'none',
+        boxSizing: 'border-box',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
-        <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div
-            style={{
-              width: 28,
-              height: 28,
-              borderRadius: 7,
-              background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-              boxShadow: '0 2px 6px rgba(79, 70, 229, 0.25)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#ffffff',
-              flexShrink: 0,
-            }}
-          >
-            <RobotFilled style={{ fontSize: 16 }} />
-          </div>
-          <span
-            style={{
-              position: 'absolute',
-              bottom: -1,
-              right: -1,
-              width: 7,
-              height: 7,
-              borderRadius: '50%',
-              backgroundColor: '#10b981',
-              border: '1.5px solid #ffffff',
-              boxShadow: '0 0 4px rgba(16, 185, 129, 0.6)',
-            }}
-          />
-        </div>
-
-        <Text strong style={{ fontSize: 13, whiteSpace: 'nowrap', color: token.colorText, flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
+        <RobotFilled style={{ fontSize: 13, color: 'var(--accent, #3871e1)' }} />
+        <span style={{ fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap', color: 'var(--fg-strong, #000000)', flexShrink: 0 }}>
           Trợ lý AI
-        </Text>
+        </span>
 
         {/* Scope Pill at Header Level */}
         {currentScope && (

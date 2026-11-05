@@ -13,6 +13,7 @@ import { useGlobalKeymap } from './hooks/useGlobalKeymap';
 import { useDoubleShift } from './hooks/useDoubleShift';
 import { SearchEverywhereModal } from './search/SearchEverywhereModal';
 import { useNotifications } from '../hooks/useNotifications';
+import { useAIChat } from '../context/AIChatContext';
 import type { TaskPlannerDatabase } from '../db';
 import {
   ProjectOutlined,
@@ -88,9 +89,19 @@ export function WorkbenchLayout({
 
   const leftActiveId = useLayoutStore((s) => s.leftActiveId);
   const rightActiveId = useLayoutStore((s) => s.rightActiveId);
+  const setToolWindowActive = useLayoutStore((s) => s.setToolWindowActive);
   const openTab = useLayoutStore((s) => s.openTab);
   const activeTabId = useLayoutStore((s) => s.activeTabId);
   const openTabs = useLayoutStore((s) => s.openTabs);
+
+  const { isOpen: isAIChatOpen } = useAIChat();
+
+  // Sync AIChatContext.isOpen with layoutStore rightActiveId
+  useEffect(() => {
+    if (isAIChatOpen && rightActiveId !== 'ai_chat') {
+      setToolWindowActive('right', 'ai_chat');
+    }
+  }, [isAIChatOpen, rightActiveId, setToolWindowActive]);
 
   const activeTab = openTabs.find((t) => t.id === activeTabId);
 
