@@ -60,7 +60,7 @@ export const AppIntelliJ: React.FC = () => {
 
   return (
     <AntdThemeAdapter>
-      {showSplash && <AppSplashScreen onReady={() => setShowSplash(false)} minDuration={900} />}
+      {showSplash && <AppSplashScreen onReady={() => setShowSplash(false)} minDuration={1900} />}
       <KnowledgeConfigProvider>
         <ServiceWorkerProvider>
           <FormGuardProvider>

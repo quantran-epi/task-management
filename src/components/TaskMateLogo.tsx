@@ -1,9 +1,9 @@
 import React from 'react';
 
 export interface TaskMateLogoProps {
-  size?: number | string;
-  className?: string;
-  style?: React.CSSProperties;
+  size?: number | string | undefined;
+  className?: string | undefined;
+  style?: React.CSSProperties | undefined;
 }
 
 export const TaskMateLogo: React.FC<TaskMateLogoProps> = ({

@@ -15,7 +15,7 @@ const BOOT_STEPS = [
 
 export const AppSplashScreen: React.FC<AppSplashScreenProps> = ({
   onReady,
-  minDuration = 800,
+  minDuration = 1800,
 }) => {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [progress, setProgress] = useState(15);
@@ -191,9 +191,15 @@ export const AppSplashScreen: React.FC<AppSplashScreenProps> = ({
           fontSize: 11,
           color: '#475569',
           letterSpacing: '0.02em',
+          textAlign: 'center',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 2,
         }}
       >
-        Private & Offline-First &bull; Personal Workload Planner
+        <div>Private & Offline-First &bull; Personal Workload Planner</div>
+        <div style={{ color: '#64748b', fontSize: 10 }}>Developed by Quan Tran Duc</div>
       </div>
     </div>
   );

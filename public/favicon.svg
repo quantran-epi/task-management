@@ -1,92 +1,65 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
   <defs>
-    <!-- Dark glass outer square matching JetBrains / modern desktop -->
-    <linearGradient id="bodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#1e1f22" />
-      <stop offset="100%" stop-color="#0e1015" />
+    <linearGradient id="tmBgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="50%" stop-color="#1e1b4b" />
+      <stop offset="100%" stop-color="#31104b" />
     </linearGradient>
 
-    <!-- Vibrant JetBrains / Modern AI overlapping color layers -->
-    <!-- Ribbon 1: Cyan to Electric Blue -->
-    <linearGradient id="cyanBlue" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#00f2fe" />
-      <stop offset="100%" stop-color="#4facfe" />
+    <linearGradient id="tmGemLeft" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="50%" stop-color="#6366f1" />
+      <stop offset="100%" stop-color="#8b5cf6" />
     </linearGradient>
 
-    <!-- Ribbon 2: Violet Indigo to Purple -->
-    <linearGradient id="purpleViolet" x1="0%" y1="100%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#7f00ff" />
-      <stop offset="100%" stop-color="#e100ff" />
+    <linearGradient id="tmGemRight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ec4899" />
+      <stop offset="50%" stop-color="#f43f5e" />
+      <stop offset="100%" stop-color="#f59e0b" />
     </linearGradient>
 
-    <!-- Ribbon 3: Warm Coral / Amber / Sunset -->
-    <linearGradient id="sunsetGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ff0844" />
-      <stop offset="100%" stop-color="#ffb199" />
+    <linearGradient id="tmCheckGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#22d3ee" />
+      <stop offset="50%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#a3e635" />
     </linearGradient>
 
-    <!-- Ribbon 4: Neon Emerald Lime (Task Check & Agility) -->
-    <linearGradient id="limeEmerald" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#00f5a0" />
-      <stop offset="100%" stop-color="#00d9f5" />
+    <linearGradient id="tmAccentCyanPink" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#06b6d4" />
+      <stop offset="50%" stop-color="#a855f7" />
+      <stop offset="100%" stop-color="#f43f5e" />
     </linearGradient>
 
-    <!-- Amber Glow Ribbon -->
-    <linearGradient id="amberGold" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#f6d365" />
-      <stop offset="100%" stop-color="#fda085" />
+    <linearGradient id="tmSparkleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="100%" stop-color="#f59e0b" />
     </linearGradient>
 
-    <!-- Border highlight -->
-    <linearGradient id="borderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#00f2fe" stop-opacity="0.7" />
-      <stop offset="50%" stop-color="#e100ff" stop-opacity="0.5" />
-      <stop offset="100%" stop-color="#ffb199" stop-opacity="0.4" />
-    </linearGradient>
-
-    <!-- Drop Shadows for 3D JetBrains ribbon layering -->
-    <filter id="ribbonShadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="-2" dy="8" stdDeviation="10" flood-color="#000000" flood-opacity="0.45" />
-    </filter>
-
-    <filter id="outerGlow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="8" result="blur" />
-      <feMerge>
-        <feMergeNode in="blur" />
-        <feMergeNode in="SourceGraphic" />
-      </feMerge>
-    </filter>
+    <radialGradient id="tmCenterGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#6366f1" stop-opacity="0.4" />
+      <stop offset="60%" stop-color="#a855f7" stop-opacity="0.15" />
+      <stop offset="100%" stop-color="#000000" stop-opacity="0" />
+    </radialGradient>
   </defs>
 
-  <!-- 1. JetBrains ExpUI Rounded Square Base Container -->
-  <rect width="512" height="512" rx="116" fill="url(#bodyGrad)" />
-  <rect x="2" y="2" width="508" height="508" rx="114" fill="none" stroke="url(#borderGrad)" stroke-width="3" />
+  <!-- Squircle base -->
+  <rect width="512" height="512" rx="124" fill="url(#tmBgGrad)" />
+  <circle cx="256" cy="256" r="210" fill="url(#tmCenterGlow)" />
+  <rect x="3" y="3" width="506" height="506" rx="121" fill="none" stroke="url(#tmAccentCyanPink)" stroke-width="3" stroke-opacity="0.5" />
 
-  <!-- 2. Dynamic Geometric JetBrains-style Polyhedral Ribbons -->
-  <!-- Layer 1: Coral / Sunset Fold (Bottom-Right) -->
-  <polygon points="260,250 430,340 370,440 210,380" fill="url(#sunsetGrad)" filter="url(#ribbonShadow)" opacity="0.95" />
+  <!-- Central Glass Plate -->
+  <rect x="92" y="92" width="328" height="328" rx="44" fill="#0f172a" fill-opacity="0.8" />
+  <rect x="92" y="92" width="328" height="328" rx="44" fill="none" stroke="url(#tmAccentCyanPink)" stroke-width="3" stroke-opacity="0.7" />
 
-  <!-- Layer 2: Violet / Magenta Fold (Top-Right to Center) -->
-  <polygon points="230,110 430,130 430,290 280,270" fill="url(#purpleViolet)" filter="url(#ribbonShadow)" opacity="0.95" />
+  <!-- Shapes: T-M Pillars -->
+  <path d="M 148 184 C 148 168 160 156 176 156 L 212 156 C 228 156 240 168 240 184 L 240 336 C 240 352 228 364 212 364 L 176 364 C 160 364 148 352 148 336 Z" fill="url(#tmGemLeft)" />
+  <path d="M 272 184 C 272 168 284 156 300 156 L 336 156 C 352 156 364 168 364 184 L 364 336 C 364 352 352 364 336 364 L 300 364 C 284 364 272 352 272 336 Z" fill="url(#tmGemRight)" />
+  <path d="M 152 168 C 152 156 162 146 174 146 L 338 146 C 350 146 360 156 360 168 L 360 200 C 360 212 350 222 338 222 L 174 222 C 162 222 152 212 152 200 Z" fill="url(#tmAccentCyanPink)" opacity="0.9" />
 
-  <!-- Layer 3: Cyan / Electric Blue Fold (Top-Left to Bottom-Left) -->
-  <polygon points="100,100 270,90 220,310 90,260" fill="url(#cyanBlue)" filter="url(#ribbonShadow)" opacity="0.95" />
+  <!-- High-contrast neon checkmark -->
+  <path d="M 196 272 L 252 328 L 388 188" fill="none" stroke="url(#tmCheckGrad)" stroke-width="38" stroke-linecap="round" stroke-linejoin="round" />
 
-  <!-- Layer 4: Amber / Gold Fold (Center-Right Bridge) -->
-  <polygon points="290,190 400,210 350,330 250,300" fill="url(#amberGold)" filter="url(#ribbonShadow)" opacity="0.9" />
-
-  <!-- Layer 5: Neon Emerald / Cyan Forward Slash (Checkmark / Velocity Mark) -->
-  <polygon points="120,350 240,430 400,210 340,170 220,330 160,290" fill="url(#limeEmerald)" filter="url(#ribbonShadow)" />
-
-  <!-- 3. JetBrains Code/Task Plate (Center-Left Dark Badge) -->
-  <rect x="130" y="150" width="150" height="150" rx="20" fill="#0c0d10" opacity="0.92" filter="url(#ribbonShadow)" />
-  <rect x="130" y="150" width="150" height="150" rx="20" fill="none" stroke="#2b2d30" stroke-width="2" />
-
-  <!-- Code / Task Underscore & Prompt (JetBrains CLI & Task Symbol) -->
-  <!-- 'T' & 'M' Geometric Monogram / Check in Center Plate -->
-  <path d="M 154 186 L 254 186" stroke="#ffffff" stroke-width="12" stroke-linecap="round" />
-  <path d="M 204 186 L 204 266" stroke="#ffffff" stroke-width="12" stroke-linecap="round" />
-
-  <!-- Terminal Prompt Caret / Cursor in JetBrains Style -->
-  <rect x="220" y="244" width="34" height="7" rx="3.5" fill="url(#limeEmerald)" filter="url(#outerGlow)" />
+  <!-- Sparkles -->
+  <path d="M 390 120 C 390 136 404 146 416 146 C 404 146 390 156 390 172 C 390 156 376 146 364 146 C 376 146 390 136 390 120 Z" fill="url(#tmSparkleGrad)" />
+  <path d="M 124 356 C 124 366 133 372 142 372 C 133 372 124 378 124 388 C 124 378 115 372 106 372 C 115 372 124 366 124 356 Z" fill="#38bdf8" />
 </svg>

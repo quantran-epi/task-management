@@ -36,7 +36,7 @@ import type { DocumentPublishStatus } from '../../db/repositories/documentSetRep
 import { renderSafeMarkdown } from '../../utils/markdown';
 import { extractMarkdownMetadata, detectReferencedEntities, isPlaceholderTitle, type DetectedEntity } from '../../utils/smartIngestion';
 import { SmartIngestionBanner } from './SmartIngestionBanner';
-import { DocOutlineToC } from './DocOutlineToC';
+import { DocOutlineToC, type HeadingItem } from './DocOutlineToC';
 import { BacklinksSection } from './BacklinksSection';
 import { getBacklinksForDoc, linkEntitiesToDoc, type BacklinksResult } from '../../db/repositories/documentLinkRepo';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
@@ -167,6 +167,8 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
   const isTitleManuallyEditedRef = useRef(false);
 
   const textareaRef = useRef<TextAreaRef | null>(null);
+  const previewContainerRef = useRef<HTMLDivElement>(null);
+  const activePaneRef = useRef<'editor' | 'preview' | null>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const aiChat = useAIChat();
@@ -492,6 +494,95 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
         { type: 'document', id: doc.id, title: doc.title || 'Tài liệu' },
         expandedPrompt
       );
+    }
+  };
+
+  // Synchronized scroll handlers between Editor and Preview using activePaneRef
+  const handleEditorScroll = useCallback(() => {
+    if (viewMode !== 'split' || activePaneRef.current !== 'editor') return;
+    const editor = textareaRef.current?.resizableTextArea?.textArea;
+    const preview = previewContainerRef.current;
+    if (!editor || !preview) return;
+
+    const editorScrollable = editor.scrollHeight - editor.clientHeight;
+    if (editorScrollable <= 0) return;
+
+    const ratio = editor.scrollTop / editorScrollable;
+    const previewScrollable = preview.scrollHeight - preview.clientHeight;
+    preview.scrollTop = ratio * previewScrollable;
+  }, [viewMode]);
+
+  const handlePreviewScroll = useCallback(() => {
+    if (viewMode !== 'split' || activePaneRef.current !== 'preview') return;
+    const editor = textareaRef.current?.resizableTextArea?.textArea;
+    const preview = previewContainerRef.current;
+    if (!editor || !preview) return;
+
+    const previewScrollable = preview.scrollHeight - preview.clientHeight;
+    if (previewScrollable <= 0) return;
+
+    const ratio = preview.scrollTop / previewScrollable;
+    const editorScrollable = editor.scrollHeight - editor.clientHeight;
+    editor.scrollTop = ratio * editorScrollable;
+  }, [viewMode]);
+
+  const handleHeadingClick = (heading: HeadingItem) => {
+    activePaneRef.current = null;
+
+    // 1. Scroll preview container if visible
+    const preview = previewContainerRef.current;
+    if (preview) {
+      let targetHeadingEl: HTMLElement | null = null;
+      if (typeof heading.lineIndex === 'number') {
+        targetHeadingEl = preview.querySelector(`[data-line-start="${heading.lineIndex + 1}"]`);
+      }
+      if (!targetHeadingEl) {
+        const headingsInPreview = Array.from(preview.querySelectorAll('h1, h2, h3, h4, h5, h6')) as HTMLElement[];
+        targetHeadingEl =
+          headingsInPreview.find(
+            (el) => el.textContent?.trim().toLowerCase() === heading.text.trim().toLowerCase()
+          ) ||
+          headingsInPreview.find(
+            (el) => el.textContent?.trim().includes(heading.text.trim())
+          ) ||
+          null;
+      }
+
+      if (targetHeadingEl) {
+        const previewRect = preview.getBoundingClientRect();
+        const headingRect = targetHeadingEl.getBoundingClientRect();
+        const targetScrollTop = preview.scrollTop + (headingRect.top - previewRect.top) - 16;
+
+        preview.scrollTo({
+          top: Math.max(0, targetScrollTop),
+          behavior: 'smooth',
+        });
+      }
+    }
+
+    // 2. Scroll and position editor textarea if visible
+    const nativeTextarea = textareaRef.current?.resizableTextArea?.textArea;
+    if (nativeTextarea && typeof heading.lineIndex === 'number') {
+      const lines = body.split(/\r?\n/);
+      let charPos = 0;
+      for (let i = 0; i < heading.lineIndex && i < lines.length; i++) {
+        charPos += (lines[i]?.length ?? 0) + 1;
+      }
+
+      nativeTextarea.focus();
+      nativeTextarea.setSelectionRange(charPos, charPos + (lines[heading.lineIndex]?.length ?? 0));
+
+      const totalLines = Math.max(1, lines.length);
+      const editorScrollable = nativeTextarea.scrollHeight - nativeTextarea.clientHeight;
+      const targetScrollTop =
+        editorScrollable > 0
+          ? (heading.lineIndex / totalLines) * nativeTextarea.scrollHeight
+          : 0;
+
+      nativeTextarea.scrollTo({
+        top: Math.max(0, targetScrollTop - 40),
+        behavior: 'smooth',
+      });
     }
   };
 
@@ -841,6 +932,9 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
         {/* Editor Area */}
         {(viewMode === 'edit' || viewMode === 'split') && (
           <div
+            onPointerEnter={() => {
+              activePaneRef.current = 'editor';
+            }}
             style={{
               flex: viewMode === 'split' ? 1 : 1,
               minWidth: 0,
@@ -856,8 +950,12 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
               ref={textareaRef}
               value={body}
               readOnly={Boolean(doc.deletedAt)}
+              onFocus={() => {
+                activePaneRef.current = 'editor';
+              }}
               onChange={(e) => handleBodyChange(e.target.value, e.target.selectionStart)}
               onKeyDown={handleKeyDown}
+              onScroll={handleEditorScroll}
               onKeyUp={(e) => {
                 const navKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Tab', 'Escape'];
                 if (isAutoCompleteOpen && navKeys.includes(e.key)) {
@@ -993,6 +1091,11 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
         {/* Preview Area */}
         {(viewMode === 'preview' || viewMode === 'split') && (
           <div
+            ref={previewContainerRef}
+            onScroll={handlePreviewScroll}
+            onPointerEnter={() => {
+              activePaneRef.current = 'preview';
+            }}
             style={{
               flex: viewMode === 'split' ? 1 : 1,
               minWidth: 0,
@@ -1031,7 +1134,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
                   onOpenProject(entityId);
                 }
               }}
-              dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(body || '_Chưa có nội dung_') }}
+              dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(body || '_Chưa có nội dung_', { sourceLines: true }) }}
             />
             {/* Backlinks Section */}
             <BacklinksSection
@@ -1073,7 +1176,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
               padding: '4px 8px',
             }}
           >
-            <DocOutlineToC markdown={body} />
+            <DocOutlineToC markdown={body} onHeadingClick={handleHeadingClick} />
           </div>
         )}
       </div>

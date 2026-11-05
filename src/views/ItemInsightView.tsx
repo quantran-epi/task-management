@@ -640,16 +640,33 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
         {((currentTask?.documentLinks || currentProject?.documentLinks)?.length ?? 0) > 0 && (
           <div style={{ marginTop: 12 }}>
             <Text type="secondary">Tài liệu liên kết: </Text>
-            <Space size={8} wrap style={{ marginTop: 4 }}>
+            <Space size={8} wrap style={{ marginTop: 4, maxWidth: '100%' }}>
               {(currentTask?.documentLinks || currentProject?.documentLinks)!.map((link, idx) => (
                 <Button
                   key={idx}
                   size="small"
+                  style={{
+                    maxWidth: '100%',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    overflow: 'hidden',
+                  }}
                   icon={isLocalPath(link) ? <FolderOpenOutlined /> : <LinkOutlined />}
                   onClick={(e) => void openDocumentLink(link, { quickClaude: e.altKey })}
                   title={isLocalPath(link) ? `${link} (Alt+Click để mở Claude Code)` : link}
                 >
-                  {link}
+                  <span
+                    style={{
+                      maxWidth: 320,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      display: 'inline-block',
+                      verticalAlign: 'bottom',
+                    }}
+                  >
+                    {link}
+                  </span>
                 </Button>
               ))}
             </Space>

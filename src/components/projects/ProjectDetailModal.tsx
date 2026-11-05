@@ -328,16 +328,32 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({
               <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
                 Tài liệu liên kết:
               </Text>
-              <Space wrap size={[6, 6]}>
+              <Space wrap size={[6, 6]} style={{ maxWidth: '100%' }}>
                 {project.documentLinks.map((link, idx) => (
                   <Button
                     key={idx}
                     size="small"
+                    style={{
+                      maxWidth: '100%',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      overflow: 'hidden',
+                    }}
                     icon={isLocalPath(link) ? <FolderOpenOutlined /> : <LinkOutlined />}
                     onClick={(e) => void openDocumentLink(link, { quickClaude: e.altKey })}
                     title={isLocalPath(link) ? `${link} (Alt+Click để mở Claude Code)` : link}
                   >
-                    {link.length > 40 ? link.slice(0, 37) + '...' : link}
+                    <span
+                      style={{
+                        maxWidth: 280,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        display: 'inline-block',
+                      }}
+                    >
+                      {link}
+                    </span>
                   </Button>
                 ))}
               </Space>

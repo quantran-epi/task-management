@@ -788,6 +788,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                         <Input
                           placeholder="https://... hoặc C:\folder hoặc /path/to/folder"
                           prefix={<LinkOutlined style={{ color: '#8c8c8c' }} />}
+                          style={{ flex: 1, minWidth: 0 }}
                         />
                       </Form.Item>
                       <Button

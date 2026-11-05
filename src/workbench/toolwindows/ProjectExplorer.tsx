@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { Tree, Input, Empty, Tag, Typography, Dropdown, message, type MenuProps } from 'antd';
+import { Tree, Input, Empty, Tag, Typography, Dropdown, Modal, message, type MenuProps } from 'antd';
 import {
   FolderOutlined,
   FlagOutlined,
@@ -22,7 +22,7 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { getAllProjects, updateProject, createProject } from '../../db/repositories/projectRepo';
 import { getAllMilestones, updateMilestone, createMilestone } from '../../db/repositories/milestoneRepo';
 import { updateTask, createTask } from '../../db/repositories/taskRepo';
-import { deleteProjectWithCascade, deleteMilestoneWithCascade } from '../../db/repositories/cascadeRepo';
+import { deleteProjectWithCascade, deleteMilestoneWithCascade, deleteTaskWithAllocations } from '../../db/repositories/cascadeRepo';
 import { useLayoutStore } from '../store/layoutStore';
 import { useTimer } from '../../hooks/useTimer';
 import { useAIChat } from '../../context/AIChatContext';
@@ -167,6 +167,33 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
             } catch {
               message.error('Không thể cập nhật tác vụ');
             }
+          },
+        },
+        {
+          type: 'divider',
+        },
+        {
+          key: 'delete',
+          icon: <DeleteOutlined style={{ color: '#ef4444' }} />,
+          danger: true,
+          label: 'Xoá tác vụ',
+          onClick: () => {
+            setContextMenu(null);
+            Modal.confirm({
+              title: `Xoá tác vụ "${task.name}"?`,
+              content: 'Hành động này không thể hoàn tác.',
+              okText: 'Xoá',
+              okType: 'danger',
+              cancelText: 'Huỷ',
+              onOk: async () => {
+                try {
+                  await deleteTaskWithAllocations(task.id, db);
+                  message.success(`Đã xoá tác vụ "${task.name}"`);
+                } catch {
+                  message.error('Không thể xoá tác vụ');
+                }
+              },
+            });
           },
         },
       ];

@@ -99,7 +99,20 @@ function SortableEditorTabItem({
       role="tab"
       aria-selected={isActive}
       tabIndex={0}
+      title={tab.title}
       onClick={onSelect}
+      onAuxClick={(e) => {
+        if (e.button === 1) {
+          e.preventDefault();
+          e.stopPropagation();
+          onClose();
+        }
+      }}
+      onMouseDown={(e) => {
+        if (e.button === 1) {
+          e.preventDefault();
+        }
+      }}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           onSelect();

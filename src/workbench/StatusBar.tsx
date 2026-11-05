@@ -77,16 +77,20 @@ export function StatusBar({
           </Tooltip>
         </div>
 
-        <Tooltip title="TaskMate Personal Planner Engine">
+        <Tooltip title="TaskMate Personal Planner • By Quan Tran Duc">
           <span
             style={{
               fontSize: 'var(--font-size-xs, 11px)',
               color: 'var(--fg-muted, #6c707e)',
               borderLeft: '1px solid var(--border-strong, #d1d3d9)',
               paddingLeft: 10,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
             }}
           >
-            TaskMate v1.3
+            <span>TaskMate v1.3</span>
+            <span style={{ opacity: 0.85, color: 'var(--fg-secondary, #5f6269)' }}>• By Quan Tran Duc</span>
           </span>
         </Tooltip>
 
