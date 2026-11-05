@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useLayoutEffect } from 'react';
 import { Tree, Input, Empty, Tag, Typography, Dropdown, Modal, message, type MenuProps } from 'antd';
 import {
   FolderOutlined,
@@ -47,19 +47,38 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
   } | null>(null);
 
   const treeContainerRef = useRef<HTMLDivElement>(null);
-  const [treeHeight, setTreeHeight] = useState<number>(450);
+  const [treeHeight, setTreeHeight] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      return Math.max(200, window.innerHeight - 150);
+    }
+    return 600;
+  });
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = treeContainerRef.current;
-    if (!el || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const h = Math.floor(entry.contentRect.height);
-        if (h > 40) setTreeHeight(h);
+    if (!el) return;
+
+    const measure = () => {
+      const h = el.clientHeight;
+      if (h > 40) {
+        setTreeHeight(h);
       }
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
+    };
+
+    measure();
+
+    if (typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          const h = Math.floor(entry.contentRect.height);
+          if (h > 40) {
+            setTreeHeight(h);
+          }
+        }
+      });
+      observer.observe(el);
+      return () => observer.disconnect();
+    }
   }, []);
 
   // Modals state
@@ -647,7 +666,7 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
       {/* Tree Content */}
       <div
         ref={treeContainerRef}
-        style={{ flex: 1, minHeight: 0, padding: '8px 6px', overflow: 'hidden' }}
+        style={{ flex: 1, minHeight: 0, overflow: 'hidden', padding: 0 }}
       >
         {treeData.length > 0 ? (
           <>
@@ -663,6 +682,7 @@ export function ProjectExplorer({ db = defaultDb, onSelectProject }: ProjectExpl
               style={{
                 background: 'transparent',
                 fontSize: 'var(--font-size-ui, 13px)',
+                padding: '4px 6px',
               }}
             />
             {contextMenu && (
