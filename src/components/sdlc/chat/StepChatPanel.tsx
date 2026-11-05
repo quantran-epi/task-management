@@ -110,10 +110,32 @@ const ARTIFACT_PREREQUISITES: Partial<Record<SdlcStepId, readonly [SdlcGrounding
 const normalizeArtifactText = (text: string) => text.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('vi-VN');
 const artifactTerm = (term: string) => new RegExp(`(?:^|[^\\p{L}\\p{N}])(?:${term})(?=$|[^\\p{L}\\p{N}])`, 'u');
 
+/** Explicit full-document generation verbs; these keep the complete-artifact output contract. */
+const GENERATION_VERB = artifactTerm('tao|soan|sinh|viet');
+/** Bounded section-edit verbs; these route to get_artifact + patch_artifact_section. */
+const PATCH_VERB = artifactTerm('them|bo\\s+sung|chen|sua|cap\\s+nhat|add|append|insert|edit|replace|update');
+const ARTIFACT_TERM = artifactTerm('tai\\s+lieu|solution|pl03b|pl07|cab');
+
 export function looksLikeArtifactRequest(text: string): boolean {
   const normalized = normalizeArtifactText(text);
-  return artifactTerm('tao|soan|sinh|viet|cap\\s+nhat|sua').test(normalized)
-    && artifactTerm('tai\\s+lieu|solution|pl03b|pl07|cab').test(normalized);
+  return (GENERATION_VERB.test(normalized) || PATCH_VERB.test(normalized)) && ARTIFACT_TERM.test(normalized);
+}
+
+/**
+ * A concrete add/edit request with an explicit artifact. Full-generation verbs win so an
+ * explicit "soạn SOLUTION đầy đủ" turn is never downgraded to a section patch (D-05/D-09).
+ */
+export function looksLikeArtifactPatchRequest(text: string): boolean {
+  const normalized = normalizeArtifactText(text);
+  if (GENERATION_VERB.test(normalized)) return false;
+  return PATCH_VERB.test(normalized) && ARTIFACT_TERM.test(normalized);
+}
+
+/** Only the exact artifact the user named; never a silent step default. */
+export function explicitPatchKind(text: string, allowed: readonly SdlcArtifactKindForTurn[]): SdlcArtifactKindForTurn | undefined {
+  const normalized = normalizeArtifactText(text);
+  const named = allowed.filter((kind) => artifactTerm(kind.toLowerCase()).test(normalized));
+  return named.length === 1 ? named[0] : undefined;
 }
 
 type ArtifactNotice =
@@ -152,9 +174,11 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
   const [error, setError] = useState<{ code: string; message: string } | null>(null);
   const [toolEvents, setToolEvents] = useState<ChatTurnToolEvent[]>([]);
   const [artifactNotice, setArtifactNotice] = useState<ArtifactNotice | null>(null);
+  // Original bounded-edit text is retained until the user names the document (D-03/D-08).
+  const [patchClarification, setPatchClarification] = useState<{ text: string; targets: readonly SdlcArtifactKindForTurn[] } | null>(null);
   const artifactActions = STEP_ARTIFACT_ACTIONS[stepId] ?? [];
 
-  useEffect(() => { setArtifactNotice(null); }, [scopeKey, threadId, readOnly]);
+  useEffect(() => { setArtifactNotice(null); setPatchClarification(null); }, [scopeKey, threadId, readOnly]);
 
   // Isolated thread for this step: sdlc:{projectId}:{crId}:{stepId}
   useEffect(() => {
@@ -295,7 +319,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
   );
 
   const submit = useCallback(
-    async (rawText: string, artifact?: SdlcArtifactKindForTurn) => {
+    async (rawText: string, artifact?: SdlcArtifactKindForTurn, patchIntent = false) => {
       const text = rawText.trim();
       if (!text || !threadId) return;
       // A prelude in flight owns the step: a second send would supersede a prompt already
@@ -321,18 +345,36 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
             role: row.role === 'user' ? ('user' as const) : ('assistant' as const),
             content: row.content,
           }));
-        const [config, apiKey, { tools, dynamicReadOnlyToolNames }] = await Promise.all([
+        // Trusted host gate before composition: an artifact tool is only advertised when a real
+        // scoped context, a live target artifact and every prerequisite are present (T-27-13).
+        const artifactScopeReady = Boolean(artifactToolContext) && artifactToolContext!.getAccess().scopeValid &&
+          !artifactToolContext!.getAccess().readOnly && artifactToolContext!.getAccess().crActive;
+        const prerequisitesMet = (ARTIFACT_PREREQUISITES[stepId] ?? [])
+          .every(([marker]) => hasGroundingSource(stepGroundingContext, marker));
+        const contextKinds = (['SOLUTION', 'PL03B', 'PL07', 'CAB'] as const)
+          .filter((kind) => artifactToolContext?.getDraft(kind) !== undefined);
+        const artifactsAllowed = artifactScopeReady && prerequisitesMet;
+        const [config, apiKey, discovery] = await Promise.all([
           getNineRouterConfig(db),
           getNineRouterApiKey(db),
           toolbox.toolsForTurn(),
         ]);
+        const { dynamicReadOnlyToolNames } = discovery;
+        // Only the artifact pair is host-gated here; the discovered MCP suffix flows through.
+        const tools = discovery.tools.filter((tool) => {
+          const name = normalizeToolName(tool.function.name);
+          if (name === 'get_artifact') return artifactsAllowed;
+          if (name === 'patch_artifact_section') return artifactsAllowed && contextKinds.length > 0;
+          return true;
+        });
 
         const composed = composeSdlcTurn({
           step: stepId,
-          intent: artifact ? 'artifact' : 'qa',
+          intent: patchIntent ? 'patch' : artifact ? 'artifact' : 'qa',
           ...(artifact ? { artifact } : {}),
           grounding: groundingText,
           dynamicReadOnlyToolNames,
+          availableToolNames: tools.map((tool) => normalizeToolName(tool.function.name)),
           metadata: { cr: crId },
           history,
           userTurn: text,
@@ -371,8 +413,10 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
           if (outcome.error) setError(outcome.error);
           return;
         }
-        if (outcome.phase === 'complete' && outcome.content) {
-          await extractArtifactDraft(outcome.content, artifact ?? 'SOLUTION');
+        // T-27-12: only an explicit full-generation turn may hand final text to the editor.
+        // Patch and ordinary Q&A answers can never bypass the diff card.
+        if (outcome.phase === 'complete' && outcome.content && artifact && !patchIntent) {
+          await extractArtifactDraft(outcome.content, artifact);
         }
       } catch {
         setDraft((current) => current || rawText);
@@ -478,6 +522,23 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
   }, [threadId, scopeKey]);
 
   const sendMessage = async (text: string) => {
+    // D-05/D-09: a concrete add/edit request with an explicit target becomes a bounded patch turn.
+    if (!readOnly && artifactToolContext && artifactActions.length > 0 && looksLikeArtifactPatchRequest(text)) {
+      const kind = explicitPatchKind(text, artifactActions);
+      if (kind) {
+        const missing = ARTIFACT_PREREQUISITES[stepId]?.find(([marker]) => !hasGroundingSource(stepGroundingContext, marker));
+        if (missing) {
+          setArtifactNotice({ type: 'warning', message: formatGuardMessage(missing[1]),
+            step: WORKFLOW_GUARD_MESSAGES[missing[1]].supplyingStep });
+          return;
+        }
+        await submit(text, kind, true);
+        return;
+      }
+      // TECH_DOCS owns two documents: ask which one instead of silently defaulting (T-27-13).
+      setPatchClarification({ text, targets: artifactActions });
+      return;
+    }
     // A clarify prompt needs somewhere to go: without targets (no artifact action at this
     // step) or in read-only history view it would dead-end, so the turn stays ordinary Q&A.
     if (!readOnly && artifactActions.length > 0 && looksLikeArtifactRequest(text)) {
@@ -504,6 +565,7 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
         pendingArtifactScopeRef.current = null;
         setPreludePending(false);
         setArtifactNotice(null);
+        setPatchClarification(null);
         turn.abort();
         try {
           await turn.runtime?.drainPersistence();
@@ -596,8 +658,31 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
         onRetry={() => {
           void turn.retry();
         }}
-        statusExtensions={!readOnly && (artifactNotice || artifactActions.length > 0) ? (
+        statusExtensions={!readOnly && (artifactNotice || patchClarification || artifactActions.length > 0) ? (
           <div style={{ padding: '8px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {patchClarification && (
+              <Alert
+                type="warning"
+                showIcon
+                closable={{ onClose: () => setPatchClarification(null) }}
+                title={`Yêu cầu chỉnh sửa này áp dụng cho tài liệu nào của bước ${stepId}? Chọn một tài liệu để đề xuất chỉnh sửa: ${patchClarification.targets.join(' / ')}.`}
+                action={
+                  <Space size={8} wrap>
+                    {patchClarification.targets.map((kind) => (
+                      <Button key={kind} size="small" style={{ minHeight: 32, fontSize: 12 }}
+                        disabled={preludePending || turn.runtime?.isRunning() || turn.status === 'awaiting-approval'}
+                        onClick={() => {
+                          const original = patchClarification.text;
+                          setPatchClarification(null);
+                          void submit(original, kind, true);
+                        }}>
+                        Chỉnh sửa {kind}
+                      </Button>
+                    ))}
+                  </Space>
+                }
+              />
+            )}
             {artifactNotice && (
               <Alert
                 type={artifactNotice.type}

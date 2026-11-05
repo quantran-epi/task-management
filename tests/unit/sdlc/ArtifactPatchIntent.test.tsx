@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor, act } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { TaskPlannerDatabase } from '../../../src/db';
 import { StepChatPanel, looksLikeArtifactPatchRequest } from '../../../src/components/sdlc/chat/StepChatPanel';
 import { createSdlcWorkflowCoordinator } from '../../../src/services/wizard/workflowCoordinator';
 import { getStepThread } from '../../../src/services/wizard/sdlcCrManager';
-import type { ArtifactToolContext } from '../../../src/services/ai/sdlcArtifactTools';
+import type { ArtifactPatchProposal, ArtifactToolContext } from '../../../src/services/ai/sdlcArtifactTools';
+import type { ChatMessage } from '../../../src/types/models';
 import { composeSdlcTurn, SDLC_STEP_ALLOWED_TOOLS } from '../../../src/services/ai/sdlcPromptComposer';
 
 const { stream } = vi.hoisted(() => ({ stream: vi.fn() }));
@@ -20,6 +21,8 @@ vi.mock('../../../src/services/ai/nineRouterTokenService', async (original) => (
 
 const BASE = ['# SOLUTION', '', '## Bối cảnh', '', 'Nội dung bối cảnh.', '', '## Kiểm tra đầu vào', '', 'Quy tắc hiện có.'].join('\n');
 const PREFIX = 'ARTIFACT_PATCH_DECISION ';
+/** SOLUTION's real prerequisites: the guard trusts markers, not rendered text. */
+const GROUNDING = { text: 'PL01 evidence\nPL02 evidence', present: new Set(['PL01', 'PL02'] as const) };
 
 type Call = { id: string; type: 'function'; function: { name: string; arguments: string } };
 const callOf = (id: string, name: string, args: Record<string, unknown>): Call =>
@@ -58,7 +61,7 @@ describe('patch intent routing (SDLC-ART-05)', () => {
     expect(composed.segments.toolPolicy).toContain('sectionId');
     expect(composed.segments.toolPolicy).toContain('baseHash');
     expect(composed.segments.toolPolicy).toContain('120');
-    expect(composed.segments.toolPolicy).toContain('phê duyệt');
+    expect(composed.segments.toolPolicy).toContain('chấp thuận');
     expect(composed.segments.toolPolicy).toContain('không áp dụng toàn bộ tài liệu');
     expect(composed.segments.toolPolicy).not.toContain('HỢP ĐỒNG ĐẦU RA');
   });
@@ -69,7 +72,7 @@ describe('patch intent routing (SDLC-ART-05)', () => {
     const off = composeSdlcTurn({ step: 'SOLUTION', intent: 'patch', artifact: 'SOLUTION', userTurn: 'x',
       availableToolNames: ['query_notes', 'get_artifact'] });
     expect(on.segments.toolPolicy).toContain('patch_artifact_section');
-    expect(off.segments.toolPolicy).not.toContain('patch_artifact_section');
+    expect(off.segments.toolPolicy).toContain('Công cụ đề xuất chỉnh sửa: không có trong payload của turn này');
     expect(off.segments.toolPolicy).toContain('Analysis Mode');
     expect(composeSdlcTurn({ step: 'INTAKE', intent: 'qa', userTurn: 'x' }).segments.toolPolicy)
       .toBe(composeSdlcTurn({ step: 'INTAKE', intent: 'qa', userTurn: 'x' }).segments.toolPolicy);
@@ -90,7 +93,7 @@ describe('real scripted get → patch → approve path', () => {
   let context: ArtifactToolContext;
   let markdown: string;
   let projectId: string;
-  let onApply: ReturnType<typeof vi.fn>;
+  let onApply: (proposal: ArtifactPatchProposal, decision: ChatMessage) => Promise<void>;
   let finalText: string;
   let patchContent: string;
 
@@ -107,13 +110,14 @@ describe('real scripted get → patch → approve path', () => {
     context = { projectId: state.projectId, crId: 'cr', stepId: 'SOLUTION',
       scopeKey: `sdlc:${state.projectId}:cr:SOLUTION`, getDraft: () => markdown, getWorkflowState: () => state,
       getAccess: () => ({ readOnly: false, crActive: true, scopeValid: true }) };
-    onApply = vi.fn(async (proposal, decision) => {
+    const apply = async (proposal: ArtifactPatchProposal, decision: ChatMessage) => {
       await db.transaction('rw', [db.settings, db.chatMessages], async () => {
         await db.settings.put({ key: 'test-draft', value: proposal.patchedMarkdown });
         await db.chatMessages.put(decision);
       });
       markdown = proposal.patchedMarkdown;
-    });
+    };
+    onApply = vi.fn(apply);
     await getStepThread(state.projectId, 'cr', 'SOLUTION', db);
     stream.mockReset();
     let round = 0;
@@ -139,13 +143,21 @@ describe('real scripted get → patch → approve path', () => {
 
   async function startTurn(text: string) {
     const view = render(<StepChatPanel projectId={projectId} crId="cr" stepId="SOLUTION" db={db}
-      artifactToolContext={context} onApplyArtifactPatch={onApply} />);
-    await waitFor(() => expect(screen.getByTestId('ai-chat-widget')).not.toHaveAttribute('data-scope-key', 'default'));
+      stepGroundingContext={GROUNDING} artifactToolContext={context} onApplyArtifactPatch={onApply} />);
+    // Sending requires the step thread; its scope key also proves the panel is bound.
+    await waitFor(async () => expect(await db.chatThreads.where('scopeKey')
+      .equals(`sdlc:${projectId}:cr:SOLUTION`).first()).toBeDefined());
     fireEvent.click(screen.getByTestId('tab-compact-more-btn'));
     fireEvent.click(await screen.findByText('Chế độ phân tích (chỉ đọc)'));
     fireEvent.click(screen.getByTestId('tab-compact-more-btn'));
     await waitFor(() => expect(screen.queryByText('Phân tích')).not.toBeInTheDocument());
-    fireEvent.change(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI'), { target: { value: text } });
+    const composer = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
+    // A send clicked while the panel is still binding its step thread is dropped by design.
+    await waitFor(() => expect(screen.getByTestId('ai-chat-widget').getAttribute('data-scope-key'))
+      .toBe(`sdlc:${projectId}:cr:SOLUTION`));
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    fireEvent.change(composer, { target: { value: text } });
+    await waitFor(() => expect(screen.getByLabelText('Gửi tin nhắn')).toBeEnabled(), { timeout: 5000 });
     fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
     return view;
   }
@@ -157,6 +169,8 @@ describe('real scripted get → patch → approve path', () => {
 
   it('calls real get then patch, shows a +1/−0 card and changes the editor only after approve', async () => {
     await startTurn('Thêm nội dung kiểm tra đầu vào vào SOLUTION');
+    await waitFor(() => expect(stream).toHaveBeenCalled());
+    await waitFor(() => expect(stream.mock.calls.length).toBeGreaterThanOrEqual(2));
     const region = await screen.findByRole('region', { name: 'Diff đề xuất chỉnh sửa' });
     expect(region.textContent).toContain(`+${patchContent}`);
     expect(screen.getByText('+1 dòng thêm')).toBeInTheDocument();
@@ -169,7 +183,8 @@ describe('real scripted get → patch → approve path', () => {
     await waitFor(() => expect(markdown).toBe(`${BASE}\n${patchContent}`));
     // Only the target section grew; the neighbouring section is byte-identical.
     expect(markdown.indexOf('Nội dung bối cảnh.')).toBe(BASE.indexOf('Nội dung bối cảnh.'));
-    expect(markdown.slice(0, markdown.indexOf(patchContent))).toBe(BASE);
+    // The append lands after a newline; everything before the added text is the original document.
+    expect(markdown.slice(0, markdown.indexOf(patchContent))).toBe(`${BASE}\n`);
     const decisions = (await db.chatMessages.toArray()).filter((row) => row.content.startsWith(PREFIX));
     expect(decisions).toHaveLength(1);
     expect(decisions[0]!.content).not.toContain(patchContent);
@@ -180,7 +195,9 @@ describe('real scripted get → patch → approve path', () => {
     await startTurn('Thêm nội dung kiểm tra đầu vào vào SOLUTION');
     await screen.findByRole('region', { name: 'Diff đề xuất chỉnh sửa' });
     expect(markdown).toBe(BASE);
-    await waitFor(() => expect(screen.getByText(/Đã đề xuất|Toàn bộ tài liệu/)).toBeInTheDocument());
+    // A complete document in the final assistant text is narrative only; the editor stays untouched.
+    await waitFor(() => expect(stream.mock.calls.length).toBeGreaterThanOrEqual(2));
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
     expect(markdown).toBe(BASE);
     fireEvent.click(screen.getByRole('button', { name: 'Chấp thuận' }));
     await waitFor(() => expect(markdown).toBe(`${BASE}\n${patchContent}`));
@@ -189,11 +206,16 @@ describe('real scripted get → patch → approve path', () => {
 
   it('omits patch from the payload in Analysis Mode and keeps get_artifact', async () => {
     render(<StepChatPanel projectId={projectId} crId="cr" stepId="SOLUTION" db={db}
-      artifactToolContext={context} onApplyArtifactPatch={onApply} />);
-    await waitFor(() => expect(screen.getByTestId('ai-chat-widget')).not.toHaveAttribute('data-scope-key', 'default'));
-    fireEvent.change(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI'), { target: { value: 'Thêm nội dung kiểm tra đầu vào vào SOLUTION' } });
+      stepGroundingContext={GROUNDING} artifactToolContext={context} onApplyArtifactPatch={onApply} />);
+    // Sending before the panel binds its thread is dropped by design, so wait for the bound scope.
+    await waitFor(() => expect(screen.getByTestId('ai-chat-widget').getAttribute('data-scope-key'))
+      .toBe(`sdlc:${projectId}:cr:SOLUTION`));
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    const analysisComposer = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
+    fireEvent.change(analysisComposer, { target: { value: 'Thêm nội dung kiểm tra đầu vào vào SOLUTION' } });
+    await waitFor(() => expect(screen.getByLabelText('Gửi tin nhắn')).toBeEnabled(), { timeout: 5000 });
     fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
-    await waitFor(() => expect(stream).toHaveBeenCalled());
+    await waitFor(() => expect(stream).toHaveBeenCalled(), { timeout: 5000 });
     const tools = toolNames();
     expect(tools).toContain('get_artifact');
     expect(tools).not.toContain('patch_artifact_section');
