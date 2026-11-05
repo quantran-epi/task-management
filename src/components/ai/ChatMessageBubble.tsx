@@ -422,9 +422,12 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   // Branch assistant display on message.grounding payload
   if (!isUser && msg.grounding) {
     const g = msg.grounding;
+    const hasStructuredAnswer = Boolean(g.answer && (g.answer.conclusion || (g.answer.claims && g.answer.claims.length > 0)));
 
-    // Render friendly markdown answer with inline citation tags instead of bulky technical card
-    if (g.answer && (g.answer.conclusion || (g.answer.claims && g.answer.claims.length > 0))) {
+    // If grounding has no structured answer but msg.content has text, fallback to normal markdown display
+    if (!hasStructuredAnswer && msg.content && msg.content.trim().length > 0) {
+      // Fall through to regular message rendering below
+    } else if (hasStructuredAnswer) {
       const isAbstention =
         ('confidence' in g.answer && g.answer.confidence === 'unknown') ||
         (typeof g.answer.conclusion === 'string' &&

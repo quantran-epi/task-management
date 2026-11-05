@@ -76,10 +76,14 @@ describe('EditorArea', () => {
     expect(useLayoutStore.getState().activeTabId).toBe('notes');
   });
 
-  it('does not render close button on non-closable tab (Tasks)', () => {
+  it('renders close button on Tasks tab and can close it', () => {
     render(<EditorArea />);
 
-    expect(screen.queryByLabelText('Close Tasks')).toBeNull();
+    const closeTasksBtn = screen.getByLabelText('Close Tasks');
+    expect(closeTasksBtn).toBeDefined();
+
+    fireEvent.click(closeTasksBtn);
+    expect(screen.queryByText('Tasks')).toBeNull();
   });
 
   it('enforces maximum 20 open tabs cap (T-25.4-03)', () => {

@@ -53,13 +53,15 @@ export function EditorArea({ db }: EditorAreaProps) {
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>, index: number) => {
     e.preventDefault();
+    e.stopPropagation();
     e.dataTransfer.dropEffect = 'move';
-    if (draggedIndex !== null && draggedIndex !== index) {
+    if (dragOverIndex !== index) {
       setDragOverIndex(index);
     }
   };
 
   const handleDragLeave = (e: React.DragEvent<HTMLDivElement>, index: number) => {
+    e.stopPropagation();
     if (e.currentTarget.contains(e.relatedTarget as Node)) return;
     if (dragOverIndex === index) {
       setDragOverIndex(null);
@@ -68,8 +70,11 @@ export function EditorArea({ db }: EditorAreaProps) {
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>, targetIndex: number) => {
     e.preventDefault();
-    if (draggedIndex !== null && draggedIndex !== targetIndex) {
-      reorderTabs(draggedIndex, targetIndex);
+    e.stopPropagation();
+    const sourceIndexStr = e.dataTransfer.getData('text/plain');
+    const from = sourceIndexStr ? parseInt(sourceIndexStr, 10) : draggedIndex;
+    if (from !== null && !isNaN(from) && from !== targetIndex) {
+      reorderTabs(from, targetIndex);
     }
     setDraggedIndex(null);
     setDragOverIndex(null);
@@ -293,7 +298,7 @@ export function EditorArea({ db }: EditorAreaProps) {
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
-                  marginRight: tab.closable !== false ? 6 : 0,
+                  marginRight: 6,
                   pointerEvents: 'none',
                 }}
                 title={tab.title}
@@ -301,31 +306,29 @@ export function EditorArea({ db }: EditorAreaProps) {
                 {tab.title}
               </span>
 
-              {tab.closable !== false && (
-                <button
-                  type="button"
-                  aria-label={`Close ${tab.title}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    closeTab(tab.id);
-                  }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    background: 'transparent',
-                    border: 'none',
-                    padding: 2,
-                    borderRadius: 3,
-                    cursor: 'pointer',
-                    color: 'var(--fg-muted, #6c707e)',
-                    lineHeight: 1,
-                    flexShrink: 0,
-                  }}
-                >
-                  <CloseOutlined style={{ fontSize: 11, pointerEvents: 'none' }} />
-                </button>
-              )}
+              <button
+                type="button"
+                aria-label={`Close ${tab.title}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  closeTab(tab.id);
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: 'transparent',
+                  border: 'none',
+                  padding: 2,
+                  borderRadius: 3,
+                  cursor: 'pointer',
+                  color: 'var(--fg-muted, #6c707e)',
+                  lineHeight: 1,
+                  flexShrink: 0,
+                }}
+              >
+                <CloseOutlined style={{ fontSize: 11, pointerEvents: 'none' }} />
+              </button>
             </div>
           );
         })}

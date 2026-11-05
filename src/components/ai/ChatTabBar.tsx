@@ -160,14 +160,16 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>, index: number) => {
     e.preventDefault();
+    e.stopPropagation();
     e.dataTransfer.dropEffect = 'move';
     if (tabs[index]?.type === 'sdlc') return;
-    if (draggedIndex !== null && draggedIndex !== index) {
+    if (dragOverIndex !== index) {
       setDragOverIndex(index);
     }
   };
 
   const handleDragLeave = (e: React.DragEvent<HTMLDivElement>, index: number) => {
+    e.stopPropagation();
     if (e.currentTarget.contains(e.relatedTarget as Node)) return;
     if (dragOverIndex === index) {
       setDragOverIndex(null);
@@ -176,13 +178,16 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>, targetIndex: number) => {
     e.preventDefault();
+    e.stopPropagation();
     if (tabs[targetIndex]?.type === 'sdlc') {
       setDraggedIndex(null);
       setDragOverIndex(null);
       return;
     }
-    if (draggedIndex !== null && draggedIndex !== targetIndex) {
-      onReorderTabs?.(draggedIndex, targetIndex);
+    const sourceIndexStr = e.dataTransfer.getData('text/plain');
+    const from = sourceIndexStr ? parseInt(sourceIndexStr, 10) : draggedIndex;
+    if (from !== null && !isNaN(from) && from !== targetIndex) {
+      onReorderTabs?.(from, targetIndex);
     }
     setDraggedIndex(null);
     setDragOverIndex(null);
