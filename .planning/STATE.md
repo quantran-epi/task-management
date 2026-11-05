@@ -4,16 +4,16 @@ milestone: v1.3
 current_phase: 27
 current_phase_name: Studio Artifact Tools & Diff Approval
 status: executing
-stopped_at: Completed 27-02-PLAN.md
-last_updated: "2026-11-05T02:32:10.230Z"
+stopped_at: Completed 27-05-PLAN.md; 27-03 and 27-04 pending
+last_updated: "2026-11-05T02:57:42.086Z"
 last_activity: 2026-11-04
 last_activity_desc: Phase 27 execution started
-state_head: b0c87677af3535c1719c3a4ed73e5c84f459b342
+state_head: 5cbe05f898a23e80455172d7f84d37e7cf26122d
 progress:
   total_phases: 8
   completed_phases: 0
   total_plans: 9
-  completed_plans: 6
+  completed_plans: 7
   percent: 0
 milestone_name: SDLC Closed-Loop Engine & Repository Autonomy
 ---
@@ -39,8 +39,8 @@ Phase sequence: 26 → 27 → 28 → 29 → 30 → 31
 
 ## Session Continuity
 
-Last session: 2026-11-05T02:32:09.873Z
-Stopped at: Completed 27-02-PLAN.md
+Last session: 2026-11-05T02:57:41.588Z
+Stopped at: Completed 27-05-PLAN.md; 27-03 and 27-04 pending
 Resume file: .planning/phases/27-studio-artifact-tools-diff-approval/27-03-PLAN.md
 
 Progress: [░░░░░░░░░░] 0%
@@ -85,6 +85,7 @@ Progress: [░░░░░░░░░░] 0%
 |------|----------|-------|-------|
 | Phase 27 P01 | 38 min | 3 tasks | 11 files |
 | Phase 27 P02 | 33 min | 3 tasks | 8 files |
+| Phase 27 P05 | 16 min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -101,6 +102,7 @@ Progress: [░░░░░░░░░░] 0%
 - [v1.3 roadmap]: Convention conflicts (global vs repo) are surfaced, never silently resolved; EXTERNAL research evidence never outranks internal evidence without saying so.
 - [Phase 27]: Artifact tools use a trusted request-bound context and prepare-then-park approval; section ids number by heading order and patches are capped at 120 changed lines. — A model argument can never select project/CR/scope, and the approved result is the cached proposal rather than a recompute.
 - [Phase 27]: Diff card is separate and neutral; approval applies through the host adapter only, staleness uses normalized hash plus exact base bytes, and decisions persist as metadata-only system rows. — Keeps semantic color in the diff body, blocks implicit draft writes, and preserves decision history without persisting pending diff payloads.
+- [Phase 27]: Artifact tools require real workflow prerequisites, post-await live access checks and an explicit studio allowlist; no-allowlist ordinary chat excludes both tools.
 
 ### Todos / Blockers
 

@@ -214,6 +214,7 @@ No architecture, DB schema, package, provider, or host interface changes.
 - Explicit coordinator dispatch ran 27-05 after 27-02 while 27-03/27-04 remain pending; no execution of those plans occurred.
 - 27-03 still owns production host apply/staleness; 27-04 owns artifact intent/prompt advertisement at owning steps. Their payloads must explicitly allow artifact tools.
 - UI refusal-at-tool-position and navigation remain 27-02/phase-UAT responsibilities; this plan supplies canonical codes and navigation metadata without editing UI.
+- Close-out SDK result: `roadmap.update-plan-progress 27` exited 0 but returned `updated: false`, `reason: missing_phase_details`; this is a decline, not a successful progress write. Manually checked only the existing 27-05 checklist and changed the Active Phase line to 3/5. STATE plan pointer remains 3 (next 27-03), session records completed 27-05, metric/decision added, and only SDLC-ART-06 was marked complete globally.
 
 ## Self-Check: PASSED
 

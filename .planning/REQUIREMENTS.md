@@ -23,7 +23,7 @@
 - [ ] **SDLC-ART-03**: The studio chat renders an artifact-diff approval card for every patch tool result: the user sees added/removed lines, can approve (writes the editor draft) or reject (leaves the editor untouched), and the decision is recorded in the transcript.
 - [ ] **SDLC-ART-04**: Approving a patch updates the step editor draft and marks the step stale, following the existing revision/staleness rules; it never commits a version, claims approval, or claims the document was saved.
 - [ ] **SDLC-ART-05**: "Add this content to the solution" style requests resolve to `get_artifact` + `patch_artifact_section` rather than regenerating the whole document, and a regression test proves a small addition produces a bounded diff.
-- [ ] **SDLC-ART-06**: Artifact tools respect read-only rules — refused in preview/historical versions, available in the active CR, and blocked when the prerequisite artifact for that step does not exist.
+- [x] **SDLC-ART-06**: Artifact tools respect read-only rules — refused in preview/historical versions, available in the active CR, and blocked when the prerequisite artifact for that step does not exist.
 
 ### Knowledge Retrieval (SDLC-RET)
 
@@ -98,7 +98,7 @@
 | SDLC-ART-03 | Phase 27 | Pending |
 | SDLC-ART-04 | Phase 27 | Pending |
 | SDLC-ART-05 | Phase 27 | Pending |
-| SDLC-ART-06 | Phase 27 | Pending |
+| SDLC-ART-06 | Phase 27 | Complete |
 | SDLC-RET-01 | Phase 28 | Pending |
 | SDLC-RET-02 | Phase 28 | Pending |
 | SDLC-RET-03 | Phase 28 | Pending |
