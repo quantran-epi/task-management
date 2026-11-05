@@ -7,7 +7,7 @@
 - Phase 25.2: Fix TaskMate mutation flow & standardize AI Core Engine for SDLC Studio (COMPLETE)
 - Phase 25.3: SDLC Workflow Engine Hardening, Unified AI Chat Widget & Prompt Architecture (COMPLETE)
 - Phase 26: SDLC Prompt Grounding & Tool-Use Policy (NOT STARTED — v1.3)
-- Phase 27: Studio Artifact Tools & Diff Approval (v1.3 — IN PROGRESS, 3/5 plans)
+- Phase 27: Studio Artifact Tools & Diff Approval (v1.3 — IN PROGRESS, 4/5 plans)
 - Phase 28: Query-Only Knowledge Retrieval (v1.3, parallel-capable)
 - Phase 29: fs-gw Client & Headless Repository Runs (v1.3)
 - Phase 30: Automatic Change Packs, Fallback & Run Reliability (v1.3)
@@ -528,7 +528,7 @@ Plans:
 
 **Wave 3** *(depends on 27-02; edits SDLC host handlers)*
 
-- [ ] 27-03-PLAN.md — Approve writes editor draft, marks step stale via existing revision rules, and never commits a version
+- [x] 27-03-PLAN.md — Approve writes editor draft, marks step stale via existing revision rules, and never commits a version
 
 **Wave 4** *(depends on 27-03)*
 

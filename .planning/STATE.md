@@ -4,16 +4,16 @@ milestone: v1.3
 current_phase: 27
 current_phase_name: Studio Artifact Tools & Diff Approval
 status: executing
-stopped_at: Completed 27-05-PLAN.md; 27-03 and 27-04 pending
-last_updated: "2026-11-05T02:57:42.086Z"
+stopped_at: Completed 27-03-PLAN.md; 27-04 pending
+last_updated: "2026-11-05T04:00:29.911Z"
 last_activity: 2026-11-04
 last_activity_desc: Phase 27 execution started
-state_head: 5cbe05f898a23e80455172d7f84d37e7cf26122d
+state_head: ca5b36b1360631c7fae6c628aa90c22a92d484d0
 progress:
   total_phases: 8
   completed_phases: 0
   total_plans: 9
-  completed_plans: 7
+  completed_plans: 8
   percent: 0
 milestone_name: SDLC Closed-Loop Engine & Repository Autonomy
 ---
@@ -39,9 +39,9 @@ Phase sequence: 26 → 27 → 28 → 29 → 30 → 31
 
 ## Session Continuity
 
-Last session: 2026-11-05T02:57:41.588Z
-Stopped at: Completed 27-05-PLAN.md; 27-03 and 27-04 pending
-Resume file: .planning/phases/27-studio-artifact-tools-diff-approval/27-03-PLAN.md
+Last session: 2026-11-05T04:00:29.656Z
+Stopped at: Completed 27-03-PLAN.md; 27-04 pending
+Resume file: .planning/phases/27-studio-artifact-tools-diff-approval/27-04-PLAN.md
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -86,6 +86,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 27 P01 | 38 min | 3 tasks | 11 files |
 | Phase 27 P02 | 33 min | 3 tasks | 8 files |
 | Phase 27 P05 | 16 min | 2 tasks | 6 files |
+| Phase 27 P03 | 46 min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -103,6 +104,7 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 27]: Artifact tools use a trusted request-bound context and prepare-then-park approval; section ids number by heading order and patches are capped at 120 changed lines. — A model argument can never select project/CR/scope, and the approved result is the cached proposal rather than a recompute.
 - [Phase 27]: Diff card is separate and neutral; approval applies through the host adapter only, staleness uses normalized hash plus exact base bytes, and decisions persist as metadata-only system rows. — Keeps semantic color in the diff body, blocks implicit draft writes, and preserves decision history without persisting pending diff payloads.
 - [Phase 27]: Artifact tools require real workflow prerequisites, post-await live access checks and an explicit studio allowlist; no-allowlist ordinary chat excludes both tools.
+- [Phase 27]: Patch approval applies only the exact reviewed proposal: SOLUTION draft+decision in one transaction, other kinds after durable decision, version commits never invoked; draft divergence marks only the owning step.
 
 ### Todos / Blockers
 
