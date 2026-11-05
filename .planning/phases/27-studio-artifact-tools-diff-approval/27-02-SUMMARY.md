@@ -247,3 +247,20 @@ None - no external service configuration required.
 - Created files exist: `ArtifactDiffApprovalCard.tsx`, `ArtifactDiffApprovalCard.test.tsx`, `ArtifactPatchApproval.test.tsx`.
 - Commits are ancestors of HEAD: `42518cbd`, `1f4b5a87`, `ceebd2d2`, `7e6a478d`, `b0c87677`.
 - Final targeted verification: 8 files / 152 tests passed, `tsc --noEmit` exit 0.
+
+## Code Review Fixes
+
+Phase 27 code review findings fixed in `2315f87b` (`fix(27): keep CRLF drafts, approval fallback and refusal surfacing`). Focused verification after the fix: 8 files / 180 tests passed, `npx tsc --noEmit` exit 0.
+
+| Finding | Location | Outcome | Evidence |
+|---|---|---|---|
+| CR-01 (critical) | `src/services/ai/sdlcArtifactTools.ts` `applyOperation` | Fixed: splices now join with the document's own dominant EOL (`detectEol`), so a CRLF draft stays CRLF and keeps its hash identity after approval | `tests/services/ai/sdlcArtifactTools.test.ts#preserves CRLF documents when appending a section line` (asserts exact CRLF `patchedMarkdown`, no bare LF), `#keeps LF documents LF when appending`, `tests/unit/sdlc/ArtifactPatchApproval.test.tsx#applies a CRLF APPROVED proposal without changing its EOL or hash identity` |
+| WR-02 | `src/components/sdlc/chat/StepChatPanel.tsx` `onResolveApproval` | Fixed: artifact path only when a live, unresolved patch record matches; otherwise `turn.resolveApproval`, restoring the Phase 26 baseline wiring | `tests/unit/sdlc/ArtifactPatchApproval.test.tsx#still resolves an ordinary mutation approval (WR-02)` |
+| WR-05 | `StepChatPanel` `onToolEvent` | Fixed: refusals are recorded for both `get_artifact` and `patch_artifact_section` | `#surfaces a get_artifact refusal with prerequisite navigation (WR-05, WR-06)` |
+| WR-06 | `StepChatPanel` refusal records + inline alert | Fixed: the service's `supplyingStep`/`stepNumber` are now read, so `Chuyển đến Bước {N}` renders and navigates | same test asserts the button text and `onNavigateToStep('INTAKE')` |
+| WR-04 | `ArtifactDiffApprovalCard.tsx` diff rows | Fixed: rows are `display: block; width: 100%`, so a line background fills the row | `tests/ai/ArtifactDiffApprovalCard.test.tsx#renders every diff row as a full-width block` |
+| WR-03 | `ArtifactDiffApprovalCard.tsx` dark detection | Fixed: exported `isDarkBase` treats antd 6 darkAlgorithm `#000`/`#000000`/near-black rgb as dark and `#fff` as light; `#141414` still honoured | `tests/ai/ArtifactDiffApprovalCard.test.tsx#detects dark surfaces from antd base tokens` |
+
+TDD: genuine RED was obtained before the production edits — CR-01 (`patchedMarkdown` still contained bare LF), WR-03 (`isDarkBase` did not exist), WR-04 (no block rows), WR-02 (ordinary approval never resolved), WR-05/WR-06 (no alert, no navigation). No INVALID_RED claim.
+
+Disclosure: `tests/unit/sdlc/ArtifactPatchApproval.test.tsx` already carried an uncommitted 27-03 edit (a rerender with a fresh context closure). Because the file was staged whole for this fix, that pre-existing delta is included in `2315f87b`; it was not reverted or altered.
