@@ -422,20 +422,21 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   // Branch assistant display on message.grounding payload
   if (!isUser && msg.grounding) {
     const g = msg.grounding;
-    const hasStructuredAnswer = Boolean(g.answer && (g.answer.conclusion || (g.answer.claims && g.answer.claims.length > 0)));
+    const answer = g.answer;
+    const hasStructuredAnswer = Boolean(answer && (answer.conclusion || (answer.claims && answer.claims.length > 0)));
 
     // If grounding has no structured answer but msg.content has text, fallback to normal markdown display
     if (!hasStructuredAnswer && msg.content && msg.content.trim().length > 0) {
       // Fall through to regular message rendering below
-    } else if (hasStructuredAnswer) {
+    } else if (hasStructuredAnswer && answer) {
       const isAbstention =
-        ('confidence' in g.answer && g.answer.confidence === 'unknown') ||
-        (typeof g.answer.conclusion === 'string' &&
+        ('confidence' in answer && answer.confidence === 'unknown') ||
+        (typeof answer.conclusion === 'string' &&
           /(không tìm thấy|không có thông tin|không có dữ liệu|chưa có thông tin|no relevant information|no evidence found|insufficient evidence)/i.test(
-            g.answer.conclusion
+            answer.conclusion
           ));
 
-      let formattedConclusion = g.answer.conclusion || '';
+      let formattedConclusion = answer.conclusion || '';
       if (isAbstention) {
         formattedConclusion = formattedConclusion.replace(/\[\s*[SL]?\d+\s*\]/gi, '').trim();
       } else {
@@ -448,14 +449,14 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
       // Collect only citations actually referenced by the AI (claims, conclusion, citationReasons)
       const citedIds = new Set<string>();
       if (!isAbstention) {
-        (g.answer.claims || []).forEach((c) => {
+        (answer.claims || []).forEach((c) => {
           (c.citationIds || []).forEach((id) => citedIds.add(id.toUpperCase()));
         });
         const inlineMatches = Array.from((formattedConclusion + ' ' + (msg.content || '')).matchAll(/\[([SL]?\d+)\]/gi));
         inlineMatches.forEach((m) => {
           if (m[1]) citedIds.add(m[1].toUpperCase());
         });
-        const answerReasons = (g.answer as any).citationReasons;
+        const answerReasons = (answer as any).citationReasons;
         if (answerReasons && typeof answerReasons === 'object') {
           Object.keys(answerReasons).forEach((k) => citedIds.add(k.toUpperCase()));
         }
@@ -498,7 +499,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
       // Format claims with inline citation tags
       const formattedClaims = isAbstention
         ? []
-        : (g.answer.claims || []).map((c) => {
+        : (answer.claims || []).map((c) => {
             let citedBadges = (c.citationIds || [])
               .map((cid) => {
                 const info = citationMap.get(cid.toUpperCase()) || citationMap.get(cid);
