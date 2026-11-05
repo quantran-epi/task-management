@@ -1,5 +1,19 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { CloseOutlined, InboxOutlined } from '@ant-design/icons';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  horizontalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { AntdThemeAdapter } from './AntdThemeAdapter';
 import { useLayoutStore, type EditorTab } from './store/layoutStore';
 import { TasksView } from '../views/TasksView';
@@ -19,6 +33,125 @@ export interface EditorAreaProps {
   db?: TaskPlannerDatabase | undefined;
 }
 
+interface SortableEditorTabItemProps {
+  tab: EditorTab;
+  isActive: boolean;
+  onSelect: () => void;
+  onClose: () => void;
+  tabRef: (el: HTMLDivElement | null) => void;
+}
+
+function SortableEditorTabItem({
+  tab,
+  isActive,
+  onSelect,
+  onClose,
+  tabRef,
+}: SortableEditorTabItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: tab.id });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Translate.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+    zIndex: isDragging ? 99 : (isActive ? 2 : 1),
+    display: 'inline-flex',
+    alignItems: 'center',
+    padding: '0 10px',
+    height: 32,
+    flex: '1 1 140px',
+    minWidth: 60,
+    maxWidth: 200,
+    background: isActive ? 'var(--bg-island, #ffffff)' : 'transparent',
+    borderRadius: '6px 6px 0 0',
+    borderTop: isActive
+      ? '1px solid var(--border-strong, #d1d3d9)'
+      : '1px solid transparent',
+    borderLeft: isActive ? '1px solid var(--border-strong, #d1d3d9)' : '1px solid transparent',
+    borderRight: isActive ? '1px solid var(--border-strong, #d1d3d9)' : '1px solid transparent',
+    borderBottom: isActive ? '1px solid var(--bg-island, #ffffff)' : '1px solid transparent',
+    marginBottom: isActive ? -1 : 0,
+    color: isActive ? 'var(--fg-strong, #000000)' : 'var(--fg-secondary, #5f6269)',
+    fontWeight: isActive ? 600 : 400,
+    fontSize: 'var(--font-size-ui, 13.5px)',
+    cursor: 'pointer',
+    userSelect: 'none',
+    position: 'relative',
+    boxSizing: 'border-box',
+    touchAction: 'none',
+  };
+
+  return (
+    <div
+      ref={(node) => {
+        setNodeRef(node);
+        tabRef(node);
+      }}
+      {...attributes}
+      {...listeners}
+      role="tab"
+      aria-selected={isActive}
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          onSelect();
+        }
+      }}
+      style={style}
+    >
+      <span
+        style={{
+          flex: 1,
+          minWidth: 0,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          marginRight: 6,
+          pointerEvents: 'none',
+        }}
+        title={tab.title}
+      >
+        {tab.title}
+      </span>
+
+      <button
+        type="button"
+        aria-label={`Close ${tab.title}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
+        onPointerDown={(e) => {
+          e.stopPropagation();
+        }}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'transparent',
+          border: 'none',
+          padding: 2,
+          borderRadius: 3,
+          cursor: 'pointer',
+          color: 'var(--fg-muted, #6c707e)',
+          lineHeight: 1,
+          flexShrink: 0,
+        }}
+      >
+        <CloseOutlined style={{ fontSize: 11, pointerEvents: 'none' }} />
+      </button>
+    </div>
+  );
+}
+
 export function EditorArea({ db }: EditorAreaProps) {
   const openTabs = useLayoutStore((state) => state.openTabs);
   const activeTabId = useLayoutStore((state) => state.activeTabId);
@@ -27,10 +160,16 @@ export function EditorArea({ db }: EditorAreaProps) {
   const openTab = useLayoutStore((state) => state.openTab);
   const reorderTabs = useLayoutStore((state) => state.reorderTabs);
 
-  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const tabElementsRef = useRef<Record<string, HTMLDivElement | null>>({});
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    })
+  );
 
   const activeTab = openTabs.find((tab) => tab.id === activeTabId) || openTabs[0];
 
@@ -45,44 +184,15 @@ export function EditorArea({ db }: EditorAreaProps) {
     }
   }, [activeTab?.id]);
 
-  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, index: number) => {
-    setDraggedIndex(index);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', String(index));
-  };
-
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>, index: number) => {
-    e.preventDefault();
-    e.stopPropagation();
-    e.dataTransfer.dropEffect = 'move';
-    if (dragOverIndex !== index) {
-      setDragOverIndex(index);
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIndex = openTabs.findIndex((t) => t.id === active.id);
+      const newIndex = openTabs.findIndex((t) => t.id === over.id);
+      if (oldIndex !== -1 && newIndex !== -1) {
+        reorderTabs(oldIndex, newIndex);
+      }
     }
-  };
-
-  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>, index: number) => {
-    e.stopPropagation();
-    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
-    if (dragOverIndex === index) {
-      setDragOverIndex(null);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>, targetIndex: number) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const sourceIndexStr = e.dataTransfer.getData('text/plain');
-    const from = sourceIndexStr ? parseInt(sourceIndexStr, 10) : draggedIndex;
-    if (from !== null && !isNaN(from) && from !== targetIndex) {
-      reorderTabs(from, targetIndex);
-    }
-    setDraggedIndex(null);
-    setDragOverIndex(null);
-  };
-
-  const handleDragEnd = () => {
-    setDraggedIndex(null);
-    setDragOverIndex(null);
   };
 
   const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
@@ -216,123 +326,52 @@ export function EditorArea({ db }: EditorAreaProps) {
       }}
     >
       {/* Editor Tab Bar */}
-      <div
-        ref={scrollContainerRef}
-        role="tablist"
-        aria-label="Editor tabs"
-        onWheel={handleWheel}
-        style={{
-          display: 'flex',
-          alignItems: 'flex-end',
-          height: 'var(--tabbar-height, 36px)',
-          minHeight: 'var(--tabbar-height, 36px)',
-          background: 'var(--bg-elev, #f7f8fa)',
-          borderBottom: '1px solid var(--border-strong, #d1d3d9)',
-          padding: '0 8px',
-          overflowX: 'auto',
-          overflowY: 'hidden',
-          scrollbarWidth: 'none',
-          gap: 3,
-        }}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
       >
-        {openTabs.map((tab, index) => {
-          const isActive = tab.id === activeTab?.id;
-          const isBeingDragged = draggedIndex === index;
-          const isDragTarget = dragOverIndex === index;
-
-          return (
-            <div
-              key={tab.id}
-              ref={(el) => {
-                tabElementsRef.current[tab.id] = el;
-              }}
-              role="tab"
-              aria-selected={isActive}
-              tabIndex={0}
-              draggable
-              onDragStart={(e) => handleDragStart(e, index)}
-              onDragOver={(e) => handleDragOver(e, index)}
-              onDragLeave={(e) => handleDragLeave(e, index)}
-              onDrop={(e) => handleDrop(e, index)}
-              onDragEnd={handleDragEnd}
-              onClick={() => setActiveTabId(tab.id)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  setActiveTabId(tab.id);
-                }
-              }}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                padding: '0 10px',
-                height: 32,
-                flex: '1 1 140px',
-                minWidth: 60,
-                maxWidth: 200,
-                background: isActive ? 'var(--bg-island, #ffffff)' : 'transparent',
-                borderRadius: '6px 6px 0 0',
-                borderTop: isActive
-                  ? '1px solid var(--border-strong, #d1d3d9)'
-                  : isDragTarget
-                  ? '1px dashed var(--color-primary, #4f46e5)'
-                  : '1px solid transparent',
-                borderLeft: isActive ? '1px solid var(--border-strong, #d1d3d9)' : '1px solid transparent',
-                borderRight: isActive ? '1px solid var(--border-strong, #d1d3d9)' : '1px solid transparent',
-                borderBottom: isActive ? '1px solid var(--bg-island, #ffffff)' : '1px solid transparent',
-                marginBottom: isActive ? -1 : 0,
-                color: isActive ? 'var(--fg-strong, #000000)' : 'var(--fg-secondary, #5f6269)',
-                fontWeight: isActive ? 600 : 400,
-                fontSize: 'var(--font-size-ui, 13.5px)',
-                cursor: 'pointer',
-                userSelect: 'none',
-                position: 'relative',
-                boxSizing: 'border-box',
-                opacity: isBeingDragged ? 0.4 : 1,
-                transition: 'background-color 0.15s, color 0.15s, opacity 0.15s',
-              }}
-            >
-              <span
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  marginRight: 6,
-                  pointerEvents: 'none',
-                }}
-                title={tab.title}
-              >
-                {tab.title}
-              </span>
-
-              <button
-                type="button"
-                aria-label={`Close ${tab.title}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  closeTab(tab.id);
-                }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background: 'transparent',
-                  border: 'none',
-                  padding: 2,
-                  borderRadius: 3,
-                  cursor: 'pointer',
-                  color: 'var(--fg-muted, #6c707e)',
-                  lineHeight: 1,
-                  flexShrink: 0,
-                }}
-              >
-                <CloseOutlined style={{ fontSize: 11, pointerEvents: 'none' }} />
-              </button>
-            </div>
-          );
-        })}
-      </div>
+        <div
+          ref={scrollContainerRef}
+          role="tablist"
+          aria-label="Editor tabs"
+          onWheel={handleWheel}
+          style={{
+            display: 'flex',
+            alignItems: 'flex-end',
+            height: 'var(--tabbar-height, 36px)',
+            minHeight: 'var(--tabbar-height, 36px)',
+            background: 'var(--bg-elev, #f7f8fa)',
+            borderBottom: '1px solid var(--border-strong, #d1d3d9)',
+            padding: '0 8px',
+            overflowX: 'auto',
+            overflowY: 'hidden',
+            scrollbarWidth: 'none',
+            gap: 3,
+          }}
+        >
+          <SortableContext
+            items={openTabs.map((tab) => tab.id)}
+            strategy={horizontalListSortingStrategy}
+          >
+            {openTabs.map((tab) => {
+              const isActive = tab.id === activeTab?.id;
+              return (
+                <SortableEditorTabItem
+                  key={tab.id}
+                  tab={tab}
+                  isActive={isActive}
+                  onSelect={() => setActiveTabId(tab.id)}
+                  onClose={() => closeTab(tab.id)}
+                  tabRef={(el) => {
+                    tabElementsRef.current[tab.id] = el;
+                  }}
+                />
+              );
+            })}
+          </SortableContext>
+        </div>
+      </DndContext>
 
       {/* Active Tab View Body inside AntdThemeAdapter */}
       <div
