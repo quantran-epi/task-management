@@ -99,27 +99,23 @@ export function buildToolPolicy(
     : new Set(availableToolNames.map(normalizeToolName));
   const local = SDLC_STEP_ALLOWED_TOOLS[step]
     .filter((name) => available === undefined || available.has(name));
+  const ownsDocuments = SDLC_STEP_ALLOWED_TOOLS[step].includes('get_artifact');
   const hasRead = local.includes('get_artifact');
   const hasPatch = local.includes('patch_artifact_section');
-  const readOnlyLocal = local.filter((name) => name !== 'patch_artifact_section');
-  // Steps that own no document keep the exact Phase 26 policy text, byte for byte.
-  const workflow = SDLC_STEP_ALLOWED_TOOLS[step].includes('get_artifact')
-    ? [
-        `Công cụ đọc cục bộ: ${readOnlyLocal.join(', ')}`,
-        `Công cụ đề xuất chỉnh sửa: ${hasPatch ? 'patch_artifact_section (cần người dùng chấp thuận)' : 'không có trong payload của turn này'}`,
-        hasPatch
-          ? 'Công cụ đề xuất chỉ tạo bản nháp chờ người dùng chấp thuận; không có công cụ ghi hoặc tạo phiên bản tài liệu.'
-          : 'Không có công cụ ghi hoặc tạo tài liệu.',
-      ]
-    : [
-        `Công cụ đọc cục bộ: ${local.join(', ')}`,
-        'Không có công cụ ghi hoặc tạo tài liệu.',
-      ];
   return [
     `[CHÍNH SÁCH CÔNG CỤ — BƯỚC ${step}]`,
-    ...workflow,
+    // The parser reads exactly these two name lines and requires them to equal the payload.
+    // `patch_artifact_section` is a proposal tool, never a read capability, so it is named
+    // only in the guidance line below.
+    `Công cụ đọc cục bộ: ${local.filter((name) => name !== 'patch_artifact_section').join(', ')}`,
     `MCP đọc-only động: ${dynamic.length ? dynamic.join(', ') : 'không có trong payload của turn này'}`,
-    'Chỉ gọi công cụ trong payload của turn này.',
+    ownsDocuments
+      ? 'Chỉ gọi công cụ trong payload của turn này.'
+      // Non-owning steps keep the exact Phase 26 line.
+      : 'Chỉ gọi công cụ trong payload của turn này. Không có công cụ ghi hoặc tạo tài liệu.',
+    ...(hasPatch
+      ? ['Công cụ đề xuất chỉ tạo bản nháp chờ người dùng chấp thuận; không có công cụ ghi hoặc tạo phiên bản tài liệu.']
+      : []),
     'Không trả lời từ trí nhớ khi công cụ có thể giải quyết câu hỏi; gọi công cụ để lấy bằng chứng.',
     'Khi bằng chứng mỏng hoặc thiếu, truy vấn lại hẹp hơn (narrower re-query).',
     'Nếu truy vấn hẹp hơn vẫn không đủ, từ chối kết luận; nêu rõ bằng chứng còn thiếu hoặc mâu thuẫn.',

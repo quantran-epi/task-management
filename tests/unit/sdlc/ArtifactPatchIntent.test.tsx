@@ -72,7 +72,7 @@ describe('patch intent routing (SDLC-ART-05)', () => {
     const off = composeSdlcTurn({ step: 'SOLUTION', intent: 'patch', artifact: 'SOLUTION', userTurn: 'x',
       availableToolNames: ['query_notes', 'get_artifact'] });
     expect(on.segments.toolPolicy).toContain('patch_artifact_section');
-    expect(off.segments.toolPolicy).toContain('Công cụ đề xuất chỉnh sửa: không có trong payload của turn này');
+    expect(off.segments.toolPolicy).toContain('Analysis Mode đang bật');
     expect(off.segments.toolPolicy).toContain('Analysis Mode');
     expect(composeSdlcTurn({ step: 'INTAKE', intent: 'qa', userTurn: 'x' }).segments.toolPolicy)
       .toBe(composeSdlcTurn({ step: 'INTAKE', intent: 'qa', userTurn: 'x' }).segments.toolPolicy);

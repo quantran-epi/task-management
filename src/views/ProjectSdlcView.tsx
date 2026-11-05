@@ -75,6 +75,10 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
   const threadId = stepThread.id;
   const threadReady = stepThread.scopeKey === `sdlc:${projectId}:${activeCrId}:${selectedStep}`;
   const [workflowState, setWorkflowState] = useState<SdlcWorkflowState | undefined>(undefined);
+  // The step editors gate approval on a proven intake baseline, so they must not mount before
+  // this CR's workflow restore settles: a transiently empty state renders a wrongly blocked
+  // editor and drops an early click (T-25.3-34).
+  const [workflowRestored, setWorkflowRestored] = useState(false);
   const [stepEvidence, setStepEvidence] = useState<WizardEvidence | undefined>(undefined);
   const [incomingSolutionDraft, setIncomingSolutionDraft] = useState<string | undefined>(undefined);
   const [draftPl03b, setDraftPl03b] = useState<string | undefined>(undefined);
@@ -343,8 +347,10 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
     let cancelled = false;
     if (!activeCrId) {
       setWorkflowState(undefined);
+      setWorkflowRestored(true);
       return undefined;
     }
+    setWorkflowRestored(false);
     void (async () => {
       try {
         const restored = await coordinator.restore();
@@ -352,6 +358,8 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
       } catch {
         // A failed restore leaves prerequisites unproven, so step views render their guards.
         if (!cancelled) setWorkflowState(undefined);
+      } finally {
+        if (!cancelled) setWorkflowRestored(true);
       }
     })();
     return () => {
@@ -896,7 +904,11 @@ export const ProjectSdlcView: React.FC<ProjectSdlcViewProps> = ({
           stepGroundingContext={stepGroundingContext}
           readOnly={Boolean(viewedVersion)}
           workflowState={workflowState}
-          stepViewNode={renderStepNode()}
+          stepViewNode={activeCrId && !workflowRestored ? (
+            <div data-testid="sdlc-step-loading" style={{ color: token.colorTextSecondary, padding: 32, textAlign: 'center' }}>
+              Đang khôi phục hồ sơ quy trình của CR này…
+            </div>
+          ) : renderStepNode()}
           onNavigateToStep={handleNavigateToStep}
           onSolutionExtracted={handleSolutionExtracted}
           onArtifactDraft={handleChatArtifactDraft}
