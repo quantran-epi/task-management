@@ -345,12 +345,23 @@ function locateSection(markdown: string, sectionId: string): SectionSlice | Arti
   return { section, bodyLines, coreStart, coreEnd };
 }
 
+/**
+ * CR-01: the document's own line-ending style is part of its identity. Rewriting a CRLF
+ * document to LF changes the approved draft hash and immediately contradicts the card.
+ */
+function detectEol(markdown: string): '\r\n' | '\n' {
+  const crlf = (markdown.match(/\r\n/g) ?? []).length;
+  const lfOnly = (markdown.match(/(?<!\r)\n/g) ?? []).length;
+  return crlf > 0 && crlf >= lfOnly ? '\r\n' : '\n';
+}
+
 function applyOperation(
   markdown: string,
   slice: SectionSlice,
   operation: 'append' | 'replace',
   newContent: string
 ): string {
+  const eol = detectEol(markdown);
   const lines = splitLines(markdown);
   const newLines = splitLines(newContent);
   // A single trailing newline in the supplied text is a formatting artifact, not a line.
@@ -360,13 +371,13 @@ function applyOperation(
     // Insert after the body's last non-blank line so the blank separator before the
     // next heading survives untouched.
     const insertAt = slice.coreEnd + 1;
-    return [...lines.slice(0, insertAt), ...newLines, ...lines.slice(insertAt)].join('\n');
+    return [...lines.slice(0, insertAt), ...newLines, ...lines.slice(insertAt)].join(eol);
   }
   return [
     ...lines.slice(0, slice.coreStart),
     ...newLines,
     ...lines.slice(slice.coreEnd + 1),
-  ].join('\n');
+  ].join(eol);
 }
 
 function countLogicalLines(text: string): number {

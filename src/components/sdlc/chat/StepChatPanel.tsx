@@ -244,12 +244,17 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
       ...createDefaultChatTurnDeps(db),
       onToolEvent: (event) => {
         setToolEvents((prev) => [...prev, event]);
-        if (event.phase !== 'result' || normalizeToolName(event.name) !== 'patch_artifact_section') return;
-        let parsed: { refused?: boolean; code?: string; message?: string } | undefined;
+        const toolName = normalizeToolName(event.name);
+        if (event.phase !== 'result' || (toolName !== 'patch_artifact_section' && toolName !== 'get_artifact')) return;
+        let parsed: { refused?: boolean; code?: string; message?: string; supplyingStep?: SdlcStepId;
+          stepNumber?: number; missingArtifact?: string } | undefined;
         try { parsed = JSON.parse(event.result ?? '{}'); } catch { parsed = undefined; }
         if (parsed?.refused !== true) return;
-        const step = parsed.code === 'ARTIFACT_NOT_FOUND' || parsed.code === 'WORKFLOW_UNAVAILABLE' ? stepId : undefined;
-        setRefusalRecords((prev) => [...prev, { callId: event.id, scopeKey, message: parsed!.message ?? '', ...(step ? { step } : {}) }]);
+        // WR-06: the service already reports the supplying step; surface its navigation CTA.
+        const step = parsed.supplyingStep ?? (
+          parsed.code === 'ARTIFACT_NOT_FOUND' || parsed.code === 'WORKFLOW_UNAVAILABLE' ? stepId : undefined);
+        setRefusalRecords((prev) => [...prev, { callId: event.id, scopeKey, message: parsed!.message ?? '',
+          ...(step ? { step } : {}) }]);
       },
       onAwaitingApproval: (info) => {
         if (!info.patch) return;
@@ -669,7 +674,16 @@ export const StepChatPanel = React.forwardRef<StepChatPanelHandle, StepChatPanel
           }
           turn.abort();
         }}
-        onResolveApproval={(approved) => { void handleResolveArtifactApproval(approved); }}
+        onResolveApproval={(approved) => {
+          // WR-02: only a live artifact proposal owns the artifact path; ordinary mutation
+          // approvals resolve directly so the turn never hangs with a disabled composer.
+          const proposal = pendingProposalRef.current;
+          if (proposal && patchRecords[proposal.proposalId] && !patchRecords[proposal.proposalId]?.decision) {
+            void handleResolveArtifactApproval(approved);
+            return;
+          }
+          turn.resolveApproval(approved);
+        }}
         onRetry={() => {
           void turn.retry();
         }}

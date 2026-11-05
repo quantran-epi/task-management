@@ -13,11 +13,21 @@ export interface ArtifactDiffApprovalCardProps {
   onReject: () => void;
 }
 
+/** WR-03: antd 6 darkAlgorithm uses a #000 background with #fff text. */
+export function isDarkBase(colorBgBase?: string | undefined): boolean {
+  if (!colorBgBase) return false;
+  const value = colorBgBase.trim().toLowerCase();
+  if (value === '#141414' || value === '#000' || value === '#000000') return true;
+  const rgb = value.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+  if (rgb) return Number(rgb[1]) + Number(rgb[2]) + Number(rgb[3]) < 96;
+  return false;
+}
+
 export const ArtifactDiffApprovalCard: React.FC<ArtifactDiffApprovalCardProps> = ({
   patch, stale = false, applying = false, error, decision, onApprove, onReject,
 }) => {
   const { token } = theme.useToken();
-  const dark = token.colorBgBase === '#141414' || token.colorTextBase?.includes('255');
+  const dark = isDarkBase(token.colorBgBase);
   const addBg = dark ? '#23452b' : '#e6ffed';
   const delBg = dark ? '#4d1f24' : '#ffeef0';
   const lines = patch.diffText.split(/(?<=\n)/);
@@ -51,9 +61,11 @@ export const ArtifactDiffApprovalCard: React.FC<ArtifactDiffApprovalCardProps> =
         style={{ maxHeight: 240, overflowX: 'auto', overflowY: 'auto', minWidth: 0, whiteSpace: 'pre',
           fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
           fontSize: 12, lineHeight: '20px' }}>
+        {/* WR-04: block-level rows so a line background spans the diff width, not just its glyphs. */}
         {lines.map((line, index) => (
-          <span key={index} style={{ backgroundColor: line.startsWith('+') && !line.startsWith('+++') ? addBg :
-            line.startsWith('-') && !line.startsWith('---') ? delBg : 'transparent' }}>{line}</span>
+          <span key={index} data-diff-line style={{ display: 'block', width: '100%',
+            backgroundColor: line.startsWith('+') && !line.startsWith('+++') ? addBg :
+              line.startsWith('-') && !line.startsWith('---') ? delBg : 'transparent' }}>{line}</span>
         ))}
       </div>
       {decision ? <div role="status" style={{ fontSize: 12 }}>

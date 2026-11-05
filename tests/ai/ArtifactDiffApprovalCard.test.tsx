@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { TaskPlannerDatabase } from '../../src/db';
 import { AiChatWidget, type AiChatWidgetProps } from '../../src/components/ai/AiChatWidget';
 import { prepareArtifactPatch, type ArtifactPatchProposal } from '../../src/services/ai/sdlcArtifactTools';
+import { isDarkBase } from '../../src/components/ai/widget/ArtifactDiffApprovalCard';
 import { createSdlcWorkflowCoordinator, defaultSha256 } from '../../src/services/wizard/workflowCoordinator';
 
 export const proposal: ArtifactPatchProposal = {
@@ -97,6 +98,27 @@ describe('ArtifactDiffApprovalCard through shared widget', () => {
     // Assert the explicit font sizes this card authors, not inherited defaults on wrappers.
     for (const element of [title, screen.getByText('+500 dòng thêm'), region]) {
       expect(Number.parseFloat((element as HTMLElement).style.fontSize)).toBeGreaterThanOrEqual(12);
+    }
+  });
+
+  it('detects dark surfaces from antd base tokens, not only the legacy #141414 value', () => {
+    // WR-03: antd 6 darkAlgorithm uses #000 backgrounds / #fff text.
+    expect(isDarkBase('#000')).toBe(true);
+    expect(isDarkBase('#000000')).toBe(true);
+    expect(isDarkBase('#141414')).toBe(true);
+    expect(isDarkBase('rgb(0, 0, 0)')).toBe(true);
+    expect(isDarkBase('#fff')).toBe(false);
+    expect(isDarkBase('#ffffff')).toBe(false);
+    expect(isDarkBase(undefined)).toBe(false);
+  });
+
+  it('renders every diff row as a full-width block so its background fills the row', () => {
+    render(<AiChatWidget {...widgetProps(proposal)} />);
+    const rows = screen.getByRole('region', { name: 'Diff đề xuất chỉnh sửa' }).querySelectorAll('[data-diff-line]');
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect((row as HTMLElement).style.display).toBe('block');
+      expect((row as HTMLElement).style.width).toBe('100%');
     }
   });
 

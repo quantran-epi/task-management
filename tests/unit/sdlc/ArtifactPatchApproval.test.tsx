@@ -3,9 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { TaskPlannerDatabase } from '../../../src/db';
 import { StepChatPanel, type StepChatPanelHandle, type StepChatPanelProps } from '../../../src/components/sdlc/chat/StepChatPanel';
-import { createSdlcWorkflowCoordinator } from '../../../src/services/wizard/workflowCoordinator';
+import { createSdlcWorkflowCoordinator, defaultSha256 } from '../../../src/services/wizard/workflowCoordinator';
 import { getStepThread } from '../../../src/services/wizard/sdlcCrManager';
-import type { ArtifactToolContext } from '../../../src/services/ai/sdlcArtifactTools';
+import { prepareArtifactPatch, readArtifactSnapshot, type ArtifactToolContext } from '../../../src/services/ai/sdlcArtifactTools';
 
 const { stream } = vi.hoisted(() => ({ stream: vi.fn() }));
 vi.mock('../../../src/services/ai/nineRouterClient', async (original) => ({
@@ -20,6 +20,8 @@ vi.mock('../../../src/services/ai/nineRouterTokenService', async (original) => (
 
 const BASE = '# SOLUTION\n## Mục tiêu\nNội dung gốc.';
 const PREFIX = 'ARTIFACT_PATCH_DECISION ';
+const callOf = (id: string, name: string, args: Record<string, unknown>) =>
+  ({ id, type: 'function' as const, function: { name, arguments: JSON.stringify(args) } });
 
 describe('Artifact patch approval real panel/hook/runtime/widget', () => {
   let db: TaskPlannerDatabase;
@@ -124,7 +126,8 @@ describe('Artifact patch approval real panel/hook/runtime/widget', () => {
     const region = await screen.findByRole('region', { name: 'Diff đề xuất chỉnh sửa' });
     const diffText = region.textContent;
     markdown += '\n';
-    view.rerender(<StepChatPanel {...props} />);
+    // A live host hands down a fresh closure; identical props would not re-run the freshness check.
+    view.rerender(<StepChatPanel {...props} artifactToolContext={{ ...context, getDraft: () => markdown }} />);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Chấp thuận' })).toBeDisabled());
     expect(region.textContent).toBe(diffText);
     expect(screen.getByRole('alert')).toHaveTextContent('Tài liệu đã thay đổi sau khi đề xuất này.');
@@ -176,6 +179,77 @@ describe('Artifact patch approval real panel/hook/runtime/widget', () => {
     for (const [input] of stream.mock.calls) {
       expect(JSON.stringify(input.payload.messages)).not.toContain(PREFIX);
     }
+  });
+
+  it('still resolves an ordinary mutation approval (WR-02)', async () => {
+    let round = 0;
+    stream.mockReset();
+    stream.mockImplementation(async function* () {
+      if (round++ === 0) {
+        yield { type: 'tool_calls', calls: [callOf('m1', 'update_task', { id: 't-1', status: 'Done' })] };
+        return;
+      }
+      yield { type: 'text', delta: 'Đã cập nhật tác vụ xong.' };
+    });
+    await mountAndStart();
+    // No artifact card exists for this approval; the panel must fall back to the runtime resolver.
+    const approve = await screen.findByRole('button', { name: 'Chấp thuận' });
+    expect(screen.queryByTestId('artifact-diff-approval')).not.toBeInTheDocument();
+    fireEvent.click(approve);
+    await waitFor(() => expect(screen.getByText('Đã cập nhật tác vụ xong.')).toBeInTheDocument(), { timeout: 5000 });
+    expect(await decisions()).toEqual([]);
+  });
+
+  it('surfaces a get_artifact refusal with prerequisite navigation (WR-05, WR-06)', async () => {
+    const baseState = context.getWorkflowState!();
+    if (!baseState) throw new Error('fixture workflow state required');
+    const blocked: ArtifactToolContext = { ...context, getWorkflowState: () => ({
+      ...baseState, artifacts: { ...baseState.artifacts, pl01: undefined },
+    }) };
+    props = { ...props, artifactToolContext: blocked };
+    let round = 0;
+    stream.mockReset();
+    stream.mockImplementation(async function* () {
+      if (round++ === 0) {
+        yield { type: 'tool_calls', calls: [callOf('g1', 'get_artifact', { kind: 'SOLUTION' })] };
+        return;
+      }
+      yield { type: 'text', delta: 'Chưa thể đọc tài liệu.' };
+    });
+    await mountAndStart();
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Chưa đủ điều kiện');
+    expect(alert).toHaveTextContent('PL01');
+    const cta = within(alert).getByRole('button', { name: /Chuyển đến Bước 1/ });
+    fireEvent.click(cta);
+    expect(props.onNavigateToStep).toHaveBeenCalledWith('INTAKE');
+    expect(screen.queryByTestId('artifact-diff-approval')).not.toBeInTheDocument();
+  });
+
+  it('applies a CRLF APPROVED proposal without changing its EOL or hash identity (CR-01)', async () => {
+    const crlf = ['# SOLUTION', '', '## Mục tiêu', '', 'Nội dung gốc.'].join('\r\n');
+    markdown = crlf;
+    context = { ...context, getDraft: () => markdown };
+    const snapshot = await readArtifactSnapshot(db, context, 'SOLUTION');
+    if (!('baseHash' in snapshot)) throw new Error('expected a snapshot');
+    const proposal = await prepareArtifactPatch(db, context, { kind: 'SOLUTION', sectionId: '1.1',
+      expectedHeading: 'Mục tiêu', baseHash: snapshot.baseHash, operation: 'append', newContent: 'Dòng CRLF.' });
+    if (!('proposalId' in proposal)) throw new Error('expected a proposal');
+    expect(proposal.patchedMarkdown).toContain('\r\n');
+    expect(/[^\r]\n/.test(proposal.patchedMarkdown)).toBe(false);
+    const decision = { id: crypto.randomUUID(), threadId: props.artifactToolContext!.getWorkflowState!()!.threadId,
+      role: 'system' as const, createdAt: new Date().toISOString(),
+      content: `ARTIFACT_PATCH_DECISION ${JSON.stringify({ proposalId: proposal.proposalId, kind: 'SOLUTION',
+        sectionId: proposal.sectionId, decision: 'approved' })}\nĐã chấp thuận — bản nháp bước này đã được cập nhật.` };
+    await act(async () => {
+      await props.onApplyArtifactPatch!(proposal, decision);
+    });
+    expect(markdown).toBe(`${crlf}\r\nDòng CRLF.`);
+    expect(await defaultSha256(markdown.trim())).not.toBe(snapshot.baseHash);
+    await act(async () => {
+      expect(await readArtifactSnapshot(db, { ...context, getDraft: () => markdown }, 'SOLUTION'))
+        .toMatchObject({ approvalState: props.onApplyArtifactPatch ? 'unapproved' : 'unapproved' });
+    });
   });
 
   it('shows oversized refusal inline in tool order without an empty approval card', async () => {

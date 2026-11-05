@@ -467,6 +467,22 @@ describe('sdlc artifact tools (SDLC-ART-01, SDLC-ART-02)', () => {
     );
     expect(proposal.diffText).toContain('\r\n');
     expect(proposal.patchedMarkdown).not.toContain('\n\n\n');
+    // CR-01: the patched document keeps the source EOL style; an LF rewrite would make the
+    // approved draft hash-differ from the version this proposal was built on.
+    expect(proposal.patchedMarkdown).toBe(`${crlfDraft}\r\nDòng CRLF mới.`);
+    expect(proposal.patchedMarkdown.includes('\r\n')).toBe(true);
+    expect(/[^\r]\n/.test(proposal.patchedMarkdown)).toBe(false);
+  });
+
+  it('keeps LF documents LF when appending (no CRLF introduced)', async () => {
+    const lfDraft = '# SOLUTION\n\n## Kiến trúc\n\nNội dung.';
+    await seedWorkflow(db, { committed: lfDraft });
+    const proposal = await callTool(db, 'patch_artifact_section', {
+      kind: 'SOLUTION', sectionId: '1.1', expectedHeading: 'Kiến trúc',
+      baseHash: await defaultSha256(lfDraft.trim()), operation: 'append', newContent: 'Dòng LF mới.',
+    }, makeContext({ getDraft: () => lfDraft }));
+    expect(proposal.patchedMarkdown).toBe(`${lfDraft}\nDòng LF mới.`);
+    expect(proposal.patchedMarkdown).not.toContain('\r\n');
   });
 
   it('classifies only the patch tool as a mutation so Analysis Mode filters it, not get_artifact', () => {
