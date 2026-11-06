@@ -11,6 +11,8 @@ import {
   type RevisionPreview,
   RevisionPreviewSchema,
   SdlcCheckpointSchema,
+  type BranchSnapshot,
+  BranchSnapshotSchema,
 } from './workflowSchemas';
 import type { SdlcSourceRef } from './sourceMerge';
 import { guardError } from './workflowGuards';
@@ -297,6 +299,31 @@ export function createSdlcWorkflowCoordinator(deps: WorkflowCoordinatorDeps) {
   };
 
   /**
+   * Lưu snapshot nhánh đã được phê duyệt ở Bước 3 (Code Guide & Remote Diff Review)
+   */
+  const commitBranchSnapshot = async (
+    snapshot: BranchSnapshot
+  ): Promise<SdlcWorkflowState> => {
+    const state = await ensureState();
+    if (!state.artifacts.solution) {
+      throw guardError('SOLUTION_REQUIRED_FOR_CHANGE_PACK');
+    }
+
+    const validatedSnapshot = BranchSnapshotSchema.parse(snapshot);
+
+    const nextState: SdlcWorkflowState = {
+      ...state,
+      artifacts: {
+        ...state.artifacts,
+        branchSnapshot: validatedSnapshot,
+      },
+      updatedAt: now(),
+    };
+
+    return emit(nextState);
+  };
+
+  /**
    * Cập nhật kết quả nạp Change Pack và Drift Matrix
    */
   const commitChangePackAndDrift = async (
@@ -450,6 +477,7 @@ export function createSdlcWorkflowCoordinator(deps: WorkflowCoordinatorDeps) {
     getState,
     startOrUpdateIntake,
     commitSolution,
+    commitBranchSnapshot,
     commitChangePackAndDrift,
     commitTechDoc,
     commitCab,
@@ -466,3 +494,6 @@ export function createSdlcWorkflowCoordinator(deps: WorkflowCoordinatorDeps) {
     resumeCheckpoint,
   };
 }
+
+export type SdlcWorkflowCoordinator = ReturnType<typeof createSdlcWorkflowCoordinator>;
+

@@ -312,3 +312,153 @@ describe('Step3CodeGuideView: 2-column review pane and interactions', () => {
   });
 });
 
+import { BranchSnapshotSchema } from '../../../../services/wizard/workflowSchemas';
+import { createSdlcWorkflowCoordinator } from '../../../../services/wizard/workflowCoordinator';
+import type { SdlcWorkflowState } from '../../../../services/wizard/workflowSchemas';
+
+describe('Task 1: SdlcWorkflowState schema and coordinator BranchSnapshot persistence', () => {
+  it('BranchSnapshotSchema validates complete branch snapshot object', () => {
+    const fullSnapshot = {
+      sshConfigId: 'ssh-1',
+      remoteRepoPath: '/home/dev/repo',
+      baseBranch: 'origin/main',
+      targetBranch: 'feature/CR-101',
+      headSha: '0123456789abcdef0123456789abcdef01234567',
+      commitCount: 2,
+      commitShas: ['0123456789abcdef0123456789abcdef01234567'],
+      filesChangedCount: 1,
+      totalAdditions: 10,
+      totalDeletions: 2,
+      fileStats: [
+        {
+          path: 'src/index.ts',
+          status: 'modified' as const,
+          additions: 10,
+          deletions: 2,
+        },
+      ],
+      approvedAt: '2026-11-06T12:00:00.000Z',
+    };
+
+    const parsed = BranchSnapshotSchema.parse(fullSnapshot);
+    expect(parsed.headSha).toBe('0123456789abcdef0123456789abcdef01234567');
+    expect(parsed.commitCount).toBe(2);
+
+    // Also validates branch, baseCommit, headCommit, commitCount, filesSummary, approvedAt
+    const aliasSnapshot = {
+      branch: 'feature/CR-101',
+      baseCommit: 'origin/main',
+      headCommit: 'abcdef1234567890abcdef1234567890abcdef12',
+      commitCount: 1,
+      filesSummary: [
+        {
+          path: 'src/index.ts',
+          status: 'modified' as const,
+          additions: 5,
+          deletions: 1,
+        },
+      ],
+      approvedAt: '2026-11-06T12:00:00.000Z',
+    };
+    const parsedAlias = BranchSnapshotSchema.parse(aliasSnapshot);
+    expect(parsedAlias.branch).toBe('feature/CR-101');
+    expect(parsedAlias.headCommit).toBe('abcdef1234567890abcdef1234567890abcdef12');
+  });
+
+  it('coordinator.commitBranchSnapshot saves branchSnapshot into artifacts and persists state to Dexie', async () => {
+    let savedState: SdlcWorkflowState | undefined;
+    const dummyState: SdlcWorkflowState = {
+      schemaVersion: 1,
+      sessionId: '11111111-1111-4111-8111-111111111111',
+      projectId: '22222222-2222-4222-8222-222222222222',
+      threadId: '33333333-3333-4333-8333-333333333333',
+      currentStep: 'CODE_GUIDE',
+      metadata: {
+        cr: 'CR-101',
+        featureName: 'Test',
+        author: 'Dev',
+        requestingUnit: 'Unit',
+        date: '2026-11-06',
+      },
+      artifacts: {
+        solution: {
+          kind: 'SOLUTION',
+          version: 1,
+          hash: 'a'.repeat(64),
+          title: 'SOLUTION.md',
+          content: 'Solution content',
+          sourceHashes: [],
+          updatedAt: '2026-11-06T00:00:00.000Z',
+        },
+      },
+      staleSteps: [],
+      createdAt: '2026-11-06T00:00:00.000Z',
+      updatedAt: '2026-11-06T00:00:00.000Z',
+    };
+
+    const coordinator = createSdlcWorkflowCoordinator({
+      projectId: '22222222-2222-4222-8222-222222222222',
+      threadId: '33333333-3333-4333-8333-333333333333',
+      loadState: async () => dummyState,
+      saveState: async (s) => {
+        savedState = s;
+      },
+    });
+
+    const snapshot = {
+      baseBranch: 'origin/main',
+      targetBranch: 'feature/CR-101',
+      headSha: '0123456789abcdef0123456789abcdef01234567',
+      commitShas: ['0123456789abcdef0123456789abcdef01234567'],
+      fileStats: [],
+      totalAdditions: 0,
+      totalDeletions: 0,
+      approvedAt: '2026-11-06T12:00:00.000Z',
+    };
+
+    const res = await coordinator.commitBranchSnapshot(snapshot);
+    expect(res.artifacts.branchSnapshot).toBeDefined();
+    expect(res.artifacts.branchSnapshot?.headSha).toBe(snapshot.headSha);
+    expect(savedState?.artifacts.branchSnapshot?.headSha).toBe(snapshot.headSha);
+  });
+
+  it('attempting to commit branch snapshot without approved SOLUTION throws guard error', async () => {
+    const dummyStateWithoutSolution: SdlcWorkflowState = {
+      schemaVersion: 1,
+      sessionId: '11111111-1111-4111-8111-111111111111',
+      projectId: '22222222-2222-4222-8222-222222222222',
+      threadId: '33333333-3333-4333-8333-333333333333',
+      currentStep: 'CODE_GUIDE',
+      metadata: {
+        cr: 'CR-101',
+        featureName: 'Test',
+        author: 'Dev',
+        requestingUnit: 'Unit',
+        date: '2026-11-06',
+      },
+      artifacts: {},
+      staleSteps: [],
+      createdAt: '2026-11-06T00:00:00.000Z',
+      updatedAt: '2026-11-06T00:00:00.000Z',
+    };
+
+    const coordinator = createSdlcWorkflowCoordinator({
+      projectId: '22222222-2222-4222-8222-222222222222',
+      threadId: '33333333-3333-4333-8333-333333333333',
+      loadState: async () => dummyStateWithoutSolution,
+    });
+
+    const snapshot = {
+      baseBranch: 'origin/main',
+      targetBranch: 'feature/CR-101',
+      headSha: '0123456789abcdef0123456789abcdef01234567',
+      approvedAt: '2026-11-06T12:00:00.000Z',
+    };
+
+    await expect(coordinator.commitBranchSnapshot(snapshot)).rejects.toThrow(
+      'SOLUTION_REQUIRED_FOR_CHANGE_PACK'
+    );
+  });
+});
+
+

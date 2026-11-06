@@ -96,6 +96,40 @@ export const RevisionPreviewSchema = z.strictObject({
 });
 export type RevisionPreview = z.infer<typeof RevisionPreviewSchema>;
 
+export const RemoteFileStatSchema = z.strictObject({
+  path: z.string().min(1),
+  status: z.enum(['added', 'modified', 'deleted', 'renamed']),
+  additions: z.number().int().nonnegative(),
+  deletions: z.number().int().nonnegative(),
+});
+export type RemoteFileStat = z.infer<typeof RemoteFileStatSchema>;
+
+export const BranchSnapshotSchema = z.object({
+  sshConfigId: z.string().min(1).optional(),
+  remoteRepoPath: z.string().min(1).optional(),
+  baseBranch: z.string().min(1).optional(),
+  targetBranch: z.string().min(1).optional(),
+  branch: z.string().min(1).optional(),
+  baseCommit: z.string().optional(),
+  headSha: z.string().regex(/^[a-f0-9]{7,40}$/, 'Must be a 7-40 char hex git SHA').optional(),
+  headCommit: z.string().optional(),
+  commitCount: z.number().int().nonnegative().optional(),
+  commitShas: z.array(z.string().regex(/^[a-f0-9]{7,40}$/, 'Must be a 7-40 char hex git SHA')).optional(),
+  filesChangedCount: z.number().int().nonnegative().optional(),
+  totalAdditions: z.number().int().nonnegative().optional(),
+  totalDeletions: z.number().int().nonnegative().optional(),
+  fileStats: z.array(RemoteFileStatSchema).optional(),
+  filesSummary: z.union([z.array(RemoteFileStatSchema), z.record(z.string(), z.unknown()), z.string()]).optional(),
+  approvedAt: isoTimestampSchema,
+}).refine(
+  (data) => Boolean(data.targetBranch || data.branch),
+  { message: 'BranchSnapshot must specify a target branch or branch' }
+).refine(
+  (data) => Boolean(data.headSha || data.headCommit),
+  { message: 'BranchSnapshot must specify a head SHA or headCommit' }
+);
+export type BranchSnapshot = z.infer<typeof BranchSnapshotSchema>;
+
 export const SdlcWorkflowStateSchema = z.strictObject({
   schemaVersion: z.literal(1),
   sessionId: uuidSchema,
@@ -108,6 +142,7 @@ export const SdlcWorkflowStateSchema = z.strictObject({
     pl02: SdlcArtifactRefSchema.optional(),
     solution: SdlcArtifactRefSchema.optional(),
     codeGuide: SdlcArtifactRefSchema.optional(),
+    branchSnapshot: BranchSnapshotSchema.optional(),
     changePack: SdlcArtifactRefSchema.optional(),
     driftResult: ReconciliationResultSchema.optional(),
     pl03b: SdlcArtifactRefSchema.optional(),
