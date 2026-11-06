@@ -4,12 +4,14 @@ import {
   ProjectOutlined,
   FileTextOutlined,
   ApartmentOutlined,
+  CloudServerOutlined,
 } from '@ant-design/icons';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { useLayoutStore } from '../store/layoutStore';
 import { ProjectExplorer } from './ProjectExplorer';
 import { DocsExplorer } from './DocsExplorer';
 import { DiagramExplorer } from './DiagramExplorer';
+import { RemoteGitExplorer } from './RemoteGitExplorer';
 
 export interface LeftToolWindowProps {
   db?: TaskPlannerDatabase | undefined;
@@ -25,8 +27,17 @@ export function LeftToolWindow({
 
   const isDocs = leftActiveId === 'docs';
   const isDiagrams = leftActiveId === 'diagrams';
-  const title = isDiagrams ? 'Diagram Explorer' : isDocs ? 'Docs Explorer' : 'Project Explorer';
-  const icon = isDiagrams ? (
+  const isRemoteExplorer = leftActiveId === 'remote_explorer';
+  const title = isRemoteExplorer
+    ? 'Remote Git Explorer'
+    : isDiagrams
+    ? 'Diagram Explorer'
+    : isDocs
+    ? 'Docs Explorer'
+    : 'Project Explorer';
+  const icon = isRemoteExplorer ? (
+    <CloudServerOutlined style={{ fontSize: 13, color: '#f59e0b' }} />
+  ) : isDiagrams ? (
     <ApartmentOutlined style={{ fontSize: 13, color: '#10b981' }} />
   ) : isDocs ? (
     <FileTextOutlined style={{ fontSize: 13, color: 'var(--accent, #3871e1)' }} />
@@ -96,7 +107,9 @@ export function LeftToolWindow({
 
       {/* Explorer Content Body */}
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-        {isDiagrams ? (
+        {isRemoteExplorer ? (
+          <RemoteGitExplorer db={db} />
+        ) : isDiagrams ? (
           <DiagramExplorer db={db} />
         ) : isDocs ? (
           <DocsExplorer db={db} />

@@ -15,7 +15,8 @@ export type EditorViewType =
   | 'telegram'
   | 'insight'
   | 'sdlc'
-  | 'mermaid';
+  | 'mermaid'
+  | 'remote_file';
 
 export interface EditorTab {
   id: string;

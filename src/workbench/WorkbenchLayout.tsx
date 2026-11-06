@@ -24,6 +24,7 @@ import {
   JetBrainsAIIcon,
   JetBrainsNotificationIcon,
 } from '../components/icons/JetBrainsIcons';
+import { CloudServerOutlined } from '@ant-design/icons';
 import '../styles/workbench-tokens.css';
 
 export interface WorkbenchLayoutProps {
@@ -41,6 +42,12 @@ const DEFAULT_LEFT_ITEMS: ToolWindowItem[] = [
   { id: 'projects', name: 'Project Explorer', icon: <JetBrainsProjectIcon size={16} />, shortcut: 'Alt+1' },
   { id: 'docs', name: 'Docs Explorer', icon: <JetBrainsDocsIcon size={16} />, shortcut: 'Alt+2' },
   { id: 'diagrams', name: 'Diagram Explorer', icon: <JetBrainsDiagramIcon size={16} />, shortcut: 'Alt+5' },
+  {
+    id: 'remote_explorer',
+    name: 'Remote Git Explorer',
+    icon: <CloudServerOutlined style={{ fontSize: 13, color: '#f59e0b' }} />,
+    shortcut: 'Alt+4',
+  },
 ];
 
 export function WorkbenchLayout({
