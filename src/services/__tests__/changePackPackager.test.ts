@@ -1,5 +1,6 @@
 // @vitest-environment node
 import JSZip from 'jszip';
+import { execFileSync } from 'node:child_process';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BranchSnapshot, RemoteFileStat } from '../../types/gitRemote';
 import type { SshConfig } from '../../types/ssh';
@@ -45,9 +46,139 @@ beforeEach(() => {
   vi.mocked(checkDirtyStatus).mockResolvedValue({ isClean: true, uncommittedFiles: [] });
   vi.mocked(runGitCommand).mockImplementation(async (_config, _repo, args) => {
     if (args[0] === 'rev-parse') return `${base}\n`;
-    if (args[0] === 'diff') return patch;
-    if (args[0] === 'show') return args[1]?.includes('sql/') ? 'select 1;\n' : 'export const value = 1;\n';
+    if (args[0] === 'diff') return args.includes('wc') ? String(new TextEncoder().encode(patch).byteLength) : patch;
+    const content = args.some((arg) => arg.includes('sql/')) ? 'select 1;\n' : 'export const value = 1;\n';
+    if (args[0] === 'cat-file') return String(new TextEncoder().encode(content).byteLength);
+    if (args[0] === 'show') return btoa(content);
     throw new Error(`Unexpected command: ${args.join(' ')}`);
+  });
+});
+
+describe('native Git transport contract', () => {
+  it('runs generated commands against Git and validates the resulting pack', async () => {
+    const actualHead = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    const actualBase = execFileSync('git', ['rev-parse', 'HEAD^'], { encoding: 'utf8' }).trim();
+    vi.mocked(runGitCommand).mockImplementation(async (_config, repo, args) => execFileSync('bash', ['-c', `git -C ${escapeShellArg(repo)} --no-pager ${args.join(' ')}`], { encoding: 'utf8' }));
+    const { blob } = await createChangePackFromSnapshot(config, process.cwd(), {
+      baseCommit: actualBase, headSha: actualHead, fileStats: [stat('src/types/ssh.ts')], approvedAt: '2026-11-06T00:00:00Z',
+    }, 'CR-1');
+    const zip = await unpack(blob);
+    expect(await zip.file('new-files/src/types/ssh.ts')!.async('string')).toContain('export interface SshConfig');
+    expect((await validateChangePack(blob)).identity).toMatchObject({ base: actualBase, head: actualHead });
+    const diffArgs = vi.mocked(runGitCommand).mock.calls.find(([, , args]) => args[0] === 'diff')![2];
+    const separator = diffArgs.indexOf('--');
+    const paths = execFileSync('bash', ['-c', `git ls-files -- ${diffArgs.slice(separator + 1, diffArgs.indexOf('|')).join(' ')}`], { encoding: 'utf8' });
+    expect(paths.split('\n')).not.toContain('package-lock.json');
+  });
+});
+
+describe('packaging safety', () => {
+  it('filters out forbidden entries like node_modules and package-lock.json before fetching', async () => {
+    const forbidden = ['node_modules/pkg/index.js', 'package-lock.json', 'web/package-lock.json', 'js/app.min.js', '.env', 'config/.env.prod', 'sql/node_modules/secret.sql'];
+    const { blob } = await createChangePackFromSnapshot(config, '/repo', snapshot(forbidden.map((path) => stat(path))), 'CR-1');
+    expect(Object.keys((await unpack(blob)).files).sort()).toEqual(['diff.patch', 'meta.json']);
+    expect(vi.mocked(runGitCommand).mock.calls.some(([, , args]) => ['show', 'cat-file'].includes(args[0]!))).toBe(false);
+    const diff = vi.mocked(runGitCommand).mock.calls.find(([, , args]) => args[0] === 'diff')![2];
+    for (const glob of ['**/node_modules/**', '**/package-lock.json', '**/*.min.js', '**/.env', '**/.env.*']) {
+      expect(diff).toContain(escapeShellArg(`:(glob,exclude,icase)${glob}`));
+    }
+  });
+
+  it('surfaces warning when remote HEAD has drifted from snapshot headSha', async () => {
+    const currentHeadSha = '3'.repeat(40);
+    vi.mocked(checkHeadDrift).mockResolvedValue({ drifted: true, currentHeadSha });
+    const { blob, warnings, meta } = await createChangePackFromSnapshot(config, '/repo', snapshot(), 'CR-1');
+    expect(warnings).toEqual([expect.stringContaining(`${head} sang ${currentHeadSha}`)]);
+    expect(meta.head).toBe(head);
+    expect((await validateChangePack(blob)).meta.head).toBe(head);
+  });
+
+  it('surfaces warning when working tree is dirty but still completes pack', async () => {
+    vi.mocked(checkDirtyStatus).mockResolvedValue({ isClean: false, uncommittedFiles: [{ path: 'secret.txt', indexStatus: 'M', workingTreeStatus: ' ' }] });
+    const { blob, warnings } = await createChangePackFromSnapshot(config, '/repo', snapshot(), 'CR-1');
+    expect(warnings).toEqual([expect.stringContaining('1 tệp chưa commit')]);
+    expect((await validateChangePack(blob)).meta.head).toBe(head);
+  });
+
+  it('generated Blob passes validateChangePack with DesktopChangePackLimits', async () => {
+    const { blob } = await createChangePackFromSnapshot(config, '/repo', snapshot(), 'CR-1');
+    const manifest = await validateChangePack(blob, undefined, DesktopChangePackLimits);
+    expect(manifest.entries).toHaveLength(4);
+    expect(manifest.identity.cr).toBe('CR-1');
+  });
+
+  it('skips oversized entries before fetching content and reports partial coverage', async () => {
+    const original = vi.mocked(runGitCommand).getMockImplementation()!;
+    vi.mocked(runGitCommand).mockImplementation(async (...args) => args[2][0] === 'cat-file' ? String(DesktopChangePackLimits.maxEntryBytes + 1) : original(...args));
+    const { blob, warnings } = await createChangePackFromSnapshot(config, '/repo', snapshot([stat('src/huge.ts')]), 'CR-1');
+    expect(warnings).toEqual([expect.stringContaining('src/huge.ts')]);
+    expect(vi.mocked(runGitCommand).mock.calls.some(([, , args]) => args[0] === 'show')).toBe(false);
+    expect((await validateChangePack(blob)).coverageStatus).toBe('partial');
+  });
+
+  it.each([
+    ['asset.png', new Uint8Array([1, 2, 3])],
+    ['unknown.dat', new Uint8Array([1, 0, 3])],
+    ['invalid.txt', new Uint8Array([0xff, 0xfe])],
+  ])('skips unsupported binary content: %s', async (path, bytes) => {
+    const original = vi.mocked(runGitCommand).getMockImplementation()!;
+    vi.mocked(runGitCommand).mockImplementation(async (...args) => {
+      if (args[2][0] === 'cat-file') return String(bytes.length);
+      if (args[2][0] === 'show') return btoa(String.fromCharCode(...bytes));
+      return original(...args);
+    });
+    const { blob, warnings } = await createChangePackFromSnapshot(config, '/repo', snapshot([stat(path)]), 'CR-1');
+    expect(warnings).toHaveLength(1);
+    expect((await unpack(blob)).file(`new-files/${path}`)).toBeNull();
+    expect((await validateChangePack(blob)).coverageStatus).toBe('partial');
+  });
+
+  it('escapes shell metacharacters in refs and paths as single arguments', async () => {
+    const path = "src/it's $(touch PWNED).ts";
+    const input = { ...snapshot([stat(path)]), baseCommit: "origin/it's-main" };
+    await createChangePackFromSnapshot(config, '/repo', input, 'CR-1');
+    expect(runGitCommand).toHaveBeenCalledWith(config, '/repo', ['rev-parse', '--verify', '--end-of-options', escapeShellArg(`${input.baseCommit}^{commit}`)], 'session-secret');
+    expect(runGitCommand).toHaveBeenCalledWith(config, '/repo', ['show', '--no-ext-diff', '--no-textconv', escapeShellArg(`${head}:${path}`), '|', 'base64'], 'session-secret');
+  });
+
+  it.each(['../secret', '/absolute', 'a/../secret', 'a\\secret', 'a\nsecret'])('rejects unsafe path before SSH: %s', async (path) => {
+    await expect(createChangePackFromSnapshot(config, '/repo', snapshot([stat(path)]), 'CR-1')).rejects.toThrow();
+    expect(getSshSecret).not.toHaveBeenCalled();
+    expect(runGitCommand).not.toHaveBeenCalled();
+  });
+
+  it('rejects a moving head ref or invalid CR before SSH', async () => {
+    await expect(createChangePackFromSnapshot(config, '/repo', { ...snapshot(), headSha: 'feature/main' }, 'CR-1')).rejects.toThrow();
+    await expect(createChangePackFromSnapshot(config, '/repo', snapshot(), '')).rejects.toThrow();
+    expect(getSshSecret).not.toHaveBeenCalled();
+  });
+
+  it('rejects case-insensitive entry collisions', async () => {
+    await expect(createChangePackFromSnapshot(config, '/repo', snapshot([stat('src/A.ts'), stat('src/a.ts')]), 'CR-1')).rejects.toThrow('PACK_PATH_COLLISION');
+  });
+
+  it('rejects more than 1000 entries before fetching contents', async () => {
+    await expect(createChangePackFromSnapshot(config, '/repo', snapshot(Array.from({ length: 999 }, (_, i) => stat(`src/${i}.ts`))), 'CR-1')).rejects.toThrow('PACK_TOO_MANY_ENTRIES');
+    expect(vi.mocked(runGitCommand).mock.calls.some(([, , args]) => args[0] === 'show')).toBe(false);
+  });
+
+  it('rejects oversized diff.patch', async () => {
+    const original = vi.mocked(runGitCommand).getMockImplementation()!;
+    vi.mocked(runGitCommand).mockImplementation(async (...args) => args[2][0] === 'diff' ? String(DesktopChangePackLimits.maxEntryBytes + 1) : original(...args));
+    await expect(createChangePackFromSnapshot(config, '/repo', snapshot(), 'CR-1')).rejects.toThrow('PACK_ENTRY_TOO_LARGE');
+  });
+
+  it('propagates SSH failure without returning a partial zip', async () => {
+    vi.mocked(runGitCommand).mockRejectedValue(new Error('SSH timeout'));
+    await expect(createChangePackFromSnapshot(config, '/repo', snapshot(), 'CR-1')).rejects.toThrow('SSH timeout');
+  });
+
+  it('rejects malformed size or truncated file transport', async () => {
+    const original = vi.mocked(runGitCommand).getMockImplementation()!;
+    vi.mocked(runGitCommand).mockImplementation(async (...args) => args[2][0] === 'cat-file' ? 'invalid' : original(...args));
+    await expect(createChangePackFromSnapshot(config, '/repo', snapshot(), 'CR-1')).rejects.toThrow('Kích thước tệp không hợp lệ');
+    vi.mocked(runGitCommand).mockImplementation(async (...args) => args[2][0] === 'cat-file' ? '999' : original(...args));
+    await expect(createChangePackFromSnapshot(config, '/repo', snapshot(), 'CR-1')).rejects.toThrow('Nội dung tệp không đầy đủ');
   });
 });
 

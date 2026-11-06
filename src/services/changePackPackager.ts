@@ -86,21 +86,60 @@ export async function createChangePackFromSnapshot(
   }
 
   onProgress?.('diff', 'Đang tạo diff.patch từ commit Snapshot...');
-  const diffPatch = await runGitCommand(config, repoPath, [
+  const diffArgs = [
     'diff', '--binary', '--no-ext-diff', '--no-textconv', escapeShellArg(`${baseCommit}..${targetCommit}`), '--', '.',
     ...excludedGlobs.map((glob) => escapeShellArg(`:(glob,exclude,icase)${glob}`)),
-  ], secret);
-  addEntry('diff.patch', diffPatch);
+  ];
+  const diffSize = (await runGitCommand(config, repoPath, [...diffArgs, '|', 'wc', '-c'], secret)).trim();
+  if (!/^\d+$/.test(diffSize) || !Number.isSafeInteger(Number(diffSize))) throw new Error('Kích thước diff không hợp lệ');
+  if (Number(diffSize) > limits.maxEntryBytes) throw new Error('PACK_ENTRY_TOO_LARGE: diff.patch');
+  let diffPatch = await runGitCommand(config, repoPath, diffArgs, secret);
+  const diffBytes = new TextEncoder().encode(diffPatch).byteLength;
+  if (diffBytes > limits.maxEntryBytes) throw new Error('PACK_ENTRY_TOO_LARGE: diff.patch');
+  // Reserve required entries before collecting remote contents.
+  const candidates = fileStats.filter((file) => file.status !== 'deleted' && isAllowedPackEntry(file.path)
+    && (/^sql\/.+\.(?:sql|plb|pck|pkb)$/i.test(file.path) || file.status === 'added'));
+  if (candidates.length + 2 > limits.maxEntries) throw new Error('PACK_TOO_MANY_ENTRIES');
+  expandedBytes = diffBytes;
 
   onProgress?.('files', 'Đang thu thập tệp SQL và tệp mới...');
-  for (const file of fileStats) {
-    if (file.status === 'deleted' || !isAllowedPackEntry(file.path)) continue;
+  for (const file of candidates) {
     const isSql = /^sql\/.+\.(?:sql|plb|pck|pkb)$/i.test(file.path);
-    if (!isSql && file.status !== 'added') continue;
     const path = isSql ? file.path : `new-files/${file.path}`;
-    const content = await runGitCommand(config, repoPath, ['show', escapeShellArg(`${targetCommit}:${file.path}`)], secret);
+    const spec = escapeShellArg(`${targetCommit}:${file.path}`);
+    const sizeOutput = (await runGitCommand(config, repoPath, ['cat-file', '-s', spec], secret)).trim();
+    if (!/^\d+$/.test(sizeOutput) || !Number.isSafeInteger(Number(sizeOutput))) throw new Error(`Kích thước tệp không hợp lệ: ${file.path}`);
+    const size = Number(sizeOutput);
+    if (size > limits.maxEntryBytes) {
+      warnings.push(`Bỏ qua tệp vượt giới hạn ${limits.maxEntryBytes} byte: ${file.path}`);
+      diffPatch += '\n# WIZARD_DEFERRED_HUNK: oversized file omitted\n';
+      continue;
+    }
+    if (/\.(?:bin|bmp|gif|ico|jpe?g|pdf|png|webp|woff2?|zip|exe|dll|so|jar|gz|7z)$/i.test(path)) {
+      warnings.push(`Bỏ qua tệp binary không hỗ trợ: ${file.path}`);
+      diffPatch += '\n# WIZARD_DEFERRED_HUNK: binary file omitted\n';
+      continue;
+    }
+    if (expandedBytes + size > limits.maxExpandedBytes) throw new Error('PACK_EXPANDED_TOO_LARGE');
+    // SSH stdout is UTF-8 text. Base64 preserves bytes before binary/UTF-8 inspection.
+    const encoded = await runGitCommand(config, repoPath, ['show', '--no-ext-diff', '--no-textconv', spec, '|', 'base64'], secret);
+    const raw = atob(encoded.replace(/\s/g, ''));
+    if (raw.length !== size) throw new Error(`Nội dung tệp không đầy đủ: ${file.path}`);
+    const bytes = Uint8Array.from(raw, (char) => char.charCodeAt(0));
+    let content: string;
+    try {
+      if (bytes.includes(0)) throw new Error('binary');
+      content = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
+    } catch {
+      warnings.push(`Bỏ qua tệp binary hoặc không phải UTF-8: ${file.path}`);
+      diffPatch += '\n# WIZARD_DEFERRED_HUNK: non-text file omitted\n';
+      continue;
+    }
     addEntry(path, content);
   }
+  // Recount the diff once, including deferred-coverage markers.
+  expandedBytes -= diffBytes;
+  addEntry('diff.patch', diffPatch);
   addEntry('meta.json', JSON.stringify(meta, null, 2));
   onProgress?.('compressing', 'Đang nén Change Pack trong bộ nhớ...');
   const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
